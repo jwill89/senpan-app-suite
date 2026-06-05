@@ -1,0 +1,28 @@
+# Runtime data & local tooling
+data/
+.idea/
+.vscode/
+vendor/
+node_modules/
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+test_cookies.txt
+
+# Built Go binaries
+/src/app-suite
+/src/app-suite.exe
+*.exe
+
+# Frontend (Vite) build output & deps
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+
+# Secrets — never commit credentials. systemd EnvironmentFiles, etc.
+*.env
+!*.env.example
+
+# OS noise
+Thumbs.db
+.DS_Store

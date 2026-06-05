@@ -1,0 +1,13 @@
+# Normalize all text files to LF in the repo and working tree.
+# Keeps Go (gofmt) happy and matches the Linux deploy target.
+* text=auto eol=lf
+
+# Binary assets — never touch.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.ico binary
+*.exe binary
+*.sqlite binary

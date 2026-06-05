@@ -1,0 +1,37 @@
+[Unit]
+Description=Senpan App Suite Service
+Documentation=https://github.com/jwill89
+After=network.target
+StartLimitBurst=5
+StartLimitIntervalSec=60
+
+[Service]
+Type=simple
+User=root
+Group=root
+WorkingDirectory=/opt/senpan
+ExecStart=/opt/senpan/app-suite -addr :8080 -db /opt/senpan/data/database.sqlite
+
+# Auto-restart on failure, with increasing back-off
+Restart=on-failure
+RestartSec=5
+
+# Environment
+#Environment=APPSUITE_ADMIN_PASSWORD=changeme
+#Environment=APPSUITE_SESSION_SECRET=changeme
+
+# Security hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/opt/senpan
+
+# Logging (stdout/stderr → journalctl)
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=senpan
+
+[Install]
+WantedBy=multi-user.target
+

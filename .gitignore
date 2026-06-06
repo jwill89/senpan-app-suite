@@ -27,3 +27,10 @@ frontend/*.tsbuildinfo
 # OS noise
 Thumbs.db
 .DS_Store
+/frontend/src/types/api.generated.ts
+/deploy/images/favicon.png
+/frontend/public/images/favicon.png
+/deploy/images/logo.png
+/frontend/public/images/logo.png
+/deploy/images/share_banner.png
+/frontend/public/images/share_banner.png

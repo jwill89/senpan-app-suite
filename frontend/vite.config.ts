@@ -1,0 +1,143 @@
+import { fileURLToPath, URL } from 'node:url'
+import { rm } from 'node:fs/promises'
+import { defineConfig, type Plugin } from 'vite'
+import vue from '@vitejs/plugin-vue'
+import { VitePWA } from 'vite-plugin-pwa'
+import { visualizer } from 'rollup-plugin-visualizer'
+
+// Static images (logo/favicon/share_banner) live in `public/images/` so they
+// are available during `vite dev`. In production, they are served from a
+// PERSISTENT `images/` folder that sits next to `dist/` at the Apache document
+// root (see deploy/.htaccess), so the copies Vite would otherwise bake into
+// `dist/images/` are redundant. This plugin removes `dist/images/` after the
+// build so `dist/` contains only the SPA shell + hashed `assets/` — keeping the
+// build output cleanly separate from the root `images/` folder.
+function stripDistImages(): Plugin {
+  return {
+    name: 'strip-dist-images',
+    apply: 'build',
+    async closeBundle() {
+      await rm(fileURLToPath(new URL('./dist/images', import.meta.url)), {
+        recursive: true,
+        force: true,
+      })
+    },
+  }
+}
+
+// https://vite.dev/config/
+//
+// The Go backend serves only `/api/*` (REST + WebSocket). During development, we
+// proxy those to the Go server (default :8080) so the SPA can talk to it without
+// CORS friction. In production the built `dist/` is served statically by Apache
+// (with /api proxied to the Go server), so relative `api/...` URLs resolve.
+//
+// Static assets (logo, favicon, share banner) and uploaded raffle images live
+// under `/images/` — copied verbatim from `public/` into `dist/` at build time.
+// For uploaded-image preview to work in dev, run the Go server with
+// `-webroot ../frontend/public` so uploads land in `public/images/raffles/`,
+// which Vite serves directly (the proxy below is a fallback for other setups).
+export default defineConfig({
+  plugins: [
+    vue(),
+    // Installable PWA + offline app-shell. The service worker auto-updates on
+    // each deploy (new precache manifest). API/WebSocket and the persistent
+    // root images/ are explicitly excluded from the SPA navigation fallback so
+    // they always hit the network (and Apache's proxy/static handling).
+    VitePWA({
+      registerType: 'autoUpdate',
+      // Static images live in the persistent root images/ folder (stripped from
+      // dist), so they are not bundled/precached — referenced by absolute URL.
+      includeAssets: [],
+      manifest: {
+        name: 'Senpan App Suite',
+        short_name: 'Senpan',
+        description: 'Bingo Night + raffles for the Senpan Tea House.',
+        theme_color: '#1a1c17',
+        background_color: '#1a1c17',
+        display: 'standalone',
+        start_url: '/',
+        scope: '/',
+        icons: [
+          { src: '/images/favicon.png', sizes: '192x192', type: 'image/png' },
+          { src: '/images/logo.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
+          { src: '/images/logo.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
+        ],
+      },
+      workbox: {
+        // Precache the built SPA shell + hashed assets.
+        globPatterns: ['**/*.{js,css,html,svg,woff,woff2}'],
+        // SPA deep-link fallback, but never intercept the API or root images.
+        navigateFallback: '/index.html',
+        navigateFallbackDenylist: [/^\/api\//, /^\/images\//],
+        cleanupOutdatedCaches: true,
+      },
+    }),
+    stripDistImages(),
+    // `npm run analyze` writes dist/stats.html with a treemap of bundle sizes.
+    ...(process.env.ANALYZE
+      ? [
+          visualizer({
+            filename: 'dist/stats.html',
+            gzipSize: true,
+            brotliSize: true,
+          }) as Plugin,
+        ]
+      : []),
+  ],
+  resolve: {
+    alias: {
+      '@': fileURLToPath(new URL('./src', import.meta.url)),
+    },
+  },
+  // Absolute base: required for Vue Router history mode so deep-link refreshes
+  // (e.g. /admin/cards) resolve hashed assets from the document root /assets/
+  // rather than relative to the current path. Apache serves the SPA at the
+  // document root and falls back to index.html for unknown paths (deploy/.htaccess).
+  base: '/',
+  server: {
+    port: 5173,
+    proxy: {
+      // REST API → Go backend
+      '/api': {
+        target: process.env.VITE_API_TARGET || 'http://localhost:8080',
+        changeOrigin: true,
+        // WebSocket upgrade for /api/ws
+        ws: true,
+      },
+    },
+  },
+  build: {
+    outDir: 'dist',
+    emptyOutDir: true,
+    sourcemap: false,
+    rollupOptions: {
+      output: {
+        // Split heavy, rarely-changing vendor libs into their own chunks so
+        // they cache independently of app code (CodeMirror + FontAwesome are
+        // only needed in the admin views). Purely a caching/loading win — no
+        // behavioural change.
+        manualChunks: {
+          vue: ['vue', 'pinia', 'vue-router'],
+          codemirror: [
+            'codemirror',
+            'vue-codemirror',
+            '@codemirror/lang-css',
+            '@codemirror/language',
+            '@codemirror/state',
+            '@codemirror/view',
+            '@lezer/highlight',
+          ],
+          fontawesome: [
+            '@fortawesome/fontawesome-svg-core',
+            '@fortawesome/free-solid-svg-icons',
+            '@fortawesome/free-regular-svg-icons',
+            '@fortawesome/free-brands-svg-icons',
+          ],
+          markdown: ['markdown-it'],
+          draggable: ['vuedraggable', 'sortablejs'],
+        },
+      },
+    },
+  },
+})

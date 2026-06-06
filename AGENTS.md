@@ -4,25 +4,56 @@ Guidance for AI coding agents working in this codebase.
 
 ## Quick orientation
 
-Go + SQLite backend serving a Vue 3 (CDN, no build step) single-page frontend.
-The backend binary is built from `src/` and serves the API on `:8080` by default.
+Go + SQLite backend serving a Vue 3 + TypeScript single-page frontend built with
+Vite. The backend binary is built from `src/` and serves only the API/WebSocket
+on `:8080`; the built frontend (`frontend/dist/`) is served statically (nginx),
+with `/api/*` proxied to the Go server.
 
 ```
-├── index.html                        ← Vue 3 SPA template (all views in one file)
-├── assets/
-│   ├── css/app.css                   ← All styles (dark theme, board, admin, modals)
-│   └── js/app.js                     ← Vue 3 app (data, methods, WebSocket)
+├── frontend/                         ← Vue 3 + TypeScript SPA (Vite)
+│   ├── index.html                    ← Vite entry (mounts #app)
+│   ├── package.json                  ← deps: vue, pinia, vuedraggable, markdown-it, vue-codemirror, @fortawesome/*
+│   ├── vite.config.ts                ← build → dist/, dev proxy for /api, manualChunks, strip dist/images
+│   ├── tsconfig*.json                ← TS project refs (app + node)
+│   ├── public/                       ← copied verbatim into dist/ at build
+│   │   └── images/                   ← logo, favicon, share banner (dev only; stripped from dist — served from doc root in prod)
+│   └── src/
+│       ├── main.ts                   ← createApp + Pinia + FontAwesome init (imports assets/app.css)
+│       ├── App.vue                   ← root shell: view router, WebSocket lifecycle, toast, mounted
+│       ├── assets/app.css            ← All styles (dark theme, board, admin, modals); imported in main.ts so Vite content-hashes it
+│       ├── lib/                      ← framework-agnostic helpers
+│       │   ├── api.ts                ← typed fetch client (credentials, JSON, error extraction)
+│       │   ├── ws.ts                 ← WsClient: reconnect back-off + keepalive ping
+│       │   ├── markdown.ts           ← markdown-it renderer (replaces CDN marked.js)
+│       │   ├── fontawesome.ts        ← SVG-core library + dom.watch() (replaces FA kit script)
+│       │   ├── codemirror.ts         ← CM6 CSS-editor extensions + dark theme/highlight
+│       │   ├── theme.ts              ← header-font + custom-CSS <head> injection
+│       │   └── constants.ts          ← stamp shapes/colors, column helpers, fallback fonts
+│       ├── types/
+│       │   ├── api.generated.ts      ← tygo-generated from Go model (DO NOT EDIT)
+│       │   └── api.ts                ← re-exports + hand-written request/response/WS envelopes
+│       ├── stores/                   ← Pinia stores (ui, app, auth, player, game, cards, patterns, styles, raffles, admin)
+│       ├── composables/useWebSocket.ts ← wires WsClient → stores (message dispatch)
+│       ├── components/
+│       │   ├── common/               ← BingoBoard, CalledNumbers, PatternMini, ModalOverlay, ToastNotification
+│       │   ├── player/               ← Stamp{Shape,Color,Opacity} pickers, WinPatternsPanel
+│       │   └── admin/                ← Sidebar + one component per tab + 4 modals
+│       └── views/                    ← HomeView, PlayerView, RafflesView, RaffleDetailView, AdminLoginView, AdminView
+├── index.html                        ← LEGACY single-file SPA (pre-Vite reference; not built)
+├── assets/css/app.css, js/app.js     ← LEGACY source of truth for look/behaviour (kept for reference)
+├── deploy/                           ← Apache deploy artifacts (.htaccess + persistent images/ + README)
 ├── src/                              ← Go backend
 │   ├── main.go                       ← Entry point: flags, DB init, server start
+│   ├── tygo.yaml                     ← Go→TS type generation config (run `npm run gen:types`)
 │   ├── go.mod / go.sum               ← Module deps (alexedwards/scs, coder/websocket, ncruces sqlite)
 │   └── internal/
-│       ├── model/model.go            ← Domain types (Card, Pattern, Game, GameState, Raffle, etc.)
+│       ├── model/model.go            ← Domain types (Card, Pattern, BingoGame, BingoGameState, Raffle, etc.)
 │       ├── store/
 │       │   ├── store.go              ← Store struct wrapping *sql.DB; all typed CRUD methods
 │       │   └── migrate.go            ← Schema versioning + migrations (PRAGMA user_version)
 │       ├── bingo/
 │       │   ├── card.go               ← Card/board generation, ID generation, LetterForNumber
-│       │   └── game.go               ← GameService (start, draw, end, state, winner matching, caching)
+│       │   └── game.go               ← bingo.Service (start, draw, end, state, winner matching, caching)
 │       ├── ws/hub.go                 ← WebSocket hub, client pumps, broadcast (player/admin channels)
 │       └── server/
 │           ├── server.go             ← Server struct (deps, routes, CORS, JSON/auth helpers, broadcast helpers)
@@ -68,7 +99,7 @@ the updated state to all connected WebSocket clients via `Hub.Broadcast()`, `Hub
 - `ListWinnersLog` uses `COUNT(*) OVER()` window function (single query for data + total).
 - SQLite connection pool allows 4 concurrent connections for WAL concurrent readers.
 
-**Schema versioning**: `store/migrate.go` uses `PRAGMA user_version` to track schema version (currently **9**).
+**Schema versioning**: `store/migrate.go` uses `PRAGMA user_version` to track schema version (currently **10**).
 On the hot path (version == current), zero migration queries execute. Migrations run
 incrementally only when the version is behind.
 
@@ -94,9 +125,41 @@ incrementally only when the version is behind.
 
 Indexes: `games(status)`, `called_numbers(game_id, call_order)`, `game_patterns(game_id)`, `raffle_entries(raffle_id)`, `winners_log(logged_at)`, `winners_log(player_name, logged_at)`, `cards(player_name)`.
 
-## Frontend (Vue 3 SPA)
+## Frontend (Vue 3 + TypeScript + Vite)
 
-**Views** (`view` state): `home` → `admin-login` → `admin` | `player` | `raffles` → `raffle-detail`.
+The frontend lives in `frontend/` as a Vite project with Vue 3 SFCs, TypeScript,
+and Pinia state management. It is a faithful migration of the legacy single-file
+`index.html` + `assets/js/app.js` — same look, same behaviour — decomposed into
+fine-grained components and stores.
+
+**State (Pinia stores)**: `ui` (view routing + toasts), `app` (settings/fonts/
+active CSS), `auth`, `player`, `game`, `cards`, `patterns`, `styles`, `raffles`,
+`admin` (sidebar nav). The root `App.vue` owns the WebSocket lifecycle and view
+transitions; `composables/useWebSocket.ts` dispatches WS messages into the stores.
+
+**Routing is store-driven** (no vue-router): `ui.view` selects the top-level view
+(`home` | `player` | `raffles` | `raffle-detail` | `admin-login` | `admin`);
+`admin.adminSection` (`bingo` | `raffles` | `system`) + `admin.adminTab` select the
+admin tab. `AdminView.vue` renders one component per tab + the four modals.
+
+**Type sync**: TS domain types are generated from the Go `model` package via tygo
+(`frontend/src/types/api.generated.ts`, committed; regenerate with `npm run gen:types`).
+Request/response/WebSocket envelopes are hand-written in `types/api.ts`.
+
+**Library choices** (migrated off CDNs):
+- Markdown → `markdown-it`, **lazy-loaded** via `useMarkdown()` (`lib/markdown.ts`); the ~100 KB parser is dynamic-imported on first render (`breaks: true` to match the old marked output)
+- Drag-and-drop → `vuedraggable` (SortableJS) for category reorder + pattern reorder/cross-category move
+- Theme CSS editor → CodeMirror 6 via `vue-codemirror`; dark look reproduced in `lib/codemirror.ts` + app.css §26
+- Icons → `@fortawesome/fontawesome-svg-core` + `dom.watch()` (keeps the existing `<i class="fa-…">` markup)
+
+**Performance / tooling**:
+- **Lazy routes**: every view + admin tab is a dynamic `import()` in `router/index.ts`, so heavy deps (CodeMirror, vuedraggable, markdown-it) load only when their route is visited — the player/home payload stays small. `manualChunks` (vite.config) keeps shared vendors cached across route chunks.
+- **PWA**: `vite-plugin-pwa` (`registerType: 'autoUpdate'`) emits `sw.js` + `manifest.webmanifest`; the SW precaches the app shell and falls back to `index.html` for SPA routes, with `/api/` and `/images/` denylisted. The deploy `.htaccess` exempts `sw.js`/`registerSW.js`/`*.webmanifest` from the immutable cache so updates land.
+- **Global error handler**: `app.config.errorHandler` (`main.ts`) surfaces uncaught errors as a toast.
+- **Accessible modals**: `ModalOverlay.vue` traps focus, restores it on close, supports Escape, and sets `role="dialog"`/`aria-modal`.
+- **Lint/format**: ESLint flat config (`eslint.config.js`) + Prettier (`.prettierrc.json`); `npm run lint` / `npm run format`. Bundle treemap via `npm run analyze` → `dist/stats.html`.
+
+**Views** (`ui.view`): `home` → `admin-login` → `admin` | `player` | `raffles` → `raffle-detail`.
 **Admin sections** (`adminSection`): `bingo` | `raffles` | `system`.
 **Admin tabs** (`adminTab`): `bingo-game` | `bingo-cards` | `bingo-patterns` | `bingo-winners-log` | `raffle-open` | `raffle-closed` | `system-themes`.
 
@@ -113,23 +176,34 @@ Indexes: `games(status)`, `called_numbers(game_id, call_order)`, `game_patterns(
 - Password-protected login (session-based auth, 24-hour cookie)
 - **Game tab**: start game (select patterns with category filter + search), draw numbers (optional player delay 0–60s), see called numbers, see winners; click winner ID to verify card with pattern-hit highlighting; frequent winners alert (3+ wins in 12h); end game with winner confirmation modal
 - **Cards tab**: generate cards (1–500), view as chips with player name indicators, click to preview board, edit player name/details, delete individual or all
-- **Patterns tab**: create (5×5 grid editor with duplicate detection), organize into categories, rename inline (click name or pencil), reorder via drag-and-drop with visual placeholder, delete; category CRUD with drag-and-drop reorder
+- **Patterns tabs**: create (5×5 grid editor with duplicate detection), organize into categories, rename inline (double-click name), reorder/move between categories via vuedraggable, delete; category CRUD with vuedraggable reorder
 - **Winners Log tab**: paginated table of past winners with sorting and per-page controls
 - **Raffles section**: create/edit raffles (title, description, rules as markdown, cost per entry, max entries, signup instructions, availability window, prize image upload); manage entries (view, toggle paid status, delete); weighted random winner pick; close/reopen raffles; delete raffles
-- **Themes section**: CRUD custom CSS themes with CodeMirror editor, activate/deactivate live
+- **Themes section**: CRUD custom CSS themes with CodeMirror 6 editor, activate/deactivate live
 
 **Key UI patterns**:
-- `v-cloak` prevents flash of unstyled template on load
+- `[v-cloak]` (in app.css) prevents a flash before mount; the `#app` div carries it
 - Optimistic updates: pattern/category reorder swaps locally then persists in background
-- Toast notifications for success/error feedback
+- Toast notifications for success/error feedback (`ui` store)
 - Admin login separates auth failure from data-loading failure to prevent false login rejections
 - Winner toast only fires on new winners (compares count before/after draw)
-- WebSocket reconnect with exponential back-off (1s → 2s → 4s → 8s → 16s, max 5 attempts)
-- Drag-and-drop with empty-box placeholder (pointer-events: none) for patterns and categories
+- WebSocket reconnect with exponential back-off (1s → 2s → 4s → 8s → 16s, max 10 attempts)
+- vuedraggable handles drag-and-drop for patterns and categories (replaces the old manual HTML5 DnD placeholders)
 
 ## Developer commands
 
 ```powershell
+# ── Frontend (Vite) ──
+cd frontend; npm install            # first time / after dependency changes
+cd frontend; npm run dev            # dev server on :5173, proxies /api → :8080
+cd frontend; npm run build          # type-check (vue-tsc) + build to frontend/dist/
+cd frontend; npm run typecheck      # vue-tsc only
+cd frontend; npm run lint           # ESLint (flat config) with --fix
+cd frontend; npm run format         # Prettier write over src/
+cd frontend; npm run analyze        # build + emit dist/stats.html bundle treemap (visualizer)
+cd frontend; npm run gen:types      # regenerate TS types from Go models (runs tygo in ../src)
+
+# ── Go backend ──
 # Build the Go backend
 cd src; go build -o app-suite.exe .
 
@@ -152,6 +226,26 @@ cd src; go test ./...
 cd src; go build -ldflags="-s -w" -o app-suite .
 ```
 
+## Deployment (Apache)
+
+The frontend is served statically by Apache; `/api/*` + `/api/ws` are reverse-
+proxied to the Go server. The document root layout keeps uploads separate from
+the built SPA so redeploys never wipe them (full guide in `deploy/README.md`):
+
+```
+<DocumentRoot>/
+├── .htaccess        ← deploy/.htaccess  (SPA fallback: serves dist/index.html; routes /assets → dist/assets; /images served from root)
+├── images/          ← deploy/images/    (PERSISTENT: logo/favicon/banner + raffles/ uploads)
+└── dist/            ← frontend/dist/    (built SPA; replaced each deploy)
+```
+
+- Run the Go server with `-webroot <DocumentRoot>`; uploads are written to
+  `<DocumentRoot>/images/raffles/` and returned as `images/raffles/<file>`.
+- `vite.config.ts` strips `dist/images/` after build (the `strip-dist-images`
+  plugin) so the redundant copy doesn't shadow the persistent root `images/`.
+- Schema migration v10 rewrites legacy `assets/images/raffles/...` prize paths
+  to `images/raffles/...` automatically on first start.
+
 ## Conventions & patterns
 
 - **Typed structs everywhere**: all store methods return typed `model.*` structs — no `map[string]interface{}`.
@@ -171,7 +265,7 @@ cd src; go build -ldflags="-s -w" -o app-suite .
 - **Player state is client-side**: stamp marks stored in `localStorage` keyed by `stamps_{cardId}_{gameId}`.
 - **Real-time updates**: WebSocket hub broadcasts game/card/pattern/style changes; separate player/admin channels.
 - **Draw delay**: admin can set 0–60s delay before players receive drawn number via WebSocket.
-- **Schema versioning**: `PRAGMA user_version` in SQLite tracks migration state; `schemaVersion` constant in `store/migrate.go` controls the target (currently 9).
+- **Schema versioning**: `PRAGMA user_version` in SQLite tracks migration state; `schemaVersion` constant in `store/migrate.go` controls the target (currently 10).
 - **Optimistic UI**: pattern/category reordering swaps locally before API call; reverts on failure.
 - **Lightweight endpoints**: `GET /api/cards` returns only IDs + player names (no board data); `GET /api/board?preview=1` returns only the card (no game state).
 - **Batch operations**: `GetCardPlayerNames()` fetches multiple cards in one query; `SaveCardsBatch()` uses transactions.
@@ -182,8 +276,9 @@ cd src; go build -ldflags="-s -w" -o app-suite .
 - **Pre-built session handler**: `sessions.LoadAndSave(mux)` is constructed once in `New()` and stored as `sessHandler` — not rebuilt per-request.
 - **Client-side keepalive**: JS sends a `ping` text message every 25s to prevent reverse-proxy idle timeouts from dropping the WebSocket.
 - **Rate limiter**: IP-based brute-force protection for admin login; reads `X-Forwarded-For` for the real client IP behind a reverse proxy.
-- **FontAwesome 7**: loaded via a FontAwesome Kit script tag (requires a free FA account); kit ID is configured in `index.html`.
-- **CodeMirror debounce**: the theme editor debounces CodeMirror change events (300ms) to prevent Vue reactivity thrashing on every keystroke; flushed before save.
+- **FontAwesome**: bundled via `@fortawesome/fontawesome-svg-core`; only the icons used are registered in `frontend/src/lib/fontawesome.ts`, and `dom.watch()` replaces the existing `<i class="fa-…">` markup with inline SVG (no kit/account needed).
+- **Theme CSS editor**: CodeMirror 6 via `vue-codemirror`, bound with `v-model` to the edited theme's `css_content`; the dark look/syntax palette lives in `frontend/src/lib/codemirror.ts` (theme + HighlightStyle) plus structural rules in app.css §26.
+- **TS↔Go type sync**: `frontend/src/types/api.generated.ts` is generated from `internal/model` by tygo (`src/tygo.yaml`); regenerate with `npm run gen:types`. Never edit the generated file.
 
 ## Key files to inspect first
 
@@ -191,14 +286,16 @@ cd src; go build -ldflags="-s -w" -o app-suite .
 2. `src/internal/store/store.go` — All database access methods with typed returns
 3. `src/internal/bingo/game.go` — Core game logic: start, draw + winner compute + cache, state reads, in-memory caching
 4. `src/internal/bingo/card.go` — Card/board generation algorithm with column-range constraints
-5. `src/internal/model/model.go` — All domain types (Card, Pattern, Game, GameState, DrawnNumber, Raffle, WinnersLogEntry, etc.)
-6. `assets/js/app.js` — Vue app: data model, all methods, WebSocket handling, optimistic updates
+5. `src/internal/model/model.go` — All domain types (Card, Pattern, BingoGame, BingoGameState, BingoDrawnNumber, Raffle, WinnersLogEntry, etc.)
+6. `frontend/src/App.vue` + `frontend/src/composables/useWebSocket.ts` — root shell, view routing, WebSocket message dispatch
+7. `frontend/src/stores/*.ts` — all client state + actions (mirror of the old app.js data/methods)
+8. `frontend/src/assets/app.css` — all styles (the look to preserve); imported in `main.ts` (content-hashed by Vite); §26 covers the CM6 editor
 
 ## Extending the project
 
 - **New API endpoint**: add a handler method on `*Server` in `internal/server/`, register the route in `routes()`.
-- **New domain type**: add to `internal/model/model.go`.
+- **New domain type**: add to `internal/model/model.go`, then run `npm run gen:types` to refresh the TS types.
 - **New store method**: add to `internal/store/store.go`, returning typed structs.
 - **New migration**: bump `schemaVersion` in `store/migrate.go`, add an `if version < N` block in `ensureSchema()`.
-- **New admin tab**: add tab ID to `adminNav()` in `app.js`, add template section in `index.html`, wrap in `.admin-panel` for consistent styling.
-- **New WebSocket message type**: add case in `ws.onmessage` handler in `app.js`, send from server via `hub.Broadcast()` / `hub.BroadcastToPlayers()` / `hub.BroadcastToAdmins()`.
+- **New admin tab**: add the tab id to `AdminTab` + `adminNav()` in `frontend/src/stores/admin.ts`, add a button in `components/admin/AdminSidebar.vue`, create a `components/admin/<Tab>.vue` (wrap content in `.admin-panel`), and render it in `views/AdminView.vue`.
+- **New WebSocket message type**: add a case in `composables/useWebSocket.ts` (and the `WsMessage` union in `types/api.ts`), send from server via `hub.Broadcast()` / `hub.BroadcastToPlayers()` / `hub.BroadcastToAdmins()`.

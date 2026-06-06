@@ -1,0 +1,87 @@
+# ============================================================================
+# Apache .htaccess — App Suite production document root
+# ----------------------------------------------------------------------------
+# PLACEMENT: copy this file to your Apache DocumentRoot (NOT into dist/).
+#
+# Expected layout at the DocumentRoot:
+#
+#   <DocumentRoot>/
+#   ├── .htaccess              ← this file
+#   ├── images/                ← PERSISTENT static + uploaded images (sibling of dist)
+#   │   ├── logo.png, favicon.png, share_banner.png
+#   │   └── raffles/           ← raffle uploads written by the Go server live here
+#   └── dist/                  ← the built Vue SPA (re-uploaded on each deploy)
+#       ├── index.html
+#       └── assets/…           ← content-hashed JS/CSS
+#
+# Run the Go server with `-webroot <DocumentRoot>` so uploads are written to
+# <DocumentRoot>/images/raffles/ and served by Apache from there. Because the
+# images/ folder is a SIBLING of dist/, rebuilding/re-uploading dist/ never
+# touches uploaded images.
+#
+# The /api/* and /api/ws routes are handled by ProxyPass in the Apache *vhost*
+# (sites-available), which runs BEFORE this file — they are not routed here.
+# ============================================================================
+
+# Never expose a directory listing if a rewrite rule is ever skipped (e.g.
+# mod_rewrite disabled) — return 403 instead of leaking the folder contents.
+Options -Indexes
+
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteBase /
+
+    # Never rewrite API / WebSocket requests — the vhost ProxyPass handles them.
+    RewriteRule ^api/ - [L]
+
+    # Serve the persistent images/ folder (static assets + raffle uploads)
+    # directly from the document root. These are real files, so just stop here.
+    RewriteRule ^images/ - [L]
+
+    # Map the SPA's hashed bundles to the dist/ subfolder. The app references
+    # them as /assets/… (absolute), but they physically live in dist/assets/.
+    RewriteRule ^assets/(.*)$ dist/assets/$1 [L]
+
+    # Serve other real files that live inside dist/ (favicon, robots, etc.)
+    # when requested at the root path.
+    RewriteCond %{DOCUMENT_ROOT}/dist/%{REQUEST_URI} -f
+    RewriteRule ^(.*)$ dist/$1 [L]
+
+    # Don't rewrite anything that already maps to a real FILE at the root.
+    # NOTE: only -f, never -d. The document root itself is a directory, so a -d
+    # check matches the "/" request and short-circuits the SPA fallback below,
+    # causing Apache to look for a DirectoryIndex in the root (which doesn't
+    # exist — index.html lives in dist/) and fail with AH01276.
+    RewriteCond %{REQUEST_FILENAME} -f
+    RewriteRule ^ - [L]
+
+    # Single-page-app fallback: everything else serves the built app shell.
+    RewriteRule ^ dist/index.html [L]
+</IfModule>
+
+# ----------------------------------------------------------------------------
+# Caching
+# ----------------------------------------------------------------------------
+<IfModule mod_headers.c>
+    # Vite emits content-hashed filenames under /assets/ — safe to cache forever.
+    <FilesMatch "\.(js|css|woff2?|ttf|eot|svg)$">
+        Header set Cache-Control "public, max-age=31536000, immutable"
+    </FilesMatch>
+
+    # Never cache the app shell so new deploys are picked up immediately.
+    <FilesMatch "^index\.html$">
+        Header set Cache-Control "no-cache, no-store, must-revalidate"
+    </FilesMatch>
+
+    # PWA service worker + its registration must NOT be cached immutably, or the
+    # app can never update. These override the broad .js rule above (later wins).
+    <FilesMatch "^(sw|registerSW)\.js$">
+        Header set Cache-Control "no-cache, no-store, must-revalidate"
+    </FilesMatch>
+
+    # The web manifest changes rarely but should revalidate, not cache forever.
+    <FilesMatch "\.webmanifest$">
+        Header set Cache-Control "no-cache"
+    </FilesMatch>
+</IfModule>
+

@@ -10,7 +10,7 @@ import (
 // PRAGMA user_version against this constant and runs only the migrations
 // needed to bring the database up to date. Bump this when adding a new
 // migration block.
-const schemaVersion = 9
+const schemaVersion = 10
 
 // ensureSchema reads the current PRAGMA user_version from the database and
 // applies any outstanding migrations to bring it up to schemaVersion.
@@ -88,6 +88,12 @@ func ensureSchema(db *sql.DB) error {
 
 	if version < 9 {
 		if err := migrateCardPlayerNameIndex(db); err != nil {
+			return err
+		}
+	}
+
+	if version < 10 {
+		if err := migrateRaffleImagePaths(db); err != nil {
 			return err
 		}
 	}
@@ -403,4 +409,24 @@ func migrateWinnersLogIndex(db *sql.DB) error {
 func migrateCardPlayerNameIndex(db *sql.DB) error {
 	_, err := db.Exec("CREATE INDEX IF NOT EXISTS idx_cards_player_name ON cards(player_name)")
 	return err
+}
+
+// migrateRaffleImagePaths rewrites stored prize_image web paths after the
+// uploads directory was moved out of `assets/` into a top-level `images/`
+// folder (so it no longer collides with the Vite `dist/assets/` output).
+// Old rows stored paths like "assets/images/raffles/raffle_….png"; rewrite
+// the prefix to "images/raffles/…". A leading-slash variant is handled too.
+func migrateRaffleImagePaths(db *sql.DB) error {
+	stmts := []string{
+		`UPDATE raffles SET prize_image = 'images/raffles/' || substr(prize_image, length('assets/images/raffles/') + 1)
+		   WHERE prize_image LIKE 'assets/images/raffles/%'`,
+		`UPDATE raffles SET prize_image = '/images/raffles/' || substr(prize_image, length('/assets/images/raffles/') + 1)
+		   WHERE prize_image LIKE '/assets/images/raffles/%'`,
+	}
+	for _, stmt := range stmts {
+		if _, err := db.Exec(stmt); err != nil {
+			return err
+		}
+	}
+	return nil
 }

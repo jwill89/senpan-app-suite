@@ -1,0 +1,124 @@
+<script setup lang="ts">
+/**
+ * Player view — the bingo board, stamp controls, win patterns, called numbers,
+ * game details, and the halftime minigame alert.
+ *
+ * Receives the board id via the `cardId` route param. On mount (and when the
+ * param changes) it loads the board if it isn't already loaded — this makes the
+ * URL directly linkable and survive a refresh. If the board can't be loaded
+ * (e.g. bad/expired id) it redirects home. The WebSocket connect/disconnect is
+ * driven by App.vue off the active route + loaded card.
+ */
+import { onMounted, watch } from 'vue'
+import { useRouter } from 'vue-router'
+import BingoBoard from '@/components/common/BingoBoard.vue'
+import CalledNumbers from '@/components/common/CalledNumbers.vue'
+import ModalOverlay from '@/components/common/ModalOverlay.vue'
+import StampShapePicker from '@/components/player/StampShapePicker.vue'
+import StampColorPicker from '@/components/player/StampColorPicker.vue'
+import StampOpacitySlider from '@/components/player/StampOpacitySlider.vue'
+import WinPatternsPanel from '@/components/player/WinPatternsPanel.vue'
+import { useMarkdown } from '@/lib/markdown'
+import { useGameStore } from '@/stores/game'
+import { usePlayerStore } from '@/stores/player'
+
+const props = defineProps<{ cardId: string }>()
+
+const router = useRouter()
+const player = usePlayerStore()
+const game = useGameStore()
+const { render: renderMarkdown } = useMarkdown()
+
+/** Loads the board for the current cardId param if not already loaded. */
+async function ensureLoaded(id: string): Promise<void> {
+  if (player.playerCard && player.playerCard.id === id) return
+  const details = await player.loadBoardById(id)
+  if (details === null && !player.playerCard) {
+    // Failed to load (bad id) → bounce home with the error toast.
+    router.replace({ name: 'home' })
+    return
+  }
+  if (details !== null) game.gameDetails = details
+}
+
+onMounted(() => ensureLoaded(props.cardId))
+watch(
+  () => props.cardId,
+  (id) => ensureLoaded(id),
+)
+
+/** Leave the board: reset state and return home (App disconnects the WS). */
+function leave(): void {
+  player.resetPlayer()
+  router.push({ name: 'home' })
+}
+</script>
+
+<template>
+  <div>
+    <div class="topbar">
+      <button class="btn-ghost btn-sm" @click="leave">← Leave</button>
+      <h2>Board <span class="code-gold">{{ player.playerCard?.id }}</span></h2>
+      <span></span>
+    </div>
+    <div class="player-body">
+      <div class="player-left">
+        <!-- The bingo board -->
+        <BingoBoard
+          v-if="player.playerCard"
+          :board="player.playerCard.board_data"
+          mode="player"
+          :is-stamped="player.isStamped"
+          :cell-class="player.boardCellClass"
+          :stamp-mark-style="player.stampMarkStyle"
+          :stamp-emoji="player.currentStampEmoji"
+          :stamp-shape="player.stampShape"
+          :custom-stamp-image="player.customStampImage"
+          @cell-click="(ri, ci) => player.toggleStamp(ri, ci)"
+        />
+
+        <StampShapePicker />
+        <StampColorPicker />
+        <StampOpacitySlider />
+
+        <button class="btn-ghost btn-sm" @click="player.clearAllStamps()">
+          Clear All Stamps on Board
+        </button>
+
+        <!-- Game details (Markdown) -->
+        <div
+          v-if="player.playerGame && game.gameDetails"
+          class="game-details"
+          v-html="renderMarkdown(game.gameDetails)"
+        ></div>
+      </div>
+
+      <div class="player-right">
+        <WinPatternsPanel v-if="player.playerGame" :patterns="player.playerGame.patterns" />
+
+        <CalledNumbers
+          :count="player.playerGame ? player.playerGame.called_numbers.length : 0"
+          :is-called="player.isCalledPlayer"
+        />
+
+        <div v-if="!player.playerGame" class="no-game-msg">
+          No game is currently active. Waiting…
+        </div>
+      </div>
+    </div>
+
+    <!-- Halftime minigame alert (player) -->
+    <ModalOverlay
+      v-if="player.showMinigameModal"
+      centered
+      @close="player.showMinigameModal = false"
+    >
+      <h3 class="mb-16"><i class="fa-solid fa-champagne-glasses"></i> Half-Time Minigame!</h3>
+      <p class="text-dim mb-20">
+        It's time for a half-time minigame! Please check your in-game chat for details and
+        instructions!
+      </p>
+      <button class="btn-primary" @click="player.showMinigameModal = false">Got it!</button>
+    </ModalOverlay>
+  </div>
+</template>

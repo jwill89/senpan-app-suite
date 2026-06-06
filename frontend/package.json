@@ -1,0 +1,50 @@
+{
+  "name": "app-suite-frontend",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vue-tsc -b && vite build",
+    "preview": "vite preview",
+    "typecheck": "vue-tsc -b --noEmit",
+    "lint": "eslint . --fix",
+    "format": "prettier --write src/",
+    "analyze": "cross-env ANALYZE=true vue-tsc -b && cross-env ANALYZE=true vite build",
+    "gen:types": "cd ../src && go run github.com/gzuidhof/tygo@latest generate"
+  },
+  "dependencies": {
+    "@codemirror/lang-css": "^6.3.1",
+    "@codemirror/language": "^6.10.8",
+    "@codemirror/state": "^6.5.2",
+    "@codemirror/view": "^6.36.2",
+    "@fortawesome/fontawesome-svg-core": "^6.7.2",
+    "@fortawesome/free-brands-svg-icons": "^6.7.2",
+    "@fortawesome/free-regular-svg-icons": "^6.7.2",
+    "@fortawesome/free-solid-svg-icons": "^6.7.2",
+    "@lezer/highlight": "^1.2.1",
+    "codemirror": "^6.0.1",
+    "markdown-it": "^14.1.0",
+    "pinia": "^3.0.1",
+    "vue": "^3.5.13",
+    "vue-codemirror": "^6.1.1",
+    "vue-router": "^4.6.4",
+    "vuedraggable": "^4.1.0"
+  },
+  "devDependencies": {
+    "@types/markdown-it": "^14.1.2",
+    "@types/node": "^22.10.5",
+    "@vitejs/plugin-vue": "^5.2.1",
+    "@vue/eslint-config-prettier": "^10.2.0",
+    "@vue/eslint-config-typescript": "^14.5.0",
+    "cross-env": "^7.0.3",
+    "eslint": "^9.21.0",
+    "eslint-plugin-vue": "^9.32.0",
+    "prettier": "^3.5.3",
+    "rollup-plugin-visualizer": "^5.14.0",
+    "typescript": "~5.7.3",
+    "vite": "^6.0.7",
+    "vite-plugin-pwa": "^0.21.1",
+    "vue-tsc": "^2.2.0"
+  }
+}

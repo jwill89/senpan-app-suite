@@ -18,6 +18,7 @@ test_cookies.txt
 frontend/node_modules/
 frontend/dist/
 frontend/.vite/
+frontend/*.tsbuildinfo
 
 # Secrets — never commit credentials. systemd EnvironmentFiles, etc.
 *.env

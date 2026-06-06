@@ -453,7 +453,7 @@ func (s *Server) removeUploadedImage(webPath string) {
 	if webPath == "" {
 		return
 	}
-	uploadDir, err := filepath.Abs(filepath.Join(s.webRoot, "assets", "images", "raffles"))
+	uploadDir, err := filepath.Abs(filepath.Join(s.webRoot, "images", "raffles"))
 	if err != nil {
 		return
 	}
@@ -476,7 +476,7 @@ func (s *Server) removeUploadedImage(webPath string) {
 //	Endpoint:  POST /api/raffles/upload
 //	Auth:      admin
 //	Request:   multipart form with "image" field
-//	Response:  {"path": "assets/images/raffles/raffle_....ext"}
+//	Response:  {"path": "images/raffles/raffle_....ext"}
 func (s *Server) handleRaffleUpload(w http.ResponseWriter, r *http.Request) {
 	if !s.requireAdmin(w, r) {
 		return
@@ -500,7 +500,7 @@ func (s *Server) handleRaffleUpload(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Ensure directory exists
-	dir := filepath.Join(s.webRoot, "assets", "images", "raffles")
+	dir := filepath.Join(s.webRoot, "images", "raffles")
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		writeError(w, http.StatusInternalServerError, "Failed to create upload directory")
 		return
@@ -523,6 +523,6 @@ func (s *Server) handleRaffleUpload(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Return the web-accessible path
-	webPath := "assets/images/raffles/" + filename
+	webPath := "images/raffles/" + filename
 	writeJSON(w, http.StatusOK, map[string]any{"path": webPath})
 }

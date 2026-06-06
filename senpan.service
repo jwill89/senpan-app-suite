@@ -10,7 +10,10 @@ Type=simple
 User=root
 Group=root
 WorkingDirectory=/opt/senpan
-ExecStart=/opt/senpan/app-suite -addr :8080 -db /opt/senpan/data/database.sqlite
+# -webroot must point at the Apache DocumentRoot so uploaded raffle images are
+# written to <DocumentRoot>/images/raffles/ and served by Apache. Adjust the
+# path to match your server (see deploy/README.md).
+ExecStart=/opt/senpan/app-suite -addr :8080 -db /opt/senpan/data/database.sqlite -webroot /var/www/senpan.mathdad.me
 
 # Auto-restart on failure, with increasing back-off
 Restart=on-failure
@@ -25,7 +28,10 @@ NoNewPrivileges=true
 ProtectSystem=strict
 ProtectHome=true
 PrivateTmp=true
-ReadWritePaths=/opt/senpan
+# The app needs write access to its own dir (DB) and to the document root's
+# images/ folder where raffle uploads are written. Adjust the second path to
+# match your -webroot (only the images/ subtree needs to be writable).
+ReadWritePaths=/opt/senpan /var/www/senpan.mathdad.me/images
 
 # Logging (stdout/stderr → journalctl)
 StandardOutput=journal

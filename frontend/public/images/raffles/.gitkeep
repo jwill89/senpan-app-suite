@@ -1,0 +1,2 @@
+# Keeps the raffle uploads directory present in the build output so the Go
+# server's upload path ({webroot}/images/raffles) always exists.

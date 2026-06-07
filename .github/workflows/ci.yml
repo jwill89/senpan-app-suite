@@ -1,0 +1,85 @@
+name: CI
+
+# Runs the full quality gate on every push and pull request: the Vue/TS
+# frontend (lint, type-check, unit tests, production build) and the Go backend
+# (build, vet, test). Mirrors the local `npm` and `go` commands so a green CI
+# means the same checks a developer runs locally have passed.
+on:
+  push:
+  pull_request:
+
+# Cancel superseded runs on the same ref so pushes don't pile up.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  frontend:
+    name: Frontend (lint · types · tests · build)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      # The TS domain types (`src/types/api.generated.ts`) are gitignored and
+      # generated from the Go model by tygo, so CI must regenerate them before
+      # type-checking / building. Requires the Go toolchain.
+      - name: Set up Go (for tygo type generation)
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: src/go.mod
+          cache-dependency-path: src/go.sum
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate API types (tygo)
+        run: npm run gen:types
+
+      - name: Lint
+        run: npm run lint:check
+
+      - name: Type-check
+        run: npm run typecheck
+
+      - name: Unit tests
+        run: npm run test
+
+      - name: Production build
+        run: npm run build
+
+  backend:
+    name: Backend (build · vet · test)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: src
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: src/go.mod
+          cache-dependency-path: src/go.sum
+
+      - name: Build
+        run: go build ./...
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Test
+        run: go test ./...

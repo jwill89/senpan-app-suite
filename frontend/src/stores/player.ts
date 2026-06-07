@@ -7,7 +7,7 @@ import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 import { endpoints } from '@/lib/endpoints'
 import { STAMP_COLORS, STAMP_SHAPES } from '@/lib/constants'
-import type { BingoGameState, Card } from '@/types/api'
+import type { BingoDrawnNumber, BingoGameState, Card } from '@/types/api'
 import { useUiStore } from './ui'
 
 export const usePlayerStore = defineStore('player', () => {
@@ -32,6 +32,16 @@ export const usePlayerStore = defineStore('player', () => {
   const customStampImage = ref<string | null>(localStorage.getItem('bingo_custom_stamp'))
 
   const showMinigameModal = ref(false)
+
+  // ── Live-game feedback (ambient; never tracks the player's own board) ───────
+  /** The most recently called number, for the player's "last called" banner. */
+  const lastDrawn = ref<BingoDrawnNumber | null>(null)
+  /** True after a game the player was watching ends (drives the end summary). */
+  const gameEnded = ref(false)
+  /** How many numbers were called in the game that just ended (neutral stat). */
+  const endedCalledCount = ref(0)
+  /** Opt-in: play a chime + vibrate when a number is called. Off by default. */
+  const soundEnabled = ref(localStorage.getItem('bingo_sound_enabled') === '1')
 
   const stampShapes = STAMP_SHAPES
   const stampColors = STAMP_COLORS
@@ -123,6 +133,12 @@ export const usePlayerStore = defineStore('player', () => {
     localStorage.setItem('bingo_stamp_opacity', String(val))
   }
 
+  /** Toggles the opt-in draw chime/vibration and persists the choice. */
+  function setSoundEnabled(on: boolean): void {
+    soundEnabled.value = on
+    localStorage.setItem('bingo_sound_enabled', on ? '1' : '0')
+  }
+
   /**
    * Handles custom stamp image upload from a file input. Reads as a data URL
    * and persists it to localStorage (so it survives a refresh). Warns if the
@@ -191,6 +207,8 @@ export const usePlayerStore = defineStore('player', () => {
       playerCard.value = data.card
       playerGame.value = data.game ?? null
       loadStamps()
+      lastDrawn.value = null
+      gameEnded.value = false
       return data.game_details || ''
     } catch (e) {
       joinError.value = (e as Error).message
@@ -204,6 +222,8 @@ export const usePlayerStore = defineStore('player', () => {
     playerCard.value = null
     playerGame.value = null
     stamps.value = {}
+    lastDrawn.value = null
+    gameEnded.value = false
   }
 
   /**
@@ -224,6 +244,8 @@ export const usePlayerStore = defineStore('player', () => {
       playerCard.value = data.card
       playerGame.value = data.game ?? null
       loadStamps()
+      lastDrawn.value = null
+      gameEnded.value = false
       return data.game_details || ''
     } catch (e) {
       joinError.value = (e as Error).message
@@ -245,6 +267,11 @@ export const usePlayerStore = defineStore('player', () => {
     stampOpacity,
     customStampImage,
     showMinigameModal,
+    lastDrawn,
+    gameEnded,
+    endedCalledCount,
+    soundEnabled,
+    setSoundEnabled,
     stampShapes,
     stampColors,
     playerCalledSet,

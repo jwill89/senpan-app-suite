@@ -8,6 +8,9 @@
  */
 import type { WsMessage } from '@/types/api'
 
+/** Connection lifecycle state surfaced to the UI (e.g. a "Live" badge). */
+export type WsStatus = 'closed' | 'connecting' | 'open' | 'reconnecting'
+
 export interface WsCallbacks {
   /** Called for every parsed message. */
   onMessage: (msg: WsMessage) => void
@@ -17,6 +20,8 @@ export interface WsCallbacks {
   notify?: (message: string, type?: 'info' | 'success' | 'error') => void
   /** Whether to keep reconnecting after a close (e.g. still on player/admin view). */
   shouldReconnect: () => boolean
+  /** Notified whenever the connection status changes. */
+  onStatus?: (status: WsStatus) => void
 }
 
 const API_BASE = 'api'
@@ -32,6 +37,11 @@ export class WsClient {
 
   constructor(cb: WsCallbacks) {
     this.cb = cb
+  }
+
+  /** Emits a connection-status change to the registered handler. */
+  private setStatus(status: WsStatus): void {
+    this.cb.onStatus?.(status)
   }
 
   /** Builds the ws:// or wss:// URL, optionally with the player's card id. */
@@ -53,6 +63,7 @@ export class WsClient {
     this.reconnectAttempts = attempts
 
     const isReconnect = this.reconnectAttempts > 0
+    this.setStatus(isReconnect ? 'reconnecting' : 'connecting')
     const ws = new WebSocket(this.url())
 
     ws.onopen = () => {
@@ -65,6 +76,7 @@ export class WsClient {
         this.cb.onReconnected?.()
       }
       this.reconnectAttempts = 0
+      this.setStatus('open')
     }
 
     ws.onmessage = (evt) => {
@@ -81,6 +93,8 @@ export class WsClient {
       this.ws = null
       if (this.cb.shouldReconnect()) {
         this.scheduleReconnect()
+      } else {
+        this.setStatus('closed')
       }
     }
 
@@ -119,6 +133,7 @@ export class WsClient {
       this.ws.close()
       this.ws = null
     }
+    this.setStatus('closed')
   }
 
   private scheduleReconnect(): void {
@@ -128,9 +143,11 @@ export class WsClient {
     if (this.reconnectAttempts > MAX_RECONNECT) {
       this.cb.notify?.('Connection lost. Please refresh the page.', 'error')
       this.reconnectAttempts = 0
+      this.setStatus('closed')
       return
     }
 
+    this.setStatus('reconnecting')
     const delay = Math.min(1000 * Math.pow(2, this.reconnectAttempts - 1), 16000)
     this.cb.notify?.(
       `Connection lost. Reconnecting (${this.reconnectAttempts}/${MAX_RECONNECT})…`,

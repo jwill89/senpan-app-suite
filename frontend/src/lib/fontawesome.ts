@@ -33,6 +33,8 @@ import {
   faTriangleExclamation,
   faTrophy,
   faUser,
+  faVolumeHigh,
+  faVolumeXmark,
 } from '@fortawesome/free-solid-svg-icons'
 
 // Don't auto-replace on import; we trigger dom.watch() explicitly after mount.
@@ -65,6 +67,8 @@ library.add(
   faTriangleExclamation,
   faTrophy,
   faUser,
+  faVolumeHigh,
+  faVolumeXmark,
 )
 
 /**

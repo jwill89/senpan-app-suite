@@ -37,6 +37,7 @@ coder/websocket · Vitest + Vue Test Utils · GitHub Actions CI.
 │       │   ├── theme.ts              ← header-font + custom-CSS <head> injection
 │       │   ├── assets.ts             ← resolves server image paths (images/...) to root-absolute URLs
 │       │   ├── exportCard.ts         ← player card → framed PNG export (html-to-image capture + canvas composite)
+│       │   ├── sound.ts              ← opt-in draw chime (Web Audio synth) + haptics for the player view
 │       │   └── constants.ts          ← stamp shapes/colors, column helpers, fallback fonts
 │       ├── types/
 │       │   ├── api.generated.ts      ← tygo-generated from Go model — GITIGNORED, DO NOT EDIT (run `npm run gen:types`)
@@ -144,7 +145,8 @@ and Pinia state management. It is a faithful migration of the legacy single-file
 fine-grained components and stores.
 
 **State (Pinia stores)**: `ui` (toasts, themed confirm dialog, route-loading
-flag), `app` (settings/fonts/active CSS), `auth`, `player`, `game`, `cards`,
+flag, realtime connection status), `app` (settings/fonts/active CSS), `auth`,
+`player`, `game`, `cards`,
 `patterns`, `styles`, `raffles`, `admin` (sidebar highlight state + per-tab data
 loads). The root `App.vue` hosts `<RouterView>` and owns the WebSocket lifecycle;
 `composables/useWebSocket.ts` dispatches WS messages into the stores.
@@ -201,6 +203,7 @@ Never edit it by hand. Request/response/WebSocket envelopes are hand-written in
 - Stamp customization: shape (blank default, heart, star, smiley, etc.), color (7 options), opacity slider, **custom uploaded image** (stored as a data URL in `localStorage`)
 - **Export/save the board as a PNG card** (`lib/exportCard.ts`): captures the live themed `.board-wrap` via `html-to-image` (preserving theme, emoji + custom-image stamps), then composites it into a framed card (title/logo header + game-details footer) on a canvas and downloads it
 - Real-time updates via WebSocket (draws, game start/end, style changes, halftime alerts)
+- **Live-game feedback** (ambient only — never tracks the player's own board, by design, to preserve player agency): a "Last Called" announcement banner for the most recent draw, an opt-in draw **chime + vibration** (`lib/sound.ts`, persisted in `localStorage`), a **Live / Reconnecting** connection badge (off `ui.wsStatus`), and an end-of-game thank-you summary
 - WebSocket reconnect with exponential back-off on disconnect
 - Browse open raffles from home page (card shown only when open raffles exist); view raffle detail with prize image, markdown description/rules, and sign-up form (character name, world, number of entries); after sign-up see confirmation with total cost and sign-up instructions
 - View closed raffles with winner announcement and total entry count

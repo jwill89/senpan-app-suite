@@ -81,3 +81,14 @@ describe('routeLoading', () => {
     expect(ui.routeLoading).toBe(true)
   })
 })
+
+describe('wsStatus', () => {
+  it('defaults to closed and follows setWsStatus', () => {
+    const ui = useUiStore()
+    expect(ui.wsStatus).toBe('closed')
+    ui.setWsStatus('connecting')
+    expect(ui.wsStatus).toBe('connecting')
+    ui.setWsStatus('open')
+    expect(ui.wsStatus).toBe('open')
+  })
+})

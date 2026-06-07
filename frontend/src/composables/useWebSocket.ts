@@ -9,6 +9,7 @@
  * a message updates depends on the current route (player vs. admin area).
  */
 import { WsClient } from '@/lib/ws'
+import { playDrawChime, vibrate } from '@/lib/sound'
 import { applyCustomCSS, applyHeaderFont } from '@/lib/theme'
 import type { WsMessage } from '@/types/api'
 import { useRouter } from 'vue-router'
@@ -42,6 +43,8 @@ export function useWebSocket() {
     notify: (m, t) => ui.notify(m, t),
     // Keep reconnecting while on the player or admin view.
     shouldReconnect: () => isPlayerView() || isAdminView(),
+    // Surface connection state for the player's "Live"/"Reconnecting" badge.
+    onStatus: (s) => ui.setWsStatus(s),
   })
 
   /** Dispatches a parsed WebSocket message to the relevant store(s). */
@@ -100,9 +103,24 @@ export function useWebSocket() {
     // Player view
     if (isPlayerView() && player.playerCard) {
       const oldGameId = player.playerGame?.id
+      if (!g && player.playerGame) {
+        // The game the player was watching has ended — show a thank-you summary
+        // (a neutral fact, the call count; we never track their board for them).
+        player.endedCalledCount = player.playerGame.called_numbers?.length ?? 0
+        player.gameEnded = true
+        player.lastDrawn = null
+      }
       player.playerGame = g
-      if (g && g.id !== oldGameId) player.loadStamps()
-      if (!g) game.gameDetails = ''
+      if (g) {
+        if (g.id !== oldGameId) {
+          player.loadStamps()
+          // A new game started — clear any prior "game over"/last-called state.
+          player.gameEnded = false
+          player.lastDrawn = null
+        }
+      } else {
+        game.gameDetails = ''
+      }
     }
 
     // Admin view
@@ -125,11 +143,17 @@ export function useWebSocket() {
     const drawn = msg.drawn
     if (!drawn) return
 
-    // Player view — append the drawn number to local called_numbers
+    // Player view — append the drawn number to local called_numbers and surface
+    // it as the "last called" announcement (plus the opt-in chime/vibration).
     if (isPlayerView() && player.playerGame) {
       if (!player.playerGame.called_numbers) player.playerGame.called_numbers = []
       player.playerGame.called_numbers.push(drawn.number)
       player.playerGame.total_called = player.playerGame.called_numbers.length
+      player.lastDrawn = drawn
+      if (player.soundEnabled) {
+        playDrawChime()
+        vibrate(60)
+      }
     }
 
     // Admin view — only if we don't already have this number

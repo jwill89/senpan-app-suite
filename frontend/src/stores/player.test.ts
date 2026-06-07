@@ -102,3 +102,29 @@ describe('called-number lookup', () => {
     expect(player.isCalledPlayer(7)).toBe(false)
   })
 })
+
+describe('draw-sound preference', () => {
+  it('defaults to off (opt-in)', () => {
+    const player = usePlayerStore()
+    expect(player.soundEnabled).toBe(false)
+  })
+
+  it('persists when enabled and reads back on a fresh store', () => {
+    usePlayerStore().setSoundEnabled(true)
+    expect(localStorage.getItem('bingo_sound_enabled')).toBe('1')
+    // A fresh Pinia instance should hydrate the saved preference.
+    setActivePinia(createPinia())
+    expect(usePlayerStore().soundEnabled).toBe(true)
+  })
+})
+
+describe('live-feedback reset', () => {
+  it('resetPlayer clears last-called and game-over state', () => {
+    const player = usePlayerStore()
+    player.lastDrawn = { number: 12, letter: 'B', call_order: 1 }
+    player.gameEnded = true
+    player.resetPlayer()
+    expect(player.lastDrawn).toBeNull()
+    expect(player.gameEnded).toBe(false)
+  })
+})

@@ -42,6 +42,14 @@ export const useUiStore = defineStore('ui', () => {
     routeLoading.value = v
   }
 
+  // ── Realtime connection status ───────────────────────────────────────────────
+  // Reflects the shared WebSocket state so the player view can show a "Live" /
+  // "Reconnecting…" badge. Driven by WsClient via the useWebSocket composable.
+  const wsStatus = ref<'closed' | 'connecting' | 'open' | 'reconnecting'>('closed')
+  function setWsStatus(s: 'closed' | 'connecting' | 'open' | 'reconnecting'): void {
+    wsStatus.value = s
+  }
+
   // ── Themed confirm dialog ──────────────────────────────────────────────────
   const confirmState = ref<ConfirmState>({
     show: false,
@@ -115,6 +123,8 @@ export const useUiStore = defineStore('ui', () => {
     confirmState,
     routeLoading,
     setRouteLoading,
+    wsStatus,
+    setWsStatus,
     notify,
     dismissToast,
     confirm,

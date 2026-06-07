@@ -108,7 +108,7 @@ export function parseInlineRuns(text: string): { text: string; bold: boolean; it
 /**
  * Parses game-details markdown into paragraphs of style-tagged "words", so the
  * footer can render bold/italic emphasis. Block syntax (headings, bullets,
- * blockquotes, links/images, code fences) is normalised to plain lines first;
+ * blockquotes, links/images, code fences) is normalized to plain lines first;
  * headings render bold.
  */
 export function parseDetailParagraphs(md: string): Word[][] {

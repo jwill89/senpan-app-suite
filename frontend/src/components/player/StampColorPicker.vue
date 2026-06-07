@@ -9,15 +9,18 @@ const player = usePlayerStore()
 </script>
 
 <template>
-  <div class="stamp-picker">
+  <div class="stamp-picker" role="group" aria-label="Stamp color">
     <span class="label">Color:</span>
-    <div
+    <button
       v-for="c in player.stampColors"
       :key="c.id"
+      type="button"
       :class="['color-swatch', player.stampColor === c.id ? 'active' : '']"
       :style="{ background: c.value }"
       :title="c.name"
+      :aria-label="`Stamp color: ${c.name}`"
+      :aria-pressed="player.stampColor === c.id"
       @click="player.setStampColor(c.id)"
-    ></div>
+    ></button>
   </div>
 </template>

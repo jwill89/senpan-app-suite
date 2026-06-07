@@ -216,6 +216,19 @@ h1 {
     gap: 8px
 }
 
+/* Visually hidden but available to screen readers */
+.sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0
+}
+
 
 .mt {
     margin-top: 16px
@@ -512,6 +525,9 @@ h1 {
     align-items: center;
     justify-content: center;
     font-size: 1.4rem;
+    font-family: inherit;
+    color: var(--text);
+    padding: 0;
     border-radius: 8px;
     cursor: pointer;
     background: var(--surface2);
@@ -521,6 +537,11 @@ h1 {
 
 .stamp-option:hover {
     border-color: var(--text-dim)
+}
+
+.stamp-option:focus-visible {
+    outline: 2px solid var(--gold);
+    outline-offset: 2px
 }
 
 /* Currently selected stamp shape */
@@ -556,6 +577,7 @@ h1 {
 .color-swatch {
     width: 32px;
     height: 32px;
+    padding: 0;
     border-radius: 50%;
     cursor: pointer;
     border: 3px solid transparent;
@@ -564,6 +586,11 @@ h1 {
 
 .color-swatch:hover {
     transform: scale(1.15)
+}
+
+.color-swatch:focus-visible {
+    outline: 2px solid var(--gold);
+    outline-offset: 2px
 }
 
 /* Currently selected color swatch with gold ring */
@@ -618,6 +645,22 @@ h1 {
     flex-direction: column;
     align-items: center;
     gap: 16px
+}
+
+/* Single-row action bar: Clear / Save / Sound */
+.player-actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 8px;
+    width: 100%
+}
+
+.player-actions .btn-sm {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    white-space: nowrap
 }
 
 /* Right column: called numbers, active patterns, game details */

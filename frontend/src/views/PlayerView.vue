@@ -11,6 +11,8 @@
  */
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
+import { icon } from '@fortawesome/fontawesome-svg-core'
+import { faVolumeHigh, faVolumeXmark } from '@fortawesome/free-solid-svg-icons'
 import BingoBoard from '@/components/common/BingoBoard.vue'
 import CalledNumbers from '@/components/common/CalledNumbers.vue'
 import ModalOverlay from '@/components/common/ModalOverlay.vue'
@@ -115,6 +117,16 @@ function toggleSound(): void {
   }
 }
 
+/**
+ * Reactive inline SVG for the sound toggle. FontAwesome's `dom.watch()` replaces
+ * `<i class="fa-…">` placeholders with SVG once, so a reactive `:class` swap on
+ * an already-replaced node never re-renders. Building the SVG via the `icon()`
+ * API and binding it with `v-html` keeps the icon in sync with `soundEnabled`.
+ */
+const soundIconHtml = computed(
+  () => icon(player.soundEnabled ? faVolumeHigh : faVolumeXmark).html.join(''),
+)
+
 /** Leave the board: reset state and return home (App disconnects the WS). */
 function leave(): void {
   player.resetPlayer()
@@ -158,24 +170,36 @@ function leave(): void {
         <StampColorPicker />
         <StampOpacitySlider />
 
-        <button class="btn-ghost btn-sm" @click="player.clearAllStamps()">
-          Clear All Stamps on Board
-        </button>
+        <div class="player-actions">
+          <button
+            class="btn-ghost btn-sm"
+            title="Clear all stamps on the board"
+            @click="player.clearAllStamps()"
+          >
+            <i class="fa-solid fa-eraser" aria-hidden="true"></i>
+            <span class="player-actions__label">Clear</span>
+          </button>
 
-        <button class="btn-ghost btn-sm" :disabled="exporting" @click="exportCard">
-          <i class="fa-solid fa-download"></i>
-          {{ exporting ? 'Saving…' : 'Save Card as Image' }}
-        </button>
+          <button
+            class="btn-ghost btn-sm"
+            :disabled="exporting"
+            :title="exporting ? 'Saving card image…' : 'Save card as image'"
+            @click="exportCard"
+          >
+            <i class="fa-solid fa-download" aria-hidden="true"></i>
+            <span class="player-actions__label">{{ exporting ? 'Saving…' : 'Save' }}</span>
+          </button>
 
-        <button
-          class="btn-ghost btn-sm"
-          :aria-pressed="player.soundEnabled"
-          :title="player.soundEnabled ? 'Draw sound on — click to mute' : 'Draw sound off — click to enable'"
-          @click="toggleSound"
-        >
-          <i :class="player.soundEnabled ? 'fa-solid fa-volume-high' : 'fa-solid fa-volume-xmark'"></i>
-          {{ player.soundEnabled ? 'Sound On' : 'Sound Off' }}
-        </button>
+          <button
+            class="btn-ghost btn-sm"
+            :aria-pressed="player.soundEnabled"
+            :title="player.soundEnabled ? 'Draw sound on — click to mute' : 'Draw sound off — click to enable'"
+            @click="toggleSound"
+          >
+            <span class="fa-icon" v-html="soundIconHtml" aria-hidden="true"></span>
+            <span class="player-actions__label">{{ player.soundEnabled ? 'Sound On' : 'Sound Off' }}</span>
+          </button>
+        </div>
 
         <!-- Game details (Markdown) -->
         <div

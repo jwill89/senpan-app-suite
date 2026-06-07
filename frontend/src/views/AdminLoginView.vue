@@ -6,6 +6,7 @@
  */
 import { ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
 import { useAuthStore } from '@/stores/auth'
 
 const auth = useAuthStore()
@@ -43,8 +44,13 @@ function goHome(): void {
           autocomplete="new-password"
         />
         <div class="btns">
-          <button type="button" class="btn-ghost" @click="goHome">Back</button>
-          <button type="submit" class="btn-secondary">Login</button>
+          <button type="button" class="btn-ghost" :disabled="auth.loggingIn" @click="goHome">
+            Back
+          </button>
+          <button type="submit" class="btn-secondary" :disabled="auth.loggingIn">
+            <LoadingSpinner v-if="auth.loggingIn" label="Logging in…" />
+            <template v-else>Login</template>
+          </button>
         </div>
       </form>
       <p v-if="auth.authError" class="error-msg">{{ auth.authError }}</p>

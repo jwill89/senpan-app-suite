@@ -157,7 +157,14 @@ func (g *Service) Start(patternIDs []int) (*model.BingoGameState, error) {
 		}
 	}
 
-	state, err := g.buildGameState(gameID)
+	// Read back the created_at timestamp for the new game so the state carries
+	// the game start time (used by the admin elapsed-time clock).
+	createdAt := ""
+	if gm, err := g.store.GetActiveGame(); err == nil && gm != nil {
+		createdAt = gm.CreatedAt
+	}
+
+	state, err := g.buildGameState(gameID, createdAt)
 	if err != nil {
 		return nil, err
 	}
@@ -222,6 +229,7 @@ func (g *Service) Draw() (*DrawResult, error) {
 
 	state := &model.BingoGameState{
 		ID:            game.ID,
+		CreatedAt:     game.CreatedAt,
 		CalledNumbers: called,
 		Patterns:      patterns,
 		TotalCalled:   len(called),
@@ -276,7 +284,7 @@ func (g *Service) CurrentState() (*model.BingoGameState, []string, error) {
 	}
 	g.stateMu.RUnlock()
 
-	state, err := g.buildGameState(game.ID)
+	state, err := g.buildGameState(game.ID, game.CreatedAt)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -299,8 +307,9 @@ func (g *Service) setStateCache(gameID int64, state *model.BingoGameState) {
 }
 
 // buildGameState assembles a GameState from the database for the given game ID.
-// Fetches called numbers and pattern snapshots.
-func (g *Service) buildGameState(gameID int64) (*model.BingoGameState, error) {
+// Fetches called numbers and pattern snapshots. The createdAt timestamp is
+// passed in by the caller (the game's start time); it may be empty.
+func (g *Service) buildGameState(gameID int64, createdAt string) (*model.BingoGameState, error) {
 	called, err := g.store.GetCalledNumbers(gameID)
 	if err != nil {
 		return nil, err
@@ -311,6 +320,7 @@ func (g *Service) buildGameState(gameID int64) (*model.BingoGameState, error) {
 	}
 	return &model.BingoGameState{
 		ID:            gameID,
+		CreatedAt:     createdAt,
 		CalledNumbers: called,
 		Patterns:      patterns,
 		TotalCalled:   len(called),

@@ -5,6 +5,7 @@
  * `adminTab==='raffle-closed'` block. The `✓` paid indicator is a real icon
  * element here (the original interpolated the raw tag as text).
  */
+import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
 import { useRafflesStore } from '@/stores/raffles'
 import { assetUrl } from '@/lib/assets'
 
@@ -73,23 +74,30 @@ const raffles = useRafflesStore()
     <!-- Closed raffle list -->
     <div v-else class="admin-panel">
       <h3 class="mb-16"><i class="fa-solid fa-lock"></i> Closed Raffles</h3>
-      <div class="raffle-list">
-        <div
-          v-for="r in raffles.closedRaffles"
-          :key="r.id"
-          class="raffle-card"
-          @click="raffles.viewRaffle(r)"
-        >
-          <img v-if="r.prize_image" :src="assetUrl(r.prize_image)" class="raffle-card-image" alt="Prize" />
-          <div class="raffle-card-body">
-            <h3>{{ r.title }}</h3>
-            <p v-if="r.cost_per_entry > 0" class="raffle-cost">
-              {{ r.cost_per_entry.toLocaleString() }} gil per entry
-            </p>
+      <LoadingSpinner
+        v-if="raffles.rafflesLoading && raffles.raffles.length === 0"
+        block
+        label="Loading raffles…"
+      />
+      <template v-else>
+        <div class="raffle-list">
+          <div
+            v-for="r in raffles.closedRaffles"
+            :key="r.id"
+            class="raffle-card"
+            @click="raffles.viewRaffle(r)"
+          >
+            <img v-if="r.prize_image" :src="assetUrl(r.prize_image)" class="raffle-card-image" alt="Prize" />
+            <div class="raffle-card-body">
+              <h3>{{ r.title }}</h3>
+              <p v-if="r.cost_per_entry > 0" class="raffle-cost">
+                {{ r.cost_per_entry.toLocaleString() }} gil per entry
+              </p>
+            </div>
           </div>
         </div>
-      </div>
-      <p v-if="raffles.closedRaffles.length === 0" class="no-game-msg">No closed raffles.</p>
+        <p v-if="raffles.closedRaffles.length === 0" class="no-game-msg">No closed raffles.</p>
+      </template>
     </div>
   </div>
 </template>

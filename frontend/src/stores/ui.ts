@@ -34,6 +34,14 @@ export const useUiStore = defineStore('ui', () => {
   })
   let toastTimer: ReturnType<typeof setTimeout> | undefined
 
+  // ── Route loading ──────────────────────────────────────────────────────────
+  // True while a route navigation is in flight (async guard + lazy chunk fetch),
+  // driving the top progress bar. Set from the router guards (see src/router).
+  const routeLoading = ref(false)
+  function setRouteLoading(v: boolean): void {
+    routeLoading.value = v
+  }
+
   // ── Themed confirm dialog ──────────────────────────────────────────────────
   const confirmState = ref<ConfirmState>({
     show: false,
@@ -75,13 +83,23 @@ export const useUiStore = defineStore('ui', () => {
     if (r) r(result)
   }
 
-  /** Displays a toast that auto-dismisses after 3.5 seconds. */
-  function notify(message: string, type: ToastType = 'info'): void {
+  /**
+   * Displays a toast that auto-dismisses after `duration` ms (default 3.5s).
+   * Pass a longer duration for important messages (e.g. winner alerts). The
+   * toast can also be dismissed early by the user via `dismissToast()`.
+   */
+  function notify(message: string, type: ToastType = 'info', duration = 3500): void {
     clearTimeout(toastTimer)
     toast.value = { show: true, message, type }
     toastTimer = setTimeout(() => {
       toast.value.show = false
-    }, 3500)
+    }, duration)
+  }
+
+  /** Hides the current toast immediately (e.g. when the user clicks it). */
+  function dismissToast(): void {
+    clearTimeout(toastTimer)
+    toast.value.show = false
   }
 
   /** Copies text to the clipboard and shows a toast. */
@@ -92,5 +110,15 @@ export const useUiStore = defineStore('ui', () => {
       .catch(() => notify('Failed to copy', 'error'))
   }
 
-  return { toast, confirmState, notify, confirm, resolveConfirm, copyToClipboard }
+  return {
+    toast,
+    confirmState,
+    routeLoading,
+    setRouteLoading,
+    notify,
+    dismissToast,
+    confirm,
+    resolveConfirm,
+    copyToClipboard,
+  }
 })

@@ -10,6 +10,7 @@
  * fields/columns are otherwise unchanged.
  */
 import { useRouter } from 'vue-router'
+import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
 import { useRafflesStore } from '@/stores/raffles'
 import { assetUrl } from '@/lib/assets'
 
@@ -57,11 +58,20 @@ function editSelected(): void {
         </h3>
         <p class="text-dim text-sm mb-12">{{ raffles.raffleWinner.num_entries }} entries</p>
         <div v-if="raffles.selectedRaffle.status === 'open'" class="flex-toolbar">
-          <button class="btn-primary" @click="raffles.verifyRaffleWinner()">
+          <button
+            class="btn-primary"
+            :disabled="raffles.pickingWinner"
+            @click="raffles.verifyRaffleWinner()"
+          >
             <i class="fa-solid fa-circle-check"></i> Verify Winner
           </button>
-          <button class="btn-ghost" @click="raffles.pickAnotherWinner()">
-            <i class="fa-solid fa-rotate"></i> Pick Another
+          <button
+            class="btn-ghost"
+            :disabled="raffles.pickingWinner"
+            @click="raffles.pickAnotherWinner()"
+          >
+            <LoadingSpinner v-if="raffles.pickingWinner" label="Picking…" />
+            <template v-else><i class="fa-solid fa-rotate"></i> Pick Another</template>
           </button>
         </div>
       </div>
@@ -71,8 +81,13 @@ function editSelected(): void {
         v-if="raffles.selectedRaffle.status === 'open' && !raffles.raffleWinner"
         class="mb-16"
       >
-        <button class="btn-primary btn-lg" @click="raffles.pickRaffleWinner()">
-          <i class="fa-solid fa-dice"></i> Pick a Winner
+        <button
+          class="btn-primary btn-lg"
+          :disabled="raffles.pickingWinner"
+          @click="raffles.pickRaffleWinner()"
+        >
+          <LoadingSpinner v-if="raffles.pickingWinner" label="Picking…" />
+          <template v-else><i class="fa-solid fa-dice"></i> Pick a Winner</template>
         </button>
       </div>
 
@@ -126,23 +141,30 @@ function editSelected(): void {
     <!-- Open raffle list -->
     <div v-else class="admin-panel">
       <h3 class="mb-16"><i class="fa-solid fa-clipboard-list"></i> Open Raffles</h3>
-      <div class="raffle-list">
-        <div
-          v-for="r in raffles.openRaffles"
-          :key="r.id"
-          class="raffle-card"
-          @click="raffles.viewRaffle(r)"
-        >
-          <img v-if="r.prize_image" :src="assetUrl(r.prize_image)" class="raffle-card-image" alt="Prize" />
-          <div class="raffle-card-body">
-            <h3>{{ r.title }}</h3>
-            <p v-if="r.cost_per_entry > 0" class="raffle-cost">
-              {{ r.cost_per_entry.toLocaleString() }} gil per entry
-            </p>
+      <LoadingSpinner
+        v-if="raffles.rafflesLoading && raffles.raffles.length === 0"
+        block
+        label="Loading raffles…"
+      />
+      <template v-else>
+        <div class="raffle-list">
+          <div
+            v-for="r in raffles.openRaffles"
+            :key="r.id"
+            class="raffle-card"
+            @click="raffles.viewRaffle(r)"
+          >
+            <img v-if="r.prize_image" :src="assetUrl(r.prize_image)" class="raffle-card-image" alt="Prize" />
+            <div class="raffle-card-body">
+              <h3>{{ r.title }}</h3>
+              <p v-if="r.cost_per_entry > 0" class="raffle-cost">
+                {{ r.cost_per_entry.toLocaleString() }} gil per entry
+              </p>
+            </div>
           </div>
         </div>
-      </div>
-      <p v-if="raffles.openRaffles.length === 0" class="no-game-msg">No open raffles.</p>
+        <p v-if="raffles.openRaffles.length === 0" class="no-game-msg">No open raffles.</p>
+      </template>
     </div>
   </div>
 </template>

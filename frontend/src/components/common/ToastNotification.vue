@@ -9,7 +9,14 @@ const ui = useUiStore()
 </script>
 
 <template>
-  <div v-if="ui.toast.show" :class="['toast', 'toast-' + ui.toast.type]">
+  <div
+    v-if="ui.toast.show"
+    :class="['toast', 'toast-' + ui.toast.type]"
+    role="status"
+    aria-live="polite"
+    title="Click to dismiss"
+    @click="ui.dismissToast()"
+  >
     {{ ui.toast.message }}
   </div>
 </template>

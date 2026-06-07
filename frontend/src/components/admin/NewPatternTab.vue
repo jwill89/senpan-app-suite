@@ -5,6 +5,7 @@
  * detection (in the store). Mirrors the original `adminTab==='bingo-new-pattern'`
  * block.
  */
+import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
 import { usePatternsStore } from '@/stores/patterns'
 
 const patterns = usePatternsStore()
@@ -52,10 +53,11 @@ const patterns = usePatternsStore()
           <button class="btn-ghost btn-sm" @click="patterns.clearPatternEditor()">Clear</button>
           <button
             class="btn-secondary"
-            :disabled="!patterns.newPatternName.trim()"
+            :disabled="!patterns.newPatternName.trim() || patterns.savingPattern"
             @click="patterns.savePattern()"
           >
-            Save Pattern
+            <LoadingSpinner v-if="patterns.savingPattern" label="Saving…" />
+            <template v-else>Save Pattern</template>
           </button>
         </div>
       </div>

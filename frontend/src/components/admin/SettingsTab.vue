@@ -7,6 +7,7 @@
  * shared FALLBACK_GOOGLE_FONTS constant (identical list to the original).
  */
 import { computed } from 'vue'
+import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
 import { FALLBACK_GOOGLE_FONTS } from '@/lib/constants'
 import { useAppStore } from '@/stores/app'
 
@@ -140,7 +141,10 @@ const fontOptions = computed(() =>
             </span>
           </div>
         </div>
-        <button class="btn-primary" @click="app.saveSettings()">Save Settings</button>
+        <button class="btn-primary" :disabled="app.savingSettings" @click="app.saveSettings()">
+          <LoadingSpinner v-if="app.savingSettings" label="Saving…" />
+          <template v-else>Save Settings</template>
+        </button>
       </div>
     </div>
   </div>

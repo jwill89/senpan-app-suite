@@ -9,6 +9,7 @@
  */
 import { computed, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
+import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
 import { useMarkdown } from '@/lib/markdown'
 import { useRafflesStore } from '@/stores/raffles'
 import { assetUrl } from '@/lib/assets'
@@ -123,11 +124,14 @@ function back(): void {
         <button
           class="btn-primary"
           :disabled="
-            !raffles.raffleSignup.characterName.trim() || !raffles.raffleSignup.world.trim()
+            !raffles.raffleSignup.characterName.trim() ||
+            !raffles.raffleSignup.world.trim() ||
+            raffles.entering
           "
           @click="raffles.enterRaffle()"
         >
-          Sign Up
+          <LoadingSpinner v-if="raffles.entering" label="Signing up…" />
+          <template v-else>Sign Up</template>
         </button>
       </div>
 
@@ -137,5 +141,8 @@ function back(): void {
         </p>
       </div>
     </div>
+  </div>
+  <div v-else-if="raffles.detailLoading" class="tab-body">
+    <LoadingSpinner block label="Loading raffle…" />
   </div>
 </template>

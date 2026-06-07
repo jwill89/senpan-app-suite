@@ -4,7 +4,9 @@
  * optional Raffles card. Navigates via the router (`/play/:cardId`,
  * `/raffles`, `/admin/login`).
  */
+import { onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
+import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
 import { useAppStore } from '@/stores/app'
 import { useGameStore } from '@/stores/game'
 import { usePlayerStore } from '@/stores/player'
@@ -36,6 +38,10 @@ function goAdminLogin(): void {
 function onJoinInput(e: Event): void {
   player.joinId = (e.target as HTMLInputElement).value.toUpperCase()
 }
+
+// Focus the board-ID field on load so players can type their code immediately.
+const joinInput = ref<HTMLInputElement | null>(null)
+onMounted(() => joinInput.value?.focus())
 </script>
 
 <template>
@@ -51,16 +57,25 @@ function onJoinInput(e: Event): void {
         <p>Enter your unique bingo board ID to play</p>
         <div class="field">
           <input
+            ref="joinInput"
             v-model="player.joinId"
             placeholder="ABC123"
             aria-label="Board ID"
             maxlength="6"
+            autocapitalize="characters"
+            autocomplete="off"
+            spellcheck="false"
             @keyup.enter="join"
             @input="onJoinInput"
           />
         </div>
-        <button class="btn-primary" :disabled="player.joinId.length === 0" @click="join">
-          Join
+        <button
+          class="btn-primary"
+          :disabled="player.joinId.length === 0 || player.joining"
+          @click="join"
+        >
+          <LoadingSpinner v-if="player.joining" label="Joining…" />
+          <template v-else>Join</template>
         </button>
         <p v-if="player.joinError" class="error-msg">{{ player.joinError }}</p>
       </div>

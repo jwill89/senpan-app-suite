@@ -90,7 +90,11 @@ export class WsClient {
 
     this.ws = ws
 
-    // Keepalive ping every 25s to defeat reverse-proxy idle timeouts.
+    // Keepalive: send a text "ping" every 25s to defeat reverse-proxy idle
+    // timeouts that only reset on data frames. The Go hub's readPump reads and
+    // *discards* all incoming client frames (it never JSON-parses them), so this
+    // is a safe no-op server-side — it's purely traffic to keep the link warm.
+    // (The server also sends its own protocol-level pings every 30s.)
     if (this.keepaliveTimer) clearInterval(this.keepaliveTimer)
     this.keepaliveTimer = setInterval(() => {
       if (this.ws && this.ws.readyState === WebSocket.OPEN) {

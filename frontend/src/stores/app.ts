@@ -6,10 +6,10 @@
  */
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
-import { api } from '@/lib/api'
+import { endpoints } from '@/lib/endpoints'
 import { applyCustomCSS, applyHeaderFont } from '@/lib/theme'
 import { DEFAULT_APP_SETTINGS } from '@/lib/constants'
-import type { AppSettings, SettingsResponse } from '@/types/api'
+import type { AppSettings } from '@/types/api'
 import { useUiStore } from './ui'
 
 export const useAppStore = defineStore('app', () => {
@@ -18,11 +18,13 @@ export const useAppStore = defineStore('app', () => {
   const settings = ref<AppSettings>({ ...DEFAULT_APP_SETTINGS })
   const googleFontsList = ref<string[]>([])
   let googleFontsCacheKey = ''
+  /** True while settings are being saved (drives the Save button). */
+  const savingSettings = ref(false)
 
   /** Loads app settings, applies title + header font, then fetches fonts. */
   async function loadSettings(): Promise<void> {
     try {
-      const data = await api<SettingsResponse>('settings')
+      const data = await endpoints.settings.get()
       if (data.settings) {
         settings.value = { ...settings.value, ...data.settings }
         document.title = settings.value.app_title || 'Senpan App Suite'
@@ -36,14 +38,17 @@ export const useAppStore = defineStore('app', () => {
 
   /** Saves settings to the server, applies them, and notifies. */
   async function saveSettings(): Promise<void> {
+    savingSettings.value = true
     try {
-      await api('settings', { method: 'POST', body: { settings: settings.value } })
+      await endpoints.settings.save(settings.value)
       document.title = settings.value.app_title || 'Senpan App Suite'
       applyHeaderFont(settings.value.header_font)
       loadGoogleFontsList()
       ui.notify('Settings saved!', 'success')
     } catch (e) {
       ui.notify((e as Error).message, 'error')
+    } finally {
+      savingSettings.value = false
     }
   }
 
@@ -81,7 +86,7 @@ export const useAppStore = defineStore('app', () => {
   /** Loads the active theme CSS on page load and injects it. */
   async function loadActiveCSS(): Promise<void> {
     try {
-      const data = await api<{ css: string }>('styles/active')
+      const data = await endpoints.styles.activeCss()
       applyCustomCSS(data.css || '')
     } catch {
       /* silent — custom CSS is optional */
@@ -91,6 +96,7 @@ export const useAppStore = defineStore('app', () => {
   return {
     settings,
     googleFontsList,
+    savingSettings,
     loadSettings,
     saveSettings,
     loadGoogleFontsList,

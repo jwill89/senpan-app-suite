@@ -5,6 +5,7 @@
  * Rendered at the `/admin/raffles/new` route.
  */
 import { useRouter } from 'vue-router'
+import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
 import { useRafflesStore } from '@/stores/raffles'
 import { assetUrl } from '@/lib/assets'
 
@@ -133,9 +134,16 @@ async function save(): Promise<void> {
           </div>
         </div>
         <div class="btns flex-toolbar">
-          <button class="btn-ghost" @click="raffles.cancelRaffleForm()">Cancel</button>
-          <button class="btn-primary" :disabled="!raffles.raffleForm.title.trim()" @click="save">
-            Save Raffle
+          <button class="btn-ghost" :disabled="raffles.savingRaffle" @click="raffles.cancelRaffleForm()">
+            Cancel
+          </button>
+          <button
+            class="btn-primary"
+            :disabled="!raffles.raffleForm.title.trim() || raffles.savingRaffle"
+            @click="save"
+          >
+            <LoadingSpinner v-if="raffles.savingRaffle" label="Saving…" />
+            <template v-else>Save Raffle</template>
           </button>
         </div>
       </template>

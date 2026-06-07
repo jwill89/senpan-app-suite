@@ -37,6 +37,43 @@ export type {
   WinnersLogEntry,
 } from './api.generated'
 
+// ── Generic / action responses ───────────────────────────────────────────────
+// Many POST action endpoints reply with a simple {"success": true} (or an
+// error envelope handled by ApiError). Callers that don't read the body use this.
+export interface OkResponse {
+  success?: boolean
+}
+
+// GET /api/auth and POST /api/auth (login/logout).
+export interface AuthCheckResponse {
+  authenticated: boolean
+}
+
+// GET /api/styles/active — the active theme's raw CSS.
+export interface ActiveCssResponse {
+  css: string
+}
+
+// POST /api/cards {action:"generate"} — number of cards generated.
+export interface GenerateCardsResponse {
+  count: number
+}
+
+// Board fetch variants that only return the card (winner verify / preview).
+export interface CardResponse {
+  card: Card
+}
+
+// POST /api/styles {action:"get"} — a single theme with its CSS.
+export interface StyleGetResponse {
+  style: Style
+}
+
+// POST /api/styles {action:"create"} — the new theme's id.
+export interface StyleCreateResponse {
+  id: number
+}
+
 // ── Card list entry (GET /api/cards) ────────────────────────────────────────
 // The list endpoint returns a lightweight shape (no board_data).
 export interface CardListEntry {

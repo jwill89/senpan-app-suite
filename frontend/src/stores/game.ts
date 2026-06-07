@@ -8,16 +8,8 @@
  */
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
-import { api } from '@/lib/api'
-import type {
-  BingoGameState,
-  Card,
-  DrawResult,
-  FrequentWinner,
-  GameStateResponse,
-  WinnersLogEntry,
-  WinnersLogResponse,
-} from '@/types/api'
+import { endpoints } from '@/lib/endpoints'
+import type { BingoGameState, Card, FrequentWinner, WinnersLogEntry } from '@/types/api'
 import { useUiStore } from './ui'
 
 export const useGameStore = defineStore('game', () => {
@@ -33,6 +25,12 @@ export const useGameStore = defineStore('game', () => {
   const drawCountdown = ref<number | null>(null)
   const drawSent = ref(false)
   let drawCountdownTimer: ReturnType<typeof setInterval> | null = null
+
+  // In-flight flags for the game-control buttons.
+  const starting = ref(false)
+  const drawing = ref(false)
+  const ending = ref(false)
+  const winnersLogLoading = ref(false)
 
   // Winner verification modal: { card, matchedCells }
   const winnerPreview = ref<{ card: Card; matchedCells: Set<string> } | null>(null)
@@ -73,7 +71,7 @@ export const useGameStore = defineStore('game', () => {
 
   async function loadGameState(): Promise<void> {
     try {
-      const data = await api<GameStateResponse>('game')
+      const data = await endpoints.game.getState()
       currentGame.value = data.game
       winners.value = data.winners || []
       gameDetails.value = data.game_details || ''
@@ -88,11 +86,9 @@ export const useGameStore = defineStore('game', () => {
       ui.notify('Select at least one win pattern', 'error')
       return
     }
+    starting.value = true
     try {
-      const data = await api<GameStateResponse>('game', {
-        method: 'POST',
-        body: { action: 'start', pattern_ids: selectedPatternIds.value },
-      })
+      const data = await endpoints.game.start(selectedPatternIds.value)
       currentGame.value = data.game
       winners.value = []
       lastDrawn.value = null
@@ -101,21 +97,22 @@ export const useGameStore = defineStore('game', () => {
       ui.notify('Game started!', 'success')
     } catch (e) {
       ui.notify((e as Error).message, 'error')
+    } finally {
+      starting.value = false
     }
   }
 
   async function drawNumber(): Promise<void> {
+    if (drawing.value) return
+    drawing.value = true
     try {
       const delay = drawDelay.value || 0
       const prevCount = winners.value.length
-      const data = await api<DrawResult>('game', {
-        method: 'POST',
-        body: { action: 'draw', delay },
-      })
+      const data = await endpoints.game.draw(delay)
       lastDrawn.value = data.drawn
       currentGame.value = data.game
       winners.value = data.winners || []
-      if (winners.value.length > prevCount) ui.notify('We have winner(s)!', 'success')
+      if (winners.value.length > prevCount) ui.notify('We have winner(s)!', 'success', 6000)
 
       clearDrawCountdown()
       if (delay > 0) {
@@ -143,6 +140,8 @@ export const useGameStore = defineStore('game', () => {
       }
     } catch (e) {
       ui.notify((e as Error).message, 'error')
+    } finally {
+      drawing.value = false
     }
   }
 
@@ -166,8 +165,9 @@ export const useGameStore = defineStore('game', () => {
 
   async function confirmEndGame(validWinnerIds: string[]): Promise<void> {
     showEndGameModal.value = false
+    ending.value = true
     try {
-      await api('game', { method: 'POST', body: { action: 'end', valid_winner_ids: validWinnerIds } })
+      await endpoints.game.end(validWinnerIds)
       currentGame.value = null
       winners.value = []
       lastDrawn.value = null
@@ -177,12 +177,14 @@ export const useGameStore = defineStore('game', () => {
       ui.notify('Game ended', 'info')
     } catch (e) {
       ui.notify((e as Error).message, 'error')
+    } finally {
+      ending.value = false
     }
   }
 
   async function saveGameDetails(): Promise<void> {
     try {
-      await api('game', { method: 'POST', body: { action: 'update_details', details: gameDetails.value } })
+      await endpoints.game.updateDetails(gameDetails.value)
     } catch (e) {
       ui.notify((e as Error).message, 'error')
     }
@@ -195,7 +197,7 @@ export const useGameStore = defineStore('game', () => {
     if (winnerLoading.value) return
     winnerLoading.value = true
     try {
-      const data = await api<{ card: Card }>('board?id=' + encodeURIComponent(cardId))
+      const data = await endpoints.board.get(cardId)
       const card = data.card
       const calledSet = adminCalledSet.value
       const patterns = currentGame.value ? currentGame.value.patterns : []
@@ -241,7 +243,7 @@ export const useGameStore = defineStore('game', () => {
   async function confirmHalftime(): Promise<void> {
     showHalftimePrompt.value = false
     try {
-      await api('game', { method: 'POST', body: { action: 'trigger_halftime' } })
+      await endpoints.game.triggerHalftime()
       ui.notify('Halftime alert sent to all players!', 'success')
     } catch (e) {
       ui.notify((e as Error).message, 'error')
@@ -256,7 +258,7 @@ export const useGameStore = defineStore('game', () => {
 
   async function loadFrequentWinners(): Promise<void> {
     try {
-      const data = await api<{ winners: FrequentWinner[] }>('winners-log/frequent')
+      const data = await endpoints.winnersLog.frequent()
       frequentWinners.value = data.winners || []
     } catch {
       /* silent */
@@ -266,14 +268,20 @@ export const useGameStore = defineStore('game', () => {
   // ── Winners log ────────────────────────────────────────────────────────────
 
   async function loadWinnersLog(): Promise<void> {
+    winnersLogLoading.value = true
     try {
-      const data = await api<WinnersLogResponse>(
-        `winners-log?page=${winnersLogPage.value}&per_page=${winnersLogPerPage.value}&sort=${winnersLogSort.value}&dir=${winnersLogDir.value}`,
-      )
+      const data = await endpoints.winnersLog.list({
+        page: winnersLogPage.value,
+        perPage: winnersLogPerPage.value,
+        sort: winnersLogSort.value,
+        dir: winnersLogDir.value,
+      })
       winnersLog.value = data.entries || []
       winnersLogTotal.value = data.total || 0
     } catch (e) {
       ui.notify((e as Error).message, 'error')
+    } finally {
+      winnersLogLoading.value = false
     }
   }
 
@@ -306,6 +314,10 @@ export const useGameStore = defineStore('game', () => {
     drawDelay,
     drawCountdown,
     drawSent,
+    starting,
+    drawing,
+    ending,
+    winnersLogLoading,
     winnerPreview,
     winnerLoading,
     showHalftimePrompt,

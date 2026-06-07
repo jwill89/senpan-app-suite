@@ -32,6 +32,7 @@ import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router'
 import type { AdminTab } from '@/stores/admin'
 import { useAuthStore } from '@/stores/auth'
 import { useAdminStore } from '@/stores/admin'
+import { useUiStore } from '@/stores/ui'
 
 // Views and admin tabs are lazy-loaded (dynamic import) so each route's code —
 // and its heavy deps (CodeMirror, vuedraggable, markdown-it) — is split into a
@@ -161,6 +162,19 @@ export function adminTabRouteName(tab: AdminTab): string {
 // tab/section in sync with the matched route so the sidebar highlights it. Data
 // loading for individual admin tabs (and the shared WebSocket lifecycle) is
 // handled by the views/composable, not here, to keep the guard lightweight.
+// Drive the top progress bar: a navigation may await the async guard below and
+// then fetch the matched route's lazy chunk, so show the bar for the whole
+// navigation and clear it once it settles (success, redirect, or error).
+router.beforeEach(() => {
+  useUiStore().setRouteLoading(true)
+})
+router.afterEach(() => {
+  useUiStore().setRouteLoading(false)
+})
+router.onError(() => {
+  useUiStore().setRouteLoading(false)
+})
+
 router.beforeEach(async (to) => {
   const auth = useAuthStore()
 

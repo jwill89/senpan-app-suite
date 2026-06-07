@@ -4,6 +4,7 @@
  * indicators), click a chip to preview, delete individual or all cards.
  * Mirrors the original `adminTab==='bingo-cards'` block.
  */
+import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
 import { useCardsStore } from '@/stores/cards'
 
 const cards = useCardsStore()
@@ -23,7 +24,10 @@ const cards = useCardsStore()
           max="500"
         />
         <span class="text-dim">cards</span>
-        <button class="btn-primary" @click="cards.generateCards()">Generate</button>
+        <button class="btn-primary" :disabled="cards.generating" @click="cards.generateCards()">
+          <LoadingSpinner v-if="cards.generating" label="Generating…" />
+          <template v-else>Generate</template>
+        </button>
         <button
           v-if="cards.cards.length"
           class="btn-danger btn-sm"
@@ -43,7 +47,12 @@ const cards = useCardsStore()
           style="flex: 1; min-width: 180px; max-width: 320px"
         />
       </div>
-      <div class="cards-grid">
+      <LoadingSpinner
+        v-if="cards.cardsLoading && cards.cards.length === 0"
+        block
+        label="Loading cards…"
+      />
+      <div v-else class="cards-grid">
         <div
           v-for="c in cards.filteredCards"
           :key="c.id"
@@ -59,7 +68,11 @@ const cards = useCardsStore()
         </div>
       </div>
 
-      <p v-if="cards.cards.length === 0" class="msg-block" style="padding: 24px">
+      <p
+        v-if="!cards.cardsLoading && cards.cards.length === 0"
+        class="msg-block"
+        style="padding: 24px"
+      >
         No cards generated yet.
       </p>
     </div>

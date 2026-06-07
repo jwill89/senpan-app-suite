@@ -7,6 +7,7 @@
  * identical. After a drag the new order is persisted via the store.
  */
 import draggable from 'vuedraggable'
+import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
 import { usePatternsStore } from '@/stores/patterns'
 
 const patterns = usePatternsStore()
@@ -31,10 +32,11 @@ function onReorder(): void {
         />
         <button
           class="btn-secondary btn-sm"
-          :disabled="!patterns.newCategoryName.trim()"
+          :disabled="!patterns.newCategoryName.trim() || patterns.creatingCategory"
           @click="patterns.createCategory()"
         >
-          + Add Category
+          <LoadingSpinner v-if="patterns.creatingCategory" label="Adding…" />
+          <template v-else>+ Add Category</template>
         </button>
       </div>
 

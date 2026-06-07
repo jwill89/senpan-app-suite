@@ -3,6 +3,7 @@
  * Admin Winners Log tab — paginated, sortable table of past game winners with
  * per-page controls. Mirrors the original `adminTab==='bingo-winners-log'` block.
  */
+import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
 import { useGameStore } from '@/stores/game'
 
 const game = useGameStore()
@@ -44,7 +45,12 @@ function onPerPageChange(): void {
           {{ game.winnersLogTotal }} total entries
         </span>
       </div>
-      <div v-if="game.winnersLog.length" style="overflow-x: auto">
+      <LoadingSpinner
+        v-if="game.winnersLogLoading && game.winnersLog.length === 0"
+        block
+        label="Loading winners…"
+      />
+      <div v-else-if="game.winnersLog.length" style="overflow-x: auto">
         <table class="winners-log-table">
           <thead>
             <tr>
@@ -93,7 +99,9 @@ function onPerPageChange(): void {
           </tbody>
         </table>
       </div>
-      <p v-else class="msg-block" style="padding: 24px">No winners logged yet.</p>
+      <p v-else-if="!game.winnersLogLoading" class="msg-block" style="padding: 24px">
+        No winners logged yet.
+      </p>
       <div v-if="game.winnersLogTotalPages() > 1" class="pagination-bar mt-12">
         <button
           class="btn-ghost btn-sm"

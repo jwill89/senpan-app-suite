@@ -4,15 +4,25 @@
  * Navigates via the router (`/admin/...` routes); the active tab/section
  * highlight reads from the admin store, which the router guard keeps in sync
  * with the matched route.
+ *
+ * NOTE: the nav items are intentionally <button>s (with programmatic
+ * router.push), not <RouterLink>/<a>. app.css (and user-authored custom themes)
+ * style `.admin-nav-items button`, so switching to anchors would silently break
+ * the sidebar's appearance under existing themes. The minor RouterLink perks
+ * (middle-click / open-in-new-tab) aren't worth that theme-fidelity cost here.
  */
 import { useRouter } from 'vue-router'
 import { adminTabRouteName } from '@/router'
 import { useAdminStore, type AdminSection, type AdminTab } from '@/stores/admin'
 import { useGameStore } from '@/stores/game'
+import { useCardsStore } from '@/stores/cards'
+import { useRafflesStore } from '@/stores/raffles'
 
 const router = useRouter()
 const admin = useAdminStore()
 const game = useGameStore()
+const cards = useCardsStore()
+const raffles = useRafflesStore()
 
 /** Navigate to an admin tab. */
 function go(tab: AdminTab): void {
@@ -47,9 +57,16 @@ function toggle(section: AdminSection): void {
       <div v-show="admin.adminSection === 'bingo'" class="admin-nav-items">
         <button :class="{ active: admin.adminTab === 'bingo-game' }" @click="go('bingo-game')">
           <i class="fa-solid fa-gamepad"></i> {{ game.adminGameLabel }}
+          <span
+            v-if="game.currentGame"
+            class="live-dot nav-live-dot"
+            role="status"
+            aria-label="Game in progress"
+          ></span>
         </button>
         <button :class="{ active: admin.adminTab === 'bingo-cards' }" @click="go('bingo-cards')">
           <i class="fa-solid fa-id-card"></i> Manage Cards
+          <span v-if="cards.cards.length" class="nav-count">({{ cards.cards.length }})</span>
         </button>
         <button
           :class="{ active: admin.adminTab === 'bingo-winners-log' }"
@@ -95,12 +112,18 @@ function toggle(section: AdminSection): void {
         </button>
         <button :class="{ active: admin.adminTab === 'raffle-open' }" @click="go('raffle-open')">
           <i class="fa-solid fa-clipboard-list"></i> Open Raffles
+          <span v-if="raffles.openRaffles.length" class="nav-count">
+            ({{ raffles.openRaffles.length }})
+          </span>
         </button>
         <button
           :class="{ active: admin.adminTab === 'raffle-closed' }"
           @click="go('raffle-closed')"
         >
           <i class="fa-solid fa-lock"></i> Closed Raffles
+          <span v-if="raffles.closedRaffles.length" class="nav-count">
+            ({{ raffles.closedRaffles.length }})
+          </span>
         </button>
       </div>
     </div>

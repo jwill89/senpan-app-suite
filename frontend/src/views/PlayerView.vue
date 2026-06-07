@@ -9,7 +9,7 @@
  * (e.g. bad/expired id) it redirects home. The WebSocket connect/disconnect is
  * driven by App.vue off the active route + loaded card.
  */
-import { onMounted, watch } from 'vue'
+import { onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import BingoBoard from '@/components/common/BingoBoard.vue'
 import CalledNumbers from '@/components/common/CalledNumbers.vue'
@@ -19,15 +19,47 @@ import StampColorPicker from '@/components/player/StampColorPicker.vue'
 import StampOpacitySlider from '@/components/player/StampOpacitySlider.vue'
 import WinPatternsPanel from '@/components/player/WinPatternsPanel.vue'
 import { useMarkdown } from '@/lib/markdown'
+import { exportCardImage } from '@/lib/exportCard'
+import { useAppStore } from '@/stores/app'
 import { useGameStore } from '@/stores/game'
 import { usePlayerStore } from '@/stores/player'
+import { useUiStore } from '@/stores/ui'
 
 const props = defineProps<{ cardId: string }>()
 
 const router = useRouter()
 const player = usePlayerStore()
 const game = useGameStore()
+const app = useAppStore()
+const ui = useUiStore()
 const { render: renderMarkdown } = useMarkdown()
+
+/** Ref to the BingoBoard component so we can capture its `.board-wrap` root. */
+const boardRef = ref<{ $el?: HTMLElement } | null>(null)
+/** True while the card image is being generated (drives the export button). */
+const exporting = ref(false)
+
+/** Saves the current board (with stamps + active theme) as a framed PNG image. */
+async function exportCard(): Promise<void> {
+  const el = boardRef.value?.$el
+  if (!el || exporting.value) return
+  exporting.value = true
+  try {
+    await exportCardImage({
+      element: el,
+      fileName: `bingo-card-${player.playerCard?.id ?? 'card'}`,
+      title: app.settings.app_title || 'Bingo',
+      cardId: player.playerCard?.id ?? '',
+      link: window.location.host,
+      gameDetails: game.gameDetails,
+    })
+    ui.notify('Card image saved!', 'success')
+  } catch {
+    ui.notify('Could not export card image.', 'error')
+  } finally {
+    exporting.value = false
+  }
+}
 
 /** Loads the board for the current cardId param if not already loaded. */
 async function ensureLoaded(id: string): Promise<void> {
@@ -66,6 +98,7 @@ function leave(): void {
         <!-- The bingo board -->
         <BingoBoard
           v-if="player.playerCard"
+          ref="boardRef"
           :board="player.playerCard.board_data"
           mode="player"
           :is-stamped="player.isStamped"
@@ -83,6 +116,11 @@ function leave(): void {
 
         <button class="btn-ghost btn-sm" @click="player.clearAllStamps()">
           Clear All Stamps on Board
+        </button>
+
+        <button class="btn-ghost btn-sm" :disabled="exporting" @click="exportCard">
+          <i class="fa-solid fa-download"></i>
+          {{ exporting ? 'Saving…' : 'Save Card as Image' }}
         </button>
 
         <!-- Game details (Markdown) -->

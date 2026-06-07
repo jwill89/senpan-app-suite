@@ -5,7 +5,7 @@
  */
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
-import { api } from '@/lib/api'
+import { endpoints } from '@/lib/endpoints'
 import type { Card, CardListEntry } from '@/types/api'
 import { useUiStore } from './ui'
 
@@ -15,6 +15,10 @@ export const useCardsStore = defineStore('cards', () => {
   const cards = ref<CardListEntry[]>([])
   const generateCount = ref(10)
   const cardSearchQuery = ref('')
+  /** True while the card list is loading (drives the list spinner). */
+  const cardsLoading = ref(false)
+  /** True while a generate request is in flight (drives the Generate button). */
+  const generating = ref(false)
 
   const previewCard = ref<Card | null>(null)
   const previewLoading = ref(false)
@@ -33,29 +37,32 @@ export const useCardsStore = defineStore('cards', () => {
   })
 
   async function loadCards(): Promise<void> {
+    cardsLoading.value = true
     try {
-      const data = await api<{ cards: CardListEntry[] }>('cards')
+      const data = await endpoints.cards.list()
       cards.value = data.cards
     } catch (e) {
       ui.notify((e as Error).message, 'error')
+    } finally {
+      cardsLoading.value = false
     }
   }
 
   async function generateCards(): Promise<void> {
+    generating.value = true
     try {
-      const data = await api<{ count: number }>('cards', {
-        method: 'POST',
-        body: { action: 'generate', count: generateCount.value },
-      })
+      const data = await endpoints.cards.generate(generateCount.value)
       ui.notify(`Generated ${data.count} card(s)`, 'success')
     } catch (e) {
       ui.notify((e as Error).message, 'error')
+    } finally {
+      generating.value = false
     }
   }
 
   async function deleteCard(id: string): Promise<void> {
     try {
-      await api('cards', { method: 'POST', body: { action: 'delete', id } })
+      await endpoints.cards.delete(id)
       cards.value = cards.value.filter((c) => c.id !== id)
       ui.notify('Card deleted', 'info')
     } catch (e) {
@@ -72,7 +79,7 @@ export const useCardsStore = defineStore('cards', () => {
     )
       return
     try {
-      await api('cards', { method: 'POST', body: { action: 'delete_all' } })
+      await endpoints.cards.deleteAll()
       cards.value = []
       ui.notify('All cards deleted', 'info')
     } catch (e) {
@@ -85,9 +92,7 @@ export const useCardsStore = defineStore('cards', () => {
     if (previewLoading.value) return
     previewLoading.value = true
     try {
-      const data = await api<{ card: Card }>(
-        'board?id=' + encodeURIComponent(id) + '&preview=1',
-      )
+      const data = await endpoints.board.get(id, { preview: true })
       previewCard.value = data.card
       previewCardEditing.value = null
     } catch (e) {
@@ -110,18 +115,15 @@ export const useCardsStore = defineStore('cards', () => {
     previewCardEditing.value = null
     if (newValue === oldValue) return
     try {
-      const payload: Record<string, string> = {
-        action: 'update_player',
-        id: previewCard.value.id,
-        player_name: field === 'player_name' ? newValue : previewCard.value.player_name || '',
-        details: field === 'details' ? newValue : previewCard.value.details || '',
-      }
-      await api('cards', { method: 'POST', body: payload })
+      const playerName =
+        field === 'player_name' ? newValue : previewCard.value.player_name || ''
+      const details = field === 'details' ? newValue : previewCard.value.details || ''
+      await endpoints.cards.updatePlayer(previewCard.value.id, playerName, details)
       previewCard.value[field] = newValue
       const card = cards.value.find((c) => c.id === previewCard.value!.id)
       if (card) {
-        card.player_name = payload.player_name
-        card.details = payload.details
+        card.player_name = playerName
+        card.details = details
       }
       ui.notify('Card updated', 'success')
     } catch (e) {
@@ -133,6 +135,8 @@ export const useCardsStore = defineStore('cards', () => {
     cards,
     generateCount,
     cardSearchQuery,
+    cardsLoading,
+    generating,
     previewCard,
     previewLoading,
     previewCardEditing,

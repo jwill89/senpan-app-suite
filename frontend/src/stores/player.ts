@@ -5,7 +5,7 @@
  */
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
-import { api } from '@/lib/api'
+import { endpoints } from '@/lib/endpoints'
 import { STAMP_COLORS, STAMP_SHAPES } from '@/lib/constants'
 import type { BingoGameState, Card } from '@/types/api'
 import { useUiStore } from './ui'
@@ -17,6 +17,8 @@ export const usePlayerStore = defineStore('player', () => {
   const joinError = ref('')
   const playerCard = ref<Card | null>(null)
   const playerGame = ref<BingoGameState | null>(null)
+  /** True while joining / loading a board (drives the Join button + board load). */
+  const joining = ref(false)
 
   // Stamps: { "r-c": true }
   const stamps = ref<Record<string, boolean>>({})
@@ -24,8 +26,10 @@ export const usePlayerStore = defineStore('player', () => {
   const stampShape = ref(localStorage.getItem('bingo_stamp_shape') || 'blank')
   const stampColor = ref(localStorage.getItem('bingo_stamp_color') || 'pink')
   const stampOpacity = ref(parseFloat(localStorage.getItem('bingo_stamp_opacity') || '') || 0.8)
-  // Data URL for user-uploaded custom stamp (session-only, not persisted).
-  const customStampImage = ref<string | null>(null)
+  // Data URL for the user-uploaded custom stamp. Persisted to localStorage so it
+  // survives a page refresh (the saved stampShape can be 'custom'); falls back to
+  // null if storage is unavailable.
+  const customStampImage = ref<string | null>(localStorage.getItem('bingo_custom_stamp'))
 
   const showMinigameModal = ref(false)
 
@@ -121,7 +125,8 @@ export const usePlayerStore = defineStore('player', () => {
 
   /**
    * Handles custom stamp image upload from a file input. Reads as a data URL
-   * (session-only). Warns if the image is not square.
+   * and persists it to localStorage (so it survives a refresh). Warns if the
+   * image is not square, or if it's too large to store.
    */
   function uploadCustomStamp(event: Event): void {
     const input = event.target as HTMLInputElement
@@ -145,12 +150,29 @@ export const usePlayerStore = defineStore('player', () => {
         }
         customStampImage.value = dataUrl
         setStampShape('custom')
+        saveCustomStamp(dataUrl)
       }
       img.onerror = () => ui.notify('Could not load image.', 'error')
       img.src = dataUrl
     }
     reader.readAsDataURL(file)
     input.value = ''
+  }
+
+  /**
+   * Persists the custom stamp data URL to localStorage. If the image is too
+   * large for the storage quota, the stamp still works for this session but
+   * won't survive a refresh — warn the player rather than failing silently.
+   */
+  function saveCustomStamp(dataUrl: string): void {
+    try {
+      localStorage.setItem('bingo_custom_stamp', dataUrl)
+    } catch {
+      ui.notify(
+        "Custom stamp is too large to save — it'll reset if you refresh. Try a smaller image.",
+        'error',
+      )
+    }
   }
 
   // ── Join / leave ───────────────────────────────────────────────────────────
@@ -163,17 +185,18 @@ export const usePlayerStore = defineStore('player', () => {
   async function joinGame(): Promise<string | null> {
     joinError.value = ''
     if (!joinId.value.trim()) return null
+    joining.value = true
     try {
-      const data = await api<{ card: Card; game: BingoGameState | null; game_details?: string }>(
-        'board?id=' + encodeURIComponent(joinId.value.trim()),
-      )
+      const data = await endpoints.board.get(joinId.value.trim())
       playerCard.value = data.card
-      playerGame.value = data.game
+      playerGame.value = data.game ?? null
       loadStamps()
       return data.game_details || ''
     } catch (e) {
       joinError.value = (e as Error).message
       return null
+    } finally {
+      joining.value = false
     }
   }
 
@@ -195,23 +218,25 @@ export const usePlayerStore = defineStore('player', () => {
     if (playerCard.value && playerCard.value.id === id) {
       return null // already loaded for this id; caller keeps existing details
     }
+    joining.value = true
     try {
-      const data = await api<{ card: Card; game: BingoGameState | null; game_details?: string }>(
-        'board?id=' + encodeURIComponent(id),
-      )
+      const data = await endpoints.board.get(id)
       playerCard.value = data.card
-      playerGame.value = data.game
+      playerGame.value = data.game ?? null
       loadStamps()
       return data.game_details || ''
     } catch (e) {
       joinError.value = (e as Error).message
       return null
+    } finally {
+      joining.value = false
     }
   }
 
   return {
     joinId,
     joinError,
+    joining,
     playerCard,
     playerGame,
     stamps,

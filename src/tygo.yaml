@@ -2,7 +2,10 @@
 #
 # This keeps the frontend's API types in sync with the backend `model` package.
 # Run with:  npm run gen:types   (from the frontend/ folder)
-# or:        go run github.com/gzuidhof/tygo@latest generate   (from src/)
+# or:        go run github.com/gzuidhof/tygo@v0.2.21 generate   (from src/)
+#
+# Keep the pinned version above in sync with frontend/package.json's
+# `gen:types` script so type generation is reproducible across machines.
 #
 # The generated file is committed so the frontend builds without Go installed,
 # but should be regenerated whenever the Go model types change.

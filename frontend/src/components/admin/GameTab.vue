@@ -5,18 +5,51 @@
  * drawn, patterns, winners, frequent winners, called numbers) once started.
  * Mirrors the original `adminTab==='bingo-game'` block exactly.
  */
+import { onBeforeUnmount, onMounted, computed, ref } from 'vue'
+import { useRouter } from 'vue-router'
 import CalledNumbers from '@/components/common/CalledNumbers.vue'
 import PatternMini from '@/components/common/PatternMini.vue'
+import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
 import { useMarkdown } from '@/lib/markdown'
 import { DRAW_DELAY_OPTIONS } from '@/lib/constants'
 import { useGameStore } from '@/stores/game'
 import { useCardsStore } from '@/stores/cards'
 import { usePatternsStore } from '@/stores/patterns'
 
+const router = useRouter()
 const game = useGameStore()
 const cards = useCardsStore()
 const patterns = usePatternsStore()
 const { render: renderMarkdown } = useMarkdown()
+
+// ── Elapsed-game clock (admin-only, Current Game view) ──────────────────────
+// Ticks once a second while this tab is mounted; the start time comes from the
+// game state's `created_at` (stored as UTC), so it stays accurate across
+// refreshes and for multiple admins.
+const now = ref(Date.now())
+let clockTimer: ReturnType<typeof setInterval> | null = null
+
+/** Parses a SQLite "YYYY-MM-DD HH:MM:SS" (UTC) or ISO timestamp to epoch ms. */
+function parseUtc(ts: string): number {
+  if (!ts) return NaN
+  // Already has a timezone designator (Z or ±HH:MM) → parse as-is.
+  if (/[zZ]|[+-]\d{2}:?\d{2}$/.test(ts)) return new Date(ts).getTime()
+  // SQLite CURRENT_TIMESTAMP form: treat the space-separated value as UTC.
+  return new Date(ts.replace(' ', 'T') + 'Z').getTime()
+}
+
+/** Live elapsed-time string (H:MM:SS / MM:SS) since the game started. */
+const elapsedTime = computed(() => {
+  const start = game.currentGame ? parseUtc(game.currentGame.created_at) : NaN
+  if (!Number.isFinite(start)) return ''
+  const secs = Math.max(0, Math.floor((now.value - start) / 1000))
+  const h = Math.floor(secs / 3600)
+  const m = Math.floor((secs % 3600) / 60)
+  const s = secs % 60
+  const mm = String(m).padStart(2, '0')
+  const ss = String(s).padStart(2, '0')
+  return h > 0 ? `${h}:${mm}:${ss}` : `${mm}:${ss}`
+})
 
 /** Player name for a winning card id (shown under the winner chip). */
 function playerNameFor(id: string): string | undefined {
@@ -24,18 +57,75 @@ function playerNameFor(id: string): string | undefined {
 }
 
 const delayLabel = (s: number): string => (s === 0 ? 'Instant' : `${s}s Delay`)
+
+/** Jump to the New Pattern tab (from the "no patterns yet" hint). */
+function goToNewPattern(): void {
+  router.push({ name: 'admin-bingo-new-pattern' })
+}
+
+// Keyboard shortcut: Space (or Enter) draws the next number during an active
+// game — speeds up calling a fast game. Ignored while typing in a form field,
+// while a draw is already in flight, or during the inter-draw countdown.
+function onKeydown(e: KeyboardEvent): void {
+  if (e.key !== ' ' && e.key !== 'Enter') return
+  if (!game.currentGame || game.drawing || game.drawCountdown !== null) return
+  // Don't hijack a focused form control or button — let it handle the key
+  // itself (e.g. Enter on "End Game" should end, not draw).
+  const el = document.activeElement as HTMLElement | null
+  const tag = el?.tagName
+  if (
+    tag === 'INPUT' ||
+    tag === 'TEXTAREA' ||
+    tag === 'SELECT' ||
+    tag === 'BUTTON' ||
+    el?.isContentEditable
+  ) {
+    return
+  }
+  e.preventDefault()
+  game.drawNumber()
+}
+
+onMounted(() => {
+  window.addEventListener('keydown', onKeydown)
+  clockTimer = setInterval(() => {
+    now.value = Date.now()
+  }, 1000)
+})
+onBeforeUnmount(() => {
+  window.removeEventListener('keydown', onKeydown)
+  if (clockTimer) clearInterval(clockTimer)
+})
 </script>
 
 <template>
   <div class="tab-body">
     <div class="admin-panel">
-      <h3 class="mb-12">{{ game.adminGameLabel }}</h3>
+      <h3 class="mb-12">
+        {{ game.adminGameLabel }}
+        <span v-if="game.currentGame" class="live-badge" role="status" aria-label="Game in progress">
+          <span class="live-dot" aria-hidden="true"></span>Live
+        </span>
+        <span
+          v-if="game.currentGame && elapsedTime"
+          class="game-clock"
+          role="timer"
+          aria-live="off"
+          :aria-label="`Game time elapsed: ${elapsedTime}`"
+          title="Time elapsed since the game started"
+        >
+          <i class="fa-solid fa-clock" aria-hidden="true"></i> {{ elapsedTime }}
+        </span>
+      </h3>
 
       <!-- No active game → start one -->
       <div v-if="!game.currentGame" class="game-setup">
-        <p v-if="patterns.patterns.length === 0" class="text-dim mb-8">
-          Create some win patterns first.
-        </p>
+        <div v-if="patterns.patterns.length === 0" class="mb-12">
+          <p class="text-dim mb-8">Create some win patterns first.</p>
+          <button class="btn-secondary btn-sm" @click="goToNewPattern">
+            <i class="fa-solid fa-plus"></i> Create a Pattern
+          </button>
+        </div>
         <div v-else>
           <p class="text-dim mb-12">Select one or more win patterns:</p>
 
@@ -104,10 +194,16 @@ const delayLabel = (s: number): string => (s === 0 ? 'Instant' : `${s}s Delay`)
 
           <button
             class="btn-primary btn-lg"
-            :disabled="game.selectedPatternIds.length === 0"
+            :disabled="game.selectedPatternIds.length === 0 || game.starting"
             @click="game.startGame()"
           >
-            Start Game
+            <LoadingSpinner v-if="game.starting" label="Starting…" />
+            <template v-else>
+              Start Game
+              <span v-if="game.selectedPatternIds.length" style="opacity: 0.85">
+                ({{ game.selectedPatternIds.length }} selected)
+              </span>
+            </template>
           </button>
         </div>
       </div>
@@ -118,10 +214,11 @@ const delayLabel = (s: number): string => (s === 0 ? 'Instant' : `${s}s Delay`)
           <div class="draw-controls">
             <button
               class="btn-primary btn-lg"
-              :disabled="game.drawCountdown !== null"
+              :disabled="game.drawCountdown !== null || game.drawing"
               @click="game.drawNumber()"
             >
-              <i class="fa-solid fa-circle-dot"></i> Draw Number
+              <LoadingSpinner v-if="game.drawing" label="Drawing…" />
+              <template v-else><i class="fa-solid fa-circle-dot"></i> Draw Number</template>
             </button>
             <select
               v-model.number="game.drawDelay"
@@ -131,8 +228,15 @@ const delayLabel = (s: number): string => (s === 0 ? 'Instant' : `${s}s Delay`)
             >
               <option v-for="s in DRAW_DELAY_OPTIONS" :key="s" :value="s">{{ delayLabel(s) }}</option>
             </select>
-            <button class="btn-danger" @click="game.endGame()">End Game</button>
+            <button class="btn-danger" :disabled="game.ending" @click="game.endGame()">
+              <LoadingSpinner v-if="game.ending" label="Ending…" />
+              <template v-else>End Game</template>
+            </button>
           </div>
+
+          <p class="text-dim text-xs mt-8">
+            Tip: press <kbd>Space</kbd> to draw the next number.
+          </p>
 
           <!-- Countdown / Sent indicator -->
           <div v-if="game.drawCountdown !== null" class="draw-countdown">

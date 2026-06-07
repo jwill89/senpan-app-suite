@@ -18,8 +18,7 @@ import { useGameStore } from '@/stores/game'
 import { usePlayerStore } from '@/stores/player'
 import { useCardsStore } from '@/stores/cards'
 import { usePatternsStore } from '@/stores/patterns'
-import { api } from '@/lib/api'
-import type { BingoGameState, Card } from '@/types/api'
+import { endpoints } from '@/lib/endpoints'
 
 export function useWebSocket() {
   const router = useRouter()
@@ -145,7 +144,7 @@ export function useWebSocket() {
       const prevWinnerCount = game.winners.length
       if (msg.winners) game.winners = msg.winners
       if (game.winners.length > prevWinnerCount && game.winners.length > 0) {
-        ui.notify('We have winner(s)!', 'success')
+        ui.notify('We have winner(s)!', 'success', 6000)
       }
     }
   }
@@ -170,10 +169,8 @@ export function useWebSocket() {
   async function refreshStateAfterReconnect(): Promise<void> {
     try {
       if (isPlayerView() && player.playerCard) {
-        const data = await api<{ card: Card; game: BingoGameState | null; game_details?: string }>(
-          'board?id=' + encodeURIComponent(player.playerCard.id),
-        )
-        player.playerGame = data.game
+        const data = await endpoints.board.get(player.playerCard.id)
+        player.playerGame = data.game ?? null
         game.gameDetails = data.game_details || ''
       } else if (isAdminView()) {
         await game.loadGameState()

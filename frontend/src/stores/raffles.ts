@@ -4,16 +4,8 @@
  */
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
-import { api } from '@/lib/api'
-import type {
-  Raffle,
-  RaffleDetailResponse,
-  RaffleEnterResponse,
-  RaffleEntry,
-  RaffleForm,
-  RaffleUploadResponse,
-  RaffleWinnerResponse,
-} from '@/types/api'
+import { endpoints } from '@/lib/endpoints'
+import type { Raffle, RaffleEnterResponse, RaffleEntry, RaffleForm } from '@/types/api'
 import { useUiStore } from './ui'
 
 export const useRafflesStore = defineStore('raffles', () => {
@@ -34,6 +26,12 @@ export const useRafflesStore = defineStore('raffles', () => {
   const raffleWinnerEntry = ref<RaffleEntry | null>(null) // public closed view
   const raffleTotalEntryCount = ref(0)
   const raffleImageUploading = ref(false)
+  // In-flight flags driving spinners / button disabling.
+  const rafflesLoading = ref(false)
+  const detailLoading = ref(false)
+  const savingRaffle = ref(false)
+  const entering = ref(false)
+  const pickingWinner = ref(false)
 
   // ── Computed ───────────────────────────────────────────────────────────────
 
@@ -43,18 +41,21 @@ export const useRafflesStore = defineStore('raffles', () => {
   // ── Load ─────────────────────────────────────────────────────────────────
 
   async function loadRaffles(): Promise<void> {
+    rafflesLoading.value = true
     try {
-      const data = await api<{ raffles: Raffle[] }>('raffles')
+      const data = await endpoints.raffles.list()
       raffles.value = data.raffles || []
     } catch (e) {
       ui.notify((e as Error).message, 'error')
+    } finally {
+      rafflesLoading.value = false
     }
   }
 
   /** Preloads open raffles (home page card visibility). */
   async function loadHomeRaffles(): Promise<void> {
     try {
-      const data = await api<{ raffles: Raffle[] }>('raffles')
+      const data = await endpoints.raffles.list()
       homeRaffles.value = (data.raffles || []).filter((r) => r.status === 'open')
     } catch {
       /* silent */
@@ -62,8 +63,9 @@ export const useRafflesStore = defineStore('raffles', () => {
   }
 
   async function loadRaffleDetail(id: number): Promise<void> {
+    detailLoading.value = true
     try {
-      const data = await api<RaffleDetailResponse>('raffles/' + id)
+      const data = await endpoints.raffles.detail(id)
       selectedRaffle.value = data.raffle
       raffleEntries.value = data.entries || []
       raffleWinner.value = null
@@ -73,6 +75,8 @@ export const useRafflesStore = defineStore('raffles', () => {
       }
     } catch (e) {
       ui.notify((e as Error).message, 'error')
+    } finally {
+      detailLoading.value = false
     }
   }
 
@@ -93,7 +97,8 @@ export const useRafflesStore = defineStore('raffles', () => {
     raffleSignupResult.value = null
     raffleWinnerEntry.value = null
     raffleTotalEntryCount.value = 0
-    api<RaffleDetailResponse>('raffles/' + raffle.id)
+    endpoints.raffles
+      .detail(raffle.id)
       .then((data) => {
         selectedRaffle.value = data.raffle
         raffleTotalEntryCount.value = data.total_entries || 0
@@ -114,14 +119,17 @@ export const useRafflesStore = defineStore('raffles', () => {
     raffleSignupResult.value = null
     raffleWinnerEntry.value = null
     raffleTotalEntryCount.value = 0
+    detailLoading.value = true
     try {
-      const data = await api<RaffleDetailResponse>('raffles/' + id)
+      const data = await endpoints.raffles.detail(id)
       selectedRaffle.value = data.raffle
       raffleTotalEntryCount.value = data.total_entries || 0
       if (data.winner_entry) raffleWinnerEntry.value = data.winner_entry
       return true
     } catch {
       return false
+    } finally {
+      detailLoading.value = false
     }
   }
 
@@ -158,12 +166,13 @@ export const useRafflesStore = defineStore('raffles', () => {
       ui.notify('Title is required', 'error')
       return false
     }
+    savingRaffle.value = true
     try {
       if (f.id) {
-        await api('raffles', { method: 'POST', body: { action: 'update', ...f } })
+        await endpoints.raffles.update({ ...f })
         ui.notify('Raffle updated', 'success')
       } else {
-        await api('raffles', { method: 'POST', body: { action: 'create', ...f } })
+        await endpoints.raffles.create({ ...f })
         ui.notify('Raffle created', 'success')
       }
       raffleForm.value = null
@@ -172,6 +181,8 @@ export const useRafflesStore = defineStore('raffles', () => {
     } catch (e) {
       ui.notify((e as Error).message, 'error')
       return false
+    } finally {
+      savingRaffle.value = false
     }
   }
 
@@ -184,7 +195,7 @@ export const useRafflesStore = defineStore('raffles', () => {
     )
       return
     try {
-      await api('raffles', { method: 'POST', body: { action: 'delete', id } })
+      await endpoints.raffles.delete(id)
       raffles.value = raffles.value.filter((r) => r.id !== id)
       if (selectedRaffle.value && selectedRaffle.value.id === id) selectedRaffle.value = null
       ui.notify('Raffle deleted', 'info')
@@ -201,10 +212,7 @@ export const useRafflesStore = defineStore('raffles', () => {
     try {
       const formData = new FormData()
       formData.append('image', file)
-      const data = await api<RaffleUploadResponse>('raffles/upload', {
-        method: 'POST',
-        body: formData,
-      })
+      const data = await endpoints.raffles.uploadImage(formData)
       if (raffleForm.value) raffleForm.value.prize_image = data.path
       ui.notify('Image uploaded', 'success')
     } catch (e) {
@@ -228,22 +236,19 @@ export const useRafflesStore = defineStore('raffles', () => {
       ui.notify('Character name and world are required', 'error')
       return
     }
+    entering.value = true
     try {
-      const data = await api<RaffleEnterResponse>(
-        'raffles/' + selectedRaffle.value.id + '/enter',
-        {
-          method: 'POST',
-          body: {
-            character_name: s.characterName.trim(),
-            world: s.world.trim(),
-            num_entries: s.numEntries,
-          },
-        },
-      )
+      const data = await endpoints.raffles.enter(selectedRaffle.value.id, {
+        character_name: s.characterName.trim(),
+        world: s.world.trim(),
+        num_entries: s.numEntries,
+      })
       raffleSignupResult.value = data
       ui.notify(data.message, 'success')
     } catch (e) {
       ui.notify((e as Error).message, 'error')
+    } finally {
+      entering.value = false
     }
   }
 
@@ -252,10 +257,7 @@ export const useRafflesStore = defineStore('raffles', () => {
   async function toggleEntryPaid(entry: RaffleEntry): Promise<void> {
     if (!selectedRaffle.value) return
     try {
-      await api('raffles/' + selectedRaffle.value.id + '/entries', {
-        method: 'POST',
-        body: { action: 'mark_paid', entry_id: entry.id, paid: !entry.paid },
-      })
+      await endpoints.raffles.markEntryPaid(selectedRaffle.value.id, entry.id, !entry.paid)
       entry.paid = !entry.paid
     } catch (e) {
       ui.notify((e as Error).message, 'error')
@@ -267,10 +269,7 @@ export const useRafflesStore = defineStore('raffles', () => {
     if (!(await ui.confirm('Delete this entry?', { title: 'Delete entry', confirmText: 'Delete' })))
       return
     try {
-      await api('raffles/' + selectedRaffle.value.id + '/entries', {
-        method: 'POST',
-        body: { action: 'delete_entry', entry_id: entry.id },
-      })
+      await endpoints.raffles.deleteEntry(selectedRaffle.value.id, entry.id)
       raffleEntries.value = raffleEntries.value.filter((e) => e.id !== entry.id)
       ui.notify('Entry deleted', 'info')
     } catch (e) {
@@ -280,26 +279,23 @@ export const useRafflesStore = defineStore('raffles', () => {
 
   async function pickRaffleWinner(): Promise<void> {
     if (!selectedRaffle.value) return
+    pickingWinner.value = true
     try {
-      const data = await api<RaffleWinnerResponse>(
-        'raffles/' + selectedRaffle.value.id + '/entries',
-        { method: 'POST', body: { action: 'pick_winner' } },
-      )
+      const data = await endpoints.raffles.pickWinner(selectedRaffle.value.id)
       raffleWinner.value = data.winner
       selectedRaffle.value.winner_entry_id = data.winner.id
       ui.notify('Winner picked!', 'success')
     } catch (e) {
       ui.notify((e as Error).message, 'error')
+    } finally {
+      pickingWinner.value = false
     }
   }
 
   async function verifyRaffleWinner(): Promise<void> {
     if (!selectedRaffle.value) return
     try {
-      await api('raffles/' + selectedRaffle.value.id + '/entries', {
-        method: 'POST',
-        body: { action: 'verify_winner' },
-      })
+      await endpoints.raffles.verifyWinner(selectedRaffle.value.id)
       selectedRaffle.value.status = 'closed'
       ui.notify('Winner verified! Raffle closed.', 'success')
       await loadRaffles()
@@ -310,16 +306,16 @@ export const useRafflesStore = defineStore('raffles', () => {
 
   async function pickAnotherWinner(): Promise<void> {
     if (!selectedRaffle.value) return
+    pickingWinner.value = true
     try {
-      const data = await api<RaffleWinnerResponse>(
-        'raffles/' + selectedRaffle.value.id + '/entries',
-        { method: 'POST', body: { action: 'pick_another' } },
-      )
+      const data = await endpoints.raffles.pickAnotherWinner(selectedRaffle.value.id)
       raffleWinner.value = data.winner
       selectedRaffle.value.winner_entry_id = data.winner.id
       ui.notify('New winner picked!', 'success')
     } catch (e) {
       ui.notify((e as Error).message, 'error')
+    } finally {
+      pickingWinner.value = false
     }
   }
 
@@ -335,6 +331,11 @@ export const useRafflesStore = defineStore('raffles', () => {
     raffleWinnerEntry,
     raffleTotalEntryCount,
     raffleImageUploading,
+    rafflesLoading,
+    detailLoading,
+    savingRaffle,
+    entering,
+    pickingWinner,
     openRaffles,
     closedRaffles,
     loadRaffles,

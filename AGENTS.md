@@ -6,8 +6,12 @@ Guidance for AI coding agents working in this codebase.
 
 Go + SQLite backend serving a Vue 3 + TypeScript single-page frontend built with
 Vite. The backend binary is built from `src/` and serves only the API/WebSocket
-on `:8080`; the built frontend (`frontend/dist/`) is served statically (nginx),
+on `:8080`; the built frontend (`frontend/dist/`) is served statically (Apache),
 with `/api/*` proxied to the Go server.
+
+**At a glance:** Vue 3 SFCs + TypeScript (strict) · Pinia (setup stores) · Vue
+Router (history mode, lazy routes) · Go 1.22+ stdlib HTTP · SQLite (WAL) ·
+coder/websocket · Vitest + Vue Test Utils · GitHub Actions CI.
 
 ```
 ├── frontend/                         ← Vue 3 + TypeScript SPA (Vite)
@@ -17,28 +21,35 @@ with `/api/*` proxied to the Go server.
 │   ├── tsconfig*.json                ← TS project refs (app + node)
 │   ├── public/                       ← copied verbatim into dist/ at build
 │   │   └── images/                   ← logo, favicon, share banner (dev only; stripped from dist — served from doc root in prod)
+│   ├── vitest.config.ts              ← Vitest config (jsdom, @ alias; separate from vite.config so tests skip PWA/visualizer)
 │   └── src/
-│       ├── main.ts                   ← createApp + Pinia + FontAwesome init (imports assets/app.css)
-│       ├── App.vue                   ← root shell: view router, WebSocket lifecycle, toast, mounted
+│       ├── main.ts                   ← createApp + Pinia + Router + FontAwesome init (imports assets/app.css; registers 401 handler)
+│       ├── App.vue                   ← root shell: <RouterView>, WebSocket lifecycle, toast, route progress bar
 │       ├── assets/app.css            ← All styles (dark theme, board, admin, modals); imported in main.ts so Vite content-hashes it
+│       ├── router/index.ts           ← Vue Router (history mode): route map, lazy route components, admin auth guard
 │       ├── lib/                      ← framework-agnostic helpers
-│       │   ├── api.ts                ← typed fetch client (credentials, JSON, error extraction)
+│       │   ├── api.ts                ← typed fetch client (credentials, JSON, error extraction, global 401 handler)
+│       │   ├── endpoints.ts          ← typed endpoint layer over api() — one fn per backend path (stores call these)
 │       │   ├── ws.ts                 ← WsClient: reconnect back-off + keepalive ping
-│       │   ├── markdown.ts           ← markdown-it renderer (replaces CDN marked.js)
+│       │   ├── markdown.ts           ← markdown-it renderer (lazy-loaded; replaces CDN marked.js)
 │       │   ├── fontawesome.ts        ← SVG-core library + dom.watch() (replaces FA kit script)
 │       │   ├── codemirror.ts         ← CM6 CSS-editor extensions + dark theme/highlight
 │       │   ├── theme.ts              ← header-font + custom-CSS <head> injection
+│       │   ├── assets.ts             ← resolves server image paths (images/...) to root-absolute URLs
+│       │   ├── exportCard.ts         ← player card → framed PNG export (html-to-image capture + canvas composite)
 │       │   └── constants.ts          ← stamp shapes/colors, column helpers, fallback fonts
 │       ├── types/
-│       │   ├── api.generated.ts      ← tygo-generated from Go model (DO NOT EDIT)
+│       │   ├── api.generated.ts      ← tygo-generated from Go model — GITIGNORED, DO NOT EDIT (run `npm run gen:types`)
 │       │   └── api.ts                ← re-exports + hand-written request/response/WS envelopes
 │       ├── stores/                   ← Pinia stores (ui, app, auth, player, game, cards, patterns, styles, raffles, admin)
 │       ├── composables/useWebSocket.ts ← wires WsClient → stores (message dispatch)
 │       ├── components/
-│       │   ├── common/               ← BingoBoard, CalledNumbers, PatternMini, ModalOverlay, ToastNotification
+│       │   ├── common/               ← BingoBoard, CalledNumbers, PatternMini, ModalOverlay, ConfirmModal, ToastNotification, LoadingSpinner, RouteProgressBar
 │       │   ├── player/               ← Stamp{Shape,Color,Opacity} pickers, WinPatternsPanel
-│       │   └── admin/                ← Sidebar + one component per tab + 4 modals
-│       └── views/                    ← HomeView, PlayerView, RafflesView, RaffleDetailView, AdminLoginView, AdminView
+│       │   └── admin/                ← Sidebar + one component per tab (11) + modals (CardPreview, EndGame, WinnerVerify, HalftimePrompt)
+│       ├── views/                    ← HomeView, PlayerView, RafflesView, RaffleDetailView, AdminLoginView, AdminView
+│       └── **/*.test.ts              ← Vitest unit/component tests, colocated next to the code they cover
+├── .github/workflows/ci.yml          ← CI: frontend (lint·typecheck·test·build) + backend (build·vet·test)
 ├── index.html                        ← LEGACY single-file SPA (pre-Vite reference; not built)
 ├── assets/css/app.css, js/app.js     ← LEGACY source of truth for look/behaviour (kept for reference)
 ├── deploy/                           ← Apache deploy artifacts (.htaccess + persistent images/ + README)
@@ -132,19 +143,33 @@ and Pinia state management. It is a faithful migration of the legacy single-file
 `index.html` + `assets/js/app.js` — same look, same behaviour — decomposed into
 fine-grained components and stores.
 
-**State (Pinia stores)**: `ui` (view routing + toasts), `app` (settings/fonts/
-active CSS), `auth`, `player`, `game`, `cards`, `patterns`, `styles`, `raffles`,
-`admin` (sidebar nav). The root `App.vue` owns the WebSocket lifecycle and view
-transitions; `composables/useWebSocket.ts` dispatches WS messages into the stores.
+**State (Pinia stores)**: `ui` (toasts, themed confirm dialog, route-loading
+flag), `app` (settings/fonts/active CSS), `auth`, `player`, `game`, `cards`,
+`patterns`, `styles`, `raffles`, `admin` (sidebar highlight state + per-tab data
+loads). The root `App.vue` hosts `<RouterView>` and owns the WebSocket lifecycle;
+`composables/useWebSocket.ts` dispatches WS messages into the stores.
 
-**Routing is store-driven** (no vue-router): `ui.view` selects the top-level view
-(`home` | `player` | `raffles` | `raffle-detail` | `admin-login` | `admin`);
-`admin.adminSection` (`bingo` | `raffles` | `system`) + `admin.adminTab` select the
-admin tab. `AdminView.vue` renders one component per tab + the four modals.
+**Routing is Vue Router** (history mode, `router/index.ts`) — real linkable URLs,
+not store-driven view switching:
+- Public: `/`, `/play/:cardId`, `/raffles`, `/raffles/:id`, `/admin/login`.
+- Admin: `/admin` (layout, `requiresAdmin`) with child routes
+  `bingo/{game,cards,winners-log,categories,new-pattern,patterns}`,
+  `raffles/{new,open,closed}`, `system/{settings,themes}`. The admin tabs are
+  **child routes** of the `AdminView` layout, so the sidebar/topbar persist while
+  the matched child renders the active tab.
+- Every view + admin tab is a lazy `import()` so heavy deps (CodeMirror,
+  vuedraggable, markdown-it) split into on-demand chunks.
+- A global `beforeEach` guard enforces admin auth (redirect to `/admin/login`
+  with a `redirect` query), and calls `admin.setTabFromRoute(meta.tab)` to sync
+  the sidebar highlight + run that tab's data load. Unknown paths redirect home.
+- `api.ts`'s global 401 handler (registered in `main.ts`) redirects to the login
+  route with a "session expired" toast when any non-auth request 401s.
 
 **Type sync**: TS domain types are generated from the Go `model` package via tygo
-(`frontend/src/types/api.generated.ts`, committed; regenerate with `npm run gen:types`).
-Request/response/WebSocket envelopes are hand-written in `types/api.ts`.
+into `frontend/src/types/api.generated.ts` — this file is **gitignored** (each dev
+regenerates it locally with `npm run gen:types`; CI/build regenerate as needed).
+Never edit it by hand. Request/response/WebSocket envelopes are hand-written in
+`types/api.ts`.
 
 **Library choices** (migrated off CDNs):
 - Markdown → `markdown-it`, **lazy-loaded** via `useMarkdown()` (`lib/markdown.ts`); the ~100 KB parser is dynamic-imported on first render (`breaks: true` to match the old marked output)
@@ -155,18 +180,26 @@ Request/response/WebSocket envelopes are hand-written in `types/api.ts`.
 **Performance / tooling**:
 - **Lazy routes**: every view + admin tab is a dynamic `import()` in `router/index.ts`, so heavy deps (CodeMirror, vuedraggable, markdown-it) load only when their route is visited — the player/home payload stays small. `manualChunks` (vite.config) keeps shared vendors cached across route chunks.
 - **PWA**: `vite-plugin-pwa` (`registerType: 'autoUpdate'`) emits `sw.js` + `manifest.webmanifest`; the SW precaches the app shell and falls back to `index.html` for SPA routes, with `/api/` and `/images/` denylisted. The deploy `.htaccess` exempts `sw.js`/`registerSW.js`/`*.webmanifest` from the immutable cache so updates land.
+- **Route progress + loading UX**: a top progress bar (`RouteProgressBar.vue`, driven by `ui.routeLoading` from the router guards) shows during async navigation/lazy-chunk loads; stores expose per-action loading flags (`joining`, `drawing`, `starting`, …) that drive `LoadingSpinner.vue` + disabled buttons.
 - **Global error handler**: `app.config.errorHandler` (`main.ts`) surfaces uncaught errors as a toast.
 - **Accessible modals**: `ModalOverlay.vue` traps focus, restores it on close, supports Escape, and sets `role="dialog"`/`aria-modal`.
-- **Lint/format**: ESLint flat config (`eslint.config.js`) + Prettier (`.prettierrc.json`); `npm run lint` / `npm run format`. Bundle treemap via `npm run analyze` → `dist/stats.html`.
+- **Lint/format**: ESLint flat config (`eslint.config.js`) + Prettier (`.prettierrc.json`); `npm run lint` (autofix) / `npm run lint:check` (no fix, used by CI) / `npm run format`. Bundle treemap via `npm run analyze` → `dist/stats.html`.
 
-**Views** (`ui.view`): `home` → `admin-login` → `admin` | `player` | `raffles` → `raffle-detail`.
-**Admin sections** (`adminSection`): `bingo` | `raffles` | `system`.
-**Admin tabs** (`adminTab`): `bingo-game` | `bingo-cards` | `bingo-patterns` | `bingo-winners-log` | `raffle-open` | `raffle-closed` | `system-themes`.
+**Testing** (Vitest + Vue Test Utils, jsdom):
+- Config in `vitest.config.ts` (kept separate from `vite.config.ts` so tests don't load the PWA/visualizer plugins). Tests **import `describe/it/expect/vi` from `vitest`** explicitly (`globals: false`) so they type-check with no extra global-types config.
+- Test files are colocated as `src/**/*.test.ts`. Current coverage: `lib/{constants,api,endpoints,exportCard}.test.ts`, `stores/{player,ui}.test.ts`, `components/common/BingoBoard.test.ts`.
+- Run: `npm run test` (CI), `npm run test:watch`, `npm run test:coverage` (v8).
+- Patterns: mock `fetch` via `vi.stubGlobal` for `api.ts`; mock the `./api` module with `vi.hoisted` + `vi.mock` for `endpoints.ts`; Pinia stores use `setActivePinia(createPinia())`; components use `mount()` from `@vue/test-utils`. Pure helpers tested directly (e.g. `exportCard.ts` exports `parseInlineRuns`/`parseDetailParagraphs` for this).
+
+**Public routes**: `/` · `/play/:cardId` · `/raffles` · `/raffles/:id` · `/admin/login`.
+**Admin sections** (`adminSection`, sidebar highlight): `bingo` | `raffles` | `system`.
+**Admin tabs** (`adminTab` / route): `bingo-game` · `bingo-cards` · `bingo-winners-log` · `bingo-categories` · `bingo-new-pattern` · `bingo-patterns` · `raffle-new` · `raffle-open` · `raffle-closed` · `system-settings` · `system-themes`.
 
 **Player features**:
 - Join by board ID; see bingo board, called numbers grid, and active win patterns
 - Manually stamp cells (click to toggle); stamps persist in `localStorage` keyed by `stamps_{cardId}_{gameId}`
-- Stamp customization: shape (blank default, heart, star, smiley, etc.), color (7 options), opacity slider
+- Stamp customization: shape (blank default, heart, star, smiley, etc.), color (7 options), opacity slider, **custom uploaded image** (stored as a data URL in `localStorage`)
+- **Export/save the board as a PNG card** (`lib/exportCard.ts`): captures the live themed `.board-wrap` via `html-to-image` (preserving theme, emoji + custom-image stamps), then composites it into a framed card (title/logo header + game-details footer) on a canvas and downloads it
 - Real-time updates via WebSocket (draws, game start/end, style changes, halftime alerts)
 - WebSocket reconnect with exponential back-off on disconnect
 - Browse open raffles from home page (card shown only when open raffles exist); view raffle detail with prize image, markdown description/rules, and sign-up form (character name, world, number of entries); after sign-up see confirmation with total cost and sign-up instructions
@@ -174,7 +207,7 @@ Request/response/WebSocket envelopes are hand-written in `types/api.ts`.
 
 **Admin features**:
 - Password-protected login (session-based auth, 24-hour cookie)
-- **Game tab**: start game (select patterns with category filter + search), draw numbers (optional player delay 0–60s), see called numbers, see winners; click winner ID to verify card with pattern-hit highlighting; frequent winners alert (3+ wins in 12h); end game with winner confirmation modal
+- **Game tab**: start game (select patterns with category filter + search), draw numbers (optional player delay 0–60s; **press `Space`/`Enter` to draw**), live "Live" badge + elapsed-time clock, see called numbers, see winners; click winner ID to verify card with pattern-hit highlighting; frequent winners alert (3+ wins in 12h); end game with winner confirmation modal
 - **Cards tab**: generate cards (1–500), view as chips with player name indicators, click to preview board, edit player name/details, delete individual or all
 - **Patterns tabs**: create (5×5 grid editor with duplicate detection), organize into categories, rename inline (double-click name), reorder/move between categories via vuedraggable, delete; category CRUD with vuedraggable reorder
 - **Winners Log tab**: paginated table of past winners with sorting and per-page controls
@@ -198,10 +231,17 @@ cd frontend; npm install            # first time / after dependency changes
 cd frontend; npm run dev            # dev server on :5173, proxies /api → :8080
 cd frontend; npm run build          # type-check (vue-tsc) + build to frontend/dist/
 cd frontend; npm run typecheck      # vue-tsc only
+cd frontend; npm run test           # Vitest run (CI mode, one-shot)
+cd frontend; npm run test:watch     # Vitest watch mode
+cd frontend; npm run test:coverage  # Vitest + v8 coverage report
 cd frontend; npm run lint           # ESLint (flat config) with --fix
+cd frontend; npm run lint:check     # ESLint without --fix (CI gate)
 cd frontend; npm run format         # Prettier write over src/
 cd frontend; npm run analyze        # build + emit dist/stats.html bundle treemap (visualizer)
-cd frontend; npm run gen:types      # regenerate TS types from Go models (runs tygo in ../src)
+cd frontend; npm run gen:types      # regenerate TS types from Go models (runs tygo in ../src; needs Go)
+
+# NOTE: src/types/api.generated.ts is gitignored. Run `npm run gen:types` after a
+# fresh clone (or after changing Go model types) before build/typecheck/test.
 
 # ── Go backend ──
 # Build the Go backend
@@ -225,6 +265,20 @@ cd src; go test ./...
 # Build for production
 cd src; go build -ldflags="-s -w" -o app-suite .
 ```
+
+## Continuous integration
+
+`.github/workflows/ci.yml` runs on every push and pull request, with two jobs:
+
+- **frontend** (`working-directory: frontend`): `npm ci` → `npm run gen:types`
+  (needs Go, so the job also sets up the Go toolchain) → `lint:check` →
+  `typecheck` → `test` → `build`. Mirrors the local gate, so a green CI ==
+  the checks a developer runs locally have passed.
+- **backend** (`working-directory: src`): `go build ./...` → `go vet ./...` →
+  `go test ./...` (Go version read from `src/go.mod`).
+
+When adding a check, wire it into both the relevant npm/go script **and** the
+workflow so local and CI stay in lockstep.
 
 ## Deployment (Apache)
 
@@ -278,7 +332,11 @@ the built SPA so redeploys never wipe them (full guide in `deploy/README.md`):
 - **Rate limiter**: IP-based brute-force protection for admin login; reads `X-Forwarded-For` for the real client IP behind a reverse proxy.
 - **FontAwesome**: bundled via `@fortawesome/fontawesome-svg-core`; only the icons used are registered in `frontend/src/lib/fontawesome.ts`, and `dom.watch()` replaces the existing `<i class="fa-…">` markup with inline SVG (no kit/account needed).
 - **Theme CSS editor**: CodeMirror 6 via `vue-codemirror`, bound with `v-model` to the edited theme's `css_content`; the dark look/syntax palette lives in `frontend/src/lib/codemirror.ts` (theme + HighlightStyle) plus structural rules in app.css §26.
-- **TS↔Go type sync**: `frontend/src/types/api.generated.ts` is generated from `internal/model` by tygo (`src/tygo.yaml`); regenerate with `npm run gen:types`. Never edit the generated file.
+- **TS↔Go type sync**: `frontend/src/types/api.generated.ts` is generated from `internal/model` by tygo (`src/tygo.yaml`); it is **gitignored** — regenerate with `npm run gen:types` (needs Go) after a fresh clone or model change. Never edit the generated file.
+- **Typed endpoint layer**: stores never call `api<T>('path')` directly — they call `endpoints.*` (`frontend/src/lib/endpoints.ts`), which wraps every backend path in a typed function. Add new endpoints there so paths/bodies/response types live in one place.
+- **Global 401 handling**: `api.ts` invokes a registered handler (set in `main.ts`) on any non-auth 401 → redirect to `/admin/login` + "session expired" toast. Auth endpoints pass `skipAuthRedirect` so a bad-password login doesn't trigger it.
+- **Themed confirm dialog**: use `await ui.confirm(message, opts)` (renders `ConfirmModal.vue`) instead of the native `window.confirm`.
+- **Theme fidelity**: new UI must reuse existing `app.css` class names + theme tokens (CSS custom properties in `:root`) so user-authored custom CSS themes keep working — never hard-code colors/fonts.
 
 ## Key files to inspect first
 
@@ -287,15 +345,19 @@ the built SPA so redeploys never wipe them (full guide in `deploy/README.md`):
 3. `src/internal/bingo/game.go` — Core game logic: start, draw + winner compute + cache, state reads, in-memory caching
 4. `src/internal/bingo/card.go` — Card/board generation algorithm with column-range constraints
 5. `src/internal/model/model.go` — All domain types (Card, Pattern, BingoGame, BingoGameState, BingoDrawnNumber, Raffle, WinnersLogEntry, etc.)
-6. `frontend/src/App.vue` + `frontend/src/composables/useWebSocket.ts` — root shell, view routing, WebSocket message dispatch
-7. `frontend/src/stores/*.ts` — all client state + actions (mirror of the old app.js data/methods)
-8. `frontend/src/assets/app.css` — all styles (the look to preserve); imported in `main.ts` (content-hashed by Vite); §26 covers the CM6 editor
+6. `frontend/src/router/index.ts` — route map, lazy route components, admin auth guard + tab sync
+7. `frontend/src/App.vue` + `frontend/src/composables/useWebSocket.ts` — root shell (`<RouterView>`), WebSocket message dispatch
+8. `frontend/src/lib/endpoints.ts` — the typed surface over every backend path (what stores call)
+9. `frontend/src/stores/*.ts` — all client state + actions (mirror of the old app.js data/methods)
+10. `frontend/src/assets/app.css` — all styles (the look to preserve); imported in `main.ts` (content-hashed by Vite); §26 covers the CM6 editor
 
 ## Extending the project
 
-- **New API endpoint**: add a handler method on `*Server` in `internal/server/`, register the route in `routes()`.
+- **New API endpoint**: add a handler method on `*Server` in `internal/server/`, register the route in `routes()`, then add a typed wrapper in `frontend/src/lib/endpoints.ts` for the frontend to call.
 - **New domain type**: add to `internal/model/model.go`, then run `npm run gen:types` to refresh the TS types.
 - **New store method**: add to `internal/store/store.go`, returning typed structs.
 - **New migration**: bump `schemaVersion` in `store/migrate.go`, add an `if version < N` block in `ensureSchema()`.
-- **New admin tab**: add the tab id to `AdminTab` + `adminNav()` in `frontend/src/stores/admin.ts`, add a button in `components/admin/AdminSidebar.vue`, create a `components/admin/<Tab>.vue` (wrap content in `.admin-panel`), and render it in `views/AdminView.vue`.
+- **New admin tab**: add the tab id to the `AdminTab` union in `frontend/src/stores/admin.ts` (and any per-tab data load in `setTabFromRoute()`), add a child route with `meta.tab` in `router/index.ts`, add a sidebar link in `components/admin/AdminSidebar.vue`, and create a `components/admin/<Tab>.vue` (wrap content in `.admin-panel`) referenced by the route's lazy `import()`.
+- **New route/view**: add a record to `routes` in `router/index.ts` with a lazy `component: () => import(...)`; mark `meta.requiresAdmin` if it needs auth.
 - **New WebSocket message type**: add a case in `composables/useWebSocket.ts` (and the `WsMessage` union in `types/api.ts`), send from server via `hub.Broadcast()` / `hub.BroadcastToPlayers()` / `hub.BroadcastToAdmins()`.
+- **New test**: colocate a `*.test.ts` next to the code; import `{ describe, it, expect }` from `vitest`; run `npm run test`. Add it to the same gate CI runs.

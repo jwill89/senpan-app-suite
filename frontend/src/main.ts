@@ -9,7 +9,9 @@ import { createPinia } from 'pinia'
 import App from './App.vue'
 import { router } from './router'
 import { initFontAwesome } from './lib/fontawesome'
+import { setUnauthorizedHandler } from './lib/api'
 import { useUiStore } from './stores/ui'
+import { useAuthStore } from './stores/auth'
 
 // Global app styles. Imported here (rather than linked statically from public/)
 // so Vite content-hashes the emitted CSS for cache-busting. Vite injects the
@@ -32,6 +34,21 @@ app.config.errorHandler = (err, _instance, info) => {
     /* Pinia not ready / store unavailable — console log above is the fallback. */
   }
 }
+
+// Handle an unexpected 401 (expired/cleared admin session) in one place: clear
+// the cached admin flag and, if we're in the admin area, bounce to the login
+// page (preserving the destination) with a notice. The auth endpoints opt out
+// of this via `skipAuthRedirect` so a bad-password login doesn't trigger it.
+setUnauthorizedHandler(() => {
+  const auth = useAuthStore()
+  auth.isAdmin = false
+  auth.authChecked = true
+  const current = router.currentRoute.value
+  if (current.name !== 'admin-login') {
+    useUiStore().notify('Your session has expired. Please log in again.', 'error')
+    router.push({ name: 'admin-login', query: { redirect: current.fullPath } })
+  }
+})
 
 app.mount('#app')
 

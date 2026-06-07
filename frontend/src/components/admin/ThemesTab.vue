@@ -9,6 +9,7 @@
  * dark look matches the original via lib/codemirror.ts + app.css section 26.
  */
 import { Codemirror } from 'vue-codemirror'
+import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
 import { cssEditorExtensions } from '@/lib/codemirror'
 import { useStylesStore } from '@/stores/styles'
 
@@ -37,7 +38,16 @@ const styles = useStylesStore()
                 Active
               </span>
             </div>
-            <p v-if="styles.styles.length === 0" class="text-dim text-sm" style="padding: 8px">
+            <LoadingSpinner
+              v-if="styles.stylesLoading && styles.styles.length === 0"
+              block
+              label="Loading…"
+            />
+            <p
+              v-else-if="styles.styles.length === 0"
+              class="text-dim text-sm"
+              style="padding: 8px"
+            >
               No themes yet.
             </p>
           </div>
@@ -76,7 +86,14 @@ const styles = useStylesStore()
                 aria-label="Theme name"
                 style="flex: 1"
               />
-              <button class="btn-primary btn-sm" @click="styles.saveStyle()">Save</button>
+              <button
+                class="btn-primary btn-sm"
+                :disabled="styles.savingStyle"
+                @click="styles.saveStyle()"
+              >
+                <LoadingSpinner v-if="styles.savingStyle" label="Saving…" />
+                <template v-else>Save</template>
+              </button>
               <button
                 v-if="styles.editingStyle.id"
                 class="btn-danger btn-sm"

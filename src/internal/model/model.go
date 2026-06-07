@@ -57,6 +57,7 @@ type BingoGame struct {
 // It contains everything a player or admin needs to render the current game.
 type BingoGameState struct {
 	ID            int64              `json:"id"`
+	CreatedAt     string             `json:"created_at"`     // ISO 8601 timestamp the game started (UTC)
 	CalledNumbers []int              `json:"called_numbers"` // numbers drawn so far, in call order
 	Patterns      []BingoGamePattern `json:"patterns"`       // active win patterns for this game
 	TotalCalled   int                `json:"total_called"`   // len(CalledNumbers), for convenience

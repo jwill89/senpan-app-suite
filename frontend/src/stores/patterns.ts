@@ -7,9 +7,9 @@
  */
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
-import { api } from '@/lib/api'
+import { endpoints } from '@/lib/endpoints'
 import { emptyGrid } from '@/lib/constants'
-import type { Pattern, PatternCategory, PatternsResponse } from '@/types/api'
+import type { Pattern, PatternCategory } from '@/types/api'
 import { useUiStore } from './ui'
 
 export interface PatternGroup {
@@ -22,6 +22,12 @@ export const usePatternsStore = defineStore('patterns', () => {
 
   const patterns = ref<Pattern[]>([])
   const categories = ref<PatternCategory[]>([])
+  /** True while patterns/categories are loading (drives list spinners). */
+  const patternsLoading = ref(false)
+  /** True while a new pattern is being saved (drives the Save button). */
+  const savingPattern = ref(false)
+  /** True while a new category is being created (drives the Add button). */
+  const creatingCategory = ref(false)
 
   // New pattern editor
   const newPatternName = ref('')
@@ -79,13 +85,16 @@ export const usePatternsStore = defineStore('patterns', () => {
   // ── Load ─────────────────────────────────────────────────────────────────
 
   async function loadPatterns(): Promise<void> {
+    patternsLoading.value = true
     try {
-      const data = await api<PatternsResponse>('patterns')
+      const data = await endpoints.patterns.list()
       patterns.value = data.patterns
       categories.value = data.categories || []
       rebuildEditableGroups()
     } catch (e) {
       ui.notify((e as Error).message, 'error')
+    } finally {
+      patternsLoading.value = false
     }
   }
 
@@ -123,18 +132,18 @@ export const usePatternsStore = defineStore('patterns', () => {
       ui.notify(`Duplicate pattern! Matches "${dup.name}" in category "${catName}"`, 'error')
       return
     }
+    savingPattern.value = true
     try {
       const catId =
         newPatternCategoryId.value || (categories.value.length ? categories.value[0].id : 1)
-      await api('patterns', {
-        method: 'POST',
-        body: { action: 'create', name, pattern_data: newPatternGrid.value, category_id: catId },
-      })
+      await endpoints.patterns.create(name, newPatternGrid.value, catId)
       ui.notify('Pattern saved', 'success')
       clearPatternEditor()
       await loadPatterns()
     } catch (e) {
       ui.notify((e as Error).message, 'error')
+    } finally {
+      savingPattern.value = false
     }
   }
 
@@ -162,7 +171,7 @@ export const usePatternsStore = defineStore('patterns', () => {
 
   async function deletePattern(id: number): Promise<void> {
     try {
-      await api('patterns', { method: 'POST', body: { action: 'delete', id } })
+      await endpoints.patterns.delete(id)
       patterns.value = patterns.value.filter((p) => p.id !== id)
       ui.notify('Pattern deleted', 'info')
     } catch (e) {
@@ -188,7 +197,7 @@ export const usePatternsStore = defineStore('patterns', () => {
     const pat = patterns.value.find((p) => p.id === id)
     if (!pat || pat.name === newName) return
     try {
-      await api('patterns', { method: 'POST', body: { action: 'rename', id, name: newName } })
+      await endpoints.patterns.rename(id, newName)
       pat.name = newName
     } catch (e) {
       ui.notify((e as Error).message, 'error')
@@ -200,13 +209,16 @@ export const usePatternsStore = defineStore('patterns', () => {
   async function createCategory(): Promise<void> {
     const name = (newCategoryName.value || '').trim()
     if (!name) return
+    creatingCategory.value = true
     try {
-      await api('pattern-categories', { method: 'POST', body: { action: 'create', name } })
+      await endpoints.patternCategories.create(name)
       newCategoryName.value = ''
       ui.notify('Category created', 'success')
       await loadPatterns()
     } catch (e) {
       ui.notify((e as Error).message, 'error')
+    } finally {
+      creatingCategory.value = false
     }
   }
 
@@ -222,7 +234,7 @@ export const usePatternsStore = defineStore('patterns', () => {
     const cat = categories.value.find((c) => c.id === id)
     if (!cat || cat.name === newName) return
     try {
-      await api('pattern-categories', { method: 'POST', body: { action: 'rename', id, name: newName } })
+      await endpoints.patternCategories.rename(id, newName)
       cat.name = newName
     } catch (e) {
       ui.notify((e as Error).message, 'error')
@@ -231,7 +243,7 @@ export const usePatternsStore = defineStore('patterns', () => {
 
   async function deleteCategory(id: number): Promise<void> {
     try {
-      await api('pattern-categories', { method: 'POST', body: { action: 'delete', id } })
+      await endpoints.patternCategories.delete(id)
       ui.notify('Category deleted', 'info')
       await loadPatterns()
     } catch (e) {
@@ -255,10 +267,7 @@ export const usePatternsStore = defineStore('patterns', () => {
   /** Persists the current category order to the server. Reverts on failure. */
   async function persistCategoryOrder(): Promise<void> {
     try {
-      await api('pattern-categories', {
-        method: 'POST',
-        body: { action: 'bulk_reorder', ordered_ids: categories.value.map((c) => c.id) },
-      })
+      await endpoints.patternCategories.reorder(categories.value.map((c) => c.id))
     } catch (e) {
       ui.notify((e as Error).message, 'error')
       await loadPatterns()
@@ -314,14 +323,10 @@ export const usePatternsStore = defineStore('patterns', () => {
 
     try {
       for (const group of editableGroups.value) {
-        await api('patterns', {
-          method: 'POST',
-          body: {
-            action: 'bulk_reorder',
-            category_id: group.category.id,
-            ordered_ids: group.patterns.map((p) => p.id),
-          },
-        })
+        await endpoints.patterns.reorder(
+          group.category.id,
+          group.patterns.map((p) => p.id),
+        )
       }
     } catch (e) {
       ui.notify((e as Error).message, 'error')
@@ -333,6 +338,9 @@ export const usePatternsStore = defineStore('patterns', () => {
   return {
     patterns,
     categories,
+    patternsLoading,
+    savingPattern,
+    creatingCategory,
     newPatternName,
     newPatternGrid,
     newPatternCategoryId,

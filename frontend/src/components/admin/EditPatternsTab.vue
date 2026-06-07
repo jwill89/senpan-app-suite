@@ -12,6 +12,7 @@
 import { onMounted } from 'vue'
 import draggable from 'vuedraggable'
 import PatternMini from '@/components/common/PatternMini.vue'
+import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
 import { usePatternsStore } from '@/stores/patterns'
 
 const patterns = usePatternsStore()
@@ -29,6 +30,11 @@ function onChange(): void {
   <div class="tab-body">
     <div class="admin-panel">
       <h3 class="mb-12"><i class="fa-solid fa-pen-to-square"></i> Edit Patterns</h3>
+      <LoadingSpinner
+        v-if="patterns.patternsLoading && patterns.patterns.length === 0"
+        block
+        label="Loading patterns…"
+      />
       <div v-if="patterns.patterns.length" style="margin-bottom: 12px">
         <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 12px">
           <span style="font-size: 0.85rem; color: var(--text-dim)">
@@ -106,7 +112,9 @@ function onChange(): void {
         </draggable>
       </template>
 
-      <p v-if="patterns.patterns.length === 0" class="msg-block">No patterns saved yet.</p>
+      <p v-if="!patterns.patternsLoading && patterns.patterns.length === 0" class="msg-block">
+        No patterns saved yet.
+      </p>
       <p class="text-dim text-xs mt-12">
         Double-click a name to rename. Drag to reorder or move between categories.
       </p>

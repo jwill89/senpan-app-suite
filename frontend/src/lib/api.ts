@@ -23,6 +23,23 @@ export class ApiError extends Error {
 export interface ApiOptions extends Omit<RequestInit, 'body'> {
   // Body objects are auto-stringified (unless FormData).
   body?: unknown
+  // Skip the global 401 → "session expired" handler for this request. Set on
+  // the auth endpoints themselves (a bad-password login legitimately 401s and
+  // must not trigger a redirect/“session expired” toast).
+  skipAuthRedirect?: boolean
+}
+
+// ── Global 401 handler ────────────────────────────────────────────────────────
+// Registered once at startup (see main.ts) so this low-level module stays free
+// of router/store imports (avoids a circular dependency). Invoked whenever a
+// request that isn't explicitly opted out returns 401, so an expired/cleared
+// admin session is handled in one place instead of every call site.
+type UnauthorizedHandler = () => void
+let onUnauthorized: UnauthorizedHandler | null = null
+
+/** Registers the callback invoked on an unexpected 401 response. */
+export function setUnauthorizedHandler(handler: UnauthorizedHandler): void {
+  onUnauthorized = handler
 }
 
 /**
@@ -56,6 +73,12 @@ export async function api<T = unknown>(endpoint: string, options: ApiOptions = {
   }
 
   if (!res.ok) {
+    // A 401 means the admin session is missing/expired. Surface it once,
+    // centrally, unless the caller opted out (the auth endpoints handle their
+    // own 401s — e.g. an invalid password).
+    if (res.status === 401 && !options.skipAuthRedirect) {
+      onUnauthorized?.()
+    }
     const msg =
       (data && typeof data === 'object' && 'error' in data && typeof data.error === 'string'
         ? data.error
@@ -68,10 +91,14 @@ export async function api<T = unknown>(endpoint: string, options: ApiOptions = {
 
 // Convenience helpers ---------------------------------------------------------
 
-export function apiGet<T = unknown>(endpoint: string): Promise<T> {
-  return api<T>(endpoint)
+export function apiGet<T = unknown>(endpoint: string, options: ApiOptions = {}): Promise<T> {
+  return api<T>(endpoint, options)
 }
 
-export function apiPost<T = unknown>(endpoint: string, body: unknown): Promise<T> {
-  return api<T>(endpoint, { method: 'POST', body })
+export function apiPost<T = unknown>(
+  endpoint: string,
+  body: unknown,
+  options: ApiOptions = {},
+): Promise<T> {
+  return api<T>(endpoint, { method: 'POST', body, ...options })
 }

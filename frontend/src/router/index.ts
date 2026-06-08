@@ -22,6 +22,7 @@
  *   /admin/raffles/closed     → Admin: Closed Raffles
  *   /admin/system/settings    → Admin: App Settings
  *   /admin/system/themes      → Admin: Themes
+ *   /admin/system/fonts       → Admin: Font Upload
  *
  * The admin tabs are child routes of the AdminView layout, so the sidebar/topbar
  * persist while the active tab is chosen by the matched child. A global guard
@@ -110,6 +111,12 @@ const adminChildren: RouteRecordRaw[] = [
     name: 'admin-system-themes',
     component: () => import('@/components/admin/ThemesTab.vue'),
     meta: { tab: 'system-themes' },
+  },
+  {
+    path: 'system/fonts',
+    name: 'admin-system-fonts',
+    component: () => import('@/components/admin/FontsTab.vue'),
+    meta: { tab: 'system-fonts' },
   },
 ]
 

@@ -168,6 +168,25 @@ export interface RaffleWinnerResponse {
   winner: RaffleEntry
 }
 
+// ── Fonts (System → Font Upload) ────────────────────────────────────────────
+// A single font file in <webRoot>/fonts.
+export interface FontFile {
+  name: string
+  size: number
+  /** RFC3339 last-modified timestamp. */
+  modified: string
+}
+
+export interface FontsResponse {
+  fonts: FontFile[]
+}
+
+// POST /api/fonts/upload — per-file result of a (possibly multi-file) upload.
+export interface FontUploadResponse {
+  uploaded: string[]
+  skipped: { name: string; reason: string }[]
+}
+
 // Form model for the admin raffle create/edit form.
 export interface RaffleForm {
   id: number

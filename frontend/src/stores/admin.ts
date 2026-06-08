@@ -13,6 +13,7 @@ import { useGameStore } from './game'
 import { useRafflesStore } from './raffles'
 import { useStylesStore } from './styles'
 import { useAppStore } from './app'
+import { useFontsStore } from './fonts'
 
 export type AdminSection = 'bingo' | 'raffles' | 'system'
 export type AdminTab =
@@ -27,6 +28,7 @@ export type AdminTab =
   | 'raffle-closed'
   | 'system-settings'
   | 'system-themes'
+  | 'system-fonts'
 
 export const useAdminStore = defineStore('admin', () => {
   const adminTab = ref<AdminTab>('bingo-game')
@@ -47,6 +49,7 @@ export const useAdminStore = defineStore('admin', () => {
     const raffles = useRafflesStore()
     const styles = useStylesStore()
     const app = useAppStore()
+    const fonts = useFontsStore()
 
     if (tab === 'raffle-open' || tab === 'raffle-closed') {
       raffles.selectedRaffle = null
@@ -54,6 +57,7 @@ export const useAdminStore = defineStore('admin', () => {
     }
     if (tab === 'system-themes') styles.loadStyles()
     if (tab === 'system-settings') app.loadSettings()
+    if (tab === 'system-fonts') fonts.loadFonts()
     if (tab === 'bingo-winners-log') game.loadWinnersLog()
     if (tab === 'raffle-new' && !raffles.raffleForm) raffles.newRaffleForm()
   }

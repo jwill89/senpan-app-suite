@@ -38,6 +38,8 @@ import type {
   StyleGetResponse,
   StylesResponse,
   WinnersLogResponse,
+  FontsResponse,
+  FontUploadResponse,
 } from '@/types/api'
 import type { AppSettings } from '@/types/api'
 
@@ -189,6 +191,19 @@ export const endpoints = {
       apiPost<OkResponse>(`raffles/${raffleId}/entries`, { action: 'verify_winner' }),
     pickAnotherWinner: (raffleId: number) =>
       apiPost<RaffleWinnerResponse>(`raffles/${raffleId}/entries`, { action: 'pick_another' }),
+  },
+
+  // ── Fonts (System → Font Upload) ─────────────────────────────────────────────
+  fonts: {
+    /** GET /api/fonts — list font files in <webRoot>/fonts. */
+    list: () => apiGet<FontsResponse>('fonts'),
+    /** POST /api/fonts/upload — multipart upload of one or more "files" fields. */
+    upload: (form: FormData) => apiPost<FontUploadResponse>('fonts/upload', form),
+    /** POST /api/fonts {delete} — remove a font file by name. */
+    delete: (name: string) => apiPost<OkResponse>('fonts', { action: 'delete', name }),
+    /** POST /api/fonts {rename} — rename a font file (fails if the target exists). */
+    rename: (name: string, newName: string) =>
+      apiPost<OkResponse>('fonts', { action: 'rename', name, new_name: newName }),
   },
 }
 

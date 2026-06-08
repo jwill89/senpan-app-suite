@@ -151,6 +151,12 @@ function toggle(section: AdminSection): void {
         >
           <i class="fa-solid fa-palette"></i> Themes
         </button>
+        <button
+          :class="{ active: admin.adminTab === 'system-fonts' }"
+          @click="go('system-fonts')"
+        >
+          <i class="fa-solid fa-font"></i> Font Upload
+        </button>
       </div>
     </div>
   </nav>

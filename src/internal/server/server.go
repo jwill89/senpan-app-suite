@@ -87,6 +87,11 @@ func (s *Server) routes() {
 	// App settings
 	s.mux.HandleFunc("GET /api/settings", s.handleSettingsGet)
 	s.mux.HandleFunc("POST /api/settings", s.handleSettingsUpdate)
+
+	// Font file management (System → Font Upload)
+	s.mux.HandleFunc("GET /api/fonts", s.handleFontsList)
+	s.mux.HandleFunc("POST /api/fonts", s.handleFontsAction)
+	s.mux.HandleFunc("POST /api/fonts/upload", s.handleFontUpload)
 }
 
 // ServeHTTP applies CORS middleware, logs the request, then dispatches to the router.

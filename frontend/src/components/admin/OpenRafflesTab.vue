@@ -91,6 +91,64 @@ function editSelected(): void {
         </button>
       </div>
 
+      <!-- Add entry (admin) -->
+      <div v-if="raffles.selectedRaffle.status === 'open'" class="entry-add mt-16 mb-16">
+        <h3 class="raffle-section-heading">
+          <i class="fa-solid fa-plus"></i> Add Entry
+        </h3>
+        <div class="flex-row mb-10">
+          <div class="field" style="flex: 2; min-width: 160px">
+            <label class="field-label">Character Name</label>
+            <input
+              v-model="raffles.entryAdd.characterName"
+              class="field-input-full"
+              placeholder="Character name"
+              aria-label="Character name"
+              @keyup.enter="raffles.addRaffleEntry()"
+            />
+          </div>
+          <div class="field" style="flex: 1; min-width: 120px">
+            <label class="field-label">World</label>
+            <input
+              v-model="raffles.entryAdd.world"
+              class="field-input-full"
+              placeholder="World"
+              aria-label="World"
+              @keyup.enter="raffles.addRaffleEntry()"
+            />
+          </div>
+          <div class="field" style="flex: 0 0 96px; min-width: 80px">
+            <label class="field-label">Entries</label>
+            <input
+              v-model.number="raffles.entryAdd.numEntries"
+              type="number"
+              min="1"
+              :max="raffles.selectedRaffle.max_entries"
+              class="field-input-full"
+              aria-label="Number of entries"
+            />
+          </div>
+        </div>
+        <div class="flex-toolbar entry-add-actions">
+          <label class="entry-add-paid">
+            <input v-model="raffles.entryAdd.paid" type="checkbox" />
+            Mark as paid
+          </label>
+          <button
+            class="btn-primary btn-sm"
+            :disabled="
+              raffles.addingEntry ||
+              !raffles.entryAdd.characterName.trim() ||
+              !raffles.entryAdd.world.trim()
+            "
+            @click="raffles.addRaffleEntry()"
+          >
+            <LoadingSpinner v-if="raffles.addingEntry" label="Adding…" />
+            <template v-else><i class="fa-solid fa-plus"></i> Add Entry</template>
+          </button>
+        </div>
+      </div>
+
       <!-- Entries table -->
       <h3 class="mb-8 mt-16">Entries ({{ raffles.raffleEntries.length }})</h3>
       <div v-if="raffles.raffleEntries.length" class="raffle-entries-table">
@@ -168,3 +226,20 @@ function editSelected(): void {
     </div>
   </div>
 </template>
+
+<style scoped>
+.entry-add {
+  background: var(--surface2);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+}
+.entry-add-actions {
+  justify-content: space-between;
+}
+.entry-add-paid {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
+</style>

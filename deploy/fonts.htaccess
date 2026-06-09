@@ -1,0 +1,35 @@
+# ============================================================================
+# Apache .htaccess — font host (serves https://fonts.senpan.cafe/)
+# ----------------------------------------------------------------------------
+# PLACEMENT: copy this file to the document root that serves
+# https://fonts.senpan.cafe/ as ".htaccess". That directory is <webRoot>/fonts/
+# — the folder the Go server writes uploaded fonts to (see internal/server/
+# fonts.go: fontsDir() = <webRoot>/fonts). The Go server only ever adds/removes
+# font files there, so this .htaccess persists across uploads.
+#
+# WHY THIS IS NEEDED:
+#   The SPA at https://apps.senpan.cafe loads uploaded fonts via CSS @font-face
+#   pointing at https://fonts.senpan.cafe/<file>. Unlike images, cross-origin
+#   font fetches are subject to CORS — without an `Access-Control-Allow-Origin`
+#   header the browser blocks the font and the header/board font silently falls
+#   back to serif (the App Settings preview shows the fallback, not the font).
+#   Font files are public, static assets, so granting read access to any origin
+#   is safe.
+#
+# If the font vhost does NOT allow .htaccess overrides (AllowOverride None),
+# put the same <FilesMatch> block in the vhost's <Directory> instead, and make
+# sure mod_headers is enabled.
+# ============================================================================
+
+# Don't leak a directory listing of the fonts folder.
+Options -Indexes
+
+<IfModule mod_headers.c>
+    <FilesMatch "\.(ttf|otf|woff2?|eot)$">
+        # Allow the SPA (any origin) to use these fonts via @font-face.
+        Header set Access-Control-Allow-Origin "*"
+        # Fonts are large and change rarely (a name can't be overwritten in
+        # place — it must be deleted then re-uploaded), so cache for a week.
+        Header set Cache-Control "public, max-age=604800"
+    </FilesMatch>
+</IfModule>

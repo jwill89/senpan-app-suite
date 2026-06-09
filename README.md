@@ -3,8 +3,9 @@
 A real-time Bingo game and raffle manager. A **Go + SQLite** backend serves a
 JSON/WebSocket API (`/api/*`); a **Vue 3 + TypeScript** single-page app (built
 with Vite) is the frontend. Admins run live bingo games (draw numbers, verify
-winners, manage cards/patterns) and raffles; players join a board by ID, stamp
-cells in real time, and can export their card as an image.
+winners, manage cards/patterns) and raffles, and customize the look via custom
+CSS themes and uploaded fonts; players join a board by ID, stamp cells in real
+time, and can export their card as an image.
 
 ## Stack
 
@@ -70,7 +71,7 @@ Open http://localhost:5173. The admin area is at `/admin/login`.
   conventions, and "how to extend" guide (the primary reference for contributors
   and AI agents).
 - **[`deploy/README.md`](deploy/README.md)** — Apache deployment (document-root
-  layout, persistent uploads, PWA caching).
+  layout, persistent uploads, the font host + CORS, PWA caching).
 - **[`themes.md`](themes.md)** — ready-made custom CSS themes (paste into the
   admin Themes editor).
 
@@ -79,7 +80,7 @@ Open http://localhost:5173. The admin area is at `/admin/login`.
 ```
 frontend/   Vue 3 + TS SPA (Vite)        — src/{views,components,stores,router,lib,types}
 src/        Go backend                    — internal/{server,store,bingo,ws,model}
-deploy/     Apache artifacts              — .htaccess + persistent images/
+deploy/     Apache artifacts              — .htaccess + fonts.htaccess (CORS) + persistent images/
 data/       SQLite DB (created at runtime, gitignored)
 ```
 

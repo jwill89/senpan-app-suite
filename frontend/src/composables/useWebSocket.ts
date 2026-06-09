@@ -10,7 +10,7 @@
  */
 import { WsClient } from '@/lib/ws'
 import { playDrawChime, vibrate } from '@/lib/sound'
-import { applyCustomCSS, applyHeaderFont } from '@/lib/theme'
+import { applyCustomCSS, applyHeaderFont, applyUploadedFonts } from '@/lib/theme'
 import type { WsMessage } from '@/types/api'
 import { useRouter } from 'vue-router'
 import { useUiStore } from '@/stores/ui'
@@ -80,6 +80,12 @@ export function useWebSocket() {
           document.title = msg.app_title
         }
         if (msg.header_font) {
+          // Register any uploaded fonts the broadcast carried so a newly
+          // selected uploaded font renders without a reload, then apply.
+          if (msg.uploaded_fonts) {
+            app.uploadedFonts = msg.uploaded_fonts
+            applyUploadedFonts(msg.uploaded_fonts)
+          }
           app.settings.header_font = msg.header_font
           applyHeaderFont(msg.header_font)
         }

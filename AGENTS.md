@@ -34,7 +34,7 @@ coder/websocket · Vitest + Vue Test Utils · GitHub Actions CI.
 │       │   ├── markdown.ts           ← markdown-it renderer (lazy-loaded; replaces CDN marked.js)
 │       │   ├── fontawesome.ts        ← SVG-core library + dom.watch() (replaces FA kit script)
 │       │   ├── codemirror.ts         ← CM6 CSS-editor extensions + dark theme/highlight
-│       │   ├── theme.ts              ← header-font + custom-CSS <head> injection
+│       │   ├── theme.ts              ← header-font + custom-CSS <head> injection; registers uploaded-font @font-face rules (metric-clamped to tame oversized vertical metrics)
 │       │   ├── assets.ts             ← resolves server image paths (images/...) to root-absolute URLs
 │       │   ├── exportCard.ts         ← player card → framed PNG export (html-to-image capture + canvas composite)
 │       │   ├── sound.ts              ← opt-in draw chime (Web Audio synth) + haptics for the player view
@@ -42,12 +42,12 @@ coder/websocket · Vitest + Vue Test Utils · GitHub Actions CI.
 │       ├── types/
 │       │   ├── api.generated.ts      ← tygo-generated from Go model — GITIGNORED, DO NOT EDIT (run `npm run gen:types`)
 │       │   └── api.ts                ← re-exports + hand-written request/response/WS envelopes
-│       ├── stores/                   ← Pinia stores (ui, app, auth, player, game, cards, patterns, styles, raffles, admin)
+│       ├── stores/                   ← Pinia stores (ui, app, auth, player, game, cards, patterns, styles, raffles, fonts, admin)
 │       ├── composables/useWebSocket.ts ← wires WsClient → stores (message dispatch)
 │       ├── components/
 │       │   ├── common/               ← BingoBoard, CalledNumbers, PatternMini, ModalOverlay, ConfirmModal, ToastNotification, LoadingSpinner, RouteProgressBar
 │       │   ├── player/               ← Stamp{Shape,Color,Opacity} pickers, WinPatternsPanel
-│       │   └── admin/                ← Sidebar + one component per tab (11) + modals (CardPreview, EndGame, WinnerVerify, HalftimePrompt)
+│       │   └── admin/                ← Sidebar + one component per tab (12, incl. SettingsTab + FontsTab) + modals (CardPreview, EndGame, WinnerVerify, HalftimePrompt)
 │       ├── views/                    ← HomeView, PlayerView, RafflesView, RaffleDetailView, AdminLoginView, AdminView
 │       └── **/*.test.ts              ← Vitest unit/component tests, colocated next to the code they cover
 ├── .github/workflows/ci.yml          ← CI: frontend (lint·typecheck·test·build) + backend (build·vet·test)
@@ -75,8 +75,11 @@ coder/websocket · Vitest + Vue Test Utils · GitHub Actions CI.
 │           ├── game.go               ← GET/POST /api/game
 │           ├── patterns.go           ← GET/POST /api/patterns, GET/POST /api/pattern-categories
 │           ├── styles.go             ← GET/POST /api/styles, GET /api/styles/active
-│           ├── raffles.go            ← GET/POST /api/raffles, raffle entries, image upload
+│           ├── raffles.go            ← GET/POST /api/raffles, raffle entries (add/mark-paid/delete/pick), image upload
 │           ├── winners.go            ← GET /api/winners-log, GET /api/winners-log/frequent
+│           ├── settings.go           ← GET/POST /api/settings (app title, draw delay, header font, Google Fonts key)
+│           ├── fonts.go              ← GET/POST /api/fonts, POST /api/fonts/upload (uploaded font files in <webRoot>/fonts)
+│           ├── ratelimit.go          ← IP-based brute-force limiter for admin login
 │           └── ws.go                 ← GET /api/ws (delegates to hub)
 ├── data/                             ← SQLite DB created at runtime (gitignored)
 ```
@@ -129,13 +132,15 @@ incrementally only when the version is behind.
 | `games` | `id INTEGER PK`, `status` (active/ended), `created_at`, `winners_cache TEXT` (JSON array of card IDs) |
 | `game_patterns` | Snapshot of patterns when game started (game_id + pattern_id + name + data) |
 | `called_numbers` | `game_id`, `number`, `call_order` |
-| `settings` | `key TEXT PK`, `value TEXT` — key-value config (e.g. `game_details`, `active_style_id`) |
+| `settings` | `key TEXT PK`, `value TEXT` — key-value config (e.g. `game_details`, `active_style_id`, `app_title`, `default_draw_delay`, `frequent_winner_threshold`/`_hours`, `header_font`, `google_fonts_api_key`) |
 | `styles` | `id INTEGER PK`, `name`, `css_content TEXT`, `created_at` |
 | `raffles` | `id INTEGER PK`, `title`, `description`, `rules`, `max_entries`, `signup_instructions`, `cost_per_entry`, `available_from`, `available_to`, `prize_image`, `status`, `winner_entry_id`, `created_at` |
 | `raffle_entries` | `id INTEGER PK`, `raffle_id`, `character_name`, `world`, `num_entries`, `paid`, `created_at` |
 | `winners_log` | `id INTEGER PK`, `logged_at`, `card_id`, `player_name`, `game_details`, `winning_patterns TEXT` (JSON) |
 
 Indexes: `games(status)`, `called_numbers(game_id, call_order)`, `game_patterns(game_id)`, `raffle_entries(raffle_id)`, `winners_log(logged_at)`, `winners_log(player_name, logged_at)`, `cards(player_name)`.
+
+**On-disk uploads (not in the DB)**: raffle prize images in `<webRoot>/images/raffles/`, and admin-uploaded **fonts** in `<webRoot>/fonts/` (`.ttf/.otf/.woff/.woff2/.eot`). Fonts are served by a **separate** vhost (`https://fonts.senpan.cafe`), so cross-origin `@font-face` needs CORS headers — see Deployment.
 
 ## Frontend (Vue 3 + TypeScript + Vite)
 
@@ -156,7 +161,7 @@ not store-driven view switching:
 - Public: `/`, `/play/:cardId`, `/raffles`, `/raffles/:id`, `/admin/login`.
 - Admin: `/admin` (layout, `requiresAdmin`) with child routes
   `bingo/{game,cards,winners-log,categories,new-pattern,patterns}`,
-  `raffles/{new,open,closed}`, `system/{settings,themes}`. The admin tabs are
+  `raffles/{new,open,closed}`, `system/{settings,themes,fonts}`. The admin tabs are
   **child routes** of the `AdminView` layout, so the sidebar/topbar persist while
   the matched child renders the active tab.
 - Every view + admin tab is a lazy `import()` so heavy deps (CodeMirror,
@@ -189,13 +194,13 @@ Never edit it by hand. Request/response/WebSocket envelopes are hand-written in
 
 **Testing** (Vitest + Vue Test Utils, jsdom):
 - Config in `vitest.config.ts` (kept separate from `vite.config.ts` so tests don't load the PWA/visualizer plugins). Tests **import `describe/it/expect/vi` from `vitest`** explicitly (`globals: false`) so they type-check with no extra global-types config.
-- Test files are colocated as `src/**/*.test.ts`. Current coverage: `lib/{constants,api,endpoints,exportCard}.test.ts`, `stores/{player,ui}.test.ts`, `components/common/BingoBoard.test.ts`.
+- Test files are colocated as `src/**/*.test.ts`. Current coverage: `lib/{constants,api,endpoints,exportCard,theme}.test.ts`, `stores/{player,ui,raffles}.test.ts`, `components/common/BingoBoard.test.ts`.
 - Run: `npm run test` (CI), `npm run test:watch`, `npm run test:coverage` (v8).
 - Patterns: mock `fetch` via `vi.stubGlobal` for `api.ts`; mock the `./api` module with `vi.hoisted` + `vi.mock` for `endpoints.ts`; Pinia stores use `setActivePinia(createPinia())`; components use `mount()` from `@vue/test-utils`. Pure helpers tested directly (e.g. `exportCard.ts` exports `parseInlineRuns`/`parseDetailParagraphs` for this).
 
 **Public routes**: `/` · `/play/:cardId` · `/raffles` · `/raffles/:id` · `/admin/login`.
 **Admin sections** (`adminSection`, sidebar highlight): `bingo` | `raffles` | `system`.
-**Admin tabs** (`adminTab` / route): `bingo-game` · `bingo-cards` · `bingo-winners-log` · `bingo-categories` · `bingo-new-pattern` · `bingo-patterns` · `raffle-new` · `raffle-open` · `raffle-closed` · `system-settings` · `system-themes`.
+**Admin tabs** (`adminTab` / route): `bingo-game` · `bingo-cards` · `bingo-winners-log` · `bingo-categories` · `bingo-new-pattern` · `bingo-patterns` · `raffle-new` · `raffle-open` · `raffle-closed` · `system-settings` · `system-themes` · `system-fonts`.
 
 **Player features**:
 - Join by board ID; see bingo board, called numbers grid, and active win patterns
@@ -214,8 +219,10 @@ Never edit it by hand. Request/response/WebSocket envelopes are hand-written in
 - **Cards tab**: generate cards (1–500), view as chips with player name indicators, click to preview board, edit player name/details, delete individual or all
 - **Patterns tabs**: create (5×5 grid editor with duplicate detection), organize into categories, rename inline (double-click name), reorder/move between categories via vuedraggable, delete; category CRUD with vuedraggable reorder
 - **Winners Log tab**: paginated table of past winners with sorting and per-page controls
-- **Raffles section**: create/edit raffles (title, description, rules as markdown, cost per entry, max entries, signup instructions, availability window, prize image upload); manage entries (view, toggle paid status, delete); weighted random winner pick; close/reopen raffles; delete raffles
-- **Themes section**: CRUD custom CSS themes with CodeMirror 6 editor, activate/deactivate live
+- **Raffles section**: create/edit raffles (title, description, rules as markdown, cost per entry, max entries, signup instructions, availability window, prize image upload); manage entries (view, **manually add an entry — optionally marked paid right away**, toggle paid status, delete); weighted random winner pick; close/reopen raffles; delete raffles
+- **System → Settings tab**: app title, default draw delay, frequent-winner threshold/window, and the **header/board font** picker — a combo box with optgroups for uploaded fonts (first) and Google Fonts, plus an optional Google Fonts API key and a live font preview
+- **System → Themes tab**: CRUD custom CSS themes with CodeMirror 6 editor, activate/deactivate live
+- **System → Font Upload tab** (`FontsTab.vue`): upload one or more font files (`.ttf/.otf/.woff/.woff2/.eot`) to `<webRoot>/fonts/`, rename/delete them, copy each file's public URL, and a **live preview** (type any text, pick a font) — all with the same metric clamping used app-wide so oversized fonts render sensibly. Uploaded fonts become selectable as the header/board font for everyone, not just the admin preview.
 
 **Key UI patterns**:
 - `[v-cloak]` (in app.css) prevents a flash before mount; the `#app` div carries it
@@ -293,15 +300,23 @@ the built SPA so redeploys never wipe them (full guide in `deploy/README.md`):
 <DocumentRoot>/
 ├── .htaccess        ← deploy/.htaccess  (SPA fallback: serves dist/index.html; routes /assets → dist/assets; /images served from root)
 ├── images/          ← deploy/images/    (PERSISTENT: logo/favicon/banner + raffles/ uploads)
+├── fonts/           ← (PERSISTENT: admin-uploaded font files; served by the fonts.senpan.cafe vhost)
 └── dist/            ← frontend/dist/    (built SPA; replaced each deploy)
 ```
 
 - Run the Go server with `-webroot <DocumentRoot>`; uploads are written to
-  `<DocumentRoot>/images/raffles/` and returned as `images/raffles/<file>`.
+  `<DocumentRoot>/images/raffles/` (prize images) and `<DocumentRoot>/fonts/`
+  (uploaded fonts), and returned as `images/raffles/<file>` / `<file>`.
 - `vite.config.ts` strips `dist/images/` after build (the `strip-dist-images`
   plugin) so the redundant copy doesn't shadow the persistent root `images/`.
 - Schema migration v10 rewrites legacy `assets/images/raffles/...` prize paths
   to `images/raffles/...` automatically on first start.
+- **Font host (CORS)**: uploaded fonts are served cross-origin from
+  `https://fonts.senpan.cafe`, so `@font-face` loads are CORS-restricted (unlike
+  `<img>`). The font vhost must send `Access-Control-Allow-Origin` — deploy
+  `deploy/fonts.htaccess` to `<webRoot>/fonts/.htaccess` (needs `mod_headers` +
+  `AllowOverride`). Without it, uploaded fonts silently fall back to serif. See
+  the **Font host (CORS)** section of `deploy/README.md`.
 
 ## Conventions & patterns
 
@@ -340,6 +355,7 @@ the built SPA so redeploys never wipe them (full guide in `deploy/README.md`):
 - **Global 401 handling**: `api.ts` invokes a registered handler (set in `main.ts`) on any non-auth 401 → redirect to `/admin/login` + "session expired" toast. Auth endpoints pass `skipAuthRedirect` so a bad-password login doesn't trigger it.
 - **Themed confirm dialog**: use `await ui.confirm(message, opts)` (renders `ConfirmModal.vue`) instead of the native `window.confirm`.
 - **Theme fidelity**: new UI must reuse existing `app.css` class names + theme tokens (CSS custom properties in `:root`) so user-authored custom CSS themes keep working — never hard-code colors/fonts.
+- **Uploaded fonts**: `applyUploadedFonts()` (`lib/theme.ts`) writes one `<style id="uploaded-fonts">` with an `@font-face` per file from `FONT_BASE_URL` (`stores/fonts.ts`), so a font is registered app-wide (board/header + every preview), not per-component. It then measures each loaded font via the Canvas TextMetrics API and, for fonts with oversized vertical metrics, rewrites the rule with `ascent-override`/`descent-override`/`line-gap-override` to clamp the box (`clampFontMetrics()` — pure + unit-tested). The Settings preview and the Font Upload live preview both rely on these shared rules, so previews always match what players see.
 
 ## Key files to inspect first
 

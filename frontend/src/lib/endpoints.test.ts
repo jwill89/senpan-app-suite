@@ -79,4 +79,29 @@ describe('raffles nested paths', () => {
     await endpoints.raffles.enter(7, body)
     expect(apiPost).toHaveBeenCalledWith('raffles/7/enter', body)
   })
+
+  it('addEntry posts the add_entry action with the paid flag', async () => {
+    await endpoints.raffles.addEntry(7, {
+      character_name: 'Cloud',
+      world: 'Gaia',
+      num_entries: 2,
+      paid: true,
+    })
+    expect(apiPost).toHaveBeenCalledWith('raffles/7/entries', {
+      action: 'add_entry',
+      character_name: 'Cloud',
+      world: 'Gaia',
+      num_entries: 2,
+      paid: true,
+    })
+  })
+
+  it('markEntryPaid posts the mark_paid action', async () => {
+    await endpoints.raffles.markEntryPaid(7, 42, false)
+    expect(apiPost).toHaveBeenCalledWith('raffles/7/entries', {
+      action: 'mark_paid',
+      entry_id: 42,
+      paid: false,
+    })
+  })
 })

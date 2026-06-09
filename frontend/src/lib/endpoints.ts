@@ -30,6 +30,7 @@ import type {
   PatternsResponse,
   RaffleDetailResponse,
   RaffleEnterResponse,
+  RaffleEntryResponse,
   RaffleUploadResponse,
   RaffleWinnerResponse,
   RafflesResponse,
@@ -174,6 +175,14 @@ export const endpoints = {
       apiPost<RaffleUploadResponse>('raffles/upload', form),
     enter: (id: number, body: { character_name: string; world: string; num_entries: number }) =>
       apiPost<RaffleEnterResponse>(`raffles/${id}/enter`, body),
+    addEntry: (
+      raffleId: number,
+      body: { character_name: string; world: string; num_entries: number; paid: boolean },
+    ) =>
+      apiPost<RaffleEntryResponse>(`raffles/${raffleId}/entries`, {
+        action: 'add_entry',
+        ...body,
+      }),
     markEntryPaid: (raffleId: number, entryId: number, paid: boolean) =>
       apiPost<OkResponse>(`raffles/${raffleId}/entries`, {
         action: 'mark_paid',

@@ -7,7 +7,7 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import { endpoints } from '@/lib/endpoints'
-import { applyCustomCSS, applyHeaderFont } from '@/lib/theme'
+import { applyCustomCSS, applyHeaderFont, applyUploadedFonts } from '@/lib/theme'
 import { DEFAULT_APP_SETTINGS } from '@/lib/constants'
 import type { AppSettings } from '@/types/api'
 import { useUiStore } from './ui'
@@ -17,6 +17,8 @@ export const useAppStore = defineStore('app', () => {
 
   const settings = ref<AppSettings>({ ...DEFAULT_APP_SETTINGS })
   const googleFontsList = ref<string[]>([])
+  /** Filenames of fonts uploaded via System → Font Upload. */
+  const uploadedFonts = ref<string[]>([])
   let googleFontsCacheKey = ''
   /** True while settings are being saved (drives the Save button). */
   const savingSettings = ref(false)
@@ -25,6 +27,10 @@ export const useAppStore = defineStore('app', () => {
   async function loadSettings(): Promise<void> {
     try {
       const data = await endpoints.settings.get()
+      // Register uploaded fonts first so applyHeaderFont knows to skip Google
+      // for an uploaded family.
+      uploadedFonts.value = data.uploaded_fonts || []
+      applyUploadedFonts(uploadedFonts.value)
       if (data.settings) {
         settings.value = { ...settings.value, ...data.settings }
         document.title = settings.value.app_title || 'Senpan App Suite'
@@ -96,6 +102,7 @@ export const useAppStore = defineStore('app', () => {
   return {
     settings,
     googleFontsList,
+    uploadedFonts,
     savingSettings,
     loadSettings,
     saveSettings,

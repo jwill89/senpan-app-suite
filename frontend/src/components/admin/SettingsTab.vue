@@ -2,20 +2,72 @@
 /**
  * Admin App Settings tab — app title, default draw delay, frequent-winner
  * thresholds, Google Fonts API key, and the header/board font (with live
- * preview + autocomplete datalist). Mirrors the original
- * `adminTab==='system-settings'` block. The fallback font datalist uses the
- * shared FALLBACK_GOOGLE_FONTS constant (identical list to the original).
+ * preview). Mirrors the original `adminTab==='system-settings'` block.
+ *
+ * The header/board font is chosen from a single combo box grouped into two
+ * <optgroup>s: fonts uploaded via System → Font Upload (listed first) and
+ * Google Fonts (the live API list when an API key is set, else the shared
+ * FALLBACK_GOOGLE_FONTS list). Uploaded fonts' @font-face rules are registered
+ * (applyUploadedFonts) so they preview live and can be selected. A previously
+ * saved value that is in neither group is preserved as a "(custom)" option so
+ * editing settings never silently drops it.
  */
-import { computed } from 'vue'
+import { computed, onMounted, watch } from 'vue'
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
 import { FALLBACK_GOOGLE_FONTS } from '@/lib/constants'
+import { applyUploadedFonts, fontFamilyFromFile } from '@/lib/theme'
 import { useAppStore } from '@/stores/app'
+import { useFontsStore } from '@/stores/fonts'
 
 const app = useAppStore()
+const fonts = useFontsStore()
 
-/** Datalist options: the live Google Fonts list if available, else the fallback. */
+/** Uploaded font family names (filename without extension), de-duplicated. */
+const uploadedFontFamilies = computed(() => {
+  const seen = new Set<string>()
+  const families: string[] = []
+  for (const f of fonts.fonts) {
+    const family = fontFamilyFromFile(f.name)
+    if (family && !seen.has(family)) {
+      seen.add(family)
+      families.push(family)
+    }
+  }
+  return families
+})
+
+/** Google-font options: live Google Fonts (if available) else the fallback list. */
 const fontOptions = computed(() =>
   app.googleFontsList.length ? app.googleFontsList : FALLBACK_GOOGLE_FONTS,
+)
+
+/**
+ * The currently-saved header font when it appears in neither group (e.g. a font
+ * typed in an earlier version, or a Google font not in the fallback list with
+ * no API key configured). Surfaced as a "(custom)" option so the combo box
+ * never blanks out / silently drops the saved value. Empty string when the
+ * value is already covered by a group.
+ */
+const customHeaderFont = computed(() => {
+  const f = (app.settings.header_font || '').trim()
+  if (!f) return ''
+  if (uploadedFontFamilies.value.includes(f)) return ''
+  if (fontOptions.value.includes(f)) return ''
+  return f
+})
+
+// Load the uploaded-font list and (re)register its @font-face rules so they
+// preview live here and reflect any uploads/deletes done on the Font Upload tab.
+// Re-applying the header font afterwards lets a saved uploaded font preview as
+// soon as its @font-face is registered (it can't render before that).
+onMounted(() => fonts.loadFonts())
+watch(
+  () => fonts.fonts,
+  () => {
+    applyUploadedFonts(fonts.fonts.map((f) => f.name))
+    app.previewHeaderFont()
+  },
+  { deep: true },
 )
 </script>
 
@@ -102,16 +154,32 @@ const fontOptions = computed(() =>
           </small>
         </div>
         <div class="field mb-10">
-          <label class="field-label">Header / Board Font</label>
+          <label class="field-label" for="header-font-select">Header / Board Font</label>
           <div class="flex gap-sm">
-            <input
+            <select
+              id="header-font-select"
               v-model="app.settings.header_font"
-              placeholder="Arapey"
               aria-label="Header font"
               class="field-input-full"
-              list="google-fonts-list"
-              @input="app.previewHeaderFont()"
-            />
+              @change="app.previewHeaderFont()"
+            >
+              <option v-if="customHeaderFont" :value="customHeaderFont">
+                {{ customHeaderFont }} (custom)
+              </option>
+              <optgroup v-if="uploadedFontFamilies.length" label="Uploaded Fonts">
+                <option
+                  v-for="f in uploadedFontFamilies"
+                  :key="'up-' + f"
+                  :value="f"
+                  :style="{ fontFamily: `'${f}', serif` }"
+                >
+                  {{ f }}
+                </option>
+              </optgroup>
+              <optgroup label="Google Fonts">
+                <option v-for="f in fontOptions" :key="'g-' + f" :value="f">{{ f }}</option>
+              </optgroup>
+            </select>
             <a
               href="https://fonts.google.com"
               target="_blank"
@@ -121,13 +189,11 @@ const fontOptions = computed(() =>
               >Browse Fonts ↗</a
             >
           </div>
-          <datalist id="google-fonts-list">
-            <option v-for="f in fontOptions" :key="f" :value="f"></option>
-          </datalist>
           <small class="text-dim">
-            Google Font family name for headings and the bingo board. Type a name and it previews
-            live.
+            Choose a Google font or one uploaded under System → Font Upload (uploaded fonts are
+            listed first). The preview below updates live.
           </small>
+
           <div
             class="font-preview mt-8"
             :style="{ fontFamily: '\'' + (app.settings.header_font || 'Arapey') + '\', serif' }"
@@ -149,3 +215,4 @@ const fontOptions = computed(() =>
     </div>
   </div>
 </template>
+

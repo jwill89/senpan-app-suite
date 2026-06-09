@@ -28,7 +28,7 @@ var settingsDefaults = map[string]string{
 //
 //	Endpoint:  GET /api/settings
 //	Auth:      public (settings are not sensitive)
-//	Response:  {"settings": {"app_title": "...", "default_draw_delay": "0", ...}}
+//	Response:  {"settings": {"app_title": "...", ...}, "uploaded_fonts": ["My Font.ttf", ...]}
 func (s *Server) handleSettingsGet(w http.ResponseWriter, r *http.Request) {
 	result := make(map[string]string, len(settingsKeys))
 	for _, key := range settingsKeys {
@@ -38,7 +38,12 @@ func (s *Server) handleSettingsGet(w http.ResponseWriter, r *http.Request) {
 		}
 		result[key] = val
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"settings": result})
+	writeJSON(w, http.StatusOK, map[string]any{
+		"settings": result,
+		// Uploaded font filenames so the frontend can register @font-face rules
+		// and offer them in the header-font picker (alongside Google Fonts).
+		"uploaded_fonts": s.fontFileNames(),
+	})
 }
 
 // settingsRequest is the JSON body for POST /api/settings.
@@ -103,9 +108,10 @@ func (s *Server) handleSettingsUpdate(w http.ResponseWriter, r *http.Request) {
 
 	// Broadcast changed settings to all clients
 	broadcastPayload := struct {
-		Type       string `json:"type"`
-		Title      string `json:"app_title,omitempty"`
-		HeaderFont string `json:"header_font,omitempty"`
+		Type          string   `json:"type"`
+		Title         string   `json:"app_title,omitempty"`
+		HeaderFont    string   `json:"header_font,omitempty"`
+		UploadedFonts []string `json:"uploaded_fonts,omitempty"`
 	}{Type: "settings_update"}
 
 	if v, ok := req.Settings["app_title"]; ok {
@@ -113,6 +119,9 @@ func (s *Server) handleSettingsUpdate(w http.ResponseWriter, r *http.Request) {
 	}
 	if v, ok := req.Settings["header_font"]; ok {
 		broadcastPayload.HeaderFont = v
+		// Include the current uploaded fonts so every client can register the
+		// @font-face for a newly selected uploaded font without a reload.
+		broadcastPayload.UploadedFonts = s.fontFileNames()
 	}
 	if broadcastPayload.Title != "" || broadcastPayload.HeaderFont != "" {
 		s.hub.Broadcast(broadcastPayload)

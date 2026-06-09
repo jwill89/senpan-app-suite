@@ -127,6 +127,12 @@ export interface AppSettings {
 
 export interface SettingsResponse {
   settings: AppSettings
+  /**
+   * Filenames of fonts uploaded via System → Font Upload (e.g. "My Font.ttf").
+   * The frontend registers an @font-face for each (family = name without the
+   * extension) so they can be used for the header/board font.
+   */
+  uploaded_fonts?: string[]
 }
 
 // ── Winners log (GET /api/winners-log) ──────────────────────────────────────
@@ -166,6 +172,11 @@ export interface RaffleUploadResponse {
 
 export interface RaffleWinnerResponse {
   winner: RaffleEntry
+}
+
+// POST /api/raffles/{id}/entries {add_entry} — the created/updated entry.
+export interface RaffleEntryResponse {
+  entry: RaffleEntry
 }
 
 // ── Fonts (System → Font Upload) ────────────────────────────────────────────
@@ -210,5 +221,5 @@ export type WsMessage =
   | { type: 'card_deleted' }
   | { type: 'details_update'; game_details: string }
   | { type: 'style_update'; css: string }
-  | { type: 'settings_update'; app_title?: string; header_font?: string }
+  | { type: 'settings_update'; app_title?: string; header_font?: string; uploaded_fonts?: string[] }
   | { type: 'halftime_minigame' }

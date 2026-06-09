@@ -1305,6 +1305,179 @@ func TestRaffles_EntriesInvalidAction(t *testing.T) {
 	resp.Body.Close()
 }
 
+func TestRaffles_AddEntry(t *testing.T) {
+	env := newTestEnv(t)
+	env.loginAdmin(t)
+
+	resp := env.postJSON(t, "/api/raffles", map[string]any{
+		"action": "create", "title": "Add Entry Test", "max_entries": 5, "cost_per_entry": 100,
+	})
+	raffleID := int(decodeBody(t, resp)["raffle"].(map[string]any)["id"].(float64))
+
+	resp = env.postJSON(t, fmt.Sprintf("/api/raffles/%d/entries", raffleID), map[string]any{
+		"action": "add_entry", "character_name": "Cloud", "world": "Gaia", "num_entries": 2,
+	})
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d; want 200", resp.StatusCode)
+	}
+	entry, _ := decodeBody(t, resp)["entry"].(map[string]any)
+	if entry == nil {
+		t.Fatal("expected entry in response")
+	}
+	if entry["character_name"] != "Cloud" || entry["num_entries"] != float64(2) {
+		t.Errorf("entry = %v; want Cloud/2", entry)
+	}
+	if entry["paid"] != false {
+		t.Errorf("paid = %v; want false (not requested)", entry["paid"])
+	}
+
+	// Confirm it persisted, unpaid.
+	stored, _ := env.store.GetRaffleEntry(int64(raffleID), "Cloud", "Gaia")
+	if stored == nil || stored.NumEntries != 2 || stored.Paid {
+		t.Errorf("stored = %+v; want 2 entries, unpaid", stored)
+	}
+}
+
+func TestRaffles_AddEntryPaid(t *testing.T) {
+	env := newTestEnv(t)
+	env.loginAdmin(t)
+
+	resp := env.postJSON(t, "/api/raffles", map[string]any{
+		"action": "create", "title": "Add Paid Test", "max_entries": 5,
+	})
+	raffleID := int(decodeBody(t, resp)["raffle"].(map[string]any)["id"].(float64))
+
+	resp = env.postJSON(t, fmt.Sprintf("/api/raffles/%d/entries", raffleID), map[string]any{
+		"action": "add_entry", "character_name": "Tifa", "world": "Gaia", "num_entries": 1, "paid": true,
+	})
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d; want 200", resp.StatusCode)
+	}
+	resp.Body.Close()
+
+	stored, _ := env.store.GetRaffleEntry(int64(raffleID), "Tifa", "Gaia")
+	if stored == nil || !stored.Paid {
+		t.Errorf("expected stored entry to be paid, got %+v", stored)
+	}
+}
+
+func TestRaffles_AddEntryMergesExisting(t *testing.T) {
+	env := newTestEnv(t)
+	env.loginAdmin(t)
+
+	resp := env.postJSON(t, "/api/raffles", map[string]any{
+		"action": "create", "title": "Merge Test", "max_entries": 10,
+	})
+	raffleID := int(decodeBody(t, resp)["raffle"].(map[string]any)["id"].(float64))
+
+	// Pre-existing paid entry.
+	entryID, _ := env.store.CreateRaffleEntry(int64(raffleID), "Aerith", "Gaia", 3)
+	_ = env.store.SetRaffleEntryPaid(entryID, true)
+
+	// Admin adds 2 more (case-insensitive match) WITHOUT the paid flag: the
+	// tickets must merge and the existing paid status must be preserved.
+	resp = env.postJSON(t, fmt.Sprintf("/api/raffles/%d/entries", raffleID), map[string]any{
+		"action": "add_entry", "character_name": "aerith", "world": "GAIA", "num_entries": 2,
+	})
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d; want 200", resp.StatusCode)
+	}
+	resp.Body.Close()
+
+	stored, _ := env.store.GetRaffleEntry(int64(raffleID), "Aerith", "Gaia")
+	if stored == nil || stored.NumEntries != 5 {
+		t.Errorf("num_entries = %+v; want 5 (3+2 merged)", stored)
+	}
+	if stored != nil && !stored.Paid {
+		t.Error("expected existing paid status to be preserved")
+	}
+}
+
+func TestRaffles_AddEntryExceedsMax(t *testing.T) {
+	env := newTestEnv(t)
+	env.loginAdmin(t)
+
+	resp := env.postJSON(t, "/api/raffles", map[string]any{
+		"action": "create", "title": "Max Test", "max_entries": 3,
+	})
+	raffleID := int(decodeBody(t, resp)["raffle"].(map[string]any)["id"].(float64))
+
+	resp = env.postJSON(t, fmt.Sprintf("/api/raffles/%d/entries", raffleID), map[string]any{
+		"action": "add_entry", "character_name": "P", "world": "W", "num_entries": 5,
+	})
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Errorf("status = %d; want 400", resp.StatusCode)
+	}
+	resp.Body.Close()
+}
+
+func TestRaffles_AddEntryMissingFields(t *testing.T) {
+	env := newTestEnv(t)
+	env.loginAdmin(t)
+
+	resp := env.postJSON(t, "/api/raffles", map[string]any{
+		"action": "create", "title": "Field Test", "max_entries": 5,
+	})
+	raffleID := int(decodeBody(t, resp)["raffle"].(map[string]any)["id"].(float64))
+
+	resp = env.postJSON(t, fmt.Sprintf("/api/raffles/%d/entries", raffleID), map[string]any{
+		"action": "add_entry", "character_name": "", "world": "", "num_entries": 1,
+	})
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Errorf("status = %d; want 400", resp.StatusCode)
+	}
+	resp.Body.Close()
+}
+
+func TestRaffles_AddEntryClosedRaffle(t *testing.T) {
+	env := newTestEnv(t)
+	env.loginAdmin(t)
+
+	resp := env.postJSON(t, "/api/raffles", map[string]any{
+		"action": "create", "title": "Closed Test", "max_entries": 5,
+	})
+	raffleID := int(decodeBody(t, resp)["raffle"].(map[string]any)["id"].(float64))
+	_ = env.store.SetRaffleStatus(int64(raffleID), "closed")
+
+	resp = env.postJSON(t, fmt.Sprintf("/api/raffles/%d/entries", raffleID), map[string]any{
+		"action": "add_entry", "character_name": "P", "world": "W", "num_entries": 1,
+	})
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Errorf("status = %d; want 400", resp.StatusCode)
+	}
+	resp.Body.Close()
+}
+
+func TestRaffles_AddEntryIgnoresAvailabilityWindow(t *testing.T) {
+	env := newTestEnv(t)
+	env.loginAdmin(t)
+
+	// Availability window already closed, but the raffle itself is still open.
+	resp := env.postJSON(t, "/api/raffles", map[string]any{
+		"action": "create", "title": "Window Test", "max_entries": 5,
+		"available_to": "2000-01-01T00:00",
+	})
+	raffleID := int(decodeBody(t, resp)["raffle"].(map[string]any)["id"].(float64))
+
+	// Public sign-up is rejected (past the window)…
+	resp = env.postJSON(t, fmt.Sprintf("/api/raffles/%d/enter", raffleID), map[string]any{
+		"character_name": "P", "world": "W", "num_entries": 1,
+	})
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Errorf("public enter status = %d; want 400 (window closed)", resp.StatusCode)
+	}
+	resp.Body.Close()
+
+	// …but the admin can still add manually.
+	resp = env.postJSON(t, fmt.Sprintf("/api/raffles/%d/entries", raffleID), map[string]any{
+		"action": "add_entry", "character_name": "P", "world": "W", "num_entries": 1,
+	})
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("admin add status = %d; want 200 (window ignored)", resp.StatusCode)
+	}
+	resp.Body.Close()
+}
+
 // ── Styles ──────────────────────────────────────────────────────────────────
 
 func TestStyles_RequiresAuth(t *testing.T) {

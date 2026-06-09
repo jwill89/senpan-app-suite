@@ -22,6 +22,9 @@ things that live *alongside* the built SPA but are **not** part of `dist/`.
 touches uploaded raffle images. The build also strips `dist/images/` (it would
 otherwise be a redundant copy) so the two never get confused.
 
+Uploaded **fonts** live in a separate folder, `<webRoot>/fonts/`, served by its
+own vhost at `https://fonts.senpan.cafe/` — see [Font host (CORS)](#font-host-cors).
+
 ## One-time server setup
 
 1. Upload `deploy/.htaccess` → `<DocumentRoot>/.htaccess`.
@@ -55,6 +58,27 @@ otherwise be a redundant copy) so the two never get confused.
    The web server (Apache) must have write access to `<DocumentRoot>/images/raffles/`
    only if the Go process and Apache run as different users; the Go process is
    what writes the files, so it needs write access to that directory.
+
+## Font host (CORS)
+
+Uploaded fonts are written by the Go server to `<webRoot>/fonts/` and served by
+a separate vhost at `https://fonts.senpan.cafe/`. The SPA (at
+`https://apps.senpan.cafe`) loads them via CSS `@font-face`, which — unlike
+`<img>` — is **cross-origin/CORS-restricted**. Without an
+`Access-Control-Allow-Origin` header the browser blocks the font and the
+header/board font silently falls back to serif (e.g. the App Settings preview
+shows the fallback instead of the uploaded font).
+
+One-time setup for the font host:
+
+1. Upload `deploy/fonts.htaccess` → `<webRoot>/fonts/.htaccess`. It adds
+   `Access-Control-Allow-Origin: *` (plus a cache header) for font files. The Go
+   server only adds/removes font files in that folder, so the `.htaccess`
+   persists across uploads.
+2. Ensure the font vhost has `mod_headers` enabled and allows `.htaccess`
+   overrides (`AllowOverride All` or at least `FileInfo`). If overrides are
+   disabled, put the `<FilesMatch>` block from `deploy/fonts.htaccess` directly
+   in the vhost's `<Directory>` instead.
 
 ## Each deploy
 

@@ -22,6 +22,11 @@ export const useRafflesStore = defineStore('raffles', () => {
     numEntries: 1,
   })
   const raffleSignupResult = ref<RaffleEnterResponse | null>(null)
+  // Admin-only: manually add a player to the selected open raffle.
+  const entryAdd = ref<{ characterName: string; world: string; numEntries: number; paid: boolean }>(
+    { characterName: '', world: '', numEntries: 1, paid: false },
+  )
+  const addingEntry = ref(false)
   const raffleWinner = ref<RaffleEntry | null>(null)
   const raffleWinnerEntry = ref<RaffleEntry | null>(null) // public closed view
   const raffleTotalEntryCount = ref(0)
@@ -87,7 +92,13 @@ export const useRafflesStore = defineStore('raffles', () => {
     raffleSignupResult.value = null
     raffleEntries.value = []
     raffleWinner.value = null
+    resetEntryAdd()
     loadRaffleDetail(raffle.id)
+  }
+
+  /** Clears the admin "add entry" form. */
+  function resetEntryAdd(): void {
+    entryAdd.value = { characterName: '', world: '', numEntries: 1, paid: false }
   }
 
   /** Public: open a raffle's detail view (loads winner + total entries). */
@@ -224,9 +235,28 @@ export const useRafflesStore = defineStore('raffles', () => {
 
   // ── Public sign-up ─────────────────────────────────────────────────────────
 
+  /**
+   * The entry count clamped to a whole number in [1, max_entries]. The raw
+   * `numEntries` can be out of range or non-integer (typed value, stepper, or a
+   * cleared field), so both the live cost preview and the submitted request go
+   * through this — the displayed total can never disagree with what's sent, and
+   * the server's own bound is never the first line of defence.
+   */
+  function clampedEntries(): number {
+    if (!selectedRaffle.value) return 1
+    const max = Math.max(1, Math.floor(selectedRaffle.value.max_entries || 1))
+    const raw = Math.floor(Number(raffleSignup.value.numEntries) || 1)
+    return Math.min(Math.max(raw, 1), max)
+  }
+
+  /** Writes the clamped entry count back to the field (call on input blur/change). */
+  function clampSignupEntries(): void {
+    raffleSignup.value.numEntries = clampedEntries()
+  }
+
   function raffleTotalCost(): number {
     if (!selectedRaffle.value) return 0
-    return (raffleSignup.value.numEntries || 1) * selectedRaffle.value.cost_per_entry
+    return clampedEntries() * selectedRaffle.value.cost_per_entry
   }
 
   async function enterRaffle(): Promise<void> {
@@ -236,6 +266,7 @@ export const useRafflesStore = defineStore('raffles', () => {
       ui.notify('Character name and world are required', 'error')
       return
     }
+    clampSignupEntries()
     entering.value = true
     try {
       const data = await endpoints.raffles.enter(selectedRaffle.value.id, {
@@ -253,6 +284,39 @@ export const useRafflesStore = defineStore('raffles', () => {
   }
 
   // ── Admin entries ──────────────────────────────────────────────────────────
+
+  /**
+   * Admin: manually add a player to the selected open raffle (optionally already
+   * paid). The entry count is clamped to [1, max_entries] to match the field's
+   * bound; the server enforces the same limit. On success the form resets and the
+   * detail view reloads so the entries table + counts reflect the new entry.
+   */
+  async function addRaffleEntry(): Promise<void> {
+    if (!selectedRaffle.value) return
+    const f = entryAdd.value
+    if (!f.characterName.trim() || !f.world.trim()) {
+      ui.notify('Character name and world are required', 'error')
+      return
+    }
+    const max = Math.max(1, Math.floor(selectedRaffle.value.max_entries || 1))
+    const num = Math.min(Math.max(Math.floor(Number(f.numEntries) || 1), 1), max)
+    addingEntry.value = true
+    try {
+      await endpoints.raffles.addEntry(selectedRaffle.value.id, {
+        character_name: f.characterName.trim(),
+        world: f.world.trim(),
+        num_entries: num,
+        paid: f.paid,
+      })
+      ui.notify('Entry added', 'success')
+      resetEntryAdd()
+      await loadRaffleDetail(selectedRaffle.value.id)
+    } catch (e) {
+      ui.notify((e as Error).message, 'error')
+    } finally {
+      addingEntry.value = false
+    }
+  }
 
   async function toggleEntryPaid(entry: RaffleEntry): Promise<void> {
     if (!selectedRaffle.value) return
@@ -327,6 +391,8 @@ export const useRafflesStore = defineStore('raffles', () => {
     raffleForm,
     raffleSignup,
     raffleSignupResult,
+    entryAdd,
+    addingEntry,
     raffleWinner,
     raffleWinnerEntry,
     raffleTotalEntryCount,
@@ -351,7 +417,9 @@ export const useRafflesStore = defineStore('raffles', () => {
     deleteRaffle,
     uploadRaffleImage,
     raffleTotalCost,
+    clampSignupEntries,
     enterRaffle,
+    addRaffleEntry,
     toggleEntryPaid,
     deleteEntry,
     pickRaffleWinner,

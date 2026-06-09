@@ -40,6 +40,31 @@ func (s *Server) fontsDir() string {
 	return filepath.Join(s.webRoot, "fonts")
 }
 
+// fontFileNames returns the sorted base names of the font files in the fonts
+// directory (font extensions only). Used by the public settings endpoint so the
+// frontend can register @font-face rules for uploaded fonts. Returns nil when
+// the directory is missing or unreadable.
+func (s *Server) fontFileNames() []string {
+	entries, err := os.ReadDir(s.fontsDir())
+	if err != nil {
+		return nil
+	}
+	names := make([]string, 0, len(entries))
+	for _, e := range entries {
+		if e.IsDir() {
+			continue
+		}
+		if !allowedFontExts[strings.ToLower(filepath.Ext(e.Name()))] {
+			continue
+		}
+		names = append(names, e.Name())
+	}
+	sort.Slice(names, func(i, j int) bool {
+		return strings.ToLower(names[i]) < strings.ToLower(names[j])
+	})
+	return names
+}
+
 // safeFontName validates and normalizes an uploaded/target font filename. It
 // strips any directory components, rejects empty/dotfile names and disallowed
 // extensions, and guards against path traversal. Returns the clean base name

@@ -444,11 +444,16 @@ h1 {
     gap: 5px
 }
 
-/* Individual board cell — displays a number or FREE */
+/* Individual board cell — displays a number or FREE.
+   Size is 68px on desktop but shrinks to fit narrow viewports: the min() with a
+   viewport-derived value keeps the 5-cell board (cells + gaps + wrapper padding)
+   from overflowing small phones, while staying exactly 68px on any width where
+   that fits. Self-limiting, so no extra breakpoint is needed for the board. */
 .board-cell {
+    --cell-size: min(68px, calc((100vw - 100px) / 5));
     position: relative;
-    width: 68px;
-    height: 68px;
+    width: var(--cell-size);
+    height: var(--cell-size);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -2468,6 +2473,69 @@ kbd {
     color: var(--text-dim);
     font-size: .95rem;
     margin-top: 4px;
+}
+
+/* ================================================================
+   34. PHONE LAYOUT — small-screen tweaks (≤560px)
+   Player view never had a mobile breakpoint; the board is handled by the
+   self-limiting .board-cell --cell-size, and these rules tighten the
+   surrounding chrome and let the right column shrink below its 300px desktop
+   min-width so nothing forces horizontal page overflow on a phone.
+   ================================================================ */
+@media (max-width: 560px) {
+    /* Tighter shells so content gets the width it needs. */
+    .player-body {
+        padding: 16px;
+        gap: 18px;
+    }
+    .tab-body {
+        padding: 16px;
+    }
+    .topbar {
+        padding: 12px 14px;
+    }
+    .topbar h2 {
+        font-size: 1rem;
+    }
+
+    /* The right column is a wrapped, full-width block on phones — drop the
+       desktop 300px floor so it can fit a 320px viewport without overflow. */
+    .player-right {
+        min-width: 0;
+        max-width: none;
+        width: 100%;
+    }
+
+    /* Scale board typography down with the (now smaller) cells. */
+    .board-header span {
+        font-size: 1.3rem;
+    }
+    .stamp-mark {
+        font-size: 2rem;
+    }
+
+    /* Home: let the cards fill the width and shrink the oversized title. */
+    .home {
+        gap: 28px;
+    }
+    .home h1 {
+        font-size: 2.2rem;
+    }
+    .home-card {
+        width: min(320px, 100%);
+        padding: 28px 22px;
+    }
+    .home-cards {
+        width: 100%;
+    }
+
+    /* Raffle entries table scrolls instead of overflowing the page on a phone.
+       (The winners-log and fonts tables already wrap in their own overflow-x
+       containers.) */
+    .raffle-entries-table {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+    }
 }
 
 /* Respect reduced-motion: replace animations with a static indicator. */

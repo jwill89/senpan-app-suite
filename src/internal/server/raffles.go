@@ -330,11 +330,16 @@ func (s *Server) handleRaffleEnter(w http.ResponseWriter, r *http.Request) {
 // ── Raffle entries admin actions ────────────────────────────────────────────
 
 // raffleEntriesRequest is the JSON body for POST /api/raffles/{id}/entries.
-// Action: "mark_paid", "delete_entry", "pick_winner", "verify_winner", or "pick_another".
+// Action: "add_entry", "mark_paid", "delete_entry", "pick_winner",
+// "verify_winner", or "pick_another".
 type raffleEntriesRequest struct {
 	Action  string `json:"action"`
 	EntryID int64  `json:"entry_id"`
 	Paid    bool   `json:"paid"`
+	// add_entry only: the player to add and how many tickets.
+	CharacterName string `json:"character_name"`
+	World         string `json:"world"`
+	NumEntries    int    `json:"num_entries"`
 }
 
 // handleRaffleEntries processes admin actions on raffle entries.
@@ -362,6 +367,83 @@ func (s *Server) handleRaffleEntries(w http.ResponseWriter, r *http.Request) {
 	}
 
 	switch req.Action {
+	case "add_entry":
+		// Admin manually adds a player to an open raffle, optionally already paid.
+		// Unlike the public sign-up this skips the availability-window check (an
+		// admin can add an entry at any time while the raffle is open) but still
+		// enforces the per-person max so the entry data stays consistent.
+		charName := strings.TrimSpace(req.CharacterName)
+		world := strings.TrimSpace(req.World)
+		if charName == "" || world == "" {
+			writeError(w, http.StatusBadRequest, "Character name and world are required")
+			return
+		}
+		if req.NumEntries < 1 {
+			req.NumEntries = 1
+		}
+
+		raffle, err := s.store.GetRaffle(raffleID)
+		if err != nil {
+			writeInternalError(w, "get raffle for add entry", err)
+			return
+		}
+		if raffle == nil {
+			writeError(w, http.StatusNotFound, "Raffle not found")
+			return
+		}
+		if raffle.Status != "open" {
+			writeError(w, http.StatusBadRequest, "This raffle is no longer accepting entries")
+			return
+		}
+
+		existing, err := s.store.GetRaffleEntry(raffleID, charName, world)
+		if err != nil {
+			writeInternalError(w, "get raffle entry for add", err)
+			return
+		}
+
+		var entryID int64
+		if existing != nil {
+			newTotal := existing.NumEntries + req.NumEntries
+			if newTotal > raffle.MaxEntries {
+				writeError(w, http.StatusBadRequest,
+					fmt.Sprintf("Cannot add %d entries. They already have %d of %d max entries.",
+						req.NumEntries, existing.NumEntries, raffle.MaxEntries))
+				return
+			}
+			if err := s.store.AddRaffleEntries(existing.ID, req.NumEntries); err != nil {
+				writeInternalError(w, "add raffle entries", err)
+				return
+			}
+			entryID = existing.ID
+		} else {
+			if req.NumEntries > raffle.MaxEntries {
+				writeError(w, http.StatusBadRequest,
+					fmt.Sprintf("Number of entries cannot exceed %d", raffle.MaxEntries))
+				return
+			}
+			entryID, err = s.store.CreateRaffleEntry(raffleID, charName, world, req.NumEntries)
+			if err != nil {
+				writeInternalError(w, "create raffle entry", err)
+				return
+			}
+		}
+
+		// Mark paid right away when requested (never un-marks an existing entry).
+		if req.Paid {
+			if err := s.store.SetRaffleEntryPaid(entryID, true); err != nil {
+				writeInternalError(w, "mark added entry paid", err)
+				return
+			}
+		}
+
+		entry, err := s.store.GetRaffleEntryByID(entryID)
+		if err != nil {
+			writeInternalError(w, "load added entry", err)
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"entry": entry})
+
 	case "mark_paid":
 		if req.EntryID <= 0 {
 			writeError(w, http.StatusBadRequest, "Entry id is required")
@@ -441,7 +523,7 @@ func (s *Server) handleRaffleEntries(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]any{"winner": winner})
 
 	default:
-		writeError(w, http.StatusBadRequest, "Invalid action. Use: mark_paid, delete_entry, pick_winner, verify_winner, pick_another")
+		writeError(w, http.StatusBadRequest, "Invalid action. Use: add_entry, mark_paid, delete_entry, pick_winner, verify_winner, pick_another")
 	}
 }
 

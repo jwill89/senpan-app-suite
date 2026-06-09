@@ -127,10 +127,28 @@ const soundIconHtml = computed(
   () => icon(player.soundEnabled ? faVolumeHigh : faVolumeXmark).html.join(''),
 )
 
-/** Leave the board: reset state and return home (App disconnects the WS). */
-function leave(): void {
+/**
+ * Leave the board and return home (App.vue disconnects the WS on the route
+ * change). We navigate *first* and only clear the player's card/stamps once
+ * we've actually left — so a navigation that can't complete (e.g. fetching the
+ * lazily-loaded Home chunk fails on a direct link, or its hash is stale after a
+ * redeploy) can't strand the player on an emptied board. If the in-app
+ * navigation fails or is aborted, fall back to a full page load to home.
+ */
+async function leave(): Promise<void> {
+  let failed = false
+  try {
+    // router.push resolves to a NavigationFailure (truthy) when aborted/
+    // redirected, and rejects when a chunk fails to load — treat both as failed.
+    failed = Boolean(await router.push({ name: 'home' }))
+  } catch {
+    failed = true
+  }
+  if (failed) {
+    window.location.assign(import.meta.env.BASE_URL || '/')
+    return // full reload resets the store, so no resetPlayer() needed here
+  }
   player.resetPlayer()
-  router.push({ name: 'home' })
 }
 </script>
 

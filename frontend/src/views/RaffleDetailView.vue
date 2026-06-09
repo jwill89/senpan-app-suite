@@ -114,8 +114,11 @@ function back(): void {
             v-model.number="raffles.raffleSignup.numEntries"
             type="number"
             min="1"
+            step="1"
             :max="raffles.selectedRaffle.max_entries"
             aria-label="Number of entries"
+            @change="raffles.clampSignupEntries()"
+            @blur="raffles.clampSignupEntries()"
           />
         </div>
         <p v-if="raffles.selectedRaffle.cost_per_entry > 0" class="mb-12" style="font-size: 0.95rem">

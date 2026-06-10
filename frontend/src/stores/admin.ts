@@ -11,11 +11,17 @@ import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import { useGameStore } from './game'
 import { useRafflesStore } from './raffles'
+import { useBookclubStore } from './bookclub'
 import { useStylesStore } from './styles'
 import { useAppStore } from './app'
 import { useFontsStore } from './fonts'
+import { BOOK_CLUBS } from '@/lib/constants'
 
-export type AdminSection = 'bingo' | 'raffles' | 'system'
+export type AdminSection = 'bingo' | 'raffles' | 'bookclub' | 'system'
+
+/** One tab per registered book club, e.g. 'bookclub-yaoi' | 'bookclub-yuri'. */
+export type BookClubTab = `bookclub-${(typeof BOOK_CLUBS)[number]['slug']}`
+
 export type AdminTab =
   | 'bingo-game'
   | 'bingo-cards'
@@ -26,6 +32,7 @@ export type AdminTab =
   | 'raffle-new'
   | 'raffle-open'
   | 'raffle-closed'
+  | BookClubTab
   | 'system-settings'
   | 'system-themes'
   | 'system-fonts'
@@ -42,11 +49,13 @@ export const useAdminStore = defineStore('admin', () => {
   function setTabFromRoute(tab: AdminTab): void {
     if (tab.startsWith('bingo-')) adminSection.value = 'bingo'
     else if (tab.startsWith('raffle-')) adminSection.value = 'raffles'
+    else if (tab.startsWith('bookclub-')) adminSection.value = 'bookclub'
     else if (tab.startsWith('system-')) adminSection.value = 'system'
     adminTab.value = tab
 
     const game = useGameStore()
     const raffles = useRafflesStore()
+    const bookclub = useBookclubStore()
     const styles = useStylesStore()
     const app = useAppStore()
     const fonts = useFontsStore()
@@ -54,6 +63,9 @@ export const useAdminStore = defineStore('admin', () => {
     if (tab === 'raffle-open' || tab === 'raffle-closed') {
       raffles.selectedRaffle = null
       raffles.loadRaffles()
+    }
+    if (tab.startsWith('bookclub-')) {
+      bookclub.openClub(tab.slice('bookclub-'.length))
     }
     if (tab === 'system-themes') styles.loadStyles()
     if (tab === 'system-settings') app.loadSettings()

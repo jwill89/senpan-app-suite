@@ -80,6 +80,20 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("POST /api/raffles/{id}/enter", s.handleRaffleEnter)
 	s.mux.HandleFunc("POST /api/raffles/{id}/entries", s.handleRaffleEntries)
 
+	// Book club / reading list routes (specific paths before {id} to avoid conflicts)
+	s.mux.HandleFunc("POST /api/bookclub/upload", s.handleBookclubUpload)
+	s.mux.HandleFunc("GET /api/bookclub/lookup", s.handleBookclubLookup)
+	// Book club event posts (scheduled Discord embeds)
+	s.mux.HandleFunc("GET /api/bookclub/events", s.handleBookClubEventsList)
+	s.mux.HandleFunc("POST /api/bookclub/events", s.handleBookClubEventsAction)
+	s.mux.HandleFunc("GET /api/bookclub/events/images", s.handleBookClubEventImages)
+	s.mux.HandleFunc("POST /api/bookclub/events/upload", s.handleBookClubEventUpload)
+	s.mux.HandleFunc("GET /api/reading-lists", s.handleReadingListsList)
+	s.mux.HandleFunc("POST /api/reading-lists", s.handleReadingListsAction)
+	s.mux.HandleFunc("GET /api/reading-lists/{id}", s.handleReadingListDetail)
+	s.mux.HandleFunc("POST /api/reading-lists/{id}/items", s.handleReadingListItems)
+	s.mux.HandleFunc("POST /api/reading-lists/{id}/publish", s.handlePublishReadingList)
+
 	// Winners log routes
 	s.mux.HandleFunc("GET /api/winners-log", s.handleWinnersLog)
 	s.mux.HandleFunc("GET /api/winners-log/frequent", s.handleFrequentWinners)

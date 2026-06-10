@@ -6,6 +6,7 @@
  */
 import { useRouter } from 'vue-router'
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
+import MarkdownEditor from '@/components/common/MarkdownEditor.vue'
 import { useRafflesStore } from '@/stores/raffles'
 import { assetUrl } from '@/lib/assets'
 
@@ -37,31 +38,28 @@ async function save(): Promise<void> {
           />
         </div>
         <div class="field mb-10">
-          <label class="field-label">Description (Markdown)</label>
-          <textarea
+          <label class="field-label">Description</label>
+          <MarkdownEditor
             v-model="raffles.raffleForm.description"
-            rows="3"
-            class="form-textarea"
-            aria-label="Description"
-          ></textarea>
+            min-height="120px"
+            placeholder="Description (supports markdown — bold, italics, lists, links…)"
+          />
         </div>
         <div class="field mb-10">
-          <label class="field-label">Rules (Markdown)</label>
-          <textarea
+          <label class="field-label">Rules</label>
+          <MarkdownEditor
             v-model="raffles.raffleForm.rules"
-            rows="3"
-            class="form-textarea"
-            aria-label="Rules"
-          ></textarea>
+            min-height="120px"
+            placeholder="Rules (supports markdown)"
+          />
         </div>
         <div class="field mb-10">
-          <label class="field-label">Sign-Up Instructions (Markdown)</label>
-          <textarea
+          <label class="field-label">Sign-Up Instructions</label>
+          <MarkdownEditor
             v-model="raffles.raffleForm.signup_instructions"
-            rows="3"
-            class="form-textarea"
-            aria-label="Sign-up instructions"
-          ></textarea>
+            min-height="120px"
+            placeholder="Sign-up instructions (supports markdown)"
+          />
         </div>
         <div class="flex-row mb-10">
           <div class="field" style="flex: 1; min-width: 120px">

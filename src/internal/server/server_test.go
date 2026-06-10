@@ -26,6 +26,7 @@ type testEnv struct {
 	ts     *httptest.Server
 	client *http.Client
 	store  *store.Store
+	srv    *server.Server
 }
 
 func newTestEnv(t *testing.T) *testEnv {
@@ -46,7 +47,7 @@ func newTestEnv(t *testing.T) *testEnv {
 	client := ts.Client()
 	client.Jar = jar
 
-	return &testEnv{ts: ts, client: client, store: st}
+	return &testEnv{ts: ts, client: client, store: st, srv: srv}
 }
 
 func (e *testEnv) url(path string) string {

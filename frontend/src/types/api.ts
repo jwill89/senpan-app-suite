@@ -12,12 +12,16 @@
 import type {
   BingoDrawnNumber,
   BingoGameState,
+  BookClubEvent,
   Card,
   FrequentWinner,
   Pattern,
   PatternCategory,
   Raffle,
   RaffleEntry,
+  ReadingList,
+  ReadingListItem,
+  ReadingListSource,
   Style,
   WinnersLogEntry,
 } from './api.generated'
@@ -27,12 +31,16 @@ export type {
   BingoGame,
   BingoGamePattern,
   BingoGameState,
+  BookClubEvent,
   Card,
   FrequentWinner,
   Pattern,
   PatternCategory,
   Raffle,
   RaffleEntry,
+  ReadingList,
+  ReadingListItem,
+  ReadingListSource,
   Style,
   WinnersLogEntry,
 } from './api.generated'
@@ -123,6 +131,20 @@ export interface AppSettings {
   frequent_winner_hours: string
   header_font: string
   google_fonts_api_key: string
+  /** AniList GraphQL endpoint used for manga lookups. */
+  anilist_api_url: string
+  /**
+   * Per-club Discord webhook URLs, keyed `discord_webhook_url_<club_slug>`
+   * (e.g. `discord_webhook_url_yaoi`). Admin-only (redacted for public). Each
+   * book club publishes its reading lists to its own channel. See BOOK_CLUBS.
+   */
+  [key: `discord_webhook_url_${string}`]: string
+  /**
+   * Per-club Discord *events*-channel webhook URLs, keyed
+   * `discord_events_webhook_url_<club_slug>`. Admin-only (redacted for public).
+   * Scheduled event posts are sent here. See clubEventsWebhookKey in constants.ts.
+   */
+  [key: `discord_events_webhook_url_${string}`]: string
 }
 
 export interface SettingsResponse {
@@ -177,6 +199,83 @@ export interface RaffleWinnerResponse {
 // POST /api/raffles/{id}/entries {add_entry} — the created/updated entry.
 export interface RaffleEntryResponse {
   entry: RaffleEntry
+}
+
+// ── Book clubs / reading lists ──────────────────────────────────────────────
+export interface ReadingListsResponse {
+  reading_lists: ReadingList[]
+}
+
+export interface ReadingListDetailResponse {
+  reading_list: ReadingList
+}
+
+// POST /api/reading-lists/{id}/items — the created/updated item.
+export interface ReadingListItemResponse {
+  item: ReadingListItem
+}
+
+// POST /api/bookclub/upload — full URL of the stored cover image.
+export interface BookclubUploadResponse {
+  url: string
+}
+
+// GET /api/bookclub/lookup — AniList suggestions, shaped like reading list items.
+export interface BookclubLookupResponse {
+  results: ReadingListItem[]
+}
+
+// POST /api/reading-lists/{id}/publish — number of items posted to Discord.
+export interface PublishResponse {
+  published: number
+}
+
+// Form model for the admin reading-list item create/edit form.
+export interface ReadingListItemForm {
+  id: number
+  cover_image: string
+  title: string
+  summary: string
+  format: string
+  genres: string
+  tropes: string
+  chapters: string
+  comments: string
+  sources: ReadingListSource[]
+}
+
+// ── Book club event posts ────────────────────────────────────────────────────
+// GET /api/bookclub/events — scheduled events for a club.
+export interface BookClubEventsResponse {
+  events: BookClubEvent[]
+}
+
+// POST /api/bookclub/events {create|update} — the saved event.
+export interface BookClubEventResponse {
+  event: BookClubEvent
+}
+
+// GET /api/bookclub/events/images — existing event images (full URLs).
+export interface EventImagesResponse {
+  images: string[]
+}
+
+// POST /api/bookclub/events/upload — full URL of the stored event image.
+export interface EventImageUploadResponse {
+  url: string
+}
+
+// Form model for the admin event create/edit form. Wall-clock times plus the
+// admin's IANA timezone; the server computes the absolute instants.
+export interface BookClubEventForm {
+  id: number
+  title: string
+  start_local: string
+  timezone: string
+  length_hours: number
+  location: string
+  image: string
+  post_at_local: string
 }
 
 // ── Fonts (System → Font Upload) ────────────────────────────────────────────

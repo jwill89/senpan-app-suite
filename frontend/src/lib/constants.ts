@@ -2,6 +2,7 @@
  * Shared constants and small pure helpers mirrored from the original app.js.
  * Keeping these identical preserves the exact look and behavior.
  */
+import type { AppSettings } from '@/types/api'
 
 export interface StampShape {
   id: string
@@ -55,15 +56,92 @@ export function emptyGrid(): boolean[][] {
   return Array.from({ length: 5 }, () => Array.from({ length: 5 }, () => false))
 }
 
+/**
+ * Registry of book clubs shown under the admin "Book Clubs" section. Add an
+ * entry to introduce a new club; its sidebar button, route, settings webhook
+ * field, and tab all wire up automatically from this list (mirror the backend
+ * `bookClubs` registry in bookclubs.go — keep `slug`/`commentsLabel` in sync).
+ *
+ *   - `commentsLabel`: label for the per-item curator comments field (e.g.
+ *     "Yao's Comments" vs "Drani's Comments"); also used in the Discord embed.
+ *   - `icon`: FontAwesome icon class for the sidebar/heading (must be registered
+ *     in lib/fontawesome.ts).
+ */
+export const BOOK_CLUBS = [
+  { slug: 'yaoi', name: 'Yaoi Book Club', commentsLabel: "Yao's Comments", icon: 'fa-heart' },
+  { slug: 'yuri', name: 'Yuri Book Club', commentsLabel: "Drani's Comments", icon: 'fa-heart' },
+] as const
+
+/** Per-club reading-list Discord webhook setting key (matches webhookSettingKey on the backend). */
+export function clubWebhookKey(slug: string): `discord_webhook_url_${string}` {
+  return `discord_webhook_url_${slug}`
+}
+
+/** Per-club events-channel Discord webhook setting key (matches eventsWebhookSettingKey on the backend). */
+export function clubEventsWebhookKey(slug: string): `discord_events_webhook_url_${string}` {
+  return `discord_events_webhook_url_${slug}`
+}
+
 /** Default app settings — matches the original app.js defaults. */
-export const DEFAULT_APP_SETTINGS = {
+export const DEFAULT_APP_SETTINGS: AppSettings = {
   app_title: 'Senpan App Suite',
   default_draw_delay: '0',
   frequent_winner_threshold: '3',
   frequent_winner_hours: '12',
   header_font: 'Arapey',
   google_fonts_api_key: '',
+  anilist_api_url: 'https://graphql.anilist.co',
+  // One blank webhook default per known club (reading-list + events channel) so
+  // the settings form binds cleanly before the server response loads.
+  ...Object.fromEntries(
+    BOOK_CLUBS.flatMap((c) => [
+      [clubWebhookKey(c.slug), ''],
+      [clubEventsWebhookKey(c.slug), ''],
+    ]),
+  ),
 }
+
+/** Meeting-length options (hours) for a book club event. */
+export const MEETING_LENGTH_OPTIONS = [1, 2, 3, 4, 5] as const
+
+/** The browser's current IANA timezone (e.g. "America/New_York"); 'UTC' fallback. */
+export function detectTimezone(): string {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'
+  } catch {
+    return 'UTC'
+  }
+}
+
+/**
+ * Sorted IANA timezone names for the event timezone picker. Uses the runtime's
+ * `Intl.supportedValuesOf('timeZone')` when available (all current browsers),
+ * else a small curated fallback that still includes the detected zone.
+ */
+export function supportedTimezones(): string[] {
+  try {
+    const intl = Intl as unknown as { supportedValuesOf?: (key: string) => string[] }
+    if (typeof intl.supportedValuesOf === 'function') {
+      const zones = intl.supportedValuesOf('timeZone')
+      if (zones?.length) return zones
+    }
+  } catch {
+    /* fall through to the curated list */
+  }
+  const detected = detectTimezone()
+  const set = new Set<string>([detected, ...FALLBACK_TIMEZONES])
+  return [...set].sort()
+}
+
+/** Small fallback timezone list when Intl.supportedValuesOf is unavailable. */
+export const FALLBACK_TIMEZONES: string[] = [
+  'UTC',
+  'America/New_York', 'America/Chicago', 'America/Denver', 'America/Los_Angeles',
+  'America/Anchorage', 'America/Halifax', 'America/Sao_Paulo', 'Europe/London',
+  'Europe/Paris', 'Europe/Berlin', 'Europe/Madrid', 'Europe/Moscow', 'Africa/Cairo',
+  'Africa/Johannesburg', 'Asia/Dubai', 'Asia/Kolkata', 'Asia/Bangkok', 'Asia/Shanghai',
+  'Asia/Tokyo', 'Asia/Seoul', 'Australia/Sydney', 'Pacific/Auckland', 'Pacific/Honolulu',
+]
 
 /** Curated fallback Google Fonts list (used when no API key is configured). */
 export const FALLBACK_GOOGLE_FONTS: string[] = [

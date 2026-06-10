@@ -10,7 +10,7 @@ import (
 // PRAGMA user_version against this constant and runs only the migrations
 // needed to bring the database up to date. Bump this when adding a new
 // migration block.
-const schemaVersion = 10
+const schemaVersion = 13
 
 // ensureSchema reads the current PRAGMA user_version from the database and
 // applies any outstanding migrations to bring it up to schemaVersion.
@@ -94,6 +94,24 @@ func ensureSchema(db *sql.DB) error {
 
 	if version < 10 {
 		if err := migrateRaffleImagePaths(db); err != nil {
+			return err
+		}
+	}
+
+	if version < 11 {
+		if err := migrateBookClubs(db); err != nil {
+			return err
+		}
+	}
+
+	if version < 12 {
+		if err := migrateBookClubTropes(db); err != nil {
+			return err
+		}
+	}
+
+	if version < 13 {
+		if err := migrateBookClubEvents(db); err != nil {
 			return err
 		}
 	}
@@ -191,6 +209,43 @@ func createTables(db *sql.DB) error {
 			game_details TEXT NOT NULL DEFAULT '',
 			winning_patterns TEXT NOT NULL DEFAULT '[]'
 		)`,
+		`CREATE TABLE IF NOT EXISTS reading_lists (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			club_slug TEXT NOT NULL DEFAULT 'yaoi',
+			title TEXT NOT NULL,
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+		)`,
+		`CREATE TABLE IF NOT EXISTS reading_list_items (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			list_id INTEGER NOT NULL,
+			cover_image TEXT NOT NULL DEFAULT '',
+			title TEXT NOT NULL,
+			summary TEXT NOT NULL DEFAULT '',
+			format TEXT NOT NULL DEFAULT '',
+			genres TEXT NOT NULL DEFAULT '',
+			tropes TEXT NOT NULL DEFAULT '',
+			chapters TEXT NOT NULL DEFAULT '',
+			comments TEXT NOT NULL DEFAULT '',
+			sources TEXT NOT NULL DEFAULT '[]',
+			sort_order INTEGER NOT NULL DEFAULT 0,
+			FOREIGN KEY (list_id) REFERENCES reading_lists(id) ON DELETE CASCADE
+		)`,
+		`CREATE TABLE IF NOT EXISTS book_club_events (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			club_slug TEXT NOT NULL DEFAULT 'yaoi',
+			title TEXT NOT NULL,
+			start_local TEXT NOT NULL DEFAULT '',
+			timezone TEXT NOT NULL DEFAULT '',
+			length_hours INTEGER NOT NULL DEFAULT 1,
+			location TEXT NOT NULL DEFAULT '',
+			image TEXT NOT NULL DEFAULT '',
+			post_at_local TEXT NOT NULL DEFAULT '',
+			start_at_unix INTEGER NOT NULL DEFAULT 0,
+			post_at_unix INTEGER NOT NULL DEFAULT 0,
+			posted INTEGER NOT NULL DEFAULT 0,
+			posted_at DATETIME,
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+		)`,
 	}
 	for _, s := range stmts {
 		if _, err := db.Exec(s); err != nil {
@@ -212,6 +267,9 @@ func createIndexes(db *sql.DB) error {
 		"CREATE INDEX IF NOT EXISTS idx_winners_log_logged_at ON winners_log(logged_at)",
 		"CREATE INDEX IF NOT EXISTS idx_winners_log_player_date ON winners_log(player_name, logged_at)",
 		"CREATE INDEX IF NOT EXISTS idx_cards_player_name ON cards(player_name)",
+		"CREATE INDEX IF NOT EXISTS idx_reading_list_items_list ON reading_list_items(list_id)",
+		"CREATE INDEX IF NOT EXISTS idx_book_club_events_club ON book_club_events(club_slug)",
+		"CREATE INDEX IF NOT EXISTS idx_book_club_events_due ON book_club_events(posted, post_at_unix)",
 	}
 	for _, idx := range indexes {
 		if _, err := db.Exec(idx); err != nil {
@@ -409,6 +467,83 @@ func migrateWinnersLogIndex(db *sql.DB) error {
 func migrateCardPlayerNameIndex(db *sql.DB) error {
 	_, err := db.Exec("CREATE INDEX IF NOT EXISTS idx_cards_player_name ON cards(player_name)")
 	return err
+}
+
+// migrateBookClubs creates the reading_lists and reading_list_items tables
+// (plus the list_id index) for the Book Clubs admin section. Item sources are
+// stored as a JSON array in the reading_list_items.sources column.
+func migrateBookClubs(db *sql.DB) error {
+	stmts := []string{
+		`CREATE TABLE IF NOT EXISTS reading_lists (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			club_slug TEXT NOT NULL DEFAULT 'yaoi',
+			title TEXT NOT NULL,
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+		)`,
+		`CREATE TABLE IF NOT EXISTS reading_list_items (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			list_id INTEGER NOT NULL,
+			cover_image TEXT NOT NULL DEFAULT '',
+			title TEXT NOT NULL,
+			summary TEXT NOT NULL DEFAULT '',
+			format TEXT NOT NULL DEFAULT '',
+			genres TEXT NOT NULL DEFAULT '',
+			tropes TEXT NOT NULL DEFAULT '',
+			chapters TEXT NOT NULL DEFAULT '',
+			comments TEXT NOT NULL DEFAULT '',
+			sources TEXT NOT NULL DEFAULT '[]',
+			sort_order INTEGER NOT NULL DEFAULT 0,
+			FOREIGN KEY (list_id) REFERENCES reading_lists(id) ON DELETE CASCADE
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_reading_list_items_list ON reading_list_items(list_id)`,
+	}
+	for _, s := range stmts {
+		if _, err := db.Exec(s); err != nil {
+			return fmt.Errorf("migrate book clubs: %w", err)
+		}
+	}
+	return nil
+}
+
+// migrateBookClubTropes adds the tropes column to reading_list_items for
+// databases created before the Tropes field existed. Idempotent via hasColumn.
+func migrateBookClubTropes(db *sql.DB) error {
+	if hasColumn(db, "reading_list_items", "tropes") {
+		return nil
+	}
+	_, err := db.Exec("ALTER TABLE reading_list_items ADD COLUMN tropes TEXT NOT NULL DEFAULT ''")
+	return err
+}
+
+// migrateBookClubEvents creates the book_club_events table (scheduled event
+// posts for a book club) plus its club and due-scheduling indexes.
+func migrateBookClubEvents(db *sql.DB) error {
+	stmts := []string{
+		`CREATE TABLE IF NOT EXISTS book_club_events (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			club_slug TEXT NOT NULL DEFAULT 'yaoi',
+			title TEXT NOT NULL,
+			start_local TEXT NOT NULL DEFAULT '',
+			timezone TEXT NOT NULL DEFAULT '',
+			length_hours INTEGER NOT NULL DEFAULT 1,
+			location TEXT NOT NULL DEFAULT '',
+			image TEXT NOT NULL DEFAULT '',
+			post_at_local TEXT NOT NULL DEFAULT '',
+			start_at_unix INTEGER NOT NULL DEFAULT 0,
+			post_at_unix INTEGER NOT NULL DEFAULT 0,
+			posted INTEGER NOT NULL DEFAULT 0,
+			posted_at DATETIME,
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_book_club_events_club ON book_club_events(club_slug)`,
+		`CREATE INDEX IF NOT EXISTS idx_book_club_events_due ON book_club_events(posted, post_at_unix)`,
+	}
+	for _, s := range stmts {
+		if _, err := db.Exec(s); err != nil {
+			return fmt.Errorf("migrate book club events: %w", err)
+		}
+	}
+	return nil
 }
 
 // migrateRaffleImagePaths rewrites stored prize_image web paths after the

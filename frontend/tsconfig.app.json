@@ -24,7 +24,8 @@
     /* Path alias */
     "baseUrl": ".",
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["./src/*"],
+      "@toast-ui/editor": ["./node_modules/@toast-ui/editor/types/index.d.ts"]
     }
   },
   "include": ["src/**/*.ts", "src/**/*.tsx", "src/**/*.vue", "env.d.ts"]

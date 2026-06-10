@@ -108,6 +108,68 @@ type RaffleEntry struct {
 	CreatedAt     string `json:"created_at"`
 }
 
+// ReadingList is a named, ordered collection of book-club reading items
+// (e.g. a "Yaoi Book Club" reading list). ClubSlug groups lists under a
+// particular book club so additional clubs can be added later without a
+// schema change. Items is populated only on detail fetches.
+type ReadingList struct {
+	ID        int64             `json:"id"`
+	ClubSlug  string            `json:"club_slug"` // book club identifier, e.g. "yaoi"
+	Title     string            `json:"title"`
+	CreatedAt string            `json:"created_at"`
+	Items     []ReadingListItem `json:"items,omitempty"`
+}
+
+// ReadingListItem is a single entry in a reading list (a manga/manhwa/danmei
+// title). CoverImage is stored as a full URL — either an uploaded image served
+// from this site or a cover URL pulled from AniList.
+type ReadingListItem struct {
+	ID         int64               `json:"id"`
+	ListID     int64               `json:"list_id"`
+	CoverImage string              `json:"cover_image"` // full URL
+	Title      string              `json:"title"`
+	Summary    string              `json:"summary"`  // markdown (rendered by Discord on publish)
+	Format     string              `json:"format"`   // Manga, Manhwa, Danmei, etc.
+	Genres     string              `json:"genres"`   // comma-separated list
+	Tropes     string              `json:"tropes"`   // comma-separated list
+	Chapters   string              `json:"chapters"` // free text (e.g. "156", "156 (ongoing)")
+	Comments   string              `json:"comments"` // Yao's Comments (markdown)
+	Sources    []ReadingListSource `json:"sources"`  // external links (stored as JSON)
+	SortOrder  int                 `json:"sort_order"`
+}
+
+// ReadingListSource is a named external link attached to a reading list item.
+type ReadingListSource struct {
+	Title string `json:"title"`
+	URL   string `json:"url"`
+}
+
+// BookClubEvent is a scheduled event post for a book club (e.g. a monthly
+// meeting or watch party). It is rendered as a Discord embed and posted
+// automatically to the club's events-channel webhook at PostAtUnix.
+//
+// The admin enters wall-clock times (StartLocal/PostAtLocal) together with
+// their IANA Timezone, so the form can be edited later in the original local
+// time. The absolute instants (StartAtUnix/PostAtUnix, UTC seconds) are
+// computed server-side from those and drive scheduling plus Discord's
+// timezone-aware <t:…> timestamps (which each viewer sees in their own zone).
+type BookClubEvent struct {
+	ID          int64  `json:"id"`
+	ClubSlug    string `json:"club_slug"`
+	Title       string `json:"title"`
+	StartLocal  string `json:"start_local"`   // "2006-01-02T15:04" in Timezone
+	Timezone    string `json:"timezone"`      // IANA name, e.g. "America/New_York"
+	LengthHours int    `json:"length_hours"`  // meeting length in hours (1–5)
+	Location    string `json:"location"`      // free text (e.g. a Discord voice channel)
+	Image       string `json:"image"`         // full URL, shown full-width in the embed
+	PostAtLocal string `json:"post_at_local"` // "2006-01-02T15:04" in Timezone
+	StartAtUnix int64  `json:"start_at_unix"` // computed UTC seconds
+	PostAtUnix  int64  `json:"post_at_unix"`  // computed UTC seconds
+	Posted      bool   `json:"posted"`        // whether it has been posted to Discord
+	PostedAt    string `json:"posted_at"`     // ISO timestamp it was posted (empty if not)
+	CreatedAt   string `json:"created_at"`
+}
+
 // WinnersLogEntry represents a confirmed winner stored in the winners log.
 // Created when an admin ends a game and selects valid winners.
 type WinnersLogEntry struct {

@@ -34,6 +34,7 @@ import type { AdminTab } from '@/stores/admin'
 import { useAuthStore } from '@/stores/auth'
 import { useAdminStore } from '@/stores/admin'
 import { useUiStore } from '@/stores/ui'
+import { BOOK_CLUBS } from '@/lib/constants'
 
 // Views and admin tabs are lazy-loaded (dynamic import) so each route's code —
 // and its heavy deps (CodeMirror, vuedraggable, markdown-it) — is split into a
@@ -100,6 +101,17 @@ const adminChildren: RouteRecordRaw[] = [
     component: () => import('@/components/admin/ClosedRafflesTab.vue'),
     meta: { tab: 'raffle-closed' },
   },
+  // One route per registered book club, all served by the generic BookClubTab
+  // (the active club drives its labels). Add a club in constants.ts to get its
+  // route, sidebar button, and settings webhook field automatically.
+  ...BOOK_CLUBS.map(
+    (club): RouteRecordRaw => ({
+      path: `bookclub/${club.slug}`,
+      name: `admin-bookclub-${club.slug}`,
+      component: () => import('@/components/admin/BookClubTab.vue'),
+      meta: { tab: `bookclub-${club.slug}` as AdminTab },
+    }),
+  ),
   {
     path: 'system/settings',
     name: 'admin-system-settings',

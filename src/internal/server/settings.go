@@ -13,6 +13,7 @@ var settingsKeys = []string{
 	"frequent_winner_hours",
 	"header_font",
 	"google_fonts_api_key",
+	"anilist_api_url",
 }
 
 // settingsDefaults provides fallback values for settings that have not been configured.
@@ -22,7 +23,14 @@ var settingsDefaults = map[string]string{
 	"frequent_winner_threshold": "3",
 	"frequent_winner_hours":     "12",
 	"header_font":               "Arapey",
+	"anilist_api_url":           defaultAniListURL,
 }
+
+// secretSettings are setting keys that must not be exposed to non-admin
+// callers. GET /api/settings is public, so these are blanked out unless the
+// requester is an authenticated admin. Per-club Discord webhook URLs grant
+// write access to a channel and are registered here by bookclubs.go's init().
+var secretSettings = map[string]bool{}
 
 // handleSettingsGet returns all app settings as a key-value map.
 //
@@ -30,8 +38,15 @@ var settingsDefaults = map[string]string{
 //	Auth:      public (settings are not sensitive)
 //	Response:  {"settings": {"app_title": "...", ...}, "uploaded_fonts": ["My Font.ttf", ...]}
 func (s *Server) handleSettingsGet(w http.ResponseWriter, r *http.Request) {
+	admin := s.isAdmin(r)
 	result := make(map[string]string, len(settingsKeys))
 	for _, key := range settingsKeys {
+		// Never leak secret settings (e.g. the Discord webhook URL) to public
+		// callers — only admins, who need them to edit on the settings page.
+		if secretSettings[key] && !admin {
+			result[key] = ""
+			continue
+		}
 		val, err := s.store.GetSetting(key)
 		if err != nil || val == "" {
 			val = settingsDefaults[key]

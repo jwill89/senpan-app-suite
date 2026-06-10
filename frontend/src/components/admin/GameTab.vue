@@ -10,6 +10,7 @@ import { useRouter } from 'vue-router'
 import CalledNumbers from '@/components/common/CalledNumbers.vue'
 import PatternMini from '@/components/common/PatternMini.vue'
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
+import MarkdownEditor from '@/components/common/MarkdownEditor.vue'
 import { useMarkdown } from '@/lib/markdown'
 import { DRAW_DELAY_OPTIONS } from '@/lib/constants'
 import { useGameStore } from '@/stores/game'
@@ -183,13 +184,12 @@ onBeforeUnmount(() => {
             >
               Game Details <span style="font-size: 0.8rem; opacity: 0.6">(Markdown supported)</span>
             </label>
-            <textarea
+            <MarkdownEditor
               v-model="game.gameDetails"
-              aria-label="Game details"
-              placeholder="Enter game details, rules, prizes, etc.&#10;Supports **bold**, *italic*, lists, and more…"
-              rows="4"
+              min-height="120px"
+              placeholder="Enter game details, rules, prizes, etc. Supports bold, italics, lists, and more…"
               @blur="game.saveGameDetails()"
-            ></textarea>
+            />
           </div>
 
           <button

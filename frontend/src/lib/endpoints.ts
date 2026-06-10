@@ -34,6 +34,18 @@ import type {
   RaffleUploadResponse,
   RaffleWinnerResponse,
   RafflesResponse,
+  ReadingListsResponse,
+  ReadingListDetailResponse,
+  ReadingListItemResponse,
+  ReadingListItem,
+  BookclubUploadResponse,
+  BookclubLookupResponse,
+  PublishResponse,
+  BookClubEventsResponse,
+  BookClubEventResponse,
+  BookClubEventForm,
+  EventImagesResponse,
+  EventImageUploadResponse,
   SettingsResponse,
   StyleCreateResponse,
   StyleGetResponse,
@@ -200,6 +212,69 @@ export const endpoints = {
       apiPost<OkResponse>(`raffles/${raffleId}/entries`, { action: 'verify_winner' }),
     pickAnotherWinner: (raffleId: number) =>
       apiPost<RaffleWinnerResponse>(`raffles/${raffleId}/entries`, { action: 'pick_another' }),
+  },
+
+  // ── Book clubs / reading lists ───────────────────────────────────────────────
+  bookclub: {
+    /** GET /api/reading-lists?club=… — reading lists for a book club (no items). */
+    lists: (club = 'yaoi') => apiGet<ReadingListsResponse>(`reading-lists?club=${enc(club)}`),
+    /** GET /api/reading-lists/{id} — a reading list with its items. */
+    listDetail: (id: number) => apiGet<ReadingListDetailResponse>(`reading-lists/${id}`),
+    createList: (title: string, club = 'yaoi') =>
+      apiPost<ReadingListDetailResponse>('reading-lists', { action: 'create', title, club_slug: club }),
+    renameList: (id: number, title: string) =>
+      apiPost<OkResponse>('reading-lists', { action: 'update', id, title }),
+    deleteList: (id: number) => apiPost<OkResponse>('reading-lists', { action: 'delete', id }),
+    /** Create or update an item (update when item.id is set). */
+    saveItem: (listId: number, item: Partial<ReadingListItem> & { id?: number }) =>
+      apiPost<ReadingListItemResponse>(`reading-lists/${listId}/items`, {
+        action: item.id ? 'update' : 'create',
+        item_id: item.id || 0,
+        item,
+      }),
+    deleteItem: (listId: number, itemId: number) =>
+      apiPost<OkResponse>(`reading-lists/${listId}/items`, { action: 'delete', item_id: itemId }),
+    publish: (listId: number) =>
+      apiPost<PublishResponse>(`reading-lists/${listId}/publish`, {}),
+    uploadImage: (form: FormData) => apiPost<BookclubUploadResponse>('bookclub/upload', form),
+    /** GET /api/bookclub/lookup?q=… — AniList suggestions shaped like items. */
+    lookup: (query: string) =>
+      apiGet<BookclubLookupResponse>(`bookclub/lookup?q=${enc(query)}`),
+    /** GET /api/bookclub/lookup?id=… — a single AniList title by numeric id. */
+    lookupById: (id: number) =>
+      apiGet<BookclubLookupResponse>(`bookclub/lookup?id=${id}`),
+  },
+
+  // ── Book club event posts (scheduled Discord embeds) ─────────────────────────
+  bookclubEvents: {
+    /** GET /api/bookclub/events?club=… — scheduled events for a club. */
+    list: (club = 'yaoi') =>
+      apiGet<BookClubEventsResponse>(`bookclub/events?club=${enc(club)}`),
+    /** Create or update an event (update when form.id is set). */
+    save: (club: string, form: BookClubEventForm) =>
+      apiPost<BookClubEventResponse>('bookclub/events', {
+        action: form.id ? 'update' : 'create',
+        id: form.id || 0,
+        club_slug: club,
+        event: {
+          title: form.title,
+          start_local: form.start_local,
+          timezone: form.timezone,
+          length_hours: form.length_hours,
+          location: form.location,
+          image: form.image,
+          post_at_local: form.post_at_local,
+        },
+      }),
+    delete: (id: number) =>
+      apiPost<OkResponse>('bookclub/events', { action: 'delete', id }),
+    /** Post an event's embed to Discord immediately (and mark it posted). */
+    postNow: (id: number) =>
+      apiPost<OkResponse>('bookclub/events', { action: 'post_now', id }),
+    /** GET /api/bookclub/events/images — existing event images (pick to reuse). */
+    images: () => apiGet<EventImagesResponse>('bookclub/events/images'),
+    uploadImage: (form: FormData) =>
+      apiPost<EventImageUploadResponse>('bookclub/events/upload', form),
   },
 
   // ── Fonts (System → Font Upload) ─────────────────────────────────────────────

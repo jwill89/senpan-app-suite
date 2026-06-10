@@ -14,7 +14,12 @@
  */
 import { computed, onMounted, watch } from 'vue'
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
-import { FALLBACK_GOOGLE_FONTS } from '@/lib/constants'
+import {
+  BOOK_CLUBS,
+  clubWebhookKey,
+  clubEventsWebhookKey,
+  FALLBACK_GOOGLE_FONTS,
+} from '@/lib/constants'
 import { applyUploadedFonts, fontFamilyFromFile } from '@/lib/theme'
 import { useAppStore } from '@/stores/app'
 import { useFontsStore } from '@/stores/fonts'
@@ -206,6 +211,51 @@ watch(
               {{ app.settings.app_title || 'App Title' }}
             </span>
           </div>
+        </div>
+        <template v-for="club in BOOK_CLUBS" :key="club.slug">
+          <div class="field mb-10">
+            <label class="field-label">{{ club.name }} — Reading List Webhook URL</label>
+            <input
+              v-model="app.settings[clubWebhookKey(club.slug)]"
+              placeholder="https://discord.com/api/webhooks/…"
+              :aria-label="club.name + ' reading list Discord webhook URL'"
+              class="field-input-full"
+              type="password"
+              autocomplete="off"
+            />
+            <small class="text-dim">
+              Publishes this club's reading lists — each item posted as its own embed to this
+              channel. Kept private; never sent to non-admin visitors.
+            </small>
+          </div>
+          <div class="field mb-10">
+            <label class="field-label">{{ club.name }} — Events Channel Webhook URL</label>
+            <input
+              v-model="app.settings[clubEventsWebhookKey(club.slug)]"
+              placeholder="https://discord.com/api/webhooks/…"
+              :aria-label="club.name + ' events Discord webhook URL'"
+              class="field-input-full"
+              type="password"
+              autocomplete="off"
+            />
+            <small class="text-dim">
+              Where this club's scheduled event posts are sent. Kept private; never sent to
+              non-admin visitors.
+            </small>
+          </div>
+        </template>
+        <div class="field mb-10">
+          <label class="field-label">AniList API URL (Book Clubs)</label>
+          <input
+            v-model="app.settings.anilist_api_url"
+            placeholder="https://graphql.anilist.co"
+            aria-label="AniList API URL"
+            class="field-input-full"
+          />
+          <small class="text-dim">
+            GraphQL endpoint for the "Pull from AniList" lookup when adding reading list items.
+            No API key needed.
+          </small>
         </div>
         <button class="btn-primary" :disabled="app.savingSettings" @click="app.saveSettings()">
           <LoadingSpinner v-if="app.savingSettings" label="Saving…" />

@@ -17,6 +17,7 @@ import { useAdminStore, type AdminSection, type AdminTab } from '@/stores/admin'
 import { useGameStore } from '@/stores/game'
 import { useCardsStore } from '@/stores/cards'
 import { useRafflesStore } from '@/stores/raffles'
+import { BOOK_CLUBS } from '@/lib/constants'
 
 const router = useRouter()
 const admin = useAdminStore()
@@ -34,6 +35,7 @@ function go(tab: AdminTab): void {
 const sectionDefaultTab: Record<AdminSection, AdminTab> = {
   bingo: 'bingo-game',
   raffles: 'raffle-open',
+  bookclub: `bookclub-${BOOK_CLUBS[0].slug}` as AdminTab,
   system: 'system-settings',
 }
 function toggle(section: AdminSection): void {
@@ -124,6 +126,28 @@ function toggle(section: AdminSection): void {
           <span v-if="raffles.closedRaffles.length" class="nav-count">
             ({{ raffles.closedRaffles.length }})
           </span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Book Clubs section -->
+    <div class="admin-nav-section">
+      <div
+        class="admin-nav-header"
+        :class="{ open: admin.adminSection === 'bookclub' }"
+        @click="toggle('bookclub')"
+      >
+        <span><i class="fa-solid fa-book"></i> Book Clubs</span>
+        <span class="nav-chevron">{{ admin.adminSection === 'bookclub' ? '▾' : '▸' }}</span>
+      </div>
+      <div v-show="admin.adminSection === 'bookclub'" class="admin-nav-items">
+        <button
+          v-for="club in BOOK_CLUBS"
+          :key="club.slug"
+          :class="{ active: admin.adminTab === `bookclub-${club.slug}` }"
+          @click="go(`bookclub-${club.slug}` as AdminTab)"
+        >
+          <i class="fa-solid" :class="club.icon"></i> {{ club.name }}
         </button>
       </div>
     </div>

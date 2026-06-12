@@ -53,6 +53,10 @@ import type {
   WinnersLogResponse,
   FontsResponse,
   FontUploadResponse,
+  CarrdProjectsResponse,
+  CarrdProjectCreateResponse,
+  CarrdImagesResponse,
+  CarrdUploadResponse,
 } from '@/types/api'
 import type { AppSettings } from '@/types/api'
 
@@ -288,6 +292,32 @@ export const endpoints = {
     /** POST /api/fonts {rename} — rename a font file (fails if the target exists). */
     rename: (name: string, newName: string) =>
       apiPost<OkResponse>('fonts', { action: 'rename', name, new_name: newName }),
+  },
+
+  // ── Carrd image hosting (System → Carrd Upload) ──────────────────────────────
+  carrd: {
+    /** GET /api/carrd/projects — list project folders under <webRoot>/carrd. */
+    projects: () => apiGet<CarrdProjectsResponse>('carrd/projects'),
+    /** POST /api/carrd/projects {create} — create a project (folder optional). */
+    createProject: (title: string, folder: string) =>
+      apiPost<CarrdProjectCreateResponse>('carrd/projects', { action: 'create', title, folder }),
+    /** POST /api/carrd/projects {delete} — delete a project folder + contents. */
+    deleteProject: (folder: string) =>
+      apiPost<OkResponse>('carrd/projects', { action: 'delete', folder }),
+    /** GET /api/carrd/images?folder=…&path=… — sub-dirs + images at a path. */
+    images: (folder: string, path = '') =>
+      apiGet<CarrdImagesResponse>(`carrd/images?folder=${enc(folder)}&path=${enc(path)}`),
+    /** POST /api/carrd/upload — multipart upload of "files" to "folder"/"path". */
+    upload: (form: FormData) => apiPost<CarrdUploadResponse>('carrd/upload', form),
+    /** POST /api/carrd/images {delete} — remove an image at a path in a project. */
+    deleteImage: (folder: string, path: string, name: string) =>
+      apiPost<OkResponse>('carrd/images', { action: 'delete', folder, path, name }),
+    /** POST /api/carrd/images {create_dir} — create a sub-directory at a path. */
+    createDir: (folder: string, path: string, name: string) =>
+      apiPost<OkResponse>('carrd/images', { action: 'create_dir', folder, path, name }),
+    /** POST /api/carrd/images {delete_dir} — delete a sub-directory + contents. */
+    deleteDir: (folder: string, path: string) =>
+      apiPost<OkResponse>('carrd/images', { action: 'delete_dir', folder, path }),
   },
 }
 

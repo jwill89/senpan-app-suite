@@ -161,6 +161,7 @@ type BookClubEvent struct {
 	Timezone    string `json:"timezone"`      // IANA name, e.g. "America/New_York"
 	LengthHours int    `json:"length_hours"`  // meeting length in hours (1–5)
 	Location    string `json:"location"`      // free text (e.g. a Discord voice channel)
+	Details     string `json:"details"`       // optional markdown, shown full-width above the image
 	Image       string `json:"image"`         // full URL, shown full-width in the embed
 	PostAtLocal string `json:"post_at_local"` // "2006-01-02T15:04" in Timezone
 	StartAtUnix int64  `json:"start_at_unix"` // computed UTC seconds

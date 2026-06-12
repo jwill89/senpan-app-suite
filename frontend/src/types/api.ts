@@ -274,6 +274,7 @@ export interface BookClubEventForm {
   timezone: string
   length_hours: number
   location: string
+  details: string
   image: string
   post_at_local: string
 }
@@ -293,6 +294,48 @@ export interface FontsResponse {
 
 // POST /api/fonts/upload — per-file result of a (possibly multi-file) upload.
 export interface FontUploadResponse {
+  uploaded: string[]
+  skipped: { name: string; reason: string }[]
+}
+
+// ── Carrd image hosting (System → Carrd Upload) ─────────────────────────────
+// A project (folder) under <webRoot>/carrd, served at carrd.senpan.cafe/<folder>.
+export interface CarrdProject {
+  title: string
+  folder: string
+  image_count: number
+  /** RFC3339 folder last-modified timestamp. */
+  modified: string
+}
+
+export interface CarrdProjectsResponse {
+  projects: CarrdProject[]
+}
+
+export interface CarrdProjectCreateResponse {
+  ok: boolean
+  project: CarrdProject
+}
+
+// A single image inside a carrd project folder.
+export interface CarrdImage {
+  name: string
+  size: number
+  /** RFC3339 last-modified timestamp. */
+  modified: string
+}
+
+export interface CarrdImagesResponse {
+  folder: string
+  /** Relative subpath within the project ("" = project root). */
+  path: string
+  /** Names of the immediate sub-directories at this path. */
+  dirs: string[]
+  images: CarrdImage[]
+}
+
+// POST /api/carrd/upload — per-file result of a (possibly multi-file) upload.
+export interface CarrdUploadResponse {
   uploaded: string[]
   skipped: { name: string; reason: string }[]
 }

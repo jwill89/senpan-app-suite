@@ -79,7 +79,7 @@ watch(
 <template>
   <div class="tab-body">
     <div class="admin-panel">
-      <h3 class="mb-12"><i class="fa-solid fa-gear"></i> App Settings</h3>
+      <h3 class="mb-12"><i class="fa-duotone fa-gear"></i> App Settings</h3>
       <div class="settings-form">
         <div class="field mb-10">
           <label class="field-label">App Title</label>

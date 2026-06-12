@@ -406,6 +406,19 @@ h1 {
     font-size: 1.15rem
 }
 
+/* Board id + player name stacked in the centre of the player topbar. */
+.topbar-id {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    line-height: 1.15
+}
+
+.topbar-player {
+    font-size: .8rem;
+    color: var(--text-dim)
+}
+
 /* ================================================================
    6. BINGO BOARD — 5×5 player board with B-I-N-G-O header
    ================================================================ */
@@ -417,6 +430,21 @@ h1 {
     padding: 18px;
     box-shadow: 0 8px 40px var(--shadow-color);
     display: inline-block
+}
+
+/* In the player view the board fills its column (which itself can grow), with a
+   minimum cell size enforced by the column's min-width. Cells become fluid
+   squares (aspect-ratio) that stretch the 5 equal grid tracks instead of being
+   pinned to a fixed 68px. Preview/admin boards keep the fixed-size cells. */
+.player-col-board .board-wrap {
+    display: block;
+    width: 100%
+}
+
+.player-col-board .board-cell {
+    width: auto;
+    height: auto;
+    aspect-ratio: 1 / 1
 }
 
 /* B-I-N-G-O column header labels */
@@ -617,10 +645,55 @@ h1 {
     color: var(--text-dim)
 }
 
+/* Custom-styled range: thumb travels flush to both edges (native accent-color
+   insets it, making 0%/100% look reachable past the track). `--fill` (set per
+   value in the component) draws the gold fill ending at the thumb centre. */
 .opacity-slider input[type=range] {
-    width: 120px;
-    accent-color: var(--gold);
+    -webkit-appearance: none;
+    appearance: none;
+    width: 140px;
+    height: 16px;
+    background: transparent;
     cursor: pointer
+}
+
+.opacity-slider input[type=range]::-webkit-slider-runnable-track {
+    height: 6px;
+    border-radius: 3px;
+    background:
+        linear-gradient(var(--gold), var(--gold)) left center / var(--fill, 0%) 100% no-repeat,
+        var(--surface2)
+}
+
+.opacity-slider input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 16px;
+    height: 16px;
+    margin-top: -5px;
+    border-radius: 50%;
+    background: var(--gold);
+    border: 2px solid var(--bg)
+}
+
+.opacity-slider input[type=range]::-moz-range-track {
+    height: 6px;
+    border-radius: 3px;
+    background: var(--surface2)
+}
+
+.opacity-slider input[type=range]::-moz-range-progress {
+    height: 6px;
+    border-radius: 3px;
+    background: var(--gold)
+}
+
+.opacity-slider input[type=range]::-moz-range-thumb {
+    width: 16px;
+    height: 16px;
+    border: 2px solid var(--bg);
+    border-radius: 50%;
+    background: var(--gold)
 }
 
 /* Percentage display next to the slider */
@@ -641,15 +714,88 @@ h1 {
     flex-wrap: wrap;
     gap: 28px;
     padding: 24px;
-    justify-content: center
+    justify-content: center;
+    align-items: flex-start
 }
 
-/* Left column: bingo board, stamp controls */
-.player-left {
+/* Three columns: board + stamp controls / called numbers / patterns + details.
+   They flex-wrap so the layout collapses to two then one column as the viewport
+   narrows (board first, then called numbers, then the info column). */
+.player-col {
+    display: flex;
+    flex-direction: column;
+    gap: 16px
+}
+
+/* Column 1: the board keeps a readable minimum (~68px cells, as before) but may
+   grow to fill its column when there's room — capped modestly so it never
+   dominates the row. min-width 396px = the old 5×68px board + padding. */
+.player-col-board {
+    flex: 1 1 396px;
+    min-width: 396px;
+    max-width: 496px;
+    align-items: center
+}
+
+/* Column 2: last-called + called-numbers tracker. */
+.player-col-called {
+    flex: 1 1 280px;
+    min-width: 280px;
+    max-width: 420px;
+    gap: 20px
+}
+
+/* Column 3: win patterns, game details, status messages. */
+.player-col-info {
+    flex: 1 1 300px;
+    min-width: 300px;
+    max-width: 480px;
+    gap: 20px
+}
+
+/* Collapsible "Stamp Customization" panel (shape/color/opacity pickers). */
+.stamp-customization {
+    width: 100%
+}
+
+.stamp-custom-toggle {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    padding: 8px 14px;
+    background: var(--surface);
+    border: 1px solid var(--surface2);
+    border-radius: var(--radius);
+    color: var(--text-dim);
+    cursor: pointer;
+    font: inherit
+}
+
+.stamp-custom-toggle:hover {
+    color: var(--gold);
+    border-color: var(--gold)
+}
+
+.stamp-custom-chevron {
+    margin-left: auto;
+    font-size: 0.85em
+}
+
+.stamp-custom-body {
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 16px
+    gap: 16px;
+    margin-top: 12px
+}
+
+/* Sound on/off toggle folded into the customization panel. */
+.stamp-sound-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    white-space: nowrap
 }
 
 /* Single-row action bar: Clear / Save / Sound */
@@ -666,16 +812,6 @@ h1 {
     align-items: center;
     gap: 6px;
     white-space: nowrap
-}
-
-/* Right column: called numbers, active patterns, game details */
-.player-right {
-    flex: 1;
-    min-width: 300px;
-    max-width: 500px;
-    display: flex;
-    flex-direction: column;
-    gap: 20px
 }
 
 /* ================================================================
@@ -791,6 +927,19 @@ span.pattern-mini {
 /* Active/required cell in a pattern (gold) */
 .pattern-mini-cell.on {
     background: var(--gold)
+}
+
+/* Player win-patterns panel: shrink the cards so more fit per row, keeping the
+   2px inter-cell gap even (the grid gap is unchanged — only the cells scale). */
+.player-col-info .pattern-cards {
+    gap: 10px
+}
+.player-col-info .pattern-card {
+    width: 66px
+}
+.player-col-info .pattern-mini-cell {
+    width: 11px;
+    height: 11px
 }
 
 /* ================================================================
@@ -1398,6 +1547,18 @@ span.pattern-mini {
     flex-wrap: wrap
 }
 
+/* Winner-sound on/off toggle in the draw-controls row. */
+.winner-sound-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    white-space: nowrap
+}
+.winner-sound-toggle[aria-pressed='true'] {
+    color: var(--gold);
+    border-color: var(--gold)
+}
+
 
 /* Countdown timer shown while delaying player broadcast */
 .draw-countdown {
@@ -1670,6 +1831,11 @@ span.pattern-mini {
     max-width: 380px;
     width: 100%;
     word-wrap: break-word
+}
+
+/* In the player info column the details span the full column width. */
+.player-col-info .game-details {
+    max-width: none
 }
 
 /* Markdown heading styles inside game details */
@@ -2424,13 +2590,30 @@ kbd {
     animation: livePulse 1.4s ease-in-out infinite;
 }
 
+/* Single cohesive box holding the "Last Called" number and the called-numbers
+   grid together, separated by a divider. The inner numbers-panel drops its own
+   surface/padding so the combined box provides the one frame. */
+.called-combined {
+    background: var(--surface);
+    border-radius: var(--radius);
+    padding: 16px;
+}
+.called-combined .numbers-panel {
+    background: transparent;
+    padding: 0;
+}
+.called-divider {
+    border: 0;
+    border-top: 1px solid var(--surface2);
+    margin: 14px 0;
+}
+
 /* "Last called" announcement above the called-numbers grid. */
 .last-called {
     display: flex;
     flex-direction: column;
     align-items: center;
     gap: 6px;
-    margin-bottom: 16px;
 }
 .last-called-label {
     font-size: .72rem;
@@ -2498,9 +2681,12 @@ kbd {
         font-size: 1rem;
     }
 
-    /* The right column is a wrapped, full-width block on phones — drop the
-       desktop 300px floor so it can fit a 320px viewport without overflow. */
-    .player-right {
+    /* All three columns become wrapped, full-width blocks on phones — drop the
+       desktop min-width floors so they fit a 320px viewport (the fluid board
+       cells shrink to fill the now-narrow board column). */
+    .player-col-board,
+    .player-col-called,
+    .player-col-info {
         min-width: 0;
         max-width: none;
         width: 100%;

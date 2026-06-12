@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /**
- * Admin Font Upload tab (System section) — lists the font files in the
+ * Admin Font Upload tab (Atelier Yao section) — lists the font files in the
  * <webRoot>/fonts directory with a public link to each, supports uploading one
  * or more font files at once, and lets the admin rename or delete files. The
  * table refreshes after a successful upload. A file whose name already exists
@@ -163,7 +163,7 @@ watch(
   <div class="tab-body">
     <div class="admin-panel" style="padding: 24px">
       <div class="flex-toolbar mb-12" style="gap: 12px; align-items: center">
-        <h3 style="margin: 0"><i class="fa-solid fa-font"></i> Font Upload</h3>
+        <h3 style="margin: 0"><i class="fa-duotone fa-font"></i> Font Upload</h3>
         <button
           class="btn-primary btn-sm"
           style="margin-left: auto"
@@ -216,7 +216,7 @@ watch(
       </div>
 
       <div v-if="fonts.fonts.length" class="font-search mb-12">
-        <i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i>
+        <i class="fa-duotone fa-magnifying-glass" aria-hidden="true"></i>
         <input
           v-model="search"
           type="search"

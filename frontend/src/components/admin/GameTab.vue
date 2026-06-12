@@ -13,6 +13,7 @@ import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
 import MarkdownEditor from '@/components/common/MarkdownEditor.vue'
 import { useMarkdown } from '@/lib/markdown'
 import { DRAW_DELAY_OPTIONS } from '@/lib/constants'
+import { primeAudio, playWinnerChime } from '@/lib/sound'
 import { useGameStore } from '@/stores/game'
 import { useCardsStore } from '@/stores/cards'
 import { usePatternsStore } from '@/stores/patterns'
@@ -58,6 +59,38 @@ function playerNameFor(id: string): string | undefined {
 }
 
 const delayLabel = (s: number): string => (s === 0 ? 'Instant' : `${s}s Delay`)
+
+/** True when every currently-visible pattern is already selected. */
+const allVisibleSelected = computed(
+  () =>
+    patterns.gameFilteredPatterns.length > 0 &&
+    patterns.gameFilteredPatterns.every((p) => game.selectedPatternIds.includes(p.id)),
+)
+
+/**
+ * Selects every currently-visible pattern (or deselects them if they're all
+ * already selected). Patterns hidden by the category/search filter keep their
+ * current selection — only the visible set is affected.
+ */
+function toggleSelectAllVisible(): void {
+  const visibleIds = patterns.gameFilteredPatterns.map((p) => p.id)
+  if (allVisibleSelected.value) {
+    const remove = new Set(visibleIds)
+    game.selectedPatternIds = game.selectedPatternIds.filter((id) => !remove.has(id))
+  } else {
+    game.selectedPatternIds = [...new Set([...game.selectedPatternIds, ...visibleIds])]
+  }
+}
+
+/** Toggles the winner-sound alert; enabling primes audio and plays a sample. */
+function toggleWinnerSound(): void {
+  const next = !game.winnerSoundEnabled
+  game.setWinnerSoundEnabled(next)
+  if (next) {
+    primeAudio()
+    playWinnerChime()
+  }
+}
 
 /** Jump to the New Pattern tab (from the "no patterns yet" hint). */
 function goToNewPattern(): void {
@@ -115,7 +148,7 @@ onBeforeUnmount(() => {
           :aria-label="`Game time elapsed: ${elapsedTime}`"
           title="Time elapsed since the game started"
         >
-          <i class="fa-solid fa-clock" aria-hidden="true"></i> {{ elapsedTime }}
+          <i class="fa-duotone fa-clock" aria-hidden="true"></i> {{ elapsedTime }}
         </span>
       </h3>
 
@@ -154,6 +187,19 @@ onBeforeUnmount(() => {
                 {{ c.name }}
               </option>
             </select>
+            <button
+              class="btn-ghost btn-sm"
+              :disabled="patterns.gameFilteredPatterns.length === 0"
+              :title="
+                allVisibleSelected
+                  ? 'Deselect the patterns shown below (others stay selected)'
+                  : 'Select all patterns shown below (others keep their status)'
+              "
+              @click="toggleSelectAllVisible"
+            >
+              <i class="fa-solid fa-circle-check" aria-hidden="true"></i>
+              {{ allVisibleSelected ? 'Deselect All' : 'Select All' }}
+            </button>
           </div>
 
           <div class="pattern-checks">
@@ -232,6 +278,25 @@ onBeforeUnmount(() => {
               <LoadingSpinner v-if="game.ending" label="Ending…" />
               <template v-else>End Game</template>
             </button>
+
+            <button
+              class="btn-ghost btn-sm winner-sound-toggle"
+              :aria-pressed="game.winnerSoundEnabled"
+              :title="
+                game.winnerSoundEnabled
+                  ? 'Winner sound on — click to mute'
+                  : 'Winner sound off — click to enable'
+              "
+              @click="toggleWinnerSound"
+            >
+              <i
+                v-if="game.winnerSoundEnabled"
+                class="fa-solid fa-volume-high"
+                aria-hidden="true"
+              ></i>
+              <i v-else class="fa-solid fa-volume-xmark" aria-hidden="true"></i>
+              <span>Winner Sound</span>
+            </button>
           </div>
 
           <p class="text-dim text-xs mt-8">
@@ -246,7 +311,7 @@ onBeforeUnmount(() => {
             <span class="countdown-label">Sending to players…</span>
           </div>
           <div v-else-if="game.drawSent" class="draw-sent">
-            <span class="sent-icon"><i class="fa-solid fa-circle-check"></i></span>
+            <span class="sent-icon"><i class="fa-duotone fa-circle-check"></i></span>
             <span class="sent-label">Sent to players!</span>
           </div>
 
@@ -277,7 +342,7 @@ onBeforeUnmount(() => {
             ></div>
 
             <div v-if="game.winners.length" class="winners-panel">
-              <h3><i class="fa-solid fa-trophy"></i> Winning Cards</h3>
+              <h3><i class="fa-duotone fa-trophy"></i> Winning Cards</h3>
               <p class="text-dim text-xs mb-8">Click a card ID to verify</p>
               <div class="winner-chips">
                 <span
@@ -299,7 +364,7 @@ onBeforeUnmount(() => {
 
             <div v-if="game.frequentWinners.length" class="frequent-winners-panel">
               <h3>
-                <i class="fa-solid fa-triangle-exclamation"></i> Frequent Winners (3+ in 12h)
+                <i class="fa-duotone fa-triangle-exclamation"></i> Frequent Winners (3+ in 12h)
               </h3>
               <div class="frequent-winner-chips">
                 <span v-for="fw in game.frequentWinners" :key="fw.player_name" class="winner-chip">

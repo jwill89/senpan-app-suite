@@ -15,7 +15,7 @@ const game = useGameStore()
   <ModalOverlay v-if="game.winnerPreview" @close="game.winnerPreview = null">
     <div class="flex-between mb-12">
       <h3>
-        <i class="fa-solid fa-trophy"></i> Card
+        <i class="fa-duotone fa-trophy"></i> Card
         <span class="code-gold">{{ game.winnerPreview.card.id }}</span>
       </h3>
       <button class="btn-ghost btn-sm" @click="game.winnerPreview = null">Close</button>

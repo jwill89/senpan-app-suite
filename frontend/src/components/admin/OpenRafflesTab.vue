@@ -53,7 +53,7 @@ function editSelected(): void {
       <!-- Winner section -->
       <div v-if="raffles.raffleWinner" class="raffle-winner-panel">
         <h3 class="raffle-section-heading">
-          <i class="fa-solid fa-trophy"></i> Winner: {{ raffles.raffleWinner.character_name }} @
+          <i class="fa-duotone fa-trophy"></i> Winner: {{ raffles.raffleWinner.character_name }} @
           {{ raffles.raffleWinner.world }}
         </h3>
         <p class="text-dim text-sm mb-12">{{ raffles.raffleWinner.num_entries }} entries</p>
@@ -94,7 +94,7 @@ function editSelected(): void {
       <!-- Add entry (admin) -->
       <div v-if="raffles.selectedRaffle.status === 'open'" class="entry-add mt-16 mb-16">
         <h3 class="raffle-section-heading">
-          <i class="fa-solid fa-plus"></i> Add Entry
+          <i class="fa-duotone fa-plus"></i> Add Entry
         </h3>
         <div class="flex-row mb-10">
           <div class="field" style="flex: 2; min-width: 160px">
@@ -198,7 +198,7 @@ function editSelected(): void {
 
     <!-- Open raffle list -->
     <div v-else class="admin-panel">
-      <h3 class="mb-16"><i class="fa-solid fa-clipboard-list"></i> Open Raffles</h3>
+      <h3 class="mb-16"><i class="fa-duotone fa-clipboard-list"></i> Open Raffles</h3>
       <LoadingSpinner
         v-if="raffles.rafflesLoading && raffles.raffles.length === 0"
         block

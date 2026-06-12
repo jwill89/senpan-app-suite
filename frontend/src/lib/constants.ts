@@ -68,8 +68,8 @@ export function emptyGrid(): boolean[][] {
  *     in lib/fontawesome.ts).
  */
 export const BOOK_CLUBS = [
-  { slug: 'yaoi', name: 'Yaoi Book Club', commentsLabel: "Yao's Comments", icon: 'fa-heart' },
-  { slug: 'yuri', name: 'Yuri Book Club', commentsLabel: "Drani's Comments", icon: 'fa-heart' },
+  { slug: 'yaoi', name: 'Yaoi Book Club', commentsLabel: "Yao's Comments", icon: 'fa-bicep' },
+  { slug: 'yuri', name: 'Yuri Book Club', commentsLabel: "Drani's Comments", icon: 'fa-flower-daffodil' },
 ] as const
 
 /** Per-club reading-list Discord webhook setting key (matches webhookSettingKey on the backend). */

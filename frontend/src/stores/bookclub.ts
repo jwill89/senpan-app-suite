@@ -47,6 +47,7 @@ function emptyEventForm(): BookClubEventForm {
     timezone: detectTimezone(),
     length_hours: 1,
     location: '',
+    details: '',
     image: '',
     post_at_local: '',
   }
@@ -398,6 +399,7 @@ export const useBookclubStore = defineStore('bookclub', () => {
       timezone: ev.timezone || detectTimezone(),
       length_hours: ev.length_hours || 1,
       location: ev.location,
+      details: ev.details,
       image: ev.image,
       post_at_local: ev.post_at_local,
     }

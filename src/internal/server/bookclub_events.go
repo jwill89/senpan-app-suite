@@ -199,6 +199,7 @@ func (s *Server) validateAndResolveEvent(w http.ResponseWriter, ev *model.BookCl
 	}
 	ev.Timezone = tz
 	ev.Location = strings.TrimSpace(ev.Location)
+	ev.Details = strings.TrimSpace(ev.Details)
 	ev.Image = strings.TrimSpace(ev.Image)
 	ev.StartAtUnix = startUnix
 	ev.PostAtUnix = postUnix
@@ -364,28 +365,36 @@ func isAllowedImageExt(ext string) bool {
 // ── Embed ───────────────────────────────────────────────────────────────────
 
 // buildEventEmbed renders an event as a Discord embed. Times are emitted as
-// Discord <t:…> timestamps so each viewer sees them in their own local zone;
-// the associated image is shown full-width at the bottom.
+// Discord <t:…> timestamps so each viewer sees them in their own local zone.
+// The date, location, and optional markdown details all render full-width in
+// the description; the associated image is shown full-width at the bottom.
 func buildEventEmbed(ev model.BookClubEvent) discordEmbed {
 	embed := discordEmbed{
 		Title: truncateRunes(ev.Title, 256),
 		Color: 0xE53170, // accent pink
 	}
+	var b strings.Builder
 	if ev.StartAtUnix > 0 {
 		end := ev.StartAtUnix + int64(ev.LengthHours)*3600
-		var b strings.Builder
 		// <t:…:F> = long date/time (includes the weekday), <t:…:t> = short time,
-		// <t:…:R> = relative. Each renders in the viewer's own timezone.
-		fmt.Fprintf(&b, "🗓️ <t:%d:F>\n", ev.StartAtUnix)
-		fmt.Fprintf(&b, "🕒 <t:%d:t> – <t:%d:t>\n", ev.StartAtUnix, end)
+		// <t:…:R> = relative. Each renders in the viewer's own timezone. The end
+		// time is appended after the full start date on the same row.
+		fmt.Fprintf(&b, "🗓️ <t:%d:F> – <t:%d:t>\n", ev.StartAtUnix, end)
 		fmt.Fprintf(&b, "⏳ <t:%d:R>", ev.StartAtUnix)
-		embed.Description = b.String()
 	}
 	if loc := strings.TrimSpace(ev.Location); loc != "" {
-		embed.Fields = append(embed.Fields, discordEmbedField{
-			Name: "📍 Location", Value: truncateRunes(loc, 1024),
-		})
+		if b.Len() > 0 {
+			b.WriteString("\n")
+		}
+		fmt.Fprintf(&b, "📍 %s", loc)
 	}
+	if details := strings.TrimSpace(ev.Details); details != "" {
+		if b.Len() > 0 {
+			b.WriteString("\n\n")
+		}
+		b.WriteString(details)
+	}
+	embed.Description = truncateRunes(b.String(), 4096)
 	if isHTTPURL(ev.Image) {
 		embed.Image = &discordEmbedImage{URL: ev.Image}
 	}

@@ -15,9 +15,10 @@ import { useBookclubStore } from './bookclub'
 import { useStylesStore } from './styles'
 import { useAppStore } from './app'
 import { useFontsStore } from './fonts'
+import { useCarrdStore } from './carrd'
 import { BOOK_CLUBS } from '@/lib/constants'
 
-export type AdminSection = 'bingo' | 'raffles' | 'bookclub' | 'system'
+export type AdminSection = 'bingo' | 'raffles' | 'bookclub' | 'atelier' | 'system'
 
 /** One tab per registered book club, e.g. 'bookclub-yaoi' | 'bookclub-yuri'. */
 export type BookClubTab = `bookclub-${(typeof BOOK_CLUBS)[number]['slug']}`
@@ -33,9 +34,10 @@ export type AdminTab =
   | 'raffle-open'
   | 'raffle-closed'
   | BookClubTab
+  | 'atelier-fonts'
+  | 'atelier-carrd'
   | 'system-settings'
   | 'system-themes'
-  | 'system-fonts'
 
 export const useAdminStore = defineStore('admin', () => {
   const adminTab = ref<AdminTab>('bingo-game')
@@ -50,6 +52,7 @@ export const useAdminStore = defineStore('admin', () => {
     if (tab.startsWith('bingo-')) adminSection.value = 'bingo'
     else if (tab.startsWith('raffle-')) adminSection.value = 'raffles'
     else if (tab.startsWith('bookclub-')) adminSection.value = 'bookclub'
+    else if (tab.startsWith('atelier-')) adminSection.value = 'atelier'
     else if (tab.startsWith('system-')) adminSection.value = 'system'
     adminTab.value = tab
 
@@ -59,6 +62,7 @@ export const useAdminStore = defineStore('admin', () => {
     const styles = useStylesStore()
     const app = useAppStore()
     const fonts = useFontsStore()
+    const carrd = useCarrdStore()
 
     if (tab === 'raffle-open' || tab === 'raffle-closed') {
       raffles.selectedRaffle = null
@@ -69,7 +73,8 @@ export const useAdminStore = defineStore('admin', () => {
     }
     if (tab === 'system-themes') styles.loadStyles()
     if (tab === 'system-settings') app.loadSettings()
-    if (tab === 'system-fonts') fonts.loadFonts()
+    if (tab === 'atelier-fonts') fonts.loadFonts()
+    if (tab === 'atelier-carrd') carrd.loadProjects()
     if (tab === 'bingo-winners-log') game.loadWinnersLog()
     if (tab === 'raffle-new' && !raffles.raffleForm) raffles.newRaffleForm()
   }

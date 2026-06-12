@@ -2,8 +2,8 @@
  * UI store: global toast notifications + clipboard helper.
  *
  * Top-level view routing previously lived here (`view` / `setView`) but is now
- * handled by Vue Router (see `src/router`). Toasts mirror the original
- * `notify()` helper (auto-dismiss after 3.5s).
+ * handled by Vue Router (see `src/router`). Toasts auto-dismiss after 5.5s so
+ * admins have time to read them before they fade.
  */
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
@@ -92,11 +92,11 @@ export const useUiStore = defineStore('ui', () => {
   }
 
   /**
-   * Displays a toast that auto-dismisses after `duration` ms (default 3.5s).
+   * Displays a toast that auto-dismisses after `duration` ms (default 5.5s).
    * Pass a longer duration for important messages (e.g. winner alerts). The
    * toast can also be dismissed early by the user via `dismissToast()`.
    */
-  function notify(message: string, type: ToastType = 'info', duration = 3500): void {
+  function notify(message: string, type: ToastType = 'info', duration = 5500): void {
     clearTimeout(toastTimer)
     toast.value = { show: true, message, type }
     toastTimer = setTimeout(() => {

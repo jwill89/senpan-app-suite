@@ -29,7 +29,7 @@ function onChange(): void {
 <template>
   <div class="tab-body">
     <div class="admin-panel">
-      <h3 class="mb-12"><i class="fa-solid fa-pen-to-square"></i> Edit Patterns</h3>
+      <h3 class="mb-12"><i class="fa-duotone fa-pen-to-square"></i> Edit Patterns</h3>
       <LoadingSpinner
         v-if="patterns.patternsLoading && patterns.patterns.length === 0"
         block
@@ -87,7 +87,7 @@ function onChange(): void {
         >
           <template #item="{ element: p }">
             <div class="saved-pattern">
-              <span class="drag-handle pattern-drag"><i class="fa-solid fa-bars"></i></span>
+              <span class="drag-handle pattern-drag"><i class="fa-duotone fa-bars"></i></span>
               <span class="del" title="Delete pattern" @click="patterns.confirmDeletePattern(p.id)"
                 >&times;</span
               >

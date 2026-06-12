@@ -19,7 +19,7 @@ const styles = useStylesStore()
 <template>
   <div class="tab-body">
     <div class="admin-panel">
-      <h3 class="mb-12"><i class="fa-solid fa-palette"></i> Themes</h3>
+      <h3 class="mb-12"><i class="fa-duotone fa-palette"></i> Themes</h3>
       <div class="styles-layout">
         <!-- Style list sidebar -->
         <div class="styles-sidebar">

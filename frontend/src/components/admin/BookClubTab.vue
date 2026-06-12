@@ -66,14 +66,14 @@ function formatInZone(unix: number, tz: string): string {
         :class="{ active: bookclub.view === 'lists' }"
         @click="bookclub.setView('lists')"
       >
-        <i class="fa-solid fa-book"></i> Reading Lists
+        <i class="fa-duotone fa-book"></i> Reading Lists
       </button>
       <button
         class="bc-tab"
         :class="{ active: bookclub.view === 'events' }"
         @click="bookclub.setView('events')"
       >
-        <i class="fa-solid fa-calendar-days"></i> Event Posts
+        <i class="fa-duotone fa-calendar-days"></i> Event Posts
       </button>
     </div>
 
@@ -82,7 +82,7 @@ function formatInZone(unix: number, tz: string): string {
     <!-- Reading list detail (items + add/edit form) -->
     <div v-if="bookclub.selectedList" class="admin-panel">
       <div class="flex-between mb-16" style="flex-wrap: wrap; gap: 8px">
-        <h3><i class="fa-solid" :class="bookclub.clubIcon"></i> {{ bookclub.selectedList.title }}</h3>
+        <h3><i class="fa-duotone" :class="bookclub.clubIcon"></i> {{ bookclub.selectedList.title }}</h3>
         <div class="flex-toolbar">
           <button class="btn-ghost btn-sm" @click="bookclub.closeList()">← Back</button>
           <button
@@ -108,7 +108,7 @@ function formatInZone(unix: number, tz: string): string {
               class="bc-item-cover"
               alt="Cover"
             />
-            <div v-else class="bc-item-cover bc-item-cover-empty"><i class="fa-solid fa-image"></i></div>
+            <div v-else class="bc-item-cover bc-item-cover-empty"><i class="fa-duotone fa-image"></i></div>
             <div class="bc-item-body">
               <h4 class="bc-item-title">{{ item.title }}</h4>
               <p class="text-dim text-sm bc-item-meta">
@@ -126,7 +126,7 @@ function formatInZone(unix: number, tz: string): string {
                   rel="noopener"
                   class="bc-source-link"
                 >
-                  <i class="fa-solid fa-link"></i> {{ src.title || 'Source' }}
+                  <i class="fa-duotone fa-link"></i> {{ src.title || 'Source' }}
                 </a>
               </p>
             </div>
@@ -145,7 +145,7 @@ function formatInZone(unix: number, tz: string): string {
         <!-- Add / edit item form -->
         <div class="bc-form mt-16">
           <h3 class="raffle-section-heading">
-            <i class="fa-solid fa-plus"></i>
+            <i class="fa-duotone fa-plus"></i>
             {{ bookclub.itemForm.id ? 'Edit Item' : 'Add Item' }}
           </h3>
 
@@ -330,7 +330,7 @@ function formatInZone(unix: number, tz: string): string {
 
     <!-- Reading lists overview -->
     <div v-else class="admin-panel">
-      <h3 class="mb-16"><i class="fa-solid fa-book"></i> {{ bookclub.clubName }} — Reading Lists</h3>
+      <h3 class="mb-16"><i class="fa-duotone fa-book"></i> {{ bookclub.clubName }} — Reading Lists</h3>
 
       <!-- Create list -->
       <div class="flex-toolbar mb-16">
@@ -404,13 +404,13 @@ function formatInZone(unix: number, tz: string): string {
     <template v-else>
       <div class="admin-panel">
         <h3 class="mb-16">
-          <i class="fa-solid fa-calendar-days"></i> {{ bookclub.clubName }} — Event Posts
+          <i class="fa-duotone fa-calendar-days"></i> {{ bookclub.clubName }} — Event Posts
         </h3>
 
         <!-- Add / edit event form -->
         <div class="bc-form mb-16">
           <h3 class="raffle-section-heading">
-            <i class="fa-solid fa-plus"></i>
+            <i class="fa-duotone fa-plus"></i>
             {{ bookclub.eventForm.id ? 'Edit Event' : 'Schedule Event' }}
           </h3>
 
@@ -483,6 +483,15 @@ function formatInZone(unix: number, tz: string): string {
             </small>
           </div>
 
+          <div class="field mb-12">
+            <label class="field-label">Event Details</label>
+            <MarkdownEditor
+              v-model="bookclub.eventForm.details"
+              min-height="120px"
+              placeholder="Optional details shown full-width above the image (supports markdown)"
+            />
+          </div>
+
           <!-- Image: upload or reuse an existing one -->
           <div class="field mb-12">
             <label class="field-label">Image</label>
@@ -495,7 +504,7 @@ function formatInZone(unix: number, tz: string): string {
                   alt="Event image preview"
                 />
                 <div v-else class="bc-event-img-preview bc-item-cover-empty">
-                  <i class="fa-solid fa-image"></i>
+                  <i class="fa-duotone fa-image"></i>
                 </div>
                 <input
                   type="file"
@@ -563,19 +572,19 @@ function formatInZone(unix: number, tz: string): string {
             <div v-for="ev in bookclub.events" :key="ev.id" class="bc-event-card">
               <img v-if="ev.image" :src="ev.image" class="bc-event-cover" alt="Event image" />
               <div v-else class="bc-event-cover bc-item-cover-empty">
-                <i class="fa-solid fa-image"></i>
+                <i class="fa-duotone fa-image"></i>
               </div>
               <div class="bc-event-body">
                 <h4 class="bc-item-title">{{ ev.title }}</h4>
                 <p class="text-sm bc-item-meta">
-                  <i class="fa-solid fa-calendar-days"></i>
+                  <i class="fa-duotone fa-calendar-days"></i>
                   {{ formatInZone(ev.start_at_unix, ev.timezone) }}
                   <span class="text-dim">({{ ev.timezone }})</span>
                 </p>
                 <p class="text-dim text-sm">
-                  <i class="fa-solid fa-clock"></i> {{ ev.length_hours }} hour{{ ev.length_hours > 1 ? 's' : '' }}
+                  <i class="fa-duotone fa-clock"></i> {{ ev.length_hours }} hour{{ ev.length_hours > 1 ? 's' : '' }}
                   <span v-if="ev.location">
-                    · <i class="fa-solid fa-location-dot"></i> {{ ev.location }}
+                    · <i class="fa-duotone fa-location-dot"></i> {{ ev.location }}
                   </span>
                 </p>
                 <p class="text-sm">

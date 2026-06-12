@@ -33,7 +33,7 @@ const raffles = useRafflesStore()
       </div>
       <div v-if="raffles.raffleWinner" class="raffle-winner-panel">
         <h3 class="raffle-section-heading">
-          <i class="fa-solid fa-trophy"></i> Winner: {{ raffles.raffleWinner.character_name }} @
+          <i class="fa-duotone fa-trophy"></i> Winner: {{ raffles.raffleWinner.character_name }} @
           {{ raffles.raffleWinner.world }}
         </h3>
         <p class="text-dim text-sm">{{ raffles.raffleWinner.num_entries }} entries</p>
@@ -61,7 +61,7 @@ const raffles = useRafflesStore()
               <td>{{ e.character_name }} @ {{ e.world }}</td>
               <td class="tc">{{ e.num_entries }}</td>
               <td class="tc">
-                <i v-if="e.paid" class="fa-solid fa-circle-check"></i>
+                <i v-if="e.paid" class="fa-duotone fa-circle-check"></i>
                 <template v-else>—</template>
               </td>
             </tr>
@@ -73,7 +73,7 @@ const raffles = useRafflesStore()
 
     <!-- Closed raffle list -->
     <div v-else class="admin-panel">
-      <h3 class="mb-16"><i class="fa-solid fa-lock"></i> Closed Raffles</h3>
+      <h3 class="mb-16"><i class="fa-duotone fa-lock"></i> Closed Raffles</h3>
       <LoadingSpinner
         v-if="raffles.rafflesLoading && raffles.raffles.length === 0"
         block

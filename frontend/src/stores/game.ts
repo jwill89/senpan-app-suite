@@ -10,6 +10,7 @@ import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 import { endpoints } from '@/lib/endpoints'
 import type { BingoGameState, Card, FrequentWinner, WinnersLogEntry } from '@/types/api'
+import { playWinnerChime } from '@/lib/sound'
 import { useUiStore } from './ui'
 
 export const useGameStore = defineStore('game', () => {
@@ -18,6 +19,17 @@ export const useGameStore = defineStore('game', () => {
   const currentGame = ref<BingoGameState | null>(null)
   const winners = ref<string[]>([])
   const selectedPatternIds = ref<number[]>([])
+
+  /**
+   * Admin opt-in: play a chime when a draw produces a new winner so the caller
+   * can hear a bingo without watching the screen. Persisted across sessions;
+   * off by default (audio needs a user gesture to start — the toggle provides it).
+   */
+  const winnerSoundEnabled = ref(localStorage.getItem('bingo_admin_winner_sound') === '1')
+  function setWinnerSoundEnabled(on: boolean): void {
+    winnerSoundEnabled.value = on
+    localStorage.setItem('bingo_admin_winner_sound', on ? '1' : '0')
+  }
   const lastDrawn = ref<{ number: number; letter: string; call_order: number } | null>(null)
   const gameDetails = ref('')
 
@@ -112,7 +124,10 @@ export const useGameStore = defineStore('game', () => {
       lastDrawn.value = data.drawn
       currentGame.value = data.game
       winners.value = data.winners || []
-      if (winners.value.length > prevCount) ui.notify('We have winner(s)!', 'success', 6000)
+      if (winners.value.length > prevCount) {
+        ui.notify('We have winner(s)!', 'success', 6000)
+        if (winnerSoundEnabled.value) playWinnerChime()
+      }
 
       clearDrawCountdown()
       if (delay > 0) {
@@ -309,6 +324,8 @@ export const useGameStore = defineStore('game', () => {
     currentGame,
     winners,
     selectedPatternIds,
+    winnerSoundEnabled,
+    setWinnerSoundEnabled,
     lastDrawn,
     gameDetails,
     drawDelay,

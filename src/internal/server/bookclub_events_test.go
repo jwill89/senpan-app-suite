@@ -163,7 +163,8 @@ func TestBookClubEventSchedulerPostsDueEvent(t *testing.T) {
 	// An event whose post time is already in the past → due now.
 	out := createEvent(t, e, map[string]any{
 		"title": "Past Watch Party", "start_local": "2026-07-15T19:00", "timezone": "America/New_York",
-		"length_hours": 2, "image": "https://example.com/party.png", "post_at_local": "2020-01-01T00:00",
+		"length_hours": 2, "location": "Voice Channel #1", "details": "**Bring snacks!**",
+		"image": "https://example.com/party.png", "post_at_local": "2020-01-01T00:00",
 	})
 	id := int64(out["id"].(float64))
 
@@ -186,9 +187,24 @@ func TestBookClubEventSchedulerPostsDueEvent(t *testing.T) {
 		t.Errorf("embed image = %v; want full-width party.png", embed["image"])
 	}
 	// Discord timestamps used for the date/time; the main date uses long format
-	// (:F) so the weekday shows.
-	if desc, _ := embed["description"].(string); !strings.Contains(desc, "<t:") || !strings.Contains(desc, ":F>") {
+	// (:F) with the end time appended (– <t:…:t>) on the same row. The location
+	// and optional markdown details render inline in the description, full-width.
+	desc, _ := embed["description"].(string)
+	if !strings.Contains(desc, "<t:") || !strings.Contains(desc, ":F>") {
 		t.Errorf("embed description missing long-format Discord timestamp: %q", desc)
+	}
+	if !strings.Contains(desc, "– <t:") || !strings.Contains(desc, ":t>") {
+		t.Errorf("embed description missing appended end time: %q", desc)
+	}
+	if !strings.Contains(desc, "📍 Voice Channel #1") {
+		t.Errorf("embed description missing inline location: %q", desc)
+	}
+	if !strings.Contains(desc, "**Bring snacks!**") {
+		t.Errorf("embed description missing event details: %q", desc)
+	}
+	// Location is no longer a separate field.
+	if _, hasFields := embed["fields"]; hasFields {
+		t.Errorf("embed should have no fields now that location is inline: %v", embed["fields"])
 	}
 	// Footer clarifies the local-timezone rendering.
 	footer, _ := embed["footer"].(map[string]any)

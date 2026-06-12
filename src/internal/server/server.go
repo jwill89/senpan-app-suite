@@ -106,6 +106,13 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("GET /api/fonts", s.handleFontsList)
 	s.mux.HandleFunc("POST /api/fonts", s.handleFontsAction)
 	s.mux.HandleFunc("POST /api/fonts/upload", s.handleFontUpload)
+
+	// Carrd image hosting (System → Carrd Upload)
+	s.mux.HandleFunc("GET /api/carrd/projects", s.handleCarrdProjectsList)
+	s.mux.HandleFunc("POST /api/carrd/projects", s.handleCarrdProjectsAction)
+	s.mux.HandleFunc("GET /api/carrd/images", s.handleCarrdImagesList)
+	s.mux.HandleFunc("POST /api/carrd/images", s.handleCarrdImagesAction)
+	s.mux.HandleFunc("POST /api/carrd/upload", s.handleCarrdUpload)
 }
 
 // ServeHTTP applies CORS middleware, logs the request, then dispatches to the router.

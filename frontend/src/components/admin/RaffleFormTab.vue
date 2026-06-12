@@ -24,7 +24,7 @@ async function save(): Promise<void> {
   <div class="tab-body">
     <div class="admin-panel">
       <h3 class="mb-12">
-        <i class="fa-solid fa-plus"></i>
+        <i class="fa-duotone fa-plus"></i>
         {{ raffles.raffleForm && raffles.raffleForm.id ? 'Edit' : 'New' }} Raffle
       </h3>
       <template v-if="raffles.raffleForm">

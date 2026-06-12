@@ -53,7 +53,7 @@ onMounted(() => joinInput.value?.focus())
     <div class="home-cards">
       <!-- Join game -->
       <div class="home-card">
-        <h2><i class="fa-solid fa-circle-dot"></i> Bingo</h2>
+        <h2><i class="fa-duotone fa-circle-dot"></i> Bingo</h2>
         <p>Enter your unique bingo board ID to play</p>
         <div class="field">
           <input
@@ -81,7 +81,7 @@ onMounted(() => joinInput.value?.focus())
       </div>
       <!-- Raffles (only if open raffles exist) -->
       <div v-if="raffles.homeRaffles.length" class="home-card">
-        <h2><i class="fa-solid fa-ticket"></i> Raffles</h2>
+        <h2><i class="fa-duotone fa-ticket"></i> Raffles</h2>
         <p>View currently open raffles and enter for a chance to win!</p>
         <button class="btn-primary" @click="viewRaffles">View Raffles</button>
       </div>

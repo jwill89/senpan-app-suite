@@ -7,8 +7,9 @@
  * are preserved exactly as rendered.
  *
  * The captured board is then composited into a larger, themed frame that adds:
- *   • a header  — site title, "Bingo Card", the card id, and the site logo
- *                 (top-right, on its own row so it is never obstructed);
+ *   • a header  — site title + "Bingo Card" hugging the top-left corner, the
+ *                 player name and (smaller) card id beneath them, and a large
+ *                 site logo on the right spanning from the top down to the board;
  *   • a footer  — a link to the site and a short excerpt of the game details.
  *
  * Frame colors/fonts are read from the active theme's CSS custom properties so
@@ -25,8 +26,10 @@ export interface ExportCardOptions {
   fileName: string
   /** Site / app title shown in the header. */
   title: string
-  /** Card id shown in the header. */
+  /** Card id shown in the header (small, under the player name). */
   cardId: string
+  /** Player name shown in the header; the "@ World" suffix is stripped. */
+  playerName?: string
   /** Site link shown in the footer (e.g. `window.location.host`). */
   link: string
   /** Optional game details (markdown) — excerpted into the footer. */
@@ -295,19 +298,36 @@ export async function exportCardImage(opts: ExportCardOptions): Promise<void> {
   // 3. Layout metrics (device px).
   const S = SCALE
   const pad = 36 * S
+  const headInset = 26 * S // header hugs the corner tighter than the body padding
   const gap = 26 * S
   const boardW = boardCanvas.width
   const boardH = boardCanvas.height
   const totalW = boardW + pad * 2
 
-  const titleSize = 40 * S
-  const subSize = 23 * S
-  const cardIdSize = 24 * S
-  const logoH = 86 * S
+  const titleSize = 42 * S
+  const subSize = 22 * S
+  const nameSize = 27 * S
+  const cardIdSize = 17 * S // smaller, beneath the player name
+  const tGap = 9 * S // tight gap between stacked header lines
+  const groupGap = 16 * S // gap before the name/id group
   const linkSize = 14 * S // small, tucked into the bottom-right corner
   const detailSize = 19 * S
   const detailLineH = 27 * S
-  const maxDetailLines = 4
+  // No hard cap — the canvas grows to fit every detail line so nothing is cut
+  // off (long details simply make a taller card).
+  const maxDetailLines = 1000
+
+  // Player name with the "@ World" suffix stripped (e.g. "Alice @ Foo" → "Alice").
+  const cleanName = (opts.playerName || '').split('@')[0].trim()
+
+  // Header left-stack baselines, measured from the header top (topY added later):
+  //   title → "Bingo Card" → [player name] → card id.
+  const titleBaseRel = titleSize
+  const subBaseRel = titleBaseRel + tGap + subSize
+  const nameBaseRel = cleanName ? subBaseRel + groupGap + nameSize : subBaseRel
+  const idBaseRel = nameBaseRel + (cleanName ? tGap : groupGap) + cardIdSize
+  // Header spans from the top down to the card-id baseline; the logo fills it.
+  const headerH = idBaseRel
 
   // Parse + wrap footer details (with bold/italic styling) before sizing canvas.
   const measure = document.createElement('canvas').getContext('2d')!
@@ -315,12 +335,9 @@ export async function exportCardImage(opts: ExportCardOptions): Promise<void> {
   const detailLines = detailParas.length
     ? wrapWords(measure, detailParas, detailSize, totalW - pad * 2, maxDetailLines)
     : []
-
-  // Header is tall enough for the logo row, with the card id beneath it.
-  const headerH = logoH + 12 * S + cardIdSize
   const footerH =
     (detailLines.length ? detailLines.length * detailLineH + 16 * S : 0) + linkSize + 8 * S
-  const totalH = pad + headerH + gap + boardH + gap + footerH + pad
+  const totalH = headInset + headerH + gap + boardH + gap + footerH + pad
 
   // 4. Compose.
   const out = document.createElement('canvas')
@@ -344,31 +361,54 @@ export async function exportCardImage(opts: ExportCardOptions): Promise<void> {
   ctx.globalAlpha = 1
 
   // ── Header ────────────────────────────────────────────────────────────────
-  const topY = pad
+  const topY = headInset
+
+  // Logo on the right, larger than the text stack: it extends down through most
+  // of the gap so its bottom sits just above the board border.
+  const logoOverhang = gap * 0.7 // how far the logo extends past the card-id row
+  const logoH = headerH + logoOverhang
+  // The logo PNG carries transparent padding (~4.9% top, ~4.1% bottom, measured),
+  // so its visible artwork sits inset from the drawn box. Nudge the header text to
+  // the logo's *visible* edges instead of its bounding box.
+  const logoTopInset = logoH * 0.049
+  const logoBottomInset = logoH * 0.041
   const logo = await loadImage(opts.logoUrl || '/images/logo.png')
   let logoW = 0
   if (logo && logo.width > 0) {
     logoW = (logo.width / logo.height) * logoH
-    ctx.drawImage(logo, totalW - pad - logoW, topY, logoW, logoH)
+    ctx.drawImage(logo, totalW - headInset - logoW, topY, logoW, logoH)
   }
 
-  // Title + "Bingo Card" on the left.
+  // Left stack: title, "Bingo Card", player name, card id — hugging the corner.
   ctx.textBaseline = 'alphabetic'
   ctx.textAlign = 'left'
-  const titleMaxW = totalW - pad * 2 - (logoW ? logoW + 24 * S : 0)
+  const leftMaxW = totalW - headInset * 2 - (logoW ? logoW + 20 * S : 0)
+
+  // Title (gold, themed header font) — raised by the logo's top padding so it
+  // hugs the visible logo top.
   ctx.fillStyle = gold
   ctx.font = `700 ${titleSize}px ${headerFont}`
-  fitText(ctx, opts.title || 'Bingo', titleMaxW)
-  ctx.fillText(opts.title || 'Bingo', pad, topY + titleSize)
-  ctx.fillStyle = text
-  ctx.font = `${subSize}px 'Segoe UI', system-ui, sans-serif`
-  ctx.fillText('Bingo Card', pad, topY + titleSize + 10 * S + subSize)
+  fitText(ctx, opts.title || 'Bingo', leftMaxW)
+  ctx.fillText(opts.title || 'Bingo', headInset, topY + titleBaseRel - logoTopInset)
 
-  // Card id under the logo, right-aligned.
-  ctx.textAlign = 'right'
-  ctx.fillStyle = gold
-  ctx.font = `600 ${cardIdSize}px 'Segoe UI', system-ui, sans-serif`
-  ctx.fillText(`Card #${opts.cardId}`, totalW - pad, topY + logoH + 12 * S + cardIdSize)
+  // "Bingo Card" subtitle.
+  ctx.fillStyle = text
+  ctx.font = `${subSize}px ${DETAIL_FONT}`
+  ctx.fillText('Bingo Card', headInset, topY + subBaseRel - logoTopInset)
+
+  // Player name + card id, shifted down by the logo's overhang (less its bottom
+  // padding) so the card-id baseline lines up with the *visible* logo bottom.
+  if (cleanName) {
+    ctx.fillStyle = gold
+    ctx.font = `600 ${nameSize}px ${DETAIL_FONT}`
+    fitText(ctx, cleanName, leftMaxW)
+    ctx.fillText(cleanName, headInset, topY + nameBaseRel + logoOverhang - logoBottomInset)
+  }
+
+  // Card id — smaller and dim, beneath the name.
+  ctx.fillStyle = textDim
+  ctx.font = `600 ${cardIdSize}px ${DETAIL_FONT}`
+  ctx.fillText(`Card #${opts.cardId}`, headInset, topY + idBaseRel + logoOverhang - logoBottomInset)
 
   // ── Board (centered) ───────────────────────────────────────────────────────
   // The captured board has rounded corners (board-wrap border-radius). Clip to a

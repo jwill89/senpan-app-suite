@@ -27,7 +27,7 @@ function onPerPageChange(): void {
 <template>
   <div class="tab-body">
     <div class="admin-panel" style="padding: 24px">
-      <h3 class="mb-12"><i class="fa-solid fa-trophy"></i> Winners Log</h3>
+      <h3 class="mb-12"><i class="fa-duotone fa-trophy"></i> Winners Log</h3>
       <div class="flex-toolbar mb-12" style="gap: 12px; align-items: center">
         <label class="text-dim text-xs">Per page:</label>
         <select

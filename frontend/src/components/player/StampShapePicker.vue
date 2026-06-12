@@ -35,7 +35,7 @@ const player = usePlayerStore()
       <img :src="player.customStampImage" class="stamp-custom-preview" alt="custom" />
     </button>
     <label class="stamp-option stamp-upload-btn" title="Upload custom stamp image">
-      <i class="fa-solid fa-folder-open" aria-hidden="true"></i>
+      <i class="fa-duotone fa-folder-open" aria-hidden="true"></i>
       <span class="sr-only">Upload custom stamp image</span>
       <input type="file" accept="image/*" hidden @change="player.uploadCustomStamp($event)" />
     </label>

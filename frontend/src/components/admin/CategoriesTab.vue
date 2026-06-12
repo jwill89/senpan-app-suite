@@ -21,7 +21,7 @@ function onReorder(): void {
 <template>
   <div class="tab-body">
     <div class="admin-panel" style="padding: 24px">
-      <h3 class="mb-12"><i class="fa-solid fa-folder-open"></i> Pattern Categories</h3>
+      <h3 class="mb-12"><i class="fa-duotone fa-folder-open"></i> Pattern Categories</h3>
       <div class="flex-toolbar" style="margin-bottom: 14px">
         <input
           v-model="patterns.newCategoryName"

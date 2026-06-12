@@ -80,6 +80,26 @@ One-time setup for the font host:
    disabled, put the `<FilesMatch>` block from `deploy/fonts.htaccess` directly
    in the vhost's `<Directory>` instead.
 
+## Carrd image host (CORS)
+
+The **System → Carrd Upload** admin tab creates per-project folders under
+`<webRoot>/carrd/` (each of which may contain arbitrarily nested sub-folders)
+and writes uploaded images to them. They are served by a separate vhost at
+`https://carrd.senpan.cafe/<folder>/.../<image>` and embedded by external Carrd
+sites (a different origin), so cross-origin reads must be allowed.
+
+One-time setup for the carrd host (same pattern as the font host):
+
+1. Upload `deploy/carrd.htaccess` → `<webRoot>/carrd/.htaccess`. It adds
+   `Access-Control-Allow-Origin: *` (plus a cache header) for image files, hides
+   the per-project `.carrd.json` metadata sidecar, and disables directory
+   listings. The Go server only adds/removes project folders and images in that
+   tree, so the `.htaccess` persists across uploads.
+2. Ensure the carrd vhost has `mod_headers` enabled and allows `.htaccess`
+   overrides (`AllowOverride All` or at least `FileInfo`). If overrides are
+   disabled, put the `<FilesMatch>` blocks from `deploy/carrd.htaccess` directly
+   in the vhost's `<Directory>` instead.
+
 ## Each deploy
 
 1. Locally: `cd frontend && npm run build`.

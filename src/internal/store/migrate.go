@@ -10,7 +10,7 @@ import (
 // PRAGMA user_version against this constant and runs only the migrations
 // needed to bring the database up to date. Bump this when adding a new
 // migration block.
-const schemaVersion = 13
+const schemaVersion = 14
 
 // ensureSchema reads the current PRAGMA user_version from the database and
 // applies any outstanding migrations to bring it up to schemaVersion.
@@ -112,6 +112,12 @@ func ensureSchema(db *sql.DB) error {
 
 	if version < 13 {
 		if err := migrateBookClubEvents(db); err != nil {
+			return err
+		}
+	}
+
+	if version < 14 {
+		if err := migrateBookClubEventDetails(db); err != nil {
 			return err
 		}
 	}
@@ -238,6 +244,7 @@ func createTables(db *sql.DB) error {
 			timezone TEXT NOT NULL DEFAULT '',
 			length_hours INTEGER NOT NULL DEFAULT 1,
 			location TEXT NOT NULL DEFAULT '',
+			details TEXT NOT NULL DEFAULT '',
 			image TEXT NOT NULL DEFAULT '',
 			post_at_local TEXT NOT NULL DEFAULT '',
 			start_at_unix INTEGER NOT NULL DEFAULT 0,
@@ -527,6 +534,7 @@ func migrateBookClubEvents(db *sql.DB) error {
 			timezone TEXT NOT NULL DEFAULT '',
 			length_hours INTEGER NOT NULL DEFAULT 1,
 			location TEXT NOT NULL DEFAULT '',
+			details TEXT NOT NULL DEFAULT '',
 			image TEXT NOT NULL DEFAULT '',
 			post_at_local TEXT NOT NULL DEFAULT '',
 			start_at_unix INTEGER NOT NULL DEFAULT 0,
@@ -542,6 +550,19 @@ func migrateBookClubEvents(db *sql.DB) error {
 		if _, err := db.Exec(s); err != nil {
 			return fmt.Errorf("migrate book club events: %w", err)
 		}
+	}
+	return nil
+}
+
+// migrateBookClubEventDetails adds the optional markdown `details` column to
+// book_club_events for databases created before it existed. Idempotent.
+func migrateBookClubEventDetails(db *sql.DB) error {
+	if hasColumn(db, "book_club_events", "details") {
+		return nil
+	}
+	_, err := db.Exec(`ALTER TABLE book_club_events ADD COLUMN details TEXT NOT NULL DEFAULT ''`)
+	if err != nil {
+		return fmt.Errorf("add book_club_events.details: %w", err)
 	}
 	return nil
 }

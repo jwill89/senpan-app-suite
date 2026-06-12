@@ -14,7 +14,7 @@ const patterns = usePatternsStore()
 <template>
   <div class="tab-body">
     <div class="admin-panel">
-      <h3 class="mb-12"><i class="fa-solid fa-plus"></i> New Pattern</h3>
+      <h3 class="mb-12"><i class="fa-duotone fa-plus"></i> New Pattern</h3>
       <div class="pattern-editor">
         <div class="field" style="display: flex; gap: 8px; flex-wrap: wrap">
           <input

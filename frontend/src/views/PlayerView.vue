@@ -42,6 +42,17 @@ const boardRef = ref<{ $el?: HTMLElement } | null>(null)
 /** True while the card image is being generated (drives the export button). */
 const exporting = ref(false)
 
+/**
+ * Whether the "Stamp Customization" panel (shape/color/opacity pickers) is
+ * expanded. Players usually set these once per night and then find them
+ * distracting, so the panel is collapsible and its open/closed choice is
+ * remembered across visits. Defaults to open for first-time discoverability.
+ */
+const showStampCustomization = ref(localStorage.getItem('bingo_stamp_custom_open') !== '0')
+watch(showStampCustomization, (open) => {
+  localStorage.setItem('bingo_stamp_custom_open', open ? '1' : '0')
+})
+
 /** Saves the current board (with stamps + active theme) as a framed PNG image. */
 async function exportCard(): Promise<void> {
   const el = boardRef.value?.$el
@@ -53,6 +64,7 @@ async function exportCard(): Promise<void> {
       fileName: `bingo-card-${player.playerCard?.id ?? 'card'}`,
       title: app.settings.app_title || 'Bingo',
       cardId: player.playerCard?.id ?? '',
+      playerName: player.playerCard?.player_name ?? '',
       link: window.location.host,
       gameDetails: game.gameDetails,
     })
@@ -156,7 +168,12 @@ async function leave(): Promise<void> {
   <div>
     <div class="topbar">
       <button class="btn-ghost btn-sm" @click="leave">← Leave</button>
-      <h2>Board <span class="code-gold">{{ player.playerCard?.id }}</span></h2>
+      <div class="topbar-id">
+        <h2>Board <span class="code-gold">{{ player.playerCard?.id }}</span></h2>
+        <span v-if="player.playerCard?.player_name" class="topbar-player">
+          {{ player.playerCard.player_name }}
+        </span>
+      </div>
       <span
         class="conn-badge"
         :class="connClass"
@@ -168,7 +185,8 @@ async function leave(): Promise<void> {
       </span>
     </div>
     <div class="player-body">
-      <div class="player-left">
+      <!-- Column 1: bingo board + stamp controls -->
+      <div class="player-col player-col-board">
         <!-- The bingo board -->
         <BingoBoard
           v-if="player.playerCard"
@@ -184,9 +202,37 @@ async function leave(): Promise<void> {
           @cell-click="(ri, ci) => player.toggleStamp(ri, ci)"
         />
 
-        <StampShapePicker />
-        <StampColorPicker />
-        <StampOpacitySlider />
+        <!-- Stamp & Sound Customization (collapsible — set once, then tuck away) -->
+        <div class="stamp-customization">
+          <button
+            class="stamp-custom-toggle"
+            :aria-expanded="showStampCustomization"
+            @click="showStampCustomization = !showStampCustomization"
+          >
+            <i class="fa-solid fa-sliders" aria-hidden="true"></i>
+            <span>Stamp &amp; Sound Customization</span>
+            <i
+              class="fa-solid stamp-custom-chevron"
+              :class="showStampCustomization ? 'fa-chevron-up' : 'fa-chevron-down'"
+              aria-hidden="true"
+            ></i>
+          </button>
+          <div v-show="showStampCustomization" class="stamp-custom-body">
+            <StampShapePicker />
+            <StampColorPicker />
+            <StampOpacitySlider />
+
+            <button
+              class="btn-ghost btn-sm stamp-sound-toggle"
+              :aria-pressed="player.soundEnabled"
+              :title="player.soundEnabled ? 'Draw sound on — click to mute' : 'Draw sound off — click to enable'"
+              @click="toggleSound"
+            >
+              <span class="fa-icon" v-html="soundIconHtml" aria-hidden="true"></span>
+              <span>{{ player.soundEnabled ? 'Sound On' : 'Sound Off' }}</span>
+            </button>
+          </div>
+        </div>
 
         <div class="player-actions">
           <button
@@ -207,46 +253,45 @@ async function leave(): Promise<void> {
             <i class="fa-solid fa-download" aria-hidden="true"></i>
             <span class="player-actions__label">{{ exporting ? 'Saving…' : 'Save' }}</span>
           </button>
-
-          <button
-            class="btn-ghost btn-sm"
-            :aria-pressed="player.soundEnabled"
-            :title="player.soundEnabled ? 'Draw sound on — click to mute' : 'Draw sound off — click to enable'"
-            @click="toggleSound"
-          >
-            <span class="fa-icon" v-html="soundIconHtml" aria-hidden="true"></span>
-            <span class="player-actions__label">{{ player.soundEnabled ? 'Sound On' : 'Sound Off' }}</span>
-          </button>
         </div>
+      </div>
 
-        <!-- Game details (Markdown) -->
+      <!-- Column 2: last called number + called numbers list, in one box -->
+      <div class="player-col player-col-called">
+        <div class="called-combined">
+          <!-- Last number the caller drew (announcement only — no board tracking) -->
+          <template v-if="player.playerGame && player.lastDrawn">
+            <div class="last-called">
+              <span class="last-called-label">Last Called</span>
+              <div :key="player.lastDrawn.call_order" class="last-drawn last-drawn--pop">
+                <span class="letter">{{ player.lastDrawn.letter }}</span>
+                <span class="number">{{ player.lastDrawn.number }}</span>
+              </div>
+            </div>
+            <hr class="called-divider" />
+          </template>
+
+          <CalledNumbers
+            :count="player.playerGame ? player.playerGame.called_numbers.length : 0"
+            :is-called="player.isCalledPlayer"
+          />
+        </div>
+      </div>
+
+      <!-- Column 3: game details, winning patterns, misc messages -->
+      <div class="player-col player-col-info">
+        <!-- Game details (Markdown) — above the win patterns, full column width -->
         <div
           v-if="player.playerGame && game.gameDetails"
           class="game-details"
           v-html="renderMarkdown(game.gameDetails)"
         ></div>
-      </div>
-
-      <div class="player-right">
-        <!-- Last number the caller drew (announcement only — no board tracking) -->
-        <div v-if="player.playerGame && player.lastDrawn" class="last-called">
-          <span class="last-called-label">Last Called</span>
-          <div :key="player.lastDrawn.call_order" class="last-drawn last-drawn--pop">
-            <span class="letter">{{ player.lastDrawn.letter }}</span>
-            <span class="number">{{ player.lastDrawn.number }}</span>
-          </div>
-        </div>
 
         <WinPatternsPanel v-if="player.playerGame" :patterns="player.playerGame.patterns" />
 
-        <CalledNumbers
-          :count="player.playerGame ? player.playerGame.called_numbers.length : 0"
-          :is-called="player.isCalledPlayer"
-        />
-
         <template v-if="!player.playerGame">
           <div v-if="player.gameEnded" class="game-over-msg">
-            <div class="go-icon"><i class="fa-solid fa-flag-checkered"></i></div>
+            <div class="go-icon"><i class="fa-duotone fa-flag-checkered"></i></div>
             <p class="go-title">That's a wrap — thanks for playing!</p>
             <p class="go-sub">Numbers called this game: {{ player.endedCalledCount }}</p>
             <p class="go-sub">Hang tight for the next game to begin.</p>
@@ -262,7 +307,7 @@ async function leave(): Promise<void> {
       centered
       @close="player.showMinigameModal = false"
     >
-      <h3 class="mb-16"><i class="fa-solid fa-champagne-glasses"></i> Half-Time Minigame!</h3>
+      <h3 class="mb-16"><i class="fa-duotone fa-champagne-glasses"></i> Half-Time Minigame!</h3>
       <p class="text-dim mb-20">
         It's time for a half-time minigame! Please check your in-game chat for details and
         instructions!

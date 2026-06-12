@@ -14,7 +14,7 @@ import (
 // admin's wall-clock input + IANA timezone before being persisted here.
 
 // eventColumns is the shared SELECT column list for book_club_events.
-const eventColumns = `id, club_slug, title, start_local, timezone, length_hours, location, image,
+const eventColumns = `id, club_slug, title, start_local, timezone, length_hours, location, details, image,
 	post_at_local, start_at_unix, post_at_unix, posted, posted_at, created_at`
 
 // scanEvent scans one book_club_events row (in eventColumns order) into a model.
@@ -23,7 +23,7 @@ func scanEvent(sc interface{ Scan(...any) error }) (model.BookClubEvent, error) 
 	var posted int
 	var postedAt sql.NullString
 	err := sc.Scan(&ev.ID, &ev.ClubSlug, &ev.Title, &ev.StartLocal, &ev.Timezone,
-		&ev.LengthHours, &ev.Location, &ev.Image, &ev.PostAtLocal, &ev.StartAtUnix,
+		&ev.LengthHours, &ev.Location, &ev.Details, &ev.Image, &ev.PostAtLocal, &ev.StartAtUnix,
 		&ev.PostAtUnix, &posted, &postedAt, &ev.CreatedAt)
 	if err != nil {
 		return ev, err
@@ -75,11 +75,11 @@ func (s *Store) GetBookClubEvent(id int64) (*model.BookClubEvent, error) {
 func (s *Store) CreateBookClubEvent(ev *model.BookClubEvent) (int64, error) {
 	res, err := s.db.Exec(
 		`INSERT INTO book_club_events
-			(club_slug, title, start_local, timezone, length_hours, location, image,
+			(club_slug, title, start_local, timezone, length_hours, location, details, image,
 			 post_at_local, start_at_unix, post_at_unix)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		ev.ClubSlug, ev.Title, ev.StartLocal, ev.Timezone, ev.LengthHours, ev.Location,
-		ev.Image, ev.PostAtLocal, ev.StartAtUnix, ev.PostAtUnix,
+		ev.Details, ev.Image, ev.PostAtLocal, ev.StartAtUnix, ev.PostAtUnix,
 	)
 	if err != nil {
 		return 0, err
@@ -93,9 +93,9 @@ func (s *Store) CreateBookClubEvent(ev *model.BookClubEvent) (int64, error) {
 func (s *Store) UpdateBookClubEvent(ev *model.BookClubEvent) error {
 	_, err := s.db.Exec(
 		`UPDATE book_club_events SET title = ?, start_local = ?, timezone = ?, length_hours = ?,
-			location = ?, image = ?, post_at_local = ?, start_at_unix = ?, post_at_unix = ?
+			location = ?, details = ?, image = ?, post_at_local = ?, start_at_unix = ?, post_at_unix = ?
 		 WHERE id = ?`,
-		ev.Title, ev.StartLocal, ev.Timezone, ev.LengthHours, ev.Location, ev.Image,
+		ev.Title, ev.StartLocal, ev.Timezone, ev.LengthHours, ev.Location, ev.Details, ev.Image,
 		ev.PostAtLocal, ev.StartAtUnix, ev.PostAtUnix, ev.ID,
 	)
 	return err

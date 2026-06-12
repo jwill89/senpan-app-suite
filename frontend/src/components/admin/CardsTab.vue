@@ -13,7 +13,7 @@ const cards = useCardsStore()
 <template>
   <div class="tab-body">
     <div class="admin-panel">
-      <h3 class="mb-12"><i class="fa-solid fa-id-card"></i> Manage Cards</h3>
+      <h3 class="mb-12"><i class="fa-duotone fa-id-card"></i> Manage Cards</h3>
       <div class="cards-toolbar">
         <span class="text-dim">Generate</span>
         <input
@@ -61,7 +61,7 @@ const cards = useCardsStore()
           @click="cards.openCardPreview(c.id)"
         >
           <span v-if="c.player_name" class="card-player-icon" :title="c.player_name">
-            <i class="fa-solid fa-user"></i>
+            <i class="fa-duotone fa-user"></i>
           </span>
           <span>{{ c.id }}</span>
           <span class="del" title="Delete card" @click.stop="cards.deleteCard(c.id)">×</span>

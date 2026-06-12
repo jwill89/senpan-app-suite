@@ -35,3 +35,5 @@ Thumbs.db
 /frontend/public/images/logo.png
 /deploy/images/share_banner.png
 /frontend/public/images/share_banner.png
+/frontend/.npmrc
+/.claude/launch.json

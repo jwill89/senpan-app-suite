@@ -29,6 +29,7 @@
     "@fortawesome/free-regular-svg-icons": "^6.7.2",
     "@fortawesome/free-solid-svg-icons": "^6.7.2",
     "@lezer/highlight": "^1.2.1",
+    "@replit/codemirror-css-color-picker": "^6.3.0",
     "@toast-ui/editor": "^3.2.2",
     "codemirror": "^6.0.1",
     "html-to-image": "^1.11.13",

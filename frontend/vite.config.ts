@@ -135,6 +135,7 @@ export default defineConfig({
             '@codemirror/state',
             '@codemirror/view',
             '@lezer/highlight',
+            '@replit/codemirror-css-color-picker',
           ],
           fontawesome: [
             '@fortawesome/fontawesome-svg-core',

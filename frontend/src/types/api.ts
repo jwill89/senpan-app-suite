@@ -145,6 +145,8 @@ export interface AppSettings {
   google_fonts_api_key: string
   /** AniList GraphQL endpoint used for manga lookups. */
   anilist_api_url: string
+  /** Markdown prompt shown on the home page above the board-ID join field. */
+  bingo_join_prompt: string
   /**
    * Per-club Discord webhook URLs, keyed `discord_webhook_url_<club_slug>`
    * (e.g. `discord_webhook_url_yaoi`). Admin-only (redacted for public). Each

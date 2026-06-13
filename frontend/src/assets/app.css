@@ -2796,6 +2796,15 @@ kbd {
     margin-top: 4px;
 }
 
+/* "Join the Discord Server" button on the end-of-game summary. */
+.game-over-msg .go-discord-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 18px;
+    text-decoration: none;
+}
+
 /* ================================================================
    34. PHONE LAYOUT — small-screen tweaks (≤560px)
    Player view never had a mobile breakpoint; the board is handled by the
@@ -2883,3 +2892,31 @@ kbd {
         animation: none;
     }
 }
+
+/* ================================================================
+   35. SITE FOOTER — credits/links on the public (non-admin) pages
+   ================================================================ */
+.app-footer {
+    margin-top: auto;
+    padding: 24px 16px 28px;
+    text-align: center;
+    font-size: .8rem;
+    line-height: 1.6;
+    color: var(--text-dim);
+    border-top: 1px solid color-mix(in srgb, var(--text-dim) 18%, transparent);
+}
+
+.app-footer p {
+    margin: 0;
+}
+
+.app-footer a {
+    color: var(--gold);
+    text-decoration: none;
+}
+
+.app-footer a:hover {
+    text-decoration: underline;
+}
+
+

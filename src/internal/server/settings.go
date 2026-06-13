@@ -14,6 +14,7 @@ var settingsKeys = []string{
 	"header_font",
 	"google_fonts_api_key",
 	"anilist_api_url",
+	"bingo_join_prompt",
 }
 
 // settingsDefaults provides fallback values for settings that have not been configured.
@@ -24,6 +25,7 @@ var settingsDefaults = map[string]string{
 	"frequent_winner_hours":     "12",
 	"header_font":               "Arapey",
 	"anilist_api_url":           defaultAniListURL,
+	"bingo_join_prompt":         "Enter your unique bingo board ID to play",
 }
 
 // secretSettings are setting keys that must not be exposed to non-admin

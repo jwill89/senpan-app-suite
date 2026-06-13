@@ -379,22 +379,26 @@ export async function exportCardImage(opts: ExportCardOptions): Promise<void> {
     ctx.drawImage(logo, totalW - headInset - logoW, topY, logoW, logoH)
   }
 
-  // Left stack: title, "Bingo Card", player name, card id — hugging the corner.
+  // Left stack: title, "Bingo Card", player name, card id.
   ctx.textBaseline = 'alphabetic'
   ctx.textAlign = 'left'
-  const leftMaxW = totalW - headInset * 2 - (logoW ? logoW + 20 * S : 0)
+  // Align the header text with the board's left border (the board is centered at
+  // `pad`) rather than hugging the outer corner, so the title/name/id sit in line
+  // with the frame around the board.
+  const headerX = pad
+  const leftMaxW = totalW - headerX - headInset - (logoW ? logoW + 20 * S : 0)
 
   // Title (gold, themed header font) — raised by the logo's top padding so it
   // hugs the visible logo top.
   ctx.fillStyle = gold
   ctx.font = `700 ${titleSize}px ${headerFont}`
   fitText(ctx, opts.title || 'Bingo', leftMaxW)
-  ctx.fillText(opts.title || 'Bingo', headInset, topY + titleBaseRel - logoTopInset)
+  ctx.fillText(opts.title || 'Bingo', headerX, topY + titleBaseRel - logoTopInset)
 
   // "Bingo Card" subtitle.
   ctx.fillStyle = text
   ctx.font = `${subSize}px ${DETAIL_FONT}`
-  ctx.fillText('Bingo Card', headInset, topY + subBaseRel - logoTopInset)
+  ctx.fillText('Bingo Card', headerX, topY + subBaseRel - logoTopInset)
 
   // Player name + card id, shifted down by the logo's overhang (less its bottom
   // padding) so the card-id baseline lines up with the *visible* logo bottom.
@@ -402,13 +406,13 @@ export async function exportCardImage(opts: ExportCardOptions): Promise<void> {
     ctx.fillStyle = gold
     ctx.font = `600 ${nameSize}px ${DETAIL_FONT}`
     fitText(ctx, cleanName, leftMaxW)
-    ctx.fillText(cleanName, headInset, topY + nameBaseRel + logoOverhang - logoBottomInset)
+    ctx.fillText(cleanName, headerX, topY + nameBaseRel + logoOverhang - logoBottomInset)
   }
 
   // Card id — smaller and dim, beneath the name.
   ctx.fillStyle = textDim
   ctx.font = `600 ${cardIdSize}px ${DETAIL_FONT}`
-  ctx.fillText(`Card #${opts.cardId}`, headInset, topY + idBaseRel + logoOverhang - logoBottomInset)
+  ctx.fillText(`Card #${opts.cardId}`, headerX, topY + idBaseRel + logoOverhang - logoBottomInset)
 
   // ── Board (centered) ───────────────────────────────────────────────────────
   // The captured board has rounded corners (board-wrap border-radius). Clip to a

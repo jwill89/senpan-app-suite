@@ -7,6 +7,7 @@
 import { onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
+import { useMarkdown } from '@/lib/markdown'
 import { useAppStore } from '@/stores/app'
 import { useGameStore } from '@/stores/game'
 import { usePlayerStore } from '@/stores/player'
@@ -17,6 +18,7 @@ const app = useAppStore()
 const player = usePlayerStore()
 const raffles = useRafflesStore()
 const game = useGameStore()
+const { render: renderMarkdown, ready: markdownReady } = useMarkdown()
 
 async function join(): Promise<void> {
   const details = await player.joinGame()
@@ -54,7 +56,13 @@ onMounted(() => joinInput.value?.focus())
       <!-- Join game -->
       <div class="home-card">
         <h2><i class="fa-duotone fa-circle-dot"></i> Bingo</h2>
-        <p>Enter your unique bingo board ID to play</p>
+        <!-- Admin-editable markdown prompt; plain-text fallback until parser loads -->
+        <p v-if="!markdownReady">{{ app.settings.bingo_join_prompt }}</p>
+        <div
+          v-else
+          class="home-card-prompt"
+          v-html="renderMarkdown(app.settings.bingo_join_prompt)"
+        ></div>
         <div class="field">
           <input
             ref="joinInput"

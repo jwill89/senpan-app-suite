@@ -90,6 +90,7 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
   header_font: 'Arapey',
   google_fonts_api_key: '',
   anilist_api_url: 'https://graphql.anilist.co',
+  bingo_join_prompt: 'Enter your unique bingo board ID to play',
   // One blank webhook default per known club (reading-list + events channel) so
   // the settings form binds cleanly before the server response loads.
   ...Object.fromEntries(

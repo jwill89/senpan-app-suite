@@ -8,18 +8,39 @@
  * The CSS editor is bound via v-model to the edited theme's css_content; the
  * dark look matches the original via lib/codemirror.ts + app.css section 26.
  */
+import { computed, ref, watch } from 'vue'
 import { Codemirror } from 'vue-codemirror'
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
-import { cssEditorExtensions } from '@/lib/codemirror'
+import ThemeColorPickerTool from '@/components/admin/ThemeColorPickerTool.vue'
+import { cssEditorExtensions, type EditorColorMode } from '@/lib/codemirror'
 import { useStylesStore } from '@/stores/styles'
 
 const styles = useStylesStore()
+
+/**
+ * The CSS editor's own colour scheme (dark/light), kept independent of the app
+ * theme so authoring stays readable whatever theme is active. Persisted so the
+ * admin's preference survives reloads; drives the reactive extension set.
+ */
+const editorMode = ref<EditorColorMode>(
+  localStorage.getItem('theme_editor_cm_mode') === 'light' ? 'light' : 'dark',
+)
+watch(editorMode, (m) => localStorage.setItem('theme_editor_cm_mode', m))
+const editorExtensions = computed(() => cssEditorExtensions(editorMode.value))
+
+function toggleEditorMode(): void {
+  editorMode.value = editorMode.value === 'dark' ? 'light' : 'dark'
+}
 </script>
 
 <template>
   <div class="tab-body">
     <div class="admin-panel">
       <h3 class="mb-12"><i class="fa-duotone fa-palette"></i> Themes</h3>
+
+      <!-- Color picker helper (pick/preview/copy colors to paste into the CSS) -->
+      <ThemeColorPickerTool />
+
       <div class="styles-layout">
         <!-- Style list sidebar -->
         <div class="styles-sidebar">
@@ -87,6 +108,16 @@ const styles = useStylesStore()
                 style="flex: 1"
               />
               <button
+                class="btn-ghost btn-sm"
+                :title="`Editor theme: ${editorMode}. Click to switch.`"
+                :aria-label="`Switch editor to ${editorMode === 'dark' ? 'light' : 'dark'} mode`"
+                @click="toggleEditorMode"
+              >
+                <i v-if="editorMode === 'dark'" class="fa-solid fa-moon" aria-hidden="true"></i>
+                <i v-else class="fa-solid fa-sun" aria-hidden="true"></i>
+                {{ editorMode === 'dark' ? 'Dark' : 'Light' }}
+              </button>
+              <button
                 class="btn-primary btn-sm"
                 :disabled="styles.savingStyle"
                 @click="styles.saveStyle()"
@@ -105,7 +136,7 @@ const styles = useStylesStore()
             <Codemirror
               v-model="styles.editingStyle.css_content"
               class="style-css-editor"
-              :extensions="cssEditorExtensions"
+              :extensions="editorExtensions"
               :indent-with-tab="false"
               :tab-size="4"
             />

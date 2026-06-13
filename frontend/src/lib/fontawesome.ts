@@ -71,16 +71,19 @@ import {
   faLink as faLinkSolid,
   faLock as faLockSolid,
   faMagnifyingGlass as faMagnifyingGlassSolid,
+  faMoon as faMoonSolid,
   faPaperPlane as faPaperPlaneSolid,
   faPenToSquare as faPenToSquareSolid,
   faPlus as faPlusSolid,
   faRotate as faRotateSolid,
   faSliders as faSlidersSolid,
+  faSun as faSunSolid,
   faTrash as faTrashSolid,
   faUpload as faUploadSolid,
   faVolumeHigh as faVolumeHighSolid,
   faVolumeXmark as faVolumeXmarkSolid,
 } from '@awesome.me/kit-46204fb6f1/icons/classic/solid'
+import { faDiscord } from '@fortawesome/free-brands-svg-icons'
 
 // Render in "nest" mode: FontAwesome inserts the <svg> *inside* the existing
 // <i class="fa-…"> wrapper instead of replacing it. This is essential for Vue
@@ -150,15 +153,19 @@ const icons = [
   faLinkSolid,
   faLockSolid,
   faMagnifyingGlassSolid,
+  faMoonSolid,
   faPaperPlaneSolid,
   faPenToSquareSolid,
   faPlusSolid,
   faRotateSolid,
   faSlidersSolid,
+  faSunSolid,
   faTrashSolid,
   faUploadSolid,
   faVolumeHighSolid,
   faVolumeXmarkSolid,
+  // Brands — social/external links.
+  faDiscord,
 ] as unknown as IconDefinition[]
 
 library.add(...icons)

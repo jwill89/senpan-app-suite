@@ -162,6 +162,11 @@ async function leave(): Promise<void> {
   }
   player.resetPlayer()
 }
+
+/** Opens the Senpan Discord invite in a new tab. */
+function openDiscord(): void {
+  window.open('https://discord.gg/QHg69gWBVy', '_blank', 'noopener')
+}
 </script>
 
 <template>
@@ -297,10 +302,24 @@ async function leave(): Promise<void> {
 
         <template v-if="!player.playerGame">
           <div v-if="player.gameEnded" class="game-over-msg">
-            <div class="go-icon"><i class="fa-duotone fa-flag-checkered"></i></div>
-            <p class="go-title">That's a wrap — thanks for playing!</p>
+            <div class="go-icon"><i class="fa-duotone fa-trophy"></i></div>
+            <p class="go-title">We have a Winner — Thanks for Playing!</p>
             <p class="go-sub">Numbers called this game: {{ player.endedCalledCount }}</p>
-            <p class="go-sub">Hang tight for the next game to begin.</p>
+            <br/>
+            <p class="go-sub">
+              Feel free to save your board and dump them into the bingo-boards channel in the
+              Senpan Discord server if you want to show off your cursed boards! Afterwards, you can
+              clear your board.
+            </p>
+            <br/>
+            <p class="go-sub">
+              If you'd like more refreshments, please let our staff know before the round starts!
+            </p>
+            <br/>
+            <p class="go-sub">The next game will begin soon — hang tight!</p>
+            <button class="btn-primary go-discord-btn" @click="openDiscord">
+              <i class="fa-brands fa-discord" aria-hidden="true"></i> Join the Discord Server
+            </button>
           </div>
           <div v-else class="no-game-msg">No game is currently active. Waiting…</div>
         </template>

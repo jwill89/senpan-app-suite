@@ -10,11 +10,12 @@
  * Per-view orchestration (joining a board, loading admin data, etc.) lives in
  * the individual views and the router guard, not here.
  */
-import { onBeforeUnmount, onMounted, watch } from 'vue'
+import { onBeforeUnmount, onMounted, computed, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import ToastNotification from '@/components/common/ToastNotification.vue'
 import ConfirmModal from '@/components/common/ConfirmModal.vue'
 import RouteProgressBar from '@/components/common/RouteProgressBar.vue'
+import AppFooter from '@/components/common/AppFooter.vue'
 import { useWebSocket } from '@/composables/useWebSocket'
 import { useAppStore } from '@/stores/app'
 import { usePlayerStore } from '@/stores/player'
@@ -26,6 +27,9 @@ const player = usePlayerStore()
 const raffles = useRafflesStore()
 
 const { client: ws } = useWebSocket()
+
+/** Footer shows only on the public (non-admin) pages, not the admin dashboard/login. */
+const showFooter = computed(() => !String(route.name ?? '').startsWith('admin'))
 
 // Drive the shared WebSocket from the active route: connect (with the player's
 // card id) on the player view, connect without an id on admin views, and
@@ -65,5 +69,6 @@ onBeforeUnmount(() => {
     <ToastNotification />
     <ConfirmModal />
     <router-view />
+    <AppFooter v-if="showFooter" />
   </div>
 </template>

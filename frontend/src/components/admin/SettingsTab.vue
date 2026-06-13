@@ -14,6 +14,7 @@
  */
 import { computed, onMounted, watch } from 'vue'
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
+import MarkdownEditor from '@/components/common/MarkdownEditor.vue'
 import {
   BOOK_CLUBS,
   clubWebhookKey,
@@ -90,6 +91,19 @@ watch(
             class="field-input-full"
           />
           <small class="text-dim">Displayed in the browser tab and home page header.</small>
+        </div>
+        <div class="field mb-10">
+          <label class="field-label">
+            Bingo Join Prompt <span class="text-dim" style="font-weight: 400">(Markdown supported)</span>
+          </label>
+          <MarkdownEditor
+            v-model="app.settings.bingo_join_prompt"
+            min-height="100px"
+            placeholder="Enter your unique bingo board ID to play"
+          />
+          <small class="text-dim">
+            Shown on the home page above the board-ID field where players join a game.
+          </small>
         </div>
         <div class="field mb-10">
           <label class="field-label">Default Draw Delay (seconds)</label>

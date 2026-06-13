@@ -96,6 +96,12 @@ function toggle(section: AdminSection): void {
         >
           <i class="fa-duotone fa-pen-to-square"></i> Edit Patterns
         </button>
+        <button
+          :class="{ active: admin.adminTab === 'bingo-presets' }"
+          @click="go('bingo-presets')"
+        >
+          <i class="fa-duotone fa-layer-group"></i> Game Presets
+        </button>
       </div>
     </div>
 

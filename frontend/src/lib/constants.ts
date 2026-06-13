@@ -14,7 +14,6 @@ export interface StampShape {
 export const STAMP_SHAPES: StampShape[] = [
   { id: 'blank', emoji: '', name: 'Blank' },
   { id: 'heart', emoji: '♥️', name: 'Heart' },
-  { id: 'star', emoji: '⭐', name: 'Star' },
   { id: 'smiley', emoji: '😊', name: 'Smiley' },
   { id: 'upside-down-face', emoji: '🙃', name: 'Upside-Down Face' },
   { id: 'expressionless', emoji: '😑', name: 'Expressionless' },

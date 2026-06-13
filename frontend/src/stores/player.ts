@@ -10,6 +10,36 @@ import { STAMP_COLORS, STAMP_SHAPES } from '@/lib/constants'
 import type { BingoDrawnNumber, BingoGameState, Card } from '@/types/api'
 import { useUiStore } from './ui'
 
+/** Fallback stamp tint (pink @ 55% alpha) when nothing is stored. */
+const DEFAULT_STAMP_COLOR = 'rgba(229,49,112,0.55)'
+
+/**
+ * Resolves the persisted stamp colour. New installs store a full CSS color
+ * string; legacy installs stored a preset id (e.g. `"pink"`) — map those to the
+ * matching preset value so returning players keep their chosen colour.
+ */
+function resolveStoredColor(stored: string | null): string {
+  if (!stored) return DEFAULT_STAMP_COLOR
+  const preset = STAMP_COLORS.find((c) => c.id === stored)
+  return preset ? preset.value : stored
+}
+
+/**
+ * Resolves the persisted stamp shape into a { mode, emoji } pair. New installs
+ * store a mode ('blank' | 'emoji' | 'custom') plus the chosen emoji character
+ * separately; legacy installs stored a fixed shape id (e.g. 'heart') — map those
+ * forward to the matching emoji so a returning player keeps their stamp.
+ */
+function resolveStoredShape(): { mode: string; emoji: string } {
+  const mode = localStorage.getItem('bingo_stamp_shape') || 'blank'
+  const emoji = localStorage.getItem('bingo_stamp_emoji') || ''
+  if (mode === 'custom' || mode === 'emoji') return { mode, emoji }
+  if (mode === 'blank') return { mode: 'blank', emoji: '' }
+  // Legacy fixed shape id (heart/star/…): map to its emoji, else fall back blank.
+  const legacy = STAMP_SHAPES.find((s) => s.id === mode)
+  return legacy && legacy.emoji ? { mode: 'emoji', emoji: legacy.emoji } : { mode: 'blank', emoji: '' }
+}
+
 export const usePlayerStore = defineStore('player', () => {
   const ui = useUiStore()
 
@@ -23,8 +53,22 @@ export const usePlayerStore = defineStore('player', () => {
   // Stamps: { "r-c": true }
   const stamps = ref<Record<string, boolean>>({})
 
-  const stampShape = ref(localStorage.getItem('bingo_stamp_shape') || 'blank')
-  const stampColor = ref(localStorage.getItem('bingo_stamp_color') || 'pink')
+  const stampShape = ref(resolveStoredShape().mode)
+  /**
+   * The chosen stamp emoji character when `stampShape === 'emoji'`. Picked from
+   * the emoji selector and persisted separately from the mode so any emoji works
+   * (not just a fixed preset list).
+   */
+  const stampEmoji = ref(resolveStoredShape().emoji)
+  /**
+   * The stamp tint as a full CSS color string *including its own alpha channel*
+   * (e.g. `rgba(229,49,112,0.55)`). Chosen via the color-picker modal. Legacy
+   * installs stored a preset id (e.g. `"pink"`) here — `resolveStoredColor()`
+   * maps those forward so a returning player keeps their colour. This alpha is
+   * deliberately separate from `stampOpacity` (below): the alpha tints only the
+   * stamp's background fill, while opacity fades the whole mark (icon included).
+   */
+  const stampColor = ref(resolveStoredColor(localStorage.getItem('bingo_stamp_color')))
   const stampOpacity = ref(parseFloat(localStorage.getItem('bingo_stamp_opacity') || '') || 0.8)
   // Data URL for the user-uploaded custom stamp. Persisted to localStorage so it
   // survives a page refresh (the saved stampShape can be 'custom'); falls back to
@@ -54,15 +98,9 @@ export const usePlayerStore = defineStore('player', () => {
     return new Set(playerGame.value.called_numbers)
   })
 
-  const currentStampEmoji = computed(() => {
-    const found = stampShapes.find((s) => s.id === stampShape.value)
-    return found ? found.emoji : ''
-  })
+  const currentStampEmoji = computed(() => (stampShape.value === 'emoji' ? stampEmoji.value : ''))
 
-  const currentStampBg = computed(() => {
-    const found = stampColors.find((c) => c.id === stampColor.value)
-    return found ? found.value : 'rgba(229,49,112,.55)'
-  })
+  const currentStampBg = computed(() => stampColor.value || DEFAULT_STAMP_COLOR)
 
   const stampMarkStyle = computed(() => ({
     background: currentStampBg.value,
@@ -118,14 +156,23 @@ export const usePlayerStore = defineStore('player', () => {
     stamps.value = raw ? JSON.parse(raw) : {}
   }
 
-  function setStampShape(id: string): void {
-    stampShape.value = id
-    localStorage.setItem('bingo_stamp_shape', id)
+  /** Sets the stamp *mode* ('blank' | 'emoji' | 'custom') and persists it. */
+  function setStampShape(mode: string): void {
+    stampShape.value = mode
+    localStorage.setItem('bingo_stamp_shape', mode)
   }
 
-  function setStampColor(id: string): void {
-    stampColor.value = id
-    localStorage.setItem('bingo_stamp_color', id)
+  /** Selects an arbitrary emoji as the stamp icon (switches into 'emoji' mode). */
+  function setStampEmoji(emoji: string): void {
+    stampEmoji.value = emoji
+    localStorage.setItem('bingo_stamp_emoji', emoji)
+    setStampShape('emoji')
+  }
+
+  /** Sets the stamp tint to a full CSS color string (incl. alpha) and persists it. */
+  function setStampColor(value: string): void {
+    stampColor.value = value
+    localStorage.setItem('bingo_stamp_color', value)
   }
 
   function setStampOpacity(val: string | number): void {
@@ -263,6 +310,7 @@ export const usePlayerStore = defineStore('player', () => {
     playerGame,
     stamps,
     stampShape,
+    stampEmoji,
     stampColor,
     stampOpacity,
     customStampImage,
@@ -286,6 +334,7 @@ export const usePlayerStore = defineStore('player', () => {
     saveStamps,
     loadStamps,
     setStampShape,
+    setStampEmoji,
     setStampColor,
     setStampOpacity,
     uploadCustomStamp,

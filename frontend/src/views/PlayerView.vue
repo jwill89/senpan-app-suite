@@ -202,7 +202,7 @@ async function leave(): Promise<void> {
           @cell-click="(ri, ci) => player.toggleStamp(ri, ci)"
         />
 
-        <!-- Stamp & Sound Customization (collapsible — set once, then tuck away) -->
+        <!-- Stamp Settings & Game Controls (collapsible — set once, then tuck away) -->
         <div class="stamp-customization">
           <button
             class="stamp-custom-toggle"
@@ -210,7 +210,7 @@ async function leave(): Promise<void> {
             @click="showStampCustomization = !showStampCustomization"
           >
             <i class="fa-solid fa-sliders" aria-hidden="true"></i>
-            <span>Stamp &amp; Sound Customization</span>
+            <span>Stamp Settings &amp; Game Controls</span>
             <i
               class="fa-solid stamp-custom-chevron"
               :class="showStampCustomization ? 'fa-chevron-up' : 'fa-chevron-down'"
@@ -218,41 +218,47 @@ async function leave(): Promise<void> {
             ></i>
           </button>
           <div v-show="showStampCustomization" class="stamp-custom-body">
-            <StampShapePicker />
-            <StampColorPicker />
+            <!-- Stamp shape + color pickers share the first row -->
+            <div class="stamp-shape-color-row">
+              <StampShapePicker />
+              <StampColorPicker />
+            </div>
+
+            <!-- Opacity slider gets its own full-width row -->
             <StampOpacitySlider />
 
-            <button
-              class="btn-ghost btn-sm stamp-sound-toggle"
-              :aria-pressed="player.soundEnabled"
-              :title="player.soundEnabled ? 'Draw sound on — click to mute' : 'Draw sound off — click to enable'"
-              @click="toggleSound"
-            >
-              <span class="fa-icon" v-html="soundIconHtml" aria-hidden="true"></span>
-              <span>{{ player.soundEnabled ? 'Sound On' : 'Sound Off' }}</span>
-            </button>
+            <!-- Clear / Save / Sound action bar -->
+            <div class="player-actions">
+              <button
+                class="btn-ghost btn-sm"
+                title="Clear all stamps on the board"
+                @click="player.clearAllStamps()"
+              >
+                <i class="fa-solid fa-eraser" aria-hidden="true"></i>
+                <span class="player-actions__label">Clear Board</span>
+              </button>
+
+              <button
+                class="btn-ghost btn-sm"
+                :disabled="exporting"
+                :title="exporting ? 'Saving card image…' : 'Save card as image'"
+                @click="exportCard"
+              >
+                <i class="fa-solid fa-download" aria-hidden="true"></i>
+                <span class="player-actions__label">{{ exporting ? 'Saving…' : 'Save Board' }}</span>
+              </button>
+
+              <button
+                class="btn-ghost btn-sm stamp-sound-toggle"
+                :aria-pressed="player.soundEnabled"
+                :title="player.soundEnabled ? 'Draw sound on — click to mute' : 'Draw sound off — click to enable'"
+                @click="toggleSound"
+              >
+                <span class="fa-icon" v-html="soundIconHtml" aria-hidden="true"></span>
+                <span>{{ player.soundEnabled ? 'Sound On' : 'Sound Off' }}</span>
+              </button>
+            </div>
           </div>
-        </div>
-
-        <div class="player-actions">
-          <button
-            class="btn-ghost btn-sm"
-            title="Clear all stamps on the board"
-            @click="player.clearAllStamps()"
-          >
-            <i class="fa-solid fa-eraser" aria-hidden="true"></i>
-            <span class="player-actions__label">Clear</span>
-          </button>
-
-          <button
-            class="btn-ghost btn-sm"
-            :disabled="exporting"
-            :title="exporting ? 'Saving card image…' : 'Save card as image'"
-            @click="exportCard"
-          >
-            <i class="fa-solid fa-download" aria-hidden="true"></i>
-            <span class="player-actions__label">{{ exporting ? 'Saving…' : 'Save' }}</span>
-          </button>
         </div>
       </div>
 

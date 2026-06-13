@@ -17,6 +17,7 @@
  *   /admin/bingo/categories   → Admin: Pattern Categories
  *   /admin/bingo/new-pattern  → Admin: New Pattern
  *   /admin/bingo/patterns     → Admin: Edit Patterns
+ *   /admin/bingo/presets      → Admin: Game Presets
  *   /admin/raffles/new        → Admin: New/Edit Raffle
  *   /admin/raffles/open       → Admin: Open Raffles
  *   /admin/raffles/closed     → Admin: Closed Raffles
@@ -83,6 +84,12 @@ const adminChildren: RouteRecordRaw[] = [
     name: 'admin-bingo-patterns',
     component: () => import('@/components/admin/EditPatternsTab.vue'),
     meta: { tab: 'bingo-patterns' },
+  },
+  {
+    path: 'bingo/presets',
+    name: 'admin-bingo-presets',
+    component: () => import('@/components/admin/PresetsTab.vue'),
+    meta: { tab: 'bingo-presets' },
   },
   {
     path: 'raffles/new',

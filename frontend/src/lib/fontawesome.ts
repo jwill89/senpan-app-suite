@@ -43,6 +43,7 @@ import {
   faIdCard,
   faImage,
   faImages,
+  faLayerGroup,
   faLink,
   faLocationDot,
   faLock,
@@ -53,6 +54,7 @@ import {
   faTicket,
   faTriangleExclamation,
   faTrophy,
+  faFaceSmile,
   faUser,
 } from '@awesome.me/kit-46204fb6f1/icons/duotone/solid'
 import {
@@ -121,6 +123,7 @@ const icons = [
   faIdCard,
   faImage,
   faImages,
+  faLayerGroup,
   faLink,
   faLocationDot,
   faLock,
@@ -131,6 +134,7 @@ const icons = [
   faTicket,
   faTriangleExclamation,
   faTrophy,
+  faFaceSmile,
   faUser,
   // Solid — action-button icons.
   faArrowRightFromBracketSolid,

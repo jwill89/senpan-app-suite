@@ -15,6 +15,7 @@ import type {
   BookClubEvent,
   Card,
   FrequentWinner,
+  GamePreset,
   Pattern,
   PatternCategory,
   Raffle,
@@ -34,6 +35,7 @@ export type {
   BookClubEvent,
   Card,
   FrequentWinner,
+  GamePreset,
   Pattern,
   PatternCategory,
   Raffle,
@@ -115,6 +117,16 @@ export interface DrawResult {
 export interface PatternsResponse {
   patterns: Pattern[]
   categories: PatternCategory[]
+}
+
+// ── Game presets (GET /api/presets) ─────────────────────────────────────────
+export interface PresetsResponse {
+  presets: GamePreset[]
+}
+
+// POST /api/presets {action:"create"} — the new preset's id.
+export interface PresetCreateResponse {
+  id: number
 }
 
 // ── Styles (GET /api/styles) ────────────────────────────────────────────────

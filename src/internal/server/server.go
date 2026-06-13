@@ -67,6 +67,8 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("POST /api/patterns", s.handlePatternsAction)
 	s.mux.HandleFunc("GET /api/pattern-categories", s.handleCategoriesList)
 	s.mux.HandleFunc("POST /api/pattern-categories", s.handleCategoriesAction)
+	s.mux.HandleFunc("GET /api/presets", s.handlePresetsList)
+	s.mux.HandleFunc("POST /api/presets", s.handlePresetsAction)
 	s.mux.HandleFunc("GET /api/styles", s.handleStylesList)
 	s.mux.HandleFunc("POST /api/styles", s.handleStylesAction)
 	s.mux.HandleFunc("GET /api/styles/active", s.handleActiveStyleCSS)

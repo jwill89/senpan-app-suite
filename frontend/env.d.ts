@@ -8,3 +8,6 @@ declare module '*.vue' {
   export default component
 }
 
+// Side-effect CSS import shipped by vue3-emoji-picker via its package exports
+// map (a bare specifier, not a `.css` path, so vite/client's glob doesn't cover it).
+declare module 'vue3-emoji-picker/css'

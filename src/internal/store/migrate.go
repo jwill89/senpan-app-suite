@@ -10,7 +10,7 @@ import (
 // PRAGMA user_version against this constant and runs only the migrations
 // needed to bring the database up to date. Bump this when adding a new
 // migration block.
-const schemaVersion = 14
+const schemaVersion = 15
 
 // ensureSchema reads the current PRAGMA user_version from the database and
 // applies any outstanding migrations to bring it up to schemaVersion.
@@ -118,6 +118,12 @@ func ensureSchema(db *sql.DB) error {
 
 	if version < 14 {
 		if err := migrateBookClubEventDetails(db); err != nil {
+			return err
+		}
+	}
+
+	if version < 15 {
+		if err := migrateGamePresets(db); err != nil {
 			return err
 		}
 	}
@@ -251,6 +257,13 @@ func createTables(db *sql.DB) error {
 			post_at_unix INTEGER NOT NULL DEFAULT 0,
 			posted INTEGER NOT NULL DEFAULT 0,
 			posted_at DATETIME,
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+		)`,
+		`CREATE TABLE IF NOT EXISTS game_presets (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			name TEXT NOT NULL,
+			pattern_ids TEXT NOT NULL DEFAULT '[]',
+			game_details TEXT NOT NULL DEFAULT '',
 			created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 		)`,
 	}
@@ -583,6 +596,22 @@ func migrateRaffleImagePaths(db *sql.DB) error {
 		if _, err := db.Exec(stmt); err != nil {
 			return err
 		}
+	}
+	return nil
+}
+
+// migrateGamePresets creates the game_presets table for reusable game templates
+// (pre-selected win patterns + pre-written markdown game details).
+func migrateGamePresets(db *sql.DB) error {
+	_, err := db.Exec(`CREATE TABLE IF NOT EXISTS game_presets (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		name TEXT NOT NULL,
+		pattern_ids TEXT NOT NULL DEFAULT '[]',
+		game_details TEXT NOT NULL DEFAULT '',
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+	)`)
+	if err != nil {
+		return fmt.Errorf("migrate game presets: %w", err)
 	}
 	return nil
 }

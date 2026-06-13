@@ -111,6 +111,14 @@ export default defineConfig({
     outDir: 'dist',
     emptyOutDir: true,
     sourcemap: false,
+    // The two largest chunks (Toast UI editor ~570 kB, CodeMirror ~440 kB) are
+    // monolithic third-party libraries that are already split into their own
+    // lazy-loaded chunks (fetched only when an admin opens a view that needs
+    // them) — they never touch the initial player/home load. Neither can be
+    // split further (each ships as one bundle), so we lift the advisory warning
+    // to 600 kB: above these intentional vendor chunks, but still low enough to
+    // flag genuinely new bloat.
+    chunkSizeWarningLimit: 600,
     rollupOptions: {
       output: {
         // Split heavy, rarely-changing vendor libs into their own chunks so
@@ -136,6 +144,11 @@ export default defineConfig({
           ],
           markdown: ['markdown-it'],
           draggable: ['vuedraggable', 'sortablejs'],
+          // Toast UI editor (lazy-loaded by MarkdownEditor.vue) — named so it
+          // caches independently and is clearly identifiable in the build output.
+          toastui: ['@toast-ui/editor'],
+          // Emoji picker (lazy-loaded by StampShapePicker.vue) — same rationale.
+          emojipicker: ['vue3-emoji-picker'],
         },
       },
     },

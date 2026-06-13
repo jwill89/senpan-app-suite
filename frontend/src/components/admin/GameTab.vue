@@ -17,12 +17,31 @@ import { primeAudio, playWinnerChime } from '@/lib/sound'
 import { useGameStore } from '@/stores/game'
 import { useCardsStore } from '@/stores/cards'
 import { usePatternsStore } from '@/stores/patterns'
+import { usePresetsStore } from '@/stores/presets'
 
 const router = useRouter()
 const game = useGameStore()
 const cards = useCardsStore()
 const patterns = usePatternsStore()
+const presets = usePresetsStore()
 const { render: renderMarkdown } = useMarkdown()
+
+// Currently-selected preset in the "Start from a preset" picker (v-model).
+const selectedPresetId = ref<number | null>(null)
+
+/**
+ * Applies a saved preset to the new-game form: pre-selects its win patterns
+ * (skipping any that were since deleted) and fills in its game details. The
+ * admin can still tweak the selection before starting.
+ */
+function applyPreset(): void {
+  const preset = presets.presets.find((p) => p.id === selectedPresetId.value)
+  if (!preset) return
+  const validIds = new Set(patterns.patterns.map((p) => p.id))
+  game.selectedPatternIds = preset.pattern_ids.filter((id) => validIds.has(id))
+  game.gameDetails = preset.game_details || ''
+  game.saveGameDetails()
+}
 
 // ── Elapsed-game clock (admin-only, Current Game view) ──────────────────────
 // Ticks once a second while this tab is mounted; the start time comes from the
@@ -122,6 +141,7 @@ function onKeydown(e: KeyboardEvent): void {
 
 onMounted(() => {
   window.addEventListener('keydown', onKeydown)
+  if (presets.presets.length === 0) presets.loadPresets()
   clockTimer = setInterval(() => {
     now.value = Date.now()
   }, 1000)
@@ -161,6 +181,34 @@ onBeforeUnmount(() => {
           </button>
         </div>
         <div v-else>
+          <!-- Start from a saved preset (auto-fills patterns + details) -->
+          <div v-if="presets.presets.length" class="flex-toolbar mb-12">
+            <label style="color: var(--text-dim); font-size: 0.9rem">Start from a preset:</label>
+            <select
+              v-model.number="selectedPresetId"
+              aria-label="Game preset"
+              style="
+                padding: 6px 10px;
+                border-radius: 6px;
+                background: var(--surface);
+                color: var(--text);
+                border: 1px solid var(--surface2);
+                min-width: 180px;
+              "
+            >
+              <option :value="null">— None —</option>
+              <option v-for="p in presets.presets" :key="p.id" :value="p.id">{{ p.name }}</option>
+            </select>
+            <button
+              class="btn-secondary btn-sm"
+              :disabled="selectedPresetId === null"
+              title="Apply this preset's patterns and game details"
+              @click="applyPreset"
+            >
+              <i class="fa-solid fa-circle-check" aria-hidden="true"></i> Apply Preset
+            </button>
+          </div>
+
           <p class="text-dim mb-12">Select one or more win patterns:</p>
 
           <!-- Pattern filter bar -->

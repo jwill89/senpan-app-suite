@@ -16,6 +16,7 @@ import { useStylesStore } from './styles'
 import { useAppStore } from './app'
 import { useFontsStore } from './fonts'
 import { useCarrdStore } from './carrd'
+import { usePresetsStore } from './presets'
 import { BOOK_CLUBS } from '@/lib/constants'
 
 export type AdminSection = 'bingo' | 'raffles' | 'bookclub' | 'atelier' | 'system'
@@ -30,6 +31,7 @@ export type AdminTab =
   | 'bingo-categories'
   | 'bingo-new-pattern'
   | 'bingo-patterns'
+  | 'bingo-presets'
   | 'raffle-new'
   | 'raffle-open'
   | 'raffle-closed'
@@ -63,6 +65,7 @@ export const useAdminStore = defineStore('admin', () => {
     const app = useAppStore()
     const fonts = useFontsStore()
     const carrd = useCarrdStore()
+    const presets = usePresetsStore()
 
     if (tab === 'raffle-open' || tab === 'raffle-closed') {
       raffles.selectedRaffle = null
@@ -76,6 +79,8 @@ export const useAdminStore = defineStore('admin', () => {
     if (tab === 'atelier-fonts') fonts.loadFonts()
     if (tab === 'atelier-carrd') carrd.loadProjects()
     if (tab === 'bingo-winners-log') game.loadWinnersLog()
+    // Presets are needed on the Game tab (to start from one) and the Presets tab.
+    if (tab === 'bingo-game' || tab === 'bingo-presets') presets.loadPresets()
     if (tab === 'raffle-new' && !raffles.raffleForm) raffles.newRaffleForm()
   }
 

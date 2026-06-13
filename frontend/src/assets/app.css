@@ -447,6 +447,17 @@ h1 {
     aspect-ratio: 1 / 1
 }
 
+/* The player board fills its (wider) column, so scale the number + B-I-N-G-O
+   header type up to match — keeping the larger board legible and balanced.
+   Scoped to the player column so preview/admin boards keep their compact type. */
+.player-col-board .board-cell {
+    font-size: 1.95rem
+}
+
+.player-col-board .board-header span {
+    font-size: 2.5rem
+}
+
 /* B-I-N-G-O column header labels */
 .board-header {
     display: grid;
@@ -539,15 +550,16 @@ h1 {
     display: flex;
     align-items: center;
     gap: 8px;
-    justify-content: center;
+    justify-content: flex-start;
     flex-wrap: wrap
 }
 
-/* "Stamp:" / "Color:" label text */
+/* "Stamp:" / "Color:" label text — fixed-width column so the controls in each
+   settings row line up at the same left edge. */
 .stamp-picker span.label {
     font-size: .85rem;
     color: var(--text-dim);
-    margin-right: 2px
+    min-width: 58px
 }
 
 /* Individual stamp shape option (emoji button) */
@@ -637,12 +649,24 @@ h1 {
     display: flex;
     align-items: center;
     gap: 8px;
-    justify-content: center
+    justify-content: flex-start
 }
 
 .opacity-slider span.label {
     font-size: .85rem;
     color: var(--text-dim)
+}
+
+/* On the player customization panel the opacity slider is its own row: align its
+   label with the "Stamp:" label above and let the track fill the full width. */
+.stamp-custom-body > .opacity-slider span.label {
+    min-width: 58px
+}
+
+.stamp-custom-body > .opacity-slider input[type=range] {
+    flex: 1;
+    width: auto;
+    min-width: 120px
 }
 
 /* Custom-styled range: thumb travels flush to both edges (native accent-color
@@ -704,6 +728,91 @@ h1 {
     text-align: center
 }
 
+/* -- Stamp color picker (modal trigger + modal contents) -- */
+
+/* Stamp shape + color pickers share the first settings row, pushed to opposite
+   ends so they fill the row rather than leaving a gap of empty space. */
+.stamp-shape-color-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 14px 18px
+}
+
+/* "Color:" label + swatch button group. */
+.stamp-color-control {
+    display: flex;
+    align-items: center;
+    gap: 8px
+}
+
+/* Slightly tighter label column than Stamp/Opacity so the swatch sits a bit
+   closer to the "Color:" text (~1/3 less leading space). */
+.stamp-color-control span.label {
+    font-size: .85rem;
+    color: var(--text-dim);
+    min-width: 50px
+}
+
+/* The swatch button that opens the color-picker modal. Wide so it reads as a
+   color bar. The checkerboard shows through the swatch's alpha so partial
+   transparency is visible at a glance. */
+.color-picker-btn {
+    width: 72px;
+    height: 32px;
+    padding: 3px;
+    border-radius: 8px;
+    cursor: pointer;
+    background: var(--surface2);
+    border: 2px solid transparent;
+    transition: all .15s
+}
+
+.color-picker-btn:hover {
+    border-color: var(--text-dim)
+}
+
+.color-picker-btn:focus-visible {
+    outline: 2px solid var(--gold);
+    outline-offset: 2px
+}
+
+.color-picker-swatch {
+    display: block;
+    width: 100%;
+    height: 100%;
+    border-radius: 5px;
+    background-image:
+        linear-gradient(45deg, rgba(255, 255, 255, .25) 25%, transparent 25%),
+        linear-gradient(-45deg, rgba(255, 255, 255, .25) 25%, transparent 25%),
+        linear-gradient(45deg, transparent 75%, rgba(255, 255, 255, .25) 75%),
+        linear-gradient(-45deg, transparent 75%, rgba(255, 255, 255, .25) 75%);
+    background-size: 10px 10px;
+    background-position: 0 0, 0 5px, 5px -5px, -5px 0
+}
+
+/* The swatch button paints the chosen tint via its inline `background`; layer it
+   over the checkerboard so alpha reads correctly. */
+.color-picker-btn .color-picker-swatch {
+    box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .25)
+}
+
+/* Center the picker widget inside the modal. */
+.color-picker-wrap {
+    display: flex;
+    justify-content: center
+}
+
+/* Quick-pick preset swatches under the picker. */
+.color-picker-presets {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 10px;
+    margin-top: 16px
+}
+
 /* ================================================================
    8. PLAYER LAYOUT — Two-column responsive layout for player view
    ================================================================ */
@@ -753,28 +862,36 @@ h1 {
     gap: 20px
 }
 
-/* Collapsible "Stamp Customization" panel (shape/color/opacity pickers). */
+/* Integrated "Stamp Settings & Game Controls" panel: a header toggle on top of a
+   body of evenly-divided, left-aligned settings rows (shape / color+opacity /
+   actions) — so the controls read as one cohesive UI, not free-floating bits. */
 .stamp-customization {
-    width: 100%
+    width: 100%;
+    background: var(--surface);
+    border: 1px solid var(--surface2);
+    border-radius: var(--radius);
+    overflow: hidden
 }
 
+/* Panel header: full-width toggle row (no own border/radius — it's the card). */
 .stamp-custom-toggle {
     display: flex;
     align-items: center;
     gap: 8px;
     width: 100%;
-    padding: 8px 14px;
-    background: var(--surface);
-    border: 1px solid var(--surface2);
-    border-radius: var(--radius);
+    padding: 10px 14px;
+    background: transparent;
+    border: none;
+    border-radius: 0;
     color: var(--text-dim);
     cursor: pointer;
-    font: inherit
+    font: inherit;
+    text-align: left
 }
 
 .stamp-custom-toggle:hover {
     color: var(--gold);
-    border-color: var(--gold)
+    background: color-mix(in srgb, var(--gold) 8%, transparent)
 }
 
 .stamp-custom-chevron {
@@ -782,34 +899,42 @@ h1 {
     font-size: 0.85em
 }
 
+/* Body holds the settings rows; sits below the header behind a divider. */
 .stamp-custom-body {
     display: flex;
     flex-direction: column;
-    align-items: center;
-    gap: 16px;
-    margin-top: 12px
+    align-items: stretch;
+    padding: 0 14px;
+    border-top: 1px solid var(--surface2)
 }
 
-/* Sound on/off toggle folded into the customization panel. */
+/* Each control is a settings row with a subtle divider between rows. */
+.stamp-custom-body > * {
+    padding: 14px 0
+}
+
+.stamp-custom-body > * + * {
+    border-top: 1px solid var(--surface2)
+}
+
+/* Sound on/off toggle folded into the action row. */
 .stamp-sound-toggle {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
     white-space: nowrap
 }
 
-/* Single-row action bar: Clear / Save / Sound */
+/* Action row: Clear / Save / Sound as equal-width buttons filling the row. */
 .player-actions {
     display: flex;
     flex-wrap: wrap;
-    justify-content: center;
     gap: 8px;
     width: 100%
 }
 
 .player-actions .btn-sm {
+    flex: 1 1 0;
     display: inline-flex;
     align-items: center;
+    justify-content: center;
     gap: 6px;
     white-space: nowrap
 }
@@ -861,6 +986,18 @@ h1 {
     background: var(--gold);
     color: var(--text-on-primary);
     font-weight: 700
+}
+
+/* Larger called-numbers type in the player's middle column for readability at a
+   glance (the last-called banner is unaffected). Scoped to the player view so
+   the admin tracker keeps its compact sizing. */
+.player-col-called .numbers-col-header {
+    font-size: 1.3rem
+}
+
+.player-col-called .num-cell {
+    font-size: 1.05rem;
+    padding: 6px 0
 }
 
 /* ================================================================
@@ -2234,6 +2371,7 @@ span.pattern-mini {
 .mt-8 { margin-top: 8px }
 .mt-12 { margin-top: 12px }
 .mt-16 { margin-top: 16px }
+.mt-20 { margin-top: 20px }
 
 /* Flex layout utilities */
 .flex-toolbar { display: flex; gap: 12px; flex-wrap: wrap; align-items: center }

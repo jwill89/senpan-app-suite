@@ -44,6 +44,17 @@ type BingoGamePattern struct {
 	PatternData [][]bool `json:"pattern_data"` // 5×5 boolean grid
 }
 
+// GamePreset is a reusable bingo-game template: a named set of win pattern IDs
+// plus pre-written game details (markdown). Admins select a preset when
+// starting a new game to auto-apply its patterns and details.
+type GamePreset struct {
+	ID          int64   `json:"id"`
+	Name        string  `json:"name"`
+	PatternIDs  []int64 `json:"pattern_ids"`  // win pattern IDs to pre-select
+	GameDetails string  `json:"game_details"` // markdown game details to apply
+	CreatedAt   string  `json:"created_at"`
+}
+
 // BingoGame is the internal database representation of a bingo game row.
 // It is not directly exposed to clients; use BingoGameState for the public view.
 type BingoGame struct {

@@ -28,6 +28,8 @@ import type {
   GenerateCardsResponse,
   OkResponse,
   PatternsResponse,
+  PresetsResponse,
+  PresetCreateResponse,
   RaffleDetailResponse,
   RaffleEnterResponse,
   RaffleEntryResponse,
@@ -163,6 +165,28 @@ export const endpoints = {
         action: 'bulk_reorder',
         ordered_ids: orderedIds,
       }),
+  },
+
+  // ── Game presets ─────────────────────────────────────────────────────────────
+  presets: {
+    /** GET /api/presets — all saved game presets. */
+    list: () => apiGet<PresetsResponse>('presets'),
+    create: (name: string, patternIds: number[], gameDetails: string) =>
+      apiPost<PresetCreateResponse>('presets', {
+        action: 'create',
+        name,
+        pattern_ids: patternIds,
+        game_details: gameDetails,
+      }),
+    update: (id: number, name: string, patternIds: number[], gameDetails: string) =>
+      apiPost<OkResponse>('presets', {
+        action: 'update',
+        id,
+        name,
+        pattern_ids: patternIds,
+        game_details: gameDetails,
+      }),
+    delete: (id: number) => apiPost<OkResponse>('presets', { action: 'delete', id }),
   },
 
   // ── Styles / themes ──────────────────────────────────────────────────────────

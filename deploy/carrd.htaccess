@@ -1,0 +1,39 @@
+# ============================================================================
+# Apache .htaccess — Carrd image host (serves https://carrd.senpan.cafe/)
+# ----------------------------------------------------------------------------
+# PLACEMENT: copy this file to the document root that serves
+# https://carrd.senpan.cafe/ as ".htaccess". That directory is <webRoot>/carrd/
+# — the folder the Go server creates per-project subfolders in and writes
+# uploaded images to (see internal/server/carrd.go: carrdDir() =
+# <webRoot>/carrd). The Go server only ever adds/removes project folders and
+# image files there, so this .htaccess persists across uploads.
+#
+# Images are reachable at https://carrd.senpan.cafe/<folder>/.../<image> (a
+# project may nest images in arbitrarily deep sub-directories) and are embedded
+# by external Carrd sites (a different origin), so cross-origin reads must be
+# allowed. Image files are public static assets, so granting read access to any
+# origin is safe.
+#
+# If the carrd vhost does NOT allow .htaccess overrides (AllowOverride None),
+# put the same <FilesMatch> block in the vhost's <Directory> instead, and make
+# sure mod_headers is enabled.
+# ============================================================================
+
+# Don't leak a directory listing of project folders.
+Options -Indexes
+
+# Hide the per-project metadata sidecar (.carrd.json) and any other dotfiles
+# from public access — they store the project title, not anything to serve.
+<FilesMatch "^\.">
+    Require all denied
+</FilesMatch>
+
+<IfModule mod_headers.c>
+    <FilesMatch "\.(jpe?g|png|webp|gif|mp3|mp4)$">
+        # Allow any origin (Carrd sites) to embed these images/audio/video.
+        Header set Access-Control-Allow-Origin "*"
+        # Files can be replaced in place (same name overwrites), so revalidate
+        # daily rather than caching for a week like the immutable fonts.
+        Header set Cache-Control "public, max-age=86400"
+    </FilesMatch>
+</IfModule>

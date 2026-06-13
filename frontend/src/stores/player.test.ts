@@ -51,25 +51,55 @@ describe('boardCellClass', () => {
 })
 
 describe('stamp customization', () => {
-  it('currentStampEmoji follows the selected shape and persists', () => {
+  it('setStampEmoji selects any emoji, switches to emoji mode, and persists', () => {
     const player = usePlayerStore()
-    player.setStampShape('star')
-    expect(player.currentStampEmoji).toBe('⭐')
-    expect(localStorage.getItem('bingo_stamp_shape')).toBe('star')
+    player.setStampEmoji('🎯')
+    expect(player.stampShape).toBe('emoji')
+    expect(player.currentStampEmoji).toBe('🎯')
+    expect(localStorage.getItem('bingo_stamp_emoji')).toBe('🎯')
+    expect(localStorage.getItem('bingo_stamp_shape')).toBe('emoji')
+  })
+
+  it('blank mode shows no emoji', () => {
+    const player = usePlayerStore()
+    player.setStampEmoji('🎯')
+    player.setStampShape('blank')
+    expect(player.currentStampEmoji).toBe('')
+  })
+
+  it('custom mode shows no emoji (the image is used instead)', () => {
+    const player = usePlayerStore()
+    player.setStampEmoji('🎯')
+    player.setStampShape('custom')
+    expect(player.currentStampEmoji).toBe('')
+  })
+
+  it('migrates a legacy fixed shape id to its emoji on load', () => {
+    localStorage.setItem('bingo_stamp_shape', 'heart')
+    setActivePinia(createPinia())
+    const player = usePlayerStore()
+    expect(player.stampShape).toBe('emoji')
+    expect(player.currentStampEmoji).toBe('♥️')
   })
 
   it('currentStampBg follows the selected color and persists', () => {
     const player = usePlayerStore()
-    player.setStampColor('green')
-    expect(player.currentStampBg).toBe('rgba(44,182,125,.55)')
-    expect(localStorage.getItem('bingo_stamp_color')).toBe('green')
+    player.setStampColor('rgba(44, 182, 125, 0.55)')
+    expect(player.currentStampBg).toBe('rgba(44, 182, 125, 0.55)')
+    expect(localStorage.getItem('bingo_stamp_color')).toBe('rgba(44, 182, 125, 0.55)')
+  })
+
+  it('migrates a legacy preset-id color to its rgba value on load', () => {
+    localStorage.setItem('bingo_stamp_color', 'green')
+    setActivePinia(createPinia())
+    expect(usePlayerStore().currentStampBg).toBe('rgba(44,182,125,.55)')
   })
 
   it('stampMarkStyle combines color and opacity', () => {
     const player = usePlayerStore()
-    player.setStampColor('blue')
+    player.setStampColor('rgba(56, 128, 255, 1)')
     player.setStampOpacity(0.5)
-    expect(player.stampMarkStyle).toEqual({ background: 'rgba(56,128,255,.55)', opacity: 0.5 })
+    expect(player.stampMarkStyle).toEqual({ background: 'rgba(56, 128, 255, 1)', opacity: 0.5 })
   })
 })
 

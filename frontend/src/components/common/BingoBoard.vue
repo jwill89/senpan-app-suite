@@ -9,6 +9,7 @@
  * `.board-cell` markup so all existing styles and themes apply unchanged.
  */
 import type { StyleValue } from 'vue'
+import CornerFlourish from '@/components/common/CornerFlourish.vue'
 
 defineProps<{
   board: number[][]
@@ -37,6 +38,14 @@ const emit = defineEmits<{ cellClick: [ri: number, ci: number, cell: number] }>(
 
 <template>
   <div class="board-wrap" :class="{ 'board-preview': preview }">
+    <!-- Decorative flourishes in each corner (player view only; captured into the
+         exported card image). Mirrored per-corner via CSS transforms. -->
+    <template v-if="mode === 'player'">
+      <CornerFlourish class="corner-flourish corner-flourish--tl" />
+      <CornerFlourish class="corner-flourish corner-flourish--tr" />
+      <CornerFlourish class="corner-flourish corner-flourish--bl" />
+      <CornerFlourish class="corner-flourish corner-flourish--br" />
+    </template>
     <div class="board-header">
       <span>B</span><span>I</span><span>N</span><span>G</span><span>O</span>
     </div>

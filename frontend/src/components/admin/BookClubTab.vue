@@ -42,17 +42,17 @@ function cancelRename(): void {
 const timezones = supportedTimezones()
 const lengthOptions = MEETING_LENGTH_OPTIONS
 
-/** Format an absolute instant (unix seconds) in a given IANA timezone. */
-function formatInZone(unix: number, tz: string): string {
-  if (!unix) return '—'
+/** Format an absolute instant (UTC RFC-3339 string) in a given IANA timezone. */
+function formatInZone(iso: string, tz: string): string {
+  if (!iso) return '—'
   try {
-    return new Date(unix * 1000).toLocaleString(undefined, {
+    return new Date(iso).toLocaleString(undefined, {
       dateStyle: 'medium',
       timeStyle: 'short',
       timeZone: tz,
     })
   } catch {
-    return new Date(unix * 1000).toLocaleString()
+    return new Date(iso).toLocaleString()
   }
 }
 </script>
@@ -578,7 +578,7 @@ function formatInZone(unix: number, tz: string): string {
                 <h4 class="bc-item-title">{{ ev.title }}</h4>
                 <p class="text-sm bc-item-meta">
                   <i class="fa-duotone fa-calendar-days"></i>
-                  {{ formatInZone(ev.start_at_unix, ev.timezone) }}
+                  {{ formatInZone(ev.start_at, ev.timezone) }}
                   <span class="text-dim">({{ ev.timezone }})</span>
                 </p>
                 <p class="text-dim text-sm">
@@ -590,7 +590,7 @@ function formatInZone(unix: number, tz: string): string {
                 <p class="text-sm">
                   <span v-if="ev.posted" class="bc-badge bc-badge-posted">Posted</span>
                   <span v-else class="bc-badge bc-badge-scheduled">
-                    Posts {{ formatInZone(ev.post_at_unix, ev.timezone) }}
+                    Posts {{ formatInZone(ev.post_at, ev.timezone) }}
                   </span>
                 </p>
               </div>

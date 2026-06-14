@@ -187,12 +187,12 @@ func (s *Server) validateAndResolveEvent(w http.ResponseWriter, ev *model.BookCl
 		writeError(w, http.StatusBadRequest, "Invalid timezone")
 		return false
 	}
-	startUnix, err := parseLocalInZone(ev.StartLocal, loc)
+	startAt, err := parseLocalInZone(ev.StartLocal, loc)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "Invalid start date/time")
 		return false
 	}
-	postUnix, err := parseLocalInZone(ev.PostAtLocal, loc)
+	postAt, err := parseLocalInZone(ev.PostAtLocal, loc)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "Invalid post date/time")
 		return false
@@ -201,24 +201,25 @@ func (s *Server) validateAndResolveEvent(w http.ResponseWriter, ev *model.BookCl
 	ev.Location = strings.TrimSpace(ev.Location)
 	ev.Details = strings.TrimSpace(ev.Details)
 	ev.Image = strings.TrimSpace(ev.Image)
-	ev.StartAtUnix = startUnix
-	ev.PostAtUnix = postUnix
+	// Persist the absolute instants as UTC RFC-3339 strings (human-readable).
+	ev.StartAt = startAt.UTC().Format(time.RFC3339)
+	ev.PostAt = postAt.UTC().Format(time.RFC3339)
 	return true
 }
 
 // parseLocalInZone parses a datetime-local wall-clock string in loc and returns
-// the absolute UTC unix seconds.
-func parseLocalInZone(value string, loc *time.Location) (int64, error) {
+// the absolute instant as a time.Time.
+func parseLocalInZone(value string, loc *time.Location) (time.Time, error) {
 	value = strings.TrimSpace(value)
 	if value == "" {
-		return 0, fmt.Errorf("empty datetime")
+		return time.Time{}, fmt.Errorf("empty datetime")
 	}
 	for _, layout := range eventTimeLayouts {
 		if t, err := time.ParseInLocation(layout, value, loc); err == nil {
-			return t.Unix(), nil
+			return t, nil
 		}
 	}
-	return 0, fmt.Errorf("invalid datetime %q", value)
+	return time.Time{}, fmt.Errorf("invalid datetime %q", value)
 }
 
 // ── Event images (upload + pick existing) ───────────────────────────────────
@@ -374,13 +375,16 @@ func buildEventEmbed(ev model.BookClubEvent) discordEmbed {
 		Color: 0xE53170, // accent pink
 	}
 	var b strings.Builder
-	if ev.StartAtUnix > 0 {
-		end := ev.StartAtUnix + int64(ev.LengthHours)*3600
+	// Convert the stored UTC RFC-3339 start instant to unix seconds for Discord's
+	// <t:…> timestamp tokens (which each viewer sees rendered in their own zone).
+	if startT, err := time.Parse(time.RFC3339, ev.StartAt); err == nil {
+		startUnix := startT.Unix()
+		end := startUnix + int64(ev.LengthHours)*3600
 		// <t:…:F> = long date/time (includes the weekday), <t:…:t> = short time,
 		// <t:…:R> = relative. Each renders in the viewer's own timezone. The end
 		// time is appended after the full start date on the same row.
-		fmt.Fprintf(&b, "🗓️ <t:%d:F> – <t:%d:t>\n", ev.StartAtUnix, end)
-		fmt.Fprintf(&b, "⏳ <t:%d:R>", ev.StartAtUnix)
+		fmt.Fprintf(&b, "🗓️ <t:%d:F> – <t:%d:t>\n", startUnix, end)
+		fmt.Fprintf(&b, "⏳ <t:%d:R>", startUnix)
 	}
 	if loc := strings.TrimSpace(ev.Location); loc != "" {
 		if b.Len() > 0 {
@@ -425,7 +429,7 @@ func (s *Server) RunEventScheduler(ctx context.Context) {
 // with no configured webhook is left pending (it posts once one is set); a
 // failed post is retried on the next tick.
 func (s *Server) postDueEvents() {
-	events, err := s.store.DueBookClubEvents(time.Now().Unix())
+	events, err := s.store.DueBookClubEvents(time.Now())
 	if err != nil {
 		slog.Error("event scheduler: load due events", "error", err)
 		return

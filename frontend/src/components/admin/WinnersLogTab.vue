@@ -5,6 +5,7 @@
  */
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
 import { useGameStore } from '@/stores/game'
+import { formatServerTimestamp } from '@/lib/datetime'
 
 const game = useGameStore()
 
@@ -90,7 +91,7 @@ function onPerPageChange(): void {
           </thead>
           <tbody>
             <tr v-for="entry in game.winnersLog" :key="entry.id">
-              <td>{{ new Date(entry.logged_at).toLocaleString() }}</td>
+              <td>{{ formatServerTimestamp(entry.logged_at) }}</td>
               <td class="code-gold">{{ entry.card_id }}</td>
               <td>{{ entry.player_name || '—' }}</td>
               <td>{{ entry.game_details || '—' }}</td>

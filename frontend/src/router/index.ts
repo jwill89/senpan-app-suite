@@ -203,9 +203,38 @@ router.beforeEach(() => {
 })
 router.afterEach(() => {
   useUiStore().setRouteLoading(false)
+  // Navigation succeeded → clear any pending chunk-reload guard (see onError).
+  sessionStorage.removeItem(CHUNK_RELOAD_KEY)
 })
-router.onError(() => {
+
+// sessionStorage key tracking the last target we force-reloaded after a failed
+// lazy-chunk import, so a genuinely broken chunk can't cause an infinite loop.
+const CHUNK_RELOAD_KEY = 'route-chunk-reload'
+
+/** Whether an error looks like a failed dynamic import of a route chunk. */
+function isChunkLoadError(error: unknown): boolean {
+  const message = (error as Error)?.message || ''
+  // Browser-specific phrasings: Chrome/Firefox "…dynamically imported module…",
+  // Safari "Importing a module script failed", plus the bundler-style name.
+  return /dynamically imported module|module script failed|ChunkLoadError/i.test(message)
+}
+
+router.onError((error, to) => {
   useUiStore().setRouteLoading(false)
+
+  // A failed dynamic import almost always means the app was redeployed while
+  // this tab was open: the lazy chunk's hashed filename no longer exists on the
+  // server (and the PWA prunes outdated precaches), so the import 404s and the
+  // navigation aborts. The UI then appears to "freeze" on the current view —
+  // clicking sidebar links does nothing — until a hard refresh. Recover by
+  // doing a full browser load of the target URL, which fetches the fresh
+  // index.html + current chunk hashes. The sessionStorage guard ensures we only
+  // attempt this once per target so a genuinely broken chunk can't loop.
+  if (!isChunkLoadError(error)) return
+  const target = to?.fullPath || window.location.pathname + window.location.search
+  if (sessionStorage.getItem(CHUNK_RELOAD_KEY) === target) return
+  sessionStorage.setItem(CHUNK_RELOAD_KEY, target)
+  window.location.assign(target)
 })
 
 router.beforeEach(async (to) => {

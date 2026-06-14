@@ -10,7 +10,7 @@ import (
 // PRAGMA user_version against this constant and runs only the migrations
 // needed to bring the database up to date. Bump this when adding a new
 // migration block.
-const schemaVersion = 15
+const schemaVersion = 16
 
 // ensureSchema reads the current PRAGMA user_version from the database and
 // applies any outstanding migrations to bring it up to schemaVersion.
@@ -124,6 +124,12 @@ func ensureSchema(db *sql.DB) error {
 
 	if version < 15 {
 		if err := migrateGamePresets(db); err != nil {
+			return err
+		}
+	}
+
+	if version < 16 {
+		if err := migrateBookClubEventTimes(db); err != nil {
 			return err
 		}
 	}
@@ -253,8 +259,8 @@ func createTables(db *sql.DB) error {
 			details TEXT NOT NULL DEFAULT '',
 			image TEXT NOT NULL DEFAULT '',
 			post_at_local TEXT NOT NULL DEFAULT '',
-			start_at_unix INTEGER NOT NULL DEFAULT 0,
-			post_at_unix INTEGER NOT NULL DEFAULT 0,
+			start_at TEXT NOT NULL DEFAULT '',
+			post_at TEXT NOT NULL DEFAULT '',
 			posted INTEGER NOT NULL DEFAULT 0,
 			posted_at DATETIME,
 			created_at DATETIME DEFAULT CURRENT_TIMESTAMP
@@ -289,7 +295,7 @@ func createIndexes(db *sql.DB) error {
 		"CREATE INDEX IF NOT EXISTS idx_cards_player_name ON cards(player_name)",
 		"CREATE INDEX IF NOT EXISTS idx_reading_list_items_list ON reading_list_items(list_id)",
 		"CREATE INDEX IF NOT EXISTS idx_book_club_events_club ON book_club_events(club_slug)",
-		"CREATE INDEX IF NOT EXISTS idx_book_club_events_due ON book_club_events(posted, post_at_unix)",
+		"CREATE INDEX IF NOT EXISTS idx_book_club_events_due ON book_club_events(posted, post_at)",
 	}
 	for _, idx := range indexes {
 		if _, err := db.Exec(idx); err != nil {
@@ -550,14 +556,14 @@ func migrateBookClubEvents(db *sql.DB) error {
 			details TEXT NOT NULL DEFAULT '',
 			image TEXT NOT NULL DEFAULT '',
 			post_at_local TEXT NOT NULL DEFAULT '',
-			start_at_unix INTEGER NOT NULL DEFAULT 0,
-			post_at_unix INTEGER NOT NULL DEFAULT 0,
+			start_at TEXT NOT NULL DEFAULT '',
+			post_at TEXT NOT NULL DEFAULT '',
 			posted INTEGER NOT NULL DEFAULT 0,
 			posted_at DATETIME,
 			created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 		)`,
 		`CREATE INDEX IF NOT EXISTS idx_book_club_events_club ON book_club_events(club_slug)`,
-		`CREATE INDEX IF NOT EXISTS idx_book_club_events_due ON book_club_events(posted, post_at_unix)`,
+		`CREATE INDEX IF NOT EXISTS idx_book_club_events_due ON book_club_events(posted, post_at)`,
 	}
 	for _, s := range stmts {
 		if _, err := db.Exec(s); err != nil {
@@ -580,7 +586,57 @@ func migrateBookClubEventDetails(db *sql.DB) error {
 	return nil
 }
 
-// migrateRaffleImagePaths rewrites stored prize_image web paths after the
+// migrateBookClubEventTimes converts the legacy book_club_events unix-seconds
+// columns (start_at_unix/post_at_unix) into readable UTC RFC-3339 string columns
+// (start_at/post_at): it adds the new columns, backfills existing rows from the
+// unix values, drops the old index + columns, and re-indexes on post_at.
+// Idempotent — a no-op once the new columns exist and the legacy ones are gone.
+func migrateBookClubEventTimes(db *sql.DB) error {
+	// Already migrated: new columns present and legacy ones gone.
+	if hasColumn(db, "book_club_events", "start_at") && !hasColumn(db, "book_club_events", "start_at_unix") {
+		return nil
+	}
+	if !hasColumn(db, "book_club_events", "start_at") {
+		if _, err := db.Exec(`ALTER TABLE book_club_events ADD COLUMN start_at TEXT NOT NULL DEFAULT ''`); err != nil {
+			return fmt.Errorf("add book_club_events.start_at: %w", err)
+		}
+	}
+	if !hasColumn(db, "book_club_events", "post_at") {
+		if _, err := db.Exec(`ALTER TABLE book_club_events ADD COLUMN post_at TEXT NOT NULL DEFAULT ''`); err != nil {
+			return fmt.Errorf("add book_club_events.post_at: %w", err)
+		}
+	}
+	// Backfill from the legacy unix columns (UTC seconds → UTC RFC-3339).
+	if hasColumn(db, "book_club_events", "start_at_unix") {
+		if _, err := db.Exec(`UPDATE book_club_events
+			SET start_at = strftime('%Y-%m-%dT%H:%M:%SZ', start_at_unix, 'unixepoch')
+			WHERE start_at_unix > 0 AND start_at = ''`); err != nil {
+			return fmt.Errorf("backfill book_club_events.start_at: %w", err)
+		}
+		if _, err := db.Exec(`UPDATE book_club_events
+			SET post_at = strftime('%Y-%m-%dT%H:%M:%SZ', post_at_unix, 'unixepoch')
+			WHERE post_at_unix > 0 AND post_at = ''`); err != nil {
+			return fmt.Errorf("backfill book_club_events.post_at: %w", err)
+		}
+		// Drop the legacy index (it references post_at_unix) before the columns.
+		if _, err := db.Exec(`DROP INDEX IF EXISTS idx_book_club_events_due`); err != nil {
+			return fmt.Errorf("drop legacy due index: %w", err)
+		}
+		if _, err := db.Exec(`ALTER TABLE book_club_events DROP COLUMN start_at_unix`); err != nil {
+			return fmt.Errorf("drop book_club_events.start_at_unix: %w", err)
+		}
+		if _, err := db.Exec(`ALTER TABLE book_club_events DROP COLUMN post_at_unix`); err != nil {
+			return fmt.Errorf("drop book_club_events.post_at_unix: %w", err)
+		}
+	}
+	// (Re)create the due index on the readable post_at column.
+	if _, err := db.Exec(`CREATE INDEX IF NOT EXISTS idx_book_club_events_due ON book_club_events(posted, post_at)`); err != nil {
+		return fmt.Errorf("create book_club_events due index: %w", err)
+	}
+	return nil
+}
+
+// migrateRaffleImagePaths rewrites legacy raffle prize-image web paths. When the
 // uploads directory was moved out of `assets/` into a top-level `images/`
 // folder (so it no longer collides with the Vite `dist/assets/` output).
 // Old rows stored paths like "assets/images/raffles/raffle_….png"; rewrite

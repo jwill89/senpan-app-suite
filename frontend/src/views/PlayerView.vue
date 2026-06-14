@@ -12,7 +12,6 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { icon } from '@fortawesome/fontawesome-svg-core'
-import { faVolumeHigh, faVolumeXmark } from '@fortawesome/free-solid-svg-icons'
 import BingoBoard from '@/components/common/BingoBoard.vue'
 import CalledNumbers from '@/components/common/CalledNumbers.vue'
 import ModalOverlay from '@/components/common/ModalOverlay.vue'
@@ -135,8 +134,30 @@ function toggleSound(): void {
  * an already-replaced node never re-renders. Building the SVG via the `icon()`
  * API and binding it with `v-html` keeps the icon in sync with `soundEnabled`.
  */
-const soundIconHtml = computed(
-  () => icon(player.soundEnabled ? faVolumeHigh : faVolumeXmark).html.join(''),
+/**
+ * Reactive inline SVG for the sound toggle. FontAwesome's `dom.watch()` renders
+ * `<i class="fa-…">` placeholders once, so a reactive `:class` swap on an
+ * already-rendered node never re-renders. Building the SVG via the `icon()` API
+ * (resolved by name from the centrally-registered Pro-kit library — see
+ * `lib/fontawesome.ts`) and binding it with `v-html` keeps the icon in sync with
+ * `soundEnabled`, without importing icon definitions in this component.
+ */
+const soundIconHtml = computed(() =>
+  icon({ prefix: 'fas', iconName: player.soundEnabled ? 'volume-high' : 'volume-xmark' }).html.join(
+    '',
+  ),
+)
+
+/**
+ * Reactive inline SVG for the accordion chevron — same rationale as the sound
+ * icon above. Resolved by name from the central library so it uses the same
+ * Pro-kit glyph as the rest of the app.
+ */
+const chevronIconHtml = computed(() =>
+  icon({
+    prefix: 'fas',
+    iconName: showStampCustomization.value ? 'chevron-up' : 'chevron-down',
+  }).html.join(''),
 )
 
 /**
@@ -216,11 +237,11 @@ function openDiscord(): void {
           >
             <i class="fa-solid fa-sliders" aria-hidden="true"></i>
             <span>Stamp Settings &amp; Game Controls</span>
-            <i
-              class="fa-solid stamp-custom-chevron"
-              :class="showStampCustomization ? 'fa-chevron-up' : 'fa-chevron-down'"
+            <span
+              class="fa-icon stamp-custom-chevron"
+              v-html="chevronIconHtml"
               aria-hidden="true"
-            ></i>
+            ></span>
           </button>
           <div v-show="showStampCustomization" class="stamp-custom-body">
             <!-- Stamp shape + color pickers share the first row -->
@@ -274,9 +295,19 @@ function openDiscord(): void {
           <template v-if="player.playerGame && player.lastDrawn">
             <div class="last-called">
               <span class="last-called-label">Last Called</span>
-              <div :key="player.lastDrawn.call_order" class="last-drawn last-drawn--pop">
-                <span class="letter">{{ player.lastDrawn.letter }}</span>
-                <span class="number">{{ player.lastDrawn.number }}</span>
+              <div class="last-called-row">
+                <span
+                  class="last-called-flourish last-called-flourish--left"
+                  aria-hidden="true"
+                ></span>
+                <div :key="player.lastDrawn.call_order" class="last-drawn last-drawn--pop">
+                  <span class="letter">{{ player.lastDrawn.letter }}</span>
+                  <span class="number">{{ player.lastDrawn.number }}</span>
+                </div>
+                <span
+                  class="last-called-flourish last-called-flourish--right"
+                  aria-hidden="true"
+                ></span>
               </div>
             </div>
             <hr class="called-divider" />

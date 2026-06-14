@@ -114,7 +114,7 @@ the updated state to all connected WebSocket clients via `Hub.Broadcast()`, `Hub
 - `ListWinnersLog` uses `COUNT(*) OVER()` window function (single query for data + total).
 - SQLite connection pool allows 4 concurrent connections for WAL concurrent readers.
 
-**Schema versioning**: `store/migrate.go` uses `PRAGMA user_version` to track schema version (currently **10**).
+**Schema versioning**: `store/migrate.go` uses `PRAGMA user_version` to track schema version (currently **16**).
 On the hot path (version == current), zero migration queries execute. Migrations run
 incrementally only when the version is behind.
 
@@ -337,7 +337,7 @@ the built SPA so redeploys never wipe them (full guide in `deploy/README.md`):
 - **Player state is client-side**: stamp marks stored in `localStorage` keyed by `stamps_{cardId}_{gameId}`.
 - **Real-time updates**: WebSocket hub broadcasts game/card/pattern/style changes; separate player/admin channels.
 - **Draw delay**: admin can set 0–60s delay before players receive drawn number via WebSocket.
-- **Schema versioning**: `PRAGMA user_version` in SQLite tracks migration state; `schemaVersion` constant in `store/migrate.go` controls the target (currently 10).
+- **Schema versioning**: `PRAGMA user_version` in SQLite tracks migration state; `schemaVersion` constant in `store/migrate.go` controls the target (currently 16).
 - **Optimistic UI**: pattern/category reordering swaps locally before API call; reverts on failure.
 - **Lightweight endpoints**: `GET /api/cards` returns only IDs + player names (no board data); `GET /api/board?preview=1` returns only the card (no game state).
 - **Batch operations**: `GetCardPlayerNames()` fetches multiple cards in one query; `SaveCardsBatch()` uses transactions.

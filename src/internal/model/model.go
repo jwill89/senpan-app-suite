@@ -100,8 +100,8 @@ type Raffle struct {
 	MaxEntries         int     `json:"max_entries"`         // max entries per player
 	SignupInstructions string  `json:"signup_instructions"` // shown to player after signup
 	CostPerEntry       float64 `json:"cost_per_entry"`
-	AvailableFrom      string  `json:"available_from"` // ISO datetime string; empty = always open
-	AvailableTo        string  `json:"available_to"`   // ISO datetime string; empty = no end
+	AvailableFrom      string  `json:"available_from"` // UTC RFC-3339 datetime; empty = always open
+	AvailableTo        string  `json:"available_to"`   // UTC RFC-3339 datetime; empty = no end
 	PrizeImage         string  `json:"prize_image"`    // relative web path to uploaded image
 	Status             string  `json:"status"`         // "open" or "closed"
 	WinnerEntryID      *int64  `json:"winner_entry_id"`
@@ -157,13 +157,14 @@ type ReadingListSource struct {
 
 // BookClubEvent is a scheduled event post for a book club (e.g. a monthly
 // meeting or watch party). It is rendered as a Discord embed and posted
-// automatically to the club's events-channel webhook at PostAtUnix.
+// automatically to the club's events-channel webhook at PostAt.
 //
 // The admin enters wall-clock times (StartLocal/PostAtLocal) together with
 // their IANA Timezone, so the form can be edited later in the original local
-// time. The absolute instants (StartAtUnix/PostAtUnix, UTC seconds) are
-// computed server-side from those and drive scheduling plus Discord's
-// timezone-aware <t:…> timestamps (which each viewer sees in their own zone).
+// time. The absolute instants (StartAt/PostAt) are computed server-side from
+// those and stored as UTC RFC-3339 strings; they drive scheduling and are
+// converted to unix seconds only when emitting Discord's timezone-aware <t:…>
+// timestamps (which each viewer sees in their own zone).
 type BookClubEvent struct {
 	ID          int64  `json:"id"`
 	ClubSlug    string `json:"club_slug"`
@@ -175,8 +176,8 @@ type BookClubEvent struct {
 	Details     string `json:"details"`       // optional markdown, shown full-width above the image
 	Image       string `json:"image"`         // full URL, shown full-width in the embed
 	PostAtLocal string `json:"post_at_local"` // "2006-01-02T15:04" in Timezone
-	StartAtUnix int64  `json:"start_at_unix"` // computed UTC seconds
-	PostAtUnix  int64  `json:"post_at_unix"`  // computed UTC seconds
+	StartAt     string `json:"start_at"`      // computed absolute instant, UTC RFC-3339
+	PostAt      string `json:"post_at"`       // computed absolute instant, UTC RFC-3339
 	Posted      bool   `json:"posted"`        // whether it has been posted to Discord
 	PostedAt    string `json:"posted_at"`     // ISO timestamp it was posted (empty if not)
 	CreatedAt   string `json:"created_at"`

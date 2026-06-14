@@ -1155,7 +1155,13 @@ func (s *Store) ListRaffles(adminMode bool) ([]model.Raffle, error) {
 	if adminMode {
 		query = `SELECT id, title, description, rules, max_entries, signup_instructions, cost_per_entry, available_from, available_to, prize_image, status, winner_entry_id, created_at FROM raffles ORDER BY created_at DESC`
 	} else {
-		query = `SELECT id, title, description, rules, max_entries, signup_instructions, cost_per_entry, available_from, available_to, prize_image, status, winner_entry_id, created_at FROM raffles WHERE status = 'open' AND (available_from = '' OR REPLACE(available_from, 'T', ' ') <= datetime('now')) AND (available_to = '' OR REPLACE(available_to, 'T', ' ') >= datetime('now')) ORDER BY created_at DESC`
+		// Public list: only open raffles currently inside their availability
+		// window. Availability dates are stored as UTC (RFC-3339 with 'Z' for new
+		// values, legacy naive strings treated as UTC); datetime() normalizes both
+		// to a UTC timestamp so the comparison against datetime('now') (also UTC)
+		// is timezone-correct — a raffle past its "available to" instant no longer
+		// shows regardless of the admin's timezone.
+		query = `SELECT id, title, description, rules, max_entries, signup_instructions, cost_per_entry, available_from, available_to, prize_image, status, winner_entry_id, created_at FROM raffles WHERE status = 'open' AND (available_from = '' OR datetime(available_from) <= datetime('now')) AND (available_to = '' OR datetime(available_to) >= datetime('now')) ORDER BY created_at DESC`
 	}
 	rows, err := s.db.Query(query, args...)
 	if err != nil {

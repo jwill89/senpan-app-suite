@@ -425,6 +425,7 @@ h1 {
 
 /* Outer wrapper with gradient background and shadow */
 .board-wrap {
+    position: relative;
     background: linear-gradient(145deg, var(--board-gradient-start), var(--board-gradient-end));
     border-radius: 16px;
     padding: 18px;
@@ -432,19 +433,68 @@ h1 {
     display: inline-block
 }
 
+/* Decorative corner flourishes (player board). Sized as a fraction of the board
+   width so they scale with the cell size as the column resizes, and inset by a
+   small percentage so they tuck inside the wrapper's 16px rounded corners rather
+   than being clipped by them. Source art is oriented top-left; the other corners
+   mirror it. Tinted with the gold theme token at 50% opacity to match the
+   "last called" flourishes. Inline SVG (not a CSS mask) so html-to-image captures
+   them into the exported card with the same color + opacity. */
+.corner-flourish {
+    position: absolute;
+    width: 14%;
+    aspect-ratio: 1 / 1;
+    color: var(--gold);
+    opacity: .5;
+    pointer-events: none;
+    z-index: 2;
+}
+.corner-flourish .corner-flourish-svg {
+    display: block;
+    width: 100%;
+    height: 100%;
+    /* Set fill explicitly (in addition to the svg's fill="currentColor") so the
+       computed style — resolved to the gold color — is baked in when html-to-image
+       inlines styles for the export capture. */
+    fill: currentColor;
+}
+.corner-flourish--tl { top: 1.5%; left: 1.5%; }
+.corner-flourish--tr { top: 1.5%; right: 1.5%; transform: scaleX(-1); }
+.corner-flourish--bl { bottom: 1.5%; left: 1.5%; transform: scaleY(-1); }
+.corner-flourish--br { bottom: 1.5%; right: 1.5%; transform: scale(-1, -1); }
+
+
 /* In the player view the board fills its column (which itself can grow), with a
    minimum cell size enforced by the column's min-width. Cells become fluid
    squares (aspect-ratio) that stretch the 5 equal grid tracks instead of being
    pinned to a fixed 68px. Preview/admin boards keep the fixed-size cells. */
 .player-col-board .board-wrap {
     display: block;
-    width: 100%
+    width: 100%;
+    /* Give the corner flourishes a gutter so they frame the grid instead of
+       being drawn over the cells. The flourish's flower knot reaches ~19px in
+       from each corner and its edge lines hug the very edge; the top is already
+       cleared by the B-I-N-G-O header band, so only the bottom needs its own
+       gutter (vertical padding doesn't shrink the cells) plus a small horizontal
+       inset so the edge lines sit just outside the cells rather than over them. */
+    padding: 18px 20px 24px
 }
 
 .player-col-board .board-cell {
     width: auto;
     height: auto;
-    aspect-ratio: 1 / 1
+    aspect-ratio: 1 / 1;
+    /* Allow the cell to shrink below its text's intrinsic width so a narrow
+       column can't push the grid wider than its container (see board-grid). */
+    min-width: 0
+}
+
+/* minmax(0, 1fr) instead of 1fr: a plain 1fr track has min-width:auto, so the
+   cell's content (the larger player-board font, esp. "FREE") sets a floor that
+   forces the 5 tracks wider than the column on narrow viewports, overflowing the
+   card. The 0 floor lets the tracks shrink to fit the column. */
+.player-col-board .board-grid {
+    grid-template-columns: repeat(5, minmax(0, 1fr))
 }
 
 /* The player board fills its (wider) column, so scale the number + B-I-N-G-O
@@ -455,7 +505,7 @@ h1 {
 }
 
 .player-col-board .board-header span {
-    font-size: 2.5rem
+    font-size: 3.5rem
 }
 
 /* B-I-N-G-O column header labels */
@@ -2764,6 +2814,32 @@ kbd {
 .last-called .last-drawn {
     margin: 0;
 }
+/* Row holding the last-drawn number flanked by a decorative flourish on each
+   side. The flourishes flex to fill the empty space beside the number and stretch
+   to its height, so they scale with the column as it resizes. */
+.last-called-row {
+    display: flex;
+    align-items: stretch;
+    justify-content: center;
+    gap: 10px;
+    width: 100%;
+}
+/* The SVG is loaded as a mask so it can be tinted with the gold theme token
+   (matching the .last-drawn border) and recolored automatically per theme. */
+.last-called-flourish {
+    flex: 1 1 0;
+    min-width: 0;
+    max-width: 110px;
+    align-self: stretch;
+    opacity: .5;
+    background-color: var(--gold);
+    -webkit-mask: url('/images/called_flourish.svg') no-repeat center / contain;
+    mask: url('/images/called_flourish.svg') no-repeat center / contain;
+}
+/* Mirror the right-hand flourish so the pair frames the number symmetrically. */
+.last-called-flourish--right {
+    transform: scaleX(-1);
+}
 /* Pop each time a new number is announced (keyed by call_order in template). */
 .last-drawn--pop {
     animation: lastCalledPop .35s ease;
@@ -2839,9 +2915,23 @@ kbd {
         width: 100%;
     }
 
-    /* Scale board typography down with the (now smaller) cells. */
+    /* Scale board typography down with the (now smaller) cells. The player board
+       keeps its enlarged desktop type (1.95rem) at wide widths, but on a phone the
+       cells are far smaller, so bring the number/FREE type back down so it fits the
+       cell instead of forcing the grid wider than the card. */
     .board-header span {
         font-size: 1.3rem;
+    }
+    .player-col-board .board-cell {
+        font-size: 1.4rem;
+    }
+    .player-col-board .board-header span {
+        font-size: 1.95rem;
+    }
+    /* Tighter board gutters on a phone — the delicate flourishes don't need the
+       desktop gutter, and the extra width is better spent on the cells. */
+    .player-col-board .board-wrap {
+        padding: 14px 14px 18px;
     }
     .stamp-mark {
         font-size: 2rem;
@@ -2917,6 +3007,25 @@ kbd {
 
 .app-footer a:hover {
     text-decoration: underline;
+}
+
+/* Mobile-only "Install App" link — styled as a pill button to read as a clear
+   call-to-action (shown by usePwaInstall only on mobile when not yet installed). */
+.app-footer-install {
+    margin-top: 14px;
+}
+.app-footer-install a {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 9px 18px;
+    border: 1px solid var(--gold);
+    border-radius: 999px;
+    font-weight: 600;
+}
+.app-footer-install a:hover {
+    background: color-mix(in srgb, var(--gold) 12%, transparent);
+    text-decoration: none;
 }
 
 

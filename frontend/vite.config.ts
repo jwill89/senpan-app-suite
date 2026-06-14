@@ -1,5 +1,7 @@
 import { fileURLToPath, URL } from 'node:url'
 import { rm } from 'node:fs/promises'
+import { readFileSync } from 'node:fs'
+import { createHash } from 'node:crypto'
 import { defineConfig, type Plugin } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import { VitePWA } from 'vite-plugin-pwa'
@@ -21,6 +23,33 @@ function stripDistImages(): Plugin {
         recursive: true,
         force: true,
       })
+    },
+  }
+}
+
+// Social platforms (Discord, Twitter/X, Facebook…) aggressively cache an OG/
+// Twitter card image by URL, so a replaced share banner keeps showing the stale
+// one. This plugin appends a `?v=<hash>` cache-buster to the og:image/
+// twitter:image URLs in index.html (replacing the `__OG_VERSION__` placeholder),
+// derived from the SHA-256 of the actual share_banner.png. The query string
+// doesn't affect file serving (Apache ignores it), but a new hash is a new URL
+// to scrapers — so the card refreshes exactly when the image changes, and stays
+// stable (no needless re-scrapes) when it doesn't. Falls back to a build
+// timestamp if the file can't be read.
+function ogImageCacheBust(): Plugin {
+  let version = 'dev'
+  try {
+    const buf = readFileSync(
+      fileURLToPath(new URL('./public/images/share_banner.png', import.meta.url)),
+    )
+    version = createHash('sha256').update(buf).digest('hex').slice(0, 12)
+  } catch {
+    version = Date.now().toString(36)
+  }
+  return {
+    name: 'og-image-cache-bust',
+    transformIndexHtml(html) {
+      return html.replaceAll('__OG_VERSION__', version)
     },
   }
 }
@@ -59,9 +88,19 @@ export default defineConfig({
         start_url: '/',
         scope: '/',
         icons: [
-          { src: '/images/favicon.png', sizes: '192x192', type: 'image/png' },
-          { src: '/images/logo.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
-          { src: '/images/logo.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
+          // Generated as full-bleed resizes of the 512×512 favicon (see
+          // deploy/images + public/images). The favicon already has its own
+          // square, centered background (sage), so it doubles as the maskable
+          // icon — the solid bg fills the mask's margins while the logo stays
+          // centered (no extra padding/letter-boxing, no white-on-white).
+          { src: '/images/pwa-192x192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
+          { src: '/images/pwa-512x512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
+          {
+            src: '/images/pwa-maskable-512x512.png',
+            sizes: '512x512',
+            type: 'image/png',
+            purpose: 'maskable',
+          },
         ],
       },
       workbox: {
@@ -74,6 +113,7 @@ export default defineConfig({
       },
     }),
     stripDistImages(),
+    ogImageCacheBust(),
     // `npm run analyze` writes dist/stats.html with a treemap of bundle sizes.
     ...(process.env.ANALYZE
       ? [
@@ -139,8 +179,6 @@ export default defineConfig({
           ],
           fontawesome: [
             '@fortawesome/fontawesome-svg-core',
-            '@fortawesome/free-solid-svg-icons',
-            '@fortawesome/free-regular-svg-icons',
             '@fortawesome/free-brands-svg-icons',
           ],
           markdown: ['markdown-it'],

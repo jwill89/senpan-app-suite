@@ -210,6 +210,24 @@ func (s *Server) handleRafflesAction(w http.ResponseWriter, r *http.Request) {
 
 // ── Raffle entry (public sign-up) ───────────────────────────────────────────
 
+// parseRaffleTime parses a raffle availability timestamp into a UTC instant.
+// New values are stored as UTC RFC-3339 (e.g. "2026-06-13T20:00:00.000Z");
+// legacy values are naive "2006-01-02T15:04" strings, which we interpret as UTC
+// to stay consistent with the SQL availability filter. Returns the instant and
+// whether parsing succeeded (false for empty/unparseable input → no constraint).
+func parseRaffleTime(s string) (time.Time, bool) {
+	if s == "" {
+		return time.Time{}, false
+	}
+	if t, err := time.Parse(time.RFC3339, s); err == nil {
+		return t.UTC(), true
+	}
+	if t, err := time.Parse("2006-01-02T15:04", s); err == nil {
+		return t.UTC(), true
+	}
+	return time.Time{}, false
+}
+
 // raffleEntryRequest is the JSON body for POST /api/raffles/{id}/enter.
 type raffleEntryRequest struct {
 	CharacterName string `json:"character_name"`
@@ -262,21 +280,18 @@ func (s *Server) handleRaffleEnter(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Check availability dates
+	// Check availability dates. Stored timestamps are UTC (RFC-3339 with 'Z' for
+	// new values; legacy naive strings are interpreted as UTC), so we compare
+	// against the current UTC instant — timezone-correct regardless of where the
+	// raffle was created.
 	now := time.Now().UTC()
-	if raffle.AvailableFrom != "" {
-		from, err := time.Parse("2006-01-02T15:04", raffle.AvailableFrom)
-		if err == nil && now.Before(from) {
-			writeError(w, http.StatusBadRequest, "This raffle is not yet open for entries")
-			return
-		}
+	if from, ok := parseRaffleTime(raffle.AvailableFrom); ok && now.Before(from) {
+		writeError(w, http.StatusBadRequest, "This raffle is not yet open for entries")
+		return
 	}
-	if raffle.AvailableTo != "" {
-		to, err := time.Parse("2006-01-02T15:04", raffle.AvailableTo)
-		if err == nil && now.After(to) {
-			writeError(w, http.StatusBadRequest, "This raffle is no longer accepting entries")
-			return
-		}
+	if to, ok := parseRaffleTime(raffle.AvailableTo); ok && now.After(to) {
+		writeError(w, http.StatusBadRequest, "This raffle is no longer accepting entries")
+		return
 	}
 
 	// Check if character+world already has entries

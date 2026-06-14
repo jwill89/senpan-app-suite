@@ -11,6 +11,10 @@ things that live *alongside* the built SPA but are **not** part of `dist/`.
 ├── images/                    ← from deploy/images/    (PERSISTENT — never wiped on redeploy)
 │   ├── logo.png
 │   ├── favicon.png
+│   ├── apple-touch-icon.png   ← iOS home-screen icon (180×180)
+│   ├── pwa-192x192.png        ← PWA install icons (manifest)
+│   ├── pwa-512x512.png
+│   ├── pwa-maskable-512x512.png
 │   ├── share_banner.png
 │   └── raffles/               ← raffle prize uploads are written here by the Go server
 └── dist/                      ← from frontend/dist/    (the built Vue app; replace on each deploy)
@@ -120,6 +124,8 @@ One-time setup for the carrd host (same pattern as the font host):
   caching block in `.htaccess` deliberately exempts `sw.js`/`registerSW.js`/
   `*.webmanifest` from the 1-year immutable cache so the app can update; if you
   re-copy an older `.htaccess`, keep those exemptions or the service worker will
-  go stale. The PWA icons reference `/images/logo.png` + `/images/favicon.png`
-  from the persistent root `images/` folder.
+  go stale. The PWA icons (`pwa-192x192.png`, `pwa-512x512.png`,
+  `pwa-maskable-512x512.png`) and the iOS `apple-touch-icon.png` are served from
+  the persistent root `images/` folder — make sure they're present there (they
+  ship in `deploy/images/`).
 

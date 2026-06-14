@@ -13,6 +13,7 @@ import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
 import MarkdownEditor from '@/components/common/MarkdownEditor.vue'
 import { useMarkdown } from '@/lib/markdown'
 import { DRAW_DELAY_OPTIONS } from '@/lib/constants'
+import { parseServerTimestamp } from '@/lib/datetime'
 import { primeAudio, playWinnerChime } from '@/lib/sound'
 import { useGameStore } from '@/stores/game'
 import { useCardsStore } from '@/stores/cards'
@@ -50,18 +51,10 @@ function applyPreset(): void {
 const now = ref(Date.now())
 let clockTimer: ReturnType<typeof setInterval> | null = null
 
-/** Parses a SQLite "YYYY-MM-DD HH:MM:SS" (UTC) or ISO timestamp to epoch ms. */
-function parseUtc(ts: string): number {
-  if (!ts) return NaN
-  // Already has a timezone designator (Z or ±HH:MM) → parse as-is.
-  if (/[zZ]|[+-]\d{2}:?\d{2}$/.test(ts)) return new Date(ts).getTime()
-  // SQLite CURRENT_TIMESTAMP form: treat the space-separated value as UTC.
-  return new Date(ts.replace(' ', 'T') + 'Z').getTime()
-}
 
 /** Live elapsed-time string (H:MM:SS / MM:SS) since the game started. */
 const elapsedTime = computed(() => {
-  const start = game.currentGame ? parseUtc(game.currentGame.created_at) : NaN
+  const start = game.currentGame ? parseServerTimestamp(game.currentGame.created_at) : NaN
   if (!Number.isFinite(start)) return ''
   const secs = Math.max(0, Math.floor((now.value - start) / 1000))
   const h = Math.floor(secs / 3600)

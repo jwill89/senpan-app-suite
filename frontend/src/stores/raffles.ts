@@ -5,6 +5,7 @@
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 import { endpoints } from '@/lib/endpoints'
+import { utcToDatetimeLocal, datetimeLocalToUtc } from '@/lib/datetime'
 import type { Raffle, RaffleEnterResponse, RaffleEntry, RaffleForm } from '@/types/api'
 import { useUiStore } from './ui'
 
@@ -162,7 +163,14 @@ export const useRafflesStore = defineStore('raffles', () => {
   }
 
   function editRaffleForm(raffle: Raffle): void {
-    raffleForm.value = { ...raffle } as unknown as RaffleForm
+    // Availability dates are stored as UTC; convert to local time so the
+    // datetime-local inputs show the correct wall-clock for *this* admin's
+    // timezone (a window set by an admin in another zone reads correctly).
+    raffleForm.value = {
+      ...(raffle as unknown as RaffleForm),
+      available_from: utcToDatetimeLocal(raffle.available_from),
+      available_to: utcToDatetimeLocal(raffle.available_to),
+    }
   }
 
   function cancelRaffleForm(): void {
@@ -179,11 +187,18 @@ export const useRafflesStore = defineStore('raffles', () => {
     }
     savingRaffle.value = true
     try {
+      // The form holds local datetime-local values; convert the availability
+      // window to UTC so the stored instant is timezone-unambiguous.
+      const payload = {
+        ...f,
+        available_from: datetimeLocalToUtc(f.available_from),
+        available_to: datetimeLocalToUtc(f.available_to),
+      }
       if (f.id) {
-        await endpoints.raffles.update({ ...f })
+        await endpoints.raffles.update(payload)
         ui.notify('Raffle updated', 'success')
       } else {
-        await endpoints.raffles.create({ ...f })
+        await endpoints.raffles.create(payload)
         ui.notify('Raffle created', 'success')
       }
       raffleForm.value = null

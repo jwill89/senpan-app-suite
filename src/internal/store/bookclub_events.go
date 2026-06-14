@@ -3,19 +3,20 @@ package store
 import (
 	"database/sql"
 	"errors"
+	"time"
 
 	"app-suite/internal/model"
 )
 
 // ── Book club events ────────────────────────────────────────────────────────
 //
-// Scheduled event posts for a book club. The absolute instants
-// (start_at_unix / post_at_unix) are computed by the server layer from the
-// admin's wall-clock input + IANA timezone before being persisted here.
+// Scheduled event posts for a book club. The absolute instants (start_at /
+// post_at) are computed by the server layer from the admin's wall-clock input +
+// IANA timezone and stored as UTC RFC-3339 strings before being persisted here.
 
 // eventColumns is the shared SELECT column list for book_club_events.
 const eventColumns = `id, club_slug, title, start_local, timezone, length_hours, location, details, image,
-	post_at_local, start_at_unix, post_at_unix, posted, posted_at, created_at`
+	post_at_local, start_at, post_at, posted, posted_at, created_at`
 
 // scanEvent scans one book_club_events row (in eventColumns order) into a model.
 func scanEvent(sc interface{ Scan(...any) error }) (model.BookClubEvent, error) {
@@ -23,8 +24,8 @@ func scanEvent(sc interface{ Scan(...any) error }) (model.BookClubEvent, error) 
 	var posted int
 	var postedAt sql.NullString
 	err := sc.Scan(&ev.ID, &ev.ClubSlug, &ev.Title, &ev.StartLocal, &ev.Timezone,
-		&ev.LengthHours, &ev.Location, &ev.Details, &ev.Image, &ev.PostAtLocal, &ev.StartAtUnix,
-		&ev.PostAtUnix, &posted, &postedAt, &ev.CreatedAt)
+		&ev.LengthHours, &ev.Location, &ev.Details, &ev.Image, &ev.PostAtLocal, &ev.StartAt,
+		&ev.PostAt, &posted, &postedAt, &ev.CreatedAt)
 	if err != nil {
 		return ev, err
 	}
@@ -39,7 +40,7 @@ func scanEvent(sc interface{ Scan(...any) error }) (model.BookClubEvent, error) 
 func (s *Store) ListBookClubEvents(clubSlug string) ([]model.BookClubEvent, error) {
 	rows, err := s.db.Query(
 		`SELECT `+eventColumns+` FROM book_club_events WHERE club_slug = ?
-		   ORDER BY start_at_unix ASC, id ASC`,
+		   ORDER BY start_at ASC, id ASC`,
 		clubSlug,
 	)
 	if err != nil {
@@ -76,10 +77,10 @@ func (s *Store) CreateBookClubEvent(ev *model.BookClubEvent) (int64, error) {
 	res, err := s.db.Exec(
 		`INSERT INTO book_club_events
 			(club_slug, title, start_local, timezone, length_hours, location, details, image,
-			 post_at_local, start_at_unix, post_at_unix)
+			 post_at_local, start_at, post_at)
 		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		ev.ClubSlug, ev.Title, ev.StartLocal, ev.Timezone, ev.LengthHours, ev.Location,
-		ev.Details, ev.Image, ev.PostAtLocal, ev.StartAtUnix, ev.PostAtUnix,
+		ev.Details, ev.Image, ev.PostAtLocal, ev.StartAt, ev.PostAt,
 	)
 	if err != nil {
 		return 0, err
@@ -93,10 +94,10 @@ func (s *Store) CreateBookClubEvent(ev *model.BookClubEvent) (int64, error) {
 func (s *Store) UpdateBookClubEvent(ev *model.BookClubEvent) error {
 	_, err := s.db.Exec(
 		`UPDATE book_club_events SET title = ?, start_local = ?, timezone = ?, length_hours = ?,
-			location = ?, details = ?, image = ?, post_at_local = ?, start_at_unix = ?, post_at_unix = ?
+			location = ?, details = ?, image = ?, post_at_local = ?, start_at = ?, post_at = ?
 		 WHERE id = ?`,
 		ev.Title, ev.StartLocal, ev.Timezone, ev.LengthHours, ev.Location, ev.Details, ev.Image,
-		ev.PostAtLocal, ev.StartAtUnix, ev.PostAtUnix, ev.ID,
+		ev.PostAtLocal, ev.StartAt, ev.PostAt, ev.ID,
 	)
 	return err
 }
@@ -112,13 +113,14 @@ func (s *Store) DeleteBookClubEvent(id int64) (bool, error) {
 }
 
 // DueBookClubEvents returns unposted events whose post time has arrived
-// (0 < post_at_unix <= nowUnix), soonest first — the scheduler's work queue.
-func (s *Store) DueBookClubEvents(nowUnix int64) ([]model.BookClubEvent, error) {
+// (post_at set and at/before now), soonest first — the scheduler's work queue.
+// post_at is a UTC RFC-3339 string; datetime() normalizes it for the comparison.
+func (s *Store) DueBookClubEvents(now time.Time) ([]model.BookClubEvent, error) {
 	rows, err := s.db.Query(
 		`SELECT `+eventColumns+` FROM book_club_events
-		   WHERE posted = 0 AND post_at_unix > 0 AND post_at_unix <= ?
-		   ORDER BY post_at_unix ASC, id ASC`,
-		nowUnix,
+		   WHERE posted = 0 AND post_at != '' AND datetime(post_at) <= datetime(?)
+		   ORDER BY post_at ASC, id ASC`,
+		now.UTC().Format(time.RFC3339),
 	)
 	if err != nil {
 		return nil, err

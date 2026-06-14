@@ -11,9 +11,10 @@ import (
 	"time"
 )
 
-// expectedUnix resolves a wall-clock string in an IANA zone to UTC seconds,
-// mirroring the server so tests don't hard-code offsets (DST-safe).
-func expectedUnix(t *testing.T, local, tz string) int64 {
+// expectedRFC3339 resolves a wall-clock string in an IANA zone to the UTC
+// RFC-3339 string the server stores, mirroring it so tests don't hard-code
+// offsets (DST-safe).
+func expectedRFC3339(t *testing.T, local, tz string) string {
 	t.Helper()
 	loc, err := time.LoadLocation(tz)
 	if err != nil {
@@ -23,7 +24,7 @@ func expectedUnix(t *testing.T, local, tz string) int64 {
 	if err != nil {
 		t.Fatalf("parse %q: %v", local, err)
 	}
-	return tm.Unix()
+	return tm.UTC().Format(time.RFC3339)
 }
 
 func createEvent(t *testing.T, e *testEnv, ev map[string]any) map[string]any {
@@ -68,11 +69,11 @@ func TestBookClubEventResolvesTimesAndCRUD(t *testing.T) {
 	})
 
 	// Server resolved the wall-clock + tz into the correct absolute instants.
-	if got := int64(out["start_at_unix"].(float64)); got != expectedUnix(t, start, tz) {
-		t.Errorf("start_at_unix = %d; want %d", got, expectedUnix(t, start, tz))
+	if got, _ := out["start_at"].(string); got != expectedRFC3339(t, start, tz) {
+		t.Errorf("start_at = %q; want %q", got, expectedRFC3339(t, start, tz))
 	}
-	if got := int64(out["post_at_unix"].(float64)); got != expectedUnix(t, postAt, tz) {
-		t.Errorf("post_at_unix = %d; want %d", got, expectedUnix(t, postAt, tz))
+	if got, _ := out["post_at"].(string); got != expectedRFC3339(t, postAt, tz) {
+		t.Errorf("post_at = %q; want %q", got, expectedRFC3339(t, postAt, tz))
 	}
 	if out["posted"].(bool) {
 		t.Errorf("new event should not be posted")

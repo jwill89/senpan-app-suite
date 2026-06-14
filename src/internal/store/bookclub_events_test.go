@@ -2,6 +2,7 @@ package store_test
 
 import (
 	"testing"
+	"time"
 
 	"app-suite/internal/model"
 )
@@ -18,8 +19,8 @@ func TestBookClubEventCRUD(t *testing.T) {
 		Location:    "VC #1",
 		Image:       "https://example.com/a.png",
 		PostAtLocal: "2026-08-15T09:00",
-		StartAtUnix: 1_780_000_000,
-		PostAtUnix:  1_779_000_000,
+		StartAt:     "2026-08-20T23:00:00Z",
+		PostAt:      "2026-08-15T13:00:00Z",
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -35,8 +36,8 @@ func TestBookClubEventCRUD(t *testing.T) {
 	if got.Title != "August Meeting" || got.LengthHours != 2 || got.Timezone != "America/New_York" {
 		t.Fatalf("event mismatch: %+v", got)
 	}
-	if got.StartAtUnix != 1_780_000_000 || got.PostAtUnix != 1_779_000_000 {
-		t.Fatalf("unix fields not persisted: %+v", got)
+	if got.StartAt != "2026-08-20T23:00:00Z" || got.PostAt != "2026-08-15T13:00:00Z" {
+		t.Fatalf("RFC-3339 instants not persisted: %+v", got)
 	}
 	if got.Posted {
 		t.Fatalf("new event should not be posted")
@@ -73,14 +74,17 @@ func TestDueBookClubEventsAndMarkPosted(t *testing.T) {
 
 	// Due (post time in the past), pending.
 	dueID, _ := s.CreateBookClubEvent(&model.BookClubEvent{
-		ClubSlug: "yaoi", Title: "Due", LengthHours: 1, PostAtUnix: 1000, StartAtUnix: 2000,
+		ClubSlug: "yaoi", Title: "Due", LengthHours: 1,
+		PostAt: "2020-01-01T00:00:00Z", StartAt: "2020-01-01T01:00:00Z",
 	})
 	// Future post time → not due.
 	s.CreateBookClubEvent(&model.BookClubEvent{
-		ClubSlug: "yaoi", Title: "Future", LengthHours: 1, PostAtUnix: 9_000_000_000, StartAtUnix: 9_000_100_000,
+		ClubSlug: "yaoi", Title: "Future", LengthHours: 1,
+		PostAt: "2099-01-01T00:00:00Z", StartAt: "2099-01-01T01:00:00Z",
 	})
 
-	due, err := s.DueBookClubEvents(5000)
+	now := time.Date(2021, 1, 1, 0, 0, 0, 0, time.UTC)
+	due, err := s.DueBookClubEvents(now)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -96,7 +100,7 @@ func TestDueBookClubEventsAndMarkPosted(t *testing.T) {
 	if !posted.Posted || posted.PostedAt == "" {
 		t.Fatalf("event not marked posted: %+v", posted)
 	}
-	due, _ = s.DueBookClubEvents(5000)
+	due, _ = s.DueBookClubEvents(now)
 	if len(due) != 0 {
 		t.Fatalf("DueBookClubEvents after mark = %d; want 0", len(due))
 	}

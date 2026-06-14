@@ -46,3 +46,8 @@ Thumbs.db
 /deploy/images/pwa-192x192.png
 /deploy/images/pwa-512x512.png
 /deploy/images/pwa-maskable-512x512.png
+/frontend/public/images/apple-touch-icon.png
+/frontend/public/images/corner_flourish.svg
+/frontend/public/images/pwa-192x192.png
+/frontend/public/images/pwa-512x512.png
+/frontend/public/images/pwa-maskable-512x512.png

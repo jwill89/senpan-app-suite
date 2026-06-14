@@ -12,6 +12,7 @@ import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 import { endpoints } from '@/lib/endpoints'
 import { BOOK_CLUBS, detectTimezone } from '@/lib/constants'
+import { createFreshness } from '@/lib/freshness'
 import type {
   BookClubEvent,
   BookClubEventForm,
@@ -70,6 +71,11 @@ export const useBookclubStore = defineStore('bookclub', () => {
   /** Label for the per-item curator comments field (e.g. "Yao's Comments"). */
   const commentsLabel = computed(() => activeClub.value.commentsLabel)
 
+  // Per-club freshness so re-entering a club tab keeps its open list / sub-view
+  // and skips a redundant refetch within the TTL. Keyed `<slug>:lists` and
+  // `<slug>:events`. Mutations call the loaders directly, so edits still refresh.
+  const clubFresh = createFreshness(30_000)
+
   // Which sub-view of the club tab is showing: reading lists or event posts.
   const view = ref<BookClubView>('lists')
 
@@ -101,21 +107,36 @@ export const useBookclubStore = defineStore('bookclub', () => {
 
   // ── Lists ────────────────────────────────────────────────────────────────
 
-  /** Switch to a club (called when its tab is entered) and load its lists. */
+  /**
+   * Switch to a club (called when its tab is entered) and load its lists.
+   *
+   * Re-entering the *same* club within the freshness TTL keeps the open list and
+   * sub-view and skips the refetch (snappy revisit). Switching to a *different*
+   * club resets the per-club selection/form, refetches its lists, and forces the
+   * next events-view open to reload (the events list is club-specific).
+   */
   function openClub(slug: string): void {
+    const switching = slug !== activeClubSlug.value
     activeClubSlug.value = slug
-    view.value = 'lists'
-    closeList()
-    lists.value = []
-    events.value = []
-    resetEventForm()
-    loadLists()
+    if (switching) {
+      view.value = 'lists'
+      closeList()
+      resetEventForm()
+      clubFresh.invalidate(`${slug}:events`)
+    }
+    // loadLists() overwrites lists.value (its spinner covers the swap), so we
+    // don't pre-clear; a different club is always stale, a quick re-entry isn't.
+    if (switching || clubFresh.isStale(`${slug}:lists`)) {
+      clubFresh.touch(`${slug}:lists`)
+      loadLists()
+    }
   }
 
-  /** Switch sub-view; lazily loads events the first time the events view opens. */
+  /** Switch sub-view; lazily (re)loads events the first time per club within the TTL. */
   function setView(next: BookClubView): void {
     view.value = next
-    if (next === 'events' && events.value.length === 0) {
+    if (next === 'events' && clubFresh.isStale(`${activeClubSlug.value}:events`)) {
+      clubFresh.touch(`${activeClubSlug.value}:events`)
       loadEvents()
       loadEventImages()
     }

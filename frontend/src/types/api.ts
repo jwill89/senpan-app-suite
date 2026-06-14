@@ -355,6 +355,8 @@ export interface AnnouncementForm {
   title: string
   details: string
   image: string
+  /** Embed accent colour as "#rrggbb" (empty falls back to the brand default). */
+  color: string
   start_local: string
   end_local: string
   schedule_kind: ScheduleKind

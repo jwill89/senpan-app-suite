@@ -5,9 +5,33 @@
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 import { endpoints } from '@/lib/endpoints'
-import { utcToDatetimeLocal, datetimeLocalToUtc } from '@/lib/datetime'
+import { utcToDatetimeLocal, datetimeLocalToUtc, parseServerTimestamp } from '@/lib/datetime'
 import type { Raffle, RaffleEnterResponse, RaffleEntry, RaffleForm } from '@/types/api'
 import { useUiStore } from './ui'
+
+/**
+ * Whether a raffle is enterable by the public right now: it must be `open` and
+ * inside its availability window — past `available_from` (if set) and before
+ * `available_to` (if set). This mirrors the backend's public list query
+ * (store.ListRaffles, non-admin) so the two never disagree.
+ *
+ * The public `GET /api/raffles` already applies the same window for normal
+ * visitors, so this is a second line of defence for the two cases the list
+ * query can't cover: a raffle reached by a direct link to its detail page
+ * (GetRaffle ignores the window), and an admin browsing the public pages (the
+ * list endpoint returns every raffle in admin mode). A raffle keeps its `open`
+ * status outside its window, so checking `status` alone is not enough. (Admin
+ * tabs intentionally do not use this — admins manage out-of-window raffles.)
+ */
+export function isRaffleEnterable(r: Raffle): boolean {
+  if (r.status !== 'open') return false
+  const now = Date.now()
+  const startsAt = parseServerTimestamp(r.available_from)
+  if (!Number.isNaN(startsAt) && startsAt > now) return false // not yet open
+  const endsAt = parseServerTimestamp(r.available_to)
+  if (!Number.isNaN(endsAt) && endsAt <= now) return false // already ended
+  return true
+}
 
 export const useRafflesStore = defineStore('raffles', () => {
   const ui = useUiStore()
@@ -44,6 +68,11 @@ export const useRafflesStore = defineStore('raffles', () => {
   const openRaffles = computed(() => raffles.value.filter((r) => r.status === 'open'))
   const closedRaffles = computed(() => raffles.value.filter((r) => r.status === 'closed'))
 
+  /** Public: is the currently-viewed raffle still enterable (open + not ended)? */
+  const selectedRaffleEnterable = computed(
+    () => selectedRaffle.value !== null && isRaffleEnterable(selectedRaffle.value),
+  )
+
   // ── Load ─────────────────────────────────────────────────────────────────
 
   async function loadRaffles(): Promise<void> {
@@ -62,7 +91,7 @@ export const useRafflesStore = defineStore('raffles', () => {
   async function loadHomeRaffles(): Promise<void> {
     try {
       const data = await endpoints.raffles.list()
-      homeRaffles.value = (data.raffles || []).filter((r) => r.status === 'open')
+      homeRaffles.value = (data.raffles || []).filter(isRaffleEnterable)
     } catch {
       /* silent */
     }
@@ -419,6 +448,7 @@ export const useRafflesStore = defineStore('raffles', () => {
     pickingWinner,
     openRaffles,
     closedRaffles,
+    selectedRaffleEnterable,
     loadRaffles,
     loadHomeRaffles,
     loadRaffleDetail,

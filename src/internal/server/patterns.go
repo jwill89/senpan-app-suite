@@ -54,7 +54,11 @@ func (s *Server) handlePatternsAction(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	req, _ := readJSON[patternRequest](r)
+	req, err := readJSON[patternRequest](r)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "Invalid JSON")
+		return
+	}
 
 	switch req.Action {
 	case "create":
@@ -228,7 +232,11 @@ func (s *Server) handleCategoriesAction(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	req, _ := readJSON[categoryRequest](r)
+	req, err := readJSON[categoryRequest](r)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "Invalid JSON")
+		return
+	}
 
 	switch req.Action {
 	case "create":

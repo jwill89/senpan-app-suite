@@ -1,8 +1,6 @@
 package server
 
 import (
-	"io"
-	"mime/multipart"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -273,7 +271,7 @@ func (s *Server) handleFontUpload(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 
-		if err := saveUploadedFont(header, dst); err != nil {
+		if err := saveMultipartFile(header, dst); err != nil {
 			skipped = append(skipped, skipEntry{Name: name, Reason: "Failed to save"})
 			continue
 		}
@@ -284,24 +282,4 @@ func (s *Server) handleFontUpload(w http.ResponseWriter, r *http.Request) {
 		"uploaded": uploaded,
 		"skipped":  skipped,
 	})
-}
-
-// saveUploadedFont streams a single multipart file part to dst.
-func saveUploadedFont(header *multipart.FileHeader, dst string) error {
-	src, err := header.Open()
-	if err != nil {
-		return err
-	}
-	defer src.Close()
-
-	out, err := os.Create(dst)
-	if err != nil {
-		return err
-	}
-	defer out.Close()
-
-	if _, err := io.Copy(out, src); err != nil {
-		return err
-	}
-	return nil
 }

@@ -3,12 +3,10 @@ package server
 import (
 	"context"
 	"fmt"
-	"io"
 	"log/slog"
 	"net/http"
 	"os"
 	"path/filepath"
-	"sort"
 	"strings"
 	"time"
 
@@ -226,7 +224,7 @@ func parseLocalInZone(value string, loc *time.Location) (time.Time, error) {
 
 // eventImageDir is the upload directory for event images under the web root.
 func (s *Server) eventImageDir() string {
-	return filepath.Join(s.webRoot, "images", "bookclub", "events")
+	return filepath.Join(s.webRoot, filepath.FromSlash(eventImageRelDir))
 }
 
 // handleBookClubEventUpload stores a multipart event image under
@@ -239,41 +237,7 @@ func (s *Server) handleBookClubEventUpload(w http.ResponseWriter, r *http.Reques
 	if !s.requireAdmin(w, r) {
 		return
 	}
-	r.Body = http.MaxBytesReader(w, r.Body, 5<<20) // 5 MB
-
-	file, header, err := r.FormFile("image")
-	if err != nil {
-		writeError(w, http.StatusBadRequest, "Image upload failed (max 5MB)")
-		return
-	}
-	defer file.Close()
-
-	ext := strings.ToLower(filepath.Ext(header.Filename))
-	if !isAllowedImageExt(ext) {
-		writeError(w, http.StatusBadRequest, "Only jpg, png, webp, and gif images are allowed")
-		return
-	}
-
-	if err := os.MkdirAll(s.eventImageDir(), 0755); err != nil {
-		writeError(w, http.StatusInternalServerError, "Failed to create upload directory")
-		return
-	}
-	filename := fmt.Sprintf("event_%d%s", time.Now().UnixNano(), ext)
-	destPath := filepath.Join(s.eventImageDir(), filename)
-
-	dst, err := os.Create(destPath)
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, "Failed to save image")
-		return
-	}
-	defer dst.Close()
-	if _, err := io.Copy(dst, file); err != nil {
-		writeError(w, http.StatusInternalServerError, "Failed to save image")
-		return
-	}
-
-	fullURL := s.siteBaseURL(r) + "/images/bookclub/events/" + filename
-	writeJSON(w, http.StatusOK, map[string]any{"url": fullURL})
+	s.saveSingleImageUpload(w, r, eventImageRelDir, "event")
 }
 
 // handleBookClubEventImages lists existing event images (newest first) as full
@@ -286,36 +250,7 @@ func (s *Server) handleBookClubEventImages(w http.ResponseWriter, r *http.Reques
 	if !s.requireAdmin(w, r) {
 		return
 	}
-	entries, err := os.ReadDir(s.eventImageDir())
-	if err != nil {
-		// Directory may not exist until the first upload — that's fine.
-		writeJSON(w, http.StatusOK, map[string]any{"images": []string{}})
-		return
-	}
-
-	type imgInfo struct {
-		name string
-		mod  time.Time
-	}
-	infos := make([]imgInfo, 0, len(entries))
-	for _, e := range entries {
-		if e.IsDir() || !isAllowedImageExt(strings.ToLower(filepath.Ext(e.Name()))) {
-			continue
-		}
-		fi, err := e.Info()
-		if err != nil {
-			continue
-		}
-		infos = append(infos, imgInfo{name: e.Name(), mod: fi.ModTime()})
-	}
-	sort.Slice(infos, func(i, j int) bool { return infos[i].mod.After(infos[j].mod) })
-
-	base := s.siteBaseURL(r) + "/images/bookclub/events/"
-	images := make([]string, 0, len(infos))
-	for _, info := range infos {
-		images = append(images, base+info.name)
-	}
-	writeJSON(w, http.StatusOK, map[string]any{"images": images})
+	writeJSON(w, http.StatusOK, map[string]any{"images": s.listUploadedImageURLs(r, eventImageRelDir)})
 }
 
 // removeUploadedEventImageIfUnused deletes an uploaded event image, but only
@@ -370,10 +305,6 @@ func isAllowedImageExt(ext string) bool {
 // The date, location, and optional markdown details all render full-width in
 // the description; the associated image is shown full-width at the bottom.
 func buildEventEmbed(ev model.BookClubEvent) discordEmbed {
-	embed := discordEmbed{
-		Title: truncateRunes(ev.Title, 256),
-		Color: 0xE53170, // accent pink
-	}
 	var b strings.Builder
 	// Convert the stored UTC RFC-3339 start instant to unix seconds for Discord's
 	// <t:…> timestamp tokens (which each viewer sees rendered in their own zone).
@@ -398,12 +329,12 @@ func buildEventEmbed(ev model.BookClubEvent) discordEmbed {
 		}
 		b.WriteString(details)
 	}
-	embed.Description = truncateRunes(b.String(), 4096)
-	if isHTTPURL(ev.Image) {
-		embed.Image = &discordEmbedImage{URL: ev.Image}
-	}
-	embed.Footer = &discordEmbedFooter{Text: "These dates are in your local time zone."}
-	return embed
+	return newEmbed().
+		title(ev.Title).
+		description(b.String()).
+		image(ev.Image).
+		footer("These dates are in your local time zone.").
+		build()
 }
 
 // ── Scheduler ───────────────────────────────────────────────────────────────
@@ -412,17 +343,7 @@ func buildEventEmbed(ev model.BookClubEvent) discordEmbed {
 // webhook on a fixed interval until ctx is cancelled. Safe to call in a
 // goroutine; it returns when ctx is done.
 func (s *Server) RunEventScheduler(ctx context.Context) {
-	ticker := time.NewTicker(eventSchedulerInterval)
-	defer ticker.Stop()
-	s.postDueEvents() // sweep immediately on startup (catch up after downtime)
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-ticker.C:
-			s.postDueEvents()
-		}
-	}
+	runScheduler(ctx, eventSchedulerInterval, s.postDueEvents)
 }
 
 // postDueEvents posts every event whose scheduled time has arrived. An event

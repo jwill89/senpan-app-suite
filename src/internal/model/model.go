@@ -227,6 +227,7 @@ type Announcement struct {
 	Title      string `json:"title"`
 	Details    string `json:"details"`     // markdown
 	Image      string `json:"image"`       // full URL, shown full-width in the embed
+	Color      string `json:"color"`       // embed accent colour, "#rrggbb" ("" = brand default)
 	StartLocal string `json:"start_local"` // optional event start, wall-clock "2006-01-02T15:04" in Timezone
 	EndLocal   string `json:"end_local"`   // optional event end, wall-clock in Timezone
 	StartAt    string `json:"start_at"`    // computed event start, UTC RFC-3339

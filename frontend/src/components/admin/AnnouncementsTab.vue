@@ -155,6 +155,14 @@ async function submitType(): Promise<void> {
             aria-label="Search announcements"
           />
         </span>
+        <select
+          v-model.number="store.typeFilter"
+          class="ann-cat-filter"
+          aria-label="Filter by category"
+        >
+          <option :value="0">All categories</option>
+          <option v-for="t in store.types" :key="t.id" :value="t.id">{{ t.name }}</option>
+        </select>
       </div>
 
       <LoadingSpinner
@@ -165,6 +173,7 @@ async function submitType(): Promise<void> {
       <template v-else>
         <div v-if="store.filteredAnnouncements.length" class="ann-list">
           <div v-for="a in store.filteredAnnouncements" :key="a.id" class="ann-card">
+            <span class="ann-swatch" :style="{ background: a.color || '#e53170' }" aria-hidden="true"></span>
             <img v-if="a.image" :src="a.image" class="ann-cover" alt="Announcement image" />
             <div v-else class="ann-cover ann-img-empty"><i class="fa-duotone fa-image"></i></div>
 
@@ -179,7 +188,7 @@ async function submitType(): Promise<void> {
                 <span v-if="a.end_at">– {{ inZone(a.end_at, a.timezone) }}</span>
                 <span v-if="a.timezone" class="text-dim">({{ a.timezone }})</span>
               </p>
-              <p class="text-sm">
+              <p class="text-sm ann-meta">
                 <span v-if="a.schedule_kind" class="ann-badge ann-badge-sched">
                   {{ scheduleLabel(a) }}
                   <template v-if="a.next_post_at">
@@ -195,33 +204,38 @@ async function submitType(): Promise<void> {
               <button
                 class="btn-primary btn-sm"
                 :disabled="store.sendingId === a.id"
-                aria-label="Send now"
-                title="Send now"
+                title="Post to Discord now"
                 @click="store.sendNow(a)"
               >
                 <LoadingSpinner v-if="store.sendingId === a.id" label="Sending…" />
-                <template v-else><i class="fa-solid fa-paper-plane"></i></template>
+                <template v-else><i class="fa-solid fa-paper-plane"></i> Send now</template>
               </button>
               <button
                 v-if="a.schedule_kind && a.next_post_at"
                 class="btn-secondary btn-sm"
                 :disabled="store.skippingId === a.id || a.skip_next"
-                aria-label="Skip next occurrence"
-                title="Skip next occurrence"
+                title="Skip the next scheduled occurrence"
                 @click="store.skipNext(a)"
               >
-                <i class="fa-solid fa-forward-step"></i>
+                <i class="fa-solid fa-forward-step"></i> Skip next
               </button>
-              <button class="btn-secondary btn-sm" aria-label="Edit" @click="openEdit(a)">
+              <button class="btn-secondary btn-sm" aria-label="Edit" title="Edit" @click="openEdit(a)">
                 <i class="fa-solid fa-pen-to-square"></i>
               </button>
-              <button class="btn-danger btn-sm" aria-label="Delete" @click="store.deleteAnnouncement(a)">
+              <button
+                class="btn-danger btn-sm"
+                aria-label="Delete"
+                title="Delete"
+                @click="store.deleteAnnouncement(a)"
+              >
                 <i class="fa-solid fa-trash"></i>
               </button>
             </div>
           </div>
         </div>
-        <p v-else-if="store.search" class="no-game-msg">No announcements match your search.</p>
+        <p v-else-if="store.search || store.typeFilter" class="no-game-msg">
+          No announcements match your filters.
+        </p>
         <p v-else class="no-game-msg">No announcements yet. Create one with “New Announcement”.</p>
       </template>
     </div>
@@ -255,14 +269,37 @@ async function submitType(): Promise<void> {
         </div>
       </div>
 
-      <div class="field mb-10">
-        <label class="field-label">Timezone *</label>
-        <select v-model="store.form.timezone" class="field-input-full" aria-label="Timezone">
-          <option v-for="tz in timezones" :key="tz" :value="tz">{{ tz }}</option>
-        </select>
-        <small class="text-dim">
-          Anchors every time below (event window + schedule); times stay put across DST.
-        </small>
+      <div class="flex-row mb-10" style="align-items: flex-start">
+        <div class="field" style="flex: 1 1 auto; min-width: 200px">
+          <label class="field-label">Timezone *</label>
+          <select v-model="store.form.timezone" class="field-input-full" aria-label="Timezone">
+            <option v-for="tz in timezones" :key="tz" :value="tz">{{ tz }}</option>
+          </select>
+          <small class="text-dim">
+            Anchors every time (event window + schedule); times stay put across DST.
+          </small>
+        </div>
+        <div class="field" style="flex: 0 0 auto">
+          <label class="field-label">Embed color</label>
+          <div class="ann-color-row">
+            <input
+              v-model="store.form.color"
+              type="color"
+              class="ann-color-input"
+              aria-label="Embed accent color"
+            />
+            <code class="ann-color-hex">{{ store.form.color }}</code>
+            <button
+              type="button"
+              class="btn-ghost btn-sm"
+              :disabled="store.form.color === '#e53170'"
+              @click="store.form.color = '#e53170'"
+            >
+              Reset
+            </button>
+          </div>
+          <small class="text-dim">Accent stripe on the embed's left edge.</small>
+        </div>
       </div>
 
       <div class="flex-row mb-10">
@@ -338,6 +375,12 @@ async function submitType(): Promise<void> {
           </div>
         </div>
       </div>
+
+      <!-- Scheduling: when (if ever) this announcement auto-posts to Discord -->
+      <hr class="ann-divider" />
+      <h4 class="raffle-section-heading">
+        <i class="fa-duotone fa-clock"></i> Scheduling
+      </h4>
 
       <!-- Schedule builder -->
       <div class="field mb-10">
@@ -517,6 +560,10 @@ async function submitType(): Promise<void> {
 .ann-search i {
   color: var(--text-dim);
 }
+.ann-cat-filter {
+  flex: 0 0 auto;
+  max-width: 220px;
+}
 .ann-list {
   display: flex;
   flex-direction: column;
@@ -530,6 +577,12 @@ async function submitType(): Promise<void> {
   border-radius: var(--radius);
   padding: 12px;
   align-items: flex-start;
+}
+.ann-swatch {
+  width: 6px;
+  align-self: stretch;
+  border-radius: 3px;
+  flex: 0 0 auto;
 }
 .ann-cover {
   width: 120px;
@@ -560,7 +613,10 @@ async function submitType(): Promise<void> {
 }
 .ann-actions {
   display: flex;
-  flex-direction: column;
+  flex-flow: row wrap;
+  align-items: flex-start;
+  justify-content: flex-end;
+  align-self: flex-start;
   gap: 6px;
 }
 .ann-img-preview {
@@ -597,6 +653,30 @@ async function submitType(): Promise<void> {
 .ann-img-thumb:hover,
 .ann-img-thumb.active {
   border-color: var(--primary);
+}
+.ann-divider {
+  border: none;
+  border-top: 1px solid var(--surface2);
+  margin: 20px 0 12px;
+}
+.ann-color-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.ann-color-input {
+  width: 48px;
+  height: 36px;
+  padding: 2px;
+  border: 1px solid var(--surface2);
+  border-radius: 6px;
+  background: var(--surface);
+  cursor: pointer;
+}
+.ann-color-hex {
+  font-family: monospace;
+  text-transform: uppercase;
+  color: var(--text-dim);
 }
 .ann-weekdays {
   display: flex;

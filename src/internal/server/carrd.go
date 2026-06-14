@@ -597,7 +597,7 @@ func (s *Server) handleCarrdUpload(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 		// Same name overwrites the existing file on purpose.
-		if err := saveUploadedFont(header, filepath.Join(folderPath, name)); err != nil {
+		if err := saveMultipartFile(header, filepath.Join(folderPath, name)); err != nil {
 			skipped = append(skipped, skipEntry{Name: name, Reason: "Failed to save"})
 			continue
 		}
@@ -610,5 +610,5 @@ func (s *Server) handleCarrdUpload(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// (saveUploadedFont in fonts.go streams a multipart file part to a destination
-// path; it is filename-agnostic, so we reuse it here for image uploads.)
+// (saveMultipartFile lives in uploads.go; it streams a multipart file part to a
+// destination path and is filename-agnostic, so it is reused here for uploads.)

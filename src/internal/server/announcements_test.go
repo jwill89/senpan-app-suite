@@ -163,6 +163,7 @@ func TestBuildAnnouncementEmbed(t *testing.T) {
 		Title:   "Tea Time",
 		Details: "**Come hang out** in the lounge.",
 		Image:   "https://example.com/banner.png",
+		Color:   "#1abc9c",
 		StartAt: "2026-06-13T19:00:00Z",
 		EndAt:   "2026-06-13T21:00:00Z",
 	}
@@ -171,8 +172,12 @@ func TestBuildAnnouncementEmbed(t *testing.T) {
 	if embed.Title != "Tea Time" {
 		t.Errorf("title: got %q", embed.Title)
 	}
+	if embed.Color != 0x1abc9c {
+		t.Errorf("color: got %#x, want 0x1abc9c", embed.Color)
+	}
+	// Two fields, in order: inline time first, then full-width details.
 	if len(embed.Fields) != 2 {
-		t.Fatalf("expected 2 fields (time + details), got %d", len(embed.Fields))
+		t.Fatalf("expected 2 fields (time, details), got %d", len(embed.Fields))
 	}
 	// First field: inline time, long "F" start, short "t" end.
 	timeField := embed.Fields[0]
@@ -184,9 +189,20 @@ func TestBuildAnnouncementEmbed(t *testing.T) {
 	if !strings.Contains(timeField.Value, wantStart) || !strings.Contains(timeField.Value, " to "+wantEnd) {
 		t.Errorf("time field value %q missing %q / %q", timeField.Value, wantStart, wantEnd)
 	}
-	// Second field: full-width details.
-	if embed.Fields[1].Inline {
+	// Second field: details, full-width, with a headingless (zero-width space) name.
+	detailsField := embed.Fields[1]
+	if detailsField.Inline {
 		t.Error("details field should be full-width (not inline)")
+	}
+	if detailsField.Name != embedNoHeading {
+		t.Errorf("details field should have no visible heading, got name %q", detailsField.Name)
+	}
+	if detailsField.Value != a.Details {
+		t.Errorf("details field value: got %q, want %q", detailsField.Value, a.Details)
+	}
+	// Details belong in a field, not the description.
+	if embed.Description != "" {
+		t.Errorf("description should be empty, got %q", embed.Description)
 	}
 	if embed.Image == nil || embed.Image.URL != a.Image {
 		t.Errorf("image: got %+v", embed.Image)
@@ -196,11 +212,41 @@ func TestBuildAnnouncementEmbed(t *testing.T) {
 func TestBuildAnnouncementEmbedNoTimes(t *testing.T) {
 	a := model.Announcement{Title: "Heads up", Details: "Plain note."}
 	embed := buildAnnouncementEmbed(a)
-	if len(embed.Fields) != 1 || embed.Fields[0].Name != "Details" {
-		t.Errorf("expected only a details field, got %+v", embed.Fields)
+	// Only the details field (no time field), full-width and headingless.
+	if len(embed.Fields) != 1 {
+		t.Fatalf("expected only the details field, got %d", len(embed.Fields))
+	}
+	if embed.Fields[0].Name != embedNoHeading || embed.Fields[0].Inline {
+		t.Errorf("details field: got name=%q inline=%v", embed.Fields[0].Name, embed.Fields[0].Inline)
+	}
+	if embed.Fields[0].Value != "Plain note." {
+		t.Errorf("details value: got %q", embed.Fields[0].Value)
+	}
+	// No explicit colour → brand accent default.
+	if embed.Color != accentColor {
+		t.Errorf("color: got %#x, want default %#x", embed.Color, accentColor)
 	}
 	if embed.Footer != nil {
 		t.Error("no time → no footer expected")
+	}
+}
+
+func TestColorFromHex(t *testing.T) {
+	cases := []struct {
+		in   string
+		want int
+	}{
+		{"#1abc9c", 0x1abc9c},
+		{"1abc9c", 0x1abc9c},
+		{"  #FFFFFF  ", 0xFFFFFF},
+		{"", accentColor},            // empty → default
+		{"not-a-color", accentColor}, // invalid hex → default
+		{"#ffffffff", accentColor},   // out of 24-bit range → default
+	}
+	for _, c := range cases {
+		if got := colorFromHex(c.in, accentColor); got != c.want {
+			t.Errorf("colorFromHex(%q): got %#x, want %#x", c.in, got, c.want)
+		}
 	}
 }
 

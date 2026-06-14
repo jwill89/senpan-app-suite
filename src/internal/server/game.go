@@ -48,7 +48,11 @@ func (s *Server) handleGameAction(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	req, _ := readJSON[gameRequest](r)
+	req, err := readJSON[gameRequest](r)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "Invalid JSON")
+		return
+	}
 
 	switch req.Action {
 	case "start":

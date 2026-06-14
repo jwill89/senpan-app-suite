@@ -10,7 +10,7 @@ import (
 // PRAGMA user_version against this constant and runs only the migrations
 // needed to bring the database up to date. Bump this when adding a new
 // migration block.
-const schemaVersion = 19
+const schemaVersion = 20
 
 // ensureSchema reads the current PRAGMA user_version from the database and
 // applies any outstanding migrations to bring it up to schemaVersion.
@@ -148,6 +148,12 @@ func ensureSchema(db *sql.DB) error {
 
 	if version < 19 {
 		if err := migrateAnnouncementLocalTimes(db); err != nil {
+			return err
+		}
+	}
+
+	if version < 20 {
+		if err := migrateAnnouncementColor(db); err != nil {
 			return err
 		}
 	}
@@ -694,6 +700,7 @@ const announcementsTableSQL = `CREATE TABLE IF NOT EXISTS announcements (
 	title TEXT NOT NULL,
 	details TEXT NOT NULL DEFAULT '',
 	image TEXT NOT NULL DEFAULT '',
+	color TEXT NOT NULL DEFAULT '',
 	start_local TEXT NOT NULL DEFAULT '',
 	end_local TEXT NOT NULL DEFAULT '',
 	start_at TEXT NOT NULL DEFAULT '',
@@ -752,6 +759,18 @@ func migrateAnnouncementLocalTimes(db *sql.DB) error {
 		if _, err := db.Exec(`ALTER TABLE announcements ADD COLUMN ` + col + ` TEXT NOT NULL DEFAULT ''`); err != nil {
 			return fmt.Errorf("add announcements.%s: %w", col, err)
 		}
+	}
+	return nil
+}
+
+// migrateAnnouncementColor adds the optional `color` column (a "#rrggbb" embed
+// accent colour; empty falls back to the brand default). Idempotent.
+func migrateAnnouncementColor(db *sql.DB) error {
+	if hasColumn(db, "announcements", "color") {
+		return nil
+	}
+	if _, err := db.Exec(`ALTER TABLE announcements ADD COLUMN color TEXT NOT NULL DEFAULT ''`); err != nil {
+		return fmt.Errorf("add announcements.color: %w", err)
 	}
 	return nil
 }

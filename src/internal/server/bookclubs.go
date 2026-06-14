@@ -352,45 +352,7 @@ func (s *Server) handleBookclubUpload(w http.ResponseWriter, r *http.Request) {
 	if !s.requireAdmin(w, r) {
 		return
 	}
-
-	r.Body = http.MaxBytesReader(w, r.Body, 5<<20) // 5 MB
-
-	file, header, err := r.FormFile("image")
-	if err != nil {
-		writeError(w, http.StatusBadRequest, "Image upload failed (max 5MB)")
-		return
-	}
-	defer file.Close()
-
-	ext := strings.ToLower(filepath.Ext(header.Filename))
-	if ext != ".jpg" && ext != ".jpeg" && ext != ".png" && ext != ".webp" && ext != ".gif" {
-		writeError(w, http.StatusBadRequest, "Only jpg, png, webp, and gif images are allowed")
-		return
-	}
-
-	dir := filepath.Join(s.webRoot, "images", "bookclub")
-	if err := os.MkdirAll(dir, 0755); err != nil {
-		writeError(w, http.StatusInternalServerError, "Failed to create upload directory")
-		return
-	}
-
-	filename := fmt.Sprintf("cover_%d%s", time.Now().UnixNano(), ext)
-	destPath := filepath.Join(dir, filename)
-
-	dst, err := os.Create(destPath)
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, "Failed to save image")
-		return
-	}
-	defer dst.Close()
-
-	if _, err := io.Copy(dst, file); err != nil {
-		writeError(w, http.StatusInternalServerError, "Failed to save image")
-		return
-	}
-
-	fullURL := s.siteBaseURL(r) + "/images/bookclub/" + filename
-	writeJSON(w, http.StatusOK, map[string]any{"url": fullURL})
+	s.saveSingleImageUpload(w, r, bookclubCoverRelDir, "cover")
 }
 
 // siteBaseURL reconstructs this site's scheme://host for building absolute URLs
@@ -679,43 +641,9 @@ func stripHTML(s string) string {
 }
 
 // ── Discord publish ─────────────────────────────────────────────────────────
-
-// discordEmbed / discordEmbedField / discordWebhookPayload model the subset of
-// the Discord webhook embed schema we send.
-type discordEmbedField struct {
-	Name   string `json:"name"`
-	Value  string `json:"value"`
-	Inline bool   `json:"inline,omitempty"`
-}
-
-type discordEmbedThumbnail struct {
-	URL string `json:"url"`
-}
-
-// discordEmbedImage is the large, full-width image rendered at the bottom of an
-// embed (distinct from the small top-right thumbnail).
-type discordEmbedImage struct {
-	URL string `json:"url"`
-}
-
-// discordEmbedFooter is the small footer line shown at the bottom of an embed.
-type discordEmbedFooter struct {
-	Text string `json:"text"`
-}
-
-type discordEmbed struct {
-	Title       string                 `json:"title,omitempty"`
-	Description string                 `json:"description,omitempty"`
-	Color       int                    `json:"color,omitempty"`
-	Fields      []discordEmbedField    `json:"fields,omitempty"`
-	Thumbnail   *discordEmbedThumbnail `json:"thumbnail,omitempty"`
-	Image       *discordEmbedImage     `json:"image,omitempty"`
-	Footer      *discordEmbedFooter    `json:"footer,omitempty"`
-}
-
-type discordWebhookPayload struct {
-	Embeds []discordEmbed `json:"embeds"`
-}
+//
+// The embed schema types, builder, colour helper, and transport live in
+// embeds.go (shared by every webhook-posting feature).
 
 // handlePublishReadingList posts each item in a reading list as its own Discord
 // embed via the configured webhook. Always posts every item (no published-state
@@ -775,28 +703,15 @@ func (s *Server) handlePublishReadingList(w http.ResponseWriter, r *http.Request
 // buildItemEmbed converts a reading list item into a Discord embed. The
 // curator-comments field is labeled per club (commentsLabel).
 func buildItemEmbed(it model.ReadingListItem, commentsLabel string) discordEmbed {
-	embed := discordEmbed{
-		Title:       truncateRunes(it.Title, 256),
-		Description: truncateRunes(it.Summary, 4096),
-		Color:       0xE53170, // accent pink
-	}
-	if isHTTPURL(it.CoverImage) {
-		embed.Thumbnail = &discordEmbedThumbnail{URL: it.CoverImage}
-	}
-	addField := func(name, value string, inline bool) {
-		value = strings.TrimSpace(value)
-		if value == "" {
-			return
-		}
-		embed.Fields = append(embed.Fields, discordEmbedField{
-			Name: name, Value: truncateRunes(value, 1024), Inline: inline,
-		})
-	}
-	addField("Format", it.Format, true)
-	addField("Chapters", it.Chapters, true)
-	addField("Genres", it.Genres, false)
-	addField("Tropes", it.Tropes, false)
-	addField(commentsLabel, it.Comments, false)
+	b := newEmbed().
+		title(it.Title).
+		description(it.Summary).
+		thumbnail(it.CoverImage).
+		field("Format", it.Format, true).
+		field("Chapters", it.Chapters, true).
+		field("Genres", it.Genres, false).
+		field("Tropes", it.Tropes, false).
+		field(commentsLabel, it.Comments, false)
 
 	if len(it.Sources) > 0 {
 		links := make([]string, 0, len(it.Sources))
@@ -810,44 +725,7 @@ func buildItemEmbed(it model.ReadingListItem, commentsLabel string) discordEmbed
 			}
 			links = append(links, fmt.Sprintf("[%s](%s)", label, src.URL))
 		}
-		addField("Sources", strings.Join(links, "\n"), false)
+		b.field("Sources", strings.Join(links, "\n"), false)
 	}
-	return embed
-}
-
-// postDiscordEmbed sends a single embed to the webhook URL.
-func postDiscordEmbed(webhookURL string, embed discordEmbed) error {
-	payload, err := json.Marshal(discordWebhookPayload{Embeds: []discordEmbed{embed}})
-	if err != nil {
-		return fmt.Errorf("encode embed")
-	}
-	resp, err := bookclubHTTPClient.Post(webhookURL, "application/json", bytes.NewReader(payload))
-	if err != nil {
-		return fmt.Errorf("request failed")
-	}
-	defer resp.Body.Close()
-	_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 1<<16))
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return fmt.Errorf("webhook returned status %d", resp.StatusCode)
-	}
-	return nil
-}
-
-// isHTTPURL reports whether u is an http(s) URL (Discord requires absolute URLs
-// for embed thumbnails).
-func isHTTPURL(u string) bool {
-	return strings.HasPrefix(u, "http://") || strings.HasPrefix(u, "https://")
-}
-
-// truncateRunes caps a string at n runes, appending an ellipsis when trimmed,
-// so embeds never exceed Discord's per-field limits.
-func truncateRunes(s string, n int) string {
-	runes := []rune(s)
-	if len(runes) <= n {
-		return s
-	}
-	if n <= 1 {
-		return string(runes[:n])
-	}
-	return string(runes[:n-1]) + "…"
+	return b.build()
 }

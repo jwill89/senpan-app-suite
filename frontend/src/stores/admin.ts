@@ -19,6 +19,7 @@ import { useCarrdStore } from './carrd'
 import { usePresetsStore } from './presets'
 import { useAnnouncementsStore } from './announcements'
 import { BOOK_CLUBS } from '@/lib/constants'
+import { createFreshness } from '@/lib/freshness'
 
 export type AdminSection = 'bingo' | 'raffles' | 'teahouse' | 'atelier' | 'system'
 
@@ -43,9 +44,23 @@ export type AdminTab =
   | 'system-settings'
   | 'system-themes'
 
+// Per-dataset freshness gate so re-entering a tab doesn't re-spin and re-fetch
+// data we just loaded. Keyed by data domain (several tabs can share one key, e.g.
+// the open/closed raffle tabs, or the game/presets tabs). Mutations refresh by
+// calling the store loaders directly (bypassing this), so edits still show at
+// once; the live game/cards/patterns also stay current over WebSocket.
+const tabData = createFreshness(30_000)
+
 export const useAdminStore = defineStore('admin', () => {
   const adminTab = ref<AdminTab>('bingo-game')
   const adminSection = ref<AdminSection>('bingo')
+
+  /** Runs `load` unless `key`'s data was already loaded within the freshness TTL. */
+  function loadFresh(key: string, load: () => void): void {
+    if (!tabData.isStale(key)) return
+    tabData.touch(key)
+    load()
+  }
 
   /**
    * Called by the router guard when an admin child route is matched. Updates
@@ -75,19 +90,22 @@ export const useAdminStore = defineStore('admin', () => {
 
     if (tab === 'raffle-open' || tab === 'raffle-closed') {
       raffles.selectedRaffle = null
-      raffles.loadRaffles()
+      loadFresh('raffles', () => raffles.loadRaffles())
     }
+    // openClub manages its own per-club freshness (and preserves the open list /
+    // events sub-view when the same club tab is re-entered).
     if (tab.startsWith('bookclub-')) {
       bookclub.openClub(tab.slice('bookclub-'.length))
     }
-    if (tab === 'teahouse-announcements') announcements.load()
-    if (tab === 'system-themes') styles.loadStyles()
-    if (tab === 'system-settings') app.loadSettings()
-    if (tab === 'atelier-fonts') fonts.loadFonts()
-    if (tab === 'atelier-carrd') carrd.loadProjects()
-    if (tab === 'bingo-winners-log') game.loadWinnersLog()
+    if (tab === 'teahouse-announcements') loadFresh('announcements', () => announcements.load())
+    if (tab === 'system-themes') loadFresh('styles', () => styles.loadStyles())
+    if (tab === 'system-settings') loadFresh('settings', () => app.loadSettings())
+    if (tab === 'atelier-fonts') loadFresh('fonts', () => fonts.loadFonts())
+    if (tab === 'atelier-carrd') loadFresh('carrd', () => carrd.loadProjects())
+    if (tab === 'bingo-winners-log') loadFresh('winners-log', () => game.loadWinnersLog())
     // Presets are needed on the Game tab (to start from one) and the Presets tab.
-    if (tab === 'bingo-game' || tab === 'bingo-presets') presets.loadPresets()
+    if (tab === 'bingo-game' || tab === 'bingo-presets')
+      loadFresh('presets', () => presets.loadPresets())
     if (tab === 'raffle-new' && !raffles.raffleForm) raffles.newRaffleForm()
   }
 

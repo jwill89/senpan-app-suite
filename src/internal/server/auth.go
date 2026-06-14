@@ -33,7 +33,11 @@ func (s *Server) handleAuthCheck(w http.ResponseWriter, r *http.Request) {
 //	Request:   {"action": "login"|"logout", "password": "..."}
 //	Response:  {"success": true} or {"error": "..."}
 func (s *Server) handleAuthAction(w http.ResponseWriter, r *http.Request) {
-	req, _ := readJSON[authRequest](r)
+	req, err := readJSON[authRequest](r)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "Invalid JSON")
+		return
+	}
 	if req.Action == "" {
 		req.Action = "login"
 	}

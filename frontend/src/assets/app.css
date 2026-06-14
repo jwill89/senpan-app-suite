@@ -29,10 +29,19 @@
  *  25. Styles/themes editor     — Split layout: theme list sidebar + CodeMirror CSS editor
  *  26. CodeMirror overrides     — Dark theme colors for the CSS syntax editor
  *  27. Raffles                  — Raffle cards, detail page, signup form, result panel, admin management
- *  28. Utility classes          — Text, margin, flex, form, modal, and layout helpers
+ *  28. Utility & component helpers — Text, margin, flex, form, modal, and layout helpers
  *  29. Winners log table        — Paginated admin table of past game winners
  *  30. Frequent winners panel   — Alert panel flagging repeat winners during active games
  *  31. Pagination bar           — Centered page navigation controls for tabular data
+ *  32. Loading & async states   — Disabled buttons, spinners, route-progress bar, empty-state text
+ *  33. Player live-game feedback — Connection badge, last-called banner, draw-sound toggle, end summary
+ *  34. Phone layout             — Small-screen (≤560px) responsive tweaks
+ *  35. Site footer              — Credits/links on the public (non-admin) pages
+ *
+ * The admin tabs added since the migration (Announcements, Book Clubs, Carrd
+ * Upload, Presets, the markdown WYSIWYG editor) intentionally reuse the shared
+ * .admin-panel chrome plus the section-28 utility/form/modal helpers rather than
+ * each carrying a bespoke block — so there is no per-feature section for them.
  */
 
 /* ================================================================

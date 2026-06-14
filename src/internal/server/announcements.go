@@ -3,12 +3,10 @@ package server
 import (
 	"context"
 	"fmt"
-	"io"
 	"log/slog"
 	"net/http"
 	"os"
 	"path/filepath"
-	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -313,6 +311,7 @@ func (s *Server) validateAndResolveAnnouncement(w http.ResponseWriter, a *model.
 		return false
 	}
 	a.Image = strings.TrimSpace(a.Image)
+	a.Color = strings.TrimSpace(a.Color)
 	a.StartLocal = strings.TrimSpace(a.StartLocal)
 	a.EndLocal = strings.TrimSpace(a.EndLocal)
 	a.OnceLocal = strings.TrimSpace(a.OnceLocal)
@@ -398,38 +397,32 @@ func resolveLocalInstant(value string, loc *time.Location) (string, error) {
 // ── Embed ───────────────────────────────────────────────────────────────────
 
 // buildAnnouncementEmbed renders an announcement as a Discord embed. When times
-// are set they render as a single inline field using Discord <t:…> tokens (long
-// "F" start, short "t" end) so each viewer sees their own zone; the markdown
-// details render as a full-width field below; an image renders full-width at the
-// bottom.
+// are set they render first, as a single inline field using Discord <t:…> tokens
+// (long "F" start, short "t" end) so each viewer sees their own zone. The markdown
+// details follow as a full-width field with no visible heading; an image renders
+// full-width at the bottom. The accent colour comes from the announcement (brand
+// default if unset).
 func buildAnnouncementEmbed(a model.Announcement) discordEmbed {
-	embed := discordEmbed{
-		Title: truncateRunes(a.Title, 256),
-		Color: 0xE53170, // accent pink
-	}
+	b := newEmbed().
+		title(a.Title).
+		colorHex(a.Color)
+
 	hasTime := false
 	if startT, err := time.Parse(time.RFC3339, a.StartAt); err == nil {
 		value := fmt.Sprintf("<t:%d:F>", startT.Unix())
 		if endT, err := time.Parse(time.RFC3339, a.EndAt); err == nil {
 			value += fmt.Sprintf(" to <t:%d:t>", endT.Unix())
 		}
-		embed.Fields = append(embed.Fields, discordEmbedField{
-			Name: "🗓️ When", Value: value, Inline: true,
-		})
+		b.field("🗓️ When", value, true)
 		hasTime = true
 	}
-	if details := strings.TrimSpace(a.Details); details != "" {
-		embed.Fields = append(embed.Fields, discordEmbedField{
-			Name: "Details", Value: truncateRunes(details, 1024), Inline: false,
-		})
-	}
-	if isHTTPURL(a.Image) {
-		embed.Image = &discordEmbedImage{URL: a.Image}
-	}
+	// Details below the time, headingless (zero-width-space name) and full-width.
+	b.field(embedNoHeading, a.Details, false)
+	b.image(a.Image)
 	if hasTime {
-		embed.Footer = &discordEmbedFooter{Text: "Times shown in your local time zone."}
+		b.footer("Times shown in your local time zone.")
 	}
-	return embed
+	return b.build()
 }
 
 // ── Recurrence ──────────────────────────────────────────────────────────────
@@ -548,7 +541,7 @@ func nthWeekdayOfMonth(year int, month time.Month, wd time.Weekday, n, h, m int,
 
 // announcementImageDir is the upload directory for announcement images.
 func (s *Server) announcementImageDir() string {
-	return filepath.Join(s.webRoot, "images", "announcements")
+	return filepath.Join(s.webRoot, filepath.FromSlash(announcementImageRelDir))
 }
 
 // handleAnnouncementUpload stores a multipart announcement image under
@@ -561,41 +554,7 @@ func (s *Server) handleAnnouncementUpload(w http.ResponseWriter, r *http.Request
 	if !s.requireAdmin(w, r) {
 		return
 	}
-	r.Body = http.MaxBytesReader(w, r.Body, 5<<20) // 5 MB
-
-	file, header, err := r.FormFile("image")
-	if err != nil {
-		writeError(w, http.StatusBadRequest, "Image upload failed (max 5MB)")
-		return
-	}
-	defer file.Close()
-
-	ext := strings.ToLower(filepath.Ext(header.Filename))
-	if !isAllowedImageExt(ext) {
-		writeError(w, http.StatusBadRequest, "Only jpg, png, webp, and gif images are allowed")
-		return
-	}
-
-	if err := os.MkdirAll(s.announcementImageDir(), 0755); err != nil {
-		writeError(w, http.StatusInternalServerError, "Failed to create upload directory")
-		return
-	}
-	filename := fmt.Sprintf("announcement_%d%s", time.Now().UnixNano(), ext)
-	destPath := filepath.Join(s.announcementImageDir(), filename)
-
-	dst, err := os.Create(destPath)
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, "Failed to save image")
-		return
-	}
-	defer dst.Close()
-	if _, err := io.Copy(dst, file); err != nil {
-		writeError(w, http.StatusInternalServerError, "Failed to save image")
-		return
-	}
-
-	fullURL := s.siteBaseURL(r) + "/images/announcements/" + filename
-	writeJSON(w, http.StatusOK, map[string]any{"url": fullURL})
+	s.saveSingleImageUpload(w, r, announcementImageRelDir, "announcement")
 }
 
 // handleAnnouncementImages lists existing announcement images (newest first) as
@@ -608,35 +567,7 @@ func (s *Server) handleAnnouncementImages(w http.ResponseWriter, r *http.Request
 	if !s.requireAdmin(w, r) {
 		return
 	}
-	entries, err := os.ReadDir(s.announcementImageDir())
-	if err != nil {
-		writeJSON(w, http.StatusOK, map[string]any{"images": []string{}})
-		return
-	}
-
-	type imgInfo struct {
-		name string
-		mod  time.Time
-	}
-	infos := make([]imgInfo, 0, len(entries))
-	for _, e := range entries {
-		if e.IsDir() || !isAllowedImageExt(strings.ToLower(filepath.Ext(e.Name()))) {
-			continue
-		}
-		fi, err := e.Info()
-		if err != nil {
-			continue
-		}
-		infos = append(infos, imgInfo{name: e.Name(), mod: fi.ModTime()})
-	}
-	sort.Slice(infos, func(i, j int) bool { return infos[i].mod.After(infos[j].mod) })
-
-	base := s.siteBaseURL(r) + "/images/announcements/"
-	images := make([]string, 0, len(infos))
-	for _, info := range infos {
-		images = append(images, base+info.name)
-	}
-	writeJSON(w, http.StatusOK, map[string]any{"images": images})
+	writeJSON(w, http.StatusOK, map[string]any{"images": s.listUploadedImageURLs(r, announcementImageRelDir)})
 }
 
 // removeUploadedAnnouncementImageIfUnused deletes an uploaded announcement image,
@@ -676,17 +607,7 @@ func (s *Server) removeUploadedAnnouncementImageIfUnused(imageURL string, exclud
 // RunAnnouncementScheduler posts due announcements to their type's webhook on a
 // fixed interval until ctx is cancelled. Safe to call in a goroutine.
 func (s *Server) RunAnnouncementScheduler(ctx context.Context) {
-	ticker := time.NewTicker(announcementSchedulerInterval)
-	defer ticker.Stop()
-	s.postDueAnnouncements() // sweep immediately on startup (catch up after downtime)
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-ticker.C:
-			s.postDueAnnouncements()
-		}
-	}
+	runScheduler(ctx, announcementSchedulerInterval, s.postDueAnnouncements)
 }
 
 // postDueAnnouncements posts every announcement whose scheduled time has arrived.

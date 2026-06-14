@@ -15,7 +15,7 @@ const { addEntry, detail } = vi.hoisted(() => ({
 }))
 vi.mock('@/lib/endpoints', () => ({ endpoints: { raffles: { addEntry, detail } } }))
 
-import { useRafflesStore } from './raffles'
+import { useRafflesStore, isRaffleEnterable } from './raffles'
 
 /** Minimal open raffle with the fields the sign-up math reads. */
 function raffle(maxEntries: number, costPerEntry: number): Raffle {
@@ -55,6 +55,31 @@ describe('raffle entry clamping', () => {
     raffles.raffleSignup.numEntries = NaN
     raffles.clampSignupEntries()
     expect(raffles.raffleSignup.numEntries).toBe(1)
+  })
+})
+
+describe('isRaffleEnterable (public visibility)', () => {
+  const HOUR = 3600_000
+  const iso = (offsetMs: number): string => new Date(Date.now() + offsetMs).toISOString()
+
+  it('is true for an open raffle with no end date', () => {
+    expect(isRaffleEnterable({ status: 'open', available_to: '' } as Raffle)).toBe(true)
+  })
+
+  it('is true for an open raffle whose end is still in the future', () => {
+    expect(isRaffleEnterable({ status: 'open', available_to: iso(HOUR) } as Raffle)).toBe(true)
+  })
+
+  it('is false for an open raffle whose end has passed', () => {
+    expect(isRaffleEnterable({ status: 'open', available_to: iso(-HOUR) } as Raffle)).toBe(false)
+  })
+
+  it('is false for an open raffle that has not started yet', () => {
+    expect(isRaffleEnterable({ status: 'open', available_from: iso(HOUR) } as Raffle)).toBe(false)
+  })
+
+  it('is false for a closed raffle regardless of end date', () => {
+    expect(isRaffleEnterable({ status: 'closed', available_to: iso(HOUR) } as Raffle)).toBe(false)
   })
 })
 

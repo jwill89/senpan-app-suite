@@ -88,9 +88,9 @@ function back(): void {
         </div>
       </div>
 
-      <!-- Sign-up form (only if raffle is open and no result yet) -->
+      <!-- Sign-up form (only while the raffle is open, not past its end, and no result yet) -->
       <div
-        v-if="raffles.selectedRaffle.status === 'open' && !raffles.raffleSignupResult"
+        v-if="raffles.selectedRaffleEnterable && !raffles.raffleSignupResult"
         class="raffle-signup-form"
       >
         <h3 class="mb-12">Enter This Raffle</h3>
@@ -138,7 +138,10 @@ function back(): void {
         </button>
       </div>
 
-      <div v-if="raffles.selectedRaffle.status === 'closed'" class="raffle-closed-msg">
+      <div
+        v-if="!raffles.selectedRaffleEnterable && !raffles.raffleSignupResult"
+        class="raffle-closed-msg"
+      >
         <p class="msg-block" style="font-size: 1.1rem">
           <i class="fa-duotone fa-lock"></i> This raffle is closed.
         </p>

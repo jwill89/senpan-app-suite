@@ -16,7 +16,11 @@ things that live *alongside* the built SPA but are **not** part of `dist/`.
 │   ├── pwa-512x512.png
 │   ├── pwa-maskable-512x512.png
 │   ├── share_banner.png
-│   └── raffles/               ← raffle prize uploads are written here by the Go server
+│   ├── raffles/               ← raffle prize uploads are written here by the Go server
+│   ├── announcements/         ← announcement embed images (created on first upload)
+│   └── bookclub/              ← reading-list cover uploads (+ events/ for event images)
+├── fonts/                     ← admin-uploaded font files; served by the fonts.senpan.cafe vhost (see Font host)
+├── carrd/                     ← Carrd image-host projects; served by the carrd.senpan.cafe vhost (see Carrd host)
 └── dist/                      ← from frontend/dist/    (the built Vue app; replace on each deploy)
     ├── index.html
     └── assets/…               ← content-hashed JS/CSS

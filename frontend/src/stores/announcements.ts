@@ -37,6 +37,7 @@ function emptyForm(): AnnouncementForm {
     title: '',
     details: '',
     image: '',
+    color: '#e53170',
     start_local: '',
     end_local: '',
     schedule_kind: '',
@@ -83,14 +84,17 @@ export const useAnnouncementsStore = defineStore('announcements', () => {
   const typeForm = ref<AnnouncementTypeForm>(emptyTypeForm())
   const form = ref<AnnouncementForm>(emptyForm())
 
-  // Search filter (client-side, like other admin tabs).
+  // Search + category (type) filters (client-side, like other admin tabs).
   const search = ref('')
+  const typeFilter = ref<number>(0) // 0 = all categories
   const filteredAnnouncements = computed(() => {
     const q = search.value.trim().toLowerCase()
-    if (!q) return announcements.value
-    return announcements.value.filter((a) =>
-      [a.title, a.type_name ?? '', a.details].some((s) => s.toLowerCase().includes(q)),
-    )
+    const tf = typeFilter.value
+    return announcements.value.filter((a) => {
+      if (tf && a.type_id !== tf) return false
+      if (!q) return true
+      return [a.title, a.type_name ?? '', a.details].some((s) => s.toLowerCase().includes(q))
+    })
   })
 
   // In-flight flags.
@@ -206,6 +210,7 @@ export const useAnnouncementsStore = defineStore('announcements', () => {
     f.title = a.title
     f.details = a.details
     f.image = a.image
+    f.color = a.color || '#e53170'
     f.start_local = a.start_local
     f.end_local = a.end_local
     f.schedule_kind = (a.schedule_kind || '') as ScheduleKind
@@ -232,6 +237,7 @@ export const useAnnouncementsStore = defineStore('announcements', () => {
       title: f.title.trim(),
       details: f.details,
       image: f.image,
+      color: f.color,
       timezone: f.timezone,
       start_local: f.start_local,
       end_local: f.end_local,
@@ -381,6 +387,7 @@ export const useAnnouncementsStore = defineStore('announcements', () => {
     typeForm,
     form,
     search,
+    typeFilter,
     filteredAnnouncements,
     loading,
     savingType,

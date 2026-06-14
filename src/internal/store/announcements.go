@@ -90,7 +90,7 @@ func (s *Store) CountAnnouncementsByType(typeID int64) (int, error) {
 
 // announcementColumns is the shared SELECT column list for the announcements
 // table (alias a), with the joined type name appended.
-const announcementColumns = `a.id, a.type_id, a.title, a.details, a.image, a.start_local, a.end_local,
+const announcementColumns = `a.id, a.type_id, a.title, a.details, a.image, a.color, a.start_local, a.end_local,
 	a.start_at, a.end_at, a.schedule_kind, a.timezone, a.once_local, a.schedule_minutes,
 	a.schedule_weekdays, a.schedule_week_of_month,
 	a.next_post_at, a.skip_next, a.active, a.last_posted_at, a.created_at, COALESCE(t.name, '')`
@@ -100,7 +100,7 @@ func scanAnnouncement(sc interface{ Scan(...any) error }) (model.Announcement, e
 	var a model.Announcement
 	var skip, active int
 	var lastPosted sql.NullString
-	err := sc.Scan(&a.ID, &a.TypeID, &a.Title, &a.Details, &a.Image, &a.StartLocal, &a.EndLocal,
+	err := sc.Scan(&a.ID, &a.TypeID, &a.Title, &a.Details, &a.Image, &a.Color, &a.StartLocal, &a.EndLocal,
 		&a.StartAt, &a.EndAt, &a.ScheduleKind, &a.Timezone, &a.OnceLocal, &a.ScheduleMinutes,
 		&a.ScheduleWeekdays, &a.ScheduleWeekOfMonth,
 		&a.NextPostAt, &skip, &active, &lastPosted, &a.CreatedAt, &a.TypeName)
@@ -159,11 +159,11 @@ func (s *Store) GetAnnouncement(id int64) (*model.Announcement, error) {
 func (s *Store) CreateAnnouncement(a *model.Announcement) (int64, error) {
 	res, err := s.db.Exec(
 		`INSERT INTO announcements
-			(type_id, title, details, image, start_local, end_local, start_at, end_at,
+			(type_id, title, details, image, color, start_local, end_local, start_at, end_at,
 			 schedule_kind, timezone, once_local, schedule_minutes, schedule_weekdays, schedule_week_of_month,
 			 next_post_at, active)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		a.TypeID, a.Title, a.Details, a.Image, a.StartLocal, a.EndLocal, a.StartAt, a.EndAt,
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		a.TypeID, a.Title, a.Details, a.Image, a.Color, a.StartLocal, a.EndLocal, a.StartAt, a.EndAt,
 		a.ScheduleKind, a.Timezone, a.OnceLocal, a.ScheduleMinutes, a.ScheduleWeekdays, a.ScheduleWeekOfMonth,
 		a.NextPostAt, boolToInt(a.Active),
 	)
@@ -177,12 +177,12 @@ func (s *Store) CreateAnnouncement(a *model.Announcement) (int64, error) {
 // last_posted_at (that's stamped only when actually posting).
 func (s *Store) UpdateAnnouncement(a *model.Announcement) error {
 	_, err := s.db.Exec(
-		`UPDATE announcements SET type_id = ?, title = ?, details = ?, image = ?,
+		`UPDATE announcements SET type_id = ?, title = ?, details = ?, image = ?, color = ?,
 			start_local = ?, end_local = ?, start_at = ?, end_at = ?, schedule_kind = ?,
 			timezone = ?, once_local = ?, schedule_minutes = ?, schedule_weekdays = ?,
 			schedule_week_of_month = ?, next_post_at = ?, skip_next = ?, active = ?
 		 WHERE id = ?`,
-		a.TypeID, a.Title, a.Details, a.Image, a.StartLocal, a.EndLocal, a.StartAt, a.EndAt,
+		a.TypeID, a.Title, a.Details, a.Image, a.Color, a.StartLocal, a.EndLocal, a.StartAt, a.EndAt,
 		a.ScheduleKind, a.Timezone, a.OnceLocal, a.ScheduleMinutes, a.ScheduleWeekdays,
 		a.ScheduleWeekOfMonth, a.NextPostAt, boolToInt(a.SkipNext), boolToInt(a.Active), a.ID,
 	)

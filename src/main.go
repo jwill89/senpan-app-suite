@@ -74,6 +74,7 @@ func main() {
 	schedCtx, cancelSched := context.WithCancel(context.Background())
 	defer cancelSched()
 	go srv.RunEventScheduler(schedCtx)
+	go srv.RunAnnouncementScheduler(schedCtx)
 
 	// Graceful shutdown: listen for SIGINT/SIGTERM.
 	shutdown := make(chan os.Signal, 1)

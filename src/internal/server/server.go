@@ -96,6 +96,15 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("POST /api/reading-lists/{id}/items", s.handleReadingListItems)
 	s.mux.HandleFunc("POST /api/reading-lists/{id}/publish", s.handlePublishReadingList)
 
+	// Announcement management (typed Discord destinations + scheduled embeds).
+	// Specific paths before any {id} routes to avoid pattern conflicts.
+	s.mux.HandleFunc("GET /api/announcement-types", s.handleAnnouncementTypesList)
+	s.mux.HandleFunc("POST /api/announcement-types", s.handleAnnouncementTypesAction)
+	s.mux.HandleFunc("GET /api/announcements/images", s.handleAnnouncementImages)
+	s.mux.HandleFunc("POST /api/announcements/upload", s.handleAnnouncementUpload)
+	s.mux.HandleFunc("GET /api/announcements", s.handleAnnouncementsList)
+	s.mux.HandleFunc("POST /api/announcements", s.handleAnnouncementsAction)
+
 	// Winners log routes
 	s.mux.HandleFunc("GET /api/winners-log", s.handleWinnersLog)
 	s.mux.HandleFunc("GET /api/winners-log/frequent", s.handleFrequentWinners)

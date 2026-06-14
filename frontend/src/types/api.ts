@@ -10,6 +10,8 @@
  * The domain models in `api.generated.ts` regenerate via `npm run gen:types`.
  */
 import type {
+  Announcement,
+  AnnouncementType,
   BingoDrawnNumber,
   BingoGameState,
   BookClubEvent,
@@ -28,6 +30,8 @@ import type {
 } from './api.generated'
 
 export type {
+  Announcement,
+  AnnouncementType,
   BingoDrawnNumber,
   BingoGame,
   BingoGamePattern,
@@ -291,6 +295,74 @@ export interface BookClubEventForm {
   details: string
   image: string
   post_at_local: string
+}
+
+// ── Announcement management ──────────────────────────────────────────────────
+// GET /api/announcement-types — Discord destinations.
+export interface AnnouncementTypesResponse {
+  types: AnnouncementType[]
+}
+
+// POST /api/announcement-types {create|update} — the saved type.
+export interface AnnouncementTypeResponse {
+  type: AnnouncementType
+}
+
+// GET /api/announcements — all announcements (with type_name joined).
+export interface AnnouncementsResponse {
+  announcements: Announcement[]
+}
+
+// POST /api/announcements {create|update|send_now|skip_next} — the saved announcement.
+export interface AnnouncementResponse {
+  announcement: Announcement
+}
+
+// GET /api/announcements/images — existing announcement images (full URLs).
+export interface AnnouncementImagesResponse {
+  images: string[]
+}
+
+// POST /api/announcements/upload — full URL of the stored announcement image.
+export interface AnnouncementUploadResponse {
+  url: string
+}
+
+// Form model for the admin announcement-type create/edit form.
+export interface AnnouncementTypeForm {
+  id: number
+  name: string
+  webhook_url: string
+}
+
+/**
+ * Recurrence builder kinds for the schedule UI.
+ *   '' = unscheduled (manual only); 'once'|'daily'|'weekly'|'monthly' as labelled.
+ */
+export type ScheduleKind = '' | 'once' | 'daily' | 'weekly' | 'monthly'
+
+/**
+ * Form model for the admin announcement create/edit form. Holds *local*
+ * wall-clock strings + a friendly recurrence builder. `start_local`/`end_local`/
+ * `once_local` are `datetime-local` values (converted to absolute UTC on save
+ * via `lib/datetime.ts`); `time_local` is an "HH:mm" wall-clock time anchored to
+ * `timezone` (an IANA name, so recurring times survive DST); `weekdays` are
+ * weekday numbers (0=Sun..6=Sat) in that zone.
+ */
+export interface AnnouncementForm {
+  id: number
+  type_id: number
+  title: string
+  details: string
+  image: string
+  start_local: string
+  end_local: string
+  schedule_kind: ScheduleKind
+  timezone: string
+  once_local: string
+  time_local: string
+  weekdays: number[]
+  week_of_month: number
 }
 
 // ── Fonts (System → Font Upload) ────────────────────────────────────────────

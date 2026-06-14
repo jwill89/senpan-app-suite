@@ -48,6 +48,14 @@ import type {
   BookClubEventForm,
   EventImagesResponse,
   EventImageUploadResponse,
+  Announcement,
+  AnnouncementTypesResponse,
+  AnnouncementTypeResponse,
+  AnnouncementTypeForm,
+  AnnouncementsResponse,
+  AnnouncementResponse,
+  AnnouncementImagesResponse,
+  AnnouncementUploadResponse,
   SettingsResponse,
   StyleCreateResponse,
   StyleGetResponse,
@@ -303,6 +311,48 @@ export const endpoints = {
     images: () => apiGet<EventImagesResponse>('bookclub/events/images'),
     uploadImage: (form: FormData) =>
       apiPost<EventImageUploadResponse>('bookclub/events/upload', form),
+  },
+
+  // ── Announcement management ──────────────────────────────────────────────────
+  announcements: {
+    /** GET /api/announcement-types — Discord destinations. */
+    types: () => apiGet<AnnouncementTypesResponse>('announcement-types'),
+    /** Create or update an announcement type (update when form.id is set). */
+    saveType: (form: AnnouncementTypeForm) =>
+      apiPost<AnnouncementTypeResponse>('announcement-types', {
+        action: form.id ? 'update' : 'create',
+        id: form.id || 0,
+        name: form.name,
+        webhook_url: form.webhook_url,
+      }),
+    deleteType: (id: number) =>
+      apiPost<OkResponse>('announcement-types', { action: 'delete', id }),
+
+    /** GET /api/announcements — all announcements (filtering is client-side). */
+    list: () => apiGet<AnnouncementsResponse>('announcements'),
+    /**
+     * Create or update an announcement. The store builds `payload` from the form,
+     * having already converted local times → the stored UTC instants / UTC
+     * recurrence fields.
+     */
+    save: (id: number, payload: Partial<Announcement>) =>
+      apiPost<AnnouncementResponse>('announcements', {
+        action: id ? 'update' : 'create',
+        id: id || 0,
+        announcement: payload,
+      }),
+    delete: (id: number) => apiPost<OkResponse>('announcements', { action: 'delete', id }),
+    /** Post an announcement's embed to Discord immediately. */
+    sendNow: (id: number) =>
+      apiPost<AnnouncementResponse>('announcements', { action: 'send_now', id }),
+    /** Skip the next scheduled occurrence of an announcement. */
+    skipNext: (id: number) =>
+      apiPost<AnnouncementResponse>('announcements', { action: 'skip_next', id }),
+
+    /** GET /api/announcements/images — existing images (pick to reuse). */
+    images: () => apiGet<AnnouncementImagesResponse>('announcements/images'),
+    uploadImage: (form: FormData) =>
+      apiPost<AnnouncementUploadResponse>('announcements/upload', form),
   },
 
   // ── Fonts (System → Font Upload) ─────────────────────────────────────────────

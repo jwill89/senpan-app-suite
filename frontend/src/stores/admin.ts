@@ -17,9 +17,10 @@ import { useAppStore } from './app'
 import { useFontsStore } from './fonts'
 import { useCarrdStore } from './carrd'
 import { usePresetsStore } from './presets'
+import { useAnnouncementsStore } from './announcements'
 import { BOOK_CLUBS } from '@/lib/constants'
 
-export type AdminSection = 'bingo' | 'raffles' | 'bookclub' | 'atelier' | 'system'
+export type AdminSection = 'bingo' | 'raffles' | 'teahouse' | 'atelier' | 'system'
 
 /** One tab per registered book club, e.g. 'bookclub-yaoi' | 'bookclub-yuri'. */
 export type BookClubTab = `bookclub-${(typeof BOOK_CLUBS)[number]['slug']}`
@@ -35,6 +36,7 @@ export type AdminTab =
   | 'raffle-new'
   | 'raffle-open'
   | 'raffle-closed'
+  | 'teahouse-announcements'
   | BookClubTab
   | 'atelier-fonts'
   | 'atelier-carrd'
@@ -53,7 +55,10 @@ export const useAdminStore = defineStore('admin', () => {
   function setTabFromRoute(tab: AdminTab): void {
     if (tab.startsWith('bingo-')) adminSection.value = 'bingo'
     else if (tab.startsWith('raffle-')) adminSection.value = 'raffles'
-    else if (tab.startsWith('bookclub-')) adminSection.value = 'bookclub'
+    // The Senpan Tea House section holds both Announcement Management
+    // (teahouse-*) and the book clubs (bookclub-*).
+    else if (tab.startsWith('teahouse-') || tab.startsWith('bookclub-'))
+      adminSection.value = 'teahouse'
     else if (tab.startsWith('atelier-')) adminSection.value = 'atelier'
     else if (tab.startsWith('system-')) adminSection.value = 'system'
     adminTab.value = tab
@@ -66,6 +71,7 @@ export const useAdminStore = defineStore('admin', () => {
     const fonts = useFontsStore()
     const carrd = useCarrdStore()
     const presets = usePresetsStore()
+    const announcements = useAnnouncementsStore()
 
     if (tab === 'raffle-open' || tab === 'raffle-closed') {
       raffles.selectedRaffle = null
@@ -74,6 +80,7 @@ export const useAdminStore = defineStore('admin', () => {
     if (tab.startsWith('bookclub-')) {
       bookclub.openClub(tab.slice('bookclub-'.length))
     }
+    if (tab === 'teahouse-announcements') announcements.load()
     if (tab === 'system-themes') styles.loadStyles()
     if (tab === 'system-settings') app.loadSettings()
     if (tab === 'atelier-fonts') fonts.loadFonts()

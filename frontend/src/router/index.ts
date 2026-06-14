@@ -109,6 +109,13 @@ const adminChildren: RouteRecordRaw[] = [
     component: () => import('@/components/admin/ClosedRafflesTab.vue'),
     meta: { tab: 'raffle-closed' },
   },
+  // Senpan Tea House → Announcement Management (first item in the section).
+  {
+    path: 'teahouse/announcements',
+    name: 'admin-teahouse-announcements',
+    component: () => import('@/components/admin/AnnouncementsTab.vue'),
+    meta: { tab: 'teahouse-announcements' },
+  },
   // One route per registered book club, all served by the generic BookClubTab
   // (the active club drives its labels). Add a club in constants.ts to get its
   // route, sidebar button, and settings webhook field automatically.

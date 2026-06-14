@@ -200,3 +200,53 @@ type FrequentWinner struct {
 	PlayerName string `json:"player_name"`
 	WinCount   int    `json:"win_count"` // number of wins in the lookback period
 }
+
+// AnnouncementType is a named Discord destination for announcements: a friendly
+// label plus the webhook URL of the channel its announcements post to. Each
+// announcement references one type, and posts to that type's webhook.
+type AnnouncementType struct {
+	ID         int64  `json:"id"`
+	Name       string `json:"name"`
+	WebhookURL string `json:"webhook_url"` // Discord channel webhook
+	CreatedAt  string `json:"created_at"`
+}
+
+// Announcement is an admin-authored message posted to Discord as an embed via
+// its type's webhook — manually ("send now") or automatically on a schedule.
+//
+// One IANA Timezone anchors every time on the announcement: the admin enters
+// wall-clock values (StartLocal/EndLocal for the event window, OnceLocal for a
+// one-time post, and the recurring time-of-day/weekday selections) and the
+// backend resolves them in Timezone with time.LoadLocation. The absolute instants
+// (StartAt/EndAt/NextPostAt, UTC RFC-3339) are computed server-side and drive the
+// embed timestamps + the scheduler. Because the zone is explicit, all times stay
+// put across DST transitions (e.g. "every Saturday 7pm America/New_York").
+type Announcement struct {
+	ID         int64  `json:"id"`
+	TypeID     int64  `json:"type_id"`
+	Title      string `json:"title"`
+	Details    string `json:"details"`     // markdown
+	Image      string `json:"image"`       // full URL, shown full-width in the embed
+	StartLocal string `json:"start_local"` // optional event start, wall-clock "2006-01-02T15:04" in Timezone
+	EndLocal   string `json:"end_local"`   // optional event end, wall-clock in Timezone
+	StartAt    string `json:"start_at"`    // computed event start, UTC RFC-3339
+	EndAt      string `json:"end_at"`      // computed event end, UTC RFC-3339
+
+	// Schedule (all optional; ScheduleKind == "" means unscheduled — manual only).
+	// All recurring/one-time times are wall-clock values anchored to Timezone.
+	ScheduleKind        string `json:"schedule_kind"`          // ""|once|daily|weekly|monthly
+	Timezone            string `json:"timezone"`               // IANA zone anchoring every time on the announcement
+	OnceLocal           string `json:"once_local"`             // wall-clock "2006-01-02T15:04" in Timezone (one-time schedule)
+	ScheduleMinutes     int    `json:"schedule_minutes"`       // local minutes-of-day in Timezone (recurring)
+	ScheduleWeekdays    string `json:"schedule_weekdays"`      // CSV of local weekdays 0=Sun..6=Sat (weekly; first value reused for monthly)
+	ScheduleWeekOfMonth int    `json:"schedule_week_of_month"` // 1..5 or -1=last (monthly)
+
+	NextPostAt   string `json:"next_post_at"`   // next scheduled instant, UTC RFC-3339 ("" = none)
+	SkipNext     bool   `json:"skip_next"`      // skip the next occurrence, then resume
+	Active       bool   `json:"active"`         // whether the schedule is live
+	LastPostedAt string `json:"last_posted_at"` // ISO timestamp of last post ("" if never)
+	CreatedAt    string `json:"created_at"`
+
+	// Read-only convenience for list rendering (joined from announcement_types).
+	TypeName string `json:"type_name,omitempty"`
+}

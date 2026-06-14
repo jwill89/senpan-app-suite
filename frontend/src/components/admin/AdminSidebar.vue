@@ -35,7 +35,7 @@ function go(tab: AdminTab): void {
 const sectionDefaultTab: Record<AdminSection, AdminTab> = {
   bingo: 'bingo-game',
   raffles: 'raffle-open',
-  bookclub: `bookclub-${BOOK_CLUBS[0].slug}` as AdminTab,
+  teahouse: 'teahouse-announcements',
   atelier: 'atelier-fonts',
   system: 'system-settings',
 }
@@ -137,17 +137,23 @@ function toggle(section: AdminSection): void {
       </div>
     </div>
 
-    <!-- Book Clubs section -->
+    <!-- Senpan Tea House section (Announcement Management + the book clubs) -->
     <div class="admin-nav-section">
       <div
         class="admin-nav-header"
-        :class="{ open: admin.adminSection === 'bookclub' }"
-        @click="toggle('bookclub')"
+        :class="{ open: admin.adminSection === 'teahouse' }"
+        @click="toggle('teahouse')"
       >
-        <span><i class="fa-duotone fa-book"></i> Book Clubs</span>
-        <span class="nav-chevron">{{ admin.adminSection === 'bookclub' ? '▾' : '▸' }}</span>
+        <span><i class="fa-duotone fa-torii-gate"></i> Senpan Tea House</span>
+        <span class="nav-chevron">{{ admin.adminSection === 'teahouse' ? '▾' : '▸' }}</span>
       </div>
-      <div v-show="admin.adminSection === 'bookclub'" class="admin-nav-items">
+      <div v-show="admin.adminSection === 'teahouse'" class="admin-nav-items">
+        <button
+          :class="{ active: admin.adminTab === 'teahouse-announcements' }"
+          @click="go('teahouse-announcements')"
+        >
+          <i class="fa-duotone fa-megaphone"></i> Announcements
+        </button>
         <button
           v-for="club in BOOK_CLUBS"
           :key="club.slug"

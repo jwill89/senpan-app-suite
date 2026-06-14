@@ -10,7 +10,7 @@ import (
 // PRAGMA user_version against this constant and runs only the migrations
 // needed to bring the database up to date. Bump this when adding a new
 // migration block.
-const schemaVersion = 16
+const schemaVersion = 19
 
 // ensureSchema reads the current PRAGMA user_version from the database and
 // applies any outstanding migrations to bring it up to schemaVersion.
@@ -130,6 +130,24 @@ func ensureSchema(db *sql.DB) error {
 
 	if version < 16 {
 		if err := migrateBookClubEventTimes(db); err != nil {
+			return err
+		}
+	}
+
+	if version < 17 {
+		if err := migrateAnnouncements(db); err != nil {
+			return err
+		}
+	}
+
+	if version < 18 {
+		if err := migrateAnnouncementTimezone(db); err != nil {
+			return err
+		}
+	}
+
+	if version < 19 {
+		if err := migrateAnnouncementLocalTimes(db); err != nil {
 			return err
 		}
 	}
@@ -272,6 +290,8 @@ func createTables(db *sql.DB) error {
 			game_details TEXT NOT NULL DEFAULT '',
 			created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 		)`,
+		announcementTypesTableSQL,
+		announcementsTableSQL,
 	}
 	for _, s := range stmts {
 		if _, err := db.Exec(s); err != nil {
@@ -296,6 +316,8 @@ func createIndexes(db *sql.DB) error {
 		"CREATE INDEX IF NOT EXISTS idx_reading_list_items_list ON reading_list_items(list_id)",
 		"CREATE INDEX IF NOT EXISTS idx_book_club_events_club ON book_club_events(club_slug)",
 		"CREATE INDEX IF NOT EXISTS idx_book_club_events_due ON book_club_events(posted, post_at)",
+		"CREATE INDEX IF NOT EXISTS idx_announcements_type ON announcements(type_id)",
+		"CREATE INDEX IF NOT EXISTS idx_announcements_due ON announcements(active, next_post_at)",
 	}
 	for _, idx := range indexes {
 		if _, err := db.Exec(idx); err != nil {
@@ -651,6 +673,84 @@ func migrateRaffleImagePaths(db *sql.DB) error {
 	for _, stmt := range stmts {
 		if _, err := db.Exec(stmt); err != nil {
 			return err
+		}
+	}
+	return nil
+}
+
+// announcementTypesTableSQL / announcementsTableSQL define the Announcement
+// Management tables. They're shared between createTables (fresh install) and
+// migrateAnnouncements (existing databases) so the schema is defined once.
+const announcementTypesTableSQL = `CREATE TABLE IF NOT EXISTS announcement_types (
+	id INTEGER PRIMARY KEY AUTOINCREMENT,
+	name TEXT NOT NULL,
+	webhook_url TEXT NOT NULL DEFAULT '',
+	created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+)`
+
+const announcementsTableSQL = `CREATE TABLE IF NOT EXISTS announcements (
+	id INTEGER PRIMARY KEY AUTOINCREMENT,
+	type_id INTEGER NOT NULL,
+	title TEXT NOT NULL,
+	details TEXT NOT NULL DEFAULT '',
+	image TEXT NOT NULL DEFAULT '',
+	start_local TEXT NOT NULL DEFAULT '',
+	end_local TEXT NOT NULL DEFAULT '',
+	start_at TEXT NOT NULL DEFAULT '',
+	end_at TEXT NOT NULL DEFAULT '',
+	schedule_kind TEXT NOT NULL DEFAULT '',
+	timezone TEXT NOT NULL DEFAULT '',
+	once_local TEXT NOT NULL DEFAULT '',
+	schedule_minutes INTEGER NOT NULL DEFAULT 0,
+	schedule_weekdays TEXT NOT NULL DEFAULT '',
+	schedule_week_of_month INTEGER NOT NULL DEFAULT 0,
+	next_post_at TEXT NOT NULL DEFAULT '',
+	skip_next INTEGER NOT NULL DEFAULT 0,
+	active INTEGER NOT NULL DEFAULT 1,
+	last_posted_at DATETIME,
+	created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+	FOREIGN KEY (type_id) REFERENCES announcement_types(id)
+)`
+
+// migrateAnnouncements creates the Announcement Management tables
+// (announcement_types + announcements) and their indexes. Idempotent.
+func migrateAnnouncements(db *sql.DB) error {
+	stmts := []string{
+		announcementTypesTableSQL,
+		announcementsTableSQL,
+		`CREATE INDEX IF NOT EXISTS idx_announcements_type ON announcements(type_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_announcements_due ON announcements(active, next_post_at)`,
+	}
+	for _, stmt := range stmts {
+		if _, err := db.Exec(stmt); err != nil {
+			return fmt.Errorf("migrate announcements: %w", err)
+		}
+	}
+	return nil
+}
+
+// migrateAnnouncementTimezone adds the optional IANA `timezone` column to the
+// announcements table (anchors recurring times so they survive DST). Idempotent.
+func migrateAnnouncementTimezone(db *sql.DB) error {
+	if hasColumn(db, "announcements", "timezone") {
+		return nil
+	}
+	if _, err := db.Exec(`ALTER TABLE announcements ADD COLUMN timezone TEXT NOT NULL DEFAULT ''`); err != nil {
+		return fmt.Errorf("add announcements.timezone: %w", err)
+	}
+	return nil
+}
+
+// migrateAnnouncementLocalTimes adds the wall-clock columns (start_local,
+// end_local, once_local) so every time on an announcement is anchored to its
+// timezone. Idempotent.
+func migrateAnnouncementLocalTimes(db *sql.DB) error {
+	for _, col := range []string{"start_local", "end_local", "once_local"} {
+		if hasColumn(db, "announcements", col) {
+			continue
+		}
+		if _, err := db.Exec(`ALTER TABLE announcements ADD COLUMN ` + col + ` TEXT NOT NULL DEFAULT ''`); err != nil {
+			return fmt.Errorf("add announcements.%s: %w", col, err)
 		}
 	}
 	return nil

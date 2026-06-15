@@ -21,7 +21,7 @@ type styleRequest struct {
 //	Auth:      admin
 //	Response:  {"styles": [...], "active_style_id": "..."}
 func (s *Server) handleStylesList(w http.ResponseWriter, r *http.Request) {
-	if !s.requireAdmin(w, r) {
+	if !s.requirePermission(w, r, permSystemThemes) {
 		return
 	}
 
@@ -45,7 +45,7 @@ func (s *Server) handleStylesList(w http.ResponseWriter, r *http.Request) {
 //	Response:    varies by action
 //	Broadcasts:  style_update (on update of active style, set_active, or delete of active)
 func (s *Server) handleStylesAction(w http.ResponseWriter, r *http.Request) {
-	if !s.requireAdmin(w, r) {
+	if !s.requirePermission(w, r, permSystemThemes) {
 		return
 	}
 

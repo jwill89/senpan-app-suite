@@ -24,7 +24,7 @@ type cardsRequest struct {
 //	Auth:      admin
 //	Response:  {"cards": [{id, player_name, details}, ...]}
 func (s *Server) handleCardsList(w http.ResponseWriter, r *http.Request) {
-	if !s.requireAdmin(w, r) {
+	if !s.requirePermission(w, r, permBingoCards) {
 		return
 	}
 
@@ -54,7 +54,7 @@ func (s *Server) handleCardsList(w http.ResponseWriter, r *http.Request) {
 //	Broadcasts:  cards_update (on generate/delete/delete_all)
 //	             card_deleted (to affected player connections)
 func (s *Server) handleCardsAction(w http.ResponseWriter, r *http.Request) {
-	if !s.requireAdmin(w, r) {
+	if !s.requirePermission(w, r, permBingoCards) {
 		return
 	}
 

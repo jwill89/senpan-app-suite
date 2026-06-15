@@ -13,15 +13,19 @@ const auth = useAuthStore()
 const route = useRoute()
 const router = useRouter()
 
+const username = ref('')
 const password = ref('')
 
 async function submit(): Promise<void> {
+  const name = username.value.trim()
   const pw = password.value
   password.value = ''
-  const ok = await auth.login(pw)
+  const ok = await auth.login(name, pw)
   if (ok) {
     const redirect = typeof route.query.redirect === 'string' ? route.query.redirect : null
-    router.push(redirect || { name: 'admin-bingo-game' })
+    // Land on /admin; the router guard forwards to the first page this account
+    // may access (admins → the game tab, others → their first permitted page).
+    router.push(redirect || { path: '/admin' })
   }
 }
 
@@ -33,15 +37,22 @@ function goHome(): void {
 <template>
   <div class="admin-login">
     <div class="box">
-      <h2><i class="fa-duotone fa-lock"></i> Admin Login</h2>
-      <p>Enter the admin password</p>
+      <h2><i class="fa-duotone fa-lock"></i> Sign In</h2>
+      <p>Enter your username and password</p>
       <form autocomplete="off" @submit.prevent="submit">
+        <input
+          v-model="username"
+          type="text"
+          placeholder="Username"
+          aria-label="Username"
+          autocomplete="username"
+        />
         <input
           v-model="password"
           type="password"
           placeholder="Password"
-          aria-label="Admin password"
-          autocomplete="new-password"
+          aria-label="Password"
+          autocomplete="current-password"
         />
         <div class="btns">
           <button type="button" class="btn-neutral" :disabled="auth.loggingIn" @click="goHome">

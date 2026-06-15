@@ -44,7 +44,7 @@ func (s *Server) handleGameState(w http.ResponseWriter, r *http.Request) {
 //	Response:    varies by action
 //	Broadcasts:  game_update (start/end), game_draw (draw), halftime_minigame, details_update
 func (s *Server) handleGameAction(w http.ResponseWriter, r *http.Request) {
-	if !s.requireAdmin(w, r) {
+	if !s.requirePermission(w, r, permBingoGame) {
 		return
 	}
 

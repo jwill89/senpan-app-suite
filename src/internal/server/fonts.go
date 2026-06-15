@@ -89,7 +89,7 @@ func safeFontName(name string) (string, bool) {
 //	Auth:      admin
 //	Response:  {"fonts": [{name, size, modified}]}
 func (s *Server) handleFontsList(w http.ResponseWriter, r *http.Request) {
-	if !s.requireAdmin(w, r) {
+	if !s.requirePermission(w, r, permAtelierFonts) {
 		return
 	}
 
@@ -147,7 +147,7 @@ type fontsActionRequest struct {
 //	Request:   {"action": "delete"|"rename", "name": "...", "new_name": "..."}
 //	Response:  {"ok": true} (rename also returns {"name": newName})
 func (s *Server) handleFontsAction(w http.ResponseWriter, r *http.Request) {
-	if !s.requireAdmin(w, r) {
+	if !s.requirePermission(w, r, permAtelierFonts) {
 		return
 	}
 
@@ -221,7 +221,7 @@ func (s *Server) handleFontsAction(w http.ResponseWriter, r *http.Request) {
 //	Request:   multipart form with one or more "files" fields
 //	Response:  {"uploaded": ["a.ttf"], "skipped": [{"name":"b.ttf","reason":"..."}]}
 func (s *Server) handleFontUpload(w http.ResponseWriter, r *http.Request) {
-	if !s.requireAdmin(w, r) {
+	if !s.requirePermission(w, r, permAtelierFonts) {
 		return
 	}
 

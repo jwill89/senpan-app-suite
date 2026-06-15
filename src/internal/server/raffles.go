@@ -108,7 +108,7 @@ type raffleRequest struct {
 //	Request:   {"action": "create"|"update"|"delete", ...}
 //	Response:  varies by action
 func (s *Server) handleRafflesAction(w http.ResponseWriter, r *http.Request) {
-	if !s.requireAdmin(w, r) {
+	if !s.requirePermission(w, r, permTeahouseRaffles) {
 		return
 	}
 
@@ -364,7 +364,7 @@ type raffleEntriesRequest struct {
 //	Request:   {"action": "mark_paid"|"delete_entry"|"pick_winner"|"verify_winner"|"pick_another", ...}
 //	Response:  varies by action
 func (s *Server) handleRaffleEntries(w http.ResponseWriter, r *http.Request) {
-	if !s.requireAdmin(w, r) {
+	if !s.requirePermission(w, r, permTeahouseRaffles) {
 		return
 	}
 
@@ -575,7 +575,7 @@ func (s *Server) removeUploadedImage(webPath string) {
 //	Request:   multipart form with "image" field
 //	Response:  {"path": "images/raffles/raffle_....ext"}
 func (s *Server) handleRaffleUpload(w http.ResponseWriter, r *http.Request) {
-	if !s.requireAdmin(w, r) {
+	if !s.requirePermission(w, r, permTeahouseRaffles) {
 		return
 	}
 

@@ -34,8 +34,13 @@ func main() {
 	}
 	if *password == "" {
 		*password = "changeme1234"
-		slog.Warn("No admin password provided; using insecure built-in default. Set -password or APPSUITE_ADMIN_PASSWORD.")
 	}
+	// DEPRECATED: the shared admin password no longer gates login. Authentication
+	// is now per-user accounts (see the users table / auth package); the database
+	// seeds an "admin"/"admin" bootstrap account on migration that must be rotated
+	// after deploy. The -password / APPSUITE_ADMIN_PASSWORD plumbing is retained
+	// only for backward-compatible startup and is unused by the auth flow.
+	slog.Warn("the shared admin password is deprecated and unused; log in with the seeded 'admin' account and change its password immediately")
 
 	// Session secret: flag > env > random
 	finalSecret := *secret

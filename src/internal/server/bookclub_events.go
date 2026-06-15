@@ -29,12 +29,12 @@ var eventTimeLayouts = []string{"2006-01-02T15:04", "2006-01-02T15:04:05"}
 //	Auth:      admin
 //	Response:  {"events": [...]}
 func (s *Server) handleBookClubEventsList(w http.ResponseWriter, r *http.Request) {
-	if !s.requireAdmin(w, r) {
-		return
-	}
 	club := strings.TrimSpace(r.URL.Query().Get("club"))
 	if club == "" {
 		club = defaultClubSlug
+	}
+	if !s.requirePermission(w, r, bookClubPerm(club)) {
+		return
 	}
 	events, err := s.store.ListBookClubEvents(club)
 	if err != nil {
@@ -59,12 +59,38 @@ type bookClubEventRequest struct {
 //	Auth:      admin
 //	Request:   {"action": "create"|"update"|"delete"|"post_now", ...}
 func (s *Server) handleBookClubEventsAction(w http.ResponseWriter, r *http.Request) {
-	if !s.requireAdmin(w, r) {
+	if _, ok := s.requireAuth(w, r); !ok {
 		return
 	}
 	req, err := readJSON[bookClubEventRequest](r)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "Invalid JSON")
+		return
+	}
+
+	// Resolve the owning book club to permission-check per club. create carries
+	// the slug in the body; the id-based actions derive it from the record.
+	club := strings.TrimSpace(req.ClubSlug)
+	if req.Action == "update" || req.Action == "delete" || req.Action == "post_now" {
+		if req.ID <= 0 {
+			writeError(w, http.StatusBadRequest, "Event id is required")
+			return
+		}
+		existing, err := s.store.GetBookClubEvent(req.ID)
+		if err != nil {
+			writeInternalError(w, "load event", err)
+			return
+		}
+		if existing == nil {
+			writeError(w, http.StatusNotFound, "Event not found")
+			return
+		}
+		club = existing.ClubSlug
+	}
+	if club == "" {
+		club = defaultClubSlug
+	}
+	if !s.requirePermission(w, r, bookClubPerm(club)) {
 		return
 	}
 
@@ -234,7 +260,7 @@ func (s *Server) eventImageDir() string {
 //	Auth:      admin
 //	Response:  {"url": "https://host/images/bookclub/events/event_....ext"}
 func (s *Server) handleBookClubEventUpload(w http.ResponseWriter, r *http.Request) {
-	if !s.requireAdmin(w, r) {
+	if !s.requireAnyBookClub(w, r) {
 		return
 	}
 	s.saveSingleImageUpload(w, r, eventImageRelDir, "event")
@@ -247,7 +273,7 @@ func (s *Server) handleBookClubEventUpload(w http.ResponseWriter, r *http.Reques
 //	Auth:      admin
 //	Response:  {"images": ["https://host/images/bookclub/events/....png", ...]}
 func (s *Server) handleBookClubEventImages(w http.ResponseWriter, r *http.Request) {
-	if !s.requireAdmin(w, r) {
+	if !s.requireAnyBookClub(w, r) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"images": s.listUploadedImageURLs(r, eventImageRelDir)})

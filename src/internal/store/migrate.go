@@ -3,6 +3,8 @@ package store
 import (
 	"database/sql"
 	"fmt"
+
+	"app-suite/internal/auth"
 )
 
 // schemaVersion is the target database schema version. Each migration
@@ -10,7 +12,7 @@ import (
 // PRAGMA user_version against this constant and runs only the migrations
 // needed to bring the database up to date. Bump this when adding a new
 // migration block.
-const schemaVersion = 21
+const schemaVersion = 22
 
 // ensureSchema reads the current PRAGMA user_version from the database and
 // applies any outstanding migrations to bring it up to schemaVersion.
@@ -160,6 +162,12 @@ func ensureSchema(db *sql.DB) error {
 
 	if version < 21 {
 		if err := migrateAnnouncementButtons(db); err != nil {
+			return err
+		}
+	}
+
+	if version < 22 {
+		if err := migrateUsers(db); err != nil {
 			return err
 		}
 	}
@@ -790,6 +798,37 @@ func migrateAnnouncementButtons(db *sql.DB) error {
 	}
 	if _, err := db.Exec(`ALTER TABLE announcements ADD COLUMN buttons TEXT NOT NULL DEFAULT '[]'`); err != nil {
 		return fmt.Errorf("add announcements.buttons: %w", err)
+	}
+	return nil
+}
+
+// migrateUsers creates the users table for the admin-account + per-page
+// permission system and seeds a bootstrap "admin" account (username "admin",
+// password "admin", full access). Runs on both fresh and existing databases;
+// the seed uses INSERT OR IGNORE so it is safe to re-run and never clobbers an
+// admin whose password was already changed. The seeded password is intended to
+// be rotated immediately after the migration runs.
+func migrateUsers(db *sql.DB) error {
+	if _, err := db.Exec(`CREATE TABLE IF NOT EXISTS users (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		username TEXT NOT NULL UNIQUE,
+		password_hash TEXT NOT NULL,
+		is_admin INTEGER NOT NULL DEFAULT 0,
+		is_active INTEGER NOT NULL DEFAULT 0,
+		permissions TEXT NOT NULL DEFAULT '[]',
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+	)`); err != nil {
+		return fmt.Errorf("create users table: %w", err)
+	}
+
+	hash, err := auth.Hash("admin")
+	if err != nil {
+		return fmt.Errorf("hash seed admin password: %w", err)
+	}
+	if _, err := db.Exec(
+		`INSERT OR IGNORE INTO users (username, password_hash, is_admin, is_active, permissions)
+		 VALUES ('admin', ?, 1, 1, '[]')`, hash); err != nil {
+		return fmt.Errorf("seed admin user: %w", err)
 	}
 	return nil
 }

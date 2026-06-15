@@ -58,6 +58,12 @@ func New(st *store.Store, hub *ws.Hub, sessionSecret, adminPassword, webRoot str
 func (s *Server) routes() {
 	s.mux.HandleFunc("GET /api/auth", s.handleAuthCheck)
 	s.mux.HandleFunc("POST /api/auth", s.handleAuthAction)
+	s.mux.HandleFunc("POST /api/register", s.handleRegister)
+
+	// User management (admin) + self-service account (any logged-in user).
+	s.mux.HandleFunc("GET /api/users", s.handleUsersList)
+	s.mux.HandleFunc("POST /api/users", s.handleUsersAction)
+	s.mux.HandleFunc("POST /api/account", s.handleAccountAction)
 	s.mux.HandleFunc("GET /api/board", s.handleBoard)
 	s.mux.HandleFunc("GET /api/cards", s.handleCardsList)
 	s.mux.HandleFunc("POST /api/cards", s.handleCardsAction)
@@ -227,9 +233,49 @@ func readJSON[T any](r *http.Request) (T, error) {
 
 // ── Auth helpers ────────────────────────────────────────────────────────────
 
-// isAdmin checks if the current request has an authenticated admin session.
+// sessionUserID returns the logged-in user's id from the session, or 0 if none.
+// The id is stored as int64 (see handleAuthAction), so it is read back via a
+// type assertion rather than scs's GetInt (which only matches plain int).
+func (s *Server) sessionUserID(r *http.Request) int64 {
+	if id, ok := s.sessions.Get(r.Context(), "user_id").(int64); ok {
+		return id
+	}
+	return 0
+}
+
+// currentUser loads the active account for the current session, or nil if the
+// request is unauthenticated, the user was deleted, or the account has since
+// been deactivated. Loading from the store on each request means permission and
+// activation changes take effect immediately (no stale session snapshot).
+func (s *Server) currentUser(r *http.Request) *model.User {
+	id := s.sessionUserID(r)
+	if id == 0 {
+		return nil
+	}
+	u, err := s.store.GetUserByID(id)
+	if err != nil || u == nil || !u.IsActive {
+		return nil
+	}
+	return u
+}
+
+// isAdmin reports whether the current request is from an authenticated, active
+// admin user.
 func (s *Server) isAdmin(r *http.Request) bool {
-	return s.sessions.GetBool(r.Context(), "is_admin")
+	u := s.currentUser(r)
+	return u != nil && u.IsAdmin
+}
+
+// requireAuth is a guard for endpoints any logged-in (active) user may call. It
+// returns the user and true, or writes a 401 and returns false. Handlers should
+// return immediately when this returns false.
+func (s *Server) requireAuth(w http.ResponseWriter, r *http.Request) (*model.User, bool) {
+	u := s.currentUser(r)
+	if u == nil {
+		writeError(w, http.StatusUnauthorized, "Unauthorized – login required")
+		return nil, false
+	}
+	return u, true
 }
 
 // requireAdmin is a guard that writes a 401 error and returns false if the
@@ -241,6 +287,23 @@ func (s *Server) requireAdmin(w http.ResponseWriter, r *http.Request) bool {
 		return false
 	}
 	return true
+}
+
+// requirePermission is the per-page guard: it allows admins (who hold every
+// permission) and non-admin users granted the given page-permission key. It
+// writes a 401 when unauthenticated and a 403 when authenticated but lacking the
+// permission, returning false in both cases.
+func (s *Server) requirePermission(w http.ResponseWriter, r *http.Request, perm string) bool {
+	u := s.currentUser(r)
+	if u == nil {
+		writeError(w, http.StatusUnauthorized, "Unauthorized – login required")
+		return false
+	}
+	if u.IsAdmin || userHasPermission(u, perm) {
+		return true
+	}
+	writeError(w, http.StatusForbidden, "Forbidden – you do not have access to this feature")
+	return false
 }
 
 // ── Broadcast helpers ───────────────────────────────────────────────────────

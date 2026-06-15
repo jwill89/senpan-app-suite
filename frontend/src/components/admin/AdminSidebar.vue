@@ -11,9 +11,11 @@
  * the sidebar's appearance under existing themes. The minor RouterLink perks
  * (middle-click / open-in-new-tab) aren't worth that theme-fidelity cost here.
  */
+import { computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { adminTabRouteName } from '@/router'
 import { useAdminStore, type AdminSection, type AdminTab } from '@/stores/admin'
+import { useAuthStore } from '@/stores/auth'
 import { useGameStore } from '@/stores/game'
 import { useCardsStore } from '@/stores/cards'
 import { useRafflesStore } from '@/stores/raffles'
@@ -21,9 +23,29 @@ import { BOOK_CLUBS } from '@/lib/constants'
 
 const router = useRouter()
 const admin = useAdminStore()
+const auth = useAuthStore()
 const game = useGameStore()
 const cards = useCardsStore()
 const raffles = useRafflesStore()
+
+/** Whether the current account may access a page (admins → everything). */
+function can(key: string): boolean {
+  return auth.hasPermission(key)
+}
+
+// Section visibility: show a section only when the account can access at least
+// one of its pages (admins see all). The System section also appears for admins
+// because the Users page lives there.
+const showBingo = computed(() =>
+  ['bingo-game', 'bingo-cards', 'bingo-winners-log', 'bingo-patterns', 'bingo-presets'].some(can),
+)
+const showTeahouse = computed(() =>
+  ['teahouse-announcements', 'teahouse-raffles', ...BOOK_CLUBS.map((c) => `bookclub-${c.slug}`)].some(
+    can,
+  ),
+)
+const showAtelier = computed(() => ['atelier-fonts', 'atelier-carrd'].some(can))
+const showSystem = computed(() => auth.isAdmin || ['system-settings', 'system-themes'].some(can))
 
 /** Navigate to an admin tab. */
 function go(tab: AdminTab): void {
@@ -47,7 +69,7 @@ function toggle(section: AdminSection): void {
 <template>
   <nav class="admin-sidebar">
     <!-- Bingo section -->
-    <div class="admin-nav-section">
+    <div v-if="showBingo" class="admin-nav-section">
       <div
         class="admin-nav-header"
         :class="{ open: admin.adminSection === 'bingo' }"
@@ -57,7 +79,11 @@ function toggle(section: AdminSection): void {
         <span class="nav-chevron">{{ admin.adminSection === 'bingo' ? '▾' : '▸' }}</span>
       </div>
       <div v-show="admin.adminSection === 'bingo'" class="admin-nav-items">
-        <button :class="{ active: admin.adminTab === 'bingo-game' }" @click="go('bingo-game')">
+        <button
+          v-if="can('bingo-game')"
+          :class="{ active: admin.adminTab === 'bingo-game' }"
+          @click="go('bingo-game')"
+        >
           <i class="fa-duotone fa-gamepad"></i> {{ game.adminGameLabel }}
           <span
             v-if="game.currentGame"
@@ -66,23 +92,30 @@ function toggle(section: AdminSection): void {
             aria-label="Game in progress"
           ></span>
         </button>
-        <button :class="{ active: admin.adminTab === 'bingo-cards' }" @click="go('bingo-cards')">
+        <button
+          v-if="can('bingo-cards')"
+          :class="{ active: admin.adminTab === 'bingo-cards' }"
+          @click="go('bingo-cards')"
+        >
           <i class="fa-duotone fa-id-card"></i> Manage Cards
           <span v-if="cards.cards.length" class="nav-count">({{ cards.cards.length }})</span>
         </button>
         <button
+          v-if="can('bingo-winners-log')"
           :class="{ active: admin.adminTab === 'bingo-winners-log' }"
           @click="go('bingo-winners-log')"
         >
           <i class="fa-duotone fa-trophy"></i> Winners Log
         </button>
         <button
+          v-if="can('bingo-patterns')"
           :class="{ active: admin.adminTab === 'bingo-patterns' }"
           @click="go('bingo-patterns')"
         >
           <i class="fa-duotone fa-grid"></i> Patterns
         </button>
         <button
+          v-if="can('bingo-presets')"
           :class="{ active: admin.adminTab === 'bingo-presets' }"
           @click="go('bingo-presets')"
         >
@@ -92,7 +125,7 @@ function toggle(section: AdminSection): void {
     </div>
 
     <!-- Senpan Tea House section (Announcements + Raffles + the book clubs) -->
-    <div class="admin-nav-section">
+    <div v-if="showTeahouse" class="admin-nav-section">
       <div
         class="admin-nav-header"
         :class="{ open: admin.adminSection === 'teahouse' }"
@@ -103,12 +136,14 @@ function toggle(section: AdminSection): void {
       </div>
       <div v-show="admin.adminSection === 'teahouse'" class="admin-nav-items">
         <button
+          v-if="can('teahouse-announcements')"
           :class="{ active: admin.adminTab === 'teahouse-announcements' }"
           @click="go('teahouse-announcements')"
         >
           <i class="fa-duotone fa-megaphone"></i> Announcements
         </button>
         <button
+          v-if="can('teahouse-raffles')"
           :class="{ active: admin.adminTab === 'teahouse-raffles' }"
           @click="go('teahouse-raffles')"
         >
@@ -119,6 +154,7 @@ function toggle(section: AdminSection): void {
         </button>
         <button
           v-for="club in BOOK_CLUBS"
+          v-show="can(`bookclub-${club.slug}`)"
           :key="club.slug"
           :class="{ active: admin.adminTab === `bookclub-${club.slug}` }"
           @click="go(`bookclub-${club.slug}` as AdminTab)"
@@ -129,7 +165,7 @@ function toggle(section: AdminSection): void {
     </div>
 
     <!-- Atelier Yao section -->
-    <div class="admin-nav-section">
+    <div v-if="showAtelier" class="admin-nav-section">
       <div
         class="admin-nav-header"
         :class="{ open: admin.adminSection === 'atelier' }"
@@ -140,12 +176,14 @@ function toggle(section: AdminSection): void {
       </div>
       <div v-show="admin.adminSection === 'atelier'" class="admin-nav-items">
         <button
+          v-if="can('atelier-fonts')"
           :class="{ active: admin.adminTab === 'atelier-fonts' }"
           @click="go('atelier-fonts')"
         >
           <i class="fa-duotone fa-font"></i> Font Upload
         </button>
         <button
+          v-if="can('atelier-carrd')"
           :class="{ active: admin.adminTab === 'atelier-carrd' }"
           @click="go('atelier-carrd')"
         >
@@ -155,7 +193,7 @@ function toggle(section: AdminSection): void {
     </div>
 
     <!-- System section -->
-    <div class="admin-nav-section">
+    <div v-if="showSystem" class="admin-nav-section">
       <div
         class="admin-nav-header"
         :class="{ open: admin.adminSection === 'system' }"
@@ -166,16 +204,25 @@ function toggle(section: AdminSection): void {
       </div>
       <div v-show="admin.adminSection === 'system'" class="admin-nav-items">
         <button
+          v-if="can('system-settings')"
           :class="{ active: admin.adminTab === 'system-settings' }"
           @click="go('system-settings')"
         >
           <i class="fa-duotone fa-gear"></i> App Settings
         </button>
         <button
+          v-if="can('system-themes')"
           :class="{ active: admin.adminTab === 'system-themes' }"
           @click="go('system-themes')"
         >
           <i class="fa-duotone fa-palette"></i> Themes
+        </button>
+        <button
+          v-if="auth.isAdmin"
+          :class="{ active: admin.adminTab === 'system-users' }"
+          @click="go('system-users')"
+        >
+          <i class="fa-duotone fa-users-gear"></i> Users
         </button>
       </div>
     </div>

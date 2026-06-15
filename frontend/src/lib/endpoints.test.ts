@@ -29,11 +29,20 @@ describe('board.get', () => {
 })
 
 describe('auth', () => {
-  it('login posts the password and opts out of the global 401 redirect', async () => {
-    await endpoints.auth.login('hunter2')
+  it('login posts the username + password and opts out of the global 401 redirect', async () => {
+    await endpoints.auth.login('yao', 'hunter2')
     expect(apiPost).toHaveBeenCalledWith(
       'auth',
-      { action: 'login', password: 'hunter2' },
+      { action: 'login', username: 'yao', password: 'hunter2' },
+      { skipAuthRedirect: true },
+    )
+  })
+
+  it('register posts the username + password and opts out of the global 401 redirect', async () => {
+    await endpoints.auth.register('yao', 'hunter2')
+    expect(apiPost).toHaveBeenCalledWith(
+      'register',
+      { username: 'yao', password: 'hunter2' },
       { skipAuthRedirect: true },
     )
   })
@@ -41,6 +50,26 @@ describe('auth', () => {
   it('logout opts out of the global 401 redirect', async () => {
     await endpoints.auth.logout()
     expect(apiPost).toHaveBeenCalledWith('auth', { action: 'logout' }, { skipAuthRedirect: true })
+  })
+})
+
+describe('users + account', () => {
+  it('setPermissions posts the action with the permission keys', async () => {
+    await endpoints.users.setPermissions(3, ['bingo-game', 'bingo-cards'])
+    expect(apiPost).toHaveBeenCalledWith('users', {
+      action: 'set_permissions',
+      id: 3,
+      permissions: ['bingo-game', 'bingo-cards'],
+    })
+  })
+
+  it('changePassword posts the current + new password', async () => {
+    await endpoints.account.changePassword('old', 'new')
+    expect(apiPost).toHaveBeenCalledWith('account', {
+      action: 'change_password',
+      current_password: 'old',
+      new_password: 'new',
+    })
   })
 })
 

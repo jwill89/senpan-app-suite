@@ -93,12 +93,12 @@ var bookclubHTTPClient = &http.Client{Timeout: 15 * time.Second}
 //	Auth:      admin
 //	Response:  {"reading_lists": [...]}
 func (s *Server) handleReadingListsList(w http.ResponseWriter, r *http.Request) {
-	if !s.requireAdmin(w, r) {
-		return
-	}
 	club := strings.TrimSpace(r.URL.Query().Get("club"))
 	if club == "" {
 		club = defaultClubSlug
+	}
+	if !s.requirePermission(w, r, bookClubPerm(club)) {
+		return
 	}
 	lists, err := s.store.ListReadingLists(club)
 	if err != nil {
@@ -114,7 +114,7 @@ func (s *Server) handleReadingListsList(w http.ResponseWriter, r *http.Request) 
 //	Auth:      admin
 //	Response:  {"reading_list": ReadingList}
 func (s *Server) handleReadingListDetail(w http.ResponseWriter, r *http.Request) {
-	if !s.requireAdmin(w, r) {
+	if _, ok := s.requireAuth(w, r); !ok {
 		return
 	}
 	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
@@ -129,6 +129,9 @@ func (s *Server) handleReadingListDetail(w http.ResponseWriter, r *http.Request)
 	}
 	if list == nil {
 		writeError(w, http.StatusNotFound, "Reading list not found")
+		return
+	}
+	if !s.requirePermission(w, r, bookClubPerm(list.ClubSlug)) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"reading_list": list})
@@ -148,12 +151,34 @@ type readingListRequest struct {
 //	Auth:      admin
 //	Request:   {"action": "create"|"update"|"delete", ...}
 func (s *Server) handleReadingListsAction(w http.ResponseWriter, r *http.Request) {
-	if !s.requireAdmin(w, r) {
+	if _, ok := s.requireAuth(w, r); !ok {
 		return
 	}
 	req, err := readJSON[readingListRequest](r)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "Invalid JSON")
+		return
+	}
+
+	// Resolve the owning book club so access can be checked per club. create
+	// carries the slug in the body; update/delete derive it from the record.
+	club := strings.TrimSpace(req.ClubSlug)
+	if req.Action == "update" || req.Action == "delete" {
+		existing, err := s.store.GetReadingList(req.ID)
+		if err != nil {
+			writeInternalError(w, "get reading list", err)
+			return
+		}
+		if existing == nil {
+			writeError(w, http.StatusNotFound, "Reading list not found")
+			return
+		}
+		club = existing.ClubSlug
+	}
+	if club == "" {
+		club = defaultClubSlug
+	}
+	if !s.requirePermission(w, r, bookClubPerm(club)) {
 		return
 	}
 
@@ -233,12 +258,25 @@ type readingListItemRequest struct {
 //	Auth:      admin
 //	Request:   {"action": "create"|"update"|"delete", "item": {...}, "item_id": N}
 func (s *Server) handleReadingListItems(w http.ResponseWriter, r *http.Request) {
-	if !s.requireAdmin(w, r) {
+	if _, ok := s.requireAuth(w, r); !ok {
 		return
 	}
 	listID, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "Invalid reading list ID")
+		return
+	}
+	// Resolve the owning book club to permission-check per club.
+	parent, err := s.store.GetReadingList(listID)
+	if err != nil {
+		writeInternalError(w, "get reading list", err)
+		return
+	}
+	if parent == nil {
+		writeError(w, http.StatusNotFound, "Reading list not found")
+		return
+	}
+	if !s.requirePermission(w, r, bookClubPerm(parent.ClubSlug)) {
 		return
 	}
 	req, err := readJSON[readingListItemRequest](r)
@@ -349,7 +387,7 @@ func sanitizeSources(sources []model.ReadingListSource) []model.ReadingListSourc
 //	Request:   multipart form with "image" field
 //	Response:  {"url": "https://host/images/bookclub/cover_....ext"}
 func (s *Server) handleBookclubUpload(w http.ResponseWriter, r *http.Request) {
-	if !s.requireAdmin(w, r) {
+	if !s.requireAnyBookClub(w, r) {
 		return
 	}
 	s.saveSingleImageUpload(w, r, bookclubCoverRelDir, "cover")
@@ -436,7 +474,7 @@ const anilistMediaFields = `id title { romaji english native } description(asHtm
 //	Auth:      admin
 //	Response:  {"results": [ReadingListItem-shaped, ...]}
 func (s *Server) handleBookclubLookup(w http.ResponseWriter, r *http.Request) {
-	if !s.requireAdmin(w, r) {
+	if !s.requireAnyBookClub(w, r) {
 		return
 	}
 	endpoint := s.anilistURL()
@@ -653,7 +691,7 @@ func stripHTML(s string) string {
 //	Auth:      admin
 //	Response:  {"published": <count>}
 func (s *Server) handlePublishReadingList(w http.ResponseWriter, r *http.Request) {
-	if !s.requireAdmin(w, r) {
+	if _, ok := s.requireAuth(w, r); !ok {
 		return
 	}
 	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
@@ -669,6 +707,9 @@ func (s *Server) handlePublishReadingList(w http.ResponseWriter, r *http.Request
 	}
 	if list == nil {
 		writeError(w, http.StatusNotFound, "Reading list not found")
+		return
+	}
+	if !s.requirePermission(w, r, bookClubPerm(list.ClubSlug)) {
 		return
 	}
 	if len(list.Items) == 0 {

@@ -27,6 +27,7 @@ import type {
   ReadingListItem,
   ReadingListSource,
   Style,
+  User,
   WinnersLogEntry,
 } from './api.generated'
 
@@ -50,6 +51,7 @@ export type {
   ReadingListItem,
   ReadingListSource,
   Style,
+  User,
   WinnersLogEntry,
 } from './api.generated'
 
@@ -60,9 +62,28 @@ export interface OkResponse {
   success?: boolean
 }
 
-// GET /api/auth and POST /api/auth (login/logout).
+// GET /api/auth and POST /api/auth (login/logout). When authenticated, `user`
+// carries the current account so the frontend can gate UI by permission.
 export interface AuthCheckResponse {
   authenticated: boolean
+  user: User | null
+}
+
+// POST /api/auth {action:"login"} — success plus the logged-in user.
+export interface LoginResponse {
+  success?: boolean
+  user: User
+}
+
+// POST /api/register — account created (pending admin activation).
+export interface RegisterResponse {
+  success?: boolean
+  message: string
+}
+
+// GET /api/users — all accounts (admin only).
+export interface UsersResponse {
+  users: User[]
 }
 
 // GET /api/styles/active — the active theme's raw CSS.

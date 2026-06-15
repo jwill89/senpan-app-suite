@@ -65,6 +65,8 @@ import {
   faTrophy,
   faFaceSmile,
   faUser,
+  faUserPlus,
+  faUsersGear,
 } from '@awesome.me/kit-46204fb6f1/icons/duotone/solid'
 import {
   faArrowLeft as faArrowLeftSolid,
@@ -159,6 +161,8 @@ const icons = [
   faTrophy,
   faFaceSmile,
   faUser,
+  faUserPlus,
+  faUsersGear,
   // Solid — action-button icons.
   faArrowLeftSolid,
   faArrowRightFromBracketSolid,

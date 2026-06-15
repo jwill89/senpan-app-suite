@@ -34,7 +34,7 @@ import type { AdminTab } from '@/stores/admin'
 import { useAuthStore } from '@/stores/auth'
 import { useAdminStore } from '@/stores/admin'
 import { useUiStore } from '@/stores/ui'
-import { BOOK_CLUBS } from '@/lib/constants'
+import { BOOK_CLUBS, ADMIN_PERMISSIONS } from '@/lib/constants'
 
 // Views and admin tabs are lazy-loaded (dynamic import) so each route's code —
 // and its heavy deps (CodeMirror, vuedraggable, markdown-it) — is split into a
@@ -116,6 +116,18 @@ const adminChildren: RouteRecordRaw[] = [
     meta: { tab: 'system-themes' },
   },
   {
+    path: 'system/users',
+    name: 'admin-system-users',
+    component: () => import('@/components/admin/UsersTab.vue'),
+    meta: { tab: 'system-users' },
+  },
+  // Landing for active accounts with no granted pages (guard redirects here).
+  {
+    path: 'no-access',
+    name: 'admin-no-access',
+    component: () => import('@/views/NoAccessView.vue'),
+  },
+  {
     path: 'atelier/fonts',
     name: 'admin-atelier-fonts',
     component: () => import('@/components/admin/FontsTab.vue'),
@@ -149,6 +161,13 @@ const routes: RouteRecordRaw[] = [
     name: 'admin-login',
     component: () => import('@/views/AdminLoginView.vue'),
   },
+  // Hidden registration page — intentionally not linked anywhere in the UI.
+  // Admins share this URL directly; new accounts start inactive.
+  {
+    path: '/admin/register',
+    name: 'admin-register',
+    component: () => import('@/views/RegisterView.vue'),
+  },
   {
     path: '/admin',
     component: () => import('@/views/AdminView.vue'),
@@ -170,6 +189,19 @@ export const router = createRouter({
 /** Maps an AdminTab id to its route name (for programmatic navigation). */
 export function adminTabRouteName(tab: AdminTab): string {
   return 'admin-' + tab
+}
+
+/**
+ * Resolves where a logged-in account should land in the admin area: admins go to
+ * the game tab; other users go to the first page (in canonical order) they have
+ * permission for. Returns null when the account has no granted pages.
+ */
+function firstAllowedAdminRoute(auth: ReturnType<typeof useAuthStore>): string | null {
+  if (auth.isAdmin) return 'admin-bingo-game'
+  for (const p of ADMIN_PERMISSIONS) {
+    if (auth.hasPermission(p.key)) return adminTabRouteName(p.key as AdminTab)
+  }
+  return null
 }
 
 // ── Navigation guard ─────────────────────────────────────────────────────────
@@ -224,18 +256,38 @@ router.beforeEach(async (to) => {
   const auth = useAuthStore()
 
   if (to.meta.requiresAdmin) {
-    // Verify admin auth once per session (server is the source of truth).
+    // Verify auth once per session (server is the source of truth).
     if (!auth.authChecked) {
       await auth.checkAuth()
     }
-    if (!auth.isAdmin) {
+    // The admin area now admits any logged-in (active) account; individual pages
+    // are gated per permission below.
+    if (!auth.user) {
       return { name: 'admin-login', query: { redirect: to.fullPath } }
+    }
+
+    // Per-page permission gating. The matched child's meta.tab doubles as its
+    // permission key; the Users page is admin-only and never granted otherwise.
+    const tab = to.meta.tab as AdminTab | undefined
+    if (tab) {
+      const allowed =
+        tab === 'system-users' ? auth.isAdmin : auth.isAdmin || auth.hasPermission(tab)
+      if (!allowed) {
+        const fallback = firstAllowedAdminRoute(auth)
+        if (fallback && fallback !== to.name) return { name: fallback }
+        if (!fallback) return { name: 'admin-no-access' }
+      }
     }
   }
 
-  // If already authenticated, skip the login page straight to the dashboard.
-  if (to.name === 'admin-login' && auth.authChecked && auth.isAdmin) {
-    return { name: 'admin-bingo-game' }
+  // If already authenticated, skip the login/register pages straight to the
+  // account's first permitted page.
+  if (
+    (to.name === 'admin-login' || to.name === 'admin-register') &&
+    auth.authChecked &&
+    auth.user
+  ) {
+    return { name: firstAllowedAdminRoute(auth) ?? 'admin-no-access' }
   }
 
   // Sync the admin store's tab/section from the matched child route's meta.

@@ -235,7 +235,7 @@ func (s *Server) listCarrdProjects() ([]carrdProject, error) {
 //	Auth:      admin
 //	Response:  {"projects": [{title, folder, image_count, modified}]}
 func (s *Server) handleCarrdProjectsList(w http.ResponseWriter, r *http.Request) {
-	if !s.requireAdmin(w, r) {
+	if !s.requirePermission(w, r, permAtelierCarrd) {
 		return
 	}
 
@@ -269,7 +269,7 @@ type carrdProjectsActionRequest struct {
 //	Response:  create → {"ok": true, "project": {...}}
 //	           delete → {"ok": true}
 func (s *Server) handleCarrdProjectsAction(w http.ResponseWriter, r *http.Request) {
-	if !s.requireAdmin(w, r) {
+	if !s.requirePermission(w, r, permAtelierCarrd) {
 		return
 	}
 
@@ -382,7 +382,7 @@ func (s *Server) createCarrdProject(w http.ResponseWriter, root string, req carr
 //	Response:  {"folder": "...", "path": "...", "dirs": ["..."],
 //	            "images": [{name, size, modified}]}
 func (s *Server) handleCarrdImagesList(w http.ResponseWriter, r *http.Request) {
-	if !s.requireAdmin(w, r) {
+	if !s.requirePermission(w, r, permAtelierCarrd) {
 		return
 	}
 
@@ -467,7 +467,7 @@ type carrdImagesActionRequest struct {
 //	           {"action":"delete_dir","folder":"...","path":"..."}
 //	Response:  {"ok": true} (create_dir also returns {"name": newDir})
 func (s *Server) handleCarrdImagesAction(w http.ResponseWriter, r *http.Request) {
-	if !s.requireAdmin(w, r) {
+	if !s.requirePermission(w, r, permAtelierCarrd) {
 		return
 	}
 
@@ -551,7 +551,7 @@ func (s *Server) handleCarrdImagesAction(w http.ResponseWriter, r *http.Request)
 //	           more "files" fields
 //	Response:  {"uploaded": ["a.png"], "skipped": [{"name":"b.txt","reason":"..."}]}
 func (s *Server) handleCarrdUpload(w http.ResponseWriter, r *http.Request) {
-	if !s.requireAdmin(w, r) {
+	if !s.requirePermission(w, r, permAtelierCarrd) {
 		return
 	}
 

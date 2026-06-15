@@ -29,7 +29,7 @@ var validScheduleKinds = map[string]bool{"": true, "once": true, "daily": true, 
 //	Auth:      admin
 //	Response:  {"types": [...]}
 func (s *Server) handleAnnouncementTypesList(w http.ResponseWriter, r *http.Request) {
-	if !s.requireAdmin(w, r) {
+	if !s.requirePermission(w, r, permTeahouseAnnounce) {
 		return
 	}
 	types, err := s.store.ListAnnouncementTypes()
@@ -54,7 +54,7 @@ type announcementTypeRequest struct {
 //	Auth:      admin
 //	Request:   {"action": "create"|"update"|"delete", ...}
 func (s *Server) handleAnnouncementTypesAction(w http.ResponseWriter, r *http.Request) {
-	if !s.requireAdmin(w, r) {
+	if !s.requirePermission(w, r, permTeahouseAnnounce) {
 		return
 	}
 	req, err := readJSON[announcementTypeRequest](r)
@@ -130,7 +130,7 @@ func (s *Server) handleAnnouncementTypesAction(w http.ResponseWriter, r *http.Re
 //	Auth:      admin
 //	Response:  {"announcements": [...]}
 func (s *Server) handleAnnouncementsList(w http.ResponseWriter, r *http.Request) {
-	if !s.requireAdmin(w, r) {
+	if !s.requirePermission(w, r, permTeahouseAnnounce) {
 		return
 	}
 	items, err := s.store.ListAnnouncements()
@@ -155,7 +155,7 @@ type announcementRequest struct {
 //	Auth:      admin
 //	Request:   {"action": "create"|"update"|"delete"|"send_now"|"skip_next", ...}
 func (s *Server) handleAnnouncementsAction(w http.ResponseWriter, r *http.Request) {
-	if !s.requireAdmin(w, r) {
+	if !s.requirePermission(w, r, permTeahouseAnnounce) {
 		return
 	}
 	req, err := readJSON[announcementRequest](r)
@@ -607,7 +607,7 @@ func (s *Server) announcementImageDir() string {
 //	Auth:      admin
 //	Response:  {"url": "https://host/images/announcements/announcement_....ext"}
 func (s *Server) handleAnnouncementUpload(w http.ResponseWriter, r *http.Request) {
-	if !s.requireAdmin(w, r) {
+	if !s.requirePermission(w, r, permTeahouseAnnounce) {
 		return
 	}
 	s.saveSingleImageUpload(w, r, announcementImageRelDir, "announcement")
@@ -620,7 +620,7 @@ func (s *Server) handleAnnouncementUpload(w http.ResponseWriter, r *http.Request
 //	Auth:      admin
 //	Response:  {"images": ["https://host/images/announcements/....png", ...]}
 func (s *Server) handleAnnouncementImages(w http.ResponseWriter, r *http.Request) {
-	if !s.requireAdmin(w, r) {
+	if !s.requirePermission(w, r, permTeahouseAnnounce) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"images": s.listUploadedImageURLs(r, announcementImageRelDir)})

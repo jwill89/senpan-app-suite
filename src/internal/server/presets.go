@@ -21,7 +21,7 @@ type presetRequest struct {
 //	Auth:      admin
 //	Response:  {"presets": [...]}
 func (s *Server) handlePresetsList(w http.ResponseWriter, r *http.Request) {
-	if !s.requireAdmin(w, r) {
+	if !s.requirePermission(w, r, permBingoPresets) {
 		return
 	}
 
@@ -40,7 +40,7 @@ func (s *Server) handlePresetsList(w http.ResponseWriter, r *http.Request) {
 //	Request:     {"action": "create"|"update"|"delete", ...}
 //	Response:    varies by action
 func (s *Server) handlePresetsAction(w http.ResponseWriter, r *http.Request) {
-	if !s.requireAdmin(w, r) {
+	if !s.requirePermission(w, r, permBingoPresets) {
 		return
 	}
 

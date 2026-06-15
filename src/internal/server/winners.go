@@ -12,7 +12,7 @@ import (
 //	Params:    page, per_page (1–200), sort (logged_at|card_id|player_name|game_details), dir (asc|desc)
 //	Response:  {"entries": [...], "total": int, "page": int, "per_page": int}
 func (s *Server) handleWinnersLog(w http.ResponseWriter, r *http.Request) {
-	if !s.requireAdmin(w, r) {
+	if !s.requirePermission(w, r, permBingoWinnersLog) {
 		return
 	}
 
@@ -49,7 +49,7 @@ func (s *Server) handleWinnersLog(w http.ResponseWriter, r *http.Request) {
 //	Auth:      admin
 //	Response:  {"winners": [{player_name, win_count}, ...]}
 func (s *Server) handleFrequentWinners(w http.ResponseWriter, r *http.Request) {
-	if !s.requireAdmin(w, r) {
+	if !s.requirePermission(w, r, permBingoWinnersLog) {
 		return
 	}
 

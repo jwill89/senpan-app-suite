@@ -19,6 +19,9 @@ import { apiGet, apiPost } from '@/lib/api'
 import type {
   ActiveCssResponse,
   AuthCheckResponse,
+  LoginResponse,
+  RegisterResponse,
+  UsersResponse,
   BoardResponse,
   CardListEntry,
   CardResponse,
@@ -75,14 +78,45 @@ const enc = encodeURIComponent
 export const endpoints = {
   // ── Auth ───────────────────────────────────────────────────────────────────
   auth: {
-    /** GET /api/auth — current admin auth status (always 200). */
+    /** GET /api/auth — current auth status + the logged-in user (always 200). */
     check: () => apiGet<AuthCheckResponse>('auth'),
-    /** POST /api/auth {login} — a bad password 401s without a global redirect. */
-    login: (password: string) =>
-      apiPost<OkResponse>('auth', { action: 'login', password }, { skipAuthRedirect: true }),
+    /** POST /api/auth {login} — bad credentials 401 without a global redirect. */
+    login: (username: string, password: string) =>
+      apiPost<LoginResponse>(
+        'auth',
+        { action: 'login', username, password },
+        { skipAuthRedirect: true },
+      ),
     /** POST /api/auth {logout}. */
     logout: () =>
       apiPost<OkResponse>('auth', { action: 'logout' }, { skipAuthRedirect: true }),
+    /** POST /api/register — create an account (hidden page; pending activation). */
+    register: (username: string, password: string) =>
+      apiPost<RegisterResponse>('register', { username, password }, { skipAuthRedirect: true }),
+  },
+
+  // ── Users (admin) + self-service account ─────────────────────────────────────
+  users: {
+    /** GET /api/users — all accounts (admin only). */
+    list: () => apiGet<UsersResponse>('users'),
+    setActive: (id: number, active: boolean) =>
+      apiPost<OkResponse>('users', { action: 'set_active', id, active }),
+    setAdmin: (id: number, admin: boolean) =>
+      apiPost<OkResponse>('users', { action: 'set_admin', id, admin }),
+    setPermissions: (id: number, permissions: string[]) =>
+      apiPost<OkResponse>('users', { action: 'set_permissions', id, permissions }),
+    setPassword: (id: number, password: string) =>
+      apiPost<OkResponse>('users', { action: 'set_password', id, password }),
+    delete: (id: number) => apiPost<OkResponse>('users', { action: 'delete', id }),
+  },
+  account: {
+    /** POST /api/account — change the logged-in user's own password. */
+    changePassword: (currentPassword: string, newPassword: string) =>
+      apiPost<OkResponse>('account', {
+        action: 'change_password',
+        current_password: currentPassword,
+        new_password: newPassword,
+      }),
   },
 
   // ── Board (player + admin card fetch) ────────────────────────────────────────

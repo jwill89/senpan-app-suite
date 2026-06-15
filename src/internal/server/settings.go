@@ -77,7 +77,7 @@ type settingsRequest struct {
 //	Response:    {"ok": true}
 //	Broadcasts:  settings_update (when app_title or header_font changes)
 func (s *Server) handleSettingsUpdate(w http.ResponseWriter, r *http.Request) {
-	if !s.requireAdmin(w, r) {
+	if !s.requirePermission(w, r, permSystemSettings) {
 		return
 	}
 

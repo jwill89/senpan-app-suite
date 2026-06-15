@@ -19,6 +19,9 @@ import (
 const (
 	testPassword = "test-password"
 	testSecret   = "test-secret-key-for-sessions-32b"
+	// Bootstrap account seeded by the users migration (see store.migrateUsers).
+	seedAdminUser = "admin"
+	seedAdminPass = "admin"
 )
 
 // testEnv bundles a test server, authenticated client, and raw store.
@@ -75,7 +78,9 @@ func (e *testEnv) postJSON(t *testing.T, path string, body any) *http.Response {
 
 func (e *testEnv) loginAdmin(t *testing.T) {
 	t.Helper()
-	resp := e.postJSON(t, "/api/auth", map[string]string{"action": "login", "password": testPassword})
+	resp := e.postJSON(t, "/api/auth", map[string]string{
+		"action": "login", "username": seedAdminUser, "password": seedAdminPass,
+	})
 	resp.Body.Close()
 	if resp.StatusCode != 200 {
 		t.Fatalf("admin login failed: %d", resp.StatusCode)
@@ -143,7 +148,9 @@ func TestAuth_CheckNotAuthenticated(t *testing.T) {
 func TestAuth_LoginSuccess(t *testing.T) {
 	env := newTestEnv(t)
 
-	resp := env.postJSON(t, "/api/auth", map[string]string{"action": "login", "password": testPassword})
+	resp := env.postJSON(t, "/api/auth", map[string]string{
+		"action": "login", "username": seedAdminUser, "password": seedAdminPass,
+	})
 	data := decodeBody(t, resp)
 	if data["success"] != true {
 		t.Errorf("expected success=true, got %v", data)
@@ -159,7 +166,9 @@ func TestAuth_LoginSuccess(t *testing.T) {
 func TestAuth_LoginWrongPassword(t *testing.T) {
 	env := newTestEnv(t)
 
-	resp := env.postJSON(t, "/api/auth", map[string]string{"action": "login", "password": "wrong"})
+	resp := env.postJSON(t, "/api/auth", map[string]string{
+		"action": "login", "username": seedAdminUser, "password": "wrong",
+	})
 	if resp.StatusCode != http.StatusUnauthorized {
 		t.Errorf("status = %d; want 401", resp.StatusCode)
 	}

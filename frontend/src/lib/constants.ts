@@ -81,6 +81,41 @@ export function clubEventsWebhookKey(slug: string): `discord_events_webhook_url_
   return `discord_events_webhook_url_${slug}`
 }
 
+/**
+ * Canonical list of grantable admin page permissions. Each `key` matches both a
+ * frontend AdminTab id and the backend permission constant (see permissions.go),
+ * so it doubles as the router `meta.tab`/permission key. Used by the Users-page
+ * permission editor, the sidebar gating, and the router guard.
+ *
+ * NOTE: the Users page itself ("system-users") is intentionally NOT listed — it
+ * is admin-only and never granted to non-admins. Book-club entries are derived
+ * from BOOK_CLUBS so adding a club wires up its permission automatically.
+ */
+export interface AdminPermission {
+  key: string
+  label: string
+  section: string
+}
+
+export const ADMIN_PERMISSIONS: AdminPermission[] = [
+  { key: 'bingo-game', label: 'Current/New Game', section: 'Bingo' },
+  { key: 'bingo-cards', label: 'Manage Cards', section: 'Bingo' },
+  { key: 'bingo-winners-log', label: 'Winners Log', section: 'Bingo' },
+  { key: 'bingo-patterns', label: 'Patterns', section: 'Bingo' },
+  { key: 'bingo-presets', label: 'Game Presets', section: 'Bingo' },
+  { key: 'teahouse-announcements', label: 'Announcements', section: 'Senpan Tea House' },
+  { key: 'teahouse-raffles', label: 'Raffles', section: 'Senpan Tea House' },
+  ...BOOK_CLUBS.map((c) => ({
+    key: `bookclub-${c.slug}`,
+    label: c.name,
+    section: 'Senpan Tea House',
+  })),
+  { key: 'atelier-fonts', label: 'Font Upload', section: 'Atelier Yao' },
+  { key: 'atelier-carrd', label: 'Carrd Upload', section: 'Atelier Yao' },
+  { key: 'system-settings', label: 'App Settings', section: 'System' },
+  { key: 'system-themes', label: 'Themes', section: 'System' },
+]
+
 /** Default app settings — matches the original app.js defaults. */
 export const DEFAULT_APP_SETTINGS: AppSettings = {
   app_title: 'Senpan App Suite',

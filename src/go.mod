@@ -6,6 +6,7 @@ require (
 	github.com/alexedwards/scs/v2 v2.9.0
 	github.com/coder/websocket v1.8.14
 	github.com/ncruces/go-sqlite3 v0.35.0
+	golang.org/x/crypto v0.53.0
 )
 
 require (

@@ -25,7 +25,7 @@ type patternRequest struct {
 //	Auth:      admin
 //	Response:  {"patterns": [...], "categories": [...]}
 func (s *Server) handlePatternsList(w http.ResponseWriter, r *http.Request) {
-	if !s.requireAdmin(w, r) {
+	if !s.requirePermission(w, r, permBingoPatterns) {
 		return
 	}
 
@@ -50,7 +50,7 @@ func (s *Server) handlePatternsList(w http.ResponseWriter, r *http.Request) {
 //	Response:    varies by action
 //	Broadcasts:  patterns_update
 func (s *Server) handlePatternsAction(w http.ResponseWriter, r *http.Request) {
-	if !s.requireAdmin(w, r) {
+	if !s.requirePermission(w, r, permBingoPatterns) {
 		return
 	}
 
@@ -208,7 +208,7 @@ type categoryRequest struct {
 //	Auth:      admin
 //	Response:  {"categories": [...]}
 func (s *Server) handleCategoriesList(w http.ResponseWriter, r *http.Request) {
-	if !s.requireAdmin(w, r) {
+	if !s.requirePermission(w, r, permBingoPatterns) {
 		return
 	}
 
@@ -228,7 +228,7 @@ func (s *Server) handleCategoriesList(w http.ResponseWriter, r *http.Request) {
 //	Response:    varies by action
 //	Broadcasts:  patterns_update
 func (s *Server) handleCategoriesAction(w http.ResponseWriter, r *http.Request) {
-	if !s.requireAdmin(w, r) {
+	if !s.requirePermission(w, r, permBingoPatterns) {
 		return
 	}
 

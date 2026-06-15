@@ -83,178 +83,246 @@ watch(
 <template>
   <div class="tab-body">
     <AdminPanel title="App Settings" icon="fa-duotone fa-gear">
-      <div class="settings-form">
-        <FormField label="App Title" help="Displayed in the browser tab and home page header.">
-          <input v-model="app.settings.app_title" placeholder="My App" aria-label="App title" />
-        </FormField>
-        <FormField
-          help="Shown on the home page above the board-ID field where players join a game."
-        >
-          <template #label>
-            Bingo Join Prompt
-            <span class="text-dim" style="font-weight: 400">(Markdown supported)</span>
-          </template>
-          <MarkdownEditor
-            v-model="app.settings.bingo_join_prompt"
-            min-height="100px"
-            placeholder="Enter your unique bingo board ID to play"
-          />
-        </FormField>
-        <FormField
-          label="Default Draw Delay (seconds)"
-          help="Pre-selected delay when starting a new game. Can still be changed per-draw."
-        >
-          <select v-model="app.settings.default_draw_delay" aria-label="Default draw delay">
-            <option value="0">0 — Instant</option>
-            <option value="3">3 seconds</option>
-            <option value="5">5 seconds</option>
-            <option value="10">10 seconds</option>
-            <option value="15">15 seconds</option>
-            <option value="20">20 seconds</option>
-            <option value="30">30 seconds</option>
-            <option value="45">45 seconds</option>
-            <option value="60">60 seconds</option>
-          </select>
-        </FormField>
-        <FormField
-          label="Frequent Winner Threshold"
-          help="How many wins before a player is flagged as a frequent winner."
-        >
-          <input
-            v-model="app.settings.frequent_winner_threshold"
-            type="number"
-            min="1"
-            max="100"
-            aria-label="Frequent winner threshold"
-          />
-        </FormField>
-        <FormField
-          label="Frequent Winner Lookback (hours)"
-          help="Time window to check for frequent winners (1–168 hours)."
-        >
-          <input
-            v-model="app.settings.frequent_winner_hours"
-            type="number"
-            min="1"
-            max="168"
-            aria-label="Frequent winner hours"
-          />
-        </FormField>
-        <FormField label="Google Fonts API Key">
-          <input
-            v-model="app.settings.google_fonts_api_key"
-            placeholder="Enter API key for font autocomplete"
-            aria-label="Google Fonts API key"
-            type="password"
-            autocomplete="off"
-          />
-          <template #help>
-            Optional. Enables full font autocomplete from Google Fonts.
-            <a
-              href="https://developers.google.com/fonts/docs/developer_api#APIKey"
-              target="_blank"
-              rel="noopener"
-              >Get a free key ↗</a
-            >
-          </template>
-        </FormField>
-        <FormField html-for="header-font-select">
-          <template #label>Header / Board Font</template>
-          <div class="flex gap-sm">
-            <select
-              id="header-font-select"
-              v-model="app.settings.header_font"
-              aria-label="Header font"
-              class="field-input-full"
-              @change="app.previewHeaderFont()"
-            >
-              <option v-if="customHeaderFont" :value="customHeaderFont">
-                {{ customHeaderFont }} (custom)
-              </option>
-              <optgroup v-if="uploadedFontFamilies.length" label="Uploaded Fonts">
-                <option
-                  v-for="f in uploadedFontFamilies"
-                  :key="'up-' + f"
-                  :value="f"
-                  :style="{ fontFamily: `'${f}', serif` }"
-                >
-                  {{ f }}
-                </option>
-              </optgroup>
-              <optgroup label="Google Fonts">
-                <option v-for="f in fontOptions" :key="'g-' + f" :value="f">{{ f }}</option>
-              </optgroup>
+      <!-- Grouped into logical sections laid out in a responsive 2-column grid
+           (stacks to one column on narrow screens) so the page isn't one long
+           scroll. -->
+      <div class="settings-grid">
+        <!-- General ───────────────────────────────────────────────────── -->
+        <section class="settings-section">
+          <h4 class="section-heading"><i class="fa-duotone fa-sliders"></i> General</h4>
+          <FormField label="App Title" help="Displayed in the browser tab and home page header.">
+            <input v-model="app.settings.app_title" placeholder="My App" aria-label="App title" />
+          </FormField>
+          <FormField
+            help="Shown on the home page above the board-ID field where players join a game."
+          >
+            <template #label>
+              Bingo Join Prompt
+              <span class="text-dim fw-normal">(Markdown supported)</span>
+            </template>
+            <MarkdownEditor
+              v-model="app.settings.bingo_join_prompt"
+              min-height="100px"
+              placeholder="Enter your unique bingo board ID to play"
+            />
+          </FormField>
+        </section>
+
+        <!-- Gameplay ───────────────────────────────────────────────────── -->
+        <section class="settings-section">
+          <h4 class="section-heading"><i class="fa-duotone fa-dice"></i> Gameplay</h4>
+          <FormField
+            label="Default Draw Delay (seconds)"
+            help="Pre-selected delay when starting a new game. Can still be changed per-draw."
+          >
+            <select v-model="app.settings.default_draw_delay" aria-label="Default draw delay">
+              <option value="0">0 — Instant</option>
+              <option value="3">3 seconds</option>
+              <option value="5">5 seconds</option>
+              <option value="10">10 seconds</option>
+              <option value="15">15 seconds</option>
+              <option value="20">20 seconds</option>
+              <option value="30">30 seconds</option>
+              <option value="45">45 seconds</option>
+              <option value="60">60 seconds</option>
             </select>
-            <a
-              href="https://fonts.google.com"
-              target="_blank"
-              rel="noopener"
-              class="btn-ghost btn-sm"
-              style="white-space: nowrap"
-              >Browse Fonts ↗</a
-            >
+          </FormField>
+          <FormField
+            label="Frequent Winner Threshold"
+            help="How many wins before a player is flagged as a frequent winner."
+          >
+            <input
+              v-model="app.settings.frequent_winner_threshold"
+              type="number"
+              min="1"
+              max="100"
+              aria-label="Frequent winner threshold"
+            />
+          </FormField>
+          <FormField
+            label="Frequent Winner Lookback (hours)"
+            help="Time window to check for frequent winners (1–168 hours)."
+          >
+            <input
+              v-model="app.settings.frequent_winner_hours"
+              type="number"
+              min="1"
+              max="168"
+              aria-label="Frequent winner hours"
+            />
+          </FormField>
+        </section>
+
+        <!-- Fonts & Branding ───────────────────────────────────────────── -->
+        <section class="settings-section">
+          <h4 class="section-heading"><i class="fa-duotone fa-font"></i> Fonts &amp; Branding</h4>
+          <FormField label="Google Fonts API Key">
+            <input
+              v-model="app.settings.google_fonts_api_key"
+              placeholder="Enter API key for font autocomplete"
+              aria-label="Google Fonts API key"
+              type="password"
+              autocomplete="off"
+            />
+            <template #help>
+              Optional. Enables full font autocomplete from Google Fonts.
+              <a
+                href="https://developers.google.com/fonts/docs/developer_api#APIKey"
+                target="_blank"
+                rel="noopener"
+                >Get a free key ↗</a
+              >
+            </template>
+          </FormField>
+          <FormField html-for="header-font-select">
+            <template #label>Header / Board Font</template>
+            <div class="flex gap-sm">
+              <select
+                id="header-font-select"
+                v-model="app.settings.header_font"
+                aria-label="Header font"
+                class="field-input-full"
+                @change="app.previewHeaderFont()"
+              >
+                <option v-if="customHeaderFont" :value="customHeaderFont">
+                  {{ customHeaderFont }} (custom)
+                </option>
+                <optgroup v-if="uploadedFontFamilies.length" label="Uploaded Fonts">
+                  <option
+                    v-for="f in uploadedFontFamilies"
+                    :key="'up-' + f"
+                    :value="f"
+                    :style="{ fontFamily: `'${f}', serif` }"
+                  >
+                    {{ f }}
+                  </option>
+                </optgroup>
+                <optgroup label="Google Fonts">
+                  <option v-for="f in fontOptions" :key="'g-' + f" :value="f">{{ f }}</option>
+                </optgroup>
+              </select>
+              <a
+                href="https://fonts.google.com"
+                target="_blank"
+                rel="noopener"
+                class="btn-ghost btn-sm nowrap"
+                >Browse Fonts ↗</a
+              >
+            </div>
+            <template #help>
+              Choose a Google font or one uploaded under System → Font Upload (uploaded fonts are
+              listed first). The preview below updates live.
+            </template>
+          </FormField>
+          <div
+            class="font-preview"
+            :style="{ fontFamily: '\'' + (app.settings.header_font || 'Arapey') + '\', serif' }"
+          >
+            <span class="fp-bingo">B I N G O</span
+            ><br />
+            <span class="fp-nums">1 &nbsp; 23 &nbsp; 45 &nbsp; 67</span
+            ><br />
+            <span class="fp-title">
+              {{ app.settings.app_title || 'App Title' }}
+            </span>
           </div>
-          <template #help>
-            Choose a Google font or one uploaded under System → Font Upload (uploaded fonts are
-            listed first). The preview below updates live.
+        </section>
+
+        <!-- Book Club Integrations ─────────────────────────────────────── -->
+        <section class="settings-section">
+          <h4 class="section-heading">
+            <i class="fa-duotone fa-book-open-cover"></i> Book Club Integrations
+          </h4>
+          <template v-for="club in BOOK_CLUBS" :key="club.slug">
+            <FormField
+              :label="`${club.name} — Reading List Webhook URL`"
+              help="Publishes this club's reading lists — each item posted as its own embed to this channel. Kept private; never sent to non-admin visitors."
+            >
+              <input
+                v-model="app.settings[clubWebhookKey(club.slug)]"
+                placeholder="https://discord.com/api/webhooks/…"
+                :aria-label="club.name + ' reading list Discord webhook URL'"
+                type="password"
+                autocomplete="off"
+              />
+            </FormField>
+            <FormField
+              :label="`${club.name} — Events Channel Webhook URL`"
+              help="Where this club's scheduled event posts are sent. Kept private; never sent to non-admin visitors."
+            >
+              <input
+                v-model="app.settings[clubEventsWebhookKey(club.slug)]"
+                placeholder="https://discord.com/api/webhooks/…"
+                :aria-label="club.name + ' events Discord webhook URL'"
+                type="password"
+                autocomplete="off"
+              />
+            </FormField>
           </template>
-        </FormField>
-        <div
-          class="font-preview mb-12"
-          :style="{ fontFamily: '\'' + (app.settings.header_font || 'Arapey') + '\', serif' }"
-        >
-          <span style="font-size: 2rem; font-weight: 800; letter-spacing: 2px">B I N G O</span
-          ><br />
-          <span style="font-size: 1.3rem; font-weight: 700">1 &nbsp; 23 &nbsp; 45 &nbsp; 67</span
-          ><br />
-          <span style="font-size: 3rem; font-weight: 700; text-transform: uppercase">
-            {{ app.settings.app_title || 'App Title' }}
-          </span>
-        </div>
-        <template v-for="club in BOOK_CLUBS" :key="club.slug">
           <FormField
-            :label="`${club.name} — Reading List Webhook URL`"
-            help="Publishes this club's reading lists — each item posted as its own embed to this channel. Kept private; never sent to non-admin visitors."
+            label="AniList API URL"
+            help="GraphQL endpoint for the &quot;Pull from AniList&quot; lookup when adding reading list items. No API key needed."
           >
             <input
-              v-model="app.settings[clubWebhookKey(club.slug)]"
-              placeholder="https://discord.com/api/webhooks/…"
-              :aria-label="club.name + ' reading list Discord webhook URL'"
-              type="password"
-              autocomplete="off"
+              v-model="app.settings.anilist_api_url"
+              placeholder="https://graphql.anilist.co"
+              aria-label="AniList API URL"
             />
           </FormField>
-          <FormField
-            :label="`${club.name} — Events Channel Webhook URL`"
-            help="Where this club's scheduled event posts are sent. Kept private; never sent to non-admin visitors."
-          >
-            <input
-              v-model="app.settings[clubEventsWebhookKey(club.slug)]"
-              placeholder="https://discord.com/api/webhooks/…"
-              :aria-label="club.name + ' events Discord webhook URL'"
-              type="password"
-              autocomplete="off"
-            />
-          </FormField>
-        </template>
-        <FormField
-          label="AniList API URL (Book Clubs)"
-          help="GraphQL endpoint for the &quot;Pull from AniList&quot; lookup when adding reading list items. No API key needed."
-        >
-          <input
-            v-model="app.settings.anilist_api_url"
-            placeholder="https://graphql.anilist.co"
-            aria-label="AniList API URL"
-          />
-        </FormField>
-        <FormActions align="start">
-          <button class="btn-primary" :disabled="app.savingSettings" @click="app.saveSettings()">
-            <LoadingSpinner v-if="app.savingSettings" label="Saving…" />
-            <template v-else>Save Settings</template>
-          </button>
-        </FormActions>
+        </section>
       </div>
+
+      <FormActions align="start">
+        <button class="btn-primary" :disabled="app.savingSettings" @click="app.saveSettings()">
+          <LoadingSpinner v-if="app.savingSettings" label="Saving…" />
+          <template v-else>Save Settings</template>
+        </button>
+      </FormActions>
     </AdminPanel>
   </div>
 </template>
+
+<style scoped>
+/* Two-column settings layout: each logical group is a raised card; the grid
+   auto-fits to one column once a column can't keep its min width (mobile). */
+.settings-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr));
+  gap: 20px;
+  align-items: start;
+  margin-bottom: 20px;
+}
+.settings-section {
+  background: var(--panel-raised-bg);
+  border-radius: var(--radius);
+  padding: 16px 18px;
+}
+/* The shared .section-heading object sets colour + bottom margin; just clear the
+   default heading top margin so it sits flush with the card top. */
+.settings-section > .section-heading {
+  margin-top: 0;
+}
+/* Last field/preview in a card shouldn't add trailing space below the card. */
+.settings-section > :last-child {
+  margin-bottom: 0;
+}
+.settings-section .font-preview {
+  margin-top: 4px;
+}
+/* The three sample lines inside the live font preview (chosen header font). */
+.fp-bingo {
+  font-size: 2rem;
+  font-weight: 800;
+  letter-spacing: 2px;
+}
+.fp-nums {
+  font-size: 1.3rem;
+  font-weight: 700;
+}
+.fp-title {
+  font-size: 3rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+</style>
 

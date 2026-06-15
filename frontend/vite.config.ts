@@ -138,12 +138,23 @@ export default defineConfig({
   server: {
     port: 5173,
     proxy: {
+      // WebSocket upgrade for /api/ws — MUST come before the '/api' entry so it
+      // matches first. `changeOrigin` is left false here on purpose: the Go hub
+      // (coder/websocket) enforces a same-origin check (the request's Origin host
+      // must equal its Host header). Rewriting Host to the target (:8080) — as the
+      // REST proxy below does — would leave Origin as the browser's :5173 and fail
+      // that check (403 → the socket drops → "Connection lost. Reconnecting").
+      // Preserving Host keeps it equal to Origin, mirroring production's Apache
+      // `ProxyPreserveHost On`, so the check passes without weakening it.
+      '/api/ws': {
+        target: process.env.VITE_API_TARGET || 'http://localhost:8080',
+        ws: true,
+        changeOrigin: false,
+      },
       // REST API → Go backend
       '/api': {
         target: process.env.VITE_API_TARGET || 'http://localhost:8080',
         changeOrigin: true,
-        // WebSocket upgrade for /api/ws
-        ws: true,
       },
     },
   },

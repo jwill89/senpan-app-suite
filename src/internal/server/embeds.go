@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net/url"
 	"strconv"
 	"strings"
 )
@@ -252,12 +253,18 @@ func postDiscordEmbed(webhookURL string, embed discordEmbed) error {
 }
 
 // postDiscordWebhook sends a full webhook payload (embeds + optional components) to
-// the webhook URL. Link-button components require a webhook that supports message
-// components; Discord returns a non-2xx status (surfaced as an error) otherwise.
+// the webhook URL. When the payload carries components (our link-button rows),
+// Discord ignores them unless the execute request opts in with
+// `?with_components=true`; without it the message posts but the buttons silently
+// vanish. Link buttons are non-interactive, so channel (non-application-owned)
+// webhooks are allowed to send them once the flag is set.
 func postDiscordWebhook(webhookURL string, payload discordWebhookPayload) error {
 	body, err := json.Marshal(payload)
 	if err != nil {
 		return fmt.Errorf("encode embed")
+	}
+	if len(payload.Components) > 0 {
+		webhookURL = withComponentsParam(webhookURL)
 	}
 	resp, err := bookclubHTTPClient.Post(webhookURL, "application/json", bytes.NewReader(body))
 	if err != nil {
@@ -269,6 +276,20 @@ func postDiscordWebhook(webhookURL string, payload discordWebhookPayload) error 
 		return fmt.Errorf("webhook returned status %d", resp.StatusCode)
 	}
 	return nil
+}
+
+// withComponentsParam returns the webhook URL with `with_components=true` added to
+// its query, so Discord honours the payload's `components` (button rows) instead of
+// silently dropping them. A URL that can't be parsed is returned unchanged.
+func withComponentsParam(webhookURL string) string {
+	u, err := url.Parse(webhookURL)
+	if err != nil {
+		return webhookURL
+	}
+	q := u.Query()
+	q.Set("with_components", "true")
+	u.RawQuery = q.Encode()
+	return u.String()
 }
 
 // isHTTPURL reports whether u is an http(s) URL (Discord requires absolute URLs

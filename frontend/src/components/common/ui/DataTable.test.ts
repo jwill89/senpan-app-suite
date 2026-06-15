@@ -59,6 +59,27 @@ describe('DataTable', () => {
     expect(wrapper.findAll('thead th')[1].classes()).toContain('ta-center')
   })
 
+  it('applies a per-row class from the rowClass function', () => {
+    const wrapper = mount(DataTable, {
+      props: {
+        columns,
+        rows,
+        rowKey: 'id',
+        rowClass: (r: unknown) => ({ 'row-selected': (r as Row).id === 2 }),
+      },
+    })
+    const trs = wrapper.findAll('tbody tr')
+    expect(trs[0].classes()).not.toContain('row-selected')
+    expect(trs[1].classes()).toContain('row-selected')
+  })
+
+  it('applies a static rowClass string to every row', () => {
+    const wrapper = mount(DataTable, {
+      props: { columns, rows, rowKey: 'id', rowClass: 'zebra' },
+    })
+    expect(wrapper.findAll('tbody tr').every((tr) => tr.classes().includes('zebra'))).toBe(true)
+  })
+
   it('renders the empty slot when there are no rows', () => {
     const wrapper = mount(DataTable, {
       props: { columns, rows: [] as Row[], rowKey: 'id' },

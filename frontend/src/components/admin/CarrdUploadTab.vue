@@ -154,7 +154,7 @@ onMounted(() => carrd.loadProjects())
   <div class="tab-body">
     <AdminPanel>
       <div class="flex-toolbar mb-12">
-        <h3 style="margin: 0"><i class="fa-duotone fa-images"></i> Carrd Upload</h3>
+        <h3 class="m-0"><i class="fa-duotone fa-images"></i> Carrd Upload</h3>
       </div>
 
       <p class="text-dim text-xs mb-12">
@@ -210,7 +210,7 @@ onMounted(() => carrd.loadProjects())
         <button
           v-for="p in carrd.projects"
           :key="p.folder"
-          class="carrd-project-chip"
+          class="chip chip--stack carrd-project-chip"
           :class="{ active: carrd.selectedFolder === p.folder }"
           @click="carrd.openProject(p.folder)"
         >
@@ -221,7 +221,7 @@ onMounted(() => carrd.loadProjects())
             /{{ p.folder }} · {{ p.image_count }} image{{ p.image_count === 1 ? '' : 's' }}
           </span>
           <span
-            class="carrd-project-del"
+            class="chip-del carrd-project-del"
             role="button"
             tabindex="0"
             title="Delete this project"
@@ -278,12 +278,12 @@ onMounted(() => carrd.loadProjects())
           <button
             v-for="dir in carrd.dirs"
             :key="dir"
-            class="carrd-dir-chip"
+            class="chip"
             @click="carrd.navigate(joinCarrdPath(carrd.currentPath, dir))"
           >
             <i class="fa-duotone fa-folder"></i> {{ dir }}
             <span
-              class="carrd-dir-del"
+              class="chip-del carrd-dir-del"
               role="button"
               tabindex="0"
               title="Delete this folder"
@@ -306,7 +306,7 @@ onMounted(() => carrd.loadProjects())
             <button class="btn-primary btn-sm" @click="submitDir">Add</button>
             <button class="btn-ghost btn-sm" @click="cancelAddDir">Cancel</button>
           </template>
-          <button v-else class="carrd-dir-chip carrd-dir-add" @click="addingDir = true">
+          <button v-else class="chip carrd-dir-add" @click="addingDir = true">
             <i class="fa-solid fa-plus"></i> New Folder
           </button>
         </div>
@@ -415,25 +415,10 @@ onMounted(() => carrd.loadProjects())
   flex-wrap: wrap;
   gap: 10px;
 }
+/* Chrome from the `.chip` + `.chip--stack` objects; only the relative
+   positioning (for the absolute delete corner) + title/meta type are local. */
 .carrd-project-chip {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 2px;
-  padding: 10px 14px;
-  background: var(--panel-raised-bg);
-  border: 1px solid transparent;
-  border-radius: var(--radius);
-  cursor: pointer;
-  text-align: left;
   position: relative;
-}
-.carrd-project-chip:hover {
-  border-color: var(--highlight);
-}
-.carrd-project-chip.active {
-  border-color: var(--highlight);
-  box-shadow: inset 0 0 0 1px var(--highlight);
 }
 .carrd-project-title {
   color: var(--highlight);
@@ -444,15 +429,11 @@ onMounted(() => carrd.loadProjects())
   font-size: 0.75rem;
   color: var(--text-muted);
 }
+/* Colour/hover come from `.chip-del`; only the corner placement is local. */
 .carrd-project-del {
   position: absolute;
   top: 8px;
   right: 10px;
-  color: var(--text-muted);
-  cursor: pointer;
-}
-.carrd-project-del:hover {
-  color: var(--danger, #e25555);
 }
 
 /* Selected-project detail. */
@@ -499,27 +480,11 @@ onMounted(() => carrd.loadProjects())
   align-items: center;
   gap: 8px;
 }
-.carrd-dir-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 12px;
-  background: var(--panel-raised-bg);
-  border: 1px solid transparent;
-  border-radius: var(--radius);
-  color: var(--text);
-  cursor: pointer;
-}
-.carrd-dir-chip:hover {
-  border-color: var(--highlight);
-}
+/* Sub-folder chips are plain `.chip`s; the delete affordance is `.chip-del`
+   (only its left margin is local). The "New Folder" chip is a `.chip` with a
+   dashed, muted outline. */
 .carrd-dir-del {
-  color: var(--text-muted);
-  cursor: pointer;
   margin-left: 2px;
-}
-.carrd-dir-del:hover {
-  color: var(--danger, #e25555);
 }
 .carrd-dir-add {
   color: var(--text-muted);
@@ -625,7 +590,7 @@ onMounted(() => carrd.loadProjects())
 }
 .carrd-del-overlay:hover {
   opacity: 1;
-  background: var(--danger, #e25555);
+  background: var(--danger);
 }
 .carrd-card-body {
   padding: 8px 10px;
@@ -639,14 +604,13 @@ onMounted(() => carrd.loadProjects())
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-/* Filled (not transparent) so the button reads clearly against the surface2
-   card; the default ghost border is surface2 and would be invisible here. */
+/* Full-width copy action under each media card. Chrome comes from `.btn-ghost`
+   (its `--control-border` outline reads on the card surface); only layout + the
+   highlight hover are component-specific. */
 .carrd-copy-btn {
   margin-top: 4px;
   width: 100%;
   white-space: nowrap;
-  background: var(--panel-bg);
-  border-color: var(--panel-bg);
 }
 .carrd-copy-btn:hover {
   border-color: var(--highlight);

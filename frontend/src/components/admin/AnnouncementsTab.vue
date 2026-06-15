@@ -200,8 +200,15 @@ async function submitType(): Promise<void> {
                 :style="{ background: a.color || '#e53170' }"
                 aria-hidden="true"
               ></span>
-              <img v-if="a.image" :src="a.image" class="ann-cover" alt="Announcement image" />
-              <div v-else class="ann-cover media-empty"><i class="fa-duotone fa-image"></i></div>
+              <img
+                v-if="a.image"
+                :src="a.image"
+                class="media-cover media-cover--wide"
+                alt="Announcement image"
+              />
+              <div v-else class="media-cover media-cover--wide media-empty">
+                <i class="fa-duotone fa-image"></i>
+              </div>
             </template>
 
             <h4 class="ann-title">{{ a.title }}</h4>
@@ -215,14 +222,14 @@ async function submitType(): Promise<void> {
               <span v-if="a.timezone" class="text-dim">({{ a.timezone }})</span>
             </p>
             <p class="text-sm ann-meta">
-              <span v-if="a.schedule_kind" class="badge ann-badge ann-badge-sched">
+              <span v-if="a.schedule_kind" class="badge badge--accent ann-badge">
                 {{ scheduleLabel(a) }}
                 <template v-if="a.next_post_at">
                   · next {{ inZone(a.next_post_at, a.timezone) }}
                 </template>
               </span>
-              <span v-else class="badge ann-badge ann-badge-manual">Manual only</span>
-              <span v-if="a.skip_next" class="badge ann-badge ann-badge-skip">⏭ next skipped</span>
+              <span v-else class="badge badge--muted ann-badge">Manual only</span>
+              <span v-if="a.skip_next" class="badge badge--warning ann-badge">⏭ next skipped</span>
             </p>
 
             <template #actions>
@@ -452,7 +459,7 @@ async function submitType(): Promise<void> {
               v-for="(label, day) in WEEKDAYS"
               :key="day"
               type="button"
-              class="ann-weekday"
+              class="toggle-btn"
               :class="{ active: store.form.weekdays.includes(day) }"
               @click="toggleWeekday(day)"
             >
@@ -586,13 +593,6 @@ async function submitType(): Promise<void> {
   border-radius: 3px;
   flex: 0 0 auto;
 }
-.ann-cover {
-  width: 120px;
-  height: 68px;
-  object-fit: cover;
-  border-radius: 6px;
-  flex: 0 0 auto;
-}
 .ann-title {
   margin: 0 0 4px;
 }
@@ -658,44 +658,15 @@ async function submitType(): Promise<void> {
   text-transform: uppercase;
   color: var(--text-muted);
 }
+/* Weekday buttons are `.toggle-btn`s; this is just their flex container. */
 .ann-weekdays {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
 }
-.ann-weekday {
-  background: var(--panel-bg);
-  color: var(--text);
-  border: 1px solid var(--panel-raised-bg);
-  border-radius: var(--radius);
-  padding: 6px 12px;
-  font-weight: 600;
-  cursor: pointer;
-}
-.ann-weekday:hover {
-  border-color: var(--accent);
-}
-.ann-weekday.active {
-  background: var(--accent);
-  color: var(--text-on-accent);
-  border-color: var(--accent);
-}
-/* Pill chrome comes from the global `.badge` object; only spacing + the
-   per-state colours below are component-specific. */
+/* Status pills use the global `.badge` object + shared `.badge--*` state
+   modifiers; only the inter-pill spacing is component-specific. */
 .ann-badge {
   margin-right: 6px;
-}
-.ann-badge-sched {
-  background: rgba(229, 49, 112, 0.18);
-  color: var(--text);
-}
-.ann-badge-manual {
-  background: var(--panel-bg);
-  color: var(--text-muted);
-  border: 1px solid var(--panel-raised-bg);
-}
-.ann-badge-skip {
-  background: color-mix(in srgb, var(--warning) 22%, transparent);
-  color: var(--text);
 }
 </style>

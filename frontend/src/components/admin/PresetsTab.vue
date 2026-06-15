@@ -64,7 +64,7 @@ function patternById(id: number) {
       <FormField>
         <template #label>
           Game Details
-          <span class="text-dim" style="font-weight: 400; font-size: 0.8rem">
+          <span class="text-dim fw-normal text-xs">
             (Markdown supported)
           </span>
         </template>

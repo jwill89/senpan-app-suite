@@ -115,7 +115,7 @@ function toggleSelectAll(): void {
           </span>
           <h4>
             {{ group.category.name }}
-            <span class="text-dim" style="font-weight: 400">({{ group.patterns.length }})</span>
+            <span class="text-dim fw-normal">({{ group.patterns.length }})</span>
           </h4>
         </div>
         <div v-show="!patterns.isCategoryCollapsed(group.category.id)" class="pattern-checks">

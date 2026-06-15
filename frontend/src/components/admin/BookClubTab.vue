@@ -71,14 +71,14 @@ function formatInZone(iso: string, tz: string): string {
     <!-- Sub-view toggle: Reading Lists / Event Posts -->
     <div class="bc-viewbar mb-16">
       <button
-        class="bc-tab"
+        class="toggle-btn"
         :class="{ active: bookclub.view === 'lists' }"
         @click="bookclub.setView('lists')"
       >
         <i class="fa-duotone fa-book"></i> Reading Lists
       </button>
       <button
-        class="bc-tab"
+        class="toggle-btn"
         :class="{ active: bookclub.view === 'events' }"
         @click="bookclub.setView('events')"
       >
@@ -116,10 +116,10 @@ function formatInZone(iso: string, tz: string): string {
               <img
                 v-if="item.cover_image"
                 :src="assetUrl(item.cover_image)"
-                class="bc-item-cover"
+                class="media-cover media-cover--book"
                 alt="Cover"
               />
-              <div v-else class="bc-item-cover media-empty">
+              <div v-else class="media-cover media-cover--book media-empty">
                 <i class="fa-duotone fa-image"></i>
               </div>
             </template>
@@ -187,7 +187,12 @@ function formatInZone(iso: string, tz: string): string {
                 class="bc-result"
                 @click="bookclub.applyLookupResult(res)"
               >
-                <img v-if="res.cover_image" :src="res.cover_image" class="bc-result-cover" alt="" />
+                <img
+                  v-if="res.cover_image"
+                  :src="res.cover_image"
+                  class="media-cover media-cover--book-sm"
+                  alt=""
+                />
                 <span class="bc-result-info">
                   <strong>{{ res.title }}</strong>
                   <small class="text-dim">{{ res.format }} · {{ res.chapters }} ch</small>
@@ -201,7 +206,7 @@ function formatInZone(iso: string, tz: string): string {
               <img
                 v-if="bookclub.itemForm.cover_image"
                 :src="assetUrl(bookclub.itemForm.cover_image)"
-                class="bc-cover-preview"
+                class="media-cover media-cover--book-lg"
                 alt="Cover preview"
               />
               <input
@@ -359,7 +364,8 @@ function formatInZone(iso: string, tz: string): string {
               v-if="editingListId === list.id"
               v-model="editingTitle"
               aria-label="Rename reading list"
-              style="width: 100%; max-width: 360px"
+              class="w-full"
+              style="max-width: 360px"
               @keyup.enter="commitRename(list)"
               @keyup.esc="cancelRename()"
             />
@@ -509,8 +515,13 @@ function formatInZone(iso: string, tz: string): string {
           <div v-if="bookclub.events.length" class="list-rows">
             <ListRow v-for="ev in bookclub.events" :key="ev.id">
               <template #media>
-                <img v-if="ev.image" :src="ev.image" class="bc-event-cover" alt="Event image" />
-                <div v-else class="bc-event-cover media-empty">
+                <img
+                  v-if="ev.image"
+                  :src="ev.image"
+                  class="media-cover media-cover--wide"
+                  alt="Event image"
+                />
+                <div v-else class="media-cover media-cover--wide media-empty">
                   <i class="fa-duotone fa-image"></i>
                 </div>
               </template>
@@ -527,8 +538,8 @@ function formatInZone(iso: string, tz: string): string {
                 </span>
               </p>
               <p class="text-sm">
-                <span v-if="ev.posted" class="bc-badge bc-badge-posted">Posted</span>
-                <span v-else class="bc-badge bc-badge-scheduled">
+                <span v-if="ev.posted" class="badge badge--success">Posted</span>
+                <span v-else class="badge badge--muted">
                   Posts {{ formatInZone(ev.post_at, ev.timezone) }}
                 </span>
               </p>
@@ -573,13 +584,6 @@ function formatInZone(iso: string, tz: string): string {
 .bc-list-title:hover {
   text-decoration: underline;
 }
-.bc-item-cover {
-  width: 64px;
-  height: 90px;
-  object-fit: cover;
-  border-radius: 6px;
-  flex: 0 0 auto;
-}
 .bc-item-title {
   margin: 0 0 4px;
 }
@@ -622,68 +626,15 @@ function formatInZone(iso: string, tz: string): string {
 .bc-result:hover {
   border-color: var(--accent);
 }
-.bc-result-cover {
-  width: 36px;
-  height: 50px;
-  object-fit: cover;
-  border-radius: 4px;
-}
 .bc-result-info {
   display: flex;
   flex-direction: column;
 }
-.bc-cover-preview {
-  width: 100px;
-  height: 140px;
-  object-fit: cover;
-  border-radius: 6px;
-  display: block;
-  margin-bottom: 8px;
-}
 
 /* ── Event posts ─────────────────────────────────────────────────────────── */
+/* The two view buttons are `.toggle-btn`s; this is just their flex container. */
 .bc-viewbar {
   display: flex;
   gap: 8px;
-}
-.bc-tab {
-  background: var(--panel-raised-bg);
-  color: var(--text);
-  border: 1px solid var(--panel-raised-bg);
-  border-radius: var(--radius);
-  padding: 8px 16px;
-  font-weight: 600;
-  cursor: pointer;
-}
-.bc-tab:hover {
-  border-color: var(--accent);
-}
-.bc-tab.active {
-  background: var(--accent);
-  color: var(--text-on-accent);
-  border-color: var(--accent);
-}
-.bc-event-cover {
-  width: 120px;
-  height: 68px;
-  object-fit: cover;
-  border-radius: 6px;
-  flex: 0 0 auto;
-}
-.bc-badge {
-  display: inline-block;
-  padding: 2px 8px;
-  border-radius: 999px;
-  font-size: 0.78rem;
-  font-weight: 600;
-}
-.bc-badge-posted {
-  background: rgba(44, 182, 125, 0.25);
-  color: var(--text);
-}
-.bc-badge-scheduled {
-  background: var(--panel-bg);
-  color: var(--text-muted);
-  border: 1px solid var(--panel-raised-bg);
 }
 </style>

@@ -137,7 +137,7 @@ async function saveNew(): Promise<void> {
       <template v-else-if="searching">
         <div v-if="patterns.gameFilteredPatterns.length" class="saved-patterns">
           <div v-for="p in patterns.gameFilteredPatterns" :key="p.id" class="saved-pattern">
-            <span class="del" title="Delete pattern" @click="patterns.confirmDeletePattern(p.id)"
+            <span class="del-x" title="Delete pattern" @click="patterns.confirmDeletePattern(p.id)"
               >&times;</span
             >
             <PatternMini :pattern-data="p.pattern_data" />
@@ -174,7 +174,7 @@ async function saveNew(): Promise<void> {
             </span>
             <h4>
               {{ group.category.name }}
-              <span class="text-dim" style="font-weight: 400">({{ group.patterns.length }})</span>
+              <span class="text-dim fw-normal">({{ group.patterns.length }})</span>
             </h4>
           </div>
 
@@ -193,7 +193,7 @@ async function saveNew(): Promise<void> {
               <div class="saved-pattern">
                 <span class="drag-handle pattern-drag"><i class="fa-duotone fa-bars"></i></span>
                 <span
-                  class="del"
+                  class="del-x"
                   title="Delete pattern"
                   @click="patterns.confirmDeletePattern(p.id)"
                   >&times;</span

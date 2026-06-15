@@ -72,7 +72,7 @@ function toggleEditorMode(): void {
               No themes yet.
             </p>
           </div>
-          <button class="btn-secondary btn-sm mt" style="width: 100%" @click="styles.newStyle()">
+          <button class="btn-secondary btn-sm mt w-full" @click="styles.newStyle()">
             + New Theme
           </button>
           <button
@@ -81,16 +81,14 @@ function toggleEditorMode(): void {
               styles.editingStyle.id &&
               String(styles.editingStyle.id) !== styles.activeStyleId
             "
-            class="btn-primary btn-sm mt"
-            style="width: 100%"
+            class="btn-primary btn-sm mt w-full"
             @click="styles.setActiveStyle(styles.editingStyle.id)"
           >
             Set Active
           </button>
           <button
             v-if="styles.activeStyleId"
-            class="btn-ghost btn-sm mt"
-            style="width: 100%"
+            class="btn-ghost btn-sm mt w-full"
             @click="styles.setActiveStyle(0)"
           >
             Clear Active Theme

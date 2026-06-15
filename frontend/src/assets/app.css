@@ -300,6 +300,7 @@ h1 {
 .text-success { color: var(--success) }
 .text-sm { font-size: .85rem }
 .text-xs { font-size: .8rem }
+.fw-normal { font-weight: 400 }
 .code-gold { font-family: monospace; color: var(--highlight) }
 
 /* Margin utilities */
@@ -318,6 +319,11 @@ h1 {
 /* Push an element to the far end of its flex row (e.g. a trailing count). */
 .push-right { margin-left: auto }
 
+/* Misc single-purpose helpers (siblings of the text/margin utilities above). */
+.nowrap { white-space: nowrap }
+.w-full { width: 100% }
+.m-0 { margin: 0 }
+
 /* Flex layout utilities */
 /* Object: horizontal toolbar (search/filter/action controls). `.manager-toolbar`
    is the same toolbar with bottom spacing for a manager page header row. */
@@ -331,9 +337,6 @@ h1 {
 /* Form input helpers */
 .field-label { color: var(--text); font-size: .9rem; font-weight: 600; display: block; margin-bottom: 4px }
 .field-input-full { width: 100% }
-
-/* Admin settings form container (constrained width) */
-.settings-form { max-width: 480px }
 
 /* ----------------------------------------------------------------
    FORM & TABLE PRIMITIVES — shared structure behind the ui/ admin
@@ -461,6 +464,55 @@ h1 {
     transition: border-color .2s;
 }
 
+/* ── Object: chip ──────────────────────────────────────────────────────────
+   A raised, rounded, clickable pill with a transparent border that lights up to
+   `--highlight` on hover (and an inset-ring `.active` state). Shared by the card
+   manager (card-id chips) and the Carrd manager (project + sub-folder chips);
+   each consumer keeps only its own layout/extras. `.chip--stack` lays the chip
+   out as a column (title over meta); `.chip-del` is the muted→danger delete
+   affordance that sits inside a chip. */
+.chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: var(--panel-raised-bg);
+    border: 1px solid transparent;
+    border-radius: var(--radius);
+    padding: 8px 12px;
+    cursor: pointer;
+    transition: border-color .15s;
+}
+.chip:hover { border-color: var(--highlight) }
+.chip.active { border-color: var(--highlight); box-shadow: inset 0 0 0 1px var(--highlight) }
+.chip--stack { flex-direction: column; align-items: flex-start; gap: 2px; text-align: left }
+.chip-del { color: var(--text-muted); cursor: pointer }
+.chip-del:hover { color: var(--danger) }
+
+/* Prominent "×" delete glyph — danger by default, dims to `--text` on hover (the
+   loud counterpart to the subtle `.chip-del`). Shared by the card-id chips and
+   the saved-pattern cards; each consumer adds its own positioning/margin. */
+.del-x { color: var(--danger); font-weight: 700; font-size: 1.1rem; line-height: 1; cursor: pointer; transition: color .12s }
+.del-x:hover { color: var(--text) }
+
+/* ── Object: toggle button ─────────────────────────────────────────────────
+   A segmented/selectable pill: a raised pill with a transparent border that
+   lights to `--accent` on hover and fills with `--accent` / `--text-on-accent`
+   when `.active`. Shared by the announcement weekday picker and the book-club
+   view switcher; stack them in a flex container. (Distinct from `.chip`, whose
+   `.active` is a ring rather than a fill — toggles read as a chosen segment.) */
+.toggle-btn {
+    background: var(--panel-raised-bg);
+    color: var(--text);
+    border: 1px solid transparent;
+    border-radius: var(--radius);
+    padding: 8px 16px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: border-color .15s;
+}
+.toggle-btn:hover { border-color: var(--accent) }
+.toggle-btn.active { background: var(--accent); color: var(--text-on-accent); border-color: var(--accent) }
+
 /* ── Object: badge ─────────────────────────────────────────────────────────
    A small uppercase pill. The shared chrome lives here; the specific badge
    classes (and a `.badge` used directly) only set colours/margins/states. */
@@ -481,6 +533,15 @@ h1 {
     letter-spacing: .04em;
     white-space: nowrap;
 }
+
+/* Shared badge state modifiers (colours only; chrome from `.badge`). The
+   announcement + book-club status pills draw from this one vocabulary instead
+   of per-page classes. Tints are theme-aware via color-mix so custom themes
+   restyle them. */
+.badge--accent  { background: color-mix(in srgb, var(--accent) 22%, transparent); color: var(--text) }
+.badge--success { background: color-mix(in srgb, var(--success) 30%, transparent); color: var(--text) }
+.badge--warning { background: color-mix(in srgb, var(--warning) 22%, transparent); color: var(--text) }
+.badge--muted   { background: var(--panel-bg); color: var(--text-muted); border: 1px solid var(--panel-raised-bg) }
 
 /* ── Object: media (image picker, thumbnail, cover, placeholder) ────────────
    Shared by the announcement + book-club image fields (reuse-an-image pickers,
@@ -520,6 +581,15 @@ h1 {
     background: var(--panel-bg);
     color: var(--text-muted);
 }
+/* Cover/preview image — shared chrome; a size modifier sets the dimensions so
+   every announcement/book-club cover matches. Pairs with `.media-empty` for the
+   no-image placeholder (which keeps its own centred flex display — base sets no
+   `display`, so the inline imgs and the flex placeholder both render correctly). */
+.media-cover { object-fit: cover; border-radius: 6px; flex: 0 0 auto }
+.media-cover--wide { width: 120px; height: 68px }                        /* 16:9 — announcement + event covers */
+.media-cover--book { width: 64px; height: 90px }                         /* book portrait — reading-list item */
+.media-cover--book-sm { width: 36px; height: 50px; border-radius: 4px }  /* small — lookup result */
+.media-cover--book-lg { width: 100px; height: 140px; display: block; margin-bottom: 8px } /* large — form preview */
 
 /* SearchInput: leading icon + grow-to-fill input. */
 .search-input {
@@ -2237,15 +2307,8 @@ span.pattern-mini {
    23. ADMIN CARDS — Card generation, listing, and management
    ================================================================ */
 
-/* Toolbar row with generate count input + action buttons */
-.cards-toolbar {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 12px;
-    align-items: center;
-    margin-bottom: 20px
-}
-
+/* Generate-count input width; the toolbar's flex chrome comes from the shared
+   `.flex-toolbar` object (markup composes `flex-toolbar cards-toolbar mb-20`). */
 .cards-toolbar input[type=number] {
     width: 80px
 }
@@ -2257,41 +2320,21 @@ span.pattern-mini {
     gap: 8px
 }
 
-/* Individual card chip showing ID, player icon, edit/delete controls */
+/* Individual card chip — chrome from the `.chip` object; only the monospace ID
+   type + the player/delete extras are card-specific. */
 .card-chip {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    background: var(--panel-raised-bg);
-    padding: 8px 12px;
-    border-radius: 8px;
     font-family: monospace;
     font-size: .95rem;
-    cursor: pointer;
-    border: 2px solid transparent;
-    transition: border-color .15s
 }
 
-.card-chip:hover {
-    border-color: var(--accent-2)
+/* Delete × on a card chip uses the `.del-x` object; only its spacing is local. */
+.card-chip .del-x {
+    margin-left: 4px
 }
 
-/* Delete × button on card chip */
-.card-chip .del {
-    color: var(--danger);
-    font-weight: 700;
-    cursor: pointer;
-    margin-left: 4px;
-    font-size: 1.1rem
-}
-
-.card-chip .del:hover {
-    color: var(--text)
-}
-
-/* Card chip with assigned player name (highlighted border) */
+/* Card chip with an assigned player name reads as persistently selected. */
 .card-chip.has-player {
-    border-color: var(--accent-2)
+    border-color: var(--highlight)
 }
 
 /* Small player icon indicator on card chip */
@@ -2407,21 +2450,12 @@ span.pattern-mini {
     white-space: nowrap
 }
 
-/* Delete × button (top-right corner of saved pattern) */
-.saved-pattern .del {
+/* Delete × (top-right corner of a saved pattern) uses the `.del-x` object;
+   only its absolute placement is local. */
+.saved-pattern .del-x {
     position: absolute;
     top: 6px;
-    right: 8px;
-    color: var(--danger);
-    cursor: pointer;
-    font-weight: 700;
-    font-size: 1.1rem;
-    line-height: 1;
-    transition: color .12s
-}
-
-.saved-pattern .del:hover {
-    color: var(--text)
+    right: 8px
 }
 
 /* Drag handle icon (top-left corner of saved pattern) */

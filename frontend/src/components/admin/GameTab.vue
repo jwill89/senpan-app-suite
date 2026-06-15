@@ -183,7 +183,7 @@ onBeforeUnmount(() => {
           <div class="game-details-editor">
             <label class="field-label">
               Game Details
-              <span class="text-dim" style="font-weight: 400; font-size: 0.8rem">
+              <span class="text-dim fw-normal text-xs">
                 (Markdown supported)
               </span>
             </label>

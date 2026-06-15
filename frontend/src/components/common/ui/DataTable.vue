@@ -33,6 +33,9 @@ const props = defineProps<{
   rowKey: string | ((row: T) => string | number)
   sortKey?: string
   sortDir?: 'asc' | 'desc'
+  /** Optional per-row class hook — a static class or a function of the row
+   *  (e.g. to highlight a selected row). Applied to each `<tr>`. */
+  rowClass?: string | ((row: T) => string | Record<string, boolean>)
 }>()
 
 defineEmits<{ sort: [key: string] }>()
@@ -54,6 +57,11 @@ function arrow(col: DataColumn): string {
   if (!col.sortable || props.sortKey !== col.key) return ''
   return props.sortDir === 'asc' ? ' ▲' : ' ▼'
 }
+
+/** Resolve the optional per-row class (static string or row-derived). */
+function rowClassFor(row: T): string | Record<string, boolean> | undefined {
+  return typeof props.rowClass === 'function' ? props.rowClass(row) : props.rowClass
+}
 </script>
 
 <template>
@@ -72,7 +80,7 @@ function arrow(col: DataColumn): string {
         </tr>
       </thead>
       <tbody>
-        <tr v-for="row in rows" :key="keyFor(row)">
+        <tr v-for="row in rows" :key="keyFor(row)" :class="rowClassFor(row)">
           <td v-for="col in columns" :key="col.key" :class="col.align ? `ta-${col.align}` : ''">
             <slot :name="`cell-${col.key}`" :row="row">{{ cellValue(row, col.key) }}</slot>
           </td>

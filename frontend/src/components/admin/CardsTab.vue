@@ -7,6 +7,7 @@
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
 import AdminPanel from '@/components/common/ui/AdminPanel.vue'
 import EmptyState from '@/components/common/ui/EmptyState.vue'
+import SearchInput from '@/components/common/ui/SearchInput.vue'
 import { useCardsStore } from '@/stores/cards'
 
 const cards = useCardsStore()
@@ -15,7 +16,7 @@ const cards = useCardsStore()
 <template>
   <div class="tab-body">
     <AdminPanel title="Manage Cards" icon="fa-duotone fa-id-card">
-      <div class="cards-toolbar">
+      <div class="flex-toolbar cards-toolbar mb-20">
         <span class="text-dim">Generate</span>
         <input
           v-model.number="cards.generateCount"
@@ -40,14 +41,12 @@ const cards = useCardsStore()
           {{ cards.filteredCards.length }}/{{ cards.cards.length }} cards
         </span>
       </div>
-      <div class="cards-toolbar" style="margin-top: 8px">
-        <input
-          v-model="cards.cardSearchQuery"
-          placeholder="Search by ID or player name…"
-          aria-label="Search cards"
-          style="flex: 1; min-width: 180px; max-width: 320px"
-        />
-      </div>
+      <SearchInput
+        v-model="cards.cardSearchQuery"
+        class="mb-12"
+        placeholder="Search by ID or player name…"
+        aria-label="Search cards"
+      />
       <LoadingSpinner
         v-if="cards.cardsLoading && cards.cards.length === 0"
         block
@@ -57,7 +56,7 @@ const cards = useCardsStore()
         <div
           v-for="c in cards.filteredCards"
           :key="c.id"
-          class="card-chip"
+          class="chip card-chip"
           :class="{ 'has-player': c.player_name }"
           @click="cards.openCardPreview(c.id)"
         >
@@ -65,7 +64,7 @@ const cards = useCardsStore()
             <i class="fa-duotone fa-user"></i>
           </span>
           <span>{{ c.id }}</span>
-          <span class="del" title="Delete card" @click.stop="cards.deleteCard(c.id)">×</span>
+          <span class="del-x" title="Delete card" @click.stop="cards.deleteCard(c.id)">×</span>
         </div>
       </div>
 

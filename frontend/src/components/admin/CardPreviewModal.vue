@@ -46,19 +46,17 @@ watch(
     @close="cards.previewCard = null"
   >
     <div class="flex-between mb-12">
-      <h3 style="white-space: nowrap">Card <span class="code-gold">{{ cards.previewCard.id }}</span></h3>
+      <h3 class="nowrap">Card <span class="code-gold">{{ cards.previewCard.id }}</span></h3>
       <div class="flex-toolbar" style="flex-wrap: nowrap; gap: 8px">
         <button
-          class="btn-ghost btn-sm"
-          style="white-space: nowrap"
+          class="btn-ghost btn-sm nowrap"
           title="Copy card ID"
           @click="ui.copyToClipboard(cards.previewCard.id)"
         >
           <i class="fa-solid fa-copy"></i> Copy ID
         </button>
         <button
-          class="btn-ghost btn-sm"
-          style="white-space: nowrap"
+          class="btn-ghost btn-sm nowrap"
           title="Copy playable card URL"
           @click="copyCardUrl"
         >
@@ -76,8 +74,8 @@ watch(
           ref="editInput"
           v-model="cards.previewCardEditValue"
           placeholder="Player name"
-          class="inline-edit-input"
-          style="text-align: center; font-weight: 600"
+          class="inline-edit-input ta-center"
+          style="font-weight: 600"
           @blur="cards.savePreviewCardField('player_name')"
           @keydown.enter="($event.target as HTMLInputElement).blur()"
           @keydown.escape="cards.previewCardEditing = null"
@@ -103,8 +101,7 @@ watch(
           ref="editInput"
           v-model="cards.previewCardEditValue"
           placeholder="Details (e.g. character name)"
-          class="inline-edit-input text-dim text-sm"
-          style="text-align: center"
+          class="inline-edit-input text-dim text-sm ta-center"
           @blur="cards.savePreviewCardField('details')"
           @keydown.enter="($event.target as HTMLInputElement).blur()"
           @keydown.escape="cards.previewCardEditing = null"

@@ -272,7 +272,7 @@ async function deleteSelected(): Promise<void> {
               :key="e.id"
               :style="
                 raffles.raffleWinner && raffles.raffleWinner.id === e.id
-                  ? 'background:rgba(214,189,174,.12)'
+                  ? 'background: color-mix(in srgb, var(--highlight) 12%, transparent)'
                   : ''
               "
             >

@@ -49,20 +49,20 @@ watch(
       <h3 class="nowrap">Card <span class="code-gold">{{ cards.previewCard.id }}</span></h3>
       <div class="flex-toolbar" style="flex-wrap: nowrap; gap: 8px">
         <button
-          class="btn-ghost btn-sm nowrap"
+          class="btn-view btn-sm nowrap"
           title="Copy card ID"
           @click="ui.copyToClipboard(cards.previewCard.id)"
         >
           <i class="fa-solid fa-copy"></i> Copy ID
         </button>
         <button
-          class="btn-ghost btn-sm nowrap"
+          class="btn-view btn-sm nowrap"
           title="Copy playable card URL"
           @click="copyCardUrl"
         >
           <i class="fa-solid fa-link"></i> Copy URL
         </button>
-        <button class="btn-ghost btn-sm" @click="cards.previewCard = null">Close</button>
+        <button class="btn-neutral btn-sm" @click="cards.previewCard = null">Close</button>
       </div>
     </div>
     <div class="flex-center">

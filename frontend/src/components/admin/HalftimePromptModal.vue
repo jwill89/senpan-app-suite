@@ -17,8 +17,8 @@ const game = useGameStore()
       You've drawn 35 numbers! Would you like to alert users about a half-time minigame?
     </p>
     <div class="flex-center" style="gap: 12px">
-      <button class="btn-primary" @click="game.confirmHalftime()">Yes</button>
-      <button class="btn-ghost" @click="game.dismissHalftime()">No</button>
+      <button class="btn-action" @click="game.confirmHalftime()">Yes</button>
+      <button class="btn-neutral" @click="game.dismissHalftime()">No</button>
     </div>
   </ModalOverlay>
 </template>

@@ -18,7 +18,7 @@ const game = useGameStore()
         <i class="fa-duotone fa-trophy"></i> Card
         <span class="code-gold">{{ game.winnerPreview.card.id }}</span>
       </h3>
-      <button class="btn-ghost btn-sm" @click="game.winnerPreview = null">Close</button>
+      <button class="btn-neutral btn-sm" @click="game.winnerPreview = null">Close</button>
     </div>
     <p class="text-dim text-sm mb-12 text-center">
       Highlighted cells complete the winning pattern

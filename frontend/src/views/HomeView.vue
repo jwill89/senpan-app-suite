@@ -78,7 +78,7 @@ onMounted(() => joinInput.value?.focus())
           />
         </div>
         <button
-          class="btn-primary"
+          class="btn-action"
           :disabled="player.joinId.length === 0 || player.joining"
           @click="join"
         >
@@ -91,12 +91,12 @@ onMounted(() => joinInput.value?.focus())
       <div v-if="raffles.homeRaffles.length" class="home-card">
         <h2><i class="fa-duotone fa-ticket"></i> Raffles</h2>
         <p>View currently open raffles and enter for a chance to win!</p>
-        <button class="btn-primary" @click="viewRaffles">View Raffles</button>
+        <button class="btn-view" @click="viewRaffles">View Raffles</button>
       </div>
     </div>
     <!-- Admin portal (separate) -->
     <div class="home-admin">
-      <button class="btn-ghost btn-sm" @click="goAdminLogin">
+      <button class="btn-neutral btn-sm" @click="goAdminLogin">
         <i class="fa-solid fa-lock"></i> Admin Portal
       </button>
     </div>

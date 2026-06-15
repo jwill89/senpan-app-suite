@@ -18,7 +18,7 @@ defineEmits<{ back: [] }>()
     <h3 v-if="title || $slots.default">
       <slot><i v-if="icon" :class="icon"></i>{{ title }}</slot>
     </h3>
-    <button class="btn-ghost btn-sm" @click="$emit('back')">
+    <button class="btn-neutral btn-sm" @click="$emit('back')">
       <i class="fa-solid fa-arrow-left"></i> Back
     </button>
   </div>

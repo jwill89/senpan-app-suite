@@ -148,7 +148,7 @@ async function deleteSelected(): Promise<void> {
         </span>
       </SubPageHeader>
       <div class="flex-toolbar flex-end mb-16">
-        <button v-if="isOpen" class="btn-secondary btn-sm" @click="editSelected">
+        <button v-if="isOpen" class="btn-confirm btn-sm" @click="editSelected">
           <i class="fa-solid fa-pen-to-square"></i> Edit
         </button>
         <button class="btn-danger btn-sm" @click="deleteSelected">
@@ -174,14 +174,14 @@ async function deleteSelected(): Promise<void> {
         <p class="text-dim text-sm mb-12">{{ raffles.raffleWinner.num_entries }} entries</p>
         <div v-if="isOpen" class="flex-toolbar">
           <button
-            class="btn-primary"
+            class="btn-action"
             :disabled="raffles.pickingWinner"
             @click="raffles.verifyRaffleWinner()"
           >
             <i class="fa-solid fa-circle-check"></i> Verify Winner
           </button>
           <button
-            class="btn-ghost"
+            class="btn-caution"
             :disabled="raffles.pickingWinner"
             @click="raffles.pickAnotherWinner()"
           >
@@ -194,7 +194,7 @@ async function deleteSelected(): Promise<void> {
       <!-- Pick winner button -->
       <div v-if="isOpen && !raffles.raffleWinner" class="mb-16">
         <button
-          class="btn-primary btn-lg"
+          class="btn-action btn-lg"
           :disabled="raffles.pickingWinner"
           @click="raffles.pickRaffleWinner()"
         >
@@ -239,7 +239,7 @@ async function deleteSelected(): Promise<void> {
             Mark as paid
           </label>
           <button
-            class="btn-primary btn-sm"
+            class="btn-confirm btn-sm"
             :disabled="
               raffles.addingEntry ||
               !raffles.entryAdd.characterName.trim() ||
@@ -284,7 +284,7 @@ async function deleteSelected(): Promise<void> {
               <td class="ta-center">
                 <button
                   v-if="isOpen"
-                  :class="['btn-sm', e.paid ? 'btn-primary' : 'btn-ghost']"
+                  :class="['btn-sm', e.paid ? 'btn-confirm' : 'btn-neutral']"
                   @click="raffles.toggleEntryPaid(e)"
                 >
                   <template v-if="e.paid"><i class="fa-solid fa-circle-check"></i> Paid</template>
@@ -308,7 +308,7 @@ async function deleteSelected(): Promise<void> {
     <!-- ── List ──────────────────────────────────────────────────────────────── -->
     <ManagerView v-else title="Raffles" icon="fa-duotone fa-ticket">
       <template #actions>
-        <button class="btn-primary btn-sm" @click="openNew">
+        <button class="btn-confirm btn-sm" @click="openNew">
           <i class="fa-solid fa-plus"></i> New Raffle
         </button>
       </template>
@@ -381,7 +381,7 @@ async function deleteSelected(): Promise<void> {
             <template #cell-actions="{ row }">
               <div class="row-actions">
                 <button
-                  class="btn-secondary btn-sm"
+                  class="btn-view btn-sm"
                   aria-label="View"
                   title="View"
                   @click="openRaffle(row)"
@@ -389,7 +389,7 @@ async function deleteSelected(): Promise<void> {
                   <i class="fa-solid fa-eye"></i>
                 </button>
                 <button
-                  class="btn-secondary btn-sm"
+                  class="btn-view btn-sm"
                   aria-label="Copy to new raffle"
                   title="Copy to new raffle"
                   @click="copyRaffle(row)"

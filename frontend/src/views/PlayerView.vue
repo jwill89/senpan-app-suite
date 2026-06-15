@@ -193,7 +193,7 @@ function openDiscord(): void {
 <template>
   <div>
     <div class="topbar">
-      <button class="btn-ghost btn-sm" @click="leave">← Leave</button>
+      <button class="btn-neutral btn-sm" @click="leave">← Leave</button>
       <div class="topbar-id">
         <h2>Board <span class="code-gold">{{ player.playerCard?.id }}</span></h2>
         <span v-if="player.playerCard?.player_name" class="topbar-player">
@@ -256,7 +256,7 @@ function openDiscord(): void {
             <!-- Clear / Save / Sound action bar -->
             <div class="player-actions">
               <button
-                class="btn-ghost btn-sm"
+                class="btn-caution btn-sm"
                 title="Clear all stamps on the board"
                 @click="player.clearAllStamps()"
               >
@@ -265,7 +265,7 @@ function openDiscord(): void {
               </button>
 
               <button
-                class="btn-ghost btn-sm"
+                class="btn-view btn-sm"
                 :disabled="exporting"
                 :title="exporting ? 'Saving card image…' : 'Save card as image'"
                 @click="exportCard"
@@ -275,7 +275,7 @@ function openDiscord(): void {
               </button>
 
               <button
-                class="btn-ghost btn-sm stamp-sound-toggle"
+                class="btn-neutral btn-sm stamp-sound-toggle"
                 :aria-pressed="player.soundEnabled"
                 :title="player.soundEnabled ? 'Draw sound on — click to mute' : 'Draw sound off — click to enable'"
                 @click="toggleSound"
@@ -348,7 +348,7 @@ function openDiscord(): void {
             </p>
             <br/>
             <p class="go-sub">The next game will begin soon — hang tight!</p>
-            <button class="btn-primary go-discord-btn" @click="openDiscord">
+            <button class="btn-action go-discord-btn" @click="openDiscord">
               <i class="fa-brands fa-discord" aria-hidden="true"></i> Join the Discord Server
             </button>
           </div>
@@ -368,7 +368,7 @@ function openDiscord(): void {
         It's time for a half-time minigame! Please check your in-game chat for details and
         instructions!
       </p>
-      <button class="btn-primary" @click="player.showMinigameModal = false">Got it!</button>
+      <button class="btn-neutral" @click="player.showMinigameModal = false">Got it!</button>
     </ModalOverlay>
   </div>
 </template>

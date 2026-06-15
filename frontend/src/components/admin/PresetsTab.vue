@@ -76,14 +76,14 @@ function patternById(id: number) {
       </FormField>
 
       <FormActions align="start">
-        <button class="btn-primary" :disabled="presets.savingPreset" @click="presets.savePreset()">
+        <button class="btn-confirm" :disabled="presets.savingPreset" @click="presets.savePreset()">
           <LoadingSpinner v-if="presets.savingPreset" label="Saving…" />
           <template v-else>
             <i class="fa-solid fa-circle-check"></i>
             {{ presets.editingPreset.id ? 'Save Changes' : 'Create Preset' }}
           </template>
         </button>
-        <button class="btn-ghost" :disabled="presets.savingPreset" @click="presets.cancelEdit()">
+        <button class="btn-neutral" :disabled="presets.savingPreset" @click="presets.cancelEdit()">
           Cancel
         </button>
       </FormActions>
@@ -92,7 +92,7 @@ function patternById(id: number) {
     <!-- ── List ──────────────────────────────────────────────────────────── -->
     <ManagerView v-else title="Game Presets" icon="fa-duotone fa-ballot">
       <template #actions>
-        <button class="btn-primary btn-sm" @click="presets.newPreset()">
+        <button class="btn-confirm btn-sm" @click="presets.newPreset()">
           <i class="fa-solid fa-plus"></i> New Preset
         </button>
       </template>
@@ -122,7 +122,7 @@ function patternById(id: number) {
             {{ preset.game_details ? 'Includes game details' : 'No game details' }}
           </p>
           <template #actions>
-            <button class="btn-ghost btn-sm" title="Edit preset" @click="presets.editPreset(preset)">
+            <button class="btn-confirm btn-sm" title="Edit preset" @click="presets.editPreset(preset)">
               <i class="fa-solid fa-pen-to-square"></i> Edit
             </button>
             <button

@@ -62,7 +62,7 @@ const fontColumns: DataColumn[] = [
   { key: 'name', label: 'File', sortable: true },
   { key: 'size', label: 'Size', sortable: true },
   { key: 'modified', label: 'Modified', sortable: true },
-  { key: 'actions', label: 'Actions', align: 'right' },
+  { key: 'actions', label: '', align: 'right' },
 ]
 
 /** Toggles direction when re-clicking the active column, else sorts ascending.
@@ -179,7 +179,7 @@ watch(
       <div class="flex-toolbar mb-12">
         <h3 class="m-0"><i class="fa-duotone fa-font"></i> Font Upload</h3>
         <button
-          class="btn-primary btn-sm push-right"
+          class="btn-action btn-sm push-right"
           :disabled="fonts.uploading"
           @click="pickFiles"
         >
@@ -268,14 +268,14 @@ watch(
           <span class="text-dim">{{ new Date(row.modified).toLocaleString() }}</span>
         </template>
         <template #cell-actions="{ row }">
-          <span class="nowrap">
+          <div class="row-actions">
             <template v-if="renamingName === row.name">
-              <button class="btn-primary btn-sm" @click="commitRename(row.name)">Save</button>
-              <button class="btn-ghost btn-sm" @click="cancelRename">Cancel</button>
+              <button class="btn-confirm btn-sm" @click="commitRename(row.name)">Save</button>
+              <button class="btn-neutral btn-sm" @click="cancelRename">Cancel</button>
             </template>
             <template v-else>
               <button
-                class="btn-ghost btn-sm"
+                class="btn-view btn-sm"
                 :class="{ active: selectedFontName === row.name }"
                 title="Preview this font in the panel above"
                 @click="selectForPreview(row.name)"
@@ -283,14 +283,14 @@ watch(
                 <i class="fa-solid fa-eye"></i> Preview
               </button>
               <button
-                class="btn-ghost btn-sm"
+                class="btn-view btn-sm"
                 title="Copy public URL to clipboard"
                 @click="copyLink(row.name)"
               >
                 <i class="fa-solid fa-copy"></i> Copy URL
               </button>
               <button
-                class="btn-ghost btn-sm"
+                class="btn-confirm btn-sm"
                 title="Rename this font file"
                 @click="startRename(row.name)"
               >
@@ -304,7 +304,7 @@ watch(
                 <i class="fa-solid fa-trash"></i> Delete
               </button>
             </template>
-          </span>
+          </div>
         </template>
         <template #empty>
           <p class="text-dim ta-center" style="padding: 20px">

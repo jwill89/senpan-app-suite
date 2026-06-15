@@ -60,7 +60,7 @@ async function logout(): Promise<void> {
   <div>
     <div class="topbar">
       <h2><i class="fa-duotone fa-gear"></i> Admin Dashboard</h2>
-      <button class="btn-ghost btn-sm" @click="logout">
+      <button class="btn-neutral btn-sm" @click="logout">
         <i class="fa-solid fa-arrow-right-from-bracket"></i> Logout
       </button>
     </div>

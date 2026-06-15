@@ -84,14 +84,14 @@ async function copy(value: string, label: string): Promise<void> {
         @input="onHexInput"
       />
       <code class="theme-color-tool__rgba">{{ rgba }}</code>
-      <button class="btn-ghost btn-sm" title="Copy hex value" @click="copy(hex, 'HEX')">
+      <button class="btn-view btn-sm" title="Copy hex value" @click="copy(hex, 'HEX')">
         <i class="fa-solid fa-copy" aria-hidden="true"></i> HEX
       </button>
-      <button class="btn-ghost btn-sm" title="Copy rgba value" @click="copy(rgba, 'RGBA')">
+      <button class="btn-view btn-sm" title="Copy rgba value" @click="copy(rgba, 'RGBA')">
         <i class="fa-solid fa-copy" aria-hidden="true"></i> RGBA
       </button>
       <button
-        class="btn-ghost btn-sm theme-color-tool__toggle"
+        class="btn-neutral btn-sm theme-color-tool__toggle"
         :aria-expanded="expanded"
         @click="expanded = !expanded"
       >

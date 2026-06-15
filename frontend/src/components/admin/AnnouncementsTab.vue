@@ -156,10 +156,10 @@ async function submitType(): Promise<void> {
     <!-- ── List ───────────────────────────────────────────────────────────── -->
     <ManagerView v-if="screen === 'list'" title="Announcements" icon="fa-duotone fa-megaphone">
       <template #actions>
-        <button class="btn-ghost btn-sm" @click="openTypes()">
+        <button class="btn-view btn-sm" @click="openTypes()">
           <i class="fa-duotone fa-folder-open"></i> Manage Types
         </button>
-        <button class="btn-primary btn-sm" @click="openNew()">
+        <button class="btn-confirm btn-sm" @click="openNew()">
           <i class="fa-solid fa-plus"></i> New Announcement
         </button>
       </template>
@@ -234,7 +234,7 @@ async function submitType(): Promise<void> {
 
             <template #actions>
               <button
-                class="btn-primary btn-sm"
+                class="btn-action btn-sm"
                 :disabled="store.sendingId === a.id"
                 title="Post to Discord now"
                 @click="store.sendNow(a)"
@@ -244,14 +244,14 @@ async function submitType(): Promise<void> {
               </button>
               <button
                 v-if="a.schedule_kind && a.next_post_at"
-                class="btn-secondary btn-sm"
+                class="btn-caution btn-sm"
                 :disabled="store.skippingId === a.id || a.skip_next"
                 title="Skip the next scheduled occurrence"
                 @click="store.skipNext(a)"
               >
                 <i class="fa-solid fa-forward-step"></i> Skip next
               </button>
-              <button class="btn-secondary btn-sm" aria-label="Edit" title="Edit" @click="openEdit(a)">
+              <button class="btn-confirm btn-sm" aria-label="Edit" title="Edit" @click="openEdit(a)">
                 <i class="fa-solid fa-pen-to-square"></i>
               </button>
               <button
@@ -323,7 +323,7 @@ async function submitType(): Promise<void> {
             <code class="ann-color-hex">{{ store.form.color }}</code>
             <button
               type="button"
-              class="btn-ghost btn-sm"
+              class="btn-neutral btn-sm"
               :disabled="store.form.color === '#e53170'"
               @click="store.form.color = '#e53170'"
             >
@@ -413,7 +413,7 @@ async function submitType(): Promise<void> {
       </div>
       <button
         type="button"
-        class="btn-ghost btn-sm"
+        class="btn-confirm btn-sm"
         :disabled="store.form.buttons.length >= MAX_BUTTONS"
         @click="addButton()"
       >
@@ -497,8 +497,8 @@ async function submitType(): Promise<void> {
       </template>
 
       <FormActions align="start">
-        <button class="btn-ghost" @click="backToList()">Cancel</button>
-        <button class="btn-primary" :disabled="store.saving || !store.form.title.trim()" @click="submit()">
+        <button class="btn-neutral" @click="backToList()">Cancel</button>
+        <button class="btn-confirm" :disabled="store.saving || !store.form.title.trim()" @click="submit()">
           <LoadingSpinner v-if="store.saving" label="Saving…" />
           <template v-else>{{ store.form.id ? 'Save Changes' : 'Create Announcement' }}</template>
         </button>
@@ -513,7 +513,7 @@ async function submitType(): Promise<void> {
         @back="screen = 'list'"
       />
       <div class="flex-toolbar flex-end mb-16">
-        <button class="btn-primary btn-sm" @click="openNewType()">
+        <button class="btn-confirm btn-sm" @click="openNewType()">
           <i class="fa-solid fa-plus"></i> New Type
         </button>
       </div>
@@ -525,7 +525,7 @@ async function submitType(): Promise<void> {
             <i class="fa-brands fa-discord"></i> {{ maskWebhook(t.webhook_url) }}
           </p>
           <template #actions>
-            <button class="btn-secondary btn-sm" aria-label="Edit type" @click="openEditType(t)">
+            <button class="btn-confirm btn-sm" aria-label="Edit type" @click="openEditType(t)">
               <i class="fa-solid fa-pen-to-square"></i>
             </button>
             <button class="btn-danger btn-sm" aria-label="Delete type" @click="store.deleteType(t)">
@@ -563,9 +563,9 @@ async function submitType(): Promise<void> {
         />
       </FormField>
       <FormActions align="start">
-        <button class="btn-ghost" @click="screen = 'types'">Cancel</button>
+        <button class="btn-neutral" @click="screen = 'types'">Cancel</button>
         <button
-          class="btn-primary"
+          class="btn-confirm"
           :disabled="store.savingType || !store.typeForm.name.trim()"
           @click="submitType()"
         >

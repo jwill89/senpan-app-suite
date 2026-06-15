@@ -26,7 +26,7 @@ const cards = useCardsStore()
           max="500"
         />
         <span class="text-dim">cards</span>
-        <button class="btn-primary" :disabled="cards.generating" @click="cards.generateCards()">
+        <button class="btn-action" :disabled="cards.generating" @click="cards.generateCards()">
           <LoadingSpinner v-if="cards.generating" label="Generating…" />
           <template v-else>Generate</template>
         </button>

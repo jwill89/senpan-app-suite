@@ -194,49 +194,54 @@ h1 {
     text-transform: uppercase
 }
 
-/* -- Button variants -- */
+/* -- Button system --
+   ONE solid shape for every button: intent is carried by the FILL colour only,
+   never by size or border style. (The old ghost/danger outlines made bordered
+   buttons read as heavier than their solid siblings — a misleading hierarchy.)
+   Each intent sets two custom props (--btn-fill + --btn-text); the shared rule
+   applies them and derives the hover by darkening the fill via color-mix, so no
+   per-intent hover tokens are needed — the five existing semantic colours +
+   the raised surface cover all six intents.
 
-/* Primary CTA button (gold background) */
-.btn-primary {
-    background: var(--accent);
-    color: var(--text-on-accent)
+   Intent = consequence, not verb:
+     confirm  save / add / edit / create / apply      → --success (green)
+     action   send / generate / publish / set active  → --accent  (brand)
+     view     open / view / preview / copy / browse    → --accent-2
+     caution  skip / reset / end game / halftime       → --warning (amber)
+     danger   delete / remove / clear                  → --danger  (red)
+     neutral  cancel / close / back                    → raised surface */
+.btn-confirm { --btn-fill: var(--success); --btn-text: var(--text-on-fill) }
+.btn-action  { --btn-fill: var(--accent); --btn-text: var(--text-on-accent) }
+.btn-view    { --btn-fill: var(--accent-2); --btn-text: var(--text-on-fill) }
+.btn-caution { --btn-fill: var(--warning); --btn-text: var(--text-on-accent) }
+.btn-danger  { --btn-fill: var(--danger); --btn-text: var(--text-on-fill) }
+/* Neutral fills with `--control-border` (not a panel surface) so it stays
+   visible even when it sits ON a `--panel-raised-bg` box — a solid fill, never a
+   ghost/transparent border. It's the lowest-emphasis intent but still a real,
+   readable button on any surface. */
+.btn-neutral { --btn-fill: var(--control-border); --btn-text: var(--text) }
+
+.btn-confirm,
+.btn-action,
+.btn-view,
+.btn-caution,
+.btn-danger,
+.btn-neutral {
+    background: var(--btn-fill);
+    color: var(--btn-text);
 }
 
-.btn-primary:hover {
-    background: var(--accent-hover)
-}
-
-/* Secondary action button (muted green) */
-.btn-secondary {
-    background: var(--accent-2);
-    color: var(--text)
-}
-
-.btn-secondary:hover {
-    background: var(--accent-2-hover)
-}
-
-/* Destructive action button (outlined red) */
-.btn-danger {
-    background: transparent;
-    color: var(--danger);
-    border: 2px solid var(--danger)
-}
-
+/* One hover language: darken the fill ~15%. Neutral is a dark surface, so it
+   lightens toward the text colour instead to keep the feedback visible. */
+.btn-confirm:hover,
+.btn-action:hover,
+.btn-view:hover,
+.btn-caution:hover,
 .btn-danger:hover {
-    background: var(--danger);
-    color: var(--text)
+    background: color-mix(in srgb, var(--btn-fill) 85%, #000);
 }
-
-/* Low-emphasis button (transparent with border) */
-.btn-ghost {
-    background: transparent;
-    color: var(--text-muted);
-    border: 2px solid var(--control-border)
-}
-
-.btn-ghost:hover {
-    border-color: var(--text-muted)
+.btn-neutral:hover {
+    background: color-mix(in srgb, var(--btn-fill) 82%, var(--text));
 }
 
 /* Button size modifiers */
@@ -476,6 +481,7 @@ h1 {
     align-items: center;
     gap: 6px;
     background: var(--panel-raised-bg);
+    color: var(--text);
     border: 1px solid transparent;
     border-radius: var(--radius);
     padding: 8px 12px;

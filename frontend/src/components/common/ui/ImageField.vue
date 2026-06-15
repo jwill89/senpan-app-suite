@@ -36,7 +36,7 @@ const emit = defineEmits<{ upload: [event: Event] }>()
         @change="emit('upload', $event)"
       />
       <span v-if="uploading" class="text-dim text-sm">Uploading…</span>
-      <button v-if="model" class="btn-ghost btn-sm mt-8" @click="model = ''">Remove</button>
+      <button v-if="model" class="btn-neutral btn-sm mt-8" @click="model = ''">Remove</button>
     </div>
     <div class="image-field-reuse">
       <label class="field-label">Or reuse an uploaded image</label>

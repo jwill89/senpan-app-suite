@@ -97,7 +97,7 @@ function formatInZone(iso: string, tz: string): string {
       />
       <div class="flex-toolbar flex-end mb-16">
         <button
-          class="btn-primary btn-sm"
+          class="btn-action btn-sm"
           :disabled="bookclub.publishing || !bookclub.selectedList.items?.length"
           @click="bookclub.publishList(bookclub.selectedList)"
         >
@@ -143,7 +143,7 @@ function formatInZone(iso: string, tz: string): string {
               </a>
             </p>
             <template #actions>
-              <button class="btn-secondary btn-sm" @click="bookclub.editItem(item)">
+              <button class="btn-confirm btn-sm" @click="bookclub.editItem(item)">
                 <i class="fa-solid fa-pen-to-square"></i>
               </button>
               <button class="btn-danger btn-sm" @click="bookclub.deleteItem(item)">
@@ -172,7 +172,7 @@ function formatInZone(iso: string, tz: string): string {
                 @keyup.enter="bookclub.runLookup()"
               />
               <button
-                class="btn-secondary btn-sm"
+                class="btn-action btn-sm"
                 :disabled="bookclub.looking || !bookclub.lookupQuery.trim()"
                 @click="bookclub.runLookup()"
               >
@@ -219,7 +219,7 @@ function formatInZone(iso: string, tz: string): string {
               <span v-if="bookclub.coverUploading" class="text-dim text-sm">Uploading…</span>
               <button
                 v-if="bookclub.itemForm.cover_image"
-                class="btn-ghost btn-sm mt-8"
+                class="btn-neutral btn-sm mt-8"
                 @click="bookclub.itemForm.cover_image = ''"
               >
                 Remove
@@ -310,17 +310,17 @@ function formatInZone(iso: string, tz: string): string {
               />
               <button class="btn-danger btn-sm" @click="bookclub.removeSourceRow(i)">&times;</button>
             </div>
-            <button class="btn-ghost btn-sm" @click="bookclub.addSourceRow()">
+            <button class="btn-confirm btn-sm" @click="bookclub.addSourceRow()">
               <i class="fa-solid fa-plus"></i> Add Source
             </button>
           </FormField>
 
           <FormActions align="start">
-            <button v-if="bookclub.itemForm.id" class="btn-ghost" @click="bookclub.resetItemForm()">
+            <button v-if="bookclub.itemForm.id" class="btn-neutral" @click="bookclub.resetItemForm()">
               Cancel Edit
             </button>
             <button
-              class="btn-primary"
+              class="btn-confirm"
               :disabled="bookclub.savingItem || !bookclub.itemForm.title.trim()"
               @click="bookclub.saveItem()"
             >
@@ -343,7 +343,7 @@ function formatInZone(iso: string, tz: string): string {
           @keyup.enter="bookclub.createList()"
         />
         <button
-          class="btn-primary btn-sm"
+          class="btn-confirm btn-sm"
           :disabled="bookclub.creatingList || !bookclub.newListTitle.trim()"
           @click="bookclub.createList()"
         >
@@ -374,20 +374,20 @@ function formatInZone(iso: string, tz: string): string {
             </button>
             <template #actions>
               <template v-if="editingListId === list.id">
-                <button class="btn-primary btn-sm" @click="commitRename(list)">Save</button>
-                <button class="btn-ghost btn-sm" @click="cancelRename()">Cancel</button>
+                <button class="btn-confirm btn-sm" @click="commitRename(list)">Save</button>
+                <button class="btn-neutral btn-sm" @click="cancelRename()">Cancel</button>
               </template>
               <template v-else>
-                <button class="btn-secondary btn-sm" @click="bookclub.selectList(list)">Open</button>
+                <button class="btn-view btn-sm" @click="bookclub.selectList(list)">Open</button>
                 <button
-                  class="btn-primary btn-sm"
+                  class="btn-action btn-sm"
                   aria-label="Publish"
                   :disabled="bookclub.publishing"
                   @click="bookclub.publishList(list)"
                 >
                   <i class="fa-solid fa-paper-plane"></i>
                 </button>
-                <button class="btn-ghost btn-sm" aria-label="Rename" @click="startRename(list)">
+                <button class="btn-confirm btn-sm" aria-label="Rename" @click="startRename(list)">
                   <i class="fa-solid fa-pen-to-square"></i>
                 </button>
                 <button class="btn-danger btn-sm" aria-label="Delete" @click="bookclub.deleteList(list)">
@@ -489,13 +489,13 @@ function formatInZone(iso: string, tz: string): string {
           <FormActions align="start">
             <button
               v-if="bookclub.eventForm.id"
-              class="btn-ghost"
+              class="btn-neutral"
               @click="bookclub.resetEventForm()"
             >
               Cancel Edit
             </button>
             <button
-              class="btn-primary"
+              class="btn-confirm"
               :disabled="bookclub.savingEvent || !bookclub.eventForm.title.trim()"
               @click="bookclub.saveEvent()"
             >
@@ -545,7 +545,7 @@ function formatInZone(iso: string, tz: string): string {
               </p>
               <template #actions>
                 <button
-                  class="btn-primary btn-sm"
+                  class="btn-action btn-sm"
                   :disabled="bookclub.postingEventId === ev.id"
                   aria-label="Post event now"
                   @click="bookclub.postEventNow(ev)"
@@ -553,7 +553,7 @@ function formatInZone(iso: string, tz: string): string {
                   <LoadingSpinner v-if="bookclub.postingEventId === ev.id" label="Posting…" />
                   <template v-else><i class="fa-solid fa-paper-plane"></i></template>
                 </button>
-                <button class="btn-secondary btn-sm" aria-label="Edit event" @click="bookclub.editEvent(ev)">
+                <button class="btn-confirm btn-sm" aria-label="Edit event" @click="bookclub.editEvent(ev)">
                   <i class="fa-solid fa-pen-to-square"></i>
                 </button>
                 <button class="btn-danger btn-sm" aria-label="Delete event" @click="bookclub.deleteEvent(ev)">

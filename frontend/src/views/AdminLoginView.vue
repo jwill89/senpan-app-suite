@@ -44,10 +44,10 @@ function goHome(): void {
           autocomplete="new-password"
         />
         <div class="btns">
-          <button type="button" class="btn-ghost" :disabled="auth.loggingIn" @click="goHome">
+          <button type="button" class="btn-neutral" :disabled="auth.loggingIn" @click="goHome">
             Back
           </button>
-          <button type="submit" class="btn-secondary" :disabled="auth.loggingIn">
+          <button type="submit" class="btn-action" :disabled="auth.loggingIn">
             <LoadingSpinner v-if="auth.loggingIn" label="Logging in…" />
             <template v-else>Login</template>
           </button>

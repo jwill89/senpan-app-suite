@@ -186,7 +186,7 @@ onMounted(() => carrd.loadProjects())
         </FormField>
         <div class="carrd-create-action">
           <button
-            class="btn-primary btn-sm"
+            class="btn-confirm btn-sm"
             :disabled="carrd.creating || !newTitle.trim()"
             @click="createProject"
           >
@@ -256,7 +256,7 @@ onMounted(() => carrd.loadProjects())
             </template>
           </nav>
           <button
-            class="btn-primary btn-sm push-right"
+            class="btn-action btn-sm push-right"
             :disabled="carrd.uploading"
             @click="pickFiles"
           >
@@ -303,8 +303,8 @@ onMounted(() => carrd.loadProjects())
               @keyup.enter="submitDir"
               @keyup.esc="cancelAddDir"
             />
-            <button class="btn-primary btn-sm" @click="submitDir">Add</button>
-            <button class="btn-ghost btn-sm" @click="cancelAddDir">Cancel</button>
+            <button class="btn-confirm btn-sm" @click="submitDir">Add</button>
+            <button class="btn-neutral btn-sm" @click="cancelAddDir">Cancel</button>
           </template>
           <button v-else class="chip carrd-dir-add" @click="addingDir = true">
             <i class="fa-solid fa-plus"></i> New Folder
@@ -375,7 +375,7 @@ onMounted(() => carrd.loadProjects())
                 preload="none"
               ></audio>
               <button
-                class="btn-ghost btn-sm carrd-copy-btn"
+                class="btn-view btn-sm carrd-copy-btn"
                 title="Copy public URL to clipboard"
                 @click="copyUrl(img.name)"
               >
@@ -604,16 +604,11 @@ onMounted(() => carrd.loadProjects())
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-/* Full-width copy action under each media card. Chrome comes from `.btn-ghost`
-   (its `--control-border` outline reads on the card surface); only layout + the
-   highlight hover are component-specific. */
+/* Full-width copy action under each media card. Fill + hover come from the
+   `.btn-view` intent; only the full-width layout is component-specific. */
 .carrd-copy-btn {
   margin-top: 4px;
   width: 100%;
   white-space: nowrap;
-}
-.carrd-copy-btn:hover {
-  border-color: var(--highlight);
-  color: var(--highlight);
 }
 </style>

@@ -149,7 +149,7 @@ onBeforeUnmount(() => {
       <div v-if="!game.currentGame" class="game-setup">
         <div v-if="patterns.patterns.length === 0" class="mb-12">
           <p class="text-dim mb-8">Create some win patterns first.</p>
-          <button class="btn-secondary btn-sm" @click="goToPatterns">
+          <button class="btn-confirm btn-sm" @click="goToPatterns">
             <i class="fa-solid fa-plus"></i> Create a Pattern
           </button>
         </div>
@@ -166,7 +166,7 @@ onBeforeUnmount(() => {
               <option v-for="p in presets.presets" :key="p.id" :value="p.id">{{ p.name }}</option>
             </select>
             <button
-              class="btn-secondary btn-sm"
+              class="btn-action btn-sm"
               :disabled="selectedPresetId === null"
               title="Apply this preset's patterns and game details"
               @click="applyPreset"
@@ -196,7 +196,7 @@ onBeforeUnmount(() => {
           </div>
 
           <button
-            class="btn-primary btn-lg"
+            class="btn-action btn-lg"
             :disabled="game.selectedPatternIds.length === 0 || game.starting"
             @click="game.startGame()"
           >
@@ -216,7 +216,7 @@ onBeforeUnmount(() => {
         <div class="draw-area">
           <div class="draw-controls">
             <button
-              class="btn-primary btn-lg"
+              class="btn-action btn-lg"
               :disabled="game.drawCountdown !== null || game.drawing"
               @click="game.drawNumber()"
             >
@@ -226,18 +226,18 @@ onBeforeUnmount(() => {
             <select
               v-model.number="game.drawDelay"
               aria-label="Draw delay"
-              class="btn-ghost"
+              class="btn-neutral"
               style="padding: 10px 14px; font-size: 0.95rem; font-weight: 600; cursor: pointer"
             >
               <option v-for="s in DRAW_DELAY_OPTIONS" :key="s" :value="s">{{ delayLabel(s) }}</option>
             </select>
-            <button class="btn-danger" :disabled="game.ending" @click="game.endGame()">
+            <button class="btn-caution" :disabled="game.ending" @click="game.endGame()">
               <LoadingSpinner v-if="game.ending" label="Ending…" />
               <template v-else>End Game</template>
             </button>
 
             <button
-              class="btn-ghost btn-sm winner-sound-toggle"
+              class="btn-neutral btn-sm winner-sound-toggle"
               :aria-pressed="game.winnerSoundEnabled"
               :title="
                 game.winnerSoundEnabled

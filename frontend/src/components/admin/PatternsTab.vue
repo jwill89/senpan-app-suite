@@ -95,10 +95,10 @@ async function saveNew(): Promise<void> {
     <!-- ── List ──────────────────────────────────────────────────────────── -->
     <ManagerView v-if="screen === 'list'" title="Patterns" icon="fa-duotone fa-grid">
       <template #actions>
-        <button class="btn-ghost btn-sm" @click="screen = 'categories'">
+        <button class="btn-view btn-sm" @click="screen = 'categories'">
           <i class="fa-duotone fa-folder-open"></i> Manage Categories
         </button>
-        <button class="btn-primary btn-sm" @click="goNew">
+        <button class="btn-confirm btn-sm" @click="goNew">
           <i class="fa-solid fa-plus"></i> New Pattern
         </button>
       </template>
@@ -162,7 +162,7 @@ async function saveNew(): Promise<void> {
       <!-- Grouped, draggable view -->
       <template v-else>
         <div class="flex-toolbar mb-12">
-          <button class="btn-ghost btn-sm" @click="patterns.togglePatternsCollapsed()">
+          <button class="btn-neutral btn-sm" @click="patterns.togglePatternsCollapsed()">
             {{ patterns.patternsCollapsed ? '▶ Show all' : '▼ Hide all' }}
           </button>
         </div>
@@ -256,9 +256,9 @@ async function saveNew(): Promise<void> {
           </template>
         </div>
         <div class="btns">
-          <button class="btn-ghost btn-sm" @click="patterns.clearPatternEditor()">Clear</button>
+          <button class="btn-caution btn-sm" @click="patterns.clearPatternEditor()">Clear</button>
           <button
-            class="btn-secondary"
+            class="btn-confirm"
             :disabled="!patterns.newPatternName.trim() || patterns.savingPattern"
             @click="saveNew"
           >
@@ -277,7 +277,7 @@ async function saveNew(): Promise<void> {
         @back="screen = 'list'"
       />
       <div class="flex-toolbar flex-end mb-16">
-        <button class="btn-primary btn-sm" @click="goNewCategory">
+        <button class="btn-confirm btn-sm" @click="goNewCategory">
           <i class="fa-solid fa-plus"></i> New Category
         </button>
       </div>
@@ -286,7 +286,7 @@ async function saveNew(): Promise<void> {
         <template #cell-actions="{ row }">
           <div class="row-actions">
             <button
-              class="btn-secondary btn-sm"
+              class="btn-confirm btn-sm"
               aria-label="Edit"
               title="Edit"
               @click="goEditCategory(row)"
@@ -335,9 +335,9 @@ async function saveNew(): Promise<void> {
         </select>
       </FormField>
       <FormActions align="start">
-        <button class="btn-ghost" @click="screen = 'categories'">Cancel</button>
+        <button class="btn-neutral" @click="screen = 'categories'">Cancel</button>
         <button
-          class="btn-primary"
+          class="btn-confirm"
           :disabled="!patterns.categoryForm.name.trim() || patterns.savingCategory"
           @click="saveCategory"
         >

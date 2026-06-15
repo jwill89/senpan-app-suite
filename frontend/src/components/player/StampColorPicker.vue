@@ -73,7 +73,7 @@ function onColorChange(c: { rgba: string }): void {
         </div>
       </div>
 
-      <button class="btn-primary mt-20 color-picker-done" @click="open = false">Done</button>
+      <button class="btn-neutral mt-20 color-picker-done" @click="open = false">Done</button>
     </ModalOverlay>
   </div>
 </template>

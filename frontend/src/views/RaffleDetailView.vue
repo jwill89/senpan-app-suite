@@ -43,7 +43,7 @@ function back(): void {
 <template>
   <div v-if="raffles.selectedRaffle">
     <div class="topbar">
-      <button class="btn-ghost btn-sm" @click="back">← Back</button>
+      <button class="btn-neutral btn-sm" @click="back">← Back</button>
       <h2>{{ raffles.selectedRaffle.title }}</h2>
       <span></span>
     </div>
@@ -125,7 +125,7 @@ function back(): void {
           <strong>Total Cost:</strong> {{ raffles.raffleTotalCost().toLocaleString() }} gil
         </p>
         <button
-          class="btn-primary"
+          class="btn-confirm"
           :disabled="
             !raffles.raffleSignup.characterName.trim() ||
             !raffles.raffleSignup.world.trim() ||

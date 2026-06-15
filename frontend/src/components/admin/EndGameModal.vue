@@ -27,10 +27,10 @@ function playerNameFor(id: string): string | undefined {
       Uncheck any card IDs that should NOT count as valid winners.
     </p>
     <div style="display: flex; gap: 8px; margin-bottom: 12px">
-      <button class="btn-ghost btn-sm" @click="game.endGameSelectedWinners = [...game.winners]">
+      <button class="btn-neutral btn-sm" @click="game.endGameSelectedWinners = [...game.winners]">
         Check All
       </button>
-      <button class="btn-ghost btn-sm" @click="game.endGameSelectedWinners = []">Uncheck All</button>
+      <button class="btn-neutral btn-sm" @click="game.endGameSelectedWinners = []">Uncheck All</button>
     </div>
     <div
       style="
@@ -54,8 +54,8 @@ function playerNameFor(id: string): string | undefined {
       </label>
     </div>
     <div style="display: flex; gap: 8px; justify-content: flex-end">
-      <button class="btn-ghost" @click="game.showEndGameModal = false">Cancel</button>
-      <button class="btn-primary" @click="game.confirmEndGame(game.endGameSelectedWinners)">
+      <button class="btn-neutral" @click="game.showEndGameModal = false">Cancel</button>
+      <button class="btn-caution" @click="game.confirmEndGame(game.endGameSelectedWinners)">
         End Game
       </button>
     </div>

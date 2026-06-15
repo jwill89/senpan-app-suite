@@ -205,7 +205,7 @@ watch(
                 href="https://fonts.google.com"
                 target="_blank"
                 rel="noopener"
-                class="btn-ghost btn-sm nowrap"
+                class="btn-view btn-sm nowrap"
                 >Browse Fonts ↗</a
               >
             </div>
@@ -273,7 +273,7 @@ watch(
       </div>
 
       <FormActions align="start">
-        <button class="btn-primary" :disabled="app.savingSettings" @click="app.saveSettings()">
+        <button class="btn-confirm" :disabled="app.savingSettings" @click="app.saveSettings()">
           <LoadingSpinner v-if="app.savingSettings" label="Saving…" />
           <template v-else>Save Settings</template>
         </button>

@@ -72,7 +72,7 @@ function toggleEditorMode(): void {
               No themes yet.
             </p>
           </div>
-          <button class="btn-secondary btn-sm mt w-full" @click="styles.newStyle()">
+          <button class="btn-confirm btn-sm mt w-full" @click="styles.newStyle()">
             + New Theme
           </button>
           <button
@@ -81,14 +81,14 @@ function toggleEditorMode(): void {
               styles.editingStyle.id &&
               String(styles.editingStyle.id) !== styles.activeStyleId
             "
-            class="btn-primary btn-sm mt w-full"
+            class="btn-action btn-sm mt w-full"
             @click="styles.setActiveStyle(styles.editingStyle.id)"
           >
             Set Active
           </button>
           <button
             v-if="styles.activeStyleId"
-            class="btn-ghost btn-sm mt w-full"
+            class="btn-caution btn-sm mt w-full"
             @click="styles.setActiveStyle(0)"
           >
             Clear Active Theme
@@ -106,7 +106,7 @@ function toggleEditorMode(): void {
                 style="flex: 1"
               />
               <button
-                class="btn-ghost btn-sm"
+                class="btn-neutral btn-sm"
                 :title="`Editor theme: ${editorMode}. Click to switch.`"
                 :aria-label="`Switch editor to ${editorMode === 'dark' ? 'light' : 'dark'} mode`"
                 @click="toggleEditorMode"
@@ -116,7 +116,7 @@ function toggleEditorMode(): void {
                 {{ editorMode === 'dark' ? 'Dark' : 'Light' }}
               </button>
               <button
-                class="btn-primary btn-sm"
+                class="btn-confirm btn-sm"
                 :disabled="styles.savingStyle"
                 @click="styles.saveStyle()"
               >

@@ -121,7 +121,7 @@ function cancel(): void {
             alt="Prize preview"
           />
           <button
-            class="btn-ghost btn-sm"
+            class="btn-neutral btn-sm"
             style="margin-left: 8px"
             @click="raffles.raffleForm.prize_image = ''"
           >
@@ -130,9 +130,9 @@ function cancel(): void {
         </div>
       </FormField>
       <FormActions align="start">
-        <button class="btn-ghost" :disabled="raffles.savingRaffle" @click="cancel">Cancel</button>
+        <button class="btn-neutral" :disabled="raffles.savingRaffle" @click="cancel">Cancel</button>
         <button
-          class="btn-primary"
+          class="btn-confirm"
           :disabled="!raffles.raffleForm.title.trim() || raffles.savingRaffle"
           @click="save"
         >

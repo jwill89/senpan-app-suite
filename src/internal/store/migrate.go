@@ -10,7 +10,7 @@ import (
 // PRAGMA user_version against this constant and runs only the migrations
 // needed to bring the database up to date. Bump this when adding a new
 // migration block.
-const schemaVersion = 20
+const schemaVersion = 21
 
 // ensureSchema reads the current PRAGMA user_version from the database and
 // applies any outstanding migrations to bring it up to schemaVersion.
@@ -154,6 +154,12 @@ func ensureSchema(db *sql.DB) error {
 
 	if version < 20 {
 		if err := migrateAnnouncementColor(db); err != nil {
+			return err
+		}
+	}
+
+	if version < 21 {
+		if err := migrateAnnouncementButtons(db); err != nil {
 			return err
 		}
 	}
@@ -716,6 +722,7 @@ const announcementsTableSQL = `CREATE TABLE IF NOT EXISTS announcements (
 	active INTEGER NOT NULL DEFAULT 1,
 	last_posted_at DATETIME,
 	created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+	buttons TEXT NOT NULL DEFAULT '[]',
 	FOREIGN KEY (type_id) REFERENCES announcement_types(id)
 )`
 
@@ -771,6 +778,18 @@ func migrateAnnouncementColor(db *sql.DB) error {
 	}
 	if _, err := db.Exec(`ALTER TABLE announcements ADD COLUMN color TEXT NOT NULL DEFAULT ''`); err != nil {
 		return fmt.Errorf("add announcements.color: %w", err)
+	}
+	return nil
+}
+
+// migrateAnnouncementButtons adds the optional `buttons` column (a JSON array of
+// Discord link buttons rendered beneath the embed; "[]" when none). Idempotent.
+func migrateAnnouncementButtons(db *sql.DB) error {
+	if hasColumn(db, "announcements", "buttons") {
+		return nil
+	}
+	if _, err := db.Exec(`ALTER TABLE announcements ADD COLUMN buttons TEXT NOT NULL DEFAULT '[]'`); err != nil {
+		return fmt.Errorf("add announcements.buttons: %w", err)
 	}
 	return nil
 }

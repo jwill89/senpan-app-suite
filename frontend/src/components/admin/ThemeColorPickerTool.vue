@@ -7,20 +7,9 @@
  * does not modify the theme directly. The Chrome picker (`@ckpack/vue-color`)
  * is lazy-loaded so it only lands when the Themes tab is opened.
  */
-import { computed, defineAsyncComponent, ref } from 'vue'
+import { computed, ref } from 'vue'
+import ColorPicker from '@/components/common/ui/ColorPicker.vue'
 import { useUiStore } from '@/stores/ui'
-
-/** Lazy-load the Chrome picker so it never bloats other admin routes. */
-const ChromePicker = defineAsyncComponent(() =>
-  import('@ckpack/vue-color').then((m) => m.Chrome),
-)
-
-/** The picker's emitted payload (only the bits we read). */
-interface ColorPayload {
-  hex: string
-  hex8: string
-  rgba: { r: number | string; g: number | string; b: number | string; a: number }
-}
 
 const ui = useUiStore()
 
@@ -59,11 +48,10 @@ function setFromAny(input: string): void {
   hex.value = toHex(r, g, b, a)
 }
 
-/** Picker change → take its precise hex8/rgba payload. */
-function onPickerChange(p: ColorPayload): void {
-  const { r, g, b, a } = p.rgba
-  rgba.value = `rgba(${Number(r)}, ${Number(g)}, ${Number(b)}, ${a})`
-  hex.value = (a < 1 ? p.hex8 : p.hex) || p.hex
+/** Picker change → take the normalized rgba + hex from ColorPicker. */
+function onPickerChange(c: { rgba: string; hex: string }): void {
+  rgba.value = c.rgba
+  hex.value = c.hex
 }
 
 /** Typed/pasted hex (or any colour) → preview + readouts. */
@@ -118,15 +106,15 @@ async function copy(value: string, label: string): Promise<void> {
     </div>
 
     <div v-show="expanded" class="theme-color-tool__picker">
-      <ChromePicker :model-value="pickerSeed" @update:model-value="onPickerChange" />
+      <ColorPicker :value="pickerSeed" @change="onPickerChange" />
     </div>
   </div>
 </template>
 
 <style scoped>
 .theme-color-tool {
-  background: var(--surface2);
-  border: 1px solid var(--surface2);
+  background: var(--panel-raised-bg);
+  border: 1px solid var(--panel-raised-bg);
   border-radius: var(--radius);
   padding: 10px 12px;
   margin-bottom: 16px;
@@ -174,7 +162,7 @@ async function copy(value: string, label: string): Promise<void> {
 }
 
 .theme-color-tool__rgba {
-  color: var(--text-dim);
+  color: var(--text-muted);
   font-size: 0.8rem;
   min-width: 150px;
 }
@@ -189,45 +177,7 @@ async function copy(value: string, label: string): Promise<void> {
   margin-top: 12px;
 }
 
-/* Re-skin the Chrome picker fields to the app theme (the picker ships a light
-   skin and its inputs would otherwise inherit dark-on-dark from the global
-   `input` rule). Mirrors the player-side StampColorPicker overrides. */
-.theme-color-tool__picker :deep(.vc-chrome) {
-  width: 100%;
-  max-width: 320px;
-  background: var(--surface);
-  border-radius: var(--radius);
-  box-shadow: 0 6px 18px var(--shadow-color);
-  font-family: inherit;
-}
-
-.theme-color-tool__picker :deep(.vc-chrome-body) {
-  background: var(--surface);
-}
-
-.theme-color-tool__picker :deep(.vc-input__input) {
-  width: 100%;
-  height: 26px;
-  padding: 2px 4px;
-  border: none;
-  border-radius: 4px;
-  font-size: 0.72rem;
-  text-align: center;
-  background: var(--surface2);
-  color: var(--text);
-  box-shadow: inset 0 0 0 1px var(--surface2);
-}
-
-.theme-color-tool__picker :deep(.vc-input__label) {
-  color: var(--text-dim);
-}
-
-.theme-color-tool__picker :deep(.vc-chrome-toggle-icon path) {
-  fill: var(--text-dim);
-}
-
-.theme-color-tool__picker :deep(.vc-chrome-toggle-icon-highlight) {
-  background: var(--surface2);
-}
+/* The Chrome picker skin lives globally on the shared `.color-picker` object
+   (app.css), so the Themes tool and the stamp-colour modal match. */
 </style>
 

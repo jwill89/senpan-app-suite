@@ -1,47 +1,64 @@
 /*
  * app.css — All styles for the App Suite
  *
- * Sections:
+ * Sections (grouped into cascade bands — foundation first, page styles after):
+ *
+ *   — Foundation —
  *   1. Reset & base             — Global resets, CSS custom properties, typography, button variants
  *   2. Layout helpers           — Flex/margin/text-align utilities
- *   3. Toast notification       — Fixed-position success/error/info feedback popups
- *   4. Home view                — Landing page: logo, app title, join-game & raffle cards
- *   5. Header bar               — Top navigation bar shared by player and admin views
- *   6. Bingo board              — 5×5 player board grid, cells, FREE space
- *   7. Stamp system             — Player stamp marks, shape/color/opacity pickers, custom image upload
- *   8. Player layout            — Two-column responsive layout for player view (board + info panels)
- *   9. Called numbers grid      — 5-column B-I-N-G-O number tracker (player & admin)
- *  10. Pattern display (mini)   — Miniature 5×5 pattern previews shown on player and game screens
- *  11. Admin login              — Password entry screen
- *  12. Admin dashboard          — Sidebar navigation, collapsible sections, tab content area
- *  13. Admin cards              — Card generation toolbar, card chip grid, delete/edit controls
- *  14. Modals                   — Fullscreen overlay + centered dialog box (card preview, winner verify)
- *  15. Admin patterns           — 5×5 pattern editor grid, saved pattern cards, inline rename
- *  16. Pattern categories       — Draggable category chips, inline rename, delete button
- *  17. Inline editing           — Shared input style for click-to-edit pattern/category names
- *  18. Drag & drop              — Visual states for dragging patterns and categories
- *  19. Admin game               — Game setup, draw controls, countdown/sent indicators, pattern picker
- *  20. Active game layout       — Two-column grid for called numbers + winners during a live game
- *  21. Last drawn display       — Highlighted badge showing the most recently drawn letter + number
- *  22. Winners panel            — Winner card ID chips with click-to-verify interaction
- *  23. Winner verification      — Pattern-hit cell highlighting on the winner's board
- *  24. Game details             — Markdown-rendered game info panel (player view + admin editor)
- *  25. Styles/themes editor     — Split layout: theme list sidebar + CodeMirror CSS editor
- *  26. CodeMirror overrides     — Dark theme colors for the CSS syntax editor
- *  27. Raffles                  — Raffle cards, detail page, signup form, result panel, admin management
- *  28. Utility & component helpers — Text, margin, flex, form, modal, and layout helpers
- *  29. Winners log table        — Paginated admin table of past game winners
- *  30. Frequent winners panel   — Alert panel flagging repeat winners during active games
- *  31. Pagination bar           — Centered page navigation controls for tabular data
- *  32. Loading & async states   — Disabled buttons, spinners, route-progress bar, empty-state text
- *  33. Player live-game feedback — Connection badge, last-called banner, draw-sound toggle, end summary
- *  34. Phone layout             — Small-screen (≤560px) responsive tweaks
- *  35. Site footer              — Credits/links on the public (non-admin) pages
  *
- * The admin tabs added since the migration (Announcements, Book Clubs, Carrd
- * Upload, Presets, the markdown WYSIWYG editor) intentionally reuse the shared
- * .admin-panel chrome plus the section-28 utility/form/modal helpers rather than
- * each carrying a bespoke block — so there is no per-feature section for them.
+ *   — Primitives & shared chrome —
+ *   3. Utility & component helpers — Text/code/spacing utilities AND the admin form/table primitives
+ *   4. Toast notification       — Fixed-position success/error/info feedback popups
+ *   5. Modals                   — Fullscreen overlay + centered dialog box (card preview, winner verify)
+ *   6. Pagination bar           — Centered page navigation controls for tabular data
+ *   7. Loading & async states   — Disabled buttons, spinners, route-progress bar, empty-state text
+ *
+ *   — Player / public surfaces —
+ *   8. Home view                — Landing page: logo, app title, join-game & raffle cards
+ *   9. Header bar               — Top navigation bar shared by player and admin views
+ *  10. Bingo board              — 5×5 player board grid, cells, FREE space
+ *  11. Stamp system             — Player stamp marks, shape/color/opacity pickers, custom image upload
+ *  12. Player layout            — Two-column responsive layout for player view
+ *  13. Called numbers grid      — 5-column B-I-N-G-O number tracker (player & admin)
+ *  14. Pattern display (mini)   — Miniature 5×5 pattern previews shown on player and game screens
+ *  15. Last drawn display       — Highlighted badge showing the most recently drawn letter + number
+ *  16. Winners panel            — Winner card ID chips with click-to-verify interaction
+ *  17. Winner verification      — Pattern-hit cell highlighting on the winner's board
+ *  18. Game details             — Markdown-rendered game info panel (player view + admin editor)
+ *  19. Player live-game feedback — Connection badge, last-called banner, draw-sound toggle, end summary
+ *  20. Site footer              — Credits/links on the public (non-admin) pages
+ *
+ *   — Admin —
+ *  21. Admin login              — Password entry screen
+ *  22. Admin dashboard          — Sidebar navigation, collapsible sections, tab content area
+ *  23. Admin cards              — Card generation toolbar, card chip grid, delete/edit controls
+ *  24. Admin patterns           — 5×5 pattern editor grid, saved pattern cards, inline rename
+ *  25. Inline editing           — Shared input style for click-to-edit pattern names
+ *  26. Drag & drop              — Visual states for dragging patterns
+ *  27. Admin game               — Game setup, draw controls, countdown/sent indicators, pattern picker
+ *  28. Active game layout       — Two-column grid for called numbers + winners during a live game
+ *  29. Styles/themes editor     — Split layout: theme list sidebar + CodeMirror CSS editor
+ *  30. CodeMirror overrides     — Dark theme colors for the CSS syntax editor
+ *  31. Raffles                  — Raffle cards, detail page, signup form, result panel, admin management
+ *  32. Frequent winners panel   — Alert panel flagging repeat winners during active games
+ *
+ *   — Responsive —
+ *  33. Phone layout             — Small-screen (≤560px) responsive tweaks
+ *
+ * Primitives layer (in §3): the admin UI is built from a small set of
+ * presentational components in src/components/common/ui/ that render stable,
+ * themeable semantic classes — so every admin form/table is consistent by
+ * construction. Class hooks: .admin-panel (AdminPanel), .field/.field-label/
+ * .field-help/.req + full-width control rule (FormField), .form-row (FormRow),
+ * .form-actions (FormActions), .data-table (DataTable — the single table style,
+ * replacing the former .entries-table and .winners-log-table), .pagination-bar
+ * (PaginationBar), .empty-state (EmptyState, replacing the former .msg-block).
+ *
+ * The admin tabs (Bingo, Raffles, Announcements, Book Clubs, Carrd Upload,
+ * Presets, Fonts, Themes…) all reuse this chrome rather than carrying a bespoke
+ * block — so there is no per-feature section for them. All CSS custom-property
+ * (--token) names are stable; saved custom themes target them directly.
  */
 
 /* ================================================================
@@ -73,41 +90,63 @@ h4 i.fa-solid {
 
 /* Dark theme design tokens — all colors, radii, and effect values */
 :root {
-    --bg: #1a1c17; /* Page background */
-    --surface: #272a22; /* Card/panel backgrounds */
-    --surface2: #383b31; /* Borders, input backgrounds, secondary surfaces */
-    --primary: #d6bdae; /* Primary button/accent color */
-    --primary-hover: #c4a999; /* Primary button hover */
-    --secondary: #6b705c; /* Secondary button/accent */
-    --secondary-hover: #5a5e4c; /* Secondary button hover */
-    --gold: #d6bdae; /* Highlight/accent (called numbers, headings) */
-    --text: #f0ebe3; /* Main text color */
-    --text-dim: #a5a58c; /* Muted/secondary text */
-    --text-on-primary: #1a1c17; /* Text on primary/gold backgrounds */
-    --text-on-toast: #f0ebe3; /* Text on toast/badge backgrounds */
-    --success: #7a8a68; /* Success state color */
-    --danger: #c4756a; /* Danger/error state color */
-    --radius: 10px;
-    --board-cell: #f0ebe3; /* Bingo board cell background */
-    --board-cell-hover: #e5ded4; /* Board cell hover state */
-    --board-cell-free: #d6bdae; /* FREE cell background */
-    --board-gradient-start: #2f3328; /* Board wrapper gradient */
-    --board-gradient-end: #272a22; /* Board wrapper gradient */
-    --overlay: rgba(0, 0, 0, .7); /* Modal overlay */
-    --shadow-color: rgba(0, 0, 0, .5); /* Box shadows */
-    --glow-color: rgba(214, 189, 174, .5); /* Gold glow/highlight effects */
+    /* ── Theme tokens ──────────────────────────────────────────────────────────
+       Every colour below is a theme token: saved CSS themes override these in
+       their own :root, and the runtime theme editor + colour-picker tool target
+       them by name. Names are role-descriptive (what the colour is *for*), not
+       palette names. --radius / --header-font are the only non-colour tokens. */
+
+    /* Backgrounds */
+    --page-bg: #1a1c17; /* App/page background, behind all panels */
+    --panel-bg: #272a22; /* Card / panel surface */
+    --panel-raised-bg: #383b31; /* Raised/nested surface: panels-within-panels, table rows, chips */
+    --control-border: #565a49; /* Control & divider outline — readable on BOTH --panel-bg and --panel-raised-bg */
+    --input-bg: #272a22; /* Form control (input/select/textarea) fill — consistent on any surface */
+
+    /* Accents & actions */
+    --accent: #d6bdae; /* Primary action / accent (primary buttons, links, focus) */
+    --accent-hover: #c4a999; /* --accent hover */
+    --accent-2: #6b705c; /* Secondary action / accent (secondary buttons) */
+    --accent-2-hover: #5a5e4c; /* --accent-2 hover */
+    --highlight: #d6bdae; /* Highlight accent (called numbers, section headings, gold trim) */
+
+    /* Text */
+    --text: #f0ebe3; /* Primary text */
+    --text-muted: #a5a58c; /* Muted / secondary text */
+    --text-on-accent: #1a1c17; /* Text on --accent / --highlight fills */
+    --text-on-fill: #f0ebe3; /* Text on toast / badge / status fills */
+
+    /* Status */
+    --success: #7a8a68; /* Success state */
+    --danger: #c4756a; /* Danger / error state */
+    --warning: #e0a82e; /* Warning / caution state (skip badges, alerts) */
+
+    /* Bingo board */
+    --board-cell-bg: #f0ebe3; /* Board cell background */
+    --board-cell-hover-bg: #e5ded4; /* Board cell hover */
+    --board-free-bg: #d6bdae; /* FREE (centre) cell background */
+    --board-gradient-start: #2f3328; /* Board wrapper gradient (top) */
+    --board-gradient-end: #272a22; /* Board wrapper gradient (bottom) */
+
+    /* Effects */
+    --modal-overlay: rgba(0, 0, 0, .7); /* Full-screen modal backdrop */
+    --shadow: rgba(0, 0, 0, .5); /* Box-shadow colour */
+    --highlight-glow: rgba(214, 189, 174, .5); /* Glow around --highlight elements */
+
+    /* Non-colour */
+    --radius: 10px; /* Shared corner radius */
     --header-font: 'Arapey', serif; /* Header/board font (overridden dynamically via settings) */
 }
 
 body {
     font-family: 'Segoe UI', system-ui, sans-serif;
-    background: var(--bg);
+    background: var(--page-bg);
     color: var(--text);
     min-height: 100vh
 }
 
 a {
-    color: var(--secondary)
+    color: var(--accent-2)
 }
 
 /* Default button styles — all buttons inherit these unless overridden */
@@ -130,17 +169,17 @@ button:active {
 /* Default input/select styles */
 input, select {
     font-family: inherit;
-    border: 2px solid var(--surface2);
+    border: 2px solid var(--control-border);
     border-radius: var(--radius);
     padding: 10px 14px;
     font-size: 1rem;
-    background: var(--surface);
+    background: var(--input-bg);
     color: var(--text);
     outline: none
 }
 
 input:focus {
-    border-color: var(--secondary)
+    border-color: var(--accent-2)
 }
 
 /* Heading defaults */
@@ -159,22 +198,22 @@ h1 {
 
 /* Primary CTA button (gold background) */
 .btn-primary {
-    background: var(--primary);
-    color: var(--text-on-primary)
+    background: var(--accent);
+    color: var(--text-on-accent)
 }
 
 .btn-primary:hover {
-    background: var(--primary-hover)
+    background: var(--accent-hover)
 }
 
 /* Secondary action button (muted green) */
 .btn-secondary {
-    background: var(--secondary);
+    background: var(--accent-2);
     color: var(--text)
 }
 
 .btn-secondary:hover {
-    background: var(--secondary-hover)
+    background: var(--accent-2-hover)
 }
 
 /* Destructive action button (outlined red) */
@@ -192,12 +231,12 @@ h1 {
 /* Low-emphasis button (transparent with border) */
 .btn-ghost {
     background: transparent;
-    color: var(--text-dim);
-    border: 2px solid var(--surface2)
+    color: var(--text-muted);
+    border: 2px solid var(--control-border)
 }
 
 .btn-ghost:hover {
-    border-color: var(--text-dim)
+    border-color: var(--text-muted)
 }
 
 /* Button size modifiers */
@@ -252,7 +291,319 @@ h1 {
 }
 
 /* ================================================================
-   3. TOAST NOTIFICATION — Fixed top-right feedback popup
+   3. UTILITY & COMPONENT HELPERS — Reusable single-purpose classes
+   ================================================================ */
+
+/* Text color utilities */
+.text-dim { color: var(--text-muted) }
+.text-gold { color: var(--highlight) }
+.text-success { color: var(--success) }
+.text-sm { font-size: .85rem }
+.text-xs { font-size: .8rem }
+.code-gold { font-family: monospace; color: var(--highlight) }
+
+/* Margin utilities */
+.mb-4 { margin-bottom: 4px }
+.mb-6 { margin-bottom: 6px }
+.mb-8 { margin-bottom: 8px }
+.mb-10 { margin-bottom: 10px }
+.mb-12 { margin-bottom: 12px }
+.mb-16 { margin-bottom: 16px }
+.mb-20 { margin-bottom: 20px }
+.mt-8 { margin-top: 8px }
+.mt-12 { margin-top: 12px }
+.mt-16 { margin-top: 16px }
+.mt-20 { margin-top: 20px }
+
+/* Push an element to the far end of its flex row (e.g. a trailing count). */
+.push-right { margin-left: auto }
+
+/* Flex layout utilities */
+/* Object: horizontal toolbar (search/filter/action controls). `.manager-toolbar`
+   is the same toolbar with bottom spacing for a manager page header row. */
+.flex-toolbar, .manager-toolbar { display: flex; gap: 12px; flex-wrap: wrap; align-items: center }
+.flex-row { display: flex; gap: 16px; flex-wrap: wrap }
+.items-start { align-items: flex-start }
+.flex-center { display: flex; justify-content: center }
+.flex-between { display: flex; justify-content: space-between; align-items: center }
+.flex-end { display: flex; justify-content: flex-end }
+
+/* Form input helpers */
+.field-label { color: var(--text); font-size: .9rem; font-weight: 600; display: block; margin-bottom: 4px }
+.field-input-full { width: 100% }
+
+/* Admin settings form container (constrained width) */
+.settings-form { max-width: 480px }
+
+/* ----------------------------------------------------------------
+   FORM & TABLE PRIMITIVES — shared structure behind the ui/ admin
+   components (FormField, FormRow, FormActions, DataTable, AdminPanel).
+   Every admin form/table routes through these so pages stay consistent
+   by construction. All use theme tokens so custom themes restyle them.
+   ---------------------------------------------------------------- */
+
+/* FormField: a labelled control. Default vertical rhythm between fields
+   (flex-row field contexts such as .home-card/.pattern-editor set their own). */
+.field { margin-bottom: 14px }
+
+/* Controls stretch full-width by default, replacing the per-input
+   .field-input-full class. The child combinator keeps flex-row field
+   layouts (.home-card/.pattern-editor) untouched. */
+.field > input,
+.field > select,
+.field > textarea,
+.field > .field-control { width: 100% }
+/* Pattern editor reuses .field as a centered flex row — keep auto width. */
+.pattern-editor .field > input,
+.pattern-editor .field > select { width: auto }
+
+/* Required-field marker appended to the label. */
+.req { color: var(--danger); margin-left: 2px }
+
+/* Help text shown beneath a field's control. */
+.field-help {
+    display: block;
+    margin-top: 4px;
+    color: var(--text-muted);
+    font-size: .85rem;
+    line-height: 1.4;
+}
+
+/* FormRow: side-by-side fields that wrap on narrow widths. Direct field
+   children share the width equally (replacing inline flex:1;min-width hacks). */
+.form-row { display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 14px }
+.form-row > .field { flex: 1; min-width: 180px; margin-bottom: 0 }
+
+/* FormActions: a form's button row. Right-aligned by default. */
+.form-actions { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; margin-top: 4px }
+.form-actions--start { justify-content: flex-start }
+.form-actions--end { justify-content: flex-end }
+.form-actions--between { justify-content: space-between }
+
+/* DataTable: the single admin table style (merges the former .entries-table
+   and .winners-log-table). Wrap scrolls horizontally on narrow screens. */
+.data-table-wrap { overflow-x: auto }
+.data-table { width: 100%; border-collapse: collapse; font-size: .85rem }
+.data-table th,
+.data-table td {
+    padding: 8px 12px;
+    text-align: left;
+    border-bottom: 1px solid var(--panel-raised-bg);
+}
+.data-table thead th { border-bottom-width: 2px }
+.data-table th {
+    color: var(--text-muted);
+    font-weight: 600;
+    user-select: none;
+    white-space: nowrap;
+}
+.data-table th.is-sortable { cursor: pointer }
+.data-table tbody tr:hover { background: var(--panel-raised-bg) }
+
+/* Cell alignment helpers (used by DataTable column `align`). */
+.ta-left { text-align: left }
+.ta-center { text-align: center }
+.ta-right { text-align: right }
+
+/* ----------------------------------------------------------------
+   MANAGER LAYOUT — shared "manage items" page structure behind the
+   ui/ components (ManagerView, ListRow, SubPageHeader, SearchInput).
+   Every admin tab that lists/manages a collection uses these so the
+   header, toolbar, list rows, and sub-page navigation are identical.
+   ---------------------------------------------------------------- */
+
+/* ManagerView / SubPageHeader header rows share the panel-title divider. */
+.manager-header,
+.subpage-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 12px;
+    padding-bottom: 12px;
+    margin-bottom: 16px;
+    border-bottom: 1px solid color-mix(in srgb, var(--text-muted) 25%, transparent);
+}
+.manager-header > h3,
+.subpage-header > h3 { margin: 0 }
+.manager-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center }
+
+/* Leading icon in a panel / manager / sub-page heading: space it from the title
+   (these headings render `<i …></i>{{ title }}` with no literal space). */
+.admin-panel > h3 > i:first-child,
+.manager-header > h3 > i:first-child,
+.subpage-header > h3 > i:first-child { margin-right: .45em }
+
+/* Manager toolbar = the `.flex-toolbar` object (grouped above) + header spacing. */
+.manager-toolbar {
+    margin-bottom: 16px;
+}
+
+/* A filter control (e.g. category <select>) in a manager toolbar — sits at its
+   natural width beside the grow-to-fill SearchInput. */
+.manager-filter { flex: 0 0 auto; max-width: 220px }
+
+/* Row-action button group for DataTable cells — pinned to the far right with
+   consistent spacing (pair with a right-aligned column). */
+.row-actions { display: flex; gap: 6px; justify-content: flex-end; align-items: center }
+
+/* ── Object: card ──────────────────────────────────────────────────────────
+   A bordered surface tile. The shared chrome lives here; the specific card
+   classes (home/raffle/saved-pattern) only set their own size/radius/hover/
+   layout. New tiles can use `.card` directly. */
+.card,
+.home-card,
+.raffle-card,
+.saved-pattern {
+    background: var(--panel-bg);
+    border: 2px solid var(--panel-raised-bg);
+    border-radius: var(--radius);
+    transition: border-color .2s;
+}
+
+/* ── Object: badge ─────────────────────────────────────────────────────────
+   A small uppercase pill. The shared chrome lives here; the specific badge
+   classes (and a `.badge` used directly) only set colours/margins/states. */
+.badge,
+.raffle-badge,
+.live-badge,
+.conn-badge,
+.style-active-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    vertical-align: middle;
+    padding: 2px 10px;
+    border-radius: 999px;
+    font-size: .7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+    white-space: nowrap;
+}
+
+/* ── Object: media (image picker, thumbnail, cover, placeholder) ────────────
+   Shared by the announcement + book-club image fields (reuse-an-image pickers,
+   cover/preview images, and the empty placeholder shown when none is set). */
+.img-picker {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    max-height: 180px;
+    overflow-y: auto;
+}
+.img-thumb {
+    width: 72px;
+    height: 48px;
+    padding: 0;
+    border: 2px solid var(--panel-raised-bg);
+    border-radius: 6px;
+    overflow: hidden;
+    cursor: pointer;
+    background: var(--panel-bg);
+}
+.img-thumb img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+.img-thumb:hover,
+.img-thumb.active {
+    border-color: var(--accent);
+}
+/* Placeholder box shown in a cover/preview slot when no image is set. */
+.media-empty {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--panel-bg);
+    color: var(--text-muted);
+}
+
+/* SearchInput: leading icon + grow-to-fill input. */
+.search-input {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 1;
+    min-width: 160px;
+    max-width: 360px;
+    color: var(--text-muted);
+}
+.search-input input { flex: 1 }
+
+/* ListRow: one item — optional media (left), body, actions pinned far right.
+   The row stretches so a media accent (e.g. a color swatch bar) can run its full
+   height; body + actions stay top-aligned. */
+.list-rows { display: flex; flex-direction: column; gap: 12px }
+.list-row {
+    display: flex;
+    align-items: stretch;
+    gap: 12px;
+    background: var(--panel-raised-bg);
+    border-radius: var(--radius);
+    padding: 12px;
+}
+.list-row-media { display: flex; flex: 0 0 auto; gap: 8px }
+.list-row-body { flex: 1; min-width: 0; align-self: flex-start }
+.list-row-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    align-items: flex-start;
+    justify-content: flex-end;
+    margin-left: auto;
+    align-self: flex-start;
+}
+
+/* Live font preview panel in settings */
+.font-preview {
+    background: var(--panel-raised-bg);
+    border-radius: var(--radius);
+    padding: 16px 20px;
+    text-align: center;
+    color: var(--highlight);
+    line-height: 1.4
+}
+
+/* Modal helpers */
+.modal-centered { max-width: 440px; text-align: center }
+
+/* Scaled-down board preview (admin card preview modal) */
+.board-preview { transform: scale(.85); transform-origin: top center; margin-bottom: -15% }
+
+/* Full-width game details variant (admin editor) */
+.game-details--wide { max-width: none }
+
+/* Smaller pattern mini cells for game start pattern picker */
+.pattern-mini-sm .pattern-mini-cell { width: 10px; height: 10px }
+
+/* Raffle detail page layout helpers */
+.raffle-detail-body { max-width: 700px; margin: 0 auto }
+.raffle-prize-container { text-align: center; margin-bottom: 20px }
+.raffle-prize-img { max-width: 100%; max-height: 400px; border-radius: 12px; box-shadow: 0 4px 20px var(--shadow) }
+.raffle-prize-img-sm { max-width: 300px; max-height: 200px; border-radius: 8px }
+/* Object: gold sub-section heading. `.raffle-section-heading` is the legacy
+   alias kept for existing markup/themes; new code uses `.section-heading`. */
+.section-heading, .raffle-section-heading { color: var(--highlight); margin-bottom: 8px }
+
+/* Empty-state drop placeholder (dashed border box) */
+.drop-placeholder {
+    padding: 16px;
+    text-align: center;
+    color: var(--text-muted);
+    font-size: .85rem;
+    border: 2px dashed var(--panel-raised-bg);
+    border-radius: 8px;
+    min-height: 80px;
+    display: flex;
+    align-items: center;
+    justify-content: center
+}
+
+/* ================================================================
+   4. TOAST NOTIFICATION — Fixed top-right feedback popup
    ================================================================ */
 
 /* Base toast container — slides in from the right */
@@ -272,17 +623,17 @@ h1 {
 /* Toast color variants */
 .toast-success {
     background: var(--success);
-    color: var(--text-on-toast)
+    color: var(--text-on-fill)
 }
 
 .toast-error {
     background: var(--danger);
-    color: var(--text-on-toast)
+    color: var(--text-on-fill)
 }
 
 .toast-info {
-    background: var(--secondary);
-    color: var(--text-on-toast)
+    background: var(--accent-2);
+    color: var(--text-on-fill)
 }
 
 /* Slide-in animation for toast appearance */
@@ -298,7 +649,229 @@ h1 {
 }
 
 /* ================================================================
-   4. HOME VIEW — Landing page with logo, title, join/raffle cards
+   5. MODALS — Overlay + dialog box (card preview, winner verify)
+   ================================================================ */
+
+/* Fullscreen semi-transparent overlay */
+.modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: var(--modal-overlay);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 500
+}
+
+/* Centered modal content box */
+.modal-box {
+    background: var(--panel-bg);
+    border-radius: 16px;
+    padding: 24px;
+    max-width: 440px;
+    width: 90%
+}
+
+.modal-box h3 {
+    margin-bottom: 12px
+}
+
+/* Themed confirm dialog (ui.confirm) — message + action button row */
+.modal-box .confirm-msg {
+    color: var(--text-muted);
+    font-size: .95rem;
+    line-height: 1.5;
+    margin-bottom: 20px
+}
+
+.modal-box .confirm-btns {
+    display: flex;
+    gap: 12px;
+    justify-content: flex-end
+}
+
+/* Centered confirm dialogs put the buttons in the middle */
+.modal-box.modal-centered .confirm-btns {
+    justify-content: center
+}
+
+/* ================================================================
+   6. PAGINATION BAR — Page navigation controls
+   ================================================================ */
+
+/* Centered row of page buttons for winners log and other tables */
+.pagination-bar {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+}
+
+/* ================================================================
+   7. LOADING & ASYNC STATES — disabled buttons, spinners, top
+       route-progress bar, and empty-state text. All styles use the
+       theme tokens (--accent, --panel-raised-bg, --text-muted, …) so custom
+       themes restyle them automatically.
+   ================================================================ */
+
+/* Disabled buttons: dim, non-interactive, and no hover/press feedback. */
+button:disabled,
+button[disabled] {
+    opacity: .55;
+    cursor: not-allowed;
+}
+button:disabled:hover,
+button[disabled]:hover {
+    /* Cancel the per-variant hover changes while disabled. */
+    background: inherit;
+    border-color: inherit;
+}
+button:disabled:active {
+    transform: none;
+}
+
+/* Spinning indicator ring. */
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+.spinner {
+    display: inline-block;
+    width: 1.1em;
+    height: 1.1em;
+    border: 2px solid var(--panel-raised-bg);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin .7s linear infinite;
+    vertical-align: -0.2em;
+    flex: 0 0 auto;
+}
+
+/* Inline spinner + optional label (e.g. inside a button). */
+.loading-inline {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+
+/* Standalone centered loading block for list/data loads. */
+.loading-block {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    padding: 40px;
+    color: var(--text-muted);
+}
+.loading-label {
+    color: var(--text-muted);
+}
+
+/* Empty-state text (no rows/cards to show). Mirrors .no-game-msg. */
+.empty-state {
+    text-align: center;
+    color: var(--text-muted);
+    padding: 40px;
+}
+
+/* Top-of-viewport route-loading progress bar (indeterminate). */
+.route-progress {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    z-index: 9999;
+    background: var(--panel-raised-bg);
+    overflow: hidden;
+}
+.route-progress-bar {
+    height: 100%;
+    width: 40%;
+    background: var(--accent);
+    border-radius: 0 2px 2px 0;
+    animation: routeProgressSlide 1.1s ease-in-out infinite;
+}
+@keyframes routeProgressSlide {
+    0%   { margin-left: -40%; }
+    50%  { margin-left: 60%; }
+    100% { margin-left: 110%; }
+}
+
+/* Inline keyboard-key hint (e.g. "press Space to draw"). */
+kbd {
+    display: inline-block;
+    padding: 1px 6px;
+    border-radius: 4px;
+    background: var(--panel-raised-bg);
+    color: var(--text);
+    border: 1px solid var(--modal-overlay);
+    font-family: inherit;
+    font-size: 0.85em;
+    font-weight: 600;
+    line-height: 1.4;
+}
+
+/* Count badge shown after an admin sidebar nav label (e.g. Open Raffles (3)).
+   Inline count text, not a pill — intentionally not the `.badge` object. */
+.nav-count {
+    margin-left: 6px;
+    font-size: 0.78em;
+    font-weight: 600;
+    color: var(--text-muted);
+}
+.admin-nav-items button.active .nav-count {
+    color: var(--text);
+}
+
+/* "Live" badge — shown next to the admin Game heading while a game is active.
+   Pill chrome from the `.badge` object; only colours + margin here. */
+.live-badge {
+    margin-left: 10px;
+    background: var(--danger);
+    color: var(--text-on-fill);
+}
+.live-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: currentColor;
+    animation: livePulse 1.4s ease-in-out infinite;
+}
+/* Admin-only elapsed-game clock shown beside the "Live" badge on Current Game. */
+.game-clock {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    vertical-align: middle;
+    margin-left: 10px;
+    padding: 2px 10px;
+    border-radius: 999px;
+    background: var(--panel-raised-bg);
+    color: var(--text);
+    font-size: 0.8rem;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.02em;
+}
+.game-clock i {
+    color: var(--highlight);
+    font-size: 0.75rem;
+}
+/* Live dot in the admin sidebar's game nav item: sits just after the label,
+   tinted with the "live" color (themes can override --danger). */
+.nav-live-dot {
+    display: inline-block;
+    margin-left: 8px;
+    vertical-align: middle;
+    background: var(--danger);
+}
+@keyframes livePulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50%      { opacity: .35; transform: scale(.65); }
+}
+
+/* ================================================================
+   8. HOME VIEW — Landing page with logo, title, join/raffle cards
    ================================================================ */
 
 /* Full-viewport centered home layout */
@@ -330,7 +903,7 @@ h1 {
 /* App title with gradient text effect */
 .home h1 {
     font-size: 3rem;
-    background: linear-gradient(135deg, var(--primary), var(--text-dim));
+    background: linear-gradient(135deg, var(--accent), var(--text-muted));
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text
@@ -346,17 +919,14 @@ h1 {
 
 /* Individual home page card (Bingo join, Raffle browse) */
 .home-card {
-    background: var(--surface);
     border-radius: 16px;
     padding: 36px 32px;
     width: 320px;
     text-align: center;
-    border: 2px solid var(--surface2);
-    transition: border-color .2s
 }
 
 .home-card:hover {
-    border-color: var(--secondary)
+    border-color: var(--accent-2)
 }
 
 .home-card h2 {
@@ -365,7 +935,7 @@ h1 {
 }
 
 .home-card p {
-    color: var(--text-dim);
+    color: var(--text-muted);
     font-size: .9rem;
     margin-bottom: 20px
 }
@@ -398,7 +968,7 @@ h1 {
 }
 
 /* ================================================================
-   5. HEADER BAR — Top bar for player and admin views
+   9. HEADER BAR — Top bar for player and admin views
    ================================================================ */
 
 /* Fixed top navigation bar with title and action buttons */
@@ -407,8 +977,8 @@ h1 {
     align-items: center;
     justify-content: space-between;
     padding: 14px 24px;
-    background: var(--surface);
-    border-bottom: 1px solid var(--surface2)
+    background: var(--panel-bg);
+    border-bottom: 1px solid var(--panel-raised-bg)
 }
 
 .topbar h2 {
@@ -425,11 +995,11 @@ h1 {
 
 .topbar-player {
     font-size: .8rem;
-    color: var(--text-dim)
+    color: var(--text-muted)
 }
 
 /* ================================================================
-   6. BINGO BOARD — 5×5 player board with B-I-N-G-O header
+   10. BINGO BOARD — 5×5 player board with B-I-N-G-O header
    ================================================================ */
 
 /* Outer wrapper with gradient background and shadow */
@@ -438,7 +1008,7 @@ h1 {
     background: linear-gradient(145deg, var(--board-gradient-start), var(--board-gradient-end));
     border-radius: 16px;
     padding: 18px;
-    box-shadow: 0 8px 40px var(--shadow-color);
+    box-shadow: 0 8px 40px var(--shadow);
     display: inline-block
 }
 
@@ -453,7 +1023,7 @@ h1 {
     position: absolute;
     width: 14%;
     aspect-ratio: 1 / 1;
-    color: var(--gold);
+    color: var(--highlight);
     opacity: .5;
     pointer-events: none;
     z-index: 2;
@@ -531,7 +1101,7 @@ h1 {
     font-size: 1.6rem;
     font-weight: 800;
     padding: 6px 0;
-    color: var(--gold);
+    color: var(--highlight);
     letter-spacing: 2px
 }
 
@@ -555,24 +1125,24 @@ h1 {
     display: flex;
     align-items: center;
     justify-content: center;
-    background: var(--board-cell);
+    background: var(--board-cell-bg);
     border-radius: 8px;
     font-family: var(--header-font);
     font-size: 1.3rem;
     font-weight: 700;
-    color: var(--text-on-primary);
+    color: var(--text-on-accent);
     cursor: pointer;
     user-select: none;
     transition: all .12s
 }
 
 .board-cell:hover {
-    background: var(--board-cell-hover)
+    background: var(--board-cell-hover-bg)
 }
 
 /* Center FREE space with distinct background */
 .board-cell.free {
-    background: var(--board-cell-free);
+    background: var(--board-free-bg);
     cursor: pointer
 }
 
@@ -582,7 +1152,7 @@ h1 {
 }
 
 /* ================================================================
-   7. STAMP SYSTEM — Player stamp marks, shape/color/opacity pickers
+   11. STAMP SYSTEM — Player stamp marks, shape/color/opacity pickers
    ================================================================ */
 
 /* Stamp overlay circle positioned inside each board cell */
@@ -617,7 +1187,7 @@ h1 {
    settings row line up at the same left edge. */
 .stamp-picker span.label {
     font-size: .85rem;
-    color: var(--text-dim);
+    color: var(--text-muted);
     min-width: 58px
 }
 
@@ -634,24 +1204,24 @@ h1 {
     padding: 0;
     border-radius: 8px;
     cursor: pointer;
-    background: var(--surface2);
+    background: var(--panel-raised-bg);
     border: 2px solid transparent;
     transition: all .15s
 }
 
 .stamp-option:hover {
-    border-color: var(--text-dim)
+    border-color: var(--text-muted)
 }
 
 .stamp-option:focus-visible {
-    outline: 2px solid var(--gold);
+    outline: 2px solid var(--highlight);
     outline-offset: 2px
 }
 
 /* Currently selected stamp shape */
 .stamp-option.active {
-    border-color: var(--gold);
-    background: var(--surface)
+    border-color: var(--highlight);
+    background: var(--panel-bg)
 }
 
 /* Custom user-uploaded stamp image rendered inside a board cell */
@@ -693,14 +1263,14 @@ h1 {
 }
 
 .color-swatch:focus-visible {
-    outline: 2px solid var(--gold);
+    outline: 2px solid var(--highlight);
     outline-offset: 2px
 }
 
 /* Currently selected color swatch with gold ring */
 .color-swatch.active {
-    border-color: var(--gold);
-    box-shadow: 0 0 8px var(--glow-color)
+    border-color: var(--highlight);
+    box-shadow: 0 0 8px var(--highlight-glow)
 }
 
 /* -- Stamp opacity slider -- */
@@ -713,7 +1283,7 @@ h1 {
 
 .opacity-slider span.label {
     font-size: .85rem;
-    color: var(--text-dim)
+    color: var(--text-muted)
 }
 
 /* On the player customization panel the opacity slider is its own row: align its
@@ -744,8 +1314,8 @@ h1 {
     height: 6px;
     border-radius: 3px;
     background:
-        linear-gradient(var(--gold), var(--gold)) left center / var(--fill, 0%) 100% no-repeat,
-        var(--surface2)
+        linear-gradient(var(--highlight), var(--highlight)) left center / var(--fill, 0%) 100% no-repeat,
+        var(--panel-raised-bg)
 }
 
 .opacity-slider input[type=range]::-webkit-slider-thumb {
@@ -755,34 +1325,34 @@ h1 {
     height: 16px;
     margin-top: -5px;
     border-radius: 50%;
-    background: var(--gold);
-    border: 2px solid var(--bg)
+    background: var(--highlight);
+    border: 2px solid var(--page-bg)
 }
 
 .opacity-slider input[type=range]::-moz-range-track {
     height: 6px;
     border-radius: 3px;
-    background: var(--surface2)
+    background: var(--panel-raised-bg)
 }
 
 .opacity-slider input[type=range]::-moz-range-progress {
     height: 6px;
     border-radius: 3px;
-    background: var(--gold)
+    background: var(--highlight)
 }
 
 .opacity-slider input[type=range]::-moz-range-thumb {
     width: 16px;
     height: 16px;
-    border: 2px solid var(--bg);
+    border: 2px solid var(--page-bg);
     border-radius: 50%;
-    background: var(--gold)
+    background: var(--highlight)
 }
 
 /* Percentage display next to the slider */
 .opacity-slider .opacity-val {
     font-size: .8rem;
-    color: var(--text-dim);
+    color: var(--text-muted);
     min-width: 32px;
     text-align: center
 }
@@ -810,7 +1380,7 @@ h1 {
    closer to the "Color:" text (~1/3 less leading space). */
 .stamp-color-control span.label {
     font-size: .85rem;
-    color: var(--text-dim);
+    color: var(--text-muted);
     min-width: 50px
 }
 
@@ -823,17 +1393,17 @@ h1 {
     padding: 3px;
     border-radius: 8px;
     cursor: pointer;
-    background: var(--surface2);
+    background: var(--panel-raised-bg);
     border: 2px solid transparent;
     transition: all .15s
 }
 
 .color-picker-btn:hover {
-    border-color: var(--text-dim)
+    border-color: var(--text-muted)
 }
 
 .color-picker-btn:focus-visible {
-    outline: 2px solid var(--gold);
+    outline: 2px solid var(--highlight);
     outline-offset: 2px
 }
 
@@ -873,7 +1443,7 @@ h1 {
 }
 
 /* ================================================================
-   8. PLAYER LAYOUT — Two-column responsive layout for player view
+   12. PLAYER LAYOUT — Two-column responsive layout for player view
    ================================================================ */
 
 /* Main player content area wrapping board + info panels */
@@ -926,8 +1496,8 @@ h1 {
    actions) — so the controls read as one cohesive UI, not free-floating bits. */
 .stamp-customization {
     width: 100%;
-    background: var(--surface);
-    border: 1px solid var(--surface2);
+    background: var(--panel-bg);
+    border: 1px solid var(--panel-raised-bg);
     border-radius: var(--radius);
     overflow: hidden
 }
@@ -942,15 +1512,15 @@ h1 {
     background: transparent;
     border: none;
     border-radius: 0;
-    color: var(--text-dim);
+    color: var(--text-muted);
     cursor: pointer;
     font: inherit;
     text-align: left
 }
 
 .stamp-custom-toggle:hover {
-    color: var(--gold);
-    background: color-mix(in srgb, var(--gold) 8%, transparent)
+    color: var(--highlight);
+    background: color-mix(in srgb, var(--highlight) 8%, transparent)
 }
 
 .stamp-custom-chevron {
@@ -964,7 +1534,7 @@ h1 {
     flex-direction: column;
     align-items: stretch;
     padding: 0 14px;
-    border-top: 1px solid var(--surface2)
+    border-top: 1px solid var(--panel-raised-bg)
 }
 
 /* Each control is a settings row with a subtle divider between rows. */
@@ -973,7 +1543,7 @@ h1 {
 }
 
 .stamp-custom-body > * + * {
-    border-top: 1px solid var(--surface2)
+    border-top: 1px solid var(--panel-raised-bg)
 }
 
 /* Sound on/off toggle folded into the action row. */
@@ -999,12 +1569,12 @@ h1 {
 }
 
 /* ================================================================
-   9. CALLED NUMBERS GRID — B-I-N-G-O tracker (player & admin)
+   13. CALLED NUMBERS GRID — B-I-N-G-O tracker (player & admin)
    ================================================================ */
 
 /* Container panel for the called numbers grid */
 .numbers-panel {
-    background: var(--surface);
+    background: var(--panel-bg);
     border-radius: var(--radius);
     padding: 16px
 }
@@ -1012,7 +1582,7 @@ h1 {
 .numbers-panel h3 {
     margin-bottom: 10px;
     font-size: 1rem;
-    color: var(--text-dim)
+    color: var(--text-muted)
 }
 
 /* 5-column grid (one per B-I-N-G-O letter) */
@@ -1028,7 +1598,7 @@ h1 {
     font-weight: 800;
     font-size: 1rem;
     padding: 4px 0;
-    color: var(--gold)
+    color: var(--highlight)
 }
 
 /* Individual number cell (1–75) in the tracker */
@@ -1037,13 +1607,13 @@ h1 {
     padding: 4px 0;
     font-size: .85rem;
     border-radius: 4px;
-    color: var(--text-dim)
+    color: var(--text-muted)
 }
 
 /* Highlighted state when a number has been called */
 .num-cell.called {
-    background: var(--gold);
-    color: var(--text-on-primary);
+    background: var(--highlight);
+    color: var(--text-on-accent);
     font-weight: 700
 }
 
@@ -1060,12 +1630,12 @@ h1 {
 }
 
 /* ================================================================
-   10. PATTERN DISPLAY (MINI) — Small 5×5 pattern grids
+   14. PATTERN DISPLAY (MINI) — Small 5×5 pattern grids
    ================================================================ */
 
 /* Container panel for active win patterns on player screen */
 .patterns-panel {
-    background: var(--surface);
+    background: var(--panel-bg);
     border-radius: var(--radius);
     padding: 16px
 }
@@ -1073,7 +1643,7 @@ h1 {
 .patterns-panel h3 {
     margin-bottom: 10px;
     font-size: 1rem;
-    color: var(--text-dim)
+    color: var(--text-muted)
 }
 
 /* Row of mini pattern preview cards */
@@ -1117,12 +1687,12 @@ span.pattern-mini {
     width: 16px;
     height: 16px;
     border-radius: 3px;
-    background: var(--surface2)
+    background: var(--panel-raised-bg)
 }
 
 /* Active/required cell in a pattern (gold) */
 .pattern-mini-cell.on {
-    background: var(--gold)
+    background: var(--highlight)
 }
 
 /* Player win-patterns panel: shrink the cards so more fit per row, keeping the
@@ -1139,7 +1709,365 @@ span.pattern-mini {
 }
 
 /* ================================================================
-   11. ADMIN LOGIN — Password entry screen
+   15. LAST DRAWN DISPLAY — Most recently drawn number badge
+   ================================================================ */
+
+/* Centered draw area */
+.draw-area {
+    text-align: center
+}
+
+/* Prominent badge showing the last drawn letter + number */
+.last-drawn {
+    display: inline-flex;
+    flex-direction: column;
+    align-items: center;
+    background: var(--panel-bg);
+    border-radius: 16px;
+    padding: 20px 36px;
+    margin-top: 12px;
+    margin-left: 16px;
+    border: 3px solid var(--highlight)
+}
+
+/* B/I/N/G/O letter label */
+.last-drawn .letter {
+    font-size: 1.6rem;
+    font-weight: 800;
+    color: var(--highlight)
+}
+
+/* Large number display */
+.last-drawn .number {
+    font-size: 3rem;
+    font-weight: 800
+}
+
+/* ================================================================
+   16. WINNERS PANEL — Winner card chips during active game
+   ================================================================ */
+
+/* Container for winner card IDs */
+.winners-panel {
+    background: var(--panel-bg);
+    border-radius: var(--radius);
+    padding: 16px
+}
+
+.winners-panel h3 {
+    color: var(--highlight);
+    margin-bottom: 8px
+}
+
+/* Row of winner card ID chips */
+.winner-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px
+}
+
+/* Individual winner chip with gradient background */
+.winner-chip {
+    background: linear-gradient(135deg, var(--highlight), var(--text-muted));
+    color: var(--text-on-accent);
+    padding: 8px 16px;
+    border-radius: 8px;
+    font-weight: 700;
+    font-family: monospace
+}
+
+/* Clickable winner chip (opens verification modal) */
+.winner-chip-btn {
+    cursor: pointer;
+    transition: transform .12s, box-shadow .12s
+}
+
+.winner-chip-btn:hover {
+    transform: scale(1.06);
+    box-shadow: 0 0 12px var(--highlight-glow)
+}
+
+.winner-chip-btn:active {
+    transform: scale(.97)
+}
+
+/* ================================================================
+   17. WINNER VERIFICATION — Pattern-hit highlighting on board
+   ================================================================ */
+
+/* Board cell that matches the winning pattern (gold highlight + glow) */
+.board-cell.pattern-hit {
+    background: var(--highlight);
+    color: var(--text-on-accent);
+    box-shadow: 0 0 10px var(--highlight-glow);
+    border: 2px solid var(--text-muted)
+}
+
+.board-cell.pattern-hit.free {
+    background: var(--highlight)
+}
+
+/* Empty state message when no game is active */
+.no-game-msg {
+    text-align: center;
+    color: var(--text-muted);
+    padding: 40px
+}
+
+/* ================================================================
+   18. GAME DETAILS — Markdown-rendered info panel (player + admin)
+   ================================================================ */
+
+/* Player-facing game details panel (rendered markdown) */
+.game-details {
+    background: var(--panel-bg);
+    border-radius: var(--radius);
+    padding: 16px 20px;
+    color: var(--text);
+    font-size: .92rem;
+    line-height: 1.6;
+    max-width: 380px;
+    width: 100%;
+    word-wrap: break-word
+}
+
+/* In the player info column the details span the full column width. */
+.player-col-info .game-details {
+    max-width: none
+}
+
+/* Markdown heading styles inside game details */
+.game-details h1,
+.game-details h2,
+.game-details h3 {
+    margin: 8px 0 4px;
+    color: var(--highlight)
+}
+
+.game-details p {
+    margin: 6px 0
+}
+
+.game-details ul,
+.game-details ol {
+    padding-left: 20px;
+    margin: 6px 0
+}
+
+.game-details a {
+    color: var(--accent)
+}
+
+.game-details strong {
+    color: var(--text)
+}
+
+.game-details code {
+    background: var(--panel-raised-bg);
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: .85em
+}
+
+/* Admin game details markdown editor */
+.game-details-editor {
+    margin-bottom: 20px
+}
+
+.game-details-editor textarea {
+    width: 100%;
+    font-family: inherit;
+    font-size: .92rem;
+    background: var(--panel-raised-bg);
+    color: var(--text);
+    border: 2px solid var(--panel-raised-bg);
+    border-radius: var(--radius);
+    padding: 10px 14px;
+    resize: vertical;
+    outline: none;
+    line-height: 1.5
+}
+
+.game-details-editor textarea:focus {
+    border-color: var(--accent)
+}
+
+/* ================================================================
+   19. PLAYER LIVE-GAME FEEDBACK — connection badge, last-called
+       announcement, draw-sound toggle, end-of-game summary
+   ================================================================ */
+
+/* Connection status pill in the player topbar — `.badge` object chrome + colours. */
+.conn-badge {
+    background: var(--panel-raised-bg);
+    color: var(--text-muted);
+}
+.conn-badge .conn-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: currentColor;
+}
+.conn-badge.is-open { color: var(--success); }
+.conn-badge.is-connecting,
+.conn-badge.is-reconnecting { color: var(--highlight); }
+/* Pulse the dot while the link isn't settled (connecting/reconnecting). */
+.conn-badge.is-connecting .conn-dot,
+.conn-badge.is-reconnecting .conn-dot {
+    animation: livePulse 1.4s ease-in-out infinite;
+}
+
+/* Single cohesive box holding the "Last Called" number and the called-numbers
+   grid together, separated by a divider. The inner numbers-panel drops its own
+   surface/padding so the combined box provides the one frame. */
+.called-combined {
+    background: var(--panel-bg);
+    border-radius: var(--radius);
+    padding: 16px;
+}
+.called-combined .numbers-panel {
+    background: transparent;
+    padding: 0;
+}
+.called-divider {
+    border: 0;
+    border-top: 1px solid var(--panel-raised-bg);
+    margin: 14px 0;
+}
+
+/* "Last called" announcement above the called-numbers grid. */
+.last-called {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+}
+.last-called-label {
+    font-size: .72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .08em;
+    color: var(--text-muted);
+}
+/* Reuse the admin .last-drawn look, centered with no offset margins. */
+.last-called .last-drawn {
+    margin: 0;
+}
+/* Row holding the last-drawn number flanked by a decorative flourish on each
+   side. The flourishes flex to fill the empty space beside the number and stretch
+   to its height, so they scale with the column as it resizes. */
+.last-called-row {
+    display: flex;
+    align-items: stretch;
+    justify-content: center;
+    gap: 10px;
+    width: 100%;
+}
+/* The SVG is loaded as a mask so it can be tinted with the gold theme token
+   (matching the .last-drawn border) and recolored automatically per theme. */
+.last-called-flourish {
+    flex: 1 1 0;
+    min-width: 0;
+    max-width: 110px;
+    align-self: stretch;
+    opacity: .5;
+    background-color: var(--highlight);
+    -webkit-mask: url('/images/called_flourish.svg') no-repeat center / contain;
+    mask: url('/images/called_flourish.svg') no-repeat center / contain;
+}
+/* Mirror the right-hand flourish so the pair frames the number symmetrically. */
+.last-called-flourish--right {
+    transform: scaleX(-1);
+}
+/* Pop each time a new number is announced (keyed by call_order in template). */
+.last-drawn--pop {
+    animation: lastCalledPop .35s ease;
+}
+@keyframes lastCalledPop {
+    0%   { transform: scale(.7); opacity: 0; }
+    60%  { transform: scale(1.08); }
+    100% { transform: scale(1); opacity: 1; }
+}
+
+/* End-of-game thank-you summary (shown in place of the "waiting" message). */
+.game-over-msg {
+    text-align: center;
+    color: var(--text);
+    padding: 32px 16px;
+}
+.game-over-msg .go-icon {
+    font-size: 2.4rem;
+    color: var(--highlight);
+    margin-bottom: 10px;
+}
+.game-over-msg .go-title {
+    font-size: 1.15rem;
+    font-weight: 700;
+    margin-bottom: 8px;
+}
+.game-over-msg .go-sub {
+    color: var(--text-muted);
+    font-size: .95rem;
+    margin-top: 4px;
+}
+
+/* "Join the Discord Server" button on the end-of-game summary. */
+.game-over-msg .go-discord-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 18px;
+    text-decoration: none;
+}
+
+/* ================================================================
+   20. SITE FOOTER — credits/links on the public (non-admin) pages
+   ================================================================ */
+.app-footer {
+    margin-top: auto;
+    padding: 24px 16px 28px;
+    text-align: center;
+    font-size: .8rem;
+    line-height: 1.6;
+    color: var(--text-muted);
+    border-top: 1px solid color-mix(in srgb, var(--text-muted) 18%, transparent);
+}
+
+.app-footer p {
+    margin: 0;
+}
+
+.app-footer a {
+    color: var(--highlight);
+    text-decoration: none;
+}
+
+.app-footer a:hover {
+    text-decoration: underline;
+}
+
+/* Mobile-only "Install App" link — styled as a pill button to read as a clear
+   call-to-action (shown by usePwaInstall only on mobile when not yet installed). */
+.app-footer-install {
+    margin-top: 14px;
+}
+.app-footer-install a {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 9px 18px;
+    border: 1px solid var(--highlight);
+    border-radius: 999px;
+    font-weight: 600;
+}
+.app-footer-install a:hover {
+    background: color-mix(in srgb, var(--highlight) 12%, transparent);
+    text-decoration: none;
+}
+
+
+/* ================================================================
+   21. ADMIN LOGIN — Password entry screen
    ================================================================ */
 
 /* Vertically centered login container */
@@ -1154,12 +2082,12 @@ span.pattern-mini {
 
 /* Login dialog box */
 .admin-login .box {
-    background: var(--surface);
+    background: var(--panel-bg);
     padding: 40px;
     border-radius: 16px;
     text-align: center;
     width: 360px;
-    border: 2px solid var(--surface2)
+    border: 2px solid var(--panel-raised-bg)
 }
 
 .admin-login .box h2 {
@@ -1167,7 +2095,7 @@ span.pattern-mini {
 }
 
 .admin-login .box p {
-    color: var(--text-dim);
+    color: var(--text-muted);
     margin-bottom: 20px;
     font-size: .9rem
 }
@@ -1193,7 +2121,7 @@ span.pattern-mini {
 }
 
 /* ================================================================
-   12. ADMIN DASHBOARD — Sidebar nav + content area
+   22. ADMIN DASHBOARD — Sidebar nav + content area
    ================================================================ */
 
 /* Two-column admin layout: sidebar + main content */
@@ -1206,8 +2134,8 @@ span.pattern-mini {
 .admin-sidebar {
     width: 220px;
     flex-shrink: 0;
-    background: var(--surface);
-    border-right: 1px solid var(--surface2);
+    background: var(--panel-bg);
+    border-right: 1px solid var(--panel-raised-bg);
     padding: 12px 0;
     overflow-y: auto
 }
@@ -1226,7 +2154,7 @@ span.pattern-mini {
     cursor: pointer;
     font-weight: 700;
     font-size: .95rem;
-    color: var(--text-dim);
+    color: var(--text-muted);
     transition: color .15s, background .15s;
     user-select: none
 }
@@ -1234,7 +2162,7 @@ span.pattern-mini {
 .admin-nav-header:hover,
 .admin-nav-header.open {
     color: var(--text);
-    background: var(--surface2)
+    background: var(--panel-raised-bg)
 }
 
 /* Expand/collapse chevron arrow */
@@ -1258,7 +2186,7 @@ span.pattern-mini {
     text-align: left;
     padding: 8px 16px 8px 28px;
     background: transparent;
-    color: var(--text-dim);
+    color: var(--text-muted);
     font-weight: 500;
     font-size: .88rem;
     border-radius: 0;
@@ -1266,27 +2194,15 @@ span.pattern-mini {
 }
 
 .admin-nav-items button:hover {
-    background: var(--surface2);
+    background: var(--panel-raised-bg);
     color: var(--text)
 }
 
 /* Currently active/selected tab */
 .admin-nav-items button.active {
-    background: var(--secondary);
+    background: var(--accent-2);
     color: var(--text);
     font-weight: 600
-}
-
-/* Sub-section label within nav */
-.admin-nav-sub-header {
-    display: block;
-    padding: 6px 16px 2px 20px;
-    font-size: .75rem;
-    font-weight: 700;
-    color: var(--text-dim);
-    text-transform: uppercase;
-    letter-spacing: .5px;
-    opacity: .7
 }
 
 /* Main content area to the right of sidebar */
@@ -1304,7 +2220,7 @@ span.pattern-mini {
     .admin-sidebar {
         width: 100%;
         border-right: none;
-        border-bottom: 1px solid var(--surface2);
+        border-bottom: 1px solid var(--panel-raised-bg);
         padding: 8px 0
     }
     .admin-nav-items button {
@@ -1318,7 +2234,7 @@ span.pattern-mini {
 }
 
 /* ================================================================
-   13. ADMIN CARDS — Card generation, listing, and management
+   23. ADMIN CARDS — Card generation, listing, and management
    ================================================================ */
 
 /* Toolbar row with generate count input + action buttons */
@@ -1346,7 +2262,7 @@ span.pattern-mini {
     display: flex;
     align-items: center;
     gap: 6px;
-    background: var(--surface2);
+    background: var(--panel-raised-bg);
     padding: 8px 12px;
     border-radius: 8px;
     font-family: monospace;
@@ -1357,7 +2273,7 @@ span.pattern-mini {
 }
 
 .card-chip:hover {
-    border-color: var(--secondary)
+    border-color: var(--accent-2)
 }
 
 /* Delete × button on card chip */
@@ -1375,7 +2291,7 @@ span.pattern-mini {
 
 /* Card chip with assigned player name (highlighted border) */
 .card-chip.has-player {
-    border-color: var(--secondary)
+    border-color: var(--accent-2)
 }
 
 /* Small player icon indicator on card chip */
@@ -1385,59 +2301,12 @@ span.pattern-mini {
 }
 
 /* ================================================================
-   14. MODALS — Overlay + dialog box (card preview, winner verify)
-   ================================================================ */
-
-/* Fullscreen semi-transparent overlay */
-.modal-overlay {
-    position: fixed;
-    inset: 0;
-    background: var(--overlay);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 500
-}
-
-/* Centered modal content box */
-.modal-box {
-    background: var(--surface);
-    border-radius: 16px;
-    padding: 24px;
-    max-width: 440px;
-    width: 90%
-}
-
-.modal-box h3 {
-    margin-bottom: 12px
-}
-
-/* Themed confirm dialog (ui.confirm) — message + action button row */
-.modal-box .confirm-msg {
-    color: var(--text-dim);
-    font-size: .95rem;
-    line-height: 1.5;
-    margin-bottom: 20px
-}
-
-.modal-box .confirm-btns {
-    display: flex;
-    gap: 12px;
-    justify-content: flex-end
-}
-
-/* Centered confirm dialogs put the buttons in the middle */
-.modal-box.modal-centered .confirm-btns {
-    justify-content: center
-}
-
-/* ================================================================
-   15. ADMIN PATTERNS — 5×5 editor + saved pattern cards
+   24. ADMIN PATTERNS — 5×5 editor + saved pattern cards
    ================================================================ */
 
 /* Pattern creation panel with grid editor */
 .pattern-editor {
-    background: var(--surface);
+    background: var(--panel-bg);
     border-radius: var(--radius);
     padding: 24px;
     margin-bottom: 16px
@@ -1457,7 +2326,7 @@ span.pattern-mini {
     width: 48px;
     height: 48px;
     border-radius: 6px;
-    background: var(--surface2);
+    background: var(--panel-raised-bg);
     cursor: pointer;
     border: 2px solid transparent;
     transition: all .12s
@@ -1465,12 +2334,12 @@ span.pattern-mini {
 
 /* Active (selected) cell in pattern editor */
 .pattern-editor-cell.on {
-    background: var(--gold);
-    border-color: var(--gold)
+    background: var(--highlight);
+    border-color: var(--highlight)
 }
 
 .pattern-editor-cell:hover {
-    border-color: var(--text-dim)
+    border-color: var(--text-muted)
 }
 
 /* Name input + category selector row */
@@ -1496,11 +2365,19 @@ span.pattern-mini {
     gap: 12px
 }
 
+/* Collapsible per-category header above each pattern group (Patterns manager) */
+.pattern-group-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 14px 0 8px;
+    cursor: pointer;
+    user-select: none;
+}
+.pattern-group-head h4 { margin: 0; font-size: 1rem }
+
 /* Individual saved pattern card with mini grid + name */
 .saved-pattern {
-    background: var(--surface);
-    border: 2px solid var(--surface2);
-    border-radius: var(--radius);
     padding: 14px;
     text-align: center;
     position: relative;
@@ -1559,11 +2436,11 @@ span.pattern-mini {
     cursor: text;
     margin-top: 6px;
     font-size: .82rem;
-    color: var(--text-dim)
+    color: var(--text-muted)
 }
 
 .saved-pattern .pattern-name:hover {
-    color: var(--gold)
+    color: var(--highlight)
 }
 
 /* Inline input when renaming a pattern */
@@ -1574,70 +2451,13 @@ span.pattern-mini {
 }
 
 /* ================================================================
-   16. PATTERN CATEGORIES — Draggable category chips
-   ================================================================ */
-
-/* Flex row of category chips */
-.category-grid {
-    display: flex;
-    gap: 10px;
-    flex-wrap: wrap
-}
-
-/* Individual draggable category chip */
-.category-chip {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 10px 16px;
-    background: var(--bg);
-    border-radius: 8px;
-    font-size: .95rem;
-    border: 2px solid var(--surface2);
-    /* Dragging is initiated only from the .drag-handle (☰), so the chip itself
-       uses the default cursor — only the handle shows the grab cursor. */
-    cursor: default;
-    transition: border-color .15s, box-shadow .15s;
-    min-width: 120px
-}
-
-.category-chip:hover {
-    border-color: var(--text-dim)
-}
-
-/* Click-to-edit category name text (truncated) */
-.category-name {
-    cursor: text;
-    flex: 1;
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap
-}
-
-/* Red × delete button on category chip */
-.category-del {
-    cursor: pointer;
-    color: var(--danger);
-    font-weight: bold;
-    font-size: 1.2rem;
-    line-height: 1;
-    margin-left: auto;
-    transition: color .12s
-}
-
-.category-del:hover {
-    color: var(--text)
-}
-
-/* ================================================================
-   17. INLINE EDITING — Shared input for click-to-edit fields
+   25. INLINE EDITING — Shared input for click-to-edit fields
    ================================================================ */
 
 /* Compact input that replaces text when editing pattern/category names */
 .inline-edit-input {
-    background: var(--surface2);
-    border: 1px solid var(--gold);
+    background: var(--panel-raised-bg);
+    border: 1px solid var(--highlight);
     border-radius: 4px;
     color: var(--text);
     font-size: inherit;
@@ -1648,12 +2468,12 @@ span.pattern-mini {
 }
 
 .inline-edit-input:focus {
-    border-color: var(--gold);
-    box-shadow: 0 0 0 2px var(--glow-color)
+    border-color: var(--highlight);
+    box-shadow: 0 0 0 2px var(--highlight-glow)
 }
 
 /* ================================================================
-   18. DRAG & DROP — Visual feedback for pattern/category reordering
+   26. DRAG & DROP — Visual feedback for pattern reordering
    ================================================================ */
 
 /* Semi-transparent state while an item is being dragged */
@@ -1661,37 +2481,15 @@ span.pattern-mini {
     opacity: .4;
 }
 
-/* Dashed outline placeholder showing where the item will drop */
-.drag-placeholder {
-    border: 2px dashed var(--gold);
-    border-radius: var(--radius);
-    background: rgba(214, 189, 174, .08);
-    pointer-events: none;
-}
-
-/* Category-sized drop placeholder */
-.drag-placeholder--category {
-    min-width: 120px;
-    height: 44px;
-}
-
-/* Pattern card-sized drop placeholder */
-.drag-placeholder--pattern {
-    width: 140px;
-    height: 160px;
-}
-
 /* Highlight on pattern drop zone when dragging over it */
 .pattern-drop-zone.drag-over {
     background: rgba(214, 189, 174, .06);
     border-radius: 8px;
-    outline: 2px dashed var(--gold);
+    outline: 2px dashed var(--highlight);
     outline-offset: 2px;
 }
 
-/* Grab cursor for draggable items that are dragged by their whole body.
-   NOTE: .category-chip is intentionally excluded — it is dragged only via its
-   .drag-handle, so only the handle (below) shows the grab cursor. */
+/* Grab cursor for draggable pattern cards (dragged by their whole body). */
 .saved-pattern[draggable="true"] {
     cursor: grab;
 }
@@ -1720,12 +2518,12 @@ span.pattern-mini {
 }
 
 /* ================================================================
-   19. ADMIN GAME — Setup, draw controls, countdown, pattern picker
+   27. ADMIN GAME — Setup, draw controls, countdown, pattern picker
    ================================================================ */
 
 /* Game setup panel (shown when no game is active) */
 .game-setup {
-    background: var(--surface);
+    background: var(--panel-bg);
     border-radius: var(--radius);
     padding: 24px
 }
@@ -1751,8 +2549,8 @@ span.pattern-mini {
     white-space: nowrap
 }
 .winner-sound-toggle[aria-pressed='true'] {
-    color: var(--gold);
-    border-color: var(--gold)
+    color: var(--highlight);
+    border-color: var(--highlight)
 }
 
 
@@ -1771,7 +2569,7 @@ span.pattern-mini {
     width: 56px;
     height: 56px;
     border-radius: 50%;
-    border: 4px solid var(--gold);
+    border: 4px solid var(--highlight);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -1782,13 +2580,13 @@ span.pattern-mini {
 .countdown-number {
     font-size: 1.6rem;
     font-weight: 800;
-    color: var(--gold)
+    color: var(--highlight)
 }
 
 /* "Sending to players..." label next to countdown */
 .countdown-label {
     font-size: 1rem;
-    color: var(--text-dim);
+    color: var(--text-muted);
     font-weight: 600
 }
 
@@ -1832,22 +2630,29 @@ span.pattern-mini {
     margin-bottom: 20px
 }
 
-/* Individual pattern checkbox chip with dot indicator */
+/* Individual selectable pattern card: mini grid on top, small name below —
+   mirrors the Patterns manager's .saved-pattern card so the picker reads
+   consistently, and the narrow width lets many patterns fit per row. The
+   selection dot sits in the top-right corner; the gold border marks selection. */
 .pattern-check {
     display: flex;
+    flex-direction: column;
     align-items: center;
-    gap: 8px;
-    background: var(--surface2);
-    padding: 10px 14px;
+    gap: 6px;
+    background: var(--panel-raised-bg);
+    padding: 12px 10px 8px;
     border-radius: 8px;
     cursor: pointer;
     border: 2px solid transparent;
+    position: relative;
+    width: 96px;
+    text-align: center;
     transition: border-color .15s
 }
 
 /* Selected pattern (gold border) */
 .pattern-check.selected {
-    border-color: var(--gold)
+    border-color: var(--highlight)
 }
 
 /* Hide native checkbox input */
@@ -1855,22 +2660,40 @@ span.pattern-mini {
     display: none
 }
 
-/* Custom radio-style dot indicator */
+/* Selection dot indicator, pinned to the card's top-right corner */
 .pattern-check .dot {
-    width: 18px;
-    height: 18px;
+    position: absolute;
+    top: 6px;
+    right: 6px;
+    width: 14px;
+    height: 14px;
     border-radius: 50%;
-    border: 2px solid var(--text-dim)
+    border: 2px solid var(--text-muted);
+    background: var(--panel-bg)
 }
 
 /* Filled gold dot when pattern is selected */
 .pattern-check.selected .dot {
-    background: var(--gold);
-    border-color: var(--gold)
+    background: var(--highlight);
+    border-color: var(--highlight)
+}
+
+/* Pattern name below the mini grid (small, wraps for long names) */
+.pattern-check-name {
+    font-size: .72rem;
+    line-height: 1.25;
+    color: var(--text);
+    word-break: break-word
+}
+
+/* Category line under the name in the flat (search-results) view */
+.pattern-check-cat {
+    font-size: .66rem;
+    color: var(--text-muted)
 }
 
 /* ================================================================
-   20. ACTIVE GAME LAYOUT — Two-column grid during live game
+   28. ACTIVE GAME LAYOUT — Two-column grid during live game
    ================================================================ */
 
 /* Vertical stack container for active game content */
@@ -1907,191 +2730,7 @@ span.pattern-mini {
 }
 
 /* ================================================================
-   21. LAST DRAWN DISPLAY — Most recently drawn number badge
-   ================================================================ */
-
-/* Centered draw area */
-.draw-area {
-    text-align: center
-}
-
-/* Prominent badge showing the last drawn letter + number */
-.last-drawn {
-    display: inline-flex;
-    flex-direction: column;
-    align-items: center;
-    background: var(--surface);
-    border-radius: 16px;
-    padding: 20px 36px;
-    margin-top: 12px;
-    margin-left: 16px;
-    border: 3px solid var(--gold)
-}
-
-/* B/I/N/G/O letter label */
-.last-drawn .letter {
-    font-size: 1.6rem;
-    font-weight: 800;
-    color: var(--gold)
-}
-
-/* Large number display */
-.last-drawn .number {
-    font-size: 3rem;
-    font-weight: 800
-}
-
-/* ================================================================
-   22. WINNERS PANEL — Winner card chips during active game
-   ================================================================ */
-
-/* Container for winner card IDs */
-.winners-panel {
-    background: var(--surface);
-    border-radius: var(--radius);
-    padding: 16px
-}
-
-.winners-panel h3 {
-    color: var(--gold);
-    margin-bottom: 8px
-}
-
-/* Row of winner card ID chips */
-.winner-chips {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px
-}
-
-/* Individual winner chip with gradient background */
-.winner-chip {
-    background: linear-gradient(135deg, var(--gold), var(--text-dim));
-    color: var(--text-on-primary);
-    padding: 8px 16px;
-    border-radius: 8px;
-    font-weight: 700;
-    font-family: monospace
-}
-
-/* Clickable winner chip (opens verification modal) */
-.winner-chip-btn {
-    cursor: pointer;
-    transition: transform .12s, box-shadow .12s
-}
-
-.winner-chip-btn:hover {
-    transform: scale(1.06);
-    box-shadow: 0 0 12px var(--glow-color)
-}
-
-.winner-chip-btn:active {
-    transform: scale(.97)
-}
-
-/* ================================================================
-   23. WINNER VERIFICATION — Pattern-hit highlighting on board
-   ================================================================ */
-
-/* Board cell that matches the winning pattern (gold highlight + glow) */
-.board-cell.pattern-hit {
-    background: var(--gold);
-    color: var(--text-on-primary);
-    box-shadow: 0 0 10px var(--glow-color);
-    border: 2px solid var(--text-dim)
-}
-
-.board-cell.pattern-hit.free {
-    background: var(--gold)
-}
-
-/* Empty state message when no game is active */
-.no-game-msg {
-    text-align: center;
-    color: var(--text-dim);
-    padding: 40px
-}
-
-/* ================================================================
-   24. GAME DETAILS — Markdown-rendered info panel (player + admin)
-   ================================================================ */
-
-/* Player-facing game details panel (rendered markdown) */
-.game-details {
-    background: var(--surface);
-    border-radius: var(--radius);
-    padding: 16px 20px;
-    color: var(--text);
-    font-size: .92rem;
-    line-height: 1.6;
-    max-width: 380px;
-    width: 100%;
-    word-wrap: break-word
-}
-
-/* In the player info column the details span the full column width. */
-.player-col-info .game-details {
-    max-width: none
-}
-
-/* Markdown heading styles inside game details */
-.game-details h1,
-.game-details h2,
-.game-details h3 {
-    margin: 8px 0 4px;
-    color: var(--gold)
-}
-
-.game-details p {
-    margin: 6px 0
-}
-
-.game-details ul,
-.game-details ol {
-    padding-left: 20px;
-    margin: 6px 0
-}
-
-.game-details a {
-    color: var(--primary)
-}
-
-.game-details strong {
-    color: var(--text)
-}
-
-.game-details code {
-    background: var(--surface2);
-    padding: 2px 6px;
-    border-radius: 4px;
-    font-size: .85em
-}
-
-/* Admin game details markdown editor */
-.game-details-editor {
-    margin-bottom: 20px
-}
-
-.game-details-editor textarea {
-    width: 100%;
-    font-family: inherit;
-    font-size: .92rem;
-    background: var(--surface2);
-    color: var(--text);
-    border: 2px solid var(--surface2);
-    border-radius: var(--radius);
-    padding: 10px 14px;
-    resize: vertical;
-    outline: none;
-    line-height: 1.5
-}
-
-.game-details-editor textarea:focus {
-    border-color: var(--primary)
-}
-
-/* ================================================================
-   25. STYLES/THEMES EDITOR — Theme list + CodeMirror CSS editor
+   29. STYLES/THEMES EDITOR — Theme list + CodeMirror CSS editor
    ================================================================ */
 
 /* Split layout: sidebar list + editor area */
@@ -2105,7 +2744,7 @@ span.pattern-mini {
 .styles-sidebar {
     width: 220px;
     flex-shrink: 0;
-    background: var(--surface);
+    background: var(--panel-bg);
     border-radius: var(--radius);
     padding: 16px
 }
@@ -2127,20 +2766,20 @@ span.pattern-mini {
     padding: 8px 12px;
     border-radius: 6px;
     cursor: pointer;
-    background: var(--surface2);
+    background: var(--panel-raised-bg);
     transition: all .12s;
     gap: 8px
 }
 
 .style-item:hover {
-    background: var(--primary);
-    color: var(--text-on-primary)
+    background: var(--accent);
+    color: var(--text-on-accent)
 }
 
 /* Currently selected/editing theme */
 .style-item.selected {
-    border: 2px solid var(--primary);
-    background: var(--surface2)
+    border: 2px solid var(--accent);
+    background: var(--panel-raised-bg)
 }
 
 /* Theme name (truncated) */
@@ -2151,15 +2790,10 @@ span.pattern-mini {
     white-space: nowrap
 }
 
-/* "Active" badge on the currently applied theme */
+/* "Active" badge on the currently applied theme — `.badge` object chrome + colours. */
 .style-active-badge {
-    font-size: .7rem;
-    font-weight: 700;
     background: var(--success);
-    color: var(--text-on-toast);
-    padding: 2px 6px;
-    border-radius: 4px;
-    white-space: nowrap
+    color: var(--text-on-fill)
 }
 
 /* CSS editor area (right side) */
@@ -2167,7 +2801,7 @@ span.pattern-mini {
     flex: 1;
     display: flex;
     flex-direction: column;
-    background: var(--surface);
+    background: var(--panel-bg);
     border-radius: var(--radius);
     padding: 16px
 }
@@ -2178,17 +2812,17 @@ span.pattern-mini {
    below) so the container always wraps it exactly. */
 .style-css-editor {
     width: 100%;
-    border: 2px solid var(--surface2);
+    border: 2px solid var(--panel-raised-bg);
     border-radius: var(--radius);
     overflow: hidden
 }
 
 .style-css-editor:focus-within {
-    border-color: var(--primary)
+    border-color: var(--accent)
 }
 
 /* ================================================================
-   26. CODEMIRROR OVERRIDES — CodeMirror 6 (vue-codemirror) CSS editor
+   30. CODEMIRROR OVERRIDES — CodeMirror 6 (vue-codemirror) CSS editor
    ================================================================
    The dark colour scheme + syntax token palette now live in the editor's
    JS theme (frontend/src/lib/codemirror.ts) because CodeMirror 6 styles
@@ -2226,8 +2860,52 @@ span.pattern-mini {
     }
 }
 
+/* ── Object: color-picker skin (@ckpack/vue-color Chrome) ───────────────────
+   The Chrome picker ships a light skin and its inputs would otherwise inherit
+   the global dark `input` background with dark text. Wrapping the picker in
+   `.color-picker` re-maps its surfaces + fields to the app theme tokens (so it
+   blends into any modal/panel and stays legible), and the descendant selectors
+   keep the edge over the library's own single-class styles regardless of load
+   order. Shared by StampColorPicker (player stamp-colour modal) and
+   ThemeColorPickerTool (Themes tab helper). */
+.color-picker .vc-chrome {
+    width: 100%;
+    max-width: 320px;
+    background: var(--panel-raised-bg);
+    border-radius: var(--radius);
+    box-shadow: 0 6px 18px var(--shadow);
+    font-family: inherit;
+}
+.color-picker .vc-chrome-body {
+    background: var(--panel-raised-bg);
+}
+.color-picker .vc-input__input {
+    width: 100%;
+    height: 26px;
+    padding: 2px 4px;
+    border: none;
+    border-radius: 4px;
+    font-size: 0.72rem;
+    text-align: center;
+    background: var(--panel-bg);
+    color: var(--text);
+    box-shadow: inset 0 0 0 1px var(--panel-raised-bg);
+}
+.color-picker .vc-input__input:focus {
+    box-shadow: inset 0 0 0 1px var(--accent-2);
+}
+.color-picker .vc-input__label {
+    color: var(--text-muted);
+}
+.color-picker .vc-chrome-toggle-icon path {
+    fill: var(--text-muted);
+}
+.color-picker .vc-chrome-toggle-icon-highlight {
+    background: var(--panel-bg);
+}
+
 /* ================================================================
-   27. RAFFLES — Cards, detail page, signup, admin management
+   31. RAFFLES — Cards, detail page, signup, admin management
    ================================================================ */
 
 /* Flex-wrapped grid of raffle preview cards */
@@ -2239,8 +2917,6 @@ span.pattern-mini {
 
 /* Individual raffle card (clickable, with image + body) */
 .raffle-card {
-    background: var(--surface);
-    border: 2px solid var(--surface2);
     border-radius: 12px;
     width: 280px;
     cursor: pointer;
@@ -2249,7 +2925,7 @@ span.pattern-mini {
 }
 
 .raffle-card:hover {
-    border-color: var(--secondary);
+    border-color: var(--accent-2);
     transform: translateY(-2px)
 }
 
@@ -2273,36 +2949,29 @@ span.pattern-mini {
 
 /* Cost per entry display (gold text) */
 .raffle-cost {
-    color: var(--gold);
+    color: var(--highlight);
     font-weight: 600;
     font-size: .9rem
 }
 
-/* Open/Closed status badge on raffle cards */
+/* Open/Closed status badge on raffle cards — `.badge` object chrome + margin. */
 .raffle-badge {
-    display: inline-block;
-    font-size: .7rem;
-    font-weight: 700;
-    padding: 2px 8px;
-    border-radius: 4px;
-    vertical-align: middle;
-    margin-left: 6px;
-    text-transform: uppercase
+    margin-left: 6px
 }
 
 .raffle-badge-open {
     background: var(--success);
-    color: var(--text-on-toast)
+    color: var(--text-on-fill)
 }
 
 .raffle-badge-closed {
     background: var(--danger);
-    color: var(--text-on-toast)
+    color: var(--text-on-fill)
 }
 
 /* Public raffle entry sign-up form */
 .raffle-signup-form {
-    background: var(--surface);
+    background: var(--panel-bg);
     border-radius: var(--radius);
     padding: 20px;
     margin-top: 16px
@@ -2315,7 +2984,7 @@ span.pattern-mini {
 
 /* Success result shown after signing up (entry count + cost) */
 .raffle-signup-result {
-    background: var(--surface);
+    background: var(--panel-bg);
     border: 2px solid var(--success);
     border-radius: var(--radius);
     padding: 20px;
@@ -2324,14 +2993,14 @@ span.pattern-mini {
 
 /* Generic admin content panel */
 .admin-panel {
-    background: var(--surface);
+    background: var(--panel-bg);
     border-radius: var(--radius);
     padding: 24px
 }
 .admin-panel > h3:first-child {
     padding-bottom: 12px;
     margin-bottom: 16px;
-    border-bottom: 1px solid color-mix(in srgb, var(--text-dim) 25%, transparent);
+    border-bottom: 1px solid color-mix(in srgb, var(--text-muted) 25%, transparent);
 }
 
 /* Nested content boxes inside admin-panel need a darker/lighter bg for contrast */
@@ -2341,42 +3010,41 @@ span.pattern-mini {
 .admin-panel .game-setup,
 .admin-panel .last-drawn,
 .admin-panel .game-details,
-.admin-panel .game-details-panel,
 .admin-panel .frequent-winners-panel {
-    background: var(--surface2);
+    background: var(--panel-raised-bg);
 }
 
 /* Inactive mini-pattern cells need darker bg inside admin panels */
 .admin-panel .pattern-mini-cell {
-    background: var(--surface);
+    background: var(--panel-bg);
 }
 .admin-panel .pattern-mini-cell.on {
-    background: var(--gold);
+    background: var(--highlight);
 }
 
 /* Pattern editor cells: darken unchecked cells inside admin panel */
 .admin-panel .pattern-editor-cell {
-    background: var(--surface);
+    background: var(--panel-bg);
 }
 .admin-panel .pattern-editor-cell.on {
-    background: var(--gold);
+    background: var(--highlight);
 }
 
 /* Saved pattern cards need contrast inside admin panel */
 .admin-panel .saved-pattern {
-    background: var(--surface2);
-    border-color: color-mix(in srgb, var(--text-dim) 20%, transparent);
+    background: var(--panel-raised-bg);
+    border-color: color-mix(in srgb, var(--text-muted) 20%, transparent);
 }
 
 /* Pattern editor panel contrast inside admin panel */
 .admin-panel .pattern-editor {
-    background: var(--surface2);
+    background: var(--panel-raised-bg);
 }
 
 /* Winner announcement panel (gradient gold/green background) */
 .raffle-winner-panel {
-    background: linear-gradient(135deg, color-mix(in srgb, var(--gold) 15%, transparent), color-mix(in srgb, var(--success) 15%, transparent));
-    border: 2px solid var(--gold);
+    background: linear-gradient(135deg, color-mix(in srgb, var(--highlight) 15%, transparent), color-mix(in srgb, var(--success) 15%, transparent));
+    border: 2px solid var(--highlight);
     border-radius: var(--radius);
     padding: 20px;
     margin-bottom: 16px;
@@ -2385,7 +3053,7 @@ span.pattern-mini {
 
 /* Admin raffle entries table container */
 .raffle-entries-table {
-    background: var(--surface);
+    background: var(--panel-bg);
     border-radius: var(--radius);
     overflow-x: auto
 }
@@ -2402,160 +3070,19 @@ span.pattern-mini {
 
 /* Public closed raffle message container */
 .raffle-closed-msg {
-    background: var(--surface);
+    background: var(--panel-bg);
     border-radius: var(--radius);
     margin-top: 16px
 }
 
 /* ================================================================
-   28. UTILITY & COMPONENT HELPERS — Reusable single-purpose classes
-   ================================================================ */
-
-/* Text color utilities */
-.text-dim { color: var(--text-dim) }
-.text-gold { color: var(--gold) }
-.text-success { color: var(--success) }
-.text-sm { font-size: .85rem }
-.text-xs { font-size: .8rem }
-.code-gold { font-family: monospace; color: var(--gold) }
-
-/* Margin utilities */
-.mb-4 { margin-bottom: 4px }
-.mb-6 { margin-bottom: 6px }
-.mb-8 { margin-bottom: 8px }
-.mb-10 { margin-bottom: 10px }
-.mb-12 { margin-bottom: 12px }
-.mb-16 { margin-bottom: 16px }
-.mb-20 { margin-bottom: 20px }
-.mt-8 { margin-top: 8px }
-.mt-12 { margin-top: 12px }
-.mt-16 { margin-top: 16px }
-.mt-20 { margin-top: 20px }
-
-/* Flex layout utilities */
-.flex-toolbar { display: flex; gap: 12px; flex-wrap: wrap; align-items: center }
-.flex-row { display: flex; gap: 16px; flex-wrap: wrap }
-.flex-center { display: flex; justify-content: center }
-.flex-between { display: flex; justify-content: space-between; align-items: center }
-
-/* Form input helpers */
-.field-label { color: var(--text); font-size: .9rem; font-weight: 600; display: block; margin-bottom: 4px }
-.form-textarea {
-    width: 100%;
-    font-family: inherit;
-    font-size: .92rem;
-    background: var(--surface2);
-    color: var(--text);
-    border: 2px solid var(--surface2);
-    border-radius: var(--radius);
-    padding: 10px 14px;
-    resize: vertical;
-    outline: none;
-    line-height: 1.5
-}
-.form-textarea:focus { border-color: var(--primary) }
-.field-input-full { width: 100% }
-
-/* Admin settings form container (constrained width) */
-.settings-form { max-width: 480px }
-
-/* Live font preview panel in settings */
-.font-preview {
-    background: var(--surface2);
-    border-radius: var(--radius);
-    padding: 16px 20px;
-    text-align: center;
-    color: var(--gold);
-    line-height: 1.4
-}
-
-/* Modal helpers */
-.modal-centered { max-width: 440px; text-align: center }
-
-/* Scaled-down board preview (admin card preview modal) */
-.board-preview { transform: scale(.85); transform-origin: top center; margin-bottom: -15% }
-
-/* Full-width game details variant (admin editor) */
-.game-details--wide { max-width: none }
-
-/* Smaller pattern mini cells for game start pattern picker */
-.pattern-mini-sm .pattern-mini-cell { width: 10px; height: 10px }
-
-/* Centered placeholder message */
-.msg-block { color: var(--text-dim); text-align: center; padding: 20px }
-
-/* Raffle detail page layout helpers */
-.raffle-detail-body { max-width: 700px; margin: 0 auto }
-.raffle-prize-container { text-align: center; margin-bottom: 20px }
-.raffle-prize-img { max-width: 100%; max-height: 400px; border-radius: 12px; box-shadow: 0 4px 20px var(--shadow-color) }
-.raffle-prize-img-sm { max-width: 300px; max-height: 200px; border-radius: 8px }
-.raffle-section-heading { color: var(--gold); margin-bottom: 8px }
-
-/* Generic data table for raffle entries */
-.entries-table { width: 100%; border-collapse: collapse }
-.entries-table th { text-align: left; padding: 8px; color: var(--text-dim); font-size: .85rem; font-weight: 600 }
-.entries-table th.tc { text-align: center }
-.entries-table td { padding: 8px }
-.entries-table td.tc { text-align: center }
-.entries-table thead tr { border-bottom: 2px solid var(--surface2) }
-.entries-table tbody tr { border-bottom: 1px solid var(--surface2) }
-
-/* Empty-state drop placeholder (dashed border box) */
-.drop-placeholder {
-    padding: 16px;
-    text-align: center;
-    color: var(--text-dim);
-    font-size: .85rem;
-    border: 2px dashed var(--surface2);
-    border-radius: 8px;
-    min-height: 80px;
-    display: flex;
-    align-items: center;
-    justify-content: center
-}
-
-/* ================================================================
-   29. WINNERS LOG TABLE — Paginated admin table of past winners
-   ================================================================ */
-
-/* Full-width sortable table for winners log */
-.winners-log-table {
-    width: 100%;
-    border-collapse: collapse;
-    font-size: .85rem;
-}
-.winners-log-table th,
-.winners-log-table td {
-    padding: 8px 12px;
-    text-align: left;
-    border-bottom: 1px solid var(--surface2);
-}
-/* Sortable column headers */
-.winners-log-table th {
-    color: var(--text-dim);
-    font-weight: 600;
-    user-select: none;
-    white-space: nowrap;
-}
-
-/* Prevent wrapping on columns */
-.winners-log-table td:first-child,
-.winners-log-table td:nth-child(3) {
-    white-space: nowrap;
-}
-/* Row hover highlight */
-.winners-log-table tbody tr:hover {
-    background: var(--surface2);
-}
-
-/* ================================================================
-   30. FREQUENT WINNERS PANEL — Alert for repeat winners
+   32. FREQUENT WINNERS PANEL — Alert for repeat winners
    ================================================================ */
 
 /* Gold-bordered alert panel shown on game tab when frequent winners exist */
 .frequent-winners-panel {
-    background: var(--surface);
-    border: 1px solid var(--gold);
+    background: var(--panel-bg);
+    border: 1px solid var(--highlight);
     border-radius: 8px;
     padding: 12px 16px;
     margin-top: 16px;
@@ -2569,329 +3096,7 @@ span.pattern-mini {
 }
 
 /* ================================================================
-   31. PAGINATION BAR — Page navigation controls
-   ================================================================ */
-
-/* Centered row of page buttons for winners log and other tables */
-.pagination-bar {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 12px;
-}
-
-/* ================================================================
-   32. LOADING & ASYNC STATES — disabled buttons, spinners, top
-       route-progress bar, and empty-state text. All styles use the
-       theme tokens (--primary, --surface2, --text-dim, …) so custom
-       themes restyle them automatically.
-   ================================================================ */
-
-/* Disabled buttons: dim, non-interactive, and no hover/press feedback. */
-button:disabled,
-button[disabled] {
-    opacity: .55;
-    cursor: not-allowed;
-}
-button:disabled:hover,
-button[disabled]:hover {
-    /* Cancel the per-variant hover changes while disabled. */
-    background: inherit;
-    border-color: inherit;
-}
-button:disabled:active {
-    transform: none;
-}
-
-/* Spinning indicator ring. */
-@keyframes spin {
-    to { transform: rotate(360deg); }
-}
-.spinner {
-    display: inline-block;
-    width: 1.1em;
-    height: 1.1em;
-    border: 2px solid var(--surface2);
-    border-top-color: var(--primary);
-    border-radius: 50%;
-    animation: spin .7s linear infinite;
-    vertical-align: -0.2em;
-    flex: 0 0 auto;
-}
-
-/* Inline spinner + optional label (e.g. inside a button). */
-.loading-inline {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-}
-
-/* Standalone centered loading block for list/data loads. */
-.loading-block {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 10px;
-    padding: 40px;
-    color: var(--text-dim);
-}
-.loading-label {
-    color: var(--text-dim);
-}
-
-/* Empty-state text (no rows/cards to show). Mirrors .no-game-msg. */
-.empty-state {
-    text-align: center;
-    color: var(--text-dim);
-    padding: 40px;
-}
-
-/* Top-of-viewport route-loading progress bar (indeterminate). */
-.route-progress {
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    height: 3px;
-    z-index: 9999;
-    background: var(--surface2);
-    overflow: hidden;
-}
-.route-progress-bar {
-    height: 100%;
-    width: 40%;
-    background: var(--primary);
-    border-radius: 0 2px 2px 0;
-    animation: routeProgressSlide 1.1s ease-in-out infinite;
-}
-@keyframes routeProgressSlide {
-    0%   { margin-left: -40%; }
-    50%  { margin-left: 60%; }
-    100% { margin-left: 110%; }
-}
-
-/* Inline keyboard-key hint (e.g. "press Space to draw"). */
-kbd {
-    display: inline-block;
-    padding: 1px 6px;
-    border-radius: 4px;
-    background: var(--surface2);
-    color: var(--text);
-    border: 1px solid var(--overlay);
-    font-family: inherit;
-    font-size: 0.85em;
-    font-weight: 600;
-    line-height: 1.4;
-}
-
-/* Count badge shown after an admin sidebar nav label (e.g. Open Raffles (3)). */
-.nav-count {
-    margin-left: 6px;
-    font-size: 0.78em;
-    font-weight: 600;
-    color: var(--text-dim);
-}
-.admin-nav-items button.active .nav-count {
-    color: var(--text);
-}
-
-/* "Live" badge — shown next to the admin Game heading while a game is active. */
-.live-badge {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    vertical-align: middle;
-    margin-left: 10px;
-    padding: 2px 10px;
-    border-radius: 999px;
-    background: var(--danger);
-    color: var(--text-on-toast);
-    font-size: 0.7rem;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
-}
-.live-dot {
-    width: 7px;
-    height: 7px;
-    border-radius: 50%;
-    background: currentColor;
-    animation: livePulse 1.4s ease-in-out infinite;
-}
-/* Admin-only elapsed-game clock shown beside the "Live" badge on Current Game. */
-.game-clock {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    vertical-align: middle;
-    margin-left: 10px;
-    padding: 2px 10px;
-    border-radius: 999px;
-    background: var(--surface2);
-    color: var(--text);
-    font-size: 0.8rem;
-    font-weight: 700;
-    font-variant-numeric: tabular-nums;
-    letter-spacing: 0.02em;
-}
-.game-clock i {
-    color: var(--gold);
-    font-size: 0.75rem;
-}
-/* Live dot in the admin sidebar's game nav item: sits just after the label,
-   tinted with the "live" color (themes can override --danger). */
-.nav-live-dot {
-    display: inline-block;
-    margin-left: 8px;
-    vertical-align: middle;
-    background: var(--danger);
-}
-@keyframes livePulse {
-    0%, 100% { opacity: 1; transform: scale(1); }
-    50%      { opacity: .35; transform: scale(.65); }
-}
-
-/* ================================================================
-   33. PLAYER LIVE-GAME FEEDBACK — connection badge, last-called
-       announcement, draw-sound toggle, end-of-game summary
-   ================================================================ */
-
-/* Connection status pill in the player topbar (right side). */
-.conn-badge {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    padding: 2px 10px;
-    border-radius: 999px;
-    background: var(--surface2);
-    color: var(--text-dim);
-    font-size: .7rem;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: .04em;
-    white-space: nowrap;
-}
-.conn-badge .conn-dot {
-    width: 7px;
-    height: 7px;
-    border-radius: 50%;
-    background: currentColor;
-}
-.conn-badge.is-open { color: var(--success); }
-.conn-badge.is-connecting,
-.conn-badge.is-reconnecting { color: var(--gold); }
-.conn-badge.is-closed { color: var(--danger); }
-/* Pulse the dot while the link isn't settled (connecting/reconnecting). */
-.conn-badge.is-connecting .conn-dot,
-.conn-badge.is-reconnecting .conn-dot {
-    animation: livePulse 1.4s ease-in-out infinite;
-}
-
-/* Single cohesive box holding the "Last Called" number and the called-numbers
-   grid together, separated by a divider. The inner numbers-panel drops its own
-   surface/padding so the combined box provides the one frame. */
-.called-combined {
-    background: var(--surface);
-    border-radius: var(--radius);
-    padding: 16px;
-}
-.called-combined .numbers-panel {
-    background: transparent;
-    padding: 0;
-}
-.called-divider {
-    border: 0;
-    border-top: 1px solid var(--surface2);
-    margin: 14px 0;
-}
-
-/* "Last called" announcement above the called-numbers grid. */
-.last-called {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 6px;
-}
-.last-called-label {
-    font-size: .72rem;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: .08em;
-    color: var(--text-dim);
-}
-/* Reuse the admin .last-drawn look, centered with no offset margins. */
-.last-called .last-drawn {
-    margin: 0;
-}
-/* Row holding the last-drawn number flanked by a decorative flourish on each
-   side. The flourishes flex to fill the empty space beside the number and stretch
-   to its height, so they scale with the column as it resizes. */
-.last-called-row {
-    display: flex;
-    align-items: stretch;
-    justify-content: center;
-    gap: 10px;
-    width: 100%;
-}
-/* The SVG is loaded as a mask so it can be tinted with the gold theme token
-   (matching the .last-drawn border) and recolored automatically per theme. */
-.last-called-flourish {
-    flex: 1 1 0;
-    min-width: 0;
-    max-width: 110px;
-    align-self: stretch;
-    opacity: .5;
-    background-color: var(--gold);
-    -webkit-mask: url('/images/called_flourish.svg') no-repeat center / contain;
-    mask: url('/images/called_flourish.svg') no-repeat center / contain;
-}
-/* Mirror the right-hand flourish so the pair frames the number symmetrically. */
-.last-called-flourish--right {
-    transform: scaleX(-1);
-}
-/* Pop each time a new number is announced (keyed by call_order in template). */
-.last-drawn--pop {
-    animation: lastCalledPop .35s ease;
-}
-@keyframes lastCalledPop {
-    0%   { transform: scale(.7); opacity: 0; }
-    60%  { transform: scale(1.08); }
-    100% { transform: scale(1); opacity: 1; }
-}
-
-/* End-of-game thank-you summary (shown in place of the "waiting" message). */
-.game-over-msg {
-    text-align: center;
-    color: var(--text);
-    padding: 32px 16px;
-}
-.game-over-msg .go-icon {
-    font-size: 2.4rem;
-    color: var(--gold);
-    margin-bottom: 10px;
-}
-.game-over-msg .go-title {
-    font-size: 1.15rem;
-    font-weight: 700;
-    margin-bottom: 8px;
-}
-.game-over-msg .go-sub {
-    color: var(--text-dim);
-    font-size: .95rem;
-    margin-top: 4px;
-}
-
-/* "Join the Discord Server" button on the end-of-game summary. */
-.game-over-msg .go-discord-btn {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    margin-top: 18px;
-    text-decoration: none;
-}
-
-/* ================================================================
-   34. PHONE LAYOUT — small-screen tweaks (≤560px)
+   33. PHONE LAYOUT — small-screen tweaks (≤560px)
    Player view never had a mobile breakpoint; the board is handled by the
    self-limiting .board-cell --cell-size, and these rules tighten the
    surrounding chrome and let the right column shrink below its 300px desktop
@@ -2974,7 +3179,7 @@ kbd {
 @media (prefers-reduced-motion: reduce) {
     .spinner {
         animation: none;
-        border-top-color: var(--primary);
+        border-top-color: var(--accent);
     }
     .route-progress-bar {
         animation: none;
@@ -2991,50 +3196,4 @@ kbd {
         animation: none;
     }
 }
-
-/* ================================================================
-   35. SITE FOOTER — credits/links on the public (non-admin) pages
-   ================================================================ */
-.app-footer {
-    margin-top: auto;
-    padding: 24px 16px 28px;
-    text-align: center;
-    font-size: .8rem;
-    line-height: 1.6;
-    color: var(--text-dim);
-    border-top: 1px solid color-mix(in srgb, var(--text-dim) 18%, transparent);
-}
-
-.app-footer p {
-    margin: 0;
-}
-
-.app-footer a {
-    color: var(--gold);
-    text-decoration: none;
-}
-
-.app-footer a:hover {
-    text-decoration: underline;
-}
-
-/* Mobile-only "Install App" link — styled as a pill button to read as a clear
-   call-to-action (shown by usePwaInstall only on mobile when not yet installed). */
-.app-footer-install {
-    margin-top: 14px;
-}
-.app-footer-install a {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    padding: 9px 18px;
-    border: 1px solid var(--gold);
-    border-radius: 999px;
-    font-weight: 600;
-}
-.app-footer-install a:hover {
-    background: color-mix(in srgb, var(--gold) 12%, transparent);
-    text-decoration: none;
-}
-
 

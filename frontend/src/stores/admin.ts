@@ -17,11 +17,12 @@ import { useAppStore } from './app'
 import { useFontsStore } from './fonts'
 import { useCarrdStore } from './carrd'
 import { usePresetsStore } from './presets'
+import { usePatternsStore } from './patterns'
 import { useAnnouncementsStore } from './announcements'
 import { BOOK_CLUBS } from '@/lib/constants'
 import { createFreshness } from '@/lib/freshness'
 
-export type AdminSection = 'bingo' | 'raffles' | 'teahouse' | 'atelier' | 'system'
+export type AdminSection = 'bingo' | 'teahouse' | 'atelier' | 'system'
 
 /** One tab per registered book club, e.g. 'bookclub-yaoi' | 'bookclub-yuri'. */
 export type BookClubTab = `bookclub-${(typeof BOOK_CLUBS)[number]['slug']}`
@@ -30,14 +31,10 @@ export type AdminTab =
   | 'bingo-game'
   | 'bingo-cards'
   | 'bingo-winners-log'
-  | 'bingo-categories'
-  | 'bingo-new-pattern'
   | 'bingo-patterns'
   | 'bingo-presets'
-  | 'raffle-new'
-  | 'raffle-open'
-  | 'raffle-closed'
   | 'teahouse-announcements'
+  | 'teahouse-raffles'
   | BookClubTab
   | 'atelier-fonts'
   | 'atelier-carrd'
@@ -69,8 +66,7 @@ export const useAdminStore = defineStore('admin', () => {
    */
   function setTabFromRoute(tab: AdminTab): void {
     if (tab.startsWith('bingo-')) adminSection.value = 'bingo'
-    else if (tab.startsWith('raffle-')) adminSection.value = 'raffles'
-    // The Senpan Tea House section holds both Announcement Management
+    // The Senpan Tea House section holds Announcement Management + Raffles
     // (teahouse-*) and the book clubs (bookclub-*).
     else if (tab.startsWith('teahouse-') || tab.startsWith('bookclub-'))
       adminSection.value = 'teahouse'
@@ -86,9 +82,10 @@ export const useAdminStore = defineStore('admin', () => {
     const fonts = useFontsStore()
     const carrd = useCarrdStore()
     const presets = usePresetsStore()
+    const patterns = usePatternsStore()
     const announcements = useAnnouncementsStore()
 
-    if (tab === 'raffle-open' || tab === 'raffle-closed') {
+    if (tab === 'teahouse-raffles') {
       raffles.selectedRaffle = null
       loadFresh('raffles', () => raffles.loadRaffles())
     }
@@ -103,10 +100,10 @@ export const useAdminStore = defineStore('admin', () => {
     if (tab === 'atelier-fonts') loadFresh('fonts', () => fonts.loadFonts())
     if (tab === 'atelier-carrd') loadFresh('carrd', () => carrd.loadProjects())
     if (tab === 'bingo-winners-log') loadFresh('winners-log', () => game.loadWinnersLog())
+    if (tab === 'bingo-patterns') loadFresh('patterns', () => patterns.loadPatterns())
     // Presets are needed on the Game tab (to start from one) and the Presets tab.
     if (tab === 'bingo-game' || tab === 'bingo-presets')
       loadFresh('presets', () => presets.loadPresets())
-    if (tab === 'raffle-new' && !raffles.raffleForm) raffles.newRaffleForm()
   }
 
   return { adminTab, adminSection, setTabFromRoute }

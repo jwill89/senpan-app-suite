@@ -96,27 +96,27 @@ watch(
  * theme (including custom themes) rather than only its bundled light/dark CSS.
  * The base light/dark stylesheet is still loaded (for the toolbar icon sprites
  * and markdown-mode syntax colors); these overrides re-map the surfaces, text,
- * borders, and accent to --surface / --text / --primary / etc.
+ * borders, and accent to --panel-bg / --text / --accent / etc.
  */
 .md-editor :deep(.toastui-editor-defaultUI) {
-  border: 1px solid var(--surface2);
+  border: 1px solid var(--panel-raised-bg);
   border-radius: var(--radius);
 }
 
 /* Toolbar */
 .md-editor :deep(.toastui-editor-defaultUI-toolbar) {
-  background: var(--surface);
-  border-bottom: 1px solid var(--surface2);
+  background: var(--panel-bg);
+  border-bottom: 1px solid var(--panel-raised-bg);
 }
 .md-editor :deep(.toastui-editor-toolbar-group) {
-  border-color: var(--surface2);
+  border-color: var(--panel-raised-bg);
 }
 
 /* Editing surfaces + text */
 .md-editor :deep(.toastui-editor-ww-container),
 .md-editor :deep(.toastui-editor-md-container),
 .md-editor :deep(.toastui-editor-main .toastui-editor-md-preview) {
-  background: var(--surface);
+  background: var(--panel-bg);
 }
 .md-editor :deep(.toastui-editor-contents),
 .md-editor :deep(.toastui-editor-contents p),
@@ -128,25 +128,25 @@ watch(
   color: var(--text);
 }
 .md-editor :deep(.toastui-editor-contents a) {
-  color: var(--primary);
+  color: var(--accent);
 }
 .md-editor :deep(.ProseMirror .placeholder),
 .md-editor :deep(.toastui-editor-md-container .placeholder) {
-  color: var(--text-dim);
+  color: var(--text-muted);
 }
 
 /* Bottom mode switch (Markdown / WYSIWYG) */
 .md-editor :deep(.toastui-editor-mode-switch) {
-  background: var(--surface);
-  border-top: 1px solid var(--surface2);
+  background: var(--panel-bg);
+  border-top: 1px solid var(--panel-raised-bg);
 }
 .md-editor :deep(.toastui-editor-mode-switch .tab-item) {
-  color: var(--text-dim);
-  background: var(--surface);
-  border-color: var(--surface2);
+  color: var(--text-muted);
+  background: var(--panel-bg);
+  border-color: var(--panel-raised-bg);
 }
 .md-editor :deep(.toastui-editor-mode-switch .tab-item.active) {
   color: var(--text);
-  border-bottom-color: var(--surface);
+  border-bottom-color: var(--panel-bg);
 }
 </style>

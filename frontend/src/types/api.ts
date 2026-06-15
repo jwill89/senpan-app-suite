@@ -11,6 +11,7 @@
  */
 import type {
   Announcement,
+  AnnouncementButton,
   AnnouncementType,
   BingoDrawnNumber,
   BingoGameState,
@@ -31,6 +32,7 @@ import type {
 
 export type {
   Announcement,
+  AnnouncementButton,
   AnnouncementType,
   BingoDrawnNumber,
   BingoGame,
@@ -365,6 +367,8 @@ export interface AnnouncementForm {
   time_local: string
   weekdays: number[]
   week_of_month: number
+  /** Optional Discord link buttons (max 5) rendered beneath the embed. */
+  buttons: AnnouncementButton[]
 }
 
 // ── Fonts (System → Font Upload) ────────────────────────────────────────────

@@ -289,11 +289,11 @@ export async function exportCardImage(opts: ExportCardOptions): Promise<void> {
 
   // 2. Theme colors/fonts for the frame.
   const headerFont = cssVar('--header-font', "'Arapey', serif")
-  const gold = cssVar('--gold', '#d6bdae')
+  const gold = cssVar('--highlight', '#d6bdae')
   const text = cssVar('--text', '#f0ebe3')
-  const textDim = cssVar('--text-dim', '#a5a58c')
+  const textDim = cssVar('--text-muted', '#a5a58c')
   const bgStart = cssVar('--board-gradient-start', '#2f3328')
-  const bgEnd = cssVar('--bg', '#1a1c17')
+  const bgEnd = cssVar('--page-bg', '#1a1c17')
 
   // 3. Layout metrics (device px).
   const S = SCALE

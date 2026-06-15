@@ -66,7 +66,91 @@ type discordEmbed struct {
 }
 
 type discordWebhookPayload struct {
-	Embeds []discordEmbed `json:"embeds"`
+	Embeds     []discordEmbed     `json:"embeds"`
+	Components []discordComponent `json:"components,omitempty"`
+}
+
+// Discord message-component type/style constants for the subset we emit: an
+// action row (type 1) holding link buttons (type 2, style 5 = URL button).
+const (
+	componentActionRow = 1
+	componentButton    = 2
+	buttonStyleLink    = 5
+	maxButtonsPerRow   = 5  // Discord's cap on buttons in one action row
+	buttonLabelMax     = 80 // Discord's per-button label length cap
+)
+
+// discordEmoji is the emoji shown on a button — either a unicode emoji (Name holds
+// the character) or a custom guild emoji (Name + numeric ID, Animated for "a:").
+type discordEmoji struct {
+	Name     string `json:"name,omitempty"`
+	ID       string `json:"id,omitempty"`
+	Animated bool   `json:"animated,omitempty"`
+}
+
+// discordComponent models the message-component subset we send: an action row
+// (Components populated) or a link button (Style/Label/URL, optional Emoji).
+type discordComponent struct {
+	Type       int                `json:"type"`
+	Style      int                `json:"style,omitempty"`
+	Label      string             `json:"label,omitempty"`
+	URL        string             `json:"url,omitempty"`
+	Emoji      *discordEmoji      `json:"emoji,omitempty"`
+	Components []discordComponent `json:"components,omitempty"`
+}
+
+// linkButtonRow builds a single action row of link buttons from (label, emoji, url)
+// triples, skipping any with a blank label or non-http(s) URL and capping at
+// Discord's five-per-row limit. Returns nil when no valid button remains, so the
+// caller can omit Components entirely.
+func linkButtonRow(buttons []struct{ Label, Emoji, URL string }) []discordComponent {
+	row := make([]discordComponent, 0, maxButtonsPerRow)
+	for _, b := range buttons {
+		label := strings.TrimSpace(b.Label)
+		url := strings.TrimSpace(b.URL)
+		if label == "" || !isHTTPURL(url) {
+			continue
+		}
+		btn := discordComponent{
+			Type:  componentButton,
+			Style: buttonStyleLink,
+			Label: truncateRunes(label, buttonLabelMax),
+			URL:   url,
+		}
+		if e := parseEmoji(b.Emoji); e != nil {
+			btn.Emoji = e
+		}
+		row = append(row, btn)
+		if len(row) >= maxButtonsPerRow {
+			break
+		}
+	}
+	if len(row) == 0 {
+		return nil
+	}
+	return []discordComponent{{Type: componentActionRow, Components: row}}
+}
+
+// parseEmoji turns an emoji string into the Discord emoji object: a custom-emoji
+// token "<:name:id>" / "<a:name:id>" becomes {name,id,animated}; anything else is
+// treated as a unicode emoji ({name}). Returns nil for an empty/blank input.
+func parseEmoji(s string) *discordEmoji {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return nil
+	}
+	if strings.HasPrefix(s, "<") && strings.HasSuffix(s, ">") {
+		inner := strings.TrimSuffix(strings.TrimPrefix(s, "<"), ">")
+		animated := strings.HasPrefix(inner, "a:")
+		inner = strings.TrimPrefix(inner, "a")
+		inner = strings.TrimPrefix(inner, ":")
+		parts := strings.SplitN(inner, ":", 2)
+		if len(parts) == 2 && parts[0] != "" && parts[1] != "" {
+			return &discordEmoji{Name: parts[0], ID: parts[1], Animated: animated}
+		}
+		return nil
+	}
+	return &discordEmoji{Name: s}
 }
 
 // embedBuilder assembles a discordEmbed fluently. Empty values are skipped and
@@ -164,11 +248,18 @@ func colorFromHex(hex string, def int) int {
 
 // postDiscordEmbed sends a single embed to the webhook URL.
 func postDiscordEmbed(webhookURL string, embed discordEmbed) error {
-	payload, err := json.Marshal(discordWebhookPayload{Embeds: []discordEmbed{embed}})
+	return postDiscordWebhook(webhookURL, discordWebhookPayload{Embeds: []discordEmbed{embed}})
+}
+
+// postDiscordWebhook sends a full webhook payload (embeds + optional components) to
+// the webhook URL. Link-button components require a webhook that supports message
+// components; Discord returns a non-2xx status (surfaced as an error) otherwise.
+func postDiscordWebhook(webhookURL string, payload discordWebhookPayload) error {
+	body, err := json.Marshal(payload)
 	if err != nil {
 		return fmt.Errorf("encode embed")
 	}
-	resp, err := bookclubHTTPClient.Post(webhookURL, "application/json", bytes.NewReader(payload))
+	resp, err := bookclubHTTPClient.Post(webhookURL, "application/json", bytes.NewReader(body))
 	if err != nil {
 		return fmt.Errorf("request failed")
 	}

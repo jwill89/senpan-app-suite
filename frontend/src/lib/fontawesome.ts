@@ -20,9 +20,12 @@
  */
 import { config, library, dom, type IconDefinition } from '@fortawesome/fontawesome-svg-core'
 import {
+  faBallot,
   faBars,
   faBicep,
   faBook,
+  faCalendarCircleExclamation,
+  faCalendarClock,
   faCalendarDays,
   faChampagneGlasses,
   faCircleCheck,
@@ -40,6 +43,7 @@ import {
   faFont,
   faGamepad,
   faGear,
+  faGrid,
   faIdCard,
   faImage,
   faImages,
@@ -60,6 +64,7 @@ import {
   faUser,
 } from '@awesome.me/kit-46204fb6f1/icons/duotone/solid'
 import {
+  faArrowLeft as faArrowLeftSolid,
   faArrowRightFromBracket as faArrowRightFromBracketSolid,
   faChevronDown as faChevronDownSolid,
   faChevronUp as faChevronUpSolid,
@@ -106,9 +111,12 @@ config.observeMutations = true // watch for icons added by Vue after initial ren
 // cast away.
 const icons = [
   // Duotone — headers, sidebar sections/nav, decorative.
+  faBallot,
   faBars,
   faBicep,
   faBook,
+  faCalendarCircleExclamation,
+  faCalendarClock,
   faCalendarDays,
   faChampagneGlasses,
   faCircleCheck,
@@ -126,6 +134,7 @@ const icons = [
   faFont,
   faGamepad,
   faGear,
+  faGrid,
   faIdCard,
   faImage,
   faImages,
@@ -145,6 +154,7 @@ const icons = [
   faFaceSmile,
   faUser,
   // Solid — action-button icons.
+  faArrowLeftSolid,
   faArrowRightFromBracketSolid,
   faChevronDownSolid,
   faChevronUpSolid,

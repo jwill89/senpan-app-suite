@@ -26,8 +26,8 @@ export const usePatternsStore = defineStore('patterns', () => {
   const patternsLoading = ref(false)
   /** True while a new pattern is being saved (drives the Save button). */
   const savingPattern = ref(false)
-  /** True while a new category is being created (drives the Add button). */
-  const creatingCategory = ref(false)
+  /** True while the category form is saving (drives its Save button). */
+  const savingCategory = ref(false)
 
   // New pattern editor
   const newPatternName = ref('')
@@ -38,10 +38,12 @@ export const usePatternsStore = defineStore('patterns', () => {
   const patternsCollapsed = ref(false)
   const collapsedCategories = ref<Record<number, boolean>>({})
 
-  // Category create / inline edit
-  const newCategoryName = ref('')
-  const editingCategoryId = ref<number | null>(null)
-  const editingCategoryName = ref('')
+  // Category create/edit form (name + insert position; see startNewCategory).
+  const categoryForm = ref<{ id: number; name: string; position: string }>({
+    id: 0,
+    name: '',
+    position: 'start',
+  })
 
   // Pattern inline edit
   const editingPatternId = ref<number | null>(null)
@@ -82,6 +84,20 @@ export const usePatternsStore = defineStore('patterns', () => {
     return list
   })
 
+  /**
+   * Patterns currently *visible* in the picker: the category filter + search and,
+   * when not searching, only patterns in expanded (non-collapsed) categories.
+   * Drives "Select all" so it never touches patterns hidden by the filter or by a
+   * collapsed category — those keep their current selection.
+   */
+  const displayedPatterns = computed<Pattern[]>(() => {
+    if ((patternSearchQuery.value || '').trim()) return gameFilteredPatterns.value
+    const groups = patternCategoryFilter.value
+      ? patternsByCategory.value.filter((g) => g.category.id === patternCategoryFilter.value)
+      : patternsByCategory.value
+    return groups.filter((g) => !isCategoryCollapsed(g.category.id)).flatMap((g) => g.patterns)
+  })
+
   // ── Load ─────────────────────────────────────────────────────────────────
 
   async function loadPatterns(): Promise<void> {
@@ -109,13 +125,14 @@ export const usePatternsStore = defineStore('patterns', () => {
     newPatternGrid.value[ri][ci] = !newPatternGrid.value[ri][ci]
   }
 
-  async function savePattern(): Promise<void> {
+  /** Saves the new-pattern editor. Returns true on success (caller can navigate). */
+  async function savePattern(): Promise<boolean> {
     const name = newPatternName.value.trim()
-    if (!name) return
+    if (!name) return false
     const hasCell = newPatternGrid.value.some((r) => r.some((c) => c))
     if (!hasCell) {
       ui.notify('Select at least one cell in the pattern', 'error')
-      return
+      return false
     }
     // Client-side duplicate check.
     const dup = patterns.value.find((p) => {
@@ -130,7 +147,7 @@ export const usePatternsStore = defineStore('patterns', () => {
     if (dup) {
       const catName = dup.category_name || 'Unknown'
       ui.notify(`Duplicate pattern! Matches "${dup.name}" in category "${catName}"`, 'error')
-      return
+      return false
     }
     savingPattern.value = true
     try {
@@ -140,8 +157,10 @@ export const usePatternsStore = defineStore('patterns', () => {
       ui.notify('Pattern saved', 'success')
       clearPatternEditor()
       await loadPatterns()
+      return true
     } catch (e) {
       ui.notify((e as Error).message, 'error')
+      return false
     } finally {
       savingPattern.value = false
     }
@@ -204,40 +223,76 @@ export const usePatternsStore = defineStore('patterns', () => {
     }
   }
 
-  // ── Category CRUD ──────────────────────────────────────────────────────────
+  // ── Category CRUD (table + position form) ──────────────────────────────────
 
-  async function createCategory(): Promise<void> {
-    const name = (newCategoryName.value || '').trim()
-    if (!name) return
-    creatingCategory.value = true
-    try {
-      await endpoints.patternCategories.create(name)
-      newCategoryName.value = ''
-      ui.notify('Category created', 'success')
-      await loadPatterns()
-    } catch (e) {
-      ui.notify((e as Error).message, 'error')
-    } finally {
-      creatingCategory.value = false
+  /** Open the form to add a new category (defaults to inserting at the end). */
+  function startNewCategory(): void {
+    const last = categories.value[categories.value.length - 1]
+    categoryForm.value = { id: 0, name: '', position: last ? `after:${last.id}` : 'start' }
+  }
+
+  /** Open the form to edit a category (position defaults to "keep current"). */
+  function startEditCategory(cat: PatternCategory): void {
+    categoryForm.value = { id: cat.id, name: cat.name, position: 'keep' }
+  }
+
+  /**
+   * Reorders the categories so `targetId` lands at the chosen position token —
+   * 'start' (first) or 'after:<id>' (right after that category) — and persists
+   * the new order via the bulk-reorder endpoint. ('keep' is handled by callers.)
+   */
+  async function applyCategoryPosition(targetId: number, position: string): Promise<void> {
+    const ids = categories.value.map((c) => c.id).filter((id) => id !== targetId)
+    let insertAt = ids.length
+    if (position === 'start') {
+      insertAt = 0
+    } else if (position.startsWith('after:')) {
+      const afterId = Number(position.slice('after:'.length))
+      const idx = ids.indexOf(afterId)
+      insertAt = idx === -1 ? ids.length : idx + 1
     }
+    ids.splice(insertAt, 0, targetId)
+    await endpoints.patternCategories.reorder(ids)
   }
 
-  function startCategoryRename(cat: PatternCategory): void {
-    editingCategoryId.value = cat.id
-    editingCategoryName.value = cat.name
-  }
-
-  async function finishCategoryRename(id: number): Promise<void> {
-    const newName = (editingCategoryName.value || '').trim()
-    editingCategoryId.value = null
-    if (!newName) return
-    const cat = categories.value.find((c) => c.id === id)
-    if (!cat || cat.name === newName) return
+  /**
+   * Saves the category form: creates (then positions) a new category, or renames
+   * + optionally repositions an existing one. Returns true on success so the
+   * caller can return to the categories table.
+   */
+  async function saveCategoryForm(): Promise<boolean> {
+    const name = categoryForm.value.name.trim()
+    if (!name) {
+      ui.notify('Category name is required', 'error')
+      return false
+    }
+    savingCategory.value = true
     try {
-      await endpoints.patternCategories.rename(id, newName)
-      cat.name = newName
+      const { id, position } = categoryForm.value
+      if (id === 0) {
+        // create() appends; find the new id by diffing, then position it.
+        const before = new Set(categories.value.map((c) => c.id))
+        await endpoints.patternCategories.create(name)
+        await loadPatterns()
+        const created = categories.value.find((c) => !before.has(c.id))
+        if (created && position !== 'keep') {
+          await applyCategoryPosition(created.id, position)
+          await loadPatterns()
+        }
+        ui.notify('Category created', 'success')
+      } else {
+        const cat = categories.value.find((c) => c.id === id)
+        if (cat && cat.name !== name) await endpoints.patternCategories.rename(id, name)
+        if (position !== 'keep') await applyCategoryPosition(id, position)
+        await loadPatterns()
+        ui.notify('Category updated', 'success')
+      }
+      return true
     } catch (e) {
       ui.notify((e as Error).message, 'error')
+      return false
+    } finally {
+      savingCategory.value = false
     }
   }
 
@@ -262,18 +317,7 @@ export const usePatternsStore = defineStore('patterns', () => {
     deleteCategory(id)
   }
 
-  // ── Reordering (called by vuedraggable handlers) ───────────────────────────
-
-  /** Persists the current category order to the server. Reverts on failure. */
-  async function persistCategoryOrder(): Promise<void> {
-    try {
-      await endpoints.patternCategories.reorder(categories.value.map((c) => c.id))
-    } catch (e) {
-      ui.notify((e as Error).message, 'error')
-      await loadPatterns()
-    }
-  }
-
+  // ── Pattern reordering (called by vuedraggable handlers) ───────────────────
 
   /**
    * Editable grouping used by the Edit Patterns drag-and-drop view. Unlike
@@ -340,21 +384,20 @@ export const usePatternsStore = defineStore('patterns', () => {
     categories,
     patternsLoading,
     savingPattern,
-    creatingCategory,
+    savingCategory,
     newPatternName,
     newPatternGrid,
     newPatternCategoryId,
     patternsCollapsed,
     collapsedCategories,
-    newCategoryName,
-    editingCategoryId,
-    editingCategoryName,
+    categoryForm,
     editingPatternId,
     editingPatternName,
     patternCategoryFilter,
     patternSearchQuery,
     patternsByCategory,
     gameFilteredPatterns,
+    displayedPatterns,
     loadPatterns,
     clearPatternEditor,
     toggleNewPatternCell,
@@ -366,12 +409,11 @@ export const usePatternsStore = defineStore('patterns', () => {
     confirmDeletePattern,
     startPatternRename,
     finishPatternRename,
-    createCategory,
-    startCategoryRename,
-    finishCategoryRename,
+    startNewCategory,
+    startEditCategory,
+    saveCategoryForm,
     deleteCategory,
     confirmDeleteCategory,
-    persistCategoryOrder,
     editableGroups,
     rebuildEditableGroups,
     applyGroupedOrder,

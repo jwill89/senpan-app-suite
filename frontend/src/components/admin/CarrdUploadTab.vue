@@ -13,6 +13,9 @@
  */
 import { computed, onMounted, ref } from 'vue'
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
+import AdminPanel from '@/components/common/ui/AdminPanel.vue'
+import FormField from '@/components/common/ui/FormField.vue'
+import EmptyState from '@/components/common/ui/EmptyState.vue'
 import { useCarrdStore, carrdImageUrl, joinCarrdPath, CARRD_BASE_URL } from '@/stores/carrd'
 import { useUiStore } from '@/stores/ui'
 
@@ -149,8 +152,8 @@ onMounted(() => carrd.loadProjects())
 
 <template>
   <div class="tab-body">
-    <div class="admin-panel" style="padding: 24px">
-      <div class="flex-toolbar mb-12" style="gap: 12px; align-items: center">
+    <AdminPanel>
+      <div class="flex-toolbar mb-12">
         <h3 style="margin: 0"><i class="fa-duotone fa-images"></i> Carrd Upload</h3>
       </div>
 
@@ -164,28 +167,23 @@ onMounted(() => carrd.loadProjects())
 
       <!-- Create project -->
       <div class="carrd-create mb-12">
-        <div class="field">
-          <label class="field-label" for="carrd-title">New Project Title</label>
+        <FormField label="New Project Title" html-for="carrd-title">
           <input
             id="carrd-title"
             v-model="newTitle"
-            class="field-input-full"
             placeholder="My Carrd Project"
             @keyup.enter="createProject"
           />
-        </div>
-        <div class="field">
-          <label class="field-label" for="carrd-folder">
-            Folder Name <span class="text-dim">(optional)</span>
-          </label>
+        </FormField>
+        <FormField html-for="carrd-folder">
+          <template #label>Folder Name <span class="text-dim">(optional)</span></template>
           <input
             id="carrd-folder"
             v-model="newFolder"
-            class="field-input-full"
             placeholder="auto from title"
             @keyup.enter="createProject"
           />
-        </div>
+        </FormField>
         <div class="carrd-create-action">
           <button
             class="btn-primary btn-sm"
@@ -235,9 +233,10 @@ onMounted(() => carrd.loadProjects())
         </button>
       </div>
 
-      <p v-else-if="!carrd.loading" class="msg-block" style="padding: 24px">
-        No projects yet. Create one above to start uploading images.
-      </p>
+      <EmptyState
+        v-else-if="!carrd.loading"
+        text="No projects yet. Create one above to start uploading images."
+      />
 
       <!-- Selected project: breadcrumb + folders + upload + image grid -->
       <div v-if="selectedProject" class="carrd-project-detail">
@@ -257,8 +256,7 @@ onMounted(() => carrd.loadProjects())
             </template>
           </nav>
           <button
-            class="btn-primary btn-sm"
-            style="margin-left: auto"
+            class="btn-primary btn-sm push-right"
             :disabled="carrd.uploading"
             @click="pickFiles"
           >
@@ -391,7 +389,7 @@ onMounted(() => carrd.loadProjects())
           No images in this folder yet. Drop some above, or create a sub-folder to organize them.
         </p>
       </div>
-    </div>
+    </AdminPanel>
   </div>
 </template>
 
@@ -423,7 +421,7 @@ onMounted(() => carrd.loadProjects())
   align-items: flex-start;
   gap: 2px;
   padding: 10px 14px;
-  background: var(--surface2);
+  background: var(--panel-raised-bg);
   border: 1px solid transparent;
   border-radius: var(--radius);
   cursor: pointer;
@@ -431,26 +429,26 @@ onMounted(() => carrd.loadProjects())
   position: relative;
 }
 .carrd-project-chip:hover {
-  border-color: var(--gold);
+  border-color: var(--highlight);
 }
 .carrd-project-chip.active {
-  border-color: var(--gold);
-  box-shadow: inset 0 0 0 1px var(--gold);
+  border-color: var(--highlight);
+  box-shadow: inset 0 0 0 1px var(--highlight);
 }
 .carrd-project-title {
-  color: var(--gold);
+  color: var(--highlight);
   font-weight: 600;
   padding-right: 22px;
 }
 .carrd-project-meta {
   font-size: 0.75rem;
-  color: var(--text-dim);
+  color: var(--text-muted);
 }
 .carrd-project-del {
   position: absolute;
   top: 8px;
   right: 10px;
-  color: var(--text-dim);
+  color: var(--text-muted);
   cursor: pointer;
 }
 .carrd-project-del:hover {
@@ -459,7 +457,7 @@ onMounted(() => carrd.loadProjects())
 
 /* Selected-project detail. */
 .carrd-project-detail {
-  border-top: 1px solid var(--surface2);
+  border-top: 1px solid var(--panel-raised-bg);
   padding-top: 16px;
 }
 
@@ -477,20 +475,20 @@ onMounted(() => carrd.loadProjects())
   padding: 2px 4px;
   margin: 0;
   font: inherit;
-  color: var(--text-dim);
+  color: var(--text-muted);
   cursor: pointer;
   border-radius: 4px;
 }
 .carrd-crumb:hover:not(:disabled) {
-  color: var(--gold);
+  color: var(--highlight);
 }
 .carrd-crumb.current {
-  color: var(--gold);
+  color: var(--highlight);
   font-weight: 600;
   cursor: default;
 }
 .carrd-crumb-sep {
-  color: var(--text-dim);
+  color: var(--text-muted);
   opacity: 0.6;
 }
 
@@ -506,17 +504,17 @@ onMounted(() => carrd.loadProjects())
   align-items: center;
   gap: 6px;
   padding: 6px 12px;
-  background: var(--surface2);
+  background: var(--panel-raised-bg);
   border: 1px solid transparent;
   border-radius: var(--radius);
   color: var(--text);
   cursor: pointer;
 }
 .carrd-dir-chip:hover {
-  border-color: var(--gold);
+  border-color: var(--highlight);
 }
 .carrd-dir-del {
-  color: var(--text-dim);
+  color: var(--text-muted);
   cursor: pointer;
   margin-left: 2px;
 }
@@ -524,9 +522,9 @@ onMounted(() => carrd.loadProjects())
   color: var(--danger, #e25555);
 }
 .carrd-dir-add {
-  color: var(--text-dim);
+  color: var(--text-muted);
   border-style: dashed;
-  border-color: var(--surface2);
+  border-color: var(--panel-raised-bg);
 }
 .carrd-dir-input {
   width: 160px;
@@ -541,19 +539,19 @@ onMounted(() => carrd.loadProjects())
   gap: 8px;
   padding: 28px;
   margin-bottom: 16px;
-  border: 2px dashed var(--surface2);
+  border: 2px dashed var(--panel-raised-bg);
   border-radius: var(--radius);
-  color: var(--text-dim);
+  color: var(--text-muted);
   cursor: pointer;
   transition: border-color 0.15s, background 0.15s;
 }
 .carrd-dropzone:hover {
-  border-color: var(--gold);
+  border-color: var(--highlight);
 }
 .carrd-dropzone.drag-over {
-  border-color: var(--gold);
-  background: color-mix(in srgb, var(--gold) 12%, transparent);
-  color: var(--gold);
+  border-color: var(--highlight);
+  background: color-mix(in srgb, var(--highlight) 12%, transparent);
+  color: var(--highlight);
 }
 .carrd-dropzone i {
   font-size: 1.6rem;
@@ -567,7 +565,7 @@ onMounted(() => carrd.loadProjects())
 }
 .carrd-card {
   margin: 0;
-  background: var(--surface2);
+  background: var(--panel-raised-bg);
   border-radius: var(--radius);
   overflow: hidden;
   display: flex;
@@ -579,7 +577,7 @@ onMounted(() => carrd.loadProjects())
 .carrd-thumb {
   display: block;
   aspect-ratio: 1 / 1;
-  background: var(--surface);
+  background: var(--panel-bg);
 }
 .carrd-thumb img {
   width: 100%;
@@ -596,7 +594,7 @@ onMounted(() => carrd.loadProjects())
   display: flex;
   align-items: center;
   justify-content: center;
-  color: var(--text-dim);
+  color: var(--text-muted);
   font-size: 2.6rem;
 }
 /* Inline audio player in the card body. */
@@ -647,11 +645,11 @@ onMounted(() => carrd.loadProjects())
   margin-top: 4px;
   width: 100%;
   white-space: nowrap;
-  background: var(--surface);
-  border-color: var(--surface);
+  background: var(--panel-bg);
+  border-color: var(--panel-bg);
 }
 .carrd-copy-btn:hover {
-  border-color: var(--gold);
-  color: var(--gold);
+  border-color: var(--highlight);
+  color: var(--highlight);
 }
 </style>

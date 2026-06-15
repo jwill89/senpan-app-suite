@@ -15,6 +15,15 @@
 import { ref } from 'vue'
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
 import MarkdownEditor from '@/components/common/MarkdownEditor.vue'
+import AdminPanel from '@/components/common/ui/AdminPanel.vue'
+import ManagerView from '@/components/common/ui/ManagerView.vue'
+import ListRow from '@/components/common/ui/ListRow.vue'
+import SubPageHeader from '@/components/common/ui/SubPageHeader.vue'
+import FormField from '@/components/common/ui/FormField.vue'
+import FormRow from '@/components/common/ui/FormRow.vue'
+import FormActions from '@/components/common/ui/FormActions.vue'
+import ImageField from '@/components/common/ui/ImageField.vue'
+import EmptyState from '@/components/common/ui/EmptyState.vue'
 import { useBookclubStore } from '@/stores/bookclub'
 import { assetUrl } from '@/lib/assets'
 import { MEETING_LENGTH_OPTIONS, supportedTimezones } from '@/lib/constants'
@@ -80,67 +89,70 @@ function formatInZone(iso: string, tz: string): string {
     <!-- Reading lists view -->
     <template v-if="bookclub.view === 'lists'">
     <!-- Reading list detail (items + add/edit form) -->
-    <div v-if="bookclub.selectedList" class="admin-panel">
-      <div class="flex-between mb-16" style="flex-wrap: wrap; gap: 8px">
-        <h3><i class="fa-duotone" :class="bookclub.clubIcon"></i> {{ bookclub.selectedList.title }}</h3>
-        <div class="flex-toolbar">
-          <button class="btn-ghost btn-sm" @click="bookclub.closeList()">← Back</button>
-          <button
-            class="btn-primary btn-sm"
-            :disabled="bookclub.publishing || !bookclub.selectedList.items?.length"
-            @click="bookclub.publishList(bookclub.selectedList)"
-          >
-            <LoadingSpinner v-if="bookclub.publishing" label="Publishing…" />
-            <template v-else><i class="fa-solid fa-paper-plane"></i> Publish to Discord</template>
-          </button>
-        </div>
+    <AdminPanel v-if="bookclub.selectedList">
+      <SubPageHeader
+        :icon="'fa-duotone ' + bookclub.clubIcon"
+        :title="bookclub.selectedList.title"
+        @back="bookclub.closeList()"
+      />
+      <div class="flex-toolbar flex-end mb-16">
+        <button
+          class="btn-primary btn-sm"
+          :disabled="bookclub.publishing || !bookclub.selectedList.items?.length"
+          @click="bookclub.publishList(bookclub.selectedList)"
+        >
+          <LoadingSpinner v-if="bookclub.publishing" label="Publishing…" />
+          <template v-else><i class="fa-solid fa-paper-plane"></i> Publish to Discord</template>
+        </button>
       </div>
 
       <LoadingSpinner v-if="bookclub.detailLoading" block label="Loading items…" />
 
       <!-- Items -->
       <template v-else>
-        <div v-if="bookclub.selectedList.items?.length" class="bc-items">
-          <div v-for="item in bookclub.selectedList.items" :key="item.id" class="bc-item-card">
-            <img
-              v-if="item.cover_image"
-              :src="assetUrl(item.cover_image)"
-              class="bc-item-cover"
-              alt="Cover"
-            />
-            <div v-else class="bc-item-cover bc-item-cover-empty"><i class="fa-duotone fa-image"></i></div>
-            <div class="bc-item-body">
-              <h4 class="bc-item-title">{{ item.title }}</h4>
-              <p class="text-dim text-sm bc-item-meta">
-                <span v-if="item.format">{{ item.format }}</span>
-                <span v-if="item.chapters">· {{ item.chapters }} ch</span>
-              </p>
-              <p v-if="item.genres" class="text-dim text-sm">{{ item.genres }}</p>
-              <p v-if="item.tropes" class="text-dim text-sm">Tropes: {{ item.tropes }}</p>
-              <p v-if="item.sources.length" class="text-sm bc-item-sources">
-                <a
-                  v-for="(src, i) in item.sources"
-                  :key="i"
-                  :href="src.url"
-                  target="_blank"
-                  rel="noopener"
-                  class="bc-source-link"
-                >
-                  <i class="fa-duotone fa-link"></i> {{ src.title || 'Source' }}
-                </a>
-              </p>
-            </div>
-            <div class="bc-item-actions">
+        <div v-if="bookclub.selectedList.items?.length" class="list-rows">
+          <ListRow v-for="item in bookclub.selectedList.items" :key="item.id">
+            <template #media>
+              <img
+                v-if="item.cover_image"
+                :src="assetUrl(item.cover_image)"
+                class="bc-item-cover"
+                alt="Cover"
+              />
+              <div v-else class="bc-item-cover media-empty">
+                <i class="fa-duotone fa-image"></i>
+              </div>
+            </template>
+            <h4 class="bc-item-title">{{ item.title }}</h4>
+            <p class="text-dim text-sm bc-item-meta">
+              <span v-if="item.format">{{ item.format }}</span>
+              <span v-if="item.chapters">· {{ item.chapters }} ch</span>
+            </p>
+            <p v-if="item.genres" class="text-dim text-sm">{{ item.genres }}</p>
+            <p v-if="item.tropes" class="text-dim text-sm">Tropes: {{ item.tropes }}</p>
+            <p v-if="item.sources.length" class="text-sm bc-item-sources">
+              <a
+                v-for="(src, i) in item.sources"
+                :key="i"
+                :href="src.url"
+                target="_blank"
+                rel="noopener"
+                class="bc-source-link"
+              >
+                <i class="fa-duotone fa-link"></i> {{ src.title || 'Source' }}
+              </a>
+            </p>
+            <template #actions>
               <button class="btn-secondary btn-sm" @click="bookclub.editItem(item)">
                 <i class="fa-solid fa-pen-to-square"></i>
               </button>
               <button class="btn-danger btn-sm" @click="bookclub.deleteItem(item)">
                 <i class="fa-solid fa-trash"></i>
               </button>
-            </div>
-          </div>
+            </template>
+          </ListRow>
         </div>
-        <p v-else class="msg-block">No items yet — add one below.</p>
+        <EmptyState v-else text="No items yet — add one below." />
 
         <!-- Add / edit item form -->
         <div class="bc-form mt-16">
@@ -150,8 +162,7 @@ function formatInZone(iso: string, tz: string): string {
           </h3>
 
           <!-- AniList lookup -->
-          <div class="bc-lookup mb-12">
-            <label class="field-label">Pull from AniList</label>
+          <FormField label="Pull from AniList" class="bc-lookup">
             <div class="flex-toolbar">
               <input
                 v-model="bookclub.lookupQuery"
@@ -183,11 +194,10 @@ function formatInZone(iso: string, tz: string): string {
                 </span>
               </button>
             </div>
-          </div>
+          </FormField>
 
-          <div class="flex-row mb-10" style="align-items: flex-start">
-            <div class="field" style="flex: 0 0 120px">
-              <label class="field-label">Cover</label>
+          <div class="flex-row items-start mb-10">
+            <FormField label="Cover" style="flex: 0 0 120px">
               <img
                 v-if="bookclub.itemForm.cover_image"
                 :src="assetUrl(bookclub.itemForm.cover_image)"
@@ -209,86 +219,75 @@ function formatInZone(iso: string, tz: string): string {
               >
                 Remove
               </button>
-            </div>
-            <div class="field" style="flex: 1; min-width: 200px">
-              <label class="field-label">Title *</label>
-              <input
-                v-model="bookclub.itemForm.title"
-                class="field-input-full"
-                placeholder="Title"
-                aria-label="Item title"
-              />
-              <label class="field-label mt-8">Cover Image URL</label>
-              <input
-                v-model="bookclub.itemForm.cover_image"
-                class="field-input-full"
-                placeholder="https://…"
-                aria-label="Cover image URL"
-              />
+            </FormField>
+            <div style="flex: 1; min-width: 200px">
+              <FormField label="Title" required>
+                <input
+                  v-model="bookclub.itemForm.title"
+                  placeholder="Title"
+                  aria-label="Item title"
+                />
+              </FormField>
+              <FormField label="Cover Image URL">
+                <input
+                  v-model="bookclub.itemForm.cover_image"
+                  placeholder="https://…"
+                  aria-label="Cover image URL"
+                />
+              </FormField>
             </div>
           </div>
 
-          <div class="field mb-10">
-            <label class="field-label">Summary</label>
+          <FormField label="Summary">
             <MarkdownEditor
               v-model="bookclub.itemForm.summary"
               placeholder="Summary (supports markdown — bold, italics, lists, links…)"
             />
-          </div>
+          </FormField>
 
           <div class="flex-row mb-10">
-            <div class="field" style="flex: 1; min-width: 140px">
-              <label class="field-label">Format</label>
+            <FormField label="Format" style="flex: 1; min-width: 140px">
               <input
                 v-model="bookclub.itemForm.format"
-                class="field-input-full"
                 placeholder="Manga, Manhwa, Danmei…"
                 aria-label="Format"
               />
-            </div>
-            <div class="field" style="flex: 0 0 120px; min-width: 100px">
-              <label class="field-label">Chapters</label>
+            </FormField>
+            <FormField label="Chapters" style="flex: 0 0 120px; min-width: 100px">
               <input
                 v-model="bookclub.itemForm.chapters"
-                class="field-input-full"
                 placeholder="e.g. 156"
                 aria-label="Chapters"
               />
-            </div>
+            </FormField>
           </div>
 
-          <div class="field mb-10">
-            <label class="field-label">Genres</label>
+          <FormField label="Genres">
             <input
               v-model="bookclub.itemForm.genres"
-              class="field-input-full"
               placeholder="Comma-separated, e.g. Romance, Fantasy"
               aria-label="Genres"
             />
-          </div>
+          </FormField>
 
-          <div class="field mb-10">
-            <label class="field-label">Tropes</label>
+          <FormField label="Tropes">
             <input
               v-model="bookclub.itemForm.tropes"
-              class="field-input-full"
               placeholder="Comma-separated, e.g. Enemies to Lovers, Slow Burn"
               aria-label="Tropes"
             />
-          </div>
+          </FormField>
 
-          <div class="field mb-10">
-            <label class="field-label">{{ bookclub.commentsLabel }}</label>
+          <FormField :label="bookclub.commentsLabel">
             <MarkdownEditor
               v-model="bookclub.itemForm.comments"
               min-height="120px"
               :placeholder="bookclub.commentsLabel + ' (supports markdown)'"
             />
-          </div>
+          </FormField>
 
           <!-- Sources repeater -->
-          <div class="field mb-12">
-            <label class="field-label">Sources</label>
+          <FormField label="Sources">
             <div v-for="(src, i) in bookclub.itemForm.sources" :key="i" class="flex-toolbar mb-8">
               <input
                 v-model="src.title"
@@ -309,9 +308,9 @@ function formatInZone(iso: string, tz: string): string {
             <button class="btn-ghost btn-sm" @click="bookclub.addSourceRow()">
               <i class="fa-solid fa-plus"></i> Add Source
             </button>
-          </div>
+          </FormField>
 
-          <div class="btns flex-toolbar">
+          <FormActions align="start">
             <button v-if="bookclub.itemForm.id" class="btn-ghost" @click="bookclub.resetItemForm()">
               Cancel Edit
             </button>
@@ -323,22 +322,19 @@ function formatInZone(iso: string, tz: string): string {
               <LoadingSpinner v-if="bookclub.savingItem" label="Saving…" />
               <template v-else>{{ bookclub.itemForm.id ? 'Save Changes' : 'Add Item' }}</template>
             </button>
-          </div>
+          </FormActions>
         </div>
       </template>
-    </div>
+    </AdminPanel>
 
     <!-- Reading lists overview -->
-    <div v-else class="admin-panel">
-      <h3 class="mb-16"><i class="fa-duotone fa-book"></i> {{ bookclub.clubName }} — Reading Lists</h3>
-
-      <!-- Create list -->
-      <div class="flex-toolbar mb-16">
+    <ManagerView v-else :title="`${bookclub.clubName} — Reading Lists`" icon="fa-duotone fa-book">
+      <template #toolbar>
         <input
           v-model="bookclub.newListTitle"
-          class="field-input-full"
           placeholder="New reading list title…"
           aria-label="New reading list title"
+          style="flex: 1; min-width: 160px; max-width: 360px"
           @keyup.enter="bookclub.createList()"
         />
         <button
@@ -349,7 +345,7 @@ function formatInZone(iso: string, tz: string): string {
           <LoadingSpinner v-if="bookclub.creatingList" label="Creating…" />
           <template v-else><i class="fa-solid fa-plus"></i> Create List</template>
         </button>
-      </div>
+      </template>
 
       <LoadingSpinner
         v-if="bookclub.listsLoading && bookclub.lists.length === 0"
@@ -357,56 +353,55 @@ function formatInZone(iso: string, tz: string): string {
         label="Loading reading lists…"
       />
       <template v-else>
-        <div v-if="bookclub.lists.length" class="bc-list">
-          <div v-for="list in bookclub.lists" :key="list.id" class="bc-list-card">
-            <template v-if="editingListId === list.id">
-              <input
-                v-model="editingTitle"
-                class="field-input-full"
-                aria-label="Rename reading list"
-                @keyup.enter="commitRename(list)"
-                @keyup.esc="cancelRename()"
-              />
-              <div class="flex-toolbar">
+        <div v-if="bookclub.lists.length" class="list-rows">
+          <ListRow v-for="list in bookclub.lists" :key="list.id">
+            <input
+              v-if="editingListId === list.id"
+              v-model="editingTitle"
+              aria-label="Rename reading list"
+              style="width: 100%; max-width: 360px"
+              @keyup.enter="commitRename(list)"
+              @keyup.esc="cancelRename()"
+            />
+            <button v-else class="bc-list-title" @click="bookclub.selectList(list)">
+              {{ list.title }}
+            </button>
+            <template #actions>
+              <template v-if="editingListId === list.id">
                 <button class="btn-primary btn-sm" @click="commitRename(list)">Save</button>
                 <button class="btn-ghost btn-sm" @click="cancelRename()">Cancel</button>
-              </div>
-            </template>
-            <template v-else>
-              <button class="bc-list-title" @click="bookclub.selectList(list)">
-                {{ list.title }}
-              </button>
-              <div class="bc-list-actions flex-toolbar">
+              </template>
+              <template v-else>
                 <button class="btn-secondary btn-sm" @click="bookclub.selectList(list)">Open</button>
-                <button class="btn-ghost btn-sm" @click="startRename(list)">
-                  <i class="fa-solid fa-pen-to-square"></i>
-                </button>
                 <button
                   class="btn-primary btn-sm"
+                  aria-label="Publish"
                   :disabled="bookclub.publishing"
                   @click="bookclub.publishList(list)"
                 >
                   <i class="fa-solid fa-paper-plane"></i>
                 </button>
-                <button class="btn-danger btn-sm" @click="bookclub.deleteList(list)">
+                <button class="btn-ghost btn-sm" aria-label="Rename" @click="startRename(list)">
+                  <i class="fa-solid fa-pen-to-square"></i>
+                </button>
+                <button class="btn-danger btn-sm" aria-label="Delete" @click="bookclub.deleteList(list)">
                   <i class="fa-solid fa-trash"></i>
                 </button>
-              </div>
+              </template>
             </template>
-          </div>
+          </ListRow>
         </div>
-        <p v-else class="no-game-msg">No reading lists yet. Create one above.</p>
+        <EmptyState v-else text="No reading lists yet. Create one above." />
       </template>
-    </div>
+    </ManagerView>
     </template>
 
     <!-- Event posts view -->
     <template v-else>
-      <div class="admin-panel">
-        <h3 class="mb-16">
-          <i class="fa-duotone fa-calendar-days"></i> {{ bookclub.clubName }} — Event Posts
-        </h3>
-
+      <ManagerView
+        :title="`${bookclub.clubName} — Event Posts`"
+        icon="fa-duotone fa-calendar-days"
+      >
         <!-- Add / edit event form -->
         <div class="bc-form mb-16">
           <h3 class="raffle-section-heading">
@@ -414,135 +409,78 @@ function formatInZone(iso: string, tz: string): string {
             {{ bookclub.eventForm.id ? 'Edit Event' : 'Schedule Event' }}
           </h3>
 
-          <div class="field mb-10">
-            <label class="field-label">Title *</label>
+          <FormField label="Title" required>
             <input
               v-model="bookclub.eventForm.title"
-              class="field-input-full"
               placeholder="e.g. July 2026 Meeting"
               aria-label="Event title"
             />
-          </div>
+          </FormField>
 
-          <div class="flex-row mb-10">
-            <div class="field" style="flex: 1; min-width: 180px">
-              <label class="field-label">Start date &amp; time *</label>
+          <FormRow>
+            <FormField label="Start date &amp; time" required>
               <input
                 v-model="bookclub.eventForm.start_local"
                 type="datetime-local"
-                class="field-input-full"
                 aria-label="Start date and time"
               />
-            </div>
-            <div class="field" style="flex: 1; min-width: 180px">
-              <label class="field-label">Timezone *</label>
-              <select
-                v-model="bookclub.eventForm.timezone"
-                class="field-input-full"
-                aria-label="Timezone"
-              >
+            </FormField>
+            <FormField label="Timezone" required>
+              <select v-model="bookclub.eventForm.timezone" aria-label="Timezone">
                 <option v-for="tz in timezones" :key="tz" :value="tz">{{ tz }}</option>
               </select>
-            </div>
-          </div>
+            </FormField>
+          </FormRow>
 
           <div class="flex-row mb-10">
-            <div class="field" style="flex: 0 0 160px; min-width: 140px">
-              <label class="field-label">Meeting length</label>
-              <select
-                v-model.number="bookclub.eventForm.length_hours"
-                class="field-input-full"
-                aria-label="Meeting length"
-              >
+            <FormField label="Meeting length" style="flex: 0 0 160px; min-width: 140px">
+              <select v-model.number="bookclub.eventForm.length_hours" aria-label="Meeting length">
                 <option v-for="h in lengthOptions" :key="h" :value="h">
                   {{ h }} hour{{ h > 1 ? 's' : '' }}
                 </option>
               </select>
-            </div>
-            <div class="field" style="flex: 1; min-width: 180px">
-              <label class="field-label">Location</label>
+            </FormField>
+            <FormField label="Location" style="flex: 1; min-width: 180px">
               <input
                 v-model="bookclub.eventForm.location"
-                class="field-input-full"
                 placeholder="e.g. Discord — Voice Channel 1"
                 aria-label="Location"
               />
-            </div>
+            </FormField>
           </div>
 
-          <div class="field mb-10">
-            <label class="field-label">When to post *</label>
+          <FormField
+            label="When to post"
+            required
+            help="The embed posts automatically at this time (interpreted in the timezone above)."
+          >
             <input
               v-model="bookclub.eventForm.post_at_local"
               type="datetime-local"
-              class="field-input-full"
               aria-label="When to post"
             />
-            <small class="text-dim">
-              The embed posts automatically at this time (interpreted in the timezone above).
-            </small>
-          </div>
+          </FormField>
 
-          <div class="field mb-12">
-            <label class="field-label">Event Details</label>
+          <FormField label="Event Details">
             <MarkdownEditor
               v-model="bookclub.eventForm.details"
               min-height="120px"
               placeholder="Optional details shown full-width above the image (supports markdown)"
             />
-          </div>
+          </FormField>
 
           <!-- Image: upload or reuse an existing one -->
-          <div class="field mb-12">
-            <label class="field-label">Image</label>
-            <div class="flex-row" style="align-items: flex-start">
-              <div style="flex: 0 0 150px">
-                <img
-                  v-if="bookclub.eventForm.image"
-                  :src="bookclub.eventForm.image"
-                  class="bc-event-img-preview"
-                  alt="Event image preview"
-                />
-                <div v-else class="bc-event-img-preview bc-item-cover-empty">
-                  <i class="fa-duotone fa-image"></i>
-                </div>
-                <input
-                  type="file"
-                  accept="image/*"
-                  aria-label="Upload event image"
-                  :disabled="bookclub.eventImageUploading"
-                  @change="bookclub.uploadEventImage($event)"
-                />
-                <span v-if="bookclub.eventImageUploading" class="text-dim text-sm">Uploading…</span>
-                <button
-                  v-if="bookclub.eventForm.image"
-                  class="btn-ghost btn-sm mt-8"
-                  @click="bookclub.eventForm.image = ''"
-                >
-                  Remove
-                </button>
-              </div>
-              <div style="flex: 1; min-width: 160px">
-                <label class="field-label">Or reuse an uploaded image</label>
-                <div v-if="bookclub.eventImages.length" class="bc-img-picker">
-                  <button
-                    v-for="img in bookclub.eventImages"
-                    :key="img"
-                    type="button"
-                    class="bc-img-thumb"
-                    :class="{ active: bookclub.eventForm.image === img }"
-                    :aria-label="'Use this image'"
-                    @click="bookclub.pickEventImage(img)"
-                  >
-                    <img :src="img" alt="" />
-                  </button>
-                </div>
-                <p v-else class="text-dim text-sm">No images uploaded yet.</p>
-              </div>
-            </div>
-          </div>
+          <FormField label="Image">
+            <ImageField
+              v-model="bookclub.eventForm.image"
+              :images="bookclub.eventImages"
+              :uploading="bookclub.eventImageUploading"
+              upload-label="Upload event image"
+              @upload="bookclub.uploadEventImage($event)"
+            />
+          </FormField>
 
-          <div class="btns flex-toolbar">
+          <FormActions align="start">
             <button
               v-if="bookclub.eventForm.id"
               class="btn-ghost"
@@ -558,7 +496,7 @@ function formatInZone(iso: string, tz: string): string {
               <LoadingSpinner v-if="bookclub.savingEvent" label="Saving…" />
               <template v-else>{{ bookclub.eventForm.id ? 'Save Changes' : 'Schedule Event' }}</template>
             </button>
-          </div>
+          </FormActions>
         </div>
 
         <!-- Scheduled events -->
@@ -568,36 +506,33 @@ function formatInZone(iso: string, tz: string): string {
           label="Loading events…"
         />
         <template v-else>
-          <div v-if="bookclub.events.length" class="bc-events">
-            <div v-for="ev in bookclub.events" :key="ev.id" class="bc-event-card">
-              <img v-if="ev.image" :src="ev.image" class="bc-event-cover" alt="Event image" />
-              <div v-else class="bc-event-cover bc-item-cover-empty">
-                <i class="fa-duotone fa-image"></i>
-              </div>
-              <div class="bc-event-body">
-                <h4 class="bc-item-title">{{ ev.title }}</h4>
-                <p class="text-sm bc-item-meta">
-                  <i class="fa-duotone fa-calendar-days"></i>
-                  {{ formatInZone(ev.start_at, ev.timezone) }}
-                  <span class="text-dim">({{ ev.timezone }})</span>
-                </p>
-                <p class="text-dim text-sm">
-                  <i class="fa-duotone fa-clock"></i> {{ ev.length_hours }} hour{{ ev.length_hours > 1 ? 's' : '' }}
-                  <span v-if="ev.location">
-                    · <i class="fa-duotone fa-location-dot"></i> {{ ev.location }}
-                  </span>
-                </p>
-                <p class="text-sm">
-                  <span v-if="ev.posted" class="bc-badge bc-badge-posted">Posted</span>
-                  <span v-else class="bc-badge bc-badge-scheduled">
-                    Posts {{ formatInZone(ev.post_at, ev.timezone) }}
-                  </span>
-                </p>
-              </div>
-              <div class="bc-item-actions">
-                <button class="btn-secondary btn-sm" aria-label="Edit event" @click="bookclub.editEvent(ev)">
-                  <i class="fa-solid fa-pen-to-square"></i>
-                </button>
+          <div v-if="bookclub.events.length" class="list-rows">
+            <ListRow v-for="ev in bookclub.events" :key="ev.id">
+              <template #media>
+                <img v-if="ev.image" :src="ev.image" class="bc-event-cover" alt="Event image" />
+                <div v-else class="bc-event-cover media-empty">
+                  <i class="fa-duotone fa-image"></i>
+                </div>
+              </template>
+              <h4 class="bc-item-title">{{ ev.title }}</h4>
+              <p class="text-sm bc-item-meta">
+                <i class="fa-duotone fa-calendar-days"></i>
+                {{ formatInZone(ev.start_at, ev.timezone) }}
+                <span class="text-dim">({{ ev.timezone }})</span>
+              </p>
+              <p class="text-dim text-sm">
+                <i class="fa-duotone fa-clock"></i> {{ ev.length_hours }} hour{{ ev.length_hours > 1 ? 's' : '' }}
+                <span v-if="ev.location">
+                  · <i class="fa-duotone fa-location-dot"></i> {{ ev.location }}
+                </span>
+              </p>
+              <p class="text-sm">
+                <span v-if="ev.posted" class="bc-badge bc-badge-posted">Posted</span>
+                <span v-else class="bc-badge bc-badge-scheduled">
+                  Posts {{ formatInZone(ev.post_at, ev.timezone) }}
+                </span>
+              </p>
+              <template #actions>
                 <button
                   class="btn-primary btn-sm"
                   :disabled="bookclub.postingEventId === ev.id"
@@ -607,35 +542,23 @@ function formatInZone(iso: string, tz: string): string {
                   <LoadingSpinner v-if="bookclub.postingEventId === ev.id" label="Posting…" />
                   <template v-else><i class="fa-solid fa-paper-plane"></i></template>
                 </button>
+                <button class="btn-secondary btn-sm" aria-label="Edit event" @click="bookclub.editEvent(ev)">
+                  <i class="fa-solid fa-pen-to-square"></i>
+                </button>
                 <button class="btn-danger btn-sm" aria-label="Delete event" @click="bookclub.deleteEvent(ev)">
                   <i class="fa-solid fa-trash"></i>
                 </button>
-              </div>
-            </div>
+              </template>
+            </ListRow>
           </div>
-          <p v-else class="no-game-msg">No events scheduled yet. Add one above.</p>
+          <EmptyState v-else text="No events scheduled yet. Add one above." />
         </template>
-      </div>
+      </ManagerView>
     </template>
   </div>
 </template>
 
 <style scoped>
-.bc-list {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-.bc-list-card {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  background: var(--surface2);
-  border-radius: var(--radius);
-  padding: 10px 14px;
-  flex-wrap: wrap;
-}
 .bc-list-title {
   background: none;
   border: none;
@@ -650,35 +573,12 @@ function formatInZone(iso: string, tz: string): string {
 .bc-list-title:hover {
   text-decoration: underline;
 }
-.bc-items {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-.bc-item-card {
-  display: flex;
-  gap: 12px;
-  background: var(--surface2);
-  border-radius: var(--radius);
-  padding: 12px;
-}
 .bc-item-cover {
   width: 64px;
   height: 90px;
   object-fit: cover;
   border-radius: 6px;
   flex: 0 0 auto;
-}
-.bc-item-cover-empty {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--surface);
-  color: var(--text-dim, #999);
-}
-.bc-item-body {
-  flex: 1;
-  min-width: 0;
 }
 .bc-item-title {
   margin: 0 0 4px;
@@ -695,13 +595,8 @@ function formatInZone(iso: string, tz: string): string {
 .bc-source-link {
   white-space: nowrap;
 }
-.bc-item-actions {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
 .bc-form {
-  background: var(--surface2);
+  background: var(--panel-raised-bg);
   border-radius: var(--radius);
   padding: 14px 16px;
 }
@@ -716,16 +611,16 @@ function formatInZone(iso: string, tz: string): string {
   display: flex;
   align-items: center;
   gap: 10px;
-  background: var(--surface);
+  background: var(--panel-bg);
   color: var(--text);
-  border: 1px solid var(--surface2);
+  border: 1px solid var(--panel-raised-bg);
   border-radius: 6px;
   padding: 6px 8px;
   cursor: pointer;
   text-align: left;
 }
 .bc-result:hover {
-  border-color: var(--primary);
+  border-color: var(--accent);
 }
 .bc-result-cover {
   width: 36px;
@@ -752,33 +647,21 @@ function formatInZone(iso: string, tz: string): string {
   gap: 8px;
 }
 .bc-tab {
-  background: var(--surface2);
+  background: var(--panel-raised-bg);
   color: var(--text);
-  border: 1px solid var(--surface2);
+  border: 1px solid var(--panel-raised-bg);
   border-radius: var(--radius);
   padding: 8px 16px;
   font-weight: 600;
   cursor: pointer;
 }
 .bc-tab:hover {
-  border-color: var(--primary);
+  border-color: var(--accent);
 }
 .bc-tab.active {
-  background: var(--primary);
-  color: var(--text-on-primary);
-  border-color: var(--primary);
-}
-.bc-events {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-.bc-event-card {
-  display: flex;
-  gap: 12px;
-  background: var(--surface2);
-  border-radius: var(--radius);
-  padding: 12px;
+  background: var(--accent);
+  color: var(--text-on-accent);
+  border-color: var(--accent);
 }
 .bc-event-cover {
   width: 120px;
@@ -786,50 +669,6 @@ function formatInZone(iso: string, tz: string): string {
   object-fit: cover;
   border-radius: 6px;
   flex: 0 0 auto;
-}
-.bc-event-body {
-  flex: 1;
-  min-width: 0;
-}
-.bc-event-body p {
-  margin: 0 0 4px;
-}
-.bc-event-img-preview {
-  width: 150px;
-  height: 85px;
-  object-fit: cover;
-  border-radius: 6px;
-  display: block;
-  margin-bottom: 8px;
-}
-.bc-img-picker {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  max-height: 180px;
-  overflow-y: auto;
-}
-.bc-img-thumb {
-  width: 72px;
-  height: 48px;
-  padding: 0;
-  border: 2px solid var(--surface2);
-  border-radius: 6px;
-  overflow: hidden;
-  cursor: pointer;
-  background: var(--surface);
-}
-.bc-img-thumb img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  display: block;
-}
-.bc-img-thumb:hover {
-  border-color: var(--primary);
-}
-.bc-img-thumb.active {
-  border-color: var(--primary);
 }
 .bc-badge {
   display: inline-block;
@@ -843,8 +682,8 @@ function formatInZone(iso: string, tz: string): string {
   color: var(--text);
 }
 .bc-badge-scheduled {
-  background: var(--surface);
-  color: var(--text-dim);
-  border: 1px solid var(--surface2);
+  background: var(--panel-bg);
+  color: var(--text-muted);
+  border: 1px solid var(--panel-raised-bg);
 }
 </style>

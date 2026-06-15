@@ -15,6 +15,9 @@
 import { computed, onMounted, watch } from 'vue'
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
 import MarkdownEditor from '@/components/common/MarkdownEditor.vue'
+import AdminPanel from '@/components/common/ui/AdminPanel.vue'
+import FormField from '@/components/common/ui/FormField.vue'
+import FormActions from '@/components/common/ui/FormActions.vue'
 import {
   BOOK_CLUBS,
   clubWebhookKey,
@@ -79,39 +82,29 @@ watch(
 
 <template>
   <div class="tab-body">
-    <div class="admin-panel">
-      <h3 class="mb-12"><i class="fa-duotone fa-gear"></i> App Settings</h3>
+    <AdminPanel title="App Settings" icon="fa-duotone fa-gear">
       <div class="settings-form">
-        <div class="field mb-10">
-          <label class="field-label">App Title</label>
-          <input
-            v-model="app.settings.app_title"
-            placeholder="My App"
-            aria-label="App title"
-            class="field-input-full"
-          />
-          <small class="text-dim">Displayed in the browser tab and home page header.</small>
-        </div>
-        <div class="field mb-10">
-          <label class="field-label">
-            Bingo Join Prompt <span class="text-dim" style="font-weight: 400">(Markdown supported)</span>
-          </label>
+        <FormField label="App Title" help="Displayed in the browser tab and home page header.">
+          <input v-model="app.settings.app_title" placeholder="My App" aria-label="App title" />
+        </FormField>
+        <FormField
+          help="Shown on the home page above the board-ID field where players join a game."
+        >
+          <template #label>
+            Bingo Join Prompt
+            <span class="text-dim" style="font-weight: 400">(Markdown supported)</span>
+          </template>
           <MarkdownEditor
             v-model="app.settings.bingo_join_prompt"
             min-height="100px"
             placeholder="Enter your unique bingo board ID to play"
           />
-          <small class="text-dim">
-            Shown on the home page above the board-ID field where players join a game.
-          </small>
-        </div>
-        <div class="field mb-10">
-          <label class="field-label">Default Draw Delay (seconds)</label>
-          <select
-            v-model="app.settings.default_draw_delay"
-            aria-label="Default draw delay"
-            class="field-input-full"
-          >
+        </FormField>
+        <FormField
+          label="Default Draw Delay (seconds)"
+          help="Pre-selected delay when starting a new game. Can still be changed per-draw."
+        >
+          <select v-model="app.settings.default_draw_delay" aria-label="Default draw delay">
             <option value="0">0 — Instant</option>
             <option value="3">3 seconds</option>
             <option value="5">5 seconds</option>
@@ -122,47 +115,40 @@ watch(
             <option value="45">45 seconds</option>
             <option value="60">60 seconds</option>
           </select>
-          <small class="text-dim">
-            Pre-selected delay when starting a new game. Can still be changed per-draw.
-          </small>
-        </div>
-        <div class="field mb-10">
-          <label class="field-label">Frequent Winner Threshold</label>
+        </FormField>
+        <FormField
+          label="Frequent Winner Threshold"
+          help="How many wins before a player is flagged as a frequent winner."
+        >
           <input
             v-model="app.settings.frequent_winner_threshold"
             type="number"
             min="1"
             max="100"
             aria-label="Frequent winner threshold"
-            class="field-input-full"
           />
-          <small class="text-dim">
-            How many wins before a player is flagged as a frequent winner.
-          </small>
-        </div>
-        <div class="field mb-10">
-          <label class="field-label">Frequent Winner Lookback (hours)</label>
+        </FormField>
+        <FormField
+          label="Frequent Winner Lookback (hours)"
+          help="Time window to check for frequent winners (1–168 hours)."
+        >
           <input
             v-model="app.settings.frequent_winner_hours"
             type="number"
             min="1"
             max="168"
             aria-label="Frequent winner hours"
-            class="field-input-full"
           />
-          <small class="text-dim">Time window to check for frequent winners (1–168 hours).</small>
-        </div>
-        <div class="field mb-10">
-          <label class="field-label">Google Fonts API Key</label>
+        </FormField>
+        <FormField label="Google Fonts API Key">
           <input
             v-model="app.settings.google_fonts_api_key"
             placeholder="Enter API key for font autocomplete"
             aria-label="Google Fonts API key"
-            class="field-input-full"
             type="password"
             autocomplete="off"
           />
-          <small class="text-dim">
+          <template #help>
             Optional. Enables full font autocomplete from Google Fonts.
             <a
               href="https://developers.google.com/fonts/docs/developer_api#APIKey"
@@ -170,10 +156,10 @@ watch(
               rel="noopener"
               >Get a free key ↗</a
             >
-          </small>
-        </div>
-        <div class="field mb-10">
-          <label class="field-label" for="header-font-select">Header / Board Font</label>
+          </template>
+        </FormField>
+        <FormField html-for="header-font-select">
+          <template #label>Header / Board Font</template>
           <div class="flex gap-sm">
             <select
               id="header-font-select"
@@ -208,75 +194,67 @@ watch(
               >Browse Fonts ↗</a
             >
           </div>
-          <small class="text-dim">
+          <template #help>
             Choose a Google font or one uploaded under System → Font Upload (uploaded fonts are
             listed first). The preview below updates live.
-          </small>
-
-          <div
-            class="font-preview mt-8"
-            :style="{ fontFamily: '\'' + (app.settings.header_font || 'Arapey') + '\', serif' }"
-          >
-            <span style="font-size: 2rem; font-weight: 800; letter-spacing: 2px">B I N G O</span
-            ><br />
-            <span style="font-size: 1.3rem; font-weight: 700">1 &nbsp; 23 &nbsp; 45 &nbsp; 67</span
-            ><br />
-            <span style="font-size: 3rem; font-weight: 700; text-transform: uppercase">
-              {{ app.settings.app_title || 'App Title' }}
-            </span>
-          </div>
+          </template>
+        </FormField>
+        <div
+          class="font-preview mb-12"
+          :style="{ fontFamily: '\'' + (app.settings.header_font || 'Arapey') + '\', serif' }"
+        >
+          <span style="font-size: 2rem; font-weight: 800; letter-spacing: 2px">B I N G O</span
+          ><br />
+          <span style="font-size: 1.3rem; font-weight: 700">1 &nbsp; 23 &nbsp; 45 &nbsp; 67</span
+          ><br />
+          <span style="font-size: 3rem; font-weight: 700; text-transform: uppercase">
+            {{ app.settings.app_title || 'App Title' }}
+          </span>
         </div>
         <template v-for="club in BOOK_CLUBS" :key="club.slug">
-          <div class="field mb-10">
-            <label class="field-label">{{ club.name }} — Reading List Webhook URL</label>
+          <FormField
+            :label="`${club.name} — Reading List Webhook URL`"
+            help="Publishes this club's reading lists — each item posted as its own embed to this channel. Kept private; never sent to non-admin visitors."
+          >
             <input
               v-model="app.settings[clubWebhookKey(club.slug)]"
               placeholder="https://discord.com/api/webhooks/…"
               :aria-label="club.name + ' reading list Discord webhook URL'"
-              class="field-input-full"
               type="password"
               autocomplete="off"
             />
-            <small class="text-dim">
-              Publishes this club's reading lists — each item posted as its own embed to this
-              channel. Kept private; never sent to non-admin visitors.
-            </small>
-          </div>
-          <div class="field mb-10">
-            <label class="field-label">{{ club.name }} — Events Channel Webhook URL</label>
+          </FormField>
+          <FormField
+            :label="`${club.name} — Events Channel Webhook URL`"
+            help="Where this club's scheduled event posts are sent. Kept private; never sent to non-admin visitors."
+          >
             <input
               v-model="app.settings[clubEventsWebhookKey(club.slug)]"
               placeholder="https://discord.com/api/webhooks/…"
               :aria-label="club.name + ' events Discord webhook URL'"
-              class="field-input-full"
               type="password"
               autocomplete="off"
             />
-            <small class="text-dim">
-              Where this club's scheduled event posts are sent. Kept private; never sent to
-              non-admin visitors.
-            </small>
-          </div>
+          </FormField>
         </template>
-        <div class="field mb-10">
-          <label class="field-label">AniList API URL (Book Clubs)</label>
+        <FormField
+          label="AniList API URL (Book Clubs)"
+          help="GraphQL endpoint for the &quot;Pull from AniList&quot; lookup when adding reading list items. No API key needed."
+        >
           <input
             v-model="app.settings.anilist_api_url"
             placeholder="https://graphql.anilist.co"
             aria-label="AniList API URL"
-            class="field-input-full"
           />
-          <small class="text-dim">
-            GraphQL endpoint for the "Pull from AniList" lookup when adding reading list items.
-            No API key needed.
-          </small>
-        </div>
-        <button class="btn-primary" :disabled="app.savingSettings" @click="app.saveSettings()">
-          <LoadingSpinner v-if="app.savingSettings" label="Saving…" />
-          <template v-else>Save Settings</template>
-        </button>
+        </FormField>
+        <FormActions align="start">
+          <button class="btn-primary" :disabled="app.savingSettings" @click="app.saveSettings()">
+            <LoadingSpinner v-if="app.savingSettings" label="Saving…" />
+            <template v-else>Save Settings</template>
+          </button>
+        </FormActions>
       </div>
-    </div>
+    </AdminPanel>
   </div>
 </template>
 

@@ -9,27 +9,16 @@
  * The emoji picker (and its CSS) is lazy-loaded so it only lands when a player
  * actually opens it — the initial player payload stays small.
  */
-import { defineAsyncComponent, ref } from 'vue'
-import ModalOverlay from '@/components/common/ModalOverlay.vue'
+import { ref } from 'vue'
+import EmojiPickerModal from '@/components/common/EmojiPickerModal.vue'
 import { usePlayerStore } from '@/stores/player'
-
-/** Lazy-load the emoji picker + its stylesheet together into one on-demand chunk. */
-const EmojiPicker = defineAsyncComponent(async () => {
-  await import('vue3-emoji-picker/css')
-  return (await import('vue3-emoji-picker')).default
-})
-
-/** The emoji-picker `select` payload — `i` is the chosen emoji character. */
-interface EmojiSelect {
-  i: string
-}
 
 const player = usePlayerStore()
 
 const pickerOpen = ref(false)
 
-function onSelectEmoji(emoji: EmojiSelect): void {
-  player.setStampEmoji(emoji.i)
+function onSelectEmoji(emoji: string): void {
+  player.setStampEmoji(emoji)
   pickerOpen.value = false
 }
 </script>
@@ -84,34 +73,7 @@ function onSelectEmoji(emoji: EmojiSelect): void {
     </label>
 
     <!-- Emoji picker modal -->
-    <ModalOverlay
-      v-if="pickerOpen"
-      centered
-      aria-label="Emoji picker"
-      :box-style="{ maxWidth: 'fit-content' }"
-      @close="pickerOpen = false"
-    >
-      <h3 class="mb-12"><i class="fa-duotone fa-face-smile"></i> Pick an Emoji</h3>
-      <div class="emoji-picker-wrap">
-        <EmojiPicker :native="true" theme="dark" :display-recent="true" @select="onSelectEmoji" />
-      </div>
-    </ModalOverlay>
+    <EmojiPickerModal v-if="pickerOpen" @select="onSelectEmoji" @close="pickerOpen = false" />
   </div>
 </template>
-
-<style scoped>
-.emoji-picker-wrap {
-  display: flex;
-  justify-content: center;
-}
-
-/* The picker ships its own dark theme, but the app's global `input` rule would
-   otherwise override the search field — re-skin it to the app surface so it
-   stays legible and on-theme. */
-.emoji-picker-wrap :deep(input) {
-  background: var(--surface);
-  color: var(--text);
-  border-color: var(--surface2);
-}
-</style>
 

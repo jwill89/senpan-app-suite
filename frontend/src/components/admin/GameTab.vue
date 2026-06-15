@@ -11,6 +11,8 @@ import CalledNumbers from '@/components/common/CalledNumbers.vue'
 import PatternMini from '@/components/common/PatternMini.vue'
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
 import MarkdownEditor from '@/components/common/MarkdownEditor.vue'
+import AdminPanel from '@/components/common/ui/AdminPanel.vue'
+import PatternPicker from '@/components/common/ui/PatternPicker.vue'
 import { useMarkdown } from '@/lib/markdown'
 import { DRAW_DELAY_OPTIONS } from '@/lib/constants'
 import { parseServerTimestamp } from '@/lib/datetime'
@@ -72,28 +74,6 @@ function playerNameFor(id: string): string | undefined {
 
 const delayLabel = (s: number): string => (s === 0 ? 'Instant' : `${s}s Delay`)
 
-/** True when every currently-visible pattern is already selected. */
-const allVisibleSelected = computed(
-  () =>
-    patterns.gameFilteredPatterns.length > 0 &&
-    patterns.gameFilteredPatterns.every((p) => game.selectedPatternIds.includes(p.id)),
-)
-
-/**
- * Selects every currently-visible pattern (or deselects them if they're all
- * already selected). Patterns hidden by the category/search filter keep their
- * current selection — only the visible set is affected.
- */
-function toggleSelectAllVisible(): void {
-  const visibleIds = patterns.gameFilteredPatterns.map((p) => p.id)
-  if (allVisibleSelected.value) {
-    const remove = new Set(visibleIds)
-    game.selectedPatternIds = game.selectedPatternIds.filter((id) => !remove.has(id))
-  } else {
-    game.selectedPatternIds = [...new Set([...game.selectedPatternIds, ...visibleIds])]
-  }
-}
-
 /** Toggles the winner-sound alert; enabling primes audio and plays a sample. */
 function toggleWinnerSound(): void {
   const next = !game.winnerSoundEnabled
@@ -104,9 +84,9 @@ function toggleWinnerSound(): void {
   }
 }
 
-/** Jump to the New Pattern tab (from the "no patterns yet" hint). */
-function goToNewPattern(): void {
-  router.push({ name: 'admin-bingo-new-pattern' })
+/** Jump to the Patterns tab (from the "no patterns yet" hint). */
+function goToPatterns(): void {
+  router.push({ name: 'admin-bingo-patterns' })
 }
 
 // Keyboard shortcut: Space (or Enter) draws the next number during an active
@@ -147,7 +127,7 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="tab-body">
-    <div class="admin-panel">
+    <AdminPanel>
       <h3 class="mb-12">
         {{ game.adminGameLabel }}
         <span v-if="game.currentGame" class="live-badge" role="status" aria-label="Game in progress">
@@ -169,25 +149,18 @@ onBeforeUnmount(() => {
       <div v-if="!game.currentGame" class="game-setup">
         <div v-if="patterns.patterns.length === 0" class="mb-12">
           <p class="text-dim mb-8">Create some win patterns first.</p>
-          <button class="btn-secondary btn-sm" @click="goToNewPattern">
+          <button class="btn-secondary btn-sm" @click="goToPatterns">
             <i class="fa-solid fa-plus"></i> Create a Pattern
           </button>
         </div>
         <div v-else>
           <!-- Start from a saved preset (auto-fills patterns + details) -->
           <div v-if="presets.presets.length" class="flex-toolbar mb-12">
-            <label style="color: var(--text-dim); font-size: 0.9rem">Start from a preset:</label>
+            <label class="text-dim text-sm">Start from a preset:</label>
             <select
               v-model.number="selectedPresetId"
               aria-label="Game preset"
-              style="
-                padding: 6px 10px;
-                border-radius: 6px;
-                background: var(--surface);
-                color: var(--text);
-                border: 1px solid var(--surface2);
-                min-width: 180px;
-              "
+              class="manager-filter"
             >
               <option :value="null">— None —</option>
               <option v-for="p in presets.presets" :key="p.id" :value="p.id">{{ p.name }}</option>
@@ -204,72 +177,15 @@ onBeforeUnmount(() => {
 
           <p class="text-dim mb-12">Select one or more win patterns:</p>
 
-          <!-- Pattern filter bar -->
-          <div class="flex-toolbar mb-12">
-            <input
-              v-model="patterns.patternSearchQuery"
-              placeholder="Search patterns…"
-              aria-label="Search patterns"
-              style="flex: 1; min-width: 140px; max-width: 260px"
-            />
-            <select
-              v-model="patterns.patternCategoryFilter"
-              aria-label="Filter by category"
-              style="
-                padding: 6px 10px;
-                border-radius: 6px;
-                background: var(--surface);
-                color: var(--text);
-                border: 1px solid var(--surface2);
-              "
-            >
-              <option :value="null">All Categories</option>
-              <option v-for="c in patterns.categories" :key="c.id" :value="c.id">
-                {{ c.name }}
-              </option>
-            </select>
-            <button
-              class="btn-ghost btn-sm"
-              :disabled="patterns.gameFilteredPatterns.length === 0"
-              :title="
-                allVisibleSelected
-                  ? 'Deselect the patterns shown below (others stay selected)'
-                  : 'Select all patterns shown below (others keep their status)'
-              "
-              @click="toggleSelectAllVisible"
-            >
-              <i class="fa-solid fa-circle-check" aria-hidden="true"></i>
-              {{ allVisibleSelected ? 'Deselect All' : 'Select All' }}
-            </button>
-          </div>
-
-          <div class="pattern-checks">
-            <label
-              v-for="p in patterns.gameFilteredPatterns"
-              :key="p.id"
-              :class="['pattern-check', game.selectedPatternIds.includes(p.id) ? 'selected' : '']"
-            >
-              <input type="checkbox" :value="p.id" v-model="game.selectedPatternIds" />
-              <span class="dot"></span>
-              <span>{{ p.name }}</span>
-              <span style="font-size: 0.75rem; color: var(--text-dim); margin-left: 4px">
-                ({{ p.category_name }})
-              </span>
-              <PatternMini
-                :pattern-data="p.pattern_data"
-                size="pattern-mini-sm"
-                inline
-                style="margin-left: 6px"
-              />
-            </label>
-          </div>
+          <PatternPicker v-model="game.selectedPatternIds" />
 
           <!-- Game details editor -->
           <div class="game-details-editor">
-            <label
-              style="color: var(--text-dim); font-size: 0.9rem; display: block; margin-bottom: 6px"
-            >
-              Game Details <span style="font-size: 0.8rem; opacity: 0.6">(Markdown supported)</span>
+            <label class="field-label">
+              Game Details
+              <span class="text-dim" style="font-weight: 400; font-size: 0.8rem">
+                (Markdown supported)
+              </span>
             </label>
             <MarkdownEditor
               v-model="game.gameDetails"
@@ -424,6 +340,6 @@ onBeforeUnmount(() => {
           </div>
         </div>
       </div>
-    </div>
+    </AdminPanel>
   </div>
 </template>

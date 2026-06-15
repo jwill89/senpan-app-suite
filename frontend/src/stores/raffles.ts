@@ -202,6 +202,27 @@ export const useRafflesStore = defineStore('raffles', () => {
     }
   }
 
+  /**
+   * Seed a brand-new raffle form from an existing (e.g. closed) raffle — copies
+   * the reusable content (title, markdown bodies, limits, cost, prize image) but
+   * starts with a cleared availability window and a zero id, so saving creates a
+   * fresh open raffle rather than editing the original.
+   */
+  function copyRaffleForm(raffle: Raffle): void {
+    raffleForm.value = {
+      id: 0,
+      title: raffle.title,
+      description: raffle.description,
+      rules: raffle.rules,
+      max_entries: raffle.max_entries,
+      signup_instructions: raffle.signup_instructions,
+      cost_per_entry: raffle.cost_per_entry,
+      available_from: '',
+      available_to: '',
+      prize_image: raffle.prize_image,
+    }
+  }
+
   function cancelRaffleForm(): void {
     raffleForm.value = null
   }
@@ -457,6 +478,7 @@ export const useRafflesStore = defineStore('raffles', () => {
     loadPublicRaffleById,
     newRaffleForm,
     editRaffleForm,
+    copyRaffleForm,
     cancelRaffleForm,
     saveRaffle,
     deleteRaffle,

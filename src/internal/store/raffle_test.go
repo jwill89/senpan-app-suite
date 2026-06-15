@@ -81,3 +81,62 @@ func TestListRafflesAvailabilityWindow(t *testing.T) {
 		t.Errorf("admin ListRaffles = %d raffles; want 5", len(all))
 	}
 }
+
+// TestListRafflesAdminAggregates verifies the admin list carries the closed-table
+// aggregates: the winner entry's "Character @ World" and the gil collected from
+// paid tickets only (sum of paid num_entries × cost_per_entry).
+func TestListRafflesAdminAggregates(t *testing.T) {
+	s := newTestStore(t)
+	id, err := s.CreateRaffle(&model.Raffle{Title: "Prize", MaxEntries: 10, CostPerEntry: 100})
+	if err != nil {
+		t.Fatalf("CreateRaffle: %v", err)
+	}
+	// One paid entry (3 tickets) → counts; one unpaid (2 tickets) → excluded.
+	paidID, err := s.CreateRaffleEntry(id, "Aria", "Gilgamesh", 3)
+	if err != nil {
+		t.Fatalf("CreateRaffleEntry (paid): %v", err)
+	}
+	if _, err := s.CreateRaffleEntry(id, "Borin", "Hades", 2); err != nil {
+		t.Fatalf("CreateRaffleEntry (unpaid): %v", err)
+	}
+	if err := s.SetRaffleEntryPaid(paidID, true); err != nil {
+		t.Fatalf("SetRaffleEntryPaid: %v", err)
+	}
+	if err := s.SetRaffleWinner(id, &paidID); err != nil {
+		t.Fatalf("SetRaffleWinner: %v", err)
+	}
+	if err := s.SetRaffleStatus(id, "closed"); err != nil {
+		t.Fatalf("SetRaffleStatus: %v", err)
+	}
+
+	all, err := s.ListRaffles(true)
+	if err != nil {
+		t.Fatalf("ListRaffles(true): %v", err)
+	}
+	var got *model.Raffle
+	for i := range all {
+		if all[i].ID == id {
+			got = &all[i]
+		}
+	}
+	if got == nil {
+		t.Fatal("created raffle not found in admin list")
+	}
+	if got.WinnerName != "Aria @ Gilgamesh" {
+		t.Errorf("winner_name = %q; want %q", got.WinnerName, "Aria @ Gilgamesh")
+	}
+	if got.PaidTotal != 300 { // 3 paid tickets × 100 gil
+		t.Errorf("paid_total = %v; want 300", got.PaidTotal)
+	}
+
+	// The public list omits both aggregates.
+	pub, err := s.ListRaffles(false)
+	if err != nil {
+		t.Fatalf("ListRaffles(false): %v", err)
+	}
+	for _, r := range pub {
+		if r.WinnerName != "" || r.PaidTotal != 0 {
+			t.Errorf("public list leaked aggregates: %+v", r)
+		}
+	}
+}

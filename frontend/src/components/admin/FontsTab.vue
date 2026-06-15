@@ -14,6 +14,9 @@
  */
 import { computed, onMounted, ref, watch } from 'vue'
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
+import AdminPanel from '@/components/common/ui/AdminPanel.vue'
+import FormField from '@/components/common/ui/FormField.vue'
+import EmptyState from '@/components/common/ui/EmptyState.vue'
 import { applyUploadedFonts, fontFamilyFromFile } from '@/lib/theme'
 import { useFontsStore, fontUrl, FONT_BASE_URL } from '@/stores/fonts'
 import { useUiStore } from '@/stores/ui'
@@ -161,12 +164,11 @@ watch(
 
 <template>
   <div class="tab-body">
-    <div class="admin-panel" style="padding: 24px">
-      <div class="flex-toolbar mb-12" style="gap: 12px; align-items: center">
+    <AdminPanel>
+      <div class="flex-toolbar mb-12">
         <h3 style="margin: 0"><i class="fa-duotone fa-font"></i> Font Upload</h3>
         <button
-          class="btn-primary btn-sm"
-          style="margin-left: auto"
+          class="btn-primary btn-sm push-right"
           :disabled="fonts.uploading"
           @click="pickFiles"
         >
@@ -191,16 +193,14 @@ watch(
 
       <!-- Live preview: type any text, then pick a font (row "Preview" action). -->
       <div v-if="fonts.fonts.length" class="font-preview-panel mb-12">
-        <div class="field">
-          <label class="field-label" for="font-preview-text">Live Preview</label>
+        <FormField label="Live Preview" html-for="font-preview-text">
           <input
             id="font-preview-text"
             v-model="previewText"
-            class="field-input-full"
             placeholder="Type text to preview…"
             aria-label="Preview text"
           />
-        </div>
+        </FormField>
         <div
           class="font-preview-stage"
           :style="selectedFamily ? { fontFamily: `'${selectedFamily}', serif` } : undefined"
@@ -231,8 +231,8 @@ watch(
         label="Loading fonts…"
       />
 
-      <div v-else-if="fonts.fonts.length" style="overflow-x: auto">
-        <table class="winners-log-table">
+      <div v-else-if="fonts.fonts.length" class="data-table-wrap">
+        <table class="data-table">
           <thead>
             <tr>
               <th>
@@ -322,10 +322,11 @@ watch(
         </table>
       </div>
 
-      <p v-else-if="!fonts.loading" class="msg-block" style="padding: 24px">
-        No fonts uploaded yet. Use “Upload Fonts” to add some.
-      </p>
-    </div>
+      <EmptyState
+        v-else-if="!fonts.loading"
+        text="No fonts uploaded yet. Use “Upload Fonts” to add some."
+      />
+    </AdminPanel>
   </div>
 </template>
 
@@ -337,7 +338,7 @@ watch(
 
 /* Live-preview panel: text input + the rendered sample stage. */
 .font-preview-panel {
-  background: var(--surface2);
+  background: var(--panel-raised-bg);
   border-radius: var(--radius);
   padding: 16px 18px;
 }
@@ -345,9 +346,9 @@ watch(
   margin-top: 12px;
   padding: 16px 18px;
   min-height: 72px;
-  background: var(--surface);
+  background: var(--panel-bg);
   border-radius: var(--radius);
-  color: var(--gold);
+  color: var(--highlight);
   /* The clamped font's own metrics; sample text wraps for long input. */
   font-size: 2rem;
   line-height: 1.3;
@@ -355,13 +356,13 @@ watch(
 }
 
 /* Highlight the row whose font is currently in the live preview. A warm gold
-   tint (not the gray --surface2 used by the ghost buttons' borders) keeps the
+   tint (not the gray --panel-raised-bg used by the ghost buttons' borders) keeps the
    action buttons clearly visible; a gold bar marks the selected row. */
 .row-selected td {
-  background: color-mix(in srgb, var(--gold) 14%, transparent);
+  background: color-mix(in srgb, var(--highlight) 14%, transparent);
 }
 .row-selected td:first-child {
-  box-shadow: inset 4px 0 0 0 var(--gold);
+  box-shadow: inset 4px 0 0 0 var(--highlight);
 }
 
 /* Search box */
@@ -370,7 +371,7 @@ watch(
   align-items: center;
   gap: 8px;
   max-width: 360px;
-  color: var(--text-dim);
+  color: var(--text-muted);
 }
 .font-search input {
   flex: 1;
@@ -389,7 +390,7 @@ watch(
   align-items: center;
 }
 .th-sort:hover {
-  color: var(--gold);
+  color: var(--highlight);
 }
 .th-sort-arrow {
   font-size: 0.7em;

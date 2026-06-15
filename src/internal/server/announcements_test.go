@@ -254,3 +254,70 @@ func TestColorFromHex(t *testing.T) {
 func itoa(n int64) string {
 	return strconv.FormatInt(n, 10)
 }
+
+func TestSanitizeAnnouncementButtons(t *testing.T) {
+	in := []model.AnnouncementButton{
+		{Label: "  Sign up  ", Emoji: " 🎉 ", URL: " https://example.com/a "},
+		{Label: "", URL: "https://example.com/b"}, // dropped: no label
+		{Label: "Bad", URL: "ftp://nope"},         // dropped: non-http URL
+		{Label: "One", URL: "https://example.com/1"},
+		{Label: "Two", URL: "https://example.com/2"},
+		{Label: "Three", URL: "https://example.com/3"},
+		{Label: "Four", URL: "https://example.com/4"},
+		{Label: "Five", URL: "https://example.com/5"}, // 6th valid → capped out
+	}
+	got := sanitizeAnnouncementButtons(in)
+	if len(got) != maxAnnouncementButtons {
+		t.Fatalf("want %d buttons, got %d", maxAnnouncementButtons, len(got))
+	}
+	if got[0].Label != "Sign up" || got[0].Emoji != "🎉" || got[0].URL != "https://example.com/a" {
+		t.Errorf("first button not trimmed: %+v", got[0])
+	}
+	if sanitizeAnnouncementButtons(nil) != nil {
+		t.Error("nil input should yield nil")
+	}
+}
+
+func TestAnnouncementComponents(t *testing.T) {
+	a := model.Announcement{Buttons: []model.AnnouncementButton{
+		{Label: "Open", Emoji: "🎉", URL: "https://example.com"},
+		{Label: "Custom", Emoji: "<:wave:123>", URL: "https://example.com/2"},
+		{Label: "Skip", URL: "not-a-url"}, // dropped: invalid URL
+	}}
+	comps := announcementComponents(a)
+	if len(comps) != 1 || comps[0].Type != componentActionRow {
+		t.Fatalf("expected one action row, got %+v", comps)
+	}
+	row := comps[0].Components
+	if len(row) != 2 {
+		t.Fatalf("expected 2 valid buttons, got %d", len(row))
+	}
+	if row[0].Type != componentButton || row[0].Style != buttonStyleLink || row[0].URL != "https://example.com" {
+		t.Errorf("button 0: %+v", row[0])
+	}
+	if row[0].Emoji == nil || row[0].Emoji.Name != "🎉" {
+		t.Errorf("button 0 emoji: %+v", row[0].Emoji)
+	}
+	if row[1].Emoji == nil || row[1].Emoji.Name != "wave" || row[1].Emoji.ID != "123" {
+		t.Errorf("button 1 custom emoji: %+v", row[1].Emoji)
+	}
+	// No buttons → no components (so the payload omits the field entirely).
+	if got := announcementComponents(model.Announcement{}); got != nil {
+		t.Errorf("no buttons should yield nil components, got %+v", got)
+	}
+}
+
+func TestParseEmoji(t *testing.T) {
+	if e := parseEmoji("  "); e != nil {
+		t.Errorf("blank → nil, got %+v", e)
+	}
+	if e := parseEmoji("🎉"); e == nil || e.Name != "🎉" || e.ID != "" {
+		t.Errorf("unicode emoji: %+v", e)
+	}
+	if e := parseEmoji("<:wave:123>"); e == nil || e.Name != "wave" || e.ID != "123" || e.Animated {
+		t.Errorf("custom emoji: %+v", e)
+	}
+	if e := parseEmoji("<a:spin:456>"); e == nil || e.Name != "spin" || e.ID != "456" || !e.Animated {
+		t.Errorf("animated custom emoji: %+v", e)
+	}
+}

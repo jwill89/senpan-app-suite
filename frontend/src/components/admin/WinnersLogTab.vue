@@ -4,10 +4,22 @@
  * per-page controls. Mirrors the original `adminTab==='bingo-winners-log'` block.
  */
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
+import AdminPanel from '@/components/common/ui/AdminPanel.vue'
+import DataTable, { type DataColumn } from '@/components/common/ui/DataTable.vue'
+import PaginationBar from '@/components/common/ui/PaginationBar.vue'
+import EmptyState from '@/components/common/ui/EmptyState.vue'
 import { useGameStore } from '@/stores/game'
 import { formatServerTimestamp } from '@/lib/datetime'
 
 const game = useGameStore()
+
+const columns: DataColumn[] = [
+  { key: 'logged_at', label: 'Date', sortable: true },
+  { key: 'card_id', label: 'Card ID', sortable: true },
+  { key: 'player_name', label: 'Player', sortable: true },
+  { key: 'game_details', label: 'Details' },
+  { key: 'winning_patterns', label: 'Patterns' },
+]
 
 /** Parses the JSON winning_patterns array into a comma-joined string. */
 function patternsLabel(json: string): string {
@@ -27,9 +39,8 @@ function onPerPageChange(): void {
 
 <template>
   <div class="tab-body">
-    <div class="admin-panel" style="padding: 24px">
-      <h3 class="mb-12"><i class="fa-duotone fa-trophy"></i> Winners Log</h3>
-      <div class="flex-toolbar mb-12" style="gap: 12px; align-items: center">
+    <AdminPanel title="Winners Log" icon="fa-duotone fa-trophy">
+      <div class="flex-toolbar mb-12">
         <label class="text-dim text-xs">Per page:</label>
         <select
           v-model.number="game.winnersLogPerPage"
@@ -42,7 +53,7 @@ function onPerPageChange(): void {
           <option :value="50">50</option>
           <option :value="100">100</option>
         </select>
-        <span class="text-dim text-xs" style="margin-left: auto">
+        <span class="text-dim text-xs push-right">
           {{ game.winnersLogTotal }} total entries
         </span>
       </div>
@@ -51,77 +62,35 @@ function onPerPageChange(): void {
         block
         label="Loading winners…"
       />
-      <div v-else-if="game.winnersLog.length" style="overflow-x: auto">
-        <table class="winners-log-table">
-          <thead>
-            <tr>
-              <th style="cursor: pointer" @click="game.winnersLogSetSort('logged_at')">
-                Date
-                {{
-                  game.winnersLogSort === 'logged_at'
-                    ? game.winnersLogDir === 'asc'
-                      ? '▲'
-                      : '▼'
-                    : ''
-                }}
-              </th>
-              <th style="cursor: pointer" @click="game.winnersLogSetSort('card_id')">
-                Card ID
-                {{
-                  game.winnersLogSort === 'card_id'
-                    ? game.winnersLogDir === 'asc'
-                      ? '▲'
-                      : '▼'
-                    : ''
-                }}
-              </th>
-              <th style="cursor: pointer" @click="game.winnersLogSetSort('player_name')">
-                Player
-                {{
-                  game.winnersLogSort === 'player_name'
-                    ? game.winnersLogDir === 'asc'
-                      ? '▲'
-                      : '▼'
-                    : ''
-                }}
-              </th>
-              <th>Details</th>
-              <th>Patterns</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="entry in game.winnersLog" :key="entry.id">
-              <td>{{ formatServerTimestamp(entry.logged_at) }}</td>
-              <td class="code-gold">{{ entry.card_id }}</td>
-              <td>{{ entry.player_name || '—' }}</td>
-              <td>{{ entry.game_details || '—' }}</td>
-              <td>{{ patternsLabel(entry.winning_patterns) }}</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-      <p v-else-if="!game.winnersLogLoading" class="msg-block" style="padding: 24px">
-        No winners logged yet.
-      </p>
-      <div v-if="game.winnersLogTotalPages() > 1" class="pagination-bar mt-12">
-        <button
-          class="btn-ghost btn-sm"
-          :disabled="game.winnersLogPage <= 1"
-          @click="game.winnersLogGoPage(game.winnersLogPage - 1)"
+      <template v-else>
+        <DataTable
+          :columns="columns"
+          :rows="game.winnersLog"
+          row-key="id"
+          :sort-key="game.winnersLogSort"
+          :sort-dir="game.winnersLogDir"
+          @sort="game.winnersLogSetSort"
         >
-          ‹ Prev
-        </button>
-        <span class="text-dim text-xs">
-          Page {{ game.winnersLogPage }} / {{ game.winnersLogTotalPages() }}
-        </span>
-        <button
-          class="btn-ghost btn-sm"
-          :disabled="game.winnersLogPage >= game.winnersLogTotalPages()"
-          @click="game.winnersLogGoPage(game.winnersLogPage + 1)"
-        >
-          Next ›
-        </button>
-      </div>
-    </div>
+          <template #cell-logged_at="{ row }">{{ formatServerTimestamp(row.logged_at) }}</template>
+          <template #cell-card_id="{ row }">
+            <span class="code-gold">{{ row.card_id }}</span>
+          </template>
+          <template #cell-player_name="{ row }">{{ row.player_name || '—' }}</template>
+          <template #cell-game_details="{ row }">{{ row.game_details || '—' }}</template>
+          <template #cell-winning_patterns="{ row }">
+            {{ patternsLabel(row.winning_patterns) }}
+          </template>
+          <template #empty>
+            <EmptyState v-if="!game.winnersLogLoading" text="No winners logged yet." />
+          </template>
+        </DataTable>
+        <PaginationBar
+          class="mt-12"
+          :page="game.winnersLogPage"
+          :total-pages="game.winnersLogTotalPages()"
+          @go="game.winnersLogGoPage"
+        />
+      </template>
+    </AdminPanel>
   </div>
 </template>

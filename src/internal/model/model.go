@@ -106,6 +106,12 @@ type Raffle struct {
 	Status             string  `json:"status"`         // "open" or "closed"
 	WinnerEntryID      *int64  `json:"winner_entry_id"`
 	CreatedAt          string  `json:"created_at"`
+
+	// Read-only aggregates populated for the admin list view only (the closed-raffle
+	// table): the verified winner's "Character @ World", and the collected total
+	// (sum of paid tickets × cost_per_entry). Omitted from public responses.
+	WinnerName string  `json:"winner_name,omitempty"`
+	PaidTotal  float64 `json:"paid_total,omitempty"`
 }
 
 // RaffleEntry represents a user's entry (one or more tickets) into a raffle.
@@ -248,6 +254,19 @@ type Announcement struct {
 	LastPostedAt string `json:"last_posted_at"` // ISO timestamp of last post ("" if never)
 	CreatedAt    string `json:"created_at"`
 
+	// Optional Discord link buttons (up to 5) rendered as a single action row
+	// below the embed. Persisted as a JSON array in the announcements.buttons column.
+	Buttons []AnnouncementButton `json:"buttons"`
+
 	// Read-only convenience for list rendering (joined from announcement_types).
 	TypeName string `json:"type_name,omitempty"`
+}
+
+// AnnouncementButton is one Discord link button shown beneath an announcement's
+// embed: a label, an optional emoji (a unicode emoji like "🎉" or a custom-emoji
+// token "<:name:id>"/"<a:name:id>"), and the URL it opens.
+type AnnouncementButton struct {
+	Label string `json:"label"`
+	Emoji string `json:"emoji"`
+	URL   string `json:"url"`
 }

@@ -46,6 +46,7 @@ function emptyForm(): AnnouncementForm {
     time_local: '19:00',
     weekdays: [],
     week_of_month: 3,
+    buttons: [],
   }
 }
 
@@ -211,6 +212,7 @@ export const useAnnouncementsStore = defineStore('announcements', () => {
     f.details = a.details
     f.image = a.image
     f.color = a.color || '#e53170'
+    f.buttons = (a.buttons || []).map((b) => ({ ...b }))
     f.start_local = a.start_local
     f.end_local = a.end_local
     f.schedule_kind = (a.schedule_kind || '') as ScheduleKind
@@ -238,6 +240,10 @@ export const useAnnouncementsStore = defineStore('announcements', () => {
       details: f.details,
       image: f.image,
       color: f.color,
+      buttons: f.buttons
+        .map((b) => ({ label: b.label.trim(), emoji: (b.emoji || '').trim(), url: b.url.trim() }))
+        .filter((b) => b.label && /^https?:\/\//i.test(b.url))
+        .slice(0, 5),
       timezone: f.timezone,
       start_local: f.start_local,
       end_local: f.end_local,
@@ -375,11 +381,6 @@ export const useAnnouncementsStore = defineStore('announcements', () => {
     }
   }
 
-  /** Reuse an existing uploaded image (no duplicate upload). */
-  function pickImage(url: string): void {
-    form.value.image = url
-  }
-
   return {
     types,
     announcements,
@@ -410,6 +411,5 @@ export const useAnnouncementsStore = defineStore('announcements', () => {
     sendNow,
     skipNext,
     uploadImage,
-    pickImage,
   }
 })

@@ -20,6 +20,17 @@
 import { computed, ref } from 'vue'
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
 import MarkdownEditor from '@/components/common/MarkdownEditor.vue'
+import AdminPanel from '@/components/common/ui/AdminPanel.vue'
+import ManagerView from '@/components/common/ui/ManagerView.vue'
+import ListRow from '@/components/common/ui/ListRow.vue'
+import SubPageHeader from '@/components/common/ui/SubPageHeader.vue'
+import SearchInput from '@/components/common/ui/SearchInput.vue'
+import ImageField from '@/components/common/ui/ImageField.vue'
+import EmojiPickerModal from '@/components/common/EmojiPickerModal.vue'
+import FormField from '@/components/common/ui/FormField.vue'
+import FormRow from '@/components/common/ui/FormRow.vue'
+import FormActions from '@/components/common/ui/FormActions.vue'
+import EmptyState from '@/components/common/ui/EmptyState.vue'
 import { useAnnouncementsStore } from '@/stores/announcements'
 import { formatServerTimestamp } from '@/lib/datetime'
 import { supportedTimezones } from '@/lib/constants'
@@ -89,6 +100,23 @@ function toggleWeekday(day: number): void {
   else store.form.weekdays.splice(idx, 1)
 }
 
+// ── Discord buttons (up to 5 link buttons under the embed) ───────────────────
+const MAX_BUTTONS = 5
+function addButton(): void {
+  if (store.form.buttons.length >= MAX_BUTTONS) return
+  store.form.buttons.push({ label: '', emoji: '', url: '' })
+}
+function removeButton(i: number): void {
+  store.form.buttons.splice(i, 1)
+}
+
+/** Which button row's emoji picker is open (null = none). */
+const emojiPickerRow = ref<number | null>(null)
+function onButtonEmoji(emoji: string): void {
+  if (emojiPickerRow.value !== null) store.form.buttons[emojiPickerRow.value].emoji = emoji
+  emojiPickerRow.value = null
+}
+
 // ── Navigation ───────────────────────────────────────────────────────────────
 function openNew(): void {
   store.resetForm()
@@ -126,44 +154,37 @@ async function submitType(): Promise<void> {
 <template>
   <div class="tab-body">
     <!-- ── List ───────────────────────────────────────────────────────────── -->
-    <div v-if="screen === 'list'" class="admin-panel">
-      <div class="flex-between mb-16" style="flex-wrap: wrap; gap: 8px">
-        <h3><i class="fa-duotone fa-megaphone"></i> Announcements</h3>
-        <div class="flex-toolbar">
-          <button class="btn-ghost btn-sm" @click="openTypes()">
-            <i class="fa-duotone fa-folder-open"></i> Manage Types
-          </button>
-          <button class="btn-primary btn-sm" @click="openNew()">
-            <i class="fa-solid fa-plus"></i> New Announcement
-          </button>
-        </div>
-      </div>
+    <ManagerView v-if="screen === 'list'" title="Announcements" icon="fa-duotone fa-megaphone">
+      <template #actions>
+        <button class="btn-ghost btn-sm" @click="openTypes()">
+          <i class="fa-duotone fa-folder-open"></i> Manage Types
+        </button>
+        <button class="btn-primary btn-sm" @click="openNew()">
+          <i class="fa-solid fa-plus"></i> New Announcement
+        </button>
+      </template>
 
-      <p v-if="!hasTypes" class="msg-block">
-        Create an <strong>Announcement Type</strong> (with a Discord webhook) under
-        <button class="link-btn" @click="openTypes()">Manage Types</button> first — every
-        announcement posts through a type.
-      </p>
-
-      <div class="flex-toolbar mb-12">
-        <span class="ann-search">
-          <i class="fa-duotone fa-magnifying-glass"></i>
-          <input
-            v-model="store.search"
-            class="field-input-full"
-            placeholder="Search announcements…"
-            aria-label="Search announcements"
-          />
-        </span>
+      <template #toolbar>
+        <SearchInput
+          v-model="store.search"
+          placeholder="Search announcements…"
+          aria-label="Search announcements"
+        />
         <select
           v-model.number="store.typeFilter"
-          class="ann-cat-filter"
           aria-label="Filter by category"
+          class="manager-filter"
         >
           <option :value="0">All categories</option>
           <option v-for="t in store.types" :key="t.id" :value="t.id">{{ t.name }}</option>
         </select>
-      </div>
+      </template>
+
+      <EmptyState v-if="!hasTypes">
+        Create an <strong>Announcement Type</strong> (with a Discord webhook) under
+        <button class="link-btn" @click="openTypes()">Manage Types</button> first — every
+        announcement posts through a type.
+      </EmptyState>
 
       <LoadingSpinner
         v-if="store.loading && store.announcements.length === 0"
@@ -171,36 +192,40 @@ async function submitType(): Promise<void> {
         label="Loading announcements…"
       />
       <template v-else>
-        <div v-if="store.filteredAnnouncements.length" class="ann-list">
-          <div v-for="a in store.filteredAnnouncements" :key="a.id" class="ann-card">
-            <span class="ann-swatch" :style="{ background: a.color || '#e53170' }" aria-hidden="true"></span>
-            <img v-if="a.image" :src="a.image" class="ann-cover" alt="Announcement image" />
-            <div v-else class="ann-cover ann-img-empty"><i class="fa-duotone fa-image"></i></div>
+        <div v-if="store.filteredAnnouncements.length" class="list-rows">
+          <ListRow v-for="a in store.filteredAnnouncements" :key="a.id">
+            <template #media>
+              <span
+                class="ann-swatch"
+                :style="{ background: a.color || '#e53170' }"
+                aria-hidden="true"
+              ></span>
+              <img v-if="a.image" :src="a.image" class="ann-cover" alt="Announcement image" />
+              <div v-else class="ann-cover media-empty"><i class="fa-duotone fa-image"></i></div>
+            </template>
 
-            <div class="ann-body">
-              <h4 class="ann-title">{{ a.title }}</h4>
-              <p class="text-sm text-dim ann-meta">
-                <i class="fa-duotone fa-folder-open"></i> {{ typeName(a) }}
-              </p>
-              <p v-if="a.start_at" class="text-sm ann-meta">
-                <i class="fa-duotone fa-calendar-days"></i>
-                {{ inZone(a.start_at, a.timezone) }}
-                <span v-if="a.end_at">– {{ inZone(a.end_at, a.timezone) }}</span>
-                <span v-if="a.timezone" class="text-dim">({{ a.timezone }})</span>
-              </p>
-              <p class="text-sm ann-meta">
-                <span v-if="a.schedule_kind" class="ann-badge ann-badge-sched">
-                  {{ scheduleLabel(a) }}
-                  <template v-if="a.next_post_at">
-                    · next {{ inZone(a.next_post_at, a.timezone) }}
-                  </template>
-                </span>
-                <span v-else class="ann-badge ann-badge-manual">Manual only</span>
-                <span v-if="a.skip_next" class="ann-badge ann-badge-skip">⏭ next skipped</span>
-              </p>
-            </div>
+            <h4 class="ann-title">{{ a.title }}</h4>
+            <p class="text-sm text-dim ann-meta">
+              <i class="fa-duotone fa-folder-open"></i> {{ typeName(a) }}
+            </p>
+            <p v-if="a.start_at" class="text-sm ann-meta">
+              <i class="fa-duotone fa-calendar-days"></i>
+              {{ inZone(a.start_at, a.timezone) }}
+              <span v-if="a.end_at">– {{ inZone(a.end_at, a.timezone) }}</span>
+              <span v-if="a.timezone" class="text-dim">({{ a.timezone }})</span>
+            </p>
+            <p class="text-sm ann-meta">
+              <span v-if="a.schedule_kind" class="badge ann-badge ann-badge-sched">
+                {{ scheduleLabel(a) }}
+                <template v-if="a.next_post_at">
+                  · next {{ inZone(a.next_post_at, a.timezone) }}
+                </template>
+              </span>
+              <span v-else class="badge ann-badge ann-badge-manual">Manual only</span>
+              <span v-if="a.skip_next" class="badge ann-badge ann-badge-skip">⏭ next skipped</span>
+            </p>
 
-            <div class="ann-actions">
+            <template #actions>
               <button
                 class="btn-primary btn-sm"
                 :disabled="store.sendingId === a.id"
@@ -230,57 +255,57 @@ async function submitType(): Promise<void> {
               >
                 <i class="fa-solid fa-trash"></i>
               </button>
-            </div>
-          </div>
+            </template>
+          </ListRow>
         </div>
-        <p v-else-if="store.search || store.typeFilter" class="no-game-msg">
-          No announcements match your filters.
-        </p>
-        <p v-else class="no-game-msg">No announcements yet. Create one with “New Announcement”.</p>
+        <EmptyState
+          v-else-if="store.search || store.typeFilter"
+          text="No announcements match your filters."
+        />
+        <EmptyState v-else text="No announcements yet. Create one with “New Announcement”." />
       </template>
-    </div>
+    </ManagerView>
 
     <!-- ── Announcement form ──────────────────────────────────────────────── -->
-    <div v-else-if="screen === 'form'" class="admin-panel">
-      <div class="flex-between mb-16" style="flex-wrap: wrap; gap: 8px">
-        <h3>
-          <i class="fa-duotone fa-megaphone"></i>
-          {{ store.form.id ? 'Edit Announcement' : 'New Announcement' }}
-        </h3>
-        <button class="btn-ghost btn-sm" @click="backToList()">← Back</button>
-      </div>
+    <AdminPanel v-else-if="screen === 'form'">
+      <SubPageHeader
+        icon="fa-duotone fa-megaphone"
+        :title="store.form.id ? 'Edit Announcement' : 'New Announcement'"
+        @back="backToList()"
+      />
 
       <div class="flex-row mb-10">
-        <div class="field" style="flex: 2; min-width: 200px">
-          <label class="field-label">Title *</label>
+        <FormField label="Title" required style="flex: 2; min-width: 200px">
           <input
             v-model="store.form.title"
-            class="field-input-full"
             placeholder="e.g. Saturday Tea Social"
             aria-label="Announcement title"
           />
-        </div>
-        <div class="field" style="flex: 1; min-width: 160px">
-          <label class="field-label">Type *</label>
-          <select v-model.number="store.form.type_id" class="field-input-full" aria-label="Announcement type">
+        </FormField>
+        <FormField label="Type" required style="flex: 1; min-width: 160px">
+          <select v-model.number="store.form.type_id" aria-label="Announcement type">
             <option :value="0" disabled>Select a type…</option>
             <option v-for="t in store.types" :key="t.id" :value="t.id">{{ t.name }}</option>
           </select>
-        </div>
+        </FormField>
       </div>
 
-      <div class="flex-row mb-10" style="align-items: flex-start">
-        <div class="field" style="flex: 1 1 auto; min-width: 200px">
-          <label class="field-label">Timezone *</label>
-          <select v-model="store.form.timezone" class="field-input-full" aria-label="Timezone">
+      <div class="flex-row items-start mb-10">
+        <FormField
+          label="Timezone"
+          required
+          style="flex: 1 1 auto; min-width: 200px"
+          help="Anchors every time (event window + schedule); times stay put across DST."
+        >
+          <select v-model="store.form.timezone" aria-label="Timezone">
             <option v-for="tz in timezones" :key="tz" :value="tz">{{ tz }}</option>
           </select>
-          <small class="text-dim">
-            Anchors every time (event window + schedule); times stay put across DST.
-          </small>
-        </div>
-        <div class="field" style="flex: 0 0 auto">
-          <label class="field-label">Embed color</label>
+        </FormField>
+        <FormField
+          label="Embed color"
+          style="flex: 0 0 auto"
+          help="Accent stripe on the embed's left edge."
+        >
           <div class="ann-color-row">
             <input
               v-model="store.form.color"
@@ -298,83 +323,102 @@ async function submitType(): Promise<void> {
               Reset
             </button>
           </div>
-          <small class="text-dim">Accent stripe on the embed's left edge.</small>
-        </div>
+        </FormField>
       </div>
 
-      <div class="flex-row mb-10">
-        <div class="field" style="flex: 1; min-width: 180px">
-          <label class="field-label">Start (optional)</label>
+      <FormRow>
+        <FormField label="Start (optional)">
           <input
             v-model="store.form.start_local"
             type="datetime-local"
-            class="field-input-full"
             aria-label="Start date and time"
           />
-        </div>
-        <div class="field" style="flex: 1; min-width: 180px">
-          <label class="field-label">End (optional)</label>
+        </FormField>
+        <FormField label="End (optional)">
           <input
             v-model="store.form.end_local"
             type="datetime-local"
-            class="field-input-full"
             aria-label="End date and time"
           />
-        </div>
-      </div>
+        </FormField>
+      </FormRow>
 
-      <div class="field mb-12">
-        <label class="field-label">Details *</label>
+      <FormField label="Details" required>
         <MarkdownEditor
           v-model="store.form.details"
           min-height="120px"
           placeholder="The announcement body (supports markdown — bold, italics, lists, links…)"
         />
-      </div>
+      </FormField>
 
       <!-- Image: upload or reuse an existing one -->
-      <div class="field mb-12">
-        <label class="field-label">Image (optional)</label>
-        <div class="flex-row" style="align-items: flex-start">
-          <div style="flex: 0 0 150px">
-            <img
-              v-if="store.form.image"
-              :src="store.form.image"
-              class="ann-img-preview"
-              alt="Announcement image preview"
-            />
-            <div v-else class="ann-img-preview ann-img-empty"><i class="fa-duotone fa-image"></i></div>
-            <input
-              type="file"
-              accept="image/*"
-              aria-label="Upload announcement image"
-              :disabled="store.uploading"
-              @change="store.uploadImage($event)"
-            />
-            <span v-if="store.uploading" class="text-dim text-sm">Uploading…</span>
-            <button v-if="store.form.image" class="btn-ghost btn-sm mt-8" @click="store.form.image = ''">
-              Remove
-            </button>
-          </div>
-          <div style="flex: 1; min-width: 160px">
-            <label class="field-label">Or reuse an uploaded image</label>
-            <div v-if="store.images.length" class="ann-img-picker">
-              <button
-                v-for="img in store.images"
-                :key="img"
-                type="button"
-                class="ann-img-thumb"
-                :class="{ active: store.form.image === img }"
-                aria-label="Use this image"
-                @click="store.pickImage(img)"
-              >
-                <img :src="img" alt="" />
-              </button>
-            </div>
-            <p v-else class="text-dim text-sm">No images uploaded yet.</p>
-          </div>
+      <FormField label="Image (optional)">
+        <ImageField
+          v-model="store.form.image"
+          :images="store.images"
+          :uploading="store.uploading"
+          upload-label="Upload announcement image"
+          @upload="store.uploadImage($event)"
+        />
+      </FormField>
+
+      <!-- Discord buttons: optional link buttons rendered beneath the embed -->
+      <hr class="ann-divider" />
+      <h4 class="raffle-section-heading"><i class="fa-brands fa-discord"></i> Buttons</h4>
+      <p class="text-dim text-sm mb-8">
+        Up to {{ MAX_BUTTONS }} link buttons shown under the embed. Each needs a label and URL;
+        the emoji is optional — click the emoji box to pick one.
+      </p>
+      <div v-if="store.form.buttons.length" class="ann-buttons">
+        <div v-for="(btn, i) in store.form.buttons" :key="i" class="ann-button-row">
+          <button
+            type="button"
+            class="ann-button-emoji"
+            :title="btn.emoji ? 'Change emoji' : 'Pick an emoji'"
+            aria-label="Button emoji"
+            @click="emojiPickerRow = i"
+          >
+            <span v-if="btn.emoji">{{ btn.emoji }}</span>
+            <i v-else class="fa-duotone fa-face-smile" aria-hidden="true"></i>
+          </button>
+          <input
+            v-model="btn.label"
+            class="ann-button-label"
+            placeholder="Button label"
+            aria-label="Button label"
+          />
+          <input
+            v-model="btn.url"
+            class="ann-button-url"
+            placeholder="https://…"
+            aria-label="Button URL"
+          />
+          <button
+            type="button"
+            class="btn-danger btn-sm"
+            aria-label="Remove button"
+            title="Remove button"
+            @click="removeButton(i)"
+          >
+            <i class="fa-solid fa-trash"></i>
+          </button>
         </div>
       </div>
+      <button
+        type="button"
+        class="btn-ghost btn-sm"
+        :disabled="store.form.buttons.length >= MAX_BUTTONS"
+        @click="addButton()"
+      >
+        <i class="fa-solid fa-plus"></i> Add button
+      </button>
+
+      <EmojiPickerModal
+        v-if="emojiPickerRow !== null"
+        allow-clear
+        @select="onButtonEmoji"
+        @close="emojiPickerRow = null"
+      />
 
       <!-- Scheduling: when (if ever) this announcement auto-posts to Discord -->
       <hr class="ann-divider" />
@@ -383,30 +427,26 @@ async function submitType(): Promise<void> {
       </h4>
 
       <!-- Schedule builder -->
-      <div class="field mb-10">
-        <label class="field-label">Schedule</label>
-        <select v-model="store.form.schedule_kind" class="field-input-full" aria-label="Schedule kind">
+      <FormField label="Schedule">
+        <select v-model="store.form.schedule_kind" aria-label="Schedule kind">
           <option value="">Not scheduled (send manually)</option>
           <option value="once">One-time</option>
           <option value="daily">Daily</option>
           <option value="weekly">Weekly</option>
           <option value="monthly">Monthly</option>
         </select>
-      </div>
+      </FormField>
 
-      <div v-if="store.form.schedule_kind === 'once'" class="field mb-12">
-        <label class="field-label">Post at *</label>
+      <FormField v-if="store.form.schedule_kind === 'once'" label="Post at" required>
         <input
           v-model="store.form.once_local"
           type="datetime-local"
-          class="field-input-full"
           aria-label="One-time post date and time"
         />
-      </div>
+      </FormField>
 
       <template v-else-if="isRecurring">
-        <div v-if="store.form.schedule_kind === 'weekly'" class="field mb-10">
-          <label class="field-label">On these days *</label>
+        <FormField v-if="store.form.schedule_kind === 'weekly'" label="On these days" required>
           <div class="ann-weekdays">
             <button
               v-for="(label, day) in WEEKDAYS"
@@ -419,114 +459,103 @@ async function submitType(): Promise<void> {
               {{ label }}
             </button>
           </div>
-        </div>
+        </FormField>
 
         <div v-if="store.form.schedule_kind === 'monthly'" class="flex-row mb-10">
-          <div class="field" style="flex: 0 0 120px">
-            <label class="field-label">Week *</label>
-            <select v-model.number="store.form.week_of_month" class="field-input-full" aria-label="Week of month">
+          <FormField label="Week" required style="flex: 0 0 120px">
+            <select v-model.number="store.form.week_of_month" aria-label="Week of month">
               <option v-for="w in WEEK_OF_MONTH" :key="w.value" :value="w.value">{{ w.label }}</option>
             </select>
-          </div>
-          <div class="field" style="flex: 0 0 140px">
-            <label class="field-label">Weekday *</label>
+          </FormField>
+          <FormField label="Weekday" required style="flex: 0 0 140px">
             <select
               :value="store.form.weekdays[0] ?? ''"
-              class="field-input-full"
               aria-label="Weekday"
               @change="store.form.weekdays = [Number(($event.target as HTMLSelectElement).value)]"
             >
               <option value="" disabled>Pick…</option>
               <option v-for="(label, day) in WEEKDAYS" :key="day" :value="day">{{ label }}</option>
             </select>
-          </div>
+          </FormField>
         </div>
 
-        <div class="field mb-12">
-          <label class="field-label">Time *</label>
+        <FormField label="Time" required help="In the timezone selected above.">
           <input
             v-model="store.form.time_local"
             type="time"
-            class="field-input-full"
             style="max-width: 160px"
             aria-label="Recurring post time"
           />
-          <small class="text-dim">In the timezone selected above.</small>
-        </div>
+        </FormField>
       </template>
 
-      <div class="btns flex-toolbar">
+      <FormActions align="start">
         <button class="btn-ghost" @click="backToList()">Cancel</button>
         <button class="btn-primary" :disabled="store.saving || !store.form.title.trim()" @click="submit()">
           <LoadingSpinner v-if="store.saving" label="Saving…" />
           <template v-else>{{ store.form.id ? 'Save Changes' : 'Create Announcement' }}</template>
         </button>
-      </div>
-    </div>
+      </FormActions>
+    </AdminPanel>
 
     <!-- ── Types list ─────────────────────────────────────────────────────── -->
-    <div v-else-if="screen === 'types'" class="admin-panel">
-      <div class="flex-between mb-16" style="flex-wrap: wrap; gap: 8px">
-        <h3><i class="fa-duotone fa-folder-open"></i> Announcement Types</h3>
-        <div class="flex-toolbar">
-          <button class="btn-ghost btn-sm" @click="screen = 'list'">← Back</button>
-          <button class="btn-primary btn-sm" @click="openNewType()">
-            <i class="fa-solid fa-plus"></i> New Type
-          </button>
-        </div>
+    <AdminPanel v-else-if="screen === 'types'">
+      <SubPageHeader
+        title="Announcement Types"
+        icon="fa-duotone fa-folder-open"
+        @back="screen = 'list'"
+      />
+      <div class="flex-toolbar flex-end mb-16">
+        <button class="btn-primary btn-sm" @click="openNewType()">
+          <i class="fa-solid fa-plus"></i> New Type
+        </button>
       </div>
 
-      <div v-if="store.types.length" class="ann-list">
-        <div v-for="t in store.types" :key="t.id" class="ann-type-card">
-          <div class="ann-body">
-            <h4 class="ann-title">{{ t.name }}</h4>
-            <p class="text-sm text-dim">
-              <i class="fa-brands fa-discord"></i> {{ maskWebhook(t.webhook_url) }}
-            </p>
-          </div>
-          <div class="ann-actions">
+      <div v-if="store.types.length" class="list-rows">
+        <ListRow v-for="t in store.types" :key="t.id">
+          <h4 class="ann-title">{{ t.name }}</h4>
+          <p class="text-sm text-dim">
+            <i class="fa-brands fa-discord"></i> {{ maskWebhook(t.webhook_url) }}
+          </p>
+          <template #actions>
             <button class="btn-secondary btn-sm" aria-label="Edit type" @click="openEditType(t)">
               <i class="fa-solid fa-pen-to-square"></i>
             </button>
             <button class="btn-danger btn-sm" aria-label="Delete type" @click="store.deleteType(t)">
               <i class="fa-solid fa-trash"></i>
             </button>
-          </div>
-        </div>
+          </template>
+        </ListRow>
       </div>
-      <p v-else class="no-game-msg">No types yet. Add one with “New Type”.</p>
-    </div>
+      <EmptyState v-else text="No types yet. Add one with “New Type”." />
+    </AdminPanel>
 
     <!-- ── Type form ──────────────────────────────────────────────────────── -->
-    <div v-else class="admin-panel">
-      <div class="flex-between mb-16" style="flex-wrap: wrap; gap: 8px">
-        <h3>
-          <i class="fa-duotone fa-folder-open"></i>
-          {{ store.typeForm.id ? 'Edit Type' : 'New Type' }}
-        </h3>
-        <button class="btn-ghost btn-sm" @click="screen = 'types'">← Back</button>
-      </div>
+    <AdminPanel v-else>
+      <SubPageHeader
+        icon="fa-duotone fa-folder-open"
+        :title="store.typeForm.id ? 'Edit Type' : 'New Type'"
+        @back="screen = 'types'"
+      />
 
-      <div class="field mb-10">
-        <label class="field-label">Name *</label>
+      <FormField label="Name" required>
         <input
           v-model="store.typeForm.name"
-          class="field-input-full"
           placeholder="e.g. Events Channel"
           aria-label="Type name"
         />
-      </div>
-      <div class="field mb-12">
-        <label class="field-label">Discord webhook URL</label>
+      </FormField>
+      <FormField
+        label="Discord webhook URL"
+        help="Announcements of this type post to this channel webhook."
+      >
         <input
           v-model="store.typeForm.webhook_url"
-          class="field-input-full"
           placeholder="https://discord.com/api/webhooks/…"
           aria-label="Discord webhook URL"
         />
-        <small class="text-dim">Announcements of this type post to this channel webhook.</small>
-      </div>
-      <div class="btns flex-toolbar">
+      </FormField>
+      <FormActions align="start">
         <button class="btn-ghost" @click="screen = 'types'">Cancel</button>
         <button
           class="btn-primary"
@@ -536,8 +565,8 @@ async function submitType(): Promise<void> {
           <LoadingSpinner v-if="store.savingType" label="Saving…" />
           <template v-else>{{ store.typeForm.id ? 'Save Changes' : 'Add Type' }}</template>
         </button>
-      </div>
-    </div>
+      </FormActions>
+    </AdminPanel>
   </div>
 </template>
 
@@ -545,38 +574,11 @@ async function submitType(): Promise<void> {
 .link-btn {
   background: none;
   border: none;
-  color: var(--primary);
+  color: var(--accent);
   cursor: pointer;
   text-decoration: underline;
   padding: 0;
   font: inherit;
-}
-.ann-search {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex: 1;
-}
-.ann-search i {
-  color: var(--text-dim);
-}
-.ann-cat-filter {
-  flex: 0 0 auto;
-  max-width: 220px;
-}
-.ann-list {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-.ann-card,
-.ann-type-card {
-  display: flex;
-  gap: 12px;
-  background: var(--surface2);
-  border-radius: var(--radius);
-  padding: 12px;
-  align-items: flex-start;
 }
 .ann-swatch {
   width: 6px;
@@ -591,73 +593,51 @@ async function submitType(): Promise<void> {
   border-radius: 6px;
   flex: 0 0 auto;
 }
-.ann-img-empty {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--surface);
-  color: var(--text-dim, #999);
-}
-.ann-body {
-  flex: 1;
-  min-width: 0;
-}
-.ann-body p {
-  margin: 0 0 4px;
-}
 .ann-title {
   margin: 0 0 4px;
 }
 .ann-meta {
   margin: 0 0 4px;
 }
-.ann-actions {
-  display: flex;
-  flex-flow: row wrap;
-  align-items: flex-start;
-  justify-content: flex-end;
-  align-self: flex-start;
-  gap: 6px;
-}
-.ann-img-preview {
-  width: 150px;
-  height: 85px;
-  object-fit: cover;
-  border-radius: 6px;
-  display: block;
-  margin-bottom: 8px;
-}
-.ann-img-picker {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  max-height: 180px;
-  overflow-y: auto;
-}
-.ann-img-thumb {
-  width: 72px;
-  height: 48px;
-  padding: 0;
-  border: 2px solid var(--surface2);
-  border-radius: 6px;
-  overflow: hidden;
-  cursor: pointer;
-  background: var(--surface);
-}
-.ann-img-thumb img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  display: block;
-}
-.ann-img-thumb:hover,
-.ann-img-thumb.active {
-  border-color: var(--primary);
-}
 .ann-divider {
   border: none;
-  border-top: 1px solid var(--surface2);
+  border-top: 1px solid var(--panel-raised-bg);
   margin: 20px 0 12px;
+}
+.ann-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.ann-button-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.ann-button-emoji {
+  flex: 0 0 56px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  font-size: 1.2rem;
+  background: var(--input-bg);
+  color: var(--text);
+  border: 2px solid var(--control-border);
+  border-radius: var(--radius);
+  cursor: pointer;
+}
+.ann-button-emoji:hover {
+  border-color: var(--accent);
+}
+.ann-button-label {
+  flex: 1 1 160px;
+  min-width: 120px;
+}
+.ann-button-url {
+  flex: 2 1 220px;
+  min-width: 160px;
 }
 .ann-color-row {
   display: flex;
@@ -668,15 +648,15 @@ async function submitType(): Promise<void> {
   width: 48px;
   height: 36px;
   padding: 2px;
-  border: 1px solid var(--surface2);
+  border: 1px solid var(--panel-raised-bg);
   border-radius: 6px;
-  background: var(--surface);
+  background: var(--panel-bg);
   cursor: pointer;
 }
 .ann-color-hex {
   font-family: monospace;
   text-transform: uppercase;
-  color: var(--text-dim);
+  color: var(--text-muted);
 }
 .ann-weekdays {
   display: flex;
@@ -684,28 +664,25 @@ async function submitType(): Promise<void> {
   gap: 6px;
 }
 .ann-weekday {
-  background: var(--surface);
+  background: var(--panel-bg);
   color: var(--text);
-  border: 1px solid var(--surface2);
+  border: 1px solid var(--panel-raised-bg);
   border-radius: var(--radius);
   padding: 6px 12px;
   font-weight: 600;
   cursor: pointer;
 }
 .ann-weekday:hover {
-  border-color: var(--primary);
+  border-color: var(--accent);
 }
 .ann-weekday.active {
-  background: var(--primary);
-  color: var(--text-on-primary);
-  border-color: var(--primary);
+  background: var(--accent);
+  color: var(--text-on-accent);
+  border-color: var(--accent);
 }
+/* Pill chrome comes from the global `.badge` object; only spacing + the
+   per-state colours below are component-specific. */
 .ann-badge {
-  display: inline-block;
-  padding: 2px 8px;
-  border-radius: 999px;
-  font-size: 0.78rem;
-  font-weight: 600;
   margin-right: 6px;
 }
 .ann-badge-sched {
@@ -713,12 +690,12 @@ async function submitType(): Promise<void> {
   color: var(--text);
 }
 .ann-badge-manual {
-  background: var(--surface);
-  color: var(--text-dim);
-  border: 1px solid var(--surface2);
+  background: var(--panel-bg);
+  color: var(--text-muted);
+  border: 1px solid var(--panel-raised-bg);
 }
 .ann-badge-skip {
-  background: rgba(255, 193, 7, 0.22);
+  background: color-mix(in srgb, var(--warning) 22%, transparent);
   color: var(--text);
 }
 </style>

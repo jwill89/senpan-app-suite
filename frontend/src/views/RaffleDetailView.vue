@@ -142,7 +142,7 @@ function back(): void {
         v-if="!raffles.selectedRaffleEnterable && !raffles.raffleSignupResult"
         class="raffle-closed-msg"
       >
-        <p class="msg-block" style="font-size: 1.1rem">
+        <p class="text-dim" style="text-align: center; padding: 20px; font-size: 1.1rem">
           <i class="fa-duotone fa-lock"></i> This raffle is closed.
         </p>
       </div>

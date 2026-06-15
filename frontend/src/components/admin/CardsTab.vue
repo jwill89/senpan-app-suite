@@ -5,6 +5,8 @@
  * Mirrors the original `adminTab==='bingo-cards'` block.
  */
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
+import AdminPanel from '@/components/common/ui/AdminPanel.vue'
+import EmptyState from '@/components/common/ui/EmptyState.vue'
 import { useCardsStore } from '@/stores/cards'
 
 const cards = useCardsStore()
@@ -12,8 +14,7 @@ const cards = useCardsStore()
 
 <template>
   <div class="tab-body">
-    <div class="admin-panel">
-      <h3 class="mb-12"><i class="fa-duotone fa-id-card"></i> Manage Cards</h3>
+    <AdminPanel title="Manage Cards" icon="fa-duotone fa-id-card">
       <div class="cards-toolbar">
         <span class="text-dim">Generate</span>
         <input
@@ -35,7 +36,7 @@ const cards = useCardsStore()
         >
           Delete All
         </button>
-        <span class="text-dim" style="margin-left: auto">
+        <span class="text-dim push-right">
           {{ cards.filteredCards.length }}/{{ cards.cards.length }} cards
         </span>
       </div>
@@ -68,13 +69,10 @@ const cards = useCardsStore()
         </div>
       </div>
 
-      <p
+      <EmptyState
         v-if="!cards.cardsLoading && cards.cards.length === 0"
-        class="msg-block"
-        style="padding: 24px"
-      >
-        No cards generated yet.
-      </p>
-    </div>
+        text="No cards generated yet."
+      />
+    </AdminPanel>
   </div>
 </template>

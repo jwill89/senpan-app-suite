@@ -2,6 +2,7 @@ package store
 
 import (
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"time"
 
@@ -93,17 +94,18 @@ func (s *Store) CountAnnouncementsByType(typeID int64) (int, error) {
 const announcementColumns = `a.id, a.type_id, a.title, a.details, a.image, a.color, a.start_local, a.end_local,
 	a.start_at, a.end_at, a.schedule_kind, a.timezone, a.once_local, a.schedule_minutes,
 	a.schedule_weekdays, a.schedule_week_of_month,
-	a.next_post_at, a.skip_next, a.active, a.last_posted_at, a.created_at, COALESCE(t.name, '')`
+	a.next_post_at, a.skip_next, a.active, a.last_posted_at, a.created_at, a.buttons, COALESCE(t.name, '')`
 
 // scanAnnouncement scans one row (in announcementColumns order) into a model.
 func scanAnnouncement(sc interface{ Scan(...any) error }) (model.Announcement, error) {
 	var a model.Announcement
 	var skip, active int
 	var lastPosted sql.NullString
+	var buttons sql.NullString
 	err := sc.Scan(&a.ID, &a.TypeID, &a.Title, &a.Details, &a.Image, &a.Color, &a.StartLocal, &a.EndLocal,
 		&a.StartAt, &a.EndAt, &a.ScheduleKind, &a.Timezone, &a.OnceLocal, &a.ScheduleMinutes,
 		&a.ScheduleWeekdays, &a.ScheduleWeekOfMonth,
-		&a.NextPostAt, &skip, &active, &lastPosted, &a.CreatedAt, &a.TypeName)
+		&a.NextPostAt, &skip, &active, &lastPosted, &a.CreatedAt, &buttons, &a.TypeName)
 	if err != nil {
 		return a, err
 	}
@@ -112,7 +114,34 @@ func scanAnnouncement(sc interface{ Scan(...any) error }) (model.Announcement, e
 	if lastPosted.Valid {
 		a.LastPostedAt = lastPosted.String
 	}
+	a.Buttons = decodeAnnouncementButtons(buttons.String)
 	return a, nil
+}
+
+// encodeAnnouncementButtons marshals the buttons slice to a JSON array string for
+// storage (always a valid array, "[]" when empty).
+func encodeAnnouncementButtons(buttons []model.AnnouncementButton) string {
+	if len(buttons) == 0 {
+		return "[]"
+	}
+	b, err := json.Marshal(buttons)
+	if err != nil {
+		return "[]"
+	}
+	return string(b)
+}
+
+// decodeAnnouncementButtons parses the stored JSON array back into a slice,
+// tolerating empty/legacy NULL values.
+func decodeAnnouncementButtons(raw string) []model.AnnouncementButton {
+	if raw == "" || raw == "[]" {
+		return nil
+	}
+	var out []model.AnnouncementButton
+	if err := json.Unmarshal([]byte(raw), &out); err != nil {
+		return nil
+	}
+	return out
 }
 
 // ListAnnouncements returns all announcements (with their type name), newest first.
@@ -161,11 +190,11 @@ func (s *Store) CreateAnnouncement(a *model.Announcement) (int64, error) {
 		`INSERT INTO announcements
 			(type_id, title, details, image, color, start_local, end_local, start_at, end_at,
 			 schedule_kind, timezone, once_local, schedule_minutes, schedule_weekdays, schedule_week_of_month,
-			 next_post_at, active)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			 next_post_at, active, buttons)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		a.TypeID, a.Title, a.Details, a.Image, a.Color, a.StartLocal, a.EndLocal, a.StartAt, a.EndAt,
 		a.ScheduleKind, a.Timezone, a.OnceLocal, a.ScheduleMinutes, a.ScheduleWeekdays, a.ScheduleWeekOfMonth,
-		a.NextPostAt, boolToInt(a.Active),
+		a.NextPostAt, boolToInt(a.Active), encodeAnnouncementButtons(a.Buttons),
 	)
 	if err != nil {
 		return 0, err
@@ -180,11 +209,12 @@ func (s *Store) UpdateAnnouncement(a *model.Announcement) error {
 		`UPDATE announcements SET type_id = ?, title = ?, details = ?, image = ?, color = ?,
 			start_local = ?, end_local = ?, start_at = ?, end_at = ?, schedule_kind = ?,
 			timezone = ?, once_local = ?, schedule_minutes = ?, schedule_weekdays = ?,
-			schedule_week_of_month = ?, next_post_at = ?, skip_next = ?, active = ?
+			schedule_week_of_month = ?, next_post_at = ?, skip_next = ?, active = ?, buttons = ?
 		 WHERE id = ?`,
 		a.TypeID, a.Title, a.Details, a.Image, a.Color, a.StartLocal, a.EndLocal, a.StartAt, a.EndAt,
 		a.ScheduleKind, a.Timezone, a.OnceLocal, a.ScheduleMinutes, a.ScheduleWeekdays,
-		a.ScheduleWeekOfMonth, a.NextPostAt, boolToInt(a.SkipNext), boolToInt(a.Active), a.ID,
+		a.ScheduleWeekOfMonth, a.NextPostAt, boolToInt(a.SkipNext), boolToInt(a.Active),
+		encodeAnnouncementButtons(a.Buttons), a.ID,
 	)
 	return err
 }

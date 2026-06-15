@@ -14,13 +14,11 @@
  *   /admin/bingo/game         → Admin: Current/New Game
  *   /admin/bingo/cards        → Admin: Manage Cards
  *   /admin/bingo/winners-log  → Admin: Winners Log
- *   /admin/bingo/categories   → Admin: Pattern Categories
- *   /admin/bingo/new-pattern  → Admin: New Pattern
- *   /admin/bingo/patterns     → Admin: Edit Patterns
+ *   /admin/bingo/patterns     → Admin: Patterns (list + New Pattern / Manage Categories sub-pages)
  *   /admin/bingo/presets      → Admin: Game Presets
- *   /admin/raffles/new        → Admin: New/Edit Raffle
- *   /admin/raffles/open       → Admin: Open Raffles
- *   /admin/raffles/closed     → Admin: Closed Raffles
+ *   /admin/teahouse/announcements    → Admin: Announcements
+ *   /admin/teahouse/raffles          → Admin: Raffles (current cards + closed table; detail/form sub-pages)
+ *   /admin/teahouse/bookclub/:slug   → Admin: a book club (Yaoi, Yuri, …)
  *   /admin/atelier/fonts      → Admin: Font Upload
  *   /admin/atelier/carrd      → Admin: Carrd Upload
  *   /admin/system/settings    → Admin: App Settings
@@ -68,21 +66,9 @@ const adminChildren: RouteRecordRaw[] = [
     meta: { tab: 'bingo-winners-log' },
   },
   {
-    path: 'bingo/categories',
-    name: 'admin-bingo-categories',
-    component: () => import('@/components/admin/CategoriesTab.vue'),
-    meta: { tab: 'bingo-categories' },
-  },
-  {
-    path: 'bingo/new-pattern',
-    name: 'admin-bingo-new-pattern',
-    component: () => import('@/components/admin/NewPatternTab.vue'),
-    meta: { tab: 'bingo-new-pattern' },
-  },
-  {
     path: 'bingo/patterns',
     name: 'admin-bingo-patterns',
-    component: () => import('@/components/admin/EditPatternsTab.vue'),
+    component: () => import('@/components/admin/PatternsTab.vue'),
     meta: { tab: 'bingo-patterns' },
   },
   {
@@ -91,24 +77,6 @@ const adminChildren: RouteRecordRaw[] = [
     component: () => import('@/components/admin/PresetsTab.vue'),
     meta: { tab: 'bingo-presets' },
   },
-  {
-    path: 'raffles/new',
-    name: 'admin-raffle-new',
-    component: () => import('@/components/admin/RaffleFormTab.vue'),
-    meta: { tab: 'raffle-new' },
-  },
-  {
-    path: 'raffles/open',
-    name: 'admin-raffle-open',
-    component: () => import('@/components/admin/OpenRafflesTab.vue'),
-    meta: { tab: 'raffle-open' },
-  },
-  {
-    path: 'raffles/closed',
-    name: 'admin-raffle-closed',
-    component: () => import('@/components/admin/ClosedRafflesTab.vue'),
-    meta: { tab: 'raffle-closed' },
-  },
   // Senpan Tea House → Announcement Management (first item in the section).
   {
     path: 'teahouse/announcements',
@@ -116,12 +84,20 @@ const adminChildren: RouteRecordRaw[] = [
     component: () => import('@/components/admin/AnnouncementsTab.vue'),
     meta: { tab: 'teahouse-announcements' },
   },
+  // Senpan Tea House → Raffles. One manager (current cards + closed table) with
+  // detail/form Back sub-pages, replacing the former New/Open/Closed raffle tabs.
+  {
+    path: 'teahouse/raffles',
+    name: 'admin-teahouse-raffles',
+    component: () => import('@/components/admin/RafflesTab.vue'),
+    meta: { tab: 'teahouse-raffles' },
+  },
   // One route per registered book club, all served by the generic BookClubTab
   // (the active club drives its labels). Add a club in constants.ts to get its
   // route, sidebar button, and settings webhook field automatically.
   ...BOOK_CLUBS.map(
     (club): RouteRecordRaw => ({
-      path: `bookclub/${club.slug}`,
+      path: `teahouse/bookclub/${club.slug}`,
       name: `admin-bookclub-${club.slug}`,
       component: () => import('@/components/admin/BookClubTab.vue'),
       meta: { tab: `bookclub-${club.slug}` as AdminTab },

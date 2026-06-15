@@ -511,11 +511,6 @@ export const useBookclubStore = defineStore('bookclub', () => {
     }
   }
 
-  /** Reuse an existing uploaded image (no duplicate upload). */
-  function pickEventImage(url: string): void {
-    eventForm.value.image = url
-  }
-
   return {
     activeClubSlug,
     clubName,
@@ -569,6 +564,5 @@ export const useBookclubStore = defineStore('bookclub', () => {
     deleteEvent,
     postEventNow,
     uploadEventImage,
-    pickEventImage,
   }
 })

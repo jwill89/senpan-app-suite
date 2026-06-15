@@ -241,7 +241,7 @@ func (s *Server) handleAnnouncementsAction(w http.ResponseWriter, r *http.Reques
 			writeError(w, http.StatusBadRequest, "This announcement's type has no Discord webhook configured.")
 			return
 		}
-		if err := postDiscordEmbed(typ.WebhookURL, buildAnnouncementEmbed(*a)); err != nil {
+		if err := postDiscordWebhook(typ.WebhookURL, buildAnnouncementMessage(*a)); err != nil {
 			writeError(w, http.StatusBadGateway, "Failed to post to Discord: "+err.Error())
 			return
 		}
@@ -315,6 +315,7 @@ func (s *Server) validateAndResolveAnnouncement(w http.ResponseWriter, a *model.
 	a.StartLocal = strings.TrimSpace(a.StartLocal)
 	a.EndLocal = strings.TrimSpace(a.EndLocal)
 	a.OnceLocal = strings.TrimSpace(a.OnceLocal)
+	a.Buttons = sanitizeAnnouncementButtons(a.Buttons)
 
 	a.ScheduleKind = strings.TrimSpace(a.ScheduleKind)
 	if !validScheduleKinds[a.ScheduleKind] {
@@ -395,6 +396,61 @@ func resolveLocalInstant(value string, loc *time.Location) (string, error) {
 }
 
 // ── Embed ───────────────────────────────────────────────────────────────────
+
+// maxAnnouncementButtons caps how many link buttons an announcement can carry
+// (Discord allows five buttons in a single action row).
+const maxAnnouncementButtons = 5
+
+// sanitizeAnnouncementButtons trims each button's fields and keeps only valid ones
+// (a non-empty label and an http(s) URL), capping the result at five. Returns nil
+// when nothing valid remains so the stored value is an empty array.
+func sanitizeAnnouncementButtons(buttons []model.AnnouncementButton) []model.AnnouncementButton {
+	if len(buttons) == 0 {
+		return nil
+	}
+	out := make([]model.AnnouncementButton, 0, len(buttons))
+	for _, b := range buttons {
+		label := strings.TrimSpace(b.Label)
+		url := strings.TrimSpace(b.URL)
+		if label == "" || !isHTTPURL(url) {
+			continue
+		}
+		out = append(out, model.AnnouncementButton{
+			Label: label,
+			Emoji: strings.TrimSpace(b.Emoji),
+			URL:   url,
+		})
+		if len(out) >= maxAnnouncementButtons {
+			break
+		}
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
+}
+
+// buildAnnouncementMessage assembles the full Discord webhook payload for an
+// announcement: its embed plus an optional action row of link buttons.
+func buildAnnouncementMessage(a model.Announcement) discordWebhookPayload {
+	return discordWebhookPayload{
+		Embeds:     []discordEmbed{buildAnnouncementEmbed(a)},
+		Components: announcementComponents(a),
+	}
+}
+
+// announcementComponents builds the announcement's link-button action row (up to
+// five), or nil when it has no valid buttons.
+func announcementComponents(a model.Announcement) []discordComponent {
+	if len(a.Buttons) == 0 {
+		return nil
+	}
+	triples := make([]struct{ Label, Emoji, URL string }, 0, len(a.Buttons))
+	for _, b := range a.Buttons {
+		triples = append(triples, struct{ Label, Emoji, URL string }{b.Label, b.Emoji, b.URL})
+	}
+	return linkButtonRow(triples)
+}
 
 // buildAnnouncementEmbed renders an announcement as a Discord embed. When times
 // are set they render first, as a single inline field using Discord <t:…> tokens
@@ -631,7 +687,7 @@ func (s *Server) postDueAnnouncements() {
 		if typ == nil || strings.TrimSpace(typ.WebhookURL) == "" {
 			continue // no webhook yet; try again next tick
 		}
-		if err := postDiscordEmbed(typ.WebhookURL, buildAnnouncementEmbed(a)); err != nil {
+		if err := postDiscordWebhook(typ.WebhookURL, buildAnnouncementMessage(a)); err != nil {
 			slog.Error("announcement scheduler: post", "id", a.ID, "error", err)
 			continue // leave pending; retry next tick
 		}

@@ -1186,6 +1186,48 @@ func TestWinnersLogPagination(t *testing.T) {
 	}
 }
 
+func TestWinnersLogDelete(t *testing.T) {
+	s := newTestStore(t)
+
+	entries := []model.WinnersLogEntry{
+		{CardID: "AAA111", PlayerName: "Alice", WinningPatterns: "[]"},
+		{CardID: "BBB222", PlayerName: "Bob", WinningPatterns: "[]"},
+		{CardID: "CCC333", PlayerName: "Cara", WinningPatterns: "[]"},
+	}
+	if err := s.InsertWinnersLog(entries); err != nil {
+		t.Fatal(err)
+	}
+
+	// Delete one by id (read an id back from the list).
+	rows, _, err := s.ListWinnersLog(10, 0, "logged_at", "DESC")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if deleted, err := s.DeleteWinnerLogEntry(rows[0].ID); err != nil || !deleted {
+		t.Fatalf("DeleteWinnerLogEntry = %v, err=%v; want true", deleted, err)
+	}
+	if _, total, _ := s.ListWinnersLog(10, 0, "logged_at", "DESC"); total != 2 {
+		t.Errorf("total after single delete = %d; want 2", total)
+	}
+
+	// Deleting a non-existent id reports false, no error.
+	if deleted, err := s.DeleteWinnerLogEntry(999999); err != nil || deleted {
+		t.Errorf("DeleteWinnerLogEntry(missing) = %v, err=%v; want false, nil", deleted, err)
+	}
+
+	// Delete-all clears the log and reports how many rows went.
+	n, err := s.DeleteAllWinnersLog()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n != 2 {
+		t.Errorf("DeleteAllWinnersLog count = %d; want 2", n)
+	}
+	if _, total, _ := s.ListWinnersLog(10, 0, "logged_at", "DESC"); total != 0 {
+		t.Errorf("total after delete-all = %d; want 0", total)
+	}
+}
+
 func TestFrequentWinners(t *testing.T) {
 	s := newTestStore(t)
 

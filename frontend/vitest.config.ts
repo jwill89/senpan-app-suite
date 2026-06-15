@@ -25,6 +25,8 @@ export default defineConfig({
     // Auto-restore spies/mocks between tests so they don't leak across files.
     restoreMocks: true,
     clearMocks: true,
+    // Global test setup (e.g. stubbing the globally-registered <font-awesome-icon>).
+    setupFiles: ['./vitest.setup.ts'],
     include: ['src/**/*.test.ts'],
   },
 })

@@ -1,5 +1,6 @@
 # Runtime data & local tooling
 data/
+devdata/
 .idea/
 .vscode/
 vendor/
@@ -51,3 +52,4 @@ Thumbs.db
 /frontend/public/images/pwa-192x192.png
 /frontend/public/images/pwa-512x512.png
 /frontend/public/images/pwa-maskable-512x512.png
+/CURRENT_THEMES.css

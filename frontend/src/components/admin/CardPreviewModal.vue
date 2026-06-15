@@ -53,14 +53,14 @@ watch(
           title="Copy card ID"
           @click="ui.copyToClipboard(cards.previewCard.id)"
         >
-          <i class="fa-solid fa-copy"></i> Copy ID
+          <font-awesome-icon :icon="['fas', 'copy']" /> Copy ID
         </button>
         <button
           class="btn-view btn-sm nowrap"
           title="Copy playable card URL"
           @click="copyCardUrl"
         >
-          <i class="fa-solid fa-link"></i> Copy URL
+          <font-awesome-icon :icon="['fas', 'link']" /> Copy URL
         </button>
         <button class="btn-neutral btn-sm" @click="cards.previewCard = null">Close</button>
       </div>

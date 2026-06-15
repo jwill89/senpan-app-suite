@@ -147,13 +147,13 @@ onMounted(() => users.loadUsers())
   <div class="tab-body">
     <AdminPanel>
       <div class="flex-toolbar mb-12">
-        <h3 class="m-0"><i class="fa-duotone fa-users-gear"></i> Users</h3>
+        <h3 class="m-0"><font-awesome-icon :icon="['fad', 'users-gear']" /> Users</h3>
         <button
           class="btn-view btn-sm push-right"
           title="Copy the hidden registration link to share with a new user"
           @click="copyRegistrationLink"
         >
-          <i class="fa-solid fa-copy"></i> Copy Registration Link
+          <font-awesome-icon :icon="['fas', 'copy']" /> Copy Registration Link
         </button>
       </div>
 
@@ -219,7 +219,7 @@ onMounted(() => users.loadUsers())
                 title="Activate this account"
                 @click="users.setActive(row.id, true)"
               >
-                <i class="fa-solid fa-circle-check"></i> Activate
+                <font-awesome-icon :icon="['fas', 'circle-check']" /> Activate
               </button>
               <button
                 class="btn-neutral btn-sm"
@@ -238,21 +238,21 @@ onMounted(() => users.loadUsers())
                 "
                 @click="openPermissions(row)"
               >
-                <i class="fa-solid fa-sliders"></i> Permissions
+                <font-awesome-icon :icon="['fas', 'sliders']" /> Permissions
               </button>
               <button
                 class="btn-confirm btn-sm"
                 title="Set a new password for this user"
                 @click="openSetPassword(row)"
               >
-                <i class="fa-solid fa-lock"></i> Set Password
+                <font-awesome-icon :icon="['fas', 'lock']" /> Set Password
               </button>
               <button
                 class="btn-danger btn-sm"
                 title="Delete this account"
                 @click="users.deleteUser(row.id, row.username)"
               >
-                <i class="fa-solid fa-trash"></i> Delete
+                <font-awesome-icon :icon="['fas', 'trash']" /> Delete
               </button>
             </template>
           </div>
@@ -273,7 +273,7 @@ onMounted(() => users.loadUsers())
       @close="permEditUser = null"
     >
       <h3 class="mt-0">
-        <i class="fa-duotone fa-sliders"></i> Permissions —
+        <font-awesome-icon :icon="['fad', 'sliders']" /> Permissions —
         <span class="code-gold">{{ permEditUser.username }}</span>
       </h3>
       <p class="text-dim text-xs">Choose which pages this user can access.</p>
@@ -311,7 +311,7 @@ onMounted(() => users.loadUsers())
       @close="pwUser = null"
     >
       <h3 class="mt-0">
-        <i class="fa-duotone fa-lock"></i> Set Password —
+        <font-awesome-icon :icon="['fad', 'lock']" /> Set Password —
         <span class="code-gold">{{ pwUser.username }}</span>
       </h3>
       <form autocomplete="off" @submit.prevent="savePassword">

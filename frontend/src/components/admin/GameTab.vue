@@ -141,7 +141,7 @@ onBeforeUnmount(() => {
           :aria-label="`Game time elapsed: ${elapsedTime}`"
           title="Time elapsed since the game started"
         >
-          <i class="fa-duotone fa-clock" aria-hidden="true"></i> {{ elapsedTime }}
+          <font-awesome-icon :icon="['fad', 'clock']" /> {{ elapsedTime }}
         </span>
       </h3>
 
@@ -150,7 +150,7 @@ onBeforeUnmount(() => {
         <div v-if="patterns.patterns.length === 0" class="mb-12">
           <p class="text-dim mb-8">Create some win patterns first.</p>
           <button class="btn-confirm btn-sm" @click="goToPatterns">
-            <i class="fa-solid fa-plus"></i> Create a Pattern
+            <font-awesome-icon :icon="['fas', 'plus']" /> Create a Pattern
           </button>
         </div>
         <div v-else>
@@ -171,7 +171,7 @@ onBeforeUnmount(() => {
               title="Apply this preset's patterns and game details"
               @click="applyPreset"
             >
-              <i class="fa-solid fa-circle-check" aria-hidden="true"></i> Apply Preset
+              <font-awesome-icon :icon="['fas', 'circle-check']" /> Apply Preset
             </button>
           </div>
 
@@ -221,7 +221,7 @@ onBeforeUnmount(() => {
               @click="game.drawNumber()"
             >
               <LoadingSpinner v-if="game.drawing" label="Drawing…" />
-              <template v-else><i class="fa-solid fa-circle-dot"></i> Draw Number</template>
+              <template v-else><font-awesome-icon :icon="['fas', 'circle-dot']" /> Draw Number</template>
             </button>
             <select
               v-model.number="game.drawDelay"
@@ -251,7 +251,7 @@ onBeforeUnmount(() => {
                 class="fa-solid fa-volume-high"
                 aria-hidden="true"
               ></i>
-              <i v-else class="fa-solid fa-volume-xmark" aria-hidden="true"></i>
+              <font-awesome-icon v-else :icon="['fas', 'volume-xmark']" />
               <span>Winner Sound</span>
             </button>
           </div>
@@ -268,7 +268,7 @@ onBeforeUnmount(() => {
             <span class="countdown-label">Sending to players…</span>
           </div>
           <div v-else-if="game.drawSent" class="draw-sent">
-            <span class="sent-icon"><i class="fa-duotone fa-circle-check"></i></span>
+            <span class="sent-icon"><font-awesome-icon :icon="['fad', 'circle-check']" /></span>
             <span class="sent-label">Sent to players!</span>
           </div>
 
@@ -299,7 +299,7 @@ onBeforeUnmount(() => {
             ></div>
 
             <div v-if="game.winners.length" class="winners-panel">
-              <h3><i class="fa-duotone fa-trophy"></i> Winning Cards</h3>
+              <h3><font-awesome-icon :icon="['fad', 'trophy']" /> Winning Cards</h3>
               <p class="text-dim text-xs mb-8">Click a card ID to verify</p>
               <div class="winner-chips">
                 <span
@@ -321,7 +321,7 @@ onBeforeUnmount(() => {
 
             <div v-if="game.frequentWinners.length" class="frequent-winners-panel">
               <h3>
-                <i class="fa-duotone fa-triangle-exclamation"></i> Frequent Winners (3+ in 12h)
+                <font-awesome-icon :icon="['fad', 'triangle-exclamation']" /> Frequent Winners (3+ in 12h)
               </h3>
               <div class="frequent-winner-chips">
                 <span v-for="fw in game.frequentWinners" :key="fw.player_name" class="winner-chip">

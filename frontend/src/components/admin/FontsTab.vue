@@ -177,14 +177,14 @@ watch(
   <div class="tab-body">
     <AdminPanel>
       <div class="flex-toolbar mb-12">
-        <h3 class="m-0"><i class="fa-duotone fa-font"></i> Font Upload</h3>
+        <h3 class="m-0"><font-awesome-icon :icon="['fad', 'font']" /> Font Upload</h3>
         <button
           class="btn-action btn-sm push-right"
           :disabled="fonts.uploading"
           @click="pickFiles"
         >
           <LoadingSpinner v-if="fonts.uploading" label="Uploading…" />
-          <template v-else><i class="fa-solid fa-plus"></i> Upload Fonts</template>
+          <template v-else><font-awesome-icon :icon="['fas', 'plus']" /> Upload Fonts</template>
         </button>
         <input
           ref="fileInput"
@@ -280,28 +280,28 @@ watch(
                 title="Preview this font in the panel above"
                 @click="selectForPreview(row.name)"
               >
-                <i class="fa-solid fa-eye"></i> Preview
+                <font-awesome-icon :icon="['fas', 'eye']" /> Preview
               </button>
               <button
                 class="btn-view btn-sm"
                 title="Copy public URL to clipboard"
                 @click="copyLink(row.name)"
               >
-                <i class="fa-solid fa-copy"></i> Copy URL
+                <font-awesome-icon :icon="['fas', 'copy']" /> Copy URL
               </button>
               <button
                 class="btn-confirm btn-sm"
                 title="Rename this font file"
                 @click="startRename(row.name)"
               >
-                <i class="fa-solid fa-pen-to-square"></i> Rename
+                <font-awesome-icon :icon="['fas', 'pen-to-square']" /> Rename
               </button>
               <button
                 class="btn-danger btn-sm"
                 title="Delete this font file"
                 @click="fonts.deleteFont(row.name)"
               >
-                <i class="fa-solid fa-trash"></i> Delete
+                <font-awesome-icon :icon="['fas', 'trash']" /> Delete
               </button>
             </template>
           </div>

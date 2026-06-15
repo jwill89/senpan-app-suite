@@ -1,24 +1,27 @@
 /**
- * FontAwesome setup (replaces the hosted FontAwesome Kit script).
+ * FontAwesome icon registry.
  *
  * Icons come from the Font Awesome Pro kit (`@awesome.me/kit-46204fb6f1`),
- * tree-shaken to only what's used, in two styles:
+ * tree-shaken to only what's used, in three styles:
  *
- *   - DUOTONE (`fa-duotone`, prefix `fad`) for headers, sidebar sections/nav,
- *     and decorative icons — the two-tone look reads well at larger sizes.
- *   - SOLID (`fa-solid`, prefix `fas`) for action-button icons (Save, Delete,
- *     Upload, Copy, …), where the flat single-tone glyph stays crisp and clear.
+ *   - DUOTONE (prefix `fad`) for headers, sidebar sections/nav, and decorative
+ *     icons — the two-tone look reads well at larger sizes.
+ *   - SOLID (prefix `fas`) for action-button icons (Save, Delete, Upload, Copy,
+ *     …), where the flat single-tone glyph stays crisp and clear.
+ *   - BRANDS (prefix `fab`) for the Discord icon.
  *
- * The SVG-core library with `dom.watch()` auto-replaces the `<i class="fa-…">`
- * markup throughout the templates with inline SVG; core's auto-injected CSS
- * supplies the duotone primary/secondary layer styling.
+ * Icons are added to the core `library` here and rendered in templates with the
+ * `<font-awesome-icon :icon="[prefix, name]" />` component (registered globally
+ * in main.ts) — e.g. `:icon="['fad', 'gear']"` / `:icon="['fas', 'trash']"` /
+ * `:icon="['fab', 'discord']"`. Vue owns the rendered <svg> directly, so there
+ * is no `dom.watch()` / MutationObserver (the old hosted-kit approach); core
+ * auto-injects its CSS, which supplies the duotone primary/secondary layering.
  *
  * To add an icon: import its `fa…` name from the matching style module below
  * (alias solid imports with the `Solid` suffix to avoid name clashes with the
- * duotone set), add it to `icons`, and reference it in markup with the right
- * style class.
+ * duotone set), add it to `icons`, and reference it by `[prefix, name]`.
  */
-import { config, library, dom, type IconDefinition } from '@fortawesome/fontawesome-svg-core'
+import { library, type IconDefinition } from '@fortawesome/fontawesome-svg-core'
 import {
   faBallot,
   faBars,
@@ -97,17 +100,6 @@ import {
   faVolumeXmark as faVolumeXmarkSolid,
 } from '@awesome.me/kit-46204fb6f1/icons/classic/solid'
 import { faDiscord } from '@fortawesome/free-brands-svg-icons'
-
-// Render in "nest" mode: FontAwesome inserts the <svg> *inside* the existing
-// <i class="fa-…"> wrapper instead of replacing it. This is essential for Vue
-// compatibility — Vue keeps owning the stable <i> element while FA owns the
-// nested <svg>, so reconciliation (re-renders, v-if/v-else icon swaps) never
-// operates on an FA-detached node. The default `true` (replace) mode swaps the
-// <i> for an <svg>, leaving Vue's vnode pointing at a detached element; the next
-// patch then throws "Cannot read properties of null (insertBefore/emitsOptions)"
-// and aborts (e.g. the admin last-drawn number silently stops updating).
-config.autoReplaceSvg = 'nest'
-config.observeMutations = true // watch for icons added by Vue after initial render
 
 // The Pro kit ships icons typed against fontawesome-common-types v7 while the
 // SVG core here is v6; the runtime icon shape is identical (verified: prefixes
@@ -195,11 +187,3 @@ const icons = [
 ] as unknown as IconDefinition[]
 
 library.add(...icons)
-
-/**
- * Starts watching the DOM and replacing `<i class="fa-...">` placeholders with
- * inline SVG. `observeMutations` keeps icons rendered by Vue updates in sync.
- */
-export function initFontAwesome(): void {
-  dom.watch()
-}

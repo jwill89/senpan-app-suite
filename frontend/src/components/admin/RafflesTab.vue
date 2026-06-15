@@ -149,10 +149,10 @@ async function deleteSelected(): Promise<void> {
       </SubPageHeader>
       <div class="flex-toolbar flex-end mb-16">
         <button v-if="isOpen" class="btn-confirm btn-sm" @click="editSelected">
-          <i class="fa-solid fa-pen-to-square"></i> Edit
+          <font-awesome-icon :icon="['fas', 'pen-to-square']" /> Edit
         </button>
         <button class="btn-danger btn-sm" @click="deleteSelected">
-          <i class="fa-solid fa-trash"></i> Delete
+          <font-awesome-icon :icon="['fas', 'trash']" /> Delete
         </button>
       </div>
 
@@ -168,7 +168,7 @@ async function deleteSelected(): Promise<void> {
       <!-- Winner section -->
       <div v-if="raffles.raffleWinner" class="raffle-winner-panel">
         <h3 class="raffle-section-heading">
-          <i class="fa-duotone fa-trophy"></i> Winner: {{ raffles.raffleWinner.character_name }} @
+          <font-awesome-icon :icon="['fad', 'trophy']" /> Winner: {{ raffles.raffleWinner.character_name }} @
           {{ raffles.raffleWinner.world }}
         </h3>
         <p class="text-dim text-sm mb-12">{{ raffles.raffleWinner.num_entries }} entries</p>
@@ -178,7 +178,7 @@ async function deleteSelected(): Promise<void> {
             :disabled="raffles.pickingWinner"
             @click="raffles.verifyRaffleWinner()"
           >
-            <i class="fa-solid fa-circle-check"></i> Verify Winner
+            <font-awesome-icon :icon="['fas', 'circle-check']" /> Verify Winner
           </button>
           <button
             class="btn-caution"
@@ -186,7 +186,7 @@ async function deleteSelected(): Promise<void> {
             @click="raffles.pickAnotherWinner()"
           >
             <LoadingSpinner v-if="raffles.pickingWinner" label="Picking…" />
-            <template v-else><i class="fa-solid fa-rotate"></i> Pick Another</template>
+            <template v-else><font-awesome-icon :icon="['fas', 'rotate']" /> Pick Another</template>
           </button>
         </div>
       </div>
@@ -199,13 +199,13 @@ async function deleteSelected(): Promise<void> {
           @click="raffles.pickRaffleWinner()"
         >
           <LoadingSpinner v-if="raffles.pickingWinner" label="Picking…" />
-          <template v-else><i class="fa-solid fa-dice"></i> Pick a Winner</template>
+          <template v-else><font-awesome-icon :icon="['fas', 'dice']" /> Pick a Winner</template>
         </button>
       </div>
 
       <!-- Add entry (admin, open only) -->
       <div v-if="isOpen" class="entry-add mt-16 mb-16">
-        <h3 class="raffle-section-heading"><i class="fa-duotone fa-plus"></i> Add Entry</h3>
+        <h3 class="raffle-section-heading"><font-awesome-icon :icon="['fad', 'plus']" /> Add Entry</h3>
         <div class="flex-row mb-10">
           <FormField label="Character Name" style="flex: 2; min-width: 160px">
             <input
@@ -248,7 +248,7 @@ async function deleteSelected(): Promise<void> {
             @click="raffles.addRaffleEntry()"
           >
             <LoadingSpinner v-if="raffles.addingEntry" label="Adding…" />
-            <template v-else><i class="fa-solid fa-plus"></i> Add Entry</template>
+            <template v-else><font-awesome-icon :icon="['fas', 'plus']" /> Add Entry</template>
           </button>
         </div>
       </div>
@@ -287,11 +287,11 @@ async function deleteSelected(): Promise<void> {
                   :class="['btn-sm', e.paid ? 'btn-confirm' : 'btn-neutral']"
                   @click="raffles.toggleEntryPaid(e)"
                 >
-                  <template v-if="e.paid"><i class="fa-solid fa-circle-check"></i> Paid</template>
+                  <template v-if="e.paid"><font-awesome-icon :icon="['fas', 'circle-check']" /> Paid</template>
                   <template v-else>Unpaid</template>
                 </button>
                 <template v-else>
-                  <i v-if="e.paid" class="fa-duotone fa-circle-check"></i>
+                  <font-awesome-icon v-if="e.paid" :icon="['fad', 'circle-check']" />
                   <template v-else>—</template>
                 </template>
               </td>
@@ -306,10 +306,10 @@ async function deleteSelected(): Promise<void> {
     </AdminPanel>
 
     <!-- ── List ──────────────────────────────────────────────────────────────── -->
-    <ManagerView v-else title="Raffles" icon="fa-duotone fa-ticket">
+    <ManagerView v-else title="Raffles" :icon="['fad', 'ticket']">
       <template #actions>
         <button class="btn-confirm btn-sm" @click="openNew">
-          <i class="fa-solid fa-plus"></i> New Raffle
+          <font-awesome-icon :icon="['fas', 'plus']" /> New Raffle
         </button>
       </template>
 
@@ -320,7 +320,7 @@ async function deleteSelected(): Promise<void> {
       />
       <template v-else>
         <!-- Current (non-closed) raffles -->
-        <h4 class="section-heading"><i class="fa-duotone fa-clipboard-list"></i> Current Raffles</h4>
+        <h4 class="section-heading"><font-awesome-icon :icon="['fad', 'clipboard-list']" /> Current Raffles</h4>
         <div v-if="raffles.openRaffles.length" class="raffle-list">
           <div
             v-for="r in raffles.openRaffles"
@@ -333,14 +333,14 @@ async function deleteSelected(): Promise<void> {
               class="raffle-status-icon"
               title="Scheduled — opens later"
             >
-              <i class="fa-duotone fa-calendar-clock"></i>
+              <font-awesome-icon :icon="['fad', 'calendar-clock']" />
             </span>
             <span
               v-else-if="raffleTiming(r) === 'ended'"
               class="raffle-status-icon raffle-status-ended"
               title="Open period has passed"
             >
-              <i class="fa-duotone fa-calendar-circle-exclamation"></i>
+              <font-awesome-icon :icon="['fad', 'calendar-circle-exclamation']" />
             </span>
             <img
               v-if="r.prize_image"
@@ -359,7 +359,7 @@ async function deleteSelected(): Promise<void> {
         <EmptyState v-else text="No current raffles." />
 
         <!-- Closed raffles table -->
-        <h4 class="section-heading mt-20"><i class="fa-duotone fa-lock"></i> Closed Raffles</h4>
+        <h4 class="section-heading mt-20"><font-awesome-icon :icon="['fad', 'lock']" /> Closed Raffles</h4>
         <template v-if="raffles.closedRaffles.length">
           <div class="manager-toolbar">
             <SearchInput
@@ -386,7 +386,7 @@ async function deleteSelected(): Promise<void> {
                   title="View"
                   @click="openRaffle(row)"
                 >
-                  <i class="fa-solid fa-eye"></i>
+                  <font-awesome-icon :icon="['fas', 'eye']" />
                 </button>
                 <button
                   class="btn-view btn-sm"
@@ -394,7 +394,7 @@ async function deleteSelected(): Promise<void> {
                   title="Copy to new raffle"
                   @click="copyRaffle(row)"
                 >
-                  <i class="fa-solid fa-copy"></i>
+                  <font-awesome-icon :icon="['fas', 'copy']" />
                 </button>
                 <button
                   class="btn-danger btn-sm"
@@ -402,7 +402,7 @@ async function deleteSelected(): Promise<void> {
                   title="Delete"
                   @click="raffles.deleteRaffle(row.id)"
                 >
-                  <i class="fa-solid fa-trash"></i>
+                  <font-awesome-icon :icon="['fas', 'trash']" />
                 </button>
               </div>
             </template>

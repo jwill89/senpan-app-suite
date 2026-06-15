@@ -11,7 +11,6 @@
  */
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { icon } from '@fortawesome/fontawesome-svg-core'
 import BingoBoard from '@/components/common/BingoBoard.vue'
 import CalledNumbers from '@/components/common/CalledNumbers.vue'
 import ModalOverlay from '@/components/common/ModalOverlay.vue'
@@ -129,38 +128,6 @@ function toggleSound(): void {
 }
 
 /**
- * Reactive inline SVG for the sound toggle. FontAwesome's `dom.watch()` replaces
- * `<i class="fa-…">` placeholders with SVG once, so a reactive `:class` swap on
- * an already-replaced node never re-renders. Building the SVG via the `icon()`
- * API and binding it with `v-html` keeps the icon in sync with `soundEnabled`.
- */
-/**
- * Reactive inline SVG for the sound toggle. FontAwesome's `dom.watch()` renders
- * `<i class="fa-…">` placeholders once, so a reactive `:class` swap on an
- * already-rendered node never re-renders. Building the SVG via the `icon()` API
- * (resolved by name from the centrally-registered Pro-kit library — see
- * `lib/fontawesome.ts`) and binding it with `v-html` keeps the icon in sync with
- * `soundEnabled`, without importing icon definitions in this component.
- */
-const soundIconHtml = computed(() =>
-  icon({ prefix: 'fas', iconName: player.soundEnabled ? 'volume-high' : 'volume-xmark' }).html.join(
-    '',
-  ),
-)
-
-/**
- * Reactive inline SVG for the accordion chevron — same rationale as the sound
- * icon above. Resolved by name from the central library so it uses the same
- * Pro-kit glyph as the rest of the app.
- */
-const chevronIconHtml = computed(() =>
-  icon({
-    prefix: 'fas',
-    iconName: showStampCustomization.value ? 'chevron-up' : 'chevron-down',
-  }).html.join(''),
-)
-
-/**
  * Leave the board and return home (App.vue disconnects the WS on the route
  * change). We navigate *first* and only clear the player's card/stamps once
  * we've actually left — so a navigation that can't complete (e.g. fetching the
@@ -235,13 +202,12 @@ function openDiscord(): void {
             :aria-expanded="showStampCustomization"
             @click="showStampCustomization = !showStampCustomization"
           >
-            <i class="fa-solid fa-sliders" aria-hidden="true"></i>
+            <font-awesome-icon :icon="['fas', 'sliders']" />
             <span>Stamp Settings &amp; Game Controls</span>
-            <span
-              class="fa-icon stamp-custom-chevron"
-              v-html="chevronIconHtml"
-              aria-hidden="true"
-            ></span>
+            <font-awesome-icon
+              class="stamp-custom-chevron"
+              :icon="['fas', showStampCustomization ? 'chevron-up' : 'chevron-down']"
+            />
           </button>
           <div v-show="showStampCustomization" class="stamp-custom-body">
             <!-- Stamp shape + color pickers share the first row -->
@@ -260,7 +226,7 @@ function openDiscord(): void {
                 title="Clear all stamps on the board"
                 @click="player.clearAllStamps()"
               >
-                <i class="fa-solid fa-eraser" aria-hidden="true"></i>
+                <font-awesome-icon :icon="['fas', 'eraser']" />
                 <span class="player-actions__label">Clear Board</span>
               </button>
 
@@ -270,7 +236,7 @@ function openDiscord(): void {
                 :title="exporting ? 'Saving card image…' : 'Save card as image'"
                 @click="exportCard"
               >
-                <i class="fa-solid fa-download" aria-hidden="true"></i>
+                <font-awesome-icon :icon="['fas', 'download']" />
                 <span class="player-actions__label">{{ exporting ? 'Saving…' : 'Save Board' }}</span>
               </button>
 
@@ -280,7 +246,9 @@ function openDiscord(): void {
                 :title="player.soundEnabled ? 'Draw sound on — click to mute' : 'Draw sound off — click to enable'"
                 @click="toggleSound"
               >
-                <span class="fa-icon" v-html="soundIconHtml" aria-hidden="true"></span>
+                <font-awesome-icon
+                  :icon="['fas', player.soundEnabled ? 'volume-high' : 'volume-xmark']"
+                />
                 <span>{{ player.soundEnabled ? 'Sound On' : 'Sound Off' }}</span>
               </button>
             </div>
@@ -333,7 +301,7 @@ function openDiscord(): void {
 
         <template v-if="!player.playerGame">
           <div v-if="player.gameEnded" class="game-over-msg">
-            <div class="go-icon"><i class="fa-duotone fa-trophy"></i></div>
+            <div class="go-icon"><font-awesome-icon :icon="['fad', 'trophy']" /></div>
             <p class="go-title">We have a Winner — Thanks for Playing!</p>
             <p class="go-sub">Numbers called this game: {{ player.endedCalledCount }}</p>
             <br/>
@@ -349,7 +317,7 @@ function openDiscord(): void {
             <br/>
             <p class="go-sub">The next game will begin soon — hang tight!</p>
             <button class="btn-action go-discord-btn" @click="openDiscord">
-              <i class="fa-brands fa-discord" aria-hidden="true"></i> Join the Discord Server
+              <font-awesome-icon :icon="['fab', 'discord']" /> Join the Discord Server
             </button>
           </div>
           <div v-else class="no-game-msg">No game is currently active. Waiting…</div>
@@ -363,7 +331,7 @@ function openDiscord(): void {
       centered
       @close="player.showMinigameModal = false"
     >
-      <h3 class="mb-16"><i class="fa-duotone fa-champagne-glasses"></i> Half-Time Minigame!</h3>
+      <h3 class="mb-16"><font-awesome-icon :icon="['fad', 'champagne-glasses']" /> Half-Time Minigame!</h3>
       <p class="text-dim mb-20">
         It's time for a half-time minigame! Please check your in-game chat for details and
         instructions!

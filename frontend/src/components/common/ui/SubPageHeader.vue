@@ -5,10 +5,12 @@
  * clicked — the parent sets its `screen` ref back to the list. Title via the
  * `title` prop (+ optional `icon`) or the default slot for markup.
  */
+import type { IconPrefix } from '@fortawesome/fontawesome-svg-core'
+
 defineProps<{
   title?: string
-  /** FontAwesome classes for the heading icon. */
-  icon?: string
+  /** FontAwesome icon for the heading as `[prefix, name]`, e.g. `['fad', 'plus']`. */
+  icon?: [IconPrefix, string]
 }>()
 defineEmits<{ back: [] }>()
 </script>
@@ -16,10 +18,10 @@ defineEmits<{ back: [] }>()
 <template>
   <div class="subpage-header">
     <h3 v-if="title || $slots.default">
-      <slot><i v-if="icon" :class="icon"></i>{{ title }}</slot>
+      <slot><font-awesome-icon v-if="icon" :icon="icon" />{{ title }}</slot>
     </h3>
     <button class="btn-neutral btn-sm" @click="$emit('back')">
-      <i class="fa-solid fa-arrow-left"></i> Back
+      <font-awesome-icon :icon="['fas', 'arrow-left']" /> Back
     </button>
   </div>
 </template>

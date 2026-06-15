@@ -42,7 +42,7 @@ function onSelect(e: EmojiSelect): void {
     @close="emit('close')"
   >
     <div class="emoji-picker-head">
-      <h3 class="mb-0"><i class="fa-duotone fa-face-smile"></i> Pick an Emoji</h3>
+      <h3 class="mb-0"><font-awesome-icon :icon="['fad', 'face-smile']" /> Pick an Emoji</h3>
       <button v-if="allowClear" type="button" class="btn-neutral btn-sm" @click="emit('select', '')">
         No emoji
       </button>

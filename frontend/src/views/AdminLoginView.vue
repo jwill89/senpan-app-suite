@@ -37,7 +37,7 @@ function goHome(): void {
 <template>
   <div class="admin-login">
     <div class="box">
-      <h2><i class="fa-duotone fa-lock"></i> Sign In</h2>
+      <h2><font-awesome-icon :icon="['fad', 'lock']" /> Sign In</h2>
       <p>Enter your username and password</p>
       <form autocomplete="off" @submit.prevent="submit">
         <input

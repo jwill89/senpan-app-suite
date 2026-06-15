@@ -70,6 +70,27 @@ func (s *Store) ListWinnersLog(limit, offset int, sortField, sortDir string) ([]
 	return entries, total, rows.Err()
 }
 
+// DeleteWinnerLogEntry removes a single winners-log entry by id.
+// Returns true if a row was deleted.
+func (s *Store) DeleteWinnerLogEntry(id int64) (bool, error) {
+	res, err := s.db.Exec("DELETE FROM winners_log WHERE id = ?", id)
+	if err != nil {
+		return false, err
+	}
+	n, _ := res.RowsAffected()
+	return n > 0, nil
+}
+
+// DeleteAllWinnersLog removes every winners-log entry. Returns the number deleted.
+func (s *Store) DeleteAllWinnersLog() (int64, error) {
+	res, err := s.db.Exec("DELETE FROM winners_log")
+	if err != nil {
+		return 0, err
+	}
+	n, _ := res.RowsAffected()
+	return n, nil
+}
+
 // FrequentWinners returns players who have won at least minWins times in the last hours.
 func (s *Store) FrequentWinners(minWins, hours int) ([]model.FrequentWinner, error) {
 	query := `SELECT player_name, COUNT(*) as win_count FROM winners_log

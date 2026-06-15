@@ -75,14 +75,14 @@ function formatInZone(iso: string, tz: string): string {
         :class="{ active: bookclub.view === 'lists' }"
         @click="bookclub.setView('lists')"
       >
-        <i class="fa-duotone fa-book"></i> Reading Lists
+        <font-awesome-icon :icon="['fad', 'book']" /> Reading Lists
       </button>
       <button
         class="toggle-btn"
         :class="{ active: bookclub.view === 'events' }"
         @click="bookclub.setView('events')"
       >
-        <i class="fa-duotone fa-calendar-days"></i> Event Posts
+        <font-awesome-icon :icon="['fad', 'calendar-days']" /> Event Posts
       </button>
     </div>
 
@@ -91,7 +91,7 @@ function formatInZone(iso: string, tz: string): string {
     <!-- Reading list detail (items + add/edit form) -->
     <AdminPanel v-if="bookclub.selectedList">
       <SubPageHeader
-        :icon="'fa-duotone ' + bookclub.clubIcon"
+        :icon="['fad', bookclub.clubIcon]"
         :title="bookclub.selectedList.title"
         @back="bookclub.closeList()"
       />
@@ -102,7 +102,7 @@ function formatInZone(iso: string, tz: string): string {
           @click="bookclub.publishList(bookclub.selectedList)"
         >
           <LoadingSpinner v-if="bookclub.publishing" label="Publishing…" />
-          <template v-else><i class="fa-solid fa-paper-plane"></i> Publish to Discord</template>
+          <template v-else><font-awesome-icon :icon="['fas', 'paper-plane']" /> Publish to Discord</template>
         </button>
       </div>
 
@@ -120,7 +120,7 @@ function formatInZone(iso: string, tz: string): string {
                 alt="Cover"
               />
               <div v-else class="media-cover media-cover--book media-empty">
-                <i class="fa-duotone fa-image"></i>
+                <font-awesome-icon :icon="['fad', 'image']" />
               </div>
             </template>
             <h4 class="bc-item-title">{{ item.title }}</h4>
@@ -139,15 +139,15 @@ function formatInZone(iso: string, tz: string): string {
                 rel="noopener"
                 class="bc-source-link"
               >
-                <i class="fa-duotone fa-link"></i> {{ src.title || 'Source' }}
+                <font-awesome-icon :icon="['fad', 'link']" /> {{ src.title || 'Source' }}
               </a>
             </p>
             <template #actions>
               <button class="btn-confirm btn-sm" @click="bookclub.editItem(item)">
-                <i class="fa-solid fa-pen-to-square"></i>
+                <font-awesome-icon :icon="['fas', 'pen-to-square']" />
               </button>
               <button class="btn-danger btn-sm" @click="bookclub.deleteItem(item)">
-                <i class="fa-solid fa-trash"></i>
+                <font-awesome-icon :icon="['fas', 'trash']" />
               </button>
             </template>
           </ListRow>
@@ -157,7 +157,7 @@ function formatInZone(iso: string, tz: string): string {
         <!-- Add / edit item form -->
         <div class="bc-form mt-16">
           <h3 class="raffle-section-heading">
-            <i class="fa-duotone fa-plus"></i>
+            <font-awesome-icon :icon="['fad', 'plus']" />
             {{ bookclub.itemForm.id ? 'Edit Item' : 'Add Item' }}
           </h3>
 
@@ -177,7 +177,7 @@ function formatInZone(iso: string, tz: string): string {
                 @click="bookclub.runLookup()"
               >
                 <LoadingSpinner v-if="bookclub.looking" label="Searching…" />
-                <template v-else><i class="fa-solid fa-magnifying-glass"></i> Search</template>
+                <template v-else><font-awesome-icon :icon="['fas', 'magnifying-glass']" /> Search</template>
               </button>
             </div>
             <div v-if="bookclub.lookupResults.length" class="bc-results mt-8">
@@ -311,7 +311,7 @@ function formatInZone(iso: string, tz: string): string {
               <button class="btn-danger btn-sm" @click="bookclub.removeSourceRow(i)">&times;</button>
             </div>
             <button class="btn-confirm btn-sm" @click="bookclub.addSourceRow()">
-              <i class="fa-solid fa-plus"></i> Add Source
+              <font-awesome-icon :icon="['fas', 'plus']" /> Add Source
             </button>
           </FormField>
 
@@ -333,7 +333,7 @@ function formatInZone(iso: string, tz: string): string {
     </AdminPanel>
 
     <!-- Reading lists overview -->
-    <ManagerView v-else :title="`${bookclub.clubName} — Reading Lists`" icon="fa-duotone fa-book">
+    <ManagerView v-else :title="`${bookclub.clubName} — Reading Lists`" :icon="['fad', 'book']">
       <template #toolbar>
         <input
           v-model="bookclub.newListTitle"
@@ -348,7 +348,7 @@ function formatInZone(iso: string, tz: string): string {
           @click="bookclub.createList()"
         >
           <LoadingSpinner v-if="bookclub.creatingList" label="Creating…" />
-          <template v-else><i class="fa-solid fa-plus"></i> Create List</template>
+          <template v-else><font-awesome-icon :icon="['fas', 'plus']" /> Create List</template>
         </button>
       </template>
 
@@ -385,13 +385,13 @@ function formatInZone(iso: string, tz: string): string {
                   :disabled="bookclub.publishing"
                   @click="bookclub.publishList(list)"
                 >
-                  <i class="fa-solid fa-paper-plane"></i>
+                  <font-awesome-icon :icon="['fas', 'paper-plane']" />
                 </button>
                 <button class="btn-confirm btn-sm" aria-label="Rename" @click="startRename(list)">
-                  <i class="fa-solid fa-pen-to-square"></i>
+                  <font-awesome-icon :icon="['fas', 'pen-to-square']" />
                 </button>
                 <button class="btn-danger btn-sm" aria-label="Delete" @click="bookclub.deleteList(list)">
-                  <i class="fa-solid fa-trash"></i>
+                  <font-awesome-icon :icon="['fas', 'trash']" />
                 </button>
               </template>
             </template>
@@ -406,12 +406,12 @@ function formatInZone(iso: string, tz: string): string {
     <template v-else>
       <ManagerView
         :title="`${bookclub.clubName} — Event Posts`"
-        icon="fa-duotone fa-calendar-days"
+        :icon="['fad', 'calendar-days']"
       >
         <!-- Add / edit event form -->
         <div class="bc-form mb-16">
           <h3 class="raffle-section-heading">
-            <i class="fa-duotone fa-plus"></i>
+            <font-awesome-icon :icon="['fad', 'plus']" />
             {{ bookclub.eventForm.id ? 'Edit Event' : 'Schedule Event' }}
           </h3>
 
@@ -522,19 +522,19 @@ function formatInZone(iso: string, tz: string): string {
                   alt="Event image"
                 />
                 <div v-else class="media-cover media-cover--wide media-empty">
-                  <i class="fa-duotone fa-image"></i>
+                  <font-awesome-icon :icon="['fad', 'image']" />
                 </div>
               </template>
               <h4 class="bc-item-title">{{ ev.title }}</h4>
               <p class="text-sm bc-item-meta">
-                <i class="fa-duotone fa-calendar-days"></i>
+                <font-awesome-icon :icon="['fad', 'calendar-days']" />
                 {{ formatInZone(ev.start_at, ev.timezone) }}
                 <span class="text-dim">({{ ev.timezone }})</span>
               </p>
               <p class="text-dim text-sm">
-                <i class="fa-duotone fa-clock"></i> {{ ev.length_hours }} hour{{ ev.length_hours > 1 ? 's' : '' }}
+                <font-awesome-icon :icon="['fad', 'clock']" /> {{ ev.length_hours }} hour{{ ev.length_hours > 1 ? 's' : '' }}
                 <span v-if="ev.location">
-                  · <i class="fa-duotone fa-location-dot"></i> {{ ev.location }}
+                  · <font-awesome-icon :icon="['fad', 'location-dot']" /> {{ ev.location }}
                 </span>
               </p>
               <p class="text-sm">
@@ -551,13 +551,13 @@ function formatInZone(iso: string, tz: string): string {
                   @click="bookclub.postEventNow(ev)"
                 >
                   <LoadingSpinner v-if="bookclub.postingEventId === ev.id" label="Posting…" />
-                  <template v-else><i class="fa-solid fa-paper-plane"></i></template>
+                  <template v-else><font-awesome-icon :icon="['fas', 'paper-plane']" /></template>
                 </button>
                 <button class="btn-confirm btn-sm" aria-label="Edit event" @click="bookclub.editEvent(ev)">
-                  <i class="fa-solid fa-pen-to-square"></i>
+                  <font-awesome-icon :icon="['fas', 'pen-to-square']" />
                 </button>
                 <button class="btn-danger btn-sm" aria-label="Delete event" @click="bookclub.deleteEvent(ev)">
-                  <i class="fa-solid fa-trash"></i>
+                  <font-awesome-icon :icon="['fas', 'trash']" />
                 </button>
               </template>
             </ListRow>

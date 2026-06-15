@@ -26,7 +26,7 @@ var eventTimeLayouts = []string{"2006-01-02T15:04", "2006-01-02T15:04:05"}
 // handleBookClubEventsList returns all scheduled events for a book club.
 //
 //	Endpoint:  GET /api/bookclub/events?club=yaoi
-//	Auth:      admin
+//	Auth:      admin, or the book club's page permission
 //	Response:  {"events": [...]}
 func (s *Server) handleBookClubEventsList(w http.ResponseWriter, r *http.Request) {
 	club := strings.TrimSpace(r.URL.Query().Get("club"))
@@ -56,7 +56,7 @@ type bookClubEventRequest struct {
 // book club event.
 //
 //	Endpoint:  POST /api/bookclub/events
-//	Auth:      admin
+//	Auth:      admin, or the book club's page permission
 //	Request:   {"action": "create"|"update"|"delete"|"post_now", ...}
 func (s *Server) handleBookClubEventsAction(w http.ResponseWriter, r *http.Request) {
 	if _, ok := s.requireAuth(w, r); !ok {
@@ -257,7 +257,7 @@ func (s *Server) eventImageDir() string {
 // <webRoot>/images/bookclub/events and returns its full URL.
 //
 //	Endpoint:  POST /api/bookclub/events/upload
-//	Auth:      admin
+//	Auth:      admin, or any book-club page permission
 //	Response:  {"url": "https://host/images/bookclub/events/event_....ext"}
 func (s *Server) handleBookClubEventUpload(w http.ResponseWriter, r *http.Request) {
 	if !s.requireAnyBookClub(w, r) {
@@ -270,7 +270,7 @@ func (s *Server) handleBookClubEventUpload(w http.ResponseWriter, r *http.Reques
 // URLs so the admin can reuse one instead of uploading a duplicate.
 //
 //	Endpoint:  GET /api/bookclub/events/images
-//	Auth:      admin
+//	Auth:      admin, or any book-club page permission
 //	Response:  {"images": ["https://host/images/bookclub/events/....png", ...]}
 func (s *Server) handleBookClubEventImages(w http.ResponseWriter, r *http.Request) {
 	if !s.requireAnyBookClub(w, r) {

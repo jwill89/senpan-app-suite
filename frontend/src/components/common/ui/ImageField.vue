@@ -27,7 +27,7 @@ const emit = defineEmits<{ upload: [event: Event] }>()
   <div class="flex-row items-start">
     <div class="image-field-main">
       <img v-if="model" :src="model" class="image-field-preview" alt="Image preview" />
-      <div v-else class="image-field-preview media-empty"><i class="fa-duotone fa-image"></i></div>
+      <div v-else class="image-field-preview media-empty"><font-awesome-icon :icon="['fad', 'image']" /></div>
       <input
         type="file"
         accept="image/*"

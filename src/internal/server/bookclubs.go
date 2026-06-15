@@ -90,7 +90,7 @@ var bookclubHTTPClient = &http.Client{Timeout: 15 * time.Second}
 // handleReadingListsList returns all reading lists for a book club (no items).
 //
 //	Endpoint:  GET /api/reading-lists?club=yaoi
-//	Auth:      admin
+//	Auth:      admin, or the book club's page permission
 //	Response:  {"reading_lists": [...]}
 func (s *Server) handleReadingListsList(w http.ResponseWriter, r *http.Request) {
 	club := strings.TrimSpace(r.URL.Query().Get("club"))
@@ -111,7 +111,7 @@ func (s *Server) handleReadingListsList(w http.ResponseWriter, r *http.Request) 
 // handleReadingListDetail returns a single reading list with its items.
 //
 //	Endpoint:  GET /api/reading-lists/{id}
-//	Auth:      admin
+//	Auth:      admin, or the book club's page permission
 //	Response:  {"reading_list": ReadingList}
 func (s *Server) handleReadingListDetail(w http.ResponseWriter, r *http.Request) {
 	if _, ok := s.requireAuth(w, r); !ok {
@@ -148,7 +148,7 @@ type readingListRequest struct {
 // handleReadingListsAction creates, renames, or deletes a reading list.
 //
 //	Endpoint:  POST /api/reading-lists
-//	Auth:      admin
+//	Auth:      admin, or the book club's page permission
 //	Request:   {"action": "create"|"update"|"delete", ...}
 func (s *Server) handleReadingListsAction(w http.ResponseWriter, r *http.Request) {
 	if _, ok := s.requireAuth(w, r); !ok {
@@ -255,7 +255,7 @@ type readingListItemRequest struct {
 // handleReadingListItems creates, updates, or deletes an item within a list.
 //
 //	Endpoint:  POST /api/reading-lists/{id}/items
-//	Auth:      admin
+//	Auth:      admin, or the book club's page permission
 //	Request:   {"action": "create"|"update"|"delete", "item": {...}, "item_id": N}
 func (s *Server) handleReadingListItems(w http.ResponseWriter, r *http.Request) {
 	if _, ok := s.requireAuth(w, r); !ok {
@@ -383,7 +383,7 @@ func sanitizeSources(sources []model.ReadingListSource) []model.ReadingListSourc
 // URL (per the requirement that covers are stored as full URLs).
 //
 //	Endpoint:  POST /api/bookclub/upload
-//	Auth:      admin
+//	Auth:      admin, or any book-club page permission
 //	Request:   multipart form with "image" field
 //	Response:  {"url": "https://host/images/bookclub/cover_....ext"}
 func (s *Server) handleBookclubUpload(w http.ResponseWriter, r *http.Request) {
@@ -471,7 +471,7 @@ const anilistMediaFields = `id title { romaji english native } description(asHtm
 // by its AniList id.
 //
 //	Endpoint:  GET /api/bookclub/lookup?q=<query>  |  ?id=<anilist id>
-//	Auth:      admin
+//	Auth:      admin, or any book-club page permission
 //	Response:  {"results": [ReadingListItem-shaped, ...]}
 func (s *Server) handleBookclubLookup(w http.ResponseWriter, r *http.Request) {
 	if !s.requireAnyBookClub(w, r) {
@@ -688,7 +688,7 @@ func stripHTML(s string) string {
 // tracking).
 //
 //	Endpoint:  POST /api/reading-lists/{id}/publish
-//	Auth:      admin
+//	Auth:      admin, or the book club's page permission
 //	Response:  {"published": <count>}
 func (s *Server) handlePublishReadingList(w http.ResponseWriter, r *http.Request) {
 	if _, ok := s.requireAuth(w, r); !ok {

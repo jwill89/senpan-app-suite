@@ -21,7 +21,7 @@ type cardsRequest struct {
 // handleCardsList returns all card IDs with their player names and details.
 //
 //	Endpoint:  GET /api/cards
-//	Auth:      admin
+//	Auth:      admin, or a user granted this page's permission
 //	Response:  {"cards": [{id, player_name, details}, ...]}
 func (s *Server) handleCardsList(w http.ResponseWriter, r *http.Request) {
 	if !s.requirePermission(w, r, permBingoCards) {
@@ -48,7 +48,7 @@ func (s *Server) handleCardsList(w http.ResponseWriter, r *http.Request) {
 // handleCardsAction processes card management operations.
 //
 //	Endpoint:    POST /api/cards
-//	Auth:        admin
+//	Auth:        admin, or a user granted this page's permission
 //	Request:     {"action": "generate"|"delete"|"delete_all"|"update_player", ...}
 //	Response:    varies by action
 //	Broadcasts:  cards_update (on generate/delete/delete_all)

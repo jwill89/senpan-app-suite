@@ -36,7 +36,7 @@ function toggleEditorMode(): void {
 <template>
   <div class="tab-body">
     <div class="admin-panel">
-      <h3 class="mb-12"><i class="fa-duotone fa-palette"></i> Themes</h3>
+      <h3 class="mb-12"><font-awesome-icon :icon="['fad', 'palette']" /> Themes</h3>
 
       <!-- Color picker helper (pick/preview/copy colors to paste into the CSS) -->
       <ThemeColorPickerTool />
@@ -111,8 +111,8 @@ function toggleEditorMode(): void {
                 :aria-label="`Switch editor to ${editorMode === 'dark' ? 'light' : 'dark'} mode`"
                 @click="toggleEditorMode"
               >
-                <i v-if="editorMode === 'dark'" class="fa-solid fa-moon" aria-hidden="true"></i>
-                <i v-else class="fa-solid fa-sun" aria-hidden="true"></i>
+                <font-awesome-icon v-if="editorMode === 'dark'" :icon="['fas', 'moon']" />
+                <font-awesome-icon v-else :icon="['fas', 'sun']" />
                 {{ editorMode === 'dark' ? 'Dark' : 'Light' }}
               </button>
               <button

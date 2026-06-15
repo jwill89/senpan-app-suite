@@ -50,7 +50,7 @@ function onColorChange(c: { rgba: string }): void {
       :box-style="{ maxWidth: '340px' }"
       @close="open = false"
     >
-      <h3 class="mb-8"><i class="fa-duotone fa-palette"></i> Stamp Color</h3>
+      <h3 class="mb-8"><font-awesome-icon :icon="['fad', 'palette']" /> Stamp Color</h3>
       <p class="text-dim mb-16 color-picker-help">
         Choose any color and transparency for your board stamps.
       </p>

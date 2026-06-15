@@ -82,14 +82,14 @@ watch(
 
 <template>
   <div class="tab-body">
-    <AdminPanel title="App Settings" icon="fa-duotone fa-gear">
+    <AdminPanel title="App Settings" :icon="['fad', 'gear']">
       <!-- Grouped into logical sections laid out in a responsive 2-column grid
            (stacks to one column on narrow screens) so the page isn't one long
            scroll. -->
       <div class="settings-grid">
         <!-- General ───────────────────────────────────────────────────── -->
         <section class="settings-section">
-          <h4 class="section-heading"><i class="fa-duotone fa-sliders"></i> General</h4>
+          <h4 class="section-heading"><font-awesome-icon :icon="['fad', 'sliders']" /> General</h4>
           <FormField label="App Title" help="Displayed in the browser tab and home page header.">
             <input v-model="app.settings.app_title" placeholder="My App" aria-label="App title" />
           </FormField>
@@ -110,7 +110,7 @@ watch(
 
         <!-- Gameplay ───────────────────────────────────────────────────── -->
         <section class="settings-section">
-          <h4 class="section-heading"><i class="fa-duotone fa-dice"></i> Gameplay</h4>
+          <h4 class="section-heading"><font-awesome-icon :icon="['fad', 'dice']" /> Gameplay</h4>
           <FormField
             label="Default Draw Delay (seconds)"
             help="Pre-selected delay when starting a new game. Can still be changed per-draw."
@@ -155,7 +155,7 @@ watch(
 
         <!-- Fonts & Branding ───────────────────────────────────────────── -->
         <section class="settings-section">
-          <h4 class="section-heading"><i class="fa-duotone fa-font"></i> Fonts &amp; Branding</h4>
+          <h4 class="section-heading"><font-awesome-icon :icon="['fad', 'font']" /> Fonts &amp; Branding</h4>
           <FormField label="Google Fonts API Key">
             <input
               v-model="app.settings.google_fonts_api_key"
@@ -231,7 +231,7 @@ watch(
         <!-- Book Club Integrations ─────────────────────────────────────── -->
         <section class="settings-section">
           <h4 class="section-heading">
-            <i class="fa-duotone fa-book-open-cover"></i> Book Club Integrations
+            <font-awesome-icon :icon="['fad', 'book-open-cover']" /> Book Club Integrations
           </h4>
           <template v-for="club in BOOK_CLUBS" :key="club.slug">
             <FormField

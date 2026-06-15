@@ -22,7 +22,7 @@ function playerNameFor(id: string): string | undefined {
     box-style="max-width:450px;max-height:90vh;display:flex;flex-direction:column"
     @close="game.showEndGameModal = false"
   >
-    <h3 class="mb-12"><i class="fa-duotone fa-flag-checkered"></i> End Game — Select Valid Winners</h3>
+    <h3 class="mb-12"><font-awesome-icon :icon="['fad', 'flag-checkered']" /> End Game — Select Valid Winners</h3>
     <p class="text-dim text-xs mb-12">
       Uncheck any card IDs that should NOT count as valid winners.
     </p>

@@ -39,7 +39,7 @@ func (s *Server) handleGameState(w http.ResponseWriter, r *http.Request) {
 // handleGameAction processes game lifecycle operations.
 //
 //	Endpoint:    POST /api/game
-//	Auth:        admin
+//	Auth:        admin, or a user granted this page's permission
 //	Request:     {"action": "start"|"draw"|"end"|"trigger_halftime"|"update_details", ...}
 //	Response:    varies by action
 //	Broadcasts:  game_update (start/end), game_draw (draw), halftime_minigame, details_update

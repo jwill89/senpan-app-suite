@@ -155,6 +155,8 @@ export const endpoints = {
         `winners-log?page=${params.page}&per_page=${params.perPage}&sort=${params.sort}&dir=${params.dir}`,
       ),
     frequent: () => apiGet<FrequentWinnersResponse>('winners-log/frequent'),
+    delete: (id: number) => apiPost<OkResponse>('winners-log', { action: 'delete', id }),
+    deleteAll: () => apiPost<OkResponse>('winners-log', { action: 'delete_all' }),
   },
 
   // ── Cards ────────────────────────────────────────────────────────────────────

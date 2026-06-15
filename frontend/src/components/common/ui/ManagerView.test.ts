@@ -4,10 +4,11 @@ import ManagerView from './ManagerView.vue'
 
 describe('ManagerView', () => {
   it('renders title + icon in the header', () => {
-    const wrapper = mount(ManagerView, { props: { title: 'Patterns', icon: 'fa-x' } })
+    // <font-awesome-icon> is globally stubbed as `.fa-stub` (see vitest.setup.ts).
+    const wrapper = mount(ManagerView, { props: { title: 'Patterns', icon: ['fad', 'grid'] } })
     const h3 = wrapper.find('.manager-header h3')
     expect(h3.text()).toBe('Patterns')
-    expect(h3.find('i.fa-x').exists()).toBe(true)
+    expect(h3.find('.fa-stub').exists()).toBe(true)
   })
 
   it('renders the default slot (list body)', () => {

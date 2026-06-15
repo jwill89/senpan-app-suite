@@ -44,7 +44,7 @@ function goHome(): void {
   <div>
     <div class="topbar">
       <button class="btn-neutral btn-sm" @click="goHome">← Home</button>
-      <h2><i class="fa-duotone fa-ticket"></i> Raffles</h2>
+      <h2><font-awesome-icon :icon="['fad', 'ticket']" /> Raffles</h2>
       <span></span>
     </div>
     <div class="tab-body">

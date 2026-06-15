@@ -18,7 +18,7 @@ type styleRequest struct {
 // handleStylesList returns all styles (without CSS content) and the active style ID.
 //
 //	Endpoint:  GET /api/styles
-//	Auth:      admin
+//	Auth:      admin, or a user granted this page's permission
 //	Response:  {"styles": [...], "active_style_id": "..."}
 func (s *Server) handleStylesList(w http.ResponseWriter, r *http.Request) {
 	if !s.requirePermission(w, r, permSystemThemes) {
@@ -40,7 +40,7 @@ func (s *Server) handleStylesList(w http.ResponseWriter, r *http.Request) {
 // handleStylesAction processes style CRUD and activation operations.
 //
 //	Endpoint:    POST /api/styles
-//	Auth:        admin
+//	Auth:        admin, or a user granted this page's permission
 //	Request:     {"action": "get"|"create"|"update"|"delete"|"set_active", ...}
 //	Response:    varies by action
 //	Broadcasts:  style_update (on update of active style, set_active, or delete of active)

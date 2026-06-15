@@ -13,10 +13,12 @@
  * EmptyState as needed. Convention: the tab component holds a `screen` ref and
  * the `#actions` buttons switch it; each sub-screen opens with `SubPageHeader`.
  */
+import type { IconPrefix } from '@fortawesome/fontawesome-svg-core'
+
 defineProps<{
   title?: string
-  /** FontAwesome classes for the heading icon, e.g. "fa-duotone fa-megaphone". */
-  icon?: string
+  /** FontAwesome icon for the heading as `[prefix, name]`, e.g. `['fad', 'megaphone']`. */
+  icon?: [IconPrefix, string]
 }>()
 </script>
 
@@ -24,7 +26,7 @@ defineProps<{
   <div class="admin-panel">
     <div class="manager-header">
       <h3 v-if="title || $slots.title">
-        <slot name="title"><i v-if="icon" :class="icon"></i>{{ title }}</slot>
+        <slot name="title"><font-awesome-icon v-if="icon" :icon="icon" />{{ title }}</slot>
       </h3>
       <div v-if="$slots.actions" class="manager-actions"><slot name="actions" /></div>
     </div>

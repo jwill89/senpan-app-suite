@@ -22,7 +22,7 @@ type patternRequest struct {
 // handlePatternsList returns all patterns grouped by category.
 //
 //	Endpoint:  GET /api/patterns
-//	Auth:      admin
+//	Auth:      admin, or a user granted this page's permission
 //	Response:  {"patterns": [...], "categories": [...]}
 func (s *Server) handlePatternsList(w http.ResponseWriter, r *http.Request) {
 	if !s.requirePermission(w, r, permBingoPatterns) {
@@ -45,7 +45,7 @@ func (s *Server) handlePatternsList(w http.ResponseWriter, r *http.Request) {
 // handlePatternsAction processes pattern CRUD and reorder operations.
 //
 //	Endpoint:    POST /api/patterns
-//	Auth:        admin
+//	Auth:        admin, or a user granted this page's permission
 //	Request:     {"action": "create"|"delete"|"rename"|"reorder"|"set_category"|"bulk_reorder", ...}
 //	Response:    varies by action
 //	Broadcasts:  patterns_update
@@ -205,7 +205,7 @@ type categoryRequest struct {
 // handleCategoriesList returns all pattern categories ordered by sort_order.
 //
 //	Endpoint:  GET /api/pattern-categories
-//	Auth:      admin
+//	Auth:      admin, or a user granted this page's permission
 //	Response:  {"categories": [...]}
 func (s *Server) handleCategoriesList(w http.ResponseWriter, r *http.Request) {
 	if !s.requirePermission(w, r, permBingoPatterns) {
@@ -223,7 +223,7 @@ func (s *Server) handleCategoriesList(w http.ResponseWriter, r *http.Request) {
 // handleCategoriesAction processes category CRUD and reorder operations.
 //
 //	Endpoint:    POST /api/pattern-categories
-//	Auth:        admin
+//	Auth:        admin, or a user granted this page's permission
 //	Request:     {"action": "create"|"delete"|"rename"|"reorder"|"bulk_reorder", ...}
 //	Response:    varies by action
 //	Broadcasts:  patterns_update

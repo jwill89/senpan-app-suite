@@ -48,7 +48,7 @@ async function onInstall(): Promise<void> {
     <p v-if="showInstall" class="app-footer-install">
       <br/>
       <a href="#" role="button" @click.prevent="onInstall">
-        <i class="fa-solid fa-download" aria-hidden="true"></i>
+        <font-awesome-icon :icon="['fas', 'download']" />
         Install App
       </a>
     </p>

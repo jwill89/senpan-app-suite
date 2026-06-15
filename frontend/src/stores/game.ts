@@ -320,6 +320,48 @@ export const useGameStore = defineStore('game', () => {
     loadWinnersLog()
   }
 
+  /** Deletes one winners-log entry (with confirm), then reloads the page. */
+  async function deleteWinnerLogEntry(id: number): Promise<void> {
+    if (
+      !(await ui.confirm('Delete this winners-log entry? This cannot be undone.', {
+        title: 'Delete entry',
+        confirmText: 'Delete',
+      }))
+    )
+      return
+    try {
+      await endpoints.winnersLog.delete(id)
+      ui.notify('Entry deleted', 'info')
+      await loadWinnersLog()
+      // If that emptied the last page, step back one so we don't strand the user.
+      if (winnersLog.value.length === 0 && winnersLogPage.value > 1) {
+        winnersLogPage.value--
+        await loadWinnersLog()
+      }
+    } catch (e) {
+      ui.notify((e as Error).message, 'error')
+    }
+  }
+
+  /** Clears the entire winners log (with confirm), then reloads from page 1. */
+  async function deleteAllWinnersLog(): Promise<void> {
+    if (
+      !(await ui.confirm('Delete ALL winners-log entries? This cannot be undone.', {
+        title: 'Delete all entries',
+        confirmText: 'Delete all',
+      }))
+    )
+      return
+    try {
+      await endpoints.winnersLog.deleteAll()
+      ui.notify('All winners-log entries deleted', 'info')
+      winnersLogPage.value = 1
+      await loadWinnersLog()
+    } catch (e) {
+      ui.notify((e as Error).message, 'error')
+    }
+  }
+
   return {
     currentGame,
     winners,
@@ -366,5 +408,7 @@ export const useGameStore = defineStore('game', () => {
     winnersLogTotalPages,
     winnersLogSetSort,
     winnersLogGoPage,
+    deleteWinnerLogEntry,
+    deleteAllWinnersLog,
   }
 })

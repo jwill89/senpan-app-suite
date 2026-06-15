@@ -15,7 +15,7 @@ const cards = useCardsStore()
 
 <template>
   <div class="tab-body">
-    <AdminPanel title="Manage Cards" icon="fa-duotone fa-id-card">
+    <AdminPanel title="Manage Cards" :icon="['fad', 'id-card']">
       <div class="flex-toolbar cards-toolbar mb-20">
         <span class="text-dim">Generate</span>
         <input
@@ -61,7 +61,7 @@ const cards = useCardsStore()
           @click="cards.openCardPreview(c.id)"
         >
           <span v-if="c.player_name" class="card-player-icon" :title="c.player_name">
-            <i class="fa-duotone fa-user"></i>
+            <font-awesome-icon :icon="['fad', 'user']" />
           </span>
           <span>{{ c.id }}</span>
           <span class="del-x" title="Delete card" @click.stop="cards.deleteCard(c.id)">×</span>

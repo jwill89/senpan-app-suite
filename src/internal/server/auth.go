@@ -129,6 +129,16 @@ type registerRequest struct {
 //	Request:   {"username": "...", "password": "..."}
 //	Response:  {"success": true, "message": "..."}
 func (s *Server) handleRegister(w http.ResponseWriter, r *http.Request) {
+	// Registration is public, so throttle it per IP to prevent mass creation of
+	// inactive accounts. Every attempt (success or not) counts against the budget.
+	ip := clientIP(r)
+	if s.regLimiter.isLimited(ip) {
+		slog.Warn("register rate limited", "ip", ip)
+		writeError(w, http.StatusTooManyRequests, "Too many sign-up attempts. Please try again later.")
+		return
+	}
+	s.regLimiter.recordFailure(ip)
+
 	req, err := readJSON[registerRequest](r)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "Invalid JSON")

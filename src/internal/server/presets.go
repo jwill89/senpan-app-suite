@@ -18,7 +18,7 @@ type presetRequest struct {
 // handlePresetsList returns all saved game presets.
 //
 //	Endpoint:  GET /api/presets
-//	Auth:      admin
+//	Auth:      admin, or a user granted this page's permission
 //	Response:  {"presets": [...]}
 func (s *Server) handlePresetsList(w http.ResponseWriter, r *http.Request) {
 	if !s.requirePermission(w, r, permBingoPresets) {
@@ -36,7 +36,7 @@ func (s *Server) handlePresetsList(w http.ResponseWriter, r *http.Request) {
 // handlePresetsAction processes game-preset CRUD operations.
 //
 //	Endpoint:    POST /api/presets
-//	Auth:        admin
+//	Auth:        admin, or a user granted this page's permission
 //	Request:     {"action": "create"|"update"|"delete", ...}
 //	Response:    varies by action
 func (s *Server) handlePresetsAction(w http.ResponseWriter, r *http.Request) {

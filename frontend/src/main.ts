@@ -1,14 +1,16 @@
 /**
  * Application entry point.
  *
- * Creates the Vue app, installs Pinia + Vue Router, initializes FontAwesome (SVG
- * auto-replacement of <i class="fa-..."> markup), and mounts to #app.
+ * Creates the Vue app, installs Pinia + Vue Router, registers the global
+ * <font-awesome-icon> component (icon set defined in lib/fontawesome.ts), and
+ * mounts to #app.
  */
 import { createApp } from 'vue'
 import { createPinia } from 'pinia'
+import { FontAwesomeIcon } from '@fortawesome/vue-fontawesome'
 import App from './App.vue'
 import { router } from './router'
-import { initFontAwesome } from './lib/fontawesome'
+import './lib/fontawesome' // side-effect: registers the icon set in the FA library
 import { setUnauthorizedHandler } from './lib/api'
 import { useUiStore } from './stores/ui'
 import { useAuthStore } from './stores/auth'
@@ -23,6 +25,7 @@ const app = createApp(App)
 const pinia = createPinia()
 app.use(pinia)
 app.use(router)
+app.component('font-awesome-icon', FontAwesomeIcon)
 
 // Surface otherwise-silent runtime errors as a toast (and keep logging them to
 // the console) so failures are visible instead of leaving the UI half-rendered.
@@ -51,7 +54,3 @@ setUnauthorizedHandler(() => {
 })
 
 app.mount('#app')
-
-// Start FontAwesome DOM watching after mount so initial icons are replaced and
-// any icons rendered by later Vue updates are kept in sync.
-initFontAwesome()

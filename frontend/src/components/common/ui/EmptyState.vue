@@ -4,16 +4,18 @@
  * `text` prop or the default slot, with an optional leading FontAwesome `icon`.
  * Replaces the ad-hoc `.msg-block` placeholders.
  */
+import type { IconPrefix } from '@fortawesome/fontawesome-svg-core'
+
 defineProps<{
   text?: string
-  /** FontAwesome classes for a leading icon, e.g. "fa-duotone fa-inbox". */
-  icon?: string
+  /** FontAwesome icon for a leading glyph as `[prefix, name]`, e.g. `['fad', 'inbox']`. */
+  icon?: [IconPrefix, string]
 }>()
 </script>
 
 <template>
   <p class="empty-state">
-    <i v-if="icon" :class="icon"></i>
+    <font-awesome-icon v-if="icon" :icon="icon" />
     <slot>{{ text }}</slot>
   </p>
 </template>

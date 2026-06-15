@@ -19,7 +19,7 @@ async function signOut(): Promise<void> {
 <template>
   <div class="admin-login">
     <div class="box">
-      <h2><i class="fa-duotone fa-lock"></i> No Access Yet</h2>
+      <h2><font-awesome-icon :icon="['fad', 'lock']" /> No Access Yet</h2>
       <p>
         Your account is active, but an administrator hasn’t granted you access to any pages yet.
         Please check back later.

@@ -63,12 +63,13 @@ export function emptyGrid(): boolean[][] {
  *
  *   - `commentsLabel`: label for the per-item curator comments field (e.g.
  *     "Yao's Comments" vs "Drani's Comments"); also used in the Discord embed.
- *   - `icon`: FontAwesome icon class for the sidebar/heading (must be registered
- *     in lib/fontawesome.ts).
+ *   - `icon`: bare duotone FontAwesome icon name for the sidebar/heading, e.g.
+ *     'bicep' — rendered as `:icon="['fad', icon]"` (must be registered in
+ *     lib/fontawesome.ts).
  */
 export const BOOK_CLUBS = [
-  { slug: 'yaoi', name: 'Yaoi Book Club', commentsLabel: "Yao's Comments", icon: 'fa-bicep' },
-  { slug: 'yuri', name: 'Yuri Book Club', commentsLabel: "Drani's Comments", icon: 'fa-flower-daffodil' },
+  { slug: 'yaoi', name: 'Yaoi Book Club', commentsLabel: "Yao's Comments", icon: 'bicep' },
+  { slug: 'yuri', name: 'Yuri Book Club', commentsLabel: "Drani's Comments", icon: 'flower-daffodil' },
 ] as const
 
 /** Per-club reading-list Discord webhook setting key (matches webhookSettingKey on the backend). */

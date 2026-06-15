@@ -49,7 +49,7 @@ function onSelectEmoji(emoji: string): void {
       @click="pickerOpen = true"
     >
       <span v-if="player.stampShape === 'emoji' && player.stampEmoji">{{ player.stampEmoji }}</span>
-      <i v-else class="fa-duotone fa-face-smile" aria-hidden="true"></i>
+      <font-awesome-icon v-else :icon="['fad', 'face-smile']" />
     </button>
 
     <!-- Custom uploaded image -->
@@ -67,7 +67,7 @@ function onSelectEmoji(emoji: string): void {
 
     <!-- Upload a custom image -->
     <label class="stamp-option stamp-upload-btn" title="Upload custom stamp image">
-      <i class="fa-duotone fa-folder-open" aria-hidden="true"></i>
+      <font-awesome-icon :icon="['fad', 'folder-open']" />
       <span class="sr-only">Upload custom stamp image</span>
       <input type="file" accept="image/*" hidden @change="player.uploadCustomStamp($event)" />
     </label>

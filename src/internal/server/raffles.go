@@ -104,7 +104,7 @@ type raffleRequest struct {
 // handleRafflesAction processes raffle CRUD operations.
 //
 //	Endpoint:  POST /api/raffles
-//	Auth:      admin
+//	Auth:      admin, or a user granted this page's permission
 //	Request:   {"action": "create"|"update"|"delete", ...}
 //	Response:  varies by action
 func (s *Server) handleRafflesAction(w http.ResponseWriter, r *http.Request) {
@@ -360,7 +360,7 @@ type raffleEntriesRequest struct {
 // handleRaffleEntries processes admin actions on raffle entries.
 //
 //	Endpoint:  POST /api/raffles/{id}/entries
-//	Auth:      admin
+//	Auth:      admin, or a user granted this page's permission
 //	Request:   {"action": "mark_paid"|"delete_entry"|"pick_winner"|"verify_winner"|"pick_another", ...}
 //	Response:  varies by action
 func (s *Server) handleRaffleEntries(w http.ResponseWriter, r *http.Request) {
@@ -571,7 +571,7 @@ func (s *Server) removeUploadedImage(webPath string) {
 // Validates file extension (jpg/png/webp/gif) and size (max 5 MB).
 //
 //	Endpoint:  POST /api/raffles/upload
-//	Auth:      admin
+//	Auth:      admin, or a user granted this page's permission
 //	Request:   multipart form with "image" field
 //	Response:  {"path": "images/raffles/raffle_....ext"}
 func (s *Server) handleRaffleUpload(w http.ResponseWriter, r *http.Request) {

@@ -26,6 +26,7 @@
     "@codemirror/view": "^6.36.2",
     "@fortawesome/fontawesome-svg-core": "^6.7.2",
     "@fortawesome/free-brands-svg-icons": "^6.7.2",
+    "@fortawesome/vue-fontawesome": "^3.2.0",
     "@lezer/highlight": "^1.2.1",
     "@replit/codemirror-css-color-picker": "^6.3.0",
     "@toast-ui/editor": "^3.2.2",

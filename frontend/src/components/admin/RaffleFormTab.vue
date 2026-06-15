@@ -35,7 +35,7 @@ function cancel(): void {
 <template>
   <AdminPanel>
     <SubPageHeader
-      icon="fa-duotone fa-plus"
+      :icon="['fad', 'plus']"
       :title="`${raffles.raffleForm && raffles.raffleForm.id ? 'Edit' : 'New'} Raffle`"
       @back="cancel"
     />

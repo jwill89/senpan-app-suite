@@ -86,7 +86,7 @@ func safeFontName(name string) (string, bool) {
 // handleFontsList returns the font files in <webRoot>/fonts.
 //
 //	Endpoint:  GET /api/fonts
-//	Auth:      admin
+//	Auth:      admin, or a user granted this page's permission
 //	Response:  {"fonts": [{name, size, modified}]}
 func (s *Server) handleFontsList(w http.ResponseWriter, r *http.Request) {
 	if !s.requirePermission(w, r, permAtelierFonts) {
@@ -143,7 +143,7 @@ type fontsActionRequest struct {
 // handleFontsAction processes admin rename/delete on font files.
 //
 //	Endpoint:  POST /api/fonts
-//	Auth:      admin
+//	Auth:      admin, or a user granted this page's permission
 //	Request:   {"action": "delete"|"rename", "name": "...", "new_name": "..."}
 //	Response:  {"ok": true} (rename also returns {"name": newName})
 func (s *Server) handleFontsAction(w http.ResponseWriter, r *http.Request) {
@@ -217,7 +217,7 @@ func (s *Server) handleFontsAction(w http.ResponseWriter, r *http.Request) {
 // were skipped, so a partial batch still uploads the valid files.
 //
 //	Endpoint:  POST /api/fonts/upload
-//	Auth:      admin
+//	Auth:      admin, or a user granted this page's permission
 //	Request:   multipart form with one or more "files" fields
 //	Response:  {"uploaded": ["a.ttf"], "skipped": [{"name":"b.ttf","reason":"..."}]}
 func (s *Server) handleFontUpload(w http.ResponseWriter, r *http.Request) {

@@ -232,7 +232,7 @@ func (s *Server) listCarrdProjects() ([]carrdProject, error) {
 // <webRoot>/carrd).
 //
 //	Endpoint:  GET /api/carrd/projects
-//	Auth:      admin
+//	Auth:      admin, or a user granted this page's permission
 //	Response:  {"projects": [{title, folder, image_count, modified}]}
 func (s *Server) handleCarrdProjectsList(w http.ResponseWriter, r *http.Request) {
 	if !s.requirePermission(w, r, permAtelierCarrd) {
@@ -263,7 +263,7 @@ type carrdProjectsActionRequest struct {
 // handleCarrdProjectsAction creates or deletes a carrd project (folder).
 //
 //	Endpoint:  POST /api/carrd/projects
-//	Auth:      admin
+//	Auth:      admin, or a user granted this page's permission
 //	Request:   {"action": "create", "title": "...", "folder": "..."(optional)}
 //	           {"action": "delete", "folder": "..."}
 //	Response:  create → {"ok": true, "project": {...}}
@@ -378,7 +378,7 @@ func (s *Server) createCarrdProject(w http.ResponseWriter, root string, req carr
 // a project (the project root when no path is given).
 //
 //	Endpoint:  GET /api/carrd/images?folder=<folder>&path=<subpath>
-//	Auth:      admin
+//	Auth:      admin, or a user granted this page's permission
 //	Response:  {"folder": "...", "path": "...", "dirs": ["..."],
 //	            "images": [{name, size, modified}]}
 func (s *Server) handleCarrdImagesList(w http.ResponseWriter, r *http.Request) {
@@ -461,7 +461,7 @@ type carrdImagesActionRequest struct {
 // a sub-directory (and its contents) within a project.
 //
 //	Endpoint:  POST /api/carrd/images
-//	Auth:      admin
+//	Auth:      admin, or a user granted this page's permission
 //	Request:   {"action":"delete","folder":"...","path":"...","name":"..."}
 //	           {"action":"create_dir","folder":"...","path":"...","name":"..."}
 //	           {"action":"delete_dir","folder":"...","path":"..."}
@@ -546,7 +546,7 @@ func (s *Server) handleCarrdImagesAction(w http.ResponseWriter, r *http.Request)
 // files.
 //
 //	Endpoint:  POST /api/carrd/upload
-//	Auth:      admin
+//	Auth:      admin, or a user granted this page's permission
 //	Request:   multipart form with "folder" + optional "path" fields and one or
 //	           more "files" fields
 //	Response:  {"uploaded": ["a.png"], "skipped": [{"name":"b.txt","reason":"..."}]}

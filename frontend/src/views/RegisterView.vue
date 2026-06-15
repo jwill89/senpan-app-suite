@@ -50,7 +50,7 @@ function goLogin(): void {
 <template>
   <div class="admin-login">
     <div class="box">
-      <h2><i class="fa-duotone fa-user-plus"></i> Create Account</h2>
+      <h2><font-awesome-icon :icon="['fad', 'user-plus']" /> Create Account</h2>
 
       <template v-if="done">
         <p class="success-msg">{{ done }}</p>

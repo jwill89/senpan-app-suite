@@ -72,7 +72,7 @@ function back(): void {
       <!-- Sign-up result (shown after signing up) -->
       <div v-if="raffles.raffleSignupResult" class="raffle-signup-result">
         <h3 class="text-success mb-8">
-          <i class="fa-duotone fa-circle-check"></i> {{ raffles.raffleSignupResult.message }}
+          <font-awesome-icon :icon="['fad', 'circle-check']" /> {{ raffles.raffleSignupResult.message }}
         </h3>
         <p><strong>Total Entries:</strong> {{ raffles.raffleSignupResult.total_entries }}</p>
         <p>
@@ -143,7 +143,7 @@ function back(): void {
         class="raffle-closed-msg"
       >
         <p class="text-dim" style="text-align: center; padding: 20px; font-size: 1.1rem">
-          <i class="fa-duotone fa-lock"></i> This raffle is closed.
+          <font-awesome-icon :icon="['fad', 'lock']" /> This raffle is closed.
         </p>
       </div>
     </div>

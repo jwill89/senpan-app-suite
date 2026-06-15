@@ -70,14 +70,13 @@
     display: none
 }
 
-/* FontAwesome icon spacing in buttons and headings */
-button i.fa-solid,
-button i.fa-regular,
-button i.fa-brands,
-h1 i.fa-solid,
-h2 i.fa-solid,
-h3 i.fa-solid,
-h4 i.fa-solid {
+/* FontAwesome icon spacing in buttons and headings. Icons render as
+   <svg class="svg-inline--fa"> via the <font-awesome-icon> component. */
+button .svg-inline--fa,
+h1 .svg-inline--fa,
+h2 .svg-inline--fa,
+h3 .svg-inline--fa,
+h4 .svg-inline--fa {
     margin-right: 0.35em;
 }
 
@@ -437,10 +436,10 @@ h1 {
 .manager-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center }
 
 /* Leading icon in a panel / manager / sub-page heading: space it from the title
-   (these headings render `<i …></i>{{ title }}` with no literal space). */
-.admin-panel > h3 > i:first-child,
-.manager-header > h3 > i:first-child,
-.subpage-header > h3 > i:first-child { margin-right: .45em }
+   (these headings render `<font-awesome-icon/>{{ title }}` with no literal space). */
+.admin-panel > h3 > .svg-inline--fa:first-child,
+.manager-header > h3 > .svg-inline--fa:first-child,
+.subpage-header > h3 > .svg-inline--fa:first-child { margin-right: .45em }
 
 /* Manager toolbar = the `.flex-toolbar` object (grouped above) + header spacing. */
 .manager-toolbar {
@@ -929,7 +928,7 @@ kbd {
     font-variant-numeric: tabular-nums;
     letter-spacing: 0.02em;
 }
-.game-clock i {
+.game-clock .svg-inline--fa {
     color: var(--highlight);
     font-size: 0.75rem;
 }
@@ -2906,8 +2905,8 @@ span.pattern-mini {
    `.color-picker` re-maps its surfaces + fields to the app theme tokens (so it
    blends into any modal/panel and stays legible), and the descendant selectors
    keep the edge over the library's own single-class styles regardless of load
-   order. Shared by StampColorPicker (player stamp-colour modal) and
-   ThemeColorPickerTool (Themes tab helper). */
+   order. Used by StampColorPicker (player stamp-colour modal); the Themes-tab
+   helper uses a native colour input instead. */
 .color-picker .vc-chrome {
     width: 100%;
     max-width: 320px;

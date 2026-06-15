@@ -26,7 +26,7 @@ var validScheduleKinds = map[string]bool{"": true, "once": true, "daily": true, 
 // handleAnnouncementTypesList returns all announcement types.
 //
 //	Endpoint:  GET /api/announcement-types
-//	Auth:      admin
+//	Auth:      admin, or a user granted this page's permission
 //	Response:  {"types": [...]}
 func (s *Server) handleAnnouncementTypesList(w http.ResponseWriter, r *http.Request) {
 	if !s.requirePermission(w, r, permTeahouseAnnounce) {
@@ -51,7 +51,7 @@ type announcementTypeRequest struct {
 // handleAnnouncementTypesAction creates, updates, or deletes an announcement type.
 //
 //	Endpoint:  POST /api/announcement-types
-//	Auth:      admin
+//	Auth:      admin, or a user granted this page's permission
 //	Request:   {"action": "create"|"update"|"delete", ...}
 func (s *Server) handleAnnouncementTypesAction(w http.ResponseWriter, r *http.Request) {
 	if !s.requirePermission(w, r, permTeahouseAnnounce) {
@@ -127,7 +127,7 @@ func (s *Server) handleAnnouncementTypesAction(w http.ResponseWriter, r *http.Re
 // handleAnnouncementsList returns all announcements (with their type name).
 //
 //	Endpoint:  GET /api/announcements
-//	Auth:      admin
+//	Auth:      admin, or a user granted this page's permission
 //	Response:  {"announcements": [...]}
 func (s *Server) handleAnnouncementsList(w http.ResponseWriter, r *http.Request) {
 	if !s.requirePermission(w, r, permTeahouseAnnounce) {
@@ -152,7 +152,7 @@ type announcementRequest struct {
 // announcement.
 //
 //	Endpoint:  POST /api/announcements
-//	Auth:      admin
+//	Auth:      admin, or a user granted this page's permission
 //	Request:   {"action": "create"|"update"|"delete"|"send_now"|"skip_next", ...}
 func (s *Server) handleAnnouncementsAction(w http.ResponseWriter, r *http.Request) {
 	if !s.requirePermission(w, r, permTeahouseAnnounce) {
@@ -604,7 +604,7 @@ func (s *Server) announcementImageDir() string {
 // <webRoot>/images/announcements and returns its full URL.
 //
 //	Endpoint:  POST /api/announcements/upload
-//	Auth:      admin
+//	Auth:      admin, or a user granted this page's permission
 //	Response:  {"url": "https://host/images/announcements/announcement_....ext"}
 func (s *Server) handleAnnouncementUpload(w http.ResponseWriter, r *http.Request) {
 	if !s.requirePermission(w, r, permTeahouseAnnounce) {
@@ -617,7 +617,7 @@ func (s *Server) handleAnnouncementUpload(w http.ResponseWriter, r *http.Request
 // full URLs so the admin can reuse one instead of uploading a duplicate.
 //
 //	Endpoint:  GET /api/announcements/images
-//	Auth:      admin
+//	Auth:      admin, or a user granted this page's permission
 //	Response:  {"images": ["https://host/images/announcements/....png", ...]}
 func (s *Server) handleAnnouncementImages(w http.ResponseWriter, r *http.Request) {
 	if !s.requirePermission(w, r, permTeahouseAnnounce) {

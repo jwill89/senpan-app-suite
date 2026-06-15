@@ -12,7 +12,7 @@ defineEmits<{ 'update:modelValue': [value: string] }>()
 
 <template>
   <span class="search-input">
-    <i class="fa-duotone fa-magnifying-glass" aria-hidden="true"></i>
+    <font-awesome-icon :icon="['fad', 'magnifying-glass']" />
     <input
       :value="modelValue"
       type="search"

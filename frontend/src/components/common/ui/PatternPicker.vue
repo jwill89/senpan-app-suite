@@ -78,7 +78,7 @@ function toggleSelectAll(): void {
         "
         @click="toggleSelectAll"
       >
-        <i class="fa-solid fa-circle-check" aria-hidden="true"></i>
+        <font-awesome-icon :icon="['fas', 'circle-check']" />
         {{ allDisplayedSelected ? 'Deselect All' : 'Select All' }}
       </button>
       <button

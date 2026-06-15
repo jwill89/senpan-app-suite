@@ -2,6 +2,7 @@
 package server
 
 import (
+	"context"
 	"encoding/json"
 	"log/slog"
 	"net/http"
@@ -25,7 +26,8 @@ type Server struct {
 	password    string
 	webRoot     string
 	mux         *http.ServeMux
-	limiter     *rateLimiter
+	limiter     *rateLimiter // failed-login brute-force limiter
+	regLimiter  *rateLimiter // registration-rate limiter (mass-signup abuse)
 }
 
 // New creates a Server, registers all API routes, and returns it.
@@ -38,19 +40,42 @@ func New(st *store.Store, hub *ws.Hub, sessionSecret, adminPassword, webRoot str
 	sm.Cookie.SameSite = http.SameSiteLaxMode
 
 	s := &Server{
-		store:    st,
-		game:     bingo.NewService(st),
-		hub:      hub,
-		sessions: sm,
-		password: adminPassword,
-		webRoot:  webRoot,
-		mux:      http.NewServeMux(),
-		limiter:  newRateLimiter(5, 15*time.Minute), // 5 failed attempts per 15 minutes
+		store:      st,
+		game:       bingo.NewService(st),
+		hub:        hub,
+		sessions:   sm,
+		password:   adminPassword,
+		webRoot:    webRoot,
+		mux:        http.NewServeMux(),
+		limiter:    newRateLimiter(5, 15*time.Minute), // 5 failed logins per 15 minutes
+		regLimiter: newRateLimiter(5, time.Hour),      // 5 registration attempts per hour
 	}
 
 	s.routes()
-	s.sessHandler = sm.LoadAndSave(s.mux)
+	// LoadAndSave (outer) populates the session, then withUserCache adds a
+	// per-request memo so currentUser hits the DB at most once per request.
+	s.sessHandler = sm.LoadAndSave(s.withUserCache(s.mux))
 	return s
+}
+
+// userCacheCtxKey is the context key under which each request carries its
+// per-request user memo.
+type userCacheCtxKey struct{}
+
+// userCache memoizes currentUser for the lifetime of a single request, so a
+// handler that runs several guards (e.g. requireAuth then requirePermission)
+// loads the account from the store once instead of per guard.
+type userCache struct {
+	loaded bool
+	user   *model.User
+}
+
+// withUserCache injects an empty per-request user memo into the request context.
+func (s *Server) withUserCache(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ctx := context.WithValue(r.Context(), userCacheCtxKey{}, &userCache{})
+		next.ServeHTTP(w, r.WithContext(ctx))
+	})
 }
 
 // routes registers all API endpoint handlers on the internal mux.
@@ -113,6 +138,7 @@ func (s *Server) routes() {
 
 	// Winners log routes
 	s.mux.HandleFunc("GET /api/winners-log", s.handleWinnersLog)
+	s.mux.HandleFunc("POST /api/winners-log", s.handleWinnersLogAction)
 	s.mux.HandleFunc("GET /api/winners-log/frequent", s.handleFrequentWinners)
 
 	// App settings
@@ -243,11 +269,54 @@ func (s *Server) sessionUserID(r *http.Request) int64 {
 	return 0
 }
 
+// wsSessionUser loads the account for a request that bypasses the session
+// middleware — specifically the /api/ws upgrade, which is dispatched straight to
+// the mux (coder/websocket needs the raw ResponseWriter, so it can't go through
+// LoadAndSave/withUserCache). It reads the session cookie, loads the SCS session
+// manually, and returns the authenticated, active account or nil. Used to gate
+// the privileged admin WebSocket channel.
+func (s *Server) wsSessionUser(r *http.Request) *model.User {
+	cookie, err := r.Cookie(s.sessions.Cookie.Name)
+	if err != nil {
+		return nil
+	}
+	ctx, err := s.sessions.Load(r.Context(), cookie.Value)
+	if err != nil {
+		return nil
+	}
+	id, ok := s.sessions.Get(ctx, "user_id").(int64)
+	if !ok || id == 0 {
+		return nil
+	}
+	u, err := s.store.GetUserByID(id)
+	if err != nil || u == nil || !u.IsActive {
+		return nil
+	}
+	return u
+}
+
 // currentUser loads the active account for the current session, or nil if the
 // request is unauthenticated, the user was deleted, or the account has since
-// been deactivated. Loading from the store on each request means permission and
-// activation changes take effect immediately (no stale session snapshot).
+// been deactivated. The result is memoized per request (see withUserCache) so
+// the several guards a handler may call share one store read; a *new* request
+// always reloads, so permission and activation changes still take effect
+// immediately (no stale session snapshot across requests).
 func (s *Server) currentUser(r *http.Request) *model.User {
+	cache, _ := r.Context().Value(userCacheCtxKey{}).(*userCache)
+	if cache != nil && cache.loaded {
+		return cache.user
+	}
+	u := s.loadCurrentUser(r)
+	if cache != nil {
+		cache.loaded = true
+		cache.user = u
+	}
+	return u
+}
+
+// loadCurrentUser reads the session's user id and loads the active account from
+// the store (uncached). Returns nil when unauthenticated, deleted, or inactive.
+func (s *Server) loadCurrentUser(r *http.Request) *model.User {
 	id := s.sessionUserID(r)
 	if id == 0 {
 		return nil

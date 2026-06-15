@@ -39,7 +39,7 @@ function patternById(id: number) {
     <!-- ── Editor sub-page (create / edit) ───────────────────────────────── -->
     <div v-if="presets.editingPreset" class="admin-panel">
       <SubPageHeader
-        icon="fa-duotone fa-ballot"
+        :icon="['fad', 'ballot']"
         :title="presets.editingPreset.id ? 'Edit Preset' : 'New Preset'"
         @back="presets.cancelEdit()"
       />
@@ -79,7 +79,7 @@ function patternById(id: number) {
         <button class="btn-confirm" :disabled="presets.savingPreset" @click="presets.savePreset()">
           <LoadingSpinner v-if="presets.savingPreset" label="Saving…" />
           <template v-else>
-            <i class="fa-solid fa-circle-check"></i>
+            <font-awesome-icon :icon="['fas', 'circle-check']" />
             {{ presets.editingPreset.id ? 'Save Changes' : 'Create Preset' }}
           </template>
         </button>
@@ -90,10 +90,10 @@ function patternById(id: number) {
     </div>
 
     <!-- ── List ──────────────────────────────────────────────────────────── -->
-    <ManagerView v-else title="Game Presets" icon="fa-duotone fa-ballot">
+    <ManagerView v-else title="Game Presets" :icon="['fad', 'ballot']">
       <template #actions>
         <button class="btn-confirm btn-sm" @click="presets.newPreset()">
-          <i class="fa-solid fa-plus"></i> New Preset
+          <font-awesome-icon :icon="['fas', 'plus']" /> New Preset
         </button>
       </template>
 
@@ -123,14 +123,14 @@ function patternById(id: number) {
           </p>
           <template #actions>
             <button class="btn-confirm btn-sm" title="Edit preset" @click="presets.editPreset(preset)">
-              <i class="fa-solid fa-pen-to-square"></i> Edit
+              <font-awesome-icon :icon="['fas', 'pen-to-square']" /> Edit
             </button>
             <button
               class="btn-danger btn-sm"
               title="Delete preset"
               @click="presets.deletePreset(preset.id)"
             >
-              <i class="fa-solid fa-trash"></i>
+              <font-awesome-icon :icon="['fas', 'trash']" />
             </button>
           </template>
         </ListRow>

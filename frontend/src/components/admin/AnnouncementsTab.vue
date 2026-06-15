@@ -154,13 +154,13 @@ async function submitType(): Promise<void> {
 <template>
   <div class="tab-body">
     <!-- ── List ───────────────────────────────────────────────────────────── -->
-    <ManagerView v-if="screen === 'list'" title="Announcements" icon="fa-duotone fa-megaphone">
+    <ManagerView v-if="screen === 'list'" title="Announcements" :icon="['fad', 'megaphone']">
       <template #actions>
         <button class="btn-view btn-sm" @click="openTypes()">
-          <i class="fa-duotone fa-folder-open"></i> Manage Types
+          <font-awesome-icon :icon="['fad', 'folder-open']" /> Manage Types
         </button>
         <button class="btn-confirm btn-sm" @click="openNew()">
-          <i class="fa-solid fa-plus"></i> New Announcement
+          <font-awesome-icon :icon="['fas', 'plus']" /> New Announcement
         </button>
       </template>
 
@@ -207,16 +207,16 @@ async function submitType(): Promise<void> {
                 alt="Announcement image"
               />
               <div v-else class="media-cover media-cover--wide media-empty">
-                <i class="fa-duotone fa-image"></i>
+                <font-awesome-icon :icon="['fad', 'image']" />
               </div>
             </template>
 
             <h4 class="ann-title">{{ a.title }}</h4>
             <p class="text-sm text-dim ann-meta">
-              <i class="fa-duotone fa-folder-open"></i> {{ typeName(a) }}
+              <font-awesome-icon :icon="['fad', 'folder-open']" /> {{ typeName(a) }}
             </p>
             <p v-if="a.start_at" class="text-sm ann-meta">
-              <i class="fa-duotone fa-calendar-days"></i>
+              <font-awesome-icon :icon="['fad', 'calendar-days']" />
               {{ inZone(a.start_at, a.timezone) }}
               <span v-if="a.end_at">– {{ inZone(a.end_at, a.timezone) }}</span>
               <span v-if="a.timezone" class="text-dim">({{ a.timezone }})</span>
@@ -240,7 +240,7 @@ async function submitType(): Promise<void> {
                 @click="store.sendNow(a)"
               >
                 <LoadingSpinner v-if="store.sendingId === a.id" label="Sending…" />
-                <template v-else><i class="fa-solid fa-paper-plane"></i> Send now</template>
+                <template v-else><font-awesome-icon :icon="['fas', 'paper-plane']" /> Send now</template>
               </button>
               <button
                 v-if="a.schedule_kind && a.next_post_at"
@@ -249,10 +249,10 @@ async function submitType(): Promise<void> {
                 title="Skip the next scheduled occurrence"
                 @click="store.skipNext(a)"
               >
-                <i class="fa-solid fa-forward-step"></i> Skip next
+                <font-awesome-icon :icon="['fas', 'forward-step']" /> Skip next
               </button>
               <button class="btn-confirm btn-sm" aria-label="Edit" title="Edit" @click="openEdit(a)">
-                <i class="fa-solid fa-pen-to-square"></i>
+                <font-awesome-icon :icon="['fas', 'pen-to-square']" />
               </button>
               <button
                 class="btn-danger btn-sm"
@@ -260,7 +260,7 @@ async function submitType(): Promise<void> {
                 title="Delete"
                 @click="store.deleteAnnouncement(a)"
               >
-                <i class="fa-solid fa-trash"></i>
+                <font-awesome-icon :icon="['fas', 'trash']" />
               </button>
             </template>
           </ListRow>
@@ -276,7 +276,7 @@ async function submitType(): Promise<void> {
     <!-- ── Announcement form ──────────────────────────────────────────────── -->
     <AdminPanel v-else-if="screen === 'form'">
       <SubPageHeader
-        icon="fa-duotone fa-megaphone"
+        :icon="['fad', 'megaphone']"
         :title="store.form.id ? 'Edit Announcement' : 'New Announcement'"
         @back="backToList()"
       />
@@ -371,7 +371,7 @@ async function submitType(): Promise<void> {
 
       <!-- Discord buttons: optional link buttons rendered beneath the embed -->
       <hr class="ann-divider" />
-      <h4 class="raffle-section-heading"><i class="fa-brands fa-discord"></i> Buttons</h4>
+      <h4 class="raffle-section-heading"><font-awesome-icon :icon="['fab', 'discord']" /> Buttons</h4>
       <p class="text-dim text-sm mb-8">
         Up to {{ MAX_BUTTONS }} link buttons shown under the embed. Each needs a label and URL;
         the emoji is optional — click the emoji box to pick one.
@@ -386,7 +386,7 @@ async function submitType(): Promise<void> {
             @click="emojiPickerRow = i"
           >
             <span v-if="btn.emoji">{{ btn.emoji }}</span>
-            <i v-else class="fa-duotone fa-face-smile" aria-hidden="true"></i>
+            <font-awesome-icon v-else :icon="['fad', 'face-smile']" />
           </button>
           <input
             v-model="btn.label"
@@ -407,7 +407,7 @@ async function submitType(): Promise<void> {
             title="Remove button"
             @click="removeButton(i)"
           >
-            <i class="fa-solid fa-trash"></i>
+            <font-awesome-icon :icon="['fas', 'trash']" />
           </button>
         </div>
       </div>
@@ -417,7 +417,7 @@ async function submitType(): Promise<void> {
         :disabled="store.form.buttons.length >= MAX_BUTTONS"
         @click="addButton()"
       >
-        <i class="fa-solid fa-plus"></i> Add button
+        <font-awesome-icon :icon="['fas', 'plus']" /> Add button
       </button>
 
       <EmojiPickerModal
@@ -430,7 +430,7 @@ async function submitType(): Promise<void> {
       <!-- Scheduling: when (if ever) this announcement auto-posts to Discord -->
       <hr class="ann-divider" />
       <h4 class="raffle-section-heading">
-        <i class="fa-duotone fa-clock"></i> Scheduling
+        <font-awesome-icon :icon="['fad', 'clock']" /> Scheduling
       </h4>
 
       <!-- Schedule builder -->
@@ -509,12 +509,12 @@ async function submitType(): Promise<void> {
     <AdminPanel v-else-if="screen === 'types'">
       <SubPageHeader
         title="Announcement Types"
-        icon="fa-duotone fa-folder-open"
+        :icon="['fad', 'folder-open']"
         @back="screen = 'list'"
       />
       <div class="flex-toolbar flex-end mb-16">
         <button class="btn-confirm btn-sm" @click="openNewType()">
-          <i class="fa-solid fa-plus"></i> New Type
+          <font-awesome-icon :icon="['fas', 'plus']" /> New Type
         </button>
       </div>
 
@@ -522,14 +522,14 @@ async function submitType(): Promise<void> {
         <ListRow v-for="t in store.types" :key="t.id">
           <h4 class="ann-title">{{ t.name }}</h4>
           <p class="text-sm text-dim">
-            <i class="fa-brands fa-discord"></i> {{ maskWebhook(t.webhook_url) }}
+            <font-awesome-icon :icon="['fab', 'discord']" /> {{ maskWebhook(t.webhook_url) }}
           </p>
           <template #actions>
             <button class="btn-confirm btn-sm" aria-label="Edit type" @click="openEditType(t)">
-              <i class="fa-solid fa-pen-to-square"></i>
+              <font-awesome-icon :icon="['fas', 'pen-to-square']" />
             </button>
             <button class="btn-danger btn-sm" aria-label="Delete type" @click="store.deleteType(t)">
-              <i class="fa-solid fa-trash"></i>
+              <font-awesome-icon :icon="['fas', 'trash']" />
             </button>
           </template>
         </ListRow>
@@ -540,7 +540,7 @@ async function submitType(): Promise<void> {
     <!-- ── Type form ──────────────────────────────────────────────────────── -->
     <AdminPanel v-else>
       <SubPageHeader
-        icon="fa-duotone fa-folder-open"
+        :icon="['fad', 'folder-open']"
         :title="store.typeForm.id ? 'Edit Type' : 'New Type'"
         @back="screen = 'types'"
       />

@@ -12,7 +12,7 @@ const game = useGameStore()
 
 <template>
   <ModalOverlay v-if="game.showHalftimePrompt" centered @close="game.dismissHalftime()">
-    <h3 class="mb-16"><i class="fa-duotone fa-circle-pause"></i> Half-Time!</h3>
+    <h3 class="mb-16"><font-awesome-icon :icon="['fad', 'circle-pause']" /> Half-Time!</h3>
     <p class="text-dim mb-20">
       You've drawn 35 numbers! Would you like to alert users about a half-time minigame?
     </p>

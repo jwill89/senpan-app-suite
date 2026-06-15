@@ -63,10 +63,8 @@ func (s *Store) GetUserByUsername(username string) (*model.User, string, error) 
 	if err != nil {
 		return nil, "", err
 	}
-	u.IsAdmin = isAdmin == 1
-	u.IsActive = isActive == 1
-	if err := json.Unmarshal([]byte(permsJSON), &u.Permissions); err != nil {
-		return nil, "", fmt.Errorf("unmarshal permissions: %w", err)
+	if err := decodeUserFlags(&u, isAdmin, isActive, permsJSON); err != nil {
+		return nil, "", err
 	}
 	return &u, hash, nil
 }
@@ -89,10 +87,8 @@ func (s *Store) ListUsers() ([]model.User, error) {
 		if err := rows.Scan(&u.ID, &u.Username, &isAdmin, &isActive, &permsJSON, &u.CreatedAt); err != nil {
 			return nil, err
 		}
-		u.IsAdmin = isAdmin == 1
-		u.IsActive = isActive == 1
-		if err := json.Unmarshal([]byte(permsJSON), &u.Permissions); err != nil {
-			return nil, fmt.Errorf("unmarshal permissions: %w", err)
+		if err := decodeUserFlags(&u, isAdmin, isActive, permsJSON); err != nil {
+			return nil, err
 		}
 		users = append(users, u)
 	}
@@ -173,12 +169,22 @@ func (s *Store) scanUser(row *sql.Row) (*model.User, error) {
 	if err != nil {
 		return nil, err
 	}
+	if err := decodeUserFlags(&u, isAdmin, isActive, permsJSON); err != nil {
+		return nil, err
+	}
+	return &u, nil
+}
+
+// decodeUserFlags applies the scanned integer flags and permissions JSON onto u.
+// Shared by every user-row reader (scanUser, ListUsers, GetUserByUsername) so the
+// int→bool + JSON-unmarshal logic lives in one place.
+func decodeUserFlags(u *model.User, isAdmin, isActive int, permsJSON string) error {
 	u.IsAdmin = isAdmin == 1
 	u.IsActive = isActive == 1
 	if err := json.Unmarshal([]byte(permsJSON), &u.Permissions); err != nil {
-		return nil, fmt.Errorf("unmarshal permissions: %w", err)
+		return fmt.Errorf("unmarshal permissions: %w", err)
 	}
-	return &u, nil
+	return nil
 }
 
 // isUniqueViolation reports whether err is a SQLite UNIQUE-constraint failure

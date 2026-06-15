@@ -104,16 +104,16 @@ async function submitChangePw(): Promise<void> {
 <template>
   <div>
     <div class="topbar">
-      <h2><i class="fa-duotone fa-gear"></i> Admin Dashboard</h2>
+      <h2><font-awesome-icon :icon="['fad', 'gear']" /> Admin Dashboard</h2>
       <div class="topbar-actions">
         <span v-if="auth.user" class="topbar-user text-dim">
-          <i class="fa-duotone fa-user"></i> {{ auth.user.username }}
+          <font-awesome-icon :icon="['fad', 'user']" /> {{ auth.user.username }}
         </span>
         <button class="btn-neutral btn-sm" @click="openChangePw">
-          <i class="fa-solid fa-lock"></i> Change Password
+          <font-awesome-icon :icon="['fas', 'lock']" /> Change Password
         </button>
         <button class="btn-neutral btn-sm" @click="logout">
-          <i class="fa-solid fa-arrow-right-from-bracket"></i> Logout
+          <font-awesome-icon :icon="['fas', 'arrow-right-from-bracket']" /> Logout
         </button>
       </div>
     </div>
@@ -138,7 +138,7 @@ async function submitChangePw(): Promise<void> {
       box-style="max-width: 420px"
       @close="showChangePw = false"
     >
-      <h3 class="mt-0"><i class="fa-duotone fa-lock"></i> Change Password</h3>
+      <h3 class="mt-0"><font-awesome-icon :icon="['fad', 'lock']" /> Change Password</h3>
       <form autocomplete="off" @submit.prevent="submitChangePw">
         <FormField label="Current password" html-for="cur-pw">
           <input

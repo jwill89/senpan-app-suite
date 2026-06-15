@@ -55,7 +55,7 @@ onMounted(() => joinInput.value?.focus())
     <div class="home-cards">
       <!-- Join game -->
       <div class="home-card">
-        <h2><i class="fa-duotone fa-circle-dot"></i> Bingo</h2>
+        <h2><font-awesome-icon :icon="['fad', 'circle-dot']" /> Bingo</h2>
         <!-- Admin-editable markdown prompt; plain-text fallback until parser loads -->
         <p v-if="!markdownReady">{{ app.settings.bingo_join_prompt }}</p>
         <div
@@ -89,7 +89,7 @@ onMounted(() => joinInput.value?.focus())
       </div>
       <!-- Raffles (only if open raffles exist) -->
       <div v-if="raffles.homeRaffles.length" class="home-card">
-        <h2><i class="fa-duotone fa-ticket"></i> Raffles</h2>
+        <h2><font-awesome-icon :icon="['fad', 'ticket']" /> Raffles</h2>
         <p>View currently open raffles and enter for a chance to win!</p>
         <button class="btn-view" @click="viewRaffles">View Raffles</button>
       </div>
@@ -97,7 +97,7 @@ onMounted(() => joinInput.value?.focus())
     <!-- Admin portal (separate) -->
     <div class="home-admin">
       <button class="btn-neutral btn-sm" @click="goAdminLogin">
-        <i class="fa-solid fa-lock"></i> Admin Portal
+        <font-awesome-icon :icon="['fas', 'lock']" /> Admin Portal
       </button>
     </div>
   </div>

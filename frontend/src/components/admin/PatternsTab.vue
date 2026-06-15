@@ -93,13 +93,13 @@ async function saveNew(): Promise<void> {
 <template>
   <div class="tab-body">
     <!-- ── List ──────────────────────────────────────────────────────────── -->
-    <ManagerView v-if="screen === 'list'" title="Patterns" icon="fa-duotone fa-grid">
+    <ManagerView v-if="screen === 'list'" title="Patterns" :icon="['fad', 'grid']">
       <template #actions>
         <button class="btn-view btn-sm" @click="screen = 'categories'">
-          <i class="fa-duotone fa-folder-open"></i> Manage Categories
+          <font-awesome-icon :icon="['fad', 'folder-open']" /> Manage Categories
         </button>
         <button class="btn-confirm btn-sm" @click="goNew">
-          <i class="fa-solid fa-plus"></i> New Pattern
+          <font-awesome-icon :icon="['fas', 'plus']" /> New Pattern
         </button>
       </template>
 
@@ -191,7 +191,7 @@ async function saveNew(): Promise<void> {
           >
             <template #item="{ element: p }">
               <div class="saved-pattern">
-                <span class="drag-handle pattern-drag"><i class="fa-duotone fa-bars"></i></span>
+                <span class="drag-handle pattern-drag"><font-awesome-icon :icon="['fad', 'bars']" /></span>
                 <span
                   class="del-x"
                   title="Delete pattern"
@@ -229,7 +229,7 @@ async function saveNew(): Promise<void> {
 
     <!-- ── New pattern ───────────────────────────────────────────────────── -->
     <div v-else-if="screen === 'new'" class="admin-panel">
-      <SubPageHeader title="New Pattern" icon="fa-duotone fa-plus" @back="screen = 'list'" />
+      <SubPageHeader title="New Pattern" :icon="['fad', 'plus']" @back="screen = 'list'" />
       <div class="pattern-editor">
         <div class="field" style="display: flex; gap: 8px; flex-wrap: wrap">
           <input
@@ -273,12 +273,12 @@ async function saveNew(): Promise<void> {
     <div v-else-if="screen === 'categories'" class="admin-panel">
       <SubPageHeader
         title="Manage Categories"
-        icon="fa-duotone fa-folder-open"
+        :icon="['fad', 'folder-open']"
         @back="screen = 'list'"
       />
       <div class="flex-toolbar flex-end mb-16">
         <button class="btn-confirm btn-sm" @click="goNewCategory">
-          <i class="fa-solid fa-plus"></i> New Category
+          <font-awesome-icon :icon="['fas', 'plus']" /> New Category
         </button>
       </div>
       <DataTable :columns="categoryColumns" :rows="patterns.categories" row-key="id">
@@ -291,7 +291,7 @@ async function saveNew(): Promise<void> {
               title="Edit"
               @click="goEditCategory(row)"
             >
-              <i class="fa-solid fa-pen-to-square"></i>
+              <font-awesome-icon :icon="['fas', 'pen-to-square']" />
             </button>
             <button
               class="btn-danger btn-sm"
@@ -300,7 +300,7 @@ async function saveNew(): Promise<void> {
               :disabled="patterns.categories.length <= 1"
               @click="patterns.confirmDeleteCategory(row.id)"
             >
-              <i class="fa-solid fa-trash"></i>
+              <font-awesome-icon :icon="['fas', 'trash']" />
             </button>
           </div>
         </template>
@@ -312,7 +312,7 @@ async function saveNew(): Promise<void> {
     <div v-else class="admin-panel">
       <SubPageHeader
         :title="patterns.categoryForm.id ? 'Edit Category' : 'New Category'"
-        icon="fa-duotone fa-folder-open"
+        :icon="['fad', 'folder-open']"
         @back="screen = 'categories'"
       />
       <FormField label="Title" required>

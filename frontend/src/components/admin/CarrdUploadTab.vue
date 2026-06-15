@@ -154,7 +154,7 @@ onMounted(() => carrd.loadProjects())
   <div class="tab-body">
     <AdminPanel>
       <div class="flex-toolbar mb-12">
-        <h3 class="m-0"><i class="fa-duotone fa-images"></i> Carrd Upload</h3>
+        <h3 class="m-0"><font-awesome-icon :icon="['fad', 'images']" /> Carrd Upload</h3>
       </div>
 
       <p class="text-dim text-xs mb-12">
@@ -191,7 +191,7 @@ onMounted(() => carrd.loadProjects())
             @click="createProject"
           >
             <LoadingSpinner v-if="carrd.creating" label="Creating…" />
-            <template v-else><i class="fa-solid fa-plus"></i> Create</template>
+            <template v-else><font-awesome-icon :icon="['fas', 'plus']" /> Create</template>
           </button>
         </div>
       </div>
@@ -215,7 +215,7 @@ onMounted(() => carrd.loadProjects())
           @click="carrd.openProject(p.folder)"
         >
           <span class="carrd-project-title">
-            <i class="fa-duotone fa-folder"></i> {{ p.title }}
+            <font-awesome-icon :icon="['fad', 'folder']" /> {{ p.title }}
           </span>
           <span class="carrd-project-meta">
             /{{ p.folder }} · {{ p.image_count }} image{{ p.image_count === 1 ? '' : 's' }}
@@ -228,7 +228,7 @@ onMounted(() => carrd.loadProjects())
             @click.stop="carrd.deleteProject(p.folder, p.title)"
             @keyup.enter.stop="carrd.deleteProject(p.folder, p.title)"
           >
-            <i class="fa-solid fa-trash"></i>
+            <font-awesome-icon :icon="['fas', 'trash']" />
           </span>
         </button>
       </div>
@@ -251,7 +251,7 @@ onMounted(() => carrd.loadProjects())
                 :disabled="i === breadcrumbs.length - 1"
                 @click="carrd.navigate(crumb.path)"
               >
-                <i v-if="i === 0" class="fa-duotone fa-folder-open"></i> {{ crumb.label }}
+                <font-awesome-icon v-if="i === 0" :icon="['fad', 'folder-open']" /> {{ crumb.label }}
               </button>
             </template>
           </nav>
@@ -261,7 +261,7 @@ onMounted(() => carrd.loadProjects())
             @click="pickFiles"
           >
             <LoadingSpinner v-if="carrd.uploading" label="Uploading…" />
-            <template v-else><i class="fa-solid fa-upload"></i> Upload Images</template>
+            <template v-else><font-awesome-icon :icon="['fas', 'upload']" /> Upload Images</template>
           </button>
           <input
             ref="fileInput"
@@ -281,7 +281,7 @@ onMounted(() => carrd.loadProjects())
             class="chip"
             @click="carrd.navigate(joinCarrdPath(carrd.currentPath, dir))"
           >
-            <i class="fa-duotone fa-folder"></i> {{ dir }}
+            <font-awesome-icon :icon="['fad', 'folder']" /> {{ dir }}
             <span
               class="chip-del carrd-dir-del"
               role="button"
@@ -290,7 +290,7 @@ onMounted(() => carrd.loadProjects())
               @click.stop="carrd.deleteDir(dir)"
               @keyup.enter.stop="carrd.deleteDir(dir)"
             >
-              <i class="fa-solid fa-trash"></i>
+              <font-awesome-icon :icon="['fas', 'trash']" />
             </span>
           </button>
 
@@ -307,7 +307,7 @@ onMounted(() => carrd.loadProjects())
             <button class="btn-neutral btn-sm" @click="cancelAddDir">Cancel</button>
           </template>
           <button v-else class="chip carrd-dir-add" @click="addingDir = true">
-            <i class="fa-solid fa-plus"></i> New Folder
+            <font-awesome-icon :icon="['fas', 'plus']" /> New Folder
           </button>
         </div>
 
@@ -321,7 +321,7 @@ onMounted(() => carrd.loadProjects())
           @drop.prevent="onDrop"
           @click="pickFiles"
         >
-          <i class="fa-duotone fa-cloud-arrow-up"></i>
+          <font-awesome-icon :icon="['fad', 'cloud-arrow-up']" />
           <span>Drag &amp; drop images, audio or video here, or click to browse</span>
         </div>
 
@@ -354,14 +354,14 @@ onMounted(() => carrd.loadProjects())
               ></video>
               <!-- Audio: icon placeholder (player lives in the card body) -->
               <div v-else class="carrd-thumb carrd-file-icon">
-                <i class="fa-duotone fa-file-audio"></i>
+                <font-awesome-icon :icon="['fad', 'file-audio']" />
               </div>
               <button
                 class="carrd-del-overlay"
                 title="Delete this file"
                 @click="carrd.deleteImage(img.name)"
               >
-                <i class="fa-solid fa-trash"></i>
+                <font-awesome-icon :icon="['fas', 'trash']" />
               </button>
             </div>
             <figcaption class="carrd-card-body">
@@ -379,7 +379,7 @@ onMounted(() => carrd.loadProjects())
                 title="Copy public URL to clipboard"
                 @click="copyUrl(img.name)"
               >
-                <i class="fa-solid fa-copy"></i> Copy URL
+                <font-awesome-icon :icon="['fas', 'copy']" /> Copy URL
               </button>
             </figcaption>
           </figure>
@@ -518,7 +518,7 @@ onMounted(() => carrd.loadProjects())
   background: color-mix(in srgb, var(--highlight) 12%, transparent);
   color: var(--highlight);
 }
-.carrd-dropzone i {
+.carrd-dropzone .svg-inline--fa {
   font-size: 1.6rem;
 }
 

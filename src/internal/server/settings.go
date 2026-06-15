@@ -72,7 +72,7 @@ type settingsRequest struct {
 // Validates numeric settings and broadcasts changes via WebSocket.
 //
 //	Endpoint:    POST /api/settings
-//	Auth:        admin
+//	Auth:        admin, or a user granted this page's permission
 //	Request:     {"settings": {"app_title": "...", "default_draw_delay": "5", ...}}
 //	Response:    {"ok": true}
 //	Broadcasts:  settings_update (when app_title or header_font changes)

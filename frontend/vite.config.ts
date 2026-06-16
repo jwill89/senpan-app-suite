@@ -54,6 +54,37 @@ function ogImageCacheBust(): Plugin {
   }
 }
 
+// Heavy, rarely-changing vendor libs each get their own chunk so they cache
+// independently of app code (CodeMirror + FontAwesome are only needed in the
+// admin views; Milkdown + the emoji picker are lazy-loaded). Vite 8 / Rolldown
+// dropped the object form of `manualChunks`, so the same grouping is expressed
+// as a function that maps a module's node_modules package to its chunk. Purely
+// a caching/loading win — no behavioural change.
+const vendorChunkGroups: ReadonlyArray<readonly [string, readonly string[]]> = [
+  ['vue', ['vue', '@vue', 'pinia', 'vue-router']],
+  ['codemirror', ['codemirror', 'vue-codemirror', '@codemirror', '@lezer', '@replit']],
+  ['fontawesome', ['@fortawesome']],
+  ['markdown', ['markdown-it']],
+  ['draggable', ['vuedraggable', 'sortablejs']],
+  // Milkdown (Crepe) WYSIWYG editor + its ProseMirror/KaTeX engine.
+  ['milkdown', ['@milkdown', 'prosemirror-', 'katex']],
+  ['emojipicker', ['vue3-emoji-picker']],
+]
+
+function manualChunks(id: string): string | undefined {
+  for (const [chunk, packages] of vendorChunkGroups) {
+    // A token ending in `-` is a package-name prefix (e.g. `prosemirror-*`);
+    // otherwise it's a whole package/scope name (trailing slash anchors it).
+    const hit = packages.some((pkg) =>
+      pkg.endsWith('-')
+        ? id.includes(`/node_modules/${pkg}`)
+        : id.includes(`/node_modules/${pkg}/`),
+    )
+    if (hit) return chunk
+  }
+  return undefined
+}
+
 // https://vite.dev/config/
 //
 // The Go backend serves only `/api/*` (REST + WebSocket). During development, we
@@ -162,45 +193,19 @@ export default defineConfig({
     outDir: 'dist',
     emptyOutDir: true,
     sourcemap: false,
-    // The two largest chunks (Toast UI editor ~570 kB, CodeMirror ~440 kB) are
+    // The two largest chunks (Milkdown editor ~620 kB, CodeMirror ~570 kB) are
     // monolithic third-party libraries that are already split into their own
     // lazy-loaded chunks (fetched only when an admin opens a view that needs
     // them) — they never touch the initial player/home load. Neither can be
     // split further (each ships as one bundle), so we lift the advisory warning
-    // to 600 kB: above these intentional vendor chunks, but still low enough to
+    // to 650 kB: above these intentional vendor chunks, but still low enough to
     // flag genuinely new bloat.
-    chunkSizeWarningLimit: 600,
+    chunkSizeWarningLimit: 650,
     rollupOptions: {
-      output: {
-        // Split heavy, rarely-changing vendor libs into their own chunks so
-        // they cache independently of app code (CodeMirror + FontAwesome are
-        // only needed in the admin views). Purely a caching/loading win — no
-        // behavioural change.
-        manualChunks: {
-          vue: ['vue', 'pinia', 'vue-router'],
-          codemirror: [
-            'codemirror',
-            'vue-codemirror',
-            '@codemirror/lang-css',
-            '@codemirror/language',
-            '@codemirror/state',
-            '@codemirror/view',
-            '@lezer/highlight',
-            '@replit/codemirror-css-color-picker',
-          ],
-          fontawesome: [
-            '@fortawesome/fontawesome-svg-core',
-            '@fortawesome/free-brands-svg-icons',
-          ],
-          markdown: ['markdown-it'],
-          draggable: ['vuedraggable', 'sortablejs'],
-          // Toast UI editor (lazy-loaded by MarkdownEditor.vue) — named so it
-          // caches independently and is clearly identifiable in the build output.
-          toastui: ['@toast-ui/editor'],
-          // Emoji picker (lazy-loaded by StampShapePicker.vue) — same rationale.
-          emojipicker: ['vue3-emoji-picker'],
-        },
-      },
+      // Vendor-chunk grouping lives in `manualChunks` above (Milkdown and the
+      // emoji picker are additionally lazy-loaded by MarkdownEditor.vue /
+      // StampShapePicker.vue, so they're fetched only when those views open).
+      output: { manualChunks },
     },
   },
 })

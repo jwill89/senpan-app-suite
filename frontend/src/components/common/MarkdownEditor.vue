@@ -1,18 +1,30 @@
 <script setup lang="ts">
 /**
- * WYSIWYG markdown editor (Toast UI Editor) exposed as a v-model component.
+ * WYSIWYG markdown editor (Milkdown "Crepe") exposed as a v-model component.
  *
- * The bound value is **markdown** — the editor starts in WYSIWYG mode (with a
- * Markdown toggle) and emits markdown via getMarkdown(). Markdown is what we
- * store and what Discord renders natively when a reading list is published.
+ * The bound value is **markdown** — that's what we store and what Discord
+ * renders natively when a reading list is published. So the editor is limited
+ * to a Discord-safe subset: inline formatting + headings, quotes, lists,
+ * dividers and links. Block types Discord can't render (tables, images, LaTeX,
+ * fenced-code editors, task lists) are left out so an author can't silently
+ * produce markdown that breaks once published.
  *
- * The library + its CSS are dynamically imported on mount so the (sizeable)
- * editor bundle stays out of the initial load — it's only fetched when an admin
- * actually opens a view that uses the editor. A dark/light theme is chosen from
- * the current page background so it blends with the active app theme.
+ * Formatting is reached the modern WYSIWYG way: a floating selection toolbar
+ * (bold/italic/strike/link) plus a `/` slash menu and markdown input rules
+ * (`# `, `> `, `- `) for block structure.
+ *
+ * Built via Crepe's tree-shakable `CrepeBuilder` rather than the all-in-one
+ * `Crepe` class: we import only the features we use, so the code-mirror
+ * (≈1.2 MB of language parsers) and LaTeX/KaTeX features are dropped from the
+ * bundle entirely. The base commonmark/gfm editing comes from the builder.
+ *
+ * The library + its CSS are dynamically imported on mount so this (still
+ * sizeable) editor stays out of the initial load — only fetched when an admin
+ * opens a view that uses it. Colors are mapped to the app theme variables so
+ * the editor follows the active theme (including custom themes).
  */
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import type ToastEditor from '@toast-ui/editor'
+import type { CrepeBuilder as CrepeBuilderType } from '@milkdown/crepe/builder'
 
 const props = withDefaults(
   defineProps<{ modelValue: string; minHeight?: string; placeholder?: string }>(),
@@ -24,56 +36,80 @@ const emit = defineEmits<{
 }>()
 
 const el = ref<HTMLDivElement | null>(null)
-let editor: ToastEditor | null = null
+let crepe: CrepeBuilderType | null = null
+/** Push an external markdown value into the editor (set after create()). */
+let applyExternal: ((markdown: string) => void) | null = null
 let disposed = false
-
-/** Rough luminance check of the page background to pick the editor theme. */
-function bgIsDark(): boolean {
-  const bg = getComputedStyle(document.body).backgroundColor
-  const m = bg.match(/\d+(\.\d+)?/g)
-  if (!m || m.length < 3) return true
-  const [r, g, b] = m.map(Number)
-  return 0.299 * r + 0.587 * g + 0.114 * b < 140
-}
+// Gate emits until the initial document has loaded, so we don't echo the
+// starting value back to the parent (which would mark a pristine form dirty).
+let ready = false
 
 onMounted(async () => {
-  const [{ default: Editor }] = await Promise.all([
-    import('@toast-ui/editor'),
-    import('@toast-ui/editor/dist/toastui-editor.css'),
-    import('@toast-ui/editor/dist/theme/toastui-editor-dark.css'),
+  const [
+    { CrepeBuilder },
+    { toolbar },
+    { blockEdit },
+    { listItem },
+    { linkTooltip },
+    { placeholder },
+    { cursor },
+    { replaceAll },
+  ] = await Promise.all([
+    import('@milkdown/crepe/builder'),
+    import('@milkdown/crepe/feature/toolbar'),
+    import('@milkdown/crepe/feature/block-edit'),
+    import('@milkdown/crepe/feature/list-item'),
+    import('@milkdown/crepe/feature/link-tooltip'),
+    import('@milkdown/crepe/feature/placeholder'),
+    import('@milkdown/crepe/feature/cursor'),
+    import('@milkdown/kit/utils'),
+    import('@milkdown/crepe/theme/common/style.css'),
+    import('@milkdown/crepe/theme/classic.css'),
   ])
   if (disposed || !el.value) return
-  // The dark theme CSS only applies under a `.toastui-editor-dark` ancestor.
-  if (bgIsDark()) el.value.classList.add('toastui-editor-dark')
 
-  editor = new Editor({
-    el: el.value,
-    initialValue: props.modelValue || '',
-    initialEditType: 'wysiwyg',
-    previewStyle: 'vertical',
-    height: 'auto',
-    minHeight: props.minHeight,
-    placeholder: props.placeholder,
-    autofocus: false,
-    usageStatistics: false,
-    toolbarItems: [
-      ['heading', 'bold', 'italic', 'strike'],
-      ['hr', 'quote'],
-      ['ul', 'ol'],
-      ['link'],
-    ],
+  const builder = new CrepeBuilder({
+    root: el.value,
+    defaultValue: props.modelValue || '',
   })
-  editor.on('change', () => {
-    if (editor) emit('update:modelValue', editor.getMarkdown())
+  builder
+    .addFeature(cursor)
+    .addFeature(listItem)
+    .addFeature(linkTooltip)
+    .addFeature(placeholder, { text: props.placeholder })
+    .addFeature(toolbar)
+    .addFeature(blockEdit, {
+      // Discord-safe slash menu: keep headings/quote/divider and bullet/ordered
+      // lists; drop task lists and the whole advanced group (image/code/table/
+      // math) since Discord can't render them.
+      listGroup: { taskList: null },
+      advancedGroup: null,
+    })
+
+  builder.on((listener) => {
+    listener.markdownUpdated((_ctx, markdown) => {
+      if (ready) emit('update:modelValue', markdown)
+    })
+    listener.blur(() => emit('blur'))
   })
-  // Surface blur so callers can persist-on-blur (e.g. autosave) like a textarea.
-  editor.on('blur', () => emit('blur'))
+
+  await builder.create()
+  if (disposed) {
+    void builder.destroy()
+    return
+  }
+  crepe = builder
+  applyExternal = (markdown) => {
+    builder.editor.action(replaceAll(markdown))
+  }
+  ready = true
 })
 
 onBeforeUnmount(() => {
   disposed = true
-  editor?.destroy()
-  editor = null
+  void crepe?.destroy()
+  crepe = null
+  applyExternal = null
 })
 
 // External updates (e.g. an AniList fill or a form reset) sync into the editor,
@@ -81,72 +117,52 @@ onBeforeUnmount(() => {
 watch(
   () => props.modelValue,
   (v) => {
-    if (editor && v !== editor.getMarkdown()) editor.setMarkdown(v || '', false)
+    if (crepe && applyExternal && v !== crepe.getMarkdown()) applyExternal(v || '')
   },
 )
 </script>
 
 <template>
-  <div ref="el" class="md-editor"></div>
+  <div ref="el" class="md-editor" :style="{ '--md-min-height': minHeight }"></div>
 </template>
 
 <style scoped>
 /*
- * Skin Toast UI Editor with the app's theme variables so it follows the active
- * theme (including custom themes) rather than only its bundled light/dark CSS.
- * The base light/dark stylesheet is still loaded (for the toolbar icon sprites
- * and markdown-mode syntax colors); these overrides re-map the surfaces, text,
- * borders, and accent to --panel-bg / --text / --accent / etc.
+ * Map Crepe's design tokens onto the app theme variables so the editor follows
+ * the active theme (including custom themes). CSS variables inherit into the
+ * `.milkdown` subtree, so setting them on the wrapper is enough; element-level
+ * tweaks (min-height, frame) use :deep().
  */
-.md-editor :deep(.toastui-editor-defaultUI) {
+.md-editor {
+  --crepe-color-background: var(--panel-bg);
+  --crepe-color-surface: var(--panel-bg);
+  --crepe-color-surface-low: var(--panel-raised-bg);
+  --crepe-color-on-background: var(--text);
+  --crepe-color-on-surface: var(--text);
+  --crepe-color-on-surface-variant: var(--text-muted);
+  --crepe-color-primary: var(--accent);
+  --crepe-color-secondary: var(--panel-raised-bg);
+  --crepe-color-on-secondary: var(--text);
+  --crepe-color-outline: var(--panel-raised-bg);
+  --crepe-color-hover: var(--panel-raised-bg);
+  --crepe-color-selected: var(--panel-raised-bg);
+  --crepe-color-inline-area: var(--panel-raised-bg);
+  --crepe-font-default: inherit;
+  --crepe-font-title: inherit;
+
   border: 1px solid var(--panel-raised-bg);
+  border-radius: var(--radius);
+  background: var(--panel-bg);
+}
+
+.md-editor :deep(.milkdown) {
+  background: transparent;
   border-radius: var(--radius);
 }
 
-/* Toolbar */
-.md-editor :deep(.toastui-editor-defaultUI-toolbar) {
-  background: var(--panel-bg);
-  border-bottom: 1px solid var(--panel-raised-bg);
-}
-.md-editor :deep(.toastui-editor-toolbar-group) {
-  border-color: var(--panel-raised-bg);
-}
-
-/* Editing surfaces + text */
-.md-editor :deep(.toastui-editor-ww-container),
-.md-editor :deep(.toastui-editor-md-container),
-.md-editor :deep(.toastui-editor-main .toastui-editor-md-preview) {
-  background: var(--panel-bg);
-}
-.md-editor :deep(.toastui-editor-contents),
-.md-editor :deep(.toastui-editor-contents p),
-.md-editor :deep(.toastui-editor-contents h1),
-.md-editor :deep(.toastui-editor-contents h2),
-.md-editor :deep(.toastui-editor-contents h3),
-.md-editor :deep(.toastui-editor-contents li),
-.md-editor :deep(.ProseMirror) {
-  color: var(--text);
-}
-.md-editor :deep(.toastui-editor-contents a) {
-  color: var(--accent);
-}
-.md-editor :deep(.ProseMirror .placeholder),
-.md-editor :deep(.toastui-editor-md-container .placeholder) {
-  color: var(--text-muted);
-}
-
-/* Bottom mode switch (Markdown / WYSIWYG) */
-.md-editor :deep(.toastui-editor-mode-switch) {
-  background: var(--panel-bg);
-  border-top: 1px solid var(--panel-raised-bg);
-}
-.md-editor :deep(.toastui-editor-mode-switch .tab-item) {
-  color: var(--text-muted);
-  background: var(--panel-bg);
-  border-color: var(--panel-raised-bg);
-}
-.md-editor :deep(.toastui-editor-mode-switch .tab-item.active) {
-  color: var(--text);
-  border-bottom-color: var(--panel-bg);
+.md-editor :deep(.milkdown .ProseMirror) {
+  min-height: var(--md-min-height, 180px);
+  padding: 0.6rem 0.85rem;
+  outline: none;
 }
 </style>

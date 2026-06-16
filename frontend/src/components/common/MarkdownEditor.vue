@@ -129,13 +129,23 @@ watch(
 <style scoped>
 /*
  * Map Crepe's design tokens onto the app theme variables so the editor follows
- * the active theme (including custom themes). CSS variables inherit into the
- * `.milkdown` subtree, so setting them on the wrapper is enough; element-level
- * tweaks (min-height, frame) use :deep().
+ * the active theme (including custom themes). The classic theme defines these
+ * variables ON `.milkdown` itself, so the overrides must live on `.milkdown`
+ * too — a rule on the parent `.md-editor` gets shadowed by the child's own
+ * definitions, leaving the content text at the theme's dark default instead of
+ * --text. Widgets inside `.milkdown` (toolbar, slash menu) inherit these.
  */
 .md-editor {
+  border: 1px solid var(--panel-raised-bg);
+  border-radius: var(--radius);
+  background: var(--panel-bg);
+}
+
+.md-editor :deep(.milkdown) {
   --crepe-color-background: var(--panel-bg);
-  --crepe-color-surface: var(--panel-bg);
+  /* Floating widgets (toolbar, slash menu) sit on the raised surface so they
+     stand out from the editor body. */
+  --crepe-color-surface: var(--panel-raised-bg);
   --crepe-color-surface-low: var(--panel-raised-bg);
   --crepe-color-on-background: var(--text);
   --crepe-color-on-surface: var(--text);
@@ -143,19 +153,16 @@ watch(
   --crepe-color-primary: var(--accent);
   --crepe-color-secondary: var(--panel-raised-bg);
   --crepe-color-on-secondary: var(--text);
-  --crepe-color-outline: var(--panel-raised-bg);
-  --crepe-color-hover: var(--panel-raised-bg);
-  --crepe-color-selected: var(--panel-raised-bg);
+  /* Crepe uses --outline as a FOREGROUND color for toolbar/handle icons and
+     dividers, so it must be a readable text tone — not a background color, or
+     the icons are invisible (and vanish entirely when hover swaps the bg). */
+  --crepe-color-outline: var(--text-muted);
+  --crepe-color-hover: color-mix(in srgb, var(--text) 8%, var(--panel-raised-bg));
+  --crepe-color-selected: color-mix(in srgb, var(--text) 14%, var(--panel-raised-bg));
   --crepe-color-inline-area: var(--panel-raised-bg);
   --crepe-font-default: inherit;
   --crepe-font-title: inherit;
 
-  border: 1px solid var(--panel-raised-bg);
-  border-radius: var(--radius);
-  background: var(--panel-bg);
-}
-
-.md-editor :deep(.milkdown) {
   background: transparent;
   border-radius: var(--radius);
 }

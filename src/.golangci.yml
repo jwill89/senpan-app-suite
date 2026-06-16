@@ -1,0 +1,53 @@
+# golangci-lint configuration for the Go backend (schema v2; installed v2.12.2).
+#
+# Run locally with `golangci-lint run ./...` from the `src/` directory; CI runs
+# the same command (see .github/workflows/ci.yml). The CI version is pinned to
+# match what is documented here so local and CI results agree.
+
+version: "2"
+
+linters:
+  # Default linters (errcheck, govet, ineffassign, staticcheck, unused) plus a
+  # curated set of high-signal additions.
+  enable:
+    - bodyclose # HTTP response bodies must be closed (e.g. Discord webhooks)
+    - errorlint # use %w / errors.Is/As instead of %v / == for error handling
+    - misspell # catch common spelling mistakes in comments and strings
+    - unconvert # flag redundant type conversions
+
+  settings:
+    staticcheck:
+      # QF1001 (apply De Morgan's law) is a stylistic refactor, not a bug. For
+      # the character-whitelist guards in carrd.go the `!(a || b || c)` form
+      # reads more clearly than the negated-and rewrite, so keep it disabled.
+      checks:
+        - all
+        - -QF1001
+
+  exclusions:
+    # Preserve the v1 default exclusion set carried over by the v2 migration.
+    generated: lax
+    presets:
+      - comments
+      - common-false-positives
+      - legacy
+      - std-error-handling
+    rules:
+      # The test helper `decodeBody` closes the response body via a deferred
+      # Close, but bodyclose cannot trace closure through a helper and reports a
+      # false positive. Test response bodies are short-lived regardless.
+      - linters:
+          - bodyclose
+        path: _test\.go
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
+
+formatters:
+  exclusions:
+    generated: lax
+    paths:
+      - third_party$
+      - builtin$
+      - examples$

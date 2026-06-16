@@ -61,7 +61,7 @@ jobs:
         run: npm run build
 
   backend:
-    name: Backend (build · vet · test)
+    name: Backend (lint · build · vet · test)
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -74,6 +74,15 @@ jobs:
         with:
           go-version-file: src/go.mod
           cache-dependency-path: src/go.sum
+
+      # golangci-lint aggregates errcheck/govet/staticcheck/unused plus the
+      # extras configured in src/.golangci.yml. Pinned to match the version
+      # developers run locally so CI and local results agree.
+      - name: Lint (golangci-lint)
+        uses: golangci/golangci-lint-action@v7
+        with:
+          version: v2.12.2
+          working-directory: src
 
       - name: Build
         run: go build ./...

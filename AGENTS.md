@@ -377,6 +377,7 @@ $env:APPSUITE_ADMIN_PASSWORD = "my-secret"; cd src; go run .   # (deprecated)
 
 # Vet / lint
 cd src; go vet ./...
+cd src; golangci-lint run ./...   # config: src/.golangci.yml (pinned v2.12.2 in CI)
 
 # Run tests
 cd src; go test ./...
@@ -393,7 +394,8 @@ cd src; go build -ldflags="-s -w" -o app-suite .
   (needs Go, so the job also sets up the Go toolchain) → `lint:check` →
   `typecheck` → `test` → `build`. Mirrors the local gate, so a green CI ==
   the checks a developer runs locally have passed.
-- **backend** (`working-directory: src`): `go build ./...` → `go vet ./...` →
+- **backend** (`working-directory: src`): `golangci-lint run` (pinned
+  v2.12.2, config `src/.golangci.yml`) → `go build ./...` → `go vet ./...` →
   `go test ./...` (Go version read from `src/go.mod`).
 
 When adding a check, wire it into both the relevant npm/go script **and** the

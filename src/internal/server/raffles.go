@@ -503,7 +503,7 @@ func (s *Server) handleRaffleEntries(w http.ResponseWriter, r *http.Request) {
 		// Finalize: close the raffle with the current winner
 		raffle, err := s.store.GetRaffle(raffleID)
 		if err != nil || raffle == nil {
-			writeInternalError(w, "verify raffle winner", fmt.Errorf("get raffle: %v", err))
+			writeInternalError(w, "verify raffle winner", fmt.Errorf("get raffle: %w", err))
 			return
 		}
 		if raffle.WinnerEntryID == nil {

@@ -176,11 +176,6 @@ func (b *embedBuilder) description(s string) *embedBuilder {
 	return b
 }
 
-func (b *embedBuilder) color(c int) *embedBuilder {
-	b.embed.Color = c
-	return b
-}
-
 // colorHex sets the colour from a "#rrggbb" (or "rrggbb") string, falling back
 // to the brand accent when empty or invalid.
 func (b *embedBuilder) colorHex(hex string) *embedBuilder {

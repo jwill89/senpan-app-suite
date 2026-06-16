@@ -78,10 +78,12 @@ func TestDueBookClubEventsAndMarkPosted(t *testing.T) {
 		PostAt: "2020-01-01T00:00:00Z", StartAt: "2020-01-01T01:00:00Z",
 	})
 	// Future post time → not due.
-	s.CreateBookClubEvent(&model.BookClubEvent{
+	if _, err := s.CreateBookClubEvent(&model.BookClubEvent{
 		ClubSlug: "yaoi", Title: "Future", LengthHours: 1,
 		PostAt: "2099-01-01T00:00:00Z", StartAt: "2099-01-01T01:00:00Z",
-	})
+	}); err != nil {
+		t.Fatal(err)
+	}
 
 	now := time.Date(2021, 1, 1, 0, 0, 0, 0, time.UTC)
 	due, err := s.DueBookClubEvents(now)

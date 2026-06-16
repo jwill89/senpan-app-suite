@@ -50,11 +50,12 @@ Open http://localhost:5173. The admin area is at `/admin/login`.
 | `npm run lint` / `lint:check`| ESLint with / without `--fix`                      |
 | `npm run build`              | Type-check + production build → `frontend/dist/`   |
 
-| Command (in `src/`)          | Purpose                |
-| ---------------------------- | ---------------------- |
-| `go build ./...`             | Build the backend      |
-| `go vet ./...`               | Static analysis        |
-| `go test ./...`              | Backend tests          |
+| Command (in `src/`)          | Purpose                          |
+| ---------------------------- | -------------------------------- |
+| `go build ./...`             | Build the backend                |
+| `go vet ./...`               | Static analysis                  |
+| `golangci-lint run ./...`    | Lint (config in `.golangci.yml`) |
+| `go test ./...`              | Backend tests                    |
 
 ## Testing & CI
 
@@ -63,7 +64,7 @@ Open http://localhost:5173. The admin area is at `/admin/login`.
   [`AGENTS.md`](AGENTS.md) for conventions.
 - [`.github/workflows/ci.yml`](.github/workflows/ci.yml) runs on every push/PR:
   a **frontend** job (gen-types → lint → typecheck → test → build) and a
-  **backend** job (build → vet → test).
+  **backend** job (golangci-lint → build → vet → test).
 
 ## Documentation
 

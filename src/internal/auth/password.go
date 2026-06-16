@@ -48,6 +48,19 @@ func Hash(password string) (string, error) {
 	), nil
 }
 
+// dummyHash is a real argon2id hash (of a throwaway password) computed once at
+// startup. It backs DummyVerify so a login attempt for a non-existent username
+// performs the same argon2 work as one for a real account.
+var dummyHash, _ = Hash("argon2id-timing-equalization-placeholder")
+
+// DummyVerify runs a verification against an internal fixed hash and discards
+// the result. Call it on the no-such-user branch of a login so the response
+// time doesn't reveal whether the username exists (defeats user enumeration via
+// the otherwise-skipped, costly argon2 computation).
+func DummyVerify(password string) {
+	_, _ = Verify(password, dummyHash)
+}
+
 // Verify reports whether password matches the encoded argon2id PHC hash. It
 // reads the parameters and salt from the encoded value, recomputes the hash,
 // and compares in constant time. Returns ErrInvalidHash (or a decode error)

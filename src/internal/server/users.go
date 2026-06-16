@@ -54,7 +54,7 @@ func (s *Server) handleUsersAction(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	req, err := readJSON[usersRequest](r)
+	req, err := readJSON[usersRequest](w, r)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "Invalid JSON")
 		return
@@ -169,7 +169,7 @@ func (s *Server) handleAccountAction(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	req, err := readJSON[accountRequest](r)
+	req, err := readJSON[accountRequest](w, r)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "Invalid JSON")
 		return

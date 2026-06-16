@@ -48,6 +48,28 @@ func saveMultipartFile(header *multipart.FileHeader, dst string) error {
 	return nil
 }
 
+// sniffedImageType returns the content type detected from the first bytes of r,
+// then rewinds r to the start so it can be read again in full. Pairs with the
+// extension check as defense in depth: it confirms the upload's *bytes* really
+// are an image, so a non-image (e.g. an HTML or script file) renamed to .png is
+// rejected rather than written to a publicly served directory.
+func sniffedImageType(r io.ReadSeeker) string {
+	head := make([]byte, 512)
+	n, _ := io.ReadFull(r, head) // short reads are fine; n is what was read
+	_, _ = r.Seek(0, io.SeekStart)
+	return http.DetectContentType(head[:n])
+}
+
+// isAllowedImageContentType reports whether a sniffed content type is one of the
+// raster image formats we accept (matches isAllowedImageExt).
+func isAllowedImageContentType(ct string) bool {
+	switch ct {
+	case "image/jpeg", "image/png", "image/gif", "image/webp":
+		return true
+	}
+	return false
+}
+
 // saveSingleImageUpload handles the common single-image upload flow shared by the
 // announcement, book-club cover, and event image endpoints: it reads the "image"
 // multipart field (max 5 MB), validates it as an allowed image type, writes it
@@ -67,6 +89,12 @@ func (s *Server) saveSingleImageUpload(w http.ResponseWriter, r *http.Request, r
 	ext := strings.ToLower(filepath.Ext(header.Filename))
 	if !isAllowedImageExt(ext) {
 		writeError(w, http.StatusBadRequest, "Only jpg, png, webp, and gif images are allowed")
+		return
+	}
+	// Defense in depth: confirm the bytes are actually an image, not just the
+	// extension. file is an io.ReadSeeker, rewound by sniffedImageType.
+	if !isAllowedImageContentType(sniffedImageType(file)) {
+		writeError(w, http.StatusBadRequest, "That file does not appear to be a valid image")
 		return
 	}
 

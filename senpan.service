@@ -20,8 +20,9 @@ Restart=on-failure
 RestartSec=5
 
 # Environment
-#Environment=APPSUITE_ADMIN_PASSWORD=changeme
 #Environment=APPSUITE_SESSION_SECRET=changeme
+# Only if cross-origin browser clients need the API (normally unset — same-origin):
+#Environment=APPSUITE_CORS_ORIGINS=https://example.com
 
 # Security hardening
 NoNewPrivileges=true

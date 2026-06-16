@@ -58,7 +58,7 @@ func (s *Server) handleWinnersLogAction(w http.ResponseWriter, r *http.Request) 
 	if !s.requirePermission(w, r, permBingoWinnersLog) {
 		return
 	}
-	req, err := readJSON[winnersLogRequest](r)
+	req, err := readJSON[winnersLogRequest](w, r)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "Invalid JSON")
 		return

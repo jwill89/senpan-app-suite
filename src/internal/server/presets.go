@@ -44,7 +44,7 @@ func (s *Server) handlePresetsAction(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	req, err := readJSON[presetRequest](r)
+	req, err := readJSON[presetRequest](w, r)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "Invalid JSON")
 		return

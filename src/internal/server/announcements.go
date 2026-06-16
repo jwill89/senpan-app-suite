@@ -57,9 +57,17 @@ func (s *Server) handleAnnouncementTypesAction(w http.ResponseWriter, r *http.Re
 	if !s.requirePermission(w, r, permTeahouseAnnounce) {
 		return
 	}
-	req, err := readJSON[announcementTypeRequest](r)
+	req, err := readJSON[announcementTypeRequest](w, r)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "Invalid JSON")
+		return
+	}
+
+	// A provided webhook URL must be a Discord webhook so the server can't be
+	// pointed at an arbitrary outbound host. Empty = this type has no webhook.
+	webhook := strings.TrimSpace(req.WebhookURL)
+	if webhook != "" && !isDiscordWebhookURL(webhook) {
+		writeError(w, http.StatusBadRequest, "Discord webhook URLs must look like https://discord.com/api/webhooks/…")
 		return
 	}
 
@@ -70,7 +78,7 @@ func (s *Server) handleAnnouncementTypesAction(w http.ResponseWriter, r *http.Re
 			writeError(w, http.StatusBadRequest, "Type name is required")
 			return
 		}
-		id, err := s.store.CreateAnnouncementType(name, strings.TrimSpace(req.WebhookURL))
+		id, err := s.store.CreateAnnouncementType(name, webhook)
 		if err != nil {
 			writeInternalError(w, "create announcement type", err)
 			return
@@ -88,7 +96,7 @@ func (s *Server) handleAnnouncementTypesAction(w http.ResponseWriter, r *http.Re
 			writeError(w, http.StatusBadRequest, "Type name is required")
 			return
 		}
-		if err := s.store.UpdateAnnouncementType(req.ID, name, strings.TrimSpace(req.WebhookURL)); err != nil {
+		if err := s.store.UpdateAnnouncementType(req.ID, name, webhook); err != nil {
 			writeInternalError(w, "update announcement type", err)
 			return
 		}
@@ -158,7 +166,7 @@ func (s *Server) handleAnnouncementsAction(w http.ResponseWriter, r *http.Reques
 	if !s.requirePermission(w, r, permTeahouseAnnounce) {
 		return
 	}
-	req, err := readJSON[announcementRequest](r)
+	req, err := readJSON[announcementRequest](w, r)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "Invalid JSON")
 		return

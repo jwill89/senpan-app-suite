@@ -58,7 +58,7 @@ func (s *Server) handleCardsAction(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	req, err := readJSON[cardsRequest](r)
+	req, err := readJSON[cardsRequest](w, r)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "Invalid JSON")
 		return

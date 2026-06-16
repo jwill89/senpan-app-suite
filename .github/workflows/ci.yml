@@ -92,3 +92,9 @@ jobs:
 
       - name: Test
         run: go test ./...
+
+      # Scan the module (and its dependencies) for known Go vulnerabilities that
+      # actually reach our code paths. Run latest so newly disclosed advisories
+      # are caught without bumping a pin.
+      - name: Vulnerability check (govulncheck)
+        run: go run golang.org/x/vuln/cmd/govulncheck@latest ./...

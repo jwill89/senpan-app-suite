@@ -27,9 +27,7 @@ password (argon2id hash, `internal/auth`), are created **inactive** via a hidden
 registration page, and an admin activates them and grants **per-page
 permissions** (one key per admin page). Admins implicitly hold every permission.
 A bootstrap `admin`/`admin` account is seeded by migration v22 and **must be
-rotated immediately**. The legacy `-password` / `APPSUITE_ADMIN_PASSWORD`
-plumbing is **deprecated and unused** by the auth flow (kept only for
-backward-compatible startup). See **Authentication & authorization** below.
+rotated immediately**. See **Authentication & authorization** below.
 
 ```
 ├── frontend/                         ← Vue 3 + TypeScript SPA (Vite)
@@ -370,10 +368,6 @@ cd src; go run . -addr :8080 -db ../data/bingo.sqlite
 # Auth is per-user now. On first run, migration v22 seeds a bootstrap account:
 #   username: admin   password: admin   (full admin) — ROTATE IT IMMEDIATELY
 # via the topbar "Change Password" modal after logging in at /admin/login.
-# The -password / APPSUITE_ADMIN_PASSWORD plumbing below is DEPRECATED + unused
-# by the auth flow (retained only for backward-compatible startup):
-cd src; go run . -password "my-secret"            # (deprecated, no effect on login)
-$env:APPSUITE_ADMIN_PASSWORD = "my-secret"; cd src; go run .   # (deprecated)
 
 # Vet / lint
 cd src; go vet ./...

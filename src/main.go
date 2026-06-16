@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -26,21 +27,19 @@ func main() {
 	dbPath := flag.String("db", "/opt/app-suite/data/database.sqlite", "SQLite database path")
 	webRoot := flag.String("webroot", "/var/www/www.yoursite.com", "Web root directory for static assets (e.g. image uploads)")
 	secret := flag.String("secret", "", "Session cookie secret (env APPSUITE_SESSION_SECRET or random if empty)")
-	password := flag.String("password", "", "Admin password (env APPSUITE_ADMIN_PASSWORD or built-in default)")
+	corsOrigins := flag.String("cors-origins", "", "Comma-separated CORS allowlist of cross-origin sites (env APPSUITE_CORS_ORIGINS; empty = same-origin only, no CORS headers)")
 	flag.Parse()
 
-	if *password == "" {
-		*password = os.Getenv("APPSUITE_ADMIN_PASSWORD")
+	// CORS allowlist: flag > env. Normally empty — the SPA and API are
+	// same-origin in both prod (Apache) and dev (Vite proxies /api).
+	originsCSV := *corsOrigins
+	if originsCSV == "" {
+		originsCSV = os.Getenv("APPSUITE_CORS_ORIGINS")
 	}
-	if *password == "" {
-		*password = "changeme1234"
+	var allowedOrigins []string
+	if originsCSV != "" {
+		allowedOrigins = strings.Split(originsCSV, ",")
 	}
-	// DEPRECATED: the shared admin password no longer gates login. Authentication
-	// is now per-user accounts (see the users table / auth package); the database
-	// seeds an "admin"/"admin" bootstrap account on migration that must be rotated
-	// after deploy. The -password / APPSUITE_ADMIN_PASSWORD plumbing is retained
-	// only for backward-compatible startup and is unused by the auth flow.
-	slog.Warn("the shared admin password is deprecated and unused; log in with the seeded 'admin' account and change its password immediately")
 
 	// Session secret: flag > env > random
 	finalSecret := *secret
@@ -67,7 +66,7 @@ func main() {
 	defer db.Close()
 
 	hub := ws.NewHub()
-	srv := server.New(db, hub, finalSecret, *password, *webRoot)
+	srv := server.New(db, hub, finalSecret, *webRoot, allowedOrigins)
 
 	httpServer := &http.Server{
 		Addr:    *addr,

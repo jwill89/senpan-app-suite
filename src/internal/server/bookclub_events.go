@@ -62,7 +62,7 @@ func (s *Server) handleBookClubEventsAction(w http.ResponseWriter, r *http.Reque
 	if _, ok := s.requireAuth(w, r); !ok {
 		return
 	}
-	req, err := readJSON[bookClubEventRequest](r)
+	req, err := readJSON[bookClubEventRequest](w, r)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "Invalid JSON")
 		return

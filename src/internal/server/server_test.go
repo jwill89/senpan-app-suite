@@ -17,8 +17,7 @@ import (
 )
 
 const (
-	testPassword = "test-password"
-	testSecret   = "test-secret-key-for-sessions-32b"
+	testSecret = "test-secret-key-for-sessions-32b"
 	// Bootstrap account seeded by the users migration (see store.migrateUsers).
 	seedAdminUser = "admin"
 	seedAdminPass = "admin"
@@ -41,7 +40,7 @@ func newTestEnv(t *testing.T) *testEnv {
 	t.Cleanup(func() { st.Close() })
 
 	hub := ws.NewHub()
-	srv := server.New(st, hub, testSecret, testPassword, t.TempDir())
+	srv := server.New(st, hub, testSecret, t.TempDir(), nil)
 
 	ts := httptest.NewTLSServer(srv)
 	t.Cleanup(ts.Close)
@@ -99,11 +98,13 @@ func decodeBody(t *testing.T, resp *http.Response) map[string]any {
 
 // ── CORS ────────────────────────────────────────────────────────────────────
 
-func TestCORS_Options(t *testing.T) {
+// TestCORS_OptionsPreflight verifies OPTIONS is short-circuited with 204 and,
+// under the default (empty) allowlist, carries no CORS headers.
+func TestCORS_OptionsPreflight(t *testing.T) {
 	env := newTestEnv(t)
 
 	req, _ := http.NewRequest("OPTIONS", env.url("/api/auth"), nil)
-	req.Header.Set("Origin", "http://localhost")
+	req.Header.Set("Origin", "http://evil.example")
 	resp, err := env.client.Do(req)
 	if err != nil {
 		t.Fatal(err)
@@ -113,24 +114,57 @@ func TestCORS_Options(t *testing.T) {
 	if resp.StatusCode != http.StatusNoContent {
 		t.Errorf("status = %d; want 204", resp.StatusCode)
 	}
-	if h := resp.Header.Get("Access-Control-Allow-Methods"); h == "" {
-		t.Error("missing CORS Allow-Methods header")
+	if h := resp.Header.Get("Access-Control-Allow-Origin"); h != "" {
+		t.Errorf("Access-Control-Allow-Origin = %q; want empty for an unlisted origin", h)
 	}
 }
 
-func TestCORS_Headers(t *testing.T) {
+// TestCORS_UnlistedOriginGetsNoHeaders locks in the secure default: an origin
+// not on the allowlist gets no CORS headers, so no arbitrary site can read
+// credentialed responses. (The allowlist is normally empty — same-origin app.)
+func TestCORS_UnlistedOriginGetsNoHeaders(t *testing.T) {
 	env := newTestEnv(t)
 
 	req, _ := http.NewRequest("GET", env.url("/api/game"), nil)
-	req.Header.Set("Origin", "http://localhost")
+	req.Header.Set("Origin", "http://evil.example")
 	resp, err := env.client.Do(req)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer resp.Body.Close()
 
-	if h := resp.Header.Get("Access-Control-Allow-Origin"); h != "http://localhost" {
-		t.Errorf("CORS origin = %q; want http://localhost", h)
+	if h := resp.Header.Get("Access-Control-Allow-Origin"); h != "" {
+		t.Errorf("Access-Control-Allow-Origin = %q; want empty (origin not allowlisted)", h)
+	}
+}
+
+// TestCORS_AllowlistedOriginReflected verifies an explicitly allow-listed origin
+// is echoed back with credentials enabled.
+func TestCORS_AllowlistedOriginReflected(t *testing.T) {
+	st, err := store.New(filepath.Join(t.TempDir(), "test.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { st.Close() })
+
+	const origin = "https://app.example"
+	srv := server.New(st, ws.NewHub(), testSecret, t.TempDir(), []string{origin})
+	ts := httptest.NewTLSServer(srv)
+	t.Cleanup(ts.Close)
+
+	req, _ := http.NewRequest("GET", ts.URL+"/api/game", nil)
+	req.Header.Set("Origin", origin)
+	resp, err := ts.Client().Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+
+	if h := resp.Header.Get("Access-Control-Allow-Origin"); h != origin {
+		t.Errorf("Access-Control-Allow-Origin = %q; want %q", h, origin)
+	}
+	if h := resp.Header.Get("Access-Control-Allow-Credentials"); h != "true" {
+		t.Errorf("Access-Control-Allow-Credentials = %q; want true", h)
 	}
 }
 

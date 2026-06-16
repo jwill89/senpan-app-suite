@@ -240,9 +240,9 @@ func TestCarrd_UploadOverwrites(t *testing.T) {
 		"action": "create", "title": "Over", "folder": "over",
 	}).Body.Close()
 
-	env.postCarrdUpload(t, "over", "", map[string][]byte{"a.png": []byte("first")}).Body.Close()
+	env.postCarrdUpload(t, "over", "", map[string][]byte{"a.png": []byte("\x89PNG\r\n\x1a\nfirst")}).Body.Close()
 	// Same name again — should overwrite, not error or duplicate.
-	resp := env.postCarrdUpload(t, "over", "", map[string][]byte{"a.png": []byte("second-longer")})
+	resp := env.postCarrdUpload(t, "over", "", map[string][]byte{"a.png": []byte("\x89PNG\r\n\x1a\nsecond-longer")})
 	data := decodeBody(t, resp)
 	uploaded, _ := data["uploaded"].([]any)
 	if len(uploaded) != 1 {
@@ -255,7 +255,7 @@ func TestCarrd_UploadOverwrites(t *testing.T) {
 	if len(images) != 1 {
 		t.Errorf("expected 1 image after overwrite, got %d", len(images))
 	}
-	if images[0].(map[string]any)["size"] != float64(len("second-longer")) {
+	if images[0].(map[string]any)["size"] != float64(len("\x89PNG\r\n\x1a\nsecond-longer")) {
 		t.Errorf("size = %v; want overwritten content size", images[0].(map[string]any)["size"])
 	}
 }
@@ -356,7 +356,7 @@ func TestCarrd_SubDir_CreateUploadListDelete(t *testing.T) {
 
 	// Upload into the nested dir.
 	resp = env.postCarrdUpload(t, "client", "spring-sale/banners", map[string][]byte{
-		"top.png": []byte("img"),
+		"top.png": []byte("\x89PNG\r\n\x1a\nimg"),
 	})
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("nested upload status = %d; want 200", resp.StatusCode)

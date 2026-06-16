@@ -69,6 +69,23 @@ func eventsWebhookSettingKey(slug string) string {
 	return "discord_events_webhook_url_" + slug
 }
 
+// isDiscordWebhookURL reports whether raw is a valid Discord webhook URL: https
+// on an official Discord host with an /api/webhooks/ path. Admin-entered webhook
+// URLs (announcement types, per-club settings) are validated against this so a
+// saved value can't point the server's outbound POSTs at an arbitrary (e.g.
+// internal) host.
+func isDiscordWebhookURL(raw string) bool {
+	u, err := url.Parse(strings.TrimSpace(raw))
+	if err != nil || u.Scheme != "https" {
+		return false
+	}
+	switch strings.ToLower(u.Hostname()) {
+	case "discord.com", "discordapp.com", "ptb.discord.com", "canary.discord.com":
+		return strings.HasPrefix(u.Path, "/api/webhooks/")
+	}
+	return false
+}
+
 // init registers each club's Discord webhooks (reading-list + events channel)
 // as secret app settings so the settings API exposes them to admins and accepts
 // saves, without hard-coding a key per club in settings.go.
@@ -154,7 +171,7 @@ func (s *Server) handleReadingListsAction(w http.ResponseWriter, r *http.Request
 	if _, ok := s.requireAuth(w, r); !ok {
 		return
 	}
-	req, err := readJSON[readingListRequest](r)
+	req, err := readJSON[readingListRequest](w, r)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "Invalid JSON")
 		return
@@ -279,7 +296,7 @@ func (s *Server) handleReadingListItems(w http.ResponseWriter, r *http.Request) 
 	if !s.requirePermission(w, r, bookClubPerm(parent.ClubSlug)) {
 		return
 	}
-	req, err := readJSON[readingListItemRequest](r)
+	req, err := readJSON[readingListItemRequest](w, r)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "Invalid JSON")
 		return

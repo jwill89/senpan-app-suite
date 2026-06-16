@@ -55,7 +55,7 @@ func (s *Server) handleAuthCheck(w http.ResponseWriter, r *http.Request) {
 //	Request:   {"action": "login"|"logout", "username": "...", "password": "..."}
 //	Response:  {"success": true, "user": User} or {"error": "..."}
 func (s *Server) handleAuthAction(w http.ResponseWriter, r *http.Request) {
-	req, err := readJSON[authRequest](r)
+	req, err := readJSON[authRequest](w, r)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "Invalid JSON")
 		return
@@ -92,6 +92,10 @@ func (s *Server) handleAuthAction(w http.ResponseWriter, r *http.Request) {
 		if ok, vErr := auth.Verify(req.Password, hash); vErr == nil {
 			valid = ok
 		}
+	} else {
+		// No such user: run a dummy verify so this branch costs the same argon2
+		// work as a real account, so usernames can't be enumerated by timing.
+		auth.DummyVerify(req.Password)
 	}
 	if !valid {
 		s.limiter.recordFailure(ip)
@@ -139,7 +143,7 @@ func (s *Server) handleRegister(w http.ResponseWriter, r *http.Request) {
 	}
 	s.regLimiter.recordFailure(ip)
 
-	req, err := readJSON[registerRequest](r)
+	req, err := readJSON[registerRequest](w, r)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "Invalid JSON")
 		return

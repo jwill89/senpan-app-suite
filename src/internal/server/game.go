@@ -48,7 +48,7 @@ func (s *Server) handleGameAction(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	req, err := readJSON[gameRequest](r)
+	req, err := readJSON[gameRequest](w, r)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "Invalid JSON")
 		return

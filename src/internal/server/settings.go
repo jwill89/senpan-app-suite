@@ -81,7 +81,7 @@ func (s *Server) handleSettingsUpdate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	req, err := readJSON[settingsRequest](r)
+	req, err := readJSON[settingsRequest](w, r)
 	if err != nil || req.Settings == nil {
 		writeError(w, http.StatusBadRequest, "Invalid JSON")
 		return
@@ -91,6 +91,13 @@ func (s *Server) handleSettingsUpdate(w http.ResponseWriter, r *http.Request) {
 	for key, val := range req.Settings {
 		if !isAllowedSetting(key) {
 			writeError(w, http.StatusBadRequest, "Unknown setting: "+key)
+			return
+		}
+		// Webhook-URL settings (the only "secret" settings) must be a Discord
+		// webhook URL so a saved value can't point the server's outbound POSTs at
+		// an arbitrary host. An empty value clears it.
+		if secretSettings[key] && val != "" && !isDiscordWebhookURL(val) {
+			writeError(w, http.StatusBadRequest, "Discord webhook URLs must look like https://discord.com/api/webhooks/…")
 			return
 		}
 		// Validate numeric settings

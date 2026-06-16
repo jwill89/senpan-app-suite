@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"log/slog"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/alexedwards/scs/v2"
@@ -23,15 +24,19 @@ type Server struct {
 	hub         *ws.Hub
 	sessions    *scs.SessionManager
 	sessHandler http.Handler // pre-built session middleware wrapping mux
-	password    string
 	webRoot     string
-	mux         *http.ServeMux
-	limiter     *rateLimiter // failed-login brute-force limiter
-	regLimiter  *rateLimiter // registration-rate limiter (mass-signup abuse)
+	// allowedOrigins is the CORS allowlist (exact origin strings). Normally
+	// empty — the SPA and API are same-origin — so no CORS headers are sent.
+	allowedOrigins map[string]bool
+	mux            *http.ServeMux
+	limiter        *rateLimiter // failed-login brute-force limiter
+	regLimiter     *rateLimiter // registration-rate limiter (mass-signup abuse)
 }
 
-// New creates a Server, registers all API routes, and returns it.
-func New(st *store.Store, hub *ws.Hub, sessionSecret, adminPassword, webRoot string) *Server {
+// New creates a Server, registers all API routes, and returns it. allowedOrigins
+// is the CORS allowlist (exact origin strings); pass nil/empty for a same-origin
+// deployment, which sends no CORS headers.
+func New(st *store.Store, hub *ws.Hub, sessionSecret, webRoot string, allowedOrigins []string) *Server {
 	sm := scs.New()
 	sm.Lifetime = 24 * time.Hour
 	sm.Cookie.Path = "/"
@@ -39,16 +44,23 @@ func New(st *store.Store, hub *ws.Hub, sessionSecret, adminPassword, webRoot str
 	sm.Cookie.Secure = true
 	sm.Cookie.SameSite = http.SameSiteLaxMode
 
+	origins := make(map[string]bool, len(allowedOrigins))
+	for _, o := range allowedOrigins {
+		if o = strings.TrimSpace(o); o != "" {
+			origins[o] = true
+		}
+	}
+
 	s := &Server{
-		store:      st,
-		game:       bingo.NewService(st),
-		hub:        hub,
-		sessions:   sm,
-		password:   adminPassword,
-		webRoot:    webRoot,
-		mux:        http.NewServeMux(),
-		limiter:    newRateLimiter(5, 15*time.Minute), // 5 failed logins per 15 minutes
-		regLimiter: newRateLimiter(5, time.Hour),      // 5 registration attempts per hour
+		store:          st,
+		game:           bingo.NewService(st),
+		hub:            hub,
+		sessions:       sm,
+		webRoot:        webRoot,
+		allowedOrigins: origins,
+		mux:            http.NewServeMux(),
+		limiter:        newRateLimiter(5, 15*time.Minute), // 5 failed logins per 15 minutes
+		regLimiter:     newRateLimiter(5, time.Hour),      // 5 registration attempts per hour
 	}
 
 	s.routes()
@@ -160,8 +172,14 @@ func (s *Server) routes() {
 
 // ServeHTTP applies CORS middleware, logs the request, then dispatches to the router.
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	origin := r.Header.Get("Origin")
-	if origin != "" {
+	// CORS: only echo the Origin (and allow credentials) for explicitly
+	// allow-listed cross-origin sites. The SPA and API are same-origin in both
+	// prod (Apache) and dev (Vite proxies /api), so the allowlist is normally
+	// empty and these headers are simply not sent — the browser doesn't consult
+	// CORS for same-origin requests. This replaces a previous "reflect ANY Origin
+	// with credentials" policy, under which any website could make credentialed
+	// cross-origin requests to the API.
+	if origin := r.Header.Get("Origin"); origin != "" && s.allowedOrigins[origin] {
 		w.Header().Set("Access-Control-Allow-Origin", origin)
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
 		w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
@@ -248,11 +266,12 @@ func writeInternalError(w http.ResponseWriter, context string, err error) {
 }
 
 // readJSON decodes the request body into a typed struct T using generics.
-// Limits request body to 1MB to prevent memory abuse.
+// Limits the request body to 1MB to prevent memory abuse; passing w lets
+// MaxBytesReader signal the server to close the connection on an oversized body.
 // Returns the zero value and an error if decoding fails.
-func readJSON[T any](r *http.Request) (T, error) {
+func readJSON[T any](w http.ResponseWriter, r *http.Request) (T, error) {
 	var v T
-	r.Body = http.MaxBytesReader(nil, r.Body, 1<<20) // 1MB limit
+	r.Body = http.MaxBytesReader(w, r.Body, 1<<20) // 1MB limit
 	err := json.NewDecoder(r.Body).Decode(&v)
 	return v, err
 }

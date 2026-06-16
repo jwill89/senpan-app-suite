@@ -14,8 +14,10 @@ func TestClientIP(t *testing.T) {
 		want   string
 	}{
 		{"x-forwarded-for single", "1.2.3.4", "9.9.9.9:5555", "1.2.3.4"},
-		{"x-forwarded-for chain takes first", "1.2.3.4, 5.6.7.8, 9.9.9.9", "9.9.9.9:5555", "1.2.3.4"},
-		{"x-forwarded-for trims space", " 1.2.3.4 , 5.6.7.8", "9.9.9.9:5555", "1.2.3.4"},
+		// The rightmost entry is the one the trusted proxy appended; values to its
+		// left are client-supplied and must not be trusted.
+		{"x-forwarded-for chain takes rightmost (proxy-set)", "1.2.3.4, 5.6.7.8, 9.9.9.9", "9.9.9.9:5555", "9.9.9.9"},
+		{"x-forwarded-for trims space", " 1.2.3.4 , 5.6.7.8 ", "9.9.9.9:5555", "5.6.7.8"},
 		{"remoteaddr host:port", "", "9.9.9.9:1234", "9.9.9.9"},
 		{"remoteaddr without port falls back", "", "9.9.9.9", "9.9.9.9"},
 	}

@@ -49,7 +49,7 @@ func (s *Server) handleStylesAction(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	req, err := readJSON[styleRequest](r)
+	req, err := readJSON[styleRequest](w, r)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "Invalid JSON")
 		return

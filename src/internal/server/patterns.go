@@ -54,7 +54,7 @@ func (s *Server) handlePatternsAction(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	req, err := readJSON[patternRequest](r)
+	req, err := readJSON[patternRequest](w, r)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "Invalid JSON")
 		return
@@ -232,7 +232,7 @@ func (s *Server) handleCategoriesAction(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	req, err := readJSON[categoryRequest](r)
+	req, err := readJSON[categoryRequest](w, r)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "Invalid JSON")
 		return

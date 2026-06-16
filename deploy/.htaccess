@@ -63,6 +63,34 @@ Options -Indexes
 # Caching
 # ----------------------------------------------------------------------------
 <IfModule mod_headers.c>
+    # ------------------------------------------------------------------------
+    # Security response headers (applied to every response; "always" covers
+    # error responses too). These harden the SPA and the publicly served
+    # uploads. The /api/* responses are emitted by the Go server, not this file.
+    # ------------------------------------------------------------------------
+    # Don't let browsers MIME-sniff a response into a different type. Pairs with
+    # the server's extension+magic-byte upload checks: an image that somehow slips
+    # through still won't be interpreted as HTML/script.
+    Header always set X-Content-Type-Options "nosniff"
+    # Clickjacking: refuse to be framed (CSP frame-ancestors for modern browsers,
+    # X-Frame-Options for older ones).
+    Header always set X-Frame-Options "DENY"
+    Header always set Content-Security-Policy "frame-ancestors 'none'"
+    # Trim the Referer sent to other origins.
+    Header always set Referrer-Policy "strict-origin-when-cross-origin"
+    # Drop powerful features the app never uses.
+    Header always set Permissions-Policy "geolocation=(), camera=(), microphone=()"
+    #
+    # HSTS — enable once every subdomain is confirmed HTTPS-only (it's sticky:
+    # browsers cache it for the max-age and it's hard to undo):
+    #   Header always set Strict-Transport-Security "max-age=31536000"
+    #
+    # A full resource CSP is high-value but must be tuned to the app's external
+    # resources (Google Fonts, admin-injected theme CSS, data: image exports) and
+    # tested first, or it will break styling/fonts. Start in Report-Only, watch
+    # the browser console, then promote to enforcing:
+    #   Header always set Content-Security-Policy-Report-Only "default-src 'self'; img-src 'self' data: https:; style-src 'self' 'unsafe-inline' https:; font-src 'self' https: data:; script-src 'self'; connect-src 'self' https: wss:; frame-ancestors 'none'; base-uri 'self'; object-src 'none'"
+
     # Vite emits content-hashed filenames under /assets/ — safe to cache forever.
     <FilesMatch "\.(js|css|woff2?|ttf|eot|svg)$">
         Header set Cache-Control "public, max-age=31536000, immutable"

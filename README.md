@@ -22,7 +22,7 @@ time, and can export their card as an image.
 ```bash
 # 1. Backend — run the API/WebSocket server on :8080
 cd src
-go run . -addr :8080 -db ../data/bingo.sqlite -password "dev-secret"
+go run . -addr :8080 -db ../data/bingo.sqlite
 
 # 2. Frontend (in a second terminal)
 cd frontend

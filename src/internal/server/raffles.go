@@ -112,7 +112,7 @@ func (s *Server) handleRafflesAction(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	req, err := readJSON[raffleRequest](r)
+	req, err := readJSON[raffleRequest](w, r)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "Invalid JSON")
 		return
@@ -250,7 +250,7 @@ func (s *Server) handleRaffleEnter(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	req, err := readJSON[raffleEntryRequest](r)
+	req, err := readJSON[raffleEntryRequest](w, r)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "Invalid JSON")
 		return
@@ -375,7 +375,7 @@ func (s *Server) handleRaffleEntries(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	req, err := readJSON[raffleEntriesRequest](r)
+	req, err := readJSON[raffleEntriesRequest](w, r)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "Invalid JSON")
 		return

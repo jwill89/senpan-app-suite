@@ -273,7 +273,7 @@ func (s *Server) handleCarrdProjectsAction(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	req, err := readJSON[carrdProjectsActionRequest](r)
+	req, err := readJSON[carrdProjectsActionRequest](w, r)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "Invalid JSON")
 		return
@@ -326,19 +326,25 @@ func (s *Server) createCarrdProject(w http.ResponseWriter, root string, req carr
 		return
 	}
 
-	// Enforce uniqueness of both the title and the folder across projects.
-	existing, err := s.listCarrdProjects()
+	// Enforce uniqueness of both the title and the folder across projects. Read
+	// the root entries directly and only the title sidecars — listCarrdProjects
+	// would additionally walk every project's whole tree counting images, which
+	// is wasted work just to reject a duplicate name.
+	entries, err := os.ReadDir(root)
 	if err != nil {
 		writeInternalError(w, "list carrd projects", err)
 		return
 	}
-	for _, p := range existing {
-		if strings.EqualFold(p.Title, title) {
-			writeError(w, http.StatusConflict, "A project titled \""+title+"\" already exists")
+	for _, e := range entries {
+		if !e.IsDir() {
+			continue
+		}
+		if e.Name() == folder {
+			writeError(w, http.StatusConflict, "A project folder \""+folder+"\" already exists")
 			return
 		}
-		if p.Folder == folder {
-			writeError(w, http.StatusConflict, "A project folder \""+folder+"\" already exists")
+		if strings.EqualFold(readCarrdTitle(filepath.Join(root, e.Name()), e.Name()), title) {
+			writeError(w, http.StatusConflict, "A project titled \""+title+"\" already exists")
 			return
 		}
 	}
@@ -471,7 +477,7 @@ func (s *Server) handleCarrdImagesAction(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	req, err := readJSON[carrdImagesActionRequest](r)
+	req, err := readJSON[carrdImagesActionRequest](w, r)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "Invalid JSON")
 		return
@@ -595,6 +601,21 @@ func (s *Server) handleCarrdUpload(w http.ResponseWriter, r *http.Request) {
 				Reason: "Unsupported type (allowed: .jpg, .jpeg, .png, .webp, .gif, .mp3, .mp4)",
 			})
 			continue
+		}
+		// For image extensions, confirm the bytes are actually an image (defense
+		// in depth). mp3/mp4 sniff unreliably, so they stay extension-validated.
+		if isAllowedImageExt(strings.ToLower(filepath.Ext(name))) {
+			f, err := header.Open()
+			if err != nil {
+				skipped = append(skipped, skipEntry{Name: name, Reason: "Failed to read"})
+				continue
+			}
+			validImage := isAllowedImageContentType(sniffedImageType(f))
+			_ = f.Close()
+			if !validImage {
+				skipped = append(skipped, skipEntry{Name: name, Reason: "Not a valid image"})
+				continue
+			}
 		}
 		// Same name overwrites the existing file on purpose.
 		if err := saveMultipartFile(header, filepath.Join(folderPath, name)); err != nil {

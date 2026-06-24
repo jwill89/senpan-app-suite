@@ -10,10 +10,11 @@ time, and can export their card as an image.
 ## Stack
 
 - **Frontend:** Vue 3 (SFC, `<script setup>`) · TypeScript (strict) · Pinia ·
-  Vue Router (history mode, lazy routes) · Vite 6 · PWA · Vitest
-- **Backend:** Go 1.22+ (stdlib HTTP, method-pattern routing) · SQLite (WAL) ·
+  Vue Router (history mode, lazy routes) · Vite 8 · PWA · Vitest
+- **Backend:** Go 1.26+ (stdlib HTTP, method-pattern routing) · SQLite (WAL) ·
   `coder/websocket` · `alexedwards/scs` sessions
-- **Tooling:** tygo (Go→TS type generation) · ESLint + Prettier · GitHub Actions CI
+- **Tooling:** tygo (Go→TS type generation) · ESLint + Prettier · GitLab CI/CD
+  (GitHub Actions config kept in parallel)
 
 ## Quick start
 
@@ -62,9 +63,13 @@ Open http://localhost:5173. The admin area is at `/admin/login`.
 - Frontend tests use **Vitest + Vue Test Utils** (jsdom); test files are
   colocated as `src/**/*.test.ts`. See the **Testing** section of
   [`AGENTS.md`](AGENTS.md) for conventions.
-- [`.github/workflows/ci.yml`](.github/workflows/ci.yml) runs on every push/PR:
-  a **frontend** job (gen-types → lint → typecheck → test → build) and a
-  **backend** job (golangci-lint → build → vet → test).
+- CI runs the same gates on every push / merge request: a **gen-types** step
+  (tygo), a **frontend** job (lint → typecheck → test → build) and a **backend**
+  job (golangci-lint → build → vet → test → govulncheck). The repo carries two
+  equivalent CI configs:
+  - [`.gitlab-ci.yml`](.gitlab-ci.yml) — runs on **GitLab** (this repo's origin).
+  - [`.github/workflows/ci.yml`](.github/workflows/ci.yml) — runs on **GitHub**
+    (kept in parallel for mirrors / GitHub pushes).
 
 ## Documentation
 
@@ -84,7 +89,3 @@ src/        Go backend                    — internal/{server,store,bingo,ws,mo
 deploy/     Apache artifacts              — .htaccess + fonts.htaccess (CORS) + persistent images/
 data/       SQLite DB (created at runtime, gitignored)
 ```
-
-The repository root also contains the **legacy** single-file SPA
-(`index.html` + `assets/`) kept only as a behavioral reference; it is not built
-or deployed.

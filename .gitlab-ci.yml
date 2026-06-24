@@ -1,0 +1,88 @@
+# GitLab CI/CD — mirror of the local quality gates (and of .github/workflows/ci.yml,
+# which only runs on GitHub). Three jobs: generate the tygo types once and share
+# them as an artifact, then a Vue/TS frontend job (lint, type-check, unit tests,
+# production build) and a Go backend job (lint, build, vet, test, govulncheck).
+# A green pipeline means the same checks a developer runs locally have passed.
+
+stages:
+  - generate
+  - test
+
+# Run for merge requests and for branch pushes, but not both at once (avoids the
+# duplicate "detached MR" + "branch" pipelines GitLab creates by default).
+workflow:
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH
+
+# ── tygo type generation ──────────────────────────────────────────────────────
+# The TS domain types (frontend/src/types/api.generated.ts) are gitignored and
+# generated from the Go model by tygo, so CI must regenerate them before the
+# frontend type-checks / builds. Produced here in the Go image and handed to the
+# frontend job as an artifact (keeps the frontend job a pure Node image).
+gen-types:
+  stage: generate
+  image: golang:1.26
+  cache:
+    key:
+      files:
+        - src/go.sum
+    paths:
+      - .go-cache/
+  variables:
+    GOPATH: $CI_PROJECT_DIR/.go-cache
+  script:
+    - cd src
+    - go run github.com/gzuidhof/tygo@v0.2.21 generate
+  artifacts:
+    paths:
+      - frontend/src/types/api.generated.ts
+    expire_in: 1 hour
+
+# ── Frontend: lint · types · tests · build ────────────────────────────────────
+frontend:
+  stage: test
+  image: node:22
+  needs:
+    - gen-types
+  cache:
+    key:
+      files:
+        - frontend/package-lock.json
+    paths:
+      - frontend/.npm/
+  before_script:
+    - cd frontend
+    - npm ci --cache .npm --prefer-offline
+  script:
+    - npm run lint:check
+    - npm run typecheck
+    - npm run test
+    - npm run build
+
+# ── Backend: lint · build · vet · test · vuln scan ────────────────────────────
+backend:
+  stage: test
+  image: golang:1.26
+  needs: []
+  cache:
+    key:
+      files:
+        - src/go.sum
+    paths:
+      - .go-cache/
+  variables:
+    GOPATH: $CI_PROJECT_DIR/.go-cache
+  before_script:
+    # golangci-lint aggregates errcheck/govet/staticcheck/unused plus the extras
+    # in src/.golangci.yml. Pinned to match the version developers run locally.
+    - curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/HEAD/install.sh | sh -s -- -b "$(go env GOPATH)/bin" v2.12.2
+    - export PATH="$(go env GOPATH)/bin:$PATH"
+  script:
+    - cd src
+    - golangci-lint run ./...
+    - go build ./...
+    - go vet ./...
+    - go test ./...
+    # Scan the module (and deps) for known Go vulnerabilities reaching our code.
+    - go run golang.org/x/vuln/cmd/govulncheck@latest ./...

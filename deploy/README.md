@@ -16,9 +16,14 @@ things that live *alongside* the built SPA but are **not** part of `dist/`.
 │   ├── pwa-512x512.png
 │   ├── pwa-maskable-512x512.png
 │   ├── share_banner.png
-│   ├── raffles/               ← raffle prize uploads are written here by the Go server
-│   ├── announcements/         ← announcement embed images (created on first upload)
-│   └── bookclub/              ← reading-list cover uploads (+ events/ for event images)
+│   ├── raffles/               ← "Raffle" image category (prize images)
+│   ├── announcements_main/    ← "Announcement Main" image category (embed main image)
+│   ├── announcements_thumb/   ← "Announcement Thumbnail" image category (embed thumbnail)
+│   ├── flourishes/            ← "Flourishes" image category (SVG board/number flourishes; seeded from corner_flourish.svg + called_flourish.svg)
+│   ├── announcements/         ← legacy announcement images; copied into announcements_main on first start
+│   ├── <custom>/              ← any custom image categories added on System → Images
+│   ├── .categories.json       ← manifest of custom image categories (name ↔ dir)
+│   └── bookclub/              ← reading-list cover uploads
 ├── fonts/                     ← admin-uploaded font files; served by the fonts.senpan.cafe vhost (see Font host)
 ├── carrd/                     ← Carrd image-host projects; served by the carrd.senpan.cafe vhost (see Carrd host)
 └── dist/                      ← from frontend/dist/    (the built Vue app; replace on each deploy)
@@ -29,6 +34,13 @@ things that live *alongside* the built SPA but are **not** part of `dist/`.
 `images/` is a **sibling** of `dist/`, so re-uploading/replacing `dist/` never
 touches uploaded raffle images. The build also strips `dist/images/` (it would
 otherwise be a redundant copy) so the two never get confused.
+
+All image uploads are now managed centrally on the **System → Images** admin
+page, which writes into per-category subdirectories of `images/` (the three
+permanent categories above plus any custom ones). They all live under the
+persistent `images/` tree, so no extra vhost or one-time setup is needed. On
+first start the Go server copies any legacy `images/announcements/` files into
+`images/announcements_main/` (idempotent — safe to leave the legacy folder).
 
 Uploaded **fonts** live in a separate folder, `<webRoot>/fonts/`, served by its
 own vhost at `https://fonts.senpan.cafe/` — see [Font host (CORS)](#font-host-cors).
@@ -109,6 +121,48 @@ One-time setup for the carrd host (same pattern as the font host):
    in the vhost's `<Directory>` instead.
 
 ## Each deploy
+
+**Scripted (recommended).** From the repo root, on Windows:
+
+```powershell
+.\scripts\deploy.ps1                  # frontend (default)
+.\scripts\deploy.ps1 -Target backend  # Go binary + service restart
+.\scripts\deploy.ps1 -Target both     # frontend, then backend
+```
+
+**Frontend** (`-Target frontend`, the default): builds `frontend/` (vue-tsc +
+vite), uploads the result to a staging dir on the host (`<DocumentRoot>/dist.new`)
+via PuTTY's `pscp` — so the DigitalOcean `.ppk` key works directly — verifies
+every file arrived, then swaps it in (`dist` → `dist.old` rollback backup,
+`dist.new` → `dist`). The build runs first, so a broken build never reaches the
+server; only `dist/` is replaced — `images/` and `.htaccess` are never touched;
+and the single `dist.old` backup is overwritten each deploy (no accumulation).
+
+**Backend** (`-Target backend`): cross-compiles a static `linux/amd64` binary
+(`GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -ldflags="-s -w" -o app-suite .`
+in `src/`), stops `senpan.service`, backs up the current binary to
+`app-suite.old`, uploads the new one, installs it at `/opt/senpan/app-suite`, and
+starts the service — **rolling back to the previous binary if the new one fails
+to stay active**. Brief downtime (a few seconds) while the service is stopped.
+
+Each target uses just **three SSH connections** and does not poll during
+transfers, to stay under `ufw limit ssh` (6 within 30s, which otherwise drops the
+transfer with "Network error: Connection timed out"); a rate-limited connection
+is retried once after a 35s wait. Defaults: host `68.183.138.141`, user `root`,
+webroot `/var/www/apps.senpan.cafe`, service `senpan`, opt dir `/opt/senpan`, key
+at `C:\Users\jwill\OneDrive\Documents\digitalocean-key.ppk` (override with
+`-VpsHost` / `-VpsUser` / `-WebRoot` / `-KeyPath` / `-ServiceName` /
+`-RemoteOptDir`). Use `-SkipBuild` to deploy an existing build, `-NoBackup` to
+drop the rollback backup. Rollback by hand: frontend `mv dist.old dist`; backend
+`mv app-suite.old app-suite && systemctl restart senpan` (on the host).
+
+`pscp`/`plink` run in batch mode, so a passphrase-protected `.ppk` must be loaded
+into PuTTY's agent first — run `pageant.exe "<KeyPath>"` once and enter the
+passphrase (it stays unlocked for the session; a `shell:startup` shortcut loads
+it at login). First-ever connection from PuTTY also needs the host key cached
+once (`plink -i "<KeyPath>" root@<host>`, accept the fingerprint).
+
+**Manual fallback.**
 
 1. Locally: `cd frontend && npm run build`.
 2. Upload the contents of `frontend/dist/` → `<DocumentRoot>/dist/` (replace).

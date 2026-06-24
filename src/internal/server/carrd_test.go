@@ -177,6 +177,84 @@ func TestCarrd_DeleteProject_InvalidFolder(t *testing.T) {
 	resp.Body.Close()
 }
 
+func TestCarrd_RenameProject(t *testing.T) {
+	env := newTestEnv(t)
+	env.loginAdmin(t)
+
+	env.postJSON(t, "/api/carrd/projects", map[string]any{
+		"action": "create", "title": "Old Title", "folder": "old-folder",
+	}).Body.Close()
+
+	// Rename the title and the folder together.
+	resp := env.postJSON(t, "/api/carrd/projects", map[string]any{
+		"action": "rename", "folder": "old-folder",
+		"title": "New Title", "new_folder": "Brand New Folder",
+	})
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("rename status = %d; want 200", resp.StatusCode)
+	}
+	project := decodeBody(t, resp)["project"].(map[string]any)
+	if project["title"] != "New Title" {
+		t.Errorf("title = %v; want New Title", project["title"])
+	}
+	if project["folder"] != "brand-new-folder" {
+		t.Errorf("folder = %v; want brand-new-folder", project["folder"])
+	}
+
+	// The listing reflects the new title/folder and the old folder is gone.
+	resp = env.get(t, "/api/carrd/projects")
+	projects, _ := decodeBody(t, resp)["projects"].([]any)
+	if len(projects) != 1 {
+		t.Fatalf("expected 1 project, got %d", len(projects))
+	}
+	got := projects[0].(map[string]any)
+	if got["folder"] != "brand-new-folder" || got["title"] != "New Title" {
+		t.Errorf("listed project = %v; want New Title / brand-new-folder", got)
+	}
+}
+
+func TestCarrd_RenameProject_TitleOnly(t *testing.T) {
+	env := newTestEnv(t)
+	env.loginAdmin(t)
+
+	env.postJSON(t, "/api/carrd/projects", map[string]any{
+		"action": "create", "title": "Keep Folder", "folder": "keep",
+	}).Body.Close()
+
+	// No new_folder → the folder stays, only the title changes.
+	resp := env.postJSON(t, "/api/carrd/projects", map[string]any{
+		"action": "rename", "folder": "keep", "title": "Renamed",
+	})
+	project := decodeBody(t, resp)["project"].(map[string]any)
+	if project["folder"] != "keep" {
+		t.Errorf("folder = %v; want keep (unchanged)", project["folder"])
+	}
+	if project["title"] != "Renamed" {
+		t.Errorf("title = %v; want Renamed", project["title"])
+	}
+}
+
+func TestCarrd_RenameProject_DuplicateTitle(t *testing.T) {
+	env := newTestEnv(t)
+	env.loginAdmin(t)
+
+	env.postJSON(t, "/api/carrd/projects", map[string]any{
+		"action": "create", "title": "Alpha", "folder": "alpha",
+	}).Body.Close()
+	env.postJSON(t, "/api/carrd/projects", map[string]any{
+		"action": "create", "title": "Beta", "folder": "beta",
+	}).Body.Close()
+
+	// Renaming Beta to Alpha's title (case-insensitive) → conflict.
+	resp := env.postJSON(t, "/api/carrd/projects", map[string]any{
+		"action": "rename", "folder": "beta", "title": "alpha",
+	})
+	if resp.StatusCode != http.StatusConflict {
+		t.Errorf("status = %d; want 409", resp.StatusCode)
+	}
+	resp.Body.Close()
+}
+
 func TestCarrd_UploadAndListAndDeleteImage(t *testing.T) {
 	env := newTestEnv(t)
 	env.loginAdmin(t)
@@ -370,12 +448,20 @@ func TestCarrd_SubDir_CreateUploadListDelete(t *testing.T) {
 		t.Fatalf("nested images = %v; want [top.png]", images)
 	}
 
-	// …and the project's recursive image count reflects it.
+	// …and the project's recursive stats reflect it: 1 file and the two nested
+	// sub-folders (spring-sale and its banners child).
 	resp = env.get(t, "/api/carrd/projects")
 	data = decodeBody(t, resp)
 	projects, _ := data["projects"].([]any)
-	if projects[0].(map[string]any)["image_count"] != float64(1) {
-		t.Errorf("image_count = %v; want 1 (recursive)", projects[0].(map[string]any)["image_count"])
+	proj := projects[0].(map[string]any)
+	if proj["file_count"] != float64(1) {
+		t.Errorf("file_count = %v; want 1 (recursive)", proj["file_count"])
+	}
+	if proj["subfolder_count"] != float64(2) {
+		t.Errorf("subfolder_count = %v; want 2 (spring-sale + banners)", proj["subfolder_count"])
+	}
+	if proj["total_size"].(float64) <= 0 {
+		t.Errorf("total_size = %v; want > 0", proj["total_size"])
 	}
 
 	// Delete the nested image with its path.

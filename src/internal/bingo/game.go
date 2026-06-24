@@ -192,11 +192,23 @@ func (g *Service) Draw() (*DrawResult, error) {
 		return nil, err
 	}
 
-	// Find remaining numbers (1–75 minus already called).
+	patterns, err := g.store.GetGamePatterns(game.ID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Only draw from columns whose numbers can complete one of the game's
+	// patterns. A column no pattern uses (e.g. N for a postage-stamp game, where
+	// no winning cell sits in the centre column) is skipped entirely, so those
+	// numbers are never called.
+	cols := PatternColumns(patterns)
+
+	// Find remaining numbers: 1–75 minus already called, restricted to the
+	// active columns above (column index = (n-1)/15).
 	calledSet := makeCalledSet(called)
 	remaining := make([]int, 0, 75-len(called))
 	for i := 1; i <= 75; i++ {
-		if !calledSet[i] {
+		if !calledSet[i] && cols[(i-1)/15] {
 			remaining = append(remaining, i)
 		}
 	}
@@ -214,10 +226,6 @@ func (g *Service) Draw() (*DrawResult, error) {
 	calledSet[number] = true
 
 	// Compute and cache winners (skip already-known winners).
-	patterns, err := g.store.GetGamePatterns(game.ID)
-	if err != nil {
-		return nil, err
-	}
 	existingWinners := parseWinnersCache(game.WinnersCache)
 	winners, err := g.computeWinners(calledSet, patterns, existingWinners)
 	if err != nil {
@@ -360,6 +368,31 @@ func (g *Service) computeWinners(calledSet map[int]bool, patterns []model.BingoG
 		}
 	}
 	return winners, nil
+}
+
+// PatternColumns reports which of the five bingo columns (B,I,N,G,O → indices
+// 0–4) hold at least one required cell across the given patterns, ignoring the
+// FREE centre [2][2] (which never needs a number drawn). Draw uses this to skip
+// columns no pattern can win from — e.g. a postage-stamp game has no required N
+// cells, so no N numbers are drawn. A column is active if ANY pattern uses it,
+// which keeps every pattern winnable (each pattern's columns are a subset). If no
+// pattern marks a real cell (e.g. a game with no patterns), every column is
+// reported active so the game can still draw.
+func PatternColumns(patterns []model.BingoGamePattern) [5]bool {
+	var cols [5]bool
+	for _, p := range patterns {
+		for r := 0; r < 5 && r < len(p.PatternData); r++ {
+			for c := 0; c < 5 && c < len(p.PatternData[r]); c++ {
+				if p.PatternData[r][c] && !(r == 2 && c == 2) {
+					cols[c] = true
+				}
+			}
+		}
+	}
+	if cols == ([5]bool{}) {
+		return [5]bool{true, true, true, true, true}
+	}
+	return cols
 }
 
 // MatchesPattern checks if a card matches a win pattern given the called numbers.

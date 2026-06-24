@@ -133,18 +133,90 @@ describe('called-number lookup', () => {
   })
 })
 
-describe('draw-sound preference', () => {
-  it('defaults to off (opt-in)', () => {
+describe('sound preference', () => {
+  it('defaults to off (opt-in) with a sensible default volume', () => {
     const player = usePlayerStore()
-    expect(player.soundEnabled).toBe(false)
+    expect(player.soundMode).toBe('off')
+    expect(player.soundOn).toBe(false)
+    expect(player.soundVolume).toBe(0.7)
   })
 
-  it('persists when enabled and reads back on a fresh store', () => {
-    usePlayerStore().setSoundEnabled(true)
-    expect(localStorage.getItem('bingo_sound_enabled')).toBe('1')
-    // A fresh Pinia instance should hydrate the saved preference.
+  it('persists the mode + volume and reads them back on a fresh store', () => {
+    const player = usePlayerStore()
+    player.setSoundMode('game')
+    player.setSoundVolume(0.4)
+    expect(localStorage.getItem('bingo_sound_mode')).toBe('game')
+    expect(localStorage.getItem('bingo_sound_volume')).toBe('0.4')
+    // A fresh Pinia instance should hydrate the saved preferences.
     setActivePinia(createPinia())
-    expect(usePlayerStore().soundEnabled).toBe(true)
+    const fresh = usePlayerStore()
+    expect(fresh.soundMode).toBe('game')
+    expect(fresh.soundOn).toBe(true)
+    expect(fresh.soundVolume).toBe(0.4)
+  })
+
+  it('clamps volume to 0..1', () => {
+    const player = usePlayerStore()
+    player.setSoundVolume(5)
+    expect(player.soundVolume).toBe(1)
+    player.setSoundVolume(-1)
+    expect(player.soundVolume).toBe(0)
+  })
+
+  it('migrates the legacy on/off flag to basic mode', () => {
+    localStorage.setItem('bingo_sound_enabled', '1')
+    setActivePinia(createPinia())
+    expect(usePlayerStore().soundMode).toBe('basic')
+  })
+})
+
+describe('secondary stamp', () => {
+  it('is off by default with its own default colour', () => {
+    const player = usePlayerStore()
+    expect(player.secondaryStampEnabled).toBe(false)
+    // Distinct from the primary stamp default.
+    expect(player.currentSecondaryStampBg).not.toBe(player.currentStampBg)
+  })
+
+  it('persists the enabled flag and colour across a fresh store', () => {
+    const player = usePlayerStore()
+    player.setSecondaryStampEnabled(true)
+    player.setSecondaryStampColor('rgba(1,2,3,0.5)')
+    expect(localStorage.getItem('bingo_secondary_stamp_enabled')).toBe('1')
+    expect(localStorage.getItem('bingo_secondary_stamp_color')).toBe('rgba(1,2,3,0.5)')
+    setActivePinia(createPinia())
+    const fresh = usePlayerStore()
+    expect(fresh.secondaryStampEnabled).toBe(true)
+    expect(fresh.secondaryStampColor).toBe('rgba(1,2,3,0.5)')
+  })
+
+  it('shares the single opacity slider value', () => {
+    const player = usePlayerStore()
+    player.setStampOpacity(0.5)
+    expect(player.secondaryStampMarkStyle.opacity).toBe(0.5)
+    expect(player.stampMarkStyle.opacity).toBe(0.5)
+  })
+
+  it('isWinningPatternCell reflects the active patterns (FREE-cell agnostic union)', () => {
+    const player = usePlayerStore()
+    // Pattern marks the top row (B..O at row 0) → those cells are pattern cells.
+    const topRow = [true, true, true, true, true]
+    const blank = [false, false, false, false, false]
+    player.playerGame = {
+      id: 1,
+      called_numbers: [],
+      patterns: [{ id: 1, name: 'Top Row', pattern_data: [topRow, blank, blank, blank, blank] }],
+    } as unknown as BingoGameState
+    expect(player.isWinningPatternCell(0, 0)).toBe(true)
+    expect(player.isWinningPatternCell(0, 4)).toBe(true)
+    expect(player.isWinningPatternCell(1, 0)).toBe(false)
+    expect(player.isWinningPatternCell(2, 2)).toBe(false)
+  })
+
+  it('treats no patterns as no pattern cells', () => {
+    const player = usePlayerStore()
+    player.playerGame = { id: 1, called_numbers: [], patterns: [] } as unknown as BingoGameState
+    expect(player.isWinningPatternCell(0, 0)).toBe(false)
   })
 })
 

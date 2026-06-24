@@ -7,7 +7,7 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import { endpoints } from '@/lib/endpoints'
-import { applyCustomCSS, applyHeaderFont, applyUploadedFonts } from '@/lib/theme'
+import { applyCustomCSS, applyHeaderFont, applyUploadedFonts, applyNumberFlourish } from '@/lib/theme'
 import { DEFAULT_APP_SETTINGS } from '@/lib/constants'
 import type { AppSettings } from '@/types/api'
 import { useUiStore } from './ui'
@@ -22,6 +22,23 @@ export const useAppStore = defineStore('app', () => {
   let googleFontsCacheKey = ''
   /** True while settings are being saved (drives the Save button). */
   const savingSettings = ref(false)
+
+  /**
+   * Active theme decorative flourishes (root-relative paths into
+   * images/flourishes, "" = built-in art). The number flourish is applied as a
+   * CSS variable; the board flourish is read by CornerFlourish to render the
+   * player board corners. Kept here (app-wide, loaded on every view) so both the
+   * public player board and the admin views stay in sync.
+   */
+  const activeBoardFlourish = ref('')
+  const activeNumberFlourish = ref('')
+
+  /** Sets the active flourishes + applies the number-flourish CSS variable. */
+  function applyFlourishes(board: string, number: string): void {
+    activeBoardFlourish.value = board || ''
+    activeNumberFlourish.value = number || ''
+    applyNumberFlourish(activeNumberFlourish.value)
+  }
 
   /** Loads app settings, applies title + header font, then fetches fonts. */
   async function loadSettings(): Promise<void> {
@@ -94,6 +111,7 @@ export const useAppStore = defineStore('app', () => {
     try {
       const data = await endpoints.styles.activeCss()
       applyCustomCSS(data.css || '')
+      applyFlourishes(data.board_flourish || '', data.number_flourish || '')
     } catch {
       /* silent — custom CSS is optional */
     }
@@ -104,6 +122,9 @@ export const useAppStore = defineStore('app', () => {
     googleFontsList,
     uploadedFonts,
     savingSettings,
+    activeBoardFlourish,
+    activeNumberFlourish,
+    applyFlourishes,
     loadSettings,
     saveSettings,
     loadGoogleFontsList,

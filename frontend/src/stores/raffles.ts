@@ -8,6 +8,7 @@ import { endpoints } from '@/lib/endpoints'
 import { utcToDatetimeLocal, datetimeLocalToUtc, parseServerTimestamp } from '@/lib/datetime'
 import type { Raffle, RaffleEnterResponse, RaffleEntry, RaffleForm } from '@/types/api'
 import { useUiStore } from './ui'
+import { useImagesStore, IMAGE_DIR_RAFFLES } from './images'
 
 /**
  * Whether a raffle is enterable by the public right now: it must be `open` and
@@ -55,7 +56,8 @@ export const useRafflesStore = defineStore('raffles', () => {
   const raffleWinner = ref<RaffleEntry | null>(null)
   const raffleWinnerEntry = ref<RaffleEntry | null>(null) // public closed view
   const raffleTotalEntryCount = ref(0)
-  const raffleImageUploading = ref(false)
+  /** Reusable prize-image paths (the "Raffle" category on the Images page). */
+  const prizeImages = ref<string[]>([])
   // In-flight flags driving spinners / button disabling.
   const rafflesLoading = ref(false)
   const detailLoading = ref(false)
@@ -280,21 +282,15 @@ export const useRafflesStore = defineStore('raffles', () => {
     }
   }
 
-  async function uploadRaffleImage(event: Event): Promise<void> {
-    const input = event.target as HTMLInputElement
-    const file = input.files && input.files[0]
-    if (!file) return
-    raffleImageUploading.value = true
+  /** Loads the reusable prize images (the "Raffle" category) for the form picker.
+   *  Prize images are stored as root-relative paths, so the picker uses `.path`. */
+  async function loadPrizeImages(): Promise<void> {
     try {
-      const formData = new FormData()
-      formData.append('image', file)
-      const data = await endpoints.raffles.uploadImage(formData)
-      if (raffleForm.value) raffleForm.value.prize_image = data.path
-      ui.notify('Image uploaded', 'success')
-    } catch (e) {
-      ui.notify((e as Error).message, 'error')
-    } finally {
-      raffleImageUploading.value = false
+      const images = useImagesStore()
+      await images.loadImages(IMAGE_DIR_RAFFLES)
+      prizeImages.value = (images.imagesByDir[IMAGE_DIR_RAFFLES] || []).map((i) => i.path)
+    } catch {
+      /* non-fatal: the picker just shows nothing */
     }
   }
 
@@ -461,7 +457,7 @@ export const useRafflesStore = defineStore('raffles', () => {
     raffleWinner,
     raffleWinnerEntry,
     raffleTotalEntryCount,
-    raffleImageUploading,
+    prizeImages,
     rafflesLoading,
     detailLoading,
     savingRaffle,
@@ -482,7 +478,7 @@ export const useRafflesStore = defineStore('raffles', () => {
     cancelRaffleForm,
     saveRaffle,
     deleteRaffle,
-    uploadRaffleImage,
+    loadPrizeImages,
     raffleTotalCost,
     clampSignupEntries,
     enterRaffle,

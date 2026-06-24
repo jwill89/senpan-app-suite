@@ -18,7 +18,8 @@ func (s *Store) SaveCard(id string, board [][]int) error {
 	if err != nil {
 		return fmt.Errorf("marshal board: %w", err)
 	}
-	_, err = s.db.Exec("INSERT INTO cards (id, board_data) VALUES (?, ?)", id, string(data))
+	_, err = s.db.Exec(
+		"INSERT INTO cards (id, board_data, created_at) VALUES (?, ?, CURRENT_TIMESTAMP)", id, string(data))
 	return err
 }
 
@@ -36,7 +37,7 @@ func (s *Store) SaveCardsBatch(cards []CardBatchEntry) error {
 	}
 	defer func() { _ = tx.Rollback() }()
 
-	stmt, err := tx.Prepare("INSERT INTO cards (id, board_data) VALUES (?, ?)")
+	stmt, err := tx.Prepare("INSERT INTO cards (id, board_data, created_at) VALUES (?, ?, CURRENT_TIMESTAMP)")
 	if err != nil {
 		return fmt.Errorf("prepare stmt: %w", err)
 	}
@@ -152,9 +153,11 @@ func (s *Store) UpdateCardPlayer(id, playerName, details string) error {
 	return err
 }
 
-// ListCardIDsWithNames returns card IDs along with player names.
+// ListCardIDsWithNames returns card IDs along with player names, details, and the
+// creation timestamp (blank for cards created before the column was added).
 func (s *Store) ListCardIDsWithNames() ([]model.Card, error) {
-	rows, err := s.db.Query("SELECT id, player_name, details FROM cards ORDER BY id")
+	rows, err := s.db.Query(
+		"SELECT id, player_name, details, COALESCE(created_at, '') FROM cards ORDER BY id")
 	if err != nil {
 		return nil, err
 	}
@@ -163,7 +166,7 @@ func (s *Store) ListCardIDsWithNames() ([]model.Card, error) {
 	cards := make([]model.Card, 0)
 	for rows.Next() {
 		var c model.Card
-		if err := rows.Scan(&c.ID, &c.PlayerName, &c.Details); err != nil {
+		if err := rows.Scan(&c.ID, &c.PlayerName, &c.Details, &c.CreatedAt); err != nil {
 			return nil, err
 		}
 		cards = append(cards, c)

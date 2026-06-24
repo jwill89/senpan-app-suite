@@ -2,10 +2,7 @@ package server
 
 import (
 	"fmt"
-	"io"
 	"net/http"
-	"os"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -186,21 +183,14 @@ func (s *Server) handleRafflesAction(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusBadRequest, "Raffle id is required")
 			return
 		}
-		// Fetch raffle to get prize image path before deletion
-		raffle, err := s.store.GetRaffle(req.ID)
-		if err != nil {
-			writeInternalError(w, "get raffle for delete", err)
-			return
-		}
 		deleted, err := s.store.DeleteRaffle(req.ID)
 		if err != nil {
 			writeInternalError(w, "delete raffle", err)
 			return
 		}
-		// Delete prize image file if it exists
-		if deleted && raffle != nil {
-			s.removeUploadedImage(raffle.PrizeImage)
-		}
+		// Prize images are managed centrally on the System → Images page (the
+		// "Raffle" category), so the image file is left intact on delete — it may
+		// be reused by another raffle.
 		writeJSON(w, http.StatusOK, map[string]any{"deleted": deleted})
 
 	default:
@@ -542,84 +532,7 @@ func (s *Server) handleRaffleEntries(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// removeUploadedImage deletes a previously uploaded prize image, but only if
-// the resolved path stays within the raffles upload directory. This guards
-// against a malicious or accidental prize_image value (e.g. "../../etc/x")
-// causing deletion of files outside the upload area.
-func (s *Server) removeUploadedImage(webPath string) {
-	if webPath == "" {
-		return
-	}
-	uploadDir, err := filepath.Abs(filepath.Join(s.webRoot, "images", "raffles"))
-	if err != nil {
-		return
-	}
-	target, err := filepath.Abs(filepath.Join(s.webRoot, filepath.Clean(webPath)))
-	if err != nil {
-		return
-	}
-	// Ensure target is inside uploadDir (and not the dir itself).
-	if target == uploadDir || !strings.HasPrefix(target, uploadDir+string(os.PathSeparator)) {
-		return
-	}
-	_ = os.Remove(target)
-}
-
-// ── Raffle image upload ─────────────────────────────────────────────────────
-
-// handleRaffleUpload handles multipart image uploads for raffle prize images.
-// Validates file extension (jpg/png/webp/gif) and size (max 5 MB).
-//
-//	Endpoint:  POST /api/raffles/upload
-//	Auth:      admin, or a user granted this page's permission
-//	Request:   multipart form with "image" field
-//	Response:  {"path": "images/raffles/raffle_....ext"}
-func (s *Server) handleRaffleUpload(w http.ResponseWriter, r *http.Request) {
-	if !s.requirePermission(w, r, permTeahouseRaffles) {
-		return
-	}
-
-	// Limit upload to 5 MB
-	r.Body = http.MaxBytesReader(w, r.Body, 5<<20)
-
-	file, header, err := r.FormFile("image")
-	if err != nil {
-		writeError(w, http.StatusBadRequest, "Image upload failed (max 5MB)")
-		return
-	}
-	defer file.Close()
-
-	// Validate extension
-	ext := strings.ToLower(filepath.Ext(header.Filename))
-	if ext != ".jpg" && ext != ".jpeg" && ext != ".png" && ext != ".webp" && ext != ".gif" {
-		writeError(w, http.StatusBadRequest, "Only jpg, png, webp, and gif images are allowed")
-		return
-	}
-
-	// Ensure directory exists
-	dir := filepath.Join(s.webRoot, "images", "raffles")
-	if err := os.MkdirAll(dir, 0755); err != nil {
-		writeError(w, http.StatusInternalServerError, "Failed to create upload directory")
-		return
-	}
-
-	// Generate unique filename
-	filename := fmt.Sprintf("raffle_%d%s", time.Now().UnixNano(), ext)
-	destPath := filepath.Join(dir, filename)
-
-	dst, err := os.Create(destPath)
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, "Failed to save image")
-		return
-	}
-	defer dst.Close()
-
-	if _, err := io.Copy(dst, file); err != nil {
-		writeError(w, http.StatusInternalServerError, "Failed to save image")
-		return
-	}
-
-	// Return the web-accessible path
-	webPath := "images/raffles/" + filename
-	writeJSON(w, http.StatusOK, map[string]any{"path": webPath})
-}
+// Raffle prize images are uploaded and managed centrally on the System → Images
+// page (the "Raffle" category → images/raffles). The raffle editor's picker
+// reads that category via GET /api/images; there is no per-raffle upload or
+// cleanup here anymore.

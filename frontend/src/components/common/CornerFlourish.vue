@@ -5,16 +5,58 @@
  * The SVG is inlined (rather than referenced as a CSS `mask`/`background` URL)
  * so it is captured into the exported card image: html-to-image rasterizes the
  * board DOM through an <img>-loaded SVG, which cannot fetch external resources —
- * inline markup with `currentColor` survives the capture, so the flourish shows
- * up in the saved PNG with the same theme color + opacity as on screen.
+ * inline markup survives the capture, so the flourish shows up in the saved PNG.
  *
- * Source artwork is oriented for the TOP-LEFT corner; the other three corners
- * reuse this same markup, mirrored with CSS transforms (see app.css §6).
+ * The active theme may override the artwork via its Board Flourish (an SVG in
+ * images/flourishes). When set, its markup is fetched once (shared across the
+ * four corners via a module cache) and inlined here; when unset, the built-in
+ * default below is used. Source artwork is oriented for the TOP-LEFT corner; the
+ * other three corners reuse this markup, mirrored with CSS transforms (app.css §6).
  */
+import { ref, watch } from 'vue'
+import { useAppStore } from '@/stores/app'
+import { assetUrl } from '@/lib/assets'
+
+const app = useAppStore()
+
+// Module-level cache so all four corners (and re-mounts) share one fetch per URL.
+const svgCache = new Map<string, Promise<string>>()
+
+function fetchFlourishSvg(path: string): Promise<string> {
+  const url = assetUrl(path)
+  let p = svgCache.get(url)
+  if (!p) {
+    p = fetch(url)
+      .then((r) => (r.ok ? r.text() : ''))
+      .then((text) => (text.includes('<svg') ? text : ''))
+      .catch(() => '')
+    svgCache.set(url, p)
+  }
+  return p
+}
+
+/** Inlined markup of the active theme's board flourish, or '' to use the default. */
+const customSvg = ref('')
+
+watch(
+  () => app.activeBoardFlourish,
+  async (path) => {
+    if (!path) {
+      customSvg.value = ''
+      return
+    }
+    customSvg.value = await fetchFlourishSvg(path)
+  },
+  { immediate: true },
+)
 </script>
 
 <template>
+  <!-- Active theme's board flourish (inlined for export capture). -->
+  <span v-if="customSvg" class="corner-flourish-svg" aria-hidden="true" v-html="customSvg"></span>
+  <!-- Built-in default artwork (used when no theme flourish is selected). -->
   <svg
+    v-else
     class="corner-flourish-svg"
     xmlns="http://www.w3.org/2000/svg"
     viewBox="0 0 125.59 126.41"
@@ -45,4 +87,3 @@
     />
   </svg>
 </template>
-

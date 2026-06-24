@@ -19,6 +19,7 @@ import { useCarrdStore } from './carrd'
 import { usePresetsStore } from './presets'
 import { usePatternsStore } from './patterns'
 import { useAnnouncementsStore } from './announcements'
+import { useImagesStore } from './images'
 import { useUsersStore } from './users'
 import { BOOK_CLUBS } from '@/lib/constants'
 import { createFreshness } from '@/lib/freshness'
@@ -41,6 +42,7 @@ export type AdminTab =
   | 'atelier-carrd'
   | 'system-settings'
   | 'system-themes'
+  | 'system-images'
   | 'system-users'
 
 // Per-dataset freshness gate so re-entering a tab doesn't re-spin and re-fetch
@@ -86,6 +88,7 @@ export const useAdminStore = defineStore('admin', () => {
     const presets = usePresetsStore()
     const patterns = usePatternsStore()
     const announcements = useAnnouncementsStore()
+    const images = useImagesStore()
     const users = useUsersStore()
 
     if (tab === 'teahouse-raffles') {
@@ -100,6 +103,7 @@ export const useAdminStore = defineStore('admin', () => {
     if (tab === 'teahouse-announcements') loadFresh('announcements', () => announcements.load())
     if (tab === 'system-themes') loadFresh('styles', () => styles.loadStyles())
     if (tab === 'system-settings') loadFresh('settings', () => app.loadSettings())
+    if (tab === 'system-images') loadFresh('images', () => images.loadCategories())
     if (tab === 'system-users') loadFresh('users', () => users.loadUsers())
     if (tab === 'atelier-fonts') loadFresh('fonts', () => fonts.loadFonts())
     if (tab === 'atelier-carrd') loadFresh('carrd', () => carrd.loadProjects())

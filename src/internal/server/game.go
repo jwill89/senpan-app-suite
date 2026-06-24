@@ -4,6 +4,7 @@ import (
 	"app-suite/internal/model"
 	"encoding/json"
 	"net/http"
+	"strconv"
 	"time"
 )
 
@@ -40,9 +41,10 @@ func (s *Server) handleGameState(w http.ResponseWriter, r *http.Request) {
 //
 //	Endpoint:    POST /api/game
 //	Auth:        admin, or a user granted this page's permission
-//	Request:     {"action": "start"|"draw"|"end"|"trigger_halftime"|"update_details", ...}
+//	Request:     {"action": "start"|"draw"|"end"|"trigger_halftime"|"set_delay"|"update_details", ...}
 //	Response:    varies by action
-//	Broadcasts:  game_update (start/end), game_draw (draw), halftime_minigame, details_update
+//	Broadcasts:  game_update (start/end), game_draw (draw), halftime_minigame,
+//	             draw_delay_update (set_delay), details_update
 func (s *Server) handleGameAction(w http.ResponseWriter, r *http.Request) {
 	if !s.requirePermission(w, r, permBingoGame) {
 		return
@@ -145,6 +147,25 @@ func (s *Server) handleGameAction(w http.ResponseWriter, r *http.Request) {
 			Type string `json:"type"`
 		}{Type: "halftime_minigame"})
 		writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+
+	case "set_delay":
+		// The draw delay is a shared game control: persist the caller's choice (so
+		// it survives page loads — admins read it as default_draw_delay) and
+		// broadcast it so every other admin's selector updates live.
+		delay := req.Delay
+		if delay < 0 || delay > 60 {
+			writeError(w, http.StatusBadRequest, "Draw delay must be 0–60")
+			return
+		}
+		if err := s.store.SetSetting("default_draw_delay", strconv.Itoa(delay)); err != nil {
+			writeInternalError(w, "save draw delay", err)
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+		s.hub.Broadcast(struct {
+			Type  string `json:"type"`
+			Delay int    `json:"delay"`
+		}{Type: "draw_delay_update", Delay: delay})
 
 	case "update_details":
 		if err := s.game.SetGameDetails(req.Details); err != nil {

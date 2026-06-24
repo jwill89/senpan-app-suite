@@ -1,12 +1,14 @@
 package server
 
 import (
+	"path/filepath"
 	"strconv"
 	"strings"
 	"testing"
 	"time"
 
 	"app-suite/internal/model"
+	"app-suite/internal/store"
 )
 
 // mustParse parses a UTC RFC-3339 instant or fails the test.
@@ -160,12 +162,13 @@ func TestBuildAnnouncementEmbed(t *testing.T) {
 	start := mustParse(t, "2026-06-13T19:00:00Z")
 	end := mustParse(t, "2026-06-13T21:00:00Z")
 	a := model.Announcement{
-		Title:   "Tea Time",
-		Details: "**Come hang out** in the lounge.",
-		Image:   "https://example.com/banner.png",
-		Color:   "#1abc9c",
-		StartAt: "2026-06-13T19:00:00Z",
-		EndAt:   "2026-06-13T21:00:00Z",
+		Title:     "Tea Time",
+		Details:   "**Come hang out** in the lounge.",
+		Image:     "https://example.com/banner.png",
+		Thumbnail: "https://example.com/thumb.png",
+		Color:     "#1abc9c",
+		StartAt:   "2026-06-13T19:00:00Z",
+		EndAt:     "2026-06-13T21:00:00Z",
 	}
 	embed := buildAnnouncementEmbed(a)
 
@@ -179,7 +182,8 @@ func TestBuildAnnouncementEmbed(t *testing.T) {
 	if len(embed.Fields) != 2 {
 		t.Fatalf("expected 2 fields (time, details), got %d", len(embed.Fields))
 	}
-	// First field: inline time, long "F" start, short "t" end.
+	// First field: inline time. No formats set → defaults: long "F" start, short
+	// "t" end.
 	timeField := embed.Fields[0]
 	if !timeField.Inline {
 		t.Error("time field should be inline")
@@ -207,6 +211,9 @@ func TestBuildAnnouncementEmbed(t *testing.T) {
 	if embed.Image == nil || embed.Image.URL != a.Image {
 		t.Errorf("image: got %+v", embed.Image)
 	}
+	if embed.Thumbnail == nil || embed.Thumbnail.URL != a.Thumbnail {
+		t.Errorf("thumbnail: got %+v", embed.Thumbnail)
+	}
 }
 
 func TestBuildAnnouncementEmbedNoTimes(t *testing.T) {
@@ -228,6 +235,198 @@ func TestBuildAnnouncementEmbedNoTimes(t *testing.T) {
 	}
 	if embed.Footer != nil {
 		t.Error("no time → no footer expected")
+	}
+}
+
+func TestBuildAnnouncementEmbedLocation(t *testing.T) {
+	a := model.Announcement{Title: "Meetup", Details: "See you there.", Location: "Voice Channel #1"}
+	embed := buildAnnouncementEmbed(a)
+	// Location renders as an inline "📍 Where" field (details are the description).
+	var loc *discordEmbedField
+	for i := range embed.Fields {
+		if embed.Fields[i].Name == "📍 Where" {
+			loc = &embed.Fields[i]
+		}
+	}
+	if loc == nil {
+		t.Fatalf("expected a location field, got fields %+v", embed.Fields)
+	}
+	if !loc.Inline || loc.Value != "Voice Channel #1" {
+		t.Errorf("location field: got inline=%v value=%q", loc.Inline, loc.Value)
+	}
+	// No location → no location field (just the details field remains).
+	if got := buildAnnouncementEmbed(model.Announcement{Title: "X", Details: "y"}); len(got.Fields) != 1 {
+		t.Errorf("no location should yield only the details field, got %d", len(got.Fields))
+	}
+}
+
+// TestBuildAnnouncementEmbedLongDetails guards the bug where long details were
+// silently truncated at the 1024-char field cap: instead they split across
+// consecutive full-width fields (at the newline), preserving the time-first order
+// and losing nothing.
+func TestBuildAnnouncementEmbedLongDetails(t *testing.T) {
+	details := strings.Repeat("a", 1000) + "\n" + strings.Repeat("b", 1000) // 2001 chars
+	embed := buildAnnouncementEmbed(model.Announcement{Title: "Long", Details: details})
+	if len(embed.Fields) != 2 {
+		t.Fatalf("expected 2 detail fields (split at the newline), got %d", len(embed.Fields))
+	}
+	for i, f := range embed.Fields {
+		if f.Name != embedNoHeading || f.Inline {
+			t.Errorf("field %d: got name=%q inline=%v; want headingless full-width", i, f.Name, f.Inline)
+		}
+		if len([]rune(f.Value)) > embedFieldValueMax {
+			t.Errorf("field %d length %d exceeds the %d cap", i, len([]rune(f.Value)), embedFieldValueMax)
+		}
+		if strings.Contains(f.Value, "…") {
+			t.Errorf("field %d was truncated with an ellipsis: %q…", i, f.Value[:20])
+		}
+	}
+	if embed.Fields[0].Value != strings.Repeat("a", 1000) || embed.Fields[1].Value != strings.Repeat("b", 1000) {
+		t.Errorf("split content not preserved: got %q / %q", embed.Fields[0].Value[:5], embed.Fields[1].Value[:5])
+	}
+}
+
+// TestSplitForEmbedFields covers the chunker directly: short text stays one
+// chunk, and a long block splits at the last newline within the cap.
+func TestSplitForEmbedFields(t *testing.T) {
+	if got := splitForEmbedFields("", 1024); got != nil {
+		t.Errorf("empty input: got %v, want nil", got)
+	}
+	if got := splitForEmbedFields("short", 1024); len(got) != 1 || got[0] != "short" {
+		t.Errorf("short input: got %v, want [short]", got)
+	}
+	// Break at the newline that falls within the window rather than mid-word.
+	text := strings.Repeat("a", 8) + "\n" + strings.Repeat("b", 8) // 17 chars
+	got := splitForEmbedFields(text, 10)
+	if len(got) != 2 || got[0] != strings.Repeat("a", 8) || got[1] != strings.Repeat("b", 8) {
+		t.Errorf("newline split: got %v", got)
+	}
+	for i, c := range got {
+		if len([]rune(c)) > 10 {
+			t.Errorf("chunk %d length %d exceeds limit 10", i, len([]rune(c)))
+		}
+	}
+}
+
+// TestDynamicEventTimes verifies the dynamic-dates re-anchoring: the template's
+// time-of-day (and the end's next-day offset) move onto the day a post goes out.
+func TestDynamicEventTimes(t *testing.T) {
+	base := model.Announcement{
+		Timezone:   "UTC",
+		StartLocal: "2026-06-12T22:00", // Fri 10pm
+		EndLocal:   "2026-06-13T01:00", // Sat 1am (runs to the next day)
+		StartAt:    "2026-06-12T22:00:00Z",
+		EndAt:      "2026-06-13T01:00:00Z",
+	}
+	ref := mustParse(t, "2026-06-17T09:00:00Z") // a Wednesday morning post
+
+	// Off → stored values unchanged.
+	if s, e := dynamicEventTimes(base, ref); s != base.StartAt || e != base.EndAt {
+		t.Errorf("dynamic off: got (%q, %q), want stored", s, e)
+	}
+
+	// On → re-anchored onto the post day, keeping 10pm and the next-day end.
+	on := base
+	on.DynamicDates = true
+	if s, e := dynamicEventTimes(on, ref); s != "2026-06-17T22:00:00Z" || e != "2026-06-18T01:00:00Z" {
+		t.Errorf("dynamic on: got (%q, %q), want (2026-06-17T22:00:00Z, 2026-06-18T01:00:00Z)", s, e)
+	}
+
+	// Same-day event keeps a 0-day offset.
+	sameDay := model.Announcement{
+		DynamicDates: true, Timezone: "UTC",
+		StartLocal: "2026-06-12T10:00", EndLocal: "2026-06-12T14:00",
+	}
+	if s, e := dynamicEventTimes(sameDay, ref); s != "2026-06-17T10:00:00Z" || e != "2026-06-17T14:00:00Z" {
+		t.Errorf("same-day: got (%q, %q), want (10:00, 14:00 on 06-17)", s, e)
+	}
+
+	// No start time → unchanged even when the flag is on.
+	noStart := model.Announcement{DynamicDates: true, EndLocal: "2026-06-12T14:00", StartAt: "", EndAt: "x"}
+	if s, e := dynamicEventTimes(noStart, ref); s != "" || e != "x" {
+		t.Errorf("no start: got (%q, %q), want stored", s, e)
+	}
+}
+
+// TestBuildAnnouncementEmbedTimeFormat verifies the independently-chosen Discord
+// timestamp styles are applied to the start and end tokens respectively.
+func TestBuildAnnouncementEmbedTimeFormat(t *testing.T) {
+	start := mustParse(t, "2026-06-13T19:00:00Z")
+	end := mustParse(t, "2026-06-13T21:00:00Z")
+	a := model.Announcement{
+		Title:       "Tea Time",
+		Details:     "x",
+		StartAt:     "2026-06-13T19:00:00Z",
+		EndAt:       "2026-06-13T21:00:00Z",
+		StartFormat: "R",
+		EndFormat:   "T",
+	}
+	got := buildAnnouncementEmbed(a).Fields[0].Value
+	wantStart := "<t:" + itoa(start.Unix()) + ":R>"
+	wantEnd := "<t:" + itoa(end.Unix()) + ":T>"
+	if !strings.Contains(got, wantStart) || !strings.Contains(got, " to "+wantEnd) {
+		t.Errorf("time field %q missing %q / %q", got, wantStart, wantEnd)
+	}
+}
+
+func TestDiscordTimeStyle(t *testing.T) {
+	cases := []struct{ in, def, want string }{
+		{"", "F", "F"},     // empty → given default
+		{"", "t", "t"},     // empty → given default
+		{"f", "F", "f"},    // valid honored
+		{"R", "t", "R"},    // valid honored
+		{" t ", "F", "t"},  // trimmed
+		{"bad", "F", "F"},  // unknown → default
+		{"long", "t", "t"}, // unknown → default
+	}
+	for _, c := range cases {
+		if got := discordTimeStyle(c.in, c.def); got != c.want {
+			t.Errorf("discordTimeStyle(%q, %q) = %q, want %q", c.in, c.def, got, c.want)
+		}
+	}
+}
+
+// TestDiscordMarkdown verifies the three Milkdown→Discord normalizations:
+// backslash hard breaks, <br> tags, and escaped timestamp tokens.
+func TestDiscordMarkdown(t *testing.T) {
+	cases := []struct {
+		name, in, want string
+	}{
+		{"empty", "", ""},
+		{"plain", "Just text.", "Just text."},
+		{"backslash break after slash url", "See https://example.com/\\\nNext line", "See https://example.com/\nNext line"},
+		{"trailing backslash at end", "ends here\\", "ends here"},
+		{"br tag", "line one<br />line two", "line one\nline two"},
+		{"br variants", "a<br>b<br/>c<BR />d", "a\nb\nc\nd"},
+		// A <br> hard break the serializer follows with a source newline must
+		// collapse to ONE line break, not a blank line between every line.
+		{"br hard break + source newline", "line one<br />\nline two", "line one\nline two"},
+		{"br with crlf", "a<br/>\r\nb", "a\nb"},
+		{"real paragraph preserved", "para one\n\npara two", "para one\n\npara two"},
+		{"br before blank stays a paragraph", "a<br />\n\nb", "a\n\nb"},
+		{"escaped timestamp", "Starts \\<t:1782009000:t> sharp", "Starts <t:1782009000:t> sharp"},
+		{"escaped both brackets", "\\<t:1782009000:F\\>", "<t:1782009000:F>"},
+		{"unescaped timestamp untouched", "<t:1782009000:R>", "<t:1782009000:R>"},
+		{"timestamp no style", "<t:1782009000>", "<t:1782009000>"},
+		// CRLF (the editor stores it) is normalized to LF.
+		{"crlf normalized", "a\r\nb", "a\nb"},
+		// A <br> used as a standalone spacer paragraph (blank lines on both sides,
+		// CRLF) collapses to a single blank line — not a stack of them.
+		{"br spacer paragraph crlf", "a\r\n\r\n<br />\r\n\r\nb", "a\n\nb"},
+		// Loose list (blank line between every item) → tight list.
+		{"loose bullet list", "* one\r\n\r\n* two\r\n\r\n* three", "* one\n* two\n* three"},
+		{"loose ordered list", "1. a\r\n\r\n2. b", "1. a\n2. b"},
+		// A loose list whose items span multiple (indented) lines still tightens.
+		{"loose list multiline items", "* one\r\n  cont\r\n\r\n* two", "* one\n  cont\n* two"},
+		// The blank line before a list and before a following paragraph is kept.
+		{"blank around list kept", "intro\r\n\r\n- a\r\n\r\n- b\r\n\r\nouttro", "intro\n\n- a\n- b\n\nouttro"},
+		// A bullet (*) item followed by a dash (-) list joins into one tight list.
+		{"mixed markers tighten", "* a\r\n\r\n- b\r\n- c", "* a\n- b\n- c"},
+	}
+	for _, tc := range cases {
+		if got := discordMarkdown(tc.in); got != tc.want {
+			t.Errorf("%s: discordMarkdown(%q) = %q, want %q", tc.name, tc.in, got, tc.want)
+		}
 	}
 }
 
@@ -304,6 +503,44 @@ func TestAnnouncementComponents(t *testing.T) {
 	// No buttons → no components (so the payload omits the field entirely).
 	if got := announcementComponents(model.Announcement{}); got != nil {
 		t.Errorf("no buttons should yield nil components, got %+v", got)
+	}
+}
+
+func TestAnnouncementMention(t *testing.T) {
+	st, err := store.New(filepath.Join(t.TempDir(), "test.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	s := &Server{store: st}
+
+	// No mention → empty content, no whitelist.
+	if c, am := s.announcementMention(model.Announcement{}); c != "" || am != nil {
+		t.Errorf("none: got content=%q allowed=%+v", c, am)
+	}
+
+	// @everyone → content + parse ["everyone"].
+	c, am := s.announcementMention(model.Announcement{Mention: "everyone"})
+	if c != "@everyone" || am == nil || len(am.Parse) != 1 || am.Parse[0] != "everyone" {
+		t.Errorf("everyone: got content=%q allowed=%+v", c, am)
+	}
+
+	// A managed role → "<@&id>" with the role whitelisted (and parse suppressed).
+	id, err := st.CreateAnnouncementRole("Crew", "123456789012345678")
+	if err != nil {
+		t.Fatal(err)
+	}
+	c, am = s.announcementMention(model.Announcement{Mention: "role:" + strconv.FormatInt(id, 10)})
+	if c != "<@&123456789012345678>" || am == nil || len(am.Roles) != 1 || am.Roles[0] != "123456789012345678" {
+		t.Errorf("role: got content=%q allowed=%+v", c, am)
+	}
+	if am != nil && len(am.Parse) != 0 {
+		t.Errorf("role: parse should be empty to suppress other mentions, got %+v", am.Parse)
+	}
+
+	// A role reference that no longer resolves → no mention (announcement still posts).
+	if c, am := s.announcementMention(model.Announcement{Mention: "role:999999"}); c != "" || am != nil {
+		t.Errorf("missing role: got content=%q allowed=%+v", c, am)
 	}
 }
 

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /**
- * Admin App Settings tab — app title, default draw delay, frequent-winner
+ * Admin Settings tab — app title, default draw delay, frequent-winner
  * thresholds, Google Fonts API key, and the header/board font (with live
  * preview). Mirrors the original `adminTab==='system-settings'` block.
  *
@@ -18,12 +18,7 @@ import MarkdownEditor from '@/components/common/MarkdownEditor.vue'
 import AdminPanel from '@/components/common/ui/AdminPanel.vue'
 import FormField from '@/components/common/ui/FormField.vue'
 import FormActions from '@/components/common/ui/FormActions.vue'
-import {
-  BOOK_CLUBS,
-  clubWebhookKey,
-  clubEventsWebhookKey,
-  FALLBACK_GOOGLE_FONTS,
-} from '@/lib/constants'
+import { BOOK_CLUBS, clubWebhookKey, FALLBACK_GOOGLE_FONTS } from '@/lib/constants'
 import { applyUploadedFonts, fontFamilyFromFile } from '@/lib/theme'
 import { useAppStore } from '@/stores/app'
 import { useFontsStore } from '@/stores/fonts'
@@ -82,10 +77,10 @@ watch(
 
 <template>
   <div class="tab-body">
-    <AdminPanel title="App Settings" :icon="['fad', 'gear']">
-      <!-- Grouped into logical sections laid out in a responsive 2-column grid
-           (stacks to one column on narrow screens) so the page isn't one long
-           scroll. -->
+    <AdminPanel title="Settings" :icon="['fad', 'gear']">
+      <!-- Grouped into logical sections laid out in a responsive two-column flex
+           layout: cards fill the row, capped at two per row, collapsing to one
+           column on mobile so the page isn't one long scroll. -->
       <div class="settings-grid">
         <!-- General ───────────────────────────────────────────────────── -->
         <section class="settings-section">
@@ -111,22 +106,9 @@ watch(
         <!-- Gameplay ───────────────────────────────────────────────────── -->
         <section class="settings-section">
           <h4 class="section-heading"><font-awesome-icon :icon="['fad', 'dice']" /> Gameplay</h4>
-          <FormField
-            label="Default Draw Delay (seconds)"
-            help="Pre-selected delay when starting a new game. Can still be changed per-draw."
-          >
-            <select v-model="app.settings.default_draw_delay" aria-label="Default draw delay">
-              <option value="0">0 — Instant</option>
-              <option value="3">3 seconds</option>
-              <option value="5">5 seconds</option>
-              <option value="10">10 seconds</option>
-              <option value="15">15 seconds</option>
-              <option value="20">20 seconds</option>
-              <option value="30">30 seconds</option>
-              <option value="45">45 seconds</option>
-              <option value="60">60 seconds</option>
-            </select>
-          </FormField>
+          <!-- The draw delay is set live on the Game page (in-game "Draw Delay"
+               selector), which persists + broadcasts it, so it isn't configured
+               here anymore. -->
           <FormField
             label="Frequent Winner Threshold"
             help="How many wins before a player is flagged as a frequent winner."
@@ -246,18 +228,6 @@ watch(
                 autocomplete="off"
               />
             </FormField>
-            <FormField
-              :label="`${club.name} — Events Channel Webhook URL`"
-              help="Where this club's scheduled event posts are sent. Kept private; never sent to non-admin visitors."
-            >
-              <input
-                v-model="app.settings[clubEventsWebhookKey(club.slug)]"
-                placeholder="https://discord.com/api/webhooks/…"
-                :aria-label="club.name + ' events Discord webhook URL'"
-                type="password"
-                autocomplete="off"
-              />
-            </FormField>
           </template>
           <FormField
             label="AniList API URL"
@@ -283,16 +253,20 @@ watch(
 </template>
 
 <style scoped>
-/* Two-column settings layout: each logical group is a raised card; the grid
-   auto-fits to one column once a column can't keep its min width (mobile). */
+/* Two-column flex layout: each logical group is a raised card. The ~50% basis
+   (half the 20px gap subtracted) caps the row at two cards — a third can never
+   fit — and `min-width: min(100%, 340px)` drops it to a single column once a
+   card can't hold ~340px (mobile), without overflowing very narrow screens. */
 .settings-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr));
+  display: flex;
+  flex-wrap: wrap;
   gap: 20px;
-  align-items: start;
+  align-items: flex-start;
   margin-bottom: 20px;
 }
 .settings-section {
+  flex: 1 1 calc(50% - 10px);
+  min-width: min(100%, 340px);
   background: var(--panel-raised-bg);
   border-radius: var(--radius);
   padding: 16px 18px;

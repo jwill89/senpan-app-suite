@@ -137,6 +137,102 @@ func TestMatchesPattern_AllTrue(t *testing.T) {
 	}
 }
 
+// ── PatternColumns ──────────────────────────────────────────────────────────
+
+// postageStampPattern is a 2×2 block in each corner — it uses columns B, I, G, O
+// but never the centre N column.
+func postageStampPattern() [][]bool {
+	p := make([][]bool, 5)
+	for i := range p {
+		p[i] = make([]bool, 5)
+	}
+	for _, rc := range [][2]int{
+		{0, 0}, {0, 1}, {1, 0}, {1, 1}, // top-left
+		{0, 3}, {0, 4}, {1, 3}, {1, 4}, // top-right
+		{3, 0}, {3, 1}, {4, 0}, {4, 1}, // bottom-left
+		{3, 3}, {3, 4}, {4, 3}, {4, 4}, // bottom-right
+	} {
+		p[rc[0]][rc[1]] = true
+	}
+	return p
+}
+
+func TestPatternColumns_PostageStampsSkipsN(t *testing.T) {
+	cols := PatternColumns([]model.BingoGamePattern{{PatternData: postageStampPattern()}})
+	want := [5]bool{true, true, false, true, true} // B,I,_,G,O — no N
+	if cols != want {
+		t.Errorf("postage-stamp columns = %v; want %v", cols, want)
+	}
+}
+
+func TestPatternColumns_FreeCentreOnlyFallsBack(t *testing.T) {
+	p := make([][]bool, 5)
+	for i := range p {
+		p[i] = make([]bool, 5)
+	}
+	p[2][2] = true // only the FREE centre → no real cell
+	cols := PatternColumns([]model.BingoGamePattern{{PatternData: p}})
+	if cols != ([5]bool{true, true, true, true, true}) {
+		t.Errorf("free-only pattern = %v; want all columns active (fallback)", cols)
+	}
+}
+
+func TestPatternColumns_NoPatternsAllActive(t *testing.T) {
+	if PatternColumns(nil) != ([5]bool{true, true, true, true, true}) {
+		t.Error("no patterns should yield all columns active")
+	}
+}
+
+func TestPatternColumns_UnionAcrossPatterns(t *testing.T) {
+	// Pattern A uses only column B (0); pattern B only column O (4).
+	mk := func(col int) [][]bool {
+		g := make([][]bool, 5)
+		for i := range g {
+			g[i] = make([]bool, 5)
+		}
+		g[0][col] = true
+		return g
+	}
+	cols := PatternColumns([]model.BingoGamePattern{{PatternData: mk(0)}, {PatternData: mk(4)}})
+	want := [5]bool{true, false, false, false, true}
+	if cols != want {
+		t.Errorf("union columns = %v; want %v", cols, want)
+	}
+}
+
+// TestGameService_Draw_SkipsInactiveColumns verifies that a postage-stamp game
+// (no N cells) never draws an N number and exhausts after the 60 B/I/G/O numbers.
+func TestGameService_Draw_SkipsInactiveColumns(t *testing.T) {
+	st := testStore(t)
+	gs := NewService(st)
+
+	patID, err := st.SavePattern("Postage Stamps", postageStampPattern(), 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := gs.Start([]int{int(patID)}); err != nil {
+		t.Fatal(err)
+	}
+
+	count := 0
+	for {
+		r, err := gs.Draw()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if r == nil {
+			break
+		}
+		count++
+		if r.Drawn.Number >= 31 && r.Drawn.Number <= 45 {
+			t.Errorf("drew N number %d, but no pattern uses the N column", r.Drawn.Number)
+		}
+	}
+	if count != 60 { // B+I+G+O = 4 columns × 15
+		t.Errorf("expected 60 drawable numbers (N skipped), got %d", count)
+	}
+}
+
 // ── makeCalledSet ───────────────────────────────────────────────────────────
 
 func TestMakeCalledSet(t *testing.T) {

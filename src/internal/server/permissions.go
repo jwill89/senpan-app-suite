@@ -24,6 +24,7 @@ const (
 	permAtelierCarrd     = "atelier-carrd"
 	permSystemSettings   = "system-settings"
 	permSystemThemes     = "system-themes"
+	permSystemImages     = "system-images"
 )
 
 // bookClubSlugs lists the known book clubs that get their own page permission.
@@ -42,7 +43,7 @@ func validPermissions() map[string]bool {
 		permBingoGame, permBingoCards, permBingoWinnersLog, permBingoPatterns, permBingoPresets,
 		permTeahouseAnnounce, permTeahouseRaffles,
 		permAtelierFonts, permAtelierCarrd,
-		permSystemSettings, permSystemThemes,
+		permSystemSettings, permSystemThemes, permSystemImages,
 	}
 	set := make(map[string]bool, len(keys)+len(bookClubSlugs))
 	for _, k := range keys {

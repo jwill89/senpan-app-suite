@@ -25,6 +25,30 @@ func TestUsersSeedAdmin(t *testing.T) {
 	}
 }
 
+func TestUsersUpdateLastLogin(t *testing.T) {
+	s := newTestStore(t)
+
+	u, err := s.CreateUser("tester", "hash-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if u.LastLoginAt != "" {
+		t.Fatalf("a new user should have no last-login time, got %q", u.LastLoginAt)
+	}
+
+	if err := s.UpdateLastLogin(u.ID); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := s.GetUserByID(u.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got == nil || got.LastLoginAt == "" {
+		t.Fatalf("last_login_at should be set after UpdateLastLogin, got %q", got.LastLoginAt)
+	}
+}
+
 func TestUsersCreateInactiveAndMutate(t *testing.T) {
 	s := newTestStore(t)
 

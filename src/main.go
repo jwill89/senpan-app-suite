@@ -73,11 +73,10 @@ func main() {
 		Handler: srv,
 	}
 
-	// Background scheduler: posts due book-club event embeds to Discord. Tied to
-	// a context cancelled on shutdown so the goroutine exits cleanly.
+	// Background scheduler: posts due announcement embeds to Discord. Tied to a
+	// context cancelled on shutdown so the goroutine exits cleanly.
 	schedCtx, cancelSched := context.WithCancel(context.Background())
 	defer cancelSched()
-	go srv.RunEventScheduler(schedCtx)
 	go srv.RunAnnouncementScheduler(schedCtx)
 
 	// Graceful shutdown: listen for SIGINT/SIGTERM.
@@ -94,7 +93,7 @@ func main() {
 
 	<-shutdown
 	slog.Info("shutdown signal received, shutting down gracefully…")
-	cancelSched() // stop the background event scheduler
+	cancelSched() // stop the background announcement scheduler
 
 	// Give in-flight requests 10 seconds to complete.
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)

@@ -13,6 +13,7 @@ type Card struct {
 	BoardData  [][]int `json:"board_data"`  // 5×5 grid of numbers (0 = FREE)
 	PlayerName string  `json:"player_name"` // optional player name assigned by admin
 	Details    string  `json:"details"`     // optional extra info about the cardholder
+	CreatedAt  string  `json:"created_at"`  // ISO timestamp the card was generated ("" if pre-dates tracking)
 }
 
 // User is an admin-area account. Authentication is username + password only;
@@ -30,6 +31,7 @@ type User struct {
 	IsActive    bool     `json:"is_active"`
 	Permissions []string `json:"permissions"` // page-permission keys (ignored when IsAdmin)
 	CreatedAt   string   `json:"created_at"`
+	LastLoginAt string   `json:"last_login_at"` // ISO timestamp of last successful login ("" if never)
 }
 
 // PatternCategory groups win patterns into named, ordered categories
@@ -104,7 +106,13 @@ type Style struct {
 	ID         int64  `json:"id"`
 	Name       string `json:"name"`
 	CSSContent string `json:"css_content,omitempty"` // omitted in list responses for efficiency
-	CreatedAt  string `json:"created_at"`
+	// Optional per-theme decorative flourishes (root-relative paths into
+	// images/flourishes, "" = use the app's built-in art). BoardFlourish is the
+	// SVG drawn at the player board corners; NumberFlourish flanks the last-called
+	// number (player + admin Game tab).
+	BoardFlourish  string `json:"board_flourish"`
+	NumberFlourish string `json:"number_flourish"`
+	CreatedAt      string `json:"created_at"`
 }
 
 // Raffle represents a raffle event that players can enter.
@@ -178,34 +186,6 @@ type ReadingListSource struct {
 	URL   string `json:"url"`
 }
 
-// BookClubEvent is a scheduled event post for a book club (e.g. a monthly
-// meeting or watch party). It is rendered as a Discord embed and posted
-// automatically to the club's events-channel webhook at PostAt.
-//
-// The admin enters wall-clock times (StartLocal/PostAtLocal) together with
-// their IANA Timezone, so the form can be edited later in the original local
-// time. The absolute instants (StartAt/PostAt) are computed server-side from
-// those and stored as UTC RFC-3339 strings; they drive scheduling and are
-// converted to unix seconds only when emitting Discord's timezone-aware <t:…>
-// timestamps (which each viewer sees in their own zone).
-type BookClubEvent struct {
-	ID          int64  `json:"id"`
-	ClubSlug    string `json:"club_slug"`
-	Title       string `json:"title"`
-	StartLocal  string `json:"start_local"`   // "2006-01-02T15:04" in Timezone
-	Timezone    string `json:"timezone"`      // IANA name, e.g. "America/New_York"
-	LengthHours int    `json:"length_hours"`  // meeting length in hours (1–5)
-	Location    string `json:"location"`      // free text (e.g. a Discord voice channel)
-	Details     string `json:"details"`       // optional markdown, shown full-width above the image
-	Image       string `json:"image"`         // full URL, shown full-width in the embed
-	PostAtLocal string `json:"post_at_local"` // "2006-01-02T15:04" in Timezone
-	StartAt     string `json:"start_at"`      // computed absolute instant, UTC RFC-3339
-	PostAt      string `json:"post_at"`       // computed absolute instant, UTC RFC-3339
-	Posted      bool   `json:"posted"`        // whether it has been posted to Discord
-	PostedAt    string `json:"posted_at"`     // ISO timestamp it was posted (empty if not)
-	CreatedAt   string `json:"created_at"`
-}
-
 // WinnersLogEntry represents a confirmed winner stored in the winners log.
 // Created when an admin ends a game and selects valid winners.
 type WinnersLogEntry struct {
@@ -234,6 +214,19 @@ type AnnouncementType struct {
 	CreatedAt  string `json:"created_at"`
 }
 
+// AnnouncementRole is a named Discord role that an announcement can optionally
+// tag (ping) when it posts: a friendly group label plus the role's Discord ID.
+// It's a convenience picker — managed like announcement types — so admins choose
+// a role by name instead of pasting raw snowflake IDs. Tagging happens in the
+// message content (above the embed), because role mentions inside an embed don't
+// notify anyone.
+type AnnouncementRole struct {
+	ID        int64  `json:"id"`
+	Name      string `json:"name"`
+	RoleID    string `json:"role_id"` // Discord role snowflake ID (string to avoid JS precision loss)
+	CreatedAt string `json:"created_at"`
+}
+
 // Announcement is an admin-authored message posted to Discord as an embed via
 // its type's webhook — manually ("send now") or automatically on a schedule.
 //
@@ -249,12 +242,23 @@ type Announcement struct {
 	TypeID     int64  `json:"type_id"`
 	Title      string `json:"title"`
 	Details    string `json:"details"`     // markdown
-	Image      string `json:"image"`       // full URL, shown full-width in the embed
+	Image      string `json:"image"`       // full URL, shown full-width at the bottom of the embed
+	Thumbnail  string `json:"thumbnail"`   // full URL, shown as the small top-right embed thumbnail
 	Color      string `json:"color"`       // embed accent colour, "#rrggbb" ("" = brand default)
+	Location   string `json:"location"`    // optional free-text location (e.g. a Discord voice channel)
 	StartLocal string `json:"start_local"` // optional event start, wall-clock "2006-01-02T15:04" in Timezone
 	EndLocal   string `json:"end_local"`   // optional event end, wall-clock in Timezone
 	StartAt    string `json:"start_at"`    // computed event start, UTC RFC-3339
 	EndAt      string `json:"end_at"`      // computed event end, UTC RFC-3339
+	// Discord timestamp styles (t|T|d|D|f|F|R) for how the start/end render in the
+	// embed; each is chosen independently ("" = default — F for start, t for end).
+	StartFormat string `json:"start_format"`
+	EndFormat   string `json:"end_format"`
+	// DynamicDates re-anchors the start/end onto the day the announcement is posted
+	// (preserving the time-of-day and how many days the end runs past the start),
+	// so a recurring "day-of" event post always shows the current occurrence rather
+	// than the first one. StartLocal/EndLocal define the template time-of-day.
+	DynamicDates bool `json:"dynamic_dates"`
 
 	// Schedule (all optional; ScheduleKind == "" means unscheduled — manual only).
 	// All recurring/one-time times are wall-clock values anchored to Timezone.
@@ -274,6 +278,11 @@ type Announcement struct {
 	// Optional Discord link buttons (up to 5) rendered as a single action row
 	// below the embed. Persisted as a JSON array in the announcements.buttons column.
 	Buttons []AnnouncementButton `json:"buttons"`
+
+	// Optional role tag posted in the message content (above the embed), since
+	// mentions inside an embed don't notify. One of: "" (don't tag), "everyone"
+	// (@everyone), or "role:<announcement_role_id>" (a managed AnnouncementRole).
+	Mention string `json:"mention"`
 
 	// Read-only convenience for list rendering (joined from announcement_types).
 	TypeName string `json:"type_name,omitempty"`

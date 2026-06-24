@@ -3,6 +3,7 @@ package server
 import (
 	"encoding/json"
 	"net/http"
+	"strings"
 
 	"app-suite/internal/bingo"
 	"app-suite/internal/store"
@@ -37,10 +38,11 @@ func (s *Server) handleCardsList(w http.ResponseWriter, r *http.Request) {
 		ID         string `json:"id"`
 		PlayerName string `json:"player_name"`
 		Details    string `json:"details"`
+		CreatedAt  string `json:"created_at"`
 	}
 	entries := make([]cardListEntry, len(cards))
 	for i, c := range cards {
-		entries[i] = cardListEntry{ID: c.ID, PlayerName: c.PlayerName, Details: c.Details}
+		entries[i] = cardListEntry{ID: c.ID, PlayerName: c.PlayerName, Details: c.Details, CreatedAt: c.CreatedAt}
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"cards": entries})
 }
@@ -49,9 +51,9 @@ func (s *Server) handleCardsList(w http.ResponseWriter, r *http.Request) {
 //
 //	Endpoint:    POST /api/cards
 //	Auth:        admin, or a user granted this page's permission
-//	Request:     {"action": "generate"|"delete"|"delete_all"|"update_player", ...}
+//	Request:     {"action": "generate"|"generate_single"|"delete"|"delete_all"|"update_player", ...}
 //	Response:    varies by action
-//	Broadcasts:  cards_update (on generate/delete/delete_all)
+//	Broadcasts:  cards_update (on generate/generate_single/delete/delete_all/update_player)
 //	             card_deleted (to affected player connections)
 func (s *Server) handleCardsAction(w http.ResponseWriter, r *http.Request) {
 	if !s.requirePermission(w, r, permBingoCards) {
@@ -90,6 +92,33 @@ func (s *Server) handleCardsAction(w http.ResponseWriter, r *http.Request) {
 		}
 		s.game.InvalidateCardCache()
 		writeJSON(w, http.StatusOK, map[string]any{"cards": cards, "count": len(cards)})
+		s.broadcastCards()
+
+	case "generate_single":
+		// Generate one card and assign it to a player name in a single step, so an
+		// admin can hand a named card to a walk-in without a separate edit.
+		name := strings.TrimSpace(req.PlayerName)
+		id, err := bingo.GenerateID(s.store.CardExists)
+		if err != nil {
+			writeInternalError(w, "generate card ID", err)
+			return
+		}
+		board := bingo.GenerateBoard()
+		if err := s.store.SaveCard(id, board); err != nil {
+			writeInternalError(w, "save card", err)
+			return
+		}
+		if name != "" {
+			if err := s.store.UpdateCardPlayer(id, name, ""); err != nil {
+				writeInternalError(w, "assign card player", err)
+				return
+			}
+		}
+		s.game.InvalidateCardCache()
+		writeJSON(w, http.StatusOK, map[string]any{
+			"card":  map[string]any{"id": id, "player_name": name, "board_data": board},
+			"count": 1,
+		})
 		s.broadcastCards()
 
 	case "delete":
@@ -136,8 +165,11 @@ func (s *Server) handleCardsAction(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+		// Broadcast so other admins viewing Manage Cards see the assignment change
+		// live (and keep their indicators, since the broadcast carries the names).
+		s.broadcastCards()
 
 	default:
-		writeError(w, http.StatusBadRequest, "Invalid action. Use: generate, delete, delete_all, update_player")
+		writeError(w, http.StatusBadRequest, "Invalid action. Use: generate, generate_single, delete, delete_all, update_player")
 	}
 }

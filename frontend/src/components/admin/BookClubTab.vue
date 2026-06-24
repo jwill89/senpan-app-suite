@@ -20,13 +20,10 @@ import ManagerView from '@/components/common/ui/ManagerView.vue'
 import ListRow from '@/components/common/ui/ListRow.vue'
 import SubPageHeader from '@/components/common/ui/SubPageHeader.vue'
 import FormField from '@/components/common/ui/FormField.vue'
-import FormRow from '@/components/common/ui/FormRow.vue'
 import FormActions from '@/components/common/ui/FormActions.vue'
-import ImageField from '@/components/common/ui/ImageField.vue'
 import EmptyState from '@/components/common/ui/EmptyState.vue'
 import { useBookclubStore } from '@/stores/bookclub'
 import { assetUrl } from '@/lib/assets'
-import { MEETING_LENGTH_OPTIONS, supportedTimezones } from '@/lib/constants'
 import type { ReadingList } from '@/types/api'
 
 const bookclub = useBookclubStore()
@@ -46,48 +43,10 @@ async function commitRename(list: ReadingList): Promise<void> {
 function cancelRename(): void {
   editingListId.value = null
 }
-
-// ── Event posts ──────────────────────────────────────────────────────────────
-const timezones = supportedTimezones()
-const lengthOptions = MEETING_LENGTH_OPTIONS
-
-/** Format an absolute instant (UTC RFC-3339 string) in a given IANA timezone. */
-function formatInZone(iso: string, tz: string): string {
-  if (!iso) return '—'
-  try {
-    return new Date(iso).toLocaleString(undefined, {
-      dateStyle: 'medium',
-      timeStyle: 'short',
-      timeZone: tz,
-    })
-  } catch {
-    return new Date(iso).toLocaleString()
-  }
-}
 </script>
 
 <template>
   <div class="tab-body">
-    <!-- Sub-view toggle: Reading Lists / Event Posts -->
-    <div class="bc-viewbar mb-16">
-      <button
-        class="toggle-btn"
-        :class="{ active: bookclub.view === 'lists' }"
-        @click="bookclub.setView('lists')"
-      >
-        <font-awesome-icon :icon="['fad', 'book']" /> Reading Lists
-      </button>
-      <button
-        class="toggle-btn"
-        :class="{ active: bookclub.view === 'events' }"
-        @click="bookclub.setView('events')"
-      >
-        <font-awesome-icon :icon="['fad', 'calendar-days']" /> Event Posts
-      </button>
-    </div>
-
-    <!-- Reading lists view -->
-    <template v-if="bookclub.view === 'lists'">
     <!-- Reading list detail (items + add/edit form) -->
     <AdminPanel v-if="bookclub.selectedList">
       <SubPageHeader
@@ -400,172 +359,6 @@ function formatInZone(iso: string, tz: string): string {
         <EmptyState v-else text="No reading lists yet. Create one above." />
       </template>
     </ManagerView>
-    </template>
-
-    <!-- Event posts view -->
-    <template v-else>
-      <ManagerView
-        :title="`${bookclub.clubName} — Event Posts`"
-        :icon="['fad', 'calendar-days']"
-      >
-        <!-- Add / edit event form -->
-        <div class="bc-form mb-16">
-          <h3 class="raffle-section-heading">
-            <font-awesome-icon :icon="['fad', 'plus']" />
-            {{ bookclub.eventForm.id ? 'Edit Event' : 'Schedule Event' }}
-          </h3>
-
-          <FormField label="Title" required>
-            <input
-              v-model="bookclub.eventForm.title"
-              placeholder="e.g. July 2026 Meeting"
-              aria-label="Event title"
-            />
-          </FormField>
-
-          <FormRow>
-            <FormField label="Start date &amp; time" required>
-              <input
-                v-model="bookclub.eventForm.start_local"
-                type="datetime-local"
-                aria-label="Start date and time"
-              />
-            </FormField>
-            <FormField label="Timezone" required>
-              <select v-model="bookclub.eventForm.timezone" aria-label="Timezone">
-                <option v-for="tz in timezones" :key="tz" :value="tz">{{ tz }}</option>
-              </select>
-            </FormField>
-          </FormRow>
-
-          <div class="flex-row mb-10">
-            <FormField label="Meeting length" style="flex: 0 0 160px; min-width: 140px">
-              <select v-model.number="bookclub.eventForm.length_hours" aria-label="Meeting length">
-                <option v-for="h in lengthOptions" :key="h" :value="h">
-                  {{ h }} hour{{ h > 1 ? 's' : '' }}
-                </option>
-              </select>
-            </FormField>
-            <FormField label="Location" style="flex: 1; min-width: 180px">
-              <input
-                v-model="bookclub.eventForm.location"
-                placeholder="e.g. Discord — Voice Channel 1"
-                aria-label="Location"
-              />
-            </FormField>
-          </div>
-
-          <FormField
-            label="When to post"
-            required
-            help="The embed posts automatically at this time (interpreted in the timezone above)."
-          >
-            <input
-              v-model="bookclub.eventForm.post_at_local"
-              type="datetime-local"
-              aria-label="When to post"
-            />
-          </FormField>
-
-          <FormField label="Event Details">
-            <MarkdownEditor
-              v-model="bookclub.eventForm.details"
-              min-height="120px"
-              placeholder="Optional details shown full-width above the image (supports markdown)"
-            />
-          </FormField>
-
-          <!-- Image: upload or reuse an existing one -->
-          <FormField label="Image">
-            <ImageField
-              v-model="bookclub.eventForm.image"
-              :images="bookclub.eventImages"
-              :uploading="bookclub.eventImageUploading"
-              upload-label="Upload event image"
-              @upload="bookclub.uploadEventImage($event)"
-            />
-          </FormField>
-
-          <FormActions align="start">
-            <button
-              v-if="bookclub.eventForm.id"
-              class="btn-neutral"
-              @click="bookclub.resetEventForm()"
-            >
-              Cancel Edit
-            </button>
-            <button
-              class="btn-confirm"
-              :disabled="bookclub.savingEvent || !bookclub.eventForm.title.trim()"
-              @click="bookclub.saveEvent()"
-            >
-              <LoadingSpinner v-if="bookclub.savingEvent" label="Saving…" />
-              <template v-else>{{ bookclub.eventForm.id ? 'Save Changes' : 'Schedule Event' }}</template>
-            </button>
-          </FormActions>
-        </div>
-
-        <!-- Scheduled events -->
-        <LoadingSpinner
-          v-if="bookclub.eventsLoading && bookclub.events.length === 0"
-          block
-          label="Loading events…"
-        />
-        <template v-else>
-          <div v-if="bookclub.events.length" class="list-rows">
-            <ListRow v-for="ev in bookclub.events" :key="ev.id">
-              <template #media>
-                <img
-                  v-if="ev.image"
-                  :src="ev.image"
-                  class="media-cover media-cover--wide"
-                  alt="Event image"
-                />
-                <div v-else class="media-cover media-cover--wide media-empty">
-                  <font-awesome-icon :icon="['fad', 'image']" />
-                </div>
-              </template>
-              <h4 class="bc-item-title">{{ ev.title }}</h4>
-              <p class="text-sm bc-item-meta">
-                <font-awesome-icon :icon="['fad', 'calendar-days']" />
-                {{ formatInZone(ev.start_at, ev.timezone) }}
-                <span class="text-dim">({{ ev.timezone }})</span>
-              </p>
-              <p class="text-dim text-sm">
-                <font-awesome-icon :icon="['fad', 'clock']" /> {{ ev.length_hours }} hour{{ ev.length_hours > 1 ? 's' : '' }}
-                <span v-if="ev.location">
-                  · <font-awesome-icon :icon="['fad', 'location-dot']" /> {{ ev.location }}
-                </span>
-              </p>
-              <p class="text-sm">
-                <span v-if="ev.posted" class="badge badge--success">Posted</span>
-                <span v-else class="badge badge--muted">
-                  Posts {{ formatInZone(ev.post_at, ev.timezone) }}
-                </span>
-              </p>
-              <template #actions>
-                <button
-                  class="btn-action btn-sm"
-                  :disabled="bookclub.postingEventId === ev.id"
-                  aria-label="Post event now"
-                  @click="bookclub.postEventNow(ev)"
-                >
-                  <LoadingSpinner v-if="bookclub.postingEventId === ev.id" label="Posting…" />
-                  <template v-else><font-awesome-icon :icon="['fas', 'paper-plane']" /></template>
-                </button>
-                <button class="btn-confirm btn-sm" aria-label="Edit event" @click="bookclub.editEvent(ev)">
-                  <font-awesome-icon :icon="['fas', 'pen-to-square']" />
-                </button>
-                <button class="btn-danger btn-sm" aria-label="Delete event" @click="bookclub.deleteEvent(ev)">
-                  <font-awesome-icon :icon="['fas', 'trash']" />
-                </button>
-              </template>
-            </ListRow>
-          </div>
-          <EmptyState v-else text="No events scheduled yet. Add one above." />
-        </template>
-      </ManagerView>
-    </template>
   </div>
 </template>
 
@@ -629,12 +422,5 @@ function formatInZone(iso: string, tz: string): string {
 .bc-result-info {
   display: flex;
   flex-direction: column;
-}
-
-/* ── Event posts ─────────────────────────────────────────────────────────── */
-/* The two view buttons are `.toggle-btn`s; this is just their flex container. */
-.bc-viewbar {
-  display: flex;
-  gap: 8px;
 }
 </style>

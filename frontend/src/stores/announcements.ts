@@ -15,11 +15,18 @@ import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 import { endpoints } from '@/lib/endpoints'
 import { detectTimezone } from '@/lib/constants'
+import {
+  useImagesStore,
+  IMAGE_DIR_ANNOUNCEMENTS_MAIN,
+  IMAGE_DIR_ANNOUNCEMENTS_THUMB,
+} from './images'
 import type {
   Announcement,
   AnnouncementForm,
   AnnouncementType,
   AnnouncementTypeForm,
+  AnnouncementRole,
+  AnnouncementRoleForm,
   ScheduleKind,
 } from '@/types/api'
 import { useUiStore } from './ui'
@@ -27,6 +34,11 @@ import { useUiStore } from './ui'
 /** A blank announcement-type form (used for "Add type" and reset after save). */
 function emptyTypeForm(): AnnouncementTypeForm {
   return { id: 0, name: '', webhook_url: '' }
+}
+
+/** A blank taggable-role form (used for "Add role" and reset after save). */
+function emptyRoleForm(): AnnouncementRoleForm {
+  return { id: 0, name: '', role_id: '' }
 }
 
 /** A blank announcement form with sensible schedule defaults. */
@@ -37,9 +49,14 @@ function emptyForm(): AnnouncementForm {
     title: '',
     details: '',
     image: '',
-    color: '#e53170',
+    thumbnail: '',
+    color: '#ff3131',
+    location: '',
     start_local: '',
     end_local: '',
+    start_format: 'F',
+    end_format: 't',
+    dynamic_dates: false,
     schedule_kind: '',
     timezone: detectTimezone(),
     once_local: '',
@@ -47,6 +64,7 @@ function emptyForm(): AnnouncementForm {
     weekdays: [],
     week_of_month: 3,
     buttons: [],
+    mention: '',
   }
 }
 
@@ -75,14 +93,28 @@ function parseWeekdays(csv: string): number[] {
 
 export const useAnnouncementsStore = defineStore('announcements', () => {
   const ui = useUiStore()
+  const imagesStore = useImagesStore()
 
   // Data.
   const types = ref<AnnouncementType[]>([])
+  /** Types sorted alphabetically by name (for the form dropdown + types list). */
+  const sortedTypes = computed(() =>
+    [...types.value].sort((a, b) => a.name.localeCompare(b.name)),
+  )
+  const roles = ref<AnnouncementRole[]>([])
   const announcements = ref<Announcement[]>([])
-  const images = ref<string[]>([])
+  /** Reusable image URLs for the Main / Thumbnail pickers, sourced from the
+   *  central Images page categories (announcements_main / announcements_thumb). */
+  const mainImages = computed(
+    () => (imagesStore.imagesByDir[IMAGE_DIR_ANNOUNCEMENTS_MAIN] || []).map((i) => i.url),
+  )
+  const thumbImages = computed(
+    () => (imagesStore.imagesByDir[IMAGE_DIR_ANNOUNCEMENTS_THUMB] || []).map((i) => i.url),
+  )
 
   // Forms.
   const typeForm = ref<AnnouncementTypeForm>(emptyTypeForm())
+  const roleForm = ref<AnnouncementRoleForm>(emptyRoleForm())
   const form = ref<AnnouncementForm>(emptyForm())
 
   // Search + category (type) filters (client-side, like other admin tabs).
@@ -101,8 +133,8 @@ export const useAnnouncementsStore = defineStore('announcements', () => {
   // In-flight flags.
   const loading = ref(false)
   const savingType = ref(false)
+  const savingRole = ref(false)
   const saving = ref(false)
-  const uploading = ref(false)
   const sendingId = ref<number | null>(null)
   const skippingId = ref<number | null>(null)
 
@@ -111,8 +143,13 @@ export const useAnnouncementsStore = defineStore('announcements', () => {
   async function load(): Promise<void> {
     loading.value = true
     try {
-      const [t, a] = await Promise.all([endpoints.announcements.types(), endpoints.announcements.list()])
+      const [t, r, a] = await Promise.all([
+        endpoints.announcements.types(),
+        endpoints.announcements.roles(),
+        endpoints.announcements.list(),
+      ])
       types.value = t.types || []
+      roles.value = r.roles || []
       announcements.value = a.announcements || []
     } catch (e) {
       ui.notify((e as Error).message, 'error')
@@ -122,10 +159,25 @@ export const useAnnouncementsStore = defineStore('announcements', () => {
     loadImages()
   }
 
+  /** Loads the Main + Thumbnail reusable-image libraries from the Images page. */
+  function loadImages(): void {
+    imagesStore.loadImages(IMAGE_DIR_ANNOUNCEMENTS_MAIN)
+    imagesStore.loadImages(IMAGE_DIR_ANNOUNCEMENTS_THUMB)
+  }
+
   async function loadTypes(): Promise<void> {
     try {
       const data = await endpoints.announcements.types()
       types.value = data.types || []
+    } catch (e) {
+      ui.notify((e as Error).message, 'error')
+    }
+  }
+
+  async function loadRoles(): Promise<void> {
+    try {
+      const data = await endpoints.announcements.roles()
+      roles.value = data.roles || []
     } catch (e) {
       ui.notify((e as Error).message, 'error')
     }
@@ -140,14 +192,20 @@ export const useAnnouncementsStore = defineStore('announcements', () => {
     }
   }
 
-  async function loadImages(): Promise<void> {
+  /**
+   * Persists a drag-and-drop reorder of the announcement list. The list array is
+   * mutated optimistically by the drag interaction; this saves the new order
+   * (top-first ids) and reverts to the server order if the save fails.
+   */
+  async function reorder(orderedIds: number[]): Promise<void> {
     try {
-      const data = await endpoints.announcements.images()
-      images.value = data.images || []
-    } catch {
-      /* non-fatal: the picker just shows nothing */
+      await endpoints.announcements.reorder(orderedIds)
+    } catch (e) {
+      ui.notify((e as Error).message, 'error')
+      await loadAnnouncements() // revert to the persisted order
     }
   }
+
 
   // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -198,6 +256,59 @@ export const useAnnouncementsStore = defineStore('announcements', () => {
     }
   }
 
+  // ── Roles (taggable Discord roles) ───────────────────────────────────────────
+
+  function resetRoleForm(): void {
+    roleForm.value = emptyRoleForm()
+  }
+
+  function editRole(r: AnnouncementRole): void {
+    roleForm.value = { id: r.id, name: r.name, role_id: r.role_id }
+  }
+
+  async function saveRole(): Promise<boolean> {
+    const f = roleForm.value
+    if (!f.name.trim()) {
+      ui.notify('Role name is required', 'error')
+      return false
+    }
+    if (!/^\d+$/.test(f.role_id.trim())) {
+      ui.notify('Role ID must be a Discord role ID (digits only)', 'error')
+      return false
+    }
+    savingRole.value = true
+    try {
+      await endpoints.announcements.saveRole({ ...f, name: f.name.trim(), role_id: f.role_id.trim() })
+      ui.notify(f.id ? 'Role updated' : 'Role added', 'success')
+      resetRoleForm()
+      await loadRoles()
+      return true
+    } catch (e) {
+      ui.notify((e as Error).message, 'error')
+      return false
+    } finally {
+      savingRole.value = false
+    }
+  }
+
+  async function deleteRole(r: AnnouncementRole): Promise<void> {
+    if (
+      !(await ui.confirm(`Delete the "${r.name}" role?`, {
+        title: 'Delete taggable role',
+        confirmText: 'Delete',
+      }))
+    )
+      return
+    try {
+      await endpoints.announcements.deleteRole(r.id)
+      ui.notify('Role deleted', 'info')
+      if (roleForm.value.id === r.id) resetRoleForm()
+      await loadRoles()
+    } catch (e) {
+      ui.notify((e as Error).message, 'error')
+    }
+  }
+
   // ── Announcements ──────────────────────────────────────────────────────────
 
   function resetForm(): void {
@@ -211,10 +322,16 @@ export const useAnnouncementsStore = defineStore('announcements', () => {
     f.title = a.title
     f.details = a.details
     f.image = a.image
-    f.color = a.color || '#e53170'
+    f.thumbnail = a.thumbnail || ''
+    f.color = a.color || '#ff3131'
+    f.location = a.location || ''
+    f.mention = a.mention || ''
     f.buttons = (a.buttons || []).map((b) => ({ ...b }))
     f.start_local = a.start_local
     f.end_local = a.end_local
+    f.start_format = (a.start_format || 'F') as AnnouncementForm['start_format']
+    f.end_format = (a.end_format || 't') as AnnouncementForm['end_format']
+    f.dynamic_dates = !!a.dynamic_dates
     f.schedule_kind = (a.schedule_kind || '') as ScheduleKind
     if (a.timezone) f.timezone = a.timezone
     if (a.schedule_kind === 'once') {
@@ -239,7 +356,10 @@ export const useAnnouncementsStore = defineStore('announcements', () => {
       title: f.title.trim(),
       details: f.details,
       image: f.image,
+      thumbnail: f.thumbnail,
       color: f.color,
+      location: f.location,
+      mention: f.mention,
       buttons: f.buttons
         .map((b) => ({ label: b.label.trim(), emoji: (b.emoji || '').trim(), url: b.url.trim() }))
         .filter((b) => b.label && /^https?:\/\//i.test(b.url))
@@ -247,6 +367,9 @@ export const useAnnouncementsStore = defineStore('announcements', () => {
       timezone: f.timezone,
       start_local: f.start_local,
       end_local: f.end_local,
+      start_format: f.start_format,
+      end_format: f.end_format,
+      dynamic_dates: f.dynamic_dates,
       schedule_kind: f.schedule_kind,
       once_local: '',
       schedule_minutes: 0,
@@ -361,55 +484,44 @@ export const useAnnouncementsStore = defineStore('announcements', () => {
     }
   }
 
-  async function uploadImage(event: Event): Promise<void> {
-    const input = event.target as HTMLInputElement
-    const file = input.files && input.files[0]
-    if (!file) return
-    uploading.value = true
-    try {
-      const formData = new FormData()
-      formData.append('image', file)
-      const data = await endpoints.announcements.uploadImage(formData)
-      form.value.image = data.url
-      ui.notify('Image uploaded', 'success')
-      await loadImages()
-    } catch (e) {
-      ui.notify((e as Error).message, 'error')
-    } finally {
-      uploading.value = false
-      input.value = ''
-    }
-  }
-
   return {
     types,
+    sortedTypes,
+    roles,
     announcements,
-    images,
+    mainImages,
+    thumbImages,
     typeForm,
+    roleForm,
     form,
     search,
     typeFilter,
     filteredAnnouncements,
     loading,
     savingType,
+    savingRole,
     saving,
-    uploading,
     sendingId,
     skippingId,
     load,
     loadTypes,
+    loadRoles,
     loadAnnouncements,
+    reorder,
     loadImages,
     resetTypeForm,
     editType,
     saveType,
     deleteType,
+    resetRoleForm,
+    editRole,
+    saveRole,
+    deleteRole,
     resetForm,
     editAnnouncement,
     save,
     deleteAnnouncement,
     sendNow,
     skipNext,
-    uploadImage,
   }
 })

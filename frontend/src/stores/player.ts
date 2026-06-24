@@ -8,10 +8,32 @@ import { computed, ref } from 'vue'
 import { endpoints } from '@/lib/endpoints'
 import { STAMP_COLORS, STAMP_SHAPES } from '@/lib/constants'
 import type { BingoDrawnNumber, BingoGameState, Card } from '@/types/api'
+import { setSoundVolume as applySoundVolume } from '@/lib/sound'
 import { useUiStore } from './ui'
+
+/** Player sound preference: off, synthesized "basic" beeps, or "game" effects. */
+export type SoundMode = 'off' | 'basic' | 'game'
+
+/** Reads the persisted sound mode, migrating the legacy on/off boolean. */
+function readSoundMode(): SoundMode {
+  const stored = localStorage.getItem('bingo_sound_mode')
+  if (stored === 'off' || stored === 'basic' || stored === 'game') return stored
+  // Legacy `bingo_sound_enabled` ('1' = on) → the basic beeps that were in place.
+  return localStorage.getItem('bingo_sound_enabled') === '1' ? 'basic' : 'off'
+}
+
+/** Reads the persisted sound volume (0..1), defaulting to 0.7. */
+function readSoundVolume(): number {
+  const v = parseFloat(localStorage.getItem('bingo_sound_volume') ?? '')
+  if (!Number.isFinite(v)) return 0.7
+  return Math.min(1, Math.max(0, v))
+}
 
 /** Fallback stamp tint (pink @ 55% alpha) when nothing is stored. */
 const DEFAULT_STAMP_COLOR = 'rgba(229,49,112,0.55)'
+
+/** Default secondary-stamp tint — blue @ 55% alpha, distinct from the primary. */
+const DEFAULT_SECONDARY_STAMP_COLOR = 'rgba(56,128,255,0.55)'
 
 /**
  * Resolves the persisted stamp colour. New installs store a full CSS color
@@ -75,6 +97,20 @@ export const usePlayerStore = defineStore('player', () => {
   // null if storage is unavailable.
   const customStampImage = ref<string | null>(localStorage.getItem('bingo_custom_stamp'))
 
+  /**
+   * Optional secondary stamp: a plain coloured circle (no emoji/custom image)
+   * with its own colour. When enabled, it auto-marks cells that are NOT part of
+   * any active win pattern, while the primary stamp marks the pattern cells —
+   * giving players an at-a-glance view of which cells matter for the win. Shares
+   * the single `stampOpacity` slider. Off by default (preserves prior behaviour).
+   */
+  const secondaryStampEnabled = ref(localStorage.getItem('bingo_secondary_stamp_enabled') === '1')
+  const secondaryStampColor = ref(
+    localStorage.getItem('bingo_secondary_stamp_color')
+      ? resolveStoredColor(localStorage.getItem('bingo_secondary_stamp_color'))
+      : DEFAULT_SECONDARY_STAMP_COLOR,
+  )
+
   const showMinigameModal = ref(false)
 
   // ── Live-game feedback (ambient; never tracks the player's own board) ───────
@@ -84,8 +120,14 @@ export const usePlayerStore = defineStore('player', () => {
   const gameEnded = ref(false)
   /** How many numbers were called in the game that just ended (neutral stat). */
   const endedCalledCount = ref(0)
-  /** Opt-in: play a chime + vibrate when a number is called. Off by default. */
-  const soundEnabled = ref(localStorage.getItem('bingo_sound_enabled') === '1')
+  /** Opt-in sound feedback mode (off / basic beeps / game effects). Off by default. */
+  const soundMode = ref<SoundMode>(readSoundMode())
+  /** Master volume (0..1) for whichever sound mode is active. */
+  const soundVolume = ref<number>(readSoundVolume())
+  // Keep the sound lib's master volume in sync from the start.
+  applySoundVolume(soundVolume.value)
+  /** Whether any sound mode is enabled (drives the volume slider's enabled state). */
+  const soundOn = computed(() => soundMode.value !== 'off')
 
   const stampShapes = STAMP_SHAPES
   const stampColors = STAMP_COLORS
@@ -106,6 +148,40 @@ export const usePlayerStore = defineStore('player', () => {
     background: currentStampBg.value,
     opacity: stampOpacity.value,
   }))
+
+  /** Background tint of the secondary stamp (its own colour, shared opacity). */
+  const currentSecondaryStampBg = computed(
+    () => secondaryStampColor.value || DEFAULT_SECONDARY_STAMP_COLOR,
+  )
+  const secondaryStampMarkStyle = computed(() => ({
+    background: currentSecondaryStampBg.value,
+    opacity: stampOpacity.value,
+  }))
+
+  /**
+   * Cell keys ("ri-ci") that are part of an active win pattern — the union of
+   * every active pattern's required cells. Mirrors how the backend treats a cell
+   * as pattern-relevant (`pattern_data[r][c] === true`). Used to route the
+   * secondary stamp onto the non-pattern cells.
+   */
+  const winningPatternCells = computed(() => {
+    const set = new Set<string>()
+    for (const p of playerGame.value?.patterns ?? []) {
+      const grid = p.pattern_data ?? []
+      for (let r = 0; r < 5 && r < grid.length; r++) {
+        const row = grid[r] ?? []
+        for (let c = 0; c < 5 && c < row.length; c++) {
+          if (row[c]) set.add(r + '-' + c)
+        }
+      }
+    }
+    return set
+  })
+
+  /** True when cell [ri,ci] is a required cell of an active win pattern. */
+  function isWinningPatternCell(ri: number, ci: number): boolean {
+    return winningPatternCells.value.has(ri + '-' + ci)
+  }
 
   // ── Stamp helpers ────────────────────────────────────────────────────────
 
@@ -175,15 +251,35 @@ export const usePlayerStore = defineStore('player', () => {
     localStorage.setItem('bingo_stamp_color', value)
   }
 
+  /** Enables/disables the secondary (non-pattern) stamp and persists the choice. */
+  function setSecondaryStampEnabled(on: boolean): void {
+    secondaryStampEnabled.value = on
+    localStorage.setItem('bingo_secondary_stamp_enabled', on ? '1' : '0')
+  }
+
+  /** Sets the secondary stamp colour (full CSS color string) and persists it. */
+  function setSecondaryStampColor(value: string): void {
+    secondaryStampColor.value = value
+    localStorage.setItem('bingo_secondary_stamp_color', value)
+  }
+
   function setStampOpacity(val: string | number): void {
     stampOpacity.value = parseFloat(String(val))
     localStorage.setItem('bingo_stamp_opacity', String(val))
   }
 
-  /** Toggles the opt-in draw chime/vibration and persists the choice. */
-  function setSoundEnabled(on: boolean): void {
-    soundEnabled.value = on
-    localStorage.setItem('bingo_sound_enabled', on ? '1' : '0')
+  /** Sets the sound mode (off / basic / game) and persists the choice. */
+  function setSoundMode(mode: SoundMode): void {
+    soundMode.value = mode
+    localStorage.setItem('bingo_sound_mode', mode)
+  }
+
+  /** Sets the master sound volume (0..1), persists it, and applies it live. */
+  function setSoundVolume(v: number): void {
+    const clamped = Math.min(1, Math.max(0, v))
+    soundVolume.value = clamped
+    localStorage.setItem('bingo_sound_volume', String(clamped))
+    applySoundVolume(clamped)
   }
 
   /**
@@ -314,18 +410,26 @@ export const usePlayerStore = defineStore('player', () => {
     stampColor,
     stampOpacity,
     customStampImage,
+    secondaryStampEnabled,
+    secondaryStampColor,
     showMinigameModal,
     lastDrawn,
     gameEnded,
     endedCalledCount,
-    soundEnabled,
-    setSoundEnabled,
+    soundMode,
+    soundVolume,
+    soundOn,
+    setSoundMode,
+    setSoundVolume,
     stampShapes,
     stampColors,
     playerCalledSet,
     currentStampEmoji,
     currentStampBg,
     stampMarkStyle,
+    currentSecondaryStampBg,
+    secondaryStampMarkStyle,
+    isWinningPatternCell,
     isCalledPlayer,
     isStamped,
     boardCellClass,
@@ -337,6 +441,8 @@ export const usePlayerStore = defineStore('player', () => {
     setStampEmoji,
     setStampColor,
     setStampOpacity,
+    setSecondaryStampEnabled,
+    setSecondaryStampColor,
     uploadCustomStamp,
     joinGame,
     resetPlayer,

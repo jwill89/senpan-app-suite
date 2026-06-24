@@ -64,6 +64,12 @@ func New(st *store.Store, hub *ws.Hub, sessionSecret, webRoot string, allowedOri
 	}
 
 	s.routes()
+	// One-time, idempotent migration of legacy announcement images into the new
+	// announcements_main category dir (safe to run on every startup).
+	s.migrateAnnouncementImages()
+	// Seed the built-in flourish SVGs into the Flourishes image category so they
+	// are pickable in the theme flourish selectors (idempotent).
+	s.seedFlourishes()
 	// LoadAndSave (outer) populates the session, then withUserCache adds a
 	// per-request memo so currentUser hits the DB at most once per request.
 	s.sessHandler = sm.LoadAndSave(s.withUserCache(s.mux))
@@ -120,7 +126,6 @@ func (s *Server) routes() {
 	// Raffle routes (upload before {id} to avoid path conflict)
 	s.mux.HandleFunc("GET /api/raffles", s.handleRafflesList)
 	s.mux.HandleFunc("POST /api/raffles", s.handleRafflesAction)
-	s.mux.HandleFunc("POST /api/raffles/upload", s.handleRaffleUpload)
 	s.mux.HandleFunc("GET /api/raffles/{id}", s.handleRaffleDetail)
 	s.mux.HandleFunc("POST /api/raffles/{id}/enter", s.handleRaffleEnter)
 	s.mux.HandleFunc("POST /api/raffles/{id}/entries", s.handleRaffleEntries)
@@ -128,11 +133,6 @@ func (s *Server) routes() {
 	// Book club / reading list routes (specific paths before {id} to avoid conflicts)
 	s.mux.HandleFunc("POST /api/bookclub/upload", s.handleBookclubUpload)
 	s.mux.HandleFunc("GET /api/bookclub/lookup", s.handleBookclubLookup)
-	// Book club event posts (scheduled Discord embeds)
-	s.mux.HandleFunc("GET /api/bookclub/events", s.handleBookClubEventsList)
-	s.mux.HandleFunc("POST /api/bookclub/events", s.handleBookClubEventsAction)
-	s.mux.HandleFunc("GET /api/bookclub/events/images", s.handleBookClubEventImages)
-	s.mux.HandleFunc("POST /api/bookclub/events/upload", s.handleBookClubEventUpload)
 	s.mux.HandleFunc("GET /api/reading-lists", s.handleReadingListsList)
 	s.mux.HandleFunc("POST /api/reading-lists", s.handleReadingListsAction)
 	s.mux.HandleFunc("GET /api/reading-lists/{id}", s.handleReadingListDetail)
@@ -143,8 +143,8 @@ func (s *Server) routes() {
 	// Specific paths before any {id} routes to avoid pattern conflicts.
 	s.mux.HandleFunc("GET /api/announcement-types", s.handleAnnouncementTypesList)
 	s.mux.HandleFunc("POST /api/announcement-types", s.handleAnnouncementTypesAction)
-	s.mux.HandleFunc("GET /api/announcements/images", s.handleAnnouncementImages)
-	s.mux.HandleFunc("POST /api/announcements/upload", s.handleAnnouncementUpload)
+	s.mux.HandleFunc("GET /api/announcement-roles", s.handleAnnouncementRolesList)
+	s.mux.HandleFunc("POST /api/announcement-roles", s.handleAnnouncementRolesAction)
 	s.mux.HandleFunc("GET /api/announcements", s.handleAnnouncementsList)
 	s.mux.HandleFunc("POST /api/announcements", s.handleAnnouncementsAction)
 
@@ -168,6 +168,15 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("GET /api/carrd/images", s.handleCarrdImagesList)
 	s.mux.HandleFunc("POST /api/carrd/images", s.handleCarrdImagesAction)
 	s.mux.HandleFunc("POST /api/carrd/upload", s.handleCarrdUpload)
+
+	// Central image hosting (System → Images). Category-based uploads/listing
+	// into subdirectories of <webRoot>/images. /upload before the bare path so
+	// the more specific pattern wins.
+	s.mux.HandleFunc("GET /api/image-categories", s.handleImageCategoriesList)
+	s.mux.HandleFunc("POST /api/image-categories", s.handleImageCategoriesAction)
+	s.mux.HandleFunc("GET /api/images", s.handleImagesList)
+	s.mux.HandleFunc("POST /api/images/upload", s.handleImagesUpload)
+	s.mux.HandleFunc("POST /api/images", s.handleImagesAction)
 }
 
 // ServeHTTP applies CORS middleware, logs the request, then dispatches to the router.
@@ -398,23 +407,29 @@ func (s *Server) requirePermission(w http.ResponseWriter, r *http.Request, perm 
 
 // cardEntry is the lightweight JSON shape for card lists.
 type cardEntry struct {
-	ID string `json:"id"`
+	ID         string `json:"id"`
+	PlayerName string `json:"player_name"`
+	Details    string `json:"details"`
+	CreatedAt  string `json:"created_at"`
 }
 
-// broadcastCards sends an updated card ID list to all WebSocket clients.
+// broadcastCards sends the updated card list to all WebSocket clients. It carries
+// the same shape as GET /api/cards (id + player_name + details) so admins viewing
+// the Manage Cards page keep their player-assignment indicators when the list is
+// replaced by this broadcast — sending IDs alone would blank them out.
 func (s *Server) broadcastCards() {
-	ids, err := s.store.ListCardIDs()
+	cards, err := s.store.ListCardIDsWithNames()
 	if err != nil {
 		return
 	}
-	cards := make([]cardEntry, len(ids))
-	for i, id := range ids {
-		cards[i] = cardEntry{ID: id}
+	entries := make([]cardEntry, len(cards))
+	for i, c := range cards {
+		entries[i] = cardEntry{ID: c.ID, PlayerName: c.PlayerName, Details: c.Details, CreatedAt: c.CreatedAt}
 	}
 	s.hub.Broadcast(struct {
 		Type  string      `json:"type"`
 		Cards []cardEntry `json:"cards"`
-	}{Type: "cards_update", Cards: cards})
+	}{Type: "cards_update", Cards: entries})
 }
 
 // broadcastPatterns sends updated patterns and categories to all WebSocket clients.
@@ -476,10 +491,14 @@ func (s *Server) broadcastDrawToAdmins(drawn model.BingoDrawnNumber, winners []s
 	}{Type: "game_draw", Drawn: drawn, Winners: winners})
 }
 
-// broadcastStyleUpdate sends a style_update message with the new CSS to all clients.
-func (s *Server) broadcastStyleUpdate(css string) {
+// broadcastStyleUpdate sends a style_update message with the active theme's CSS
+// and decorative flourishes to all clients (empty strings when the theme is
+// cleared), so the live board/last-called flourishes update without a reload.
+func (s *Server) broadcastStyleUpdate(css, boardFlourish, numberFlourish string) {
 	s.hub.Broadcast(struct {
-		Type string `json:"type"`
-		CSS  string `json:"css"`
-	}{Type: "style_update", CSS: css})
+		Type           string `json:"type"`
+		CSS            string `json:"css"`
+		BoardFlourish  string `json:"board_flourish"`
+		NumberFlourish string `json:"number_flourish"`
+	}{Type: "style_update", CSS: css, BoardFlourish: boardFlourish, NumberFlourish: numberFlourish})
 }

@@ -2,11 +2,11 @@
 /**
  * Theme color-picker helper tool (Themes tab).
  *
- * Purely an aid for the admin: pick a colour with the native colour input,
- * type/paste any CSS colour (hex, rgb, name) to preview it, and copy the HEX or
+ * Purely an aid for the admin: pick a color with the native color input,
+ * type/paste any CSS color (hex, rgb, name) to preview it, and copy the HEX or
  * RGBA value to paste into the CSS editor. It does not modify the theme directly.
  *
- * The native `<input type="color">` is opaque (#rrggbb); for colours that need
+ * The native `<input type="color">` is opaque (#rrggbb); for colors that need
  * alpha, type the value into the hex field — the RGBA readout reflects it.
  */
 import { computed, ref } from 'vue'
@@ -82,6 +82,10 @@ async function copy(value: string, label: string): Promise<void> {
         @input="onColorInput"
       />
       <code class="theme-color-tool__rgba">{{ rgba }}</code>
+    </div>
+    <!-- Copy buttons on their own row so they stay together (and the tool fits a
+         narrow modal without wrapping awkwardly). -->
+    <div class="theme-color-tool__buttons">
       <button class="btn-view btn-sm" title="Copy hex value" @click="copy(hex, 'HEX')">
         <font-awesome-icon :icon="['fas', 'copy']" /> HEX
       </button>
@@ -108,7 +112,13 @@ async function copy(value: string, label: string): Promise<void> {
   gap: 8px;
 }
 
-/* Native colour input doubling as the swatch (matches the embed-colour input). */
+.theme-color-tool__buttons {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+/* Native color input doubling as the swatch (matches the embed-color input). */
 .theme-color-tool__color {
   width: 48px;
   height: 36px;

@@ -67,8 +67,21 @@ type discordEmbed struct {
 }
 
 type discordWebhookPayload struct {
-	Embeds     []discordEmbed     `json:"embeds"`
-	Components []discordComponent `json:"components,omitempty"`
+	// Content is the plain message text above the embed — used to carry a role
+	// mention (@everyone or <@&id>), since mentions inside an embed don't notify.
+	Content         string                  `json:"content,omitempty"`
+	Embeds          []discordEmbed          `json:"embeds"`
+	Components      []discordComponent      `json:"components,omitempty"`
+	AllowedMentions *discordAllowedMentions `json:"allowed_mentions,omitempty"`
+}
+
+// discordAllowedMentions whitelists which mentions in Content actually ping.
+// Without it Discord may silently suppress webhook mentions; we set it so the
+// chosen role (or @everyone) reliably notifies. Parse "everyone" enables the
+// @everyone/@here ping; Roles lists explicit role IDs allowed to ping.
+type discordAllowedMentions struct {
+	Parse []string `json:"parse"`
+	Roles []string `json:"roles,omitempty"`
 }
 
 // Discord message-component type/style constants for the subset we emit: an

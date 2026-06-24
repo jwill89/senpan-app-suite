@@ -110,11 +110,12 @@ export const useUiStore = defineStore('ui', () => {
     toast.value.show = false
   }
 
-  /** Copies text to the clipboard and shows a toast. */
-  function copyToClipboard(text: string): void {
+  /** Copies text to the clipboard and shows a toast. Pass `successMsg` to combine
+   *  the copy confirmation into a caller-specific message (one toast, not two). */
+  function copyToClipboard(text: string, successMsg = 'Copied to clipboard!'): void {
     navigator.clipboard
       .writeText(text)
-      .then(() => notify('Copied to clipboard!', 'success'))
+      .then(() => notify(successMsg, 'success'))
       .catch(() => notify('Failed to copy', 'error'))
   }
 

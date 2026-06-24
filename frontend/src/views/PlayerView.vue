@@ -17,10 +17,11 @@ import ModalOverlay from '@/components/common/ModalOverlay.vue'
 import StampShapePicker from '@/components/player/StampShapePicker.vue'
 import StampColorPicker from '@/components/player/StampColorPicker.vue'
 import StampOpacitySlider from '@/components/player/StampOpacitySlider.vue'
+import SecondaryStampControl from '@/components/player/SecondaryStampControl.vue'
+import SoundControls from '@/components/player/SoundControls.vue'
 import WinPatternsPanel from '@/components/player/WinPatternsPanel.vue'
 import { useMarkdown } from '@/lib/markdown'
 import { exportCardImage } from '@/lib/exportCard'
-import { primeAudio, playDrawChime } from '@/lib/sound'
 import { useAppStore } from '@/stores/app'
 import { useGameStore } from '@/stores/game'
 import { usePlayerStore } from '@/stores/player'
@@ -113,19 +114,6 @@ const connClass = computed(() =>
   ui.wsStatus === 'closed' ? 'is-connecting' : `is-${ui.wsStatus}`,
 )
 
-/**
- * Toggles the opt-in draw chime. Enabling counts as the user gesture browsers
- * require to start audio, so we prime the context and play a sample so the
- * player can confirm it works.
- */
-function toggleSound(): void {
-  const next = !player.soundEnabled
-  player.setSoundEnabled(next)
-  if (next) {
-    primeAudio()
-    playDrawChime()
-  }
-}
 
 /**
  * Leave the board and return home (App.vue disconnects the WS on the route
@@ -192,6 +180,10 @@ function openDiscord(): void {
           :stamp-emoji="player.currentStampEmoji"
           :stamp-shape="player.stampShape"
           :custom-stamp-image="player.customStampImage"
+          :secondary-stamp-style="
+            player.secondaryStampEnabled ? player.secondaryStampMarkStyle : undefined
+          "
+          :is-winning-pattern-cell="player.isWinningPatternCell"
           @cell-click="(ri, ci) => player.toggleStamp(ri, ci)"
         />
 
@@ -216,10 +208,16 @@ function openDiscord(): void {
               <StampColorPicker />
             </div>
 
+            <!-- Optional secondary stamp (auto-marks non-pattern cells) -->
+            <SecondaryStampControl />
+
             <!-- Opacity slider gets its own full-width row -->
             <StampOpacitySlider />
 
-            <!-- Clear / Save / Sound action bar -->
+            <!-- Sound mode (off/basic/game) + volume slider -->
+            <SoundControls />
+
+            <!-- Clear / Save action bar -->
             <div class="player-actions">
               <button
                 class="btn-caution btn-sm"
@@ -238,18 +236,6 @@ function openDiscord(): void {
               >
                 <font-awesome-icon :icon="['fas', 'download']" />
                 <span class="player-actions__label">{{ exporting ? 'Saving…' : 'Save Board' }}</span>
-              </button>
-
-              <button
-                class="btn-neutral btn-sm stamp-sound-toggle"
-                :aria-pressed="player.soundEnabled"
-                :title="player.soundEnabled ? 'Draw sound on — click to mute' : 'Draw sound off — click to enable'"
-                @click="toggleSound"
-              >
-                <font-awesome-icon
-                  :icon="['fas', player.soundEnabled ? 'volume-high' : 'volume-xmark']"
-                />
-                <span>{{ player.soundEnabled ? 'Sound On' : 'Sound Off' }}</span>
               </button>
             </div>
           </div>

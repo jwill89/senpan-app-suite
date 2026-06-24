@@ -7,24 +7,31 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"sort"
 	"strings"
 	"time"
 )
 
 // This file holds the upload plumbing shared by the image-hosting features
-// (raffles, announcements, book-club covers, book-club event images). Each
-// feature stores its files under a fixed sub-path of <webRoot>; the relative
-// path doubles as the public URL path, so it is the single source of truth for
-// both the on-disk location and the returned URL.
+// (raffles, announcements, book-club covers). Each feature stores its files
+// under a fixed sub-path of <webRoot>; the relative path doubles as the public
+// URL path, so it is the single source of truth for both the on-disk location
+// and the returned URL.
 
 // Relative (forward-slash) upload directories under <webRoot>. Used both to
 // resolve the on-disk path (filepath.FromSlash) and to build the public URL.
 const (
-	announcementImageRelDir = "images/announcements"
-	bookclubCoverRelDir     = "images/bookclub"
-	eventImageRelDir        = "images/bookclub/events"
+	bookclubCoverRelDir = "images/bookclub"
 )
+
+// isAllowedImageExt reports whether ext (lowercase, with dot) is a permitted
+// uploaded-image extension.
+func isAllowedImageExt(ext string) bool {
+	switch ext {
+	case ".jpg", ".jpeg", ".png", ".webp", ".gif":
+		return true
+	}
+	return false
+}
 
 // saveMultipartFile streams a single multipart file part to dst. It is
 // filename-agnostic (fonts, images, audio/video), so callers must validate the
@@ -71,7 +78,7 @@ func isAllowedImageContentType(ct string) bool {
 }
 
 // saveSingleImageUpload handles the common single-image upload flow shared by the
-// announcement, book-club cover, and event image endpoints: it reads the "image"
+// announcement and book-club cover endpoints: it reads the "image"
 // multipart field (max 5 MB), validates it as an allowed image type, writes it
 // under <webRoot>/<relDir> as "<prefix>_<nanos><ext>", and writes the JSON
 // {"url": <fullURL>} success response. On any failure it writes the error
@@ -117,40 +124,4 @@ func (s *Server) saveSingleImageUpload(w http.ResponseWriter, r *http.Request, r
 	}
 
 	writeJSON(w, http.StatusOK, map[string]any{"url": s.siteBaseURL(r) + "/" + relDir + "/" + filename})
-}
-
-// listUploadedImageURLs lists the allowed image files in <webRoot>/<relDir>,
-// newest first, as full public URLs. It returns an empty slice (never an error)
-// when the directory is missing — it isn't created until the first upload — so
-// the "pick an existing image" endpoints can always return a clean list.
-func (s *Server) listUploadedImageURLs(r *http.Request, relDir string) []string {
-	dir := filepath.Join(s.webRoot, filepath.FromSlash(relDir))
-	entries, err := os.ReadDir(dir)
-	if err != nil {
-		return []string{}
-	}
-
-	type imgInfo struct {
-		name string
-		mod  time.Time
-	}
-	infos := make([]imgInfo, 0, len(entries))
-	for _, e := range entries {
-		if e.IsDir() || !isAllowedImageExt(strings.ToLower(filepath.Ext(e.Name()))) {
-			continue
-		}
-		fi, err := e.Info()
-		if err != nil {
-			continue
-		}
-		infos = append(infos, imgInfo{name: e.Name(), mod: fi.ModTime()})
-	}
-	sort.Slice(infos, func(i, j int) bool { return infos[i].mod.After(infos[j].mod) })
-
-	base := s.siteBaseURL(r) + "/" + relDir + "/"
-	images := make([]string, 0, len(infos))
-	for _, info := range infos {
-		images = append(images, base+info.name)
-	}
-	return images
 }

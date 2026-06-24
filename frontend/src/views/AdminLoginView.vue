@@ -7,6 +7,7 @@
 import { ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
+import FormField from '@/components/common/ui/FormField.vue'
 import { useAuthStore } from '@/stores/auth'
 
 const auth = useAuthStore()
@@ -39,21 +40,23 @@ function goHome(): void {
     <div class="box">
       <h2><font-awesome-icon :icon="['fad', 'lock']" /> Sign In</h2>
       <p>Enter your username and password</p>
-      <form autocomplete="off" @submit.prevent="submit">
-        <input
-          v-model="username"
-          type="text"
-          placeholder="Username"
-          aria-label="Username"
-          autocomplete="username"
-        />
-        <input
-          v-model="password"
-          type="password"
-          placeholder="Password"
-          aria-label="Password"
-          autocomplete="current-password"
-        />
+      <form class="login-form" autocomplete="off" @submit.prevent="submit">
+        <FormField label="Username" html-for="login-username">
+          <input
+            id="login-username"
+            v-model="username"
+            type="text"
+            autocomplete="username"
+          />
+        </FormField>
+        <FormField label="Password" html-for="login-password">
+          <input
+            id="login-password"
+            v-model="password"
+            type="password"
+            autocomplete="current-password"
+          />
+        </FormField>
         <div class="btns">
           <button type="button" class="btn-neutral" :disabled="auth.loggingIn" @click="goHome">
             Back

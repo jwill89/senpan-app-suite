@@ -789,6 +789,31 @@ func TestGame_InvalidAction(t *testing.T) {
 	resp.Body.Close()
 }
 
+// TestGame_SetDelay verifies set_delay persists the shared draw delay (readable
+// as default_draw_delay, so it survives page loads) and rejects out-of-range values.
+func TestGame_SetDelay(t *testing.T) {
+	env := newTestEnv(t)
+	env.loginAdmin(t)
+
+	resp := env.postJSON(t, "/api/game", map[string]any{"action": "set_delay", "delay": 15})
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d; want 200", resp.StatusCode)
+	}
+	resp.Body.Close()
+
+	resp = env.get(t, "/api/settings")
+	settings, _ := decodeBody(t, resp)["settings"].(map[string]any)
+	if settings["default_draw_delay"] != "15" {
+		t.Errorf("default_draw_delay = %v; want 15", settings["default_draw_delay"])
+	}
+
+	resp = env.postJSON(t, "/api/game", map[string]any{"action": "set_delay", "delay": 999})
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Errorf("out-of-range status = %d; want 400", resp.StatusCode)
+	}
+	resp.Body.Close()
+}
+
 func TestGame_StateWithActiveGame(t *testing.T) {
 	env := newTestEnv(t)
 	env.loginAdmin(t)

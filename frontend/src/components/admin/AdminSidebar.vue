@@ -52,7 +52,9 @@ const showTeahouse = computed(() =>
   ),
 )
 const showAtelier = computed(() => ['atelier-fonts', 'atelier-carrd'].some(can))
-const showSystem = computed(() => auth.isAdmin || ['system-settings', 'system-themes'].some(can))
+const showSystem = computed(
+  () => auth.isAdmin || ['system-settings', 'system-themes', 'system-images'].some(can),
+)
 
 /** Navigate to an admin tab (items navigate; headers don't — see toggleSection). */
 function go(tab: AdminTab): void {
@@ -215,7 +217,7 @@ function toggleSection(section: AdminSection): void {
         :class="{ open: isOpen('system') }"
         @click="toggleSection('system')"
       >
-        <span><font-awesome-icon :icon="['fad', 'gear']" /> System</span>
+        <span><font-awesome-icon :icon="['fad', 'gears']" /> System</span>
         <span class="nav-chevron">{{ isOpen('system') ? '▾' : '▸' }}</span>
       </div>
       <div v-show="isOpen('system')" class="admin-nav-items">
@@ -224,7 +226,7 @@ function toggleSection(section: AdminSection): void {
           :class="{ active: admin.adminTab === 'system-settings' }"
           @click="go('system-settings')"
         >
-          <font-awesome-icon :icon="['fad', 'gear']" /> App Settings
+          <font-awesome-icon :icon="['fad', 'gear']" /> Settings
         </button>
         <button
           v-if="can('system-themes')"
@@ -232,6 +234,13 @@ function toggleSection(section: AdminSection): void {
           @click="go('system-themes')"
         >
           <font-awesome-icon :icon="['fad', 'palette']" /> Themes
+        </button>
+        <button
+          v-if="can('system-images')"
+          :class="{ active: admin.adminTab === 'system-images' }"
+          @click="go('system-images')"
+        >
+          <font-awesome-icon :icon="['fad', 'images']" /> Images
         </button>
         <button
           v-if="auth.isAdmin"

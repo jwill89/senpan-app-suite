@@ -11,7 +11,7 @@
  * admin area is entered, including via a direct link / refresh). Logout
  * disconnects the WebSocket implicitly (App's route watcher) and returns home.
  */
-import { onMounted, ref } from 'vue'
+import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import AdminSidebar from '@/components/admin/AdminSidebar.vue'
 import WinnerVerifyModal from '@/components/admin/WinnerVerifyModal.vue'
@@ -55,6 +55,36 @@ onMounted(async () => {
     /* show the dashboard even if a data load failed */
   }
 })
+
+// ── Mobile nav drawer ────────────────────────────────────────────────────────
+// On narrow viewports the sidebar collapses into a hamburger-triggered drawer
+// (see app.css). Selecting a nav item navigates, so close the drawer on every
+// route change; tapping the backdrop closes it too.
+const navOpen = ref(false)
+watch(
+  () => router.currentRoute.value.fullPath,
+  () => {
+    navOpen.value = false
+  },
+)
+
+// The hamburger toggle (and drawer backdrop) only exist on narrow viewports where
+// the sidebar collapses into a drawer. We drive this from matchMedia and `v-if`
+// rather than CSS `display`, so a custom theme's generic button styling can't
+// accidentally re-show the button on desktop (where the sidebar is always shown).
+const NARROW_QUERY = '(max-width: 768px)'
+const isNarrow = ref(false)
+let navMql: MediaQueryList | null = null
+function syncIsNarrow(): void {
+  isNarrow.value = !!navMql?.matches
+  if (!isNarrow.value) navOpen.value = false // back to desktop → ensure the drawer is closed
+}
+onMounted(() => {
+  navMql = window.matchMedia(NARROW_QUERY)
+  syncIsNarrow()
+  navMql.addEventListener('change', syncIsNarrow)
+})
+onBeforeUnmount(() => navMql?.removeEventListener('change', syncIsNarrow))
 
 /** Log out, then return home (App's route watcher disconnects the WebSocket). */
 async function logout(): Promise<void> {
@@ -104,7 +134,18 @@ async function submitChangePw(): Promise<void> {
 <template>
   <div>
     <div class="topbar">
-      <h2><font-awesome-icon :icon="['fad', 'gear']" /> Admin Dashboard</h2>
+      <div class="flex gap-sm">
+        <button
+          v-if="isNarrow"
+          class="btn-neutral btn-sm admin-nav-toggle"
+          :aria-expanded="navOpen"
+          aria-label="Toggle navigation menu"
+          @click="navOpen = !navOpen"
+        >
+          <font-awesome-icon :icon="['fad', 'bars']" />
+        </button>
+        <h2><font-awesome-icon :icon="['fad', 'gear']" /> Admin Dashboard</h2>
+      </div>
       <div class="topbar-actions">
         <span v-if="auth.user" class="topbar-user text-dim">
           <font-awesome-icon :icon="['fad', 'user']" /> {{ auth.user.username }}
@@ -119,10 +160,15 @@ async function submitChangePw(): Promise<void> {
     </div>
 
     <div class="admin-layout">
-      <AdminSidebar />
+      <!-- Backdrop behind the mobile drawer; only exists in the narrow drawer mode. -->
+      <div v-if="isNarrow && navOpen" class="admin-nav-backdrop" @click="navOpen = false"></div>
+
+      <AdminSidebar :class="{ 'is-open': navOpen }" />
 
       <div class="admin-content">
-        <router-view />
+        <div class="admin-content-inner content-container">
+          <router-view />
+        </div>
       </div>
     </div>
 

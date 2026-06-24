@@ -328,20 +328,6 @@ async function deleteSelected(): Promise<void> {
             class="raffle-card"
             @click="openRaffle(r)"
           >
-            <span
-              v-if="raffleTiming(r) === 'upcoming'"
-              class="raffle-status-icon"
-              title="Scheduled — opens later"
-            >
-              <font-awesome-icon :icon="['fad', 'calendar-clock']" />
-            </span>
-            <span
-              v-else-if="raffleTiming(r) === 'ended'"
-              class="raffle-status-icon raffle-status-ended"
-              title="Open period has passed"
-            >
-              <font-awesome-icon :icon="['fad', 'calendar-circle-exclamation']" />
-            </span>
             <img
               v-if="r.prize_image"
               :src="assetUrl(r.prize_image)"
@@ -349,6 +335,18 @@ async function deleteSelected(): Promise<void> {
               alt="Prize"
             />
             <div class="raffle-card-body">
+              <span
+                v-if="raffleTiming(r) === 'upcoming'"
+                class="badge badge--warning raffle-status-pill"
+              >
+                <font-awesome-icon :icon="['fad', 'calendar-clock']" /> Scheduled
+              </span>
+              <span
+                v-else-if="raffleTiming(r) === 'ended'"
+                class="badge badge--danger raffle-status-pill"
+              >
+                <font-awesome-icon :icon="['fad', 'calendar-circle-exclamation']" /> Window passed
+              </span>
               <h3>{{ r.title }}</h3>
               <p v-if="r.cost_per_entry > 0" class="raffle-cost">
                 {{ r.cost_per_entry.toLocaleString() }} gil per entry
@@ -439,26 +437,8 @@ async function deleteSelected(): Promise<void> {
   gap: 8px;
   cursor: pointer;
 }
-/* Corner timing badge over a current-raffle card's image. */
-.raffle-card {
-  position: relative;
-}
-.raffle-status-icon {
-  position: absolute;
-  top: 8px;
-  right: 8px;
-  z-index: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 30px;
-  height: 30px;
-  border-radius: 50%;
-  background: rgba(0, 0, 0, 0.55);
-  color: var(--highlight);
-  font-size: 0.95rem;
-}
-.raffle-status-ended {
-  color: var(--danger);
+/* Timing pill above a current-raffle card's title (Scheduled / Window passed). */
+.raffle-status-pill {
+  margin-bottom: 8px;
 }
 </style>

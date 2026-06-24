@@ -62,13 +62,6 @@ func webhookSettingKey(slug string) string {
 	return "discord_webhook_url_" + slug
 }
 
-// eventsWebhookSettingKey returns the per-club events-channel Discord webhook
-// setting key for a slug (e.g. "discord_events_webhook_url_yaoi"). Must match
-// clubEventsWebhookKey on the frontend.
-func eventsWebhookSettingKey(slug string) string {
-	return "discord_events_webhook_url_" + slug
-}
-
 // isDiscordWebhookURL reports whether raw is a valid Discord webhook URL: https
 // on an official Discord host with an /api/webhooks/ path. Admin-entered webhook
 // URLs (announcement types, per-club settings) are validated against this so a
@@ -86,15 +79,14 @@ func isDiscordWebhookURL(raw string) bool {
 	return false
 }
 
-// init registers each club's Discord webhooks (reading-list + events channel)
-// as secret app settings so the settings API exposes them to admins and accepts
-// saves, without hard-coding a key per club in settings.go.
+// init registers each club's reading-list Discord webhook as a secret app
+// setting so the settings API exposes it to admins and accepts saves, without
+// hard-coding a key per club in settings.go.
 func init() {
 	for _, c := range bookClubs {
-		for _, key := range []string{webhookSettingKey(c.Slug), eventsWebhookSettingKey(c.Slug)} {
-			settingsKeys = append(settingsKeys, key)
-			secretSettings[key] = true
-		}
+		key := webhookSettingKey(c.Slug)
+		settingsKeys = append(settingsKeys, key)
+		secretSettings[key] = true
 	}
 }
 

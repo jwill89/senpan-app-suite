@@ -13,9 +13,9 @@ import type {
   Announcement,
   AnnouncementButton,
   AnnouncementType,
+  AnnouncementRole,
   BingoDrawnNumber,
   BingoGameState,
-  BookClubEvent,
   Card,
   FrequentWinner,
   GamePreset,
@@ -35,11 +35,11 @@ export type {
   Announcement,
   AnnouncementButton,
   AnnouncementType,
+  AnnouncementRole,
   BingoDrawnNumber,
   BingoGame,
   BingoGamePattern,
   BingoGameState,
-  BookClubEvent,
   Card,
   FrequentWinner,
   GamePreset,
@@ -86,14 +86,24 @@ export interface UsersResponse {
   users: User[]
 }
 
-// GET /api/styles/active — the active theme's raw CSS.
+// GET /api/styles/active — the active theme's raw CSS + decorative flourishes
+// (root-relative paths into images/flourishes, "" = built-in art).
 export interface ActiveCssResponse {
   css: string
+  board_flourish: string
+  number_flourish: string
 }
 
 // POST /api/cards {action:"generate"} — number of cards generated.
 export interface GenerateCardsResponse {
   count: number
+}
+
+// POST /api/cards {action:"generate_single"} — the one card created (with its
+// assigned player name), so the caller can surface or open it immediately.
+export interface GenerateSingleCardResponse {
+  count: number
+  card: { id: string; player_name: string; board_data: number[][] }
 }
 
 // Board fetch variants that only return the card (winner verify / preview).
@@ -117,6 +127,8 @@ export interface CardListEntry {
   id: string
   player_name: string
   details: string
+  /** ISO timestamp the card was generated ("" for cards predating tracking). */
+  created_at: string
 }
 
 // ── Board (GET /api/board) ──────────────────────────────────────────────────
@@ -180,12 +192,6 @@ export interface AppSettings {
    * book club publishes its reading lists to its own channel. See BOOK_CLUBS.
    */
   [key: `discord_webhook_url_${string}`]: string
-  /**
-   * Per-club Discord *events*-channel webhook URLs, keyed
-   * `discord_events_webhook_url_<club_slug>`. Admin-only (redacted for public).
-   * Scheduled event posts are sent here. See clubEventsWebhookKey in constants.ts.
-   */
-  [key: `discord_events_webhook_url_${string}`]: string
 }
 
 export interface SettingsResponse {
@@ -227,10 +233,6 @@ export interface RaffleEnterResponse {
   total_entries: number
   total_cost: number
   signup_instructions: string
-}
-
-export interface RaffleUploadResponse {
-  path: string
 }
 
 export interface RaffleWinnerResponse {
@@ -285,41 +287,6 @@ export interface ReadingListItemForm {
   sources: ReadingListSource[]
 }
 
-// ── Book club event posts ────────────────────────────────────────────────────
-// GET /api/bookclub/events — scheduled events for a club.
-export interface BookClubEventsResponse {
-  events: BookClubEvent[]
-}
-
-// POST /api/bookclub/events {create|update} — the saved event.
-export interface BookClubEventResponse {
-  event: BookClubEvent
-}
-
-// GET /api/bookclub/events/images — existing event images (full URLs).
-export interface EventImagesResponse {
-  images: string[]
-}
-
-// POST /api/bookclub/events/upload — full URL of the stored event image.
-export interface EventImageUploadResponse {
-  url: string
-}
-
-// Form model for the admin event create/edit form. Wall-clock times plus the
-// admin's IANA timezone; the server computes the absolute instants.
-export interface BookClubEventForm {
-  id: number
-  title: string
-  start_local: string
-  timezone: string
-  length_hours: number
-  location: string
-  details: string
-  image: string
-  post_at_local: string
-}
-
 // ── Announcement management ──────────────────────────────────────────────────
 // GET /api/announcement-types — Discord destinations.
 export interface AnnouncementTypesResponse {
@@ -329,6 +296,16 @@ export interface AnnouncementTypesResponse {
 // POST /api/announcement-types {create|update} — the saved type.
 export interface AnnouncementTypeResponse {
   type: AnnouncementType
+}
+
+// GET /api/announcement-roles — taggable Discord roles.
+export interface AnnouncementRolesResponse {
+  roles: AnnouncementRole[]
+}
+
+// POST /api/announcement-roles {create|update} — the saved role.
+export interface AnnouncementRoleResponse {
+  role: AnnouncementRole
 }
 
 // GET /api/announcements — all announcements (with type_name joined).
@@ -341,15 +318,8 @@ export interface AnnouncementResponse {
   announcement: Announcement
 }
 
-// GET /api/announcements/images — existing announcement images (full URLs).
-export interface AnnouncementImagesResponse {
-  images: string[]
-}
-
-// POST /api/announcements/upload — full URL of the stored announcement image.
-export interface AnnouncementUploadResponse {
-  url: string
-}
+// Announcement images are now sourced from the central Images page (categories
+// "Announcement Main" / "Announcement Thumbnail") via the image endpoints below.
 
 // Form model for the admin announcement-type create/edit form.
 export interface AnnouncementTypeForm {
@@ -358,11 +328,40 @@ export interface AnnouncementTypeForm {
   webhook_url: string
 }
 
+// Form model for the admin taggable-role create/edit form.
+export interface AnnouncementRoleForm {
+  id: number
+  name: string
+  role_id: string
+}
+
 /**
  * Recurrence builder kinds for the schedule UI.
  *   '' = unscheduled (manual only); 'once'|'daily'|'weekly'|'monthly' as labelled.
  */
 export type ScheduleKind = '' | 'once' | 'daily' | 'weekly' | 'monthly'
+
+/**
+ * Discord timestamp style letter, used to render an announcement's start/end
+ * times as `<t:unix:STYLE>` tokens so each viewer sees their own zone.
+ */
+export type DiscordTimeFormat = 't' | 'T' | 'd' | 'D' | 'f' | 'F' | 'R'
+
+/**
+ * Selectable Discord timestamp styles (value + human label) shown in the form's
+ * "Time format" picker, in a sensible reading order. The example text mirrors
+ * how Discord renders each style. Keep in sync with the backend's
+ * `validTimeFormats`.
+ */
+export const DISCORD_TIME_FORMATS: { value: DiscordTimeFormat; label: string }[] = [
+  { value: 'f', label: 'Short date & time — June 13, 2026 7:00 PM' },
+  { value: 'F', label: 'Long date & time — Saturday, June 13, 2026 7:00 PM' },
+  { value: 't', label: 'Short time — 7:00 PM' },
+  { value: 'T', label: 'Long time — 7:00:00 PM' },
+  { value: 'd', label: 'Short date — 06/13/2026' },
+  { value: 'D', label: 'Long date — June 13, 2026' },
+  { value: 'R', label: 'Relative — in 3 days' },
+]
 
 /**
  * Form model for the admin announcement create/edit form. Holds *local*
@@ -378,10 +377,20 @@ export interface AnnouncementForm {
   title: string
   details: string
   image: string
+  /** Small top-right embed thumbnail URL (empty = none). Shares uploads with image. */
+  thumbnail: string
   /** Embed accent colour as "#rrggbb" (empty falls back to the brand default). */
   color: string
+  /** Optional free-text location (e.g. a Discord voice channel). */
+  location: string
   start_local: string
   end_local: string
+  /** Discord timestamp style for the start display (see DISCORD_TIME_FORMATS). */
+  start_format: DiscordTimeFormat
+  /** Discord timestamp style for the end display (see DISCORD_TIME_FORMATS). */
+  end_format: DiscordTimeFormat
+  /** Re-anchor start/end onto the day each post goes out (recurring day-of events). */
+  dynamic_dates: boolean
   schedule_kind: ScheduleKind
   timezone: string
   once_local: string
@@ -390,6 +399,11 @@ export interface AnnouncementForm {
   week_of_month: number
   /** Optional Discord link buttons (max 5) rendered beneath the embed. */
   buttons: AnnouncementButton[]
+  /**
+   * Optional role tag posted above the embed: '' (don't tag), 'everyone'
+   * (@everyone), or 'role:<announcement_role_id>' (a managed taggable role).
+   */
+  mention: string
 }
 
 // ── Fonts (System → Font Upload) ────────────────────────────────────────────
@@ -416,7 +430,12 @@ export interface FontUploadResponse {
 export interface CarrdProject {
   title: string
   folder: string
-  image_count: number
+  /** Total media files across the project (root + nested sub-folders). */
+  file_count: number
+  /** Number of nested sub-folders (recursive). */
+  subfolder_count: number
+  /** Combined size in bytes of all media files in the project. */
+  total_size: number
   /** RFC3339 folder last-modified timestamp. */
   modified: string
 }
@@ -453,6 +472,54 @@ export interface CarrdUploadResponse {
   skipped: { name: string; reason: string }[]
 }
 
+// ── Central image hosting (System → Images) ─────────────────────────────────
+// An image category maps to a subdirectory of <webRoot>/images. Three are
+// permanent (announcements_main, announcements_thumb, raffles); admins may add
+// custom ones. Used by the Images page and by the announcement/raffle pickers.
+export interface ImageCategory {
+  name: string
+  /** Subdirectory of <webRoot>/images this category maps to. */
+  dir: string
+  /** Permanent categories cannot be renamed or deleted. */
+  permanent: boolean
+  /** Number of image files in the category directory. */
+  file_count: number
+  /** Combined size in bytes of the images in the category. */
+  total_size: number
+}
+
+export interface ImageCategoriesResponse {
+  categories: ImageCategory[]
+}
+
+export interface ImageCategoryActionResponse {
+  ok: boolean
+  category: ImageCategory
+}
+
+// A single image within a category directory.
+export interface ImageEntry {
+  name: string
+  /** Absolute public URL (used by announcement embeds, which need absolute URLs). */
+  url: string
+  /** Root-relative web path ("images/<dir>/<name>"); raffles store this. */
+  path: string
+  size: number
+  /** RFC3339 last-modified timestamp. */
+  modified: string
+}
+
+export interface ImagesResponse {
+  dir: string
+  images: ImageEntry[]
+}
+
+// POST /api/images/upload — per-file result of a (possibly multi-file) upload.
+export interface ImagesUploadResponse {
+  uploaded: string[]
+  skipped: { name: string; reason: string }[]
+}
+
 // Form model for the admin raffle create/edit form.
 export interface RaffleForm {
   id: number
@@ -475,6 +542,7 @@ export type WsMessage =
   | { type: 'patterns_update'; patterns: Pattern[]; categories?: PatternCategory[] }
   | { type: 'card_deleted' }
   | { type: 'details_update'; game_details: string }
-  | { type: 'style_update'; css: string }
+  | { type: 'style_update'; css: string; board_flourish?: string; number_flourish?: string }
   | { type: 'settings_update'; app_title?: string; header_font?: string; uploaded_fonts?: string[] }
   | { type: 'halftime_minigame' }
+  | { type: 'draw_delay_update'; delay: number }

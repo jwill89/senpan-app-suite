@@ -7,6 +7,7 @@
  * on a successful save and `cancel`/`back` to return to the list, rather than
  * navigating routes itself.
  */
+import { onMounted } from 'vue'
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
 import MarkdownEditor from '@/components/common/MarkdownEditor.vue'
 import AdminPanel from '@/components/common/ui/AdminPanel.vue'
@@ -14,11 +15,14 @@ import SubPageHeader from '@/components/common/ui/SubPageHeader.vue'
 import FormField from '@/components/common/ui/FormField.vue'
 import FormRow from '@/components/common/ui/FormRow.vue'
 import FormActions from '@/components/common/ui/FormActions.vue'
+import ImagePicker from '@/components/common/ui/ImagePicker.vue'
 import { useRafflesStore } from '@/stores/raffles'
-import { assetUrl } from '@/lib/assets'
 
 const emit = defineEmits<{ saved: []; cancel: [] }>()
 const raffles = useRafflesStore()
+
+// Load the reusable prize images (the "Raffle" category on System → Images).
+onMounted(() => raffles.loadPrizeImages())
 
 /** Save the form; on success let the parent return to the list. */
 async function save(): Promise<void> {
@@ -103,31 +107,11 @@ function cancel(): void {
           />
         </FormField>
       </FormRow>
-      <FormField label="Prize Image">
-        <div class="flex-toolbar">
-          <input
-            type="file"
-            accept="image/*"
-            aria-label="Prize image"
-            :disabled="raffles.raffleImageUploading"
-            @change="raffles.uploadRaffleImage($event)"
-          />
-          <span v-if="raffles.raffleImageUploading" class="text-dim text-sm">Uploading...</span>
-        </div>
-        <div v-if="raffles.raffleForm.prize_image" class="mt-8">
-          <img
-            :src="assetUrl(raffles.raffleForm.prize_image)"
-            style="max-width: 200px; max-height: 150px; border-radius: 8px"
-            alt="Prize preview"
-          />
-          <button
-            class="btn-neutral btn-sm"
-            style="margin-left: 8px"
-            @click="raffles.raffleForm.prize_image = ''"
-          >
-            Remove
-          </button>
-        </div>
+      <FormField
+        label="Prize Image"
+        help="Pick from the “Raffle” image category. Upload new images on the System → Images page."
+      >
+        <ImagePicker v-model="raffles.raffleForm.prize_image" :images="raffles.prizeImages" />
       </FormField>
       <FormActions align="start">
         <button class="btn-neutral" :disabled="raffles.savingRaffle" @click="cancel">Cancel</button>

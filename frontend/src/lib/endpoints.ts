@@ -29,6 +29,7 @@ import type {
   FrequentWinnersResponse,
   GameStateResponse,
   GenerateCardsResponse,
+  GenerateSingleCardResponse,
   OkResponse,
   PatternsResponse,
   PresetsResponse,
@@ -36,7 +37,6 @@ import type {
   RaffleDetailResponse,
   RaffleEnterResponse,
   RaffleEntryResponse,
-  RaffleUploadResponse,
   RaffleWinnerResponse,
   RafflesResponse,
   ReadingListsResponse,
@@ -46,19 +46,19 @@ import type {
   BookclubUploadResponse,
   BookclubLookupResponse,
   PublishResponse,
-  BookClubEventsResponse,
-  BookClubEventResponse,
-  BookClubEventForm,
-  EventImagesResponse,
-  EventImageUploadResponse,
   Announcement,
   AnnouncementTypesResponse,
   AnnouncementTypeResponse,
   AnnouncementTypeForm,
+  AnnouncementRolesResponse,
+  AnnouncementRoleResponse,
+  AnnouncementRoleForm,
   AnnouncementsResponse,
   AnnouncementResponse,
-  AnnouncementImagesResponse,
-  AnnouncementUploadResponse,
+  ImageCategoriesResponse,
+  ImageCategoryActionResponse,
+  ImagesResponse,
+  ImagesUploadResponse,
   SettingsResponse,
   StyleCreateResponse,
   StyleGetResponse,
@@ -141,6 +141,7 @@ export const endpoints = {
     start: (patternIds: number[]) =>
       apiPost<GameStateResponse>('game', { action: 'start', pattern_ids: patternIds }),
     draw: (delay: number) => apiPost<DrawResult>('game', { action: 'draw', delay }),
+    setDelay: (delay: number) => apiPost<OkResponse>('game', { action: 'set_delay', delay }),
     end: (validWinnerIds: string[]) =>
       apiPost<OkResponse>('game', { action: 'end', valid_winner_ids: validWinnerIds }),
     updateDetails: (details: string) =>
@@ -164,6 +165,11 @@ export const endpoints = {
     list: () => apiGet<{ cards: CardListEntry[] }>('cards'),
     generate: (count: number) =>
       apiPost<GenerateCardsResponse>('cards', { action: 'generate', count }),
+    generateSingle: (playerName: string) =>
+      apiPost<GenerateSingleCardResponse>('cards', {
+        action: 'generate_single',
+        player_name: playerName,
+      }),
     delete: (id: string) => apiPost<OkResponse>('cards', { action: 'delete', id }),
     deleteAll: () => apiPost<OkResponse>('cards', { action: 'delete_all' }),
     updatePlayer: (id: string, playerName: string, details: string) =>
@@ -238,10 +244,23 @@ export const endpoints = {
     list: () => apiGet<StylesResponse>('styles'),
     activeCss: () => apiGet<ActiveCssResponse>('styles/active'),
     get: (id: number) => apiPost<StyleGetResponse>('styles', { action: 'get', id }),
-    create: (name: string, cssContent: string) =>
-      apiPost<StyleCreateResponse>('styles', { action: 'create', name, css_content: cssContent }),
-    update: (id: number, name: string, cssContent: string) =>
-      apiPost<OkResponse>('styles', { action: 'update', id, name, css_content: cssContent }),
+    create: (name: string, cssContent: string, boardFlourish = '', numberFlourish = '') =>
+      apiPost<StyleCreateResponse>('styles', {
+        action: 'create',
+        name,
+        css_content: cssContent,
+        board_flourish: boardFlourish,
+        number_flourish: numberFlourish,
+      }),
+    update: (id: number, name: string, cssContent: string, boardFlourish = '', numberFlourish = '') =>
+      apiPost<OkResponse>('styles', {
+        action: 'update',
+        id,
+        name,
+        css_content: cssContent,
+        board_flourish: boardFlourish,
+        number_flourish: numberFlourish,
+      }),
     delete: (id: number) => apiPost<OkResponse>('styles', { action: 'delete', id }),
     setActive: (id: number) => apiPost<OkResponse>('styles', { action: 'set_active', id }),
   },
@@ -255,8 +274,6 @@ export const endpoints = {
     update: (raffle: Record<string, unknown>) =>
       apiPost<OkResponse>('raffles', { action: 'update', ...raffle }),
     delete: (id: number) => apiPost<OkResponse>('raffles', { action: 'delete', id }),
-    uploadImage: (form: FormData) =>
-      apiPost<RaffleUploadResponse>('raffles/upload', form),
     enter: (id: number, body: { character_name: string; world: string; num_entries: number }) =>
       apiPost<RaffleEnterResponse>(`raffles/${id}/enter`, body),
     addEntry: (
@@ -317,38 +334,6 @@ export const endpoints = {
       apiGet<BookclubLookupResponse>(`bookclub/lookup?id=${id}`),
   },
 
-  // ── Book club event posts (scheduled Discord embeds) ─────────────────────────
-  bookclubEvents: {
-    /** GET /api/bookclub/events?club=… — scheduled events for a club. */
-    list: (club = 'yaoi') =>
-      apiGet<BookClubEventsResponse>(`bookclub/events?club=${enc(club)}`),
-    /** Create or update an event (update when form.id is set). */
-    save: (club: string, form: BookClubEventForm) =>
-      apiPost<BookClubEventResponse>('bookclub/events', {
-        action: form.id ? 'update' : 'create',
-        id: form.id || 0,
-        club_slug: club,
-        event: {
-          title: form.title,
-          start_local: form.start_local,
-          timezone: form.timezone,
-          length_hours: form.length_hours,
-          location: form.location,
-          image: form.image,
-          post_at_local: form.post_at_local,
-        },
-      }),
-    delete: (id: number) =>
-      apiPost<OkResponse>('bookclub/events', { action: 'delete', id }),
-    /** Post an event's embed to Discord immediately (and mark it posted). */
-    postNow: (id: number) =>
-      apiPost<OkResponse>('bookclub/events', { action: 'post_now', id }),
-    /** GET /api/bookclub/events/images — existing event images (pick to reuse). */
-    images: () => apiGet<EventImagesResponse>('bookclub/events/images'),
-    uploadImage: (form: FormData) =>
-      apiPost<EventImageUploadResponse>('bookclub/events/upload', form),
-  },
-
   // ── Announcement management ──────────────────────────────────────────────────
   announcements: {
     /** GET /api/announcement-types — Discord destinations. */
@@ -364,6 +349,19 @@ export const endpoints = {
     deleteType: (id: number) =>
       apiPost<OkResponse>('announcement-types', { action: 'delete', id }),
 
+    /** GET /api/announcement-roles — taggable Discord roles. */
+    roles: () => apiGet<AnnouncementRolesResponse>('announcement-roles'),
+    /** Create or update a taggable role (update when form.id is set). */
+    saveRole: (form: AnnouncementRoleForm) =>
+      apiPost<AnnouncementRoleResponse>('announcement-roles', {
+        action: form.id ? 'update' : 'create',
+        id: form.id || 0,
+        name: form.name,
+        role_id: form.role_id,
+      }),
+    deleteRole: (id: number) =>
+      apiPost<OkResponse>('announcement-roles', { action: 'delete', id }),
+
     /** GET /api/announcements — all announcements (filtering is client-side). */
     list: () => apiGet<AnnouncementsResponse>('announcements'),
     /**
@@ -378,17 +376,39 @@ export const endpoints = {
         announcement: payload,
       }),
     delete: (id: number) => apiPost<OkResponse>('announcements', { action: 'delete', id }),
+    /** Persist a new drag-and-drop order (top-first list of announcement ids). */
+    reorder: (orderedIds: number[]) =>
+      apiPost<OkResponse>('announcements', { action: 'reorder', ordered_ids: orderedIds }),
     /** Post an announcement's embed to Discord immediately. */
     sendNow: (id: number) =>
       apiPost<AnnouncementResponse>('announcements', { action: 'send_now', id }),
     /** Skip the next scheduled occurrence of an announcement. */
     skipNext: (id: number) =>
       apiPost<AnnouncementResponse>('announcements', { action: 'skip_next', id }),
+  },
 
-    /** GET /api/announcements/images — existing images (pick to reuse). */
-    images: () => apiGet<AnnouncementImagesResponse>('announcements/images'),
-    uploadImage: (form: FormData) =>
-      apiPost<AnnouncementUploadResponse>('announcements/upload', form),
+  // ── Central image hosting (System → Images) ──────────────────────────────────
+  images: {
+    /** GET /api/image-categories — permanent + custom categories. */
+    categories: () => apiGet<ImageCategoriesResponse>('image-categories'),
+    /** Create or rename a category (rename when an existing dir is supplied). */
+    saveCategory: (action: 'create' | 'rename', name: string, dir = '', newDir = '') =>
+      apiPost<ImageCategoryActionResponse>('image-categories', {
+        action,
+        name,
+        dir,
+        new_dir: newDir,
+      }),
+    /** POST /api/image-categories {delete} — delete a custom category + its files. */
+    deleteCategory: (dir: string) =>
+      apiPost<OkResponse>('image-categories', { action: 'delete', dir }),
+    /** GET /api/images?dir=… — images in a category (newest first). */
+    list: (dir: string) => apiGet<ImagesResponse>(`images?dir=${enc(dir)}`),
+    /** POST /api/images/upload — multipart "dir" + one or more "files". */
+    upload: (form: FormData) => apiPost<ImagesUploadResponse>('images/upload', form),
+    /** POST /api/images {delete} — remove an image from a category. */
+    deleteImage: (dir: string, name: string) =>
+      apiPost<OkResponse>('images', { action: 'delete', dir, name }),
   },
 
   // ── Fonts (System → Font Upload) ─────────────────────────────────────────────
@@ -411,6 +431,14 @@ export const endpoints = {
     /** POST /api/carrd/projects {create} — create a project (folder optional). */
     createProject: (title: string, folder: string) =>
       apiPost<CarrdProjectCreateResponse>('carrd/projects', { action: 'create', title, folder }),
+    /** POST /api/carrd/projects {rename} — rename a project's title and/or folder. */
+    renameProject: (folder: string, title: string, newFolder: string) =>
+      apiPost<CarrdProjectCreateResponse>('carrd/projects', {
+        action: 'rename',
+        folder,
+        title,
+        new_folder: newFolder,
+      }),
     /** POST /api/carrd/projects {delete} — delete a project folder + contents. */
     deleteProject: (folder: string) =>
       apiPost<OkResponse>('carrd/projects', { action: 'delete', folder }),

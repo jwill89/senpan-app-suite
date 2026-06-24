@@ -55,7 +55,7 @@ onMounted(() => joinInput.value?.focus())
     <div class="home-cards">
       <!-- Join game -->
       <div class="home-card">
-        <h2><font-awesome-icon :icon="['fad', 'circle-dot']" /> Bingo</h2>
+        <h2><font-awesome-icon :icon="['fad', 'game-board-simple']" /> Bingo</h2>
         <!-- Admin-editable markdown prompt; plain-text fallback until parser loads -->
         <p v-if="!markdownReady">{{ app.settings.bingo_join_prompt }}</p>
         <div

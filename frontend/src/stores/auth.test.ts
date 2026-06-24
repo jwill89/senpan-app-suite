@@ -22,6 +22,7 @@ function user(overrides: Partial<User> = {}): User {
     is_active: true,
     permissions: [],
     created_at: '',
+    last_login_at: '',
     ...overrides,
   }
 }

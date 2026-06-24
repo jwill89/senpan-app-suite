@@ -39,12 +39,15 @@ type carrdMeta struct {
 	Title string `json:"title"`
 }
 
-// carrdProject is the JSON shape for one project in the listing.
+// carrdProject is the JSON shape for one project in the listing. The counts and
+// size are aggregated across the whole project tree (root + nested sub-folders).
 type carrdProject struct {
-	Title      string `json:"title"`
-	Folder     string `json:"folder"`
-	ImageCount int    `json:"image_count"`
-	Modified   string `json:"modified"` // RFC3339 (folder mod time)
+	Title          string `json:"title"`
+	Folder         string `json:"folder"`
+	FileCount      int    `json:"file_count"`      // media files, recursive
+	SubfolderCount int    `json:"subfolder_count"` // nested sub-directories, recursive
+	TotalSize      int64  `json:"total_size"`      // combined size of all media files, bytes
+	Modified       string `json:"modified"`        // RFC3339 (folder mod time)
 }
 
 // carrdImage is the JSON shape for one image in a project listing.
@@ -176,20 +179,30 @@ func readCarrdTitle(folderPath, folder string) string {
 	return meta.Title
 }
 
-// countCarrdImages returns the total number of media files in a project folder,
-// counting files in every nested sub-directory too.
-func countCarrdImages(folderPath string) int {
-	n := 0
-	_ = filepath.WalkDir(folderPath, func(_ string, d fs.DirEntry, err error) error {
+// carrdProjectStats walks a project folder and returns, across the whole tree,
+// the number of nested sub-directories, the number of media files, and their
+// combined size in bytes. The project folder itself is not counted as a
+// sub-directory, and dotfiles (e.g. the .carrd.json title sidecar) are ignored.
+func carrdProjectStats(folderPath string) (subfolders, files int, totalSize int64) {
+	_ = filepath.WalkDir(folderPath, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return nil
 		}
-		if !d.IsDir() && isAllowedCarrdFileExt(strings.ToLower(filepath.Ext(d.Name()))) {
-			n++
+		if d.IsDir() {
+			if path != folderPath {
+				subfolders++
+			}
+			return nil
+		}
+		if isAllowedCarrdFileExt(strings.ToLower(filepath.Ext(d.Name()))) {
+			files++
+			if info, err := d.Info(); err == nil {
+				totalSize += info.Size()
+			}
 		}
 		return nil
 	})
-	return n
+	return
 }
 
 // listCarrdProjects reads the carrd root and returns its projects sorted by
@@ -215,11 +228,14 @@ func (s *Server) listCarrdProjects() ([]carrdProject, error) {
 		if info, err := e.Info(); err == nil {
 			modified = info.ModTime().UTC().Format(time.RFC3339)
 		}
+		subfolders, files, totalSize := carrdProjectStats(folderPath)
 		projects = append(projects, carrdProject{
-			Title:      readCarrdTitle(folderPath, folder),
-			Folder:     folder,
-			ImageCount: countCarrdImages(folderPath),
-			Modified:   modified,
+			Title:          readCarrdTitle(folderPath, folder),
+			Folder:         folder,
+			FileCount:      files,
+			SubfolderCount: subfolders,
+			TotalSize:      totalSize,
+			Modified:       modified,
 		})
 	}
 	sort.Slice(projects, func(i, j int) bool {
@@ -233,7 +249,8 @@ func (s *Server) listCarrdProjects() ([]carrdProject, error) {
 //
 //	Endpoint:  GET /api/carrd/projects
 //	Auth:      admin, or a user granted this page's permission
-//	Response:  {"projects": [{title, folder, image_count, modified}]}
+//	Response:  {"projects": [{title, folder, file_count, subfolder_count,
+//	            total_size, modified}]}
 func (s *Server) handleCarrdProjectsList(w http.ResponseWriter, r *http.Request) {
 	if !s.requirePermission(w, r, permAtelierCarrd) {
 		return
@@ -253,11 +270,13 @@ func (s *Server) handleCarrdProjectsList(w http.ResponseWriter, r *http.Request)
 }
 
 // carrdProjectsActionRequest is the JSON body for POST /api/carrd/projects.
-// Action: "create" or "delete".
+// Action: "create", "rename", or "delete". For "rename", Folder is the existing
+// project folder and NewFolder is the desired folder ("" keeps the current one).
 type carrdProjectsActionRequest struct {
-	Action string `json:"action"`
-	Title  string `json:"title"`
-	Folder string `json:"folder"`
+	Action    string `json:"action"`
+	Title     string `json:"title"`
+	Folder    string `json:"folder"`
+	NewFolder string `json:"new_folder"`
 }
 
 // handleCarrdProjectsAction creates or deletes a carrd project (folder).
@@ -265,9 +284,10 @@ type carrdProjectsActionRequest struct {
 //	Endpoint:  POST /api/carrd/projects
 //	Auth:      admin, or a user granted this page's permission
 //	Request:   {"action": "create", "title": "...", "folder": "..."(optional)}
+//	           {"action": "rename", "folder": "...", "title": "...", "new_folder": "..."(optional)}
 //	           {"action": "delete", "folder": "..."}
-//	Response:  create → {"ok": true, "project": {...}}
-//	           delete → {"ok": true}
+//	Response:  create/rename → {"ok": true, "project": {...}}
+//	           delete        → {"ok": true}
 func (s *Server) handleCarrdProjectsAction(w http.ResponseWriter, r *http.Request) {
 	if !s.requirePermission(w, r, permAtelierCarrd) {
 		return
@@ -289,6 +309,9 @@ func (s *Server) handleCarrdProjectsAction(w http.ResponseWriter, r *http.Reques
 	case "create":
 		s.createCarrdProject(w, root, req)
 
+	case "rename":
+		s.renameCarrdProject(w, root, req)
+
 	case "delete":
 		folder := strings.TrimSpace(req.Folder)
 		if !validCarrdFolder(folder) {
@@ -302,7 +325,7 @@ func (s *Server) handleCarrdProjectsAction(w http.ResponseWriter, r *http.Reques
 		writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 
 	default:
-		writeError(w, http.StatusBadRequest, "Invalid action. Use: create, delete")
+		writeError(w, http.StatusBadRequest, "Invalid action. Use: create, rename, delete")
 	}
 }
 
@@ -372,10 +395,95 @@ func (s *Server) createCarrdProject(w http.ResponseWriter, root string, req carr
 	writeJSON(w, http.StatusCreated, map[string]any{
 		"ok": true,
 		"project": carrdProject{
-			Title:      title,
-			Folder:     folder,
-			ImageCount: 0,
-			Modified:   modified,
+			Title:    title,
+			Folder:   folder,
+			Modified: modified,
+		},
+	})
+}
+
+// renameCarrdProject handles the "rename" action: it updates a project's title
+// sidecar and, when new_folder differs, renames the project folder on disk.
+// Both the new title and the new folder must stay unique across projects.
+func (s *Server) renameCarrdProject(w http.ResponseWriter, root string, req carrdProjectsActionRequest) {
+	folder := strings.TrimSpace(req.Folder)
+	if !validCarrdFolder(folder) {
+		writeError(w, http.StatusBadRequest, "Invalid folder name")
+		return
+	}
+	title := strings.TrimSpace(req.Title)
+	if title == "" {
+		writeError(w, http.StatusBadRequest, "Project title is required")
+		return
+	}
+	// Target folder: normalize the supplied new folder, or keep the current one.
+	newFolder := slugifyFolder(req.NewFolder)
+	if newFolder == "" {
+		newFolder = folder
+	}
+
+	srcPath := filepath.Join(root, folder)
+	if info, err := os.Stat(srcPath); err != nil || !info.IsDir() {
+		writeError(w, http.StatusNotFound, "Project not found")
+		return
+	}
+
+	// Enforce uniqueness of both the new title and the new folder against the
+	// OTHER projects (a project may keep its own title/folder unchanged).
+	entries, err := os.ReadDir(root)
+	if err != nil {
+		writeInternalError(w, "list carrd projects", err)
+		return
+	}
+	for _, e := range entries {
+		if !e.IsDir() || e.Name() == folder {
+			continue
+		}
+		if e.Name() == newFolder {
+			writeError(w, http.StatusConflict, "A project folder \""+newFolder+"\" already exists")
+			return
+		}
+		if strings.EqualFold(readCarrdTitle(filepath.Join(root, e.Name()), e.Name()), title) {
+			writeError(w, http.StatusConflict, "A project titled \""+title+"\" already exists")
+			return
+		}
+	}
+
+	// Rename the folder on disk when it changed.
+	destPath := srcPath
+	if newFolder != folder {
+		destPath = filepath.Join(root, newFolder)
+		if err := os.Rename(srcPath, destPath); err != nil {
+			if os.IsExist(err) {
+				writeError(w, http.StatusConflict, "A project folder \""+newFolder+"\" already exists")
+				return
+			}
+			writeInternalError(w, "rename carrd project", err)
+			return
+		}
+	}
+
+	// Update the title sidecar in the (possibly moved) folder.
+	meta, _ := json.Marshal(carrdMeta{Title: title})
+	if err := os.WriteFile(filepath.Join(destPath, carrdMetaFile), meta, 0644); err != nil {
+		writeInternalError(w, "write carrd metadata", err)
+		return
+	}
+
+	subfolders, files, totalSize := carrdProjectStats(destPath)
+	modified := ""
+	if info, err := os.Stat(destPath); err == nil {
+		modified = info.ModTime().UTC().Format(time.RFC3339)
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"ok": true,
+		"project": carrdProject{
+			Title:          title,
+			Folder:         newFolder,
+			FileCount:      files,
+			SubfolderCount: subfolders,
+			TotalSize:      totalSize,
+			Modified:       modified,
 		},
 	})
 }

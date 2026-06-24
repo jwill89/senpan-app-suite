@@ -3,11 +3,12 @@ import { createPinia, setActivePinia } from 'pinia'
 import type { Announcement } from '@/types/api'
 
 // Capture the payload save() builds; list() backs the post-save refresh.
-const { save, list } = vi.hoisted(() => ({
+const { save, list, reorder } = vi.hoisted(() => ({
   save: vi.fn(async () => ({ announcement: {} })),
   list: vi.fn(async () => ({ announcements: [] })),
+  reorder: vi.fn(async () => ({ ok: true })),
 }))
-vi.mock('@/lib/endpoints', () => ({ endpoints: { announcements: { save, list } } }))
+vi.mock('@/lib/endpoints', () => ({ endpoints: { announcements: { save, list, reorder } } }))
 
 import { useAnnouncementsStore } from './announcements'
 
@@ -17,6 +18,12 @@ interface SavedPayload {
   schedule_minutes: number
   schedule_weekdays: string
   buttons: { label: string; emoji: string; url: string }[]
+  mention: string
+  start_format: string
+  end_format: string
+  image: string
+  thumbnail: string
+  dynamic_dates: boolean
 }
 /** Args of the first save() call (vi infers no params, so widen to read them). */
 function firstSaveArgs(): unknown[] {
@@ -31,6 +38,22 @@ beforeEach(() => {
   setActivePinia(createPinia())
   save.mockClear()
   list.mockClear()
+  reorder.mockClear()
+})
+
+describe('reorder', () => {
+  it('persists the supplied id order via the reorder endpoint', async () => {
+    const store = useAnnouncementsStore()
+    await store.reorder([3, 1, 2])
+    expect(reorder).toHaveBeenCalledWith([3, 1, 2])
+  })
+
+  it('reverts to the server order when the save fails', async () => {
+    reorder.mockRejectedValueOnce(new Error('boom'))
+    const store = useAnnouncementsStore()
+    await store.reorder([2, 1])
+    expect(list).toHaveBeenCalled() // reloads the persisted order
+  })
 })
 
 describe('filteredAnnouncements', () => {
@@ -112,6 +135,42 @@ describe('save() payload building', () => {
     ])
   })
 
+  it('passes the selected role tag through to the payload', async () => {
+    const s = useAnnouncementsStore()
+    Object.assign(s.form, { type_id: 1, title: 'Tagged', details: 'x', mention: 'role:4' })
+    await s.save()
+    expect(savedPayload().mention).toBe('role:4')
+  })
+
+  it('passes the selected Discord start/end formats through to the payload', async () => {
+    const s = useAnnouncementsStore()
+    Object.assign(s.form, { type_id: 1, title: 'Timed', details: 'x', start_format: 'R', end_format: 'T' })
+    await s.save()
+    expect(savedPayload().start_format).toBe('R')
+    expect(savedPayload().end_format).toBe('T')
+  })
+
+  it('passes the dynamic-dates flag through to the payload', async () => {
+    const s = useAnnouncementsStore()
+    Object.assign(s.form, { type_id: 1, title: 'Recurring event', details: 'x', dynamic_dates: true })
+    await s.save()
+    expect(savedPayload().dynamic_dates).toBe(true)
+  })
+
+  it('passes both the image and the thumbnail through to the payload', async () => {
+    const s = useAnnouncementsStore()
+    Object.assign(s.form, {
+      type_id: 1,
+      title: 'Pics',
+      details: 'x',
+      image: 'https://h/images/announcements/main.png',
+      thumbnail: 'https://h/images/announcements/thumb.png',
+    })
+    await s.save()
+    expect(savedPayload().image).toBe('https://h/images/announcements/main.png')
+    expect(savedPayload().thumbnail).toBe('https://h/images/announcements/thumb.png')
+  })
+
   it('blocks save and does not hit the API when the title is missing', async () => {
     const s = useAnnouncementsStore()
     Object.assign(s.form, { type_id: 1, title: '   ', details: 'x' })
@@ -150,11 +209,17 @@ describe('editAnnouncement round-trip', () => {
       schedule_weekdays: '5,1,3',
       schedule_week_of_month: 2,
       buttons: [{ label: 'Go', emoji: '', url: 'https://a.com' }],
+      mention: 'everyone',
     } as unknown as Announcement)
     expect(s.form.id).toBe(7)
     expect(s.form.time_local).toBe('19:30')
     expect(s.form.weekdays).toEqual([1, 3, 5]) // parsed + sorted
-    expect(s.form.color).toBe('#e53170') // blank colour falls back to brand default
+    expect(s.form.color).toBe('#ff3131') // blank colour falls back to brand default
+    expect(s.form.thumbnail).toBe('') // absent thumbnail → empty
+    expect(s.form.dynamic_dates).toBe(false) // absent flag → off
+    expect(s.form.start_format).toBe('F') // blank start format → default
+    expect(s.form.end_format).toBe('t') // blank end format → default
     expect(s.form.buttons).toEqual([{ label: 'Go', emoji: '', url: 'https://a.com' }])
+    expect(s.form.mention).toBe('everyone')
   })
 })

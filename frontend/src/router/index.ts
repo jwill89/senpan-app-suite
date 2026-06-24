@@ -116,6 +116,12 @@ const adminChildren: RouteRecordRaw[] = [
     meta: { tab: 'system-themes' },
   },
   {
+    path: 'system/images',
+    name: 'admin-system-images',
+    component: () => import('@/components/admin/ImagesTab.vue'),
+    meta: { tab: 'system-images' },
+  },
+  {
     path: 'system/users',
     name: 'admin-system-users',
     component: () => import('@/components/admin/UsersTab.vue'),

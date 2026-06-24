@@ -8,6 +8,7 @@
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
+import FormField from '@/components/common/ui/FormField.vue'
 import { useAuthStore } from '@/stores/auth'
 
 const auth = useAuthStore()
@@ -61,28 +62,31 @@ function goLogin(): void {
 
       <template v-else>
         <p>Choose a username and password</p>
-        <form autocomplete="off" @submit.prevent="submit">
-          <input
-            v-model="username"
-            type="text"
-            placeholder="Username"
-            aria-label="Username"
-            autocomplete="username"
-          />
-          <input
-            v-model="password"
-            type="password"
-            placeholder="Password (min 8 characters)"
-            aria-label="Password"
-            autocomplete="new-password"
-          />
-          <input
-            v-model="confirm"
-            type="password"
-            placeholder="Confirm password"
-            aria-label="Confirm password"
-            autocomplete="new-password"
-          />
+        <form class="login-form" autocomplete="off" @submit.prevent="submit">
+          <FormField label="Username" html-for="reg-username">
+            <input
+              id="reg-username"
+              v-model="username"
+              type="text"
+              autocomplete="username"
+            />
+          </FormField>
+          <FormField label="Password" html-for="reg-password" help="At least 8 characters.">
+            <input
+              id="reg-password"
+              v-model="password"
+              type="password"
+              autocomplete="new-password"
+            />
+          </FormField>
+          <FormField label="Confirm password" html-for="reg-confirm">
+            <input
+              id="reg-confirm"
+              v-model="confirm"
+              type="password"
+              autocomplete="new-password"
+            />
+          </FormField>
           <div class="btns">
             <button type="button" class="btn-neutral" :disabled="auth.loggingIn" @click="goLogin">
               Back

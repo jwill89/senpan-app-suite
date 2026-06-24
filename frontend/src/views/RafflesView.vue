@@ -7,6 +7,7 @@ import { onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import type { Raffle } from '@/types/api'
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
+import EmptyState from '@/components/common/ui/EmptyState.vue'
 import { useRafflesStore } from '@/stores/raffles'
 import { assetUrl } from '@/lib/assets'
 
@@ -47,9 +48,9 @@ function goHome(): void {
       <h2><font-awesome-icon :icon="['fad', 'ticket']" /> Raffles</h2>
       <span></span>
     </div>
-    <div class="tab-body">
+    <div class="tab-body content-container">
       <LoadingSpinner v-if="loading" block label="Loading raffles…" />
-      <div v-else class="raffle-list">
+      <div v-else-if="raffles.raffles.length" class="raffle-list raffle-list--center">
         <div
           v-for="r in raffles.raffles"
           :key="r.id"
@@ -68,9 +69,12 @@ function goHome(): void {
           </div>
         </div>
       </div>
-      <p v-if="!loading && raffles.raffles.length === 0" class="no-game-msg">
-        No raffles are currently open.
-      </p>
+      <EmptyState
+        v-else
+        :icon="['fad', 'ticket']"
+        text="No raffles are currently open."
+        hint="Check back soon — new raffles appear here when they go live."
+      />
     </div>
   </div>
 </template>

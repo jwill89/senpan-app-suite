@@ -228,6 +228,7 @@ onBeforeUnmount(() => {
               aria-label="Draw delay"
               class="btn-neutral"
               style="padding: 10px 14px; font-size: 0.95rem; font-weight: 600; cursor: pointer"
+              @change="game.persistDrawDelay()"
             >
               <option v-for="s in DRAW_DELAY_OPTIONS" :key="s" :value="s">{{ delayLabel(s) }}</option>
             </select>
@@ -246,12 +247,9 @@ onBeforeUnmount(() => {
               "
               @click="toggleWinnerSound"
             >
-              <i
-                v-if="game.winnerSoundEnabled"
-                class="fa-solid fa-volume-high"
-                aria-hidden="true"
-              ></i>
-              <font-awesome-icon v-else :icon="['fas', 'volume-xmark']" />
+              <font-awesome-icon
+                :icon="['fas', game.winnerSoundEnabled ? 'volume-high' : 'volume-xmark']"
+              />
               <span>Winner Sound</span>
             </button>
           </div>
@@ -271,33 +269,45 @@ onBeforeUnmount(() => {
             <span class="sent-icon"><font-awesome-icon :icon="['fad', 'circle-check']" /></span>
             <span class="sent-label">Sent to players!</span>
           </div>
-
-          <div v-if="game.lastDrawn" class="last-drawn">
-            <span class="letter">{{ game.lastDrawn.letter }}</span>
-            <span class="number">{{ game.lastDrawn.number }}</span>
-          </div>
         </div>
 
-        <!-- Two-column layout for game info -->
+        <!-- Two-column layout, mirroring the player board: called numbers (with
+             the last-drawn announcement) on the left, winners/details/patterns
+             on the right. -->
         <div class="game-active-columns">
-          <!-- Left column: patterns + details + winners -->
+          <!-- Left column: last drawn + called numbers, in one framed box -->
           <div class="game-active-left">
-            <div class="patterns-panel">
-              <h3>Active Win Patterns</h3>
-              <div class="pattern-cards">
-                <div v-for="(p, i) in game.currentGame.patterns" :key="i" class="pattern-card">
-                  <PatternMini :pattern-data="p.pattern_data" />
-                  <span :title="p.name">{{ p.name }}</span>
+            <div class="called-combined">
+              <template v-if="game.lastDrawn">
+                <div class="last-called">
+                  <span class="last-called-label">Last Called</span>
+                  <div class="last-called-row">
+                    <span
+                      class="last-called-flourish last-called-flourish--left"
+                      aria-hidden="true"
+                    ></span>
+                    <div :key="game.lastDrawn.call_order" class="last-drawn last-drawn--pop">
+                      <span class="letter">{{ game.lastDrawn.letter }}</span>
+                      <span class="number">{{ game.lastDrawn.number }}</span>
+                    </div>
+                    <span
+                      class="last-called-flourish last-called-flourish--right"
+                      aria-hidden="true"
+                    ></span>
+                  </div>
                 </div>
-              </div>
+                <hr class="called-divider" />
+              </template>
+
+              <CalledNumbers
+                :count="game.currentGame.called_numbers.length"
+                :is-called="game.isCalledAdmin"
+              />
             </div>
+          </div>
 
-            <div
-              v-if="game.gameDetails"
-              class="game-details game-details--wide"
-              v-html="renderMarkdown(game.gameDetails)"
-            ></div>
-
+          <!-- Right column: winners, then game details, then active patterns -->
+          <div class="game-active-right">
             <div v-if="game.winners.length" class="winners-panel">
               <h3><font-awesome-icon :icon="['fad', 'trophy']" /> Winning Cards</h3>
               <p class="text-dim text-xs mb-8">Click a card ID to verify</p>
@@ -329,14 +339,22 @@ onBeforeUnmount(() => {
                 </span>
               </div>
             </div>
-          </div>
 
-          <!-- Right column: called numbers -->
-          <div class="game-active-right">
-            <CalledNumbers
-              :count="game.currentGame.called_numbers.length"
-              :is-called="game.isCalledAdmin"
-            />
+            <div
+              v-if="game.gameDetails"
+              class="game-details"
+              v-html="renderMarkdown(game.gameDetails)"
+            ></div>
+
+            <div class="patterns-panel">
+              <h3>Active Win Patterns</h3>
+              <div class="pattern-cards">
+                <div v-for="(p, i) in game.currentGame.patterns" :key="i" class="pattern-card">
+                  <PatternMini :pattern-data="p.pattern_data" />
+                  <span :title="p.name">{{ p.name }}</span>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </div>

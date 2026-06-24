@@ -19,6 +19,7 @@ function makeUser(partial: Partial<User>): User {
     is_active: true,
     permissions: [],
     created_at: '',
+    last_login_at: '',
     ...partial,
   }
 }
@@ -94,7 +95,7 @@ describe('AdminSidebar', () => {
     await clickHeader(wrapper, 'System') // expand System to reveal its items
     const settingsBtn = section(wrapper, 'System')
       .findAll('.admin-nav-items button')
-      .find((b) => b.text().includes('App Settings'))!
+      .find((b) => b.text().includes('Settings'))!
 
     await settingsBtn.trigger('click')
 

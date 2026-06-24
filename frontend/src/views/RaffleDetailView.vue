@@ -56,7 +56,7 @@ function back(): void {
       <!-- Description -->
       <div
         v-if="raffles.selectedRaffle.description"
-        class="game-details game-details--wide mb-16"
+        class="game-details mb-16"
         v-html="renderMarkdown(raffles.selectedRaffle.description)"
       ></div>
 
@@ -64,7 +64,7 @@ function back(): void {
       <div v-if="raffles.selectedRaffle.rules" class="mb-16">
         <h3 class="raffle-section-heading">Rules</h3>
         <div
-          class="game-details game-details--wide"
+          class="game-details"
           v-html="renderMarkdown(raffles.selectedRaffle.rules)"
         ></div>
       </div>
@@ -81,7 +81,7 @@ function back(): void {
         </p>
         <div
           v-if="raffles.raffleSignupResult.signup_instructions"
-          class="game-details game-details--wide mt-12"
+          class="game-details mt-12"
         >
           <h4 class="text-gold mb-6">Sign-Up Instructions</h4>
           <div v-html="renderMarkdown(raffles.raffleSignupResult.signup_instructions)"></div>

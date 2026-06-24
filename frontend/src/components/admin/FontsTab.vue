@@ -40,6 +40,9 @@ const search = ref('')
 
 /** Custom text shown in the live-preview panel. */
 const previewText = ref('The quick brown fox jumps over the lazy dog 1234567890')
+/** Whether the live-preview panel is expanded. Collapsed by default since the
+ *  oversized sample stage takes up a fair bit of vertical space. */
+const previewExpanded = ref(false)
 /** File name of the font selected for the live preview (null = none yet). */
 const selectedFontName = ref<string | null>(null)
 /** CSS family of the selected preview font (empty when none selected). */
@@ -47,9 +50,11 @@ const selectedFamily = computed(() =>
   selectedFontName.value ? fontFamilyFromFile(selectedFontName.value) : '',
 )
 
-/** Selects a font for the live-preview panel above the table. */
+/** Selects a font for the live-preview panel above the table. Expands the panel
+ *  so the chosen font is visible even if the preview was collapsed. */
 function selectForPreview(name: string): void {
   selectedFontName.value = name
+  previewExpanded.value = true
 }
 
 type SortKey = 'name' | 'size' | 'modified'
@@ -202,28 +207,41 @@ watch(
         .woff2, .eot. To replace a font, delete the old file first.
       </p>
 
-      <!-- Live preview: type any text, then pick a font (row "Preview" action). -->
+      <!-- Live preview: type any text, then pick a font (row "Preview" action).
+           Collapsed by default since the oversized sample stage is tall. -->
       <div v-if="fonts.fonts.length" class="font-preview-panel mb-12">
-        <FormField label="Live Preview" html-for="font-preview-text">
-          <input
-            id="font-preview-text"
-            v-model="previewText"
-            placeholder="Type text to preview…"
-            aria-label="Preview text"
-          />
-        </FormField>
-        <div
-          class="font-preview-stage"
-          :style="selectedFamily ? { fontFamily: `'${selectedFamily}', serif` } : undefined"
+        <button
+          type="button"
+          class="font-preview-toggle"
+          :aria-expanded="previewExpanded"
+          aria-controls="font-preview-body"
+          @click="previewExpanded = !previewExpanded"
         >
-          <span v-if="selectedFamily">{{ previewText || 'Type text to preview…' }}</span>
-          <span v-else class="text-dim">
-            Select a font below (the “Preview” action) to see your text rendered here.
-          </span>
+          <font-awesome-icon :icon="['fas', previewExpanded ? 'chevron-up' : 'chevron-down']" />
+          Live Preview
+        </button>
+        <div v-show="previewExpanded" id="font-preview-body">
+          <FormField label="Preview text" html-for="font-preview-text">
+            <input
+              id="font-preview-text"
+              v-model="previewText"
+              placeholder="Type text to preview…"
+              aria-label="Preview text"
+            />
+          </FormField>
+          <div
+            class="font-preview-stage"
+            :style="selectedFamily ? { fontFamily: `'${selectedFamily}', serif` } : undefined"
+          >
+            <span v-if="selectedFamily">{{ previewText || 'Type text to preview…' }}</span>
+            <span v-else class="text-dim">
+              Select a font below (the “Preview” action) to see your text rendered here.
+            </span>
+          </div>
+          <p v-if="selectedFamily" class="text-dim text-xs" style="margin: 6px 0 0">
+            Previewing <span class="code-gold">{{ selectedFamily }}</span>
+          </p>
         </div>
-        <p v-if="selectedFamily" class="text-dim text-xs" style="margin: 6px 0 0">
-          Previewing <span class="code-gold">{{ selectedFamily }}</span>
-        </p>
       </div>
 
       <SearchInput
@@ -333,15 +351,34 @@ watch(
   border-radius: var(--radius);
   padding: 16px 18px;
 }
+/* Collapse toggle: a full-width, borderless header that reads as a label. */
+.font-preview-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 0;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--highlight);
+  font-weight: 600;
+  font-size: inherit;
+  text-align: left;
+}
+#font-preview-body {
+  margin-top: 12px;
+}
 .font-preview-stage {
   margin-top: 12px;
   padding: 16px 18px;
-  min-height: 72px;
+  min-height: 144px;
   background: var(--panel-bg);
   border-radius: var(--radius);
   color: var(--highlight);
-  /* The clamped font's own metrics; sample text wraps for long input. */
-  font-size: 2rem;
+  /* The clamped font's own metrics; sample text wraps for long input.
+     Doubled from 2rem so the sample is large enough to judge fine details. */
+  font-size: 4rem;
   line-height: 1.3;
   overflow-wrap: anywhere;
 }

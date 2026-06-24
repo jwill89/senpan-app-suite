@@ -18,6 +18,7 @@
  * as UTC (the store converts via lib/datetime.ts); displayed in the viewer's zone.
  */
 import { computed, ref } from 'vue'
+import draggable from 'vuedraggable'
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
 import MarkdownEditor from '@/components/common/MarkdownEditor.vue'
 import AdminPanel from '@/components/common/ui/AdminPanel.vue'
@@ -25,21 +26,23 @@ import ManagerView from '@/components/common/ui/ManagerView.vue'
 import ListRow from '@/components/common/ui/ListRow.vue'
 import SubPageHeader from '@/components/common/ui/SubPageHeader.vue'
 import SearchInput from '@/components/common/ui/SearchInput.vue'
-import ImageField from '@/components/common/ui/ImageField.vue'
+import ImagePicker from '@/components/common/ui/ImagePicker.vue'
 import EmojiPickerModal from '@/components/common/EmojiPickerModal.vue'
 import FormField from '@/components/common/ui/FormField.vue'
 import FormRow from '@/components/common/ui/FormRow.vue'
 import FormActions from '@/components/common/ui/FormActions.vue'
 import EmptyState from '@/components/common/ui/EmptyState.vue'
 import { useAnnouncementsStore } from '@/stores/announcements'
+import { detailPartCount } from '@/lib/announcementDetails'
 import { formatServerTimestamp } from '@/lib/datetime'
 import { supportedTimezones } from '@/lib/constants'
-import type { Announcement, AnnouncementType } from '@/types/api'
+import type { Announcement, AnnouncementType, AnnouncementRole } from '@/types/api'
+import { DISCORD_TIME_FORMATS } from '@/types/api'
 
 const store = useAnnouncementsStore()
 
 /** Which full-tab screen is showing. */
-type Screen = 'list' | 'form' | 'types' | 'type-form'
+type Screen = 'list' | 'form' | 'types' | 'type-form' | 'roles' | 'role-form'
 const screen = ref<Screen>('list')
 
 const timezones = supportedTimezones()
@@ -53,6 +56,30 @@ const WEEK_OF_MONTH = [
 ]
 
 const hasTypes = computed(() => store.types.length > 0)
+
+// Drag-and-drop reordering of the list is only allowed when the full list is
+// shown (no search / category filter) — reordering a filtered subset would be
+// ambiguous to persist. When filtered, rows still render (v-show) but can't be
+// dragged, and a hint explains why.
+const canReorder = computed(() => !store.search.trim() && !store.typeFilter)
+/** Ids currently passing the search/category filter (for v-show in the list). */
+const visibleIds = computed(() => new Set(store.filteredAnnouncements.map((a) => a.id)))
+/** Persist the order after a drag (vuedraggable has already mutated the array). */
+function onReorder(): void {
+  store.reorder(store.announcements.map((a) => a.id))
+}
+
+// How many Discord embed fields the current details will occupy. >1 means the
+// post will be split (at line breaks) to stay under Discord's 1024-char field cap.
+const detailParts = computed(() => detailPartCount(store.form.details))
+
+/** Options for the optional "tag a role" dropdown on the announcement form. */
+const mentionOptions = computed(() => [
+  { value: '', label: 'Do Not Tag' },
+  { value: 'everyone', label: 'Tag @everyone' },
+  ...store.roles.map((r) => ({ value: `role:${r.id}`, label: `Tag @${r.name}` })),
+])
+
 const isRecurring = computed(() =>
   ['daily', 'weekly', 'monthly'].includes(store.form.schedule_kind),
 )
@@ -149,6 +176,22 @@ function openEditType(t: AnnouncementType): void {
 async function submitType(): Promise<void> {
   if (await store.saveType()) screen.value = 'types'
 }
+
+function openRoles(): void {
+  store.resetRoleForm()
+  screen.value = 'roles'
+}
+function openNewRole(): void {
+  store.resetRoleForm()
+  screen.value = 'role-form'
+}
+function openEditRole(r: AnnouncementRole): void {
+  store.editRole(r)
+  screen.value = 'role-form'
+}
+async function submitRole(): Promise<void> {
+  if (await store.saveRole()) screen.value = 'roles'
+}
 </script>
 
 <template>
@@ -158,6 +201,9 @@ async function submitType(): Promise<void> {
       <template #actions>
         <button class="btn-view btn-sm" @click="openTypes()">
           <font-awesome-icon :icon="['fad', 'folder-open']" /> Manage Types
+        </button>
+        <button class="btn-view btn-sm" @click="openRoles()">
+          <font-awesome-icon :icon="['fad', 'at']" /> Manage Roles
         </button>
         <button class="btn-confirm btn-sm" @click="openNew()">
           <font-awesome-icon :icon="['fas', 'plus']" /> New Announcement
@@ -176,7 +222,7 @@ async function submitType(): Promise<void> {
           class="manager-filter"
         >
           <option :value="0">All categories</option>
-          <option v-for="t in store.types" :key="t.id" :value="t.id">{{ t.name }}</option>
+          <option v-for="t in store.sortedTypes" :key="t.id" :value="t.id">{{ t.name }}</option>
         </select>
       </template>
 
@@ -192,26 +238,59 @@ async function submitType(): Promise<void> {
         label="Loading announcements…"
       />
       <template v-else>
-        <div v-if="store.filteredAnnouncements.length" class="list-rows">
-          <ListRow v-for="a in store.filteredAnnouncements" :key="a.id">
-            <template #media>
-              <span
-                class="ann-swatch"
-                :style="{ background: a.color || '#e53170' }"
-                aria-hidden="true"
-              ></span>
-              <img
-                v-if="a.image"
-                :src="a.image"
-                class="media-cover media-cover--wide"
-                alt="Announcement image"
-              />
-              <div v-else class="media-cover media-cover--wide media-empty">
-                <font-awesome-icon :icon="['fad', 'image']" />
-              </div>
-            </template>
+        <p
+          v-if="store.announcements.length > 1"
+          class="text-dim text-xs mb-12"
+        >
+          <template v-if="canReorder">
+            <font-awesome-icon :icon="['fad', 'bars']" /> Drag a row by its handle to reorder the
+            list. The order is saved automatically.
+          </template>
+          <template v-else>
+            Clear the search and category filter to drag-and-drop reorder the list.
+          </template>
+        </p>
 
-            <h4 class="ann-title">{{ a.title }}</h4>
+        <draggable
+          v-if="store.announcements.length"
+          v-show="store.filteredAnnouncements.length"
+          v-model="store.announcements"
+          class="list-rows"
+          item-key="id"
+          handle=".ann-drag"
+          :animation="150"
+          ghost-class="dragging"
+          :disabled="!canReorder"
+          @change="onReorder"
+        >
+          <template #item="{ element: a }">
+            <ListRow v-show="visibleIds.has(a.id)">
+              <template #media>
+                <span
+                  v-if="canReorder"
+                  class="ann-drag drag-handle"
+                  title="Drag to reorder"
+                  aria-label="Drag to reorder"
+                >
+                  <font-awesome-icon :icon="['fad', 'bars']" />
+                </span>
+                <span
+                  class="ann-swatch"
+                  :style="{ background: a.color || '#ff3131' }"
+                  aria-hidden="true"
+                ></span>
+                <img
+                  v-if="a.image"
+                  :src="a.image"
+                  class="media-cover media-cover--wide"
+                  alt="Announcement image"
+                />
+                <div v-else class="media-cover media-cover--wide media-empty">
+                  <font-awesome-icon :icon="['fad', 'image']" />
+                </div>
+              </template>
+
+              <h4 class="ann-title">{{ a.title }}</h4>
             <p class="text-sm text-dim ann-meta">
               <font-awesome-icon :icon="['fad', 'folder-open']" /> {{ typeName(a) }}
             </p>
@@ -262,14 +341,18 @@ async function submitType(): Promise<void> {
               >
                 <font-awesome-icon :icon="['fas', 'trash']" />
               </button>
-            </template>
-          </ListRow>
-        </div>
+              </template>
+            </ListRow>
+          </template>
+        </draggable>
         <EmptyState
-          v-else-if="store.search || store.typeFilter"
+          v-if="store.announcements.length && !store.filteredAnnouncements.length"
           text="No announcements match your filters."
         />
-        <EmptyState v-else text="No announcements yet. Create one with “New Announcement”." />
+        <EmptyState
+          v-else-if="!store.announcements.length"
+          text="No announcements yet. Create one with “New Announcement”."
+        />
       </template>
     </ManagerView>
 
@@ -292,7 +375,7 @@ async function submitType(): Promise<void> {
         <FormField label="Type" required style="flex: 1; min-width: 160px">
           <select v-model.number="store.form.type_id" aria-label="Announcement type">
             <option :value="0" disabled>Select a type…</option>
-            <option v-for="t in store.types" :key="t.id" :value="t.id">{{ t.name }}</option>
+            <option v-for="t in store.sortedTypes" :key="t.id" :value="t.id">{{ t.name }}</option>
           </select>
         </FormField>
       </div>
@@ -324,8 +407,8 @@ async function submitType(): Promise<void> {
             <button
               type="button"
               class="btn-neutral btn-sm"
-              :disabled="store.form.color === '#e53170'"
-              @click="store.form.color = '#e53170'"
+              :disabled="store.form.color === '#ff3131'"
+              @click="store.form.color = '#ff3131'"
             >
               Reset
             </button>
@@ -350,23 +433,95 @@ async function submitType(): Promise<void> {
         </FormField>
       </FormRow>
 
+      <FormField
+        v-if="store.form.start_local"
+        label="Dynamic dates"
+        help="For recurring day-of events: each time this announcement posts, the Start/End shift to the day it's sent, keeping the same time of day (and a next-day end stays next-day). The dates above define that time-of-day template — e.g. set the first occurrence's 10pm–1am and every post shows that day's 10pm–1am."
+      >
+        <label class="checkbox-inline">
+          <input type="checkbox" v-model="store.form.dynamic_dates" />
+          Re-anchor the Start/End to the day each post is sent
+        </label>
+      </FormField>
+
+      <FormRow v-if="store.form.start_local || store.form.end_local">
+        <FormField
+          v-if="store.form.start_local"
+          label="Start format"
+          help="How the start displays in Discord. Each viewer still sees their own time zone."
+        >
+          <select v-model="store.form.start_format" aria-label="Discord start time format">
+            <option v-for="fmt in DISCORD_TIME_FORMATS" :key="fmt.value" :value="fmt.value">
+              {{ fmt.label }}
+            </option>
+          </select>
+        </FormField>
+        <FormField
+          v-if="store.form.end_local"
+          label="End format"
+          help="How the end displays in Discord. Each viewer still sees their own time zone."
+        >
+          <select v-model="store.form.end_format" aria-label="Discord end time format">
+            <option v-for="fmt in DISCORD_TIME_FORMATS" :key="fmt.value" :value="fmt.value">
+              {{ fmt.label }}
+            </option>
+          </select>
+        </FormField>
+      </FormRow>
+
+      <FormField
+        label="Location (optional)"
+        help="Free text shown on the embed, e.g. a Discord voice channel."
+      >
+        <input
+          v-model="store.form.location"
+          placeholder="e.g. Discord — Voice Channel 1"
+          aria-label="Location"
+        />
+      </FormField>
+
       <FormField label="Details" required>
         <MarkdownEditor
           v-model="store.form.details"
           min-height="120px"
           placeholder="The announcement body (supports markdown — bold, italics, lists, links…)"
         />
+        <p v-if="detailParts > 1" class="ann-split-note text-xs">
+          <font-awesome-icon :icon="['fad', 'triangle-exclamation']" />
+          These details exceed Discord's 1024-character limit per embed field, so the post will be
+          split into <strong>{{ detailParts }}</strong> stacked sections (at line breaks). Nothing
+          is cut off, and they render in order below the event time.
+        </p>
       </FormField>
 
-      <!-- Image: upload or reuse an existing one -->
-      <FormField label="Image (optional)">
-        <ImageField
-          v-model="store.form.image"
-          :images="store.images"
-          :uploading="store.uploading"
-          upload-label="Upload announcement image"
-          @upload="store.uploadImage($event)"
-        />
+      <!-- Embed images (optional): pick a thumbnail and/or a main image from the
+           central Images page categories. Upload new images on System → Images. -->
+      <FormField
+        label="Embed images (optional)"
+        help="Pick a thumbnail (small, top-right) and/or a main image (large, bottom). Upload new images on the System → Images page (categories “Announcement Thumbnail” and “Announcement Main”)."
+      >
+        <div class="image-pickers">
+          <div class="image-picker-block">
+            <span class="field-label">Thumbnail — small, top-right</span>
+            <ImagePicker v-model="store.form.thumbnail" :images="store.thumbImages" />
+          </div>
+          <div class="image-picker-block">
+            <span class="field-label">Main image — large, bottom</span>
+            <ImagePicker v-model="store.form.image" :images="store.mainImages" />
+          </div>
+        </div>
+      </FormField>
+
+      <!-- Tag a role: optional mention posted in the message content above the embed -->
+      <FormField
+        label="Tag a role (optional)"
+        help="Posted above the embed (mentions inside an embed don't notify). Manage the list under “Manage Roles”."
+      >
+        <select v-model="store.form.mention" aria-label="Role to tag">
+          <option v-for="opt in mentionOptions" :key="opt.value" :value="opt.value">
+            {{ opt.label }}
+          </option>
+        </select>
       </FormField>
 
       <!-- Discord buttons: optional link buttons rendered beneath the embed -->
@@ -519,7 +674,7 @@ async function submitType(): Promise<void> {
       </div>
 
       <div v-if="store.types.length" class="list-rows">
-        <ListRow v-for="t in store.types" :key="t.id">
+        <ListRow v-for="t in store.sortedTypes" :key="t.id">
           <h4 class="ann-title">{{ t.name }}</h4>
           <p class="text-sm text-dim">
             <font-awesome-icon :icon="['fab', 'discord']" /> {{ maskWebhook(t.webhook_url) }}
@@ -538,7 +693,7 @@ async function submitType(): Promise<void> {
     </AdminPanel>
 
     <!-- ── Type form ──────────────────────────────────────────────────────── -->
-    <AdminPanel v-else>
+    <AdminPanel v-else-if="screen === 'type-form'">
       <SubPageHeader
         :icon="['fad', 'folder-open']"
         :title="store.typeForm.id ? 'Edit Type' : 'New Type'"
@@ -574,10 +729,101 @@ async function submitType(): Promise<void> {
         </button>
       </FormActions>
     </AdminPanel>
+
+    <!-- ── Roles list ─────────────────────────────────────────────────────── -->
+    <AdminPanel v-else-if="screen === 'roles'">
+      <SubPageHeader title="Taggable Roles" :icon="['fad', 'at']" @back="screen = 'list'" />
+      <p class="text-dim text-sm mb-16">
+        Roles available to tag on an announcement. Each is a group name plus its Discord role ID
+        (enable Developer Mode in Discord, right-click a role → “Copy Role ID”).
+      </p>
+      <div class="flex-toolbar flex-end mb-16">
+        <button class="btn-confirm btn-sm" @click="openNewRole()">
+          <font-awesome-icon :icon="['fas', 'plus']" /> New Role
+        </button>
+      </div>
+
+      <div v-if="store.roles.length" class="list-rows">
+        <ListRow v-for="r in store.roles" :key="r.id">
+          <h4 class="ann-title">{{ r.name }}</h4>
+          <p class="text-sm text-dim">
+            <font-awesome-icon :icon="['fad', 'at']" /> {{ r.role_id }}
+          </p>
+          <template #actions>
+            <button class="btn-confirm btn-sm" aria-label="Edit role" @click="openEditRole(r)">
+              <font-awesome-icon :icon="['fas', 'pen-to-square']" />
+            </button>
+            <button class="btn-danger btn-sm" aria-label="Delete role" @click="store.deleteRole(r)">
+              <font-awesome-icon :icon="['fas', 'trash']" />
+            </button>
+          </template>
+        </ListRow>
+      </div>
+      <EmptyState v-else text="No roles yet. Add one with “New Role”." />
+    </AdminPanel>
+
+    <!-- ── Role form ──────────────────────────────────────────────────────── -->
+    <AdminPanel v-else-if="screen === 'role-form'">
+      <SubPageHeader
+        :icon="['fad', 'at']"
+        :title="store.roleForm.id ? 'Edit Role' : 'New Role'"
+        @back="screen = 'roles'"
+      />
+
+      <FormField label="Group name" required>
+        <input
+          v-model="store.roleForm.name"
+          placeholder="e.g. Event Crew"
+          aria-label="Role group name"
+        />
+      </FormField>
+      <FormField
+        label="Discord role ID"
+        required
+        help="The numeric role ID. In Discord: Settings → Advanced → Developer Mode, then right-click the role → Copy Role ID."
+      >
+        <input
+          v-model="store.roleForm.role_id"
+          placeholder="e.g. 123456789012345678"
+          inputmode="numeric"
+          aria-label="Discord role ID"
+        />
+      </FormField>
+      <FormActions align="start">
+        <button class="btn-neutral" @click="screen = 'roles'">Cancel</button>
+        <button
+          class="btn-confirm"
+          :disabled="store.savingRole || !store.roleForm.name.trim() || !store.roleForm.role_id.trim()"
+          @click="submitRole()"
+        >
+          <LoadingSpinner v-if="store.savingRole" label="Saving…" />
+          <template v-else>{{ store.roleForm.id ? 'Save Changes' : 'Add Role' }}</template>
+        </button>
+      </FormActions>
+    </AdminPanel>
   </div>
 </template>
 
 <style scoped>
+/* Inline checkbox + label (e.g. the dynamic-dates toggle). */
+.checkbox-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
+
+/* The two embed-image pickers (thumbnail + main) stacked below the shared upload. */
+.image-pickers {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-top: 12px;
+}
+.image-picker-block .field-label {
+  margin-bottom: 6px;
+}
+
 .link-btn {
   background: none;
   border: none;
@@ -593,8 +839,36 @@ async function submitType(): Promise<void> {
   border-radius: 3px;
   flex: 0 0 auto;
 }
+/* Drag handle for reordering the list; grab cursor + muted until hovered. */
+.ann-drag {
+  display: inline-flex;
+  align-items: center;
+  align-self: stretch;
+  padding: 0 2px;
+  color: var(--text-muted);
+  cursor: grab;
+}
+.ann-drag:hover {
+  color: var(--highlight);
+}
+.ann-drag:active {
+  cursor: grabbing;
+}
+/* vuedraggable ghost while dragging a row. */
+.dragging {
+  opacity: 0.5;
+}
 .ann-title {
   margin: 0 0 4px;
+}
+/* Heads-up note under the Details editor when the post will be split into
+   multiple embed fields (long details past Discord's 1024-char field cap). */
+.ann-split-note {
+  margin: 8px 0 0;
+  color: var(--text-muted);
+}
+.ann-split-note strong {
+  color: var(--highlight);
 }
 .ann-meta {
   margin: 0 0 4px;

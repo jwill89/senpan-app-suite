@@ -43,7 +43,7 @@ func (s *Store) CreateUser(username, passwordHash string) (*model.User, error) {
 // GetUserByID retrieves a user by id. Returns nil if not found.
 func (s *Store) GetUserByID(id int64) (*model.User, error) {
 	return s.scanUser(s.db.QueryRow(
-		`SELECT id, username, is_admin, is_active, permissions, created_at
+		`SELECT id, username, is_admin, is_active, permissions, created_at, COALESCE(last_login_at, '')
 		 FROM users WHERE id = ?`, id))
 }
 
@@ -54,9 +54,9 @@ func (s *Store) GetUserByUsername(username string) (*model.User, string, error) 
 	var permsJSON, hash string
 	var isAdmin, isActive int
 	err := s.db.QueryRow(
-		`SELECT id, username, password_hash, is_admin, is_active, permissions, created_at
+		`SELECT id, username, password_hash, is_admin, is_active, permissions, created_at, COALESCE(last_login_at, '')
 		 FROM users WHERE username = ?`, username).
-		Scan(&u.ID, &u.Username, &hash, &isAdmin, &isActive, &permsJSON, &u.CreatedAt)
+		Scan(&u.ID, &u.Username, &hash, &isAdmin, &isActive, &permsJSON, &u.CreatedAt, &u.LastLoginAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, "", nil
 	}
@@ -72,7 +72,7 @@ func (s *Store) GetUserByUsername(username string) (*model.User, string, error) 
 // ListUsers returns all users ordered by username (no password hashes).
 func (s *Store) ListUsers() ([]model.User, error) {
 	rows, err := s.db.Query(
-		`SELECT id, username, is_admin, is_active, permissions, created_at
+		`SELECT id, username, is_admin, is_active, permissions, created_at, COALESCE(last_login_at, '')
 		 FROM users ORDER BY username`)
 	if err != nil {
 		return nil, err
@@ -84,7 +84,7 @@ func (s *Store) ListUsers() ([]model.User, error) {
 		var u model.User
 		var permsJSON string
 		var isAdmin, isActive int
-		if err := rows.Scan(&u.ID, &u.Username, &isAdmin, &isActive, &permsJSON, &u.CreatedAt); err != nil {
+		if err := rows.Scan(&u.ID, &u.Username, &isAdmin, &isActive, &permsJSON, &u.CreatedAt, &u.LastLoginAt); err != nil {
 			return nil, err
 		}
 		if err := decodeUserFlags(&u, isAdmin, isActive, permsJSON); err != nil {
@@ -146,6 +146,13 @@ func (s *Store) SetUserPassword(id int64, passwordHash string) error {
 	return err
 }
 
+// UpdateLastLogin stamps a user's last_login_at with the current UTC time.
+// Called (best-effort) after a successful login.
+func (s *Store) UpdateLastLogin(id int64) error {
+	_, err := s.db.Exec("UPDATE users SET last_login_at = CURRENT_TIMESTAMP WHERE id = ?", id)
+	return err
+}
+
 // DeleteUser removes an account. Returns true if a row was deleted.
 func (s *Store) DeleteUser(id int64) (bool, error) {
 	res, err := s.db.Exec("DELETE FROM users WHERE id = ?", id)
@@ -162,7 +169,7 @@ func (s *Store) scanUser(row *sql.Row) (*model.User, error) {
 	var u model.User
 	var permsJSON string
 	var isAdmin, isActive int
-	err := row.Scan(&u.ID, &u.Username, &isAdmin, &isActive, &permsJSON, &u.CreatedAt)
+	err := row.Scan(&u.ID, &u.Username, &isAdmin, &isActive, &permsJSON, &u.CreatedAt, &u.LastLoginAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
 	}

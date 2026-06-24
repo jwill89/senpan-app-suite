@@ -23,6 +23,7 @@
  */
 import { library, type IconDefinition } from '@fortawesome/fontawesome-svg-core'
 import {
+  faAt,
   faBallot,
   faBars,
   faBicep,
@@ -46,8 +47,10 @@ import {
   faFolder,
   faFolderOpen,
   faFont,
+  faGameBoardSimple,
   faGamepad,
   faGear,
+  faGears,
   faGrid,
   faIdCard,
   faImage,
@@ -97,6 +100,7 @@ import {
   faTrash as faTrashSolid,
   faUpload as faUploadSolid,
   faVolumeHigh as faVolumeHighSolid,
+  faVolumeLow as faVolumeLowSolid,
   faVolumeXmark as faVolumeXmarkSolid,
 } from '@awesome.me/kit-46204fb6f1/icons/classic/solid'
 import { faDiscord } from '@fortawesome/free-brands-svg-icons'
@@ -108,6 +112,7 @@ import { faDiscord } from '@fortawesome/free-brands-svg-icons'
 // cast away.
 const icons = [
   // Duotone — headers, sidebar sections/nav, decorative.
+  faAt,
   faBallot,
   faBars,
   faBicep,
@@ -131,8 +136,10 @@ const icons = [
   faFolder,
   faFolderOpen,
   faFont,
+  faGameBoardSimple,
   faGamepad,
   faGear,
+  faGears,
   faGrid,
   faIdCard,
   faImage,
@@ -181,6 +188,7 @@ const icons = [
   faTrashSolid,
   faUploadSolid,
   faVolumeHighSolid,
+  faVolumeLowSolid,
   faVolumeXmarkSolid,
   // Brands — social/external links.
   faDiscord,

@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"strconv"
 	"time"
 
 	"app-suite/internal/model"
@@ -87,30 +88,113 @@ func (s *Store) CountAnnouncementsByType(typeID int64) (int, error) {
 	return n, err
 }
 
+// ── Announcement roles ──────────────────────────────────────────────────────
+//
+// An announcement role is a named, taggable Discord role (label + role ID). It's
+// a convenience picker so admins tag a role by name; an announcement stores its
+// selection as "role:<id>" in the mention column.
+
+// ListAnnouncementRoles returns all taggable roles, newest first.
+func (s *Store) ListAnnouncementRoles() ([]model.AnnouncementRole, error) {
+	rows, err := s.db.Query(
+		`SELECT id, name, role_id, created_at FROM announcement_roles ORDER BY id DESC`,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	roles := make([]model.AnnouncementRole, 0)
+	for rows.Next() {
+		var r model.AnnouncementRole
+		if err := rows.Scan(&r.ID, &r.Name, &r.RoleID, &r.CreatedAt); err != nil {
+			return nil, err
+		}
+		roles = append(roles, r)
+	}
+	return roles, rows.Err()
+}
+
+// GetAnnouncementRole returns a single role by ID, or nil if it does not exist.
+func (s *Store) GetAnnouncementRole(id int64) (*model.AnnouncementRole, error) {
+	var r model.AnnouncementRole
+	err := s.db.QueryRow(
+		`SELECT id, name, role_id, created_at FROM announcement_roles WHERE id = ?`, id,
+	).Scan(&r.ID, &r.Name, &r.RoleID, &r.CreatedAt)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &r, nil
+}
+
+// CreateAnnouncementRole inserts a new role and returns its ID.
+func (s *Store) CreateAnnouncementRole(name, roleID string) (int64, error) {
+	res, err := s.db.Exec(
+		`INSERT INTO announcement_roles (name, role_id) VALUES (?, ?)`, name, roleID,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return res.LastInsertId()
+}
+
+// UpdateAnnouncementRole updates a role's name and Discord role ID.
+func (s *Store) UpdateAnnouncementRole(id int64, name, roleID string) error {
+	_, err := s.db.Exec(
+		`UPDATE announcement_roles SET name = ?, role_id = ? WHERE id = ?`, name, roleID, id,
+	)
+	return err
+}
+
+// DeleteAnnouncementRole removes a role by ID. Returns true if a row was deleted.
+func (s *Store) DeleteAnnouncementRole(id int64) (bool, error) {
+	res, err := s.db.Exec(`DELETE FROM announcement_roles WHERE id = ?`, id)
+	if err != nil {
+		return false, err
+	}
+	n, _ := res.RowsAffected()
+	return n > 0, nil
+}
+
+// CountAnnouncementsByRole returns how many announcements tag a given role — used
+// to block deleting a role that's still referenced by an announcement's mention.
+func (s *Store) CountAnnouncementsByRole(roleID int64) (int, error) {
+	var n int
+	err := s.db.QueryRow(
+		`SELECT COUNT(*) FROM announcements WHERE mention = ?`,
+		"role:"+strconv.FormatInt(roleID, 10),
+	).Scan(&n)
+	return n, err
+}
+
 // ── Announcements ───────────────────────────────────────────────────────────
 
 // announcementColumns is the shared SELECT column list for the announcements
 // table (alias a), with the joined type name appended.
-const announcementColumns = `a.id, a.type_id, a.title, a.details, a.image, a.color, a.start_local, a.end_local,
-	a.start_at, a.end_at, a.schedule_kind, a.timezone, a.once_local, a.schedule_minutes,
+const announcementColumns = `a.id, a.type_id, a.title, a.details, a.image, a.thumbnail, a.color, a.location, a.start_local, a.end_local,
+	a.start_at, a.end_at, a.start_format, a.end_format, a.dynamic_dates, a.schedule_kind, a.timezone, a.once_local, a.schedule_minutes,
 	a.schedule_weekdays, a.schedule_week_of_month,
-	a.next_post_at, a.skip_next, a.active, a.last_posted_at, a.created_at, a.buttons, COALESCE(t.name, '')`
+	a.next_post_at, a.skip_next, a.active, a.last_posted_at, a.created_at, a.buttons, a.mention, COALESCE(t.name, '')`
 
 // scanAnnouncement scans one row (in announcementColumns order) into a model.
 func scanAnnouncement(sc interface{ Scan(...any) error }) (model.Announcement, error) {
 	var a model.Announcement
-	var skip, active int
+	var skip, active, dynamicDates int
 	var lastPosted sql.NullString
 	var buttons sql.NullString
-	err := sc.Scan(&a.ID, &a.TypeID, &a.Title, &a.Details, &a.Image, &a.Color, &a.StartLocal, &a.EndLocal,
-		&a.StartAt, &a.EndAt, &a.ScheduleKind, &a.Timezone, &a.OnceLocal, &a.ScheduleMinutes,
+	err := sc.Scan(&a.ID, &a.TypeID, &a.Title, &a.Details, &a.Image, &a.Thumbnail, &a.Color, &a.Location, &a.StartLocal, &a.EndLocal,
+		&a.StartAt, &a.EndAt, &a.StartFormat, &a.EndFormat, &dynamicDates, &a.ScheduleKind, &a.Timezone, &a.OnceLocal, &a.ScheduleMinutes,
 		&a.ScheduleWeekdays, &a.ScheduleWeekOfMonth,
-		&a.NextPostAt, &skip, &active, &lastPosted, &a.CreatedAt, &buttons, &a.TypeName)
+		&a.NextPostAt, &skip, &active, &lastPosted, &a.CreatedAt, &buttons, &a.Mention, &a.TypeName)
 	if err != nil {
 		return a, err
 	}
 	a.SkipNext = skip != 0
 	a.Active = active != 0
+	a.DynamicDates = dynamicDates != 0
 	if lastPosted.Valid {
 		a.LastPostedAt = lastPosted.String
 	}
@@ -144,12 +228,15 @@ func decodeAnnouncementButtons(raw string) []model.AnnouncementButton {
 	return out
 }
 
-// ListAnnouncements returns all announcements (with their type name), newest first.
+// ListAnnouncements returns all announcements (with their type name) in the
+// admin's chosen order: sort_order ascending, then newest-first as a tie-break.
+// Rows default to sort_order 0 (so a fresh list is newest-first, and a newly
+// created announcement appears at the top) until the admin drags to reorder.
 func (s *Store) ListAnnouncements() ([]model.Announcement, error) {
 	rows, err := s.db.Query(
 		`SELECT ` + announcementColumns + ` FROM announcements a
 		   LEFT JOIN announcement_types t ON t.id = a.type_id
-		   ORDER BY a.id DESC`,
+		   ORDER BY a.sort_order ASC, a.id DESC`,
 	)
 	if err != nil {
 		return nil, err
@@ -188,13 +275,13 @@ func (s *Store) GetAnnouncement(id int64) (*model.Announcement, error) {
 func (s *Store) CreateAnnouncement(a *model.Announcement) (int64, error) {
 	res, err := s.db.Exec(
 		`INSERT INTO announcements
-			(type_id, title, details, image, color, start_local, end_local, start_at, end_at,
+			(type_id, title, details, image, thumbnail, color, location, start_local, end_local, start_at, end_at, start_format, end_format, dynamic_dates,
 			 schedule_kind, timezone, once_local, schedule_minutes, schedule_weekdays, schedule_week_of_month,
-			 next_post_at, active, buttons)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		a.TypeID, a.Title, a.Details, a.Image, a.Color, a.StartLocal, a.EndLocal, a.StartAt, a.EndAt,
+			 next_post_at, active, buttons, mention)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		a.TypeID, a.Title, a.Details, a.Image, a.Thumbnail, a.Color, a.Location, a.StartLocal, a.EndLocal, a.StartAt, a.EndAt, a.StartFormat, a.EndFormat, boolToInt(a.DynamicDates),
 		a.ScheduleKind, a.Timezone, a.OnceLocal, a.ScheduleMinutes, a.ScheduleWeekdays, a.ScheduleWeekOfMonth,
-		a.NextPostAt, boolToInt(a.Active), encodeAnnouncementButtons(a.Buttons),
+		a.NextPostAt, boolToInt(a.Active), encodeAnnouncementButtons(a.Buttons), a.Mention,
 	)
 	if err != nil {
 		return 0, err
@@ -206,17 +293,34 @@ func (s *Store) CreateAnnouncement(a *model.Announcement) (int64, error) {
 // last_posted_at (that's stamped only when actually posting).
 func (s *Store) UpdateAnnouncement(a *model.Announcement) error {
 	_, err := s.db.Exec(
-		`UPDATE announcements SET type_id = ?, title = ?, details = ?, image = ?, color = ?,
-			start_local = ?, end_local = ?, start_at = ?, end_at = ?, schedule_kind = ?,
+		`UPDATE announcements SET type_id = ?, title = ?, details = ?, image = ?, thumbnail = ?, color = ?, location = ?,
+			start_local = ?, end_local = ?, start_at = ?, end_at = ?, start_format = ?, end_format = ?, dynamic_dates = ?, schedule_kind = ?,
 			timezone = ?, once_local = ?, schedule_minutes = ?, schedule_weekdays = ?,
-			schedule_week_of_month = ?, next_post_at = ?, skip_next = ?, active = ?, buttons = ?
+			schedule_week_of_month = ?, next_post_at = ?, skip_next = ?, active = ?, buttons = ?, mention = ?
 		 WHERE id = ?`,
-		a.TypeID, a.Title, a.Details, a.Image, a.Color, a.StartLocal, a.EndLocal, a.StartAt, a.EndAt,
+		a.TypeID, a.Title, a.Details, a.Image, a.Thumbnail, a.Color, a.Location, a.StartLocal, a.EndLocal, a.StartAt, a.EndAt, a.StartFormat, a.EndFormat, boolToInt(a.DynamicDates),
 		a.ScheduleKind, a.Timezone, a.OnceLocal, a.ScheduleMinutes, a.ScheduleWeekdays,
 		a.ScheduleWeekOfMonth, a.NextPostAt, boolToInt(a.SkipNext), boolToInt(a.Active),
-		encodeAnnouncementButtons(a.Buttons), a.ID,
+		encodeAnnouncementButtons(a.Buttons), a.Mention, a.ID,
 	)
 	return err
+}
+
+// BulkReorderAnnouncements rewrites the sort_order of the given announcements so
+// they list in the supplied id order (index 0 = top). Ids are applied in a single
+// transaction; unknown ids are no-ops. Mirrors BulkReorderPatterns.
+func (s *Store) BulkReorderAnnouncements(ids []int64) error {
+	tx, err := s.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+	for i, id := range ids {
+		if _, err := tx.Exec(`UPDATE announcements SET sort_order = ? WHERE id = ?`, i, id); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
 }
 
 // DeleteAnnouncement removes an announcement by ID. Returns true if a row was deleted.

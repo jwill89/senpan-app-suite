@@ -1,6 +1,11 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, beforeEach } from 'vitest'
 import { mount } from '@vue/test-utils'
+import { createPinia, setActivePinia } from 'pinia'
 import BingoBoard from './BingoBoard.vue'
+
+// BingoBoard renders CornerFlourish (player mode), which reads the app store, so
+// a Pinia instance must be active for those mounts.
+beforeEach(() => setActivePinia(createPinia()))
 
 /** A standard 5×5 board with the conventional FREE (0) center square. */
 function sampleBoard(): number[][] {
@@ -72,5 +77,44 @@ describe('BingoBoard', () => {
     const img = wrapper.find('.stamp-custom-img')
     expect(img.exists()).toBe(true)
     expect(img.attributes('src')).toBe(dataUrl)
+  })
+
+  it('routes the secondary stamp to non-pattern cells and keeps the primary on pattern cells', () => {
+    const wrapper = mount(BingoBoard, {
+      props: {
+        board: sampleBoard(),
+        mode: 'player',
+        isStamped: () => true, // every cell stamped
+        cellClass: () => ['board-cell', 'stamped'],
+        stampEmoji: '⭐',
+        stampShape: 'star',
+        stampMarkStyle: { background: 'pink' },
+        secondaryStampStyle: { background: 'blue' },
+        // Only the top-left cell is part of a winning pattern.
+        isWinningPatternCell: (ri: number, ci: number) => ri === 0 && ci === 0,
+      },
+    })
+    const marks = wrapper.findAll('.stamp-mark')
+    // Pattern cell (0,0): primary stamp → shows the emoji.
+    expect(marks[0].text()).toBe('⭐')
+    expect(marks[0].attributes('style')).toContain('background: pink')
+    // Non-pattern cell (0,1): secondary stamp → plain circle, no emoji.
+    expect(marks[1].text()).toBe('')
+    expect(marks[1].attributes('style')).toContain('background: blue')
+  })
+
+  it('uses the primary stamp everywhere when no secondary style is provided', () => {
+    const wrapper = mount(BingoBoard, {
+      props: {
+        board: sampleBoard(),
+        mode: 'player',
+        isStamped: () => true,
+        cellClass: () => ['board-cell', 'stamped'],
+        stampEmoji: '⭐',
+        isWinningPatternCell: () => false, // would be "non-pattern" everywhere
+      },
+    })
+    // Without secondaryStampStyle, every stamped cell keeps the primary emoji.
+    expect(wrapper.findAll('.stamp-mark')[1].text()).toBe('⭐')
   })
 })

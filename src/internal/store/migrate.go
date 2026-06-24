@@ -3,6 +3,7 @@ package store
 import (
 	"database/sql"
 	"fmt"
+	"strings"
 
 	"app-suite/internal/auth"
 )
@@ -12,7 +13,7 @@ import (
 // PRAGMA user_version against this constant and runs only the migrations
 // needed to bring the database up to date. Bump this when adding a new
 // migration block.
-const schemaVersion = 22
+const schemaVersion = 34
 
 // ensureSchema reads the current PRAGMA user_version from the database and
 // applies any outstanding migrations to bring it up to schemaVersion.
@@ -112,26 +113,13 @@ func ensureSchema(db *sql.DB) error {
 		}
 	}
 
-	if version < 13 {
-		if err := migrateBookClubEvents(db); err != nil {
-			return err
-		}
-	}
-
-	if version < 14 {
-		if err := migrateBookClubEventDetails(db); err != nil {
-			return err
-		}
-	}
+	// Versions 13, 14, and 16 created and evolved the book_club_events table.
+	// That feature was merged into the Announcements tool and the table is dropped
+	// in version 28, so those create/alter migrations were removed (a fresh DB no
+	// longer creates the table; an existing one has it dropped below).
 
 	if version < 15 {
 		if err := migrateGamePresets(db); err != nil {
-			return err
-		}
-	}
-
-	if version < 16 {
-		if err := migrateBookClubEventTimes(db); err != nil {
 			return err
 		}
 	}
@@ -172,6 +160,78 @@ func ensureSchema(db *sql.DB) error {
 		}
 	}
 
+	if version < 23 {
+		if err := migrateUserLastLogin(db); err != nil {
+			return err
+		}
+	}
+
+	if version < 24 {
+		if err := migrateAnnouncementRoles(db); err != nil {
+			return err
+		}
+	}
+
+	if version < 25 {
+		if err := migrateAnnouncementMention(db); err != nil {
+			return err
+		}
+	}
+
+	if version < 26 {
+		if err := migrateAnnouncementLocation(db); err != nil {
+			return err
+		}
+	}
+
+	if version < 27 {
+		if err := migrateBookClubEventWebhooks(db); err != nil {
+			return err
+		}
+	}
+
+	if version < 28 {
+		if err := migrateDropBookClubEvents(db); err != nil {
+			return err
+		}
+	}
+
+	if version < 29 {
+		if err := migrateAnnouncementTimeFormats(db); err != nil {
+			return err
+		}
+	}
+
+	if version < 30 {
+		if err := migrateCardCreatedAt(db); err != nil {
+			return err
+		}
+	}
+
+	if version < 31 {
+		if err := migrateAnnouncementThumbnail(db); err != nil {
+			return err
+		}
+	}
+
+	if version < 32 {
+		if err := migrateAnnouncementDynamicDates(db); err != nil {
+			return err
+		}
+	}
+
+	if version < 33 {
+		if err := migrateAnnouncementSortOrder(db); err != nil {
+			return err
+		}
+	}
+
+	if version < 34 {
+		if err := migrateStyleFlourishes(db); err != nil {
+			return err
+		}
+	}
+
 	_, err := db.Exec(fmt.Sprintf("PRAGMA user_version = %d", schemaVersion))
 	return err
 }
@@ -184,7 +244,8 @@ func createTables(db *sql.DB) error {
 			id TEXT PRIMARY KEY,
 			board_data TEXT NOT NULL,
 			player_name TEXT NOT NULL DEFAULT '',
-			details TEXT NOT NULL DEFAULT ''
+			details TEXT NOT NULL DEFAULT '',
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 		)`,
 		`CREATE TABLE IF NOT EXISTS pattern_categories (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -230,6 +291,8 @@ func createTables(db *sql.DB) error {
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
 			name TEXT NOT NULL,
 			css_content TEXT NOT NULL DEFAULT '',
+			board_flourish TEXT NOT NULL DEFAULT '',
+			number_flourish TEXT NOT NULL DEFAULT '',
 			created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 		)`,
 		`CREATE TABLE IF NOT EXISTS raffles (
@@ -286,23 +349,6 @@ func createTables(db *sql.DB) error {
 			sort_order INTEGER NOT NULL DEFAULT 0,
 			FOREIGN KEY (list_id) REFERENCES reading_lists(id) ON DELETE CASCADE
 		)`,
-		`CREATE TABLE IF NOT EXISTS book_club_events (
-			id INTEGER PRIMARY KEY AUTOINCREMENT,
-			club_slug TEXT NOT NULL DEFAULT 'yaoi',
-			title TEXT NOT NULL,
-			start_local TEXT NOT NULL DEFAULT '',
-			timezone TEXT NOT NULL DEFAULT '',
-			length_hours INTEGER NOT NULL DEFAULT 1,
-			location TEXT NOT NULL DEFAULT '',
-			details TEXT NOT NULL DEFAULT '',
-			image TEXT NOT NULL DEFAULT '',
-			post_at_local TEXT NOT NULL DEFAULT '',
-			start_at TEXT NOT NULL DEFAULT '',
-			post_at TEXT NOT NULL DEFAULT '',
-			posted INTEGER NOT NULL DEFAULT 0,
-			posted_at DATETIME,
-			created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-		)`,
 		`CREATE TABLE IF NOT EXISTS game_presets (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
 			name TEXT NOT NULL,
@@ -312,6 +358,7 @@ func createTables(db *sql.DB) error {
 		)`,
 		announcementTypesTableSQL,
 		announcementsTableSQL,
+		announcementRolesTableSQL,
 	}
 	for _, s := range stmts {
 		if _, err := db.Exec(s); err != nil {
@@ -334,8 +381,6 @@ func createIndexes(db *sql.DB) error {
 		"CREATE INDEX IF NOT EXISTS idx_winners_log_player_date ON winners_log(player_name, logged_at)",
 		"CREATE INDEX IF NOT EXISTS idx_cards_player_name ON cards(player_name)",
 		"CREATE INDEX IF NOT EXISTS idx_reading_list_items_list ON reading_list_items(list_id)",
-		"CREATE INDEX IF NOT EXISTS idx_book_club_events_club ON book_club_events(club_slug)",
-		"CREATE INDEX IF NOT EXISTS idx_book_club_events_due ON book_club_events(posted, post_at)",
 		"CREATE INDEX IF NOT EXISTS idx_announcements_type ON announcements(type_id)",
 		"CREATE INDEX IF NOT EXISTS idx_announcements_due ON announcements(active, next_post_at)",
 	}
@@ -397,6 +442,15 @@ func hasColumn(db *sql.DB, table, column string) bool {
 		}
 	}
 	return false
+}
+
+// tableExists reports whether a table with the given name exists.
+func tableExists(db *sql.DB, name string) bool {
+	var found string
+	err := db.QueryRow(
+		`SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?`, name,
+	).Scan(&found)
+	return err == nil
 }
 
 // migrateSettings creates the key-value settings table for app configuration
@@ -583,101 +637,6 @@ func migrateBookClubTropes(db *sql.DB) error {
 	return err
 }
 
-// migrateBookClubEvents creates the book_club_events table (scheduled event
-// posts for a book club) plus its club and due-scheduling indexes.
-func migrateBookClubEvents(db *sql.DB) error {
-	stmts := []string{
-		`CREATE TABLE IF NOT EXISTS book_club_events (
-			id INTEGER PRIMARY KEY AUTOINCREMENT,
-			club_slug TEXT NOT NULL DEFAULT 'yaoi',
-			title TEXT NOT NULL,
-			start_local TEXT NOT NULL DEFAULT '',
-			timezone TEXT NOT NULL DEFAULT '',
-			length_hours INTEGER NOT NULL DEFAULT 1,
-			location TEXT NOT NULL DEFAULT '',
-			details TEXT NOT NULL DEFAULT '',
-			image TEXT NOT NULL DEFAULT '',
-			post_at_local TEXT NOT NULL DEFAULT '',
-			start_at TEXT NOT NULL DEFAULT '',
-			post_at TEXT NOT NULL DEFAULT '',
-			posted INTEGER NOT NULL DEFAULT 0,
-			posted_at DATETIME,
-			created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-		)`,
-		`CREATE INDEX IF NOT EXISTS idx_book_club_events_club ON book_club_events(club_slug)`,
-		`CREATE INDEX IF NOT EXISTS idx_book_club_events_due ON book_club_events(posted, post_at)`,
-	}
-	for _, s := range stmts {
-		if _, err := db.Exec(s); err != nil {
-			return fmt.Errorf("migrate book club events: %w", err)
-		}
-	}
-	return nil
-}
-
-// migrateBookClubEventDetails adds the optional markdown `details` column to
-// book_club_events for databases created before it existed. Idempotent.
-func migrateBookClubEventDetails(db *sql.DB) error {
-	if hasColumn(db, "book_club_events", "details") {
-		return nil
-	}
-	_, err := db.Exec(`ALTER TABLE book_club_events ADD COLUMN details TEXT NOT NULL DEFAULT ''`)
-	if err != nil {
-		return fmt.Errorf("add book_club_events.details: %w", err)
-	}
-	return nil
-}
-
-// migrateBookClubEventTimes converts the legacy book_club_events unix-seconds
-// columns (start_at_unix/post_at_unix) into readable UTC RFC-3339 string columns
-// (start_at/post_at): it adds the new columns, backfills existing rows from the
-// unix values, drops the old index + columns, and re-indexes on post_at.
-// Idempotent — a no-op once the new columns exist and the legacy ones are gone.
-func migrateBookClubEventTimes(db *sql.DB) error {
-	// Already migrated: new columns present and legacy ones gone.
-	if hasColumn(db, "book_club_events", "start_at") && !hasColumn(db, "book_club_events", "start_at_unix") {
-		return nil
-	}
-	if !hasColumn(db, "book_club_events", "start_at") {
-		if _, err := db.Exec(`ALTER TABLE book_club_events ADD COLUMN start_at TEXT NOT NULL DEFAULT ''`); err != nil {
-			return fmt.Errorf("add book_club_events.start_at: %w", err)
-		}
-	}
-	if !hasColumn(db, "book_club_events", "post_at") {
-		if _, err := db.Exec(`ALTER TABLE book_club_events ADD COLUMN post_at TEXT NOT NULL DEFAULT ''`); err != nil {
-			return fmt.Errorf("add book_club_events.post_at: %w", err)
-		}
-	}
-	// Backfill from the legacy unix columns (UTC seconds → UTC RFC-3339).
-	if hasColumn(db, "book_club_events", "start_at_unix") {
-		if _, err := db.Exec(`UPDATE book_club_events
-			SET start_at = strftime('%Y-%m-%dT%H:%M:%SZ', start_at_unix, 'unixepoch')
-			WHERE start_at_unix > 0 AND start_at = ''`); err != nil {
-			return fmt.Errorf("backfill book_club_events.start_at: %w", err)
-		}
-		if _, err := db.Exec(`UPDATE book_club_events
-			SET post_at = strftime('%Y-%m-%dT%H:%M:%SZ', post_at_unix, 'unixepoch')
-			WHERE post_at_unix > 0 AND post_at = ''`); err != nil {
-			return fmt.Errorf("backfill book_club_events.post_at: %w", err)
-		}
-		// Drop the legacy index (it references post_at_unix) before the columns.
-		if _, err := db.Exec(`DROP INDEX IF EXISTS idx_book_club_events_due`); err != nil {
-			return fmt.Errorf("drop legacy due index: %w", err)
-		}
-		if _, err := db.Exec(`ALTER TABLE book_club_events DROP COLUMN start_at_unix`); err != nil {
-			return fmt.Errorf("drop book_club_events.start_at_unix: %w", err)
-		}
-		if _, err := db.Exec(`ALTER TABLE book_club_events DROP COLUMN post_at_unix`); err != nil {
-			return fmt.Errorf("drop book_club_events.post_at_unix: %w", err)
-		}
-	}
-	// (Re)create the due index on the readable post_at column.
-	if _, err := db.Exec(`CREATE INDEX IF NOT EXISTS idx_book_club_events_due ON book_club_events(posted, post_at)`); err != nil {
-		return fmt.Errorf("create book_club_events due index: %w", err)
-	}
-	return nil
-}
-
 // migrateRaffleImagePaths rewrites legacy raffle prize-image web paths. When the
 // uploads directory was moved out of `assets/` into a top-level `images/`
 // folder (so it no longer collides with the Vite `dist/assets/` output).
@@ -714,11 +673,16 @@ const announcementsTableSQL = `CREATE TABLE IF NOT EXISTS announcements (
 	title TEXT NOT NULL,
 	details TEXT NOT NULL DEFAULT '',
 	image TEXT NOT NULL DEFAULT '',
+	thumbnail TEXT NOT NULL DEFAULT '',
 	color TEXT NOT NULL DEFAULT '',
+	location TEXT NOT NULL DEFAULT '',
 	start_local TEXT NOT NULL DEFAULT '',
 	end_local TEXT NOT NULL DEFAULT '',
 	start_at TEXT NOT NULL DEFAULT '',
 	end_at TEXT NOT NULL DEFAULT '',
+	start_format TEXT NOT NULL DEFAULT '',
+	end_format TEXT NOT NULL DEFAULT '',
+	dynamic_dates INTEGER NOT NULL DEFAULT 0,
 	schedule_kind TEXT NOT NULL DEFAULT '',
 	timezone TEXT NOT NULL DEFAULT '',
 	once_local TEXT NOT NULL DEFAULT '',
@@ -731,7 +695,18 @@ const announcementsTableSQL = `CREATE TABLE IF NOT EXISTS announcements (
 	last_posted_at DATETIME,
 	created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 	buttons TEXT NOT NULL DEFAULT '[]',
+	mention TEXT NOT NULL DEFAULT '',
+	sort_order INTEGER NOT NULL DEFAULT 0,
 	FOREIGN KEY (type_id) REFERENCES announcement_types(id)
+)`
+
+// announcementRolesTableSQL defines the managed list of taggable Discord roles
+// (a friendly name + the role's Discord ID) an announcement can optionally ping.
+const announcementRolesTableSQL = `CREATE TABLE IF NOT EXISTS announcement_roles (
+	id INTEGER PRIMARY KEY AUTOINCREMENT,
+	name TEXT NOT NULL,
+	role_id TEXT NOT NULL DEFAULT '',
+	created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 )`
 
 // migrateAnnouncements creates the Announcement Management tables
@@ -802,6 +777,213 @@ func migrateAnnouncementButtons(db *sql.DB) error {
 	return nil
 }
 
+// migrateAnnouncementRoles creates the announcement_roles table (the managed list
+// of taggable Discord roles). Idempotent.
+func migrateAnnouncementRoles(db *sql.DB) error {
+	if _, err := db.Exec(announcementRolesTableSQL); err != nil {
+		return fmt.Errorf("migrate announcement roles: %w", err)
+	}
+	return nil
+}
+
+// migrateAnnouncementMention adds the optional `mention` column (the role tag an
+// announcement posts above its embed: ""|"everyone"|"role:<id>"). Idempotent.
+func migrateAnnouncementMention(db *sql.DB) error {
+	if hasColumn(db, "announcements", "mention") {
+		return nil
+	}
+	if _, err := db.Exec(`ALTER TABLE announcements ADD COLUMN mention TEXT NOT NULL DEFAULT ''`); err != nil {
+		return fmt.Errorf("add announcements.mention: %w", err)
+	}
+	return nil
+}
+
+// migrateAnnouncementThumbnail adds the optional `thumbnail` column (full URL of
+// the small top-right embed thumbnail, distinct from the large bottom image).
+// Idempotent.
+func migrateAnnouncementThumbnail(db *sql.DB) error {
+	if !tableExists(db, "announcements") || hasColumn(db, "announcements", "thumbnail") {
+		return nil
+	}
+	if _, err := db.Exec(`ALTER TABLE announcements ADD COLUMN thumbnail TEXT NOT NULL DEFAULT ''`); err != nil {
+		return fmt.Errorf("add announcements.thumbnail: %w", err)
+	}
+	return nil
+}
+
+// migrateAnnouncementDynamicDates adds the optional `dynamic_dates` flag: when
+// set, the embed re-anchors the event start/end onto the day each post goes out
+// (for recurring day-of event announcements). Idempotent.
+func migrateAnnouncementDynamicDates(db *sql.DB) error {
+	if !tableExists(db, "announcements") || hasColumn(db, "announcements", "dynamic_dates") {
+		return nil
+	}
+	if _, err := db.Exec(`ALTER TABLE announcements ADD COLUMN dynamic_dates INTEGER NOT NULL DEFAULT 0`); err != nil {
+		return fmt.Errorf("add announcements.dynamic_dates: %w", err)
+	}
+	return nil
+}
+
+// migrateAnnouncementSortOrder adds the `sort_order` column used for the admin's
+// drag-and-drop ordering of the announcement list. Existing rows default to 0, so
+// the list keeps its previous newest-first order (ListAnnouncements breaks ties on
+// id DESC) until the admin reorders. Idempotent.
+func migrateAnnouncementSortOrder(db *sql.DB) error {
+	if !tableExists(db, "announcements") || hasColumn(db, "announcements", "sort_order") {
+		return nil
+	}
+	if _, err := db.Exec(`ALTER TABLE announcements ADD COLUMN sort_order INTEGER NOT NULL DEFAULT 0`); err != nil {
+		return fmt.Errorf("add announcements.sort_order: %w", err)
+	}
+	return nil
+}
+
+// migrateStyleFlourishes adds the per-theme `board_flourish`/`number_flourish`
+// columns (root-relative paths into images/flourishes; "" = built-in art).
+// Idempotent.
+func migrateStyleFlourishes(db *sql.DB) error {
+	if !tableExists(db, "styles") {
+		return nil
+	}
+	if !hasColumn(db, "styles", "board_flourish") {
+		if _, err := db.Exec(`ALTER TABLE styles ADD COLUMN board_flourish TEXT NOT NULL DEFAULT ''`); err != nil {
+			return fmt.Errorf("add styles.board_flourish: %w", err)
+		}
+	}
+	if !hasColumn(db, "styles", "number_flourish") {
+		if _, err := db.Exec(`ALTER TABLE styles ADD COLUMN number_flourish TEXT NOT NULL DEFAULT ''`); err != nil {
+			return fmt.Errorf("add styles.number_flourish: %w", err)
+		}
+	}
+	return nil
+}
+
+// migrateAnnouncementLocation adds the optional `location` column (free-text
+// location shown on the embed, e.g. a Discord voice channel). Idempotent.
+func migrateAnnouncementLocation(db *sql.DB) error {
+	if hasColumn(db, "announcements", "location") {
+		return nil
+	}
+	if _, err := db.Exec(`ALTER TABLE announcements ADD COLUMN location TEXT NOT NULL DEFAULT ''`); err != nil {
+		return fmt.Errorf("add announcements.location: %w", err)
+	}
+	return nil
+}
+
+// migrateAnnouncementTimeFormats adds the optional `start_format` / `end_format`
+// columns (the Discord timestamp style letters — t|T|d|D|f|F|R — used to render
+// the embed's start and end times independently; "" falls back to the defaults).
+// Idempotent.
+func migrateAnnouncementTimeFormats(db *sql.DB) error {
+	for _, col := range []string{"start_format", "end_format"} {
+		if hasColumn(db, "announcements", col) {
+			continue
+		}
+		if _, err := db.Exec(`ALTER TABLE announcements ADD COLUMN ` + col + ` TEXT NOT NULL DEFAULT ''`); err != nil {
+			return fmt.Errorf("add announcements.%s: %w", col, err)
+		}
+	}
+	return nil
+}
+
+// migrateCardCreatedAt adds the `created_at` column to the cards table so the
+// Manage Cards table can show when each card was generated. SQLite forbids a
+// CURRENT_TIMESTAMP default on ADD COLUMN, so the column is nullable here (older
+// cards predate tracking and read as NULL → blank); new inserts set it
+// explicitly. Idempotent.
+func migrateCardCreatedAt(db *sql.DB) error {
+	// A fresh/partial DB may not have the cards table yet (createTables builds it
+	// with the column); only alter an existing one.
+	if !tableExists(db, "cards") || hasColumn(db, "cards", "created_at") {
+		return nil
+	}
+	if _, err := db.Exec(`ALTER TABLE cards ADD COLUMN created_at DATETIME`); err != nil {
+		return fmt.Errorf("add cards.created_at: %w", err)
+	}
+	return nil
+}
+
+// migrateBookClubEventWebhooks merges the retired book-club "event posts" feature
+// into the Announcements tool: each per-club events-channel webhook (settings key
+// discord_events_webhook_url_<slug>) becomes a dedicated announcement type so the
+// club can author event posts there instead. The old settings rows are removed
+// afterward. Idempotent via the schema-version gate; a no-op when none are set.
+func migrateBookClubEventWebhooks(db *sql.DB) error {
+	// Nothing to migrate if neither table is present (e.g. a partial/legacy DB).
+	if !tableExists(db, "settings") || !tableExists(db, "announcement_types") {
+		return nil
+	}
+	rows, err := db.Query(
+		`SELECT key, value FROM settings
+		   WHERE key LIKE 'discord_events_webhook_url_%' AND TRIM(value) != ''`)
+	if err != nil {
+		return fmt.Errorf("read events webhooks: %w", err)
+	}
+	type webhook struct{ key, slug, url string }
+	var found []webhook
+	for rows.Next() {
+		var key, value string
+		if err := rows.Scan(&key, &value); err != nil {
+			rows.Close()
+			return fmt.Errorf("scan events webhook: %w", err)
+		}
+		slug := strings.TrimPrefix(key, "discord_events_webhook_url_")
+		found = append(found, webhook{key: key, slug: slug, url: strings.TrimSpace(value)})
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return fmt.Errorf("iterate events webhooks: %w", err)
+	}
+	rows.Close()
+
+	for _, w := range found {
+		name := titleCaseSlug(w.slug) + " Book Club Events"
+		if _, err := db.Exec(
+			`INSERT INTO announcement_types (name, webhook_url) VALUES (?, ?)`, name, w.url,
+		); err != nil {
+			return fmt.Errorf("create announcement type for %q: %w", w.slug, err)
+		}
+		if _, err := db.Exec(`DELETE FROM settings WHERE key = ?`, w.key); err != nil {
+			return fmt.Errorf("remove events webhook setting %q: %w", w.key, err)
+		}
+	}
+	return nil
+}
+
+// titleCaseSlug turns a slug like "yaoi" or "yuri-extra" into a friendly,
+// space-separated, title-cased label ("Yaoi", "Yuri Extra") for a migrated
+// announcement type name.
+func titleCaseSlug(slug string) string {
+	parts := strings.FieldsFunc(slug, func(r rune) bool { return r == '-' || r == '_' })
+	for i, p := range parts {
+		if p == "" {
+			continue
+		}
+		parts[i] = strings.ToUpper(p[:1]) + p[1:]
+	}
+	out := strings.Join(parts, " ")
+	if out == "" {
+		return "Book Club"
+	}
+	return out
+}
+
+// migrateDropBookClubEvents removes the retired book_club_events table and its
+// indexes (the feature was merged into Announcements). Idempotent.
+func migrateDropBookClubEvents(db *sql.DB) error {
+	stmts := []string{
+		`DROP INDEX IF EXISTS idx_book_club_events_due`,
+		`DROP INDEX IF EXISTS idx_book_club_events_club`,
+		`DROP TABLE IF EXISTS book_club_events`,
+	}
+	for _, s := range stmts {
+		if _, err := db.Exec(s); err != nil {
+			return fmt.Errorf("drop book_club_events: %w", err)
+		}
+	}
+	return nil
+}
+
 // migrateUsers creates the users table for the admin-account + per-page
 // permission system and seeds a bootstrap "admin" account (username "admin",
 // password "admin", full access). Runs on both fresh and existing databases;
@@ -816,7 +998,8 @@ func migrateUsers(db *sql.DB) error {
 		is_admin INTEGER NOT NULL DEFAULT 0,
 		is_active INTEGER NOT NULL DEFAULT 0,
 		permissions TEXT NOT NULL DEFAULT '[]',
-		created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		last_login_at DATETIME
 	)`); err != nil {
 		return fmt.Errorf("create users table: %w", err)
 	}
@@ -829,6 +1012,18 @@ func migrateUsers(db *sql.DB) error {
 		`INSERT OR IGNORE INTO users (username, password_hash, is_admin, is_active, permissions)
 		 VALUES ('admin', ?, 1, 1, '[]')`, hash); err != nil {
 		return fmt.Errorf("seed admin user: %w", err)
+	}
+	return nil
+}
+
+// migrateUserLastLogin adds the nullable last_login_at column to the users
+// table (NULL until an account's first login). Idempotent via hasColumn.
+func migrateUserLastLogin(db *sql.DB) error {
+	if hasColumn(db, "users", "last_login_at") {
+		return nil
+	}
+	if _, err := db.Exec(`ALTER TABLE users ADD COLUMN last_login_at DATETIME`); err != nil {
+		return fmt.Errorf("add users.last_login_at: %w", err)
 	}
 	return nil
 }

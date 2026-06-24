@@ -1038,7 +1038,7 @@ func TestSettingsGetSet(t *testing.T) {
 func TestStyleCRUD(t *testing.T) {
 	s := newTestStore(t)
 
-	id, err := s.CreateStyle("Dark Theme", "body { background: #000; }")
+	id, err := s.CreateStyle("Dark Theme", "body { background: #000; }", "images/flourishes/a.svg", "images/flourishes/b.svg")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1056,14 +1056,21 @@ func TestStyleCRUD(t *testing.T) {
 	if style.CSSContent != "body { background: #000; }" {
 		t.Errorf("css = %q", style.CSSContent)
 	}
+	// Flourishes round-trip.
+	if style.BoardFlourish != "images/flourishes/a.svg" || style.NumberFlourish != "images/flourishes/b.svg" {
+		t.Errorf("flourishes = %q / %q", style.BoardFlourish, style.NumberFlourish)
+	}
 
-	// Update
-	if err := s.UpdateStyle(id, "Light Theme", "body { background: #fff; }"); err != nil {
+	// Update (also clears the flourishes).
+	if err := s.UpdateStyle(id, "Light Theme", "body { background: #fff; }", "", ""); err != nil {
 		t.Fatal(err)
 	}
 	style, _ = s.GetStyle(id)
 	if style.Name != "Light Theme" {
 		t.Errorf("name after update = %q", style.Name)
+	}
+	if style.BoardFlourish != "" || style.NumberFlourish != "" {
+		t.Errorf("flourishes after clear = %q / %q", style.BoardFlourish, style.NumberFlourish)
 	}
 
 	// List
@@ -1114,7 +1121,7 @@ func TestActiveStyleCSS(t *testing.T) {
 	}
 
 	// Create and activate
-	id, _ := s.CreateStyle("Test", ".foo { color: red; }")
+	id, _ := s.CreateStyle("Test", ".foo { color: red; }", "images/flourishes/board.svg", "images/flourishes/num.svg")
 	_ = s.SetSetting("active_style_id", fmt.Sprintf("%d", id))
 
 	css, err = s.GetActiveStyleCSS()
@@ -1123,6 +1130,15 @@ func TestActiveStyleCSS(t *testing.T) {
 	}
 	if css != ".foo { color: red; }" {
 		t.Errorf("active CSS = %q", css)
+	}
+
+	// The active style carries its flourishes (used by the active endpoint/broadcast).
+	active, err := s.GetActiveStyle()
+	if err != nil || active == nil {
+		t.Fatalf("GetActiveStyle: %v / %v", active, err)
+	}
+	if active.BoardFlourish != "images/flourishes/board.svg" || active.NumberFlourish != "images/flourishes/num.svg" {
+		t.Errorf("active flourishes = %q / %q", active.BoardFlourish, active.NumberFlourish)
 	}
 }
 

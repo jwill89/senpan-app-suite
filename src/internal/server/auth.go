@@ -114,6 +114,12 @@ func (s *Server) handleAuthAction(w http.ResponseWriter, r *http.Request) {
 	_ = s.sessions.RenewToken(r.Context())
 	s.sessions.Put(r.Context(), "user_id", user.ID)
 	s.limiter.resetFailures(ip)
+	// Stamp the last-login time (best-effort — don't fail the login if it errors).
+	// The returned user still carries the *previous* value, which is the intended
+	// "last seen" semantic; the users table reloads to show the fresh time.
+	if err := s.store.UpdateLastLogin(user.ID); err != nil {
+		slog.Error("update last login", "error", err, "user_id", user.ID)
+	}
 	writeJSON(w, http.StatusOK, map[string]any{"success": true, "user": user})
 }
 

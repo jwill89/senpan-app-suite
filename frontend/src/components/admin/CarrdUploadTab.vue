@@ -3,10 +3,15 @@
  * Admin Carrd Upload tab (Atelier Yao section) — image hosting for external Carrd
  * sites. The admin creates "projects" (folders under <webRoot>/carrd, served at
  * carrd.senpan.cafe/<folder>/…), then uploads images into the project root or
- * into arbitrarily nested sub-directories via drag-and-drop or a file picker.
- * A breadcrumb navigates the tree; sub-folders can be created and deleted. Each
- * image shows a preview with a "Copy URL" action (the public carrd.senpan.cafe
- * URL) and a delete action. Projects can be deleted (folder + all contents).
+ * into arbitrarily nested sub-directories.
+ *
+ * Two screens, following the standard manager model:
+ *   - list:   a "+ New Project" create form plus a DataTable of projects (title,
+ *             folder, sub-folder count, file count, total size) with edit
+ *             (rename title + folder) and delete row actions. Clicking a project
+ *             opens it.
+ *   - detail: the open project (breadcrumb, sub-folders, upload drop zone, media
+ *             grid) on its own page with a Back button.
  *
  * Uploading an image whose name already exists overwrites it server-side, so a
  * Carrd site referencing that URL picks up the replacement.
@@ -14,17 +19,35 @@
 import { computed, onMounted, ref } from 'vue'
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
 import AdminPanel from '@/components/common/ui/AdminPanel.vue'
+import ManagerView from '@/components/common/ui/ManagerView.vue'
+import SubPageHeader from '@/components/common/ui/SubPageHeader.vue'
 import FormField from '@/components/common/ui/FormField.vue'
 import EmptyState from '@/components/common/ui/EmptyState.vue'
+import SearchInput from '@/components/common/ui/SearchInput.vue'
+import DataTable, { type DataColumn } from '@/components/common/ui/DataTable.vue'
+import ModalOverlay from '@/components/common/ModalOverlay.vue'
 import { useCarrdStore, carrdImageUrl, joinCarrdPath, CARRD_BASE_URL } from '@/stores/carrd'
 import { useUiStore } from '@/stores/ui'
+import type { CarrdProject } from '@/types/api'
 
 const carrd = useCarrdStore()
 const ui = useUiStore()
 
-/** New-project form fields. */
-const newTitle = ref('')
-const newFolder = ref('')
+type Screen = 'list' | 'detail'
+const screen = ref<Screen>('list')
+
+/** Free-text filter applied to the projects table (title + folder). */
+const search = ref('')
+
+/**
+ * Create/rename modal state. `null` = closed; otherwise the mode and (for
+ * "edit") the folder of the project being renamed. `formTitle`/`formFolder`
+ * back the inputs for both modes.
+ */
+const projectModal = ref<{ mode: 'create' | 'edit'; folder: string } | null>(null)
+const formTitle = ref('')
+const formFolder = ref('')
+const savingProject = ref(false)
 
 /** New sub-directory inline-form state. */
 const addingDir = ref(false)
@@ -39,6 +62,25 @@ const dragOver = ref(false)
 const selectedProject = computed(
   () => carrd.projects.find((p) => p.folder === carrd.selectedFolder) ?? null,
 )
+
+/** Columns for the projects table (the last is the right-aligned actions). */
+const projectColumns: DataColumn[] = [
+  { key: 'title', label: 'Project' },
+  { key: 'folder', label: 'Folder' },
+  { key: 'subfolder_count', label: 'Sub-folders', align: 'center' },
+  { key: 'file_count', label: 'Files', align: 'center' },
+  { key: 'total_size', label: 'Size', align: 'right' },
+  { key: 'actions', label: '', align: 'right' },
+]
+
+/** Projects filtered by the search box (matches title or folder). */
+const filteredProjects = computed(() => {
+  const q = search.value.trim().toLowerCase()
+  if (!q) return carrd.projects
+  return carrd.projects.filter((p) =>
+    [p.title, p.folder].some((s) => s.toLowerCase().includes(q)),
+  )
+})
 
 /**
  * Breadcrumb trail for the current path within the open project: the project
@@ -57,8 +99,8 @@ const breadcrumbs = computed(() => {
   return crumbs
 })
 
-/** Live preview of the folder name that would be derived from the title. */
-const derivedFolder = computed(() => slugify(newFolder.value || newTitle.value))
+/** Live preview of the folder slug the modal's inputs would produce. */
+const formDerivedFolder = computed(() => slugify(formFolder.value || formTitle.value))
 
 /** Mirrors the server's folder slug rules for the create-form preview. */
 function slugify(s: string): string {
@@ -71,14 +113,55 @@ function slugify(s: string): string {
     .replace(/^-+|-+$/g, '')
 }
 
-async function createProject(): Promise<void> {
-  const folder = await carrd.createProject(newTitle.value, newFolder.value)
-  if (folder) {
-    newTitle.value = ''
-    newFolder.value = ''
+// ── Navigation ─────────────────────────────────────────────────────────────────
+async function openProject(p: CarrdProject): Promise<void> {
+  await carrd.openProject(p.folder)
+  screen.value = 'detail'
+}
+
+function backToList(): void {
+  screen.value = 'list'
+  carrd.loadProjects() // refresh counts/size after edits in the project
+}
+
+// ── Create / rename modal ──────────────────────────────────────────────────────
+function openNew(): void {
+  formTitle.value = ''
+  formFolder.value = ''
+  projectModal.value = { mode: 'create', folder: '' }
+}
+
+function startEdit(p: CarrdProject): void {
+  formTitle.value = p.title
+  formFolder.value = p.folder
+  projectModal.value = { mode: 'edit', folder: p.folder }
+}
+
+function closeModal(): void {
+  projectModal.value = null
+}
+
+async function submitProject(): Promise<void> {
+  if (!projectModal.value || !formTitle.value.trim()) return
+  savingProject.value = true
+  try {
+    if (projectModal.value.mode === 'edit') {
+      const ok = await carrd.renameProject(projectModal.value.folder, formTitle.value, formFolder.value)
+      if (ok) closeModal()
+    } else {
+      // The store creates and opens the project (loads its contents) on success.
+      const folder = await carrd.createProject(formTitle.value, formFolder.value)
+      if (folder) {
+        closeModal()
+        screen.value = 'detail'
+      }
+    }
+  } finally {
+    savingProject.value = false
   }
 }
 
+// ── Upload + sub-folders (detail screen) ───────────────────────────────────────
 function pickFiles(): void {
   fileInput.value?.click()
 }
@@ -152,51 +235,182 @@ onMounted(() => carrd.loadProjects())
 
 <template>
   <div class="tab-body">
-    <AdminPanel>
-      <div class="flex-toolbar mb-12">
-        <h3 class="m-0"><font-awesome-icon :icon="['fad', 'images']" /> Carrd Upload</h3>
+    <!-- ── Detail: open project (breadcrumb + folders + upload + media grid) ──── -->
+    <AdminPanel v-if="screen === 'detail' && selectedProject">
+      <SubPageHeader @back="backToList">
+        <font-awesome-icon :icon="['fad', 'folder-open']" /> {{ selectedProject.title }}
+      </SubPageHeader>
+
+      <p class="text-dim text-xs mb-12">
+        Served from
+        <span class="code-gold">{{ CARRD_BASE_URL }}/{{ selectedProject.folder }}/…</span>.
+        Allowed types: .jpg, .jpeg, .png, .webp, .gif, .mp3, .mp4. Uploading a file with an
+        existing name replaces it.
+      </p>
+
+      <div class="flex-toolbar mb-12" style="gap: 12px; align-items: center">
+        <!-- Breadcrumb: project root → nested path -->
+        <nav class="carrd-breadcrumb" aria-label="Folder path">
+          <template v-for="(crumb, i) in breadcrumbs" :key="crumb.path">
+            <span v-if="i > 0" class="carrd-crumb-sep">/</span>
+            <button
+              class="carrd-crumb"
+              :class="{ current: i === breadcrumbs.length - 1 }"
+              :disabled="i === breadcrumbs.length - 1"
+              @click="carrd.navigate(crumb.path)"
+            >
+              <font-awesome-icon v-if="i === 0" :icon="['fad', 'folder-open']" /> {{ crumb.label }}
+            </button>
+          </template>
+        </nav>
+        <button
+          class="btn-action btn-sm push-right"
+          :disabled="carrd.uploading"
+          @click="pickFiles"
+        >
+          <LoadingSpinner v-if="carrd.uploading" label="Uploading…" />
+          <template v-else><font-awesome-icon :icon="['fas', 'upload']" /> Upload Images</template>
+        </button>
+        <input
+          ref="fileInput"
+          type="file"
+          accept=".jpg,.jpeg,.png,.webp,.gif,.mp3,.mp4"
+          multiple
+          hidden
+          @change="onFilesSelected"
+        />
       </div>
+
+      <!-- Sub-folders at the current path + create-folder control -->
+      <div class="carrd-dirs mb-12">
+        <button
+          v-for="dir in carrd.dirs"
+          :key="dir"
+          class="chip"
+          @click="carrd.navigate(joinCarrdPath(carrd.currentPath, dir))"
+        >
+          <font-awesome-icon :icon="['fad', 'folder']" /> {{ dir }}
+          <span
+            class="chip-del carrd-dir-del"
+            role="button"
+            tabindex="0"
+            title="Delete this folder"
+            @click.stop="carrd.deleteDir(dir)"
+            @keyup.enter.stop="carrd.deleteDir(dir)"
+          >
+            <font-awesome-icon :icon="['fas', 'trash']" />
+          </span>
+        </button>
+
+        <template v-if="addingDir">
+          <input
+            v-model="newDirName"
+            class="carrd-dir-input"
+            placeholder="folder name"
+            aria-label="New folder name"
+            @keyup.enter="submitDir"
+            @keyup.esc="cancelAddDir"
+          />
+          <button class="btn-confirm btn-sm" @click="submitDir">Add</button>
+          <button class="btn-neutral btn-sm" @click="cancelAddDir">Cancel</button>
+        </template>
+        <button v-else class="chip carrd-dir-add" @click="addingDir = true">
+          <font-awesome-icon :icon="['fas', 'plus']" /> New Folder
+        </button>
+      </div>
+
+      <!-- Drag-and-drop zone -->
+      <div
+        class="carrd-dropzone"
+        :class="{ 'drag-over': dragOver }"
+        @dragover.prevent="dragOver = true"
+        @dragenter.prevent="dragOver = true"
+        @dragleave.prevent="dragOver = false"
+        @drop.prevent="onDrop"
+        @click="pickFiles"
+      >
+        <font-awesome-icon :icon="['fad', 'cloud-arrow-up']" />
+        <span>Drag &amp; drop images, audio or video here, or click to browse</span>
+      </div>
+
+      <LoadingSpinner
+        v-if="carrd.loadingImages && carrd.images.length === 0"
+        block
+        label="Loading images…"
+      />
+
+      <div v-else-if="carrd.images.length" class="carrd-grid">
+        <figure v-for="img in carrd.images" :key="img.name" class="carrd-card">
+          <div class="carrd-thumb-wrap">
+            <!-- Image: clickable thumbnail -->
+            <a
+              v-if="fileKind(img.name) === 'image'"
+              :href="fileUrl(img.name)"
+              target="_blank"
+              rel="noopener"
+              class="carrd-thumb"
+            >
+              <img :src="fileUrl(img.name)" :alt="img.name" loading="lazy" />
+            </a>
+            <!-- Video: inline player -->
+            <video
+              v-else-if="fileKind(img.name) === 'video'"
+              :src="fileUrl(img.name)"
+              class="carrd-thumb carrd-media"
+              controls
+              preload="metadata"
+            ></video>
+            <!-- Audio: icon placeholder (player lives in the card body) -->
+            <div v-else class="carrd-thumb carrd-file-icon">
+              <font-awesome-icon :icon="['fad', 'file-audio']" />
+            </div>
+            <button
+              class="carrd-del-overlay"
+              title="Delete this file"
+              @click="carrd.deleteImage(img.name)"
+            >
+              <font-awesome-icon :icon="['fas', 'trash']" />
+            </button>
+          </div>
+          <figcaption class="carrd-card-body">
+            <span class="carrd-img-name code-gold" :title="img.name">{{ img.name }}</span>
+            <span class="text-dim text-xs">{{ formatSize(img.size) }}</span>
+            <audio
+              v-if="fileKind(img.name) === 'audio'"
+              :src="fileUrl(img.name)"
+              class="carrd-audio"
+              controls
+              preload="none"
+            ></audio>
+            <button
+              class="btn-view btn-sm carrd-copy-btn"
+              title="Copy public URL to clipboard"
+              @click="copyUrl(img.name)"
+            >
+              <font-awesome-icon :icon="['fas', 'copy']" /> Copy URL
+            </button>
+          </figcaption>
+        </figure>
+      </div>
+
+      <p v-else-if="!carrd.loadingImages" class="text-dim" style="padding: 16px 0">
+        No images in this folder yet. Drop some above, or create a sub-folder to organize them.
+      </p>
+    </AdminPanel>
+
+    <!-- ── List: projects table (create/rename via modal) ─────────────────────── -->
+    <ManagerView v-else title="Carrd Upload" :icon="['fad', 'images']">
+      <template #actions>
+        <button class="btn-confirm btn-sm" @click="openNew">
+          <font-awesome-icon :icon="['fas', 'plus']" /> New Project
+        </button>
+      </template>
 
       <p class="text-dim text-xs mb-12">
         Images are served from
         <span class="code-gold">{{ CARRD_BASE_URL }}/&lt;folder&gt;/…</span>
         for embedding in external Carrd sites. A project can hold files directly or in nested
-        sub-folders. Allowed types: .jpg, .jpeg, .png, .webp, .gif, .mp3, .mp4. Uploading a file
-        with an existing name replaces it.
-      </p>
-
-      <!-- Create project -->
-      <div class="carrd-create mb-12">
-        <FormField label="New Project Title" html-for="carrd-title">
-          <input
-            id="carrd-title"
-            v-model="newTitle"
-            placeholder="My Carrd Project"
-            @keyup.enter="createProject"
-          />
-        </FormField>
-        <FormField html-for="carrd-folder">
-          <template #label>Folder Name <span class="text-dim">(optional)</span></template>
-          <input
-            id="carrd-folder"
-            v-model="newFolder"
-            placeholder="auto from title"
-            @keyup.enter="createProject"
-          />
-        </FormField>
-        <div class="carrd-create-action">
-          <button
-            class="btn-confirm btn-sm"
-            :disabled="carrd.creating || !newTitle.trim()"
-            @click="createProject"
-          >
-            <LoadingSpinner v-if="carrd.creating" label="Creating…" />
-            <template v-else><font-awesome-icon :icon="['fas', 'plus']" /> Create</template>
-          </button>
-        </div>
-      </div>
-      <p v-if="derivedFolder" class="text-dim text-xs mb-12" style="margin-top: -4px">
-        URL folder: <span class="code-gold">{{ CARRD_BASE_URL }}/{{ derivedFolder }}/</span>
+        sub-folders. Open a project to upload and organize its files.
       </p>
 
       <LoadingSpinner
@@ -205,241 +419,136 @@ onMounted(() => carrd.loadProjects())
         label="Loading projects…"
       />
 
-      <!-- Project list -->
-      <div v-else-if="carrd.projects.length" class="carrd-projects mb-12">
-        <button
-          v-for="p in carrd.projects"
-          :key="p.folder"
-          class="chip chip--stack carrd-project-chip"
-          :class="{ active: carrd.selectedFolder === p.folder }"
-          @click="carrd.openProject(p.folder)"
-        >
-          <span class="carrd-project-title">
-            <font-awesome-icon :icon="['fad', 'folder']" /> {{ p.title }}
+      <template v-else-if="carrd.projects.length">
+        <div class="manager-toolbar">
+          <SearchInput
+            v-model="search"
+            placeholder="Search projects…"
+            aria-label="Search projects by title or folder"
+          />
+          <span class="text-dim text-xs push-right">
+            {{ filteredProjects.length }} of {{ carrd.projects.length }}
           </span>
-          <span class="carrd-project-meta">
-            /{{ p.folder }} · {{ p.image_count }} image{{ p.image_count === 1 ? '' : 's' }}
-          </span>
-          <span
-            class="chip-del carrd-project-del"
-            role="button"
-            tabindex="0"
-            title="Delete this project"
-            @click.stop="carrd.deleteProject(p.folder, p.title)"
-            @keyup.enter.stop="carrd.deleteProject(p.folder, p.title)"
-          >
-            <font-awesome-icon :icon="['fas', 'trash']" />
-          </span>
-        </button>
-      </div>
+        </div>
+
+        <DataTable :columns="projectColumns" :rows="filteredProjects" row-key="folder">
+          <template #cell-title="{ row }">
+            <button class="carrd-open-btn" @click="openProject(row)">
+              <font-awesome-icon :icon="['fad', 'folder']" /> {{ row.title }}
+            </button>
+          </template>
+          <template #cell-folder="{ row }">
+            <span class="code-gold">/{{ row.folder }}</span>
+          </template>
+          <template #cell-subfolder_count="{ row }">
+            <span class="text-dim">{{ row.subfolder_count }}</span>
+          </template>
+          <template #cell-file_count="{ row }">
+            <span class="text-dim">{{ row.file_count }}</span>
+          </template>
+          <template #cell-total_size="{ row }">
+            <span class="text-dim">{{ formatSize(row.total_size) }}</span>
+          </template>
+          <template #cell-actions="{ row }">
+            <div class="row-actions">
+              <button class="btn-confirm btn-sm" title="Rename this project" @click="startEdit(row)">
+                <font-awesome-icon :icon="['fas', 'pen-to-square']" /> Edit
+              </button>
+              <button
+                class="btn-danger btn-sm"
+                title="Delete this project"
+                @click="carrd.deleteProject(row.folder, row.title)"
+              >
+                <font-awesome-icon :icon="['fas', 'trash']" /> Delete
+              </button>
+            </div>
+          </template>
+          <template #empty>
+            <EmptyState text="No projects match your search." />
+          </template>
+        </DataTable>
+      </template>
 
       <EmptyState
         v-else-if="!carrd.loading"
-        text="No projects yet. Create one above to start uploading images."
+        text="No projects yet. Use “New Project” to start uploading images."
       />
+    </ManagerView>
 
-      <!-- Selected project: breadcrumb + folders + upload + image grid -->
-      <div v-if="selectedProject" class="carrd-project-detail">
-        <div class="flex-toolbar mb-12" style="gap: 12px; align-items: center">
-          <!-- Breadcrumb: project root → nested path -->
-          <nav class="carrd-breadcrumb" aria-label="Folder path">
-            <template v-for="(crumb, i) in breadcrumbs" :key="crumb.path">
-              <span v-if="i > 0" class="carrd-crumb-sep">/</span>
-              <button
-                class="carrd-crumb"
-                :class="{ current: i === breadcrumbs.length - 1 }"
-                :disabled="i === breadcrumbs.length - 1"
-                @click="carrd.navigate(crumb.path)"
-              >
-                <font-awesome-icon v-if="i === 0" :icon="['fad', 'folder-open']" /> {{ crumb.label }}
-              </button>
-            </template>
-          </nav>
-          <button
-            class="btn-action btn-sm push-right"
-            :disabled="carrd.uploading"
-            @click="pickFiles"
-          >
-            <LoadingSpinner v-if="carrd.uploading" label="Uploading…" />
-            <template v-else><font-awesome-icon :icon="['fas', 'upload']" /> Upload Images</template>
-          </button>
-          <input
-            ref="fileInput"
-            type="file"
-            accept=".jpg,.jpeg,.png,.webp,.gif,.mp3,.mp4"
-            multiple
-            hidden
-            @change="onFilesSelected"
-          />
-        </div>
-
-        <!-- Sub-folders at the current path + create-folder control -->
-        <div class="carrd-dirs mb-12">
-          <button
-            v-for="dir in carrd.dirs"
-            :key="dir"
-            class="chip"
-            @click="carrd.navigate(joinCarrdPath(carrd.currentPath, dir))"
-          >
-            <font-awesome-icon :icon="['fad', 'folder']" /> {{ dir }}
-            <span
-              class="chip-del carrd-dir-del"
-              role="button"
-              tabindex="0"
-              title="Delete this folder"
-              @click.stop="carrd.deleteDir(dir)"
-              @keyup.enter.stop="carrd.deleteDir(dir)"
-            >
-              <font-awesome-icon :icon="['fas', 'trash']" />
-            </span>
-          </button>
-
-          <template v-if="addingDir">
-            <input
-              v-model="newDirName"
-              class="carrd-dir-input"
-              placeholder="folder name"
-              aria-label="New folder name"
-              @keyup.enter="submitDir"
-              @keyup.esc="cancelAddDir"
-            />
-            <button class="btn-confirm btn-sm" @click="submitDir">Add</button>
-            <button class="btn-neutral btn-sm" @click="cancelAddDir">Cancel</button>
-          </template>
-          <button v-else class="chip carrd-dir-add" @click="addingDir = true">
-            <font-awesome-icon :icon="['fas', 'plus']" /> New Folder
-          </button>
-        </div>
-
-        <!-- Drag-and-drop zone -->
-        <div
-          class="carrd-dropzone"
-          :class="{ 'drag-over': dragOver }"
-          @dragover.prevent="dragOver = true"
-          @dragenter.prevent="dragOver = true"
-          @dragleave.prevent="dragOver = false"
-          @drop.prevent="onDrop"
-          @click="pickFiles"
-        >
-          <font-awesome-icon :icon="['fad', 'cloud-arrow-up']" />
-          <span>Drag &amp; drop images, audio or video here, or click to browse</span>
-        </div>
-
-        <LoadingSpinner
-          v-if="carrd.loadingImages && carrd.images.length === 0"
-          block
-          label="Loading images…"
+    <!-- ── Create / rename project modal ─────────────────────────────────────── -->
+    <ModalOverlay
+      v-if="projectModal"
+      centered
+      :aria-label="projectModal.mode === 'edit' ? 'Rename project' : 'New project'"
+      box-style="max-width: 420px"
+      @close="closeModal"
+    >
+      <h3 class="m-0 mb-12">
+        <template v-if="projectModal.mode === 'edit'">
+          <font-awesome-icon :icon="['fas', 'pen-to-square']" /> Rename Project
+        </template>
+        <template v-else><font-awesome-icon :icon="['fad', 'images']" /> New Project</template>
+      </h3>
+      <FormField label="Project Title" html-for="carrd-form-title">
+        <input
+          id="carrd-form-title"
+          v-model="formTitle"
+          placeholder="My Carrd Project"
+          @keyup.enter="submitProject"
         />
-
-        <div v-else-if="carrd.images.length" class="carrd-grid">
-          <figure v-for="img in carrd.images" :key="img.name" class="carrd-card">
-            <div class="carrd-thumb-wrap">
-              <!-- Image: clickable thumbnail -->
-              <a
-                v-if="fileKind(img.name) === 'image'"
-                :href="fileUrl(img.name)"
-                target="_blank"
-                rel="noopener"
-                class="carrd-thumb"
-              >
-                <img :src="fileUrl(img.name)" :alt="img.name" loading="lazy" />
-              </a>
-              <!-- Video: inline player -->
-              <video
-                v-else-if="fileKind(img.name) === 'video'"
-                :src="fileUrl(img.name)"
-                class="carrd-thumb carrd-media"
-                controls
-                preload="metadata"
-              ></video>
-              <!-- Audio: icon placeholder (player lives in the card body) -->
-              <div v-else class="carrd-thumb carrd-file-icon">
-                <font-awesome-icon :icon="['fad', 'file-audio']" />
-              </div>
-              <button
-                class="carrd-del-overlay"
-                title="Delete this file"
-                @click="carrd.deleteImage(img.name)"
-              >
-                <font-awesome-icon :icon="['fas', 'trash']" />
-              </button>
-            </div>
-            <figcaption class="carrd-card-body">
-              <span class="carrd-img-name code-gold" :title="img.name">{{ img.name }}</span>
-              <span class="text-dim text-xs">{{ formatSize(img.size) }}</span>
-              <audio
-                v-if="fileKind(img.name) === 'audio'"
-                :src="fileUrl(img.name)"
-                class="carrd-audio"
-                controls
-                preload="none"
-              ></audio>
-              <button
-                class="btn-view btn-sm carrd-copy-btn"
-                title="Copy public URL to clipboard"
-                @click="copyUrl(img.name)"
-              >
-                <font-awesome-icon :icon="['fas', 'copy']" /> Copy URL
-              </button>
-            </figcaption>
-          </figure>
-        </div>
-
-        <p v-else-if="!carrd.loadingImages" class="text-dim" style="padding: 16px 0">
-          No images in this folder yet. Drop some above, or create a sub-folder to organize them.
-        </p>
+      </FormField>
+      <FormField html-for="carrd-form-folder">
+        <template #label>
+          Folder Name
+          <span v-if="projectModal.mode === 'create'" class="text-dim">(optional)</span>
+        </template>
+        <input
+          id="carrd-form-folder"
+          v-model="formFolder"
+          :placeholder="projectModal.mode === 'create' ? 'auto from title' : 'folder name'"
+          @keyup.enter="submitProject"
+        />
+      </FormField>
+      <p v-if="formDerivedFolder" class="text-dim text-xs mb-12">
+        URL folder: <span class="code-gold">{{ CARRD_BASE_URL }}/{{ formDerivedFolder }}/</span>
+      </p>
+      <p v-if="projectModal.mode === 'edit'" class="text-dim text-xs mb-12">
+        Renaming the folder changes the public URL of every file in this project — existing Carrd
+        embeds pointing at the old folder will break.
+      </p>
+      <div class="flex-toolbar flex-end">
+        <button class="btn-neutral btn-sm" @click="closeModal">Cancel</button>
+        <button
+          class="btn-confirm btn-sm"
+          :disabled="savingProject || !formTitle.trim()"
+          @click="submitProject"
+        >
+          <LoadingSpinner v-if="savingProject" label="Saving…" />
+          <template v-else-if="projectModal.mode === 'edit'">
+            <font-awesome-icon :icon="['fas', 'check']" /> Save
+          </template>
+          <template v-else><font-awesome-icon :icon="['fas', 'plus']" /> Create</template>
+        </button>
       </div>
-    </AdminPanel>
+    </ModalOverlay>
   </div>
 </template>
 
 <style scoped>
-/* Create-project form: title + folder inputs side by side, button trailing. */
-.carrd-create {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
-  align-items: flex-end;
-}
-.carrd-create .field {
-  flex: 1 1 220px;
+/* Project title cell rendered as a link-styled button that opens the project. */
+.carrd-open-btn {
+  background: none;
+  border: 0;
+  padding: 0;
   margin: 0;
-}
-.carrd-create-action {
-  flex: 0 0 auto;
-}
-
-/* Project chips. */
-.carrd-projects {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-}
-/* Chrome from the `.chip` + `.chip--stack` objects; only the relative
-   positioning (for the absolute delete corner) + title/meta type are local. */
-.carrd-project-chip {
-  position: relative;
-}
-.carrd-project-title {
-  color: var(--highlight);
+  font: inherit;
   font-weight: 600;
-  padding-right: 22px;
+  color: var(--highlight);
+  cursor: pointer;
+  text-align: left;
 }
-.carrd-project-meta {
-  font-size: 0.75rem;
-  color: var(--text-muted);
-}
-/* Colour/hover come from `.chip-del`; only the corner placement is local. */
-.carrd-project-del {
-  position: absolute;
-  top: 8px;
-  right: 10px;
-}
-
-/* Selected-project detail. */
-.carrd-project-detail {
-  border-top: 1px solid var(--panel-raised-bg);
-  padding-top: 16px;
+.carrd-open-btn:hover {
+  text-decoration: underline;
 }
 
 /* Breadcrumb path. */

@@ -123,6 +123,32 @@ export const useCarrdStore = defineStore('carrd', () => {
     }
   }
 
+  /**
+   * Renames a project's title and (optionally) its URL folder. When the open
+   * project's folder changes, follow it so the detail view stays on the same
+   * project. Returns true on success.
+   */
+  async function renameProject(folder: string, title: string, newFolder: string): Promise<boolean> {
+    const trimmed = title.trim()
+    if (!trimmed) {
+      ui.notify('Project title is required', 'error')
+      return false
+    }
+    try {
+      const res = await endpoints.carrd.renameProject(folder, trimmed, newFolder.trim())
+      ui.notify(`Renamed project to “${res.project.title}”`, 'success')
+      // If the open project's folder changed on disk, re-point the selection.
+      if (selectedFolder.value === folder && res.project.folder !== folder) {
+        selectedFolder.value = res.project.folder
+      }
+      await loadProjects()
+      return true
+    } catch (e) {
+      ui.notify((e as Error).message, 'error')
+      return false
+    }
+  }
+
   async function deleteProject(folder: string, title: string): Promise<void> {
     if (
       !(await ui.confirm(
@@ -253,6 +279,7 @@ export const useCarrdStore = defineStore('carrd', () => {
     openProject,
     navigate,
     createProject,
+    renameProject,
     deleteProject,
     createDir,
     deleteDir,

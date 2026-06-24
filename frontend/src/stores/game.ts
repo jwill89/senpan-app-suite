@@ -11,6 +11,7 @@ import { computed, ref } from 'vue'
 import { endpoints } from '@/lib/endpoints'
 import type { BingoGameState, Card, FrequentWinner, WinnersLogEntry } from '@/types/api'
 import { playWinnerChime } from '@/lib/sound'
+import { halftimeCallThreshold } from '@/lib/halftime'
 import { useUiStore } from './ui'
 
 export const useGameStore = defineStore('game', () => {
@@ -50,6 +51,9 @@ export const useGameStore = defineStore('game', () => {
 
   // Halftime modals
   const showHalftimePrompt = ref(false)
+  /** Call number at which the halftime prompt fires — the 35-of-75 mark scaled
+   *  to the current game's actual callable pool (driven by its win patterns). */
+  const halftimeThreshold = computed(() => halftimeCallThreshold(currentGame.value?.patterns))
 
   // End-game winner confirmation
   const showEndGameModal = ref(false)
@@ -149,14 +153,30 @@ export const useGameStore = defineStore('game', () => {
         drawSent.value = false
       }
 
-      // After the 35th number, prompt about a halftime minigame.
-      if (currentGame.value?.called_numbers?.length === 35) {
+      // Prompt for a halftime minigame at the half-way point — the classic
+      // 35-of-75 mark scaled to how many numbers THIS game can actually call
+      // (which depends on the active win patterns; see lib/halftime).
+      if (currentGame.value?.called_numbers?.length === halftimeThreshold.value) {
         showHalftimePrompt.value = true
       }
     } catch (e) {
       ui.notify((e as Error).message, 'error')
     } finally {
       drawing.value = false
+    }
+  }
+
+  /**
+   * Persist the chosen draw delay so it's shared: the server stores it (admins
+   * read it as `default_draw_delay` on the next page load) and broadcasts a
+   * `draw_delay_update` so other admins' selectors update live. The local
+   * `drawDelay` is already set by the selector's v-model; this just propagates it.
+   */
+  async function persistDrawDelay(): Promise<void> {
+    try {
+      await endpoints.game.setDelay(drawDelay.value || 0)
+    } catch (e) {
+      ui.notify((e as Error).message, 'error')
     }
   }
 
@@ -257,6 +277,17 @@ export const useGameStore = defineStore('game', () => {
 
   async function confirmHalftime(): Promise<void> {
     showHalftimePrompt.value = false
+    // Tie the alert to the draw delay: the midpoint number is broadcast to
+    // players only after its delay elapses, so if that countdown is still
+    // running, hold the minigame alert until the number has actually been sent —
+    // otherwise players see the minigame prompt before the number that triggered
+    // it. (`drawCountdown` is null/0 for an instant draw or once it has elapsed,
+    // so this is a no-op in those cases.)
+    const remaining = drawCountdown.value ?? 0
+    if (remaining > 0) {
+      ui.notify(`Halftime alert will send once the number reaches players (${remaining}s)…`, 'info')
+      await new Promise((resolve) => setTimeout(resolve, remaining * 1000))
+    }
     try {
       await endpoints.game.triggerHalftime()
       ui.notify('Halftime alert sent to all players!', 'success')
@@ -380,6 +411,7 @@ export const useGameStore = defineStore('game', () => {
     winnerPreview,
     winnerLoading,
     showHalftimePrompt,
+    halftimeThreshold,
     showEndGameModal,
     endGameSelectedWinners,
     frequentWinners,
@@ -395,6 +427,7 @@ export const useGameStore = defineStore('game', () => {
     loadGameState,
     startGame,
     drawNumber,
+    persistDrawDelay,
     clearDrawCountdown,
     endGame,
     confirmEndGame,

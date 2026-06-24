@@ -9,10 +9,12 @@ import (
 // styleRequest is the JSON body for POST /api/styles.
 // Action determines the operation: "get", "create", "update", "delete", or "set_active".
 type styleRequest struct {
-	Action     string `json:"action"`
-	ID         int64  `json:"id"`
-	Name       string `json:"name"`
-	CSSContent string `json:"css_content"`
+	Action         string `json:"action"`
+	ID             int64  `json:"id"`
+	Name           string `json:"name"`
+	CSSContent     string `json:"css_content"`
+	BoardFlourish  string `json:"board_flourish"`
+	NumberFlourish string `json:"number_flourish"`
 }
 
 // handleStylesList returns all styles (without CSS content) and the active style ID.
@@ -78,7 +80,7 @@ func (s *Server) handleStylesAction(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusBadRequest, "Style name is required")
 			return
 		}
-		id, err := s.store.CreateStyle(name, req.CSSContent)
+		id, err := s.store.CreateStyle(name, req.CSSContent, req.BoardFlourish, req.NumberFlourish)
 		if err != nil {
 			writeInternalError(w, "create style", err)
 			return
@@ -98,7 +100,7 @@ func (s *Server) handleStylesAction(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusBadRequest, "Style name is required")
 			return
 		}
-		if err := s.store.UpdateStyle(req.ID, name, req.CSSContent); err != nil {
+		if err := s.store.UpdateStyle(req.ID, name, req.CSSContent, req.BoardFlourish, req.NumberFlourish); err != nil {
 			writeInternalError(w, "update style", err)
 			return
 		}
@@ -107,7 +109,7 @@ func (s *Server) handleStylesAction(w http.ResponseWriter, r *http.Request) {
 		// If this is the active style, broadcast the update to all clients
 		activeID, _ := s.store.GetSetting("active_style_id")
 		if activeID == fmt.Sprintf("%d", req.ID) {
-			s.broadcastStyleUpdate(req.CSSContent)
+			s.broadcastStyleUpdate(req.CSSContent, req.BoardFlourish, req.NumberFlourish)
 		}
 
 	case "delete":
@@ -119,7 +121,7 @@ func (s *Server) handleStylesAction(w http.ResponseWriter, r *http.Request) {
 		activeID, _ := s.store.GetSetting("active_style_id")
 		if activeID == fmt.Sprintf("%d", req.ID) {
 			_ = s.store.SetSetting("active_style_id", "")
-			s.broadcastStyleUpdate("")
+			s.broadcastStyleUpdate("", "", "")
 		}
 		deleted, err := s.store.DeleteStyle(req.ID)
 		if err != nil {
@@ -137,12 +139,14 @@ func (s *Server) handleStylesAction(w http.ResponseWriter, r *http.Request) {
 			writeInternalError(w, "set active style", err)
 			return
 		}
-		css := ""
+		css, board, number := "", "", ""
 		if req.ID > 0 {
-			css, _ = s.store.GetActiveStyleCSS()
+			if active, _ := s.store.GetActiveStyle(); active != nil {
+				css, board, number = active.CSSContent, active.BoardFlourish, active.NumberFlourish
+			}
 		}
 		writeJSON(w, http.StatusOK, map[string]any{"ok": true})
-		s.broadcastStyleUpdate(css)
+		s.broadcastStyleUpdate(css, board, number)
 
 	default:
 		writeError(w, http.StatusBadRequest, "Invalid action. Use: get, create, update, delete, set_active")
@@ -155,10 +159,18 @@ func (s *Server) handleStylesAction(w http.ResponseWriter, r *http.Request) {
 //	Auth:      public
 //	Response:  {"css": "..."}
 func (s *Server) handleActiveStyleCSS(w http.ResponseWriter, r *http.Request) {
-	css, err := s.store.GetActiveStyleCSS()
+	active, err := s.store.GetActiveStyle()
 	if err != nil {
-		writeInternalError(w, "get active style CSS", err)
+		writeInternalError(w, "get active style", err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"css": css})
+	css, board, number := "", "", ""
+	if active != nil {
+		css, board, number = active.CSSContent, active.BoardFlourish, active.NumberFlourish
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"css":             css,
+		"board_flourish":  board,
+		"number_flourish": number,
+	})
 }

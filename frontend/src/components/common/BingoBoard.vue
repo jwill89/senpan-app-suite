@@ -11,7 +11,7 @@
 import type { StyleValue } from 'vue'
 import CornerFlourish from '@/components/common/CornerFlourish.vue'
 
-defineProps<{
+const props = defineProps<{
   board: number[][]
   /** 'player' = interactive + stamps; 'preview' = static. */
   mode?: 'player' | 'preview'
@@ -23,7 +23,7 @@ defineProps<{
   cellClass?: (ri: number, ci: number, cell: number) => (string | false)[]
   /** Preview mode: should this cell be highlighted as a pattern hit? */
   isCellMatch?: (ri: number, ci: number) => boolean
-  /** Player mode: inline style for the stamp mark. */
+  /** Player mode: inline style for the primary stamp mark. */
   stampMarkStyle?: StyleValue
   /** Player mode: emoji to show for stamped cells. */
   stampEmoji?: string
@@ -31,9 +31,33 @@ defineProps<{
   stampShape?: string
   /** Player mode: custom stamp image data URL. */
   customStampImage?: string | null
+  /**
+   * Player mode: optional secondary-stamp style (a plain coloured circle). When
+   * provided, stamped cells that are NOT part of a win pattern render this
+   * instead of the primary stamp (no emoji/image). Omit to use the primary stamp
+   * everywhere.
+   */
+  secondaryStampStyle?: StyleValue
+  /** Player mode: is cell [ri,ci] part of an active win pattern? */
+  isWinningPatternCell?: (ri: number, ci: number) => boolean
 }>()
 
 const emit = defineEmits<{ cellClick: [ri: number, ci: number, cell: number] }>()
+
+/**
+ * Whether the secondary stamp (plain coloured circle) applies to a stamped cell:
+ * only when a secondary style is supplied and the cell falls outside every active
+ * win pattern.
+ */
+function usesSecondaryStamp(ri: number, ci: number): boolean {
+  return (
+    !!props.secondaryStampStyle &&
+    !!props.isStamped &&
+    props.isStamped(ri, ci) &&
+    !!props.isWinningPatternCell &&
+    !props.isWinningPatternCell(ri, ci)
+  )
+}
 </script>
 
 <template>
@@ -60,14 +84,26 @@ const emit = defineEmits<{ cellClick: [ri: number, ci: number, cell: number] }>(
             @click="emit('cellClick', ri, ci, cell)"
           >
             <span class="cell-num">{{ cell === 0 ? 'FREE' : cell }}</span>
-            <div class="stamp-mark" :style="isStamped && isStamped(ri, ci) ? stampMarkStyle : {}">
-              <img
-                v-if="isStamped && isStamped(ri, ci) && stampShape === 'custom' && customStampImage"
-                :src="customStampImage"
-                class="stamp-custom-img"
-                alt="stamp"
-              />
-              <template v-else>{{ isStamped && isStamped(ri, ci) ? stampEmoji : '' }}</template>
+            <div
+              class="stamp-mark"
+              :style="
+                isStamped && isStamped(ri, ci)
+                  ? usesSecondaryStamp(ri, ci)
+                    ? secondaryStampStyle
+                    : stampMarkStyle
+                  : {}
+              "
+            >
+              <!-- Secondary stamp is a plain coloured circle (no icon). -->
+              <template v-if="isStamped && isStamped(ri, ci) && !usesSecondaryStamp(ri, ci)">
+                <img
+                  v-if="stampShape === 'custom' && customStampImage"
+                  :src="customStampImage"
+                  class="stamp-custom-img"
+                  alt="stamp"
+                />
+                <template v-else>{{ stampEmoji }}</template>
+              </template>
             </div>
           </div>
         </template>

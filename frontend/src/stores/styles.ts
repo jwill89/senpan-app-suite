@@ -10,6 +10,7 @@ import { endpoints } from '@/lib/endpoints'
 import { applyCustomCSS } from '@/lib/theme'
 import type { Style } from '@/types/api'
 import { useUiStore } from './ui'
+import { useAppStore } from './app'
 
 export const useStylesStore = defineStore('styles', () => {
   const ui = useUiStore()
@@ -47,7 +48,14 @@ export const useStylesStore = defineStore('styles', () => {
   }
 
   function newStyle(): void {
-    editingStyle.value = { id: 0, name: '', css_content: '', created_at: '' }
+    editingStyle.value = {
+      id: 0,
+      name: '',
+      css_content: '',
+      board_flourish: '',
+      number_flourish: '',
+      created_at: '',
+    }
   }
 
   async function saveStyle(): Promise<void> {
@@ -59,12 +67,14 @@ export const useStylesStore = defineStore('styles', () => {
     }
     savingStyle.value = true
     const css = editingStyle.value.css_content ?? ''
+    const board = editingStyle.value.board_flourish ?? ''
+    const number = editingStyle.value.number_flourish ?? ''
     try {
       if (editingStyle.value.id) {
-        await endpoints.styles.update(editingStyle.value.id, name, css)
+        await endpoints.styles.update(editingStyle.value.id, name, css, board, number)
         ui.notify('Theme saved', 'success')
       } else {
-        const data = await endpoints.styles.create(name, css)
+        const data = await endpoints.styles.create(name, css, board, number)
         editingStyle.value.id = data.id
         ui.notify('Theme created', 'success')
       }
@@ -90,29 +100,26 @@ export const useStylesStore = defineStore('styles', () => {
   }
 
   async function setActiveStyle(id: number): Promise<void> {
+    const app = useAppStore()
     try {
       await endpoints.styles.setActive(id)
       activeStyleId.value = id > 0 ? String(id) : ''
-      // Apply locally immediately.
+      // Apply CSS + flourishes locally immediately (the server also broadcasts).
       if (id > 0 && editingStyle.value && editingStyle.value.id === id) {
         applyCustomCSS(editingStyle.value.css_content || '')
+        app.applyFlourishes(
+          editingStyle.value.board_flourish || '',
+          editingStyle.value.number_flourish || '',
+        )
       } else if (id > 0) {
-        await loadActiveCSS()
+        await app.loadActiveCSS()
       } else {
         applyCustomCSS('')
+        app.applyFlourishes('', '')
       }
       ui.notify(id > 0 ? 'Theme activated' : 'Theme cleared', 'success')
     } catch (e) {
       ui.notify((e as Error).message, 'error')
-    }
-  }
-
-  async function loadActiveCSS(): Promise<void> {
-    try {
-      const data = await endpoints.styles.activeCss()
-      applyCustomCSS(data.css || '')
-    } catch {
-      /* silent */
     }
   }
 
@@ -128,6 +135,5 @@ export const useStylesStore = defineStore('styles', () => {
     saveStyle,
     deleteStyle,
     setActiveStyle,
-    loadActiveCSS,
   }
 })

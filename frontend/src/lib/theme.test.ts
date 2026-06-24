@@ -1,5 +1,22 @@
-import { describe, it, expect } from 'vitest'
-import { clampFontMetrics, fontFamilyFromFile } from './theme'
+import { describe, it, expect, afterEach } from 'vitest'
+import { clampFontMetrics, fontFamilyFromFile, applyNumberFlourish } from './theme'
+
+describe('applyNumberFlourish', () => {
+  afterEach(() => document.documentElement.style.removeProperty('--number-flourish-url'))
+
+  it('sets --number-flourish-url to the resolved asset URL for a relative path', () => {
+    applyNumberFlourish('images/flourishes/swirl.svg')
+    expect(document.documentElement.style.getPropertyValue('--number-flourish-url')).toBe(
+      'url("/images/flourishes/swirl.svg")',
+    )
+  })
+
+  it('clears the variable when given an empty value (falls back to built-in)', () => {
+    applyNumberFlourish('images/flourishes/swirl.svg')
+    applyNumberFlourish('')
+    expect(document.documentElement.style.getPropertyValue('--number-flourish-url')).toBe('')
+  })
+})
 
 describe('fontFamilyFromFile', () => {
   it('strips the extension and trims', () => {

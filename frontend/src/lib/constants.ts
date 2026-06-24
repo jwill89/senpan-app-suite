@@ -77,11 +77,6 @@ export function clubWebhookKey(slug: string): `discord_webhook_url_${string}` {
   return `discord_webhook_url_${slug}`
 }
 
-/** Per-club events-channel Discord webhook setting key (matches eventsWebhookSettingKey on the backend). */
-export function clubEventsWebhookKey(slug: string): `discord_events_webhook_url_${string}` {
-  return `discord_events_webhook_url_${slug}`
-}
-
 /**
  * Canonical list of grantable admin page permissions. Each `key` matches both a
  * frontend AdminTab id and the backend permission constant (see permissions.go),
@@ -113,8 +108,9 @@ export const ADMIN_PERMISSIONS: AdminPermission[] = [
   })),
   { key: 'atelier-fonts', label: 'Font Upload', section: 'Atelier Yao' },
   { key: 'atelier-carrd', label: 'Carrd Upload', section: 'Atelier Yao' },
-  { key: 'system-settings', label: 'App Settings', section: 'System' },
+  { key: 'system-settings', label: 'Settings', section: 'System' },
   { key: 'system-themes', label: 'Themes', section: 'System' },
+  { key: 'system-images', label: 'Images', section: 'System' },
 ]
 
 /** Default app settings — matches the original app.js defaults. */
@@ -127,18 +123,10 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
   google_fonts_api_key: '',
   anilist_api_url: 'https://graphql.anilist.co',
   bingo_join_prompt: 'Enter your unique bingo board ID to play',
-  // One blank webhook default per known club (reading-list + events channel) so
-  // the settings form binds cleanly before the server response loads.
-  ...Object.fromEntries(
-    BOOK_CLUBS.flatMap((c) => [
-      [clubWebhookKey(c.slug), ''],
-      [clubEventsWebhookKey(c.slug), ''],
-    ]),
-  ),
+  // One blank reading-list webhook default per known club so the settings form
+  // binds cleanly before the server response loads.
+  ...Object.fromEntries(BOOK_CLUBS.map((c) => [clubWebhookKey(c.slug), ''])),
 }
-
-/** Meeting-length options (hours) for a book club event. */
-export const MEETING_LENGTH_OPTIONS = [1, 2, 3, 4, 5] as const
 
 /** The browser's current IANA timezone (e.g. "America/New_York"); 'UTC' fallback. */
 export function detectTimezone(): string {

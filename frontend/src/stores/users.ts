@@ -80,6 +80,43 @@ export const useUsersStore = defineStore('users', () => {
     }
   }
 
+  /**
+   * Applies all edits from the "Edit User" modal in one go: only the fields that
+   * actually changed are sent (active, admin, permissions), plus an optional new
+   * password. Reloads + notifies once at the end (instead of per-field), and
+   * reloads on failure too so the table reflects any partial change. Returns true
+   * on full success. Permissions are skipped when the account is (or becomes) an
+   * admin, since admins implicitly hold every permission.
+   */
+  async function updateUser(
+    id: number,
+    desired: { is_active: boolean; is_admin: boolean; permissions: string[] },
+    password?: string,
+  ): Promise<boolean> {
+    const orig = users.value.find((u) => u.id === id)
+    if (!orig) {
+      ui.notify('User not found', 'error')
+      return false
+    }
+    try {
+      if (desired.is_active !== orig.is_active) await endpoints.users.setActive(id, desired.is_active)
+      if (desired.is_admin !== orig.is_admin) await endpoints.users.setAdmin(id, desired.is_admin)
+      if (!desired.is_admin) {
+        const a = [...desired.permissions].sort().join('|')
+        const b = [...orig.permissions].sort().join('|')
+        if (a !== b) await endpoints.users.setPermissions(id, desired.permissions)
+      }
+      if (password) await endpoints.users.setPassword(id, password)
+      ui.notify('User updated', 'success')
+      await loadUsers()
+      return true
+    } catch (e) {
+      ui.notify((e as Error).message, 'error')
+      await loadUsers()
+      return false
+    }
+  }
+
   async function deleteUser(id: number, username: string): Promise<void> {
     if (
       !(await ui.confirm(`Delete account "${username}"? This cannot be undone.`, {
@@ -105,6 +142,7 @@ export const useUsersStore = defineStore('users', () => {
     setAdmin,
     setPermissions,
     setPassword,
+    updateUser,
     deleteUser,
   }
 })

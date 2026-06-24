@@ -9,7 +9,7 @@
  * a message updates depends on the current route (player vs. admin area).
  */
 import { WsClient } from '@/lib/ws'
-import { playDrawChime, vibrate } from '@/lib/sound'
+import { playEvent, vibrate } from '@/lib/sound'
 import { applyCustomCSS, applyHeaderFont, applyUploadedFonts } from '@/lib/theme'
 import type { WsMessage } from '@/types/api'
 import { useRouter } from 'vue-router'
@@ -34,7 +34,15 @@ export function useWebSocket() {
   const isPlayerView = (): boolean => router.currentRoute.value.name === 'player'
   const isAdminView = (): boolean => {
     const n = router.currentRoute.value.name
-    return typeof n === 'string' && n.startsWith('admin') && n !== 'admin-login'
+    // The auth pages (login/register) are under the `admin-` name prefix but have
+    // no live data, so they must NOT keep a socket open — otherwise a post-logout
+    // landing on them fires "Connection lost. Reconnecting…" toasts.
+    return (
+      typeof n === 'string' &&
+      n.startsWith('admin') &&
+      n !== 'admin-login' &&
+      n !== 'admin-register'
+    )
   }
 
   const client = new WsClient({
@@ -73,6 +81,7 @@ export function useWebSocket() {
         break
       case 'style_update':
         applyCustomCSS(msg.css || '')
+        app.applyFlourishes(msg.board_flourish || '', msg.number_flourish || '')
         break
       case 'settings_update':
         if (msg.app_title) {
@@ -91,7 +100,19 @@ export function useWebSocket() {
         }
         break
       case 'halftime_minigame':
-        if (isPlayerView()) player.showMinigameModal = true
+        if (isPlayerView()) {
+          player.showMinigameModal = true
+          const mode = player.soundMode
+          if (mode !== 'off') playEvent('minigame', mode)
+        }
+        break
+      case 'draw_delay_update':
+        // Shared draw-delay control: sync every admin's selector live, and keep
+        // the settings copy in step so the Settings page reflects it too.
+        if (isAdminView()) {
+          game.drawDelay = msg.delay
+          app.settings.default_draw_delay = String(msg.delay)
+        }
         break
     }
   }
@@ -115,6 +136,8 @@ export function useWebSocket() {
         player.endedCalledCount = player.playerGame.called_numbers?.length ?? 0
         player.gameEnded = true
         player.lastDrawn = null
+        const mode = player.soundMode
+        if (mode !== 'off') playEvent('gameend', mode)
       }
       player.playerGame = g
       if (g) {
@@ -156,8 +179,9 @@ export function useWebSocket() {
       player.playerGame.called_numbers.push(drawn.number)
       player.playerGame.total_called = player.playerGame.called_numbers.length
       player.lastDrawn = drawn
-      if (player.soundEnabled) {
-        playDrawChime()
+      const mode = player.soundMode
+      if (mode !== 'off') {
+        playEvent('draw', mode)
         vibrate(60)
       }
     }

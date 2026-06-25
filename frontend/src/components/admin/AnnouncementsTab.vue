@@ -526,7 +526,7 @@ async function submitRole(): Promise<void> {
 
       <!-- Discord buttons: optional link buttons rendered beneath the embed -->
       <hr class="ann-divider" />
-      <h4 class="raffle-section-heading"><font-awesome-icon :icon="['fab', 'discord']" /> Buttons</h4>
+      <h4 class="section-heading"><font-awesome-icon :icon="['fab', 'discord']" /> Buttons</h4>
       <p class="text-dim text-sm mb-8">
         Up to {{ MAX_BUTTONS }} link buttons shown under the embed. Each needs a label and URL;
         the emoji is optional — click the emoji box to pick one.
@@ -584,7 +584,7 @@ async function submitRole(): Promise<void> {
 
       <!-- Scheduling: when (if ever) this announcement auto-posts to Discord -->
       <hr class="ann-divider" />
-      <h4 class="raffle-section-heading">
+      <h4 class="section-heading">
         <font-awesome-icon :icon="['fad', 'clock']" /> Scheduling
       </h4>
 

@@ -49,8 +49,8 @@ function back(): void {
     </div>
     <div class="tab-body raffle-detail-body">
       <!-- Prize image -->
-      <div v-if="raffles.selectedRaffle.prize_image" class="raffle-prize-container">
-        <img :src="assetUrl(raffles.selectedRaffle.prize_image)" class="raffle-prize-img" alt="Prize" />
+      <div v-if="raffles.selectedRaffle.prize_image" class="prize-container">
+        <img :src="assetUrl(raffles.selectedRaffle.prize_image)" class="prize-img" alt="Prize" />
       </div>
 
       <!-- Description -->
@@ -62,7 +62,7 @@ function back(): void {
 
       <!-- Rules -->
       <div v-if="raffles.selectedRaffle.rules" class="mb-16">
-        <h3 class="raffle-section-heading">Rules</h3>
+        <h3 class="section-heading">Rules</h3>
         <div
           class="game-details"
           v-html="renderMarkdown(raffles.selectedRaffle.rules)"

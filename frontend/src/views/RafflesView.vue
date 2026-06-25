@@ -50,15 +50,15 @@ function goHome(): void {
     </div>
     <div class="tab-body content-container">
       <LoadingSpinner v-if="loading" block label="Loading raffles…" />
-      <div v-else-if="raffles.raffles.length" class="raffle-list raffle-list--center">
+      <div v-else-if="raffles.raffles.length" class="card-grid card-grid--center">
         <div
           v-for="r in raffles.raffles"
           :key="r.id"
-          class="raffle-card"
+          class="media-card"
           @click="openRaffle(r)"
         >
-          <img v-if="r.prize_image" :src="assetUrl(r.prize_image)" class="raffle-card-image" alt="Prize" />
-          <div class="raffle-card-body">
+          <img v-if="r.prize_image" :src="assetUrl(r.prize_image)" class="media-card-image" alt="Prize" />
+          <div class="media-card-body">
             <h3>{{ r.title }}</h3>
             <p v-if="r.cost_per_entry > 0" class="raffle-cost">
               {{ r.cost_per_entry.toLocaleString() }} gil per entry

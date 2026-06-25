@@ -143,7 +143,7 @@ async function deleteSelected(): Promise<void> {
     <AdminPanel v-else-if="screen === 'detail' && raffles.selectedRaffle">
       <SubPageHeader @back="backToList">
         {{ raffles.selectedRaffle.title }}
-        <span :class="['raffle-badge', 'raffle-badge-' + raffles.selectedRaffle.status]">
+        <span :class="['status-badge', 'status-badge-' + raffles.selectedRaffle.status]">
           {{ raffles.selectedRaffle.status }}
         </span>
       </SubPageHeader>
@@ -160,14 +160,14 @@ async function deleteSelected(): Promise<void> {
       <div v-if="raffles.selectedRaffle.prize_image" class="mb-16">
         <img
           :src="assetUrl(raffles.selectedRaffle.prize_image)"
-          class="raffle-prize-img-sm"
+          class="prize-img-sm"
           alt="Prize"
         />
       </div>
 
       <!-- Winner section -->
       <div v-if="raffles.raffleWinner" class="raffle-winner-panel">
-        <h3 class="raffle-section-heading">
+        <h3 class="section-heading">
           <font-awesome-icon :icon="['fad', 'trophy']" /> Winner: {{ raffles.raffleWinner.character_name }} @
           {{ raffles.raffleWinner.world }}
         </h3>
@@ -205,7 +205,7 @@ async function deleteSelected(): Promise<void> {
 
       <!-- Add entry (admin, open only) -->
       <div v-if="isOpen" class="entry-add mt-16 mb-16">
-        <h3 class="raffle-section-heading"><font-awesome-icon :icon="['fad', 'plus']" /> Add Entry</h3>
+        <h3 class="section-heading"><font-awesome-icon :icon="['fad', 'plus']" /> Add Entry</h3>
         <div class="flex-row mb-10">
           <FormField label="Character Name" style="flex: 2; min-width: 160px">
             <input
@@ -321,20 +321,20 @@ async function deleteSelected(): Promise<void> {
       <template v-else>
         <!-- Current (non-closed) raffles -->
         <h4 class="section-heading"><font-awesome-icon :icon="['fad', 'clipboard-list']" /> Current Raffles</h4>
-        <div v-if="raffles.openRaffles.length" class="raffle-list">
+        <div v-if="raffles.openRaffles.length" class="card-grid">
           <div
             v-for="r in raffles.openRaffles"
             :key="r.id"
-            class="raffle-card"
+            class="media-card"
             @click="openRaffle(r)"
           >
             <img
               v-if="r.prize_image"
               :src="assetUrl(r.prize_image)"
-              class="raffle-card-image"
+              class="media-card-image"
               alt="Prize"
             />
-            <div class="raffle-card-body">
+            <div class="media-card-body">
               <span
                 v-if="raffleTiming(r) === 'upcoming'"
                 class="badge badge--warning raffle-status-pill"

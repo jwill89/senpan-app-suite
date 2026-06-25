@@ -178,7 +178,7 @@ function toggleClosed(): void {
     <AdminPanel v-else-if="screen === 'detail' && garapons.selectedGarapon">
       <SubPageHeader @back="backToList">
         {{ garapons.selectedGarapon.title }}
-        <span :class="['raffle-badge', 'raffle-badge-' + garapons.selectedGarapon.status]">
+        <span :class="['status-badge', 'status-badge-' + garapons.selectedGarapon.status]">
           {{ garapons.selectedGarapon.status }}
         </span>
       </SubPageHeader>
@@ -209,7 +209,7 @@ function toggleClosed(): void {
       <div v-if="garapons.selectedGarapon.grand_prize_image" class="mb-16">
         <img
           :src="assetUrl(garapons.selectedGarapon.grand_prize_image)"
-          class="raffle-prize-img-sm"
+          class="prize-img-sm"
           alt="Grand prize"
         />
       </div>
@@ -421,20 +421,20 @@ function toggleClosed(): void {
         <h4 class="section-heading">
           <font-awesome-icon :icon="['fad', 'ferris-wheel']" /> Current Garapons
         </h4>
-        <div v-if="garapons.openGarapons.length" class="raffle-list">
+        <div v-if="garapons.openGarapons.length" class="card-grid">
           <div
             v-for="g in garapons.openGarapons"
             :key="g.id"
-            class="raffle-card"
+            class="media-card"
             @click="openGarapon(g)"
           >
             <img
               v-if="g.grand_prize_image"
               :src="assetUrl(g.grand_prize_image)"
-              class="raffle-card-image"
+              class="media-card-image"
               alt="Grand prize"
             />
-            <div class="raffle-card-body">
+            <div class="media-card-body">
               <h3>{{ g.title }}</h3>
               <p class="text-dim text-sm">
                 {{ g.player_count || 0 }} drawing{{ g.player_count === 1 ? '' : 's' }} ·

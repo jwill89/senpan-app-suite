@@ -515,7 +515,7 @@ h1 {
    layout. New tiles can use `.card` directly. */
 .card,
 .home-card,
-.raffle-card,
+.media-card,
 .saved-pattern {
     background: var(--panel-bg);
     border: 2px solid var(--panel-raised-bg);
@@ -574,7 +574,7 @@ h1 {
    A small uppercase pill. The shared chrome lives here; the specific badge
    classes (and a `.badge` used directly) only set colours/margins/states. */
 .badge,
-.raffle-badge,
+.status-badge,
 .live-badge,
 .conn-badge,
 .style-active-badge {
@@ -709,14 +709,14 @@ h1 {
 /* Smaller pattern mini cells for game start pattern picker */
 .pattern-mini-sm .pattern-mini-cell { width: 10px; height: 10px }
 
-/* Raffle detail page layout helpers */
+/* Prize image helpers (shared by the raffle + garapon detail views) and the
+   raffle detail page wrapper. */
 .raffle-detail-body { max-width: 700px; margin: 0 auto }
-.raffle-prize-container { text-align: center; margin-bottom: 20px }
-.raffle-prize-img { max-width: 100%; max-height: 400px; border-radius: 12px; box-shadow: 0 4px 20px var(--shadow) }
-.raffle-prize-img-sm { max-width: 300px; max-height: 200px; border-radius: 8px }
-/* Object: gold sub-section heading. `.raffle-section-heading` is the legacy
-   alias kept for existing markup/themes; new code uses `.section-heading`. */
-.section-heading, .raffle-section-heading { color: var(--highlight); margin-bottom: 8px }
+.prize-container { text-align: center; margin-bottom: 20px }
+.prize-img { max-width: 100%; max-height: 400px; border-radius: 12px; box-shadow: 0 4px 20px var(--shadow) }
+.prize-img-sm { max-width: 300px; max-height: 200px; border-radius: 8px }
+/* Object: gold sub-section heading. */
+.section-heading { color: var(--highlight); margin-bottom: 8px }
 
 /* Empty-state drop placeholder (dashed border box) */
 .drop-placeholder {
@@ -3068,7 +3068,7 @@ span.pattern-mini {
    ================================================================ */
 
 /* Flex-wrapped grid of raffle preview cards */
-.raffle-list {
+.card-grid {
     display: flex;
     flex-wrap: wrap;
     gap: 16px
@@ -3076,14 +3076,14 @@ span.pattern-mini {
 
 /* Public raffle list: centre the cards so a single/few raffles sit in the middle
    of the page rather than marooned in the top-left corner. */
-.raffle-list--center {
+.card-grid--center {
     justify-content: center
 }
 
 /* Individual raffle card (clickable, with optional image + body). A solid
    surface + border so the card still reads as a card when it has no prize image
    (previously it had no fill and collapsed into floating text). */
-.raffle-card {
+.media-card {
     border-radius: 12px;
     width: 280px;
     cursor: pointer;
@@ -3093,14 +3093,14 @@ span.pattern-mini {
     overflow: hidden
 }
 
-.raffle-card:hover {
+.media-card:hover {
     border-color: var(--accent-2);
     transform: translateY(-2px);
     box-shadow: 0 6px 18px var(--shadow)
 }
 
 /* Prize image at top of raffle card */
-.raffle-card-image {
+.media-card-image {
     width: 100%;
     height: 160px;
     object-fit: cover;
@@ -3108,11 +3108,11 @@ span.pattern-mini {
 }
 
 /* Text content area below the image */
-.raffle-card-body {
+.media-card-body {
     padding: 16px
 }
 
-.raffle-card-body h3 {
+.media-card-body h3 {
     font-size: 1.05rem;
     margin-bottom: 6px
 }
@@ -3125,16 +3125,16 @@ span.pattern-mini {
 }
 
 /* Open/Closed status badge on raffle cards — `.badge` object chrome + margin. */
-.raffle-badge {
+.status-badge {
     margin-left: 6px
 }
 
-.raffle-badge-open {
+.status-badge-open {
     background: var(--success);
     color: var(--text-on-fill)
 }
 
-.raffle-badge-closed {
+.status-badge-closed {
     background: var(--danger);
     color: var(--text-on-fill)
 }

@@ -115,7 +115,7 @@ function cancelRename(): void {
 
         <!-- Add / edit item form -->
         <div class="bc-form mt-16">
-          <h3 class="raffle-section-heading">
+          <h3 class="section-heading">
             <font-awesome-icon :icon="['fad', 'plus']" />
             {{ bookclub.itemForm.id ? 'Edit Item' : 'Add Item' }}
           </h3>

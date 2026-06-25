@@ -287,17 +287,26 @@ func (s *Server) handleGaraponPlayers(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusBadRequest, "Player id is required")
 			return
 		}
-		// Block deletion once the player has drawn (their results live in the log).
 		existing, err := s.store.GetGaraponPlayerByID(req.PlayerID)
 		if err != nil {
 			writeInternalError(w, "get garapon player", err)
 			return
 		}
-		if existing != nil && existing.DrawsUsed > 0 {
-			writeError(w, http.StatusConflict, "This player has already drawn and cannot be deleted")
+		// A closed garapon can be cleaned up: any link may be deleted, and its
+		// draws stay in the log (garapon_draws.player_id is ON DELETE SET NULL).
+		// While the garapon is open, a link that has already drawn can't be deleted.
+		garapon, err := s.store.GetGarapon(garaponID)
+		if err != nil {
+			writeInternalError(w, "get garapon for delete player", err)
 			return
 		}
-		deleted, err := s.store.DeleteGaraponPlayer(req.PlayerID)
+		closed := garapon != nil && garapon.Status == "closed"
+		if existing != nil && existing.DrawsUsed > 0 && !closed {
+			writeError(w, http.StatusConflict,
+				"This player has already drawn and can't be deleted while the garapon is open")
+			return
+		}
+		deleted, err := s.store.DeleteGaraponPlayer(req.PlayerID, closed)
 		if err != nil {
 			writeInternalError(w, "delete garapon player", err)
 			return

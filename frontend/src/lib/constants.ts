@@ -100,13 +100,14 @@ export const ADMIN_PERMISSIONS: AdminPermission[] = [
   { key: 'bingo-patterns', label: 'Patterns', section: 'Bingo' },
   { key: 'bingo-presets', label: 'Game Presets', section: 'Bingo' },
   { key: 'teahouse-announcements', label: 'Announcements', section: 'Senpan Tea House' },
-  { key: 'teahouse-raffles', label: 'Raffles', section: 'Senpan Tea House' },
   ...BOOK_CLUBS.map((c) => ({
     key: `bookclub-${c.slug}`,
     label: c.name,
     section: 'Senpan Tea House',
   })),
   { key: 'festival-garapon', label: 'Garapon', section: 'Festival' },
+  // Raffles moved under Festival; the permission/route id stays `teahouse-raffles`.
+  { key: 'teahouse-raffles', label: 'Raffles', section: 'Festival' },
   { key: 'atelier-fonts', label: 'Font Upload', section: 'Atelier Yao' },
   { key: 'atelier-carrd', label: 'Carrd Upload', section: 'Atelier Yao' },
   { key: 'system-settings', label: 'Settings', section: 'System' },

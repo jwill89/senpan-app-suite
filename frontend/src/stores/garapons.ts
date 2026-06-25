@@ -36,7 +36,7 @@ export const useGaraponsStore = defineStore('garapons', () => {
   /** Reusable grand-prize images (the "Garapon" category on System → Images). */
   const grandPrizeImages = ref<string[]>([])
   /** Admin "generate drawing" form (issue a new per-player link). */
-  const playerAdd = ref<{ playerName: string; maxDraws: number }>({ playerName: '', maxDraws: 5 })
+  const playerAdd = ref<{ playerName: string; maxDraws: number }>({ playerName: '', maxDraws: 1 })
 
   const garaponsLoading = ref(false)
   const detailLoading = ref(false)
@@ -112,7 +112,7 @@ export const useGaraponsStore = defineStore('garapons', () => {
   }
 
   function resetPlayerAdd(): void {
-    playerAdd.value = { playerName: '', maxDraws: 5 }
+    playerAdd.value = { playerName: '', maxDraws: 1 }
   }
 
   /** Loads the reusable grand-prize images (the "Garapon" category) for the picker. */
@@ -273,13 +273,15 @@ export const useGaraponsStore = defineStore('garapons', () => {
 
   async function deletePlayer(player: GaraponPlayer): Promise<void> {
     if (!selectedGarapon.value) return
-    if (
-      !(await ui.confirm(`Delete the drawing link for ${player.player_name}?`, {
-        title: 'Delete drawing link',
-        confirmText: 'Delete',
-      }))
-    )
-      return
+    // Deleting a link keeps its draws in the log (they detach, not delete), so
+    // reassure the admin when the player has already drawn.
+    const msg =
+      player.draws_used > 0
+        ? `Delete the drawing link for ${player.player_name}? Their ${player.draws_used} draw${
+            player.draws_used === 1 ? '' : 's'
+          } stay in the draw log.`
+        : `Delete the drawing link for ${player.player_name}?`
+    if (!(await ui.confirm(msg, { title: 'Delete drawing link', confirmText: 'Delete' }))) return
     try {
       await endpoints.garapons.deletePlayer(selectedGarapon.value.id, player.id)
       garaponPlayers.value = garaponPlayers.value.filter((p) => p.id !== player.id)

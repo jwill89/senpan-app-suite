@@ -59,17 +59,27 @@ describe('AdminSidebar', () => {
 
   it('shows every section for an admin, with the active section expanded', () => {
     const wrapper = mountAs(makeUser({ is_admin: true }))
-    // Bingo, Senpan Tea House, Festival, Atelier Yao, System.
-    expect(wrapper.findAll('.admin-nav-section')).toHaveLength(5)
+    // Bingo, Senpan Tea House, Festival, Atelier Yao, System, User Options.
+    expect(wrapper.findAll('.admin-nav-section')).toHaveLength(6)
     // admin.adminSection defaults to 'bingo', so Bingo starts expanded.
     expect(isExpanded(wrapper, 'Bingo')).toBe(true)
     expect(section(wrapper, 'Bingo').find('.admin-nav-items').isVisible()).toBe(true)
     expect(isExpanded(wrapper, 'System')).toBe(false)
     expect(section(wrapper, 'System').find('.admin-nav-items').isVisible()).toBe(false)
-    // The Festival section carries the single Garapon item.
-    const festivalItems = section(wrapper, 'Festival').findAll('.admin-nav-items button')
-    expect(festivalItems).toHaveLength(1)
-    expect(festivalItems[0].text()).toContain('Garapon')
+    // The Festival section carries Garapon + Raffles (Raffles moved here from Tea House).
+    const festivalText = section(wrapper, 'Festival')
+      .findAll('.admin-nav-items button')
+      .map((b) => b.text())
+    expect(festivalText).toHaveLength(2)
+    expect(festivalText.join(' ')).toContain('Garapon')
+    expect(festivalText.join(' ')).toContain('Raffles')
+    // The always-present User Options section carries Change Password + Logout.
+    const userText = section(wrapper, 'User Options')
+      .findAll('.admin-nav-items button')
+      .map((b) => b.text())
+      .join(' ')
+    expect(userText).toContain('Change Password')
+    expect(userText).toContain('Logout')
   })
 
   it('header click expands a section independently (others stay open) WITHOUT navigating', async () => {
@@ -109,11 +119,13 @@ describe('AdminSidebar', () => {
 
   it('hides sections the account cannot access any item in', () => {
     // A non-admin with only the Manage Cards permission sees just the Bingo
-    // section (and only its Cards item) — no empty Tea House / Atelier / System.
+    // section (and only its Cards item) — no empty Tea House / Atelier / System —
+    // plus the always-present User Options section.
     const wrapper = mountAs(makeUser({ permissions: ['bingo-cards'] }))
     const sections = wrapper.findAll('.admin-nav-section')
-    expect(sections).toHaveLength(1)
+    expect(sections).toHaveLength(2)
     expect(sections[0].find('.admin-nav-header').text()).toContain('Bingo')
+    expect(sections[1].find('.admin-nav-header').text()).toContain('User Options')
     const buttons = sections[0].findAll('.admin-nav-items button')
     expect(buttons).toHaveLength(1)
     expect(buttons[0].text()).toContain('Manage Cards')

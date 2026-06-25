@@ -77,8 +77,8 @@ function cancel(): void {
           <div class="prize-row prize-row-head text-dim text-xs">
             <span class="prize-grand-col">Grand</span>
             <span class="prize-name-col">Name</span>
-            <span class="prize-color-col">Ball</span>
-            <span class="prize-rate-col">Rate</span>
+            <span class="prize-color-col">Ball Color</span>
+            <span class="prize-rate-col">Draw Weight</span>
             <span class="prize-pct-col">Odds</span>
             <span class="prize-del-col"></span>
           </div>
@@ -165,39 +165,42 @@ function cancel(): void {
   display: flex;
   flex-direction: column;
   gap: 8px;
+  /* Scroll horizontally on very narrow screens rather than cramping columns. */
+  overflow-x: auto;
 }
+/* The header row and every field row use ONE shared grid template, so the column
+   headers line up exactly with the inputs below regardless of input intrinsic widths. */
 .prize-row {
-  display: flex;
+  display: grid;
+  /* Last track is wide enough for the small delete button so it doesn't overflow
+     and trigger the editor's horizontal scrollbar. */
+  grid-template-columns: 48px minmax(110px, 1fr) 76px 96px 56px 46px;
   align-items: center;
-  gap: 8px;
+  column-gap: 8px;
 }
 .prize-row-head {
   padding-bottom: 2px;
 }
+/* Let inputs shrink to their grid track instead of forcing the track wider. */
+.prize-row > span {
+  min-width: 0;
+}
 .prize-grand-col {
-  flex: 0 0 44px;
   text-align: center;
 }
-.prize-name-col {
-  flex: 2;
-  min-width: 120px;
-}
-.prize-color-col {
-  flex: 0 0 52px;
-}
-.prize-rate-col {
-  flex: 0 0 84px;
-}
 .prize-pct-col {
-  flex: 0 0 56px;
   text-align: right;
   font-size: 0.85rem;
 }
 .prize-del-col {
-  flex: 0 0 40px;
   text-align: right;
 }
-/* Native color input trimmed to a neat square swatch. */
+/* Text + number inputs fill their column for consistent alignment. */
+.prize-name-col input,
+.prize-rate-col input {
+  width: 100%;
+}
+/* Native color input trimmed to a neat swatch that fills its column. */
 .prize-color {
   width: 100%;
   height: 38px;

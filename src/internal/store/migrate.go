@@ -13,7 +13,7 @@ import (
 // PRAGMA user_version against this constant and runs only the migrations
 // needed to bring the database up to date. Bump this when adding a new
 // migration block.
-const schemaVersion = 35
+const schemaVersion = 36
 
 // ensureSchema reads the current PRAGMA user_version from the database and
 // applies any outstanding migrations to bring it up to schemaVersion.
@@ -234,6 +234,12 @@ func ensureSchema(db *sql.DB) error {
 
 	if version < 35 {
 		if err := migrateGarapons(db); err != nil {
+			return err
+		}
+	}
+
+	if version < 36 {
+		if err := migrateGaraponDrawKeepLogs(db); err != nil {
 			return err
 		}
 	}
@@ -1094,17 +1100,21 @@ const garaponPlayersTableSQL = `CREATE TABLE IF NOT EXISTS garapon_players (
 	FOREIGN KEY (garapon_id) REFERENCES garapons(id) ON DELETE CASCADE
 )`
 
+// player_id is nullable with ON DELETE SET NULL (not CASCADE): deleting a drawing
+// link detaches its draws but KEEPS them in the log (the draw snapshots
+// player_name/prize_name/ball_color, so the record survives). Deleting the whole
+// garapon still removes every draw via the garapon_id CASCADE.
 const garaponDrawsTableSQL = `CREATE TABLE IF NOT EXISTS garapon_draws (
 	id INTEGER PRIMARY KEY AUTOINCREMENT,
 	garapon_id INTEGER NOT NULL,
-	player_id INTEGER NOT NULL,
+	player_id INTEGER,
 	prize_id INTEGER NOT NULL DEFAULT 0,
 	player_name TEXT NOT NULL DEFAULT '',
 	prize_name TEXT NOT NULL DEFAULT '',
 	ball_color TEXT NOT NULL DEFAULT '',
 	drawn_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 	FOREIGN KEY (garapon_id) REFERENCES garapons(id) ON DELETE CASCADE,
-	FOREIGN KEY (player_id) REFERENCES garapon_players(id) ON DELETE CASCADE
+	FOREIGN KEY (player_id) REFERENCES garapon_players(id) ON DELETE SET NULL
 )`
 
 // migrateGarapons creates the Garapon tables (garapons + garapon_prizes +
@@ -1127,4 +1137,73 @@ func migrateGarapons(db *sql.DB) error {
 		}
 	}
 	return nil
+}
+
+// columnIsNotNull reports whether a table's column is declared NOT NULL, via
+// PRAGMA table_info. Used to detect the pre-v36 garapon_draws schema.
+func columnIsNotNull(db *sql.DB, table, column string) bool {
+	rows, err := db.Query(fmt.Sprintf("PRAGMA table_info(%s)", table))
+	if err != nil {
+		return false
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var cid int
+		var name, typ string
+		var notnull int
+		var dfltValue sql.NullString
+		var pk int
+		if err := rows.Scan(&cid, &name, &typ, &notnull, &dfltValue, &pk); err != nil {
+			return false
+		}
+		if name == column {
+			return notnull == 1
+		}
+	}
+	return false
+}
+
+// migrateGaraponDrawKeepLogs rebuilds garapon_draws so player_id is nullable with
+// ON DELETE SET NULL (was NOT NULL + CASCADE), so deleting a drawing link keeps
+// its draws in the log instead of wiping them. SQLite can't ALTER a foreign key,
+// so the table is rebuilt (copy → drop → rename) inside a transaction. Only runs
+// when the old schema is detected (player_id NOT NULL), so a fresh DB created with
+// the updated const — or a re-run — is a no-op. garapon_draws is a leaf table
+// (nothing references it), so the rebuild is foreign-key-safe.
+func migrateGaraponDrawKeepLogs(db *sql.DB) error {
+	if !tableExists(db, "garapon_draws") || !columnIsNotNull(db, "garapon_draws", "player_id") {
+		return nil
+	}
+	tx, err := db.Begin()
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	stmts := []string{
+		`CREATE TABLE garapon_draws_new (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			garapon_id INTEGER NOT NULL,
+			player_id INTEGER,
+			prize_id INTEGER NOT NULL DEFAULT 0,
+			player_name TEXT NOT NULL DEFAULT '',
+			prize_name TEXT NOT NULL DEFAULT '',
+			ball_color TEXT NOT NULL DEFAULT '',
+			drawn_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			FOREIGN KEY (garapon_id) REFERENCES garapons(id) ON DELETE CASCADE,
+			FOREIGN KEY (player_id) REFERENCES garapon_players(id) ON DELETE SET NULL
+		)`,
+		`INSERT INTO garapon_draws_new (id, garapon_id, player_id, prize_id, player_name, prize_name, ball_color, drawn_at)
+			SELECT id, garapon_id, player_id, prize_id, player_name, prize_name, ball_color, drawn_at FROM garapon_draws`,
+		`DROP TABLE garapon_draws`,
+		`ALTER TABLE garapon_draws_new RENAME TO garapon_draws`,
+		`CREATE INDEX IF NOT EXISTS idx_garapon_draws_garapon ON garapon_draws(garapon_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_garapon_draws_player ON garapon_draws(player_id)`,
+	}
+	for _, s := range stmts {
+		if _, err := tx.Exec(s); err != nil {
+			return fmt.Errorf("migrate garapon draws keep-logs: %w", err)
+		}
+	}
+	return tx.Commit()
 }

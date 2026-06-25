@@ -1,17 +1,19 @@
 <script setup lang="ts">
 /**
- * Admin Garapon manager (Festival → Garapon). One tab with three screens,
- * modeled on RafflesTab:
+ * Admin Garapon manager (Festival → Garapon). Screens:
  *
- *   - list: "Current Garapons" (open) as image cards, then a searchable +
- *     paginated "Closed Garapons" table.
- *   - detail: the selected garapon — prizes, a "Generate Drawing" form that
- *     issues per-player links, the drawing-links table (copy link / draw-gated
- *     delete / used-over-max), and the draw log. Open-only controls are gated by
- *     status so it doubles as the read-only closed view.
+ *   - list: "Current Garapons" (open) as image cards (with a card-level delete),
+ *     then a searchable + paginated "Closed Garapons" table.
+ *   - detail: the selected garapon — status/actions, grand-prize image, prizes —
+ *     plus links into the two sub-pages below (with live counts).
+ *   - links: "Generate Drawing" form (open garapons) + the per-player drawing
+ *     links as a searchable, paginated table.
+ *   - log: the draw log as a searchable, column-sortable, paginated table.
  *   - form: the create/edit form (GaraponFormTab), a Back sub-page.
  *
- * All state + actions come from the garapons store.
+ * Open-only controls (edit, generate) are gated by status, so the detail/links
+ * pages double as the read-only closed view. All state + actions come from the
+ * garapons store; the per-page search/sort/pagination is local client-side state.
  */
 import { computed, ref, watch } from 'vue'
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
@@ -31,16 +33,16 @@ import type { Garapon, GaraponPrize } from '@/types/api'
 
 const garapons = useGaraponsStore()
 
-type Screen = 'list' | 'detail' | 'form'
+type Screen = 'list' | 'detail' | 'links' | 'log' | 'form'
 const screen = ref<Screen>('list')
 
 const isOpen = computed(() => garapons.selectedGarapon?.status === 'open')
 
-// ── Closed-garapon table: client-side search + pagination ────────────────────
-const closedSearch = ref('')
-const closedPage = ref(1)
 const PER_PAGE = 10
 
+// ── Closed-garapon table (list screen): search + pagination ──────────────────
+const closedSearch = ref('')
+const closedPage = ref(1)
 const closedColumns: DataColumn[] = [
   { key: 'title', label: 'Title' },
   { key: 'players', label: 'Drawings', align: 'right' },
@@ -48,14 +50,6 @@ const closedColumns: DataColumn[] = [
   { key: 'created', label: 'Created' },
   { key: 'actions', label: '', align: 'right' },
 ]
-
-const playerColumns: DataColumn[] = [
-  { key: 'player', label: 'Player' },
-  { key: 'draws', label: 'Draws', align: 'center' },
-  { key: 'created', label: 'Created' },
-  { key: 'actions', label: '', align: 'right' },
-]
-
 const filteredClosed = computed(() => {
   const q = closedSearch.value.trim().toLowerCase()
   if (!q) return garapons.closedGarapons
@@ -69,6 +63,79 @@ const pagedClosed = computed(() => {
 watch(closedSearch, () => (closedPage.value = 1))
 watch(closedTotalPages, (n) => {
   if (closedPage.value > n) closedPage.value = n
+})
+
+// ── Drawing Links sub-page: search + pagination ──────────────────────────────
+const linkSearch = ref('')
+const linkPage = ref(1)
+const linkColumns: DataColumn[] = [
+  { key: 'player', label: 'Player' },
+  { key: 'draws', label: 'Draws', align: 'center' },
+  { key: 'created', label: 'Created' },
+  { key: 'actions', label: '', align: 'right' },
+]
+const filteredLinks = computed(() => {
+  const q = linkSearch.value.trim().toLowerCase()
+  if (!q) return garapons.garaponPlayers
+  return garapons.garaponPlayers.filter((p) => p.player_name.toLowerCase().includes(q))
+})
+const linkTotalPages = computed(() => Math.max(1, Math.ceil(filteredLinks.value.length / PER_PAGE)))
+const pagedLinks = computed(() => {
+  const start = (linkPage.value - 1) * PER_PAGE
+  return filteredLinks.value.slice(start, start + PER_PAGE)
+})
+watch(linkSearch, () => (linkPage.value = 1))
+watch(linkTotalPages, (n) => {
+  if (linkPage.value > n) linkPage.value = n
+})
+
+// ── Draw Log sub-page: search + column sort + pagination ─────────────────────
+const logSearch = ref('')
+const logPage = ref(1)
+const logSortKey = ref<string>('drawn_at')
+const logSortDir = ref<'asc' | 'desc'>('desc')
+const logColumns: DataColumn[] = [
+  { key: 'player_name', label: 'Player', sortable: true },
+  { key: 'prize_name', label: 'Prize', sortable: true },
+  { key: 'drawn_at', label: 'When', sortable: true, align: 'right' },
+]
+/** Toggle/cycle the draw-log sort on a column header click. */
+function setLogSort(key: string): void {
+  if (logSortKey.value === key) {
+    logSortDir.value = logSortDir.value === 'asc' ? 'desc' : 'asc'
+  } else {
+    logSortKey.value = key
+    logSortDir.value = 'asc'
+  }
+}
+const filteredLog = computed(() => {
+  const q = logSearch.value.trim().toLowerCase()
+  if (!q) return garapons.garaponDraws
+  return garapons.garaponDraws.filter(
+    (d) => d.player_name.toLowerCase().includes(q) || d.prize_name.toLowerCase().includes(q),
+  )
+})
+const sortedLog = computed(() => {
+  const key = logSortKey.value
+  const dir = logSortDir.value === 'asc' ? 1 : -1
+  // Copy before sorting so the store array isn't mutated. Timestamps are stored
+  // in a fixed sortable format, so a numeric-aware string compare orders all
+  // three columns correctly.
+  return [...filteredLog.value].sort((a, b) => {
+    const av = String((a as Record<string, unknown>)[key] ?? '')
+    const bv = String((b as Record<string, unknown>)[key] ?? '')
+    return av.localeCompare(bv, undefined, { numeric: true }) * dir
+  })
+})
+const logTotalPages = computed(() => Math.max(1, Math.ceil(sortedLog.value.length / PER_PAGE)))
+const pagedLog = computed(() => {
+  const start = (logPage.value - 1) * PER_PAGE
+  return sortedLog.value.slice(start, start + PER_PAGE)
+})
+watch(logSearch, () => (logPage.value = 1))
+watch([logSortKey, logSortDir], () => (logPage.value = 1))
+watch(logTotalPages, (n) => {
+  if (logPage.value > n) logPage.value = n
 })
 
 // ── Display helpers ──────────────────────────────────────────────────────────
@@ -89,12 +156,31 @@ function created(ts: string): string {
 }
 
 // ── Navigation ───────────────────────────────────────────────────────────────
+/** Reset the per-sub-page search/sort/pagination when opening a garapon. */
+function resetSubPages(): void {
+  linkSearch.value = ''
+  linkPage.value = 1
+  logSearch.value = ''
+  logPage.value = 1
+  logSortKey.value = 'drawn_at'
+  logSortDir.value = 'desc'
+}
 function openNew(): void {
   garapons.newGaraponForm()
   screen.value = 'form'
 }
 function openGarapon(g: Garapon): void {
   garapons.viewGarapon(g)
+  resetSubPages()
+  screen.value = 'detail'
+}
+function openLinks(): void {
+  screen.value = 'links'
+}
+function openLog(): void {
+  screen.value = 'log'
+}
+function backToDetail(): void {
   screen.value = 'detail'
 }
 function editSelected(): void {
@@ -137,6 +223,16 @@ function toggleClosed(): void {
         </span>
       </SubPageHeader>
       <div class="flex-toolbar flex-end mb-16">
+        <button class="btn-neutral btn-sm" @click="openLinks">
+          <font-awesome-icon :icon="['fad', 'link']" /> Drawing Links ({{
+            garapons.garaponPlayers.length
+          }})
+        </button>
+        <button class="btn-neutral btn-sm" @click="openLog">
+          <font-awesome-icon :icon="['fad', 'clipboard-list']" /> Draw Log ({{
+            garapons.garaponDraws.length
+          }})
+        </button>
         <button v-if="isOpen" class="btn-confirm btn-sm" @click="editSelected">
           <font-awesome-icon :icon="['fas', 'pen-to-square']" /> Edit
         </button>
@@ -159,16 +255,14 @@ function toggleClosed(): void {
       </div>
 
       <!-- Prizes -->
-      <h3 class="section-heading mt-8">
-        <font-awesome-icon :icon="['fad', 'gift']" /> Prizes
-      </h3>
+      <h3 class="section-heading mt-8"><font-awesome-icon :icon="['fad', 'gift']" /> Prizes</h3>
       <div class="garapon-table-wrap mb-16">
         <table class="data-table">
           <thead>
             <tr>
               <th>Prize</th>
-              <th class="ta-center">Ball</th>
-              <th class="ta-right">Rate</th>
+              <th class="ta-center">Ball Color</th>
+              <th class="ta-right">Draw Weight</th>
               <th class="ta-right">Odds</th>
             </tr>
           </thead>
@@ -189,6 +283,15 @@ function toggleClosed(): void {
           </tbody>
         </table>
       </div>
+
+    </AdminPanel>
+
+    <!-- ── Drawing Links sub-page ──────────────────────────────────────────────── -->
+    <AdminPanel v-else-if="screen === 'links' && garapons.selectedGarapon">
+      <SubPageHeader @back="backToDetail">
+        <font-awesome-icon :icon="['fad', 'link']" /> Drawing Links —
+        {{ garapons.selectedGarapon.title }}
+      </SubPageHeader>
 
       <!-- Generate a drawing (open only) -->
       <div v-if="isOpen" class="entry-add mb-16">
@@ -225,70 +328,114 @@ function toggleClosed(): void {
         </div>
       </div>
 
-      <!-- Drawing links -->
-      <h3 class="section-heading mt-8">
-        <font-awesome-icon :icon="['fad', 'link']" /> Drawing Links ({{ garapons.garaponPlayers.length }})
-      </h3>
-      <DataTable
-        v-if="garapons.garaponPlayers.length"
-        :columns="playerColumns"
-        :rows="garapons.garaponPlayers"
-        row-key="id"
-      >
-        <template #cell-player="{ row }">{{ row.player_name }}</template>
-        <template #cell-draws="{ row }">{{ row.draws_used }}/{{ row.max_draws }}</template>
-        <template #cell-created="{ row }">
-          <span class="text-sm">{{ created(row.created_at) }}</span>
-        </template>
-        <template #cell-actions="{ row }">
-          <div class="row-actions">
-            <button
-              class="btn-view btn-sm"
-              aria-label="Copy link"
-              title="Copy link"
-              @click="garapons.copyPlayerLink(row)"
-            >
-              <font-awesome-icon :icon="['fas', 'link']" />
-            </button>
-            <button
-              class="btn-danger btn-sm"
-              :disabled="row.draws_used > 0"
-              :aria-label="row.draws_used > 0 ? 'Cannot delete — player has drawn' : 'Delete'"
-              :title="row.draws_used > 0 ? 'Player has already drawn' : 'Delete'"
-              @click="garapons.deletePlayer(row)"
-            >
-              <font-awesome-icon :icon="['fas', 'trash']" />
-            </button>
-          </div>
-        </template>
-      </DataTable>
+      <!-- Links table (searchable + paginated) -->
+      <template v-if="garapons.garaponPlayers.length">
+        <div class="manager-toolbar">
+          <SearchInput
+            v-model="linkSearch"
+            placeholder="Search by player…"
+            aria-label="Search drawing links"
+          />
+          <span class="text-dim text-xs push-right">
+            {{ filteredLinks.length }} link{{ filteredLinks.length === 1 ? '' : 's' }}
+          </span>
+        </div>
+        <DataTable :columns="linkColumns" :rows="pagedLinks" row-key="id">
+          <template #cell-player="{ row }">{{ row.player_name }}</template>
+          <template #cell-draws="{ row }">{{ row.draws_used }}/{{ row.max_draws }}</template>
+          <template #cell-created="{ row }">
+            <span class="text-sm">{{ created(row.created_at) }}</span>
+          </template>
+          <template #cell-actions="{ row }">
+            <div class="row-actions">
+              <button
+                class="btn-view btn-sm"
+                aria-label="Copy link"
+                title="Copy link"
+                @click="garapons.copyPlayerLink(row)"
+              >
+                <font-awesome-icon :icon="['fas', 'link']" />
+              </button>
+              <button
+                class="btn-danger btn-sm"
+                :disabled="row.draws_used > 0 && isOpen"
+                :aria-label="
+                  row.draws_used > 0 && isOpen
+                    ? 'Cannot delete — player has drawn (garapon is open)'
+                    : 'Delete drawing link'
+                "
+                :title="
+                  row.draws_used > 0 && isOpen
+                    ? 'Player has already drawn — close the garapon to delete this link (its draws stay in the log)'
+                    : 'Delete drawing link'
+                "
+                @click="garapons.deletePlayer(row)"
+              >
+                <font-awesome-icon :icon="['fas', 'trash']" />
+              </button>
+            </div>
+          </template>
+          <template #empty>
+            <EmptyState text="No drawing links match your search." />
+          </template>
+        </DataTable>
+        <PaginationBar
+          v-if="linkTotalPages > 1"
+          class="mt-12"
+          :page="linkPage"
+          :total-pages="linkTotalPages"
+          @go="(p: number) => (linkPage = p)"
+        />
+      </template>
       <EmptyState v-else text="No drawing links yet." />
+    </AdminPanel>
 
-      <!-- Draw log -->
-      <h3 class="section-heading mt-16">
-        <font-awesome-icon :icon="['fad', 'clipboard-list']" /> Draw Log ({{ garapons.garaponDraws.length }})
-      </h3>
-      <div v-if="garapons.garaponDraws.length" class="garapon-table-wrap">
-        <table class="data-table">
-          <thead>
-            <tr>
-              <th>Player</th>
-              <th>Prize</th>
-              <th class="ta-right">When</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="d in garapons.garaponDraws" :key="d.id">
-              <td>{{ d.player_name }}</td>
-              <td>
-                <span class="ball-swatch ball-swatch-sm" :style="{ background: d.ball_color }"></span>
-                {{ d.prize_name }}
-              </td>
-              <td class="ta-right text-sm text-dim">{{ created(d.drawn_at) }}</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
+    <!-- ── Draw Log sub-page ───────────────────────────────────────────────────── -->
+    <AdminPanel v-else-if="screen === 'log' && garapons.selectedGarapon">
+      <SubPageHeader @back="backToDetail">
+        <font-awesome-icon :icon="['fad', 'clipboard-list']" /> Draw Log —
+        {{ garapons.selectedGarapon.title }}
+      </SubPageHeader>
+
+      <template v-if="garapons.garaponDraws.length">
+        <div class="manager-toolbar">
+          <SearchInput
+            v-model="logSearch"
+            placeholder="Search by player or prize…"
+            aria-label="Search draw log"
+          />
+          <span class="text-dim text-xs push-right">
+            {{ filteredLog.length }} draw{{ filteredLog.length === 1 ? '' : 's' }}
+          </span>
+        </div>
+        <DataTable
+          :columns="logColumns"
+          :rows="pagedLog"
+          row-key="id"
+          :sort-key="logSortKey"
+          :sort-dir="logSortDir"
+          @sort="setLogSort"
+        >
+          <template #cell-player_name="{ row }">{{ row.player_name }}</template>
+          <template #cell-prize_name="{ row }">
+            <span class="ball-swatch ball-swatch-sm" :style="{ background: row.ball_color }"></span>
+            {{ row.prize_name }}
+          </template>
+          <template #cell-drawn_at="{ row }">
+            <span class="text-sm text-dim">{{ created(row.drawn_at) }}</span>
+          </template>
+          <template #empty>
+            <EmptyState text="No draws match your search." />
+          </template>
+        </DataTable>
+        <PaginationBar
+          v-if="logTotalPages > 1"
+          class="mt-12"
+          :page="logPage"
+          :total-pages="logTotalPages"
+          @go="(p: number) => (logPage = p)"
+        />
+      </template>
       <EmptyState v-else text="No draws yet." />
     </AdminPanel>
 
@@ -329,6 +476,17 @@ function toggleClosed(): void {
                 {{ g.player_count || 0 }} drawing{{ g.player_count === 1 ? '' : 's' }} ·
                 {{ g.draw_count || 0 }} draw{{ g.draw_count === 1 ? '' : 's' }}
               </p>
+              <!-- @click.stop so deleting doesn't also open the detail view. -->
+              <div class="garapon-card-actions">
+                <button
+                  class="btn-danger btn-sm"
+                  aria-label="Delete garapon"
+                  title="Delete garapon and all its links and results"
+                  @click.stop="garapons.deleteGarapon(g.id)"
+                >
+                  <font-awesome-icon :icon="['fas', 'trash']" /> Delete
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -400,6 +558,12 @@ function toggleClosed(): void {
 }
 .garapon-table-wrap {
   overflow-x: auto;
+}
+/* List-level delete on a Current Garapons card. */
+.garapon-card-actions {
+  margin-top: 10px;
+  display: flex;
+  justify-content: flex-end;
 }
 /* A round colored chip standing in for a Garapon ball. */
 .ball-swatch {

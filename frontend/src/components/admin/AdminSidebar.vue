@@ -14,7 +14,7 @@
  * the sidebar's appearance under existing themes. The minor RouterLink perks
  * (middle-click / open-in-new-tab) aren't worth that theme-fidelity cost here.
  */
-import { computed, reactive, watch } from 'vue'
+import { computed, reactive, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { adminTabRouteName } from '@/router'
 import { useAdminStore, type AdminSection, type AdminTab } from '@/stores/admin'
@@ -30,6 +30,12 @@ const auth = useAuthStore()
 const game = useGameStore()
 const cards = useCardsStore()
 const raffles = useRafflesStore()
+
+// Change Password / Logout are actions, not navigation: the sidebar emits them so
+// the admin shell (which owns the change-password modal + session) handles them.
+const emit = defineEmits<{ 'change-password': []; logout: [] }>()
+// "User Options" isn't tied to a route/tab, so it tracks its own accordion state.
+const userOptionsOpen = ref(false)
 
 /** Whether the current account may access a page (admins → everything). */
 function can(key: string): boolean {
@@ -47,11 +53,11 @@ const showBingo = computed(() =>
   ['bingo-game', 'bingo-cards', 'bingo-winners-log', 'bingo-patterns', 'bingo-presets'].some(can),
 )
 const showTeahouse = computed(() =>
-  ['teahouse-announcements', 'teahouse-raffles', ...BOOK_CLUBS.map((c) => `bookclub-${c.slug}`)].some(
-    can,
-  ),
+  ['teahouse-announcements', ...BOOK_CLUBS.map((c) => `bookclub-${c.slug}`)].some(can),
 )
-const showFestival = computed(() => can('festival-garapon'))
+// Festival now also hosts Raffles (moved out of Senpan Tea House). The Raffles
+// page keeps its `teahouse-raffles` permission/route id; only its placement moved.
+const showFestival = computed(() => ['festival-garapon', 'teahouse-raffles'].some(can))
 const showAtelier = computed(() => ['atelier-fonts', 'atelier-carrd'].some(can))
 const showSystem = computed(
   () => auth.isAdmin || ['system-settings', 'system-themes', 'system-images'].some(can),
@@ -163,16 +169,6 @@ function toggleSection(section: AdminSection): void {
           <font-awesome-icon :icon="['fad', 'megaphone']" /> Announcements
         </button>
         <button
-          v-if="can('teahouse-raffles')"
-          :class="{ active: admin.adminTab === 'teahouse-raffles' }"
-          @click="go('teahouse-raffles')"
-        >
-          <font-awesome-icon :icon="['fad', 'ticket']" /> Raffles
-          <span v-if="raffles.openRaffles.length" class="nav-count">
-            ({{ raffles.openRaffles.length }})
-          </span>
-        </button>
-        <button
           v-for="club in visibleClubs"
           :key="club.slug"
           :class="{ active: admin.adminTab === `bookclub-${club.slug}` }"
@@ -200,6 +196,16 @@ function toggleSection(section: AdminSection): void {
           @click="go('festival-garapon')"
         >
           <font-awesome-icon :icon="['fad', 'ferris-wheel']" /> Garapon
+        </button>
+        <button
+          v-if="can('teahouse-raffles')"
+          :class="{ active: admin.adminTab === 'teahouse-raffles' }"
+          @click="go('teahouse-raffles')"
+        >
+          <font-awesome-icon :icon="['fad', 'ticket']" /> Raffles
+          <span v-if="raffles.openRaffles.length" class="nav-count">
+            ({{ raffles.openRaffles.length }})
+          </span>
         </button>
       </div>
     </div>
@@ -270,6 +276,25 @@ function toggleSection(section: AdminSection): void {
           @click="go('system-users')"
         >
           <font-awesome-icon :icon="['fad', 'users-gear']" /> Users
+        </button>
+      </div>
+    </div>
+    <!-- User Options (Change Password / Logout) — actions, not navigation. -->
+    <div class="admin-nav-section">
+      <div
+        class="admin-nav-header"
+        :class="{ open: userOptionsOpen }"
+        @click="userOptionsOpen = !userOptionsOpen"
+      >
+        <span><font-awesome-icon :icon="['fad', 'user']" /> User Options</span>
+        <span class="nav-chevron">{{ userOptionsOpen ? '▾' : '▸' }}</span>
+      </div>
+      <div v-show="userOptionsOpen" class="admin-nav-items">
+        <button @click="emit('change-password')">
+          <font-awesome-icon :icon="['fad', 'lock']" /> Change Password
+        </button>
+        <button @click="emit('logout')">
+          <font-awesome-icon :icon="['fas', 'arrow-right-from-bracket']" /> Logout
         </button>
       </div>
     </div>

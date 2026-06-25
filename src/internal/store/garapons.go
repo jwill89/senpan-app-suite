@@ -267,13 +267,21 @@ func (s *Store) CreateGaraponPlayer(garaponID int64, name string, maxDraws int) 
 	return s.GetGaraponPlayerByID(id)
 }
 
-// DeleteGaraponPlayer removes a drawing link only if the player has not drawn yet
-// (the NOT EXISTS guard). Returns true when a row was actually deleted; false
-// means either the link doesn't exist or the player has already drawn — the
-// handler checks which to return a precise message.
-func (s *Store) DeleteGaraponPlayer(playerID int64) (bool, error) {
-	res, err := s.db.Exec(`DELETE FROM garapon_players WHERE id = ?
-		AND NOT EXISTS (SELECT 1 FROM garapon_draws d WHERE d.player_id = ?)`, playerID, playerID)
+// DeleteGaraponPlayer removes a drawing link. With force=false (garapon still
+// open) it only deletes links that have not drawn yet — the NOT EXISTS guard.
+// With force=true (garapon closed) it deletes regardless; the player's draws are
+// KEPT in the log because garapon_draws.player_id is ON DELETE SET NULL (they
+// detach rather than cascade-delete). Returns whether a row was deleted (false in
+// the non-force case can also mean "blocked because the player has drawn").
+func (s *Store) DeleteGaraponPlayer(playerID int64, force bool) (bool, error) {
+	var res sql.Result
+	var err error
+	if force {
+		res, err = s.db.Exec(`DELETE FROM garapon_players WHERE id = ?`, playerID)
+	} else {
+		res, err = s.db.Exec(`DELETE FROM garapon_players WHERE id = ?
+			AND NOT EXISTS (SELECT 1 FROM garapon_draws d WHERE d.player_id = ?)`, playerID, playerID)
+	}
 	if err != nil {
 		return false, err
 	}
@@ -286,15 +294,17 @@ func (s *Store) DeleteGaraponPlayer(playerID int64) (bool, error) {
 // GetGaraponDraw returns a single draw row by id (nil if not found).
 func (s *Store) GetGaraponDraw(id int64) (*model.GaraponDraw, error) {
 	var d model.GaraponDraw
+	var playerID sql.NullInt64 // null once the link is deleted (log is kept)
 	err := s.db.QueryRow(`SELECT id, garapon_id, player_id, prize_id, player_name, prize_name, ball_color, drawn_at
 		FROM garapon_draws WHERE id = ?`, id).
-		Scan(&d.ID, &d.GaraponID, &d.PlayerID, &d.PrizeID, &d.PlayerName, &d.PrizeName, &d.BallColor, &d.DrawnAt)
+		Scan(&d.ID, &d.GaraponID, &playerID, &d.PrizeID, &d.PlayerName, &d.PrizeName, &d.BallColor, &d.DrawnAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
 	}
 	if err != nil {
 		return nil, err
 	}
+	d.PlayerID = playerID.Int64
 	return &d, nil
 }
 
@@ -309,9 +319,11 @@ func (s *Store) scanGaraponDraws(query string, arg any) ([]model.GaraponDraw, er
 	draws := make([]model.GaraponDraw, 0)
 	for rows.Next() {
 		var d model.GaraponDraw
-		if err := rows.Scan(&d.ID, &d.GaraponID, &d.PlayerID, &d.PrizeID, &d.PlayerName, &d.PrizeName, &d.BallColor, &d.DrawnAt); err != nil {
+		var playerID sql.NullInt64 // null once the link is deleted (log is kept)
+		if err := rows.Scan(&d.ID, &d.GaraponID, &playerID, &d.PrizeID, &d.PlayerName, &d.PrizeName, &d.BallColor, &d.DrawnAt); err != nil {
 			return nil, err
 		}
+		d.PlayerID = playerID.Int64
 		draws = append(draws, d)
 	}
 	return draws, rows.Err()

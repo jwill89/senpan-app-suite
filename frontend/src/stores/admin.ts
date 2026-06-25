@@ -72,11 +72,15 @@ export const useAdminStore = defineStore('admin', () => {
    */
   function setTabFromRoute(tab: AdminTab): void {
     if (tab.startsWith('bingo-')) adminSection.value = 'bingo'
-    // The Senpan Tea House section holds Announcement Management + Raffles
-    // (teahouse-*) and the book clubs (bookclub-*).
+    // Raffles moved under Festival (alongside Garapon); it keeps its
+    // `teahouse-raffles` id, so map it to 'festival' before the generic
+    // teahouse- check below.
+    else if (tab === 'teahouse-raffles' || tab.startsWith('festival-'))
+      adminSection.value = 'festival'
+    // The Senpan Tea House section holds Announcement Management and the book
+    // clubs (bookclub-*).
     else if (tab.startsWith('teahouse-') || tab.startsWith('bookclub-'))
       adminSection.value = 'teahouse'
-    else if (tab.startsWith('festival-')) adminSection.value = 'festival'
     else if (tab.startsWith('atelier-')) adminSection.value = 'atelier'
     else if (tab.startsWith('system-')) adminSection.value = 'system'
     adminTab.value = tab

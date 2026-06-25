@@ -108,6 +108,12 @@ function openChangePw(): void {
   showChangePw.value = true
 }
 
+/** Sidebar "Change Password" → close the mobile drawer, then open the modal. */
+function onChangePassword(): void {
+  navOpen.value = false
+  openChangePw()
+}
+
 async function submitChangePw(): Promise<void> {
   pwError.value = ''
   if (newPw.value.length < 8) {
@@ -150,12 +156,6 @@ async function submitChangePw(): Promise<void> {
         <span v-if="auth.user" class="topbar-user text-dim">
           <font-awesome-icon :icon="['fad', 'user']" /> {{ auth.user.username }}
         </span>
-        <button class="btn-neutral btn-sm" @click="openChangePw">
-          <font-awesome-icon :icon="['fas', 'lock']" /> Change Password
-        </button>
-        <button class="btn-neutral btn-sm" @click="logout">
-          <font-awesome-icon :icon="['fas', 'arrow-right-from-bracket']" /> Logout
-        </button>
       </div>
     </div>
 
@@ -163,7 +163,11 @@ async function submitChangePw(): Promise<void> {
       <!-- Backdrop behind the mobile drawer; only exists in the narrow drawer mode. -->
       <div v-if="isNarrow && navOpen" class="admin-nav-backdrop" @click="navOpen = false"></div>
 
-      <AdminSidebar :class="{ 'is-open': navOpen }" />
+      <AdminSidebar
+        :class="{ 'is-open': navOpen }"
+        @change-password="onChangePassword"
+        @logout="logout"
+      />
 
       <div class="admin-content">
         <div class="admin-content-inner content-container">

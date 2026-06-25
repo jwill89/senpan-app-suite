@@ -127,5 +127,83 @@ export const useAdminStore = defineStore('admin', () => {
       loadFresh('presets', () => presets.loadPresets())
   }
 
-  return { adminTab, adminSection, setTabFromRoute }
+  /**
+   * Apply a thin "resource changed" signal pushed when another admin mutated an
+   * admin CRUD resource (see the WebSocket `resource_changed` message). If this
+   * admin is currently viewing that resource, refetch it now (the REST load
+   * re-applies the per-feature permission guard); otherwise just drop its
+   * freshness stamp so the next navigation refetches — closing the gap where a
+   * change made while you were on another tab wouldn't show on a quick return.
+   *
+   * Refetching reuses the normal list/detail loaders, which only show a spinner
+   * when there's no data yet, so a live refresh swaps rows in without a flash. The
+   * editor forms live in separate store state, so a background reload never
+   * clobbers an in-progress edit. Resources with their own realtime events (the
+   * live game, cards, patterns, theme, settings) are handled in useWebSocket and
+   * never reach here.
+   */
+  function refreshResource(resource: string): void {
+    const tab = adminTab.value
+
+    // When viewing `key`'s tab, reload now and re-stamp freshness; otherwise
+    // invalidate so the tab refetches when next entered.
+    function apply(key: string, viewing: boolean, reload: () => void): void {
+      if (viewing) {
+        reload()
+        tabData.touch(key)
+      } else {
+        tabData.invalidate(key)
+      }
+    }
+
+    switch (resource) {
+      case 'garapons':
+        apply('garapons', tab === 'festival-garapon', () => {
+          const garapons = useGaraponsStore()
+          garapons.loadGarapons()
+          if (garapons.selectedGarapon) garapons.loadGaraponDetail(garapons.selectedGarapon.id)
+        })
+        break
+      case 'raffles':
+        apply('raffles', tab === 'teahouse-raffles', () => {
+          const raffles = useRafflesStore()
+          raffles.loadRaffles()
+          if (raffles.selectedRaffle) raffles.loadRaffleDetail(raffles.selectedRaffle.id)
+        })
+        break
+      case 'announcements':
+        apply('announcements', tab === 'teahouse-announcements', () =>
+          useAnnouncementsStore().load(),
+        )
+        break
+      case 'presets':
+        apply('presets', tab === 'bingo-presets' || tab === 'bingo-game', () =>
+          usePresetsStore().loadPresets(),
+        )
+        break
+      case 'winners-log':
+        apply('winners-log', tab === 'bingo-winners-log', () => useGameStore().loadWinnersLog())
+        break
+      case 'users':
+        apply('users', tab === 'system-users', () => useUsersStore().loadUsers())
+        break
+      case 'fonts':
+        apply('fonts', tab === 'atelier-fonts', () => useFontsStore().loadFonts())
+        break
+      case 'carrd':
+        apply('carrd', tab === 'atelier-carrd', () => useCarrdStore().loadProjects())
+        break
+      case 'images':
+        apply('images', tab === 'system-images', () => useImagesStore().loadCategories())
+        break
+      case 'bookclub':
+        // Book club lists use the store's own per-club freshness, so route the
+        // signal through it (the signal isn't club-specific, so it acts on the
+        // currently-open club — cross-club staleness self-heals via the TTL).
+        useBookclubStore().applyExternalChange(tab.startsWith('bookclub-'))
+        break
+    }
+  }
+
+  return { adminTab, adminSection, setTabFromRoute, refreshResource }
 })

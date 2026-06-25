@@ -96,6 +96,24 @@ export const useBookclubStore = defineStore('bookclub', () => {
     }
   }
 
+  /**
+   * Apply a live "bookclub changed" signal (another admin edited a reading list
+   * or its items). If a book-club tab is open, refetch the open club's lists now
+   * (and the open list's detail); otherwise drop the freshness stamp so re-entry
+   * refetches. The signal isn't club-specific, so it acts on the active club —
+   * any other club's staleness self-heals via the freshness TTL.
+   */
+  function applyExternalChange(viewing: boolean): void {
+    const key = `${activeClubSlug.value}:lists`
+    if (viewing) {
+      loadLists()
+      clubFresh.touch(key)
+      if (selectedList.value) loadListDetail(selectedList.value.id)
+    } else {
+      clubFresh.invalidate(key)
+    }
+  }
+
   async function loadLists(): Promise<void> {
     listsLoading.value = true
     try {
@@ -357,6 +375,7 @@ export const useBookclubStore = defineStore('bookclub', () => {
     looking,
     publishing,
     openClub,
+    applyExternalChange,
     loadLists,
     loadListDetail,
     selectList,

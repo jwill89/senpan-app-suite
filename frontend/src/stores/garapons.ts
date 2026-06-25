@@ -261,11 +261,25 @@ export const useGaraponsStore = defineStore('garapons', () => {
     const max = Math.max(1, Math.floor(Number(playerAdd.value.maxDraws) || 1))
     creatingPlayer.value = true
     try {
-      await endpoints.garapons.createPlayer(selectedGarapon.value.id, {
+      const data = await endpoints.garapons.createPlayer(selectedGarapon.value.id, {
         player_name: name,
         max_draws: max,
       })
-      ui.notify('Drawing link created', 'success')
+      // Copy the new link straight to the clipboard so the admin can paste it to
+      // the player. The URL is too long for the toast, so we only confirm the
+      // action; do the copy before the detail reload to stay within the click's
+      // activation window, and fall back gracefully if the browser blocks it.
+      let copied = false
+      try {
+        await navigator.clipboard.writeText(playerLinkUrl(data.player))
+        copied = true
+      } catch {
+        /* clipboard blocked (insecure context / permissions) — the per-row Copy link button still works */
+      }
+      ui.notify(
+        copied ? 'Drawing link created and copied to clipboard' : 'Drawing link created',
+        'success',
+      )
       resetPlayerAdd()
       await loadGaraponDetail(selectedGarapon.value.id)
     } catch (e) {
@@ -295,9 +309,14 @@ export const useGaraponsStore = defineStore('garapons', () => {
     }
   }
 
+  /** A player's full public drawing link (origin + tokenized path). */
+  function playerLinkUrl(player: GaraponPlayer): string {
+    return `${window.location.origin}/garapon/${player.token}`
+  }
+
   /** Builds a player's full public link and copies it to the clipboard. */
   async function copyPlayerLink(player: GaraponPlayer): Promise<void> {
-    const url = `${window.location.origin}/garapon/${player.token}`
+    const url = playerLinkUrl(player)
     try {
       await navigator.clipboard.writeText(url)
       ui.notify('Link copied to clipboard', 'success')

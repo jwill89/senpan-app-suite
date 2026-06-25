@@ -83,6 +83,8 @@ const {
   reset: resetLinks,
 } = useDataTableView<GaraponPlayer>(() => garapons.garaponPlayers, {
   matches: (p, q) => p.player_name.toLowerCase().includes(q),
+  // Newest links first by default (a freshly generated link lands on top).
+  sort: { key: 'created_at', dir: 'desc' },
 })
 
 const logColumns: DataColumn[] = [

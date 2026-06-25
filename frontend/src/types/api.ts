@@ -610,3 +610,7 @@ export type WsMessage =
   | { type: 'settings_update'; app_title?: string; header_font?: string; uploaded_fonts?: string[] }
   | { type: 'halftime_minigame' }
   | { type: 'draw_delay_update'; delay: number }
+  // Thin "an admin resource changed" signal (no payload): an admin viewing that
+  // resource refetches it via REST. `resource` is a key like 'garapons',
+  // 'raffles', 'announcements', 'bookclub', 'presets', 'users', etc.
+  | { type: 'resource_changed'; resource: string }

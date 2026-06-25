@@ -226,6 +226,18 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	s.sessHandler.ServeHTTP(rw, r)
 	duration := time.Since(start)
 
+	// Live admin invalidation: after a successful admin-mutation POST, push a thin
+	// "resource changed" signal so any admin viewing that resource refetches it via
+	// REST (which re-applies the per-feature permission guard). The signal carries
+	// no data — see broadcastResourceChanged. Public/auth/self-service paths and the
+	// rich-realtime endpoints (game/cards/patterns/styles/settings, which emit their
+	// own targeted events) are excluded by adminMutationResource.
+	if r.Method == http.MethodPost && rw.status >= 200 && rw.status < 300 {
+		if resource, ok := adminMutationResource(r.URL.Path); ok {
+			s.broadcastResourceChanged(resource)
+		}
+	}
+
 	level := slog.LevelInfo
 	if rw.status >= 500 {
 		level = slog.LevelError
@@ -415,6 +427,61 @@ func (s *Server) requirePermission(w http.ResponseWriter, r *http.Request, perm 
 }
 
 // ── Broadcast helpers ───────────────────────────────────────────────────────
+
+// broadcastResourceChanged notifies all admin clients that a named admin resource
+// changed, so any admin currently viewing it refetches via REST. It deliberately
+// carries no payload: the refetch re-applies that feature's permission guard
+// (keeping authorization fresh, unlike a per-connection cached check) and keeps
+// the REST handler the single source of truth for the data's shape. Rich,
+// high-frequency streams (the bingo game, cards, patterns, theme, settings) emit
+// their own targeted broadcasts instead — see adminMutationResource.
+func (s *Server) broadcastResourceChanged(resource string) {
+	s.hub.BroadcastToAdmins(struct {
+		Type     string `json:"type"`
+		Resource string `json:"resource"`
+	}{Type: "resource_changed", Resource: resource})
+}
+
+// adminMutationResource maps a successful admin-mutation POST path to the frontend
+// resource key to refetch, returning ok=false when the path should emit no
+// invalidation. Only admin CRUD endpoints are listed; public, auth, self-service
+// (/api/account), and the rich-realtime endpoints are intentionally excluded (the
+// latter broadcast their own targeted events). Sub-paths carrying an {id} segment
+// are matched by their trailing component, so e.g. the public ".../enter" is
+// excluded while the admin ".../entries" is included.
+func adminMutationResource(path string) (string, bool) {
+	switch path {
+	case "/api/garapons":
+		return "garapons", true
+	case "/api/raffles":
+		return "raffles", true
+	case "/api/presets":
+		return "presets", true
+	case "/api/users":
+		return "users", true
+	case "/api/announcements", "/api/announcement-types", "/api/announcement-roles":
+		return "announcements", true
+	case "/api/reading-lists":
+		return "bookclub", true
+	case "/api/winners-log":
+		return "winners-log", true
+	case "/api/fonts", "/api/fonts/upload":
+		return "fonts", true
+	case "/api/carrd/projects", "/api/carrd/images", "/api/carrd/upload":
+		return "carrd", true
+	case "/api/images", "/api/images/upload", "/api/image-categories":
+		return "images", true
+	}
+	switch {
+	case strings.HasPrefix(path, "/api/garapons/") && strings.HasSuffix(path, "/players"):
+		return "garapons", true
+	case strings.HasPrefix(path, "/api/raffles/") && strings.HasSuffix(path, "/entries"):
+		return "raffles", true
+	case strings.HasPrefix(path, "/api/reading-lists/") && strings.HasSuffix(path, "/items"):
+		return "bookclub", true
+	}
+	return "", false
+}
 
 // cardEntry is the lightweight JSON shape for card lists.
 type cardEntry struct {

@@ -19,6 +19,7 @@ import { useGameStore } from '@/stores/game'
 import { usePlayerStore } from '@/stores/player'
 import { useCardsStore } from '@/stores/cards'
 import { usePatternsStore } from '@/stores/patterns'
+import { useAdminStore } from '@/stores/admin'
 import { endpoints } from '@/lib/endpoints'
 
 export function useWebSocket() {
@@ -29,6 +30,7 @@ export function useWebSocket() {
   const player = usePlayerStore()
   const cards = useCardsStore()
   const patterns = usePatternsStore()
+  const admin = useAdminStore()
 
   // Route-based context predicates (replace the old `ui.view === …` checks).
   const isPlayerView = (): boolean => router.currentRoute.value.name === 'player'
@@ -113,6 +115,12 @@ export function useWebSocket() {
           game.drawDelay = msg.delay
           app.settings.default_draw_delay = String(msg.delay)
         }
+        break
+      case 'resource_changed':
+        // An admin elsewhere mutated a CRUD resource: if we're viewing it, refetch
+        // it (the REST load re-applies our own permission guard); otherwise mark it
+        // stale so the next navigation refetches. See admin.refreshResource.
+        if (isAdminView()) admin.refreshResource(msg.resource)
         break
     }
   }

@@ -21,11 +21,10 @@
     "noFallthroughCasesInSwitch": true,
     "verbatimModuleSyntax": true,
 
-    /* Path alias */
-    "baseUrl": ".",
+    /* Path alias (resolved relative to this tsconfig; baseUrl is unneeded under
+       moduleResolution "bundler" and deprecated as of TS 6). */
     "paths": {
-      "@/*": ["./src/*"],
-      "@toast-ui/editor": ["./node_modules/@toast-ui/editor/types/index.d.ts"]
+      "@/*": ["./src/*"]
     }
   },
   "include": ["src/**/*.ts", "src/**/*.tsx", "src/**/*.vue", "env.d.ts"]

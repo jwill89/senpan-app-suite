@@ -42,7 +42,7 @@ gen-types:
 # ── Frontend: lint · types · tests · build ────────────────────────────────────
 frontend:
   stage: test
-  image: node:22
+  image: node:24
   needs:
     - gen-types
   cache:

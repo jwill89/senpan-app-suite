@@ -18,7 +18,7 @@ time, and can export their card as an image.
 
 ## Quick start
 
-**Prerequisites:** Node 22+ and Go (version per `src/go.mod`).
+**Prerequisites:** Node 24+ and Go (version per `src/go.mod`).
 
 ```bash
 # 1. Backend — run the API/WebSocket server on :8080

@@ -105,12 +105,9 @@ import {
 } from '@awesome.me/kit-46204fb6f1/icons/classic/solid'
 import { faDiscord } from '@fortawesome/free-brands-svg-icons'
 
-// The Pro kit ships icons typed against fontawesome-common-types v7 while the
-// SVG core here is v6; the runtime icon shape is identical (verified: prefixes
-// `fad`/`fas`, and core 6.x maps the `fa-duotone`/`fa-solid` classes → those
-// prefixes), so the v7→v6 IconDefinition mismatch is a types-only concern we
-// cast away.
-const icons = [
+// Kit icons, the standalone brand icon, and the SVG core are all on FontAwesome 7
+// now, so their IconDefinition types line up directly — no cast needed.
+const icons: IconDefinition[] = [
   // Duotone — headers, sidebar sections/nav, decorative.
   faAt,
   faBallot,
@@ -192,6 +189,6 @@ const icons = [
   faVolumeXmarkSolid,
   // Brands — social/external links.
   faDiscord,
-] as unknown as IconDefinition[]
+]
 
 library.add(...icons)

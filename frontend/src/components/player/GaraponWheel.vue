@@ -76,6 +76,9 @@ async function dropBall(color: string): Promise<void> {
     vibrate(40)
     return
   }
+  // Clear the previous round's fill:forwards animation — otherwise finished
+  // animations compose and the resting position drifts over many draws.
+  el.getAnimations().forEach((a) => a.cancel())
   const anim = el.animate(
     [
       { transform: 'translate(-4px, -200px) scale(0.9)' },

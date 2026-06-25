@@ -17,12 +17,18 @@ import type {
   GaraponForm,
   GaraponPlayer,
   GaraponPrize,
+  GaraponPrizeForm,
 } from '@/types/api'
 import { useUiStore } from './ui'
 import { useImagesStore, IMAGE_DIR_GARAPONS } from './images'
 
 /** A sensible default ball color for a fresh prize row (a festival gold). */
 const DEFAULT_BALL_COLOR = '#e5b53f'
+
+/** A fresh prize row for the editor (the first/grand row defaults to a higher weight). */
+function blankPrize(rate: number, isGrand = false): GaraponPrizeForm {
+  return { name: '', ball_color: DEFAULT_BALL_COLOR, rate, is_grand: isGrand }
+}
 
 export const useGaraponsStore = defineStore('garapons', () => {
   const ui = useUiStore()
@@ -133,7 +139,7 @@ export const useGaraponsStore = defineStore('garapons', () => {
       title: '',
       details: '',
       grand_prize_image: '',
-      prizes: [{ name: '', ball_color: DEFAULT_BALL_COLOR, rate: 50, is_grand: true }],
+      prizes: [blankPrize(50, true)],
     }
   }
 
@@ -151,9 +157,7 @@ export const useGaraponsStore = defineStore('garapons', () => {
       title: g.title,
       details: g.details,
       grand_prize_image: g.grand_prize_image,
-      prizes: prizes.length
-        ? prizes
-        : [{ name: '', ball_color: DEFAULT_BALL_COLOR, rate: 50, is_grand: true }],
+      prizes: prizes.length ? prizes : [blankPrize(50, true)],
     }
   }
 
@@ -163,7 +167,7 @@ export const useGaraponsStore = defineStore('garapons', () => {
 
   /** Adds a blank prize row to the form. */
   function addPrizeRow(): void {
-    garaponForm.value?.prizes.push({ name: '', ball_color: DEFAULT_BALL_COLOR, rate: 10, is_grand: false })
+    garaponForm.value?.prizes.push(blankPrize(10))
   }
 
   /** Removes a prize row; if it was the grand prize, promotes the first remaining row. */

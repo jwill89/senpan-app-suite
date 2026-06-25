@@ -15,7 +15,7 @@
  * pages double as the read-only closed view. All state + actions come from the
  * garapons store; the per-page search/sort/pagination is local client-side state.
  */
-import { computed, ref, watch } from 'vue'
+import { computed, ref } from 'vue'
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
 import AdminPanel from '@/components/common/ui/AdminPanel.vue'
 import ManagerView from '@/components/common/ui/ManagerView.vue'
@@ -25,11 +25,14 @@ import FormField from '@/components/common/ui/FormField.vue'
 import DataTable, { type DataColumn } from '@/components/common/ui/DataTable.vue'
 import PaginationBar from '@/components/common/ui/PaginationBar.vue'
 import EmptyState from '@/components/common/ui/EmptyState.vue'
+import BallSwatch from '@/components/common/ui/BallSwatch.vue'
 import GaraponFormTab from './GaraponFormTab.vue'
 import { useGaraponsStore } from '@/stores/garapons'
+import { useDataTableView } from '@/composables/useDataTableView'
+import { rateTotal, ratePct as normalizedPct } from '@/lib/garapon'
 import { assetUrl } from '@/lib/assets'
 import { formatServerTimestamp } from '@/lib/datetime'
-import type { Garapon, GaraponPrize } from '@/types/api'
+import type { Garapon, GaraponPrize, GaraponPlayer, GaraponDraw } from '@/types/api'
 
 const garapons = useGaraponsStore()
 
@@ -38,117 +41,78 @@ const screen = ref<Screen>('list')
 
 const isOpen = computed(() => garapons.selectedGarapon?.status === 'open')
 
-const PER_PAGE = 10
-
-// ── Closed-garapon table (list screen): search + pagination ──────────────────
-const closedSearch = ref('')
-const closedPage = ref(1)
+// Each admin table (closed garapons, drawing links, draw log) is the same
+// search + column-sort + paginate view, so useDataTableView owns that pipeline
+// and only the columns, match predicate, and starting sort differ here. Column
+// keys match the row fields so the generic sort reads them directly.
 const closedColumns: DataColumn[] = [
-  { key: 'title', label: 'Title' },
-  { key: 'players', label: 'Drawings', align: 'right' },
-  { key: 'draws', label: 'Draws', align: 'right' },
-  { key: 'created', label: 'Created' },
+  { key: 'title', label: 'Title', sortable: true },
+  { key: 'player_count', label: 'Drawings', align: 'right', sortable: true },
+  { key: 'draw_count', label: 'Draws', align: 'right', sortable: true },
+  { key: 'created_at', label: 'Created', sortable: true },
   { key: 'actions', label: '', align: 'right' },
 ]
-const filteredClosed = computed(() => {
-  const q = closedSearch.value.trim().toLowerCase()
-  if (!q) return garapons.closedGarapons
-  return garapons.closedGarapons.filter((g) => g.title.toLowerCase().includes(q))
-})
-const closedTotalPages = computed(() => Math.max(1, Math.ceil(filteredClosed.value.length / PER_PAGE)))
-const pagedClosed = computed(() => {
-  const start = (closedPage.value - 1) * PER_PAGE
-  return filteredClosed.value.slice(start, start + PER_PAGE)
-})
-watch(closedSearch, () => (closedPage.value = 1))
-watch(closedTotalPages, (n) => {
-  if (closedPage.value > n) closedPage.value = n
+const {
+  search: closedSearch,
+  page: closedPage,
+  totalPages: closedTotalPages,
+  paged: pagedClosed,
+  filtered: filteredClosed,
+  sortKey: closedSortKey,
+  sortDir: closedSortDir,
+  setSort: setClosedSort,
+} = useDataTableView<Garapon>(() => garapons.closedGarapons, {
+  matches: (g, q) => g.title.toLowerCase().includes(q),
 })
 
-// ── Drawing Links sub-page: search + pagination ──────────────────────────────
-const linkSearch = ref('')
-const linkPage = ref(1)
 const linkColumns: DataColumn[] = [
-  { key: 'player', label: 'Player' },
-  { key: 'draws', label: 'Draws', align: 'center' },
-  { key: 'created', label: 'Created' },
+  { key: 'player_name', label: 'Player', sortable: true },
+  { key: 'draws_used', label: 'Draws', align: 'center', sortable: true },
+  { key: 'created_at', label: 'Created', sortable: true },
   { key: 'actions', label: '', align: 'right' },
 ]
-const filteredLinks = computed(() => {
-  const q = linkSearch.value.trim().toLowerCase()
-  if (!q) return garapons.garaponPlayers
-  return garapons.garaponPlayers.filter((p) => p.player_name.toLowerCase().includes(q))
-})
-const linkTotalPages = computed(() => Math.max(1, Math.ceil(filteredLinks.value.length / PER_PAGE)))
-const pagedLinks = computed(() => {
-  const start = (linkPage.value - 1) * PER_PAGE
-  return filteredLinks.value.slice(start, start + PER_PAGE)
-})
-watch(linkSearch, () => (linkPage.value = 1))
-watch(linkTotalPages, (n) => {
-  if (linkPage.value > n) linkPage.value = n
+const {
+  search: linkSearch,
+  page: linkPage,
+  totalPages: linkTotalPages,
+  paged: pagedLinks,
+  filtered: filteredLinks,
+  sortKey: linkSortKey,
+  sortDir: linkSortDir,
+  setSort: setLinkSort,
+  reset: resetLinks,
+} = useDataTableView<GaraponPlayer>(() => garapons.garaponPlayers, {
+  matches: (p, q) => p.player_name.toLowerCase().includes(q),
 })
 
-// ── Draw Log sub-page: search + column sort + pagination ─────────────────────
-const logSearch = ref('')
-const logPage = ref(1)
-const logSortKey = ref<string>('drawn_at')
-const logSortDir = ref<'asc' | 'desc'>('desc')
 const logColumns: DataColumn[] = [
   { key: 'player_name', label: 'Player', sortable: true },
   { key: 'prize_name', label: 'Prize', sortable: true },
   { key: 'drawn_at', label: 'When', sortable: true, align: 'right' },
 ]
-/** Toggle/cycle the draw-log sort on a column header click. */
-function setLogSort(key: string): void {
-  if (logSortKey.value === key) {
-    logSortDir.value = logSortDir.value === 'asc' ? 'desc' : 'asc'
-  } else {
-    logSortKey.value = key
-    logSortDir.value = 'asc'
-  }
-}
-const filteredLog = computed(() => {
-  const q = logSearch.value.trim().toLowerCase()
-  if (!q) return garapons.garaponDraws
-  return garapons.garaponDraws.filter(
-    (d) => d.player_name.toLowerCase().includes(q) || d.prize_name.toLowerCase().includes(q),
-  )
-})
-const sortedLog = computed(() => {
-  const key = logSortKey.value
-  const dir = logSortDir.value === 'asc' ? 1 : -1
-  // Copy before sorting so the store array isn't mutated. Timestamps are stored
-  // in a fixed sortable format, so a numeric-aware string compare orders all
-  // three columns correctly.
-  return [...filteredLog.value].sort((a, b) => {
-    const av = String((a as Record<string, unknown>)[key] ?? '')
-    const bv = String((b as Record<string, unknown>)[key] ?? '')
-    return av.localeCompare(bv, undefined, { numeric: true }) * dir
-  })
-})
-const logTotalPages = computed(() => Math.max(1, Math.ceil(sortedLog.value.length / PER_PAGE)))
-const pagedLog = computed(() => {
-  const start = (logPage.value - 1) * PER_PAGE
-  return sortedLog.value.slice(start, start + PER_PAGE)
-})
-watch(logSearch, () => (logPage.value = 1))
-watch([logSortKey, logSortDir], () => (logPage.value = 1))
-watch(logTotalPages, (n) => {
-  if (logPage.value > n) logPage.value = n
+const {
+  search: logSearch,
+  page: logPage,
+  totalPages: logTotalPages,
+  paged: pagedLog,
+  filtered: filteredLog,
+  sortKey: logSortKey,
+  sortDir: logSortDir,
+  setSort: setLogSort,
+  reset: resetLog,
+} = useDataTableView<GaraponDraw>(() => garapons.garaponDraws, {
+  matches: (d, q) =>
+    d.player_name.toLowerCase().includes(q) || d.prize_name.toLowerCase().includes(q),
+  sort: { key: 'drawn_at', dir: 'desc' },
 })
 
 // ── Display helpers ──────────────────────────────────────────────────────────
 
-/** Sum of the selected garapon's prize rates (for the normalized-% column). */
-const prizeRateTotal = computed(() =>
-  (garapons.selectedGarapon?.prizes || []).reduce((sum, p) => sum + (p.rate > 0 ? p.rate : 0), 0),
-)
+/** Sum of the selected garapon's prize weights (for the normalized-% column). */
+const prizeRateTotal = computed(() => rateTotal(garapons.selectedGarapon?.prizes || []))
 /** A prize's odds as a normalized percentage string (relative weights). */
 function ratePct(p: GaraponPrize): string {
-  const total = prizeRateTotal.value
-  if (total <= 0) return '—'
-  return `${((Math.max(0, p.rate) / total) * 100).toFixed(1)}%`
+  return normalizedPct(p.rate, prizeRateTotal.value)
 }
 
 function created(ts: string): string {
@@ -158,12 +122,8 @@ function created(ts: string): string {
 // ── Navigation ───────────────────────────────────────────────────────────────
 /** Reset the per-sub-page search/sort/pagination when opening a garapon. */
 function resetSubPages(): void {
-  linkSearch.value = ''
-  linkPage.value = 1
-  logSearch.value = ''
-  logPage.value = 1
-  logSortKey.value = 'drawn_at'
-  logSortDir.value = 'desc'
+  resetLinks()
+  resetLog()
 }
 function openNew(): void {
   garapons.newGaraponForm()
@@ -275,7 +235,7 @@ function toggleClosed(): void {
                 {{ p.name }}
               </td>
               <td class="ta-center">
-                <span class="ball-swatch" :style="{ background: p.ball_color }"></span>
+                <BallSwatch :color="p.ball_color" />
               </td>
               <td class="ta-right">{{ p.rate }}</td>
               <td class="ta-right text-dim">{{ ratePct(p) }}</td>
@@ -340,10 +300,16 @@ function toggleClosed(): void {
             {{ filteredLinks.length }} link{{ filteredLinks.length === 1 ? '' : 's' }}
           </span>
         </div>
-        <DataTable :columns="linkColumns" :rows="pagedLinks" row-key="id">
-          <template #cell-player="{ row }">{{ row.player_name }}</template>
-          <template #cell-draws="{ row }">{{ row.draws_used }}/{{ row.max_draws }}</template>
-          <template #cell-created="{ row }">
+        <DataTable
+          :columns="linkColumns"
+          :rows="pagedLinks"
+          row-key="id"
+          :sort-key="linkSortKey"
+          :sort-dir="linkSortDir"
+          @sort="setLinkSort"
+        >
+          <template #cell-draws_used="{ row }">{{ row.draws_used }}/{{ row.max_draws }}</template>
+          <template #cell-created_at="{ row }">
             <span class="text-sm">{{ created(row.created_at) }}</span>
           </template>
           <template #cell-actions="{ row }">
@@ -416,10 +382,8 @@ function toggleClosed(): void {
           :sort-dir="logSortDir"
           @sort="setLogSort"
         >
-          <template #cell-player_name="{ row }">{{ row.player_name }}</template>
           <template #cell-prize_name="{ row }">
-            <span class="ball-swatch ball-swatch-sm" :style="{ background: row.ball_color }"></span>
-            {{ row.prize_name }}
+            <span class="prize-cell"><BallSwatch :color="row.ball_color" size="sm" /> {{ row.prize_name }}</span>
           </template>
           <template #cell-drawn_at="{ row }">
             <span class="text-sm text-dim">{{ created(row.drawn_at) }}</span>
@@ -505,11 +469,17 @@ function toggleClosed(): void {
             />
             <span class="text-dim text-xs push-right">{{ filteredClosed.length }} closed</span>
           </div>
-          <DataTable :columns="closedColumns" :rows="pagedClosed" row-key="id">
-            <template #cell-title="{ row }">{{ row.title }}</template>
-            <template #cell-players="{ row }">{{ row.player_count || 0 }}</template>
-            <template #cell-draws="{ row }">{{ row.draw_count || 0 }}</template>
-            <template #cell-created="{ row }">
+          <DataTable
+            :columns="closedColumns"
+            :rows="pagedClosed"
+            row-key="id"
+            :sort-key="closedSortKey"
+            :sort-dir="closedSortDir"
+            @sort="setClosedSort"
+          >
+            <template #cell-player_count="{ row }">{{ row.player_count || 0 }}</template>
+            <template #cell-draw_count="{ row }">{{ row.draw_count || 0 }}</template>
+            <template #cell-created_at="{ row }">
               <span class="text-sm">{{ created(row.created_at) }}</span>
             </template>
             <template #cell-actions="{ row }">
@@ -565,20 +535,11 @@ function toggleClosed(): void {
   display: flex;
   justify-content: flex-end;
 }
-/* A round colored chip standing in for a Garapon ball. */
-.ball-swatch {
-  display: inline-block;
-  width: 20px;
-  height: 20px;
-  border-radius: 50%;
-  border: 1px solid var(--control-border);
-  box-shadow: inset 0 -2px 3px rgba(0, 0, 0, 0.25), inset 0 2px 3px rgba(255, 255, 255, 0.35);
-  vertical-align: middle;
-}
-.ball-swatch-sm {
-  width: 14px;
-  height: 14px;
-  margin-right: 6px;
+/* Prize-name cell: swatch + label aligned on one baseline. */
+.prize-cell {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
 }
 .grand-star {
   color: var(--highlight);

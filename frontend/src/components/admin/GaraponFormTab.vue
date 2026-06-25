@@ -18,6 +18,7 @@ import FormField from '@/components/common/ui/FormField.vue'
 import FormActions from '@/components/common/ui/FormActions.vue'
 import ImagePicker from '@/components/common/ui/ImagePicker.vue'
 import { useGaraponsStore } from '@/stores/garapons'
+import { rateTotal, ratePct as normalizedPct } from '@/lib/garapon'
 
 const emit = defineEmits<{ saved: []; cancel: [] }>()
 const garapons = useGaraponsStore()
@@ -25,14 +26,11 @@ const garapons = useGaraponsStore()
 // Load the reusable grand-prize images (the "Garapon" category on System → Images).
 onMounted(() => garapons.loadGrandPrizeImages())
 
-/** Sum of positive prize rates, for the live normalized-% readouts. */
-const rateTotal = computed(() =>
-  (garapons.garaponForm?.prizes || []).reduce((sum, p) => sum + (p.rate > 0 ? p.rate : 0), 0),
-)
+/** Sum of positive prize weights, for the live normalized-% readouts. */
+const total = computed(() => rateTotal(garapons.garaponForm?.prizes || []))
 /** A prize's odds as a normalized percentage (relative weights). */
 function ratePct(rate: number): string {
-  if (rateTotal.value <= 0) return '—'
-  return `${((Math.max(0, rate) / rateTotal.value) * 100).toFixed(1)}%`
+  return normalizedPct(rate, total.value)
 }
 
 async function save(): Promise<void> {

@@ -292,6 +292,13 @@ func (s *Server) handleGaraponPlayers(w http.ResponseWriter, r *http.Request) {
 			writeInternalError(w, "get garapon player", err)
 			return
 		}
+		// The link must belong to the garapon in the path — otherwise the
+		// open/closed check below would read the wrong garapon's status and could
+		// force-delete a drawn link from a different, still-open garapon.
+		if existing == nil || existing.GaraponID != garaponID {
+			writeError(w, http.StatusNotFound, "Drawing link not found")
+			return
+		}
 		// A closed garapon can be cleaned up: any link may be deleted, and its
 		// draws stay in the log (garapon_draws.player_id is ON DELETE SET NULL).
 		// While the garapon is open, a link that has already drawn can't be deleted.
@@ -301,7 +308,7 @@ func (s *Server) handleGaraponPlayers(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		closed := garapon != nil && garapon.Status == "closed"
-		if existing != nil && existing.DrawsUsed > 0 && !closed {
+		if existing.DrawsUsed > 0 && !closed {
 			writeError(w, http.StatusConflict,
 				"This player has already drawn and can't be deleted while the garapon is open")
 			return
@@ -440,14 +447,11 @@ func (s *Server) handleGaraponDraw(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Reload the player for the fresh used-count so the client can update the
-	// remaining-draws display without a second request.
-	updated, err := s.store.GetGaraponPlayerByID(player.ID)
-	usedCount := player.DrawsUsed + 1
-	maxDraws := player.MaxDraws
-	if err == nil && updated != nil {
-		usedCount = updated.DrawsUsed
-		maxDraws = updated.MaxDraws
-	}
-	writeJSON(w, http.StatusOK, map[string]any{"draw": draw, "draws_used": usedCount, "max_draws": maxDraws})
+	// Exactly one draw was just recorded, so the fresh usage is player.DrawsUsed+1
+	// (its allowance is unchanged) — no need to reload the player.
+	writeJSON(w, http.StatusOK, map[string]any{
+		"draw":       draw,
+		"draws_used": player.DrawsUsed + 1,
+		"max_draws":  player.MaxDraws,
+	})
 }

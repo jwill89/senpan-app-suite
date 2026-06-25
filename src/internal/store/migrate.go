@@ -439,13 +439,14 @@ func migrateWinnersCache(db *sql.DB) error {
 	return err
 }
 
-// hasColumn checks whether a table has a given column by inspecting
-// PRAGMA table_info. Used by migration functions to make ALTER TABLE
-// operations idempotent (safe to re-run).
-func hasColumn(db *sql.DB, table, column string) bool {
+// columnInfo reports whether a table has the given column and, if so, whether it
+// is declared NOT NULL — both read from PRAGMA table_info. A missing table (or a
+// query error) reports (false, false). Backs hasColumn (idempotent ALTER TABLE
+// guards) and the v36 garapon_draws schema detection.
+func columnInfo(db *sql.DB, table, column string) (exists, notNull bool) {
 	rows, err := db.Query(fmt.Sprintf("PRAGMA table_info(%s)", table))
 	if err != nil {
-		return false
+		return false, false
 	}
 	defer rows.Close()
 
@@ -456,13 +457,20 @@ func hasColumn(db *sql.DB, table, column string) bool {
 		var dfltValue sql.NullString
 		var pk int
 		if err := rows.Scan(&cid, &name, &typ, &notnull, &dfltValue, &pk); err != nil {
-			return false
+			return false, false
 		}
 		if name == column {
-			return true
+			return true, notnull == 1
 		}
 	}
-	return false
+	return false, false
+}
+
+// hasColumn checks whether a table has a given column. Used by migration
+// functions to make ALTER TABLE operations idempotent (safe to re-run).
+func hasColumn(db *sql.DB, table, column string) bool {
+	exists, _ := columnInfo(db, table, column)
+	return exists
 }
 
 // tableExists reports whether a table with the given name exists.
@@ -1139,30 +1147,6 @@ func migrateGarapons(db *sql.DB) error {
 	return nil
 }
 
-// columnIsNotNull reports whether a table's column is declared NOT NULL, via
-// PRAGMA table_info. Used to detect the pre-v36 garapon_draws schema.
-func columnIsNotNull(db *sql.DB, table, column string) bool {
-	rows, err := db.Query(fmt.Sprintf("PRAGMA table_info(%s)", table))
-	if err != nil {
-		return false
-	}
-	defer rows.Close()
-	for rows.Next() {
-		var cid int
-		var name, typ string
-		var notnull int
-		var dfltValue sql.NullString
-		var pk int
-		if err := rows.Scan(&cid, &name, &typ, &notnull, &dfltValue, &pk); err != nil {
-			return false
-		}
-		if name == column {
-			return notnull == 1
-		}
-	}
-	return false
-}
-
 // migrateGaraponDrawKeepLogs rebuilds garapon_draws so player_id is nullable with
 // ON DELETE SET NULL (was NOT NULL + CASCADE), so deleting a drawing link keeps
 // its draws in the log instead of wiping them. SQLite can't ALTER a foreign key,
@@ -1171,7 +1155,9 @@ func columnIsNotNull(db *sql.DB, table, column string) bool {
 // the updated const — or a re-run — is a no-op. garapon_draws is a leaf table
 // (nothing references it), so the rebuild is foreign-key-safe.
 func migrateGaraponDrawKeepLogs(db *sql.DB) error {
-	if !tableExists(db, "garapon_draws") || !columnIsNotNull(db, "garapon_draws", "player_id") {
+	// A missing column/table reports notNull=false, so this also no-ops on a DB
+	// that never had garapon_draws.
+	if _, notNull := columnInfo(db, "garapon_draws", "player_id"); !notNull {
 		return nil
 	}
 	tx, err := db.Begin()

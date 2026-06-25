@@ -11,6 +11,7 @@
  */
 import { computed, onMounted, ref, watch } from 'vue'
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
+import BallSwatch from '@/components/common/ui/BallSwatch.vue'
 import GaraponWheel from '@/components/player/GaraponWheel.vue'
 import { useMarkdown } from '@/lib/markdown'
 import { useGaraponsStore } from '@/stores/garapons'
@@ -89,7 +90,7 @@ function when(ts: string): string {
 
       <!-- Congratulations banner -->
       <div v-if="garapons.lastWin" class="garapon-win-banner">
-        <span class="ball-swatch" :style="{ background: garapons.lastWin.ball_color }"></span>
+        <BallSwatch :color="garapons.lastWin.ball_color" />
         🎉 Congratulations, you've won <strong>{{ garapons.lastWin.prize_name }}</strong>!
       </div>
 
@@ -111,7 +112,7 @@ function when(ts: string): string {
             alt="Grand prize"
           />
           <div class="garapon-grand-meta">
-            <span class="ball-swatch ball-swatch-lg" :style="{ background: garapons.grandPrize.ball_color }"></span>
+            <BallSwatch :color="garapons.grandPrize.ball_color" size="lg" />
             <span class="garapon-grand-name">{{ garapons.grandPrize.name }}</span>
           </div>
         </div>
@@ -137,7 +138,7 @@ function when(ts: string): string {
           <tbody>
             <tr v-for="p in garapons.otherPrizes" :key="p.id">
               <td class="ta-center">
-                <span class="ball-swatch" :style="{ background: p.ball_color }"></span>
+                <BallSwatch :color="p.ball_color" />
               </td>
               <td>{{ p.name }}</td>
             </tr>
@@ -161,7 +162,7 @@ function when(ts: string): string {
           <tbody>
             <tr v-for="d in garapons.publicDraws" :key="d.id">
               <td class="ta-center">
-                <span class="ball-swatch" :style="{ background: d.ball_color }"></span>
+                <BallSwatch :color="d.ball_color" />
               </td>
               <td>{{ d.prize_name }}</td>
               <td class="ta-right text-sm text-dim">{{ when(d.drawn_at) }}</td>
@@ -249,21 +250,5 @@ function when(ts: string): string {
   text-align: center;
   padding: 40px 20px;
   font-size: 1.1rem;
-}
-/* Round colored chip standing in for a Garapon ball. */
-.ball-swatch {
-  display: inline-block;
-  width: 22px;
-  height: 22px;
-  border-radius: 50%;
-  border: 1px solid var(--control-border);
-  box-shadow:
-    inset 0 -2px 3px rgba(0, 0, 0, 0.25),
-    inset 0 2px 3px rgba(255, 255, 255, 0.35);
-  vertical-align: middle;
-}
-.ball-swatch-lg {
-  width: 30px;
-  height: 30px;
 }
 </style>

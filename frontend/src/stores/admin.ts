@@ -11,6 +11,7 @@ import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import { useGameStore } from './game'
 import { useRafflesStore } from './raffles'
+import { useGaraponsStore } from './garapons'
 import { useBookclubStore } from './bookclub'
 import { useStylesStore } from './styles'
 import { useAppStore } from './app'
@@ -24,7 +25,7 @@ import { useUsersStore } from './users'
 import { BOOK_CLUBS } from '@/lib/constants'
 import { createFreshness } from '@/lib/freshness'
 
-export type AdminSection = 'bingo' | 'teahouse' | 'atelier' | 'system'
+export type AdminSection = 'bingo' | 'teahouse' | 'festival' | 'atelier' | 'system'
 
 /** One tab per registered book club, e.g. 'bookclub-yaoi' | 'bookclub-yuri'. */
 export type BookClubTab = `bookclub-${(typeof BOOK_CLUBS)[number]['slug']}`
@@ -38,6 +39,7 @@ export type AdminTab =
   | 'teahouse-announcements'
   | 'teahouse-raffles'
   | BookClubTab
+  | 'festival-garapon'
   | 'atelier-fonts'
   | 'atelier-carrd'
   | 'system-settings'
@@ -74,12 +76,14 @@ export const useAdminStore = defineStore('admin', () => {
     // (teahouse-*) and the book clubs (bookclub-*).
     else if (tab.startsWith('teahouse-') || tab.startsWith('bookclub-'))
       adminSection.value = 'teahouse'
+    else if (tab.startsWith('festival-')) adminSection.value = 'festival'
     else if (tab.startsWith('atelier-')) adminSection.value = 'atelier'
     else if (tab.startsWith('system-')) adminSection.value = 'system'
     adminTab.value = tab
 
     const game = useGameStore()
     const raffles = useRafflesStore()
+    const garapons = useGaraponsStore()
     const bookclub = useBookclubStore()
     const styles = useStylesStore()
     const app = useAppStore()
@@ -94,6 +98,11 @@ export const useAdminStore = defineStore('admin', () => {
     if (tab === 'teahouse-raffles') {
       raffles.selectedRaffle = null
       loadFresh('raffles', () => raffles.loadRaffles())
+    }
+    if (tab === 'festival-garapon') {
+      garapons.selectedGarapon = null
+      garapons.garaponForm = null
+      loadFresh('garapons', () => garapons.loadGarapons())
     }
     // openClub manages its own per-club freshness (and preserves the open list /
     // events sub-view when the same club tab is re-entered).

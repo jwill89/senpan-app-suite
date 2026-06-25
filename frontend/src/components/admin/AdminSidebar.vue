@@ -51,6 +51,7 @@ const showTeahouse = computed(() =>
     can,
   ),
 )
+const showFestival = computed(() => can('festival-garapon'))
 const showAtelier = computed(() => ['atelier-fonts', 'atelier-carrd'].some(can))
 const showSystem = computed(
   () => auth.isAdmin || ['system-settings', 'system-themes', 'system-images'].some(can),
@@ -178,6 +179,27 @@ function toggleSection(section: AdminSection): void {
           @click="go(`bookclub-${club.slug}` as AdminTab)"
         >
           <font-awesome-icon :icon="['fad', club.icon]" /> {{ club.name }}
+        </button>
+      </div>
+    </div>
+
+    <!-- Festival section (Garapon) -->
+    <div v-if="showFestival" class="admin-nav-section">
+      <div
+        class="admin-nav-header"
+        :class="{ open: isOpen('festival') }"
+        @click="toggleSection('festival')"
+      >
+        <span><font-awesome-icon :icon="['fad', 'pot-food']" /> Festival</span>
+        <span class="nav-chevron">{{ isOpen('festival') ? '▾' : '▸' }}</span>
+      </div>
+      <div v-show="isOpen('festival')" class="admin-nav-items">
+        <button
+          v-if="can('festival-garapon')"
+          :class="{ active: admin.adminTab === 'festival-garapon' }"
+          @click="go('festival-garapon')"
+        >
+          <font-awesome-icon :icon="['fad', 'ferris-wheel']" /> Garapon
         </button>
       </div>
     </div>

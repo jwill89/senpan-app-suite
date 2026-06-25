@@ -103,6 +103,13 @@ const adminChildren: RouteRecordRaw[] = [
       meta: { tab: `bookclub-${club.slug}` as AdminTab },
     }),
   ),
+  // Festival → Garapon (festival lottery drum).
+  {
+    path: 'festival/garapon',
+    name: 'admin-festival-garapon',
+    component: () => import('@/components/admin/GaraponTab.vue'),
+    meta: { tab: 'festival-garapon' },
+  },
   {
     path: 'system/settings',
     name: 'admin-system-settings',
@@ -160,6 +167,14 @@ const routes: RouteRecordRaw[] = [
     path: '/raffles/:id',
     name: 'raffle-detail',
     component: () => import('@/views/RaffleDetailView.vue'),
+    props: true,
+  },
+  // Public Garapon player view — reached only via a per-player drawing link
+  // (an unguessable token). No admin auth; the token is the capability.
+  {
+    path: '/garapon/:token',
+    name: 'garapon',
+    component: () => import('@/views/GaraponView.vue'),
     props: true,
   },
   {

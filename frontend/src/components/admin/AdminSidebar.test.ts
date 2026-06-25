@@ -59,12 +59,17 @@ describe('AdminSidebar', () => {
 
   it('shows every section for an admin, with the active section expanded', () => {
     const wrapper = mountAs(makeUser({ is_admin: true }))
-    expect(wrapper.findAll('.admin-nav-section')).toHaveLength(4)
+    // Bingo, Senpan Tea House, Festival, Atelier Yao, System.
+    expect(wrapper.findAll('.admin-nav-section')).toHaveLength(5)
     // admin.adminSection defaults to 'bingo', so Bingo starts expanded.
     expect(isExpanded(wrapper, 'Bingo')).toBe(true)
     expect(section(wrapper, 'Bingo').find('.admin-nav-items').isVisible()).toBe(true)
     expect(isExpanded(wrapper, 'System')).toBe(false)
     expect(section(wrapper, 'System').find('.admin-nav-items').isVisible()).toBe(false)
+    // The Festival section carries the single Garapon item.
+    const festivalItems = section(wrapper, 'Festival').findAll('.admin-nav-items button')
+    expect(festivalItems).toHaveLength(1)
+    expect(festivalItems[0].text()).toContain('Garapon')
   })
 
   it('header click expands a section independently (others stay open) WITHOUT navigating', async () => {

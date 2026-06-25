@@ -20,6 +20,7 @@ const (
 	permBingoPresets     = "bingo-presets"
 	permTeahouseAnnounce = "teahouse-announcements"
 	permTeahouseRaffles  = "teahouse-raffles"
+	permFestivalGarapon  = "festival-garapon"
 	permAtelierFonts     = "atelier-fonts"
 	permAtelierCarrd     = "atelier-carrd"
 	permSystemSettings   = "system-settings"
@@ -42,6 +43,7 @@ func validPermissions() map[string]bool {
 	keys := []string{
 		permBingoGame, permBingoCards, permBingoWinnersLog, permBingoPatterns, permBingoPresets,
 		permTeahouseAnnounce, permTeahouseRaffles,
+		permFestivalGarapon,
 		permAtelierFonts, permAtelierCarrd,
 		permSystemSettings, permSystemThemes, permSystemImages,
 	}

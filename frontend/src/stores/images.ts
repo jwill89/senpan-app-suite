@@ -20,6 +20,7 @@ import { useUiStore } from './ui'
 export const IMAGE_DIR_ANNOUNCEMENTS_MAIN = 'announcements_main'
 export const IMAGE_DIR_ANNOUNCEMENTS_THUMB = 'announcements_thumb'
 export const IMAGE_DIR_RAFFLES = 'raffles'
+export const IMAGE_DIR_GARAPONS = 'garapons'
 export const IMAGE_DIR_FLOURISHES = 'flourishes'
 
 export const useImagesStore = defineStore('images', () => {

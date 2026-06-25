@@ -106,6 +106,7 @@ export const ADMIN_PERMISSIONS: AdminPermission[] = [
     label: c.name,
     section: 'Senpan Tea House',
   })),
+  { key: 'festival-garapon', label: 'Garapon', section: 'Festival' },
   { key: 'atelier-fonts', label: 'Font Upload', section: 'Atelier Yao' },
   { key: 'atelier-carrd', label: 'Carrd Upload', section: 'Atelier Yao' },
   { key: 'system-settings', label: 'Settings', section: 'System' },

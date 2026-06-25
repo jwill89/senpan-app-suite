@@ -190,6 +190,129 @@ export function playWinnerChime(): void {
   ])
 }
 
+/**
+ * Plays a short, metallic "pon" — the clink a Garapon ball makes as it drops out
+ * of the drum and lands in the tray. A handful of inharmonic partials (not integer
+ * multiples, so the timbre reads as metallic rather than tonal) with a fast,
+ * ringing decay and a slight downward pitch chirp. No audio asset; no-op when muted.
+ */
+export function playPonSound(): void {
+  if (volume <= 0) return
+  try {
+    const ac = getCtx()
+    if (!ac) return
+    if (ac.state === 'suspended') void ac.resume()
+    const now = ac.currentTime
+    const partials = [
+      { f: 540, g: 0.5 },
+      { f: 950, g: 0.34 },
+      { f: 1560, g: 0.22 },
+      { f: 2350, g: 0.14 },
+    ]
+    for (const p of partials) {
+      const osc = ac.createOscillator()
+      const gain = ac.createGain()
+      osc.type = 'triangle'
+      // A quick chirp down into the partial gives the "p…on" attack a bright clink.
+      osc.frequency.setValueAtTime(p.f * 1.22, now)
+      osc.frequency.exponentialRampToValueAtTime(p.f, now + 0.04)
+      const peak = p.g * 0.5 * volume
+      gain.gain.setValueAtTime(0.0001, now)
+      gain.gain.exponentialRampToValueAtTime(Math.max(0.0001, peak), now + 0.006)
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.26)
+      osc.connect(gain).connect(ac.destination)
+      osc.start(now)
+      osc.stop(now + 0.28)
+    }
+  } catch {
+    /* non-fatal */
+  }
+}
+
+/**
+ * Plays the sound of wooden balls tumbling inside the Garapon drum while it spins:
+ * a low band-passed noise rumble with a rolling tremolo, plus a few wooden
+ * "knocks" that thin out toward the end as the drum slows. `durationMs` should
+ * roughly match the spin length. No audio asset; no-op when muted.
+ */
+export function playGaraponRoll(durationMs = 1900): void {
+  if (volume <= 0) return
+  try {
+    const ac = getCtx()
+    if (!ac) return
+    if (ac.state === 'suspended') void ac.resume()
+    const now = ac.currentTime
+    const dur = Math.max(0.2, durationMs / 1000)
+
+    // Brown-ish noise (integrated white) → a low, woody rumble.
+    const frames = Math.floor(ac.sampleRate * dur)
+    const buf = ac.createBuffer(1, frames, ac.sampleRate)
+    const data = buf.getChannelData(0)
+    let last = 0
+    for (let i = 0; i < frames; i++) {
+      const white = Math.random() * 2 - 1
+      last = (last + 0.02 * white) / 1.02
+      data[i] = last * 3.2
+    }
+    const src = ac.createBufferSource()
+    src.buffer = buf
+
+    // Band-pass for the hollow-wood timbre.
+    const bp = ac.createBiquadFilter()
+    bp.type = 'bandpass'
+    bp.frequency.value = 320
+    bp.Q.value = 0.8
+
+    // Rolling tremolo via an LFO modulating a gain node.
+    const trem = ac.createGain()
+    trem.gain.value = 0.6
+    const lfo = ac.createOscillator()
+    const lfoGain = ac.createGain()
+    lfo.type = 'sine'
+    lfo.frequency.value = 11
+    lfoGain.gain.value = 0.35
+    lfo.connect(lfoGain).connect(trem.gain)
+    lfo.start(now)
+    lfo.stop(now + dur)
+
+    // Envelope: quick rise, then fade as the drum slows to a stop.
+    const gain = ac.createGain()
+    const peak = 0.16 * volume
+    gain.gain.setValueAtTime(0.0001, now)
+    gain.gain.exponentialRampToValueAtTime(Math.max(0.0001, peak), now + 0.08)
+    gain.gain.setValueAtTime(Math.max(0.0001, peak), now + dur * 0.65)
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + dur)
+
+    src.connect(bp).connect(trem).connect(gain).connect(ac.destination)
+    src.start(now)
+    src.stop(now + dur)
+
+    // Wooden knocks (balls thudding against the drum), thinning toward the end.
+    const knocks = 7
+    for (let k = 0; k < knocks; k++) {
+      const t = now + dur * Math.pow(k / knocks, 1.25) + Math.random() * 0.05
+      woodKnock(ac, t, 0.1 * volume)
+    }
+  } catch {
+    /* non-fatal */
+  }
+}
+
+/** A single short wooden "knock" (a quick pitch-dropping thud). */
+function woodKnock(ac: AudioContext, t: number, amp: number): void {
+  const osc = ac.createOscillator()
+  const g = ac.createGain()
+  osc.type = 'triangle'
+  osc.frequency.setValueAtTime(170 + Math.random() * 120, t)
+  osc.frequency.exponentialRampToValueAtTime(85, t + 0.05)
+  g.gain.setValueAtTime(0.0001, t)
+  g.gain.exponentialRampToValueAtTime(Math.max(0.0001, amp), t + 0.005)
+  g.gain.exponentialRampToValueAtTime(0.0001, t + 0.09)
+  osc.connect(g).connect(ac.destination)
+  osc.start(t)
+  osc.stop(t + 0.11)
+}
+
 /** Triggers a brief device vibration where supported (mobile). */
 export function vibrate(pattern: number | number[] = 60): void {
   try {

@@ -39,6 +39,11 @@ import type {
   RaffleEntryResponse,
   RaffleWinnerResponse,
   RafflesResponse,
+  GaraponsResponse,
+  GaraponDetailResponse,
+  GaraponPlayerResponse,
+  GaraponPublicResponse,
+  GaraponDrawResponse,
   ReadingListsResponse,
   ReadingListDetailResponse,
   ReadingListItemResponse,
@@ -301,6 +306,40 @@ export const endpoints = {
       apiPost<OkResponse>(`raffles/${raffleId}/entries`, { action: 'verify_winner' }),
     pickAnotherWinner: (raffleId: number) =>
       apiPost<RaffleWinnerResponse>(`raffles/${raffleId}/entries`, { action: 'pick_another' }),
+  },
+
+  // ── Garapon (admin) ──────────────────────────────────────────────────────────
+  garapons: {
+    /** GET /api/garapons — all garapons (admin). */
+    list: () => apiGet<GaraponsResponse>('garapons'),
+    /** GET /api/garapons/{id} — a garapon with prizes, drawing links, draw log. */
+    detail: (id: number) => apiGet<GaraponDetailResponse>(`garapons/${id}`),
+    create: (garapon: Record<string, unknown>) =>
+      apiPost<OkResponse>('garapons', { action: 'create', ...garapon }),
+    update: (garapon: Record<string, unknown>) =>
+      apiPost<OkResponse>('garapons', { action: 'update', ...garapon }),
+    delete: (id: number) => apiPost<OkResponse>('garapons', { action: 'delete', id }),
+    setStatus: (id: number, status: 'open' | 'closed') =>
+      apiPost<OkResponse>('garapons', { action: 'set_status', id, status }),
+    /** Create a per-player drawing link (returns its token). */
+    createPlayer: (garaponId: number, body: { player_name: string; max_draws: number }) =>
+      apiPost<GaraponPlayerResponse>(`garapons/${garaponId}/players`, {
+        action: 'create_player',
+        ...body,
+      }),
+    deletePlayer: (garaponId: number, playerId: number) =>
+      apiPost<OkResponse>(`garapons/${garaponId}/players`, {
+        action: 'delete_player',
+        player_id: playerId,
+      }),
+  },
+
+  // ── Garapon (public player view, via per-player token) ───────────────────────
+  garapon: {
+    /** GET /api/garapon/{token} — the player view (garapon + prizes + their record). */
+    get: (token: string) => apiGet<GaraponPublicResponse>(`garapon/${enc(token)}`),
+    /** POST /api/garapon/{token}/draw — perform one authoritative draw. */
+    draw: (token: string) => apiPost<GaraponDrawResponse>(`garapon/${enc(token)}/draw`, {}),
   },
 
   // ── Book clubs / reading lists ───────────────────────────────────────────────

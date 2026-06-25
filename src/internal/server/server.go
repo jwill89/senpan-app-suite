@@ -130,6 +130,17 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("POST /api/raffles/{id}/enter", s.handleRaffleEnter)
 	s.mux.HandleFunc("POST /api/raffles/{id}/entries", s.handleRaffleEntries)
 
+	// Garapon routes (festival lottery drum). Admin CRUD + per-player drawing
+	// links, plus the tokenized public player view + draw. The "garapon/{token}"
+	// (singular) public paths don't collide with the "garapons" (plural) admin
+	// paths; the {id}/players sub-path is registered alongside the {id} detail.
+	s.mux.HandleFunc("GET /api/garapons", s.handleGaraponsList)
+	s.mux.HandleFunc("POST /api/garapons", s.handleGaraponsAction)
+	s.mux.HandleFunc("GET /api/garapons/{id}", s.handleGaraponDetail)
+	s.mux.HandleFunc("POST /api/garapons/{id}/players", s.handleGaraponPlayers)
+	s.mux.HandleFunc("GET /api/garapon/{token}", s.handleGaraponPublic)
+	s.mux.HandleFunc("POST /api/garapon/{token}/draw", s.handleGaraponDraw)
+
 	// Book club / reading list routes (specific paths before {id} to avoid conflicts)
 	s.mux.HandleFunc("POST /api/bookclub/upload", s.handleBookclubUpload)
 	s.mux.HandleFunc("GET /api/bookclub/lookup", s.handleBookclubLookup)

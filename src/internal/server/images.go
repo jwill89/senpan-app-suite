@@ -46,6 +46,7 @@ const (
 	imageDirAnnouncementsMain  = "announcements_main"
 	imageDirAnnouncementsThumb = "announcements_thumb"
 	imageDirRaffles            = "raffles"
+	imageDirGarapons           = "garapons"
 	imageDirFlourishes         = "flourishes"
 )
 
@@ -76,6 +77,7 @@ func permanentImageCategories() []imageCategory {
 		{Name: "Announcement Main", Dir: imageDirAnnouncementsMain, Permanent: true},
 		{Name: "Announcement Thumbnail", Dir: imageDirAnnouncementsThumb, Permanent: true},
 		{Name: "Raffle", Dir: imageDirRaffles, Permanent: true},
+		{Name: "Garapon", Dir: imageDirGarapons, Permanent: true},
 		{Name: "Flourishes", Dir: imageDirFlourishes, Permanent: true},
 	}
 }
@@ -225,6 +227,8 @@ func canAccessImageDir(u *model.User, dir string) bool {
 		return userHasPermission(u, permTeahouseAnnounce)
 	case imageDirRaffles:
 		return userHasPermission(u, permTeahouseRaffles)
+	case imageDirGarapons:
+		return userHasPermission(u, permFestivalGarapon)
 	case imageDirFlourishes:
 		return userHasPermission(u, permSystemThemes)
 	}

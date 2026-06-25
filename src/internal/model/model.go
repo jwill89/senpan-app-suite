@@ -150,6 +150,69 @@ type RaffleEntry struct {
 	CreatedAt     string `json:"created_at"`
 }
 
+// Garapon is a festival lottery-drum event (ガラポン / 福引): a hand-crank drum a
+// player spins to drop a colored ball and win a prize. Like a raffle it is created
+// instantly "open" and later "closed" (archived), but players don't buy tickets —
+// an admin issues each player a private tokenized link (a GaraponPlayer) with a
+// fixed number of draws.
+type Garapon struct {
+	ID              int64  `json:"id"`
+	Title           string `json:"title"`
+	Details         string `json:"details"`           // markdown event description
+	GrandPrizeImage string `json:"grand_prize_image"` // root-relative web path (images/garapons/…), "" = none
+	Status          string `json:"status"`            // "open" or "closed"
+	CreatedAt       string `json:"created_at"`
+
+	// Prizes is populated on detail fetches (the ball/prize tiers). Omitted from
+	// list responses for efficiency.
+	Prizes []GaraponPrize `json:"prizes,omitempty"`
+
+	// Read-only aggregates populated for the admin list view only: how many
+	// drawing links exist and how many draws have been made across them.
+	PlayerCount int `json:"player_count,omitempty"`
+	DrawCount   int `json:"draw_count,omitempty"`
+}
+
+// GaraponPrize is one prize tier in a garapon: a named prize, the color of the
+// ball that wins it, and an appearance rate (a relative weight — the rates need
+// not total 100; the server draws weighted by them). Exactly one prize per garapon
+// is flagged IsGrand: the headline prize that carries the garapon's picture.
+type GaraponPrize struct {
+	ID        int64   `json:"id"`
+	GaraponID int64   `json:"garapon_id"`
+	Name      string  `json:"name"`
+	BallColor string  `json:"ball_color"` // CSS color, e.g. "#e5b53f"
+	Rate      float64 `json:"rate"`       // appearance weight (relative; normalized for display)
+	IsGrand   bool    `json:"is_grand"`   // the grand (headline) prize
+	SortOrder int     `json:"sort_order"`
+}
+
+// GaraponPlayer is a tokenized drawing link issued to a named player: an
+// unguessable URL token, the player's name, and how many draws they're allowed.
+// DrawsUsed is a read-only count of how many draws they've already made.
+type GaraponPlayer struct {
+	ID         int64  `json:"id"`
+	GaraponID  int64  `json:"garapon_id"`
+	Token      string `json:"token"` // unguessable URL token (the player's private link)
+	PlayerName string `json:"player_name"`
+	MaxDraws   int    `json:"max_draws"`
+	DrawsUsed  int    `json:"draws_used"` // read-only: COUNT of recorded draws
+	CreatedAt  string `json:"created_at"`
+}
+
+// GaraponDraw is a single recorded pull: which player drew, the prize they won,
+// and a snapshot of its name + ball color (so the log survives later prize edits).
+type GaraponDraw struct {
+	ID         int64  `json:"id"`
+	GaraponID  int64  `json:"garapon_id"`
+	PlayerID   int64  `json:"player_id"`
+	PrizeID    int64  `json:"prize_id"`
+	PlayerName string `json:"player_name"` // snapshot for the admin log
+	PrizeName  string `json:"prize_name"`  // snapshot
+	BallColor  string `json:"ball_color"`  // snapshot
+	DrawnAt    string `json:"drawn_at"`
+}
+
 // ReadingList is a named, ordered collection of book-club reading items
 // (e.g. a "Yaoi Book Club" reading list). ClubSlug groups lists under a
 // particular book club so additional clubs can be added later without a

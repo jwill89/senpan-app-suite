@@ -23,6 +23,9 @@ import type {
   PatternCategory,
   Raffle,
   RaffleEntry,
+  Garapon,
+  GaraponPlayer,
+  GaraponDraw,
   ReadingList,
   ReadingListItem,
   ReadingListSource,
@@ -47,6 +50,10 @@ export type {
   PatternCategory,
   Raffle,
   RaffleEntry,
+  Garapon,
+  GaraponPrize,
+  GaraponPlayer,
+  GaraponDraw,
   ReadingList,
   ReadingListItem,
   ReadingListSource,
@@ -242,6 +249,47 @@ export interface RaffleWinnerResponse {
 // POST /api/raffles/{id}/entries {add_entry} — the created/updated entry.
 export interface RaffleEntryResponse {
   entry: RaffleEntry
+}
+
+// ── Garapon (festival lottery drum) ─────────────────────────────────────────
+// GET /api/garapons — admin list (each carries player_count/draw_count aggregates).
+export interface GaraponsResponse {
+  garapons: Garapon[]
+}
+
+// GET /api/garapons/{id} — admin detail: the garapon (with prizes), its drawing
+// links, and the full draw log.
+export interface GaraponDetailResponse {
+  garapon: Garapon
+  players: GaraponPlayer[]
+  draws: GaraponDraw[]
+}
+
+// POST /api/garapons/{id}/players {create_player} — the new drawing link.
+export interface GaraponPlayerResponse {
+  player: GaraponPlayer
+}
+
+// GET /api/garapon/{token} — the public player view. `garapon.prizes` carry ball
+// colors + which is grand but NOT the appearance rates (rate is zeroed). `player`
+// is the trimmed shape (name + allowance/usage, no token); `draws` is this
+// player's own history.
+export interface GaraponPublicPlayer {
+  player_name: string
+  max_draws: number
+  draws_used: number
+}
+export interface GaraponPublicResponse {
+  garapon: Garapon
+  player: GaraponPublicPlayer
+  draws: GaraponDraw[]
+}
+
+// POST /api/garapon/{token}/draw — the recorded draw + the fresh usage counts.
+export interface GaraponDrawResponse {
+  draw: GaraponDraw
+  draws_used: number
+  max_draws: number
 }
 
 // ── Book clubs / reading lists ──────────────────────────────────────────────
@@ -532,6 +580,22 @@ export interface RaffleForm {
   available_from: string
   available_to: string
   prize_image: string
+}
+
+// Form models for the admin garapon create/edit form. A prize row carries a name,
+// ball color (hex), an appearance-rate weight, and whether it's the grand prize.
+export interface GaraponPrizeForm {
+  name: string
+  ball_color: string
+  rate: number
+  is_grand: boolean
+}
+export interface GaraponForm {
+  id: number
+  title: string
+  details: string
+  grand_prize_image: string
+  prizes: GaraponPrizeForm[]
 }
 
 // ── WebSocket message types ─────────────────────────────────────────────────

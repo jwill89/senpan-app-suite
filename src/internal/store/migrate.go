@@ -13,7 +13,7 @@ import (
 // PRAGMA user_version against this constant and runs only the migrations
 // needed to bring the database up to date. Bump this when adding a new
 // migration block.
-const schemaVersion = 34
+const schemaVersion = 35
 
 // ensureSchema reads the current PRAGMA user_version from the database and
 // applies any outstanding migrations to bring it up to schemaVersion.
@@ -232,6 +232,12 @@ func ensureSchema(db *sql.DB) error {
 		}
 	}
 
+	if version < 35 {
+		if err := migrateGarapons(db); err != nil {
+			return err
+		}
+	}
+
 	_, err := db.Exec(fmt.Sprintf("PRAGMA user_version = %d", schemaVersion))
 	return err
 }
@@ -359,6 +365,10 @@ func createTables(db *sql.DB) error {
 		announcementTypesTableSQL,
 		announcementsTableSQL,
 		announcementRolesTableSQL,
+		garaponsTableSQL,
+		garaponPrizesTableSQL,
+		garaponPlayersTableSQL,
+		garaponDrawsTableSQL,
 	}
 	for _, s := range stmts {
 		if _, err := db.Exec(s); err != nil {
@@ -383,6 +393,11 @@ func createIndexes(db *sql.DB) error {
 		"CREATE INDEX IF NOT EXISTS idx_reading_list_items_list ON reading_list_items(list_id)",
 		"CREATE INDEX IF NOT EXISTS idx_announcements_type ON announcements(type_id)",
 		"CREATE INDEX IF NOT EXISTS idx_announcements_due ON announcements(active, next_post_at)",
+		"CREATE INDEX IF NOT EXISTS idx_garapon_prizes_garapon ON garapon_prizes(garapon_id)",
+		"CREATE INDEX IF NOT EXISTS idx_garapon_players_garapon ON garapon_players(garapon_id)",
+		"CREATE INDEX IF NOT EXISTS idx_garapon_players_token ON garapon_players(token)",
+		"CREATE INDEX IF NOT EXISTS idx_garapon_draws_garapon ON garapon_draws(garapon_id)",
+		"CREATE INDEX IF NOT EXISTS idx_garapon_draws_player ON garapon_draws(player_id)",
 	}
 	for _, idx := range indexes {
 		if _, err := db.Exec(idx); err != nil {
@@ -1040,6 +1055,76 @@ func migrateGamePresets(db *sql.DB) error {
 	)`)
 	if err != nil {
 		return fmt.Errorf("migrate game presets: %w", err)
+	}
+	return nil
+}
+
+// garapon*TableSQL define the Garapon festival lottery-drum tables. Shared between
+// createTables (fresh install) and migrateGarapons (existing databases) so the
+// schema is defined once. A garapon has prize tiers (each a ball color + weight),
+// tokenized per-player drawing links, and a draw log. The prize/player/draw rows
+// cascade-delete with their garapon (and draws with their player).
+const garaponsTableSQL = `CREATE TABLE IF NOT EXISTS garapons (
+	id INTEGER PRIMARY KEY AUTOINCREMENT,
+	title TEXT NOT NULL,
+	details TEXT NOT NULL DEFAULT '',
+	grand_prize_image TEXT NOT NULL DEFAULT '',
+	status TEXT NOT NULL DEFAULT 'open',
+	created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+)`
+
+const garaponPrizesTableSQL = `CREATE TABLE IF NOT EXISTS garapon_prizes (
+	id INTEGER PRIMARY KEY AUTOINCREMENT,
+	garapon_id INTEGER NOT NULL,
+	name TEXT NOT NULL DEFAULT '',
+	ball_color TEXT NOT NULL DEFAULT '',
+	rate REAL NOT NULL DEFAULT 0,
+	is_grand INTEGER NOT NULL DEFAULT 0,
+	sort_order INTEGER NOT NULL DEFAULT 0,
+	FOREIGN KEY (garapon_id) REFERENCES garapons(id) ON DELETE CASCADE
+)`
+
+const garaponPlayersTableSQL = `CREATE TABLE IF NOT EXISTS garapon_players (
+	id INTEGER PRIMARY KEY AUTOINCREMENT,
+	garapon_id INTEGER NOT NULL,
+	token TEXT NOT NULL UNIQUE,
+	player_name TEXT NOT NULL DEFAULT '',
+	max_draws INTEGER NOT NULL DEFAULT 1,
+	created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+	FOREIGN KEY (garapon_id) REFERENCES garapons(id) ON DELETE CASCADE
+)`
+
+const garaponDrawsTableSQL = `CREATE TABLE IF NOT EXISTS garapon_draws (
+	id INTEGER PRIMARY KEY AUTOINCREMENT,
+	garapon_id INTEGER NOT NULL,
+	player_id INTEGER NOT NULL,
+	prize_id INTEGER NOT NULL DEFAULT 0,
+	player_name TEXT NOT NULL DEFAULT '',
+	prize_name TEXT NOT NULL DEFAULT '',
+	ball_color TEXT NOT NULL DEFAULT '',
+	drawn_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+	FOREIGN KEY (garapon_id) REFERENCES garapons(id) ON DELETE CASCADE,
+	FOREIGN KEY (player_id) REFERENCES garapon_players(id) ON DELETE CASCADE
+)`
+
+// migrateGarapons creates the Garapon tables (garapons + garapon_prizes +
+// garapon_players + garapon_draws) and their indexes. Idempotent.
+func migrateGarapons(db *sql.DB) error {
+	stmts := []string{
+		garaponsTableSQL,
+		garaponPrizesTableSQL,
+		garaponPlayersTableSQL,
+		garaponDrawsTableSQL,
+		`CREATE INDEX IF NOT EXISTS idx_garapon_prizes_garapon ON garapon_prizes(garapon_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_garapon_players_garapon ON garapon_players(garapon_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_garapon_players_token ON garapon_players(token)`,
+		`CREATE INDEX IF NOT EXISTS idx_garapon_draws_garapon ON garapon_draws(garapon_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_garapon_draws_player ON garapon_draws(player_id)`,
+	}
+	for _, s := range stmts {
+		if _, err := db.Exec(s); err != nil {
+			return fmt.Errorf("migrate garapons: %w", err)
+		}
 	}
 	return nil
 }

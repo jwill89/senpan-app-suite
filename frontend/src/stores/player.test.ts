@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
 import { usePlayerStore } from './player'
+import { useGameStore } from './game'
 import type { BingoGameState, Card } from '@/types/api'
 
 /** Minimal Card/GameState stand-ins (only the fields the store reads). */
@@ -217,6 +218,100 @@ describe('secondary stamp', () => {
     const player = usePlayerStore()
     player.playerGame = { id: 1, called_numbers: [], patterns: [] } as unknown as BingoGameState
     expect(player.isWinningPatternCell(0, 0)).toBe(false)
+  })
+
+  /** Marks the top row (row 0) as the only winning pattern of game `id`. */
+  function topRowGame(id: number): BingoGameState {
+    const topRow = [true, true, true, true, true]
+    const blank = [false, false, false, false, false]
+    return {
+      id,
+      called_numbers: [],
+      patterns: [{ id, name: 'Top Row', pattern_data: [topRow, blank, blank, blank, blank] }],
+    } as unknown as BingoGameState
+  }
+
+  it('keeps the pattern split after the game ends (playerGame → null)', () => {
+    const player = usePlayerStore()
+    player.playerGame = topRowGame(7)
+    expect(player.isWinningPatternCell(0, 0)).toBe(true)
+
+    // Game ends — the server sends game=null. The primary/secondary split must
+    // survive so stamps don't all flip to secondary before the player saves.
+    player.playerGame = null
+    expect(player.isWinningPatternCell(0, 0)).toBe(true)
+    expect(player.isWinningPatternCell(1, 0)).toBe(false)
+  })
+
+  it('drops the frozen split when the board is cleared', () => {
+    const player = usePlayerStore()
+    player.playerGame = topRowGame(7)
+    player.playerGame = null
+    expect(player.isWinningPatternCell(0, 0)).toBe(true)
+    player.clearAllStamps()
+    expect(player.isWinningPatternCell(0, 0)).toBe(false)
+  })
+
+  it('refreshes the snapshot to the new game when one starts', () => {
+    const player = usePlayerStore()
+    player.playerGame = topRowGame(7)
+    player.playerGame = null
+    expect(player.isWinningPatternCell(0, 4)).toBe(true) // frozen from the old game
+
+    // New game: only the left column (column 0) is a pattern cell.
+    const col0 = [true, false, false, false, false]
+    player.playerGame = {
+      id: 8,
+      called_numbers: [],
+      patterns: [{ id: 8, name: 'Left', pattern_data: [col0, col0, col0, col0, col0] }],
+    } as unknown as BingoGameState
+    expect(player.isWinningPatternCell(0, 0)).toBe(true)
+    expect(player.isWinningPatternCell(0, 4)).toBe(false) // old top-row cell no longer counts
+  })
+})
+
+describe('game details persistence for export', () => {
+  /** A minimal active game with no patterns (details are what we're testing). */
+  function activeGame(id: number): BingoGameState {
+    return { id, called_numbers: [], patterns: [] } as unknown as BingoGameState
+  }
+
+  it('falls back to the frozen details for export after the game ends', () => {
+    const game = useGameStore()
+    const player = usePlayerStore()
+    player.playerGame = activeGame(5)
+    game.gameDetails = '## Tonight\nPrizes!'
+    // While the game runs, export uses the live details.
+    expect(player.cardExportDetails).toBe('## Tonight\nPrizes!')
+    // Game ends: the server clears the live details, but the export keeps a copy.
+    game.gameDetails = ''
+    player.playerGame = null
+    expect(player.cardExportDetails).toBe('## Tonight\nPrizes!')
+  })
+
+  it('clears stored details when the board is cleared with no active game', () => {
+    const game = useGameStore()
+    const player = usePlayerStore()
+    player.playerGame = activeGame(5)
+    game.gameDetails = 'details'
+    game.gameDetails = ''
+    player.playerGame = null
+    expect(player.cardExportDetails).toBe('details')
+    player.clearAllStamps()
+    expect(player.cardExportDetails).toBe('')
+  })
+
+  it('uses live (not stale frozen) details while a new game is active', () => {
+    const game = useGameStore()
+    const player = usePlayerStore()
+    player.playerGame = activeGame(5)
+    game.gameDetails = 'old'
+    player.playerGame = null // ended → frozen = 'old'
+    expect(player.cardExportDetails).toBe('old')
+    // A new game with no details should export blank, not the stale 'old'.
+    game.gameDetails = ''
+    player.playerGame = activeGame(6)
+    expect(player.cardExportDetails).toBe('')
   })
 })
 

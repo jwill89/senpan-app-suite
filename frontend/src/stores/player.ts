@@ -4,12 +4,13 @@
  * custom image). Mirrors all player-side logic from app.js.
  */
 import { defineStore } from 'pinia'
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { endpoints } from '@/lib/endpoints'
 import { STAMP_COLORS, STAMP_SHAPES } from '@/lib/constants'
 import type { BingoDrawnNumber, BingoGameState, Card } from '@/types/api'
 import { setSoundVolume as applySoundVolume } from '@/lib/sound'
 import { useUiStore } from './ui'
+import { useGameStore } from './game'
 
 /** Player sound preference: off, synthesized "basic" beeps, or "game" effects. */
 export type SoundMode = 'off' | 'basic' | 'game'
@@ -64,6 +65,7 @@ function resolveStoredShape(): { mode: string; emoji: string } {
 
 export const usePlayerStore = defineStore('player', () => {
   const ui = useUiStore()
+  const game = useGameStore()
 
   const joinId = ref('')
   const joinError = ref('')
@@ -178,10 +180,73 @@ export const usePlayerStore = defineStore('player', () => {
     return set
   })
 
-  /** True when cell [ri,ci] is a required cell of an active win pattern. */
+  /**
+   * Frozen snapshot of the win-pattern cell set, kept so the primary/secondary
+   * stamp split survives a game ending. When a game ends the server sends
+   * game=null, which empties `winningPatternCells` (it reads `playerGame`);
+   * without this freeze every stamp would flip to the "non-pattern" secondary
+   * stamp before the player can save their board. We mirror the live set here
+   * while a game runs, and drop it when a new game starts (the game id changes)
+   * or the board is cleared — exactly the moments the player expects a reset.
+   */
+  const frozenPatternCells = ref<Set<string> | null>(null)
+  // A new game (different id) invalidates the old snapshot; the next watcher then
+  // repopulates it from that game's patterns. Sync flush keeps it deterministic.
+  watch(
+    () => playerGame.value?.id,
+    (id, prevId) => {
+      if (id && id !== prevId) frozenPatternCells.value = null
+    },
+    { flush: 'sync' },
+  )
+  // Mirror the live pattern set while a game is active (non-empty). Once the game
+  // ends the live set empties, so we stop updating and the last snapshot persists.
+  watch(
+    winningPatternCells,
+    (cells) => {
+      if (cells.size > 0) frozenPatternCells.value = new Set(cells)
+    },
+    { flush: 'sync' },
+  )
+
+  /**
+   * True when cell [ri,ci] is a required cell of a win pattern. While a game is
+   * live this reflects the active patterns; once the game has ended (playerGame
+   * is null) it falls back to the frozen snapshot so stamps keep their type until
+   * a new game starts or the board is cleared.
+   */
   function isWinningPatternCell(ri: number, ci: number): boolean {
-    return winningPatternCells.value.has(ri + '-' + ci)
+    const set =
+      !playerGame.value && frozenPatternCells.value
+        ? frozenPatternCells.value
+        : winningPatternCells.value
+    return set.has(ri + '-' + ci)
   }
+
+  /**
+   * Frozen copy of the game-details markdown, kept so the card-image export still
+   * includes them after a game ends — game end clears the live `game.gameDetails`
+   * (server sends game=null), which would otherwise leave the exported card
+   * without its details if the player saves after the game is over. We mirror the
+   * live details while a game is active and fall back to this once it has ended.
+   */
+  const frozenGameDetails = ref('')
+  watch(
+    () => game.gameDetails,
+    (d) => {
+      if (d) frozenGameDetails.value = d
+    },
+    { flush: 'sync' },
+  )
+
+  /**
+   * The game details to bake into the exported card image: the live details
+   * while a game is running, or the frozen copy once it has ended (so a player
+   * saving their board after the game is over still gets the details).
+   */
+  const cardExportDetails = computed(() =>
+    playerGame.value ? game.gameDetails : frozenGameDetails.value,
+  )
 
   // ── Stamp helpers ────────────────────────────────────────────────────────
 
@@ -213,6 +278,13 @@ export const usePlayerStore = defineStore('player', () => {
 
   function clearAllStamps(): void {
     stamps.value = {}
+    frozenPatternCells.value = null // clearing the board resets the pattern split
+    // If no game is running (e.g. it ended), clearing the board also drops the
+    // game details so they no longer linger in a subsequent card export.
+    if (!playerGame.value) {
+      frozenGameDetails.value = ''
+      game.gameDetails = ''
+    }
     saveStamps()
   }
 
@@ -367,6 +439,8 @@ export const usePlayerStore = defineStore('player', () => {
     stamps.value = {}
     lastDrawn.value = null
     gameEnded.value = false
+    frozenPatternCells.value = null
+    frozenGameDetails.value = ''
   }
 
   /**
@@ -430,6 +504,7 @@ export const usePlayerStore = defineStore('player', () => {
     currentSecondaryStampBg,
     secondaryStampMarkStyle,
     isWinningPatternCell,
+    cardExportDetails,
     isCalledPlayer,
     isStamped,
     boardCellClass,

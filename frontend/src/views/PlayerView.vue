@@ -65,7 +65,7 @@ async function exportCard(): Promise<void> {
       cardId: player.playerCard?.id ?? '',
       playerName: player.playerCard?.player_name ?? '',
       link: window.location.host,
-      gameDetails: game.gameDetails,
+      gameDetails: player.cardExportDetails,
     })
     ui.notify('Card image saved!', 'success')
   } catch {

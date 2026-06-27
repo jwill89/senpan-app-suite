@@ -447,6 +447,13 @@ func (s *Server) handleGaraponDraw(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// A draw mutates the admin-visible draw log + the player's used count, but this
+	// is the *public* draw path (the token is the capability), so it's excluded from
+	// the adminMutationResource middleware that invalidates admin views. Broadcast
+	// the "garapons" signal explicitly so an admin viewing the garapon detail sees
+	// the new draw appear live (the refetch re-applies the per-feature guard).
+	s.broadcastResourceChanged("garapons")
+
 	// Exactly one draw was just recorded, so the fresh usage is player.DrawsUsed+1
 	// (its allowance is unchanged) — no need to reload the player.
 	writeJSON(w, http.StatusOK, map[string]any{

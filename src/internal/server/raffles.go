@@ -330,6 +330,14 @@ func (s *Server) handleRaffleEnter(w http.ResponseWriter, r *http.Request) {
 			"signup_instructions": raffle.SignupInstructions,
 		})
 	}
+
+	// A sign-up mutates the admin-visible entry list + counts, but this is the
+	// *public* entry path, so it's excluded from the adminMutationResource
+	// middleware (which matches the admin ".../entries" suffix, not ".../enter").
+	// Broadcast the "raffles" signal explicitly so an admin viewing the raffle
+	// detail sees the new entry appear live (the refetch re-applies the guard).
+	// Only success reaches here — every validation/error path above returns first.
+	s.broadcastResourceChanged("raffles")
 }
 
 // ── Raffle entries admin actions ────────────────────────────────────────────

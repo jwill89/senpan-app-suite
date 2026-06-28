@@ -1,6 +1,13 @@
 import { fileURLToPath, URL } from 'node:url'
+import { readFileSync } from 'node:fs'
 import { defineConfig } from 'vitest/config'
 import vue from '@vitejs/plugin-vue'
+
+// Mirror vite.config.ts's __APP_VERSION__ define so code that reads the frontend
+// version works (and can be asserted) under the test runner too.
+const frontendVersion = JSON.parse(
+  readFileSync(fileURLToPath(new URL('./package.json', import.meta.url)), 'utf-8'),
+).version as string
 
 // Vitest configuration, kept separate from `vite.config.ts` so the test runner
 // doesn't pull in the production-only plugins (PWA service worker, bundle
@@ -8,6 +15,9 @@ import vue from '@vitejs/plugin-vue'
 // are needed to import and mount components/stores under test.
 export default defineConfig({
   plugins: [vue()],
+  define: {
+    __APP_VERSION__: JSON.stringify(frontendVersion),
+  },
   resolve: {
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url)),

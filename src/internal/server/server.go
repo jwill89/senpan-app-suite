@@ -99,6 +99,7 @@ func (s *Server) withUserCache(next http.Handler) http.Handler {
 // routes registers all API endpoint handlers on the internal mux.
 // Uses Go 1.22+ method-pattern routing ("GET /api/..." syntax).
 func (s *Server) routes() {
+	s.mux.HandleFunc("GET /api/version", s.handleVersion)
 	s.mux.HandleFunc("GET /api/auth", s.handleAuthCheck)
 	s.mux.HandleFunc("POST /api/auth", s.handleAuthAction)
 	s.mux.HandleFunc("POST /api/register", s.handleRegister)

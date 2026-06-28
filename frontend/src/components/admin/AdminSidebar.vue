@@ -23,6 +23,7 @@ import { useGameStore } from '@/stores/game'
 import { useCardsStore } from '@/stores/cards'
 import { useRafflesStore } from '@/stores/raffles'
 import { BOOK_CLUBS } from '@/lib/constants'
+import AppVersions from '@/components/admin/AppVersions.vue'
 
 const router = useRouter()
 const admin = useAdminStore()
@@ -298,5 +299,8 @@ function toggleSection(section: AdminSection): void {
         </button>
       </div>
     </div>
+
+    <!-- Frontend/backend version readout (compatibility check). -->
+    <AppVersions />
   </nav>
 </template>

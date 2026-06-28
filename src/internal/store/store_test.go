@@ -1038,7 +1038,7 @@ func TestSettingsGetSet(t *testing.T) {
 func TestStyleCRUD(t *testing.T) {
 	s := newTestStore(t)
 
-	id, err := s.CreateStyle("Dark Theme", "body { background: #000; }", "images/flourishes/a.svg", "images/flourishes/b.svg")
+	id, err := s.CreateStyle("Dark Theme", map[string]string{"page-bg": "#000", "accent": "#fff"}, "images/flourishes/a.svg", "images/flourishes/b.svg")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1053,8 +1053,12 @@ func TestStyleCRUD(t *testing.T) {
 	if style.Name != "Dark Theme" {
 		t.Errorf("name = %q; want Dark Theme", style.Name)
 	}
-	if style.CSSContent != "body { background: #000; }" {
-		t.Errorf("css = %q", style.CSSContent)
+	// Tokens round-trip, and the CSS is generated from them in canonical order.
+	if style.Tokens["page-bg"] != "#000" || style.Tokens["accent"] != "#fff" {
+		t.Errorf("tokens = %v", style.Tokens)
+	}
+	if style.CSSContent != ":root{--page-bg:#000;--accent:#fff;}" {
+		t.Errorf("generated css = %q", style.CSSContent)
 	}
 	// Flourishes round-trip.
 	if style.BoardFlourish != "images/flourishes/a.svg" || style.NumberFlourish != "images/flourishes/b.svg" {
@@ -1062,7 +1066,7 @@ func TestStyleCRUD(t *testing.T) {
 	}
 
 	// Update (also clears the flourishes).
-	if err := s.UpdateStyle(id, "Light Theme", "body { background: #fff; }", "", ""); err != nil {
+	if err := s.UpdateStyle(id, "Light Theme", map[string]string{"page-bg": "#fff"}, "", ""); err != nil {
 		t.Fatal(err)
 	}
 	style, _ = s.GetStyle(id)
@@ -1121,14 +1125,14 @@ func TestActiveStyleCSS(t *testing.T) {
 	}
 
 	// Create and activate
-	id, _ := s.CreateStyle("Test", ".foo { color: red; }", "images/flourishes/board.svg", "images/flourishes/num.svg")
+	id, _ := s.CreateStyle("Test", map[string]string{"highlight": "red"}, "images/flourishes/board.svg", "images/flourishes/num.svg")
 	_ = s.SetSetting("active_style_id", fmt.Sprintf("%d", id))
 
 	css, err = s.GetActiveStyleCSS()
 	if err != nil {
 		t.Fatal(err)
 	}
-	if css != ".foo { color: red; }" {
+	if css != ":root{--highlight:red;}" {
 		t.Errorf("active CSS = %q", css)
 	}
 

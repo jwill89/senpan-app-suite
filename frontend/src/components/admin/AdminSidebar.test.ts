@@ -24,12 +24,14 @@ function makeUser(partial: Partial<User>): User {
   }
 }
 
-/** Mounts the sidebar with the given logged-in account. */
+/** Mounts the sidebar with the given logged-in account. The AppVersions footer
+ * (which fetches GET /api/version on mount) is stubbed — it's covered by its own
+ * test and irrelevant to the navigation assertions here. */
 function mountAs(user: User): VueWrapper {
   const auth = useAuthStore()
   auth.user = user
   auth.isAdmin = !!user.is_admin
-  return mount(AdminSidebar)
+  return mount(AdminSidebar, { global: { stubs: { AppVersions: true } } })
 }
 
 /** The section wrapper whose header text contains `label` (looked up fresh). */

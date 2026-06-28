@@ -37,9 +37,9 @@ import { useUiStore } from '@/stores/ui'
 import { BOOK_CLUBS, ADMIN_PERMISSIONS } from '@/lib/constants'
 
 // Views and admin tabs are lazy-loaded (dynamic import) so each route's code —
-// and its heavy deps (CodeMirror, vuedraggable, markdown-it) — is split into a
-// separate chunk fetched on demand. A player viewing a board never downloads
-// the admin/themes editor code. Vite + the manualChunks config keep shared
+// and its heavy deps (vuedraggable, markdown-it) — is split into a separate
+// chunk fetched on demand. A player viewing a board never downloads the
+// admin/themes editor code. Vite + the manualChunks config keep shared
 // vendor code (vue, fontawesome) cached across these route chunks.
 
 // Each admin child route carries the AdminTab id it represents in meta.tab so

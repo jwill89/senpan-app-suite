@@ -1,0 +1,1001 @@
+/*
+ * Admin views — login, dashboard, and tabs (cards, patterns, game, themes,
+ * raffles, frequent winners).
+ */
+
+/* ================================================================
+   21. ADMIN LOGIN — Password entry screen
+   ================================================================ */
+
+/* Vertically centered login container */
+.admin-login {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 80vh;
+    gap: 16px
+}
+
+/* Login dialog box */
+.admin-login .box {
+    background: var(--panel-bg);
+    padding: 40px;
+    border-radius: 16px;
+    text-align: center;
+    width: 360px;
+    border: 2px solid var(--panel-raised-bg)
+}
+
+.admin-login .box h2 {
+    margin-bottom: 6px
+}
+
+.admin-login .box p {
+    color: var(--text-muted);
+    margin-bottom: 20px;
+    font-size: .9rem
+}
+
+.admin-login .box input {
+    width: 100%
+}
+
+/* Form fields (FormField) carry their own label + spacing; left-align them
+   within the otherwise centred login/register box so labels sit above their
+   inputs rather than centred. */
+.admin-login .login-form {
+    text-align: left;
+    margin-bottom: 4px
+}
+
+/* Login/back button row */
+.admin-login .box .btns {
+    display: flex;
+    gap: 12px;
+    justify-content: center;
+    margin-top: 4px
+}
+
+/* Inline error message (wrong password, etc.) */
+.error-msg {
+    color: var(--danger);
+    font-size: .85rem;
+    margin-top: 8px
+}
+
+/* ================================================================
+   22. ADMIN DASHBOARD — Sidebar nav + content area
+   ================================================================ */
+
+/* Two-column admin layout: sidebar + main content */
+.admin-layout {
+    display: flex;
+    min-height: calc(100vh - 56px)
+}
+
+/* Left sidebar with collapsible section navigation */
+.admin-sidebar {
+    width: 220px;
+    flex-shrink: 0;
+    background: var(--panel-bg);
+    border-right: 1px solid var(--panel-raised-bg);
+    padding: 12px 0;
+    overflow-y: auto
+}
+
+/* Collapsible nav section group (Bingo, Raffles, System) */
+.admin-nav-section {
+    margin-bottom: 4px
+}
+
+/* Clickable section header with expand/collapse chevron */
+.admin-nav-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 16px;
+    cursor: pointer;
+    font-weight: 700;
+    font-size: .95rem;
+    color: var(--text-muted);
+    transition: color .15s, background .15s;
+    user-select: none
+}
+
+.admin-nav-header:hover,
+.admin-nav-header.open {
+    color: var(--text);
+    background: var(--panel-raised-bg)
+}
+
+/* Expand/collapse chevron arrow */
+.nav-chevron {
+    font-size: .75rem;
+    opacity: .6
+}
+
+/* Tab buttons within an expanded section */
+.admin-nav-items {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    padding: 2px 0
+}
+
+/* Individual tab button */
+.admin-nav-items button {
+    display: block;
+    width: 100%;
+    text-align: left;
+    padding: 8px 16px 8px 28px;
+    background: transparent;
+    color: var(--text-muted);
+    font-weight: 500;
+    font-size: .88rem;
+    border-radius: 0;
+    transition: background .12s, color .12s
+}
+
+.admin-nav-items button:hover {
+    background: var(--panel-raised-bg);
+    color: var(--text)
+}
+
+/* Currently active/selected tab */
+.admin-nav-items button.active {
+    background: var(--accent-2);
+    color: var(--text);
+    font-weight: 600
+}
+
+/* Main content area to the right of sidebar */
+.admin-content {
+    flex: 1;
+    min-width: 0;
+    overflow-y: auto
+}
+
+/* Centred max-width wrapper inside the content column (the `.content-container`
+   companion) — keeps admin tabs a comfortable measure on wide monitors. */
+.admin-content-inner {
+    width: 100%
+}
+
+/* Hamburger toggle + drawer backdrop are mobile-only — hidden on desktop where
+   the sidebar is a permanent column. */
+.admin-nav-toggle { display: none }
+.admin-nav-backdrop { display: none }
+
+/* Mobile: the sidebar becomes a slide-in drawer over the content (instead of
+   stacking on top and pushing every page below the fold). The hamburger in the
+   topbar toggles `.is-open`; a backdrop dims the page and closes on tap. */
+@media (max-width: 768px) {
+    .admin-layout {
+        flex-direction: column
+    }
+    .admin-nav-toggle {
+        display: inline-flex;
+        align-items: center
+    }
+    .admin-sidebar {
+        position: fixed;
+        top: 0;
+        left: 0;
+        bottom: 0;
+        width: 260px;
+        max-width: 82vw;
+        z-index: 1200;
+        padding: 12px 0;
+        border-right: 1px solid var(--panel-raised-bg);
+        border-bottom: none;
+        box-shadow: 2px 0 18px var(--shadow);
+        transform: translateX(-100%);
+        transition: transform .22s ease;
+    }
+    .admin-sidebar.is-open {
+        transform: translateX(0)
+    }
+    .admin-nav-backdrop {
+        display: block;
+        position: fixed;
+        inset: 0;
+        z-index: 1100;
+        background: var(--modal-overlay);
+    }
+    .admin-nav-items button {
+        padding: 8px 16px 8px 36px
+    }
+}
+
+/* Respect reduced-motion: no slide animation. */
+@media (max-width: 768px) and (prefers-reduced-motion: reduce) {
+    .admin-sidebar { transition: none }
+}
+
+/* Content padding inside each admin tab */
+.tab-body {
+    padding: 24px
+}
+
+/* ================================================================
+   23. ADMIN CARDS — Card generation, listing, and management
+   ================================================================ */
+
+/* Generate-count input width; the toolbar's flex chrome comes from the shared
+   `.flex-toolbar` object (markup composes `flex-toolbar cards-toolbar mb-20`).
+   The card list itself is the shared `.data-table` (see CardsTab.vue). */
+.cards-toolbar input[type=number] {
+    width: 80px
+}
+
+/* ================================================================
+   24. ADMIN PATTERNS — 5×5 editor + saved pattern cards
+   ================================================================ */
+
+/* Pattern creation panel with grid editor */
+.pattern-editor {
+    background: var(--panel-bg);
+    border-radius: var(--radius);
+    padding: 24px;
+    margin-bottom: 16px
+}
+
+/* 5×5 clickable grid for designing patterns */
+.pattern-editor-grid {
+    display: grid;
+    grid-template-columns:repeat(5, 1fr);
+    gap: 4px;
+    width: fit-content;
+    margin: 16px auto
+}
+
+/* Individual toggle cell in the pattern editor */
+.pattern-editor-cell {
+    width: 48px;
+    height: 48px;
+    border-radius: 6px;
+    background: var(--panel-raised-bg);
+    cursor: pointer;
+    border: 2px solid transparent;
+    transition: all .12s
+}
+
+/* Active (selected) cell in pattern editor */
+.pattern-editor-cell.on {
+    background: var(--highlight);
+    border-color: var(--highlight)
+}
+
+.pattern-editor-cell:hover {
+    border-color: var(--text-muted)
+}
+
+/* Name input + category selector row */
+.pattern-editor .field {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 12px;
+    justify-content: center
+}
+
+/* Save/clear button row */
+.pattern-editor .btns {
+    display: flex;
+    gap: 12px;
+    justify-content: center;
+    margin-top: 20px
+}
+
+/* Flex-wrapped grid of saved pattern cards */
+.saved-patterns {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px
+}
+
+/* Collapsible per-category header above each pattern group (Patterns manager) */
+.pattern-group-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 14px 0 8px;
+    cursor: pointer;
+    user-select: none;
+}
+.pattern-group-head h4 { margin: 0; font-size: 1rem }
+
+/* Individual saved pattern card with mini grid + name */
+.saved-pattern {
+    padding: 14px;
+    text-align: center;
+    position: relative;
+    width: 140px;
+    transition: border-color .15s, box-shadow .15s
+}
+
+/* Centered mini grid inside saved pattern card */
+.saved-pattern .pattern-mini {
+    margin: 24px auto 8px;
+    width: fit-content;
+}
+
+/* Slightly larger cells in saved pattern cards */
+.saved-pattern .pattern-mini .pattern-mini-cell {
+    width: 18px;
+    height: 18px
+}
+
+/* Pattern name below the mini grid */
+.saved-pattern span {
+    display: block;
+    font-size: .85rem;
+    margin-bottom: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap
+}
+
+/* Delete × (top-right corner of a saved pattern) uses the `.del-x` object;
+   only its absolute placement is local. */
+.saved-pattern .del-x {
+    position: absolute;
+    top: 6px;
+    right: 8px
+}
+
+/* Drag handle icon (top-left corner of saved pattern) */
+.saved-pattern .pattern-drag {
+    position: absolute;
+    top: 6px;
+    left: 8px
+}
+
+/* Click-to-edit pattern name text */
+.saved-pattern .pattern-name {
+    cursor: text;
+    margin-top: 6px;
+    font-size: .82rem;
+    color: var(--text-muted)
+}
+
+.saved-pattern .pattern-name:hover {
+    color: var(--highlight)
+}
+
+/* Inline input when renaming a pattern */
+.saved-pattern .pattern-name-input {
+    margin-top: 6px;
+    font-size: .82rem;
+    max-width: 110px
+}
+
+/* ================================================================
+   25. INLINE EDITING — Shared input for click-to-edit fields
+   ================================================================ */
+
+/* Compact input that replaces text when editing pattern/category names */
+.inline-edit-input {
+    background: var(--panel-raised-bg);
+    border: 1px solid var(--highlight);
+    border-radius: 4px;
+    color: var(--text);
+    font-size: inherit;
+    padding: 2px 6px;
+    outline: none;
+    width: 100%;
+    min-width: 60px
+}
+
+.inline-edit-input:focus {
+    border-color: var(--highlight);
+    box-shadow: 0 0 0 2px var(--highlight-glow)
+}
+
+/* ================================================================
+   26. DRAG & DROP — Visual feedback for pattern reordering
+   ================================================================ */
+
+/* Semi-transparent state while an item is being dragged */
+.dragging {
+    opacity: .4;
+}
+
+/* Highlight on pattern drop zone when dragging over it */
+.pattern-drop-zone.drag-over {
+    background: rgba(214, 189, 174, .06);
+    border-radius: 8px;
+    outline: 2px dashed var(--highlight);
+    outline-offset: 2px;
+}
+
+/* Grab cursor for draggable pattern cards (dragged by their whole body). */
+.saved-pattern[draggable="true"] {
+    cursor: grab;
+}
+
+/* Grabbing cursor while actively dragging */
+.saved-pattern[draggable="true"]:active {
+    cursor: grabbing;
+}
+
+/* Drag handle icon (⋮⋮) shown on pattern cards */
+.drag-handle {
+    user-select: none;
+    cursor: grab;
+    opacity: .4;
+    font-size: .8rem;
+    transition: opacity .15s
+}
+
+.drag-handle:hover {
+    opacity: .8
+}
+
+/* Active grabbing cursor while dragging via the handle */
+.drag-handle:active {
+    cursor: grabbing;
+}
+
+/* ================================================================
+   27. ADMIN GAME — Setup, draw controls, countdown, pattern picker
+   ================================================================ */
+
+/* Game setup form (shown when no game is active). Sits flush in the
+   admin panel like the other tabs — no nested-card surface of its own. */
+.game-setup {
+    border-radius: var(--radius)
+}
+
+.game-setup h3 {
+    margin-bottom: 12px
+}
+
+/* Draw button + delay selector + end game button row */
+.draw-controls {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 14px;
+    flex-wrap: wrap
+}
+
+/* Winner-sound on/off toggle in the draw-controls row. */
+.winner-sound-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    white-space: nowrap
+}
+.winner-sound-toggle[aria-pressed='true'] {
+    color: var(--highlight);
+    border-color: var(--highlight)
+}
+
+
+/* Countdown timer shown while delaying player broadcast */
+.draw-countdown {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    margin-top: 16px;
+    animation: fadeIn .3s ease
+}
+
+/* Pulsing circular countdown ring */
+.countdown-ring {
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    border: 4px solid var(--highlight);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    animation: countdownPulse 1s infinite
+}
+
+/* Seconds remaining inside the countdown ring */
+.countdown-number {
+    font-size: 1.6rem;
+    font-weight: 800;
+    color: var(--highlight)
+}
+
+/* "Sending to players..." label next to countdown */
+.countdown-label {
+    font-size: 1rem;
+    color: var(--text-muted);
+    font-weight: 600
+}
+
+/* Pulsing scale animation for the countdown ring */
+@keyframes countdownPulse {
+    0%, 100% { transform: scale(1); opacity: 1 }
+    50% { transform: scale(1.08); opacity: .85 }
+}
+
+/* "✓ Sent to players" confirmation shown after countdown completes */
+.draw-sent {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    margin-top: 16px;
+    animation: fadeIn .3s ease
+}
+
+.sent-icon {
+    font-size: 1.4rem
+}
+
+.sent-label {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--success)
+}
+
+/* Fade-in animation shared by countdown and sent indicators */
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(-8px) }
+    to { opacity: 1; transform: translateY(0) }
+}
+
+/* Pattern checkbox list for game start (select which patterns to use) */
+.pattern-checks {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-bottom: 20px
+}
+
+/* Individual selectable pattern card: mini grid on top, small name below —
+   mirrors the Patterns manager's .saved-pattern card so the picker reads
+   consistently, and the narrow width lets many patterns fit per row. The
+   selection dot sits in the top-right corner; the gold border marks selection. */
+.pattern-check {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    background: var(--panel-raised-bg);
+    padding: 12px 10px 8px;
+    border-radius: 8px;
+    cursor: pointer;
+    border: 2px solid transparent;
+    position: relative;
+    width: 96px;
+    text-align: center;
+    transition: border-color .15s
+}
+
+/* Selected pattern (gold border) */
+.pattern-check.selected {
+    border-color: var(--highlight)
+}
+
+/* Hide native checkbox input */
+.pattern-check input {
+    display: none
+}
+
+/* Selection dot indicator, pinned to the card's top-right corner */
+.pattern-check .dot {
+    position: absolute;
+    top: 6px;
+    right: 6px;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    border: 2px solid var(--text-muted);
+    background: var(--panel-bg)
+}
+
+/* Filled gold dot when pattern is selected */
+.pattern-check.selected .dot {
+    background: var(--highlight);
+    border-color: var(--highlight)
+}
+
+/* Pattern name below the mini grid (small, wraps for long names) */
+.pattern-check-name {
+    font-size: .72rem;
+    line-height: 1.25;
+    color: var(--text);
+    word-break: break-word
+}
+
+/* Category line under the name in the flat (search-results) view */
+.pattern-check-cat {
+    font-size: .66rem;
+    color: var(--text-muted)
+}
+
+/* ================================================================
+   28. ACTIVE GAME LAYOUT — Two-column grid during live game
+   ================================================================ */
+
+/* Vertical stack container for active game content */
+.game-active {
+    display: flex;
+    flex-direction: column;
+    gap: 20px
+}
+
+/* Two-column layout: called numbers (left) + winners/details (right) */
+.game-active-columns {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px
+}
+
+.game-active-left {
+    display: flex;
+    flex-direction: column;
+    gap: 20px
+}
+
+.game-active-right {
+    display: flex;
+    flex-direction: column;
+    gap: 20px
+}
+
+/* Stack columns on narrow screens */
+@media (max-width: 800px) {
+    .game-active-columns {
+        grid-template-columns: 1fr
+    }
+}
+
+/* ================================================================
+   29. STYLES/THEMES EDITOR — Theme list + structured token editor
+   ================================================================ */
+
+/* Split layout: sidebar list + editor area */
+.styles-layout {
+    display: flex;
+    gap: 20px;
+    min-height: 500px
+}
+
+/* Theme list sidebar */
+.styles-sidebar {
+    width: 220px;
+    flex-shrink: 0;
+    background: var(--panel-bg);
+    border-radius: var(--radius);
+    padding: 16px
+}
+
+/* Scrollable list of theme entries */
+.styles-list {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    max-height: 350px;
+    overflow-y: auto
+}
+
+/* Individual theme list item */
+.style-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 12px;
+    border-radius: 6px;
+    cursor: pointer;
+    background: var(--panel-raised-bg);
+    transition: all .12s;
+    gap: 8px
+}
+
+.style-item:hover {
+    background: var(--accent);
+    color: var(--text-on-accent)
+}
+
+/* Currently selected/editing theme */
+.style-item.selected {
+    border: 2px solid var(--accent);
+    background: var(--panel-raised-bg)
+}
+
+/* Theme name (truncated) */
+.style-name {
+    font-size: .9rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap
+}
+
+/* "Active" badge on the currently applied theme — `.badge` object chrome + colours. */
+.style-active-badge {
+    background: var(--success);
+    color: var(--text-on-fill)
+}
+
+/* CSS editor area (right side) */
+.styles-editor {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    background: var(--panel-bg);
+    border-radius: var(--radius);
+    padding: 16px
+}
+
+/* Mobile: stack theme list above editor */
+@media (max-width: 700px) {
+    .styles-layout {
+        flex-direction: column
+    }
+    .styles-sidebar {
+        width: 100%
+    }
+    .styles-list {
+        max-height: 200px
+    }
+}
+
+/* ── Object: color-picker skin (@ckpack/vue-color Chrome) ───────────────────
+   The Chrome picker ships a light skin and its inputs would otherwise inherit
+   the global dark `input` background with dark text. Wrapping the picker in
+   `.color-picker` re-maps its surfaces + fields to the app theme tokens (so it
+   blends into any modal/panel and stays legible), and the descendant selectors
+   keep the edge over the library's own single-class styles regardless of load
+   order. Used by StampColorPicker (player stamp-colour modal); the Themes-tab
+   helper uses a native colour input instead. */
+.color-picker .vc-chrome {
+    width: 100%;
+    max-width: 320px;
+    background: var(--panel-raised-bg);
+    border-radius: var(--radius);
+    box-shadow: 0 6px 18px var(--shadow);
+    font-family: inherit;
+}
+.color-picker .vc-chrome-body {
+    background: var(--panel-raised-bg);
+}
+.color-picker .vc-input__input {
+    width: 100%;
+    height: 26px;
+    padding: 2px 4px;
+    border: none;
+    border-radius: 4px;
+    font-size: 0.72rem;
+    text-align: center;
+    background: var(--panel-bg);
+    color: var(--text);
+    box-shadow: inset 0 0 0 1px var(--panel-raised-bg);
+}
+.color-picker .vc-input__input:focus {
+    box-shadow: inset 0 0 0 1px var(--accent-2);
+}
+.color-picker .vc-input__label {
+    color: var(--text-muted);
+}
+.color-picker .vc-chrome-toggle-icon path {
+    fill: var(--text-muted);
+}
+.color-picker .vc-chrome-toggle-icon-highlight {
+    background: var(--panel-bg);
+}
+
+/* ================================================================
+   31. RAFFLES — Cards, detail page, signup, admin management
+   ================================================================ */
+
+/* Flex-wrapped grid of raffle preview cards */
+.card-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px
+}
+
+/* Public raffle list: centre the cards so a single/few raffles sit in the middle
+   of the page rather than marooned in the top-left corner. */
+.card-grid--center {
+    justify-content: center
+}
+
+/* Individual raffle card (clickable, with optional image + body). A solid
+   surface + border so the card still reads as a card when it has no prize image
+   (previously it had no fill and collapsed into floating text). */
+.media-card {
+    border-radius: 12px;
+    width: 280px;
+    cursor: pointer;
+    background: var(--panel-raised-bg);
+    border: 1px solid var(--control-border);
+    transition: border-color .2s, transform .12s, box-shadow .2s;
+    overflow: hidden
+}
+
+.media-card:hover {
+    border-color: var(--accent-2);
+    transform: translateY(-2px);
+    box-shadow: 0 6px 18px var(--shadow)
+}
+
+/* Prize image at top of raffle card */
+.media-card-image {
+    width: 100%;
+    height: 160px;
+    object-fit: cover;
+    display: block
+}
+
+/* Text content area below the image */
+.media-card-body {
+    padding: 16px
+}
+
+.media-card-body h3 {
+    font-size: 1.05rem;
+    margin-bottom: 6px
+}
+
+/* Cost per entry display (gold text) */
+.raffle-cost {
+    color: var(--highlight);
+    font-weight: 600;
+    font-size: .9rem
+}
+
+/* Open/Closed status badge on raffle cards — `.badge` object chrome + margin. */
+.status-badge {
+    margin-left: 6px
+}
+
+.status-badge-open {
+    background: var(--success);
+    color: var(--text-on-fill)
+}
+
+.status-badge-closed {
+    background: var(--danger);
+    color: var(--text-on-fill)
+}
+
+/* Public raffle entry sign-up form */
+.raffle-signup-form {
+    background: var(--panel-bg);
+    border-radius: var(--radius);
+    padding: 20px;
+    margin-top: 16px
+}
+
+.raffle-signup-form input,
+.raffle-signup-form select {
+    width: 100%
+}
+
+/* Success result shown after signing up (entry count + cost) */
+.raffle-signup-result {
+    background: var(--panel-bg);
+    border: 2px solid var(--success);
+    border-radius: var(--radius);
+    padding: 20px;
+    margin-top: 16px
+}
+
+/* Generic admin content panel */
+.admin-panel {
+    background: var(--panel-bg);
+    border-radius: var(--radius);
+    padding: 24px
+}
+.admin-panel > h3:first-child {
+    padding-bottom: 12px;
+    margin-bottom: 16px;
+    border-bottom: 1px solid color-mix(in srgb, var(--text-muted) 25%, transparent);
+}
+
+/* Nested content boxes inside admin-panel need a darker/lighter bg for contrast */
+.admin-panel .numbers-panel,
+.admin-panel .winners-panel,
+.admin-panel .patterns-panel,
+.admin-panel .last-drawn,
+.admin-panel .game-details,
+.admin-panel .frequent-winners-panel {
+    background: var(--panel-raised-bg);
+}
+
+/* The combined last-drawn + called-numbers box (mirrors the player board) is a
+   raised card inside the admin panel; its inner tracker keeps no surface of its
+   own so the one box provides the single frame (beats the .numbers-panel rule
+   above on specificity). */
+.admin-panel .called-combined {
+    background: var(--panel-raised-bg);
+}
+.admin-panel .called-combined .numbers-panel {
+    background: transparent;
+}
+/* The divider's default color matches the raised card it now sits on, so give it
+   a contrasting line (the token built to read on --panel-raised-bg). */
+.admin-panel .called-divider {
+    border-top-color: var(--control-border);
+}
+
+/* Inactive mini-pattern cells need darker bg inside admin panels */
+.admin-panel .pattern-mini-cell {
+    background: var(--panel-bg);
+}
+.admin-panel .pattern-mini-cell.on {
+    background: var(--highlight);
+}
+
+/* Pattern editor cells: darken unchecked cells inside admin panel */
+.admin-panel .pattern-editor-cell {
+    background: var(--panel-bg);
+}
+.admin-panel .pattern-editor-cell.on {
+    background: var(--highlight);
+}
+
+/* Saved pattern cards need contrast inside admin panel */
+.admin-panel .saved-pattern {
+    background: var(--panel-raised-bg);
+    border-color: color-mix(in srgb, var(--text-muted) 20%, transparent);
+}
+
+/* Pattern editor panel contrast inside admin panel */
+.admin-panel .pattern-editor {
+    background: var(--panel-raised-bg);
+}
+
+/* Winner announcement panel (gradient gold/green background) */
+.raffle-winner-panel {
+    background: linear-gradient(135deg, color-mix(in srgb, var(--highlight) 15%, transparent), color-mix(in srgb, var(--success) 15%, transparent));
+    border: 2px solid var(--highlight);
+    border-radius: var(--radius);
+    padding: 20px;
+    margin-bottom: 16px;
+    text-align: center
+}
+
+/* Admin raffle entries table container */
+.raffle-entries-table {
+    background: var(--panel-bg);
+    border-radius: var(--radius);
+    overflow-x: auto
+}
+
+.raffle-entries-table th {
+    font-weight: 600
+}
+
+.raffle-entries-table td,
+.raffle-entries-table th {
+    white-space: nowrap
+}
+
+
+/* Public closed raffle message container */
+.raffle-closed-msg {
+    background: var(--panel-bg);
+    border-radius: var(--radius);
+    margin-top: 16px
+}
+
+/* ================================================================
+   32. FREQUENT WINNERS PANEL — Alert for repeat winners
+   ================================================================ */
+
+/* Gold-bordered alert panel shown on game tab when frequent winners exist */
+.frequent-winners-panel {
+    background: var(--panel-bg);
+    border: 1px solid var(--highlight);
+    border-radius: 8px;
+    padding: 12px 16px;
+    margin-top: 16px;
+}
+/* Row of player name chips inside the alert */
+.frequent-winner-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 8px;
+}
+

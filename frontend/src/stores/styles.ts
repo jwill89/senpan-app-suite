@@ -1,13 +1,15 @@
 /**
- * Styles store: custom CSS theme CRUD + activation. The CSS editor itself is
- * CodeMirror 6 (vue-codemirror) in the component — this store just manages the
- * theme list, the currently-edited theme, and persistence. Applying the active
- * CSS live is done via the theme lib helper.
+ * Styles store: theme CRUD + activation. A theme is a set of design-token
+ * overrides (see lib/theme-tokens), edited via the structured ThemeTokenEditor
+ * in the component — this store manages the theme list, the currently-edited
+ * theme, and persistence. The applied stylesheet is generated from the tokens
+ * (server-side; and locally via tokensToCss for the live activation).
  */
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import { endpoints } from '@/lib/endpoints'
 import { applyCustomCSS } from '@/lib/theme'
+import { defaultTokens, tokensToCss, withDefaults } from '@/lib/theme-tokens'
 import type { Style } from '@/types/api'
 import { useUiStore } from './ui'
 import { useAppStore } from './app'
@@ -40,8 +42,9 @@ export const useStylesStore = defineStore('styles', () => {
   async function loadStyle(id: number): Promise<void> {
     try {
       const data = await endpoints.styles.get(id)
-      // Guarantee css_content is a string for the v-model-bound CSS editor.
-      editingStyle.value = { ...data.style, css_content: data.style.css_content ?? '' }
+      // Merge saved tokens over the defaults so every token has a value for the
+      // editor (a theme may have been saved before a token existed).
+      editingStyle.value = { ...data.style, tokens: withDefaults(data.style.tokens) }
     } catch (e) {
       ui.notify((e as Error).message, 'error')
     }
@@ -51,7 +54,7 @@ export const useStylesStore = defineStore('styles', () => {
     editingStyle.value = {
       id: 0,
       name: '',
-      css_content: '',
+      tokens: defaultTokens(),
       board_flourish: '',
       number_flourish: '',
       created_at: '',
@@ -66,15 +69,15 @@ export const useStylesStore = defineStore('styles', () => {
       return
     }
     savingStyle.value = true
-    const css = editingStyle.value.css_content ?? ''
+    const tokens = editingStyle.value.tokens ?? {}
     const board = editingStyle.value.board_flourish ?? ''
     const number = editingStyle.value.number_flourish ?? ''
     try {
       if (editingStyle.value.id) {
-        await endpoints.styles.update(editingStyle.value.id, name, css, board, number)
+        await endpoints.styles.update(editingStyle.value.id, name, tokens, board, number)
         ui.notify('Theme saved', 'success')
       } else {
-        const data = await endpoints.styles.create(name, css, board, number)
+        const data = await endpoints.styles.create(name, tokens, board, number)
         editingStyle.value.id = data.id
         ui.notify('Theme created', 'success')
       }
@@ -106,7 +109,7 @@ export const useStylesStore = defineStore('styles', () => {
       activeStyleId.value = id > 0 ? String(id) : ''
       // Apply CSS + flourishes locally immediately (the server also broadcasts).
       if (id > 0 && editingStyle.value && editingStyle.value.id === id) {
-        applyCustomCSS(editingStyle.value.css_content || '')
+        applyCustomCSS(tokensToCss(editingStyle.value.tokens || {}))
         app.applyFlourishes(
           editingStyle.value.board_flourish || '',
           editingStyle.value.number_flourish || '',

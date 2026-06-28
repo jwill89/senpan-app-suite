@@ -1,0 +1,287 @@
+/*
+ * Shared components — toasts, modals, pagination, loading & empty states.
+ */
+
+/* ================================================================
+   4. TOAST NOTIFICATION — Fixed top-right feedback popup
+   ================================================================ */
+
+/* Base toast container — slides in from the right */
+.toast {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    padding: 14px 24px;
+    border-radius: var(--radius);
+    font-weight: 600;
+    z-index: 1000;
+    animation: slideIn .3s ease;
+    max-width: 380px;
+    cursor: pointer
+}
+
+/* Toast color variants */
+.toast-success {
+    background: var(--success);
+    color: var(--text-on-fill)
+}
+
+.toast-error {
+    background: var(--danger);
+    color: var(--text-on-fill)
+}
+
+.toast-info {
+    background: var(--accent-2);
+    color: var(--text-on-fill)
+}
+
+/* Slide-in animation for toast appearance */
+@keyframes slideIn {
+    from {
+        opacity: 0;
+        transform: translateX(40px)
+    }
+    to {
+        opacity: 1;
+        transform: translateX(0)
+    }
+}
+
+/* ================================================================
+   5. MODALS — Overlay + dialog box (card preview, winner verify)
+   ================================================================ */
+
+/* Fullscreen semi-transparent overlay */
+.modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: var(--modal-overlay);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 500
+}
+
+/* Centered modal content box */
+.modal-box {
+    background: var(--panel-bg);
+    border-radius: 16px;
+    padding: 24px;
+    max-width: 440px;
+    width: 90%
+}
+
+.modal-box h3 {
+    margin-bottom: 12px
+}
+
+/* Themed confirm dialog (ui.confirm) — message + action button row */
+.modal-box .confirm-msg {
+    color: var(--text-muted);
+    font-size: .95rem;
+    line-height: 1.5;
+    margin-bottom: 20px
+}
+
+.modal-box .confirm-btns {
+    display: flex;
+    gap: 12px;
+    justify-content: flex-end
+}
+
+/* Centered confirm dialogs put the buttons in the middle */
+.modal-box.modal-centered .confirm-btns {
+    justify-content: center
+}
+
+/* ================================================================
+   6. PAGINATION BAR — Page navigation controls
+   ================================================================ */
+
+/* Centered row of page buttons for winners log and other tables */
+.pagination-bar {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+}
+
+/* ================================================================
+   7. LOADING & ASYNC STATES — disabled buttons, spinners, top
+       route-progress bar, and empty-state text. All styles use the
+       theme tokens (--accent, --panel-raised-bg, --text-muted, …) so custom
+       themes restyle them automatically.
+   ================================================================ */
+
+/* Disabled buttons: dim, non-interactive, and no hover/press feedback. */
+button:disabled,
+button[disabled] {
+    opacity: .55;
+    cursor: not-allowed;
+}
+button:disabled:hover,
+button[disabled]:hover {
+    /* Cancel the per-variant hover changes while disabled. */
+    background: inherit;
+    border-color: inherit;
+}
+button:disabled:active {
+    transform: none;
+}
+
+/* Spinning indicator ring. */
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+.spinner {
+    display: inline-block;
+    width: 1.1em;
+    height: 1.1em;
+    border: 2px solid var(--panel-raised-bg);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin .7s linear infinite;
+    vertical-align: -0.2em;
+    flex: 0 0 auto;
+}
+
+/* Inline spinner + optional label (e.g. inside a button). */
+.loading-inline {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+
+/* Standalone centered loading block for list/data loads. */
+.loading-block {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    padding: 40px;
+    color: var(--text-muted);
+}
+.loading-label {
+    color: var(--text-muted);
+}
+
+/* Empty-state (no rows/cards to show): centred stack of a large muted glyph,
+   the message, an optional hint line, and an optional action button. Plain
+   `text`-only usages still render just the centred message. */
+.empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    text-align: center;
+    color: var(--text-muted);
+    padding: 40px 24px;
+}
+.empty-state__icon {
+    font-size: 2.4rem;
+    opacity: .5;
+    margin-bottom: 6px;
+    color: var(--text-muted);
+}
+.empty-state__title { font-size: .95rem; line-height: 1.4 }
+.empty-state__hint { font-size: .82rem; opacity: .85; max-width: 44ch; line-height: 1.45 }
+.empty-state__action { margin-top: 10px }
+
+/* Top-of-viewport route-loading progress bar (indeterminate). */
+.route-progress {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    z-index: 9999;
+    background: var(--panel-raised-bg);
+    overflow: hidden;
+}
+.route-progress-bar {
+    height: 100%;
+    width: 40%;
+    background: var(--accent);
+    border-radius: 0 2px 2px 0;
+    animation: routeProgressSlide 1.1s ease-in-out infinite;
+}
+@keyframes routeProgressSlide {
+    0%   { margin-left: -40%; }
+    50%  { margin-left: 60%; }
+    100% { margin-left: 110%; }
+}
+
+/* Inline keyboard-key hint (e.g. "press Space to draw"). */
+kbd {
+    display: inline-block;
+    padding: 1px 6px;
+    border-radius: 4px;
+    background: var(--panel-raised-bg);
+    color: var(--text);
+    border: 1px solid var(--modal-overlay);
+    font-family: inherit;
+    font-size: 0.85em;
+    font-weight: 600;
+    line-height: 1.4;
+}
+
+/* Count badge shown after an admin sidebar nav label (e.g. Open Raffles (3)).
+   Inline count text, not a pill — intentionally not the `.badge` object. */
+.nav-count {
+    margin-left: 6px;
+    font-size: 0.78em;
+    font-weight: 600;
+    color: var(--text-muted);
+}
+.admin-nav-items button.active .nav-count {
+    color: var(--text);
+}
+
+/* "Live" badge — shown next to the admin Game heading while a game is active.
+   Pill chrome from the `.badge` object; only colours + margin here. */
+.live-badge {
+    margin-left: 10px;
+    background: var(--danger);
+    color: var(--text-on-fill);
+}
+.live-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: currentColor;
+    animation: livePulse 1.4s ease-in-out infinite;
+}
+/* Admin-only elapsed-game clock shown beside the "Live" badge on Current Game. */
+.game-clock {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    vertical-align: middle;
+    margin-left: 10px;
+    padding: 2px 10px;
+    border-radius: 999px;
+    background: var(--panel-raised-bg);
+    color: var(--text);
+    font-size: 0.8rem;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.02em;
+}
+.game-clock .svg-inline--fa {
+    color: var(--highlight);
+    font-size: 0.75rem;
+}
+/* Live dot in the admin sidebar's game nav item: sits just after the label,
+   tinted with the "live" color (themes can override --danger). */
+.nav-live-dot {
+    display: inline-block;
+    margin-left: 8px;
+    vertical-align: middle;
+    background: var(--danger);
+}
+@keyframes livePulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50%      { opacity: .35; transform: scale(.65); }
+}
+

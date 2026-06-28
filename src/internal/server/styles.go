@@ -4,17 +4,21 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+
+	"app-suite/internal/store"
 )
 
 // styleRequest is the JSON body for POST /api/styles.
 // Action determines the operation: "get", "create", "update", "delete", or "set_active".
 type styleRequest struct {
-	Action         string `json:"action"`
-	ID             int64  `json:"id"`
-	Name           string `json:"name"`
-	CSSContent     string `json:"css_content"`
-	BoardFlourish  string `json:"board_flourish"`
-	NumberFlourish string `json:"number_flourish"`
+	Action string `json:"action"`
+	ID     int64  `json:"id"`
+	Name   string `json:"name"`
+	// Tokens are the theme's design-token overrides (token name → CSS value). The
+	// store sanitizes them to the known allowlist; arbitrary CSS is not accepted.
+	Tokens         map[string]string `json:"tokens"`
+	BoardFlourish  string            `json:"board_flourish"`
+	NumberFlourish string            `json:"number_flourish"`
 }
 
 // handleStylesList returns all styles (without CSS content) and the active style ID.
@@ -80,7 +84,7 @@ func (s *Server) handleStylesAction(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusBadRequest, "Style name is required")
 			return
 		}
-		id, err := s.store.CreateStyle(name, req.CSSContent, req.BoardFlourish, req.NumberFlourish)
+		id, err := s.store.CreateStyle(name, req.Tokens, req.BoardFlourish, req.NumberFlourish)
 		if err != nil {
 			writeInternalError(w, "create style", err)
 			return
@@ -100,16 +104,16 @@ func (s *Server) handleStylesAction(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusBadRequest, "Style name is required")
 			return
 		}
-		if err := s.store.UpdateStyle(req.ID, name, req.CSSContent, req.BoardFlourish, req.NumberFlourish); err != nil {
+		if err := s.store.UpdateStyle(req.ID, name, req.Tokens, req.BoardFlourish, req.NumberFlourish); err != nil {
 			writeInternalError(w, "update style", err)
 			return
 		}
 		writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 
-		// If this is the active style, broadcast the update to all clients
+		// If this is the active style, broadcast the regenerated CSS to all clients.
 		activeID, _ := s.store.GetSetting("active_style_id")
 		if activeID == fmt.Sprintf("%d", req.ID) {
-			s.broadcastStyleUpdate(req.CSSContent, req.BoardFlourish, req.NumberFlourish)
+			s.broadcastStyleUpdate(store.TokensToCSS(req.Tokens), req.BoardFlourish, req.NumberFlourish)
 		}
 
 	case "delete":

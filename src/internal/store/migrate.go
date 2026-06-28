@@ -2,6 +2,7 @@ package store
 
 import (
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -13,7 +14,7 @@ import (
 // PRAGMA user_version against this constant and runs only the migrations
 // needed to bring the database up to date. Bump this when adding a new
 // migration block.
-const schemaVersion = 36
+const schemaVersion = 37
 
 // ensureSchema reads the current PRAGMA user_version from the database and
 // applies any outstanding migrations to bring it up to schemaVersion.
@@ -240,6 +241,12 @@ func ensureSchema(db *sql.DB) error {
 
 	if version < 36 {
 		if err := migrateGaraponDrawKeepLogs(db); err != nil {
+			return err
+		}
+	}
+
+	if version < 37 {
+		if err := migrateStyleTokens(db); err != nil {
 			return err
 		}
 	}
@@ -882,6 +889,72 @@ func migrateStyleFlourishes(db *sql.DB) error {
 	if !hasColumn(db, "styles", "number_flourish") {
 		if _, err := db.Exec(`ALTER TABLE styles ADD COLUMN number_flourish TEXT NOT NULL DEFAULT ''`); err != nil {
 			return fmt.Errorf("add styles.number_flourish: %w", err)
+		}
+	}
+	return nil
+}
+
+// migrateStyleTokens moves themes from free-form `css_content` blobs to
+// structured design-token storage. It adds a `tokens` column (a JSON map of
+// token name → CSS value), backfills it by parsing the `:root{…}` block out of
+// each theme's existing css_content (keeping only known tokens), and then drops
+// the now-unused css_content column. The applied stylesheet is generated from
+// the tokens at read time (see TokensToCSS), so themes can no longer carry
+// arbitrary CSS. Idempotent.
+func migrateStyleTokens(db *sql.DB) error {
+	if !tableExists(db, "styles") {
+		return nil
+	}
+	if !hasColumn(db, "styles", "tokens") {
+		if _, err := db.Exec(`ALTER TABLE styles ADD COLUMN tokens TEXT NOT NULL DEFAULT '{}'`); err != nil {
+			return fmt.Errorf("add styles.tokens: %w", err)
+		}
+	}
+
+	// Backfill tokens from the old css_content, but only while that column still
+	// exists (so a re-run after the drop below is a no-op).
+	if hasColumn(db, "styles", "css_content") {
+		rows, err := db.Query(`SELECT id, css_content FROM styles WHERE tokens = '' OR tokens = '{}'`)
+		if err != nil {
+			return fmt.Errorf("read styles for token backfill: %w", err)
+		}
+		type pending struct {
+			id   int64
+			json string
+		}
+		var updates []pending
+		for rows.Next() {
+			var id int64
+			var css string
+			if err := rows.Scan(&id, &css); err != nil {
+				rows.Close()
+				return fmt.Errorf("scan style for token backfill: %w", err)
+			}
+			tokens := parseRootTokens(css)
+			buf, err := json.Marshal(tokens)
+			if err != nil {
+				rows.Close()
+				return fmt.Errorf("marshal backfilled tokens: %w", err)
+			}
+			updates = append(updates, pending{id: id, json: string(buf)})
+		}
+		if err := rows.Err(); err != nil {
+			rows.Close()
+			return fmt.Errorf("iterate styles for token backfill: %w", err)
+		}
+		rows.Close()
+		for _, u := range updates {
+			if _, err := db.Exec(`UPDATE styles SET tokens = ? WHERE id = ?`, u.json, u.id); err != nil {
+				return fmt.Errorf("write backfilled tokens: %w", err)
+			}
+		}
+
+		// Drop the legacy column now that tokens are the source of truth. SQLite
+		// supports DROP COLUMN (3.35+); if an older engine ever rejects it, leave
+		// the column in place (harmless, unused) rather than failing startup.
+		if _, err := db.Exec(`ALTER TABLE styles DROP COLUMN css_content`); err != nil {
+			// non-fatal: the column simply remains as dead, unused data.
+			_ = err
 		}
 	}
 	return nil

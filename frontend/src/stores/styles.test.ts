@@ -4,7 +4,7 @@ import type { Style } from '@/types/api'
 
 const ep = vi.hoisted(() => ({
   list: vi.fn(async () => ({ styles: [] as Style[], active_style_id: '' })),
-  get: vi.fn(async () => ({ style: { id: 1, css_content: null } })),
+  get: vi.fn(async () => ({ style: { id: 1, tokens: {} } })),
   create: vi.fn(async () => ({ id: 11 })),
   update: vi.fn(async () => ({ ok: true })),
   del: vi.fn(async () => ({ ok: true })),
@@ -35,19 +35,21 @@ describe('loading', () => {
     expect(s.editingStyle).toBeNull()
   })
 
-  it('loadStyle coerces null css_content to an empty string for the editor', async () => {
-    ep.get.mockResolvedValueOnce({ style: { id: 2, css_content: null } as never })
+  it('loadStyle merges saved tokens over the defaults', async () => {
+    ep.get.mockResolvedValueOnce({ style: { id: 2, tokens: { 'page-bg': '#abc' } } as never })
     const s = useStylesStore()
     await s.loadStyle(2)
-    expect(s.editingStyle?.css_content).toBe('')
+    expect(s.editingStyle?.tokens?.['page-bg']).toBe('#abc') // saved override
+    expect(s.editingStyle?.tokens?.['panel-bg']).toBe('#272a22') // default filled in
   })
 })
 
 describe('newStyle', () => {
-  it('seeds a blank editable theme', () => {
+  it('seeds a blank theme with the default token set', () => {
     const s = useStylesStore()
     s.newStyle()
-    expect(s.editingStyle).toMatchObject({ id: 0, name: '', css_content: '' })
+    expect(s.editingStyle).toMatchObject({ id: 0, name: '' })
+    expect(s.editingStyle?.tokens?.['accent']).toBe('#d6bdae')
   })
 })
 
@@ -59,26 +61,40 @@ describe('saveStyle', () => {
     expect(ep.create).not.toHaveBeenCalled()
   })
 
-  it('creates a new theme then reloads (which closes the editor)', async () => {
+  it('creates a new theme with its tokens, then reloads (closing the editor)', async () => {
     const s = useStylesStore()
     s.newStyle()
     s.editingStyle!.name = 'Midnight'
-    s.editingStyle!.css_content = ':root{}'
+    s.editingStyle!.tokens!['page-bg'] = '#000'
     await s.saveStyle()
-    expect(ep.create).toHaveBeenCalledWith('Midnight', ':root{}', '', '')
+    expect(ep.create).toHaveBeenCalledTimes(1)
+    const [name, tokens, board, number] = ep.create.mock.calls[0] as unknown as [
+      string,
+      Record<string, string>,
+      string,
+      string,
+    ]
+    expect(name).toBe('Midnight')
+    expect(tokens['page-bg']).toBe('#000')
+    expect(board).toBe('')
+    expect(number).toBe('')
     expect(ep.list).toHaveBeenCalled()
-    // loadStyles() runs after a successful save and clears the editor.
     expect(s.editingStyle).toBeNull()
   })
 
-  it('updates an existing theme', async () => {
+  it('updates an existing theme with its tokens', async () => {
     const s = useStylesStore()
     s.editingStyle = {
-      id: 5, name: 'Old', css_content: 'a', board_flourish: '', number_flourish: '', created_at: '',
+      id: 5,
+      name: 'Old',
+      tokens: { 'page-bg': '#111' },
+      board_flourish: '',
+      number_flourish: '',
+      created_at: '',
     }
     s.editingStyle.name = 'New'
     await s.saveStyle()
-    expect(ep.update).toHaveBeenCalledWith(5, 'New', 'a', '', '')
+    expect(ep.update).toHaveBeenCalledWith(5, 'New', { 'page-bg': '#111' }, '', '')
     expect(ep.create).not.toHaveBeenCalled()
   })
 })

@@ -1,20 +1,15 @@
 <script setup lang="ts">
 /**
- * Admin Themes tab — custom CSS theme CRUD with a CodeMirror 6 editor
- * (vue-codemirror, replacing the CDN CodeMirror 5). Mirrors the original
- * `adminTab==='system-themes'` block: a theme-list sidebar + the editor pane,
- * with set-active / clear-active controls. Activating applies the CSS live.
- *
- * The CSS editor is bound via v-model to the edited theme's css_content; the
- * dark look matches the original via lib/codemirror.ts + app.css section 26.
+ * Admin Themes tab — theme CRUD with a structured design-token editor
+ * (ThemeTokenEditor). A theme is a set of token overrides, not free-form CSS;
+ * the applied stylesheet is generated from the tokens (server-side, and locally
+ * for the live preview). A theme-list sidebar + the editor pane, with
+ * set-active / clear-active controls. Activating applies the theme live.
  */
-import { computed, onMounted, ref, watch } from 'vue'
-import { Codemirror } from 'vue-codemirror'
+import { computed, onMounted } from 'vue'
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
-import ModalOverlay from '@/components/common/ModalOverlay.vue'
-import ThemeColorPickerTool from '@/components/admin/ThemeColorPickerTool.vue'
+import ThemeTokenEditor from '@/components/admin/ThemeTokenEditor.vue'
 import ImagePicker from '@/components/common/ui/ImagePicker.vue'
-import { cssEditorExtensions, type EditorColorMode } from '@/lib/codemirror'
 import { useStylesStore } from '@/stores/styles'
 import { useImagesStore, IMAGE_DIR_FLOURISHES } from '@/stores/images'
 
@@ -32,25 +27,14 @@ const flourishPaths = computed(() =>
 
 onMounted(() => images.loadImages(IMAGE_DIR_FLOURISHES))
 
-/**
- * The CSS editor's own colour scheme (dark/light), kept independent of the app
- * theme so authoring stays readable whatever theme is active. Persisted so the
- * admin's preference survives reloads; drives the reactive extension set.
- */
-const editorMode = ref<EditorColorMode>(
-  localStorage.getItem('theme_editor_cm_mode') === 'light' ? 'light' : 'dark',
-)
-watch(editorMode, (m) => localStorage.setItem('theme_editor_cm_mode', m))
-const editorExtensions = computed(() => cssEditorExtensions(editorMode.value))
-
-function toggleEditorMode(): void {
-  editorMode.value = editorMode.value === 'dark' ? 'light' : 'dark'
-}
-
-// The color-picker helper now opens in a modal (it was an always-visible bar
-// whose relationship to the editor was unclear). It's an authoring aid only —
-// pick/preview a color and copy its HEX/RGBA to paste into the CSS editor.
-const showColorTool = ref(false)
+// Writable view of the edited theme's token map (the store guarantees it's set
+// while editing); lets the token editor bind via v-model.
+const tokens = computed<Record<string, string>>({
+  get: () => styles.editingStyle?.tokens ?? {},
+  set: (v) => {
+    if (styles.editingStyle) styles.editingStyle.tokens = v
+  },
+})
 </script>
 
 <template>
@@ -58,11 +42,6 @@ const showColorTool = ref(false)
     <div class="admin-panel">
       <div class="manager-header">
         <h3><font-awesome-icon :icon="['fad', 'palette']" /> Themes</h3>
-        <div class="manager-actions">
-          <button class="btn-view btn-sm" @click="showColorTool = true">
-            <font-awesome-icon :icon="['fad', 'palette']" /> Color Tool
-          </button>
-        </div>
       </div>
 
       <div class="styles-layout">
@@ -130,16 +109,6 @@ const showColorTool = ref(false)
                 style="flex: 1"
               />
               <button
-                class="btn-neutral btn-sm"
-                :title="`Editor theme: ${editorMode}. Click to switch.`"
-                :aria-label="`Switch editor to ${editorMode === 'dark' ? 'light' : 'dark'} mode`"
-                @click="toggleEditorMode"
-              >
-                <font-awesome-icon v-if="editorMode === 'dark'" :icon="['fas', 'moon']" />
-                <font-awesome-icon v-else :icon="['fas', 'sun']" />
-                {{ editorMode === 'dark' ? 'Dark' : 'Light' }}
-              </button>
-              <button
                 class="btn-confirm btn-sm"
                 :disabled="styles.savingStyle"
                 @click="styles.saveStyle()"
@@ -155,13 +124,8 @@ const showColorTool = ref(false)
                 Delete
               </button>
             </div>
-            <Codemirror
-              v-model="styles.editingStyle.css_content"
-              class="style-css-editor"
-              :extensions="editorExtensions"
-              :indent-with-tab="false"
-              :tab-size="4"
-            />
+
+            <ThemeTokenEditor v-model="tokens" />
 
             <!-- Decorative flourishes (SVG only) sourced from the Flourishes image
                  category. Empty = the app's built-in flourishes. -->
@@ -188,26 +152,11 @@ const showColorTool = ref(false)
         </div>
       </div>
     </div>
-
-    <!-- Color-picker helper modal (authoring aid; copies HEX/RGBA to paste). -->
-    <ModalOverlay
-      v-if="showColorTool"
-      aria-label="Theme color tool"
-      box-style="max-width: 440px"
-      @close="showColorTool = false"
-    >
-      <h3 class="mt-0"><font-awesome-icon :icon="['fad', 'palette']" /> Color Tool</h3>
-      <p class="text-dim text-sm mb-12">
-        Pick or paste any CSS color, then copy its HEX or RGBA value to paste into the theme CSS
-        editor.
-      </p>
-      <ThemeColorPickerTool />
-    </ModalOverlay>
   </div>
 </template>
 
 <style scoped>
-/* Flourish pickers below the CSS editor. */
+/* Flourish pickers below the token editor. */
 .flourish-options {
   display: flex;
   flex-wrap: wrap;

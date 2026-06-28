@@ -140,6 +140,12 @@ export const endpoints = {
     save: (settings: AppSettings) => apiPost<OkResponse>('settings', { settings }),
   },
 
+  // ── System ───────────────────────────────────────────────────────────────────
+  system: {
+    /** GET /api/version — the backend's semantic version (public). */
+    version: () => apiGet<{ backend: string }>('version'),
+  },
+
   // ── Game lifecycle ───────────────────────────────────────────────────────────
   game: {
     getState: () => apiGet<GameStateResponse>('game'),
@@ -249,20 +255,31 @@ export const endpoints = {
     list: () => apiGet<StylesResponse>('styles'),
     activeCss: () => apiGet<ActiveCssResponse>('styles/active'),
     get: (id: number) => apiPost<StyleGetResponse>('styles', { action: 'get', id }),
-    create: (name: string, cssContent: string, boardFlourish = '', numberFlourish = '') =>
+    create: (
+      name: string,
+      tokens: Record<string, string>,
+      boardFlourish = '',
+      numberFlourish = '',
+    ) =>
       apiPost<StyleCreateResponse>('styles', {
         action: 'create',
         name,
-        css_content: cssContent,
+        tokens,
         board_flourish: boardFlourish,
         number_flourish: numberFlourish,
       }),
-    update: (id: number, name: string, cssContent: string, boardFlourish = '', numberFlourish = '') =>
+    update: (
+      id: number,
+      name: string,
+      tokens: Record<string, string>,
+      boardFlourish = '',
+      numberFlourish = '',
+    ) =>
       apiPost<OkResponse>('styles', {
         action: 'update',
         id,
         name,
-        css_content: cssContent,
+        tokens,
         board_flourish: boardFlourish,
         number_flourish: numberFlourish,
       }),

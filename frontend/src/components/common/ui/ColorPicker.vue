@@ -4,7 +4,7 @@
  * its weight only lands when a picker actually opens), applies the shared
  * `.color-picker` theme skin (app.css), and normalizes the change payload to a
  * CSS `rgba()` string plus a `#rrggbb(aa)` hex. Used by the stamp-colour modal
- * (StampColorPicker) and the Themes-tab helper (ThemeColorPickerTool).
+ * (StampColorPicker).
  */
 import { defineAsyncComponent } from 'vue'
 

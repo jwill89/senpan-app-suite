@@ -1,0 +1,110 @@
+/*
+ * Phone layout — small-screen (max-width: 560px) responsive tweaks.
+ */
+
+/* ================================================================
+   33. PHONE LAYOUT — small-screen tweaks (≤560px)
+   Player view never had a mobile breakpoint; the board is handled by the
+   self-limiting .board-cell --cell-size, and these rules tighten the
+   surrounding chrome and let the right column shrink below its 300px desktop
+   min-width so nothing forces horizontal page overflow on a phone.
+   ================================================================ */
+@media (max-width: 560px) {
+    /* Tighter shells so content gets the width it needs. */
+    .player-body {
+        padding: 16px;
+        gap: 18px;
+    }
+    .tab-body {
+        padding: 16px;
+    }
+    .topbar {
+        padding: 12px 14px;
+    }
+    .topbar h2 {
+        font-size: 1rem;
+    }
+    /* Reclaim space in the crowded admin topbar (hamburger + title + actions):
+       the username chip is non-essential here — the account is implied. */
+    .topbar-user {
+        display: none;
+    }
+
+    /* All three columns become wrapped, full-width blocks on phones — drop the
+       desktop min-width floors so they fit a 320px viewport (the fluid board
+       cells shrink to fill the now-narrow board column). */
+    .player-col-board,
+    .player-col-called,
+    .player-col-info {
+        min-width: 0;
+        max-width: none;
+        width: 100%;
+    }
+
+    /* Scale board typography down with the (now smaller) cells. The player board
+       keeps its enlarged desktop type (1.95rem) at wide widths, but on a phone the
+       cells are far smaller, so bring the number/FREE type back down so it fits the
+       cell instead of forcing the grid wider than the card. */
+    .board-header span {
+        font-size: 1.3rem;
+    }
+    .player-col-board .board-cell {
+        font-size: 1.4rem;
+    }
+    .player-col-board .board-header span {
+        font-size: 1.95rem;
+    }
+    /* Tighter board gutters on a phone — the delicate flourishes don't need the
+       desktop gutter, and the extra width is better spent on the cells. */
+    .player-col-board .board-wrap {
+        padding: 14px 14px 18px;
+    }
+    .stamp-mark {
+        font-size: 2rem;
+    }
+
+    /* Home: let the cards fill the width and shrink the oversized title. */
+    .home {
+        gap: 28px;
+    }
+    .home h1 {
+        font-size: 2.2rem;
+    }
+    .home-card {
+        width: min(320px, 100%);
+        padding: 28px 22px;
+    }
+    .home-cards {
+        width: 100%;
+    }
+
+    /* Raffle entries table scrolls instead of overflowing the page on a phone.
+       (The winners-log and fonts tables already wrap in their own overflow-x
+       containers.) */
+    .raffle-entries-table {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+}
+
+/* Respect reduced-motion: replace animations with a static indicator. */
+@media (prefers-reduced-motion: reduce) {
+    .spinner {
+        animation: none;
+        border-top-color: var(--accent);
+    }
+    .route-progress-bar {
+        animation: none;
+        width: 100%;
+        opacity: .8;
+    }
+    .live-dot {
+        animation: none;
+    }
+    .conn-badge .conn-dot {
+        animation: none;
+    }
+    .last-drawn--pop {
+        animation: none;
+    }
+}

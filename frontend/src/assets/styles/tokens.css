@@ -1,0 +1,54 @@
+/*
+ * Theme design tokens — the :root custom properties every theme overrides.
+ * Split out of app.css; see app.css for the import order.
+ */
+
+/* Dark theme design tokens — all colors, radii, and effect values */
+:root {
+    /* ── Theme tokens ──────────────────────────────────────────────────────────
+       Every colour below is a theme token: saved CSS themes override these in
+       their own :root, and the runtime theme editor + colour-picker tool target
+       them by name. Names are role-descriptive (what the colour is *for*), not
+       palette names. --radius / --header-font are the only non-colour tokens. */
+
+    /* Backgrounds */
+    --page-bg: #1a1c17; /* App/page background, behind all panels */
+    --panel-bg: #272a22; /* Card / panel surface */
+    --panel-raised-bg: #2f3228; /* Raised/nested surface: panels-within-panels, table rows, chips */
+    --control-border: #4a4d3f; /* Control & divider outline + neutral-button fill — dark enough for --text (AAA), still visible on both panel surfaces */
+    --input-bg: #272a22; /* Form control (input/select/textarea) fill — consistent on any surface */
+
+    /* Accents & actions */
+    --accent: #d6bdae; /* Primary action / accent (primary buttons, links, focus) */
+    --accent-hover: #c4a999; /* --accent hover */
+    --accent-2: #474b3c; /* Secondary action / accent (secondary buttons) — dark enough for --text-on-fill (AAA) */
+    --accent-2-hover: #3a3d30; /* --accent-2 hover */
+    --highlight: #d6bdae; /* Highlight accent (called numbers, section headings, gold trim) */
+
+    /* Text */
+    --text: #f0ebe3; /* Primary text */
+    --text-muted: #d3d3bf; /* Muted / secondary text (AAA on panel + raised surfaces) */
+    --text-on-accent: #1a1c17; /* Text on --accent / --highlight fills */
+    --text-on-fill: #f5f1ea; /* Text on toast / badge / status fills */
+
+    /* Status */
+    --success: #175020; /* Success state — a clear green, dark enough for --text-on-fill (AAA) */
+    --danger: #9a2018; /* Danger / error state — a clear red, dark enough for --text-on-fill (AAA) */
+    --warning: #e0a82e; /* Warning / caution state (skip badges, alerts); caution buttons use --text-on-accent */
+
+    /* Bingo board */
+    --board-cell-bg: #f0ebe3; /* Board cell background */
+    --board-cell-hover-bg: #e5ded4; /* Board cell hover */
+    --board-free-bg: #d6bdae; /* FREE (centre) cell background */
+    --board-gradient-start: #2f3328; /* Board wrapper gradient (top) */
+    --board-gradient-end: #272a22; /* Board wrapper gradient (bottom) */
+
+    /* Effects */
+    --modal-overlay: rgb(0 0 0 / 70%); /* Full-screen modal backdrop */
+    --shadow: rgb(0 0 0 / 50%); /* Box-shadow colour */
+    --highlight-glow: rgb(214 189 174 / 50%); /* Glow around --highlight elements */
+
+    /* Non-colour */
+    --radius: 10px; /* Shared corner radius */
+    --header-font: 'Arapey', serif; /* Header/board font (overridden dynamically via settings) */
+}

@@ -1,0 +1,87 @@
+# Changelog
+
+All notable changes to the **Senpan App Suite** are recorded here.
+
+The **frontend** (Vue SPA) and **backend** (Go API) are versioned independently
+with [Semantic Versioning](https://semver.org/) and tracked in their own sections
+below — a change usually touches only one side, and they deploy separately. The
+admin dashboard shows both live versions (sidebar footer) so operators can confirm
+a deploy left the two halves compatible.
+
+**Sources of truth**
+
+- Frontend version → `frontend/package.json` (`"version"`), baked into the build
+  and read via `frontend/src/lib/version.ts`.
+- Backend version → `src/internal/version/version.go` (`Version`), served at
+  `GET /api/version`.
+
+**Compatibility rule:** the SPA and API are compatible while their **MAJOR**
+versions match. Bump MAJOR only for a breaking change to the JSON/WebSocket API
+the SPA depends on; MINOR for backward-compatible additions; PATCH for fixes.
+When you change one side, bump its version and add an entry under its section.
+
+The format follows [Keep a Changelog](https://keepachangelog.com/).
+
+---
+
+## Frontend
+
+### [1.0.0] — 2026-06-28
+
+First tracked release — establishes versioning for the current production build.
+
+#### Added
+
+- **App version readout** in the admin sidebar footer (frontend + backend
+  versions, with a flag when their major versions differ).
+- **WCAG 2.1 contrast report** in the theme editor: a live audit of 28 real
+  text/background pairings (body, muted, links, headings, inputs, neutral/primary/
+  secondary/success/danger/caution buttons + their hover states, the B-I-N-G-O
+  header, every board state, called number, winner chip). Each finding shows a
+  live contrast chip, the token trail, separate AA/AAA verdicts, and a
+  **Find-in-preview** button; the verdict updates live as colours change.
+- **Token-based theme editor** with a collapsible live preview, per-token help
+  text, native colour pickers for solid tokens, and an alpha-capable picker for
+  translucent tokens (modal overlay, shadow, glow).
+
+#### Changed
+
+- `app.css` split from a monolith into logical files under
+  `src/assets/styles/` (`tokens`, `base`, `utilities`, `components`, `player`,
+  `admin`, `responsive`).
+- All built-in themes retuned for contrast (WCAG 2.1 AAA, with two documented
+  light-theme neutral-button pairs at strong AA); added the **Toji** theme.
+
+#### Removed
+
+- CodeMirror free-form CSS theme editor (themes are now structured tokens).
+
+---
+
+## Backend
+
+### [1.0.0] — 2026-06-28
+
+First tracked release — establishes versioning for the current production build.
+
+#### Added
+
+- **`GET /api/version`** — public endpoint returning the backend's semantic
+  version (powers the admin compatibility readout; doubles as a version probe).
+- **Token-based theming**: themes stored as a structured token map; the applied
+  stylesheet is generated server-side (`:root { … }`) and sanitized against a
+  token allowlist (migration `user_version` 37 backfills + drops `css_content`).
+- **Live admin invalidation**: a thin `resource_changed` WebSocket signal after
+  admin-mutation POSTs prompts a scoped REST refetch (Garapon draws and raffle
+  entries included).
+- **Garapon** festival lottery-drum feature (admin CRUD + tokenized public draw).
+
+---
+
+## How to update this file
+
+1. Make your change and bump the relevant version source
+   (`frontend/package.json` and/or `src/internal/version/version.go`).
+2. Add an entry under the matching section above, newest first, grouped as
+   _Added / Changed / Fixed / Removed_.
+3. Keep the version string in the source file and the heading here in sync.

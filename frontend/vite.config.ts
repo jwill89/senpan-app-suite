@@ -55,14 +55,13 @@ function ogImageCacheBust(): Plugin {
 }
 
 // Heavy, rarely-changing vendor libs each get their own chunk so they cache
-// independently of app code (CodeMirror + FontAwesome are only needed in the
-// admin views; Milkdown + the emoji picker are lazy-loaded). Vite 8 / Rolldown
-// dropped the object form of `manualChunks`, so the same grouping is expressed
-// as a function that maps a module's node_modules package to its chunk. Purely
-// a caching/loading win — no behavioural change.
+// independently of app code (FontAwesome is only needed in the admin views;
+// Milkdown + the emoji picker are lazy-loaded). Vite 8 / Rolldown dropped the
+// object form of `manualChunks`, so the same grouping is expressed as a function
+// that maps a module's node_modules package to its chunk. Purely a
+// caching/loading win — no behavioural change.
 const vendorChunkGroups: ReadonlyArray<readonly [string, readonly string[]]> = [
   ['vue', ['vue', '@vue', 'pinia', 'vue-router']],
-  ['codemirror', ['codemirror', 'vue-codemirror', '@codemirror', '@lezer', '@replit']],
   ['fontawesome', ['@fortawesome']],
   ['markdown', ['markdown-it']],
   ['draggable', ['vuedraggable', 'sortablejs']],
@@ -84,6 +83,14 @@ function manualChunks(id: string): string | undefined {
   }
   return undefined
 }
+
+// The frontend's semantic version, read from package.json and baked into the
+// bundle as the global `__APP_VERSION__` (see env.d.ts). The admin dashboard
+// shows it next to the backend version for a compatibility check; bump
+// package.json's "version" in the same change as a matching CHANGELOG.md entry.
+const frontendVersion = JSON.parse(
+  readFileSync(fileURLToPath(new URL('./package.json', import.meta.url)), 'utf-8'),
+).version as string
 
 // https://vite.dev/config/
 //
@@ -156,6 +163,9 @@ export default defineConfig({
         ]
       : []),
   ],
+  define: {
+    __APP_VERSION__: JSON.stringify(frontendVersion),
+  },
   resolve: {
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url)),
@@ -193,13 +203,12 @@ export default defineConfig({
     outDir: 'dist',
     emptyOutDir: true,
     sourcemap: false,
-    // The two largest chunks (Milkdown editor ~620 kB, CodeMirror ~570 kB) are
-    // monolithic third-party libraries that are already split into their own
-    // lazy-loaded chunks (fetched only when an admin opens a view that needs
-    // them) — they never touch the initial player/home load. Neither can be
-    // split further (each ships as one bundle), so we lift the advisory warning
-    // to 650 kB: above these intentional vendor chunks, but still low enough to
-    // flag genuinely new bloat.
+    // The largest chunk (the Milkdown editor ~620 kB) is a monolithic
+    // third-party library already split into its own lazy-loaded chunk (fetched
+    // only when an admin opens a view that needs it) — it never touches the
+    // initial player/home load. It can't be split further (it ships as one
+    // bundle), so we lift the advisory warning to 650 kB: above this intentional
+    // vendor chunk, but still low enough to flag genuinely new bloat.
     chunkSizeWarningLimit: 650,
     rollupOptions: {
       // Vendor-chunk grouping lives in `manualChunks` above (Milkdown and the

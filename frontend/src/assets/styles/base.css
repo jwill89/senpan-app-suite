@@ -1,0 +1,204 @@
+/*
+ * Reset & base — global resets, base typography, default button/input styles.
+ */
+
+/* ================================================================
+   1. RESET & BASE — Global resets, CSS custom properties, typography
+   ================================================================ */
+
+/* Prevent Vue template flash before mount */
+[v-cloak] {
+    display: none
+}
+
+/* FontAwesome icon spacing in buttons and headings. Icons render as
+   <svg class="svg-inline--fa"> via the <font-awesome-icon> component. This
+   margin separates the icon from the text that follows it, and is also the
+   graceful fallback for the flex layout below. */
+button .svg-inline--fa,
+h1 .svg-inline--fa,
+h2 .svg-inline--fa,
+h3 .svg-inline--fa,
+h4 .svg-inline--fa {
+    margin-right: 0.35em;
+}
+
+/* Buttons whose direct child is an FA icon lay the icon (and its label, if any)
+   out with inline-flex + `gap` — the same idiom as `.player-actions .btn-sm`.
+   The spacing then falls only BETWEEN the icon and a following label, so an
+   icon-only button has nothing to space against and the glyph stays centred. A
+   bare `margin-right` can't tell the two apart, because the label is a text
+   node, not an element (so `:only-child`/`:last-child` match the icon either
+   way). The full-width sidebar nav items are excluded: they keep their block
+   layout and the margin-based spacing above (gap would be inert on a block, and
+   removing the margin would un-space their label). */
+button:has(> .svg-inline--fa):not(.admin-nav-items button) {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.35em;
+}
+button:has(> .svg-inline--fa):not(.admin-nav-items button) > .svg-inline--fa {
+    margin-right: 0;
+}
+
+/* Box-sizing reset for all elements */
+*, *::before, *::after {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0
+}
+
+
+
+body {
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    background: var(--page-bg);
+    color: var(--text);
+    min-height: 100vh
+}
+
+/* Links use --accent (the high-contrast accent paired with --text-on-accent),
+   not --accent-2: --accent-2 doubles as a light-text button fill, so it can't
+   also be a readable link colour on dark surfaces. */
+a {
+    color: var(--accent)
+}
+
+/* Default button styles — all buttons inherit these unless overridden */
+button {
+    font-family: inherit;
+    cursor: pointer;
+    border: none;
+    border-radius: var(--radius);
+    padding: 10px 20px;
+    font-size: .95rem;
+    font-weight: 600;
+    transition: all .15s
+}
+
+/* Subtle press feedback on all buttons */
+button:active {
+    transform: scale(.97)
+}
+
+/* Default input/select styles */
+input, select {
+    font-family: inherit;
+    border: 2px solid var(--control-border);
+    border-radius: var(--radius);
+    padding: 10px 14px;
+    font-size: 1rem;
+    background: var(--input-bg);
+    color: var(--text);
+    outline: none
+}
+
+input:focus {
+    border-color: var(--accent-2)
+}
+
+/* Placeholder text — an explicit, theme-aware colour so it clears WCAG AA
+   contrast (the browser default ≈#757575 fails on --input-bg). --text-muted is
+   the established "secondary text" token (~6:1 on the input fill) and stays a
+   clear step below entered text (--text). opacity:1 overrides Firefox's default
+   placeholder dimming, which would otherwise push it back below AA. */
+input::placeholder,
+textarea::placeholder {
+    color: var(--text-muted);
+    opacity: 1;
+}
+
+/* Heading defaults */
+h1, h2, h3 {
+    font-weight: 700
+}
+
+/* App title font (home page heading) */
+h1 {
+    font-family: var(--header-font);
+    font-style: normal;
+    text-transform: uppercase
+}
+
+/* -- Button system --
+   ONE solid shape for every button: intent is carried by the FILL colour only,
+   never by size or border style. (The old ghost/danger outlines made bordered
+   buttons read as heavier than their solid siblings — a misleading hierarchy.)
+   Each intent sets two custom props (--btn-fill + --btn-text); the shared rule
+   applies them and derives the hover by darkening the fill via color-mix, so no
+   per-intent hover tokens are needed — the five existing semantic colours +
+   the raised surface cover all six intents.
+
+   Intent = consequence, not verb:
+     confirm  save / add / edit / create / apply      → --success (green)
+     action   send / generate / publish / set active  → --accent  (brand)
+     view     open / view / preview / copy / browse    → --accent-2
+     caution  skip / reset / end game / halftime       → --warning (amber)
+     danger   delete / remove / clear                  → --danger  (red)
+     neutral  cancel / close / back                    → raised surface */
+.btn-confirm { --btn-fill: var(--success); --btn-text: var(--text-on-fill) }
+.btn-action  { --btn-fill: var(--accent); --btn-text: var(--text-on-accent) }
+.btn-view    { --btn-fill: var(--accent-2); --btn-text: var(--text-on-fill) }
+/* Caution uses a fixed dark ink (not --text-on-accent, which goes light in
+   light themes) so --warning can stay a bright amber/yellow in every theme. */
+.btn-caution { --btn-fill: var(--warning); --btn-text: #1f1a06 }
+.btn-danger  { --btn-fill: var(--danger); --btn-text: var(--text-on-fill) }
+/* Neutral fills with `--control-border` (not a panel surface) so it stays
+   visible even when it sits ON a `--panel-raised-bg` box — a solid fill, never a
+   ghost/transparent border. It's the lowest-emphasis intent but still a real,
+   readable button on any surface. */
+.btn-neutral { --btn-fill: var(--control-border); --btn-text: var(--text) }
+
+.btn-confirm,
+.btn-action,
+.btn-view,
+.btn-caution,
+.btn-danger,
+.btn-neutral {
+    background: var(--btn-fill);
+    color: var(--btn-text);
+}
+
+/* One hover language: darken the fill ~15%. Neutral is a dark surface, so it
+   lightens toward the text colour instead to keep the feedback visible. */
+.btn-confirm:hover,
+.btn-action:hover,
+.btn-view:hover,
+.btn-caution:hover,
+.btn-danger:hover {
+    background: color-mix(in srgb, var(--btn-fill) 85%, #000);
+}
+.btn-neutral:hover {
+    background: color-mix(in srgb, var(--btn-fill) 82%, var(--text));
+}
+
+/* Button size modifiers */
+.btn-sm {
+    padding: 8px 16px;
+    font-size: .88rem
+}
+
+.btn-lg {
+    padding: 14px 32px;
+    font-size: 1.1rem
+}
+
+/* Touch targets: on coarse-pointer (touch) devices every button — including the
+   compact `.btn-sm` icon buttons in manager rows/tables — meets the 44×44px
+   minimum (WCAG 2.5.5 / platform HIG). Scoped to `pointer: coarse` so desktop
+   mouse users keep the denser sizing. */
+@media (pointer: coarse) {
+    button,
+    .btn-sm,
+    input[type="color"] {
+        min-height: 44px;
+    }
+    /* Icon-only buttons also need the horizontal target. */
+    .row-actions button,
+    .list-row-actions button,
+    .manager-actions button {
+        min-width: 44px;
+    }
+}
+

@@ -53,6 +53,23 @@ frontend:
       - frontend/.npm/
   before_script:
     - cd frontend
+    # FontAwesome Pro packages (@fortawesome + the @awesome.me kit) install from
+    # FontAwesome's private registry. The local frontend/.npmrc that points those
+    # scopes at it is gitignored (it carries an auth token), so CI never receives
+    # it — recreate it here from the masked CI/CD variable FONTAWESOME_TOKEN
+    # (Settings → CI/CD → Variables; mark it Masked and Protected). Without this,
+    # `npm ci` fails with "E401 Incorrect or missing password".
+    - |
+      if [ -z "$FONTAWESOME_TOKEN" ]; then
+        echo "ERROR: FONTAWESOME_TOKEN is not set. Add it under Settings → CI/CD → Variables (Masked + Protected)." >&2
+        exit 1
+      fi
+    - |
+      {
+        echo "@awesome.me:registry=https://npm.fontawesome.com/"
+        echo "@fortawesome:registry=https://npm.fontawesome.com/"
+        echo "//npm.fontawesome.com/:_authToken=${FONTAWESOME_TOKEN}"
+      } > .npmrc
     - npm ci --cache .npm --prefer-offline
   script:
     - npm run lint:check

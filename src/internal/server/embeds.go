@@ -3,12 +3,21 @@ package server
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/url"
 	"strconv"
 	"strings"
 )
+
+// errWebhookAmbiguous marks a transport-level failure (timeout, connection reset)
+// where the request may still have reached Discord. The scheduler must NOT retry
+// these: if the message did in fact arrive, retrying would double-post it. An
+// HTTP error *status* (4xx/5xx, incl. 429) is NOT ambiguous — Discord received
+// the request and declined it, so the message was not delivered and is safe to
+// retry.
+var errWebhookAmbiguous = errors.New("discord webhook delivery ambiguous (transport failure)")
 
 // This file holds the generic Discord embed plumbing shared by every feature
 // that posts to a webhook (reading lists, book-club events, announcements):
@@ -276,7 +285,9 @@ func postDiscordWebhook(webhookURL string, payload discordWebhookPayload) error 
 	}
 	resp, err := bookclubHTTPClient.Post(webhookURL, "application/json", bytes.NewReader(body))
 	if err != nil {
-		return fmt.Errorf("request failed")
+		// Transport failure: the request may or may not have reached Discord, so
+		// mark it ambiguous (callers must not blindly retry — see errWebhookAmbiguous).
+		return fmt.Errorf("%w: %v", errWebhookAmbiguous, err)
 	}
 	defer resp.Body.Close()
 	_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 1<<16))

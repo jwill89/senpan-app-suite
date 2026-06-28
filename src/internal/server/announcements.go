@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"math"
@@ -1091,13 +1092,24 @@ func (s *Server) postDueAnnouncements() {
 		if typ == nil || strings.TrimSpace(typ.WebhookURL) == "" {
 			continue // no webhook yet; try again next tick
 		}
-		if err := postDiscordWebhook(typ.WebhookURL, s.buildAnnouncementMessage(a)); err != nil {
+		err := postDiscordWebhook(typ.WebhookURL, s.buildAnnouncementMessage(a))
+		if err != nil && !errors.Is(err, errWebhookAmbiguous) {
+			// Definitely not delivered (HTTP error status, incl. 429 rate limit):
+			// leave the cursor where it is so the next tick retries.
 			slog.Error("announcement scheduler: post", "id", a.ID, "error", err)
-			continue // leave pending; retry next tick
+			continue
 		}
+		// Success OR an ambiguous transport failure: advance the cursor either way.
+		// On ambiguity the message may already be on Discord, so retrying would
+		// duplicate it — we advance instead and log a warning. Recurring posts
+		// resume at their next occurrence; a one-time post that truly failed needs
+		// a manual resend.
 		next, active := s.advanceCursor(a)
-		if err := s.store.MarkAnnouncementPosted(a.ID, next, active); err != nil {
-			slog.Error("announcement scheduler: mark posted", "id", a.ID, "error", err)
+		if mErr := s.store.MarkAnnouncementPosted(a.ID, next, active); mErr != nil {
+			slog.Error("announcement scheduler: mark posted", "id", a.ID, "error", mErr)
+		} else if err != nil {
+			slog.Warn("announcement post ambiguous; advanced cursor to avoid a duplicate",
+				"id", a.ID, "title", a.Title, "error", err)
 		} else {
 			slog.Info("posted scheduled announcement", "id", a.ID, "title", a.Title)
 		}
@@ -1105,14 +1117,28 @@ func (s *Server) postDueAnnouncements() {
 }
 
 // advanceCursor computes the next schedule cursor for an announcement after its
-// current next_post_at fires. Recurring kinds roll forward; a one-time schedule
-// has no further occurrence (returns "", false → deactivated).
+// current next_post_at fires. See advanceCursorAt; this binds it to the wall clock.
 func (s *Server) advanceCursor(a model.Announcement) (nextPostAt string, active bool) {
+	return s.advanceCursorAt(a, time.Now())
+}
+
+// advanceCursorAt computes the next schedule cursor as of `now`. Recurring kinds
+// roll forward to the next occurrence STRICTLY IN THE FUTURE; a one-time schedule
+// has no further occurrence (returns "", false → deactivated).
+//
+// The anchor is the later of `now` and the just-fired cursor. Anchoring on `now`
+// (not the stale cursor) is essential: when an announcement is overdue by more
+// than one period — e.g. the server was down across a scheduled slot — advancing
+// from the old cursor would land on ANOTHER past slot, leaving it still due so it
+// re-posts every tick until it catches up (the double-post bug). Anchoring on now
+// jumps straight to the next future slot; missed occurrences are skipped, not
+// replayed.
+func (s *Server) advanceCursorAt(a model.Announcement, now time.Time) (nextPostAt string, active bool) {
 	if a.ScheduleKind == "" || a.ScheduleKind == "once" {
 		return "", false
 	}
-	after := time.Now()
-	if t, err := time.Parse(time.RFC3339, a.NextPostAt); err == nil {
+	after := now
+	if t, err := time.Parse(time.RFC3339, a.NextPostAt); err == nil && t.After(after) {
 		after = t
 	}
 	next := nextAnnouncementOccurrence(a, after)

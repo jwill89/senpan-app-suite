@@ -60,6 +60,22 @@ First tracked release — establishes versioning for the current production buil
 
 ## Backend
 
+### [1.0.1] — 2026-06-28
+
+#### Fixed
+
+- **Scheduled announcements could post more than once.** Two independent causes:
+  1. An announcement overdue by more than one period (e.g. the server was down
+     across a slot) advanced its schedule cursor from the stale slot, landing on
+     _another_ past slot — so it stayed "due" and re-posted on every scheduler
+     tick until it caught up. The cursor now advances to the next occurrence
+     strictly in the **future** (missed slots are skipped, not replayed).
+  2. A webhook call that failed at the **transport** layer (timeout / connection
+     reset) was retried on the next tick even though Discord may already have
+     received it. Transport failures are now treated as _possibly delivered_ and
+     the cursor is advanced (no retry); genuine HTTP error responses (e.g. a 429
+     rate limit or a 5xx) are still retried, so delivery isn't dropped.
+
 ### [1.0.0] — 2026-06-28
 
 First tracked release — establishes versioning for the current production build.

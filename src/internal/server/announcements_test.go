@@ -1,9 +1,12 @@
 package server
 
 import (
+	"net/http"
+	"net/http/httptest"
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -141,20 +144,128 @@ func TestNextOccurrenceOnceAndUnscheduled(t *testing.T) {
 
 func TestAdvanceCursor(t *testing.T) {
 	s := &Server{}
-	// Recurring weekly rolls forward from the fired instant.
 	weekly := model.Announcement{
 		ScheduleKind: "weekly", Timezone: "UTC", ScheduleWeekdays: "6", ScheduleMinutes: 19 * 60,
-		NextPostAt: "2026-06-13T19:00:00Z",
 	}
-	next, active := s.advanceCursor(weekly)
+
+	// Fired on time → rolls forward to next week's Saturday slot.
+	onTime := weekly
+	onTime.NextPostAt = "2026-06-13T19:00:00Z" // a Saturday
+	next, active := s.advanceCursorAt(onTime, mustParse(t, "2026-06-13T19:00:05Z"))
 	if !active || next != "2026-06-20T19:00:00Z" {
-		t.Errorf("advance weekly: next=%q active=%v", next, active)
+		t.Errorf("advance on-time: next=%q active=%v", next, active)
 	}
+
+	// Overdue by more than a week (e.g. the server was down across a slot): the
+	// cursor must jump to the next FUTURE slot, not replay a past one — otherwise
+	// it stays due and re-posts every tick (the double-post bug).
+	overdue := weekly
+	overdue.NextPostAt = "2026-05-30T19:00:00Z" // ~2 Saturdays earlier
+	now := mustParse(t, "2026-06-15T12:00:00Z")
+	next, active = s.advanceCursorAt(overdue, now)
+	if !active || next != "2026-06-20T19:00:00Z" {
+		t.Errorf("advance overdue: next=%q active=%v (want the next future slot)", next, active)
+	}
+	if !mustParse(t, next).After(now) {
+		t.Errorf("advance overdue: next %q is not after now %q — it would re-fire", next, now)
+	}
+
 	// One-time has no next → deactivates.
 	once := model.Announcement{ScheduleKind: "once", NextPostAt: "2026-06-13T19:00:00Z"}
-	next, active = s.advanceCursor(once)
-	if active || next != "" {
+	if next, active := s.advanceCursorAt(once, mustParse(t, "2026-06-14T00:00:00Z")); active || next != "" {
 		t.Errorf("advance once: next=%q active=%v", next, active)
+	}
+}
+
+// newSchedulerEnv builds a minimal Server backed by a temp store plus a daily
+// announcement that is already overdue (cursor in the past), for scheduler tests.
+// Returns the server, the announcement id, and its starting next_post_at.
+func newSchedulerEnv(t *testing.T, webhook string) (*Server, int64, string) {
+	t.Helper()
+	st, err := store.New(filepath.Join(t.TempDir(), "test.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { st.Close() })
+
+	typeID, err := st.CreateAnnouncementType("T", webhook)
+	if err != nil {
+		t.Fatal(err)
+	}
+	startCursor := time.Now().UTC().AddDate(0, 0, -3).Format(time.RFC3339) // 3 days overdue
+	a := &model.Announcement{
+		Title: "Daily", Details: "d", TypeID: typeID,
+		ScheduleKind: "daily", Timezone: "UTC", ScheduleMinutes: 9 * 60,
+		NextPostAt: startCursor, Active: true,
+	}
+	id, err := st.CreateAnnouncement(a)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return &Server{store: st}, id, startCursor
+}
+
+// TestPostDueAnnouncementsNoDoubleWhenOverdue is the regression test for the
+// reported double-posting: an overdue recurring announcement must post exactly
+// once and advance its cursor to a future slot, so a second sweep posts nothing.
+func TestPostDueAnnouncementsNoDoubleWhenOverdue(t *testing.T) {
+	var hits int32
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		atomic.AddInt32(&hits, 1)
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer ts.Close()
+
+	s, id, _ := newSchedulerEnv(t, ts.URL)
+
+	s.postDueAnnouncements()
+	s.postDueAnnouncements() // back-to-back: a correct scheduler still posts once
+
+	if got := atomic.LoadInt32(&hits); got != 1 {
+		t.Fatalf("posted %d times across two sweeps; want exactly 1", got)
+	}
+	reloaded, _ := s.store.GetAnnouncement(id)
+	if reloaded == nil || !mustParse(t, reloaded.NextPostAt).After(time.Now()) {
+		t.Errorf("cursor not advanced to a future slot: %+v", reloaded)
+	}
+}
+
+// TestPostDueAnnouncementsAmbiguousAdvances verifies a transport failure (the
+// webhook may have been delivered) advances the cursor instead of retrying, so a
+// possibly-delivered post is never duplicated on the next tick.
+func TestPostDueAnnouncementsAmbiguousAdvances(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
+	closedURL := ts.URL
+	ts.Close() // the port now refuses connections → transport (ambiguous) error
+
+	s, id, startCursor := newSchedulerEnv(t, closedURL)
+	s.postDueAnnouncements()
+
+	reloaded, _ := s.store.GetAnnouncement(id)
+	if reloaded == nil || reloaded.NextPostAt == startCursor {
+		t.Errorf("ambiguous failure should advance the cursor (no retry), got %q", reloaded.NextPostAt)
+	}
+	if reloaded != nil && !mustParse(t, reloaded.NextPostAt).After(time.Now()) {
+		t.Errorf("advanced cursor should be in the future, got %q", reloaded.NextPostAt)
+	}
+}
+
+// TestPostDueAnnouncementsHTTPErrorRetries verifies a definite non-delivery (an
+// HTTP error status, e.g. a 429 rate limit or 5xx) leaves the cursor untouched so
+// the next tick retries — preserving delivery without duplicating.
+func TestPostDueAnnouncementsHTTPErrorRetries(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer ts.Close()
+
+	s, id, startCursor := newSchedulerEnv(t, ts.URL)
+	s.postDueAnnouncements()
+
+	reloaded, _ := s.store.GetAnnouncement(id)
+	if reloaded == nil || reloaded.NextPostAt != startCursor {
+		t.Errorf("HTTP error should leave the cursor pending for retry; got %q want %q",
+			reloaded.NextPostAt, startCursor)
 	}
 }
 

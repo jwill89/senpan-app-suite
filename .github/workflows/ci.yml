@@ -42,6 +42,25 @@ jobs:
           go-version-file: src/go.mod
           cache-dependency-path: src/go.sum
 
+      # FontAwesome Pro packages (@fortawesome + the @awesome.me kit) install from
+      # FontAwesome's private registry. The local frontend/.npmrc that points those
+      # scopes at it is gitignored (it carries an auth token), so CI must recreate
+      # it from the FONTAWESOME_TOKEN repo secret (Settings → Secrets and variables
+      # → Actions). Without this, `npm ci` fails with "E401 missing password".
+      - name: Configure FontAwesome registry
+        env:
+          FONTAWESOME_TOKEN: ${{ secrets.FONTAWESOME_TOKEN }}
+        run: |
+          if [ -z "$FONTAWESOME_TOKEN" ]; then
+            echo "ERROR: FONTAWESOME_TOKEN secret is not set." >&2
+            exit 1
+          fi
+          {
+            echo "@awesome.me:registry=https://npm.fontawesome.com/"
+            echo "@fortawesome:registry=https://npm.fontawesome.com/"
+            echo "//npm.fontawesome.com/:_authToken=${FONTAWESOME_TOKEN}"
+          } > .npmrc
+
       - name: Install dependencies
         run: npm ci
 

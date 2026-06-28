@@ -287,7 +287,8 @@ func postDiscordWebhook(webhookURL string, payload discordWebhookPayload) error 
 	if err != nil {
 		// Transport failure: the request may or may not have reached Discord, so
 		// mark it ambiguous (callers must not blindly retry — see errWebhookAmbiguous).
-		return fmt.Errorf("%w: %v", errWebhookAmbiguous, err)
+		// Both errors are wrapped (%w) so errors.Is reaches either.
+		return fmt.Errorf("%w: %w", errWebhookAmbiguous, err)
 	}
 	defer resp.Body.Close()
 	_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 1<<16))

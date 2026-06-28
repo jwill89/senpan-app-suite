@@ -74,8 +74,15 @@ frontend:
   script:
     - npm run lint:check
     - npm run typecheck
-    - npm run test
+    # Emit a JUnit report alongside the console output so test results show in the
+    # pipeline's "Tests" tab and the merge-request widget (no log-scraping).
+    - npm run test -- --reporter=default --reporter=junit --outputFile=junit.xml
     - npm run build
+  artifacts:
+    when: always # also collect on failure — that's when you want the report
+    reports:
+      junit: frontend/junit.xml
+    expire_in: 1 week
 
 # ── Backend: lint · build · vet · test · vuln scan ────────────────────────────
 backend:
@@ -97,9 +104,20 @@ backend:
     - export PATH="$(go env GOPATH)/bin:$PATH"
   script:
     - cd src
-    - golangci-lint run ./...
+    # Lint → console output plus a GitLab Code Quality report (shown in the MR
+    # widget and inline on the diff). --path-prefix src rewrites report paths to
+    # be repo-relative (the module lives in src/) so annotations land correctly.
+    - golangci-lint run --path-prefix src --output.text.path stdout --output.code-climate.path gl-code-quality-report.json ./...
     - go build ./...
     - go vet ./...
-    - go test ./...
+    # gotestsum runs the tests with readable console output AND writes a JUnit
+    # report for the pipeline's "Tests" tab / MR widget.
+    - go run gotest.tools/gotestsum@latest --junitfile junit.xml --format pkgname -- ./...
     # Scan the module (and deps) for known Go vulnerabilities reaching our code.
     - go run golang.org/x/vuln/cmd/govulncheck@latest ./...
+  artifacts:
+    when: always # collect the reports even when a step fails
+    reports:
+      codequality: src/gl-code-quality-report.json
+      junit: src/junit.xml
+    expire_in: 1 week

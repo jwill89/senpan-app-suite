@@ -44,12 +44,19 @@ function onJoinInput(e: Event): void {
 // Focus the board-ID field on load so players can type their code immediately.
 const joinInput = ref<HTMLInputElement | null>(null)
 onMounted(() => joinInput.value?.focus())
+
+// The logo (and the other brand images) are served at runtime from the web
+// root's persistent `images/` folder — see vite.config.ts — not bundled. Bind
+// the URL as a runtime string so the build never tries to resolve it as a
+// module (a static `src="/images/logo.png"` makes Vite import it, which fails a
+// clean build where public/images/ — gitignored — isn't present).
+const logoUrl = '/images/logo.png'
 </script>
 
 <template>
   <div class="home">
     <div class="home-brand">
-      <img src="/images/logo.png" alt="Senpan Logo" class="home-logo" />
+      <img :src="logoUrl" alt="Senpan Logo" class="home-logo" />
       <h1>{{ app.settings.app_title }}</h1>
     </div>
     <div class="home-cards">

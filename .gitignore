@@ -22,6 +22,12 @@ frontend/.vite/
 frontend/*.tsbuildinfo
 frontend/coverage/
 
+# CI report artifacts (JUnit test reports + golangci-lint Code Quality), produced
+# by the pipeline (and if you run the CI commands locally).
+/frontend/junit.xml
+/src/junit.xml
+/src/gl-code-quality-report.json
+
 # Secrets — never commit credentials. systemd EnvironmentFiles, etc.
 *.env
 !*.env.example

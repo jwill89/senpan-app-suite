@@ -56,6 +56,13 @@ go test ./...
 (CI also runs `gen:types` and `govulncheck`; see [`.gitlab-ci.yml`](.gitlab-ci.yml)
 and [`.github/workflows/ci.yml`](.github/workflows/ci.yml).)
 
+> **One command:** maintainers can run `scripts/check.ps1` (PowerShell) to run
+> every gate above — backend `golangci-lint`/build/vet/test, then frontend
+> `gen:types`/lint/typecheck/test/build — and stop at the first failure.
+> `golangci-lint` is **not** covered by `go build`/`go vet`, so don't skip it.
+> (`scripts/` is gitignored local tooling — install golangci-lint with
+> `go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.12.2`.)
+
 ## Conventions
 
 - **Match the surrounding code.** Mirror the existing naming, comment density,

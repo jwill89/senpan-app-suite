@@ -26,6 +26,23 @@ The format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## Frontend
 
+### [1.1.1] — 2026-06-28
+
+#### Added
+
+- Cloudflare Turnstile bot check on the hidden **registration** form too (same
+  widget + gating as the login form).
+
+### [1.1.0] — 2026-06-28
+
+#### Added
+
+- **Cloudflare Turnstile bot check on the admin login.** When the backend reports
+  a Turnstile site key (`GET /api/config`), the login form renders the challenge
+  widget and requires it before logging in (the token is sent with the login
+  request and verified server-side). When no key is configured, the form behaves
+  as before. New `TurnstileWidget` component + `endpoints.system.config()`.
+
 ### [1.0.0] — 2026-06-28
 
 First tracked release — establishes versioning for the current production build.
@@ -59,6 +76,25 @@ First tracked release — establishes versioning for the current production buil
 ---
 
 ## Backend
+
+### [1.1.1] — 2026-06-28
+
+#### Added
+
+- Cloudflare Turnstile verification on `POST /api/register` as well (mass-signup
+  protection), gated the same way as login — enforced only when a secret is set.
+
+### [1.1.0] — 2026-06-28
+
+#### Added
+
+- **Cloudflare Turnstile verification on login.** When `APPSUITE_TURNSTILE_SECRET`
+  (flag `-turnstile-secret`) is set, `POST /api/auth` requires a valid Turnstile
+  token — verified against Cloudflare's siteverify API (fail-closed) — before any
+  credential work, blocking automated brute-force at the door. Disabled (skipped)
+  when no secret is configured, so dev/test keep working.
+- **`GET /api/config`** — public endpoint exposing the non-secret Turnstile site
+  key (flag `-turnstile-sitekey` / `APPSUITE_TURNSTILE_SITEKEY`) for the login page.
 
 ### [1.0.1] — 2026-06-28
 

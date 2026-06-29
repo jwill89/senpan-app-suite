@@ -5,10 +5,12 @@
  * created inactive and cannot log in until an admin activates them, so an
  * unsolicited signup is harmless.
  */
-import { ref } from 'vue'
+import { onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
 import FormField from '@/components/common/ui/FormField.vue'
+import TurnstileWidget from '@/components/common/TurnstileWidget.vue'
+import { endpoints } from '@/lib/endpoints'
 import { useAuthStore } from '@/stores/auth'
 
 const auth = useAuthStore()
@@ -21,6 +23,19 @@ const confirm = ref('')
 const done = ref('')
 /** Client-side validation message (mismatched/short password). */
 const localError = ref('')
+
+// Cloudflare Turnstile bot check (same as login). Empty site key = disabled.
+const turnstileSiteKey = ref('')
+const turnstileToken = ref('')
+const turnstile = ref<InstanceType<typeof TurnstileWidget> | null>(null)
+
+onMounted(async () => {
+  try {
+    turnstileSiteKey.value = (await endpoints.system.config()).turnstile_site_key
+  } catch {
+    turnstileSiteKey.value = ''
+  }
+})
 
 async function submit(): Promise<void> {
   localError.value = ''
@@ -37,10 +52,20 @@ async function submit(): Promise<void> {
     localError.value = 'Passwords do not match.'
     return
   }
-  const message = await auth.register(name, password.value)
+  if (turnstileSiteKey.value && !turnstileToken.value) {
+    localError.value = 'Please complete the “I’m not a robot” check.'
+    return
+  }
+  const message = await auth.register(name, password.value, turnstileToken.value || undefined)
   password.value = ''
   confirm.value = ''
-  if (message) done.value = message
+  if (message) {
+    done.value = message
+    return
+  }
+  // Failure → re-issue a fresh single-use token for the next attempt.
+  turnstileToken.value = ''
+  turnstile.value?.reset()
 }
 
 function goLogin(): void {
@@ -87,11 +112,24 @@ function goLogin(): void {
               autocomplete="new-password"
             />
           </FormField>
+          <!-- Cloudflare Turnstile bot check (only when a site key is configured). -->
+          <TurnstileWidget
+            v-if="turnstileSiteKey"
+            ref="turnstile"
+            :site-key="turnstileSiteKey"
+            @verified="turnstileToken = $event"
+            @expired="turnstileToken = ''"
+            @error="turnstileToken = ''"
+          />
           <div class="btns">
             <button type="button" class="btn-neutral" :disabled="auth.loggingIn" @click="goLogin">
               Back
             </button>
-            <button type="submit" class="btn-action" :disabled="auth.loggingIn">
+            <button
+              type="submit"
+              class="btn-action"
+              :disabled="auth.loggingIn || (!!turnstileSiteKey && !turnstileToken)"
+            >
               <LoadingSpinner v-if="auth.loggingIn" label="Creating…" />
               <template v-else>Create Account</template>
             </button>

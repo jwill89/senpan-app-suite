@@ -62,11 +62,15 @@ export const useAuthStore = defineStore('auth', () => {
    * Attempts login with the given username + password.
    * Returns true on success; sets authError and returns false on failure.
    */
-  async function login(username: string, password: string): Promise<boolean> {
+  async function login(
+    username: string,
+    password: string,
+    turnstileToken?: string,
+  ): Promise<boolean> {
     authError.value = ''
     loggingIn.value = true
     try {
-      const data = await endpoints.auth.login(username, password)
+      const data = await endpoints.auth.login(username, password, turnstileToken)
       setUser(data.user)
       authChecked.value = true
       return true
@@ -82,11 +86,15 @@ export const useAuthStore = defineStore('auth', () => {
    * Registers a new account (hidden registration page). Returns the server's
    * confirmation message on success; sets authError and returns null on failure.
    */
-  async function register(username: string, password: string): Promise<string | null> {
+  async function register(
+    username: string,
+    password: string,
+    turnstileToken?: string,
+  ): Promise<string | null> {
     authError.value = ''
     loggingIn.value = true
     try {
-      const data = await endpoints.auth.register(username, password)
+      const data = await endpoints.auth.register(username, password, turnstileToken)
       return data.message
     } catch (e) {
       authError.value = (e as Error).message

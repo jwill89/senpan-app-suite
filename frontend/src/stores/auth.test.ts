@@ -64,7 +64,9 @@ describe('auth login', () => {
     expect(ok).toBe(true)
     expect(auth.isAdmin).toBe(true)
     expect(auth.user?.username).toBe('tester')
-    expect(login).toHaveBeenCalledWith('admin', 'pw')
+    // The third arg is the optional Turnstile token (undefined when the bot
+    // check isn't in play).
+    expect(login).toHaveBeenCalledWith('admin', 'pw', undefined)
   })
 
   it('captures the error message on failure', async () => {

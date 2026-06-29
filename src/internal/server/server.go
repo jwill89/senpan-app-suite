@@ -31,6 +31,19 @@ type Server struct {
 	mux            *http.ServeMux
 	limiter        *rateLimiter // failed-login brute-force limiter
 	regLimiter     *rateLimiter // registration-rate limiter (mass-signup abuse)
+	// Cloudflare Turnstile bot check on the admin login. Disabled (verification
+	// skipped) when turnstileSecret is empty — see SetTurnstile / turnstile.go.
+	turnstileSecret  string
+	turnstileSiteKey string
+}
+
+// SetTurnstile enables the Cloudflare Turnstile bot check on the login form.
+// secret is the server-side secret key (kept private); siteKey is the public key
+// served to the browser. An empty secret leaves Turnstile disabled, so the test
+// harness and local dev (no keys) keep working without a challenge.
+func (s *Server) SetTurnstile(secret, siteKey string) {
+	s.turnstileSecret = strings.TrimSpace(secret)
+	s.turnstileSiteKey = strings.TrimSpace(siteKey)
 }
 
 // New creates a Server, registers all API routes, and returns it. allowedOrigins
@@ -100,6 +113,7 @@ func (s *Server) withUserCache(next http.Handler) http.Handler {
 // Uses Go 1.22+ method-pattern routing ("GET /api/..." syntax).
 func (s *Server) routes() {
 	s.mux.HandleFunc("GET /api/version", s.handleVersion)
+	s.mux.HandleFunc("GET /api/config", s.handleConfig)
 	s.mux.HandleFunc("GET /api/auth", s.handleAuthCheck)
 	s.mux.HandleFunc("POST /api/auth", s.handleAuthAction)
 	s.mux.HandleFunc("POST /api/register", s.handleRegister)

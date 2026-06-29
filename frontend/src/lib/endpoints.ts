@@ -85,19 +85,26 @@ export const endpoints = {
   auth: {
     /** GET /api/auth — current auth status + the logged-in user (always 200). */
     check: () => apiGet<AuthCheckResponse>('auth'),
-    /** POST /api/auth {login} — bad credentials 401 without a global redirect. */
-    login: (username: string, password: string) =>
+    /** POST /api/auth {login} — bad credentials 401 without a global redirect.
+     *  turnstileToken carries the Cloudflare Turnstile result when the bot check
+     *  is enabled (omitted/ignored otherwise). */
+    login: (username: string, password: string, turnstileToken?: string) =>
       apiPost<LoginResponse>(
         'auth',
-        { action: 'login', username, password },
+        { action: 'login', username, password, turnstile_token: turnstileToken },
         { skipAuthRedirect: true },
       ),
     /** POST /api/auth {logout}. */
     logout: () =>
       apiPost<OkResponse>('auth', { action: 'logout' }, { skipAuthRedirect: true }),
-    /** POST /api/register — create an account (hidden page; pending activation). */
-    register: (username: string, password: string) =>
-      apiPost<RegisterResponse>('register', { username, password }, { skipAuthRedirect: true }),
+    /** POST /api/register — create an account (hidden page; pending activation).
+     *  turnstileToken carries the Turnstile result when the bot check is enabled. */
+    register: (username: string, password: string, turnstileToken?: string) =>
+      apiPost<RegisterResponse>(
+        'register',
+        { username, password, turnstile_token: turnstileToken },
+        { skipAuthRedirect: true },
+      ),
   },
 
   // ── Users (admin) + self-service account ─────────────────────────────────────
@@ -144,6 +151,8 @@ export const endpoints = {
   system: {
     /** GET /api/version — the backend's semantic version (public). */
     version: () => apiGet<{ backend: string }>('version'),
+    /** GET /api/config — client bootstrap config (Turnstile site key; "" = off). */
+    config: () => apiGet<{ turnstile_site_key: string }>('config'),
   },
 
   // ── Game lifecycle ───────────────────────────────────────────────────────────

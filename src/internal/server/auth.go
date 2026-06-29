@@ -24,9 +24,10 @@ const minPasswordLen = 8
 // authRequest is the JSON body for POST /api/auth.
 // Action is "login" (default) or "logout".
 type authRequest struct {
-	Action   string `json:"action"`
-	Username string `json:"username"`
-	Password string `json:"password"`
+	Action         string `json:"action"`
+	Username       string `json:"username"`
+	Password       string `json:"password"`
+	TurnstileToken string `json:"turnstile_token"` // Cloudflare Turnstile token (when enabled)
 }
 
 // handleAuthCheck returns the current authentication status and, when logged in,
@@ -78,6 +79,17 @@ func (s *Server) handleAuthAction(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Bot check: when Cloudflare Turnstile is configured, a valid one-time token
+	// is required before we do any credential work, so automated brute-force
+	// clients can't reach the password check. A failed challenge isn't counted
+	// against the login limiter — a legit user with an expired token shouldn't be
+	// locked out of password attempts; the token is just re-issued on retry.
+	if s.turnstileEnabled() && !s.verifyTurnstile(r.Context(), req.TurnstileToken, ip) {
+		slog.Warn("turnstile verification failed", "ip", ip)
+		writeError(w, http.StatusForbidden, "Bot verification failed. Please complete the challenge and try again.")
+		return
+	}
+
 	username := strings.TrimSpace(req.Username)
 	user, hash, err := s.store.GetUserByUsername(username)
 	if err != nil {
@@ -125,8 +137,9 @@ func (s *Server) handleAuthAction(w http.ResponseWriter, r *http.Request) {
 
 // registerRequest is the JSON body for POST /api/register.
 type registerRequest struct {
-	Username string `json:"username"`
-	Password string `json:"password"`
+	Username       string `json:"username"`
+	Password       string `json:"password"`
+	TurnstileToken string `json:"turnstile_token"` // Cloudflare Turnstile token (when enabled)
 }
 
 // handleRegister creates a new account from the hidden registration page. The
@@ -152,6 +165,14 @@ func (s *Server) handleRegister(w http.ResponseWriter, r *http.Request) {
 	req, err := readJSON[registerRequest](w, r)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "Invalid JSON")
+		return
+	}
+
+	// Bot check: when Turnstile is configured, require a valid token before
+	// creating an account (blocks automated mass-signup). Skipped when disabled.
+	if s.turnstileEnabled() && !s.verifyTurnstile(r.Context(), req.TurnstileToken, ip) {
+		slog.Warn("turnstile verification failed (register)", "ip", ip)
+		writeError(w, http.StatusForbidden, "Bot verification failed. Please complete the challenge and try again.")
 		return
 	}
 

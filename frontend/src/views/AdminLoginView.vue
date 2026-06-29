@@ -4,10 +4,12 @@
  * `redirect` query param if present, else the admin dashboard). The admin's
  * initial data load happens in AdminView when the dashboard mounts.
  */
-import { ref } from 'vue'
+import { onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
 import FormField from '@/components/common/ui/FormField.vue'
+import TurnstileWidget from '@/components/common/TurnstileWidget.vue'
+import { endpoints } from '@/lib/endpoints'
 import { useAuthStore } from '@/stores/auth'
 
 const auth = useAuthStore()
@@ -17,17 +19,40 @@ const router = useRouter()
 const username = ref('')
 const password = ref('')
 
+// Cloudflare Turnstile bot check. The site key (empty = disabled) comes from the
+// backend; when present, the widget renders and a token is required to log in.
+const turnstileSiteKey = ref('')
+const turnstileToken = ref('')
+const turnstile = ref<InstanceType<typeof TurnstileWidget> | null>(null)
+
+onMounted(async () => {
+  try {
+    turnstileSiteKey.value = (await endpoints.system.config()).turnstile_site_key
+  } catch {
+    turnstileSiteKey.value = '' // config probe failed → behave as if disabled
+  }
+})
+
 async function submit(): Promise<void> {
+  // When the bot check is enabled, require a completed challenge first.
+  if (turnstileSiteKey.value && !turnstileToken.value) {
+    auth.authError = 'Please complete the “I’m not a robot” check.'
+    return
+  }
   const name = username.value.trim()
   const pw = password.value
   password.value = ''
-  const ok = await auth.login(name, pw)
+  const ok = await auth.login(name, pw, turnstileToken.value || undefined)
   if (ok) {
     const redirect = typeof route.query.redirect === 'string' ? route.query.redirect : null
     // Land on /admin; the router guard forwards to the first page this account
     // may access (admins → the game tab, others → their first permitted page).
     router.push(redirect || { path: '/admin' })
+    return
   }
+  // Turnstile tokens are single-use — re-issue one for the next attempt.
+  turnstileToken.value = ''
+  turnstile.value?.reset()
 }
 
 function goHome(): void {
@@ -57,11 +82,24 @@ function goHome(): void {
             autocomplete="current-password"
           />
         </FormField>
+        <!-- Cloudflare Turnstile bot check (only when a site key is configured). -->
+        <TurnstileWidget
+          v-if="turnstileSiteKey"
+          ref="turnstile"
+          :site-key="turnstileSiteKey"
+          @verified="turnstileToken = $event"
+          @expired="turnstileToken = ''"
+          @error="turnstileToken = ''"
+        />
         <div class="btns">
           <button type="button" class="btn-neutral" :disabled="auth.loggingIn" @click="goHome">
             Back
           </button>
-          <button type="submit" class="btn-action" :disabled="auth.loggingIn">
+          <button
+            type="submit"
+            class="btn-action"
+            :disabled="auth.loggingIn || (!!turnstileSiteKey && !turnstileToken)"
+          >
             <LoadingSpinner v-if="auth.loggingIn" label="Logging in…" />
             <template v-else>Login</template>
           </button>

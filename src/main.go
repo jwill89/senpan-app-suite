@@ -28,6 +28,8 @@ func main() {
 	webRoot := flag.String("webroot", "/var/www/www.yoursite.com", "Web root directory for static assets (e.g. image uploads)")
 	secret := flag.String("secret", "", "Session cookie secret (env APPSUITE_SESSION_SECRET or random if empty)")
 	corsOrigins := flag.String("cors-origins", "", "Comma-separated CORS allowlist of cross-origin sites (env APPSUITE_CORS_ORIGINS; empty = same-origin only, no CORS headers)")
+	turnstileSecret := flag.String("turnstile-secret", "", "Cloudflare Turnstile secret key (env APPSUITE_TURNSTILE_SECRET; empty = login bot check disabled)")
+	turnstileSiteKey := flag.String("turnstile-sitekey", "", "Cloudflare Turnstile public site key (env APPSUITE_TURNSTILE_SITEKEY)")
 	flag.Parse()
 
 	// CORS allowlist: flag > env. Normally empty — the SPA and API are
@@ -65,8 +67,24 @@ func main() {
 	}
 	defer db.Close()
 
+	// Cloudflare Turnstile login bot check: flag > env. Disabled when no secret.
+	tsSecret := *turnstileSecret
+	if tsSecret == "" {
+		tsSecret = os.Getenv("APPSUITE_TURNSTILE_SECRET")
+	}
+	tsSiteKey := *turnstileSiteKey
+	if tsSiteKey == "" {
+		tsSiteKey = os.Getenv("APPSUITE_TURNSTILE_SITEKEY")
+	}
+
 	hub := ws.NewHub()
 	srv := server.New(db, hub, finalSecret, *webRoot, allowedOrigins)
+	srv.SetTurnstile(tsSecret, tsSiteKey)
+	if tsSecret != "" {
+		slog.Info("Cloudflare Turnstile bot check enabled on the login form")
+	} else {
+		slog.Warn("Cloudflare Turnstile not configured; login bot check disabled")
+	}
 
 	httpServer := &http.Server{
 		Addr:    *addr,

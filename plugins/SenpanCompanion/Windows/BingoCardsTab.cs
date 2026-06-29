@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Numerics;
 using Dalamud.Bindings.ImGui;
 using SenpanCompanion.Api;
@@ -9,8 +11,9 @@ namespace SenpanCompanion.Windows;
 /// <summary>
 /// Bingo Cards tab: create named cards (with a nearby-player picker that can also
 /// /tell the player their card URL), copy a card's URL, and delete cards. The card
-/// list is the shared <see cref="CardCache"/>, so the Game tab's winner names and
-/// this tab stay in sync and refresh once on a WebSocket card change.
+/// list is the shared <see cref="CardCache"/> (newest-first), so the Game tab's
+/// winner names and this tab stay in sync and refresh once on a WebSocket card
+/// change. Creating a card for a character who already has one prompts to replace it.
 /// </summary>
 internal sealed class BingoCardsTab : TabBase
 {
@@ -23,6 +26,14 @@ internal sealed class BingoCardsTab : TabBase
     private string newPlayerName = string.Empty;
     private string pendingTellName = string.Empty;
     private string pendingTellWorld = string.Empty;
+
+    // Staged create request (set on button click; run directly, or after a
+    // replace-confirm when the character already has a card).
+    private bool openReplacePopup;
+    private string createName = string.Empty;
+    private string createTellWorld = string.Empty;
+    private bool createDoTell;
+    private List<string> replaceIds = new();
 
     public BingoCardsTab(ApiClient api, NearbyPlayers nearby, Configuration config, ChatSender chat, CardCache cardCache)
     {
@@ -50,22 +61,20 @@ internal sealed class BingoCardsTab : TabBase
             });
 
         ImGui.SetNextItemWidth(220);
-        ImGui.InputText("##playername", ref this.newPlayerName, 64);
+        ImGui.InputTextWithHint("##playername", "Player name", ref this.newPlayerName, 64);
         ImGui.SameLine();
         DrawNearbyPicker();
-        ImGui.SameLine();
+        // Create on its own line so it's never pushed off-screen on a narrow window.
         if (ImGui.Button("Create card") && !string.IsNullOrWhiteSpace(this.newPlayerName))
-            CreateCard();
+            OnCreateClicked();
 
         ImGui.TextDisabled($"{cards.Count} card(s)");
 
         if (cards.Count == 0)
         {
             ImGui.TextDisabled(this.cardCache.LoadFailed ? "Couldn't load cards." : "No cards yet.");
-            return;
         }
-
-        if (ImGui.BeginTable("cards", 3, ImGuiTableFlags.Borders | ImGuiTableFlags.RowBg | ImGuiTableFlags.ScrollY, new Vector2(0, 360)))
+        else if (ImGui.BeginTable("cards", 3, ImGuiTableFlags.Borders | ImGuiTableFlags.RowBg | ImGuiTableFlags.ScrollY, new Vector2(0, 360)))
         {
             ImGui.TableSetupColumn("Card ID");
             ImGui.TableSetupColumn("Player");
@@ -96,19 +105,46 @@ internal sealed class BingoCardsTab : TabBase
 
             ImGui.EndTable();
         }
+
+        DrawReplacePopup();
     }
 
-    private void CreateCard()
+    private void OnCreateClicked()
     {
         var name = this.newPlayerName.Trim();
-        var tellName = this.pendingTellName;
-        var tellWorld = this.pendingTellWorld;
-        var doTell = this.config.TellCardUrlOnCreate
-                     && !string.IsNullOrEmpty(tellWorld)
-                     && string.Equals(tellName, name, StringComparison.Ordinal);
+        if (name.Length == 0)
+            return;
+
+        this.createName = name;
+        this.createTellWorld = this.pendingTellWorld;
+        this.createDoTell = this.config.TellCardUrlOnCreate
+                            && !string.IsNullOrEmpty(this.pendingTellWorld)
+                            && string.Equals(this.pendingTellName, name, StringComparison.Ordinal);
+
+        // Does this character already have a card? If so, confirm a replace rather
+        // than silently creating a duplicate.
+        this.replaceIds = this.cardCache.Cards
+            .Where(c => string.Equals(c.PlayerName.Trim(), name, StringComparison.OrdinalIgnoreCase))
+            .Select(c => c.Id)
+            .ToList();
+
+        if (this.replaceIds.Count > 0)
+            this.openReplacePopup = true;
+        else
+            RunCreate(false);
+    }
+
+    private void RunCreate(bool replaceExisting)
+    {
+        var name = this.createName;
+        var doTell = this.createDoTell;
+        var tellWorld = this.createTellWorld;
+        var toDelete = replaceExisting ? this.replaceIds.ToList() : new List<string>();
 
         Run(async () =>
         {
+            foreach (var id in toDelete)
+                await this.api.DeleteCardAsync(id);
             var created = await this.api.CreateNamedCardAsync(name);
             await this.cardCache.RefreshAsync();
             await Apply(() =>
@@ -121,6 +157,36 @@ internal sealed class BingoCardsTab : TabBase
             if (doTell && !string.IsNullOrEmpty(created.Card.Id))
                 this.chat.SendTell(name, tellWorld, $"Here's your bingo card: {this.config.CardUrl(created.Card.Id)}");
         });
+    }
+
+    private void DrawReplacePopup()
+    {
+        if (this.openReplacePopup)
+        {
+            ImGui.OpenPopup("Replace card###replacecard");
+            this.openReplacePopup = false;
+        }
+
+        ImGui.SetNextWindowSize(new Vector2(360, 0), ImGuiCond.Appearing);
+        var open = true;
+        if (!ImGui.BeginPopupModal("Replace card###replacecard", ref open))
+            return;
+
+        var plural = this.replaceIds.Count != 1;
+        ImGui.TextWrapped(
+            $"{this.createName} already has {(plural ? $"{this.replaceIds.Count} cards" : "a card")} " +
+            $"({string.Join(", ", this.replaceIds)}). This will delete {(plural ? "them" : "it")} " +
+            "and create a new one. Proceed?");
+        ImGui.Spacing();
+        if (ImGui.Button("Replace"))
+        {
+            RunCreate(true);
+            ImGui.CloseCurrentPopup();
+        }
+        ImGui.SameLine();
+        if (ImGui.Button("Cancel##replace"))
+            ImGui.CloseCurrentPopup();
+        ImGui.EndPopup();
     }
 
     private void DrawNearbyPicker()

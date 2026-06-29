@@ -68,7 +68,12 @@ public sealed class CardCache : IDisposable
     {
         try
         {
-            var cards = (await this.api.ListCardsAsync().ConfigureAwait(false)).Cards;
+            // Newest-first by created_at (the server returns them ordered by id).
+            // created_at is an ISO/SQLite timestamp string, which sorts chronologically;
+            // blank (pre-tracking) values sort last under descending order.
+            var cards = (await this.api.ListCardsAsync().ConfigureAwait(false)).Cards
+                .OrderByDescending(c => c.CreatedAt, StringComparer.Ordinal)
+                .ToList();
             await Plugin.Framework.RunOnFrameworkThread(() =>
             {
                 this.Cards = cards;

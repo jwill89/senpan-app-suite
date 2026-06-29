@@ -68,18 +68,22 @@ describe('AdminSidebar', () => {
     expect(section(wrapper, 'Bingo').find('.admin-nav-items').isVisible()).toBe(true)
     expect(isExpanded(wrapper, 'System')).toBe(false)
     expect(section(wrapper, 'System').find('.admin-nav-items').isVisible()).toBe(false)
-    // The Festival section carries Garapon + Raffles (Raffles moved here from Tea House).
+    // The Festival section carries Garapon + Stamp Rally + Raffles (Raffles moved
+    // here from Tea House).
     const festivalText = section(wrapper, 'Festival')
       .findAll('.admin-nav-items button')
       .map((b) => b.text())
-    expect(festivalText).toHaveLength(2)
+    expect(festivalText).toHaveLength(3)
     expect(festivalText.join(' ')).toContain('Garapon')
+    expect(festivalText.join(' ')).toContain('Stamp Rally')
     expect(festivalText.join(' ')).toContain('Raffles')
-    // The always-present User Options section carries Change Password + Logout.
+    // The always-present User Options section carries Access Token, Change
+    // Password + Logout.
     const userText = section(wrapper, 'User Options')
       .findAll('.admin-nav-items button')
       .map((b) => b.text())
       .join(' ')
+    expect(userText).toContain('Access Token')
     expect(userText).toContain('Change Password')
     expect(userText).toContain('Logout')
   })

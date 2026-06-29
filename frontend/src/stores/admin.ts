@@ -13,6 +13,7 @@ import { useGameStore } from './game'
 import { useRafflesStore } from './raffles'
 import { useAffiliatesStore } from './affiliates'
 import { useGaraponsStore } from './garapons'
+import { useStampRalliesStore } from './stampRallies'
 import { useBookclubStore } from './bookclub'
 import { useStylesStore } from './styles'
 import { useAppStore } from './app'
@@ -42,6 +43,7 @@ export type AdminTab =
   | 'teahouse-raffles'
   | BookClubTab
   | 'festival-garapon'
+  | 'festival-stamp-rally'
   | 'atelier-fonts'
   | 'atelier-carrd'
   | 'system-settings'
@@ -91,6 +93,7 @@ export const useAdminStore = defineStore('admin', () => {
     const raffles = useRafflesStore()
     const affiliates = useAffiliatesStore()
     const garapons = useGaraponsStore()
+    const stampRallies = useStampRalliesStore()
     const bookclub = useBookclubStore()
     const styles = useStylesStore()
     const app = useAppStore()
@@ -115,6 +118,11 @@ export const useAdminStore = defineStore('admin', () => {
       affiliates.selectedAffiliate = null
       affiliates.affiliateForm = null
       loadFresh('affiliates', () => affiliates.loadAffiliates())
+    }
+    if (tab === 'festival-stamp-rally') {
+      stampRallies.selectedRally = null
+      stampRallies.rallyForm = null
+      loadFresh('stamp-rallies', () => stampRallies.loadRallies())
     }
     // openClub manages its own per-club freshness (and preserves the open list /
     // events sub-view when the same club tab is re-entered).
@@ -183,6 +191,18 @@ export const useAdminStore = defineStore('admin', () => {
         apply('affiliates', tab === 'teahouse-affiliates', () =>
           useAffiliatesStore().loadAffiliates(),
         )
+        break
+      case 'stamp-rallies':
+        // When viewing the manager, reload the list + the open event detail + the
+        // open logs so a participant's just-collected stamp shows live.
+        apply('stamp-rallies', tab === 'festival-stamp-rally', () => {
+          const sr = useStampRalliesStore()
+          sr.loadRallies()
+          if (sr.selectedRally) {
+            sr.loadRallyDetail(sr.selectedRally.id)
+            sr.loadRallyLogs(sr.selectedRally.id)
+          }
+        })
         break
       case 'announcements':
         apply('announcements', tab === 'teahouse-announcements', () =>

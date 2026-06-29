@@ -26,6 +26,64 @@ The format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## Frontend
 
+### [1.5.0] — 2026-06-29
+
+#### Added
+
+- **Personal access tokens** (User Options → **Access Token**). Generate a token from the
+  account menu so an external client — such as a Final Fantasy XIV Dalamud plugin — can
+  sign in to this server as you, with your exact page permissions. The modal shows the
+  token's prefix and its created / last-used times; the secret itself is revealed **once**
+  at generation (with a copy button) and can be **regenerated** (invalidating the old one)
+  or **revoked**.
+
+### [1.4.0] — 2026-06-29
+
+#### Added
+
+- **Garapon ↔ Stamp Rally linking.** A Garapon can optionally **link to an open Stamp
+  Rally**; issuing a participant a drawing link then also issues them a Stamp Rally card
+  **sharing the same token** (one hash works for both `/garapon/<token>` and
+  `/stamp-card/<token>`), with a copy button for each in the drawing-links table.
+- **Stamp Rally open/closed status** (separate from the date window): the manager now
+  splits into an **Open** card grid and a **Closed** table (like Raffles/Garapon), with a
+  Close/Reopen button. A closed rally is read-only and isn't offered for Garapon linking.
+  A card with collected stamps can only be deleted once the rally is closed — and its
+  **View Logs** entries are preserved (the log now groups by the participant-name snapshot).
+- **Inline stall pause from the main list.** Each open rally card shows an at-a-glance
+  "X/Y stalls active" summary and a **Manage stalls** panel to Pause/Resume individual
+  vendor stalls right there — no need to open the rally or its placement editor.
+
+### [1.3.1] — 2026-06-29
+
+#### Changed
+
+- Reordered the admin sidebar: Bingo ends with **Winners Log**; Senpan Tea House
+  leads with **Affiliates** (above Announcements); Festival lists **Stamp Rally**
+  below Raffles; Atelier Yao shows **Carrd Upload** before Font Upload; and System is
+  ordered **Images → Themes → Users → Settings**.
+
+### [1.3.0] — 2026-06-29
+
+#### Added
+
+- **Stamp Rally** (Festival → **Stamp Rally**): an admin tool to author stamp-rally
+  events — a card background + "not stamped" placeholder, an availability window,
+  markdown details + "How to Redeem" instructions, and **stamps** and **prizes**
+  placed on the card with a visual **drag / resize / rotate** editor. The card image
+  is the full designed card (frame, slot placeholders, labels, prize panel); earned
+  stamp/prize art is overlaid on its slots, turning the "empty" card into the "full"
+  one. Each stamp links
+  to an affiliate stall (or Senpan Tea House), has a password and an optional active
+  window with pause/resume. Admins issue each participant a tokenized
+  `/stamp-card/<token>` link; participants enter stall passwords to collect stamps,
+  and once every still-collectable stamp is accounted for the card completes and its
+  prizes + redeem instructions reveal. A per-event **View Logs** page shows every
+  collection (participant · stall · time), sortable with each participant's rows
+  grouped, and updates **live** over the WebSocket as stamps come in. Three new
+  permanent image categories: **Stamp Cards**, **Stamp Stamps**, **Stamp Prizes**.
+  Gated by the new `festival-stamp-rally` page permission.
+
 ### [1.2.0] — 2026-06-29
 
 #### Added
@@ -87,6 +145,62 @@ First tracked release — establishes versioning for the current production buil
 ---
 
 ## Backend
+
+### [1.5.0] — 2026-06-29
+
+#### Added
+
+- **Personal access token (bearer) auth** for external API clients (e.g. a FFXIV Dalamud
+  plugin), letting them use the existing REST + WebSocket API without the browser's
+  cookie-session / Turnstile login. A request carries `Authorization: Bearer <token>` (or
+  `?token=` on the `/api/ws` upgrade); it resolves to the owning account and the **same
+  per-page permission guards** apply, so a token never grants more than the account holds.
+  Resolution is wired into `loadCurrentUser` + `wsSessionUser`, so every existing endpoint
+  accepts a token with no per-handler change.
+- `GET` / `POST /api/account/token` — self-service token metadata + generate (replace) /
+  revoke. One token per account; only a SHA-256 hash is stored and the plaintext is
+  returned **exactly once**, at generation. Schema migration **v42** adds the `user_tokens`
+  table (cascade-deleted with its user; resolves active accounts only).
+
+### [1.4.0] — 2026-06-29
+
+#### Added
+
+- **Garapon ↔ Stamp Rally linking.** Garapons carry an optional `stamp_rally_id` (to an
+  **open** rally; closed/unknown rejected). Creating a drawing link on a linked garapon
+  auto-issues a Stamp Rally card via `IssueRallyCardWithToken` using the **same token** as
+  the drawing link, recorded on `garapon_players.stamp_card_id` (and surfaced as
+  `stamp_card_token`). Deleting the link removes the paired card; deleting the rally clears
+  any garapon link.
+- **Stamp Rally `status` (open/closed)** with a `set_status` action — closed rallies are
+  read-only (`rallyOpen`/`stampAvailable` reject them). Cards with collected stamps are
+  deletable only when the rally is closed.
+- `GET /api/stamp-rallies` now returns per-rally `stamp_count` + `active_stamp_count`
+  (stamps not paused) for the list's at-a-glance stall summary + inline pause panel.
+
+#### Changed
+
+- **Stamp logs are preserved on card/stamp deletion** (schema migration v40 + v41):
+  `stamp_rally_collected` now snapshots `participant_name`/`stall_name` and carries a
+  `rally_id` (CASCADE) with nullable `card_id`/`stamp_id` (`ON DELETE SET NULL`) — mirroring
+  `garapon_draws`. Deleting a rally still removes its whole log.
+
+### [1.3.0] — 2026-06-29
+
+#### Added
+
+- **Stamp Rally API** — admin CRUD at `GET/POST /api/stamp-rallies` (events with
+  stamps + prizes carrying %-based placements, saved inline; stamps upserted by id so
+  collection history survives edits), per-stamp pause/resume and tokenized participant
+  cards (`/{id}/stamps`, `/{id}/cards`), and the event-wide collection log
+  (`/{id}/logs`). Public, tokenized participant flow at `GET /api/stamp-card/{token}`
+  (passwords stripped; prizes hidden until the card completes) and
+  `POST /api/stamp-card/{token}/stamp` (collect by password; "this stall is currently
+  closed" when unavailable; lazy completion when every stamp is collected-or-expired).
+  The public collect broadcasts the `stamp-rallies` resource-changed signal for live
+  admin log updates. Schema migration v39 (five `stamp_rally*` tables) and three new
+  permanent image categories (`stamp_cards`, `stamp_stamps`, `stamp_prizes`). Gated by
+  the new `festival-stamp-rally` page permission.
 
 ### [1.2.0] — 2026-06-29
 

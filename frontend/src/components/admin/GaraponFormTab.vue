@@ -23,8 +23,17 @@ import { rateTotal, ratePct as normalizedPct } from '@/lib/garapon'
 const emit = defineEmits<{ saved: []; cancel: [] }>()
 const garapons = useGaraponsStore()
 
-// Load the reusable grand-prize images (the "Garapon" category on System → Images).
-onMounted(() => garapons.loadGrandPrizeImages())
+// Load the reusable grand-prize images (the "Garapon" category on System → Images)
+// and the open stamp rallies offered in the "Linked Stamp Rally" picker.
+onMounted(() => {
+  garapons.loadGrandPrizeImages()
+  garapons.loadStampRallyOptions()
+})
+
+/** Set the linked stamp rally from the select ('' → null = not linked). */
+function setStampRally(value: string): void {
+  if (garapons.garaponForm) garapons.garaponForm.stamp_rally_id = value ? Number(value) : null
+}
 
 /** Sum of positive prize weights, for the live normalized-% readouts. */
 const total = computed(() => rateTotal(garapons.garaponForm?.prizes || []))
@@ -56,6 +65,20 @@ function cancel(): void {
           placeholder="Garapon Title"
           aria-label="Garapon title"
         />
+      </FormField>
+
+      <FormField
+        label="Linked Stamp Rally"
+        help="Optional. When linked, every drawing link you issue also issues that participant a stamp card for this rally — sharing the same link. Only open rallies are listed."
+      >
+        <select
+          :value="garapons.garaponForm.stamp_rally_id ?? ''"
+          aria-label="Linked stamp rally"
+          @change="setStampRally(($event.target as HTMLSelectElement).value)"
+        >
+          <option value="">None — not linked</option>
+          <option v-for="r in garapons.stampRallyOptions" :key="r.id" :value="r.id">{{ r.title }}</option>
+        </select>
       </FormField>
 
       <FormField label="Details">

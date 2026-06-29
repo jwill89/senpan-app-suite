@@ -18,6 +18,7 @@ import type {
   GaraponPlayer,
   GaraponPrize,
   GaraponPrizeForm,
+  StampRally,
 } from '@/types/api'
 import { useUiStore } from './ui'
 import { useImagesStore, IMAGE_DIR_GARAPONS } from './images'
@@ -41,6 +42,8 @@ export const useGaraponsStore = defineStore('garapons', () => {
   const garaponForm = ref<GaraponForm | null>(null)
   /** Reusable grand-prize images (the "Garapon" category on System → Images). */
   const grandPrizeImages = ref<string[]>([])
+  /** Open stamp rallies offered in the "Linked Stamp Rally" picker on the form. */
+  const stampRallyOptions = ref<StampRally[]>([])
   /** Admin "generate drawing" form (issue a new per-player link). */
   const playerAdd = ref<{ playerName: string; maxDraws: number }>({ playerName: '', maxDraws: 1 })
 
@@ -132,6 +135,16 @@ export const useGaraponsStore = defineStore('garapons', () => {
     }
   }
 
+  /** Loads the OPEN stamp rallies for the form's "Linked Stamp Rally" picker. */
+  async function loadStampRallyOptions(): Promise<void> {
+    try {
+      const data = await endpoints.stampRallies.list()
+      stampRallyOptions.value = (data.stamp_rallies || []).filter((r) => r.status !== 'closed')
+    } catch {
+      stampRallyOptions.value = []
+    }
+  }
+
   // ── Admin: form ──────────────────────────────────────────────────────────
   function newGaraponForm(): void {
     garaponForm.value = {
@@ -139,6 +152,7 @@ export const useGaraponsStore = defineStore('garapons', () => {
       title: '',
       details: '',
       grand_prize_image: '',
+      stamp_rally_id: null,
       prizes: [blankPrize(50, true)],
     }
   }
@@ -157,6 +171,7 @@ export const useGaraponsStore = defineStore('garapons', () => {
       title: g.title,
       details: g.details,
       grand_prize_image: g.grand_prize_image,
+      stamp_rally_id: g.stamp_rally_id ?? null,
       prizes: prizes.length ? prizes : [blankPrize(50, true)],
     }
   }
@@ -326,6 +341,25 @@ export const useGaraponsStore = defineStore('garapons', () => {
     }
   }
 
+  /** The stamp card link auto-issued with this drawing link (same token), if any. */
+  function stampCardLinkUrl(player: GaraponPlayer): string {
+    return player.stamp_card_token
+      ? `${window.location.origin}/stamp-card/${player.stamp_card_token}`
+      : ''
+  }
+
+  /** Copies a player's stamp card link (the same hash as their drawing link). */
+  async function copyStampCardLink(player: GaraponPlayer): Promise<void> {
+    const url = stampCardLinkUrl(player)
+    if (!url) return
+    try {
+      await navigator.clipboard.writeText(url)
+      ui.notify('Stamp card link copied to clipboard', 'success')
+    } catch {
+      ui.notify(url, 'info')
+    }
+  }
+
   // ── Public: player view + draw ───────────────────────────────────────────
   function resetPublic(): void {
     publicGarapon.value = null
@@ -388,6 +422,7 @@ export const useGaraponsStore = defineStore('garapons', () => {
     garaponDraws,
     garaponForm,
     grandPrizeImages,
+    stampRallyOptions,
     playerAdd,
     garaponsLoading,
     detailLoading,
@@ -412,6 +447,7 @@ export const useGaraponsStore = defineStore('garapons', () => {
     loadGaraponDetail,
     viewGarapon,
     loadGrandPrizeImages,
+    loadStampRallyOptions,
     newGaraponForm,
     editGaraponForm,
     cancelGaraponForm,
@@ -424,6 +460,8 @@ export const useGaraponsStore = defineStore('garapons', () => {
     createPlayer,
     deletePlayer,
     copyPlayerLink,
+    stampCardLinkUrl,
+    copyStampCardLink,
     // public actions
     resetPublic,
     loadByToken,

@@ -91,8 +91,8 @@ func (s *Store) CreateGarapon(g *model.Garapon) (int64, error) {
 	}
 	defer func() { _ = tx.Rollback() }()
 
-	res, err := tx.Exec(`INSERT INTO garapons (title, details, grand_prize_image, status)
-		VALUES (?, ?, ?, 'open')`, g.Title, g.Details, g.GrandPrizeImage)
+	res, err := tx.Exec(`INSERT INTO garapons (title, details, grand_prize_image, status, stamp_rally_id)
+		VALUES (?, ?, ?, 'open', ?)`, g.Title, g.Details, g.GrandPrizeImage, nullableID(g.StampRallyID))
 	if err != nil {
 		return 0, err
 	}
@@ -120,8 +120,8 @@ func (s *Store) UpdateGarapon(g *model.Garapon) error {
 	}
 	defer func() { _ = tx.Rollback() }()
 
-	if _, err := tx.Exec(`UPDATE garapons SET title = ?, details = ?, grand_prize_image = ? WHERE id = ?`,
-		g.Title, g.Details, g.GrandPrizeImage, g.ID); err != nil {
+	if _, err := tx.Exec(`UPDATE garapons SET title = ?, details = ?, grand_prize_image = ?, stamp_rally_id = ? WHERE id = ?`,
+		g.Title, g.Details, g.GrandPrizeImage, nullableID(g.StampRallyID), g.ID); err != nil {
 		return err
 	}
 	if _, err := tx.Exec(`DELETE FROM garapon_prizes WHERE garapon_id = ?`, g.ID); err != nil {
@@ -153,14 +153,20 @@ func (s *Store) SetGaraponStatus(id int64, status string) error {
 // GetGarapon retrieves a single garapon with its prizes. Returns nil if not found.
 func (s *Store) GetGarapon(id int64) (*model.Garapon, error) {
 	var g model.Garapon
-	err := s.db.QueryRow(`SELECT id, title, details, grand_prize_image, status, created_at
-		FROM garapons WHERE id = ?`, id).
-		Scan(&g.ID, &g.Title, &g.Details, &g.GrandPrizeImage, &g.Status, &g.CreatedAt)
+	var stampRallyID sql.NullInt64
+	err := s.db.QueryRow(`SELECT g.id, g.title, g.details, g.grand_prize_image, g.status,
+			g.stamp_rally_id, COALESCE(sr.title, ''), g.created_at
+		FROM garapons g LEFT JOIN stamp_rallies sr ON sr.id = g.stamp_rally_id WHERE g.id = ?`, id).
+		Scan(&g.ID, &g.Title, &g.Details, &g.GrandPrizeImage, &g.Status,
+			&stampRallyID, &g.StampRallyTitle, &g.CreatedAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
 	}
 	if err != nil {
 		return nil, err
+	}
+	if stampRallyID.Valid {
+		g.StampRallyID = &stampRallyID.Int64
 	}
 	prizes, err := scanGaraponPrizes(s.db, id)
 	if err != nil {
@@ -175,10 +181,12 @@ func (s *Store) GetGarapon(id int64) (*model.Garapon, error) {
 // links exist and how many draws have been made. Prizes are omitted here for
 // efficiency (the detail fetch loads them).
 func (s *Store) ListGarapons() ([]model.Garapon, error) {
-	rows, err := s.db.Query(`SELECT g.id, g.title, g.details, g.grand_prize_image, g.status, g.created_at,
+	rows, err := s.db.Query(`SELECT g.id, g.title, g.details, g.grand_prize_image, g.status,
+			g.stamp_rally_id, COALESCE(sr.title, ''), g.created_at,
 			COALESCE((SELECT COUNT(*) FROM garapon_players p WHERE p.garapon_id = g.id), 0),
 			COALESCE((SELECT COUNT(*) FROM garapon_draws d WHERE d.garapon_id = g.id), 0)
-		FROM garapons g ORDER BY g.created_at DESC, g.id DESC`)
+		FROM garapons g LEFT JOIN stamp_rallies sr ON sr.id = g.stamp_rally_id
+		ORDER BY g.created_at DESC, g.id DESC`)
 	if err != nil {
 		return nil, err
 	}
@@ -187,9 +195,14 @@ func (s *Store) ListGarapons() ([]model.Garapon, error) {
 	garapons := make([]model.Garapon, 0)
 	for rows.Next() {
 		var g model.Garapon
-		if err := rows.Scan(&g.ID, &g.Title, &g.Details, &g.GrandPrizeImage, &g.Status, &g.CreatedAt,
+		var stampRallyID sql.NullInt64
+		if err := rows.Scan(&g.ID, &g.Title, &g.Details, &g.GrandPrizeImage, &g.Status,
+			&stampRallyID, &g.StampRallyTitle, &g.CreatedAt,
 			&g.PlayerCount, &g.DrawCount); err != nil {
 			return nil, err
+		}
+		if stampRallyID.Valid {
+			g.StampRallyID = &stampRallyID.Int64
 		}
 		garapons = append(garapons, g)
 	}
@@ -202,8 +215,10 @@ func (s *Store) ListGarapons() ([]model.Garapon, error) {
 // read-only draws-used count, oldest first.
 func (s *Store) ListGaraponPlayers(garaponID int64) ([]model.GaraponPlayer, error) {
 	rows, err := s.db.Query(`SELECT p.id, p.garapon_id, p.token, p.player_name, p.max_draws, p.created_at,
-			COALESCE((SELECT COUNT(*) FROM garapon_draws d WHERE d.player_id = p.id), 0)
-		FROM garapon_players p WHERE p.garapon_id = ? ORDER BY p.created_at ASC, p.id ASC`, garaponID)
+			COALESCE((SELECT COUNT(*) FROM garapon_draws d WHERE d.player_id = p.id), 0),
+			COALESCE(sc.token, '')
+		FROM garapon_players p LEFT JOIN stamp_rally_cards sc ON sc.id = p.stamp_card_id
+		WHERE p.garapon_id = ? ORDER BY p.created_at ASC, p.id ASC`, garaponID)
 	if err != nil {
 		return nil, err
 	}
@@ -212,7 +227,8 @@ func (s *Store) ListGaraponPlayers(garaponID int64) ([]model.GaraponPlayer, erro
 	players := make([]model.GaraponPlayer, 0)
 	for rows.Next() {
 		var p model.GaraponPlayer
-		if err := rows.Scan(&p.ID, &p.GaraponID, &p.Token, &p.PlayerName, &p.MaxDraws, &p.CreatedAt, &p.DrawsUsed); err != nil {
+		if err := rows.Scan(&p.ID, &p.GaraponID, &p.Token, &p.PlayerName, &p.MaxDraws, &p.CreatedAt, &p.DrawsUsed,
+			&p.StampCardToken); err != nil {
 			return nil, err
 		}
 		players = append(players, p)
@@ -225,9 +241,11 @@ func (s *Store) ListGaraponPlayers(garaponID int64) ([]model.GaraponPlayer, erro
 func (s *Store) getGaraponPlayer(where string, arg any) (*model.GaraponPlayer, error) {
 	var p model.GaraponPlayer
 	err := s.db.QueryRow(`SELECT p.id, p.garapon_id, p.token, p.player_name, p.max_draws, p.created_at,
-			COALESCE((SELECT COUNT(*) FROM garapon_draws d WHERE d.player_id = p.id), 0)
-		FROM garapon_players p WHERE `+where, arg).
-		Scan(&p.ID, &p.GaraponID, &p.Token, &p.PlayerName, &p.MaxDraws, &p.CreatedAt, &p.DrawsUsed)
+			COALESCE((SELECT COUNT(*) FROM garapon_draws d WHERE d.player_id = p.id), 0),
+			COALESCE(sc.token, '')
+		FROM garapon_players p LEFT JOIN stamp_rally_cards sc ON sc.id = p.stamp_card_id WHERE `+where, arg).
+		Scan(&p.ID, &p.GaraponID, &p.Token, &p.PlayerName, &p.MaxDraws, &p.CreatedAt, &p.DrawsUsed,
+			&p.StampCardToken)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
 	}
@@ -267,6 +285,13 @@ func (s *Store) CreateGaraponPlayer(garaponID int64, name string, maxDraws int) 
 	return s.GetGaraponPlayerByID(id)
 }
 
+// SetPlayerStampCard links a drawing link to the Stamp Rally card auto-issued for it
+// (so its token can be surfaced and the card cleaned up with the link).
+func (s *Store) SetPlayerStampCard(playerID, cardID int64) error {
+	_, err := s.db.Exec(`UPDATE garapon_players SET stamp_card_id = ? WHERE id = ?`, cardID, playerID)
+	return err
+}
+
 // DeleteGaraponPlayer removes a drawing link. With force=false (garapon still
 // open) it only deletes links that have not drawn yet — the NOT EXISTS guard.
 // With force=true (garapon closed) it deletes regardless; the player's draws are
@@ -274,6 +299,11 @@ func (s *Store) CreateGaraponPlayer(garaponID int64, name string, maxDraws int) 
 // detach rather than cascade-delete). Returns whether a row was deleted (false in
 // the non-force case can also mean "blocked because the player has drawn").
 func (s *Store) DeleteGaraponPlayer(playerID int64, force bool) (bool, error) {
+	// Note the paired stamp card (if any) before deleting the link, so it can be
+	// removed alongside (its stamp log is preserved — card_id ON DELETE SET NULL).
+	var stampCardID sql.NullInt64
+	_ = s.db.QueryRow(`SELECT stamp_card_id FROM garapon_players WHERE id = ?`, playerID).Scan(&stampCardID)
+
 	var res sql.Result
 	var err error
 	if force {
@@ -286,6 +316,11 @@ func (s *Store) DeleteGaraponPlayer(playerID int64, force bool) (bool, error) {
 		return false, err
 	}
 	n, _ := res.RowsAffected()
+	if n > 0 && stampCardID.Valid {
+		// Remove the auto-issued stamp card too (best-effort); its collected rows stay
+		// in the rally's log via the ON DELETE SET NULL + snapshots.
+		_, _ = s.db.Exec(`DELETE FROM stamp_rally_cards WHERE id = ?`, stampCardID.Int64)
+	}
 	return n > 0, nil
 }
 

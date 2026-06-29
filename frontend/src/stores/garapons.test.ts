@@ -31,6 +31,14 @@ vi.mock('@/lib/endpoints', () => ({
       createPlayer: ep.createPlayer,
     },
     garapon: { get: ep.publicGet, draw: ep.draw },
+    stampRallies: {
+      list: vi.fn(async () => ({
+        stamp_rallies: [
+          { id: 1, title: 'Open', status: 'open' },
+          { id: 2, title: 'Closed', status: 'closed' },
+        ],
+      })),
+    },
   },
 }))
 
@@ -274,5 +282,19 @@ describe('public draw flow', () => {
     expect(s.publicDraws).toHaveLength(1)
     expect(s.publicPlayer?.draws_used).toBe(1)
     expect(s.lastWin?.prize_name).toBe('Grand')
+  })
+})
+
+describe('linked stamp rally', () => {
+  it('loadStampRallyOptions keeps only open rallies', async () => {
+    const s = useGaraponsStore()
+    await s.loadStampRallyOptions()
+    expect(s.stampRallyOptions.map((r) => r.id)).toEqual([1])
+  })
+
+  it('stampCardLinkUrl uses the shared token, empty when unlinked', () => {
+    const s = useGaraponsStore()
+    expect(s.stampCardLinkUrl({ stamp_card_token: 'abc' } as GaraponPlayer)).toMatch(/\/stamp-card\/abc$/)
+    expect(s.stampCardLinkUrl({ stamp_card_token: '' } as GaraponPlayer)).toBe('')
   })
 })

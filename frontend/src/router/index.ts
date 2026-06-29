@@ -117,6 +117,13 @@ const adminChildren: RouteRecordRaw[] = [
     component: () => import('@/components/admin/GaraponTab.vue'),
     meta: { tab: 'festival-garapon' },
   },
+  // Festival → Stamp Rally.
+  {
+    path: 'festival/stamp-rally',
+    name: 'admin-festival-stamp-rally',
+    component: () => import('@/components/admin/StampRalliesTab.vue'),
+    meta: { tab: 'festival-stamp-rally' },
+  },
   {
     path: 'system/settings',
     name: 'admin-system-settings',
@@ -182,6 +189,14 @@ const routes: RouteRecordRaw[] = [
     path: '/garapon/:token',
     name: 'garapon',
     component: () => import('@/views/GaraponView.vue'),
+    props: true,
+  },
+  // Public Stamp Rally card — reached only via a per-participant card link (an
+  // unguessable token). No admin auth; the token is the capability.
+  {
+    path: '/stamp-card/:token',
+    name: 'stamp-card',
+    component: () => import('@/views/StampCardView.vue'),
     props: true,
   },
   {

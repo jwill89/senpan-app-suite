@@ -95,6 +95,7 @@ func TestImages_ListCategories_Permanent(t *testing.T) {
 		"announcements_main": false, "announcements_thumb": false,
 		"raffles": false, "flourishes": false,
 		"affiliate_logos": false, "affiliate_images": false,
+		"stamp_cards": false, "stamp_stamps": false, "stamp_prizes": false,
 	}
 	for _, c := range cats {
 		m := c.(map[string]any)

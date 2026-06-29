@@ -50,6 +50,9 @@ const (
 	imageDirFlourishes         = "flourishes"
 	imageDirAffiliateLogos     = "affiliate_logos"
 	imageDirAffiliateImages    = "affiliate_images"
+	imageDirStampCards         = "stamp_cards"
+	imageDirStampStamps        = "stamp_stamps"
+	imageDirStampPrizes        = "stamp_prizes"
 )
 
 // imageCategory is the JSON shape for one category in the listing. FileCount and
@@ -83,6 +86,9 @@ func permanentImageCategories() []imageCategory {
 		{Name: "Flourishes", Dir: imageDirFlourishes, Permanent: true},
 		{Name: "Affiliate Logos", Dir: imageDirAffiliateLogos, Permanent: true},
 		{Name: "Affiliate Images", Dir: imageDirAffiliateImages, Permanent: true},
+		{Name: "Stamp Cards", Dir: imageDirStampCards, Permanent: true},
+		{Name: "Stamp Stamps", Dir: imageDirStampStamps, Permanent: true},
+		{Name: "Stamp Prizes", Dir: imageDirStampPrizes, Permanent: true},
 	}
 }
 
@@ -237,6 +243,8 @@ func canAccessImageDir(u *model.User, dir string) bool {
 		return userHasPermission(u, permSystemThemes)
 	case imageDirAffiliateLogos, imageDirAffiliateImages:
 		return userHasPermission(u, permTeahouseAffiliates)
+	case imageDirStampCards, imageDirStampStamps, imageDirStampPrizes:
+		return userHasPermission(u, permFestivalStampRally)
 	}
 	return false
 }

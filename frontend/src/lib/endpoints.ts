@@ -22,6 +22,8 @@ import type {
   LoginResponse,
   RegisterResponse,
   UsersResponse,
+  AccountTokenInfoResponse,
+  AccountTokenGenerateResponse,
   BoardResponse,
   CardListEntry,
   CardResponse,
@@ -40,6 +42,12 @@ import type {
   RaffleWinnerResponse,
   RafflesResponse,
   AffiliatesResponse,
+  StampRalliesResponse,
+  StampRallyDetailResponse,
+  StampRallyCardResponse,
+  StampRallyLogsResponse,
+  PublicStampCard,
+  StampSubmitResponse,
   GaraponsResponse,
   GaraponDetailResponse,
   GaraponPlayerResponse,
@@ -130,6 +138,15 @@ export const endpoints = {
         current_password: currentPassword,
         new_password: newPassword,
       }),
+    /** GET /api/account/token — the account's personal-access-token metadata
+     *  (never the secret itself; that is only returned once at generation). */
+    tokenInfo: () => apiGet<AccountTokenInfoResponse>('account/token'),
+    /** POST /api/account/token {generate} — mint (replacing any existing) a token.
+     *  The returned `token` plaintext is shown to the user exactly once. */
+    generateToken: () =>
+      apiPost<AccountTokenGenerateResponse>('account/token', { action: 'generate' }),
+    /** POST /api/account/token {revoke} — delete the account's token. */
+    revokeToken: () => apiPost<OkResponse>('account/token', { action: 'revoke' }),
   },
 
   // ── Board (player + admin card fetch) ────────────────────────────────────────
@@ -378,6 +395,50 @@ export const endpoints = {
     update: (affiliate: Record<string, unknown>) =>
       apiPost<OkResponse>('affiliates', { action: 'update', ...affiliate }),
     delete: (id: number) => apiPost<OkResponse>('affiliates', { action: 'delete', id }),
+  },
+
+  // ── Stamp Rally (admin) ──────────────────────────────────────────────────────
+  stampRallies: {
+    /** GET /api/stamp-rallies — all rallies (admin). */
+    list: () => apiGet<StampRalliesResponse>('stamp-rallies'),
+    /** GET /api/stamp-rallies/{id} — a rally with stamps, prizes, and issued cards. */
+    detail: (id: number) => apiGet<StampRallyDetailResponse>(`stamp-rallies/${id}`),
+    /** GET /api/stamp-rallies/{id}/logs — the event-wide stamp collection log. */
+    logs: (id: number) => apiGet<StampRallyLogsResponse>(`stamp-rallies/${id}/logs`),
+    create: (rally: Record<string, unknown>) =>
+      apiPost<OkResponse>('stamp-rallies', { action: 'create', ...rally }),
+    update: (rally: Record<string, unknown>) =>
+      apiPost<OkResponse>('stamp-rallies', { action: 'update', ...rally }),
+    delete: (id: number) => apiPost<OkResponse>('stamp-rallies', { action: 'delete', id }),
+    setStatus: (id: number, status: 'open' | 'closed') =>
+      apiPost<OkResponse>('stamp-rallies', { action: 'set_status', id, status }),
+    /** Pause/resume a single stamp without re-saving the whole event. */
+    setStampPaused: (rallyId: number, stampId: number, paused: boolean) =>
+      apiPost<OkResponse>(`stamp-rallies/${rallyId}/stamps`, {
+        action: 'set_paused',
+        stamp_id: stampId,
+        paused,
+      }),
+    /** Issue a tokenized participant card (returns its token). */
+    createCard: (rallyId: number, participantName: string) =>
+      apiPost<StampRallyCardResponse>(`stamp-rallies/${rallyId}/cards`, {
+        action: 'create_card',
+        participant_name: participantName,
+      }),
+    deleteCard: (rallyId: number, cardId: number) =>
+      apiPost<OkResponse>(`stamp-rallies/${rallyId}/cards`, {
+        action: 'delete_card',
+        card_id: cardId,
+      }),
+  },
+
+  // ── Stamp Rally (public, via per-participant card token) ─────────────────────
+  stampCard: {
+    /** GET /api/stamp-card/{token} — the participant card view (no passwords). */
+    get: (token: string) => apiGet<PublicStampCard>(`stamp-card/${enc(token)}`),
+    /** POST /api/stamp-card/{token}/stamp — collect a stamp by password. */
+    stamp: (token: string, password: string) =>
+      apiPost<StampSubmitResponse>(`stamp-card/${enc(token)}/stamp`, { password }),
   },
 
   // ── Book clubs / reading lists ───────────────────────────────────────────────

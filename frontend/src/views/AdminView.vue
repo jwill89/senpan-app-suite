@@ -29,6 +29,7 @@ import { usePatternsStore } from '@/stores/patterns'
 import { useRafflesStore } from '@/stores/raffles'
 import { useUiStore } from '@/stores/ui'
 import { endpoints } from '@/lib/endpoints'
+import type { AccountTokenInfoResponse } from '@/types/api'
 
 const router = useRouter()
 const auth = useAuthStore()
@@ -135,6 +136,80 @@ async function submitChangePw(): Promise<void> {
     savingPw.value = false
   }
 }
+
+// ── Access-token modal (personal access token for external API clients) ───────
+const showToken = ref(false)
+const tokenInfo = ref<AccountTokenInfoResponse | null>(null)
+const tokenLoading = ref(false)
+const tokenBusy = ref(false)
+const tokenError = ref('')
+/** The freshly generated token plaintext — shown exactly once, then forgotten. */
+const newToken = ref('')
+
+/** Formats a SQLite UTC timestamp ("YYYY-MM-DD HH:MM:SS") for local display. */
+function fmtTokenTime(ts: string): string {
+  if (!ts) return 'Never'
+  const d = new Date(ts.replace(' ', 'T') + 'Z')
+  return Number.isNaN(d.getTime()) ? ts : d.toLocaleString()
+}
+
+/** Sidebar "Access Token" → close the mobile drawer, open the modal, load info. */
+async function onAccessToken(): Promise<void> {
+  navOpen.value = false
+  newToken.value = ''
+  tokenError.value = ''
+  tokenInfo.value = null
+  showToken.value = true
+  tokenLoading.value = true
+  try {
+    tokenInfo.value = await endpoints.account.tokenInfo()
+  } catch (e) {
+    tokenError.value = (e as Error).message
+  } finally {
+    tokenLoading.value = false
+  }
+}
+
+/** Generate (or replace) the token; reveals the plaintext once and refreshes info. */
+async function generateToken(): Promise<void> {
+  tokenBusy.value = true
+  tokenError.value = ''
+  try {
+    const res = await endpoints.account.generateToken()
+    newToken.value = res.token
+    tokenInfo.value = await endpoints.account.tokenInfo()
+  } catch (e) {
+    tokenError.value = (e as Error).message
+  } finally {
+    tokenBusy.value = false
+  }
+}
+
+/** Revoke the token (an external client loses access until a new one is generated). */
+async function revokeToken(): Promise<void> {
+  tokenBusy.value = true
+  tokenError.value = ''
+  try {
+    await endpoints.account.revokeToken()
+    newToken.value = ''
+    tokenInfo.value = await endpoints.account.tokenInfo()
+    ui.notify('Token revoked', 'success')
+  } catch (e) {
+    tokenError.value = (e as Error).message
+  } finally {
+    tokenBusy.value = false
+  }
+}
+
+/** Copy the freshly generated token to the clipboard. */
+async function copyToken(): Promise<void> {
+  try {
+    await navigator.clipboard.writeText(newToken.value)
+    ui.notify('Token copied to clipboard', 'success')
+  } catch {
+    ui.notify('Copy failed — select the token and copy it manually', 'error')
+  }
+}
 </script>
 
 <template>
@@ -165,6 +240,7 @@ async function submitChangePw(): Promise<void> {
 
       <AdminSidebar
         :class="{ 'is-open': navOpen }"
+        @access-token="onAccessToken"
         @change-password="onChangePassword"
         @logout="logout"
       />
@@ -232,6 +308,90 @@ async function submitChangePw(): Promise<void> {
         </div>
       </form>
     </ModalOverlay>
+
+    <ModalOverlay
+      v-if="showToken"
+      aria-label="Personal access token"
+      box-style="max-width: 540px"
+      @close="showToken = false"
+    >
+      <h3 class="mt-0"><font-awesome-icon :icon="['fad', 'key']" /> Access Token</h3>
+      <p class="text-dim pat-intro">
+        A personal access token lets an external client — such as the FFXIV plugin —
+        sign in to this server as you, with your exact permissions. Treat it like a
+        password: anyone who has it can act as your account.
+      </p>
+
+      <p v-if="tokenLoading"><LoadingSpinner label="Loading…" /></p>
+
+      <!-- Freshly generated token: revealed exactly once. -->
+      <template v-else-if="newToken">
+        <FormField
+          label="Your new token — copy it now, it won't be shown again"
+          html-for="pat-value"
+        >
+          <div class="pat-reveal">
+            <input
+              id="pat-value"
+              class="pat-input"
+              :value="newToken"
+              readonly
+              @focus="($event.target as HTMLInputElement).select()"
+            />
+            <button type="button" class="btn-neutral" @click="copyToken">
+              <font-awesome-icon :icon="['fas', 'copy']" /> Copy
+            </button>
+          </div>
+        </FormField>
+        <p class="text-dim pat-note">
+          Paste it into the plugin's settings. Generating or revoking a token later
+          invalidates this one immediately.
+        </p>
+        <div class="modal-actions">
+          <button type="button" class="btn-action" @click="showToken = false">Done</button>
+        </div>
+      </template>
+
+      <!-- Existing-token metadata + controls. -->
+      <template v-else>
+        <template v-if="tokenInfo?.has_token">
+          <dl class="pat-meta">
+            <dt class="text-dim">Token</dt>
+            <dd><code>{{ tokenInfo.prefix }}…</code></dd>
+            <dt class="text-dim">Created</dt>
+            <dd>{{ fmtTokenTime(tokenInfo.created_at) }}</dd>
+            <dt class="text-dim">Last used</dt>
+            <dd>{{ fmtTokenTime(tokenInfo.last_used_at) }}</dd>
+          </dl>
+          <p class="text-dim pat-note">
+            For security the token itself can't be shown again. If you've lost it,
+            regenerate to get a new one — the old token stops working immediately.
+          </p>
+        </template>
+        <p v-else>You don't have an access token yet. Generate one to connect a plugin.</p>
+
+        <p v-if="tokenError" class="error-msg">{{ tokenError }}</p>
+
+        <div class="modal-actions">
+          <button
+            v-if="tokenInfo?.has_token"
+            type="button"
+            class="btn-danger"
+            :disabled="tokenBusy"
+            @click="revokeToken"
+          >
+            <font-awesome-icon :icon="['fas', 'trash']" /> Revoke
+          </button>
+          <button type="button" class="btn-action" :disabled="tokenBusy" @click="generateToken">
+            <LoadingSpinner v-if="tokenBusy" label="Working…" />
+            <template v-else>
+              <font-awesome-icon :icon="tokenInfo?.has_token ? ['fas', 'rotate'] : ['fad', 'key']" />
+              {{ tokenInfo?.has_token ? 'Regenerate' : 'Generate token' }}
+            </template>
+          </button>
+        </div>
+      </template>
+    </ModalOverlay>
   </div>
 </template>
 
@@ -249,5 +409,31 @@ async function submitChangePw(): Promise<void> {
   gap: 12px;
   justify-content: flex-end;
   margin-top: 16px;
+}
+.pat-intro {
+  font-size: 0.9rem;
+}
+.pat-note {
+  font-size: 0.85rem;
+}
+.pat-reveal {
+  display: flex;
+  gap: 8px;
+}
+.pat-input {
+  flex: 1;
+  font-family: monospace;
+}
+.pat-meta {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 4px 16px;
+  margin: 0 0 12px;
+}
+.pat-meta dt {
+  font-size: 0.85rem;
+}
+.pat-meta dd {
+  margin: 0;
 }
 </style>

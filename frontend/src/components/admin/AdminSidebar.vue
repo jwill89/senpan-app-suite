@@ -34,7 +34,7 @@ const raffles = useRafflesStore()
 
 // Change Password / Logout are actions, not navigation: the sidebar emits them so
 // the admin shell (which owns the change-password modal + session) handles them.
-const emit = defineEmits<{ 'change-password': []; logout: [] }>()
+const emit = defineEmits<{ 'access-token': []; 'change-password': []; logout: [] }>()
 // "User Options" isn't tied to a route/tab, so it tracks its own accordion state.
 const userOptionsOpen = ref(false)
 
@@ -60,7 +60,9 @@ const showTeahouse = computed(() =>
 )
 // Festival now also hosts Raffles (moved out of Senpan Tea House). The Raffles
 // page keeps its `teahouse-raffles` permission/route id; only its placement moved.
-const showFestival = computed(() => ['festival-garapon', 'teahouse-raffles'].some(can))
+const showFestival = computed(() =>
+  ['festival-garapon', 'festival-stamp-rally', 'teahouse-raffles'].some(can),
+)
 const showAtelier = computed(() => ['atelier-fonts', 'atelier-carrd'].some(can))
 const showSystem = computed(
   () => auth.isAdmin || ['system-settings', 'system-themes', 'system-images'].some(can),
@@ -130,13 +132,6 @@ function toggleSection(section: AdminSection): void {
           <span v-if="cards.cards.length" class="nav-count">({{ cards.cards.length }})</span>
         </button>
         <button
-          v-if="can('bingo-winners-log')"
-          :class="{ active: admin.adminTab === 'bingo-winners-log' }"
-          @click="go('bingo-winners-log')"
-        >
-          <font-awesome-icon :icon="['fad', 'trophy']" /> Winners Log
-        </button>
-        <button
           v-if="can('bingo-patterns')"
           :class="{ active: admin.adminTab === 'bingo-patterns' }"
           @click="go('bingo-patterns')"
@@ -149,6 +144,13 @@ function toggleSection(section: AdminSection): void {
           @click="go('bingo-presets')"
         >
           <font-awesome-icon :icon="['fad', 'ballot']" /> Game Presets
+        </button>
+        <button
+          v-if="can('bingo-winners-log')"
+          :class="{ active: admin.adminTab === 'bingo-winners-log' }"
+          @click="go('bingo-winners-log')"
+        >
+          <font-awesome-icon :icon="['fad', 'trophy']" /> Winners Log
         </button>
       </div>
     </div>
@@ -165,18 +167,18 @@ function toggleSection(section: AdminSection): void {
       </div>
       <div v-show="isOpen('teahouse')" class="admin-nav-items">
         <button
-          v-if="can('teahouse-announcements')"
-          :class="{ active: admin.adminTab === 'teahouse-announcements' }"
-          @click="go('teahouse-announcements')"
-        >
-          <font-awesome-icon :icon="['fad', 'megaphone']" /> Announcements
-        </button>
-        <button
           v-if="can('teahouse-affiliates')"
           :class="{ active: admin.adminTab === 'teahouse-affiliates' }"
           @click="go('teahouse-affiliates')"
         >
           <font-awesome-icon :icon="['fad', 'handshake']" /> Affiliates
+        </button>
+        <button
+          v-if="can('teahouse-announcements')"
+          :class="{ active: admin.adminTab === 'teahouse-announcements' }"
+          @click="go('teahouse-announcements')"
+        >
+          <font-awesome-icon :icon="['fad', 'megaphone']" /> Announcements
         </button>
         <button
           v-for="club in visibleClubs"
@@ -217,6 +219,13 @@ function toggleSection(section: AdminSection): void {
             ({{ raffles.openRaffles.length }})
           </span>
         </button>
+        <button
+          v-if="can('festival-stamp-rally')"
+          :class="{ active: admin.adminTab === 'festival-stamp-rally' }"
+          @click="go('festival-stamp-rally')"
+        >
+          <font-awesome-icon :icon="['fad', 'stamp']" /> Stamp Rally
+        </button>
       </div>
     </div>
 
@@ -232,18 +241,18 @@ function toggleSection(section: AdminSection): void {
       </div>
       <div v-show="isOpen('atelier')" class="admin-nav-items">
         <button
-          v-if="can('atelier-fonts')"
-          :class="{ active: admin.adminTab === 'atelier-fonts' }"
-          @click="go('atelier-fonts')"
-        >
-          <font-awesome-icon :icon="['fad', 'font']" /> Font Upload
-        </button>
-        <button
           v-if="can('atelier-carrd')"
           :class="{ active: admin.adminTab === 'atelier-carrd' }"
           @click="go('atelier-carrd')"
         >
           <font-awesome-icon :icon="['fad', 'images']" /> Carrd Upload
+        </button>
+        <button
+          v-if="can('atelier-fonts')"
+          :class="{ active: admin.adminTab === 'atelier-fonts' }"
+          @click="go('atelier-fonts')"
+        >
+          <font-awesome-icon :icon="['fad', 'font']" /> Font Upload
         </button>
       </div>
     </div>
@@ -260,11 +269,11 @@ function toggleSection(section: AdminSection): void {
       </div>
       <div v-show="isOpen('system')" class="admin-nav-items">
         <button
-          v-if="can('system-settings')"
-          :class="{ active: admin.adminTab === 'system-settings' }"
-          @click="go('system-settings')"
+          v-if="can('system-images')"
+          :class="{ active: admin.adminTab === 'system-images' }"
+          @click="go('system-images')"
         >
-          <font-awesome-icon :icon="['fad', 'gear']" /> Settings
+          <font-awesome-icon :icon="['fad', 'images']" /> Images
         </button>
         <button
           v-if="can('system-themes')"
@@ -274,18 +283,18 @@ function toggleSection(section: AdminSection): void {
           <font-awesome-icon :icon="['fad', 'palette']" /> Themes
         </button>
         <button
-          v-if="can('system-images')"
-          :class="{ active: admin.adminTab === 'system-images' }"
-          @click="go('system-images')"
-        >
-          <font-awesome-icon :icon="['fad', 'images']" /> Images
-        </button>
-        <button
           v-if="auth.isAdmin"
           :class="{ active: admin.adminTab === 'system-users' }"
           @click="go('system-users')"
         >
           <font-awesome-icon :icon="['fad', 'users-gear']" /> Users
+        </button>
+        <button
+          v-if="can('system-settings')"
+          :class="{ active: admin.adminTab === 'system-settings' }"
+          @click="go('system-settings')"
+        >
+          <font-awesome-icon :icon="['fad', 'gear']" /> Settings
         </button>
       </div>
     </div>
@@ -300,6 +309,9 @@ function toggleSection(section: AdminSection): void {
         <span class="nav-chevron">{{ userOptionsOpen ? '▾' : '▸' }}</span>
       </div>
       <div v-show="userOptionsOpen" class="admin-nav-items">
+        <button @click="emit('access-token')">
+          <font-awesome-icon :icon="['fad', 'key']" /> Access Token
+        </button>
         <button @click="emit('change-password')">
           <font-awesome-icon :icon="['fad', 'lock']" /> Change Password
         </button>

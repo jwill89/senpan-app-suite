@@ -318,11 +318,20 @@ function toggleClosed(): void {
             <div class="row-actions">
               <button
                 class="btn-view btn-sm"
-                aria-label="Copy link"
-                title="Copy link"
+                aria-label="Copy drawing link"
+                title="Copy drawing link"
                 @click="garapons.copyPlayerLink(row)"
               >
                 <font-awesome-icon :icon="['fas', 'link']" />
+              </button>
+              <button
+                v-if="row.stamp_card_token"
+                class="btn-view btn-sm"
+                aria-label="Copy stamp card link"
+                title="Copy stamp card link (same hash)"
+                @click="garapons.copyStampCardLink(row)"
+              >
+                <font-awesome-icon :icon="['fad', 'stamp']" />
               </button>
               <button
                 class="btn-danger btn-sm"

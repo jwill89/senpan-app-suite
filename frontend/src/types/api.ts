@@ -11,6 +11,10 @@
  */
 import type {
   Affiliate,
+  Placement,
+  StampRally,
+  StampRallyCard,
+  StampRallyLogEntry,
   Announcement,
   AnnouncementButton,
   AnnouncementType,
@@ -38,6 +42,13 @@ import type {
 export type {
   Affiliate,
   AffiliateHour,
+  Placement,
+  StampRally,
+  StampRallyStamp,
+  StampRallyPrize,
+  StampRallyCard,
+  StampRallyCollected,
+  StampRallyLogEntry,
   Announcement,
   AnnouncementButton,
   AnnouncementType,
@@ -94,6 +105,26 @@ export interface RegisterResponse {
 // GET /api/users — all accounts (admin only).
 export interface UsersResponse {
   users: User[]
+}
+
+// GET /api/account/token — the current account's personal-access-token metadata.
+// The token plaintext itself is never returned here (only at generation), so a
+// reload of the account page can show whether one exists, its visible prefix, and
+// when it was created / last used — but not the secret.
+export interface AccountTokenInfoResponse {
+  has_token: boolean
+  prefix: string
+  created_at: string
+  last_used_at: string
+}
+
+// POST /api/account/token {action:"generate"} — the freshly minted token. `token`
+// is the full plaintext and is returned EXACTLY ONCE (it is hashed at rest); the
+// UI must surface it to the user immediately because it can never be shown again.
+export interface AccountTokenGenerateResponse {
+  token: string
+  prefix: string
+  created_at: string
 }
 
 // GET /api/styles/active — the active theme's raw CSS + decorative flourishes
@@ -299,6 +330,71 @@ export interface GaraponDrawResponse {
 // GET /api/affiliates — admin list (full records: owners + hours + images).
 export interface AffiliatesResponse {
   affiliates: Affiliate[]
+}
+
+// ── Stamp Rally ─────────────────────────────────────────────────────────────
+// GET /api/stamp-rallies — admin list (each with card/completed counts).
+export interface StampRalliesResponse {
+  stamp_rallies: StampRally[]
+}
+// GET /api/stamp-rallies/{id} — event (with stamps + prizes) + issued cards.
+export interface StampRallyDetailResponse {
+  stamp_rally: StampRally
+  cards: StampRallyCard[]
+}
+// POST /api/stamp-rallies/{id}/cards {create_card} — the issued card (with token).
+export interface StampRallyCardResponse {
+  card: StampRallyCard
+}
+// GET /api/stamp-rallies/{id}/logs — the event-wide collection log.
+export interface StampRallyLogsResponse {
+  logs: StampRallyLogEntry[]
+}
+
+// Public token view (hand-mirrored from server/stamprally.go publicCard). Passwords
+// are stripped; prize name/image are blank until the card is complete (the slot then
+// shows the not-stamped placeholder), and stamps carry computed availability/collection.
+export interface PublicStampRally {
+  id: number
+  title: string
+  card_image: string
+  not_stamped_image: string
+  details: string
+  redeem_instructions: string
+  available_from: string
+  available_to: string
+  is_active: boolean
+}
+export interface PublicStamp {
+  id: number
+  affiliate_name: string
+  image: string
+  placement: Placement
+  active_from: string
+  active_to: string
+  available: boolean
+  collected: boolean
+  collected_at: string
+}
+export interface PublicPrize {
+  id: number
+  name: string
+  image: string
+  placement: Placement
+}
+export interface PublicStampCard {
+  rally: PublicStampRally
+  participant_name: string
+  completed: boolean
+  completed_at: string
+  stamps: PublicStamp[]
+  prizes: PublicPrize[]
+  prizes_revealed: boolean
+}
+// POST /api/stamp-card/{token}/stamp — the refreshed card + the just-collected stamp id.
+export interface StampSubmitResponse {
+  card: PublicStampCard
+  collected_stamp_id: number
 }
 
 // ── Book clubs / reading lists ──────────────────────────────────────────────
@@ -604,6 +700,8 @@ export interface GaraponForm {
   title: string
   details: string
   grand_prize_image: string
+  /** Optional link to an open Stamp Rally (null = not linked). */
+  stamp_rally_id: number | null
   prizes: GaraponPrizeForm[]
 }
 
@@ -624,6 +722,37 @@ export interface AffiliateForm {
   details: string
   logo: string
   screenshot: string
+}
+
+// Form models for the admin stamp-rally editor. Placement is the same %-based box as
+// the model. A stamp's affiliate_id is null for the "Senpan Tea House" default.
+export interface StampRallyStampForm {
+  id: number
+  affiliate_id: number | null
+  image: string
+  password: string
+  placement: Placement
+  active_from: string
+  active_to: string
+  paused: boolean
+}
+export interface StampRallyPrizeForm {
+  id: number
+  name: string
+  image: string
+  placement: Placement
+}
+export interface StampRallyForm {
+  id: number
+  title: string
+  card_image: string
+  not_stamped_image: string
+  available_from: string
+  available_to: string
+  details: string
+  redeem_instructions: string
+  stamps: StampRallyStampForm[]
+  prizes: StampRallyPrizeForm[]
 }
 
 // ── WebSocket message types ─────────────────────────────────────────────────

@@ -81,7 +81,31 @@ type garaponRequest struct {
 	Details         string               `json:"details"`
 	GrandPrizeImage string               `json:"grand_prize_image"`
 	Status          string               `json:"status"`
+	StampRallyID    *int64               `json:"stamp_rally_id"` // optional link to an open rally
 	Prizes          []model.GaraponPrize `json:"prizes"`
+}
+
+// resolveStampRallyLink validates an optional garapon→rally link: nil/0 means
+// unlinked; a supplied id must be a real, OPEN rally (closed/unknown rallies are
+// rejected). Writes the error and returns ok=false on any problem.
+func (s *Server) resolveStampRallyLink(w http.ResponseWriter, id *int64) (*int64, bool) {
+	if id == nil || *id == 0 {
+		return nil, true
+	}
+	rally, err := s.store.GetStampRally(*id)
+	if err != nil {
+		writeInternalError(w, "get rally for link", err)
+		return nil, false
+	}
+	if rally == nil {
+		writeError(w, http.StatusBadRequest, "Linked stamp rally not found")
+		return nil, false
+	}
+	if rally.Status != "open" {
+		writeError(w, http.StatusBadRequest, "The linked stamp rally is closed")
+		return nil, false
+	}
+	return id, true
 }
 
 // sanitizeGaraponPrizes trims/normalizes incoming prize rows: it drops blank rows,
@@ -148,10 +172,15 @@ func (s *Server) handleGaraponsAction(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusBadRequest, msg)
 			return
 		}
+		link, ok := s.resolveStampRallyLink(w, req.StampRallyID)
+		if !ok {
+			return
+		}
 		garapon := &model.Garapon{
 			Title:           title,
 			Details:         req.Details,
 			GrandPrizeImage: req.GrandPrizeImage,
+			StampRallyID:    link,
 			Prizes:          prizes,
 		}
 		id, err := s.store.CreateGarapon(garapon)
@@ -178,11 +207,16 @@ func (s *Server) handleGaraponsAction(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusBadRequest, msg)
 			return
 		}
+		link, ok := s.resolveStampRallyLink(w, req.StampRallyID)
+		if !ok {
+			return
+		}
 		garapon := &model.Garapon{
 			ID:              req.ID,
 			Title:           title,
 			Details:         req.Details,
 			GrandPrizeImage: req.GrandPrizeImage,
+			StampRallyID:    link,
 			Prizes:          prizes,
 		}
 		if err := s.store.UpdateGarapon(garapon); err != nil {
@@ -279,6 +313,21 @@ func (s *Server) handleGaraponPlayers(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			writeInternalError(w, "create garapon player", err)
 			return
+		}
+		// If the garapon is linked to an open stamp rally, also issue this participant
+		// a stamp card USING THE SAME TOKEN, so one hash serves both /garapon/<token>
+		// and /stamp-card/<token>. Best-effort: a rally that's since closed/vanished
+		// just yields no card (the drawing link is still valid on its own).
+		if garapon.StampRallyID != nil {
+			if rally, _ := s.store.GetStampRally(*garapon.StampRallyID); rally != nil && rally.Status == "open" {
+				if card, err := s.store.IssueRallyCardWithToken(*garapon.StampRallyID, name, player.Token); err == nil && card != nil {
+					if err := s.store.SetPlayerStampCard(player.ID, card.ID); err == nil {
+						player.StampCardToken = card.Token
+					}
+					// A stamp card was issued — let admins viewing the rally see it live.
+					s.broadcastResourceChanged("stamp-rallies")
+				}
+			}
 		}
 		writeJSON(w, http.StatusCreated, map[string]any{"player": player})
 

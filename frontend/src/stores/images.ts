@@ -24,6 +24,9 @@ export const IMAGE_DIR_GARAPONS = 'garapons'
 export const IMAGE_DIR_FLOURISHES = 'flourishes'
 export const IMAGE_DIR_AFFILIATE_LOGOS = 'affiliate_logos'
 export const IMAGE_DIR_AFFILIATE_IMAGES = 'affiliate_images'
+export const IMAGE_DIR_STAMP_CARDS = 'stamp_cards'
+export const IMAGE_DIR_STAMP_STAMPS = 'stamp_stamps'
+export const IMAGE_DIR_STAMP_PRIZES = 'stamp_prizes'
 
 export const useImagesStore = defineStore('images', () => {
   const ui = useUiStore()

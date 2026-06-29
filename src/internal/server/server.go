@@ -122,6 +122,10 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("GET /api/users", s.handleUsersList)
 	s.mux.HandleFunc("POST /api/users", s.handleUsersAction)
 	s.mux.HandleFunc("POST /api/account", s.handleAccountAction)
+	// Personal access tokens (self-service): GET reads the non-secret metadata,
+	// POST generates/revokes. Used by external API clients (e.g. the FFXIV plugin).
+	s.mux.HandleFunc("GET /api/account/token", s.handleAccountTokenInfo)
+	s.mux.HandleFunc("POST /api/account/token", s.handleAccountTokenAction)
 	s.mux.HandleFunc("GET /api/board", s.handleBoard)
 	s.mux.HandleFunc("GET /api/cards", s.handleCardsList)
 	s.mux.HandleFunc("POST /api/cards", s.handleCardsAction)
@@ -161,6 +165,20 @@ func (s *Server) routes() {
 	// categories managed on System → Images.
 	s.mux.HandleFunc("GET /api/affiliates", s.handleAffiliatesList)
 	s.mux.HandleFunc("POST /api/affiliates", s.handleAffiliatesAction)
+
+	// Stamp Rally (Festival → Stamp Rally). Admin CRUD of events (stamps + prizes
+	// with placements), tokenized participant cards, and the event-wide stamp log,
+	// plus the tokenized public card view + password-driven stamp collection. The
+	// singular "stamp-card/{token}" public paths don't collide with the plural
+	// "stamp-rallies" admin paths (mirrors the garapon singular/plural split).
+	s.mux.HandleFunc("GET /api/stamp-rallies", s.handleStampRalliesList)
+	s.mux.HandleFunc("POST /api/stamp-rallies", s.handleStampRalliesAction)
+	s.mux.HandleFunc("GET /api/stamp-rallies/{id}", s.handleStampRallyDetail)
+	s.mux.HandleFunc("GET /api/stamp-rallies/{id}/logs", s.handleStampRallyLogs)
+	s.mux.HandleFunc("POST /api/stamp-rallies/{id}/stamps", s.handleStampRallyStamps)
+	s.mux.HandleFunc("POST /api/stamp-rallies/{id}/cards", s.handleStampRallyCards)
+	s.mux.HandleFunc("GET /api/stamp-card/{token}", s.handleStampCardPublic)
+	s.mux.HandleFunc("POST /api/stamp-card/{token}/stamp", s.handleStampCardStamp)
 
 	// Book club / reading list routes (specific paths before {id} to avoid conflicts)
 	s.mux.HandleFunc("POST /api/bookclub/upload", s.handleBookclubUpload)
@@ -345,20 +363,22 @@ func (s *Server) sessionUserID(r *http.Request) int64 {
 // middleware — specifically the /api/ws upgrade, which is dispatched straight to
 // the mux (coder/websocket needs the raw ResponseWriter, so it can't go through
 // LoadAndSave/withUserCache). It reads the session cookie, loads the SCS session
-// manually, and returns the authenticated, active account or nil. Used to gate
-// the privileged admin WebSocket channel.
+// manually, and returns the authenticated, active account or nil. A request with
+// no usable cookie session falls back to a personal access token (the WS upgrade
+// accepts it via `?token=`), so the FFXIV plugin can open the admin channel too.
+// Used to gate the privileged admin WebSocket channel.
 func (s *Server) wsSessionUser(r *http.Request) *model.User {
 	cookie, err := r.Cookie(s.sessions.Cookie.Name)
 	if err != nil {
-		return nil
+		return s.userFromToken(r)
 	}
 	ctx, err := s.sessions.Load(r.Context(), cookie.Value)
 	if err != nil {
-		return nil
+		return s.userFromToken(r)
 	}
 	id, ok := s.sessions.Get(ctx, "user_id").(int64)
 	if !ok || id == 0 {
-		return nil
+		return s.userFromToken(r)
 	}
 	u, err := s.store.GetUserByID(id)
 	if err != nil || u == nil || !u.IsActive {
@@ -391,7 +411,9 @@ func (s *Server) currentUser(r *http.Request) *model.User {
 func (s *Server) loadCurrentUser(r *http.Request) *model.User {
 	id := s.sessionUserID(r)
 	if id == 0 {
-		return nil
+		// No cookie session — fall back to a personal access token, so external
+		// API clients (e.g. the FFXIV plugin) authenticate through the same guards.
+		return s.userFromToken(r)
 	}
 	u, err := s.store.GetUserByID(id)
 	if err != nil || u == nil || !u.IsActive {
@@ -476,6 +498,8 @@ func adminMutationResource(path string) (string, bool) {
 		return "garapons", true
 	case "/api/affiliates":
 		return "affiliates", true
+	case "/api/stamp-rallies":
+		return "stamp-rallies", true
 	case "/api/raffles":
 		return "raffles", true
 	case "/api/presets":
@@ -502,6 +526,9 @@ func adminMutationResource(path string) (string, bool) {
 		return "raffles", true
 	case strings.HasPrefix(path, "/api/reading-lists/") && strings.HasSuffix(path, "/items"):
 		return "bookclub", true
+	case strings.HasPrefix(path, "/api/stamp-rallies/") &&
+		(strings.HasSuffix(path, "/cards") || strings.HasSuffix(path, "/stamps")):
+		return "stamp-rallies", true
 	}
 	return "", false
 }

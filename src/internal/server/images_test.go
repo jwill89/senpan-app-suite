@@ -94,6 +94,7 @@ func TestImages_ListCategories_Permanent(t *testing.T) {
 	want := map[string]bool{
 		"announcements_main": false, "announcements_thumb": false,
 		"raffles": false, "flourishes": false,
+		"affiliate_logos": false, "affiliate_images": false,
 	}
 	for _, c := range cats {
 		m := c.(map[string]any)

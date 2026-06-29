@@ -22,6 +22,8 @@ export const IMAGE_DIR_ANNOUNCEMENTS_THUMB = 'announcements_thumb'
 export const IMAGE_DIR_RAFFLES = 'raffles'
 export const IMAGE_DIR_GARAPONS = 'garapons'
 export const IMAGE_DIR_FLOURISHES = 'flourishes'
+export const IMAGE_DIR_AFFILIATE_LOGOS = 'affiliate_logos'
+export const IMAGE_DIR_AFFILIATE_IMAGES = 'affiliate_images'
 
 export const useImagesStore = defineStore('images', () => {
   const ui = useUiStore()

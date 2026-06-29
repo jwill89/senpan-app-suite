@@ -11,6 +11,7 @@ import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import { useGameStore } from './game'
 import { useRafflesStore } from './raffles'
+import { useAffiliatesStore } from './affiliates'
 import { useGaraponsStore } from './garapons'
 import { useBookclubStore } from './bookclub'
 import { useStylesStore } from './styles'
@@ -37,6 +38,7 @@ export type AdminTab =
   | 'bingo-patterns'
   | 'bingo-presets'
   | 'teahouse-announcements'
+  | 'teahouse-affiliates'
   | 'teahouse-raffles'
   | BookClubTab
   | 'festival-garapon'
@@ -87,6 +89,7 @@ export const useAdminStore = defineStore('admin', () => {
 
     const game = useGameStore()
     const raffles = useRafflesStore()
+    const affiliates = useAffiliatesStore()
     const garapons = useGaraponsStore()
     const bookclub = useBookclubStore()
     const styles = useStylesStore()
@@ -107,6 +110,11 @@ export const useAdminStore = defineStore('admin', () => {
       garapons.selectedGarapon = null
       garapons.garaponForm = null
       loadFresh('garapons', () => garapons.loadGarapons())
+    }
+    if (tab === 'teahouse-affiliates') {
+      affiliates.selectedAffiliate = null
+      affiliates.affiliateForm = null
+      loadFresh('affiliates', () => affiliates.loadAffiliates())
     }
     // openClub manages its own per-club freshness (and preserves the open list /
     // events sub-view when the same club tab is re-entered).
@@ -170,6 +178,11 @@ export const useAdminStore = defineStore('admin', () => {
           raffles.loadRaffles()
           if (raffles.selectedRaffle) raffles.loadRaffleDetail(raffles.selectedRaffle.id)
         })
+        break
+      case 'affiliates':
+        apply('affiliates', tab === 'teahouse-affiliates', () =>
+          useAffiliatesStore().loadAffiliates(),
+        )
         break
       case 'announcements':
         apply('announcements', tab === 'teahouse-announcements', () =>

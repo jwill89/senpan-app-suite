@@ -54,7 +54,9 @@ const showBingo = computed(() =>
   ['bingo-game', 'bingo-cards', 'bingo-winners-log', 'bingo-patterns', 'bingo-presets'].some(can),
 )
 const showTeahouse = computed(() =>
-  ['teahouse-announcements', ...BOOK_CLUBS.map((c) => `bookclub-${c.slug}`)].some(can),
+  ['teahouse-announcements', 'teahouse-affiliates', ...BOOK_CLUBS.map((c) => `bookclub-${c.slug}`)].some(
+    can,
+  ),
 )
 // Festival now also hosts Raffles (moved out of Senpan Tea House). The Raffles
 // page keeps its `teahouse-raffles` permission/route id; only its placement moved.
@@ -168,6 +170,13 @@ function toggleSection(section: AdminSection): void {
           @click="go('teahouse-announcements')"
         >
           <font-awesome-icon :icon="['fad', 'megaphone']" /> Announcements
+        </button>
+        <button
+          v-if="can('teahouse-affiliates')"
+          :class="{ active: admin.adminTab === 'teahouse-affiliates' }"
+          @click="go('teahouse-affiliates')"
+        >
+          <font-awesome-icon :icon="['fad', 'handshake']" /> Affiliates
         </button>
         <button
           v-for="club in visibleClubs"

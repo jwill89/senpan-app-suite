@@ -39,6 +39,7 @@ import type {
   RaffleEntryResponse,
   RaffleWinnerResponse,
   RafflesResponse,
+  AffiliatesResponse,
   GaraponsResponse,
   GaraponDetailResponse,
   GaraponPlayerResponse,
@@ -366,6 +367,17 @@ export const endpoints = {
     get: (token: string) => apiGet<GaraponPublicResponse>(`garapon/${enc(token)}`),
     /** POST /api/garapon/{token}/draw — perform one authoritative draw. */
     draw: (token: string) => apiPost<GaraponDrawResponse>(`garapon/${enc(token)}/draw`, {}),
+  },
+
+  // ── Affiliates (admin) ───────────────────────────────────────────────────────
+  affiliates: {
+    /** GET /api/affiliates — all affiliates (admin). */
+    list: () => apiGet<AffiliatesResponse>('affiliates'),
+    create: (affiliate: Record<string, unknown>) =>
+      apiPost<OkResponse>('affiliates', { action: 'create', ...affiliate }),
+    update: (affiliate: Record<string, unknown>) =>
+      apiPost<OkResponse>('affiliates', { action: 'update', ...affiliate }),
+    delete: (id: number) => apiPost<OkResponse>('affiliates', { action: 'delete', id }),
   },
 
   // ── Book clubs / reading lists ───────────────────────────────────────────────

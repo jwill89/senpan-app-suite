@@ -26,6 +26,17 @@ The format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## Frontend
 
+### [1.2.0] — 2026-06-29
+
+#### Added
+
+- **Affiliates management** (Senpan Tea House → **Affiliates**): an admin page to
+  manage partner establishments — name, one or more owners, location, opening
+  hours (multiple time ranges under a single timezone), markdown details, and a
+  logo + establishment screenshot picked from two new permanent image categories
+  (**Affiliate Logos**, **Affiliate Images**). Gated by the new
+  `teahouse-affiliates` page permission; live-refreshes across admin sessions.
+
 ### [1.1.1] — 2026-06-28
 
 #### Added
@@ -76,6 +87,17 @@ First tracked release — establishes versioning for the current production buil
 ---
 
 ## Backend
+
+### [1.2.0] — 2026-06-29
+
+#### Added
+
+- **Affiliates API** — `GET/POST /api/affiliates` (admin CRUD of partner
+  establishments), gated by the new `teahouse-affiliates` page permission. Owners
+  and opening hours persist as JSON columns on a new `affiliates` table (schema
+  migration v38). Adds two permanent image categories — **Affiliate Logos**
+  (`affiliate_logos`) and **Affiliate Images** (`affiliate_images`) — readable by
+  affiliate editors for the logo/screenshot pickers.
 
 ### [1.1.1] — 2026-06-28
 

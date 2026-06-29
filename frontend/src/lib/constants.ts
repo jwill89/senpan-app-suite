@@ -100,6 +100,7 @@ export const ADMIN_PERMISSIONS: AdminPermission[] = [
   { key: 'bingo-patterns', label: 'Patterns', section: 'Bingo' },
   { key: 'bingo-presets', label: 'Game Presets', section: 'Bingo' },
   { key: 'teahouse-announcements', label: 'Announcements', section: 'Senpan Tea House' },
+  { key: 'teahouse-affiliates', label: 'Affiliates', section: 'Senpan Tea House' },
   ...BOOK_CLUBS.map((c) => ({
     key: `bookclub-${c.slug}`,
     label: c.name,

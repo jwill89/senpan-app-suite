@@ -10,6 +10,7 @@
  * The domain models in `api.generated.ts` regenerate via `npm run gen:types`.
  */
 import type {
+  Affiliate,
   Announcement,
   AnnouncementButton,
   AnnouncementType,
@@ -35,6 +36,8 @@ import type {
 } from './api.generated'
 
 export type {
+  Affiliate,
+  AffiliateHour,
   Announcement,
   AnnouncementButton,
   AnnouncementType,
@@ -290,6 +293,12 @@ export interface GaraponDrawResponse {
   draw: GaraponDraw
   draws_used: number
   max_draws: number
+}
+
+// ── Affiliates ──────────────────────────────────────────────────────────────
+// GET /api/affiliates — admin list (full records: owners + hours + images).
+export interface AffiliatesResponse {
+  affiliates: Affiliate[]
 }
 
 // ── Book clubs / reading lists ──────────────────────────────────────────────
@@ -596,6 +605,25 @@ export interface GaraponForm {
   details: string
   grand_prize_image: string
   prizes: GaraponPrizeForm[]
+}
+
+// Form models for the admin affiliate create/edit form. The hours form mirrors
+// model.AffiliateHour; owners is a list of plain name strings.
+export interface AffiliateHourForm {
+  label: string
+  start: string
+  end: string
+}
+export interface AffiliateForm {
+  id: number
+  name: string
+  owners: string[]
+  location: string
+  timezone: string
+  hours: AffiliateHourForm[]
+  details: string
+  logo: string
+  screenshot: string
 }
 
 // ── WebSocket message types ─────────────────────────────────────────────────

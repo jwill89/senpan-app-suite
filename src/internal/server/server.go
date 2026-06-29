@@ -156,6 +156,12 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("GET /api/garapon/{token}", s.handleGaraponPublic)
 	s.mux.HandleFunc("POST /api/garapon/{token}/draw", s.handleGaraponDraw)
 
+	// Affiliates (Senpan Tea House → Affiliates). Admin-only CRUD of partner
+	// establishments; logo/screenshot images live in dedicated permanent image
+	// categories managed on System → Images.
+	s.mux.HandleFunc("GET /api/affiliates", s.handleAffiliatesList)
+	s.mux.HandleFunc("POST /api/affiliates", s.handleAffiliatesAction)
+
 	// Book club / reading list routes (specific paths before {id} to avoid conflicts)
 	s.mux.HandleFunc("POST /api/bookclub/upload", s.handleBookclubUpload)
 	s.mux.HandleFunc("GET /api/bookclub/lookup", s.handleBookclubLookup)
@@ -468,6 +474,8 @@ func adminMutationResource(path string) (string, bool) {
 	switch path {
 	case "/api/garapons":
 		return "garapons", true
+	case "/api/affiliates":
+		return "affiliates", true
 	case "/api/raffles":
 		return "raffles", true
 	case "/api/presets":

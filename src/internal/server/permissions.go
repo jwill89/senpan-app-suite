@@ -13,19 +13,20 @@ import (
 // The Users page itself ("system-users") is intentionally NOT a grantable
 // permission — it is admin-only and guarded with requireAdmin.
 const (
-	permBingoGame        = "bingo-game"
-	permBingoCards       = "bingo-cards"
-	permBingoWinnersLog  = "bingo-winners-log"
-	permBingoPatterns    = "bingo-patterns"
-	permBingoPresets     = "bingo-presets"
-	permTeahouseAnnounce = "teahouse-announcements"
-	permTeahouseRaffles  = "teahouse-raffles"
-	permFestivalGarapon  = "festival-garapon"
-	permAtelierFonts     = "atelier-fonts"
-	permAtelierCarrd     = "atelier-carrd"
-	permSystemSettings   = "system-settings"
-	permSystemThemes     = "system-themes"
-	permSystemImages     = "system-images"
+	permBingoGame          = "bingo-game"
+	permBingoCards         = "bingo-cards"
+	permBingoWinnersLog    = "bingo-winners-log"
+	permBingoPatterns      = "bingo-patterns"
+	permBingoPresets       = "bingo-presets"
+	permTeahouseAnnounce   = "teahouse-announcements"
+	permTeahouseAffiliates = "teahouse-affiliates"
+	permTeahouseRaffles    = "teahouse-raffles"
+	permFestivalGarapon    = "festival-garapon"
+	permAtelierFonts       = "atelier-fonts"
+	permAtelierCarrd       = "atelier-carrd"
+	permSystemSettings     = "system-settings"
+	permSystemThemes       = "system-themes"
+	permSystemImages       = "system-images"
 )
 
 // bookClubSlugs lists the known book clubs that get their own page permission.
@@ -42,7 +43,7 @@ func bookClubPerm(slug string) string { return "bookclub-" + slug }
 func validPermissions() map[string]bool {
 	keys := []string{
 		permBingoGame, permBingoCards, permBingoWinnersLog, permBingoPatterns, permBingoPresets,
-		permTeahouseAnnounce, permTeahouseRaffles,
+		permTeahouseAnnounce, permTeahouseAffiliates, permTeahouseRaffles,
 		permFestivalGarapon,
 		permAtelierFonts, permAtelierCarrd,
 		permSystemSettings, permSystemThemes, permSystemImages,

@@ -84,6 +84,13 @@ const adminChildren: RouteRecordRaw[] = [
     component: () => import('@/components/admin/AnnouncementsTab.vue'),
     meta: { tab: 'teahouse-announcements' },
   },
+  // Senpan Tea House → Affiliates. Admin-only CRUD of partner establishments.
+  {
+    path: 'teahouse/affiliates',
+    name: 'admin-teahouse-affiliates',
+    component: () => import('@/components/admin/AffiliatesTab.vue'),
+    meta: { tab: 'teahouse-affiliates' },
+  },
   // Senpan Tea House → Raffles. One manager (current cards + closed table) with
   // detail/form Back sub-pages, replacing the former New/Open/Closed raffle tabs.
   {

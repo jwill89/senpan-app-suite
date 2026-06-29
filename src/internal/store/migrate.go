@@ -14,7 +14,7 @@ import (
 // PRAGMA user_version against this constant and runs only the migrations
 // needed to bring the database up to date. Bump this when adding a new
 // migration block.
-const schemaVersion = 37
+const schemaVersion = 38
 
 // ensureSchema reads the current PRAGMA user_version from the database and
 // applies any outstanding migrations to bring it up to schemaVersion.
@@ -251,6 +251,12 @@ func ensureSchema(db *sql.DB) error {
 		}
 	}
 
+	if version < 38 {
+		if err := migrateAffiliates(db); err != nil {
+			return err
+		}
+	}
+
 	_, err := db.Exec(fmt.Sprintf("PRAGMA user_version = %d", schemaVersion))
 	return err
 }
@@ -382,6 +388,7 @@ func createTables(db *sql.DB) error {
 		garaponPrizesTableSQL,
 		garaponPlayersTableSQL,
 		garaponDrawsTableSQL,
+		affiliatesTableSQL,
 	}
 	for _, s := range stmts {
 		if _, err := db.Exec(s); err != nil {
@@ -1197,6 +1204,35 @@ const garaponDrawsTableSQL = `CREATE TABLE IF NOT EXISTS garapon_draws (
 	FOREIGN KEY (garapon_id) REFERENCES garapons(id) ON DELETE CASCADE,
 	FOREIGN KEY (player_id) REFERENCES garapon_players(id) ON DELETE SET NULL
 )`
+
+// affiliatesTableSQL defines the Affiliates table (Senpan Tea House → Affiliates):
+// a partner establishment with one or more owners and opening-hours ranges stored
+// as JSON arrays (owners/hours), a single timezone anchoring those hours, markdown
+// details, and a logo + screenshot picked from dedicated permanent image
+// categories. Shared between createTables (fresh install) and migrateAffiliates
+// (existing databases) so the schema is defined once.
+const affiliatesTableSQL = `CREATE TABLE IF NOT EXISTS affiliates (
+	id INTEGER PRIMARY KEY AUTOINCREMENT,
+	name TEXT NOT NULL,
+	owners TEXT NOT NULL DEFAULT '[]',
+	location TEXT NOT NULL DEFAULT '',
+	timezone TEXT NOT NULL DEFAULT '',
+	hours TEXT NOT NULL DEFAULT '[]',
+	details TEXT NOT NULL DEFAULT '',
+	logo TEXT NOT NULL DEFAULT '',
+	screenshot TEXT NOT NULL DEFAULT '',
+	created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+)`
+
+// migrateAffiliates creates the affiliates table for the Affiliates admin section.
+// Owners and opening hours are stored as JSON arrays in the owners/hours columns.
+// Idempotent (CREATE TABLE IF NOT EXISTS).
+func migrateAffiliates(db *sql.DB) error {
+	if _, err := db.Exec(affiliatesTableSQL); err != nil {
+		return fmt.Errorf("migrate affiliates: %w", err)
+	}
+	return nil
+}
 
 // migrateGarapons creates the Garapon tables (garapons + garapon_prizes +
 // garapon_players + garapon_draws) and their indexes. Idempotent.

@@ -1,0 +1,25 @@
+<Project Sdk="Dalamud.NET.Sdk/15.0.0">
+  <!--
+    Senpan Companion — a Final Fantasy XIV Dalamud plugin that acts as a second UI
+    over the Senpan App Suite server (the Go backend stays the single source of
+    truth; this is just another client). See ../README.md for build/install steps.
+
+    The Dalamud.NET.Sdk supplies the TargetFramework (net*-windows) and references
+    the Dalamud assemblies from the local XIVLauncher install, so no Dalamud
+    package references are needed here.
+  -->
+  <PropertyGroup>
+    <Version>0.1.0.0</Version>
+    <Description>Senpan App Suite companion: run bingo games and manage raffles from inside FFXIV.</Description>
+    <PackageProjectUrl>https://gitlab.com/mathdad-apps/senpan-app-suite</PackageProjectUrl>
+    <Nullable>enable</Nullable>
+    <LangVersion>latest</LangVersion>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Senpan Tea House logo (transparent), shown on the About tab. Copied next to
+         the DLL and bundled into the plugin package by DalamudPackager. -->
+    <Content Include="Data\senpan-logo.png" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+</Project>

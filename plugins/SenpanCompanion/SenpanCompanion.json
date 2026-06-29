@@ -1,0 +1,9 @@
+{
+  "Author": "mathdad",
+  "Name": "Senpan Companion",
+  "Punchline": "Run bingo games and manage raffles from inside FFXIV.",
+  "Description": "A companion UI for the Senpan App Suite server. Create and delete bingo cards (with names pulled from nearby players), run a game (draw numbers, trigger the halftime mini-game, see live winner alerts with card IDs and player names), and manage raffles (add entrants, mark them paid, draw a winner) — all by talking to your existing server over its API, so every change still broadcasts to the web UI. Open the settings with /senpan and paste a personal access token generated from your account.",
+  "ApplicableVersion": "any",
+  "Tags": ["bingo", "raffle", "venue", "senpan"],
+  "RepoUrl": "https://gitlab.com/mathdad-apps/senpan-app-suite"
+}

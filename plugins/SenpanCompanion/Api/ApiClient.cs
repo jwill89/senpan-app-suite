@@ -1,0 +1,211 @@
+using System;
+using System.Net;
+using System.Net.Http;
+using System.Net.Http.Headers;
+using System.Text;
+using System.Text.Json;
+using System.Text.Json.Serialization;
+using System.Threading;
+using System.Threading.Tasks;
+using Dalamud.Networking.Http;
+using Dalamud.Plugin.Services;
+
+namespace SenpanCompanion.Api;
+
+/// <summary>Thrown for any non-2xx response; Message carries the server's error text.</summary>
+public sealed class ApiException : Exception
+{
+    public HttpStatusCode Status { get; }
+    public ApiException(string message, HttpStatusCode status) : base(message) => this.Status = status;
+}
+
+/// <summary>
+/// Typed REST client for the Senpan server. Every request carries the configured
+/// personal access token as a Bearer credential, so the server applies the same
+/// per-page permission guards the web UI gets. All methods are async and must be
+/// awaited off the game's framework thread (the UI fires them and reads results
+/// back on the next frame).
+/// </summary>
+public sealed class ApiClient : IDisposable
+{
+    public static readonly JsonSerializerOptions Json = new()
+    {
+        PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
+        PropertyNameCaseInsensitive = true,
+        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
+    };
+
+    private readonly HttpClient http;
+    private readonly Configuration config;
+    private readonly IPluginLog log;
+    private readonly HappyEyeballsCallback happyEyeballs = new();
+    private readonly CancellationTokenSource lifetime = new();
+
+    public ApiClient(Configuration config, IPluginLog log)
+    {
+        this.config = config;
+        this.log = log;
+        // HappyEyeballs improves IPv6/dual-stack connect behaviour (Dalamud guidance).
+        var handler = new SocketsHttpHandler { ConnectCallback = this.happyEyeballs.ConnectCallback };
+        this.http = new HttpClient(handler) { Timeout = TimeSpan.FromSeconds(15) };
+    }
+
+    public void Dispose()
+    {
+        this.lifetime.Cancel();
+        this.http.Dispose();
+        this.happyEyeballs.Dispose();
+        this.lifetime.Dispose();
+    }
+
+    // ── Auth ─────────────────────────────────────────────────────────────────
+
+    public Task<AuthCheckResponse> CheckAuthAsync(CancellationToken ct = default)
+        => SendAsync<AuthCheckResponse>(HttpMethod.Get, "api/auth", null, ct);
+
+    // ── Bingo: cards ───────────────────────────────────────────────────────────
+
+    public Task<CardsResponse> ListCardsAsync(CancellationToken ct = default)
+        => SendAsync<CardsResponse>(HttpMethod.Get, "api/cards", null, ct);
+
+    public Task<BoardResponse> GetCardBoardAsync(string id, CancellationToken ct = default)
+        => SendAsync<BoardResponse>(HttpMethod.Get, $"api/board?id={Uri.EscapeDataString(id)}&preview=1", null, ct);
+
+    public Task<GenerateSingleResponse> CreateNamedCardAsync(string playerName, CancellationToken ct = default)
+        => SendAsync<GenerateSingleResponse>(HttpMethod.Post, "api/cards",
+            new { action = "generate_single", player_name = playerName }, ct);
+
+    public Task<OkResponse> DeleteCardAsync(string id, CancellationToken ct = default)
+        => SendAsync<OkResponse>(HttpMethod.Post, "api/cards", new { action = "delete", id }, ct);
+
+    public Task<OkResponse> DeleteAllCardsAsync(CancellationToken ct = default)
+        => SendAsync<OkResponse>(HttpMethod.Post, "api/cards", new { action = "delete_all" }, ct);
+
+    // ── Bingo: patterns + game ───────────────────────────────────────────────
+
+    public Task<PatternsResponse> ListPatternsAsync(CancellationToken ct = default)
+        => SendAsync<PatternsResponse>(HttpMethod.Get, "api/patterns", null, ct);
+
+    public Task<PresetsResponse> ListPresetsAsync(CancellationToken ct = default)
+        => SendAsync<PresetsResponse>(HttpMethod.Get, "api/presets", null, ct);
+
+    public Task<FrequentWinnersResponse> FrequentWinnersAsync(CancellationToken ct = default)
+        => SendAsync<FrequentWinnersResponse>(HttpMethod.Get, "api/winners-log/frequent", null, ct);
+
+    public Task<WinnersLogResponse> WinnersLogAsync(int page, int perPage, string sort = "logged_at", string dir = "desc", CancellationToken ct = default)
+        => SendAsync<WinnersLogResponse>(HttpMethod.Get,
+            $"api/winners-log?page={page}&per_page={perPage}&sort={Uri.EscapeDataString(sort)}&dir={Uri.EscapeDataString(dir)}", null, ct);
+
+    // Per-entry delete only — the plugin deliberately exposes no "clear all" for
+    // the winners log, so it can't be wiped from in-game.
+    public Task<OkResponse> DeleteWinnersLogEntryAsync(long id, CancellationToken ct = default)
+        => SendAsync<OkResponse>(HttpMethod.Post, "api/winners-log", new { action = "delete", id }, ct);
+
+    public Task<GameStateResponse> GetGameAsync(CancellationToken ct = default)
+        => SendAsync<GameStateResponse>(HttpMethod.Get, "api/game", null, ct);
+
+    public Task<GameStateResponse> StartGameAsync(int[] patternIds, CancellationToken ct = default)
+        => SendAsync<GameStateResponse>(HttpMethod.Post, "api/game",
+            new { action = "start", pattern_ids = patternIds }, ct);
+
+    public Task<DrawResult> DrawAsync(int delaySeconds, CancellationToken ct = default)
+        => SendAsync<DrawResult>(HttpMethod.Post, "api/game",
+            new { action = "draw", delay = delaySeconds }, ct);
+
+    public Task<OkResponse> EndGameAsync(string[] validWinnerIds, CancellationToken ct = default)
+        => SendAsync<OkResponse>(HttpMethod.Post, "api/game",
+            new { action = "end", valid_winner_ids = validWinnerIds }, ct);
+
+    public Task<OkResponse> TriggerHalftimeAsync(CancellationToken ct = default)
+        => SendAsync<OkResponse>(HttpMethod.Post, "api/game", new { action = "trigger_halftime" }, ct);
+
+    public Task<OkResponse> UpdateGameDetailsAsync(string details, CancellationToken ct = default)
+        => SendAsync<OkResponse>(HttpMethod.Post, "api/game", new { action = "update_details", details }, ct);
+
+    // ── Raffles ──────────────────────────────────────────────────────────────
+
+    public Task<RafflesResponse> ListRafflesAsync(CancellationToken ct = default)
+        => SendAsync<RafflesResponse>(HttpMethod.Get, "api/raffles", null, ct);
+
+    public Task<RaffleDetailResponse> GetRaffleAsync(long id, CancellationToken ct = default)
+        => SendAsync<RaffleDetailResponse>(HttpMethod.Get, $"api/raffles/{id}", null, ct);
+
+    public Task<RaffleEntryResponse> AddRaffleEntryAsync(long raffleId, string characterName, string world, int numEntries, bool paid, CancellationToken ct = default)
+        => SendAsync<RaffleEntryResponse>(HttpMethod.Post, $"api/raffles/{raffleId}/entries",
+            new { action = "add_entry", character_name = characterName, world, num_entries = numEntries, paid }, ct);
+
+    public Task<OkResponse> MarkRaffleEntryPaidAsync(long raffleId, long entryId, bool paid, CancellationToken ct = default)
+        => SendAsync<OkResponse>(HttpMethod.Post, $"api/raffles/{raffleId}/entries",
+            new { action = "mark_paid", entry_id = entryId, paid }, ct);
+
+    public Task<OkResponse> DeleteRaffleEntryAsync(long raffleId, long entryId, CancellationToken ct = default)
+        => SendAsync<OkResponse>(HttpMethod.Post, $"api/raffles/{raffleId}/entries",
+            new { action = "delete_entry", entry_id = entryId }, ct);
+
+    public Task<RaffleWinnerResponse> PickRaffleWinnerAsync(long raffleId, CancellationToken ct = default)
+        => SendAsync<RaffleWinnerResponse>(HttpMethod.Post, $"api/raffles/{raffleId}/entries",
+            new { action = "pick_winner" }, ct);
+
+    public Task<RaffleWinnerResponse> PickAnotherRaffleWinnerAsync(long raffleId, CancellationToken ct = default)
+        => SendAsync<RaffleWinnerResponse>(HttpMethod.Post, $"api/raffles/{raffleId}/entries",
+            new { action = "pick_another" }, ct);
+
+    public Task<OkResponse> VerifyRaffleWinnerAsync(long raffleId, CancellationToken ct = default)
+        => SendAsync<OkResponse>(HttpMethod.Post, $"api/raffles/{raffleId}/entries",
+            new { action = "verify_winner" }, ct);
+
+    // ── Transport ────────────────────────────────────────────────────────────
+
+    private async Task<T> SendAsync<T>(HttpMethod method, string path, object? body, CancellationToken ct)
+    {
+        // Link the caller's token with the client lifetime so in-flight requests
+        // cancel when the plugin unloads.
+        using var linked = CancellationTokenSource.CreateLinkedTokenSource(this.lifetime.Token, ct);
+        using var req = new HttpRequestMessage(method, BuildUrl(path));
+        var bearer = this.config.Token.Trim();
+        if (bearer.Length > 0)
+            req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", bearer);
+        if (body != null)
+            req.Content = new StringContent(JsonSerializer.Serialize(body, Json), Encoding.UTF8, "application/json");
+
+        using var resp = await this.http.SendAsync(req, linked.Token).ConfigureAwait(false);
+        var text = await resp.Content.ReadAsStringAsync(linked.Token).ConfigureAwait(false);
+
+        if (!resp.IsSuccessStatusCode)
+        {
+            var msg = TryExtractError(text) ?? $"Request failed ({(int)resp.StatusCode})";
+            this.log.Warning($"Senpan API {method} {path} -> {(int)resp.StatusCode}: {msg}");
+            throw new ApiException(msg, resp.StatusCode);
+        }
+
+        var result = JsonSerializer.Deserialize<T>(text, Json);
+        if (result == null)
+            throw new ApiException("Empty or unreadable response", resp.StatusCode);
+        return result;
+    }
+
+    private Uri BuildUrl(string path)
+    {
+        var baseUrl = this.config.ServerUrl.Trim().TrimEnd('/');
+        return new Uri($"{baseUrl}/{path.TrimStart('/')}");
+    }
+
+    private static string? TryExtractError(string body)
+    {
+        if (string.IsNullOrWhiteSpace(body))
+            return null;
+        try
+        {
+            using var doc = JsonDocument.Parse(body);
+            if (doc.RootElement.ValueKind == JsonValueKind.Object &&
+                doc.RootElement.TryGetProperty("error", out var err) &&
+                err.ValueKind == JsonValueKind.String)
+                return err.GetString();
+        }
+        catch (JsonException)
+        {
+            // Non-JSON error body — fall through.
+        }
+        return null;
+    }
+}

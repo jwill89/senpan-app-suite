@@ -15,11 +15,18 @@ and **announcements** — the latter two post **Discord embeds** (manually or on
 schedule via background goroutines). It also hosts images for external **Carrd**
 sites and admin-uploaded **fonts**.
 
+A third surface — the **FFXIV Dalamud plugin** (`plugins/SenpanCompanion/`,
+C#/.NET 10 + ImGui, published as *Senpan Admin Companion*) — is a **second admin
+UI** over the same server. FFXIV gives plugins no client↔client networking, so the
+Go server stays the single source of truth: every plugin action goes through the
+same REST/WebSocket API and still broadcasts to the website. See **FFXIV plugin
+(Dalamud)** below.
+
 **At a glance:** Vue 3 SFCs + TypeScript (strict) · Pinia (setup stores) · Vue
 Router (history mode, lazy routes) · Go 1.22+ stdlib HTTP · SQLite (WAL) ·
 coder/websocket · per-user accounts (argon2id) + per-page permissions ·
 embedded tzdata + background schedulers (Discord embeds) · Vitest + Vue Test
-Utils · GitHub Actions CI.
+Utils · C#/.NET 10 Dalamud plugin (ImGui) · GitHub + GitLab CI.
 
 **Auth model (read this first):** the admin area is now gated by **per-user
 accounts**, not a single shared password. Accounts log in with username +
@@ -71,7 +78,7 @@ rotated immediately**. See **Authentication & authorization** below.
 │       │   └── admin/                ← AdminSidebar + one component per tab + modals (CardPreview, EndGame, WinnerVerify, HalftimePrompt) + ThemeTokenEditor. Tabs: Game, Cards, WinnersLog, Patterns (one manager unifying the patterns list + New Pattern / Manage Categories sub-pages), Presets, RaffleForm, Raffles, Announcements, BookClub (one generic tab serves every club), Settings, Themes, Users (admin-only account+permission manager), Fonts, CarrdUpload
 │       ├── views/                    ← HomeView, PlayerView, RafflesView, RaffleDetailView, AdminLoginView, RegisterView (hidden), NoAccessView (active account, no granted pages), AdminView
 │       └── **/*.test.ts              ← Vitest unit/component tests, colocated next to the code they cover
-├── .github/workflows/ci.yml          ← CI: frontend (lint·typecheck·test·build) + backend (build·vet·test)
+├── .github/workflows/ci.yml          ← CI: frontend (lint·typecheck·test·build) + backend (build·vet·test) + plugin (build·format); mirrored in .gitlab-ci.yml
 ├── deploy/                           ← Apache deploy artifacts (.htaccess + persistent images/ + README)
 ├── backend/                          ← Go backend
 │   ├── main.go                       ← Entry point: flags, DB init, server start
@@ -114,6 +121,16 @@ rotated immediately**. See **Authentication & authorization** below.
 │           ├── ratelimit.go          ← IP-based brute-force limiter for admin login
 │           ├── tzdata.go             ← blank-imports time/tzdata so IANA timezones resolve on hosts without zoneinfo (Windows)
 │           └── ws.go                 ← GET /api/ws (delegates to hub)
+├── plugins/                          ← FFXIV Dalamud plugin (C#/.NET) — secondary admin UI over the server
+│   ├── pluginmaster.json             ← Dalamud custom-repo index (hosted at /plugin/pluginmaster.json)
+│   └── SenpanCompanion/              ← the plugin (DLL/InternalName "SenpanCompanionAdmin"; display "Senpan Admin Companion")
+│       ├── Plugin.cs                 ← entry point: injected [PluginService]s, /senpan (+ /senpan config) command, window system
+│       ├── Configuration.cs          ← persisted config: server URL + personal-access token
+│       ├── Api/                      ← ApiClient (REST, Bearer pat_…) + ApiModels + LiveConnection (admin WS: game_draw/game_update/cards_update)
+│       ├── Services/                 ← Session (auth/perms), CardCache (coalesced, framework-thread), NearbyPlayers (IObjectTable), ChatSender (/tell), WinnerChime (winmm synth)
+│       ├── Windows/                  ← ImGui tabs: TabBase + Bingo{Cards,Game,Winners}Tab + RaffleTab + MainWindow
+│       ├── SenpanCompanion.csproj    ← Dalamud.NET.Sdk/15.0.0; <AssemblyName>SenpanCompanionAdmin; EnableWindowsTargeting (Linux CI)
+│       └── .editorconfig             ← dotnet format rules (root; csharp_indent_case_contents_when_block=false)
 ├── devdata/                          ← Local dev sandbox: SQLite DBs + built binaries + webroot uploads (gitignored)
 ```
 
@@ -335,6 +352,50 @@ Never edit it by hand. Request/response/WebSocket envelopes are hand-written in
 - WebSocket reconnect with exponential back-off (1s → 2s → 4s → 8s → 16s, max 10 attempts)
 - vuedraggable handles drag-and-drop for patterns and categories (replaces the old manual HTML5 DnD placeholders)
 
+## FFXIV plugin (Dalamud)
+
+`plugins/SenpanCompanion/` is a **Final Fantasy XIV Dalamud plugin** (C#/.NET 10,
+ImGui) that acts as a **second admin UI** over the same Go server — published as
+*Senpan Admin Companion* (Dalamud InternalName/DLL `SenpanCompanionAdmin`; the
+folder, csproj, and C# namespace stay `SenpanCompanion`). The server remains the
+single source of truth: every plugin action hits the same REST/WebSocket API the
+website uses, so it still broadcasts to all web clients. FFXIV gives plugins no
+client↔client networking, so the server *must* stay the relay — the plugin never
+talks peer-to-peer.
+
+- **Auth — personal access token.** The plugin sends `Authorization: Bearer pat_…`
+  on REST and `?token=` on the WebSocket; the server URL + token are entered via
+  `/senpan config` (PAT support shipped in FE+BE v1.5.0). Permissions are enforced
+  server-side exactly as for the web admin (`bingo-cards` / `bingo-game` /
+  `teahouse-raffles`). `/senpan` opens the main window.
+- **Feature parity (admin subset).** Bingo: create named cards (`generate_single`)
+  + delete / delete-all; game lifecycle (start with pattern IDs, draw w/ delay,
+  halftime, end with winner IDs); live draws + winner alerts over the **admin
+  WebSocket** (`game_draw` / `game_update` / `cards_update`). Raffle: pick an open
+  raffle, add / mark-paid / delete entrants, pick→confirm a winner (no raffle
+  creation). A **nearby-players** picker (`IObjectTable`) prefills name + world.
+- **Threading model (critical).** Dalamud has no SyncContext, so `await`
+  continuations resume on the thread pool. **Every UI-state write from an async op
+  must go through `Apply(() => …)`** (`Plugin.Framework.RunOnFrameworkThread`),
+  which marshals back to the framework thread — otherwise it races the render loop
+  + WS handlers. Tab panels extend `Windows/TabBase` (shared `Run`/`Busy`/`Status`,
+  `EnsureLoaded`/`MarkStale` with retry cooldown, `LoadAsync`); the card list is the
+  shared `Services/CardCache` (coalesced refresh, framework-thread swap).
+- **Game interop is minimal + ToS-sensitive.** `WinnerChime` is a synth WAV via
+  winmm (no game interop); `ChatSender` /tell uses
+  `RaptureShellModule.ExecuteCommandInner` — the only game interop, and opt-out.
+- **Build.** `<Project Sdk="Dalamud.NET.Sdk/15.0.0">` supplies the `net*-windows`
+  TFM and references Dalamud from the local XIVLauncher install; needs the **.NET 10
+  SDK** + XIVLauncher/Dalamud. `dotnet build -c Release` emits
+  `bin/Release/SenpanCompanionAdmin/latest.zip` (DalamudPackager); `bin/` + `obj/`
+  are gitignored. **0/0 warnings is enforced — keep it that way.** Note ImGui's
+  namespace is `Dalamud.Bindings.ImGui` (not ImGuiNET).
+- **Distribution.** A **custom Dalamud repo**, not the official list:
+  `plugins/pluginmaster.json` + `latest.zip` are hosted at
+  `https://apps.senpan.cafe/plugin/…` (publish with `scripts/deploy.ps1 -Target
+  plugin`). Bump `AssemblyVersion` + `LastUpdate` in `pluginmaster.json` per release;
+  a Dalamud API bump means bumping `DalamudApiLevel` (currently **15**).
+
 ## Developer commands
 
 ```powershell
@@ -375,11 +436,18 @@ cd backend; go test ./...
 
 # Build for production
 cd backend; go build -ldflags="-s -w" -o app-suite .
+
+# ── FFXIV Dalamud plugin (C#/.NET 10) ──
+# Needs the .NET 10 SDK + a local XIVLauncher/Dalamud install (Windows).
+cd plugins\SenpanCompanion; dotnet build -c Release   # → bin/Release/SenpanCompanionAdmin/latest.zip (keep 0/0 warnings)
+cd plugins\SenpanCompanion; dotnet format             # apply .editorconfig style (CI runs --verify-no-changes)
+.\scripts\deploy.ps1 -Target plugin                   # build + publish the custom Dalamud repo (pluginmaster.json + latest.zip)
 ```
 
 ## Continuous integration
 
-`.github/workflows/ci.yml` runs on every push and pull request, with two jobs:
+`.github/workflows/ci.yml` runs on every push and pull request, with three jobs
+(mirrored in `.gitlab-ci.yml`, since the repo also lives on GitLab):
 
 - **frontend** (`working-directory: frontend`): `npm ci` → `npm run gen:types`
   (needs Go, so the job also sets up the Go toolchain) → `lint:check` →
@@ -388,9 +456,18 @@ cd backend; go build -ldflags="-s -w" -o app-suite .
 - **backend** (`working-directory: backend`): `golangci-lint run` (pinned
   v2.12.2, config `backend/.golangci.yml`) → `go build ./...` → `go vet ./...` →
   `go test ./...` (Go version read from `backend/go.mod`).
+- **plugin** (`working-directory: plugins/SenpanCompanion`): builds the FFXIV
+  Dalamud plugin on a **Linux** runner — there's no XIVLauncher there, so it
+  downloads the official Dalamud dev distribution and points `DALAMUD_HOME` at it;
+  the `net*-windows` TFM compiles via the `EnableWindowsTargeting` property
+  (conditioned off on Windows, so local builds are unchanged). Gate =
+  `dotnet build -c Release -p:TreatWarningsAsErrors=true` (the 0-warning rule) +
+  `dotnet format --verify-no-changes` (rules in `plugins/SenpanCompanion/.editorconfig`).
+  Tracking Dalamud `latest` means an upstream API bump can redden it — the cue to
+  bump `DalamudApiLevel`.
 
-When adding a check, wire it into both the relevant npm/go script **and** the
-workflow so local and CI stay in lockstep.
+When adding a check, wire it into both the relevant npm/go/dotnet script **and**
+the workflow (GitHub **and** GitLab) so local and CI stay in lockstep.
 
 ## Deployment (Apache)
 
@@ -515,3 +592,4 @@ the built SPA so redeploys never wipe them (full guide in `deploy/README.md`):
 - **New book club**: add an entry to `bookClubs` (`server/bookclubs.go`) **and** `BOOK_CLUBS` (`lib/constants.ts`) — keep the slug identical — **and** add the slug to `bookClubSlugs` in `server/permissions.go` so its `bookclub-<slug>` page permission is grantable + enforced. The route, sidebar button, comments label, both secret webhook settings, and the permission entry are then derived automatically.
 - **New setting**: add the key to `settingsKeys` (and a fallback in `settingsDefaults`) in `server/settings.go`; mark it secret by adding to `secretSettings` if it shouldn't be public; surface it in `SettingsTab.vue` + the `AppSettings` type.
 - **New test**: colocate a `*.test.ts` next to the code; import `{ describe, it, expect }` from `vitest`; run `npm run test`. Add it to the same gate CI runs. (Go: colocate `*_test.go` and run `go test ./...`.)
+- **New plugin feature/tab** (`plugins/SenpanCompanion/`): the plugin is API-only — add the call to `Api/ApiClient.cs` (+ a shape in `Api/ApiModels.cs`) against an **existing** server endpoint; never add client↔client logic. A new ImGui tab subclasses `Windows/TabBase` and is registered in `Windows/MainWindow.cs`; **route every post-await UI write through `Apply(() => …)`**. Keep the build at **0/0 warnings** and run `dotnet format` before pushing (CI gates both). If the backend gained a new endpoint, expose it on the server first (see **New API endpoint**).

@@ -7,6 +7,10 @@ import (
 	"app-suite/internal/model"
 )
 
+// ErrRaffleEntryLimit is returned by AddOrCreateRaffleEntry when recording the
+// requested entries would push a character+world over the raffle's per-player cap.
+var ErrRaffleEntryLimit = errors.New("raffle entry limit exceeded")
+
 // ── Raffle operations ───────────────────────────────────────────────────────
 
 // CreateRaffle inserts a new raffle and returns its ID.
@@ -215,6 +219,59 @@ func (s *Store) CreateRaffleEntry(raffleID int64, charName, world string, numEnt
 func (s *Store) AddRaffleEntries(entryID int64, additionalEntries int) error {
 	_, err := s.db.Exec(`UPDATE raffle_entries SET num_entries = num_entries + ? WHERE id = ?`, additionalEntries, entryID)
 	return err
+}
+
+// AddOrCreateRaffleEntry records num additional entries for a character+world on a
+// raffle, enforcing the per-player cap (maxEntries) inside one write transaction so
+// concurrent public sign-ups can neither exceed the cap nor create duplicate rows
+// for the same character+world. It updates the existing row if one exists (matched
+// case-insensitively, mirroring GetRaffleEntry) or inserts a new one otherwise.
+//
+// Returns the affected row's id, the running total after the change, the count that
+// existed before it, and whether a new row was created. When the cap would be
+// exceeded it makes no change and returns ErrRaffleEntryLimit (with prevEntries set
+// so the caller can phrase the message). Callers should still pre-validate raffle
+// status/availability; this method only owns the atomic cap-enforced write.
+func (s *Store) AddOrCreateRaffleEntry(raffleID int64, charName, world string, num, maxEntries int) (entryID int64, newTotal, prevEntries int, created bool, err error) {
+	tx, err := s.beginImmediate()
+	if err != nil {
+		return 0, 0, 0, false, err
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	row := tx.QueryRow(`SELECT id, num_entries FROM raffle_entries
+		WHERE raffle_id = ? AND LOWER(character_name) = LOWER(?) AND LOWER(world) = LOWER(?)`,
+		raffleID, charName, world)
+	switch scanErr := row.Scan(&entryID, &prevEntries); {
+	case errors.Is(scanErr, sql.ErrNoRows):
+		created = true
+	case scanErr != nil:
+		return 0, 0, 0, false, scanErr
+	}
+
+	newTotal = prevEntries + num
+	if newTotal > maxEntries {
+		return 0, 0, prevEntries, created, ErrRaffleEntryLimit
+	}
+
+	if created {
+		res, err := tx.Exec(`INSERT INTO raffle_entries (raffle_id, character_name, world, num_entries) VALUES (?, ?, ?, ?)`,
+			raffleID, charName, world, num)
+		if err != nil {
+			return 0, 0, 0, false, err
+		}
+		if entryID, err = res.LastInsertId(); err != nil {
+			return 0, 0, 0, false, err
+		}
+	} else {
+		if _, err := tx.Exec(`UPDATE raffle_entries SET num_entries = num_entries + ? WHERE id = ?`, num, entryID); err != nil {
+			return 0, 0, 0, false, err
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return 0, 0, 0, false, err
+	}
+	return entryID, newTotal, prevEntries, created, nil
 }
 
 // SetRaffleEntryPaid sets the paid flag on a raffle entry.

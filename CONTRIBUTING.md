@@ -73,6 +73,9 @@ and [`.github/workflows/ci.yml`](.github/workflows/ci.yml).)
   [`AGENTS.md`](AGENTS.md) for conventions.
 - **Types flow from Go.** Backend model changes must be followed by
   `npm run gen:types`; don't hand-edit `api.generated.ts`.
+- **Keep the API reference current.** Adding, removing, or changing an endpoint
+  (route, guard, request/response shape, or action) means updating
+  [`API.md`](API.md) in the same change.
 - **Theming is structured tokens**, not free-form CSS — edit the token list in
   the three places that must stay in sync (`frontend/src/assets/styles/tokens.css`,
   `store.themeTokenOrder` in Go, `THEME_TOKEN_GROUPS` in `lib/theme-tokens.ts`).

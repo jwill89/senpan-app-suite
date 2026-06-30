@@ -31,7 +31,7 @@ type CardBatchEntry struct {
 
 // SaveCardsBatch inserts multiple cards in a single transaction.
 func (s *Store) SaveCardsBatch(cards []CardBatchEntry) error {
-	tx, err := s.db.Begin()
+	tx, err := s.beginImmediate()
 	if err != nil {
 		return fmt.Errorf("begin tx: %w", err)
 	}

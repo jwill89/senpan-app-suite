@@ -1,6 +1,7 @@
 package server
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -8,6 +9,7 @@ import (
 	"time"
 
 	"app-suite/internal/model"
+	"app-suite/internal/store"
 )
 
 // ── Raffle list (public + admin) ────────────────────────────────────────────
@@ -284,48 +286,40 @@ func (s *Server) handleRaffleEnter(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Check if character+world already has entries
-	existing, err := s.store.GetRaffleEntry(raffleID, charName, world)
+	// Record the entries atomically: the store enforces the per-player cap and the
+	// add-vs-create decision inside one write transaction, so two simultaneous
+	// sign-ups for the same character+world can't both pass a stale count check and
+	// exceed the cap (or create duplicate rows).
+	_, newTotal, prevEntries, created, err := s.store.AddOrCreateRaffleEntry(
+		raffleID, charName, world, req.NumEntries, raffle.MaxEntries)
+	if errors.Is(err, store.ErrRaffleEntryLimit) {
+		if prevEntries > 0 {
+			writeError(w, http.StatusBadRequest,
+				fmt.Sprintf("Cannot add %d entries. You already have %d of %d max entries.",
+					req.NumEntries, prevEntries, raffle.MaxEntries))
+		} else {
+			writeError(w, http.StatusBadRequest,
+				fmt.Sprintf("Number of entries cannot exceed %d", raffle.MaxEntries))
+		}
+		return
+	}
 	if err != nil {
-		writeInternalError(w, "get raffle entry", err)
+		writeInternalError(w, "record raffle entry", err)
 		return
 	}
 
-	if existing != nil {
-		// Check if adding entries would exceed max
-		newTotal := existing.NumEntries + req.NumEntries
-		if newTotal > raffle.MaxEntries {
-			writeError(w, http.StatusBadRequest,
-				fmt.Sprintf("Cannot add %d entries. You already have %d of %d max entries.",
-					req.NumEntries, existing.NumEntries, raffle.MaxEntries))
-			return
-		}
-		if err := s.store.AddRaffleEntries(existing.ID, req.NumEntries); err != nil {
-			writeInternalError(w, "add raffle entries", err)
-			return
-		}
-		totalCost := float64(newTotal) * raffle.CostPerEntry
-		writeJSON(w, http.StatusOK, map[string]any{
-			"message":             "Entries added successfully",
+	totalCost := float64(newTotal) * raffle.CostPerEntry
+	if created {
+		writeJSON(w, http.StatusCreated, map[string]any{
+			"message":             "Signed up successfully",
 			"total_entries":       newTotal,
 			"total_cost":          totalCost,
 			"signup_instructions": raffle.SignupInstructions,
 		})
 	} else {
-		// New entry — check max entries
-		if req.NumEntries > raffle.MaxEntries {
-			writeError(w, http.StatusBadRequest,
-				fmt.Sprintf("Number of entries cannot exceed %d", raffle.MaxEntries))
-			return
-		}
-		if _, err := s.store.CreateRaffleEntry(raffleID, charName, world, req.NumEntries); err != nil {
-			writeInternalError(w, "create raffle entry", err)
-			return
-		}
-		totalCost := float64(req.NumEntries) * raffle.CostPerEntry
-		writeJSON(w, http.StatusCreated, map[string]any{
-			"message":             "Signed up successfully",
-			"total_entries":       req.NumEntries,
+		writeJSON(w, http.StatusOK, map[string]any{
+			"message":             "Entries added successfully",
+			"total_entries":       newTotal,
 			"total_cost":          totalCost,
 			"signup_instructions": raffle.SignupInstructions,
 		})
@@ -409,37 +403,25 @@ func (s *Server) handleRaffleEntries(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		existing, err := s.store.GetRaffleEntry(raffleID, charName, world)
-		if err != nil {
-			writeInternalError(w, "get raffle entry for add", err)
-			return
-		}
-
-		var entryID int64
-		if existing != nil {
-			newTotal := existing.NumEntries + req.NumEntries
-			if newTotal > raffle.MaxEntries {
+		// Same atomic cap-enforced write as the public enter path, so an admin and a
+		// player adding entries for the same character+world at once can't race past
+		// the max.
+		entryID, _, prevEntries, _, err := s.store.AddOrCreateRaffleEntry(
+			raffleID, charName, world, req.NumEntries, raffle.MaxEntries)
+		if errors.Is(err, store.ErrRaffleEntryLimit) {
+			if prevEntries > 0 {
 				writeError(w, http.StatusBadRequest,
 					fmt.Sprintf("Cannot add %d entries. They already have %d of %d max entries.",
-						req.NumEntries, existing.NumEntries, raffle.MaxEntries))
-				return
-			}
-			if err := s.store.AddRaffleEntries(existing.ID, req.NumEntries); err != nil {
-				writeInternalError(w, "add raffle entries", err)
-				return
-			}
-			entryID = existing.ID
-		} else {
-			if req.NumEntries > raffle.MaxEntries {
+						req.NumEntries, prevEntries, raffle.MaxEntries))
+			} else {
 				writeError(w, http.StatusBadRequest,
 					fmt.Sprintf("Number of entries cannot exceed %d", raffle.MaxEntries))
-				return
 			}
-			entryID, err = s.store.CreateRaffleEntry(raffleID, charName, world, req.NumEntries)
-			if err != nil {
-				writeInternalError(w, "create raffle entry", err)
-				return
-			}
+			return
+		}
+		if err != nil {
+			writeInternalError(w, "record raffle entry", err)
+			return
 		}
 
 		// Mark paid right away when requested (never un-marks an existing entry).

@@ -146,3 +146,30 @@ func TestDeleteReadingListCascadesItems(t *testing.T) {
 		t.Errorf("items leaked across lists: %+v", got.Items)
 	}
 }
+
+// TestCountReadingListItemsByCover backs the reference-safe cover cleanup: covers
+// keep their uploaded filename so two items can share one file, and a file must
+// only be deleted once nothing references it.
+func TestCountReadingListItemsByCover(t *testing.T) {
+	s := newTestStore(t)
+	listID, _ := s.CreateReadingList("yaoi", "L")
+	const shared = "https://host/images/bookclub/cat.jpg"
+	a, _ := s.CreateReadingListItem(&model.ReadingListItem{ListID: listID, Title: "A", CoverImage: shared})
+	if _, err := s.CreateReadingListItem(&model.ReadingListItem{ListID: listID, Title: "B", CoverImage: shared}); err != nil {
+		t.Fatal(err)
+	}
+
+	if n, err := s.CountReadingListItemsByCover(shared); err != nil || n != 2 {
+		t.Fatalf("CountReadingListItemsByCover = %d, %v; want 2, nil", n, err)
+	}
+	// After deleting one item the shared cover is still referenced by the other.
+	if _, err := s.DeleteReadingListItem(a); err != nil {
+		t.Fatal(err)
+	}
+	if n, _ := s.CountReadingListItemsByCover(shared); n != 1 {
+		t.Fatalf("after one delete: count = %d; want 1 (file must NOT be removed yet)", n)
+	}
+	if n, _ := s.CountReadingListItemsByCover("https://host/images/bookclub/none.jpg"); n != 0 {
+		t.Fatalf("unreferenced cover: count = %d; want 0", n)
+	}
+}

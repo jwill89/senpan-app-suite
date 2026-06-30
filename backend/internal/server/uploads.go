@@ -1,14 +1,12 @@
 package server
 
 import (
-	"fmt"
 	"io"
 	"mime/multipart"
 	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
-	"time"
 )
 
 // This file holds the upload plumbing shared by the image-hosting features
@@ -31,6 +29,26 @@ func isAllowedImageExt(ext string) bool {
 		return true
 	}
 	return false
+}
+
+// safeImageUploadName reduces an uploaded filename to a safe basename and accepts
+// it only when it carries an allowed raster-image extension. It strips any path,
+// and rejects empty/dot/hidden names and embedded separators, so the result is safe
+// to use directly as the on-disk (and URL) filename. Mirrors safeImageFileName
+// (images.go) but for the raster-only cover set (no SVG).
+func safeImageUploadName(name string) (string, bool) {
+	name = strings.TrimSpace(name)
+	name = filepath.Base(filepath.FromSlash(name))
+	if name == "" || name == "." || name == ".." || strings.HasPrefix(name, ".") {
+		return "", false
+	}
+	if strings.ContainsAny(name, `/\`) {
+		return "", false
+	}
+	if !isAllowedImageExt(strings.ToLower(filepath.Ext(name))) {
+		return "", false
+	}
+	return name, true
 }
 
 // saveMultipartFile streams a single multipart file part to dst. It is
@@ -77,13 +95,15 @@ func isAllowedImageContentType(ct string) bool {
 	return false
 }
 
-// saveSingleImageUpload handles the common single-image upload flow shared by the
-// announcement and book-club cover endpoints: it reads the "image"
-// multipart field (max 5 MB), validates it as an allowed image type, writes it
-// under <webRoot>/<relDir> as "<prefix>_<nanos><ext>", and writes the JSON
-// {"url": <fullURL>} success response. On any failure it writes the error
-// response itself. relDir is a forward-slash path that doubles as the URL path.
-func (s *Server) saveSingleImageUpload(w http.ResponseWriter, r *http.Request, relDir, prefix string) {
+// saveSingleImageUpload handles the single-image upload flow used by the book-club
+// cover endpoint: it reads the "image" multipart field (max 5 MB), validates it as
+// an allowed raster image, writes it under <webRoot>/<relDir> keeping the uploaded
+// filename, and writes the JSON {"url": <fullURL>} success response. On any failure
+// it writes the error response itself. relDir is a forward-slash path that doubles
+// as the URL path. A same-named upload overwrites the existing file — matching the
+// central image-hosting and Carrd uploads; the app no longer rewrites uploaded
+// names (callers that auto-clean covers must therefore guard against shared files).
+func (s *Server) saveSingleImageUpload(w http.ResponseWriter, r *http.Request, relDir string) {
 	r.Body = http.MaxBytesReader(w, r.Body, 5<<20) // 5 MB
 
 	file, header, err := r.FormFile("image")
@@ -93,8 +113,8 @@ func (s *Server) saveSingleImageUpload(w http.ResponseWriter, r *http.Request, r
 	}
 	defer file.Close()
 
-	ext := strings.ToLower(filepath.Ext(header.Filename))
-	if !isAllowedImageExt(ext) {
+	name, ok := safeImageUploadName(header.Filename)
+	if !ok {
 		writeError(w, http.StatusBadRequest, "Only jpg, png, webp, and gif images are allowed")
 		return
 	}
@@ -110,18 +130,10 @@ func (s *Server) saveSingleImageUpload(w http.ResponseWriter, r *http.Request, r
 		writeError(w, http.StatusInternalServerError, "Failed to create upload directory")
 		return
 	}
-	filename := fmt.Sprintf("%s_%d%s", prefix, time.Now().UnixNano(), ext)
-
-	dst, err := os.Create(filepath.Join(destDir, filename))
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, "Failed to save image")
-		return
-	}
-	defer dst.Close()
-	if _, err := io.Copy(dst, file); err != nil {
+	if err := saveMultipartFile(header, filepath.Join(destDir, name)); err != nil {
 		writeError(w, http.StatusInternalServerError, "Failed to save image")
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]any{"url": s.siteBaseURL(r) + "/" + relDir + "/" + filename})
+	writeJSON(w, http.StatusOK, map[string]any{"url": s.siteBaseURL(r) + "/" + relDir + "/" + name})
 }

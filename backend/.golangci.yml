@@ -1,6 +1,6 @@
 # golangci-lint configuration for the Go backend (schema v2; installed v2.12.2).
 #
-# Run locally with `golangci-lint run ./...` from the `src/` directory; CI runs
+# Run locally with `golangci-lint run ./...` from the `backend/` directory; CI runs
 # the same command (see .github/workflows/ci.yml). The CI version is pinned to
 # match what is documented here so local and CI results agree.
 

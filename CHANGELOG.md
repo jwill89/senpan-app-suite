@@ -26,6 +26,16 @@ The format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## Frontend
 
+### [1.5.1] — 2026-06-30
+
+#### Fixed
+
+- **Player stamp persistence is crash-safe.** Loading stamps now tolerates corrupt
+  or tampered `localStorage` (a bad value starts the board clean instead of
+  throwing during load), and saving stamps no longer throws out of the
+  high-frequency toggle path when storage is full — bringing both in line with the
+  custom-stamp save, which already degraded gracefully.
+
 ### [1.5.0] — 2026-06-29
 
 #### Added
@@ -145,6 +155,39 @@ First tracked release — establishes versioning for the current production buil
 ---
 
 ## Backend
+
+### [1.6.0] — 2026-06-30
+
+#### Changed
+
+- **Uploads keep their original filename everywhere.** The book-club cover upload
+  (`POST /api/bookclub/upload`) was the last endpoint that rewrote uploaded names
+  (`cover_<nanos>.ext`); it now preserves the uploaded filename (sanitized) and
+  overwrites a same-named file, matching the central image-hosting and Carrd
+  uploads. Cover cleanup on item/list delete is now **reference-safe** — a shared
+  file is removed only once no reading-list item still points at it
+  (`CountReadingListItemsByCover`).
+
+#### Fixed
+
+- **Race-free writes.** Multi-statement store mutations now run as write
+  transactions (`BEGIN IMMEDIATE`, via a `beginImmediate` helper) instead of the
+  default deferred mode, so concurrent read-modify-write paths serialize on the
+  busy-timeout rather than colliding on a stale snapshot. This makes the public
+  **garapon draw** (remaining-draw cap) and similar count checks correct under
+  concurrency instead of risking a spurious error.
+- **Atomic raffle sign-ups.** `POST /api/raffles/{id}/enter` (and the admin
+  `add_entry`) now record entries through a single cap-enforced transaction
+  (`AddOrCreateRaffleEntry`), so two simultaneous sign-ups for the same
+  character+world can't both pass a stale count check and exceed `max_entries` or
+  create duplicate rows.
+
+#### Documentation
+
+- Added [`API.md`](API.md) — a full HTTP & WebSocket API reference (auth, request/
+  response shapes, action types, broadcast messages) — linked from the README.
+- Corrected stale comments (the `.golangci.yml` run directory, the `cards` and
+  `game` action lists) and the `uploads.go` / AGENTS.md upload-helper docs.
 
 ### [1.5.0] — 2026-06-29
 

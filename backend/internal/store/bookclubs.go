@@ -153,6 +153,16 @@ func (s *Store) DeleteReadingListItem(itemID int64) (bool, error) {
 	return n > 0, nil
 }
 
+// CountReadingListItemsByCover returns how many items still reference a cover URL.
+// Cover images are uploaded under their original filename (so two items can share a
+// file), so callers check this after deleting an item before removing its cover
+// file — a shared file must survive while another item still points at it.
+func (s *Store) CountReadingListItemsByCover(coverImage string) (int, error) {
+	var n int
+	err := s.db.QueryRow(`SELECT COUNT(*) FROM reading_list_items WHERE cover_image = ?`, coverImage).Scan(&n)
+	return n, err
+}
+
 // encodeSources marshals a sources slice to a JSON string for storage, always
 // producing a valid array (never "null").
 func encodeSources(sources []model.ReadingListSource) string {

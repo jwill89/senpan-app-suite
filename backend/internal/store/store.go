@@ -2,6 +2,7 @@
 package store
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"math/rand/v2"
@@ -69,3 +70,17 @@ func New(path string) (*Store, error) {
 
 // Close closes the underlying database connection.
 func (s *Store) Close() error { return s.db.Close() }
+
+// beginImmediate starts a write transaction (issuing BEGIN IMMEDIATE via the
+// driver's serializable isolation level) rather than the default deferred
+// transaction. A deferred transaction starts read-only and only takes the write
+// lock when it first writes; under WAL with multiple pooled connections that lets
+// two read-modify-write transactions both read the same snapshot and then collide
+// when the second tries to upgrade its read to a write, failing with a stale-
+// snapshot error. Taking the write lock up front instead makes concurrent writers
+// serialize on busy_timeout — SQLite allows only one writer anyway, so there is no
+// throughput cost — which keeps count/cap checks (e.g. a garapon's remaining
+// draws) race-free. Every multi-statement mutation in this package uses it.
+func (s *Store) beginImmediate() (*sql.Tx, error) {
+	return s.db.BeginTx(context.Background(), &sql.TxOptions{Isolation: sql.LevelSerializable})
+}

@@ -1,6 +1,7 @@
 package store_test
 
 import (
+	"errors"
 	"testing"
 	"time"
 
@@ -79,6 +80,43 @@ func TestListRafflesAvailabilityWindow(t *testing.T) {
 	}
 	if len(all) != 5 {
 		t.Errorf("admin ListRaffles = %d raffles; want 5", len(all))
+	}
+}
+
+// TestAddOrCreateRaffleEntry verifies the atomic cap-enforced entry write: it
+// creates a new row, folds a repeat sign-up (matched case-insensitively) into the
+// same row, and refuses an over-cap add without mutating anything.
+func TestAddOrCreateRaffleEntry(t *testing.T) {
+	s := newTestStore(t)
+	id, err := s.CreateRaffle(&model.Raffle{Title: "Cap", MaxEntries: 5})
+	if err != nil {
+		t.Fatalf("CreateRaffle: %v", err)
+	}
+
+	// First sign-up creates the row.
+	entryID, total, prev, created, err := s.AddOrCreateRaffleEntry(id, "Cloud", "Gaia", 2, 5)
+	if err != nil {
+		t.Fatalf("AddOrCreateRaffleEntry (create): %v", err)
+	}
+	if !created || prev != 0 || total != 2 || entryID == 0 {
+		t.Fatalf("create: got entryID=%d total=%d prev=%d created=%v; want id>0 total=2 prev=0 created=true", entryID, total, prev, created)
+	}
+
+	// Repeat sign-up (different case) folds into the same row.
+	gotID, total, prev, created, err := s.AddOrCreateRaffleEntry(id, "cloud", "GAIA", 1, 5)
+	if err != nil {
+		t.Fatalf("AddOrCreateRaffleEntry (add): %v", err)
+	}
+	if created || gotID != entryID || prev != 2 || total != 3 {
+		t.Fatalf("add: got entryID=%d total=%d prev=%d created=%v; want id=%d total=3 prev=2 created=false", gotID, total, prev, created, entryID)
+	}
+
+	// Over-cap add is rejected and leaves the row unchanged.
+	if _, _, prev, _, err := s.AddOrCreateRaffleEntry(id, "Cloud", "Gaia", 3, 5); !errors.Is(err, store.ErrRaffleEntryLimit) {
+		t.Fatalf("over-cap add: err=%v (prev=%d); want ErrRaffleEntryLimit", err, prev)
+	}
+	if e, _ := s.GetRaffleEntry(id, "Cloud", "Gaia"); e == nil || e.NumEntries != 3 {
+		t.Fatalf("over-cap add must not mutate: entry=%+v; want NumEntries=3", e)
 	}
 }
 

@@ -180,6 +180,6 @@ func (s *Server) handleGameAction(w http.ResponseWriter, r *http.Request) {
 		}{Type: "details_update", Details: req.Details})
 
 	default:
-		writeError(w, http.StatusBadRequest, "Invalid action. Use: start, draw, end, trigger_halftime, update_details")
+		writeError(w, http.StatusBadRequest, "Invalid action. Use: start, draw, end, trigger_halftime, set_delay, update_details")
 	}
 }

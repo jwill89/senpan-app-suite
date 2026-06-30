@@ -4,8 +4,9 @@ A self-hosted suite of community tools for the **Senpan Tea House** and
 **Atelier Yao** — real-time Bingo, raffles, a festival lottery drum, Discord
 announcements, book-club reading lists, font/image hosting, and a fully
 themeable, permissioned admin dashboard. A **Go + SQLite** backend serves a
-JSON/WebSocket API (`/api/*`); a **Vue 3 + TypeScript** single-page app (built
-with Vite, installable as a PWA) is the frontend.
+JSON/WebSocket API (`/api/*`, documented in [`API.md`](API.md)); a **Vue 3 +
+TypeScript** single-page app (built with Vite, installable as a PWA) is the
+frontend.
 
 ## What's in the suite
 
@@ -107,6 +108,9 @@ See [`deploy/README.md`](deploy/README.md) for the Apache layout and host setup.
 
 ## Documentation
 
+- **[`API.md`](API.md)** — the canonical HTTP & WebSocket API reference: every
+  endpoint with its auth requirement, request/response shapes, action types, and
+  the WebSocket broadcast messages.
 - **[`AGENTS.md`](AGENTS.md)** — full architecture, data flow, DB schema,
   conventions, and "how to extend" guide (the primary reference for contributors
   and AI agents).

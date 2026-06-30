@@ -310,7 +310,7 @@ func (s *Store) UpdateAnnouncement(a *model.Announcement) error {
 // they list in the supplied id order (index 0 = top). Ids are applied in a single
 // transaction; unknown ids are no-ops. Mirrors BulkReorderPatterns.
 func (s *Store) BulkReorderAnnouncements(ids []int64) error {
-	tx, err := s.db.Begin()
+	tx, err := s.beginImmediate()
 	if err != nil {
 		return err
 	}

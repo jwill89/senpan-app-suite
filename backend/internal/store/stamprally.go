@@ -137,7 +137,7 @@ func (s *Store) listStampRallyPrizes(rallyID int64) ([]model.StampRallyPrize, er
 // CreateStampRally inserts a new rally and its stamps + prizes in one transaction.
 // Returns the new rally's ID.
 func (s *Store) CreateStampRally(r *model.StampRally) (int64, error) {
-	tx, err := s.db.Begin()
+	tx, err := s.beginImmediate()
 	if err != nil {
 		return 0, err
 	}
@@ -175,7 +175,7 @@ func (s *Store) CreateStampRally(r *model.StampRally) (int64, error) {
 // inserted, omitted ids deleted) so that collected-stamp history survives edits;
 // prizes (which nothing references) are simply replaced.
 func (s *Store) UpdateStampRally(r *model.StampRally) error {
-	tx, err := s.db.Begin()
+	tx, err := s.beginImmediate()
 	if err != nil {
 		return err
 	}

@@ -10,7 +10,8 @@ import (
 )
 
 // cardsRequest is the JSON body for POST /api/cards.
-// Action determines the operation: "generate", "delete", "delete_all", or "update_player".
+// Action determines the operation: "generate", "generate_single", "delete",
+// "delete_all", or "update_player".
 type cardsRequest struct {
 	Action     string `json:"action"`
 	ID         string `json:"id"`          // card ID (for delete, update_player)

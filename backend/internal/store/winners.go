@@ -13,7 +13,7 @@ func (s *Store) InsertWinnersLog(entries []model.WinnersLogEntry) error {
 	if len(entries) == 0 {
 		return nil
 	}
-	tx, err := s.db.Begin()
+	tx, err := s.beginImmediate()
 	if err != nil {
 		return err
 	}

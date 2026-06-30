@@ -235,17 +235,22 @@ func (s *Server) handleReadingListsAction(w http.ResponseWriter, r *http.Request
 			writeError(w, http.StatusBadRequest, "Reading list id is required")
 			return
 		}
-		// Remove any uploaded cover images before deleting the list (items
-		// cascade-delete in the DB, but their files would otherwise be orphaned).
+		// Capture cover URLs before deleting the list (items cascade-delete in the
+		// DB, but their files would otherwise be orphaned), then clean up each file
+		// after the rows are gone — skipping any still referenced by another list.
+		var covers []string
 		if list, err := s.store.GetReadingList(req.ID); err == nil && list != nil {
 			for _, it := range list.Items {
-				s.removeUploadedBookclubImage(it.CoverImage)
+				covers = append(covers, it.CoverImage)
 			}
 		}
 		deleted, err := s.store.DeleteReadingList(req.ID)
 		if err != nil {
 			writeInternalError(w, "delete reading list", err)
 			return
+		}
+		for _, c := range covers {
+			s.removeBookclubCoverIfUnused(c)
 		}
 		writeJSON(w, http.StatusOK, map[string]any{"deleted": deleted})
 
@@ -349,11 +354,13 @@ func (s *Server) handleReadingListItems(w http.ResponseWriter, r *http.Request) 
 			writeError(w, http.StatusBadRequest, "Item id is required")
 			return
 		}
-		// Best-effort cleanup of the uploaded cover image, if any.
+		// Capture the cover URL before deleting so the file can be cleaned up after
+		// the row is gone — but only if no other item still references it.
+		var cover string
 		if list, err := s.store.GetReadingList(listID); err == nil && list != nil {
 			for _, it := range list.Items {
 				if it.ID == req.ItemID {
-					s.removeUploadedBookclubImage(it.CoverImage)
+					cover = it.CoverImage
 					break
 				}
 			}
@@ -363,6 +370,7 @@ func (s *Server) handleReadingListItems(w http.ResponseWriter, r *http.Request) 
 			writeInternalError(w, "delete reading list item", err)
 			return
 		}
+		s.removeBookclubCoverIfUnused(cover)
 		writeJSON(w, http.StatusOK, map[string]any{"deleted": deleted})
 
 	default:
@@ -394,12 +402,12 @@ func sanitizeSources(sources []model.ReadingListSource) []model.ReadingListSourc
 //	Endpoint:  POST /api/bookclub/upload
 //	Auth:      admin, or any book-club page permission
 //	Request:   multipart form with "image" field
-//	Response:  {"url": "https://host/images/bookclub/cover_....ext"}
+//	Response:  {"url": "https://host/images/bookclub/<original-filename>"}
 func (s *Server) handleBookclubUpload(w http.ResponseWriter, r *http.Request) {
 	if !s.requireAnyBookClub(w, r) {
 		return
 	}
-	s.saveSingleImageUpload(w, r, bookclubCoverRelDir, "cover")
+	s.saveSingleImageUpload(w, r, bookclubCoverRelDir)
 }
 
 // siteBaseURL reconstructs this site's scheme://host for building absolute URLs
@@ -415,10 +423,25 @@ func (s *Server) siteBaseURL(r *http.Request) string {
 	return scheme + "://" + r.Host
 }
 
+// removeBookclubCoverIfUnused deletes an uploaded cover file, but only when no
+// reading-list item still references it. Covers keep their uploaded filename (the
+// app no longer rewrites upload names), so two items can share one file; call this
+// AFTER the owning item/list rows are deleted so the reference count reflects only
+// the remaining items. External (AniList) URLs are ignored by the inner removal.
+func (s *Server) removeBookclubCoverIfUnused(coverURL string) {
+	if coverURL == "" {
+		return
+	}
+	if n, err := s.store.CountReadingListItemsByCover(coverURL); err != nil || n > 0 {
+		return
+	}
+	s.removeUploadedBookclubImage(coverURL)
+}
+
 // removeUploadedBookclubImage deletes a previously uploaded cover image, but
 // only when the URL points inside this site's images/bookclub directory. API
 // covers (e.g. s4.anilist.co) and anything outside the upload area are left
-// untouched. Mirrors removeUploadedImage (raffles).
+// untouched.
 func (s *Server) removeUploadedBookclubImage(coverURL string) {
 	if coverURL == "" {
 		return

@@ -85,7 +85,7 @@ func insertGaraponPrizes(tx *sql.Tx, garaponID int64, prizes []model.GaraponPriz
 // CreateGarapon inserts a new garapon and its prizes in one transaction. The
 // garapon is created "open" (instantly active). Returns the new garapon's ID.
 func (s *Store) CreateGarapon(g *model.Garapon) (int64, error) {
-	tx, err := s.db.Begin()
+	tx, err := s.beginImmediate()
 	if err != nil {
 		return 0, err
 	}
@@ -114,7 +114,7 @@ func (s *Store) CreateGarapon(g *model.Garapon) (int64, error) {
 // snapshot the prize name/color and don't FK the prize row — so the draw log
 // survives prize edits.
 func (s *Store) UpdateGarapon(g *model.Garapon) error {
-	tx, err := s.db.Begin()
+	tx, err := s.beginImmediate()
 	if err != nil {
 		return err
 	}
@@ -417,7 +417,7 @@ func pickGaraponPrize(prizes []model.GaraponPrize) *model.GaraponPrize {
 // the recorded draw, or ErrGaraponClosed / ErrGaraponNoDraws / ErrGaraponNoPrizes
 // (and sql.ErrNoRows if the player vanished).
 func (s *Store) RecordGaraponDraw(playerID int64) (*model.GaraponDraw, error) {
-	tx, err := s.db.Begin()
+	tx, err := s.beginImmediate()
 	if err != nil {
 		return nil, err
 	}

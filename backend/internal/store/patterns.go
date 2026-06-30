@@ -76,7 +76,7 @@ func (s *Store) DeletePatternCategory(id int64) (bool, error) {
 		return false, err
 	}
 
-	tx, err := s.db.Begin()
+	tx, err := s.beginImmediate()
 	if err != nil {
 		return false, err
 	}
@@ -164,7 +164,7 @@ func (s *Store) swapCategoryOrder(idA, idB int64) (bool, error) {
 		orderB = orderA + 1
 	}
 
-	tx, err := s.db.Begin()
+	tx, err := s.beginImmediate()
 	if err != nil {
 		return false, err
 	}
@@ -391,7 +391,7 @@ func (s *Store) swapPatternOrder(idA, idB int) (bool, error) {
 		orderB = orderA + 1 // force apart when equal
 	}
 
-	tx, err := s.db.Begin()
+	tx, err := s.beginImmediate()
 	if err != nil {
 		return false, err
 	}
@@ -419,7 +419,7 @@ func (s *Store) SetPatternCategory(patternID int, categoryID int64) error {
 
 // BulkReorderCategories sets the sort_order for each category based on the provided ordered list of IDs.
 func (s *Store) BulkReorderCategories(ids []int64) error {
-	tx, err := s.db.Begin()
+	tx, err := s.beginImmediate()
 	if err != nil {
 		return err
 	}
@@ -434,7 +434,7 @@ func (s *Store) BulkReorderCategories(ids []int64) error {
 
 // BulkReorderPatterns sets the sort_order for each pattern within a given category based on the provided ordered list of IDs.
 func (s *Store) BulkReorderPatterns(categoryID int64, ids []int) error {
-	tx, err := s.db.Begin()
+	tx, err := s.beginImmediate()
 	if err != nil {
 		return err
 	}

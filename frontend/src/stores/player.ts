@@ -291,7 +291,13 @@ export const usePlayerStore = defineStore('player', () => {
   function saveStamps(): void {
     if (!playerCard.value || !playerGame.value) return
     const k = 'stamps_' + playerCard.value.id + '_' + playerGame.value.id
-    localStorage.setItem(k, JSON.stringify(stamps.value))
+    // Best-effort persistence: the reactive stamps drive the board regardless, so
+    // a full/unavailable quota mustn't throw out of the high-frequency toggle path.
+    try {
+      localStorage.setItem(k, JSON.stringify(stamps.value))
+    } catch {
+      /* storage unavailable — stamps still work this session, just won't persist */
+    }
   }
 
   function loadStamps(): void {
@@ -301,7 +307,13 @@ export const usePlayerStore = defineStore('player', () => {
     }
     const k = 'stamps_' + playerCard.value.id + '_' + playerGame.value.id
     const raw = localStorage.getItem(k)
-    stamps.value = raw ? JSON.parse(raw) : {}
+    // Guard against corrupt/tampered storage so a bad value starts the board clean
+    // instead of throwing during load.
+    try {
+      stamps.value = raw ? JSON.parse(raw) : {}
+    } catch {
+      stamps.value = {}
+    }
   }
 
   /** Sets the stamp *mode* ('blank' | 'emoji' | 'custom') and persists it. */

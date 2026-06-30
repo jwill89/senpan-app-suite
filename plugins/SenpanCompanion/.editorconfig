@@ -1,0 +1,25 @@
+# EditorConfig for the Senpan Companion plugin — the repo's only C# project.
+#
+# Its job is to pin the handful of C# formatting rules that `dotnet format`
+# (run in CI) enforces, so the formatter agrees with the code as written rather
+# than the other way around. Scoped to this folder via `root = true`, so it has
+# no effect on the Go/TS code elsewhere in the repo.
+#
+# Deliberately minimal: only options the existing code already satisfies, plus
+# the one case-block rule below. `end_of_line` is intentionally left UNSET — the
+# repo normalizes text to LF (.gitattributes `eol=lf`), so CI checks out LF while
+# a Windows working tree may hold CRLF; leaving it unset lets `dotnet format`
+# preserve each file's existing endings instead of failing on one platform.
+root = true
+
+[*.cs]
+indent_style = space
+indent_size = 4
+
+# Braced `case` blocks keep their `{` aligned with the `case` label instead of
+# indented an extra level. This matches the switch style used in the plugin
+# (e.g. LiveConnection.HandleMessage). `dotnet format`'s default for this option
+# is `true`, which would otherwise want the whole block reflowed one level deeper.
+csharp_indent_switch_labels = true
+csharp_indent_case_contents = true
+csharp_indent_case_contents_when_block = false

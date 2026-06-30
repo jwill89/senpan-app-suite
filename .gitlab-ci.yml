@@ -121,3 +121,29 @@ backend:
       codequality: src/gl-code-quality-report.json
       junit: src/junit.xml
     expire_in: 1 week
+
+# ── Plugin: build · warnings = errors · format ────────────────────────────────
+# The FFXIV Dalamud plugin (plugins/SenpanCompanion). Dalamud.NET.Sdk normally
+# resolves its reference assemblies from a local XIVLauncher install, which CI
+# lacks — so fetch the official Dalamud dev distribution and point DALAMUD_HOME at
+# it. The net*-windows target framework compiles (never runs) on the Linux SDK
+# image via the conditioned EnableWindowsTargeting property in the csproj. Warnings
+# are promoted to errors to hold the plugin's 0-warning rule, and dotnet format
+# verifies the style pinned in the plugin's .editorconfig. Tracking `latest` means
+# an upstream Dalamud API bump can turn this red — the cue to bump DalamudApiLevel.
+plugin:
+  stage: test
+  image: mcr.microsoft.com/dotnet/sdk:10.0
+  needs: []
+  variables:
+    DALAMUD_HOME: $CI_PROJECT_DIR/.dalamud
+  before_script:
+    # The Debian-based SDK image is minimal; add curl + unzip for the fetch.
+    - apt-get update -qq && apt-get install -y -qq --no-install-recommends curl unzip
+    - mkdir -p "$DALAMUD_HOME"
+    - curl -fsSL https://goatcorp.github.io/dalamud-distrib/latest.zip -o /tmp/dalamud.zip
+    - unzip -q -o /tmp/dalamud.zip -d "$DALAMUD_HOME"
+  script:
+    - cd plugins/SenpanCompanion
+    - dotnet build -c Release -p:TreatWarningsAsErrors=true
+    - dotnet format --verify-no-changes

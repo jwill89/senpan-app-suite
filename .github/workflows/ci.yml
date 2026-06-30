@@ -117,3 +117,41 @@ jobs:
       # are caught without bumping a pin.
       - name: Vulnerability check (govulncheck)
         run: go run golang.org/x/vuln/cmd/govulncheck@latest ./...
+
+  plugin:
+    name: Plugin (build · warnings=errors · format)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: plugins/SenpanCompanion
+    env:
+      # The FFXIV Dalamud plugin. Dalamud.NET.Sdk normally resolves its reference
+      # assemblies from a local XIVLauncher install, which CI doesn't have — so we
+      # download the official Dalamud dev distribution and point DALAMUD_HOME at it
+      # (the SDK honors that override). Tracking `latest` means an upstream Dalamud
+      # API bump can turn this job red, which is the cue to bump DalamudApiLevel.
+      # (Compiling this net*-windows project on Linux is enabled by the conditioned
+      # EnableWindowsTargeting property in SenpanCompanion.csproj.)
+      DALAMUD_HOME: ${{ github.workspace }}/.dalamud
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Fetch Dalamud dev distribution
+        run: |
+          mkdir -p "$DALAMUD_HOME"
+          curl -fsSL https://goatcorp.github.io/dalamud-distrib/latest.zip -o "$RUNNER_TEMP/dalamud.zip"
+          unzip -q "$RUNNER_TEMP/dalamud.zip" -d "$DALAMUD_HOME"
+
+      # Promote warnings to errors so the plugin's 0-warning rule is enforced, not
+      # merely observed.
+      - name: Build (Release · warnings = errors)
+        run: dotnet build -c Release -p:TreatWarningsAsErrors=true
+
+      # Whitespace/style gate. Rules are pinned in plugins/SenpanCompanion/.editorconfig.
+      - name: Format check
+        run: dotnet format --verify-no-changes

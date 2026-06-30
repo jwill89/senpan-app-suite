@@ -19,6 +19,12 @@
     <Nullable>enable</Nullable>
     <LangVersion>latest</LangVersion>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+
+    <!-- Lets CI compile (and `dotnet format`-check) this net*-windows plugin on a
+         Linux runner — build/lint only; it never runs there. Conditioned to
+         non-Windows, so it is a no-op locally: the normal Windows build and the
+         `dotnet build -c Release` deploy step are unaffected. -->
+    <EnableWindowsTargeting Condition="'$(OS)' != 'Windows_NT'">true</EnableWindowsTargeting>
   </PropertyGroup>
 
   <ItemGroup>

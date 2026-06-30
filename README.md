@@ -34,12 +34,12 @@ with Vite, installable as a PWA) is the frontend.
 
 ## Quick start
 
-**Prerequisites:** Node 24+ and Go (version per `src/go.mod`).
+**Prerequisites:** Node 24+ and Go (version per `backend/go.mod`).
 
 ```bash
 # 1. Backend — run the API/WebSocket server on :8080
-cd src
-go run . -addr :8080 -db ../data/bingo.sqlite
+cd backend
+go run . -addr :8080 -db ../devdata/database.sqlite -webroot ../devdata/webroot
 
 # 2. Frontend (in a second terminal)
 cd frontend
@@ -63,7 +63,7 @@ sidebar footer shows both live versions and flags a major-version mismatch, so a
 partial deploy can't silently leave the halves incompatible.
 
 - Frontend version → `frontend/package.json`; backend version →
-  `src/internal/version/version.go` (served at `GET /api/version`).
+  `backend/internal/version/version.go` (served at `GET /api/version`).
 - Record every change in **[`CHANGELOG.md`](CHANGELOG.md)** and bump the matching
   version source.
 
@@ -80,7 +80,7 @@ partial deploy can't silently leave the halves incompatible.
 | `npm run lint` / `lint:check`| ESLint with / without `--fix`                      |
 | `npm run build`              | Type-check + production build → `frontend/dist/`   |
 
-| Command (in `src/`)          | Purpose                          |
+| Command (in `backend/`)      | Purpose                          |
 | ---------------------------- | -------------------------------- |
 | `go build ./...`             | Build the backend                |
 | `go vet ./...`               | Static analysis                  |
@@ -124,7 +124,7 @@ Proprietary — © 2026 mathdad, All Rights Reserved. See [`LICENSE`](LICENSE).
 
 ```
 frontend/   Vue 3 + TS SPA (Vite)        — src/{views,components,stores,router,lib,types}
-src/        Go backend                    — internal/{server,store,bingo,ws,model,version}
+backend/    Go backend                    — internal/{server,store,bingo,ws,model,version}
 deploy/     Apache artifacts              — .htaccess + fonts.htaccess (CORS) + persistent images/
-data/       SQLite DB (created at runtime, gitignored)
+devdata/    Local dev sandbox: SQLite DBs + built binaries + webroot uploads (created at runtime, gitignored)
 ```

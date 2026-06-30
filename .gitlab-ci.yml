@@ -26,13 +26,13 @@ gen-types:
   cache:
     key:
       files:
-        - src/go.sum
+        - backend/go.sum
     paths:
       - .go-cache/
   variables:
     GOPATH: $CI_PROJECT_DIR/.go-cache
   script:
-    - cd src
+    - cd backend
     - go run github.com/gzuidhof/tygo@v0.2.21 generate
   artifacts:
     paths:
@@ -92,22 +92,22 @@ backend:
   cache:
     key:
       files:
-        - src/go.sum
+        - backend/go.sum
     paths:
       - .go-cache/
   variables:
     GOPATH: $CI_PROJECT_DIR/.go-cache
   before_script:
     # golangci-lint aggregates errcheck/govet/staticcheck/unused plus the extras
-    # in src/.golangci.yml. Pinned to match the version developers run locally.
+    # in backend/.golangci.yml. Pinned to match the version developers run locally.
     - curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/HEAD/install.sh | sh -s -- -b "$(go env GOPATH)/bin" v2.12.2
     - export PATH="$(go env GOPATH)/bin:$PATH"
   script:
-    - cd src
+    - cd backend
     # Lint → console output plus a GitLab Code Quality report (shown in the MR
-    # widget and inline on the diff). --path-prefix src rewrites report paths to
-    # be repo-relative (the module lives in src/) so annotations land correctly.
-    - golangci-lint run --path-prefix src --output.text.path stdout --output.code-climate.path gl-code-quality-report.json ./...
+    # widget and inline on the diff). --path-prefix backend rewrites report paths to
+    # be repo-relative (the module lives in backend/) so annotations land correctly.
+    - golangci-lint run --path-prefix backend --output.text.path stdout --output.code-climate.path gl-code-quality-report.json ./...
     - go build ./...
     - go vet ./...
     # gotestsum runs the tests with readable console output AND writes a JUnit
@@ -118,8 +118,8 @@ backend:
   artifacts:
     when: always # collect the reports even when a step fails
     reports:
-      codequality: src/gl-code-quality-report.json
-      junit: src/junit.xml
+      codequality: backend/gl-code-quality-report.json
+      junit: backend/junit.xml
     expire_in: 1 week
 
 # ── Plugin: build · warnings = errors · format ────────────────────────────────

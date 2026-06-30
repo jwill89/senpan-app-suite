@@ -12,7 +12,7 @@ a deploy left the two halves compatible.
 
 - Frontend version → `frontend/package.json` (`"version"`), baked into the build
   and read via `frontend/src/lib/version.ts`.
-- Backend version → `src/internal/version/version.go` (`Version`), served at
+- Backend version → `backend/internal/version/version.go` (`Version`), served at
   `GET /api/version`.
 
 **Compatibility rule:** the SPA and API are compatible while their **MAJOR**
@@ -269,7 +269,7 @@ First tracked release — establishes versioning for the current production buil
 ## How to update this file
 
 1. Make your change and bump the relevant version source
-   (`frontend/package.json` and/or `src/internal/version/version.go`).
+   (`frontend/package.json` and/or `backend/internal/version/version.go`).
 2. Add an entry under the matching section above, newest first, grouped as
    _Added / Changed / Fixed / Removed_.
 3. Keep the version string in the source file and the heading here in sync.

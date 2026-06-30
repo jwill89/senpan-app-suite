@@ -18,7 +18,7 @@
     "lint:check": "eslint .",
     "format": "prettier --write src/",
     "analyze": "cross-env ANALYZE=true vue-tsc -b && cross-env ANALYZE=true vite build",
-    "gen:types": "cd ../src && go run github.com/gzuidhof/tygo@v0.2.21 generate"
+    "gen:types": "cd ../backend && go run github.com/gzuidhof/tygo@v0.2.21 generate"
   },
   "dependencies": {
     "@awesome.me/kit-46204fb6f1": "^1.0.3",

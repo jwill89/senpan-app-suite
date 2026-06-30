@@ -39,8 +39,8 @@ jobs:
       - name: Set up Go (for tygo type generation)
         uses: actions/setup-go@v5
         with:
-          go-version-file: src/go.mod
-          cache-dependency-path: src/go.sum
+          go-version-file: backend/go.mod
+          cache-dependency-path: backend/go.sum
 
       # FontAwesome Pro packages (@fortawesome + the @awesome.me kit) install from
       # FontAwesome's private registry. The local frontend/.npmrc that points those
@@ -84,24 +84,24 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: src
+        working-directory: backend
     steps:
       - uses: actions/checkout@v4
 
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version-file: src/go.mod
-          cache-dependency-path: src/go.sum
+          go-version-file: backend/go.mod
+          cache-dependency-path: backend/go.sum
 
       # golangci-lint aggregates errcheck/govet/staticcheck/unused plus the
-      # extras configured in src/.golangci.yml. Pinned to match the version
+      # extras configured in backend/.golangci.yml. Pinned to match the version
       # developers run locally so CI and local results agree.
       - name: Lint (golangci-lint)
         uses: golangci/golangci-lint-action@v7
         with:
           version: v2.12.2
-          working-directory: src
+          working-directory: backend
 
       - name: Build
         run: go build ./...

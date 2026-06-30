@@ -10,10 +10,10 @@ the primary reference. New to the repo? Start with [`README.md`](README.md).
 
 ## Getting set up
 
-**Prerequisites:** Node 24+ and Go (version per `src/go.mod`).
+**Prerequisites:** Node 24+ and Go (version per `backend/go.mod`).
 
 ```bash
-cd src && go run . -addr :8080 -db ../data/bingo.sqlite   # backend
+cd backend && go run . -addr :8080 -db ../devdata/database.sqlite -webroot ../devdata/webroot   # backend
 cd frontend && npm install && npm run gen:types && npm run dev   # frontend
 ```
 
@@ -44,7 +44,7 @@ npm run test           # Vitest (one-shot)
 npm run build          # production build
 ```
 
-**Backend (in `src/`):**
+**Backend (in `backend/`):**
 
 ```bash
 golangci-lint run ./...
@@ -84,7 +84,7 @@ The frontend and backend are versioned **independently** with semver
 When your change ships:
 
 1. Bump the matching version source — `frontend/package.json` `"version"` and/or
-   `src/internal/version/version.go` (`Version`).
+   `backend/internal/version/version.go` (`Version`).
 2. Add an entry under the matching section of [`CHANGELOG.md`](CHANGELOG.md)
    (newest first; _Added / Changed / Fixed / Removed_).
 

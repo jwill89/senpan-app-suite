@@ -140,7 +140,7 @@ and the single `dist.old` backup is overwritten each deploy (no accumulation).
 
 **Backend** (`-Target backend`): cross-compiles a static `linux/amd64` binary
 (`GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -ldflags="-s -w" -o app-suite .`
-in `src/`), stops `senpan.service`, backs up the current binary to
+in `backend/`), stops `senpan.service`, backs up the current binary to
 `app-suite.old`, uploads the new one, installs it at `/opt/senpan/app-suite`, and
 starts the service — **rolling back to the previous binary if the new one fails
 to stay active**. Brief downtime (a few seconds) while the service is stopped.

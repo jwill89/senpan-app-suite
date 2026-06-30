@@ -5,7 +5,7 @@ Guidance for AI coding agents working in this codebase.
 ## Quick orientation
 
 Go + SQLite backend serving a Vue 3 + TypeScript single-page frontend built with
-Vite. The backend binary is built from `src/` and serves only the API/WebSocket
+Vite. The backend binary is built from `backend/` and serves only the API/WebSocket
 on `:8080`; the built frontend (`frontend/dist/`) is served statically (Apache),
 with `/api/*` proxied to the Go server.
 
@@ -73,7 +73,7 @@ rotated immediately**. See **Authentication & authorization** below.
 │       └── **/*.test.ts              ← Vitest unit/component tests, colocated next to the code they cover
 ├── .github/workflows/ci.yml          ← CI: frontend (lint·typecheck·test·build) + backend (build·vet·test)
 ├── deploy/                           ← Apache deploy artifacts (.htaccess + persistent images/ + README)
-├── src/                              ← Go backend
+├── backend/                          ← Go backend
 │   ├── main.go                       ← Entry point: flags, DB init, server start
 │   ├── tygo.yaml                     ← Go→TS type generation config (run `npm run gen:types`)
 │   ├── go.mod / go.sum               ← Module deps (alexedwards/scs, coder/websocket, ncruces sqlite, golang.org/x/crypto for argon2id)
@@ -114,7 +114,7 @@ rotated immediately**. See **Authentication & authorization** below.
 │           ├── ratelimit.go          ← IP-based brute-force limiter for admin login
 │           ├── tzdata.go             ← blank-imports time/tzdata so IANA timezones resolve on hosts without zoneinfo (Windows)
 │           └── ws.go                 ← GET /api/ws (delegates to hub)
-├── data/                             ← SQLite DB created at runtime (gitignored)
+├── devdata/                          ← Local dev sandbox: SQLite DBs + built binaries + webroot uploads (gitignored)
 ```
 
 ## Architecture
@@ -350,31 +350,31 @@ cd frontend; npm run lint           # ESLint (flat config) with --fix
 cd frontend; npm run lint:check     # ESLint without --fix (CI gate)
 cd frontend; npm run format         # Prettier write over src/
 cd frontend; npm run analyze        # build + emit dist/stats.html bundle treemap (visualizer)
-cd frontend; npm run gen:types      # regenerate TS types from Go models (runs tygo in ../src; needs Go)
+cd frontend; npm run gen:types      # regenerate TS types from Go models (runs tygo in ../backend; needs Go)
 
 # NOTE: src/types/api.generated.ts is gitignored. Run `npm run gen:types` after a
 # fresh clone (or after changing Go model types) before build/typecheck/test.
 
 # ── Go backend ──
 # Build the Go backend
-cd src; go build -o app-suite.exe .
+cd backend; go build -o app-suite.exe .
 
 # Run the server (from project root or with -db flag)
-cd src; go run . -addr :8080 -db ../data/bingo.sqlite
+cd backend; go run . -addr :8080 -db ../devdata/database.sqlite -webroot ../devdata/webroot
 
 # Auth is per-user now. On first run, migration v22 seeds a bootstrap account:
 #   username: admin   password: admin   (full admin) — ROTATE IT IMMEDIATELY
 # via the topbar "Change Password" modal after logging in at /admin/login.
 
 # Vet / lint
-cd src; go vet ./...
-cd src; golangci-lint run ./...   # config: src/.golangci.yml (pinned v2.12.2 in CI)
+cd backend; go vet ./...
+cd backend; golangci-lint run ./...   # config: backend/.golangci.yml (pinned v2.12.2 in CI)
 
 # Run tests
-cd src; go test ./...
+cd backend; go test ./...
 
 # Build for production
-cd src; go build -ldflags="-s -w" -o app-suite .
+cd backend; go build -ldflags="-s -w" -o app-suite .
 ```
 
 ## Continuous integration
@@ -385,9 +385,9 @@ cd src; go build -ldflags="-s -w" -o app-suite .
   (needs Go, so the job also sets up the Go toolchain) → `lint:check` →
   `typecheck` → `test` → `build`. Mirrors the local gate, so a green CI ==
   the checks a developer runs locally have passed.
-- **backend** (`working-directory: src`): `golangci-lint run` (pinned
-  v2.12.2, config `src/.golangci.yml`) → `go build ./...` → `go vet ./...` →
-  `go test ./...` (Go version read from `src/go.mod`).
+- **backend** (`working-directory: backend`): `golangci-lint run` (pinned
+  v2.12.2, config `backend/.golangci.yml`) → `go build ./...` → `go vet ./...` →
+  `go test ./...` (Go version read from `backend/go.mod`).
 
 When adding a check, wire it into both the relevant npm/go script **and** the
 workflow so local and CI stay in lockstep.
@@ -463,7 +463,7 @@ the built SPA so redeploys never wipe them (full guide in `deploy/README.md`):
 - **Rate limiter**: IP-based brute-force protection for admin login; reads `X-Forwarded-For` for the real client IP behind a reverse proxy.
 - **FontAwesome**: bundled via `@fortawesome/fontawesome-svg-core`; only the used Pro-kit icons are added to the library in `frontend/src/lib/fontawesome.ts`. Templates render them with the global **`<font-awesome-icon :icon="[prefix, name]" />`** component (`@fortawesome/vue-fontawesome`, registered in `main.ts`) — `['fad', …]` duotone, `['fas', …]` solid, `['fab', 'discord']` brands. Vue owns the `<svg>` directly (no `dom.watch()`/MutationObserver, no nest-mode hack). The shared `ui/` primitives (AdminPanel/ManagerView/SubPageHeader/EmptyState) take an `icon?: [IconPrefix, string]` prop and forward it (name is `string` because Pro icon names aren't in FA's free `IconName`). CSS targets the rendered `.svg-inline--fa` (not `<i>`). Component tests stub `<font-awesome-icon>` globally via `vitest.setup.ts`.
 - **Theme editor**: structured token editor (`ThemeTokenEditor.vue`) bound to the edited theme's `tokens` map; `lib/theme-tokens.ts` is the token source of truth. Themes are token-only (no free-form CSS); the applied `:root{}` is generated server-side (`store.TokensToCSS`) and locally for the live preview (`tokensToCss`). CodeMirror was removed.
-- **TS↔Go type sync**: `frontend/src/types/api.generated.ts` is generated from `internal/model` by tygo (`src/tygo.yaml`); it is **gitignored** — regenerate with `npm run gen:types` (needs Go) after a fresh clone or model change. Never edit the generated file.
+- **TS↔Go type sync**: `frontend/src/types/api.generated.ts` is generated from `internal/model` by tygo (`backend/tygo.yaml`); it is **gitignored** — regenerate with `npm run gen:types` (needs Go) after a fresh clone or model change. Never edit the generated file.
 - **Typed endpoint layer**: stores never call `api<T>('path')` directly — they call `endpoints.*` (`frontend/src/lib/endpoints.ts`), which wraps every backend path in a typed function. Add new endpoints there so paths/bodies/response types live in one place.
 - **Global 401 handling**: `api.ts` invokes a registered handler (set in `main.ts`) on any non-auth 401 → redirect to `/admin/login` + "session expired" toast. Auth endpoints pass `skipAuthRedirect` so a bad-password login doesn't trigger it.
 - **Themed confirm dialog**: use `await ui.confirm(message, opts)` (renders `ConfirmModal.vue`) instead of the native `window.confirm`.
@@ -488,13 +488,13 @@ the built SPA so redeploys never wipe them (full guide in `deploy/README.md`):
 
 ## Key files to inspect first
 
-1. `src/internal/server/server.go` — Server struct, route registration, middleware, JSON helpers, the auth/permission guards (`currentUser`/`requireAuth`/`requireAdmin`/`requirePermission`), broadcast helpers
-   - `src/internal/server/{auth,users,permissions}.go` + `src/internal/auth/password.go` — read before touching login, registration, accounts, or page gating
-2. `src/internal/store/` — all database access, one file per domain (`cards.go`, `patterns.go`, `raffles.go`, …); `store.go` holds the `Store` struct, `New()`/`Close()`, pragmas, and shared helpers
-3. `src/internal/bingo/game.go` — Core game logic: start, draw + winner compute + cache, state reads, in-memory caching
-4. `src/internal/bingo/card.go` — Card/board generation algorithm with column-range constraints
-5. `src/internal/model/model.go` — All domain types (Card, Pattern, GamePreset, BingoGameState, BingoDrawnNumber, Raffle, ReadingList(+Item/Source), AnnouncementType, AnnouncementRole, Announcement, WinnersLogEntry, etc.)
-   - `src/internal/server/embeds.go` — shared Discord embed builder + transport (read before touching any webhook feature)
+1. `backend/internal/server/server.go` — Server struct, route registration, middleware, JSON helpers, the auth/permission guards (`currentUser`/`requireAuth`/`requireAdmin`/`requirePermission`), broadcast helpers
+   - `backend/internal/server/{auth,users,permissions}.go` + `backend/internal/auth/password.go` — read before touching login, registration, accounts, or page gating
+2. `backend/internal/store/` — all database access, one file per domain (`cards.go`, `patterns.go`, `raffles.go`, …); `store.go` holds the `Store` struct, `New()`/`Close()`, pragmas, and shared helpers
+3. `backend/internal/bingo/game.go` — Core game logic: start, draw + winner compute + cache, state reads, in-memory caching
+4. `backend/internal/bingo/card.go` — Card/board generation algorithm with column-range constraints
+5. `backend/internal/model/model.go` — All domain types (Card, Pattern, GamePreset, BingoGameState, BingoDrawnNumber, Raffle, ReadingList(+Item/Source), AnnouncementType, AnnouncementRole, Announcement, WinnersLogEntry, etc.)
+   - `backend/internal/server/embeds.go` — shared Discord embed builder + transport (read before touching any webhook feature)
 6. `frontend/src/router/index.ts` — route map, lazy route components, admin auth guard + tab sync
 7. `frontend/src/App.vue` + `frontend/src/composables/useWebSocket.ts` — root shell (`<RouterView>`), WebSocket message dispatch
 8. `frontend/src/lib/endpoints.ts` — the typed surface over every backend path (what stores call)

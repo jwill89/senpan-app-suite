@@ -1,0 +1,25 @@
+[
+  {
+    "Author": "MathDad",
+    "Name": "Senpan Admin Companion",
+    "InternalName": "SenpanCompanionAdmin",
+    "AssemblyVersion": "1.0.0.0",
+    "Description": "Serves as an alternative to many of the web-interface functions, allowing staff to operate various systems from within the game.",
+    "Punchline": "Allows Senpan Tea House staff to use various app services right from the game.",
+    "Changelog": "Initial Release",
+    "Tags": ["bingo", "raffle", "venue", "senpan"],
+    "RepoUrl": "https://gitlab.com/mathdad-apps/senpan-app-suite",
+    "ApplicableVersion": "any",
+    "DalamudApiLevel": 15,
+    "TestingDalamudApiLevel": 15,
+    "IsTestingExclusive": false,
+    "LoadPriority": 0,
+    "IconUrl": "https://apps.senpan.cafe/images/pwa-512x512.png",
+    "DownloadLinkInstall": "https://apps.senpan.cafe/plugin/SenpanCompanionAdmin/latest.zip",
+    "DownloadLinkUpdate": "https://apps.senpan.cafe/plugin/SenpanCompanionAdmin/latest.zip",
+    "DownloadLinkTesting": "https://apps.senpan.cafe/plugin/SenpanCompanionAdmin/latest.zip",
+    "DownloadCount": 0,
+    "LastUpdate": 1782691200,
+    "AcceptsFeedback": true
+  }
+]

@@ -1,6 +1,7 @@
 package server
 
 import (
+	"errors"
 	"net/http"
 	"strconv"
 	"strings"
@@ -647,7 +648,7 @@ func (s *Server) handleStampCardStamp(w http.ResponseWriter, r *http.Request) {
 		stall = "Senpan Tea House"
 	}
 	if _, err := s.store.CollectStamp(card.RallyID, card.ID, match.ID, card.ParticipantName, stall); err != nil {
-		if err == store.ErrStampAlreadyCollected {
+		if errors.Is(err, store.ErrStampAlreadyCollected) {
 			writeError(w, http.StatusConflict, "You've already collected this stamp")
 			return
 		}

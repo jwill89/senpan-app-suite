@@ -38,7 +38,7 @@ public sealed class MainWindow : Window, IDisposable
     private bool settingsPrimed;
 
     public MainWindow(Plugin plugin, Configuration config, ApiClient api, LiveConnection live, NearbyPlayers nearby, ChatSender chat)
-        : base("Senpan Companion###SenpanMain")
+        : base("Senpan Admin Companion###SenpanMain")
     {
         this.plugin = plugin;
         this.config = config;
@@ -203,7 +203,7 @@ public sealed class MainWindow : Window, IDisposable
 
         ImGui.Spacing();
         var version = typeof(Plugin).Assembly.GetName().Version;
-        ImGui.TextDisabled(version != null ? $"Senpan Companion v{version.ToString(3)}" : "Senpan Companion");
+        ImGui.TextDisabled(version != null ? $"Senpan Admin Companion v{version.ToString(3)}" : "Senpan Admin Companion");
     }
 
     private static void Hyperlink(string text, string url)

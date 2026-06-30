@@ -1,6 +1,8 @@
 # Runtime data & local tooling
-data/
-devdata/
+# Anchored to repo root so the rule doesn't also catch nested dirs like
+# plugins/SenpanCompanion/Data/ (git is case-insensitive on Windows).
+/data/
+/devdata/
 .idea/
 .vscode/
 vendor/

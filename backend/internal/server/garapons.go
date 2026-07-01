@@ -32,7 +32,7 @@ func (s *Server) handleGaraponsList(w http.ResponseWriter, r *http.Request) {
 		writeInternalError(w, "list garapons", err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"garapons": garapons})
+	writeJSON(w, http.StatusOK, model.GaraponsResponse{Garapons: garapons})
 }
 
 // handleGaraponDetail returns a single garapon with its prizes, drawing links,
@@ -69,18 +69,15 @@ func (s *Server) handleGaraponDetail(w http.ResponseWriter, r *http.Request) {
 		writeInternalError(w, "list garapon draws", err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"garapon": garapon, "players": players, "draws": draws})
+	writeJSON(w, http.StatusOK, model.GaraponDetailResponse{Garapon: *garapon, Players: players, Draws: draws})
 }
 
-// garaponRequest is the JSON body for POST /api/garapons.
-// Action: "create", "update", "delete", or "set_status".
-type garaponRequest struct {
-	Action          string               `json:"action"`
-	ID              int64                `json:"id"`
+// garaponWriteRequest is the JSON body for creating (POST /api/garapons) or
+// replacing (PUT /api/garapons/{id}) a garapon. The id comes from the path on PUT.
+type garaponWriteRequest struct {
 	Title           string               `json:"title"`
 	Details         string               `json:"details"`
 	GrandPrizeImage string               `json:"grand_prize_image"`
-	Status          string               `json:"status"`
 	StampRallyID    *int64               `json:"stamp_rally_id"` // optional link to an open rally
 	Prizes          []model.GaraponPrize `json:"prizes"`
 }
@@ -145,258 +142,283 @@ func sanitizeGaraponPrizes(in []model.GaraponPrize) (prizes []model.GaraponPrize
 	return out, ""
 }
 
-// handleGaraponsAction processes garapon CRUD + status changes.
+// handleGaraponCreate creates a garapon.
 //
 //	Endpoint:  POST /api/garapons
 //	Auth:      admin, or a user granted festival-garapon
-//	Request:   {"action": "create"|"update"|"delete"|"set_status", ...}
-func (s *Server) handleGaraponsAction(w http.ResponseWriter, r *http.Request) {
+//	Response:  201 {"garapon": Garapon}
+func (s *Server) handleGaraponCreate(w http.ResponseWriter, r *http.Request) {
 	if !s.requirePermission(w, r, permFestivalGarapon) {
 		return
 	}
-	req, err := readJSON[garaponRequest](w, r)
+	req, err := readJSON[garaponWriteRequest](w, r)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "Invalid JSON")
 		return
 	}
-
-	switch req.Action {
-	case "create":
-		title := strings.TrimSpace(req.Title)
-		if title == "" {
-			writeError(w, http.StatusBadRequest, "Title is required")
-			return
-		}
-		prizes, msg := sanitizeGaraponPrizes(req.Prizes)
-		if msg != "" {
-			writeError(w, http.StatusBadRequest, msg)
-			return
-		}
-		link, ok := s.resolveStampRallyLink(w, req.StampRallyID)
-		if !ok {
-			return
-		}
-		garapon := &model.Garapon{
-			Title:           title,
-			Details:         req.Details,
-			GrandPrizeImage: req.GrandPrizeImage,
-			StampRallyID:    link,
-			Prizes:          prizes,
-		}
-		id, err := s.store.CreateGarapon(garapon)
-		if err != nil {
-			writeInternalError(w, "create garapon", err)
-			return
-		}
-		garapon.ID = id
-		garapon.Status = "open"
-		writeJSON(w, http.StatusCreated, map[string]any{"garapon": garapon})
-
-	case "update":
-		if req.ID <= 0 {
-			writeError(w, http.StatusBadRequest, "Garapon id is required")
-			return
-		}
-		title := strings.TrimSpace(req.Title)
-		if title == "" {
-			writeError(w, http.StatusBadRequest, "Title is required")
-			return
-		}
-		prizes, msg := sanitizeGaraponPrizes(req.Prizes)
-		if msg != "" {
-			writeError(w, http.StatusBadRequest, msg)
-			return
-		}
-		link, ok := s.resolveStampRallyLink(w, req.StampRallyID)
-		if !ok {
-			return
-		}
-		garapon := &model.Garapon{
-			ID:              req.ID,
-			Title:           title,
-			Details:         req.Details,
-			GrandPrizeImage: req.GrandPrizeImage,
-			StampRallyID:    link,
-			Prizes:          prizes,
-		}
-		if err := s.store.UpdateGarapon(garapon); err != nil {
-			writeInternalError(w, "update garapon", err)
-			return
-		}
-		writeJSON(w, http.StatusOK, map[string]any{"ok": true})
-
-	case "delete":
-		if req.ID <= 0 {
-			writeError(w, http.StatusBadRequest, "Garapon id is required")
-			return
-		}
-		deleted, err := s.store.DeleteGarapon(req.ID)
-		if err != nil {
-			writeInternalError(w, "delete garapon", err)
-			return
-		}
-		// The grand-prize image is managed centrally on System → Images (the
-		// "Garapon" category), so the file is left intact — it may be reused.
-		writeJSON(w, http.StatusOK, map[string]any{"deleted": deleted})
-
-	case "set_status":
-		if req.ID <= 0 {
-			writeError(w, http.StatusBadRequest, "Garapon id is required")
-			return
-		}
-		if req.Status != "open" && req.Status != "closed" {
-			writeError(w, http.StatusBadRequest, "Status must be \"open\" or \"closed\"")
-			return
-		}
-		if err := s.store.SetGaraponStatus(req.ID, req.Status); err != nil {
-			writeInternalError(w, "set garapon status", err)
-			return
-		}
-		writeJSON(w, http.StatusOK, map[string]any{"ok": true, "status": req.Status})
-
-	default:
-		writeError(w, http.StatusBadRequest, "Invalid action. Use: create, update, delete, set_status")
+	title := strings.TrimSpace(req.Title)
+	if title == "" {
+		writeError(w, http.StatusBadRequest, "Title is required")
+		return
 	}
+	prizes, msg := sanitizeGaraponPrizes(req.Prizes)
+	if msg != "" {
+		writeError(w, http.StatusBadRequest, msg)
+		return
+	}
+	link, ok := s.resolveStampRallyLink(w, req.StampRallyID)
+	if !ok {
+		return
+	}
+	garapon := &model.Garapon{
+		Title:           title,
+		Details:         req.Details,
+		GrandPrizeImage: req.GrandPrizeImage,
+		StampRallyID:    link,
+		Prizes:          prizes,
+	}
+	id, err := s.store.CreateGarapon(garapon)
+	if err != nil {
+		writeInternalError(w, "create garapon", err)
+		return
+	}
+	garapon.ID = id
+	garapon.Status = "open"
+	writeJSON(w, http.StatusCreated, model.GaraponResponse{Garapon: *garapon})
 }
 
-// garaponPlayersRequest is the JSON body for POST /api/garapons/{id}/players.
-// Action: "create_player" or "delete_player".
-type garaponPlayersRequest struct {
-	Action     string `json:"action"`
-	PlayerID   int64  `json:"player_id"`
+// handleGaraponUpdate replaces a garapon's editable fields (status is not editable
+// here and is preserved — use the close/reopen verbs).
+//
+//	Endpoint:  PUT /api/garapons/{id}
+//	Auth:      admin, or a user granted festival-garapon
+//	Response:  200 {"ok": true}
+func (s *Server) handleGaraponUpdate(w http.ResponseWriter, r *http.Request) {
+	if !s.requirePermission(w, r, permFestivalGarapon) {
+		return
+	}
+	id, ok := pathInt64(w, r, "id", "garapon")
+	if !ok {
+		return
+	}
+	req, err := readJSON[garaponWriteRequest](w, r)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "Invalid JSON")
+		return
+	}
+	title := strings.TrimSpace(req.Title)
+	if title == "" {
+		writeError(w, http.StatusBadRequest, "Title is required")
+		return
+	}
+	prizes, msg := sanitizeGaraponPrizes(req.Prizes)
+	if msg != "" {
+		writeError(w, http.StatusBadRequest, msg)
+		return
+	}
+	link, ok := s.resolveStampRallyLink(w, req.StampRallyID)
+	if !ok {
+		return
+	}
+	garapon := &model.Garapon{
+		ID:              id,
+		Title:           title,
+		Details:         req.Details,
+		GrandPrizeImage: req.GrandPrizeImage,
+		StampRallyID:    link,
+		Prizes:          prizes,
+	}
+	if err := s.store.UpdateGarapon(garapon); err != nil {
+		writeInternalError(w, "update garapon", err)
+		return
+	}
+	writeJSON(w, http.StatusOK, model.OKResponse{OK: true})
+}
+
+// handleGaraponDelete deletes a garapon. The grand-prize image is managed
+// centrally on System → Images (the "Garapon" category), so the file is left
+// intact — it may be reused.
+//
+//	Endpoint:  DELETE /api/garapons/{id}
+//	Auth:      admin, or a user granted festival-garapon
+//	Response:  204 No Content
+func (s *Server) handleGaraponDelete(w http.ResponseWriter, r *http.Request) {
+	if !s.requirePermission(w, r, permFestivalGarapon) {
+		return
+	}
+	id, ok := pathInt64(w, r, "id", "garapon")
+	if !ok {
+		return
+	}
+	if _, err := s.store.DeleteGarapon(id); err != nil {
+		writeInternalError(w, "delete garapon", err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// setGaraponStatus applies a status change and responds with {ok, status}. Shared
+// by the close and reopen verb handlers.
+func (s *Server) setGaraponStatus(w http.ResponseWriter, r *http.Request, status string) {
+	if !s.requirePermission(w, r, permFestivalGarapon) {
+		return
+	}
+	id, ok := pathInt64(w, r, "id", "garapon")
+	if !ok {
+		return
+	}
+	if err := s.store.SetGaraponStatus(id, status); err != nil {
+		writeInternalError(w, "set garapon status", err)
+		return
+	}
+	writeJSON(w, http.StatusOK, model.StatusResponse{OK: true, Status: status})
+}
+
+// handleGaraponClose closes a garapon (no further draws).
+//
+//	Endpoint:  POST /api/garapons/{id}/close
+//	Auth:      admin, or a user granted festival-garapon
+//	Response:  200 {"ok": true, "status": "closed"}
+func (s *Server) handleGaraponClose(w http.ResponseWriter, r *http.Request) {
+	s.setGaraponStatus(w, r, "closed")
+}
+
+// handleGaraponReopen reopens a closed garapon.
+//
+//	Endpoint:  POST /api/garapons/{id}/reopen
+//	Auth:      admin, or a user granted festival-garapon
+//	Response:  200 {"ok": true, "status": "open"}
+func (s *Server) handleGaraponReopen(w http.ResponseWriter, r *http.Request) {
+	s.setGaraponStatus(w, r, "open")
+}
+
+// garaponPlayerCreateRequest is the JSON body for POST /api/garapons/{id}/players.
+type garaponPlayerCreateRequest struct {
 	PlayerName string `json:"player_name"`
 	MaxDraws   int    `json:"max_draws"`
 }
 
-// handleGaraponPlayers creates or deletes a garapon's drawing links.
+// handleGaraponPlayerCreate issues a new per-player drawing link.
 //
 //	Endpoint:  POST /api/garapons/{id}/players
 //	Auth:      admin, or a user granted festival-garapon
-//	Request:   {"action":"create_player","player_name":"...","max_draws":5}
-//	           {"action":"delete_player","player_id":1}
-func (s *Server) handleGaraponPlayers(w http.ResponseWriter, r *http.Request) {
+//	Response:  201 {"player": GaraponPlayer}
+func (s *Server) handleGaraponPlayerCreate(w http.ResponseWriter, r *http.Request) {
 	if !s.requirePermission(w, r, permFestivalGarapon) {
 		return
 	}
-	garaponID, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
-	if err != nil {
-		writeError(w, http.StatusBadRequest, "Invalid garapon ID")
+	garaponID, ok := pathInt64(w, r, "id", "garapon")
+	if !ok {
 		return
 	}
-	req, err := readJSON[garaponPlayersRequest](w, r)
+	req, err := readJSON[garaponPlayerCreateRequest](w, r)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "Invalid JSON")
 		return
 	}
-
-	switch req.Action {
-	case "create_player":
-		name := strings.TrimSpace(req.PlayerName)
-		if name == "" {
-			writeError(w, http.StatusBadRequest, "Player name is required")
-			return
-		}
-		maxDraws := req.MaxDraws
-		if maxDraws < 1 {
-			maxDraws = 1
-		}
-		garapon, err := s.store.GetGarapon(garaponID)
-		if err != nil {
-			writeInternalError(w, "get garapon for player", err)
-			return
-		}
-		if garapon == nil {
-			writeError(w, http.StatusNotFound, "Garapon not found")
-			return
-		}
-		player, err := s.store.CreateGaraponPlayer(garaponID, name, maxDraws)
-		if err != nil {
-			writeInternalError(w, "create garapon player", err)
-			return
-		}
-		// If the garapon is linked to an open stamp rally, also issue this participant
-		// a stamp card USING THE SAME TOKEN, so one hash serves both /garapon/<token>
-		// and /stamp-card/<token>. Best-effort: a rally that's since closed/vanished
-		// just yields no card (the drawing link is still valid on its own).
-		if garapon.StampRallyID != nil {
-			if rally, _ := s.store.GetStampRally(*garapon.StampRallyID); rally != nil && rally.Status == "open" {
-				if card, err := s.store.IssueRallyCardWithToken(*garapon.StampRallyID, name, player.Token); err == nil && card != nil {
-					if err := s.store.SetPlayerStampCard(player.ID, card.ID); err == nil {
-						player.StampCardToken = card.Token
-					}
-					// A stamp card was issued — let admins viewing the rally see it live.
-					s.broadcastResourceChanged("stamp-rallies")
+	name := strings.TrimSpace(req.PlayerName)
+	if name == "" {
+		writeError(w, http.StatusBadRequest, "Player name is required")
+		return
+	}
+	maxDraws := req.MaxDraws
+	if maxDraws < 1 {
+		maxDraws = 1
+	}
+	garapon, err := s.store.GetGarapon(garaponID)
+	if err != nil {
+		writeInternalError(w, "get garapon for player", err)
+		return
+	}
+	if garapon == nil {
+		writeError(w, http.StatusNotFound, "Garapon not found")
+		return
+	}
+	player, err := s.store.CreateGaraponPlayer(garaponID, name, maxDraws)
+	if err != nil {
+		writeInternalError(w, "create garapon player", err)
+		return
+	}
+	// If the garapon is linked to an open stamp rally, also issue this participant
+	// a stamp card USING THE SAME TOKEN, so one hash serves both /garapon/<token>
+	// and /stamp-card/<token>. Best-effort: a rally that's since closed/vanished
+	// just yields no card (the drawing link is still valid on its own).
+	if garapon.StampRallyID != nil {
+		if rally, _ := s.store.GetStampRally(*garapon.StampRallyID); rally != nil && rally.Status == "open" {
+			if card, err := s.store.IssueRallyCardWithToken(*garapon.StampRallyID, name, player.Token); err == nil && card != nil {
+				if err := s.store.SetPlayerStampCard(player.ID, card.ID); err == nil {
+					player.StampCardToken = card.Token
 				}
+				// A stamp card was issued — let admins viewing the rally see it live.
+				s.broadcastResourceChanged("stamp-rallies")
 			}
 		}
-		writeJSON(w, http.StatusCreated, map[string]any{"player": player})
-
-	case "delete_player":
-		if req.PlayerID <= 0 {
-			writeError(w, http.StatusBadRequest, "Player id is required")
-			return
-		}
-		existing, err := s.store.GetGaraponPlayerByID(req.PlayerID)
-		if err != nil {
-			writeInternalError(w, "get garapon player", err)
-			return
-		}
-		// The link must belong to the garapon in the path — otherwise the
-		// open/closed check below would read the wrong garapon's status and could
-		// force-delete a drawn link from a different, still-open garapon.
-		if existing == nil || existing.GaraponID != garaponID {
-			writeError(w, http.StatusNotFound, "Drawing link not found")
-			return
-		}
-		// A closed garapon can be cleaned up: any link may be deleted, and its
-		// draws stay in the log (garapon_draws.player_id is ON DELETE SET NULL).
-		// While the garapon is open, a link that has already drawn can't be deleted.
-		garapon, err := s.store.GetGarapon(garaponID)
-		if err != nil {
-			writeInternalError(w, "get garapon for delete player", err)
-			return
-		}
-		closed := garapon != nil && garapon.Status == "closed"
-		if existing.DrawsUsed > 0 && !closed {
-			writeError(w, http.StatusConflict,
-				"This player has already drawn and can't be deleted while the garapon is open")
-			return
-		}
-		deleted, err := s.store.DeleteGaraponPlayer(req.PlayerID, closed)
-		if err != nil {
-			writeInternalError(w, "delete garapon player", err)
-			return
-		}
-		writeJSON(w, http.StatusOK, map[string]any{"deleted": deleted})
-
-	default:
-		writeError(w, http.StatusBadRequest, "Invalid action. Use: create_player, delete_player")
 	}
+	writeJSON(w, http.StatusCreated, model.GaraponPlayerResponse{Player: *player})
+}
+
+// handleGaraponPlayerDelete removes a garapon's drawing link.
+//
+//	Endpoint:  DELETE /api/garapons/{id}/players/{playerId}
+//	Auth:      admin, or a user granted festival-garapon
+//	Response:  204 No Content
+func (s *Server) handleGaraponPlayerDelete(w http.ResponseWriter, r *http.Request) {
+	if !s.requirePermission(w, r, permFestivalGarapon) {
+		return
+	}
+	garaponID, ok := pathInt64(w, r, "id", "garapon")
+	if !ok {
+		return
+	}
+	playerID, ok := pathInt64(w, r, "playerId", "player")
+	if !ok {
+		return
+	}
+	existing, err := s.store.GetGaraponPlayerByID(playerID)
+	if err != nil {
+		writeInternalError(w, "get garapon player", err)
+		return
+	}
+	// The link must belong to the garapon in the path — otherwise the
+	// open/closed check below would read the wrong garapon's status and could
+	// force-delete a drawn link from a different, still-open garapon.
+	if existing == nil || existing.GaraponID != garaponID {
+		writeError(w, http.StatusNotFound, "Drawing link not found")
+		return
+	}
+	// A closed garapon can be cleaned up: any link may be deleted, and its
+	// draws stay in the log (garapon_draws.player_id is ON DELETE SET NULL).
+	// While the garapon is open, a link that has already drawn can't be deleted.
+	garapon, err := s.store.GetGarapon(garaponID)
+	if err != nil {
+		writeInternalError(w, "get garapon for delete player", err)
+		return
+	}
+	closed := garapon != nil && garapon.Status == "closed"
+	if existing.DrawsUsed > 0 && !closed {
+		writeError(w, http.StatusConflict,
+			"This player has already drawn and can't be deleted while the garapon is open")
+		return
+	}
+	if _, err := s.store.DeleteGaraponPlayer(playerID, closed); err != nil {
+		writeInternalError(w, "delete garapon player", err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 // ── Garapon public (tokenized player view + draw) ───────────────────────────
 
-// publicGarapon is the trimmed garapon shape sent to players: it carries the
-// prizes (names + ball colors + which is grand) but never the appearance rates —
-// the odds stay admin-only.
-type publicGarapon struct {
-	ID              int64                `json:"id"`
-	Title           string               `json:"title"`
-	Details         string               `json:"details"`
-	GrandPrizeImage string               `json:"grand_prize_image"`
-	Status          string               `json:"status"`
-	Prizes          []model.GaraponPrize `json:"prizes"`
-}
-
 // toPublicGarapon copies a garapon for the player view, zeroing each prize's Rate
-// so the configured odds aren't exposed.
-func toPublicGarapon(g *model.Garapon) publicGarapon {
+// so the configured odds aren't exposed. The trimmed wire shape (no odds, no
+// admin-only fields) is model.PublicGarapon.
+func toPublicGarapon(g *model.Garapon) model.PublicGarapon {
 	prizes := make([]model.GaraponPrize, len(g.Prizes))
 	for i, p := range g.Prizes {
 		p.Rate = 0
 		prizes[i] = p
 	}
-	return publicGarapon{
+	return model.PublicGarapon{
 		ID:              g.ID,
 		Title:           g.Title,
 		Details:         g.Details,
@@ -404,14 +426,6 @@ func toPublicGarapon(g *model.Garapon) publicGarapon {
 		Status:          g.Status,
 		Prizes:          prizes,
 	}
-}
-
-// publicPlayer is the trimmed player shape sent to the public view (no token —
-// the caller already holds it in the URL).
-type publicPlayer struct {
-	PlayerName string `json:"player_name"`
-	MaxDraws   int    `json:"max_draws"`
-	DrawsUsed  int    `json:"draws_used"`
 }
 
 // loadGaraponByToken resolves a player token to its player + garapon, writing the
@@ -456,10 +470,10 @@ func (s *Server) handleGaraponPublic(w http.ResponseWriter, r *http.Request) {
 		writeInternalError(w, "list player draws", err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{
-		"garapon": toPublicGarapon(garapon),
-		"player":  publicPlayer{PlayerName: player.PlayerName, MaxDraws: player.MaxDraws, DrawsUsed: player.DrawsUsed},
-		"draws":   draws,
+	writeJSON(w, http.StatusOK, model.GaraponPublicResponse{
+		Garapon: toPublicGarapon(garapon),
+		Player:  model.GaraponPublicPlayer{PlayerName: player.PlayerName, MaxDraws: player.MaxDraws, DrawsUsed: player.DrawsUsed},
+		Draws:   draws,
 	})
 }
 
@@ -505,9 +519,9 @@ func (s *Server) handleGaraponDraw(w http.ResponseWriter, r *http.Request) {
 
 	// Exactly one draw was just recorded, so the fresh usage is player.DrawsUsed+1
 	// (its allowance is unchanged) — no need to reload the player.
-	writeJSON(w, http.StatusOK, map[string]any{
-		"draw":       draw,
-		"draws_used": player.DrawsUsed + 1,
-		"max_draws":  player.MaxDraws,
+	writeJSON(w, http.StatusOK, model.GaraponDrawResponse{
+		Draw:      *draw,
+		DrawsUsed: player.DrawsUsed + 1,
+		MaxDraws:  player.MaxDraws,
 	})
 }

@@ -53,8 +53,8 @@ go vet ./...
 go test ./...
 ```
 
-(CI also runs `gen:types` and `govulncheck`; see [`.gitlab-ci.yml`](.gitlab-ci.yml)
-and [`.github/workflows/ci.yml`](.github/workflows/ci.yml).)
+(CI also runs `gen:types` and `govulncheck`; see
+[`.github/workflows/ci.yml`](.github/workflows/ci.yml).)
 
 > **One command:** maintainers can run `scripts/check.ps1` (PowerShell) to run
 > every gate above — backend `golangci-lint`/build/vet/test, then frontend
@@ -73,9 +73,12 @@ and [`.github/workflows/ci.yml`](.github/workflows/ci.yml).)
   [`AGENTS.md`](AGENTS.md) for conventions.
 - **Types flow from Go.** Backend model changes must be followed by
   `npm run gen:types`; don't hand-edit `api.generated.ts`.
-- **Keep the API reference current.** Adding, removing, or changing an endpoint
-  (route, guard, request/response shape, or action) means updating
-  [`API.md`](API.md) in the same change.
+- **Keep the API reference current.** Response shapes are **typed structs** in
+  `internal/model` (never `map[string]any`), which feed both the frontend types
+  (`npm run gen:types`) and the OpenAPI schemas. Adding/changing an endpoint means
+  updating the paths table in `internal/apidoc/` and running
+  `go run ./cmd/openapi-gen` to refresh [`backend/openapi.yaml`](backend/openapi.yaml).
+  CI (`internal/apidoc` tests) fails if the spec is stale or a route is undocumented.
 - **Theming is structured tokens**, not free-form CSS — edit the token list in
   the three places that must stay in sync (`frontend/src/assets/styles/tokens.css`,
   `store.themeTokenOrder` in Go, `THEME_TOKEN_GROUPS` in `lib/theme-tokens.ts`).

@@ -4,15 +4,19 @@ import (
 	"net/http"
 
 	"app-suite/internal/auth"
+	"app-suite/internal/model"
 )
 
 // ── User management (admin) + self-service account (any user) ─────────────────
 //
-// The Users page is admin-only: GET/POST /api/users require an admin. Every
-// account, admin or not, can change its own password via POST /api/account.
+// The Users page is admin-only: GET /api/users lists accounts, PATCH/DELETE
+// /api/users/{id} modify one. Every account, admin or not, can change its own
+// password via POST /api/account/change-password.
 //
 // The seeded "admin" account is protected: no one but "admin" itself can delete,
-// deactivate, demote, or change the password of "admin".
+// deactivate, demote, or change the password of "admin". (Its page permissions
+// may still be edited here — permissions are deliberately not part of the
+// protected set.)
 
 // handleUsersList returns all accounts (without password hashes).
 //
@@ -28,43 +32,46 @@ func (s *Server) handleUsersList(w http.ResponseWriter, r *http.Request) {
 		writeInternalError(w, "list users", err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"users": users})
+	writeJSON(w, http.StatusOK, model.UsersResponse{Users: users})
 }
 
-// usersRequest is the JSON body for POST /api/users.
-type usersRequest struct {
-	Action      string   `json:"action"`
-	ID          int64    `json:"id"`
-	Active      bool     `json:"active"`      // for set_active
-	Admin       bool     `json:"admin"`       // for set_admin
-	Permissions []string `json:"permissions"` // for set_permissions
-	Password    string   `json:"password"`    // for set_password
+// userPatchRequest is the JSON body for PATCH /api/users/{id}. Every field is a
+// pointer so the handler can tell "field omitted" from "field set to its zero
+// value" (e.g. active:false vs. active absent) and apply only what was supplied.
+type userPatchRequest struct {
+	Active      *bool     `json:"active"`
+	Admin       *bool     `json:"admin"`
+	Permissions *[]string `json:"permissions"`
+	Password    *string   `json:"password"`
 }
 
-// handleUsersAction performs admin user-management operations.
+// handleUserPatch applies one or more account changes in a single request. It
+// merges the former set_active / set_admin / set_permissions / set_password
+// actions: any present field is applied. The bootstrap "admin" account is
+// protected — active/admin/password may not be changed on it (permissions may,
+// matching the former behavior where set_permissions was not a protected action).
 //
-//	Endpoint:  POST /api/users
+//	Endpoint:  PATCH /api/users/{id}
 //	Auth:      admin
-//	Request:   {"action": "set_active"|"set_admin"|"set_permissions"|"set_password"|"delete", "id": N, ...}
+//	Request:   {"active"?: bool, "admin"?: bool, "permissions"?: [...], "password"?: "..."}
 //	Response:  {"ok": true}
-func (s *Server) handleUsersAction(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handleUserPatch(w http.ResponseWriter, r *http.Request) {
 	actor := s.currentUser(r)
 	if actor == nil || !actor.IsAdmin {
 		writeError(w, http.StatusUnauthorized, "Unauthorized – admin login required")
 		return
 	}
-
-	req, err := readJSON[usersRequest](w, r)
+	id, ok := pathInt64(w, r, "id", "user")
+	if !ok {
+		return
+	}
+	req, err := readJSON[userPatchRequest](w, r)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "Invalid JSON")
 		return
 	}
-	if req.ID == 0 {
-		writeError(w, http.StatusBadRequest, "User id is required")
-		return
-	}
 
-	target, err := s.store.GetUserByID(req.ID)
+	target, err := s.store.GetUserByID(id)
 	if err != nil {
 		writeInternalError(w, "get user", err)
 		return
@@ -74,37 +81,39 @@ func (s *Server) handleUsersAction(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Protect the bootstrap "admin" account from changes by anyone else. (The
-	// "admin" account rotates its own password via /api/account, not here.)
+	// Protect the bootstrap "admin" account: it can't be activated/deactivated,
+	// promoted/demoted, or have its password reset by anyone here (it rotates its
+	// own password via /api/account/change-password). Permissions are deliberately
+	// allowed — mirrors the former action set, where set_permissions was not
+	// protected.
 	protected := target.Username == reservedUsername
-	switch req.Action {
-	case "set_active", "set_admin", "set_password", "delete":
-		if protected {
-			writeError(w, http.StatusForbidden, "The admin account cannot be modified here")
-			return
-		}
+	if protected && (req.Active != nil || req.Admin != nil || req.Password != nil) {
+		writeError(w, http.StatusForbidden, "The admin account cannot be modified here")
+		return
 	}
 
-	switch req.Action {
-	case "set_active":
-		if err := s.store.SetUserActive(req.ID, req.Active); err != nil {
+	if req.Active == nil && req.Admin == nil && req.Permissions == nil && req.Password == nil {
+		writeError(w, http.StatusBadRequest, "No fields to update")
+		return
+	}
+
+	if req.Active != nil {
+		if err := s.store.SetUserActive(id, *req.Active); err != nil {
 			writeInternalError(w, "set user active", err)
 			return
 		}
-		writeJSON(w, http.StatusOK, map[string]any{"ok": true})
-
-	case "set_admin":
-		if err := s.store.SetUserAdmin(req.ID, req.Admin); err != nil {
+	}
+	if req.Admin != nil {
+		if err := s.store.SetUserAdmin(id, *req.Admin); err != nil {
 			writeInternalError(w, "set user admin", err)
 			return
 		}
-		writeJSON(w, http.StatusOK, map[string]any{"ok": true})
-
-	case "set_permissions":
+	}
+	if req.Permissions != nil {
 		valid := validPermissions()
-		cleaned := make([]string, 0, len(req.Permissions))
-		seen := make(map[string]bool, len(req.Permissions))
-		for _, p := range req.Permissions {
+		cleaned := make([]string, 0, len(*req.Permissions))
+		seen := make(map[string]bool, len(*req.Permissions))
+		for _, p := range *req.Permissions {
 			if !valid[p] {
 				writeError(w, http.StatusBadRequest, "Unknown permission: "+p)
 				return
@@ -114,96 +123,111 @@ func (s *Server) handleUsersAction(w http.ResponseWriter, r *http.Request) {
 				cleaned = append(cleaned, p)
 			}
 		}
-		if err := s.store.SetUserPermissions(req.ID, cleaned); err != nil {
+		if err := s.store.SetUserPermissions(id, cleaned); err != nil {
 			writeInternalError(w, "set user permissions", err)
 			return
 		}
-		writeJSON(w, http.StatusOK, map[string]any{"ok": true})
-
-	case "set_password":
-		if len(req.Password) < minPasswordLen {
+	}
+	if req.Password != nil {
+		if len(*req.Password) < minPasswordLen {
 			writeError(w, http.StatusBadRequest, "Password must be at least 8 characters")
 			return
 		}
-		hash, err := auth.Hash(req.Password)
+		hash, err := auth.Hash(*req.Password)
 		if err != nil {
 			writeInternalError(w, "hash password", err)
 			return
 		}
-		if err := s.store.SetUserPassword(req.ID, hash); err != nil {
+		if err := s.store.SetUserPassword(id, hash); err != nil {
 			writeInternalError(w, "set user password", err)
 			return
 		}
-		writeJSON(w, http.StatusOK, map[string]any{"ok": true})
-
-	case "delete":
-		if _, err := s.store.DeleteUser(req.ID); err != nil {
-			writeInternalError(w, "delete user", err)
-			return
-		}
-		writeJSON(w, http.StatusOK, map[string]any{"ok": true})
-
-	default:
-		writeError(w, http.StatusBadRequest, "Invalid action. Use: set_active, set_admin, set_permissions, set_password, delete")
 	}
+	writeJSON(w, http.StatusOK, model.OKResponse{OK: true})
 }
 
-// accountRequest is the JSON body for POST /api/account.
-type accountRequest struct {
-	Action          string `json:"action"`
+// handleUserDelete deletes an account. The bootstrap "admin" account is protected.
+//
+//	Endpoint:  DELETE /api/users/{id}
+//	Auth:      admin
+//	Response:  204 No Content
+func (s *Server) handleUserDelete(w http.ResponseWriter, r *http.Request) {
+	actor := s.currentUser(r)
+	if actor == nil || !actor.IsAdmin {
+		writeError(w, http.StatusUnauthorized, "Unauthorized – admin login required")
+		return
+	}
+	id, ok := pathInt64(w, r, "id", "user")
+	if !ok {
+		return
+	}
+	target, err := s.store.GetUserByID(id)
+	if err != nil {
+		writeInternalError(w, "get user", err)
+		return
+	}
+	if target == nil {
+		writeError(w, http.StatusNotFound, "User not found")
+		return
+	}
+	if target.Username == reservedUsername {
+		writeError(w, http.StatusForbidden, "The admin account cannot be modified here")
+		return
+	}
+	if _, err := s.store.DeleteUser(id); err != nil {
+		writeInternalError(w, "delete user", err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// changePasswordRequest is the JSON body for POST /api/account/change-password.
+type changePasswordRequest struct {
 	CurrentPassword string `json:"current_password"`
 	NewPassword     string `json:"new_password"`
 }
 
-// handleAccountAction handles self-service account operations for the logged-in
-// user. Currently the only action is change_password, which every active user
-// (including the protected "admin" account) uses to rotate its own password.
+// handleAccountChangePassword lets the logged-in user rotate their own password
+// (every active user, including the protected "admin" account).
 //
-//	Endpoint:  POST /api/account
+//	Endpoint:  POST /api/account/change-password
 //	Auth:      any active user
-//	Request:   {"action": "change_password", "current_password": "...", "new_password": "..."}
+//	Request:   {"current_password": "...", "new_password": "..."}
 //	Response:  {"ok": true}
-func (s *Server) handleAccountAction(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handleAccountChangePassword(w http.ResponseWriter, r *http.Request) {
 	user, ok := s.requireAuth(w, r)
 	if !ok {
 		return
 	}
 
-	req, err := readJSON[accountRequest](w, r)
+	req, err := readJSON[changePasswordRequest](w, r)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "Invalid JSON")
 		return
 	}
-
-	switch req.Action {
-	case "change_password":
-		if len(req.NewPassword) < minPasswordLen {
-			writeError(w, http.StatusBadRequest, "New password must be at least 8 characters")
-			return
-		}
-		// Re-read with the hash to verify the current password.
-		_, hash, err := s.store.GetUserByUsername(user.Username)
-		if err != nil {
-			writeInternalError(w, "get user", err)
-			return
-		}
-		valid, _ := auth.Verify(req.CurrentPassword, hash)
-		if !valid {
-			writeError(w, http.StatusUnauthorized, "Current password is incorrect")
-			return
-		}
-		newHash, err := auth.Hash(req.NewPassword)
-		if err != nil {
-			writeInternalError(w, "hash password", err)
-			return
-		}
-		if err := s.store.SetUserPassword(user.ID, newHash); err != nil {
-			writeInternalError(w, "set password", err)
-			return
-		}
-		writeJSON(w, http.StatusOK, map[string]any{"ok": true})
-
-	default:
-		writeError(w, http.StatusBadRequest, "Invalid action. Use: change_password")
+	if len(req.NewPassword) < minPasswordLen {
+		writeError(w, http.StatusBadRequest, "New password must be at least 8 characters")
+		return
 	}
+	// Re-read with the hash to verify the current password.
+	_, hash, err := s.store.GetUserByUsername(user.Username)
+	if err != nil {
+		writeInternalError(w, "get user", err)
+		return
+	}
+	valid, _ := auth.Verify(req.CurrentPassword, hash)
+	if !valid {
+		writeError(w, http.StatusUnauthorized, "Current password is incorrect")
+		return
+	}
+	newHash, err := auth.Hash(req.NewPassword)
+	if err != nil {
+		writeInternalError(w, "hash password", err)
+		return
+	}
+	if err := s.store.SetUserPassword(user.ID, newHash); err != nil {
+		writeInternalError(w, "set password", err)
+		return
+	}
+	writeJSON(w, http.StatusOK, model.OKResponse{OK: true})
 }

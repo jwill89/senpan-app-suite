@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"app-suite/internal/auth"
+	"app-suite/internal/model"
 	"app-suite/internal/store"
 )
 
@@ -40,9 +41,9 @@ type authRequest struct {
 //	Response:  {"authenticated": bool, "user": User|null}
 func (s *Server) handleAuthCheck(w http.ResponseWriter, r *http.Request) {
 	u := s.currentUser(r)
-	writeJSON(w, http.StatusOK, map[string]any{
-		"authenticated": u != nil,
-		"user":          u,
+	writeJSON(w, http.StatusOK, model.AuthCheckResponse{
+		Authenticated: u != nil,
+		User:          u,
 	})
 }
 
@@ -67,7 +68,7 @@ func (s *Server) handleAuthAction(w http.ResponseWriter, r *http.Request) {
 
 	if req.Action == "logout" {
 		_ = s.sessions.Destroy(r.Context())
-		writeJSON(w, http.StatusOK, map[string]any{"success": true})
+		writeJSON(w, http.StatusOK, model.LogoutResponse{Success: true})
 		return
 	}
 
@@ -132,7 +133,7 @@ func (s *Server) handleAuthAction(w http.ResponseWriter, r *http.Request) {
 	if err := s.store.UpdateLastLogin(user.ID); err != nil {
 		slog.Error("update last login", "error", err, "user_id", user.ID)
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"success": true, "user": user})
+	writeJSON(w, http.StatusOK, model.LoginResponse{Success: true, User: *user})
 }
 
 // registerRequest is the JSON body for POST /api/register.
@@ -205,8 +206,8 @@ func (s *Server) handleRegister(w http.ResponseWriter, r *http.Request) {
 	}
 
 	slog.Info("user registered (pending activation)", "username", username)
-	writeJSON(w, http.StatusOK, map[string]any{
-		"success": true,
-		"message": "Account created. An administrator must activate it before you can log in.",
+	writeJSON(w, http.StatusOK, model.RegisterResponse{
+		Success: true,
+		Message: "Account created. An administrator must activate it before you can log in.",
 	})
 }

@@ -12,6 +12,7 @@ import { computed, ref } from 'vue'
 import { endpoints } from '@/lib/endpoints'
 import type {
   Garapon,
+  PublicGarapon,
   GaraponDraw,
   GaraponDrawResponse,
   GaraponForm,
@@ -53,7 +54,8 @@ export const useGaraponsStore = defineStore('garapons', () => {
   const creatingPlayer = ref(false)
 
   // ── Public (player view) state ───────────────────────────────────────────
-  const publicGarapon = ref<Garapon | null>(null)
+  // The public token view returns the trimmed PublicGarapon (no odds/aggregates).
+  const publicGarapon = ref<PublicGarapon | null>(null)
   const publicPlayer = ref<{ player_name: string; max_draws: number; draws_used: number } | null>(
     null,
   )

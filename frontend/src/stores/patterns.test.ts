@@ -2,8 +2,10 @@ import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
 import type { Pattern, PatternCategory } from '@/types/api'
 
-// Capture the reorder calls so the category position math can be asserted.
+// Capture the bulk-reorder calls so the category position math can be asserted.
 // listPatterns backs the loadPatterns() refresh that saveCategoryForm runs.
+// (Cross-category moves + drag-order persistence go through the bulk `/reorder`
+// endpoints — patterns.bulkReorder / patternCategories.bulkReorder.)
 const { reorderCats, reorderPats, listPatterns } = vi.hoisted(() => ({
   reorderCats: vi.fn(async () => ({})),
   reorderPats: vi.fn(async () => ({})),
@@ -11,9 +13,9 @@ const { reorderCats, reorderPats, listPatterns } = vi.hoisted(() => ({
 }))
 vi.mock('@/lib/endpoints', () => ({
   endpoints: {
-    patterns: { reorder: reorderPats, list: listPatterns },
+    patterns: { bulkReorder: reorderPats, list: listPatterns },
     patternCategories: {
-      reorder: reorderCats,
+      bulkReorder: reorderCats,
       rename: vi.fn(async () => ({})),
       create: vi.fn(async () => ({})),
     },

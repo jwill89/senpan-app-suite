@@ -49,7 +49,7 @@ export const useAuthStore = defineStore('auth', () => {
   async function checkAuth(): Promise<boolean> {
     try {
       const data = await endpoints.auth.check()
-      setUser(data.authenticated ? data.user : null)
+      setUser(data.authenticated ? (data.user ?? null) : null)
     } catch {
       setUser(null)
     } finally {

@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"log/slog"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -35,6 +36,9 @@ type Server struct {
 	// skipped) when turnstileSecret is empty — see SetTurnstile / turnstile.go.
 	turnstileSecret  string
 	turnstileSiteKey string
+	// openAPISpec is the embedded openapi.yaml served at GET /api/openapi.yaml
+	// and rendered by GET /api/docs. Injected from main via SetOpenAPISpec.
+	openAPISpec []byte
 }
 
 // SetTurnstile enables the Cloudflare Turnstile bot check on the login form.
@@ -77,6 +81,9 @@ func New(st *store.Store, hub *ws.Hub, sessionSecret, webRoot string, allowedOri
 	}
 
 	s.routes()
+	// API-reference endpoints (GET /api/docs, GET /api/openapi.yaml). Registered
+	// apart from routes() so routes() stays the authoritative API-surface list.
+	s.registerDocs()
 	// One-time, idempotent migration of legacy announcement images into the new
 	// announcements_main category dir (safe to run on every startup).
 	s.migrateAnnouncementImages()
@@ -118,45 +125,102 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("POST /api/auth", s.handleAuthAction)
 	s.mux.HandleFunc("POST /api/register", s.handleRegister)
 
-	// User management (admin) + self-service account (any logged-in user).
+	// User management (admin, resource-oriented: PATCH merges the former
+	// set_active/set_admin/set_permissions/set_password actions) + self-service
+	// account (any logged-in user). The literal /account/change-password and
+	// /account/token sub-paths are matched ahead of one another by the Go 1.22 mux.
 	s.mux.HandleFunc("GET /api/users", s.handleUsersList)
-	s.mux.HandleFunc("POST /api/users", s.handleUsersAction)
-	s.mux.HandleFunc("POST /api/account", s.handleAccountAction)
+	s.mux.HandleFunc("PATCH /api/users/{id}", s.handleUserPatch)
+	s.mux.HandleFunc("DELETE /api/users/{id}", s.handleUserDelete)
+	s.mux.HandleFunc("POST /api/account/change-password", s.handleAccountChangePassword)
 	// Personal access tokens (self-service): GET reads the non-secret metadata,
-	// POST generates/revokes. Used by external API clients (e.g. the FFXIV plugin).
+	// POST generates (returning the plaintext once), DELETE revokes. Used by
+	// external API clients (e.g. the FFXIV plugin).
 	s.mux.HandleFunc("GET /api/account/token", s.handleAccountTokenInfo)
-	s.mux.HandleFunc("POST /api/account/token", s.handleAccountTokenAction)
+	s.mux.HandleFunc("POST /api/account/token", s.handleAccountTokenGenerate)
+	s.mux.HandleFunc("DELETE /api/account/token", s.handleAccountTokenRevoke)
 	s.mux.HandleFunc("GET /api/board", s.handleBoard)
+	// Cards (resource-oriented). The literal /generate and /all sub-paths are
+	// matched ahead of the {id} wildcard by the Go 1.22 mux, so there's no
+	// conflict. Card handlers self-broadcast (cards_update / card_deleted), so
+	// cards are intentionally absent from the adminMutationResource middleware.
 	s.mux.HandleFunc("GET /api/cards", s.handleCardsList)
-	s.mux.HandleFunc("POST /api/cards", s.handleCardsAction)
+	s.mux.HandleFunc("POST /api/cards", s.handleCardCreate)
+	s.mux.HandleFunc("POST /api/cards/generate", s.handleCardsGenerate)
+	s.mux.HandleFunc("DELETE /api/cards/all", s.handleCardsDeleteAll)
+	s.mux.HandleFunc("DELETE /api/cards/{id}", s.handleCardDelete)
+	s.mux.HandleFunc("PATCH /api/cards/{id}", s.handleCardUpdate)
+	// Game (singleton resource): GET state, POST lifecycle verbs, PATCH controls.
+	// The game handlers self-broadcast (game_update / game_draw / etc.), so game
+	// is intentionally absent from the adminMutationResource middleware.
 	s.mux.HandleFunc("GET /api/game", s.handleGameState)
-	s.mux.HandleFunc("POST /api/game", s.handleGameAction)
+	s.mux.HandleFunc("POST /api/game/start", s.handleGameStart)
+	s.mux.HandleFunc("POST /api/game/draw", s.handleGameDraw)
+	s.mux.HandleFunc("POST /api/game/end", s.handleGameEnd)
+	s.mux.HandleFunc("POST /api/game/halftime", s.handleGameHalftime)
+	s.mux.HandleFunc("PATCH /api/game", s.handleGamePatch)
+	// Patterns (resource-oriented). Single reorder is folded into PATCH /{id}
+	// (direction field); bulk reorder is the literal POST /reorder sub-path,
+	// matched ahead of the {id} wildcard by the Go 1.22 mux. Handlers
+	// self-broadcast (patterns_update), so patterns/categories are intentionally
+	// absent from the adminMutationResource middleware.
 	s.mux.HandleFunc("GET /api/patterns", s.handlePatternsList)
-	s.mux.HandleFunc("POST /api/patterns", s.handlePatternsAction)
+	s.mux.HandleFunc("POST /api/patterns", s.handlePatternCreate)
+	s.mux.HandleFunc("POST /api/patterns/reorder", s.handlePatternsReorder)
+	s.mux.HandleFunc("PATCH /api/patterns/{id}", s.handlePatternPatch)
+	s.mux.HandleFunc("DELETE /api/patterns/{id}", s.handlePatternDelete)
 	s.mux.HandleFunc("GET /api/pattern-categories", s.handleCategoriesList)
-	s.mux.HandleFunc("POST /api/pattern-categories", s.handleCategoriesAction)
+	s.mux.HandleFunc("POST /api/pattern-categories", s.handleCategoryCreate)
+	s.mux.HandleFunc("POST /api/pattern-categories/reorder", s.handleCategoriesReorder)
+	s.mux.HandleFunc("PATCH /api/pattern-categories/{id}", s.handleCategoryPatch)
+	s.mux.HandleFunc("DELETE /api/pattern-categories/{id}", s.handleCategoryDelete)
 	s.mux.HandleFunc("GET /api/presets", s.handlePresetsList)
-	s.mux.HandleFunc("POST /api/presets", s.handlePresetsAction)
+	s.mux.HandleFunc("POST /api/presets", s.handlePresetCreate)
+	s.mux.HandleFunc("PUT /api/presets/{id}", s.handlePresetUpdate)
+	s.mux.HandleFunc("DELETE /api/presets/{id}", s.handlePresetDelete)
+	// Styles (resource-oriented). The literal /active (public CSS) and
+	// /deactivate sub-paths are matched ahead of the {id} wildcard by the Go 1.22
+	// mux. Style write handlers self-broadcast (style_update), so styles are
+	// intentionally absent from the adminMutationResource middleware.
 	s.mux.HandleFunc("GET /api/styles", s.handleStylesList)
-	s.mux.HandleFunc("POST /api/styles", s.handleStylesAction)
+	s.mux.HandleFunc("POST /api/styles", s.handleStyleCreate)
+	s.mux.HandleFunc("POST /api/styles/deactivate", s.handleStyleDeactivate)
 	s.mux.HandleFunc("GET /api/styles/active", s.handleActiveStyleCSS)
+	s.mux.HandleFunc("GET /api/styles/{id}", s.handleStyleGet)
+	s.mux.HandleFunc("PUT /api/styles/{id}", s.handleStyleUpdate)
+	s.mux.HandleFunc("DELETE /api/styles/{id}", s.handleStyleDelete)
+	s.mux.HandleFunc("POST /api/styles/{id}/activate", s.handleStyleActivate)
 	s.mux.HandleFunc("/api/ws", s.handleWS) // WebSocket: method-agnostic for upgrade
 
-	// Raffle routes (upload before {id} to avoid path conflict)
+	// Raffles (resource-oriented: methods for CRUD, POST /{id}/{verb} for commands)
 	s.mux.HandleFunc("GET /api/raffles", s.handleRafflesList)
-	s.mux.HandleFunc("POST /api/raffles", s.handleRafflesAction)
+	s.mux.HandleFunc("POST /api/raffles", s.handleRaffleCreate)
 	s.mux.HandleFunc("GET /api/raffles/{id}", s.handleRaffleDetail)
-	s.mux.HandleFunc("POST /api/raffles/{id}/enter", s.handleRaffleEnter)
-	s.mux.HandleFunc("POST /api/raffles/{id}/entries", s.handleRaffleEntries)
+	s.mux.HandleFunc("PUT /api/raffles/{id}", s.handleRaffleUpdate)
+	s.mux.HandleFunc("DELETE /api/raffles/{id}", s.handleRaffleDelete)
+	s.mux.HandleFunc("POST /api/raffles/{id}/enter", s.handleRaffleEnter) // public sign-up
+	s.mux.HandleFunc("POST /api/raffles/{id}/entries", s.handleRaffleEntryAdd)
+	s.mux.HandleFunc("PATCH /api/raffles/{id}/entries/{entryId}", s.handleRaffleEntryPatch)
+	s.mux.HandleFunc("DELETE /api/raffles/{id}/entries/{entryId}", s.handleRaffleEntryDelete)
+	s.mux.HandleFunc("POST /api/raffles/{id}/pick-winner", s.handleRafflePickWinner)
+	s.mux.HandleFunc("POST /api/raffles/{id}/pick-another", s.handleRafflePickAnother)
+	s.mux.HandleFunc("POST /api/raffles/{id}/verify-winner", s.handleRaffleVerifyWinner)
 
-	// Garapon routes (festival lottery drum). Admin CRUD + per-player drawing
+	// Garapon routes (festival lottery drum; resource-oriented: methods for CRUD,
+	// POST /{id}/{verb} for status). Admin CRUD + close/reopen + per-player drawing
 	// links, plus the tokenized public player view + draw. The "garapon/{token}"
 	// (singular) public paths don't collide with the "garapons" (plural) admin
-	// paths; the {id}/players sub-path is registered alongside the {id} detail.
+	// paths; the literal /close, /reopen, /players sub-paths are matched ahead of
+	// the {id} wildcard by the Go 1.22 mux.
 	s.mux.HandleFunc("GET /api/garapons", s.handleGaraponsList)
-	s.mux.HandleFunc("POST /api/garapons", s.handleGaraponsAction)
+	s.mux.HandleFunc("POST /api/garapons", s.handleGaraponCreate)
 	s.mux.HandleFunc("GET /api/garapons/{id}", s.handleGaraponDetail)
-	s.mux.HandleFunc("POST /api/garapons/{id}/players", s.handleGaraponPlayers)
+	s.mux.HandleFunc("PUT /api/garapons/{id}", s.handleGaraponUpdate)
+	s.mux.HandleFunc("DELETE /api/garapons/{id}", s.handleGaraponDelete)
+	s.mux.HandleFunc("POST /api/garapons/{id}/close", s.handleGaraponClose)
+	s.mux.HandleFunc("POST /api/garapons/{id}/reopen", s.handleGaraponReopen)
+	s.mux.HandleFunc("POST /api/garapons/{id}/players", s.handleGaraponPlayerCreate)
+	s.mux.HandleFunc("DELETE /api/garapons/{id}/players/{playerId}", s.handleGaraponPlayerDelete)
 	s.mux.HandleFunc("GET /api/garapon/{token}", s.handleGaraponPublic)
 	s.mux.HandleFunc("POST /api/garapon/{token}/draw", s.handleGaraponDraw)
 
@@ -164,69 +228,112 @@ func (s *Server) routes() {
 	// establishments; logo/screenshot images live in dedicated permanent image
 	// categories managed on System → Images.
 	s.mux.HandleFunc("GET /api/affiliates", s.handleAffiliatesList)
-	s.mux.HandleFunc("POST /api/affiliates", s.handleAffiliatesAction)
+	s.mux.HandleFunc("POST /api/affiliates", s.handleAffiliateCreate)
+	s.mux.HandleFunc("PUT /api/affiliates/{id}", s.handleAffiliateUpdate)
+	s.mux.HandleFunc("DELETE /api/affiliates/{id}", s.handleAffiliateDelete)
 
-	// Stamp Rally (Festival → Stamp Rally). Admin CRUD of events (stamps + prizes
-	// with placements), tokenized participant cards, and the event-wide stamp log,
-	// plus the tokenized public card view + password-driven stamp collection. The
-	// singular "stamp-card/{token}" public paths don't collide with the plural
-	// "stamp-rallies" admin paths (mirrors the garapon singular/plural split).
+	// Stamp Rally (Festival → Stamp Rally; resource-oriented: methods for CRUD,
+	// POST /{id}/{verb} for status, PATCH for the per-stamp pause toggle). Admin
+	// CRUD of events (stamps + prizes with placements) + close/reopen, tokenized
+	// participant cards, and the event-wide stamp log, plus the tokenized public
+	// card view + password-driven stamp collection. The singular "stamp-card/{token}"
+	// public paths don't collide with the plural "stamp-rallies" admin paths
+	// (mirrors the garapon singular/plural split); the literal /logs, /close,
+	// /reopen, /stamps, /cards sub-paths are matched ahead of the {id} wildcard.
 	s.mux.HandleFunc("GET /api/stamp-rallies", s.handleStampRalliesList)
-	s.mux.HandleFunc("POST /api/stamp-rallies", s.handleStampRalliesAction)
+	s.mux.HandleFunc("POST /api/stamp-rallies", s.handleStampRallyCreate)
 	s.mux.HandleFunc("GET /api/stamp-rallies/{id}", s.handleStampRallyDetail)
+	s.mux.HandleFunc("PUT /api/stamp-rallies/{id}", s.handleStampRallyUpdate)
+	s.mux.HandleFunc("DELETE /api/stamp-rallies/{id}", s.handleStampRallyDelete)
 	s.mux.HandleFunc("GET /api/stamp-rallies/{id}/logs", s.handleStampRallyLogs)
-	s.mux.HandleFunc("POST /api/stamp-rallies/{id}/stamps", s.handleStampRallyStamps)
-	s.mux.HandleFunc("POST /api/stamp-rallies/{id}/cards", s.handleStampRallyCards)
+	s.mux.HandleFunc("POST /api/stamp-rallies/{id}/close", s.handleStampRallyClose)
+	s.mux.HandleFunc("POST /api/stamp-rallies/{id}/reopen", s.handleStampRallyReopen)
+	s.mux.HandleFunc("PATCH /api/stamp-rallies/{id}/stamps/{stampId}", s.handleStampRallyStampPatch)
+	s.mux.HandleFunc("POST /api/stamp-rallies/{id}/cards", s.handleStampRallyCardCreate)
+	s.mux.HandleFunc("DELETE /api/stamp-rallies/{id}/cards/{cardId}", s.handleStampRallyCardDelete)
 	s.mux.HandleFunc("GET /api/stamp-card/{token}", s.handleStampCardPublic)
 	s.mux.HandleFunc("POST /api/stamp-card/{token}/stamp", s.handleStampCardStamp)
 
-	// Book club / reading list routes (specific paths before {id} to avoid conflicts)
+	// Book club / reading list routes. Reading lists are nested under their owning
+	// club ({club} path segment), making each book club a first-class parent
+	// entity (resource-oriented: methods for CRUD on lists and their /items
+	// sub-resource; POST /{id}/publish is a verb route). The two club-agnostic
+	// utility endpoints (cover upload, AniList lookup) stay under /api/bookclub.
 	s.mux.HandleFunc("POST /api/bookclub/upload", s.handleBookclubUpload)
 	s.mux.HandleFunc("GET /api/bookclub/lookup", s.handleBookclubLookup)
-	s.mux.HandleFunc("GET /api/reading-lists", s.handleReadingListsList)
-	s.mux.HandleFunc("POST /api/reading-lists", s.handleReadingListsAction)
-	s.mux.HandleFunc("GET /api/reading-lists/{id}", s.handleReadingListDetail)
-	s.mux.HandleFunc("POST /api/reading-lists/{id}/items", s.handleReadingListItems)
-	s.mux.HandleFunc("POST /api/reading-lists/{id}/publish", s.handlePublishReadingList)
+	s.mux.HandleFunc("GET /api/book-clubs/{club}/reading-lists", s.handleReadingListsList)
+	s.mux.HandleFunc("POST /api/book-clubs/{club}/reading-lists", s.handleReadingListCreate)
+	s.mux.HandleFunc("GET /api/book-clubs/{club}/reading-lists/{id}", s.handleReadingListDetail)
+	s.mux.HandleFunc("PUT /api/book-clubs/{club}/reading-lists/{id}", s.handleReadingListUpdate)
+	s.mux.HandleFunc("DELETE /api/book-clubs/{club}/reading-lists/{id}", s.handleReadingListDelete)
+	s.mux.HandleFunc("POST /api/book-clubs/{club}/reading-lists/{id}/items", s.handleReadingListItemCreate)
+	s.mux.HandleFunc("PUT /api/book-clubs/{club}/reading-lists/{id}/items/{itemId}", s.handleReadingListItemUpdate)
+	s.mux.HandleFunc("DELETE /api/book-clubs/{club}/reading-lists/{id}/items/{itemId}", s.handleReadingListItemDelete)
+	s.mux.HandleFunc("POST /api/book-clubs/{club}/reading-lists/{id}/publish", s.handlePublishReadingList)
 
 	// Announcement management (typed Discord destinations + scheduled embeds).
 	// Specific paths before any {id} routes to avoid pattern conflicts.
 	s.mux.HandleFunc("GET /api/announcement-types", s.handleAnnouncementTypesList)
-	s.mux.HandleFunc("POST /api/announcement-types", s.handleAnnouncementTypesAction)
+	s.mux.HandleFunc("POST /api/announcement-types", s.handleAnnouncementTypeCreate)
+	s.mux.HandleFunc("PUT /api/announcement-types/{id}", s.handleAnnouncementTypeUpdate)
+	s.mux.HandleFunc("DELETE /api/announcement-types/{id}", s.handleAnnouncementTypeDelete)
 	s.mux.HandleFunc("GET /api/announcement-roles", s.handleAnnouncementRolesList)
-	s.mux.HandleFunc("POST /api/announcement-roles", s.handleAnnouncementRolesAction)
+	s.mux.HandleFunc("POST /api/announcement-roles", s.handleAnnouncementRoleCreate)
+	s.mux.HandleFunc("PUT /api/announcement-roles/{id}", s.handleAnnouncementRoleUpdate)
+	s.mux.HandleFunc("DELETE /api/announcement-roles/{id}", s.handleAnnouncementRoleDelete)
+	// Announcements (resource-oriented: methods for CRUD, POST /{id}/{verb} for
+	// send/skip, POST /reorder for the bulk drag-order). The literal /reorder
+	// sub-path is matched ahead of the {id} wildcard by the Go 1.22 mux.
 	s.mux.HandleFunc("GET /api/announcements", s.handleAnnouncementsList)
-	s.mux.HandleFunc("POST /api/announcements", s.handleAnnouncementsAction)
+	s.mux.HandleFunc("POST /api/announcements", s.handleAnnouncementCreate)
+	s.mux.HandleFunc("POST /api/announcements/reorder", s.handleAnnouncementsReorder)
+	s.mux.HandleFunc("PUT /api/announcements/{id}", s.handleAnnouncementUpdate)
+	s.mux.HandleFunc("DELETE /api/announcements/{id}", s.handleAnnouncementDelete)
+	s.mux.HandleFunc("POST /api/announcements/{id}/send", s.handleAnnouncementSend)
+	s.mux.HandleFunc("POST /api/announcements/{id}/skip", s.handleAnnouncementSkip)
 
-	// Winners log routes
+	// Winners log routes. The literal /all and /frequent sub-paths are matched
+	// ahead of the {id} wildcard by the Go 1.22 mux, so there's no conflict.
 	s.mux.HandleFunc("GET /api/winners-log", s.handleWinnersLog)
-	s.mux.HandleFunc("POST /api/winners-log", s.handleWinnersLogAction)
+	s.mux.HandleFunc("DELETE /api/winners-log/all", s.handleWinnersLogDeleteAll)
+	s.mux.HandleFunc("DELETE /api/winners-log/{id}", s.handleWinnersLogDelete)
 	s.mux.HandleFunc("GET /api/winners-log/frequent", s.handleFrequentWinners)
 
 	// App settings
 	s.mux.HandleFunc("GET /api/settings", s.handleSettingsGet)
 	s.mux.HandleFunc("POST /api/settings", s.handleSettingsUpdate)
 
-	// Font file management (System → Font Upload)
+	// Font file management (System → Font Upload). Fonts are keyed by filename;
+	// the literal /upload sub-path is matched ahead of the {name} wildcard.
 	s.mux.HandleFunc("GET /api/fonts", s.handleFontsList)
-	s.mux.HandleFunc("POST /api/fonts", s.handleFontsAction)
 	s.mux.HandleFunc("POST /api/fonts/upload", s.handleFontUpload)
+	s.mux.HandleFunc("DELETE /api/fonts/{name}", s.handleFontDelete)
+	s.mux.HandleFunc("PATCH /api/fonts/{name}", s.handleFontRename)
 
-	// Carrd image hosting (System → Carrd Upload)
+	// Carrd image hosting (System → Carrd Upload). Projects are keyed by folder
+	// name (a path param); images/sub-dirs are keyed by folder+path (+name), which
+	// may contain slashes, so those deletes take query params. The literal
+	// /images/dirs sub-path coexists with /images (different method+path pairs).
 	s.mux.HandleFunc("GET /api/carrd/projects", s.handleCarrdProjectsList)
-	s.mux.HandleFunc("POST /api/carrd/projects", s.handleCarrdProjectsAction)
+	s.mux.HandleFunc("POST /api/carrd/projects", s.handleCarrdProjectCreate)
+	s.mux.HandleFunc("PATCH /api/carrd/projects/{folder}", s.handleCarrdProjectRename)
+	s.mux.HandleFunc("DELETE /api/carrd/projects/{folder}", s.handleCarrdProjectDelete)
 	s.mux.HandleFunc("GET /api/carrd/images", s.handleCarrdImagesList)
-	s.mux.HandleFunc("POST /api/carrd/images", s.handleCarrdImagesAction)
+	s.mux.HandleFunc("DELETE /api/carrd/images", s.handleCarrdImageDelete)
+	s.mux.HandleFunc("POST /api/carrd/images/dirs", s.handleCarrdDirCreate)
+	s.mux.HandleFunc("DELETE /api/carrd/images/dirs", s.handleCarrdDirDelete)
 	s.mux.HandleFunc("POST /api/carrd/upload", s.handleCarrdUpload)
 
-	// Central image hosting (System → Images). Category-based uploads/listing
-	// into subdirectories of <webRoot>/images. /upload before the bare path so
-	// the more specific pattern wins.
+	// Central image hosting (System → Images). Categories are keyed by directory
+	// name (a path param); image deletes take dir+name query params. /upload
+	// before the bare path so the more specific pattern wins.
 	s.mux.HandleFunc("GET /api/image-categories", s.handleImageCategoriesList)
-	s.mux.HandleFunc("POST /api/image-categories", s.handleImageCategoriesAction)
+	s.mux.HandleFunc("POST /api/image-categories", s.handleImageCategoryCreate)
+	s.mux.HandleFunc("PATCH /api/image-categories/{dir}", s.handleImageCategoryRename)
+	s.mux.HandleFunc("DELETE /api/image-categories/{dir}", s.handleImageCategoryDelete)
 	s.mux.HandleFunc("GET /api/images", s.handleImagesList)
 	s.mux.HandleFunc("POST /api/images/upload", s.handleImagesUpload)
-	s.mux.HandleFunc("POST /api/images", s.handleImagesAction)
+	s.mux.HandleFunc("DELETE /api/images", s.handleImageDelete)
 }
 
 // ServeHTTP applies CORS middleware, logs the request, then dispatches to the router.
@@ -240,7 +347,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// cross-origin requests to the API.
 	if origin := r.Header.Get("Origin"); origin != "" && s.allowedOrigins[origin] {
 		w.Header().Set("Access-Control-Allow-Origin", origin)
-		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
 		w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
 		w.Header().Set("Access-Control-Allow-Credentials", "true")
 		w.Header().Set("Vary", "Origin")
@@ -271,9 +378,12 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// no data — see broadcastResourceChanged. Public/auth/self-service paths and the
 	// rich-realtime endpoints (game/cards/patterns/styles/settings, which emit their
 	// own targeted events) are excluded by adminMutationResource.
-	if r.Method == http.MethodPost && rw.status >= 200 && rw.status < 300 {
-		if resource, ok := adminMutationResource(r.URL.Path); ok {
-			s.broadcastResourceChanged(resource)
+	switch r.Method {
+	case http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete:
+		if rw.status >= 200 && rw.status < 300 {
+			if resource, ok := adminMutationResource(r.URL.Path); ok {
+				s.broadcastResourceChanged(resource)
+			}
 		}
 	}
 
@@ -345,6 +455,18 @@ func readJSON[T any](w http.ResponseWriter, r *http.Request) (T, error) {
 	r.Body = http.MaxBytesReader(w, r.Body, 1<<20) // 1MB limit
 	err := json.NewDecoder(r.Body).Decode(&v)
 	return v, err
+}
+
+// pathInt64 parses an int64 path wildcard (e.g. {id}). On a missing/invalid
+// value it writes a 400 "Invalid <label> ID" and returns ok=false; handlers
+// should return immediately. Shared by the resource-oriented (REST) routes.
+func pathInt64(w http.ResponseWriter, r *http.Request, name, label string) (int64, bool) {
+	v, err := strconv.ParseInt(r.PathValue(name), 10, 64)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "Invalid "+label+" ID")
+		return 0, false
+	}
+	return v, true
 }
 
 // ── Auth helpers ────────────────────────────────────────────────────────────
@@ -485,50 +607,33 @@ func (s *Server) broadcastResourceChanged(resource string) {
 	}{Type: "resource_changed", Resource: resource})
 }
 
-// adminMutationResource maps a successful admin-mutation POST path to the frontend
-// resource key to refetch, returning ok=false when the path should emit no
-// invalidation. Only admin CRUD endpoints are listed; public, auth, self-service
-// (/api/account), and the rich-realtime endpoints are intentionally excluded (the
-// latter broadcast their own targeted events). Sub-paths carrying an {id} segment
-// are matched by their trailing component, so e.g. the public ".../enter" is
-// excluded while the admin ".../entries" is included.
+// adminMutationResource maps a successful admin-mutation request (POST/PUT/PATCH/
+// DELETE) to the frontend resource key to refetch, returning ok=false when the
+// path should emit no invalidation. It keys on the first path segment after
+// /api/, so every resource-oriented sub-path (/{id}, /{id}/entries/{entryId},
+// /{id}/{verb}, …) is covered automatically. Public, auth, self-service
+// (/api/account), and the rich-realtime endpoints (game/cards/patterns/styles/
+// settings) are intentionally absent — they broadcast their own targeted events
+// (or none). The public raffle sign-up (.../enter) is excluded explicitly; it
+// broadcasts "raffles" itself.
 func adminMutationResource(path string) (string, bool) {
-	switch path {
-	case "/api/garapons":
-		return "garapons", true
-	case "/api/affiliates":
-		return "affiliates", true
-	case "/api/stamp-rallies":
-		return "stamp-rallies", true
-	case "/api/raffles":
+	seg, _, _ := strings.Cut(strings.TrimPrefix(path, "/api/"), "/")
+	switch seg {
+	case "garapons", "affiliates", "stamp-rallies", "presets", "users", "winners-log", "fonts":
+		return seg, true
+	case "raffles":
+		if strings.HasSuffix(path, "/enter") {
+			return "", false // public sign-up self-broadcasts
+		}
 		return "raffles", true
-	case "/api/presets":
-		return "presets", true
-	case "/api/users":
-		return "users", true
-	case "/api/announcements", "/api/announcement-types", "/api/announcement-roles":
+	case "announcements", "announcement-types", "announcement-roles":
 		return "announcements", true
-	case "/api/reading-lists":
+	case "book-clubs":
 		return "bookclub", true
-	case "/api/winners-log":
-		return "winners-log", true
-	case "/api/fonts", "/api/fonts/upload":
-		return "fonts", true
-	case "/api/carrd/projects", "/api/carrd/images", "/api/carrd/upload":
+	case "carrd":
 		return "carrd", true
-	case "/api/images", "/api/images/upload", "/api/image-categories":
+	case "images", "image-categories":
 		return "images", true
-	}
-	switch {
-	case strings.HasPrefix(path, "/api/garapons/") && strings.HasSuffix(path, "/players"):
-		return "garapons", true
-	case strings.HasPrefix(path, "/api/raffles/") && strings.HasSuffix(path, "/entries"):
-		return "raffles", true
-	case strings.HasPrefix(path, "/api/reading-lists/") && strings.HasSuffix(path, "/items"):
-		return "bookclub", true
-	case strings.HasPrefix(path, "/api/stamp-rallies/") &&
-		(strings.HasSuffix(path, "/cards") || strings.HasSuffix(path, "/stamps")):
-		return "stamp-rallies", true
 	}
 	return "", false
 }

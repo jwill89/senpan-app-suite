@@ -3,6 +3,8 @@ package server
 import (
 	"net/http"
 	"strconv"
+
+	"app-suite/internal/model"
 )
 
 // settingsKeys lists the setting keys exposed via the settings API.
@@ -55,11 +57,11 @@ func (s *Server) handleSettingsGet(w http.ResponseWriter, r *http.Request) {
 		}
 		result[key] = val
 	}
-	writeJSON(w, http.StatusOK, map[string]any{
-		"settings": result,
-		// Uploaded font filenames so the frontend can register @font-face rules
-		// and offer them in the header-font picker (alongside Google Fonts).
-		"uploaded_fonts": s.fontFileNames(),
+	// Uploaded font filenames so the frontend can register @font-face rules and
+	// offer them in the header-font picker (alongside Google Fonts).
+	writeJSON(w, http.StatusOK, model.SettingsResponse{
+		Settings:      result,
+		UploadedFonts: s.fontFileNames(),
 	})
 }
 
@@ -151,7 +153,7 @@ func (s *Server) handleSettingsUpdate(w http.ResponseWriter, r *http.Request) {
 		s.hub.Broadcast(broadcastPayload)
 	}
 
-	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+	writeJSON(w, http.StatusOK, model.OKResponse{OK: true})
 }
 
 // isAllowedSetting checks whether a key is in the editable settings list.

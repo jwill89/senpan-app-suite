@@ -102,3 +102,26 @@ export function apiPost<T = unknown>(
 ): Promise<T> {
   return api<T>(endpoint, { method: 'POST', body, ...options })
 }
+
+/** PUT — full replace of the resource at `endpoint` (idempotent). */
+export function apiPut<T = unknown>(
+  endpoint: string,
+  body: unknown,
+  options: ApiOptions = {},
+): Promise<T> {
+  return api<T>(endpoint, { method: 'PUT', body, ...options })
+}
+
+/** PATCH — partial/field update of the resource at `endpoint`. */
+export function apiPatch<T = unknown>(
+  endpoint: string,
+  body: unknown,
+  options: ApiOptions = {},
+): Promise<T> {
+  return api<T>(endpoint, { method: 'PATCH', body, ...options })
+}
+
+/** DELETE — remove the resource at `endpoint` (idempotent; no body). */
+export function apiDelete<T = unknown>(endpoint: string, options: ApiOptions = {}): Promise<T> {
+  return api<T>(endpoint, { method: 'DELETE', ...options })
+}

@@ -7,6 +7,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"app-suite/internal/model"
 )
 
 // ── Font file management (System → Font Upload admin tab) ────────────────────
@@ -24,13 +26,6 @@ var allowedFontExts = map[string]bool{
 	".woff":  true,
 	".woff2": true,
 	".eot":   true,
-}
-
-// fontFile is the JSON shape for a single font in the directory listing.
-type fontFile struct {
-	Name     string `json:"name"`
-	Size     int64  `json:"size"`
-	Modified string `json:"modified"` // RFC3339
 }
 
 // fontsDir returns the absolute path to the fonts upload directory.
@@ -105,7 +100,7 @@ func (s *Server) handleFontsList(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	fonts := make([]fontFile, 0, len(entries))
+	fonts := make([]model.FontFile, 0, len(entries))
 	for _, e := range entries {
 		if e.IsDir() {
 			continue
@@ -117,7 +112,7 @@ func (s *Server) handleFontsList(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			continue
 		}
-		fonts = append(fonts, fontFile{
+		fonts = append(fonts, model.FontFile{
 			Name:     e.Name(),
 			Size:     info.Size(),
 			Modified: info.ModTime().UTC().Format(time.RFC3339),
@@ -129,85 +124,96 @@ func (s *Server) handleFontsList(w http.ResponseWriter, r *http.Request) {
 		return strings.ToLower(fonts[i].Name) < strings.ToLower(fonts[j].Name)
 	})
 
-	writeJSON(w, http.StatusOK, map[string]any{"fonts": fonts})
+	writeJSON(w, http.StatusOK, model.FontsResponse{Fonts: fonts})
 }
 
-// fontsActionRequest is the JSON body for POST /api/fonts.
-// Action: "delete" or "rename".
-type fontsActionRequest struct {
-	Action  string `json:"action"`
-	Name    string `json:"name"`
+// fontRenameRequest is the JSON body for PATCH /api/fonts/{name}.
+type fontRenameRequest struct {
 	NewName string `json:"new_name"`
 }
 
-// handleFontsAction processes admin rename/delete on font files.
+// handleFontDelete removes a font file. The filename comes from the path (URL
+// decoding is automatic) and is still run through safeFontName to guard against
+// path traversal and reject disallowed names.
 //
-//	Endpoint:  POST /api/fonts
+//	Endpoint:  DELETE /api/fonts/{name}
 //	Auth:      admin, or a user granted this page's permission
-//	Request:   {"action": "delete"|"rename", "name": "...", "new_name": "..."}
-//	Response:  {"ok": true} (rename also returns {"name": newName})
-func (s *Server) handleFontsAction(w http.ResponseWriter, r *http.Request) {
+//	Response:  204 No Content
+func (s *Server) handleFontDelete(w http.ResponseWriter, r *http.Request) {
 	if !s.requirePermission(w, r, permAtelierFonts) {
 		return
 	}
 
-	req, err := readJSON[fontsActionRequest](w, r)
-	if err != nil {
-		writeError(w, http.StatusBadRequest, "Invalid JSON")
-		return
-	}
-
-	name, ok := safeFontName(req.Name)
+	name, ok := safeFontName(r.PathValue("name"))
 	if !ok {
 		writeError(w, http.StatusBadRequest, "Invalid font file name")
 		return
 	}
 
-	dir := s.fontsDir()
-	src := filepath.Join(dir, name)
-
-	switch req.Action {
-	case "delete":
-		if err := os.Remove(src); err != nil {
-			if os.IsNotExist(err) {
-				writeError(w, http.StatusNotFound, "Font file not found")
-				return
-			}
-			writeInternalError(w, "delete font", err)
-			return
-		}
-		writeJSON(w, http.StatusOK, map[string]any{"ok": true})
-
-	case "rename":
-		newName, ok := safeFontName(req.NewName)
-		if !ok {
-			writeError(w, http.StatusBadRequest, "Invalid new file name (allowed: .ttf, .otf, .woff, .woff2, .eot)")
-			return
-		}
-		if newName == name {
-			writeJSON(w, http.StatusOK, map[string]any{"ok": true, "name": newName})
-			return
-		}
-		// Source must exist…
-		if _, err := os.Stat(src); err != nil {
+	src := filepath.Join(s.fontsDir(), name)
+	if err := os.Remove(src); err != nil {
+		if os.IsNotExist(err) {
 			writeError(w, http.StatusNotFound, "Font file not found")
 			return
 		}
-		dst := filepath.Join(dir, newName)
-		// …and the target must not (don't clobber an existing font).
-		if _, err := os.Stat(dst); err == nil {
-			writeError(w, http.StatusConflict, "A font named \""+newName+"\" already exists")
-			return
-		}
-		if err := os.Rename(src, dst); err != nil {
-			writeInternalError(w, "rename font", err)
-			return
-		}
-		writeJSON(w, http.StatusOK, map[string]any{"ok": true, "name": newName})
-
-	default:
-		writeError(w, http.StatusBadRequest, "Invalid action. Use: delete, rename")
+		writeInternalError(w, "delete font", err)
+		return
 	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// handleFontRename renames a font file. The current name comes from the path and
+// the target from the body. Fails with 404 when the source is missing or 409
+// when the target already exists (an in-use font is never clobbered).
+//
+//	Endpoint:  PATCH /api/fonts/{name}
+//	Auth:      admin, or a user granted this page's permission
+//	Request:   {"new_name": "..."}
+//	Response:  {"ok": true, "name": newName}
+func (s *Server) handleFontRename(w http.ResponseWriter, r *http.Request) {
+	if !s.requirePermission(w, r, permAtelierFonts) {
+		return
+	}
+
+	name, ok := safeFontName(r.PathValue("name"))
+	if !ok {
+		writeError(w, http.StatusBadRequest, "Invalid font file name")
+		return
+	}
+
+	req, err := readJSON[fontRenameRequest](w, r)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "Invalid JSON")
+		return
+	}
+	newName, ok := safeFontName(req.NewName)
+	if !ok {
+		writeError(w, http.StatusBadRequest, "Invalid new file name (allowed: .ttf, .otf, .woff, .woff2, .eot)")
+		return
+	}
+
+	dir := s.fontsDir()
+	src := filepath.Join(dir, name)
+	if newName == name {
+		writeJSON(w, http.StatusOK, model.NamedOKResponse{OK: true, Name: newName})
+		return
+	}
+	// Source must exist…
+	if _, err := os.Stat(src); err != nil {
+		writeError(w, http.StatusNotFound, "Font file not found")
+		return
+	}
+	dst := filepath.Join(dir, newName)
+	// …and the target must not (don't clobber an existing font).
+	if _, err := os.Stat(dst); err == nil {
+		writeError(w, http.StatusConflict, "A font named \""+newName+"\" already exists")
+		return
+	}
+	if err := os.Rename(src, dst); err != nil {
+		writeInternalError(w, "rename font", err)
+		return
+	}
+	writeJSON(w, http.StatusOK, model.NamedOKResponse{OK: true, Name: newName})
 }
 
 // handleFontUpload handles multipart uploads of one or more font files to
@@ -244,17 +250,13 @@ func (s *Server) handleFontUpload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	type skipEntry struct {
-		Name   string `json:"name"`
-		Reason string `json:"reason"`
-	}
 	uploaded := make([]string, 0, len(files))
-	skipped := make([]skipEntry, 0)
+	skipped := make([]model.SkippedUpload, 0)
 
 	for _, header := range files {
 		name, ok := safeFontName(header.Filename)
 		if !ok {
-			skipped = append(skipped, skipEntry{
+			skipped = append(skipped, model.SkippedUpload{
 				Name:   header.Filename,
 				Reason: "Unsupported type (allowed: .ttf, .otf, .woff, .woff2, .eot)",
 			})
@@ -264,7 +266,7 @@ func (s *Server) handleFontUpload(w http.ResponseWriter, r *http.Request) {
 		dst := filepath.Join(dir, name)
 		// Reject if a file with this name already exists.
 		if _, err := os.Stat(dst); err == nil {
-			skipped = append(skipped, skipEntry{
+			skipped = append(skipped, model.SkippedUpload{
 				Name:   name,
 				Reason: "Already exists — delete the existing file first",
 			})
@@ -272,14 +274,14 @@ func (s *Server) handleFontUpload(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if err := saveMultipartFile(header, dst); err != nil {
-			skipped = append(skipped, skipEntry{Name: name, Reason: "Failed to save"})
+			skipped = append(skipped, model.SkippedUpload{Name: name, Reason: "Failed to save"})
 			continue
 		}
 		uploaded = append(uploaded, name)
 	}
 
-	writeJSON(w, http.StatusOK, map[string]any{
-		"uploaded": uploaded,
-		"skipped":  skipped,
+	writeJSON(w, http.StatusOK, model.FontUploadResponse{
+		Uploaded: uploaded,
+		Skipped:  skipped,
 	})
 }

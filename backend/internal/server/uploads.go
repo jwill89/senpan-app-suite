@@ -7,6 +7,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"app-suite/internal/model"
 )
 
 // This file holds the upload plumbing shared by the image-hosting features
@@ -135,5 +137,5 @@ func (s *Server) saveSingleImageUpload(w http.ResponseWriter, r *http.Request, r
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]any{"url": s.siteBaseURL(r) + "/" + relDir + "/" + name})
+	writeJSON(w, http.StatusOK, model.BookclubUploadResponse{URL: s.siteBaseURL(r) + "/" + relDir + "/" + name})
 }

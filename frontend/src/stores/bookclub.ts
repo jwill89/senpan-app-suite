@@ -129,7 +129,7 @@ export const useBookclubStore = defineStore('bookclub', () => {
   async function loadListDetail(id: number): Promise<void> {
     detailLoading.value = true
     try {
-      const data = await endpoints.bookclub.listDetail(id)
+      const data = await endpoints.bookclub.listDetail(activeClubSlug.value, id)
       selectedList.value = data.reading_list
       resetItemForm()
     } catch (e) {
@@ -160,7 +160,7 @@ export const useBookclubStore = defineStore('bookclub', () => {
     }
     creatingList.value = true
     try {
-      const data = await endpoints.bookclub.createList(title, activeClubSlug.value)
+      const data = await endpoints.bookclub.createList(activeClubSlug.value, title)
       newListTitle.value = ''
       ui.notify('Reading list created', 'success')
       await loadLists()
@@ -177,7 +177,7 @@ export const useBookclubStore = defineStore('bookclub', () => {
     const trimmed = title.trim()
     if (!trimmed || trimmed === list.title) return false
     try {
-      await endpoints.bookclub.renameList(list.id, trimmed)
+      await endpoints.bookclub.renameList(activeClubSlug.value, list.id, trimmed)
       list.title = trimmed
       if (selectedList.value?.id === list.id) selectedList.value.title = trimmed
       ui.notify('Reading list renamed', 'success')
@@ -197,7 +197,7 @@ export const useBookclubStore = defineStore('bookclub', () => {
     )
       return
     try {
-      await endpoints.bookclub.deleteList(list.id)
+      await endpoints.bookclub.deleteList(activeClubSlug.value, list.id)
       lists.value = lists.value.filter((l) => l.id !== list.id)
       if (selectedList.value?.id === list.id) selectedList.value = null
       ui.notify('Reading list deleted', 'info')
@@ -216,7 +216,7 @@ export const useBookclubStore = defineStore('bookclub', () => {
       return
     publishing.value = true
     try {
-      const data = await endpoints.bookclub.publish(list.id)
+      const data = await endpoints.bookclub.publish(activeClubSlug.value, list.id)
       ui.notify(`Published ${data.published} item(s) to Discord`, 'success')
     } catch (e) {
       ui.notify((e as Error).message, 'error')
@@ -264,7 +264,7 @@ export const useBookclubStore = defineStore('bookclub', () => {
     }
     savingItem.value = true
     try {
-      await endpoints.bookclub.saveItem(selectedList.value.id, {
+      await endpoints.bookclub.saveItem(activeClubSlug.value, selectedList.value.id, {
         id: f.id || undefined,
         cover_image: f.cover_image,
         title: f.title.trim(),
@@ -290,7 +290,7 @@ export const useBookclubStore = defineStore('bookclub', () => {
     if (!(await ui.confirm(`Delete "${item.title}"?`, { title: 'Delete item', confirmText: 'Delete' })))
       return
     try {
-      await endpoints.bookclub.deleteItem(selectedList.value.id, item.id)
+      await endpoints.bookclub.deleteItem(activeClubSlug.value, selectedList.value.id, item.id)
       ui.notify('Item deleted', 'info')
       await loadListDetail(selectedList.value.id)
     } catch (e) {

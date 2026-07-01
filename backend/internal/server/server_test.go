@@ -76,6 +76,39 @@ func (e *testEnv) postJSON(t *testing.T, path string, body any) *http.Response {
 	return resp
 }
 
+// reqJSON sends an arbitrary-method JSON request (PUT/PATCH/DELETE) for the
+// resource-oriented routes. A nil body sends no body (for DELETE).
+func (e *testEnv) reqJSON(t *testing.T, method, path string, body any) *http.Response {
+	t.Helper()
+	var r io.Reader
+	if body != nil {
+		data, _ := json.Marshal(body)
+		r = bytes.NewReader(data)
+	}
+	req, err := http.NewRequest(method, e.url(path), r)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if body != nil {
+		req.Header.Set("Content-Type", "application/json")
+	}
+	resp, err := e.client.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return resp
+}
+
+func (e *testEnv) putJSON(t *testing.T, path string, body any) *http.Response {
+	return e.reqJSON(t, http.MethodPut, path, body)
+}
+func (e *testEnv) patchJSON(t *testing.T, path string, body any) *http.Response {
+	return e.reqJSON(t, http.MethodPatch, path, body)
+}
+func (e *testEnv) del(t *testing.T, path string) *http.Response {
+	return e.reqJSON(t, http.MethodDelete, path, nil)
+}
+
 func (e *testEnv) loginAdmin(t *testing.T) {
 	t.Helper()
 	resp := e.postJSON(t, "/api/auth", map[string]string{
@@ -325,7 +358,7 @@ func TestBoard_CaseInsensitive(t *testing.T) {
 	resp.Body.Close()
 }
 
-// ── Cards (admin-only) ─────────────────────────────────────────────────────
+// ── Cards (admin-only, hybrid REST) ─────────────────────────────────────────
 
 func TestCards_RequiresAuth(t *testing.T) {
 	env := newTestEnv(t)
@@ -336,9 +369,9 @@ func TestCards_RequiresAuth(t *testing.T) {
 	}
 	resp.Body.Close()
 
-	resp = env.postJSON(t, "/api/cards", map[string]any{"action": "generate", "count": 1})
+	resp = env.postJSON(t, "/api/cards/generate", map[string]any{"count": 1})
 	if resp.StatusCode != http.StatusUnauthorized {
-		t.Errorf("POST /api/cards status = %d; want 401", resp.StatusCode)
+		t.Errorf("POST /api/cards/generate status = %d; want 401", resp.StatusCode)
 	}
 	resp.Body.Close()
 }
@@ -347,11 +380,11 @@ func TestCards_Generate(t *testing.T) {
 	env := newTestEnv(t)
 	env.loginAdmin(t)
 
-	resp := env.postJSON(t, "/api/cards", map[string]any{"action": "generate", "count": 3})
-	if resp.StatusCode != 200 {
+	resp := env.postJSON(t, "/api/cards/generate", map[string]any{"count": 3})
+	if resp.StatusCode != http.StatusCreated {
 		body, _ := io.ReadAll(resp.Body)
 		resp.Body.Close()
-		t.Fatalf("status = %d; body = %s", resp.StatusCode, body)
+		t.Fatalf("status = %d; want 201; body = %s", resp.StatusCode, body)
 	}
 	data := decodeBody(t, resp)
 
@@ -378,12 +411,35 @@ func TestCards_Generate(t *testing.T) {
 	}
 }
 
+// TestCards_CreateNamed covers POST /api/cards: one card, optionally assigned to
+// a player name, returned as 201.
+func TestCards_CreateNamed(t *testing.T) {
+	env := newTestEnv(t)
+	env.loginAdmin(t)
+
+	resp := env.postJSON(t, "/api/cards", map[string]any{"player_name": "Aerith"})
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("status = %d; want 201", resp.StatusCode)
+	}
+	data := decodeBody(t, resp)
+	card, _ := data["card"].(map[string]any)
+	if card == nil {
+		t.Fatal("expected card object")
+	}
+	if card["player_name"] != "Aerith" {
+		t.Errorf("player_name = %v; want Aerith", card["player_name"])
+	}
+	if id, _ := card["id"].(string); len(id) != 6 {
+		t.Errorf("card id length = %d; want 6", len(id))
+	}
+}
+
 func TestCards_List(t *testing.T) {
 	env := newTestEnv(t)
 	env.loginAdmin(t)
 
 	// Generate cards first
-	env.postJSON(t, "/api/cards", map[string]any{"action": "generate", "count": 2}).Body.Close()
+	env.postJSON(t, "/api/cards/generate", map[string]any{"count": 2}).Body.Close()
 
 	resp := env.get(t, "/api/cards")
 	data := decodeBody(t, resp)
@@ -399,17 +455,17 @@ func TestCards_Delete(t *testing.T) {
 	env.loginAdmin(t)
 
 	// Generate a card
-	resp := env.postJSON(t, "/api/cards", map[string]any{"action": "generate", "count": 1})
+	resp := env.postJSON(t, "/api/cards/generate", map[string]any{"count": 1})
 	data := decodeBody(t, resp)
 	cards := data["cards"].([]any)
 	cardID := cards[0].(map[string]any)["id"].(string)
 
-	// Delete it
-	resp = env.postJSON(t, "/api/cards", map[string]any{"action": "delete", "id": cardID})
-	data = decodeBody(t, resp)
-	if data["deleted"] != true {
-		t.Errorf("expected deleted=true, got %v", data["deleted"])
+	// Delete it (DELETE → 204)
+	resp = env.del(t, "/api/cards/"+cardID)
+	if resp.StatusCode != http.StatusNoContent {
+		t.Errorf("delete status = %d; want 204", resp.StatusCode)
 	}
+	resp.Body.Close()
 
 	// Should not exist anymore
 	resp = env.get(t, "/api/board?id="+cardID)
@@ -423,9 +479,12 @@ func TestCards_DeleteAll(t *testing.T) {
 	env := newTestEnv(t)
 	env.loginAdmin(t)
 
-	env.postJSON(t, "/api/cards", map[string]any{"action": "generate", "count": 5}).Body.Close()
+	env.postJSON(t, "/api/cards/generate", map[string]any{"count": 5}).Body.Close()
 
-	resp := env.postJSON(t, "/api/cards", map[string]any{"action": "delete_all"})
+	resp := env.del(t, "/api/cards/all")
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("delete all status = %d; want 200", resp.StatusCode)
+	}
 	data := decodeBody(t, resp)
 	deleted, _ := data["deleted"].(float64)
 	if deleted != 5 {
@@ -441,26 +500,42 @@ func TestCards_DeleteAll(t *testing.T) {
 	}
 }
 
+// TestCards_DeleteMissing verifies deleting a non-existent card is an idempotent
+// no-op success (204).
 func TestCards_DeleteMissing(t *testing.T) {
 	env := newTestEnv(t)
 	env.loginAdmin(t)
 
-	resp := env.postJSON(t, "/api/cards", map[string]any{"action": "delete", "id": "ZZZZZZ"})
-	data := decodeBody(t, resp)
-	if data["deleted"] != false {
-		t.Errorf("expected deleted=false for missing card, got %v", data["deleted"])
+	resp := env.del(t, "/api/cards/ZZZZZZ")
+	if resp.StatusCode != http.StatusNoContent {
+		t.Errorf("status = %d; want 204 for missing card", resp.StatusCode)
 	}
+	resp.Body.Close()
 }
 
-func TestCards_InvalidAction(t *testing.T) {
+// TestCards_UpdatePlayer covers PATCH /api/cards/{id}: assign a player name and
+// details to an existing card.
+func TestCards_UpdatePlayer(t *testing.T) {
 	env := newTestEnv(t)
 	env.loginAdmin(t)
 
-	resp := env.postJSON(t, "/api/cards", map[string]any{"action": "explode"})
-	if resp.StatusCode != http.StatusBadRequest {
-		t.Errorf("status = %d; want 400", resp.StatusCode)
+	resp := env.postJSON(t, "/api/cards/generate", map[string]any{"count": 1})
+	cardID := decodeBody(t, resp)["cards"].([]any)[0].(map[string]any)["id"].(string)
+
+	resp = env.patchJSON(t, "/api/cards/"+cardID,
+		map[string]any{"player_name": "Tifa", "details": "VIP"})
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("patch status = %d; want 200", resp.StatusCode)
 	}
-	resp.Body.Close()
+	if decodeBody(t, resp)["ok"] != true {
+		t.Error("expected ok=true")
+	}
+
+	// The assignment shows up on the card list.
+	cards := decodeBody(t, env.get(t, "/api/cards"))["cards"].([]any)
+	if cards[0].(map[string]any)["player_name"] != "Tifa" {
+		t.Errorf("player_name = %v; want Tifa", cards[0].(map[string]any)["player_name"])
+	}
 }
 
 func TestCards_GenerateClampedCount(t *testing.T) {
@@ -468,7 +543,7 @@ func TestCards_GenerateClampedCount(t *testing.T) {
 	env.loginAdmin(t)
 
 	// Count > 500 should be clamped
-	resp := env.postJSON(t, "/api/cards", map[string]any{"action": "generate", "count": 9999})
+	resp := env.postJSON(t, "/api/cards/generate", map[string]any{"count": 9999})
 	data := decodeBody(t, resp)
 	count, _ := data["count"].(float64)
 	if count != 500 {
@@ -512,12 +587,24 @@ func testPattern5x5Alt() [][]bool {
 	return grid
 }
 
+// createPattern POSTs a pattern and returns its new id. Fails the test on a
+// non-201 (so callers can assume success).
+func createPattern(t *testing.T, env *testEnv, name string, grid [][]bool) float64 {
+	t.Helper()
+	resp := env.postJSON(t, "/api/patterns", map[string]any{"name": name, "pattern_data": grid})
+	if resp.StatusCode != http.StatusCreated {
+		body, _ := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		t.Fatalf("create pattern %q: status = %d; body = %s", name, resp.StatusCode, body)
+	}
+	return decodeBody(t, resp)["pattern"].(map[string]any)["id"].(float64)
+}
+
 func TestPatterns_Create(t *testing.T) {
 	env := newTestEnv(t)
 	env.loginAdmin(t)
 
 	resp := env.postJSON(t, "/api/patterns", map[string]any{
-		"action":       "create",
 		"name":         "Top Row",
 		"pattern_data": testPattern5x5(),
 	})
@@ -539,7 +626,6 @@ func TestPatterns_Create_InvalidGrid(t *testing.T) {
 
 	// Wrong dimensions
 	resp := env.postJSON(t, "/api/patterns", map[string]any{
-		"action":       "create",
 		"name":         "Bad",
 		"pattern_data": [][]bool{{true}},
 	})
@@ -554,7 +640,6 @@ func TestPatterns_Create_EmptyName(t *testing.T) {
 	env.loginAdmin(t)
 
 	resp := env.postJSON(t, "/api/patterns", map[string]any{
-		"action":       "create",
 		"name":         "",
 		"pattern_data": testPattern5x5(),
 	})
@@ -564,16 +649,28 @@ func TestPatterns_Create_EmptyName(t *testing.T) {
 	resp.Body.Close()
 }
 
+func TestPatterns_Create_Duplicate(t *testing.T) {
+	env := newTestEnv(t)
+	env.loginAdmin(t)
+
+	createPattern(t, env, "Top Row", testPattern5x5())
+
+	// Same grid → 409 duplicate.
+	resp := env.postJSON(t, "/api/patterns", map[string]any{
+		"name": "Also Top Row", "pattern_data": testPattern5x5(),
+	})
+	if resp.StatusCode != http.StatusConflict {
+		t.Errorf("status = %d; want 409", resp.StatusCode)
+	}
+	resp.Body.Close()
+}
+
 func TestPatterns_List(t *testing.T) {
 	env := newTestEnv(t)
 	env.loginAdmin(t)
 
-	env.postJSON(t, "/api/patterns", map[string]any{
-		"action": "create", "name": "Pat A", "pattern_data": testPattern5x5(),
-	}).Body.Close()
-	env.postJSON(t, "/api/patterns", map[string]any{
-		"action": "create", "name": "Pat B", "pattern_data": testPattern5x5Alt(),
-	}).Body.Close()
+	createPattern(t, env, "Pat A", testPattern5x5())
+	createPattern(t, env, "Pat B", testPattern5x5Alt())
 
 	resp := env.get(t, "/api/patterns")
 	data := decodeBody(t, resp)
@@ -583,82 +680,128 @@ func TestPatterns_List(t *testing.T) {
 	}
 }
 
+// TestPatterns_Rename covers PATCH /api/patterns/{id} {name}: a pure rename
+// returns {"ok": true} and the new name shows on the list.
 func TestPatterns_Rename(t *testing.T) {
 	env := newTestEnv(t)
 	env.loginAdmin(t)
 
-	resp := env.postJSON(t, "/api/patterns", map[string]any{
-		"action": "create", "name": "Old", "pattern_data": testPattern5x5(),
-	})
-	data := decodeBody(t, resp)
-	pat := data["pattern"].(map[string]any)
-	id := pat["id"].(float64)
+	id := createPattern(t, env, "Old", testPattern5x5())
 
-	resp = env.postJSON(t, "/api/patterns", map[string]any{
-		"action": "rename", "id": id, "name": "New",
-	})
-	data = decodeBody(t, resp)
-	if data["renamed"] != true {
-		t.Errorf("expected renamed=true, got %v", data["renamed"])
+	resp := env.patchJSON(t, fmt.Sprintf("/api/patterns/%d", int(id)), map[string]any{"name": "New"})
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("rename status = %d; want 200", resp.StatusCode)
+	}
+	if decodeBody(t, resp)["ok"] != true {
+		t.Error("expected ok=true")
+	}
+
+	patterns := decodeBody(t, env.get(t, "/api/patterns"))["patterns"].([]any)
+	if patterns[0].(map[string]any)["name"] != "New" {
+		t.Errorf("name = %v; want New", patterns[0].(map[string]any)["name"])
 	}
 }
 
-func TestPatterns_Delete(t *testing.T) {
+// TestPatterns_SetCategory covers PATCH /api/patterns/{id} {category_id}: moving
+// a pattern to another category.
+func TestPatterns_SetCategory(t *testing.T) {
 	env := newTestEnv(t)
 	env.loginAdmin(t)
 
-	resp := env.postJSON(t, "/api/patterns", map[string]any{
-		"action": "create", "name": "Temp", "pattern_data": testPattern5x5(),
-	})
-	data := decodeBody(t, resp)
-	pat := data["pattern"].(map[string]any)
-	id := pat["id"].(float64)
+	id := createPattern(t, env, "Movable", testPattern5x5())
+	// Create a second category to move into.
+	catID := int64(decodeBody(t, env.postJSON(t, "/api/pattern-categories", map[string]any{"name": "Bonus"}))["id"].(float64))
 
-	resp = env.postJSON(t, "/api/patterns", map[string]any{
-		"action": "delete", "id": id,
-	})
-	data = decodeBody(t, resp)
-	if data["deleted"] != true {
-		t.Errorf("expected deleted=true, got %v", data["deleted"])
+	resp := env.patchJSON(t, fmt.Sprintf("/api/patterns/%d", int(id)), map[string]any{"category_id": catID})
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("set-category status = %d; want 200", resp.StatusCode)
+	}
+	resp.Body.Close()
+
+	patterns := decodeBody(t, env.get(t, "/api/patterns"))["patterns"].([]any)
+	if int64(patterns[0].(map[string]any)["category_id"].(float64)) != catID {
+		t.Errorf("category_id = %v; want %d", patterns[0].(map[string]any)["category_id"], catID)
 	}
 }
 
-func TestPatterns_Reorder(t *testing.T) {
+// TestPatterns_PatchEmpty verifies PATCH with no recognized field is a 400.
+func TestPatterns_PatchEmpty(t *testing.T) {
 	env := newTestEnv(t)
 	env.loginAdmin(t)
 
-	env.postJSON(t, "/api/patterns", map[string]any{
-		"action": "create", "name": "A", "pattern_data": testPattern5x5(),
-	}).Body.Close()
-	resp := env.postJSON(t, "/api/patterns", map[string]any{
-		"action": "create", "name": "B", "pattern_data": testPattern5x5Alt(),
-	})
-	data := decodeBody(t, resp)
-	idB := data["pattern"].(map[string]any)["id"].(float64)
-
-	resp = env.postJSON(t, "/api/patterns", map[string]any{
-		"action": "reorder", "id": idB, "direction": "up",
-	})
-	data = decodeBody(t, resp)
-	patterns, _ := data["patterns"].([]any)
-	if len(patterns) != 2 {
-		t.Fatalf("expected 2 patterns, got %d", len(patterns))
-	}
-	first := patterns[0].(map[string]any)
-	if first["name"] != "B" {
-		t.Errorf("first pattern should be B after move up, got %v", first["name"])
-	}
-}
-
-func TestPatterns_InvalidAction(t *testing.T) {
-	env := newTestEnv(t)
-	env.loginAdmin(t)
-
-	resp := env.postJSON(t, "/api/patterns", map[string]any{"action": "explode"})
+	id := createPattern(t, env, "P", testPattern5x5())
+	resp := env.patchJSON(t, fmt.Sprintf("/api/patterns/%d", int(id)), map[string]any{})
 	if resp.StatusCode != http.StatusBadRequest {
 		t.Errorf("status = %d; want 400", resp.StatusCode)
 	}
 	resp.Body.Close()
+}
+
+// TestPatterns_Delete covers DELETE /api/patterns/{id} → 204.
+func TestPatterns_Delete(t *testing.T) {
+	env := newTestEnv(t)
+	env.loginAdmin(t)
+
+	id := createPattern(t, env, "Temp", testPattern5x5())
+
+	resp := env.del(t, fmt.Sprintf("/api/patterns/%d", int(id)))
+	if resp.StatusCode != http.StatusNoContent {
+		t.Fatalf("delete status = %d; want 204", resp.StatusCode)
+	}
+	resp.Body.Close()
+
+	patterns := decodeBody(t, env.get(t, "/api/patterns"))["patterns"].([]any)
+	if len(patterns) != 0 {
+		t.Errorf("expected 0 patterns after delete, got %d", len(patterns))
+	}
+}
+
+// TestPatterns_Reorder covers the single-item reorder folded into PATCH
+// /api/patterns/{id} {direction}: it moves the pattern and returns the fresh
+// patterns snapshot.
+func TestPatterns_Reorder(t *testing.T) {
+	env := newTestEnv(t)
+	env.loginAdmin(t)
+
+	createPattern(t, env, "A", testPattern5x5())
+	idB := createPattern(t, env, "B", testPattern5x5Alt())
+
+	resp := env.patchJSON(t, fmt.Sprintf("/api/patterns/%d", int(idB)), map[string]any{"direction": "up"})
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("reorder status = %d; want 200", resp.StatusCode)
+	}
+	data := decodeBody(t, resp)
+	patterns, _ := data["patterns"].([]any)
+	if len(patterns) != 2 {
+		t.Fatalf("expected 2 patterns, got %d", len(patterns))
+	}
+	if patterns[0].(map[string]any)["name"] != "B" {
+		t.Errorf("first pattern should be B after move up, got %v", patterns[0].(map[string]any)["name"])
+	}
+}
+
+// TestPatterns_BulkReorder covers POST /api/patterns/reorder: it persists a new
+// per-category order and returns the fresh snapshot.
+func TestPatterns_BulkReorder(t *testing.T) {
+	env := newTestEnv(t)
+	env.loginAdmin(t)
+
+	// Both patterns land in the seeded default category.
+	idA := createPattern(t, env, "A", testPattern5x5())
+	idB := createPattern(t, env, "B", testPattern5x5Alt())
+	catID := int64(decodeBody(t, env.get(t, "/api/patterns"))["patterns"].([]any)[0].(map[string]any)["category_id"].(float64))
+
+	// Reverse the order (B, A).
+	resp := env.postJSON(t, "/api/patterns/reorder", map[string]any{
+		"category_id": catID, "ordered_ids": []int{int(idB), int(idA)},
+	})
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("bulk reorder status = %d; want 200", resp.StatusCode)
+	}
+	patterns := decodeBody(t, resp)["patterns"].([]any)
+	if patterns[0].(map[string]any)["name"] != "B" {
+		t.Errorf("first pattern = %v; want B after bulk reorder", patterns[0].(map[string]any)["name"])
+	}
 }
 
 // ── Game ────────────────────────────────────────────────────────────────────
@@ -677,7 +820,7 @@ func TestGame_State_NoActive(t *testing.T) {
 func TestGame_RequiresAuth(t *testing.T) {
 	env := newTestEnv(t)
 
-	resp := env.postJSON(t, "/api/game", map[string]any{"action": "start", "pattern_ids": []int{1}})
+	resp := env.postJSON(t, "/api/game/start", map[string]any{"pattern_ids": []int{1}})
 	if resp.StatusCode != http.StatusUnauthorized {
 		t.Errorf("status = %d; want 401", resp.StatusCode)
 	}
@@ -688,7 +831,7 @@ func TestGame_Start_NoPatterns(t *testing.T) {
 	env := newTestEnv(t)
 	env.loginAdmin(t)
 
-	resp := env.postJSON(t, "/api/game", map[string]any{"action": "start", "pattern_ids": []int{}})
+	resp := env.postJSON(t, "/api/game/start", map[string]any{"pattern_ids": []int{}})
 	if resp.StatusCode != http.StatusBadRequest {
 		t.Errorf("status = %d; want 400", resp.StatusCode)
 	}
@@ -707,8 +850,8 @@ func TestGame_FullLifecycle(t *testing.T) {
 	patID := data["pattern"].(map[string]any)["id"].(float64)
 
 	// Start game
-	resp = env.postJSON(t, "/api/game", map[string]any{
-		"action": "start", "pattern_ids": []int{int(patID)},
+	resp = env.postJSON(t, "/api/game/start", map[string]any{
+		"pattern_ids": []int{int(patID)},
 	})
 	if resp.StatusCode != 200 {
 		body, _ := io.ReadAll(resp.Body)
@@ -729,7 +872,7 @@ func TestGame_FullLifecycle(t *testing.T) {
 	}
 
 	// Draw a number
-	resp = env.postJSON(t, "/api/game", map[string]any{"action": "draw"})
+	resp = env.postJSON(t, "/api/game/draw", map[string]any{})
 	if resp.StatusCode != 200 {
 		body, _ := io.ReadAll(resp.Body)
 		resp.Body.Close()
@@ -754,14 +897,14 @@ func TestGame_FullLifecycle(t *testing.T) {
 	}
 
 	// End game
-	resp = env.postJSON(t, "/api/game", map[string]any{"action": "end"})
+	resp = env.postJSON(t, "/api/game/end", map[string]any{})
 	data = decodeBody(t, resp)
 	if data["ended"] != true {
 		t.Errorf("expected ended=true, got %v", data["ended"])
 	}
 
 	// End again — should return false
-	resp = env.postJSON(t, "/api/game", map[string]any{"action": "end"})
+	resp = env.postJSON(t, "/api/game/end", map[string]any{})
 	data = decodeBody(t, resp)
 	if data["ended"] != false {
 		t.Errorf("expected ended=false on second end, got %v", data["ended"])
@@ -772,31 +915,21 @@ func TestGame_Draw_NoActive(t *testing.T) {
 	env := newTestEnv(t)
 	env.loginAdmin(t)
 
-	resp := env.postJSON(t, "/api/game", map[string]any{"action": "draw"})
+	resp := env.postJSON(t, "/api/game/draw", map[string]any{})
 	if resp.StatusCode != http.StatusBadRequest {
 		t.Errorf("status = %d; want 400", resp.StatusCode)
 	}
 	resp.Body.Close()
 }
 
-func TestGame_InvalidAction(t *testing.T) {
-	env := newTestEnv(t)
-	env.loginAdmin(t)
-
-	resp := env.postJSON(t, "/api/game", map[string]any{"action": "explode"})
-	if resp.StatusCode != http.StatusBadRequest {
-		t.Errorf("status = %d; want 400", resp.StatusCode)
-	}
-	resp.Body.Close()
-}
-
-// TestGame_SetDelay verifies set_delay persists the shared draw delay (readable
-// as default_draw_delay, so it survives page loads) and rejects out-of-range values.
+// TestGame_SetDelay verifies PATCH /api/game {delay} persists the shared draw
+// delay (readable as default_draw_delay, so it survives page loads) and rejects
+// out-of-range values.
 func TestGame_SetDelay(t *testing.T) {
 	env := newTestEnv(t)
 	env.loginAdmin(t)
 
-	resp := env.postJSON(t, "/api/game", map[string]any{"action": "set_delay", "delay": 15})
+	resp := env.patchJSON(t, "/api/game", map[string]any{"delay": 15})
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("status = %d; want 200", resp.StatusCode)
 	}
@@ -808,7 +941,7 @@ func TestGame_SetDelay(t *testing.T) {
 		t.Errorf("default_draw_delay = %v; want 15", settings["default_draw_delay"])
 	}
 
-	resp = env.postJSON(t, "/api/game", map[string]any{"action": "set_delay", "delay": 999})
+	resp = env.patchJSON(t, "/api/game", map[string]any{"delay": 999})
 	if resp.StatusCode != http.StatusBadRequest {
 		t.Errorf("out-of-range status = %d; want 400", resp.StatusCode)
 	}
@@ -826,8 +959,8 @@ func TestGame_StateWithActiveGame(t *testing.T) {
 	data := decodeBody(t, resp)
 	patID := data["pattern"].(map[string]any)["id"].(float64)
 
-	env.postJSON(t, "/api/game", map[string]any{
-		"action": "start", "pattern_ids": []int{int(patID)},
+	env.postJSON(t, "/api/game/start", map[string]any{
+		"pattern_ids": []int{int(patID)},
 	}).Body.Close()
 
 	// GET game state (no auth required)
@@ -866,12 +999,12 @@ func TestGame_BoardWithActiveGame(t *testing.T) {
 	data := decodeBody(t, resp)
 	patID := data["pattern"].(map[string]any)["id"].(float64)
 
-	env.postJSON(t, "/api/game", map[string]any{
-		"action": "start", "pattern_ids": []int{int(patID)},
+	env.postJSON(t, "/api/game/start", map[string]any{
+		"pattern_ids": []int{int(patID)},
 	}).Body.Close()
 
 	// Draw a number
-	env.postJSON(t, "/api/game", map[string]any{"action": "draw"}).Body.Close()
+	env.postJSON(t, "/api/game/draw", map[string]any{}).Body.Close()
 
 	// Board should include game state with called numbers
 	resp = env.get(t, "/api/board?id=GAME01")
@@ -1004,12 +1137,16 @@ func TestRaffles_Update(t *testing.T) {
 	raffle := data["raffle"].(map[string]any)
 	id := raffle["id"].(float64)
 
-	resp = env.postJSON(t, "/api/raffles", map[string]any{
-		"action": "update", "id": id, "title": "Updated", "max_entries": 10,
+	resp = env.putJSON(t, fmt.Sprintf("/api/raffles/%d", int(id)), map[string]any{
+		"title": "Updated", "max_entries": 10,
 	})
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d; want 200", resp.StatusCode)
+	}
 	data = decodeBody(t, resp)
-	if data["ok"] != true {
-		t.Errorf("expected ok=true, got %v", data["ok"])
+	raffle = data["raffle"].(map[string]any)
+	if raffle["title"] != "Updated" {
+		t.Errorf("title = %v; want Updated", raffle["title"])
 	}
 }
 
@@ -1024,24 +1161,15 @@ func TestRaffles_Delete(t *testing.T) {
 	raffle := data["raffle"].(map[string]any)
 	id := raffle["id"].(float64)
 
-	resp = env.postJSON(t, "/api/raffles", map[string]any{
-		"action": "delete", "id": id,
-	})
-	data = decodeBody(t, resp)
-	if data["deleted"] != true {
-		t.Errorf("expected deleted=true, got %v", data["deleted"])
-	}
-}
-
-func TestRaffles_InvalidAction(t *testing.T) {
-	env := newTestEnv(t)
-	env.loginAdmin(t)
-
-	resp := env.postJSON(t, "/api/raffles", map[string]any{"action": "explode"})
-	if resp.StatusCode != http.StatusBadRequest {
-		t.Errorf("status = %d; want 400", resp.StatusCode)
+	resp = env.del(t, fmt.Sprintf("/api/raffles/%d", int(id)))
+	if resp.StatusCode != http.StatusNoContent {
+		t.Errorf("status = %d; want 204", resp.StatusCode)
 	}
 	resp.Body.Close()
+	// Confirm it's gone.
+	if r, _ := env.store.GetRaffle(int64(id)); r != nil {
+		t.Error("raffle should be deleted")
+	}
 }
 
 func TestRaffles_Detail(t *testing.T) {
@@ -1227,17 +1355,20 @@ func TestRaffles_MarkPaid(t *testing.T) {
 
 	entryID, _ := env.store.CreateRaffleEntry(int64(raffleID), "P1", "W1", 1)
 
-	resp = env.postJSON(t, fmt.Sprintf("/api/raffles/%d/entries", raffleID), map[string]any{
-		"action": "mark_paid", "entry_id": entryID, "paid": true,
+	resp = env.patchJSON(t, fmt.Sprintf("/api/raffles/%d/entries/%d", raffleID, entryID), map[string]any{
+		"paid": true,
 	})
-	data = decodeBody(t, resp)
-	if data["ok"] != true {
-		t.Errorf("expected ok=true, got %v", data["ok"])
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d; want 200", resp.StatusCode)
+	}
+	entry, _ := decodeBody(t, resp)["entry"].(map[string]any)
+	if entry == nil || entry["paid"] != true {
+		t.Errorf("expected paid entry in response, got %v", entry)
 	}
 
 	// Verify paid
-	entry, _ := env.store.GetRaffleEntry(int64(raffleID), "P1", "W1")
-	if !entry.Paid {
+	stored, _ := env.store.GetRaffleEntry(int64(raffleID), "P1", "W1")
+	if !stored.Paid {
 		t.Error("expected entry to be paid")
 	}
 }
@@ -1255,9 +1386,7 @@ func TestRaffles_PickWinner(t *testing.T) {
 	entryID, _ := env.store.CreateRaffleEntry(int64(raffleID), "Winner", "World", 3)
 	_ = env.store.SetRaffleEntryPaid(entryID, true)
 
-	resp = env.postJSON(t, fmt.Sprintf("/api/raffles/%d/entries", raffleID), map[string]any{
-		"action": "pick_winner",
-	})
+	resp = env.postJSON(t, fmt.Sprintf("/api/raffles/%d/pick-winner", raffleID), nil)
 	data = decodeBody(t, resp)
 	winner, _ := data["winner"].(map[string]any)
 	if winner == nil {
@@ -1278,9 +1407,7 @@ func TestRaffles_PickWinnerNoPaid(t *testing.T) {
 	data := decodeBody(t, resp)
 	raffleID := int(data["raffle"].(map[string]any)["id"].(float64))
 
-	resp = env.postJSON(t, fmt.Sprintf("/api/raffles/%d/entries", raffleID), map[string]any{
-		"action": "pick_winner",
-	})
+	resp = env.postJSON(t, fmt.Sprintf("/api/raffles/%d/pick-winner", raffleID), nil)
 	if resp.StatusCode != http.StatusBadRequest {
 		t.Errorf("status = %d; want 400", resp.StatusCode)
 	}
@@ -1301,9 +1428,7 @@ func TestRaffles_VerifyWinner(t *testing.T) {
 	_ = env.store.SetRaffleEntryPaid(entryID, true)
 	_ = env.store.SetRaffleWinner(int64(raffleID), &entryID)
 
-	resp = env.postJSON(t, fmt.Sprintf("/api/raffles/%d/entries", raffleID), map[string]any{
-		"action": "verify_winner",
-	})
+	resp = env.postJSON(t, fmt.Sprintf("/api/raffles/%d/verify-winner", raffleID), nil)
 	data = decodeBody(t, resp)
 	if data["status"] != "closed" {
 		t.Errorf("status = %v; want closed", data["status"])
@@ -1326,9 +1451,7 @@ func TestRaffles_VerifyWinnerNoWinner(t *testing.T) {
 	data := decodeBody(t, resp)
 	raffleID := int(data["raffle"].(map[string]any)["id"].(float64))
 
-	resp = env.postJSON(t, fmt.Sprintf("/api/raffles/%d/entries", raffleID), map[string]any{
-		"action": "verify_winner",
-	})
+	resp = env.postJSON(t, fmt.Sprintf("/api/raffles/%d/verify-winner", raffleID), nil)
 	if resp.StatusCode != http.StatusBadRequest {
 		t.Errorf("status = %d; want 400", resp.StatusCode)
 	}
@@ -1347,30 +1470,9 @@ func TestRaffles_DeleteEntry(t *testing.T) {
 
 	entryID, _ := env.store.CreateRaffleEntry(int64(raffleID), "P", "W", 1)
 
-	resp = env.postJSON(t, fmt.Sprintf("/api/raffles/%d/entries", raffleID), map[string]any{
-		"action": "delete_entry", "entry_id": entryID,
-	})
-	data = decodeBody(t, resp)
-	if data["deleted"] != true {
-		t.Errorf("expected deleted=true, got %v", data["deleted"])
-	}
-}
-
-func TestRaffles_EntriesInvalidAction(t *testing.T) {
-	env := newTestEnv(t)
-	env.loginAdmin(t)
-
-	resp := env.postJSON(t, "/api/raffles", map[string]any{
-		"action": "create", "title": "T", "max_entries": 1,
-	})
-	data := decodeBody(t, resp)
-	raffleID := int(data["raffle"].(map[string]any)["id"].(float64))
-
-	resp = env.postJSON(t, fmt.Sprintf("/api/raffles/%d/entries", raffleID), map[string]any{
-		"action": "explode",
-	})
-	if resp.StatusCode != http.StatusBadRequest {
-		t.Errorf("status = %d; want 400", resp.StatusCode)
+	resp = env.del(t, fmt.Sprintf("/api/raffles/%d/entries/%d", raffleID, entryID))
+	if resp.StatusCode != http.StatusNoContent {
+		t.Errorf("status = %d; want 204", resp.StatusCode)
 	}
 	resp.Body.Close()
 }
@@ -1387,8 +1489,8 @@ func TestRaffles_AddEntry(t *testing.T) {
 	resp = env.postJSON(t, fmt.Sprintf("/api/raffles/%d/entries", raffleID), map[string]any{
 		"action": "add_entry", "character_name": "Cloud", "world": "Gaia", "num_entries": 2,
 	})
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("status = %d; want 200", resp.StatusCode)
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("status = %d; want 201", resp.StatusCode)
 	}
 	entry, _ := decodeBody(t, resp)["entry"].(map[string]any)
 	if entry == nil {
@@ -1420,8 +1522,8 @@ func TestRaffles_AddEntryPaid(t *testing.T) {
 	resp = env.postJSON(t, fmt.Sprintf("/api/raffles/%d/entries", raffleID), map[string]any{
 		"action": "add_entry", "character_name": "Tifa", "world": "Gaia", "num_entries": 1, "paid": true,
 	})
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("status = %d; want 200", resp.StatusCode)
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("status = %d; want 201", resp.StatusCode)
 	}
 	resp.Body.Close()
 
@@ -1542,8 +1644,8 @@ func TestRaffles_AddEntryIgnoresAvailabilityWindow(t *testing.T) {
 	resp = env.postJSON(t, fmt.Sprintf("/api/raffles/%d/entries", raffleID), map[string]any{
 		"action": "add_entry", "character_name": "P", "world": "W", "num_entries": 1,
 	})
-	if resp.StatusCode != http.StatusOK {
-		t.Errorf("admin add status = %d; want 200 (window ignored)", resp.StatusCode)
+	if resp.StatusCode != http.StatusCreated {
+		t.Errorf("admin add status = %d; want 201 (window ignored)", resp.StatusCode)
 	}
 	resp.Body.Close()
 }

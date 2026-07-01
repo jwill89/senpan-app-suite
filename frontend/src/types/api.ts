@@ -1,44 +1,30 @@
 /**
  * API types barrel.
  *
- * Re-exports the auto-generated domain types (mirrored from the Go `model`
- * package via tygo) and adds the request/response envelope types that the API
- * handlers use (these live in the Go `server` package as ad-hoc structs /
- * `map[string]any`, so they are mirrored here by hand).
+ * Re-exports the tygo-generated types from `api.generated.ts` — both the domain
+ * models AND the request/response envelopes, which now live as Go structs in the
+ * backend `model` package (so the Go handlers are the single source of truth for
+ * every wire shape). This file adds only the handful of types that are
+ * intentionally frontend-only: the admin *form* models, the richer `AppSettings`
+ * view, the WebSocket message union, and a couple of UI enums/constants.
  *
- * Keep this file in sync with `src/internal/server/*.go` handler shapes.
- * The domain models in `api.generated.ts` regenerate via `npm run gen:types`.
+ * Regenerate the domain + envelope types with `npm run gen:types` after changing
+ * any Go `model` struct.
  */
 import type {
-  Affiliate,
+  // Domain types referenced by the form models and WsMessage below.
   Placement,
-  StampRally,
-  StampRallyCard,
-  StampRallyLogEntry,
-  Announcement,
   AnnouncementButton,
-  AnnouncementType,
-  AnnouncementRole,
+  ReadingListSource,
   BingoDrawnNumber,
   BingoGameState,
-  Card,
-  FrequentWinner,
-  GamePreset,
+  CardListEntry,
   Pattern,
   PatternCategory,
-  Raffle,
-  RaffleEntry,
-  Garapon,
-  GaraponPlayer,
-  GaraponDraw,
-  ReadingList,
-  ReadingListItem,
-  ReadingListSource,
-  Style,
-  User,
-  WinnersLogEntry,
+  TokenInfo,
 } from './api.generated'
 
+// ── Domain models (generated from the Go `model` package) ────────────────────
 export type {
   Affiliate,
   AffiliateHour,
@@ -74,148 +60,126 @@ export type {
   Style,
   User,
   WinnersLogEntry,
+  TokenInfo,
 } from './api.generated'
 
-// ── Generic / action responses ───────────────────────────────────────────────
-// Many POST action endpoints reply with a simple {"success": true} (or an
-// error envelope handled by ApiError). Callers that don't read the body use this.
-export interface OkResponse {
-  success?: boolean
-}
+// ── Response envelopes (generated; backend `model` is the source of truth) ───
+export type {
+  // Shared
+  OKResponse,
+  DeletedResponse,
+  DeletedCountResponse,
+  StatusResponse,
+  NamedOKResponse,
+  RenamedResponse,
+  PausedResponse,
+  SkippedUpload,
+  // Auth / users / account
+  AuthCheckResponse,
+  LoginResponse,
+  LogoutResponse,
+  RegisterResponse,
+  UsersResponse,
+  AccountTokenGenerateResponse,
+  TokenRevokeResponse,
+  // Bingo: board / cards / game / patterns / presets / styles
+  ActiveCSSResponse,
+  CardListEntry,
+  CardsListResponse,
+  GeneratedCard,
+  GenerateCardsResponse,
+  GeneratedNamedCard,
+  GenerateSingleCardResponse,
+  CardResponse,
+  BoardResponse,
+  GameStateResponse,
+  DrawResult,
+  EndGameResponse,
+  PatternsResponse,
+  CreatedPattern,
+  PatternCreateResponse,
+  CategoriesResponse,
+  CategoryCreateResponse,
+  PresetsResponse,
+  PresetCreateResponse,
+  StylesResponse,
+  StyleGetResponse,
+  StyleCreateResponse,
+  // Raffles
+  RafflesResponse,
+  RaffleResponse,
+  RaffleDetailResponse,
+  RaffleEnterResponse,
+  RaffleEntryResponse,
+  RaffleWinnerResponse,
+  // Garapons
+  GaraponsResponse,
+  GaraponResponse,
+  GaraponDetailResponse,
+  GaraponPlayerResponse,
+  PublicGarapon,
+  GaraponPublicPlayer,
+  GaraponPublicResponse,
+  GaraponDrawResponse,
+  // Affiliates
+  AffiliatesResponse,
+  AffiliateResponse,
+  // Stamp rally
+  StampRalliesResponse,
+  StampRallyResponse,
+  StampRallyDetailResponse,
+  StampRallyCardResponse,
+  StampRallyLogsResponse,
+  PublicStampRally,
+  PublicStamp,
+  PublicPrize,
+  PublicStampCard,
+  StampSubmitResponse,
+  // Book club / reading lists
+  ReadingListsResponse,
+  ReadingListDetailResponse,
+  ReadingListItemResponse,
+  BookclubUploadResponse,
+  BookclubLookupResponse,
+  PublishResponse,
+  // Announcements
+  AnnouncementTypesResponse,
+  AnnouncementTypeResponse,
+  AnnouncementRolesResponse,
+  AnnouncementRoleResponse,
+  AnnouncementsResponse,
+  AnnouncementResponse,
+  // Winners log
+  WinnersLogResponse,
+  FrequentWinnersResponse,
+  // Fonts / Carrd / Images
+  FontFile,
+  FontsResponse,
+  FontUploadResponse,
+  CarrdProject,
+  CarrdProjectsResponse,
+  CarrdProjectCreateResponse,
+  CarrdImage,
+  CarrdImagesResponse,
+  CarrdUploadResponse,
+  ImageCategory,
+  ImageCategoriesResponse,
+  ImageCategoryActionResponse,
+  ImageEntry,
+  ImagesResponse,
+  ImagesUploadResponse,
+} from './api.generated'
 
-// GET /api/auth and POST /api/auth (login/logout). When authenticated, `user`
-// carries the current account so the frontend can gate UI by permission.
-export interface AuthCheckResponse {
-  authenticated: boolean
-  user: User | null
-}
+// GET /api/account/token returns the account's token metadata, which IS the
+// domain `TokenInfo` shape (the handler writes it directly). Aliased for a
+// self-documenting name at call sites.
+export type AccountTokenInfoResponse = TokenInfo
 
-// POST /api/auth {action:"login"} — success plus the logged-in user.
-export interface LoginResponse {
-  success?: boolean
-  user: User
-}
-
-// POST /api/register — account created (pending admin activation).
-export interface RegisterResponse {
-  success?: boolean
-  message: string
-}
-
-// GET /api/users — all accounts (admin only).
-export interface UsersResponse {
-  users: User[]
-}
-
-// GET /api/account/token — the current account's personal-access-token metadata.
-// The token plaintext itself is never returned here (only at generation), so a
-// reload of the account page can show whether one exists, its visible prefix, and
-// when it was created / last used — but not the secret.
-export interface AccountTokenInfoResponse {
-  has_token: boolean
-  prefix: string
-  created_at: string
-  last_used_at: string
-}
-
-// POST /api/account/token {action:"generate"} — the freshly minted token. `token`
-// is the full plaintext and is returned EXACTLY ONCE (it is hashed at rest); the
-// UI must surface it to the user immediately because it can never be shown again.
-export interface AccountTokenGenerateResponse {
-  token: string
-  prefix: string
-  created_at: string
-}
-
-// GET /api/styles/active — the active theme's raw CSS + decorative flourishes
-// (root-relative paths into images/flourishes, "" = built-in art).
-export interface ActiveCssResponse {
-  css: string
-  board_flourish: string
-  number_flourish: string
-}
-
-// POST /api/cards {action:"generate"} — number of cards generated.
-export interface GenerateCardsResponse {
-  count: number
-}
-
-// POST /api/cards {action:"generate_single"} — the one card created (with its
-// assigned player name), so the caller can surface or open it immediately.
-export interface GenerateSingleCardResponse {
-  count: number
-  card: { id: string; player_name: string; board_data: number[][] }
-}
-
-// Board fetch variants that only return the card (winner verify / preview).
-export interface CardResponse {
-  card: Card
-}
-
-// POST /api/styles {action:"get"} — a single theme with its CSS.
-export interface StyleGetResponse {
-  style: Style
-}
-
-// POST /api/styles {action:"create"} — the new theme's id.
-export interface StyleCreateResponse {
-  id: number
-}
-
-// ── Card list entry (GET /api/cards) ────────────────────────────────────────
-// The list endpoint returns a lightweight shape (no board_data).
-export interface CardListEntry {
-  id: string
-  player_name: string
-  details: string
-  /** ISO timestamp the card was generated ("" for cards predating tracking). */
-  created_at: string
-}
-
-// ── Board (GET /api/board) ──────────────────────────────────────────────────
-export interface BoardResponse {
-  card: Card
-  game?: BingoGameState | null
-  game_details?: string
-}
-
-// ── Game (GET /api/game) ────────────────────────────────────────────────────
-export interface GameStateResponse {
-  game: BingoGameState | null
-  winners: string[]
-  game_details: string
-}
-
-// ── Draw result (POST /api/game {action:"draw"}) ────────────────────────────
-export interface DrawResult {
-  drawn: BingoDrawnNumber
-  game: BingoGameState
-  winners: string[]
-}
-
-// ── Patterns (GET /api/patterns) ────────────────────────────────────────────
-export interface PatternsResponse {
-  patterns: Pattern[]
-  categories: PatternCategory[]
-}
-
-// ── Game presets (GET /api/presets) ─────────────────────────────────────────
-export interface PresetsResponse {
-  presets: GamePreset[]
-}
-
-// POST /api/presets {action:"create"} — the new preset's id.
-export interface PresetCreateResponse {
-  id: number
-}
-
-// ── Styles (GET /api/styles) ────────────────────────────────────────────────
-export interface StylesResponse {
-  styles: Style[]
-  active_style_id: string
-}
-
-// ── Settings (GET /api/settings) ────────────────────────────────────────────
+// ── Settings (kept hand-written) ─────────────────────────────────────────────
+// The backend response types `settings` as a dynamic string→string map; this
+// richer view enumerates the known keys (plus the per-club webhook index
+// signature) for better editor support on the Settings page. Kept in sync by
+// hand with the backend `settingsKeys`.
 export interface AppSettings {
   app_title: string
   default_draw_delay: string
@@ -235,6 +199,7 @@ export interface AppSettings {
   [key: `discord_webhook_url_${string}`]: string
 }
 
+// GET /api/settings — the richer settings view (named keys) + uploaded fonts.
 export interface SettingsResponse {
   settings: AppSettings
   /**
@@ -245,186 +210,7 @@ export interface SettingsResponse {
   uploaded_fonts?: string[]
 }
 
-// ── Winners log (GET /api/winners-log) ──────────────────────────────────────
-export interface WinnersLogResponse {
-  entries: WinnersLogEntry[]
-  total: number
-  page: number
-  per_page: number
-}
-
-export interface FrequentWinnersResponse {
-  winners: FrequentWinner[]
-}
-
-// ── Raffles ─────────────────────────────────────────────────────────────────
-export interface RafflesResponse {
-  raffles: Raffle[]
-}
-
-export interface RaffleDetailResponse {
-  raffle: Raffle
-  total_entries?: number
-  entries?: RaffleEntry[]
-  winner_entry?: RaffleEntry
-}
-
-export interface RaffleEnterResponse {
-  message: string
-  total_entries: number
-  total_cost: number
-  signup_instructions: string
-}
-
-export interface RaffleWinnerResponse {
-  winner: RaffleEntry
-}
-
-// POST /api/raffles/{id}/entries {add_entry} — the created/updated entry.
-export interface RaffleEntryResponse {
-  entry: RaffleEntry
-}
-
-// ── Garapon (festival lottery drum) ─────────────────────────────────────────
-// GET /api/garapons — admin list (each carries player_count/draw_count aggregates).
-export interface GaraponsResponse {
-  garapons: Garapon[]
-}
-
-// GET /api/garapons/{id} — admin detail: the garapon (with prizes), its drawing
-// links, and the full draw log.
-export interface GaraponDetailResponse {
-  garapon: Garapon
-  players: GaraponPlayer[]
-  draws: GaraponDraw[]
-}
-
-// POST /api/garapons/{id}/players {create_player} — the new drawing link.
-export interface GaraponPlayerResponse {
-  player: GaraponPlayer
-}
-
-// GET /api/garapon/{token} — the public player view. `garapon.prizes` carry ball
-// colors + which is grand but NOT the appearance rates (rate is zeroed). `player`
-// is the trimmed shape (name + allowance/usage, no token); `draws` is this
-// player's own history.
-export interface GaraponPublicPlayer {
-  player_name: string
-  max_draws: number
-  draws_used: number
-}
-export interface GaraponPublicResponse {
-  garapon: Garapon
-  player: GaraponPublicPlayer
-  draws: GaraponDraw[]
-}
-
-// POST /api/garapon/{token}/draw — the recorded draw + the fresh usage counts.
-export interface GaraponDrawResponse {
-  draw: GaraponDraw
-  draws_used: number
-  max_draws: number
-}
-
-// ── Affiliates ──────────────────────────────────────────────────────────────
-// GET /api/affiliates — admin list (full records: owners + hours + images).
-export interface AffiliatesResponse {
-  affiliates: Affiliate[]
-}
-
-// ── Stamp Rally ─────────────────────────────────────────────────────────────
-// GET /api/stamp-rallies — admin list (each with card/completed counts).
-export interface StampRalliesResponse {
-  stamp_rallies: StampRally[]
-}
-// GET /api/stamp-rallies/{id} — event (with stamps + prizes) + issued cards.
-export interface StampRallyDetailResponse {
-  stamp_rally: StampRally
-  cards: StampRallyCard[]
-}
-// POST /api/stamp-rallies/{id}/cards {create_card} — the issued card (with token).
-export interface StampRallyCardResponse {
-  card: StampRallyCard
-}
-// GET /api/stamp-rallies/{id}/logs — the event-wide collection log.
-export interface StampRallyLogsResponse {
-  logs: StampRallyLogEntry[]
-}
-
-// Public token view (hand-mirrored from server/stamprally.go publicCard). Passwords
-// are stripped; prize name/image are blank until the card is complete (the slot then
-// shows the not-stamped placeholder), and stamps carry computed availability/collection.
-export interface PublicStampRally {
-  id: number
-  title: string
-  card_image: string
-  not_stamped_image: string
-  details: string
-  redeem_instructions: string
-  available_from: string
-  available_to: string
-  is_active: boolean
-}
-export interface PublicStamp {
-  id: number
-  affiliate_name: string
-  image: string
-  placement: Placement
-  active_from: string
-  active_to: string
-  available: boolean
-  collected: boolean
-  collected_at: string
-}
-export interface PublicPrize {
-  id: number
-  name: string
-  image: string
-  placement: Placement
-}
-export interface PublicStampCard {
-  rally: PublicStampRally
-  participant_name: string
-  completed: boolean
-  completed_at: string
-  stamps: PublicStamp[]
-  prizes: PublicPrize[]
-  prizes_revealed: boolean
-}
-// POST /api/stamp-card/{token}/stamp — the refreshed card + the just-collected stamp id.
-export interface StampSubmitResponse {
-  card: PublicStampCard
-  collected_stamp_id: number
-}
-
-// ── Book clubs / reading lists ──────────────────────────────────────────────
-export interface ReadingListsResponse {
-  reading_lists: ReadingList[]
-}
-
-export interface ReadingListDetailResponse {
-  reading_list: ReadingList
-}
-
-// POST /api/reading-lists/{id}/items — the created/updated item.
-export interface ReadingListItemResponse {
-  item: ReadingListItem
-}
-
-// POST /api/bookclub/upload — full URL of the stored cover image.
-export interface BookclubUploadResponse {
-  url: string
-}
-
-// GET /api/bookclub/lookup — AniList suggestions, shaped like reading list items.
-export interface BookclubLookupResponse {
-  results: ReadingListItem[]
-}
-
-// POST /api/reading-lists/{id}/publish — number of items posted to Discord.
-export interface PublishResponse {
-  published: number
-}
+// ── Form models (frontend-only) ──────────────────────────────────────────────
 
 // Form model for the admin reading-list item create/edit form.
 export interface ReadingListItemForm {
@@ -439,40 +225,6 @@ export interface ReadingListItemForm {
   comments: string
   sources: ReadingListSource[]
 }
-
-// ── Announcement management ──────────────────────────────────────────────────
-// GET /api/announcement-types — Discord destinations.
-export interface AnnouncementTypesResponse {
-  types: AnnouncementType[]
-}
-
-// POST /api/announcement-types {create|update} — the saved type.
-export interface AnnouncementTypeResponse {
-  type: AnnouncementType
-}
-
-// GET /api/announcement-roles — taggable Discord roles.
-export interface AnnouncementRolesResponse {
-  roles: AnnouncementRole[]
-}
-
-// POST /api/announcement-roles {create|update} — the saved role.
-export interface AnnouncementRoleResponse {
-  role: AnnouncementRole
-}
-
-// GET /api/announcements — all announcements (with type_name joined).
-export interface AnnouncementsResponse {
-  announcements: Announcement[]
-}
-
-// POST /api/announcements {create|update|send_now|skip_next} — the saved announcement.
-export interface AnnouncementResponse {
-  announcement: Announcement
-}
-
-// Announcement images are now sourced from the central Images page (categories
-// "Announcement Main" / "Announcement Thumbnail") via the image endpoints below.
 
 // Form model for the admin announcement-type create/edit form.
 export interface AnnouncementTypeForm {
@@ -557,120 +309,6 @@ export interface AnnouncementForm {
    * (@everyone), or 'role:<announcement_role_id>' (a managed taggable role).
    */
   mention: string
-}
-
-// ── Fonts (System → Font Upload) ────────────────────────────────────────────
-// A single font file in <webRoot>/fonts.
-export interface FontFile {
-  name: string
-  size: number
-  /** RFC3339 last-modified timestamp. */
-  modified: string
-}
-
-export interface FontsResponse {
-  fonts: FontFile[]
-}
-
-// POST /api/fonts/upload — per-file result of a (possibly multi-file) upload.
-export interface FontUploadResponse {
-  uploaded: string[]
-  skipped: { name: string; reason: string }[]
-}
-
-// ── Carrd image hosting (System → Carrd Upload) ─────────────────────────────
-// A project (folder) under <webRoot>/carrd, served at carrd.senpan.cafe/<folder>.
-export interface CarrdProject {
-  title: string
-  folder: string
-  /** Total media files across the project (root + nested sub-folders). */
-  file_count: number
-  /** Number of nested sub-folders (recursive). */
-  subfolder_count: number
-  /** Combined size in bytes of all media files in the project. */
-  total_size: number
-  /** RFC3339 folder last-modified timestamp. */
-  modified: string
-}
-
-export interface CarrdProjectsResponse {
-  projects: CarrdProject[]
-}
-
-export interface CarrdProjectCreateResponse {
-  ok: boolean
-  project: CarrdProject
-}
-
-// A single image inside a carrd project folder.
-export interface CarrdImage {
-  name: string
-  size: number
-  /** RFC3339 last-modified timestamp. */
-  modified: string
-}
-
-export interface CarrdImagesResponse {
-  folder: string
-  /** Relative subpath within the project ("" = project root). */
-  path: string
-  /** Names of the immediate sub-directories at this path. */
-  dirs: string[]
-  images: CarrdImage[]
-}
-
-// POST /api/carrd/upload — per-file result of a (possibly multi-file) upload.
-export interface CarrdUploadResponse {
-  uploaded: string[]
-  skipped: { name: string; reason: string }[]
-}
-
-// ── Central image hosting (System → Images) ─────────────────────────────────
-// An image category maps to a subdirectory of <webRoot>/images. Three are
-// permanent (announcements_main, announcements_thumb, raffles); admins may add
-// custom ones. Used by the Images page and by the announcement/raffle pickers.
-export interface ImageCategory {
-  name: string
-  /** Subdirectory of <webRoot>/images this category maps to. */
-  dir: string
-  /** Permanent categories cannot be renamed or deleted. */
-  permanent: boolean
-  /** Number of image files in the category directory. */
-  file_count: number
-  /** Combined size in bytes of the images in the category. */
-  total_size: number
-}
-
-export interface ImageCategoriesResponse {
-  categories: ImageCategory[]
-}
-
-export interface ImageCategoryActionResponse {
-  ok: boolean
-  category: ImageCategory
-}
-
-// A single image within a category directory.
-export interface ImageEntry {
-  name: string
-  /** Absolute public URL (used by announcement embeds, which need absolute URLs). */
-  url: string
-  /** Root-relative web path ("images/<dir>/<name>"); raffles store this. */
-  path: string
-  size: number
-  /** RFC3339 last-modified timestamp. */
-  modified: string
-}
-
-export interface ImagesResponse {
-  dir: string
-  images: ImageEntry[]
-}
-
-// POST /api/images/upload — per-file result of a (possibly multi-file) upload.
-export interface ImagesUploadResponse {
-  uploaded: string[]
-  skipped: { name: string; reason: string }[]
 }
 
 // Form model for the admin raffle create/edit form.

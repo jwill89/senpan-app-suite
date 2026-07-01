@@ -62,7 +62,7 @@ describe('applyExternalChange (live invalidation)', () => {
     s.selectedList = { id: 4 } as ReadingList
     s.applyExternalChange(true)
     expect(ep.lists).toHaveBeenCalled()
-    expect(ep.listDetail).toHaveBeenCalledWith(4)
+    expect(ep.listDetail).toHaveBeenCalledWith('yaoi', 4)
   })
 
   it('only invalidates when not viewing, so the next entry refetches', () => {
@@ -88,7 +88,7 @@ describe('createList', () => {
     const s = useBookclubStore()
     s.newListTitle = '  Summer Reads  '
     await s.createList()
-    expect(ep.createList).toHaveBeenCalledWith('Summer Reads', 'yaoi')
+    expect(ep.createList).toHaveBeenCalledWith('yaoi', 'Summer Reads')
     expect(s.newListTitle).toBe('')
   })
 })
@@ -142,8 +142,11 @@ describe('saveItem', () => {
       { title: 'Drop', url: '   ' },
     ]
     await s.saveItem()
-    const payload = (ep.saveItem.mock.calls[0] as unknown[])[1] as { sources: unknown[] }
+    const call = ep.saveItem.mock.calls[0] as unknown[]
+    expect(call[0]).toBe('yaoi') // club threaded through as the first arg
+    expect(call[1]).toBe(3) // the open list's id
+    const payload = call[2] as { sources: unknown[] }
     expect(payload.sources).toHaveLength(1)
-    expect(ep.listDetail).toHaveBeenCalledWith(3)
+    expect(ep.listDetail).toHaveBeenCalledWith('yaoi', 3)
   })
 })

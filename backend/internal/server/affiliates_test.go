@@ -1,6 +1,7 @@
 package server_test
 
 import (
+	"fmt"
 	"net/http"
 	"testing"
 
@@ -86,8 +87,9 @@ func TestAffiliates_UpdateAndDelete(t *testing.T) {
 
 	id := env.createAffiliate(t, "Original")
 
-	resp := env.postJSON(t, "/api/affiliates", map[string]any{
-		"action": "update", "id": id, "name": "Renamed", "owners": []string{"Solo"},
+	// Update (PUT /api/affiliates/{id}).
+	resp := env.putJSON(t, fmt.Sprintf("/api/affiliates/%d", id), map[string]any{
+		"name": "Renamed", "owners": []string{"Solo"},
 	})
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("update status = %d; want 200", resp.StatusCode)
@@ -99,20 +101,29 @@ func TestAffiliates_UpdateAndDelete(t *testing.T) {
 		t.Errorf("name = %v; want Renamed", list[0].(map[string]any)["name"])
 	}
 
-	resp = env.postJSON(t, "/api/affiliates", map[string]any{"action": "delete", "id": id})
-	data := decodeBody(t, resp)
-	if data["deleted"] != true {
-		t.Errorf("expected deleted=true, got %v", data["deleted"])
+	// Delete (DELETE /api/affiliates/{id} → 204).
+	resp = env.del(t, fmt.Sprintf("/api/affiliates/%d", id))
+	if resp.StatusCode != http.StatusNoContent {
+		t.Fatalf("delete status = %d; want 204", resp.StatusCode)
+	}
+	resp.Body.Close()
+
+	if list := decodeBody(t, env.get(t, "/api/affiliates"))["affiliates"].([]any); len(list) != 0 {
+		t.Errorf("expected affiliate deleted, got %d remaining", len(list))
 	}
 }
 
-func TestAffiliates_InvalidAction(t *testing.T) {
+func TestAffiliates_UpdateValidation(t *testing.T) {
 	env := newTestEnv(t)
 	env.loginAdmin(t)
 
-	resp := env.postJSON(t, "/api/affiliates", map[string]any{"action": "explode"})
+	id := env.createAffiliate(t, "Original")
+
+	// A blank name is rejected on update (PUT /api/affiliates/{id}).
+	resp := env.putJSON(t, fmt.Sprintf("/api/affiliates/%d", id),
+		map[string]any{"name": "  ", "owners": []string{"Solo"}})
 	if resp.StatusCode != http.StatusBadRequest {
-		t.Errorf("status = %d; want 400", resp.StatusCode)
+		t.Errorf("update blank name status = %d; want 400", resp.StatusCode)
 	}
 	resp.Body.Close()
 }

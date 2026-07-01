@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
-import type { Garapon, GaraponDraw, GaraponPlayer } from '@/types/api'
+import type { Garapon, GaraponDraw, GaraponPlayer, PublicGarapon } from '@/types/api'
 
 // Mock the typed endpoint layer so store actions can be exercised without the
 // network. vi.hoisted lets the spies be referenced inside the mock factory.
@@ -95,7 +95,7 @@ describe('computed', () => {
         { name: 'Grand', is_grand: true },
         { name: 'Other', is_grand: false },
       ] as never,
-    })
+    }) as unknown as PublicGarapon
     s.publicPlayer = { player_name: 'Hero', max_draws: 3, draws_used: 1 }
     expect(s.grandPrize?.name).toBe('Grand')
     expect(s.otherPrizes).toHaveLength(1)
@@ -105,7 +105,7 @@ describe('computed', () => {
 
   it('canDraw is false when the allowance is exhausted', () => {
     const s = useGaraponsStore()
-    s.publicGarapon = garapon()
+    s.publicGarapon = garapon() as unknown as PublicGarapon
     s.publicPlayer = { player_name: 'Hero', max_draws: 1, draws_used: 1 }
     expect(s.drawsRemaining).toBe(0)
     expect(s.canDraw).toBe(false)

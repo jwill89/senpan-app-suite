@@ -9,6 +9,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"app-suite/internal/model"
 )
 
 // ── Carrd image hosting (System → Carrd Upload admin tab) ────────────────────
@@ -37,24 +39,6 @@ const carrdMetaFile = ".carrd.json"
 // carrdMeta is the JSON shape of the per-project metadata sidecar.
 type carrdMeta struct {
 	Title string `json:"title"`
-}
-
-// carrdProject is the JSON shape for one project in the listing. The counts and
-// size are aggregated across the whole project tree (root + nested sub-folders).
-type carrdProject struct {
-	Title          string `json:"title"`
-	Folder         string `json:"folder"`
-	FileCount      int    `json:"file_count"`      // media files, recursive
-	SubfolderCount int    `json:"subfolder_count"` // nested sub-directories, recursive
-	TotalSize      int64  `json:"total_size"`      // combined size of all media files, bytes
-	Modified       string `json:"modified"`        // RFC3339 (folder mod time)
-}
-
-// carrdImage is the JSON shape for one image in a project listing.
-type carrdImage struct {
-	Name     string `json:"name"`
-	Size     int64  `json:"size"`
-	Modified string `json:"modified"` // RFC3339
 }
 
 // carrdDir returns the absolute path to the carrd projects root directory.
@@ -207,17 +191,17 @@ func carrdProjectStats(folderPath string) (subfolders, files int, totalSize int6
 
 // listCarrdProjects reads the carrd root and returns its projects sorted by
 // title (case-insensitive). Returns an empty slice when the root is missing.
-func (s *Server) listCarrdProjects() ([]carrdProject, error) {
+func (s *Server) listCarrdProjects() ([]model.CarrdProject, error) {
 	root := s.carrdDir()
 	entries, err := os.ReadDir(root)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return []carrdProject{}, nil
+			return []model.CarrdProject{}, nil
 		}
 		return nil, err
 	}
 
-	projects := make([]carrdProject, 0, len(entries))
+	projects := make([]model.CarrdProject, 0, len(entries))
 	for _, e := range entries {
 		if !e.IsDir() {
 			continue
@@ -229,7 +213,7 @@ func (s *Server) listCarrdProjects() ([]carrdProject, error) {
 			modified = info.ModTime().UTC().Format(time.RFC3339)
 		}
 		subfolders, files, totalSize := carrdProjectStats(folderPath)
-		projects = append(projects, carrdProject{
+		projects = append(projects, model.CarrdProject{
 			Title:          readCarrdTitle(folderPath, folder),
 			Folder:         folder,
 			FileCount:      files,
@@ -266,34 +250,35 @@ func (s *Server) handleCarrdProjectsList(w http.ResponseWriter, r *http.Request)
 		writeInternalError(w, "list carrd projects", err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"projects": projects})
+	writeJSON(w, http.StatusOK, model.CarrdProjectsResponse{Projects: projects})
 }
 
-// carrdProjectsActionRequest is the JSON body for POST /api/carrd/projects.
-// Action: "create", "rename", or "delete". For "rename", Folder is the existing
-// project folder and NewFolder is the desired folder ("" keeps the current one).
-type carrdProjectsActionRequest struct {
-	Action    string `json:"action"`
+// carrdProjectCreateRequest is the JSON body for POST /api/carrd/projects.
+type carrdProjectCreateRequest struct {
+	Title  string `json:"title"`
+	Folder string `json:"folder"`
+}
+
+// carrdProjectRenameRequest is the JSON body for PATCH /api/carrd/projects/{folder}.
+// The existing folder comes from the path; NewFolder is the desired folder
+// ("" keeps the current one).
+type carrdProjectRenameRequest struct {
 	Title     string `json:"title"`
-	Folder    string `json:"folder"`
 	NewFolder string `json:"new_folder"`
 }
 
-// handleCarrdProjectsAction creates or deletes a carrd project (folder).
+// handleCarrdProjectCreate creates a carrd project (folder).
 //
 //	Endpoint:  POST /api/carrd/projects
 //	Auth:      admin, or a user granted this page's permission
-//	Request:   {"action": "create", "title": "...", "folder": "..."(optional)}
-//	           {"action": "rename", "folder": "...", "title": "...", "new_folder": "..."(optional)}
-//	           {"action": "delete", "folder": "..."}
-//	Response:  create/rename → {"ok": true, "project": {...}}
-//	           delete        → {"ok": true}
-func (s *Server) handleCarrdProjectsAction(w http.ResponseWriter, r *http.Request) {
+//	Request:   {"title": "...", "folder": "..."(optional)}
+//	Response:  201 {"ok": true, "project": {...}}
+func (s *Server) handleCarrdProjectCreate(w http.ResponseWriter, r *http.Request) {
 	if !s.requirePermission(w, r, permAtelierCarrd) {
 		return
 	}
 
-	req, err := readJSON[carrdProjectsActionRequest](w, r)
+	req, err := readJSON[carrdProjectCreateRequest](w, r)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "Invalid JSON")
 		return
@@ -304,43 +289,74 @@ func (s *Server) handleCarrdProjectsAction(w http.ResponseWriter, r *http.Reques
 		writeError(w, http.StatusInternalServerError, "Failed to access carrd directory")
 		return
 	}
-
-	switch req.Action {
-	case "create":
-		s.createCarrdProject(w, root, req)
-
-	case "rename":
-		s.renameCarrdProject(w, root, req)
-
-	case "delete":
-		folder := strings.TrimSpace(req.Folder)
-		if !validCarrdFolder(folder) {
-			writeError(w, http.StatusBadRequest, "Invalid folder name")
-			return
-		}
-		if err := os.RemoveAll(filepath.Join(root, folder)); err != nil {
-			writeInternalError(w, "delete carrd project", err)
-			return
-		}
-		writeJSON(w, http.StatusOK, map[string]any{"ok": true})
-
-	default:
-		writeError(w, http.StatusBadRequest, "Invalid action. Use: create, rename, delete")
-	}
+	s.createCarrdProject(w, root, req.Title, req.Folder)
 }
 
-// createCarrdProject handles the "create" action: it validates that the title
-// and folder are non-empty and unique, creates the folder, and writes the
-// title sidecar.
-func (s *Server) createCarrdProject(w http.ResponseWriter, root string, req carrdProjectsActionRequest) {
-	title := strings.TrimSpace(req.Title)
+// handleCarrdProjectRename renames a carrd project. The current folder comes from
+// the path; the new title/folder from the body.
+//
+//	Endpoint:  PATCH /api/carrd/projects/{folder}
+//	Auth:      admin, or a user granted this page's permission
+//	Request:   {"title": "...", "new_folder": "..."(optional)}
+//	Response:  200 {"ok": true, "project": {...}}
+func (s *Server) handleCarrdProjectRename(w http.ResponseWriter, r *http.Request) {
+	if !s.requirePermission(w, r, permAtelierCarrd) {
+		return
+	}
+
+	req, err := readJSON[carrdProjectRenameRequest](w, r)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "Invalid JSON")
+		return
+	}
+
+	root := s.carrdDir()
+	if err := os.MkdirAll(root, 0755); err != nil {
+		writeError(w, http.StatusInternalServerError, "Failed to access carrd directory")
+		return
+	}
+	s.renameCarrdProject(w, root, r.PathValue("folder"), req.Title, req.NewFolder)
+}
+
+// handleCarrdProjectDelete deletes a carrd project (folder) and its contents.
+//
+//	Endpoint:  DELETE /api/carrd/projects/{folder}
+//	Auth:      admin, or a user granted this page's permission
+//	Response:  204 No Content
+func (s *Server) handleCarrdProjectDelete(w http.ResponseWriter, r *http.Request) {
+	if !s.requirePermission(w, r, permAtelierCarrd) {
+		return
+	}
+
+	root := s.carrdDir()
+	if err := os.MkdirAll(root, 0755); err != nil {
+		writeError(w, http.StatusInternalServerError, "Failed to access carrd directory")
+		return
+	}
+	folder := strings.TrimSpace(r.PathValue("folder"))
+	if !validCarrdFolder(folder) {
+		writeError(w, http.StatusBadRequest, "Invalid folder name")
+		return
+	}
+	if err := os.RemoveAll(filepath.Join(root, folder)); err != nil {
+		writeInternalError(w, "delete carrd project", err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// createCarrdProject validates that the title and folder are non-empty and
+// unique, creates the folder, and writes the title sidecar. reqTitle/reqFolder
+// are the raw (untrimmed/unnormalized) values from the request.
+func (s *Server) createCarrdProject(w http.ResponseWriter, root, reqTitle, reqFolder string) {
+	title := strings.TrimSpace(reqTitle)
 	if title == "" {
 		writeError(w, http.StatusBadRequest, "Project title is required")
 		return
 	}
 
 	// Folder: use the supplied name (normalized) or derive it from the title.
-	folder := slugifyFolder(req.Folder)
+	folder := slugifyFolder(reqFolder)
 	if folder == "" {
 		folder = slugifyFolder(title)
 	}
@@ -392,9 +408,9 @@ func (s *Server) createCarrdProject(w http.ResponseWriter, root string, req carr
 	if info, err := os.Stat(folderPath); err == nil {
 		modified = info.ModTime().UTC().Format(time.RFC3339)
 	}
-	writeJSON(w, http.StatusCreated, map[string]any{
-		"ok": true,
-		"project": carrdProject{
+	writeJSON(w, http.StatusCreated, model.CarrdProjectCreateResponse{
+		OK: true,
+		Project: model.CarrdProject{
 			Title:    title,
 			Folder:   folder,
 			Modified: modified,
@@ -402,22 +418,23 @@ func (s *Server) createCarrdProject(w http.ResponseWriter, root string, req carr
 	})
 }
 
-// renameCarrdProject handles the "rename" action: it updates a project's title
-// sidecar and, when new_folder differs, renames the project folder on disk.
-// Both the new title and the new folder must stay unique across projects.
-func (s *Server) renameCarrdProject(w http.ResponseWriter, root string, req carrdProjectsActionRequest) {
-	folder := strings.TrimSpace(req.Folder)
+// renameCarrdProject updates a project's title sidecar and, when new_folder
+// differs, renames the project folder on disk. Both the new title and the new
+// folder must stay unique across projects. reqFolder is the existing folder
+// (from the path); reqTitle/reqNewFolder are the raw request values.
+func (s *Server) renameCarrdProject(w http.ResponseWriter, root, reqFolder, reqTitle, reqNewFolder string) {
+	folder := strings.TrimSpace(reqFolder)
 	if !validCarrdFolder(folder) {
 		writeError(w, http.StatusBadRequest, "Invalid folder name")
 		return
 	}
-	title := strings.TrimSpace(req.Title)
+	title := strings.TrimSpace(reqTitle)
 	if title == "" {
 		writeError(w, http.StatusBadRequest, "Project title is required")
 		return
 	}
 	// Target folder: normalize the supplied new folder, or keep the current one.
-	newFolder := slugifyFolder(req.NewFolder)
+	newFolder := slugifyFolder(reqNewFolder)
 	if newFolder == "" {
 		newFolder = folder
 	}
@@ -475,9 +492,9 @@ func (s *Server) renameCarrdProject(w http.ResponseWriter, root string, req carr
 	if info, err := os.Stat(destPath); err == nil {
 		modified = info.ModTime().UTC().Format(time.RFC3339)
 	}
-	writeJSON(w, http.StatusOK, map[string]any{
-		"ok": true,
-		"project": carrdProject{
+	writeJSON(w, http.StatusOK, model.CarrdProjectCreateResponse{
+		OK: true,
+		Project: model.CarrdProject{
 			Title:          title,
 			Folder:         newFolder,
 			FileCount:      files,
@@ -518,7 +535,7 @@ func (s *Server) handleCarrdImagesList(w http.ResponseWriter, r *http.Request) {
 	}
 
 	dirs := make([]string, 0)
-	images := make([]carrdImage, 0, len(entries))
+	images := make([]model.CarrdImage, 0, len(entries))
 	for _, e := range entries {
 		// Hide dotfiles/dirs (e.g. the .carrd.json title sidecar).
 		if strings.HasPrefix(e.Name(), ".") {
@@ -535,7 +552,7 @@ func (s *Server) handleCarrdImagesList(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			continue
 		}
-		images = append(images, carrdImage{
+		images = append(images, model.CarrdImage{
 			Name:     e.Name(),
 			Size:     info.Size(),
 			Modified: info.ModTime().UTC().Format(time.RFC3339),
@@ -548,108 +565,128 @@ func (s *Server) handleCarrdImagesList(w http.ResponseWriter, r *http.Request) {
 		return strings.ToLower(images[i].Name) < strings.ToLower(images[j].Name)
 	})
 
-	writeJSON(w, http.StatusOK, map[string]any{
-		"folder": folder,
-		"path":   cleanPath,
-		"dirs":   dirs,
-		"images": images,
+	writeJSON(w, http.StatusOK, model.CarrdImagesResponse{
+		Folder: folder,
+		Path:   cleanPath,
+		Dirs:   dirs,
+		Images: images,
 	})
 }
 
-// carrdImagesActionRequest is the JSON body for POST /api/carrd/images.
-// Action: "delete" (image), "create_dir", or "delete_dir".
-//
-//	Path is the relative subpath within the project ("" = project root). For
-//	"delete" and "create_dir" it is the parent directory; for "delete_dir" it is
-//	the directory to remove (and must be non-empty — delete the whole project via
-//	/api/carrd/projects instead). Name is the image filename ("delete") or the
-//	new sub-directory name ("create_dir").
-type carrdImagesActionRequest struct {
-	Action string `json:"action"`
+// carrdCreateDirRequest is the JSON body for POST /api/carrd/images/dirs. Path is
+// the relative subpath of the parent directory within the project ("" = project
+// root); Name is the new sub-directory name.
+type carrdCreateDirRequest struct {
 	Folder string `json:"folder"`
 	Path   string `json:"path"`
 	Name   string `json:"name"`
 }
 
-// handleCarrdImagesAction deletes an image, creates a sub-directory, or deletes
-// a sub-directory (and its contents) within a project.
+// handleCarrdImageDelete deletes an image within a project. The image identity
+// (folder + path + name) is supplied as query parameters, since the path may
+// contain slashes.
 //
-//	Endpoint:  POST /api/carrd/images
+//	Endpoint:  DELETE /api/carrd/images?folder=<folder>&path=<subpath>&name=<file>
 //	Auth:      admin, or a user granted this page's permission
-//	Request:   {"action":"delete","folder":"...","path":"...","name":"..."}
-//	           {"action":"create_dir","folder":"...","path":"...","name":"..."}
-//	           {"action":"delete_dir","folder":"...","path":"..."}
-//	Response:  {"ok": true} (create_dir also returns {"name": newDir})
-func (s *Server) handleCarrdImagesAction(w http.ResponseWriter, r *http.Request) {
+//	Response:  204 No Content
+func (s *Server) handleCarrdImageDelete(w http.ResponseWriter, r *http.Request) {
 	if !s.requirePermission(w, r, permAtelierCarrd) {
 		return
 	}
 
-	req, err := readJSON[carrdImagesActionRequest](w, r)
+	dirPath, _, ok := s.carrdResolve(strings.TrimSpace(r.URL.Query().Get("folder")), r.URL.Query().Get("path"))
+	if !ok {
+		writeError(w, http.StatusBadRequest, "Invalid folder or path")
+		return
+	}
+	name, ok := safeCarrdFileName(r.URL.Query().Get("name"))
+	if !ok {
+		writeError(w, http.StatusBadRequest, "Invalid file name")
+		return
+	}
+	if err := os.Remove(filepath.Join(dirPath, name)); err != nil {
+		if os.IsNotExist(err) {
+			writeError(w, http.StatusNotFound, "File not found")
+			return
+		}
+		writeInternalError(w, "delete carrd file", err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// handleCarrdDirCreate creates a sub-directory within a project. Path is the
+// parent directory (project root when "").
+//
+//	Endpoint:  POST /api/carrd/images/dirs
+//	Auth:      admin, or a user granted this page's permission
+//	Request:   {"folder":"...","path":"...","name":"..."}
+//	Response:  201 {"ok": true, "name": newDir}
+func (s *Server) handleCarrdDirCreate(w http.ResponseWriter, r *http.Request) {
+	if !s.requirePermission(w, r, permAtelierCarrd) {
+		return
+	}
+
+	req, err := readJSON[carrdCreateDirRequest](w, r)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "Invalid JSON")
 		return
 	}
-
-	dirPath, cleanPath, ok := s.carrdResolve(strings.TrimSpace(req.Folder), req.Path)
+	dirPath, _, ok := s.carrdResolve(strings.TrimSpace(req.Folder), req.Path)
 	if !ok {
 		writeError(w, http.StatusBadRequest, "Invalid folder or path")
 		return
 	}
 
-	switch req.Action {
-	case "delete":
-		name, ok := safeCarrdFileName(req.Name)
-		if !ok {
-			writeError(w, http.StatusBadRequest, "Invalid file name")
-			return
-		}
-		if err := os.Remove(filepath.Join(dirPath, name)); err != nil {
-			if os.IsNotExist(err) {
-				writeError(w, http.StatusNotFound, "File not found")
-				return
-			}
-			writeInternalError(w, "delete carrd file", err)
-			return
-		}
-		writeJSON(w, http.StatusOK, map[string]any{"ok": true})
-
-	case "create_dir":
-		newDir := slugifyFolder(req.Name)
-		if newDir == "" {
-			writeError(w, http.StatusBadRequest, "Folder name must contain letters or numbers")
-			return
-		}
-		// The parent (project root or sub-directory) must already exist.
-		if info, err := os.Stat(dirPath); err != nil || !info.IsDir() {
-			writeError(w, http.StatusNotFound, "Parent folder not found")
-			return
-		}
-		if err := os.Mkdir(filepath.Join(dirPath, newDir), 0755); err != nil {
-			if os.IsExist(err) {
-				writeError(w, http.StatusConflict, "A folder named \""+newDir+"\" already exists here")
-				return
-			}
-			writeInternalError(w, "create carrd dir", err)
-			return
-		}
-		writeJSON(w, http.StatusOK, map[string]any{"ok": true, "name": newDir})
-
-	case "delete_dir":
-		// Refuse to delete the project root through this endpoint.
-		if cleanPath == "" {
-			writeError(w, http.StatusBadRequest, "Use the projects endpoint to delete a whole project")
-			return
-		}
-		if err := os.RemoveAll(dirPath); err != nil {
-			writeInternalError(w, "delete carrd dir", err)
-			return
-		}
-		writeJSON(w, http.StatusOK, map[string]any{"ok": true})
-
-	default:
-		writeError(w, http.StatusBadRequest, "Invalid action. Use: delete, create_dir, delete_dir")
+	newDir := slugifyFolder(req.Name)
+	if newDir == "" {
+		writeError(w, http.StatusBadRequest, "Folder name must contain letters or numbers")
+		return
 	}
+	// The parent (project root or sub-directory) must already exist.
+	if info, err := os.Stat(dirPath); err != nil || !info.IsDir() {
+		writeError(w, http.StatusNotFound, "Parent folder not found")
+		return
+	}
+	if err := os.Mkdir(filepath.Join(dirPath, newDir), 0755); err != nil {
+		if os.IsExist(err) {
+			writeError(w, http.StatusConflict, "A folder named \""+newDir+"\" already exists here")
+			return
+		}
+		writeInternalError(w, "create carrd dir", err)
+		return
+	}
+	writeJSON(w, http.StatusCreated, model.NamedOKResponse{OK: true, Name: newDir})
+}
+
+// handleCarrdDirDelete deletes a sub-directory (and its contents) within a
+// project. The directory identity (folder + path) is supplied as query
+// parameters, since the path may contain slashes. The project root cannot be
+// deleted here — use the projects endpoint instead.
+//
+//	Endpoint:  DELETE /api/carrd/images/dirs?folder=<folder>&path=<subpath>
+//	Auth:      admin, or a user granted this page's permission
+//	Response:  204 No Content
+func (s *Server) handleCarrdDirDelete(w http.ResponseWriter, r *http.Request) {
+	if !s.requirePermission(w, r, permAtelierCarrd) {
+		return
+	}
+
+	dirPath, cleanPath, ok := s.carrdResolve(strings.TrimSpace(r.URL.Query().Get("folder")), r.URL.Query().Get("path"))
+	if !ok {
+		writeError(w, http.StatusBadRequest, "Invalid folder or path")
+		return
+	}
+	// Refuse to delete the project root through this endpoint.
+	if cleanPath == "" {
+		writeError(w, http.StatusBadRequest, "Use the projects endpoint to delete a whole project")
+		return
+	}
+	if err := os.RemoveAll(dirPath); err != nil {
+		writeInternalError(w, "delete carrd dir", err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 // handleCarrdUpload handles multipart uploads of one or more images to a
@@ -694,17 +731,13 @@ func (s *Server) handleCarrdUpload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	type skipEntry struct {
-		Name   string `json:"name"`
-		Reason string `json:"reason"`
-	}
 	uploaded := make([]string, 0, len(files))
-	skipped := make([]skipEntry, 0)
+	skipped := make([]model.SkippedUpload, 0)
 
 	for _, header := range files {
 		name, ok := safeCarrdFileName(header.Filename)
 		if !ok {
-			skipped = append(skipped, skipEntry{
+			skipped = append(skipped, model.SkippedUpload{
 				Name:   header.Filename,
 				Reason: "Unsupported type (allowed: .jpg, .jpeg, .png, .webp, .gif, .mp3, .mp4)",
 			})
@@ -715,27 +748,27 @@ func (s *Server) handleCarrdUpload(w http.ResponseWriter, r *http.Request) {
 		if isAllowedImageExt(strings.ToLower(filepath.Ext(name))) {
 			f, err := header.Open()
 			if err != nil {
-				skipped = append(skipped, skipEntry{Name: name, Reason: "Failed to read"})
+				skipped = append(skipped, model.SkippedUpload{Name: name, Reason: "Failed to read"})
 				continue
 			}
 			validImage := isAllowedImageContentType(sniffedImageType(f))
 			_ = f.Close()
 			if !validImage {
-				skipped = append(skipped, skipEntry{Name: name, Reason: "Not a valid image"})
+				skipped = append(skipped, model.SkippedUpload{Name: name, Reason: "Not a valid image"})
 				continue
 			}
 		}
 		// Same name overwrites the existing file on purpose.
 		if err := saveMultipartFile(header, filepath.Join(folderPath, name)); err != nil {
-			skipped = append(skipped, skipEntry{Name: name, Reason: "Failed to save"})
+			skipped = append(skipped, model.SkippedUpload{Name: name, Reason: "Failed to save"})
 			continue
 		}
 		uploaded = append(uploaded, name)
 	}
 
-	writeJSON(w, http.StatusOK, map[string]any{
-		"uploaded": uploaded,
-		"skipped":  skipped,
+	writeJSON(w, http.StatusOK, model.CarrdUploadResponse{
+		Uploaded: uploaded,
+		Skipped:  skipped,
 	})
 }
 

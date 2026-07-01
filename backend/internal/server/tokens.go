@@ -113,64 +113,57 @@ func (s *Server) handleAccountTokenInfo(w http.ResponseWriter, r *http.Request) 
 	writeJSON(w, http.StatusOK, info)
 }
 
-// accountTokenRequest is the JSON body for POST /api/account/token.
-type accountTokenRequest struct {
-	Action string `json:"action"` // "generate" | "revoke"
-}
-
-// handleAccountTokenAction generates (replacing any existing) or revokes the
-// current user's personal access token. A freshly generated token's plaintext is
-// returned exactly once in this response — it is hashed at rest and can never be
-// shown again — so the UI must surface it to the user immediately. Generating a
-// new token invalidates the previous one.
+// handleAccountTokenGenerate mints (replacing any existing) the current user's
+// personal access token. The freshly generated token's plaintext is returned
+// exactly once in this response — it is hashed at rest and can never be shown
+// again — so the UI must surface it to the user immediately. Generating a new
+// token invalidates the previous one.
 //
 //	Endpoint:  POST /api/account/token
 //	Auth:      any active user
-//	Request:   {"action": "generate"|"revoke"}
-//	Response:  generate → {"token": "...", "prefix": "...", "created_at": "..."}
-//	           revoke   → {"ok": true, "deleted": bool}
-func (s *Server) handleAccountTokenAction(w http.ResponseWriter, r *http.Request) {
+//	Response:  {"token": "...", "prefix": "...", "created_at": "..."}
+func (s *Server) handleAccountTokenGenerate(w http.ResponseWriter, r *http.Request) {
 	user, ok := s.requireAuth(w, r)
 	if !ok {
 		return
 	}
-	req, err := readJSON[accountTokenRequest](w, r)
+	token, hash, prefix, err := generatePAT()
 	if err != nil {
-		writeError(w, http.StatusBadRequest, "Invalid JSON")
+		writeInternalError(w, "generate token", err)
 		return
 	}
-
-	switch req.Action {
-	case "generate":
-		token, hash, prefix, err := generatePAT()
-		if err != nil {
-			writeInternalError(w, "generate token", err)
-			return
-		}
-		if err := s.store.UpsertUserToken(user.ID, hash, prefix); err != nil {
-			writeInternalError(w, "store token", err)
-			return
-		}
-		info, err := s.store.GetUserTokenInfo(user.ID)
-		if err != nil {
-			writeInternalError(w, "load token info", err)
-			return
-		}
-		writeJSON(w, http.StatusOK, map[string]any{
-			"token":      token,
-			"prefix":     prefix,
-			"created_at": info.CreatedAt,
-		})
-
-	case "revoke":
-		deleted, err := s.store.DeleteUserToken(user.ID)
-		if err != nil {
-			writeInternalError(w, "revoke token", err)
-			return
-		}
-		writeJSON(w, http.StatusOK, map[string]any{"ok": true, "deleted": deleted})
-
-	default:
-		writeError(w, http.StatusBadRequest, "Invalid action. Use: generate, revoke")
+	if err := s.store.UpsertUserToken(user.ID, hash, prefix); err != nil {
+		writeInternalError(w, "store token", err)
+		return
 	}
+	info, err := s.store.GetUserTokenInfo(user.ID)
+	if err != nil {
+		writeInternalError(w, "load token info", err)
+		return
+	}
+	writeJSON(w, http.StatusOK, model.AccountTokenGenerateResponse{
+		Token:     token,
+		Prefix:    prefix,
+		CreatedAt: info.CreatedAt,
+	})
+}
+
+// handleAccountTokenRevoke deletes the current user's personal access token. The
+// response carries whether a token row was actually removed, so it returns the
+// {"ok": true, "deleted": bool} body (not a bare 204).
+//
+//	Endpoint:  DELETE /api/account/token
+//	Auth:      any active user
+//	Response:  200 {"ok": true, "deleted": bool}
+func (s *Server) handleAccountTokenRevoke(w http.ResponseWriter, r *http.Request) {
+	user, ok := s.requireAuth(w, r)
+	if !ok {
+		return
+	}
+	deleted, err := s.store.DeleteUserToken(user.ID)
+	if err != nil {
+		writeInternalError(w, "revoke token", err)
+		return
+	}
+	writeJSON(w, http.StatusOK, model.TokenRevokeResponse{OK: true, Deleted: deleted})
 }

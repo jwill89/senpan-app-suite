@@ -27,7 +27,7 @@ func (s *Server) handleRafflesList(w http.ResponseWriter, r *http.Request) {
 		writeInternalError(w, "list raffles", err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"raffles": raffles})
+	writeJSON(w, http.StatusOK, model.RafflesResponse{Raffles: raffles})
 }
 
 // ── Raffle detail (public + admin) ──────────────────────────────────────────
@@ -55,12 +55,12 @@ func (s *Server) handleRaffleDetail(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	resp := map[string]any{"raffle": raffle}
+	resp := model.RaffleDetailResponse{Raffle: *raffle}
 
 	// Always include total entry count
 	totalEntries, err := s.store.CountRaffleEntries(id)
 	if err == nil {
-		resp["total_entries"] = totalEntries
+		resp.TotalEntries = &totalEntries
 	}
 
 	// Include entries for admins, or winner entry for public on closed raffles
@@ -70,25 +70,23 @@ func (s *Server) handleRaffleDetail(w http.ResponseWriter, r *http.Request) {
 			writeInternalError(w, "list raffle entries", err)
 			return
 		}
-		resp["entries"] = entries
+		resp.Entries = &entries
 	} else if raffle.Status == "closed" && raffle.WinnerEntryID != nil {
 		// Show the winner entry to public — fetch directly by ID
 		entry, err := s.store.GetRaffleEntryByID(*raffle.WinnerEntryID)
 		if err == nil && entry != nil {
-			resp["winner_entry"] = entry
+			resp.WinnerEntry = entry
 		}
 	}
 
 	writeJSON(w, http.StatusOK, resp)
 }
 
-// ── Raffle admin actions (create, update, delete) ───────────────────────────
+// ── Raffle create / update / delete ─────────────────────────────────────────
 
-// raffleRequest is the JSON body for POST /api/raffles.
-// Action determines the operation: "create", "update", or "delete".
-type raffleRequest struct {
-	Action             string  `json:"action"`
-	ID                 int64   `json:"id"`
+// raffleWriteRequest is the JSON body for creating (POST /api/raffles) or
+// replacing (PUT /api/raffles/{id}) a raffle. The id comes from the path on PUT.
+type raffleWriteRequest struct {
 	Title              string  `json:"title"`
 	Description        string  `json:"description"`
 	Rules              string  `json:"rules"`
@@ -100,104 +98,110 @@ type raffleRequest struct {
 	PrizeImage         string  `json:"prize_image"`
 }
 
-// handleRafflesAction processes raffle CRUD operations.
+// toRaffle builds a model.Raffle from the request, flooring max_entries to 1.
+func (req raffleWriteRequest) toRaffle(id int64) *model.Raffle {
+	maxEntries := req.MaxEntries
+	if maxEntries < 1 {
+		maxEntries = 1
+	}
+	return &model.Raffle{
+		ID:                 id,
+		Title:              strings.TrimSpace(req.Title),
+		Description:        req.Description,
+		Rules:              req.Rules,
+		MaxEntries:         maxEntries,
+		SignupInstructions: req.SignupInstructions,
+		CostPerEntry:       req.CostPerEntry,
+		AvailableFrom:      req.AvailableFrom,
+		AvailableTo:        req.AvailableTo,
+		PrizeImage:         req.PrizeImage,
+	}
+}
+
+// handleRaffleCreate creates a raffle.
 //
 //	Endpoint:  POST /api/raffles
-//	Auth:      admin, or a user granted this page's permission
-//	Request:   {"action": "create"|"update"|"delete", ...}
-//	Response:  varies by action
-func (s *Server) handleRafflesAction(w http.ResponseWriter, r *http.Request) {
+//	Auth:      permission:teahouse-raffles
+//	Response:  201 {"raffle": Raffle}
+func (s *Server) handleRaffleCreate(w http.ResponseWriter, r *http.Request) {
 	if !s.requirePermission(w, r, permTeahouseRaffles) {
 		return
 	}
-
-	req, err := readJSON[raffleRequest](w, r)
+	req, err := readJSON[raffleWriteRequest](w, r)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "Invalid JSON")
 		return
 	}
-
-	switch req.Action {
-	case "create":
-		title := strings.TrimSpace(req.Title)
-		if title == "" {
-			writeError(w, http.StatusBadRequest, "Title is required")
-			return
-		}
-		maxEntries := req.MaxEntries
-		if maxEntries < 1 {
-			maxEntries = 1
-		}
-		raffle := &model.Raffle{
-			Title:              title,
-			Description:        req.Description,
-			Rules:              req.Rules,
-			MaxEntries:         maxEntries,
-			SignupInstructions: req.SignupInstructions,
-			CostPerEntry:       req.CostPerEntry,
-			AvailableFrom:      req.AvailableFrom,
-			AvailableTo:        req.AvailableTo,
-			PrizeImage:         req.PrizeImage,
-		}
-		id, err := s.store.CreateRaffle(raffle)
-		if err != nil {
-			writeInternalError(w, "create raffle", err)
-			return
-		}
-		raffle.ID = id
-		raffle.Status = "open"
-		writeJSON(w, http.StatusCreated, map[string]any{"raffle": raffle})
-
-	case "update":
-		if req.ID <= 0 {
-			writeError(w, http.StatusBadRequest, "Raffle id is required")
-			return
-		}
-		title := strings.TrimSpace(req.Title)
-		if title == "" {
-			writeError(w, http.StatusBadRequest, "Title is required")
-			return
-		}
-		maxEntries := req.MaxEntries
-		if maxEntries < 1 {
-			maxEntries = 1
-		}
-		raffle := &model.Raffle{
-			ID:                 req.ID,
-			Title:              title,
-			Description:        req.Description,
-			Rules:              req.Rules,
-			MaxEntries:         maxEntries,
-			SignupInstructions: req.SignupInstructions,
-			CostPerEntry:       req.CostPerEntry,
-			AvailableFrom:      req.AvailableFrom,
-			AvailableTo:        req.AvailableTo,
-			PrizeImage:         req.PrizeImage,
-		}
-		if err := s.store.UpdateRaffle(raffle); err != nil {
-			writeInternalError(w, "update raffle", err)
-			return
-		}
-		writeJSON(w, http.StatusOK, map[string]any{"ok": true})
-
-	case "delete":
-		if req.ID <= 0 {
-			writeError(w, http.StatusBadRequest, "Raffle id is required")
-			return
-		}
-		deleted, err := s.store.DeleteRaffle(req.ID)
-		if err != nil {
-			writeInternalError(w, "delete raffle", err)
-			return
-		}
-		// Prize images are managed centrally on the System → Images page (the
-		// "Raffle" category), so the image file is left intact on delete — it may
-		// be reused by another raffle.
-		writeJSON(w, http.StatusOK, map[string]any{"deleted": deleted})
-
-	default:
-		writeError(w, http.StatusBadRequest, "Invalid action. Use: create, update, delete")
+	if strings.TrimSpace(req.Title) == "" {
+		writeError(w, http.StatusBadRequest, "Title is required")
+		return
 	}
+	raffle := req.toRaffle(0)
+	id, err := s.store.CreateRaffle(raffle)
+	if err != nil {
+		writeInternalError(w, "create raffle", err)
+		return
+	}
+	raffle.ID = id
+	raffle.Status = "open"
+	writeJSON(w, http.StatusCreated, model.RaffleResponse{Raffle: *raffle})
+}
+
+// handleRaffleUpdate replaces a raffle's editable fields (status/winner are not
+// editable here and are preserved).
+//
+//	Endpoint:  PUT /api/raffles/{id}
+//	Auth:      permission:teahouse-raffles
+//	Response:  200 {"raffle": Raffle}
+func (s *Server) handleRaffleUpdate(w http.ResponseWriter, r *http.Request) {
+	if !s.requirePermission(w, r, permTeahouseRaffles) {
+		return
+	}
+	id, ok := pathInt64(w, r, "id", "raffle")
+	if !ok {
+		return
+	}
+	req, err := readJSON[raffleWriteRequest](w, r)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "Invalid JSON")
+		return
+	}
+	if strings.TrimSpace(req.Title) == "" {
+		writeError(w, http.StatusBadRequest, "Title is required")
+		return
+	}
+	if err := s.store.UpdateRaffle(req.toRaffle(id)); err != nil {
+		writeInternalError(w, "update raffle", err)
+		return
+	}
+	raffle, err := s.store.GetRaffle(id)
+	if err != nil || raffle == nil {
+		writeInternalError(w, "load updated raffle", err)
+		return
+	}
+	writeJSON(w, http.StatusOK, model.RaffleResponse{Raffle: *raffle})
+}
+
+// handleRaffleDelete deletes a raffle. Prize images are managed centrally on
+// System → Images (the "Raffle" category), so the file is left intact — it may
+// be reused by another raffle.
+//
+//	Endpoint:  DELETE /api/raffles/{id}
+//	Auth:      permission:teahouse-raffles
+//	Response:  204 No Content
+func (s *Server) handleRaffleDelete(w http.ResponseWriter, r *http.Request) {
+	if !s.requirePermission(w, r, permTeahouseRaffles) {
+		return
+	}
+	id, ok := pathInt64(w, r, "id", "raffle")
+	if !ok {
+		return
+	}
+	if _, err := s.store.DeleteRaffle(id); err != nil {
+		writeInternalError(w, "delete raffle", err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 // ── Raffle entry (public sign-up) ───────────────────────────────────────────
@@ -310,18 +314,18 @@ func (s *Server) handleRaffleEnter(w http.ResponseWriter, r *http.Request) {
 
 	totalCost := float64(newTotal) * raffle.CostPerEntry
 	if created {
-		writeJSON(w, http.StatusCreated, map[string]any{
-			"message":             "Signed up successfully",
-			"total_entries":       newTotal,
-			"total_cost":          totalCost,
-			"signup_instructions": raffle.SignupInstructions,
+		writeJSON(w, http.StatusCreated, model.RaffleEnterResponse{
+			Message:            "Signed up successfully",
+			TotalEntries:       newTotal,
+			TotalCost:          totalCost,
+			SignupInstructions: raffle.SignupInstructions,
 		})
 	} else {
-		writeJSON(w, http.StatusOK, map[string]any{
-			"message":             "Entries added successfully",
-			"total_entries":       newTotal,
-			"total_cost":          totalCost,
-			"signup_instructions": raffle.SignupInstructions,
+		writeJSON(w, http.StatusOK, model.RaffleEnterResponse{
+			Message:            "Entries added successfully",
+			TotalEntries:       newTotal,
+			TotalCost:          totalCost,
+			SignupInstructions: raffle.SignupInstructions,
 		})
 	}
 
@@ -334,192 +338,246 @@ func (s *Server) handleRaffleEnter(w http.ResponseWriter, r *http.Request) {
 	s.broadcastResourceChanged("raffles")
 }
 
-// ── Raffle entries admin actions ────────────────────────────────────────────
+// ── Raffle entries (admin) ──────────────────────────────────────────────────
 
-// raffleEntriesRequest is the JSON body for POST /api/raffles/{id}/entries.
-// Action: "add_entry", "mark_paid", "delete_entry", "pick_winner",
-// "verify_winner", or "pick_another".
-type raffleEntriesRequest struct {
-	Action  string `json:"action"`
-	EntryID int64  `json:"entry_id"`
-	Paid    bool   `json:"paid"`
-	// add_entry only: the player to add and how many tickets.
+// raffleEntryAddRequest is the JSON body for POST /api/raffles/{id}/entries.
+type raffleEntryAddRequest struct {
 	CharacterName string `json:"character_name"`
 	World         string `json:"world"`
 	NumEntries    int    `json:"num_entries"`
+	Paid          bool   `json:"paid"`
 }
 
-// handleRaffleEntries processes admin actions on raffle entries.
+// handleRaffleEntryAdd adds an entry to an open raffle (admin). Unlike the public
+// sign-up it skips the availability-window check (an admin can add at any time
+// while the raffle is open) but still enforces the per-person max.
 //
 //	Endpoint:  POST /api/raffles/{id}/entries
-//	Auth:      admin, or a user granted this page's permission
-//	Request:   {"action": "mark_paid"|"delete_entry"|"pick_winner"|"verify_winner"|"pick_another", ...}
-//	Response:  varies by action
-func (s *Server) handleRaffleEntries(w http.ResponseWriter, r *http.Request) {
+//	Auth:      permission:teahouse-raffles
+//	Response:  201 {"entry": RaffleEntry}
+func (s *Server) handleRaffleEntryAdd(w http.ResponseWriter, r *http.Request) {
 	if !s.requirePermission(w, r, permTeahouseRaffles) {
 		return
 	}
-
-	idStr := r.PathValue("id")
-	raffleID, err := strconv.ParseInt(idStr, 10, 64)
-	if err != nil {
-		writeError(w, http.StatusBadRequest, "Invalid raffle ID")
+	raffleID, ok := pathInt64(w, r, "id", "raffle")
+	if !ok {
 		return
 	}
-
-	req, err := readJSON[raffleEntriesRequest](w, r)
+	req, err := readJSON[raffleEntryAddRequest](w, r)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "Invalid JSON")
 		return
 	}
-
-	switch req.Action {
-	case "add_entry":
-		// Admin manually adds a player to an open raffle, optionally already paid.
-		// Unlike the public sign-up this skips the availability-window check (an
-		// admin can add an entry at any time while the raffle is open) but still
-		// enforces the per-person max so the entry data stays consistent.
-		charName := strings.TrimSpace(req.CharacterName)
-		world := strings.TrimSpace(req.World)
-		if charName == "" || world == "" {
-			writeError(w, http.StatusBadRequest, "Character name and world are required")
-			return
-		}
-		if req.NumEntries < 1 {
-			req.NumEntries = 1
-		}
-
-		raffle, err := s.store.GetRaffle(raffleID)
-		if err != nil {
-			writeInternalError(w, "get raffle for add entry", err)
-			return
-		}
-		if raffle == nil {
-			writeError(w, http.StatusNotFound, "Raffle not found")
-			return
-		}
-		if raffle.Status != "open" {
-			writeError(w, http.StatusBadRequest, "This raffle is no longer accepting entries")
-			return
-		}
-
-		// Same atomic cap-enforced write as the public enter path, so an admin and a
-		// player adding entries for the same character+world at once can't race past
-		// the max.
-		entryID, _, prevEntries, _, err := s.store.AddOrCreateRaffleEntry(
-			raffleID, charName, world, req.NumEntries, raffle.MaxEntries)
-		if errors.Is(err, store.ErrRaffleEntryLimit) {
-			if prevEntries > 0 {
-				writeError(w, http.StatusBadRequest,
-					fmt.Sprintf("Cannot add %d entries. They already have %d of %d max entries.",
-						req.NumEntries, prevEntries, raffle.MaxEntries))
-			} else {
-				writeError(w, http.StatusBadRequest,
-					fmt.Sprintf("Number of entries cannot exceed %d", raffle.MaxEntries))
-			}
-			return
-		}
-		if err != nil {
-			writeInternalError(w, "record raffle entry", err)
-			return
-		}
-
-		// Mark paid right away when requested (never un-marks an existing entry).
-		if req.Paid {
-			if err := s.store.SetRaffleEntryPaid(entryID, true); err != nil {
-				writeInternalError(w, "mark added entry paid", err)
-				return
-			}
-		}
-
-		entry, err := s.store.GetRaffleEntryByID(entryID)
-		if err != nil {
-			writeInternalError(w, "load added entry", err)
-			return
-		}
-		writeJSON(w, http.StatusOK, map[string]any{"entry": entry})
-
-	case "mark_paid":
-		if req.EntryID <= 0 {
-			writeError(w, http.StatusBadRequest, "Entry id is required")
-			return
-		}
-		if err := s.store.SetRaffleEntryPaid(req.EntryID, req.Paid); err != nil {
-			writeInternalError(w, "mark entry paid", err)
-			return
-		}
-		writeJSON(w, http.StatusOK, map[string]any{"ok": true})
-
-	case "delete_entry":
-		if req.EntryID <= 0 {
-			writeError(w, http.StatusBadRequest, "Entry id is required")
-			return
-		}
-		deleted, err := s.store.DeleteRaffleEntry(req.EntryID)
-		if err != nil {
-			writeInternalError(w, "delete raffle entry", err)
-			return
-		}
-		writeJSON(w, http.StatusOK, map[string]any{"deleted": deleted})
-
-	case "pick_winner":
-		winner, err := s.store.PickRaffleWinner(raffleID)
-		if err != nil {
-			writeInternalError(w, "pick raffle winner", err)
-			return
-		}
-		if winner == nil {
-			writeError(w, http.StatusBadRequest, "No paid entries to pick from")
-			return
-		}
-		// Set as pending winner
-		if err := s.store.SetRaffleWinner(raffleID, &winner.ID); err != nil {
-			writeInternalError(w, "set raffle winner", err)
-			return
-		}
-		writeJSON(w, http.StatusOK, map[string]any{"winner": winner})
-
-	case "verify_winner":
-		// Finalize: close the raffle with the current winner
-		raffle, err := s.store.GetRaffle(raffleID)
-		if err != nil || raffle == nil {
-			writeInternalError(w, "verify raffle winner", fmt.Errorf("get raffle: %w", err))
-			return
-		}
-		if raffle.WinnerEntryID == nil {
-			writeError(w, http.StatusBadRequest, "No winner selected to verify")
-			return
-		}
-		if err := s.store.SetRaffleStatus(raffleID, "closed"); err != nil {
-			writeInternalError(w, "close raffle", err)
-			return
-		}
-		writeJSON(w, http.StatusOK, map[string]any{"ok": true, "status": "closed"})
-
-	case "pick_another":
-		// Clear current winner and pick again
-		if err := s.store.SetRaffleWinner(raffleID, nil); err != nil {
-			writeInternalError(w, "clear raffle winner", err)
-			return
-		}
-		winner, err := s.store.PickRaffleWinner(raffleID)
-		if err != nil {
-			writeInternalError(w, "pick another winner", err)
-			return
-		}
-		if winner == nil {
-			writeError(w, http.StatusBadRequest, "No paid entries to pick from")
-			return
-		}
-		if err := s.store.SetRaffleWinner(raffleID, &winner.ID); err != nil {
-			writeInternalError(w, "set another winner", err)
-			return
-		}
-		writeJSON(w, http.StatusOK, map[string]any{"winner": winner})
-
-	default:
-		writeError(w, http.StatusBadRequest, "Invalid action. Use: add_entry, mark_paid, delete_entry, pick_winner, verify_winner, pick_another")
+	charName := strings.TrimSpace(req.CharacterName)
+	world := strings.TrimSpace(req.World)
+	if charName == "" || world == "" {
+		writeError(w, http.StatusBadRequest, "Character name and world are required")
+		return
 	}
+	if req.NumEntries < 1 {
+		req.NumEntries = 1
+	}
+
+	raffle, err := s.store.GetRaffle(raffleID)
+	if err != nil {
+		writeInternalError(w, "get raffle for add entry", err)
+		return
+	}
+	if raffle == nil {
+		writeError(w, http.StatusNotFound, "Raffle not found")
+		return
+	}
+	if raffle.Status != "open" {
+		writeError(w, http.StatusBadRequest, "This raffle is no longer accepting entries")
+		return
+	}
+
+	// Same atomic cap-enforced write as the public enter path, so an admin and a
+	// player adding entries for the same character+world at once can't race past
+	// the max.
+	entryID, _, prevEntries, created, err := s.store.AddOrCreateRaffleEntry(
+		raffleID, charName, world, req.NumEntries, raffle.MaxEntries)
+	if errors.Is(err, store.ErrRaffleEntryLimit) {
+		if prevEntries > 0 {
+			writeError(w, http.StatusBadRequest,
+				fmt.Sprintf("Cannot add %d entries. They already have %d of %d max entries.",
+					req.NumEntries, prevEntries, raffle.MaxEntries))
+		} else {
+			writeError(w, http.StatusBadRequest,
+				fmt.Sprintf("Number of entries cannot exceed %d", raffle.MaxEntries))
+		}
+		return
+	}
+	if err != nil {
+		writeInternalError(w, "record raffle entry", err)
+		return
+	}
+
+	// Mark paid right away when requested (never un-marks an existing entry).
+	if req.Paid {
+		if err := s.store.SetRaffleEntryPaid(entryID, true); err != nil {
+			writeInternalError(w, "mark added entry paid", err)
+			return
+		}
+	}
+
+	entry, err := s.store.GetRaffleEntryByID(entryID)
+	if err != nil || entry == nil {
+		writeInternalError(w, "load added entry", err)
+		return
+	}
+	// 201 when a new entry row was created; 200 when merged into an existing one.
+	status := http.StatusOK
+	if created {
+		status = http.StatusCreated
+	}
+	writeJSON(w, status, model.RaffleEntryResponse{Entry: *entry})
+}
+
+// raffleEntryPatchRequest is the JSON body for PATCH /api/raffles/{id}/entries/{entryId}.
+type raffleEntryPatchRequest struct {
+	Paid bool `json:"paid"`
+}
+
+// handleRaffleEntryPatch updates an entry's paid flag.
+//
+//	Endpoint:  PATCH /api/raffles/{id}/entries/{entryId}
+//	Auth:      permission:teahouse-raffles
+//	Response:  200 {"entry": RaffleEntry}
+func (s *Server) handleRaffleEntryPatch(w http.ResponseWriter, r *http.Request) {
+	if !s.requirePermission(w, r, permTeahouseRaffles) {
+		return
+	}
+	entryID, ok := pathInt64(w, r, "entryId", "entry")
+	if !ok {
+		return
+	}
+	req, err := readJSON[raffleEntryPatchRequest](w, r)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "Invalid JSON")
+		return
+	}
+	if err := s.store.SetRaffleEntryPaid(entryID, req.Paid); err != nil {
+		writeInternalError(w, "mark entry paid", err)
+		return
+	}
+	entry, err := s.store.GetRaffleEntryByID(entryID)
+	if err != nil {
+		writeInternalError(w, "load entry", err)
+		return
+	}
+	if entry == nil {
+		writeError(w, http.StatusNotFound, "Entry not found")
+		return
+	}
+	writeJSON(w, http.StatusOK, model.RaffleEntryResponse{Entry: *entry})
+}
+
+// handleRaffleEntryDelete removes a raffle entry.
+//
+//	Endpoint:  DELETE /api/raffles/{id}/entries/{entryId}
+//	Auth:      permission:teahouse-raffles
+//	Response:  204 No Content
+func (s *Server) handleRaffleEntryDelete(w http.ResponseWriter, r *http.Request) {
+	if !s.requirePermission(w, r, permTeahouseRaffles) {
+		return
+	}
+	entryID, ok := pathInt64(w, r, "entryId", "entry")
+	if !ok {
+		return
+	}
+	if _, err := s.store.DeleteRaffleEntry(entryID); err != nil {
+		writeInternalError(w, "delete raffle entry", err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// ── Raffle winner commands ──────────────────────────────────────────────────
+
+// pickRaffleWinner picks a random paid entry as the pending winner and returns it,
+// or writes a 400 when there are no paid entries. Shared by pick-winner and
+// pick-another (which clears the current winner first).
+func (s *Server) pickRaffleWinner(w http.ResponseWriter, raffleID int64) {
+	winner, err := s.store.PickRaffleWinner(raffleID)
+	if err != nil {
+		writeInternalError(w, "pick raffle winner", err)
+		return
+	}
+	if winner == nil {
+		writeError(w, http.StatusBadRequest, "No paid entries to pick from")
+		return
+	}
+	if err := s.store.SetRaffleWinner(raffleID, &winner.ID); err != nil {
+		writeInternalError(w, "set raffle winner", err)
+		return
+	}
+	writeJSON(w, http.StatusOK, model.RaffleWinnerResponse{Winner: *winner})
+}
+
+// handleRafflePickWinner selects a random paid entry as the pending winner.
+//
+//	Endpoint:  POST /api/raffles/{id}/pick-winner
+//	Auth:      permission:teahouse-raffles
+//	Response:  200 {"winner": RaffleEntry}
+func (s *Server) handleRafflePickWinner(w http.ResponseWriter, r *http.Request) {
+	if !s.requirePermission(w, r, permTeahouseRaffles) {
+		return
+	}
+	raffleID, ok := pathInt64(w, r, "id", "raffle")
+	if !ok {
+		return
+	}
+	s.pickRaffleWinner(w, raffleID)
+}
+
+// handleRafflePickAnother clears the pending winner and re-picks.
+//
+//	Endpoint:  POST /api/raffles/{id}/pick-another
+//	Auth:      permission:teahouse-raffles
+//	Response:  200 {"winner": RaffleEntry}
+func (s *Server) handleRafflePickAnother(w http.ResponseWriter, r *http.Request) {
+	if !s.requirePermission(w, r, permTeahouseRaffles) {
+		return
+	}
+	raffleID, ok := pathInt64(w, r, "id", "raffle")
+	if !ok {
+		return
+	}
+	if err := s.store.SetRaffleWinner(raffleID, nil); err != nil {
+		writeInternalError(w, "clear raffle winner", err)
+		return
+	}
+	s.pickRaffleWinner(w, raffleID)
+}
+
+// handleRaffleVerifyWinner finalizes the pending winner and closes the raffle.
+//
+//	Endpoint:  POST /api/raffles/{id}/verify-winner
+//	Auth:      permission:teahouse-raffles
+//	Response:  200 {"ok": true, "status": "closed"}
+func (s *Server) handleRaffleVerifyWinner(w http.ResponseWriter, r *http.Request) {
+	if !s.requirePermission(w, r, permTeahouseRaffles) {
+		return
+	}
+	raffleID, ok := pathInt64(w, r, "id", "raffle")
+	if !ok {
+		return
+	}
+	raffle, err := s.store.GetRaffle(raffleID)
+	if err != nil || raffle == nil {
+		writeInternalError(w, "verify raffle winner", fmt.Errorf("get raffle: %w", err))
+		return
+	}
+	if raffle.WinnerEntryID == nil {
+		writeError(w, http.StatusBadRequest, "No winner selected to verify")
+		return
+	}
+	if err := s.store.SetRaffleStatus(raffleID, "closed"); err != nil {
+		writeInternalError(w, "close raffle", err)
+		return
+	}
+	writeJSON(w, http.StatusOK, model.StatusResponse{OK: true, Status: "closed"})
 }
 
 // Raffle prize images are uploaded and managed centrally on the System → Images

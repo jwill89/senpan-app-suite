@@ -88,7 +88,7 @@ export const useGameStore = defineStore('game', () => {
   async function loadGameState(): Promise<void> {
     try {
       const data = await endpoints.game.getState()
-      currentGame.value = data.game
+      currentGame.value = data.game ?? null
       winners.value = data.winners || []
       gameDetails.value = data.game_details || ''
       loadFrequentWinners()
@@ -105,7 +105,7 @@ export const useGameStore = defineStore('game', () => {
     starting.value = true
     try {
       const data = await endpoints.game.start(selectedPatternIds.value)
-      currentGame.value = data.game
+      currentGame.value = data.game ?? null
       winners.value = []
       lastDrawn.value = null
       selectedPatternIds.value = []

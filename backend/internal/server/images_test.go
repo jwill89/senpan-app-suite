@@ -74,7 +74,7 @@ func TestImages_RequiresAuth(t *testing.T) {
 	}
 	resp.Body.Close()
 
-	resp = env.postJSON(t, "/api/image-categories", map[string]any{"action": "create", "name": "X"})
+	resp = env.postJSON(t, "/api/image-categories", map[string]any{"name": "X"})
 	if resp.StatusCode != http.StatusUnauthorized {
 		t.Errorf("POST /api/image-categories status = %d; want 401", resp.StatusCode)
 	}
@@ -119,7 +119,7 @@ func TestImages_CreateCategory_DefaultDir(t *testing.T) {
 	env.loginAdmin(t)
 
 	resp := env.postJSON(t, "/api/image-categories", map[string]any{
-		"action": "create", "name": "Event Banners!",
+		"name": "Event Banners!",
 	})
 	if resp.StatusCode != http.StatusCreated {
 		t.Fatalf("status = %d; want 201", resp.StatusCode)
@@ -136,7 +136,7 @@ func TestImages_CreateCategory_ExplicitDir(t *testing.T) {
 	env.loginAdmin(t)
 
 	resp := env.postJSON(t, "/api/image-categories", map[string]any{
-		"action": "create", "name": "Promo", "dir": "My Promo 2026",
+		"name": "Promo", "dir": "My Promo 2026",
 	})
 	data := decodeBody(t, resp)
 	cat := data["category"].(map[string]any)
@@ -150,7 +150,7 @@ func TestImages_CreateCategory_ReservedDir(t *testing.T) {
 	env.loginAdmin(t)
 
 	resp := env.postJSON(t, "/api/image-categories", map[string]any{
-		"action": "create", "name": "Sneaky", "dir": "raffles",
+		"name": "Sneaky", "dir": "raffles",
 	})
 	if resp.StatusCode != http.StatusConflict {
 		t.Errorf("status = %d; want 409 (reserved permanent dir)", resp.StatusCode)
@@ -163,11 +163,11 @@ func TestImages_CreateCategory_DuplicateDir(t *testing.T) {
 	env.loginAdmin(t)
 
 	env.postJSON(t, "/api/image-categories", map[string]any{
-		"action": "create", "name": "First", "dir": "shared",
+		"name": "First", "dir": "shared",
 	}).Body.Close()
 
 	resp := env.postJSON(t, "/api/image-categories", map[string]any{
-		"action": "create", "name": "Second", "dir": "shared",
+		"name": "Second", "dir": "shared",
 	})
 	if resp.StatusCode != http.StatusConflict {
 		t.Errorf("status = %d; want 409", resp.StatusCode)
@@ -179,9 +179,7 @@ func TestImages_DeletePermanent_Forbidden(t *testing.T) {
 	env := newTestEnv(t)
 	env.loginAdmin(t)
 
-	resp := env.postJSON(t, "/api/image-categories", map[string]any{
-		"action": "delete", "dir": "raffles",
-	})
+	resp := env.del(t, "/api/image-categories/raffles")
 	if resp.StatusCode != http.StatusForbidden {
 		t.Errorf("status = %d; want 403", resp.StatusCode)
 	}
@@ -193,13 +191,13 @@ func TestImages_RenameCustomCategory(t *testing.T) {
 	env.loginAdmin(t)
 
 	env.postJSON(t, "/api/image-categories", map[string]any{
-		"action": "create", "name": "Old", "dir": "old_dir",
+		"name": "Old", "dir": "old_dir",
 	}).Body.Close()
 	// Put an image in it so the rename must move a real folder.
 	env.postImagesUpload(t, "old_dir", map[string][]byte{"a.png": pngBytes}).Body.Close()
 
-	resp := env.postJSON(t, "/api/image-categories", map[string]any{
-		"action": "rename", "dir": "old_dir", "name": "New", "new_dir": "new_dir",
+	resp := env.patchJSON(t, "/api/image-categories/old_dir", map[string]any{
+		"name": "New", "new_dir": "new_dir",
 	})
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("rename status = %d; want 200", resp.StatusCode)
@@ -241,11 +239,9 @@ func TestImages_UploadListDelete(t *testing.T) {
 		t.Fatalf("listed images = %v; want [hero.png]", names)
 	}
 
-	resp = env.postJSON(t, "/api/images", map[string]any{
-		"action": "delete", "dir": "announcements_main", "name": "hero.png",
-	})
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("delete status = %d; want 200", resp.StatusCode)
+	resp = env.del(t, "/api/images?dir=announcements_main&name=hero.png")
+	if resp.StatusCode != http.StatusNoContent {
+		t.Fatalf("delete status = %d; want 204", resp.StatusCode)
 	}
 	resp.Body.Close()
 	if names := env.imageNames(t, "announcements_main"); len(names) != 0 {
@@ -269,15 +265,13 @@ func TestImages_DeleteCustomCategory_RemovesFiles(t *testing.T) {
 	env.loginAdmin(t)
 
 	env.postJSON(t, "/api/image-categories", map[string]any{
-		"action": "create", "name": "Temp", "dir": "temp_cat",
+		"name": "Temp", "dir": "temp_cat",
 	}).Body.Close()
 	env.postImagesUpload(t, "temp_cat", map[string][]byte{"x.png": pngBytes}).Body.Close()
 
-	resp := env.postJSON(t, "/api/image-categories", map[string]any{
-		"action": "delete", "dir": "temp_cat",
-	})
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("delete status = %d; want 200", resp.StatusCode)
+	resp := env.del(t, "/api/image-categories/temp_cat")
+	if resp.StatusCode != http.StatusNoContent {
+		t.Fatalf("delete status = %d; want 204", resp.StatusCode)
 	}
 	resp.Body.Close()
 

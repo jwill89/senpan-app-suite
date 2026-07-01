@@ -3,6 +3,8 @@ package server
 import (
 	"net/http"
 	"strings"
+
+	"app-suite/internal/model"
 )
 
 // handleBoard serves a player's bingo board along with the current game state.
@@ -32,7 +34,7 @@ func (s *Server) handleBoard(w http.ResponseWriter, r *http.Request) {
 
 	// Lightweight preview mode — return only the card, skip game state.
 	if r.URL.Query().Get("preview") != "" {
-		writeJSON(w, http.StatusOK, map[string]any{"card": card})
+		writeJSON(w, http.StatusOK, model.CardResponse{Card: *card})
 		return
 	}
 
@@ -44,9 +46,9 @@ func (s *Server) handleBoard(w http.ResponseWriter, r *http.Request) {
 
 	details, _ := s.game.GameDetails()
 
-	writeJSON(w, http.StatusOK, map[string]any{
-		"card":         card,
-		"game":         state,
-		"game_details": details,
+	writeJSON(w, http.StatusOK, model.BoardResponse{
+		Card:        *card,
+		Game:        state,
+		GameDetails: details,
 	})
 }

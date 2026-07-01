@@ -252,7 +252,7 @@ export const usePatternsStore = defineStore('patterns', () => {
       insertAt = idx === -1 ? ids.length : idx + 1
     }
     ids.splice(insertAt, 0, targetId)
-    await endpoints.patternCategories.reorder(ids)
+    await endpoints.patternCategories.bulkReorder(ids)
   }
 
   /**
@@ -367,7 +367,7 @@ export const usePatternsStore = defineStore('patterns', () => {
 
     try {
       for (const group of editableGroups.value) {
-        await endpoints.patterns.reorder(
+        await endpoints.patterns.bulkReorder(
           group.category.id,
           group.patterns.map((p) => p.id),
         )

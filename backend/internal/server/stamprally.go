@@ -111,57 +111,18 @@ func rallyCardComplete(r *model.StampRally, stamps []model.StampRallyStamp, coll
 }
 
 // ── Public payload shapes (no passwords; prizes hidden until complete) ────────
-
-type publicStampRally struct {
-	ID                 int64  `json:"id"`
-	Title              string `json:"title"`
-	CardImage          string `json:"card_image"`
-	NotStampedImage    string `json:"not_stamped_image"`
-	Details            string `json:"details"`
-	RedeemInstructions string `json:"redeem_instructions"`
-	AvailableFrom      string `json:"available_from"`
-	AvailableTo        string `json:"available_to"`
-	IsActive           bool   `json:"is_active"`
-}
-
-type publicStamp struct {
-	ID              int64  `json:"id"`
-	AffiliateName   string `json:"affiliate_name"` // "" → "Senpan Tea House" on the frontend
-	Image           string `json:"image"`
-	model.Placement `json:"placement"`
-	ActiveFrom      string `json:"active_from"`
-	ActiveTo        string `json:"active_to"`
-	Available       bool   `json:"available"`
-	Collected       bool   `json:"collected"`
-	CollectedAt     string `json:"collected_at"`
-}
-
-// publicPrize always carries the placement so the card can show the not-stamped
-// placeholder at the slot; Name/Image are populated only once the card is complete.
-type publicPrize struct {
-	ID              int64  `json:"id"`
-	Name            string `json:"name"`
-	Image           string `json:"image"`
-	model.Placement `json:"placement"`
-}
-
-type publicCard struct {
-	Rally           publicStampRally `json:"rally"`
-	ParticipantName string           `json:"participant_name"`
-	Completed       bool             `json:"completed"`
-	CompletedAt     string           `json:"completed_at"`
-	Stamps          []publicStamp    `json:"stamps"`
-	Prizes          []publicPrize    `json:"prizes"`
-	PrizesRevealed  bool             `json:"prizes_revealed"`
-}
+//
+// The exported wire structs (model.PublicStampCard and its nested
+// model.PublicStampRally/PublicStamp/PublicPrize) live in the model package; the
+// building logic stays here.
 
 // buildPublicCard assembles the participant-facing view from loaded rows, stripping
 // passwords, computing each stamp's availability/collection, and revealing prize
 // name/image only when the card is complete.
 func buildPublicCard(r *model.StampRally, card *model.StampRallyCard, stamps []model.StampRallyStamp,
-	prizes []model.StampRallyPrize, collected map[int64]string, now time.Time) publicCard {
-	pc := publicCard{
-		Rally: publicStampRally{
+	prizes []model.StampRallyPrize, collected map[int64]string, now time.Time) model.PublicStampCard {
+	pc := model.PublicStampCard{
+		Rally: model.PublicStampRally{
 			ID: r.ID, Title: r.Title, CardImage: r.CardImage, NotStampedImage: r.NotStampedImage,
 			Details: r.Details, RedeemInstructions: r.RedeemInstructions,
 			AvailableFrom: r.AvailableFrom, AvailableTo: r.AvailableTo, IsActive: rallyOpen(r, now),
@@ -170,13 +131,13 @@ func buildPublicCard(r *model.StampRally, card *model.StampRallyCard, stamps []m
 		Completed:       card.Completed,
 		CompletedAt:     card.CompletedAt,
 		PrizesRevealed:  card.Completed,
-		Stamps:          make([]publicStamp, 0, len(stamps)),
-		Prizes:          make([]publicPrize, 0, len(prizes)),
+		Stamps:          make([]model.PublicStamp, 0, len(stamps)),
+		Prizes:          make([]model.PublicPrize, 0, len(prizes)),
 	}
 	for i := range stamps {
 		st := &stamps[i]
 		at, got := collected[st.ID]
-		pc.Stamps = append(pc.Stamps, publicStamp{
+		pc.Stamps = append(pc.Stamps, model.PublicStamp{
 			ID: st.ID, AffiliateName: st.AffiliateName, Image: st.Image, Placement: st.Placement,
 			ActiveFrom: st.ActiveFrom, ActiveTo: st.ActiveTo,
 			Available: stampAvailable(r, st, now), Collected: got, CollectedAt: at,
@@ -184,7 +145,7 @@ func buildPublicCard(r *model.StampRally, card *model.StampRallyCard, stamps []m
 	}
 	for i := range prizes {
 		p := &prizes[i]
-		pp := publicPrize{ID: p.ID, Placement: p.Placement}
+		pp := model.PublicPrize{ID: p.ID, Placement: p.Placement}
 		if card.Completed {
 			pp.Name = p.Name
 			pp.Image = p.Image
@@ -209,7 +170,7 @@ func (s *Server) handleStampRalliesList(w http.ResponseWriter, r *http.Request) 
 		writeInternalError(w, "list stamp rallies", err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"stamp_rallies": rallies})
+	writeJSON(w, http.StatusOK, model.StampRalliesResponse{StampRallies: rallies})
 }
 
 // handleStampRallyDetail returns a rally with its stamps, prizes, and issued cards.
@@ -239,7 +200,7 @@ func (s *Server) handleStampRallyDetail(w http.ResponseWriter, r *http.Request) 
 		writeInternalError(w, "list rally cards", err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"stamp_rally": rally, "cards": cards})
+	writeJSON(w, http.StatusOK, model.StampRallyDetailResponse{StampRally: *rally, Cards: cards})
 }
 
 // handleStampRallyLogs returns the event-wide stamp log (every collection across all
@@ -261,15 +222,15 @@ func (s *Server) handleStampRallyLogs(w http.ResponseWriter, r *http.Request) {
 		writeInternalError(w, "list rally collections", err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"logs": logs})
+	writeJSON(w, http.StatusOK, model.StampRallyLogsResponse{Logs: logs})
 }
 
 // ── Admin: CRUD ──────────────────────────────────────────────────────────────
 
-// stampRallyRequest is the JSON body for POST /api/stamp-rallies.
-type stampRallyRequest struct {
-	Action             string                  `json:"action"`
-	ID                 int64                   `json:"id"`
+// stampRallyWriteRequest is the JSON body for creating (POST /api/stamp-rallies)
+// or replacing (PUT /api/stamp-rallies/{id}) a rally. The id comes from the path
+// on PUT.
+type stampRallyWriteRequest struct {
 	Title              string                  `json:"title"`
 	CardImage          string                  `json:"card_image"`
 	NotStampedImage    string                  `json:"not_stamped_image"`
@@ -277,13 +238,12 @@ type stampRallyRequest struct {
 	AvailableTo        string                  `json:"available_to"`
 	Details            string                  `json:"details"`
 	RedeemInstructions string                  `json:"redeem_instructions"`
-	Status             string                  `json:"status"` // for set_status
 	Stamps             []model.StampRallyStamp `json:"stamps"`
 	Prizes             []model.StampRallyPrize `json:"prizes"`
 }
 
 // rallyFromRequest builds a sanitized model.StampRally (sans ID) from a request.
-func rallyFromRequest(req stampRallyRequest, title string) *model.StampRally {
+func rallyFromRequest(req stampRallyWriteRequest, title string) *model.StampRally {
 	stamps := make([]model.StampRallyStamp, 0, len(req.Stamps))
 	for _, st := range req.Stamps {
 		st.Image = strings.TrimSpace(st.Image)
@@ -312,224 +272,256 @@ func rallyFromRequest(req stampRallyRequest, title string) *model.StampRally {
 	}
 }
 
-// handleStampRalliesAction creates, updates, or deletes a rally (stamps + prizes inline).
+// handleStampRallyCreate creates a rally (stamps + prizes inline).
 //
 //	Endpoint:  POST /api/stamp-rallies
 //	Auth:      admin, or a user granted festival-stamp-rally
-func (s *Server) handleStampRalliesAction(w http.ResponseWriter, r *http.Request) {
+//	Response:  201 {"stamp_rally": StampRally}
+func (s *Server) handleStampRallyCreate(w http.ResponseWriter, r *http.Request) {
 	if !s.requirePermission(w, r, permFestivalStampRally) {
 		return
 	}
-	req, err := readJSON[stampRallyRequest](w, r)
+	req, err := readJSON[stampRallyWriteRequest](w, r)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "Invalid JSON")
 		return
 	}
-
-	switch req.Action {
-	case "create":
-		title := strings.TrimSpace(req.Title)
-		if title == "" {
-			writeError(w, http.StatusBadRequest, "Title is required")
-			return
-		}
-		rally := rallyFromRequest(req, title)
-		id, err := s.store.CreateStampRally(rally)
-		if err != nil {
-			writeInternalError(w, "create stamp rally", err)
-			return
-		}
-		rally.ID = id
-		rally.Status = "open"
-		writeJSON(w, http.StatusCreated, map[string]any{"stamp_rally": rally})
-
-	case "update":
-		if req.ID <= 0 {
-			writeError(w, http.StatusBadRequest, "Stamp rally id is required")
-			return
-		}
-		title := strings.TrimSpace(req.Title)
-		if title == "" {
-			writeError(w, http.StatusBadRequest, "Title is required")
-			return
-		}
-		rally := rallyFromRequest(req, title)
-		rally.ID = req.ID
-		if err := s.store.UpdateStampRally(rally); err != nil {
-			writeInternalError(w, "update stamp rally", err)
-			return
-		}
-		writeJSON(w, http.StatusOK, map[string]any{"ok": true})
-
-	case "set_status":
-		if req.ID <= 0 {
-			writeError(w, http.StatusBadRequest, "Stamp rally id is required")
-			return
-		}
-		if req.Status != "open" && req.Status != "closed" {
-			writeError(w, http.StatusBadRequest, "Status must be \"open\" or \"closed\"")
-			return
-		}
-		if err := s.store.SetStampRallyStatus(req.ID, req.Status); err != nil {
-			writeInternalError(w, "set stamp rally status", err)
-			return
-		}
-		writeJSON(w, http.StatusOK, map[string]any{"ok": true, "status": req.Status})
-
-	case "delete":
-		if req.ID <= 0 {
-			writeError(w, http.StatusBadRequest, "Stamp rally id is required")
-			return
-		}
-		deleted, err := s.store.DeleteStampRally(req.ID)
-		if err != nil {
-			writeInternalError(w, "delete stamp rally", err)
-			return
-		}
-		writeJSON(w, http.StatusOK, map[string]any{"deleted": deleted})
-
-	default:
-		writeError(w, http.StatusBadRequest, "Invalid action. Use: create, update, delete, set_status")
+	title := strings.TrimSpace(req.Title)
+	if title == "" {
+		writeError(w, http.StatusBadRequest, "Title is required")
+		return
 	}
+	rally := rallyFromRequest(req, title)
+	id, err := s.store.CreateStampRally(rally)
+	if err != nil {
+		writeInternalError(w, "create stamp rally", err)
+		return
+	}
+	rally.ID = id
+	rally.Status = "open"
+	writeJSON(w, http.StatusCreated, model.StampRallyResponse{StampRally: *rally})
 }
 
-// stampRallyStampsRequest is the JSON body for POST /api/stamp-rallies/{id}/stamps.
-type stampRallyStampsRequest struct {
-	Action  string `json:"action"`
-	StampID int64  `json:"stamp_id"`
-	Paused  bool   `json:"paused"`
-}
-
-// handleStampRallyStamps handles per-stamp quick actions (pause/resume) without a
-// full event re-save.
+// handleStampRallyUpdate replaces a rally's editable fields (stamps + prizes
+// inline). Status is not editable here and is preserved — use close/reopen.
 //
-//	Endpoint:  POST /api/stamp-rallies/{id}/stamps
+//	Endpoint:  PUT /api/stamp-rallies/{id}
 //	Auth:      admin, or a user granted festival-stamp-rally
-//	Request:   {"action":"set_paused","stamp_id":N,"paused":true}
-func (s *Server) handleStampRallyStamps(w http.ResponseWriter, r *http.Request) {
+//	Response:  200 {"ok": true}
+func (s *Server) handleStampRallyUpdate(w http.ResponseWriter, r *http.Request) {
 	if !s.requirePermission(w, r, permFestivalStampRally) {
 		return
 	}
-	rallyID, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
-	if err != nil {
-		writeError(w, http.StatusBadRequest, "Invalid stamp rally ID")
+	id, ok := pathInt64(w, r, "id", "stamp rally")
+	if !ok {
 		return
 	}
-	req, err := readJSON[stampRallyStampsRequest](w, r)
+	req, err := readJSON[stampRallyWriteRequest](w, r)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "Invalid JSON")
 		return
 	}
-	if req.Action != "set_paused" {
-		writeError(w, http.StatusBadRequest, "Invalid action. Use: set_paused")
+	title := strings.TrimSpace(req.Title)
+	if title == "" {
+		writeError(w, http.StatusBadRequest, "Title is required")
 		return
 	}
-	if req.StampID <= 0 {
-		writeError(w, http.StatusBadRequest, "Stamp id is required")
+	rally := rallyFromRequest(req, title)
+	rally.ID = id
+	if err := s.store.UpdateStampRally(rally); err != nil {
+		writeInternalError(w, "update stamp rally", err)
 		return
 	}
-	ok, err := s.store.SetStampPaused(rallyID, req.StampID, req.Paused)
+	writeJSON(w, http.StatusOK, model.OKResponse{OK: true})
+}
+
+// handleStampRallyDelete deletes a rally and all its stamps/prizes/cards.
+//
+//	Endpoint:  DELETE /api/stamp-rallies/{id}
+//	Auth:      admin, or a user granted festival-stamp-rally
+//	Response:  204 No Content
+func (s *Server) handleStampRallyDelete(w http.ResponseWriter, r *http.Request) {
+	if !s.requirePermission(w, r, permFestivalStampRally) {
+		return
+	}
+	id, ok := pathInt64(w, r, "id", "stamp rally")
+	if !ok {
+		return
+	}
+	if _, err := s.store.DeleteStampRally(id); err != nil {
+		writeInternalError(w, "delete stamp rally", err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// setStampRallyStatus applies a status change and responds with {ok, status}.
+// Shared by the close and reopen verb handlers.
+func (s *Server) setStampRallyStatus(w http.ResponseWriter, r *http.Request, status string) {
+	if !s.requirePermission(w, r, permFestivalStampRally) {
+		return
+	}
+	id, ok := pathInt64(w, r, "id", "stamp rally")
+	if !ok {
+		return
+	}
+	if err := s.store.SetStampRallyStatus(id, status); err != nil {
+		writeInternalError(w, "set stamp rally status", err)
+		return
+	}
+	writeJSON(w, http.StatusOK, model.StatusResponse{OK: true, Status: status})
+}
+
+// handleStampRallyClose closes a rally (read-only, moves to the closed table).
+//
+//	Endpoint:  POST /api/stamp-rallies/{id}/close
+//	Auth:      admin, or a user granted festival-stamp-rally
+//	Response:  200 {"ok": true, "status": "closed"}
+func (s *Server) handleStampRallyClose(w http.ResponseWriter, r *http.Request) {
+	s.setStampRallyStatus(w, r, "closed")
+}
+
+// handleStampRallyReopen reopens a closed rally.
+//
+//	Endpoint:  POST /api/stamp-rallies/{id}/reopen
+//	Auth:      admin, or a user granted festival-stamp-rally
+//	Response:  200 {"ok": true, "status": "open"}
+func (s *Server) handleStampRallyReopen(w http.ResponseWriter, r *http.Request) {
+	s.setStampRallyStatus(w, r, "open")
+}
+
+// stampPausedRequest is the JSON body for PATCH /api/stamp-rallies/{id}/stamps/{stampId}.
+type stampPausedRequest struct {
+	Paused bool `json:"paused"`
+}
+
+// handleStampRallyStampPatch pauses/resumes a single stamp without a full event
+// re-save (flipping a boolean → PATCH).
+//
+//	Endpoint:  PATCH /api/stamp-rallies/{id}/stamps/{stampId}
+//	Auth:      admin, or a user granted festival-stamp-rally
+//	Response:  200 {"ok": true, "paused": bool}
+func (s *Server) handleStampRallyStampPatch(w http.ResponseWriter, r *http.Request) {
+	if !s.requirePermission(w, r, permFestivalStampRally) {
+		return
+	}
+	rallyID, ok := pathInt64(w, r, "id", "stamp rally")
+	if !ok {
+		return
+	}
+	stampID, ok := pathInt64(w, r, "stampId", "stamp")
+	if !ok {
+		return
+	}
+	req, err := readJSON[stampPausedRequest](w, r)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "Invalid JSON")
+		return
+	}
+	paused, err := s.store.SetStampPaused(rallyID, stampID, req.Paused)
 	if err != nil {
 		writeInternalError(w, "set stamp paused", err)
 		return
 	}
-	if !ok {
+	if !paused {
 		writeError(w, http.StatusNotFound, "Stamp not found")
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "paused": req.Paused})
+	writeJSON(w, http.StatusOK, model.PausedResponse{OK: true, Paused: req.Paused})
 }
 
-// stampRallyCardsRequest is the JSON body for POST /api/stamp-rallies/{id}/cards.
-type stampRallyCardsRequest struct {
-	Action          string `json:"action"`
-	CardID          int64  `json:"card_id"`
+// stampRallyCardCreateRequest is the JSON body for POST /api/stamp-rallies/{id}/cards.
+type stampRallyCardCreateRequest struct {
 	ParticipantName string `json:"participant_name"`
 }
 
-// handleStampRallyCards issues or deletes participant card links.
+// handleStampRallyCardCreate issues a tokenized participant card link.
 //
 //	Endpoint:  POST /api/stamp-rallies/{id}/cards
 //	Auth:      admin, or a user granted festival-stamp-rally
-//	Request:   {"action":"create_card","participant_name":"..."} | {"action":"delete_card","card_id":N}
-func (s *Server) handleStampRallyCards(w http.ResponseWriter, r *http.Request) {
+//	Response:  201 {"card": StampRallyCard}
+func (s *Server) handleStampRallyCardCreate(w http.ResponseWriter, r *http.Request) {
 	if !s.requirePermission(w, r, permFestivalStampRally) {
 		return
 	}
-	rallyID, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
-	if err != nil {
-		writeError(w, http.StatusBadRequest, "Invalid stamp rally ID")
+	rallyID, ok := pathInt64(w, r, "id", "stamp rally")
+	if !ok {
 		return
 	}
-	req, err := readJSON[stampRallyCardsRequest](w, r)
+	req, err := readJSON[stampRallyCardCreateRequest](w, r)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "Invalid JSON")
 		return
 	}
-
-	switch req.Action {
-	case "create_card":
-		name := strings.TrimSpace(req.ParticipantName)
-		if name == "" {
-			writeError(w, http.StatusBadRequest, "Participant name is required")
-			return
-		}
-		rally, err := s.store.GetStampRally(rallyID)
-		if err != nil {
-			writeInternalError(w, "get rally for card", err)
-			return
-		}
-		if rally == nil {
-			writeError(w, http.StatusNotFound, "Stamp rally not found")
-			return
-		}
-		card, err := s.store.IssueRallyCard(rallyID, name)
-		if err != nil {
-			writeInternalError(w, "issue rally card", err)
-			return
-		}
-		writeJSON(w, http.StatusCreated, map[string]any{"card": card})
-
-	case "delete_card":
-		if req.CardID <= 0 {
-			writeError(w, http.StatusBadRequest, "Card id is required")
-			return
-		}
-		// A card with collected stamps can only be deleted once the rally is closed
-		// (its log is preserved either way — collected rows snapshot participant/stall
-		// and detach via ON DELETE SET NULL). Mirrors garapon drawing-link deletion.
-		rally, err := s.store.GetStampRally(rallyID)
-		if err != nil {
-			writeInternalError(w, "get rally for card delete", err)
-			return
-		}
-		if rally == nil {
-			writeError(w, http.StatusNotFound, "Stamp rally not found")
-			return
-		}
-		closed := rally.Status == "closed"
-		if !closed {
-			collected, err := s.store.ListCollectedStampIDs(req.CardID)
-			if err != nil {
-				writeInternalError(w, "list collected for card delete", err)
-				return
-			}
-			if len(collected) > 0 {
-				writeError(w, http.StatusConflict,
-					"This card has collected stamps and can't be deleted while the rally is open — close the rally first (the stamp log is kept).")
-				return
-			}
-		}
-		deleted, err := s.store.DeleteRallyCard(rallyID, req.CardID, closed)
-		if err != nil {
-			writeInternalError(w, "delete rally card", err)
-			return
-		}
-		writeJSON(w, http.StatusOK, map[string]any{"deleted": deleted})
-
-	default:
-		writeError(w, http.StatusBadRequest, "Invalid action. Use: create_card, delete_card")
+	name := strings.TrimSpace(req.ParticipantName)
+	if name == "" {
+		writeError(w, http.StatusBadRequest, "Participant name is required")
+		return
 	}
+	rally, err := s.store.GetStampRally(rallyID)
+	if err != nil {
+		writeInternalError(w, "get rally for card", err)
+		return
+	}
+	if rally == nil {
+		writeError(w, http.StatusNotFound, "Stamp rally not found")
+		return
+	}
+	card, err := s.store.IssueRallyCard(rallyID, name)
+	if err != nil {
+		writeInternalError(w, "issue rally card", err)
+		return
+	}
+	writeJSON(w, http.StatusCreated, model.StampRallyCardResponse{Card: *card})
+}
+
+// handleStampRallyCardDelete removes a participant card link.
+//
+//	Endpoint:  DELETE /api/stamp-rallies/{id}/cards/{cardId}
+//	Auth:      admin, or a user granted festival-stamp-rally
+//	Response:  204 No Content
+func (s *Server) handleStampRallyCardDelete(w http.ResponseWriter, r *http.Request) {
+	if !s.requirePermission(w, r, permFestivalStampRally) {
+		return
+	}
+	rallyID, ok := pathInt64(w, r, "id", "stamp rally")
+	if !ok {
+		return
+	}
+	cardID, ok := pathInt64(w, r, "cardId", "card")
+	if !ok {
+		return
+	}
+	// A card with collected stamps can only be deleted once the rally is closed
+	// (its log is preserved either way — collected rows snapshot participant/stall
+	// and detach via ON DELETE SET NULL). Mirrors garapon drawing-link deletion.
+	rally, err := s.store.GetStampRally(rallyID)
+	if err != nil {
+		writeInternalError(w, "get rally for card delete", err)
+		return
+	}
+	if rally == nil {
+		writeError(w, http.StatusNotFound, "Stamp rally not found")
+		return
+	}
+	closed := rally.Status == "closed"
+	if !closed {
+		collected, err := s.store.ListCollectedStampIDs(cardID)
+		if err != nil {
+			writeInternalError(w, "list collected for card delete", err)
+			return
+		}
+		if len(collected) > 0 {
+			writeError(w, http.StatusConflict,
+				"This card has collected stamps and can't be deleted while the rally is open — close the rally first (the stamp log is kept).")
+			return
+		}
+	}
+	if _, err := s.store.DeleteRallyCard(rallyID, cardID, closed); err != nil {
+		writeInternalError(w, "delete rally card", err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 // ── Public (tokenized card view + stamp) ─────────────────────────────────────
@@ -668,8 +660,8 @@ func (s *Server) handleStampCardStamp(w http.ResponseWriter, r *http.Request) {
 	s.broadcastResourceChanged("stamp-rallies")
 
 	resp := buildPublicCard(rally, card, rally.Stamps, rally.Prizes, collected, now)
-	writeJSON(w, http.StatusOK, map[string]any{
-		"card":               resp,
-		"collected_stamp_id": match.ID,
+	writeJSON(w, http.StatusOK, model.StampSubmitResponse{
+		Card:             resp,
+		CollectedStampID: match.ID,
 	})
 }

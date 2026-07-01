@@ -9,12 +9,10 @@ import (
 	"app-suite/internal/store"
 )
 
-// DrawResult is the full response from a draw action.
-type DrawResult struct {
-	Drawn   model.BingoDrawnNumber `json:"drawn"`
-	Game    model.BingoGameState   `json:"game"`
-	Winners []string               `json:"winners"`
-}
+// DrawResult is the response from a draw action; it lives in the model package
+// (model.DrawResult) so it is one source of truth for the wire shape, the
+// generated frontend type, and the OpenAPI schema. Aliased here for brevity.
+type DrawResult = model.DrawResult
 
 // Service handles game lifecycle, drawing, and winner computation.
 type Service struct {

@@ -3,6 +3,8 @@ package server
 import (
 	"net/http"
 	"strconv"
+
+	"app-suite/internal/model"
 )
 
 // handleWinnersLog returns a paginated list of winners log entries.
@@ -34,58 +36,51 @@ func (s *Server) handleWinnersLog(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]any{
-		"entries":  entries,
-		"total":    total,
-		"page":     page,
-		"per_page": perPage,
+	writeJSON(w, http.StatusOK, model.WinnersLogResponse{
+		Entries: entries,
+		Total:   total,
+		Page:    page,
+		PerPage: perPage,
 	})
 }
 
-// winnersLogRequest is the JSON body for POST /api/winners-log.
-type winnersLogRequest struct {
-	Action string `json:"action"`
-	ID     int64  `json:"id"` // for "delete"
-}
-
-// handleWinnersLogAction deletes one winners-log entry or clears the whole log.
+// handleWinnersLogDelete removes one winners-log entry. Deleting a non-existent
+// entry is a no-op success (idempotent).
 //
-//	Endpoint:  POST /api/winners-log
+//	Endpoint:  DELETE /api/winners-log/{id}
 //	Auth:      admin, or a user granted this page's permission
-//	Request:   {"action": "delete", "id": N} | {"action": "delete_all"}
-//	Response:  {"ok": true}
-func (s *Server) handleWinnersLogAction(w http.ResponseWriter, r *http.Request) {
+//	Response:  204 No Content
+func (s *Server) handleWinnersLogDelete(w http.ResponseWriter, r *http.Request) {
 	if !s.requirePermission(w, r, permBingoWinnersLog) {
 		return
 	}
-	req, err := readJSON[winnersLogRequest](w, r)
-	if err != nil {
-		writeError(w, http.StatusBadRequest, "Invalid JSON")
+	id, ok := pathInt64(w, r, "id", "entry")
+	if !ok {
 		return
 	}
-
-	switch req.Action {
-	case "delete":
-		if req.ID == 0 {
-			writeError(w, http.StatusBadRequest, "Entry id is required")
-			return
-		}
-		if _, err := s.store.DeleteWinnerLogEntry(req.ID); err != nil {
-			writeInternalError(w, "delete winners log entry", err)
-			return
-		}
-		writeJSON(w, http.StatusOK, map[string]any{"ok": true})
-
-	case "delete_all":
-		if _, err := s.store.DeleteAllWinnersLog(); err != nil {
-			writeInternalError(w, "delete all winners log", err)
-			return
-		}
-		writeJSON(w, http.StatusOK, map[string]any{"ok": true})
-
-	default:
-		writeError(w, http.StatusBadRequest, "Invalid action. Use: delete, delete_all")
+	if _, err := s.store.DeleteWinnerLogEntry(id); err != nil {
+		writeInternalError(w, "delete winners log entry", err)
+		return
 	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// handleWinnersLogDeleteAll clears the entire winners log, reporting how many
+// rows were removed (per the project's bulk-delete convention).
+//
+//	Endpoint:  DELETE /api/winners-log/all
+//	Auth:      admin, or a user granted this page's permission
+//	Response:  200 {"deleted": N}
+func (s *Server) handleWinnersLogDeleteAll(w http.ResponseWriter, r *http.Request) {
+	if !s.requirePermission(w, r, permBingoWinnersLog) {
+		return
+	}
+	deleted, err := s.store.DeleteAllWinnersLog()
+	if err != nil {
+		writeInternalError(w, "delete all winners log", err)
+		return
+	}
+	writeJSON(w, http.StatusOK, model.DeletedCountResponse{Deleted: deleted})
 }
 
 // handleFrequentWinners returns players who have won N+ times in the last H hours.
@@ -108,5 +103,5 @@ func (s *Server) handleFrequentWinners(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]any{"winners": winners})
+	writeJSON(w, http.StatusOK, model.FrequentWinnersResponse{Winners: winners})
 }

@@ -80,6 +80,7 @@ func main() {
 	hub := ws.NewHub()
 	srv := server.New(db, hub, finalSecret, *webRoot, allowedOrigins)
 	srv.SetTurnstile(tsSecret, tsSiteKey)
+	srv.SetOpenAPISpec(openAPISpec) // GET /api/docs + /api/openapi.yaml
 	if tsSecret != "" {
 		slog.Info("Cloudflare Turnstile bot check enabled on the login form")
 	} else {

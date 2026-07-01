@@ -1,6 +1,7 @@
 package server_test
 
 import (
+	"fmt"
 	"net/http"
 	"testing"
 )
@@ -42,7 +43,7 @@ func TestPresets_CreateListUpdateDelete(t *testing.T) {
 
 	// Create.
 	resp := env.postJSON(t, "/api/presets", map[string]any{
-		"action": "create", "name": "Quick Game", "pattern_ids": []int64{pid}, "game_details": "GL HF",
+		"name": "Quick Game", "pattern_ids": []int64{pid}, "game_details": "GL HF",
 	})
 	if resp.StatusCode != http.StatusCreated {
 		t.Fatalf("create status = %d; want 201", resp.StatusCode)
@@ -55,23 +56,21 @@ func TestPresets_CreateListUpdateDelete(t *testing.T) {
 		t.Fatalf("expected 1 preset, got %d", len(presets))
 	}
 
-	// Update.
-	resp = env.postJSON(t, "/api/presets", map[string]any{
-		"action": "update", "id": id, "name": "Renamed", "pattern_ids": []int64{pid},
+	// Update (PUT).
+	resp = env.putJSON(t, fmt.Sprintf("/api/presets/%d", id), map[string]any{
+		"name": "Renamed", "pattern_ids": []int64{pid},
 	})
 	if resp.StatusCode != 200 {
 		t.Fatalf("update status = %d; want 200", resp.StatusCode)
 	}
 	resp.Body.Close()
 
-	// Delete.
-	resp = env.postJSON(t, "/api/presets", map[string]any{"action": "delete", "id": id})
-	if resp.StatusCode != 200 {
-		t.Fatalf("delete status = %d; want 200", resp.StatusCode)
+	// Delete (DELETE → 204).
+	resp = env.del(t, fmt.Sprintf("/api/presets/%d", id))
+	if resp.StatusCode != http.StatusNoContent {
+		t.Fatalf("delete status = %d; want 204", resp.StatusCode)
 	}
-	if decodeBody(t, resp)["deleted"] != true {
-		t.Error("expected deleted=true")
-	}
+	resp.Body.Close()
 }
 
 func TestPresets_CreateValidation(t *testing.T) {
@@ -79,13 +78,12 @@ func TestPresets_CreateValidation(t *testing.T) {
 	env.loginAdmin(t)
 	pid := env.seedPattern(t, "P")
 
-	cases := map[string]map[string]any{
-		"missing name":         {"action": "create", "name": " ", "pattern_ids": []int64{pid}},
-		"no patterns":          {"action": "create", "name": "Has Name", "pattern_ids": []int64{}},
-		"update needs id+name": {"action": "update", "id": 0, "name": " ", "pattern_ids": []int64{pid}},
-		"delete needs id":      {"action": "delete", "id": 0},
+	// Create validation (POST /api/presets).
+	create := map[string]map[string]any{
+		"missing name": {"name": " ", "pattern_ids": []int64{pid}},
+		"no patterns":  {"name": "Has Name", "pattern_ids": []int64{}},
 	}
-	for name, body := range cases {
+	for name, body := range create {
 		t.Run(name, func(t *testing.T) {
 			resp := env.postJSON(t, "/api/presets", body)
 			if resp.StatusCode != http.StatusBadRequest {
@@ -94,14 +92,14 @@ func TestPresets_CreateValidation(t *testing.T) {
 			resp.Body.Close()
 		})
 	}
-}
 
-func TestPresets_InvalidAction(t *testing.T) {
-	env := newTestEnv(t)
-	env.loginAdmin(t)
-	resp := env.postJSON(t, "/api/presets", map[string]any{"action": "explode"})
-	if resp.StatusCode != http.StatusBadRequest {
-		t.Errorf("status = %d; want 400", resp.StatusCode)
-	}
-	resp.Body.Close()
+	// Update validation (PUT /api/presets/{id}): a blank name is rejected.
+	t.Run("update blank name", func(t *testing.T) {
+		resp := env.putJSON(t, fmt.Sprintf("/api/presets/%d", pid),
+			map[string]any{"name": " ", "pattern_ids": []int64{pid}})
+		if resp.StatusCode != http.StatusBadRequest {
+			t.Errorf("status = %d; want 400", resp.StatusCode)
+		}
+		resp.Body.Close()
+	})
 }

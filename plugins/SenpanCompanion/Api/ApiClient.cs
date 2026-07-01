@@ -73,13 +73,13 @@ public sealed class ApiClient : IDisposable
 
     public Task<GenerateSingleResponse> CreateNamedCardAsync(string playerName, CancellationToken ct = default)
         => SendAsync<GenerateSingleResponse>(HttpMethod.Post, "api/cards",
-            new { action = "generate_single", player_name = playerName }, ct);
+            new { player_name = playerName }, ct);
 
-    public Task<OkResponse> DeleteCardAsync(string id, CancellationToken ct = default)
-        => SendAsync<OkResponse>(HttpMethod.Post, "api/cards", new { action = "delete", id }, ct);
+    public Task DeleteCardAsync(string id, CancellationToken ct = default)
+        => SendNoContentAsync(HttpMethod.Delete, $"api/cards/{Uri.EscapeDataString(id)}", null, ct);
 
-    public Task<OkResponse> DeleteAllCardsAsync(CancellationToken ct = default)
-        => SendAsync<OkResponse>(HttpMethod.Post, "api/cards", new { action = "delete_all" }, ct);
+    public Task<DeletedCountResponse> DeleteAllCardsAsync(CancellationToken ct = default)
+        => SendAsync<DeletedCountResponse>(HttpMethod.Delete, "api/cards/all", null, ct);
 
     // ── Bingo: patterns + game ───────────────────────────────────────────────
 
@@ -97,30 +97,30 @@ public sealed class ApiClient : IDisposable
             $"api/winners-log?page={page}&per_page={perPage}&sort={Uri.EscapeDataString(sort)}&dir={Uri.EscapeDataString(dir)}", null, ct);
 
     // Per-entry delete only — the plugin deliberately exposes no "clear all" for
-    // the winners log, so it can't be wiped from in-game.
-    public Task<OkResponse> DeleteWinnersLogEntryAsync(long id, CancellationToken ct = default)
-        => SendAsync<OkResponse>(HttpMethod.Post, "api/winners-log", new { action = "delete", id }, ct);
+    // the winners log, so it can't be wiped from in-game. Returns no body (204).
+    public Task DeleteWinnersLogEntryAsync(long id, CancellationToken ct = default)
+        => SendNoContentAsync(HttpMethod.Delete, $"api/winners-log/{id}", null, ct);
 
     public Task<GameStateResponse> GetGameAsync(CancellationToken ct = default)
         => SendAsync<GameStateResponse>(HttpMethod.Get, "api/game", null, ct);
 
     public Task<GameStateResponse> StartGameAsync(int[] patternIds, CancellationToken ct = default)
-        => SendAsync<GameStateResponse>(HttpMethod.Post, "api/game",
-            new { action = "start", pattern_ids = patternIds }, ct);
+        => SendAsync<GameStateResponse>(HttpMethod.Post, "api/game/start",
+            new { pattern_ids = patternIds }, ct);
 
     public Task<DrawResult> DrawAsync(int delaySeconds, CancellationToken ct = default)
-        => SendAsync<DrawResult>(HttpMethod.Post, "api/game",
-            new { action = "draw", delay = delaySeconds }, ct);
+        => SendAsync<DrawResult>(HttpMethod.Post, "api/game/draw",
+            new { delay = delaySeconds }, ct);
 
     public Task<OkResponse> EndGameAsync(string[] validWinnerIds, CancellationToken ct = default)
-        => SendAsync<OkResponse>(HttpMethod.Post, "api/game",
-            new { action = "end", valid_winner_ids = validWinnerIds }, ct);
+        => SendAsync<OkResponse>(HttpMethod.Post, "api/game/end",
+            new { valid_winner_ids = validWinnerIds }, ct);
 
     public Task<OkResponse> TriggerHalftimeAsync(CancellationToken ct = default)
-        => SendAsync<OkResponse>(HttpMethod.Post, "api/game", new { action = "trigger_halftime" }, ct);
+        => SendAsync<OkResponse>(HttpMethod.Post, "api/game/halftime", null, ct);
 
     public Task<OkResponse> UpdateGameDetailsAsync(string details, CancellationToken ct = default)
-        => SendAsync<OkResponse>(HttpMethod.Post, "api/game", new { action = "update_details", details }, ct);
+        => SendAsync<OkResponse>(HttpMethod.Patch, "api/game", new { details }, ct);
 
     // ── Raffles ──────────────────────────────────────────────────────────────
 
@@ -132,27 +132,23 @@ public sealed class ApiClient : IDisposable
 
     public Task<RaffleEntryResponse> AddRaffleEntryAsync(long raffleId, string characterName, string world, int numEntries, bool paid, CancellationToken ct = default)
         => SendAsync<RaffleEntryResponse>(HttpMethod.Post, $"api/raffles/{raffleId}/entries",
-            new { action = "add_entry", character_name = characterName, world, num_entries = numEntries, paid }, ct);
+            new { character_name = characterName, world, num_entries = numEntries, paid }, ct);
 
-    public Task<OkResponse> MarkRaffleEntryPaidAsync(long raffleId, long entryId, bool paid, CancellationToken ct = default)
-        => SendAsync<OkResponse>(HttpMethod.Post, $"api/raffles/{raffleId}/entries",
-            new { action = "mark_paid", entry_id = entryId, paid }, ct);
+    public Task<RaffleEntryResponse> MarkRaffleEntryPaidAsync(long raffleId, long entryId, bool paid, CancellationToken ct = default)
+        => SendAsync<RaffleEntryResponse>(HttpMethod.Patch, $"api/raffles/{raffleId}/entries/{entryId}",
+            new { paid }, ct);
 
-    public Task<OkResponse> DeleteRaffleEntryAsync(long raffleId, long entryId, CancellationToken ct = default)
-        => SendAsync<OkResponse>(HttpMethod.Post, $"api/raffles/{raffleId}/entries",
-            new { action = "delete_entry", entry_id = entryId }, ct);
+    public Task DeleteRaffleEntryAsync(long raffleId, long entryId, CancellationToken ct = default)
+        => SendNoContentAsync(HttpMethod.Delete, $"api/raffles/{raffleId}/entries/{entryId}", null, ct);
 
     public Task<RaffleWinnerResponse> PickRaffleWinnerAsync(long raffleId, CancellationToken ct = default)
-        => SendAsync<RaffleWinnerResponse>(HttpMethod.Post, $"api/raffles/{raffleId}/entries",
-            new { action = "pick_winner" }, ct);
+        => SendAsync<RaffleWinnerResponse>(HttpMethod.Post, $"api/raffles/{raffleId}/pick-winner", null, ct);
 
     public Task<RaffleWinnerResponse> PickAnotherRaffleWinnerAsync(long raffleId, CancellationToken ct = default)
-        => SendAsync<RaffleWinnerResponse>(HttpMethod.Post, $"api/raffles/{raffleId}/entries",
-            new { action = "pick_another" }, ct);
+        => SendAsync<RaffleWinnerResponse>(HttpMethod.Post, $"api/raffles/{raffleId}/pick-another", null, ct);
 
     public Task<OkResponse> VerifyRaffleWinnerAsync(long raffleId, CancellationToken ct = default)
-        => SendAsync<OkResponse>(HttpMethod.Post, $"api/raffles/{raffleId}/entries",
-            new { action = "verify_winner" }, ct);
+        => SendAsync<OkResponse>(HttpMethod.Post, $"api/raffles/{raffleId}/verify-winner", null, ct);
 
     // ── Transport ────────────────────────────────────────────────────────────
 
@@ -182,6 +178,29 @@ public sealed class ApiClient : IDisposable
         if (result == null)
             throw new ApiException("Empty or unreadable response", resp.StatusCode);
         return result;
+    }
+
+    // SendNoContentAsync issues a request that returns no body (e.g. a 204 from a
+    // DELETE). It shares the auth + error handling of SendAsync but skips
+    // deserialization, so an empty success body isn't treated as an error.
+    private async Task SendNoContentAsync(HttpMethod method, string path, object? body, CancellationToken ct)
+    {
+        using var linked = CancellationTokenSource.CreateLinkedTokenSource(this.lifetime.Token, ct);
+        using var req = new HttpRequestMessage(method, BuildUrl(path));
+        var bearer = this.config.Token.Trim();
+        if (bearer.Length > 0)
+            req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", bearer);
+        if (body != null)
+            req.Content = new StringContent(JsonSerializer.Serialize(body, Json), Encoding.UTF8, "application/json");
+
+        using var resp = await this.http.SendAsync(req, linked.Token).ConfigureAwait(false);
+        if (!resp.IsSuccessStatusCode)
+        {
+            var text = await resp.Content.ReadAsStringAsync(linked.Token).ConfigureAwait(false);
+            var msg = TryExtractError(text) ?? $"Request failed ({(int)resp.StatusCode})";
+            this.log.Warning($"Senpan API {method} {path} -> {(int)resp.StatusCode}: {msg}");
+            throw new ApiException(msg, resp.StatusCode);
+        }
     }
 
     private Uri BuildUrl(string path)

@@ -15,7 +15,7 @@ func TestGarapons_RequiresAuth(t *testing.T) {
 		t.Errorf("list status = %d; want 401", resp.StatusCode)
 		resp.Body.Close()
 	}
-	resp := env.postJSON(t, "/api/garapons", map[string]any{"action": "create", "title": "X"})
+	resp := env.postJSON(t, "/api/garapons", map[string]any{"title": "X"})
 	if resp.StatusCode != http.StatusUnauthorized {
 		t.Errorf("create status = %d; want 401", resp.StatusCode)
 	}
@@ -26,7 +26,6 @@ func TestGarapons_RequiresAuth(t *testing.T) {
 func (e *testEnv) createGarapon(t *testing.T, title string) int {
 	t.Helper()
 	resp := e.postJSON(t, "/api/garapons", map[string]any{
-		"action":  "create",
 		"title":   title,
 		"details": "round and round",
 		"prizes": []map[string]any{
@@ -82,9 +81,9 @@ func TestGarapons_CreateValidation(t *testing.T) {
 		name string
 		body map[string]any
 	}{
-		{"missing title", map[string]any{"action": "create", "title": "  "}},
-		{"no usable prizes", map[string]any{"action": "create", "title": "T", "prizes": []map[string]any{{"name": " "}}}},
-		{"multiple grand", map[string]any{"action": "create", "title": "T", "prizes": []map[string]any{
+		{"missing title", map[string]any{"title": "  "}},
+		{"no usable prizes", map[string]any{"title": "T", "prizes": []map[string]any{{"name": " "}}}},
+		{"multiple grand", map[string]any{"title": "T", "prizes": []map[string]any{
 			{"name": "A", "is_grand": true}, {"name": "B", "is_grand": true},
 		}}},
 	}
@@ -105,7 +104,7 @@ func TestGarapons_DefaultsSingleGrand(t *testing.T) {
 
 	// No prize flagged grand → the first row is promoted.
 	resp := env.postJSON(t, "/api/garapons", map[string]any{
-		"action": "create", "title": "T",
+		"title":  "T",
 		"prizes": []map[string]any{{"name": "A", "rate": 1}, {"name": "B", "rate": 1}},
 	})
 	id := int(decodeBody(t, resp)["garapon"].(map[string]any)["id"].(float64))
@@ -123,8 +122,8 @@ func TestGarapons_Update(t *testing.T) {
 	env.loginAdmin(t)
 	id := env.createGarapon(t, "Old Title")
 
-	resp := env.postJSON(t, "/api/garapons", map[string]any{
-		"action": "update", "id": id, "title": "New Title",
+	resp := env.putJSON(t, fmt.Sprintf("/api/garapons/%d", id), map[string]any{
+		"title":  "New Title",
 		"prizes": []map[string]any{{"name": "Only", "rate": 1, "is_grand": true}},
 	})
 	if resp.StatusCode != 200 {
@@ -138,26 +137,34 @@ func TestGarapons_Update(t *testing.T) {
 	}
 }
 
-func TestGarapons_SetStatus(t *testing.T) {
+func TestGarapons_CloseReopen(t *testing.T) {
 	env := newTestEnv(t)
 	env.loginAdmin(t)
 	id := env.createGarapon(t, "G")
 
-	resp := env.postJSON(t, "/api/garapons", map[string]any{"action": "set_status", "id": id, "status": "closed"})
+	// Close → status flips to closed.
+	resp := env.postJSON(t, fmt.Sprintf("/api/garapons/%d/close", id), map[string]any{})
 	if resp.StatusCode != 200 {
-		t.Fatalf("set_status status = %d; want 200", resp.StatusCode)
+		t.Fatalf("close status = %d; want 200", resp.StatusCode)
 	}
-	resp.Body.Close()
+	if got := decodeBody(t, resp)["status"]; got != "closed" {
+		t.Errorf("close response status = %v; want closed", got)
+	}
 	if got := decodeBody(t, env.get(t, fmt.Sprintf("/api/garapons/%d", id)))["garapon"].(map[string]any)["status"]; got != "closed" {
 		t.Errorf("status = %v; want closed", got)
 	}
 
-	// Invalid status value is rejected.
-	resp = env.postJSON(t, "/api/garapons", map[string]any{"action": "set_status", "id": id, "status": "paused"})
-	if resp.StatusCode != http.StatusBadRequest {
-		t.Errorf("invalid status = %d; want 400", resp.StatusCode)
+	// Reopen → status flips back to open.
+	resp = env.postJSON(t, fmt.Sprintf("/api/garapons/%d/reopen", id), map[string]any{})
+	if resp.StatusCode != 200 {
+		t.Fatalf("reopen status = %d; want 200", resp.StatusCode)
 	}
-	resp.Body.Close()
+	if got := decodeBody(t, resp)["status"]; got != "open" {
+		t.Errorf("reopen response status = %v; want open", got)
+	}
+	if got := decodeBody(t, env.get(t, fmt.Sprintf("/api/garapons/%d", id)))["garapon"].(map[string]any)["status"]; got != "open" {
+		t.Errorf("status = %v; want open", got)
+	}
 }
 
 func TestGarapons_Delete(t *testing.T) {
@@ -165,9 +172,9 @@ func TestGarapons_Delete(t *testing.T) {
 	env.loginAdmin(t)
 	id := env.createGarapon(t, "G")
 
-	resp := env.postJSON(t, "/api/garapons", map[string]any{"action": "delete", "id": id})
-	if resp.StatusCode != 200 {
-		t.Fatalf("delete status = %d; want 200", resp.StatusCode)
+	resp := env.del(t, fmt.Sprintf("/api/garapons/%d", id))
+	if resp.StatusCode != http.StatusNoContent {
+		t.Fatalf("delete status = %d; want 204", resp.StatusCode)
 	}
 	resp.Body.Close()
 
@@ -175,16 +182,6 @@ func TestGarapons_Delete(t *testing.T) {
 		t.Errorf("detail after delete = %d; want 404", resp.StatusCode)
 		resp.Body.Close()
 	}
-}
-
-func TestGarapons_InvalidAction(t *testing.T) {
-	env := newTestEnv(t)
-	env.loginAdmin(t)
-	resp := env.postJSON(t, "/api/garapons", map[string]any{"action": "explode"})
-	if resp.StatusCode != http.StatusBadRequest {
-		t.Errorf("status = %d; want 400", resp.StatusCode)
-	}
-	resp.Body.Close()
 }
 
 func TestGarapon_DetailNotFound(t *testing.T) {
@@ -202,7 +199,7 @@ func TestGarapon_DetailNotFound(t *testing.T) {
 func (e *testEnv) createGaraponPlayer(t *testing.T, garaponID int, name string, maxDraws int) (token string, id int) {
 	t.Helper()
 	resp := e.postJSON(t, fmt.Sprintf("/api/garapons/%d/players", garaponID), map[string]any{
-		"action": "create_player", "player_name": name, "max_draws": maxDraws,
+		"player_name": name, "max_draws": maxDraws,
 	})
 	if resp.StatusCode != http.StatusCreated {
 		t.Fatalf("create_player status = %d; want 201", resp.StatusCode)
@@ -225,11 +222,9 @@ func TestGaraponPlayers_CreateAndDelete(t *testing.T) {
 	}
 
 	// An undrawn link deletes cleanly while open.
-	resp := env.postJSON(t, fmt.Sprintf("/api/garapons/%d/players", gid), map[string]any{
-		"action": "delete_player", "player_id": pid,
-	})
-	if resp.StatusCode != 200 {
-		t.Fatalf("delete_player status = %d; want 200", resp.StatusCode)
+	resp := env.del(t, fmt.Sprintf("/api/garapons/%d/players/%d", gid, pid))
+	if resp.StatusCode != http.StatusNoContent {
+		t.Fatalf("delete_player status = %d; want 204", resp.StatusCode)
 	}
 	resp.Body.Close()
 }
@@ -243,21 +238,17 @@ func TestGaraponPlayers_DeleteDrawnWhileOpenConflicts(t *testing.T) {
 	// Use one draw, then deleting the link while the garapon is open must 409.
 	env.postJSON(t, "/api/garapon/"+token+"/draw", map[string]any{}).Body.Close()
 
-	resp := env.postJSON(t, fmt.Sprintf("/api/garapons/%d/players", gid), map[string]any{
-		"action": "delete_player", "player_id": pid,
-	})
+	resp := env.del(t, fmt.Sprintf("/api/garapons/%d/players/%d", gid, pid))
 	if resp.StatusCode != http.StatusConflict {
 		t.Errorf("delete drawn (open) status = %d; want 409", resp.StatusCode)
 	}
 	resp.Body.Close()
 
 	// Closing the garapon allows the cleanup; the draw stays in the log.
-	env.postJSON(t, "/api/garapons", map[string]any{"action": "set_status", "id": gid, "status": "closed"}).Body.Close()
-	resp = env.postJSON(t, fmt.Sprintf("/api/garapons/%d/players", gid), map[string]any{
-		"action": "delete_player", "player_id": pid,
-	})
-	if resp.StatusCode != 200 {
-		t.Errorf("delete drawn (closed) status = %d; want 200", resp.StatusCode)
+	env.postJSON(t, fmt.Sprintf("/api/garapons/%d/close", gid), map[string]any{}).Body.Close()
+	resp = env.del(t, fmt.Sprintf("/api/garapons/%d/players/%d", gid, pid))
+	if resp.StatusCode != http.StatusNoContent {
+		t.Errorf("delete drawn (closed) status = %d; want 204", resp.StatusCode)
 	}
 	resp.Body.Close()
 
@@ -271,9 +262,7 @@ func TestGaraponPlayers_DeleteUnknown(t *testing.T) {
 	env := newTestEnv(t)
 	env.loginAdmin(t)
 	gid := env.createGarapon(t, "G")
-	resp := env.postJSON(t, fmt.Sprintf("/api/garapons/%d/players", gid), map[string]any{
-		"action": "delete_player", "player_id": 9999,
-	})
+	resp := env.del(t, fmt.Sprintf("/api/garapons/%d/players/9999", gid))
 	if resp.StatusCode != http.StatusNotFound {
 		t.Errorf("status = %d; want 404", resp.StatusCode)
 	}
@@ -349,7 +338,7 @@ func TestGaraponDraw_Closed(t *testing.T) {
 	env.loginAdmin(t)
 	gid := env.createGarapon(t, "G")
 	token, _ := env.createGaraponPlayer(t, gid, "Hero", 2)
-	env.postJSON(t, "/api/garapons", map[string]any{"action": "set_status", "id": gid, "status": "closed"}).Body.Close()
+	env.postJSON(t, fmt.Sprintf("/api/garapons/%d/close", gid), map[string]any{}).Body.Close()
 
 	resp := env.postJSON(t, "/api/garapon/"+token+"/draw", map[string]any{})
 	if resp.StatusCode != http.StatusBadRequest {

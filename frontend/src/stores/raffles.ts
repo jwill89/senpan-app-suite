@@ -247,7 +247,7 @@ export const useRafflesStore = defineStore('raffles', () => {
         available_to: datetimeLocalToUtc(f.available_to),
       }
       if (f.id) {
-        await endpoints.raffles.update(payload)
+        await endpoints.raffles.update(f.id, payload)
         ui.notify('Raffle updated', 'success')
       } else {
         await endpoints.raffles.create(payload)

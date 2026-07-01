@@ -16,10 +16,10 @@ import (
 // itoa is a tiny local int64→string helper to keep test call sites terse.
 func itoa(n int64) string { return strconv.FormatInt(n, 10) }
 
-// createReadingList logs in (if needed) and creates a list, returning its id.
-func createReadingList(t *testing.T, e *testEnv, title string) int64 {
+// createReadingListIn creates a list in the given club, returning its id.
+func createReadingListIn(t *testing.T, e *testEnv, club, title string) int64 {
 	t.Helper()
-	resp := e.postJSON(t, "/api/reading-lists", map[string]any{"action": "create", "title": title})
+	resp := e.postJSON(t, "/api/book-clubs/"+club+"/reading-lists", map[string]any{"title": title})
 	if resp.StatusCode != http.StatusCreated {
 		t.Fatalf("create list status = %d; want 201", resp.StatusCode)
 	}
@@ -32,11 +32,17 @@ func createReadingList(t *testing.T, e *testEnv, title string) int64 {
 	return int64(id)
 }
 
+// createReadingList creates a list in the default (yaoi) club, returning its id.
+func createReadingList(t *testing.T, e *testEnv, title string) int64 {
+	t.Helper()
+	return createReadingListIn(t, e, "yaoi", title)
+}
+
 func TestReadingListAndItemHTTPCRUD(t *testing.T) {
 	e := newTestEnv(t)
 
 	// Unauthenticated calls are rejected.
-	resp := e.get(t, "/api/reading-lists")
+	resp := e.get(t, "/api/book-clubs/yaoi/reading-lists")
 	if resp.StatusCode != http.StatusUnauthorized {
 		t.Fatalf("anon list status = %d; want 401", resp.StatusCode)
 	}
@@ -46,8 +52,7 @@ func TestReadingListAndItemHTTPCRUD(t *testing.T) {
 	listID := createReadingList(t, e, "Yaoi Faves")
 
 	// Add an item with sources.
-	resp = e.postJSON(t, "/api/reading-lists/"+itoa(listID)+"/items", map[string]any{
-		"action": "create",
+	resp = e.postJSON(t, "/api/book-clubs/yaoi/reading-lists/"+itoa(listID)+"/items", map[string]any{
 		"item": map[string]any{
 			"title":       "Painter of the Night",
 			"summary":     "A period romance.",
@@ -68,7 +73,7 @@ func TestReadingListAndItemHTTPCRUD(t *testing.T) {
 	resp.Body.Close()
 
 	// Detail should include the item with one (sanitized) source.
-	resp = e.get(t, "/api/reading-lists/"+itoa(listID))
+	resp = e.get(t, "/api/book-clubs/yaoi/reading-lists/"+itoa(listID))
 	body := decodeBody(t, resp)
 	list, _ := body["reading_list"].(map[string]any)
 	items, _ := list["items"].([]any)
@@ -82,32 +87,107 @@ func TestReadingListAndItemHTTPCRUD(t *testing.T) {
 	}
 	itemID := int64(item0["id"].(float64))
 
-	// Update the item.
-	resp = e.postJSON(t, "/api/reading-lists/"+itoa(listID)+"/items", map[string]any{
-		"action":  "update",
-		"item_id": itemID,
-		"item":    map[string]any{"title": "Painter of the Night (Vol 1)"},
+	// Update the item (PUT the item resource).
+	resp = e.putJSON(t, "/api/book-clubs/yaoi/reading-lists/"+itoa(listID)+"/items/"+itoa(itemID), map[string]any{
+		"item": map[string]any{"title": "Painter of the Night (Vol 1)"},
 	})
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("update item status = %d; want 200", resp.StatusCode)
 	}
 	resp.Body.Close()
 
-	// Delete the item.
-	resp = e.postJSON(t, "/api/reading-lists/"+itoa(listID)+"/items", map[string]any{
-		"action": "delete", "item_id": itemID,
-	})
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("delete item status = %d; want 200", resp.StatusCode)
+	// Delete the item (DELETE the item resource → 204).
+	resp = e.del(t, "/api/book-clubs/yaoi/reading-lists/"+itoa(listID)+"/items/"+itoa(itemID))
+	if resp.StatusCode != http.StatusNoContent {
+		t.Fatalf("delete item status = %d; want 204", resp.StatusCode)
 	}
 	resp.Body.Close()
 
-	resp = e.get(t, "/api/reading-lists/"+itoa(listID))
+	resp = e.get(t, "/api/book-clubs/yaoi/reading-lists/"+itoa(listID))
 	body = decodeBody(t, resp)
 	list, _ = body["reading_list"].(map[string]any)
 	if items, _ := list["items"].([]any); len(items) != 0 {
 		t.Fatalf("items after delete = %d; want 0", len(items))
 	}
+}
+
+// TestReadingListClubMismatchGuard verifies the security guard: a list created in
+// one club cannot be read or mutated through another club's path, even by an
+// admin (who holds every club's permission). The mismatch is a 404 — the id is
+// not disclosed to the wrong club — while the correct-club path still works.
+func TestReadingListClubMismatchGuard(t *testing.T) {
+	e := newTestEnv(t)
+	e.loginAdmin(t)
+
+	// A list that belongs to yaoi, plus one item in it.
+	listID := createReadingListIn(t, e, "yaoi", "Yaoi Only")
+	resp := e.postJSON(t, "/api/book-clubs/yaoi/reading-lists/"+itoa(listID)+"/items", map[string]any{
+		"item": map[string]any{"title": "Secret"},
+	})
+	item := decodeBody(t, resp)["item"].(map[string]any)
+	itemID := int64(item["id"].(float64))
+
+	yaoi := "/api/book-clubs/yaoi/reading-lists/" + itoa(listID)
+	yuri := "/api/book-clubs/yuri/reading-lists/" + itoa(listID)
+
+	// Reaching the yaoi list through the yuri path 404s on every operation.
+	mismatches := []struct {
+		name string
+		resp *http.Response
+	}{
+		{"detail", e.get(t, yuri)},
+		{"update", e.putJSON(t, yuri, map[string]any{"title": "Hijacked"})},
+		{"item create", e.postJSON(t, yuri+"/items", map[string]any{"item": map[string]any{"title": "X"}})},
+		{"item update", e.putJSON(t, yuri+"/items/"+itoa(itemID), map[string]any{"item": map[string]any{"title": "X"}})},
+		{"item delete", e.del(t, yuri+"/items/"+itoa(itemID))},
+		{"publish", e.postJSON(t, yuri+"/publish", map[string]any{})},
+		{"delete", e.del(t, yuri)},
+	}
+	for _, m := range mismatches {
+		if m.resp.StatusCode != http.StatusNotFound {
+			t.Errorf("%s via yuri path status = %d; want 404 (club mismatch)", m.name, m.resp.StatusCode)
+		}
+		m.resp.Body.Close()
+	}
+
+	// The correct (yaoi) path still resolves the list — the guard didn't touch it.
+	resp = e.get(t, yaoi)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("yaoi detail status = %d; want 200", resp.StatusCode)
+	}
+	resp.Body.Close()
+}
+
+// TestReadingListPerClubPermission verifies the per-club page permission: a
+// non-admin who holds only bookclub-yaoi may list/create in yaoi but is
+// forbidden (403) from another club's reading lists.
+func TestReadingListPerClubPermission(t *testing.T) {
+	e := newTestEnv(t)
+	yaoiUser := makeActiveUser(t, e, "yaoi-curator", "password123", []string{"bookclub-yaoi"})
+
+	// Granted club: listing and creating work.
+	resp := getAs(t, yaoiUser, e, "/api/book-clubs/yaoi/reading-lists")
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("yaoi list status = %d; want 200", resp.StatusCode)
+	}
+	resp.Body.Close()
+	resp = postAs(t, yaoiUser, e, "/api/book-clubs/yaoi/reading-lists", map[string]any{"title": "Mine"})
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("yaoi create status = %d; want 201", resp.StatusCode)
+	}
+	resp.Body.Close()
+
+	// Ungranted club: both list and create are forbidden (not just hidden).
+	resp = getAs(t, yaoiUser, e, "/api/book-clubs/yuri/reading-lists")
+	if resp.StatusCode != http.StatusForbidden {
+		t.Fatalf("yuri list status = %d; want 403", resp.StatusCode)
+	}
+	resp.Body.Close()
+	resp = postAs(t, yaoiUser, e, "/api/book-clubs/yuri/reading-lists", map[string]any{"title": "Nope"})
+	if resp.StatusCode != http.StatusForbidden {
+		t.Fatalf("yuri create status = %d; want 403", resp.StatusCode)
+	}
+	resp.Body.Close()
 }
 
 func TestDiscordWebhookSettingRedactedForPublic(t *testing.T) {
@@ -157,14 +237,13 @@ func TestPublishPostsOneEmbedPerItem(t *testing.T) {
 
 	listID := createReadingList(t, e, "To Publish")
 	for _, title := range []string{"Alpha", "Beta", "Gamma"} {
-		resp := e.postJSON(t, "/api/reading-lists/"+itoa(listID)+"/items", map[string]any{
-			"action": "create",
-			"item":   map[string]any{"title": title, "format": "Manga", "summary": title + " summary"},
+		resp := e.postJSON(t, "/api/book-clubs/yaoi/reading-lists/"+itoa(listID)+"/items", map[string]any{
+			"item": map[string]any{"title": title, "format": "Manga", "summary": title + " summary"},
 		})
 		resp.Body.Close()
 	}
 
-	resp := e.postJSON(t, "/api/reading-lists/"+itoa(listID)+"/publish", map[string]any{})
+	resp := e.postJSON(t, "/api/book-clubs/yaoi/reading-lists/"+itoa(listID)+"/publish", map[string]any{})
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("publish status = %d; want 200", resp.StatusCode)
 	}
@@ -207,24 +286,15 @@ func TestPublishUsesPerClubCommentsLabel(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Create a Yuri list (club_slug carried through), with one commented item.
-	resp := e.postJSON(t, "/api/reading-lists", map[string]any{
-		"action": "create", "title": "Yuri Faves", "club_slug": "yuri",
-	})
-	if resp.StatusCode != http.StatusCreated {
-		t.Fatalf("create yuri list status = %d; want 201", resp.StatusCode)
-	}
-	body := decodeBody(t, resp)
-	list, _ := body["reading_list"].(map[string]any)
-	listID := int64(list["id"].(float64))
+	// Create a Yuri list (club from the path), with one commented item.
+	listID := createReadingListIn(t, e, "yuri", "Yuri Faves")
 
-	resp = e.postJSON(t, "/api/reading-lists/"+itoa(listID)+"/items", map[string]any{
-		"action": "create",
-		"item":   map[string]any{"title": "Bloom Into You", "comments": "Drani loved it."},
+	resp := e.postJSON(t, "/api/book-clubs/yuri/reading-lists/"+itoa(listID)+"/items", map[string]any{
+		"item": map[string]any{"title": "Bloom Into You", "comments": "Drani loved it."},
 	})
 	resp.Body.Close()
 
-	resp = e.postJSON(t, "/api/reading-lists/"+itoa(listID)+"/publish", map[string]any{})
+	resp = e.postJSON(t, "/api/book-clubs/yuri/reading-lists/"+itoa(listID)+"/publish", map[string]any{})
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("publish status = %d; want 200", resp.StatusCode)
 	}
@@ -255,12 +325,12 @@ func TestPublishWithoutWebhookFails(t *testing.T) {
 	e := newTestEnv(t)
 	e.loginAdmin(t)
 	listID := createReadingList(t, e, "No Hook")
-	resp := e.postJSON(t, "/api/reading-lists/"+itoa(listID)+"/items", map[string]any{
-		"action": "create", "item": map[string]any{"title": "X"},
+	resp := e.postJSON(t, "/api/book-clubs/yaoi/reading-lists/"+itoa(listID)+"/items", map[string]any{
+		"item": map[string]any{"title": "X"},
 	})
 	resp.Body.Close()
 
-	resp = e.postJSON(t, "/api/reading-lists/"+itoa(listID)+"/publish", map[string]any{})
+	resp = e.postJSON(t, "/api/book-clubs/yaoi/reading-lists/"+itoa(listID)+"/publish", map[string]any{})
 	if resp.StatusCode != http.StatusBadRequest {
 		t.Fatalf("publish w/o webhook status = %d; want 400", resp.StatusCode)
 	}

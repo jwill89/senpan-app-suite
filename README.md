@@ -30,8 +30,7 @@ frontend.
   Vue Router (history mode, lazy routes) · Vite 8 · PWA · Vitest
 - **Backend:** Go 1.26+ (stdlib HTTP, method-pattern routing) · SQLite (WAL) ·
   `coder/websocket` · `alexedwards/scs` sessions
-- **Tooling:** tygo (Go→TS type generation) · ESLint + Prettier · GitLab CI/CD
-  (GitHub Actions config kept in parallel)
+- **Tooling:** tygo (Go→TS type generation) · ESLint + Prettier · GitHub Actions CI
 
 ## Quick start
 
@@ -87,6 +86,7 @@ partial deploy can't silently leave the halves incompatible.
 | `go vet ./...`               | Static analysis                  |
 | `golangci-lint run ./...`    | Lint (config in `.golangci.yml`) |
 | `go test ./...`              | Backend tests                    |
+| `go run ./cmd/openapi-gen`   | Regenerate `openapi.yaml` from the model |
 
 ## Deploying
 
@@ -98,19 +98,19 @@ See [`deploy/README.md`](deploy/README.md) for the Apache layout and host setup.
 - Frontend tests use **Vitest + Vue Test Utils** (jsdom); test files are
   colocated as `src/**/*.test.ts`. See the **Testing** section of
   [`AGENTS.md`](AGENTS.md) for conventions.
-- CI runs the same gates on every push / merge request: a **gen-types** step
-  (tygo), a **frontend** job (lint → typecheck → test → build) and a **backend**
-  job (golangci-lint → build → vet → test → govulncheck). The repo carries two
-  equivalent CI configs:
-  - [`.gitlab-ci.yml`](.gitlab-ci.yml) — runs on **GitLab** (this repo's origin).
-  - [`.github/workflows/ci.yml`](.github/workflows/ci.yml) — runs on **GitHub**
-    (kept in parallel for mirrors / GitHub pushes).
+- CI ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) runs the same gates
+  on every push / pull request: a **gen-types** step (tygo), a **frontend** job
+  (lint → typecheck → test → build) and a **backend** job (golangci-lint → build
+  → vet → test → govulncheck; the backend tests include the OpenAPI spec-freshness
+  and route-coverage checks).
 
 ## Documentation
 
-- **[`API.md`](API.md)** — the canonical HTTP & WebSocket API reference: every
-  endpoint with its auth requirement, request/response shapes, action types, and
-  the WebSocket broadcast messages.
+- **[`API.md`](API.md)** — how the API is documented: an **OpenAPI 3** spec
+  ([`backend/openapi.yaml`](backend/openapi.yaml)) generated from the Go `model`
+  structs, served live at `GET /api/openapi.yaml` and rendered with **Scalar** at
+  `GET /api/docs`. Regenerate with `go run ./cmd/openapi-gen` (a CI test keeps it
+  in sync with the code and the routes).
 - **[`AGENTS.md`](AGENTS.md)** — full architecture, data flow, DB schema,
   conventions, and "how to extend" guide (the primary reference for contributors
   and AI agents).

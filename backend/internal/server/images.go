@@ -55,30 +55,9 @@ const (
 	imageDirStampPrizes        = "stamp_prizes"
 )
 
-// imageCategory is the JSON shape for one category in the listing. FileCount and
-// TotalSize are populated for listings and omitted (zero) for action responses.
-type imageCategory struct {
-	Name      string `json:"name"`
-	Dir       string `json:"dir"`
-	Permanent bool   `json:"permanent"`
-	FileCount int    `json:"file_count"`
-	TotalSize int64  `json:"total_size"`
-}
-
-// imageEntry is the JSON shape for one image in a category listing. Url is the
-// absolute public URL (Discord embeds require absolute URLs); Path is the
-// root-relative web path (raffles store the relative path in prize_image).
-type imageEntry struct {
-	Name     string `json:"name"`
-	URL      string `json:"url"`
-	Path     string `json:"path"`
-	Size     int64  `json:"size"`
-	Modified string `json:"modified"` // RFC3339
-}
-
 // permanentImageCategories returns the fixed categories, in a stable order.
-func permanentImageCategories() []imageCategory {
-	return []imageCategory{
+func permanentImageCategories() []model.ImageCategory {
+	return []model.ImageCategory{
 		{Name: "Announcement Main", Dir: imageDirAnnouncementsMain, Permanent: true},
 		{Name: "Announcement Thumbnail", Dir: imageDirAnnouncementsThumb, Permanent: true},
 		{Name: "Raffle", Dir: imageDirRaffles, Permanent: true},
@@ -154,23 +133,23 @@ func validImageDir(dir string) bool {
 
 // imageManifest is the JSON shape of the custom-categories manifest dotfile.
 type imageManifest struct {
-	Categories []imageCategory `json:"categories"`
+	Categories []model.ImageCategory `json:"categories"`
 }
 
 // readImageCategories reads the custom-category manifest. Returns an empty slice
 // when the manifest is missing or unreadable (it isn't created until the first
 // custom category is added).
-func (s *Server) readImageCategories() []imageCategory {
+func (s *Server) readImageCategories() []model.ImageCategory {
 	data, err := os.ReadFile(filepath.Join(s.imagesRootDir(), imageCategoriesManifest))
 	if err != nil {
-		return []imageCategory{}
+		return []model.ImageCategory{}
 	}
 	var m imageManifest
 	if err := json.Unmarshal(data, &m); err != nil {
-		return []imageCategory{}
+		return []model.ImageCategory{}
 	}
 	// Defensive: drop any entry that collides with a permanent dir or is invalid.
-	out := make([]imageCategory, 0, len(m.Categories))
+	out := make([]model.ImageCategory, 0, len(m.Categories))
 	for _, c := range m.Categories {
 		if validImageDir(c.Dir) && !isPermanentImageDir(c.Dir) {
 			c.Permanent = false
@@ -181,7 +160,7 @@ func (s *Server) readImageCategories() []imageCategory {
 }
 
 // writeImageCategories persists the custom categories to the manifest dotfile.
-func (s *Server) writeImageCategories(cats []imageCategory) error {
+func (s *Server) writeImageCategories(cats []model.ImageCategory) error {
 	if err := os.MkdirAll(s.imagesRootDir(), 0755); err != nil {
 		return err
 	}
@@ -213,7 +192,7 @@ func (s *Server) imageCategoryDirStats(dir string) (count int, totalSize int64) 
 
 // allImageCategories returns the permanent categories followed by the custom
 // ones, each with file counts/size populated.
-func (s *Server) allImageCategories() []imageCategory {
+func (s *Server) allImageCategories() []model.ImageCategory {
 	cats := append(permanentImageCategories(), s.readImageCategories()...)
 	for i := range cats {
 		cats[i].FileCount, cats[i].TotalSize = s.imageCategoryDirStats(cats[i].Dir)
@@ -262,33 +241,34 @@ func (s *Server) handleImageCategoriesList(w http.ResponseWriter, r *http.Reques
 		writeError(w, http.StatusInternalServerError, "Failed to access images directory")
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"categories": s.allImageCategories()})
+	writeJSON(w, http.StatusOK, model.ImageCategoriesResponse{Categories: s.allImageCategories()})
 }
 
-// imageCategoriesActionRequest is the JSON body for POST /api/image-categories.
-// Action: "create", "rename", or "delete". For "rename", Dir is the existing
-// directory and NewDir is the desired one ("" keeps the current directory).
-type imageCategoriesActionRequest struct {
-	Action string `json:"action"`
+// imageCategoryCreateRequest is the JSON body for POST /api/image-categories.
+type imageCategoryCreateRequest struct {
+	Name string `json:"name"`
+	Dir  string `json:"dir"`
+}
+
+// imageCategoryRenameRequest is the JSON body for PATCH /api/image-categories/{dir}.
+// The existing directory comes from the path; NewDir is the desired one
+// ("" keeps the current directory).
+type imageCategoryRenameRequest struct {
 	Name   string `json:"name"`
-	Dir    string `json:"dir"`
 	NewDir string `json:"new_dir"`
 }
 
-// handleImageCategoriesAction creates, renames, or deletes a custom category.
+// handleImageCategoryCreate creates a custom category.
 //
 //	Endpoint:  POST /api/image-categories
 //	Auth:      admin, or a user granted system-images
-//	Request:   {"action":"create","name":"...","dir":"..."(optional)}
-//	           {"action":"rename","dir":"...","name":"...","new_dir":"..."(optional)}
-//	           {"action":"delete","dir":"..."}
-//	Response:  create/rename → {"ok": true, "category": {...}}
-//	           delete        → {"ok": true}
-func (s *Server) handleImageCategoriesAction(w http.ResponseWriter, r *http.Request) {
+//	Request:   {"name":"...","dir":"..."(optional)}
+//	Response:  201 {"ok": true, "category": {...}}
+func (s *Server) handleImageCategoryCreate(w http.ResponseWriter, r *http.Request) {
 	if !s.requirePermission(w, r, permSystemImages) {
 		return
 	}
-	req, err := readJSON[imageCategoriesActionRequest](w, r)
+	req, err := readJSON[imageCategoryCreateRequest](w, r)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "Invalid JSON")
 		return
@@ -297,30 +277,59 @@ func (s *Server) handleImageCategoriesAction(w http.ResponseWriter, r *http.Requ
 		writeError(w, http.StatusInternalServerError, "Failed to access images directory")
 		return
 	}
+	s.createImageCategory(w, req.Name, req.Dir)
+}
 
-	switch req.Action {
-	case "create":
-		s.createImageCategory(w, req)
-	case "rename":
-		s.renameImageCategory(w, req)
-	case "delete":
-		s.deleteImageCategory(w, req)
-	default:
-		writeError(w, http.StatusBadRequest, "Invalid action. Use: create, rename, delete")
+// handleImageCategoryRename renames a custom category. The current directory
+// comes from the path; the new name/dir from the body.
+//
+//	Endpoint:  PATCH /api/image-categories/{dir}
+//	Auth:      admin, or a user granted system-images
+//	Request:   {"name":"...","new_dir":"..."(optional)}
+//	Response:  200 {"ok": true, "category": {...}}
+func (s *Server) handleImageCategoryRename(w http.ResponseWriter, r *http.Request) {
+	if !s.requirePermission(w, r, permSystemImages) {
+		return
 	}
+	req, err := readJSON[imageCategoryRenameRequest](w, r)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "Invalid JSON")
+		return
+	}
+	if err := os.MkdirAll(s.imagesRootDir(), 0755); err != nil {
+		writeError(w, http.StatusInternalServerError, "Failed to access images directory")
+		return
+	}
+	s.renameImageCategory(w, r.PathValue("dir"), req.Name, req.NewDir)
+}
+
+// handleImageCategoryDelete deletes a custom category (and its files).
+//
+//	Endpoint:  DELETE /api/image-categories/{dir}
+//	Auth:      admin, or a user granted system-images
+//	Response:  204 No Content
+func (s *Server) handleImageCategoryDelete(w http.ResponseWriter, r *http.Request) {
+	if !s.requirePermission(w, r, permSystemImages) {
+		return
+	}
+	if err := os.MkdirAll(s.imagesRootDir(), 0755); err != nil {
+		writeError(w, http.StatusInternalServerError, "Failed to access images directory")
+		return
+	}
+	s.deleteImageCategory(w, r.PathValue("dir"))
 }
 
 // createImageCategory validates the name + directory, ensures the directory does
 // not collide with a permanent or existing custom one, creates the folder, and
-// records it in the manifest.
-func (s *Server) createImageCategory(w http.ResponseWriter, req imageCategoriesActionRequest) {
-	name := strings.TrimSpace(req.Name)
+// records it in the manifest. reqName/reqDir are the raw request values.
+func (s *Server) createImageCategory(w http.ResponseWriter, reqName, reqDir string) {
+	name := strings.TrimSpace(reqName)
 	if name == "" {
 		writeError(w, http.StatusBadRequest, "Category name is required")
 		return
 	}
 	// Directory: use the supplied name (normalized) or derive it from the name.
-	dir := slugifyImageDir(req.Dir)
+	dir := slugifyImageDir(reqDir)
 	if dir == "" {
 		dir = slugifyImageDir(name)
 	}
@@ -349,18 +358,20 @@ func (s *Server) createImageCategory(w http.ResponseWriter, req imageCategoriesA
 		writeInternalError(w, "create image category", err)
 		return
 	}
-	cat := imageCategory{Name: name, Dir: dir, Permanent: false}
+	cat := model.ImageCategory{Name: name, Dir: dir, Permanent: false}
 	if err := s.writeImageCategories(append(cats, cat)); err != nil {
 		writeInternalError(w, "write image categories", err)
 		return
 	}
-	writeJSON(w, http.StatusCreated, map[string]any{"ok": true, "category": cat})
+	writeJSON(w, http.StatusCreated, model.ImageCategoryActionResponse{OK: true, Category: cat})
 }
 
 // renameImageCategory updates a custom category's display name and, when the
 // directory changes, moves the folder on disk. Permanent categories are rejected.
-func (s *Server) renameImageCategory(w http.ResponseWriter, req imageCategoriesActionRequest) {
-	dir := strings.TrimSpace(req.Dir)
+// reqDir is the existing directory (from the path); reqName/reqNewDir are the
+// raw request values.
+func (s *Server) renameImageCategory(w http.ResponseWriter, reqDir, reqName, reqNewDir string) {
+	dir := strings.TrimSpace(reqDir)
 	if !validImageDir(dir) {
 		writeError(w, http.StatusBadRequest, "Invalid directory name")
 		return
@@ -369,12 +380,12 @@ func (s *Server) renameImageCategory(w http.ResponseWriter, req imageCategoriesA
 		writeError(w, http.StatusForbidden, "Permanent categories cannot be modified")
 		return
 	}
-	name := strings.TrimSpace(req.Name)
+	name := strings.TrimSpace(reqName)
 	if name == "" {
 		writeError(w, http.StatusBadRequest, "Category name is required")
 		return
 	}
-	newDir := slugifyImageDir(req.NewDir)
+	newDir := slugifyImageDir(reqNewDir)
 	if newDir == "" {
 		newDir = slugifyImageDir(name)
 	}
@@ -428,18 +439,19 @@ func (s *Server) renameImageCategory(w http.ResponseWriter, req imageCategoriesA
 		}
 	}
 
-	cats[idx] = imageCategory{Name: name, Dir: newDir, Permanent: false}
+	cats[idx] = model.ImageCategory{Name: name, Dir: newDir, Permanent: false}
 	if err := s.writeImageCategories(cats); err != nil {
 		writeInternalError(w, "write image categories", err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "category": cats[idx]})
+	writeJSON(w, http.StatusOK, model.ImageCategoryActionResponse{OK: true, Category: cats[idx]})
 }
 
 // deleteImageCategory removes a custom category's folder (and all its files) and
-// its manifest entry. Permanent categories cannot be deleted.
-func (s *Server) deleteImageCategory(w http.ResponseWriter, req imageCategoriesActionRequest) {
-	dir := strings.TrimSpace(req.Dir)
+// its manifest entry. Permanent categories cannot be deleted. reqDir is the
+// directory (from the path).
+func (s *Server) deleteImageCategory(w http.ResponseWriter, reqDir string) {
+	dir := strings.TrimSpace(reqDir)
 	if !validImageDir(dir) {
 		writeError(w, http.StatusBadRequest, "Invalid directory name")
 		return
@@ -470,7 +482,7 @@ func (s *Server) deleteImageCategory(w http.ResponseWriter, req imageCategoriesA
 		writeInternalError(w, "write image categories", err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+	w.WriteHeader(http.StatusNoContent)
 }
 
 // imageDirIsKnown reports whether dir is a permanent or a recorded custom
@@ -513,7 +525,7 @@ func (s *Server) handleImagesList(w http.ResponseWriter, r *http.Request) {
 	entries, err := os.ReadDir(filepath.Join(s.imagesRootDir(), dir))
 	if err != nil {
 		// Missing dir (no uploads yet) → empty list, not an error.
-		writeJSON(w, http.StatusOK, map[string]any{"dir": dir, "images": []imageEntry{}})
+		writeJSON(w, http.StatusOK, model.ImagesResponse{Dir: dir, Images: []model.ImageEntry{}})
 		return
 	}
 
@@ -536,10 +548,10 @@ func (s *Server) handleImagesList(w http.ResponseWriter, r *http.Request) {
 	sort.Slice(infos, func(i, j int) bool { return infos[i].mod.After(infos[j].mod) })
 
 	base := s.siteBaseURL(r)
-	images := make([]imageEntry, 0, len(infos))
+	images := make([]model.ImageEntry, 0, len(infos))
 	for _, info := range infos {
 		rel := "images/" + dir + "/" + info.name
-		images = append(images, imageEntry{
+		images = append(images, model.ImageEntry{
 			Name:     info.name,
 			URL:      base + "/" + rel,
 			Path:     rel,
@@ -547,41 +559,25 @@ func (s *Server) handleImagesList(w http.ResponseWriter, r *http.Request) {
 			Modified: info.mod.UTC().Format(time.RFC3339),
 		})
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"dir": dir, "images": images})
+	writeJSON(w, http.StatusOK, model.ImagesResponse{Dir: dir, Images: images})
 }
 
-// imagesActionRequest is the JSON body for POST /api/images (image delete).
-type imagesActionRequest struct {
-	Action string `json:"action"`
-	Dir    string `json:"dir"`
-	Name   string `json:"name"`
-}
-
-// handleImagesAction deletes a single image within a category.
+// handleImageDelete deletes a single image within a category. The image identity
+// (dir + name) is supplied as query parameters.
 //
-//	Endpoint:  POST /api/images
+//	Endpoint:  DELETE /api/images?dir=<dir>&name=<file>
 //	Auth:      admin, or a user granted system-images
-//	Request:   {"action":"delete","dir":"...","name":"..."}
-//	Response:  {"ok": true}
-func (s *Server) handleImagesAction(w http.ResponseWriter, r *http.Request) {
+//	Response:  204 No Content
+func (s *Server) handleImageDelete(w http.ResponseWriter, r *http.Request) {
 	if !s.requirePermission(w, r, permSystemImages) {
 		return
 	}
-	req, err := readJSON[imagesActionRequest](w, r)
-	if err != nil {
-		writeError(w, http.StatusBadRequest, "Invalid JSON")
-		return
-	}
-	if req.Action != "delete" {
-		writeError(w, http.StatusBadRequest, "Invalid action. Use: delete")
-		return
-	}
-	dir := strings.TrimSpace(req.Dir)
+	dir := strings.TrimSpace(r.URL.Query().Get("dir"))
 	if !validImageDir(dir) || !s.imageDirIsKnown(dir) {
 		writeError(w, http.StatusBadRequest, "Unknown image category")
 		return
 	}
-	name, ok := safeImageFileName(req.Name)
+	name, ok := safeImageFileName(r.URL.Query().Get("name"))
 	if !ok {
 		writeError(w, http.StatusBadRequest, "Invalid file name")
 		return
@@ -594,7 +590,7 @@ func (s *Server) handleImagesAction(w http.ResponseWriter, r *http.Request) {
 		writeInternalError(w, "delete image", err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+	w.WriteHeader(http.StatusNoContent)
 }
 
 // safeImageFileName validates and normalizes an uploaded/target image filename:
@@ -664,17 +660,13 @@ func (s *Server) handleImagesUpload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	type skipEntry struct {
-		Name   string `json:"name"`
-		Reason string `json:"reason"`
-	}
 	uploaded := make([]string, 0, len(files))
-	skipped := make([]skipEntry, 0)
+	skipped := make([]model.SkippedUpload, 0)
 
 	for _, header := range files {
 		name, ok := safeImageFileName(header.Filename)
 		if !ok {
-			skipped = append(skipped, skipEntry{
+			skipped = append(skipped, model.SkippedUpload{
 				Name:   header.Filename,
 				Reason: "Unsupported type (allowed: .jpg, .jpeg, .png, .webp, .gif, .svg)",
 			})
@@ -684,7 +676,7 @@ func (s *Server) handleImagesUpload(w http.ResponseWriter, r *http.Request) {
 		// (the raster content-sniff would reject it), so it's validated separately.
 		f, err := header.Open()
 		if err != nil {
-			skipped = append(skipped, skipEntry{Name: name, Reason: "Failed to read"})
+			skipped = append(skipped, model.SkippedUpload{Name: name, Reason: "Failed to read"})
 			continue
 		}
 		isSVG := strings.EqualFold(filepath.Ext(name), ".svg")
@@ -700,18 +692,18 @@ func (s *Server) handleImagesUpload(w http.ResponseWriter, r *http.Request) {
 			if isSVG {
 				reason = "Not a valid SVG"
 			}
-			skipped = append(skipped, skipEntry{Name: name, Reason: reason})
+			skipped = append(skipped, model.SkippedUpload{Name: name, Reason: reason})
 			continue
 		}
 		// Same name overwrites the existing file on purpose.
 		if err := saveMultipartFile(header, filepath.Join(destDir, name)); err != nil {
-			skipped = append(skipped, skipEntry{Name: name, Reason: "Failed to save"})
+			skipped = append(skipped, model.SkippedUpload{Name: name, Reason: "Failed to save"})
 			continue
 		}
 		uploaded = append(uploaded, name)
 	}
 
-	writeJSON(w, http.StatusOK, map[string]any{"uploaded": uploaded, "skipped": skipped})
+	writeJSON(w, http.StatusOK, model.ImagesUploadResponse{Uploaded: uploaded, Skipped: skipped})
 }
 
 // migrateAnnouncementImages performs a one-time, idempotent copy of any files in

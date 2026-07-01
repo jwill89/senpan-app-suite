@@ -38,97 +38,122 @@ func (s *Server) handleAnnouncementTypesList(w http.ResponseWriter, r *http.Requ
 		writeInternalError(w, "list announcement types", err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"types": types})
+	writeJSON(w, http.StatusOK, model.AnnouncementTypesResponse{Types: types})
 }
 
-// announcementTypeRequest is the JSON body for POST /api/announcement-types.
-type announcementTypeRequest struct {
-	Action     string `json:"action"`
-	ID         int64  `json:"id"`
+// announcementTypeWriteRequest is the JSON body for creating (POST /api/
+// announcement-types) or replacing (PUT /api/announcement-types/{id}) an
+// announcement type. The id comes from the path on PUT.
+type announcementTypeWriteRequest struct {
 	Name       string `json:"name"`
 	WebhookURL string `json:"webhook_url"`
 }
 
-// handleAnnouncementTypesAction creates, updates, or deletes an announcement type.
+// validate checks the shared create/update requirements, writing a 400 and
+// returning ("", "", false) when they aren't met. Returns the trimmed name and
+// validated webhook URL on success.
+func (req announcementTypeWriteRequest) validate(w http.ResponseWriter) (name, webhook string, ok bool) {
+	// A provided webhook URL must be a Discord webhook so the server can't be
+	// pointed at an arbitrary outbound host. Empty = this type has no webhook.
+	webhook = strings.TrimSpace(req.WebhookURL)
+	if webhook != "" && !isDiscordWebhookURL(webhook) {
+		writeError(w, http.StatusBadRequest, "Discord webhook URLs must look like https://discord.com/api/webhooks/…")
+		return "", "", false
+	}
+	name = strings.TrimSpace(req.Name)
+	if name == "" {
+		writeError(w, http.StatusBadRequest, "Type name is required")
+		return "", "", false
+	}
+	return name, webhook, true
+}
+
+// handleAnnouncementTypeCreate creates an announcement type.
 //
 //	Endpoint:  POST /api/announcement-types
 //	Auth:      admin, or a user granted this page's permission
-//	Request:   {"action": "create"|"update"|"delete", ...}
-func (s *Server) handleAnnouncementTypesAction(w http.ResponseWriter, r *http.Request) {
+//	Response:  201 {"type": AnnouncementType}
+func (s *Server) handleAnnouncementTypeCreate(w http.ResponseWriter, r *http.Request) {
 	if !s.requirePermission(w, r, permTeahouseAnnounce) {
 		return
 	}
-	req, err := readJSON[announcementTypeRequest](w, r)
+	req, err := readJSON[announcementTypeWriteRequest](w, r)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "Invalid JSON")
 		return
 	}
-
-	// A provided webhook URL must be a Discord webhook so the server can't be
-	// pointed at an arbitrary outbound host. Empty = this type has no webhook.
-	webhook := strings.TrimSpace(req.WebhookURL)
-	if webhook != "" && !isDiscordWebhookURL(webhook) {
-		writeError(w, http.StatusBadRequest, "Discord webhook URLs must look like https://discord.com/api/webhooks/…")
+	name, webhook, ok := req.validate(w)
+	if !ok {
 		return
 	}
-
-	switch req.Action {
-	case "create":
-		name := strings.TrimSpace(req.Name)
-		if name == "" {
-			writeError(w, http.StatusBadRequest, "Type name is required")
-			return
-		}
-		id, err := s.store.CreateAnnouncementType(name, webhook)
-		if err != nil {
-			writeInternalError(w, "create announcement type", err)
-			return
-		}
-		saved, _ := s.store.GetAnnouncementType(id)
-		writeJSON(w, http.StatusCreated, map[string]any{"type": saved})
-
-	case "update":
-		if req.ID <= 0 {
-			writeError(w, http.StatusBadRequest, "Type id is required")
-			return
-		}
-		name := strings.TrimSpace(req.Name)
-		if name == "" {
-			writeError(w, http.StatusBadRequest, "Type name is required")
-			return
-		}
-		if err := s.store.UpdateAnnouncementType(req.ID, name, webhook); err != nil {
-			writeInternalError(w, "update announcement type", err)
-			return
-		}
-		saved, _ := s.store.GetAnnouncementType(req.ID)
-		writeJSON(w, http.StatusOK, map[string]any{"type": saved})
-
-	case "delete":
-		if req.ID <= 0 {
-			writeError(w, http.StatusBadRequest, "Type id is required")
-			return
-		}
-		count, err := s.store.CountAnnouncementsByType(req.ID)
-		if err != nil {
-			writeInternalError(w, "count announcements by type", err)
-			return
-		}
-		if count > 0 {
-			writeError(w, http.StatusBadRequest,
-				fmt.Sprintf("This type is used by %d announcement(s). Reassign or delete them first.", count))
-			return
-		}
-		deleted, err := s.store.DeleteAnnouncementType(req.ID)
-		if err != nil {
-			writeInternalError(w, "delete announcement type", err)
-			return
-		}
-		writeJSON(w, http.StatusOK, map[string]any{"deleted": deleted})
-
-	default:
-		writeError(w, http.StatusBadRequest, "Invalid action. Use: create, update, delete")
+	id, err := s.store.CreateAnnouncementType(name, webhook)
+	if err != nil {
+		writeInternalError(w, "create announcement type", err)
+		return
 	}
+	saved, _ := s.store.GetAnnouncementType(id)
+	writeJSON(w, http.StatusCreated, model.AnnouncementTypeResponse{Type: saved})
+}
+
+// handleAnnouncementTypeUpdate replaces an announcement type.
+//
+//	Endpoint:  PUT /api/announcement-types/{id}
+//	Auth:      admin, or a user granted this page's permission
+//	Response:  200 {"type": AnnouncementType}
+func (s *Server) handleAnnouncementTypeUpdate(w http.ResponseWriter, r *http.Request) {
+	if !s.requirePermission(w, r, permTeahouseAnnounce) {
+		return
+	}
+	id, ok := pathInt64(w, r, "id", "type")
+	if !ok {
+		return
+	}
+	req, err := readJSON[announcementTypeWriteRequest](w, r)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "Invalid JSON")
+		return
+	}
+	name, webhook, ok := req.validate(w)
+	if !ok {
+		return
+	}
+	if err := s.store.UpdateAnnouncementType(id, name, webhook); err != nil {
+		writeInternalError(w, "update announcement type", err)
+		return
+	}
+	saved, _ := s.store.GetAnnouncementType(id)
+	writeJSON(w, http.StatusOK, model.AnnouncementTypeResponse{Type: saved})
+}
+
+// handleAnnouncementTypeDelete deletes an announcement type, refusing while it is
+// still in use by any announcement.
+//
+//	Endpoint:  DELETE /api/announcement-types/{id}
+//	Auth:      admin, or a user granted this page's permission
+//	Response:  204 No Content
+func (s *Server) handleAnnouncementTypeDelete(w http.ResponseWriter, r *http.Request) {
+	if !s.requirePermission(w, r, permTeahouseAnnounce) {
+		return
+	}
+	id, ok := pathInt64(w, r, "id", "type")
+	if !ok {
+		return
+	}
+	count, err := s.store.CountAnnouncementsByType(id)
+	if err != nil {
+		writeInternalError(w, "count announcements by type", err)
+		return
+	}
+	if count > 0 {
+		writeError(w, http.StatusBadRequest,
+			fmt.Sprintf("This type is used by %d announcement(s). Reassign or delete them first.", count))
+		return
+	}
+	if _, err := s.store.DeleteAnnouncementType(id); err != nil {
+		writeInternalError(w, "delete announcement type", err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 // ── Announcement roles (taggable Discord roles) ─────────────────────────────
@@ -147,99 +172,120 @@ func (s *Server) handleAnnouncementRolesList(w http.ResponseWriter, r *http.Requ
 		writeInternalError(w, "list announcement roles", err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"roles": roles})
+	writeJSON(w, http.StatusOK, model.AnnouncementRolesResponse{Roles: roles})
 }
 
-// announcementRoleRequest is the JSON body for POST /api/announcement-roles.
-type announcementRoleRequest struct {
-	Action string `json:"action"`
-	ID     int64  `json:"id"`
+// announcementRoleWriteRequest is the JSON body for creating (POST /api/
+// announcement-roles) or replacing (PUT /api/announcement-roles/{id}) a taggable
+// role. The id comes from the path on PUT.
+type announcementRoleWriteRequest struct {
 	Name   string `json:"name"`
 	RoleID string `json:"role_id"`
 }
 
-// handleAnnouncementRolesAction creates, updates, or deletes a taggable role.
+// validate checks the shared create/update requirements, writing a 400 and
+// returning ("", "", false) when they aren't met. Returns the trimmed name and
+// role id on success.
+func (req announcementRoleWriteRequest) validate(w http.ResponseWriter) (name, roleID string, ok bool) {
+	name = strings.TrimSpace(req.Name)
+	roleID = strings.TrimSpace(req.RoleID)
+	if name == "" {
+		writeError(w, http.StatusBadRequest, "Role name is required")
+		return "", "", false
+	}
+	if !isDiscordSnowflake(roleID) {
+		writeError(w, http.StatusBadRequest, "Role ID must be a Discord role ID (digits only)")
+		return "", "", false
+	}
+	return name, roleID, true
+}
+
+// handleAnnouncementRoleCreate creates a taggable role.
 //
 //	Endpoint:  POST /api/announcement-roles
 //	Auth:      admin, or a user granted this page's permission
-//	Request:   {"action": "create"|"update"|"delete", ...}
-func (s *Server) handleAnnouncementRolesAction(w http.ResponseWriter, r *http.Request) {
+//	Response:  201 {"role": AnnouncementRole}
+func (s *Server) handleAnnouncementRoleCreate(w http.ResponseWriter, r *http.Request) {
 	if !s.requirePermission(w, r, permTeahouseAnnounce) {
 		return
 	}
-	req, err := readJSON[announcementRoleRequest](w, r)
+	req, err := readJSON[announcementRoleWriteRequest](w, r)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "Invalid JSON")
 		return
 	}
-
-	switch req.Action {
-	case "create":
-		name := strings.TrimSpace(req.Name)
-		roleID := strings.TrimSpace(req.RoleID)
-		if name == "" {
-			writeError(w, http.StatusBadRequest, "Role name is required")
-			return
-		}
-		if !isDiscordSnowflake(roleID) {
-			writeError(w, http.StatusBadRequest, "Role ID must be a Discord role ID (digits only)")
-			return
-		}
-		id, err := s.store.CreateAnnouncementRole(name, roleID)
-		if err != nil {
-			writeInternalError(w, "create announcement role", err)
-			return
-		}
-		saved, _ := s.store.GetAnnouncementRole(id)
-		writeJSON(w, http.StatusCreated, map[string]any{"role": saved})
-
-	case "update":
-		if req.ID <= 0 {
-			writeError(w, http.StatusBadRequest, "Role id is required")
-			return
-		}
-		name := strings.TrimSpace(req.Name)
-		roleID := strings.TrimSpace(req.RoleID)
-		if name == "" {
-			writeError(w, http.StatusBadRequest, "Role name is required")
-			return
-		}
-		if !isDiscordSnowflake(roleID) {
-			writeError(w, http.StatusBadRequest, "Role ID must be a Discord role ID (digits only)")
-			return
-		}
-		if err := s.store.UpdateAnnouncementRole(req.ID, name, roleID); err != nil {
-			writeInternalError(w, "update announcement role", err)
-			return
-		}
-		saved, _ := s.store.GetAnnouncementRole(req.ID)
-		writeJSON(w, http.StatusOK, map[string]any{"role": saved})
-
-	case "delete":
-		if req.ID <= 0 {
-			writeError(w, http.StatusBadRequest, "Role id is required")
-			return
-		}
-		count, err := s.store.CountAnnouncementsByRole(req.ID)
-		if err != nil {
-			writeInternalError(w, "count announcements by role", err)
-			return
-		}
-		if count > 0 {
-			writeError(w, http.StatusBadRequest,
-				fmt.Sprintf("This role is tagged by %d announcement(s). Change their tag first.", count))
-			return
-		}
-		deleted, err := s.store.DeleteAnnouncementRole(req.ID)
-		if err != nil {
-			writeInternalError(w, "delete announcement role", err)
-			return
-		}
-		writeJSON(w, http.StatusOK, map[string]any{"deleted": deleted})
-
-	default:
-		writeError(w, http.StatusBadRequest, "Invalid action. Use: create, update, delete")
+	name, roleID, ok := req.validate(w)
+	if !ok {
+		return
 	}
+	id, err := s.store.CreateAnnouncementRole(name, roleID)
+	if err != nil {
+		writeInternalError(w, "create announcement role", err)
+		return
+	}
+	saved, _ := s.store.GetAnnouncementRole(id)
+	writeJSON(w, http.StatusCreated, model.AnnouncementRoleResponse{Role: saved})
+}
+
+// handleAnnouncementRoleUpdate replaces a taggable role.
+//
+//	Endpoint:  PUT /api/announcement-roles/{id}
+//	Auth:      admin, or a user granted this page's permission
+//	Response:  200 {"role": AnnouncementRole}
+func (s *Server) handleAnnouncementRoleUpdate(w http.ResponseWriter, r *http.Request) {
+	if !s.requirePermission(w, r, permTeahouseAnnounce) {
+		return
+	}
+	id, ok := pathInt64(w, r, "id", "role")
+	if !ok {
+		return
+	}
+	req, err := readJSON[announcementRoleWriteRequest](w, r)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "Invalid JSON")
+		return
+	}
+	name, roleID, ok := req.validate(w)
+	if !ok {
+		return
+	}
+	if err := s.store.UpdateAnnouncementRole(id, name, roleID); err != nil {
+		writeInternalError(w, "update announcement role", err)
+		return
+	}
+	saved, _ := s.store.GetAnnouncementRole(id)
+	writeJSON(w, http.StatusOK, model.AnnouncementRoleResponse{Role: saved})
+}
+
+// handleAnnouncementRoleDelete deletes a taggable role, refusing while it is
+// still tagged by any announcement.
+//
+//	Endpoint:  DELETE /api/announcement-roles/{id}
+//	Auth:      admin, or a user granted this page's permission
+//	Response:  204 No Content
+func (s *Server) handleAnnouncementRoleDelete(w http.ResponseWriter, r *http.Request) {
+	if !s.requirePermission(w, r, permTeahouseAnnounce) {
+		return
+	}
+	id, ok := pathInt64(w, r, "id", "role")
+	if !ok {
+		return
+	}
+	count, err := s.store.CountAnnouncementsByRole(id)
+	if err != nil {
+		writeInternalError(w, "count announcements by role", err)
+		return
+	}
+	if count > 0 {
+		writeError(w, http.StatusBadRequest,
+			fmt.Sprintf("This role is tagged by %d announcement(s). Change their tag first.", count))
+		return
+	}
+	if _, err := s.store.DeleteAnnouncementRole(id); err != nil {
+		writeInternalError(w, "delete announcement role", err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 // isDiscordSnowflake reports whether s is a non-empty all-digit Discord ID.
@@ -271,155 +317,206 @@ func (s *Server) handleAnnouncementsList(w http.ResponseWriter, r *http.Request)
 		writeInternalError(w, "list announcements", err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"announcements": items})
+	writeJSON(w, http.StatusOK, model.AnnouncementsResponse{Announcements: items})
 }
 
-// announcementRequest is the JSON body for POST /api/announcements.
-type announcementRequest struct {
-	Action       string             `json:"action"`
-	ID           int64              `json:"id"`
+// announcementWriteRequest is the JSON body for creating (POST /api/announcements)
+// or replacing (PUT /api/announcements/{id}) an announcement. The id comes from
+// the path on PUT.
+type announcementWriteRequest struct {
 	Announcement model.Announcement `json:"announcement"`
-	OrderedIDs   []int64            `json:"ordered_ids"` // for "reorder"
 }
 
-// handleAnnouncementsAction creates, updates, deletes, sends, or skips an
-// announcement.
+// announcementReorderRequest is the JSON body for POST /api/announcements/reorder.
+type announcementReorderRequest struct {
+	OrderedIDs []int64 `json:"ordered_ids"`
+}
+
+// handleAnnouncementCreate creates an announcement.
 //
 //	Endpoint:  POST /api/announcements
 //	Auth:      admin, or a user granted this page's permission
-//	Request:   {"action": "create"|"update"|"delete"|"send_now"|"skip_next"|"reorder", ...}
-func (s *Server) handleAnnouncementsAction(w http.ResponseWriter, r *http.Request) {
+//	Response:  201 {"announcement": Announcement}
+func (s *Server) handleAnnouncementCreate(w http.ResponseWriter, r *http.Request) {
 	if !s.requirePermission(w, r, permTeahouseAnnounce) {
 		return
 	}
-	req, err := readJSON[announcementRequest](w, r)
+	req, err := readJSON[announcementWriteRequest](w, r)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "Invalid JSON")
 		return
 	}
-
-	switch req.Action {
-	case "create":
-		a := req.Announcement
-		if !s.validateAndResolveAnnouncement(w, &a) {
-			return
-		}
-		id, err := s.store.CreateAnnouncement(&a)
-		if err != nil {
-			writeInternalError(w, "create announcement", err)
-			return
-		}
-		saved, _ := s.store.GetAnnouncement(id)
-		writeJSON(w, http.StatusCreated, map[string]any{"announcement": saved})
-
-	case "update":
-		if req.ID <= 0 {
-			writeError(w, http.StatusBadRequest, "Announcement id is required")
-			return
-		}
-		existing, err := s.store.GetAnnouncement(req.ID)
-		if err != nil {
-			writeInternalError(w, "load announcement for update", err)
-			return
-		}
-		if existing == nil {
-			writeError(w, http.StatusNotFound, "Announcement not found")
-			return
-		}
-		a := req.Announcement
-		if !s.validateAndResolveAnnouncement(w, &a) {
-			return
-		}
-		a.ID = req.ID
-		if err := s.store.UpdateAnnouncement(&a); err != nil {
-			writeInternalError(w, "update announcement", err)
-			return
-		}
-		// Images are managed centrally on the System → Images page (a shared
-		// library), so replacing an announcement's image no longer deletes the
-		// old file here — it may be reused by another announcement.
-		saved, _ := s.store.GetAnnouncement(a.ID)
-		writeJSON(w, http.StatusOK, map[string]any{"announcement": saved})
-
-	case "delete":
-		if req.ID <= 0 {
-			writeError(w, http.StatusBadRequest, "Announcement id is required")
-			return
-		}
-		deleted, err := s.store.DeleteAnnouncement(req.ID)
-		if err != nil {
-			writeInternalError(w, "delete announcement", err)
-			return
-		}
-		// Images are managed centrally on the System → Images page, so the
-		// announcement's image/thumbnail files are left intact on delete.
-		writeJSON(w, http.StatusOK, map[string]any{"deleted": deleted})
-
-	case "send_now":
-		if req.ID <= 0 {
-			writeError(w, http.StatusBadRequest, "Announcement id is required")
-			return
-		}
-		a, err := s.store.GetAnnouncement(req.ID)
-		if err != nil {
-			writeInternalError(w, "load announcement for send", err)
-			return
-		}
-		if a == nil {
-			writeError(w, http.StatusNotFound, "Announcement not found")
-			return
-		}
-		typ, _ := s.store.GetAnnouncementType(a.TypeID)
-		if typ == nil || strings.TrimSpace(typ.WebhookURL) == "" {
-			writeError(w, http.StatusBadRequest, "This announcement's type has no Discord webhook configured.")
-			return
-		}
-		if err := postDiscordWebhook(typ.WebhookURL, s.buildAnnouncementMessage(*a)); err != nil {
-			writeError(w, http.StatusBadGateway, "Failed to post to Discord: "+err.Error())
-			return
-		}
-		if err := s.store.TouchAnnouncementPosted(a.ID); err != nil {
-			writeInternalError(w, "stamp announcement posted", err)
-			return
-		}
-		saved, _ := s.store.GetAnnouncement(a.ID)
-		writeJSON(w, http.StatusOK, map[string]any{"announcement": saved})
-
-	case "skip_next":
-		if req.ID <= 0 {
-			writeError(w, http.StatusBadRequest, "Announcement id is required")
-			return
-		}
-		a, err := s.store.GetAnnouncement(req.ID)
-		if err != nil {
-			writeInternalError(w, "load announcement for skip", err)
-			return
-		}
-		if a == nil {
-			writeError(w, http.StatusNotFound, "Announcement not found")
-			return
-		}
-		if a.ScheduleKind == "" || a.NextPostAt == "" {
-			writeError(w, http.StatusBadRequest, "This announcement isn't scheduled.")
-			return
-		}
-		if err := s.store.SetAnnouncementSkip(a.ID, true); err != nil {
-			writeInternalError(w, "skip announcement", err)
-			return
-		}
-		saved, _ := s.store.GetAnnouncement(a.ID)
-		writeJSON(w, http.StatusOK, map[string]any{"announcement": saved})
-
-	case "reorder":
-		if err := s.store.BulkReorderAnnouncements(req.OrderedIDs); err != nil {
-			writeInternalError(w, "reorder announcements", err)
-			return
-		}
-		writeJSON(w, http.StatusOK, map[string]any{"ok": true})
-
-	default:
-		writeError(w, http.StatusBadRequest, "Invalid action. Use: create, update, delete, send_now, skip_next, reorder")
+	a := req.Announcement
+	if !s.validateAndResolveAnnouncement(w, &a) {
+		return
 	}
+	id, err := s.store.CreateAnnouncement(&a)
+	if err != nil {
+		writeInternalError(w, "create announcement", err)
+		return
+	}
+	saved, _ := s.store.GetAnnouncement(id)
+	writeJSON(w, http.StatusCreated, model.AnnouncementResponse{Announcement: saved})
+}
+
+// handleAnnouncementUpdate replaces an announcement's editable fields.
+//
+//	Endpoint:  PUT /api/announcements/{id}
+//	Auth:      admin, or a user granted this page's permission
+//	Response:  200 {"announcement": Announcement}
+func (s *Server) handleAnnouncementUpdate(w http.ResponseWriter, r *http.Request) {
+	if !s.requirePermission(w, r, permTeahouseAnnounce) {
+		return
+	}
+	id, ok := pathInt64(w, r, "id", "announcement")
+	if !ok {
+		return
+	}
+	req, err := readJSON[announcementWriteRequest](w, r)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "Invalid JSON")
+		return
+	}
+	existing, err := s.store.GetAnnouncement(id)
+	if err != nil {
+		writeInternalError(w, "load announcement for update", err)
+		return
+	}
+	if existing == nil {
+		writeError(w, http.StatusNotFound, "Announcement not found")
+		return
+	}
+	a := req.Announcement
+	if !s.validateAndResolveAnnouncement(w, &a) {
+		return
+	}
+	a.ID = id
+	if err := s.store.UpdateAnnouncement(&a); err != nil {
+		writeInternalError(w, "update announcement", err)
+		return
+	}
+	// Images are managed centrally on the System → Images page (a shared
+	// library), so replacing an announcement's image no longer deletes the
+	// old file here — it may be reused by another announcement.
+	saved, _ := s.store.GetAnnouncement(a.ID)
+	writeJSON(w, http.StatusOK, model.AnnouncementResponse{Announcement: saved})
+}
+
+// handleAnnouncementDelete deletes an announcement. Images are managed centrally
+// on the System → Images page, so the announcement's image/thumbnail files are
+// left intact on delete.
+//
+//	Endpoint:  DELETE /api/announcements/{id}
+//	Auth:      admin, or a user granted this page's permission
+//	Response:  204 No Content
+func (s *Server) handleAnnouncementDelete(w http.ResponseWriter, r *http.Request) {
+	if !s.requirePermission(w, r, permTeahouseAnnounce) {
+		return
+	}
+	id, ok := pathInt64(w, r, "id", "announcement")
+	if !ok {
+		return
+	}
+	if _, err := s.store.DeleteAnnouncement(id); err != nil {
+		writeInternalError(w, "delete announcement", err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// handleAnnouncementSend posts an announcement's embed to Discord immediately.
+//
+//	Endpoint:  POST /api/announcements/{id}/send
+//	Auth:      admin, or a user granted this page's permission
+//	Response:  200 {"announcement": Announcement}
+func (s *Server) handleAnnouncementSend(w http.ResponseWriter, r *http.Request) {
+	if !s.requirePermission(w, r, permTeahouseAnnounce) {
+		return
+	}
+	id, ok := pathInt64(w, r, "id", "announcement")
+	if !ok {
+		return
+	}
+	a, err := s.store.GetAnnouncement(id)
+	if err != nil {
+		writeInternalError(w, "load announcement for send", err)
+		return
+	}
+	if a == nil {
+		writeError(w, http.StatusNotFound, "Announcement not found")
+		return
+	}
+	typ, _ := s.store.GetAnnouncementType(a.TypeID)
+	if typ == nil || strings.TrimSpace(typ.WebhookURL) == "" {
+		writeError(w, http.StatusBadRequest, "This announcement's type has no Discord webhook configured.")
+		return
+	}
+	if err := postDiscordWebhook(typ.WebhookURL, s.buildAnnouncementMessage(*a)); err != nil {
+		writeError(w, http.StatusBadGateway, "Failed to post to Discord: "+err.Error())
+		return
+	}
+	if err := s.store.TouchAnnouncementPosted(a.ID); err != nil {
+		writeInternalError(w, "stamp announcement posted", err)
+		return
+	}
+	saved, _ := s.store.GetAnnouncement(a.ID)
+	writeJSON(w, http.StatusOK, model.AnnouncementResponse{Announcement: saved})
+}
+
+// handleAnnouncementSkip skips an announcement's next scheduled occurrence.
+//
+//	Endpoint:  POST /api/announcements/{id}/skip
+//	Auth:      admin, or a user granted this page's permission
+//	Response:  200 {"announcement": Announcement}
+func (s *Server) handleAnnouncementSkip(w http.ResponseWriter, r *http.Request) {
+	if !s.requirePermission(w, r, permTeahouseAnnounce) {
+		return
+	}
+	id, ok := pathInt64(w, r, "id", "announcement")
+	if !ok {
+		return
+	}
+	a, err := s.store.GetAnnouncement(id)
+	if err != nil {
+		writeInternalError(w, "load announcement for skip", err)
+		return
+	}
+	if a == nil {
+		writeError(w, http.StatusNotFound, "Announcement not found")
+		return
+	}
+	if a.ScheduleKind == "" || a.NextPostAt == "" {
+		writeError(w, http.StatusBadRequest, "This announcement isn't scheduled.")
+		return
+	}
+	if err := s.store.SetAnnouncementSkip(a.ID, true); err != nil {
+		writeInternalError(w, "skip announcement", err)
+		return
+	}
+	saved, _ := s.store.GetAnnouncement(a.ID)
+	writeJSON(w, http.StatusOK, model.AnnouncementResponse{Announcement: saved})
+}
+
+// handleAnnouncementsReorder persists a new drag-and-drop order for the
+// announcement list (a bulk operation, hence a collection-level POST verb).
+//
+//	Endpoint:  POST /api/announcements/reorder
+//	Auth:      admin, or a user granted this page's permission
+//	Response:  200 {"ok": true}
+func (s *Server) handleAnnouncementsReorder(w http.ResponseWriter, r *http.Request) {
+	if !s.requirePermission(w, r, permTeahouseAnnounce) {
+		return
+	}
+	req, err := readJSON[announcementReorderRequest](w, r)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "Invalid JSON")
+		return
+	}
+	if err := s.store.BulkReorderAnnouncements(req.OrderedIDs); err != nil {
+		writeInternalError(w, "reorder announcements", err)
+		return
+	}
+	writeJSON(w, http.StatusOK, model.OKResponse{OK: true})
 }
 
 // validateAndResolveAnnouncement validates required fields, confirms the type

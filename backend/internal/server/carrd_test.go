@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"mime/multipart"
 	"net/http"
+	"net/url"
 	"testing"
 )
 
@@ -18,7 +19,7 @@ func TestCarrd_RequiresAuth(t *testing.T) {
 	}
 	resp.Body.Close()
 
-	resp = env.postJSON(t, "/api/carrd/projects", map[string]any{"action": "create", "title": "X"})
+	resp = env.postJSON(t, "/api/carrd/projects", map[string]any{"title": "X"})
 	if resp.StatusCode != http.StatusUnauthorized {
 		t.Errorf("POST /api/carrd/projects status = %d; want 401", resp.StatusCode)
 	}
@@ -30,7 +31,7 @@ func TestCarrd_CreateProject_DefaultFolder(t *testing.T) {
 	env.loginAdmin(t)
 
 	resp := env.postJSON(t, "/api/carrd/projects", map[string]any{
-		"action": "create", "title": "My Cool Project!",
+		"title": "My Cool Project!",
 	})
 	if resp.StatusCode != http.StatusCreated {
 		t.Fatalf("status = %d; want 201", resp.StatusCode)
@@ -54,7 +55,7 @@ func TestCarrd_CreateProject_ExplicitFolder(t *testing.T) {
 	env.loginAdmin(t)
 
 	resp := env.postJSON(t, "/api/carrd/projects", map[string]any{
-		"action": "create", "title": "Spring Sale", "folder": "Spring 2026 Promo",
+		"title": "Spring Sale", "folder": "Spring 2026 Promo",
 	})
 	data := decodeBody(t, resp)
 	project, _ := data["project"].(map[string]any)
@@ -71,7 +72,7 @@ func TestCarrd_CreateProject_EmptyTitle(t *testing.T) {
 	env.loginAdmin(t)
 
 	resp := env.postJSON(t, "/api/carrd/projects", map[string]any{
-		"action": "create", "title": "   ",
+		"title": "   ",
 	})
 	if resp.StatusCode != http.StatusBadRequest {
 		t.Errorf("status = %d; want 400", resp.StatusCode)
@@ -84,12 +85,12 @@ func TestCarrd_CreateProject_DuplicateTitle(t *testing.T) {
 	env.loginAdmin(t)
 
 	env.postJSON(t, "/api/carrd/projects", map[string]any{
-		"action": "create", "title": "Gallery", "folder": "gallery-a",
+		"title": "Gallery", "folder": "gallery-a",
 	}).Body.Close()
 
 	// Same title (case-insensitive), different folder → conflict.
 	resp := env.postJSON(t, "/api/carrd/projects", map[string]any{
-		"action": "create", "title": "gallery", "folder": "gallery-b",
+		"title": "gallery", "folder": "gallery-b",
 	})
 	if resp.StatusCode != http.StatusConflict {
 		t.Errorf("status = %d; want 409", resp.StatusCode)
@@ -102,11 +103,11 @@ func TestCarrd_CreateProject_DuplicateFolder(t *testing.T) {
 	env.loginAdmin(t)
 
 	env.postJSON(t, "/api/carrd/projects", map[string]any{
-		"action": "create", "title": "First", "folder": "shared",
+		"title": "First", "folder": "shared",
 	}).Body.Close()
 
 	resp := env.postJSON(t, "/api/carrd/projects", map[string]any{
-		"action": "create", "title": "Second", "folder": "shared",
+		"title": "Second", "folder": "shared",
 	})
 	if resp.StatusCode != http.StatusConflict {
 		t.Errorf("status = %d; want 409", resp.StatusCode)
@@ -119,10 +120,10 @@ func TestCarrd_ListProjects(t *testing.T) {
 	env.loginAdmin(t)
 
 	env.postJSON(t, "/api/carrd/projects", map[string]any{
-		"action": "create", "title": "Beta", "folder": "beta",
+		"title": "Beta", "folder": "beta",
 	}).Body.Close()
 	env.postJSON(t, "/api/carrd/projects", map[string]any{
-		"action": "create", "title": "Alpha", "folder": "alpha",
+		"title": "Alpha", "folder": "alpha",
 	}).Body.Close()
 
 	resp := env.get(t, "/api/carrd/projects")
@@ -143,20 +144,18 @@ func TestCarrd_DeleteProject(t *testing.T) {
 	env.loginAdmin(t)
 
 	env.postJSON(t, "/api/carrd/projects", map[string]any{
-		"action": "create", "title": "Temp", "folder": "temp",
+		"title": "Temp", "folder": "temp",
 	}).Body.Close()
 
-	resp := env.postJSON(t, "/api/carrd/projects", map[string]any{
-		"action": "delete", "folder": "temp",
-	})
-	data := decodeBody(t, resp)
-	if data["ok"] != true {
-		t.Errorf("expected ok=true, got %v", data["ok"])
+	resp := env.del(t, "/api/carrd/projects/temp")
+	if resp.StatusCode != http.StatusNoContent {
+		t.Errorf("delete status = %d; want 204", resp.StatusCode)
 	}
+	resp.Body.Close()
 
 	// Now gone from the listing.
 	resp = env.get(t, "/api/carrd/projects")
-	data = decodeBody(t, resp)
+	data := decodeBody(t, resp)
 	projects, _ := data["projects"].([]any)
 	if len(projects) != 0 {
 		t.Errorf("expected 0 projects after delete, got %d", len(projects))
@@ -167,10 +166,9 @@ func TestCarrd_DeleteProject_InvalidFolder(t *testing.T) {
 	env := newTestEnv(t)
 	env.loginAdmin(t)
 
-	// Path-traversal attempt must be rejected by folder validation.
-	resp := env.postJSON(t, "/api/carrd/projects", map[string]any{
-		"action": "delete", "folder": "../secret",
-	})
+	// Path-traversal attempt must be rejected by folder validation. Encode the
+	// slash so it stays a single {folder} path segment rather than routing away.
+	resp := env.del(t, "/api/carrd/projects/..%2Fsecret")
 	if resp.StatusCode != http.StatusBadRequest {
 		t.Errorf("status = %d; want 400", resp.StatusCode)
 	}
@@ -182,12 +180,11 @@ func TestCarrd_RenameProject(t *testing.T) {
 	env.loginAdmin(t)
 
 	env.postJSON(t, "/api/carrd/projects", map[string]any{
-		"action": "create", "title": "Old Title", "folder": "old-folder",
+		"title": "Old Title", "folder": "old-folder",
 	}).Body.Close()
 
 	// Rename the title and the folder together.
-	resp := env.postJSON(t, "/api/carrd/projects", map[string]any{
-		"action": "rename", "folder": "old-folder",
+	resp := env.patchJSON(t, "/api/carrd/projects/old-folder", map[string]any{
 		"title": "New Title", "new_folder": "Brand New Folder",
 	})
 	if resp.StatusCode != http.StatusOK {
@@ -218,12 +215,12 @@ func TestCarrd_RenameProject_TitleOnly(t *testing.T) {
 	env.loginAdmin(t)
 
 	env.postJSON(t, "/api/carrd/projects", map[string]any{
-		"action": "create", "title": "Keep Folder", "folder": "keep",
+		"title": "Keep Folder", "folder": "keep",
 	}).Body.Close()
 
 	// No new_folder → the folder stays, only the title changes.
-	resp := env.postJSON(t, "/api/carrd/projects", map[string]any{
-		"action": "rename", "folder": "keep", "title": "Renamed",
+	resp := env.patchJSON(t, "/api/carrd/projects/keep", map[string]any{
+		"title": "Renamed",
 	})
 	project := decodeBody(t, resp)["project"].(map[string]any)
 	if project["folder"] != "keep" {
@@ -239,15 +236,15 @@ func TestCarrd_RenameProject_DuplicateTitle(t *testing.T) {
 	env.loginAdmin(t)
 
 	env.postJSON(t, "/api/carrd/projects", map[string]any{
-		"action": "create", "title": "Alpha", "folder": "alpha",
+		"title": "Alpha", "folder": "alpha",
 	}).Body.Close()
 	env.postJSON(t, "/api/carrd/projects", map[string]any{
-		"action": "create", "title": "Beta", "folder": "beta",
+		"title": "Beta", "folder": "beta",
 	}).Body.Close()
 
 	// Renaming Beta to Alpha's title (case-insensitive) → conflict.
-	resp := env.postJSON(t, "/api/carrd/projects", map[string]any{
-		"action": "rename", "folder": "beta", "title": "alpha",
+	resp := env.patchJSON(t, "/api/carrd/projects/beta", map[string]any{
+		"title": "alpha",
 	})
 	if resp.StatusCode != http.StatusConflict {
 		t.Errorf("status = %d; want 409", resp.StatusCode)
@@ -260,7 +257,7 @@ func TestCarrd_UploadAndListAndDeleteImage(t *testing.T) {
 	env.loginAdmin(t)
 
 	env.postJSON(t, "/api/carrd/projects", map[string]any{
-		"action": "create", "title": "Pics", "folder": "pics",
+		"title": "Pics", "folder": "pics",
 	}).Body.Close()
 
 	// Upload a valid .png and an invalid .txt in the same batch.
@@ -293,14 +290,12 @@ func TestCarrd_UploadAndListAndDeleteImage(t *testing.T) {
 		t.Errorf("image name = %v; want hero.png", img["name"])
 	}
 
-	// Delete it.
-	resp = env.postJSON(t, "/api/carrd/images", map[string]any{
-		"action": "delete", "folder": "pics", "name": "hero.png",
-	})
-	data = decodeBody(t, resp)
-	if data["ok"] != true {
-		t.Errorf("expected ok=true, got %v", data["ok"])
+	// Delete it (query params, 204).
+	resp = env.del(t, "/api/carrd/images?folder=pics&name=hero.png")
+	if resp.StatusCode != http.StatusNoContent {
+		t.Errorf("delete image status = %d; want 204", resp.StatusCode)
 	}
+	resp.Body.Close()
 
 	resp = env.get(t, "/api/carrd/images?folder=pics")
 	data = decodeBody(t, resp)
@@ -315,7 +310,7 @@ func TestCarrd_UploadOverwrites(t *testing.T) {
 	env.loginAdmin(t)
 
 	env.postJSON(t, "/api/carrd/projects", map[string]any{
-		"action": "create", "title": "Over", "folder": "over",
+		"title": "Over", "folder": "over",
 	}).Body.Close()
 
 	env.postCarrdUpload(t, "over", "", map[string][]byte{"a.png": []byte("\x89PNG\r\n\x1a\nfirst")}).Body.Close()
@@ -343,7 +338,7 @@ func TestCarrd_UploadAudioAndVideo(t *testing.T) {
 	env.loginAdmin(t)
 
 	env.postJSON(t, "/api/carrd/projects", map[string]any{
-		"action": "create", "title": "Media", "folder": "media",
+		"title": "Media", "folder": "media",
 	}).Body.Close()
 
 	// .mp3 and .mp4 are accepted; .txt is rejected.
@@ -393,13 +388,25 @@ func TestCarrd_ListImages_InvalidFolder(t *testing.T) {
 	resp.Body.Close()
 }
 
-func TestCarrd_InvalidProjectsAction(t *testing.T) {
+func TestCarrd_DeleteImage_InvalidName(t *testing.T) {
 	env := newTestEnv(t)
 	env.loginAdmin(t)
 
-	resp := env.postJSON(t, "/api/carrd/projects", map[string]any{"action": "explode"})
+	env.postJSON(t, "/api/carrd/projects", map[string]any{
+		"title": "Names", "folder": "names",
+	}).Body.Close()
+
+	// A disallowed extension must be rejected by safeCarrdFileName (400).
+	resp := env.del(t, "/api/carrd/images?folder=names&name=evil.txt")
 	if resp.StatusCode != http.StatusBadRequest {
 		t.Errorf("status = %d; want 400", resp.StatusCode)
+	}
+	resp.Body.Close()
+
+	// A valid name that doesn't exist → 404.
+	resp = env.del(t, "/api/carrd/images?folder=names&name=missing.png")
+	if resp.StatusCode != http.StatusNotFound {
+		t.Errorf("status = %d; want 404", resp.StatusCode)
 	}
 	resp.Body.Close()
 }
@@ -409,15 +416,19 @@ func TestCarrd_SubDir_CreateUploadListDelete(t *testing.T) {
 	env.loginAdmin(t)
 
 	env.postJSON(t, "/api/carrd/projects", map[string]any{
-		"action": "create", "title": "Client", "folder": "client",
+		"title": "Client", "folder": "client",
 	}).Body.Close()
 
-	// Create a nested sub-directory: client/spring/banners
-	env.postJSON(t, "/api/carrd/images", map[string]any{
-		"action": "create_dir", "folder": "client", "path": "", "name": "Spring Sale",
-	}).Body.Close()
-	resp := env.postJSON(t, "/api/carrd/images", map[string]any{
-		"action": "create_dir", "folder": "client", "path": "spring-sale", "name": "banners",
+	// Create a nested sub-directory: client/spring/banners (201).
+	resp := env.postJSON(t, "/api/carrd/images/dirs", map[string]any{
+		"folder": "client", "path": "", "name": "Spring Sale",
+	})
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("create_dir status = %d; want 201", resp.StatusCode)
+	}
+	resp.Body.Close()
+	resp = env.postJSON(t, "/api/carrd/images/dirs", map[string]any{
+		"folder": "client", "path": "spring-sale", "name": "banners",
 	})
 	data := decodeBody(t, resp)
 	if data["name"] != "banners" {
@@ -464,21 +475,19 @@ func TestCarrd_SubDir_CreateUploadListDelete(t *testing.T) {
 		t.Errorf("total_size = %v; want > 0", proj["total_size"])
 	}
 
-	// Delete the nested image with its path.
-	resp = env.postJSON(t, "/api/carrd/images", map[string]any{
-		"action": "delete", "folder": "client", "path": "spring-sale/banners", "name": "top.png",
-	})
-	if decodeBody(t, resp)["ok"] != true {
-		t.Error("expected ok=true deleting nested image")
+	// Delete the nested image with its path (query params, 204).
+	resp = env.del(t, "/api/carrd/images?folder=client&path="+url.QueryEscape("spring-sale/banners")+"&name=top.png")
+	if resp.StatusCode != http.StatusNoContent {
+		t.Errorf("delete nested image status = %d; want 204", resp.StatusCode)
 	}
+	resp.Body.Close()
 
-	// Delete the whole sub-tree (spring-sale and its banners child).
-	resp = env.postJSON(t, "/api/carrd/images", map[string]any{
-		"action": "delete_dir", "folder": "client", "path": "spring-sale",
-	})
-	if decodeBody(t, resp)["ok"] != true {
-		t.Error("expected ok=true deleting sub-dir")
+	// Delete the whole sub-tree (spring-sale and its banners child), 204.
+	resp = env.del(t, "/api/carrd/images/dirs?folder=client&path=spring-sale")
+	if resp.StatusCode != http.StatusNoContent {
+		t.Errorf("delete_dir status = %d; want 204", resp.StatusCode)
 	}
+	resp.Body.Close()
 	resp = env.get(t, "/api/carrd/images?folder=client")
 	data = decodeBody(t, resp)
 	dirs, _ = data["dirs"].([]any)
@@ -492,14 +501,14 @@ func TestCarrd_CreateDir_Duplicate(t *testing.T) {
 	env.loginAdmin(t)
 
 	env.postJSON(t, "/api/carrd/projects", map[string]any{
-		"action": "create", "title": "Dup", "folder": "dup",
+		"title": "Dup", "folder": "dup",
 	}).Body.Close()
-	env.postJSON(t, "/api/carrd/images", map[string]any{
-		"action": "create_dir", "folder": "dup", "name": "sub",
+	env.postJSON(t, "/api/carrd/images/dirs", map[string]any{
+		"folder": "dup", "name": "sub",
 	}).Body.Close()
 
-	resp := env.postJSON(t, "/api/carrd/images", map[string]any{
-		"action": "create_dir", "folder": "dup", "name": "sub",
+	resp := env.postJSON(t, "/api/carrd/images/dirs", map[string]any{
+		"folder": "dup", "name": "sub",
 	})
 	if resp.StatusCode != http.StatusConflict {
 		t.Errorf("status = %d; want 409", resp.StatusCode)
@@ -512,13 +521,11 @@ func TestCarrd_DeleteDir_RejectsRoot(t *testing.T) {
 	env.loginAdmin(t)
 
 	env.postJSON(t, "/api/carrd/projects", map[string]any{
-		"action": "create", "title": "Root", "folder": "rootp",
+		"title": "Root", "folder": "rootp",
 	}).Body.Close()
 
 	// Empty path = project root: must be refused (use the projects endpoint).
-	resp := env.postJSON(t, "/api/carrd/images", map[string]any{
-		"action": "delete_dir", "folder": "rootp", "path": "",
-	})
+	resp := env.del(t, "/api/carrd/images/dirs?folder=rootp&path=")
 	if resp.StatusCode != http.StatusBadRequest {
 		t.Errorf("status = %d; want 400", resp.StatusCode)
 	}
@@ -530,7 +537,7 @@ func TestCarrd_Path_TraversalRejected(t *testing.T) {
 	env.loginAdmin(t)
 
 	env.postJSON(t, "/api/carrd/projects", map[string]any{
-		"action": "create", "title": "Trav", "folder": "trav",
+		"title": "Trav", "folder": "trav",
 	}).Body.Close()
 
 	resp := env.get(t, "/api/carrd/images?folder=trav&path=..%2F..%2Fetc")
@@ -542,6 +549,13 @@ func TestCarrd_Path_TraversalRejected(t *testing.T) {
 	resp = env.postCarrdUpload(t, "trav", "../escape", map[string][]byte{"a.png": []byte("x")})
 	if resp.StatusCode != http.StatusBadRequest {
 		t.Errorf("upload status = %d; want 400", resp.StatusCode)
+	}
+	resp.Body.Close()
+
+	// A traversal path on the delete-image endpoint is also rejected (400).
+	resp = env.del(t, "/api/carrd/images?folder=trav&path=..%2F..%2Fetc&name=a.png")
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Errorf("delete status = %d; want 400", resp.StatusCode)
 	}
 	resp.Body.Close()
 }

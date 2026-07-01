@@ -139,6 +139,8 @@ describe('saveAffiliate', () => {
     const ok = await s.saveAffiliate()
     expect(ok).toBe(true)
     expect(ep.update).toHaveBeenCalledTimes(1)
+    // PUT /api/affiliates/{id}: the id is passed separately from the payload.
+    expect((ep.update.mock.calls[0] as unknown[])[0]).toBe(4)
     expect(ep.create).not.toHaveBeenCalled()
   })
 })

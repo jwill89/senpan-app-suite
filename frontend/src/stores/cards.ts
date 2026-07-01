@@ -130,7 +130,7 @@ export const useCardsStore = defineStore('cards', () => {
     }
     generatingSingle.value = true
     try {
-      const data = await endpoints.cards.generateSingle(name)
+      const data = await endpoints.cards.create(name)
       singleCardName.value = ''
       const href = router.resolve({ name: 'player', params: { cardId: data.card.id } }).href
       ui.copyToClipboard(

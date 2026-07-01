@@ -62,8 +62,8 @@ func TestAccountToken_GenerateInfoRevoke(t *testing.T) {
 	}
 	resp.Body.Close()
 
-	// Revoke: the same token stops working immediately.
-	env.postJSON(t, "/api/account/token", map[string]string{"action": "revoke"}).Body.Close()
+	// Revoke (DELETE): the same token stops working immediately.
+	env.del(t, "/api/account/token").Body.Close()
 	resp = bearerGet(t, env, "/api/users", token)
 	if resp.StatusCode != http.StatusUnauthorized {
 		t.Fatalf("revoked-token GET /api/users = %d; want 401", resp.StatusCode)
@@ -100,8 +100,8 @@ func TestTokenAuth_EnforcesUserPermissions(t *testing.T) {
 	env.postJSON(t, "/api/register", map[string]string{"username": "plugin", "password": "password123"}).Body.Close()
 	env.loginAdmin(t)
 	id := findUserID(t, env, "plugin")
-	env.postJSON(t, "/api/users", map[string]any{"action": "set_active", "id": id, "active": true}).Body.Close()
-	env.postJSON(t, "/api/users", map[string]any{"action": "set_permissions", "id": id, "permissions": []string{"bingo-cards"}}).Body.Close()
+	env.patchJSON(t, "/api/users/"+itoa(id), map[string]any{"active": true}).Body.Close()
+	env.patchJSON(t, "/api/users/"+itoa(id), map[string]any{"permissions": []string{"bingo-cards"}}).Body.Close()
 
 	// Log in as that user (independent client/jar) and mint a token.
 	user := newClient(t, env)

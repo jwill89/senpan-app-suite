@@ -29,14 +29,12 @@ func (s *Server) handleAffiliatesList(w http.ResponseWriter, r *http.Request) {
 		writeInternalError(w, "list affiliates", err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"affiliates": affiliates})
+	writeJSON(w, http.StatusOK, model.AffiliatesResponse{Affiliates: affiliates})
 }
 
-// affiliateRequest is the JSON body for POST /api/affiliates.
-// Action: "create", "update", or "delete".
-type affiliateRequest struct {
-	Action     string                `json:"action"`
-	ID         int64                 `json:"id"`
+// affiliateWriteRequest is the JSON body for creating (POST /api/affiliates) or
+// replacing (PUT /api/affiliates/{id}) an affiliate. The id comes from the path.
+type affiliateWriteRequest struct {
 	Name       string                `json:"name"`
 	Owners     []string              `json:"owners"`
 	Location   string                `json:"location"`
@@ -78,7 +76,7 @@ func sanitizeAffiliateHours(in []model.AffiliateHour) []model.AffiliateHour {
 }
 
 // affiliateFromRequest builds a sanitized model.Affiliate (sans ID) from a request.
-func affiliateFromRequest(req affiliateRequest, name string) *model.Affiliate {
+func affiliateFromRequest(req affiliateWriteRequest, name string) *model.Affiliate {
 	return &model.Affiliate{
 		Name:       name,
 		Owners:     sanitizeOwners(req.Owners),
@@ -91,68 +89,83 @@ func affiliateFromRequest(req affiliateRequest, name string) *model.Affiliate {
 	}
 }
 
-// handleAffiliatesAction creates, updates, or deletes an affiliate.
+// handleAffiliateCreate creates an affiliate.
 //
 //	Endpoint:  POST /api/affiliates
 //	Auth:      admin, or a user granted teahouse-affiliates
-//	Request:   {"action": "create"|"update"|"delete", ...}
-func (s *Server) handleAffiliatesAction(w http.ResponseWriter, r *http.Request) {
+//	Response:  201 {"affiliate": Affiliate}
+func (s *Server) handleAffiliateCreate(w http.ResponseWriter, r *http.Request) {
 	if !s.requirePermission(w, r, permTeahouseAffiliates) {
 		return
 	}
-	req, err := readJSON[affiliateRequest](w, r)
+	req, err := readJSON[affiliateWriteRequest](w, r)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "Invalid JSON")
 		return
 	}
-
-	switch req.Action {
-	case "create":
-		name := strings.TrimSpace(req.Name)
-		if name == "" {
-			writeError(w, http.StatusBadRequest, "Name is required")
-			return
-		}
-		affiliate := affiliateFromRequest(req, name)
-		id, err := s.store.CreateAffiliate(affiliate)
-		if err != nil {
-			writeInternalError(w, "create affiliate", err)
-			return
-		}
-		affiliate.ID = id
-		writeJSON(w, http.StatusCreated, map[string]any{"affiliate": affiliate})
-
-	case "update":
-		if req.ID <= 0 {
-			writeError(w, http.StatusBadRequest, "Affiliate id is required")
-			return
-		}
-		name := strings.TrimSpace(req.Name)
-		if name == "" {
-			writeError(w, http.StatusBadRequest, "Name is required")
-			return
-		}
-		affiliate := affiliateFromRequest(req, name)
-		affiliate.ID = req.ID
-		if err := s.store.UpdateAffiliate(affiliate); err != nil {
-			writeInternalError(w, "update affiliate", err)
-			return
-		}
-		writeJSON(w, http.StatusOK, map[string]any{"ok": true})
-
-	case "delete":
-		if req.ID <= 0 {
-			writeError(w, http.StatusBadRequest, "Affiliate id is required")
-			return
-		}
-		deleted, err := s.store.DeleteAffiliate(req.ID)
-		if err != nil {
-			writeInternalError(w, "delete affiliate", err)
-			return
-		}
-		writeJSON(w, http.StatusOK, map[string]any{"deleted": deleted})
-
-	default:
-		writeError(w, http.StatusBadRequest, "Invalid action. Use: create, update, delete")
+	name := strings.TrimSpace(req.Name)
+	if name == "" {
+		writeError(w, http.StatusBadRequest, "Name is required")
+		return
 	}
+	affiliate := affiliateFromRequest(req, name)
+	id, err := s.store.CreateAffiliate(affiliate)
+	if err != nil {
+		writeInternalError(w, "create affiliate", err)
+		return
+	}
+	affiliate.ID = id
+	writeJSON(w, http.StatusCreated, model.AffiliateResponse{Affiliate: *affiliate})
+}
+
+// handleAffiliateUpdate replaces an affiliate.
+//
+//	Endpoint:  PUT /api/affiliates/{id}
+//	Auth:      admin, or a user granted teahouse-affiliates
+//	Response:  200 {"ok": true}
+func (s *Server) handleAffiliateUpdate(w http.ResponseWriter, r *http.Request) {
+	if !s.requirePermission(w, r, permTeahouseAffiliates) {
+		return
+	}
+	id, ok := pathInt64(w, r, "id", "affiliate")
+	if !ok {
+		return
+	}
+	req, err := readJSON[affiliateWriteRequest](w, r)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "Invalid JSON")
+		return
+	}
+	name := strings.TrimSpace(req.Name)
+	if name == "" {
+		writeError(w, http.StatusBadRequest, "Name is required")
+		return
+	}
+	affiliate := affiliateFromRequest(req, name)
+	affiliate.ID = id
+	if err := s.store.UpdateAffiliate(affiliate); err != nil {
+		writeInternalError(w, "update affiliate", err)
+		return
+	}
+	writeJSON(w, http.StatusOK, model.OKResponse{OK: true})
+}
+
+// handleAffiliateDelete deletes an affiliate.
+//
+//	Endpoint:  DELETE /api/affiliates/{id}
+//	Auth:      admin, or a user granted teahouse-affiliates
+//	Response:  204 No Content
+func (s *Server) handleAffiliateDelete(w http.ResponseWriter, r *http.Request) {
+	if !s.requirePermission(w, r, permTeahouseAffiliates) {
+		return
+	}
+	id, ok := pathInt64(w, r, "id", "affiliate")
+	if !ok {
+		return
+	}
+	if _, err := s.store.DeleteAffiliate(id); err != nil {
+		writeInternalError(w, "delete affiliate", err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }

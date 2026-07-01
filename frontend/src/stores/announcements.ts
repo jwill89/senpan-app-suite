@@ -225,7 +225,12 @@ export const useAnnouncementsStore = defineStore('announcements', () => {
     }
     savingType.value = true
     try {
-      await endpoints.announcements.saveType({ ...f, name: f.name.trim() })
+      const payload = { ...f, name: f.name.trim() }
+      if (f.id) {
+        await endpoints.announcements.updateType(f.id, payload)
+      } else {
+        await endpoints.announcements.createType(payload)
+      }
       ui.notify(f.id ? 'Type updated' : 'Type added', 'success')
       resetTypeForm()
       await loadTypes()
@@ -278,7 +283,12 @@ export const useAnnouncementsStore = defineStore('announcements', () => {
     }
     savingRole.value = true
     try {
-      await endpoints.announcements.saveRole({ ...f, name: f.name.trim(), role_id: f.role_id.trim() })
+      const payload = { ...f, name: f.name.trim(), role_id: f.role_id.trim() }
+      if (f.id) {
+        await endpoints.announcements.updateRole(f.id, payload)
+      } else {
+        await endpoints.announcements.createRole(payload)
+      }
       ui.notify(f.id ? 'Role updated' : 'Role added', 'success')
       resetRoleForm()
       await loadRoles()

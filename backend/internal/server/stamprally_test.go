@@ -16,7 +16,7 @@ func TestStampRally_RequiresAuth(t *testing.T) {
 		t.Errorf("list status = %d; want 401", resp.StatusCode)
 		resp.Body.Close()
 	}
-	resp := env.postJSON(t, "/api/stamp-rallies", map[string]any{"action": "create", "title": "X"})
+	resp := env.postJSON(t, "/api/stamp-rallies", map[string]any{"title": "X"})
 	if resp.StatusCode != http.StatusUnauthorized {
 		t.Errorf("create status = %d; want 401", resp.StatusCode)
 	}
@@ -28,8 +28,7 @@ func TestStampRally_RequiresAuth(t *testing.T) {
 func (e *testEnv) createRally(t *testing.T, title string, paused bool) int {
 	t.Helper()
 	resp := e.postJSON(t, "/api/stamp-rallies", map[string]any{
-		"action": "create",
-		"title":  title,
+		"title": title,
 		"stamps": []map[string]any{
 			{
 				"image":     "images/stamp_stamps/a.png",
@@ -54,7 +53,7 @@ func (e *testEnv) createRally(t *testing.T, title string, paused bool) int {
 func (e *testEnv) issueCard(t *testing.T, rallyID int, name string) string {
 	t.Helper()
 	resp := e.postJSON(t, fmt.Sprintf("/api/stamp-rallies/%d/cards", rallyID), map[string]any{
-		"action": "create_card", "participant_name": name,
+		"participant_name": name,
 	})
 	if resp.StatusCode != http.StatusCreated {
 		t.Fatalf("create_card status = %d; want 201", resp.StatusCode)
@@ -85,7 +84,7 @@ func TestStampRally_CreateListDetail(t *testing.T) {
 func TestStampRally_CreateValidation(t *testing.T) {
 	env := newTestEnv(t)
 	env.loginAdmin(t)
-	resp := env.postJSON(t, "/api/stamp-rallies", map[string]any{"action": "create", "title": "  "})
+	resp := env.postJSON(t, "/api/stamp-rallies", map[string]any{"title": "  "})
 	if resp.StatusCode != http.StatusBadRequest {
 		t.Errorf("missing title status = %d; want 400", resp.StatusCode)
 	}
@@ -177,12 +176,16 @@ func TestStampCard_UnknownToken(t *testing.T) {
 	resp.Body.Close()
 }
 
-// setRallyStatus posts a status change for a rally.
+// setRallyStatus posts a close/reopen for a rally (status is "closed" or "open").
 func (e *testEnv) setRallyStatus(t *testing.T, rallyID int, status string) {
 	t.Helper()
-	resp := e.postJSON(t, "/api/stamp-rallies", map[string]any{"action": "set_status", "id": rallyID, "status": status})
+	verb := "reopen"
+	if status == "closed" {
+		verb = "close"
+	}
+	resp := e.postJSON(t, fmt.Sprintf("/api/stamp-rallies/%d/%s", rallyID, verb), map[string]any{})
 	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("set_status %s = %d; want 200", status, resp.StatusCode)
+		t.Fatalf("%s = %d; want 200", verb, resp.StatusCode)
 	}
 	resp.Body.Close()
 }
@@ -205,7 +208,7 @@ func TestStampRally_CloseKeepsLogs(t *testing.T) {
 	cardID := int(cards[0].(map[string]any)["id"].(float64))
 
 	// While open, deleting a card that has stamps is rejected (409).
-	resp := env.postJSON(t, fmt.Sprintf("/api/stamp-rallies/%d/cards", id), map[string]any{"action": "delete_card", "card_id": cardID})
+	resp := env.del(t, fmt.Sprintf("/api/stamp-rallies/%d/cards/%d", id, cardID))
 	if resp.StatusCode != http.StatusConflict {
 		t.Errorf("delete collected card (open) = %d; want 409", resp.StatusCode)
 	}
@@ -220,10 +223,11 @@ func TestStampRally_CloseKeepsLogs(t *testing.T) {
 	resp.Body.Close()
 
 	// ...and the card can now be deleted, but its log row survives.
-	resp = env.postJSON(t, fmt.Sprintf("/api/stamp-rallies/%d/cards", id), map[string]any{"action": "delete_card", "card_id": cardID})
-	if resp.StatusCode != http.StatusOK || decodeBody(t, resp)["deleted"] != true {
-		t.Fatalf("delete collected card (closed) failed")
+	resp = env.del(t, fmt.Sprintf("/api/stamp-rallies/%d/cards/%d", id, cardID))
+	if resp.StatusCode != http.StatusNoContent {
+		t.Fatalf("delete collected card (closed) = %d; want 204", resp.StatusCode)
 	}
+	resp.Body.Close()
 	logs := decodeBody(t, env.get(t, fmt.Sprintf("/api/stamp-rallies/%d/logs", id)))["logs"].([]any)
 	if len(logs) != 1 {
 		t.Fatalf("logs after card delete = %d; want 1 (kept)", len(logs))
@@ -243,7 +247,7 @@ func TestGarapon_LinkedStampRally(t *testing.T) {
 
 	// Create a garapon linked to the open rally.
 	resp := env.postJSON(t, "/api/garapons", map[string]any{
-		"action": "create", "title": "Drum", "stamp_rally_id": rallyID,
+		"title": "Drum", "stamp_rally_id": rallyID,
 		"prizes": []map[string]any{{"name": "Grand", "ball_color": "#e5b53f", "rate": 1, "is_grand": true}},
 	})
 	if resp.StatusCode != http.StatusCreated {
@@ -253,7 +257,7 @@ func TestGarapon_LinkedStampRally(t *testing.T) {
 
 	// Issue a drawing link → it also issues a stamp card with the SAME token.
 	resp = env.postJSON(t, fmt.Sprintf("/api/garapons/%d/players", gid), map[string]any{
-		"action": "create_player", "player_name": "Tester", "max_draws": 1,
+		"player_name": "Tester", "max_draws": 1,
 	})
 	player := decodeBody(t, resp)["player"].(map[string]any)
 	token := player["token"].(string)
@@ -269,7 +273,7 @@ func TestGarapon_LinkedStampRally(t *testing.T) {
 	// Linking a CLOSED rally is rejected.
 	env.setRallyStatus(t, rallyID, "closed")
 	resp = env.postJSON(t, "/api/garapons", map[string]any{
-		"action": "create", "title": "Drum2", "stamp_rally_id": rallyID,
+		"title": "Drum2", "stamp_rally_id": rallyID,
 		"prizes": []map[string]any{{"name": "G", "rate": 1, "is_grand": true}},
 	})
 	if resp.StatusCode != http.StatusBadRequest {
@@ -278,7 +282,7 @@ func TestGarapon_LinkedStampRally(t *testing.T) {
 	resp.Body.Close()
 
 	// Deleting the rally clears the first garapon's link.
-	env.postJSON(t, "/api/stamp-rallies", map[string]any{"action": "delete", "id": rallyID}).Body.Close()
+	env.del(t, fmt.Sprintf("/api/stamp-rallies/%d", rallyID)).Body.Close()
 	g := decodeBody(t, env.get(t, fmt.Sprintf("/api/garapons/%d", gid)))["garapon"].(map[string]any)
 	if g["stamp_rally_id"] != nil {
 		t.Errorf("garapon link after rally delete = %v; want null", g["stamp_rally_id"])

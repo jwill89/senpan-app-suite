@@ -26,7 +26,7 @@ same REST/WebSocket API and still broadcasts to the website. See **FFXIV plugin
 Router (history mode, lazy routes) · Go 1.22+ stdlib HTTP · SQLite (WAL) ·
 coder/websocket · per-user accounts (argon2id) + per-page permissions ·
 embedded tzdata + background schedulers (Discord embeds) · Vitest + Vue Test
-Utils · C#/.NET 10 Dalamud plugin (ImGui) · GitHub + GitLab CI.
+Utils · C#/.NET 10 Dalamud plugin (ImGui) · GitHub Actions CI.
 
 **Auth model (read this first):** the admin area is now gated by **per-user
 accounts**, not a single shared password. Accounts log in with username +
@@ -78,7 +78,7 @@ rotated immediately**. See **Authentication & authorization** below.
 │       │   └── admin/                ← AdminSidebar + one component per tab + modals (CardPreview, EndGame, WinnerVerify, HalftimePrompt) + ThemeTokenEditor. Tabs: Game, Cards, WinnersLog, Patterns (one manager unifying the patterns list + New Pattern / Manage Categories sub-pages), Presets, RaffleForm, Raffles, Announcements, BookClub (one generic tab serves every club), Settings, Themes, Users (admin-only account+permission manager), Fonts, CarrdUpload
 │       ├── views/                    ← HomeView, PlayerView, RafflesView, RaffleDetailView, AdminLoginView, RegisterView (hidden), NoAccessView (active account, no granted pages), AdminView
 │       └── **/*.test.ts              ← Vitest unit/component tests, colocated next to the code they cover
-├── .github/workflows/ci.yml          ← CI: frontend (lint·typecheck·test·build) + backend (build·vet·test) + plugin (build·format); mirrored in .gitlab-ci.yml
+├── .github/workflows/ci.yml          ← CI: frontend (lint·typecheck·test·build) + backend (build·vet·test) + plugin (build·format)
 ├── deploy/                           ← Apache deploy artifacts (.htaccess + persistent images/ + README)
 ├── backend/                          ← Go backend
 │   ├── main.go                       ← Entry point: flags, DB init, server start
@@ -446,8 +446,7 @@ cd plugins\SenpanCompanion; dotnet format             # apply .editorconfig styl
 
 ## Continuous integration
 
-`.github/workflows/ci.yml` runs on every push and pull request, with three jobs
-(mirrored in `.gitlab-ci.yml`, since the repo also lives on GitLab):
+`.github/workflows/ci.yml` runs on every push and pull request, with three jobs:
 
 - **frontend** (`working-directory: frontend`): `npm ci` → `npm run gen:types`
   (needs Go, so the job also sets up the Go toolchain) → `lint:check` →
@@ -455,7 +454,8 @@ cd plugins\SenpanCompanion; dotnet format             # apply .editorconfig styl
   the checks a developer runs locally have passed.
 - **backend** (`working-directory: backend`): `golangci-lint run` (pinned
   v2.12.2, config `backend/.golangci.yml`) → `go build ./...` → `go vet ./...` →
-  `go test ./...` (Go version read from `backend/go.mod`).
+  `go test ./...` (Go version read from `backend/go.mod`; the tests include the
+  OpenAPI spec-freshness + route-coverage checks in `internal/apidoc`).
 - **plugin** (`working-directory: plugins/SenpanCompanion`): builds the FFXIV
   Dalamud plugin on a **Linux** runner — there's no XIVLauncher there, so it
   downloads the official Dalamud dev distribution and points `DALAMUD_HOME` at it;
@@ -467,7 +467,7 @@ cd plugins\SenpanCompanion; dotnet format             # apply .editorconfig styl
   bump `DalamudApiLevel`.
 
 When adding a check, wire it into both the relevant npm/go/dotnet script **and**
-the workflow (GitHub **and** GitLab) so local and CI stay in lockstep.
+`.github/workflows/ci.yml` so local and CI stay in lockstep.
 
 ## Deployment (Apache)
 
@@ -514,7 +514,7 @@ the built SPA so redeploys never wipe them (full guide in `deploy/README.md`):
 - **Method-pattern routing**: Go 1.22+ `"GET /api/auth"` patterns — no manual method checks.
 - **Typed JSON requests**: each handler defines a request struct and uses `readJSON[T]()` generic decoder.
 - **JSON errors**: API failures return `{"error":"message"}` with appropriate HTTP status via `writeError()`.
-- **Action-based POST**: POST endpoints use `{"action":"…"}` in JSON body to multiplex operations.
+- **Hybrid REST**: the HTTP method carries intent — `GET` read, `POST` create (`201`) or run a command, `PUT` replace, `PATCH` partial-update, `DELETE` remove (`204`). Items are `/api/<resource>/{id}` (numeric or string keys), sub-collections nest (`…/{id}/<subs>/{subId}`), non-CRUD commands are `POST …/{id}/<verb>` (e.g. `…/close`, `…/activate`, `/api/game/start`), bulk writes are `POST` (`…/reorder`, `…/generate`) and bulk deletes are `DELETE …/all`. A single reorder / flag toggle is a declarative `PATCH`. The only action-body holdouts are `POST /api/auth` (login/logout) and `POST /api/register`.
 - **Account-based auth + per-page permissions**: login stores `user_id` in the SCS session cookie; `currentUser` reloads the account from the DB on each request (no stale snapshot). Every mutating admin handler opens with a guard — `requireAuth` / `requireAdmin` / `requirePermission(perm)` / `requireAnyBookClub` (see **Authentication & authorization**). Permission keys equal the frontend `AdminTab` ids. The legacy `-password` / `APPSUITE_ADMIN_PASSWORD` flag is **deprecated and unused** (kept only for backward-compatible startup); don't add new code paths that read `Server.password`.
 - **Password hashing**: argon2id via the `internal/auth` package (`Hash`/`Verify`, PHC strings, constant-time compare). The hash lives only in the store layer and is never placed on `model.User`. Min password length 8 (the seeded `admin`/`admin` bypasses this and must be rotated).
 - **Pattern snapshots**: `game_patterns` stores a copy of pattern name + data so deleting a pattern doesn't break active games.
@@ -580,8 +580,8 @@ the built SPA so redeploys never wipe them (full guide in `deploy/README.md`):
 
 ## Extending the project
 
-- **New API endpoint**: add a handler method on `*Server` in `internal/server/`, register the route in `routes()`, then add a typed wrapper in `frontend/src/lib/endpoints.ts` for the frontend to call. Document the endpoint (auth, request/response, action types) in [`API.md`](API.md) in the same change.
-- **New domain type**: add to `internal/model/model.go`, then run `npm run gen:types` to refresh the TS types.
+- **New API endpoint**: add a handler method on `*Server` in `internal/server/` returning a **typed response struct** from `internal/model` (add it to `model/responses*.go` — not `map[string]any`), register the route in `routes()`, add a typed wrapper in `frontend/src/lib/endpoints.ts`, then add the endpoint to the OpenAPI paths table in `internal/apidoc/paths*.go` (add its response schema name to `internal/apidoc/schemas.go` too) and run `go run ./cmd/openapi-gen`. The `internal/apidoc` tests fail if a route is undocumented or `openapi.yaml` is stale.
+- **New domain type / response struct**: add to `internal/model/` (domain in `model.go`, response envelopes in `model/responses*.go`), then run `npm run gen:types` (frontend types) and, if it's referenced by the spec, add it to `internal/apidoc/schemas.go` + `go run ./cmd/openapi-gen`.
 - **New store method**: add to the matching domain file in `internal/store/` (`raffles.go`, `patterns.go`, …; new domain → new file), returning typed structs.
 - **New migration**: bump `schemaVersion` in `store/migrate.go`, add an `if version < N` block in `ensureSchema()`.
 - **New admin tab**: add the tab id to the `AdminTab` union in `frontend/src/stores/admin.ts` (mapping its prefix to a section in `setTabFromRoute()` + any per-tab data load — wrap the load in `loadFresh('<key>', …)` so revisits stay snappy), add a child route with `meta.tab` in `router/index.ts`, add a sidebar link (gated with `v-if="can('<key>')"`) in `components/admin/AdminSidebar.vue`, and create a `components/admin/<Tab>.vue` referenced by the route's lazy `import()`. **Wire its permission too** (see "New admin page permission" below) unless it's admin-only. For a "manage items" tab use the **manager model** (`ManagerView` + `ListRow` + `SubPageHeader` + `SearchInput`, with a `screen` ref for sub-pages — see `PatternsTab.vue`); otherwise wrap content in `<AdminPanel>`. Either way build forms/tables from the `components/common/ui/` primitives (`FormField`, `FormRow`, `FormActions`, `DataTable`, `PaginationBar`, `EmptyState`) rather than hand-rolled markup.

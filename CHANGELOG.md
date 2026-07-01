@@ -26,6 +26,32 @@ The format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## Frontend
 
+### [2.0.0] — 2026-06-30
+
+#### Changed
+
+- **API client migrated to hybrid REST (breaking).** Every admin data call in
+  `src/lib/endpoints.ts` moved off the old action-dispatcher POSTs to REST
+  methods — `apiGet`/`apiPost`/`apiPut`/`apiPatch`/`apiDelete` (new helpers in
+  `src/lib/api.ts`) against resource paths (`/api/<resource>/{id}`, nested
+  sub-resources, `POST …/{id}/<verb>` commands such as `close`/`reopen`/
+  `activate`/`send`/`pick-winner`, `DELETE …/all` bulk deletes). Store call-site
+  names/signatures were preserved, so components are unchanged; the wire calls
+  now line up with the backend 2.0 contract. Requires **backend ≥ 2.0.0**.
+- **Book-club calls carry the club slug in the path.** The `bookclub` endpoint
+  group targets `/api/book-clubs/{club}/reading-lists…`; the store threads its
+  `activeClubSlug` through, so component-facing signatures are unchanged.
+
+### [1.5.2] — 2026-06-30
+
+#### Changed
+
+- **Response types are now generated, not hand-maintained.** The hand-written
+  response envelopes in `src/types/api.ts` were replaced by re-exports of the
+  tygo-generated types (the backend `model` structs are now the source of truth),
+  eliminating the backend↔frontend drift surface. No behavioural change; the
+  public garapon view is now precisely typed as `PublicGarapon`.
+
 ### [1.5.1] — 2026-06-30
 
 #### Fixed
@@ -155,6 +181,60 @@ First tracked release — establishes versioning for the current production buil
 ---
 
 ## Backend
+
+### [2.0.0] — 2026-06-30
+
+#### Changed
+
+- **HTTP API migrated from action dispatchers to hybrid REST (breaking).** Every
+  admin/resource endpoint that previously multiplexed on a `{"action":"…"}` body
+  now uses HTTP methods and resource paths: `POST` create (`201`), `PUT` replace,
+  `PATCH` partial-update, `DELETE` remove (`204`), plus `POST /api/<resource>/{id}/<verb>`
+  for non-CRUD commands (`close`/`reopen`, `activate`/`deactivate`, `send`/`skip`,
+  `pick-winner`, `/api/game/{start,draw,end,halftime}`, …). Bulk writes are `POST`
+  (`…/reorder`, `/api/cards/generate`); bulk deletes are `DELETE /api/<resource>/all`
+  → `{ "deleted": N }`. A single reorder or flag toggle is a declarative `PATCH`.
+  All per-handler auth guards, validation, error codes, and WebSocket broadcasts
+  are unchanged; the protected `admin` account and permission-key validation on
+  `PATCH /api/users/{id}` are preserved (and now covered by dedicated tests). The
+  regenerated `openapi.yaml` documents every new route (CI enforces coverage +
+  freshness). `POST /api/auth` (login/logout) and `POST /api/register` intentionally
+  remain small action/credential bodies. Requires the **2.0.0 SPA**; the Dalamud
+  plugin was migrated in lockstep.
+- **Book clubs are now a first-class path entity.** Reading lists moved from the
+  flat, query-scoped `/api/reading-lists?club=…` to nested resources under the
+  club slug: `/api/book-clubs/{club}/reading-lists[/{id}[/items/{itemId}|/publish]]`.
+  The club slug leaves request bodies (it's in the path), and every load-by-id
+  handler now verifies the record belongs to the `{club}` in the path — a caller
+  holding one club's permission can no longer reach another club's list by id
+  (404 on mismatch). The shared utilities `POST /api/bookclub/upload` and
+  `GET /api/bookclub/lookup` are unchanged.
+
+### [1.7.0] — 2026-06-30
+
+#### Added
+
+- **OpenAPI 3 spec + hosted API reference.** Every endpoint is described in
+  [`backend/openapi.yaml`](backend/openapi.yaml), **generated** from the Go code:
+  component schemas are reflected from the `model` structs (via
+  `internal/apidoc` + `cmd/openapi-gen`) so they can't drift, and a hand-maintained
+  paths table adds auth, params, action-dispatcher requests, and the WebSocket
+  channel (in the description). The server serves it at **`GET /api/openapi.yaml`**
+  and renders it with **Scalar** at **`GET /api/docs`** (both public — the API
+  contract carries no secrets). The spec is embedded so the binary is
+  self-contained.
+- **CI accuracy guards** (`internal/apidoc/openapi_test.go`): one test regenerates
+  the spec and fails if the committed `openapi.yaml` is stale (the OpenAPI analog
+  of `gen:types`); another parses `routes()` and fails if any registered route is
+  undocumented, or the spec documents a route that doesn't exist.
+
+#### Changed
+
+- **Typed responses everywhere.** Every handler now returns a named struct from
+  the `model` package instead of ad-hoc `map[string]any` (the new
+  `model/responses*.go`). The wire shapes are **unchanged** (asserted by the
+  existing tests); the structs are the single source of truth for the JSON wire
+  format, the tygo-generated frontend types, and the OpenAPI schemas.
 
 ### [1.6.0] — 2026-06-30
 

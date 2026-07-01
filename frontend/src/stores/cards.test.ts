@@ -3,15 +3,15 @@ import { nextTick } from 'vue'
 import { createPinia, setActivePinia } from 'pinia'
 import type { CardListEntry } from '@/types/api'
 
-// Stub the endpoint layer; generateSingle is spied so the generate-single tests
-// can assert on its calls.
-const { generateSingle } = vi.hoisted(() => ({
-  generateSingle: vi.fn(async (playerName: string) => ({
+// Stub the endpoint layer; cards.create is spied so the create-single tests can
+// assert on its calls.
+const { create } = vi.hoisted(() => ({
+  create: vi.fn(async (playerName: string) => ({
     count: 1,
     card: { id: 'NEW123', player_name: playerName, board_data: [] },
   })),
 }))
-vi.mock('@/lib/endpoints', () => ({ endpoints: { cards: { generateSingle }, board: {} } }))
+vi.mock('@/lib/endpoints', () => ({ endpoints: { cards: { create }, board: {} } }))
 
 import { useCardsStore } from './cards'
 
@@ -25,7 +25,7 @@ const writeText = vi.fn<(text: string) => Promise<void>>(() => Promise.resolve()
 
 beforeEach(() => {
   setActivePinia(createPinia())
-  generateSingle.mockClear()
+  create.mockClear()
   writeText.mockClear()
   Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true })
 })
@@ -113,14 +113,14 @@ describe('generateSingleCard', () => {
     const cards = useCardsStore()
     cards.singleCardName = '   '
     await cards.generateSingleCard()
-    expect(generateSingle).not.toHaveBeenCalled()
+    expect(create).not.toHaveBeenCalled()
   })
 
   it('sends the trimmed name, clears the input, and copies the card URL', async () => {
     const cards = useCardsStore()
     cards.singleCardName = '  Aerith  '
     await cards.generateSingleCard()
-    expect(generateSingle).toHaveBeenCalledWith('Aerith')
+    expect(create).toHaveBeenCalledWith('Aerith')
     expect(cards.singleCardName).toBe('')
     // The new card's playable URL is auto-copied to the clipboard.
     expect(writeText).toHaveBeenCalledTimes(1)

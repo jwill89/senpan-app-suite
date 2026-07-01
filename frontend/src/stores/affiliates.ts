@@ -143,7 +143,7 @@ export const useAffiliatesStore = defineStore('affiliates', () => {
     try {
       const payload = { ...f, owners, hours }
       if (f.id) {
-        await endpoints.affiliates.update(payload)
+        await endpoints.affiliates.update(f.id, payload)
         ui.notify('Affiliate updated', 'success')
       } else {
         await endpoints.affiliates.create(payload)

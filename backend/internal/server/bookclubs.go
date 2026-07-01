@@ -96,17 +96,30 @@ var bookclubHTTPClient = &http.Client{Timeout: 15 * time.Second}
 
 // ── Reading lists (admin) ───────────────────────────────────────────────────
 
-// handleReadingListsList returns all reading lists for a book club (no items).
-//
-//	Endpoint:  GET /api/reading-lists?club=yaoi
-//	Auth:      admin, or the book club's page permission
-//	Response:  {"reading_lists": [...]}
-func (s *Server) handleReadingListsList(w http.ResponseWriter, r *http.Request) {
-	club := strings.TrimSpace(r.URL.Query().Get("club"))
+// bookClubFromPath reads the {club} path segment, defaults it, and enforces the
+// caller holds that club's page permission. Writes the 401/403 itself and
+// returns ok=false so the handler can return immediately. Because
+// requirePermission already implies auth (an unauthenticated caller gets a 401),
+// this single guard replaces the old requireAuth-then-load-then-check dance.
+func (s *Server) bookClubFromPath(w http.ResponseWriter, r *http.Request) (string, bool) {
+	club := strings.TrimSpace(r.PathValue("club"))
 	if club == "" {
 		club = defaultClubSlug
 	}
 	if !s.requirePermission(w, r, bookClubPerm(club)) {
+		return "", false
+	}
+	return club, true
+}
+
+// handleReadingListsList returns all reading lists for a book club (no items).
+//
+//	Endpoint:  GET /api/book-clubs/{club}/reading-lists
+//	Auth:      admin, or the book club's page permission
+//	Response:  {"reading_lists": [...]}
+func (s *Server) handleReadingListsList(w http.ResponseWriter, r *http.Request) {
+	club, ok := s.bookClubFromPath(w, r)
+	if !ok {
 		return
 	}
 	lists, err := s.store.ListReadingLists(club)
@@ -114,16 +127,17 @@ func (s *Server) handleReadingListsList(w http.ResponseWriter, r *http.Request) 
 		writeInternalError(w, "list reading lists", err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"reading_lists": lists})
+	writeJSON(w, http.StatusOK, model.ReadingListsResponse{ReadingLists: lists})
 }
 
 // handleReadingListDetail returns a single reading list with its items.
 //
-//	Endpoint:  GET /api/reading-lists/{id}
+//	Endpoint:  GET /api/book-clubs/{club}/reading-lists/{id}
 //	Auth:      admin, or the book club's page permission
 //	Response:  {"reading_list": ReadingList}
 func (s *Server) handleReadingListDetail(w http.ResponseWriter, r *http.Request) {
-	if _, ok := s.requireAuth(w, r); !ok {
+	club, ok := s.bookClubFromPath(w, r)
+	if !ok {
 		return
 	}
 	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
@@ -136,246 +150,280 @@ func (s *Server) handleReadingListDetail(w http.ResponseWriter, r *http.Request)
 		writeInternalError(w, "get reading list", err)
 		return
 	}
-	if list == nil {
+	// Security guard: the list must belong to the club in the path, so a caller
+	// with one club's permission can't read another club's list by guessing an id.
+	if list == nil || list.ClubSlug != club {
 		writeError(w, http.StatusNotFound, "Reading list not found")
 		return
 	}
-	if !s.requirePermission(w, r, bookClubPerm(list.ClubSlug)) {
-		return
-	}
-	writeJSON(w, http.StatusOK, map[string]any{"reading_list": list})
+	writeJSON(w, http.StatusOK, model.ReadingListDetailResponse{ReadingList: *list})
 }
 
-// readingListRequest is the JSON body for POST /api/reading-lists.
-type readingListRequest struct {
-	Action   string `json:"action"`
-	ID       int64  `json:"id"`
-	ClubSlug string `json:"club_slug"`
-	Title    string `json:"title"`
+// readingListCreateRequest is the JSON body for
+// POST /api/book-clubs/{club}/reading-lists. The owning club comes from the path.
+type readingListCreateRequest struct {
+	Title string `json:"title"`
 }
 
-// handleReadingListsAction creates, renames, or deletes a reading list.
+// readingListUpdateRequest is the JSON body for
+// PUT /api/book-clubs/{club}/reading-lists/{id}.
+type readingListUpdateRequest struct {
+	Title string `json:"title"`
+}
+
+// handleReadingListCreate creates a reading list. The owning club comes from the
+// path; the caller must hold that club's page permission.
 //
-//	Endpoint:  POST /api/reading-lists
+//	Endpoint:  POST /api/book-clubs/{club}/reading-lists
 //	Auth:      admin, or the book club's page permission
-//	Request:   {"action": "create"|"update"|"delete", ...}
-func (s *Server) handleReadingListsAction(w http.ResponseWriter, r *http.Request) {
-	if _, ok := s.requireAuth(w, r); !ok {
+//	Response:  201 {"reading_list": ReadingList}
+func (s *Server) handleReadingListCreate(w http.ResponseWriter, r *http.Request) {
+	club, ok := s.bookClubFromPath(w, r)
+	if !ok {
 		return
 	}
-	req, err := readJSON[readingListRequest](w, r)
+	req, err := readJSON[readingListCreateRequest](w, r)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "Invalid JSON")
 		return
 	}
-
-	// Resolve the owning book club so access can be checked per club. create
-	// carries the slug in the body; update/delete derive it from the record.
-	club := strings.TrimSpace(req.ClubSlug)
-	if req.Action == "update" || req.Action == "delete" {
-		existing, err := s.store.GetReadingList(req.ID)
-		if err != nil {
-			writeInternalError(w, "get reading list", err)
-			return
-		}
-		if existing == nil {
-			writeError(w, http.StatusNotFound, "Reading list not found")
-			return
-		}
-		club = existing.ClubSlug
-	}
-	if club == "" {
-		club = defaultClubSlug
-	}
-	if !s.requirePermission(w, r, bookClubPerm(club)) {
+	title := strings.TrimSpace(req.Title)
+	if title == "" {
+		writeError(w, http.StatusBadRequest, "Title is required")
 		return
 	}
-
-	switch req.Action {
-	case "create":
-		title := strings.TrimSpace(req.Title)
-		if title == "" {
-			writeError(w, http.StatusBadRequest, "Title is required")
-			return
-		}
-		club := strings.TrimSpace(req.ClubSlug)
-		if club == "" {
-			club = defaultClubSlug
-		}
-		id, err := s.store.CreateReadingList(club, title)
-		if err != nil {
-			writeInternalError(w, "create reading list", err)
-			return
-		}
-		list, err := s.store.GetReadingList(id)
-		if err != nil {
-			writeInternalError(w, "load created reading list", err)
-			return
-		}
-		writeJSON(w, http.StatusCreated, map[string]any{"reading_list": list})
-
-	case "update":
-		if req.ID <= 0 {
-			writeError(w, http.StatusBadRequest, "Reading list id is required")
-			return
-		}
-		title := strings.TrimSpace(req.Title)
-		if title == "" {
-			writeError(w, http.StatusBadRequest, "Title is required")
-			return
-		}
-		if err := s.store.UpdateReadingListTitle(req.ID, title); err != nil {
-			writeInternalError(w, "update reading list", err)
-			return
-		}
-		writeJSON(w, http.StatusOK, map[string]any{"ok": true})
-
-	case "delete":
-		if req.ID <= 0 {
-			writeError(w, http.StatusBadRequest, "Reading list id is required")
-			return
-		}
-		// Capture cover URLs before deleting the list (items cascade-delete in the
-		// DB, but their files would otherwise be orphaned), then clean up each file
-		// after the rows are gone — skipping any still referenced by another list.
-		var covers []string
-		if list, err := s.store.GetReadingList(req.ID); err == nil && list != nil {
-			for _, it := range list.Items {
-				covers = append(covers, it.CoverImage)
-			}
-		}
-		deleted, err := s.store.DeleteReadingList(req.ID)
-		if err != nil {
-			writeInternalError(w, "delete reading list", err)
-			return
-		}
-		for _, c := range covers {
-			s.removeBookclubCoverIfUnused(c)
-		}
-		writeJSON(w, http.StatusOK, map[string]any{"deleted": deleted})
-
-	default:
-		writeError(w, http.StatusBadRequest, "Invalid action. Use: create, update, delete")
-	}
-}
-
-// readingListItemRequest is the JSON body for POST /api/reading-lists/{id}/items.
-type readingListItemRequest struct {
-	Action string                `json:"action"`
-	ItemID int64                 `json:"item_id"`
-	Item   model.ReadingListItem `json:"item"`
-}
-
-// handleReadingListItems creates, updates, or deletes an item within a list.
-//
-//	Endpoint:  POST /api/reading-lists/{id}/items
-//	Auth:      admin, or the book club's page permission
-//	Request:   {"action": "create"|"update"|"delete", "item": {...}, "item_id": N}
-func (s *Server) handleReadingListItems(w http.ResponseWriter, r *http.Request) {
-	if _, ok := s.requireAuth(w, r); !ok {
-		return
-	}
-	listID, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	id, err := s.store.CreateReadingList(club, title)
 	if err != nil {
-		writeError(w, http.StatusBadRequest, "Invalid reading list ID")
+		writeInternalError(w, "create reading list", err)
 		return
 	}
-	// Resolve the owning book club to permission-check per club.
-	parent, err := s.store.GetReadingList(listID)
+	list, err := s.store.GetReadingList(id)
+	if err != nil {
+		writeInternalError(w, "load created reading list", err)
+		return
+	}
+	writeJSON(w, http.StatusCreated, model.ReadingListDetailResponse{ReadingList: *list})
+}
+
+// handleReadingListUpdate renames a reading list. The club comes from the path;
+// the loaded record must belong to it.
+//
+//	Endpoint:  PUT /api/book-clubs/{club}/reading-lists/{id}
+//	Auth:      admin, or the book club's page permission
+//	Response:  200 {"ok": true}
+func (s *Server) handleReadingListUpdate(w http.ResponseWriter, r *http.Request) {
+	club, ok := s.bookClubFromPath(w, r)
+	if !ok {
+		return
+	}
+	id, ok := pathInt64(w, r, "id", "reading list")
+	if !ok {
+		return
+	}
+	existing, err := s.store.GetReadingList(id)
 	if err != nil {
 		writeInternalError(w, "get reading list", err)
 		return
 	}
-	if parent == nil {
+	// Security guard: the list must belong to the club in the path.
+	if existing == nil || existing.ClubSlug != club {
 		writeError(w, http.StatusNotFound, "Reading list not found")
 		return
 	}
-	if !s.requirePermission(w, r, bookClubPerm(parent.ClubSlug)) {
-		return
-	}
-	req, err := readJSON[readingListItemRequest](w, r)
+	req, err := readJSON[readingListUpdateRequest](w, r)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "Invalid JSON")
 		return
 	}
+	title := strings.TrimSpace(req.Title)
+	if title == "" {
+		writeError(w, http.StatusBadRequest, "Title is required")
+		return
+	}
+	if err := s.store.UpdateReadingListTitle(id, title); err != nil {
+		writeInternalError(w, "update reading list", err)
+		return
+	}
+	writeJSON(w, http.StatusOK, model.OKResponse{OK: true})
+}
 
-	switch req.Action {
-	case "create":
-		title := strings.TrimSpace(req.Item.Title)
-		if title == "" {
-			writeError(w, http.StatusBadRequest, "Item title is required")
-			return
-		}
-		// Ensure the parent list exists so we don't create orphans.
-		list, err := s.store.GetReadingList(listID)
-		if err != nil {
-			writeInternalError(w, "get list for item create", err)
-			return
-		}
-		if list == nil {
-			writeError(w, http.StatusNotFound, "Reading list not found")
-			return
-		}
-		it := req.Item
-		it.ListID = listID
-		it.Title = title
-		it.Sources = sanitizeSources(it.Sources)
-		id, err := s.store.CreateReadingListItem(&it)
-		if err != nil {
-			writeInternalError(w, "create reading list item", err)
-			return
-		}
-		it.ID = id
-		writeJSON(w, http.StatusCreated, map[string]any{"item": it})
+// handleReadingListDelete deletes a reading list. The club comes from the path;
+// the loaded record must belong to it.
+//
+//	Endpoint:  DELETE /api/book-clubs/{club}/reading-lists/{id}
+//	Auth:      admin, or the book club's page permission
+//	Response:  204 No Content
+func (s *Server) handleReadingListDelete(w http.ResponseWriter, r *http.Request) {
+	club, ok := s.bookClubFromPath(w, r)
+	if !ok {
+		return
+	}
+	id, ok := pathInt64(w, r, "id", "reading list")
+	if !ok {
+		return
+	}
+	existing, err := s.store.GetReadingList(id)
+	if err != nil {
+		writeInternalError(w, "get reading list", err)
+		return
+	}
+	// Security guard: the list must belong to the club in the path.
+	if existing == nil || existing.ClubSlug != club {
+		writeError(w, http.StatusNotFound, "Reading list not found")
+		return
+	}
+	// Capture cover URLs before deleting the list (items cascade-delete in the
+	// DB, but their files would otherwise be orphaned), then clean up each file
+	// after the rows are gone — skipping any still referenced by another list.
+	var covers []string
+	for _, it := range existing.Items {
+		covers = append(covers, it.CoverImage)
+	}
+	if _, err := s.store.DeleteReadingList(id); err != nil {
+		writeInternalError(w, "delete reading list", err)
+		return
+	}
+	for _, c := range covers {
+		s.removeBookclubCoverIfUnused(c)
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
 
-	case "update":
-		if req.ItemID <= 0 {
-			writeError(w, http.StatusBadRequest, "Item id is required")
-			return
-		}
-		title := strings.TrimSpace(req.Item.Title)
-		if title == "" {
-			writeError(w, http.StatusBadRequest, "Item title is required")
-			return
-		}
-		it := req.Item
-		it.ID = req.ItemID
-		it.ListID = listID
-		it.Title = title
-		it.Sources = sanitizeSources(it.Sources)
-		if err := s.store.UpdateReadingListItem(&it); err != nil {
-			writeInternalError(w, "update reading list item", err)
-			return
-		}
-		writeJSON(w, http.StatusOK, map[string]any{"item": it})
+// readingListItemWriteRequest is the JSON body for creating (POST /api/
+// book-clubs/{club}/reading-lists/{id}/items) or replacing (PUT /api/
+// book-clubs/{club}/reading-lists/{id}/items/{itemId}) an item. The ids come
+// from the path.
+type readingListItemWriteRequest struct {
+	Item model.ReadingListItem `json:"item"`
+}
 
-	case "delete":
-		if req.ItemID <= 0 {
-			writeError(w, http.StatusBadRequest, "Item id is required")
-			return
-		}
-		// Capture the cover URL before deleting so the file can be cleaned up after
-		// the row is gone — but only if no other item still references it.
-		var cover string
-		if list, err := s.store.GetReadingList(listID); err == nil && list != nil {
-			for _, it := range list.Items {
-				if it.ID == req.ItemID {
-					cover = it.CoverImage
-					break
-				}
+// resolveReadingListParent reads the {club} from the path, enforces its page
+// permission, and loads the parent list for an /items sub-resource, writing the
+// 401/403/404 itself. The list must belong to the club in the path (the same
+// security guard as the list handlers). Returns (listID, ok).
+func (s *Server) resolveReadingListParent(w http.ResponseWriter, r *http.Request) (int64, bool) {
+	club, ok := s.bookClubFromPath(w, r)
+	if !ok {
+		return 0, false
+	}
+	listID, ok := pathInt64(w, r, "id", "reading list")
+	if !ok {
+		return 0, false
+	}
+	parent, err := s.store.GetReadingList(listID)
+	if err != nil {
+		writeInternalError(w, "get reading list", err)
+		return 0, false
+	}
+	// Security guard: the parent list must belong to the club in the path.
+	if parent == nil || parent.ClubSlug != club {
+		writeError(w, http.StatusNotFound, "Reading list not found")
+		return 0, false
+	}
+	return listID, true
+}
+
+// handleReadingListItemCreate creates an item within a list.
+//
+//	Endpoint:  POST /api/book-clubs/{club}/reading-lists/{id}/items
+//	Auth:      admin, or the book club's page permission
+//	Response:  201 {"item": ReadingListItem}
+func (s *Server) handleReadingListItemCreate(w http.ResponseWriter, r *http.Request) {
+	listID, ok := s.resolveReadingListParent(w, r)
+	if !ok {
+		return
+	}
+	req, err := readJSON[readingListItemWriteRequest](w, r)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "Invalid JSON")
+		return
+	}
+	title := strings.TrimSpace(req.Item.Title)
+	if title == "" {
+		writeError(w, http.StatusBadRequest, "Item title is required")
+		return
+	}
+	it := req.Item
+	it.ListID = listID
+	it.Title = title
+	it.Sources = sanitizeSources(it.Sources)
+	id, err := s.store.CreateReadingListItem(&it)
+	if err != nil {
+		writeInternalError(w, "create reading list item", err)
+		return
+	}
+	it.ID = id
+	writeJSON(w, http.StatusCreated, model.ReadingListItemResponse{Item: it})
+}
+
+// handleReadingListItemUpdate replaces an item within a list.
+//
+//	Endpoint:  PUT /api/book-clubs/{club}/reading-lists/{id}/items/{itemId}
+//	Auth:      admin, or the book club's page permission
+//	Response:  200 {"item": ReadingListItem}
+func (s *Server) handleReadingListItemUpdate(w http.ResponseWriter, r *http.Request) {
+	listID, ok := s.resolveReadingListParent(w, r)
+	if !ok {
+		return
+	}
+	itemID, ok := pathInt64(w, r, "itemId", "item")
+	if !ok {
+		return
+	}
+	req, err := readJSON[readingListItemWriteRequest](w, r)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "Invalid JSON")
+		return
+	}
+	title := strings.TrimSpace(req.Item.Title)
+	if title == "" {
+		writeError(w, http.StatusBadRequest, "Item title is required")
+		return
+	}
+	it := req.Item
+	it.ID = itemID
+	it.ListID = listID
+	it.Title = title
+	it.Sources = sanitizeSources(it.Sources)
+	if err := s.store.UpdateReadingListItem(&it); err != nil {
+		writeInternalError(w, "update reading list item", err)
+		return
+	}
+	writeJSON(w, http.StatusOK, model.ReadingListItemResponse{Item: it})
+}
+
+// handleReadingListItemDelete removes an item from a list, cleaning up its cover
+// image afterwards when no other item still references it.
+//
+//	Endpoint:  DELETE /api/book-clubs/{club}/reading-lists/{id}/items/{itemId}
+//	Auth:      admin, or the book club's page permission
+//	Response:  204 No Content
+func (s *Server) handleReadingListItemDelete(w http.ResponseWriter, r *http.Request) {
+	listID, ok := s.resolveReadingListParent(w, r)
+	if !ok {
+		return
+	}
+	itemID, ok := pathInt64(w, r, "itemId", "item")
+	if !ok {
+		return
+	}
+	// Capture the cover URL before deleting so the file can be cleaned up after
+	// the row is gone — but only if no other item still references it.
+	var cover string
+	if list, err := s.store.GetReadingList(listID); err == nil && list != nil {
+		for _, it := range list.Items {
+			if it.ID == itemID {
+				cover = it.CoverImage
+				break
 			}
 		}
-		deleted, err := s.store.DeleteReadingListItem(req.ItemID)
-		if err != nil {
-			writeInternalError(w, "delete reading list item", err)
-			return
-		}
-		s.removeBookclubCoverIfUnused(cover)
-		writeJSON(w, http.StatusOK, map[string]any{"deleted": deleted})
-
-	default:
-		writeError(w, http.StatusBadRequest, "Invalid action. Use: create, update, delete")
 	}
+	if _, err := s.store.DeleteReadingListItem(itemID); err != nil {
+		writeInternalError(w, "delete reading list item", err)
+		return
+	}
+	s.removeBookclubCoverIfUnused(cover)
+	w.WriteHeader(http.StatusNoContent)
 }
 
 // sanitizeSources trims and drops empty source rows so blank repeater entries
@@ -542,7 +590,7 @@ func (s *Server) handleBookclubLookup(w http.ResponseWriter, r *http.Request) {
 	for _, m := range media {
 		results = append(results, anilistToItem(m))
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"results": results})
+	writeJSON(w, http.StatusOK, model.BookclubLookupResponse{Results: results})
 }
 
 // anilistURL returns the configured AniList GraphQL endpoint (trimmed, no
@@ -719,11 +767,12 @@ func stripHTML(s string) string {
 // embed via the configured webhook. Always posts every item (no published-state
 // tracking).
 //
-//	Endpoint:  POST /api/reading-lists/{id}/publish
+//	Endpoint:  POST /api/book-clubs/{club}/reading-lists/{id}/publish
 //	Auth:      admin, or the book club's page permission
 //	Response:  {"published": <count>}
 func (s *Server) handlePublishReadingList(w http.ResponseWriter, r *http.Request) {
-	if _, ok := s.requireAuth(w, r); !ok {
+	club, ok := s.bookClubFromPath(w, r)
+	if !ok {
 		return
 	}
 	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
@@ -737,11 +786,9 @@ func (s *Server) handlePublishReadingList(w http.ResponseWriter, r *http.Request
 		writeInternalError(w, "get reading list for publish", err)
 		return
 	}
-	if list == nil {
+	// Security guard: the list must belong to the club in the path.
+	if list == nil || list.ClubSlug != club {
 		writeError(w, http.StatusNotFound, "Reading list not found")
-		return
-	}
-	if !s.requirePermission(w, r, bookClubPerm(list.ClubSlug)) {
 		return
 	}
 	if len(list.Items) == 0 {
@@ -770,7 +817,7 @@ func (s *Server) handlePublishReadingList(w http.ResponseWriter, r *http.Request
 		time.Sleep(350 * time.Millisecond)
 	}
 
-	writeJSON(w, http.StatusOK, map[string]any{"published": published})
+	writeJSON(w, http.StatusOK, model.PublishResponse{Published: published})
 }
 
 // buildItemEmbed converts a reading list item into a Discord embed. The

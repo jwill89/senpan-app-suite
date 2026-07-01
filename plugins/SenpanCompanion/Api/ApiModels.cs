@@ -215,3 +215,9 @@ public sealed class OkResponse
     public bool Deleted { get; set; }
     public string? Error { get; set; }
 }
+
+// DeletedCountResponse mirrors the server's bulk-delete envelope — {"deleted": N}.
+public sealed class DeletedCountResponse
+{
+    public long Deleted { get; set; }
+}

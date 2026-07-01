@@ -29,40 +29,22 @@ func TestWinnersLog_Frequent_RequiresAuth(t *testing.T) {
 	}
 }
 
-func TestWinnersLog_ActionValidation(t *testing.T) {
-	env := newTestEnv(t)
-	env.loginAdmin(t)
-
-	// delete without an id → 400.
-	resp := env.postJSON(t, "/api/winners-log", map[string]any{"action": "delete", "id": 0})
-	if resp.StatusCode != http.StatusBadRequest {
-		t.Errorf("delete (no id) status = %d; want 400", resp.StatusCode)
-	}
-	resp.Body.Close()
-
-	// unknown action → 400.
-	resp = env.postJSON(t, "/api/winners-log", map[string]any{"action": "explode"})
-	if resp.StatusCode != http.StatusBadRequest {
-		t.Errorf("invalid action status = %d; want 400", resp.StatusCode)
-	}
-	resp.Body.Close()
-}
-
 func TestWinnersLog_DeleteAndDeleteAll(t *testing.T) {
 	env := newTestEnv(t)
 	env.loginAdmin(t)
 
-	// Deleting a non-existent entry is a no-op success (idempotent).
-	resp := env.postJSON(t, "/api/winners-log", map[string]any{"action": "delete", "id": 12345})
-	if resp.StatusCode != 200 {
-		t.Errorf("delete status = %d; want 200", resp.StatusCode)
+	// DELETE /api/winners-log/{id}: deleting a non-existent entry is a no-op
+	// success (idempotent) → 204.
+	resp := env.del(t, "/api/winners-log/12345")
+	if resp.StatusCode != http.StatusNoContent {
+		t.Errorf("delete status = %d; want 204", resp.StatusCode)
 	}
 	resp.Body.Close()
 
-	// delete_all on an empty log also succeeds.
-	resp = env.postJSON(t, "/api/winners-log", map[string]any{"action": "delete_all"})
-	if resp.StatusCode != 200 {
-		t.Errorf("delete_all status = %d; want 200", resp.StatusCode)
+	// DELETE /api/winners-log/all clears the log and returns the deleted count
+	// (0 on an empty log) → 200.
+	body := decodeBody(t, env.del(t, "/api/winners-log/all"))
+	if _, ok := body["deleted"]; !ok {
+		t.Errorf("delete_all response missing 'deleted' count: %v", body)
 	}
-	resp.Body.Close()
 }

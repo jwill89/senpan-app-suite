@@ -5,6 +5,6 @@
   "Description": "Serves as an alternative to many of the web-interface functions, allowing staff to operate various systems from within the game.",
   "ApplicableVersion": "any",
   "Tags": ["bingo", "raffle", "venue", "senpan"],
-  "RepoUrl": "https://gitlab.com/mathdad-apps/senpan-app-suite",
+  "RepoUrl": "https://github.com/jwill89/senpan-app-suite",
   "IconUrl": "https://apps.senpan.cafe/images/pwa-512x512.png"
 }

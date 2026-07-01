@@ -3,12 +3,12 @@
     "Author": "MathDad",
     "Name": "Senpan Admin Companion",
     "InternalName": "SenpanCompanionAdmin",
-    "AssemblyVersion": "1.0.0.0",
+    "AssemblyVersion": "2.0.0.0",
     "Description": "Serves as an alternative to many of the web-interface functions, allowing staff to operate various systems from within the game.",
     "Punchline": "Allows Senpan Tea House staff to use various app services right from the game.",
-    "Changelog": "Initial Release",
+    "Changelog": "Updated for the Senpan App Suite 2.0 hybrid-REST API (cards, game, raffles, and winners-log calls now use REST methods). Required for compatibility with the 2.0.0 server.",
     "Tags": ["bingo", "raffle", "venue", "senpan"],
-    "RepoUrl": "https://gitlab.com/mathdad-apps/senpan-app-suite",
+    "RepoUrl": "https://github.com/jwill89/senpan-app-suite",
     "ApplicableVersion": "any",
     "DalamudApiLevel": 15,
     "TestingDalamudApiLevel": 15,
@@ -19,7 +19,7 @@
     "DownloadLinkUpdate": "https://apps.senpan.cafe/plugin/SenpanCompanionAdmin/latest.zip",
     "DownloadLinkTesting": "https://apps.senpan.cafe/plugin/SenpanCompanionAdmin/latest.zip",
     "DownloadCount": 0,
-    "LastUpdate": 1782691200,
+    "LastUpdate": 1782881814,
     "AcceptsFeedback": true
   }
 ]

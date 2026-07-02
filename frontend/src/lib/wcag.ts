@@ -31,36 +31,216 @@ interface Pair {
 }
 
 const PAIRS: Pair[] = [
-  { id: 'body-page', fg: 'text', bg: 'page-bg', label: 'Body text on the page', where: 'Page background, outside any panel' },
-  { id: 'body-panel', fg: 'text', bg: 'panel-bg', label: 'Body text on a panel', where: 'Paragraphs and labels inside panels' },
-  { id: 'body-raised', fg: 'text', bg: 'panel-raised-bg', label: 'Body text on a raised surface', where: 'Table rows, chips, nested panels' },
-  { id: 'input-text', fg: 'text', bg: 'input-bg', label: 'Text typed into a field', where: 'What you type into inputs/textareas' },
-  { id: 'neutral-btn', fg: 'text', bg: 'control-border', label: 'Neutral button label', where: 'Cancel / Close / secondary actions' },
-  { id: 'muted-page', fg: 'text-muted', bg: 'page-bg', label: 'Muted text on the page', where: 'Hints/captions outside panels' },
-  { id: 'muted-panel', fg: 'text-muted', bg: 'panel-bg', label: 'Muted text on a panel', where: 'Secondary/help text inside panels' },
-  { id: 'muted-raised', fg: 'text-muted', bg: 'panel-raised-bg', label: 'Muted text on a raised surface', where: 'Secondary text in rows/chips' },
-  { id: 'placeholder', fg: 'text-muted', bg: 'input-bg', label: 'Placeholder text in a field', where: 'The greyed prompt inside empty inputs' },
-  { id: 'link-panel', fg: 'accent', bg: 'panel-bg', label: 'Link on a panel', where: 'Hyperlinks inside panels' },
-  { id: 'link-page', fg: 'accent', bg: 'page-bg', label: 'Link on the page', where: 'Hyperlinks on the page background' },
-  { id: 'heading-panel', fg: 'highlight', bg: 'panel-bg', label: 'Heading on a panel', where: 'Section headings inside panels' },
-  { id: 'heading-page', fg: 'highlight', bg: 'page-bg', label: 'Heading on the page', where: 'Headings on the page background' },
-  { id: 'heading-raised', fg: 'highlight', bg: 'panel-raised-bg', label: 'Heading on a raised surface', where: 'Headings inside rows/nested panels' },
+  {
+    id: 'body-page',
+    fg: 'text',
+    bg: 'page-bg',
+    label: 'Body text on the page',
+    where: 'Page background, outside any panel',
+  },
+  {
+    id: 'body-panel',
+    fg: 'text',
+    bg: 'panel-bg',
+    label: 'Body text on a panel',
+    where: 'Paragraphs and labels inside panels',
+  },
+  {
+    id: 'body-raised',
+    fg: 'text',
+    bg: 'panel-raised-bg',
+    label: 'Body text on a raised surface',
+    where: 'Table rows, chips, nested panels',
+  },
+  {
+    id: 'input-text',
+    fg: 'text',
+    bg: 'input-bg',
+    label: 'Text typed into a field',
+    where: 'What you type into inputs/textareas',
+  },
+  {
+    id: 'neutral-btn',
+    fg: 'text',
+    bg: 'control-border',
+    label: 'Neutral button label',
+    where: 'Cancel / Close / secondary actions',
+  },
+  {
+    id: 'muted-page',
+    fg: 'text-muted',
+    bg: 'page-bg',
+    label: 'Muted text on the page',
+    where: 'Hints/captions outside panels',
+  },
+  {
+    id: 'muted-panel',
+    fg: 'text-muted',
+    bg: 'panel-bg',
+    label: 'Muted text on a panel',
+    where: 'Secondary/help text inside panels',
+  },
+  {
+    id: 'muted-raised',
+    fg: 'text-muted',
+    bg: 'panel-raised-bg',
+    label: 'Muted text on a raised surface',
+    where: 'Secondary text in rows/chips',
+  },
+  {
+    id: 'placeholder',
+    fg: 'text-muted',
+    bg: 'input-bg',
+    label: 'Placeholder text in a field',
+    where: 'The greyed prompt inside empty inputs',
+  },
+  {
+    id: 'link-panel',
+    fg: 'accent',
+    bg: 'panel-bg',
+    label: 'Link on a panel',
+    where: 'Hyperlinks inside panels',
+  },
+  {
+    id: 'link-page',
+    fg: 'accent',
+    bg: 'page-bg',
+    label: 'Link on the page',
+    where: 'Hyperlinks on the page background',
+  },
+  {
+    id: 'heading-panel',
+    fg: 'highlight',
+    bg: 'panel-bg',
+    label: 'Heading on a panel',
+    where: 'Section headings inside panels',
+  },
+  {
+    id: 'heading-page',
+    fg: 'highlight',
+    bg: 'page-bg',
+    label: 'Heading on the page',
+    where: 'Headings on the page background',
+  },
+  {
+    id: 'heading-raised',
+    fg: 'highlight',
+    bg: 'panel-raised-bg',
+    label: 'Heading on a raised surface',
+    where: 'Headings inside rows/nested panels',
+  },
   // The B-I-N-G-O column letters paint with --highlight over the board wrapper's
   // gradient (--board-gradient-start → --board-gradient-end); check both stops.
-  { id: 'bingo-top', fg: 'highlight', bg: 'board-gradient-start', label: 'B-I-N-G-O header letters (board top)', where: 'The B I N G O column letters', large: true, sample: 'B' },
-  { id: 'bingo-bottom', fg: 'highlight', bg: 'board-gradient-end', label: 'B-I-N-G-O header letters (board bottom)', where: 'The B I N G O column letters', large: true, sample: 'O' },
-  { id: 'primary-btn', fg: 'text-on-accent', bg: 'accent', label: 'Primary button label', where: 'Main call-to-action buttons' },
-  { id: 'primary-btn-hover', fg: 'text-on-accent', bg: 'accent-hover', label: 'Primary button label (hover)', where: 'A primary button while hovered' },
-  { id: 'called-num', fg: 'text-on-accent', bg: 'highlight', label: 'Called number on its badge', where: 'The big "last called" number', large: true, sample: '52' },
-  { id: 'winner-chip', fg: 'text-on-accent', bg: 'text-muted', label: 'Winner chip label', where: 'The winner announcement chip' },
-  { id: 'board-num', fg: 'text-on-accent', bg: 'board-cell-bg', label: 'Bingo board number', where: 'Numbers in the board cells', large: true, sample: '12' },
-  { id: 'board-num-hover', fg: 'text-on-accent', bg: 'board-cell-hover-bg', label: 'Bingo board number (hover)', where: 'A board number while hovered', large: true, sample: '12' },
-  { id: 'free-num', fg: 'text-on-accent', bg: 'board-free-bg', label: 'FREE cell number', where: 'The centre FREE cell', large: true, sample: '★' },
-  { id: 'secondary-btn', fg: 'text-on-fill', bg: 'accent-2', label: 'Secondary button label', where: 'View / secondary-fill buttons' },
-  { id: 'secondary-btn-hover', fg: 'text-on-fill', bg: 'accent-2-hover', label: 'Secondary button label (hover)', where: 'A secondary button while hovered' },
-  { id: 'success-btn', fg: 'text-on-fill', bg: 'success', label: 'Confirm/success button label', where: 'Confirm/save and success badges' },
-  { id: 'danger-btn', fg: 'text-on-fill', bg: 'danger', label: 'Danger button label', where: 'Delete/destructive buttons & badges' },
-  { id: 'caution-btn', fg: CAUTION_INK, bg: 'warning', label: 'Caution button label', where: 'Skip / reset / halftime buttons' },
+  {
+    id: 'bingo-top',
+    fg: 'highlight',
+    bg: 'board-gradient-start',
+    label: 'B-I-N-G-O header letters (board top)',
+    where: 'The B I N G O column letters',
+    large: true,
+    sample: 'B',
+  },
+  {
+    id: 'bingo-bottom',
+    fg: 'highlight',
+    bg: 'board-gradient-end',
+    label: 'B-I-N-G-O header letters (board bottom)',
+    where: 'The B I N G O column letters',
+    large: true,
+    sample: 'O',
+  },
+  {
+    id: 'primary-btn',
+    fg: 'text-on-accent',
+    bg: 'accent',
+    label: 'Primary button label',
+    where: 'Main call-to-action buttons',
+  },
+  {
+    id: 'primary-btn-hover',
+    fg: 'text-on-accent',
+    bg: 'accent-hover',
+    label: 'Primary button label (hover)',
+    where: 'A primary button while hovered',
+  },
+  {
+    id: 'called-num',
+    fg: 'text-on-accent',
+    bg: 'highlight',
+    label: 'Called number on its badge',
+    where: 'The big "last called" number',
+    large: true,
+    sample: '52',
+  },
+  {
+    id: 'winner-chip',
+    fg: 'text-on-accent',
+    bg: 'text-muted',
+    label: 'Winner chip label',
+    where: 'The winner announcement chip',
+  },
+  {
+    id: 'board-num',
+    fg: 'text-on-accent',
+    bg: 'board-cell-bg',
+    label: 'Bingo board number',
+    where: 'Numbers in the board cells',
+    large: true,
+    sample: '12',
+  },
+  {
+    id: 'board-num-hover',
+    fg: 'text-on-accent',
+    bg: 'board-cell-hover-bg',
+    label: 'Bingo board number (hover)',
+    where: 'A board number while hovered',
+    large: true,
+    sample: '12',
+  },
+  {
+    id: 'free-num',
+    fg: 'text-on-accent',
+    bg: 'board-free-bg',
+    label: 'FREE cell number',
+    where: 'The centre FREE cell',
+    large: true,
+    sample: '★',
+  },
+  {
+    id: 'secondary-btn',
+    fg: 'text-on-fill',
+    bg: 'accent-2',
+    label: 'Secondary button label',
+    where: 'View / secondary-fill buttons',
+  },
+  {
+    id: 'secondary-btn-hover',
+    fg: 'text-on-fill',
+    bg: 'accent-2-hover',
+    label: 'Secondary button label (hover)',
+    where: 'A secondary button while hovered',
+  },
+  {
+    id: 'success-btn',
+    fg: 'text-on-fill',
+    bg: 'success',
+    label: 'Confirm/success button label',
+    where: 'Confirm/save and success badges',
+  },
+  {
+    id: 'danger-btn',
+    fg: 'text-on-fill',
+    bg: 'danger',
+    label: 'Danger button label',
+    where: 'Delete/destructive buttons & badges',
+  },
+  {
+    id: 'caution-btn',
+    fg: CAUTION_INK,
+    bg: 'warning',
+    label: 'Caution button label',
+    where: 'Skip / reset / halftime buttons',
+  },
 ]
 
 /** Parsed RGB (0–255). Alpha is ignored — no checked pair uses an alpha token. */
@@ -69,12 +249,19 @@ function parseRgb(input: string): [number, number, number] | null {
   const hex = s.match(/^#([0-9a-f]{3,8})$/i)
   if (hex) {
     let h = hex[1]
-    if (h.length === 3 || h.length === 4) h = h.split('').map((c) => c + c).join('')
+    if (h.length === 3 || h.length === 4)
+      h = h
+        .split('')
+        .map((c) => c + c)
+        .join('')
     return [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16)]
   }
   const fn = s.match(/^rgba?\(([^)]+)\)$/i)
   if (fn) {
-    const parts = fn[1].replace(/\//g, ' ').split(/[\s,]+/).filter(Boolean)
+    const parts = fn[1]
+      .replace(/\//g, ' ')
+      .split(/[\s,]+/)
+      .filter(Boolean)
     if (parts.length >= 3) {
       const ch = (x: string) => (x.endsWith('%') ? (parseFloat(x) / 100) * 255 : parseFloat(x))
       return [ch(parts[0]), ch(parts[1]), ch(parts[2])]
@@ -85,8 +272,8 @@ function parseRgb(input: string): [number, number, number] | null {
 
 function relLuminance([r, g, b]: [number, number, number]): number {
   const lin = (c: number) => {
-    c /= 255
-    return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4)
+    const v = c / 255
+    return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4)
   }
   return 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b)
 }

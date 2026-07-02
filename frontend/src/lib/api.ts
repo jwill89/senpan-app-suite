@@ -56,7 +56,10 @@ export async function api<T = unknown>(endpoint: string, options: ApiOptions = {
     typeof options.body === 'object' &&
     !(options.body instanceof FormData)
   ) {
-    opts.headers = { 'Content-Type': 'application/json', ...(options.headers || {}) }
+    opts.headers = {
+      'Content-Type': 'application/json',
+      ...(options.headers as Record<string, string> | undefined),
+    }
     opts.body = JSON.stringify(options.body)
   } else if (options.body instanceof FormData) {
     opts.body = options.body

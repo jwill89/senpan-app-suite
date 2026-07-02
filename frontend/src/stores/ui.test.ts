@@ -50,7 +50,11 @@ describe('confirm dialog', () => {
   it('opens with merged options and resolves true on confirm', async () => {
     const ui = useUiStore()
     const p = ui.confirm('Delete this?', { confirmText: 'Yes' })
-    expect(ui.confirmState).toMatchObject({ show: true, message: 'Delete this?', confirmText: 'Yes' })
+    expect(ui.confirmState).toMatchObject({
+      show: true,
+      message: 'Delete this?',
+      confirmText: 'Yes',
+    })
     ui.resolveConfirm(true)
     await expect(p).resolves.toBe(true)
     expect(ui.confirmState.show).toBe(false)

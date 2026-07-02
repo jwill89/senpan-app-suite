@@ -22,7 +22,9 @@ function playerNameFor(id: string): string | undefined {
     box-style="max-width:450px;max-height:90vh;display:flex;flex-direction:column"
     @close="game.showEndGameModal = false"
   >
-    <h3 class="mb-12"><font-awesome-icon :icon="['fad', 'flag-checkered']" /> End Game — Select Valid Winners</h3>
+    <h3 class="mb-12">
+      <font-awesome-icon :icon="['fad', 'flag-checkered']" /> End Game — Select Valid Winners
+    </h3>
     <p class="text-dim text-xs mb-12">
       Uncheck any card IDs that should NOT count as valid winners.
     </p>
@@ -30,7 +32,9 @@ function playerNameFor(id: string): string | undefined {
       <button class="btn-neutral btn-sm" @click="game.endGameSelectedWinners = [...game.winners]">
         Check All
       </button>
-      <button class="btn-neutral btn-sm" @click="game.endGameSelectedWinners = []">Uncheck All</button>
+      <button class="btn-neutral btn-sm" @click="game.endGameSelectedWinners = []">
+        Uncheck All
+      </button>
     </div>
     <div
       style="
@@ -48,7 +52,7 @@ function playerNameFor(id: string): string | undefined {
         :key="w"
         style="display: flex; align-items: center; gap: 8px; cursor: pointer"
       >
-        <input type="checkbox" :value="w" v-model="game.endGameSelectedWinners" />
+        <input v-model="game.endGameSelectedWinners" type="checkbox" :value="w" />
         <span class="code-gold">{{ w }}</span>
         <small v-if="playerNameFor(w)" class="text-dim">— {{ playerNameFor(w) }}</small>
       </label>

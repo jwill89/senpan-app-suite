@@ -39,7 +39,7 @@ function ensureLoaded(): Promise<void> {
  * use and re-renders when the parser becomes available.
  */
 export function useMarkdown() {
-  ensureLoaded()
+  void ensureLoaded()
   function render(text: string | null | undefined): string {
     // Touch `ready` so the rendering effect re-runs once the parser loads.
     if (!ready.value || !md) return ''

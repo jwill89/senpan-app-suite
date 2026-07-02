@@ -7,7 +7,12 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import { endpoints } from '@/lib/endpoints'
-import { applyCustomCSS, applyHeaderFont, applyUploadedFonts, applyNumberFlourish } from '@/lib/theme'
+import {
+  applyCustomCSS,
+  applyHeaderFont,
+  applyUploadedFonts,
+  applyNumberFlourish,
+} from '@/lib/theme'
 import { DEFAULT_APP_SETTINGS } from '@/lib/constants'
 import type { AppSettings } from '@/types/api'
 import { useUiStore } from './ui'
@@ -48,12 +53,10 @@ export const useAppStore = defineStore('app', () => {
       // for an uploaded family.
       uploadedFonts.value = data.uploaded_fonts || []
       applyUploadedFonts(uploadedFonts.value)
-      if (data.settings) {
-        settings.value = { ...settings.value, ...data.settings }
-        document.title = settings.value.app_title || 'Senpan App Suite'
-        applyHeaderFont(settings.value.header_font)
-        loadGoogleFontsList()
-      }
+      settings.value = { ...settings.value, ...data.settings }
+      document.title = settings.value.app_title || 'Senpan App Suite'
+      applyHeaderFont(settings.value.header_font)
+      void loadGoogleFontsList()
     } catch {
       /* silent */
     }
@@ -66,7 +69,7 @@ export const useAppStore = defineStore('app', () => {
       await endpoints.settings.save(settings.value)
       document.title = settings.value.app_title || 'Senpan App Suite'
       applyHeaderFont(settings.value.header_font)
-      loadGoogleFontsList()
+      void loadGoogleFontsList()
       ui.notify('Settings saved!', 'success')
     } catch (e) {
       ui.notify((e as Error).message, 'error')

@@ -61,7 +61,9 @@ function cancelRename(): void {
           @click="bookclub.publishList(bookclub.selectedList)"
         >
           <LoadingSpinner v-if="bookclub.publishing" label="Publishing…" />
-          <template v-else><font-awesome-icon :icon="['fas', 'paper-plane']" /> Publish to Discord</template>
+          <template v-else
+            ><font-awesome-icon :icon="['fas', 'paper-plane']" /> Publish to Discord</template
+          >
         </button>
       </div>
 
@@ -136,7 +138,9 @@ function cancelRename(): void {
                 @click="bookclub.runLookup()"
               >
                 <LoadingSpinner v-if="bookclub.looking" label="Searching…" />
-                <template v-else><font-awesome-icon :icon="['fas', 'magnifying-glass']" /> Search</template>
+                <template v-else
+                  ><font-awesome-icon :icon="['fas', 'magnifying-glass']" /> Search</template
+                >
               </button>
             </div>
             <div v-if="bookclub.lookupResults.length" class="bc-results mt-8">
@@ -267,7 +271,9 @@ function cancelRename(): void {
                 placeholder="https://…"
                 aria-label="Source URL"
               />
-              <button class="btn-danger btn-sm" @click="bookclub.removeSourceRow(i)">&times;</button>
+              <button class="btn-danger btn-sm" @click="bookclub.removeSourceRow(i)">
+                &times;
+              </button>
             </div>
             <button class="btn-confirm btn-sm" @click="bookclub.addSourceRow()">
               <font-awesome-icon :icon="['fas', 'plus']" /> Add Source
@@ -275,7 +281,11 @@ function cancelRename(): void {
           </FormField>
 
           <FormActions align="start">
-            <button v-if="bookclub.itemForm.id" class="btn-neutral" @click="bookclub.resetItemForm()">
+            <button
+              v-if="bookclub.itemForm.id"
+              class="btn-neutral"
+              @click="bookclub.resetItemForm()"
+            >
               Cancel Edit
             </button>
             <button
@@ -349,7 +359,11 @@ function cancelRename(): void {
                 <button class="btn-confirm btn-sm" aria-label="Rename" @click="startRename(list)">
                   <font-awesome-icon :icon="['fas', 'pen-to-square']" />
                 </button>
-                <button class="btn-danger btn-sm" aria-label="Delete" @click="bookclub.deleteList(list)">
+                <button
+                  class="btn-danger btn-sm"
+                  aria-label="Delete"
+                  @click="bookclub.deleteList(list)"
+                >
                   <font-awesome-icon :icon="['fas', 'trash']" />
                 </button>
               </template>

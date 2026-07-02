@@ -22,7 +22,13 @@ function cat(name: string, dir: string, permanent = false): ImageCategory {
   return { name, dir, permanent, file_count: 0, total_size: 0 }
 }
 function entry(name: string): ImageEntry {
-  return { name, url: `https://h/images/d/${name}`, path: `images/d/${name}`, size: 1, modified: '' }
+  return {
+    name,
+    url: `https://h/images/d/${name}`,
+    path: `images/d/${name}`,
+    size: 1,
+    modified: '',
+  }
 }
 
 beforeEach(() => {

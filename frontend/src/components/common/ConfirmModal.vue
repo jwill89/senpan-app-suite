@@ -31,4 +31,3 @@ const ui = useUiStore()
     </div>
   </ModalOverlay>
 </template>
-

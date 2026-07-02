@@ -20,9 +20,7 @@ const game = useGameStore()
       </h3>
       <button class="btn-neutral btn-sm" @click="game.winnerPreview = null">Close</button>
     </div>
-    <p class="text-dim text-sm mb-12 text-center">
-      Highlighted cells complete the winning pattern
-    </p>
+    <p class="text-dim text-sm mb-12 text-center">Highlighted cells complete the winning pattern</p>
     <div class="flex-center">
       <BingoBoard
         :board="game.winnerPreview.card.board_data"

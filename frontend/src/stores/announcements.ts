@@ -98,18 +98,16 @@ export const useAnnouncementsStore = defineStore('announcements', () => {
   // Data.
   const types = ref<AnnouncementType[]>([])
   /** Types sorted alphabetically by name (for the form dropdown + types list). */
-  const sortedTypes = computed(() =>
-    [...types.value].sort((a, b) => a.name.localeCompare(b.name)),
-  )
+  const sortedTypes = computed(() => [...types.value].sort((a, b) => a.name.localeCompare(b.name)))
   const roles = ref<AnnouncementRole[]>([])
   const announcements = ref<Announcement[]>([])
   /** Reusable image URLs for the Main / Thumbnail pickers, sourced from the
    *  central Images page categories (announcements_main / announcements_thumb). */
-  const mainImages = computed(
-    () => (imagesStore.imagesByDir[IMAGE_DIR_ANNOUNCEMENTS_MAIN] || []).map((i) => i.url),
+  const mainImages = computed(() =>
+    imagesStore.imagesByDir[IMAGE_DIR_ANNOUNCEMENTS_MAIN].map((i) => i.url),
   )
-  const thumbImages = computed(
-    () => (imagesStore.imagesByDir[IMAGE_DIR_ANNOUNCEMENTS_THUMB] || []).map((i) => i.url),
+  const thumbImages = computed(() =>
+    imagesStore.imagesByDir[IMAGE_DIR_ANNOUNCEMENTS_THUMB].map((i) => i.url),
   )
 
   // Forms.
@@ -148,9 +146,9 @@ export const useAnnouncementsStore = defineStore('announcements', () => {
         endpoints.announcements.roles(),
         endpoints.announcements.list(),
       ])
-      types.value = t.types || []
-      roles.value = r.roles || []
-      announcements.value = a.announcements || []
+      types.value = t.types
+      roles.value = r.roles
+      announcements.value = a.announcements
     } catch (e) {
       ui.notify((e as Error).message, 'error')
     } finally {
@@ -161,14 +159,14 @@ export const useAnnouncementsStore = defineStore('announcements', () => {
 
   /** Loads the Main + Thumbnail reusable-image libraries from the Images page. */
   function loadImages(): void {
-    imagesStore.loadImages(IMAGE_DIR_ANNOUNCEMENTS_MAIN)
-    imagesStore.loadImages(IMAGE_DIR_ANNOUNCEMENTS_THUMB)
+    void imagesStore.loadImages(IMAGE_DIR_ANNOUNCEMENTS_MAIN)
+    void imagesStore.loadImages(IMAGE_DIR_ANNOUNCEMENTS_THUMB)
   }
 
   async function loadTypes(): Promise<void> {
     try {
       const data = await endpoints.announcements.types()
-      types.value = data.types || []
+      types.value = data.types
     } catch (e) {
       ui.notify((e as Error).message, 'error')
     }
@@ -177,7 +175,7 @@ export const useAnnouncementsStore = defineStore('announcements', () => {
   async function loadRoles(): Promise<void> {
     try {
       const data = await endpoints.announcements.roles()
-      roles.value = data.roles || []
+      roles.value = data.roles
     } catch (e) {
       ui.notify((e as Error).message, 'error')
     }
@@ -186,7 +184,7 @@ export const useAnnouncementsStore = defineStore('announcements', () => {
   async function loadAnnouncements(): Promise<void> {
     try {
       const data = await endpoints.announcements.list()
-      announcements.value = data.announcements || []
+      announcements.value = data.announcements
     } catch (e) {
       ui.notify((e as Error).message, 'error')
     }
@@ -205,7 +203,6 @@ export const useAnnouncementsStore = defineStore('announcements', () => {
       await loadAnnouncements() // revert to the persisted order
     }
   }
-
 
   // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -336,12 +333,12 @@ export const useAnnouncementsStore = defineStore('announcements', () => {
     f.color = a.color || '#ff3131'
     f.location = a.location || ''
     f.mention = a.mention || ''
-    f.buttons = (a.buttons || []).map((b) => ({ ...b }))
+    f.buttons = a.buttons.map((b) => ({ ...b }))
     f.start_local = a.start_local
     f.end_local = a.end_local
     f.start_format = (a.start_format || 'F') as AnnouncementForm['start_format']
     f.end_format = (a.end_format || 't') as AnnouncementForm['end_format']
-    f.dynamic_dates = !!a.dynamic_dates
+    f.dynamic_dates = a.dynamic_dates
     f.schedule_kind = (a.schedule_kind || '') as ScheduleKind
     if (a.timezone) f.timezone = a.timezone
     if (a.schedule_kind === 'once') {
@@ -406,7 +403,8 @@ export const useAnnouncementsStore = defineStore('announcements', () => {
     if (!f.title.trim()) return 'Title is required'
     if (!f.type_id) return 'An announcement type is required'
     if (!f.details.trim()) return 'Details are required'
-    if (f.schedule_kind === 'once' && !f.once_local) return 'Pick a date & time for the one-time post'
+    if (f.schedule_kind === 'once' && !f.once_local)
+      return 'Pick a date & time for the one-time post'
     if ((f.schedule_kind === 'weekly' || f.schedule_kind === 'monthly') && !f.time_local)
       return 'Pick a time for the recurring post'
     if (f.schedule_kind === 'weekly' && f.weekdays.length === 0) return 'Pick at least one weekday'

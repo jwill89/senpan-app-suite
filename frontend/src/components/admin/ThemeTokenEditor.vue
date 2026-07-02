@@ -48,7 +48,7 @@ function parseColor(input: string): Rgba {
   const m = getComputedStyle(el).color.match(/[\d.]+/g)
   el.remove()
   if (!m || m.length < 3) return { r: 0, g: 0, b: 0, a: 1 }
-  return { r: +m[0], g: +m[1], b: +m[2], a: m[3] !== undefined ? +m[3] : 1 }
+  return { r: +m[0], g: +m[1], b: +m[2], a: m.length > 3 ? +m[3] : 1 }
 }
 
 /** Opaque #rrggbb of a solid token's value, for its native colour input. */
@@ -91,8 +91,7 @@ const verdictLabel = computed(() =>
 )
 const fmtRatio = (r: number) => `${r.toFixed(2)}:1`
 /** "text-on-accent → board-cell-bg" style token trail for a finding. */
-const tokenTrail = (fg: string, bg: string) =>
-  `${fg.startsWith('#') ? fg : `--${fg}`} → --${bg}`
+const tokenTrail = (fg: string, bg: string) => `${fg.startsWith('#') ? fg : `--${fg}`} → --${bg}`
 
 // "Find in preview": open the preview and flash the element a pairing renders as.
 const stageRef = ref<HTMLElement | null>(null)
@@ -121,9 +120,14 @@ async function revealInPreview(id: string): Promise<void> {
         :aria-expanded="showPreview"
         @click="showPreview = !showPreview"
       >
-        <font-awesome-icon :icon="['fas', showPreview ? 'chevron-up' : 'chevron-down']" fixed-width />
+        <font-awesome-icon
+          :icon="['fas', showPreview ? 'chevron-up' : 'chevron-down']"
+          fixed-width
+        />
         <span>Live preview</span>
-        <span class="token-preview__hint">— hover the buttons &amp; board cells to see hover colours</span>
+        <span class="token-preview__hint"
+          >— hover the buttons &amp; board cells to see hover colours</span
+        >
       </button>
 
       <div v-show="showPreview" ref="stageRef" class="token-preview__stage" :style="previewStyle">
@@ -131,25 +135,62 @@ async function revealInPreview(id: string): Promise<void> {
           <!-- Surfaces & text -->
           <section class="tp-panel">
             <h5 class="tp-h" data-pair="heading-panel heading-page">Heading &amp; highlight</h5>
-            <p class="tp-text" data-pair="body-panel body-page">Primary body text on a panel surface.</p>
+            <p class="tp-text" data-pair="body-panel body-page">
+              Primary body text on a panel surface.
+            </p>
             <p class="tp-muted" data-pair="muted-panel muted-page">Muted secondary text.</p>
-            <p class="tp-text">A themed <a href="#" class="tp-link" data-pair="link-panel link-page" @click.prevent>hyperlink</a> in a sentence.</p>
-            <div class="tp-raised" data-pair="body-raised muted-raised heading-raised">Raised surface — rows, chips, nested panels</div>
-            <input class="tp-input" type="text" value="Input field" readonly aria-label="Sample input" data-pair="input-text placeholder" />
+            <p class="tp-text">
+              A themed
+              <a href="#" class="tp-link" data-pair="link-panel link-page" @click.prevent
+                >hyperlink</a
+              >
+              in a sentence.
+            </p>
+            <div class="tp-raised" data-pair="body-raised muted-raised heading-raised">
+              Raised surface — rows, chips, nested panels
+            </div>
+            <input
+              class="tp-input"
+              type="text"
+              value="Input field"
+              readonly
+              aria-label="Sample input"
+              data-pair="input-text placeholder"
+            />
           </section>
 
           <!-- Buttons & status -->
           <section class="tp-panel">
             <h5 class="tp-h">Buttons</h5>
             <div class="tp-row">
-              <button type="button" class="tp-btn tp-btn--primary" data-pair="primary-btn primary-btn-hover">Primary</button>
-              <button type="button" class="tp-btn tp-btn--secondary" data-pair="secondary-btn secondary-btn-hover">Secondary</button>
-              <button type="button" class="tp-btn tp-btn--neutral" data-pair="neutral-btn">Cancel</button>
+              <button
+                type="button"
+                class="tp-btn tp-btn--primary"
+                data-pair="primary-btn primary-btn-hover"
+              >
+                Primary
+              </button>
+              <button
+                type="button"
+                class="tp-btn tp-btn--secondary"
+                data-pair="secondary-btn secondary-btn-hover"
+              >
+                Secondary
+              </button>
+              <button type="button" class="tp-btn tp-btn--neutral" data-pair="neutral-btn">
+                Cancel
+              </button>
             </div>
             <div class="tp-row">
-              <button type="button" class="tp-btn tp-btn--success" data-pair="success-btn">Success</button>
-              <button type="button" class="tp-btn tp-btn--danger" data-pair="danger-btn">Danger</button>
-              <button type="button" class="tp-btn tp-btn--warning" data-pair="caution-btn">Warning</button>
+              <button type="button" class="tp-btn tp-btn--success" data-pair="success-btn">
+                Success
+              </button>
+              <button type="button" class="tp-btn tp-btn--danger" data-pair="danger-btn">
+                Danger
+              </button>
+              <button type="button" class="tp-btn tp-btn--warning" data-pair="caution-btn">
+                Warning
+              </button>
             </div>
             <div class="tp-row">
               <span class="tp-badge tp-badge--success">Paid</span>
@@ -202,7 +243,10 @@ async function revealInPreview(id: string): Promise<void> {
         :aria-expanded="showReport"
         @click="showReport = !showReport"
       >
-        <font-awesome-icon :icon="['fas', showReport ? 'chevron-up' : 'chevron-down']" fixed-width />
+        <font-awesome-icon
+          :icon="['fas', showReport ? 'chevron-up' : 'chevron-down']"
+          fixed-width
+        />
         <span>Check WCAG compliance</span>
         <span class="wcag__verdict">{{ verdictLabel }}</span>
       </button>
@@ -213,20 +257,22 @@ async function revealInPreview(id: string): Promise<void> {
             <strong>AAA</strong> (the strictest level).</template
           >
           <template v-else-if="report.level === 'AA'"
-            >Meets WCAG 2.1 <strong>AA</strong>. <strong>{{ report.warnings.length }}</strong> pairing(s)
-            are readable but fall short of AAA (7:1 for normal text).</template
+            >Meets WCAG 2.1 <strong>AA</strong>.
+            <strong>{{ report.warnings.length }}</strong> pairing(s) are readable but fall short of
+            AAA (7:1 for normal text).</template
           >
           <template v-else
-            ><strong>{{ report.errors.length }}</strong> pairing(s) fail WCAG 2.1 AA — these are hard
-            to read and should be fixed.</template
+            ><strong>{{ report.errors.length }}</strong> pairing(s) fail WCAG 2.1 AA — these are
+            hard to read and should be fixed.</template
           >
         </p>
 
         <!-- Findings: errors first, then AA-only warnings, then (optionally) passes. -->
         <div v-if="report.errors.length" class="wcag__group">
           <h5 class="wcag__h wcag__h--error">
-            <font-awesome-icon :icon="['fas', 'circle-xmark']" /> Fails AA — fix these
-            ({{ report.errors.length }})
+            <font-awesome-icon :icon="['fas', 'circle-xmark']" /> Fails AA — fix these ({{
+              report.errors.length
+            }})
           </h5>
           <ul class="wcag__list">
             <li v-for="r in report.errors" :key="r.id" class="wcag__finding wcag__finding--error">
@@ -247,7 +293,7 @@ async function revealInPreview(id: string): Promise<void> {
                   <span class="wcag__lvl wcag__lvl--off">AA {{ r.aaTarget }}:1</span>
                   <span class="wcag__lvl wcag__lvl--off">AAA {{ r.aaaTarget }}:1</span>
                 </span>
-                <span class="wcag__lg" v-if="r.large">large text</span>
+                <span v-if="r.large" class="wcag__lg">large text</span>
               </span>
               <button type="button" class="wcag__find" @click="revealInPreview(r.id)">
                 <font-awesome-icon :icon="['fas', 'magnifying-glass']" /> Find
@@ -280,7 +326,7 @@ async function revealInPreview(id: string): Promise<void> {
                   <span class="wcag__lvl wcag__lvl--on">AA</span>
                   <span class="wcag__lvl wcag__lvl--off">AAA {{ r.aaaTarget }}:1</span>
                 </span>
-                <span class="wcag__lg" v-if="r.large">large text</span>
+                <span v-if="r.large" class="wcag__lg">large text</span>
               </span>
               <button type="button" class="wcag__find" @click="revealInPreview(r.id)">
                 <font-awesome-icon :icon="['fas', 'magnifying-glass']" /> Find
@@ -291,7 +337,10 @@ async function revealInPreview(id: string): Promise<void> {
 
         <!-- Full list of every check (passes included), opt-in to avoid clutter. -->
         <button type="button" class="wcag__showall" @click="showAllChecks = !showAllChecks">
-          <font-awesome-icon :icon="['fas', showAllChecks ? 'chevron-up' : 'chevron-down']" fixed-width />
+          <font-awesome-icon
+            :icon="['fas', showAllChecks ? 'chevron-up' : 'chevron-down']"
+            fixed-width
+          />
           {{ showAllChecks ? 'Hide' : 'Show' }} all {{ report.results.length }} checks
         </button>
         <ul v-if="showAllChecks" class="wcag__list">
@@ -323,10 +372,14 @@ async function revealInPreview(id: string): Promise<void> {
                 >{{ fmtRatio(r.ratio) }}</span
               >
               <span class="wcag__levels">
-                <span class="wcag__lvl" :class="r.aaPass ? 'wcag__lvl--on' : 'wcag__lvl--off'">AA</span>
-                <span class="wcag__lvl" :class="r.aaaPass ? 'wcag__lvl--on' : 'wcag__lvl--off'">AAA</span>
+                <span class="wcag__lvl" :class="r.aaPass ? 'wcag__lvl--on' : 'wcag__lvl--off'"
+                  >AA</span
+                >
+                <span class="wcag__lvl" :class="r.aaaPass ? 'wcag__lvl--on' : 'wcag__lvl--off'"
+                  >AAA</span
+                >
               </span>
-              <span class="wcag__lg" v-if="r.large">large text</span>
+              <span v-if="r.large" class="wcag__lg">large text</span>
             </span>
             <button type="button" class="wcag__find" @click="revealInPreview(r.id)">
               <font-awesome-icon :icon="['fas', 'magnifying-glass']" /> Find
@@ -335,8 +388,8 @@ async function revealInPreview(id: string): Promise<void> {
         </ul>
 
         <p class="wcag__count">
-          {{ report.passes.length }} of {{ report.results.length }} pairings meet AAA · updates live as
-          you edit colours.
+          {{ report.passes.length }} of {{ report.results.length }} pairings meet AAA · updates live
+          as you edit colours.
         </p>
       </div>
     </div>
@@ -346,7 +399,11 @@ async function revealInPreview(id: string): Promise<void> {
       <div class="token-rows">
         <div v-for="t in group.tokens" :key="t.name" class="token-row">
           <div class="token-row__head">
-            <span class="token-row__swatch" :style="{ background: valueOf(t) }" aria-hidden="true" />
+            <span
+              class="token-row__swatch"
+              :style="{ background: valueOf(t) }"
+              aria-hidden="true"
+            />
             <label :for="`tok-${t.name}`" class="token-row__label">{{ t.label }}</label>
             <!-- Solid tokens: lightweight native picker. Alpha tokens: a swatch
                  button that opens the cross-browser Chrome picker (with alpha). -->

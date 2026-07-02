@@ -20,7 +20,9 @@ defineProps<{
 <template>
   <div class="empty-state">
     <font-awesome-icon v-if="icon" :icon="icon" class="empty-state__icon" />
-    <div class="empty-state__title"><slot>{{ text }}</slot></div>
+    <div class="empty-state__title">
+      <slot>{{ text }}</slot>
+    </div>
     <div v-if="hint || $slots.hint" class="empty-state__hint">
       <slot name="hint">{{ hint }}</slot>
     </div>

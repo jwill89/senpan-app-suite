@@ -46,7 +46,7 @@ async function onInstall(): Promise<void> {
       <a href="https://xiv.mathdad.me" target="_blank" rel="noopener">MathDad</a>
     </p>
     <p v-if="showInstall" class="app-footer-install">
-      <br/>
+      <br />
       <a href="#" role="button" @click.prevent="onInstall">
         <font-awesome-icon :icon="['fas', 'download']" />
         Install App
@@ -54,4 +54,3 @@ async function onInstall(): Promise<void> {
     </p>
   </footer>
 </template>
-

@@ -109,4 +109,3 @@ function onColorChange(c: { rgba: string }): void {
   gap: 10px;
 }
 </style>
-

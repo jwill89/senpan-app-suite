@@ -9,9 +9,7 @@
 import { defineAsyncComponent } from 'vue'
 
 /** Lazy-load the Chrome picker so it never bloats the initial payload. */
-const ChromePicker = defineAsyncComponent(() =>
-  import('@ckpack/vue-color').then((m) => m.Chrome),
-)
+const ChromePicker = defineAsyncComponent(() => import('@ckpack/vue-color').then((m) => m.Chrome))
 
 /** The picker's emitted payload (only the bits we read). */
 interface ColorPayload {

@@ -73,7 +73,7 @@ export const useGameStore = defineStore('game', () => {
   // ── Computed ───────────────────────────────────────────────────────────────
 
   const adminCalledSet = computed(() => {
-    if (!currentGame.value || !currentGame.value.called_numbers) return new Set<number>()
+    if (!currentGame.value) return new Set<number>()
     return new Set(currentGame.value.called_numbers)
   })
 
@@ -89,9 +89,9 @@ export const useGameStore = defineStore('game', () => {
     try {
       const data = await endpoints.game.getState()
       currentGame.value = data.game ?? null
-      winners.value = data.winners || []
+      winners.value = data.winners
       gameDetails.value = data.game_details || ''
-      loadFrequentWinners()
+      void loadFrequentWinners()
     } catch {
       /* silent */
     }
@@ -109,7 +109,7 @@ export const useGameStore = defineStore('game', () => {
       winners.value = []
       lastDrawn.value = null
       selectedPatternIds.value = []
-      if (data.game_details !== undefined) gameDetails.value = data.game_details
+      gameDetails.value = data.game_details
       ui.notify('Game started!', 'success')
     } catch (e) {
       ui.notify((e as Error).message, 'error')
@@ -127,7 +127,7 @@ export const useGameStore = defineStore('game', () => {
       const data = await endpoints.game.draw(delay)
       lastDrawn.value = data.drawn
       currentGame.value = data.game
-      winners.value = data.winners || []
+      winners.value = data.winners
       if (winners.value.length > prevCount) {
         ui.notify('We have winner(s)!', 'success', 6000)
         if (winnerSoundEnabled.value) playWinnerChime()
@@ -156,7 +156,7 @@ export const useGameStore = defineStore('game', () => {
       // Prompt for a halftime minigame at the half-way point — the classic
       // 35-of-75 mark scaled to how many numbers THIS game can actually call
       // (which depends on the active win patterns; see lib/halftime).
-      if (currentGame.value?.called_numbers?.length === halftimeThreshold.value) {
+      if (currentGame.value.called_numbers.length === halftimeThreshold.value) {
         showHalftimePrompt.value = true
       }
     } catch (e) {
@@ -255,7 +255,7 @@ export const useGameStore = defineStore('game', () => {
         if (satisfied) {
           for (let r = 0; r < 5; r++) {
             for (let c = 0; c < 5; c++) {
-              if (pd[r][c]) matchedCells.add(r + '-' + c)
+              if (pd[r][c]) matchedCells.add(`${r}-${c}`)
             }
           }
         }
@@ -270,7 +270,7 @@ export const useGameStore = defineStore('game', () => {
 
   function isWinnerCellMatch(ri: number, ci: number): boolean {
     if (!winnerPreview.value) return false
-    return winnerPreview.value.matchedCells.has(ri + '-' + ci)
+    return winnerPreview.value.matchedCells.has(`${ri}-${ci}`)
   }
 
   // ── Halftime ───────────────────────────────────────────────────────────────
@@ -305,7 +305,7 @@ export const useGameStore = defineStore('game', () => {
   async function loadFrequentWinners(): Promise<void> {
     try {
       const data = await endpoints.winnersLog.frequent()
-      frequentWinners.value = data.winners || []
+      frequentWinners.value = data.winners
     } catch {
       /* silent */
     }
@@ -322,7 +322,7 @@ export const useGameStore = defineStore('game', () => {
         sort: winnersLogSort.value,
         dir: winnersLogDir.value,
       })
-      winnersLog.value = data.entries || []
+      winnersLog.value = data.entries
       winnersLogTotal.value = data.total || 0
     } catch (e) {
       ui.notify((e as Error).message, 'error')
@@ -343,12 +343,12 @@ export const useGameStore = defineStore('game', () => {
       winnersLogDir.value = 'desc'
     }
     winnersLogPage.value = 1
-    loadWinnersLog()
+    void loadWinnersLog()
   }
 
   function winnersLogGoPage(p: number): void {
     winnersLogPage.value = p
-    loadWinnersLog()
+    void loadWinnersLog()
   }
 
   /** Deletes one winners-log entry (with confirm), then reloads the page. */

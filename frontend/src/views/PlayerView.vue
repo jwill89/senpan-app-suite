@@ -81,7 +81,7 @@ async function ensureLoaded(id: string): Promise<void> {
   const details = await player.loadBoardById(id)
   if (details === null && !player.playerCard) {
     // Failed to load (bad id) → bounce home with the error toast.
-    router.replace({ name: 'home' })
+    void router.replace({ name: 'home' })
     return
   }
   if (details !== null) game.gameDetails = details
@@ -110,10 +110,7 @@ const connLabel = computed(() => {
       return 'Connecting…'
   }
 })
-const connClass = computed(() =>
-  ui.wsStatus === 'closed' ? 'is-connecting' : `is-${ui.wsStatus}`,
-)
-
+const connClass = computed(() => (ui.wsStatus === 'closed' ? 'is-connecting' : `is-${ui.wsStatus}`))
 
 /**
  * Leave the board and return home (App.vue disconnects the WS on the route
@@ -150,7 +147,9 @@ function openDiscord(): void {
     <div class="topbar">
       <button class="btn-neutral btn-sm" @click="leave">← Leave</button>
       <div class="topbar-id">
-        <h2>Board <span class="code-gold">{{ player.playerCard?.id }}</span></h2>
+        <h2>
+          Board <span class="code-gold">{{ player.playerCard?.id }}</span>
+        </h2>
         <span v-if="player.playerCard?.player_name" class="topbar-player">
           {{ player.playerCard.player_name }}
         </span>
@@ -235,7 +234,9 @@ function openDiscord(): void {
                 @click="exportCard"
               >
                 <font-awesome-icon :icon="['fas', 'download']" />
-                <span class="player-actions__label">{{ exporting ? 'Saving…' : 'Save Board' }}</span>
+                <span class="player-actions__label">{{
+                  exporting ? 'Saving…' : 'Save Board'
+                }}</span>
               </button>
             </div>
           </div>
@@ -290,17 +291,17 @@ function openDiscord(): void {
             <div class="go-icon"><font-awesome-icon :icon="['fad', 'trophy']" /></div>
             <p class="go-title">We have a Winner — Thanks for Playing!</p>
             <p class="go-sub">Numbers called this game: {{ player.endedCalledCount }}</p>
-            <br/>
+            <br />
             <p class="go-sub">
-              Feel free to save your board and dump them into the bingo-boards channel in the
-              Senpan Discord server if you want to show off your cursed boards! Afterwards, you can
-              clear your board.
+              Feel free to save your board and dump them into the bingo-boards channel in the Senpan
+              Discord server if you want to show off your cursed boards! Afterwards, you can clear
+              your board.
             </p>
-            <br/>
+            <br />
             <p class="go-sub">
               If you'd like more refreshments, please let our staff know before the round starts!
             </p>
-            <br/>
+            <br />
             <p class="go-sub">The next game will begin soon — hang tight!</p>
             <button class="btn-action go-discord-btn" @click="openDiscord">
               <font-awesome-icon :icon="['fab', 'discord']" /> Join the Discord Server
@@ -317,7 +318,9 @@ function openDiscord(): void {
       centered
       @close="player.showMinigameModal = false"
     >
-      <h3 class="mb-16"><font-awesome-icon :icon="['fad', 'champagne-glasses']" /> Half-Time Minigame!</h3>
+      <h3 class="mb-16">
+        <font-awesome-icon :icon="['fad', 'champagne-glasses']" /> Half-Time Minigame!
+      </h3>
       <p class="text-dim mb-20">
         It's time for a half-time minigame! Please check your in-game chat for details and
         instructions!

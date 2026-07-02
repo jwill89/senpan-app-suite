@@ -90,7 +90,7 @@ onBeforeUnmount(() => navMql?.removeEventListener('change', syncIsNarrow))
 /** Log out, then return home (App's route watcher disconnects the WebSocket). */
 async function logout(): Promise<void> {
   await auth.logout()
-  router.push({ name: 'home' })
+  void router.push({ name: 'home' })
 }
 
 // ── Change-password modal (available to every logged-in account) ──────────────
@@ -267,12 +267,7 @@ async function copyToken(): Promise<void> {
       <h3 class="mt-0"><font-awesome-icon :icon="['fad', 'lock']" /> Change Password</h3>
       <form autocomplete="off" @submit.prevent="submitChangePw">
         <FormField label="Current password" html-for="cur-pw">
-          <input
-            id="cur-pw"
-            v-model="currentPw"
-            type="password"
-            autocomplete="current-password"
-          />
+          <input id="cur-pw" v-model="currentPw" type="password" autocomplete="current-password" />
         </FormField>
         <FormField label="New password" html-for="new-pw">
           <input
@@ -284,12 +279,7 @@ async function copyToken(): Promise<void> {
           />
         </FormField>
         <FormField label="Confirm new password" html-for="confirm-pw">
-          <input
-            id="confirm-pw"
-            v-model="confirmPw"
-            type="password"
-            autocomplete="new-password"
-          />
+          <input id="confirm-pw" v-model="confirmPw" type="password" autocomplete="new-password" />
         </FormField>
         <p v-if="pwError" class="error-msg">{{ pwError }}</p>
         <div class="modal-actions">
@@ -317,9 +307,9 @@ async function copyToken(): Promise<void> {
     >
       <h3 class="mt-0"><font-awesome-icon :icon="['fad', 'key']" /> Access Token</h3>
       <p class="text-dim pat-intro">
-        A personal access token lets an external client — such as the FFXIV plugin —
-        sign in to this server as you, with your exact permissions. Treat it like a
-        password: anyone who has it can act as your account.
+        A personal access token lets an external client — such as the FFXIV plugin — sign in to this
+        server as you, with your exact permissions. Treat it like a password: anyone who has it can
+        act as your account.
       </p>
 
       <p v-if="tokenLoading"><LoadingSpinner label="Loading…" /></p>
@@ -344,8 +334,8 @@ async function copyToken(): Promise<void> {
           </div>
         </FormField>
         <p class="text-dim pat-note">
-          Paste it into the plugin's settings. Generating or revoking a token later
-          invalidates this one immediately.
+          Paste it into the plugin's settings. Generating or revoking a token later invalidates this
+          one immediately.
         </p>
         <div class="modal-actions">
           <button type="button" class="btn-action" @click="showToken = false">Done</button>
@@ -357,15 +347,17 @@ async function copyToken(): Promise<void> {
         <template v-if="tokenInfo?.has_token">
           <dl class="pat-meta">
             <dt class="text-dim">Token</dt>
-            <dd><code>{{ tokenInfo.prefix }}…</code></dd>
+            <dd>
+              <code>{{ tokenInfo.prefix }}…</code>
+            </dd>
             <dt class="text-dim">Created</dt>
             <dd>{{ fmtTokenTime(tokenInfo.created_at) }}</dd>
             <dt class="text-dim">Last used</dt>
             <dd>{{ fmtTokenTime(tokenInfo.last_used_at) }}</dd>
           </dl>
           <p class="text-dim pat-note">
-            For security the token itself can't be shown again. If you've lost it,
-            regenerate to get a new one — the old token stops working immediately.
+            For security the token itself can't be shown again. If you've lost it, regenerate to get
+            a new one — the old token stops working immediately.
           </p>
         </template>
         <p v-else>You don't have an access token yet. Generate one to connect a plugin.</p>
@@ -385,7 +377,9 @@ async function copyToken(): Promise<void> {
           <button type="button" class="btn-action" :disabled="tokenBusy" @click="generateToken">
             <LoadingSpinner v-if="tokenBusy" label="Working…" />
             <template v-else>
-              <font-awesome-icon :icon="tokenInfo?.has_token ? ['fas', 'rotate'] : ['fad', 'key']" />
+              <font-awesome-icon
+                :icon="tokenInfo?.has_token ? ['fas', 'rotate'] : ['fad', 'key']"
+              />
               {{ tokenInfo?.has_token ? 'Regenerate' : 'Generate token' }}
             </template>
           </button>

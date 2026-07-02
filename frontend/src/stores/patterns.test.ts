@@ -25,10 +25,16 @@ vi.mock('@/lib/endpoints', () => ({
 import { usePatternsStore } from './patterns'
 
 function cat(id: number, name: string, sort = id): PatternCategory {
-  return { id, name, sort_order: sort } as PatternCategory
+  return { id, name, sort_order: sort }
 }
 function pat(id: number, name: string, categoryId: number): Pattern {
-  return { id, name, category_id: categoryId, category_name: '', pattern_data: [] } as unknown as Pattern
+  return {
+    id,
+    name,
+    category_id: categoryId,
+    category_name: '',
+    pattern_data: [],
+  } as unknown as Pattern
 }
 
 beforeEach(() => {

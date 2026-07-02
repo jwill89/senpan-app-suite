@@ -118,7 +118,9 @@ function onColorChange(c: { rgba: string }): void {
   border-radius: 999px;
   background: var(--panel-raised-bg);
   cursor: pointer;
-  transition: background 0.15s, border-color 0.15s;
+  transition:
+    background 0.15s,
+    border-color 0.15s;
 }
 .ss-switch.on {
   background: var(--accent);

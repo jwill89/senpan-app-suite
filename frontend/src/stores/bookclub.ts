@@ -92,7 +92,7 @@ export const useBookclubStore = defineStore('bookclub', () => {
     // don't pre-clear; a different club is always stale, a quick re-entry isn't.
     if (switching || clubFresh.isStale(`${slug}:lists`)) {
       clubFresh.touch(`${slug}:lists`)
-      loadLists()
+      void loadLists()
     }
   }
 
@@ -106,9 +106,9 @@ export const useBookclubStore = defineStore('bookclub', () => {
   function applyExternalChange(viewing: boolean): void {
     const key = `${activeClubSlug.value}:lists`
     if (viewing) {
-      loadLists()
+      void loadLists()
       clubFresh.touch(key)
-      if (selectedList.value) loadListDetail(selectedList.value.id)
+      if (selectedList.value) void loadListDetail(selectedList.value.id)
     } else {
       clubFresh.invalidate(key)
     }
@@ -118,7 +118,7 @@ export const useBookclubStore = defineStore('bookclub', () => {
     listsLoading.value = true
     try {
       const data = await endpoints.bookclub.lists(activeClubSlug.value)
-      lists.value = data.reading_lists || []
+      lists.value = data.reading_lists
     } catch (e) {
       ui.notify((e as Error).message, 'error')
     } finally {
@@ -145,7 +145,7 @@ export const useBookclubStore = defineStore('bookclub', () => {
     resetItemForm()
     lookupResults.value = []
     lookupQuery.value = ''
-    loadListDetail(list.id)
+    void loadListDetail(list.id)
   }
 
   function closeList(): void {
@@ -164,7 +164,7 @@ export const useBookclubStore = defineStore('bookclub', () => {
       newListTitle.value = ''
       ui.notify('Reading list created', 'success')
       await loadLists()
-      if (data.reading_list) selectList(data.reading_list)
+      selectList(data.reading_list)
     } catch (e) {
       ui.notify((e as Error).message, 'error')
     } finally {
@@ -208,10 +208,13 @@ export const useBookclubStore = defineStore('bookclub', () => {
 
   async function publishList(list: ReadingList): Promise<void> {
     if (
-      !(await ui.confirm(`Publish "${list.title}" to Discord? Each item will be posted as an embed.`, {
-        title: 'Publish reading list',
-        confirmText: 'Publish',
-      }))
+      !(await ui.confirm(
+        `Publish "${list.title}" to Discord? Each item will be posted as an embed.`,
+        {
+          title: 'Publish reading list',
+          confirmText: 'Publish',
+        },
+      ))
     )
       return
     publishing.value = true
@@ -243,7 +246,7 @@ export const useBookclubStore = defineStore('bookclub', () => {
       tropes: item.tropes,
       chapters: item.chapters,
       comments: item.comments,
-      sources: (item.sources || []).map((s) => ({ ...s })),
+      sources: item.sources.map((s) => ({ ...s })),
     }
   }
 
@@ -287,7 +290,12 @@ export const useBookclubStore = defineStore('bookclub', () => {
 
   async function deleteItem(item: ReadingListItem): Promise<void> {
     if (!selectedList.value) return
-    if (!(await ui.confirm(`Delete "${item.title}"?`, { title: 'Delete item', confirmText: 'Delete' })))
+    if (
+      !(await ui.confirm(`Delete "${item.title}"?`, {
+        title: 'Delete item',
+        confirmText: 'Delete',
+      }))
+    )
       return
     try {
       await endpoints.bookclub.deleteItem(activeClubSlug.value, selectedList.value.id, item.id)
@@ -326,7 +334,7 @@ export const useBookclubStore = defineStore('bookclub', () => {
     lookupResults.value = []
     try {
       const data = await endpoints.bookclub.lookup(q)
-      lookupResults.value = data.results || []
+      lookupResults.value = data.results
       if (!lookupResults.value.length) ui.notify('No matches found', 'info')
     } catch (e) {
       ui.notify((e as Error).message, 'error')
@@ -337,7 +345,7 @@ export const useBookclubStore = defineStore('bookclub', () => {
 
   /** Fill the item form from a chosen AniList result (keeps any existing id). */
   function applyLookupResult(result: ReadingListItem): void {
-    const sources: ReadingListSource[] = (result.sources || []).map((s) => ({ ...s }))
+    const sources: ReadingListSource[] = result.sources.map((s) => ({ ...s }))
     itemForm.value = {
       id: itemForm.value.id,
       cover_image: result.cover_image || '',

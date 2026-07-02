@@ -123,7 +123,7 @@ export const useStampRalliesStore = defineStore('stampRallies', () => {
     ralliesLoading.value = true
     try {
       const data = await endpoints.stampRallies.list()
-      rallies.value = data.stamp_rallies || []
+      rallies.value = data.stamp_rallies
     } catch (e) {
       ui.notify((e as Error).message, 'error')
     } finally {
@@ -136,7 +136,7 @@ export const useStampRalliesStore = defineStore('stampRallies', () => {
     try {
       const data = await endpoints.stampRallies.detail(id)
       selectedRally.value = data.stamp_rally
-      rallyCards.value = data.cards || []
+      rallyCards.value = data.cards
     } catch (e) {
       ui.notify((e as Error).message, 'error')
     } finally {
@@ -148,7 +148,7 @@ export const useStampRalliesStore = defineStore('stampRallies', () => {
     logsLoading.value = true
     try {
       const data = await endpoints.stampRallies.logs(id)
-      rallyLogs.value = data.logs || []
+      rallyLogs.value = data.logs
     } catch (e) {
       ui.notify((e as Error).message, 'error')
     } finally {
@@ -162,7 +162,7 @@ export const useStampRalliesStore = defineStore('stampRallies', () => {
     rallyCards.value = []
     rallyLogs.value = []
     cardAdd.value = { participantName: '' }
-    loadRallyDetail(r.id)
+    void loadRallyDetail(r.id)
   }
 
   /** Loads the three picker image categories + the affiliates list (for the form). */
@@ -174,15 +174,15 @@ export const useStampRalliesStore = defineStore('stampRallies', () => {
         images.loadImages(IMAGE_DIR_STAMP_STAMPS),
         images.loadImages(IMAGE_DIR_STAMP_PRIZES),
       ])
-      cardImages.value = (images.imagesByDir[IMAGE_DIR_STAMP_CARDS] || []).map((i) => i.path)
-      stampImages.value = (images.imagesByDir[IMAGE_DIR_STAMP_STAMPS] || []).map((i) => i.path)
-      prizeImages.value = (images.imagesByDir[IMAGE_DIR_STAMP_PRIZES] || []).map((i) => i.path)
+      cardImages.value = images.imagesByDir[IMAGE_DIR_STAMP_CARDS].map((i) => i.path)
+      stampImages.value = images.imagesByDir[IMAGE_DIR_STAMP_STAMPS].map((i) => i.path)
+      prizeImages.value = images.imagesByDir[IMAGE_DIR_STAMP_PRIZES].map((i) => i.path)
     } catch {
       /* non-fatal: pickers show nothing */
     }
     try {
       const data = await endpoints.affiliates.list()
-      affiliates.value = data.affiliates || []
+      affiliates.value = data.affiliates
     } catch {
       affiliates.value = []
     }
@@ -324,7 +324,7 @@ export const useStampRalliesStore = defineStore('stampRallies', () => {
 
   /** Loads a rally's stamps for the inline "Manage stalls" panel on a list card. */
   async function loadCardStamps(rallyId: number): Promise<void> {
-    if (cardStamps.value[rallyId]) return // already loaded
+    if (rallyId in cardStamps.value) return // already loaded
     try {
       const data = await endpoints.stampRallies.detail(rallyId)
       cardStamps.value = { ...cardStamps.value, [rallyId]: data.stamp_rally.stamps || [] }
@@ -335,10 +335,14 @@ export const useStampRalliesStore = defineStore('stampRallies', () => {
 
   /** Pause/resume a stall from the list card's inline panel, updating that card's
    *  loaded stamps and its "active stalls" count without a reload. */
-  async function setStampPausedInList(rallyId: number, stampId: number, paused: boolean): Promise<void> {
+  async function setStampPausedInList(
+    rallyId: number,
+    stampId: number,
+    paused: boolean,
+  ): Promise<void> {
     try {
       await endpoints.stampRallies.setStampPaused(rallyId, stampId, paused)
-      const st = cardStamps.value[rallyId]?.find((s) => s.id === stampId)
+      const st = cardStamps.value[rallyId].find((s) => s.id === stampId)
       if (st) st.paused = paused
       const r = rallies.value.find((rr) => rr.id === rallyId)
       if (r) r.active_stamp_count = Math.max(0, (r.active_stamp_count ?? 0) + (paused ? -1 : 1))
@@ -379,7 +383,10 @@ export const useStampRalliesStore = defineStore('stampRallies', () => {
       } catch {
         /* clipboard blocked — the per-row copy button still works */
       }
-      ui.notify(copied ? 'Card link created and copied to clipboard' : 'Card link created', 'success')
+      ui.notify(
+        copied ? 'Card link created and copied to clipboard' : 'Card link created',
+        'success',
+      )
       cardAdd.value = { participantName: '' }
       await loadRallyDetail(selectedRally.value.id)
     } catch (e) {
@@ -392,10 +399,13 @@ export const useStampRalliesStore = defineStore('stampRallies', () => {
   async function deleteCard(card: StampRallyCard): Promise<void> {
     if (!selectedRally.value) return
     if (
-      !(await ui.confirm(`Delete the card for ${card.participant_name}? Their stamp record is removed.`, {
-        title: 'Delete card',
-        confirmText: 'Delete',
-      }))
+      !(await ui.confirm(
+        `Delete the card for ${card.participant_name}? Their stamp record is removed.`,
+        {
+          title: 'Delete card',
+          confirmText: 'Delete',
+        },
+      ))
     )
       return
     try {

@@ -50,8 +50,19 @@ function stubLoaders() {
   bookclub.openClub = vi.fn()
   bookclub.applyExternalChange = vi.fn()
   return {
-    garapons, raffles, presets, users, game, announcements,
-    fonts, carrd, images, styles, app, patterns, bookclub,
+    garapons,
+    raffles,
+    presets,
+    users,
+    game,
+    announcements,
+    fonts,
+    carrd,
+    images,
+    styles,
+    app,
+    patterns,
+    bookclub,
   }
 }
 

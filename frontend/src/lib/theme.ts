@@ -151,7 +151,6 @@ function measureFontOverride(family: string): FontMetricOverride | null {
     const m = ctx.measureText('Hg')
     const asc = m.fontBoundingBoxAscent
     const desc = m.fontBoundingBoxDescent
-    if (asc === undefined || desc === undefined) return null
     return clampFontMetrics(asc / px, desc / px)
   } catch {
     return null
@@ -164,26 +163,26 @@ function measureFontOverride(family: string): FontMetricOverride | null {
  * no-ops where the Font Loading API is unavailable (e.g. SSR / older browsers).
  */
 async function clampUploadedFontMetrics(filenames: string[]): Promise<void> {
-  if (typeof document === 'undefined' || !document.fonts) return
-  let changed = false
-  await Promise.all(
+  if (typeof document === 'undefined') return
+  const results = await Promise.all(
     filenames.map(async (file) => {
       const family = fontFamilyFromFile(file)
-      if (!family || measuredFamilies.has(family)) return
+      if (!family || measuredFamilies.has(family)) return false
       try {
         await document.fonts.load(`32px '${family}'`)
       } catch {
-        return // unloaded font would measure as the fallback — skip, retry later
+        return false // unloaded font would measure as the fallback — skip, retry later
       }
       measuredFamilies.add(family)
       const o = measureFontOverride(family)
       if (o) {
         metricOverrides.set(family, o)
-        changed = true
+        return true
       }
+      return false
     }),
   )
-  if (changed) writeUploadedFontStyle(lastFontFilenames)
+  if (results.includes(true)) writeUploadedFontStyle(lastFontFilenames)
 }
 
 /**

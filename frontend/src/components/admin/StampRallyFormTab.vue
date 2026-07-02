@@ -55,7 +55,7 @@ function applyUpdate(key: string, placement: Placement): void {
   if (!f) return
   const idx = Number(key.slice(1))
   const target = key[0] === 's' ? f.stamps[idx] : f.prizes[idx]
-  if (target) Object.assign(target.placement, placement)
+  Object.assign(target.placement, placement)
 }
 
 /** The currently-selected stamp or prize (for the editing panel). */
@@ -66,10 +66,10 @@ const selected = computed(() => {
   const idx = Number(k.slice(1))
   if (k[0] === 's') {
     const stamp = f.stamps[idx]
-    return stamp ? { kind: 'stamp' as const, index: idx, stamp } : null
+    return { kind: 'stamp' as const, index: idx, stamp }
   }
   const prize = f.prizes[idx]
-  return prize ? { kind: 'prize' as const, index: idx, prize } : null
+  return { kind: 'prize' as const, index: idx, prize }
 })
 
 function addStamp(): void {
@@ -113,15 +113,27 @@ function cancel(): void {
     />
     <template v-if="store.rallyForm">
       <FormField label="Title" required>
-        <input v-model="store.rallyForm.title" placeholder="Event name" aria-label="Stamp rally title" />
+        <input
+          v-model="store.rallyForm.title"
+          placeholder="Event name"
+          aria-label="Stamp rally title"
+        />
       </FormField>
 
       <FormRow>
         <FormField label="Available From" help="When the card opens (optional).">
-          <input v-model="store.rallyForm.available_from" type="datetime-local" aria-label="Available from" />
+          <input
+            v-model="store.rallyForm.available_from"
+            type="datetime-local"
+            aria-label="Available from"
+          />
         </FormField>
         <FormField label="Available To" help="When the card closes (optional).">
-          <input v-model="store.rallyForm.available_to" type="datetime-local" aria-label="Available to" />
+          <input
+            v-model="store.rallyForm.available_to"
+            type="datetime-local"
+            aria-label="Available to"
+          />
         </FormField>
       </FormRow>
 
@@ -182,7 +194,11 @@ function cancel(): void {
         <div class="flex-toolbar flex-between mb-10">
           <h4 class="section-heading no-margin">
             <font-awesome-icon :icon="['fad', selected.kind === 'prize' ? 'gift' : 'stamp']" />
-            {{ selected.kind === 'prize' ? `Prize ${selected.index + 1}` : `Stamp ${selected.index + 1}` }}
+            {{
+              selected.kind === 'prize'
+                ? `Prize ${selected.index + 1}`
+                : `Stamp ${selected.index + 1}`
+            }}
           </h4>
           <button class="btn-danger btn-sm" @click="removeSelected">
             <font-awesome-icon :icon="['fas', 'trash']" /> Remove
@@ -192,18 +208,27 @@ function cancel(): void {
         <!-- Stamp settings -->
         <template v-if="selected.kind === 'stamp'">
           <FormRow>
-            <FormField label="Stall / Vendor" help="Recorded in the View Logs (the card's stall labels are part of the card art).">
+            <FormField
+              label="Stall / Vendor"
+              help="Recorded in the View Logs (the card's stall labels are part of the card art)."
+            >
               <select
                 :value="selected.stamp.affiliate_id ?? ''"
                 aria-label="Stall affiliate"
                 @change="setAffiliate(selected.index, ($event.target as HTMLSelectElement).value)"
               >
                 <option value="">Senpan Tea House (default)</option>
-                <option v-for="a in store.affiliates" :key="a.id" :value="a.id">{{ a.name }}</option>
+                <option v-for="a in store.affiliates" :key="a.id" :value="a.id">
+                  {{ a.name }}
+                </option>
               </select>
             </FormField>
             <FormField label="Password" help="Participants enter this to collect the stamp.">
-              <input v-model="selected.stamp.password" placeholder="Stamp password" aria-label="Stamp password" />
+              <input
+                v-model="selected.stamp.password"
+                placeholder="Stamp password"
+                aria-label="Stamp password"
+              />
             </FormField>
           </FormRow>
           <FormField label="Stamp Image" help="From the “Stamp Stamps” image category.">
@@ -211,10 +236,18 @@ function cancel(): void {
           </FormField>
           <FormRow>
             <FormField label="Active From" help="Optional — defaults to the whole event.">
-              <input v-model="selected.stamp.active_from" type="datetime-local" aria-label="Stamp active from" />
+              <input
+                v-model="selected.stamp.active_from"
+                type="datetime-local"
+                aria-label="Stamp active from"
+              />
             </FormField>
             <FormField label="Active To" help="Optional.">
-              <input v-model="selected.stamp.active_to" type="datetime-local" aria-label="Stamp active to" />
+              <input
+                v-model="selected.stamp.active_to"
+                type="datetime-local"
+                aria-label="Stamp active to"
+              />
             </FormField>
           </FormRow>
           <label class="checkbox-row">

@@ -59,7 +59,9 @@ const filteredClosed = computed(() => {
     [r.title, r.winner_name ?? ''].some((s) => s.toLowerCase().includes(q)),
   )
 })
-const closedTotalPages = computed(() => Math.max(1, Math.ceil(filteredClosed.value.length / PER_PAGE)))
+const closedTotalPages = computed(() =>
+  Math.max(1, Math.ceil(filteredClosed.value.length / PER_PAGE)),
+)
 const pagedClosed = computed(() => {
   const start = (closedPage.value - 1) * PER_PAGE
   return filteredClosed.value.slice(start, start + PER_PAGE)
@@ -127,8 +129,9 @@ function onFormDone(): void {
   screen.value = 'list'
 }
 async function deleteSelected(): Promise<void> {
-  if (!raffles.selectedRaffle) return
-  await raffles.deleteRaffle(raffles.selectedRaffle.id)
+  const r = raffles.selectedRaffle
+  if (!r) return
+  await raffles.deleteRaffle(r.id)
   // deleteRaffle clears selectedRaffle on success → return to the list.
   if (!raffles.selectedRaffle) screen.value = 'list'
 }
@@ -158,17 +161,14 @@ async function deleteSelected(): Promise<void> {
 
       <!-- Prize image -->
       <div v-if="raffles.selectedRaffle.prize_image" class="mb-16">
-        <img
-          :src="assetUrl(raffles.selectedRaffle.prize_image)"
-          class="prize-img-sm"
-          alt="Prize"
-        />
+        <img :src="assetUrl(raffles.selectedRaffle.prize_image)" class="prize-img-sm" alt="Prize" />
       </div>
 
       <!-- Winner section -->
       <div v-if="raffles.raffleWinner" class="raffle-winner-panel">
         <h3 class="section-heading">
-          <font-awesome-icon :icon="['fad', 'trophy']" /> Winner: {{ raffles.raffleWinner.character_name }} @
+          <font-awesome-icon :icon="['fad', 'trophy']" /> Winner:
+          {{ raffles.raffleWinner.character_name }} @
           {{ raffles.raffleWinner.world }}
         </h3>
         <p class="text-dim text-sm mb-12">{{ raffles.raffleWinner.num_entries }} entries</p>
@@ -287,7 +287,9 @@ async function deleteSelected(): Promise<void> {
                   :class="['btn-sm', e.paid ? 'btn-confirm' : 'btn-neutral']"
                   @click="raffles.toggleEntryPaid(e)"
                 >
-                  <template v-if="e.paid"><font-awesome-icon :icon="['fas', 'circle-check']" /> Paid</template>
+                  <template v-if="e.paid"
+                    ><font-awesome-icon :icon="['fas', 'circle-check']" /> Paid</template
+                  >
                   <template v-else>Unpaid</template>
                 </button>
                 <template v-else>
@@ -320,7 +322,9 @@ async function deleteSelected(): Promise<void> {
       />
       <template v-else>
         <!-- Current (non-closed) raffles -->
-        <h4 class="section-heading"><font-awesome-icon :icon="['fad', 'clipboard-list']" /> Current Raffles</h4>
+        <h4 class="section-heading">
+          <font-awesome-icon :icon="['fad', 'clipboard-list']" /> Current Raffles
+        </h4>
         <div v-if="raffles.openRaffles.length" class="card-grid">
           <div
             v-for="r in raffles.openRaffles"
@@ -357,7 +361,9 @@ async function deleteSelected(): Promise<void> {
         <EmptyState v-else text="No current raffles." />
 
         <!-- Closed raffles table -->
-        <h4 class="section-heading mt-20"><font-awesome-icon :icon="['fad', 'lock']" /> Closed Raffles</h4>
+        <h4 class="section-heading mt-20">
+          <font-awesome-icon :icon="['fad', 'lock']" /> Closed Raffles
+        </h4>
         <template v-if="raffles.closedRaffles.length">
           <div class="manager-toolbar">
             <SearchInput
@@ -365,9 +371,7 @@ async function deleteSelected(): Promise<void> {
               placeholder="Search closed raffles…"
               aria-label="Search closed raffles"
             />
-            <span class="text-dim text-xs push-right">
-              {{ filteredClosed.length }} closed
-            </span>
+            <span class="text-dim text-xs push-right"> {{ filteredClosed.length }} closed </span>
           </div>
           <DataTable :columns="closedColumns" :rows="pagedClosed" row-key="id">
             <template #cell-title="{ row }">{{ row.title }}</template>

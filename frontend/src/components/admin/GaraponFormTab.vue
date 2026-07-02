@@ -26,8 +26,8 @@ const garapons = useGaraponsStore()
 // Load the reusable grand-prize images (the "Garapon" category on System → Images)
 // and the open stamp rallies offered in the "Linked Stamp Rally" picker.
 onMounted(() => {
-  garapons.loadGrandPrizeImages()
-  garapons.loadStampRallyOptions()
+  void garapons.loadGrandPrizeImages()
+  void garapons.loadStampRallyOptions()
 })
 
 /** Set the linked stamp rally from the select ('' → null = not linked). */
@@ -77,7 +77,9 @@ function cancel(): void {
           @change="setStampRally(($event.target as HTMLSelectElement).value)"
         >
           <option value="">None — not linked</option>
-          <option v-for="r in garapons.stampRallyOptions" :key="r.id" :value="r.id">{{ r.title }}</option>
+          <option v-for="r in garapons.stampRallyOptions" :key="r.id" :value="r.id">
+            {{ r.title }}
+          </option>
         </select>
       </FormField>
 
@@ -103,11 +105,7 @@ function cancel(): void {
             <span class="prize-pct-col">Odds</span>
             <span class="prize-del-col"></span>
           </div>
-          <div
-            v-for="(p, i) in garapons.garaponForm.prizes"
-            :key="i"
-            class="prize-row"
-          >
+          <div v-for="(p, i) in garapons.garaponForm.prizes" :key="i" class="prize-row">
             <span class="prize-grand-col">
               <input
                 type="radio"
@@ -167,7 +165,9 @@ function cancel(): void {
       </FormField>
 
       <FormActions align="start">
-        <button class="btn-neutral" :disabled="garapons.savingGarapon" @click="cancel">Cancel</button>
+        <button class="btn-neutral" :disabled="garapons.savingGarapon" @click="cancel">
+          Cancel
+        </button>
         <button
           class="btn-confirm"
           :disabled="!garapons.garaponForm.title.trim() || garapons.savingGarapon"

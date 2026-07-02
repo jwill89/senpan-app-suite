@@ -25,7 +25,7 @@ const app = createApp(App)
 const pinia = createPinia()
 app.use(pinia)
 app.use(router)
-app.component('font-awesome-icon', FontAwesomeIcon)
+app.component('FontAwesomeIcon', FontAwesomeIcon)
 
 // Surface otherwise-silent runtime errors as a toast (and keep logging them to
 // the console) so failures are visible instead of leaving the UI half-rendered.
@@ -49,7 +49,7 @@ setUnauthorizedHandler(() => {
   const current = router.currentRoute.value
   if (current.name !== 'admin-login') {
     useUiStore().notify('Your session has expired. Please log in again.', 'error')
-    router.push({ name: 'admin-login', query: { redirect: current.fullPath } })
+    void router.push({ name: 'admin-login', query: { redirect: current.fullPath } })
   }
 })
 

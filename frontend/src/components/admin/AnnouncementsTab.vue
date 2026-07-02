@@ -66,7 +66,7 @@ const canReorder = computed(() => !store.search.trim() && !store.typeFilter)
 const visibleIds = computed(() => new Set(store.filteredAnnouncements.map((a) => a.id)))
 /** Persist the order after a drag (vuedraggable has already mutated the array). */
 function onReorder(): void {
-  store.reorder(store.announcements.map((a) => a.id))
+  void store.reorder(store.announcements.map((a) => a.id))
 }
 
 // How many Discord embed fields the current details will occupy. >1 means the
@@ -238,10 +238,7 @@ async function submitRole(): Promise<void> {
         label="Loading announcements…"
       />
       <template v-else>
-        <p
-          v-if="store.announcements.length > 1"
-          class="text-dim text-xs mb-12"
-        >
+        <p v-if="store.announcements.length > 1" class="text-dim text-xs mb-12">
           <template v-if="canReorder">
             <font-awesome-icon :icon="['fad', 'bars']" /> Drag a row by its handle to reorder the
             list. The order is saved automatically.
@@ -291,56 +288,65 @@ async function submitRole(): Promise<void> {
               </template>
 
               <h4 class="ann-title">{{ a.title }}</h4>
-            <p class="text-sm text-dim ann-meta">
-              <font-awesome-icon :icon="['fad', 'folder-open']" /> {{ typeName(a) }}
-            </p>
-            <p v-if="a.start_at" class="text-sm ann-meta">
-              <font-awesome-icon :icon="['fad', 'calendar-days']" />
-              {{ inZone(a.start_at, a.timezone) }}
-              <span v-if="a.end_at">– {{ inZone(a.end_at, a.timezone) }}</span>
-              <span v-if="a.timezone" class="text-dim">({{ a.timezone }})</span>
-            </p>
-            <p class="text-sm ann-meta">
-              <span v-if="a.schedule_kind" class="badge badge--accent ann-badge">
-                {{ scheduleLabel(a) }}
-                <template v-if="a.next_post_at">
-                  · next {{ inZone(a.next_post_at, a.timezone) }}
-                </template>
-              </span>
-              <span v-else class="badge badge--muted ann-badge">Manual only</span>
-              <span v-if="a.skip_next" class="badge badge--warning ann-badge">⏭ next skipped</span>
-            </p>
+              <p class="text-sm text-dim ann-meta">
+                <font-awesome-icon :icon="['fad', 'folder-open']" /> {{ typeName(a) }}
+              </p>
+              <p v-if="a.start_at" class="text-sm ann-meta">
+                <font-awesome-icon :icon="['fad', 'calendar-days']" />
+                {{ inZone(a.start_at, a.timezone) }}
+                <span v-if="a.end_at">– {{ inZone(a.end_at, a.timezone) }}</span>
+                <span v-if="a.timezone" class="text-dim">({{ a.timezone }})</span>
+              </p>
+              <p class="text-sm ann-meta">
+                <span v-if="a.schedule_kind" class="badge badge--accent ann-badge">
+                  {{ scheduleLabel(a) }}
+                  <template v-if="a.next_post_at">
+                    · next {{ inZone(a.next_post_at, a.timezone) }}
+                  </template>
+                </span>
+                <span v-else class="badge badge--muted ann-badge">Manual only</span>
+                <span v-if="a.skip_next" class="badge badge--warning ann-badge"
+                  >⏭ next skipped</span
+                >
+              </p>
 
-            <template #actions>
-              <button
-                class="btn-action btn-sm"
-                :disabled="store.sendingId === a.id"
-                title="Post to Discord now"
-                @click="store.sendNow(a)"
-              >
-                <LoadingSpinner v-if="store.sendingId === a.id" label="Sending…" />
-                <template v-else><font-awesome-icon :icon="['fas', 'paper-plane']" /> Send now</template>
-              </button>
-              <button
-                v-if="a.schedule_kind && a.next_post_at"
-                class="btn-caution btn-sm"
-                :disabled="store.skippingId === a.id || a.skip_next"
-                title="Skip the next scheduled occurrence"
-                @click="store.skipNext(a)"
-              >
-                <font-awesome-icon :icon="['fas', 'forward-step']" /> Skip next
-              </button>
-              <button class="btn-confirm btn-sm" aria-label="Edit" title="Edit" @click="openEdit(a)">
-                <font-awesome-icon :icon="['fas', 'pen-to-square']" />
-              </button>
-              <button
-                class="btn-danger btn-sm"
-                aria-label="Delete"
-                title="Delete"
-                @click="store.deleteAnnouncement(a)"
-              >
-                <font-awesome-icon :icon="['fas', 'trash']" />
-              </button>
+              <template #actions>
+                <button
+                  class="btn-action btn-sm"
+                  :disabled="store.sendingId === a.id"
+                  title="Post to Discord now"
+                  @click="store.sendNow(a)"
+                >
+                  <LoadingSpinner v-if="store.sendingId === a.id" label="Sending…" />
+                  <template v-else
+                    ><font-awesome-icon :icon="['fas', 'paper-plane']" /> Send now</template
+                  >
+                </button>
+                <button
+                  v-if="a.schedule_kind && a.next_post_at"
+                  class="btn-caution btn-sm"
+                  :disabled="store.skippingId === a.id || a.skip_next"
+                  title="Skip the next scheduled occurrence"
+                  @click="store.skipNext(a)"
+                >
+                  <font-awesome-icon :icon="['fas', 'forward-step']" /> Skip next
+                </button>
+                <button
+                  class="btn-confirm btn-sm"
+                  aria-label="Edit"
+                  title="Edit"
+                  @click="openEdit(a)"
+                >
+                  <font-awesome-icon :icon="['fas', 'pen-to-square']" />
+                </button>
+                <button
+                  class="btn-danger btn-sm"
+                  aria-label="Delete"
+                  title="Delete"
+                  @click="store.deleteAnnouncement(a)"
+                >
+                  <font-awesome-icon :icon="['fas', 'trash']" />
+                </button>
               </template>
             </ListRow>
           </template>
@@ -439,7 +445,7 @@ async function submitRole(): Promise<void> {
         help="For recurring day-of events: each time this announcement posts, the Start/End shift to the day it's sent, keeping the same time of day (and a next-day end stays next-day). The dates above define that time-of-day template — e.g. set the first occurrence's 10pm–1am and every post shows that day's 10pm–1am."
       >
         <label class="checkbox-inline">
-          <input type="checkbox" v-model="store.form.dynamic_dates" />
+          <input v-model="store.form.dynamic_dates" type="checkbox" />
           Re-anchor the Start/End to the day each post is sent
         </label>
       </FormField>
@@ -528,8 +534,8 @@ async function submitRole(): Promise<void> {
       <hr class="ann-divider" />
       <h4 class="section-heading"><font-awesome-icon :icon="['fab', 'discord']" /> Buttons</h4>
       <p class="text-dim text-sm mb-8">
-        Up to {{ MAX_BUTTONS }} link buttons shown under the embed. Each needs a label and URL;
-        the emoji is optional — click the emoji box to pick one.
+        Up to {{ MAX_BUTTONS }} link buttons shown under the embed. Each needs a label and URL; the
+        emoji is optional — click the emoji box to pick one.
       </p>
       <div v-if="store.form.buttons.length" class="ann-buttons">
         <div v-for="(btn, i) in store.form.buttons" :key="i" class="ann-button-row">
@@ -584,9 +590,7 @@ async function submitRole(): Promise<void> {
 
       <!-- Scheduling: when (if ever) this announcement auto-posts to Discord -->
       <hr class="ann-divider" />
-      <h4 class="section-heading">
-        <font-awesome-icon :icon="['fad', 'clock']" /> Scheduling
-      </h4>
+      <h4 class="section-heading"><font-awesome-icon :icon="['fad', 'clock']" /> Scheduling</h4>
 
       <!-- Schedule builder -->
       <FormField label="Schedule">
@@ -626,7 +630,9 @@ async function submitRole(): Promise<void> {
         <div v-if="store.form.schedule_kind === 'monthly'" class="flex-row mb-10">
           <FormField label="Week" required style="flex: 0 0 120px">
             <select v-model.number="store.form.week_of_month" aria-label="Week of month">
-              <option v-for="w in WEEK_OF_MONTH" :key="w.value" :value="w.value">{{ w.label }}</option>
+              <option v-for="w in WEEK_OF_MONTH" :key="w.value" :value="w.value">
+                {{ w.label }}
+              </option>
             </select>
           </FormField>
           <FormField label="Weekday" required style="flex: 0 0 140px">
@@ -653,7 +659,11 @@ async function submitRole(): Promise<void> {
 
       <FormActions align="start">
         <button class="btn-neutral" @click="backToList()">Cancel</button>
-        <button class="btn-confirm" :disabled="store.saving || !store.form.title.trim()" @click="submit()">
+        <button
+          class="btn-confirm"
+          :disabled="store.saving || !store.form.title.trim()"
+          @click="submit()"
+        >
           <LoadingSpinner v-if="store.saving" label="Saving…" />
           <template v-else>{{ store.form.id ? 'Save Changes' : 'Create Announcement' }}</template>
         </button>
@@ -793,7 +803,9 @@ async function submitRole(): Promise<void> {
         <button class="btn-neutral" @click="screen = 'roles'">Cancel</button>
         <button
           class="btn-confirm"
-          :disabled="store.savingRole || !store.roleForm.name.trim() || !store.roleForm.role_id.trim()"
+          :disabled="
+            store.savingRole || !store.roleForm.name.trim() || !store.roleForm.role_id.trim()
+          "
           @click="submitRole()"
         >
           <LoadingSpinner v-if="store.savingRole" label="Saving…" />

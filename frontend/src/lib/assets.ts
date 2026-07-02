@@ -18,4 +18,3 @@ export function assetUrl(path: string | null | undefined): string {
   }
   return '/' + path
 }
-

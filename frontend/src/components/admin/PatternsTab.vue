@@ -68,7 +68,7 @@ onMounted(() => patterns.rebuildEditableGroups())
 
 /** Persist after any drag (reorder within / move between categories). */
 function onChange(): void {
-  patterns.applyGroupedOrder()
+  void patterns.applyGroupedOrder()
 }
 
 /** True when a text search is active — switches the body to a flat result list. */
@@ -168,7 +168,10 @@ async function saveNew(): Promise<void> {
         </div>
 
         <template v-for="group in visibleGroups" :key="group.category.id">
-          <div class="pattern-group-head" @click="patterns.toggleCategoryCollapsed(group.category.id)">
+          <div
+            class="pattern-group-head"
+            @click="patterns.toggleCategoryCollapsed(group.category.id)"
+          >
             <span class="text-dim">
               {{ patterns.isCategoryCollapsed(group.category.id) ? '▶' : '▼' }}
             </span>
@@ -191,7 +194,9 @@ async function saveNew(): Promise<void> {
           >
             <template #item="{ element: p }">
               <div class="saved-pattern">
-                <span class="drag-handle pattern-drag"><font-awesome-icon :icon="['fad', 'bars']" /></span>
+                <span class="drag-handle pattern-drag"
+                  ><font-awesome-icon :icon="['fad', 'bars']"
+                /></span>
                 <span
                   class="del-x"
                   title="Delete pattern"
@@ -342,7 +347,9 @@ async function saveNew(): Promise<void> {
           @click="saveCategory"
         >
           <LoadingSpinner v-if="patterns.savingCategory" label="Saving…" />
-          <template v-else>{{ patterns.categoryForm.id ? 'Save Changes' : 'Add Category' }}</template>
+          <template v-else>{{
+            patterns.categoryForm.id ? 'Save Changes' : 'Add Category'
+          }}</template>
         </button>
       </FormActions>
     </div>

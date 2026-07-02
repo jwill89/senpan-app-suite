@@ -77,9 +77,7 @@ const projectColumns: DataColumn[] = [
 const filteredProjects = computed(() => {
   const q = search.value.trim().toLowerCase()
   if (!q) return carrd.projects
-  return carrd.projects.filter((p) =>
-    [p.title, p.folder].some((s) => s.toLowerCase().includes(q)),
-  )
+  return carrd.projects.filter((p) => [p.title, p.folder].some((s) => s.toLowerCase().includes(q)))
 })
 
 /**
@@ -121,7 +119,7 @@ async function openProject(p: CarrdProject): Promise<void> {
 
 function backToList(): void {
   screen.value = 'list'
-  carrd.loadProjects() // refresh counts/size after edits in the project
+  void carrd.loadProjects() // refresh counts/size after edits in the project
 }
 
 // ── Create / rename modal ──────────────────────────────────────────────────────
@@ -146,7 +144,11 @@ async function submitProject(): Promise<void> {
   savingProject.value = true
   try {
     if (projectModal.value.mode === 'edit') {
-      const ok = await carrd.renameProject(projectModal.value.folder, formTitle.value, formFolder.value)
+      const ok = await carrd.renameProject(
+        projectModal.value.folder,
+        formTitle.value,
+        formFolder.value,
+      )
       if (ok) closeModal()
     } else {
       // The store creates and opens the project (loads its contents) on success.
@@ -178,7 +180,7 @@ function onDrop(e: DragEvent): void {
   dragOver.value = false
   const files = e.dataTransfer?.files
   if (files && files.length > 0) {
-    carrd.uploadImages(files)
+    void carrd.uploadImages(files)
   }
 }
 
@@ -243,9 +245,9 @@ onMounted(() => carrd.loadProjects())
 
       <p class="text-dim text-xs mb-12">
         Served from
-        <span class="code-gold">{{ CARRD_BASE_URL }}/{{ selectedProject.folder }}/…</span>.
-        Allowed types: .jpg, .jpeg, .png, .webp, .gif, .mp3, .mp4. Uploading a file with an
-        existing name replaces it.
+        <span class="code-gold">{{ CARRD_BASE_URL }}/{{ selectedProject.folder }}/…</span>. Allowed
+        types: .jpg, .jpeg, .png, .webp, .gif, .mp3, .mp4. Uploading a file with an existing name
+        replaces it.
       </p>
 
       <div class="flex-toolbar mb-12" style="gap: 12px; align-items: center">
@@ -263,11 +265,7 @@ onMounted(() => carrd.loadProjects())
             </button>
           </template>
         </nav>
-        <button
-          class="btn-action btn-sm push-right"
-          :disabled="carrd.uploading"
-          @click="pickFiles"
-        >
+        <button class="btn-action btn-sm push-right" :disabled="carrd.uploading" @click="pickFiles">
           <LoadingSpinner v-if="carrd.uploading" label="Uploading…" />
           <template v-else><font-awesome-icon :icon="['fas', 'upload']" /> Upload Images</template>
         </button>
@@ -451,7 +449,11 @@ onMounted(() => carrd.loadProjects())
           </template>
           <template #cell-actions="{ row }">
             <div class="row-actions">
-              <button class="btn-confirm btn-sm" title="Rename this project" @click="startEdit(row)">
+              <button
+                class="btn-confirm btn-sm"
+                title="Rename this project"
+                @click="startEdit(row)"
+              >
                 <font-awesome-icon :icon="['fas', 'pen-to-square']" /> Edit
               </button>
               <button
@@ -617,7 +619,9 @@ onMounted(() => carrd.loadProjects())
   border-radius: var(--radius);
   color: var(--text-muted);
   cursor: pointer;
-  transition: border-color 0.15s, background 0.15s;
+  transition:
+    border-color 0.15s,
+    background 0.15s;
 }
 .carrd-dropzone:hover {
   border-color: var(--highlight);
@@ -695,7 +699,9 @@ onMounted(() => carrd.loadProjects())
   color: #fff;
   cursor: pointer;
   opacity: 0.85;
-  transition: background 0.15s, opacity 0.15s;
+  transition:
+    background 0.15s,
+    opacity 0.15s;
 }
 .carrd-del-overlay:hover {
   opacity: 1;

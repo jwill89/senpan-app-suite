@@ -17,7 +17,15 @@ describe('activeColumnCount', () => {
 
   it('counts distinct columns with a required cell', () => {
     // Columns B, I, N (0,1,2) marked → 3 active.
-    expect(activeColumnCount([pattern([[0, 0], [1, 1], [4, 2]])])).toBe(3)
+    expect(
+      activeColumnCount([
+        pattern([
+          [0, 0],
+          [1, 1],
+          [4, 2],
+        ]),
+      ]),
+    ).toBe(3)
   })
 
   it('ignores the FREE centre cell', () => {
@@ -35,7 +43,15 @@ describe('activeColumnCount', () => {
 describe('maxCallableNumbers', () => {
   it('is activeColumns × 15', () => {
     expect(maxCallableNumbers([])).toBe(75)
-    expect(maxCallableNumbers([pattern([[0, 0], [0, 1], [0, 2]])])).toBe(45)
+    expect(
+      maxCallableNumbers([
+        pattern([
+          [0, 0],
+          [0, 1],
+          [0, 2],
+        ]),
+      ]),
+    ).toBe(45)
   })
 })
 
@@ -46,9 +62,26 @@ describe('halftimeCallThreshold', () => {
 
   it('scales the 35/75 ratio to the callable pool', () => {
     // 3 columns → 45 callable → round(35/75 * 45) = 21.
-    expect(halftimeCallThreshold([pattern([[0, 0], [0, 1], [0, 2]])])).toBe(21)
+    expect(
+      halftimeCallThreshold([
+        pattern([
+          [0, 0],
+          [0, 1],
+          [0, 2],
+        ]),
+      ]),
+    ).toBe(21)
     // 4 columns → 60 callable → round(35/75 * 60) = 28.
-    expect(halftimeCallThreshold([pattern([[0, 0], [0, 1], [0, 2], [0, 3]])])).toBe(28)
+    expect(
+      halftimeCallThreshold([
+        pattern([
+          [0, 0],
+          [0, 1],
+          [0, 2],
+          [0, 3],
+        ]),
+      ]),
+    ).toBe(28)
     // 1 column → 15 callable → round(35/75 * 15) = 7.
     expect(halftimeCallThreshold([pattern([[0, 0]])])).toBe(7)
   })

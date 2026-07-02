@@ -97,11 +97,12 @@ export function parseInlineRuns(text: string): { text: string; bold: boolean; it
   let m: RegExpExecArray | null
   while ((m = re.exec(text)) !== null) {
     if (m.index > last) runs.push({ text: text.slice(last, m.index), bold: false, italic: false })
-    if (m[2] !== undefined) runs.push({ text: m[2], bold: true, italic: true })
-    else if (m[4] !== undefined) runs.push({ text: m[4], bold: true, italic: false })
-    else if (m[6] !== undefined) runs.push({ text: m[6], bold: false, italic: true })
-    else if (m[7] !== undefined) runs.push({ text: m[7], bold: false, italic: false }) // inline code
-    else if (m[8] !== undefined) runs.push({ text: m[8], bold: false, italic: false }) // strikethrough
+    if (m[2]) runs.push({ text: m[2], bold: true, italic: true })
+    else if (m[4]) runs.push({ text: m[4], bold: true, italic: false })
+    else if (m[6]) runs.push({ text: m[6], bold: false, italic: true })
+    else if (m[7])
+      runs.push({ text: m[7], bold: false, italic: false }) // inline code
+    else if (m[8]) runs.push({ text: m[8], bold: false, italic: false }) // strikethrough
     last = re.lastIndex
   }
   if (last < text.length) runs.push({ text: text.slice(last), bold: false, italic: false })
@@ -264,12 +265,10 @@ export async function exportCardImage(opts: ExportCardOptions): Promise<void> {
 
   // Make sure the (possibly Google-hosted) header font is ready so canvas text
   // metrics + rendering use it.
-  if (document.fonts?.ready) {
-    try {
-      await document.fonts.ready
-    } catch {
-      /* non-fatal */
-    }
+  try {
+    await document.fonts.ready
+  } catch {
+    /* non-fatal */
   }
 
   // 1. Capture the live styled board. Try with web-font embedding first (so the
@@ -330,7 +329,8 @@ export async function exportCardImage(opts: ExportCardOptions): Promise<void> {
   const headerH = idBaseRel
 
   // Parse + wrap footer details (with bold/italic styling) before sizing canvas.
-  const measure = document.createElement('canvas').getContext('2d')!
+  const measure = document.createElement('canvas').getContext('2d')
+  if (!measure) throw new Error('Canvas not supported')
   const detailParas = opts.gameDetails ? parseDetailParagraphs(opts.gameDetails) : []
   const detailLines = detailParas.length
     ? wrapWords(measure, detailParas, detailSize, totalW - pad * 2, maxDetailLines)
@@ -459,4 +459,3 @@ export async function exportCardImage(opts: ExportCardOptions): Promise<void> {
   if (!blob) throw new Error('Failed to render image')
   triggerDownload(blob, opts.fileName + '.png')
 }
-

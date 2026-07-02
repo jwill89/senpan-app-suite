@@ -20,7 +20,7 @@ const images = useImagesStore()
 // Only .svg is offered — the board flourish inlines for card export and the
 // number flourish is a CSS mask, both of which require SVG.
 const flourishPaths = computed(() =>
-  (images.imagesByDir[IMAGE_DIR_FLOURISHES] || [])
+  (IMAGE_DIR_FLOURISHES in images.imagesByDir ? images.imagesByDir[IMAGE_DIR_FLOURISHES] : [])
     .filter((i) => i.name.toLowerCase().endsWith('.svg'))
     .map((i) => i.path),
 )
@@ -67,11 +67,7 @@ const tokens = computed<Record<string, string>>({
               block
               label="Loading…"
             />
-            <p
-              v-else-if="styles.styles.length === 0"
-              class="text-dim text-sm"
-              style="padding: 8px"
-            >
+            <p v-else-if="styles.styles.length === 0" class="text-dim text-sm" style="padding: 8px">
               No themes yet.
             </p>
           </div>
@@ -133,8 +129,8 @@ const tokens = computed<Record<string, string>>({
               <div class="flourish-option">
                 <label class="field-label">Board Flourish</label>
                 <p class="text-dim text-xs mb-8">
-                  SVG drawn at the four corners of the player bingo board. Upload SVGs under
-                  System → Images → Flourishes. Leave unset to use the built-in flourish.
+                  SVG drawn at the four corners of the player bingo board. Upload SVGs under System
+                  → Images → Flourishes. Leave unset to use the built-in flourish.
                 </p>
                 <ImagePicker v-model="styles.editingStyle.board_flourish" :images="flourishPaths" />
               </div>
@@ -144,7 +140,10 @@ const tokens = computed<Record<string, string>>({
                   SVG shown either side of the “Last Called” number (player view + Game tab). Leave
                   unset to use the built-in flourish.
                 </p>
-                <ImagePicker v-model="styles.editingStyle.number_flourish" :images="flourishPaths" />
+                <ImagePicker
+                  v-model="styles.editingStyle.number_flourish"
+                  :images="flourishPaths"
+                />
               </div>
             </div>
           </div>

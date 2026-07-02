@@ -47,7 +47,7 @@ export const useImagesStore = defineStore('images', () => {
     loading.value = true
     try {
       const data = await endpoints.images.categories()
-      categories.value = data.categories || []
+      categories.value = data.categories
     } catch (e) {
       ui.notify((e as Error).message, 'error')
     } finally {
@@ -60,7 +60,7 @@ export const useImagesStore = defineStore('images', () => {
     loadingImages.value = true
     try {
       const data = await endpoints.images.list(dir)
-      imagesByDir.value = { ...imagesByDir.value, [dir]: data.images || [] }
+      imagesByDir.value = { ...imagesByDir.value, [dir]: data.images }
     } catch (e) {
       ui.notify((e as Error).message, 'error')
       imagesByDir.value = { ...imagesByDir.value, [dir]: [] }
@@ -104,7 +104,7 @@ export const useImagesStore = defineStore('images', () => {
       await endpoints.images.deleteCategory(cat.dir)
       ui.notify('Category deleted', 'info')
       const next = { ...imagesByDir.value }
-      delete next[cat.dir]
+      Reflect.deleteProperty(next, cat.dir)
       imagesByDir.value = next
       await loadCategories()
     } catch (e) {
@@ -123,8 +123,8 @@ export const useImagesStore = defineStore('images', () => {
     uploading.value = true
     try {
       const res = await endpoints.images.upload(form)
-      const ok = res.uploaded?.length ?? 0
-      const skipped = res.skipped ?? []
+      const ok = res.uploaded.length
+      const skipped = res.skipped
       if (ok > 0) ui.notify(`Uploaded ${ok} image${ok === 1 ? '' : 's'}`, 'success')
       for (const s of skipped) ui.notify(`${s.name}: ${s.reason}`, 'error')
       if (ok === 0 && skipped.length === 0) ui.notify('No images were uploaded', 'info')

@@ -59,7 +59,9 @@ const items = computed<CanvasItem[]>(() => {
   return [...stamps, ...prizes]
 })
 
-const collectedCount = computed(() => store.publicCard?.stamps.filter((s) => s.collected).length ?? 0)
+const collectedCount = computed(
+  () => store.publicCard?.stamps.filter((s) => s.collected).length ?? 0,
+)
 const totalStamps = computed(() => store.publicCard?.stamps.length ?? 0)
 
 function stampStatus(s: PublicStamp): { label: string; cls: string } {
@@ -99,7 +101,10 @@ async function submit(): Promise<void> {
         🎉 Your card is complete! Your prizes are revealed below.
       </div>
       <p v-else class="stamp-progress">
-        <strong>{{ collectedCount }}</strong> of {{ totalStamps }} stamp{{ totalStamps === 1 ? '' : 's' }} collected
+        <strong>{{ collectedCount }}</strong> of {{ totalStamps }} stamp{{
+          totalStamps === 1 ? '' : 's'
+        }}
+        collected
       </p>
 
       <!-- The card -->
@@ -134,8 +139,12 @@ async function submit(): Promise<void> {
       <ul class="stamp-stall-list mb-16">
         <li v-for="s in store.publicCard.stamps" :key="s.id" class="stamp-stall">
           <span class="stamp-stall-name">{{ stallName(s.affiliate_name) }}</span>
-          <span v-if="windowText(s)" class="stamp-stall-window text-dim text-xs">{{ windowText(s) }}</span>
-          <span :class="['status-badge', `stall-${stampStatus(s).cls}`]">{{ stampStatus(s).label }}</span>
+          <span v-if="windowText(s)" class="stamp-stall-window text-dim text-xs">{{
+            windowText(s)
+          }}</span>
+          <span :class="['status-badge', `stall-${stampStatus(s).cls}`]">{{
+            stampStatus(s).label
+          }}</span>
         </li>
       </ul>
 
@@ -160,7 +169,8 @@ async function submit(): Promise<void> {
   <!-- Not found -->
   <div v-else-if="notFound" class="tab-body">
     <p class="stamp-notfound text-dim">
-      <font-awesome-icon :icon="['fad', 'stamp']" /> This stamp card link is invalid or has been removed.
+      <font-awesome-icon :icon="['fad', 'stamp']" /> This stamp card link is invalid or has been
+      removed.
     </p>
   </div>
 

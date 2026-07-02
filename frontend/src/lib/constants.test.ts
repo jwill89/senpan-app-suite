@@ -35,7 +35,7 @@ describe('emptyGrid', () => {
     const g = emptyGrid()
     expect(g).toHaveLength(5)
     expect(g.every((row) => row.length === 5)).toBe(true)
-    expect(g.flat().every((v) => v === false)).toBe(true)
+    expect(g.flat().every((v) => !v)).toBe(true)
   })
 
   it('returns independent rows (no shared reference)', () => {

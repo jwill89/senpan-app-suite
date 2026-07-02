@@ -137,7 +137,9 @@ watch(
 
         <!-- Fonts & Branding ───────────────────────────────────────────── -->
         <section class="settings-section">
-          <h4 class="section-heading"><font-awesome-icon :icon="['fad', 'font']" /> Fonts &amp; Branding</h4>
+          <h4 class="section-heading">
+            <font-awesome-icon :icon="['fad', 'font']" /> Fonts &amp; Branding
+          </h4>
           <FormField label="Google Fonts API Key">
             <input
               v-model="app.settings.google_fonts_api_key"
@@ -200,10 +202,8 @@ watch(
             class="font-preview"
             :style="{ fontFamily: '\'' + (app.settings.header_font || 'Arapey') + '\', serif' }"
           >
-            <span class="fp-bingo">B I N G O</span
-            ><br />
-            <span class="fp-nums">1 &nbsp; 23 &nbsp; 45 &nbsp; 67</span
-            ><br />
+            <span class="fp-bingo">B I N G O</span><br />
+            <span class="fp-nums">1 &nbsp; 23 &nbsp; 45 &nbsp; 67</span><br />
             <span class="fp-title">
               {{ app.settings.app_title || 'App Title' }}
             </span>
@@ -231,7 +231,7 @@ watch(
           </template>
           <FormField
             label="AniList API URL"
-            help="GraphQL endpoint for the &quot;Pull from AniList&quot; lookup when adding reading list items. No API key needed."
+            help='GraphQL endpoint for the "Pull from AniList" lookup when adding reading list items. No API key needed.'
           >
             <input
               v-model="app.settings.anilist_api_url"
@@ -299,4 +299,3 @@ watch(
   text-transform: uppercase;
 }
 </style>
-

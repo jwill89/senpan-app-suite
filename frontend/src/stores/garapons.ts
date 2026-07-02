@@ -71,15 +71,17 @@ export const useGaraponsStore = defineStore('garapons', () => {
 
   /** The flagged grand prize of the currently-viewed public garapon (if any). */
   const grandPrize = computed<GaraponPrize | null>(
-    () => publicGarapon.value?.prizes?.find((p) => p.is_grand) ?? null,
+    () => publicGarapon.value?.prizes.find((p) => p.is_grand) ?? null,
   )
   /** The non-grand prizes (the "other possible prizes" table). */
   const otherPrizes = computed<GaraponPrize[]>(
-    () => publicGarapon.value?.prizes?.filter((p) => !p.is_grand) ?? [],
+    () => publicGarapon.value?.prizes.filter((p) => !p.is_grand) ?? [],
   )
   /** Draws the public player has left. */
   const drawsRemaining = computed(() =>
-    publicPlayer.value ? Math.max(0, publicPlayer.value.max_draws - publicPlayer.value.draws_used) : 0,
+    publicPlayer.value
+      ? Math.max(0, publicPlayer.value.max_draws - publicPlayer.value.draws_used)
+      : 0,
   )
   /** Whether the public player can draw right now. */
   const canDraw = computed(
@@ -91,7 +93,7 @@ export const useGaraponsStore = defineStore('garapons', () => {
     garaponsLoading.value = true
     try {
       const data = await endpoints.garapons.list()
-      garapons.value = data.garapons || []
+      garapons.value = data.garapons
     } catch (e) {
       ui.notify((e as Error).message, 'error')
     } finally {
@@ -104,8 +106,8 @@ export const useGaraponsStore = defineStore('garapons', () => {
     try {
       const data = await endpoints.garapons.detail(id)
       selectedGarapon.value = data.garapon
-      garaponPlayers.value = data.players || []
-      garaponDraws.value = data.draws || []
+      garaponPlayers.value = data.players
+      garaponDraws.value = data.draws
     } catch (e) {
       ui.notify((e as Error).message, 'error')
     } finally {
@@ -119,7 +121,7 @@ export const useGaraponsStore = defineStore('garapons', () => {
     garaponPlayers.value = []
     garaponDraws.value = []
     resetPlayerAdd()
-    loadGaraponDetail(g.id)
+    void loadGaraponDetail(g.id)
   }
 
   function resetPlayerAdd(): void {
@@ -131,7 +133,7 @@ export const useGaraponsStore = defineStore('garapons', () => {
     try {
       const images = useImagesStore()
       await images.loadImages(IMAGE_DIR_GARAPONS)
-      grandPrizeImages.value = (images.imagesByDir[IMAGE_DIR_GARAPONS] || []).map((i) => i.path)
+      grandPrizeImages.value = images.imagesByDir[IMAGE_DIR_GARAPONS].map((i) => i.path)
     } catch {
       /* non-fatal: the picker just shows nothing */
     }
@@ -141,7 +143,7 @@ export const useGaraponsStore = defineStore('garapons', () => {
   async function loadStampRallyOptions(): Promise<void> {
     try {
       const data = await endpoints.stampRallies.list()
-      stampRallyOptions.value = (data.stamp_rallies || []).filter((r) => r.status !== 'closed')
+      stampRallyOptions.value = data.stamp_rallies.filter((r) => r.status !== 'closed')
     } catch {
       stampRallyOptions.value = []
     }
@@ -275,7 +277,7 @@ export const useGaraponsStore = defineStore('garapons', () => {
       ui.notify('Player name is required', 'error')
       return
     }
-    const max = Math.max(1, Math.floor(Number(playerAdd.value.maxDraws) || 1))
+    const max = Math.max(1, Math.floor(playerAdd.value.maxDraws || 1))
     creatingPlayer.value = true
     try {
       const data = await endpoints.garapons.createPlayer(selectedGarapon.value.id, {
@@ -378,7 +380,7 @@ export const useGaraponsStore = defineStore('garapons', () => {
       const data = await endpoints.garapon.get(token)
       publicGarapon.value = data.garapon
       publicPlayer.value = data.player
-      publicDraws.value = data.draws || []
+      publicDraws.value = data.draws
       return true
     } catch {
       return false

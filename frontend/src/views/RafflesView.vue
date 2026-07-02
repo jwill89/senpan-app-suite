@@ -33,11 +33,11 @@ onMounted(async () => {
 
 /** Open a raffle's public detail view. */
 function openRaffle(r: Raffle): void {
-  router.push({ name: 'raffle-detail', params: { id: r.id } })
+  void router.push({ name: 'raffle-detail', params: { id: r.id } })
 }
 
 function goHome(): void {
-  router.push({ name: 'home' })
+  void router.push({ name: 'home' })
 }
 </script>
 
@@ -51,13 +51,13 @@ function goHome(): void {
     <div class="tab-body content-container">
       <LoadingSpinner v-if="loading" block label="Loading raffles…" />
       <div v-else-if="raffles.raffles.length" class="card-grid card-grid--center">
-        <div
-          v-for="r in raffles.raffles"
-          :key="r.id"
-          class="media-card"
-          @click="openRaffle(r)"
-        >
-          <img v-if="r.prize_image" :src="assetUrl(r.prize_image)" class="media-card-image" alt="Prize" />
+        <div v-for="r in raffles.raffles" :key="r.id" class="media-card" @click="openRaffle(r)">
+          <img
+            v-if="r.prize_image"
+            :src="assetUrl(r.prize_image)"
+            class="media-card-image"
+            alt="Prize"
+          />
           <div class="media-card-body">
             <h3>{{ r.title }}</h3>
             <p v-if="r.cost_per_entry > 0" class="raffle-cost">

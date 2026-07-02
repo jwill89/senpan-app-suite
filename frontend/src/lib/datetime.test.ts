@@ -57,9 +57,7 @@ describe('parseServerTimestamp', () => {
 
   it('treats a SQLite "YYYY-MM-DD HH:MM:SS" timestamp as UTC, not local', () => {
     // The zone-less space form must be read as UTC — same instant as the Z form.
-    expect(parseServerTimestamp('2026-06-13 20:00:00')).toBe(
-      Date.UTC(2026, 5, 13, 20, 0, 0),
-    )
+    expect(parseServerTimestamp('2026-06-13 20:00:00')).toBe(Date.UTC(2026, 5, 13, 20, 0, 0))
   })
 
   it('treats a zone-less ISO timestamp as UTC', () => {
@@ -83,4 +81,3 @@ describe('formatServerTimestamp', () => {
     expect(formatServerTimestamp('2026-06-13 20:00:00')).toBe(expected)
   })
 })
-

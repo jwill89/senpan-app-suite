@@ -50,7 +50,7 @@ registerListeners()
 function isStandalone(): boolean {
   if (typeof window === 'undefined') return false
   return (
-    window.matchMedia?.('(display-mode: standalone)').matches ||
+    window.matchMedia('(display-mode: standalone)').matches ||
     // iOS Safari exposes its own standalone flag rather than display-mode.
     (window.navigator as Navigator & { standalone?: boolean }).standalone === true
   )
@@ -75,7 +75,7 @@ function isMobile(): boolean {
   if (typeof navigator === 'undefined') return false
   const uaMobile = /android|iphone|ipod|ipad|mobile/i.test(navigator.userAgent) || isIosDevice()
   const coarsePointer =
-    typeof window !== 'undefined' && window.matchMedia?.('(pointer: coarse)').matches === true
+    typeof window !== 'undefined' && window.matchMedia('(pointer: coarse)').matches
   const touch = navigator.maxTouchPoints > 0
   return uaMobile || (coarsePointer && touch)
 }
@@ -117,5 +117,3 @@ export function usePwaInstall() {
 
   return { showInstall, canPrompt, needsIosInstructions, promptInstall }
 }
-
-

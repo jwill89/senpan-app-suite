@@ -65,7 +65,7 @@ const {
 const isClosed = computed(() => store.selectedRally?.status === 'closed')
 function toggleClosed(): void {
   if (!store.selectedRally) return
-  store.setRallyStatus(store.selectedRally.id, isClosed.value ? 'open' : 'closed')
+  void store.setRallyStatus(store.selectedRally.id, isClosed.value ? 'open' : 'closed')
 }
 
 // Inline "Manage stalls" panel on the open list cards (one expanded at a time).
@@ -75,7 +75,7 @@ function toggleManage(r: StampRally): void {
     expandedCard.value = null
   } else {
     expandedCard.value = r.id
-    store.loadCardStamps(r.id)
+    void store.loadCardStamps(r.id)
   }
 }
 
@@ -134,7 +134,7 @@ function openCards(): void {
   screen.value = 'cards'
 }
 function openLogs(): void {
-  if (store.selectedRally) store.loadRallyLogs(store.selectedRally.id)
+  if (store.selectedRally) void store.loadRallyLogs(store.selectedRally.id)
   resetLogs()
   screen.value = 'logs'
 }
@@ -154,8 +154,9 @@ function onFormDone(): void {
   screen.value = 'list'
 }
 async function deleteSelected(): Promise<void> {
-  if (!store.selectedRally) return
-  await store.deleteRally(store.selectedRally.id)
+  const r = store.selectedRally
+  if (!r) return
+  await store.deleteRally(r.id)
   if (!store.selectedRally) screen.value = 'list'
 }
 </script>
@@ -192,7 +193,11 @@ async function deleteSelected(): Promise<void> {
         </button>
       </div>
 
-      <LoadingSpinner v-if="store.detailLoading && !store.selectedRally.stamps" block label="Loading…" />
+      <LoadingSpinner
+        v-if="store.detailLoading && !store.selectedRally.stamps"
+        block
+        label="Loading…"
+      />
       <template v-else>
         <!-- Read-only card preview -->
         <div class="rally-preview mb-16">
@@ -201,7 +206,10 @@ async function deleteSelected(): Promise<void> {
 
         <!-- Stamps -->
         <h3 class="section-heading"><font-awesome-icon :icon="['fad', 'stamp']" /> Stamps</h3>
-        <div v-if="store.selectedRally.stamps && store.selectedRally.stamps.length" class="rally-table-wrap mb-16">
+        <div
+          v-if="store.selectedRally.stamps && store.selectedRally.stamps.length"
+          class="rally-table-wrap mb-16"
+        >
           <table class="data-table">
             <thead>
               <tr>
@@ -214,7 +222,9 @@ async function deleteSelected(): Promise<void> {
             <tbody>
               <tr v-for="s in store.selectedRally.stamps" :key="s.id">
                 <td>{{ stallName(s.affiliate_name) }}</td>
-                <td><code>{{ s.password || '—' }}</code></td>
+                <td>
+                  <code>{{ s.password || '—' }}</code>
+                </td>
                 <td class="ta-center">
                   <span v-if="s.paused" class="status-badge status-badge-closed">paused</span>
                   <span v-else class="status-badge status-badge-open">active</span>
@@ -233,7 +243,10 @@ async function deleteSelected(): Promise<void> {
 
         <!-- Prizes -->
         <h3 class="section-heading"><font-awesome-icon :icon="['fad', 'gift']" /> Prizes</h3>
-        <div v-if="store.selectedRally.prizes && store.selectedRally.prizes.length" class="prize-chips mb-8">
+        <div
+          v-if="store.selectedRally.prizes && store.selectedRally.prizes.length"
+          class="prize-chips mb-8"
+        >
           <span v-for="p in store.selectedRally.prizes" :key="p.id" class="prize-chip">
             <img v-if="p.image" :src="assetUrl(p.image)" alt="" />
             {{ p.name || 'Prize' }}
@@ -268,7 +281,9 @@ async function deleteSelected(): Promise<void> {
             @click="store.createCard()"
           >
             <LoadingSpinner v-if="store.creatingCard" label="Creating…" />
-            <template v-else><font-awesome-icon :icon="['fas', 'plus']" /> Create Card Link</template>
+            <template v-else
+              ><font-awesome-icon :icon="['fas', 'plus']" /> Create Card Link</template
+            >
           </button>
         </div>
       </div>
@@ -293,7 +308,12 @@ async function deleteSelected(): Promise<void> {
               </td>
               <td class="ta-right">
                 <div class="row-actions">
-                  <button class="btn-view btn-sm" title="Copy link" aria-label="Copy link" @click="store.copyCardLink(c)">
+                  <button
+                    class="btn-view btn-sm"
+                    title="Copy link"
+                    aria-label="Copy link"
+                    @click="store.copyCardLink(c)"
+                  >
                     <font-awesome-icon :icon="['fas', 'link']" />
                   </button>
                   <button
@@ -325,12 +345,17 @@ async function deleteSelected(): Promise<void> {
     <!-- ── View Logs sub-page ────────────────────────────────────────────────── -->
     <AdminPanel v-else-if="screen === 'logs' && store.selectedRally">
       <SubPageHeader @back="backToDetail">
-        <font-awesome-icon :icon="['fad', 'clipboard-list']" /> Stamp Log — {{ store.selectedRally.title }}
+        <font-awesome-icon :icon="['fad', 'clipboard-list']" /> Stamp Log —
+        {{ store.selectedRally.title }}
       </SubPageHeader>
 
       <template v-if="store.rallyLogs.length">
         <div class="manager-toolbar">
-          <SearchInput v-model="logSearch" placeholder="Search by participant or stall…" aria-label="Search logs" />
+          <SearchInput
+            v-model="logSearch"
+            placeholder="Search by participant or stall…"
+            aria-label="Search logs"
+          />
           <span class="text-dim text-xs push-right">{{ groupedLogs.length }} stamps</span>
         </div>
         <DataTable
@@ -365,15 +390,26 @@ async function deleteSelected(): Promise<void> {
       />
       <template v-else>
         <!-- Open rallies -->
-        <h4 class="section-heading"><font-awesome-icon :icon="['fad', 'stamp']" /> Open Stamp Rallies</h4>
+        <h4 class="section-heading">
+          <font-awesome-icon :icon="['fad', 'stamp']" /> Open Stamp Rallies
+        </h4>
         <template v-if="store.openRallies.length">
           <div class="manager-toolbar">
-            <SearchInput v-model="search" placeholder="Search open stamp rallies…" aria-label="Search stamp rallies" />
+            <SearchInput
+              v-model="search"
+              placeholder="Search open stamp rallies…"
+              aria-label="Search stamp rallies"
+            />
             <span class="text-dim text-xs push-right">{{ filteredOpen.length }} open</span>
           </div>
           <div v-if="filteredOpen.length" class="card-grid">
             <div v-for="r in filteredOpen" :key="r.id" class="media-card" @click="openRally(r)">
-              <img v-if="r.card_image" :src="assetUrl(r.card_image)" class="media-card-image" alt="Stamp card" />
+              <img
+                v-if="r.card_image"
+                :src="assetUrl(r.card_image)"
+                class="media-card-image"
+                alt="Stamp card"
+              />
               <div class="media-card-body">
                 <h3>{{ r.title }}</h3>
                 <p class="text-dim text-sm">
@@ -382,7 +418,9 @@ async function deleteSelected(): Promise<void> {
                 </p>
                 <p v-if="(r.stamp_count || 0) > 0" class="text-dim text-sm">
                   <font-awesome-icon :icon="['fad', 'stamp']" />
-                  <strong :class="{ 'has-paused': (r.active_stamp_count ?? 0) < (r.stamp_count || 0) }">
+                  <strong
+                    :class="{ 'has-paused': (r.active_stamp_count ?? 0) < (r.stamp_count || 0) }"
+                  >
                     {{ r.active_stamp_count ?? 0 }}/{{ r.stamp_count }}
                   </strong>
                   stall{{ r.stamp_count === 1 ? '' : 's' }} active
@@ -415,7 +453,12 @@ async function deleteSelected(): Promise<void> {
                   <template v-else-if="store.cardStamps[r.id].length">
                     <div v-for="s in store.cardStamps[r.id]" :key="s.id" class="stall-row">
                       <span class="stall-row-name">{{ stallName(s.affiliate_name) }}</span>
-                      <span :class="['status-badge', s.paused ? 'status-badge-closed' : 'status-badge-open']">
+                      <span
+                        :class="[
+                          'status-badge',
+                          s.paused ? 'status-badge-closed' : 'status-badge-open',
+                        ]"
+                      >
                         {{ s.paused ? 'paused' : 'active' }}
                       </span>
                       <button
@@ -437,10 +480,16 @@ async function deleteSelected(): Promise<void> {
         <EmptyState v-else text="No open stamp rallies." />
 
         <!-- Closed rallies -->
-        <h4 class="section-heading mt-20"><font-awesome-icon :icon="['fad', 'lock']" /> Closed Stamp Rallies</h4>
+        <h4 class="section-heading mt-20">
+          <font-awesome-icon :icon="['fad', 'lock']" /> Closed Stamp Rallies
+        </h4>
         <template v-if="store.closedRallies.length">
           <div class="manager-toolbar">
-            <SearchInput v-model="closedSearch" placeholder="Search closed stamp rallies…" aria-label="Search closed stamp rallies" />
+            <SearchInput
+              v-model="closedSearch"
+              placeholder="Search closed stamp rallies…"
+              aria-label="Search closed stamp rallies"
+            />
             <span class="text-dim text-xs push-right">{{ filteredClosed.length }} closed</span>
           </div>
           <DataTable
@@ -451,22 +500,38 @@ async function deleteSelected(): Promise<void> {
             :sort-dir="closedSortDir"
             @sort="setClosedSort"
           >
-            <template #cell-card_count="{ row }">{{ (row as StampRally).card_count || 0 }}</template>
-            <template #cell-completed_count="{ row }">{{ (row as StampRally).completed_count || 0 }}</template>
+            <template #cell-card_count="{ row }">{{
+              (row as StampRally).card_count || 0
+            }}</template>
+            <template #cell-completed_count="{ row }">{{
+              (row as StampRally).completed_count || 0
+            }}</template>
             <template #cell-created_at="{ row }">
               <span class="text-sm">{{ when((row as StampRally).created_at) }}</span>
             </template>
             <template #cell-actions="{ row }">
               <div class="row-actions">
-                <button class="btn-view btn-sm" aria-label="View" title="View" @click="openRally(row as StampRally)">
+                <button
+                  class="btn-view btn-sm"
+                  aria-label="View"
+                  title="View"
+                  @click="openRally(row as StampRally)"
+                >
                   <font-awesome-icon :icon="['fas', 'eye']" />
                 </button>
-                <button class="btn-danger btn-sm" aria-label="Delete" title="Delete" @click="store.deleteRally((row as StampRally).id)">
+                <button
+                  class="btn-danger btn-sm"
+                  aria-label="Delete"
+                  title="Delete"
+                  @click="store.deleteRally((row as StampRally).id)"
+                >
                   <font-awesome-icon :icon="['fas', 'trash']" />
                 </button>
               </div>
             </template>
-            <template #empty><EmptyState text="No closed stamp rallies match your search." /></template>
+            <template #empty
+              ><EmptyState text="No closed stamp rallies match your search."
+            /></template>
           </DataTable>
           <PaginationBar
             v-if="closedTotalPages > 1"

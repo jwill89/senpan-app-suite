@@ -115,10 +115,7 @@ describe('WsClient lifecycle', () => {
       latest().onclose?.()
       vi.advanceTimersByTime(16000) // >= max backoff cap
     }
-    expect(cb.notify).toHaveBeenCalledWith(
-      expect.stringContaining('Please refresh'),
-      'error',
-    )
+    expect(cb.notify).toHaveBeenCalledWith(expect.stringContaining('Please refresh'), 'error')
   })
 
   it('disconnect() closes the socket and stops reconnecting', () => {

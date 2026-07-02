@@ -5,7 +5,7 @@
  * created inactive and cannot log in until an admin activates them, so an
  * unsolicited signup is harmless.
  */
-import { onMounted, ref } from 'vue'
+import { onMounted, ref, useTemplateRef } from 'vue'
 import { useRouter } from 'vue-router'
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
 import FormField from '@/components/common/ui/FormField.vue'
@@ -27,7 +27,7 @@ const localError = ref('')
 // Cloudflare Turnstile bot check (same as login). Empty site key = disabled.
 const turnstileSiteKey = ref('')
 const turnstileToken = ref('')
-const turnstile = ref<InstanceType<typeof TurnstileWidget> | null>(null)
+const turnstile = useTemplateRef<InstanceType<typeof TurnstileWidget>>('turnstile')
 
 onMounted(async () => {
   try {
@@ -69,7 +69,7 @@ async function submit(): Promise<void> {
 }
 
 function goLogin(): void {
-  router.push({ name: 'admin-login' })
+  void router.push({ name: 'admin-login' })
 }
 </script>
 
@@ -89,12 +89,7 @@ function goLogin(): void {
         <p>Choose a username and password</p>
         <form class="login-form" autocomplete="off" @submit.prevent="submit">
           <FormField label="Username" html-for="reg-username">
-            <input
-              id="reg-username"
-              v-model="username"
-              type="text"
-              autocomplete="username"
-            />
+            <input id="reg-username" v-model="username" type="text" autocomplete="username" />
           </FormField>
           <FormField label="Password" html-for="reg-password" help="At least 8 characters.">
             <input
@@ -105,12 +100,7 @@ function goLogin(): void {
             />
           </FormField>
           <FormField label="Confirm password" html-for="reg-confirm">
-            <input
-              id="reg-confirm"
-              v-model="confirm"
-              type="password"
-              autocomplete="new-password"
-            />
+            <input id="reg-confirm" v-model="confirm" type="password" autocomplete="new-password" />
           </FormField>
           <!-- Cloudflare Turnstile bot check (only when a site key is configured). -->
           <TurnstileWidget

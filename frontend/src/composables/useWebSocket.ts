@@ -49,7 +49,9 @@ export function useWebSocket() {
 
   const client = new WsClient({
     onMessage: dispatch,
-    onReconnected: refreshStateAfterReconnect,
+    onReconnected: () => {
+      void refreshStateAfterReconnect()
+    },
     notify: (m, t) => ui.notify(m, t),
     // Keep reconnecting while on the player or admin view.
     shouldReconnect: () => isPlayerView() || isAdminView(),
@@ -67,11 +69,11 @@ export function useWebSocket() {
         handleGameDraw(msg)
         break
       case 'cards_update':
-        if (isAdminView()) cards.cards = msg.cards || []
+        if (isAdminView()) cards.cards = msg.cards
         break
       case 'patterns_update':
         if (isAdminView()) {
-          patterns.patterns = msg.patterns || []
+          patterns.patterns = msg.patterns
           if (msg.categories) patterns.categories = msg.categories
         }
         break
@@ -141,7 +143,7 @@ export function useWebSocket() {
       if (!g && player.playerGame) {
         // The game the player was watching has ended — show a thank-you summary
         // (a neutral fact, the call count; we never track their board for them).
-        player.endedCalledCount = player.playerGame.called_numbers?.length ?? 0
+        player.endedCalledCount = player.playerGame.called_numbers.length
         player.gameEnded = true
         player.lastDrawn = null
         const mode = player.soundMode
@@ -178,12 +180,10 @@ export function useWebSocket() {
    */
   function handleGameDraw(msg: Extract<WsMessage, { type: 'game_draw' }>): void {
     const drawn = msg.drawn
-    if (!drawn) return
 
     // Player view — append the drawn number to local called_numbers and surface
     // it as the "last called" announcement (plus the opt-in chime/vibration).
     if (isPlayerView() && player.playerGame) {
-      if (!player.playerGame.called_numbers) player.playerGame.called_numbers = []
       player.playerGame.called_numbers.push(drawn.number)
       player.playerGame.total_called = player.playerGame.called_numbers.length
       player.lastDrawn = drawn
@@ -196,7 +196,6 @@ export function useWebSocket() {
 
     // Admin view — only if we don't already have this number
     if (isAdminView() && game.currentGame) {
-      if (!game.currentGame.called_numbers) game.currentGame.called_numbers = []
       const alreadyHas = game.currentGame.called_numbers.includes(drawn.number)
       if (!alreadyHas) {
         game.currentGame.called_numbers.push(drawn.number)
@@ -219,7 +218,7 @@ export function useWebSocket() {
     if (isPlayerView()) {
       client.disconnect()
       player.resetPlayer()
-      router.push({ name: 'home' })
+      void router.push({ name: 'home' })
       ui.notify('Your card has been deleted. You have been logged out.', 'error')
     }
   }

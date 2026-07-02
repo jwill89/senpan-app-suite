@@ -24,11 +24,11 @@ const raffleId = computed(() => Number(props.id))
 
 async function load(id: number): Promise<void> {
   if (!Number.isFinite(id)) {
-    router.replace({ name: 'raffles' })
+    void router.replace({ name: 'raffles' })
     return
   }
   const ok = await raffles.loadPublicRaffleById(id)
-  if (!ok) router.replace({ name: 'raffles' })
+  if (!ok) void router.replace({ name: 'raffles' })
 }
 
 onMounted(() => load(raffleId.value))
@@ -36,7 +36,7 @@ watch(raffleId, (id) => load(id))
 
 function back(): void {
   raffles.selectedRaffle = null
-  router.push({ name: 'raffles' })
+  void router.push({ name: 'raffles' })
 }
 </script>
 
@@ -63,26 +63,21 @@ function back(): void {
       <!-- Rules -->
       <div v-if="raffles.selectedRaffle.rules" class="mb-16">
         <h3 class="section-heading">Rules</h3>
-        <div
-          class="game-details"
-          v-html="renderMarkdown(raffles.selectedRaffle.rules)"
-        ></div>
+        <div class="game-details" v-html="renderMarkdown(raffles.selectedRaffle.rules)"></div>
       </div>
 
       <!-- Sign-up result (shown after signing up) -->
       <div v-if="raffles.raffleSignupResult" class="raffle-signup-result">
         <h3 class="text-success mb-8">
-          <font-awesome-icon :icon="['fad', 'circle-check']" /> {{ raffles.raffleSignupResult.message }}
+          <font-awesome-icon :icon="['fad', 'circle-check']" />
+          {{ raffles.raffleSignupResult.message }}
         </h3>
         <p><strong>Total Entries:</strong> {{ raffles.raffleSignupResult.total_entries }}</p>
         <p>
           <strong>Total Cost:</strong>
           {{ raffles.raffleSignupResult.total_cost.toLocaleString() }} gil
         </p>
-        <div
-          v-if="raffles.raffleSignupResult.signup_instructions"
-          class="game-details mt-12"
-        >
+        <div v-if="raffles.raffleSignupResult.signup_instructions" class="game-details mt-12">
           <h4 class="text-gold mb-6">Sign-Up Instructions</h4>
           <div v-html="renderMarkdown(raffles.raffleSignupResult.signup_instructions)"></div>
         </div>
@@ -121,7 +116,11 @@ function back(): void {
             @blur="raffles.clampSignupEntries()"
           />
         </div>
-        <p v-if="raffles.selectedRaffle.cost_per_entry > 0" class="mb-12" style="font-size: 0.95rem">
+        <p
+          v-if="raffles.selectedRaffle.cost_per_entry > 0"
+          class="mb-12"
+          style="font-size: 0.95rem"
+        >
           <strong>Total Cost:</strong> {{ raffles.raffleTotalCost().toLocaleString() }} gil
         </p>
         <button

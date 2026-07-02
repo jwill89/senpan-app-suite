@@ -36,7 +36,7 @@ describe('loading', () => {
   })
 
   it('loadStyle merges saved tokens over the defaults', async () => {
-    ep.get.mockResolvedValueOnce({ style: { id: 2, tokens: { 'page-bg': '#abc' } } as never })
+    ep.get.mockResolvedValueOnce({ style: { id: 2, tokens: { 'page-bg': '#abc' } } })
     const s = useStylesStore()
     await s.loadStyle(2)
     expect(s.editingStyle?.tokens?.['page-bg']).toBe('#abc') // saved override

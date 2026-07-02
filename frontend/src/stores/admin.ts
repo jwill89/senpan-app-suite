@@ -24,7 +24,7 @@ import { usePatternsStore } from './patterns'
 import { useAnnouncementsStore } from './announcements'
 import { useImagesStore } from './images'
 import { useUsersStore } from './users'
-import { BOOK_CLUBS } from '@/lib/constants'
+import type { BOOK_CLUBS } from '@/lib/constants'
 import { createFreshness } from '@/lib/freshness'
 
 export type AdminSection = 'bingo' | 'teahouse' | 'festival' | 'atelier' | 'system'
@@ -107,40 +107,77 @@ export const useAdminStore = defineStore('admin', () => {
 
     if (tab === 'teahouse-raffles') {
       raffles.selectedRaffle = null
-      loadFresh('raffles', () => raffles.loadRaffles())
+      loadFresh('raffles', () => {
+        void raffles.loadRaffles()
+      })
     }
     if (tab === 'festival-garapon') {
       garapons.selectedGarapon = null
       garapons.garaponForm = null
-      loadFresh('garapons', () => garapons.loadGarapons())
+      loadFresh('garapons', () => {
+        void garapons.loadGarapons()
+      })
     }
     if (tab === 'teahouse-affiliates') {
       affiliates.selectedAffiliate = null
       affiliates.affiliateForm = null
-      loadFresh('affiliates', () => affiliates.loadAffiliates())
+      loadFresh('affiliates', () => {
+        void affiliates.loadAffiliates()
+      })
     }
     if (tab === 'festival-stamp-rally') {
       stampRallies.selectedRally = null
       stampRallies.rallyForm = null
-      loadFresh('stamp-rallies', () => stampRallies.loadRallies())
+      loadFresh('stamp-rallies', () => {
+        void stampRallies.loadRallies()
+      })
     }
     // openClub manages its own per-club freshness (and preserves the open list /
     // events sub-view when the same club tab is re-entered).
     if (tab.startsWith('bookclub-')) {
       bookclub.openClub(tab.slice('bookclub-'.length))
     }
-    if (tab === 'teahouse-announcements') loadFresh('announcements', () => announcements.load())
-    if (tab === 'system-themes') loadFresh('styles', () => styles.loadStyles())
-    if (tab === 'system-settings') loadFresh('settings', () => app.loadSettings())
-    if (tab === 'system-images') loadFresh('images', () => images.loadCategories())
-    if (tab === 'system-users') loadFresh('users', () => users.loadUsers())
-    if (tab === 'atelier-fonts') loadFresh('fonts', () => fonts.loadFonts())
-    if (tab === 'atelier-carrd') loadFresh('carrd', () => carrd.loadProjects())
-    if (tab === 'bingo-winners-log') loadFresh('winners-log', () => game.loadWinnersLog())
-    if (tab === 'bingo-patterns') loadFresh('patterns', () => patterns.loadPatterns())
+    if (tab === 'teahouse-announcements')
+      loadFresh('announcements', () => {
+        void announcements.load()
+      })
+    if (tab === 'system-themes')
+      loadFresh('styles', () => {
+        void styles.loadStyles()
+      })
+    if (tab === 'system-settings')
+      loadFresh('settings', () => {
+        void app.loadSettings()
+      })
+    if (tab === 'system-images')
+      loadFresh('images', () => {
+        void images.loadCategories()
+      })
+    if (tab === 'system-users')
+      loadFresh('users', () => {
+        void users.loadUsers()
+      })
+    if (tab === 'atelier-fonts')
+      loadFresh('fonts', () => {
+        void fonts.loadFonts()
+      })
+    if (tab === 'atelier-carrd')
+      loadFresh('carrd', () => {
+        void carrd.loadProjects()
+      })
+    if (tab === 'bingo-winners-log')
+      loadFresh('winners-log', () => {
+        void game.loadWinnersLog()
+      })
+    if (tab === 'bingo-patterns')
+      loadFresh('patterns', () => {
+        void patterns.loadPatterns()
+      })
     // Presets are needed on the Game tab (to start from one) and the Presets tab.
     if (tab === 'bingo-game' || tab === 'bingo-presets')
-      loadFresh('presets', () => presets.loadPresets())
+      loadFresh('presets', () => {
+        void presets.loadPresets()
+      })
   }
 
   /**
@@ -176,58 +213,68 @@ export const useAdminStore = defineStore('admin', () => {
       case 'garapons':
         apply('garapons', tab === 'festival-garapon', () => {
           const garapons = useGaraponsStore()
-          garapons.loadGarapons()
-          if (garapons.selectedGarapon) garapons.loadGaraponDetail(garapons.selectedGarapon.id)
+          void garapons.loadGarapons()
+          if (garapons.selectedGarapon) void garapons.loadGaraponDetail(garapons.selectedGarapon.id)
         })
         break
       case 'raffles':
         apply('raffles', tab === 'teahouse-raffles', () => {
           const raffles = useRafflesStore()
-          raffles.loadRaffles()
-          if (raffles.selectedRaffle) raffles.loadRaffleDetail(raffles.selectedRaffle.id)
+          void raffles.loadRaffles()
+          if (raffles.selectedRaffle) void raffles.loadRaffleDetail(raffles.selectedRaffle.id)
         })
         break
       case 'affiliates':
-        apply('affiliates', tab === 'teahouse-affiliates', () =>
-          useAffiliatesStore().loadAffiliates(),
-        )
+        apply('affiliates', tab === 'teahouse-affiliates', () => {
+          void useAffiliatesStore().loadAffiliates()
+        })
         break
       case 'stamp-rallies':
         // When viewing the manager, reload the list + the open event detail + the
         // open logs so a participant's just-collected stamp shows live.
         apply('stamp-rallies', tab === 'festival-stamp-rally', () => {
           const sr = useStampRalliesStore()
-          sr.loadRallies()
+          void sr.loadRallies()
           if (sr.selectedRally) {
-            sr.loadRallyDetail(sr.selectedRally.id)
-            sr.loadRallyLogs(sr.selectedRally.id)
+            void sr.loadRallyDetail(sr.selectedRally.id)
+            void sr.loadRallyLogs(sr.selectedRally.id)
           }
         })
         break
       case 'announcements':
-        apply('announcements', tab === 'teahouse-announcements', () =>
-          useAnnouncementsStore().load(),
-        )
+        apply('announcements', tab === 'teahouse-announcements', () => {
+          void useAnnouncementsStore().load()
+        })
         break
       case 'presets':
-        apply('presets', tab === 'bingo-presets' || tab === 'bingo-game', () =>
-          usePresetsStore().loadPresets(),
-        )
+        apply('presets', tab === 'bingo-presets' || tab === 'bingo-game', () => {
+          void usePresetsStore().loadPresets()
+        })
         break
       case 'winners-log':
-        apply('winners-log', tab === 'bingo-winners-log', () => useGameStore().loadWinnersLog())
+        apply('winners-log', tab === 'bingo-winners-log', () => {
+          void useGameStore().loadWinnersLog()
+        })
         break
       case 'users':
-        apply('users', tab === 'system-users', () => useUsersStore().loadUsers())
+        apply('users', tab === 'system-users', () => {
+          void useUsersStore().loadUsers()
+        })
         break
       case 'fonts':
-        apply('fonts', tab === 'atelier-fonts', () => useFontsStore().loadFonts())
+        apply('fonts', tab === 'atelier-fonts', () => {
+          void useFontsStore().loadFonts()
+        })
         break
       case 'carrd':
-        apply('carrd', tab === 'atelier-carrd', () => useCarrdStore().loadProjects())
+        apply('carrd', tab === 'atelier-carrd', () => {
+          void useCarrdStore().loadProjects()
+        })
         break
       case 'images':
-        apply('images', tab === 'system-images', () => useImagesStore().loadCategories())
+        apply('images', tab === 'system-images', () => {
+          void useImagesStore().loadCategories()
+        })
         break
       case 'bookclub':
         // Book club lists use the store's own per-club freshness, so route the

@@ -32,7 +32,7 @@ export const usePresetsStore = defineStore('presets', () => {
     presetsLoading.value = true
     try {
       const data = await endpoints.presets.list()
-      presets.value = data.presets || []
+      presets.value = data.presets
     } catch (e) {
       ui.notify((e as Error).message, 'error')
     } finally {
@@ -50,7 +50,7 @@ export const usePresetsStore = defineStore('presets', () => {
     editingPreset.value = {
       id: preset.id,
       name: preset.name,
-      pattern_ids: [...(preset.pattern_ids || [])],
+      pattern_ids: [...preset.pattern_ids],
       game_details: preset.game_details || '',
     }
   }
@@ -117,4 +117,3 @@ export const usePresetsStore = defineStore('presets', () => {
     deletePreset,
   }
 })
-

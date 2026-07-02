@@ -91,7 +91,8 @@ function when(ts: string): string {
       <!-- Congratulations banner -->
       <div v-if="garapons.lastWin" class="garapon-win-banner">
         <BallSwatch :color="garapons.lastWin.ball_color" />
-        🎉 Congratulations, you've won <strong>{{ garapons.lastWin.prize_name }}</strong>!
+        🎉 Congratulations, you've won <strong>{{ garapons.lastWin.prize_name }}</strong
+        >!
       </div>
 
       <!-- The drum (open + has draws) -->
@@ -101,9 +102,7 @@ function when(ts: string): string {
 
       <!-- Grand prize showcase -->
       <div v-if="garapons.grandPrize" class="garapon-grand">
-        <h3 class="section-heading">
-          <font-awesome-icon :icon="['fad', 'trophy']" /> Grand Prize
-        </h3>
+        <h3 class="section-heading"><font-awesome-icon :icon="['fad', 'trophy']" /> Grand Prize</h3>
         <div class="garapon-grand-card">
           <img
             v-if="garapons.publicGarapon.grand_prize_image"

@@ -122,9 +122,14 @@ describe('form editing', () => {
 
   it('editGaraponForm guarantees exactly one grand prize', () => {
     const s = useGaraponsStore()
-    s.editGaraponForm(garapon({
-      prizes: [{ name: 'A', is_grand: false }, { name: 'B', is_grand: false }] as never,
-    }))
+    s.editGaraponForm(
+      garapon({
+        prizes: [
+          { name: 'A', is_grand: false },
+          { name: 'B', is_grand: false },
+        ] as never,
+      }),
+    )
     expect(s.garaponForm?.prizes.filter((p) => p.is_grand)).toHaveLength(1)
   })
 
@@ -227,7 +232,7 @@ describe('setGaraponStatus', () => {
     s.selectedGarapon = garapon()
     await s.setGaraponStatus(1, 'closed')
     expect(ep.setStatus).toHaveBeenCalledWith(1, 'closed')
-    expect(s.selectedGarapon?.status).toBe('closed')
+    expect(s.selectedGarapon.status).toBe('closed')
     expect(s.garapons[0].status).toBe('closed')
   })
 })
@@ -280,7 +285,7 @@ describe('public draw flow', () => {
     expect(resp?.draws_used).toBe(1)
     s.commitDraw(resp!)
     expect(s.publicDraws).toHaveLength(1)
-    expect(s.publicPlayer?.draws_used).toBe(1)
+    expect(s.publicPlayer.draws_used).toBe(1)
     expect(s.lastWin?.prize_name).toBe('Grand')
   })
 })
@@ -294,7 +299,9 @@ describe('linked stamp rally', () => {
 
   it('stampCardLinkUrl uses the shared token, empty when unlinked', () => {
     const s = useGaraponsStore()
-    expect(s.stampCardLinkUrl({ stamp_card_token: 'abc' } as GaraponPlayer)).toMatch(/\/stamp-card\/abc$/)
+    expect(s.stampCardLinkUrl({ stamp_card_token: 'abc' } as GaraponPlayer)).toMatch(
+      /\/stamp-card\/abc$/,
+    )
     expect(s.stampCardLinkUrl({ stamp_card_token: '' } as GaraponPlayer)).toBe('')
   })
 })

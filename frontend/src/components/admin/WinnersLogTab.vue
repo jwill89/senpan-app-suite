@@ -34,7 +34,7 @@ function patternsLabel(json: string): string {
 
 function onPerPageChange(): void {
   game.winnersLogPage = 1
-  game.loadWinnersLog()
+  void game.loadWinnersLog()
 }
 </script>
 
@@ -54,9 +54,7 @@ function onPerPageChange(): void {
           <option :value="50">50</option>
           <option :value="100">100</option>
         </select>
-        <span class="text-dim text-xs push-right">
-          {{ game.winnersLogTotal }} total entries
-        </span>
+        <span class="text-dim text-xs push-right"> {{ game.winnersLogTotal }} total entries </span>
         <button
           class="btn-danger btn-sm"
           :disabled="!game.winnersLogTotal"

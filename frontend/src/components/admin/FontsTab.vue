@@ -170,8 +170,7 @@ watch(
     // Keep a valid font selected for the live preview: default to the first,
     // and re-pick if the selected one was deleted/renamed away.
     const stillPresent =
-      selectedFontName.value !== null &&
-      fonts.fonts.some((f) => f.name === selectedFontName.value)
+      selectedFontName.value !== null && fonts.fonts.some((f) => f.name === selectedFontName.value)
     if (!stillPresent) selectedFontName.value = fonts.fonts[0]?.name ?? null
   },
   { deep: true },
@@ -183,11 +182,7 @@ watch(
     <AdminPanel>
       <div class="flex-toolbar mb-12">
         <h3 class="m-0"><font-awesome-icon :icon="['fad', 'font']" /> Font Upload</h3>
-        <button
-          class="btn-action btn-sm push-right"
-          :disabled="fonts.uploading"
-          @click="pickFiles"
-        >
+        <button class="btn-action btn-sm push-right" :disabled="fonts.uploading" @click="pickFiles">
           <LoadingSpinner v-if="fonts.uploading" label="Uploading…" />
           <template v-else><font-awesome-icon :icon="['fas', 'plus']" /> Upload Fonts</template>
         </button>
@@ -203,8 +198,9 @@ watch(
 
       <p class="text-dim text-xs mb-12">
         Files are served from
-        <span class="code-gold">{{ FONT_BASE_URL }}</span>. Allowed types: .ttf, .otf, .woff,
-        .woff2, .eot. To replace a font, delete the old file first.
+        <span class="code-gold">{{ FONT_BASE_URL }}</span
+        >. Allowed types: .ttf, .otf, .woff, .woff2, .eot. To replace a font, delete the old file
+        first.
       </p>
 
       <!-- Live preview: type any text, then pick a font (row "Preview" action).
@@ -325,9 +321,7 @@ watch(
           </div>
         </template>
         <template #empty>
-          <p class="text-dim ta-center" style="padding: 20px">
-            No fonts match “{{ search }}”.
-          </p>
+          <p class="text-dim ta-center" style="padding: 20px">No fonts match “{{ search }}”.</p>
         </template>
       </DataTable>
 
@@ -392,6 +386,4 @@ watch(
 .row-selected td:first-child {
   box-shadow: inset 4px 0 0 0 var(--highlight);
 }
-
 </style>
-

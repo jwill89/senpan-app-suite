@@ -30,7 +30,7 @@ function makeUser(partial: Partial<User>): User {
 function mountAs(user: User): VueWrapper {
   const auth = useAuthStore()
   auth.user = user
-  auth.isAdmin = !!user.is_admin
+  auth.isAdmin = user.is_admin
   return mount(AdminSidebar, { global: { stubs: { AppVersions: true } } })
 }
 

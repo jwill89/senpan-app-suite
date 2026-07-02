@@ -108,7 +108,7 @@ describe('item form', () => {
     const item = { id: 1, title: 'T', sources: [{ title: 'A', url: 'u' }] } as ReadingListItem
     s.editItem(item)
     s.itemForm.sources[0].url = 'changed'
-    expect(item.sources![0].url).toBe('u')
+    expect(item.sources[0].url).toBe('u')
   })
 
   it('applyLookupResult fills the form but preserves id, tropes, and comments', () => {

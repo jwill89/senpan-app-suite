@@ -46,7 +46,9 @@ watch(
     @close="cards.previewCard = null"
   >
     <div class="flex-between mb-12">
-      <h3 class="nowrap">Card <span class="code-gold">{{ cards.previewCard.id }}</span></h3>
+      <h3 class="nowrap">
+        Card <span class="code-gold">{{ cards.previewCard.id }}</span>
+      </h3>
       <div class="flex-toolbar" style="flex-wrap: nowrap; gap: 8px">
         <button
           class="btn-view btn-sm nowrap"
@@ -55,11 +57,7 @@ watch(
         >
           <font-awesome-icon :icon="['fas', 'copy']" /> Copy ID
         </button>
-        <button
-          class="btn-view btn-sm nowrap"
-          title="Copy playable card URL"
-          @click="copyCardUrl"
-        >
+        <button class="btn-view btn-sm nowrap" title="Copy playable card URL" @click="copyCardUrl">
           <font-awesome-icon :icon="['fas', 'link']" /> Copy URL
         </button>
         <button class="btn-neutral btn-sm" @click="cards.previewCard = null">Close</button>
@@ -85,9 +83,7 @@ watch(
         v-else
         style="font-weight: 600; cursor: pointer"
         :title="
-          cards.previewCard.player_name
-            ? 'Double-click to edit'
-            : 'Double-click to set player name'
+          cards.previewCard.player_name ? 'Double-click to edit' : 'Double-click to set player name'
         "
         @dblclick="cards.startPreviewCardEdit('player_name')"
       >

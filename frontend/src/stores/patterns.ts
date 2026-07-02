@@ -62,7 +62,7 @@ export const usePatternsStore = defineStore('patterns', () => {
       map[cat.id] = { category: cat, patterns: [] }
     }
     for (const p of patterns.value) {
-      if (!map[p.category_id]) {
+      if (!(p.category_id in map)) {
         map[p.category_id] = {
           category: { id: p.category_id, name: p.category_name || 'Unknown', sort_order: 0 },
           patterns: [],
@@ -105,7 +105,7 @@ export const usePatternsStore = defineStore('patterns', () => {
     try {
       const data = await endpoints.patterns.list()
       patterns.value = data.patterns
-      categories.value = data.categories || []
+      categories.value = data.categories
       rebuildEditableGroups()
     } catch (e) {
       ui.notify((e as Error).message, 'error')
@@ -136,10 +136,10 @@ export const usePatternsStore = defineStore('patterns', () => {
     }
     // Client-side duplicate check.
     const dup = patterns.value.find((p) => {
-      if (!p.pattern_data || p.pattern_data.length !== 5) return false
+      if (p.pattern_data.length !== 5) return false
       for (let r = 0; r < 5; r++) {
         for (let c = 0; c < 5; c++) {
-          if (!!p.pattern_data[r][c] !== !!newPatternGrid.value[r][c]) return false
+          if (p.pattern_data[r][c] !== newPatternGrid.value[r][c]) return false
         }
       }
       return true
@@ -183,7 +183,7 @@ export const usePatternsStore = defineStore('patterns', () => {
   }
 
   function isCategoryCollapsed(catId: number): boolean {
-    return !!collapsedCategories.value[catId]
+    return collapsedCategories.value[catId]
   }
 
   // ── Pattern CRUD ───────────────────────────────────────────────────────────
@@ -199,9 +199,14 @@ export const usePatternsStore = defineStore('patterns', () => {
   }
 
   async function confirmDeletePattern(id: number): Promise<void> {
-    if (!(await ui.confirm('Delete this pattern?', { title: 'Delete pattern', confirmText: 'Delete' })))
+    if (
+      !(await ui.confirm('Delete this pattern?', {
+        title: 'Delete pattern',
+        confirmText: 'Delete',
+      }))
+    )
       return
-    deletePattern(id)
+    void deletePattern(id)
   }
 
   function startPatternRename(pat: Pattern): void {
@@ -228,7 +233,11 @@ export const usePatternsStore = defineStore('patterns', () => {
   /** Open the form to add a new category (defaults to inserting at the end). */
   function startNewCategory(): void {
     const last = categories.value[categories.value.length - 1]
-    categoryForm.value = { id: 0, name: '', position: last ? `after:${last.id}` : 'start' }
+    categoryForm.value = {
+      id: 0,
+      name: '',
+      position: categories.value.length ? `after:${last.id}` : 'start',
+    }
   }
 
   /** Open the form to edit a category (position defaults to "keep current"). */
@@ -314,7 +323,7 @@ export const usePatternsStore = defineStore('patterns', () => {
       ))
     )
       return
-    deleteCategory(id)
+    void deleteCategory(id)
   }
 
   // ── Pattern reordering (called by vuedraggable handlers) ───────────────────
@@ -333,7 +342,7 @@ export const usePatternsStore = defineStore('patterns', () => {
     const map: Record<number, PatternGroup> = {}
     for (const cat of categories.value) map[cat.id] = { category: cat, patterns: [] }
     for (const p of patterns.value) {
-      if (!map[p.category_id]) {
+      if (!(p.category_id in map)) {
         map[p.category_id] = {
           category: { id: p.category_id, name: p.category_name || 'Unknown', sort_order: 0 },
           patterns: [],

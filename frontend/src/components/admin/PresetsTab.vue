@@ -22,10 +22,10 @@ const presets = usePresetsStore()
 const patterns = usePatternsStore()
 
 onMounted(() => {
-  presets.loadPresets()
+  void presets.loadPresets()
   // The pattern picker needs patterns/categories; AdminView loads them on entry,
   // but reload if they're somehow empty (e.g. deep-link straight to this tab).
-  if (patterns.patterns.length === 0) patterns.loadPatterns()
+  if (patterns.patterns.length === 0) void patterns.loadPatterns()
 })
 
 /** Pattern name lookup for rendering a preset's pattern chips in the list. */
@@ -64,9 +64,7 @@ function patternById(id: number) {
       <FormField>
         <template #label>
           Game Details
-          <span class="text-dim fw-normal text-xs">
-            (Markdown supported)
-          </span>
+          <span class="text-dim fw-normal text-xs"> (Markdown supported) </span>
         </template>
         <MarkdownEditor
           v-model="presets.editingPreset.game_details"
@@ -122,7 +120,11 @@ function patternById(id: number) {
             {{ preset.game_details ? 'Includes game details' : 'No game details' }}
           </p>
           <template #actions>
-            <button class="btn-confirm btn-sm" title="Edit preset" @click="presets.editPreset(preset)">
+            <button
+              class="btn-confirm btn-sm"
+              title="Edit preset"
+              @click="presets.editPreset(preset)"
+            >
               <font-awesome-icon :icon="['fas', 'pen-to-square']" /> Edit
             </button>
             <button
@@ -138,4 +140,3 @@ function patternById(id: number) {
     </ManagerView>
   </div>
 </template>
-

@@ -27,7 +27,7 @@ export const useUsersStore = defineStore('users', () => {
     loading.value = true
     try {
       const data = await endpoints.users.list()
-      users.value = data.users || []
+      users.value = data.users
     } catch (e) {
       ui.notify((e as Error).message, 'error')
     } finally {
@@ -99,7 +99,8 @@ export const useUsersStore = defineStore('users', () => {
       return false
     }
     try {
-      if (desired.is_active !== orig.is_active) await endpoints.users.setActive(id, desired.is_active)
+      if (desired.is_active !== orig.is_active)
+        await endpoints.users.setActive(id, desired.is_active)
       if (desired.is_admin !== orig.is_admin) await endpoints.users.setAdmin(id, desired.is_admin)
       if (!desired.is_admin) {
         const a = [...desired.permissions].sort().join('|')

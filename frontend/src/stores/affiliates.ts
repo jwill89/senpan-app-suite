@@ -14,11 +14,7 @@ import { endpoints } from '@/lib/endpoints'
 import { detectTimezone } from '@/lib/constants'
 import type { Affiliate, AffiliateForm } from '@/types/api'
 import { useUiStore } from './ui'
-import {
-  useImagesStore,
-  IMAGE_DIR_AFFILIATE_LOGOS,
-  IMAGE_DIR_AFFILIATE_IMAGES,
-} from './images'
+import { useImagesStore, IMAGE_DIR_AFFILIATE_LOGOS, IMAGE_DIR_AFFILIATE_IMAGES } from './images'
 
 /** A fresh, empty opening-hours row for the editor. */
 function blankHour(): { label: string; start: string; end: string } {
@@ -43,7 +39,7 @@ export const useAffiliatesStore = defineStore('affiliates', () => {
     affiliatesLoading.value = true
     try {
       const data = await endpoints.affiliates.list()
-      affiliates.value = data.affiliates || []
+      affiliates.value = data.affiliates
     } catch (e) {
       ui.notify((e as Error).message, 'error')
     } finally {
@@ -59,10 +55,8 @@ export const useAffiliatesStore = defineStore('affiliates', () => {
         images.loadImages(IMAGE_DIR_AFFILIATE_LOGOS),
         images.loadImages(IMAGE_DIR_AFFILIATE_IMAGES),
       ])
-      logoImages.value = (images.imagesByDir[IMAGE_DIR_AFFILIATE_LOGOS] || []).map((i) => i.path)
-      screenshotImages.value = (images.imagesByDir[IMAGE_DIR_AFFILIATE_IMAGES] || []).map(
-        (i) => i.path,
-      )
+      logoImages.value = images.imagesByDir[IMAGE_DIR_AFFILIATE_LOGOS].map((i) => i.path)
+      screenshotImages.value = images.imagesByDir[IMAGE_DIR_AFFILIATE_IMAGES].map((i) => i.path)
     } catch {
       /* non-fatal: the pickers just show nothing */
     }

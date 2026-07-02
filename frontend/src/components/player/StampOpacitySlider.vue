@@ -14,7 +14,7 @@ import { usePlayerStore } from '@/stores/player'
 const player = usePlayerStore()
 
 /** Gold-fill length ending at the thumb centre (thumb is 16px on the track). */
-const fillPct = computed(() => `calc((100% - 16px) * ${Number(player.stampOpacity)} + 8px)`)
+const fillPct = computed(() => `calc((100% - 16px) * ${player.stampOpacity} + 8px)`)
 
 function onInput(e: Event): void {
   player.setStampOpacity((e.target as HTMLInputElement).value)

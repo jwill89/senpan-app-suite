@@ -23,7 +23,10 @@ describe('api()', () => {
   it('prefixes the endpoint with the API base and sends cookies', async () => {
     vi.mocked(fetch).mockResolvedValue(jsonResponse({ ok: true }))
     await api('auth')
-    expect(fetch).toHaveBeenCalledWith(`${API_BASE}/auth`, expect.objectContaining({ credentials: 'include' }))
+    expect(fetch).toHaveBeenCalledWith(
+      `${API_BASE}/auth`,
+      expect.objectContaining({ credentials: 'include' }),
+    )
   })
 
   it('JSON-stringifies a plain object body and sets the content-type', async () => {
@@ -69,7 +72,9 @@ describe('api()', () => {
   it('invokes the global unauthorized handler on a 401', async () => {
     const onUnauthorized = vi.fn()
     setUnauthorizedHandler(onUnauthorized)
-    vi.mocked(fetch).mockResolvedValue(jsonResponse({ error: 'expired' }, { ok: false, status: 401 }))
+    vi.mocked(fetch).mockResolvedValue(
+      jsonResponse({ error: 'expired' }, { ok: false, status: 401 }),
+    )
     await expect(api('game')).rejects.toBeInstanceOf(ApiError)
     expect(onUnauthorized).toHaveBeenCalledOnce()
   })
@@ -77,7 +82,9 @@ describe('api()', () => {
   it('skips the unauthorized handler when skipAuthRedirect is set', async () => {
     const onUnauthorized = vi.fn()
     setUnauthorizedHandler(onUnauthorized)
-    vi.mocked(fetch).mockResolvedValue(jsonResponse({ error: 'bad password' }, { ok: false, status: 401 }))
+    vi.mocked(fetch).mockResolvedValue(
+      jsonResponse({ error: 'bad password' }, { ok: false, status: 401 }),
+    )
     await expect(api('auth', { skipAuthRedirect: true })).rejects.toBeInstanceOf(ApiError)
     expect(onUnauthorized).not.toHaveBeenCalled()
   })

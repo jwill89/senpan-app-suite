@@ -56,7 +56,7 @@ export const useCarrdStore = defineStore('carrd', () => {
     loading.value = true
     try {
       const data = await endpoints.carrd.projects()
-      projects.value = data.projects || []
+      projects.value = data.projects
       // Drop the selection if its project no longer exists.
       if (selectedFolder.value && !projects.value.some((p) => p.folder === selectedFolder.value)) {
         selectedFolder.value = null
@@ -77,8 +77,8 @@ export const useCarrdStore = defineStore('carrd', () => {
     loadingImages.value = true
     try {
       const data = await endpoints.carrd.images(selectedFolder.value, currentPath.value)
-      dirs.value = data.dirs || []
-      images.value = data.images || []
+      dirs.value = data.dirs
+      images.value = data.images
     } catch (e) {
       ui.notify((e as Error).message, 'error')
       dirs.value = []
@@ -225,8 +225,8 @@ export const useCarrdStore = defineStore('carrd', () => {
     uploading.value = true
     try {
       const res = await endpoints.carrd.upload(form)
-      const ok = res.uploaded?.length ?? 0
-      const skipped = res.skipped ?? []
+      const ok = res.uploaded.length
+      const skipped = res.skipped
       if (ok > 0) {
         ui.notify(`Uploaded ${ok} image${ok === 1 ? '' : 's'}`, 'success')
       }

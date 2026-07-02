@@ -97,7 +97,7 @@ function toggleSelectAll(): void {
         :key="p.id"
         :class="['pattern-check', model.includes(p.id) ? 'selected' : '']"
       >
-        <input type="checkbox" :value="p.id" v-model="model" />
+        <input v-model="model" type="checkbox" :value="p.id" />
         <span class="dot"></span>
         <PatternMini :pattern-data="p.pattern_data" size="pattern-mini-sm" />
         <span class="pattern-check-name">{{ p.name }}</span>
@@ -109,7 +109,10 @@ function toggleSelectAll(): void {
     <template v-else>
       <EmptyState v-if="visibleGroups.length === 0" text="No patterns match the current filter." />
       <template v-for="group in visibleGroups" :key="group.category.id">
-        <div class="pattern-group-head" @click="patterns.toggleCategoryCollapsed(group.category.id)">
+        <div
+          class="pattern-group-head"
+          @click="patterns.toggleCategoryCollapsed(group.category.id)"
+        >
           <span class="text-dim">
             {{ patterns.isCategoryCollapsed(group.category.id) ? '▶' : '▼' }}
           </span>
@@ -124,7 +127,7 @@ function toggleSelectAll(): void {
             :key="p.id"
             :class="['pattern-check', model.includes(p.id) ? 'selected' : '']"
           >
-            <input type="checkbox" :value="p.id" v-model="model" />
+            <input v-model="model" type="checkbox" :value="p.id" />
             <span class="dot"></span>
             <PatternMini :pattern-data="p.pattern_data" size="pattern-mini-sm" />
             <span class="pattern-check-name">{{ p.name }}</span>

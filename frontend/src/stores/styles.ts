@@ -30,7 +30,7 @@ export const useStylesStore = defineStore('styles', () => {
     stylesLoading.value = true
     try {
       const data = await endpoints.styles.list()
-      styles.value = data.styles || []
+      styles.value = data.styles
       activeStyleId.value = data.active_style_id || ''
     } catch (e) {
       ui.notify((e as Error).message, 'error')
@@ -70,8 +70,8 @@ export const useStylesStore = defineStore('styles', () => {
     }
     savingStyle.value = true
     const tokens = editingStyle.value.tokens ?? {}
-    const board = editingStyle.value.board_flourish ?? ''
-    const number = editingStyle.value.number_flourish ?? ''
+    const board = editingStyle.value.board_flourish
+    const number = editingStyle.value.number_flourish
     try {
       if (editingStyle.value.id) {
         await endpoints.styles.update(editingStyle.value.id, name, tokens, board, number)

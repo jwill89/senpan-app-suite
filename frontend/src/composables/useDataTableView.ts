@@ -66,8 +66,8 @@ export function useDataTableView<T>(
     const dir = sortDir.value === 'asc' ? 1 : -1
     // Copy before sorting so the source array isn't mutated in place.
     return [...searched.value].sort((a, b) => {
-      const av = String((a as Record<string, unknown>)[key] ?? '')
-      const bv = String((b as Record<string, unknown>)[key] ?? '')
+      const av = String((a as Record<string, string | number | null | undefined>)[key] ?? '')
+      const bv = String((b as Record<string, string | number | null | undefined>)[key] ?? '')
       return av.localeCompare(bv, undefined, { numeric: true }) * dir
     })
   })

@@ -28,7 +28,7 @@ function selectMode(mode: SoundMode): void {
 }
 
 /** Gold-fill length ending at the thumb centre (thumb is 16px on the track). */
-const fillPct = computed(() => `calc((100% - 16px) * ${Number(player.soundVolume)} + 8px)`)
+const fillPct = computed(() => `calc((100% - 16px) * ${player.soundVolume} + 8px)`)
 
 function onVolume(e: Event): void {
   player.setSoundVolume(Number((e.target as HTMLInputElement).value))

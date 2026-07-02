@@ -3,10 +3,10 @@
  * Search box with a leading magnifying-glass icon, `v-model`'d to a string.
  * Used in manager toolbars (replaces `.ann-search`, `.font-search`, etc.).
  */
-withDefaults(
-  defineProps<{ modelValue: string; placeholder?: string; ariaLabel?: string }>(),
-  { placeholder: 'Search…', ariaLabel: 'Search' },
-)
+withDefaults(defineProps<{ modelValue: string; placeholder?: string; ariaLabel?: string }>(), {
+  placeholder: 'Search…',
+  ariaLabel: 'Search',
+})
 defineEmits<{ 'update:modelValue': [value: string] }>()
 </script>
 

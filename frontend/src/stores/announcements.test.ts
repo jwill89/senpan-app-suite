@@ -27,7 +27,7 @@ interface SavedPayload {
 }
 /** Args of the first save() call (vi infers no params, so widen to read them). */
 function firstSaveArgs(): unknown[] {
-  return save.mock.calls[0] as unknown[]
+  return save.mock.calls[0]
 }
 /** The payload passed to the first save() call, typed for assertions. */
 function savedPayload(): SavedPayload {
@@ -126,13 +126,7 @@ describe('save() payload building', () => {
     const payload = savedPayload()
     expect(payload.buttons).toHaveLength(5)
     expect(payload.buttons[0]).toEqual({ label: 'Go', emoji: '😀', url: 'https://a.com' })
-    expect(payload.buttons.map((b) => b.label)).toEqual([
-      'Go',
-      'One',
-      'Two',
-      'Three',
-      'Four',
-    ])
+    expect(payload.buttons.map((b) => b.label)).toEqual(['Go', 'One', 'Two', 'Three', 'Four'])
   })
 
   it('passes the selected role tag through to the payload', async () => {
@@ -144,7 +138,13 @@ describe('save() payload building', () => {
 
   it('passes the selected Discord start/end formats through to the payload', async () => {
     const s = useAnnouncementsStore()
-    Object.assign(s.form, { type_id: 1, title: 'Timed', details: 'x', start_format: 'R', end_format: 'T' })
+    Object.assign(s.form, {
+      type_id: 1,
+      title: 'Timed',
+      details: 'x',
+      start_format: 'R',
+      end_format: 'T',
+    })
     await s.save()
     expect(savedPayload().start_format).toBe('R')
     expect(savedPayload().end_format).toBe('T')
@@ -152,7 +152,12 @@ describe('save() payload building', () => {
 
   it('passes the dynamic-dates flag through to the payload', async () => {
     const s = useAnnouncementsStore()
-    Object.assign(s.form, { type_id: 1, title: 'Recurring event', details: 'x', dynamic_dates: true })
+    Object.assign(s.form, {
+      type_id: 1,
+      title: 'Recurring event',
+      details: 'x',
+      dynamic_dates: true,
+    })
     await s.save()
     expect(savedPayload().dynamic_dates).toBe(true)
   })
@@ -210,13 +215,14 @@ describe('editAnnouncement round-trip', () => {
       schedule_week_of_month: 2,
       buttons: [{ label: 'Go', emoji: '', url: 'https://a.com' }],
       mention: 'everyone',
+      dynamic_dates: false,
     } as unknown as Announcement)
     expect(s.form.id).toBe(7)
     expect(s.form.time_local).toBe('19:30')
     expect(s.form.weekdays).toEqual([1, 3, 5]) // parsed + sorted
     expect(s.form.color).toBe('#ff3131') // blank colour falls back to brand default
     expect(s.form.thumbnail).toBe('') // absent thumbnail → empty
-    expect(s.form.dynamic_dates).toBe(false) // absent flag → off
+    expect(s.form.dynamic_dates).toBe(false) // flag round-trips (API always sends it — no omitempty)
     expect(s.form.start_format).toBe('F') // blank start format → default
     expect(s.form.end_format).toBe('t') // blank end format → default
     expect(s.form.buttons).toEqual([{ label: 'Go', emoji: '', url: 'https://a.com' }])

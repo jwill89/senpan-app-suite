@@ -76,4 +76,3 @@ function onSelectEmoji(emoji: string): void {
     <EmojiPickerModal v-if="pickerOpen" @select="onSelectEmoji" @close="pickerOpen = false" />
   </div>
 </template>
-

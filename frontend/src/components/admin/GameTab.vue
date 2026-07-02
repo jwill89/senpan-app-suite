@@ -43,7 +43,7 @@ function applyPreset(): void {
   const validIds = new Set(patterns.patterns.map((p) => p.id))
   game.selectedPatternIds = preset.pattern_ids.filter((id) => validIds.has(id))
   game.gameDetails = preset.game_details || ''
-  game.saveGameDetails()
+  void game.saveGameDetails()
 }
 
 // ── Elapsed-game clock (admin-only, Current Game view) ──────────────────────
@@ -52,7 +52,6 @@ function applyPreset(): void {
 // refreshes and for multiple admins.
 const now = ref(Date.now())
 let clockTimer: ReturnType<typeof setInterval> | null = null
-
 
 /** Live elapsed-time string (H:MM:SS / MM:SS) since the game started. */
 const elapsedTime = computed(() => {
@@ -86,7 +85,7 @@ function toggleWinnerSound(): void {
 
 /** Jump to the Patterns tab (from the "no patterns yet" hint). */
 function goToPatterns(): void {
-  router.push({ name: 'admin-bingo-patterns' })
+  void router.push({ name: 'admin-bingo-patterns' })
 }
 
 // Keyboard shortcut: Space (or Enter) draws the next number during an active
@@ -109,12 +108,12 @@ function onKeydown(e: KeyboardEvent): void {
     return
   }
   e.preventDefault()
-  game.drawNumber()
+  void game.drawNumber()
 }
 
 onMounted(() => {
   window.addEventListener('keydown', onKeydown)
-  if (presets.presets.length === 0) presets.loadPresets()
+  if (presets.presets.length === 0) void presets.loadPresets()
   clockTimer = setInterval(() => {
     now.value = Date.now()
   }, 1000)
@@ -130,7 +129,12 @@ onBeforeUnmount(() => {
     <AdminPanel>
       <h3 class="mb-12">
         {{ game.adminGameLabel }}
-        <span v-if="game.currentGame" class="live-badge" role="status" aria-label="Game in progress">
+        <span
+          v-if="game.currentGame"
+          class="live-badge"
+          role="status"
+          aria-label="Game in progress"
+        >
           <span class="live-dot" aria-hidden="true"></span>Live
         </span>
         <span
@@ -183,9 +187,7 @@ onBeforeUnmount(() => {
           <div class="game-details-editor">
             <label class="field-label">
               Game Details
-              <span class="text-dim fw-normal text-xs">
-                (Markdown supported)
-              </span>
+              <span class="text-dim fw-normal text-xs"> (Markdown supported) </span>
             </label>
             <MarkdownEditor
               v-model="game.gameDetails"
@@ -221,7 +223,9 @@ onBeforeUnmount(() => {
               @click="game.drawNumber()"
             >
               <LoadingSpinner v-if="game.drawing" label="Drawing…" />
-              <template v-else><font-awesome-icon :icon="['fas', 'circle-dot']" /> Draw Number</template>
+              <template v-else
+                ><font-awesome-icon :icon="['fas', 'circle-dot']" /> Draw Number</template
+              >
             </button>
             <select
               v-model.number="game.drawDelay"
@@ -230,7 +234,9 @@ onBeforeUnmount(() => {
               style="padding: 10px 14px; font-size: 0.95rem; font-weight: 600; cursor: pointer"
               @change="game.persistDrawDelay()"
             >
-              <option v-for="s in DRAW_DELAY_OPTIONS" :key="s" :value="s">{{ delayLabel(s) }}</option>
+              <option v-for="s in DRAW_DELAY_OPTIONS" :key="s" :value="s">
+                {{ delayLabel(s) }}
+              </option>
             </select>
             <button class="btn-caution" :disabled="game.ending" @click="game.endGame()">
               <LoadingSpinner v-if="game.ending" label="Ending…" />
@@ -254,9 +260,7 @@ onBeforeUnmount(() => {
             </button>
           </div>
 
-          <p class="text-dim text-xs mt-8">
-            Tip: press <kbd>Space</kbd> to draw the next number.
-          </p>
+          <p class="text-dim text-xs mt-8">Tip: press <kbd>Space</kbd> to draw the next number.</p>
 
           <!-- Countdown / Sent indicator -->
           <div v-if="game.drawCountdown !== null" class="draw-countdown">
@@ -331,7 +335,8 @@ onBeforeUnmount(() => {
 
             <div v-if="game.frequentWinners.length" class="frequent-winners-panel">
               <h3>
-                <font-awesome-icon :icon="['fad', 'triangle-exclamation']" /> Frequent Winners (3+ in 12h)
+                <font-awesome-icon :icon="['fad', 'triangle-exclamation']" /> Frequent Winners (3+
+                in 12h)
               </h3>
               <div class="frequent-winner-chips">
                 <span v-for="fw in game.frequentWinners" :key="fw.player_name" class="winner-chip">

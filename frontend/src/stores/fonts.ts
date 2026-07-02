@@ -34,7 +34,7 @@ export const useFontsStore = defineStore('fonts', () => {
     loading.value = true
     try {
       const data = await endpoints.fonts.list()
-      fonts.value = data.fonts || []
+      fonts.value = data.fonts
     } catch (e) {
       ui.notify((e as Error).message, 'error')
     } finally {
@@ -52,8 +52,8 @@ export const useFontsStore = defineStore('fonts', () => {
     uploading.value = true
     try {
       const res = await endpoints.fonts.upload(form)
-      const ok = res.uploaded?.length ?? 0
-      const skipped = res.skipped ?? []
+      const ok = res.uploaded.length
+      const skipped = res.skipped
       if (ok > 0) {
         ui.notify(`Uploaded ${ok} font${ok === 1 ? '' : 's'}`, 'success')
       }
@@ -113,4 +113,3 @@ export const useFontsStore = defineStore('fonts', () => {
     renameFont,
   }
 })
-

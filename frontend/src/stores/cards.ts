@@ -199,12 +199,12 @@ export const useCardsStore = defineStore('cards', () => {
     previewCardEditing.value = null
     if (newValue === oldValue) return
     try {
-      const playerName =
-        field === 'player_name' ? newValue : previewCard.value.player_name || ''
+      const playerName = field === 'player_name' ? newValue : previewCard.value.player_name || ''
       const details = field === 'details' ? newValue : previewCard.value.details || ''
       await endpoints.cards.updatePlayer(previewCard.value.id, playerName, details)
       previewCard.value[field] = newValue
-      const card = cards.value.find((c) => c.id === previewCard.value!.id)
+      const previewCardId = previewCard.value.id
+      const card = cards.value.find((c) => c.id === previewCardId)
       if (card) {
         card.player_name = playerName
         card.details = details

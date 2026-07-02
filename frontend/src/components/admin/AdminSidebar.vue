@@ -54,9 +54,11 @@ const showBingo = computed(() =>
   ['bingo-game', 'bingo-cards', 'bingo-winners-log', 'bingo-patterns', 'bingo-presets'].some(can),
 )
 const showTeahouse = computed(() =>
-  ['teahouse-announcements', 'teahouse-affiliates', ...BOOK_CLUBS.map((c) => `bookclub-${c.slug}`)].some(
-    can,
-  ),
+  [
+    'teahouse-announcements',
+    'teahouse-affiliates',
+    ...BOOK_CLUBS.map((c) => `bookclub-${c.slug}`),
+  ].some(can),
 )
 // Festival now also hosts Raffles (moved out of Senpan Tea House). The Raffles
 // page keeps its `teahouse-raffles` permission/route id; only its placement moved.
@@ -70,7 +72,7 @@ const showSystem = computed(
 
 /** Navigate to an admin tab (items navigate; headers don't — see toggleSection). */
 function go(tab: AdminTab): void {
-  router.push({ name: adminTabRouteName(tab) })
+  void router.push({ name: adminTabRouteName(tab) })
 }
 
 // Which sections are expanded. Headers are independent accordion toggles: each

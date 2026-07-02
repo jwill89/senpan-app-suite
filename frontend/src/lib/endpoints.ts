@@ -117,8 +117,7 @@ export const endpoints = {
         { skipAuthRedirect: true },
       ),
     /** POST /api/auth {logout}. */
-    logout: () =>
-      apiPost<OKResponse>('auth', { action: 'logout' }, { skipAuthRedirect: true }),
+    logout: () => apiPost<OKResponse>('auth', { action: 'logout' }, { skipAuthRedirect: true }),
     /** POST /api/register — create an account (hidden page; pending activation).
      *  turnstileToken carries the Turnstile result when the bot check is enabled. */
     register: (username: string, password: string, turnstileToken?: string) =>
@@ -134,8 +133,7 @@ export const endpoints = {
     /** GET /api/users — all accounts (admin only). */
     list: () => apiGet<UsersResponse>('users'),
     /** PATCH /api/users/{id} {active} — activate/deactivate the account. */
-    setActive: (id: number, active: boolean) =>
-      apiPatch<OKResponse>(`users/${id}`, { active }),
+    setActive: (id: number, active: boolean) => apiPatch<OKResponse>(`users/${id}`, { active }),
     /** PATCH /api/users/{id} {admin} — grant/revoke admin. */
     setAdmin: (id: number, admin: boolean) => apiPatch<OKResponse>(`users/${id}`, { admin }),
     /** PATCH /api/users/{id} {permissions} — set the account's page-permission set. */
@@ -419,8 +417,7 @@ export const endpoints = {
     /** GET /api/stamp-rallies/{id}/logs — the event-wide stamp collection log. */
     logs: (id: number) => apiGet<StampRallyLogsResponse>(`stamp-rallies/${id}/logs`),
     /** POST /api/stamp-rallies — create a rally (201). The form omits an id. */
-    create: (rally: Record<string, unknown>) =>
-      apiPost<StampRallyResponse>('stamp-rallies', rally),
+    create: (rally: Record<string, unknown>) => apiPost<StampRallyResponse>('stamp-rallies', rally),
     /** PUT /api/stamp-rallies/{id} — full replace of the editable fields. */
     update: (rally: { id: number } & Record<string, unknown>) =>
       apiPut<OKResponse>(`stamp-rallies/${rally.id}`, rally),
@@ -461,8 +458,7 @@ export const endpoints = {
   // /api/bookclub/* paths.
   bookclub: {
     /** GET /api/book-clubs/{club}/reading-lists — reading lists for a club (no items). */
-    lists: (club: string) =>
-      apiGet<ReadingListsResponse>(`book-clubs/${enc(club)}/reading-lists`),
+    lists: (club: string) => apiGet<ReadingListsResponse>(`book-clubs/${enc(club)}/reading-lists`),
     /** GET /api/book-clubs/{club}/reading-lists/{id} — a reading list with its items. */
     listDetail: (club: string, id: number) =>
       apiGet<ReadingListDetailResponse>(`book-clubs/${enc(club)}/reading-lists/${id}`),
@@ -496,11 +492,9 @@ export const endpoints = {
       apiPost<PublishResponse>(`book-clubs/${enc(club)}/reading-lists/${listId}/publish`, {}),
     uploadImage: (form: FormData) => apiPost<BookclubUploadResponse>('bookclub/upload', form),
     /** GET /api/bookclub/lookup?q=… — AniList suggestions shaped like items. */
-    lookup: (query: string) =>
-      apiGet<BookclubLookupResponse>(`bookclub/lookup?q=${enc(query)}`),
+    lookup: (query: string) => apiGet<BookclubLookupResponse>(`bookclub/lookup?q=${enc(query)}`),
     /** GET /api/bookclub/lookup?id=… — a single AniList title by numeric id. */
-    lookupById: (id: number) =>
-      apiGet<BookclubLookupResponse>(`bookclub/lookup?id=${id}`),
+    lookupById: (id: number) => apiGet<BookclubLookupResponse>(`bookclub/lookup?id=${id}`),
   },
 
   // ── Announcement management ──────────────────────────────────────────────────

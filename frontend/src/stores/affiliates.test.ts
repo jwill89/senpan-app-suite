@@ -81,7 +81,12 @@ describe('form rows', () => {
   it('editAffiliateForm seeds the form from an affiliate', () => {
     const s = useAffiliatesStore()
     s.editAffiliateForm(
-      affiliate({ id: 7, name: 'Tavern', owners: ['Tataru'], hours: [{ label: '', start: '09:00', end: '' }] }),
+      affiliate({
+        id: 7,
+        name: 'Tavern',
+        owners: ['Tataru'],
+        hours: [{ label: '', start: '09:00', end: '' }],
+      }),
     )
     expect(s.affiliateForm).toMatchObject({ id: 7, name: 'Tavern', owners: ['Tataru'] })
     expect(s.affiliateForm!.hours).toHaveLength(1)

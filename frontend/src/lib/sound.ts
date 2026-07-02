@@ -17,10 +17,7 @@ let ctx: AudioContext | null = null
 /** Lazily creates the shared AudioContext (handles the webkit-prefixed name). */
 function getCtx(): AudioContext | null {
   if (ctx) return ctx
-  const AC =
-    window.AudioContext ||
-    (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext
-  if (!AC) return null
+  const AC = window.AudioContext
   ctx = new AC()
   return ctx
 }
@@ -170,7 +167,9 @@ export function playEvent(event: SoundEvent, mode: 'basic' | 'game'): void {
     playSample(file)
     return
   }
-  const chime = { draw: playDrawChime, minigame: playMinigameChime, gameend: playGameEndChime }[event]
+  const chime = { draw: playDrawChime, minigame: playMinigameChime, gameend: playGameEndChime }[
+    event
+  ]
   chime()
 }
 
@@ -316,7 +315,7 @@ function woodKnock(ac: AudioContext, t: number, amp: number): void {
 /** Triggers a brief device vibration where supported (mobile). */
 export function vibrate(pattern: number | number[] = 60): void {
   try {
-    navigator.vibrate?.(pattern)
+    navigator.vibrate(pattern)
   } catch {
     /* non-fatal */
   }

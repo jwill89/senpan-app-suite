@@ -1,0 +1,3 @@
+[submodule "frontend/eslint-config"]
+	path = frontend/eslint-config
+	url = https://github.com/jwill89/eslint-config.git

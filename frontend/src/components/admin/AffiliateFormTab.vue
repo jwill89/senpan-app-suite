@@ -144,10 +144,7 @@ function cancel(): void {
         label="Logo"
         help="Pick from the “Affiliate Logos” image category. Upload new images on the System → Images page."
       >
-        <ImagePicker
-          v-model="affiliates.affiliateForm.logo"
-          :images="affiliates.logoImages"
-        />
+        <ImagePicker v-model="affiliates.affiliateForm.logo" :images="affiliates.logoImages" />
       </FormField>
 
       <FormField

@@ -158,13 +158,14 @@ function onFormDone(): void {
   screen.value = 'list'
 }
 async function deleteSelected(): Promise<void> {
-  if (!garapons.selectedGarapon) return
-  await garapons.deleteGarapon(garapons.selectedGarapon.id)
+  const g = garapons.selectedGarapon
+  if (!g) return
+  await garapons.deleteGarapon(g.id)
   if (!garapons.selectedGarapon) screen.value = 'list'
 }
 function toggleClosed(): void {
   if (!garapons.selectedGarapon) return
-  garapons.setGaraponStatus(
+  void garapons.setGaraponStatus(
     garapons.selectedGarapon.id,
     garapons.selectedGarapon.status === 'open' ? 'closed' : 'open',
   )
@@ -245,7 +246,6 @@ function toggleClosed(): void {
           </tbody>
         </table>
       </div>
-
     </AdminPanel>
 
     <!-- ── Drawing Links sub-page ──────────────────────────────────────────────── -->
@@ -394,7 +394,9 @@ function toggleClosed(): void {
           @sort="setLogSort"
         >
           <template #cell-prize_name="{ row }">
-            <span class="prize-cell"><BallSwatch :color="row.ball_color" size="sm" /> {{ row.prize_name }}</span>
+            <span class="prize-cell"
+              ><BallSwatch :color="row.ball_color" size="sm" /> {{ row.prize_name }}</span
+            >
           </template>
           <template #cell-drawn_at="{ row }">
             <span class="text-sm text-dim">{{ created(row.drawn_at) }}</span>

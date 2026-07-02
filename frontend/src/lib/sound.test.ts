@@ -12,14 +12,14 @@ class FakeAudio {
   load = vi.fn()
   constructor(s?: string) {
     if (s !== undefined) this.src = s
-    created.push(this as unknown as (typeof created)[number])
+    created.push(this)
   }
 }
 
 beforeEach(() => {
   created.length = 0
   vi.resetModules() // fresh module = fresh sample cache + volume
-  vi.stubGlobal('Audio', FakeAudio as unknown as typeof Audio)
+  vi.stubGlobal('Audio', FakeAudio)
 })
 
 /** Fresh import so each test gets a clean sample cache. */

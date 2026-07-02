@@ -171,9 +171,9 @@ onMounted(() => users.loadUsers())
       </div>
 
       <p class="text-dim text-xs mb-12">
-        Accounts sign in with a username and password. New sign-ups (via the shared
-        registration link) start <strong>inactive</strong> — activate one here and grant the
-        pages it should access. Admins have full access to everything.
+        Accounts sign in with a username and password. New sign-ups (via the shared registration
+        link) start <strong>inactive</strong> — activate one here and grant the pages it should
+        access. Admins have full access to everything.
       </p>
 
       <SearchInput
@@ -257,10 +257,10 @@ onMounted(() => users.loadUsers())
       <!-- Account -->
       <div class="edit-section">
         <label class="perm-option">
-          <input type="checkbox" v-model="editActive" /> Account active
+          <input v-model="editActive" type="checkbox" /> Account active
         </label>
         <label class="perm-option">
-          <input type="checkbox" v-model="editAdmin" /> Administrator (full access to every page)
+          <input v-model="editAdmin" type="checkbox" /> Administrator (full access to every page)
         </label>
       </div>
 

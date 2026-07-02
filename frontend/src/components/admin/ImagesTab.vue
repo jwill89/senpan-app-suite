@@ -44,7 +44,9 @@ const dragOver = ref(false)
 const selectedCategory = computed(
   () => images.sortedCategories.find((c) => c.dir === selectedDir.value) ?? null,
 )
-const currentImages = computed(() => images.imagesByDir[selectedDir.value] || [])
+const currentImages = computed(() =>
+  selectedDir.value in images.imagesByDir ? images.imagesByDir[selectedDir.value] : [],
+)
 
 /** Keep a valid category selected as the list loads/changes. */
 watch(
@@ -58,7 +60,7 @@ watch(
 )
 // Load the selected category's images whenever the selection changes.
 watch(selectedDir, (dir) => {
-  if (dir) images.loadImages(dir)
+  if (dir) void images.loadImages(dir)
 })
 
 // ── Category management modal ────────────────────────────────────────────────
@@ -107,7 +109,12 @@ async function submitCategory(): Promise<void> {
   try {
     const dir =
       categoryModal.value.mode === 'edit'
-        ? await images.saveCategory('rename', formName.value, categoryModal.value.dir, formDir.value)
+        ? await images.saveCategory(
+            'rename',
+            formName.value,
+            categoryModal.value.dir,
+            formDir.value,
+          )
         : await images.saveCategory('create', formName.value, formDir.value)
     if (dir) {
       selectedDir.value = dir
@@ -133,7 +140,7 @@ function onDrop(e: DragEvent): void {
   dragOver.value = false
   const files = e.dataTransfer?.files
   if (files && files.length > 0 && selectedDir.value) {
-    images.uploadImages(selectedDir.value, files)
+    void images.uploadImages(selectedDir.value, files)
   }
 }
 
@@ -161,7 +168,11 @@ onMounted(() => images.loadCategories())
   <div class="tab-body">
     <!-- ── Manage categories ─────────────────────────────────────────────────── -->
     <AdminPanel v-if="screen === 'categories'">
-      <SubPageHeader title="Image Categories" :icon="['fad', 'folder-open']" @back="screen = 'browse'" />
+      <SubPageHeader
+        title="Image Categories"
+        :icon="['fad', 'folder-open']"
+        @back="screen = 'browse'"
+      />
       <p class="text-dim text-xs mb-12">
         Each category maps to a subdirectory of <span class="code-gold">images/</span>. The three
         permanent categories back the announcement and raffle editors and can't be renamed or
@@ -194,7 +205,9 @@ onMounted(() => images.loadCategories())
             <button
               class="btn-confirm btn-sm"
               :disabled="row.permanent"
-              :title="row.permanent ? 'Permanent categories can\'t be renamed' : 'Rename this category'"
+              :title="
+                row.permanent ? 'Permanent categories can\'t be renamed' : 'Rename this category'
+              "
               @click="startEditCategory(row)"
             >
               <font-awesome-icon :icon="['fas', 'pen-to-square']" /> Edit
@@ -202,7 +215,9 @@ onMounted(() => images.loadCategories())
             <button
               class="btn-danger btn-sm"
               :disabled="row.permanent"
-              :title="row.permanent ? 'Permanent categories can\'t be deleted' : 'Delete this category'"
+              :title="
+                row.permanent ? 'Permanent categories can\'t be deleted' : 'Delete this category'
+              "
               @click="images.deleteCategory(row)"
             >
               <font-awesome-icon :icon="['fas', 'trash']" /> Delete
@@ -224,9 +239,8 @@ onMounted(() => images.loadCategories())
       </template>
 
       <p class="text-dim text-xs mb-12">
-        Pick a category, then drag &amp; drop images (or click to browse) to upload them.
-        Allowed types: .jpg, .jpeg, .png, .webp, .gif. Uploading a file with an existing name
-        replaces it.
+        Pick a category, then drag &amp; drop images (or click to browse) to upload them. Allowed
+        types: .jpg, .jpeg, .png, .webp, .gif. Uploading a file with an existing name replaces it.
       </p>
 
       <LoadingSpinner
@@ -250,7 +264,9 @@ onMounted(() => images.loadCategories())
             @click="pickFiles"
           >
             <LoadingSpinner v-if="images.uploading" label="Uploading…" />
-            <template v-else><font-awesome-icon :icon="['fas', 'upload']" /> Upload Images</template>
+            <template v-else
+              ><font-awesome-icon :icon="['fas', 'upload']" /> Upload Images</template
+            >
           </button>
           <input
             ref="fileInput"
@@ -355,8 +371,8 @@ onMounted(() => images.loadCategories())
         Directory: <span class="code-gold">images/{{ formDerivedDir }}/</span>
       </p>
       <p v-if="categoryModal.mode === 'edit'" class="text-dim text-xs mb-12">
-        Renaming the directory moves the folder on disk and changes the public URL of every image
-        in it — existing references to the old path will break.
+        Renaming the directory moves the folder on disk and changes the public URL of every image in
+        it — existing references to the old path will break.
       </p>
       <div class="flex-toolbar flex-end">
         <button class="btn-neutral btn-sm" @click="closeModal">Cancel</button>
@@ -390,7 +406,9 @@ onMounted(() => images.loadCategories())
   border-radius: var(--radius);
   color: var(--text-muted);
   cursor: pointer;
-  transition: border-color 0.15s, background 0.15s;
+  transition:
+    border-color 0.15s,
+    background 0.15s;
 }
 .image-dropzone:hover {
   border-color: var(--highlight);
@@ -451,7 +469,9 @@ onMounted(() => images.loadCategories())
   color: #fff;
   cursor: pointer;
   opacity: 0.85;
-  transition: background 0.15s, opacity 0.15s;
+  transition:
+    background 0.15s,
+    opacity 0.15s;
 }
 .image-del-overlay:hover {
   opacity: 1;

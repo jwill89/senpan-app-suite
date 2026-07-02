@@ -4,7 +4,7 @@
  * `redirect` query param if present, else the admin dashboard). The admin's
  * initial data load happens in AdminView when the dashboard mounts.
  */
-import { onMounted, ref } from 'vue'
+import { onMounted, ref, useTemplateRef } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
 import FormField from '@/components/common/ui/FormField.vue'
@@ -23,7 +23,7 @@ const password = ref('')
 // backend; when present, the widget renders and a token is required to log in.
 const turnstileSiteKey = ref('')
 const turnstileToken = ref('')
-const turnstile = ref<InstanceType<typeof TurnstileWidget> | null>(null)
+const turnstile = useTemplateRef<InstanceType<typeof TurnstileWidget>>('turnstile')
 
 onMounted(async () => {
   try {
@@ -47,7 +47,7 @@ async function submit(): Promise<void> {
     const redirect = typeof route.query.redirect === 'string' ? route.query.redirect : null
     // Land on /admin; the router guard forwards to the first page this account
     // may access (admins → the game tab, others → their first permitted page).
-    router.push(redirect || { path: '/admin' })
+    void router.push(redirect || { path: '/admin' })
     return
   }
   // Turnstile tokens are single-use — re-issue one for the next attempt.
@@ -56,7 +56,7 @@ async function submit(): Promise<void> {
 }
 
 function goHome(): void {
-  router.push({ name: 'home' })
+  void router.push({ name: 'home' })
 }
 </script>
 
@@ -67,12 +67,7 @@ function goHome(): void {
       <p>Enter your username and password</p>
       <form class="login-form" autocomplete="off" @submit.prevent="submit">
         <FormField label="Username" html-for="login-username">
-          <input
-            id="login-username"
-            v-model="username"
-            type="text"
-            autocomplete="username"
-          />
+          <input id="login-username" v-model="username" type="text" autocomplete="username" />
         </FormField>
         <FormField label="Password" html-for="login-password">
           <input

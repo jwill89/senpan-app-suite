@@ -39,7 +39,9 @@ const incompatible = computed(
     </span>
     <span class="app-versions__row">
       <span class="app-versions__label">Backend</span>
-      <span class="app-versions__val">{{ backend ? `v${backend}` : failed ? 'unknown' : '…' }}</span>
+      <span class="app-versions__val">{{
+        backend ? `v${backend}` : failed ? 'unknown' : '…'
+      }}</span>
     </span>
     <span
       v-if="incompatible"

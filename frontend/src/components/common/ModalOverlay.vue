@@ -68,13 +68,13 @@ onMounted(() => {
   document.addEventListener('keydown', onKeydown, true)
   // Focus the first focusable control, else the dialog itself.
   const items = focusable()
-  ;(items[0] ?? box.value)?.focus()
+  ;(items[0] ?? box.value).focus()
 })
 
 onBeforeUnmount(() => {
   document.removeEventListener('keydown', onKeydown, true)
   // Restore focus to whatever was focused before the modal opened.
-  previouslyFocused?.focus?.()
+  previouslyFocused?.focus()
 })
 </script>
 

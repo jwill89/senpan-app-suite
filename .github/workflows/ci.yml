@@ -24,10 +24,17 @@ jobs:
       run:
         working-directory: frontend
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
+        with:
+          # The frontend ESLint config lives in the private @jwill89/eslint-config
+          # repo, wired in as the frontend/eslint-config submodule. Fetch it with a
+          # PAT that can read that repo (ESLINT_CONFIG_TOKEN secret) — the default
+          # GITHUB_TOKEN can't reach a different private repo.
+          submodules: recursive
+          token: ${{ secrets.ESLINT_CONFIG_TOKEN }}
 
       - name: Set up Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: 24
           cache: npm
@@ -37,7 +44,7 @@ jobs:
       # generated from the Go model by tygo, so CI must regenerate them before
       # type-checking / building. Requires the Go toolchain.
       - name: Set up Go (for tygo type generation)
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version-file: backend/go.mod
           cache-dependency-path: backend/go.sum
@@ -86,7 +93,7 @@ jobs:
       run:
         working-directory: backend
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Set up Go
         uses: actions/setup-go@v5
@@ -134,7 +141,7 @@ jobs:
       # EnableWindowsTargeting property in SenpanCompanion.csproj.)
       DALAMUD_HOME: ${{ github.workspace }}/.dalamud
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Set up .NET
         uses: actions/setup-dotnet@v4

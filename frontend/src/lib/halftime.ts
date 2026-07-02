@@ -25,7 +25,7 @@ export const HALFTIME_RATIO = 35 / 75
 export function activeColumnCount(patterns: BingoGamePattern[] | undefined | null): number {
   const cols = [false, false, false, false, false]
   for (const p of patterns ?? []) {
-    const grid = p.pattern_data ?? []
+    const grid = p.pattern_data
     for (let r = 0; r < 5 && r < grid.length; r++) {
       const row = grid[r] ?? []
       for (let c = 0; c < 5 && c < row.length; c++) {

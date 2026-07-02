@@ -34,7 +34,14 @@ import { useStampRalliesStore, groupedByParticipant } from './stampRallies'
 import { useUiStore } from './ui'
 
 function logRow(over: Partial<StampRallyLogEntry>): StampRallyLogEntry {
-  return { card_id: 1, participant_name: 'A', stamp_id: 1, stall_name: 'X', stamped_at: '', ...over }
+  return {
+    card_id: 1,
+    participant_name: 'A',
+    stamp_id: 1,
+    stall_name: 'X',
+    stamped_at: '',
+    ...over,
+  }
 }
 
 function publicCard(over: Partial<PublicStampCard> = {}): PublicStampCard {
@@ -83,7 +90,9 @@ describe('groupedByParticipant', () => {
 
 describe('admin', () => {
   it('loadRallies populates the list', async () => {
-    ep.list.mockResolvedValueOnce({ stamp_rallies: [{ id: 1 } as StampRally, { id: 2 } as StampRally] })
+    ep.list.mockResolvedValueOnce({
+      stamp_rallies: [{ id: 1 } as StampRally, { id: 2 } as StampRally],
+    })
     const s = useStampRalliesStore()
     await s.loadRallies()
     expect(s.rallies).toHaveLength(2)
@@ -107,7 +116,7 @@ describe('admin', () => {
     await s.setRallyStatus(1, 'closed')
     expect(ep.setStatus).toHaveBeenCalledWith(1, 'closed')
     expect(s.rallies[0].status).toBe('closed')
-    expect(s.selectedRally?.status).toBe('closed')
+    expect(s.selectedRally.status).toBe('closed')
   })
 
   it('setStampPausedInList toggles the loaded stall and adjusts the active count', async () => {

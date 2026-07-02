@@ -44,6 +44,11 @@ let disposed = false
 // starting value back to the parent (which would mark a pristine form dirty).
 let ready = false
 
+// Read `disposed` through a call so control-flow analysis doesn't treat it as
+// still-false after the awaits below — it can flip to true if the component
+// unmounts while the editor is loading.
+const isDisposed = (): boolean => disposed
+
 onMounted(async () => {
   const [
     { CrepeBuilder },
@@ -94,7 +99,7 @@ onMounted(async () => {
   })
 
   await builder.create()
-  if (disposed) {
+  if (isDisposed()) {
     void builder.destroy()
     return
   }

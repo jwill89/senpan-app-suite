@@ -53,9 +53,9 @@ watch(
 onMounted(() => {
   // Load the active theme CSS + app settings, and preload open raffles so the
   // home page knows whether to show the Raffles card (mirrors app.js mounted()).
-  app.loadActiveCSS()
-  app.loadSettings()
-  raffles.loadHomeRaffles()
+  void app.loadActiveCSS()
+  void app.loadSettings()
+  void raffles.loadHomeRaffles()
 })
 
 onBeforeUnmount(() => {

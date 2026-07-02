@@ -1,31 +1,25 @@
-import { globalIgnores } from 'eslint/config'
-import { defineConfigWithVueTs, vueTsConfigs } from '@vue/eslint-config-typescript'
-import pluginVue from 'eslint-plugin-vue'
-import skipFormatting from '@vue/eslint-config-prettier/skip-formatting'
+import shared from '@jwill89/eslint-config'
 
-// Flat ESLint config for the Vue 3 + TypeScript SPA. Formatting is delegated to
-// Prettier (skipFormatting disables stylistic ESLint rules that would conflict).
-export default defineConfigWithVueTs(
+// Flat ESLint config for the Vue 3 + TypeScript SPA. The rules, plugin versions,
+// and formatting come from the shared @jwill89/eslint-config — a git submodule at
+// ./eslint-config, installed as a local (`file:`) dev dependency — so every
+// jwill89 frontend lints against one source of truth. Only project-specific
+// ignores live here (the generated tygo types + the submodule dir itself).
+export default [
   {
-    name: 'app/files',
-    files: ['**/*.{ts,mts,tsx,vue}'],
+    ignores: [
+      'dist/**',
+      'dist-ssr/**',
+      'coverage/**',
+      'eslint-config/**',
+      'src/types/api.generated.ts',
+      // Root JS config files aren't part of any tsconfig, so the shared config's
+      // type-aware (projectService) rules can't resolve them — and they don't need
+      // linting. (vite/vitest .ts configs stay linted via tsconfig.node.json.)
+      'eslint.config.js',
+      'prettier.config.js',
+    ],
   },
 
-  globalIgnores(['**/dist/**', '**/dist-ssr/**', '**/coverage/**', '**/node_modules/**']),
-
-  pluginVue.configs['flat/essential'],
-  vueTsConfigs.recommended,
-
-  {
-    name: 'app/rules',
-    rules: {
-      // The generated API types file uses interfaces tygo emits verbatim.
-      '@typescript-eslint/no-explicit-any': 'warn',
-      // Allow intentional empty catch blocks (best-effort logout, JSON parse).
-      'no-empty': ['error', { allowEmptyCatch: true }],
-    },
-  },
-
-  skipFormatting,
-)
-
+  ...shared,
+]

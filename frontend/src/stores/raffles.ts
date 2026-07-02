@@ -81,7 +81,7 @@ export const useRafflesStore = defineStore('raffles', () => {
     rafflesLoading.value = true
     try {
       const data = await endpoints.raffles.list()
-      raffles.value = data.raffles || []
+      raffles.value = data.raffles
     } catch (e) {
       ui.notify((e as Error).message, 'error')
     } finally {
@@ -93,7 +93,7 @@ export const useRafflesStore = defineStore('raffles', () => {
   async function loadHomeRaffles(): Promise<void> {
     try {
       const data = await endpoints.raffles.list()
-      homeRaffles.value = (data.raffles || []).filter(isRaffleEnterable)
+      homeRaffles.value = data.raffles.filter(isRaffleEnterable)
     } catch {
       /* silent */
     }
@@ -125,7 +125,7 @@ export const useRafflesStore = defineStore('raffles', () => {
     raffleEntries.value = []
     raffleWinner.value = null
     resetEntryAdd()
-    loadRaffleDetail(raffle.id)
+    void loadRaffleDetail(raffle.id)
   }
 
   /** Clears the admin "add entry" form. */
@@ -288,7 +288,7 @@ export const useRafflesStore = defineStore('raffles', () => {
     try {
       const images = useImagesStore()
       await images.loadImages(IMAGE_DIR_RAFFLES)
-      prizeImages.value = (images.imagesByDir[IMAGE_DIR_RAFFLES] || []).map((i) => i.path)
+      prizeImages.value = images.imagesByDir[IMAGE_DIR_RAFFLES].map((i) => i.path)
     } catch {
       /* non-fatal: the picker just shows nothing */
     }
@@ -306,7 +306,7 @@ export const useRafflesStore = defineStore('raffles', () => {
   function clampedEntries(): number {
     if (!selectedRaffle.value) return 1
     const max = Math.max(1, Math.floor(selectedRaffle.value.max_entries || 1))
-    const raw = Math.floor(Number(raffleSignup.value.numEntries) || 1)
+    const raw = Math.floor(raffleSignup.value.numEntries || 1)
     return Math.min(Math.max(raw, 1), max)
   }
 
@@ -360,7 +360,7 @@ export const useRafflesStore = defineStore('raffles', () => {
       return
     }
     const max = Math.max(1, Math.floor(selectedRaffle.value.max_entries || 1))
-    const num = Math.min(Math.max(Math.floor(Number(f.numEntries) || 1), 1), max)
+    const num = Math.min(Math.max(Math.floor(f.numEntries || 1), 1), max)
     addingEntry.value = true
     try {
       await endpoints.raffles.addEntry(selectedRaffle.value.id, {

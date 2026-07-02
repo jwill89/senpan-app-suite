@@ -60,7 +60,9 @@ function resolveStoredShape(): { mode: string; emoji: string } {
   if (mode === 'blank') return { mode: 'blank', emoji: '' }
   // Legacy fixed shape id (heart/star/…): map to its emoji, else fall back blank.
   const legacy = STAMP_SHAPES.find((s) => s.id === mode)
-  return legacy && legacy.emoji ? { mode: 'emoji', emoji: legacy.emoji } : { mode: 'blank', emoji: '' }
+  return legacy && legacy.emoji
+    ? { mode: 'emoji', emoji: legacy.emoji }
+    : { mode: 'blank', emoji: '' }
 }
 
 export const usePlayerStore = defineStore('player', () => {
@@ -138,7 +140,7 @@ export const usePlayerStore = defineStore('player', () => {
 
   /** Set of called numbers (O(1) lookup in templates). */
   const playerCalledSet = computed(() => {
-    if (!playerGame.value || !playerGame.value.called_numbers) return new Set<number>()
+    if (!playerGame.value) return new Set<number>()
     return new Set(playerGame.value.called_numbers)
   })
 
@@ -169,11 +171,11 @@ export const usePlayerStore = defineStore('player', () => {
   const winningPatternCells = computed(() => {
     const set = new Set<string>()
     for (const p of playerGame.value?.patterns ?? []) {
-      const grid = p.pattern_data ?? []
+      const grid = p.pattern_data
       for (let r = 0; r < 5 && r < grid.length; r++) {
         const row = grid[r] ?? []
         for (let c = 0; c < 5 && c < row.length; c++) {
-          if (row[c]) set.add(r + '-' + c)
+          if (row[c]) set.add(`${r}-${c}`)
         }
       }
     }
@@ -220,7 +222,7 @@ export const usePlayerStore = defineStore('player', () => {
       !playerGame.value && frozenPatternCells.value
         ? frozenPatternCells.value
         : winningPatternCells.value
-    return set.has(ri + '-' + ci)
+    return set.has(`${ri}-${ci}`)
   }
 
   /**
@@ -255,20 +257,20 @@ export const usePlayerStore = defineStore('player', () => {
   }
 
   function isStamped(ri: number, ci: number): boolean {
-    return stamps.value[ri + '-' + ci]
+    return stamps.value[`${ri}-${ci}`]
   }
 
   function boardCellClass(ri: number, ci: number, cell: number): (string | false)[] {
     const classes: (string | false)[] = ['board-cell']
     if (cell === 0) classes.push('free')
-    if (stamps.value[ri + '-' + ci]) classes.push('stamped')
+    if (stamps.value[`${ri}-${ci}`]) classes.push('stamped')
     return classes
   }
 
   function toggleStamp(ri: number, ci: number): void {
-    const key = ri + '-' + ci
+    const key = `${ri}-${ci}`
     if (stamps.value[key]) {
-      delete stamps.value[key]
+      Reflect.deleteProperty(stamps.value, key)
     } else {
       stamps.value[key] = true
     }
@@ -290,7 +292,7 @@ export const usePlayerStore = defineStore('player', () => {
 
   function saveStamps(): void {
     if (!playerCard.value || !playerGame.value) return
-    const k = 'stamps_' + playerCard.value.id + '_' + playerGame.value.id
+    const k = `stamps_${playerCard.value.id}_${playerGame.value.id}`
     // Best-effort persistence: the reactive stamps drive the board regardless, so
     // a full/unavailable quota mustn't throw out of the high-frequency toggle path.
     try {
@@ -305,7 +307,7 @@ export const usePlayerStore = defineStore('player', () => {
       stamps.value = {}
       return
     }
-    const k = 'stamps_' + playerCard.value.id + '_' + playerGame.value.id
+    const k = `stamps_${playerCard.value.id}_${playerGame.value.id}`
     const raw = localStorage.getItem(k)
     // Guard against corrupt/tampered storage so a bad value starts the board clean
     // instead of throwing during load.

@@ -124,8 +124,16 @@ function onCanvasPointerDown(e: PointerEvent): void {
 <template>
   <div class="pe-wrap">
     <div ref="canvasRef" class="pe-canvas" @pointerdown="onCanvasPointerDown">
-      <img v-if="cardImage" :src="assetUrl(cardImage)" class="pe-bg" alt="Stamp card" draggable="false" />
-      <div v-else class="pe-bg pe-empty"><font-awesome-icon :icon="['fad', 'image']" /> Pick a card image</div>
+      <img
+        v-if="cardImage"
+        :src="assetUrl(cardImage)"
+        class="pe-bg"
+        alt="Stamp card"
+        draggable="false"
+      />
+      <div v-else class="pe-bg pe-empty">
+        <font-awesome-icon :icon="['fad', 'image']" /> Pick a card image
+      </div>
 
       <div
         v-for="item in items"

@@ -12,7 +12,7 @@ const router = useRouter()
 
 async function signOut(): Promise<void> {
   await auth.logout()
-  router.push({ name: 'admin-login' })
+  void router.push({ name: 'admin-login' })
 }
 </script>
 

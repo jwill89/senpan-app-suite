@@ -24,17 +24,17 @@ async function join(): Promise<void> {
   const details = await player.joinGame()
   if (details !== null && player.playerCard) {
     game.gameDetails = details
-    router.push({ name: 'player', params: { cardId: player.playerCard.id } })
+    void router.push({ name: 'player', params: { cardId: player.playerCard.id } })
   }
 }
 
 function viewRaffles(): void {
   raffles.raffles = raffles.homeRaffles
-  router.push({ name: 'raffles' })
+  void router.push({ name: 'raffles' })
 }
 
 function goAdminLogin(): void {
-  router.push({ name: 'admin-login' })
+  void router.push({ name: 'admin-login' })
 }
 
 function onJoinInput(e: Event): void {

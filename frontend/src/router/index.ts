@@ -271,7 +271,7 @@ const CHUNK_RELOAD_KEY = 'route-chunk-reload'
 
 /** Whether an error looks like a failed dynamic import of a route chunk. */
 function isChunkLoadError(error: unknown): boolean {
-  const message = (error as Error)?.message || ''
+  const message = (error as Error).message || ''
   // Browser-specific phrasings: Chrome/Firefox "…dynamically imported module…",
   // Safari "Importing a module script failed", plus the bundler-style name.
   return /dynamically imported module|module script failed|ChunkLoadError/i.test(message)
@@ -289,7 +289,7 @@ router.onError((error, to) => {
   // index.html + current chunk hashes. The sessionStorage guard ensures we only
   // attempt this once per target so a genuinely broken chunk can't loop.
   if (!isChunkLoadError(error)) return
-  const target = to?.fullPath || window.location.pathname + window.location.search
+  const target = to.fullPath || window.location.pathname + window.location.search
   if (sessionStorage.getItem(CHUNK_RELOAD_KEY) === target) return
   sessionStorage.setItem(CHUNK_RELOAD_KEY, target)
   window.location.assign(target)

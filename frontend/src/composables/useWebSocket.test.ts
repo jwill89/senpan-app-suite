@@ -6,7 +6,7 @@ import { createPinia, setActivePinia } from 'pinia'
 // these available inside the mock factories (which are hoisted above imports).
 const h = vi.hoisted(() => ({
   captured: { onMessage: undefined as undefined | ((m: unknown) => void) },
-  route: { value: { name: 'admin-game' as string } },
+  route: { value: { name: 'admin-game' } },
 }))
 
 vi.mock('@/lib/ws', () => ({
@@ -19,11 +19,11 @@ vi.mock('@/lib/ws', () => ({
   },
 }))
 vi.mock('vue-router', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('vue-router')>()),
+  ...(await importOriginal<Record<string, unknown>>()),
   useRouter: () => ({ currentRoute: h.route, push: vi.fn() }),
 }))
 vi.mock('@/lib/sound', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/sound')>()),
+  ...(await importOriginal<Record<string, unknown>>()),
   playEvent: vi.fn(),
   vibrate: vi.fn(),
 }))

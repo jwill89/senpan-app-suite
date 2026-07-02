@@ -20,6 +20,11 @@ export class ApiError extends Error {
   }
 }
 
+// Default per-request timeout. A request that hasn't responded by now is aborted
+// so a hung network can't leave a spinner (or the caller's promise) pending
+// forever. Callers that pass their own `signal` opt out of this entirely.
+const DEFAULT_TIMEOUT_MS = 30_000
+
 export interface ApiOptions extends Omit<RequestInit, 'body'> {
   // Body objects are auto-stringified (unless FormData).
   body?: unknown
@@ -27,6 +32,9 @@ export interface ApiOptions extends Omit<RequestInit, 'body'> {
   // the auth endpoints themselves (a bad-password login legitimately 401s and
   // must not trigger a redirect/“session expired” toast).
   skipAuthRedirect?: boolean
+  // Abort the request after this many ms when the caller doesn't supply its own
+  // `signal`. Defaults to 30s; pass 0 to disable the timeout for this request.
+  timeoutMs?: number
 }
 
 // ── Global 401 handler ────────────────────────────────────────────────────────
@@ -67,7 +75,35 @@ export async function api<T = unknown>(endpoint: string, options: ApiOptions = {
     opts.body = options.body as BodyInit
   }
 
-  const res = await fetch(url, opts)
+  // Abort/timeout: honor a caller-supplied `signal` as-is (they own its
+  // lifetime); otherwise install a default timeout so a hung request can't wait
+  // forever. The timer is always cleared in the finally, and an abort is surfaced
+  // as a clean error rather than a raw AbortError.
+  let timeoutId: ReturnType<typeof setTimeout> | undefined
+  if (!options.signal) {
+    const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS
+    if (timeoutMs > 0) {
+      const controller = new AbortController()
+      opts.signal = controller.signal
+      timeoutId = setTimeout(() => controller.abort(), timeoutMs)
+    }
+  }
+
+  let res: Response
+  try {
+    res = await fetch(url, opts)
+  } catch (e) {
+    if ((e instanceof DOMException || e instanceof Error) && e.name === 'AbortError') {
+      // A caller-supplied signal means the caller cancelled; otherwise our own
+      // default timeout fired.
+      const msg = options.signal ? 'Request cancelled' : 'Request timed out. Please try again.'
+      throw new ApiError(msg, 0)
+    }
+    throw e
+  } finally {
+    if (timeoutId !== undefined) clearTimeout(timeoutId)
+  }
+
   let data: unknown
   try {
     data = await res.json()

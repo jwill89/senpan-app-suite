@@ -1,7 +1,7 @@
 {
   "name": "app-suite-frontend",
   "private": true,
-  "version": "2.0.0",
+  "version": "2.2.0",
   "type": "module",
   "engines": {
     "node": ">=24"
@@ -31,15 +31,15 @@
     "markdown-it": "^14.1.0",
     "pinia": "^3.0.4",
     "vue": "^3.5.13",
+    "vue-draggable-plus": "^0.6.1",
     "vue-router": "^5.1.0",
-    "vue3-emoji-picker": "^1.1.8",
-    "vuedraggable": "^4.1.0"
+    "vue3-emoji-picker": "^1.1.8"
   },
   "devDependencies": {
+    "@jwill89/eslint-config": "file:eslint-config",
     "@types/markdown-it": "^14.1.2",
     "@types/node": "^24.0.0",
     "@vitejs/plugin-vue": "^6.0.7",
-    "@jwill89/eslint-config": "file:eslint-config",
     "@vitest/coverage-v8": "^4.1.9",
     "@vue/test-utils": "^2.4.11",
     "cross-env": "^10.0.0",

@@ -9,12 +9,41 @@ import (
 	"net/http/cookiejar"
 	"net/http/httptest"
 	"path/filepath"
+	"strings"
 	"testing"
 
+	"app-suite/internal/model"
 	"app-suite/internal/server"
 	"app-suite/internal/store"
 	"app-suite/internal/ws"
 )
+
+// createRaffleEntry adds a raffle entry for test setup via the production
+// cap-enforcing writer (with an effectively unlimited cap) and returns its id.
+func createRaffleEntry(t *testing.T, s *store.Store, raffleID int64, name, world string, num int) int64 {
+	t.Helper()
+	id, _, _, _, err := s.AddOrCreateRaffleEntry(raffleID, name, world, num, 1_000_000)
+	if err != nil {
+		t.Fatalf("create raffle entry: %v", err)
+	}
+	return id
+}
+
+// getRaffleEntryByName looks up a raffle entry by character+world (case-insensitive)
+// via the production list query, returning nil when none matches.
+func getRaffleEntryByName(t *testing.T, s *store.Store, raffleID int64, name, world string) *model.RaffleEntry {
+	t.Helper()
+	entries, err := s.ListRaffleEntries(raffleID)
+	if err != nil {
+		t.Fatalf("list raffle entries: %v", err)
+	}
+	for i := range entries {
+		if strings.EqualFold(entries[i].CharacterName, name) && strings.EqualFold(entries[i].World, world) {
+			return &entries[i]
+		}
+	}
+	return nil
+}
 
 const (
 	testSecret = "test-secret-key-for-sessions-32b"
@@ -128,6 +157,52 @@ func decodeBody(t *testing.T, resp *http.Response) map[string]any {
 		t.Fatal(err)
 	}
 	return result
+}
+
+// ── CSRF ────────────────────────────────────────────────────────────────────
+
+// TestCSRF_CrossOriginMutationBlocked verifies the defense-in-depth Origin check:
+// a state-changing request carrying the session cookie but a cross-origin Origin
+// header is rejected 403, while a same-origin Origin and an absent Origin pass
+// through to the handler.
+func TestCSRF_CrossOriginMutationBlocked(t *testing.T) {
+	env := newTestEnv(t)
+	env.loginAdmin(t)
+
+	post := func(origin string) *http.Response {
+		req, err := http.NewRequest(http.MethodPost, env.url("/api/settings"),
+			bytes.NewReader([]byte(`{"settings":{"app_title":"X"}}`)))
+		if err != nil {
+			t.Fatal(err)
+		}
+		req.Header.Set("Content-Type", "application/json")
+		if origin != "" {
+			req.Header.Set("Origin", origin)
+		}
+		resp, err := env.client.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return resp
+	}
+
+	resp := post("https://evil.example")
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusForbidden {
+		t.Errorf("cross-origin POST status = %d; want 403", resp.StatusCode)
+	}
+
+	resp = post(env.ts.URL) // same origin as the test server
+	resp.Body.Close()
+	if resp.StatusCode == http.StatusForbidden {
+		t.Errorf("same-origin POST was blocked (403); want it allowed through")
+	}
+
+	resp = post("") // no Origin header — SameSite cookie stays the primary defense
+	resp.Body.Close()
+	if resp.StatusCode == http.StatusForbidden {
+		t.Errorf("Origin-less POST was blocked (403); want it allowed through")
+	}
 }
 
 // ── CORS ────────────────────────────────────────────────────────────────────
@@ -1353,7 +1428,7 @@ func TestRaffles_MarkPaid(t *testing.T) {
 	data := decodeBody(t, resp)
 	raffleID := int(data["raffle"].(map[string]any)["id"].(float64))
 
-	entryID, _ := env.store.CreateRaffleEntry(int64(raffleID), "P1", "W1", 1)
+	entryID := createRaffleEntry(t, env.store, int64(raffleID), "P1", "W1", 1)
 
 	resp = env.patchJSON(t, fmt.Sprintf("/api/raffles/%d/entries/%d", raffleID, entryID), map[string]any{
 		"paid": true,
@@ -1367,7 +1442,7 @@ func TestRaffles_MarkPaid(t *testing.T) {
 	}
 
 	// Verify paid
-	stored, _ := env.store.GetRaffleEntry(int64(raffleID), "P1", "W1")
+	stored := getRaffleEntryByName(t, env.store, int64(raffleID), "P1", "W1")
 	if !stored.Paid {
 		t.Error("expected entry to be paid")
 	}
@@ -1383,7 +1458,7 @@ func TestRaffles_PickWinner(t *testing.T) {
 	data := decodeBody(t, resp)
 	raffleID := int(data["raffle"].(map[string]any)["id"].(float64))
 
-	entryID, _ := env.store.CreateRaffleEntry(int64(raffleID), "Winner", "World", 3)
+	entryID := createRaffleEntry(t, env.store, int64(raffleID), "Winner", "World", 3)
 	_ = env.store.SetRaffleEntryPaid(entryID, true)
 
 	resp = env.postJSON(t, fmt.Sprintf("/api/raffles/%d/pick-winner", raffleID), nil)
@@ -1424,7 +1499,7 @@ func TestRaffles_VerifyWinner(t *testing.T) {
 	data := decodeBody(t, resp)
 	raffleID := int(data["raffle"].(map[string]any)["id"].(float64))
 
-	entryID, _ := env.store.CreateRaffleEntry(int64(raffleID), "W", "X", 1)
+	entryID := createRaffleEntry(t, env.store, int64(raffleID), "W", "X", 1)
 	_ = env.store.SetRaffleEntryPaid(entryID, true)
 	_ = env.store.SetRaffleWinner(int64(raffleID), &entryID)
 
@@ -1468,7 +1543,7 @@ func TestRaffles_DeleteEntry(t *testing.T) {
 	data := decodeBody(t, resp)
 	raffleID := int(data["raffle"].(map[string]any)["id"].(float64))
 
-	entryID, _ := env.store.CreateRaffleEntry(int64(raffleID), "P", "W", 1)
+	entryID := createRaffleEntry(t, env.store, int64(raffleID), "P", "W", 1)
 
 	resp = env.del(t, fmt.Sprintf("/api/raffles/%d/entries/%d", raffleID, entryID))
 	if resp.StatusCode != http.StatusNoContent {
@@ -1504,7 +1579,7 @@ func TestRaffles_AddEntry(t *testing.T) {
 	}
 
 	// Confirm it persisted, unpaid.
-	stored, _ := env.store.GetRaffleEntry(int64(raffleID), "Cloud", "Gaia")
+	stored := getRaffleEntryByName(t, env.store, int64(raffleID), "Cloud", "Gaia")
 	if stored == nil || stored.NumEntries != 2 || stored.Paid {
 		t.Errorf("stored = %+v; want 2 entries, unpaid", stored)
 	}
@@ -1527,7 +1602,7 @@ func TestRaffles_AddEntryPaid(t *testing.T) {
 	}
 	resp.Body.Close()
 
-	stored, _ := env.store.GetRaffleEntry(int64(raffleID), "Tifa", "Gaia")
+	stored := getRaffleEntryByName(t, env.store, int64(raffleID), "Tifa", "Gaia")
 	if stored == nil || !stored.Paid {
 		t.Errorf("expected stored entry to be paid, got %+v", stored)
 	}
@@ -1543,7 +1618,7 @@ func TestRaffles_AddEntryMergesExisting(t *testing.T) {
 	raffleID := int(decodeBody(t, resp)["raffle"].(map[string]any)["id"].(float64))
 
 	// Pre-existing paid entry.
-	entryID, _ := env.store.CreateRaffleEntry(int64(raffleID), "Aerith", "Gaia", 3)
+	entryID := createRaffleEntry(t, env.store, int64(raffleID), "Aerith", "Gaia", 3)
 	_ = env.store.SetRaffleEntryPaid(entryID, true)
 
 	// Admin adds 2 more (case-insensitive match) WITHOUT the paid flag: the
@@ -1556,7 +1631,7 @@ func TestRaffles_AddEntryMergesExisting(t *testing.T) {
 	}
 	resp.Body.Close()
 
-	stored, _ := env.store.GetRaffleEntry(int64(raffleID), "Aerith", "Gaia")
+	stored := getRaffleEntryByName(t, env.store, int64(raffleID), "Aerith", "Gaia")
 	if stored == nil || stored.NumEntries != 5 {
 		t.Errorf("num_entries = %+v; want 5 (3+2 merged)", stored)
 	}

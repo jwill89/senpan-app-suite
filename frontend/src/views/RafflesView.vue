@@ -51,7 +51,16 @@ function goHome(): void {
     <div class="tab-body content-container">
       <LoadingSpinner v-if="loading" block label="Loading raffles…" />
       <div v-else-if="raffles.raffles.length" class="card-grid card-grid--center">
-        <div v-for="r in raffles.raffles" :key="r.id" class="media-card" @click="openRaffle(r)">
+        <div
+          v-for="r in raffles.raffles"
+          :key="r.id"
+          class="media-card"
+          role="button"
+          tabindex="0"
+          @click="openRaffle(r)"
+          @keydown.enter="openRaffle(r)"
+          @keydown.space.prevent="openRaffle(r)"
+        >
           <img
             v-if="r.prize_image"
             :src="assetUrl(r.prize_image)"

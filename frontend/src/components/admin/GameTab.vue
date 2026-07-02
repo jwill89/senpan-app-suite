@@ -319,7 +319,11 @@ onBeforeUnmount(() => {
                   v-for="w in game.winners"
                   :key="w"
                   class="winner-chip winner-chip-btn"
+                  role="button"
+                  tabindex="0"
                   @click="game.viewWinner(w)"
+                  @keydown.enter="game.viewWinner(w)"
+                  @keydown.space.prevent="game.viewWinner(w)"
                 >
                   {{ w }}
                   <small

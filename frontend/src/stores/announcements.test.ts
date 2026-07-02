@@ -225,7 +225,28 @@ describe('editAnnouncement round-trip', () => {
     expect(s.form.dynamic_dates).toBe(false) // flag round-trips (API always sends it — no omitempty)
     expect(s.form.start_format).toBe('F') // blank start format → default
     expect(s.form.end_format).toBe('t') // blank end format → default
-    expect(s.form.buttons).toEqual([{ label: 'Go', emoji: '', url: 'https://a.com' }])
+    // Buttons round-trip; each also gains a client-only `_uid` for stable
+    // repeater keying (stripped again when the payload is built).
+    expect(s.form.buttons).toMatchObject([{ label: 'Go', emoji: '', url: 'https://a.com' }])
+    expect(s.form.buttons[0]._uid).toEqual(expect.any(Number))
     expect(s.form.mention).toBe('everyone')
+  })
+
+  it('handles a button-less announcement (empty array) without throwing', () => {
+    const s = useAnnouncementsStore()
+    expect(() =>
+      s.editAnnouncement({
+        id: 8,
+        type_id: 1,
+        title: 'No buttons',
+        details: 'd',
+        image: '',
+        color: '',
+        buttons: [],
+        mention: '',
+        dynamic_dates: false,
+      } as unknown as Announcement),
+    ).not.toThrow()
+    expect(s.form.buttons).toEqual([])
   })
 })

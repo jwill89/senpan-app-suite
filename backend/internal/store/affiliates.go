@@ -2,7 +2,6 @@ package store
 
 import (
 	"database/sql"
-	"encoding/json"
 	"errors"
 
 	"app-suite/internal/model"
@@ -107,54 +106,9 @@ func scanAffiliate(sc rowScanner) (*model.Affiliate, error) {
 	return &a, nil
 }
 
-// encodeStrings marshals a string slice to a JSON array for storage, always
-// producing a valid array (never "null").
-func encodeStrings(in []string) string {
-	if in == nil {
-		in = []string{}
-	}
-	data, err := json.Marshal(in)
-	if err != nil {
-		return "[]"
-	}
-	return string(data)
-}
-
-// decodeStrings parses a stored JSON string array, returning an empty slice on any
-// error or empty value.
-func decodeStrings(raw string) []string {
-	if raw == "" {
-		return []string{}
-	}
-	var out []string
-	if err := json.Unmarshal([]byte(raw), &out); err != nil || out == nil {
-		return []string{}
-	}
-	return out
-}
-
-// encodeHours marshals an opening-hours slice to a JSON array for storage, always
-// producing a valid array (never "null").
-func encodeHours(hours []model.AffiliateHour) string {
-	if hours == nil {
-		hours = []model.AffiliateHour{}
-	}
-	data, err := json.Marshal(hours)
-	if err != nil {
-		return "[]"
-	}
-	return string(data)
-}
-
-// decodeHours parses the stored JSON hours column, returning an empty slice on any
-// error or empty value.
-func decodeHours(raw string) []model.AffiliateHour {
-	if raw == "" {
-		return []model.AffiliateHour{}
-	}
-	var hours []model.AffiliateHour
-	if err := json.Unmarshal([]byte(raw), &hours); err != nil || hours == nil {
-		return []model.AffiliateHour{}
-	}
-	return hours
-}
+// These wrap the shared generic JSON-array codecs (jsonarray.go), which always
+// produce a valid array (never "null") and never return nil.
+func encodeStrings(in []string) string               { return encodeJSONArray(in) }
+func decodeStrings(raw string) []string              { return decodeJSONArray[string](raw) }
+func encodeHours(hours []model.AffiliateHour) string { return encodeJSONArray(hours) }
+func decodeHours(raw string) []model.AffiliateHour   { return decodeJSONArray[model.AffiliateHour](raw) }

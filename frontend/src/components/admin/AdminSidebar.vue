@@ -34,7 +34,12 @@ const raffles = useRafflesStore()
 
 // Change Password / Logout are actions, not navigation: the sidebar emits them so
 // the admin shell (which owns the change-password modal + session) handles them.
-const emit = defineEmits<{ 'access-token': []; 'change-password': []; logout: [] }>()
+const emit = defineEmits<{
+  'access-token': []
+  'change-password': []
+  'manage-passkeys': []
+  logout: []
+}>()
 // "User Options" isn't tied to a route/tab, so it tracks its own accordion state.
 const userOptionsOpen = ref(false)
 
@@ -316,6 +321,9 @@ function toggleSection(section: AdminSection): void {
         </button>
         <button @click="emit('change-password')">
           <font-awesome-icon :icon="['fad', 'lock']" /> Change Password
+        </button>
+        <button @click="emit('manage-passkeys')">
+          <font-awesome-icon :icon="['fad', 'user-key']" /> Add Passkey
         </button>
         <button @click="emit('logout')">
           <font-awesome-icon :icon="['fas', 'arrow-right-from-bracket']" /> Logout

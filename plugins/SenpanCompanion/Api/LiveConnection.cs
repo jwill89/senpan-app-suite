@@ -114,6 +114,10 @@ public sealed class LiveConnection : IDisposable
             return;
 
         using var ws = new ClientWebSocket();
+        // Send the personal access token as an Authorization header rather than a
+        // URL query parameter, so it isn't captured in server/proxy access logs.
+        // The server accepts either, but the header keeps the secret out of logs.
+        ws.Options.SetRequestHeader("Authorization", $"Bearer {this.config.Token.Trim()}");
         await ws.ConnectAsync(uri, ct).ConfigureAwait(false);
         this.Connected = true;
 
@@ -192,8 +196,10 @@ public sealed class LiveConnection : IDisposable
         if (!Uri.TryCreate(baseUrl, UriKind.Absolute, out var parsed))
             return null;
 
+        // The token is sent via the Authorization header (see ConnectAndReceiveAsync),
+        // not the query string, so it stays out of access logs.
         var scheme = parsed.Scheme == "https" ? "wss" : "ws";
-        return new Uri($"{scheme}://{parsed.Authority}{parsed.AbsolutePath.TrimEnd('/')}/api/ws?token={Uri.EscapeDataString(token)}");
+        return new Uri($"{scheme}://{parsed.Authority}{parsed.AbsolutePath.TrimEnd('/')}/api/ws");
     }
 
     // Combined admin-channel message envelope — deserialized once; only the fields

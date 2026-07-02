@@ -3,6 +3,7 @@ package server
 import (
 	"encoding/json"
 	"io/fs"
+	"mime/multipart"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -50,38 +51,12 @@ func (s *Server) carrdDir() string {
 // spaces/underscores become hyphens, only letters/digits/hyphens are kept, and
 // runs of hyphens are collapsed and trimmed. Used both to default the folder
 // from the title and to normalize an admin-supplied folder name.
-func slugifyFolder(s string) string {
-	var b strings.Builder
-	for _, r := range strings.ToLower(strings.TrimSpace(s)) {
-		switch {
-		case r >= 'a' && r <= 'z', r >= '0' && r <= '9':
-			b.WriteRune(r)
-		case r == ' ' || r == '_' || r == '-':
-			b.WriteByte('-')
-		}
-	}
-	// Collapse repeated hyphens and trim leading/trailing ones.
-	out := b.String()
-	for strings.Contains(out, "--") {
-		out = strings.ReplaceAll(out, "--", "-")
-	}
-	return strings.Trim(out, "-")
-}
+func slugifyFolder(s string) string { return slugify(s, '-') }
 
 // validCarrdFolder reports whether name is a safe, already-normalized folder
 // name (lowercase letters, digits, hyphens only). Guards against path traversal
 // for folder names received from the client on delete/list/upload.
-func validCarrdFolder(name string) bool {
-	if name == "" {
-		return false
-	}
-	for _, r := range name {
-		if !(r >= 'a' && r <= 'z' || r >= '0' && r <= '9' || r == '-') {
-			return false
-		}
-	}
-	return true
-}
+func validCarrdFolder(name string) bool { return validSlug(name, '-') }
 
 // cleanCarrdRelPath validates a forward-slash relative subpath within a project
 // and returns it in normalized form ("" for the project root). Every segment
@@ -135,18 +110,7 @@ func isAllowedCarrdFileExt(ext string) bool {
 // strips any path, rejects empty/dotfile names and disallowed extensions, and
 // guards against traversal. Returns the clean base name and true when valid.
 func safeCarrdFileName(name string) (string, bool) {
-	name = strings.TrimSpace(name)
-	name = filepath.Base(filepath.FromSlash(name))
-	if name == "" || name == "." || name == ".." || strings.HasPrefix(name, ".") {
-		return "", false
-	}
-	if strings.ContainsAny(name, `/\`) {
-		return "", false
-	}
-	if !isAllowedCarrdFileExt(strings.ToLower(filepath.Ext(name))) {
-		return "", false
-	}
-	return name, true
+	return safeUploadName(name, isAllowedCarrdFileExt)
 }
 
 // readCarrdTitle reads the project Title from a folder's sidecar metadata,
@@ -705,71 +669,51 @@ func (s *Server) handleCarrdUpload(w http.ResponseWriter, r *http.Request) {
 	if !s.requirePermission(w, r, permAtelierCarrd) {
 		return
 	}
-
-	// Cap the whole request at 64 MB (several images at once).
-	r.Body = http.MaxBytesReader(w, r.Body, 64<<20)
-	if err := r.ParseMultipartForm(32 << 20); err != nil {
-		writeError(w, http.StatusBadRequest, "Upload failed (max 64MB total)")
-		return
-	}
-
-	folderPath, _, ok := s.carrdResolve(strings.TrimSpace(r.FormValue("folder")), r.FormValue("path"))
+	uploaded, skipped, ok := s.handleMultipartUploads(w, r,
+		func() (string, bool) {
+			folderPath, _, resolved := s.carrdResolve(strings.TrimSpace(r.FormValue("folder")), r.FormValue("path"))
+			if !resolved {
+				writeError(w, http.StatusBadRequest, "Invalid folder or path")
+				return "", false
+			}
+			// The target directory must already exist (the project and any
+			// sub-dirs are created via their own endpoints).
+			if info, err := os.Stat(folderPath); err != nil || !info.IsDir() {
+				writeError(w, http.StatusNotFound, "Folder not found")
+				return "", false
+			}
+			return folderPath, true
+		},
+		func(header *multipart.FileHeader, destDir string) (string, string) {
+			name, ok := safeCarrdFileName(header.Filename)
+			if !ok {
+				return header.Filename, "Unsupported type (allowed: .jpg, .jpeg, .png, .webp, .gif, .mp3, .mp4)"
+			}
+			// For image extensions, confirm the bytes are actually an image
+			// (defense in depth). mp3/mp4 sniff unreliably, so they stay
+			// extension-validated.
+			if isAllowedImageExt(strings.ToLower(filepath.Ext(name))) {
+				f, err := header.Open()
+				if err != nil {
+					return name, "Failed to read"
+				}
+				validImage := isAllowedImageContentType(sniffedImageType(f))
+				_ = f.Close()
+				if !validImage {
+					return name, "Not a valid image"
+				}
+			}
+			// Same name overwrites the existing file on purpose.
+			if err := saveMultipartFile(header, filepath.Join(destDir, name)); err != nil {
+				return name, "Failed to save"
+			}
+			return name, ""
+		},
+	)
 	if !ok {
-		writeError(w, http.StatusBadRequest, "Invalid folder or path")
 		return
 	}
-	// The target directory must already exist (the project and any sub-dirs are
-	// created via their own endpoints).
-	if info, err := os.Stat(folderPath); err != nil || !info.IsDir() {
-		writeError(w, http.StatusNotFound, "Folder not found")
-		return
-	}
-
-	files := r.MultipartForm.File["files"]
-	if len(files) == 0 {
-		writeError(w, http.StatusBadRequest, "No files provided")
-		return
-	}
-
-	uploaded := make([]string, 0, len(files))
-	skipped := make([]model.SkippedUpload, 0)
-
-	for _, header := range files {
-		name, ok := safeCarrdFileName(header.Filename)
-		if !ok {
-			skipped = append(skipped, model.SkippedUpload{
-				Name:   header.Filename,
-				Reason: "Unsupported type (allowed: .jpg, .jpeg, .png, .webp, .gif, .mp3, .mp4)",
-			})
-			continue
-		}
-		// For image extensions, confirm the bytes are actually an image (defense
-		// in depth). mp3/mp4 sniff unreliably, so they stay extension-validated.
-		if isAllowedImageExt(strings.ToLower(filepath.Ext(name))) {
-			f, err := header.Open()
-			if err != nil {
-				skipped = append(skipped, model.SkippedUpload{Name: name, Reason: "Failed to read"})
-				continue
-			}
-			validImage := isAllowedImageContentType(sniffedImageType(f))
-			_ = f.Close()
-			if !validImage {
-				skipped = append(skipped, model.SkippedUpload{Name: name, Reason: "Not a valid image"})
-				continue
-			}
-		}
-		// Same name overwrites the existing file on purpose.
-		if err := saveMultipartFile(header, filepath.Join(folderPath, name)); err != nil {
-			skipped = append(skipped, model.SkippedUpload{Name: name, Reason: "Failed to save"})
-			continue
-		}
-		uploaded = append(uploaded, name)
-	}
-
-	writeJSON(w, http.StatusOK, model.CarrdUploadResponse{
-		Uploaded: uploaded,
-		Skipped:  skipped,
-	})
+	writeJSON(w, http.StatusOK, model.CarrdUploadResponse{Uploaded: uploaded, Skipped: skipped})
 }
 
 // (saveMultipartFile lives in uploads.go; it streams a multipart file part to a

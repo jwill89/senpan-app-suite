@@ -5,7 +5,9 @@ import (
 	"context"
 	"encoding/json"
 	"log/slog"
+	"net"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -32,6 +34,7 @@ type Server struct {
 	mux            *http.ServeMux
 	limiter        *rateLimiter // failed-login brute-force limiter
 	regLimiter     *rateLimiter // registration-rate limiter (mass-signup abuse)
+	raffleLimiter  *rateLimiter // public raffle-entry limiter (entry flooding)
 	// Cloudflare Turnstile bot check on the admin login. Disabled (verification
 	// skipped) when turnstileSecret is empty — see SetTurnstile / turnstile.go.
 	turnstileSecret  string
@@ -76,8 +79,9 @@ func New(st *store.Store, hub *ws.Hub, sessionSecret, webRoot string, allowedOri
 		webRoot:        webRoot,
 		allowedOrigins: origins,
 		mux:            http.NewServeMux(),
-		limiter:        newRateLimiter(5, 15*time.Minute), // 5 failed logins per 15 minutes
-		regLimiter:     newRateLimiter(5, time.Hour),      // 5 registration attempts per hour
+		limiter:        newRateLimiter(5, 15*time.Minute),  // 5 failed logins per 15 minutes
+		regLimiter:     newRateLimiter(5, time.Hour),       // 5 registration attempts per hour
+		raffleLimiter:  newRateLimiter(20, 10*time.Minute), // 20 raffle entries per 10 minutes per IP
 	}
 
 	s.routes()
@@ -124,6 +128,9 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("GET /api/auth", s.handleAuthCheck)
 	s.mux.HandleFunc("POST /api/auth", s.handleAuthAction)
 	s.mux.HandleFunc("POST /api/register", s.handleRegister)
+	// Passkey (WebAuthn) login — public, usernameless discoverable-credential flow.
+	s.mux.HandleFunc("POST /api/auth/passkey/begin", s.handlePasskeyLoginBegin)
+	s.mux.HandleFunc("POST /api/auth/passkey/finish", s.handlePasskeyLoginFinish)
 
 	// User management (admin, resource-oriented: PATCH merges the former
 	// set_active/set_admin/set_permissions/set_password actions) + self-service
@@ -139,6 +146,11 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("GET /api/account/token", s.handleAccountTokenInfo)
 	s.mux.HandleFunc("POST /api/account/token", s.handleAccountTokenGenerate)
 	s.mux.HandleFunc("DELETE /api/account/token", s.handleAccountTokenRevoke)
+	// Passkeys (self-service): register a new passkey (begin/finish), list, delete.
+	s.mux.HandleFunc("POST /api/account/passkeys/register/begin", s.handlePasskeyRegisterBegin)
+	s.mux.HandleFunc("POST /api/account/passkeys/register/finish", s.handlePasskeyRegisterFinish)
+	s.mux.HandleFunc("GET /api/account/passkeys", s.handlePasskeyList)
+	s.mux.HandleFunc("DELETE /api/account/passkeys/{id}", s.handlePasskeyDelete)
 	s.mux.HandleFunc("GET /api/board", s.handleBoard)
 	// Cards (resource-oriented). The literal /generate and /all sub-paths are
 	// matched ahead of the {id} wildcard by the Go 1.22 mux, so there's no
@@ -365,6 +377,12 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// CSRF defense-in-depth: reject a cross-origin state-changing request that
+	// rides an ambient session cookie, layered on top of the SameSite=Lax cookie.
+	if !s.checkCSRF(w, r) {
+		return
+	}
+
 	start := time.Now()
 	rw := &responseWriter{ResponseWriter: w, status: http.StatusOK}
 
@@ -479,6 +497,59 @@ func (s *Server) sessionUserID(r *http.Request) int64 {
 		return id
 	}
 	return 0
+}
+
+// checkCSRF is a defense-in-depth CSRF guard layered on top of the SameSite=Lax
+// session cookie. It scrutinizes only cookie-authenticated, state-changing
+// requests — the shape a cross-site page could drive using the victim's ambient
+// cookie. Bearer-token (plugin) and cookie-less requests carry no ambient
+// credential and are exempt, as are safe methods. For a checked request it
+// requires the Origin header (when the browser sends one) to be same-host or an
+// explicitly allow-listed cross-origin site; this blocks a malicious page,
+// including one served from a sibling same-site subdomain that SameSite alone
+// would permit. Returns false and writes a 403 when the request is blocked.
+func (s *Server) checkCSRF(w http.ResponseWriter, r *http.Request) bool {
+	switch r.Method {
+	case http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete:
+	default:
+		return true // safe/idempotent methods can't mutate state
+	}
+	// Only ambient-cookie auth is CSRF-exposed. No session cookie (public and
+	// bearer-token requests) means there's nothing for an attacker to ride.
+	if _, err := r.Cookie(s.sessions.Cookie.Name); err != nil {
+		return true
+	}
+	if bearerToken(r) != "" {
+		return true // authenticated by PAT, not the cookie
+	}
+	origin := r.Header.Get("Origin")
+	if origin == "" {
+		// Browsers send Origin on cross-origin mutations, so an absent Origin
+		// isn't the attack shape; the SameSite=Lax cookie remains the primary
+		// defense. Allow it rather than break a non-browser same-origin client.
+		return true
+	}
+	if s.allowedOrigins[origin] {
+		return true // operator opted this cross-origin site in (see CORS above)
+	}
+	if u, err := url.Parse(origin); err == nil && sameHost(u.Hostname(), r.Host) {
+		return true
+	}
+	slog.Warn("blocked cross-origin state-changing request",
+		"origin", origin, "host", r.Host, "method", r.Method, "path", r.URL.Path)
+	writeError(w, http.StatusForbidden, "Cross-origin request blocked")
+	return false
+}
+
+// sameHost reports whether an Origin's hostname matches the request's host. It
+// compares hostnames (port-stripped) so a default-vs-explicit port — e.g. the dev
+// setup's :5173 origin against a :8080 host, both "localhost" — isn't a false
+// mismatch, while a different host (including a sibling subdomain) still fails.
+func sameHost(originHost, requestHost string) bool {
+	if h, _, err := net.SplitHostPort(requestHost); err == nil {
+		requestHost = h
+	}
+	return strings.EqualFold(originHost, requestHost)
 }
 
 // wsSessionUser loads the account for a request that bypasses the session

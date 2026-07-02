@@ -2,7 +2,6 @@ package store
 
 import (
 	"database/sql"
-	"encoding/json"
 	"errors"
 	"strconv"
 	"time"
@@ -202,30 +201,15 @@ func scanAnnouncement(sc interface{ Scan(...any) error }) (model.Announcement, e
 	return a, nil
 }
 
-// encodeAnnouncementButtons marshals the buttons slice to a JSON array string for
-// storage (always a valid array, "[]" when empty).
+// These wrap the shared generic JSON-array codecs (jsonarray.go). decode returns
+// an empty (non-nil) slice for empty/legacy-NULL values, so the API always sends
+// buttons as an array (never null) — matching the generated TS type, which is
+// non-nullable — rather than the client having to guard against null.
 func encodeAnnouncementButtons(buttons []model.AnnouncementButton) string {
-	if len(buttons) == 0 {
-		return "[]"
-	}
-	b, err := json.Marshal(buttons)
-	if err != nil {
-		return "[]"
-	}
-	return string(b)
+	return encodeJSONArray(buttons)
 }
-
-// decodeAnnouncementButtons parses the stored JSON array back into a slice,
-// tolerating empty/legacy NULL values.
 func decodeAnnouncementButtons(raw string) []model.AnnouncementButton {
-	if raw == "" || raw == "[]" {
-		return nil
-	}
-	var out []model.AnnouncementButton
-	if err := json.Unmarshal([]byte(raw), &out); err != nil {
-		return nil
-	}
-	return out
+	return decodeJSONArray[model.AnnouncementButton](raw)
 }
 
 // ListAnnouncements returns all announcements (with their type name) in the

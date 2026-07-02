@@ -1,7 +1,7 @@
 /**
  * Patterns store: win patterns + categories CRUD, the new-pattern editor,
  * collapse state, and reordering. Drag-and-drop reordering is now handled by
- * vuedraggable in the components; this store exposes `persistPatternOrder` and
+ * vue-draggable-plus in the components; this store exposes `persistPatternOrder` and
  * `persistCategoryOrder` (and a cross-category move) that the components call
  * after a drag, plus `setPatternCategory` — replacing the old manual HTML5 DnD.
  */
@@ -326,12 +326,12 @@ export const usePatternsStore = defineStore('patterns', () => {
     void deleteCategory(id)
   }
 
-  // ── Pattern reordering (called by vuedraggable handlers) ───────────────────
+  // ── Pattern reordering (called by vue-draggable-plus handlers) ───────────────────
 
   /**
    * Editable grouping used by the Edit Patterns drag-and-drop view. Unlike
    * `patternsByCategory`, the inner `patterns` arrays here are mutable copies
-   * that vuedraggable can reorder/move directly. Call `applyGroupedOrder` after
+   * that vue-draggable-plus can reorder/move directly. Call `applyGroupedOrder` after
    * a drag to push the new ordering + category assignments back into `patterns`
    * and persist them. Rebuild it from server state with `rebuildEditableGroups`.
    */
@@ -354,7 +354,7 @@ export const usePatternsStore = defineStore('patterns', () => {
   }
 
   /**
-   * After a vuedraggable change in the Edit Patterns view, flattens
+   * After a vue-draggable-plus change in the Edit Patterns view, flattens
    * `editableGroups` back into `patterns` (updating each pattern's category +
    * order) and persists the order of every category. A single call covers both
    * in-category reordering and cross-category moves.
@@ -376,6 +376,11 @@ export const usePatternsStore = defineStore('patterns', () => {
 
     try {
       for (const group of editableGroups.value) {
+        // Skip empty categories: the reorder endpoint requires a non-empty
+        // ordered_ids (and there's nothing to persist for a category with no
+        // patterns). A pattern moved out of a category is reassigned via its
+        // destination group's call, which sets its new category_id.
+        if (group.patterns.length === 0) continue
         await endpoints.patterns.bulkReorder(
           group.category.id,
           group.patterns.map((p) => p.id),

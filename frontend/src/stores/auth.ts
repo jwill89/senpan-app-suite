@@ -10,6 +10,7 @@
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 import { endpoints } from '@/lib/endpoints'
+import { loginWithPasskey as passkeyLogin } from '@/lib/passkeys'
 import type { User } from '@/types/api'
 
 export const useAuthStore = defineStore('auth', () => {
@@ -43,6 +44,18 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   /**
+   * Clears the cached session in place — drops the user and admin flag while
+   * keeping `authChecked` true. Called by the global 401 handler when the server
+   * reports the admin session is missing/expired, so both the router guard and
+   * per-page permission checks (which read `user`) see a logged-out state.
+   */
+  function clearSession(): void {
+    user.value = null
+    isAdmin.value = false
+    authChecked.value = true
+  }
+
+  /**
    * Queries the server for the current auth status (and user) and caches it.
    * Returns the resulting boolean. Used by the router guard for /admin routes.
    */
@@ -71,6 +84,26 @@ export const useAuthStore = defineStore('auth', () => {
     loggingIn.value = true
     try {
       const data = await endpoints.auth.login(username, password, turnstileToken)
+      setUser(data.user)
+      authChecked.value = true
+      return true
+    } catch (e) {
+      authError.value = (e as Error).message
+      return false
+    } finally {
+      loggingIn.value = false
+    }
+  }
+
+  /**
+   * Logs in with a passkey (discoverable WebAuthn credential). Returns true on
+   * success; sets authError and returns false on failure/cancellation.
+   */
+  async function loginWithPasskey(): Promise<boolean> {
+    authError.value = ''
+    loggingIn.value = true
+    try {
+      const data = await passkeyLogin()
       setUser(data.user)
       authChecked.value = true
       return true
@@ -123,8 +156,10 @@ export const useAuthStore = defineStore('auth', () => {
     loggingIn,
     permissions,
     hasPermission,
+    clearSession,
     checkAuth,
     login,
+    loginWithPasskey,
     register,
     logout,
   }

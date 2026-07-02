@@ -33,12 +33,13 @@ func isAllowedImageExt(ext string) bool {
 	return false
 }
 
-// safeImageUploadName reduces an uploaded filename to a safe basename and accepts
-// it only when it carries an allowed raster-image extension. It strips any path,
-// and rejects empty/dot/hidden names and embedded separators, so the result is safe
-// to use directly as the on-disk (and URL) filename. Mirrors safeImageFileName
-// (images.go) but for the raster-only cover set (no SVG).
-func safeImageUploadName(name string) (string, bool) {
+// safeUploadName reduces an uploaded filename to a safe basename, accepting it
+// only when allow reports its (lowercased, dot-prefixed) extension is permitted.
+// It strips any path and rejects empty, dot, hidden (leading-dot), and
+// separator-bearing names, so the result is safe to use directly as the on-disk
+// (and URL) filename. The per-feature safe*Name helpers wrap this with their own
+// extension predicate.
+func safeUploadName(name string, allow func(ext string) bool) (string, bool) {
 	name = strings.TrimSpace(name)
 	name = filepath.Base(filepath.FromSlash(name))
 	if name == "" || name == "." || name == ".." || strings.HasPrefix(name, ".") {
@@ -47,10 +48,104 @@ func safeImageUploadName(name string) (string, bool) {
 	if strings.ContainsAny(name, `/\`) {
 		return "", false
 	}
-	if !isAllowedImageExt(strings.ToLower(filepath.Ext(name))) {
+	if !allow(strings.ToLower(filepath.Ext(name))) {
 		return "", false
 	}
 	return name, true
+}
+
+// safeImageUploadName accepts an uploaded filename for the raster-only cover set
+// (no SVG). See safeUploadName.
+func safeImageUploadName(name string) (string, bool) {
+	return safeUploadName(name, isAllowedImageExt)
+}
+
+// slugify lowercases s and keeps [a-z0-9], mapping spaces/underscores/hyphens to
+// sep, collapsing repeats, and trimming leading/trailing sep. Carrd project
+// folders use '-'; central-image category dirs use '_'.
+func slugify(s string, sep byte) string {
+	var b strings.Builder
+	for _, r := range strings.ToLower(strings.TrimSpace(s)) {
+		switch {
+		case r >= 'a' && r <= 'z', r >= '0' && r <= '9':
+			b.WriteRune(r)
+		case r == ' ' || r == '_' || r == '-':
+			b.WriteByte(sep)
+		}
+	}
+	out := b.String()
+	double := string([]byte{sep, sep})
+	for strings.Contains(out, double) {
+		out = strings.ReplaceAll(out, double, string(sep))
+	}
+	return strings.Trim(out, string(sep))
+}
+
+// validSlug reports whether name is a non-empty string of [a-z0-9] plus sep — the
+// shape slugify produces. Used to validate a client-supplied directory name.
+func validSlug(name string, sep byte) bool {
+	if name == "" {
+		return false
+	}
+	for _, r := range name {
+		if !(r >= 'a' && r <= 'z' || r >= '0' && r <= '9' || r == rune(sep)) {
+			return false
+		}
+	}
+	return true
+}
+
+// uploadFileFunc validates and saves one multipart file part into destDir. It
+// returns the display name plus an empty reason on success, or a name and a
+// non-empty skip reason to record the file as skipped. It never writes to the
+// ResponseWriter — the shared skeleton accumulates its result.
+type uploadFileFunc func(header *multipart.FileHeader, destDir string) (name, reason string)
+
+// handleMultipartUploads runs the shared "upload one or more files" skeleton used
+// by the fonts, images, and Carrd endpoints. It caps the request body at 64 MB,
+// parses the multipart form (removing its spilled temp files on return), resolves
+// the destination directory via resolveDest (which writes its own error response
+// and returns false on failure), then runs save for each "files" part,
+// accumulating uploaded names and skip reasons. On a form/dest/no-files failure it
+// writes the error itself and returns ok=false; on success the caller writes its
+// own {uploaded, skipped} response shape.
+func (s *Server) handleMultipartUploads(
+	w http.ResponseWriter, r *http.Request,
+	resolveDest func() (string, bool),
+	save uploadFileFunc,
+) (uploaded []string, skipped []model.SkippedUpload, ok bool) {
+	// Cap the whole request at 64 MB (several files at once).
+	r.Body = http.MaxBytesReader(w, r.Body, 64<<20)
+	if err := r.ParseMultipartForm(32 << 20); err != nil {
+		writeError(w, http.StatusBadRequest, "Upload failed (max 64MB total)")
+		return nil, nil, false
+	}
+	// Parts over the in-memory budget spill to temp files the stdlib does not
+	// auto-remove; clean them up when we're done.
+	defer func() { _ = r.MultipartForm.RemoveAll() }()
+
+	destDir, dirOK := resolveDest()
+	if !dirOK {
+		return nil, nil, false // resolveDest already wrote the error response
+	}
+
+	files := r.MultipartForm.File["files"]
+	if len(files) == 0 {
+		writeError(w, http.StatusBadRequest, "No files provided")
+		return nil, nil, false
+	}
+
+	uploaded = make([]string, 0, len(files))
+	skipped = make([]model.SkippedUpload, 0)
+	for _, header := range files {
+		name, reason := save(header, destDir)
+		if reason != "" {
+			skipped = append(skipped, model.SkippedUpload{Name: name, Reason: reason})
+			continue
+		}
+		uploaded = append(uploaded, name)
+	}
+	return uploaded, skipped, true
 }
 
 // saveMultipartFile streams a single multipart file part to dst. It is

@@ -25,6 +25,7 @@ import ModalOverlay from '@/components/common/ModalOverlay.vue'
 import { useImagesStore } from '@/stores/images'
 import { useUiStore } from '@/stores/ui'
 import { assetUrl } from '@/lib/assets'
+import { slugify, formatSize } from '@/lib/format'
 import type { ImageCategory } from '@/types/api'
 
 const images = useImagesStore()
@@ -69,17 +70,8 @@ const formName = ref('')
 const formDir = ref('')
 const savingCategory = ref(false)
 
-/** Mirrors the server's directory slug rules (spaces → underscores) for preview. */
-function slugifyDir(s: string): string {
-  return s
-    .toLowerCase()
-    .trim()
-    .replace(/[\s-]+/g, '_')
-    .replace(/[^a-z0-9_]/g, '')
-    .replace(/_+/g, '_')
-    .replace(/^_+|_+$/g, '')
-}
-const formDerivedDir = computed(() => slugifyDir(formDir.value || formName.value))
+// Directory slugs use underscores (spaces + hyphens fold to `_`).
+const formDerivedDir = computed(() => slugify(formDir.value || formName.value, '_'))
 
 const categoryColumns: DataColumn[] = [
   { key: 'name', label: 'Category' },
@@ -152,13 +144,6 @@ async function copyUrl(url: string): Promise<void> {
   } catch {
     ui.notify(url, 'info')
   }
-}
-
-/** Human-readable file size. */
-function formatSize(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
 }
 
 onMounted(() => images.loadCategories())

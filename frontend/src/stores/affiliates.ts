@@ -12,13 +12,20 @@ import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import { endpoints } from '@/lib/endpoints'
 import { detectTimezone } from '@/lib/constants'
-import type { Affiliate, AffiliateForm } from '@/types/api'
+import type { Affiliate, AffiliateForm, AffiliateHourForm, AffiliateOwnerForm } from '@/types/api'
 import { useUiStore } from './ui'
 import { useImagesStore, IMAGE_DIR_AFFILIATE_LOGOS, IMAGE_DIR_AFFILIATE_IMAGES } from './images'
+import { nextUid } from '@/lib/uid'
+import { withLoading } from '@/lib/withLoading'
 
 /** A fresh, empty opening-hours row for the editor. */
-function blankHour(): { label: string; start: string; end: string } {
-  return { label: '', start: '', end: '' }
+function blankHour(): AffiliateHourForm {
+  return { label: '', start: '', end: '', _uid: nextUid() }
+}
+
+/** An owner form row wrapping a plain name so the repeater can key on `_uid`. */
+function ownerRow(value = ''): AffiliateOwnerForm {
+  return { value, _uid: nextUid() }
 }
 
 export const useAffiliatesStore = defineStore('affiliates', () => {
@@ -36,15 +43,10 @@ export const useAffiliatesStore = defineStore('affiliates', () => {
 
   // ── Load ───────────────────────────────────────────────────────────────────
   async function loadAffiliates(): Promise<void> {
-    affiliatesLoading.value = true
-    try {
+    await withLoading(affiliatesLoading, async () => {
       const data = await endpoints.affiliates.list()
       affiliates.value = data.affiliates
-    } catch (e) {
-      ui.notify((e as Error).message, 'error')
-    } finally {
-      affiliatesLoading.value = false
-    }
+    })
   }
 
   /** Loads the reusable logo + screenshot images for the form pickers. */
@@ -67,7 +69,7 @@ export const useAffiliatesStore = defineStore('affiliates', () => {
     affiliateForm.value = {
       id: 0,
       name: '',
-      owners: [''],
+      owners: [ownerRow()],
       location: '',
       timezone: detectTimezone(),
       hours: [blankHour()],
@@ -81,11 +83,11 @@ export const useAffiliatesStore = defineStore('affiliates', () => {
     affiliateForm.value = {
       id: a.id,
       name: a.name,
-      owners: a.owners.length ? [...a.owners] : [''],
+      owners: a.owners.length ? a.owners.map((o) => ownerRow(o)) : [ownerRow()],
       location: a.location,
       timezone: a.timezone || detectTimezone(),
       hours: a.hours.length
-        ? a.hours.map((h) => ({ label: h.label, start: h.start, end: h.end }))
+        ? a.hours.map((h) => ({ label: h.label, start: h.start, end: h.end, _uid: nextUid() }))
         : [blankHour()],
       details: a.details,
       logo: a.logo,
@@ -98,7 +100,7 @@ export const useAffiliatesStore = defineStore('affiliates', () => {
   }
 
   function addOwner(): void {
-    affiliateForm.value?.owners.push('')
+    affiliateForm.value?.owners.push(ownerRow())
   }
   function removeOwner(index: number): void {
     const f = affiliateForm.value
@@ -123,8 +125,9 @@ export const useAffiliatesStore = defineStore('affiliates', () => {
       ui.notify('Name is required', 'error')
       return false
     }
-    // Drop blank repeater rows before sending (the backend also sanitizes).
-    const owners = f.owners.map((o) => o.trim()).filter((o) => o)
+    // Drop blank repeater rows before sending (the backend also sanitizes). Owners
+    // are unwrapped from their form rows back to plain name strings.
+    const owners = f.owners.map((o) => o.value.trim()).filter((o) => o)
     if (!owners.length) {
       ui.notify('Add at least one owner', 'error')
       return false

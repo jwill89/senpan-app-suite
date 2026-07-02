@@ -23,6 +23,7 @@ import type {
   StampRallyStampForm,
 } from '@/types/api'
 import { datetimeLocalToUtc, utcToDatetimeLocal } from '@/lib/datetime'
+import { withLoading } from '@/lib/withLoading'
 import { useUiStore } from './ui'
 import {
   useImagesStore,
@@ -97,6 +98,9 @@ export const useStampRalliesStore = defineStore('stampRallies', () => {
 
   const ralliesLoading = ref(false)
   const detailLoading = ref(false)
+  // Monotonic token guarding loadRallyDetail against a last-write-wins race
+  // (a slow earlier open overwriting a newer one). Only the latest request applies.
+  let detailSeq = 0
   const logsLoading = ref(false)
   const savingRally = ref(false)
   const creatingCard = ref(false)
@@ -120,40 +124,32 @@ export const useStampRalliesStore = defineStore('stampRallies', () => {
 
   // ── Admin: load ──────────────────────────────────────────────────────────
   async function loadRallies(): Promise<void> {
-    ralliesLoading.value = true
-    try {
+    await withLoading(ralliesLoading, async () => {
       const data = await endpoints.stampRallies.list()
       rallies.value = data.stamp_rallies
-    } catch (e) {
-      ui.notify((e as Error).message, 'error')
-    } finally {
-      ralliesLoading.value = false
-    }
+    })
   }
 
   async function loadRallyDetail(id: number): Promise<void> {
+    const reqId = ++detailSeq
     detailLoading.value = true
     try {
       const data = await endpoints.stampRallies.detail(id)
+      if (reqId !== detailSeq) return // a newer load superseded this one
       selectedRally.value = data.stamp_rally
       rallyCards.value = data.cards
     } catch (e) {
-      ui.notify((e as Error).message, 'error')
+      if (reqId === detailSeq) ui.notify((e as Error).message, 'error')
     } finally {
-      detailLoading.value = false
+      if (reqId === detailSeq) detailLoading.value = false
     }
   }
 
   async function loadRallyLogs(id: number): Promise<void> {
-    logsLoading.value = true
-    try {
+    await withLoading(logsLoading, async () => {
       const data = await endpoints.stampRallies.logs(id)
       rallyLogs.value = data.logs
-    } catch (e) {
-      ui.notify((e as Error).message, 'error')
-    } finally {
-      logsLoading.value = false
-    }
+    })
   }
 
   /** Admin: open a rally's detail view (loads detail + cards). */

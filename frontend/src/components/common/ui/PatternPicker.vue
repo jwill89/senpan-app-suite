@@ -111,7 +111,12 @@ function toggleSelectAll(): void {
       <template v-for="group in visibleGroups" :key="group.category.id">
         <div
           class="pattern-group-head"
+          role="button"
+          tabindex="0"
+          :aria-expanded="!patterns.isCategoryCollapsed(group.category.id)"
           @click="patterns.toggleCategoryCollapsed(group.category.id)"
+          @keydown.enter="patterns.toggleCategoryCollapsed(group.category.id)"
+          @keydown.space.prevent="patterns.toggleCategoryCollapsed(group.category.id)"
         >
           <span class="text-dim">
             {{ patterns.isCategoryCollapsed(group.category.id) ? '▶' : '▼' }}

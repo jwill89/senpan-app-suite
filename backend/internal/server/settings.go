@@ -34,7 +34,11 @@ var settingsDefaults = map[string]string{
 // callers. GET /api/settings is public, so these are blanked out unless the
 // requester is an authenticated admin. Per-club Discord webhook URLs grant
 // write access to a channel and are registered here by bookclubs.go's init().
-var secretSettings = map[string]bool{}
+// The Google Fonts API key is included so it isn't handed to anonymous callers
+// (it's only needed by the admin font picker).
+var secretSettings = map[string]bool{
+	"google_fonts_api_key": true,
+}
 
 // handleSettingsGet returns all app settings as a key-value map.
 //
@@ -100,6 +104,12 @@ func (s *Server) handleSettingsUpdate(w http.ResponseWriter, r *http.Request) {
 		// an arbitrary host. An empty value clears it.
 		if secretSettings[key] && val != "" && !isDiscordWebhookURL(val) {
 			writeError(w, http.StatusBadRequest, "Discord webhook URLs must look like https://discord.com/api/webhooks/…")
+			return
+		}
+		// The AniList endpoint drives an outbound server request, so restrict it
+		// to anilist.co (SSRF defense) — an empty value falls back to the default.
+		if key == "anilist_api_url" && val != "" && !isAllowedAniListURL(val) {
+			writeError(w, http.StatusBadRequest, "AniList API URL must be an https URL under anilist.co")
 			return
 		}
 		// Validate numeric settings

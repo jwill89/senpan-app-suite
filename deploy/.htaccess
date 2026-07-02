@@ -72,24 +72,26 @@ Options -Indexes
     # the server's extension+magic-byte upload checks: an image that somehow slips
     # through still won't be interpreted as HTML/script.
     Header always set X-Content-Type-Options "nosniff"
-    # Clickjacking: refuse to be framed (CSP frame-ancestors for modern browsers,
-    # X-Frame-Options for older ones).
+    # Clickjacking: refuse to be framed. X-Frame-Options covers older browsers;
+    # modern browsers use frame-ancestors 'none' from the full CSP below.
     Header always set X-Frame-Options "DENY"
-    Header always set Content-Security-Policy "frame-ancestors 'none'"
     # Trim the Referer sent to other origins.
     Header always set Referrer-Policy "strict-origin-when-cross-origin"
     # Drop powerful features the app never uses.
     Header always set Permissions-Policy "geolocation=(), camera=(), microphone=()"
+    # HSTS — now enabled: every subdomain is confirmed HTTPS-only. Note this is
+    # sticky: browsers cache it for the max-age and it's hard to undo.
+    Header always set Strict-Transport-Security "max-age=31536000; includeSubDomains"
     #
-    # HSTS — enable once every subdomain is confirmed HTTPS-only (it's sticky:
-    # browsers cache it for the max-age and it's hard to undo):
-    #   Header always set Strict-Transport-Security "max-age=31536000"
-    #
-    # A full resource CSP is high-value but must be tuned to the app's external
-    # resources (Google Fonts, admin-injected theme CSS, data: image exports) and
-    # tested first, or it will break styling/fonts. Start in Report-Only, watch
-    # the browser console, then promote to enforcing:
-    #   Header always set Content-Security-Policy-Report-Only "default-src 'self'; img-src 'self' data: https:; style-src 'self' 'unsafe-inline' https:; font-src 'self' https: data:; script-src 'self'; connect-src 'self' https: wss:; frame-ancestors 'none'; base-uri 'self'; object-src 'none'"
+    # Full resource CSP — now ENFORCING (verified via a Report-Only pass across
+    # admin/player/editors/fonts/export; the only external scripts are allow-listed
+    # and no code needs 'unsafe-eval' after moving off vuedraggable). To debug a
+    # future breakage, temporarily append "-Report-Only" to the header name.
+    #   script/style/font/img/connect are kept permissive where the app needs it
+    #   (Google Fonts + cross-origin images over https:, inline theme CSS, data:
+    #   exports, the wss: game socket). challenges.cloudflare.com = Turnstile
+    #   (script + iframe); static.cloudflareinsights.com = CF Web Analytics beacon.
+    Header always set Content-Security-Policy "default-src 'self'; img-src 'self' data: https:; style-src 'self' 'unsafe-inline' https:; font-src 'self' https: data:; script-src 'self' https://challenges.cloudflare.com https://static.cloudflareinsights.com; frame-src https://challenges.cloudflare.com; connect-src 'self' https: wss:; frame-ancestors 'none'; base-uri 'self'; object-src 'none'"
 
     # Vite emits content-hashed filenames under /assets/ — safe to cache forever.
     <FilesMatch "\.(js|css|woff2?|ttf|eot|svg)$">

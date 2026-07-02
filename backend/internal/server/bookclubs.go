@@ -79,6 +79,20 @@ func isDiscordWebhookURL(raw string) bool {
 	return false
 }
 
+// isAllowedAniListURL reports whether raw is an acceptable AniList GraphQL
+// endpoint: https on a host under anilist.co. The anilist_api_url setting drives
+// the server's outbound lookup POST, so it is validated against this allowlist
+// (mirroring the Discord-webhook check) to stop an admin-entered value from
+// pointing those requests at an internal service or cloud metadata endpoint.
+func isAllowedAniListURL(raw string) bool {
+	u, err := url.Parse(strings.TrimSpace(raw))
+	if err != nil || u.Scheme != "https" || u.Host == "" {
+		return false
+	}
+	host := strings.ToLower(u.Hostname())
+	return host == "anilist.co" || strings.HasSuffix(host, ".anilist.co")
+}
+
 // init registers each club's reading-list Discord webhook as a secret app
 // setting so the settings API exposes it to admins and accepts saves, without
 // hard-coding a key per club in settings.go.

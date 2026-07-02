@@ -40,6 +40,10 @@ type client struct {
 	send   chan []byte        // buffered channel of outbound messages
 	cardID string             // non-empty for player connections; used to target disconnects
 	cancel context.CancelFunc // cancels this client's context (signals pumps to exit)
+	// revalidate, when non-nil (admin connections), re-checks on each ping that
+	// the connection's account is still authorized; returning false drops the
+	// socket. nil for player connections (public, never re-checked).
+	revalidate func() bool
 }
 
 // NewHub creates a new Hub with a background context.
@@ -125,7 +129,10 @@ func (h *Hub) broadcastRaw(data []byte, filter func(*client) bool) {
 // ServeWS upgrades an HTTP request to a WebSocket connection and registers it.
 // cardID should be non-empty for player connections so they can be disconnected
 // when their card is deleted.
-func (h *Hub) ServeWS(w http.ResponseWriter, r *http.Request, cardID string) {
+// ServeWS upgrades and registers a connection. revalidate is called periodically
+// (on the ping tick) to re-check that the connection is still authorized; pass a
+// closure for admin connections and nil for public player connections.
+func (h *Hub) ServeWS(w http.ResponseWriter, r *http.Request, cardID string, revalidate func() bool) {
 	// Default same-origin check: Origin must match Host header.
 	// Requires the reverse proxy to set ProxyPreserveHost On so the
 	// original Host header reaches Go (e.g. Apache: ProxyPreserveHost On).
@@ -139,11 +146,12 @@ func (h *Hub) ServeWS(w http.ResponseWriter, r *http.Request, cardID string) {
 	clientCtx, clientCancel := context.WithCancel(h.ctx)
 
 	c := &client{
-		hub:    h,
-		conn:   conn,
-		send:   make(chan []byte, 64),
-		cardID: cardID,
-		cancel: clientCancel,
+		hub:        h,
+		conn:       conn,
+		send:       make(chan []byte, 64),
+		cardID:     cardID,
+		cancel:     clientCancel,
+		revalidate: revalidate,
 	}
 	h.register(c)
 
@@ -159,16 +167,19 @@ func (h *Hub) DisconnectCardClients(cardID string, msg []byte) {
 	var targets []*client
 	for c := range h.clients {
 		if c.cardID == cardID {
+			// Send under the read lock: close(c.send) only happens under the
+			// write lock (in unregister), so the channel cannot be closed
+			// concurrently here. Non-blocking so a full buffer never stalls.
+			select {
+			case c.send <- msg:
+			default:
+			}
 			targets = append(targets, c)
 		}
 	}
 	h.mu.RUnlock()
 
 	for _, c := range targets {
-		select {
-		case c.send <- msg:
-		default:
-		}
 		h.unregister(c)
 	}
 }
@@ -180,16 +191,19 @@ func (h *Hub) DisconnectAllPlayerClients(msg []byte) {
 	var targets []*client
 	for c := range h.clients {
 		if c.cardID != "" {
+			// Send under the read lock: close(c.send) only happens under the
+			// write lock (in unregister), so the channel cannot be closed
+			// concurrently here. Non-blocking so a full buffer never stalls.
+			select {
+			case c.send <- msg:
+			default:
+			}
 			targets = append(targets, c)
 		}
 	}
 	h.mu.RUnlock()
 
 	for _, c := range targets {
-		select {
-		case c.send <- msg:
-		default:
-		}
 		h.unregister(c)
 	}
 }
@@ -269,6 +283,13 @@ func (c *client) writePump(ctx context.Context) {
 				}
 			}
 		case <-ticker.C:
+			// Re-authorize admin connections: if the account was deactivated or
+			// deleted, drop the socket rather than keep streaming the undelayed
+			// admin feed (the draw-delay anti-peek). Players have no revalidate.
+			if c.revalidate != nil && !c.revalidate() {
+				c.conn.Close(websocket.StatusPolicyViolation, "session no longer authorized")
+				return
+			}
 			pingCtx, cancel := context.WithTimeout(ctx, writeWait)
 			err := c.conn.Ping(pingCtx)
 			cancel()

@@ -82,6 +82,8 @@ export type {
   UsersResponse,
   AccountTokenGenerateResponse,
   TokenRevokeResponse,
+  Passkey,
+  PasskeysResponse,
   // Bingo: board / cards / game / patterns / presets / styles
   ActiveCSSResponse,
   CardListEntry,
@@ -212,6 +214,14 @@ export interface SettingsResponse {
 
 // ── Form models (frontend-only) ──────────────────────────────────────────────
 
+/**
+ * A reading-list source row in the item form. `_uid` is a client-only stable key
+ * for the repeater (see lib/uid.ts); it's stripped before the payload is sent.
+ */
+export interface ReadingListSourceForm extends ReadingListSource {
+  _uid?: number
+}
+
 // Form model for the admin reading-list item create/edit form.
 export interface ReadingListItemForm {
   id: number
@@ -223,7 +233,7 @@ export interface ReadingListItemForm {
   tropes: string
   chapters: string
   comments: string
-  sources: ReadingListSource[]
+  sources: ReadingListSourceForm[]
 }
 
 // Form model for the admin announcement-type create/edit form.
@@ -269,6 +279,14 @@ export const DISCORD_TIME_FORMATS: { value: DiscordTimeFormat; label: string }[]
 ]
 
 /**
+ * A Discord button row in the announcement form. `_uid` is a client-only stable
+ * key for the repeater (see lib/uid.ts); it's stripped when the payload is built.
+ */
+export interface AnnouncementButtonForm extends AnnouncementButton {
+  _uid?: number
+}
+
+/**
  * Form model for the admin announcement create/edit form. Holds *local*
  * wall-clock strings + a friendly recurrence builder. `start_local`/`end_local`/
  * `once_local` are `datetime-local` values (converted to absolute UTC on save
@@ -303,7 +321,7 @@ export interface AnnouncementForm {
   weekdays: number[]
   week_of_month: number
   /** Optional Discord link buttons (max 5) rendered beneath the embed. */
-  buttons: AnnouncementButton[]
+  buttons: AnnouncementButtonForm[]
   /**
    * Optional role tag posted above the embed: '' (don't tag), 'everyone'
    * (@everyone), or 'role:<announcement_role_id>' (a managed taggable role).
@@ -332,6 +350,9 @@ export interface GaraponPrizeForm {
   ball_color: string
   rate: number
   is_grand: boolean
+  /** Client-only stable key for the prize repeater (see lib/uid.ts); stripped
+   *  from the payload before it's sent to the server. */
+  _uid?: number
 }
 export interface GaraponForm {
   id: number
@@ -349,11 +370,23 @@ export interface AffiliateHourForm {
   label: string
   start: string
   end: string
+  /** Client-only stable key for the hours repeater (see lib/uid.ts). */
+  _uid?: number
+}
+/**
+ * An owner row in the affiliate form. Owners are plain name strings on the wire,
+ * but the form wraps each in an object so the repeater can key on a stable
+ * `_uid` (see lib/uid.ts) instead of the array index; the payload sends
+ * `value`s only.
+ */
+export interface AffiliateOwnerForm {
+  value: string
+  _uid?: number
 }
 export interface AffiliateForm {
   id: number
   name: string
-  owners: string[]
+  owners: AffiliateOwnerForm[]
   location: string
   timezone: string
   hours: AffiliateHourForm[]

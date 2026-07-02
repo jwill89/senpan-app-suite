@@ -26,6 +26,61 @@ The format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## Frontend
 
+### [2.2.0] — 2026-07-02
+
+#### Added
+
+- **Sign in with a passkey.** The login page offers a usernameless "Sign in with
+  a passkey" option (WebAuthn discoverable credentials), and every account can
+  add / name / remove passkeys under **User Options → Add Passkey**. Passkeys
+  complement the password — both continue to work.
+- **Cloudflare Turnstile on public raffle sign-up.** When Turnstile is
+  configured, the raffle entry form shows the bot check and requires it before
+  submitting, matching the admin login.
+
+### [2.1.0] — 2026-07-02
+
+#### Fixed
+
+- Guard the announcement form's Main/Thumbnail image pickers so opening the form
+  before the image lists finish loading no longer throws.
+- Detail loaders (raffles, garapons, stamp rallies, book-club lists) ignore stale
+  responses via a per-loader request token, so quickly switching between items
+  can't settle the view on the wrong record.
+- API requests now time out after 30s instead of leaving a spinner (and the
+  caller's promise) pending forever on a hung network.
+
+#### Added
+
+- `timeoutMs` option on the API client (pass `0` to disable), with a default
+  request timeout that surfaces a clean error on abort.
+
+#### Security
+
+- Validate the post-login `?redirect=` value as a same-origin path before
+  navigating (falls back to `/admin`).
+- Clear the full auth session (not just the `isAdmin` flag) on a 401, so stale
+  permission gating can't linger after a session expires.
+
+#### Accessibility
+
+- Clickable cards, chips, and collapsible headers (raffles, stamp rallies,
+  garapons, the game winner chip, the pattern-picker group headers) are now
+  keyboard- and screen-reader-operable (`role`/`tabindex`/keydown).
+
+#### Changed
+
+- Removable repeater rows (garapon prizes, affiliate hours/owners, announcement
+  buttons, reading-list sources) key on a stable id so removing a row can't
+  rebind inputs to the wrong logical row.
+- RafflesTab now reuses the shared `DataTable` + `useDataTableView` composable
+  instead of hand-rolled table/pagination state; extracted shared `slugify`,
+  `formatSize`, and `withLoading` helpers.
+- Replaced `vuedraggable` with `vue-draggable-plus` for pattern/announcement
+  drag-and-drop. The old library's bundled runtime used `new Function()` (which a
+  strict CSP `script-src` would block); the modern one doesn't, so the site can
+  enforce CSP without `'unsafe-eval'`. Also ~200 KB smaller in that chunk.
+
 ### [2.0.0] — 2026-06-30
 
 #### Changed
@@ -181,6 +236,80 @@ First tracked release — establishes versioning for the current production buil
 ---
 
 ## Backend
+
+### [2.2.0] — 2026-07-02
+
+#### Added
+
+- **Passkey (WebAuthn) support.** Register / list / delete passkeys for an account
+  (`/api/account/passkeys…`) and a usernameless, discoverable-credential login
+  (`POST /api/auth/passkey/{begin,finish}`) that establishes the session like a
+  password login. Credentials (the full go-webauthn `Credential`, as JSON) live in
+  the new `user_passkeys` table (schema **v44**); the relying-party id/origin
+  derive from the request host, and the one-time challenge is held in the session
+  between the begin/finish halves. Uses `github.com/go-webauthn/webauthn`.
+- **Turnstile on public raffle entry.** When Cloudflare Turnstile is configured,
+  `POST /api/raffles/{id}/enter` verifies a token before recording the entry, so
+  bot-flooded entries can't skew the weighted winner pick (on top of the per-IP
+  rate limiter).
+
+### [2.1.0] — 2026-07-02
+
+#### Security
+
+- Sanitize uploaded SVGs server-side before persisting — drop `<script>`/
+  `<foreignObject>`, event-handler attributes, `javascript:`/external refs, and
+  dangerous inline styles — closing a stored-XSS vector (SVGs are served from our
+  origin and inlined on the player board).
+- Restrict the `anilist_api_url` setting to hosts under `anilist.co` (SSRF
+  defense), mirroring the existing Discord-webhook allowlist.
+- Keep the Google Fonts API key out of the public `GET /api/settings` response
+  (admin-only, like the webhook secrets).
+- Rate-limit the public raffle-entry endpoint (per IP) and gate raffle detail so
+  non-admins can no longer read a not-yet-open/closed-window raffle by guessing
+  its id.
+- Add a CSRF Origin check (defense-in-depth over the SameSite=Lax cookie): a
+  cross-origin state-changing request that rides an ambient session cookie is
+  rejected. Bearer-token (plugin) and cookie-less requests are exempt.
+- Re-authorize the admin WebSocket periodically instead of only at connect, so an
+  account deactivated or deleted mid-session has its admin (undelayed-draw) socket
+  dropped rather than kept open. Server-side only; the plugin reconnects and is
+  rejected at connect while deactivated.
+- Add an **enforcing** full resource Content-Security-Policy (`deploy/.htaccess`).
+  Verified via a Report-Only pass; the only external scripts (Cloudflare Turnstile
+  + Web Analytics) are allow-listed and nothing needs `'unsafe-eval'` after the
+  drag-library swap, so `script-src` stays strict.
+
+#### Fixed
+
+- Fix a send-on-closed-channel panic in the WebSocket hub's disconnect helpers
+  (the message send now happens under the read lock).
+- Fix an HTTP 500 on a participant's stamp-card page after a stamp is removed —
+  the nullable `stamp_id` is now scanned via `sql.NullInt64`.
+- Wait for the announcement scheduler's in-flight sweep on shutdown before
+  closing the DB, so a post that already succeeded advances its cursor and can't
+  re-post on the next boot.
+- Clean up multipart temp files after each upload (`RemoveAll`), so a batch that
+  spills over the in-memory budget no longer leaves files behind in the temp dir.
+- Announcement `buttons` now serialize as an empty array (never `null`) when a
+  post has none, matching the generated TS type — fixes a client-side crash when
+  editing a button-less announcement.
+
+#### Added
+
+- `UNIQUE(game_id, number)` index on `called_numbers` (schema **v43**) as a
+  database-level backstop against a number being drawn twice in one game.
+
+#### Changed
+
+- Starting a game is now a single transaction (end active + create + snapshot all
+  patterns), so a partial failure can't leave a half-initialized active game.
+- Made the retired book-club events-webhook migration transactional and
+  idempotent (no duplicate announcement types if it re-runs after a partial
+  failure).
+- Consolidated the upload-name and slug validators into shared helpers (fixing a
+  missing hidden-file check on font uploads) and the JSON-array / raffle-row scan
+  helpers in the store layer.
 
 ### [2.0.0] — 2026-06-30
 

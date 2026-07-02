@@ -45,21 +45,33 @@ func (s *Store) DeleteRaffle(id int64) (bool, error) {
 	return n > 0, nil
 }
 
-// GetRaffle retrieves a single raffle by ID. Returns nil if not found.
-func (s *Store) GetRaffle(id int64) (*model.Raffle, error) {
+// raffleColumns is the shared SELECT list for the base raffles row, matching the
+// scan order in scanRaffle. (listRafflesAdmin appends its own aggregate columns.)
+const raffleColumns = "id, title, description, rules, max_entries, signup_instructions, cost_per_entry, available_from, available_to, prize_image, status, winner_entry_id, created_at"
+
+// scanRaffle scans one base raffles row (winner_entry_id nullable). Shared by
+// GetRaffle and the public ListRaffles so the column order lives in one place.
+func scanRaffle(sc rowScanner) (model.Raffle, error) {
 	var r model.Raffle
 	var winnerID sql.NullInt64
-	err := s.db.QueryRow(`SELECT id, title, description, rules, max_entries, signup_instructions, cost_per_entry, available_from, available_to, prize_image, status, winner_entry_id, created_at FROM raffles WHERE id = ?`, id).
-		Scan(&r.ID, &r.Title, &r.Description, &r.Rules, &r.MaxEntries, &r.SignupInstructions,
-			&r.CostPerEntry, &r.AvailableFrom, &r.AvailableTo, &r.PrizeImage, &r.Status, &winnerID, &r.CreatedAt)
+	if err := sc.Scan(&r.ID, &r.Title, &r.Description, &r.Rules, &r.MaxEntries, &r.SignupInstructions,
+		&r.CostPerEntry, &r.AvailableFrom, &r.AvailableTo, &r.PrizeImage, &r.Status, &winnerID, &r.CreatedAt); err != nil {
+		return r, err
+	}
+	if winnerID.Valid {
+		r.WinnerEntryID = &winnerID.Int64
+	}
+	return r, nil
+}
+
+// GetRaffle retrieves a single raffle by ID. Returns nil if not found.
+func (s *Store) GetRaffle(id int64) (*model.Raffle, error) {
+	r, err := scanRaffle(s.db.QueryRow(`SELECT `+raffleColumns+` FROM raffles WHERE id = ?`, id))
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
 	}
 	if err != nil {
 		return nil, err
-	}
-	if winnerID.Valid {
-		r.WinnerEntryID = &winnerID.Int64
 	}
 	return &r, nil
 }
@@ -81,7 +93,7 @@ func (s *Store) ListRaffles(adminMode bool) ([]model.Raffle, error) {
 	// to a UTC timestamp so the comparison against datetime('now') (also UTC)
 	// is timezone-correct — a raffle past its "available to" instant no longer
 	// shows regardless of the admin's timezone.
-	rows, err := s.db.Query(`SELECT id, title, description, rules, max_entries, signup_instructions, cost_per_entry, available_from, available_to, prize_image, status, winner_entry_id, created_at FROM raffles WHERE status = 'open' AND (available_from = '' OR datetime(available_from) <= datetime('now')) AND (available_to = '' OR datetime(available_to) >= datetime('now')) ORDER BY created_at DESC`)
+	rows, err := s.db.Query(`SELECT ` + raffleColumns + ` FROM raffles WHERE status = 'open' AND (available_from = '' OR datetime(available_from) <= datetime('now')) AND (available_to = '' OR datetime(available_to) >= datetime('now')) ORDER BY created_at DESC`)
 	if err != nil {
 		return nil, err
 	}
@@ -89,14 +101,9 @@ func (s *Store) ListRaffles(adminMode bool) ([]model.Raffle, error) {
 
 	raffles := make([]model.Raffle, 0)
 	for rows.Next() {
-		var r model.Raffle
-		var winnerID sql.NullInt64
-		if err := rows.Scan(&r.ID, &r.Title, &r.Description, &r.Rules, &r.MaxEntries, &r.SignupInstructions,
-			&r.CostPerEntry, &r.AvailableFrom, &r.AvailableTo, &r.PrizeImage, &r.Status, &winnerID, &r.CreatedAt); err != nil {
+		r, err := scanRaffle(rows)
+		if err != nil {
 			return nil, err
-		}
-		if winnerID.Valid {
-			r.WinnerEntryID = &winnerID.Int64
 		}
 		raffles = append(raffles, r)
 	}
@@ -150,9 +157,25 @@ func (s *Store) CountRaffleEntries(raffleID int64) (int, error) {
 	return count, err
 }
 
+// raffleEntryColumns is the shared SELECT list for raffle_entries, matching the
+// scan order in scanRaffleEntry.
+const raffleEntryColumns = "id, raffle_id, character_name, world, num_entries, paid, created_at"
+
+// scanRaffleEntry scans one raffle_entries row (paid stored as 0/1). Shared by the
+// list/get/pick paths so the column order + paid conversion live in one place.
+func scanRaffleEntry(sc rowScanner) (model.RaffleEntry, error) {
+	var e model.RaffleEntry
+	var paid int
+	if err := sc.Scan(&e.ID, &e.RaffleID, &e.CharacterName, &e.World, &e.NumEntries, &paid, &e.CreatedAt); err != nil {
+		return e, err
+	}
+	e.Paid = paid != 0
+	return e, nil
+}
+
 // ListRaffleEntries returns all entries for a raffle.
 func (s *Store) ListRaffleEntries(raffleID int64) ([]model.RaffleEntry, error) {
-	rows, err := s.db.Query(`SELECT id, raffle_id, character_name, world, num_entries, paid, created_at FROM raffle_entries WHERE raffle_id = ? ORDER BY created_at ASC`, raffleID)
+	rows, err := s.db.Query(`SELECT `+raffleEntryColumns+` FROM raffle_entries WHERE raffle_id = ? ORDER BY created_at ASC`, raffleID)
 	if err != nil {
 		return nil, err
 	}
@@ -160,72 +183,32 @@ func (s *Store) ListRaffleEntries(raffleID int64) ([]model.RaffleEntry, error) {
 
 	entries := make([]model.RaffleEntry, 0)
 	for rows.Next() {
-		var e model.RaffleEntry
-		var paid int
-		if err := rows.Scan(&e.ID, &e.RaffleID, &e.CharacterName, &e.World, &e.NumEntries, &paid, &e.CreatedAt); err != nil {
+		e, err := scanRaffleEntry(rows)
+		if err != nil {
 			return nil, err
 		}
-		e.Paid = paid != 0
 		entries = append(entries, e)
 	}
 	return entries, rows.Err()
 }
 
-// GetRaffleEntry retrieves a single raffle entry by character+world for a raffle.
-func (s *Store) GetRaffleEntry(raffleID int64, charName, world string) (*model.RaffleEntry, error) {
-	var e model.RaffleEntry
-	var paid int
-	err := s.db.QueryRow(`SELECT id, raffle_id, character_name, world, num_entries, paid, created_at FROM raffle_entries WHERE raffle_id = ? AND LOWER(character_name) = LOWER(?) AND LOWER(world) = LOWER(?)`,
-		raffleID, charName, world).
-		Scan(&e.ID, &e.RaffleID, &e.CharacterName, &e.World, &e.NumEntries, &paid, &e.CreatedAt)
-	if errors.Is(err, sql.ErrNoRows) {
-		return nil, nil
-	}
-	if err != nil {
-		return nil, err
-	}
-	e.Paid = paid != 0
-	return &e, nil
-}
-
 // GetRaffleEntryByID returns a single raffle entry by its ID.
 func (s *Store) GetRaffleEntryByID(entryID int64) (*model.RaffleEntry, error) {
-	var e model.RaffleEntry
-	var paid int
-	err := s.db.QueryRow(`SELECT id, raffle_id, character_name, world, num_entries, paid, created_at FROM raffle_entries WHERE id = ?`,
-		entryID).
-		Scan(&e.ID, &e.RaffleID, &e.CharacterName, &e.World, &e.NumEntries, &paid, &e.CreatedAt)
+	e, err := scanRaffleEntry(s.db.QueryRow(`SELECT `+raffleEntryColumns+` FROM raffle_entries WHERE id = ?`, entryID))
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
 	}
 	if err != nil {
 		return nil, err
 	}
-	e.Paid = paid != 0
 	return &e, nil
-}
-
-// CreateRaffleEntry inserts a new raffle entry.
-func (s *Store) CreateRaffleEntry(raffleID int64, charName, world string, numEntries int) (int64, error) {
-	res, err := s.db.Exec(`INSERT INTO raffle_entries (raffle_id, character_name, world, num_entries) VALUES (?, ?, ?, ?)`,
-		raffleID, charName, world, numEntries)
-	if err != nil {
-		return 0, err
-	}
-	return res.LastInsertId()
-}
-
-// AddRaffleEntries adds entries to an existing raffle_entries row.
-func (s *Store) AddRaffleEntries(entryID int64, additionalEntries int) error {
-	_, err := s.db.Exec(`UPDATE raffle_entries SET num_entries = num_entries + ? WHERE id = ?`, additionalEntries, entryID)
-	return err
 }
 
 // AddOrCreateRaffleEntry records num additional entries for a character+world on a
 // raffle, enforcing the per-player cap (maxEntries) inside one write transaction so
 // concurrent public sign-ups can neither exceed the cap nor create duplicate rows
 // for the same character+world. It updates the existing row if one exists (matched
-// case-insensitively, mirroring GetRaffleEntry) or inserts a new one otherwise.
+// case-insensitively on character_name + world) or inserts a new one otherwise.
 //
 // Returns the affected row's id, the running total after the change, the count that
 // existed before it, and whether a new row was created. When the cap would be
@@ -304,7 +287,7 @@ func (s *Store) SetRaffleStatus(raffleID int64, status string) error {
 // Returns nil if no paid entries exist.
 func (s *Store) PickRaffleWinner(raffleID int64) (*model.RaffleEntry, error) {
 	// Get all paid entries
-	rows, err := s.db.Query(`SELECT id, raffle_id, character_name, world, num_entries, paid, created_at FROM raffle_entries WHERE raffle_id = ? AND paid = 1`, raffleID)
+	rows, err := s.db.Query(`SELECT `+raffleEntryColumns+` FROM raffle_entries WHERE raffle_id = ? AND paid = 1`, raffleID)
 	if err != nil {
 		return nil, err
 	}
@@ -313,12 +296,10 @@ func (s *Store) PickRaffleWinner(raffleID int64) (*model.RaffleEntry, error) {
 	var entries []model.RaffleEntry
 	totalTickets := 0
 	for rows.Next() {
-		var e model.RaffleEntry
-		var paid int
-		if err := rows.Scan(&e.ID, &e.RaffleID, &e.CharacterName, &e.World, &e.NumEntries, &paid, &e.CreatedAt); err != nil {
+		e, err := scanRaffleEntry(rows)
+		if err != nil {
 			return nil, err
 		}
-		e.Paid = paid != 0
 		entries = append(entries, e)
 		totalTickets += e.NumEntries
 	}

@@ -345,8 +345,15 @@ export const endpoints = {
     update: (id: number, raffle: Record<string, unknown>) =>
       apiPut<RaffleResponse>(`raffles/${id}`, raffle),
     delete: (id: number) => apiDelete(`raffles/${id}`),
-    enter: (id: number, body: { character_name: string; world: string; num_entries: number }) =>
-      apiPost<RaffleEnterResponse>(`raffles/${id}/enter`, body),
+    enter: (
+      id: number,
+      body: {
+        character_name: string
+        world: string
+        num_entries: number
+        turnstile_token?: string
+      },
+    ) => apiPost<RaffleEnterResponse>(`raffles/${id}/enter`, body),
     addEntry: (
       raffleId: number,
       body: { character_name: string; world: string; num_entries: number; paid: boolean },

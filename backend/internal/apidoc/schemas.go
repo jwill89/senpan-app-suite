@@ -38,6 +38,7 @@ var modelTypes = map[string]any{
 	"LogoutResponse": model.LogoutResponse{}, "RegisterResponse": model.RegisterResponse{},
 	"UsersResponse": model.UsersResponse{}, "AccountTokenGenerateResponse": model.AccountTokenGenerateResponse{},
 	"TokenRevokeResponse": model.TokenRevokeResponse{},
+	"Passkey":             model.Passkey{}, "PasskeysResponse": model.PasskeysResponse{},
 
 	// Bingo
 	"CardListEntry": model.CardListEntry{}, "CardsListResponse": model.CardsListResponse{},

@@ -18,7 +18,7 @@
  * as UTC (the store converts via lib/datetime.ts); displayed in the viewer's zone.
  */
 import { computed, ref } from 'vue'
-import draggable from 'vuedraggable'
+import { VueDraggable } from 'vue-draggable-plus'
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
 import MarkdownEditor from '@/components/common/MarkdownEditor.vue'
 import AdminPanel from '@/components/common/ui/AdminPanel.vue'
@@ -36,6 +36,7 @@ import { useAnnouncementsStore } from '@/stores/announcements'
 import { detailPartCount } from '@/lib/announcementDetails'
 import { formatServerTimestamp } from '@/lib/datetime'
 import { supportedTimezones } from '@/lib/constants'
+import { nextUid } from '@/lib/uid'
 import type { Announcement, AnnouncementType, AnnouncementRole } from '@/types/api'
 import { DISCORD_TIME_FORMATS } from '@/types/api'
 
@@ -64,7 +65,7 @@ const hasTypes = computed(() => store.types.length > 0)
 const canReorder = computed(() => !store.search.trim() && !store.typeFilter)
 /** Ids currently passing the search/category filter (for v-show in the list). */
 const visibleIds = computed(() => new Set(store.filteredAnnouncements.map((a) => a.id)))
-/** Persist the order after a drag (vuedraggable has already mutated the array). */
+/** Persist the order after a drag (vue-draggable-plus has already mutated the array). */
 function onReorder(): void {
   void store.reorder(store.announcements.map((a) => a.id))
 }
@@ -131,7 +132,7 @@ function toggleWeekday(day: number): void {
 const MAX_BUTTONS = 5
 function addButton(): void {
   if (store.form.buttons.length >= MAX_BUTTONS) return
-  store.form.buttons.push({ label: '', emoji: '', url: '' })
+  store.form.buttons.push({ label: '', emoji: '', url: '', _uid: nextUid() })
 }
 function removeButton(i: number): void {
   store.form.buttons.splice(i, 1)
@@ -248,109 +249,104 @@ async function submitRole(): Promise<void> {
           </template>
         </p>
 
-        <draggable
+        <VueDraggable
           v-if="store.announcements.length"
           v-show="store.filteredAnnouncements.length"
           v-model="store.announcements"
           class="list-rows"
-          item-key="id"
           handle=".ann-drag"
           :animation="150"
           ghost-class="dragging"
           :disabled="!canReorder"
-          @change="onReorder"
+          @end="onReorder"
         >
-          <template #item="{ element: a }">
-            <ListRow v-show="visibleIds.has(a.id)">
-              <template #media>
-                <span
-                  v-if="canReorder"
-                  class="ann-drag drag-handle"
-                  title="Drag to reorder"
-                  aria-label="Drag to reorder"
-                >
-                  <font-awesome-icon :icon="['fad', 'bars']" />
-                </span>
-                <span
-                  class="ann-swatch"
-                  :style="{ background: a.color || '#ff3131' }"
-                  aria-hidden="true"
-                ></span>
-                <img
-                  v-if="a.image"
-                  :src="a.image"
-                  class="media-cover media-cover--wide"
-                  alt="Announcement image"
-                />
-                <div v-else class="media-cover media-cover--wide media-empty">
-                  <font-awesome-icon :icon="['fad', 'image']" />
-                </div>
-              </template>
+          <ListRow v-for="a in store.announcements" v-show="visibleIds.has(a.id)" :key="a.id">
+            <template #media>
+              <span
+                v-if="canReorder"
+                class="ann-drag drag-handle"
+                title="Drag to reorder"
+                aria-label="Drag to reorder"
+              >
+                <font-awesome-icon :icon="['fad', 'bars']" />
+              </span>
+              <span
+                class="ann-swatch"
+                :style="{ background: a.color || '#ff3131' }"
+                aria-hidden="true"
+              ></span>
+              <img
+                v-if="a.image"
+                :src="a.image"
+                class="media-cover media-cover--wide"
+                alt="Announcement image"
+              />
+              <div v-else class="media-cover media-cover--wide media-empty">
+                <font-awesome-icon :icon="['fad', 'image']" />
+              </div>
+            </template>
 
-              <h4 class="ann-title">{{ a.title }}</h4>
-              <p class="text-sm text-dim ann-meta">
-                <font-awesome-icon :icon="['fad', 'folder-open']" /> {{ typeName(a) }}
-              </p>
-              <p v-if="a.start_at" class="text-sm ann-meta">
-                <font-awesome-icon :icon="['fad', 'calendar-days']" />
-                {{ inZone(a.start_at, a.timezone) }}
-                <span v-if="a.end_at">– {{ inZone(a.end_at, a.timezone) }}</span>
-                <span v-if="a.timezone" class="text-dim">({{ a.timezone }})</span>
-              </p>
-              <p class="text-sm ann-meta">
-                <span v-if="a.schedule_kind" class="badge badge--accent ann-badge">
-                  {{ scheduleLabel(a) }}
-                  <template v-if="a.next_post_at">
-                    · next {{ inZone(a.next_post_at, a.timezone) }}
-                  </template>
-                </span>
-                <span v-else class="badge badge--muted ann-badge">Manual only</span>
-                <span v-if="a.skip_next" class="badge badge--warning ann-badge"
-                  >⏭ next skipped</span
-                >
-              </p>
+            <h4 class="ann-title">{{ a.title }}</h4>
+            <p class="text-sm text-dim ann-meta">
+              <font-awesome-icon :icon="['fad', 'folder-open']" /> {{ typeName(a) }}
+            </p>
+            <p v-if="a.start_at" class="text-sm ann-meta">
+              <font-awesome-icon :icon="['fad', 'calendar-days']" />
+              {{ inZone(a.start_at, a.timezone) }}
+              <span v-if="a.end_at">– {{ inZone(a.end_at, a.timezone) }}</span>
+              <span v-if="a.timezone" class="text-dim">({{ a.timezone }})</span>
+            </p>
+            <p class="text-sm ann-meta">
+              <span v-if="a.schedule_kind" class="badge badge--accent ann-badge">
+                {{ scheduleLabel(a) }}
+                <template v-if="a.next_post_at">
+                  · next {{ inZone(a.next_post_at, a.timezone) }}
+                </template>
+              </span>
+              <span v-else class="badge badge--muted ann-badge">Manual only</span>
+              <span v-if="a.skip_next" class="badge badge--warning ann-badge">⏭ next skipped</span>
+            </p>
 
-              <template #actions>
-                <button
-                  class="btn-action btn-sm"
-                  :disabled="store.sendingId === a.id"
-                  title="Post to Discord now"
-                  @click="store.sendNow(a)"
+            <template #actions>
+              <button
+                class="btn-action btn-sm"
+                :disabled="store.sendingId === a.id"
+                title="Post to Discord now"
+                @click="store.sendNow(a)"
+              >
+                <LoadingSpinner v-if="store.sendingId === a.id" label="Sending…" />
+                <template v-else
+                  ><font-awesome-icon :icon="['fas', 'paper-plane']" /> Send now</template
                 >
-                  <LoadingSpinner v-if="store.sendingId === a.id" label="Sending…" />
-                  <template v-else
-                    ><font-awesome-icon :icon="['fas', 'paper-plane']" /> Send now</template
-                  >
-                </button>
-                <button
-                  v-if="a.schedule_kind && a.next_post_at"
-                  class="btn-caution btn-sm"
-                  :disabled="store.skippingId === a.id || a.skip_next"
-                  title="Skip the next scheduled occurrence"
-                  @click="store.skipNext(a)"
-                >
-                  <font-awesome-icon :icon="['fas', 'forward-step']" /> Skip next
-                </button>
-                <button
-                  class="btn-confirm btn-sm"
-                  aria-label="Edit"
-                  title="Edit"
-                  @click="openEdit(a)"
-                >
-                  <font-awesome-icon :icon="['fas', 'pen-to-square']" />
-                </button>
-                <button
-                  class="btn-danger btn-sm"
-                  aria-label="Delete"
-                  title="Delete"
-                  @click="store.deleteAnnouncement(a)"
-                >
-                  <font-awesome-icon :icon="['fas', 'trash']" />
-                </button>
-              </template>
-            </ListRow>
-          </template>
-        </draggable>
+              </button>
+              <button
+                v-if="a.schedule_kind && a.next_post_at"
+                class="btn-caution btn-sm"
+                :disabled="store.skippingId === a.id || a.skip_next"
+                title="Skip the next scheduled occurrence"
+                @click="store.skipNext(a)"
+              >
+                <font-awesome-icon :icon="['fas', 'forward-step']" /> Skip next
+              </button>
+              <button
+                class="btn-confirm btn-sm"
+                aria-label="Edit"
+                title="Edit"
+                @click="openEdit(a)"
+              >
+                <font-awesome-icon :icon="['fas', 'pen-to-square']" />
+              </button>
+              <button
+                class="btn-danger btn-sm"
+                aria-label="Delete"
+                title="Delete"
+                @click="store.deleteAnnouncement(a)"
+              >
+                <font-awesome-icon :icon="['fas', 'trash']" />
+              </button>
+            </template>
+          </ListRow>
+        </VueDraggable>
         <EmptyState
           v-if="store.announcements.length && !store.filteredAnnouncements.length"
           text="No announcements match your filters."
@@ -538,7 +534,7 @@ async function submitRole(): Promise<void> {
         emoji is optional — click the emoji box to pick one.
       </p>
       <div v-if="store.form.buttons.length" class="ann-buttons">
-        <div v-for="(btn, i) in store.form.buttons" :key="i" class="ann-button-row">
+        <div v-for="(btn, i) in store.form.buttons" :key="btn._uid" class="ann-button-row">
           <button
             type="button"
             class="ann-button-emoji"
@@ -866,7 +862,7 @@ async function submitRole(): Promise<void> {
 .ann-drag:active {
   cursor: grabbing;
 }
-/* vuedraggable ghost while dragging a row. */
+/* vue-draggable-plus ghost while dragging a row. */
 .dragging {
   opacity: 0.5;
 }

@@ -10,6 +10,7 @@ import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
 import FormField from '@/components/common/ui/FormField.vue'
 import TurnstileWidget from '@/components/common/TurnstileWidget.vue'
 import { endpoints } from '@/lib/endpoints'
+import { passkeysSupported } from '@/lib/passkeys'
 import { useAuthStore } from '@/stores/auth'
 
 const auth = useAuthStore()
@@ -18,6 +19,16 @@ const router = useRouter()
 
 const username = ref('')
 const password = ref('')
+
+/**
+ * A `?redirect=` value is only safe to navigate to when it's a same-origin path:
+ * a single leading slash, not a protocol-relative `//host` and not a `scheme:`
+ * URL (which could bounce the just-authenticated admin to an attacker's site).
+ * Anything else falls back to the admin dashboard.
+ */
+function safeRedirect(value: unknown): string {
+  return typeof value === 'string' && /^\/(?!\/)/.test(value) ? value : '/admin'
+}
 
 // Cloudflare Turnstile bot check. The site key (empty = disabled) comes from the
 // backend; when present, the widget renders and a token is required to log in.
@@ -44,15 +55,21 @@ async function submit(): Promise<void> {
   password.value = ''
   const ok = await auth.login(name, pw, turnstileToken.value || undefined)
   if (ok) {
-    const redirect = typeof route.query.redirect === 'string' ? route.query.redirect : null
-    // Land on /admin; the router guard forwards to the first page this account
-    // may access (admins → the game tab, others → their first permitted page).
-    void router.push(redirect || { path: '/admin' })
+    // Only honor a same-origin redirect path; otherwise land on /admin, where the
+    // router guard forwards to the first page this account may access (admins →
+    // the game tab, others → their first permitted page).
+    void router.push(safeRedirect(route.query.redirect))
     return
   }
   // Turnstile tokens are single-use — re-issue one for the next attempt.
   turnstileToken.value = ''
   turnstile.value?.reset()
+}
+
+/** Sign in with a passkey (usernameless). Navigates on success like a password login. */
+async function passkeyLogin(): Promise<void> {
+  const ok = await auth.loginWithPasskey()
+  if (ok) void router.push(safeRedirect(route.query.redirect))
 }
 
 function goHome(): void {
@@ -100,7 +117,40 @@ function goHome(): void {
           </button>
         </div>
       </form>
+      <template v-if="passkeysSupported()">
+        <div class="login-or"><span>or</span></div>
+        <button
+          type="button"
+          class="btn-neutral login-passkey"
+          :disabled="auth.loggingIn"
+          @click="passkeyLogin"
+        >
+          <font-awesome-icon :icon="['fad', 'user-key']" /> Sign in with a passkey
+        </button>
+      </template>
       <p v-if="auth.authError" class="error-msg">{{ auth.authError }}</p>
     </div>
   </div>
 </template>
+
+<style scoped>
+.login-or {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 16px 0;
+  color: var(--color-text-dim, #888);
+  font-size: 0.85rem;
+}
+.login-or::before,
+.login-or::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: color-mix(in srgb, var(--color-text) 15%, transparent);
+}
+.login-passkey {
+  width: 100%;
+  justify-content: center;
+}
+</style>

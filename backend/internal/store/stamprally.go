@@ -447,12 +447,17 @@ func (s *Store) ListCollectedStampIDs(cardID int64) (map[int64]string, error) {
 
 	collected := make(map[int64]string)
 	for rows.Next() {
-		var stampID int64
+		// stamp_id is nullable (ON DELETE SET NULL, schema v41): a collected row
+		// survives its stamp's removal with a NULL stamp_id. Skip those rather
+		// than failing the scan (which would 500 the participant's card page).
+		var stampID sql.NullInt64
 		var stampedAt string
 		if err := rows.Scan(&stampID, &stampedAt); err != nil {
 			return nil, err
 		}
-		collected[stampID] = stampedAt
+		if stampID.Valid {
+			collected[stampID.Int64] = stampedAt
+		}
 	}
 	return collected, rows.Err()
 }

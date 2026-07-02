@@ -403,7 +403,16 @@ async function deleteSelected(): Promise<void> {
             <span class="text-dim text-xs push-right">{{ filteredOpen.length }} open</span>
           </div>
           <div v-if="filteredOpen.length" class="card-grid">
-            <div v-for="r in filteredOpen" :key="r.id" class="media-card" @click="openRally(r)">
+            <div
+              v-for="r in filteredOpen"
+              :key="r.id"
+              class="media-card"
+              role="button"
+              tabindex="0"
+              @click="openRally(r)"
+              @keydown.enter="openRally(r)"
+              @keydown.space.prevent="openRally(r)"
+            >
               <img
                 v-if="r.card_image"
                 :src="assetUrl(r.card_image)"

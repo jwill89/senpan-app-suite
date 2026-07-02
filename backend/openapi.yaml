@@ -1691,6 +1691,35 @@ components:
         ok:
           type: boolean
       type: object
+    Passkey:
+      properties:
+        created_at:
+          type: string
+        id:
+          format: int64
+          type: integer
+        last_used_at:
+          type: string
+        name:
+          type: string
+      type: object
+    PasskeysResponse:
+      properties:
+        passkeys:
+          items:
+            properties:
+              created_at:
+                type: string
+              id:
+                format: int64
+                type: integer
+              last_used_at:
+                type: string
+              name:
+                type: string
+            type: object
+          type: array
+      type: object
     Pattern:
       properties:
         category_id:
@@ -3643,7 +3672,7 @@ info:
 
     Broadcast messages (each carries a `type` field): `resource_changed`, `cards_update`, `card_deleted`, `patterns_update`, `game_update`, `game_draw`, `halftime_minigame`, `draw_delay_update`, `details_update`, `style_update`, `settings_update`.
   title: Senpan App Suite API
-  version: 2.0.0
+  version: 2.2.0
 openapi: 3.0.3
 paths:
   /api/account/change-password:
@@ -3686,6 +3715,134 @@ paths:
       - cookieAuth: []
       - bearerAuth: []
       summary: Change own password
+      tags:
+      - Users & Account
+  /api/account/passkeys:
+    get:
+      description: |-
+        **Auth:** auth
+
+        The logged-in account's passkeys (metadata only).
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PasskeysResponse'
+          description: Success
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: Unauthorized
+      security:
+      - cookieAuth: []
+      - bearerAuth: []
+      summary: List own passkeys
+      tags:
+      - Users & Account
+  /api/account/passkeys/{id}:
+    delete:
+      description: '**Auth:** auth'
+      parameters:
+      - description: Passkey row id.
+        in: path
+        name: id
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PasskeysResponse'
+          description: Success
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: Unauthorized
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: Passkey not found
+      security:
+      - cookieAuth: []
+      - bearerAuth: []
+      summary: Delete a passkey
+      tags:
+      - Users & Account
+  /api/account/passkeys/register/begin:
+    post:
+      description: |-
+        **Auth:** auth
+
+        Starts registering a new passkey for the logged-in account; returns the credential creation options.
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: PublicKey credential creation options
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: Unauthorized
+      security:
+      - cookieAuth: []
+      - bearerAuth: []
+      summary: Begin passkey registration
+      tags:
+      - Users & Account
+  /api/account/passkeys/register/finish:
+    post:
+      description: |-
+        **Auth:** auth
+
+        Verifies the attestation and stores the credential. The passkey label comes from the `name` query.
+      parameters:
+      - description: Friendly passkey label.
+        in: query
+        name: name
+        schema:
+          type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PasskeysResponse'
+          description: Success
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: Registration failed
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: Unauthorized
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: Already registered
+      security:
+      - cookieAuth: []
+      - bearerAuth: []
+      summary: Finish passkey registration
       tags:
       - Users & Account
   /api/account/token:
@@ -4453,6 +4610,64 @@ paths:
       summary: Log in or out
       tags:
       - Auth
+  /api/auth/passkey/begin:
+    post:
+      description: |-
+        **Auth:** public
+
+        Starts a usernameless (discoverable) WebAuthn login; returns the credential request options (challenge).
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: PublicKey credential request options
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: Could not start
+      security: []
+      summary: Begin passkey login
+      tags:
+      - Users & Account
+  /api/auth/passkey/finish:
+    post:
+      description: |-
+        **Auth:** public
+
+        Verifies the WebAuthn assertion and, on success, establishes the session (as a password login does).
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+          description: Success
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: No login in progress
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: Passkey login failed
+        "429":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: Too many attempts
+      security: []
+      summary: Finish passkey login
+      tags:
+      - Users & Account
   /api/board:
     get:
       description: '**Auth:** public'

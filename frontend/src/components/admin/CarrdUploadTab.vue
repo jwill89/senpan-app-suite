@@ -28,6 +28,7 @@ import DataTable, { type DataColumn } from '@/components/common/ui/DataTable.vue
 import ModalOverlay from '@/components/common/ModalOverlay.vue'
 import { useCarrdStore, carrdImageUrl, joinCarrdPath, CARRD_BASE_URL } from '@/stores/carrd'
 import { useUiStore } from '@/stores/ui'
+import { slugify, formatSize } from '@/lib/format'
 import type { CarrdProject } from '@/types/api'
 
 const carrd = useCarrdStore()
@@ -99,17 +100,6 @@ const breadcrumbs = computed(() => {
 
 /** Live preview of the folder slug the modal's inputs would produce. */
 const formDerivedFolder = computed(() => slugify(formFolder.value || formTitle.value))
-
-/** Mirrors the server's folder slug rules for the create-form preview. */
-function slugify(s: string): string {
-  return s
-    .toLowerCase()
-    .trim()
-    .replace(/[\s_]+/g, '-')
-    .replace(/[^a-z0-9-]/g, '')
-    .replace(/-+/g, '-')
-    .replace(/^-+|-+$/g, '')
-}
 
 // ── Navigation ─────────────────────────────────────────────────────────────────
 async function openProject(p: CarrdProject): Promise<void> {
@@ -210,13 +200,6 @@ async function copyUrl(name: string): Promise<void> {
   } catch {
     ui.notify(url, 'info')
   }
-}
-
-/** Human-readable file size. */
-function formatSize(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
 }
 
 /** Classifies a file by extension so the grid renders the right media element. */

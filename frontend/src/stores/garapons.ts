@@ -23,13 +23,15 @@ import type {
 } from '@/types/api'
 import { useUiStore } from './ui'
 import { useImagesStore, IMAGE_DIR_GARAPONS } from './images'
+import { nextUid } from '@/lib/uid'
+import { withLoading } from '@/lib/withLoading'
 
 /** A sensible default ball color for a fresh prize row (a festival gold). */
 const DEFAULT_BALL_COLOR = '#e5b53f'
 
 /** A fresh prize row for the editor (the first/grand row defaults to a higher weight). */
 function blankPrize(rate: number, isGrand = false): GaraponPrizeForm {
-  return { name: '', ball_color: DEFAULT_BALL_COLOR, rate, is_grand: isGrand }
+  return { name: '', ball_color: DEFAULT_BALL_COLOR, rate, is_grand: isGrand, _uid: nextUid() }
 }
 
 export const useGaraponsStore = defineStore('garapons', () => {
@@ -50,6 +52,9 @@ export const useGaraponsStore = defineStore('garapons', () => {
 
   const garaponsLoading = ref(false)
   const detailLoading = ref(false)
+  // Monotonic token guarding loadGaraponDetail against a last-write-wins race
+  // (a slow earlier open overwriting a newer one). Only the latest request applies.
+  let detailSeq = 0
   const savingGarapon = ref(false)
   const creatingPlayer = ref(false)
 
@@ -90,28 +95,25 @@ export const useGaraponsStore = defineStore('garapons', () => {
 
   // ── Admin: load ──────────────────────────────────────────────────────────
   async function loadGarapons(): Promise<void> {
-    garaponsLoading.value = true
-    try {
+    await withLoading(garaponsLoading, async () => {
       const data = await endpoints.garapons.list()
       garapons.value = data.garapons
-    } catch (e) {
-      ui.notify((e as Error).message, 'error')
-    } finally {
-      garaponsLoading.value = false
-    }
+    })
   }
 
   async function loadGaraponDetail(id: number): Promise<void> {
+    const reqId = ++detailSeq
     detailLoading.value = true
     try {
       const data = await endpoints.garapons.detail(id)
+      if (reqId !== detailSeq) return // a newer load superseded this one
       selectedGarapon.value = data.garapon
       garaponPlayers.value = data.players
       garaponDraws.value = data.draws
     } catch (e) {
-      ui.notify((e as Error).message, 'error')
+      if (reqId === detailSeq) ui.notify((e as Error).message, 'error')
     } finally {
-      detailLoading.value = false
+      if (reqId === detailSeq) detailLoading.value = false
     }
   }
 
@@ -167,6 +169,7 @@ export const useGaraponsStore = defineStore('garapons', () => {
       ball_color: p.ball_color || DEFAULT_BALL_COLOR,
       rate: p.rate,
       is_grand: p.is_grand,
+      _uid: nextUid(),
     }))
     // Guarantee exactly one grand prize for the radio group.
     if (prizes.length && !prizes.some((p) => p.is_grand)) prizes[0].is_grand = true
@@ -220,7 +223,16 @@ export const useGaraponsStore = defineStore('garapons', () => {
     }
     savingGarapon.value = true
     try {
-      const payload = { ...f, prizes: named }
+      // Strip the client-only `_uid` from each prize before sending.
+      const payload = {
+        ...f,
+        prizes: named.map((p) => ({
+          name: p.name,
+          ball_color: p.ball_color,
+          rate: p.rate,
+          is_grand: p.is_grand,
+        })),
+      }
       if (f.id) {
         await endpoints.garapons.update(payload)
         ui.notify('Garapon updated', 'success')

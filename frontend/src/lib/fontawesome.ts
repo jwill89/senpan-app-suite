@@ -77,6 +77,7 @@ import {
   faGift,
   faPotFood,
   faUser,
+  faUserKey,
   faUserPlus,
   faUsersGear,
 } from '@awesome.me/kit-46204fb6f1/icons/duotone/solid'
@@ -170,6 +171,7 @@ const icons: IconDefinition[] = [
   faGift,
   faPotFood,
   faUser,
+  faUserKey,
   faUserPlus,
   faUsersGear,
   // Solid — action-button icons.

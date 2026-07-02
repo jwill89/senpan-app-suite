@@ -17,9 +17,26 @@ func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 	// they must come from a logged-in account. Without this gate anyone could
 	// open the admin channel and peek (defeating the draw-delay anti-cheat).
 	// The /api/ws route bypasses the session middleware, so load it manually.
-	if cardID == "" && s.wsSessionUser(r) == nil {
-		writeError(w, http.StatusUnauthorized, "Unauthorized – login required")
-		return
+	var revalidate func() bool
+	if cardID == "" {
+		user := s.wsSessionUser(r)
+		if user == nil {
+			writeError(w, http.StatusUnauthorized, "Unauthorized – login required")
+			return
+		}
+		// The connection is only authorized at accept time; re-check the account
+		// periodically (see hub writePump) so an account deactivated or deleted
+		// mid-session has its admin socket dropped instead of streaming forever.
+		// Uses a context-free lookup by id — the request context is gone once the
+		// upgrade handler returns. Catches deactivation/deletion (the anti-peek
+		// threat: staff revoked during a live game); a browser logout closes its
+		// own socket client-side, and a revoked plugin token is rejected on the
+		// plugin's next reconnect.
+		id := user.ID
+		revalidate = func() bool {
+			u, err := s.store.GetUserByID(id)
+			return err == nil && u != nil && u.IsActive
+		}
 	}
-	s.hub.ServeWS(w, r, cardID)
+	s.hub.ServeWS(w, r, cardID, revalidate)
 }

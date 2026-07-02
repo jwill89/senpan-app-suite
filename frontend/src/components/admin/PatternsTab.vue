@@ -13,7 +13,7 @@
  * restructures the three former tabs into one shell.
  */
 import { computed, onMounted, ref } from 'vue'
-import draggable from 'vuedraggable'
+import { VueDraggable } from 'vue-draggable-plus'
 import PatternMini from '@/components/common/PatternMini.vue'
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
 import ManagerView from '@/components/common/ui/ManagerView.vue'
@@ -181,49 +181,45 @@ async function saveNew(): Promise<void> {
             </h4>
           </div>
 
-          <draggable
+          <VueDraggable
             v-show="!patterns.isCategoryCollapsed(group.category.id)"
             v-model="group.patterns"
             class="saved-patterns pattern-drop-zone"
             :group="{ name: 'patterns' }"
-            item-key="id"
             handle=".drag-handle"
             :animation="150"
             ghost-class="dragging"
-            @change="onChange"
+            :draggable="'.saved-pattern'"
+            @end="onChange"
           >
-            <template #item="{ element: p }">
-              <div class="saved-pattern">
-                <span class="drag-handle pattern-drag"
-                  ><font-awesome-icon :icon="['fad', 'bars']"
-                /></span>
-                <span
-                  class="del-x"
-                  title="Delete pattern"
-                  @click="patterns.confirmDeletePattern(p.id)"
-                  >&times;</span
-                >
-                <PatternMini :pattern-data="p.pattern_data" />
-                <input
-                  v-if="patterns.editingPatternId === p.id"
-                  v-model="patterns.editingPatternName"
-                  aria-label="Pattern name"
-                  class="inline-edit-input pattern-name-input"
-                  @blur="patterns.finishPatternRename(p.id)"
-                  @keyup.enter="patterns.finishPatternRename(p.id)"
-                  @keyup.escape="patterns.editingPatternId = null"
-                />
-                <span v-else class="pattern-name" @dblclick="patterns.startPatternRename(p)">
-                  {{ p.name }}
-                </span>
-              </div>
-            </template>
-            <template #footer>
-              <div v-if="group.patterns.length === 0" class="drop-placeholder">
-                Drop patterns here
-              </div>
-            </template>
-          </draggable>
+            <div v-for="p in group.patterns" :key="p.id" class="saved-pattern">
+              <span class="drag-handle pattern-drag"
+                ><font-awesome-icon :icon="['fad', 'bars']"
+              /></span>
+              <span
+                class="del-x"
+                title="Delete pattern"
+                @click="patterns.confirmDeletePattern(p.id)"
+                >&times;</span
+              >
+              <PatternMini :pattern-data="p.pattern_data" />
+              <input
+                v-if="patterns.editingPatternId === p.id"
+                v-model="patterns.editingPatternName"
+                aria-label="Pattern name"
+                class="inline-edit-input pattern-name-input"
+                @blur="patterns.finishPatternRename(p.id)"
+                @keyup.enter="patterns.finishPatternRename(p.id)"
+                @keyup.escape="patterns.editingPatternId = null"
+              />
+              <span v-else class="pattern-name" @dblclick="patterns.startPatternRename(p)">
+                {{ p.name }}
+              </span>
+            </div>
+            <div v-if="group.patterns.length === 0" class="drop-placeholder">
+              Drop patterns here
+            </div>
+          </VueDraggable>
         </template>
 
         <p class="text-dim text-xs mt-12">

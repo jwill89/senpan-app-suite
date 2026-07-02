@@ -3,6 +3,7 @@ package server
 import (
 	"encoding/json"
 	"io"
+	"mime/multipart"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -99,37 +100,12 @@ func (s *Server) imagesRootDir() string {
 // letters/digits/underscores are kept, and runs of underscores are collapsed and
 // trimmed. The underscore variant of carrd's slugifyFolder (per the spec, the
 // directory name converts spaces to underscores).
-func slugifyImageDir(s string) string {
-	var b strings.Builder
-	for _, r := range strings.ToLower(strings.TrimSpace(s)) {
-		switch {
-		case r >= 'a' && r <= 'z', r >= '0' && r <= '9':
-			b.WriteRune(r)
-		case r == ' ' || r == '_' || r == '-':
-			b.WriteByte('_')
-		}
-	}
-	out := b.String()
-	for strings.Contains(out, "__") {
-		out = strings.ReplaceAll(out, "__", "_")
-	}
-	return strings.Trim(out, "_")
-}
+func slugifyImageDir(s string) string { return slugify(s, '_') }
 
 // validImageDir reports whether dir is a safe, already-normalized directory name
 // (lowercase letters, digits, underscores only — no path separators). Guards
 // against traversal for dir names received from the client on list/upload/delete.
-func validImageDir(dir string) bool {
-	if dir == "" {
-		return false
-	}
-	for _, r := range dir {
-		if !(r >= 'a' && r <= 'z' || r >= '0' && r <= '9' || r == '_') {
-			return false
-		}
-	}
-	return true
-}
+func validImageDir(dir string) bool { return validSlug(dir, '_') }
 
 // imageManifest is the JSON shape of the custom-categories manifest dotfile.
 type imageManifest struct {
@@ -597,29 +573,7 @@ func (s *Server) handleImageDelete(w http.ResponseWriter, r *http.Request) {
 // strips any path, rejects empty/dotfile names and disallowed extensions, and
 // guards against traversal. Returns the clean base name and true when valid.
 func safeImageFileName(name string) (string, bool) {
-	name = strings.TrimSpace(name)
-	name = filepath.Base(filepath.FromSlash(name))
-	if name == "" || name == "." || name == ".." || strings.HasPrefix(name, ".") {
-		return "", false
-	}
-	if strings.ContainsAny(name, `/\`) {
-		return "", false
-	}
-	if !isAllowedImagesExt(strings.ToLower(filepath.Ext(name))) {
-		return "", false
-	}
-	return name, true
-}
-
-// looksLikeSVG reports whether r begins with SVG markup (an "<svg" root within the
-// first bytes). SVG is XML/text, so the raster content-sniff used for other images
-// would reject it; this is the SVG counterpart (defense in depth alongside the
-// .svg extension check). Rewinds r so it can still be read in full afterwards.
-func looksLikeSVG(r io.ReadSeeker) bool {
-	head := make([]byte, 1024)
-	n, _ := io.ReadFull(r, head)
-	_, _ = r.Seek(0, io.SeekStart)
-	return strings.Contains(strings.ToLower(string(head[:n])), "<svg")
+	return safeUploadName(name, isAllowedImagesExt)
 }
 
 // handleImagesUpload handles multipart uploads of one or more images to a
@@ -635,74 +589,67 @@ func (s *Server) handleImagesUpload(w http.ResponseWriter, r *http.Request) {
 	if !s.requirePermission(w, r, permSystemImages) {
 		return
 	}
-
-	// Cap the whole request at 64 MB (several images at once).
-	r.Body = http.MaxBytesReader(w, r.Body, 64<<20)
-	if err := r.ParseMultipartForm(32 << 20); err != nil {
-		writeError(w, http.StatusBadRequest, "Upload failed (max 64MB total)")
-		return
-	}
-
-	dir := strings.TrimSpace(r.FormValue("dir"))
-	if !validImageDir(dir) || !s.imageDirIsKnown(dir) {
-		writeError(w, http.StatusBadRequest, "Unknown image category")
-		return
-	}
-	destDir := filepath.Join(s.imagesRootDir(), dir)
-	if err := os.MkdirAll(destDir, 0755); err != nil {
-		writeError(w, http.StatusInternalServerError, "Failed to create category directory")
-		return
-	}
-
-	files := r.MultipartForm.File["files"]
-	if len(files) == 0 {
-		writeError(w, http.StatusBadRequest, "No files provided")
-		return
-	}
-
-	uploaded := make([]string, 0, len(files))
-	skipped := make([]model.SkippedUpload, 0)
-
-	for _, header := range files {
-		name, ok := safeImageFileName(header.Filename)
-		if !ok {
-			skipped = append(skipped, model.SkippedUpload{
-				Name:   header.Filename,
-				Reason: "Unsupported type (allowed: .jpg, .jpeg, .png, .webp, .gif, .svg)",
-			})
-			continue
-		}
-		// Defense in depth: confirm the bytes match the extension. SVG is XML/text
-		// (the raster content-sniff would reject it), so it's validated separately.
-		f, err := header.Open()
-		if err != nil {
-			skipped = append(skipped, model.SkippedUpload{Name: name, Reason: "Failed to read"})
-			continue
-		}
-		isSVG := strings.EqualFold(filepath.Ext(name), ".svg")
-		var valid bool
-		if isSVG {
-			valid = looksLikeSVG(f)
-		} else {
-			valid = isAllowedImageContentType(sniffedImageType(f))
-		}
-		_ = f.Close()
-		if !valid {
-			reason := "Not a valid image"
-			if isSVG {
-				reason = "Not a valid SVG"
+	uploaded, skipped, ok := s.handleMultipartUploads(w, r,
+		func() (string, bool) {
+			dir := strings.TrimSpace(r.FormValue("dir"))
+			if !validImageDir(dir) || !s.imageDirIsKnown(dir) {
+				writeError(w, http.StatusBadRequest, "Unknown image category")
+				return "", false
 			}
-			skipped = append(skipped, model.SkippedUpload{Name: name, Reason: reason})
-			continue
-		}
-		// Same name overwrites the existing file on purpose.
-		if err := saveMultipartFile(header, filepath.Join(destDir, name)); err != nil {
-			skipped = append(skipped, model.SkippedUpload{Name: name, Reason: "Failed to save"})
-			continue
-		}
-		uploaded = append(uploaded, name)
+			destDir := filepath.Join(s.imagesRootDir(), dir)
+			if err := os.MkdirAll(destDir, 0755); err != nil {
+				writeError(w, http.StatusInternalServerError, "Failed to create category directory")
+				return "", false
+			}
+			return destDir, true
+		},
+		func(header *multipart.FileHeader, destDir string) (string, string) {
+			name, ok := safeImageFileName(header.Filename)
+			if !ok {
+				return header.Filename, "Unsupported type (allowed: .jpg, .jpeg, .png, .webp, .gif, .svg)"
+			}
+			// Defense in depth: confirm the bytes match the extension. SVG is
+			// XML/text (the raster content-sniff would reject it), so it's handled
+			// separately.
+			f, err := header.Open()
+			if err != nil {
+				return name, "Failed to read"
+			}
+			if strings.EqualFold(filepath.Ext(name), ".svg") {
+				// SVG is script-capable and served from our origin (and inlined via
+				// v-html on the player board), so sanitize it before persisting
+				// rather than storing the raw upload. sanitizeSVG also rejects
+				// markup that isn't a parseable <svg>.
+				raw, readErr := io.ReadAll(io.LimitReader(f, 2<<20)) // 2 MB cap for SVG text
+				_ = f.Close()
+				if readErr != nil {
+					return name, "Failed to read"
+				}
+				clean, valid := sanitizeSVG(raw)
+				if !valid {
+					return name, "Not a valid SVG"
+				}
+				// Same name overwrites the existing file on purpose.
+				if err := os.WriteFile(filepath.Join(destDir, name), clean, 0644); err != nil {
+					return name, "Failed to save"
+				}
+				return name, ""
+			}
+			valid := isAllowedImageContentType(sniffedImageType(f))
+			_ = f.Close()
+			if !valid {
+				return name, "Not a valid image"
+			}
+			// Same name overwrites the existing file on purpose.
+			if err := saveMultipartFile(header, filepath.Join(destDir, name)); err != nil {
+				return name, "Failed to save"
+			}
+			return name, ""
+		},
+	)
+	if !ok {
+		return
 	}
-
 	writeJSON(w, http.StatusOK, model.ImagesUploadResponse{Uploaded: uploaded, Skipped: skipped})
 }
 

@@ -7,12 +7,14 @@
  * refresh. Redirects back to the list if the raffle can't be loaded. Back
  * navigates to the public raffle list.
  */
-import { computed, onMounted, watch } from 'vue'
+import { computed, onMounted, ref, useTemplateRef, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
 import MarkdownText from '@/components/common/MarkdownText.vue'
+import TurnstileWidget from '@/components/common/TurnstileWidget.vue'
 import { useRafflesStore } from '@/stores/raffles'
 import { assetUrl } from '@/lib/assets'
+import { endpoints } from '@/lib/endpoints'
 
 const props = defineProps<{ id: string }>()
 
@@ -20,6 +22,10 @@ const router = useRouter()
 const raffles = useRafflesStore()
 
 const raffleId = computed(() => Number(props.id))
+
+// Cloudflare Turnstile bot check for the public sign-up (empty site key = disabled).
+const turnstileSiteKey = ref('')
+const turnstile = useTemplateRef<InstanceType<typeof TurnstileWidget>>('turnstile')
 
 async function load(id: number): Promise<void> {
   if (!Number.isFinite(id)) {
@@ -30,8 +36,30 @@ async function load(id: number): Promise<void> {
   if (!ok) void router.replace({ name: 'raffles' })
 }
 
-onMounted(() => load(raffleId.value))
+onMounted(async () => {
+  void load(raffleId.value)
+  try {
+    turnstileSiteKey.value = (await endpoints.system.config()).turnstile_site_key
+  } catch {
+    turnstileSiteKey.value = '' // config probe failed → behave as if disabled
+  }
+})
 watch(raffleId, (id) => load(id))
+
+function onTurnstileVerified(token: string): void {
+  raffles.signupTurnstileToken = token
+}
+function onTurnstileCleared(): void {
+  raffles.signupTurnstileToken = ''
+}
+/** Sign up, then re-issue a fresh Turnstile token if the attempt failed (the
+ *  token is single-use and the store cleared it). */
+async function signUp(): Promise<void> {
+  await raffles.enterRaffle()
+  if (!raffles.raffleSignupResult) {
+    turnstile.value?.reset()
+  }
+}
 
 function back(): void {
   raffles.selectedRaffle = null
@@ -122,14 +150,25 @@ function back(): void {
         >
           <strong>Total Cost:</strong> {{ raffles.raffleTotalCost().toLocaleString() }} gil
         </p>
+        <!-- Cloudflare Turnstile bot check (only when a site key is configured). -->
+        <TurnstileWidget
+          v-if="turnstileSiteKey"
+          ref="turnstile"
+          :site-key="turnstileSiteKey"
+          class="mb-10"
+          @verified="onTurnstileVerified"
+          @expired="onTurnstileCleared"
+          @error="onTurnstileCleared"
+        />
         <button
           class="btn-confirm"
           :disabled="
             !raffles.raffleSignup.characterName.trim() ||
             !raffles.raffleSignup.world.trim() ||
-            raffles.entering
+            raffles.entering ||
+            (!!turnstileSiteKey && !raffles.signupTurnstileToken)
           "
-          @click="raffles.enterRaffle()"
+          @click="signUp()"
         >
           <LoadingSpinner v-if="raffles.entering" label="Signing up…" />
           <template v-else>Sign Up</template>

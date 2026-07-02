@@ -34,9 +34,11 @@ function registerListeners(): void {
   if (registered || typeof window === 'undefined') return
   registered = true
   window.addEventListener('beforeinstallprompt', (e: Event) => {
-    // Suppress Chrome's default mini-infobar so we can trigger the prompt from
-    // our own footer link on demand.
-    e.preventDefault()
+    // Capture + defer the event so our own footer link can trigger the prompt on
+    // demand. We deliberately do NOT call preventDefault(): modern Chromium no
+    // longer shows an automatic mini-infobar, and calling preventDefault() without
+    // a follow-up prompt() logs a noisy "Banner not shown" console message. The
+    // saved event's prompt() still works without it.
     deferredPrompt.value = e as BeforeInstallPromptEvent
   })
   window.addEventListener('appinstalled', () => {

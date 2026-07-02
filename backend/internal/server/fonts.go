@@ -1,6 +1,7 @@
 package server
 
 import (
+	"mime/multipart"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -58,24 +59,10 @@ func (s *Server) fontFileNames() []string {
 	return names
 }
 
-// safeFontName validates and normalizes an uploaded/target font filename. It
-// strips any directory components, rejects empty/dotfile names and disallowed
-// extensions, and guards against path traversal. Returns the clean base name
-// and true when valid.
+// safeFontName validates and normalizes an uploaded/target font filename,
+// accepting only permitted font extensions. See safeUploadName (uploads.go).
 func safeFontName(name string) (string, bool) {
-	name = strings.TrimSpace(name)
-	// Strip any path the client may have included; we only keep the base name.
-	name = filepath.Base(filepath.FromSlash(name))
-	if name == "" || name == "." || name == ".." {
-		return "", false
-	}
-	if strings.ContainsAny(name, `/\`) {
-		return "", false
-	}
-	if !allowedFontExts[strings.ToLower(filepath.Ext(name))] {
-		return "", false
-	}
-	return name, true
+	return safeUploadName(name, func(ext string) bool { return allowedFontExts[ext] })
 }
 
 // handleFontsList returns the font files in <webRoot>/fonts.
@@ -230,58 +217,34 @@ func (s *Server) handleFontUpload(w http.ResponseWriter, r *http.Request) {
 	if !s.requirePermission(w, r, permAtelierFonts) {
 		return
 	}
-
-	// Cap the whole request at 64 MB (several font files at once).
-	r.Body = http.MaxBytesReader(w, r.Body, 64<<20)
-	if err := r.ParseMultipartForm(32 << 20); err != nil {
-		writeError(w, http.StatusBadRequest, "Upload failed (max 64MB total)")
+	uploaded, skipped, ok := s.handleMultipartUploads(w, r,
+		func() (string, bool) {
+			dir := s.fontsDir()
+			if err := os.MkdirAll(dir, 0755); err != nil {
+				writeError(w, http.StatusInternalServerError, "Failed to create fonts directory")
+				return "", false
+			}
+			return dir, true
+		},
+		func(header *multipart.FileHeader, destDir string) (string, string) {
+			name, ok := safeFontName(header.Filename)
+			if !ok {
+				return header.Filename, "Unsupported type (allowed: .ttf, .otf, .woff, .woff2, .eot)"
+			}
+			dst := filepath.Join(destDir, name)
+			// Reject if a file with this name already exists — an in-use font must
+			// be deleted first, never silently overwritten.
+			if _, err := os.Stat(dst); err == nil {
+				return name, "Already exists — delete the existing file first"
+			}
+			if err := saveMultipartFile(header, dst); err != nil {
+				return name, "Failed to save"
+			}
+			return name, ""
+		},
+	)
+	if !ok {
 		return
 	}
-
-	files := r.MultipartForm.File["files"]
-	if len(files) == 0 {
-		writeError(w, http.StatusBadRequest, "No files provided")
-		return
-	}
-
-	dir := s.fontsDir()
-	if err := os.MkdirAll(dir, 0755); err != nil {
-		writeError(w, http.StatusInternalServerError, "Failed to create fonts directory")
-		return
-	}
-
-	uploaded := make([]string, 0, len(files))
-	skipped := make([]model.SkippedUpload, 0)
-
-	for _, header := range files {
-		name, ok := safeFontName(header.Filename)
-		if !ok {
-			skipped = append(skipped, model.SkippedUpload{
-				Name:   header.Filename,
-				Reason: "Unsupported type (allowed: .ttf, .otf, .woff, .woff2, .eot)",
-			})
-			continue
-		}
-
-		dst := filepath.Join(dir, name)
-		// Reject if a file with this name already exists.
-		if _, err := os.Stat(dst); err == nil {
-			skipped = append(skipped, model.SkippedUpload{
-				Name:   name,
-				Reason: "Already exists — delete the existing file first",
-			})
-			continue
-		}
-
-		if err := saveMultipartFile(header, dst); err != nil {
-			skipped = append(skipped, model.SkippedUpload{Name: name, Reason: "Failed to save"})
-			continue
-		}
-		uploaded = append(uploaded, name)
-	}
-
-	writeJSON(w, http.StatusOK, model.FontUploadResponse{
-		Uploaded: uploaded,
-		Skipped:  skipped,
-	})
+	writeJSON(w, http.StatusOK, model.FontUploadResponse{Uploaded: uploaded, Skipped: skipped})
 }

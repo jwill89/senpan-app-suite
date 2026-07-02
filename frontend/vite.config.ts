@@ -64,7 +64,7 @@ const vendorChunkGroups: ReadonlyArray<readonly [string, readonly string[]]> = [
   ['vue', ['vue', '@vue', 'pinia', 'vue-router']],
   ['fontawesome', ['@fortawesome']],
   ['markdown', ['markdown-it']],
-  ['draggable', ['vuedraggable', 'sortablejs']],
+  ['draggable', ['vue-draggable-plus', 'sortablejs']],
   // Milkdown (Crepe) WYSIWYG editor + its ProseMirror/KaTeX engine.
   ['milkdown', ['@milkdown', 'prosemirror-', 'katex']],
   ['emojipicker', ['vue3-emoji-picker']],

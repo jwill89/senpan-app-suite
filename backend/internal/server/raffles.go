@@ -3,6 +3,7 @@ package server
 import (
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
@@ -51,6 +52,15 @@ func (s *Server) handleRaffleDetail(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if raffle == nil {
+		writeError(w, http.StatusNotFound, "Raffle not found")
+		return
+	}
+
+	// Non-admins may only view a currently-public raffle: an open one inside its
+	// availability window (same predicate as the public list) or a closed one
+	// (winner announcement). Otherwise 404 so a not-yet-open raffle's details
+	// can't be read by guessing its ID.
+	if !s.isAdmin(r) && !raffleIsPubliclyViewable(raffle) {
 		writeError(w, http.StatusNotFound, "Raffle not found")
 		return
 	}
@@ -224,11 +234,34 @@ func parseRaffleTime(s string) (time.Time, bool) {
 	return time.Time{}, false
 }
 
+// raffleIsPubliclyViewable reports whether a raffle should be visible to
+// non-admins via the detail endpoint: a closed raffle (winner announcement), or
+// an open raffle currently inside its availability window. This mirrors the
+// public list filter in Store.ListRaffles so detail can't reveal a scheduled/
+// not-yet-open raffle that the list hides.
+func raffleIsPubliclyViewable(raffle *model.Raffle) bool {
+	if raffle.Status == "closed" {
+		return true
+	}
+	if raffle.Status != "open" {
+		return false
+	}
+	now := time.Now().UTC()
+	if from, ok := parseRaffleTime(raffle.AvailableFrom); ok && now.Before(from) {
+		return false
+	}
+	if to, ok := parseRaffleTime(raffle.AvailableTo); ok && now.After(to) {
+		return false
+	}
+	return true
+}
+
 // raffleEntryRequest is the JSON body for POST /api/raffles/{id}/enter.
 type raffleEntryRequest struct {
-	CharacterName string `json:"character_name"`
-	World         string `json:"world"`
-	NumEntries    int    `json:"num_entries"`
+	CharacterName  string `json:"character_name"`
+	World          string `json:"world"`
+	NumEntries     int    `json:"num_entries"`
+	TurnstileToken string `json:"turnstile_token"` // Cloudflare Turnstile token (when enabled)
 }
 
 // handleRaffleEnter processes a public raffle sign-up.
@@ -239,6 +272,16 @@ type raffleEntryRequest struct {
 //	Request:   {"character_name": "...", "world": "...", "num_entries": 1}
 //	Response:  {"message": "...", "total_entries": int, "total_cost": float, "signup_instructions": "..."}
 func (s *Server) handleRaffleEnter(w http.ResponseWriter, r *http.Request) {
+	// Public endpoint: throttle per IP so a bot can't flood a raffle's entry
+	// table under arbitrary character names. Every attempt counts against it.
+	ip := clientIP(r)
+	if s.raffleLimiter.isLimited(ip) {
+		slog.Warn("raffle entry rate limited", "ip", ip)
+		writeError(w, http.StatusTooManyRequests, "Too many entries. Please try again later.")
+		return
+	}
+	s.raffleLimiter.recordFailure(ip)
+
 	idStr := r.PathValue("id")
 	raffleID, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
@@ -249,6 +292,15 @@ func (s *Server) handleRaffleEnter(w http.ResponseWriter, r *http.Request) {
 	req, err := readJSON[raffleEntryRequest](w, r)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "Invalid JSON")
+		return
+	}
+
+	// Bot check: when Cloudflare Turnstile is configured, require a valid one-time
+	// token before recording an entry (entry counts drive the weighted winner
+	// pick, so bot-flooded entries would skew the odds).
+	if s.turnstileEnabled() && !s.verifyTurnstile(r.Context(), req.TurnstileToken, ip) {
+		slog.Warn("turnstile verification failed (raffle entry)", "ip", ip)
+		writeError(w, http.StatusForbidden, "Bot check failed. Please try again.")
 		return
 	}
 

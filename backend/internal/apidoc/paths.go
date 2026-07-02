@@ -223,6 +223,27 @@ func buildPaths(doc *openapi3.T) {
 	b.add("DELETE", "/api/account/token", "Users & Account", "Revoke a token", "auth",
 		"Deletes the account's token, reporting whether a row was removed.", opt{
 			resps: []respEntry{ok("TokenRevokeResponse"), r("401", "Unauthorized")}})
+	// Passkeys (WebAuthn). The begin endpoints return standard WebAuthn options
+	// (PublicKeyCredentialCreation/RequestOptions) rather than a model schema.
+	b.add("POST", "/api/auth/passkey/begin", "Users & Account", "Begin passkey login", "public",
+		"Starts a usernameless (discoverable) WebAuthn login; returns the credential request options (challenge).", opt{
+			resps: []respEntry{r("200", "PublicKey credential request options"), r("500", "Could not start")}})
+	b.add("POST", "/api/auth/passkey/finish", "Users & Account", "Finish passkey login", "public",
+		"Verifies the WebAuthn assertion and, on success, establishes the session (as a password login does).", opt{
+			resps: []respEntry{ok("LoginResponse"), r("400", "No login in progress"), r("401", "Passkey login failed"), r("429", "Too many attempts")}})
+	b.add("POST", "/api/account/passkeys/register/begin", "Users & Account", "Begin passkey registration", "auth",
+		"Starts registering a new passkey for the logged-in account; returns the credential creation options.", opt{
+			resps: []respEntry{r("200", "PublicKey credential creation options"), r("401", "Unauthorized")}})
+	b.add("POST", "/api/account/passkeys/register/finish", "Users & Account", "Finish passkey registration", "auth",
+		"Verifies the attestation and stores the credential. The passkey label comes from the `name` query.", opt{
+			query: []*openapi3.Parameter{qparam("name", "Friendly passkey label.", false)},
+			resps: []respEntry{ok("PasskeysResponse"), r("400", "Registration failed"), r("401", "Unauthorized"), r("409", "Already registered")}})
+	b.add("GET", "/api/account/passkeys", "Users & Account", "List own passkeys", "auth",
+		"The logged-in account's passkeys (metadata only).", opt{
+			resps: []respEntry{ok("PasskeysResponse"), r("401", "Unauthorized")}})
+	b.add("DELETE", "/api/account/passkeys/{id}", "Users & Account", "Delete a passkey", "auth", "", opt{
+		path:  []*openapi3.Parameter{pparam("id", "Passkey row id.")},
+		resps: []respEntry{ok("PasskeysResponse"), r("401", "Unauthorized"), r("404", "Passkey not found")}})
 
 	// ── Bingo: board / cards / game ───────────────────────────────────────────
 	b.add("GET", "/api/board", "Bingo", "Player board (card + game)", "public", "", opt{

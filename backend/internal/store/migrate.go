@@ -14,7 +14,7 @@ import (
 // PRAGMA user_version against this constant and runs only the migrations
 // needed to bring the database up to date. Bump this when adding a new
 // migration block.
-const schemaVersion = 42
+const schemaVersion = 44
 
 // ensureSchema reads the current PRAGMA user_version from the database and
 // applies any outstanding migrations to bring it up to schemaVersion.
@@ -281,8 +281,60 @@ func ensureSchema(db *sql.DB) error {
 		}
 	}
 
+	if version < 43 {
+		if err := migrateCalledNumbersUnique(db); err != nil {
+			return err
+		}
+	}
+
+	if version < 44 {
+		if _, err := db.Exec(userPasskeysTableSQL); err != nil {
+			return fmt.Errorf("create user_passkeys: %w", err)
+		}
+		if _, err := db.Exec(userPasskeysIndexSQL); err != nil {
+			return fmt.Errorf("create user_passkeys index: %w", err)
+		}
+	}
+
 	_, err := db.Exec(fmt.Sprintf("PRAGMA user_version = %d", schemaVersion))
 	return err
+}
+
+// userPasskeysTableSQL defines the WebAuthn passkey credentials table. The full
+// go-webauthn Credential is stored as JSON in `credential` (it's designed to be
+// serialized); `credential_id` is the base64url of Credential.ID for lookup +
+// uniqueness. Rows cascade-delete with the owning user.
+const userPasskeysTableSQL = `CREATE TABLE IF NOT EXISTS user_passkeys (
+	id INTEGER PRIMARY KEY AUTOINCREMENT,
+	user_id INTEGER NOT NULL,
+	credential_id TEXT NOT NULL UNIQUE,
+	credential TEXT NOT NULL,
+	name TEXT NOT NULL DEFAULT '',
+	created_at TEXT NOT NULL DEFAULT (datetime('now')),
+	last_used_at TEXT NOT NULL DEFAULT '',
+	FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+)`
+
+const userPasskeysIndexSQL = `CREATE INDEX IF NOT EXISTS idx_user_passkeys_user ON user_passkeys(user_id)`
+
+// migrateCalledNumbersUnique adds a UNIQUE(game_id, number) index to
+// called_numbers: a database-level backstop so a number can't be recorded twice
+// in one game even if the draw path's in-process serialization is ever bypassed
+// (a second writer / process). Any pre-existing duplicates are collapsed to their
+// first occurrence so the unique index can be built.
+func migrateCalledNumbersUnique(db *sql.DB) error {
+	if !tableExists(db, "called_numbers") {
+		return nil
+	}
+	if _, err := db.Exec(`DELETE FROM called_numbers WHERE rowid NOT IN (
+		SELECT MIN(rowid) FROM called_numbers GROUP BY game_id, number)`); err != nil {
+		return fmt.Errorf("dedupe called_numbers: %w", err)
+	}
+	if _, err := db.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_called_numbers_game_number
+		ON called_numbers(game_id, number)`); err != nil {
+		return fmt.Errorf("create called_numbers unique index: %w", err)
+	}
+	return nil
 }
 
 // createTables builds all tables from scratch for a fresh database.
@@ -435,6 +487,8 @@ func createIndexes(db *sql.DB) error {
 	indexes := []string{
 		"CREATE INDEX IF NOT EXISTS idx_games_status ON games(status)",
 		"CREATE INDEX IF NOT EXISTS idx_called_numbers_game ON called_numbers(game_id, call_order)",
+		// A number can be drawn at most once per game (backstops the draw mutex).
+		"CREATE UNIQUE INDEX IF NOT EXISTS idx_called_numbers_game_number ON called_numbers(game_id, number)",
 		"CREATE INDEX IF NOT EXISTS idx_game_patterns_game ON game_patterns(game_id)",
 		"CREATE INDEX IF NOT EXISTS idx_raffle_entries_raffle ON raffle_entries(raffle_id)",
 		"CREATE INDEX IF NOT EXISTS idx_winners_log_logged_at ON winners_log(logged_at)",
@@ -1082,18 +1136,37 @@ func migrateBookClubEventWebhooks(db *sql.DB) error {
 	}
 	rows.Close()
 
+	// Insert-then-delete each webhook inside one transaction so a crash between
+	// the INSERT and the DELETE can't leave the setting behind for this migration
+	// (which isn't version-gated as committed until all migrations finish) to
+	// re-insert on the next boot — which would accumulate duplicate types. The
+	// NOT-EXISTS guard makes it idempotent even if a prior partial run committed.
+	tx, err := db.Begin()
+	if err != nil {
+		return fmt.Errorf("begin events webhook migration: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+
 	for _, w := range found {
 		name := titleCaseSlug(w.slug) + " Book Club Events"
-		if _, err := db.Exec(
-			`INSERT INTO announcement_types (name, webhook_url) VALUES (?, ?)`, name, w.url,
-		); err != nil {
-			return fmt.Errorf("create announcement type for %q: %w", w.slug, err)
+		var exists int
+		if err := tx.QueryRow(
+			`SELECT COUNT(*) FROM announcement_types WHERE name = ? AND webhook_url = ?`, name, w.url,
+		).Scan(&exists); err != nil {
+			return fmt.Errorf("check announcement type for %q: %w", w.slug, err)
 		}
-		if _, err := db.Exec(`DELETE FROM settings WHERE key = ?`, w.key); err != nil {
+		if exists == 0 {
+			if _, err := tx.Exec(
+				`INSERT INTO announcement_types (name, webhook_url) VALUES (?, ?)`, name, w.url,
+			); err != nil {
+				return fmt.Errorf("create announcement type for %q: %w", w.slug, err)
+			}
+		}
+		if _, err := tx.Exec(`DELETE FROM settings WHERE key = ?`, w.key); err != nil {
 			return fmt.Errorf("remove events webhook setting %q: %w", w.key, err)
 		}
 	}
-	return nil
+	return tx.Commit()
 }
 
 // titleCaseSlug turns a slug like "yaoi" or "yuri-extra" into a friendly,

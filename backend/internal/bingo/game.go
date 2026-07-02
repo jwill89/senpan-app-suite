@@ -129,38 +129,25 @@ func (g *Service) Start(patternIDs []int) (*model.BingoGameState, error) {
 	g.opMu.Lock()
 	defer g.opMu.Unlock()
 
-	// End any active game.
-	if active, err := g.store.GetActiveGame(); err != nil {
-		return nil, err
-	} else if active != nil {
-		if err := g.store.EndGame(active.ID); err != nil {
-			return nil, err
-		}
-	}
-	g.invalidateStateCache()
-
-	gameID, err := g.store.CreateGame()
-	if err != nil {
-		return nil, err
-	}
-
-	// Snapshot each selected pattern into game_patterns.
+	// Read the selected patterns to snapshot (a read, so outside the write tx).
 	patterns, err := g.store.GetPatternsByIDs(patternIDs)
 	if err != nil {
 		return nil, err
 	}
-	for _, p := range patterns {
-		if err := g.store.AddGamePattern(gameID, int(p.ID), p.Name, p.PatternData); err != nil {
-			return nil, err
-		}
+	snapshots := make([]model.BingoGamePattern, len(patterns))
+	for i, p := range patterns {
+		snapshots[i] = model.BingoGamePattern{ID: int(p.ID), Name: p.Name, PatternData: p.PatternData}
 	}
 
-	// Read back the created_at timestamp for the new game so the state carries
-	// the game start time (used by the admin elapsed-time clock).
-	createdAt := ""
-	if gm, err := g.store.GetActiveGame(); err == nil && gm != nil {
-		createdAt = gm.CreatedAt
+	// End the active game, create the new one, and snapshot all patterns in a
+	// single transaction, so a partial failure can't leave a new active game with
+	// an incomplete pattern set (which miscalibrates winner detection). The
+	// createdAt timestamp (for the admin elapsed-time clock) comes back with it.
+	gameID, createdAt, err := g.store.StartGame(snapshots)
+	if err != nil {
+		return nil, err
 	}
+	g.invalidateStateCache()
 
 	state, err := g.buildGameState(gameID, createdAt)
 	if err != nil {

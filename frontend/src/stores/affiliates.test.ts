@@ -88,7 +88,9 @@ describe('form rows', () => {
         hours: [{ label: '', start: '09:00', end: '' }],
       }),
     )
-    expect(s.affiliateForm).toMatchObject({ id: 7, name: 'Tavern', owners: ['Tataru'] })
+    // Owners are wrapped in form rows ({ value, _uid }) so the repeater can key
+    // on a stable id; the plain names are unwrapped again in the save payload.
+    expect(s.affiliateForm).toMatchObject({ id: 7, name: 'Tavern', owners: [{ value: 'Tataru' }] })
     expect(s.affiliateForm!.hours).toHaveLength(1)
   })
 })
@@ -111,7 +113,7 @@ describe('saveAffiliate', () => {
     const s = useAffiliatesStore()
     s.newAffiliateForm()
     s.affiliateForm!.name = 'Tavern'
-    s.affiliateForm!.owners = ['  '] // blanks only
+    s.affiliateForm!.owners = [{ value: '  ' }] // blanks only
     const ok = await s.saveAffiliate()
     expect(ok).toBe(false)
     expect(ep.create).not.toHaveBeenCalled()
@@ -121,7 +123,7 @@ describe('saveAffiliate', () => {
     const s = useAffiliatesStore()
     s.newAffiliateForm()
     s.affiliateForm!.name = 'Tavern'
-    s.affiliateForm!.owners = ['Tataru', '  ', 'Hildibrand']
+    s.affiliateForm!.owners = [{ value: 'Tataru' }, { value: '  ' }, { value: 'Hildibrand' }]
     s.affiliateForm!.hours = [
       { label: 'Mon–Fri', start: '18:00', end: '23:00' },
       { label: 'blank', start: '  ', end: '' }, // dropped (no start)

@@ -256,7 +256,11 @@ function cancelRename(): void {
 
           <!-- Sources repeater -->
           <FormField label="Sources">
-            <div v-for="(src, i) in bookclub.itemForm.sources" :key="i" class="flex-toolbar mb-8">
+            <div
+              v-for="(src, i) in bookclub.itemForm.sources"
+              :key="src._uid"
+              class="flex-toolbar mb-8"
+            >
               <input
                 v-model="src.title"
                 class="field-input-full"

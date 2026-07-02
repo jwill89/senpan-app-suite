@@ -13,11 +13,13 @@ import { computed, ref } from 'vue'
 import { endpoints } from '@/lib/endpoints'
 import { BOOK_CLUBS } from '@/lib/constants'
 import { createFreshness } from '@/lib/freshness'
+import { nextUid } from '@/lib/uid'
+import { withLoading } from '@/lib/withLoading'
 import type {
   ReadingList,
   ReadingListItem,
   ReadingListItemForm,
-  ReadingListSource,
+  ReadingListSourceForm,
 } from '@/types/api'
 import { useUiStore } from './ui'
 
@@ -67,6 +69,9 @@ export const useBookclubStore = defineStore('bookclub', () => {
   // In-flight flags.
   const listsLoading = ref(false)
   const detailLoading = ref(false)
+  // Monotonic token guarding loadListDetail against a last-write-wins race
+  // (a slow earlier open overwriting a newer one). Only the latest request applies.
+  let detailSeq = 0
   const creatingList = ref(false)
   const savingItem = ref(false)
   const coverUploading = ref(false)
@@ -115,27 +120,24 @@ export const useBookclubStore = defineStore('bookclub', () => {
   }
 
   async function loadLists(): Promise<void> {
-    listsLoading.value = true
-    try {
+    await withLoading(listsLoading, async () => {
       const data = await endpoints.bookclub.lists(activeClubSlug.value)
       lists.value = data.reading_lists
-    } catch (e) {
-      ui.notify((e as Error).message, 'error')
-    } finally {
-      listsLoading.value = false
-    }
+    })
   }
 
   async function loadListDetail(id: number): Promise<void> {
+    const reqId = ++detailSeq
     detailLoading.value = true
     try {
       const data = await endpoints.bookclub.listDetail(activeClubSlug.value, id)
+      if (reqId !== detailSeq) return // a newer load superseded this one
       selectedList.value = data.reading_list
       resetItemForm()
     } catch (e) {
-      ui.notify((e as Error).message, 'error')
+      if (reqId === detailSeq) ui.notify((e as Error).message, 'error')
     } finally {
-      detailLoading.value = false
+      if (reqId === detailSeq) detailLoading.value = false
     }
   }
 
@@ -246,12 +248,12 @@ export const useBookclubStore = defineStore('bookclub', () => {
       tropes: item.tropes,
       chapters: item.chapters,
       comments: item.comments,
-      sources: item.sources.map((s) => ({ ...s })),
+      sources: item.sources.map((s) => ({ ...s, _uid: nextUid() })),
     }
   }
 
   function addSourceRow(): void {
-    itemForm.value.sources.push({ title: '', url: '' })
+    itemForm.value.sources.push({ title: '', url: '', _uid: nextUid() })
   }
 
   function removeSourceRow(index: number): void {
@@ -277,7 +279,8 @@ export const useBookclubStore = defineStore('bookclub', () => {
         tropes: f.tropes,
         chapters: f.chapters,
         comments: f.comments,
-        sources: f.sources.filter((s) => s.url.trim()),
+        // Drop blank rows and strip the client-only `_uid` before sending.
+        sources: f.sources.filter((s) => s.url.trim()).map((s) => ({ title: s.title, url: s.url })),
       })
       ui.notify(f.id ? 'Item updated' : 'Item added', 'success')
       await loadListDetail(selectedList.value.id)
@@ -345,7 +348,7 @@ export const useBookclubStore = defineStore('bookclub', () => {
 
   /** Fill the item form from a chosen AniList result (keeps any existing id). */
   function applyLookupResult(result: ReadingListItem): void {
-    const sources: ReadingListSource[] = result.sources.map((s) => ({ ...s }))
+    const sources: ReadingListSourceForm[] = result.sources.map((s) => ({ ...s, _uid: nextUid() }))
     itemForm.value = {
       id: itemForm.value.id,
       cover_image: result.cover_image || '',

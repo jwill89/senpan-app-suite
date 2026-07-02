@@ -93,10 +93,16 @@ func main() {
 	}
 
 	// Background scheduler: posts due announcement embeds to Discord. Tied to a
-	// context cancelled on shutdown so the goroutine exits cleanly.
+	// context cancelled on shutdown so the goroutine exits cleanly. schedDone is
+	// closed when it has fully returned, so shutdown can wait for an in-flight
+	// sweep before closing the DB.
 	schedCtx, cancelSched := context.WithCancel(context.Background())
 	defer cancelSched()
-	go srv.RunAnnouncementScheduler(schedCtx)
+	schedDone := make(chan struct{})
+	go func() {
+		defer close(schedDone)
+		srv.RunAnnouncementScheduler(schedCtx)
+	}()
 
 	// Graceful shutdown: listen for SIGINT/SIGTERM.
 	shutdown := make(chan os.Signal, 1)
@@ -117,6 +123,16 @@ func main() {
 	// Give in-flight requests 10 seconds to complete.
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
+
+	// Wait for the announcement scheduler to finish any in-flight sweep before
+	// the deferred db.Close(): a Discord post that already succeeded must get its
+	// cursor advanced (MarkAnnouncementPosted), or it re-posts on the next boot.
+	// Bounded by the shutdown deadline so a hung post can't block forever.
+	select {
+	case <-schedDone:
+	case <-ctx.Done():
+		slog.Warn("announcement scheduler did not stop within the shutdown deadline")
+	}
 
 	// Close all WebSocket connections first.
 	hub.Shutdown(ctx)

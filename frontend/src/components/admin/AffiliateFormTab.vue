@@ -57,15 +57,11 @@ function cancel(): void {
       <FormField label="Owner(s)" help="Add one or more owners.">
         <div class="repeater">
           <div
-            v-for="(_, i) in affiliates.affiliateForm.owners"
-            :key="i"
+            v-for="(owner, i) in affiliates.affiliateForm.owners"
+            :key="owner._uid"
             class="repeater-row owner-row"
           >
-            <input
-              v-model="affiliates.affiliateForm.owners[i]"
-              placeholder="Owner name"
-              aria-label="Owner name"
-            />
+            <input v-model="owner.value" placeholder="Owner name" aria-label="Owner name" />
             <button
               class="btn-danger btn-sm"
               :disabled="affiliates.affiliateForm.owners.length <= 1"
@@ -110,7 +106,7 @@ function cancel(): void {
           </div>
           <div
             v-for="(h, i) in affiliates.affiliateForm.hours"
-            :key="i"
+            :key="h._uid"
             class="repeater-row hour-row"
           >
             <input v-model="h.label" placeholder="e.g. Mon–Fri" aria-label="Hours label" />

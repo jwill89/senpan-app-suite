@@ -44,8 +44,7 @@ app.config.errorHandler = (err, _instance, info) => {
 // of this via `skipAuthRedirect` so a bad-password login doesn't trigger it.
 setUnauthorizedHandler(() => {
   const auth = useAuthStore()
-  auth.isAdmin = false
-  auth.authChecked = true
+  auth.clearSession()
   const current = router.currentRoute.value
   if (current.name !== 'admin-login') {
     useUiStore().notify('Your session has expired. Please log in again.', 'error')

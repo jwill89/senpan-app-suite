@@ -21,11 +21,11 @@ cd frontend && npm install && npm run gen:types && npm run dev   # frontend
 run `npm run gen:types` after a fresh clone and whenever you change Go model
 types, or `typecheck`/`test`/`build` will fail.
 
-## Branches & merge requests
+## Branches & pull requests
 
 - The default branch is `main`. Don't commit directly to it — work on a feature
-  branch and open a merge request.
-- Keep each MR focused on one logical change. Rebase on `main` before requesting
+  branch and open a pull request.
+- Keep each PR focused on one logical change. Rebase on `main` before requesting
   review so CI runs against current code.
 - Commit messages: a short, capitalized, imperative subject line (e.g.
   `Add Garapon festival lottery-drum feature.`), with a body when the *why* isn't

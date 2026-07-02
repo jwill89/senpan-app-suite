@@ -29,7 +29,8 @@ import { usePatternsStore } from '@/stores/patterns'
 import { useRafflesStore } from '@/stores/raffles'
 import { useUiStore } from '@/stores/ui'
 import { endpoints } from '@/lib/endpoints'
-import type { AccountTokenInfoResponse } from '@/types/api'
+import { listPasskeys, registerPasskey, deletePasskey, passkeysSupported } from '@/lib/passkeys'
+import type { AccountTokenInfoResponse, Passkey } from '@/types/api'
 
 const router = useRouter()
 const auth = useAuthStore()
@@ -210,6 +211,70 @@ async function copyToken(): Promise<void> {
     ui.notify('Copy failed — select the token and copy it manually', 'error')
   }
 }
+
+// ── Passkeys modal (WebAuthn credentials — add / list / remove) ───────────────
+const showPasskeys = ref(false)
+const passkeys = ref<Passkey[]>([])
+const passkeysLoading = ref(false)
+const passkeyBusy = ref(false)
+const passkeyError = ref('')
+const newPasskeyName = ref('')
+
+/** Sidebar "Add Passkey" → close the drawer, open the modal, load the list. */
+async function onManagePasskeys(): Promise<void> {
+  navOpen.value = false
+  passkeyError.value = ''
+  newPasskeyName.value = ''
+  showPasskeys.value = true
+  passkeysLoading.value = true
+  try {
+    passkeys.value = (await listPasskeys()).passkeys
+  } catch (e) {
+    passkeyError.value = (e as Error).message
+  } finally {
+    passkeysLoading.value = false
+  }
+}
+
+/** Create a new passkey (prompts the browser's authenticator). */
+async function addPasskey(): Promise<void> {
+  if (!passkeysSupported()) {
+    passkeyError.value = 'This browser does not support passkeys.'
+    return
+  }
+  passkeyBusy.value = true
+  passkeyError.value = ''
+  try {
+    passkeys.value = (await registerPasskey(newPasskeyName.value.trim() || 'Passkey')).passkeys
+    newPasskeyName.value = ''
+    ui.notify('Passkey added', 'success')
+  } catch (e) {
+    passkeyError.value = (e as Error).message
+  } finally {
+    passkeyBusy.value = false
+  }
+}
+
+/** Remove a passkey. */
+async function removePasskey(id: number): Promise<void> {
+  passkeyBusy.value = true
+  passkeyError.value = ''
+  try {
+    passkeys.value = (await deletePasskey(id)).passkeys
+    ui.notify('Passkey removed', 'success')
+  } catch (e) {
+    passkeyError.value = (e as Error).message
+  } finally {
+    passkeyBusy.value = false
+  }
+}
+
+/** Formats a SQLite UTC timestamp for local display ("Never" when empty). */
+function fmtPasskeyTime(ts: string): string {
+  if (!ts) return 'Never'
+  const d = new Date(ts.replace(' ', 'T') + 'Z')
+  return Number.isNaN(d.getTime()) ? ts : d.toLocaleString()
+}
 </script>
 
 <template>
@@ -242,6 +307,7 @@ async function copyToken(): Promise<void> {
         :class="{ 'is-open': navOpen }"
         @access-token="onAccessToken"
         @change-password="onChangePassword"
+        @manage-passkeys="onManagePasskeys"
         @logout="logout"
       />
 
@@ -386,6 +452,74 @@ async function copyToken(): Promise<void> {
         </div>
       </template>
     </ModalOverlay>
+
+    <ModalOverlay
+      v-if="showPasskeys"
+      aria-label="Passkeys"
+      box-style="max-width: 520px"
+      @close="showPasskeys = false"
+    >
+      <h3 class="mt-0"><font-awesome-icon :icon="['fad', 'user-key']" /> Passkeys</h3>
+      <p class="text-dim pat-intro">
+        A passkey lets you sign in with your device's fingerprint, face, PIN, or a security key
+        instead of your password. You can add more than one (e.g. one per device); your password
+        still works too.
+      </p>
+
+      <p v-if="passkeysLoading"><LoadingSpinner label="Loading…" /></p>
+      <template v-else>
+        <ul v-if="passkeys.length" class="passkey-list">
+          <li v-for="pk in passkeys" :key="pk.id" class="passkey-row">
+            <span class="passkey-info">
+              <font-awesome-icon :icon="['fad', 'user-key']" />
+              <strong>{{ pk.name }}</strong>
+              <span class="text-dim text-xs">
+                Added {{ fmtPasskeyTime(pk.created_at) }} · Last used
+                {{ fmtPasskeyTime(pk.last_used_at) }}
+              </span>
+            </span>
+            <button
+              type="button"
+              class="btn-danger btn-sm"
+              :disabled="passkeyBusy"
+              :aria-label="`Remove passkey ${pk.name}`"
+              @click="removePasskey(pk.id)"
+            >
+              <font-awesome-icon :icon="['fas', 'trash']" />
+            </button>
+          </li>
+        </ul>
+        <p v-else class="text-dim">No passkeys yet.</p>
+
+        <form class="passkey-add" @submit.prevent="addPasskey">
+          <FormField label="Name this passkey (optional)" html-for="pk-name">
+            <input
+              id="pk-name"
+              v-model="newPasskeyName"
+              placeholder="e.g. My Laptop"
+              maxlength="60"
+            />
+          </FormField>
+          <p v-if="passkeyError" class="error-msg">{{ passkeyError }}</p>
+          <div class="modal-actions">
+            <button
+              type="button"
+              class="btn-neutral"
+              :disabled="passkeyBusy"
+              @click="showPasskeys = false"
+            >
+              Close
+            </button>
+            <button type="submit" class="btn-action" :disabled="passkeyBusy">
+              <LoadingSpinner v-if="passkeyBusy" label="Working…" />
+              <template v-else>
+                <font-awesome-icon :icon="['fad', 'user-key']" /> Add Passkey
+              </template>
+            </button>
+          </div>
+        </form>
+      </template>
+    </ModalOverlay>
   </div>
 </template>
 
@@ -429,5 +563,31 @@ async function copyToken(): Promise<void> {
 }
 .pat-meta dd {
   margin: 0;
+}
+.passkey-list {
+  list-style: none;
+  margin: 0 0 16px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.passkey-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 12px;
+  border-radius: var(--radius-sm, 6px);
+  background: color-mix(in srgb, var(--color-text) 6%, transparent);
+}
+.passkey-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.passkey-add {
+  margin-top: 8px;
 }
 </style>

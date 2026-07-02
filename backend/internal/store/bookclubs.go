@@ -2,7 +2,6 @@ package store
 
 import (
 	"database/sql"
-	"encoding/json"
 	"errors"
 
 	"app-suite/internal/model"
@@ -163,28 +162,9 @@ func (s *Store) CountReadingListItemsByCover(coverImage string) (int, error) {
 	return n, err
 }
 
-// encodeSources marshals a sources slice to a JSON string for storage, always
-// producing a valid array (never "null").
-func encodeSources(sources []model.ReadingListSource) string {
-	if sources == nil {
-		sources = []model.ReadingListSource{}
-	}
-	data, err := json.Marshal(sources)
-	if err != nil {
-		return "[]"
-	}
-	return string(data)
-}
-
-// decodeSources parses the stored JSON sources column, returning an empty slice
-// on any error or empty value.
+// These wrap the shared generic JSON-array codecs (jsonarray.go): always a valid
+// array (never "null"), never nil.
+func encodeSources(sources []model.ReadingListSource) string { return encodeJSONArray(sources) }
 func decodeSources(raw string) []model.ReadingListSource {
-	if raw == "" {
-		return []model.ReadingListSource{}
-	}
-	var sources []model.ReadingListSource
-	if err := json.Unmarshal([]byte(raw), &sources); err != nil || sources == nil {
-		return []model.ReadingListSource{}
-	}
-	return sources
+	return decodeJSONArray[model.ReadingListSource](raw)
 }

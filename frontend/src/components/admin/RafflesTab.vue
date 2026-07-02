@@ -16,7 +16,7 @@
  *
  * All state + actions come from the raffles store (unchanged besides copyRaffleForm).
  */
-import { computed, ref, watch } from 'vue'
+import { computed, ref } from 'vue'
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
 import AdminPanel from '@/components/common/ui/AdminPanel.vue'
 import ManagerView from '@/components/common/ui/ManagerView.vue'
@@ -27,10 +27,11 @@ import DataTable, { type DataColumn } from '@/components/common/ui/DataTable.vue
 import PaginationBar from '@/components/common/ui/PaginationBar.vue'
 import EmptyState from '@/components/common/ui/EmptyState.vue'
 import RaffleFormTab from './RaffleFormTab.vue'
+import { useDataTableView } from '@/composables/useDataTableView'
 import { useRafflesStore } from '@/stores/raffles'
 import { assetUrl } from '@/lib/assets'
 import { formatServerTimestamp, parseServerTimestamp } from '@/lib/datetime'
-import type { Raffle } from '@/types/api'
+import type { Raffle, RaffleEntry } from '@/types/api'
 
 const raffles = useRafflesStore()
 
@@ -40,10 +41,8 @@ const screen = ref<Screen>('list')
 const isOpen = computed(() => raffles.selectedRaffle?.status === 'open')
 
 // ── Closed-raffle table: client-side search + pagination ─────────────────────
-const closedSearch = ref('')
-const closedPage = ref(1)
-const PER_PAGE = 10
-
+// The shared view composable owns the search → paginate pipeline (and the
+// page-clamp watchers) so only the columns + match predicate live here.
 const closedColumns: DataColumn[] = [
   { key: 'title', label: 'Title' },
   { key: 'winner', label: 'Winner' },
@@ -51,26 +50,35 @@ const closedColumns: DataColumn[] = [
   { key: 'total', label: 'Total', align: 'right' },
   { key: 'actions', label: '', align: 'right' },
 ]
+const {
+  search: closedSearch,
+  page: closedPage,
+  totalPages: closedTotalPages,
+  paged: pagedClosed,
+  filtered: filteredClosed,
+} = useDataTableView<Raffle>(() => raffles.closedRaffles, {
+  matches: (r, q) => [r.title, r.winner_name ?? ''].some((s) => s.toLowerCase().includes(q)),
+  perPage: 10,
+})
 
-const filteredClosed = computed(() => {
-  const q = closedSearch.value.trim().toLowerCase()
-  if (!q) return raffles.closedRaffles
-  return raffles.closedRaffles.filter((r) =>
-    [r.title, r.winner_name ?? ''].some((s) => s.toLowerCase().includes(q)),
-  )
+// ── Entries table (DataTable) ────────────────────────────────────────────────
+// The Actions column (delete) only exists while the raffle is open; the closed
+// view is read-only, so it's dropped there.
+const entryColumns = computed<DataColumn[]>(() => {
+  const cols: DataColumn[] = [
+    { key: 'character', label: 'Character' },
+    { key: 'num_entries', label: 'Entries', align: 'center' },
+    { key: 'cost', label: 'Cost', align: 'center' },
+    { key: 'paid', label: 'Paid', align: 'center' },
+  ]
+  if (isOpen.value) cols.push({ key: 'actions', label: 'Actions', align: 'center' })
+  return cols
 })
-const closedTotalPages = computed(() =>
-  Math.max(1, Math.ceil(filteredClosed.value.length / PER_PAGE)),
-)
-const pagedClosed = computed(() => {
-  const start = (closedPage.value - 1) * PER_PAGE
-  return filteredClosed.value.slice(start, start + PER_PAGE)
-})
-// A new search resets to the first page; a shrinking list clamps the page.
-watch(closedSearch, () => (closedPage.value = 1))
-watch(closedTotalPages, (n) => {
-  if (closedPage.value > n) closedPage.value = n
-})
+
+/** Highlights the winner's row in the entries table. */
+function entryRowClass(e: RaffleEntry): string {
+  return raffles.raffleWinner?.id === e.id ? 'entry-winner-row' : ''
+}
 
 // ── Display helpers ──────────────────────────────────────────────────────────
 
@@ -255,55 +263,37 @@ async function deleteSelected(): Promise<void> {
 
       <!-- Entries table -->
       <h3 class="mb-8 mt-16">Entries ({{ raffles.raffleEntries.length }})</h3>
-      <div v-if="raffles.raffleEntries.length" class="raffle-entries-table">
-        <table class="data-table">
-          <thead>
-            <tr>
-              <th>Character</th>
-              <th class="ta-center">Entries</th>
-              <th class="ta-center">Cost</th>
-              <th class="ta-center">Paid</th>
-              <th v-if="isOpen" class="ta-center">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr
-              v-for="e in raffles.raffleEntries"
-              :key="e.id"
-              :style="
-                raffles.raffleWinner && raffles.raffleWinner.id === e.id
-                  ? 'background: color-mix(in srgb, var(--highlight) 12%, transparent)'
-                  : ''
-              "
+      <DataTable
+        v-if="raffles.raffleEntries.length"
+        :columns="entryColumns"
+        :rows="raffles.raffleEntries"
+        row-key="id"
+        :row-class="entryRowClass"
+      >
+        <template #cell-character="{ row }">{{ row.character_name }} @ {{ row.world }}</template>
+        <template #cell-cost="{ row }">
+          {{ (row.num_entries * (raffles.selectedRaffle?.cost_per_entry ?? 0)).toLocaleString() }}
+        </template>
+        <template #cell-paid="{ row }">
+          <button
+            v-if="isOpen"
+            :class="['btn-sm', row.paid ? 'btn-confirm' : 'btn-neutral']"
+            @click="raffles.toggleEntryPaid(row)"
+          >
+            <template v-if="row.paid"
+              ><font-awesome-icon :icon="['fas', 'circle-check']" /> Paid</template
             >
-              <td>{{ e.character_name }} @ {{ e.world }}</td>
-              <td class="ta-center">{{ e.num_entries }}</td>
-              <td class="ta-center">
-                {{ (e.num_entries * raffles.selectedRaffle.cost_per_entry).toLocaleString() }}
-              </td>
-              <td class="ta-center">
-                <button
-                  v-if="isOpen"
-                  :class="['btn-sm', e.paid ? 'btn-confirm' : 'btn-neutral']"
-                  @click="raffles.toggleEntryPaid(e)"
-                >
-                  <template v-if="e.paid"
-                    ><font-awesome-icon :icon="['fas', 'circle-check']" /> Paid</template
-                  >
-                  <template v-else>Unpaid</template>
-                </button>
-                <template v-else>
-                  <font-awesome-icon v-if="e.paid" :icon="['fad', 'circle-check']" />
-                  <template v-else>—</template>
-                </template>
-              </td>
-              <td v-if="isOpen" class="ta-center">
-                <button class="btn-danger btn-sm" @click="raffles.deleteEntry(e)">&times;</button>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
+            <template v-else>Unpaid</template>
+          </button>
+          <template v-else>
+            <font-awesome-icon v-if="row.paid" :icon="['fad', 'circle-check']" />
+            <template v-else>—</template>
+          </template>
+        </template>
+        <template #cell-actions="{ row }">
+          <button class="btn-danger btn-sm" @click="raffles.deleteEntry(row)">&times;</button>
+        </template>
+      </DataTable>
       <EmptyState v-else text="No entries yet." />
     </AdminPanel>
 
@@ -330,7 +320,11 @@ async function deleteSelected(): Promise<void> {
             v-for="r in raffles.openRaffles"
             :key="r.id"
             class="media-card"
+            role="button"
+            tabindex="0"
             @click="openRaffle(r)"
+            @keydown.enter="openRaffle(r)"
+            @keydown.space.prevent="openRaffle(r)"
           >
             <img
               v-if="r.prize_image"
@@ -444,5 +438,10 @@ async function deleteSelected(): Promise<void> {
 /* Timing pill above a current-raffle card's title (Scheduled / Window passed). */
 .raffle-status-pill {
   margin-bottom: 8px;
+}
+/* Winner row highlight in the entries DataTable. `:deep` reaches the row that
+   the DataTable child renders (a plain scoped selector wouldn't penetrate it). */
+:deep(.entry-winner-row) {
+  background: color-mix(in srgb, var(--highlight) 12%, transparent);
 }
 </style>

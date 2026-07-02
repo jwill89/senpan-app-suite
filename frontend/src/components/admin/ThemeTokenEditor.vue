@@ -39,16 +39,30 @@ function setToken(name: string, value: string): void {
 
 /** Parses any CSS colour (hex, rgb/rgba, modern slash form, named) to RGBA via
  *  the browser, so the swatch + opacity slider can read existing values in any
- *  format an admin may have saved. */
+ *  format an admin may have saved.
+ *
+ *  Memoized by input string: `swatchHex` runs this per token in the template, so
+ *  an unmemoized version forced ~one layout reflow per token on every re-render
+ *  (i.e. every keystroke/colour-drag). Re-renders reuse the same value strings,
+ *  so the cache makes them free; only a newly-typed value touches the DOM. */
+const colorCache = new Map<string, Rgba>()
+
 function parseColor(input: string): Rgba {
+  const cached = colorCache.get(input)
+  if (cached) return cached
+  let result: Rgba = { r: 0, g: 0, b: 0, a: 1 }
   const el = document.createElement('div')
   el.style.color = input
-  if (!el.style.color) return { r: 0, g: 0, b: 0, a: 1 }
-  document.body.appendChild(el)
-  const m = getComputedStyle(el).color.match(/[\d.]+/g)
-  el.remove()
-  if (!m || m.length < 3) return { r: 0, g: 0, b: 0, a: 1 }
-  return { r: +m[0], g: +m[1], b: +m[2], a: m.length > 3 ? +m[3] : 1 }
+  if (el.style.color) {
+    document.body.appendChild(el)
+    const m = getComputedStyle(el).color.match(/[\d.]+/g)
+    el.remove()
+    if (m && m.length >= 3) {
+      result = { r: +m[0], g: +m[1], b: +m[2], a: m.length > 3 ? +m[3] : 1 }
+    }
+  }
+  colorCache.set(input, result)
+  return result
 }
 
 /** Opaque #rrggbb of a solid token's value, for its native colour input. */

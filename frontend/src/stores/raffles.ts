@@ -9,6 +9,7 @@ import { utcToDatetimeLocal, datetimeLocalToUtc, parseServerTimestamp } from '@/
 import type { Raffle, RaffleEnterResponse, RaffleEntry, RaffleForm } from '@/types/api'
 import { useUiStore } from './ui'
 import { useImagesStore, IMAGE_DIR_RAFFLES } from './images'
+import { withLoading } from '@/lib/withLoading'
 
 /**
  * Whether a raffle is enterable by the public right now: it must be `open` and
@@ -48,6 +49,8 @@ export const useRafflesStore = defineStore('raffles', () => {
     numEntries: 1,
   })
   const raffleSignupResult = ref<RaffleEnterResponse | null>(null)
+  /** Cloudflare Turnstile token for the public sign-up (empty when disabled/unset). */
+  const signupTurnstileToken = ref('')
   // Admin-only: manually add a player to the selected open raffle.
   const entryAdd = ref<{ characterName: string; world: string; numEntries: number; paid: boolean }>(
     { characterName: '', world: '', numEntries: 1, paid: false },
@@ -61,6 +64,10 @@ export const useRafflesStore = defineStore('raffles', () => {
   // In-flight flags driving spinners / button disabling.
   const rafflesLoading = ref(false)
   const detailLoading = ref(false)
+  // Monotonic token guarding loadRaffleDetail against a last-write-wins race:
+  // two rapid opens each fire a request, and a slow earlier one could otherwise
+  // overwrite a newer one. Only the latest request applies its result.
+  let detailSeq = 0
   const savingRaffle = ref(false)
   const entering = ref(false)
   const pickingWinner = ref(false)
@@ -78,15 +85,10 @@ export const useRafflesStore = defineStore('raffles', () => {
   // ── Load ─────────────────────────────────────────────────────────────────
 
   async function loadRaffles(): Promise<void> {
-    rafflesLoading.value = true
-    try {
+    await withLoading(rafflesLoading, async () => {
       const data = await endpoints.raffles.list()
       raffles.value = data.raffles
-    } catch (e) {
-      ui.notify((e as Error).message, 'error')
-    } finally {
-      rafflesLoading.value = false
-    }
+    })
   }
 
   /** Preloads open raffles (home page card visibility). */
@@ -100,9 +102,11 @@ export const useRafflesStore = defineStore('raffles', () => {
   }
 
   async function loadRaffleDetail(id: number): Promise<void> {
+    const reqId = ++detailSeq
     detailLoading.value = true
     try {
       const data = await endpoints.raffles.detail(id)
+      if (reqId !== detailSeq) return // a newer load superseded this one
       selectedRaffle.value = data.raffle
       raffleEntries.value = data.entries || []
       raffleWinner.value = null
@@ -111,9 +115,9 @@ export const useRafflesStore = defineStore('raffles', () => {
           raffleEntries.value.find((e) => e.id === data.raffle.winner_entry_id) || null
       }
     } catch (e) {
-      ui.notify((e as Error).message, 'error')
+      if (reqId === detailSeq) ui.notify((e as Error).message, 'error')
     } finally {
-      detailLoading.value = false
+      if (reqId === detailSeq) detailLoading.value = false
     }
   }
 
@@ -334,12 +338,15 @@ export const useRafflesStore = defineStore('raffles', () => {
         character_name: s.characterName.trim(),
         world: s.world.trim(),
         num_entries: s.numEntries,
+        turnstile_token: signupTurnstileToken.value || undefined,
       })
       raffleSignupResult.value = data
       ui.notify(data.message, 'success')
     } catch (e) {
       ui.notify((e as Error).message, 'error')
     } finally {
+      // Turnstile tokens are single-use — clear it so the widget re-issues one.
+      signupTurnstileToken.value = ''
       entering.value = false
     }
   }
@@ -452,6 +459,7 @@ export const useRafflesStore = defineStore('raffles', () => {
     raffleForm,
     raffleSignup,
     raffleSignupResult,
+    signupTurnstileToken,
     entryAdd,
     addingEntry,
     raffleWinner,

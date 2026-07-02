@@ -439,7 +439,11 @@ function toggleClosed(): void {
             v-for="g in garapons.openGarapons"
             :key="g.id"
             class="media-card"
+            role="button"
+            tabindex="0"
             @click="openGarapon(g)"
+            @keydown.enter="openGarapon(g)"
+            @keydown.space.prevent="openGarapon(g)"
           >
             <img
               v-if="g.grand_prize_image"

@@ -23,7 +23,7 @@ same REST/WebSocket API and still broadcasts to the website. See **FFXIV plugin
 (Dalamud)** below.
 
 **At a glance:** Vue 3 SFCs + TypeScript (strict) · Pinia (setup stores) · Vue
-Router (history mode, lazy routes) · Go 1.22+ stdlib HTTP · SQLite (WAL) ·
+Router (history mode, lazy routes) · Go 1.26+ stdlib HTTP · SQLite (WAL) ·
 coder/websocket · per-user accounts (argon2id) + per-page permissions ·
 embedded tzdata + background schedulers (Discord embeds) · Vitest + Vue Test
 Utils · C#/.NET 10 Dalamud plugin (ImGui) · GitHub Actions CI.
@@ -39,7 +39,7 @@ rotated immediately**. See **Authentication & authorization** below.
 ```
 ├── frontend/                         ← Vue 3 + TypeScript SPA (Vite)
 │   ├── index.html                    ← Vite entry (mounts #app)
-│   ├── package.json                  ← deps: vue, pinia, vue-router, vuedraggable (sortablejs), markdown-it, @toast-ui/editor (WYSIWYG authoring), @awesome.me/kit-… (FA Pro icons) + @fortawesome/fontawesome-svg-core + @fortawesome/vue-fontawesome (the <font-awesome-icon> component), @ckpack/vue-color, vue3-emoji-picker, html-to-image
+│   ├── package.json                  ← deps: vue, pinia, vue-router, vuedraggable (sortablejs), markdown-it, @milkdown/crepe (Milkdown "Crepe" WYSIWYG authoring), @awesome.me/kit-… (FA Pro icons) + @fortawesome/fontawesome-svg-core + @fortawesome/vue-fontawesome (the <font-awesome-icon> component), @ckpack/vue-color, vue3-emoji-picker, html-to-image
 │   ├── vite.config.ts                ← build → dist/, dev proxy for /api, manualChunks, strip dist/images
 │   ├── tsconfig*.json                ← TS project refs (app + node)
 │   ├── public/                       ← copied verbatim into dist/ at build
@@ -67,7 +67,7 @@ rotated immediately**. See **Authentication & authorization** below.
 │       ├── types/
 │       │   ├── api.generated.ts      ← tygo-generated from Go model — GITIGNORED, DO NOT EDIT (run `npm run gen:types`)
 │       │   └── api.ts                ← re-exports + hand-written request/response/WS envelopes
-│       ├── stores/                   ← Pinia stores (ui, app, auth, users, player, game, cards, patterns, presets, styles, raffles, fonts, bookclub, carrd, announcements, admin)
+│       ├── stores/                   ← Pinia stores (ui, app, auth, users, player, game, cards, patterns, presets, styles, raffles, affiliates, garapons, stampRallies, images, fonts, bookclub, carrd, announcements, admin)
 │       ├── composables/
 │       │   ├── useWebSocket.ts       ← wires WsClient → stores (message dispatch)
 │       │   └── usePwaInstall.ts      ← beforeinstallprompt capture + install/standalone state for the PWA "Install" affordance
@@ -75,10 +75,10 @@ rotated immediately**. See **Authentication & authorization** below.
 │       │   ├── common/               ← BingoBoard, CalledNumbers, PatternMini, ModalOverlay, ConfirmModal, ToastNotification, LoadingSpinner, RouteProgressBar, MarkdownEditor (WYSIWYG), AppFooter, CornerFlourish
 │       │   │   └── ui/                ← admin UI primitives (presentational, render stable themeable classes). Forms/tables: AdminPanel, FormField, FormRow, FormActions, DataTable, PaginationBar, EmptyState. Manager model: ManagerView (list page shell), ListRow (item row, actions far-right), SubPageHeader (Back sub-page header), SearchInput. Shared widgets: PatternPicker (v-model selected pattern ids — search + category filter + Select-All + collapse-all over a grouped collapsible checkbox grid; used by GameTab + the Preset editor), ImageField (upload-or-reuse-an-image field; announcement forms), ColorPicker (lazy vue-color Chrome wrapper + .color-picker skin; player stamp-colour modal). Every admin "manage items" tab routes through these for one consistent structure
 │       │   ├── player/               ← Stamp{Shape,Color,Opacity} pickers, WinPatternsPanel
-│       │   └── admin/                ← AdminSidebar + one component per tab + modals (CardPreview, EndGame, WinnerVerify, HalftimePrompt) + ThemeTokenEditor. Tabs: Game, Cards, WinnersLog, Patterns (one manager unifying the patterns list + New Pattern / Manage Categories sub-pages), Presets, RaffleForm, Raffles, Announcements, BookClub (one generic tab serves every club), Settings, Themes, Users (admin-only account+permission manager), Fonts, CarrdUpload
-│       ├── views/                    ← HomeView, PlayerView, RafflesView, RaffleDetailView, AdminLoginView, RegisterView (hidden), NoAccessView (active account, no granted pages), AdminView
+│       │   └── admin/                ← AdminSidebar + one component per tab + modals (CardPreview, EndGame, WinnerVerify, HalftimePrompt) + ThemeTokenEditor. Tabs: Game, Cards, WinnersLog, Patterns (one manager unifying the patterns list + New Pattern / Manage Categories sub-pages), Presets, RaffleForm, Raffles, Announcements, Affiliates + AffiliateForm, BookClub (one generic tab serves every club), Garapon + GaraponForm, StampRallies + StampRallyForm, Settings, Themes, Images, Users (admin-only account+permission manager), Fonts, CarrdUpload; PlacementEditor (shared %-based image placement widget for Garapon/Stamp Rally forms)
+│       ├── views/                    ← HomeView, PlayerView, RafflesView, RaffleDetailView, GaraponView (public token-gated draw), StampCardView (public token-gated stamp card), AdminLoginView, RegisterView (hidden), NoAccessView (active account, no granted pages), AdminView
 │       └── **/*.test.ts              ← Vitest unit/component tests, colocated next to the code they cover
-├── .github/workflows/ci.yml          ← CI: frontend (lint·typecheck·test·build) + backend (build·vet·test) + plugin (build·format)
+├── .github/workflows/ci.yml          ← CI: frontend (lint·typecheck·test·build) + backend (lint·build·vet·test·govulncheck) + plugin (build·format)
 ├── deploy/                           ← Apache deploy artifacts (.htaccess + persistent images/ + README)
 ├── backend/                          ← Go backend
 │   ├── main.go                       ← Entry point: flags, DB init, server start
@@ -144,7 +144,7 @@ All dependencies are wired in `main.go` and passed via structs (no globals, no s
 - `store` — Single `Store` struct wrapping `*sql.DB`. All database reads/writes. Returns typed structs, never `map[string]interface{}`.
 - `bingo` — Stateless card/board generation functions + `GameService` for game lifecycle (start, draw, end, winner computation). Caches game state and card data in memory for performance.
 - `ws` — WebSocket `Hub` for real-time broadcasts. Self-contained: manages client lifecycle, ping/pong, and message fan-out. Supports separate player/admin channels.
-- `server` — `Server` struct implementing `http.Handler`. Holds Store, GameService, Hub, session store, web root. Registers routes using Go 1.22+ method-pattern routing (`"GET /api/auth"`). Owns **authentication & per-page authorization** (see below), the **Discord-embed** features (announcements, book-club reading lists) and the announcement **background scheduler**, the **AniList** lookup proxy, and the on-disk upload areas (raffle/announcement/book-club images + Carrd projects).
+- `server` — `Server` struct implementing `http.Handler`. Holds Store, GameService, Hub, session store, web root. Registers routes using Go 1.26+ method-pattern routing (`"GET /api/auth"`). Owns **authentication & per-page authorization** (see below), the **Discord-embed** features (announcements, book-club reading lists) and the announcement **background scheduler**, the **AniList** lookup proxy, and the on-disk upload areas (raffle/announcement/book-club images + Carrd projects).
 - `auth` — argon2id `Hash()` / `Verify()` over PHC-format strings. Its own package (depends only on `golang.org/x/crypto`) so both `store` (seeding the bootstrap admin) and `server` (login / change-password) can hash without an import cycle. Params: 64 MB / t=1 / p=4 (OWASP argon2id baseline); `Verify` is constant-time.
 
 **Authentication & authorization**:
@@ -178,7 +178,7 @@ the updated state to all connected WebSocket clients via `Hub.Broadcast()`, `Hub
 - `ListWinnersLog` uses `COUNT(*) OVER()` window function (single query for data + total).
 - SQLite connection pool allows 4 concurrent connections for WAL concurrent readers.
 
-**Schema versioning**: `store/migrate.go` uses `PRAGMA user_version` to track schema version (currently **22** — v21 added `announcements.buttons`, v22 added the `users` table + seeded the bootstrap admin).
+**Schema versioning**: `store/migrate.go` uses `PRAGMA user_version` to track schema version (currently **43**). v22 added the `users` table + seeded the bootstrap admin; later migrations grew the announcements feature (roles, mention, location, thumbnail, dynamic dates, sort order) and dropped the retired `book_club_events` table (v28), moved themes to structured design tokens + added style flourishes (v34/v37), then shipped the **Garapon** festival lottery drum (v35–36), **Affiliates** (v38), the **Stamp Rally** (v39–41, including the v41 collected-log rebuild that keeps logs after a card/stamp is deleted), per-account **personal-access tokens** for the plugin/API (v42), and a `UNIQUE(game_id, number)` index on `called_numbers` as a duplicate-draw backstop (v43).
 On the hot path (version == current), zero migration queries execute. Migrations run
 incrementally only when the version is behind.
 
@@ -223,12 +223,22 @@ The principles below are *why* the conventions exist — keep changes aligned wi
 | `announcement_types` | `id INTEGER PK`, `name`, `webhook_url`, `created_at` — a named Discord destination |
 | `announcement_roles` | `id INTEGER PK`, `name`, `role_id` (Discord role snowflake), `created_at` — a taggable role an announcement can ping |
 | `announcements` | `id INTEGER PK`, `type_id`, `title`, `details` (markdown), `image`, `color`, `location`, event window (`start_local`/`end_local` + computed `start_at`/`end_at`), schedule (`schedule_kind`, `timezone`, `once_local`, `schedule_minutes`, `schedule_weekdays`, `schedule_week_of_month`), `next_post_at`, `skip_next`, `active`, `last_posted_at`, `buttons TEXT` (JSON array of up to 5 Discord link buttons), `mention` (`""`/`everyone`/`role:<id>`), `created_at` |
+| `affiliates` | `id INTEGER PK`, `name`, `owners TEXT` (JSON), `location`, `timezone`, `hours TEXT` (JSON opening-hours ranges), `details` (markdown), `logo`, `screenshot`, `created_at` — a partner establishment (Senpan Tea House → Affiliates) |
+| `garapons` | `id INTEGER PK`, `title`, `details` (markdown), `grand_prize_image`, `status` (open/closed), `stamp_rally_id` (optional link), `created_at` — a festival lottery drum |
+| `garapon_prizes` | `id INTEGER PK`, `garapon_id`, `name`, `ball_color`, `rate REAL`, `is_grand`, `sort_order` — a garapon prize tier |
+| `garapon_players` | `id INTEGER PK`, `garapon_id`, `token TEXT UNIQUE`, `player_name`, `max_draws`, `stamp_card_id` (optional, for a linked rally), `created_at` — a per-player drawing link |
+| `garapon_draws` | `id INTEGER PK`, `garapon_id`, `player_id` (nullable, `ON DELETE SET NULL`), `prize_id`, snapshots `player_name`/`prize_name`/`ball_color`, `drawn_at` — the draw log (survives link deletion) |
+| `stamp_rallies` | `id INTEGER PK`, `title`, `card_image`, `not_stamped_image`, `available_from`/`available_to`, `details`, `redeem_instructions`, `status` (open/closed), `created_at` — a stamp-rally event (Festival → Stamp Rally) |
+| `stamp_rally_stamps` | `id INTEGER PK`, `rally_id`, `affiliate_id` (nullable = Tea House default), `image`, `password`, `%`-based placement (`pos_x`/`pos_y`/`width`/`height`/`rotation`), `active_from`/`active_to`, `paused`, `sort_order` |
+| `stamp_rally_prizes` | `id INTEGER PK`, `rally_id`, `name`, `image`, `%`-based placement (`pos_x`/`pos_y`/`width`/`height`/`rotation`), `sort_order` |
+| `stamp_rally_cards` | `id INTEGER PK`, `rally_id`, `token TEXT UNIQUE`, `participant_name`, `completed`, `completed_at`, `created_at` — a per-participant card |
+| `stamp_rally_collected` | `id INTEGER PK`, `rally_id`, `card_id`/`stamp_id` (nullable, `ON DELETE SET NULL`), snapshots `participant_name`/`stall_name`, `stamped_at`, `UNIQUE(card_id, stamp_id)` — the collected-stamp log (survives card/stamp deletion) |
+| `user_tokens` | `user_id INTEGER PK`, `token_hash TEXT UNIQUE` (SHA-256; plaintext shown once), `token_prefix`, `created_at`, `last_used_at` — one personal-access token per account for the plugin/API bearer auth |
 
-Indexes: `games(status)`, `called_numbers(game_id, call_order)`, `game_patterns(game_id)`, `raffle_entries(raffle_id)`, `winners_log(logged_at)`, `winners_log(player_name, logged_at)`, `cards(player_name)`, `reading_list_items(list_id)`, `announcements(type_id)`, `announcements(active, next_post_at)` (due sweep).
+Indexes: `games(status)`, `called_numbers(game_id, call_order)`, `game_patterns(game_id)`, `raffle_entries(raffle_id)`, `winners_log(logged_at)`, `winners_log(player_name, logged_at)`, `cards(player_name)`, `reading_list_items(list_id)`, `announcements(type_id)`, `announcements(active, next_post_at)` (due sweep), `garapon_prizes(garapon_id)`, `garapon_players(garapon_id)`, `garapon_players(token)`, `garapon_draws(garapon_id)`, `garapon_draws(player_id)`, `stamp_rally_stamps(rally_id)`, `stamp_rally_prizes(rally_id)`, `stamp_rally_cards(rally_id)`, `stamp_rally_cards(token)`, `stamp_rally_collected(card_id)`, `stamp_rally_collected(stamp_id)`, `stamp_rally_collected(rally_id)`.
 
 **On-disk uploads (not in the DB)**, all under `<webRoot>`:
-- `images/raffles/` — raffle prize images
-- `images/announcements/` — announcement embed images (reusable across announcements)
+- `images/<category>/` — the **central image host** (System → Images). Each category is a subfolder served at `/images/<dir>/<file>`. Three categories are PERMANENT (hardcoded): `images/raffles` (Raffle), `images/announcements_main` (Announcement Main), `images/announcements_thumb` (Announcement Thumbnail). Admins may add custom categories, tracked in a dotfile manifest `<webRoot>/images/.categories.json` (no DB table). Affiliate logos/screenshots, garapon/stamp-rally artwork, etc. are picked from these categories.
 - `images/bookclub/` — reading-list item cover uploads (AniList covers stay remote)
 - `fonts/` — admin-uploaded **fonts** (`.ttf/.otf/.woff/.woff2/.eot`), served by a **separate** vhost (`https://fonts.senpan.cafe`) — cross-origin `@font-face` needs CORS headers (see Deployment)
 - `carrd/<project>/…` — Carrd image-host projects (images + `.mp3`/`.mp4`), each with a `.carrd.json` title sidecar; served cross-origin from `https://carrd.senpan.cafe` (needs CORS — see Deployment)
@@ -244,23 +254,29 @@ fine-grained components and stores.
 **State (Pinia stores)**: `ui` (toasts, themed confirm dialog, route-loading
 flag, realtime connection status), `app` (settings/fonts/active CSS), `auth`,
 `player`, `game`, `cards`, `patterns`, `presets` (game templates), `styles`,
-`raffles`, `fonts`, `bookclub` (reading lists/items per club), `carrd`
-(image-host projects), `announcements` (types + roles + scheduled embeds), `admin`
-(sidebar highlight state + per-tab data loads). The root `App.vue` hosts
+`raffles`, `affiliates` (partner establishments), `garapons` (festival lottery
+drums + per-player draw links), `stampRallies` (stamp-rally events + cards/logs),
+`images` (central image-host categories), `fonts`, `bookclub` (reading lists/items
+per club), `carrd` (image-host projects), `announcements` (types + roles +
+scheduled embeds), `admin` (sidebar highlight state + per-tab data loads). The root `App.vue` hosts
 `<RouterView>` and owns the WebSocket lifecycle; `composables/useWebSocket.ts`
 dispatches WS messages into the stores.
 
 **Routing is Vue Router** (history mode, `router/index.ts`) — real linkable URLs,
 not store-driven view switching:
-- Public: `/`, `/play/:cardId`, `/raffles`, `/raffles/:id`, `/admin/login`,
-  `/admin/register` (hidden — linked nowhere; admins share the URL to onboard a
-  new account, which starts inactive).
-- Admin: `/admin` (layout, `requiresAdmin`) with child routes grouped into four
-  sidebar sections that the route paths mirror — **bingo** (`bingo/{game,cards,
-  winners-log,patterns,presets}`), **teahouse** ("Senpan Tea House":
-  `teahouse/announcements`, `teahouse/raffles`, and one `teahouse/bookclub/<slug>`
-  route per registered club), **atelier** (`atelier/{fonts,carrd}`), and **system**
-  (`system/{settings,themes,users}`), plus `no-access` (landing for an active
+- Public: `/`, `/play/:cardId`, `/raffles`, `/raffles/:id`, `/garapon/:token`
+  (per-player Garapon draw — the unguessable token is the capability, no admin
+  auth), `/stamp-card/:token` (per-participant Stamp Rally card, likewise
+  token-gated), `/admin/login`, `/admin/register` (hidden — linked nowhere; admins
+  share the URL to onboard a new account, which starts inactive).
+- Admin: `/admin` (layout, `requiresAdmin`) with child routes grouped into five
+  sidebar sections that the route paths mostly mirror — **bingo** (`bingo/{game,
+  cards,winners-log,patterns,presets}`), **teahouse** ("Senpan Tea House":
+  `teahouse/announcements`, `teahouse/affiliates`, and one `teahouse/bookclub/<slug>`
+  route per registered club), **festival** (`festival/{garapon,stamp-rally}`; the
+  Raffles manager now lives in this section too, though its route/id stays
+  `teahouse/raffles`), **atelier** (`atelier/{fonts,carrd}`), and **system**
+  (`system/{settings,themes,images,users}`), plus `no-access` (landing for an active
   account with no granted pages). The admin tabs are **child routes** of the
   `AdminView` layout, so the sidebar/topbar persist while the matched child renders
   the active tab. The per-club book-club routes are generated from the `BOOK_CLUBS`
@@ -290,7 +306,7 @@ Never edit it by hand. Request/response/WebSocket envelopes are hand-written in
 
 **Library choices** (migrated off CDNs):
 - Markdown **rendering** → `markdown-it`, **lazy-loaded** via `useMarkdown()` (`lib/markdown.ts`); the ~100 KB parser is dynamic-imported on first render (`breaks: true` to match the old marked output).
-- Markdown **authoring** → `MarkdownEditor.vue` wraps the **TOAST UI Editor** (`@toast-ui/editor`), a full WYSIWYG editor. It's a sizeable bundle, so both the library **and** its CSS are dynamic-imported on mount (kept out of the initial load); it starts in WYSIWYG mode, picks a dark/light theme from the page background, and emits **markdown** (what we store and what Discord renders). Reused by raffles, book-club items, and announcements.
+- Markdown **authoring** → `MarkdownEditor.vue` wraps **Milkdown (Crepe)** (`@milkdown/crepe`), a WYSIWYG editor built via Crepe's tree-shakable `CrepeBuilder` (only the features used are imported, dropping the CodeMirror/LaTeX bundles). It's still a sizeable bundle, so both the library **and** its CSS are dynamic-imported on mount (kept out of the initial load); it maps its colours onto the app theme variables, is limited to a Discord-safe subset (inline formatting + headings/quotes/lists/dividers/links), and emits **markdown** (what we store and what Discord renders). Reused by raffles, book-club items, and announcements.
 - Drag-and-drop → `vuedraggable` (SortableJS) for category reorder + pattern reorder/cross-category move
 - Theme editor → structured token editor (`ThemeTokenEditor.vue`): a colour swatch + value per `:root` design token, no free-form CSS (CodeMirror removed). Alpha tokens use the `@ckpack/vue-color` picker; solid tokens the native `<input type=color>`
 - Icons → `@fortawesome/*` **Pro** packages via `@fortawesome/fontawesome-svg-core` + the `@fortawesome/vue-fontawesome` **component** (`<font-awesome-icon :icon="[prefix, name]" />`, registered globally in `main.ts`). Only the icons used are added to the library in `lib/fontawesome.ts`; templates reference them by `[prefix, name]` tuple (`['fad', …]` duotone, `['fas', …]` solid, `['fab', 'discord']` brands). Vue owns the rendered `<svg>`, so there is no `dom.watch()`/MutationObserver
@@ -310,9 +326,9 @@ Never edit it by hand. Request/response/WebSocket envelopes are hand-written in
 - Run: `npm run test` (CI), `npm run test:watch`, `npm run test:coverage` (v8).
 - Patterns: mock `fetch` via `vi.stubGlobal` for `api.ts`; mock the `./api` module with `vi.hoisted` + `vi.mock` for `endpoints.ts`; Pinia stores use `setActivePinia(createPinia())`; components use `mount()` from `@vue/test-utils`. Pure helpers tested directly (e.g. `exportCard.ts` exports `parseInlineRuns`/`parseDetailParagraphs` for this).
 
-**Public routes**: `/` · `/play/:cardId` · `/raffles` · `/raffles/:id` · `/admin/login` · `/admin/register` (hidden).
-**Admin sections** (`adminSection`, sidebar highlight): `bingo` | `teahouse` | `atelier` | `system`.
-**Admin tabs** (`adminTab` / route): `bingo-game` · `bingo-cards` · `bingo-winners-log` · `bingo-patterns` · `bingo-presets` · `teahouse-announcements` · `teahouse-raffles` · `bookclub-<slug>` (one per registered club, e.g. `bookclub-yaoi`, `bookclub-yuri`) · `system-settings` · `system-themes` · `system-users` (admin-only) · `atelier-fonts` · `atelier-carrd`. Each tab id (except `system-users`) doubles as its **page-permission key**.
+**Public routes**: `/` · `/play/:cardId` · `/raffles` · `/raffles/:id` · `/garapon/:token` (token-gated) · `/stamp-card/:token` (token-gated) · `/admin/login` · `/admin/register` (hidden).
+**Admin sections** (`adminSection`, sidebar highlight): `bingo` | `teahouse` | `festival` | `atelier` | `system`.
+**Admin tabs** (`adminTab` / route): `bingo-game` · `bingo-cards` · `bingo-winners-log` · `bingo-patterns` · `bingo-presets` · `teahouse-announcements` · `teahouse-affiliates` · `bookclub-<slug>` (one per registered club, e.g. `bookclub-yaoi`, `bookclub-yuri`) · `festival-garapon` · `festival-stamp-rally` · `teahouse-raffles` (shown in the Festival section, id unchanged) · `system-settings` · `system-themes` · `system-images` · `system-users` (admin-only) · `atelier-fonts` · `atelier-carrd`. Each tab id (except `system-users`) doubles as its **page-permission key**.
 
 **Player features**:
 - Join by board ID; see bingo board, called numbers grid, and active win patterns
@@ -343,7 +359,7 @@ Never edit it by hand. Request/response/WebSocket envelopes are hand-written in
 - **Atelier → Carrd Upload tab** (`CarrdUploadTab.vue`): manage image-hosting **projects** (folders under `<webRoot>/carrd`, each with a human-readable title) and nested sub-directories; upload images plus `.mp3`/`.mp4` (same-name **overwrites** so external Carrd sites pick up new versions), copy public URLs, delete files/dirs/projects. Served cross-origin from the carrd vhost.
 
 **Key UI patterns**:
-- **Admin sidebar = accordion** (`AdminSidebar.vue`): section headers (Bingo / Tea House / Atelier / System) are pure **accordion toggles** — clicking one shows/hides the items it contains and never navigates; only the items navigate. Expanded sections are local component state (`openSections`, a reactive `Set`) and toggle **independently**, so any number can be open at once. A section auto-opens when navigation makes it active (so the highlighted item stays visible); otherwise sections are collapsed/expanded freely without changing the route. A whole section is hidden when the account can access none of its pages.
+- **Admin sidebar = accordion** (`AdminSidebar.vue`): section headers (Bingo / Tea House / Festival / Atelier / System) are pure **accordion toggles** — clicking one shows/hides the items it contains and never navigates; only the items navigate. Expanded sections are local component state (`openSections`, a reactive `Set`) and toggle **independently**, so any number can be open at once. A section auto-opens when navigation makes it active (so the highlighted item stays visible); otherwise sections are collapsed/expanded freely without changing the route. A whole section is hidden when the account can access none of its pages.
 - `[v-cloak]` (in app.css) prevents a flash before mount; the `#app` div carries it
 - Optimistic updates: pattern/category reorder swaps locally then persists in background
 - Toast notifications for success/error feedback (`ui` store)
@@ -455,7 +471,9 @@ cd plugins\SenpanCompanion; dotnet format             # apply .editorconfig styl
 - **backend** (`working-directory: backend`): `golangci-lint run` (pinned
   v2.12.2, config `backend/.golangci.yml`) → `go build ./...` → `go vet ./...` →
   `go test ./...` (Go version read from `backend/go.mod`; the tests include the
-  OpenAPI spec-freshness + route-coverage checks in `internal/apidoc`).
+  OpenAPI spec-freshness + route-coverage checks in `internal/apidoc`) →
+  `govulncheck ./...` (`go run golang.org/x/vuln/cmd/govulncheck@latest`, run at
+  latest so newly disclosed advisories are caught).
 - **plugin** (`working-directory: plugins/SenpanCompanion`): builds the FFXIV
   Dalamud plugin on a **Linux** runner — there's no XIVLauncher there, so it
   downloads the official Dalamud dev distribution and points `DALAMUD_HOME` at it;
@@ -511,7 +529,7 @@ the built SPA so redeploys never wipe them (full guide in `deploy/README.md`):
 
 - **Typed structs everywhere**: all store methods return typed `model.*` structs — no `map[string]interface{}`.
 - **Dependency injection**: `Server` struct holds all deps (`Store`, `GameService`, `Hub`, sessions, password). No package-level globals.
-- **Method-pattern routing**: Go 1.22+ `"GET /api/auth"` patterns — no manual method checks.
+- **Method-pattern routing**: Go 1.26+ `"GET /api/auth"` patterns — no manual method checks.
 - **Typed JSON requests**: each handler defines a request struct and uses `readJSON[T]()` generic decoder.
 - **JSON errors**: API failures return `{"error":"message"}` with appropriate HTTP status via `writeError()`.
 - **Hybrid REST**: the HTTP method carries intent — `GET` read, `POST` create (`201`) or run a command, `PUT` replace, `PATCH` partial-update, `DELETE` remove (`204`). Items are `/api/<resource>/{id}` (numeric or string keys), sub-collections nest (`…/{id}/<subs>/{subId}`), non-CRUD commands are `POST …/{id}/<verb>` (e.g. `…/close`, `…/activate`, `/api/game/start`), bulk writes are `POST` (`…/reorder`, `…/generate`) and bulk deletes are `DELETE …/all`. A single reorder / flag toggle is a declarative `PATCH`. The only action-body holdouts are `POST /api/auth` (login/logout) and `POST /api/register`.
@@ -527,7 +545,7 @@ the built SPA so redeploys never wipe them (full guide in `deploy/README.md`):
 - **Player state is client-side**: stamp marks stored in `localStorage` keyed by `stamps_{cardId}_{gameId}`.
 - **Real-time updates**: WebSocket hub broadcasts game/card/pattern/style changes; separate player/admin channels.
 - **Draw delay**: admin can set 0–60s delay before players receive drawn number via WebSocket.
-- **Schema versioning**: `PRAGMA user_version` in SQLite tracks migration state; `schemaVersion` constant in `store/migrate.go` controls the target (currently 22). Migrations are idempotent (`hasColumn` guards) and run incrementally only when behind.
+- **Schema versioning**: `PRAGMA user_version` in SQLite tracks migration state; `schemaVersion` constant in `store/migrate.go` controls the target (currently 43). Migrations are idempotent (`hasColumn` guards) and run incrementally only when behind.
 - **Optimistic UI**: pattern/category reordering swaps locally before API call; reverts on failure.
 - **Lightweight endpoints**: `GET /api/cards` returns only IDs + player names (no board data); `GET /api/board?preview=1` returns only the card (no game state).
 - **Batch operations**: `GetCardPlayerNames()` fetches multiple cards in one query; `SaveCardsBatch()` uses transactions.

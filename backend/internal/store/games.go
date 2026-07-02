@@ -20,6 +20,57 @@ func (s *Store) CreateGame() (int64, error) {
 	return res.LastInsertId()
 }
 
+// StartGame atomically ends any active game, creates a new active game, and
+// snapshots the given patterns into game_patterns — all in one transaction, so a
+// failure part-way can't leave a new active game with only a partial pattern set
+// (which would silently miscalibrate winner detection). Returns the new game's id
+// and created_at timestamp.
+func (s *Store) StartGame(patterns []model.BingoGamePattern) (int64, string, error) {
+	tx, err := s.beginImmediate()
+	if err != nil {
+		return 0, "", err
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	if _, err := tx.Exec("UPDATE games SET status = 'ended' WHERE status = 'active'"); err != nil {
+		return 0, "", fmt.Errorf("end active games: %w", err)
+	}
+
+	res, err := tx.Exec("INSERT INTO games (status, winners_cache) VALUES ('active', '[]')")
+	if err != nil {
+		return 0, "", fmt.Errorf("create game: %w", err)
+	}
+	gameID, err := res.LastInsertId()
+	if err != nil {
+		return 0, "", err
+	}
+
+	stmt, err := tx.Prepare("INSERT INTO game_patterns (game_id, pattern_id, pattern_name, pattern_data) VALUES (?, ?, ?, ?)")
+	if err != nil {
+		return 0, "", err
+	}
+	defer stmt.Close()
+	for _, p := range patterns {
+		jsonData, err := json.Marshal(p.PatternData)
+		if err != nil {
+			return 0, "", fmt.Errorf("marshal pattern data: %w", err)
+		}
+		if _, err := stmt.Exec(gameID, p.ID, p.Name, string(jsonData)); err != nil {
+			return 0, "", fmt.Errorf("snapshot pattern: %w", err)
+		}
+	}
+
+	var createdAt string
+	if err := tx.QueryRow("SELECT created_at FROM games WHERE id = ?", gameID).Scan(&createdAt); err != nil {
+		return 0, "", err
+	}
+
+	if err := tx.Commit(); err != nil {
+		return 0, "", err
+	}
+	return gameID, createdAt, nil
+}
+
 // EndGame marks a game as ended.
 func (s *Store) EndGame(gameID int64) error {
 	_, err := s.db.Exec("UPDATE games SET status = 'ended' WHERE id = ?", gameID)

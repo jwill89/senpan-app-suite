@@ -15,6 +15,7 @@ import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 import { endpoints } from '@/lib/endpoints'
 import { detectTimezone } from '@/lib/constants'
+import { nextUid } from '@/lib/uid'
 import {
   useImagesStore,
   IMAGE_DIR_ANNOUNCEMENTS_MAIN,
@@ -104,10 +105,10 @@ export const useAnnouncementsStore = defineStore('announcements', () => {
   /** Reusable image URLs for the Main / Thumbnail pickers, sourced from the
    *  central Images page categories (announcements_main / announcements_thumb). */
   const mainImages = computed(() =>
-    imagesStore.imagesByDir[IMAGE_DIR_ANNOUNCEMENTS_MAIN].map((i) => i.url),
+    (imagesStore.imagesByDir[IMAGE_DIR_ANNOUNCEMENTS_MAIN] ?? []).map((i) => i.url),
   )
   const thumbImages = computed(() =>
-    imagesStore.imagesByDir[IMAGE_DIR_ANNOUNCEMENTS_THUMB].map((i) => i.url),
+    (imagesStore.imagesByDir[IMAGE_DIR_ANNOUNCEMENTS_THUMB] ?? []).map((i) => i.url),
   )
 
   // Forms.
@@ -333,7 +334,7 @@ export const useAnnouncementsStore = defineStore('announcements', () => {
     f.color = a.color || '#ff3131'
     f.location = a.location || ''
     f.mention = a.mention || ''
-    f.buttons = a.buttons.map((b) => ({ ...b }))
+    f.buttons = a.buttons.map((b) => ({ ...b, _uid: nextUid() }))
     f.start_local = a.start_local
     f.end_local = a.end_local
     f.start_format = (a.start_format || 'F') as AnnouncementForm['start_format']

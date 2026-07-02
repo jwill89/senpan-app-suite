@@ -105,7 +105,7 @@ function cancel(): void {
             <span class="prize-pct-col">Odds</span>
             <span class="prize-del-col"></span>
           </div>
-          <div v-for="(p, i) in garapons.garaponForm.prizes" :key="i" class="prize-row">
+          <div v-for="(p, i) in garapons.garaponForm.prizes" :key="p._uid" class="prize-row">
             <span class="prize-grand-col">
               <input
                 type="radio"

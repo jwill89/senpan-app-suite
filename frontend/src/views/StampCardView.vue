@@ -10,8 +10,8 @@
  */
 import { computed, onMounted, ref, watch } from 'vue'
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
+import MarkdownText from '@/components/common/MarkdownText.vue'
 import StampCardCanvas, { type CanvasItem } from '@/components/common/ui/StampCardCanvas.vue'
-import { useMarkdown } from '@/lib/markdown'
 import { useStampRalliesStore } from '@/stores/stampRallies'
 import { assetUrl } from '@/lib/assets'
 import { stallName } from '@/lib/stampcard'
@@ -21,7 +21,6 @@ import type { PublicStamp } from '@/types/api'
 const props = defineProps<{ token: string }>()
 
 const store = useStampRalliesStore()
-const { render: renderMarkdown } = useMarkdown()
 
 const notFound = ref(false)
 const password = ref('')
@@ -128,11 +127,11 @@ async function submit(): Promise<void> {
       </form>
 
       <!-- Details (markdown) -->
-      <div
+      <MarkdownText
         v-if="store.publicCard.rally.details"
         class="game-details mb-16"
-        v-html="renderMarkdown(store.publicCard.rally.details)"
-      ></div>
+        :source="store.publicCard.rally.details"
+      />
 
       <!-- Stalls + availability -->
       <h3 class="section-heading"><font-awesome-icon :icon="['fad', 'stamp']" /> Stalls</h3>
@@ -157,11 +156,11 @@ async function submit(): Promise<void> {
             <span>{{ p.name }}</span>
           </div>
         </div>
-        <div
+        <MarkdownText
           v-if="store.publicCard.rally.redeem_instructions"
           class="game-details redeem"
-          v-html="renderMarkdown(store.publicCard.rally.redeem_instructions)"
-        ></div>
+          :source="store.publicCard.rally.redeem_instructions"
+        />
       </template>
     </div>
   </div>

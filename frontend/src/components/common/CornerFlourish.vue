@@ -52,7 +52,9 @@ watch(
 </script>
 
 <template>
-  <!-- Active theme's board flourish (inlined for export capture). -->
+  <!-- Active theme's board flourish (inlined for export capture). The SVG is
+       admin-configured trusted theme markup, not user input. -->
+  <!-- eslint-disable-next-line vue/no-v-html -->
   <span v-if="customSvg" class="corner-flourish-svg" aria-hidden="true" v-html="customSvg"></span>
   <!-- Built-in default artwork (used when no theme flourish is selected). -->
   <svg

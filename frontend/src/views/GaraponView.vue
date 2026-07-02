@@ -11,9 +11,9 @@
  */
 import { computed, onMounted, ref, watch } from 'vue'
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
+import MarkdownText from '@/components/common/MarkdownText.vue'
 import BallSwatch from '@/components/common/ui/BallSwatch.vue'
 import GaraponWheel from '@/components/player/GaraponWheel.vue'
-import { useMarkdown } from '@/lib/markdown'
 import { useGaraponsStore } from '@/stores/garapons'
 import { assetUrl } from '@/lib/assets'
 import { formatServerTimestamp } from '@/lib/datetime'
@@ -22,7 +22,6 @@ import type { GaraponDrawResponse } from '@/types/api'
 const props = defineProps<{ token: string }>()
 
 const garapons = useGaraponsStore()
-const { render: renderMarkdown } = useMarkdown()
 
 const notFound = ref(false)
 
@@ -118,11 +117,11 @@ function when(ts: string): string {
       </div>
 
       <!-- Details (markdown) -->
-      <div
+      <MarkdownText
         v-if="garapons.publicGarapon.details"
         class="game-details mb-16"
-        v-html="renderMarkdown(garapons.publicGarapon.details)"
-      ></div>
+        :source="garapons.publicGarapon.details"
+      />
 
       <!-- Other prizes -->
       <div v-if="garapons.otherPrizes.length" class="mb-16">

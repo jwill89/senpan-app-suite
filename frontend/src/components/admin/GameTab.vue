@@ -11,9 +11,9 @@ import CalledNumbers from '@/components/common/CalledNumbers.vue'
 import PatternMini from '@/components/common/PatternMini.vue'
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
 import MarkdownEditor from '@/components/common/MarkdownEditor.vue'
+import MarkdownText from '@/components/common/MarkdownText.vue'
 import AdminPanel from '@/components/common/ui/AdminPanel.vue'
 import PatternPicker from '@/components/common/ui/PatternPicker.vue'
-import { useMarkdown } from '@/lib/markdown'
 import { DRAW_DELAY_OPTIONS } from '@/lib/constants'
 import { parseServerTimestamp } from '@/lib/datetime'
 import { primeAudio, playWinnerChime } from '@/lib/sound'
@@ -27,7 +27,6 @@ const game = useGameStore()
 const cards = useCardsStore()
 const patterns = usePatternsStore()
 const presets = usePresetsStore()
-const { render: renderMarkdown } = useMarkdown()
 
 // Currently-selected preset in the "Start from a preset" picker (v-model).
 const selectedPresetId = ref<number | null>(null)
@@ -345,11 +344,7 @@ onBeforeUnmount(() => {
               </div>
             </div>
 
-            <div
-              v-if="game.gameDetails"
-              class="game-details"
-              v-html="renderMarkdown(game.gameDetails)"
-            ></div>
+            <MarkdownText v-if="game.gameDetails" class="game-details" :source="game.gameDetails" />
 
             <div class="patterns-panel">
               <h3>Active Win Patterns</h3>

@@ -13,6 +13,7 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import BingoBoard from '@/components/common/BingoBoard.vue'
 import CalledNumbers from '@/components/common/CalledNumbers.vue'
+import MarkdownText from '@/components/common/MarkdownText.vue'
 import ModalOverlay from '@/components/common/ModalOverlay.vue'
 import StampShapePicker from '@/components/player/StampShapePicker.vue'
 import StampColorPicker from '@/components/player/StampColorPicker.vue'
@@ -20,7 +21,6 @@ import StampOpacitySlider from '@/components/player/StampOpacitySlider.vue'
 import SecondaryStampControl from '@/components/player/SecondaryStampControl.vue'
 import SoundControls from '@/components/player/SoundControls.vue'
 import WinPatternsPanel from '@/components/player/WinPatternsPanel.vue'
-import { useMarkdown } from '@/lib/markdown'
 import { exportCardImage } from '@/lib/exportCard'
 import { useAppStore } from '@/stores/app'
 import { useGameStore } from '@/stores/game'
@@ -34,7 +34,6 @@ const player = usePlayerStore()
 const game = useGameStore()
 const app = useAppStore()
 const ui = useUiStore()
-const { render: renderMarkdown } = useMarkdown()
 
 /** Ref to the BingoBoard component so we can capture its `.board-wrap` root. */
 const boardRef = ref<{ $el?: HTMLElement } | null>(null)
@@ -278,11 +277,11 @@ function openDiscord(): void {
       <!-- Column 3: game details, winning patterns, misc messages -->
       <div class="player-col player-col-info">
         <!-- Game details (Markdown) — above the win patterns, full column width -->
-        <div
+        <MarkdownText
           v-if="player.playerGame && game.gameDetails"
           class="game-details"
-          v-html="renderMarkdown(game.gameDetails)"
-        ></div>
+          :source="game.gameDetails"
+        />
 
         <WinPatternsPanel v-if="player.playerGame" :patterns="player.playerGame.patterns" />
 

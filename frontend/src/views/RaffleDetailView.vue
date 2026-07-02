@@ -10,7 +10,7 @@
 import { computed, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
-import { useMarkdown } from '@/lib/markdown'
+import MarkdownText from '@/components/common/MarkdownText.vue'
 import { useRafflesStore } from '@/stores/raffles'
 import { assetUrl } from '@/lib/assets'
 
@@ -18,7 +18,6 @@ const props = defineProps<{ id: string }>()
 
 const router = useRouter()
 const raffles = useRafflesStore()
-const { render: renderMarkdown } = useMarkdown()
 
 const raffleId = computed(() => Number(props.id))
 
@@ -54,16 +53,16 @@ function back(): void {
       </div>
 
       <!-- Description -->
-      <div
+      <MarkdownText
         v-if="raffles.selectedRaffle.description"
         class="game-details mb-16"
-        v-html="renderMarkdown(raffles.selectedRaffle.description)"
-      ></div>
+        :source="raffles.selectedRaffle.description"
+      />
 
       <!-- Rules -->
       <div v-if="raffles.selectedRaffle.rules" class="mb-16">
         <h3 class="section-heading">Rules</h3>
-        <div class="game-details" v-html="renderMarkdown(raffles.selectedRaffle.rules)"></div>
+        <MarkdownText class="game-details" :source="raffles.selectedRaffle.rules" />
       </div>
 
       <!-- Sign-up result (shown after signing up) -->
@@ -79,7 +78,7 @@ function back(): void {
         </p>
         <div v-if="raffles.raffleSignupResult.signup_instructions" class="game-details mt-12">
           <h4 class="text-gold mb-6">Sign-Up Instructions</h4>
-          <div v-html="renderMarkdown(raffles.raffleSignupResult.signup_instructions)"></div>
+          <MarkdownText :source="raffles.raffleSignupResult.signup_instructions" />
         </div>
       </div>
 

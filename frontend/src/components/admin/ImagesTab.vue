@@ -5,9 +5,9 @@
  * number of images at once (drag-and-drop or click to browse), browses the
  * images in that category, and deletes them.
  *
- * Three categories are permanent (Announcement Main / Announcement Thumbnail /
- * Raffle) and feed the announcement + raffle editors' pickers; admins can add
- * custom categories (a display name + a directory) and rename/delete those.
+ * Every category is admin-managed (a display name + a directory): all of them
+ * can be created, renamed, and deleted. The shared ImagePicker used by the
+ * feature editors (announcements, raffles, garapons, …) browses all of them.
  *
  * Two screens (a lightweight in-tab router via `screen`):
  *   - browse:     category picker + upload drop zone + image grid.
@@ -159,9 +159,9 @@ onMounted(() => images.loadCategories())
         @back="screen = 'browse'"
       />
       <p class="text-dim text-xs mb-12">
-        Each category maps to a subdirectory of <span class="code-gold">images/</span>. The three
-        permanent categories back the announcement and raffle editors and can't be renamed or
-        deleted. Deleting a custom category removes its folder and all images in it.
+        Each category maps to a subdirectory of <span class="code-gold">images/</span>. Deleting a
+        category removes its folder and all images in it — anything still referencing those images
+        (announcements, raffles, …) will lose them.
       </p>
       <div class="flex-toolbar flex-end mb-16">
         <button class="btn-confirm btn-sm" @click="openNewCategory">
@@ -172,9 +172,6 @@ onMounted(() => images.loadCategories())
       <DataTable :columns="categoryColumns" :rows="images.sortedCategories" row-key="dir">
         <template #cell-name="{ row }">
           <font-awesome-icon :icon="['fad', 'folder']" /> {{ row.name }}
-          <span v-if="row.permanent" class="badge badge--muted" style="margin-left: 6px">
-            Permanent
-          </span>
         </template>
         <template #cell-dir="{ row }">
           <span class="code-gold">images/{{ row.dir }}</span>
@@ -189,20 +186,14 @@ onMounted(() => images.loadCategories())
           <div class="row-actions">
             <button
               class="btn-confirm btn-sm"
-              :disabled="row.permanent"
-              :title="
-                row.permanent ? 'Permanent categories can\'t be renamed' : 'Rename this category'
-              "
+              title="Rename this category"
               @click="startEditCategory(row)"
             >
               <font-awesome-icon :icon="['fas', 'pen-to-square']" /> Edit
             </button>
             <button
               class="btn-danger btn-sm"
-              :disabled="row.permanent"
-              :title="
-                row.permanent ? 'Permanent categories can\'t be deleted' : 'Delete this category'
-              "
+              title="Delete this category"
               @click="images.deleteCategory(row)"
             >
               <font-awesome-icon :icon="['fas', 'trash']" /> Delete
@@ -225,7 +216,8 @@ onMounted(() => images.loadCategories())
 
       <p class="text-dim text-xs mb-12">
         Pick a category, then drag &amp; drop images (or click to browse) to upload them. Allowed
-        types: .jpg, .jpeg, .png, .webp, .gif. Uploading a file with an existing name replaces it.
+        types: .jpg, .jpeg, .png, .webp, .gif, .svg. Uploading a file with an existing name replaces
+        it.
       </p>
 
       <LoadingSpinner
@@ -256,7 +248,7 @@ onMounted(() => images.loadCategories())
           <input
             ref="fileInput"
             type="file"
-            accept=".jpg,.jpeg,.png,.webp,.gif"
+            accept=".jpg,.jpeg,.png,.webp,.gif,.svg"
             multiple
             hidden
             @change="onFilesSelected"

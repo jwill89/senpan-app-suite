@@ -1631,8 +1631,6 @@ components:
                 type: integer
               name:
                 type: string
-              permanent:
-                type: boolean
               total_size:
                 format: int64
                 type: integer
@@ -1647,8 +1645,6 @@ components:
           type: integer
         name:
           type: string
-        permanent:
-          type: boolean
         total_size:
           format: int64
           type: integer
@@ -1663,8 +1659,6 @@ components:
               type: integer
             name:
               type: string
-            permanent:
-              type: boolean
             total_size:
               format: int64
               type: integer
@@ -3762,7 +3756,7 @@ info:
 
     Broadcast messages (each carries a `type` field): `resource_changed`, `cards_update`, `card_deleted`, `patterns_update`, `game_update`, `game_draw`, `halftime_minigame`, `draw_delay_update`, `details_update`, `style_update`, `settings_update`.
   title: Senpan App Suite API
-  version: 3.0.0
+  version: 3.1.0
 openapi: 3.0.3
 paths:
   /api/account/change-password:
@@ -6671,7 +6665,10 @@ paths:
       - Garapon
   /api/image-categories:
     get:
-      description: '**Auth:** permission:system-images'
+      description: |-
+        **Auth:** auth
+
+        Access: admin, `system-images`, or any image-using editor permission (the shared image picker reads the category list).
       responses:
         "200":
           content:
@@ -6679,6 +6676,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/ImageCategoriesResponse'
           description: Success
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: No access
       security:
       - cookieAuth: []
       - bearerAuth: []
@@ -6689,7 +6692,7 @@ paths:
       description: |-
         **Auth:** permission:system-images
 
-        Creates a custom category; `dir` is optional (derived from `name` when omitted). Permanent dirs are reserved.
+        Creates a category; `dir` is optional (derived from `name` when omitted).
       requestBody:
         content:
           application/json:
@@ -6722,7 +6725,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
-          description: Duplicate / reserved
+          description: Duplicate
       security:
       - cookieAuth: []
       - bearerAuth: []
@@ -6734,7 +6737,7 @@ paths:
       description: |-
         **Auth:** permission:system-images
 
-        Deletes a custom category folder and all its files. Permanent categories are protected.
+        Deletes a category folder and all its files.
       parameters:
       - description: Category directory.
         in: path
@@ -6751,12 +6754,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
           description: Invalid
-        "403":
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-          description: Permanent category
         "404":
           content:
             application/json:
@@ -6773,7 +6770,7 @@ paths:
       description: |-
         **Auth:** permission:system-images
 
-        Renames a custom category's name and/or directory (`new_dir` ""/omitted derives from `name`). Permanent categories are protected.
+        Renames a category's name and/or directory (`new_dir` ""/omitted derives from `name`).
       parameters:
       - description: Existing category directory.
         in: path
@@ -6808,12 +6805,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
           description: Invalid
-        "403":
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-          description: Permanent category
         "404":
           content:
             application/json:
@@ -6825,7 +6816,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
-          description: Duplicate / reserved
+          description: Duplicate
       security:
       - cookieAuth: []
       - bearerAuth: []
@@ -6876,7 +6867,7 @@ paths:
       description: |-
         **Auth:** auth
 
-        Access: admin, `system-images`, or the editor permission that owns the category (e.g. `raffles`→teahouse-raffles).
+        Access: admin, `system-images`, or any image-using editor permission (announcements, raffles, garapon, affiliates, stamp rally, themes).
       parameters:
       - description: Category directory (required).
         in: query

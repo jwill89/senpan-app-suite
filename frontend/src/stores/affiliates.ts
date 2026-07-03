@@ -14,7 +14,6 @@ import { endpoints } from '@/lib/endpoints'
 import { detectTimezone } from '@/lib/constants'
 import type { Affiliate, AffiliateForm, AffiliateHourForm, AffiliateOwnerForm } from '@/types/api'
 import { useUiStore } from './ui'
-import { useImagesStore, IMAGE_DIR_AFFILIATE_LOGOS, IMAGE_DIR_AFFILIATE_IMAGES } from './images'
 import { nextUid } from '@/lib/uid'
 import { withLoading } from '@/lib/withLoading'
 
@@ -34,9 +33,6 @@ export const useAffiliatesStore = defineStore('affiliates', () => {
   const affiliates = ref<Affiliate[]>([])
   const selectedAffiliate = ref<Affiliate | null>(null)
   const affiliateForm = ref<AffiliateForm | null>(null)
-  /** Reusable images for the two pickers (the affiliate logo/image categories). */
-  const logoImages = ref<string[]>([])
-  const screenshotImages = ref<string[]>([])
 
   const affiliatesLoading = ref(false)
   const savingAffiliate = ref(false)
@@ -47,21 +43,6 @@ export const useAffiliatesStore = defineStore('affiliates', () => {
       const data = await endpoints.affiliates.list()
       affiliates.value = data.affiliates
     })
-  }
-
-  /** Loads the reusable logo + screenshot images for the form pickers. */
-  async function loadPickerImages(): Promise<void> {
-    try {
-      const images = useImagesStore()
-      await Promise.all([
-        images.loadImages(IMAGE_DIR_AFFILIATE_LOGOS),
-        images.loadImages(IMAGE_DIR_AFFILIATE_IMAGES),
-      ])
-      logoImages.value = images.imagesByDir[IMAGE_DIR_AFFILIATE_LOGOS].map((i) => i.path)
-      screenshotImages.value = images.imagesByDir[IMAGE_DIR_AFFILIATE_IMAGES].map((i) => i.path)
-    } catch {
-      /* non-fatal: the pickers just show nothing */
-    }
   }
 
   // ── Form ───────────────────────────────────────────────────────────────────
@@ -179,12 +160,9 @@ export const useAffiliatesStore = defineStore('affiliates', () => {
     affiliates,
     selectedAffiliate,
     affiliateForm,
-    logoImages,
-    screenshotImages,
     affiliatesLoading,
     savingAffiliate,
     loadAffiliates,
-    loadPickerImages,
     newAffiliateForm,
     editAffiliateForm,
     cancelAffiliateForm,

@@ -3,13 +3,11 @@
  * Admin Affiliate create/edit form. Name, a repeatable owners list, location, a
  * single timezone for the affiliate, a repeatable opening-hours editor (optional
  * label + start + optional end), markdown details, and two image pickers — the
- * logo (the "Affiliate Logos" category) and the establishment screenshot (the
- * "Affiliate Images" category).
+ * logo and the establishment screenshot (both browse the shared image library).
  *
  * Hosted as a Back sub-page of the Affiliates manager (AffiliatesTab): it emits
  * `saved` on a successful save and `cancel` to return to the list.
  */
-import { onMounted } from 'vue'
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
 import MarkdownEditor from '@/components/common/MarkdownEditor.vue'
 import AdminPanel from '@/components/common/ui/AdminPanel.vue'
@@ -24,9 +22,6 @@ const emit = defineEmits<{ saved: []; cancel: [] }>()
 const affiliates = useAffiliatesStore()
 
 const timezones = supportedTimezones()
-
-// Load the reusable logo + screenshot images for the pickers.
-onMounted(() => affiliates.loadPickerImages())
 
 async function save(): Promise<void> {
   if (await affiliates.saveAffiliate()) emit('saved')
@@ -138,19 +133,16 @@ function cancel(): void {
 
       <FormField
         label="Logo"
-        help="Pick from the “Affiliate Logos” image category. Upload new images on the System → Images page."
+        help="Pick from any image category. Upload new images on the System → Images page."
       >
-        <ImagePicker v-model="affiliates.affiliateForm.logo" :images="affiliates.logoImages" />
+        <ImagePicker v-model="affiliates.affiliateForm.logo" />
       </FormField>
 
       <FormField
         label="Establishment Screenshot"
-        help="Pick from the “Affiliate Images” image category. Upload new images on the System → Images page."
+        help="Pick from any image category. Upload new images on the System → Images page."
       >
-        <ImagePicker
-          v-model="affiliates.affiliateForm.screenshot"
-          :images="affiliates.screenshotImages"
-        />
+        <ImagePicker v-model="affiliates.affiliateForm.screenshot" />
       </FormField>
 
       <FormActions align="start">

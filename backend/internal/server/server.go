@@ -93,6 +93,9 @@ func New(st *store.Store, hub *ws.Hub, sessionSecret, webRoot string, allowedOri
 	// API-reference endpoints (GET /api/docs, GET /api/openapi.yaml). Registered
 	// apart from routes() so routes() stays the authoritative API-surface list.
 	s.registerDocs()
+	// Upgrade the image-category manifest to the current schema (folds the
+	// formerly hardcoded permanent categories into the manifest; runs once).
+	s.migrateImageCategoryManifest()
 	// One-time, idempotent migration of legacy announcement images into the new
 	// announcements_main category dir (safe to run on every startup).
 	s.migrateAnnouncementImages()
@@ -248,8 +251,8 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("POST /api/garapon/{token}/draw", s.handleGaraponDraw)
 
 	// Affiliates (Senpan Tea House → Affiliates). Admin-only CRUD of partner
-	// establishments; logo/screenshot images live in dedicated permanent image
-	// categories managed on System → Images.
+	// establishments; logo/screenshot images are picked from the shared image
+	// library managed on System → Images.
 	s.mux.HandleFunc("GET /api/affiliates", s.handleAffiliatesList)
 	s.mux.HandleFunc("POST /api/affiliates", s.handleAffiliateCreate)
 	s.mux.HandleFunc("PUT /api/affiliates/{id}", s.handleAffiliateUpdate)

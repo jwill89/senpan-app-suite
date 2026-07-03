@@ -81,7 +81,7 @@ func TestImages_RequiresAuth(t *testing.T) {
 	resp.Body.Close()
 }
 
-func TestImages_ListCategories_Permanent(t *testing.T) {
+func TestImages_ListCategories_Defaults(t *testing.T) {
 	env := newTestEnv(t)
 	env.loginAdmin(t)
 
@@ -93,23 +93,23 @@ func TestImages_ListCategories_Permanent(t *testing.T) {
 	cats, _ := data["categories"].([]any)
 	want := map[string]bool{
 		"announcements_main": false, "announcements_thumb": false,
-		"raffles": false, "flourishes": false,
+		"raffles": false, "garapons": false, "flourishes": false,
 		"affiliate_logos": false, "affiliate_images": false,
 		"stamp_cards": false, "stamp_stamps": false, "stamp_prizes": false,
 	}
 	for _, c := range cats {
 		m := c.(map[string]any)
+		if _, has := m["permanent"]; has {
+			t.Errorf("category %v still exposes a permanent flag", m["dir"])
+		}
 		dir := m["dir"].(string)
 		if _, ok := want[dir]; ok {
-			if m["permanent"] != true {
-				t.Errorf("category %s permanent = %v; want true", dir, m["permanent"])
-			}
 			want[dir] = true
 		}
 	}
 	for dir, found := range want {
 		if !found {
-			t.Errorf("permanent category %q missing from listing", dir)
+			t.Errorf("default category %q missing from listing", dir)
 		}
 	}
 }
@@ -145,7 +145,7 @@ func TestImages_CreateCategory_ExplicitDir(t *testing.T) {
 	}
 }
 
-func TestImages_CreateCategory_ReservedDir(t *testing.T) {
+func TestImages_CreateCategory_SeededDirConflict(t *testing.T) {
 	env := newTestEnv(t)
 	env.loginAdmin(t)
 
@@ -153,7 +153,7 @@ func TestImages_CreateCategory_ReservedDir(t *testing.T) {
 		"name": "Sneaky", "dir": "raffles",
 	})
 	if resp.StatusCode != http.StatusConflict {
-		t.Errorf("status = %d; want 409 (reserved permanent dir)", resp.StatusCode)
+		t.Errorf("status = %d; want 409 (duplicate of the seeded raffles dir)", resp.StatusCode)
 	}
 	resp.Body.Close()
 }
@@ -175,15 +175,44 @@ func TestImages_CreateCategory_DuplicateDir(t *testing.T) {
 	resp.Body.Close()
 }
 
-func TestImages_DeletePermanent_Forbidden(t *testing.T) {
+// TestImages_DeleteDefaultCategory verifies the formerly permanent categories
+// are now ordinary: deleting one succeeds and removes it from the listing.
+func TestImages_DeleteDefaultCategory(t *testing.T) {
 	env := newTestEnv(t)
 	env.loginAdmin(t)
 
 	resp := env.del(t, "/api/image-categories/raffles")
-	if resp.StatusCode != http.StatusForbidden {
-		t.Errorf("status = %d; want 403", resp.StatusCode)
+	if resp.StatusCode != http.StatusNoContent {
+		t.Fatalf("status = %d; want 204", resp.StatusCode)
 	}
 	resp.Body.Close()
+
+	resp = env.get(t, "/api/images?dir=raffles")
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Errorf("GET deleted category status = %d; want 400 (unknown)", resp.StatusCode)
+	}
+	resp.Body.Close()
+}
+
+// TestImages_RenameDefaultCategory verifies a seeded default can be renamed
+// (name and directory) like any other category.
+func TestImages_RenameDefaultCategory(t *testing.T) {
+	env := newTestEnv(t)
+	env.loginAdmin(t)
+
+	env.postImagesUpload(t, "raffles", map[string][]byte{"prize.png": pngBytes}).Body.Close()
+
+	resp := env.patchJSON(t, "/api/image-categories/raffles", map[string]any{
+		"name": "Prize Pool", "new_dir": "prize_pool",
+	})
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("rename status = %d; want 200", resp.StatusCode)
+	}
+	resp.Body.Close()
+
+	if names := env.imageNames(t, "prize_pool"); len(names) != 1 || names[0] != "prize.png" {
+		t.Errorf("prize_pool images = %v; want [prize.png]", names)
+	}
 }
 
 func TestImages_RenameCustomCategory(t *testing.T) {
@@ -353,6 +382,64 @@ func TestImages_Migration(t *testing.T) {
 
 	if names := env.imageNames(t, "announcements_main"); len(names) != 1 || names[0] != "legacy.png" {
 		t.Errorf("announcements_main = %v; want [legacy.png] migrated from legacy dir", names)
+	}
+}
+
+// TestImages_ManifestMigration verifies a pre-version-2 manifest (custom
+// categories only, no version field) gets the former permanent set folded in
+// while keeping the existing custom entries.
+func TestImages_ManifestMigration(t *testing.T) {
+	webRoot := t.TempDir()
+	imagesDir := filepath.Join(webRoot, "images")
+	if err := os.MkdirAll(imagesDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	legacy := []byte(`{"categories":[{"name":"Event Banners","dir":"event_banners"}]}`)
+	if err := os.WriteFile(filepath.Join(imagesDir, ".categories.json"), legacy, 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	env := newTestEnvWithWebRoot(t, webRoot)
+	env.loginAdmin(t)
+
+	resp := env.get(t, "/api/image-categories")
+	data := decodeBody(t, resp)
+	cats, _ := data["categories"].([]any)
+	dirs := map[string]bool{}
+	for _, c := range cats {
+		dirs[c.(map[string]any)["dir"].(string)] = true
+	}
+	for _, want := range []string{"raffles", "announcements_main", "event_banners"} {
+		if !dirs[want] {
+			t.Errorf("category %q missing after manifest migration (got %v)", want, dirs)
+		}
+	}
+}
+
+// TestImages_ManifestMigration_RunsOnce verifies the migration does not
+// resurrect defaults an admin deleted: a second server start on the same
+// webRoot leaves the version-2 manifest untouched.
+func TestImages_ManifestMigration_RunsOnce(t *testing.T) {
+	webRoot := t.TempDir()
+
+	env := newTestEnvWithWebRoot(t, webRoot)
+	env.loginAdmin(t)
+	resp := env.del(t, "/api/image-categories/raffles")
+	if resp.StatusCode != http.StatusNoContent {
+		t.Fatalf("delete status = %d; want 204", resp.StatusCode)
+	}
+	resp.Body.Close()
+
+	// Simulate a restart: a fresh server over the same webRoot.
+	env2 := newTestEnvWithWebRoot(t, webRoot)
+	env2.loginAdmin(t)
+	resp = env2.get(t, "/api/image-categories")
+	data := decodeBody(t, resp)
+	cats, _ := data["categories"].([]any)
+	for _, c := range cats {
+		if c.(map[string]any)["dir"] == "raffles" {
+			t.Errorf("deleted default category %q reappeared after restart", "raffles")
+		}
 	}
 }
 

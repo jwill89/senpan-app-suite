@@ -272,8 +272,14 @@ export const useAdminStore = defineStore('admin', () => {
         })
         break
       case 'images':
-        apply('images', tab === 'system-images', () => {
-          void useImagesStore().loadCategories()
+        // The shared image picker reads the cached category list + per-dir
+        // images from many tabs (announcements, raffles, garapons, affiliates,
+        // stamp rallies, themes), so refresh the caches regardless of the open
+        // tab — not just when viewing System → Images.
+        apply('images', true, () => {
+          const images = useImagesStore()
+          void images.loadCategories()
+          for (const dir of Object.keys(images.imagesByDir)) void images.loadImages(dir)
         })
         break
       case 'bookclub':

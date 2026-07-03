@@ -20,55 +20,51 @@ import (
 // category maps to exactly one subfolder; uploaded images for that category live
 // directly in it and are served publicly from /images/<dir>/<file>.
 //
-// Three categories are PERMANENT (hardcoded, not renamable/deletable) and back
-// the announcement + raffle editors:
+// Every category is admin-managed (a display name + a directory name): all of
+// them can be created, renamed, and deleted. Categories are tracked in a dotfile
+// manifest at <webRoot>/images/.categories.json — the directory tree holds the
+// files, the manifest records the human-readable name ↔ directory mapping
+// (mirrors the carrd title sidecar approach, so no database/model change is
+// needed). Deleting a category removes its folder and all files within it.
 //
-//	"Announcement Main"      → images/announcements_main
-//	"Announcement Thumbnail" → images/announcements_thumb
-//	"Raffle"                 → images/raffles
-//
-// Admins may add custom categories (a display name + a directory name). Custom
-// categories are tracked in a dotfile manifest at <webRoot>/images/.categories.json
-// — the directory tree holds the files, the manifest only records the
-// human-readable name ↔ directory mapping (mirrors the carrd title sidecar
-// approach, so no database/model change is needed). Deleting a custom category
-// removes its folder and all files within it.
+// Any editor that stores an image reference (announcements, raffles, garapons,
+// affiliates, stamp rallies, theme flourishes) picks from ALL categories via the
+// shared image picker, so no category is tied to a feature.
 //
 // Like carrd (and unlike fonts), an uploaded image whose name already exists
 // OVERWRITES the existing file.
 
 // imageCategoriesManifest is the dotfile under <webRoot>/images that records the
-// custom (non-permanent) categories. A dotfile so it is never served/listed.
+// categories. A dotfile so it is never served/listed.
 const imageCategoriesManifest = ".categories.json"
 
-// Permanent category directories (also referenced by canAccessImageDir and the
-// announcement/raffle editors). Kept as constants so callers can name them.
+// imageManifestVersion is the current manifest schema version. Version 2 marks
+// the migration that folded the formerly hardcoded "permanent" categories into
+// the manifest as ordinary editable ones (see migrateImageCategoryManifest).
+const imageManifestVersion = 2
+
+// Directories referenced by the startup seed/migration helpers below.
 const (
-	imageDirAnnouncementsMain  = "announcements_main"
-	imageDirAnnouncementsThumb = "announcements_thumb"
-	imageDirRaffles            = "raffles"
-	imageDirGarapons           = "garapons"
-	imageDirFlourishes         = "flourishes"
-	imageDirAffiliateLogos     = "affiliate_logos"
-	imageDirAffiliateImages    = "affiliate_images"
-	imageDirStampCards         = "stamp_cards"
-	imageDirStampStamps        = "stamp_stamps"
-	imageDirStampPrizes        = "stamp_prizes"
+	imageDirAnnouncementsMain = "announcements_main"
+	imageDirFlourishes        = "flourishes"
 )
 
-// permanentImageCategories returns the fixed categories, in a stable order.
-func permanentImageCategories() []model.ImageCategory {
+// defaultImageCategories returns the categories seeded into a fresh (or
+// pre-version-2) manifest. These match the formerly hardcoded permanent set so
+// existing deployments keep their categories; after seeding they are ordinary
+// categories and may be renamed or deleted.
+func defaultImageCategories() []model.ImageCategory {
 	return []model.ImageCategory{
-		{Name: "Announcement Main", Dir: imageDirAnnouncementsMain, Permanent: true},
-		{Name: "Announcement Thumbnail", Dir: imageDirAnnouncementsThumb, Permanent: true},
-		{Name: "Raffle", Dir: imageDirRaffles, Permanent: true},
-		{Name: "Garapon", Dir: imageDirGarapons, Permanent: true},
-		{Name: "Flourishes", Dir: imageDirFlourishes, Permanent: true},
-		{Name: "Affiliate Logos", Dir: imageDirAffiliateLogos, Permanent: true},
-		{Name: "Affiliate Images", Dir: imageDirAffiliateImages, Permanent: true},
-		{Name: "Stamp Cards", Dir: imageDirStampCards, Permanent: true},
-		{Name: "Stamp Stamps", Dir: imageDirStampStamps, Permanent: true},
-		{Name: "Stamp Prizes", Dir: imageDirStampPrizes, Permanent: true},
+		{Name: "Announcement Main", Dir: imageDirAnnouncementsMain},
+		{Name: "Announcement Thumbnail", Dir: "announcements_thumb"},
+		{Name: "Raffle", Dir: "raffles"},
+		{Name: "Garapon", Dir: "garapons"},
+		{Name: "Flourishes", Dir: imageDirFlourishes},
+		{Name: "Affiliate Logos", Dir: "affiliate_logos"},
+		{Name: "Affiliate Images", Dir: "affiliate_images"},
+		{Name: "Stamp Cards", Dir: "stamp_cards"},
+		{Name: "Stamp Stamps", Dir: "stamp_stamps"},
+		{Name: "Stamp Prizes", Dir: "stamp_prizes"},
 	}
 }
 
@@ -78,16 +74,6 @@ func permanentImageCategories() []model.ImageCategory {
 // allow-list), and validation of the SVG bytes happens in handleImagesUpload.
 func isAllowedImagesExt(ext string) bool {
 	return ext == ".svg" || isAllowedImageExt(ext)
-}
-
-// isPermanentImageDir reports whether dir is one of the permanent category dirs.
-func isPermanentImageDir(dir string) bool {
-	for _, c := range permanentImageCategories() {
-		if c.Dir == dir {
-			return true
-		}
-	}
-	return false
 }
 
 // imagesRootDir returns the absolute path to <webRoot>/images.
@@ -107,14 +93,15 @@ func slugifyImageDir(s string) string { return slugify(s, '_') }
 // against traversal for dir names received from the client on list/upload/delete.
 func validImageDir(dir string) bool { return validSlug(dir, '_') }
 
-// imageManifest is the JSON shape of the custom-categories manifest dotfile.
+// imageManifest is the JSON shape of the categories manifest dotfile.
 type imageManifest struct {
+	Version    int                   `json:"version"`
 	Categories []model.ImageCategory `json:"categories"`
 }
 
-// readImageCategories reads the custom-category manifest. Returns an empty slice
-// when the manifest is missing or unreadable (it isn't created until the first
-// custom category is added).
+// readImageCategories reads the category manifest. Returns an empty slice when
+// the manifest is missing or unreadable (migrateImageCategoryManifest seeds it
+// on startup).
 func (s *Server) readImageCategories() []model.ImageCategory {
 	data, err := os.ReadFile(filepath.Join(s.imagesRootDir(), imageCategoriesManifest))
 	if err != nil {
@@ -124,27 +111,53 @@ func (s *Server) readImageCategories() []model.ImageCategory {
 	if err := json.Unmarshal(data, &m); err != nil {
 		return []model.ImageCategory{}
 	}
-	// Defensive: drop any entry that collides with a permanent dir or is invalid.
+	// Defensive: drop any entry whose directory name is invalid.
 	out := make([]model.ImageCategory, 0, len(m.Categories))
 	for _, c := range m.Categories {
-		if validImageDir(c.Dir) && !isPermanentImageDir(c.Dir) {
-			c.Permanent = false
+		if validImageDir(c.Dir) {
 			out = append(out, c)
 		}
 	}
 	return out
 }
 
-// writeImageCategories persists the custom categories to the manifest dotfile.
+// writeImageCategories persists the categories to the manifest dotfile.
 func (s *Server) writeImageCategories(cats []model.ImageCategory) error {
 	if err := os.MkdirAll(s.imagesRootDir(), 0755); err != nil {
 		return err
 	}
-	data, err := json.Marshal(imageManifest{Categories: cats})
+	data, err := json.Marshal(imageManifest{Version: imageManifestVersion, Categories: cats})
 	if err != nil {
 		return err
 	}
 	return os.WriteFile(filepath.Join(s.imagesRootDir(), imageCategoriesManifest), data, 0644)
+}
+
+// migrateImageCategoryManifest upgrades the category manifest to the current
+// schema version. Pre-version-2 manifests (including a missing one, i.e. a fresh
+// install) get the formerly hardcoded permanent categories folded in ahead of
+// any custom entries. Runs once: version-2 manifests are left untouched, so
+// categories an admin later renames or deletes stay renamed/deleted.
+func (s *Server) migrateImageCategoryManifest() {
+	data, err := os.ReadFile(filepath.Join(s.imagesRootDir(), imageCategoriesManifest))
+	if err == nil {
+		var m imageManifest
+		if json.Unmarshal(data, &m) == nil && m.Version >= imageManifestVersion {
+			return // already migrated
+		}
+	}
+	merged := defaultImageCategories()
+	seen := make(map[string]bool, len(merged))
+	for _, c := range merged {
+		seen[c.Dir] = true
+	}
+	for _, c := range s.readImageCategories() {
+		if !seen[c.Dir] {
+			merged = append(merged, c)
+			seen[c.Dir] = true
+		}
+	}
+	_ = s.writeImageCategories(merged)
 }
 
 // imageCategoryDirStats returns the number of image files in a category dir and
@@ -166,51 +179,67 @@ func (s *Server) imageCategoryDirStats(dir string) (count int, totalSize int64) 
 	return count, totalSize
 }
 
-// allImageCategories returns the permanent categories followed by the custom
-// ones, each with file counts/size populated.
+// allImageCategories returns the manifest categories with file counts/size
+// populated.
 func (s *Server) allImageCategories() []model.ImageCategory {
-	cats := append(permanentImageCategories(), s.readImageCategories()...)
+	cats := s.readImageCategories()
 	for i := range cats {
 		cats[i].FileCount, cats[i].TotalSize = s.imageCategoryDirStats(cats[i].Dir)
 	}
 	return cats
 }
 
-// canAccessImageDir reports whether the user may LIST a category's images. The
-// management endpoints (upload/delete/category CRUD) require system-images, but
-// the announcement and raffle editors need to read their own categories without
-// it, so the permanent dirs map to those editors' page permissions.
-func canAccessImageDir(u *model.User, dir string) bool {
+// canBrowseImages reports whether the user may READ the image library (list
+// categories and the images within them). The management endpoints
+// (upload/delete/category CRUD) require system-images, but every editor whose
+// page embeds the shared image picker needs read access to all categories, so
+// any image-using page permission grants it.
+func canBrowseImages(u *model.User) bool {
 	if u == nil {
 		return false
 	}
-	if u.IsAdmin || userHasPermission(u, permSystemImages) {
+	if u.IsAdmin {
 		return true
 	}
-	switch dir {
-	case imageDirAnnouncementsMain, imageDirAnnouncementsThumb:
-		return userHasPermission(u, permTeahouseAnnounce)
-	case imageDirRaffles:
-		return userHasPermission(u, permTeahouseRaffles)
-	case imageDirGarapons:
-		return userHasPermission(u, permFestivalGarapon)
-	case imageDirFlourishes:
-		return userHasPermission(u, permSystemThemes)
-	case imageDirAffiliateLogos, imageDirAffiliateImages:
-		return userHasPermission(u, permTeahouseAffiliates)
-	case imageDirStampCards, imageDirStampStamps, imageDirStampPrizes:
-		return userHasPermission(u, permFestivalStampRally)
+	for _, perm := range []string{
+		permSystemImages,
+		permTeahouseAnnounce,
+		permTeahouseRaffles,
+		permTeahouseAffiliates,
+		permFestivalGarapon,
+		permFestivalStampRally,
+		permSystemThemes,
+	} {
+		if userHasPermission(u, perm) {
+			return true
+		}
 	}
 	return false
 }
 
-// handleImageCategoriesList returns all image categories (permanent + custom).
+// requireImageBrowse guards the image read endpoints: it allows any user that
+// canBrowseImages accepts, writing 401/403 otherwise.
+func (s *Server) requireImageBrowse(w http.ResponseWriter, r *http.Request) bool {
+	u := s.currentUser(r)
+	if u == nil {
+		writeError(w, http.StatusUnauthorized, "Unauthorized – login required")
+		return false
+	}
+	if !canBrowseImages(u) {
+		writeError(w, http.StatusForbidden, "Forbidden – you do not have access to the image library")
+		return false
+	}
+	return true
+}
+
+// handleImageCategoriesList returns all image categories.
 //
 //	Endpoint:  GET /api/image-categories
-//	Auth:      admin, or a user granted system-images
-//	Response:  {"categories": [{name, dir, permanent, file_count, total_size}]}
+//	Auth:      admin, or a user granted any image-using page permission
+//	           (the shared image picker needs the category list)
+//	Response:  {"categories": [{name, dir, file_count, total_size}]}
 func (s *Server) handleImageCategoriesList(w http.ResponseWriter, r *http.Request) {
-	if !s.requirePermission(w, r, permSystemImages) {
+	if !s.requireImageBrowse(w, r) {
 		return
 	}
 	if err := os.MkdirAll(s.imagesRootDir(), 0755); err != nil {
@@ -296,8 +325,8 @@ func (s *Server) handleImageCategoryDelete(w http.ResponseWriter, r *http.Reques
 }
 
 // createImageCategory validates the name + directory, ensures the directory does
-// not collide with a permanent or existing custom one, creates the folder, and
-// records it in the manifest. reqName/reqDir are the raw request values.
+// not collide with an existing category, creates the folder, and records it in
+// the manifest. reqName/reqDir are the raw request values.
 func (s *Server) createImageCategory(w http.ResponseWriter, reqName, reqDir string) {
 	name := strings.TrimSpace(reqName)
 	if name == "" {
@@ -311,10 +340,6 @@ func (s *Server) createImageCategory(w http.ResponseWriter, reqName, reqDir stri
 	}
 	if dir == "" {
 		writeError(w, http.StatusBadRequest, "Could not derive a directory name — use letters or numbers in the name or directory")
-		return
-	}
-	if isPermanentImageDir(dir) {
-		writeError(w, http.StatusConflict, "That directory is reserved by a permanent category")
 		return
 	}
 
@@ -334,7 +359,7 @@ func (s *Server) createImageCategory(w http.ResponseWriter, reqName, reqDir stri
 		writeInternalError(w, "create image category", err)
 		return
 	}
-	cat := model.ImageCategory{Name: name, Dir: dir, Permanent: false}
+	cat := model.ImageCategory{Name: name, Dir: dir}
 	if err := s.writeImageCategories(append(cats, cat)); err != nil {
 		writeInternalError(w, "write image categories", err)
 		return
@@ -342,18 +367,13 @@ func (s *Server) createImageCategory(w http.ResponseWriter, reqName, reqDir stri
 	writeJSON(w, http.StatusCreated, model.ImageCategoryActionResponse{OK: true, Category: cat})
 }
 
-// renameImageCategory updates a custom category's display name and, when the
-// directory changes, moves the folder on disk. Permanent categories are rejected.
-// reqDir is the existing directory (from the path); reqName/reqNewDir are the
-// raw request values.
+// renameImageCategory updates a category's display name and, when the directory
+// changes, moves the folder on disk. reqDir is the existing directory (from the
+// path); reqName/reqNewDir are the raw request values.
 func (s *Server) renameImageCategory(w http.ResponseWriter, reqDir, reqName, reqNewDir string) {
 	dir := strings.TrimSpace(reqDir)
 	if !validImageDir(dir) {
 		writeError(w, http.StatusBadRequest, "Invalid directory name")
-		return
-	}
-	if isPermanentImageDir(dir) {
-		writeError(w, http.StatusForbidden, "Permanent categories cannot be modified")
 		return
 	}
 	name := strings.TrimSpace(reqName)
@@ -367,10 +387,6 @@ func (s *Server) renameImageCategory(w http.ResponseWriter, reqDir, reqName, req
 	}
 	if newDir == "" {
 		writeError(w, http.StatusBadRequest, "Could not derive a directory name")
-		return
-	}
-	if isPermanentImageDir(newDir) {
-		writeError(w, http.StatusConflict, "That directory is reserved by a permanent category")
 		return
 	}
 
@@ -415,7 +431,7 @@ func (s *Server) renameImageCategory(w http.ResponseWriter, reqDir, reqName, req
 		}
 	}
 
-	cats[idx] = model.ImageCategory{Name: name, Dir: newDir, Permanent: false}
+	cats[idx] = model.ImageCategory{Name: name, Dir: newDir}
 	if err := s.writeImageCategories(cats); err != nil {
 		writeInternalError(w, "write image categories", err)
 		return
@@ -423,17 +439,12 @@ func (s *Server) renameImageCategory(w http.ResponseWriter, reqDir, reqName, req
 	writeJSON(w, http.StatusOK, model.ImageCategoryActionResponse{OK: true, Category: cats[idx]})
 }
 
-// deleteImageCategory removes a custom category's folder (and all its files) and
-// its manifest entry. Permanent categories cannot be deleted. reqDir is the
-// directory (from the path).
+// deleteImageCategory removes a category's folder (and all its files) and its
+// manifest entry. reqDir is the directory (from the path).
 func (s *Server) deleteImageCategory(w http.ResponseWriter, reqDir string) {
 	dir := strings.TrimSpace(reqDir)
 	if !validImageDir(dir) {
 		writeError(w, http.StatusBadRequest, "Invalid directory name")
-		return
-	}
-	if isPermanentImageDir(dir) {
-		writeError(w, http.StatusForbidden, "Permanent categories cannot be deleted")
 		return
 	}
 
@@ -461,12 +472,9 @@ func (s *Server) deleteImageCategory(w http.ResponseWriter, reqDir string) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// imageDirIsKnown reports whether dir is a permanent or a recorded custom
-// category (so we never list/upload into arbitrary subfolders of images/).
+// imageDirIsKnown reports whether dir is a recorded category (so we never
+// list/upload into arbitrary subfolders of images/).
 func (s *Server) imageDirIsKnown(dir string) bool {
-	if isPermanentImageDir(dir) {
-		return true
-	}
 	for _, c := range s.readImageCategories() {
 		if c.Dir == dir {
 			return true
@@ -478,23 +486,16 @@ func (s *Server) imageDirIsKnown(dir string) bool {
 // handleImagesList returns the images in a category, newest first.
 //
 //	Endpoint:  GET /api/images?dir=<dir>
-//	Auth:      admin/system-images, or the editor permission that owns the dir
-//	           (teahouse-announcements for the announcement dirs, teahouse-raffles
-//	           for the raffle dir).
+//	Auth:      admin, or a user granted any image-using page permission
+//	           (the shared image picker browses every category)
 //	Response:  {"dir": "...", "images": [{name, url, path, size, modified}]}
 func (s *Server) handleImagesList(w http.ResponseWriter, r *http.Request) {
-	u := s.currentUser(r)
-	if u == nil {
-		writeError(w, http.StatusUnauthorized, "Unauthorized – login required")
+	if !s.requireImageBrowse(w, r) {
 		return
 	}
 	dir := strings.TrimSpace(r.URL.Query().Get("dir"))
 	if !validImageDir(dir) || !s.imageDirIsKnown(dir) {
 		writeError(w, http.StatusBadRequest, "Unknown image category")
-		return
-	}
-	if !canAccessImageDir(u, dir) {
-		writeError(w, http.StatusForbidden, "Forbidden – you do not have access to this category")
 		return
 	}
 

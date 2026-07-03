@@ -23,10 +23,8 @@ import { rateTotal, ratePct as normalizedPct } from '@/lib/garapon'
 const emit = defineEmits<{ saved: []; cancel: [] }>()
 const garapons = useGaraponsStore()
 
-// Load the reusable grand-prize images (the "Garapon" category on System → Images)
-// and the open stamp rallies offered in the "Linked Stamp Rally" picker.
+// Load the open stamp rallies offered in the "Linked Stamp Rally" picker.
 onMounted(() => {
-  void garapons.loadGrandPrizeImages()
   void garapons.loadStampRallyOptions()
 })
 
@@ -156,12 +154,9 @@ function cancel(): void {
 
       <FormField
         label="Grand Prize Image"
-        help="Pick from the “Garapon” image category. Upload new images on the System → Images page."
+        help="Pick from any image category. Upload new images on the System → Images page."
       >
-        <ImagePicker
-          v-model="garapons.garaponForm.grand_prize_image"
-          :images="garapons.grandPrizeImages"
-        />
+        <ImagePicker v-model="garapons.garaponForm.grand_prize_image" />
       </FormField>
 
       <FormActions align="start">

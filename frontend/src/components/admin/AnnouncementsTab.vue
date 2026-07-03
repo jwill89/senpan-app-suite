@@ -496,20 +496,20 @@ async function submitRole(): Promise<void> {
         </p>
       </FormField>
 
-      <!-- Embed images (optional): pick a thumbnail and/or a main image from the
-           central Images page categories. Upload new images on System → Images. -->
+      <!-- Embed images (optional): pick a thumbnail and/or a main image from any
+           image category. Upload new images on System → Images. -->
       <FormField
         label="Embed images (optional)"
-        help="Pick a thumbnail (small, top-right) and/or a main image (large, bottom). Upload new images on the System → Images page (categories “Announcement Thumbnail” and “Announcement Main”)."
+        help="Pick a thumbnail (small, top-right) and/or a main image (large, bottom) from any image category. Upload new images on the System → Images page."
       >
         <div class="image-pickers">
           <div class="image-picker-block">
             <span class="field-label">Thumbnail — small, top-right</span>
-            <ImagePicker v-model="store.form.thumbnail" :images="store.thumbImages" />
+            <ImagePicker v-model="store.form.thumbnail" value-key="url" />
           </div>
           <div class="image-picker-block">
             <span class="field-label">Main image — large, bottom</span>
-            <ImagePicker v-model="store.form.image" :images="store.mainImages" />
+            <ImagePicker v-model="store.form.image" value-key="url" />
           </div>
         </div>
       </FormField>

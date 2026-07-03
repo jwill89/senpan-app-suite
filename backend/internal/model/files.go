@@ -95,7 +95,6 @@ type CarrdUploadResponse struct {
 type ImageCategory struct {
 	Name      string `json:"name"`
 	Dir       string `json:"dir"`
-	Permanent bool   `json:"permanent"`
 	FileCount int    `json:"file_count"`
 	TotalSize int64  `json:"total_size"`
 }

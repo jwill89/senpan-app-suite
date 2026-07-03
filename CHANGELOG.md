@@ -26,6 +26,26 @@ The format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## Frontend
 
+### [3.1.0] — 2026-07-03
+
+#### Changed
+
+- **Image picker browses the whole image library.** The picker used by the
+  announcement, raffle, garapon, affiliate, stamp-rally, and theme-flourish
+  editors now has its own category dropdown: any image in any category can be
+  picked from any editor (announcements keep storing absolute URLs for Discord
+  embeds; the theme flourish pickers only offer `.svg`). When editing, the
+  picker opens in the category of the currently selected image. The per-feature
+  image lists (and their store plumbing) are gone.
+- **All image categories are editable.** The "Permanent" badge and the disabled
+  Edit/Delete buttons on System → Images → Manage Categories are gone — every
+  category can be renamed and deleted (deleting still removes its folder and
+  files, so existing references lose their images).
+- System → Images now lists `.svg` in the upload help + file-browser filter
+  (SVG uploads were already accepted and sanitized server-side).
+- Image caches refresh live on any image change, whichever admin tab is open,
+  so open pickers pick up another admin's uploads.
+
 ### [3.0.0] — 2026-07-02
 
 #### Changed
@@ -268,6 +288,24 @@ First tracked release — establishes versioning for the current production buil
 ---
 
 ## Backend
+
+### [3.1.0] — 2026-07-03
+
+#### Changed
+
+- **No more permanent image categories.** The ten formerly hardcoded categories
+  (announcements, raffle, garapon, flourishes, affiliates ×2, stamp rally ×3)
+  are folded into the `.categories.json` manifest by a one-time startup
+  migration (manifest schema v2) and become ordinary categories — renamable and
+  deletable like any other. Fresh installs seed the same set as defaults. The
+  `permanent` field is gone from `ImageCategory`, and rename/delete no longer
+  return `403 Permanent category`.
+- **Image read access widened for the shared picker.** `GET
+  /api/image-categories` and `GET /api/images` now allow any user holding an
+  image-using page permission (announcements, raffles, garapon, affiliates,
+  stamp rally, themes, or system-images) instead of gating each directory to
+  the single editor permission that owned it. Management endpoints
+  (upload/delete/category CRUD) still require `system-images`.
 
 ### [3.0.0] — 2026-07-02
 

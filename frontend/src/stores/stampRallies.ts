@@ -25,12 +25,6 @@ import type {
 import { datetimeLocalToUtc, utcToDatetimeLocal } from '@/lib/datetime'
 import { withLoading } from '@/lib/withLoading'
 import { useUiStore } from './ui'
-import {
-  useImagesStore,
-  IMAGE_DIR_STAMP_CARDS,
-  IMAGE_DIR_STAMP_STAMPS,
-  IMAGE_DIR_STAMP_PRIZES,
-} from './images'
 
 /** A fresh placement for a new stamp/prize: centred, modest size, no rotation. */
 function defaultPlacement(): Placement {
@@ -87,10 +81,6 @@ export const useStampRalliesStore = defineStore('stampRallies', () => {
   const rallyForm = ref<StampRallyForm | null>(null)
   /** Affiliates, for the per-stamp "stall" select (null = Senpan Tea House). */
   const affiliates = ref<Affiliate[]>([])
-  /** Reusable images for the three pickers. */
-  const cardImages = ref<string[]>([])
-  const stampImages = ref<string[]>([])
-  const prizeImages = ref<string[]>([])
   /** New-card form state. */
   const cardAdd = ref<{ participantName: string }>({ participantName: '' })
   /** Stamps loaded for an expanded "Manage stalls" panel on a list card, by rally id. */
@@ -161,21 +151,8 @@ export const useStampRalliesStore = defineStore('stampRallies', () => {
     void loadRallyDetail(r.id)
   }
 
-  /** Loads the three picker image categories + the affiliates list (for the form). */
+  /** Loads the affiliates list for the form's per-stamp "stall" selects. */
   async function loadFormSources(): Promise<void> {
-    try {
-      const images = useImagesStore()
-      await Promise.all([
-        images.loadImages(IMAGE_DIR_STAMP_CARDS),
-        images.loadImages(IMAGE_DIR_STAMP_STAMPS),
-        images.loadImages(IMAGE_DIR_STAMP_PRIZES),
-      ])
-      cardImages.value = images.imagesByDir[IMAGE_DIR_STAMP_CARDS].map((i) => i.path)
-      stampImages.value = images.imagesByDir[IMAGE_DIR_STAMP_STAMPS].map((i) => i.path)
-      prizeImages.value = images.imagesByDir[IMAGE_DIR_STAMP_PRIZES].map((i) => i.path)
-    } catch {
-      /* non-fatal: pickers show nothing */
-    }
     try {
       const data = await endpoints.affiliates.list()
       affiliates.value = data.affiliates
@@ -482,9 +459,6 @@ export const useStampRalliesStore = defineStore('stampRallies', () => {
     rallyForm,
     affiliates,
     cardStamps,
-    cardImages,
-    stampImages,
-    prizeImages,
     cardAdd,
     ralliesLoading,
     detailLoading,

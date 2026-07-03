@@ -22,7 +22,6 @@ import type {
   StampRally,
 } from '@/types/api'
 import { useUiStore } from './ui'
-import { useImagesStore, IMAGE_DIR_GARAPONS } from './images'
 import { nextUid } from '@/lib/uid'
 import { withLoading } from '@/lib/withLoading'
 
@@ -43,8 +42,6 @@ export const useGaraponsStore = defineStore('garapons', () => {
   const garaponPlayers = ref<GaraponPlayer[]>([])
   const garaponDraws = ref<GaraponDraw[]>([])
   const garaponForm = ref<GaraponForm | null>(null)
-  /** Reusable grand-prize images (the "Garapon" category on System → Images). */
-  const grandPrizeImages = ref<string[]>([])
   /** Open stamp rallies offered in the "Linked Stamp Rally" picker on the form. */
   const stampRallyOptions = ref<StampRally[]>([])
   /** Admin "generate drawing" form (issue a new per-player link). */
@@ -128,17 +125,6 @@ export const useGaraponsStore = defineStore('garapons', () => {
 
   function resetPlayerAdd(): void {
     playerAdd.value = { playerName: '', maxDraws: 1 }
-  }
-
-  /** Loads the reusable grand-prize images (the "Garapon" category) for the picker. */
-  async function loadGrandPrizeImages(): Promise<void> {
-    try {
-      const images = useImagesStore()
-      await images.loadImages(IMAGE_DIR_GARAPONS)
-      grandPrizeImages.value = images.imagesByDir[IMAGE_DIR_GARAPONS].map((i) => i.path)
-    } catch {
-      /* non-fatal: the picker just shows nothing */
-    }
   }
 
   /** Loads the OPEN stamp rallies for the form's "Linked Stamp Rally" picker. */
@@ -437,7 +423,6 @@ export const useGaraponsStore = defineStore('garapons', () => {
     garaponPlayers,
     garaponDraws,
     garaponForm,
-    grandPrizeImages,
     stampRallyOptions,
     playerAdd,
     garaponsLoading,
@@ -462,7 +447,6 @@ export const useGaraponsStore = defineStore('garapons', () => {
     loadGarapons,
     loadGaraponDetail,
     viewGarapon,
-    loadGrandPrizeImages,
     loadStampRallyOptions,
     newGaraponForm,
     editGaraponForm,

@@ -3,7 +3,7 @@ package model
 // Affiliate is a partner establishment listed in the Senpan Tea House → Affiliates
 // admin section: a named place with one or more owners, a location, opening hours
 // (multiple time ranges sharing one timezone), markdown details, and two pictures
-// picked from dedicated permanent image categories — a Logo and an establishment
+// picked from the shared image library — a Logo and an establishment
 // Screenshot. Owners and Hours are persisted as JSON columns (no sub-tables).
 type Affiliate struct {
 	ID         int64           `json:"id"`

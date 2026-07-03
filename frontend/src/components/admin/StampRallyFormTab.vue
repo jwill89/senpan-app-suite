@@ -156,15 +156,15 @@ function cancel(): void {
       <FormRow>
         <FormField
           label="Stamp Card Image"
-          help="The full designed card — its frame, slot placeholders, stall labels, and any prize panel are all part of this image. Earned stamp/prize art is overlaid on top. From “Stamp Cards”."
+          help="The full designed card — its frame, slot placeholders, stall labels, and any prize panel are all part of this image. Earned stamp/prize art is overlaid on top."
         >
-          <ImagePicker v-model="store.rallyForm.card_image" :images="store.cardImages" />
+          <ImagePicker v-model="store.rallyForm.card_image" />
         </FormField>
         <FormField
           label="Not-Stamped Overlay (optional)"
-          help="Drawn over uncollected stamp + locked prize slots. Leave empty if your card already marks them (e.g. with “?”). From “Stamp Stamps”."
+          help="Drawn over uncollected stamp + locked prize slots. Leave empty if your card already marks them (e.g. with “?”)."
         >
-          <ImagePicker v-model="store.rallyForm.not_stamped_image" :images="store.stampImages" />
+          <ImagePicker v-model="store.rallyForm.not_stamped_image" />
         </FormField>
       </FormRow>
 
@@ -231,8 +231,8 @@ function cancel(): void {
               />
             </FormField>
           </FormRow>
-          <FormField label="Stamp Image" help="From the “Stamp Stamps” image category.">
-            <ImagePicker v-model="selected.stamp.image" :images="store.stampImages" />
+          <FormField label="Stamp Image" help="Pick from any image category.">
+            <ImagePicker v-model="selected.stamp.image" />
           </FormField>
           <FormRow>
             <FormField label="Active From" help="Optional — defaults to the whole event.">
@@ -261,8 +261,8 @@ function cancel(): void {
           <FormField label="Prize Name">
             <input v-model="selected.prize.name" placeholder="Prize name" aria-label="Prize name" />
           </FormField>
-          <FormField label="Prize Image" help="From the “Stamp Prizes” image category.">
-            <ImagePicker v-model="selected.prize.image" :images="store.prizeImages" />
+          <FormField label="Prize Image" help="Pick from any image category.">
+            <ImagePicker v-model="selected.prize.image" />
           </FormField>
         </template>
       </div>

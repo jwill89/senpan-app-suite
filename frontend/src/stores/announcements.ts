@@ -16,11 +16,6 @@ import { computed, ref } from 'vue'
 import { endpoints } from '@/lib/endpoints'
 import { detectTimezone } from '@/lib/constants'
 import { nextUid } from '@/lib/uid'
-import {
-  useImagesStore,
-  IMAGE_DIR_ANNOUNCEMENTS_MAIN,
-  IMAGE_DIR_ANNOUNCEMENTS_THUMB,
-} from './images'
 import type {
   Announcement,
   AnnouncementForm,
@@ -94,7 +89,6 @@ function parseWeekdays(csv: string): number[] {
 
 export const useAnnouncementsStore = defineStore('announcements', () => {
   const ui = useUiStore()
-  const imagesStore = useImagesStore()
 
   // Data.
   const types = ref<AnnouncementType[]>([])
@@ -102,14 +96,6 @@ export const useAnnouncementsStore = defineStore('announcements', () => {
   const sortedTypes = computed(() => [...types.value].sort((a, b) => a.name.localeCompare(b.name)))
   const roles = ref<AnnouncementRole[]>([])
   const announcements = ref<Announcement[]>([])
-  /** Reusable image URLs for the Main / Thumbnail pickers, sourced from the
-   *  central Images page categories (announcements_main / announcements_thumb). */
-  const mainImages = computed(() =>
-    (imagesStore.imagesByDir[IMAGE_DIR_ANNOUNCEMENTS_MAIN] ?? []).map((i) => i.url),
-  )
-  const thumbImages = computed(() =>
-    (imagesStore.imagesByDir[IMAGE_DIR_ANNOUNCEMENTS_THUMB] ?? []).map((i) => i.url),
-  )
 
   // Forms.
   const typeForm = ref<AnnouncementTypeForm>(emptyTypeForm())
@@ -155,13 +141,6 @@ export const useAnnouncementsStore = defineStore('announcements', () => {
     } finally {
       loading.value = false
     }
-    loadImages()
-  }
-
-  /** Loads the Main + Thumbnail reusable-image libraries from the Images page. */
-  function loadImages(): void {
-    void imagesStore.loadImages(IMAGE_DIR_ANNOUNCEMENTS_MAIN)
-    void imagesStore.loadImages(IMAGE_DIR_ANNOUNCEMENTS_THUMB)
   }
 
   async function loadTypes(): Promise<void> {
@@ -498,8 +477,6 @@ export const useAnnouncementsStore = defineStore('announcements', () => {
     sortedTypes,
     roles,
     announcements,
-    mainImages,
-    thumbImages,
     typeForm,
     roleForm,
     form,
@@ -517,7 +494,6 @@ export const useAnnouncementsStore = defineStore('announcements', () => {
     loadRoles,
     loadAnnouncements,
     reorder,
-    loadImages,
     resetTypeForm,
     editType,
     saveType,

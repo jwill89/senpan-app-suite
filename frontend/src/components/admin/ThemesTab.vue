@@ -6,26 +6,13 @@
  * for the live preview). A theme-list sidebar + the editor pane, with
  * set-active / clear-active controls. Activating applies the theme live.
  */
-import { computed, onMounted } from 'vue'
+import { computed } from 'vue'
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
 import ThemeTokenEditor from '@/components/admin/ThemeTokenEditor.vue'
 import ImagePicker from '@/components/common/ui/ImagePicker.vue'
 import { useStylesStore } from '@/stores/styles'
-import { useImagesStore, IMAGE_DIR_FLOURISHES } from '@/stores/images'
 
 const styles = useStylesStore()
-const images = useImagesStore()
-
-// SVG flourishes (root-relative paths) for the Board/Number Flourish pickers.
-// Only .svg is offered — the board flourish inlines for card export and the
-// number flourish is a CSS mask, both of which require SVG.
-const flourishPaths = computed(() =>
-  (IMAGE_DIR_FLOURISHES in images.imagesByDir ? images.imagesByDir[IMAGE_DIR_FLOURISHES] : [])
-    .filter((i) => i.name.toLowerCase().endsWith('.svg'))
-    .map((i) => i.path),
-)
-
-onMounted(() => images.loadImages(IMAGE_DIR_FLOURISHES))
 
 // Writable view of the edited theme's token map (the store guarantees it's set
 // while editing); lets the token editor bind via v-model.
@@ -123,16 +110,17 @@ const tokens = computed<Record<string, string>>({
 
             <ThemeTokenEditor v-model="tokens" />
 
-            <!-- Decorative flourishes (SVG only) sourced from the Flourishes image
-                 category. Empty = the app's built-in flourishes. -->
+            <!-- Decorative flourishes (SVG only — the board flourish inlines for
+                 card export and the number flourish is a CSS mask) picked from the
+                 shared image library. Empty = the app's built-in flourishes. -->
             <div class="flourish-options">
               <div class="flourish-option">
                 <label class="field-label">Board Flourish</label>
                 <p class="text-dim text-xs mb-8">
-                  SVG drawn at the four corners of the player bingo board. Upload SVGs under System
-                  → Images → Flourishes. Leave unset to use the built-in flourish.
+                  SVG drawn at the four corners of the player bingo board. Upload SVGs on the System
+                  → Images page. Leave unset to use the built-in flourish.
                 </p>
-                <ImagePicker v-model="styles.editingStyle.board_flourish" :images="flourishPaths" />
+                <ImagePicker v-model="styles.editingStyle.board_flourish" :extensions="['.svg']" />
               </div>
               <div class="flourish-option">
                 <label class="field-label">Number Flourish</label>
@@ -140,10 +128,7 @@ const tokens = computed<Record<string, string>>({
                   SVG shown either side of the “Last Called” number (player view + Game tab). Leave
                   unset to use the built-in flourish.
                 </p>
-                <ImagePicker
-                  v-model="styles.editingStyle.number_flourish"
-                  :images="flourishPaths"
-                />
+                <ImagePicker v-model="styles.editingStyle.number_flourish" :extensions="['.svg']" />
               </div>
             </div>
           </div>

@@ -386,22 +386,24 @@ func buildFilePaths(b *pb) {
 			body:  multipartBody("Carrd files.", props("folder", pstr(""), "path", pstr(""), "files", pfiles("Files."))),
 			resps: []respEntry{ok("CarrdUploadResponse")}})
 	// Images
-	b.add("GET", "/api/image-categories", "Files", "List image categories", "permission:system-images", "", opt{resps: []respEntry{ok("ImageCategoriesResponse")}})
+	b.add("GET", "/api/image-categories", "Files", "List image categories", "auth",
+		"Access: admin, `system-images`, or any image-using editor permission (the shared image picker reads the category list).", opt{
+			resps: []respEntry{ok("ImageCategoriesResponse"), r("403", "No access")}})
 	b.add("POST", "/api/image-categories", "Files", "Create an image category", "permission:system-images",
-		"Creates a custom category; `dir` is optional (derived from `name` when omitted). Permanent dirs are reserved.", opt{
+		"Creates a category; `dir` is optional (derived from `name` when omitted).", opt{
 			body:  actionBody("New category.", nil, props("name", pstr("Category name (required)."), "dir", pstr("Directory name (optional)."))),
-			resps: []respEntry{created("ImageCategoryActionResponse"), r("400", "Invalid"), r("409", "Duplicate / reserved")}})
+			resps: []respEntry{created("ImageCategoryActionResponse"), r("400", "Invalid"), r("409", "Duplicate")}})
 	b.add("PATCH", "/api/image-categories/{dir}", "Files", "Rename an image category", "permission:system-images",
-		"Renames a custom category's name and/or directory (`new_dir` \"\"/omitted derives from `name`). Permanent categories are protected.", opt{
+		"Renames a category's name and/or directory (`new_dir` \"\"/omitted derives from `name`).", opt{
 			path:  []*openapi3.Parameter{pparam("dir", "Existing category directory.")},
 			body:  actionBody("Rename fields.", nil, props("name", pstr("New name (required)."), "new_dir", pstr("New directory (optional)."))),
-			resps: []respEntry{ok("ImageCategoryActionResponse"), r("400", "Invalid"), r("403", "Permanent category"), r("404", "Not found"), r("409", "Duplicate / reserved")}})
+			resps: []respEntry{ok("ImageCategoryActionResponse"), r("400", "Invalid"), r("404", "Not found"), r("409", "Duplicate")}})
 	b.add("DELETE", "/api/image-categories/{dir}", "Files", "Delete an image category", "permission:system-images",
-		"Deletes a custom category folder and all its files. Permanent categories are protected.", opt{
+		"Deletes a category folder and all its files.", opt{
 			path:  []*openapi3.Parameter{pparam("dir", "Category directory.")},
-			resps: []respEntry{noContent(), r("400", "Invalid"), r("403", "Permanent category"), r("404", "Not found")}})
+			resps: []respEntry{noContent(), r("400", "Invalid"), r("404", "Not found")}})
 	b.add("GET", "/api/images", "Files", "List images in a category", "auth",
-		"Access: admin, `system-images`, or the editor permission that owns the category (e.g. `raffles`→teahouse-raffles).", opt{
+		"Access: admin, `system-images`, or any image-using editor permission (announcements, raffles, garapon, affiliates, stamp rally, themes).", opt{
 			query: []*openapi3.Parameter{qparam("dir", "Category directory (required).", true)},
 			resps: []respEntry{ok("ImagesResponse"), r("400", "Unknown category"), r("403", "No access")}})
 	b.add("POST", "/api/images/upload", "Files", "Upload images", "permission:system-images",

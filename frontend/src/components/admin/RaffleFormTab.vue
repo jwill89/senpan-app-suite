@@ -7,7 +7,6 @@
  * on a successful save and `cancel`/`back` to return to the list, rather than
  * navigating routes itself.
  */
-import { onMounted } from 'vue'
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
 import MarkdownEditor from '@/components/common/MarkdownEditor.vue'
 import AdminPanel from '@/components/common/ui/AdminPanel.vue'
@@ -20,9 +19,6 @@ import { useRafflesStore } from '@/stores/raffles'
 
 const emit = defineEmits<{ saved: []; cancel: [] }>()
 const raffles = useRafflesStore()
-
-// Load the reusable prize images (the "Raffle" category on System → Images).
-onMounted(() => raffles.loadPrizeImages())
 
 /** Save the form; on success let the parent return to the list. */
 async function save(): Promise<void> {
@@ -109,9 +105,9 @@ function cancel(): void {
       </FormRow>
       <FormField
         label="Prize Image"
-        help="Pick from the “Raffle” image category. Upload new images on the System → Images page."
+        help="Pick from any image category. Upload new images on the System → Images page."
       >
-        <ImagePicker v-model="raffles.raffleForm.prize_image" :images="raffles.prizeImages" />
+        <ImagePicker v-model="raffles.raffleForm.prize_image" />
       </FormField>
       <FormActions align="start">
         <button class="btn-neutral" :disabled="raffles.savingRaffle" @click="cancel">Cancel</button>

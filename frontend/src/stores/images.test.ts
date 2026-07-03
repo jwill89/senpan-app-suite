@@ -18,8 +18,8 @@ vi.mock('@/lib/endpoints', () => ({
 import { useImagesStore } from './images'
 import { useUiStore } from './ui'
 
-function cat(name: string, dir: string, permanent = false): ImageCategory {
-  return { name, dir, permanent, file_count: 0, total_size: 0 }
+function cat(name: string, dir: string): ImageCategory {
+  return { name, dir, file_count: 0, total_size: 0 }
 }
 function entry(name: string): ImageEntry {
   return {
@@ -46,7 +46,7 @@ describe('images sortedCategories', () => {
 
 describe('images loaders', () => {
   it('loadCategories populates from the endpoint', async () => {
-    categories.mockResolvedValueOnce({ categories: [cat('Raffle', 'raffles', true)] })
+    categories.mockResolvedValueOnce({ categories: [cat('Raffle', 'raffles')] })
     const store = useImagesStore()
     await store.loadCategories()
     expect(store.categories).toHaveLength(1)
@@ -59,6 +59,24 @@ describe('images loaders', () => {
     await store.loadImages('raffles')
     expect(list).toHaveBeenCalledWith('raffles')
     expect(store.imagesByDir.raffles.map((i) => i.name)).toEqual(['a.png'])
+  })
+
+  it('ensureCategories fetches once for concurrent callers and skips when loaded', async () => {
+    categories.mockResolvedValue({ categories: [cat('Raffle', 'raffles')] })
+    const store = useImagesStore()
+    await Promise.all([store.ensureCategories(), store.ensureCategories()])
+    expect(categories).toHaveBeenCalledTimes(1)
+    await store.ensureCategories()
+    expect(categories).toHaveBeenCalledTimes(1)
+  })
+
+  it('ensureImages fetches a directory once and skips when cached', async () => {
+    list.mockResolvedValue({ dir: 'raffles', images: [entry('a.png')] })
+    const store = useImagesStore()
+    await Promise.all([store.ensureImages('raffles'), store.ensureImages('raffles')])
+    expect(list).toHaveBeenCalledTimes(1)
+    await store.ensureImages('raffles')
+    expect(list).toHaveBeenCalledTimes(1)
   })
 })
 

@@ -12,8 +12,8 @@ import (
 // An affiliate is a partner establishment (see model.Affiliate). Admins manage a
 // flat list of them — create/edit/delete — with owners and opening hours edited
 // as repeatable rows and persisted as JSON. The logo + screenshot are picked from
-// the "Affiliate Logos" / "Affiliate Images" permanent image categories. There's
-// no public view: this is admin-only management gated by permTeahouseAffiliates.
+// the shared image library (System → Images categories). There's no public view:
+// this is admin-only management gated by permTeahouseAffiliates.
 
 // handleAffiliatesList returns every affiliate, alphabetically by name.
 //

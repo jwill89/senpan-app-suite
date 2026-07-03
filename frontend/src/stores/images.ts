@@ -2,31 +2,20 @@
  * Images store: manages image "categories" (curated subdirectories of
  * <webRoot>/images) and the images within them — the System → Images admin page.
  *
- * Three categories are permanent (Announcement Main / Announcement Thumbnail /
- * Raffle) and back the announcement + raffle editors; admins may add custom ones
- * (a display name + a directory). Uploading an image whose name already exists
+ * Every category is admin-managed (a display name + a directory) and can be
+ * created, renamed, and deleted. Uploading an image whose name already exists
  * overwrites it.
  *
- * The announcement and raffle editors also use this store to LIST their category
- * (via `loadImages(dir)` → `imagesByDir[dir]`) without owning any upload UI.
+ * The shared ImagePicker (announcements, raffles, garapons, affiliates, stamp
+ * rallies, theme flourishes) also uses this store to browse categories and list
+ * images (`ensureCategories()` / `ensureImages(dir)` → `imagesByDir[dir]`)
+ * without owning any upload UI.
  */
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 import { endpoints } from '@/lib/endpoints'
 import type { ImageCategory, ImageEntry } from '@/types/api'
 import { useUiStore } from './ui'
-
-/** Permanent category directory names (mirrors the Go permanent categories). */
-export const IMAGE_DIR_ANNOUNCEMENTS_MAIN = 'announcements_main'
-export const IMAGE_DIR_ANNOUNCEMENTS_THUMB = 'announcements_thumb'
-export const IMAGE_DIR_RAFFLES = 'raffles'
-export const IMAGE_DIR_GARAPONS = 'garapons'
-export const IMAGE_DIR_FLOURISHES = 'flourishes'
-export const IMAGE_DIR_AFFILIATE_LOGOS = 'affiliate_logos'
-export const IMAGE_DIR_AFFILIATE_IMAGES = 'affiliate_images'
-export const IMAGE_DIR_STAMP_CARDS = 'stamp_cards'
-export const IMAGE_DIR_STAMP_STAMPS = 'stamp_stamps'
-export const IMAGE_DIR_STAMP_PRIZES = 'stamp_prizes'
 
 export const useImagesStore = defineStore('images', () => {
   const ui = useUiStore()
@@ -67,6 +56,31 @@ export const useImagesStore = defineStore('images', () => {
     } finally {
       loadingImages.value = false
     }
+  }
+
+  // In-flight de-duplication for the ensure* helpers: several pickers mount at
+  // once (a form can hold four), and each asks for the same data.
+  let categoriesPromise: Promise<void> | null = null
+  const imagesPromises = new Map<string, Promise<void>>()
+
+  /** Loads the category list only if it isn't already loaded or loading. */
+  async function ensureCategories(): Promise<void> {
+    if (categories.value.length > 0) return
+    categoriesPromise ??= loadCategories().finally(() => {
+      categoriesPromise = null
+    })
+    return categoriesPromise
+  }
+
+  /** Loads a category's images only if they aren't already cached or loading. */
+  async function ensureImages(dir: string): Promise<void> {
+    if (dir in imagesByDir.value) return
+    let pending = imagesPromises.get(dir)
+    if (!pending) {
+      pending = loadImages(dir).finally(() => imagesPromises.delete(dir))
+      imagesPromises.set(dir, pending)
+    }
+    return pending
   }
 
   /** Creates or renames a category; returns the resulting dir on success, else null. */
@@ -164,6 +178,8 @@ export const useImagesStore = defineStore('images', () => {
     uploading,
     loadCategories,
     loadImages,
+    ensureCategories,
+    ensureImages,
     saveCategory,
     deleteCategory,
     uploadImages,

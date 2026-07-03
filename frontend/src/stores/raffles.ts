@@ -8,7 +8,6 @@ import { endpoints } from '@/lib/endpoints'
 import { utcToDatetimeLocal, datetimeLocalToUtc, parseServerTimestamp } from '@/lib/datetime'
 import type { Raffle, RaffleEnterResponse, RaffleEntry, RaffleForm } from '@/types/api'
 import { useUiStore } from './ui'
-import { useImagesStore, IMAGE_DIR_RAFFLES } from './images'
 import { withLoading } from '@/lib/withLoading'
 
 /**
@@ -59,8 +58,6 @@ export const useRafflesStore = defineStore('raffles', () => {
   const raffleWinner = ref<RaffleEntry | null>(null)
   const raffleWinnerEntry = ref<RaffleEntry | null>(null) // public closed view
   const raffleTotalEntryCount = ref(0)
-  /** Reusable prize-image paths (the "Raffle" category on the Images page). */
-  const prizeImages = ref<string[]>([])
   // In-flight flags driving spinners / button disabling.
   const rafflesLoading = ref(false)
   const detailLoading = ref(false)
@@ -286,18 +283,6 @@ export const useRafflesStore = defineStore('raffles', () => {
     }
   }
 
-  /** Loads the reusable prize images (the "Raffle" category) for the form picker.
-   *  Prize images are stored as root-relative paths, so the picker uses `.path`. */
-  async function loadPrizeImages(): Promise<void> {
-    try {
-      const images = useImagesStore()
-      await images.loadImages(IMAGE_DIR_RAFFLES)
-      prizeImages.value = images.imagesByDir[IMAGE_DIR_RAFFLES].map((i) => i.path)
-    } catch {
-      /* non-fatal: the picker just shows nothing */
-    }
-  }
-
   // ── Public sign-up ─────────────────────────────────────────────────────────
 
   /**
@@ -465,7 +450,6 @@ export const useRafflesStore = defineStore('raffles', () => {
     raffleWinner,
     raffleWinnerEntry,
     raffleTotalEntryCount,
-    prizeImages,
     rafflesLoading,
     detailLoading,
     savingRaffle,
@@ -486,7 +470,6 @@ export const useRafflesStore = defineStore('raffles', () => {
     cancelRaffleForm,
     saveRaffle,
     deleteRaffle,
-    loadPrizeImages,
     raffleTotalCost,
     clampSignupEntries,
     enterRaffle,

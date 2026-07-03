@@ -1345,8 +1345,8 @@ const garaponDrawsTableSQL = `CREATE TABLE IF NOT EXISTS garapon_draws (
 // affiliatesTableSQL defines the Affiliates table (Senpan Tea House → Affiliates):
 // a partner establishment with one or more owners and opening-hours ranges stored
 // as JSON arrays (owners/hours), a single timezone anchoring those hours, markdown
-// details, and a logo + screenshot picked from dedicated permanent image
-// categories. Shared between createTables (fresh install) and migrateAffiliates
+// details, and a logo + screenshot picked from the shared image library.
+// Shared between createTables (fresh install) and migrateAffiliates
 // (existing databases) so the schema is defined once.
 const affiliatesTableSQL = `CREATE TABLE IF NOT EXISTS affiliates (
 	id INTEGER PRIMARY KEY AUTOINCREMENT,

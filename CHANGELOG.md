@@ -26,6 +26,38 @@ The format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## Frontend
 
+### [3.0.0] — 2026-07-02
+
+#### Changed
+
+- **BREAKING (with backend 3.0.0): protected font serving.** Uploaded fonts are
+  no longer referenced by static `https://fonts.senpan.cafe/<file>` URLs. The
+  app registers `@font-face` rules from the rotating tokenized URLs in the
+  settings payload (`uploaded_fonts` is now `[{name, family, token}]`), loading
+  fonts **same-origin** via `/api/fonts/pub/f/<token>` — so the header/board
+  font picker and player-facing fonts always work regardless of any external
+  allowlist. Requires backend 3.0.0.
+- **Font Upload reworked around font families.** Files sharing a base name
+  (e.g. `Jasper.ttf` + `Jasper.woff2`) appear as ONE font. The table stays
+  slim — **CSS Name**, **Serves** (the actual served format:
+  TTF/OTF/WOFF/WOFF2/EOT; ✦ marks the auto-converted copy), **Modified**, and
+  actions — and a new **Edit** modal holds everything else: the CSS
+  `font-family` name (blank = base-name default; flows through the kit, the
+  app, and the picker), the served-version picker (any uploaded format or the
+  converted WOFF2), the font's **own allowed-sites list**, and the files
+  themselves (per-file rename/delete with sizes).
+
+#### Added
+
+- **Embed on External Sites** panel: copy the permanent `kit.css`
+  `<link>` snippet for Carrd sites; each site automatically receives only the
+  fonts whose allowed sites include it. Per-font **Copy URL** copies the
+  served version's tokenized link (expires in 1–2 weeks) instead of a
+  permanent direct download link.
+- **Live-preview format switch**: preview any font's text sample in each of
+  its actual formats (e.g. TTF vs the converted WOFF2) to sanity-check a
+  conversion before serving it.
+
 ### [2.2.0] — 2026-07-02
 
 #### Added
@@ -236,6 +268,48 @@ First tracked release — establishes versioning for the current production buil
 ---
 
 ## Backend
+
+### [3.0.0] — 2026-07-02
+
+#### Changed
+
+- **BREAKING: protected font serving.** Uploaded fonts are licensed assets and
+  are no longer served as static files. The server streams them itself:
+  `GET /api/fonts/pub/kit.css` (generated `@font-face` stylesheet for external
+  sites) and `GET /api/fonts/pub/f/{token}` (font bytes behind an opaque,
+  rotating HMAC token, valid 7–14 days; key auto-generated into the
+  `font_url_secret` settings key). Font requests are **origin-gated per
+  font**: same-origin (the SPA) is always allowed; cross-origin needs an
+  origin on THAT font's allowlist (echoed via `Access-Control-Allow-Origin`,
+  which browsers require for cross-origin fonts); requests with no usable
+  Origin (address bar, plain fetch tools) are refused. `kit.css` filters its
+  `@font-face` rules by the requesting site's Referer, so each site only sees
+  the fonts that allow it. Both endpoints are served with **private** caching:
+  Cloudflare fronts the site, caches `*.woff2` by default, and ignores `Vary`,
+  so a shared-cache copy would silently bypass the origin gate (browsers still
+  cache per-visitor). `GET /api/settings` `uploaded_fonts` changed from
+  `["file.ttf"]` to `[{name, family, token}]` (hence the MAJOR bump).
+  **Deployment:** the `fonts.senpan.cafe` vhost must become a reverse proxy to
+  `/api/fonts/pub/` (see `deploy/README.md`); legacy direct font URLs stop
+  working.
+- **BREAKING: fonts are grouped into families.** Files sharing a base name
+  (e.g. `Jasper.otf` + `Jasper.woff2`) are format VARIANTS of one font.
+  `GET /api/fonts` returns the grouped shape (base, family, served type/token,
+  per-font origins, variants); `PATCH /api/fonts/{name}` renames one file;
+  `PATCH /api/fonts/families/{base}` edits a font's metadata (`family` — the
+  CSS name, `serve` — the served variant type, `origins` — its allowlist,
+  stored under the `font_meta` settings key) and
+  `DELETE /api/fonts/families/{base}` removes a whole font.
+
+#### Added
+
+- **Automatic WOFF2 conversion** (via `github.com/tdewolff/font`, pure Go). A
+  font with no uploaded WOFF2 gets one converted from its best source into
+  `<webRoot>/fonts/.woff2/` — the served variant by default (selectable per
+  font); uploading a real WOFF2 suppresses/removes the converted copy. A
+  startup backfill converts pre-existing fonts and sweeps stale copies.
+  Conversion failure keeps the upload and serves an uploaded format instead
+  (reported via the new `warnings` field on the upload response).
 
 ### [2.2.0] — 2026-07-02
 

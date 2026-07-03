@@ -587,17 +587,24 @@ export const endpoints = {
       apiDelete(`images?dir=${enc(dir)}&name=${enc(name)}`),
   },
 
-  // ── Fonts (System → Font Upload) ─────────────────────────────────────────────
+  // ── Fonts (Atelier → Font Upload) ────────────────────────────────────────────
   fonts: {
-    /** GET /api/fonts — list font files in <webRoot>/fonts. */
+    /** GET /api/fonts — fonts grouped by base name with their variants. */
     list: () => apiGet<FontsResponse>('fonts'),
     /** POST /api/fonts/upload — multipart upload of one or more "files" fields. */
     upload: (form: FormData) => apiPost<FontUploadResponse>('fonts/upload', form),
-    /** DELETE /api/fonts/{name} — remove a font file by name (204). */
-    delete: (name: string) => apiDelete(`fonts/${enc(name)}`),
-    /** PATCH /api/fonts/{name} — rename a font file (fails if the target exists). */
-    rename: (name: string, newName: string) =>
+    /** DELETE /api/fonts/{name} — remove ONE variant file by name (204). */
+    deleteFile: (name: string) => apiDelete(`fonts/${enc(name)}`),
+    /** PATCH /api/fonts/{name} — rename one variant file (fails if the target exists). */
+    renameFile: (name: string, newName: string) =>
       apiPatch<NamedOKResponse>(`fonts/${enc(name)}`, { new_name: newName }),
+    /** PATCH /api/fonts/families/{base} — partial update of a font's metadata:
+     *  CSS family name ("" = base default), served variant type ("" = auto),
+     *  and/or its per-font allowed-site origins. */
+    updateFamily: (base: string, fields: { family?: string; serve?: string; origins?: string[] }) =>
+      apiPatch<OKResponse>(`fonts/families/${enc(base)}`, fields),
+    /** DELETE /api/fonts/families/{base} — delete a whole font (all variants, 204). */
+    deleteFont: (base: string) => apiDelete(`fonts/families/${enc(base)}`),
   },
 
   // ── Carrd image hosting (System → Carrd Upload) ──────────────────────────────

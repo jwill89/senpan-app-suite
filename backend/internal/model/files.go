@@ -1,21 +1,48 @@
 package model
 
-// FontFile is the JSON shape for a single font file in the directory listing.
-type FontFile struct {
-	Name     string `json:"name"`
-	Size     int64  `json:"size"`
-	Modified string `json:"modified"` // RFC3339
+// FontVariant is one format variant of a font: an uploaded file, or the
+// auto-converted WOFF2 copy (Converted=true). Token serves this variant; it
+// rotates on a schedule, so it must be re-read, never persisted.
+type FontVariant struct {
+	Name      string `json:"name"`      // file name (converted copies use "<base>.woff2")
+	Type      string `json:"type"`      // "TTF" | "OTF" | "WOFF" | "WOFF2" | "EOT"
+	Converted bool   `json:"converted"` // auto-generated WOFF2 copy, not an upload
+	Size      int64  `json:"size"`
+	Modified  string `json:"modified"` // RFC3339 ("" for converted copies)
+	Token     string `json:"token"`
+}
+
+// Font is one logical font in GET /api/fonts: all uploaded files sharing a
+// base name (plus the converted WOFF2 copy) grouped as variants. Base is the
+// group's identity for the /api/fonts/families/{base} endpoints. Family is the
+// effective CSS family name (admin-customizable; defaults to Base). Serve is
+// the admin's chosen served variant type ("" = auto: WOFF2 when available);
+// ServedType/ServedToken describe the variant actually served publicly.
+// Origins is THIS font's external-site allowlist (the app's own origin is
+// always allowed and never listed).
+type Font struct {
+	Base        string        `json:"base"`
+	Family      string        `json:"family"`
+	Serve       string        `json:"serve"`
+	ServedType  string        `json:"served_type"`
+	ServedToken string        `json:"served_token"`
+	Origins     []string      `json:"origins"`
+	Modified    string        `json:"modified"` // newest variant, RFC3339
+	Variants    []FontVariant `json:"variants"`
 }
 
 // FontsResponse is the body of GET /api/fonts.
 type FontsResponse struct {
-	Fonts []FontFile `json:"fonts"`
+	Fonts []Font `json:"fonts"`
 }
 
-// FontUploadResponse is the body of POST /api/fonts/upload.
+// FontUploadResponse is the body of POST /api/fonts/upload. Warnings covers
+// files that uploaded fine but whose WOFF2 conversion failed (the original is
+// served for those).
 type FontUploadResponse struct {
 	Uploaded []string        `json:"uploaded"`
 	Skipped  []SkippedUpload `json:"skipped"`
+	Warnings []string        `json:"warnings,omitempty"`
 }
 
 // CarrdProject is the JSON shape for one project in the listing. The counts and

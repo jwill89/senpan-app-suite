@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/alexedwards/scs/v2"
@@ -42,6 +43,10 @@ type Server struct {
 	// openAPISpec is the embedded openapi.yaml served at GET /api/openapi.yaml
 	// and rendered by GET /api/docs. Injected from main via SetOpenAPISpec.
 	openAPISpec []byte
+	// Lazily-loaded HMAC key for the tokenized public font URLs — see
+	// fontserve.go. Generated and persisted to settings on first use.
+	fontSecretMu  sync.Mutex
+	fontSecretVal []byte
 }
 
 // SetTurnstile enables the Cloudflare Turnstile bot check on the login form.
@@ -94,6 +99,12 @@ func New(st *store.Store, hub *ws.Hub, sessionSecret, webRoot string, allowedOri
 	// Seed the built-in flourish SVGs into the Flourishes image category so they
 	// are pickable in the theme flourish selectors (idempotent).
 	s.seedFlourishes()
+	// Upgrade pre-group font metadata (file-keyed entries, the old global
+	// origin allowlist), then reconcile every font's WOFF2 conversion —
+	// backfilling missing ones and sweeping stale copies. Both idempotent;
+	// conversion failures log and fall back to serving an uploaded format.
+	s.migrateFontMetaV2()
+	s.migrateFontDerivatives()
 	// LoadAndSave (outer) populates the session, then withUserCache adds a
 	// per-request memo so currentUser hits the DB at most once per request.
 	s.sessHandler = sm.LoadAndSave(s.withUserCache(s.mux))
@@ -315,12 +326,23 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("GET /api/settings", s.handleSettingsGet)
 	s.mux.HandleFunc("POST /api/settings", s.handleSettingsUpdate)
 
-	// Font file management (System → Font Upload). Fonts are keyed by filename;
-	// the literal /upload sub-path is matched ahead of the {name} wildcard.
+	// Font management (Atelier → Font Upload). Font FILES are keyed by filename
+	// ({name}); logical FONTS (groups of variants sharing a base name) are keyed
+	// by base under the literal /families sub-path, which the Go 1.22 mux
+	// matches ahead of the single-segment {name} wildcard. The literal /upload
+	// sub-path likewise precedes {name}.
 	s.mux.HandleFunc("GET /api/fonts", s.handleFontsList)
 	s.mux.HandleFunc("POST /api/fonts/upload", s.handleFontUpload)
 	s.mux.HandleFunc("DELETE /api/fonts/{name}", s.handleFontDelete)
 	s.mux.HandleFunc("PATCH /api/fonts/{name}", s.handleFontRename)
+	s.mux.HandleFunc("PATCH /api/fonts/families/{base}", s.handleFontFamilyPatch)
+	s.mux.HandleFunc("DELETE /api/fonts/families/{base}", s.handleFontFamilyDelete)
+	// Public tokenized font serving (fontserve.go). The fonts.senpan.cafe vhost
+	// reverse-proxies to these ("/" → /api/fonts/pub/); the SPA loads the same
+	// endpoints same-origin via the /api ProxyPass, so per-font allowlists never
+	// affect the app itself.
+	s.mux.HandleFunc("GET /api/fonts/pub/kit.css", s.handleFontKitCSS)
+	s.mux.HandleFunc("GET /api/fonts/pub/f/{token}", s.handleFontPublicFile)
 
 	// Carrd image hosting (System → Carrd Upload). Projects are keyed by folder
 	// name (a path param); images/sub-dirs are keyed by folder+path (+name), which

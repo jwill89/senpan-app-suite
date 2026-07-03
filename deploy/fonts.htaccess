@@ -1,35 +1,25 @@
 # ============================================================================
-# Apache .htaccess — font host (serves https://fonts.senpan.cafe/)
+# Apache .htaccess — font storage folder (<webRoot>/fonts/)
 # ----------------------------------------------------------------------------
-# PLACEMENT: copy this file to the document root that serves
-# https://fonts.senpan.cafe/ as ".htaccess". That directory is <webRoot>/fonts/
-# — the folder the Go server writes uploaded fonts to (see internal/server/
-# fonts.go: fontsDir() = <webRoot>/fonts). The Go server only ever adds/removes
-# font files there, so this .htaccess persists across uploads.
+# PLACEMENT: copy this file to <webRoot>/fonts/.htaccess — the folder the Go
+# server writes uploaded fonts to (see internal/server/fonts.go: fontsDir()).
 #
-# WHY THIS IS NEEDED:
-#   The SPA at https://apps.senpan.cafe loads uploaded fonts via CSS @font-face
-#   pointing at https://fonts.senpan.cafe/<file>. Unlike images, cross-origin
-#   font fetches are subject to CORS — without an `Access-Control-Allow-Origin`
-#   header the browser blocks the font and the header/board font silently falls
-#   back to serif (the App Settings preview shows the fallback, not the font).
-#   Font files are public, static assets, so granting read access to any origin
-#   is safe.
+# Fonts are LICENSED assets and are no longer served statically. The
+# fonts.senpan.cafe vhost must be a reverse proxy to the Go server's tokenized,
+# origin-gated font endpoints (see deploy/README.md → Font host):
 #
-# If the font vhost does NOT allow .htaccess overrides (AllowOverride None),
-# put the same <FilesMatch> block in the vhost's <Directory> instead, and make
-# sure mod_headers is enabled.
+#   ProxyPass        / http://localhost:8080/api/fonts/pub/
+#   ProxyPassReverse / http://localhost:8080/api/fonts/pub/
+#
+# With the proxy in place Apache never reads this directory, so this file is
+# pure defense in depth: if the vhost is ever reverted to a DocumentRoot
+# pointing here (or another vhost exposes the webRoot), the raw font files
+# still cannot be fetched.
 # ============================================================================
 
-# Don't leak a directory listing of the fonts folder.
-Options -Indexes
+# Deny all direct access to the font files (the Go server reads them from
+# disk; nothing should ever serve them over HTTP from this folder).
+Require all denied
 
-<IfModule mod_headers.c>
-    <FilesMatch "\.(ttf|otf|woff2?|eot)$">
-        # Allow the SPA (any origin) to use these fonts via @font-face.
-        Header set Access-Control-Allow-Origin "*"
-        # Fonts are large and change rarely (a name can't be overwritten in
-        # place — it must be deleted then re-uploaded), so cache for a week.
-        Header set Cache-Control "public, max-age=604800"
-    </FilesMatch>
-</IfModule>
+# Belt and braces if the deny is ever loosened: never list the folder.
+Options -Indexes

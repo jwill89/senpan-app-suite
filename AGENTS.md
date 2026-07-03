@@ -117,7 +117,9 @@ rotated immediately**. See **Authentication & authorization** below.
 │           ├── carrd.go              ← Carrd image-host projects/dirs/uploads under <webRoot>/carrd (System → Atelier → Carrd Upload)
 │           ├── winners.go            ← GET/POST /api/winners-log (list + delete/delete_all), GET /api/winners-log/frequent
 │           ├── settings.go           ← GET/POST /api/settings (app title, draw delay, fonts, AniList URL, join prompt; secret per-club webhooks)
-│           ├── fonts.go              ← GET/POST /api/fonts, POST /api/fonts/upload (uploaded font files in <webRoot>/fonts)
+│           ├── fonts.go              ← fonts admin API: grouped GET /api/fonts, upload, per-file rename/delete, PATCH/DELETE /api/fonts/families/{base} (metadata / whole font)
+│           ├── fontserve.go          ← protected font serving: tokenized public URLs (GET /api/fonts/pub/kit.css + /f/{token}), gated per font by its origin allowlist; kit filtered by Referer
+│           ├── fontconvert.go        ← font GROUPS (base-name variants), WOFF2 conversion (tdewolff/font) into <webRoot>/fonts/.woff2/ (skipped when a WOFF2 was uploaded) + per-font meta (family/serve/origins) + startup migrations
 │           ├── ratelimit.go          ← IP-based brute-force limiter for admin login
 │           ├── tzdata.go             ← blank-imports time/tzdata so IANA timezones resolve on hosts without zoneinfo (Windows)
 │           └── ws.go                 ← GET /api/ws (delegates to hub)
@@ -240,7 +242,7 @@ Indexes: `games(status)`, `called_numbers(game_id, call_order)`, `game_patterns(
 **On-disk uploads (not in the DB)**, all under `<webRoot>`:
 - `images/<category>/` — the **central image host** (System → Images). Each category is a subfolder served at `/images/<dir>/<file>`. Three categories are PERMANENT (hardcoded): `images/raffles` (Raffle), `images/announcements_main` (Announcement Main), `images/announcements_thumb` (Announcement Thumbnail). Admins may add custom categories, tracked in a dotfile manifest `<webRoot>/images/.categories.json` (no DB table). Affiliate logos/screenshots, garapon/stamp-rally artwork, etc. are picked from these categories.
 - `images/bookclub/` — reading-list item cover uploads (AniList covers stay remote)
-- `fonts/` — admin-uploaded **fonts** (`.ttf/.otf/.woff/.woff2/.eot`), served by a **separate** vhost (`https://fonts.senpan.cafe`) — cross-origin `@font-face` needs CORS headers (see Deployment)
+- `fonts/` — admin-uploaded **font files** (`.ttf/.otf/.woff/.woff2/.eot`); files sharing a base name group into one logical FONT (its format variants). Licensed assets — NOT served statically: the Go server streams them via rotating tokenized URLs gated **per font** by its own origin allowlist (`fontserve.go`); the `https://fonts.senpan.cafe` vhost is a reverse proxy onto `/api/fonts/pub/` and external sites embed `kit.css` (filtered per site — see Deployment). A font with no uploaded WOFF2 gets one auto-converted into `fonts/.woff2/` (`fontconvert.go`, tdewolff/font; upload-time + startup backfill) — the served variant defaults to WOFF2, selectable per font
 - `carrd/<project>/…` — Carrd image-host projects (images + `.mp3`/`.mp4`), each with a `.carrd.json` title sidecar; served cross-origin from `https://carrd.senpan.cafe` (needs CORS — see Deployment)
 
 ## Frontend (Vue 3 + TypeScript + Vite)
@@ -355,7 +357,7 @@ Never edit it by hand. Request/response/WebSocket envelopes are hand-written in
 - **System → Settings tab**: app title, bingo join prompt, default draw delay, frequent-winner threshold/window, the **header/board font** picker (combo box with optgroups for uploaded fonts + Google Fonts, optional Google Fonts API key, live preview), the AniList API URL, and the per-club reading-list Discord webhook URLs (treated as secret)
 - **System → Themes tab**: CRUD themes via a structured **token editor** (`ThemeTokenEditor.vue` — a swatch + value per `:root` design token, grouped, with a collapsible live preview), activate/deactivate live. A theme stores a **token map** (not CSS); the server generates the `:root{}` stylesheet (`store.TokensToCSS`). Alpha tokens (modal/shadow/glow) use the `@ckpack/vue-color` picker; solid tokens the native colour input
 - **System → Users tab** (`UsersTab.vue`, **admin-only**): manage accounts — activate/deactivate pending registrations, grant/revoke admin, edit the per-page permission set (checkbox grid grouped by section, derived from `ADMIN_PERMISSIONS`), set a user's password, and delete accounts. The seeded `admin` account is protected (its destructive actions are hidden in the UI and rejected server-side). Separately, **every** logged-in account can rotate its own password via the **Change Password** modal in the admin topbar (`AdminView.vue` → `POST /api/account`)
-- **Atelier → Font Upload tab** (`FontsTab.vue`): upload one or more font files (`.ttf/.otf/.woff/.woff2/.eot`) to `<webRoot>/fonts/`, rename/delete them, copy each file's public URL, and a **live preview** (type any text, pick a font) — all with the same metric clamping used app-wide so oversized fonts render sensibly. Uploaded fonts become selectable as the header/board font for everyone, not just the admin preview.
+- **Atelier → Font Upload tab** (`FontsTab.vue` + `FontEditModal.vue`): upload font files (`.ttf/.otf/.woff/.woff2/.eot`) to `<webRoot>/fonts/`; files sharing a base name are variants of ONE font (a font with no WOFF2 gets one auto-converted). The table is slim — **CSS Name** (the `font-family` used by the kit/app/picker), **Serves** (the served format; ✦ = the converted copy), **Modified**, actions — and the **Edit modal** holds the rest: CSS name, served-version picker (any variant type or Auto), the font's **per-font allowed sites**, and the files themselves (per-file rename/delete, sizes). The **live preview** (type any text, pick a font) can switch between the font's actual formats. Per-row **Copy URL** copies the served variant's tokenized URL (rotates every 1–2 weeks — the kit is for permanent embeds); an Embed panel shows the `kit.css` snippet. The app's own origin is always allowed implicitly (the font picker never breaks).
 - **Atelier → Carrd Upload tab** (`CarrdUploadTab.vue`): manage image-hosting **projects** (folders under `<webRoot>/carrd`, each with a human-readable title) and nested sub-directories; upload images plus `.mp3`/`.mp4` (same-name **overwrites** so external Carrd sites pick up new versions), copy public URLs, delete files/dirs/projects. Served cross-origin from the carrd vhost.
 
 **Key UI patterns**:
@@ -497,7 +499,7 @@ the built SPA so redeploys never wipe them (full guide in `deploy/README.md`):
 <DocumentRoot>/
 ├── .htaccess        ← deploy/.htaccess  (SPA fallback: serves dist/index.html; routes /assets → dist/assets; /images served from root)
 ├── images/          ← deploy/images/    (PERSISTENT: logo/favicon/banner + raffles/, announcements/, bookclub/ uploads)
-├── fonts/           ← (PERSISTENT: admin-uploaded font files; served by the fonts.senpan.cafe vhost)
+├── fonts/           ← (PERSISTENT: admin-uploaded font files; NOT static — streamed by the Go server via tokenized URLs; fonts.senpan.cafe reverse-proxies to /api/fonts/pub/)
 ├── carrd/           ← (PERSISTENT: Carrd image-host projects; served by the carrd.senpan.cafe vhost)
 └── dist/            ← frontend/dist/    (built SPA; replaced each deploy)
 ```
@@ -510,12 +512,19 @@ the built SPA so redeploys never wipe them (full guide in `deploy/README.md`):
   plugin) so the redundant copy doesn't shadow the persistent root `images/`.
 - Schema migration v10 rewrites legacy `assets/images/raffles/...` prize paths
   to `images/raffles/...` automatically on first start.
-- **Font host (CORS)**: uploaded fonts are served cross-origin from
-  `https://fonts.senpan.cafe`, so `@font-face` loads are CORS-restricted (unlike
-  `<img>`). The font vhost must send `Access-Control-Allow-Origin` — deploy
-  `deploy/fonts.htaccess` to `<webRoot>/fonts/.htaccess` (needs `mod_headers` +
-  `AllowOverride`). Without it, uploaded fonts silently fall back to serif. See
-  the **Font host (CORS)** section of `deploy/README.md`.
+- **Font host (protected serving)**: uploaded fonts are licensed assets and are
+  NOT served statically. The Go server streams them via rotating tokenized URLs
+  (`/api/fonts/pub/kit.css` + `/api/fonts/pub/f/{token}`, `fontserve.go`) gated
+  **per font** by its own origin allowlist (Font Upload → Edit); cross-origin
+  `@font-face` requires the echoed CORS header, so non-listed sites can't
+  render the fonts, and `kit.css` only emits each requesting site's allowed
+  fonts. The `fonts.senpan.cafe` vhost is a **reverse proxy** (`ProxyPass / →
+  http://localhost:8080/api/fonts/pub/`); external Carrd sites embed
+  `https://fonts.senpan.cafe/kit.css`. The SPA loads fonts same-origin through
+  the `/api` ProxyPass, so it never depends on any allowlist. Deploy
+  `deploy/fonts.htaccess` (deny-all, defense in depth) to
+  `<webRoot>/fonts/.htaccess`. See **Font host (protected serving)** in
+  `deploy/README.md`.
 - **Carrd host (CORS)**: Carrd projects are served cross-origin from
   `https://carrd.senpan.cafe` and embedded by external Carrd sites, so reads need
   CORS. Deploy `deploy/carrd.htaccess` to `<webRoot>/carrd/.htaccess` (adds

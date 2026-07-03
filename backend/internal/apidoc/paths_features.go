@@ -313,21 +313,44 @@ func buildFeaturePaths(b *pb) {
 
 // buildFilePaths registers the fonts / carrd / images endpoints.
 func buildFilePaths(b *pb) {
-	// Fonts
-	b.add("GET", "/api/fonts", "Files", "List fonts", "permission:atelier-fonts", "", opt{resps: []respEntry{ok("FontsResponse")}})
-	b.add("POST", "/api/fonts/upload", "Files", "Upload fonts", "permission:atelier-fonts",
-		"multipart `files` (repeated, 64 MB total). Same-named files are skipped.", opt{
+	// Fonts. A logical font is a GROUP of uploaded files sharing a base name
+	// (its format variants) plus an auto-converted WOFF2 copy; files are keyed
+	// by filename, fonts by base name under /families.
+	b.add("GET", "/api/fonts", "Files", "List fonts", "permission:atelier-fonts",
+		"Fonts grouped by base name, each with its variants (uploaded files + the auto-converted WOFF2 copy), metadata (CSS family, served type, per-font origin allowlist), and rotating serving tokens.", opt{
+			resps: []respEntry{ok("FontsResponse")}})
+	b.add("POST", "/api/fonts/upload", "Files", "Upload font files", "permission:atelier-fonts",
+		"multipart `files` (repeated, 64 MB total). Same-named files are skipped. Each owning font's WOFF2 conversion is reconciled after the save (a font with no uploaded WOFF2 gets one converted; uploading a real WOFF2 removes a redundant converted copy); conversion failures are reported in `warnings`.", opt{
 			body:  multipartBody("Font files.", props("files", pfiles("Font files."))),
 			resps: []respEntry{ok("FontUploadResponse"), r("400", "No files")}})
-	b.add("DELETE", "/api/fonts/{name}", "Files", "Delete a font", "permission:atelier-fonts",
-		"Fonts are keyed by filename (URL-encode it in the path).", opt{
+	b.add("DELETE", "/api/fonts/{name}", "Files", "Delete a font file", "permission:atelier-fonts",
+		"Deletes ONE variant file (URL-encode the filename). The owning font's conversion and metadata are reconciled (deleting the last file drops the font).", opt{
 			path:  []*openapi3.Parameter{pparam("name", "Font file name.")},
 			resps: []respEntry{noContent(), r("400", "Invalid name"), r("404", "Not found")}})
-	b.add("PATCH", "/api/fonts/{name}", "Files", "Rename a font", "permission:atelier-fonts",
-		"Renames a font file; fails if the target name already exists.", opt{
+	b.add("PATCH", "/api/fonts/{name}", "Files", "Rename a font file", "permission:atelier-fonts",
+		"Renames one variant file; fails if the target name already exists. Group bookkeeping (conversion, metadata) follows the rename.", opt{
 			path:  []*openapi3.Parameter{pparam("name", "Current font file name.")},
 			body:  actionBody("Rename target.", nil, props("new_name", pstr("New file name."))),
 			resps: []respEntry{ok("NamedOKResponse"), r("400", "Invalid name"), r("404", "Not found"), r("409", "Target exists")}})
+	b.add("PATCH", "/api/fonts/families/{base}", "Files", "Update a font's metadata", "permission:atelier-fonts",
+		"Partial update of one font (group): `family` sets the CSS font-family name (\"\" resets to the base name; must not collide with another font's), `serve` picks the served variant type (`TTF`/`OTF`/`WOFF`/`WOFF2`/`EOT`; \"\" = auto, WOFF2 preferred), `origins` replaces THIS font's external-site allowlist (bare origins, e.g. `https://mysite.carrd.co`; the app's own origin is always allowed).", opt{
+			path: []*openapi3.Parameter{pparam("base", "Font base name (filename minus extension).")},
+			body: actionBody("Font metadata to update.", nil, props(
+				"family", pstr("Custom CSS family name (optional; \"\" resets to default)."),
+				"serve", pstr("Served variant type (optional; \"\" = auto)."),
+				"origins", parr("Allowed site origins (optional).", pstr("")))),
+			resps: []respEntry{ok("OKResponse"), r("400", "Invalid field / nothing to update"), r("404", "Font not found"), r("409", "Family name taken")}})
+	b.add("DELETE", "/api/fonts/families/{base}", "Files", "Delete a font", "permission:atelier-fonts",
+		"Deletes a whole font: every uploaded variant file, the converted WOFF2 copy, and its metadata.", opt{
+			path:  []*openapi3.Parameter{pparam("base", "Font base name (filename minus extension).")},
+			resps: []respEntry{noContent(), r("404", "Font not found")}})
+	b.add("GET", "/api/fonts/pub/kit.css", "Files", "Public font kit stylesheet", "public",
+		"Generated `@font-face` stylesheet for external sites (embedded via the fonts vhost as `https://fonts.senpan.cafe/kit.css`). Sources are relative tokenized URLs that rotate on a schedule. Content is filtered per requesting site: a foreign Referer only sees fonts whose allowlist includes its origin; the font files themselves are the real gate.", opt{
+			resps: []respEntry{rawResp("The @font-face stylesheet.", "text/css", false)}})
+	b.add("GET", "/api/fonts/pub/f/{token}", "Files", "Serve a font file by token", "public",
+		"Streams the font behind an opaque rotating token (valid 7–14 days). Same-origin requests are always allowed; cross-origin requests need an `Origin` on THAT FONT's allowlist, echoed in `Access-Control-Allow-Origin` (browsers require CORS for cross-origin fonts, so this is enforced by the browser too). Requests with no usable Origin (e.g. pasting the URL) are refused.", opt{
+			path:  []*openapi3.Parameter{pparam("token", "Opaque font token from the kit stylesheet / settings payload.")},
+			resps: []respEntry{rawResp("The font bytes.", "application/octet-stream", true), r("403", "Origin not approved"), r("404", "Unknown or expired token")}})
 	// Carrd
 	b.add("GET", "/api/carrd/projects", "Files", "List Carrd projects", "permission:atelier-carrd", "", opt{resps: []respEntry{ok("CarrdProjectsResponse")}})
 	b.add("POST", "/api/carrd/projects", "Files", "Create a Carrd project", "permission:atelier-carrd",

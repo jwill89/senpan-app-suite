@@ -19,4 +19,15 @@ var (
 	IsDiscordSnowflakeForTest = isDiscordSnowflake
 	// ParseRaffleTimeForTest parses a raffle availability timestamp to a UTC instant.
 	ParseRaffleTimeForTest = parseRaffleTime
+	// NormalizeFontOriginForTest validates/normalizes a font-allowlist origin.
+	NormalizeFontOriginForTest = normalizeFontOrigin
+	// FontTokenBucketForTest returns the token time bucket for an instant.
+	FontTokenBucketForTest = fontTokenBucket
+	// FontFileTokenForTest derives a font's serving token for a given bucket, so
+	// the expiry window (current + previous bucket) can be exercised directly.
+	FontFileTokenForTest = (*Server).fontFileToken
 )
+
+// WebRootForTest exposes the server's webRoot so external tests can seed
+// upload files mid-test (e.g. adding a font after the env is built).
+func (s *Server) WebRootForTest() string { return s.webRoot }

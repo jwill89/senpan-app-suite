@@ -157,6 +157,18 @@ func created(s string) respEntry    { return respEntry{"201", jsonResp("Created"
 func noContent() respEntry          { return respEntry{"204", jsonResp("No Content", "")} }
 func r(code, desc string) respEntry { return respEntry{code, errResp(desc)} }
 
+// rawResp is a 200 response with a non-JSON media type (e.g. the generated font
+// kit CSS, or font bytes — binary sets the string schema's format accordingly).
+func rawResp(desc, mediaType string, binary bool) respEntry {
+	s := openapi3.NewStringSchema()
+	if binary {
+		s.Format = "binary"
+	}
+	resp := openapi3.NewResponse().WithDescription(desc)
+	resp.Content = openapi3.Content{mediaType: openapi3.NewMediaType().WithSchemaRef(openapi3.NewSchemaRef("", s))}
+	return respEntry{"200", &openapi3.ResponseRef{Value: resp}}
+}
+
 func buildPaths(doc *openapi3.T) {
 	b := &pb{doc: doc}
 

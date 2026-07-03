@@ -80,7 +80,8 @@ var modelTypes = map[string]any{
 
 	// Winners / settings / files
 	"WinnersLogResponse": model.WinnersLogResponse{}, "FrequentWinnersResponse": model.FrequentWinnersResponse{},
-	"FontFile": model.FontFile{}, "FontsResponse": model.FontsResponse{}, "FontUploadResponse": model.FontUploadResponse{},
+	"Font": model.Font{}, "FontVariant": model.FontVariant{}, "FontsResponse": model.FontsResponse{},
+	"FontUploadResponse": model.FontUploadResponse{}, "UploadedFont": model.UploadedFont{},
 	"CarrdProject": model.CarrdProject{}, "CarrdProjectsResponse": model.CarrdProjectsResponse{},
 	"CarrdProjectCreateResponse": model.CarrdProjectCreateResponse{}, "CarrdImage": model.CarrdImage{},
 	"CarrdImagesResponse": model.CarrdImagesResponse{}, "CarrdUploadResponse": model.CarrdUploadResponse{},

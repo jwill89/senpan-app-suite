@@ -61,11 +61,12 @@ func (s *Server) handleSettingsGet(w http.ResponseWriter, r *http.Request) {
 		}
 		result[key] = val
 	}
-	// Uploaded font filenames so the frontend can register @font-face rules and
-	// offer them in the header-font picker (alongside Google Fonts).
+	// Uploaded fonts (name + serving token) so the frontend can register
+	// @font-face rules and offer them in the header-font picker (alongside
+	// Google Fonts). Tokens are minted fresh per response — see fontserve.go.
 	writeJSON(w, http.StatusOK, model.SettingsResponse{
 		Settings:      result,
-		UploadedFonts: s.fontFileNames(),
+		UploadedFonts: s.uploadedFontRefs(),
 	})
 }
 
@@ -144,10 +145,10 @@ func (s *Server) handleSettingsUpdate(w http.ResponseWriter, r *http.Request) {
 
 	// Broadcast changed settings to all clients
 	broadcastPayload := struct {
-		Type          string   `json:"type"`
-		Title         string   `json:"app_title,omitempty"`
-		HeaderFont    string   `json:"header_font,omitempty"`
-		UploadedFonts []string `json:"uploaded_fonts,omitempty"`
+		Type          string               `json:"type"`
+		Title         string               `json:"app_title,omitempty"`
+		HeaderFont    string               `json:"header_font,omitempty"`
+		UploadedFonts []model.UploadedFont `json:"uploaded_fonts,omitempty"`
 	}{Type: "settings_update"}
 
 	if v, ok := req.Settings["app_title"]; ok {
@@ -157,7 +158,7 @@ func (s *Server) handleSettingsUpdate(w http.ResponseWriter, r *http.Request) {
 		broadcastPayload.HeaderFont = v
 		// Include the current uploaded fonts so every client can register the
 		// @font-face for a newly selected uploaded font without a reload.
-		broadcastPayload.UploadedFonts = s.fontFileNames()
+		broadcastPayload.UploadedFonts = s.uploadedFontRefs()
 	}
 	if broadcastPayload.Title != "" || broadcastPayload.HeaderFont != "" {
 		s.hub.Broadcast(broadcastPayload)

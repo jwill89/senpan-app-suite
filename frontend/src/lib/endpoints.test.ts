@@ -292,14 +292,32 @@ describe('styles (hybrid REST)', () => {
 })
 
 describe('fonts (hybrid REST)', () => {
-  it('delete DELETEs the URL-encoded font name', async () => {
-    await endpoints.fonts.delete('My Font.ttf')
+  it('deleteFile DELETEs the URL-encoded file name', async () => {
+    await endpoints.fonts.deleteFile('My Font.ttf')
     expect(apiDelete).toHaveBeenCalledWith('fonts/My%20Font.ttf')
   })
 
-  it('rename PATCHes the font resource with the new name', async () => {
-    await endpoints.fonts.rename('My Font.ttf', 'Renamed.ttf')
+  it('renameFile PATCHes the file resource with the new name', async () => {
+    await endpoints.fonts.renameFile('My Font.ttf', 'Renamed.ttf')
     expect(apiPatch).toHaveBeenCalledWith('fonts/My%20Font.ttf', { new_name: 'Renamed.ttf' })
+  })
+
+  it('updateFamily PATCHes the URL-encoded family resource', async () => {
+    await endpoints.fonts.updateFamily('My Font', {
+      family: 'Fancy',
+      serve: 'WOFF2',
+      origins: ['https://mysite.carrd.co'],
+    })
+    expect(apiPatch).toHaveBeenCalledWith('fonts/families/My%20Font', {
+      family: 'Fancy',
+      serve: 'WOFF2',
+      origins: ['https://mysite.carrd.co'],
+    })
+  })
+
+  it('deleteFont DELETEs the whole family', async () => {
+    await endpoints.fonts.deleteFont('My Font')
+    expect(apiDelete).toHaveBeenCalledWith('fonts/families/My%20Font')
   })
 })
 

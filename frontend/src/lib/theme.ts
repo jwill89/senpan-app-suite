@@ -11,12 +11,14 @@
  *
  * In addition to Google Fonts, the header/board font can be one of the fonts
  * uploaded via System → Font Upload. `applyUploadedFonts()` registers an
- * @font-face for each uploaded file (served from FONT_BASE_URL) so those
- * families are usable anywhere `--header-font` is — for players too, not just
- * the admin preview. `applyHeaderFont()` then skips the Google Fonts request
- * for a family it knows is an uploaded one.
+ * @font-face for each uploaded font so those families are usable anywhere
+ * `--header-font` is — for players too, not just the admin preview. Fonts are
+ * sourced SAME-ORIGIN from `/api/fonts/pub/f/<token>` (rotating opaque tokens;
+ * see the backend's fontserve.go), so the app never depends on the external
+ * fonts host or its origin allowlist. `applyHeaderFont()` then skips the
+ * Google Fonts request for a family it knows is an uploaded one.
  */
-import { FONT_BASE_URL } from '@/stores/fonts'
+import type { UploadedFont } from '@/types/api'
 import { assetUrl } from '@/lib/assets'
 
 /**
@@ -53,6 +55,12 @@ let uploadedFamilies = new Set<string>()
 /** Derives the CSS font-family name from a font filename (strips the extension). */
 export function fontFamilyFromFile(filename: string): string {
   return filename.replace(/\.[^.]+$/, '').trim()
+}
+
+/** A font's effective CSS family: the admin-set custom name, else the default
+ *  derived from the filename (mirrors the server's fontFamilyFor). */
+export function fontFamily(font: Pick<UploadedFont, 'name' | 'family'>): string {
+  return font.family || fontFamilyFromFile(font.name)
 }
 
 /** True when `family` is one of the registered uploaded fonts. */
@@ -105,28 +113,32 @@ export function clampFontMetrics(
 /** Override metrics for clamped families, plus families already evaluated. */
 const metricOverrides = new Map<string, FontMetricOverride>()
 const measuredFamilies = new Set<string>()
-/** The most recent filename list, so a clamp pass can rewrite the same set. */
-let lastFontFilenames: string[] = []
+/** The most recent uploaded-font list, so a clamp pass can rewrite the same set. */
+let lastFonts: UploadedFont[] = []
+
+/** Same-origin path a font token is served from (proxied to the Go backend). */
+export function uploadedFontUrl(token: string): string {
+  return `/api/fonts/pub/f/${encodeURIComponent(token)}`
+}
 
 /** Builds a single @font-face rule, including override descriptors if clamped. */
-function fontFaceRule(file: string): string {
-  const family = fontFamilyFromFile(file)
+function fontFaceRule(font: UploadedFont): string {
+  const family = fontFamily(font)
   if (!family) return ''
-  const ext = (file.split('.').pop() || '').toLowerCase()
+  const ext = (font.name.split('.').pop() || '').toLowerCase()
   const hint = FONT_FORMAT_HINTS[ext]
-  const url = `${FONT_BASE_URL}/${encodeURIComponent(file)}`
   const formatPart = hint ? ` format('${hint}')` : ''
   const o = metricOverrides.get(family)
   const overridePart = o
     ? `ascent-override:${(o.ascent * 100).toFixed(1)}%;` +
       `descent-override:${(o.descent * 100).toFixed(1)}%;line-gap-override:0%;`
     : ''
-  return `@font-face{font-family:'${family}';src:url('${url}')${formatPart};${overridePart}font-display:swap;}`
+  return `@font-face{font-family:'${family}';src:url('${uploadedFontUrl(font.token)}')${formatPart};${overridePart}font-display:swap;}`
 }
 
 /** Writes the <style id="uploaded-fonts"> element with the current rules. */
-function writeUploadedFontStyle(filenames: string[]): void {
-  const rules = filenames.map(fontFaceRule).filter(Boolean).join('\n')
+function writeUploadedFontStyle(fonts: UploadedFont[]): void {
+  const rules = fonts.map(fontFaceRule).filter(Boolean).join('\n')
   let el = document.getElementById('uploaded-fonts') as HTMLStyleElement | null
   if (!el) {
     el = document.createElement('style')
@@ -162,11 +174,11 @@ function measureFontOverride(family: string): FontMetricOverride | null {
  * ones with clamp overrides. Runs once per family (results are cached). Silently
  * no-ops where the Font Loading API is unavailable (e.g. SSR / older browsers).
  */
-async function clampUploadedFontMetrics(filenames: string[]): Promise<void> {
+async function clampUploadedFontMetrics(fonts: UploadedFont[]): Promise<void> {
   if (typeof document === 'undefined') return
   const results = await Promise.all(
-    filenames.map(async (file) => {
-      const family = fontFamilyFromFile(file)
+    fonts.map(async (font) => {
+      const family = fontFamily(font)
       if (!family || measuredFamilies.has(family)) return false
       try {
         await document.fonts.load(`32px '${family}'`)
@@ -182,21 +194,21 @@ async function clampUploadedFontMetrics(filenames: string[]): Promise<void> {
       return false
     }),
   )
-  if (results.includes(true)) writeUploadedFontStyle(lastFontFilenames)
+  if (results.includes(true)) writeUploadedFontStyle(lastFonts)
 }
 
 /**
- * Registers @font-face rules for the given uploaded font filenames, replacing
- * any previously-registered set. Each family is the filename without its
- * extension; the source is the file served from FONT_BASE_URL. Safe to call
- * repeatedly (it rewrites a single <style> element).
+ * Registers @font-face rules for the given uploaded fonts (name + serving
+ * token), replacing any previously-registered set. Each family is the filename
+ * without its extension; the source is the same-origin tokenized URL. Safe to
+ * call repeatedly (it rewrites a single <style> element).
  *
  * After registering, it asynchronously measures the fonts and re-registers any
  * with oversized vertical metrics using clamp overrides (see above).
  */
-export function applyUploadedFonts(filenames: string[]): void {
-  uploadedFamilies = new Set(filenames.map(fontFamilyFromFile).filter(Boolean))
-  lastFontFilenames = filenames.slice()
+export function applyUploadedFonts(fonts: UploadedFont[]): void {
+  uploadedFamilies = new Set(fonts.map(fontFamily).filter(Boolean))
+  lastFonts = fonts.slice()
 
   // Forget cached results for families that are no longer present.
   for (const fam of [...measuredFamilies]) {
@@ -206,8 +218,8 @@ export function applyUploadedFonts(filenames: string[]): void {
     }
   }
 
-  writeUploadedFontStyle(filenames)
-  void clampUploadedFontMetrics(filenames)
+  writeUploadedFontStyle(fonts)
+  void clampUploadedFontMetrics(fonts)
 }
 
 /**

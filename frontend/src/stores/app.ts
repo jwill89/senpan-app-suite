@@ -14,7 +14,7 @@ import {
   applyNumberFlourish,
 } from '@/lib/theme'
 import { DEFAULT_APP_SETTINGS } from '@/lib/constants'
-import type { AppSettings } from '@/types/api'
+import type { AppSettings, UploadedFont } from '@/types/api'
 import { useUiStore } from './ui'
 
 export const useAppStore = defineStore('app', () => {
@@ -22,8 +22,8 @@ export const useAppStore = defineStore('app', () => {
 
   const settings = ref<AppSettings>({ ...DEFAULT_APP_SETTINGS })
   const googleFontsList = ref<string[]>([])
-  /** Filenames of fonts uploaded via System → Font Upload. */
-  const uploadedFonts = ref<string[]>([])
+  /** Fonts uploaded via System → Font Upload (name + serving token). */
+  const uploadedFonts = ref<UploadedFont[]>([])
   let googleFontsCacheKey = ''
   /** True while settings are being saved (drives the Save button). */
   const savingSettings = ref(false)

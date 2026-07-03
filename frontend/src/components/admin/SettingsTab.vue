@@ -19,22 +19,21 @@ import AdminPanel from '@/components/common/ui/AdminPanel.vue'
 import FormField from '@/components/common/ui/FormField.vue'
 import FormActions from '@/components/common/ui/FormActions.vue'
 import { BOOK_CLUBS, clubWebhookKey, FALLBACK_GOOGLE_FONTS } from '@/lib/constants'
-import { applyUploadedFonts, fontFamilyFromFile } from '@/lib/theme'
+import { applyUploadedFonts } from '@/lib/theme'
 import { useAppStore } from '@/stores/app'
-import { useFontsStore } from '@/stores/fonts'
+import { useFontsStore, toUploadedFont } from '@/stores/fonts'
 
 const app = useAppStore()
 const fonts = useFontsStore()
 
-/** Uploaded font family names (filename without extension), de-duplicated. */
+/** Uploaded fonts' effective CSS family names, de-duplicated. */
 const uploadedFontFamilies = computed(() => {
   const seen = new Set<string>()
   const families: string[] = []
   for (const f of fonts.fonts) {
-    const family = fontFamilyFromFile(f.name)
-    if (family && !seen.has(family)) {
-      seen.add(family)
-      families.push(family)
+    if (f.family && !seen.has(f.family)) {
+      seen.add(f.family)
+      families.push(f.family)
     }
   }
   return families
@@ -68,7 +67,7 @@ onMounted(() => fonts.loadFonts())
 watch(
   () => fonts.fonts,
   () => {
-    applyUploadedFonts(fonts.fonts.map((f) => f.name))
+    applyUploadedFonts(fonts.fonts.map(toUploadedFont))
     app.previewHeaderFont()
   },
   { deep: true },

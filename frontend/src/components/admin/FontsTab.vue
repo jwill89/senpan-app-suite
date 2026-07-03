@@ -1,16 +1,18 @@
 <script setup lang="ts">
 /**
- * Admin Font Upload tab (Atelier Yao section) — lists the font files in the
- * <webRoot>/fonts directory with a public link to each, supports uploading one
- * or more font files at once, and lets the admin rename or delete files. The
- * table refreshes after a successful upload. A file whose name already exists
- * is rejected by the server (the existing one must be deleted first).
+ * Admin Font Upload tab (Atelier Yao section). A logical FONT groups the
+ * uploaded files sharing a base name as format variants (TTF/OTF/WOFF/WOFF2/
+ * EOT, plus an auto-converted WOFF2 copy — created only when no WOFF2 was
+ * uploaded). Fonts are licensed assets, so they are not downloadable by direct
+ * link: they're served through obfuscated token URLs that rotate every 1–2
+ * weeks, and each font may only be loaded by ITS allowed sites (this app is
+ * always allowed — the font selector keeps working no matter what).
  *
- * The table is searchable (by file name) and sortable by name / size / modified.
- * A live-preview panel above the table renders custom text in whichever font the
- * admin selects (the "Preview" row action), with the same oversized-metric
- * clamping the board/header use (via applyUploadedFonts → @font-face overrides).
- * Each row's actions include "Copy URL" (copies the public URL to the clipboard).
+ * The table stays slim — CSS name, served version, modified, actions — and
+ * everything else lives in the Edit modal (FontEditModal): file names with
+ * rename/delete, sizes, the served-version picker, and the font's allowed
+ * sites. A live-preview panel renders custom text in any variant of the
+ * selected font, so the converted WOFF2 can be compared against the uploads.
  */
 import { computed, onMounted, ref, watch } from 'vue'
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
@@ -19,53 +21,143 @@ import FormField from '@/components/common/ui/FormField.vue'
 import EmptyState from '@/components/common/ui/EmptyState.vue'
 import SearchInput from '@/components/common/ui/SearchInput.vue'
 import DataTable, { type DataColumn } from '@/components/common/ui/DataTable.vue'
-import { applyUploadedFonts, fontFamilyFromFile } from '@/lib/theme'
-import { useFontsStore, fontUrl, FONT_BASE_URL } from '@/stores/fonts'
+import FontEditModal from '@/components/admin/FontEditModal.vue'
+import { applyUploadedFonts, uploadedFontUrl } from '@/lib/theme'
+import { useFontsStore, fontShareUrl, toUploadedFont, FONT_KIT_URL } from '@/stores/fonts'
 import { useUiStore } from '@/stores/ui'
-import type { FontFile } from '@/types/api'
+import type { Font, FontVariant } from '@/types/api'
 
 const fonts = useFontsStore()
 const ui = useUiStore()
 
+// ── External use (the kit embed) ─────────────────────────────────────────────
+
+/** The <link> tag external sites paste into their custom code. */
+const kitSnippet = `<link rel="stylesheet" href="${FONT_KIT_URL}">`
+/** Whether the external-use panel is expanded. */
+const externalExpanded = ref(false)
+
+async function copyKitSnippet(): Promise<void> {
+  try {
+    await navigator.clipboard.writeText(kitSnippet)
+    ui.notify('Embed code copied to clipboard', 'success')
+  } catch {
+    ui.notify(kitSnippet, 'info')
+  }
+}
+
+// ── Upload ───────────────────────────────────────────────────────────────────
+
 /** Hidden <input type="file"> used by the Upload button. */
 const fileInput = ref<HTMLInputElement | null>(null)
 
-/** Name of the font currently being renamed (inline editor), or null. */
-const renamingName = ref<string | null>(null)
-/** Working value of the inline rename input. */
-const renameValue = ref('')
+function pickFiles(): void {
+  fileInput.value?.click()
+}
 
-/** Free-text filter applied to the file name. */
-const search = ref('')
+async function onFilesSelected(e: Event): Promise<void> {
+  const input = e.target as HTMLInputElement
+  if (input.files && input.files.length > 0) {
+    await fonts.uploadFonts(input.files)
+  }
+  // Reset so selecting the same file again re-triggers change.
+  input.value = ''
+}
+
+// ── Edit modal ───────────────────────────────────────────────────────────────
+
+/** Base name of the font open in the Edit modal (null = closed). */
+const editingBase = ref<string | null>(null)
+
+// ── Live preview ─────────────────────────────────────────────────────────────
 
 /** Custom text shown in the live-preview panel. */
 const previewText = ref('The quick brown fox jumps over the lazy dog 1234567890')
 /** Whether the live-preview panel is expanded. Collapsed by default since the
  *  oversized sample stage takes up a fair bit of vertical space. */
 const previewExpanded = ref(false)
-/** File name of the font selected for the live preview (null = none yet). */
-const selectedFontName = ref<string | null>(null)
-/** CSS family of the selected preview font (empty when none selected). */
-const selectedFamily = computed(() =>
-  selectedFontName.value ? fontFamilyFromFile(selectedFontName.value) : '',
+/** Base name of the font selected for the live preview (null = none yet). */
+const selectedBase = ref<string | null>(null)
+/** The selected font's listing row (null when none selected). */
+const selectedFont = computed(() => fonts.fonts.find((f) => f.base === selectedBase.value) ?? null)
+/** Token of the variant the live preview renders. Defaults to the served one. */
+const previewToken = ref('')
+watch(selectedFont, (f, old) => {
+  // Re-target on selection change or when the current token vanished (e.g. a
+  // variant was deleted); keep the user's variant choice across list reloads.
+  if (!f) return
+  const stillThere = f.variants.some((v) => v.token === previewToken.value)
+  if (old?.base !== f.base || !stillThere) previewToken.value = f.served_token
+})
+
+/** Escapes a value for a single-quoted CSS string. */
+function cssQuote(s: string): string {
+  return s.replace(/\\/g, '\\\\').replace(/'/g, "\\'")
+}
+
+/** Ad-hoc preview family name for one variant of the selected font. */
+function previewVariantFamily(f: Font, v: FontVariant): string {
+  return `${f.family} (${v.name}${v.converted ? ' converted' : ''} preview)`
+}
+
+// Register ad-hoc @font-face rules for EVERY variant of the selected font, so
+// the preview toggle can compare formats. These live in their own <style> and
+// use "(… preview)" family names that never collide with the app-registered
+// set; a variant's font only downloads when the preview actually renders it.
+watch(
+  [selectedFont, () => fonts.fonts],
+  () => {
+    let el = document.getElementById('font-preview-variants') as HTMLStyleElement | null
+    if (!el) {
+      el = document.createElement('style')
+      el.id = 'font-preview-variants'
+      document.head.appendChild(el)
+    }
+    const f = selectedFont.value
+    if (!f) {
+      el.textContent = ''
+      return
+    }
+    el.textContent = f.variants
+      .map(
+        (v) =>
+          `@font-face{font-family:'${cssQuote(previewVariantFamily(f, v))}';src:url('${uploadedFontUrl(v.token)}');font-display:swap;}`,
+      )
+      .join('\n')
+  },
+  { deep: true },
 )
+
+/** The variant currently previewed (null when none). */
+const previewVariant = computed(
+  () => selectedFont.value?.variants.find((v) => v.token === previewToken.value) ?? null,
+)
+
+/** CSS family the preview stage renders with (empty when none selected). */
+const selectedFamily = computed(() => {
+  const f = selectedFont.value
+  const v = previewVariant.value
+  return f && v ? previewVariantFamily(f, v) : ''
+})
 
 /** Selects a font for the live-preview panel above the table. Expands the panel
  *  so the chosen font is visible even if the preview was collapsed. */
-function selectForPreview(name: string): void {
-  selectedFontName.value = name
+function selectForPreview(base: string): void {
+  selectedBase.value = base
   previewExpanded.value = true
 }
 
-type SortKey = 'name' | 'size' | 'modified'
+// ── Table ────────────────────────────────────────────────────────────────────
+
+type SortKey = 'family' | 'served_type' | 'modified'
 /** Active sort column + direction. */
-const sortKey = ref<SortKey>('name')
+const sortKey = ref<SortKey>('family')
 const sortDir = ref<'asc' | 'desc'>('asc')
 
 /** Columns for the shared DataTable (the last is the right-aligned actions). */
 const fontColumns: DataColumn[] = [
-  { key: 'name', label: 'File', sortable: true },
-  { key: 'size', label: 'Size', sortable: true },
+  { key: 'family', label: 'CSS Name', sortable: true },
+  { key: 'served_type', label: 'Serves', sortable: true },
   { key: 'modified', label: 'Modified', sortable: true },
   { key: 'actions', label: '', align: 'right' },
 ]
@@ -82,24 +174,28 @@ function sortBy(key: string): void {
 }
 
 /** Highlights the row whose font is currently shown in the live preview. */
-function previewRowClass(f: FontFile): Record<string, boolean> {
-  return { 'row-selected': selectedFontName.value === f.name }
+function previewRowClass(f: Font): Record<string, boolean> {
+  return { 'row-selected': selectedBase.value === f.base }
 }
 
-/** Filtered + sorted rows for display. */
+/** Filtered + sorted rows for display (searches CSS names and file names). */
 const displayedFonts = computed(() => {
   const term = search.value.trim().toLowerCase()
   const rows = term
-    ? fonts.fonts.filter((f) => f.name.toLowerCase().includes(term))
+    ? fonts.fonts.filter(
+        (f) =>
+          f.family.toLowerCase().includes(term) ||
+          f.variants.some((v) => v.name.toLowerCase().includes(term)),
+      )
     : fonts.fonts.slice()
 
   const dir = sortDir.value === 'asc' ? 1 : -1
   rows.sort((a, b) => {
     let cmp = 0
-    if (sortKey.value === 'name') {
-      cmp = a.name.toLowerCase().localeCompare(b.name.toLowerCase())
-    } else if (sortKey.value === 'size') {
-      cmp = a.size - b.size
+    if (sortKey.value === 'family') {
+      cmp = a.family.toLowerCase().localeCompare(b.family.toLowerCase())
+    } else if (sortKey.value === 'served_type') {
+      cmp = a.served_type.localeCompare(b.served_type)
     } else {
       cmp = new Date(a.modified).getTime() - new Date(b.modified).getTime()
     }
@@ -108,70 +204,40 @@ const displayedFonts = computed(() => {
   return rows
 })
 
-/** Copies a font's public URL to the clipboard. */
-async function copyLink(name: string): Promise<void> {
-  const url = fontUrl(name)
+/** Free-text filter applied to CSS names and file names. */
+const search = ref('')
+
+/** True when the served variant is the auto-converted WOFF2 copy. */
+function servesConverted(f: Font): boolean {
+  return f.variants.some((v) => v.converted && v.token === f.served_token)
+}
+
+/** Copies the tokenized URL of a font's SERVED variant to the clipboard. The
+ *  token rotates every 1–2 weeks — for anything permanent, embed the kit. */
+async function copyLink(f: Font): Promise<void> {
+  const url = fontShareUrl(f.served_token)
   try {
     await navigator.clipboard.writeText(url)
-    ui.notify('Link copied to clipboard', 'success')
+    ui.notify('Link copied — note it expires in 1–2 weeks (use the kit for embeds)', 'success')
   } catch {
     ui.notify(url, 'info')
   }
 }
 
-function pickFiles(): void {
-  fileInput.value?.click()
-}
-
-async function onFilesSelected(e: Event): Promise<void> {
-  const input = e.target as HTMLInputElement
-  if (input.files && input.files.length > 0) {
-    await fonts.uploadFonts(input.files)
-  }
-  // Reset so selecting the same file again re-triggers change.
-  input.value = ''
-}
-
-function startRename(name: string): void {
-  renamingName.value = name
-  renameValue.value = name
-}
-
-function cancelRename(): void {
-  renamingName.value = null
-  renameValue.value = ''
-}
-
-async function commitRename(name: string): Promise<void> {
-  const newName = renameValue.value.trim()
-  const ok = await fonts.renameFont(name, renameValue.value)
-  if (ok) {
-    // Follow the rename so the live preview keeps pointing at the same font.
-    if (selectedFontName.value === name) selectedFontName.value = newName
-    cancelRename()
-  }
-}
-
-/** Human-readable file size. */
-function formatSize(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
-}
-
-// Register (and re-register on upload/delete) the uploaded fonts' @font-face
-// rules so each preview cell renders in its own font. applyUploadedFonts also
-// runs the oversized-metric clamp, so the previews match the board/header.
+// Register (and re-register on upload/delete) the fonts' @font-face rules
+// (each font's SERVED variant under its CSS name) so the picker and app-wide
+// uses stay current. applyUploadedFonts also runs the oversized-metric clamp
+// used by the board/header.
 onMounted(() => fonts.loadFonts())
 watch(
   () => fonts.fonts,
   () => {
-    applyUploadedFonts(fonts.fonts.map((f) => f.name))
+    applyUploadedFonts(fonts.fonts.map(toUploadedFont))
     // Keep a valid font selected for the live preview: default to the first,
     // and re-pick if the selected one was deleted/renamed away.
     const stillPresent =
-      selectedFontName.value !== null && fonts.fonts.some((f) => f.name === selectedFontName.value)
-    if (!stillPresent) selectedFontName.value = fonts.fonts[0]?.name ?? null
+      selectedBase.value !== null && fonts.fonts.some((f) => f.base === selectedBase.value)
+    if (!stillPresent) selectedBase.value = fonts.fonts[0]?.base ?? null
   },
   { deep: true },
 )
@@ -197,18 +263,51 @@ watch(
       </div>
 
       <p class="text-dim text-xs mb-12">
-        Files are served from
-        <span class="code-gold">{{ FONT_BASE_URL }}</span
-        >. Allowed types: .ttf, .otf, .woff, .woff2, .eot. To replace a font, delete the old file
-        first.
+        Allowed types: .ttf, .otf, .woff, .woff2, .eot. Files sharing a name (e.g.
+        <span class="code-gold">Jasper.ttf</span> + <span class="code-gold">Jasper.woff2</span>) are
+        versions of one font; fonts without a WOFF2 get one converted automatically. Fonts are
+        protected: served through obfuscated links that rotate every 1–2 weeks, usable only by this
+        app and each font's own allowed sites (managed via <strong>Edit</strong>).
       </p>
 
-      <!-- Live preview: type any text, then pick a font (row "Preview" action).
-           Collapsed by default since the oversized sample stage is tall. -->
+      <!-- External use: the kit embed snippet. -->
+      <div class="font-external-panel mb-12">
+        <button
+          type="button"
+          class="font-panel-toggle"
+          :aria-expanded="externalExpanded"
+          aria-controls="font-external-body"
+          @click="externalExpanded = !externalExpanded"
+        >
+          <font-awesome-icon :icon="['fas', externalExpanded ? 'chevron-up' : 'chevron-down']" />
+          Embed on External Sites
+        </button>
+        <div v-show="externalExpanded" id="font-external-body">
+          <FormField
+            label="Embed on an external site (e.g. Carrd)"
+            help="Paste this into the site's custom <head> code, then use each font with CSS: font-family: '<CSS Name>' (the table below). The kit URL never changes — font links inside it refresh automatically, and each site only receives the fonts whose Allowed Sites (Edit) include it."
+          >
+            <div class="font-inline-row">
+              <input
+                readonly
+                :value="kitSnippet"
+                aria-label="Font kit embed code"
+                @focus="($event.target as HTMLInputElement).select()"
+              />
+              <button class="btn-view btn-sm" title="Copy embed code" @click="copyKitSnippet">
+                <font-awesome-icon :icon="['fas', 'copy']" /> Copy
+              </button>
+            </div>
+          </FormField>
+        </div>
+      </div>
+
+      <!-- Live preview: type any text, pick a font (row "Preview" action), and
+           switch between its format variants. Collapsed by default. -->
       <div v-if="fonts.fonts.length" class="font-preview-panel mb-12">
         <button
           type="button"
-          class="font-preview-toggle"
+          class="font-panel-toggle"
           :aria-expanded="previewExpanded"
           aria-controls="font-preview-body"
           @click="previewExpanded = !previewExpanded"
@@ -225,6 +324,24 @@ watch(
               aria-label="Preview text"
             />
           </FormField>
+          <!-- Variant toggle: compare the font's formats (shown when it has
+               more than one). -->
+          <div
+            v-if="selectedFont && selectedFont.variants.length > 1"
+            class="font-variant-toggle"
+            role="group"
+          >
+            <span class="text-dim text-xs">Version:</span>
+            <button
+              v-for="v in selectedFont.variants"
+              :key="v.token"
+              class="btn-view btn-sm"
+              :class="{ active: previewToken === v.token }"
+              @click="previewToken = v.token"
+            >
+              {{ v.type }}{{ v.converted ? ' (converted)' : '' }}
+            </button>
+          </div>
           <div
             class="font-preview-stage"
             :style="selectedFamily ? { fontFamily: `'${selectedFamily}', serif` } : undefined"
@@ -234,8 +351,9 @@ watch(
               Select a font below (the “Preview” action) to see your text rendered here.
             </span>
           </div>
-          <p v-if="selectedFamily" class="text-dim text-xs" style="margin: 6px 0 0">
-            Previewing <span class="code-gold">{{ selectedFamily }}</span>
+          <p v-if="selectedFont && previewVariant" class="text-dim text-xs" style="margin: 6px 0 0">
+            Previewing <span class="code-gold">{{ selectedFont.family }}</span> —
+            {{ previewVariant.type }}{{ previewVariant.converted ? ' (converted)' : '' }}
           </p>
         </div>
       </div>
@@ -258,66 +376,55 @@ watch(
         v-else-if="fonts.fonts.length"
         :columns="fontColumns"
         :rows="displayedFonts"
-        row-key="name"
+        row-key="base"
         :sort-key="sortKey"
         :sort-dir="sortDir"
         :row-class="previewRowClass"
         @sort="sortBy"
       >
-        <template #cell-name="{ row }">
-          <input
-            v-if="renamingName === row.name"
-            v-model="renameValue"
-            class="font-rename-input"
-            aria-label="New file name"
-            @keyup.enter="commitRename(row.name)"
-            @keyup.esc="cancelRename"
-          />
-          <span v-else class="code-gold">{{ row.name }}</span>
+        <template #cell-family="{ row }">
+          <span class="code-gold">{{ row.family }}</span>
         </template>
-        <template #cell-size="{ row }">
-          <span class="text-dim">{{ formatSize(row.size) }}</span>
+        <template #cell-served_type="{ row }">
+          <span :title="servesConverted(row) ? 'Serving the auto-converted WOFF2 copy' : undefined">
+            {{ row.served_type
+            }}<span v-if="servesConverted(row)" class="text-dim text-xs"> ✦</span>
+          </span>
         </template>
         <template #cell-modified="{ row }">
           <span class="text-dim">{{ new Date(row.modified).toLocaleString() }}</span>
         </template>
         <template #cell-actions="{ row }">
           <div class="row-actions">
-            <template v-if="renamingName === row.name">
-              <button class="btn-confirm btn-sm" @click="commitRename(row.name)">Save</button>
-              <button class="btn-neutral btn-sm" @click="cancelRename">Cancel</button>
-            </template>
-            <template v-else>
-              <button
-                class="btn-view btn-sm"
-                :class="{ active: selectedFontName === row.name }"
-                title="Preview this font in the panel above"
-                @click="selectForPreview(row.name)"
-              >
-                <font-awesome-icon :icon="['fas', 'eye']" /> Preview
-              </button>
-              <button
-                class="btn-view btn-sm"
-                title="Copy public URL to clipboard"
-                @click="copyLink(row.name)"
-              >
-                <font-awesome-icon :icon="['fas', 'copy']" /> Copy URL
-              </button>
-              <button
-                class="btn-confirm btn-sm"
-                title="Rename this font file"
-                @click="startRename(row.name)"
-              >
-                <font-awesome-icon :icon="['fas', 'pen-to-square']" /> Rename
-              </button>
-              <button
-                class="btn-danger btn-sm"
-                title="Delete this font file"
-                @click="fonts.deleteFont(row.name)"
-              >
-                <font-awesome-icon :icon="['fas', 'trash']" /> Delete
-              </button>
-            </template>
+            <button
+              class="btn-view btn-sm"
+              :class="{ active: selectedBase === row.base }"
+              title="Preview this font in the panel above"
+              @click="selectForPreview(row.base)"
+            >
+              <font-awesome-icon :icon="['fas', 'eye']" /> Preview
+            </button>
+            <button
+              class="btn-view btn-sm"
+              title="Copy the served version's tokenized URL (expires in 1–2 weeks — embed the kit stylesheet for anything permanent)"
+              @click="copyLink(row)"
+            >
+              <font-awesome-icon :icon="['fas', 'copy']" /> Copy URL
+            </button>
+            <button
+              class="btn-confirm btn-sm"
+              title="Edit this font: CSS name, served version, allowed sites, and files"
+              @click="editingBase = row.base"
+            >
+              <font-awesome-icon :icon="['fas', 'pen-to-square']" /> Edit
+            </button>
+            <button
+              class="btn-danger btn-sm"
+              title="Delete this font (all of its files)"
+              @click="fonts.deleteFont(row)"
+            >
+              <font-awesome-icon :icon="['fas', 'trash']" /> Delete
+            </button>
           </div>
         </template>
         <template #empty>
@@ -330,23 +437,25 @@ watch(
         text="No fonts uploaded yet. Use “Upload Fonts” to add some."
       />
     </AdminPanel>
+
+    <FontEditModal v-if="editingBase" :base="editingBase" @close="editingBase = null" />
   </div>
 </template>
 
 <style scoped>
-.font-rename-input {
-  width: 100%;
-  min-width: 160px;
-}
-
-/* Live-preview panel: text input + the rendered sample stage. */
+/* External-use and live-preview panels share the raised-card look. */
+.font-external-panel,
 .font-preview-panel {
   background: var(--panel-raised-bg);
   border-radius: var(--radius);
   padding: 16px 18px;
 }
+#font-external-body,
+#font-preview-body {
+  margin-top: 12px;
+}
 /* Collapse toggle: a full-width, borderless header that reads as a label. */
-.font-preview-toggle {
+.font-panel-toggle {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -360,7 +469,22 @@ watch(
   font-size: inherit;
   text-align: left;
 }
-#font-preview-body {
+/* Input + button on one line (kit snippet). */
+.font-inline-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.font-inline-row input {
+  flex: 1;
+  min-width: 0;
+}
+/* Format-variant toggle above the preview stage. */
+.font-variant-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
   margin-top: 12px;
 }
 .font-preview-stage {

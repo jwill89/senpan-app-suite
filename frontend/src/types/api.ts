@@ -22,6 +22,7 @@ import type {
   Pattern,
   PatternCategory,
   TokenInfo,
+  UploadedFont,
 } from './api.generated'
 
 // ── Domain models (generated from the Go `model` package) ────────────────────
@@ -155,9 +156,11 @@ export type {
   WinnersLogResponse,
   FrequentWinnersResponse,
   // Fonts / Carrd / Images
-  FontFile,
+  Font,
+  FontVariant,
   FontsResponse,
   FontUploadResponse,
+  UploadedFont,
   CarrdProject,
   CarrdProjectsResponse,
   CarrdProjectCreateResponse,
@@ -205,11 +208,12 @@ export interface AppSettings {
 export interface SettingsResponse {
   settings: AppSettings
   /**
-   * Filenames of fonts uploaded via System → Font Upload (e.g. "My Font.ttf").
-   * The frontend registers an @font-face for each (family = name without the
-   * extension) so they can be used for the header/board font.
+   * Fonts uploaded via System → Font Upload, each with its file name (family =
+   * name without the extension) and current serving token. The frontend
+   * registers an @font-face per font sourced same-origin from
+   * `/api/fonts/pub/f/<token>`; tokens rotate, so never persist them.
    */
-  uploaded_fonts?: string[]
+  uploaded_fonts?: UploadedFont[]
 }
 
 // ── Form models (frontend-only) ──────────────────────────────────────────────
@@ -435,7 +439,12 @@ export type WsMessage =
   | { type: 'card_deleted' }
   | { type: 'details_update'; game_details: string }
   | { type: 'style_update'; css: string; board_flourish?: string; number_flourish?: string }
-  | { type: 'settings_update'; app_title?: string; header_font?: string; uploaded_fonts?: string[] }
+  | {
+      type: 'settings_update'
+      app_title?: string
+      header_font?: string
+      uploaded_fonts?: UploadedFont[]
+    }
   | { type: 'halftime_minigame' }
   | { type: 'draw_delay_update'; delay: number }
   // Thin "an admin resource changed" signal (no payload): an admin viewing that

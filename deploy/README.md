@@ -24,7 +24,7 @@ things that live *alongside* the built SPA but are **not** part of `dist/`.
 │   ├── <custom>/              ← any custom image categories added on System → Images
 │   ├── .categories.json       ← manifest of custom image categories (name ↔ dir)
 │   └── bookclub/              ← reading-list cover uploads
-├── fonts/                     ← admin-uploaded font files; served by the fonts.senpan.cafe vhost (see Font host)
+├── fonts/                     ← admin-uploaded font files; NOT served statically — the Go server streams them via tokenized URLs (see Font host)
 ├── carrd/                     ← Carrd image-host projects; served by the carrd.senpan.cafe vhost (see Carrd host)
 └── dist/                      ← from frontend/dist/    (the built Vue app; replace on each deploy)
     ├── index.html
@@ -42,8 +42,10 @@ persistent `images/` tree, so no extra vhost or one-time setup is needed. On
 first start the Go server copies any legacy `images/announcements/` files into
 `images/announcements_main/` (idempotent — safe to leave the legacy folder).
 
-Uploaded **fonts** live in a separate folder, `<webRoot>/fonts/`, served by its
-own vhost at `https://fonts.senpan.cafe/` — see [Font host (CORS)](#font-host-cors).
+Uploaded **fonts** live in a separate folder, `<webRoot>/fonts/`, but are NOT
+served statically: the `fonts.senpan.cafe` vhost reverse-proxies to the Go
+server's tokenized, origin-gated endpoints — see
+[Font host (protected serving)](#font-host-protected-serving).
 
 ## One-time server setup
 
@@ -79,26 +81,59 @@ own vhost at `https://fonts.senpan.cafe/` — see [Font host (CORS)](#font-host-
    only if the Go process and Apache run as different users; the Go process is
    what writes the files, so it needs write access to that directory.
 
-## Font host (CORS)
+## Font host (protected serving)
 
-Uploaded fonts are written by the Go server to `<webRoot>/fonts/` and served by
-a separate vhost at `https://fonts.senpan.cafe/`. The SPA (at
-`https://apps.senpan.cafe`) loads them via CSS `@font-face`, which — unlike
-`<img>` — is **cross-origin/CORS-restricted**. Without an
-`Access-Control-Allow-Origin` header the browser blocks the font and the
-header/board font silently falls back to serif (e.g. the App Settings preview
-shows the fallback instead of the uploaded font).
+Uploaded fonts are licensed assets, so they are **never served as static
+files**. The Go server streams them itself through obfuscated token URLs that
+rotate every 1–2 weeks, gated by the requesting site's `Origin` against
+**that font's own allowlist** (Atelier → Font Upload → Edit → Allowed sites).
+Cross-origin `@font-face` loads hard-require CORS, so a site that isn't on a
+font's list cannot render it; requests with no usable Origin (pasting the URL
+into a browser, `wget`, casual scrapers) get a 403, and `kit.css` only emits
+each requesting site's allowed fonts. The SPA itself loads fonts
+**same-origin** via the existing `/api` ProxyPass
+(`/api/fonts/pub/f/<token>`), so the app and its font picker always work — the
+allowlists only govern external sites.
+
+External (Carrd) sites embed one stylesheet whose URL never changes:
+
+```html
+<link rel="stylesheet" href="https://fonts.senpan.cafe/kit.css">
+```
+
+and then use `font-family: '<CSS Name>'` (shown per font on the Font Upload
+tab; defaults to the filename without extension). The kit's tokenized font
+URLs refresh automatically on rotation.
+
+Files sharing a base name (e.g. `Jasper.otf` + `Jasper.woff2`) are format
+variants of **one font**. A font with no uploaded WOFF2 gets one
+**auto-converted** (stored in the hidden `<webRoot>/fonts/.woff2/`
+sub-directory; a startup backfill converts pre-existing fonts and sweeps
+stale copies). The WOFF2 is served by default — uploads stay on disk
+untouched, and the served version is selectable per font in the Edit modal.
 
 One-time setup for the font host:
 
-1. Upload `deploy/fonts.htaccess` → `<webRoot>/fonts/.htaccess`. It adds
-   `Access-Control-Allow-Origin: *` (plus a cache header) for font files. The Go
-   server only adds/removes font files in that folder, so the `.htaccess`
-   persists across uploads.
-2. Ensure the font vhost has `mod_headers` enabled and allows `.htaccess`
-   overrides (`AllowOverride All` or at least `FileInfo`). If overrides are
-   disabled, put the `<FilesMatch>` block from `deploy/fonts.htaccess` directly
-   in the vhost's `<Directory>` instead.
+1. Make the `fonts.senpan.cafe` vhost a **reverse proxy** to the Go server
+   (replacing any DocumentRoot-based static config):
+
+   ```apache
+   ProxyPass        / http://localhost:8080/api/fonts/pub/
+   ProxyPassReverse / http://localhost:8080/api/fonts/pub/
+   ProxyPreserveHost On
+   ```
+
+   `https://fonts.senpan.cafe/kit.css` → `/api/fonts/pub/kit.css` and
+   `https://fonts.senpan.cafe/f/<token>` → `/api/fonts/pub/f/<token>`.
+2. Upload `deploy/fonts.htaccess` → `<webRoot>/fonts/.htaccess`. It now DENIES
+   all direct access — pure defense in depth in case the vhost is ever
+   reverted to serving the folder statically. The Go server only adds/removes
+   font files in that folder, so the `.htaccess` persists across uploads.
+
+> **Migration note:** legacy direct URLs
+> (`https://fonts.senpan.cafe/My%20Font.ttf`) stop working the moment the
+> vhost becomes a proxy. Any external site using them must switch to the
+> kit stylesheet above, and its origin must be added to the allowlist.
 
 ## Carrd image host (CORS)
 

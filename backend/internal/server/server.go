@@ -43,6 +43,9 @@ type Server struct {
 	// openAPISpec is the embedded openapi.yaml served at GET /api/openapi.yaml
 	// and rendered by GET /api/docs. Injected from main via SetOpenAPISpec.
 	openAPISpec []byte
+	// logFile is the path to the rotating JSON log file the admin log viewer
+	// (GET /api/logs) tails. Empty disables the viewer. Injected via SetLogFile.
+	logFile string
 	// Lazily-loaded HMAC key for the tokenized public font URLs — see
 	// fontserve.go. Generated and persisted to settings on first use.
 	fontSecretMu  sync.Mutex
@@ -56,6 +59,13 @@ type Server struct {
 func (s *Server) SetTurnstile(secret, siteKey string) {
 	s.turnstileSecret = strings.TrimSpace(secret)
 	s.turnstileSiteKey = strings.TrimSpace(siteKey)
+}
+
+// SetLogFile tells the admin log viewer (GET /api/logs) which rotating JSON log
+// file to tail. Empty leaves the viewer with nothing to read. Injected from main
+// so it matches the -log-file the process actually writes to.
+func (s *Server) SetLogFile(path string) {
+	s.logFile = strings.TrimSpace(path)
 }
 
 // New creates a Server, registers all API routes, and returns it. allowedOrigins
@@ -329,6 +339,11 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("GET /api/settings", s.handleSettingsGet)
 	s.mux.HandleFunc("POST /api/settings", s.handleSettingsUpdate)
 
+	// Server log viewer (admin-only): tails the rotating JSON log file, and flips
+	// the runtime log level (live DEBUG toggle).
+	s.mux.HandleFunc("GET /api/logs", s.handleLogs)
+	s.mux.HandleFunc("POST /api/logs/level", s.handleLogLevelSet)
+
 	// Font management (Atelier → Font Upload). Font FILES are keyed by filename
 	// ({name}); logical FONTS (groups of variants sharing a base name) are keyed
 	// by base under the literal /families sub-path, which the Go 1.22 mux
@@ -436,13 +451,27 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	} else if rw.status >= 400 {
 		level = slog.LevelWarn
 	}
+	ip := logClientIP(r)
 	slog.Log(r.Context(), level, "http request",
 		"method", r.Method,
 		"path", r.URL.Path,
 		"status", rw.status,
 		"duration", duration.Round(time.Microsecond),
-		"ip", r.RemoteAddr,
+		"ip", ip,
 	)
+	// When DEBUG is on (live-toggleable), emit a richer companion line for every
+	// request. Guarded so the header lookups are skipped entirely at INFO+.
+	if slog.Default().Enabled(r.Context(), slog.LevelDebug) {
+		slog.LogAttrs(r.Context(), slog.LevelDebug, "request detail",
+			slog.String("method", r.Method),
+			slog.String("path", r.URL.Path),
+			slog.String("query", r.URL.RawQuery),
+			slog.Int("status", rw.status),
+			slog.String("ua", r.UserAgent()),
+			slog.String("referer", r.Referer()),
+			slog.String("ip", ip),
+		)
+	}
 }
 
 // responseWriter wraps http.ResponseWriter to capture the status code.

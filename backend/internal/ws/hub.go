@@ -103,6 +103,44 @@ func (h *Hub) BroadcastToAdmins(msg any) {
 	h.broadcastRaw(data, func(c *client) bool { return c.cardID == "" })
 }
 
+// HasAdminClients reports whether any admin connection (empty cardID) is
+// currently attached. The live-log tail checks this before doing any
+// serialization work, so logging stays cheap when nobody is watching.
+func (h *Hub) HasAdminClients() bool {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	for c := range h.clients {
+		if c.cardID == "" {
+			return true
+		}
+	}
+	return false
+}
+
+// BroadcastLog sends a best-effort live-log line to admin clients. Unlike the
+// other Broadcast* methods, a client whose send buffer is full simply MISSES
+// this line instead of being disconnected — a log burst must never knock an
+// admin off the socket (which would also drop resource-invalidation). It never
+// logs on failure, so it can be called from inside the logging path without
+// recursing.
+func (h *Hub) BroadcastLog(msg any) {
+	data, err := json.Marshal(msg)
+	if err != nil {
+		return
+	}
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	for c := range h.clients {
+		if c.cardID != "" {
+			continue // admins only
+		}
+		select {
+		case c.send <- data:
+		default: // buffer full — drop this log line, keep the client connected
+		}
+	}
+}
+
 // broadcastRaw sends pre-marshaled data to clients matching the optional filter.
 // If filter is nil, all clients receive the message.
 func (h *Hub) broadcastRaw(data []byte, filter func(*client) bool) {
@@ -219,7 +257,13 @@ func (h *Hub) ClientCount() int {
 func (h *Hub) register(c *client) {
 	h.mu.Lock()
 	h.clients[c] = struct{}{}
+	n := len(h.clients)
 	h.mu.Unlock()
+	kind := "admin"
+	if c.cardID != "" {
+		kind = "player"
+	}
+	slog.Debug("ws client registered", "kind", kind, "card_id", c.cardID, "clients", n)
 }
 
 // unregister removes a client from the hub, closes its send channel
@@ -227,12 +271,18 @@ func (h *Hub) register(c *client) {
 // Safe to call multiple times — the map check prevents double-close.
 func (h *Hub) unregister(c *client) {
 	h.mu.Lock()
+	removed := false
 	if _, ok := h.clients[c]; ok {
 		delete(h.clients, c)
 		close(c.send)
 		c.cancel()
+		removed = true
 	}
+	n := len(h.clients)
 	h.mu.Unlock()
+	if removed {
+		slog.Debug("ws client unregistered", "card_id", c.cardID, "clients", n)
+	}
 }
 
 // readPump reads (and discards) incoming messages; keeps the connection alive.

@@ -20,6 +20,7 @@ import { usePlayerStore } from '@/stores/player'
 import { useCardsStore } from '@/stores/cards'
 import { usePatternsStore } from '@/stores/patterns'
 import { useAdminStore } from '@/stores/admin'
+import { useLogsStore } from '@/stores/logs'
 import { endpoints } from '@/lib/endpoints'
 
 export function useWebSocket() {
@@ -31,6 +32,7 @@ export function useWebSocket() {
   const cards = useCardsStore()
   const patterns = usePatternsStore()
   const admin = useAdminStore()
+  const logs = useLogsStore()
 
   // Route-based context predicates (replace the old `ui.view === …` checks).
   const isPlayerView = (): boolean => router.currentRoute.value.name === 'player'
@@ -123,6 +125,11 @@ export function useWebSocket() {
         // it (the REST load re-applies our own permission guard); otherwise mark it
         // stale so the next navigation refetches. See admin.refreshResource.
         if (isAdminView()) admin.refreshResource(msg.resource)
+        break
+      case 'log':
+        // Live server-log tail — append to the viewer (it self-limits to the
+        // admin Logs tab: entries only accumulate while that store is in use).
+        if (isAdminView()) logs.appendLive(msg.entry)
         break
     }
   }

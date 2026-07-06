@@ -118,10 +118,15 @@ export async function api<T = unknown>(endpoint: string, options: ApiOptions = {
     if (res.status === 401 && !options.skipAuthRedirect) {
       onUnauthorized?.()
     }
-    const msg =
-      (data && typeof data === 'object' && 'error' in data && typeof data.error === 'string'
+    // Prefer the server's `{ "error": "..." }` message. When the body isn't our
+    // JSON (an empty/HTML gateway error from Cloudflare/Apache, e.g. a 502 when
+    // the origin is unreachable), fall back to a message that still names the
+    // HTTP status so the failure is distinguishable from a generic one.
+    const serverMsg =
+      data && typeof data === 'object' && 'error' in data && typeof data.error === 'string'
         ? data.error
-        : null) || 'Request failed'
+        : null
+    const msg = serverMsg || (res.status ? `Request failed (HTTP ${res.status})` : 'Request failed')
     throw new ApiError(msg, res.status)
   }
 

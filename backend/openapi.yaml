@@ -1717,6 +1717,23 @@ components:
             type: string
           type: array
       type: object
+    LogEntry:
+      properties:
+        fields:
+          additionalProperties: {}
+          type: object
+        level:
+          type: string
+        message:
+          type: string
+        time:
+          type: string
+      type: object
+    LogLevelResponse:
+      properties:
+        level:
+          type: string
+      type: object
     LoginResponse:
       properties:
         success:
@@ -1745,6 +1762,29 @@ components:
     LogoutResponse:
       properties:
         success:
+          type: boolean
+      type: object
+    LogsResponse:
+      properties:
+        entries:
+          items:
+            properties:
+              fields:
+                additionalProperties: {}
+                type: object
+              level:
+                type: string
+              message:
+                type: string
+              time:
+                type: string
+            type: object
+          type: array
+        file:
+          type: string
+        level:
+          type: string
+        truncated:
           type: boolean
       type: object
     NamedOKResponse:
@@ -3754,9 +3794,13 @@ info:
     - **no `id`** → **admin** channel: requires an authenticated active account
       (cookie or `?token=pat_…`); streams draws immediately plus winner card IDs.
 
-    Broadcast messages (each carries a `type` field): `resource_changed`, `cards_update`, `card_deleted`, `patterns_update`, `game_update`, `game_draw`, `halftime_minigame`, `draw_delay_update`, `details_update`, `style_update`, `settings_update`.
+    Broadcast messages (each carries a `type` field): `resource_changed`, `cards_update`, `card_deleted`, `patterns_update`, `game_update`, `game_draw`, `halftime_minigame`, `draw_delay_update`, `details_update`, `style_update`, `settings_update`, `log`.
+
+    The **admin** channel also receives a `log` message per server log line
+    (`{ "type": "log", "entry": LogEntry }`) for the live log tail — best-effort,
+    sent only while an admin is connected.
   title: Senpan App Suite API
-  version: 3.1.0
+  version: 3.3.0
 openapi: 3.0.3
 paths:
   /api/account/change-password:
@@ -6935,6 +6979,77 @@ paths:
       summary: Upload images
       tags:
       - Files
+  /api/logs:
+    get:
+      description: |-
+        **Auth:** admin
+
+        Tails the server's rotating JSON log file, newest-first. `level` filters to that minimum severity; `q` is a case-insensitive substring match; `limit` caps entries. The response `level` is the current runtime minimum level. Admin-only — the log contains IPs, usernames, and internal error detail.
+      parameters:
+      - description: 'Minimum level: debug|info|warn|error.'
+        in: query
+        name: level
+        schema:
+          type: string
+      - description: Case-insensitive substring filter.
+        in: query
+        name: q
+        schema:
+          type: string
+      - description: Max entries (default 200, max 1000).
+        in: query
+        name: limit
+        schema:
+          type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LogsResponse'
+          description: Success
+      security:
+      - cookieAuth: []
+      - bearerAuth: []
+      summary: Server logs (tail)
+      tags:
+      - System
+  /api/logs/level:
+    post:
+      description: |-
+        **Auth:** admin
+
+        Changes the process-wide minimum log level live (no restart) — used to toggle DEBUG on/off. Reverts to the startup default on restart.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              properties:
+                level:
+                  description: One of debug, info, warn, error.
+                  type: string
+              type: object
+        description: The new level.
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LogLevelResponse'
+          description: Success
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: Invalid level
+      security:
+      - cookieAuth: []
+      - bearerAuth: []
+      summary: Set runtime log level
+      tags:
+      - System
   /api/pattern-categories:
     get:
       description: '**Auth:** permission:bingo-patterns'

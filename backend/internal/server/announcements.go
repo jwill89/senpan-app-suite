@@ -1177,6 +1177,9 @@ func (s *Server) postDueAnnouncements() {
 		slog.Error("announcement scheduler: load due", "error", err)
 		return
 	}
+	if len(due) > 0 {
+		slog.Debug("announcement scheduler: due", "count", len(due))
+	}
 	for _, a := range due {
 		if a.SkipNext {
 			next, active := s.advanceCursor(a)

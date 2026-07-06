@@ -63,10 +63,10 @@ describe('api()', () => {
     })
   })
 
-  it('falls back to a generic message when the error body has no error field', async () => {
+  it('falls back to a status-bearing message when the error body has no error field', async () => {
     vi.mocked(fetch).mockResolvedValue(jsonResponse(null, { ok: false, status: 500 }))
     await expect(api('cards')).rejects.toBeInstanceOf(ApiError)
-    await expect(api('cards')).rejects.toHaveProperty('message', 'Request failed')
+    await expect(api('cards')).rejects.toHaveProperty('message', 'Request failed (HTTP 500)')
   })
 
   it('invokes the global unauthorized handler on a 401', async () => {

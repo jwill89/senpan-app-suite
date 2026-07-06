@@ -127,6 +127,7 @@ func (s *Server) handleAuthAction(w http.ResponseWriter, r *http.Request) {
 	_ = s.sessions.RenewToken(r.Context())
 	s.sessions.Put(r.Context(), "user_id", user.ID)
 	s.limiter.resetFailures(ip)
+	slog.Debug("login succeeded", "user_id", user.ID, "username", username, "admin", user.IsAdmin, "ip", ip)
 	// Stamp the last-login time (best-effort — don't fail the login if it errors).
 	// The returned user still carries the *previous* value, which is the intended
 	// "last seen" semantic; the users table reloads to show the fresh time.

@@ -303,6 +303,13 @@ function toggleSection(section: AdminSection): void {
         >
           <font-awesome-icon :icon="['fad', 'gear']" /> Settings
         </button>
+        <button
+          v-if="auth.isAdmin"
+          :class="{ active: admin.adminTab === 'system-logs' }"
+          @click="go('system-logs')"
+        >
+          <font-awesome-icon :icon="['fad', 'clipboard-clock']" /> Logs
+        </button>
       </div>
     </div>
     <!-- User Options (Change Password / Logout) — actions, not navigation. -->

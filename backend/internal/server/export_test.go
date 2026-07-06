@@ -26,6 +26,18 @@ var (
 	// FontFileTokenForTest derives a font's serving token for a given bucket, so
 	// the expiry window (current + previous bucket) can be exercised directly.
 	FontFileTokenForTest = (*Server).fontFileToken
+	// ParseLogLinesForTest exposes the NDJSON log parser (level/text filtering,
+	// time/level/msg promotion, malformed-line skipping) for unit testing.
+	ParseLogLinesForTest = parseLogLines
+	// SlogLevelValueForTest exposes the level-name → severity mapping.
+	SlogLevelValueForTest = slogLevelValue
+	// LogLevelNameForTest / ParseLogLevelNameForTest expose the runtime-level
+	// name↔slog.Level mapping used by the live DEBUG toggle.
+	LogLevelNameForTest      = logLevelName
+	ParseLogLevelNameForTest = parseLogLevelName
+	// LogClientIPForTest exposes the CF-Connecting-IP-first client-IP extraction
+	// used for the request log's ip field.
+	LogClientIPForTest = logClientIP
 )
 
 // WebRootForTest exposes the server's webRoot so external tests can seed

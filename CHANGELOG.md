@@ -26,6 +26,38 @@ The format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## Frontend
 
+### [3.4.0] — 2026-07-05
+
+#### Added
+
+- **Server Logs admin tab (System → Logs, admin-only).** A live-tailing viewer
+  over the backend's structured log: loads a filtered snapshot from
+  `GET /api/logs`, then live-appends new lines over the admin WebSocket. Runs on
+  the shared `DataTable` with a per-page selector (25/50/100/200) and pagination.
+  Common HTTP-request fields are promoted to typed, colored columns — **Method**
+  badges (GET/POST/PUT/PATCH/DELETE/WS), **Status** (2xx green → 5xx red),
+  formatted **Duration**, and **IP** — with any other fields previewed inline and
+  click-to-expand to full JSON. Includes a minimum-level filter + debounced text
+  search, a pause/resume "Live" toggle, and a **Debug On/Off** button that flips
+  the server's runtime log level live (`POST /api/logs/level`) — capture detail on
+  demand and quiet it again without a restart. The in-memory buffer self-caps at
+  1000 entries.
+
+#### Changed
+
+- **`DataTable` gained opt-in expandable rows + column widths** (used by the logs
+  viewer). Providing a `#detail` slot makes each row toggle a full-width detail
+  row on click (cell slots receive an `expanded` flag), and a column can set a
+  fixed `width`. Both are backward-compatible — tables without a `#detail`
+  slot/`width` are unchanged.
+
+#### Fixed
+
+- **API errors with no JSON body now show the HTTP status** — a non-JSON gateway
+  failure (e.g. an empty/HTML `502` from Cloudflare/Apache) surfaces as `Request
+  failed (HTTP 502)` instead of a bare `Request failed`; our own `{ "error": … }`
+  messages are still preferred when present.
+
 ### [3.1.0] — 2026-07-03
 
 #### Changed
@@ -288,6 +320,52 @@ First tracked release — establishes versioning for the current production buil
 ---
 
 ## Backend
+
+### [3.3.0] — 2026-07-05
+
+#### Added
+
+- **Structured logging + admin log viewer.** `slog` now emits JSON (was the
+  default text handler) to stdout **and**, when `-log-file` is set (default
+  `/var/log/senpan/senpan.log`), to a rotating file via timberjack — daily
+  rotation at local midnight, zstd-compressed backups, bounded retention
+  (`MaxBackups=14`, `MaxAge=30d`, plus a 100 MB safety cap). `GET /api/logs`
+  (admin) tails the file newest-first with `level`/`q`/`limit` filters (4 MB read
+  cap, `truncated` flag) and reports the current runtime `level`; each line is
+  also forwarded to admin WebSocket clients as a `{"type":"log","entry":LogEntry}`
+  message for a live tail — tapped at the slog writer (so it needs no file
+  polling and works even with file logging off), admin-gated, and **lossy** so a
+  burst can't disconnect anyone. The on-box `jlv` tool reads the same file. Pass
+  `-log-file=""` in dev for stdout-only. Requires `LogsDirectory=senpan` on the
+  systemd unit (see `deploy/README.md`) so the log dir is writable under
+  `ProtectSystem=strict`.
+- **Live DEBUG toggle (no restart).** `POST /api/logs/level` (admin) flips the
+  process-wide minimum level at runtime via a `slog.LevelVar` — effective
+  immediately across stdout, the file, and the live tail, reverting to INFO on
+  restart. When DEBUG is on, every request emits a richer `request detail`
+  companion line (query, user-agent, referer, ip), and DEBUG logs run across the
+  major services (AniList/Discord calls, WebSocket connect/disconnect, login, the
+  announcement scheduler).
+
+#### Changed
+
+- **Book club covers post as the Discord embed image** — the large, full-width
+  image instead of the small top-right thumbnail — when publishing a reading list.
+
+#### Fixed
+
+- **Request logs record the real client IP.** The `ip` field used `RemoteAddr`
+  (always the Apache proxy, e.g. `[::1]:44686`); it now prefers `CF-Connecting-IP`
+  (Cloudflare's authoritative client address), then the leftmost
+  `X-Forwarded-For`, then the RemoteAddr host. Display-only — rate limiting still
+  uses the spoof-resistant `clientIP`.
+- **Book-club AniList lookup surfaces the real error.** Lookups now return
+  **`424 Failed Dependency`** carrying AniList's actual message (e.g. "API
+  temporarily disabled… (status 403)", or a transport reason like "did not
+  respond within 15s") instead of a `502`. Cloudflare replaces origin **5xx**
+  bodies with its own error page, so a 5xx hid the message from the SPA; a 4xx
+  body passes through. Outbound AniList requests also send a descriptive
+  `User-Agent` (`SenpanAppSuite (+https://apps.senpan.cafe)`).
 
 ### [3.1.0] — 2026-07-03
 

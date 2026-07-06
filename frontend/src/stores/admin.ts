@@ -50,6 +50,7 @@ export type AdminTab =
   | 'system-themes'
   | 'system-images'
   | 'system-users'
+  | 'system-logs'
 
 // Per-dataset freshness gate so re-entering a tab doesn't re-spin and re-fetch
 // data we just loaded. Keyed by data domain (several tabs can share one key, e.g.

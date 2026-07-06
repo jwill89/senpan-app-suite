@@ -17,6 +17,8 @@ import (
 	"syscall"
 	"time"
 
+	"app-suite/internal/logging"
+	"app-suite/internal/model"
 	"app-suite/internal/server"
 	"app-suite/internal/store"
 	"app-suite/internal/ws"
@@ -30,7 +32,20 @@ func main() {
 	corsOrigins := flag.String("cors-origins", "", "Comma-separated CORS allowlist of cross-origin sites (env APPSUITE_CORS_ORIGINS; empty = same-origin only, no CORS headers)")
 	turnstileSecret := flag.String("turnstile-secret", "", "Cloudflare Turnstile secret key (env APPSUITE_TURNSTILE_SECRET; empty = login bot check disabled)")
 	turnstileSiteKey := flag.String("turnstile-sitekey", "", "Cloudflare Turnstile public site key (env APPSUITE_TURNSTILE_SITEKEY)")
+	logFile := flag.String("log-file", "/var/log/senpan/senpan.log", "Rotating JSON log file path (daily midnight rotation); empty = stdout only")
 	flag.Parse()
+
+	// Logging: install the JSON slog handler before anything logs. Always writes
+	// to stdout (journald); also to the rotating file when -log-file is set (prod
+	// default). On a file-sink failure we still log to stdout and warn. Dev on a
+	// non-Linux box should pass -log-file="" to avoid creating a /var/log tree.
+	logCloser, logErr := logging.Setup(*logFile, slog.LevelInfo)
+	if logCloser != nil {
+		defer logCloser.Close()
+	}
+	if logErr != nil {
+		slog.Warn("file logging disabled; using stdout only", "path", *logFile, "error", logErr)
+	}
 
 	// CORS allowlist: flag > env. Normally empty — the SPA and API are
 	// same-origin in both prod (Apache) and dev (Vite proxies /api).
@@ -80,6 +95,21 @@ func main() {
 	hub := ws.NewHub()
 	srv := server.New(db, hub, finalSecret, *webRoot, allowedOrigins)
 	srv.SetTurnstile(tsSecret, tsSiteKey)
+	srv.SetLogFile(*logFile) // GET /api/logs tails this file
+
+	// Live log tail: forward each JSON log line to admin WebSocket clients as a
+	// {"type":"log","entry":…} message. Gated on an admin actually watching so the
+	// parse/broadcast is skipped entirely otherwise, and lossy so a burst can't
+	// disconnect anyone. model.ParseLogEntry runs synchronously and copies out of
+	// the line, so the slog buffer is not retained.
+	logging.SetTailSink(func(line []byte) {
+		if !hub.HasAdminClients() {
+			return
+		}
+		if entry, ok := model.ParseLogEntry(line); ok {
+			hub.BroadcastLog(map[string]any{"type": "log", "entry": entry})
+		}
+	})
 	srv.SetOpenAPISpec(openAPISpec) // GET /api/docs + /api/openapi.yaml
 	if tsSecret != "" {
 		slog.Info("Cloudflare Turnstile bot check enabled on the login form")

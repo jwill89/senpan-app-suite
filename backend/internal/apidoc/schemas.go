@@ -32,6 +32,8 @@ var modelTypes = map[string]any{
 	"NamedOKResponse": model.NamedOKResponse{}, "RenamedResponse": model.RenamedResponse{},
 	"PausedResponse": model.PausedResponse{}, "SkippedUpload": model.SkippedUpload{},
 	"SettingsResponse": model.SettingsResponse{},
+	"LogEntry":         model.LogEntry{}, "LogsResponse": model.LogsResponse{},
+	"LogLevelResponse": model.LogLevelResponse{},
 
 	// Auth / users / account
 	"AuthCheckResponse": model.AuthCheckResponse{}, "LoginResponse": model.LoginResponse{},

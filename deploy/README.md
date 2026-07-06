@@ -155,6 +155,40 @@ One-time setup for the carrd host (same pattern as the font host):
    disabled, put the `<FilesMatch>` blocks from `deploy/carrd.htaccess` directly
    in the vhost's `<Directory>` instead.
 
+## Server logs
+
+The Go server writes **structured JSON** logs to **stdout** (captured by
+`journalctl -u senpan`) and, by default, to a rotating file at
+`/var/log/senpan/senpan.log` (`-log-file`; pass `""` to disable, e.g. local dev).
+timberjack rotates the file **daily at local midnight**, zstd-compresses backups,
+and bounds retention (14 backups / 30 days / 100 MB safety cap). The admin
+**System → Logs** tab and the on-box `jlv` tool both read this file;
+`GET /api/logs` tails it and every line also streams to connected admins over the
+WebSocket for a live tail, so most log inspection needs no SSH.
+
+**Required systemd setting (`LogsDirectory`).** `senpan.service` runs with
+`ProtectSystem=strict`, which mounts `/var/log` **read-only** for the service — so
+the app cannot create its own log dir (it falls back to stdout-only and logs a
+`file logging disabled … read-only file system` warning). Grant it a writable log
+directory with systemd's `LogsDirectory`, which creates `/var/log/senpan` (owned
+by the service, writable inside the sandbox) on every start — this survives
+reboots and rebuilds:
+
+```ini
+# /etc/systemd/system/senpan.service.d/logdir.conf
+[Service]
+LogsDirectory=senpan
+```
+
+Then `systemctl daemon-reload && systemctl restart senpan`, and verify with
+`tail /var/log/senpan/senpan.log` (JSON lines). A drop-in keeps the change out of
+the packaged unit; equivalently add the `LogsDirectory=senpan` line to the unit's
+`[Service]` section directly. **Without this, only the live tail / journald work —
+the on-disk file, the Logs tab's historical snapshot, and `jlv` stay empty.**
+
+On-box viewing: `jlv /var/log/senpan/senpan.log` (install the Linux `.deb` from
+<https://github.com/hedhyw/json-log-viewer/releases>).
+
 ## Each deploy
 
 **Scripted (recommended).** From the repo root, on Windows:

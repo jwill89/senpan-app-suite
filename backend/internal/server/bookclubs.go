@@ -3,9 +3,11 @@ package server
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"html"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"os"
@@ -22,6 +24,11 @@ import (
 // anilist_api_url setting is unset). Configurable on the admin settings page.
 // AniList needs no API key for public read queries.
 const defaultAniListURL = "https://graphql.anilist.co"
+
+// anilistUserAgent identifies this app to AniList (and its Cloudflare front).
+// Sending a descriptive User-Agent instead of Go's default is good practice for
+// public APIs and helps avoid being caught by generic bot filtering.
+const anilistUserAgent = "SenpanAppSuite (+https://apps.senpan.cafe)"
 
 // defaultClubSlug is the book club used when a request omits one. The schema
 // supports more clubs via club_slug without changes.
@@ -567,6 +574,9 @@ const anilistMediaFields = `id title { romaji english native } description(asHtm
 //	Endpoint:  GET /api/bookclub/lookup?q=<query>  |  ?id=<anilist id>
 //	Auth:      admin, or any book-club page permission
 //	Response:  {"results": [ReadingListItem-shaped, ...]}
+//	Errors:    424 Failed Dependency when AniList is unavailable — a 4xx, not a
+//	           5xx, on purpose: Cloudflare replaces origin 5xx bodies with its own
+//	           error page, so a 5xx would hide the real reason from the client.
 func (s *Server) handleBookclubLookup(w http.ResponseWriter, r *http.Request) {
 	if !s.requireAnyBookClub(w, r) {
 		return
@@ -596,7 +606,14 @@ func (s *Server) handleBookclubLookup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		writeError(w, http.StatusBadGateway, "AniList request failed: "+err.Error())
+		// Return 424 (Failed Dependency), not 502. This is genuinely a failed
+		// upstream dependency, but Cloudflare fronts the site and replaces origin
+		// *5xx* responses with its own branded error page — discarding our JSON
+		// body, so the SPA only ever sees a bodyless 502. Cloudflare passes 4xx
+		// bodies through untouched, so a 4xx is what actually delivers the real
+		// reason (e.g. "AniList API temporarily disabled… (status 403)") to the
+		// client. See handleBookclubLookup's doc comment.
+		writeError(w, http.StatusFailedDependency, "AniList request failed: "+err.Error())
 		return
 	}
 
@@ -681,16 +698,51 @@ func anilistPost(endpoint, query string, variables map[string]any) ([]byte, erro
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json")
+	req.Header.Set("User-Agent", anilistUserAgent)
+	slog.Debug("anilist request", "endpoint", endpoint, "bytes", len(payload))
 	resp, err := bookclubHTTPClient.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("request failed")
+		// Don't swallow the transport failure — surface *why* AniList was
+		// unreachable (timeout, connection reset, DNS/TLS) so it reaches the
+		// operator instead of an opaque "request failed". http.Client wraps these
+		// in *url.Error; a datacenter IP hitting AniList's Cloudflare front
+		// commonly sees a timeout or reset rather than a clean HTTP status.
+		if urlErr, ok := errors.AsType[*url.Error](err); ok {
+			if urlErr.Timeout() {
+				return nil, fmt.Errorf("did not respond within %s", bookclubHTTPClient.Timeout)
+			}
+			return nil, fmt.Errorf("could not connect (%v)", urlErr.Err)
+		}
+		return nil, fmt.Errorf("request failed (%v)", err)
 	}
 	defer resp.Body.Close()
 	body, _ := io.ReadAll(io.LimitReader(resp.Body, 2<<20)) // 2 MB cap
+	slog.Debug("anilist response", "status", resp.StatusCode, "bytes", len(body))
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		// AniList returns its GraphQL error shape even on non-2xx (e.g. a 403 when
+		// the API is disabled for stability). Surface that message so the operator
+		// sees the real reason ("AniList API temporarily disabled…") rather than a
+		// bare status code.
+		if msg := anilistErrorMessage(body); msg != "" {
+			return nil, fmt.Errorf("%s (status %d)", msg, resp.StatusCode)
+		}
 		return nil, fmt.Errorf("upstream status %d", resp.StatusCode)
 	}
 	return body, nil
+}
+
+// anilistErrorMessage extracts the first GraphQL error message from an AniList
+// response body, returning "" when the body isn't the expected error shape.
+func anilistErrorMessage(body []byte) string {
+	var resp struct {
+		Errors []struct {
+			Message string `json:"message"`
+		} `json:"errors"`
+	}
+	if err := json.Unmarshal(body, &resp); err != nil || len(resp.Errors) == 0 {
+		return ""
+	}
+	return strings.TrimSpace(resp.Errors[0].Message)
 }
 
 // anilistToItem maps an AniList Media to a reading-list item suggestion: picks
@@ -834,13 +886,14 @@ func (s *Server) handlePublishReadingList(w http.ResponseWriter, r *http.Request
 	writeJSON(w, http.StatusOK, model.PublishResponse{Published: published})
 }
 
-// buildItemEmbed converts a reading list item into a Discord embed. The
-// curator-comments field is labeled per club (commentsLabel).
+// buildItemEmbed converts a reading list item into a Discord embed. The cover
+// renders as the large, full-width embed image (not the small thumbnail), and
+// the curator-comments field is labeled per club (commentsLabel).
 func buildItemEmbed(it model.ReadingListItem, commentsLabel string) discordEmbed {
 	b := newEmbed().
 		title(it.Title).
 		description(it.Summary).
-		thumbnail(it.CoverImage).
+		image(it.CoverImage).
 		field("Format", it.Format, true).
 		field("Chapters", it.Chapters, true).
 		field("Genres", it.Genres, false).

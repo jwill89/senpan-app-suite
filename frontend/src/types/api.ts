@@ -23,6 +23,7 @@ import type {
   PatternCategory,
   TokenInfo,
   UploadedFont,
+  LogEntry,
 } from './api.generated'
 
 // ── Domain models (generated from the Go `model` package) ────────────────────
@@ -62,6 +63,7 @@ export type {
   User,
   WinnersLogEntry,
   TokenInfo,
+  LogEntry,
 } from './api.generated'
 
 // ── Response envelopes (generated; backend `model` is the source of truth) ───
@@ -75,6 +77,8 @@ export type {
   RenamedResponse,
   PausedResponse,
   SkippedUpload,
+  LogsResponse,
+  LogLevelResponse,
   // Auth / users / account
   AuthCheckResponse,
   LoginResponse,
@@ -451,3 +455,6 @@ export type WsMessage =
   // resource refetches it via REST. `resource` is a key like 'garapons',
   // 'raffles', 'announcements', 'bookclub', 'presets', 'users', etc.
   | { type: 'resource_changed'; resource: string }
+  // Live server-log tail: one message per log line, sent to admin connections
+  // only (best-effort — dropped rather than queued when a client can't keep up).
+  | { type: 'log'; entry: LogEntry }

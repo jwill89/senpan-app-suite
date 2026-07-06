@@ -148,6 +148,12 @@ const adminChildren: RouteRecordRaw[] = [
     component: () => import('@/components/admin/UsersTab.vue'),
     meta: { tab: 'system-users' },
   },
+  {
+    path: 'system/logs',
+    name: 'admin-system-logs',
+    component: () => import('@/components/admin/LogsTab.vue'),
+    meta: { tab: 'system-logs' },
+  },
   // Landing for active accounts with no granted pages (guard redirects here).
   {
     path: 'no-access',
@@ -314,7 +320,9 @@ router.beforeEach(async (to) => {
     const tab = to.meta.tab as AdminTab | undefined
     if (tab) {
       const allowed =
-        tab === 'system-users' ? auth.isAdmin : auth.isAdmin || auth.hasPermission(tab)
+        tab === 'system-users' || tab === 'system-logs'
+          ? auth.isAdmin
+          : auth.isAdmin || auth.hasPermission(tab)
       if (!allowed) {
         const fallback = firstAllowedAdminRoute(auth)
         if (fallback && fallback !== to.name) return { name: fallback }

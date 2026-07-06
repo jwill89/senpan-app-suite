@@ -88,4 +88,31 @@ describe('DataTable', () => {
     expect(wrapper.find('.none').exists()).toBe(true)
     expect(wrapper.findAll('tbody tr')).toHaveLength(0)
   })
+
+  it('is not expandable and rows are inert without a #detail slot', async () => {
+    const wrapper = mount(DataTable, { props: { columns, rows, rowKey: 'id' } })
+    const firstRow = wrapper.findAll('tbody tr')[0]
+    expect(firstRow.classes()).not.toContain('dt-expandable')
+    await firstRow.trigger('click')
+    expect(wrapper.findAll('tbody tr')).toHaveLength(2) // no detail row inserted
+  })
+
+  it('toggles an expandable detail row on click when a #detail slot is provided', async () => {
+    const wrapper = mount(DataTable, {
+      props: { columns, rows, rowKey: 'id' },
+      slots: { detail: '<span class="detail">D</span>' },
+    })
+    expect(wrapper.findAll('tbody tr')[0].classes()).toContain('dt-expandable')
+    expect(wrapper.findAll('.detail')).toHaveLength(0)
+    await wrapper.findAll('tbody tr')[0].trigger('click')
+    expect(wrapper.findAll('.detail')).toHaveLength(1)
+    await wrapper.findAll('tbody tr')[0].trigger('click') // collapse
+    expect(wrapper.findAll('.detail')).toHaveLength(0)
+  })
+
+  it('applies a fixed column width from the column width option', () => {
+    const wide: DataColumn[] = [{ key: 'name', label: 'Name', width: '120px' }]
+    const wrapper = mount(DataTable, { props: { columns: wide, rows, rowKey: 'id' } })
+    expect(wrapper.find('thead th').attributes('style')).toContain('width: 120px')
+  })
 })

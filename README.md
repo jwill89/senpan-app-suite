@@ -22,14 +22,16 @@ frontend.
   and **Carrd image hosting**.
 - **System** — app **settings**, a structured **theme editor** (design tokens
   with a live preview and a WCAG 2.1 contrast report), central **image hosting**,
-  and **user accounts** with per-page permissions.
+  **user accounts** with per-page permissions, and a live **server-log viewer**
+  (typed/colored columns, live tail over WebSocket, and a runtime DEBUG toggle).
 
 ## Stack
 
 - **Frontend:** Vue 3 (SFC, `<script setup>`) · TypeScript (strict) · Pinia ·
   Vue Router (history mode, lazy routes) · Vite 8 · PWA · Vitest
 - **Backend:** Go 1.26+ (stdlib HTTP, method-pattern routing) · SQLite (WAL) ·
-  `coder/websocket` · `alexedwards/scs` sessions
+  `coder/websocket` · `alexedwards/scs` sessions · structured JSON logging
+  (`slog` + `timberjack` rotation)
 - **Tooling:** tygo (Go→TS type generation) · ESLint + Prettier · GitHub Actions CI
 
 ## Quick start
@@ -39,7 +41,8 @@ frontend.
 ```bash
 # 1. Backend — run the API/WebSocket server on :8080
 cd backend
-go run . -addr :8080 -db ../devdata/database.sqlite -webroot ../devdata/webroot
+# -log-file="" keeps logs on stdout only (the default writes to /var/log/senpan)
+go run . -addr :8080 -db ../devdata/database.sqlite -webroot ../devdata/webroot -log-file ""
 
 # 2. Frontend (in a second terminal)
 cd frontend

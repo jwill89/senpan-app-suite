@@ -67,7 +67,7 @@ rotated immediately**. See **Authentication & authorization** below.
 │       ├── types/
 │       │   ├── api.generated.ts      ← tygo-generated from Go model — GITIGNORED, DO NOT EDIT (run `npm run gen:types`)
 │       │   └── api.ts                ← re-exports + hand-written request/response/WS envelopes
-│       ├── stores/                   ← Pinia stores (ui, app, auth, users, player, game, cards, patterns, presets, styles, raffles, affiliates, garapons, stampRallies, images, fonts, bookclub, carrd, announcements, admin)
+│       ├── stores/                   ← Pinia stores (ui, app, auth, users, player, game, cards, patterns, presets, styles, raffles, affiliates, garapons, stampRallies, images, fonts, bookclub, carrd, announcements, logs, admin)
 │       ├── composables/
 │       │   ├── useWebSocket.ts       ← wires WsClient → stores (message dispatch)
 │       │   └── usePwaInstall.ts      ← beforeinstallprompt capture + install/standalone state for the PWA "Install" affordance
@@ -75,7 +75,7 @@ rotated immediately**. See **Authentication & authorization** below.
 │       │   ├── common/               ← BingoBoard, CalledNumbers, PatternMini, ModalOverlay, ConfirmModal, ToastNotification, LoadingSpinner, RouteProgressBar, MarkdownEditor (WYSIWYG), AppFooter, CornerFlourish
 │       │   │   └── ui/                ← admin UI primitives (presentational, render stable themeable classes). Forms/tables: AdminPanel, FormField, FormRow, FormActions, DataTable, PaginationBar, EmptyState. Manager model: ManagerView (list page shell), ListRow (item row, actions far-right), SubPageHeader (Back sub-page header), SearchInput. Shared widgets: PatternPicker (v-model selected pattern ids — search + category filter + Select-All + collapse-all over a grouped collapsible checkbox grid; used by GameTab + the Preset editor), ImageField (upload-or-reuse-an-image field; announcement forms), ColorPicker (lazy vue-color Chrome wrapper + .color-picker skin; player stamp-colour modal). Every admin "manage items" tab routes through these for one consistent structure
 │       │   ├── player/               ← Stamp{Shape,Color,Opacity} pickers, WinPatternsPanel
-│       │   └── admin/                ← AdminSidebar + one component per tab + modals (CardPreview, EndGame, WinnerVerify, HalftimePrompt) + ThemeTokenEditor. Tabs: Game, Cards, WinnersLog, Patterns (one manager unifying the patterns list + New Pattern / Manage Categories sub-pages), Presets, RaffleForm, Raffles, Announcements, Affiliates + AffiliateForm, BookClub (one generic tab serves every club), Garapon + GaraponForm, StampRallies + StampRallyForm, Settings, Themes, Images, Users (admin-only account+permission manager), Fonts, CarrdUpload; PlacementEditor (shared %-based image placement widget for Garapon/Stamp Rally forms)
+│       │   └── admin/                ← AdminSidebar + one component per tab + modals (CardPreview, EndGame, WinnerVerify, HalftimePrompt) + ThemeTokenEditor. Tabs: Game, Cards, WinnersLog, Patterns (one manager unifying the patterns list + New Pattern / Manage Categories sub-pages), Presets, RaffleForm, Raffles, Announcements, Affiliates + AffiliateForm, BookClub (one generic tab serves every club), Garapon + GaraponForm, StampRallies + StampRallyForm, Settings, Themes, Images, Users (admin-only account+permission manager), Logs (admin-only live server-log viewer — typed/colored columns, filters, live tail, DEBUG toggle), Fonts, CarrdUpload; PlacementEditor (shared %-based image placement widget for Garapon/Stamp Rally forms)
 │       ├── views/                    ← HomeView, PlayerView, RafflesView, RaffleDetailView, GaraponView (public token-gated draw), StampCardView (public token-gated stamp card), AdminLoginView, RegisterView (hidden), NoAccessView (active account, no granted pages), AdminView
 │       └── **/*.test.ts              ← Vitest unit/component tests, colocated next to the code they cover
 ├── .github/workflows/ci.yml          ← CI: frontend (lint·typecheck·test·build) + backend (lint·build·vet·test·govulncheck) + plugin (build·format)
@@ -96,9 +96,10 @@ rotated immediately**. See **Authentication & authorization** below.
 │       ├── bingo/
 │       │   ├── card.go               ← Card/board generation, ID generation, LetterForNumber
 │       │   └── game.go               ← bingo.Service (start, draw, end, state, winner matching, caching)
-│       ├── ws/hub.go                 ← WebSocket hub, client pumps, broadcast (player/admin channels)
+│       ├── ws/hub.go                 ← WebSocket hub, client pumps, broadcast (player/admin channels; BroadcastLog = lossy admin-only live-log fan-out that never disconnects on a full buffer)
+│       ├── logging/logging.go        ← slog setup: JSON handler → stdout + a rotating file (timberjack; daily-midnight rotation, zstd) + a live-tail tap (io.Writer forwarding each line); runtime-settable level via slog.LevelVar
 │       └── server/
-│           ├── server.go             ← Server struct (deps, routes, CORS, JSON helpers, broadcast helpers) + auth helpers (currentUser/isAdmin/requireAuth/requireAdmin/requirePermission)
+│           ├── server.go             ← Server struct (deps, routes, CORS, JSON helpers, broadcast helpers) + auth helpers (currentUser/isAdmin/requireAuth/requireAdmin/requirePermission) + the request-logging middleware (structured JSON; real client IP via CF-Connecting-IP)
 │           ├── auth.go               ← GET/POST /api/auth (login/logout, argon2id verify, rate-limited) + POST /api/register (hidden, creates inactive accounts)
 │           ├── users.go              ← GET/POST /api/users (admin user management) + POST /api/account (self-service change-password)
 │           ├── permissions.go        ← page-permission key constants, validPermissions(), userHasPermission(), requireAnyBookClub(); bookClubSlugs (keep in sync with BOOK_CLUBS)
@@ -116,6 +117,7 @@ rotated immediately**. See **Authentication & authorization** below.
 │           ├── scheduler.go          ← runScheduler: shared ticker/sweep loop behind the announcement scheduler
 │           ├── carrd.go              ← Carrd image-host projects/dirs/uploads under <webRoot>/carrd (System → Atelier → Carrd Upload)
 │           ├── winners.go            ← GET/POST /api/winners-log (list + delete/delete_all), GET /api/winners-log/frequent
+│           ├── logs.go               ← GET /api/logs (admin: tail the JSON log file, level/q/limit filters) + POST /api/logs/level (live DEBUG toggle); shared NDJSON parse in model.ParseLogEntry
 │           ├── settings.go           ← GET/POST /api/settings (app title, draw delay, fonts, AniList URL, join prompt; secret per-club webhooks)
 │           ├── fonts.go              ← fonts admin API: grouped GET /api/fonts, upload, per-file rename/delete, PATCH/DELETE /api/fonts/families/{base} (metadata / whole font)
 │           ├── fontserve.go          ← protected font serving: tokenized public URLs (GET /api/fonts/pub/kit.css + /f/{token}), gated per font by its origin allowlist; kit filtered by Referer
@@ -148,6 +150,7 @@ All dependencies are wired in `main.go` and passed via structs (no globals, no s
 - `ws` — WebSocket `Hub` for real-time broadcasts. Self-contained: manages client lifecycle, ping/pong, and message fan-out. Supports separate player/admin channels.
 - `server` — `Server` struct implementing `http.Handler`. Holds Store, GameService, Hub, session store, web root. Registers routes using Go 1.26+ method-pattern routing (`"GET /api/auth"`). Owns **authentication & per-page authorization** (see below), the **Discord-embed** features (announcements, book-club reading lists) and the announcement **background scheduler**, the **AniList** lookup proxy, and the on-disk upload areas (raffle/announcement/book-club images + Carrd projects).
 - `auth` — argon2id `Hash()` / `Verify()` over PHC-format strings. Its own package (depends only on `golang.org/x/crypto`) so both `store` (seeding the bootstrap admin) and `server` (login / change-password) can hash without an import cycle. Params: 64 MB / t=1 / p=4 (OWASP argon2id baseline); `Verify` is constant-time.
+- `logging` — process-wide `slog` setup (leaf; imports only `model` + timberjack). Installs a JSON handler writing to stdout **and** a rotating file, holds the runtime level in a `slog.LevelVar` (`SetLevel`/`CurrentLevel`), and exposes a settable tail sink (`SetTailSink`) that forwards each finished log line to a callback. `main` wires that callback to `Hub.BroadcastLog` for the live tail. See **Logging & observability** below.
 
 **Authentication & authorization**:
 - **Accounts, not a shared password.** `users` table holds `username`, argon2id `password_hash` (only ever read in the store layer — never on `model.User`, so it can't leak through JSON), `is_admin`, `is_active`, and a JSON `permissions` array. Login (`POST /api/auth`) verifies the hash, is **IP rate-limited**, rejects inactive accounts, and stores `user_id` in the SCS session (token rotated on login to prevent fixation). A missing user and a bad password return the same generic error so usernames can't be enumerated.
@@ -161,6 +164,8 @@ All dependencies are wired in `main.go` and passed via structs (no globals, no s
 **Discord embeds**: `embeds.go` holds the shared embed schema, a fluent `newEmbed()…build()` builder (auto-truncates to Discord's per-field limits, skips empty fields), a `#rrggbb`→int colour helper, and `postDiscordEmbed()` / `postDiscordWebhook()` transport (the latter also carries an optional `content` mention + `allowed_mentions`). Feature code (announcements, reading-list items) only assembles a builder chain — no feature has its own transport. Outbound calls (AniList + webhooks) share `bookclubHTTPClient` (15s timeout).
 
 **Background scheduler**: `main.go` launches `RunAnnouncementScheduler` in a goroutine tied to a shutdown-cancelled context. It uses the ticker/sweep loop in `scheduler.go` (`runScheduler`): ticks every 30s (and sweeps once on startup to catch up after downtime), posts due announcements to their type's webhook, and is resilient — an announcement whose webhook is unset is left pending, a failed post is retried next tick, and `skip_next`/recurrence advance the cursor without losing the schedule. Wall-clock times are resolved against each announcement's IANA timezone (DST-safe) and stored as UTC; `tzdata.go` embeds the zone database so this works on Windows hosts too.
+
+**Logging & observability**: the app logs **structured JSON** via `slog` (set up in the `logging` package). Output goes to **stdout** (captured by journald) and, when `-log-file` is set (default `/var/log/senpan/senpan.log`), to a **rotating file** (timberjack: daily-midnight rotation, zstd backups, bounded retention) — the file sink degrades gracefully to stdout-only if it can't be created (e.g. a read-only `/var/log` under `ProtectSystem=strict`; the systemd unit needs `LogsDirectory=senpan` — see `deploy/README.md`). The request-logging middleware records `method`/`path`/`status`/`duration`/`ip` per request, using the **real client IP** (`CF-Connecting-IP` behind Cloudflare, not the proxy's `[::1]`). Admins view logs **without SSH**: `GET /api/logs` tails the file (level/text/limit filters), and every line is also pushed to admin WebSocket clients as a `log` message so **System → Logs** live-tails them (see the tab in the frontend section). The minimum level is a `slog.LevelVar` flipped at runtime by `POST /api/logs/level` — turn **DEBUG** on to capture a richer `request detail` line per request plus DEBUG logs across the services, then back off, with no restart. The same NDJSON parse (`model.ParseLogEntry`) backs both the REST tail and the live feed.
 
 **Key data flow — drawing a number**:
 Admin clicks Draw → `POST /api/game {action:"draw"}` → `server.handleGameAction` →
@@ -292,7 +297,8 @@ not store-driven view switching:
 - A global `beforeEach` guard enforces auth + **per-page permission**: it
   redirects unauthenticated users to `/admin/login` (with a `redirect` query),
   then checks the matched child's `meta.tab` as the permission key — admins pass
-  everything, `system-users` is admin-only, and a user lacking the key is sent to
+  everything, `system-users` and `system-logs` are admin-only, and a user lacking
+  the key is sent to
   their first allowed page (or `/admin/no-access` when they have none). An
   already-logged-in user hitting `/admin/login` or `/admin/register` is bounced
   to their first allowed page. The guard also calls `admin.setTabFromRoute(meta.tab)`
@@ -330,7 +336,7 @@ Never edit it by hand. Request/response/WebSocket envelopes are hand-written in
 
 **Public routes**: `/` · `/play/:cardId` · `/raffles` · `/raffles/:id` · `/garapon/:token` (token-gated) · `/stamp-card/:token` (token-gated) · `/admin/login` · `/admin/register` (hidden).
 **Admin sections** (`adminSection`, sidebar highlight): `bingo` | `teahouse` | `festival` | `atelier` | `system`.
-**Admin tabs** (`adminTab` / route): `bingo-game` · `bingo-cards` · `bingo-winners-log` · `bingo-patterns` · `bingo-presets` · `teahouse-announcements` · `teahouse-affiliates` · `bookclub-<slug>` (one per registered club, e.g. `bookclub-yaoi`, `bookclub-yuri`) · `festival-garapon` · `festival-stamp-rally` · `teahouse-raffles` (shown in the Festival section, id unchanged) · `system-settings` · `system-themes` · `system-images` · `system-users` (admin-only) · `atelier-fonts` · `atelier-carrd`. Each tab id (except `system-users`) doubles as its **page-permission key**.
+**Admin tabs** (`adminTab` / route): `bingo-game` · `bingo-cards` · `bingo-winners-log` · `bingo-patterns` · `bingo-presets` · `teahouse-announcements` · `teahouse-affiliates` · `bookclub-<slug>` (one per registered club, e.g. `bookclub-yaoi`, `bookclub-yuri`) · `festival-garapon` · `festival-stamp-rally` · `teahouse-raffles` (shown in the Festival section, id unchanged) · `system-settings` · `system-themes` · `system-images` · `system-users` (admin-only) · `system-logs` (admin-only) · `atelier-fonts` · `atelier-carrd`. Each tab id (except `system-users`/`system-logs`) doubles as its **page-permission key**.
 
 **Player features**:
 - Join by board ID; see bingo board, called numbers grid, and active win patterns
@@ -533,6 +539,12 @@ the built SPA so redeploys never wipe them (full guide in `deploy/README.md`):
 - **Scheduler**: the server runs a background goroutine that posts due
   announcements to Discord webhooks — no cron needed; it
   starts with the process and stops on graceful shutdown.
+- **Server logs**: structured JSON to stdout (journald) + a rotating file at
+  `/var/log/senpan/senpan.log` (`-log-file`). Under `ProtectSystem=strict` the
+  `senpan.service` unit needs `LogsDirectory=senpan` so that path is writable;
+  otherwise the app degrades to stdout-only (a warning is logged). Admins view
+  them at **System → Logs** (live tail + `GET /api/logs`) or on-box via `jlv`.
+  See **Server logs** in `deploy/README.md`.
 
 ## Conventions & patterns
 

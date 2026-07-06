@@ -75,6 +75,28 @@ func clientIP(r *http.Request) string {
 	return host
 }
 
+// logClientIP returns the best-guess real client IP for LOGGING/display only
+// (never for security decisions). Behind Cloudflare the authoritative client
+// address is CF-Connecting-IP (set by Cloudflare, overriding any client-supplied
+// value); fall back to the leftmost X-Forwarded-For entry (the original origin),
+// then the RemoteAddr host. This deliberately favors the true origin address for
+// human-readable logs, unlike clientIP which takes the spoof-resistant rightmost
+// entry for rate-limiting.
+func logClientIP(r *http.Request) string {
+	if cf := strings.TrimSpace(r.Header.Get("CF-Connecting-IP")); cf != "" {
+		return cf
+	}
+	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
+		if first := strings.TrimSpace(strings.Split(xff, ",")[0]); first != "" {
+			return first
+		}
+	}
+	if host, _, err := net.SplitHostPort(r.RemoteAddr); err == nil {
+		return host
+	}
+	return r.RemoteAddr
+}
+
 // isLimited returns true if the given IP has exceeded the failure limit.
 func (rl *rateLimiter) isLimited(ip string) bool {
 	rl.mu.Lock()

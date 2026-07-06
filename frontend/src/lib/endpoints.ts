@@ -97,6 +97,8 @@ import type {
   CarrdProjectCreateResponse,
   CarrdImagesResponse,
   CarrdUploadResponse,
+  LogsResponse,
+  LogLevelResponse,
 } from '@/types/api'
 import type { AppSettings } from '@/types/api'
 
@@ -212,6 +214,21 @@ export const endpoints = {
     delete: (id: number) => apiDelete(`winners-log/${id}`),
     /** DELETE /api/winners-log/all — clear the log, returning the deleted count. */
     deleteAll: () => apiDelete<DeletedCountResponse>('winners-log/all'),
+  },
+
+  // ── Server logs (admin-only) ─────────────────────────────────────────────────
+  logs: {
+    /** GET /api/logs — tail the server JSON log, newest-first, filtered. */
+    list: (params: { level?: string; q?: string; limit?: number } = {}) => {
+      const qs = new URLSearchParams()
+      if (params.level) qs.set('level', params.level)
+      if (params.q) qs.set('q', params.q)
+      if (params.limit) qs.set('limit', String(params.limit))
+      const s = qs.toString()
+      return apiGet<LogsResponse>(`logs${s ? `?${s}` : ''}`)
+    },
+    /** POST /api/logs/level — set the runtime minimum log level (live DEBUG toggle). */
+    setLevel: (level: string) => apiPost<LogLevelResponse>('logs/level', { level }),
   },
 
   // ── Cards (hybrid REST) ──────────────────────────────────────────────────────

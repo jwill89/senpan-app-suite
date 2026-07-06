@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/url"
 	"strconv"
 	"strings"
@@ -283,6 +284,7 @@ func postDiscordWebhook(webhookURL string, payload discordWebhookPayload) error 
 	if len(payload.Components) > 0 {
 		webhookURL = withComponentsParam(webhookURL)
 	}
+	slog.Debug("discord webhook post", "embeds", len(payload.Embeds), "components", len(payload.Components), "bytes", len(body))
 	resp, err := bookclubHTTPClient.Post(webhookURL, "application/json", bytes.NewReader(body))
 	if err != nil {
 		// Transport failure: the request may or may not have reached Discord, so
@@ -292,6 +294,7 @@ func postDiscordWebhook(webhookURL string, payload discordWebhookPayload) error 
 	}
 	defer resp.Body.Close()
 	_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 1<<16))
+	slog.Debug("discord webhook response", "status", resp.StatusCode)
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return fmt.Errorf("webhook returned status %d", resp.StatusCode)
 	}

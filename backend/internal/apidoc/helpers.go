@@ -46,7 +46,11 @@ Connect with ` + "`GET /api/ws`" + `; the channel is chosen by the ` + "`id`" + 
 - **no ` + "`id`" + `** → **admin** channel: requires an authenticated active account
   (cookie or ` + "`?token=pat_…`" + `); streams draws immediately plus winner card IDs.
 
-Broadcast messages (each carries a ` + "`type`" + ` field): ` + "`resource_changed`, `cards_update`, `card_deleted`, `patterns_update`, `game_update`, `game_draw`, `halftime_minigame`, `draw_delay_update`, `details_update`, `style_update`, `settings_update`" + `.`
+Broadcast messages (each carries a ` + "`type`" + ` field): ` + "`resource_changed`, `cards_update`, `card_deleted`, `patterns_update`, `game_update`, `game_draw`, `halftime_minigame`, `draw_delay_update`, `details_update`, `style_update`, `settings_update`, `log`" + `.
+
+The **admin** channel also receives a ` + "`log`" + ` message per server log line
+(` + "`{ \"type\": \"log\", \"entry\": LogEntry }`" + `) for the live log tail — best-effort,
+sent only while an admin is connected.`
 
 // securitySchemes declares the two ways a request can authenticate.
 func securitySchemes() openapi3.SecuritySchemes {

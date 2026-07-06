@@ -308,6 +308,20 @@ func buildFeaturePaths(b *pb) {
 		body:  actionBody("Setting values.", nil, props("settings", desc(openapi3.NewObjectSchema(), "Map of setting key → value."))),
 		resps: []respEntry{ok("OKResponse"), r("400", "Unknown / invalid setting")}})
 
+	// ── Server logs ───────────────────────────────────────────────────────────
+	b.add("GET", "/api/logs", "System", "Server logs (tail)", "admin",
+		"Tails the server's rotating JSON log file, newest-first. `level` filters to that minimum severity; `q` is a case-insensitive substring match; `limit` caps entries. The response `level` is the current runtime minimum level. Admin-only — the log contains IPs, usernames, and internal error detail.", opt{
+			query: []*openapi3.Parameter{
+				qparam("level", "Minimum level: debug|info|warn|error.", false),
+				qparam("q", "Case-insensitive substring filter.", false),
+				qparam("limit", "Max entries (default 200, max 1000).", false),
+			},
+			resps: []respEntry{ok("LogsResponse")}})
+	b.add("POST", "/api/logs/level", "System", "Set runtime log level", "admin",
+		"Changes the process-wide minimum log level live (no restart) — used to toggle DEBUG on/off. Reverts to the startup default on restart.", opt{
+			body:  actionBody("The new level.", nil, props("level", desc(openapi3.NewStringSchema(), "One of debug, info, warn, error."))),
+			resps: []respEntry{ok("LogLevelResponse"), r("400", "Invalid level")}})
+
 	buildFilePaths(b)
 }
 

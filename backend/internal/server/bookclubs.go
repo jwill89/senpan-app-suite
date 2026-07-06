@@ -711,9 +711,9 @@ func anilistPost(endpoint, query string, variables map[string]any) ([]byte, erro
 			if urlErr.Timeout() {
 				return nil, fmt.Errorf("did not respond within %s", bookclubHTTPClient.Timeout)
 			}
-			return nil, fmt.Errorf("could not connect (%v)", urlErr.Err)
+			return nil, fmt.Errorf("could not connect (%w)", urlErr.Err)
 		}
-		return nil, fmt.Errorf("request failed (%v)", err)
+		return nil, fmt.Errorf("request failed (%w)", err)
 	}
 	defer resp.Body.Close()
 	body, _ := io.ReadAll(io.LimitReader(resp.Body, 2<<20)) // 2 MB cap

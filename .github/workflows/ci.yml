@@ -105,7 +105,7 @@ jobs:
       # extras configured in backend/.golangci.yml. Pinned to match the version
       # developers run locally so CI and local results agree.
       - name: Lint (golangci-lint)
-        uses: golangci/golangci-lint-action@v7
+        uses: golangci/golangci-lint-action@v9
         with:
           version: v2.12.2
           working-directory: backend

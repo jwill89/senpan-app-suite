@@ -21,7 +21,7 @@ var settingsKeys = []string{
 
 // settingsDefaults provides fallback values for settings that have not been configured.
 var settingsDefaults = map[string]string{
-	"app_title":                 "Nifty App Suite",
+	"app_title":                 "Senpan App Suite",
 	"default_draw_delay":        "0",
 	"frequent_winner_threshold": "3",
 	"frequent_winner_hours":     "12",
@@ -131,6 +131,18 @@ func (s *Server) handleSettingsUpdate(w http.ResponseWriter, r *http.Request) {
 			n, err := strconv.Atoi(val)
 			if err != nil || n < 1 || n > 168 {
 				writeError(w, http.StatusBadRequest, "Winner hours must be 1–168")
+				return
+			}
+		case "header_font":
+			// Flows verbatim into the --header-font CSS variable on every client
+			// (theme.ts applyHeaderFont), so reject anything that could break out
+			// of the quoted CSS value and inject rules — same guard as font names.
+			if len(val) > 100 {
+				writeError(w, http.StatusBadRequest, "Header font name is too long (max 100 characters)")
+				return
+			}
+			if cssNameUnsafe(val) {
+				writeError(w, http.StatusBadRequest, "Header font name may not contain quotes, backslashes, control characters, or any of { } ; < >")
 				return
 			}
 		}

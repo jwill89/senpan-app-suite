@@ -79,22 +79,32 @@ func clientIP(r *http.Request) string {
 // (never for security decisions). Behind Cloudflare the authoritative client
 // address is CF-Connecting-IP (set by Cloudflare, overriding any client-supplied
 // value); fall back to the leftmost X-Forwarded-For entry (the original origin),
-// then the RemoteAddr host. This deliberately favors the true origin address for
+// then the RemoteAddr host. This favors the true origin address for
 // human-readable logs, unlike clientIP which takes the spoof-resistant rightmost
 // entry for rate-limiting.
+//
+// Security: the proxy-supplied headers are honored ONLY when the immediate peer
+// (RemoteAddr) is the local reverse proxy — i.e. a loopback address, since Apache
+// ProxyPasses to localhost:8080. A client that can reach the backend directly (or
+// craft the header) could otherwise forge CF-Connecting-IP / X-Forwarded-For and
+// poison the audit log's `ip` field. If the proxy is ever bound off-loopback,
+// widen this trusted set (see clientIP's note).
 func logClientIP(r *http.Request) string {
-	if cf := strings.TrimSpace(r.Header.Get("CF-Connecting-IP")); cf != "" {
-		return cf
+	host := r.RemoteAddr
+	if h, _, err := net.SplitHostPort(r.RemoteAddr); err == nil {
+		host = h
 	}
-	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
-		if first := strings.TrimSpace(strings.Split(xff, ",")[0]); first != "" {
-			return first
+	if ip := net.ParseIP(host); ip != nil && ip.IsLoopback() {
+		if cf := strings.TrimSpace(r.Header.Get("CF-Connecting-IP")); cf != "" {
+			return cf
+		}
+		if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
+			if first := strings.TrimSpace(strings.Split(xff, ",")[0]); first != "" {
+				return first
+			}
 		}
 	}
-	if host, _, err := net.SplitHostPort(r.RemoteAddr); err == nil {
-		return host
-	}
-	return r.RemoteAddr
+	return host
 }
 
 // isLimited returns true if the given IP has exceeded the failure limit.

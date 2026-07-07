@@ -29,6 +29,7 @@ const columns: DataColumn[] = [
   { key: 'status', label: 'Status', width: '52px' },
   { key: 'dur', label: 'Dur', width: '68px' },
   { key: 'ip', label: 'IP', width: '120px' },
+  { key: 'user', label: 'User', width: '116px' },
   { key: 'msg', label: 'Path / Message' },
 ]
 
@@ -127,7 +128,17 @@ function messageText(row: LogRow): string {
   return row.message === 'http request' ? '' : row.message
 }
 
-const PROMOTED = new Set(['method', 'path', 'status', 'ip', 'duration'])
+/** Who made the request: the account username, else a verified-bot name, else
+ *  empty (anonymous). `auth` (session|token|bot|anon) drives the styling. */
+function actorLabel(row: LogRow): string {
+  return fieldStr(row, 'user') || fieldStr(row, 'bot')
+}
+function actorClass(row: LogRow): string {
+  const auth = fieldStr(row, 'auth')
+  return auth ? `actor actor-${auth}` : 'actor'
+}
+
+const PROMOTED = new Set(['method', 'path', 'status', 'ip', 'duration', 'auth', 'user', 'bot'])
 /** Inline preview of the non-promoted fields (full set on expand). */
 function extraFieldsPreview(row: LogRow): string {
   if (!row.fields) return ''
@@ -252,6 +263,11 @@ onMounted(() => void logs.load())
           <template #cell-ip="{ row }">
             <span class="log-ip">{{ fieldStr(row, 'ip') }}</span>
           </template>
+          <template #cell-user="{ row }">
+            <span :class="actorClass(row)" :title="fieldStr(row, 'auth')">{{
+              actorLabel(row) || '—'
+            }}</span>
+          </template>
           <template #cell-msg="{ row, expanded }">
             <span v-if="fieldStr(row, 'path')" class="log-path">{{ fieldStr(row, 'path') }}</span>
             <span v-if="messageText(row)" class="log-msg-text">{{ messageText(row) }}</span>
@@ -290,6 +306,23 @@ onMounted(() => void logs.load())
   color: var(--text-dim, #888);
   font-family: ui-monospace, monospace;
   font-size: 0.78rem;
+}
+.actor {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: inline-block;
+  max-width: 100%;
+  font-size: 0.78rem;
+}
+/* Anonymous rows fade the "—"; a verified bot is italic; a plugin token (token)
+   auth and admin (session) auth read as normal account names. */
+.actor-anon {
+  color: var(--text-dim, #888);
+}
+.actor-bot {
+  font-style: italic;
+  color: var(--text-dim, #888);
 }
 .log-path {
   font-family: ui-monospace, monospace;

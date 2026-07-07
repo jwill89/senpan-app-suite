@@ -194,6 +194,54 @@ func TestHub_DisconnectAllPlayerClients(t *testing.T) {
 	}
 }
 
+func TestHub_BroadcastLog_AdminsOnly(t *testing.T) {
+	h := NewHub()
+	defer h.Shutdown(context.Background())
+
+	// admin: true-admin account on the cardID=="" channel — should receive logs.
+	admin := &client{hub: h, send: make(chan []byte, 64), cancel: func() {}}
+	admin.isAdmin.Store(true)
+	// staff: a non-admin grantee (or plugin PAT) also sits on cardID=="" for
+	// resource_changed, but must NOT receive the log tail.
+	staff := &client{hub: h, send: make(chan []byte, 64), cancel: func() {}}
+	// player: card-scoped public connection, never an admin.
+	player := &client{hub: h, send: make(chan []byte, 64), cardID: "CARD1", cancel: func() {}}
+	h.register(admin)
+	h.register(staff)
+	h.register(player)
+
+	if !h.HasAdminClients() {
+		t.Fatal("HasAdminClients should be true when a true-admin is connected")
+	}
+
+	h.BroadcastLog(map[string]string{"type": "log", "entry": "secret"})
+
+	select {
+	case <-admin.send:
+		// expected
+	default:
+		t.Error("admin should have received the log line")
+	}
+	select {
+	case got := <-staff.send:
+		t.Errorf("non-admin staff must NOT receive the log line, got %s", got)
+	default:
+		// expected
+	}
+	select {
+	case got := <-player.send:
+		t.Errorf("player must NOT receive the log line, got %s", got)
+	default:
+		// expected
+	}
+
+	// With only staff + player connected (no true-admin), the tail short-circuits.
+	h.unregister(admin)
+	if h.HasAdminClients() {
+		t.Error("HasAdminClients should be false when only staff/players remain")
+	}
+}
+
 func TestHub_DisconnectCardClients_NoMatch(t *testing.T) {
 	h := NewHub()
 	defer h.Shutdown(context.Background())

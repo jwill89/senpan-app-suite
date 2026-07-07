@@ -17,6 +17,7 @@ vi.mock('@/lib/endpoints', () => ({
 
 import { useImagesStore } from './images'
 import { useUiStore } from './ui'
+import { ApiError } from '@/lib/api'
 
 function cat(name: string, dir: string): ImageCategory {
   return { name, dir, file_count: 0, total_size: 0 }
@@ -77,6 +78,41 @@ describe('images loaders', () => {
     expect(list).toHaveBeenCalledTimes(1)
     await store.ensureImages('raffles')
     expect(list).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('images quiet refreshers (live invalidation)', () => {
+  it('refreshCategoriesQuiet updates on success and never toasts on error', async () => {
+    const store = useImagesStore()
+    const notify = vi.spyOn(useUiStore(), 'notify')
+
+    categories.mockResolvedValueOnce({ categories: [cat('Raffle', 'raffles')] })
+    await store.refreshCategoriesQuiet()
+    expect(store.categories.map((c) => c.dir)).toEqual(['raffles'])
+
+    // A 403 (access lost) leaves the list untouched and raises no toast.
+    categories.mockRejectedValueOnce(new ApiError('Forbidden', 403))
+    await store.refreshCategoriesQuiet()
+    expect(store.categories.map((c) => c.dir)).toEqual(['raffles'])
+    expect(notify).not.toHaveBeenCalled()
+  })
+
+  it('refreshImagesQuiet drops a stale dir key on 400 and stays silent otherwise', async () => {
+    const store = useImagesStore()
+    const notify = vi.spyOn(useUiStore(), 'notify')
+    store.imagesByDir = { gone: [entry('a.png')], kept: [entry('b.png')] }
+
+    // 400 Unknown image category → the renamed/deleted dir key is pruned.
+    list.mockRejectedValueOnce(new ApiError('Unknown image category', 400))
+    await store.refreshImagesQuiet('gone')
+    expect('gone' in store.imagesByDir).toBe(false)
+    expect('kept' in store.imagesByDir).toBe(true)
+
+    // A transient 502 leaves the cached images in place, silently.
+    list.mockRejectedValueOnce(new ApiError('Bad gateway', 502))
+    await store.refreshImagesQuiet('kept')
+    expect(store.imagesByDir.kept.map((i) => i.name)).toEqual(['b.png'])
+    expect(notify).not.toHaveBeenCalled()
   })
 })
 

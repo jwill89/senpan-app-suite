@@ -60,7 +60,14 @@ Thumbs.db
 /frontend/public/images/pwa-512x512.png
 /frontend/public/images/pwa-maskable-512x512.png
 /CURRENT_THEMES.css
-/scripts/
+# Track the shared tooling (no secrets): the quality gate, the deploy script, and
+# the deploy-config TEMPLATE. The deploy script's environment-specific host + key
+# live in the untracked scripts/deploy.config.ps1 (dot-sourced at runtime), which
+# stays ignored by the /scripts/* rule below.
+/scripts/*
+!/scripts/check.ps1
+!/scripts/deploy.ps1
+!/scripts/deploy.config.example.ps1
 /frontend/public/sounds/
 /frontend/public/images/flourishes/corner_flourish.svg
 /frontend/public/images/flourishes/called_flourish.svg

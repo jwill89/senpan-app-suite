@@ -1,5 +1,30 @@
 import { describe, it, expect, afterEach } from 'vitest'
-import { clampFontMetrics, fontFamilyFromFile, applyNumberFlourish } from './theme'
+import { clampFontMetrics, fontFamilyFromFile, applyNumberFlourish, cssNameSafe } from './theme'
+
+describe('cssNameSafe', () => {
+  it('accepts ordinary font family names', () => {
+    expect(cssNameSafe('Arapey')).toBe(true)
+    expect(cssNameSafe('My Font')).toBe(true)
+    expect(cssNameSafe('Playfair Display')).toBe(true)
+    expect(cssNameSafe('Noto Sans JP')).toBe(true)
+  })
+
+  it('rejects CSS-breaking characters', () => {
+    expect(cssNameSafe("a'}body{display:none")).toBe(false)
+    expect(cssNameSafe('a"b')).toBe(false)
+    expect(cssNameSafe('a\\b')).toBe(false)
+    expect(cssNameSafe('a;b')).toBe(false)
+    expect(cssNameSafe('a{b')).toBe(false)
+    expect(cssNameSafe('a}b')).toBe(false)
+    expect(cssNameSafe('a<b')).toBe(false)
+    expect(cssNameSafe('a>b')).toBe(false)
+  })
+
+  it('rejects control characters (a newline breaks out of a quoted CSS string)', () => {
+    expect(cssNameSafe('Evil\n}body{display:none}')).toBe(false)
+    expect(cssNameSafe('a\tb')).toBe(false)
+  })
+})
 
 describe('applyNumberFlourish', () => {
   afterEach(() => document.documentElement.style.removeProperty('--number-flourish-url'))

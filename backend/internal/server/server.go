@@ -50,6 +50,11 @@ type Server struct {
 	// fontserve.go. Generated and persisted to settings on first use.
 	fontSecretMu  sync.Mutex
 	fontSecretVal []byte
+	// Serializes the image-category manifest read-modify-write (create/rename/
+	// delete + startup migration) so concurrent admin edits can't lose a write or
+	// orphan a directory. See images.go. Distinct from fontSecretMu — the font
+	// metadata lives in the DB, this manifest is a filesystem dotfile.
+	imageManifestMu sync.Mutex
 }
 
 // SetTurnstile enables the Cloudflare Turnstile bot check on the login form.
@@ -120,7 +125,7 @@ func New(st *store.Store, hub *ws.Hub, sessionSecret, webRoot string, allowedOri
 	s.migrateFontDerivatives()
 	// LoadAndSave (outer) populates the session, then withUserCache adds a
 	// per-request memo so currentUser hits the DB at most once per request.
-	s.sessHandler = sm.LoadAndSave(s.withUserCache(s.mux))
+	s.sessHandler = sm.LoadAndSave(s.withUserCache(s.withActor(s.mux)))
 	return s
 }
 
@@ -426,6 +431,12 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	start := time.Now()
 	rw := &responseWriter{ResponseWriter: w, status: http.StatusOK}
 
+	// Carry a per-request actor holder through the handler chain so the access log
+	// (which runs out here, outside the session middleware) can name who made the
+	// request. withActor fills it in from inside, where the session/token resolve.
+	actor := &requestActor{kind: "anon"}
+	r = r.WithContext(context.WithValue(r.Context(), actorCtxKey{}, actor))
+
 	// Wrap with SCS session middleware so session data is available in handlers.
 	s.sessHandler.ServeHTTP(rw, r)
 	duration := time.Since(start)
@@ -452,25 +463,50 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		level = slog.LevelWarn
 	}
 	ip := logClientIP(r)
-	slog.Log(r.Context(), level, "http request",
+	// Redact capability-token path segments so bearer tokens (garapon/stamp-card
+	// draw links, font-kit tokens) never land in the rotating log, the /api/logs
+	// viewer, or the admin WS tail.
+	path := redactSensitivePath(r.URL.Path)
+	// actor names who made the request: a logged-in account (session or plugin
+	// PAT), a Cloudflare-verified bot, or anonymous. `auth` is always present so
+	// every line is classifiable; `user`/`bot` only when they apply.
+	attrs := []any{
 		"method", r.Method,
-		"path", r.URL.Path,
+		"path", path,
 		"status", rw.status,
 		"duration", duration.Round(time.Microsecond),
 		"ip", ip,
-	)
+		"auth", actor.kind,
+	}
+	if actor.user != "" {
+		attrs = append(attrs, "user", actor.user)
+	}
+	if actor.bot != "" {
+		attrs = append(attrs, "bot", actor.bot)
+	}
+	slog.Log(r.Context(), level, "http request", attrs...)
 	// When DEBUG is on (live-toggleable), emit a richer companion line for every
-	// request. Guarded so the header lookups are skipped entirely at INFO+.
+	// request. Guarded so the header lookups are skipped entirely at INFO+. Query,
+	// path, and Referer are all scrubbed of capability tokens (tokens can ride the
+	// query as the PAT fallback, and the Referer when navigating from a token page).
 	if slog.Default().Enabled(r.Context(), slog.LevelDebug) {
-		slog.LogAttrs(r.Context(), slog.LevelDebug, "request detail",
+		dattrs := []slog.Attr{
 			slog.String("method", r.Method),
-			slog.String("path", r.URL.Path),
-			slog.String("query", r.URL.RawQuery),
+			slog.String("path", path),
+			slog.String("query", redactTokenQuery(r.URL.RawQuery)),
 			slog.Int("status", rw.status),
 			slog.String("ua", r.UserAgent()),
-			slog.String("referer", r.Referer()),
+			slog.String("referer", redactReferer(r.Referer())),
 			slog.String("ip", ip),
-		)
+			slog.String("auth", actor.kind),
+		}
+		if actor.user != "" {
+			dattrs = append(dattrs, slog.String("user", actor.user))
+		}
+		if actor.bot != "" {
+			dattrs = append(dattrs, slog.String("bot", actor.bot))
+		}
+		slog.LogAttrs(r.Context(), slog.LevelDebug, "request detail", dattrs...)
 	}
 }
 

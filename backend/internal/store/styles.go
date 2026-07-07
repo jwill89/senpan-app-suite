@@ -205,8 +205,31 @@ func (s *Store) scanStyle(row *sql.Row) (*model.Style, error) {
 	return &st, nil
 }
 
+// ErrInvalidFlourish is returned by CreateStyle/UpdateStyle when a flourish path
+// is neither empty nor a safe images/<dir>/<file>.svg reference.
+var ErrInvalidFlourish = errors.New("invalid flourish path")
+
+var flourishPathRe = regexp.MustCompile(`^images/[a-z0-9_]+/[^/\\]+(?i:\.svg)$`)
+
+// ValidFlourishPath reports whether p is an acceptable theme flourish reference:
+// empty (unset) or a relative images/<category>/<file>.svg path. Flourishes are
+// otherwise stored verbatim and fetched + v-html'd on the public board
+// (CornerFlourish.vue), so this blocks data:-URI and external-URL SVGs that never
+// went through the upload-time SVG sanitizer. The directory segment matches a
+// category slug; the filename stays permissive ([^/\\]+) so uppercase/space/
+// Unicode uploaded names pass. Case-insensitive on the .svg extension.
+func ValidFlourishPath(p string) bool {
+	if p == "" {
+		return true
+	}
+	return flourishPathRe.MatchString(p)
+}
+
 // CreateStyle inserts a new theme from a token map (sanitized) and returns its ID.
 func (s *Store) CreateStyle(name string, tokens map[string]string, boardFlourish, numberFlourish string) (int64, error) {
+	if !ValidFlourishPath(boardFlourish) || !ValidFlourishPath(numberFlourish) {
+		return 0, ErrInvalidFlourish
+	}
 	tokenJSON, err := marshalTokens(tokens)
 	if err != nil {
 		return 0, err
@@ -223,6 +246,9 @@ func (s *Store) CreateStyle(name string, tokens map[string]string, boardFlourish
 
 // UpdateStyle updates a theme's name, tokens (sanitized), and flourishes.
 func (s *Store) UpdateStyle(id int64, name string, tokens map[string]string, boardFlourish, numberFlourish string) error {
+	if !ValidFlourishPath(boardFlourish) || !ValidFlourishPath(numberFlourish) {
+		return ErrInvalidFlourish
+	}
 	tokenJSON, err := marshalTokens(tokens)
 	if err != nil {
 		return err

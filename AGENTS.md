@@ -39,7 +39,7 @@ rotated immediately**. See **Authentication & authorization** below.
 ```
 ├── frontend/                         ← Vue 3 + TypeScript SPA (Vite)
 │   ├── index.html                    ← Vite entry (mounts #app)
-│   ├── package.json                  ← deps: vue, pinia, vue-router, vuedraggable (sortablejs), markdown-it, @milkdown/crepe (Milkdown "Crepe" WYSIWYG authoring), @awesome.me/kit-… (FA Pro icons) + @fortawesome/fontawesome-svg-core + @fortawesome/vue-fontawesome (the <font-awesome-icon> component), @ckpack/vue-color, vue3-emoji-picker, html-to-image
+│   ├── package.json                  ← deps: vue, pinia, vue-router, vue-draggable-plus (sortablejs), markdown-it, @milkdown/crepe (Milkdown "Crepe" WYSIWYG authoring), @awesome.me/kit-… (FA Pro icons) + @fortawesome/fontawesome-svg-core + @fortawesome/vue-fontawesome (the <font-awesome-icon> component), @ckpack/vue-color, vue3-emoji-picker, html-to-image
 │   ├── vite.config.ts                ← build → dist/, dev proxy for /api, manualChunks, strip dist/images
 │   ├── tsconfig*.json                ← TS project refs (app + node)
 │   ├── public/                       ← copied verbatim into dist/ at build
@@ -96,10 +96,12 @@ rotated immediately**. See **Authentication & authorization** below.
 │       ├── bingo/
 │       │   ├── card.go               ← Card/board generation, ID generation, LetterForNumber
 │       │   └── game.go               ← bingo.Service (start, draw, end, state, winner matching, caching)
-│       ├── ws/hub.go                 ← WebSocket hub, client pumps, broadcast (player/admin channels; BroadcastLog = lossy admin-only live-log fan-out that never disconnects on a full buffer)
+│       ├── ws/hub.go                 ← WebSocket hub, client pumps, broadcast (player/admin channels; BroadcastLog = lossy live-log fan-out to true-admin (IsAdmin) clients only, never disconnects on a full buffer; isAdmin bit refreshed on the revalidate tick)
 │       ├── logging/logging.go        ← slog setup: JSON handler → stdout + a rotating file (timberjack; daily-midnight rotation, zstd) + a live-tail tap (io.Writer forwarding each line); runtime-settable level via slog.LevelVar
 │       └── server/
-│           ├── server.go             ← Server struct (deps, routes, CORS, JSON helpers, broadcast helpers) + auth helpers (currentUser/isAdmin/requireAuth/requireAdmin/requirePermission) + the request-logging middleware (structured JSON; real client IP via CF-Connecting-IP)
+│           ├── server.go             ← Server struct (deps, routes, CORS, JSON helpers, broadcast helpers) + auth helpers (currentUser/isAdmin/requireAuth/requireAdmin/requirePermission) + the request-logging middleware (structured JSON; actor identity + capability-token redaction; client IP via loopback-gated CF-Connecting-IP)
+│           ├── actor.go              ← per-request actor for the access log: withActor resolves session/PAT user + Cloudflare verified-bot (cf-verified-bot / x-verified-bot) → auth/user/bot log fields
+│           ├── logredact.go          ← redact capability tokens (garapon/stamp-card/font paths, PAT ?token=, Referer) to a short SHA-256 correlation hash in log lines
 │           ├── auth.go               ← GET/POST /api/auth (login/logout, argon2id verify, rate-limited) + POST /api/register (hidden, creates inactive accounts)
 │           ├── users.go              ← GET/POST /api/users (admin user management) + POST /api/account (self-service change-password)
 │           ├── permissions.go        ← page-permission key constants, validPermissions(), userHasPermission(), requireAnyBookClub(); bookClubSlugs (keep in sync with BOOK_CLUBS)
@@ -150,7 +152,7 @@ All dependencies are wired in `main.go` and passed via structs (no globals, no s
 - `ws` — WebSocket `Hub` for real-time broadcasts. Self-contained: manages client lifecycle, ping/pong, and message fan-out. Supports separate player/admin channels.
 - `server` — `Server` struct implementing `http.Handler`. Holds Store, GameService, Hub, session store, web root. Registers routes using Go 1.26+ method-pattern routing (`"GET /api/auth"`). Owns **authentication & per-page authorization** (see below), the **Discord-embed** features (announcements, book-club reading lists) and the announcement **background scheduler**, the **AniList** lookup proxy, and the on-disk upload areas (raffle/announcement/book-club images + Carrd projects).
 - `auth` — argon2id `Hash()` / `Verify()` over PHC-format strings. Its own package (depends only on `golang.org/x/crypto`) so both `store` (seeding the bootstrap admin) and `server` (login / change-password) can hash without an import cycle. Params: 64 MB / t=1 / p=4 (OWASP argon2id baseline); `Verify` is constant-time.
-- `logging` — process-wide `slog` setup (leaf; imports only `model` + timberjack). Installs a JSON handler writing to stdout **and** a rotating file, holds the runtime level in a `slog.LevelVar` (`SetLevel`/`CurrentLevel`), and exposes a settable tail sink (`SetTailSink`) that forwards each finished log line to a callback. `main` wires that callback to `Hub.BroadcastLog` for the live tail. See **Logging & observability** below.
+- `logging` — process-wide `slog` setup (leaf; imports only `model` + timberjack). Installs a JSON handler writing to stdout **and** a rotating file, holds the runtime level in a `slog.LevelVar` (`SetLevel`/`CurrentLevel`), and exposes a settable tail sink (`SetTailSink`) that forwards each finished log line to a callback. `main` wires that callback to `Hub.BroadcastLog` for the live tail. See the **Server logs** operational note below.
 
 **Authentication & authorization**:
 - **Accounts, not a shared password.** `users` table holds `username`, argon2id `password_hash` (only ever read in the store layer — never on `model.User`, so it can't leak through JSON), `is_admin`, `is_active`, and a JSON `permissions` array. Login (`POST /api/auth`) verifies the hash, is **IP rate-limited**, rejects inactive accounts, and stores `user_id` in the SCS session (token rotated on login to prevent fixation). A missing user and a bad password return the same generic error so usernames can't be enumerated.
@@ -291,7 +293,7 @@ not store-driven view switching:
   Routes mirror the nav exactly (no legacy redirects) — an unknown `/admin/*` path
   falls through the catch-all to home.
 - Every view + admin tab is a lazy `import()` so heavy deps (the Milkdown
-  editor, vuedraggable, markdown-it) split into on-demand chunks. A `router.onError`
+  editor, vue-draggable-plus, markdown-it) split into on-demand chunks. A `router.onError`
   guard recovers from stale lazy-chunk 404s after a redeploy by doing one full
   browser load of the target (sessionStorage-guarded against loops).
 - A global `beforeEach` guard enforces auth + **per-page permission**: it
@@ -315,13 +317,13 @@ Never edit it by hand. Request/response/WebSocket envelopes are hand-written in
 **Library choices** (migrated off CDNs):
 - Markdown **rendering** → `markdown-it`, **lazy-loaded** via `useMarkdown()` (`lib/markdown.ts`); the ~100 KB parser is dynamic-imported on first render (`breaks: true` to match the old marked output).
 - Markdown **authoring** → `MarkdownEditor.vue` wraps **Milkdown (Crepe)** (`@milkdown/crepe`), a WYSIWYG editor built via Crepe's tree-shakable `CrepeBuilder` (only the features used are imported, dropping the CodeMirror/LaTeX bundles). It's still a sizeable bundle, so both the library **and** its CSS are dynamic-imported on mount (kept out of the initial load); it maps its colours onto the app theme variables, is limited to a Discord-safe subset (inline formatting + headings/quotes/lists/dividers/links), and emits **markdown** (what we store and what Discord renders). Reused by raffles, book-club items, and announcements.
-- Drag-and-drop → `vuedraggable` (SortableJS) for category reorder + pattern reorder/cross-category move
+- Drag-and-drop → `vue-draggable-plus` (SortableJS) for category reorder + pattern reorder/cross-category move
 - Theme editor → structured token editor (`ThemeTokenEditor.vue`): a colour swatch + value per `:root` design token, no free-form CSS (CodeMirror removed). Alpha tokens use the `@ckpack/vue-color` picker; solid tokens the native `<input type=color>`
 - Icons → `@fortawesome/*` **Pro** packages via `@fortawesome/fontawesome-svg-core` + the `@fortawesome/vue-fontawesome` **component** (`<font-awesome-icon :icon="[prefix, name]" />`, registered globally in `main.ts`). Only the icons used are added to the library in `lib/fontawesome.ts`; templates reference them by `[prefix, name]` tuple (`['fad', …]` duotone, `['fas', …]` solid, `['fab', 'discord']` brands). Vue owns the rendered `<svg>`, so there is no `dom.watch()`/MutationObserver
 - Card PNG export → `html-to-image` captures the live themed board, then a canvas composites the framed card (`lib/exportCard.ts`)
 
 **Performance / tooling**:
-- **Lazy routes**: every view + admin tab is a dynamic `import()` in `router/index.ts`, so heavy deps (the Milkdown editor, vuedraggable, markdown-it) load only when their route is visited — the player/home payload stays small. `manualChunks` (vite.config) keeps shared vendors cached across route chunks.
+- **Lazy routes**: every view + admin tab is a dynamic `import()` in `router/index.ts`, so heavy deps (the Milkdown editor, vue-draggable-plus, markdown-it) load only when their route is visited — the player/home payload stays small. `manualChunks` (vite.config) keeps shared vendors cached across route chunks.
 - **PWA**: `vite-plugin-pwa` (`registerType: 'autoUpdate'`) emits `sw.js` + `manifest.webmanifest`; the SW precaches the app shell and falls back to `index.html` for SPA routes, with `/api/` and `/images/` denylisted. The deploy `.htaccess` exempts `sw.js`/`registerSW.js`/`*.webmanifest` from the immutable cache so updates land.
 - **Route progress + loading UX**: a top progress bar (`RouteProgressBar.vue`, driven by `ui.routeLoading` from the router guards) shows during async navigation/lazy-chunk loads; stores expose per-action loading flags (`joining`, `drawing`, `starting`, …) that drive `LoadingSpinner.vue` + disabled buttons.
 - **Global error handler**: `app.config.errorHandler` (`main.ts`) surfaces uncaught errors as a toast.
@@ -374,7 +376,7 @@ Never edit it by hand. Request/response/WebSocket envelopes are hand-written in
 - Admin login separates auth failure from data-loading failure to prevent false login rejections
 - Winner toast only fires on new winners (compares count before/after draw)
 - WebSocket reconnect with exponential back-off (1s → 2s → 4s → 8s → 16s, max 10 attempts)
-- vuedraggable handles drag-and-drop for patterns and categories (replaces the old manual HTML5 DnD placeholders)
+- vue-draggable-plus handles drag-and-drop for patterns and categories (replaces the old manual HTML5 DnD placeholders)
 
 ## FFXIV plugin (Dalamud)
 
@@ -545,6 +547,22 @@ the built SPA so redeploys never wipe them (full guide in `deploy/README.md`):
   otherwise the app degrades to stdout-only (a warning is logged). Admins view
   them at **System → Logs** (live tail + `GET /api/logs`) or on-box via `jlv`.
   See **Server logs** in `deploy/README.md`.
+  - **Request line** carries `method`/`path`/`status`/`duration`/`ip` plus an
+    **actor**: `auth` (`session`|`token`|`bot`|`anon`), and `user`/`bot` when they
+    apply. Admins resolve via the cookie session, the plugin via its PAT (both
+    through `currentUser`, resolved in `withActor` inside the handler chain and
+    carried out to the log via a per-request holder, since the log runs outside
+    the session middleware — see `actor.go`). A verified crawler is named from
+    Cloudflare's signal: native `cf-verified-bot`(+category) on Bot Management, or
+    a custom `x-verified-bot` header set by a Transform Rule on `cf.client.bot`
+    (works on any plan). It's a logging hint only, never a security decision.
+  - **Capability tokens are redacted** (garapon/stamp-card/font paths, the PAT
+    `token` query, and Referer) to a short SHA-256 correlation hash (`logredact.go`).
+    `logClientIP` trusts `CF-Connecting-IP`/XFF only from a loopback peer (the
+    Apache proxy), so a direct client can't forge the `ip`.
+  - **Live tail** fans each line out to admin WebSocket clients gated on the
+    per-connection `isAdmin` bit (not merely the admin channel), matching the
+    `requireAdmin` gate on `GET /api/logs`.
 
 ## Conventions & patterns
 

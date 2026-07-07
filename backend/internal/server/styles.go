@@ -87,6 +87,10 @@ func (s *Server) handleStyleCreate(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "Style name is required")
 		return
 	}
+	if !store.ValidFlourishPath(req.BoardFlourish) || !store.ValidFlourishPath(req.NumberFlourish) {
+		writeError(w, http.StatusBadRequest, "Flourish must be an images/<category>/<file>.svg path")
+		return
+	}
 	id, err := s.store.CreateStyle(name, req.Tokens, req.BoardFlourish, req.NumberFlourish)
 	if err != nil {
 		writeInternalError(w, "create style", err)
@@ -119,6 +123,10 @@ func (s *Server) handleStyleUpdate(w http.ResponseWriter, r *http.Request) {
 	name := strings.TrimSpace(req.Name)
 	if name == "" {
 		writeError(w, http.StatusBadRequest, "Style name is required")
+		return
+	}
+	if !store.ValidFlourishPath(req.BoardFlourish) || !store.ValidFlourishPath(req.NumberFlourish) {
+		writeError(w, http.StatusBadRequest, "Flourish must be an images/<category>/<file>.svg path")
 		return
 	}
 	if err := s.store.UpdateStyle(id, name, req.Tokens, req.BoardFlourish, req.NumberFlourish); err != nil {

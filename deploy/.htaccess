@@ -27,6 +27,16 @@
 # mod_rewrite disabled) — return 403 instead of leaking the folder contents.
 Options -Indexes
 
+# Deny every dotfile. This is an authorization directive (independent of
+# mod_rewrite), so it applies even though the "^images/ - [L]" rewrite below
+# serves the images/ tree as real files. In particular it hides
+# images/.categories.json — the image-category manifest, which enumerates every
+# category name and directory. The list API keeps that behind auth; without this
+# block an unauthenticated GET /images/.categories.json would leak the same data.
+<FilesMatch "^\.">
+    Require all denied
+</FilesMatch>
+
 <IfModule mod_rewrite.c>
     RewriteEngine On
     RewriteBase /
@@ -114,4 +124,3 @@ Options -Indexes
         Header set Cache-Control "no-cache"
     </FilesMatch>
 </IfModule>
-

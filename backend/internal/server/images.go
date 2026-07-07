@@ -2,7 +2,9 @@ package server
 
 import (
 	"encoding/json"
+	"errors"
 	"io"
+	"log/slog"
 	"mime/multipart"
 	"net/http"
 	"os"
@@ -93,6 +95,22 @@ func slugifyImageDir(s string) string { return slugify(s, '_') }
 // against traversal for dir names received from the client on list/upload/delete.
 func validImageDir(dir string) bool { return validSlug(dir, '_') }
 
+// reservedImageDir reports whether dir is owned by another feature that writes
+// under images/ WITHOUT going through the category manifest — currently the
+// book-club cover folder and the legacy announcements source dir. A system-images
+// grantee must not be able to create/rename a category onto one of these and thus
+// list, overwrite, or (via category delete's RemoveAll) wipe files guarded by a
+// different permission. The seeded default categories (announcements_main,
+// raffles, …) are manifest-managed and deliberately NOT reserved.
+func reservedImageDir(dir string) bool {
+	switch dir {
+	case filepath.Base(bookclubCoverRelDir), "announcements":
+		return true
+	default:
+		return false
+	}
+}
+
 // imageManifest is the JSON shape of the categories manifest dotfile.
 type imageManifest struct {
 	Version    int                   `json:"version"`
@@ -121,7 +139,10 @@ func (s *Server) readImageCategories() []model.ImageCategory {
 	return out
 }
 
-// writeImageCategories persists the categories to the manifest dotfile.
+// writeImageCategories persists the categories to the manifest dotfile. The
+// write is atomic (temp file + rename) so a crash or disk-full mid-write can't
+// leave a truncated, unparseable manifest — which would otherwise disable the
+// whole image subsystem (see migrateImageCategoryManifest's corrupt handling).
 func (s *Server) writeImageCategories(cats []model.ImageCategory) error {
 	if err := os.MkdirAll(s.imagesRootDir(), 0755); err != nil {
 		return err
@@ -130,7 +151,19 @@ func (s *Server) writeImageCategories(cats []model.ImageCategory) error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(filepath.Join(s.imagesRootDir(), imageCategoriesManifest), data, 0644)
+	dst := filepath.Join(s.imagesRootDir(), imageCategoriesManifest)
+	tmp := dst + ".tmp"
+	if err := os.WriteFile(tmp, data, 0644); err != nil {
+		return err
+	}
+	// os.Rename replaces an existing destination atomically on POSIX and on
+	// modern Windows (MoveFileEx with REPLACE_EXISTING); clean up the temp on
+	// failure so a rename error doesn't leave a stray .tmp behind.
+	if err := os.Rename(tmp, dst); err != nil {
+		_ = os.Remove(tmp)
+		return err
+	}
+	return nil
 }
 
 // migrateImageCategoryManifest upgrades the category manifest to the current
@@ -139,13 +172,37 @@ func (s *Server) writeImageCategories(cats []model.ImageCategory) error {
 // any custom entries. Runs once: version-2 manifests are left untouched, so
 // categories an admin later renames or deletes stay renamed/deleted.
 func (s *Server) migrateImageCategoryManifest() {
-	data, err := os.ReadFile(filepath.Join(s.imagesRootDir(), imageCategoriesManifest))
-	if err == nil {
+	s.imageManifestMu.Lock()
+	defer s.imageManifestMu.Unlock()
+
+	path := filepath.Join(s.imagesRootDir(), imageCategoriesManifest)
+	data, err := os.ReadFile(path)
+	switch {
+	case err == nil:
 		var m imageManifest
-		if json.Unmarshal(data, &m) == nil && m.Version >= imageManifestVersion {
+		if uerr := json.Unmarshal(data, &m); uerr != nil {
+			// Present but unparseable. Do NOT reseed: that would wipe custom
+			// categories and resurrect deleted defaults (silent data loss).
+			// Leave the file for manual recovery and log loudly, once, at
+			// startup — image administration is disabled until it's repaired,
+			// but bingo/raffle keep running. (readImageCategories stays quiet on
+			// the per-request path so a persistent corruption can't flood logs.)
+			slog.Error("image category manifest is corrupt; leaving it untouched — image admin disabled until repaired",
+				"path", path, "error", uerr)
+			return
+		}
+		if m.Version >= imageManifestVersion {
 			return // already migrated
 		}
+		// Valid but an older version: fall through to fold in the defaults.
+	case errors.Is(err, os.ErrNotExist):
+		// Fresh install: seed the defaults below.
+	default:
+		// Unreadable for some other reason (e.g. permissions). Don't clobber it.
+		slog.Error("image category manifest unreadable; not seeding", "path", path, "error", err)
+		return
 	}
+
 	merged := defaultImageCategories()
 	seen := make(map[string]bool, len(merged))
 	for _, c := range merged {
@@ -157,7 +214,9 @@ func (s *Server) migrateImageCategoryManifest() {
 			seen[c.Dir] = true
 		}
 	}
-	_ = s.writeImageCategories(merged)
+	if werr := s.writeImageCategories(merged); werr != nil {
+		slog.Error("failed to write migrated image category manifest", "path", path, "error", werr)
+	}
 }
 
 // imageCategoryDirStats returns the number of image files in a category dir and
@@ -342,6 +401,13 @@ func (s *Server) createImageCategory(w http.ResponseWriter, reqName, reqDir stri
 		writeError(w, http.StatusBadRequest, "Could not derive a directory name — use letters or numbers in the name or directory")
 		return
 	}
+	if reservedImageDir(dir) {
+		writeError(w, http.StatusConflict, "That directory name is reserved for another feature")
+		return
+	}
+
+	s.imageManifestMu.Lock()
+	defer s.imageManifestMu.Unlock()
 
 	cats := s.readImageCategories()
 	for _, c := range cats {
@@ -389,6 +455,15 @@ func (s *Server) renameImageCategory(w http.ResponseWriter, reqDir, reqName, req
 		writeError(w, http.StatusBadRequest, "Could not derive a directory name")
 		return
 	}
+	// Block renaming ONTO a reserved dir, but only when the directory actually
+	// changes — a pure display-name change on an existing category is fine.
+	if newDir != dir && reservedImageDir(newDir) {
+		writeError(w, http.StatusConflict, "That directory name is reserved for another feature")
+		return
+	}
+
+	s.imageManifestMu.Lock()
+	defer s.imageManifestMu.Unlock()
 
 	cats := s.readImageCategories()
 	idx := -1
@@ -448,6 +523,9 @@ func (s *Server) deleteImageCategory(w http.ResponseWriter, reqDir string) {
 		return
 	}
 
+	s.imageManifestMu.Lock()
+	defer s.imageManifestMu.Unlock()
+
 	cats := s.readImageCategories()
 	idx := -1
 	for i, c := range cats {
@@ -461,6 +539,10 @@ func (s *Server) deleteImageCategory(w http.ResponseWriter, reqDir string) {
 		return
 	}
 
+	// NOTE: an image upload into this same dir that is in-flight right now is not
+	// covered by this lock (it would block the multipart save on the manifest
+	// mutex). That upload-vs-delete race is admin-only and self-healing (re-run
+	// the delete), so it is accepted rather than serialized against large uploads.
 	if err := os.RemoveAll(filepath.Join(s.imagesRootDir(), dir)); err != nil {
 		writeInternalError(w, "delete image category", err)
 		return

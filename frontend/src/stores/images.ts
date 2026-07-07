@@ -14,6 +14,7 @@
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 import { endpoints } from '@/lib/endpoints'
+import { ApiError } from '@/lib/api'
 import type { ImageCategory, ImageEntry } from '@/types/api'
 import { useUiStore } from './ui'
 
@@ -55,6 +56,37 @@ export const useImagesStore = defineStore('images', () => {
       imagesByDir.value = { ...imagesByDir.value, [dir]: [] }
     } finally {
       loadingImages.value = false
+    }
+  }
+
+  // Silent, self-pruning variants used by the live-invalidation handler
+  // (admin.ts refreshResource). Unlike loadCategories/loadImages these NEVER
+  // toast — a background refresh triggered by someone else's mutation must not
+  // interrupt the user — and they self-heal the cache instead of blanking it.
+  async function refreshCategoriesQuiet(): Promise<void> {
+    try {
+      const data = await endpoints.images.categories()
+      categories.value = data.categories
+    } catch {
+      // Stay silent. A 403 (access lost or never held) or a transient error
+      // leaves the existing list untouched rather than clearing it or toasting.
+    }
+  }
+
+  async function refreshImagesQuiet(dir: string): Promise<void> {
+    try {
+      const data = await endpoints.images.list(dir)
+      imagesByDir.value = { ...imagesByDir.value, [dir]: data.images }
+    } catch (e) {
+      // A 400 "Unknown image category" means this dir was renamed or deleted:
+      // drop the stale key so it stops being refetched (and stops re-toasting on
+      // every future invalidation). Any other error (403, transient 5xx) leaves
+      // the cached images in place, silently.
+      if (e instanceof ApiError && e.status === 400) {
+        const next = { ...imagesByDir.value }
+        Reflect.deleteProperty(next, dir)
+        imagesByDir.value = next
+      }
     }
   }
 
@@ -178,6 +210,8 @@ export const useImagesStore = defineStore('images', () => {
     uploading,
     loadCategories,
     loadImages,
+    refreshCategoriesQuiet,
+    refreshImagesQuiet,
     ensureCategories,
     ensureImages,
     saveCategory,

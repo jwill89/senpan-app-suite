@@ -1785,7 +1785,7 @@ func TestSettings_GetDefaults(t *testing.T) {
 	if settings == nil {
 		t.Fatal("expected settings map")
 	}
-	if settings["app_title"] != "Nifty App Suite" {
+	if settings["app_title"] != "Senpan App Suite" {
 		t.Errorf("app_title = %v; want default", settings["app_title"])
 	}
 	if settings["default_draw_delay"] != "0" {

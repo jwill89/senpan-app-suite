@@ -272,17 +272,24 @@ export const useAdminStore = defineStore('admin', () => {
           void useCarrdStore().loadProjects()
         })
         break
-      case 'images':
+      case 'images': {
         // The shared image picker reads the cached category list + per-dir
         // images from many tabs (announcements, raffles, garapons, affiliates,
-        // stamp rallies, themes), so refresh the caches regardless of the open
-        // tab — not just when viewing System → Images.
-        apply('images', true, () => {
-          const images = useImagesStore()
-          void images.loadCategories()
-          for (const dir of Object.keys(images.imagesByDir)) void images.loadImages(dir)
-        })
+        // stamp rallies, themes), so keep those caches fresh regardless of the
+        // open tab — but SILENTLY (a background invalidation must never toast)
+        // and only when something is actually cached. An admin without image
+        // access (or who never opened a picker) has empty caches, so this makes
+        // no request and can't raise a 403 toast. Renamed/deleted dirs self-prune
+        // via refreshImagesQuiet rather than re-toasting a 400 forever.
+        const images = useImagesStore()
+        const viewing = tab === 'system-images'
+        if (viewing || images.categories.length > 0) void images.refreshCategoriesQuiet()
+        for (const dir of Object.keys(images.imagesByDir)) void images.refreshImagesQuiet(dir)
+        // Freshness governs the System → Images tab specifically.
+        if (viewing) tabData.touch('images')
+        else tabData.invalidate('images')
         break
+      }
       case 'bookclub':
         // Book club lists use the store's own per-club freshness, so route the
         // signal through it (the signal isn't club-specific, so it acts on the

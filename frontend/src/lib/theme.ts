@@ -63,6 +63,21 @@ export function fontFamily(font: Pick<UploadedFont, 'name' | 'family'>): string 
   return font.family || fontFamilyFromFile(font.name)
 }
 
+/** Rejects font-family names that could break out of a single-quoted CSS string
+ *  or identifier — control chars, quotes, backslash, or the structural chars
+ *  { } ; < >. The server validates admin-set families and uploaded filenames too
+ *  (fonts.go cssNameUnsafe); this is defense in depth so a family that predates
+ *  that validation cannot inject CSS into the <style> sinks built here. */
+const CSS_UNSAFE_CHARS = new Set(["'", '"', '\\', '{', '}', ';', '<', '>'])
+export function cssNameSafe(family: string): boolean {
+  for (const ch of family) {
+    const code = ch.charCodeAt(0)
+    if (code < 0x20 || code === 0x7f) return false
+    if (CSS_UNSAFE_CHARS.has(ch)) return false
+  }
+  return true
+}
+
 /** True when `family` is one of the registered uploaded fonts. */
 export function isUploadedFamily(family: string): boolean {
   return uploadedFamilies.has(family.trim())
@@ -124,7 +139,7 @@ export function uploadedFontUrl(token: string): string {
 /** Builds a single @font-face rule, including override descriptors if clamped. */
 function fontFaceRule(font: UploadedFont): string {
   const family = fontFamily(font)
-  if (!family) return ''
+  if (!family || !cssNameSafe(family)) return ''
   const ext = (font.name.split('.').pop() || '').toLowerCase()
   const hint = FONT_FORMAT_HINTS[ext]
   const formatPart = hint ? ` format('${hint}')` : ''
@@ -228,7 +243,11 @@ export function applyUploadedFonts(fonts: UploadedFont[]): void {
  * are fetched from Google Fonts. Defaults to 'Arapey' when no font is given.
  */
 export function applyHeaderFont(fontFamily: string | null | undefined): void {
-  const family = fontFamily || 'Arapey'
+  // Fall back to the default when the configured family carries CSS-breaking
+  // characters, so a malicious header_font can't inject CSS via the
+  // --header-font variable (the server validates it too; this is defense in
+  // depth). The server rejects such values, so this only bites legacy data.
+  const family = fontFamily && cssNameSafe(fontFamily) ? fontFamily : 'Arapey'
   document.documentElement.style.setProperty('--header-font', `'${family}', serif`)
   if (!isUploadedFamily(family)) loadGoogleFont(family)
 }

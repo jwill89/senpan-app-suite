@@ -443,6 +443,59 @@ func TestImages_ManifestMigration_RunsOnce(t *testing.T) {
 	}
 }
 
+// TestImages_ManifestMigration_CorruptNotWiped verifies a present-but-unparseable
+// manifest is left untouched (not reseeded to defaults, which would silently wipe
+// any custom categories) so it can be recovered by hand.
+func TestImages_ManifestMigration_CorruptNotWiped(t *testing.T) {
+	webRoot := t.TempDir()
+	imagesDir := filepath.Join(webRoot, "images")
+	if err := os.MkdirAll(imagesDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	corrupt := []byte(`{"version":2,"categories":[{"name":"Keep",`) // truncated JSON
+	manifestPath := filepath.Join(imagesDir, ".categories.json")
+	if err := os.WriteFile(manifestPath, corrupt, 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Booting the server runs the startup migration, which must NOT rewrite the
+	// corrupt file.
+	_ = newTestEnvWithWebRoot(t, webRoot)
+
+	got, err := os.ReadFile(manifestPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(got, corrupt) {
+		t.Errorf("corrupt manifest was modified; want it left untouched.\n got: %s", got)
+	}
+}
+
+// TestImages_ReservedCategoryDir verifies a category can't be created onto a
+// directory owned by another feature (book-club covers), while normal dirs work.
+func TestImages_ReservedCategoryDir(t *testing.T) {
+	env := newTestEnv(t)
+	env.loginAdmin(t)
+
+	resp := env.postJSON(t, "/api/image-categories", map[string]any{"name": "Book Club", "dir": "bookclub"})
+	if resp.StatusCode != http.StatusConflict {
+		t.Errorf("create reserved dir 'bookclub' status = %d; want 409", resp.StatusCode)
+	}
+	resp.Body.Close()
+
+	resp = env.postJSON(t, "/api/image-categories", map[string]any{"name": "Legacy", "dir": "announcements"})
+	if resp.StatusCode != http.StatusConflict {
+		t.Errorf("create reserved dir 'announcements' status = %d; want 409", resp.StatusCode)
+	}
+	resp.Body.Close()
+
+	resp = env.postJSON(t, "/api/image-categories", map[string]any{"name": "My Cat", "dir": "my_cat"})
+	if resp.StatusCode != http.StatusCreated {
+		t.Errorf("create normal category status = %d; want 201", resp.StatusCode)
+	}
+	resp.Body.Close()
+}
+
 // newTestEnvWithWebRoot builds a test env backed by a caller-provided webRoot, so
 // a test can pre-seed files before the server (and its startup migration) run.
 func newTestEnvWithWebRoot(t *testing.T, webRoot string) *testEnv {

@@ -56,12 +56,17 @@ go test ./...
 (CI also runs `gen:types` and `govulncheck`; see
 [`.github/workflows/ci.yml`](.github/workflows/ci.yml).)
 
-> **One command:** maintainers can run `scripts/check.ps1` (PowerShell) to run
-> every gate above — backend `golangci-lint`/build/vet/test, then frontend
-> `gen:types`/lint/typecheck/test/build — and stop at the first failure.
-> `golangci-lint` is **not** covered by `go build`/`go vet`, so don't skip it.
-> (`scripts/` is gitignored local tooling — install golangci-lint with
-> `go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.12.2`.)
+> **One command:** run [`scripts/check.ps1`](scripts/check.ps1) (PowerShell) to run
+> every gate above — backend `golangci-lint`/build/vet/test/govulncheck, then
+> frontend `gen:types`/lint/typecheck/test/build, then the plugin `dotnet`
+> build/format — and stop at the first failure. `golangci-lint` is **not** covered
+> by `go build`/`go vet`, so don't skip it (install the pinned version:
+> `go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.12.2`).
+> The race detector is intentionally not run — the pure-Go SQLite driver
+> (`CGO_ENABLED=0`) can't use it; see the note in `check.ps1`. (`scripts/check.ps1`
+> and `scripts/deploy.ps1` are version-controlled; all deploy server settings
+> (host, user, key, webroot, service, opt dir) live in an untracked
+> `scripts/deploy.config.ps1` — copy `deploy.config.example.ps1`.)
 
 ## Conventions
 
@@ -100,6 +105,10 @@ keeping them in step matters.
 ## Deploying
 
 Deployment is maintainer-only via `scripts/deploy.ps1`
-(`-Target frontend|backend|both`); see [`deploy/README.md`](deploy/README.md).
+(`-Target frontend|backend|main|all|plugin`; `both` is a kept alias for `main`).
+The script is version-controlled; every environment-specific setting (host, SSH
+user, key, webroot, service name, opt dir) lives in an untracked
+`scripts/deploy.config.ps1` (copy `deploy.config.example.ps1`) — nothing in the
+tracked script reveals the server layout. See [`deploy/README.md`](deploy/README.md).
 Database changes on production (outside the app's own migrations) are applied
 manually and require explicit sign-off — never include them in a routine deploy.

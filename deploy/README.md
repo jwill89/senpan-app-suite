@@ -81,6 +81,85 @@ server's tokenized, origin-gated endpoints — see
    only if the Go process and Apache run as different users; the Go process is
    what writes the files, so it needs write access to that directory.
 
+## Running as a non-root user (recommended)
+
+The repo's `senpan.service` specifies `User=senpan`/`Group=senpan`. Nothing in the
+server needs root — it binds `:8080` (non-privileged) and only touches ordinary
+files — so run it as a dedicated, locked system account to shrink the blast radius
+of any compromise.
+
+> **Important:** `scripts/deploy.ps1` does **NOT** ship the systemd unit — it only
+> updates the binary (and syncs `.htaccess`). The repo `deploy/senpan.service` is a
+> reference/template; the unit that actually runs lives on the host at
+> `/etc/systemd/system/senpan.service`. So editing `User=` in the repo and
+> redeploying does nothing to the running service — you must update the unit **on
+> the host** (step 3 below). This is why a `daemon-reload`/`restart` alone leaves
+> `systemctl show senpan -p User` reporting `root`.
+
+One-time host setup:
+
+```bash
+# 1. Create a locked system account (no home, no login shell).
+useradd --system --no-create-home --shell /usr/sbin/nologin senpan
+
+# 2. Give it ownership of everything the process writes: its own dir (binary,
+#    DB + SQLite -wal/-shm) and EVERY document-root subtree it writes into.
+chown -R senpan:senpan /opt/senpan
+chown -R senpan:senpan /var/www/apps.senpan.cafe/images \
+                       /var/www/apps.senpan.cafe/fonts \
+                       /var/www/apps.senpan.cafe/carrd
+
+# 3. Update the UNIT FILE ON THE HOST. Inspect the current one first, then edit it:
+systemctl cat senpan                 # note the path + current User/ReadWritePaths
+systemctl edit --full senpan         # opens the effective unit for editing
+#   In the editor, set:
+#     User=senpan
+#     Group=senpan
+#     ReadWritePaths=/opt/senpan /var/www/apps.senpan.cafe/images \
+#                    /var/www/apps.senpan.cafe/fonts /var/www/apps.senpan.cafe/carrd
+#   (match the ExecStart -webroot to your host). Alternatively, copy the repo's
+#   deploy/senpan.service onto /etc/systemd/system/senpan.service and fill in its
+#   placeholders — <service-user>, /opt/<app>, <webroot>, <service-name> — with
+#   your values (the tracked template deliberately carries no concrete paths).
+
+# 4. Reload + restart.
+systemctl daemon-reload
+systemctl restart senpan
+```
+
+`ReadWritePaths` in the running unit must list every one of those subtrees or
+writes fail with `EACCES` under `ProtectSystem=strict`. Apache keeps serving the
+files as its own user (read is world-readable); only writes are the `senpan`
+user's concern. Verify:
+
+```bash
+systemctl show senpan -p User -p Group          # senpan / senpan
+ps -o user= -C app-suite                         # not root
+# Smoke-test each writable subtree from the admin UI: upload an image, a font
+# (confirm fonts/.woff2/ is written), and a Carrd project image; confirm an
+# admin CRUD write succeeds and /var/log/senpan/senpan.log keeps growing.
+```
+
+> If font/carrd uploads currently work in production, the **live** unit's
+> `ReadWritePaths` is already broader than an older repo copy — run
+> `systemctl cat senpan` and reconcile before shipping the repo unit so a
+> `daemon-reload` never *narrows* the writable set.
+
+## Credential rotation
+
+- **Admin (and pre-existing staff) passwords.** Rotate the admin password to a
+  fresh high-entropy value via the app's change-password flow, plus any staff
+  accounts that predate a known exposure. Rotating the password alone does **not**
+  invalidate already-issued session cookies — the session secret does (below).
+- **`APPSUITE_SESSION_SECRET`.** When unset, the server generates a *random*
+  secret on every boot, so all sessions drop on each restart and there is no
+  operator-controlled secret to rotate. Set it explicitly in the unit's
+  `Environment=` (or an `EnvironmentFile=`) to a stable high-entropy value, and
+  rotate it (to a **new** value) in the same maintenance window as a password
+  rotation — changing the secret is what forcibly logs out every outstanding
+  session. The FFXIV plugin uses PAT bearer tokens, not the admin cookie, so it
+  is unaffected.
+
 ## Font host (protected serving)
 
 Uploaded fonts are licensed assets, so they are **never served as static
@@ -134,6 +213,20 @@ One-time setup for the font host:
 > (`https://fonts.senpan.cafe/My%20Font.ttf`) stop working the moment the
 > vhost becomes a proxy. Any external site using them must switch to the
 > kit stylesheet above, and its origin must be added to the allowlist.
+
+**Verify the cutover** (the repo can't confirm host-side vhost state):
+
+```bash
+# The gated responses MUST carry Cache-Control: private, or Cloudflare (which
+# ignores Vary) can serve one origin's kit to another. Check this FIRST —
+# it is a blocking precondition before migrating any external site.
+curl -sI https://fonts.senpan.cafe/kit.css | grep -i cache-control     # → private
+
+apachectl -S | grep fonts.senpan.cafe                                  # a proxy vhost, no DocumentRoot
+curl -s -o /dev/null -w '%{http_code}\n' https://fonts.senpan.cafe/AnyFont.ttf   # → 403/404 (legacy URL dead)
+curl -s -o /dev/null -w '%{http_code}\n' https://fonts.senpan.cafe/f/anytoken    # → 403 (no Origin)
+curl -s -H 'Origin: https://<allowed-site>' https://fonts.senpan.cafe/kit.css    # → that site's fonts
+```
 
 ## Carrd image host (CORS)
 
@@ -189,6 +282,37 @@ the on-disk file, the Logs tab's historical snapshot, and `jlv` stay empty.**
 On-box viewing: `jlv /var/log/senpan/senpan.log` (install the Linux `.deb` from
 <https://github.com/hedhyw/json-log-viewer/releases>).
 
+### Who made each request (actor identity)
+
+Every request line names the actor via an `auth` field (`session` | `token` |
+`bot` | `anon`) plus `user` (account username) and `bot` (crawler) when they
+apply. Admin actions resolve through the cookie session and plugin actions
+through the personal access token — both automatic, no configuration. The
+**System → Logs** tab surfaces this in a **User** column.
+
+**Enabling verified-bot names (Cloudflare).** Anonymous requests are labelled
+`bot` only when Cloudflare tells the origin the request is a *verified* good bot
+(Googlebot, Bingbot, GPTBot, …). Cloudflare does not send that signal by default;
+enable it one of two ways:
+
+- **Any plan** — add a **Request Header Transform Rule**: Cloudflare dashboard →
+  your zone → **Rules → Transform Rules → Modify Request Header → Create rule**.
+  Set the filter to the `cf.client.bot` field (UI: *Verified Bot* *equals*
+  *True*) and the action to **Set static** header `X-Verified-Bot` = `true`.
+  Deploy. The backend reads `X-Verified-Bot` and names the bot from its (now
+  Cloudflare-verified, so trustworthy) User-Agent.
+- **Enterprise + Bot Management** — enable the **"Add bot protection headers"**
+  managed transform (Rules → Managed Transforms). The backend also reads its
+  native `cf-verified-bot` / `cf-verified-bot-category` headers, giving a cleaner
+  category name — no code change.
+
+This is a logging hint, never a security decision: like `CF-Connecting-IP`, the
+header is forgeable by a client that reaches the origin without going through
+Cloudflare. Lock the origin to Cloudflare's IP ranges (or Authenticated Origin
+Pulls) if you need it to be tamper-proof. Capability tokens in request
+paths/queries/Referer are redacted to a short correlation hash before logging, so
+draw/stamp/font links never appear verbatim in the log or the viewer.
+
 ## Each deploy
 
 **Scripted (recommended).** From the repo root, on Windows:
@@ -196,8 +320,20 @@ On-box viewing: `jlv /var/log/senpan/senpan.log` (install the Linux `.deb` from
 ```powershell
 .\scripts\deploy.ps1                  # frontend (default)
 .\scripts\deploy.ps1 -Target backend  # Go binary + service restart
-.\scripts\deploy.ps1 -Target both     # frontend, then backend
+.\scripts\deploy.ps1 -Target main     # frontend, then backend ('both' is a kept alias)
+.\scripts\deploy.ps1 -Target all      # frontend, backend, then plugin
+.\scripts\deploy.ps1 -Target plugin   # Dalamud custom-repo files only
 ```
+
+> **First-time setup:** the script is version-controlled, but **no**
+> environment-specific value is baked into it — the host, SSH user, key path,
+> webroot, service name, and opt dir all live outside the repo. Copy
+> `scripts/deploy.config.example.ps1` to `scripts/deploy.config.ps1` (untracked)
+> and fill in the six `$Senpan*` values. Each can instead be passed as a
+> `-param` or set via its `$env:SENPAN_*` variable (`SENPAN_VPS_HOST`,
+> `SENPAN_VPS_USER`, `SENPAN_DEPLOY_KEY`, `SENPAN_WEB_ROOT`,
+> `SENPAN_SERVICE_NAME`, `SENPAN_REMOTE_OPT_DIR`); the script fails fast, listing
+> any that are unset.
 
 **Frontend** (`-Target frontend`, the default): builds `frontend/` (vue-tsc +
 vite), uploads the result to a staging dir on the host (`<DocumentRoot>/dist.new`)
@@ -217,9 +353,10 @@ to stay active**. Brief downtime (a few seconds) while the service is stopped.
 Each target uses just **three SSH connections** and does not poll during
 transfers, to stay under `ufw limit ssh` (6 within 30s, which otherwise drops the
 transfer with "Network error: Connection timed out"); a rate-limited connection
-is retried once after a 35s wait. Defaults: host `68.183.138.141`, user `root`,
+is retried once after a 35s wait. Defaults (set per operator, e.g. via the
+script's parameters or environment): host `<your-droplet-ip>`, user `root`,
 webroot `/var/www/apps.senpan.cafe`, service `senpan`, opt dir `/opt/senpan`, key
-at `C:\Users\jwill\OneDrive\Documents\digitalocean-key.ppk` (override with
+at `<path-to-your-deploy-key.ppk>` (override with
 `-VpsHost` / `-VpsUser` / `-WebRoot` / `-KeyPath` / `-ServiceName` /
 `-RemoteOptDir`). Use `-SkipBuild` to deploy an existing build, `-NoBackup` to
 drop the rollback backup. Rollback by hand: frontend `mv dist.old dist`; backend

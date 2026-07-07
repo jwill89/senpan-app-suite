@@ -2,11 +2,13 @@
 
 All notable changes to the **Senpan App Suite** are recorded here.
 
-The **frontend** (Vue SPA) and **backend** (Go API) are versioned independently
-with [Semantic Versioning](https://semver.org/) and tracked in their own sections
-below — a change usually touches only one side, and they deploy separately. The
-admin dashboard shows both live versions (sidebar footer) so operators can confirm
-a deploy left the two halves compatible.
+The **frontend** (Vue SPA), **backend** (Go API), and **plugin** (SenpanCompanion,
+a Dalamud/FFXIV plugin) are versioned independently with
+[Semantic Versioning](https://semver.org/) and tracked in their own sections below
+— a change usually touches only one, and they deploy separately. The admin
+dashboard shows the live frontend + backend versions (sidebar footer) so operators
+can confirm the two web halves are compatible; the plugin ships through its own
+Dalamud custom repo and talks to the backend over the same API (PAT-authenticated).
 
 **Sources of truth**
 
@@ -14,6 +16,9 @@ a deploy left the two halves compatible.
   and read via `frontend/src/lib/version.ts`.
 - Backend version → `backend/internal/version/version.go` (`Version`), served at
   `GET /api/version`.
+- Plugin version → `plugins/SenpanCompanion/SenpanCompanion.csproj` (`<Version>`,
+  a four-part Dalamud AssemblyVersion) + `plugins/pluginmaster.json` (the repo
+  listing consumed by Dalamud).
 
 **Compatibility rule:** the SPA and API are compatible while their **MAJOR**
 versions match. Bump MAJOR only for a breaking change to the JSON/WebSocket API
@@ -25,6 +30,37 @@ The format follows [Keep a Changelog](https://keepachangelog.com/).
 ---
 
 ## Frontend
+
+### [3.5.0] — 2026-07-07
+
+A security/correctness bugfix pass plus request-log identity, released together
+(paired with backend 3.4.0).
+
+#### Added
+
+- **Server Logs viewer now shows a "User" column.** Each request line names who
+  made it — the account username for an admin (cookie session) or the FFXIV
+  plugin (personal access token), a verified-bot name for a Cloudflare-verified
+  crawler, or "—" for anonymous traffic. A verified bot renders italic; the
+  `auth` classifier (`session` / `token` / `bot` / `anon`) is shown on hover and
+  in the expanded JSON.
+
+#### Fixed
+
+- **Font-family CSS-injection defense (defense in depth).** `theme.ts` now
+  refuses to emit an `@font-face` rule, and falls back to the default
+  `--header-font`, for any family carrying CSS-breaking characters (control
+  chars, quotes, backslash, or `{ } ; < >`). The server validates these too;
+  this closes the client-side `<style>`/`--header-font` sinks for any value that
+  predates that validation, so an uploaded font (or `header_font`) can no longer
+  inject CSS into every visitor's board.
+- **Image library no longer spams error toasts on live updates.** The
+  `resource_changed` handler now refreshes the shared image-picker caches
+  **silently** and only when something is actually cached: an admin without image
+  access no longer gets a 403 toast on every image mutation, and a renamed or
+  deleted category self-prunes from the cache instead of re-raising a 400
+  "Unknown image category" toast on every subsequent update. Explicit user
+  actions still surface errors loudly.
 
 ### [3.4.0] — 2026-07-05
 
@@ -320,6 +356,99 @@ First tracked release — establishes versioning for the current production buil
 ---
 
 ## Backend
+
+### [3.4.0] — 2026-07-07
+
+A security/correctness bugfix pass plus request-log identity, released together
+(paired with frontend 3.5.0). No breaking API/WebSocket contract changes.
+
+#### Added
+
+- **Request logs now identify the actor.** Every access-log line carries an
+  `auth` field (`session` | `token` | `bot` | `anon`) and, when applicable, a
+  `user` (account username) and `bot` (verified-bot name). Admin actions resolve
+  via the cookie session; plugin actions resolve via the personal access token —
+  both through the existing `currentUser` path, so no extra store reads for
+  authenticated requests and none for anonymous ones. The actor is resolved
+  inside the handler chain and carried out to the logging layer via a
+  per-request holder (the log runs outside the session middleware).
+- **Cloudflare-verified bot detection.** For anonymous requests, the log reads
+  Cloudflare's verified-bot signal — either the native `cf-verified-bot`
+  (+`cf-verified-bot-category`) headers from the "Add bot protection headers"
+  managed transform (Enterprise Bot Management), or a custom `x-verified-bot`
+  header set by a Transform Rule on `cf.client.bot` (works on any plan). A
+  verified bot is named by its category, or by its User-Agent — trustworthy here
+  because Cloudflare has already vouched for the source. This is a logging hint
+  only, never a security decision (like `CF-Connecting-IP`, it's forgeable by a
+  client that bypasses Cloudflare; lock the origin to Cloudflare IPs for
+  assurance). No new endpoints or response-shape changes — the fields ride the
+  existing free-form log-entry map, so the log viewer surfaces them
+  automatically.
+
+#### Security
+
+- **Live server-log WebSocket tail is now admin-only.** The log stream was
+  broadcast to every account on the admin channel (`cardID == ""`), which admits
+  any authenticated active account and any plugin PAT — not just admins — even
+  though `GET /api/logs` is admin-gated. Log lines carry client IPs, request
+  paths (which embed capability tokens), and failed-login usernames. The hub now
+  gates the tail on a per-connection `isAdmin` flag, refreshed on each revalidate
+  tick so a mid-session demotion stops the tail without dropping the socket.
+  `resource_changed` and the draw feed still reach non-admin staff and the plugin
+  as before.
+- **Capability tokens are redacted from request logs.** Garapon/stamp-card draw
+  tokens and font-kit tokens in the URL path (and the PAT `token` query
+  parameter, and Referer) are replaced with a short non-reversible hash in both
+  the standard and DEBUG log lines — so they no longer land verbatim in the
+  rotating log file, the `GET /api/logs` viewer, or the admin WS tail. The hash
+  keeps per-link correlation for abuse investigation.
+- **Font-family / header-font / theme-flourish injection closed at the source.**
+  Font family names (set via `PATCH`, or derived from an uploaded filename), the
+  `header_font` setting, and theme `board_flourish`/`number_flourish` paths are
+  now validated before storage. Family/header-font values reject CSS-breaking
+  characters (control chars, quotes, backslash, `{ } ; < >`); flourishes must be
+  an `images/<category>/<file>.svg` path, blocking `data:`/external-URL SVGs that
+  bypassed the upload-time sanitizer. The flourish check runs in the store layer,
+  so the `themetool` CLI is covered too.
+- **`logClientIP` no longer trusts spoofable headers from a direct peer.**
+  `CF-Connecting-IP` / `X-Forwarded-For` are honored only when the immediate peer
+  is the loopback reverse proxy, so a client reaching the backend directly can't
+  poison the audit log's `ip` field. (Rate limiting was already spoof-resistant.)
+
+#### Fixed
+
+- **Image-category manifest robustness.** The manifest read-modify-write
+  (create/rename/delete + startup migration) is now serialized by a mutex, and
+  the manifest is written atomically (temp file + rename). A present-but-corrupt
+  manifest is left untouched and logged (once, at startup) instead of being
+  silently reseeded to defaults — which used to wipe custom categories. A
+  reserved-directory denylist stops a category from being created/renamed onto a
+  folder owned by another feature (book-club covers, the legacy announcements
+  dir).
+- **`app_title` default** is now `"Senpan App Suite"` (was `"Nifty App Suite"`),
+  matching the frontend default so an unconfigured instance no longer flashes the
+  wrong product name.
+
+#### Deploy / docs
+
+- **`senpan.service` runs as a dedicated `senpan` user** (was root), with
+  `ReadWritePaths` widened to every document-root subtree the app writes
+  (`images/`, `fonts/`, `carrd/`). `deploy/.htaccess` denies all dotfiles, hiding
+  `images/.categories.json`. `deploy/README.md` documents the non-root setup, the
+  font-host cutover verification, credential/session-secret rotation, and the
+  Cloudflare Transform Rule that enables verified-bot labelling in the request
+  log. `AGENTS.md` / `CONTRIBUTING.md` were brought current for the same.
+- **Deploy tooling is now version-controlled.** Both `scripts/check.ps1` and
+  `scripts/deploy.ps1` are tracked; **every** environment-specific deploy setting
+  (VPS host, SSH user, key path, webroot, service name, opt dir) was moved into an
+  untracked `scripts/deploy.config.ps1` (dot-sourced at runtime, or via
+  `$env:SENPAN_*` / `-params`; `deploy.config.example.ps1` is the tracked
+  template), so nothing in the tracked script reveals the server layout. The prod
+  host IP / key path were removed from all tracked files, and the tracked
+  `deploy/senpan.service` is now a placeholder template (no concrete host paths,
+  user, or service name). `deploy.ps1` also gained `-Target main` (frontend +
+  backend; `both` kept as an alias) and `-Target all` (frontend + backend +
+  plugin).
 
 ### [3.3.0] — 2026-07-05
 
@@ -708,10 +837,56 @@ First tracked release — establishes versioning for the current production buil
 
 ---
 
+## Plugin
+
+**SenpanCompanion** — a Dalamud/FFXIV plugin ("Senpan Admin Companion") that lets
+Tea House staff drive app services from in-game. It authenticates to the backend
+with a personal access token and is distributed through a Dalamud custom repo
+(`plugins/pluginmaster.json`). Versions use the four-part AssemblyVersion in
+`SenpanCompanion.csproj`. Entries below the current release were reconstructed
+from the `<Version>` history and commit messages.
+
+### [2.0.1.0] — 2026-07-02
+
+#### Security
+
+- **Personal access token moved to the `Authorization` header on the WebSocket
+  connection** (was previously on the WS URL query string, where it could land in
+  access logs). REST calls already used the header. Plus assorted bug fixes.
+
+### [2.0.0.0] — 2026-07-01
+
+#### Changed
+
+- **Major API migration** to match the backend's move to a hybrid RESTful-RPC
+  style with proper HTTP status codes — the plugin's API client was reworked
+  accordingly. (Major bump: it requires the correspondingly migrated backend.)
+
+### [1.0.0.0] — 2026-06-29
+
+#### Added
+
+- **First published release** through the Dalamud custom repo (repo listing
+  finalized).
+
+#### Changed
+
+- Cards sorted by creation date.
+
+### [0.1.0.0] — 2026-06-29
+
+#### Added
+
+- **Initial Dalamud plugin** (Senpan Companion): operate bingo and raffle features
+  from within the game, authenticated by a personal access token.
+
+---
+
 ## How to update this file
 
 1. Make your change and bump the relevant version source
-   (`frontend/package.json` and/or `backend/internal/version/version.go`).
-2. Add an entry under the matching section above, newest first, grouped as
-   _Added / Changed / Fixed / Removed_.
+   (`frontend/package.json`, `backend/internal/version/version.go`, and/or the
+   plugin's `SenpanCompanion.csproj` `<Version>` + `plugins/pluginmaster.json`).
+2. Add an entry under the matching section above (Frontend / Backend / Plugin),
+   newest first, grouped as _Added / Changed / Fixed / Removed / Security_.
 3. Keep the version string in the source file and the heading here in sync.

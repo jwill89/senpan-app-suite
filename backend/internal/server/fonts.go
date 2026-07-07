@@ -65,10 +65,41 @@ func (s *Server) fontFileNames() []string {
 	return names
 }
 
+// cssNameUnsafe reports whether s contains characters that could break out of a
+// single-quoted CSS string or font-family identifier — control characters
+// (including newlines, which CSS requires be escaped as \A), quotes, backslash,
+// or the structural characters { } ; < >. Font family names (set explicitly, or
+// derived from an uploaded filename) are emitted into the generated kit.css and
+// the SPA's <style id="uploaded-fonts"> element, so an unescaped one of these
+// would let a fonts-grantee inject arbitrary CSS into external sites and every
+// player's board. None are legal in a real CSS font-family name.
+func cssNameUnsafe(s string) bool {
+	if strings.ContainsAny(s, "'\"\\{};<>") {
+		return true
+	}
+	for _, r := range s {
+		if r < 0x20 || r == 0x7f {
+			return true
+		}
+	}
+	return false
+}
+
 // safeFontName validates and normalizes an uploaded/target font filename,
-// accepting only permitted font extensions. See safeUploadName (uploads.go).
+// accepting only permitted font extensions. See safeUploadName (uploads.go). The
+// base name (filename minus extension) becomes the default CSS font-family when
+// no custom family is set, so it is additionally rejected if it carries any
+// CSS-breaking character — closing the upload path that the family PATCH
+// validator never sees.
 func safeFontName(name string) (string, bool) {
-	return safeUploadName(name, func(ext string) bool { return allowedFontExts[ext] })
+	n, ok := safeUploadName(name, func(ext string) bool { return allowedFontExts[ext] })
+	if !ok {
+		return "", false
+	}
+	if cssNameUnsafe(strings.TrimSuffix(n, filepath.Ext(n))) {
+		return "", false
+	}
+	return n, true
 }
 
 // fontModTime returns a file's RFC3339 mod time ("" when unreadable).
@@ -305,8 +336,8 @@ func (s *Server) handleFontFamilyPatch(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusBadRequest, "Font name is too long (max 100 characters)")
 			return
 		}
-		if strings.ContainsAny(family, `'"\`) {
-			writeError(w, http.StatusBadRequest, "Font name may not contain quotes or backslashes")
+		if cssNameUnsafe(family) {
+			writeError(w, http.StatusBadRequest, "Font name may not contain quotes, backslashes, control characters, or any of { } ; < >")
 			return
 		}
 		if family != "" {

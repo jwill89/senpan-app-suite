@@ -3800,7 +3800,7 @@ info:
     (`{ "type": "log", "entry": LogEntry }`) for the live log tail — best-effort,
     sent only while an admin is connected.
   title: Senpan App Suite API
-  version: 3.3.0
+  version: 3.4.0
 openapi: 3.0.3
 paths:
   /api/account/change-password:

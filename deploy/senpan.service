@@ -1,3 +1,10 @@
+# systemd unit TEMPLATE for the Senpan App Suite backend. This tracked copy keeps
+# the concrete host layout OUT of the repo: copy it to
+# /etc/systemd/system/<service-name>.service on the host and replace the
+# placeholders below — <service-user>, /opt/<app>, <webroot>, <service-name> —
+# with your values. See deploy/README.md for a worked example. (deploy.ps1 does
+# NOT ship this file; the running unit lives only on the host.)
+
 [Unit]
 Description=Senpan App Suite Service
 Documentation=https://github.com/jwill89
@@ -7,13 +14,15 @@ StartLimitIntervalSec=60
 
 [Service]
 Type=simple
-User=root
-Group=root
-WorkingDirectory=/opt/senpan
+# Run as a dedicated, unprivileged system account — nothing here needs root
+# (the listen addr is :8080, non-privileged; all paths are ordinary files). See
+# deploy/README.md "Running as a non-root user" for the one-time useradd + chown.
+User=<service-user>
+Group=<service-user>
+WorkingDirectory=/opt/<app>
 # -webroot must point at the Apache DocumentRoot so uploaded raffle images are
-# written to <DocumentRoot>/images/raffles/ and served by Apache. Adjust the
-# path to match your server (see deploy/README.md).
-ExecStart=/opt/senpan/app-suite -addr :8080 -db /opt/senpan/data/database.sqlite -webroot /var/www/apps.senpan.cafe
+# written to <webroot>/images/raffles/ and served by Apache.
+ExecStart=/opt/<app>/app-suite -addr :8080 -db /opt/<app>/data/database.sqlite -webroot <webroot>
 
 # Auto-restart on failure, with increasing back-off
 Restart=on-failure
@@ -29,16 +38,17 @@ NoNewPrivileges=true
 ProtectSystem=strict
 ProtectHome=true
 PrivateTmp=true
-# The app needs write access to its own dir (DB) and to the document root's
-# images/ folder where raffle uploads are written. Adjust the second path to
-# match your -webroot (only the images/ subtree needs to be writable).
-ReadWritePaths=/opt/senpan /var/www/apps.senpan.cafe/images
+# The app needs write access to its own dir (DB + SQLite -wal/-shm) and to the
+# document-root subtrees it writes into: images/ (raffle/announcement/category
+# uploads), fonts/ (uploaded fonts + the fonts/.woff2 conversion cache), and
+# carrd/ (per-project image folders). Every subtree the app writes MUST appear
+# here or writes fail with EACCES under ProtectSystem=strict.
+ReadWritePaths=/opt/<app> <webroot>/images <webroot>/fonts <webroot>/carrd
 
 # Logging (stdout/stderr → journalctl)
 StandardOutput=journal
 StandardError=journal
-SyslogIdentifier=senpan
+SyslogIdentifier=<service-name>
 
 [Install]
 WantedBy=multi-user.target
-

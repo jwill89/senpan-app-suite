@@ -100,3 +100,21 @@ func TestLogClientIP_PrefersCloudflareHeader(t *testing.T) {
 		t.Errorf("RemoteAddr host: got %q; want ::1", got)
 	}
 }
+
+func TestLogClientIP_IgnoresForgedHeadersFromNonLoopback(t *testing.T) {
+	// A client that reaches the backend directly (RemoteAddr is NOT the loopback
+	// proxy) must not be able to forge its logged IP via CF-Connecting-IP / XFF.
+	r := httptest.NewRequest(http.MethodGet, "/api/x", nil)
+	r.RemoteAddr = "1.2.3.4:5555"
+	r.Header.Set("CF-Connecting-IP", "9.9.9.9")
+	r.Header.Set("X-Forwarded-For", "8.8.8.8")
+	if got := server.LogClientIPForTest(r); got != "1.2.3.4" {
+		t.Errorf("forged headers from non-loopback peer: got %q; want 1.2.3.4 (RemoteAddr)", got)
+	}
+
+	// From the trusted loopback proxy, the headers ARE honored.
+	r.RemoteAddr = "127.0.0.1:5555"
+	if got := server.LogClientIPForTest(r); got != "9.9.9.9" {
+		t.Errorf("from loopback proxy: got %q; want 9.9.9.9 (CF-Connecting-IP)", got)
+	}
+}

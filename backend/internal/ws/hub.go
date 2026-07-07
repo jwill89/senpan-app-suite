@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net/http"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/coder/websocket"
@@ -40,10 +41,18 @@ type client struct {
 	send   chan []byte        // buffered channel of outbound messages
 	cardID string             // non-empty for player connections; used to target disconnects
 	cancel context.CancelFunc // cancels this client's context (signals pumps to exit)
-	// revalidate, when non-nil (admin connections), re-checks on each ping that
-	// the connection's account is still authorized; returning false drops the
-	// socket. nil for player connections (public, never re-checked).
-	revalidate func() bool
+	// isAdmin gates the live-log tail: only true-admin connections receive it.
+	// An empty cardID alone is NOT sufficient (permission-limited staff and
+	// plugin PATs also open the cardID=="" channel for resource_changed and the
+	// draw feed). Refreshed on each revalidate tick so a mid-session demotion
+	// stops the tail within one ping without dropping the socket. Atomic because
+	// writePump writes it while BroadcastLog reads it under the hub RLock.
+	isAdmin atomic.Bool
+	// revalidate, when non-nil (admin-channel connections), re-checks on each
+	// ping that the account is still active (returning active=false drops the
+	// socket) and reports its current admin status (used to refresh isAdmin).
+	// nil for player connections (public, never re-checked).
+	revalidate func() (active bool, isAdmin bool)
 }
 
 // NewHub creates a new Hub with a background context.
@@ -103,26 +112,32 @@ func (h *Hub) BroadcastToAdmins(msg any) {
 	h.broadcastRaw(data, func(c *client) bool { return c.cardID == "" })
 }
 
-// HasAdminClients reports whether any admin connection (empty cardID) is
+// HasAdminClients reports whether any true-admin connection (IsAdmin account) is
 // currently attached. The live-log tail checks this before doing any
-// serialization work, so logging stays cheap when nobody is watching.
+// serialization work, so logging stays cheap when nobody is watching. Note this
+// is stricter than "empty cardID": a permission-limited staff account or a
+// plugin PAT on the admin channel is NOT counted, so their presence alone does
+// not cause log lines to be parsed and broadcast.
 func (h *Hub) HasAdminClients() bool {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
 	for c := range h.clients {
-		if c.cardID == "" {
+		if c.isAdmin.Load() {
 			return true
 		}
 	}
 	return false
 }
 
-// BroadcastLog sends a best-effort live-log line to admin clients. Unlike the
-// other Broadcast* methods, a client whose send buffer is full simply MISSES
-// this line instead of being disconnected — a log burst must never knock an
-// admin off the socket (which would also drop resource-invalidation). It never
-// logs on failure, so it can be called from inside the logging path without
-// recursing.
+// BroadcastLog sends a best-effort live-log line to true-admin clients only.
+// The log carries client IPs, request paths, and internal detail, so it must
+// NOT reach the permission-limited staff accounts and plugin PATs that also sit
+// on the cardID=="" channel — it is gated on the per-client isAdmin flag, which
+// matches the requireAdmin gate on GET /api/logs. Unlike the other Broadcast*
+// methods, a client whose send buffer is full simply MISSES this line instead
+// of being disconnected — a log burst must never knock an admin off the socket
+// (which would also drop resource-invalidation). It never logs on failure, so
+// it can be called from inside the logging path without recursing.
 func (h *Hub) BroadcastLog(msg any) {
 	data, err := json.Marshal(msg)
 	if err != nil {
@@ -131,8 +146,8 @@ func (h *Hub) BroadcastLog(msg any) {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
 	for c := range h.clients {
-		if c.cardID != "" {
-			continue // admins only
+		if !c.isAdmin.Load() {
+			continue // true admins only (not staff grantees / plugin PATs)
 		}
 		select {
 		case c.send <- data:
@@ -167,10 +182,12 @@ func (h *Hub) broadcastRaw(data []byte, filter func(*client) bool) {
 // ServeWS upgrades an HTTP request to a WebSocket connection and registers it.
 // cardID should be non-empty for player connections so they can be disconnected
 // when their card is deleted.
-// ServeWS upgrades and registers a connection. revalidate is called periodically
-// (on the ping tick) to re-check that the connection is still authorized; pass a
-// closure for admin connections and nil for public player connections.
-func (h *Hub) ServeWS(w http.ResponseWriter, r *http.Request, cardID string, revalidate func() bool) {
+// ServeWS upgrades and registers a connection. isAdmin marks a true-admin
+// account (gates the live-log tail; false for players and staff grantees).
+// revalidate is called periodically (on the ping tick) to re-check that the
+// connection is still active and to refresh its admin status; pass a closure for
+// admin-channel connections and nil for public player connections.
+func (h *Hub) ServeWS(w http.ResponseWriter, r *http.Request, cardID string, isAdmin bool, revalidate func() (active bool, isAdmin bool)) {
 	// Default same-origin check: Origin must match Host header.
 	// Requires the reverse proxy to set ProxyPreserveHost On so the
 	// original Host header reaches Go (e.g. Apache: ProxyPreserveHost On).
@@ -191,6 +208,7 @@ func (h *Hub) ServeWS(w http.ResponseWriter, r *http.Request, cardID string, rev
 		cancel:     clientCancel,
 		revalidate: revalidate,
 	}
+	c.isAdmin.Store(isAdmin)
 	h.register(c)
 
 	go c.writePump(clientCtx)
@@ -333,12 +351,20 @@ func (c *client) writePump(ctx context.Context) {
 				}
 			}
 		case <-ticker.C:
-			// Re-authorize admin connections: if the account was deactivated or
-			// deleted, drop the socket rather than keep streaming the undelayed
-			// admin feed (the draw-delay anti-peek). Players have no revalidate.
-			if c.revalidate != nil && !c.revalidate() {
-				c.conn.Close(websocket.StatusPolicyViolation, "session no longer authorized")
-				return
+			// Re-authorize admin-channel connections: if the account was
+			// deactivated or deleted, drop the socket rather than keep streaming
+			// the undelayed admin feed (the draw-delay anti-peek). Players have no
+			// revalidate. Also refresh isAdmin so a mid-session admin demotion
+			// stops the live-log tail within one ping without dropping the socket
+			// (the account may still be an active staff grantee needing
+			// resource_changed).
+			if c.revalidate != nil {
+				active, isAdmin := c.revalidate()
+				if !active {
+					c.conn.Close(websocket.StatusPolicyViolation, "session no longer authorized")
+					return
+				}
+				c.isAdmin.Store(isAdmin)
 			}
 			pingCtx, cancel := context.WithTimeout(ctx, writeWait)
 			err := c.conn.Ping(pingCtx)

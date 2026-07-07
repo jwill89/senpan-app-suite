@@ -331,7 +331,11 @@ func (s *Server) handleFontKitCSS(w http.ResponseWriter, r *http.Request) {
 			continue // this site isn't allowed to use this font
 		}
 		family := fontFamilyFor(g.Base, m)
-		if family == "" {
+		if family == "" || cssNameUnsafe(family) {
+			// Skip a font whose family carries CSS-breaking characters rather than
+			// emit a rule that could inject CSS — mirrors the empty-family skip.
+			// New families are rejected at write time; this guards any value that
+			// predates that validation.
 			continue
 		}
 		token, _ := s.servedFontVariant(g, m, bucket)

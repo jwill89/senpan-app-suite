@@ -78,7 +78,8 @@ rotated immediately**. See **Authentication & authorization** below.
 │       │   └── admin/                ← AdminSidebar + one component per tab + modals (CardPreview, EndGame, WinnerVerify, HalftimePrompt) + ThemeTokenEditor. Tabs: Game, Cards, WinnersLog, Patterns (one manager unifying the patterns list + New Pattern / Manage Categories sub-pages), Presets, RaffleForm, Raffles, Announcements, Affiliates + AffiliateForm, BookClub (one generic tab serves every club), Garapon + GaraponForm, StampRallies + StampRallyForm, Settings, Themes, Images, Users (admin-only account+permission manager), Logs (admin-only live server-log viewer — typed/colored columns, filters, live tail, DEBUG toggle), Fonts, CarrdUpload; PlacementEditor (shared %-based image placement widget for Garapon/Stamp Rally forms)
 │       ├── views/                    ← HomeView, PlayerView, RafflesView, RaffleDetailView, GaraponView (public token-gated draw), StampCardView (public token-gated stamp card), AdminLoginView, RegisterView (hidden), NoAccessView (active account, no granted pages), AdminView
 │       └── **/*.test.ts              ← Vitest unit/component tests, colocated next to the code they cover
-├── .github/workflows/ci.yml          ← CI: frontend (lint·typecheck·test·build) + backend (lint·build·vet·test·govulncheck) + plugin (build·format)
+├── .github/workflows/ci.yml          ← CI: frontend (lint·typecheck·test·build) + backend (lint·build·vet·test·govulncheck) + plugin (build·format) + release (main: auto tag + GitHub Release per component on version bump)
+├── .github/scripts/release.sh        ← the release job's script: reads each component's version, tags <Component>-v<version> + publishes a Release with that component's CHANGELOG.md section
 ├── deploy/                           ← Apache deploy artifacts (.htaccess + persistent images/ + README)
 ├── backend/                          ← Go backend
 │   ├── main.go                       ← Entry point: flags, DB init, server start
@@ -472,7 +473,8 @@ cd plugins\SenpanCompanion; dotnet format             # apply .editorconfig styl
 
 ## Continuous integration
 
-`.github/workflows/ci.yml` runs on every push and pull request, with three jobs:
+`.github/workflows/ci.yml` runs on every push and pull request, with three gate
+jobs plus a release job:
 
 - **frontend** (`working-directory: frontend`): `npm ci` → `npm run gen:types`
   (needs Go, so the job also sets up the Go toolchain) → `lint:check` →
@@ -493,6 +495,14 @@ cd plugins\SenpanCompanion; dotnet format             # apply .editorconfig styl
   `dotnet format --verify-no-changes` (rules in `plugins/SenpanCompanion/.editorconfig`).
   Tracking Dalamud `latest` means an upstream API bump can redden it — the cue to
   bump `DalamudApiLevel`.
+- **release** (`needs: [frontend, backend, plugin]`, only on a push to `main`):
+  runs `.github/scripts/release.sh`, which for each component reads its current
+  version (`package.json` / `version.go` / `SenpanCompanion.csproj`) and, if the
+  `<Component>-v<version>` release doesn't exist yet, tags it and publishes a
+  GitHub Release whose body is that component's `CHANGELOG.md` section. Idempotent
+  (already-released versions are skipped) and gated on the whole gate passing, so
+  only green commits release. Needs `contents: write` (set at the job level; the
+  workflow default is `contents: read`).
 
 When adding a check, wire it into both the relevant npm/go/dotnet script **and**
 `.github/workflows/ci.yml` so local and CI stay in lockstep.

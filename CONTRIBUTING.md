@@ -90,17 +90,25 @@ go test ./...
 
 ## Versioning & changelog
 
-The frontend and backend are versioned **independently** with semver
+The frontend, backend, and plugin are versioned **independently** with semver
 (MAJOR = breaking API change, MINOR = backward-compatible addition, PATCH = fix).
 When your change ships:
 
-1. Bump the matching version source — `frontend/package.json` `"version"` and/or
-   `backend/internal/version/version.go` (`Version`).
-2. Add an entry under the matching section of [`CHANGELOG.md`](CHANGELOG.md)
-   (newest first; _Added / Changed / Fixed / Removed_).
+1. Bump the matching version source — `frontend/package.json` `"version"`,
+   `backend/internal/version/version.go` (`Version`), and/or the plugin's
+   `SenpanCompanion.csproj` `<Version>`.
+2. Add an entry under the matching section (Frontend / Backend / Plugin) of
+   [`CHANGELOG.md`](CHANGELOG.md), newest first
+   (_Added / Changed / Fixed / Removed / Security_).
 
-The admin dashboard shows both versions and flags a major-version mismatch, so
-keeping them in step matters.
+The admin dashboard shows the frontend + backend versions and flags a
+major-version mismatch, so keeping them in step matters.
+
+**Releases are automatic.** On a push to `main`, once the CI gate passes, the
+`release` job tags each component whose version has no release yet
+(`<Component>-v<version>`) and publishes a GitHub Release using its CHANGELOG
+section as the body. So bump the version **and** update its CHANGELOG section in
+the same commit — that's what becomes the release notes. No manual `git tag`.
 
 ## Deploying
 

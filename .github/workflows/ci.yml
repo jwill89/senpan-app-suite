@@ -162,3 +162,26 @@ jobs:
       # Whitespace/style gate. Rules are pinned in plugins/SenpanCompanion/.editorconfig.
       - name: Format check
         run: dotnet format --verify-no-changes
+
+  # On a push to main, AFTER the whole gate passes, tag + release any component
+  # whose current version has no release yet. Tags follow <Component>-v<version>
+  # (Frontend-v3.5.0, Backend-v3.4.0, Plugin-v2.0.1.0) and each release body is
+  # that component's CHANGELOG.md section, so a green version bump auto-publishes
+  # a release linked to its notes. Idempotent — versions already released are
+  # skipped, so ordinary main pushes are a no-op here.
+  release:
+    name: Tag + release (main, on version bump)
+    needs: [frontend, backend, plugin]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0 # need existing tags to detect what's already released
+
+      - name: Tag + release changed component versions
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: bash .github/scripts/release.sh

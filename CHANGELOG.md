@@ -25,6 +25,16 @@ versions match. Bump MAJOR only for a breaking change to the JSON/WebSocket API
 the SPA depends on; MINOR for backward-compatible additions; PATCH for fixes.
 When you change one side, bump its version and add an entry under its section.
 
+**Releases & tags.** Each version corresponds to a Git tag and GitHub Release
+named `<Component>-v<version>` — e.g. `Frontend-v3.5.0`, `Backend-v3.4.0`,
+`Plugin-v2.0.1.0`. These are created **automatically** by the CI `release` job
+(`.github/workflows/ci.yml` → `.github/scripts/release.sh`): on a push to `main`,
+after the full gate passes, any component whose current version has no release
+yet is tagged and released, with the release body taken verbatim from that
+component's section below. So bumping a version here and pushing a green commit
+is all it takes — no manual tagging. To publish a release, make sure the version
+source and its section here are updated in the same commit.
+
 The format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ---

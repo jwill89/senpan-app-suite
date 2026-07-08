@@ -452,7 +452,7 @@ A security/correctness bugfix pass plus request-log identity, released together
   `scripts/deploy.ps1` are tracked; **every** environment-specific deploy setting
   (VPS host, SSH user, key path, webroot, service name, opt dir) was moved into an
   untracked `scripts/deploy.config.ps1` (dot-sourced at runtime, or via
-  `$env:SENPAN_*` / `-params`; `deploy.config.example.ps1` is the tracked
+  `$env:DEPLOY_*` / `-params`; `deploy.config.example.ps1` is the tracked
   template), so nothing in the tracked script reveals the server layout. The prod
   host IP / key path were removed from all tracked files, and the tracked
   `deploy/senpan.service` is now a placeholder template (no concrete host paths,

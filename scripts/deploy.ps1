@@ -41,29 +41,29 @@
     the Dalamud custom-repo files: SenpanCompanionAdmin/latest.zip + pluginmaster.json).
 
 .PARAMETER VpsHost
-    Droplet IP or hostname. If omitted, resolved from $env:SENPAN_VPS_HOST, then
-    the untracked scripts/deploy.config.ps1 ($SenpanVpsHost).
+    Droplet IP or hostname. If omitted, resolved from $env:DEPLOY_VPS_HOST, then
+    the untracked scripts/deploy.config.ps1 ($DeployVpsHost).
 
 .PARAMETER VpsUser
-    SSH user. If omitted, resolved from $env:SENPAN_VPS_USER, then
-    scripts/deploy.config.ps1 ($SenpanVpsUser).
+    SSH user. If omitted, resolved from $env:DEPLOY_VPS_USER, then
+    scripts/deploy.config.ps1 ($DeployVpsUser).
 
 .PARAMETER KeyPath
     Path to the PuTTY .ppk private key. If omitted, resolved from
-    $env:SENPAN_DEPLOY_KEY, then scripts/deploy.config.ps1 ($SenpanDeployKey).
+    $env:DEPLOY_KEY_PATH, then scripts/deploy.config.ps1 ($DeployKeyPath).
 
 .PARAMETER WebRoot
     Apache DocumentRoot on the host (holds "dist" + "plugin"; frontend + plugin).
-    If omitted, resolved from $env:SENPAN_WEB_ROOT, then scripts/deploy.config.ps1
-    ($SenpanWebRoot).
+    If omitted, resolved from $env:DEPLOY_WEB_ROOT, then scripts/deploy.config.ps1
+    ($DeployWebRoot).
 
 .PARAMETER ServiceName
     systemd service to restart for the backend. If omitted, resolved from
-    $env:SENPAN_SERVICE_NAME, then scripts/deploy.config.ps1 ($SenpanServiceName).
+    $env:DEPLOY_SERVICE_NAME, then scripts/deploy.config.ps1 ($DeployServiceName).
 
 .PARAMETER RemoteOptDir
     Directory on the host holding the backend binary. If omitted, resolved from
-    $env:SENPAN_REMOTE_OPT_DIR, then scripts/deploy.config.ps1 ($SenpanRemoteOptDir).
+    $env:DEPLOY_REMOTE_OPT_DIR, then scripts/deploy.config.ps1 ($DeployRemoteOptDir).
 
 .PARAMETER SkipBuild
     Deploy the existing build artifact(s) without rebuilding.
@@ -90,20 +90,20 @@ param(
 
     # Server-specific settings are NOT baked into this (tracked) script — nothing
     # here reveals the host, SSH user, filesystem paths, or service name. Each is
-    # resolved below from its -param, then the matching $env:SENPAN_* variable (the
+    # resolved below from its -param, then the matching $env:DEPLOY_* variable (the
     # param default), then the untracked scripts/deploy.config.ps1. See
     # scripts/deploy.config.example.ps1.
-    [string]$VpsHost = $env:SENPAN_VPS_HOST,
+    [string]$VpsHost = $env:DEPLOY_VPS_HOST,
 
-    [string]$VpsUser = $env:SENPAN_VPS_USER,
+    [string]$VpsUser = $env:DEPLOY_VPS_USER,
 
-    [string]$KeyPath = $env:SENPAN_DEPLOY_KEY,
+    [string]$KeyPath = $env:DEPLOY_KEY_PATH,
 
-    [string]$WebRoot = $env:SENPAN_WEB_ROOT,
+    [string]$WebRoot = $env:DEPLOY_WEB_ROOT,
 
-    [string]$ServiceName = $env:SENPAN_SERVICE_NAME,
+    [string]$ServiceName = $env:DEPLOY_SERVICE_NAME,
 
-    [string]$RemoteOptDir = $env:SENPAN_REMOTE_OPT_DIR,
+    [string]$RemoteOptDir = $env:DEPLOY_REMOTE_OPT_DIR,
 
     [switch]$SkipBuild,
 
@@ -126,27 +126,27 @@ trap { Write-Host "`nERROR: $($_.Exception.Message)" -ForegroundColor Red; exit 
 # ── Server settings resolution ────────────────────────────────────────────────
 # Every environment-specific value (host, SSH user, key, webroot, service name,
 # opt dir) lives OUTSIDE this tracked script. Resolution order for each: its
-# -param, then the matching $env:SENPAN_* variable (already applied as the param
+# -param, then the matching $env:DEPLOY_* variable (already applied as the param
 # default), then the untracked scripts/deploy.config.ps1. Copy
 # scripts/deploy.config.example.ps1 to deploy.config.ps1 and fill it in once.
 $configPath = Join-Path $PSScriptRoot 'deploy.config.ps1'
 if (Test-Path $configPath) { . $configPath }
-if (-not $VpsHost) { $VpsHost = $SenpanVpsHost }
-if (-not $VpsUser) { $VpsUser = $SenpanVpsUser }
-if (-not $KeyPath) { $KeyPath = $SenpanDeployKey }
-if (-not $WebRoot) { $WebRoot = $SenpanWebRoot }
-if (-not $ServiceName) { $ServiceName = $SenpanServiceName }
-if (-not $RemoteOptDir) { $RemoteOptDir = $SenpanRemoteOptDir }
+if (-not $VpsHost) { $VpsHost = $DeployVpsHost }
+if (-not $VpsUser) { $VpsUser = $DeployVpsUser }
+if (-not $KeyPath) { $KeyPath = $DeployKeyPath }
+if (-not $WebRoot) { $WebRoot = $DeployWebRoot }
+if (-not $ServiceName) { $ServiceName = $DeployServiceName }
+if (-not $RemoteOptDir) { $RemoteOptDir = $DeployRemoteOptDir }
 
 $missing = @()
-if (-not $VpsHost) { $missing += 'VpsHost (-VpsHost / $env:SENPAN_VPS_HOST / $SenpanVpsHost)' }
-if (-not $VpsUser) { $missing += 'VpsUser (-VpsUser / $env:SENPAN_VPS_USER / $SenpanVpsUser)' }
-if (-not $KeyPath) { $missing += 'KeyPath (-KeyPath / $env:SENPAN_DEPLOY_KEY / $SenpanDeployKey)' }
-if (-not $WebRoot) { $missing += 'WebRoot (-WebRoot / $env:SENPAN_WEB_ROOT / $SenpanWebRoot)' }
-if (-not $ServiceName) { $missing += 'ServiceName (-ServiceName / $env:SENPAN_SERVICE_NAME / $SenpanServiceName)' }
-if (-not $RemoteOptDir) { $missing += 'RemoteOptDir (-RemoteOptDir / $env:SENPAN_REMOTE_OPT_DIR / $SenpanRemoteOptDir)' }
+if (-not $VpsHost) { $missing += 'VpsHost (-VpsHost / $env:DEPLOY_VPS_HOST / $DeployVpsHost)' }
+if (-not $VpsUser) { $missing += 'VpsUser (-VpsUser / $env:DEPLOY_VPS_USER / $DeployVpsUser)' }
+if (-not $KeyPath) { $missing += 'KeyPath (-KeyPath / $env:DEPLOY_KEY_PATH / $DeployKeyPath)' }
+if (-not $WebRoot) { $missing += 'WebRoot (-WebRoot / $env:DEPLOY_WEB_ROOT / $DeployWebRoot)' }
+if (-not $ServiceName) { $missing += 'ServiceName (-ServiceName / $env:DEPLOY_SERVICE_NAME / $DeployServiceName)' }
+if (-not $RemoteOptDir) { $missing += 'RemoteOptDir (-RemoteOptDir / $env:DEPLOY_REMOTE_OPT_DIR / $DeployRemoteOptDir)' }
 if ($missing.Count -gt 0) {
-    Fail "Missing deploy settings:`n  - $($missing -join "`n  - ")`nSet these via -params, `$env:SENPAN_* variables, or scripts/deploy.config.ps1 (copy scripts/deploy.config.example.ps1)."
+    Fail "Missing deploy settings:`n  - $($missing -join "`n  - ")`nSet these via -params, `$env:DEPLOY_* variables, or scripts/deploy.config.ps1 (copy scripts/deploy.config.example.ps1)."
 }
 
 # Restore an env var to a prior value ($null => remove it).

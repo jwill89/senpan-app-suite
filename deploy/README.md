@@ -329,10 +329,10 @@ draw/stamp/font links never appear verbatim in the log or the viewer.
 > environment-specific value is baked into it — the host, SSH user, key path,
 > webroot, service name, and opt dir all live outside the repo. Copy
 > `scripts/deploy.config.example.ps1` to `scripts/deploy.config.ps1` (untracked)
-> and fill in the six `$Senpan*` values. Each can instead be passed as a
-> `-param` or set via its `$env:SENPAN_*` variable (`SENPAN_VPS_HOST`,
-> `SENPAN_VPS_USER`, `SENPAN_DEPLOY_KEY`, `SENPAN_WEB_ROOT`,
-> `SENPAN_SERVICE_NAME`, `SENPAN_REMOTE_OPT_DIR`); the script fails fast, listing
+> and fill in the six `$Deploy*` values. Each can instead be passed as a
+> `-param` or set via its `$env:DEPLOY_*` variable (`DEPLOY_VPS_HOST`,
+> `DEPLOY_VPS_USER`, `DEPLOY_KEY_PATH`, `DEPLOY_WEB_ROOT`,
+> `DEPLOY_SERVICE_NAME`, `DEPLOY_REMOTE_OPT_DIR`); the script fails fast, listing
 > any that are unset.
 
 **Frontend** (`-Target frontend`, the default): builds `frontend/` (vue-tsc +

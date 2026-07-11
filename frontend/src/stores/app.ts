@@ -66,7 +66,18 @@ export const useAppStore = defineStore('app', () => {
   async function saveSettings(): Promise<void> {
     savingSettings.value = true
     try {
-      await endpoints.settings.save(settings.value)
+      // The settings API is a string→string map, but a number <input> bound with
+      // v-model yields a *number* for any field the admin edited — and a numeric
+      // JSON value fails the backend's map[string]string decode ("Invalid JSON").
+      // Coerce every value back to a string before sending. (The AppSettings type
+      // says the values are already strings, hence the `unknown` view to allow it.)
+      const payload = Object.fromEntries(
+        Object.entries(settings.value as Record<string, string | number>).map(([k, v]) => [
+          k,
+          String(v),
+        ]),
+      ) as unknown as AppSettings
+      await endpoints.settings.save(payload)
       document.title = settings.value.app_title || 'Senpan App Suite'
       applyHeaderFont(settings.value.header_font)
       void loadGoogleFontsList()

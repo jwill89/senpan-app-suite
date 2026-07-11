@@ -225,6 +225,21 @@ export const useGameStore = defineStore('game', () => {
     }
   }
 
+  /**
+   * Switches the "It's Yoever" reaction on/off for the current game. Optimistic:
+   * flips the local flag immediately (the server also broadcasts yoever_config to
+   * every client), reverting if the request fails.
+   */
+  async function setYoeverEnabled(on: boolean): Promise<void> {
+    if (currentGame.value) currentGame.value.yoever_enabled = on
+    try {
+      await endpoints.game.setYoeverEnabled(on)
+    } catch (e) {
+      if (currentGame.value) currentGame.value.yoever_enabled = !on
+      ui.notify((e as Error).message, 'error')
+    }
+  }
+
   // ── Winner verification ────────────────────────────────────────────────────
 
   /** Fetches a winning card and highlights cells completing the win patterns. */
@@ -432,6 +447,7 @@ export const useGameStore = defineStore('game', () => {
     endGame,
     confirmEndGame,
     saveGameDetails,
+    setYoeverEnabled,
     viewWinner,
     isWinnerCellMatch,
     confirmHalftime,

@@ -60,12 +60,16 @@ internal sealed class BingoGameTab : TabBase, IDisposable
 
         this.live.GameDraw += OnGameDraw;
         this.live.GameUpdate += OnGameUpdate;
+        this.live.Yoever += OnYoever;
+        this.live.YoeverConfig += OnYoeverConfig;
     }
 
     public void Dispose()
     {
         this.live.GameDraw -= OnGameDraw;
         this.live.GameUpdate -= OnGameUpdate;
+        this.live.Yoever -= OnYoever;
+        this.live.YoeverConfig -= OnYoeverConfig;
     }
 
     protected override async Task LoadAsync()
@@ -273,6 +277,20 @@ internal sealed class BingoGameTab : TabBase, IDisposable
                 EndGame(Array.Empty<string>());
             }
         }
+
+        // "It's Yoever" live controls: switch the reaction on/off for all players
+        // (server-side, per game) and watch the running trigger count.
+        var yoeverEnabled = state.YoeverEnabled;
+        if (ImGui.Checkbox("It's Yoever", ref yoeverEnabled))
+        {
+            var next = yoeverEnabled;
+            state.YoeverEnabled = next; // optimistic; the yoever_config broadcast confirms
+            Run(() => this.api.SetYoeverEnabledAsync(next));
+        }
+        if (ImGui.IsItemHovered())
+            ImGui.SetTooltip("Let players trigger the \"It's Yoever\" reaction. Switch off to curb spam.");
+        ImGui.SameLine();
+        ImGui.TextDisabled($"Yoevers: {state.YoeverCount}");
 
         ImGui.Separator();
 
@@ -671,6 +689,22 @@ internal sealed class BingoGameTab : TabBase, IDisposable
             // Joining an in-progress game: arm the prompt only if it hasn't passed.
             this.halftimePrompted = state.CalledNumbers.Count >= HalftimeThreshold(state.Patterns);
         }
+    }
+
+    // A player fired the reaction: keep the running count in step. The dedicated
+    // "yoever" broadcast is the only live count update between draws (game_update
+    // only arrives on start/draw/end), so the tracker relies on it.
+    private void OnYoever(string playerName, int count)
+    {
+        if (this.game != null)
+            this.game.YoeverCount = count;
+    }
+
+    // An admin (here or on the web) switched the reaction on/off.
+    private void OnYoeverConfig(bool enabled)
+    {
+        if (this.game != null)
+            this.game.YoeverEnabled = enabled;
     }
 
     /// <summary>

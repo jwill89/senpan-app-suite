@@ -298,11 +298,22 @@ func buildPaths(doc *openapi3.T) {
 	b.add("POST", "/api/game/halftime", "Bingo", "Trigger halftime", "permission:bingo-game",
 		"Alerts players about a half-time mini-game.", opt{
 			resps: []respEntry{ok("OKResponse"), r("401", "Unauthorized")}})
+	b.add("POST", "/api/game/yoever", "Bingo", "Trigger \"It's Yoever\"", "public",
+		"Broadcasts the \"It's Yoever\" reaction (sound + a bouncing image labelled with the player's name) to every connected client. Public, but each board is throttled to one trigger per `yoever_cooldown_seconds` and an admin can switch the reaction off per game.", opt{
+			body: actionBody("Trigger.", nil, props("card_id", pstr("Triggering board id (required)."))),
+			resps: []respEntry{
+				ok("YoeverResponse"),
+				r("400", "Missing board id"),
+				r("403", "Reaction switched off"),
+				r("404", "Board not found"),
+				r("409", "No active game"),
+				r("429", "On cooldown (Retry-After)")}})
 	b.add("PATCH", "/api/game", "Bingo", "Update game controls", "permission:bingo-game",
-		"Partial update: `delay` (0–60) persists the shared draw delay; `details` sets the markdown game details. Either or both may be supplied.", opt{
+		"Partial update: `delay` (0–60) persists the shared draw delay; `details` sets the markdown game details; `yoever_enabled` toggles the \"It's Yoever\" reaction. Any combination may be supplied.", opt{
 			body: actionBody("Game controls.", nil, props(
 				"delay", pint("Shared draw delay seconds (0–60)."),
-				"details", pstr("Markdown game details."))),
+				"details", pstr("Markdown game details."),
+				"yoever_enabled", pbool("Switch the \"It's Yoever\" reaction on/off."))),
 			resps: []respEntry{ok("OKResponse"), r("400", "Draw delay out of range"), r("401", "Unauthorized")}})
 
 	// ── Bingo: patterns / categories / presets / styles ───────────────────────

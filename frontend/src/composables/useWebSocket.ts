@@ -9,7 +9,7 @@
  * a message updates depends on the current route (player vs. admin area).
  */
 import { WsClient } from '@/lib/ws'
-import { playEvent, vibrate } from '@/lib/sound'
+import { playEvent, playYoeverSound, vibrate } from '@/lib/sound'
 import { applyCustomCSS, applyHeaderFont, applyUploadedFonts } from '@/lib/theme'
 import type { WsMessage } from '@/types/api'
 import { useRouter } from 'vue-router'
@@ -21,6 +21,7 @@ import { useCardsStore } from '@/stores/cards'
 import { usePatternsStore } from '@/stores/patterns'
 import { useAdminStore } from '@/stores/admin'
 import { useLogsStore } from '@/stores/logs'
+import { useYoeverStore } from '@/stores/yoever'
 import { endpoints } from '@/lib/endpoints'
 
 export function useWebSocket() {
@@ -33,6 +34,7 @@ export function useWebSocket() {
   const patterns = usePatternsStore()
   const admin = useAdminStore()
   const logs = useLogsStore()
+  const yoever = useYoeverStore()
 
   // Route-based context predicates (replace the old `ui.view === …` checks).
   const isPlayerView = (): boolean => router.currentRoute.value.name === 'player'
@@ -112,6 +114,16 @@ export function useWebSocket() {
           if (mode !== 'off') playEvent('minigame', mode)
         }
         break
+      case 'yoever':
+        handleYoever(msg)
+        break
+      case 'yoever_config':
+        // An admin switched the reaction on/off: reflect it on whichever game
+        // state is loaded so the player's trigger button shows/hides and every
+        // admin's toggle stays in step.
+        if (isPlayerView() && player.playerGame) player.playerGame.yoever_enabled = msg.enabled
+        if (isAdminView() && game.currentGame) game.currentGame.yoever_enabled = msg.enabled
+        break
       case 'draw_delay_update':
         // Shared draw-delay control: sync every admin's selector live, and keep
         // the settings copy in step so the Settings page reflects it too.
@@ -160,6 +172,9 @@ export function useWebSocket() {
       if (g) {
         if (g.id !== oldGameId) {
           player.loadStamps()
+          // A new game clears every card's cooldown server-side — re-read ours
+          // (a fresh game id has no stored expiry) so the button starts enabled.
+          player.loadYoeverCooldown()
           // A new game started — clear any prior "game over"/last-called state.
           player.gameEnded = false
           player.lastDrawn = null
@@ -215,6 +230,20 @@ export function useWebSocket() {
         ui.notify('We have winner(s)!', 'success', 6000)
       }
     }
+  }
+
+  /**
+   * Handle a `yoever` reaction fired by some player. The admin "Yoevers: N"
+   * counter always updates (even when this client has opted out, so an admin
+   * monitoring the game still sees it climb). "Show effects" (not muted) is the
+   * master: `show()` self-gates the animation on it, and the sound only plays when
+   * effects are shown AND the separate "play sound" toggle is on — the latter is
+   * independent of the main sound mode, but still at the master volume.
+   */
+  function handleYoever(msg: Extract<WsMessage, { type: 'yoever' }>): void {
+    if (isAdminView() && game.currentGame) game.currentGame.yoever_count = msg.count
+    yoever.show(msg.player_name)
+    if (!yoever.muted && yoever.soundEnabled) playYoeverSound()
   }
 
   /**

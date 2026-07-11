@@ -1,9 +1,11 @@
 package bingo
 
 import (
+	"errors"
 	"path/filepath"
 	"sync"
 	"testing"
+	"time"
 
 	"app-suite/internal/model"
 	"app-suite/internal/store"
@@ -824,5 +826,135 @@ func TestGameService_ConcurrentDrawsNoDuplicates(t *testing.T) {
 	}
 	if count != 75 {
 		t.Errorf("expected exactly 75 numbers drawn, got %d", count)
+	}
+}
+
+// ── "It's Yoever" reaction ──────────────────────────────────────────────────
+
+// startYoeverGame starts a fresh game so the reaction state is initialized.
+func startYoeverGame(t *testing.T, gs *Service, st *store.Store) {
+	t.Helper()
+	patID, err := st.SavePattern("Top Row", testPattern5x5(), 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := gs.Start([]int{int(patID)}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestYoever_NoActiveGame(t *testing.T) {
+	gs := NewService(testStore(t))
+	if _, _, err := gs.TriggerYoever("ABC123", time.Now(), 3*time.Minute); !errors.Is(err, ErrYoeverNoGame) {
+		t.Fatalf("want ErrYoeverNoGame, got %v", err)
+	}
+}
+
+func TestYoever_TriggerIncrementsWithCooldown(t *testing.T) {
+	st := testStore(t)
+	gs := NewService(st)
+	startYoeverGame(t, gs, st)
+
+	base := time.Unix(1_700_000_000, 0)
+	cd := 3 * time.Minute
+
+	// First trigger for a card succeeds and counts.
+	if count, retry, err := gs.TriggerYoever("AAA111", base, cd); err != nil || retry != 0 || count != 1 {
+		t.Fatalf("first trigger: count=%d retry=%v err=%v", count, retry, err)
+	}
+
+	// The same card inside the window is throttled and must not count.
+	count, retry, err := gs.TriggerYoever("AAA111", base.Add(30*time.Second), cd)
+	if err != nil {
+		t.Fatalf("throttled trigger err: %v", err)
+	}
+	if retry <= 0 {
+		t.Fatalf("expected positive retryAfter, got %v", retry)
+	}
+	if count != 0 {
+		t.Fatalf("throttled trigger should not count, got count=%d", count)
+	}
+
+	// A different card is independent (count advances to 2).
+	if count, _, err := gs.TriggerYoever("BBB222", base.Add(31*time.Second), cd); err != nil || count != 2 {
+		t.Fatalf("second card: count=%d err=%v", count, err)
+	}
+
+	// Once the cooldown elapses, the first card may trigger again (count 3).
+	if count, retry, err := gs.TriggerYoever("AAA111", base.Add(cd+time.Second), cd); err != nil || retry != 0 || count != 3 {
+		t.Fatalf("post-cooldown: count=%d retry=%v err=%v", count, retry, err)
+	}
+}
+
+func TestYoever_ZeroCooldownNeverThrottles(t *testing.T) {
+	st := testStore(t)
+	gs := NewService(st)
+	startYoeverGame(t, gs, st)
+
+	base := time.Unix(1_700_000_000, 0)
+	if _, retry, err := gs.TriggerYoever("AAA111", base, 0); err != nil || retry != 0 {
+		t.Fatalf("first: retry=%v err=%v", retry, err)
+	}
+	if count, retry, err := gs.TriggerYoever("AAA111", base, 0); err != nil || retry != 0 || count != 2 {
+		t.Fatalf("zero-cooldown re-trigger: count=%d retry=%v err=%v", count, retry, err)
+	}
+}
+
+func TestYoever_DisabledRejects(t *testing.T) {
+	st := testStore(t)
+	gs := NewService(st)
+	startYoeverGame(t, gs, st)
+
+	gs.SetYoeverEnabled(false)
+	if _, _, err := gs.TriggerYoever("AAA111", time.Now(), time.Minute); !errors.Is(err, ErrYoeverDisabled) {
+		t.Fatalf("want ErrYoeverDisabled, got %v", err)
+	}
+	if gs.YoeverEnabled() {
+		t.Fatal("expected disabled after SetYoeverEnabled(false)")
+	}
+}
+
+func TestYoever_ResetOnStart(t *testing.T) {
+	st := testStore(t)
+	gs := NewService(st)
+	startYoeverGame(t, gs, st)
+
+	if _, _, err := gs.TriggerYoever("AAA111", time.Now(), time.Minute); err != nil {
+		t.Fatal(err)
+	}
+	gs.SetYoeverEnabled(false)
+
+	// A new game re-enables the reaction, zeroes the count, and clears cooldowns.
+	startYoeverGame(t, gs, st)
+	state, _, err := gs.CurrentState()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !state.YoeverEnabled {
+		t.Error("new game should re-enable the reaction")
+	}
+	if state.YoeverCount != 0 {
+		t.Errorf("new game should reset count, got %d", state.YoeverCount)
+	}
+	// The previously-triggered card is no longer on cooldown in the new game.
+	if _, retry, err := gs.TriggerYoever("AAA111", time.Now(), time.Minute); err != nil || retry != 0 {
+		t.Fatalf("cooldown should reset on new game: retry=%v err=%v", retry, err)
+	}
+}
+
+func TestYoever_StateReflectsCount(t *testing.T) {
+	st := testStore(t)
+	gs := NewService(st)
+	startYoeverGame(t, gs, st)
+
+	if _, _, err := gs.TriggerYoever("AAA111", time.Now(), time.Minute); err != nil {
+		t.Fatal(err)
+	}
+	state, _, err := gs.CurrentState()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !state.YoeverEnabled || state.YoeverCount != 1 {
+		t.Fatalf("after one trigger: enabled=%v count=%d", state.YoeverEnabled, state.YoeverCount)
 	}
 }

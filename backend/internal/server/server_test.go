@@ -1854,6 +1854,40 @@ func TestSettings_InvalidKey(t *testing.T) {
 	resp.Body.Close()
 }
 
+// TestSettings_GoogleFontsKeyNotValidatedAsWebhook guards that a non-empty
+// google_fonts_api_key (a secret setting, but NOT a Discord webhook) saves
+// successfully — the Discord-URL validation must apply only to webhook keys.
+func TestSettings_GoogleFontsKeyNotValidatedAsWebhook(t *testing.T) {
+	env := newTestEnv(t)
+	env.loginAdmin(t)
+
+	resp := env.postJSON(t, "/api/settings", map[string]any{
+		"settings": map[string]string{
+			"app_title":            "Yao",
+			"google_fonts_api_key": "AIzaNotADiscordWebhookURL",
+		},
+	})
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d; want 200 (google_fonts_api_key must not be Discord-validated)", resp.StatusCode)
+	}
+	resp.Body.Close()
+}
+
+// TestSettings_WebhookStillValidated confirms the Discord-URL check still guards
+// the actual per-club webhook keys.
+func TestSettings_WebhookStillValidated(t *testing.T) {
+	env := newTestEnv(t)
+	env.loginAdmin(t)
+
+	resp := env.postJSON(t, "/api/settings", map[string]any{
+		"settings": map[string]string{"discord_webhook_url_yaoi": "https://evil.example.com/hook"},
+	})
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("status = %d; want 400 (bad webhook must be rejected)", resp.StatusCode)
+	}
+	resp.Body.Close()
+}
+
 func TestSettings_InvalidDrawDelay(t *testing.T) {
 	env := newTestEnv(t)
 	env.loginAdmin(t)

@@ -21,12 +21,14 @@ import { useGameStore } from '@/stores/game'
 import { useCardsStore } from '@/stores/cards'
 import { usePatternsStore } from '@/stores/patterns'
 import { usePresetsStore } from '@/stores/presets'
+import { useYoeverStore } from '@/stores/yoever'
 
 const router = useRouter()
 const game = useGameStore()
 const cards = useCardsStore()
 const patterns = usePatternsStore()
 const presets = usePresetsStore()
+const yoever = useYoeverStore()
 
 // Currently-selected preset in the "Start from a preset" picker (v-model).
 const selectedPresetId = ref<number | null>(null)
@@ -85,6 +87,30 @@ function toggleWinnerSound(): void {
 /** Jump to the Patterns tab (from the "no patterns yet" hint). */
 function goToPatterns(): void {
   void router.push({ name: 'admin-bingo-patterns' })
+}
+
+/** Toggles the "It's Yoever" reaction on/off for all players (server-side). */
+function toggleYoever(): void {
+  void game.setYoeverEnabled(!game.currentGame?.yoever_enabled)
+}
+
+/**
+ * Master local toggle: whether *this admin* sees the reaction on their screen.
+ * "Show effect" governs the sound too — turning it off also mutes the sound (and
+ * disables that sub-toggle); turning it on re-enables the sound.
+ */
+function toggleYoeverForMe(): void {
+  yoever.toggleShowEffects()
+}
+
+/**
+ * Toggles whether this admin hears the reaction sound locally — only while the
+ * effect is shown. Independent of the main sound options; enabling it is the
+ * audio-unlocking gesture so the sound can play on the next trigger.
+ */
+function toggleYoeverSoundForMe(): void {
+  yoever.toggleSound()
+  if (yoever.soundEnabled) primeAudio()
 }
 
 // Keyboard shortcut: Space (or Enter) draws the next number during an active
@@ -261,6 +287,57 @@ onBeforeUnmount(() => {
 
           <p class="text-dim text-xs mt-8">Tip: press <kbd>Space</kbd> to draw the next number.</p>
 
+          <!-- "It's Yoever" live controls: switch the reaction on/off for all
+               players, watch the running count, and toggle it for yourself. -->
+          <div class="yoever-admin-controls">
+            <button
+              class="btn-neutral btn-sm"
+              :aria-pressed="game.currentGame.yoever_enabled"
+              :title="
+                game.currentGame.yoever_enabled
+                  ? `It's Yoever is ON — click to switch it off for all players`
+                  : `It's Yoever is OFF — click to switch it on`
+              "
+              @click="toggleYoever"
+            >
+              <font-awesome-icon
+                :icon="['fas', game.currentGame.yoever_enabled ? 'circle-check' : 'circle-xmark']"
+              />
+              <span>It's Yoever: {{ game.currentGame.yoever_enabled ? 'On' : 'Off' }}</span>
+            </button>
+
+            <span class="yoever-count" title="Times It's Yoever has been triggered this game">
+              <font-awesome-icon :icon="['fad', 'megaphone']" /> Yoevers:
+              {{ game.currentGame.yoever_count }}
+            </span>
+
+            <label
+              class="yoever-selfmute"
+              title="Show or hide the reaction animation on your own screen"
+            >
+              <input type="checkbox" :checked="!yoever.muted" @change="toggleYoeverForMe" />
+              <span>Show effect for me</span>
+            </label>
+
+            <label
+              class="yoever-selfmute"
+              :class="{ 'is-disabled': yoever.muted }"
+              :title="
+                yoever.muted
+                  ? 'Turn on Show effect first to control the sound'
+                  : 'Play or mute the reaction sound on your own screen (uses your sound volume)'
+              "
+            >
+              <input
+                type="checkbox"
+                :checked="!yoever.muted && yoever.soundEnabled"
+                :disabled="yoever.muted"
+                @change="toggleYoeverSoundForMe"
+              />
+              <span>Play sound for me</span>
+            </label>
+          </div>
+
           <!-- Countdown / Sent indicator -->
           <div v-if="game.drawCountdown !== null" class="draw-countdown">
             <div class="countdown-ring">
@@ -365,3 +442,39 @@ onBeforeUnmount(() => {
     </AdminPanel>
   </div>
 </template>
+
+<style scoped>
+/* "It's Yoever" live controls under the draw buttons. */
+.yoever-admin-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 14px;
+  margin-top: 10px;
+}
+.yoever-count {
+  font-weight: 700;
+  font-size: 0.9rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+.yoever-selfmute {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  cursor: pointer;
+  user-select: none;
+}
+.yoever-selfmute input {
+  cursor: pointer;
+}
+.yoever-selfmute.is-disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.yoever-selfmute.is-disabled input {
+  cursor: not-allowed;
+}
+</style>

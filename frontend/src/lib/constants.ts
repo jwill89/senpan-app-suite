@@ -133,6 +133,7 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
   google_fonts_api_key: '',
   anilist_api_url: 'https://graphql.anilist.co',
   bingo_join_prompt: 'Enter your unique bingo board ID to play',
+  yoever_cooldown_seconds: '180',
   // One blank reading-list webhook default per known club so the settings form
   // binds cleanly before the server response loads.
   ...Object.fromEntries(BOOK_CLUBS.map((c) => [clubWebhookKey(c.slug), ''])),

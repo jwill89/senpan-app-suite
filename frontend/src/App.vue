@@ -16,6 +16,7 @@ import ToastNotification from '@/components/common/ToastNotification.vue'
 import ConfirmModal from '@/components/common/ConfirmModal.vue'
 import RouteProgressBar from '@/components/common/RouteProgressBar.vue'
 import AppFooter from '@/components/common/AppFooter.vue'
+import YoeverOverlay from '@/components/common/YoeverOverlay.vue'
 import { useWebSocket } from '@/composables/useWebSocket'
 import { useAppStore } from '@/stores/app'
 import { usePlayerStore } from '@/stores/player'
@@ -70,5 +71,7 @@ onBeforeUnmount(() => {
     <ConfirmModal />
     <router-view />
     <AppFooter v-if="showFooter" />
+    <!-- "It's Yoever" reaction — global so it shows on both player and admin views -->
+    <YoeverOverlay />
   </div>
 </template>

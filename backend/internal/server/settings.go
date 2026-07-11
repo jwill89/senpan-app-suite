@@ -3,6 +3,7 @@ package server
 import (
 	"net/http"
 	"strconv"
+	"strings"
 
 	"app-suite/internal/model"
 )
@@ -17,6 +18,7 @@ var settingsKeys = []string{
 	"google_fonts_api_key",
 	"anilist_api_url",
 	"bingo_join_prompt",
+	"yoever_cooldown_seconds",
 }
 
 // settingsDefaults provides fallback values for settings that have not been configured.
@@ -28,6 +30,7 @@ var settingsDefaults = map[string]string{
 	"header_font":               "Arapey",
 	"anilist_api_url":           defaultAniListURL,
 	"bingo_join_prompt":         "Enter your unique bingo board ID to play",
+	"yoever_cooldown_seconds":   strconv.Itoa(defaultYoeverCooldownSeconds),
 }
 
 // secretSettings are setting keys that must not be exposed to non-admin
@@ -100,10 +103,12 @@ func (s *Server) handleSettingsUpdate(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusBadRequest, "Unknown setting: "+key)
 			return
 		}
-		// Webhook-URL settings (the only "secret" settings) must be a Discord
-		// webhook URL so a saved value can't point the server's outbound POSTs at
-		// an arbitrary host. An empty value clears it.
-		if secretSettings[key] && val != "" && !isDiscordWebhookURL(val) {
+		// Per-club Discord webhook settings must be a Discord webhook URL so a saved
+		// value can't point the server's outbound POSTs at an arbitrary host. An
+		// empty value clears it. Scope this to the webhook keys only (prefix set by
+		// clubWebhookKey) — NOT every secret setting, since google_fonts_api_key is
+		// also secret but is not a webhook and must not be validated as one.
+		if strings.HasPrefix(key, "discord_webhook_url_") && val != "" && !isDiscordWebhookURL(val) {
 			writeError(w, http.StatusBadRequest, "Discord webhook URLs must look like https://discord.com/api/webhooks/…")
 			return
 		}
@@ -131,6 +136,12 @@ func (s *Server) handleSettingsUpdate(w http.ResponseWriter, r *http.Request) {
 			n, err := strconv.Atoi(val)
 			if err != nil || n < 1 || n > 168 {
 				writeError(w, http.StatusBadRequest, "Winner hours must be 1–168")
+				return
+			}
+		case "yoever_cooldown_seconds":
+			n, err := strconv.Atoi(val)
+			if err != nil || n < 0 || n > 3600 {
+				writeError(w, http.StatusBadRequest, "It's Yoever cooldown must be 0–3600 seconds")
 				return
 			}
 		case "header_font":

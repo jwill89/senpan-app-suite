@@ -1,10 +1,13 @@
 package server
 
 import (
+	"app-suite/internal/bingo"
 	"app-suite/internal/model"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -192,13 +195,114 @@ func (s *Server) handleGameHalftime(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, model.OKResponse{OK: true})
 }
 
-// gamePatchRequest is the JSON body for PATCH /api/game. Both fields are pointers
+// yoeverRequest is the JSON body for POST /api/game/yoever.
+type yoeverRequest struct {
+	CardID string `json:"card_id"` // the triggering player's board id
+}
+
+// defaultYoeverCooldownSeconds is the anti-spam window between a card's
+// "It's Yoever" triggers when the admin hasn't configured one.
+const defaultYoeverCooldownSeconds = 180
+
+// yoeverCooldown returns the configured per-card cooldown between reaction
+// triggers (yoever_cooldown_seconds), clamped to a non-negative duration.
+func (s *Server) yoeverCooldown() time.Duration {
+	secs := s.getSettingInt("yoever_cooldown_seconds", defaultYoeverCooldownSeconds)
+	if secs < 0 {
+		secs = 0
+	}
+	return time.Duration(secs) * time.Second
+}
+
+// handleGameYoever lets a player trigger the shared "It's Yoever" reaction — a
+// sound + a bouncing image with the player's name, broadcast to every connected
+// client. It is public (any player holding a valid board id), but each card is
+// throttled to one trigger per yoever_cooldown_seconds and the whole feature can
+// be switched off by an admin.
+//
+//	Endpoint:    POST /api/game/yoever
+//	Auth:        public
+//	Request:     {"card_id": "ABC123"}
+//	Response:    200 YoeverResponse (ok, count, cooldown_seconds)
+//	             400 bad id, 403 disabled, 404 unknown card, 409 no active game,
+//	             429 cooldown ({"error","retry_after"} + Retry-After header)
+//	Broadcasts:  yoever (to all clients)
+func (s *Server) handleGameYoever(w http.ResponseWriter, r *http.Request) {
+	req, err := readJSON[yoeverRequest](w, r)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "Invalid JSON")
+		return
+	}
+	cardID := strings.ToUpper(strings.TrimSpace(req.CardID))
+	if cardID == "" {
+		writeError(w, http.StatusBadRequest, "Board ID is required")
+		return
+	}
+
+	// Resolve the triggering player's name for the broadcast label; this also
+	// validates the board id is real (players connect with it but never prove it).
+	card, err := s.store.GetCard(cardID)
+	if err != nil {
+		writeInternalError(w, "get card", err)
+		return
+	}
+	if card == nil {
+		writeError(w, http.StatusNotFound, "Board not found")
+		return
+	}
+
+	cooldown := s.yoeverCooldown()
+	count, retryAfter, err := s.game.TriggerYoever(cardID, time.Now(), cooldown)
+	switch {
+	case errors.Is(err, bingo.ErrYoeverNoGame):
+		writeError(w, http.StatusConflict, "No game is currently active")
+		return
+	case errors.Is(err, bingo.ErrYoeverDisabled):
+		writeError(w, http.StatusForbidden, "It's Yoever is currently switched off")
+		return
+	case err != nil:
+		writeInternalError(w, "trigger yoever", err)
+		return
+	}
+	if retryAfter > 0 {
+		// Round the wait up to whole seconds so a sub-second remainder still reads
+		// as "1s", never "0s".
+		secs := int(retryAfter.Seconds())
+		if time.Duration(secs)*time.Second < retryAfter {
+			secs++
+		}
+		w.Header().Set("Retry-After", strconv.Itoa(secs))
+		writeJSON(w, http.StatusTooManyRequests, struct {
+			Error      string `json:"error"`
+			RetryAfter int    `json:"retry_after"`
+		}{Error: "You just did that — give it a moment.", RetryAfter: secs})
+		return
+	}
+
+	// Announce to everyone (players + admins): play the sound + bounce the image
+	// labelled with this player's name, and update the admin "Yoevers: N" counter.
+	s.hub.Broadcast(struct {
+		Type       string `json:"type"`
+		PlayerName string `json:"player_name"`
+		Count      int    `json:"count"`
+	}{Type: "yoever", PlayerName: card.PlayerName, Count: count})
+
+	writeJSON(w, http.StatusOK, model.YoeverResponse{
+		OK:              true,
+		Count:           count,
+		CooldownSeconds: int(cooldown.Seconds()),
+	})
+}
+
+// gamePatchRequest is the JSON body for PATCH /api/game. Every field is a pointer
 // so an absent field ("not being changed") is distinguishable from a zero value:
-//   - delay present   → validate 0–60, persist default_draw_delay, broadcast draw_delay_update
-//   - details present → set game details, broadcast details_update
+//   - delay present          → validate 0–60, persist default_draw_delay, broadcast draw_delay_update
+//   - details present        → set game details, broadcast details_update
+//   - yoever_enabled present → toggle the "It's Yoever" reaction, broadcast yoever_config
 type gamePatchRequest struct {
-	Delay   *int    `json:"delay"`
-	Details *string `json:"details"`
+	Delay         *int    `json:"delay"`
+	Details       *string `json:"details"`
+	YoeverEnabled *bool   `json:"yoever_enabled"`
 }
 
 // handleGamePatch partially updates the shared game controls (draw delay and/or
@@ -248,6 +352,17 @@ func (s *Server) handleGamePatch(w http.ResponseWriter, r *http.Request) {
 			Type    string `json:"type"`
 			Details string `json:"game_details"`
 		}{Type: "details_update", Details: *req.Details})
+	}
+
+	// The "It's Yoever" on/off switch is a shared, per-game admin control: flip it
+	// and tell every client so players' trigger button shows/hides live and other
+	// admins' toggle stays in step.
+	if req.YoeverEnabled != nil {
+		s.game.SetYoeverEnabled(*req.YoeverEnabled)
+		s.hub.Broadcast(struct {
+			Type    string `json:"type"`
+			Enabled bool   `json:"enabled"`
+		}{Type: "yoever_config", Enabled: *req.YoeverEnabled})
 	}
 
 	writeJSON(w, http.StatusOK, model.OKResponse{OK: true})

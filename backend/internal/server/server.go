@@ -199,6 +199,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("POST /api/game/draw", s.handleGameDraw)
 	s.mux.HandleFunc("POST /api/game/end", s.handleGameEnd)
 	s.mux.HandleFunc("POST /api/game/halftime", s.handleGameHalftime)
+	s.mux.HandleFunc("POST /api/game/yoever", s.handleGameYoever)
 	s.mux.HandleFunc("PATCH /api/game", s.handleGamePatch)
 	// Patterns (resource-oriented). Single reorder is folded into PATCH /{id}
 	// (direction field); bulk reorder is the literal POST /reorder sub-path,

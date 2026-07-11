@@ -13,10 +13,17 @@ export const API_BASE = '/api'
 
 export class ApiError extends Error {
   status: number
-  constructor(message: string, status: number) {
+  /**
+   * The parsed error response body (our `{ error, ... }` JSON), if any. Lets
+   * callers read extra fields the server included alongside the message — e.g. a
+   * 429's `retry_after` seconds — without a second round-trip.
+   */
+  body?: unknown
+  constructor(message: string, status: number, body?: unknown) {
     super(message)
     this.name = 'ApiError'
     this.status = status
+    this.body = body
   }
 }
 
@@ -127,7 +134,7 @@ export async function api<T = unknown>(endpoint: string, options: ApiOptions = {
         ? data.error
         : null
     const msg = serverMsg || (res.status ? `Request failed (HTTP ${res.status})` : 'Request failed')
-    throw new ApiError(msg, res.status)
+    throw new ApiError(msg, res.status, data)
   }
 
   return data as T

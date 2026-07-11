@@ -6,6 +6,7 @@
 import { defineStore } from 'pinia'
 import { computed, ref, watch } from 'vue'
 import { endpoints } from '@/lib/endpoints'
+import type { ApiError } from '@/lib/api'
 import { STAMP_COLORS, STAMP_SHAPES } from '@/lib/constants'
 import type { BingoDrawnNumber, BingoGameState, Card } from '@/types/api'
 import { setSoundVolume as applySoundVolume } from '@/lib/sound'
@@ -132,6 +133,23 @@ export const usePlayerStore = defineStore('player', () => {
   applySoundVolume(soundVolume.value)
   /** Whether any sound mode is enabled (drives the volume slider's enabled state). */
   const soundOn = computed(() => soundMode.value !== 'off')
+
+  // ── "It's Yoever" reaction ──────────────────────────────────────────────────
+  /** In-flight flag for the trigger button. */
+  const yoeverTriggering = ref(false)
+  /**
+   * Epoch-ms until which this client's trigger button stays disabled. The server
+   * owns the real cooldown; we mirror it locally (persisted per card+game) so the
+   * button disables across a refresh, and fall back to the server 429 if it drifts.
+   */
+  const yoeverCooldownUntil = ref(0)
+  /**
+   * Last cooldown length (seconds) the server reported, used to re-arm the local
+   * timer after a 429 when we have nothing fresher. Seeded to the 3-minute default.
+   */
+  const yoeverCooldownHint = ref(180)
+  /** Whether the reaction is currently offered: admin-enabled AND a game running. */
+  const yoeverEnabled = computed(() => !!playerGame.value?.yoever_enabled)
 
   const stampShapes = STAMP_SHAPES
   const stampColors = STAMP_COLORS
@@ -318,6 +336,79 @@ export const usePlayerStore = defineStore('player', () => {
     }
   }
 
+  /** localStorage key for this card+game's yoever cooldown, or null if not loaded. */
+  function yoeverCooldownKey(): string | null {
+    if (!playerCard.value || !playerGame.value) return null
+    return `yoever_cd_${playerCard.value.id}_${playerGame.value.id}`
+  }
+
+  /** Arms the local cooldown for `seconds` and persists its expiry (best-effort). */
+  function setYoeverCooldown(seconds: number): void {
+    if (seconds > 0) yoeverCooldownHint.value = seconds
+    yoeverCooldownUntil.value = Date.now() + seconds * 1000
+    const k = yoeverCooldownKey()
+    if (k) {
+      try {
+        localStorage.setItem(k, String(yoeverCooldownUntil.value))
+      } catch {
+        /* storage unavailable — the timer still works this session */
+      }
+    }
+  }
+
+  /**
+   * Restores the persisted cooldown for the current card+game (0 when none or
+   * already elapsed). Called whenever the loaded game changes so a new game — for
+   * which the server has cleared cooldowns — starts with the button enabled.
+   */
+  function loadYoeverCooldown(): void {
+    const k = yoeverCooldownKey()
+    if (!k) {
+      yoeverCooldownUntil.value = 0
+      return
+    }
+    const raw = localStorage.getItem(k)
+    const v = raw ? parseInt(raw, 10) : 0
+    yoeverCooldownUntil.value = Number.isFinite(v) && v > Date.now() ? v : 0
+  }
+
+  /**
+   * Triggers the "It's Yoever" reaction for this board. The server broadcasts the
+   * sound + animation to everyone (including us), so we don't play it here — we
+   * just arm the local cooldown on success. Returns true if the trigger was sent.
+   */
+  async function triggerYoever(): Promise<boolean> {
+    if (!playerCard.value || !playerGame.value || !yoeverEnabled.value) return false
+    if (yoeverTriggering.value || Date.now() < yoeverCooldownUntil.value) return false
+    yoeverTriggering.value = true
+    try {
+      const res = await endpoints.game.yoever(playerCard.value.id)
+      setYoeverCooldown(res.cooldown_seconds)
+      return true
+    } catch (e) {
+      const err = e as ApiError
+      if (err.status === 429) {
+        // Our local timer disagreed with the server — re-arm from the server's
+        // reported retry_after (exact remaining time) when present, falling back
+        // to the last-known cooldown length so we don't over-disable the button.
+        const retryAfter = (err.body as { retry_after?: number } | null | undefined)?.retry_after
+        setYoeverCooldown(
+          typeof retryAfter === 'number' && retryAfter > 0 ? retryAfter : yoeverCooldownHint.value,
+        )
+        ui.notify('You just did that — give it a moment.', 'info')
+      } else if (err.status === 403) {
+        ui.notify("It's Yoever is switched off right now.", 'info')
+      } else if (err.status === 409) {
+        ui.notify('No game is currently active.', 'info')
+      } else {
+        ui.notify(err.message || 'Could not do that right now.', 'error')
+      }
+      return false
+    } finally {
+      yoeverTriggering.value = false
+    }
+  }
+
   /** Sets the stamp *mode* ('blank' | 'emoji' | 'custom') and persists it. */
   function setStampShape(mode: string): void {
     stampShape.value = mode
@@ -436,6 +527,7 @@ export const usePlayerStore = defineStore('player', () => {
       playerCard.value = data.card
       playerGame.value = data.game ?? null
       loadStamps()
+      loadYoeverCooldown()
       lastDrawn.value = null
       gameEnded.value = false
       return data.game_details || ''
@@ -455,6 +547,7 @@ export const usePlayerStore = defineStore('player', () => {
     gameEnded.value = false
     frozenPatternCells.value = null
     frozenGameDetails.value = ''
+    yoeverCooldownUntil.value = 0
   }
 
   /**
@@ -475,6 +568,7 @@ export const usePlayerStore = defineStore('player', () => {
       playerCard.value = data.card
       playerGame.value = data.game ?? null
       loadStamps()
+      loadYoeverCooldown()
       lastDrawn.value = null
       gameEnded.value = false
       return data.game_details || ''
@@ -509,6 +603,11 @@ export const usePlayerStore = defineStore('player', () => {
     soundOn,
     setSoundMode,
     setSoundVolume,
+    yoeverTriggering,
+    yoeverCooldownUntil,
+    yoeverEnabled,
+    triggerYoever,
+    loadYoeverCooldown,
     stampShapes,
     stampColors,
     playerCalledSet,

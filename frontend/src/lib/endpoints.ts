@@ -33,6 +33,7 @@ import type {
   EndGameResponse,
   FrequentWinnersResponse,
   GameStateResponse,
+  YoeverResponse,
   GenerateCardsResponse,
   GenerateSingleCardResponse,
   OKResponse,
@@ -204,6 +205,11 @@ export const endpoints = {
     /** PATCH /api/game {details} — set + broadcast the markdown game details. */
     updateDetails: (details: string) => apiPatch<OKResponse>('game', { details }),
     triggerHalftime: () => apiPost<OKResponse>('game/halftime', undefined),
+    /** POST /api/game/yoever {card_id} — trigger the "It's Yoever" reaction (public). */
+    yoever: (cardId: string) => apiPost<YoeverResponse>('game/yoever', { card_id: cardId }),
+    /** PATCH /api/game {yoever_enabled} — switch the reaction on/off + broadcast. */
+    setYoeverEnabled: (enabled: boolean) =>
+      apiPatch<OKResponse>('game', { yoever_enabled: enabled }),
   },
 
   // ── Winners log ──────────────────────────────────────────────────────────────

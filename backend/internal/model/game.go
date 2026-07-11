@@ -17,6 +17,13 @@ type BingoGameState struct {
 	CalledNumbers []int              `json:"called_numbers"` // numbers drawn so far, in call order
 	Patterns      []BingoGamePattern `json:"patterns"`       // active win patterns for this game
 	TotalCalled   int                `json:"total_called"`   // len(CalledNumbers), for convenience
+	// YoeverEnabled reports whether the "It's Yoever" player reaction is currently
+	// allowed. It is a per-game control an admin can toggle live (defaults on at
+	// the start of each game); when false, players' trigger button is hidden.
+	YoeverEnabled bool `json:"yoever_enabled"`
+	// YoeverCount is how many times "It's Yoever" has been triggered this game
+	// (reset when a new game starts). Shown to admins as "Yoevers: N".
+	YoeverCount int `json:"yoever_count"`
 }
 
 // BingoGamePattern is a point-in-time snapshot of a pattern attached to a bingo game.
@@ -53,4 +60,13 @@ type DrawResult struct {
 // EndGameResponse is the body of POST /api/game/end.
 type EndGameResponse struct {
 	Ended bool `json:"ended"`
+}
+
+// YoeverResponse is the body of a successful POST /api/game/yoever: the running
+// per-game trigger count and the cooldown (in seconds) the triggering board must
+// wait before it may trigger the reaction again.
+type YoeverResponse struct {
+	OK              bool `json:"ok"`
+	Count           int  `json:"count"`
+	CooldownSeconds int  `json:"cooldown_seconds"`
 }

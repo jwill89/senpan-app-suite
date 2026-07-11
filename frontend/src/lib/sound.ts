@@ -83,7 +83,8 @@ export function primeAudio(): void {
     const ac = getCtx()
     if (ac && ac.state === 'suspended') void ac.resume()
     // Warm the game samples so the first real event plays without a fetch delay.
-    for (const name of ['moogle_noise', 'queue_pop', 'level_up']) getSample(name)?.load()
+    for (const name of ['moogle_noise', 'queue_pop', 'level_up', 'this_is_bad'])
+      getSample(name)?.load()
   } catch {
     /* non-fatal */
   }
@@ -171,6 +172,15 @@ export function playEvent(event: SoundEvent, mode: 'basic' | 'game'): void {
     event
   ]
   chime()
+}
+
+/**
+ * Plays the "It's Yoever" reaction sound — the bundled this_is_bad.mp3 sample.
+ * Triggered for every connected client when a player fires the reaction, gated on
+ * that client having game sounds enabled (and not having opted out of the effect).
+ */
+export function playYoeverSound(): void {
+  playSample('this_is_bad')
 }
 
 /**

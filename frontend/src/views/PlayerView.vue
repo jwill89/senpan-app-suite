@@ -20,12 +20,15 @@ import StampColorPicker from '@/components/player/StampColorPicker.vue'
 import StampOpacitySlider from '@/components/player/StampOpacitySlider.vue'
 import SecondaryStampControl from '@/components/player/SecondaryStampControl.vue'
 import SoundControls from '@/components/player/SoundControls.vue'
+import YoeverButton from '@/components/player/YoeverButton.vue'
 import WinPatternsPanel from '@/components/player/WinPatternsPanel.vue'
 import { exportCardImage } from '@/lib/exportCard'
+import { primeAudio } from '@/lib/sound'
 import { useAppStore } from '@/stores/app'
 import { useGameStore } from '@/stores/game'
 import { usePlayerStore } from '@/stores/player'
 import { useUiStore } from '@/stores/ui'
+import { useYoeverStore } from '@/stores/yoever'
 
 const props = defineProps<{ cardId: string }>()
 
@@ -34,6 +37,7 @@ const player = usePlayerStore()
 const game = useGameStore()
 const app = useAppStore()
 const ui = useUiStore()
+const yoever = useYoeverStore()
 
 /** Ref to the BingoBoard component so we can capture its `.board-wrap` root. */
 const boardRef = ref<{ $el?: HTMLElement } | null>(null)
@@ -139,6 +143,13 @@ async function leave(): Promise<void> {
 function openDiscord(): void {
   window.open('https://discord.gg/QHg69gWBVy', '_blank', 'noopener')
 }
+
+/** Toggles the per-player "It's Yoever" sound (only while effects are shown);
+ *  enabling is a user gesture, so prime audio then so the sound can play. */
+function onYoeverSoundToggle(): void {
+  yoever.toggleSound()
+  if (yoever.soundEnabled) primeAudio()
+}
 </script>
 
 <template>
@@ -215,7 +226,53 @@ function openDiscord(): void {
             <!-- Sound mode (off/basic/game) + volume slider -->
             <SoundControls />
 
-            <!-- Clear / Save action bar -->
+            <!-- Per-player toggles (above the action bar), for my screen only: show/
+                 hide the reaction animation, and play/mute its sound. Independent of
+                 each other and of the main Sound options; both on by default. -->
+            <div v-if="player.playerGame" class="yoever-toggles">
+              <div class="yoever-toggle">
+                <span class="label">Show "It's Yoever" effects:</span>
+                <button
+                  type="button"
+                  class="yoever-switch"
+                  role="switch"
+                  :class="{ on: !yoever.muted }"
+                  :aria-checked="!yoever.muted"
+                  :title="
+                    yoever.muted
+                      ? `Hidden for you — click to show the It's Yoever effect (and its sound)`
+                      : `Shown — click to hide the It's Yoever effect on your screen only`
+                  "
+                  @click="yoever.toggleShowEffects()"
+                >
+                  <span class="yoever-knob"></span>
+                </button>
+              </div>
+
+              <div class="yoever-toggle" :class="{ 'is-disabled': yoever.muted }">
+                <span class="label">Play "It's Yoever" sound:</span>
+                <button
+                  type="button"
+                  class="yoever-switch"
+                  role="switch"
+                  :class="{ on: !yoever.muted && yoever.soundEnabled }"
+                  :disabled="yoever.muted"
+                  :aria-checked="!yoever.muted && yoever.soundEnabled"
+                  :title="
+                    yoever.muted
+                      ? `Turn on Show effects first to control the sound`
+                      : yoever.soundEnabled
+                        ? `On — click to mute the It's Yoever sound for you (uses your sound volume)`
+                        : `Off — click to play the It's Yoever sound for you (uses your sound volume)`
+                  "
+                  @click="onYoeverSoundToggle"
+                >
+                  <span class="yoever-knob"></span>
+                </button>
+              </div>
+            </div>
+
+            <!-- Clear / Save / It's Yoever action bar -->
             <div class="player-actions">
               <button
                 class="btn-caution btn-sm"
@@ -237,6 +294,10 @@ function openDiscord(): void {
                   exporting ? 'Saving…' : 'Save Board'
                 }}</span>
               </button>
+
+              <!-- Broadcasts the "It's Yoever" reaction to everyone (active game +
+                   admin-enabled only; self-rate-limited). -->
+              <YoeverButton />
             </div>
           </div>
         </div>

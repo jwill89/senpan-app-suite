@@ -543,6 +543,10 @@ components:
           type: array
         total_called:
           type: integer
+        yoever_count:
+          type: integer
+        yoever_enabled:
+          type: boolean
       type: object
     BoardResponse:
       properties:
@@ -592,6 +596,10 @@ components:
               type: array
             total_called:
               type: integer
+            yoever_count:
+              type: integer
+            yoever_enabled:
+              type: boolean
           type: object
         game_details:
           type: string
@@ -903,6 +911,10 @@ components:
               type: array
             total_called:
               type: integer
+            yoever_count:
+              type: integer
+            yoever_enabled:
+              type: boolean
           type: object
         winners:
           items:
@@ -1101,6 +1113,10 @@ components:
               type: array
             total_called:
               type: integer
+            yoever_count:
+              type: integer
+            yoever_enabled:
+              type: boolean
           type: object
         game_details:
           type: string
@@ -3940,6 +3956,15 @@ components:
         total:
           type: integer
       type: object
+    YoeverResponse:
+      properties:
+        cooldown_seconds:
+          type: integer
+        count:
+          type: integer
+        ok:
+          type: boolean
+      type: object
   securitySchemes:
     bearerAuth:
       description: Personal access token (pat_…). Also accepted as ?token= on the
@@ -4000,7 +4025,7 @@ info:
     (`{ "type": "log", "entry": LogEntry }`) for the live log tail — best-effort,
     sent only while an admin is connected.
   title: Senpan App Suite API
-  version: 3.5.0
+  version: 3.6.0
 openapi: 3.0.3
 paths:
   /api/account/change-password:
@@ -6345,7 +6370,7 @@ paths:
       description: |-
         **Auth:** permission:bingo-game
 
-        Partial update: `delay` (0–60) persists the shared draw delay; `details` sets the markdown game details. Either or both may be supplied.
+        Partial update: `delay` (0–60) persists the shared draw delay; `details` sets the markdown game details; `yoever_enabled` toggles the "It's Yoever" reaction. Any combination may be supplied.
       requestBody:
         content:
           application/json:
@@ -6358,6 +6383,9 @@ paths:
                 details:
                   description: Markdown game details.
                   type: string
+                yoever_enabled:
+                  description: Switch the "It's Yoever" reaction on/off.
+                  type: boolean
               type: object
         description: Game controls.
         required: true
@@ -6532,6 +6560,64 @@ paths:
       - cookieAuth: []
       - bearerAuth: []
       summary: Start a game
+      tags:
+      - Bingo
+  /api/game/yoever:
+    post:
+      description: |-
+        **Auth:** public
+
+        Broadcasts the "It's Yoever" reaction (sound + a bouncing image labelled with the player's name) to every connected client. Public, but each board is throttled to one trigger per `yoever_cooldown_seconds` and an admin can switch the reaction off per game.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              properties:
+                card_id:
+                  description: Triggering board id (required).
+                  type: string
+              type: object
+        description: Trigger.
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/YoeverResponse'
+          description: Success
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: Missing board id
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: Reaction switched off
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: Board not found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: No active game
+        "429":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: On cooldown (Retry-After)
+      security: []
+      summary: Trigger "It's Yoever"
       tags:
       - Bingo
   /api/garapon/{token}:

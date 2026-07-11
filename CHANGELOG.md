@@ -41,6 +41,46 @@ The format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## Frontend
 
+### [3.7.0] — 2026-07-11
+
+Adds the **"It's Yoever"** bingo reaction (paired with backend 3.6.0).
+
+#### Added
+
+- **"It's Yoever" button** (player board, next to Save Board). While a game is
+  running and the reaction is switched on, a player can trigger it to broadcast a
+  sound (`this_is_bad.mp3`) and a reduced-size, reduced-opacity **big-yoey-head**
+  image that bounces across every connected client's screen and fades over a few
+  seconds, captioned with the triggering player's name (`"It's Yoever." ~Name`). A
+  global `YoeverOverlay` (mounted in the app shell) renders it on both the player
+  and admin views; it respects `prefers-reduced-motion`. When the host switches the
+  reaction off the button stays visible but disabled, so it never looks missing.
+- **Per-player rate limit.** After triggering, the button disables and shows a
+  live countdown until the cooldown (default 3 minutes, admin-configurable) clears.
+  The expiry is mirrored from the server (`retry_after`) and persisted per
+  card + game, so it survives a refresh; the server's `429` is the backstop.
+- **Per-client toggles** (above the board actions, and mirrored on the admin Game
+  tab), on by default and affecting only your own screen. **"Show It's Yoever
+  effects"** is the master switch for the reaction; **"Play It's Yoever sound"** is
+  a sub-toggle that only applies while effects are shown — turning the master off
+  also mutes the sound (and disables that sub-toggle), and turning it back on
+  re-enables the sound. While effects are shown, the sound toggle is independent of
+  the main Sound options (off/basic/game) but still plays at your master sound
+  volume.
+- **Admin controls** (Game tab, live game): an **on/off switch** for the reaction
+  (broadcast to every client so players' buttons show/hide live) and a
+  **"Yoevers: N"** running counter. Both reset when a new game starts.
+- **Settings.** New **"It's Yoever" Cooldown (seconds)** field (Gameplay section,
+  0–3600; 0 disables the limit).
+
+#### Fixed
+
+- **Saving a numeric setting no longer fails with "Invalid JSON."** A number
+  `<input>` bound with `v-model` yields a JS *number* for any edited field, which
+  the string→string settings API rejected on decode; every value is now coerced to
+  a string before the save. Affected all numeric settings, not just the new
+  cooldown.
+
 ### [3.6.0] — 2026-07-10
 
 Adds the **Tea Rooms** admin page under Senpan Tea House (paired with backend
@@ -388,6 +428,46 @@ First tracked release — establishes versioning for the current production buil
 ---
 
 ## Backend
+
+### [3.6.0] — 2026-07-11
+
+Adds the **"It's Yoever"** bingo reaction. Backward-compatible additions only
+(one new endpoint, one folded PATCH field, two new game-state fields, a new
+setting, and a new WebSocket message type); no breaking contract changes.
+
+#### Added
+
+- **Trigger endpoint.** `POST /api/game/yoever` (public, body `{card_id}`)
+  broadcasts a `yoever` message — `{player_name, count}` — to every connected
+  client. Guarded, in order: an active game must exist (409), the reaction must be
+  enabled (403), and the card must be off cooldown (429 with `Retry-After` +
+  `retry_after`). The player name for the broadcast is resolved from the card.
+- **Per-game reaction state** lives in the bingo service (enabled flag, trigger
+  count, and a per-card last-trigger map for the cooldown), reset at the start of
+  every game. The game-state object (`GET /api/game`, `GET /api/board`, and the
+  `game_update` push) now carries `yoever_enabled` and `yoever_count`.
+- **Admin on/off switch** folded into `PATCH /api/game` as `yoever_enabled`,
+  broadcasting a `yoever_config` message so every client updates live.
+- **Setting `yoever_cooldown_seconds`** (default `180`, range 0–3600; 0 disables
+  the per-card cooldown).
+
+#### Fixed
+
+- **Saving settings no longer rejects a Google Fonts API key as a Discord
+  webhook.** The webhook-URL validation was gated on `secretSettings`, which also
+  contains `google_fonts_api_key` — so any admin with that key set got
+  "Discord webhook URLs must look like…" and couldn't save *any* setting. The
+  check is now scoped to the `discord_webhook_url_*` keys only.
+- The reaction now defaults to **enabled** on service construction, so a backend
+  redeploy mid-game keeps it available for the running game instead of silently
+  switching it off until the next game starts.
+
+#### Security
+
+- **Bumped the Go toolchain to 1.26.5** (`go.mod`) to pick up the `crypto/tls` fix
+  for **GO-2026-5856** (Encrypted Client Hello privacy leak). `govulncheck` is now
+  clean. CI installs the toolchain from `go.mod` (`go-version-file`), so no
+  workflow change was needed.
 
 ### [3.5.0] — 2026-07-10
 
@@ -905,6 +985,19 @@ with a personal access token and is distributed through a Dalamud custom repo
 (`plugins/pluginmaster.json`). Versions use the four-part AssemblyVersion in
 `SenpanCompanion.csproj`. Entries below the current release were reconstructed
 from the `<Version>` history and commit messages.
+
+### [2.1.0.0] — 2026-07-11
+
+Adds the **"It's Yoever"** bingo controls (paired with backend 3.6.0).
+
+#### Added
+
+- **"It's Yoever" live controls** on the Bingo Game tab: a checkbox to switch the
+  reaction on/off for all players during a live game (`PATCH /api/game` →
+  `yoever_enabled`), and a **"Yoevers: N"** counter. Both track the server live —
+  the count updates on the `yoever` broadcast (between draws) and the toggle syncs
+  on `yoever_config` — and the game-state model carries `yoever_enabled` /
+  `yoever_count`.
 
 ### [2.0.1.0] — 2026-07-02
 

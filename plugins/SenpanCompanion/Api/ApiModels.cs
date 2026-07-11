@@ -111,6 +111,12 @@ public sealed class GameState
     public List<int> CalledNumbers { get; set; } = new();
     public List<GamePattern> Patterns { get; set; } = new();
     public int TotalCalled { get; set; }
+
+    // "It's Yoever" reaction: whether it is currently allowed (admin-toggleable
+    // per game) and how many times it has fired this game. Delivered both on
+    // GET /api/game and on the game_update WebSocket push.
+    public bool YoeverEnabled { get; set; }
+    public int YoeverCount { get; set; }
 }
 
 public sealed class GameStateResponse

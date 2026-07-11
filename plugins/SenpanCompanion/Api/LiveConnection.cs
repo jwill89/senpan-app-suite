@@ -41,6 +41,12 @@ public sealed class LiveConnection : IDisposable
     /// <summary>The card list changed (generated / deleted / renamed).</summary>
     public event Action? CardsChanged;
 
+    /// <summary>An "It's Yoever" reaction fired: the triggering player's name and the running count.</summary>
+    public event Action<string, int>? Yoever;
+
+    /// <summary>An admin switched the "It's Yoever" reaction on/off for the current game.</summary>
+    public event Action<bool>? YoeverConfig;
+
     public LiveConnection(Configuration config, IPluginLog log, IFramework framework)
     {
         this.config = config;
@@ -177,6 +183,21 @@ public sealed class LiveConnection : IDisposable
             case "cards_update":
                 RunOnUi(() => CardsChanged?.Invoke());
                 break;
+
+            case "yoever":
+            {
+                var name = msg.PlayerName ?? string.Empty;
+                var count = msg.Count;
+                RunOnUi(() => Yoever?.Invoke(name, count));
+                break;
+            }
+
+            case "yoever_config":
+            {
+                var enabled = msg.Enabled;
+                RunOnUi(() => YoeverConfig?.Invoke(enabled));
+                break;
+            }
         }
     }
 
@@ -210,5 +231,11 @@ public sealed class LiveConnection : IDisposable
         public DrawnNumber? Drawn { get; set; }
         public string[]? Winners { get; set; }
         public GameState? Game { get; set; }
+
+        // "yoever" carries the triggering player's name + running count;
+        // "yoever_config" carries the new enabled flag.
+        public string? PlayerName { get; set; }
+        public int Count { get; set; }
+        public bool Enabled { get; set; }
     }
 }

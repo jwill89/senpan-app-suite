@@ -122,6 +122,11 @@ public sealed class ApiClient : IDisposable
     public Task<OkResponse> UpdateGameDetailsAsync(string details, CancellationToken ct = default)
         => SendAsync<OkResponse>(HttpMethod.Patch, "api/game", new { details }, ct);
 
+    // Switches the "It's Yoever" reaction on/off for the current game. The server
+    // broadcasts a yoever_config message so every client (and admin) stays in sync.
+    public Task<OkResponse> SetYoeverEnabledAsync(bool enabled, CancellationToken ct = default)
+        => SendAsync<OkResponse>(HttpMethod.Patch, "api/game", new { yoever_enabled = enabled }, ct);
+
     // ── Raffles ──────────────────────────────────────────────────────────────
 
     public Task<RafflesResponse> ListRafflesAsync(CancellationToken ct = default)

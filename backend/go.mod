@@ -1,6 +1,6 @@
 module app-suite
 
-go 1.26.4
+go 1.26.5
 
 require (
 	github.com/DeRuina/timberjack v1.4.5

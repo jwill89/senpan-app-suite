@@ -709,6 +709,77 @@
     white-space: nowrap
 }
 
+/* Per-player "It's Yoever" toggles (show effects / play sound) above the action
+   buttons — labelled on/off switches mirroring the "2nd stamp" toggle switch.
+   Sit side by side, wrapping to their own line on a narrow board column. */
+.yoever-toggles {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 20px;
+    margin-bottom: 4px
+}
+
+.yoever-toggle {
+    display: flex;
+    align-items: center;
+    gap: 8px
+}
+
+.yoever-toggle .label {
+    font-size: 0.85rem;
+    color: var(--text-muted)
+}
+
+.yoever-switch {
+    position: relative;
+    width: 40px;
+    height: 22px;
+    flex: 0 0 auto;
+    padding: 0;
+    border: 1px solid var(--control-border);
+    border-radius: 999px;
+    background: var(--panel-raised-bg);
+    cursor: pointer;
+    transition: background .15s, border-color .15s
+}
+
+.yoever-switch.on {
+    background: var(--accent);
+    border-color: var(--accent)
+}
+
+.yoever-knob {
+    position: absolute;
+    top: 50%;
+    left: 2px;
+    transform: translateY(-50%);
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: var(--panel-bg);
+    transition: left .15s
+}
+
+.yoever-switch.on .yoever-knob {
+    left: calc(100% - 18px);
+    background: var(--text-on-accent)
+}
+
+.yoever-switch:focus-visible {
+    outline: 2px solid var(--highlight);
+    outline-offset: 2px
+}
+
+/* Sound sub-toggle is locked while "Show effects" is off. */
+.yoever-switch:disabled {
+    opacity: 0.45;
+    cursor: not-allowed
+}
+
+.yoever-toggle.is-disabled .label {
+    opacity: 0.55
+}
+
 /* ================================================================
    13. CALLED NUMBERS GRID — B-I-N-G-O tracker (player & admin)
    ================================================================ */

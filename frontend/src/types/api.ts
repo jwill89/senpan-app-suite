@@ -103,6 +103,7 @@ export type {
   GameStateResponse,
   DrawResult,
   EndGameResponse,
+  YoeverResponse,
   PatternsResponse,
   CreatedPattern,
   PatternCreateResponse,
@@ -207,6 +208,8 @@ export interface AppSettings {
   anilist_api_url: string
   /** Markdown prompt shown on the home page above the board-ID join field. */
   bingo_join_prompt: string
+  /** Seconds a board must wait between "It's Yoever" triggers (0–3600; 0 = no limit). */
+  yoever_cooldown_seconds: string
   /**
    * Per-club Discord webhook URLs, keyed `discord_webhook_url_<club_slug>`
    * (e.g. `discord_webhook_url_yaoi`). Admin-only (redacted for public). Each
@@ -478,6 +481,12 @@ export type WsMessage =
       uploaded_fonts?: UploadedFont[]
     }
   | { type: 'halftime_minigame' }
+  // "It's Yoever" reaction fired by a player: play the sound + bounce the image
+  // labelled `player_name` on every client; `count` is the running per-game total.
+  | { type: 'yoever'; player_name: string; count: number }
+  // Admin flipped the reaction on/off for the current game (players' trigger
+  // button shows/hides, other admins' toggle syncs).
+  | { type: 'yoever_config'; enabled: boolean }
   | { type: 'draw_delay_update'; delay: number }
   // Thin "an admin resource changed" signal (no payload): an admin viewing that
   // resource refetches it via REST. `resource` is a key like 'garapons',

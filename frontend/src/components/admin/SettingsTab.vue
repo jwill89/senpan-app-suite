@@ -132,6 +132,18 @@ watch(
               aria-label="Frequent winner hours"
             />
           </FormField>
+          <FormField
+            label='"It&apos;s Yoever" Cooldown (seconds)'
+            help="How long each player must wait between triggering the It's Yoever reaction (0–3600; 0 disables the limit)."
+          >
+            <input
+              v-model="app.settings.yoever_cooldown_seconds"
+              type="number"
+              min="0"
+              max="3600"
+              aria-label="It's Yoever cooldown seconds"
+            />
+          </FormField>
         </section>
 
         <!-- Fonts & Branding ───────────────────────────────────────────── -->

@@ -2,8 +2,10 @@ package bingo
 
 import (
 	"encoding/json"
+	"errors"
 	"math/rand/v2"
 	"sync"
+	"time"
 
 	"app-suite/internal/model"
 	"app-suite/internal/store"
@@ -13,6 +15,14 @@ import (
 // (model.DrawResult) so it is one source of truth for the wire shape, the
 // generated frontend type, and the OpenAPI schema. Aliased here for brevity.
 type DrawResult = model.DrawResult
+
+// Errors returned by TriggerYoever so the HTTP layer can map them to statuses.
+var (
+	// ErrYoeverNoGame is returned when there is no active game to react to.
+	ErrYoeverNoGame = errors.New("no active game")
+	// ErrYoeverDisabled is returned when an admin has switched the reaction off.
+	ErrYoeverDisabled = errors.New("yoever reaction disabled")
+)
 
 // Service handles game lifecycle, drawing, and winner computation.
 type Service struct {
@@ -35,11 +45,30 @@ type Service struct {
 	detailsMu    sync.RWMutex
 	detailsCache string
 	detailsReady bool
+
+	// "It's Yoever" reaction state. This is transient, per-game state (reset by
+	// resetYoever on each Start): whether the reaction is currently allowed, how
+	// many times it has fired this game, and the last time each card triggered it
+	// (for the anti-spam cooldown). Guarded by its own mutex, independent of the
+	// game caches above.
+	yoeverMu      sync.Mutex
+	yoeverEnabled bool
+	yoeverCount   int
+	yoeverLast    map[string]time.Time // card ID (upper-case) → last trigger time
 }
 
-// NewService creates a Service backed by the given store.
+// NewService creates a Service backed by the given store. The "It's Yoever"
+// reaction defaults to enabled so that if the process restarts while a game is
+// live (e.g. a redeploy), the reaction stays on for that game rather than
+// silently switching off until the next Start() — matching its enabled-by-default
+// semantics. (The per-game count resets to 0 on restart, which is acceptable for
+// an ephemeral fun stat.)
 func NewService(s *store.Store) *Service {
-	return &Service{store: s}
+	return &Service{
+		store:         s,
+		yoeverEnabled: true,
+		yoeverLast:    make(map[string]time.Time),
+	}
 }
 
 // InvalidateCardCache clears the cached card list.
@@ -148,11 +177,15 @@ func (g *Service) Start(patternIDs []int) (*model.BingoGameState, error) {
 		return nil, err
 	}
 	g.invalidateStateCache()
+	// A fresh game re-enables the reaction, zeroes the counter, and forgets every
+	// card's cooldown, so the on/off toggle and "Yoevers: N" count are per-game.
+	g.resetYoever()
 
 	state, err := g.buildGameState(gameID, createdAt)
 	if err != nil {
 		return nil, err
 	}
+	state.YoeverEnabled, state.YoeverCount = g.yoeverSnapshot()
 	g.setStateCache(gameID, state)
 	return state, nil
 }
@@ -227,6 +260,7 @@ func (g *Service) Draw() (*DrawResult, error) {
 		Patterns:      patterns,
 		TotalCalled:   len(called),
 	}
+	state.YoeverEnabled, state.YoeverCount = g.yoeverSnapshot()
 	g.setStateCache(game.ID, state)
 
 	return &DrawResult{
@@ -267,13 +301,17 @@ func (g *Service) CurrentState() (*model.BingoGameState, []string, error) {
 		return nil, []string{}, nil
 	}
 
-	// Try to serve from cache.
+	// Try to serve from cache. Return a shallow copy stamped with the current
+	// yoever snapshot rather than the shared cached pointer: the count/toggle
+	// change far more often than the game state, so mutating the cached struct in
+	// place would race with concurrent readers serializing it.
 	g.stateMu.RLock()
 	if g.stateCache != nil && g.stateGameID == game.ID {
-		state := g.stateCache
+		stateCopy := *g.stateCache
 		g.stateMu.RUnlock()
+		stateCopy.YoeverEnabled, stateCopy.YoeverCount = g.yoeverSnapshot()
 		winners := parseWinnersCache(game.WinnersCache)
-		return state, winners, nil
+		return &stateCopy, winners, nil
 	}
 	g.stateMu.RUnlock()
 
@@ -281,12 +319,84 @@ func (g *Service) CurrentState() (*model.BingoGameState, []string, error) {
 	if err != nil {
 		return nil, nil, err
 	}
+	// Stamp the yoever snapshot before caching so the cached struct is never
+	// mutated after another goroutine can observe it (see the cache-hit path).
+	state.YoeverEnabled, state.YoeverCount = g.yoeverSnapshot()
 	g.setStateCache(game.ID, state)
 
 	// Read cached winners.
 	winners := parseWinnersCache(game.WinnersCache)
 
 	return state, winners, nil
+}
+
+// ── "It's Yoever" reaction ──────────────────────────────────────────────────
+
+// resetYoever restores the per-game reaction state: enabled, zero count, and no
+// per-card cooldowns. Called from Start so each game begins fresh.
+func (g *Service) resetYoever() {
+	g.yoeverMu.Lock()
+	g.yoeverEnabled = true
+	g.yoeverCount = 0
+	g.yoeverLast = make(map[string]time.Time)
+	g.yoeverMu.Unlock()
+}
+
+// yoeverSnapshot returns the current enabled flag and trigger count for stamping
+// onto a BingoGameState.
+func (g *Service) yoeverSnapshot() (enabled bool, count int) {
+	g.yoeverMu.Lock()
+	defer g.yoeverMu.Unlock()
+	return g.yoeverEnabled, g.yoeverCount
+}
+
+// YoeverEnabled reports whether the reaction is currently allowed.
+func (g *Service) YoeverEnabled() bool {
+	g.yoeverMu.Lock()
+	defer g.yoeverMu.Unlock()
+	return g.yoeverEnabled
+}
+
+// SetYoeverEnabled switches the reaction on or off (admin control).
+func (g *Service) SetYoeverEnabled(on bool) {
+	g.yoeverMu.Lock()
+	g.yoeverEnabled = on
+	g.yoeverMu.Unlock()
+}
+
+// TriggerYoever records a reaction trigger for cardID and returns the new
+// per-game count. It enforces, in order: an active game must exist
+// (ErrYoeverNoGame), the reaction must be enabled (ErrYoeverDisabled), and the
+// same card must not have triggered within the cooldown window — in which case
+// it returns retryAfter > 0 (and does not count the trigger). `now` is passed in
+// so tests can control the clock. A non-positive cooldown disables the throttle.
+func (g *Service) TriggerYoever(cardID string, now time.Time, cooldown time.Duration) (count int, retryAfter time.Duration, err error) {
+	game, err := g.store.GetActiveGame()
+	if err != nil {
+		return 0, 0, err
+	}
+	if game == nil {
+		return 0, 0, ErrYoeverNoGame
+	}
+
+	g.yoeverMu.Lock()
+	defer g.yoeverMu.Unlock()
+	if !g.yoeverEnabled {
+		return 0, 0, ErrYoeverDisabled
+	}
+	if g.yoeverLast == nil {
+		g.yoeverLast = make(map[string]time.Time)
+	}
+	if cooldown > 0 {
+		if last, ok := g.yoeverLast[cardID]; ok {
+			if elapsed := now.Sub(last); elapsed < cooldown {
+				return 0, cooldown - elapsed, nil
+			}
+		}
+	}
+	g.yoeverLast[cardID] = now
+	g.yoeverCount++
+	return g.yoeverCount, 0, nil
 }
 
 // ── internal helpers ────────────────────────────────────────────────────────

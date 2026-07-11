@@ -3,10 +3,10 @@
     "Author": "MathDad",
     "Name": "Senpan Admin Companion",
     "InternalName": "SenpanCompanionAdmin",
-    "AssemblyVersion": "2.0.1.0",
+    "AssemblyVersion": "2.1.0.0",
     "Description": "Serves as an alternative to many of the web-interface functions, allowing staff to operate various systems from within the game.",
     "Punchline": "Allows Senpan Tea House staff to use various app services right from the game.",
-    "Changelog": "Security: the personal access token is now sent to the live WebSocket via the Authorization header instead of the URL query string, so it no longer appears in server/proxy access logs.",
+    "Changelog": "Adds the \"It's Yoever\" bingo controls: switch the reaction on/off for all players during a live game and watch the running \"Yoevers\" count update live.",
     "Tags": ["bingo", "raffle", "venue", "senpan"],
     "RepoUrl": "https://github.com/jwill89/senpan-app-suite",
     "ApplicableVersion": "any",
@@ -19,7 +19,7 @@
     "DownloadLinkUpdate": "https://apps.senpan.cafe/plugin/SenpanCompanionAdmin/latest.zip",
     "DownloadLinkTesting": "https://apps.senpan.cafe/plugin/SenpanCompanionAdmin/latest.zip",
     "DownloadCount": 0,
-    "LastUpdate": 1782881814,
+    "LastUpdate": 1783750660,
     "AcceptsFeedback": true
   }
 ]

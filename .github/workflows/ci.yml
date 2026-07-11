@@ -68,8 +68,13 @@ jobs:
             echo "//npm.fontawesome.com/:_authToken=${FONTAWESOME_TOKEN}"
           } > .npmrc
 
+      # --prefer-offline installs from the setup-node npm cache and only hits the
+      # network for packages MISSING from it. That stops `npm ci` from revalidating
+      # cached packages against their registry every run — notably the Font Awesome
+      # Pro kit (@awesome.me/kit-…), whose fetches count against the kit's bandwidth.
+      # So FontAwesome is contacted only when package-lock.json actually changes.
       - name: Install dependencies
-        run: npm ci
+        run: npm ci --prefer-offline
 
       - name: Generate API types (tygo)
         run: npm run gen:types

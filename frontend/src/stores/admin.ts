@@ -12,6 +12,7 @@ import { ref } from 'vue'
 import { useGameStore } from './game'
 import { useRafflesStore } from './raffles'
 import { useAffiliatesStore } from './affiliates'
+import { useTeaRoomsStore } from './teaRooms'
 import { useGaraponsStore } from './garapons'
 import { useStampRalliesStore } from './stampRallies'
 import { useBookclubStore } from './bookclub'
@@ -40,6 +41,7 @@ export type AdminTab =
   | 'bingo-presets'
   | 'teahouse-announcements'
   | 'teahouse-affiliates'
+  | 'teahouse-tea-rooms'
   | 'teahouse-raffles'
   | BookClubTab
   | 'festival-garapon'
@@ -93,6 +95,7 @@ export const useAdminStore = defineStore('admin', () => {
     const game = useGameStore()
     const raffles = useRafflesStore()
     const affiliates = useAffiliatesStore()
+    const teaRooms = useTeaRoomsStore()
     const garapons = useGaraponsStore()
     const stampRallies = useStampRalliesStore()
     const bookclub = useBookclubStore()
@@ -124,6 +127,12 @@ export const useAdminStore = defineStore('admin', () => {
       affiliates.affiliateForm = null
       loadFresh('affiliates', () => {
         void affiliates.loadAffiliates()
+      })
+    }
+    if (tab === 'teahouse-tea-rooms') {
+      teaRooms.teaRoomForm = null
+      loadFresh('tea-rooms', () => {
+        void teaRooms.loadTeaRooms()
       })
     }
     if (tab === 'festival-stamp-rally') {
@@ -228,6 +237,11 @@ export const useAdminStore = defineStore('admin', () => {
       case 'affiliates':
         apply('affiliates', tab === 'teahouse-affiliates', () => {
           void useAffiliatesStore().loadAffiliates()
+        })
+        break
+      case 'tea-rooms':
+        apply('tea-rooms', tab === 'teahouse-tea-rooms', () => {
+          void useTeaRoomsStore().loadTeaRooms()
         })
         break
       case 'stamp-rallies':

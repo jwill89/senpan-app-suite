@@ -64,6 +64,11 @@ var modelTypes = map[string]any{
 	"PublicGarapon": model.PublicGarapon{}, "GaraponPublicPlayer": model.GaraponPublicPlayer{},
 	"GaraponPublicResponse": model.GaraponPublicResponse{}, "GaraponDrawResponse": model.GaraponDrawResponse{},
 
+	// Tea rooms
+	"TeaRoom": model.TeaRoom{}, "TeaRoomsResponse": model.TeaRoomsResponse{},
+	"TeaRoomResponse": model.TeaRoomResponse{}, "TeaRoomWebhookResponse": model.TeaRoomWebhookResponse{},
+	"TeaRoomsPublicResponse": model.TeaRoomsPublicResponse{}, "TeaRoomPublicResponse": model.TeaRoomPublicResponse{},
+
 	// Affiliates / stamp rally
 	"AffiliatesResponse": model.AffiliatesResponse{}, "AffiliateResponse": model.AffiliateResponse{},
 	"StampRalliesResponse": model.StampRalliesResponse{}, "StampRallyResponse": model.StampRallyResponse{},

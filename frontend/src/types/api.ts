@@ -56,6 +56,7 @@ export type {
   GaraponPrize,
   GaraponPlayer,
   GaraponDraw,
+  TeaRoom,
   ReadingList,
   ReadingListItem,
   ReadingListSource,
@@ -131,6 +132,12 @@ export type {
   // Affiliates
   AffiliatesResponse,
   AffiliateResponse,
+  // Tea rooms
+  TeaRoomsResponse,
+  TeaRoomResponse,
+  TeaRoomWebhookResponse,
+  TeaRoomsPublicResponse,
+  TeaRoomPublicResponse,
   // Stamp rally
   StampRalliesResponse,
   StampRallyResponse,
@@ -401,6 +408,26 @@ export interface AffiliateForm {
   details: string
   logo: string
   screenshot: string
+}
+
+/**
+ * Form model for the admin tea-room create/edit form. Mirrors the editable subset
+ * of model.TeaRoom (the server owns id/sort_order/created_at). `cost_per_half_hour`
+ * is whole gil; `color` is a "#rrggbb" embed accent; `image` is an absolute URL.
+ */
+export interface TeaRoomForm {
+  id: number
+  name: string
+  room_number: string
+  cost_per_half_hour: number
+  hashtags: string
+  description: string
+  seasonal: boolean
+  open: boolean
+  lockable: boolean
+  discounted: boolean
+  image: string
+  color: string
 }
 
 // Form models for the admin stamp-rally editor. Placement is the same %-based box as

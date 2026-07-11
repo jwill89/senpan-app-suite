@@ -129,6 +129,47 @@ func buildFeaturePaths(b *pb) {
 		path:  []*openapi3.Parameter{pparam("id", "Affiliate id.")},
 		resps: []respEntry{noContent()}})
 
+	// ── Tea Rooms (admin CRUD + toggles + post; plus a public cross-origin read API)
+	teaRoom := "permission:teahouse-tea-rooms"
+	b.add("GET", "/api/tea-rooms", "Tea Rooms", "List tea rooms", teaRoom,
+		"Also returns the shared Discord webhook (`webhook_url`); safe here since the endpoint is permission-gated.", opt{
+			resps: []respEntry{ok("TeaRoomsResponse")}})
+	b.add("POST", "/api/tea-rooms", "Tea Rooms", "Create a tea room", teaRoom, "", opt{
+		body:  actionBody("New tea room.", nil, props("tea_room", ref("TeaRoom"))),
+		resps: []respEntry{created("TeaRoomResponse"), r("400", "Name required / invalid")}})
+	b.add("POST", "/api/tea-rooms/reorder", "Tea Rooms", "Reorder tea rooms", teaRoom,
+		"Persists a new drag order (top-first ids).", opt{
+			body:  actionBody("Bulk reorder.", nil, props("ordered_ids", parr("Tea-room ids in the new order.", pint("")))),
+			resps: []respEntry{ok("OKResponse")}})
+	b.add("PUT", "/api/tea-rooms/webhook", "Tea Rooms", "Set the shared Discord webhook", teaRoom,
+		"Stores the single webhook every tea room posts to (empty clears it). Validated as a Discord webhook URL.", opt{
+			body:  actionBody("Webhook URL.", nil, props("webhook_url", pstr("Discord webhook URL ('' clears)."))),
+			resps: []respEntry{ok("TeaRoomWebhookResponse"), r("400", "Not a Discord webhook URL")}})
+	b.add("GET", "/api/tea-rooms/public", "Tea Rooms", "Public: list all rooms", "public",
+		"Cross-origin (`Access-Control-Allow-Origin: *`), read-only room list for an external site (e.g. a Carrd embed). No webhook.", opt{
+			resps: []respEntry{ok("TeaRoomsPublicResponse")}})
+	b.add("GET", "/api/tea-rooms/public/{id}", "Tea Rooms", "Public: one room", "public",
+		"Cross-origin single room with all its data + status flags.", opt{
+			path:  []*openapi3.Parameter{pparam("id", "Tea-room id.")},
+			resps: []respEntry{ok("TeaRoomPublicResponse"), r("404", "Not found")}})
+	b.add("PUT", "/api/tea-rooms/{id}", "Tea Rooms", "Replace a tea room", teaRoom,
+		"Full replace of the editable fields (sort_order is preserved — reordering is separate).", opt{
+			path:  []*openapi3.Parameter{pparam("id", "Tea-room id.")},
+			body:  actionBody("Full tea-room fields.", nil, props("tea_room", ref("TeaRoom"))),
+			resps: []respEntry{ok("TeaRoomResponse"), r("400", "Name required / invalid"), r("404", "Not found")}})
+	b.add("PATCH", "/api/tea-rooms/{id}", "Tea Rooms", "Toggle open/discounted", teaRoom,
+		"Partial update of the quick-toggle flags; absent fields are left unchanged.", opt{
+			path:  []*openapi3.Parameter{pparam("id", "Tea-room id.")},
+			body:  actionBody("Flag toggles.", nil, props("open", pbool("Open/closed."), "discounted", pbool("50%-off flag."))),
+			resps: []respEntry{ok("TeaRoomResponse"), r("404", "Not found")}})
+	b.add("DELETE", "/api/tea-rooms/{id}", "Tea Rooms", "Delete a tea room", teaRoom, "", opt{
+		path:  []*openapi3.Parameter{pparam("id", "Tea-room id.")},
+		resps: []respEntry{noContent()}})
+	b.add("POST", "/api/tea-rooms/{id}/post", "Tea Rooms", "Post to Discord", teaRoom,
+		"Posts the room's embed to the shared Discord webhook now.", opt{
+			path:  []*openapi3.Parameter{pparam("id", "Tea-room id.")},
+			resps: []respEntry{ok("TeaRoomResponse"), r("400", "No webhook configured"), r("404", "Not found"), r("502", "Discord failed")}})
+
 	// ── Stamp Rally (resource-oriented: methods for CRUD, POST /{id}/{verb}) ────
 	rallyFields := func() openapi3.Schemas {
 		return props(

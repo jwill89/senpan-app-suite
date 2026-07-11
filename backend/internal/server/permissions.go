@@ -20,6 +20,7 @@ const (
 	permBingoPresets       = "bingo-presets"
 	permTeahouseAnnounce   = "teahouse-announcements"
 	permTeahouseAffiliates = "teahouse-affiliates"
+	permTeahouseTeaRooms   = "teahouse-tea-rooms"
 	permTeahouseRaffles    = "teahouse-raffles"
 	permFestivalGarapon    = "festival-garapon"
 	permFestivalStampRally = "festival-stamp-rally"
@@ -44,7 +45,7 @@ func bookClubPerm(slug string) string { return "bookclub-" + slug }
 func validPermissions() map[string]bool {
 	keys := []string{
 		permBingoGame, permBingoCards, permBingoWinnersLog, permBingoPatterns, permBingoPresets,
-		permTeahouseAnnounce, permTeahouseAffiliates, permTeahouseRaffles,
+		permTeahouseAnnounce, permTeahouseAffiliates, permTeahouseTeaRooms, permTeahouseRaffles,
 		permFestivalGarapon, permFestivalStampRally,
 		permAtelierFonts, permAtelierCarrd,
 		permSystemSettings, permSystemThemes, permSystemImages,

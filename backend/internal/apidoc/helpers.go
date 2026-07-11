@@ -32,7 +32,7 @@ Guard levels referenced in each operation's description:
 - **admin** — an active admin account.
 - **permission:<key>** — an admin, or a non-admin holding that page-permission key.
 
-Page-permission keys: ` + "`bingo-game`, `bingo-cards`, `bingo-winners-log`, `bingo-patterns`, `bingo-presets`, `teahouse-announcements`, `teahouse-affiliates`, `teahouse-raffles`, `festival-garapon`, `festival-stamp-rally`, `atelier-fonts`, `atelier-carrd`, `system-settings`, `system-themes`, `system-images`" + `,
+Page-permission keys: ` + "`bingo-game`, `bingo-cards`, `bingo-winners-log`, `bingo-patterns`, `bingo-presets`, `teahouse-announcements`, `teahouse-affiliates`, `teahouse-tea-rooms`, `teahouse-raffles`, `festival-garapon`, `festival-stamp-rally`, `atelier-fonts`, `atelier-carrd`, `system-settings`, `system-themes`, `system-images`" + `,
 plus per-book-club ` + "`bookclub-yaoi` / `bookclub-yuri`" + `. The Users page is admin-only
 (not a grantable key).
 
@@ -81,6 +81,7 @@ func tags() openapi3.Tags {
 		{"Raffles", "Raffles and entries"},
 		{"Garapon", "Festival lottery drum (admin + tokenized public)"},
 		{"Affiliates", "Partner establishments"},
+		{"Tea Rooms", "Bookable tea rooms (admin + public cross-origin read API)"},
 		{"Stamp Rally", "Stamp-rally events (admin + tokenized public)"},
 		{"Book Club", "Reading lists and Discord publishing"},
 		{"Announcements", "Scheduled Discord announcements, types, and roles"},

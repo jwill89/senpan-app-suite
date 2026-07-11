@@ -14,7 +14,7 @@ import (
 // PRAGMA user_version against this constant and runs only the migrations
 // needed to bring the database up to date. Bump this when adding a new
 // migration block.
-const schemaVersion = 44
+const schemaVersion = 45
 
 // ensureSchema reads the current PRAGMA user_version from the database and
 // applies any outstanding migrations to bring it up to schemaVersion.
@@ -296,6 +296,12 @@ func ensureSchema(db *sql.DB) error {
 		}
 	}
 
+	if version < 45 {
+		if err := migrateTeaRooms(db); err != nil {
+			return err
+		}
+	}
+
 	_, err := db.Exec(fmt.Sprintf("PRAGMA user_version = %d", schemaVersion))
 	return err
 }
@@ -471,6 +477,7 @@ func createTables(db *sql.DB) error {
 		stampRallyCardsTableSQL,
 		stampRallyCollectedTableSQL,
 		userTokensTableSQL,
+		teaRoomsTableSQL,
 	}
 	for _, s := range stmts {
 		if _, err := db.Exec(s); err != nil {
@@ -509,6 +516,7 @@ func createIndexes(db *sql.DB) error {
 		"CREATE INDEX IF NOT EXISTS idx_stamp_rally_collected_card ON stamp_rally_collected(card_id)",
 		"CREATE INDEX IF NOT EXISTS idx_stamp_rally_collected_stamp ON stamp_rally_collected(stamp_id)",
 		"CREATE INDEX IF NOT EXISTS idx_stamp_rally_collected_rally ON stamp_rally_collected(rally_id)",
+		"CREATE INDEX IF NOT EXISTS idx_tea_rooms_sort ON tea_rooms(sort_order, id)",
 	}
 	for _, idx := range indexes {
 		if _, err := db.Exec(idx); err != nil {
@@ -1367,6 +1375,44 @@ const affiliatesTableSQL = `CREATE TABLE IF NOT EXISTS affiliates (
 func migrateAffiliates(db *sql.DB) error {
 	if _, err := db.Exec(affiliatesTableSQL); err != nil {
 		return fmt.Errorf("migrate affiliates: %w", err)
+	}
+	return nil
+}
+
+// teaRoomsTableSQL defines the Tea Rooms table (Senpan Tea House → Tea Rooms): a
+// bookable room with a per-half-hour gil cost, hashtags, markdown description, a
+// handful of status flags, an image picked from the shared library, and a Discord
+// embed accent colour. sort_order backs the admin's drag-and-drop ordering. Shared
+// between createTables (fresh install) and migrateTeaRooms (existing databases) so
+// the schema is defined once.
+const teaRoomsTableSQL = `CREATE TABLE IF NOT EXISTS tea_rooms (
+	id INTEGER PRIMARY KEY AUTOINCREMENT,
+	name TEXT NOT NULL,
+	room_number TEXT NOT NULL DEFAULT '',
+	cost_per_half_hour INTEGER NOT NULL DEFAULT 0,
+	hashtags TEXT NOT NULL DEFAULT '',
+	description TEXT NOT NULL DEFAULT '',
+	seasonal INTEGER NOT NULL DEFAULT 0,
+	open INTEGER NOT NULL DEFAULT 1,
+	lockable INTEGER NOT NULL DEFAULT 0,
+	discounted INTEGER NOT NULL DEFAULT 0,
+	image TEXT NOT NULL DEFAULT '',
+	color TEXT NOT NULL DEFAULT '',
+	sort_order INTEGER NOT NULL DEFAULT 0,
+	created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+)`
+
+// migrateTeaRooms creates the tea_rooms table (+ its ordering index) for the Tea
+// Rooms admin section. Idempotent (CREATE TABLE / INDEX IF NOT EXISTS).
+func migrateTeaRooms(db *sql.DB) error {
+	stmts := []string{
+		teaRoomsTableSQL,
+		`CREATE INDEX IF NOT EXISTS idx_tea_rooms_sort ON tea_rooms(sort_order, id)`,
+	}
+	for _, s := range stmts {
+		if _, err := db.Exec(s); err != nil {
+			return fmt.Errorf("migrate tea rooms: %w", err)
+		}
 	}
 	return nil
 }

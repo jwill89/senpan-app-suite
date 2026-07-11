@@ -3625,6 +3625,196 @@ components:
             type: object
           type: array
       type: object
+    TeaRoom:
+      properties:
+        color:
+          type: string
+        cost_per_half_hour:
+          format: int64
+          type: integer
+        created_at:
+          type: string
+        description:
+          type: string
+        discounted:
+          type: boolean
+        hashtags:
+          type: string
+        id:
+          format: int64
+          type: integer
+        image:
+          type: string
+        lockable:
+          type: boolean
+        name:
+          type: string
+        open:
+          type: boolean
+        room_number:
+          type: string
+        seasonal:
+          type: boolean
+        sort_order:
+          type: integer
+      type: object
+    TeaRoomPublicResponse:
+      properties:
+        tea_room:
+          nullable: true
+          properties:
+            color:
+              type: string
+            cost_per_half_hour:
+              format: int64
+              type: integer
+            created_at:
+              type: string
+            description:
+              type: string
+            discounted:
+              type: boolean
+            hashtags:
+              type: string
+            id:
+              format: int64
+              type: integer
+            image:
+              type: string
+            lockable:
+              type: boolean
+            name:
+              type: string
+            open:
+              type: boolean
+            room_number:
+              type: string
+            seasonal:
+              type: boolean
+            sort_order:
+              type: integer
+          type: object
+      type: object
+    TeaRoomResponse:
+      properties:
+        tea_room:
+          nullable: true
+          properties:
+            color:
+              type: string
+            cost_per_half_hour:
+              format: int64
+              type: integer
+            created_at:
+              type: string
+            description:
+              type: string
+            discounted:
+              type: boolean
+            hashtags:
+              type: string
+            id:
+              format: int64
+              type: integer
+            image:
+              type: string
+            lockable:
+              type: boolean
+            name:
+              type: string
+            open:
+              type: boolean
+            room_number:
+              type: string
+            seasonal:
+              type: boolean
+            sort_order:
+              type: integer
+          type: object
+      type: object
+    TeaRoomWebhookResponse:
+      properties:
+        webhook_url:
+          type: string
+      type: object
+    TeaRoomsPublicResponse:
+      properties:
+        tea_rooms:
+          items:
+            properties:
+              color:
+                type: string
+              cost_per_half_hour:
+                format: int64
+                type: integer
+              created_at:
+                type: string
+              description:
+                type: string
+              discounted:
+                type: boolean
+              hashtags:
+                type: string
+              id:
+                format: int64
+                type: integer
+              image:
+                type: string
+              lockable:
+                type: boolean
+              name:
+                type: string
+              open:
+                type: boolean
+              room_number:
+                type: string
+              seasonal:
+                type: boolean
+              sort_order:
+                type: integer
+            type: object
+          type: array
+      type: object
+    TeaRoomsResponse:
+      properties:
+        tea_rooms:
+          items:
+            properties:
+              color:
+                type: string
+              cost_per_half_hour:
+                format: int64
+                type: integer
+              created_at:
+                type: string
+              description:
+                type: string
+              discounted:
+                type: boolean
+              hashtags:
+                type: string
+              id:
+                format: int64
+                type: integer
+              image:
+                type: string
+              lockable:
+                type: boolean
+              name:
+                type: string
+              open:
+                type: boolean
+              room_number:
+                type: string
+              seasonal:
+                type: boolean
+              sort_order:
+                type: integer
+            type: object
+          type: array
+        webhook_url:
+          type: string
+      type: object
     TokenInfo:
       properties:
         created_at:
@@ -3780,7 +3970,7 @@ info:
     - **admin** — an active admin account.
     - **permission:<key>** — an admin, or a non-admin holding that page-permission key.
 
-    Page-permission keys: `bingo-game`, `bingo-cards`, `bingo-winners-log`, `bingo-patterns`, `bingo-presets`, `teahouse-announcements`, `teahouse-affiliates`, `teahouse-raffles`, `festival-garapon`, `festival-stamp-rally`, `atelier-fonts`, `atelier-carrd`, `system-settings`, `system-themes`, `system-images`,
+    Page-permission keys: `bingo-game`, `bingo-cards`, `bingo-winners-log`, `bingo-patterns`, `bingo-presets`, `teahouse-announcements`, `teahouse-affiliates`, `teahouse-tea-rooms`, `teahouse-raffles`, `festival-garapon`, `festival-stamp-rally`, `atelier-fonts`, `atelier-carrd`, `system-settings`, `system-themes`, `system-images`,
     plus per-book-club `bookclub-yaoi` / `bookclub-yuri`. The Users page is admin-only
     (not a grantable key).
 
@@ -3800,7 +3990,7 @@ info:
     (`{ "type": "log", "entry": LogEntry }`) for the live log tail — best-effort,
     sent only while an admin is connected.
   title: Senpan App Suite API
-  version: 3.4.0
+  version: 3.5.0
 openapi: 3.0.3
 paths:
   /api/account/change-password:
@@ -8773,6 +8963,327 @@ paths:
       summary: Deactivate the active theme
       tags:
       - Bingo
+  /api/tea-rooms:
+    get:
+      description: |-
+        **Auth:** permission:teahouse-tea-rooms
+
+        Also returns the shared Discord webhook (`webhook_url`); safe here since the endpoint is permission-gated.
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TeaRoomsResponse'
+          description: Success
+      security:
+      - cookieAuth: []
+      - bearerAuth: []
+      summary: List tea rooms
+      tags:
+      - Tea Rooms
+    post:
+      description: '**Auth:** permission:teahouse-tea-rooms'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              properties:
+                tea_room:
+                  $ref: '#/components/schemas/TeaRoom'
+              type: object
+        description: New tea room.
+        required: true
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TeaRoomResponse'
+          description: Created
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: Name required / invalid
+      security:
+      - cookieAuth: []
+      - bearerAuth: []
+      summary: Create a tea room
+      tags:
+      - Tea Rooms
+  /api/tea-rooms/{id}:
+    delete:
+      description: '**Auth:** permission:teahouse-tea-rooms'
+      parameters:
+      - description: Tea-room id.
+        in: path
+        name: id
+        required: true
+        schema:
+          type: string
+      responses:
+        "204":
+          description: No Content
+      security:
+      - cookieAuth: []
+      - bearerAuth: []
+      summary: Delete a tea room
+      tags:
+      - Tea Rooms
+    patch:
+      description: |-
+        **Auth:** permission:teahouse-tea-rooms
+
+        Partial update of the quick-toggle flags; absent fields are left unchanged.
+      parameters:
+      - description: Tea-room id.
+        in: path
+        name: id
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              properties:
+                discounted:
+                  description: 50%-off flag.
+                  type: boolean
+                open:
+                  description: Open/closed.
+                  type: boolean
+              type: object
+        description: Flag toggles.
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TeaRoomResponse'
+          description: Success
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: Not found
+      security:
+      - cookieAuth: []
+      - bearerAuth: []
+      summary: Toggle open/discounted
+      tags:
+      - Tea Rooms
+    put:
+      description: |-
+        **Auth:** permission:teahouse-tea-rooms
+
+        Full replace of the editable fields (sort_order is preserved — reordering is separate).
+      parameters:
+      - description: Tea-room id.
+        in: path
+        name: id
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              properties:
+                tea_room:
+                  $ref: '#/components/schemas/TeaRoom'
+              type: object
+        description: Full tea-room fields.
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TeaRoomResponse'
+          description: Success
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: Name required / invalid
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: Not found
+      security:
+      - cookieAuth: []
+      - bearerAuth: []
+      summary: Replace a tea room
+      tags:
+      - Tea Rooms
+  /api/tea-rooms/{id}/post:
+    post:
+      description: |-
+        **Auth:** permission:teahouse-tea-rooms
+
+        Posts the room's embed to the shared Discord webhook now.
+      parameters:
+      - description: Tea-room id.
+        in: path
+        name: id
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TeaRoomResponse'
+          description: Success
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: No webhook configured
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: Not found
+        "502":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: Discord failed
+      security:
+      - cookieAuth: []
+      - bearerAuth: []
+      summary: Post to Discord
+      tags:
+      - Tea Rooms
+  /api/tea-rooms/public:
+    get:
+      description: |-
+        **Auth:** public
+
+        Cross-origin (`Access-Control-Allow-Origin: *`), read-only room list for an external site (e.g. a Carrd embed). No webhook.
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TeaRoomsPublicResponse'
+          description: Success
+      security: []
+      summary: 'Public: list all rooms'
+      tags:
+      - Tea Rooms
+  /api/tea-rooms/public/{id}:
+    get:
+      description: |-
+        **Auth:** public
+
+        Cross-origin single room with all its data + status flags.
+      parameters:
+      - description: Tea-room id.
+        in: path
+        name: id
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TeaRoomPublicResponse'
+          description: Success
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: Not found
+      security: []
+      summary: 'Public: one room'
+      tags:
+      - Tea Rooms
+  /api/tea-rooms/reorder:
+    post:
+      description: |-
+        **Auth:** permission:teahouse-tea-rooms
+
+        Persists a new drag order (top-first ids).
+      requestBody:
+        content:
+          application/json:
+            schema:
+              properties:
+                ordered_ids:
+                  description: Tea-room ids in the new order.
+                  items:
+                    format: int64
+                    type: integer
+                  type: array
+              type: object
+        description: Bulk reorder.
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OKResponse'
+          description: Success
+      security:
+      - cookieAuth: []
+      - bearerAuth: []
+      summary: Reorder tea rooms
+      tags:
+      - Tea Rooms
+  /api/tea-rooms/webhook:
+    put:
+      description: |-
+        **Auth:** permission:teahouse-tea-rooms
+
+        Stores the single webhook every tea room posts to (empty clears it). Validated as a Discord webhook URL.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              properties:
+                webhook_url:
+                  description: Discord webhook URL ('' clears).
+                  type: string
+              type: object
+        description: Webhook URL.
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TeaRoomWebhookResponse'
+          description: Success
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: Not a Discord webhook URL
+      security:
+      - cookieAuth: []
+      - bearerAuth: []
+      summary: Set the shared Discord webhook
+      tags:
+      - Tea Rooms
   /api/users:
     get:
       description: '**Auth:** admin'
@@ -9028,6 +9539,8 @@ tags:
   name: Garapon
 - description: Partner establishments
   name: Affiliates
+- description: Bookable tea rooms (admin + public cross-origin read API)
+  name: Tea Rooms
 - description: Stamp-rally events (admin + tokenized public)
   name: Stamp Rally
 - description: Reading lists and Discord publishing

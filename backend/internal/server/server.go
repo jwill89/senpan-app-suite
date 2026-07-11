@@ -273,6 +273,22 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("PUT /api/affiliates/{id}", s.handleAffiliateUpdate)
 	s.mux.HandleFunc("DELETE /api/affiliates/{id}", s.handleAffiliateDelete)
 
+	// Tea Rooms (Senpan Tea House → Tea Rooms). Admin CRUD + drag reorder + the
+	// open/discounted flag toggles (PATCH) + post-to-Discord, the shared webhook
+	// setter, and a public cross-origin read API for external Carrd sites. The
+	// literal /reorder, /webhook, /public sub-paths are matched ahead of the {id}
+	// wildcard by the Go 1.22 mux; /public/{id} coexists with them.
+	s.mux.HandleFunc("GET /api/tea-rooms", s.handleTeaRoomsList)
+	s.mux.HandleFunc("POST /api/tea-rooms", s.handleTeaRoomCreate)
+	s.mux.HandleFunc("POST /api/tea-rooms/reorder", s.handleTeaRoomsReorder)
+	s.mux.HandleFunc("PUT /api/tea-rooms/webhook", s.handleTeaRoomWebhookSet)
+	s.mux.HandleFunc("GET /api/tea-rooms/public", s.handleTeaRoomsPublic)
+	s.mux.HandleFunc("GET /api/tea-rooms/public/{id}", s.handleTeaRoomPublic)
+	s.mux.HandleFunc("PUT /api/tea-rooms/{id}", s.handleTeaRoomUpdate)
+	s.mux.HandleFunc("PATCH /api/tea-rooms/{id}", s.handleTeaRoomPatch)
+	s.mux.HandleFunc("DELETE /api/tea-rooms/{id}", s.handleTeaRoomDelete)
+	s.mux.HandleFunc("POST /api/tea-rooms/{id}/post", s.handleTeaRoomPost)
+
 	// Stamp Rally (Festival → Stamp Rally; resource-oriented: methods for CRUD,
 	// POST /{id}/{verb} for status, PATCH for the per-stamp pause toggle). Admin
 	// CRUD of events (stamps + prizes with placements) + close/reopen, tokenized
@@ -780,7 +796,7 @@ func (s *Server) broadcastResourceChanged(resource string) {
 func adminMutationResource(path string) (string, bool) {
 	seg, _, _ := strings.Cut(strings.TrimPrefix(path, "/api/"), "/")
 	switch seg {
-	case "garapons", "affiliates", "stamp-rallies", "presets", "users", "winners-log", "fonts":
+	case "garapons", "affiliates", "tea-rooms", "stamp-rallies", "presets", "users", "winners-log", "fonts":
 		return seg, true
 	case "raffles":
 		if strings.HasSuffix(path, "/enter") {

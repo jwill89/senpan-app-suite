@@ -133,6 +133,10 @@
     color: var(--text-muted);
     font-weight: 500;
     font-size: .88rem;
+    /* Full-width nav rows keep a roomy line-height (the base button's line-height:1
+       is for the compact, sometimes icon-only action buttons — nav items always
+       have a text label and read better with more vertical room). */
+    line-height: 1.4;
     border-radius: 0;
     transition: background .12s, color .12s
 }

@@ -91,6 +91,14 @@ const adminChildren: RouteRecordRaw[] = [
     component: () => import('@/components/admin/AffiliatesTab.vue'),
     meta: { tab: 'teahouse-affiliates' },
   },
+  // Senpan Tea House → Tea Rooms. Drag-orderable bookable rooms posted as Discord
+  // embeds, plus a public cross-origin read API for the Carrd site.
+  {
+    path: 'teahouse/tea-rooms',
+    name: 'admin-teahouse-tea-rooms',
+    component: () => import('@/components/admin/TeaRoomsTab.vue'),
+    meta: { tab: 'teahouse-tea-rooms' },
+  },
   // Senpan Tea House → Raffles. One manager (current cards + closed table) with
   // detail/form Back sub-pages, replacing the former New/Open/Closed raffle tabs.
   {

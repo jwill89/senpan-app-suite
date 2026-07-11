@@ -62,6 +62,7 @@ const showTeahouse = computed(() =>
   [
     'teahouse-announcements',
     'teahouse-affiliates',
+    'teahouse-tea-rooms',
     ...BOOK_CLUBS.map((c) => `bookclub-${c.slug}`),
   ].some(can),
 )
@@ -186,6 +187,13 @@ function toggleSection(section: AdminSection): void {
           @click="go('teahouse-announcements')"
         >
           <font-awesome-icon :icon="['fad', 'megaphone']" /> Announcements
+        </button>
+        <button
+          v-if="can('teahouse-tea-rooms')"
+          :class="{ active: admin.adminTab === 'teahouse-tea-rooms' }"
+          @click="go('teahouse-tea-rooms')"
+        >
+          <font-awesome-icon :icon="['fad', 'booth-curtain']" /> Tea Rooms
         </button>
         <button
           v-for="club in visibleClubs"

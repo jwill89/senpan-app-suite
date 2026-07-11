@@ -74,6 +74,13 @@ button {
     padding: 10px 20px;
     font-size: .95rem;
     font-weight: 600;
+    /* line-height 1 makes a button's content exactly one em tall whether it holds
+       text or a single icon, so icon-only and text buttons of the same size class
+       are identical in height. (Icon buttons are inline-flex — see above — so their
+       height is the icon's 1em; without this, text buttons stand taller by the
+       default line-height's extra ~0.3em. The vertical padding supplies the visual
+       breathing room, so a tight line-height doesn't crowd the label.) */
+    line-height: 1;
     transition: all .15s
 }
 

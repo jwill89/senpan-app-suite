@@ -52,6 +52,9 @@ import type {
   StatusResponse,
   AffiliatesResponse,
   AffiliateResponse,
+  TeaRoomsResponse,
+  TeaRoomResponse,
+  TeaRoomWebhookResponse,
   StampRalliesResponse,
   StampRallyResponse,
   StampRallyDetailResponse,
@@ -430,6 +433,31 @@ export const endpoints = {
     update: (id: number, affiliate: Record<string, unknown>) =>
       apiPut<OKResponse>(`affiliates/${id}`, affiliate),
     delete: (id: number) => apiDelete(`affiliates/${id}`),
+  },
+
+  // ── Tea Rooms (admin) ────────────────────────────────────────────────────────
+  teaRooms: {
+    /** GET /api/tea-rooms — all rooms + the shared Discord webhook (admin/perm). */
+    list: () => apiGet<TeaRoomsResponse>('tea-rooms'),
+    /** POST /api/tea-rooms — create a room (201). */
+    create: (room: Record<string, unknown>) =>
+      apiPost<TeaRoomResponse>('tea-rooms', { tea_room: room }),
+    /** PUT /api/tea-rooms/{id} — full replace of the editable fields. */
+    update: (id: number, room: Record<string, unknown>) =>
+      apiPut<TeaRoomResponse>(`tea-rooms/${id}`, { tea_room: room }),
+    /** PATCH /api/tea-rooms/{id} — toggle the open and/or discounted flag. */
+    patch: (id: number, fields: { open?: boolean; discounted?: boolean }) =>
+      apiPatch<TeaRoomResponse>(`tea-rooms/${id}`, fields),
+    /** DELETE /api/tea-rooms/{id} — delete a room (204). */
+    delete: (id: number) => apiDelete(`tea-rooms/${id}`),
+    /** POST /api/tea-rooms/reorder — persist a new drag order (top-first ids). */
+    reorder: (orderedIds: number[]) =>
+      apiPost<OKResponse>('tea-rooms/reorder', { ordered_ids: orderedIds }),
+    /** POST /api/tea-rooms/{id}/post — post a room's embed to the shared webhook now. */
+    post: (id: number) => apiPost<TeaRoomResponse>(`tea-rooms/${id}/post`, undefined),
+    /** PUT /api/tea-rooms/webhook — set the single shared Discord webhook ('' clears). */
+    setWebhook: (webhookUrl: string) =>
+      apiPut<TeaRoomWebhookResponse>('tea-rooms/webhook', { webhook_url: webhookUrl }),
   },
 
   // ── Stamp Rally (admin, hybrid REST) ─────────────────────────────────────────

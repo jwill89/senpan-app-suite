@@ -33,15 +33,19 @@ const ui = useUiStore()
 
 /**
  * The public (cross-origin) rooms API URL an external site fetches — the all-rooms
- * list, or one room when an id is given. Built from the current origin so it points
- * at whichever host is serving the admin (apps.senpan.cafe in production).
+ * list, or one room when a room number is given (the public lookup key). Built from
+ * the current origin so it points at whichever host serves the admin
+ * (apps.senpan.cafe in production).
  */
-function publicApiUrl(id?: number): string {
+function publicApiUrl(roomNumber?: string): string {
   const base = `${window.location.origin}/api/tea-rooms/public`
-  return id ? `${base}/${id}` : base
+  return roomNumber ? `${base}/${encodeURIComponent(roomNumber)}` : base
 }
-function copyApiLink(id?: number): void {
-  ui.copyToClipboard(publicApiUrl(id), id ? "Room's API link copied" : 'All-rooms API link copied')
+function copyApiLink(roomNumber?: string): void {
+  ui.copyToClipboard(
+    publicApiUrl(roomNumber),
+    roomNumber ? "Room's API link copied" : 'All-rooms API link copied',
+  )
 }
 
 type Screen = 'list' | 'form' | 'webhook'
@@ -213,6 +217,7 @@ async function submitWebhook(): Promise<void> {
                 >· Room {{ t.room_number }}</span
               >
             </h4>
+            <p v-if="t.subtitle" class="text-sm text-dim room-meta">{{ t.subtitle }}</p>
             <p class="text-sm room-meta">
               <font-awesome-icon :icon="['fad', 'coins']" /> {{ costText(t) }}
             </p>
@@ -262,7 +267,7 @@ async function submitWebhook(): Promise<void> {
                 class="btn-view btn-sm"
                 aria-label="Copy this room's API link"
                 title="Copy this room's API link"
-                @click="copyApiLink(t.id)"
+                @click="copyApiLink(t.room_number)"
               >
                 <font-awesome-icon :icon="['fas', 'link']" />
               </button>

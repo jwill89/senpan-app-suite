@@ -14,7 +14,7 @@ import (
 // PRAGMA user_version against this constant and runs only the migrations
 // needed to bring the database up to date. Bump this when adding a new
 // migration block.
-const schemaVersion = 45
+const schemaVersion = 46
 
 // ensureSchema reads the current PRAGMA user_version from the database and
 // applies any outstanding migrations to bring it up to schemaVersion.
@@ -302,6 +302,12 @@ func ensureSchema(db *sql.DB) error {
 		}
 	}
 
+	if version < 46 {
+		if err := migrateTeaRoomSubtitle(db); err != nil {
+			return err
+		}
+	}
+
 	_, err := db.Exec(fmt.Sprintf("PRAGMA user_version = %d", schemaVersion))
 	return err
 }
@@ -517,6 +523,8 @@ func createIndexes(db *sql.DB) error {
 		"CREATE INDEX IF NOT EXISTS idx_stamp_rally_collected_stamp ON stamp_rally_collected(stamp_id)",
 		"CREATE INDEX IF NOT EXISTS idx_stamp_rally_collected_rally ON stamp_rally_collected(rally_id)",
 		"CREATE INDEX IF NOT EXISTS idx_tea_rooms_sort ON tea_rooms(sort_order, id)",
+		// room_number is the public/embed lookup key and must be unique.
+		"CREATE UNIQUE INDEX IF NOT EXISTS idx_tea_rooms_room_number ON tea_rooms(room_number)",
 	}
 	for _, idx := range indexes {
 		if _, err := db.Exec(idx); err != nil {
@@ -1388,6 +1396,7 @@ func migrateAffiliates(db *sql.DB) error {
 const teaRoomsTableSQL = `CREATE TABLE IF NOT EXISTS tea_rooms (
 	id INTEGER PRIMARY KEY AUTOINCREMENT,
 	name TEXT NOT NULL,
+	subtitle TEXT NOT NULL DEFAULT '',
 	room_number TEXT NOT NULL DEFAULT '',
 	cost_per_half_hour INTEGER NOT NULL DEFAULT 0,
 	hashtags TEXT NOT NULL DEFAULT '',
@@ -1413,6 +1422,23 @@ func migrateTeaRooms(db *sql.DB) error {
 		if _, err := db.Exec(s); err != nil {
 			return fmt.Errorf("migrate tea rooms: %w", err)
 		}
+	}
+	return nil
+}
+
+// migrateTeaRoomSubtitle adds the `subtitle` column and a UNIQUE index on
+// room_number (now a required, unique public lookup key). Both idempotent — the
+// column ALTER is guarded by hasColumn, the index by IF NOT EXISTS. The unique
+// index is safe to build on existing data because room_number was already
+// effectively per-room; a duplicate would surface here as a build error.
+func migrateTeaRoomSubtitle(db *sql.DB) error {
+	if !hasColumn(db, "tea_rooms", "subtitle") {
+		if _, err := db.Exec(`ALTER TABLE tea_rooms ADD COLUMN subtitle TEXT NOT NULL DEFAULT ''`); err != nil {
+			return fmt.Errorf("add tea_rooms.subtitle: %w", err)
+		}
+	}
+	if _, err := db.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_tea_rooms_room_number ON tea_rooms(room_number)`); err != nil {
+		return fmt.Errorf("create tea_rooms room_number unique index: %w", err)
 	}
 	return nil
 }

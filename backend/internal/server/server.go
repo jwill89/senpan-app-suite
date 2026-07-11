@@ -283,7 +283,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("POST /api/tea-rooms/reorder", s.handleTeaRoomsReorder)
 	s.mux.HandleFunc("PUT /api/tea-rooms/webhook", s.handleTeaRoomWebhookSet)
 	s.mux.HandleFunc("GET /api/tea-rooms/public", s.handleTeaRoomsPublic)
-	s.mux.HandleFunc("GET /api/tea-rooms/public/{id}", s.handleTeaRoomPublic)
+	s.mux.HandleFunc("GET /api/tea-rooms/public/{number}", s.handleTeaRoomPublic)
 	s.mux.HandleFunc("PUT /api/tea-rooms/{id}", s.handleTeaRoomUpdate)
 	s.mux.HandleFunc("PATCH /api/tea-rooms/{id}", s.handleTeaRoomPatch)
 	s.mux.HandleFunc("DELETE /api/tea-rooms/{id}", s.handleTeaRoomDelete)

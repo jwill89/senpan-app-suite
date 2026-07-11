@@ -134,9 +134,10 @@ func buildFeaturePaths(b *pb) {
 	b.add("GET", "/api/tea-rooms", "Tea Rooms", "List tea rooms", teaRoom,
 		"Also returns the shared Discord webhook (`webhook_url`); safe here since the endpoint is permission-gated.", opt{
 			resps: []respEntry{ok("TeaRoomsResponse")}})
-	b.add("POST", "/api/tea-rooms", "Tea Rooms", "Create a tea room", teaRoom, "", opt{
-		body:  actionBody("New tea room.", nil, props("tea_room", ref("TeaRoom"))),
-		resps: []respEntry{created("TeaRoomResponse"), r("400", "Name required / invalid")}})
+	b.add("POST", "/api/tea-rooms", "Tea Rooms", "Create a tea room", teaRoom,
+		"Room number is required and must be unique (the public lookup key).", opt{
+			body:  actionBody("New tea room.", nil, props("tea_room", ref("TeaRoom"))),
+			resps: []respEntry{created("TeaRoomResponse"), r("400", "Name / unique room number required")}})
 	b.add("POST", "/api/tea-rooms/reorder", "Tea Rooms", "Reorder tea rooms", teaRoom,
 		"Persists a new drag order (top-first ids).", opt{
 			body:  actionBody("Bulk reorder.", nil, props("ordered_ids", parr("Tea-room ids in the new order.", pint("")))),
@@ -148,15 +149,15 @@ func buildFeaturePaths(b *pb) {
 	b.add("GET", "/api/tea-rooms/public", "Tea Rooms", "Public: list all rooms", "public",
 		"Cross-origin (`Access-Control-Allow-Origin: *`), read-only room list for an external site (e.g. a Carrd embed). No webhook.", opt{
 			resps: []respEntry{ok("TeaRoomsPublicResponse")}})
-	b.add("GET", "/api/tea-rooms/public/{id}", "Tea Rooms", "Public: one room", "public",
-		"Cross-origin single room with all its data + status flags.", opt{
-			path:  []*openapi3.Parameter{pparam("id", "Tea-room id.")},
+	b.add("GET", "/api/tea-rooms/public/{number}", "Tea Rooms", "Public: one room", "public",
+		"Cross-origin single room (all data + status flags), looked up by its unique room number.", opt{
+			path:  []*openapi3.Parameter{pparam("number", "The room's unique room number.")},
 			resps: []respEntry{ok("TeaRoomPublicResponse"), r("404", "Not found")}})
 	b.add("PUT", "/api/tea-rooms/{id}", "Tea Rooms", "Replace a tea room", teaRoom,
-		"Full replace of the editable fields (sort_order is preserved — reordering is separate).", opt{
+		"Full replace of the editable fields (sort_order is preserved — reordering is separate). Room number is required and must be unique.", opt{
 			path:  []*openapi3.Parameter{pparam("id", "Tea-room id.")},
 			body:  actionBody("Full tea-room fields.", nil, props("tea_room", ref("TeaRoom"))),
-			resps: []respEntry{ok("TeaRoomResponse"), r("400", "Name required / invalid"), r("404", "Not found")}})
+			resps: []respEntry{ok("TeaRoomResponse"), r("400", "Name / unique room number required"), r("404", "Not found")}})
 	b.add("PATCH", "/api/tea-rooms/{id}", "Tea Rooms", "Toggle open/discounted", teaRoom,
 		"Partial update of the quick-toggle flags; absent fields are left unchanged.", opt{
 			path:  []*openapi3.Parameter{pparam("id", "Tea-room id.")},

@@ -11,6 +11,7 @@ func TestTeaRoomCRUD(t *testing.T) {
 
 	id, err := s.CreateTeaRoom(&model.TeaRoom{
 		Name:            "Jasmine Room",
+		Subtitle:        "「 静かな部屋 」", // UTF-8 (Japanese) round-trips
 		RoomNumber:      "1",
 		CostPerHalfHour: 125000,
 		Hashtags:        "#cozy #private",
@@ -37,6 +38,9 @@ func TestTeaRoomCRUD(t *testing.T) {
 	}
 	if got.Name != "Jasmine Room" || got.RoomNumber != "1" {
 		t.Errorf("name/number = %q / %q", got.Name, got.RoomNumber)
+	}
+	if got.Subtitle != "「 静かな部屋 」" {
+		t.Errorf("subtitle = %q", got.Subtitle)
 	}
 	if got.CostPerHalfHour != 125000 {
 		t.Errorf("cost = %d; want 125000", got.CostPerHalfHour)
@@ -94,9 +98,25 @@ func TestTeaRoomGetNotFound(t *testing.T) {
 	}
 }
 
+func TestTeaRoomByNumber(t *testing.T) {
+	s := newTestStore(t)
+	id, _ := s.CreateTeaRoom(&model.TeaRoom{Name: "Room", RoomNumber: "West 3"})
+
+	got, err := s.GetTeaRoomByNumber("West 3")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got == nil || got.ID != id {
+		t.Fatalf("GetTeaRoomByNumber = %+v; want id %d", got, id)
+	}
+	if missing, _ := s.GetTeaRoomByNumber("nope"); missing != nil {
+		t.Error("expected nil for an unknown room number")
+	}
+}
+
 func TestTeaRoomToggles(t *testing.T) {
 	s := newTestStore(t)
-	id, _ := s.CreateTeaRoom(&model.TeaRoom{Name: "R", Open: true})
+	id, _ := s.CreateTeaRoom(&model.TeaRoom{Name: "R", RoomNumber: "toggle-1", Open: true})
 
 	if err := s.SetTeaRoomOpen(id, false); err != nil {
 		t.Fatal(err)
@@ -120,9 +140,9 @@ func TestTeaRoomToggles(t *testing.T) {
 
 func TestTeaRoomReorder(t *testing.T) {
 	s := newTestStore(t)
-	idA, _ := s.CreateTeaRoom(&model.TeaRoom{Name: "A"})
-	idB, _ := s.CreateTeaRoom(&model.TeaRoom{Name: "B"})
-	idC, _ := s.CreateTeaRoom(&model.TeaRoom{Name: "C"})
+	idA, _ := s.CreateTeaRoom(&model.TeaRoom{Name: "A", RoomNumber: "A"})
+	idB, _ := s.CreateTeaRoom(&model.TeaRoom{Name: "B", RoomNumber: "B"})
+	idC, _ := s.CreateTeaRoom(&model.TeaRoom{Name: "C", RoomNumber: "C"})
 
 	// Reorder to B, C, A.
 	if err := s.BulkReorderTeaRooms([]int64{idB, idC, idA}); err != nil {

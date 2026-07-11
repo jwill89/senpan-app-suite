@@ -101,15 +101,14 @@ func TestBuildTeaRoomEmbed(t *testing.T) {
 	if f := fieldByName(embed, "🔢 Room Number"); f == nil || f.Value != "1" || !f.Inline {
 		t.Errorf("room number field = %+v", f)
 	}
-	if f := fieldByName(embed, "🔒 Privacy"); f == nil ||
-		f.Value != "This room can be locked for an additional 30,000 gil fee." {
-		t.Errorf("privacy field = %+v", f)
-	}
-	if f := fieldByName(embed, "🍂 Availability"); f == nil || f.Value != "Seasonal" || !f.Inline {
-		t.Errorf("availability field = %+v", f)
-	}
 	if f := fieldByName(embed, "🚪 Status"); f == nil || f.Value != "Open" || !f.Inline {
 		t.Errorf("status field = %+v", f)
+	}
+	// The Privacy (lock) and Availability (seasonal) fields were removed from the embed.
+	for _, name := range []string{"🔒 Privacy", "🍂 Availability"} {
+		if f := fieldByName(embed, name); f != nil {
+			t.Errorf("field %q should not be in the embed: %+v", name, f)
+		}
 	}
 }
 
@@ -133,13 +132,11 @@ func TestBuildTeaRoomEmbedDiscountedAndClosed(t *testing.T) {
 		!strings.Contains(cost.Value, "Currently Discounted!") {
 		t.Errorf("discounted cost value = %q", cost.Value)
 	}
-	if f := fieldByName(embed, "🔒 Privacy"); f == nil || f.Value != "This room cannot be locked." {
-		t.Errorf("privacy field = %+v", f)
-	}
-	if f := fieldByName(embed, "🍂 Availability"); f == nil || f.Value != "Permanent" {
-		t.Errorf("availability field = %+v", f)
-	}
 	if f := fieldByName(embed, "🚪 Status"); f == nil || f.Value != "Closed" {
 		t.Errorf("status field = %+v", f)
+	}
+	// Privacy + Availability fields are gone regardless of the lockable/seasonal flags.
+	if fieldByName(embed, "🔒 Privacy") != nil || fieldByName(embed, "🍂 Availability") != nil {
+		t.Error("Privacy/Availability fields should not be in the embed")
 	}
 }

@@ -3657,6 +3657,8 @@ components:
           type: boolean
         sort_order:
           type: integer
+        subtitle:
+          type: string
       type: object
     TeaRoomPublicResponse:
       properties:
@@ -3693,6 +3695,8 @@ components:
               type: boolean
             sort_order:
               type: integer
+            subtitle:
+              type: string
           type: object
       type: object
     TeaRoomResponse:
@@ -3730,6 +3734,8 @@ components:
               type: boolean
             sort_order:
               type: integer
+            subtitle:
+              type: string
           type: object
       type: object
     TeaRoomWebhookResponse:
@@ -3772,6 +3778,8 @@ components:
                 type: boolean
               sort_order:
                 type: integer
+              subtitle:
+                type: string
             type: object
           type: array
       type: object
@@ -3810,6 +3818,8 @@ components:
                 type: boolean
               sort_order:
                 type: integer
+              subtitle:
+                type: string
             type: object
           type: array
         webhook_url:
@@ -8983,7 +8993,10 @@ paths:
       tags:
       - Tea Rooms
     post:
-      description: '**Auth:** permission:teahouse-tea-rooms'
+      description: |-
+        **Auth:** permission:teahouse-tea-rooms
+
+        Room number is required and must be unique (the public lookup key).
       requestBody:
         content:
           application/json:
@@ -9006,7 +9019,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
-          description: Name required / invalid
+          description: Name / unique room number required
       security:
       - cookieAuth: []
       - bearerAuth: []
@@ -9081,7 +9094,7 @@ paths:
       description: |-
         **Auth:** permission:teahouse-tea-rooms
 
-        Full replace of the editable fields (sort_order is preserved — reordering is separate).
+        Full replace of the editable fields (sort_order is preserved — reordering is separate). Room number is required and must be unique.
       parameters:
       - description: Tea-room id.
         in: path
@@ -9111,7 +9124,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
-          description: Name required / invalid
+          description: Name / unique room number required
         "404":
           content:
             application/json:
@@ -9185,16 +9198,16 @@ paths:
       summary: 'Public: list all rooms'
       tags:
       - Tea Rooms
-  /api/tea-rooms/public/{id}:
+  /api/tea-rooms/public/{number}:
     get:
       description: |-
         **Auth:** public
 
-        Cross-origin single room with all its data + status flags.
+        Cross-origin single room (all data + status flags), looked up by its unique room number.
       parameters:
-      - description: Tea-room id.
+      - description: The room's unique room number.
         in: path
-        name: id
+        name: number
         required: true
         schema:
           type: string

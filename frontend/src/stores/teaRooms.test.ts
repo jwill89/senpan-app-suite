@@ -38,7 +38,8 @@ function room(over: Partial<TeaRoom> = {}): TeaRoom {
   return {
     id: 1,
     name: 'R',
-    room_number: '',
+    subtitle: '',
+    room_number: '1',
     cost_per_half_hour: 0,
     hashtags: '',
     description: '',
@@ -125,10 +126,22 @@ describe('saveTeaRoom', () => {
     expect(ui.notify).toHaveBeenCalled()
   })
 
+  it('requires a room number', async () => {
+    const ui = useUiStore()
+    ui.notify = vi.fn()
+    const s = useTeaRoomsStore()
+    s.newTeaRoomForm()
+    s.teaRoomForm!.name = 'Jasmine' // room number still blank
+    const ok = await s.saveTeaRoom()
+    expect(ok).toBe(false)
+    expect(ep.create).not.toHaveBeenCalled()
+  })
+
   it('creates with the id stripped from the payload', async () => {
     const s = useTeaRoomsStore()
     s.newTeaRoomForm()
     s.teaRoomForm!.name = 'Jasmine'
+    s.teaRoomForm!.room_number = '12'
     s.teaRoomForm!.cost_per_half_hour = 125000
     const ok = await s.saveTeaRoom()
     expect(ok).toBe(true)

@@ -19,6 +19,7 @@ function emptyForm(): TeaRoomForm {
   return {
     id: 0,
     name: '',
+    subtitle: '',
     room_number: '',
     cost_per_half_hour: 0,
     hashtags: '',
@@ -73,6 +74,7 @@ export const useTeaRoomsStore = defineStore('teaRooms', () => {
     teaRoomForm.value = {
       id: t.id,
       name: t.name,
+      subtitle: t.subtitle,
       room_number: t.room_number,
       cost_per_half_hour: t.cost_per_half_hour,
       hashtags: t.hashtags,
@@ -96,6 +98,10 @@ export const useTeaRoomsStore = defineStore('teaRooms', () => {
     if (!f) return false
     if (!f.name.trim()) {
       ui.notify('Room name is required', 'error')
+      return false
+    }
+    if (!f.room_number.trim()) {
+      ui.notify('Room number is required', 'error')
       return false
     }
     if (f.cost_per_half_hour < 0) {

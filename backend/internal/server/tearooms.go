@@ -27,10 +27,6 @@ import (
 // it's read/written only through the permission-gated tea-room endpoints.
 const teaRoomWebhookSettingKey = "tearoom_webhook_url"
 
-// teaRoomLockFee is the flat gil surcharge quoted in a lockable room's embed
-// ("…locked for an additional 30,000 gil fee").
-const teaRoomLockFee = 30000
-
 // maxTeaRoomHashtags caps how many hashtags a room keeps (abuse guard).
 const maxTeaRoomHashtags = 30
 
@@ -70,15 +66,36 @@ func (req *teaRoomWriteRequest) validateAndSanitize(w http.ResponseWriter) bool 
 		writeError(w, http.StatusBadRequest, "Room name is required")
 		return false
 	}
+	t.RoomNumber = strings.TrimSpace(t.RoomNumber)
+	if t.RoomNumber == "" {
+		writeError(w, http.StatusBadRequest, "Room number is required")
+		return false
+	}
 	if t.CostPerHalfHour < 0 {
 		writeError(w, http.StatusBadRequest, "Cost cannot be negative")
 		return false
 	}
-	t.RoomNumber = strings.TrimSpace(t.RoomNumber)
+	t.Subtitle = strings.TrimSpace(t.Subtitle)
 	t.Description = strings.TrimSpace(t.Description)
 	t.Image = strings.TrimSpace(t.Image)
 	t.Color = strings.TrimSpace(t.Color)
 	t.Hashtags = normalizeHashtags(t.Hashtags)
+	return true
+}
+
+// checkTeaRoomNumberUnique reports whether room_number is free to use (unique, or
+// already this room's). It writes a 400 and returns false when another room owns
+// it — a friendly guard ahead of the DB's UNIQUE index backstop.
+func (s *Server) checkTeaRoomNumberUnique(w http.ResponseWriter, number string, exceptID int64) bool {
+	other, err := s.store.GetTeaRoomByNumber(number)
+	if err != nil {
+		writeInternalError(w, "check tea room number", err)
+		return false
+	}
+	if other != nil && other.ID != exceptID {
+		writeError(w, http.StatusBadRequest, "That room number is already in use by another room.")
+		return false
+	}
 	return true
 }
 
@@ -97,6 +114,9 @@ func (s *Server) handleTeaRoomCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !req.validateAndSanitize(w) {
+		return
+	}
+	if !s.checkTeaRoomNumberUnique(w, req.TeaRoom.RoomNumber, 0) {
 		return
 	}
 	id, err := s.store.CreateTeaRoom(&req.TeaRoom)
@@ -137,6 +157,9 @@ func (s *Server) handleTeaRoomUpdate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !req.validateAndSanitize(w) {
+		return
+	}
+	if !s.checkTeaRoomNumberUnique(w, req.TeaRoom.RoomNumber, id) {
 		return
 	}
 	req.TeaRoom.ID = id
@@ -336,18 +359,20 @@ func (s *Server) handleTeaRoomsPublic(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleTeaRoomPublic returns a single tea room with all its data + status flags,
-// for an external site that renders one specific room.
+// looked up by its ROOM NUMBER (the room's public key, so an external site keys
+// off the one number the admin already knows).
 //
-//	Endpoint:  GET /api/tea-rooms/public/{id}
+//	Endpoint:  GET /api/tea-rooms/public/{number}
 //	Auth:      public
 //	Response:  {"tea_room": TeaRoom}
 func (s *Server) handleTeaRoomPublic(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Access-Control-Allow-Origin", "*")
-	id, ok := pathInt64(w, r, "id", "tea room")
-	if !ok {
+	number := strings.TrimSpace(r.PathValue("number"))
+	if number == "" {
+		writeError(w, http.StatusNotFound, "Tea room not found")
 		return
 	}
-	room, err := s.store.GetTeaRoom(id)
+	room, err := s.store.GetTeaRoomByNumber(number)
 	if err != nil {
 		writeInternalError(w, "load tea room (public)", err)
 		return
@@ -362,12 +387,11 @@ func (s *Server) handleTeaRoomPublic(w http.ResponseWriter, r *http.Request) {
 // ── Embed ────────────────────────────────────────────────────────────────────
 
 // buildTeaRoomEmbed renders a tea room as a Discord embed: the room name as the
-// title, the markdown description as the body, then fields — the per-half-hour
-// cost (halved, with a note, when discounted) with the room number inline beside
-// it, a Privacy note (whether the room can be locked), and two inline fields for
-// the seasonal + open status. Hashtags render in the footer, always capitalized.
-// The room image renders full-width at the bottom, and the accent colour comes
-// from the room (brand default when unset).
+// title, the markdown description as the body, then three inline fields — the
+// per-half-hour cost (halved, with a note, when discounted), the room number, and
+// the open/closed status. Hashtags render in the footer, always capitalized. The
+// room image renders full-width at the bottom, and the accent colour comes from
+// the room (brand default when unset).
 func buildTeaRoomEmbed(t model.TeaRoom) discordEmbed {
 	b := newEmbed().title(t.Name).colorHex(t.Color)
 
@@ -375,7 +399,7 @@ func buildTeaRoomEmbed(t model.TeaRoom) discordEmbed {
 	b.description(discordMarkdown(strings.TrimSpace(t.Description)))
 
 	// Cost — full price, or the fixed 50%-off price plus a note when discounted.
-	// Inline so the room number sits beside it.
+	// Inline so the room number + status sit beside it.
 	if t.Discounted {
 		b.field("💰 Cost", fmt.Sprintf("~~%s gil~~ **%s gil**/half hour\n**Currently Discounted!**",
 			formatGil(t.CostPerHalfHour), formatGil(t.CostPerHalfHour/2)), true)
@@ -383,19 +407,8 @@ func buildTeaRoomEmbed(t model.TeaRoom) discordEmbed {
 		b.field("💰 Cost", fmt.Sprintf("%s gil/half hour", formatGil(t.CostPerHalfHour)), true)
 	}
 
-	// Room number, inline beside the cost.
+	// Room number + open/closed status, inline beside the cost.
 	b.field("🔢 Room Number", t.RoomNumber, true)
-
-	// Privacy — whether the room can be locked, and the fee if so.
-	if t.Lockable {
-		b.field("🔒 Privacy",
-			fmt.Sprintf("This room can be locked for an additional %s gil fee.", formatGil(teaRoomLockFee)), false)
-	} else {
-		b.field("🔒 Privacy", "This room cannot be locked.", false)
-	}
-
-	// Two inline fields side by side: seasonal + open status.
-	b.field("🍂 Availability", boolLabel(t.Seasonal, "Seasonal", "Permanent"), true)
 	b.field("🚪 Status", boolLabel(t.Open, "Open", "Closed"), true)
 
 	// Hashtags in the footer, always capitalized (e.g. "#Cozy #Private").

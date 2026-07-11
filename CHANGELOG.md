@@ -49,17 +49,19 @@ Adds the **Tea Rooms** admin page under Senpan Tea House (paired with backend
 #### Added
 
 - **Tea Rooms** (Senpan Tea House → Tea Rooms, `booth-curtain` icon). A
-  drag-orderable list of bookable rooms — name, room number, per-half-hour gil
-  cost, hashtags, markdown description, seasonal/open/lockable/discounted flags,
-  an image, and an embed accent colour. Each row has Post-to-Discord,
-  open/close toggle, discount toggle, edit, and delete actions; the list reorders
-  like Announcements. A Webhook sub-page stores the single shared Discord webhook
-  the rooms post to. Gated by the new **`teahouse-tea-rooms`** page permission (in
-  the Users-page permission editor).
-- The Discord embed shows the room name, description, then the cost (halved with a
-  "Currently Discounted!" note when discounted) with the room number inline beside
-  it, a Privacy note, inline Seasonal/Permanent + Open/Closed status, and the
-  hashtags (capitalized) in the footer.
+  drag-orderable list of bookable rooms — name, subtitle (any language), a
+  **required + unique** room number, per-half-hour gil cost, hashtags, markdown
+  description, seasonal/open/lockable/discounted flags, an image, and an embed
+  accent colour. Each row has Post-to-Discord, open/close toggle, discount toggle,
+  copy-API-link, edit, and delete actions; the list reorders like Announcements.
+  A Webhook sub-page stores the single shared Discord webhook the rooms post to.
+  Gated by the new **`teahouse-tea-rooms`** page permission (in the Users-page
+  permission editor). The Copy-API-link buttons build the public URL from the
+  room's **room number** (the one number the admin manages).
+- The Discord embed shows the room name, description, then three inline fields —
+  the cost (halved with a "Currently Discounted!" note when discounted), the room
+  number, and the Open/Closed status — with the hashtags (capitalized) in the
+  footer.
 
 ### [3.5.0] — 2026-07-07
 
@@ -395,23 +397,25 @@ contract changes.
 
 #### Added
 
-- **Tea Rooms.** A new single-table entity (`tea_rooms`, schema **v45**) for
-  bookable tea rooms — name, room number, per-half-hour gil cost, hashtags,
-  markdown description, seasonal/open/lockable/discounted flags, an image, and a
-  Discord embed accent colour. Admin CRUD lives under `GET/POST /api/tea-rooms`,
+- **Tea Rooms.** A new single-table entity (`tea_rooms`, schema **v45–46**) for
+  bookable tea rooms — name, subtitle (UTF-8, e.g. a Japanese phrase), a
+  **required + unique** room number, per-half-hour gil cost, hashtags, markdown
+  description, seasonal/open/lockable/discounted flags, an image, and a Discord
+  embed accent colour. Admin CRUD lives under `GET/POST /api/tea-rooms`,
   `PUT/PATCH/DELETE /api/tea-rooms/{id}` (PATCH toggles the open/discounted
   flags), and `POST /api/tea-rooms/reorder` for the drag order, all gated by the
   new **`teahouse-tea-rooms`** page permission.
 - **Post a room to Discord.** `POST /api/tea-rooms/{id}/post` renders the room as
-  an embed (name title, description body, then the cost — halved with a "Currently
-  Discounted!" note when discounted — with the room number inline beside it, a
-  Privacy note, inline Seasonal/Permanent + Open/Closed status, and the hashtags
-  capitalized in the footer) and posts it to a single shared webhook stored via
-  `PUT /api/tea-rooms/webhook` (kept out of the public settings so it never leaks).
+  an embed (name title, description body, then three inline fields — the cost,
+  halved with a "Currently Discounted!" note when discounted; the room number; and
+  the Open/Closed status — with the hashtags capitalized in the footer) and posts
+  it to a single shared webhook stored via `PUT /api/tea-rooms/webhook` (kept out
+  of the public settings so it never leaks).
 - **Public rooms API (cross-origin).** `GET /api/tea-rooms/public` (all rooms) and
-  `GET /api/tea-rooms/public/{id}` (one room, all data + status flags) are
-  unauthenticated and send `Access-Control-Allow-Origin: *`, so an external Carrd
-  site can read live availability/pricing.
+  `GET /api/tea-rooms/public/{number}` (one room by its **room number**, all data +
+  status flags) are unauthenticated and send `Access-Control-Allow-Origin: *`, so an
+  external Carrd site can read live availability/pricing keyed off the one number
+  the admin already knows.
 
 ### [3.4.0] — 2026-07-07
 

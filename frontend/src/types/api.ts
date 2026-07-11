@@ -418,6 +418,7 @@ export interface AffiliateForm {
 export interface TeaRoomForm {
   id: number
   name: string
+  subtitle: string
   room_number: string
   cost_per_half_hour: number
   hashtags: string

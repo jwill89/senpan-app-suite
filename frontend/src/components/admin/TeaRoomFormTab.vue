@@ -46,14 +46,29 @@ function cancel(): void {
             aria-label="Room name"
           />
         </FormField>
-        <FormField label="Room number">
+        <FormField
+          label="Room number"
+          required
+          help="Unique — this is the public key the Carrd site and public API look the room up by."
+        >
           <input
             v-model="store.teaRoomForm.room_number"
-            placeholder="e.g. 1 or West 3"
+            placeholder="e.g. 12"
             aria-label="Room number"
           />
         </FormField>
       </FormRow>
+
+      <FormField
+        label="Subtitle"
+        help="A short second line under the name (any language, e.g. a Japanese phrase)."
+      >
+        <input
+          v-model="store.teaRoomForm.subtitle"
+          placeholder="e.g. 「 桃の森の床の間。」"
+          aria-label="Subtitle"
+        />
+      </FormField>
 
       <div class="flex-row items-start mb-10">
         <FormField
@@ -146,7 +161,9 @@ function cancel(): void {
         <button class="btn-neutral" :disabled="store.saving" @click="cancel">Cancel</button>
         <button
           class="btn-confirm"
-          :disabled="!store.teaRoomForm.name.trim() || store.saving"
+          :disabled="
+            !store.teaRoomForm.name.trim() || !store.teaRoomForm.room_number.trim() || store.saving
+          "
           @click="save"
         >
           <LoadingSpinner v-if="store.saving" label="Saving…" />

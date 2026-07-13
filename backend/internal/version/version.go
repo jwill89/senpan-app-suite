@@ -13,4 +13,4 @@ package version
 
 // Version is the backend's current semantic version. Keep it in sync with
 // CHANGELOG.md's latest Backend entry.
-const Version = "3.7.1"
+const Version = "3.8.0"

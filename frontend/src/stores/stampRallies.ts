@@ -172,6 +172,7 @@ export const useStampRalliesStore = defineStore('stampRallies', () => {
       available_to: '',
       details: '',
       redeem_instructions: '',
+      redeem_image: '',
       stamps: [],
       prizes: [],
     }
@@ -188,6 +189,7 @@ export const useStampRalliesStore = defineStore('stampRallies', () => {
       available_to: utcToDatetimeLocal(r.available_to),
       details: r.details,
       redeem_instructions: r.redeem_instructions,
+      redeem_image: r.redeem_image,
       stamps: (r.stamps || []).map((s) => ({
         id: s.id,
         affiliate_id: s.affiliate_id ?? null,

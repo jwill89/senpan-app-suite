@@ -124,7 +124,7 @@ func buildPublicCard(r *model.StampRally, card *model.StampRallyCard, stamps []m
 	pc := model.PublicStampCard{
 		Rally: model.PublicStampRally{
 			ID: r.ID, Title: r.Title, CardImage: r.CardImage, NotStampedImage: r.NotStampedImage,
-			Details: r.Details, RedeemInstructions: r.RedeemInstructions,
+			Details: r.Details, RedeemInstructions: r.RedeemInstructions, RedeemImage: r.RedeemImage,
 			AvailableFrom: r.AvailableFrom, AvailableTo: r.AvailableTo, IsActive: rallyOpen(r, now),
 		},
 		ParticipantName: card.ParticipantName,
@@ -238,6 +238,7 @@ type stampRallyWriteRequest struct {
 	AvailableTo        string                  `json:"available_to"`
 	Details            string                  `json:"details"`
 	RedeemInstructions string                  `json:"redeem_instructions"`
+	RedeemImage        string                  `json:"redeem_image"`
 	Stamps             []model.StampRallyStamp `json:"stamps"`
 	Prizes             []model.StampRallyPrize `json:"prizes"`
 }
@@ -267,6 +268,7 @@ func rallyFromRequest(req stampRallyWriteRequest, title string) *model.StampRall
 		AvailableTo:        strings.TrimSpace(req.AvailableTo),
 		Details:            req.Details,
 		RedeemInstructions: req.RedeemInstructions,
+		RedeemImage:        strings.TrimSpace(req.RedeemImage),
 		Stamps:             stamps,
 		Prizes:             prizes,
 	}

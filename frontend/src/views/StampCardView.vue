@@ -161,6 +161,10 @@ async function submit(): Promise<void> {
           class="game-details redeem"
           :source="store.publicCard.rally.redeem_instructions"
         />
+        <figure v-if="store.publicCard.rally.redeem_image" class="stamp-redeem-where">
+          <figcaption>Where to redeem</figcaption>
+          <img :src="assetUrl(store.publicCard.rally.redeem_image)" alt="Where to redeem your card" />
+        </figure>
       </template>
     </div>
   </div>
@@ -278,5 +282,17 @@ async function submit(): Promise<void> {
 }
 .stamp-stall-window + .status-badge {
   margin-left: 0;
+}
+.stamp-redeem-where {
+  margin: 12px 0 0;
+}
+.stamp-redeem-where figcaption {
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+.stamp-redeem-where img {
+  max-width: 100%;
+  border-radius: var(--radius);
+  border: 1px solid var(--control-border);
 }
 </style>

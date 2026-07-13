@@ -468,6 +468,7 @@ export interface StampRallyForm {
   available_to: string
   details: string
   redeem_instructions: string
+  redeem_image: string
   stamps: StampRallyStampForm[]
   prizes: StampRallyPrizeForm[]
 }

@@ -14,7 +14,7 @@ import (
 // PRAGMA user_version against this constant and runs only the migrations
 // needed to bring the database up to date. Bump this when adding a new
 // migration block.
-const schemaVersion = 47
+const schemaVersion = 48
 
 // ensureSchema reads the current PRAGMA user_version from the database and
 // applies any outstanding migrations to bring it up to schemaVersion.
@@ -310,6 +310,12 @@ func ensureSchema(db *sql.DB) error {
 
 	if version < 47 {
 		if err := migrateAffiliateFields(db); err != nil {
+			return err
+		}
+	}
+
+	if version < 48 {
+		if err := migrateStampRallyRedeemImage(db); err != nil {
 			return err
 		}
 	}
@@ -1499,6 +1505,7 @@ const stampRalliesTableSQL = `CREATE TABLE IF NOT EXISTS stamp_rallies (
 	available_to TEXT NOT NULL DEFAULT '',
 	details TEXT NOT NULL DEFAULT '',
 	redeem_instructions TEXT NOT NULL DEFAULT '',
+	redeem_image TEXT NOT NULL DEFAULT '',
 	status TEXT NOT NULL DEFAULT 'open',
 	created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 )`
@@ -1613,6 +1620,18 @@ func migrateStampRallyGaraponLink(db *sql.DB) error {
 	if tableExists(db, "garapon_players") && !hasColumn(db, "garapon_players", "stamp_card_id") {
 		if _, err := db.Exec(`ALTER TABLE garapon_players ADD COLUMN stamp_card_id INTEGER`); err != nil {
 			return fmt.Errorf("add garapon_players.stamp_card_id: %w", err)
+		}
+	}
+	return nil
+}
+
+// migrateStampRallyRedeemImage (schema v48) adds the "Where to Redeem" screenshot column
+// to stamp_rallies — a card image shown to participants (alongside the redeem instructions)
+// once their card is complete. Idempotent.
+func migrateStampRallyRedeemImage(db *sql.DB) error {
+	if tableExists(db, "stamp_rallies") && !hasColumn(db, "stamp_rallies", "redeem_image") {
+		if _, err := db.Exec(`ALTER TABLE stamp_rallies ADD COLUMN redeem_image TEXT NOT NULL DEFAULT ''`); err != nil {
+			return fmt.Errorf("add stamp_rallies.redeem_image: %w", err)
 		}
 	}
 	return nil

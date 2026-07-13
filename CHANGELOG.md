@@ -41,6 +41,17 @@ The format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## Frontend
 
+### [3.10.0] — 2026-07-12
+
+Adds a **"Where to Redeem"** image to stamp rallies (paired with backend 3.8.0).
+
+#### Added
+
+- **"Where to Redeem"** field on the stamp-rally editor — an image picker below
+  **How to Redeem**, usually a screenshot of where in the area a participant goes
+  to redeem their completed card. It's shown on the participant's card, alongside
+  the redeem instructions, once the card is complete.
+
 ### [3.9.0] — 2026-07-12
 
 Fixes large image uploads timing out, and adds a live upload-progress indicator.
@@ -473,6 +484,19 @@ First tracked release — establishes versioning for the current production buil
 ---
 
 ## Backend
+
+### [3.8.0] — 2026-07-12
+
+Adds a **"Where to Redeem"** image to stamp rallies (paired with frontend 3.10.0).
+Backward-compatible addition only (one new column via schema **v48**); no breaking
+contract changes.
+
+#### Added
+
+- **Stamp-rally `redeem_image`** — a card image (the "Where to Redeem" screenshot)
+  stored on the rally, accepted on create/replace and returned on the admin and
+  public (`GET /api/stamp-card/{token}`) payloads. Schema **v48** (idempotent
+  `ALTER TABLE stamp_rallies ADD COLUMN redeem_image`).
 
 ### [3.7.1] — 2026-07-12
 

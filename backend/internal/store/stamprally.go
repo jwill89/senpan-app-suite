@@ -26,7 +26,7 @@ var ErrStampAlreadyCollected = errors.New("stamp already collected")
 // and completed-card counts. Stamps/prizes are omitted (use GetStampRally).
 func (s *Store) ListStampRallies() ([]model.StampRally, error) {
 	rows, err := s.db.Query(`SELECT r.id, r.title, r.card_image, r.not_stamped_image,
-			r.available_from, r.available_to, r.details, r.redeem_instructions, r.status, r.created_at,
+			r.available_from, r.available_to, r.details, r.redeem_instructions, r.redeem_image, r.status, r.created_at,
 			COALESCE((SELECT COUNT(*) FROM stamp_rally_cards c WHERE c.rally_id = r.id), 0),
 			COALESCE((SELECT COUNT(*) FROM stamp_rally_cards c WHERE c.rally_id = r.id AND c.completed = 1), 0),
 			COALESCE((SELECT COUNT(*) FROM stamp_rally_stamps st WHERE st.rally_id = r.id), 0),
@@ -41,7 +41,7 @@ func (s *Store) ListStampRallies() ([]model.StampRally, error) {
 	for rows.Next() {
 		var r model.StampRally
 		if err := rows.Scan(&r.ID, &r.Title, &r.CardImage, &r.NotStampedImage,
-			&r.AvailableFrom, &r.AvailableTo, &r.Details, &r.RedeemInstructions, &r.Status, &r.CreatedAt,
+			&r.AvailableFrom, &r.AvailableTo, &r.Details, &r.RedeemInstructions, &r.RedeemImage, &r.Status, &r.CreatedAt,
 			&r.CardCount, &r.CompletedCount, &r.StampCount, &r.ActiveStampCount); err != nil {
 			return nil, err
 		}
@@ -55,10 +55,10 @@ func (s *Store) ListStampRallies() ([]model.StampRally, error) {
 func (s *Store) GetStampRally(id int64) (*model.StampRally, error) {
 	var r model.StampRally
 	err := s.db.QueryRow(`SELECT id, title, card_image, not_stamped_image,
-			available_from, available_to, details, redeem_instructions, status, created_at
+			available_from, available_to, details, redeem_instructions, redeem_image, status, created_at
 		FROM stamp_rallies WHERE id = ?`, id).
 		Scan(&r.ID, &r.Title, &r.CardImage, &r.NotStampedImage,
-			&r.AvailableFrom, &r.AvailableTo, &r.Details, &r.RedeemInstructions, &r.Status, &r.CreatedAt)
+			&r.AvailableFrom, &r.AvailableTo, &r.Details, &r.RedeemInstructions, &r.RedeemImage, &r.Status, &r.CreatedAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
 	}
@@ -144,9 +144,9 @@ func (s *Store) CreateStampRally(r *model.StampRally) (int64, error) {
 	defer func() { _ = tx.Rollback() }()
 
 	res, err := tx.Exec(`INSERT INTO stamp_rallies
-			(title, card_image, not_stamped_image, available_from, available_to, details, redeem_instructions)
-		VALUES (?, ?, ?, ?, ?, ?, ?)`,
-		r.Title, r.CardImage, r.NotStampedImage, r.AvailableFrom, r.AvailableTo, r.Details, r.RedeemInstructions)
+			(title, card_image, not_stamped_image, available_from, available_to, details, redeem_instructions, redeem_image)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+		r.Title, r.CardImage, r.NotStampedImage, r.AvailableFrom, r.AvailableTo, r.Details, r.RedeemInstructions, r.RedeemImage)
 	if err != nil {
 		return 0, err
 	}
@@ -182,9 +182,9 @@ func (s *Store) UpdateStampRally(r *model.StampRally) error {
 	defer func() { _ = tx.Rollback() }()
 
 	if _, err := tx.Exec(`UPDATE stamp_rallies SET title = ?, card_image = ?, not_stamped_image = ?,
-			available_from = ?, available_to = ?, details = ?, redeem_instructions = ? WHERE id = ?`,
+			available_from = ?, available_to = ?, details = ?, redeem_instructions = ?, redeem_image = ? WHERE id = ?`,
 		r.Title, r.CardImage, r.NotStampedImage, r.AvailableFrom, r.AvailableTo,
-		r.Details, r.RedeemInstructions, r.ID); err != nil {
+		r.Details, r.RedeemInstructions, r.RedeemImage, r.ID); err != nil {
 		return err
 	}
 

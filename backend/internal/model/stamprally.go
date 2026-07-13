@@ -23,6 +23,7 @@ type StampRally struct {
 	AvailableTo        string `json:"available_to"`        // UTC RFC-3339 ("" = unbounded)
 	Details            string `json:"details"`             // markdown
 	RedeemInstructions string `json:"redeem_instructions"` // markdown, shown once complete
+	RedeemImage        string `json:"redeem_image"`        // images/… screenshot of where to redeem, shown once complete
 	// Status is a manual "open"/"closed" flag, independent of the availability window:
 	// a closed rally is read-only (no more stamping), moves to the admin's closed table,
 	// and isn't offered for Garapon linking.
@@ -151,6 +152,7 @@ type PublicStampRally struct {
 	NotStampedImage    string `json:"not_stamped_image"`
 	Details            string `json:"details"`
 	RedeemInstructions string `json:"redeem_instructions"`
+	RedeemImage        string `json:"redeem_image"`
 	AvailableFrom      string `json:"available_from"`
 	AvailableTo        string `json:"available_to"`
 	IsActive           bool   `json:"is_active"`

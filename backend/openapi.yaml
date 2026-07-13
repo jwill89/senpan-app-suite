@@ -2176,6 +2176,8 @@ components:
               type: boolean
             not_stamped_image:
               type: string
+            redeem_image:
+              type: string
             redeem_instructions:
               type: string
             title:
@@ -2238,6 +2240,8 @@ components:
         is_active:
           type: boolean
         not_stamped_image:
+          type: string
+        redeem_image:
           type: string
         redeem_instructions:
           type: string
@@ -2870,6 +2874,8 @@ components:
                       type: integer
                   type: object
                 type: array
+              redeem_image:
+                type: string
               redeem_instructions:
                 type: string
               stamp_count:
@@ -2986,6 +2992,8 @@ components:
                 type: integer
             type: object
           type: array
+        redeem_image:
+          type: string
         redeem_instructions:
           type: string
         stamp_count:
@@ -3191,6 +3199,8 @@ components:
                     type: integer
                 type: object
               type: array
+            redeem_image:
+              type: string
             redeem_instructions:
               type: string
             stamp_count:
@@ -3376,6 +3386,8 @@ components:
                     type: integer
                 type: object
               type: array
+            redeem_image:
+              type: string
             redeem_instructions:
               type: string
             stamp_count:
@@ -3536,6 +3548,8 @@ components:
                 is_active:
                   type: boolean
                 not_stamped_image:
+                  type: string
+                redeem_image:
                   type: string
                 redeem_instructions:
                   type: string
@@ -8652,6 +8666,9 @@ paths:
                   items:
                     $ref: '#/components/schemas/StampRallyPrize'
                   type: array
+                redeem_image:
+                  description: Where-to-redeem screenshot.
+                  type: string
                 redeem_instructions:
                   description: Markdown.
                   type: string
@@ -8765,6 +8782,9 @@ paths:
                   items:
                     $ref: '#/components/schemas/StampRallyPrize'
                   type: array
+                redeem_image:
+                  description: Where-to-redeem screenshot.
+                  type: string
                 redeem_instructions:
                   description: Markdown.
                   type: string

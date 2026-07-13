@@ -193,7 +193,7 @@ func buildFeaturePaths(b *pb) {
 		return props(
 			"title", pstr("Title (required)."), "card_image", pstr(""), "not_stamped_image", pstr(""),
 			"available_from", pstr("UTC RFC-3339."), "available_to", pstr("UTC RFC-3339."),
-			"details", pstr("Markdown."), "redeem_instructions", pstr("Markdown."),
+			"details", pstr("Markdown."), "redeem_instructions", pstr("Markdown."), "redeem_image", pstr("Where-to-redeem screenshot."),
 			"stamps", parr("", ref("StampRallyStamp")), "prizes", parr("", ref("StampRallyPrize")))
 	}
 	b.add("GET", "/api/stamp-rallies", "Stamp Rally", "List rallies", "permission:festival-stamp-rally", "", opt{resps: []respEntry{ok("StampRalliesResponse")}})

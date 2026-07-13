@@ -53,6 +53,7 @@ function publicCard(over: Partial<PublicStampCard> = {}): PublicStampCard {
       not_stamped_image: '',
       details: '',
       redeem_instructions: '',
+      redeem_image: '',
       available_from: '',
       available_to: '',
       is_active: true,

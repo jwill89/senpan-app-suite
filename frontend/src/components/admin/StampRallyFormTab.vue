@@ -153,6 +153,13 @@ function cancel(): void {
         />
       </FormField>
 
+      <FormField
+        label="Where to Redeem"
+        help="Usually a screenshot of where in the area to go to redeem the completed card. Shown to participants alongside the redeem instructions once their card is complete."
+      >
+        <ImagePicker v-model="store.rallyForm.redeem_image" />
+      </FormField>
+
       <FormRow>
         <FormField
           label="Stamp Card Image"

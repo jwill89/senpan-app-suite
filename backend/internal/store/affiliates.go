@@ -14,12 +14,17 @@ import (
 // columns (mirroring reading_list_items.sources) rather than sub-tables, since
 // they're small, always loaded with the row, and edited as a set.
 
-// ListAffiliates returns every affiliate, ordered alphabetically by name
-// (case-insensitively), each with its owners and hours decoded.
+// affiliateColumns is the shared SELECT column list (order matches scanAffiliate).
+const affiliateColumns = `id, name, owners, location, timezone, hours, details, logo, screenshot,
+	embed_color, discord_link, carrd_link, sort_order, created_at`
+
+// ListAffiliates returns every affiliate in the admin's manual drag order, then
+// alphabetically by name (so a fresh install / never-reordered list stays
+// alphabetical until dragged), each with its owners and hours decoded.
 func (s *Store) ListAffiliates() ([]model.Affiliate, error) {
 	rows, err := s.db.Query(
-		`SELECT id, name, owners, location, timezone, hours, details, logo, screenshot, created_at
-		   FROM affiliates ORDER BY name COLLATE NOCASE ASC, id ASC`)
+		`SELECT ` + affiliateColumns + `
+		   FROM affiliates ORDER BY sort_order ASC, name COLLATE NOCASE ASC, id ASC`)
 	if err != nil {
 		return nil, err
 	}
@@ -39,8 +44,7 @@ func (s *Store) ListAffiliates() ([]model.Affiliate, error) {
 // GetAffiliate retrieves a single affiliate by id. Returns nil if not found.
 func (s *Store) GetAffiliate(id int64) (*model.Affiliate, error) {
 	row := s.db.QueryRow(
-		`SELECT id, name, owners, location, timezone, hours, details, logo, screenshot, created_at
-		   FROM affiliates WHERE id = ?`, id)
+		`SELECT `+affiliateColumns+` FROM affiliates WHERE id = ?`, id)
 	a, err := scanAffiliate(row)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
@@ -55,24 +59,46 @@ func (s *Store) GetAffiliate(id int64) (*model.Affiliate, error) {
 // are stored as JSON arrays.
 func (s *Store) CreateAffiliate(a *model.Affiliate) (int64, error) {
 	res, err := s.db.Exec(
-		`INSERT INTO affiliates (name, owners, location, timezone, hours, details, logo, screenshot)
-		   VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+		`INSERT INTO affiliates
+		   (name, owners, location, timezone, hours, details, logo, screenshot, embed_color, discord_link, carrd_link)
+		   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		a.Name, encodeStrings(a.Owners), a.Location, a.Timezone,
-		encodeHours(a.Hours), a.Details, a.Logo, a.Screenshot)
+		encodeHours(a.Hours), a.Details, a.Logo, a.Screenshot,
+		a.EmbedColor, a.DiscordLink, a.CarrdLink)
 	if err != nil {
 		return 0, err
 	}
 	return res.LastInsertId()
 }
 
-// UpdateAffiliate updates an affiliate's editable fields (everything but id/created_at).
+// UpdateAffiliate updates an affiliate's editable fields (everything but
+// id/created_at/sort_order — sort_order is managed by BulkReorderAffiliates, so an
+// edit must not reset the drag order).
 func (s *Store) UpdateAffiliate(a *model.Affiliate) error {
 	_, err := s.db.Exec(
 		`UPDATE affiliates SET name = ?, owners = ?, location = ?, timezone = ?,
-		   hours = ?, details = ?, logo = ?, screenshot = ? WHERE id = ?`,
+		   hours = ?, details = ?, logo = ?, screenshot = ?,
+		   embed_color = ?, discord_link = ?, carrd_link = ? WHERE id = ?`,
 		a.Name, encodeStrings(a.Owners), a.Location, a.Timezone,
-		encodeHours(a.Hours), a.Details, a.Logo, a.Screenshot, a.ID)
+		encodeHours(a.Hours), a.Details, a.Logo, a.Screenshot,
+		a.EmbedColor, a.DiscordLink, a.CarrdLink, a.ID)
 	return err
+}
+
+// BulkReorderAffiliates rewrites sort_order to match the given id order (index 0 =
+// top), in a single transaction. Ids not present are left untouched.
+func (s *Store) BulkReorderAffiliates(ids []int64) error {
+	tx, err := s.beginImmediate()
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+	for i, id := range ids {
+		if _, err := tx.Exec(`UPDATE affiliates SET sort_order = ? WHERE id = ?`, i, id); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
 }
 
 // DeleteAffiliate removes an affiliate. Returns true if a row was deleted. The
@@ -98,7 +124,8 @@ func scanAffiliate(sc rowScanner) (*model.Affiliate, error) {
 	var a model.Affiliate
 	var ownersJSON, hoursJSON string
 	if err := sc.Scan(&a.ID, &a.Name, &ownersJSON, &a.Location, &a.Timezone,
-		&hoursJSON, &a.Details, &a.Logo, &a.Screenshot, &a.CreatedAt); err != nil {
+		&hoursJSON, &a.Details, &a.Logo, &a.Screenshot,
+		&a.EmbedColor, &a.DiscordLink, &a.CarrdLink, &a.SortOrder, &a.CreatedAt); err != nil {
 		return nil, err
 	}
 	a.Owners = decodeStrings(ownersJSON)

@@ -14,7 +14,7 @@ import (
 // PRAGMA user_version against this constant and runs only the migrations
 // needed to bring the database up to date. Bump this when adding a new
 // migration block.
-const schemaVersion = 46
+const schemaVersion = 47
 
 // ensureSchema reads the current PRAGMA user_version from the database and
 // applies any outstanding migrations to bring it up to schemaVersion.
@@ -308,6 +308,12 @@ func ensureSchema(db *sql.DB) error {
 		}
 	}
 
+	if version < 47 {
+		if err := migrateAffiliateFields(db); err != nil {
+			return err
+		}
+	}
+
 	_, err := db.Exec(fmt.Sprintf("PRAGMA user_version = %d", schemaVersion))
 	return err
 }
@@ -525,6 +531,7 @@ func createIndexes(db *sql.DB) error {
 		"CREATE INDEX IF NOT EXISTS idx_tea_rooms_sort ON tea_rooms(sort_order, id)",
 		// room_number is the public/embed lookup key and must be unique.
 		"CREATE UNIQUE INDEX IF NOT EXISTS idx_tea_rooms_room_number ON tea_rooms(room_number)",
+		"CREATE INDEX IF NOT EXISTS idx_affiliates_sort ON affiliates(sort_order, id)",
 	}
 	for _, idx := range indexes {
 		if _, err := db.Exec(idx); err != nil {
@@ -1374,6 +1381,10 @@ const affiliatesTableSQL = `CREATE TABLE IF NOT EXISTS affiliates (
 	details TEXT NOT NULL DEFAULT '',
 	logo TEXT NOT NULL DEFAULT '',
 	screenshot TEXT NOT NULL DEFAULT '',
+	embed_color TEXT NOT NULL DEFAULT '',
+	discord_link TEXT NOT NULL DEFAULT '',
+	carrd_link TEXT NOT NULL DEFAULT '',
+	sort_order INTEGER NOT NULL DEFAULT 0,
 	created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 )`
 
@@ -1383,6 +1394,32 @@ const affiliatesTableSQL = `CREATE TABLE IF NOT EXISTS affiliates (
 func migrateAffiliates(db *sql.DB) error {
 	if _, err := db.Exec(affiliatesTableSQL); err != nil {
 		return fmt.Errorf("migrate affiliates: %w", err)
+	}
+	return nil
+}
+
+// migrateAffiliateFields adds the Discord-posting + drag-order columns to the
+// affiliates table for databases created before they existed: an embed accent
+// colour, optional Discord + Carrd links, and a sort_order for drag-and-drop.
+// Existing rows default to 0 sort_order (keeping their prior order until dragged)
+// and empty strings. Idempotent (each ALTER is guarded by hasColumn).
+func migrateAffiliateFields(db *sql.DB) error {
+	if !tableExists(db, "affiliates") {
+		return nil
+	}
+	cols := []struct{ name, ddl string }{
+		{"embed_color", `ALTER TABLE affiliates ADD COLUMN embed_color TEXT NOT NULL DEFAULT ''`},
+		{"discord_link", `ALTER TABLE affiliates ADD COLUMN discord_link TEXT NOT NULL DEFAULT ''`},
+		{"carrd_link", `ALTER TABLE affiliates ADD COLUMN carrd_link TEXT NOT NULL DEFAULT ''`},
+		{"sort_order", `ALTER TABLE affiliates ADD COLUMN sort_order INTEGER NOT NULL DEFAULT 0`},
+	}
+	for _, c := range cols {
+		if hasColumn(db, "affiliates", c.name) {
+			continue
+		}
+		if _, err := db.Exec(c.ddl); err != nil {
+			return fmt.Errorf("add affiliates.%s: %w", c.name, err)
+		}
 	}
 	return nil
 }

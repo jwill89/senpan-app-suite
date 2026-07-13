@@ -8,7 +8,10 @@ const { categories, saveCategory, deleteCategory, list, upload, deleteImage } = 
   saveCategory: vi.fn(async () => ({ ok: true, category: { dir: 'event_banners' } })),
   deleteCategory: vi.fn(async () => ({ ok: true })),
   list: vi.fn(async () => ({ dir: '', images: [] as ImageEntry[] })),
-  upload: vi.fn(async () => ({ uploaded: ['a.png'], skipped: [] })),
+  upload: vi.fn(async (_form: FormData, _onProgress?: (p: number) => void) => ({
+    uploaded: ['a.png'],
+    skipped: [],
+  })),
   deleteImage: vi.fn(async () => ({ ok: true })),
 }))
 vi.mock('@/lib/endpoints', () => ({
@@ -149,6 +152,20 @@ describe('images uploadImages', () => {
     const store = useImagesStore()
     await store.uploadImages('raffles', [])
     expect(upload).not.toHaveBeenCalled()
+  })
+
+  it('tracks upload progress via the callback and resets it when done', async () => {
+    const store = useImagesStore()
+    let midFlight = -99
+    upload.mockImplementationOnce(async (_form, onProgress) => {
+      onProgress?.(42) // server-driven progress event
+      midFlight = store.uploadProgress
+      return { uploaded: ['a.png'], skipped: [] }
+    })
+    expect(store.uploadProgress).toBe(-1) // idle before
+    await store.uploadImages('raffles', [new File(['x'], 'a.png', { type: 'image/png' })])
+    expect(midFlight).toBe(42) // the callback drove the ref mid-upload
+    expect(store.uploadProgress).toBe(-1) // reset in finally
   })
 })
 

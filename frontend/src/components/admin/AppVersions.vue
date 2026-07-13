@@ -1,16 +1,22 @@
 <script setup lang="ts">
 /**
- * Compact frontend/backend version readout for the admin sidebar footer. Shows
- * the SPA's build version (baked in) alongside the backend's (fetched from
- * GET /api/version) so operators can confirm a deploy left the two halves
- * compatible. A mismatch in MAJOR version (or a failed probe) is flagged.
+ * Frontend/backend/plugin version readout for the admin sidebar footer. The SPA's
+ * build version (baked in) and the backend's (fetched from GET /api/version) are
+ * shown so operators can confirm a deploy left the web halves compatible; a MAJOR
+ * mismatch (or a failed probe) is flagged. The plugin's version comes from the
+ * bundled changelog (its latest released entry). Each version is a button that
+ * opens that component's changelog (the plugin's also carries install steps).
  */
 import { computed, onMounted, ref } from 'vue'
 import { endpoints } from '@/lib/endpoints'
 import { FRONTEND_VERSION, versionsCompatible } from '@/lib/version'
+import { changelog, type ChangelogComponent } from '@/lib/changelog'
+import ChangelogModal from '@/components/admin/ChangelogModal.vue'
 
 const backend = ref<string | null>(null)
 const failed = ref(false)
+/** Which component's changelog modal is open (null = closed). */
+const openComponent = ref<ChangelogComponent | null>(null)
 
 // .then/.catch (not async/await) so the rejection handler is attached
 // synchronously — no unhandled-rejection window if the probe fails.
@@ -29,20 +35,53 @@ onMounted(() => {
 const incompatible = computed(
   () => backend.value !== null && !versionsCompatible(FRONTEND_VERSION, backend.value),
 )
+
+/** Latest released plugin version (from the bundled changelog). */
+const pluginVersion = computed(() => changelog.plugin.latest)
 </script>
 
 <template>
   <div class="app-versions" :class="{ 'app-versions--warn': incompatible || failed }">
     <span class="app-versions__row">
       <span class="app-versions__label">Frontend</span>
-      <span class="app-versions__val">v{{ FRONTEND_VERSION }}</span>
+      <button
+        type="button"
+        class="app-versions__val app-versions__link"
+        title="View the Frontend changelog"
+        @click="openComponent = 'frontend'"
+      >
+        v{{ FRONTEND_VERSION }}
+      </button>
     </span>
+
     <span class="app-versions__row">
       <span class="app-versions__label">Backend</span>
-      <span class="app-versions__val">{{
-        backend ? `v${backend}` : failed ? 'unknown' : '…'
-      }}</span>
+      <button
+        v-if="backend"
+        type="button"
+        class="app-versions__val app-versions__link"
+        title="View the Backend changelog"
+        @click="openComponent = 'backend'"
+      >
+        v{{ backend }}
+      </button>
+      <span v-else class="app-versions__val">{{ failed ? 'unknown' : '…' }}</span>
     </span>
+
+    <span class="app-versions__row">
+      <span class="app-versions__label">Plugin</span>
+      <button
+        v-if="pluginVersion"
+        type="button"
+        class="app-versions__val app-versions__link"
+        title="View the Plugin changelog + install steps"
+        @click="openComponent = 'plugin'"
+      >
+        v{{ pluginVersion }}
+      </button>
+      <span v-else class="app-versions__val">—</span>
+    </span>
+
     <span
       v-if="incompatible"
       class="app-versions__flag"
@@ -50,6 +89,8 @@ const incompatible = computed(
     >
       <font-awesome-icon :icon="['fas', 'triangle-exclamation']" /> version mismatch
     </span>
+
+    <ChangelogModal v-if="openComponent" :component="openComponent" @close="openComponent = null" />
   </div>
 </template>
 
@@ -75,6 +116,22 @@ const incompatible = computed(
 .app-versions__val {
   font-family: 'Consolas', 'Monaco', monospace;
   color: var(--text);
+}
+/* Version numbers are buttons that open the changelog — reset button chrome and
+   surface them as subtle links. */
+.app-versions__link {
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0;
+  cursor: pointer;
+  text-decoration: underline;
+  text-decoration-style: dotted;
+  text-underline-offset: 2px;
+}
+.app-versions__link:hover,
+.app-versions__link:focus-visible {
+  color: var(--accent);
 }
 .app-versions--warn .app-versions__val {
   color: var(--warning);

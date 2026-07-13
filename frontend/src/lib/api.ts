@@ -176,3 +176,93 @@ export function apiPatch<T = unknown>(
 export function apiDelete<T = unknown>(endpoint: string, options: ApiOptions = {}): Promise<T> {
   return api<T>(endpoint, { method: 'DELETE', ...options })
 }
+
+// ── File uploads ──────────────────────────────────────────────────────────────
+
+export interface UploadOptions {
+  // Invoked with 0–100 as the request body is sent. Fires only while bytes are
+  // in flight; once the last byte is sent it sits at 100 while the server saves
+  // the files and responds.
+  onProgress?: (percent: number) => void
+  // Cancels the in-flight upload (e.g. the user navigated away).
+  signal?: AbortSignal
+  // Skip the global 401 → "session expired" handler (parity with ApiOptions).
+  skipAuthRedirect?: boolean
+}
+
+/**
+ * Uploads a multipart form via XMLHttpRequest and returns the parsed JSON.
+ *
+ * Uploads go through XHR rather than the fetch-based `api()` for two reasons that
+ * matter for large files:
+ *   1. No client-side timeout. A big image (up to the server's 64 MB cap) over a
+ *      slow uplink can legitimately take minutes; api()'s 30s default would abort
+ *      it mid-transfer with a bogus "timed out" error. Here `xhr.timeout` stays 0
+ *      — the transfer takes as long as it takes, and only the network or the user
+ *      can end it.
+ *   2. Upload progress. fetch exposes no upload-progress events; XHR does (via
+ *      `upload.onprogress`), so the UI can show a real percentage instead of an
+ *      indeterminate spinner that looks hung on a long upload.
+ *
+ * Credentials, error extraction, and the global 401 handler mirror `api()` so
+ * callers get the same {@link ApiError} contract.
+ * @throws {ApiError} with the server's error message if the response is not OK.
+ */
+export function apiUpload<T = unknown>(
+  endpoint: string,
+  form: FormData,
+  options: UploadOptions = {},
+): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const xhr = new XMLHttpRequest()
+    xhr.open('POST', `${API_BASE}/${endpoint}`)
+    xhr.withCredentials = true // send the admin session cookie, like fetch's credentials:'include'
+    xhr.timeout = 0 // never abort on our side; large uploads can take minutes
+
+    const { onProgress } = options
+    if (onProgress) {
+      xhr.upload.onprogress = (e) => {
+        if (e.lengthComputable) onProgress(Math.round((e.loaded / e.total) * 100))
+      }
+    }
+
+    const fail = (message: string, status: number, body?: unknown) =>
+      reject(new ApiError(message, status, body))
+
+    xhr.onload = () => {
+      let data: unknown = null
+      try {
+        data = JSON.parse(xhr.responseText)
+      } catch {
+        data = null
+      }
+      if (xhr.status >= 200 && xhr.status < 300) {
+        resolve(data as T)
+        return
+      }
+      if (xhr.status === 401 && !options.skipAuthRedirect) onUnauthorized?.()
+      const serverMsg =
+        data && typeof data === 'object' && 'error' in data && typeof data.error === 'string'
+          ? data.error
+          : null
+      fail(
+        serverMsg || (xhr.status ? `Upload failed (HTTP ${xhr.status})` : 'Upload failed'),
+        xhr.status,
+        data,
+      )
+    }
+    xhr.onerror = () => fail('Network error during upload. Please try again.', 0)
+    xhr.ontimeout = () => fail('Upload timed out. Please try again.', 0)
+    xhr.onabort = () => fail('Upload cancelled', 0)
+
+    if (options.signal) {
+      if (options.signal.aborted) {
+        fail('Upload cancelled', 0)
+        return
+      }
+      options.signal.addEventListener('abort', () => xhr.abort(), { once: true })
+    }
+
+    xhr.send(form)
+  })
+}

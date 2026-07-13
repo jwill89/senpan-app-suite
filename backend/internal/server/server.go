@@ -271,8 +271,11 @@ func (s *Server) routes() {
 	// library managed on System → Images.
 	s.mux.HandleFunc("GET /api/affiliates", s.handleAffiliatesList)
 	s.mux.HandleFunc("POST /api/affiliates", s.handleAffiliateCreate)
+	s.mux.HandleFunc("POST /api/affiliates/reorder", s.handleAffiliatesReorder)
+	s.mux.HandleFunc("PUT /api/affiliates/webhook", s.handleAffiliateWebhookSet)
 	s.mux.HandleFunc("PUT /api/affiliates/{id}", s.handleAffiliateUpdate)
 	s.mux.HandleFunc("DELETE /api/affiliates/{id}", s.handleAffiliateDelete)
+	s.mux.HandleFunc("POST /api/affiliates/{id}/post", s.handleAffiliatePost)
 
 	// Tea Rooms (Senpan Tea House → Tea Rooms). Admin CRUD + drag reorder + the
 	// open/discounted flag toggles (PATCH) + post-to-Discord, the shared webhook

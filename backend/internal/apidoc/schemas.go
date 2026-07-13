@@ -72,6 +72,7 @@ var modelTypes = map[string]any{
 
 	// Affiliates / stamp rally
 	"AffiliatesResponse": model.AffiliatesResponse{}, "AffiliateResponse": model.AffiliateResponse{},
+	"AffiliateWebhookResponse": model.AffiliateWebhookResponse{},
 	"StampRalliesResponse": model.StampRalliesResponse{}, "StampRallyResponse": model.StampRallyResponse{},
 	"StampRallyDetailResponse": model.StampRallyDetailResponse{}, "StampRallyCardResponse": model.StampRallyCardResponse{},
 	"StampRallyLogsResponse": model.StampRallyLogsResponse{}, "PublicStampRally": model.PublicStampRally{},

@@ -170,3 +170,79 @@ func TestAffiliates_PermissionGating(t *testing.T) {
 		resp.Body.Close()
 	}
 }
+
+// ── Reorder, webhook, and post-to-Discord ───────────────────────────────────
+
+func TestAffiliates_Reorder(t *testing.T) {
+	env := newTestEnv(t)
+	env.loginAdmin(t)
+
+	// Three affiliates; all share sort_order 0, so they list alphabetically first.
+	idA := env.createAffiliate(t, "Alpha")
+	idB := env.createAffiliate(t, "Bravo")
+	idC := env.createAffiliate(t, "Charlie")
+
+	// Drag into C, A, B order.
+	resp := env.postJSON(t, "/api/affiliates/reorder", map[string]any{
+		"ordered_ids": []int{idC, idA, idB},
+	})
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("reorder status = %d; want 200", resp.StatusCode)
+	}
+	resp.Body.Close()
+
+	list := decodeBody(t, env.get(t, "/api/affiliates"))["affiliates"].([]any)
+	got := make([]int, 0, len(list))
+	for _, a := range list {
+		got = append(got, int(a.(map[string]any)["id"].(float64)))
+	}
+	want := []int{idC, idA, idB}
+	if fmt.Sprint(got) != fmt.Sprint(want) {
+		t.Errorf("order after reorder = %v; want %v", got, want)
+	}
+}
+
+func TestAffiliates_Webhook(t *testing.T) {
+	env := newTestEnv(t)
+	env.loginAdmin(t)
+
+	// A valid Discord webhook saves and comes back on the list response.
+	hook := "https://discord.com/api/webhooks/123/abc"
+	resp := env.putJSON(t, "/api/affiliates/webhook", map[string]any{"webhook_url": hook})
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("set webhook status = %d; want 200", resp.StatusCode)
+	}
+	resp.Body.Close()
+	if got := decodeBody(t, env.get(t, "/api/affiliates"))["webhook_url"]; got != hook {
+		t.Errorf("webhook_url = %v; want %q", got, hook)
+	}
+
+	// A non-Discord URL is rejected.
+	resp = env.putJSON(t, "/api/affiliates/webhook", map[string]any{"webhook_url": "https://evil.example.com/x"})
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("bad webhook status = %d; want 400", resp.StatusCode)
+	}
+	resp.Body.Close()
+}
+
+func TestAffiliates_Post(t *testing.T) {
+	env := newTestEnv(t)
+	env.loginAdmin(t)
+	id := env.createAffiliate(t, "Poster")
+
+	// Posting with no webhook configured is a 400.
+	resp := env.postJSON(t, fmt.Sprintf("/api/affiliates/%d/post", id), map[string]any{})
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("post without webhook status = %d; want 400", resp.StatusCode)
+	}
+	resp.Body.Close()
+
+	// Posting an unknown affiliate is a 404 (even with a webhook set).
+	env.putJSON(t, "/api/affiliates/webhook",
+		map[string]any{"webhook_url": "https://discord.com/api/webhooks/1/x"}).Body.Close()
+	resp = env.postJSON(t, "/api/affiliates/999999/post", map[string]any{})
+	if resp.StatusCode != http.StatusNotFound {
+		t.Fatalf("post unknown affiliate status = %d; want 404", resp.StatusCode)
+	}
+	resp.Body.Close()
+}

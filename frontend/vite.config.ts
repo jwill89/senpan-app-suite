@@ -6,6 +6,7 @@ import { defineConfig, type Plugin } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import { VitePWA } from 'vite-plugin-pwa'
 import { visualizer } from 'rollup-plugin-visualizer'
+import { changelogPlugin } from './config/changelog-plugin'
 
 // Static images (logo/favicon/share_banner) live in `public/images/` so they
 // are available during `vite dev`. In production, they are served from a
@@ -107,6 +108,7 @@ const frontendVersion = JSON.parse(
 export default defineConfig({
   plugins: [
     vue(),
+    changelogPlugin(),
     // Installable PWA + offline app-shell. The service worker auto-updates on
     // each deploy (new precache manifest). API/WebSocket and the persistent
     // root images/ are explicitly excluded from the SPA navigation fallback so

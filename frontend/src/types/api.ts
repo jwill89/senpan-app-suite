@@ -133,6 +133,7 @@ export type {
   // Affiliates
   AffiliatesResponse,
   AffiliateResponse,
+  AffiliateWebhookResponse,
   // Tea rooms
   TeaRoomsResponse,
   TeaRoomResponse,
@@ -411,6 +412,12 @@ export interface AffiliateForm {
   details: string
   logo: string
   screenshot: string
+  /** Discord embed accent, "#rrggbb". */
+  embed_color: string
+  /** Optional Discord invite/link shown in the embed. */
+  discord_link: string
+  /** Optional Carrd (or other site) link shown in the embed. */
+  carrd_link: string
 }
 
 /**

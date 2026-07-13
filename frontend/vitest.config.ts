@@ -2,6 +2,7 @@ import { fileURLToPath, URL } from 'node:url'
 import { readFileSync } from 'node:fs'
 import { defineConfig } from 'vitest/config'
 import vue from '@vitejs/plugin-vue'
+import { changelogPlugin } from './config/changelog-plugin'
 
 // Mirror vite.config.ts's __APP_VERSION__ define so code that reads the frontend
 // version works (and can be asserted) under the test runner too.
@@ -14,7 +15,7 @@ const frontendVersion = JSON.parse(
 // visualizer, dist-image stripping). Only the Vue SFC compiler + the `@` alias
 // are needed to import and mount components/stores under test.
 export default defineConfig({
-  plugins: [vue()],
+  plugins: [vue(), changelogPlugin()],
   define: {
     __APP_VERSION__: JSON.stringify(frontendVersion),
   },

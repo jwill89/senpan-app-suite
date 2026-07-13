@@ -49,6 +49,16 @@ const currentImages = computed(() =>
   selectedDir.value in images.imagesByDir ? images.imagesByDir[selectedDir.value] : [],
 )
 
+// Upload progress. `uploadProgress` is 0–100 while bytes transfer, then sits at
+// 100 while the server saves the files; -1 when idle.
+const uploadLabel = computed(() => {
+  const p = images.uploadProgress
+  if (p < 0) return 'Uploading…'
+  if (p < 100) return `Uploading ${p}%`
+  return 'Processing…'
+})
+const uploadBarWidth = computed(() => `${images.uploadProgress < 0 ? 0 : images.uploadProgress}%`)
+
 /** Keep a valid category selected as the list loads/changes. */
 watch(
   () => images.sortedCategories,
@@ -240,7 +250,7 @@ onMounted(() => images.loadCategories())
             :disabled="images.uploading || !selectedDir"
             @click="pickFiles"
           >
-            <LoadingSpinner v-if="images.uploading" label="Uploading…" />
+            <LoadingSpinner v-if="images.uploading" :label="uploadLabel" />
             <template v-else
               ><font-awesome-icon :icon="['fas', 'upload']" /> Upload Images</template
             >
@@ -271,6 +281,26 @@ onMounted(() => images.loadCategories())
         >
           <font-awesome-icon :icon="['fad', 'cloud-arrow-up']" />
           <span>Drag &amp; drop images here, or click to browse</span>
+        </div>
+
+        <!-- Live upload progress (large uploads can take a while over a slow link). -->
+        <div
+          v-if="images.uploading"
+          class="upload-progress"
+          role="progressbar"
+          aria-label="Upload progress"
+          :aria-valuenow="images.uploadProgress < 0 ? undefined : images.uploadProgress"
+          aria-valuemin="0"
+          aria-valuemax="100"
+        >
+          <div class="upload-progress__track">
+            <div
+              class="upload-progress__bar"
+              :class="{ 'is-processing': images.uploadProgress >= 100 }"
+              :style="{ width: uploadBarWidth }"
+            ></div>
+          </div>
+          <span class="upload-progress__label">{{ uploadLabel }}</span>
         </div>
 
         <LoadingSpinner
@@ -401,6 +431,56 @@ onMounted(() => images.loadCategories())
 }
 .image-dropzone .svg-inline--fa {
   font-size: 1.6rem;
+}
+
+/* Upload progress bar (shown while an upload is in flight — large uploads over a
+   slow link can take a while, so a real percentage beats an idle spinner). */
+.upload-progress {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+.upload-progress__track {
+  flex: 1;
+  height: 8px;
+  background: var(--panel-raised-bg);
+  border-radius: 999px;
+  overflow: hidden;
+}
+.upload-progress__bar {
+  height: 100%;
+  background: var(--highlight);
+  border-radius: inherit;
+  transition: width 0.2s ease;
+}
+/* Bytes are all sent; the bar is full while the server saves the files. */
+.upload-progress__bar.is-processing {
+  animation: upload-pulse 1s ease-in-out infinite;
+}
+.upload-progress__label {
+  min-width: 92px;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+@keyframes upload-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.55;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .upload-progress__bar {
+    transition: none;
+  }
+  .upload-progress__bar.is-processing {
+    animation: none;
+  }
 }
 
 /* Image grid. */

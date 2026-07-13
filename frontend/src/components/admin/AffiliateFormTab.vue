@@ -123,7 +123,7 @@ function cancel(): void {
         </div>
       </FormField>
 
-      <FormField label="Details">
+      <FormField label="Details" help="Becomes the Discord embed description.">
         <MarkdownEditor
           v-model="affiliates.affiliateForm.details"
           min-height="120px"
@@ -131,16 +131,54 @@ function cancel(): void {
         />
       </FormField>
 
+      <!-- Discord embed presentation: accent colour + the two links shown in the embed. -->
+      <FormField label="Embed color" help="Accent stripe on the Discord embed.">
+        <div class="aff-color-row">
+          <input
+            v-model="affiliates.affiliateForm.embed_color"
+            type="color"
+            class="aff-color-input"
+            aria-label="Embed accent color"
+          />
+          <code class="aff-color-hex">{{ affiliates.affiliateForm.embed_color }}</code>
+          <button
+            type="button"
+            class="btn-neutral btn-sm"
+            :disabled="affiliates.affiliateForm.embed_color === '#ff3131'"
+            @click="affiliates.affiliateForm.embed_color = '#ff3131'"
+          >
+            Reset
+          </button>
+        </div>
+      </FormField>
+
+      <div class="aff-links-row">
+        <FormField label="Discord Link" help="Optional. Shown as a link field in the embed.">
+          <input
+            v-model="affiliates.affiliateForm.discord_link"
+            placeholder="https://discord.gg/…"
+            aria-label="Discord link"
+          />
+        </FormField>
+        <FormField label="Carrd Link" help="Optional. Shown as a link field in the embed.">
+          <input
+            v-model="affiliates.affiliateForm.carrd_link"
+            placeholder="https://example.carrd.co"
+            aria-label="Carrd link"
+          />
+        </FormField>
+      </div>
+
       <FormField
         label="Logo"
-        help="Pick from any image category. Upload new images on the System → Images page."
+        help="Used as the embed thumbnail. Pick from any image category (upload on System → Images)."
       >
         <ImagePicker v-model="affiliates.affiliateForm.logo" />
       </FormField>
 
       <FormField
         label="Establishment Screenshot"
-        help="Pick from any image category. Upload new images on the System → Images page."
+        help="Used as the large embed image. Pick from any image category (upload on System → Images)."
       >
         <ImagePicker v-model="affiliates.affiliateForm.screenshot" />
       </FormField>
@@ -184,6 +222,33 @@ function cancel(): void {
 }
 .repeater-row > input {
   width: 100%;
+  min-width: 0;
+}
+/* Native colour picker + hex readout + reset, mirroring the Tea Room form. */
+.aff-color-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.aff-color-input {
+  width: 48px;
+  height: 34px;
+  padding: 2px;
+  border-radius: var(--radius);
+  cursor: pointer;
+}
+.aff-color-hex {
+  font-family: 'Consolas', 'Monaco', monospace;
+  color: var(--text-muted);
+}
+/* Discord + Carrd links side by side, wrapping on narrow screens. */
+.aff-links-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+.aff-links-row > * {
+  flex: 1 1 240px;
   min-width: 0;
 }
 </style>

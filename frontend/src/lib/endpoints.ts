@@ -15,7 +15,7 @@
  * Grouped by resource. Action-based POST endpoints expose one function per
  * action so each can carry its own precise request/response types.
  */
-import { apiGet, apiPost, apiPut, apiPatch, apiDelete } from '@/lib/api'
+import { apiGet, apiPost, apiPut, apiPatch, apiDelete, apiUpload } from '@/lib/api'
 import type {
   ActiveCSSResponse,
   AuthCheckResponse,
@@ -53,6 +53,7 @@ import type {
   StatusResponse,
   AffiliatesResponse,
   AffiliateResponse,
+  AffiliateWebhookResponse,
   TeaRoomsResponse,
   TeaRoomResponse,
   TeaRoomWebhookResponse,
@@ -432,13 +433,21 @@ export const endpoints = {
 
   // ── Affiliates (admin) ───────────────────────────────────────────────────────
   affiliates: {
-    /** GET /api/affiliates — all affiliates (admin). */
+    /** GET /api/affiliates — all affiliates + the shared Discord webhook (admin). */
     list: () => apiGet<AffiliatesResponse>('affiliates'),
     create: (affiliate: Record<string, unknown>) =>
       apiPost<AffiliateResponse>('affiliates', affiliate),
     update: (id: number, affiliate: Record<string, unknown>) =>
       apiPut<OKResponse>(`affiliates/${id}`, affiliate),
     delete: (id: number) => apiDelete(`affiliates/${id}`),
+    /** POST /api/affiliates/reorder — persist a new drag order (top-first ids). */
+    reorder: (orderedIds: number[]) =>
+      apiPost<OKResponse>('affiliates/reorder', { ordered_ids: orderedIds }),
+    /** POST /api/affiliates/{id}/post — post the affiliate's embed to the shared webhook now. */
+    post: (id: number) => apiPost<AffiliateResponse>(`affiliates/${id}/post`, undefined),
+    /** PUT /api/affiliates/webhook — set the single shared Discord webhook ('' clears). */
+    setWebhook: (webhookUrl: string) =>
+      apiPut<AffiliateWebhookResponse>('affiliates/webhook', { webhook_url: webhookUrl }),
   },
 
   // ── Tea Rooms (admin) ────────────────────────────────────────────────────────
@@ -548,7 +557,8 @@ export const endpoints = {
       apiDelete(`book-clubs/${enc(club)}/reading-lists/${listId}/items/${itemId}`),
     publish: (club: string, listId: number) =>
       apiPost<PublishResponse>(`book-clubs/${enc(club)}/reading-lists/${listId}/publish`, {}),
-    uploadImage: (form: FormData) => apiPost<BookclubUploadResponse>('bookclub/upload', form),
+    uploadImage: (form: FormData, onProgress?: (percent: number) => void) =>
+      apiUpload<BookclubUploadResponse>('bookclub/upload', form, { onProgress }),
     /** GET /api/bookclub/lookup?q=… — AniList suggestions shaped like items. */
     lookup: (query: string) => apiGet<BookclubLookupResponse>(`bookclub/lookup?q=${enc(query)}`),
     /** GET /api/bookclub/lookup?id=… — a single AniList title by numeric id. */
@@ -631,8 +641,13 @@ export const endpoints = {
     deleteCategory: (dir: string) => apiDelete(`image-categories/${enc(dir)}`),
     /** GET /api/images?dir=… — images in a category (newest first). */
     list: (dir: string) => apiGet<ImagesResponse>(`images?dir=${enc(dir)}`),
-    /** POST /api/images/upload — multipart "dir" + one or more "files". */
-    upload: (form: FormData) => apiPost<ImagesUploadResponse>('images/upload', form),
+    /**
+     * POST /api/images/upload — multipart "dir" + one or more "files".
+     * Uses apiUpload (XHR) so large uploads aren't killed by the 30s fetch
+     * timeout and can report progress; pass `onProgress` for a live percentage.
+     */
+    upload: (form: FormData, onProgress?: (percent: number) => void) =>
+      apiUpload<ImagesUploadResponse>('images/upload', form, { onProgress }),
     /** DELETE /api/images?dir=…&name=… — remove an image from a category (204). */
     deleteImage: (dir: string, name: string) =>
       apiDelete(`images?dir=${enc(dir)}&name=${enc(name)}`),
@@ -642,8 +657,10 @@ export const endpoints = {
   fonts: {
     /** GET /api/fonts — fonts grouped by base name with their variants. */
     list: () => apiGet<FontsResponse>('fonts'),
-    /** POST /api/fonts/upload — multipart upload of one or more "files" fields. */
-    upload: (form: FormData) => apiPost<FontUploadResponse>('fonts/upload', form),
+    /** POST /api/fonts/upload — multipart upload of one or more "files" fields.
+     *  XHR-based (apiUpload) so large font files aren't cut off by the fetch timeout. */
+    upload: (form: FormData, onProgress?: (percent: number) => void) =>
+      apiUpload<FontUploadResponse>('fonts/upload', form, { onProgress }),
     /** DELETE /api/fonts/{name} — remove ONE variant file by name (204). */
     deleteFile: (name: string) => apiDelete(`fonts/${enc(name)}`),
     /** PATCH /api/fonts/{name} — rename one variant file (fails if the target exists). */
@@ -676,8 +693,10 @@ export const endpoints = {
     /** GET /api/carrd/images?folder=…&path=… — sub-dirs + images at a path. */
     images: (folder: string, path = '') =>
       apiGet<CarrdImagesResponse>(`carrd/images?folder=${enc(folder)}&path=${enc(path)}`),
-    /** POST /api/carrd/upload — multipart upload of "files" to "folder"/"path". */
-    upload: (form: FormData) => apiPost<CarrdUploadResponse>('carrd/upload', form),
+    /** POST /api/carrd/upload — multipart upload of "files" to "folder"/"path".
+     *  XHR-based (apiUpload) so large uploads aren't cut off by the fetch timeout. */
+    upload: (form: FormData, onProgress?: (percent: number) => void) =>
+      apiUpload<CarrdUploadResponse>('carrd/upload', form, { onProgress }),
     /** DELETE /api/carrd/images?folder=…&path=…&name=… — remove an image at a path (204). */
     deleteImage: (folder: string, path: string, name: string) =>
       apiDelete(`carrd/images?folder=${enc(folder)}&path=${enc(path)}&name=${enc(name)}`),

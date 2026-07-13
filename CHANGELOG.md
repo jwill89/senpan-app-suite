@@ -41,9 +41,48 @@ The format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## Frontend
 
+### [3.9.0] — 2026-07-12
+
+Fixes large image uploads timing out, and adds a live upload-progress indicator.
+
+#### Fixed
+
+- **Image uploads no longer time out.** Uploads went through the API client's
+  30-second request timeout, so a large image (or several at once) over a slow
+  connection was aborted mid-transfer with _"Request timed out. Please try
+  again."_ Uploads now run over `XMLHttpRequest` with no client-side deadline —
+  the transfer takes as long as it needs (the server still caps a request at
+  64 MB). The same fix covers the **font**, **Carrd**, and **book-club** uploads,
+  which shared the timeout.
+
+#### Added
+
+- **Live upload progress** on the Images tab — a real percentage bar while the
+  bytes are in flight, then a "Processing…" state while the server saves the
+  files, replacing the indeterminate spinner that looked stuck on long uploads.
+
+### [3.8.0] — 2026-07-12
+
+Reworks the **Affiliates** admin page (Senpan Tea House → Affiliates) to match Tea
+Rooms — a drag-sortable list that posts rich embeds to Discord (paired with backend
+3.7.0).
+
+#### Added
+
+- **Shared Discord webhook** for Affiliates — a Webhook sub-screen (with a "no
+  webhook set yet" hint on the list), and a per-row **Post** button that posts the
+  affiliate to that channel as an embed.
+- **Drag-and-drop reordering** of the affiliate list (the order persists), replacing
+  the old alphabetical card grid with a Tea Rooms-style list.
+- Each row shows the **logo — or the establishment screenshot when there's no logo**
+  — plus an embed-colour swatch and Discord / Carrd / open-times badges.
+- Form fields for an **embed accent colour** (native colour picker), a **Discord
+  Link**, and a **Carrd Link**.
+
 ### [3.7.0] — 2026-07-11
 
-Adds the **"It's Yoever"** bingo reaction (paired with backend 3.6.0).
+Adds the **"It's Yoever"** bingo reaction, and makes the admin sidebar version
+numbers open per-component changelogs (paired with backend 3.6.0).
 
 #### Added
 
@@ -72,6 +111,12 @@ Adds the **"It's Yoever"** bingo reaction (paired with backend 3.6.0).
   **"Yoevers: N"** running counter. Both reset when a new game starts.
 - **Settings.** New **"It's Yoever" Cooldown (seconds)** field (Gameplay section,
   0–3600; 0 disables the limit).
+- **Version changelogs in the admin sidebar.** The **Frontend / Backend / Plugin**
+  version numbers in the sidebar footer are now clickable — each opens that
+  component's changelog in a modal, parsed from `CHANGELOG.md` at build time (via
+  a `virtual:changelog` Vite plugin). The **Plugin** version is new, and its
+  changelog is prefixed with **Dalamud install steps** (the custom-repo URL and the
+  `/senpan` token setup).
 
 #### Fixed
 
@@ -428,6 +473,38 @@ First tracked release — establishes versioning for the current production buil
 ---
 
 ## Backend
+
+### [3.7.1] — 2026-07-12
+
+#### Changed
+
+- **Affiliate embed open times** now render as Discord **Short Time** (`<t:…:t>`,
+  e.g. "4:00 PM") instead of Long Time (which included seconds). Still local to
+  each viewer's time zone.
+
+### [3.7.0] — 2026-07-12
+
+Adds Discord posting + drag ordering to **Affiliates** (paired with frontend 3.8.0).
+Backward-compatible additions only (new columns via schema **v47**, new endpoints,
+and a settings-stored webhook); no breaking contract changes.
+
+#### Added
+
+- **Affiliate fields** `embed_color`, `discord_link`, `carrd_link`, and a
+  `sort_order` for the drag order (schema **v47** — idempotent `ALTER TABLE` column
+  adds + an `idx_affiliates_sort` index). Editing an affiliate preserves its order.
+- **Shared webhook** (settings key `affiliate_webhook_url`, deliberately kept out of
+  the public settings) returned on `GET /api/affiliates` and set via
+  `PUT /api/affiliates/webhook` (validated as a Discord webhook URL).
+- **Reorder** — `POST /api/affiliates/reorder` persists a new top-first id order.
+- **Post to Discord** — `POST /api/affiliates/{id}/post` builds and sends the embed:
+  the embed **colour**, the **name** as the title, the markdown **details** as the
+  description, the **logo as the thumbnail** and the **establishment screenshot as
+  the image**, and — each shown only when set — the **location** (full-width), the
+  **opening hours** (full-width, as Discord "Long Time" tokens `<t:unix:T>` anchored
+  in the affiliate's IANA timezone so each viewer sees them in their own, with the
+  footer "Times are displayed in your local time zone."), and finally the
+  **Discord/Carrd links as two side-by-side fields**.
 
 ### [3.6.0] — 2026-07-11
 

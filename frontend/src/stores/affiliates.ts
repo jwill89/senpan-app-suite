@@ -9,13 +9,16 @@
  * status lifecycle — owners and hours are edited as repeatable form rows.
  */
 import { defineStore } from 'pinia'
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import { endpoints } from '@/lib/endpoints'
 import { detectTimezone } from '@/lib/constants'
 import type { Affiliate, AffiliateForm, AffiliateHourForm, AffiliateOwnerForm } from '@/types/api'
 import { useUiStore } from './ui'
 import { nextUid } from '@/lib/uid'
 import { withLoading } from '@/lib/withLoading'
+
+/** Default embed accent (brand red) for a new affiliate, matching Tea Rooms. */
+const DEFAULT_EMBED_COLOR = '#ff3131'
 
 /** A fresh, empty opening-hours row for the editor. */
 function blankHour(): AffiliateHourForm {
@@ -33,15 +36,29 @@ export const useAffiliatesStore = defineStore('affiliates', () => {
   const affiliates = ref<Affiliate[]>([])
   const selectedAffiliate = ref<Affiliate | null>(null)
   const affiliateForm = ref<AffiliateForm | null>(null)
+  /** The single shared Discord webhook every affiliate posts to ('' = none). */
+  const webhookUrl = ref('')
+
+  const search = ref('')
+  const filteredAffiliates = computed(() => {
+    const q = search.value.trim().toLowerCase()
+    if (!q) return affiliates.value
+    return affiliates.value.filter((a) =>
+      [a.name, a.location, ...a.owners].some((s) => s.toLowerCase().includes(q)),
+    )
+  })
 
   const affiliatesLoading = ref(false)
   const savingAffiliate = ref(false)
+  const savingWebhook = ref(false)
+  const postingId = ref<number | null>(null)
 
   // ── Load ───────────────────────────────────────────────────────────────────
   async function loadAffiliates(): Promise<void> {
     await withLoading(affiliatesLoading, async () => {
       const data = await endpoints.affiliates.list()
       affiliates.value = data.affiliates
+      webhookUrl.value = data.webhook_url
     })
   }
 
@@ -57,6 +74,9 @@ export const useAffiliatesStore = defineStore('affiliates', () => {
       details: '',
       logo: '',
       screenshot: '',
+      embed_color: DEFAULT_EMBED_COLOR,
+      discord_link: '',
+      carrd_link: '',
     }
   }
 
@@ -73,6 +93,9 @@ export const useAffiliatesStore = defineStore('affiliates', () => {
       details: a.details,
       logo: a.logo,
       screenshot: a.screenshot,
+      embed_color: a.embed_color || DEFAULT_EMBED_COLOR,
+      discord_link: a.discord_link,
+      carrd_link: a.carrd_link,
     }
   }
 
@@ -156,12 +179,70 @@ export const useAffiliatesStore = defineStore('affiliates', () => {
     }
   }
 
+  /**
+   * Persists a drag-and-drop reorder. The list array is mutated optimistically by
+   * the drag interaction; this saves the new order and reverts on failure.
+   */
+  async function reorder(orderedIds: number[]): Promise<void> {
+    try {
+      await endpoints.affiliates.reorder(orderedIds)
+    } catch (e) {
+      ui.notify((e as Error).message, 'error')
+      await loadAffiliates() // revert to the persisted order
+    }
+  }
+
+  /** Post an affiliate's embed to the shared Discord webhook (after confirmation). */
+  async function postAffiliate(a: Affiliate): Promise<void> {
+    if (!webhookUrl.value.trim()) {
+      ui.notify('Set a Discord webhook first (Webhook button above).', 'error')
+      return
+    }
+    if (
+      !(await ui.confirm(`Post "${a.name}" to Discord now?`, {
+        title: 'Post affiliate',
+        confirmText: 'Post',
+      }))
+    )
+      return
+    postingId.value = a.id
+    try {
+      await endpoints.affiliates.post(a.id)
+      ui.notify('Affiliate posted to Discord', 'success')
+    } catch (e) {
+      ui.notify((e as Error).message, 'error')
+    } finally {
+      postingId.value = null
+    }
+  }
+
+  /** Save the shared Discord webhook. Returns true on success. */
+  async function saveWebhook(url: string): Promise<boolean> {
+    savingWebhook.value = true
+    try {
+      const data = await endpoints.affiliates.setWebhook(url.trim())
+      webhookUrl.value = data.webhook_url
+      ui.notify('Discord webhook saved', 'success')
+      return true
+    } catch (e) {
+      ui.notify((e as Error).message, 'error')
+      return false
+    } finally {
+      savingWebhook.value = false
+    }
+  }
+
   return {
     affiliates,
     selectedAffiliate,
     affiliateForm,
+    webhookUrl,
+    search,
+    filteredAffiliates,
     affiliatesLoading,
     savingAffiliate,
+    savingWebhook,
+    postingId,
     loadAffiliates,
     newAffiliateForm,
     editAffiliateForm,
@@ -172,5 +253,8 @@ export const useAffiliatesStore = defineStore('affiliates', () => {
     removeHour,
     saveAffiliate,
     deleteAffiliate,
+    reorder,
+    postAffiliate,
+    saveWebhook,
   }
 })

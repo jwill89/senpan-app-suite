@@ -14,7 +14,12 @@ import { ref } from 'vue'
 
 type MarkdownRenderer = { render: (src: string) => string }
 
+// Two configured instances share one lazy import: `md` converts single newlines
+// to <br> (breaks: true — for user-entered game details/raffle copy where a line
+// break is intended), while `mdFlow` follows standard markdown (soft newlines are
+// spaces) — right for prose that's soft-wrapped in source, like CHANGELOG.md.
 let md: MarkdownRenderer | null = null
+let mdFlow: MarkdownRenderer | null = null
 let loadPromise: Promise<void> | null = null
 const ready = ref(false)
 
@@ -22,29 +27,39 @@ const ready = ref(false)
 function ensureLoaded(): Promise<void> {
   if (loadPromise) return loadPromise
   loadPromise = import('markdown-it').then(({ default: MarkdownIt }) => {
-    md = new MarkdownIt({
-      html: false, // do not allow raw HTML (matches marked default safety posture)
-      breaks: true, // convert \n to <br>
-      linkify: true,
-    })
+    md = new MarkdownIt({ html: false, breaks: true, linkify: true })
+    mdFlow = new MarkdownIt({ html: false, breaks: false, linkify: true })
     ready.value = true
   })
   return loadPromise
 }
 
+/** Shared reactive renderer factory over one of the configured instances. */
+function useRenderer(get: () => MarkdownRenderer | null) {
+  void ensureLoaded()
+  function render(text: string | null | undefined): string {
+    // Touch `ready` so the rendering effect re-runs once the parser loads.
+    if (!ready.value || !text) return ''
+    return get()?.render(text) ?? ''
+  }
+  return { render, ready }
+}
+
 /**
- * Reactive markdown renderer. Use in <script setup>:
+ * Reactive markdown renderer (single newline → <br>). Use in <script setup>:
  *   const { render: renderMarkdown } = useMarkdown()
  * then bind `v-html="renderMarkdown(text)"`. Triggers the lazy load on first
  * use and re-renders when the parser becomes available.
  */
 export function useMarkdown() {
-  void ensureLoaded()
-  function render(text: string | null | undefined): string {
-    // Touch `ready` so the rendering effect re-runs once the parser loads.
-    if (!ready.value || !md) return ''
-    if (!text) return ''
-    return md.render(text)
-  }
-  return { render, ready }
+  return useRenderer(() => md)
+}
+
+/**
+ * Reactive markdown renderer with standard soft-break handling (single newlines
+ * join into flowing paragraphs). For rendering prose that is soft-wrapped in its
+ * source, such as CHANGELOG.md.
+ */
+export function useMarkdownFlow() {
+  return useRenderer(() => mdFlow)
 }

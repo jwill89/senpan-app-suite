@@ -110,24 +110,41 @@ func buildFeaturePaths(b *pb) {
 		path:  []*openapi3.Parameter{pparam("token", "The player's private link token.")},
 		resps: []respEntry{ok("GaraponDrawResponse"), r("400", "Closed / no prizes"), r("409", "No draws remaining"), r("404", "Not found")}})
 
-	// ── Affiliates (resource-oriented: methods for CRUD) ──────────────────────
+	// ── Affiliates (admin CRUD + drag reorder + post to Discord) ──────────────
+	affiliate := "permission:teahouse-affiliates"
 	affiliateFields := func() openapi3.Schemas {
 		return props(
 			"name", pstr("Name (required)."), "owners", parr("", pstr("")), "location", pstr(""),
 			"timezone", pstr("IANA zone."), "hours", parr("", ref("AffiliateHour")), "details", pstr("Markdown."),
-			"logo", pstr(""), "screenshot", pstr(""))
+			"logo", pstr(""), "screenshot", pstr(""), "embed_color", pstr("Discord embed accent '#rrggbb'."),
+			"discord_link", pstr("Discord link."), "carrd_link", pstr("Carrd (or other site) link."))
 	}
-	b.add("GET", "/api/affiliates", "Affiliates", "List affiliates", "permission:teahouse-affiliates", "", opt{resps: []respEntry{ok("AffiliatesResponse")}})
-	b.add("POST", "/api/affiliates", "Affiliates", "Create an affiliate", "permission:teahouse-affiliates", "", opt{
+	b.add("GET", "/api/affiliates", "Affiliates", "List affiliates", affiliate,
+		"Also returns the shared Discord webhook (`webhook_url`); safe here since the endpoint is permission-gated.", opt{
+			resps: []respEntry{ok("AffiliatesResponse")}})
+	b.add("POST", "/api/affiliates", "Affiliates", "Create an affiliate", affiliate, "", opt{
 		body:  actionBody("Affiliate fields.", nil, affiliateFields()),
 		resps: []respEntry{created("AffiliateResponse"), r("400", "Name required")}})
-	b.add("PUT", "/api/affiliates/{id}", "Affiliates", "Replace an affiliate", "permission:teahouse-affiliates", "", opt{
-		path:  []*openapi3.Parameter{pparam("id", "Affiliate id.")},
-		body:  actionBody("Full affiliate fields.", nil, affiliateFields()),
-		resps: []respEntry{ok("OKResponse"), r("400", "Name required")}})
-	b.add("DELETE", "/api/affiliates/{id}", "Affiliates", "Delete an affiliate", "permission:teahouse-affiliates", "", opt{
+	b.add("POST", "/api/affiliates/reorder", "Affiliates", "Reorder affiliates", affiliate,
+		"Persists a new drag order (top-first ids).", opt{
+			body:  actionBody("Bulk reorder.", nil, props("ordered_ids", parr("Affiliate ids in the new order.", pint("")))),
+			resps: []respEntry{ok("OKResponse")}})
+	b.add("PUT", "/api/affiliates/webhook", "Affiliates", "Set the shared Discord webhook", affiliate,
+		"Stores the single webhook every affiliate posts to (empty clears it). Validated as a Discord webhook URL.", opt{
+			body:  actionBody("Webhook URL.", nil, props("webhook_url", pstr("Discord webhook URL ('' clears)."))),
+			resps: []respEntry{ok("AffiliateWebhookResponse"), r("400", "Not a Discord webhook URL")}})
+	b.add("PUT", "/api/affiliates/{id}", "Affiliates", "Replace an affiliate", affiliate,
+		"Full replace of the editable fields (sort_order is preserved — reordering is separate).", opt{
+			path:  []*openapi3.Parameter{pparam("id", "Affiliate id.")},
+			body:  actionBody("Full affiliate fields.", nil, affiliateFields()),
+			resps: []respEntry{ok("OKResponse"), r("400", "Name required")}})
+	b.add("DELETE", "/api/affiliates/{id}", "Affiliates", "Delete an affiliate", affiliate, "", opt{
 		path:  []*openapi3.Parameter{pparam("id", "Affiliate id.")},
 		resps: []respEntry{noContent()}})
+	b.add("POST", "/api/affiliates/{id}/post", "Affiliates", "Post to Discord", affiliate,
+		"Posts the affiliate's embed to the shared webhook now: colour, logo thumbnail, screenshot image, then (when set) the location, the open hours as local-time tokens, and the Discord/Carrd links.", opt{
+			path:  []*openapi3.Parameter{pparam("id", "Affiliate id.")},
+			resps: []respEntry{ok("AffiliateResponse"), r("400", "No webhook configured"), r("404", "Not found"), r("502", "Discord failed")}})
 
 	// ── Tea Rooms (admin CRUD + toggles + post; plus a public cross-origin read API)
 	teaRoom := "permission:teahouse-tea-rooms"

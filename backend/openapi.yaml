@@ -23,9 +23,15 @@ components:
       type: object
     Affiliate:
       properties:
+        carrd_link:
+          type: string
         created_at:
           type: string
         details:
+          type: string
+        discord_link:
+          type: string
+        embed_color:
           type: string
         hours:
           items:
@@ -53,6 +59,8 @@ components:
           type: array
         screenshot:
           type: string
+        sort_order:
+          type: integer
         timezone:
           type: string
       type: object
@@ -69,9 +77,15 @@ components:
       properties:
         affiliate:
           properties:
+            carrd_link:
+              type: string
             created_at:
               type: string
             details:
+              type: string
+            discord_link:
+              type: string
+            embed_color:
               type: string
             hours:
               items:
@@ -99,18 +113,31 @@ components:
               type: array
             screenshot:
               type: string
+            sort_order:
+              type: integer
             timezone:
               type: string
           type: object
+      type: object
+    AffiliateWebhookResponse:
+      properties:
+        webhook_url:
+          type: string
       type: object
     AffiliatesResponse:
       properties:
         affiliates:
           items:
             properties:
+              carrd_link:
+                type: string
               created_at:
                 type: string
               details:
+                type: string
+              discord_link:
+                type: string
+              embed_color:
                 type: string
               hours:
                 items:
@@ -138,10 +165,14 @@ components:
                 type: array
               screenshot:
                 type: string
+              sort_order:
+                type: integer
               timezone:
                 type: string
             type: object
           type: array
+        webhook_url:
+          type: string
       type: object
     Announcement:
       properties:
@@ -4025,7 +4056,7 @@ info:
     (`{ "type": "log", "entry": LogEntry }`) for the live log tail — best-effort,
     sent only while an admin is connected.
   title: Senpan App Suite API
-  version: 3.6.0
+  version: 3.7.1
 openapi: 3.0.3
 paths:
   /api/account/change-password:
@@ -4273,7 +4304,10 @@ paths:
       - Users & Account
   /api/affiliates:
     get:
-      description: '**Auth:** permission:teahouse-affiliates'
+      description: |-
+        **Auth:** permission:teahouse-affiliates
+
+        Also returns the shared Discord webhook (`webhook_url`); safe here since the endpoint is permission-gated.
       responses:
         "200":
           content:
@@ -4294,8 +4328,17 @@ paths:
           application/json:
             schema:
               properties:
+                carrd_link:
+                  description: Carrd (or other site) link.
+                  type: string
                 details:
                   description: Markdown.
+                  type: string
+                discord_link:
+                  description: Discord link.
+                  type: string
+                embed_color:
+                  description: Discord embed accent '#rrggbb'.
                   type: string
                 hours:
                   items:
@@ -4359,7 +4402,10 @@ paths:
       tags:
       - Affiliates
     put:
-      description: '**Auth:** permission:teahouse-affiliates'
+      description: |-
+        **Auth:** permission:teahouse-affiliates
+
+        Full replace of the editable fields (sort_order is preserved — reordering is separate).
       parameters:
       - description: Affiliate id.
         in: path
@@ -4372,8 +4418,17 @@ paths:
           application/json:
             schema:
               properties:
+                carrd_link:
+                  description: Carrd (or other site) link.
+                  type: string
                 details:
                   description: Markdown.
+                  type: string
+                discord_link:
+                  description: Discord link.
+                  type: string
+                embed_color:
+                  description: Discord embed accent '#rrggbb'.
                   type: string
                 hours:
                   items:
@@ -4415,6 +4470,119 @@ paths:
       - cookieAuth: []
       - bearerAuth: []
       summary: Replace an affiliate
+      tags:
+      - Affiliates
+  /api/affiliates/{id}/post:
+    post:
+      description: |-
+        **Auth:** permission:teahouse-affiliates
+
+        Posts the affiliate's embed to the shared webhook now: colour, logo thumbnail, screenshot image, then (when set) the location, the open hours as local-time tokens, and the Discord/Carrd links.
+      parameters:
+      - description: Affiliate id.
+        in: path
+        name: id
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AffiliateResponse'
+          description: Success
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: No webhook configured
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: Not found
+        "502":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: Discord failed
+      security:
+      - cookieAuth: []
+      - bearerAuth: []
+      summary: Post to Discord
+      tags:
+      - Affiliates
+  /api/affiliates/reorder:
+    post:
+      description: |-
+        **Auth:** permission:teahouse-affiliates
+
+        Persists a new drag order (top-first ids).
+      requestBody:
+        content:
+          application/json:
+            schema:
+              properties:
+                ordered_ids:
+                  description: Affiliate ids in the new order.
+                  items:
+                    format: int64
+                    type: integer
+                  type: array
+              type: object
+        description: Bulk reorder.
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OKResponse'
+          description: Success
+      security:
+      - cookieAuth: []
+      - bearerAuth: []
+      summary: Reorder affiliates
+      tags:
+      - Affiliates
+  /api/affiliates/webhook:
+    put:
+      description: |-
+        **Auth:** permission:teahouse-affiliates
+
+        Stores the single webhook every affiliate posts to (empty clears it). Validated as a Discord webhook URL.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              properties:
+                webhook_url:
+                  description: Discord webhook URL ('' clears).
+                  type: string
+              type: object
+        description: Webhook URL.
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AffiliateWebhookResponse'
+          description: Success
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: Not a Discord webhook URL
+      security:
+      - cookieAuth: []
+      - bearerAuth: []
+      summary: Set the shared Discord webhook
       tags:
       - Affiliates
   /api/announcement-roles:

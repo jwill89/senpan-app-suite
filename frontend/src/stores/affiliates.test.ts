@@ -4,10 +4,13 @@ import type { Affiliate } from '@/types/api'
 
 // Mock the typed endpoint layer so store actions run without the network.
 const ep = vi.hoisted(() => ({
-  list: vi.fn(async () => ({ affiliates: [] as Affiliate[] })),
+  list: vi.fn(async () => ({ affiliates: [] as Affiliate[], webhook_url: '' })),
   create: vi.fn(async () => ({ ok: true })),
   update: vi.fn(async () => ({ ok: true })),
   del: vi.fn(async () => ({ ok: true })),
+  reorder: vi.fn(async () => ({ ok: true })),
+  post: vi.fn(async () => ({ ok: true })),
+  setWebhook: vi.fn(async (url: string) => ({ webhook_url: url })),
 }))
 vi.mock('@/lib/endpoints', () => ({
   endpoints: {
@@ -16,6 +19,9 @@ vi.mock('@/lib/endpoints', () => ({
       create: ep.create,
       update: ep.update,
       delete: ep.del,
+      reorder: ep.reorder,
+      post: ep.post,
+      setWebhook: ep.setWebhook,
     },
   },
 }))
@@ -35,6 +41,10 @@ function affiliate(over: Partial<Affiliate> = {}): Affiliate {
     details: '',
     logo: '',
     screenshot: '',
+    embed_color: '',
+    discord_link: '',
+    carrd_link: '',
+    sort_order: 0,
     created_at: '',
     ...over,
   }
@@ -46,11 +56,15 @@ beforeEach(() => {
 })
 
 describe('loading', () => {
-  it('loadAffiliates populates the list', async () => {
-    ep.list.mockResolvedValueOnce({ affiliates: [affiliate(), affiliate({ id: 2 })] })
+  it('loadAffiliates populates the list and the shared webhook', async () => {
+    ep.list.mockResolvedValueOnce({
+      affiliates: [affiliate(), affiliate({ id: 2 })],
+      webhook_url: 'https://discord.com/api/webhooks/1/x',
+    })
     const s = useAffiliatesStore()
     await s.loadAffiliates()
     expect(s.affiliates).toHaveLength(2)
+    expect(s.webhookUrl).toBe('https://discord.com/api/webhooks/1/x')
     expect(s.affiliatesLoading).toBe(false)
   })
 })
@@ -171,5 +185,50 @@ describe('deleteAffiliate', () => {
     await s.deleteAffiliate(1)
     expect(ep.del).toHaveBeenCalledWith(1)
     expect(s.affiliates.map((a) => a.id)).toEqual([2])
+  })
+})
+
+describe('reorder / webhook / post', () => {
+  it('reorder persists the new id order', async () => {
+    const s = useAffiliatesStore()
+    await s.reorder([3, 1, 2])
+    expect(ep.reorder).toHaveBeenCalledWith([3, 1, 2])
+  })
+
+  it('reorder reverts (reloads) on failure', async () => {
+    const ui = useUiStore()
+    ui.notify = vi.fn()
+    ep.reorder.mockRejectedValueOnce(new Error('nope'))
+    const s = useAffiliatesStore()
+    await s.reorder([1])
+    expect(ep.list).toHaveBeenCalled() // reload to revert
+    expect(ui.notify).toHaveBeenCalled()
+  })
+
+  it('saveWebhook stores the trimmed url', async () => {
+    const s = useAffiliatesStore()
+    const ok = await s.saveWebhook('  https://discord.com/api/webhooks/1/x  ')
+    expect(ok).toBe(true)
+    expect(ep.setWebhook).toHaveBeenCalledWith('https://discord.com/api/webhooks/1/x')
+    expect(s.webhookUrl).toBe('https://discord.com/api/webhooks/1/x')
+  })
+
+  it('postAffiliate refuses without a webhook', async () => {
+    const ui = useUiStore()
+    ui.notify = vi.fn()
+    const s = useAffiliatesStore()
+    s.webhookUrl = ''
+    await s.postAffiliate(affiliate({ id: 5 }))
+    expect(ep.post).not.toHaveBeenCalled()
+    expect(ui.notify).toHaveBeenCalled()
+  })
+
+  it('postAffiliate posts after confirmation when a webhook is set', async () => {
+    const ui = useUiStore()
+    ui.confirm = vi.fn(async () => true)
+    const s = useAffiliatesStore()
+    s.webhookUrl = 'https://discord.com/api/webhooks/1/x'
+    await s.postAffiliate(affiliate({ id: 5 }))
+    expect(ep.post).toHaveBeenCalledWith(5)
   })
 })

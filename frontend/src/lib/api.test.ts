@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { api, apiGet, apiPost, ApiError, setUnauthorizedHandler, API_BASE } from './api'
+import { api, apiGet, apiPost, apiUpload, ApiError, setUnauthorizedHandler, API_BASE } from './api'
 
 /** Builds a minimal Response-like stub for the mocked fetch. */
 function jsonResponse(body: unknown, init: { ok?: boolean; status?: number } = {}) {
@@ -8,6 +8,44 @@ function jsonResponse(body: unknown, init: { ok?: boolean; status?: number } = {
     status: init.status ?? 200,
     json: async () => body,
   } as Response
+}
+
+/**
+ * Controllable stand-in for XMLHttpRequest. `apiUpload` wires up the handlers,
+ * then calls send(); each test sets `FakeXHR.onSend` to drive the outcome
+ * (progress → onload / onerror / etc.) synchronously.
+ */
+class FakeXHR {
+  static instances: FakeXHR[] = []
+  static onSend: ((xhr: FakeXHR) => void) | null = null
+  method = ''
+  url = ''
+  withCredentials = false
+  timeout = -1
+  status = 0
+  responseText = ''
+  upload: { onprogress: ((e: ProgressEvent) => void) | null } = { onprogress: null }
+  onload: (() => void) | null = null
+  onerror: (() => void) | null = null
+  ontimeout: (() => void) | null = null
+  onabort: (() => void) | null = null
+  constructor() {
+    FakeXHR.instances.push(this)
+  }
+  open(method: string, url: string) {
+    this.method = method
+    this.url = url
+  }
+  abort() {
+    this.onabort?.()
+  }
+  send() {
+    FakeXHR.onSend?.(this)
+  }
+  /** Fire a progress event with the given fraction (as apiUpload expects it). */
+  progress(loaded: number, total: number) {
+    this.upload.onprogress?.({ lengthComputable: true, loaded, total } as unknown as ProgressEvent)
+  }
 }
 
 describe('api()', () => {
@@ -87,5 +125,86 @@ describe('api()', () => {
     )
     await expect(api('auth', { skipAuthRedirect: true })).rejects.toBeInstanceOf(ApiError)
     expect(onUnauthorized).not.toHaveBeenCalled()
+  })
+})
+
+describe('apiUpload()', () => {
+  beforeEach(() => {
+    setUnauthorizedHandler(() => {})
+    FakeXHR.instances = []
+    FakeXHR.onSend = null
+    vi.stubGlobal('XMLHttpRequest', FakeXHR)
+  })
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('opens a credentialed POST against the API base with no client timeout', async () => {
+    FakeXHR.onSend = (xhr) => {
+      xhr.status = 200
+      xhr.responseText = '{}'
+      xhr.onload?.()
+    }
+    await apiUpload('images/upload', new FormData())
+    const xhr = FakeXHR.instances[0]
+    expect(xhr.method).toBe('POST')
+    expect(xhr.url).toBe(`${API_BASE}/images/upload`)
+    expect(xhr.withCredentials).toBe(true)
+    expect(xhr.timeout).toBe(0) // large uploads must never be aborted on our side
+  })
+
+  it('resolves with parsed JSON and reports upload progress', async () => {
+    FakeXHR.onSend = (xhr) => {
+      xhr.progress(50, 100)
+      xhr.progress(100, 100)
+      xhr.status = 200
+      xhr.responseText = JSON.stringify({ uploaded: ['a.png'], skipped: [] })
+      xhr.onload?.()
+    }
+    const seen: number[] = []
+    const res = await apiUpload<{ uploaded: string[] }>('images/upload', new FormData(), {
+      onProgress: (p) => seen.push(p),
+    })
+    expect(res.uploaded).toEqual(['a.png'])
+    expect(seen).toEqual([50, 100])
+  })
+
+  it('throws an ApiError carrying the server error message on a non-2xx response', async () => {
+    FakeXHR.onSend = (xhr) => {
+      xhr.status = 400
+      xhr.responseText = JSON.stringify({ error: 'Upload failed (max 64MB total)' })
+      xhr.onload?.()
+    }
+    await expect(apiUpload('images/upload', new FormData())).rejects.toMatchObject({
+      name: 'ApiError',
+      message: 'Upload failed (max 64MB total)',
+      status: 400,
+    })
+  })
+
+  it('invokes the unauthorized handler on a 401 (unless opted out)', async () => {
+    const onUnauthorized = vi.fn()
+    setUnauthorizedHandler(onUnauthorized)
+    FakeXHR.onSend = (xhr) => {
+      xhr.status = 401
+      xhr.responseText = JSON.stringify({ error: 'expired' })
+      xhr.onload?.()
+    }
+    await expect(apiUpload('images/upload', new FormData())).rejects.toBeInstanceOf(ApiError)
+    expect(onUnauthorized).toHaveBeenCalledOnce()
+
+    onUnauthorized.mockClear()
+    await expect(
+      apiUpload('images/upload', new FormData(), { skipAuthRedirect: true }),
+    ).rejects.toBeInstanceOf(ApiError)
+    expect(onUnauthorized).not.toHaveBeenCalled()
+  })
+
+  it('rejects with a network-error ApiError when the transfer fails', async () => {
+    FakeXHR.onSend = (xhr) => xhr.onerror?.()
+    await expect(apiUpload('images/upload', new FormData())).rejects.toMatchObject({
+      status: 0,
+      message: expect.stringContaining('Network error'),
+    })
   })
 })

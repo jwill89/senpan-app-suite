@@ -32,6 +32,9 @@ export const useImagesStore = defineStore('images', () => {
   const loading = ref(false)
   const loadingImages = ref(false)
   const uploading = ref(false)
+  // 0–100 while an upload's bytes are in flight; sits at 100 while the server
+  // saves the files. -1 when no upload is running (indeterminate/idle).
+  const uploadProgress = ref(-1)
 
   async function loadCategories(): Promise<void> {
     loading.value = true
@@ -167,8 +170,11 @@ export const useImagesStore = defineStore('images', () => {
     for (const f of list) form.append('files', f)
 
     uploading.value = true
+    uploadProgress.value = 0
     try {
-      const res = await endpoints.images.upload(form)
+      const res = await endpoints.images.upload(form, (pct) => {
+        uploadProgress.value = pct
+      })
       const ok = res.uploaded.length
       const skipped = res.skipped
       if (ok > 0) ui.notify(`Uploaded ${ok} image${ok === 1 ? '' : 's'}`, 'success')
@@ -180,6 +186,7 @@ export const useImagesStore = defineStore('images', () => {
       ui.notify((e as Error).message, 'error')
     } finally {
       uploading.value = false
+      uploadProgress.value = -1
     }
   }
 
@@ -208,6 +215,7 @@ export const useImagesStore = defineStore('images', () => {
     loading,
     loadingImages,
     uploading,
+    uploadProgress,
     loadCategories,
     loadImages,
     refreshCategoriesQuiet,

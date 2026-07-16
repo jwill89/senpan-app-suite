@@ -1,0 +1,28 @@
+#!/bin/sh
+# Pre-push hook — run the full local quality gate (scripts/check.ps1, which mirrors
+# the three CI jobs) so lint/build/test failures are caught before they reach GitHub.
+#
+# Enable it once per clone:  git config core.hooksPath .githooks
+# Bypass for a one-off push:  git push --no-verify
+#
+# The gate is PowerShell. If neither pwsh nor Windows PowerShell is installed (e.g. a
+# non-Windows contributor), the hook warns and lets the push through — CI still
+# enforces the same gate, so nothing unsafe reaches main.
+
+if command -v pwsh >/dev/null 2>&1; then
+  shell=pwsh
+elif command -v powershell >/dev/null 2>&1; then
+  shell=powershell
+else
+  echo "pre-push: PowerShell not found — skipping the local gate (CI still runs it)." >&2
+  exit 0
+fi
+
+root=$(git rev-parse --show-toplevel)
+echo "pre-push: running scripts/check.ps1 (CI mirror) — bypass with 'git push --no-verify'." >&2
+"$shell" -NoProfile -ExecutionPolicy Bypass -File "$root/scripts/check.ps1"
+code=$?
+if [ "$code" -ne 0 ]; then
+  echo "pre-push: local gate FAILED — push aborted. Fix the issues above, or 'git push --no-verify' to bypass." >&2
+fi
+exit "$code"

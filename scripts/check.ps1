@@ -78,6 +78,17 @@ if (-not $SkipBackend) {
 if (-not $SkipFrontend) {
     Push-Location "$root\frontend"
     try {
+        # The shared ESLint config (@jwill89/eslint-config) is a git submodule linked
+        # as a file: dependency. Without it checked out AND npm-linked, `eslint` fails
+        # to START ("Cannot find package") instead of reporting violations — silently
+        # disabling the lint gate. Fail early with the fix rather than skipping lint.
+        if (-not (Test-Path "$root\frontend\node_modules\@jwill89\eslint-config\package.json")) {
+            Write-Host "`nFAILED: frontend ESLint config (@jwill89/eslint-config) is not linked; lint can't run." -ForegroundColor Red
+            Write-Host "  Fix (once per clone):" -ForegroundColor Yellow
+            Write-Host "    git submodule update --init --recursive" -ForegroundColor Yellow
+            Write-Host "    cd frontend; npm install" -ForegroundColor Yellow
+            exit 1
+        }
         # api.generated.ts is gitignored; regenerate so typecheck/build are current.
         Invoke-Step "frontend: gen:types" { npm run gen:types }
         Invoke-Step "frontend: lint" { npm run lint:check }

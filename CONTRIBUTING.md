@@ -12,6 +12,18 @@ the primary reference. New to the repo? Start with [`README.md`](README.md).
 
 **Prerequisites:** Node 24+ and Go (version per `backend/go.mod`).
 
+**First-time setup (once per clone):**
+
+```bash
+git submodule update --init --recursive   # shared ESLint config (@jwill89/eslint-config)
+git config core.hooksPath .githooks        # pre-push runs scripts/check.ps1 (the CI mirror)
+```
+
+The ESLint config is a git submodule linked as a `file:` dependency — without it
+checked out **and** `npm install` run to link it, `npm run lint:check` can't even
+start (it errors _"Cannot find package"_), so lint silently doesn't run. `check.ps1`
+now fails early with this exact fix if the config isn't linked.
+
 ```bash
 cd backend && go run . -addr :8080 -db ../devdata/database.sqlite -webroot ../devdata/webroot   # backend
 cd frontend && npm install && npm run gen:types && npm run dev   # frontend
@@ -59,7 +71,10 @@ go test ./...
 > **One command:** run [`scripts/check.ps1`](scripts/check.ps1) (PowerShell) to run
 > every gate above — backend `golangci-lint`/build/vet/test/govulncheck, then
 > frontend `gen:types`/lint/typecheck/test/build, then the plugin `dotnet`
-> build/format — and stop at the first failure. `golangci-lint` is **not** covered
+> build/format — and stop at the first failure. With the pre-push hook enabled
+> (`git config core.hooksPath .githooks`), this runs automatically on `git push` and
+> aborts it on any failure — bypass a single push with `git push --no-verify`.
+> `golangci-lint` is **not** covered
 > by `go build`/`go vet`, so don't skip it (install the pinned version:
 > `go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.12.2`).
 > The race detector is intentionally not run — the pure-Go SQLite driver

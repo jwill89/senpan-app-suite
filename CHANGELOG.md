@@ -41,6 +41,20 @@ The format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## Frontend
 
+### [3.12.0] — 2026-07-16
+
+Shows the **live** plugin version in the admin footer.
+
+#### Changed
+
+- The **Plugin** version in the sidebar footer is now fetched at runtime from the
+  deployed Dalamud repo index (`/plugin/pluginmaster.json`) rather than baked into
+  the bundle from CHANGELOG.md at build time. So publishing a new plugin (deploy
+  `-Target plugin`) refreshes the shown version without a frontend rebuild, and the
+  number always matches what Dalamud actually serves. It falls back to the bundled
+  changelog version when the index isn't reachable (e.g. local dev). The plugin's
+  changelog **modal** content is still bundled at build time.
+
 ### [3.11.0] — 2026-07-16
 
 Adds a **Stamp Rally link on the public Garapon page** (paired with backend 3.9.0).
@@ -1113,6 +1127,29 @@ with a personal access token and is distributed through a Dalamud custom repo
 (`plugins/pluginmaster.json`). Versions use the four-part AssemblyVersion in
 `SenpanCompanion.csproj`. Entries below the current release were reconstructed
 from the `<Version>` history and commit messages.
+
+### [2.2.1.0] — 2026-07-16
+
+Makes the auto-`/tell` messages fully customizable, with length-aware splitting.
+
+#### Added
+
+- **Editable auto-tell templates** for all three tells (bingo card, garapon, stamp
+  rally): enabling a tell in Settings now reveals a message editor. Templates use
+  placeholders the plugin expands — `<t>` (recipient's character name) and
+  `<bingocard-link>` / `<garapon-link>` / `<stamprally-link>` (the relevant link).
+  Defaults reproduce the previous fixed messages, so an already-enabled tell behaves
+  the same until it's customized.
+
+#### Changed
+
+- **Long tells are split to fit the in-game chat limit.** Because the link
+  placeholders are expanded by the plugin, not the game, they're **measured at the
+  full width of the URL** they become. A message longer than one chat message is split
+  into multiple tells at the best break point (a sentence end where possible, else a
+  word boundary — nothing is dropped) and the parts are delivered a second apart to
+  respect the chat throttle. The Settings editor shows a live warning — _"This message
+  is too long and will be split into two separate tells."_ — when a template will split.
 
 ### [2.2.0.0] — 2026-07-16
 

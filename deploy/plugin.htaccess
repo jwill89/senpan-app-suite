@@ -1,0 +1,34 @@
+# ============================================================================
+# Apache .htaccess — Dalamud plugin repo (<webRoot>/plugin/)
+# ----------------------------------------------------------------------------
+# PLACEMENT: <webRoot>/plugin/.htaccess. That directory holds the custom Dalamud
+# repo the plugin is distributed through:
+#   pluginmaster.json                  ← the repo index Dalamud reads
+#   SenpanCompanionAdmin/latest.zip    ← the plugin package it downloads
+# Both are published by `scripts/deploy.ps1 -Target plugin`, which uploads THIS
+# file too — so it's synced automatically and persists across releases.
+#
+# WHY no-cache: apps.senpan.cafe sits behind Cloudflare, which by default
+# edge-caches .zip (but not .json). After a release, the edge kept serving the
+# OLD latest.zip while pluginmaster.json (uncached) already advertised the NEW
+# version, so Dalamud downloaded a package whose embedded version didn't match
+# the repo index and refused the update:
+#     "Distributed plugin version does not match repo version"
+# Cloudflare honors an origin no-store/no-cache directive and skips its edge
+# cache, so a freshly-deployed package is served immediately. The deploy ALSO
+# appends ?v=<version> to the download links as a second, independent guard.
+#
+# Requires mod_headers (already used by carrd.htaccess). If this vhost doesn't
+# allow .htaccess overrides, put the same block in the vhost's <Directory>.
+# ============================================================================
+
+# Never list the repo directory.
+Options -Indexes
+
+<IfModule mod_headers.c>
+    # The repo index and the package must never be served stale, so a new release
+    # is picked up the moment it's uploaded (see the note above).
+    <FilesMatch "\.(zip|json)$">
+        Header set Cache-Control "no-store, no-cache, must-revalidate, max-age=0"
+    </FilesMatch>
+</IfModule>

@@ -1,7 +1,14 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi, afterEach } from 'vitest'
 // Exercises the real CHANGELOG.md through the `virtual:changelog` build plugin
 // (config/changelog-plugin.ts), registered in vitest.config.ts.
-import { changelog, PLUGIN_REPO_URL, PLUGIN_INSTALL_STEPS, CHANGELOG_LABELS } from './changelog'
+import {
+  changelog,
+  PLUGIN_REPO_URL,
+  PLUGIN_INSTALL_STEPS,
+  CHANGELOG_LABELS,
+  PLUGIN_MASTER_PATH,
+  fetchLivePluginVersion,
+} from './changelog'
 
 describe('changelog pipeline', () => {
   it('parses CHANGELOG.md into structured entries for each component', () => {
@@ -18,10 +25,14 @@ describe('changelog pipeline', () => {
   })
 
   it('parses labelled change-groups with bullet bodies', () => {
-    const latest = changelog.frontend.entries[0]
-    expect(latest.groups.length).toBeGreaterThan(0)
-    const added = latest.groups.find((g) => g.label.toLowerCase() === 'added')
-    expect(added, 'frontend 3.7.0 should have an Added group').toBeTruthy()
+    expect(changelog.frontend.entries[0].groups.length).toBeGreaterThan(0)
+    // Find any frontend entry with an "Added" group rather than assuming the newest
+    // one has it (newer entries may be Changed/Fixed only) — the point is that the
+    // parser produces labelled groups whose bodies are markdown bullet lists.
+    const added = changelog.frontend.entries
+      .flatMap((e) => e.groups)
+      .find((g) => g.label.toLowerCase() === 'added')
+    expect(added, 'a frontend entry should have an Added group').toBeTruthy()
     expect(added?.body).toContain('- ') // its body is a markdown bullet list
   })
 
@@ -43,5 +54,50 @@ describe('changelog pipeline', () => {
     expect(PLUGIN_INSTALL_STEPS.length).toBeGreaterThan(0)
     expect(PLUGIN_INSTALL_STEPS.some((s) => s.detail.includes('/senpan'))).toBe(true)
     expect(CHANGELOG_LABELS.plugin).toBe('Plugin')
+  })
+})
+
+describe('fetchLivePluginVersion', () => {
+  afterEach(() => vi.unstubAllGlobals())
+
+  function stubFetch(impl: () => Promise<unknown> | never) {
+    vi.stubGlobal('fetch', vi.fn(impl))
+  }
+
+  it('returns the AssemblyVersion of the first pluginmaster entry', async () => {
+    stubFetch(async () => ({ ok: true, json: async () => [{ AssemblyVersion: '2.3.4.0' }] }))
+    expect(await fetchLivePluginVersion()).toBe('2.3.4.0')
+  })
+
+  it('fetches the same-origin repo-index path with no-store', async () => {
+    const spy = vi.fn(async () => ({
+      ok: true,
+      json: async () => [{ AssemblyVersion: '1.0.0.0' }],
+    }))
+    vi.stubGlobal('fetch', spy)
+    await fetchLivePluginVersion()
+    expect(spy).toHaveBeenCalledWith(PLUGIN_MASTER_PATH, { cache: 'no-store' })
+  })
+
+  it('returns null on a non-ok response', async () => {
+    stubFetch(async () => ({ ok: false, json: async () => [] }))
+    expect(await fetchLivePluginVersion()).toBeNull()
+  })
+
+  it('returns null when the payload is not the expected array shape', async () => {
+    stubFetch(async () => ({ ok: true, json: async () => ({}) }))
+    expect(await fetchLivePluginVersion()).toBeNull()
+  })
+
+  it('returns null when the first entry has no AssemblyVersion', async () => {
+    stubFetch(async () => ({ ok: true, json: async () => [{}] }))
+    expect(await fetchLivePluginVersion()).toBeNull()
+  })
+
+  it('returns null (never throws) when fetch rejects', async () => {
+    stubFetch(() => {
+      throw new Error('network down')
+    })
+    expect(await fetchLivePluginVersion()).toBeNull()
   })
 })

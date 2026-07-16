@@ -31,14 +31,15 @@
     run in batch mode, so a passphrase-protected .ppk must be loaded into Pageant
     first:  pageant.exe "<KeyPath>"  (enter the passphrase once per Windows session).
 
-    Each target uses just THREE SSH connections and does not poll during transfers,
+    Each target uses at most FOUR SSH connections and does not poll during transfers,
     to stay under `ufw limit ssh` (which drops the IP after 6 connections in 30s).
     A connection that gets rate-limited is retried once after a 35s wait.
 
 .PARAMETER Target
     What to deploy: frontend (default), backend, main (frontend + backend; 'both'
     is a kept alias), all (frontend + backend + plugin), or plugin (build + publish
-    the Dalamud custom-repo files: SenpanCompanionAdmin/latest.zip + pluginmaster.json).
+    the Dalamud custom-repo files: SenpanCompanionAdmin/latest.zip, pluginmaster.json
+    with a ?v=<version> cache-bust on its download links, and plugin.htaccess).
 
 .PARAMETER VpsHost
     Droplet IP or hostname. If omitted, resolved from $env:DEPLOY_VPS_HOST, then
@@ -218,7 +219,9 @@ $BackendDir = Join-Path $RepoRoot "backend"
 $LocalBinary = Join-Path $BackendDir "app-suite"
 $PluginDir = Join-Path $RepoRoot "plugins\SenpanCompanion"
 $PluginZip = Join-Path $PluginDir "bin\Release\SenpanCompanionAdmin\latest.zip"
+$PluginManifest = Join-Path $PluginDir "bin\Release\SenpanCompanionAdmin\SenpanCompanionAdmin.json"
 $PluginMaster = Join-Path $RepoRoot "plugins\pluginmaster.json"
+$PluginHtaccess = Join-Path $RepoRoot "deploy\plugin.htaccess"
 
 if (-not (Test-Path $KeyPath)) { Fail "SSH key not found: $KeyPath" }
 
@@ -420,31 +423,78 @@ function Deploy-Plugin {
     }
     if (-not (Test-Path $PluginZip)) { Fail "Plugin package not found at $PluginZip - nothing to deploy." }
     if (-not (Test-Path $PluginMaster)) { Fail "pluginmaster.json not found at $PluginMaster." }
-    Write-Ok "Package present: $PluginZip"
+    if (-not (Test-Path $PluginManifest)) { Fail "Built plugin manifest not found at $PluginManifest (build the plugin first)." }
 
-    # 2. Prepare the remote repo dir (1 connection).
-    Write-Step "Preparing remote plugin dir..."
-    if (-not (Invoke-RemoteWithRetry "mkdir -p '$remotePluginZipDir'")) {
-        Fail "Could not create $remotePluginZipDir on the host."
+    # 2. Version guardrail. Read the version DalamudPackager baked into latest.zip's
+    #    manifest and make sure the repo index (pluginmaster.json) advertises the same
+    #    one — Dalamud refuses an update whose packaged version doesn't match the repo
+    #    ("Distributed plugin version does not match repo version"), so fail early with
+    #    guidance rather than publishing a package that can't install.
+    $pkgVersion = (Get-Content $PluginManifest -Raw | ConvertFrom-Json).AssemblyVersion
+    if (-not $pkgVersion) { Fail "Could not read AssemblyVersion from $PluginManifest." }
+    $masterText = Get-Content $PluginMaster -Raw
+    $masterVersion = if ($masterText -match '"AssemblyVersion"\s*:\s*"([^"]+)"') { $Matches[1] } else { $null }
+    if ($masterVersion -ne $pkgVersion) {
+        Fail ("Version mismatch: the built package is $pkgVersion but pluginmaster.json says '$masterVersion'.`n" +
+            "  Bump AssemblyVersion (and LastUpdate) in plugins/pluginmaster.json to $pkgVersion, then re-run.")
     }
-    Write-Ok "Remote dir ready."
+    Write-Ok "Package present: $PluginZip (v$pkgVersion)"
 
-    # 3. Upload the package (1 connection).
-    Write-Step "Uploading latest.zip -> $remotePluginZipDir/latest.zip ..."
-    if (-not (Send-File $PluginZip "$remotePluginZipDir/latest.zip")) {
-        Fail "Plugin package upload failed."
+    # 3. Cache-bust the download links. apps.senpan.cafe is behind Cloudflare, which
+    #    edge-caches .zip; appending ?v=<version> makes each release a distinct cache
+    #    key (a fresh MISS that fetches the new package). The repo file keeps clean
+    #    links; the version is injected HERE so it can never drift out of sync. This is
+    #    belt-and-braces with the no-store headers in plugin.htaccess (step 6).
+    $bustedMaster = [regex]::Replace($masterText, 'latest\.zip(\?v=[^"\s]*)?', "latest.zip?v=$pkgVersion")
+    $tmpMaster = Join-Path $env:TEMP ("pluginmaster-{0}.json" -f [guid]::NewGuid())
+    [System.IO.File]::WriteAllText($tmpMaster, $bustedMaster)
+
+    try {
+        # 4. Prepare the remote repo dir (connection 1).
+        Write-Step "Preparing remote plugin dir..."
+        if (-not (Invoke-RemoteWithRetry "mkdir -p '$remotePluginZipDir'")) {
+            Fail "Could not create $remotePluginZipDir on the host."
+        }
+        Write-Ok "Remote dir ready."
+
+        # 5. Upload the package (connection 2).
+        Write-Step "Uploading latest.zip -> $remotePluginZipDir/latest.zip ..."
+        if (-not (Send-File $PluginZip "$remotePluginZipDir/latest.zip")) {
+            Fail "Plugin package upload failed."
+        }
+        Write-Ok "Package uploaded."
+
+        # 6. Upload the repo index with cache-busted download links (connection 3).
+        Write-Step "Uploading pluginmaster.json (cache-bust ?v=$pkgVersion) -> $remotePluginDir/pluginmaster.json ..."
+        if (-not (Send-File $tmpMaster "$remotePluginDir/pluginmaster.json")) {
+            Fail "pluginmaster.json upload failed."
+        }
+        Write-Ok "Repo index uploaded."
     }
-    Write-Ok "Package uploaded."
-
-    # 4. Upload the repo index (1 connection).
-    Write-Step "Uploading pluginmaster.json -> $remotePluginDir/pluginmaster.json ..."
-    if (-not (Send-File $PluginMaster "$remotePluginDir/pluginmaster.json")) {
-        Fail "pluginmaster.json upload failed."
+    finally {
+        Remove-Item $tmpMaster -Force -ErrorAction SilentlyContinue
     }
 
-    Write-Host "`n[OK] Plugin repo published on $remoteTarget." -ForegroundColor Green
+    # 7. Sync the no-cache Apache config so Cloudflare never serves a stale package
+    #    (connection 4). The repo copy (deploy/plugin.htaccess) is the source of truth.
+    #    Non-fatal: the package + index are already live and the ?v= cache-bust still
+    #    protects updates, so a failed header sync only warns.
+    Write-Step "Syncing plugin .htaccess (no-cache headers)..."
+    if (Test-Path $PluginHtaccess) {
+        if (Send-File $PluginHtaccess "$remotePluginDir/.htaccess") {
+            Write-Ok ".htaccess synced to $remotePluginDir/.htaccess"
+        }
+        else {
+            Write-Host "    WARNING: plugin .htaccess upload failed; the package is live but Cloudflare may still edge-cache latest.zip (the ?v= cache-bust still applies). Re-run, or upload deploy/plugin.htaccess to $remotePluginDir/.htaccess manually." -ForegroundColor Yellow
+        }
+    }
+    else {
+        Write-Host "    WARNING: $PluginHtaccess not found; skipped the plugin .htaccess sync." -ForegroundColor Yellow
+    }
+
+    Write-Host "`n[OK] Plugin repo published on $remoteTarget (v$pkgVersion)." -ForegroundColor Green
     Write-Host "     Dalamud custom repo URL: https://apps.senpan.cafe/plugin/pluginmaster.json" -ForegroundColor DarkGray
-    Write-Host "     Bump AssemblyVersion + LastUpdate in pluginmaster.json before each release." -ForegroundColor DarkGray
+    Write-Host "     Bump AssemblyVersion + LastUpdate in pluginmaster.json before each release; the ?v= cache-bust and no-cache headers are automatic." -ForegroundColor DarkGray
 }
 
 # ── Dispatch ──────────────────────────────────────────────────────────────────

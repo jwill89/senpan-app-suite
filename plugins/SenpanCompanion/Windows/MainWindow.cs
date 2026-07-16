@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Numerics;
 using System.Threading.Tasks;
 using Dalamud.Bindings.ImGui;
@@ -357,6 +358,74 @@ public sealed class MainWindow : Window, IDisposable
         this.settingsToken = this.config.Token;
     }
 
+    private static readonly Vector4 WarnColor = new(0.9f, 0.65f, 0.2f, 1f);
+
+    // A representative recipient name for the settings-time split estimate — the real
+    // name is only known when a card is issued. Uses the maximum FFXIV name width
+    // (forename 15 + space + surname 15 = 31) so the estimate is a conservative upper
+    // bound: it errs toward showing the split warning rather than silently splitting a
+    // <t>-containing message at send time. (Link widths in the estimate are already
+    // exact — real server URL + real 32/6-char token widths.)
+    private static readonly string ReprName = new('W', 31);
+
+    // Auto-tell checkbox + (when enabled) a template editor, a placeholder hint, and a
+    // live "this will split into N tells" warning estimated from the real server URL +
+    // representative link/name widths. Config-backed via get/set delegates; saved on
+    // each edit (the config file is tiny) so an edit can't be lost by navigating away.
+    private void DrawTellSetting(
+        string checkboxLabel,
+        Func<bool> getEnabled, Action<bool> setEnabled,
+        Func<string> getTemplate, Action<string> setTemplate,
+        string editorId, string placeholderHint,
+        Func<string, int> estimateParts)
+    {
+        var enabled = getEnabled();
+        if (ImGui.Checkbox(checkboxLabel, ref enabled))
+        {
+            setEnabled(enabled);
+            this.config.Save();
+        }
+        if (!enabled)
+            return;
+
+        ImGui.Indent(22f);
+        var tmpl = getTemplate();
+        if (ImGui.InputTextMultiline(editorId, ref tmpl, 2048, new Vector2(-1f, 54f)))
+        {
+            setTemplate(tmpl);
+            this.config.Save();
+        }
+        ImGui.TextDisabled(placeholderHint);
+
+        var parts = estimateParts(getTemplate());
+        if (parts >= 2)
+            ImGui.TextColored(WarnColor, parts == 2
+                ? "This message is too long and will be split into two separate tells."
+                : $"This message is too long and will be split into {parts} separate tells.");
+        ImGui.Unindent(22f);
+    }
+
+    // Representative placeholder expansions for the settings-time split estimate: the
+    // real server URL + a token of the real width (garapon/stamp = 32 hex chars, bingo
+    // card id = 6) so the link is measured at the full width it will render as.
+    private Dictionary<string, string> BingoReprValues() => new()
+    {
+        [TellComposer.TargetToken] = ReprName,
+        [TellComposer.BingoCardLinkToken] = this.config.CardUrl(new string('x', 6)),
+    };
+
+    private Dictionary<string, string> GaraponReprValues() => new()
+    {
+        [TellComposer.TargetToken] = ReprName,
+        [TellComposer.GaraponLinkToken] = this.config.GaraponUrl(new string('x', 32)),
+    };
+
+    private Dictionary<string, string> StampReprValues() => new()
+    {
+        [TellComposer.TargetToken] = ReprName,
+        [TellComposer.StampCardLinkToken] = this.config.StampCardUrl(new string('x', 32)),
+    };
+
     private void DrawSettingsPanel()
     {
         ImGui.TextWrapped(
@@ -378,27 +447,31 @@ public sealed class MainWindow : Window, IDisposable
             this.plugin.OnConnectionSettingsChanged();
         }
 
-        var tell = this.config.TellCardUrlOnCreate;
-        if (ImGui.Checkbox("/tell the bingo card URL when creating from the nearby list", ref tell))
-        {
-            this.config.TellCardUrlOnCreate = tell;
-            this.config.Save();
-        }
+        DrawTellSetting(
+            "/tell the bingo card link when creating from the nearby list",
+            () => this.config.TellCardUrlOnCreate, v => this.config.TellCardUrlOnCreate = v,
+            () => this.config.BingoCardTellTemplate, v => this.config.BingoCardTellTemplate = v,
+            "##bingotelltmpl",
+            "Placeholders: <t> = player name  ·  <bingocard-link> = the card link.",
+            t => TellComposer.PartCount(t, BingoReprValues()));
 
-        var tellGarapon = this.config.TellGaraponUrlOnCreate;
-        if (ImGui.Checkbox("/tell the Garapon drawing link when issuing from the nearby list", ref tellGarapon))
-        {
-            this.config.TellGaraponUrlOnCreate = tellGarapon;
-            this.config.Save();
-        }
+        DrawTellSetting(
+            "/tell the Garapon drawing link when issuing from the nearby list",
+            () => this.config.TellGaraponUrlOnCreate, v => this.config.TellGaraponUrlOnCreate = v,
+            () => this.config.GaraponTellTemplate, v => this.config.GaraponTellTemplate = v,
+            "##garapontelltmpl",
+            "Placeholders: <t> = player name  ·  <garapon-link> = the drawing link.",
+            t => TellComposer.PartCount(t, GaraponReprValues()));
 
-        var tellStamp = this.config.TellStampCardUrlOnCreate;
-        if (ImGui.Checkbox("/tell the Stamp Rally card link when issuing from the nearby list", ref tellStamp))
-        {
-            this.config.TellStampCardUrlOnCreate = tellStamp;
-            this.config.Save();
-        }
-        ImGui.TextDisabled("    Each sends an outgoing chat message on your behalf — see the README's ToS note.");
+        DrawTellSetting(
+            "/tell the Stamp Rally card link when issuing from the nearby list",
+            () => this.config.TellStampCardUrlOnCreate, v => this.config.TellStampCardUrlOnCreate = v,
+            () => this.config.StampCardTellTemplate, v => this.config.StampCardTellTemplate = v,
+            "##stamptelltmpl",
+            "Placeholders: <t> = player name  ·  <stamprally-link> = the card link.",
+            t => TellComposer.PartCount(t, StampReprValues()));
+
+        ImGui.TextDisabled("    Each sends an outgoing chat message on your behalf — a long message splits into multiple tells. See the README's ToS note.");
 
         ImGui.Spacing();
         if (ImGui.Button("Save"))

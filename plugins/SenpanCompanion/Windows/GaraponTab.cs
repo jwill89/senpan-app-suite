@@ -149,7 +149,14 @@ internal sealed class GaraponTab : TabBase
             });
 
             if (doTell && !string.IsNullOrEmpty(created.Token))
-                this.chat.SendTell(name, tellWorld, $"Here's your Garapon drawing link: {this.config.GaraponUrl(created.Token)}");
+            {
+                var parts = TellComposer.Compose(this.config.GaraponTellTemplate, new Dictionary<string, string>
+                {
+                    [TellComposer.TargetToken] = name,
+                    [TellComposer.GaraponLinkToken] = this.config.GaraponUrl(created.Token),
+                });
+                this.chat.SendTell(name, tellWorld, parts);
+            }
         });
     }
 

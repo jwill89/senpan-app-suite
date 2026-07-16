@@ -155,7 +155,14 @@ internal sealed class BingoCardsTab : TabBase
             });
 
             if (doTell && !string.IsNullOrEmpty(created.Card.Id))
-                this.chat.SendTell(name, tellWorld, $"Here's your bingo card: {this.config.CardUrl(created.Card.Id)}");
+            {
+                var parts = TellComposer.Compose(this.config.BingoCardTellTemplate, new Dictionary<string, string>
+                {
+                    [TellComposer.TargetToken] = name,
+                    [TellComposer.BingoCardLinkToken] = this.config.CardUrl(created.Card.Id),
+                });
+                this.chat.SendTell(name, tellWorld, parts);
+            }
         });
     }
 

@@ -49,6 +49,20 @@ public class Configuration : IPluginConfiguration
     /// </summary>
     public bool TellStampCardUrlOnCreate { get; set; }
 
+    // Editable auto-tell message templates. Placeholders (expanded by the plugin, see
+    // TellComposer): <t> = recipient name; <bingocard-link>/<garapon-link>/<stamprally-link>
+    // = the relevant link. Defaults reproduce the messages the plugin sent before the
+    // templates existed, so enabling a tell behaves the same until it's customized.
+
+    /// <summary>Template for the bingo-card auto-tell (uses <c>&lt;bingocard-link&gt;</c>).</summary>
+    public string BingoCardTellTemplate { get; set; } = "Here's your bingo card: <bingocard-link>";
+
+    /// <summary>Template for the Garapon drawing-link auto-tell (uses <c>&lt;garapon-link&gt;</c>).</summary>
+    public string GaraponTellTemplate { get; set; } = "Here's your Garapon drawing link: <garapon-link>";
+
+    /// <summary>Template for the Stamp Rally card auto-tell (uses <c>&lt;stamprally-link&gt;</c>).</summary>
+    public string StampCardTellTemplate { get; set; } = "Here's your Stamp Rally card: <stamprally-link>";
+
     /// <summary>The production server, used as the default and for fresh installs.</summary>
     public const string DefaultServerUrl = "https://apps.senpan.cafe";
 

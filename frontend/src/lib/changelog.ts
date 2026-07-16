@@ -29,6 +29,40 @@ export const CHANGELOG_LABELS: Record<ChangelogComponent, string> = {
 /** The Dalamud custom-repository URL (matches pluginmaster.json's DownloadLink*). */
 export const PLUGIN_REPO_URL = 'https://apps.senpan.cafe/plugin/pluginmaster.json'
 
+/**
+ * Same-origin path to the deployed Dalamud repo index. Fetched at runtime (see
+ * {@link fetchLivePluginVersion}) so the admin footer can show the LIVE plugin
+ * version — what Dalamud actually serves — instead of the version baked into this
+ * bundle at build time. Publishing a new plugin (deploy `-Target plugin`) then
+ * refreshes the shown version without a frontend rebuild. Relative so it stays
+ * same-origin (the SPA and `/plugin/` share the doc root in production); in dev it
+ * 404s and the caller falls back to the bundled changelog version.
+ */
+export const PLUGIN_MASTER_PATH = '/plugin/pluginmaster.json'
+
+/**
+ * Reads the live plugin version: the `AssemblyVersion` of the first entry in the
+ * deployed pluginmaster.json. Returns `null` on any failure (dev/offline/parse) so
+ * the caller can fall back to the bundled changelog version. Never throws. Sends
+ * `cache: 'no-store'` so a browser cache can't mask a fresh deploy (belt-and-braces
+ * with the no-cache headers Apache serves for the plugin repo).
+ */
+export async function fetchLivePluginVersion(): Promise<string | null> {
+  try {
+    const res = await fetch(PLUGIN_MASTER_PATH, { cache: 'no-store' })
+    if (!res.ok) return null
+    const data: unknown = await res.json()
+    const first = Array.isArray(data) ? data[0] : null
+    const version =
+      first && typeof first === 'object'
+        ? (first as { AssemblyVersion?: unknown }).AssemblyVersion
+        : null
+    return typeof version === 'string' && version.length > 0 ? version : null
+  } catch {
+    return null
+  }
+}
+
 /** One install step (title + markdown detail) for the plugin "How to install" view. */
 export interface InstallStep {
   title: string

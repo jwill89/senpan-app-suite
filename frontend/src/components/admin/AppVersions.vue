@@ -3,18 +3,22 @@
  * Frontend/backend/plugin version readout for the admin sidebar footer. The SPA's
  * build version (baked in) and the backend's (fetched from GET /api/version) are
  * shown so operators can confirm a deploy left the web halves compatible; a MAJOR
- * mismatch (or a failed probe) is flagged. The plugin's version comes from the
- * bundled changelog (its latest released entry). Each version is a button that
- * opens that component's changelog (the plugin's also carries install steps).
+ * mismatch (or a failed probe) is flagged. The plugin's version is fetched LIVE from
+ * the deployed Dalamud repo index (pluginmaster.json) so publishing a new plugin
+ * refreshes it without a frontend rebuild; it falls back to the bundled changelog
+ * version when the index isn't reachable (e.g. local dev). Each version is a button
+ * that opens that component's changelog (the plugin's also carries install steps).
  */
 import { computed, onMounted, ref } from 'vue'
 import { endpoints } from '@/lib/endpoints'
 import { FRONTEND_VERSION, versionsCompatible } from '@/lib/version'
-import { changelog, type ChangelogComponent } from '@/lib/changelog'
+import { changelog, fetchLivePluginVersion, type ChangelogComponent } from '@/lib/changelog'
 import ChangelogModal from '@/components/admin/ChangelogModal.vue'
 
 const backend = ref<string | null>(null)
 const failed = ref(false)
+/** Live plugin version from the deployed repo index; null until fetched (or on failure). */
+const livePlugin = ref<string | null>(null)
 /** Which component's changelog modal is open (null = closed). */
 const openComponent = ref<ChangelogComponent | null>(null)
 
@@ -29,6 +33,11 @@ onMounted(() => {
     .catch(() => {
       failed.value = true
     })
+  // Live plugin version (what Dalamud serves). fetchLivePluginVersion never throws —
+  // it resolves to null on failure, so the computed falls back to the bundled value.
+  fetchLivePluginVersion().then((v) => {
+    livePlugin.value = v
+  })
 })
 
 /** Incompatible only once we actually know the backend version. */
@@ -36,8 +45,8 @@ const incompatible = computed(
   () => backend.value !== null && !versionsCompatible(FRONTEND_VERSION, backend.value),
 )
 
-/** Latest released plugin version (from the bundled changelog). */
-const pluginVersion = computed(() => changelog.plugin.latest)
+/** Live plugin version if reachable, else the version baked into the bundled changelog. */
+const pluginVersion = computed(() => livePlugin.value ?? changelog.plugin.latest)
 </script>
 
 <template>

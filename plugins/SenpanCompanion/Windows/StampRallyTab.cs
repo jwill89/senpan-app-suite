@@ -145,7 +145,14 @@ internal sealed class StampRallyTab : TabBase
             });
 
             if (doTell && !string.IsNullOrEmpty(created.Token))
-                this.chat.SendTell(name, tellWorld, $"Here's your Stamp Rally card: {this.config.StampCardUrl(created.Token)}");
+            {
+                var parts = TellComposer.Compose(this.config.StampCardTellTemplate, new Dictionary<string, string>
+                {
+                    [TellComposer.TargetToken] = name,
+                    [TellComposer.StampCardLinkToken] = this.config.StampCardUrl(created.Token),
+                });
+                this.chat.SendTell(name, tellWorld, parts);
+            }
         });
     }
 

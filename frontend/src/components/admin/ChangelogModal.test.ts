@@ -15,11 +15,13 @@ describe('ChangelogModal', () => {
     // One rail item per version (frontend has no install item).
     expect(wrapper.findAll('.cl__railitem')).toHaveLength(versions.length)
 
-    // Opens on the newest release, with its change-group badges (Added/Fixed/…).
+    // Opens on the newest release, with its change-group badges (Added/Changed/…).
     expect(wrapper.find('.cl__detailtitle').text()).toContain(`v${versions[0].version}`)
     const badges = wrapper.findAll('.cl-badge').map((b) => b.text())
     expect(badges.length).toBeGreaterThan(0)
-    expect(badges).toContain('Added')
+    // Badges are the newest release's actual change-group labels — don't hardcode one
+    // (a Changed/Fixed-only release has no "Added" group).
+    expect(badges).toEqual(versions[0].groups.map((g) => g.label))
   })
 
   it('navigates to an older version when its rail item is clicked', async () => {

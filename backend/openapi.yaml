@@ -1429,6 +1429,8 @@ components:
           type: integer
         player_name:
           type: string
+        stamp_card_token:
+          type: string
       type: object
     GaraponPublicResponse:
       properties:
@@ -1500,6 +1502,8 @@ components:
             max_draws:
               type: integer
             player_name:
+              type: string
+            stamp_card_token:
               type: string
           type: object
       type: object
@@ -4070,7 +4074,7 @@ info:
     (`{ "type": "log", "entry": LogEntry }`) for the live log tail — best-effort,
     sent only while an admin is connected.
   title: Senpan App Suite API
-  version: 3.7.1
+  version: 3.9.0
 openapi: 3.0.3
 paths:
   /api/account/change-password:

@@ -304,4 +304,21 @@ describe('linked stamp rally', () => {
     )
     expect(s.stampCardLinkUrl({ stamp_card_token: '' } as GaraponPlayer)).toBe('')
   })
+
+  it('loadByToken surfaces the linked stamp-card token to the public view', async () => {
+    ep.publicGet.mockResolvedValueOnce({
+      garapon: garapon({ title: 'Festival' }),
+      player: { player_name: 'Hero', max_draws: 3, draws_used: 0, stamp_card_token: 'tok' },
+      draws: [],
+    })
+    const s = useGaraponsStore()
+    await s.loadByToken('tok')
+    expect(s.publicStampCardToken).toBe('tok')
+  })
+
+  it('publicStampCardToken is empty when the drawing link has no paired rally card', () => {
+    const s = useGaraponsStore()
+    s.publicPlayer = { player_name: 'Hero', max_draws: 3, draws_used: 0 }
+    expect(s.publicStampCardToken).toBe('')
+  })
 })

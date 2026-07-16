@@ -41,6 +41,19 @@ The format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## Frontend
 
+### [3.11.0] — 2026-07-16
+
+Adds a **Stamp Rally link on the public Garapon page** (paired with backend 3.9.0).
+
+#### Added
+
+- **"View your Stamp Rally card" link** on the Garapon drawing page
+  (`/garapon/:token`). When a drawing link was issued for a garapon tied to a Stamp
+  Rally — so the player also holds a stamp card sharing the same token — the page
+  now shows a link straight to their `/stamp-card/:token`. It's gated on the new
+  `stamp_card_token` the public endpoint returns, so it appears only when a linked
+  card actually exists.
+
 ### [3.10.0] — 2026-07-12
 
 Adds a **"Where to Redeem"** image to stamp rallies (paired with backend 3.8.0).
@@ -484,6 +497,20 @@ First tracked release — establishes versioning for the current production buil
 ---
 
 ## Backend
+
+### [3.9.0] — 2026-07-16
+
+Surfaces the linked **stamp-card token** on the public garapon payload (paired with
+frontend 3.11.0). Backward-compatible addition only; no breaking contract changes.
+
+#### Added
+
+- **`stamp_card_token` on `GET /api/garapon/{token}`** — the public player object
+  (`GaraponPublicResponse.player`) now carries the token of the Stamp Rally card
+  auto-issued alongside the drawing link (equal to the drawing-link token) when the
+  garapon is tied to a rally, and is omitted otherwise. The value was already loaded
+  server-side (the `LEFT JOIN` in `GetGaraponPlayerByToken`); it is now forwarded so
+  the public Garapon page can link to the participant's stamp card. No schema change.
 
 ### [3.8.0] — 2026-07-12
 
@@ -1086,6 +1113,33 @@ with a personal access token and is distributed through a Dalamud custom repo
 (`plugins/pluginmaster.json`). Versions use the four-part AssemblyVersion in
 `SenpanCompanion.csproj`. Entries below the current release were reconstructed
 from the `<Version>` history and commit messages.
+
+### [2.2.0.0] — 2026-07-16
+
+Adds **Garapon** and **Stamp Rally** management, and replaces the tab bar with a
+**collapsible sidebar**. Uses only existing server endpoints (paired with backend
+3.9.0 for the public-page link, which is a web/backend concern).
+
+#### Added
+
+- **Garapon management** (gated on `festival-garapon`): a **Garapon** page to issue
+  a per-player drawing link for an existing garapon — quick-fill the name from the
+  nearby list, set the draw count, and **copy the link** (plus a **copy stamp-card
+  link** button when the garapon is tied to a Stamp Rally; the server issues that
+  paired card automatically on create, sharing the token). It is create-only, by
+  design — no edit/delete from in-game. A separate **Garapon Draw Log** page lists
+  the recorded pulls.
+- **Stamp Rally management** (gated on `festival-stamp-rally`): a **Stamp Rally**
+  page to issue a participant card for a nearby player (**copy the card link**) and
+  **pause/resume** individual stalls. A separate **Stamp Rally Log** page shows the
+  collected-stamp log.
+- **Optional `/tell` on create** for both, **off by default** (opt-in per feature in
+  Settings): when you issue a link/card for a player picked from the nearby list, the
+  plugin can `/tell` them the URL. Outgoing chat — see the ToS note in Settings.
+- **Collapsible sidebar navigation** replacing the flat tab bar: **Bingo** and
+  **Festival** sections with per-page links, plus **Settings** and **About**.
+  Sections and links are hidden for permissions the account lacks, mirroring the web
+  admin sidebar; the window opens on the first page the account can reach.
 
 ### [2.1.0.0] — 2026-07-11
 

@@ -122,6 +122,11 @@ type GaraponPublicPlayer struct {
 	PlayerName string `json:"player_name"`
 	MaxDraws   int    `json:"max_draws"`
 	DrawsUsed  int    `json:"draws_used"`
+	// StampCardToken is set when this drawing link's garapon is tied to a Stamp
+	// Rally and a card was issued for the player — it equals the garapon token, so
+	// the public view can link to /stamp-card/<token>. "" when there is no linked
+	// card, which gates whether the rally link is shown.
+	StampCardToken string `json:"stamp_card_token,omitempty"`
 }
 
 // GaraponPublicResponse is the body of GET /api/garapon/{token} — the player-facing

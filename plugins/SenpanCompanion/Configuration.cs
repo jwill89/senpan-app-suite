@@ -36,6 +36,19 @@ public class Configuration : IPluginConfiguration
     /// </summary>
     public bool TellCardUrlOnCreate { get; set; } = true;
 
+    /// <summary>
+    /// When issuing a Garapon drawing link for a player picked from the nearby list,
+    /// /tell them the link. Like <see cref="TellCardUrlOnCreate"/> this drives an
+    /// outgoing chat message (ToS caveat in ChatSender), so it defaults OFF (opt-in).
+    /// </summary>
+    public bool TellGaraponUrlOnCreate { get; set; }
+
+    /// <summary>
+    /// When issuing a Stamp Rally card for a player picked from the nearby list,
+    /// /tell them the card link. Outgoing chat, so it defaults OFF (opt-in).
+    /// </summary>
+    public bool TellStampCardUrlOnCreate { get; set; }
+
     /// <summary>The production server, used as the default and for fresh installs.</summary>
     public const string DefaultServerUrl = "https://apps.senpan.cafe";
 
@@ -50,4 +63,10 @@ public class Configuration : IPluginConfiguration
 
     /// <summary>The public player URL for a card id (…/play/{id}).</summary>
     public string CardUrl(string id) => $"{this.ServerUrl.Trim().TrimEnd('/')}/play/{id}";
+
+    /// <summary>The public Garapon drawing-link URL for a player token (…/garapon/{token}).</summary>
+    public string GaraponUrl(string token) => $"{this.ServerUrl.Trim().TrimEnd('/')}/garapon/{token}";
+
+    /// <summary>The public Stamp Rally card URL for a token (…/stamp-card/{token}).</summary>
+    public string StampCardUrl(string token) => $"{this.ServerUrl.Trim().TrimEnd('/')}/stamp-card/{token}";
 }

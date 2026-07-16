@@ -213,6 +213,123 @@ public sealed class WinnersLogResponse
     public int PerPage { get; set; }
 }
 
+// ── Garapon ──────────────────────────────────────────────────────────────────
+
+public sealed class Garapon
+{
+    public long Id { get; set; }
+    public string Title { get; set; } = string.Empty;
+    public string Status { get; set; } = string.Empty;
+    public long? StampRallyId { get; set; }                     // set when linked to a rally
+    public string StampRallyTitle { get; set; } = string.Empty; // joined for display when linked
+    public int PlayerCount { get; set; }                        // admin-list aggregate
+    public int DrawCount { get; set; }                          // admin-list aggregate
+}
+
+// A per-player drawing link. StampCardToken is non-empty only when the garapon is
+// tied to a rally and a dual card was auto-issued (it equals Token).
+public sealed class GaraponPlayer
+{
+    public long Id { get; set; }
+    public string Token { get; set; } = string.Empty;
+    public string PlayerName { get; set; } = string.Empty;
+    public int MaxDraws { get; set; }
+    public int DrawsUsed { get; set; }
+    public string StampCardToken { get; set; } = string.Empty;
+}
+
+// One recorded pull (snapshotted, so the log survives later prize edits).
+public sealed class GaraponDraw
+{
+    public string PlayerName { get; set; } = string.Empty;
+    public string PrizeName { get; set; } = string.Empty;
+    public string BallColor { get; set; } = string.Empty; // CSS hex, e.g. "#e5b53f"
+    public string DrawnAt { get; set; } = string.Empty;
+}
+
+public sealed class GaraponsResponse
+{
+    public List<Garapon> Garapons { get; set; } = new();
+}
+
+// GET /api/garapons/{id}: the garapon, its drawing links, and the full draw log.
+public sealed class GaraponDetailResponse
+{
+    public Garapon Garapon { get; set; } = new();
+    public List<GaraponPlayer> Players { get; set; } = new();
+    public List<GaraponDraw> Draws { get; set; } = new();
+}
+
+public sealed class GaraponPlayerResponse
+{
+    public GaraponPlayer Player { get; set; } = new();
+}
+
+// ── Stamp Rally ──────────────────────────────────────────────────────────────
+
+// One collectable stamp (a "stall"). AffiliateName "" renders as "Senpan Tea House".
+public sealed class StampRallyStamp
+{
+    public long Id { get; set; }
+    public string AffiliateName { get; set; } = string.Empty;
+    public bool Paused { get; set; }
+    public int SortOrder { get; set; }
+}
+
+public sealed class StampRally
+{
+    public long Id { get; set; }
+    public string Title { get; set; } = string.Empty;
+    public string Status { get; set; } = string.Empty;
+    public int CardCount { get; set; }
+    public int CompletedCount { get; set; }
+    public int StampCount { get; set; }
+    public int ActiveStampCount { get; set; }
+    public List<StampRallyStamp> Stamps { get; set; } = new(); // populated on detail fetches
+}
+
+// A participant's tokenized card. CollectedCount is an admin-list aggregate.
+public sealed class StampRallyCard
+{
+    public long Id { get; set; }
+    public string Token { get; set; } = string.Empty;
+    public string ParticipantName { get; set; } = string.Empty;
+    public bool Completed { get; set; }
+    public int CollectedCount { get; set; }
+}
+
+// One row of the event-wide collected-stamp log (grouped by participant server-side).
+public sealed class StampRallyLogEntry
+{
+    public long CardId { get; set; }
+    public string ParticipantName { get; set; } = string.Empty;
+    public long StampId { get; set; }
+    public string StallName { get; set; } = string.Empty;
+    public string StampedAt { get; set; } = string.Empty;
+}
+
+public sealed class StampRalliesResponse
+{
+    public List<StampRally> StampRallies { get; set; } = new();
+}
+
+// GET /api/stamp-rallies/{id}: the rally (with stamps) plus its issued cards.
+public sealed class StampRallyDetailResponse
+{
+    public StampRally StampRally { get; set; } = new();
+    public List<StampRallyCard> Cards { get; set; } = new();
+}
+
+public sealed class StampRallyCardResponse
+{
+    public StampRallyCard Card { get; set; } = new();
+}
+
+public sealed class StampRallyLogsResponse
+{
+    public List<StampRallyLogEntry> Logs { get; set; } = new();
+}
+
 // ── Generic ──────────────────────────────────────────────────────────────────
 
 public sealed class OkResponse

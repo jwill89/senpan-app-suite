@@ -70,6 +70,17 @@ function when(ts: string): string {
         <strong>{{ garapons.publicPlayer.player_name }}</strong>
       </p>
 
+      <!-- Linked Stamp Rally card: shown only when this drawing link was issued
+           alongside a paired rally card (same token). -->
+      <router-link
+        v-if="garapons.publicStampCardToken"
+        :to="{ name: 'stamp-card', params: { token: garapons.publicStampCardToken } }"
+        class="garapon-rally-link"
+      >
+        <font-awesome-icon :icon="['fad', 'stamp']" />
+        <span>View your Stamp Rally card</span>
+      </router-link>
+
       <!-- Status / remaining draws -->
       <p class="garapon-draws-line">
         <template v-if="isClosed">
@@ -199,6 +210,25 @@ function when(ts: string): string {
   color: var(--highlight);
   font-weight: 600;
   margin-bottom: 16px;
+}
+.garapon-rally-link {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  max-width: 360px;
+  margin: 0 auto 16px;
+  padding: 10px 16px;
+  background: color-mix(in srgb, var(--accent-2) 16%, transparent);
+  border: 1px solid var(--accent-2);
+  border-radius: var(--radius);
+  color: var(--text);
+  font-weight: 600;
+  text-decoration: none;
+  transition: background 0.15s ease;
+}
+.garapon-rally-link:hover {
+  background: color-mix(in srgb, var(--accent-2) 28%, transparent);
 }
 .garapon-wheel-wrap {
   margin: 8px 0 20px;

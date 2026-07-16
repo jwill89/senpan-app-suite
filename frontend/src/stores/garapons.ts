@@ -19,6 +19,7 @@ import type {
   GaraponPlayer,
   GaraponPrize,
   GaraponPrizeForm,
+  GaraponPublicPlayer,
   StampRally,
 } from '@/types/api'
 import { useUiStore } from './ui'
@@ -58,9 +59,7 @@ export const useGaraponsStore = defineStore('garapons', () => {
   // ── Public (player view) state ───────────────────────────────────────────
   // The public token view returns the trimmed PublicGarapon (no odds/aggregates).
   const publicGarapon = ref<PublicGarapon | null>(null)
-  const publicPlayer = ref<{ player_name: string; max_draws: number; draws_used: number } | null>(
-    null,
-  )
+  const publicPlayer = ref<GaraponPublicPlayer | null>(null)
   const publicDraws = ref<GaraponDraw[]>([])
   /** The most recent win (drives the "congratulations" banner). */
   const lastWin = ref<GaraponDraw | null>(null)
@@ -89,6 +88,12 @@ export const useGaraponsStore = defineStore('garapons', () => {
   const canDraw = computed(
     () => publicGarapon.value?.status === 'open' && drawsRemaining.value > 0 && !drawing.value,
   )
+  /**
+   * The token of the Stamp Rally card linked to this drawing link (empty when the
+   * garapon isn't tied to a rally). It equals the garapon token, so the public view
+   * can link straight to /stamp-card/<token>.
+   */
+  const publicStampCardToken = computed(() => publicPlayer.value?.stamp_card_token ?? '')
 
   // ── Admin: load ──────────────────────────────────────────────────────────
   async function loadGarapons(): Promise<void> {
@@ -443,6 +448,7 @@ export const useGaraponsStore = defineStore('garapons', () => {
     otherPrizes,
     drawsRemaining,
     canDraw,
+    publicStampCardToken,
     // admin actions
     loadGarapons,
     loadGaraponDetail,

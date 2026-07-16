@@ -472,8 +472,13 @@ func (s *Server) handleGaraponPublic(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, http.StatusOK, model.GaraponPublicResponse{
 		Garapon: toPublicGarapon(garapon),
-		Player:  model.GaraponPublicPlayer{PlayerName: player.PlayerName, MaxDraws: player.MaxDraws, DrawsUsed: player.DrawsUsed},
-		Draws:   draws,
+		Player: model.GaraponPublicPlayer{
+			PlayerName:     player.PlayerName,
+			MaxDraws:       player.MaxDraws,
+			DrawsUsed:      player.DrawsUsed,
+			StampCardToken: player.StampCardToken,
+		},
+		Draws: draws,
 	})
 }
 

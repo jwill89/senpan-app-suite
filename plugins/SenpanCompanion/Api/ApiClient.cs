@@ -155,6 +155,44 @@ public sealed class ApiClient : IDisposable
     public Task<OkResponse> VerifyRaffleWinnerAsync(long raffleId, CancellationToken ct = default)
         => SendAsync<OkResponse>(HttpMethod.Post, $"api/raffles/{raffleId}/verify-winner", null, ct);
 
+    // ── Garapon ────────────────────────────────────────────────────────────────
+
+    public Task<GaraponsResponse> ListGaraponsAsync(CancellationToken ct = default)
+        => SendAsync<GaraponsResponse>(HttpMethod.Get, "api/garapons", null, ct);
+
+    // Detail carries the drawing links AND the full draw log in one call (there is
+    // no separate draw-log endpoint) — both the manage and log pages read from it.
+    public Task<GaraponDetailResponse> GetGaraponAsync(long id, CancellationToken ct = default)
+        => SendAsync<GaraponDetailResponse>(HttpMethod.Get, $"api/garapons/{id}", null, ct);
+
+    // Issues a per-player drawing link. When the garapon is linked to an open rally,
+    // the server also auto-issues the paired stamp card (same token) and returns it
+    // as player.stamp_card_token — no second call is needed.
+    public Task<GaraponPlayerResponse> CreateGaraponPlayerAsync(long garaponId, string playerName, int maxDraws, CancellationToken ct = default)
+        => SendAsync<GaraponPlayerResponse>(HttpMethod.Post, $"api/garapons/{garaponId}/players",
+            new { player_name = playerName, max_draws = maxDraws }, ct);
+
+    // ── Stamp Rally ──────────────────────────────────────────────────────────────
+
+    public Task<StampRalliesResponse> ListStampRalliesAsync(CancellationToken ct = default)
+        => SendAsync<StampRalliesResponse>(HttpMethod.Get, "api/stamp-rallies", null, ct);
+
+    public Task<StampRallyDetailResponse> GetStampRallyAsync(long id, CancellationToken ct = default)
+        => SendAsync<StampRallyDetailResponse>(HttpMethod.Get, $"api/stamp-rallies/{id}", null, ct);
+
+    public Task<StampRallyCardResponse> CreateStampRallyCardAsync(long rallyId, string participantName, CancellationToken ct = default)
+        => SendAsync<StampRallyCardResponse>(HttpMethod.Post, $"api/stamp-rallies/{rallyId}/cards",
+            new { participant_name = participantName }, ct);
+
+    // Pause/resume one stall (stamp_rally_stamps.paused). The 200 body echoes the new
+    // paused value; callers refetch detail, so OkResponse suffices (extra field ignored).
+    public Task<OkResponse> SetStampPausedAsync(long rallyId, long stampId, bool paused, CancellationToken ct = default)
+        => SendAsync<OkResponse>(HttpMethod.Patch, $"api/stamp-rallies/{rallyId}/stamps/{stampId}",
+            new { paused }, ct);
+
+    public Task<StampRallyLogsResponse> StampRallyLogsAsync(long id, CancellationToken ct = default)
+        => SendAsync<StampRallyLogsResponse>(HttpMethod.Get, $"api/stamp-rallies/{id}/logs", null, ct);
+
     // ── Transport ────────────────────────────────────────────────────────────
 
     private async Task<T> SendAsync<T>(HttpMethod method, string path, object? body, CancellationToken ct)

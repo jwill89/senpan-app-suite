@@ -338,9 +338,9 @@ func formatAffiliateHours(a model.Affiliate, now time.Time) string {
 		if label := strings.TrimSpace(h.Label); label != "" {
 			line.WriteString("**" + label + "** — ")
 		}
-		line.WriteString(fmt.Sprintf("<t:%d:t>", start))
+		fmt.Fprintf(&line, "<t:%d:t>", start)
 		if end, ok := hhmmToUnix(h.End, loc, now); ok {
-			line.WriteString(fmt.Sprintf(" – <t:%d:t>", end))
+			fmt.Fprintf(&line, " – <t:%d:t>", end)
 		}
 		lines = append(lines, line.String())
 	}

@@ -163,7 +163,10 @@ async function submit(): Promise<void> {
         />
         <figure v-if="store.publicCard.rally.redeem_image" class="stamp-redeem-where">
           <figcaption>Where to redeem</figcaption>
-          <img :src="assetUrl(store.publicCard.rally.redeem_image)" alt="Where to redeem your card" />
+          <img
+            :src="assetUrl(store.publicCard.rally.redeem_image)"
+            alt="Where to redeem your card"
+          />
         </figure>
       </template>
     </div>

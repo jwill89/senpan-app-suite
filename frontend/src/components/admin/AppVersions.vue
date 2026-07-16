@@ -33,9 +33,10 @@ onMounted(() => {
     .catch(() => {
       failed.value = true
     })
-  // Live plugin version (what Dalamud serves). fetchLivePluginVersion never throws —
+  // Live plugin version (what Dalamud serves). fetchLivePluginVersion never rejects —
   // it resolves to null on failure, so the computed falls back to the bundled value.
-  fetchLivePluginVersion().then((v) => {
+  // `void` marks it deliberately fire-and-forget (no rejection to handle).
+  void fetchLivePluginVersion().then((v) => {
     livePlugin.value = v
   })
 })

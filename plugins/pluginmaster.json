@@ -3,10 +3,10 @@
     "Author": "MathDad",
     "Name": "Senpan Admin Companion",
     "InternalName": "SenpanCompanionAdmin",
-    "AssemblyVersion": "2.2.1.0",
+    "AssemblyVersion": "3.0.1.0",
     "Description": "Serves as an alternative to many of the web-interface functions, allowing staff to operate various systems from within the game.",
     "Punchline": "Allows Senpan Tea House staff to use various app services right from the game.",
-    "Changelog": "Auto-/tell messages are now fully customizable in Settings — placeholders for the player name (<t>) and the bingo/garapon/stamp links — and a message too long for one in-game chat message is split into multiple tells at a sentence or word boundary.",
+    "Changelog": "A major UI/UX overhaul of the companion window, plus in-place editing of saved Timed Text Macros. A shared design language now runs across every page — icon section headers, a button system (primary/secondary/destructive) that matches the web dashboard's colours, copy/delete icon buttons, badges, and cards — so related controls read as a group and a Delete never looks like a Create. The always-available tools (Rolls, Timed Text Macros, Settings, About) sit under a collapsible General group in the sidebar. Each Timed Text Macro is its own card with a Show/Hide message toggle, the Rolls page is split into Captured rolls / Filter / Find the winner / Rolls sections, and the bingo win-pattern list has a Collapse all / Show all toggle.",
     "Tags": ["bingo", "raffle", "venue", "senpan"],
     "RepoUrl": "https://github.com/jwill89/senpan-app-suite",
     "ApplicableVersion": "any",
@@ -19,7 +19,7 @@
     "DownloadLinkUpdate": "https://apps.senpan.cafe/plugin/SenpanCompanionAdmin/latest.zip",
     "DownloadLinkTesting": "https://apps.senpan.cafe/plugin/SenpanCompanionAdmin/latest.zip",
     "DownloadCount": 0,
-    "LastUpdate": 1784160000,
+    "LastUpdate": 1784246400,
     "AcceptsFeedback": true
   }
 ]

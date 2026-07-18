@@ -1,6 +1,8 @@
 using System;
+using System.Collections.Generic;
 using Dalamud.Configuration;
 using Dalamud.Plugin;
+using SenpanCompanion.Services;
 
 namespace SenpanCompanion;
 
@@ -62,6 +64,13 @@ public class Configuration : IPluginConfiguration
 
     /// <summary>Template for the Stamp Rally card auto-tell (uses <c>&lt;stamprally-link&gt;</c>).</summary>
     public string StampCardTellTemplate { get; set; } = "Here's your Stamp Rally card: <stamprally-link>";
+
+    /// <summary>
+    /// User-defined Timed Text Macros (the account-free Timed Text Macros tool). Persisted
+    /// so they survive logout/restart; each macro's per-send progress is saved as it runs,
+    /// but macros always reload stopped (see <see cref="Services.TimedMacroRunner"/>).
+    /// </summary>
+    public List<TimedTextMacro> TimedTextMacros { get; set; } = new();
 
     /// <summary>The production server, used as the default and for fresh installs.</summary>
     public const string DefaultServerUrl = "https://apps.senpan.cafe";

@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Numerics;
 using System.Threading.Tasks;
 using Dalamud.Bindings.ImGui;
+using Dalamud.Interface;
 using Dalamud.Interface.Windowing;
 using Dalamud.Utility;
 using SenpanCompanion.Api;
@@ -33,6 +34,8 @@ public sealed class MainWindow : Window, IDisposable
     private readonly RaffleTab raffle;
     private readonly GaraponTab garapon;
     private readonly StampRallyTab stampRally;
+    private readonly RollsTab rolls;
+    private readonly TimedMacrosTab timedMacros;
 
     private const float NavWidth = 175f;
 
@@ -40,6 +43,11 @@ public sealed class MainWindow : Window, IDisposable
     /// to the first page you can access" once the session's permissions have loaded.</summary>
     private Page currentPage = Page.BingoGame;
     private bool navInitialized;
+
+    // Armed while no token is set (see Draw); on the first frame after a token connects,
+    // it lands the view on the first accessible suite page instead of leaving it on the
+    // setup screen.
+    private bool landOnConnect;
 
     // Settings panel (shared between first-run setup and the Settings tab). The
     // URL/token are staged copies; auto-connect/tell write straight to config.
@@ -49,7 +57,7 @@ public sealed class MainWindow : Window, IDisposable
     private bool settingsTesting;
     private bool settingsPrimed;
 
-    public MainWindow(Plugin plugin, Configuration config, ApiClient api, LiveConnection live, NearbyPlayers nearby, ChatSender chat)
+    public MainWindow(Plugin plugin, Configuration config, ApiClient api, LiveConnection live, NearbyPlayers nearby, ChatSender chat, RollTracker rollTracker, TimedMacroRunner timedMacroRunner)
         : base("Senpan Admin Companion###SenpanMain")
     {
         this.plugin = plugin;
@@ -64,6 +72,8 @@ public sealed class MainWindow : Window, IDisposable
         this.raffle = new RaffleTab(api, nearby);
         this.garapon = new GaraponTab(api, nearby, config, chat);
         this.stampRally = new StampRallyTab(api, nearby, config, chat);
+        this.rolls = new RollsTab(rollTracker);
+        this.timedMacros = new TimedMacrosTab(config, timedMacroRunner);
         this.SizeConstraints = new WindowSizeConstraints
         {
             // The sidebar + content split needs more horizontal room than the old
@@ -83,27 +93,45 @@ public sealed class MainWindow : Window, IDisposable
 
     public override void Draw()
     {
-        if (string.IsNullOrWhiteSpace(this.config.Token))
+        // The Rolls tool (plus Settings/About) are account-free, so the window always
+        // renders the sidebar + content layout — even before a token is set, where the
+        // suite sections stay hidden and setup lands on the Settings page.
+        if (!string.IsNullOrWhiteSpace(this.config.Token))
         {
-            ImGui.TextWrapped("Welcome to Senpan Companion. Connect to your account to get started:");
-            ImGui.Spacing();
-            DrawSettingsPanel();
-            return;
-        }
-
-        this.session.EnsureLoaded();
-        // Once permissions are known, land on the first page the account can reach
-        // (the default is Bingo Game; an account without it shouldn't stare at a
-        // blank panel). Runs once per session load — token changes re-arm it.
-        if (this.session.Loaded && !this.navInitialized)
-        {
-            this.navInitialized = true;
-            if (!IsAccessible(this.currentPage))
+            this.session.EnsureLoaded();
+            // Once permissions are known, land on the first page the account can reach
+            // (the default is Bingo Game; an account without it shouldn't stare at a
+            // blank panel). Runs once per session load — token changes re-arm it.
+            if (this.session.Loaded && !this.navInitialized)
+            {
+                this.navInitialized = true;
+                if (!IsAccessible(this.currentPage))
+                    this.currentPage = FirstAccessiblePage();
+            }
+            // A just-connected first-run account was parked on Settings by the no-token
+            // branch below; move it onto the first usable suite page (its accessible
+            // check above would otherwise keep it on the always-accessible Settings page).
+            if (this.session.Loaded && this.landOnConnect)
+            {
+                this.landOnConnect = false;
                 this.currentPage = FirstAccessiblePage();
-        }
+            }
 
-        DrawTopBar();
-        DrawSessionNotice();
+            DrawTopBar();
+            DrawSessionNotice();
+        }
+        else
+        {
+            // No account yet: park suite pages on Settings so a fresh install sees the
+            // setup panel, but leave the account-free tools (Rolls/About) reachable. Arm
+            // the one-time land-on-connect jump for when a token is finally entered.
+            this.landOnConnect = true;
+            if (this.currentPage is not (Page.Rolls or Page.TimedMacros or Page.Settings or Page.About))
+                this.currentPage = Page.Settings;
+            ImGui.TextColored(new Vector4(0.85f, 0.55f, 0.2f, 1f), "○ Not connected");
+            UiText.WrappedDisabled("Connect your account on the Settings page. The Rolls and Timed Text Macros tools work without an account.");
+            ImGui.Separator();
+        }
 
         // The old tab bar re-synced the staged settings fields whenever the Settings
         // tab lost focus; with a sidebar there is no such event, so re-arm the prime
@@ -153,9 +181,16 @@ public sealed class MainWindow : Window, IDisposable
             NavItem("Stamp Rally Log", Page.StampRallyLog, s.Has(Perms.FestivalStampRally));
         }
 
-        ImGui.Separator();
-        NavItem("Settings", Page.Settings, true, indent: false);
-        NavItem("About", Page.About, true, indent: false);
+        // Account-free tools live under their own always-visible group, mirroring the
+        // Bingo/Festival accordions (a token-less install sees only this one).
+        ImGui.Spacing();
+        if (ImGui.CollapsingHeader("General###secGeneral", ImGuiTreeNodeFlags.DefaultOpen))
+        {
+            NavItem("Rolls", Page.Rolls, true);
+            NavItem("Timed Text Macros", Page.TimedMacros, true);
+            NavItem("Settings", Page.Settings, true);
+            NavItem("About", Page.About, true);
+        }
     }
 
     private void NavItem(string label, Page page, bool visible, bool indent = true)
@@ -214,6 +249,12 @@ public sealed class MainWindow : Window, IDisposable
                 this.stampRally.EnsureLoaded();
                 this.stampRally.DrawLog();
                 break;
+            case Page.Rolls:
+                this.rolls.Draw();
+                break;
+            case Page.TimedMacros:
+                this.timedMacros.Draw();
+                break;
             case Page.Settings:
                 // Re-sync the staged fields from config the first frame Settings shows,
                 // so a token set on first-run (or elsewhere) is reflected, not clobbered.
@@ -238,7 +279,7 @@ public sealed class MainWindow : Window, IDisposable
         Page.Raffles => this.session.Has(Perms.TeahouseRaffles),
         Page.Garapon or Page.GaraponLog => this.session.Has(Perms.FestivalGarapon),
         Page.StampRally or Page.StampRallyLog => this.session.Has(Perms.FestivalStampRally),
-        Page.Settings or Page.About => true,
+        Page.Rolls or Page.TimedMacros or Page.Settings or Page.About => true,
         _ => false,
     };
 
@@ -247,7 +288,7 @@ public sealed class MainWindow : Window, IDisposable
         Page[] order =
         {
             Page.BingoGame, Page.BingoCards, Page.BingoWinners, Page.Raffles,
-            Page.Garapon, Page.GaraponLog, Page.StampRally, Page.StampRallyLog, Page.Settings,
+            Page.Garapon, Page.GaraponLog, Page.StampRally, Page.StampRallyLog, Page.Rolls, Page.TimedMacros, Page.Settings,
         };
         foreach (var p in order)
             if (IsAccessible(p))
@@ -265,6 +306,8 @@ public sealed class MainWindow : Window, IDisposable
         GaraponLog,
         StampRally,
         StampRallyLog,
+        Rolls,
+        TimedMacros,
         Settings,
         About,
     }
@@ -286,7 +329,7 @@ public sealed class MainWindow : Window, IDisposable
         if (!this.session.Loaded)
         {
             if (this.session.LoadFailed)
-                ImGui.TextColored(new Vector4(0.9f, 0.5f, 0.4f, 1f),
+                UiText.WrappedColored(new Vector4(0.9f, 0.5f, 0.4f, 1f),
                     "Couldn't verify your account — check your token on the Settings tab.");
             else
                 ImGui.TextDisabled("Verifying your account…");
@@ -297,7 +340,7 @@ public sealed class MainWindow : Window, IDisposable
             || this.session.Has(Perms.BingoWinnersLog) || this.session.Has(Perms.TeahouseRaffles)
             || this.session.Has(Perms.FestivalGarapon) || this.session.Has(Perms.FestivalStampRally);
         if (!anyPanel)
-            ImGui.TextDisabled("Your account has no Senpan panel permissions — ask an admin to grant access.");
+            UiText.WrappedDisabled("Your account has no Senpan panel permissions — ask an admin to grant access.");
     }
 
     // ── About ─────────────────────────────────────────────────────────────────
@@ -395,11 +438,11 @@ public sealed class MainWindow : Window, IDisposable
             setTemplate(tmpl);
             this.config.Save();
         }
-        ImGui.TextDisabled(placeholderHint);
+        UiText.WrappedDisabled(placeholderHint);
 
         var parts = estimateParts(getTemplate());
         if (parts >= 2)
-            ImGui.TextColored(WarnColor, parts == 2
+            UiText.WrappedColored(WarnColor, parts == 2
                 ? "This message is too long and will be split into two separate tells."
                 : $"This message is too long and will be split into {parts} separate tells.");
         ImGui.Unindent(22f);
@@ -428,6 +471,7 @@ public sealed class MainWindow : Window, IDisposable
 
     private void DrawSettingsPanel()
     {
+        Ui.Section(FontAwesomeIcon.Plug, "Connection");
         ImGui.TextWrapped(
             "Generate a personal access token on the website (User Options → Access " +
             "Token) and paste it here. The token signs in as your account, so the " +
@@ -447,6 +491,7 @@ public sealed class MainWindow : Window, IDisposable
             this.plugin.OnConnectionSettingsChanged();
         }
 
+        Ui.Section(FontAwesomeIcon.Bullhorn, "Automatic tells");
         DrawTellSetting(
             "/tell the bingo card link when creating from the nearby list",
             () => this.config.TellCardUrlOnCreate, v => this.config.TellCardUrlOnCreate = v,
@@ -471,18 +516,21 @@ public sealed class MainWindow : Window, IDisposable
             "Placeholders: <t> = player name  ·  <stamprally-link> = the card link.",
             t => TellComposer.PartCount(t, StampReprValues()));
 
-        ImGui.TextDisabled("    Each sends an outgoing chat message on your behalf — a long message splits into multiple tells. See the README's ToS note.");
+        UiText.WrappedDisabled("Each sends an outgoing chat message on your behalf — a long message splits into multiple tells. See the README's ToS note.");
 
         ImGui.Spacing();
-        if (ImGui.Button("Save"))
+        if (Ui.PrimaryButton("Save"))
             SaveSettings();
         ImGui.SameLine();
         if (this.settingsTesting)
             ImGui.BeginDisabled();
-        if (ImGui.Button("Save & Test Connection"))
+        if (Ui.Button("Save & Test Connection"))
         {
             SaveSettings();
             TestSettings();
+            // The user explicitly asked to see the connection result — don't let the
+            // first-run land-on-connect jump yank them off Settings before they read it.
+            this.landOnConnect = false;
         }
         if (this.settingsTesting)
             ImGui.EndDisabled();

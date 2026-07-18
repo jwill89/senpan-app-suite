@@ -4,6 +4,7 @@ using System.Numerics;
 using System.Text.Json;
 using System.Threading.Tasks;
 using Dalamud.Bindings.ImGui;
+using Dalamud.Interface;
 using SenpanCompanion.Api;
 
 namespace SenpanCompanion.Windows;
@@ -39,7 +40,8 @@ internal sealed class BingoWinnersTab : TabBase
     {
         DrawStatusLine();
 
-        if (ImGui.Button("Refresh##winlog"))
+        Ui.Section(FontAwesomeIcon.Trophy, "Winners log");
+        if (Ui.Button("Refresh##winlog"))
             Run(LoadAsync);
         ImGui.SameLine();
         ImGui.TextDisabled(this.total > this.entries.Count
@@ -75,7 +77,7 @@ internal sealed class BingoWinnersTab : TabBase
             ImGui.TableNextColumn();
             ImGui.TextWrapped(FormatPatterns(e.WinningPatterns));
             ImGui.TableNextColumn();
-            if (ImGui.SmallButton($"Delete##win{e.Id}"))
+            if (Ui.DangerIconButton($"del{e.Id}", FontAwesomeIcon.Trash, "Delete entry"))
             {
                 var id = e.Id;
                 Run(async () =>

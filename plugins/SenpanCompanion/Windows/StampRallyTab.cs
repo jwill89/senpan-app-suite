@@ -4,6 +4,7 @@ using System.Linq;
 using System.Numerics;
 using System.Threading.Tasks;
 using Dalamud.Bindings.ImGui;
+using Dalamud.Interface;
 using SenpanCompanion.Api;
 using SenpanCompanion.Services;
 
@@ -83,21 +84,18 @@ internal sealed class StampRallyTab : TabBase
 
         ImGui.Separator();
         DrawHeader(d);
-        ImGui.Spacing();
 
         var open = string.Equals(d.StampRally.Status, "open", StringComparison.OrdinalIgnoreCase);
+        Ui.Section(FontAwesomeIcon.Plus, "Issue a card");
         if (open)
-        {
             DrawIssueCardForm();
-        }
         else
-        {
-            ImGui.TextDisabled("This rally is closed — no new cards can be issued.");
-        }
-        ImGui.Spacing();
+            UiText.WrappedDisabled("This rally is closed — no new cards can be issued.");
 
+        Ui.Section(FontAwesomeIcon.IdCard, $"Cards ({d.Cards.Count})");
         DrawCards(d.Cards);
-        ImGui.Spacing();
+
+        Ui.Section(FontAwesomeIcon.Store, "Stalls");
         DrawStalls(d.StampRally.Stamps);
     }
 
@@ -111,7 +109,7 @@ internal sealed class StampRallyTab : TabBase
         var canCreate = !string.IsNullOrWhiteSpace(this.newParticipantName);
         if (!canCreate)
             ImGui.BeginDisabled();
-        if (ImGui.Button("Issue card"))
+        if (Ui.PrimaryButton("Issue card"))
             RunCreateCard();
         if (!canCreate)
             ImGui.EndDisabled();
@@ -158,7 +156,6 @@ internal sealed class StampRallyTab : TabBase
 
     private void DrawCards(List<StampRallyCard> cards)
     {
-        ImGui.TextDisabled($"{cards.Count} card(s)");
         if (cards.Count == 0)
         {
             ImGui.TextDisabled("No cards issued yet.");
@@ -173,7 +170,7 @@ internal sealed class StampRallyTab : TabBase
         ImGui.TableSetupColumn("Participant");
         ImGui.TableSetupColumn("Stamps", ImGuiTableColumnFlags.WidthFixed, 70);
         ImGui.TableSetupColumn("Done", ImGuiTableColumnFlags.WidthFixed, 50);
-        ImGui.TableSetupColumn("##actions", ImGuiTableColumnFlags.WidthFixed, 100);
+        ImGui.TableSetupColumn("##actions", ImGuiTableColumnFlags.WidthFixed, 60);
         ImGui.TableHeadersRow();
 
         foreach (var c in cards)
@@ -186,7 +183,7 @@ internal sealed class StampRallyTab : TabBase
             ImGui.TableNextColumn();
             ImGui.TextUnformatted(c.Completed ? "✓" : "—");
             ImGui.TableNextColumn();
-            if (ImGui.SmallButton($"Copy link##rc{c.Id}"))
+            if (Ui.IconButton($"rc{c.Id}", FontAwesomeIcon.Copy, "Copy card link"))
                 ImGui.SetClipboardText(this.config.StampCardUrl(c.Token));
         }
 
@@ -224,7 +221,7 @@ internal sealed class StampRallyTab : TabBase
             else
                 ImGui.TextColored(new Vector4(0.3f, 0.85f, 0.35f, 1f), "Active");
             ImGui.TableNextColumn();
-            if (ImGui.SmallButton($"{(s.Paused ? "Resume" : "Pause")}##stall{s.Id}"))
+            if (Ui.SmallButton($"{(s.Paused ? "Resume" : "Pause")}##stall{s.Id}"))
                 SetStallPaused(s.Id, !s.Paused);
         }
 
@@ -263,9 +260,8 @@ internal sealed class StampRallyTab : TabBase
 
         ImGui.Separator();
         DrawHeader(this.detail);
-        ImGui.Spacing();
 
-        ImGui.TextDisabled($"{this.logs.Count} collected stamp(s)");
+        Ui.Section(FontAwesomeIcon.ListOl, $"Collected stamps ({this.logs.Count})");
         if (this.logs.Count == 0)
         {
             ImGui.TextDisabled("No stamps collected yet.");
@@ -300,7 +296,7 @@ internal sealed class StampRallyTab : TabBase
 
     private void DrawPickerRow()
     {
-        if (ImGui.Button("Refresh##rally"))
+        if (Ui.Button("Refresh##rally"))
             Run(LoadAsync);
         ImGui.SameLine();
         DrawRallyPicker();

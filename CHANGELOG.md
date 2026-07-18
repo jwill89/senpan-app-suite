@@ -1128,6 +1128,102 @@ with a personal access token and is distributed through a Dalamud custom repo
 `SenpanCompanion.csproj`. Entries below the current release were reconstructed
 from the `<Version>` history and commit messages.
 
+### [3.0.1.0] — 2026-07-17
+
+Polish on the 3.0.0.0 UI overhaul.
+
+#### Changed
+
+- **Button colours now match the web admin dashboard's default theme** — a tan primary
+  action (dark text), an olive secondary, and a red destructive — replacing the initial
+  purple accent, so the plugin and the site read as one product.
+- **Bingo win patterns** gain a **Collapse all / Show all** toggle to fold or unfold every
+  pattern category at once while building a game.
+
+#### Fixed
+
+- **A Timed Text Macro's message is now actually hidden until you expand it.** Previously
+  the preview text stayed visible and only the button label flipped; **Show message** /
+  **Hide message** now genuinely shows or hides the full text, and the button's stray glyph
+  (which didn't render in the game font, showing as a stray "≡") is gone.
+
+### [3.0.0.0] — 2026-07-17
+
+A major **UI/UX overhaul** of the companion window, plus the ability to **edit saved
+macros**. What the tools do is unchanged — this is about how they look and how easy they
+are to operate.
+
+#### Added
+
+- **Edit a saved Timed Text Macro in place.** Each macro now has an **Edit** button that
+  reopens its name, channel, message, interval, and send cap in an inline editor
+  (Save / Cancel) — no more delete-and-recreate. (Stop a running macro first to edit it.)
+- **Shared design system across every page:** icon + accent **section headers**, a
+  three-tier **button system** (primary / secondary / destructive), compact **icon buttons**
+  for table-row actions (copy / delete), pill **badges**, and rounded **cards** — so related
+  controls read as a group and a Delete never looks like a Create.
+
+#### Changed
+
+- **Sidebar:** the always-available tools (**Rolls**, **Timed Text Macros**, **Settings**,
+  **About**) now live under a collapsible **General** group at the bottom, mirroring the
+  Bingo and Festival accordions.
+- **Timed Text Macros** renders each macro as its own **card** — an enumerated title with
+  channel and status badges, a schedule summary, and a one-line message preview that
+  **expands on demand**, so a long (multi-message) macro no longer floods the panel.
+- **Rolls** is split into labelled **Captured rolls / Filter / Find the winner / Rolls**
+  sections instead of one continuous flow.
+- **Settings** groups its fields under **Connection** and **Automatic tells** headers, and
+  the **Bingo, Raffle, Garapon, and Stamp Rally** pages pick up the same section headers,
+  button tiers, and copy / delete icon buttons.
+
+### [2.3.0.0] — 2026-07-16
+
+Adds two permission-free, account-free tools: a **Rolls** helper for in-game roll games
+and **Timed Text Macros** for repeating announcements.
+
+#### Added
+
+- **Rolls page** (no account or permission required — it works even before a token is
+  set). It watches chat for `/random` · `/dice` rolls near you and lists them in a
+  **paginated table** (15 / 30 / 45 per page, scrolls when needed) showing the player,
+  home world, the number rolled (with its ceiling for `/random N`, e.g. _"11 (out of
+  20)"_), and the time.
+- **Rolls filtering & search:** narrow to a player by name and/or to the **last N
+  minutes**, and run a **Highest / Lowest / Closest-to-N** query over that window.
+  Matching rolls are brought to the top and highlighted, with a summary banner — and
+  when the winning player rolled more than once in the window, a **"multiple rolls
+  detected in the time frame"** notice lists all of their rolls.
+- **Rolls privacy by design:** rolls are held **in memory only** — nothing is saved or
+  sent anywhere. The log clears automatically on **logout** (and is gone entirely once
+  the game closes and the plugin unloads); a **Clear** button wipes it on demand. A
+  disclaimer on the page states this.
+- **Timed Text Macros page** (also no account or permission required). Create any number
+  of named announcements, each sent on a chosen public channel (**Say / Yell / Shout**)
+  on a **fixed minute interval**, with an optional **cap on the number of sends** (e.g.
+  every 15 minutes, 8 times). The **first send fires when you press Send** and it repeats
+  until stopped or the cap is reached; each running macro shows a **live countdown to the
+  next send** and its **remaining count**.
+- **Macro message splitting:** the text can be any length — if it exceeds one in-game
+  chat message it is split with the **same logic as the auto-tells** and the page tells
+  you up front **how many messages** each send will become; the parts are delivered **one
+  second apart**.
+- **Macro persistence:** macros are saved and **survive logout and restart**. Progress is
+  saved after every send, so a crash leaves the remaining count accurate; a macro always
+  reloads **stopped** and must be started again by hand (logout also stops every macro).
+
+#### Changed
+
+- **Split auto-`/tell` messages are now sent one second apart** via the same shared pacing
+  as the new macros (previously they were already spaced a second apart; this unifies the
+  timing so both paths stay in step).
+
+#### Fixed
+
+- **Long text now wraps to the window** instead of running off the right edge. Disclaimers,
+  notices, warnings, and other multi-sentence text across the pages (Rolls, Timed Text
+  Macros, Settings, Garapon, Stamp Rally, Raffle, Bingo) now wrap at the window width.
+
 ### [2.2.1.0] — 2026-07-16
 
 Makes the auto-`/tell` messages fully customizable, with length-aware splitting.

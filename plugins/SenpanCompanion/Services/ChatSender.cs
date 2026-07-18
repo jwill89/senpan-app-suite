@@ -24,9 +24,11 @@ namespace SenpanCompanion.Services;
 /// </summary>
 public sealed class ChatSender
 {
-    // Gap between the parts of a split message so the game's chat throttle doesn't
-    // drop a rapid follow-up tell.
-    private const int TellSpacingMs = 1000;
+    // Gap between the consecutive parts of a split message — one second — so the game's
+    // chat throttle doesn't drop a rapid follow-up. Shared by every send path (the
+    // auto-tells and the Timed Text Macros' say/yell/shout) so a split message is always
+    // delivered one part per second.
+    private const int MessageSpacingMs = 1000;
 
     private readonly IFramework framework;
     private readonly IPluginLog log;
@@ -42,7 +44,7 @@ public sealed class ChatSender
     /// that was split to fit the in-game chat limit — see <see cref="TellComposer"/>).
     /// Each part is marshalled to the framework thread, best-effort (failures are
     /// logged, never thrown), and multiple parts are spaced out by
-    /// <see cref="TellSpacingMs"/> so the chat throttle doesn't drop the follow-up.
+    /// <see cref="MessageSpacingMs"/> so the chat throttle doesn't drop the follow-up.
     /// </summary>
     public void SendTell(string characterName, string world, IReadOnlyList<string> parts)
     {
@@ -58,6 +60,44 @@ public sealed class ChatSender
             if (msg.Length > 0)
                 commands.Add($"/tell {name}@{w} {msg}");
         }
+        SendSpaced(commands);
+    }
+
+    /// <summary>
+    /// Sends a plain message over a public channel (<c>say</c> / <c>yell</c> / <c>shout</c>)
+    /// — the Timed Text Macros. Like <see cref="SendTell"/>, the message is pre-split into
+    /// <paramref name="parts"/> (see <see cref="TellComposer.SplitPlain"/>) and the parts are
+    /// delivered one second apart. An unknown channel is ignored.
+    /// </summary>
+    public void SendChannelMessage(string channel, IReadOnlyList<string> parts)
+    {
+        var command = ChannelCommand(channel);
+        if (command == null || parts == null)
+            return;
+
+        var commands = new List<string>(parts.Count);
+        foreach (var part in parts)
+        {
+            var msg = Sanitize(part);
+            if (msg.Length > 0)
+                commands.Add($"{command} {msg}");
+        }
+        SendSpaced(commands);
+    }
+
+    /// <summary>Maps a channel key to its chat command, or null if unrecognized.</summary>
+    private static string? ChannelCommand(string channel) => channel?.Trim().ToLowerInvariant() switch
+    {
+        "say" => "/say",
+        "yell" => "/yell",
+        "shout" => "/shout",
+        _ => null,
+    };
+
+    // Runs each command on the framework thread, one second apart, best-effort. Fire-and-
+    // forget — failures are logged, never thrown (the caller is often a UI click or a timer).
+    private void SendSpaced(List<string> commands)
+    {
         if (commands.Count == 0)
             return;
 
@@ -68,7 +108,7 @@ public sealed class ChatSender
                 for (var i = 0; i < commands.Count; i++)
                 {
                     if (i > 0)
-                        await Task.Delay(TellSpacingMs).ConfigureAwait(false);
+                        await Task.Delay(MessageSpacingMs).ConfigureAwait(false);
                     var command = commands[i];
                     await this.framework.RunOnFrameworkThread(() => Execute(command)).ConfigureAwait(false);
                 }
@@ -77,7 +117,7 @@ public sealed class ChatSender
             {
                 // Best-effort (e.g. the framework tore down between parts) — never throw
                 // from this fire-and-forget task.
-                this.log.Warning($"Failed to send tell: {ex.Message}");
+                this.log.Warning($"Failed to send chat message: {ex.Message}");
             }
         });
     }

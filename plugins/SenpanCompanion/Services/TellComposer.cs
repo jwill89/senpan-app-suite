@@ -55,6 +55,17 @@ public static class TellComposer
     public static int PartCount(string template, IReadOnlyDictionary<string, string> values)
         => Compose(template, values).Count;
 
+    /// <summary>
+    /// Splits arbitrary text into chat-sized parts using the same collapse + break-point
+    /// logic as <see cref="Compose"/>, but WITHOUT placeholder expansion — for the Timed
+    /// Text Macros, whose text is sent verbatim over say/yell/shout (a literal
+    /// <c>&lt;t&gt;</c> in the text must survive, not be blanked).
+    /// </summary>
+    public static List<string> SplitPlain(string text) => Split(CollapseToLine(text ?? string.Empty));
+
+    /// <summary>How many chat messages <paramref name="text"/> would be sent as.</summary>
+    public static int PartCountPlain(string text) => SplitPlain(text).Count;
+
     private static string Expand(string template, IReadOnlyDictionary<string, string> values)
     {
         var sb = new StringBuilder(template ?? string.Empty);

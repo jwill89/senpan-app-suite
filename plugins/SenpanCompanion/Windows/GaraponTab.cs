@@ -5,6 +5,7 @@ using System.Linq;
 using System.Numerics;
 using System.Threading.Tasks;
 using Dalamud.Bindings.ImGui;
+using Dalamud.Interface;
 using SenpanCompanion.Api;
 using SenpanCompanion.Services;
 
@@ -81,20 +82,15 @@ internal sealed class GaraponTab : TabBase
 
         ImGui.Separator();
         DrawHeader(d.Garapon);
-        ImGui.Spacing();
 
         var open = string.Equals(d.Garapon.Status, "open", StringComparison.OrdinalIgnoreCase);
+        Ui.Section(FontAwesomeIcon.Plus, "Issue a drawing link");
         if (open)
-        {
             DrawCreateForm();
-            ImGui.Spacing();
-        }
         else
-        {
-            ImGui.TextDisabled("This garapon is closed — no new drawing links can be issued.");
-            ImGui.Spacing();
-        }
+            UiText.WrappedDisabled("This garapon is closed — no new drawing links can be issued.");
 
+        Ui.Section(FontAwesomeIcon.Link, $"Drawing links ({d.Players.Count})");
         DrawPlayers(d.Players);
     }
 
@@ -113,7 +109,7 @@ internal sealed class GaraponTab : TabBase
         var canCreate = !string.IsNullOrWhiteSpace(this.newPlayerName);
         if (!canCreate)
             ImGui.BeginDisabled();
-        if (ImGui.Button("Issue drawing link"))
+        if (Ui.PrimaryButton("Issue drawing link"))
             RunCreatePlayer();
         if (!canCreate)
             ImGui.EndDisabled();
@@ -162,7 +158,6 @@ internal sealed class GaraponTab : TabBase
 
     private void DrawPlayers(List<GaraponPlayer> players)
     {
-        ImGui.TextDisabled($"{players.Count} drawing link(s)");
         if (players.Count == 0)
         {
             ImGui.TextDisabled("No drawing links issued yet.");
@@ -176,7 +171,7 @@ internal sealed class GaraponTab : TabBase
 
         ImGui.TableSetupColumn("Player");
         ImGui.TableSetupColumn("Draws", ImGuiTableColumnFlags.WidthFixed, 70);
-        ImGui.TableSetupColumn("##actions", ImGuiTableColumnFlags.WidthFixed, 230);
+        ImGui.TableSetupColumn("##actions", ImGuiTableColumnFlags.WidthFixed, 90);
         ImGui.TableHeadersRow();
 
         foreach (var p in players)
@@ -187,12 +182,12 @@ internal sealed class GaraponTab : TabBase
             ImGui.TableNextColumn();
             ImGui.TextUnformatted($"{p.DrawsUsed}/{p.MaxDraws}");
             ImGui.TableNextColumn();
-            if (ImGui.SmallButton($"Copy link##g{p.Id}"))
+            if (Ui.IconButton($"g{p.Id}", FontAwesomeIcon.Copy, "Copy drawing link"))
                 ImGui.SetClipboardText(this.config.GaraponUrl(p.Token));
             if (!string.IsNullOrEmpty(p.StampCardToken))
             {
                 ImGui.SameLine();
-                if (ImGui.SmallButton($"Copy stamp card##sc{p.Id}"))
+                if (Ui.IconButton($"sc{p.Id}", FontAwesomeIcon.Stamp, "Copy stamp card link"))
                     ImGui.SetClipboardText(this.config.StampCardUrl(p.StampCardToken));
             }
         }
@@ -216,9 +211,8 @@ internal sealed class GaraponTab : TabBase
 
         ImGui.Separator();
         DrawHeader(d.Garapon);
-        ImGui.Spacing();
 
-        ImGui.TextDisabled($"{d.Draws.Count} draw(s)");
+        Ui.Section(FontAwesomeIcon.ListOl, $"Draw log ({d.Draws.Count})");
         if (d.Draws.Count == 0)
         {
             ImGui.TextDisabled("No draws recorded yet.");
@@ -254,7 +248,7 @@ internal sealed class GaraponTab : TabBase
 
     private void DrawPickerRow()
     {
-        if (ImGui.Button("Refresh##garapon"))
+        if (Ui.Button("Refresh##garapon"))
             Run(LoadAsync);
         ImGui.SameLine();
         DrawGaraponPicker();
@@ -306,7 +300,7 @@ internal sealed class GaraponTab : TabBase
         ImGui.SameLine();
         ImGui.TextDisabled($"— {g.Status}");
         if (!string.IsNullOrEmpty(g.StampRallyTitle))
-            ImGui.TextDisabled($"Linked to Stamp Rally \"{g.StampRallyTitle}\" — a stamp card is issued with each drawing link.");
+            UiText.WrappedDisabled($"Linked to Stamp Rally \"{g.StampRallyTitle}\" — a stamp card is issued with each drawing link.");
     }
 
     private void DrawNearbyPicker()

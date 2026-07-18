@@ -4,6 +4,7 @@ using System.Linq;
 using System.Numerics;
 using System.Threading.Tasks;
 using Dalamud.Bindings.ImGui;
+using Dalamud.Interface;
 using SenpanCompanion.Api;
 using SenpanCompanion.Services;
 
@@ -55,7 +56,7 @@ internal sealed class RaffleTab : TabBase
     {
         DrawStatusLine();
 
-        if (ImGui.Button("Refresh##raffles"))
+        if (Ui.Button("Refresh##raffles"))
             Run(LoadAsync);
         ImGui.SameLine();
         DrawRafflePicker();
@@ -68,11 +69,14 @@ internal sealed class RaffleTab : TabBase
 
         ImGui.Separator();
         DrawRaffleHeader(this.detail);
-        ImGui.Spacing();
+
+        Ui.Section(FontAwesomeIcon.UserPlus, "Add entrant");
         DrawAddEntry();
-        ImGui.Spacing();
+
+        Ui.Section(FontAwesomeIcon.Users, "Entrants");
         DrawEntries(this.detail);
-        ImGui.Spacing();
+
+        Ui.Section(FontAwesomeIcon.Trophy, "Draw a winner");
         DrawWinnerControls();
     }
 
@@ -118,7 +122,7 @@ internal sealed class RaffleTab : TabBase
         var open = string.Equals(this.detail?.Raffle.Status, "open", StringComparison.OrdinalIgnoreCase);
         if (!open)
         {
-            ImGui.TextDisabled("This raffle is closed — entries can't be added.");
+            UiText.WrappedDisabled("This raffle is closed — entries can't be added.");
             return;
         }
 
@@ -140,7 +144,7 @@ internal sealed class RaffleTab : TabBase
         var canAdd = !string.IsNullOrWhiteSpace(this.charName) && !string.IsNullOrWhiteSpace(this.world);
         if (!canAdd)
             ImGui.BeginDisabled();
-        if (ImGui.Button("Add entrant"))
+        if (Ui.PrimaryButton("Add entrant"))
         {
             var id = this.selectedRaffleId;
             var name = this.charName.Trim();
@@ -210,7 +214,7 @@ internal sealed class RaffleTab : TabBase
             }
 
             ImGui.TableNextColumn();
-            if (ImGui.SmallButton($"Delete##e{entry.Id}"))
+            if (Ui.DangerIconButton($"e{entry.Id}", FontAwesomeIcon.Trash, "Delete entrant"))
             {
                 var id = this.selectedRaffleId;
                 var entryId = entry.Id;
@@ -228,13 +232,12 @@ internal sealed class RaffleTab : TabBase
 
     private void DrawWinnerControls()
     {
-        ImGui.Separator();
         if (this.pendingWinner != null)
         {
-            ImGui.TextColored(new Vector4(0.3f, 0.9f, 0.4f, 1f),
+            UiText.WrappedColored(new Vector4(0.3f, 0.9f, 0.4f, 1f),
                 $"Drawn winner: {this.pendingWinner.CharacterName} @ {this.pendingWinner.World}");
 
-            if (ImGui.Button("Confirm winner"))
+            if (Ui.PrimaryButton("Confirm winner"))
             {
                 var id = this.selectedRaffleId;
                 Run(async () =>
@@ -249,7 +252,7 @@ internal sealed class RaffleTab : TabBase
                 });
             }
             ImGui.SameLine();
-            if (ImGui.Button("Draw another"))
+            if (Ui.Button("Draw another"))
             {
                 var id = this.selectedRaffleId;
                 Run(async () =>
@@ -261,7 +264,7 @@ internal sealed class RaffleTab : TabBase
             return;
         }
 
-        if (ImGui.Button("Pick a winner"))
+        if (Ui.PrimaryButton("Pick a winner"))
         {
             var id = this.selectedRaffleId;
             Run(async () =>

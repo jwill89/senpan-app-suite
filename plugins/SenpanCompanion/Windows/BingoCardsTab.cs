@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Numerics;
 using Dalamud.Bindings.ImGui;
+using Dalamud.Interface;
 using SenpanCompanion.Api;
 using SenpanCompanion.Services;
 
@@ -50,25 +51,26 @@ internal sealed class BingoCardsTab : TabBase
 
         var cards = this.cardCache.Cards;
 
-        if (ImGui.Button("Refresh##cards"))
+        if (Ui.Button("Refresh##cards"))
             this.cardCache.Refresh();
         ImGui.SameLine();
-        if (ImGui.Button("Delete all"))
+        if (Ui.DangerButton("Delete all"))
             Run(async () =>
             {
                 await this.api.DeleteAllCardsAsync();
                 await this.cardCache.RefreshAsync();
             });
 
+        Ui.Section(FontAwesomeIcon.Plus, "Issue a card");
         ImGui.SetNextItemWidth(220);
         ImGui.InputTextWithHint("##playername", "Player name", ref this.newPlayerName, 64);
         ImGui.SameLine();
         DrawNearbyPicker();
         // Create on its own line so it's never pushed off-screen on a narrow window.
-        if (ImGui.Button("Create card") && !string.IsNullOrWhiteSpace(this.newPlayerName))
+        if (Ui.PrimaryButton("Create card") && !string.IsNullOrWhiteSpace(this.newPlayerName))
             OnCreateClicked();
 
-        ImGui.TextDisabled($"{cards.Count} card(s)");
+        Ui.Section(FontAwesomeIcon.ThLarge, $"Cards ({cards.Count})");
 
         if (cards.Count == 0)
         {
@@ -78,7 +80,7 @@ internal sealed class BingoCardsTab : TabBase
         {
             ImGui.TableSetupColumn("Card ID");
             ImGui.TableSetupColumn("Player");
-            ImGui.TableSetupColumn("##actions", ImGuiTableColumnFlags.WidthFixed, 130);
+            ImGui.TableSetupColumn("##actions", ImGuiTableColumnFlags.WidthFixed, 80);
             ImGui.TableHeadersRow();
 
             foreach (var card in cards)
@@ -89,10 +91,10 @@ internal sealed class BingoCardsTab : TabBase
                 ImGui.TableNextColumn();
                 ImGui.TextUnformatted(string.IsNullOrEmpty(card.PlayerName) ? "—" : card.PlayerName);
                 ImGui.TableNextColumn();
-                if (ImGui.SmallButton($"Copy URL##{card.Id}"))
+                if (Ui.IconButton($"copy{card.Id}", FontAwesomeIcon.Copy, "Copy card URL"))
                     ImGui.SetClipboardText(this.config.CardUrl(card.Id));
                 ImGui.SameLine();
-                if (ImGui.SmallButton($"Delete##{card.Id}"))
+                if (Ui.DangerIconButton($"del{card.Id}", FontAwesomeIcon.Trash, "Delete card"))
                 {
                     var id = card.Id;
                     Run(async () =>
@@ -185,13 +187,13 @@ internal sealed class BingoCardsTab : TabBase
             $"({string.Join(", ", this.replaceIds)}). This will delete {(plural ? "them" : "it")} " +
             "and create a new one. Proceed?");
         ImGui.Spacing();
-        if (ImGui.Button("Replace"))
+        if (Ui.DangerButton("Replace"))
         {
             RunCreate(true);
             ImGui.CloseCurrentPopup();
         }
         ImGui.SameLine();
-        if (ImGui.Button("Cancel##replace"))
+        if (Ui.Button("Cancel##replace"))
             ImGui.CloseCurrentPopup();
         ImGui.EndPopup();
     }

@@ -411,6 +411,22 @@ talks peer-to-peer.
 - **Game interop is minimal + ToS-sensitive.** `WinnerChime` is a synth WAV via
   winmm (no game interop); `ChatSender` /tell uses
   `RaptureShellModule.ExecuteCommandInner` — the only game interop, and opt-out.
+- **Rolls tool (`Services/RollTracker` + `Windows/RollsTab`).** A **permission-free,
+  server-independent** helper: `RollTracker` subscribes to `IChatGui.ChatMessage`,
+  keeps `XivChatType.RandomNumber` (`/random` · `/dice`) lines **in memory only** (no
+  persistence, no server), and wipes them on `IClientState.Logout` + dispose. Read-only
+  observation — no game interop.
+- **Timed Text Macros (`Services/TimedMacroRunner` + `Windows/TimedMacrosTab`).** Another
+  **permission-free, account-free** tool. `TimedTextMacro` records (persisted in
+  `Configuration.TimedTextMacros`) repeat a Say/Yell/Shout message on an interval with an
+  optional send cap. `TimedMacroRunner` drives them off `IFramework.Update`, sends via
+  `ChatSender.SendChannelMessage` (split by `TellComposer.SplitPlain`, one part/second),
+  and saves `SendsCompleted` after each fire; **run state is in-memory only** so macros
+  reload **stopped**, and `IClientState.Logout` stops them all. This is `/say`-`/yell`-
+  `/shout` **game automation on a timer** — operator-initiated and opt-in per macro, but
+  more automation than the single-shot tells; keep the ToS caveat in mind.
+- Both account-free tools are reachable **without a token**, so `MainWindow.Draw` renders
+  the sidebar even before setup (the suite pages stay hidden until an account connects).
 - **Build.** `<Project Sdk="Dalamud.NET.Sdk/15.0.0">` supplies the `net*-windows`
   TFM and references Dalamud from the local XIVLauncher install; needs the **.NET 10
   SDK** + XIVLauncher/Dalamud. `dotnet build -c Release` emits

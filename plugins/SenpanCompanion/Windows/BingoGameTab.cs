@@ -4,6 +4,7 @@ using System.Linq;
 using System.Numerics;
 using System.Threading.Tasks;
 using Dalamud.Bindings.ImGui;
+using Dalamud.Interface;
 using SenpanCompanion.Api;
 using SenpanCompanion.Services;
 
@@ -35,6 +36,11 @@ internal sealed class BingoGameTab : TabBase, IDisposable
     private List<FrequentWinner> frequentWinners = new();
     private readonly HashSet<int> selectedPatterns = new();
     private long selectedPresetId;
+
+    // Bulk expand/collapse of the win-pattern category headers: pendingPatternOpen forces
+    // every header open/closed for one frame; patternsCollapsed drives the toggle label.
+    private bool? pendingPatternOpen;
+    private bool patternsCollapsed;
 
     private GameState? game;
     private List<string> winners = new();
@@ -131,7 +137,7 @@ internal sealed class BingoGameTab : TabBase, IDisposable
     {
         if (this.patterns.Count == 0)
         {
-            ImGui.TextDisabled("No win patterns exist yet. Create some on the website first.");
+            UiText.WrappedDisabled("No win patterns exist yet. Create some on the website first.");
             return;
         }
 
@@ -151,15 +157,22 @@ internal sealed class BingoGameTab : TabBase, IDisposable
                 ImGui.EndCombo();
             }
             ImGui.SameLine();
-            if (ImGui.Button("Apply Preset") && current != null)
+            if (Ui.Button("Apply Preset") && current != null)
                 ApplyPreset(current);
         }
 
-        ImGui.TextDisabled("Select one or more win patterns:");
+        Ui.Section(FontAwesomeIcon.ThLarge, "Win patterns");
+        Ui.Help("Select one or more.");
+        ImGui.SameLine();
+        if (Ui.SmallButton(this.patternsCollapsed ? "Show all" : "Collapse all"))
+        {
+            this.patternsCollapsed = !this.patternsCollapsed;
+            this.pendingPatternOpen = !this.patternsCollapsed;
+        }
         DrawPatternPicker();
 
-        ImGui.Spacing();
-        ImGui.TextUnformatted("Game Details (Markdown supported)");
+        Ui.Section(FontAwesomeIcon.AlignLeft, "Game details");
+        Ui.Help("Markdown supported.");
         var details = this.gameDetails;
         if (ImGui.InputTextMultiline("##gamedetails", ref details, 4000, new Vector2(-1, 90)))
             this.gameDetails = details;
@@ -173,7 +186,7 @@ internal sealed class BingoGameTab : TabBase, IDisposable
         var canStart = this.selectedPatterns.Count > 0;
         if (!canStart)
             ImGui.BeginDisabled();
-        if (ImGui.Button($"Start Game ({this.selectedPatterns.Count})"))
+        if (Ui.PrimaryButton($"Start Game ({this.selectedPatterns.Count})"))
         {
             var ids = this.selectedPatterns.ToArray();
             Run(async () =>
@@ -210,6 +223,8 @@ internal sealed class BingoGameTab : TabBase, IDisposable
         foreach (var group in this.patterns.GroupBy(p => p.CategoryName))
         {
             var header = string.IsNullOrEmpty(group.Key) ? "Patterns" : group.Key;
+            if (this.pendingPatternOpen.HasValue)
+                ImGui.SetNextItemOpen(this.pendingPatternOpen.Value);
             if (!ImGui.CollapsingHeader($"{header}###cat{header}", ImGuiTreeNodeFlags.DefaultOpen))
                 continue;
 
@@ -233,6 +248,10 @@ internal sealed class BingoGameTab : TabBase, IDisposable
                 ImGui.EndTable();
             }
         }
+
+        // The bulk open/close only applies for the frame the button was clicked; after
+        // that, individual header toggles work normally again.
+        this.pendingPatternOpen = null;
     }
 
     // ── Current game ─────────────────────────────────────────────────────────
@@ -241,7 +260,7 @@ internal sealed class BingoGameTab : TabBase, IDisposable
     {
         if (this.Busy)
             ImGui.BeginDisabled();
-        if (ImGui.Button("Draw Number"))
+        if (Ui.PrimaryButton("Draw Number"))
         {
             var delay = this.config.DrawDelaySeconds;
             Run(async () =>
@@ -263,7 +282,7 @@ internal sealed class BingoGameTab : TabBase, IDisposable
         ImGui.SameLine();
         DrawDelayCombo();
         ImGui.SameLine();
-        if (ImGui.Button("End Game"))
+        if (Ui.DangerButton("End Game"))
         {
             if (this.winners.Count > 0)
             {
@@ -397,7 +416,7 @@ internal sealed class BingoGameTab : TabBase, IDisposable
             var name = this.cardCache.NameFor(id);
             ImGui.BulletText(string.IsNullOrEmpty(name) ? id : $"{name}  ({id})");
             ImGui.SameLine();
-            if (ImGui.SmallButton($"View##win{id}"))
+            if (Ui.SmallButton($"View##win{id}"))
                 OpenViewCard(id);
         }
         ImGui.Spacing();
@@ -449,13 +468,13 @@ internal sealed class BingoGameTab : TabBase, IDisposable
         var threshold = this.game != null ? HalftimeThreshold(this.game.Patterns) : 0;
         ImGui.TextWrapped($"You've drawn {threshold} numbers! Alert players about a half-time mini-game?");
         ImGui.Spacing();
-        if (ImGui.Button("Yes"))
+        if (Ui.PrimaryButton("Yes"))
         {
             Run(() => this.api.TriggerHalftimeAsync());
             ImGui.CloseCurrentPopup();
         }
         ImGui.SameLine();
-        if (ImGui.Button("No"))
+        if (Ui.Button("No"))
             ImGui.CloseCurrentPopup();
         ImGui.EndPopup();
     }
@@ -489,13 +508,13 @@ internal sealed class BingoGameTab : TabBase, IDisposable
         }
 
         ImGui.Spacing();
-        if (ImGui.Button("End Game##confirm"))
+        if (Ui.DangerButton("End Game##confirm"))
         {
             EndGame(this.endGameSelected.ToArray());
             ImGui.CloseCurrentPopup();
         }
         ImGui.SameLine();
-        if (ImGui.Button("Cancel##endgame"))
+        if (Ui.Button("Cancel##endgame"))
             ImGui.CloseCurrentPopup();
         ImGui.EndPopup();
     }
@@ -616,7 +635,7 @@ internal sealed class BingoGameTab : TabBase, IDisposable
         DrawCardBoard(this.viewCard.BoardData, this.viewMatched);
 
         ImGui.Spacing();
-        if (ImGui.Button("Close##viewcard"))
+        if (Ui.Button("Close##viewcard"))
             ImGui.CloseCurrentPopup();
         ImGui.EndPopup();
     }

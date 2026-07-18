@@ -23,6 +23,7 @@ public sealed class Plugin : IDalamudPlugin
     [PluginService] internal static IObjectTable ObjectTable { get; private set; } = null!;
     [PluginService] internal static IFramework Framework { get; private set; } = null!;
     [PluginService] internal static ITextureProvider TextureProvider { get; private set; } = null!;
+    [PluginService] internal static IChatGui ChatGui { get; private set; } = null!;
     [PluginService] internal static IPluginLog Log { get; private set; } = null!;
 
     /// <summary>Path to the bundled Senpan Tea House logo (copied next to the DLL).</summary>
@@ -36,6 +37,8 @@ public sealed class Plugin : IDalamudPlugin
     private readonly Configuration config;
     private readonly ApiClient api;
     private readonly LiveConnection live;
+    private readonly RollTracker rollTracker;
+    private readonly TimedMacroRunner timedMacros;
     private readonly MainWindow mainWindow;
 
     public Plugin()
@@ -52,8 +55,14 @@ public sealed class Plugin : IDalamudPlugin
         this.live = new LiveConnection(this.config, Log, Framework);
         var nearby = new NearbyPlayers(ObjectTable);
         var chat = new ChatSender(Framework, Log);
+        // Roll tracking is server-independent — it starts watching chat as soon as the
+        // plugin loads, regardless of whether an account is connected.
+        this.rollTracker = new RollTracker(ChatGui, ClientState, ObjectTable, Log);
+        // Timed Text Macros are likewise account-free; the runner drives their timers off
+        // the game frame and persists progress via config.
+        this.timedMacros = new TimedMacroRunner(this.config, chat, Framework, ClientState, Log);
 
-        this.mainWindow = new MainWindow(this, this.config, this.api, this.live, nearby, chat);
+        this.mainWindow = new MainWindow(this, this.config, this.api, this.live, nearby, chat, this.rollTracker, this.timedMacros);
         this.WindowSystem.AddWindow(this.mainWindow);
 
         CommandManager.AddHandler(CommandName, new CommandInfo(OnCommand)
@@ -78,6 +87,8 @@ public sealed class Plugin : IDalamudPlugin
 
         this.WindowSystem.RemoveAllWindows();
         this.mainWindow.Dispose();
+        this.rollTracker.Dispose();
+        this.timedMacros.Dispose();
         this.live.Dispose();
         this.api.Dispose();
     }

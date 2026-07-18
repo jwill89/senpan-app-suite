@@ -108,7 +108,7 @@ internal sealed class RaffleTab : TabBase
         });
     }
 
-    private void DrawRaffleHeader(RaffleDetailResponse d)
+    private static void DrawRaffleHeader(RaffleDetailResponse d)
     {
         ImGui.Text($"{d.Raffle.Title}");
         ImGui.SameLine();

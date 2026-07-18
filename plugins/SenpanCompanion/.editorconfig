@@ -23,3 +23,12 @@ indent_size = 4
 csharp_indent_switch_labels = true
 csharp_indent_case_contents = true
 csharp_indent_case_contents_when_block = false
+
+# ── Lint rule severities ──
+# Read by the `roslynator analyze` gate (scripts/check.ps1) as well as the build and
+# IDE. This is where the C# lint ruleset is curated, the way .golangci.yml curates the
+# Go linters — disable a rule here (with a reason) when it doesn't fit the project.
+#
+# The one winmm P/Invoke (WinnerChime) works fine as a classic [DllImport]; don't
+# require rewriting it to source-generated [LibraryImport] for a one-shot chime.
+dotnet_diagnostic.SYSLIB1054.severity = none

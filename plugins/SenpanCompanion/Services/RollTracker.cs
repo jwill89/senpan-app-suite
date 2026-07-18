@@ -31,7 +31,7 @@ public readonly record struct RollEntry(string PlayerName, string World, int Val
 /// local character. Both the capture (a framework-thread chat event) and the UI read run
 /// on the framework thread, but a lock keeps the list self-consistent regardless.
 /// </summary>
-public sealed class RollTracker : IDisposable
+public sealed partial class RollTracker : IDisposable
 {
     // A long venue session can rack up a lot of rolls; cap the buffer so it can't grow
     // without bound. The oldest entries fall off first — the tool is about the recent
@@ -40,8 +40,9 @@ public sealed class RollTracker : IDisposable
 
     // Every number in a roll line (any client language): a plain /random has one (the
     // roll); /random N has two (the roll and its ceiling). ASCII digits with an optional
-    // thousands separator — a ceiling of 1,000 renders "1,000".
-    private static readonly Regex NumberPattern = new(@"[0-9][0-9,]*", RegexOptions.Compiled);
+    // thousands separator — a ceiling of 1,000 renders "1,000". Source-generated.
+    [GeneratedRegex(@"[0-9][0-9,]*")]
+    private static partial Regex NumberPattern();
 
     private readonly IChatGui chat;
     private readonly IClientState clientState;
@@ -111,7 +112,7 @@ public sealed class RollTracker : IDisposable
             var text = line.TextValue ?? string.Empty;
 
             var numbers = new List<int>();
-            foreach (Match m in NumberPattern.Matches(text))
+            foreach (Match m in NumberPattern().Matches(text))
                 if (TryParseNumber(m.Value, out var n))
                     numbers.Add(n);
             if (numbers.Count == 0)

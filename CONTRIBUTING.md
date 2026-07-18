@@ -71,7 +71,9 @@ go test ./...
 > **One command:** run [`scripts/check.ps1`](scripts/check.ps1) (PowerShell) to run
 > every gate above — backend `golangci-lint`/build/vet/test/govulncheck, then
 > frontend `gen:types`/lint/typecheck/test/build, then the plugin `dotnet`
-> build/format — and stop at the first failure. With the pre-push hook enabled
+> build/format plus the **Roslynator** C# lint gate (`roslynator analyze`, the CLI
+> pinned in `.config/dotnet-tools.json`; ruleset curated in the plugin's
+> `.editorconfig`) — and stop at the first failure. With the pre-push hook enabled
 > (`git config core.hooksPath .githooks`), this runs automatically on `git push` and
 > aborts it on any failure — bypass a single push with `git push --no-verify`.
 > `golangci-lint` is **not** covered

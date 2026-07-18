@@ -112,7 +112,7 @@ internal sealed class TimedMacrosTab
 
     // ── Shared create/edit form ──────────────────────────────────────────────────
 
-    private void DrawForm(MacroForm form, string idPrefix)
+    private static void DrawForm(MacroForm form, string idPrefix)
     {
         ImGui.SetNextItemWidth(300);
         ImGui.InputTextWithHint($"Name##{idPrefix}name", "Macro title", ref form.Name, 128);

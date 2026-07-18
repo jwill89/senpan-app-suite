@@ -361,7 +361,7 @@ internal sealed class BingoGameTab : TabBase, IDisposable
 
     private static string DelayLabel(int s) => s == 0 ? "Instant" : $"{s}s Delay";
 
-    private void DrawCalledNumbersGrid(GameState state)
+    private static void DrawCalledNumbersGrid(GameState state)
     {
         var called = new HashSet<int>(state.CalledNumbers);
         ImGui.TextUnformatted($"Called Numbers ({called.Count} / 75)");
@@ -422,7 +422,7 @@ internal sealed class BingoGameTab : TabBase, IDisposable
         ImGui.Spacing();
     }
 
-    private void DrawActivePatterns(GameState state)
+    private static void DrawActivePatterns(GameState state)
     {
         if (state.Patterns.Count == 0)
             return;

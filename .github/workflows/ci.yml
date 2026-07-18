@@ -131,7 +131,7 @@ jobs:
         run: go run golang.org/x/vuln/cmd/govulncheck@latest ./...
 
   plugin:
-    name: Plugin (build · warnings=errors · format)
+    name: Plugin (build · warnings=errors · format · lint)
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -167,6 +167,14 @@ jobs:
       # Whitespace/style gate. Rules are pinned in plugins/SenpanCompanion/.editorconfig.
       - name: Format check
         run: dotnet format --verify-no-changes
+
+      # C# lint gate (the analog to golangci-lint / eslint): the Roslynator CLI, pinned
+      # in .config/dotnet-tools.json, fails on any analyzer diagnostic at info or above.
+      # The ruleset is curated in plugins/SenpanCompanion/.editorconfig.
+      - name: Restore lint tool
+        run: dotnet tool restore
+      - name: Roslynator analyze
+        run: dotnet roslynator analyze SenpanCompanion.csproj --severity-level info
 
   # On a push to main, AFTER the whole gate passes, tag + release any component
   # whose current version has no release yet. Tags follow <Component>-v<version>

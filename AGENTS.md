@@ -78,7 +78,7 @@ rotated immediately**. See **Authentication & authorization** below.
 │       │   └── admin/                ← AdminSidebar + one component per tab + modals (CardPreview, EndGame, WinnerVerify, HalftimePrompt) + ThemeTokenEditor. Tabs: Game, Cards, WinnersLog, Patterns (one manager unifying the patterns list + New Pattern / Manage Categories sub-pages), Presets, RaffleForm, Raffles, Announcements, Affiliates + AffiliateForm, BookClub (one generic tab serves every club), Garapon + GaraponForm, StampRallies + StampRallyForm, Settings, Themes, Images, Users (admin-only account+permission manager), Logs (admin-only live server-log viewer — typed/colored columns, filters, live tail, DEBUG toggle), Fonts, CarrdUpload; PlacementEditor (shared %-based image placement widget for Garapon/Stamp Rally forms)
 │       ├── views/                    ← HomeView, PlayerView, RafflesView, RaffleDetailView, GaraponView (public token-gated draw), StampCardView (public token-gated stamp card), AdminLoginView, RegisterView (hidden), NoAccessView (active account, no granted pages), AdminView
 │       └── **/*.test.ts              ← Vitest unit/component tests, colocated next to the code they cover
-├── .github/workflows/ci.yml          ← CI: frontend (lint·typecheck·test·build) + backend (lint·build·vet·test·govulncheck) + plugin (build·format) + release (main: auto tag + GitHub Release per component on version bump)
+├── .github/workflows/ci.yml          ← CI: frontend (lint·typecheck·test·build) + backend (lint·build·vet·test·govulncheck) + plugin (build·format·lint) + release (main: auto tag + GitHub Release per component on version bump)
 ├── .github/scripts/release.sh        ← the release job's script: reads each component's version, tags <Component>-v<version> + publishes a Release with that component's CHANGELOG.md section
 ├── deploy/                           ← Apache deploy artifacts (.htaccess + persistent images/ + README)
 ├── backend/                          ← Go backend
@@ -137,7 +137,7 @@ rotated immediately**. See **Authentication & authorization** below.
 │       ├── Services/                 ← Session (auth/perms), CardCache (coalesced, framework-thread), NearbyPlayers (IObjectTable), ChatSender (/tell), WinnerChime (winmm synth)
 │       ├── Windows/                  ← ImGui tabs: TabBase + Bingo{Cards,Game,Winners}Tab + RaffleTab + MainWindow
 │       ├── SenpanCompanion.csproj    ← Dalamud.NET.Sdk/15.0.0; <AssemblyName>SenpanCompanionAdmin; EnableWindowsTargeting (Linux CI)
-│       └── .editorconfig             ← dotnet format rules (root; csharp_indent_case_contents_when_block=false)
+│       └── .editorconfig             ← dotnet format rules + Roslynator lint severities (root; curated ruleset)
 ├── devdata/                          ← Local dev sandbox: SQLite DBs + built binaries + webroot uploads (gitignored)
 ```
 
@@ -484,6 +484,7 @@ cd backend; go build -ldflags="-s -w" -o app-suite .
 # Needs the .NET 10 SDK + a local XIVLauncher/Dalamud install (Windows).
 cd plugins\SenpanCompanion; dotnet build -c Release   # → bin/Release/SenpanCompanionAdmin/latest.zip (keep 0/0 warnings)
 cd plugins\SenpanCompanion; dotnet format             # apply .editorconfig style (CI runs --verify-no-changes)
+dotnet tool restore; dotnet roslynator analyze plugins\SenpanCompanion\SenpanCompanion.csproj --severity-level info   # C# lint gate (Roslynator CLI, pinned in .config/dotnet-tools.json; ruleset curated in .editorconfig)
 .\scripts\deploy.ps1 -Target plugin                   # build + publish the custom Dalamud repo (pluginmaster.json + latest.zip)
 ```
 
@@ -508,7 +509,9 @@ jobs plus a release job:
   the `net*-windows` TFM compiles via the `EnableWindowsTargeting` property
   (conditioned off on Windows, so local builds are unchanged). Gate =
   `dotnet build -c Release -p:TreatWarningsAsErrors=true` (the 0-warning rule) +
-  `dotnet format --verify-no-changes` (rules in `plugins/SenpanCompanion/.editorconfig`).
+  `dotnet format --verify-no-changes` + `roslynator analyze --severity-level info`
+  (the C# lint gate — Roslynator CLI pinned in `.config/dotnet-tools.json`; ruleset
+  curated in `plugins/SenpanCompanion/.editorconfig`).
   Tracking Dalamud `latest` means an upstream API bump can redden it — the cue to
   bump `DalamudApiLevel`.
 - **release** (`needs: [frontend, backend, plugin]`, only on a push to `main`):

@@ -6,7 +6,7 @@
 .DESCRIPTION
     Backend (backend/):   golangci-lint · go build · go vet · go test · govulncheck
     Frontend (frontend/): gen:types · lint:check · typecheck · test · build
-    Plugin (plugins/SenpanCompanion/): dotnet build (warnings=errors) · dotnet format
+    Plugin (plugins/SenpanCompanion/): dotnet build (warnings=errors) · dotnet format · roslynator analyze
 
     Stops at the first failing step with a clear message, so `golangci-lint`
     (which is NOT part of `go build`/`go vet`) can't be forgotten and slip
@@ -116,6 +116,13 @@ if (-not $SkipFrontend -and -not $SkipBackend) {
             }
             # Whitespace/style gate; rules pinned in .editorconfig.
             Invoke-Step "plugin: dotnet format" { dotnet format --verify-no-changes }
+            # C# lint gate (the analog to golangci-lint / eslint): the Roslynator CLI,
+            # pinned in .config/dotnet-tools.json, fails on any analyzer diagnostic at
+            # info or above. The ruleset is curated in the plugin's .editorconfig.
+            Invoke-Step "plugin: roslynator restore" { dotnet tool restore }
+            Invoke-Step "plugin: roslynator analyze" {
+                dotnet roslynator analyze .\SenpanCompanion.csproj --severity-level info
+            }
         }
         finally { Pop-Location }
     }

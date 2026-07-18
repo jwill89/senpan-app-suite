@@ -347,7 +347,7 @@ public sealed class MainWindow : Window, IDisposable
 
     private static readonly Vector4 LinkColor = new(0.40f, 0.70f, 1f, 1f);
 
-    private void DrawAboutTab()
+    private static void DrawAboutTab()
     {
         var logo = Plugin.TextureProvider.GetFromFile(Plugin.LogoPath).GetWrapOrEmpty();
         if (logo.Handle != IntPtr.Zero && logo.Width > 0)

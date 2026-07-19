@@ -5,15 +5,22 @@ import type { CardListEntry } from '@/types/api'
 
 // Stub the endpoint layer; cards.create is spied so the create-single tests can
 // assert on its calls.
-const { create } = vi.hoisted(() => ({
+const { create, approve, setProtected, deleteAll, list } = vi.hoisted(() => ({
   create: vi.fn(async (playerName: string) => ({
     count: 1,
     card: { id: 'NEW123', player_name: playerName, board_data: [] },
   })),
+  approve: vi.fn(async () => ({ ok: true })),
+  setProtected: vi.fn(async () => ({ ok: true })),
+  deleteAll: vi.fn(async () => ({ deleted: 2 })),
+  list: vi.fn(async () => ({ cards: [] as CardListEntry[] })),
 }))
-vi.mock('@/lib/endpoints', () => ({ endpoints: { cards: { create }, board: {} } }))
+vi.mock('@/lib/endpoints', () => ({
+  endpoints: { cards: { create, approve, setProtected, deleteAll, list }, board: {} },
+}))
 
 import { useCardsStore } from './cards'
+import { useUiStore } from './ui'
 
 function entry(id: string, player_name = '', created_at = ''): CardListEntry {
   return { id, player_name, created_at } as CardListEntry
@@ -26,6 +33,10 @@ const writeText = vi.fn<(text: string) => Promise<void>>(() => Promise.resolve()
 beforeEach(() => {
   setActivePinia(createPinia())
   create.mockClear()
+  approve.mockClear()
+  setProtected.mockClear()
+  deleteAll.mockClear()
+  list.mockClear()
   writeText.mockClear()
   Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true })
 })
@@ -125,5 +136,42 @@ describe('generateSingleCard', () => {
     // The new card's playable URL is auto-copied to the clipboard.
     expect(writeText).toHaveBeenCalledTimes(1)
     expect(writeText.mock.calls[0][0]).toContain('/play/NEW123')
+  })
+})
+
+describe('cards status actions', () => {
+  it('approveCard calls the approve endpoint', async () => {
+    const cards = useCardsStore()
+    await cards.approveCard('CUST01')
+    expect(approve).toHaveBeenCalledWith('CUST01')
+  })
+
+  it('setProtected calls the protect endpoint with the flag', async () => {
+    const cards = useCardsStore()
+    await cards.setProtected('ABC123', true)
+    expect(setProtected).toHaveBeenCalledWith('ABC123', true)
+    await cards.setProtected('ABC123', false)
+    expect(setProtected).toHaveBeenLastCalledWith('ABC123', false)
+  })
+
+  it('deleteAllCards refetches the surviving cards instead of clearing (protected survive)', async () => {
+    const cards = useCardsStore()
+    useUiStore().confirm = vi.fn(async () => true)
+    cards.cards = [entry('AAA111'), entry('BBB222'), entry('KEEP01')]
+    // The server keeps the protected card; loadCards() returns only the survivor.
+    list.mockResolvedValueOnce({ cards: [entry('KEEP01')] })
+
+    await cards.deleteAllCards()
+
+    expect(deleteAll).toHaveBeenCalled()
+    expect(list).toHaveBeenCalled() // refetched rather than blindly cleared
+    expect(cards.cards.map((c) => c.id)).toEqual(['KEEP01'])
+  })
+
+  it('deleteAllCards does nothing when the confirm is cancelled', async () => {
+    const cards = useCardsStore()
+    useUiStore().confirm = vi.fn(async () => false)
+    await cards.deleteAllCards()
+    expect(deleteAll).not.toHaveBeenCalled()
   })
 })

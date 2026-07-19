@@ -33,6 +33,15 @@ public sealed class CardListEntry
     public string PlayerName { get; set; } = string.Empty;
     public string Details { get; set; } = string.Empty;
     public string CreatedAt { get; set; } = string.Empty;
+
+    /// <summary>Spared by "Delete all" (approved custom cards are auto-protected).</summary>
+    public bool Protected { get; set; }
+
+    /// <summary>Custom-card lifecycle: "" normal, "pending" awaiting approval, "approved".</summary>
+    public string CustomStatus { get; set; } = string.Empty;
+
+    /// <summary>Home world of a custom-card requester ("" for normal cards).</summary>
+    public string World { get; set; } = string.Empty;
 }
 
 public sealed class CardsResponse

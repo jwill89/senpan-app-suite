@@ -14,7 +14,7 @@ import MarkdownEditor from '@/components/common/MarkdownEditor.vue'
 import MarkdownText from '@/components/common/MarkdownText.vue'
 import AdminPanel from '@/components/common/ui/AdminPanel.vue'
 import PatternPicker from '@/components/common/ui/PatternPicker.vue'
-import { DRAW_DELAY_OPTIONS } from '@/lib/constants'
+import { DRAW_DELAY_OPTIONS, patternColumns } from '@/lib/constants'
 import { parseServerTimestamp } from '@/lib/datetime'
 import { primeAudio, playWinnerChime } from '@/lib/sound'
 import { useGameStore } from '@/stores/game'
@@ -25,6 +25,12 @@ import { useYoeverStore } from '@/stores/yoever'
 
 const router = useRouter()
 const game = useGameStore()
+// Which BINGO columns this game can draw from (undefined when no game is active →
+// no dimming). Columns no active pattern uses get a dim overlay in the Called
+// Numbers panel, since no number in them will be called this game.
+const calledActiveColumns = computed(() =>
+  game.currentGame ? patternColumns(game.currentGame.patterns) : undefined,
+)
 const cards = useCardsStore()
 const patterns = usePatternsStore()
 const presets = usePresetsStore()
@@ -382,6 +388,7 @@ onBeforeUnmount(() => {
               <CalledNumbers
                 :count="game.currentGame.called_numbers.length"
                 :is-called="game.isCalledAdmin"
+                :active-columns="calledActiveColumns"
               />
             </div>
           </div>

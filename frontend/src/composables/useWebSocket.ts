@@ -88,8 +88,12 @@ export function useWebSocket() {
         game.gameDetails = msg.game_details || ''
         break
       case 'style_update':
-        applyCustomCSS(msg.css || '')
-        app.applyFlourishes(msg.board_flourish || '', msg.number_flourish || '')
+        // Only follow the admin's live theme change when the player is on
+        // "Default". A player who picked a specific public theme keeps their choice.
+        if (app.themePreference === 'default') {
+          applyCustomCSS(msg.css || '')
+          app.applyFlourishes(msg.board_flourish || '', msg.number_flourish || '')
+        }
         break
       case 'settings_update':
         if (msg.app_title) {

@@ -191,6 +191,13 @@ const routes: RouteRecordRaw[] = [
     props: true,
   },
   { path: '/raffles', name: 'raffles', component: () => import('@/views/RafflesView.vue') },
+  // Public Personal Card Requests — build a custom bingo card and submit it for
+  // staff approval. No auth (public page).
+  {
+    path: '/card-requests',
+    name: 'card-requests',
+    component: () => import('@/views/CardRequestsView.vue'),
+  },
   {
     path: '/raffles/:id',
     name: 'raffle-detail',

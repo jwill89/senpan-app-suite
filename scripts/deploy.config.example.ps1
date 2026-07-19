@@ -16,3 +16,7 @@ $DeployKeyPath = "<path-to-your-deploy-key.ppk>"
 $DeployWebRoot = "<apache-documentroot-on-host>"       # e.g. /var/www/example.com
 $DeployServiceName = "<systemd-service-name>"          # e.g. myapp
 $DeployRemoteOptDir = "<dir-holding-the-backend-binary>" # e.g. /opt/myapp
+# Optional: full path to the live SQLite DB on the host, used only by the
+# post-backend dev-DB refresh. Leave unset to default to
+# "<DeployRemoteOptDir>/data/database.sqlite" (matches deploy/senpan.service).
+# $DeployRemoteDbPath = "<remote-db-path>"             # e.g. /opt/myapp/data/database.sqlite

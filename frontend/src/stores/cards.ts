@@ -156,16 +156,38 @@ export const useCardsStore = defineStore('cards', () => {
 
   async function deleteAllCards(): Promise<void> {
     if (
-      !(await ui.confirm('Delete ALL cards? This cannot be undone.', {
+      !(await ui.confirm('Delete ALL cards? Protected cards are kept. This cannot be undone.', {
         title: 'Delete all cards',
         confirmText: 'Delete all',
       }))
     )
       return
     try {
-      await endpoints.cards.deleteAll()
-      cards.value = []
-      ui.notify('All cards deleted', 'info')
+      const data = await endpoints.cards.deleteAll()
+      // Protected cards survive, so refetch the surviving set rather than clearing.
+      await loadCards()
+      ui.notify(`Deleted ${data.deleted} card(s); protected cards kept`, 'info')
+    } catch (e) {
+      ui.notify((e as Error).message, 'error')
+    }
+  }
+
+  /** Approve a pending custom card (→ approved + protected). List updates via the
+   *  cards_update broadcast. */
+  async function approveCard(id: string): Promise<void> {
+    try {
+      await endpoints.cards.approve(id)
+      ui.notify(`Card ${id} approved`, 'success')
+    } catch (e) {
+      ui.notify((e as Error).message, 'error')
+    }
+  }
+
+  /** Mark or unmark a card as Protected (spared by Delete All). */
+  async function setProtected(id: string, protectedFlag: boolean): Promise<void> {
+    try {
+      await endpoints.cards.setProtected(id, protectedFlag)
+      ui.notify(protectedFlag ? `Card ${id} protected` : `Card ${id} unprotected`, 'success')
     } catch (e) {
       ui.notify((e as Error).message, 'error')
     }
@@ -242,6 +264,8 @@ export const useCardsStore = defineStore('cards', () => {
     generateSingleCard,
     deleteCard,
     deleteAllCards,
+    approveCard,
+    setProtected,
     openCardPreview,
     startPreviewCardEdit,
     savePreviewCardField,

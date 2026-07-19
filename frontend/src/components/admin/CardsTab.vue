@@ -24,6 +24,7 @@ const columns: DataColumn[] = [
   { key: 'id', label: 'Board ID', sortable: true },
   { key: 'player_name', label: 'Player', sortable: true },
   { key: 'created_at', label: 'Created', sortable: true },
+  { key: 'status', label: 'Status', align: 'center' },
   { key: 'actions', label: '', align: 'right' },
 ]
 
@@ -122,8 +123,55 @@ function copyCardUrl(id: string): void {
           <template #cell-created_at="{ row }">
             {{ row.created_at ? formatServerTimestamp(row.created_at) : '—' }}
           </template>
+          <template #cell-status="{ row }">
+            <span class="status-icons">
+              <span
+                v-if="row.custom_status === 'pending'"
+                class="status-pending"
+                title="Pending custom card — awaiting approval"
+                aria-label="Pending custom card"
+              >
+                <font-awesome-icon :icon="['far', 'star']" />
+              </span>
+              <span
+                v-else-if="row.custom_status === 'approved'"
+                class="status-approved"
+                title="Approved custom card"
+                aria-label="Approved custom card"
+              >
+                <font-awesome-icon :icon="['fas', 'star']" />
+              </span>
+              <span
+                v-if="row.protected"
+                class="status-protected"
+                title="Protected — kept when deleting all cards"
+                aria-label="Protected card"
+              >
+                <font-awesome-icon :icon="['fas', 'table-cells-lock']" />
+              </span>
+              <span v-if="!row.custom_status && !row.protected" class="text-dim">—</span>
+            </span>
+          </template>
           <template #cell-actions="{ row }">
             <div class="row-actions">
+              <button
+                v-if="row.custom_status === 'pending'"
+                class="btn-confirm btn-sm"
+                aria-label="Approve custom card"
+                title="Approve custom card"
+                @click="cards.approveCard(row.id)"
+              >
+                <font-awesome-icon :icon="['fas', 'circle-check']" />
+              </button>
+              <button
+                class="btn-view btn-sm"
+                :class="{ 'is-protected': row.protected }"
+                :aria-label="row.protected ? 'Unprotect card' : 'Protect card'"
+                :title="row.protected ? 'Unprotect (allow Delete All)' : 'Protect from Delete All'"
+                @click="cards.setProtected(row.id, !row.protected)"
+              >
+                <font-awesome-icon :icon="['fas', 'table-cells-lock']" />
+              </button>
               <button
                 class="btn-view btn-sm"
                 aria-label="View or edit board"
@@ -181,5 +229,26 @@ function copyCardUrl(id: string): void {
    the row doesn't stretch (it still wraps on narrow widths via .flex-toolbar). */
 .cards-name-input {
   width: 160px;
+}
+/* Status icon column: pending (hollow star), approved (gold star), protected (lock). */
+.status-icons {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: center;
+}
+.status-pending {
+  color: var(--text-muted);
+}
+.status-approved {
+  color: var(--warning);
+}
+.status-protected {
+  color: var(--accent);
+}
+/* Protect toggle in the "on" state reads as active. */
+.row-actions .is-protected {
+  color: var(--accent);
+  border-color: var(--accent);
 }
 </style>

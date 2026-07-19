@@ -160,9 +160,10 @@ func scanTokens(raw string) map[string]string {
 	return tokens
 }
 
-// ListStyles returns all styles (name only — no tokens) for lightweight listing.
+// ListStyles returns all styles (name + visibility, no tokens) for lightweight
+// listing in the admin theme manager.
 func (s *Store) ListStyles() ([]model.Style, error) {
-	rows, err := s.db.Query("SELECT id, name, created_at FROM styles ORDER BY name ASC")
+	rows, err := s.db.Query("SELECT id, name, is_public, created_at FROM styles ORDER BY name ASC")
 	if err != nil {
 		return nil, err
 	}
@@ -171,7 +172,7 @@ func (s *Store) ListStyles() ([]model.Style, error) {
 	styles := make([]model.Style, 0)
 	for rows.Next() {
 		var st model.Style
-		if err := rows.Scan(&st.ID, &st.Name, &st.CreatedAt); err != nil {
+		if err := rows.Scan(&st.ID, &st.Name, &st.IsPublic, &st.CreatedAt); err != nil {
 			return nil, err
 		}
 		styles = append(styles, st)
@@ -179,11 +180,40 @@ func (s *Store) ListStyles() ([]model.Style, error) {
 	return styles, rows.Err()
 }
 
+// ListPublicStyles returns the id + name of every Public theme (ordered by name)
+// for the client-side theme picker. Excludes tokens/CSS and Private themes.
+func (s *Store) ListPublicStyles() ([]model.PublicStyle, error) {
+	rows, err := s.db.Query("SELECT id, name FROM styles WHERE is_public = 1 ORDER BY name ASC")
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	styles := make([]model.PublicStyle, 0)
+	for rows.Next() {
+		var ps model.PublicStyle
+		if err := rows.Scan(&ps.ID, &ps.Name); err != nil {
+			return nil, err
+		}
+		styles = append(styles, ps)
+	}
+	return styles, rows.Err()
+}
+
+// GetPublicStyle returns a theme (with generated CSS + flourishes) only when it is
+// Public. Returns nil for a missing or Private theme, so the public by-id CSS
+// endpoint can't be used to fetch a Private theme's stylesheet by guessing its id.
+func (s *Store) GetPublicStyle(id int64) (*model.Style, error) {
+	return s.scanStyle(s.db.QueryRow(
+		"SELECT id, name, tokens, board_flourish, number_flourish, is_public, created_at FROM styles WHERE id = ? AND is_public = 1", id,
+	))
+}
+
 // GetStyle retrieves a single style by ID with its tokens (and the generated
 // CSS + flourishes). Returns nil if not found.
 func (s *Store) GetStyle(id int64) (*model.Style, error) {
 	return s.scanStyle(s.db.QueryRow(
-		"SELECT id, name, tokens, board_flourish, number_flourish, created_at FROM styles WHERE id = ?", id,
+		"SELECT id, name, tokens, board_flourish, number_flourish, is_public, created_at FROM styles WHERE id = ?", id,
 	))
 }
 
@@ -193,7 +223,7 @@ func (s *Store) GetStyle(id int64) (*model.Style, error) {
 func (s *Store) scanStyle(row *sql.Row) (*model.Style, error) {
 	var st model.Style
 	var rawTokens string
-	err := row.Scan(&st.ID, &st.Name, &rawTokens, &st.BoardFlourish, &st.NumberFlourish, &st.CreatedAt)
+	err := row.Scan(&st.ID, &st.Name, &rawTokens, &st.BoardFlourish, &st.NumberFlourish, &st.IsPublic, &st.CreatedAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
 	}
@@ -226,7 +256,8 @@ func ValidFlourishPath(p string) bool {
 }
 
 // CreateStyle inserts a new theme from a token map (sanitized) and returns its ID.
-func (s *Store) CreateStyle(name string, tokens map[string]string, boardFlourish, numberFlourish string) (int64, error) {
+// isPublic marks the theme as selectable in the client-side picker (false = admin-only).
+func (s *Store) CreateStyle(name string, tokens map[string]string, boardFlourish, numberFlourish string, isPublic bool) (int64, error) {
 	if !ValidFlourishPath(boardFlourish) || !ValidFlourishPath(numberFlourish) {
 		return 0, ErrInvalidFlourish
 	}
@@ -235,8 +266,8 @@ func (s *Store) CreateStyle(name string, tokens map[string]string, boardFlourish
 		return 0, err
 	}
 	res, err := s.db.Exec(
-		"INSERT INTO styles (name, tokens, board_flourish, number_flourish) VALUES (?, ?, ?, ?)",
-		name, tokenJSON, boardFlourish, numberFlourish,
+		"INSERT INTO styles (name, tokens, board_flourish, number_flourish, is_public) VALUES (?, ?, ?, ?, ?)",
+		name, tokenJSON, boardFlourish, numberFlourish, boolToInt(isPublic),
 	)
 	if err != nil {
 		return 0, err
@@ -244,8 +275,8 @@ func (s *Store) CreateStyle(name string, tokens map[string]string, boardFlourish
 	return res.LastInsertId()
 }
 
-// UpdateStyle updates a theme's name, tokens (sanitized), and flourishes.
-func (s *Store) UpdateStyle(id int64, name string, tokens map[string]string, boardFlourish, numberFlourish string) error {
+// UpdateStyle updates a theme's name, tokens (sanitized), flourishes, and visibility.
+func (s *Store) UpdateStyle(id int64, name string, tokens map[string]string, boardFlourish, numberFlourish string, isPublic bool) error {
 	if !ValidFlourishPath(boardFlourish) || !ValidFlourishPath(numberFlourish) {
 		return ErrInvalidFlourish
 	}
@@ -254,8 +285,8 @@ func (s *Store) UpdateStyle(id int64, name string, tokens map[string]string, boa
 		return err
 	}
 	_, err = s.db.Exec(
-		"UPDATE styles SET name = ?, tokens = ?, board_flourish = ?, number_flourish = ? WHERE id = ?",
-		name, tokenJSON, boardFlourish, numberFlourish, id,
+		"UPDATE styles SET name = ?, tokens = ?, board_flourish = ?, number_flourish = ?, is_public = ? WHERE id = ?",
+		name, tokenJSON, boardFlourish, numberFlourish, boolToInt(isPublic), id,
 	)
 	return err
 }
@@ -279,7 +310,7 @@ func (s *Store) GetActiveStyle() (*model.Style, error) {
 		return nil, err
 	}
 	return s.scanStyle(s.db.QueryRow(
-		"SELECT id, name, tokens, board_flourish, number_flourish, created_at FROM styles WHERE id = ?", idStr,
+		"SELECT id, name, tokens, board_flourish, number_flourish, is_public, created_at FROM styles WHERE id = ?", idStr,
 	))
 }
 

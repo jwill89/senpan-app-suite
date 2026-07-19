@@ -36,6 +36,7 @@ type Server struct {
 	limiter        *rateLimiter // failed-login brute-force limiter
 	regLimiter     *rateLimiter // registration-rate limiter (mass-signup abuse)
 	raffleLimiter  *rateLimiter // public raffle-entry limiter (entry flooding)
+	cardReqLimiter *rateLimiter // public custom-card-request limiter (request flooding)
 	// Cloudflare Turnstile bot check on the admin login. Disabled (verification
 	// skipped) when turnstileSecret is empty — see SetTurnstile / turnstile.go.
 	turnstileSecret  string
@@ -102,6 +103,7 @@ func New(st *store.Store, hub *ws.Hub, sessionSecret, webRoot string, allowedOri
 		limiter:        newRateLimiter(5, 15*time.Minute),  // 5 failed logins per 15 minutes
 		regLimiter:     newRateLimiter(5, time.Hour),       // 5 registration attempts per hour
 		raffleLimiter:  newRateLimiter(20, 10*time.Minute), // 20 raffle entries per 10 minutes per IP
+		cardReqLimiter: newRateLimiter(10, 10*time.Minute), // 10 custom-card requests per 10 minutes per IP
 	}
 
 	s.routes()
@@ -188,9 +190,12 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("GET /api/cards", s.handleCardsList)
 	s.mux.HandleFunc("POST /api/cards", s.handleCardCreate)
 	s.mux.HandleFunc("POST /api/cards/generate", s.handleCardsGenerate)
+	s.mux.HandleFunc("POST /api/cards/request", s.handleCardRequest) // public: Personal Card Request
 	s.mux.HandleFunc("DELETE /api/cards/all", s.handleCardsDeleteAll)
 	s.mux.HandleFunc("DELETE /api/cards/{id}", s.handleCardDelete)
 	s.mux.HandleFunc("PATCH /api/cards/{id}", s.handleCardUpdate)
+	s.mux.HandleFunc("POST /api/cards/{id}/approve", s.handleCardApprove)
+	s.mux.HandleFunc("POST /api/cards/{id}/protect", s.handleCardProtect)
 	// Game (singleton resource): GET state, POST lifecycle verbs, PATCH controls.
 	// The game handlers self-broadcast (game_update / game_draw / etc.), so game
 	// is intentionally absent from the adminMutationResource middleware.
@@ -228,6 +233,8 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("POST /api/styles", s.handleStyleCreate)
 	s.mux.HandleFunc("POST /api/styles/deactivate", s.handleStyleDeactivate)
 	s.mux.HandleFunc("GET /api/styles/active", s.handleActiveStyleCSS)
+	s.mux.HandleFunc("GET /api/styles/public", s.handlePublicStylesList)    // public: theme picker list
+	s.mux.HandleFunc("GET /api/styles/public/{id}", s.handlePublicStyleCSS) // public: theme CSS by id
 	s.mux.HandleFunc("GET /api/styles/{id}", s.handleStyleGet)
 	s.mux.HandleFunc("PUT /api/styles/{id}", s.handleStyleUpdate)
 	s.mux.HandleFunc("DELETE /api/styles/{id}", s.handleStyleDelete)
@@ -819,30 +826,33 @@ func adminMutationResource(path string) (string, bool) {
 	return "", false
 }
 
-// cardEntry is the lightweight JSON shape for card lists.
-type cardEntry struct {
-	ID         string `json:"id"`
-	PlayerName string `json:"player_name"`
-	Details    string `json:"details"`
-	CreatedAt  string `json:"created_at"`
-}
-
 // broadcastCards sends the updated card list to all WebSocket clients. It carries
-// the same shape as GET /api/cards (id + player_name + details) so admins viewing
-// the Manage Cards page keep their player-assignment indicators when the list is
-// replaced by this broadcast — sending IDs alone would blank them out.
+// the FULL GET /api/cards shape (model.CardListEntry — including protected,
+// custom_status, and world) so a client that replaces its list from this broadcast
+// keeps every indicator (player-assignment, the pending/approved star, the
+// Protected lock) live. Using the model type keeps this in lockstep with
+// handleCardsList — a broadcast that dropped a field would show a stale status
+// until a manual refetch (e.g. protecting a card wouldn't show the lock).
 func (s *Server) broadcastCards() {
 	cards, err := s.store.ListCardIDsWithNames()
 	if err != nil {
 		return
 	}
-	entries := make([]cardEntry, len(cards))
+	entries := make([]model.CardListEntry, len(cards))
 	for i, c := range cards {
-		entries[i] = cardEntry{ID: c.ID, PlayerName: c.PlayerName, Details: c.Details, CreatedAt: c.CreatedAt}
+		entries[i] = model.CardListEntry{
+			ID:           c.ID,
+			PlayerName:   c.PlayerName,
+			Details:      c.Details,
+			CreatedAt:    c.CreatedAt,
+			Protected:    c.Protected,
+			CustomStatus: c.CustomStatus,
+			World:        c.World,
+		}
 	}
 	s.hub.Broadcast(struct {
-		Type  string      `json:"type"`
-		Cards []cardEntry `json:"cards"`
+		Type  string                `json:"type"`
+		Cards []model.CardListEntry `json:"cards"`
 	}{Type: "cards_update", Cards: entries})
 }
 

@@ -144,6 +144,18 @@ watch(
               aria-label="It's Yoever cooldown seconds"
             />
           </FormField>
+          <FormField
+            label="Custom Card Cost (gil)"
+            help="Gil price shown on the public Personal Card Requests page for a custom bingo card."
+          >
+            <input
+              v-model="app.settings.custom_card_cost"
+              type="number"
+              min="0"
+              max="1000000000"
+              aria-label="Custom card cost in gil"
+            />
+          </FormField>
         </section>
 
         <!-- Fonts & Branding ───────────────────────────────────────────── -->

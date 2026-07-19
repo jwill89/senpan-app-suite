@@ -28,6 +28,7 @@ import type {
   BoardResponse,
   CardsListResponse,
   CardResponse,
+  CardRequestResponse,
   DeletedCountResponse,
   DrawResult,
   EndGameResponse,
@@ -95,6 +96,7 @@ import type {
   StyleCreateResponse,
   StyleGetResponse,
   StylesResponse,
+  PublicStylesResponse,
   WinnersLogResponse,
   FontsResponse,
   FontUploadResponse,
@@ -251,11 +253,24 @@ export const endpoints = {
     generate: (count: number) => apiPost<GenerateCardsResponse>('cards/generate', { count }),
     /** DELETE /api/cards/{id} — delete a single card (204). */
     delete: (id: string) => apiDelete(`cards/${enc(id)}`),
-    /** DELETE /api/cards/all — delete every card, returning the deleted count. */
+    /** DELETE /api/cards/all — delete every non-Protected card, returning the deleted count. */
     deleteAll: () => apiDelete<DeletedCountResponse>('cards/all'),
     /** PATCH /api/cards/{id} — update the card's assigned player name + details. */
     updatePlayer: (id: string, playerName: string, details: string) =>
       apiPatch<OKResponse>(`cards/${enc(id)}`, { player_name: playerName, details }),
+    /** POST /api/cards/{id}/approve — approve a pending custom card (→ approved + protected). */
+    approve: (id: string) => apiPost<OKResponse>(`cards/${enc(id)}/approve`, undefined),
+    /** POST /api/cards/{id}/protect — mark/unmark a card as Protected (spared by Delete All). */
+    setProtected: (id: string, protectedFlag: boolean) =>
+      apiPost<OKResponse>(`cards/${enc(id)}/protect`, { protected: protectedFlag }),
+    /** POST /api/cards/request — public Personal Card Request (custom card, pending approval). */
+    request: (payload: {
+      character_name: string
+      world: string
+      card_id: string
+      board_data: number[][]
+      turnstile_token?: string
+    }) => apiPost<CardRequestResponse>('cards/request', payload),
   },
 
   // ── Patterns (hybrid REST) ───────────────────────────────────────────────────
@@ -326,6 +341,10 @@ export const endpoints = {
   styles: {
     list: () => apiGet<StylesResponse>('styles'),
     activeCss: () => apiGet<ActiveCSSResponse>('styles/active'),
+    /** GET /api/styles/public — public themes (id + name) for the client-side picker. */
+    listPublic: () => apiGet<PublicStylesResponse>('styles/public'),
+    /** GET /api/styles/public/{id} — a public theme's generated CSS + flourishes. */
+    publicCss: (id: number) => apiGet<ActiveCSSResponse>(`styles/public/${id}`),
     /** GET /api/styles/{id} — one theme (tokens + generated CSS). */
     get: (id: number) => apiGet<StyleGetResponse>(`styles/${id}`),
     /** POST /api/styles — create a theme (201). */
@@ -334,12 +353,14 @@ export const endpoints = {
       tokens: Record<string, string>,
       boardFlourish = '',
       numberFlourish = '',
+      isPublic = false,
     ) =>
       apiPost<StyleCreateResponse>('styles', {
         name,
         tokens,
         board_flourish: boardFlourish,
         number_flourish: numberFlourish,
+        is_public: isPublic,
       }),
     /** PUT /api/styles/{id} — full replace of a theme. */
     update: (
@@ -348,12 +369,14 @@ export const endpoints = {
       tokens: Record<string, string>,
       boardFlourish = '',
       numberFlourish = '',
+      isPublic = false,
     ) =>
       apiPut<OKResponse>(`styles/${id}`, {
         name,
         tokens,
         board_flourish: boardFlourish,
         number_flourish: numberFlourish,
+        is_public: isPublic,
       }),
     /** DELETE /api/styles/{id} — delete a theme (204). */
     delete: (id: number) => apiDelete(`styles/${id}`),

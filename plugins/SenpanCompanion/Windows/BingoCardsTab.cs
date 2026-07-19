@@ -18,6 +18,9 @@ namespace SenpanCompanion.Windows;
 /// </summary>
 internal sealed class BingoCardsTab : TabBase
 {
+    // Muted grey for the "pending approval" star (vs. gold for an approved custom card).
+    private static readonly Vector4 PendingColor = new(0.62f, 0.62f, 0.62f, 1f);
+
     private readonly ApiClient api;
     private readonly NearbyPlayers nearby;
     private readonly Configuration config;
@@ -76,11 +79,12 @@ internal sealed class BingoCardsTab : TabBase
         {
             ImGui.TextDisabled(this.cardCache.LoadFailed ? "Couldn't load cards." : "No cards yet.");
         }
-        else if (ImGui.BeginTable("cards", 3, ImGuiTableFlags.Borders | ImGuiTableFlags.RowBg | ImGuiTableFlags.ScrollY, new Vector2(0, 360)))
+        else if (ImGui.BeginTable("cards", 4, ImGuiTableFlags.Borders | ImGuiTableFlags.RowBg | ImGuiTableFlags.ScrollY, new Vector2(0, 360)))
         {
             ImGui.TableSetupColumn("Card ID");
             ImGui.TableSetupColumn("Player");
-            ImGui.TableSetupColumn("##actions", ImGuiTableColumnFlags.WidthFixed, 80);
+            ImGui.TableSetupColumn("Status", ImGuiTableColumnFlags.WidthFixed, 70);
+            ImGui.TableSetupColumn("##actions", ImGuiTableColumnFlags.WidthFixed, 150);
             ImGui.TableHeadersRow();
 
             foreach (var card in cards)
@@ -91,24 +95,100 @@ internal sealed class BingoCardsTab : TabBase
                 ImGui.TableNextColumn();
                 ImGui.TextUnformatted(string.IsNullOrEmpty(card.PlayerName) ? "—" : card.PlayerName);
                 ImGui.TableNextColumn();
-                if (Ui.IconButton($"copy{card.Id}", FontAwesomeIcon.Copy, "Copy card URL"))
-                    ImGui.SetClipboardText(this.config.CardUrl(card.Id));
-                ImGui.SameLine();
-                if (Ui.DangerIconButton($"del{card.Id}", FontAwesomeIcon.Trash, "Delete card"))
-                {
-                    var id = card.Id;
-                    Run(async () =>
-                    {
-                        await this.api.DeleteCardAsync(id);
-                        await this.cardCache.RefreshAsync();
-                    });
-                }
+                DrawStatusIcons(card);
+                ImGui.TableNextColumn();
+                DrawRowActions(card);
             }
 
             ImGui.EndTable();
         }
 
         DrawReplacePopup();
+    }
+
+    /// <summary>Status glyphs for a card: a pending/approved custom star and/or a Protected lock.</summary>
+    private static void DrawStatusIcons(CardListEntry card)
+    {
+        var drewAny = false;
+
+        if (card.CustomStatus == "pending")
+        {
+            StatusIcon(FontAwesomeIcon.Star, PendingColor, CustomTooltip(card, "Pending approval"));
+            drewAny = true;
+        }
+        else if (card.CustomStatus == "approved")
+        {
+            StatusIcon(FontAwesomeIcon.Star, Ui.WarnColor, CustomTooltip(card, "Approved custom card"));
+            drewAny = true;
+        }
+
+        if (card.Protected)
+        {
+            if (drewAny)
+                ImGui.SameLine();
+            StatusIcon(FontAwesomeIcon.Lock, Ui.AccentColor, "Protected — kept when deleting all cards");
+            drewAny = true;
+        }
+
+        if (!drewAny)
+            ImGui.TextDisabled("—");
+    }
+
+    /// <summary>Render a status glyph with a hover tooltip (no click).</summary>
+    private static void StatusIcon(FontAwesomeIcon icon, Vector4 color, string tooltip)
+    {
+        Ui.Icon(icon, color);
+        if (ImGui.IsItemHovered())
+            ImGui.SetTooltip(tooltip);
+    }
+
+    /// <summary>Appends the requester's character @ world to a custom-card status tooltip.</summary>
+    private static string CustomTooltip(CardListEntry card, string label)
+    {
+        var who = card.PlayerName;
+        if (!string.IsNullOrEmpty(card.World))
+            who = string.IsNullOrEmpty(who) ? card.World : $"{who} @ {card.World}";
+        return string.IsNullOrEmpty(who) ? label : $"{label} — {who}";
+    }
+
+    /// <summary>Row action buttons: approve (pending only), protect toggle, copy URL, delete.</summary>
+    private void DrawRowActions(CardListEntry card)
+    {
+        var id = card.Id;
+
+        // Approve — only shown for a pending custom-card request.
+        if (card.CustomStatus == "pending")
+        {
+            if (Ui.IconButton($"approve{id}", FontAwesomeIcon.Check, "Approve custom card"))
+                Run(async () =>
+                {
+                    await this.api.ApproveCardAsync(id);
+                    await this.cardCache.RefreshAsync();
+                });
+            ImGui.SameLine();
+        }
+
+        // Protect / unprotect toggle.
+        var isProtected = card.Protected;
+        if (Ui.IconButton($"prot{id}", isProtected ? FontAwesomeIcon.LockOpen : FontAwesomeIcon.Lock,
+                isProtected ? "Unprotect (allow Delete all)" : "Protect from Delete all"))
+            Run(async () =>
+            {
+                await this.api.SetCardProtectedAsync(id, !isProtected);
+                await this.cardCache.RefreshAsync();
+            });
+        ImGui.SameLine();
+
+        if (Ui.IconButton($"copy{id}", FontAwesomeIcon.Copy, "Copy card URL"))
+            ImGui.SetClipboardText(this.config.CardUrl(id));
+        ImGui.SameLine();
+
+        if (Ui.DangerIconButton($"del{id}", FontAwesomeIcon.Trash, "Delete card"))
+            Run(async () =>
+            {
+                await this.api.DeleteCardAsync(id);
+                await this.cardCache.RefreshAsync();
+            });
     }
 
     private void OnCreateClicked()

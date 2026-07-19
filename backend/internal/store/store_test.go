@@ -201,12 +201,12 @@ func TestCardDeleteAll(t *testing.T) {
 		}
 	}
 
-	count, err := s.DeleteAllCards()
+	deleted, err := s.DeleteAllCards()
 	if err != nil {
 		t.Fatal(err)
 	}
-	if count != 3 {
-		t.Errorf("expected 3 deleted, got %d", count)
+	if len(deleted) != 3 {
+		t.Errorf("expected 3 deleted, got %d", len(deleted))
 	}
 
 	ids, err := s.ListCardIDs()
@@ -1038,7 +1038,7 @@ func TestSettingsGetSet(t *testing.T) {
 func TestStyleCRUD(t *testing.T) {
 	s := newTestStore(t)
 
-	id, err := s.CreateStyle("Dark Theme", map[string]string{"page-bg": "#000", "accent": "#fff"}, "images/flourishes/a.svg", "images/flourishes/b.svg")
+	id, err := s.CreateStyle("Dark Theme", map[string]string{"page-bg": "#000", "accent": "#fff"}, "images/flourishes/a.svg", "images/flourishes/b.svg", false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1064,9 +1064,19 @@ func TestStyleCRUD(t *testing.T) {
 	if style.BoardFlourish != "images/flourishes/a.svg" || style.NumberFlourish != "images/flourishes/b.svg" {
 		t.Errorf("flourishes = %q / %q", style.BoardFlourish, style.NumberFlourish)
 	}
+	// New themes default to Private, and are absent from the public list.
+	if style.IsPublic {
+		t.Error("new theme should default to Private (is_public=false)")
+	}
+	if pubs, _ := s.ListPublicStyles(); len(pubs) != 0 {
+		t.Errorf("private theme leaked into public list: %v", pubs)
+	}
+	if ps, _ := s.GetPublicStyle(id); ps != nil {
+		t.Error("GetPublicStyle returned a Private theme")
+	}
 
-	// Update (also clears the flourishes).
-	if err := s.UpdateStyle(id, "Light Theme", map[string]string{"page-bg": "#fff"}, "", ""); err != nil {
+	// Update (also clears the flourishes and marks the theme Public).
+	if err := s.UpdateStyle(id, "Light Theme", map[string]string{"page-bg": "#fff"}, "", "", true); err != nil {
 		t.Fatal(err)
 	}
 	style, _ = s.GetStyle(id)
@@ -1075,6 +1085,16 @@ func TestStyleCRUD(t *testing.T) {
 	}
 	if style.BoardFlourish != "" || style.NumberFlourish != "" {
 		t.Errorf("flourishes after clear = %q / %q", style.BoardFlourish, style.NumberFlourish)
+	}
+	// Now Public: it appears in the public list and GetPublicStyle returns it.
+	if !style.IsPublic {
+		t.Error("theme should be Public after update")
+	}
+	if pubs, _ := s.ListPublicStyles(); len(pubs) != 1 || pubs[0].ID != id {
+		t.Errorf("public list after publish = %v", pubs)
+	}
+	if ps, _ := s.GetPublicStyle(id); ps == nil {
+		t.Error("GetPublicStyle should return a Public theme")
 	}
 
 	// List
@@ -1125,7 +1145,7 @@ func TestActiveStyleCSS(t *testing.T) {
 	}
 
 	// Create and activate
-	id, _ := s.CreateStyle("Test", map[string]string{"highlight": "red"}, "images/flourishes/board.svg", "images/flourishes/num.svg")
+	id, _ := s.CreateStyle("Test", map[string]string{"highlight": "red"}, "images/flourishes/board.svg", "images/flourishes/num.svg", false)
 	_ = s.SetSetting("active_style_id", fmt.Sprintf("%d", id))
 
 	css, err = s.GetActiveStyleCSS()

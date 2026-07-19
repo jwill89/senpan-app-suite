@@ -90,11 +90,12 @@ describe('saveStyle', () => {
       tokens: { 'page-bg': '#111' },
       board_flourish: '',
       number_flourish: '',
+      is_public: false,
       created_at: '',
     }
     s.editingStyle.name = 'New'
     await s.saveStyle()
-    expect(ep.update).toHaveBeenCalledWith(5, 'New', { 'page-bg': '#111' }, '', '')
+    expect(ep.update).toHaveBeenCalledWith(5, 'New', { 'page-bg': '#111' }, '', '', false)
     expect(ep.create).not.toHaveBeenCalled()
   })
 })

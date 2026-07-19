@@ -65,6 +65,9 @@ type styleWriteRequest struct {
 	Tokens         map[string]string `json:"tokens"`
 	BoardFlourish  string            `json:"board_flourish"`
 	NumberFlourish string            `json:"number_flourish"`
+	// IsPublic marks the theme as selectable by end users in the client-side picker.
+	// Only settable here (the admin panel) — private themes stay admin-only.
+	IsPublic bool `json:"is_public"`
 }
 
 // handleStyleCreate creates a theme.
@@ -91,7 +94,7 @@ func (s *Server) handleStyleCreate(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "Flourish must be an images/<category>/<file>.svg path")
 		return
 	}
-	id, err := s.store.CreateStyle(name, req.Tokens, req.BoardFlourish, req.NumberFlourish)
+	id, err := s.store.CreateStyle(name, req.Tokens, req.BoardFlourish, req.NumberFlourish, req.IsPublic)
 	if err != nil {
 		writeInternalError(w, "create style", err)
 		return
@@ -129,7 +132,7 @@ func (s *Server) handleStyleUpdate(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "Flourish must be an images/<category>/<file>.svg path")
 		return
 	}
-	if err := s.store.UpdateStyle(id, name, req.Tokens, req.BoardFlourish, req.NumberFlourish); err != nil {
+	if err := s.store.UpdateStyle(id, name, req.Tokens, req.BoardFlourish, req.NumberFlourish, req.IsPublic); err != nil {
 		writeInternalError(w, "update style", err)
 		return
 	}
@@ -235,5 +238,48 @@ func (s *Server) handleActiveStyleCSS(w http.ResponseWriter, r *http.Request) {
 		CSS:            css,
 		BoardFlourish:  board,
 		NumberFlourish: number,
+	})
+}
+
+// handlePublicStylesList returns the Public themes an end user may pick for
+// themselves (id + name only). Private themes are never listed here.
+//
+//	Endpoint:  GET /api/styles/public
+//	Auth:      public
+//	Response:  {"styles": [{"id": 1, "name": "..."}, ...]}
+func (s *Server) handlePublicStylesList(w http.ResponseWriter, r *http.Request) {
+	styles, err := s.store.ListPublicStyles()
+	if err != nil {
+		writeInternalError(w, "list public styles", err)
+		return
+	}
+	writeJSON(w, http.StatusOK, model.PublicStylesResponse{Styles: styles})
+}
+
+// handlePublicStyleCSS returns the generated CSS + flourishes of a single Public
+// theme, so a player who picked it can apply it. Returns 404 for a Private or
+// missing theme, so a Private theme's CSS can't be fetched by guessing its id.
+//
+//	Endpoint:  GET /api/styles/public/{id}
+//	Auth:      public
+//	Response:  200 ActiveCSSResponse (404 when the theme isn't Public)
+func (s *Server) handlePublicStyleCSS(w http.ResponseWriter, r *http.Request) {
+	id, ok := pathInt64(w, r, "id", "style")
+	if !ok {
+		return
+	}
+	style, err := s.store.GetPublicStyle(id)
+	if err != nil {
+		writeInternalError(w, "get public style", err)
+		return
+	}
+	if style == nil {
+		writeError(w, http.StatusNotFound, "Theme not found")
+		return
+	}
+	writeJSON(w, http.StatusOK, model.ActiveCSSResponse{
+		CSS:            style.CSSContent,
+		BoardFlourish:  style.BoardFlourish,
+		NumberFlourish: style.NumberFlourish,
 	})
 }

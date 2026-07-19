@@ -22,7 +22,27 @@ type Style struct {
 	// number (player + admin Game tab).
 	BoardFlourish  string `json:"board_flourish"`
 	NumberFlourish string `json:"number_flourish"`
-	CreatedAt      string `json:"created_at"`
+	// IsPublic marks a theme as selectable by end users in the client-side theme
+	// picker. Private (false, the default) themes are admin-only. Public themes
+	// expose their name + generated CSS through the unauthenticated /api/styles/public
+	// endpoints.
+	IsPublic  bool   `json:"is_public"`
+	CreatedAt string `json:"created_at"`
+}
+
+// PublicStyle is the slim shape returned by the public theme picker: just enough
+// to label an option and fetch its CSS by id. Deliberately excludes tokens/CSS
+// and any admin-only fields.
+type PublicStyle struct {
+	ID   int64  `json:"id"`
+	Name string `json:"name"`
+}
+
+// PublicStylesResponse is the body of GET /api/styles/public: the themes an end
+// user may pick for themselves (the admin's active theme is offered separately as
+// a name-hiding "Default" option, resolved via GET /api/styles/active).
+type PublicStylesResponse struct {
+	Styles []PublicStyle `json:"styles"`
 }
 
 // StylesResponse is the body of GET /api/styles: all styles (without CSS) and

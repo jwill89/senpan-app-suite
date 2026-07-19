@@ -19,6 +19,7 @@ var settingsKeys = []string{
 	"anilist_api_url",
 	"bingo_join_prompt",
 	"yoever_cooldown_seconds",
+	"custom_card_cost",
 }
 
 // settingsDefaults provides fallback values for settings that have not been configured.
@@ -31,6 +32,7 @@ var settingsDefaults = map[string]string{
 	"anilist_api_url":           defaultAniListURL,
 	"bingo_join_prompt":         "Enter your unique bingo board ID to play",
 	"yoever_cooldown_seconds":   strconv.Itoa(defaultYoeverCooldownSeconds),
+	"custom_card_cost":          "0",
 }
 
 // secretSettings are setting keys that must not be exposed to non-admin
@@ -142,6 +144,14 @@ func (s *Server) handleSettingsUpdate(w http.ResponseWriter, r *http.Request) {
 			n, err := strconv.Atoi(val)
 			if err != nil || n < 0 || n > 3600 {
 				writeError(w, http.StatusBadRequest, "It's Yoever cooldown must be 0–3600 seconds")
+				return
+			}
+		case "custom_card_cost":
+			// Gil cost shown on the public Personal Card Requests page. A whole,
+			// non-negative number; capped well above any realistic price.
+			n, err := strconv.Atoi(val)
+			if err != nil || n < 0 || n > 1_000_000_000 {
+				writeError(w, http.StatusBadRequest, "Custom card cost must be 0–1,000,000,000 gil")
 				return
 			}
 		case "header_font":

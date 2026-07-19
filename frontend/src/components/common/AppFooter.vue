@@ -3,6 +3,7 @@
  * Site footer shown on the public (non-admin) pages — credits + external links,
  * plus a mobile-only "Install App" link that adds the PWA to the home screen.
  */
+import ThemePicker from '@/components/common/ThemePicker.vue'
 import { usePwaInstall } from '@/composables/usePwaInstall'
 import { useUiStore } from '@/stores/ui'
 
@@ -35,6 +36,10 @@ async function onInstall(): Promise<void> {
 
 <template>
   <footer class="app-footer">
+    <!-- Per-browser theme picker (hidden unless the admin has published themes). -->
+    <div class="app-footer-theme">
+      <ThemePicker />
+    </div>
     <p>
       Created for
       <a href="https://senpan.cafe" target="_blank" rel="noopener">Senpan Tea House</a>
@@ -54,3 +59,11 @@ async function onInstall(): Promise<void> {
     </p>
   </footer>
 </template>
+
+<style scoped>
+.app-footer-theme {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 10px;
+}
+</style>

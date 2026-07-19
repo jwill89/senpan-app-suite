@@ -22,6 +22,7 @@ import SecondaryStampControl from '@/components/player/SecondaryStampControl.vue
 import SoundControls from '@/components/player/SoundControls.vue'
 import YoeverButton from '@/components/player/YoeverButton.vue'
 import WinPatternsPanel from '@/components/player/WinPatternsPanel.vue'
+import { patternColumns } from '@/lib/constants'
 import { exportCardImage } from '@/lib/exportCard'
 import { primeAudio } from '@/lib/sound'
 import { useAppStore } from '@/stores/app'
@@ -114,6 +115,13 @@ const connLabel = computed(() => {
   }
 })
 const connClass = computed(() => (ui.wsStatus === 'closed' ? 'is-connecting' : `is-${ui.wsStatus}`))
+
+// Which BINGO columns this game can draw from (undefined when there's no game → no
+// dimming). Columns no active pattern uses get a dim overlay in the Called Numbers
+// panel, since no number in them will be called this game.
+const calledActiveColumns = computed(() =>
+  player.playerGame ? patternColumns(player.playerGame.patterns) : undefined,
+)
 
 /**
  * Leave the board and return home (App.vue disconnects the WS on the route
@@ -331,6 +339,7 @@ function onYoeverSoundToggle(): void {
           <CalledNumbers
             :count="player.playerGame ? player.playerGame.called_numbers.length : 0"
             :is-called="player.isCalledPlayer"
+            :active-columns="calledActiveColumns"
           />
         </div>
       </div>

@@ -591,11 +591,17 @@ components:
               type: array
             created_at:
               type: string
+            custom_status:
+              type: string
             details:
               type: string
             id:
               type: string
             player_name:
+              type: string
+            protected:
+              type: boolean
+            world:
               type: string
           type: object
         game:
@@ -691,22 +697,41 @@ components:
           type: array
         created_at:
           type: string
+        custom_status:
+          type: string
         details:
           type: string
         id:
           type: string
         player_name:
+          type: string
+        protected:
+          type: boolean
+        world:
           type: string
       type: object
     CardListEntry:
       properties:
         created_at:
           type: string
+        custom_status:
+          type: string
         details:
           type: string
         id:
           type: string
         player_name:
+          type: string
+        protected:
+          type: boolean
+        world:
+          type: string
+      type: object
+    CardRequestResponse:
+      properties:
+        id:
+          type: string
+        status:
           type: string
       type: object
     CardResponse:
@@ -721,11 +746,17 @@ components:
               type: array
             created_at:
               type: string
+            custom_status:
+              type: string
             details:
               type: string
             id:
               type: string
             player_name:
+              type: string
+            protected:
+              type: boolean
+            world:
               type: string
           type: object
       type: object
@@ -736,11 +767,17 @@ components:
             properties:
               created_at:
                 type: string
+              custom_status:
+                type: string
               details:
                 type: string
               id:
                 type: string
               player_name:
+                type: string
+              protected:
+                type: boolean
+              world:
                 type: string
             type: object
           type: array
@@ -2252,6 +2289,19 @@ components:
         title:
           type: string
       type: object
+    PublicStylesResponse:
+      properties:
+        styles:
+          items:
+            properties:
+              id:
+                format: int64
+                type: integer
+              name:
+                type: string
+            type: object
+          type: array
+      type: object
     PublishResponse:
       properties:
         published:
@@ -3623,6 +3673,8 @@ components:
         id:
           format: int64
           type: integer
+        is_public:
+          type: boolean
         name:
           type: string
         number_flourish:
@@ -3653,6 +3705,8 @@ components:
             id:
               format: int64
               type: integer
+            is_public:
+              type: boolean
             name:
               type: string
             number_flourish:
@@ -3679,6 +3733,8 @@ components:
               id:
                 format: int64
                 type: integer
+              is_public:
+                type: boolean
               name:
                 type: string
               number_flourish:
@@ -4074,7 +4130,7 @@ info:
     (`{ "type": "log", "entry": LogEntry }`) for the live log tail — best-effort,
     sent only while an admin is connected.
   title: Senpan App Suite API
-  version: 3.9.0
+  version: 3.10.0
 openapi: 3.0.3
 paths:
   /api/account/change-password:
@@ -5820,12 +5876,99 @@ paths:
       summary: Update a card's player
       tags:
       - Bingo
+  /api/cards/{id}/approve:
+    post:
+      description: |-
+        **Auth:** permission:bingo-cards
+
+        Approves a pending custom-card request: it becomes playable and is automatically marked Protected.
+      parameters:
+      - description: Card id.
+        in: path
+        name: id
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OKResponse'
+          description: Success
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: Unauthorized
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: No pending custom card with that ID
+      security:
+      - cookieAuth: []
+      - bearerAuth: []
+      summary: Approve a pending custom card
+      tags:
+      - Bingo
+  /api/cards/{id}/protect:
+    post:
+      description: |-
+        **Auth:** permission:bingo-cards
+
+        Marks or unmarks a card as Protected. Protected cards are spared by Delete All (still deletable individually).
+      parameters:
+      - description: Card id.
+        in: path
+        name: id
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              properties:
+                protected:
+                  description: Whether the card is Protected.
+                  type: boolean
+              type: object
+        description: Protected flag.
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OKResponse'
+          description: Success
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: Unauthorized
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: Card not found
+      security:
+      - cookieAuth: []
+      - bearerAuth: []
+      summary: Set a card's Protected flag
+      tags:
+      - Bingo
   /api/cards/all:
     delete:
       description: |-
         **Auth:** permission:bingo-cards
 
-        Removes every card, reporting how many were deleted.
+        Removes every non-Protected card, reporting how many were deleted. Protected cards are spared.
       responses:
         "200":
           content:
@@ -5880,6 +6023,70 @@ paths:
       - cookieAuth: []
       - bearerAuth: []
       summary: Bulk-generate cards
+      tags:
+      - Bingo
+  /api/cards/request:
+    post:
+      description: |-
+        **Auth:** public
+
+        Public Personal Card Request: submit a hand-built bingo card with a chosen 6-char ID, character name, and world. Validates the board and rejects a taken ID or a duplicate board; on success the card is stored pending staff approval (not yet playable). Rate-limited; Cloudflare Turnstile when configured.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              properties:
+                board_data:
+                  description: 5×5 grid of numbers (row-major; centre 0 = FREE).
+                  items:
+                    items:
+                      description: Cell number.
+                      format: int64
+                      type: integer
+                    type: array
+                  type: array
+                card_id:
+                  description: Chosen 6-character alphanumeric card ID.
+                  type: string
+                character_name:
+                  description: Requester's character name.
+                  type: string
+                turnstile_token:
+                  description: Cloudflare Turnstile token (when enabled).
+                  type: string
+                world:
+                  description: Requester's home world.
+                  type: string
+              type: object
+        description: Custom card request.
+        required: true
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CardRequestResponse'
+          description: Created
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: Invalid card or fields
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: ID taken or duplicate card
+        "429":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: Too many requests
+      security: []
+      summary: Submit a custom card request
       tags:
       - Bingo
   /api/carrd/images:
@@ -9060,6 +9267,10 @@ paths:
                 board_flourish:
                   description: Board flourish path.
                   type: string
+                is_public:
+                  description: Whether the theme is selectable in the client-side
+                    picker (default false = admin-only).
+                  type: boolean
                 name:
                   description: Style name (required).
                   type: string
@@ -9161,6 +9372,10 @@ paths:
                 board_flourish:
                   description: Board flourish path.
                   type: string
+                is_public:
+                  description: Whether the theme is selectable in the client-side
+                    picker.
+                  type: boolean
                 name:
                   description: Style name (required).
                   type: string
@@ -9249,6 +9464,53 @@ paths:
       - cookieAuth: []
       - bearerAuth: []
       summary: Deactivate the active theme
+      tags:
+      - Bingo
+  /api/styles/public:
+    get:
+      description: |-
+        **Auth:** public
+
+        The Public themes an end user may pick for themselves (id + name only). Private themes are never listed.
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PublicStylesResponse'
+          description: Success
+      security: []
+      summary: List public themes
+      tags:
+      - Bingo
+  /api/styles/public/{id}:
+    get:
+      description: |-
+        **Auth:** public
+
+        Generated CSS + flourishes of a single Public theme. 404 for a Private or missing theme, so Private CSS can't be fetched by id.
+      parameters:
+      - description: Style id.
+        in: path
+        name: id
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActiveCSSResponse'
+          description: Success
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: Theme not found
+      security: []
+      summary: Public theme CSS
       tags:
       - Bingo
   /api/tea-rooms:

@@ -57,6 +57,7 @@ export const useStylesStore = defineStore('styles', () => {
       tokens: defaultTokens(),
       board_flourish: '',
       number_flourish: '',
+      is_public: false,
       created_at: '',
     }
   }
@@ -72,12 +73,13 @@ export const useStylesStore = defineStore('styles', () => {
     const tokens = editingStyle.value.tokens ?? {}
     const board = editingStyle.value.board_flourish
     const number = editingStyle.value.number_flourish
+    const isPublic = editingStyle.value.is_public
     try {
       if (editingStyle.value.id) {
-        await endpoints.styles.update(editingStyle.value.id, name, tokens, board, number)
+        await endpoints.styles.update(editingStyle.value.id, name, tokens, board, number, isPublic)
         ui.notify('Theme saved', 'success')
       } else {
-        const data = await endpoints.styles.create(name, tokens, board, number)
+        const data = await endpoints.styles.create(name, tokens, board, number, isPublic)
         editingStyle.value.id = data.id
         ui.notify('Theme created', 'success')
       }

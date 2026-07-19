@@ -81,6 +81,15 @@ public sealed class ApiClient : IDisposable
     public Task<DeletedCountResponse> DeleteAllCardsAsync(CancellationToken ct = default)
         => SendAsync<DeletedCountResponse>(HttpMethod.Delete, "api/cards/all", null, ct);
 
+    /// <summary>Approve a pending custom card (→ approved and auto-protected).</summary>
+    public Task<OkResponse> ApproveCardAsync(string id, CancellationToken ct = default)
+        => SendAsync<OkResponse>(HttpMethod.Post, $"api/cards/{Uri.EscapeDataString(id)}/approve", null, ct);
+
+    /// <summary>Mark or unmark a card as Protected (spared by "Delete all").</summary>
+    public Task<OkResponse> SetCardProtectedAsync(string id, bool isProtected, CancellationToken ct = default)
+        => SendAsync<OkResponse>(HttpMethod.Post, $"api/cards/{Uri.EscapeDataString(id)}/protect",
+            new { @protected = isProtected }, ct);
+
     // ── Bingo: patterns + game ───────────────────────────────────────────────
 
     public Task<PatternsResponse> ListPatternsAsync(CancellationToken ct = default)

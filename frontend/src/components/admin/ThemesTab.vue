@@ -45,6 +45,7 @@ const tokens = computed<Record<string, string>>({
               @click="styles.loadStyle(st.id)"
             >
               <span class="style-name">{{ st.name }}</span>
+              <span v-if="st.is_public" class="style-public-badge">Public</span>
               <span v-if="String(st.id) === styles.activeStyleId" class="style-active-badge">
                 Active
               </span>
@@ -108,6 +109,19 @@ const tokens = computed<Record<string, string>>({
               </button>
             </div>
 
+            <!-- Public/Private: only settable here (admin). Public themes appear in
+                 the client-side picker; the admin's active theme is always offered
+                 separately as a name-hiding "Default". -->
+            <label class="visibility-toggle mb">
+              <input v-model="styles.editingStyle.is_public" type="checkbox" />
+              <span>Public — players can pick this theme for themselves</span>
+            </label>
+            <p class="text-dim text-xs mb-8">
+              Private themes are admin-only. Public themes appear in the client-side theme picker
+              (each player opts in per browser); the admin's active theme is always offered there as
+              “Default”.
+            </p>
+
             <ThemeTokenEditor v-model="tokens" />
 
             <!-- Decorative flourishes (SVG only — the board flourish inlines for
@@ -153,5 +167,28 @@ const tokens = computed<Record<string, string>>({
 }
 .flourish-option .field-label {
   font-weight: 600;
+}
+/* Public/Private toggle in the editor. */
+.visibility-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  font-weight: 600;
+}
+.visibility-toggle input {
+  width: auto;
+  margin: 0;
+}
+/* "Public" badge in the theme list. */
+.style-public-badge {
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--accent-2);
+  color: var(--text-on-fill);
 }
 </style>

@@ -147,9 +147,20 @@ func (g *Service) cachedCards() ([]model.Card, error) {
 	if err != nil {
 		return nil, err
 	}
-	g.cardCache = cards
+	// Pending custom-card requests are awaiting staff approval and are not yet
+	// playable, so they must never be eligible to win. Exclude them from the cache
+	// that drives winner computation. (InvalidateCardCache is called on approval, so
+	// a card becomes eligible the moment it is approved.)
+	playable := make([]model.Card, 0, len(cards))
+	for _, c := range cards {
+		if c.CustomStatus == "pending" {
+			continue
+		}
+		playable = append(playable, c)
+	}
+	g.cardCache = playable
 	g.cacheReady = true
-	return cards, nil
+	return playable, nil
 }
 
 // Start begins a new game with the given pattern IDs.

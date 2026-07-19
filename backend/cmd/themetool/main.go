@@ -327,7 +327,7 @@ func main() {
 			for k, v := range over {
 				tok[k] = v
 			}
-			if err := st.UpdateStyle(id, cur.Name, tok, cur.BoardFlourish, cur.NumberFlourish); err != nil {
+			if err := st.UpdateStyle(id, cur.Name, tok, cur.BoardFlourish, cur.NumberFlourish, cur.IsPublic); err != nil {
 				fmt.Printf("update %s: %v\n", idStr, err)
 				continue
 			}
@@ -335,7 +335,7 @@ func main() {
 		}
 		for _, c := range changes.Create {
 			tok := merged(c.Tokens) // fill any omitted token from defaults
-			id, err := st.CreateStyle(c.Name, tok, c.BoardFlourish, c.NumberFlourish)
+			id, err := st.CreateStyle(c.Name, tok, c.BoardFlourish, c.NumberFlourish, false)
 			if err != nil {
 				fmt.Printf("create %s: %v\n", c.Name, err)
 				continue

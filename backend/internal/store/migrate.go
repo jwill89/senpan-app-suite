@@ -14,7 +14,7 @@ import (
 // PRAGMA user_version against this constant and runs only the migrations
 // needed to bring the database up to date. Bump this when adding a new
 // migration block.
-const schemaVersion = 48
+const schemaVersion = 49
 
 // ensureSchema reads the current PRAGMA user_version from the database and
 // applies any outstanding migrations to bring it up to schemaVersion.
@@ -320,6 +320,15 @@ func ensureSchema(db *sql.DB) error {
 		}
 	}
 
+	if version < 49 {
+		if err := migrateStyleVisibility(db); err != nil {
+			return err
+		}
+		if err := migrateCardStatuses(db); err != nil {
+			return err
+		}
+	}
+
 	_, err := db.Exec(fmt.Sprintf("PRAGMA user_version = %d", schemaVersion))
 	return err
 }
@@ -370,7 +379,10 @@ func createTables(db *sql.DB) error {
 			board_data TEXT NOT NULL,
 			player_name TEXT NOT NULL DEFAULT '',
 			details TEXT NOT NULL DEFAULT '',
-			created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			protected INTEGER NOT NULL DEFAULT 0,
+			custom_status TEXT NOT NULL DEFAULT '',
+			world TEXT NOT NULL DEFAULT ''
 		)`,
 		`CREATE TABLE IF NOT EXISTS pattern_categories (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -418,7 +430,8 @@ func createTables(db *sql.DB) error {
 			css_content TEXT NOT NULL DEFAULT '',
 			board_flourish TEXT NOT NULL DEFAULT '',
 			number_flourish TEXT NOT NULL DEFAULT '',
-			created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			is_public INTEGER NOT NULL DEFAULT 0
 		)`,
 		`CREATE TABLE IF NOT EXISTS raffles (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -1128,6 +1141,45 @@ func migrateCardCreatedAt(db *sql.DB) error {
 	}
 	if _, err := db.Exec(`ALTER TABLE cards ADD COLUMN created_at DATETIME`); err != nil {
 		return fmt.Errorf("add cards.created_at: %w", err)
+	}
+	return nil
+}
+
+// migrateStyleVisibility adds the `is_public` flag to styles. It defaults to 0
+// (Private) so every existing theme stays admin-only; admins opt a theme into the
+// public client-side picker by setting it. Idempotent.
+func migrateStyleVisibility(db *sql.DB) error {
+	if !tableExists(db, "styles") || hasColumn(db, "styles", "is_public") {
+		return nil
+	}
+	if _, err := db.Exec(`ALTER TABLE styles ADD COLUMN is_public INTEGER NOT NULL DEFAULT 0`); err != nil {
+		return fmt.Errorf("add styles.is_public: %w", err)
+	}
+	return nil
+}
+
+// migrateCardStatuses adds the card status columns: `protected` (shields a card
+// from Delete All), `custom_status` ('' normal, 'pending' awaiting staff approval,
+// 'approved' a live custom card), and `world` (the requester's home world for a
+// custom-card request; the character name reuses player_name). Idempotent.
+func migrateCardStatuses(db *sql.DB) error {
+	if !tableExists(db, "cards") {
+		return nil
+	}
+	if !hasColumn(db, "cards", "protected") {
+		if _, err := db.Exec(`ALTER TABLE cards ADD COLUMN protected INTEGER NOT NULL DEFAULT 0`); err != nil {
+			return fmt.Errorf("add cards.protected: %w", err)
+		}
+	}
+	if !hasColumn(db, "cards", "custom_status") {
+		if _, err := db.Exec(`ALTER TABLE cards ADD COLUMN custom_status TEXT NOT NULL DEFAULT ''`); err != nil {
+			return fmt.Errorf("add cards.custom_status: %w", err)
+		}
+	}
+	if !hasColumn(db, "cards", "world") {
+		if _, err := db.Exec(`ALTER TABLE cards ADD COLUMN world TEXT NOT NULL DEFAULT ''`); err != nil {
+			return fmt.Errorf("add cards.world: %w", err)
+		}
 	}
 	return nil
 }

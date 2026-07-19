@@ -50,10 +50,208 @@ export function columnNumbers(colIndex: number): number[] {
   return Array.from({ length: 15 }, (_, i) => start + i)
 }
 
+/** Returns the inclusive [min, max] number range for a column index (0=B … 4=O). */
+export function columnRange(colIndex: number): [number, number] {
+  const start = colIndex * 15 + 1
+  return [start, start + 14]
+}
+
+/** An empty 5×5 number board (all 0; centre [2][2] is the FREE space). */
+export function emptyNumberBoard(): number[][] {
+  return Array.from({ length: 5 }, () => Array.from({ length: 5 }, () => 0))
+}
+
+/**
+ * Generates a random valid 5×5 bingo board (each column shuffled from its range;
+ * centre [2][2] = 0 = FREE). Mirrors the backend `bingo.GenerateBoard`.
+ */
+export function randomBoard(): number[][] {
+  const board = emptyNumberBoard()
+  for (let col = 0; col < 5; col++) {
+    const [lo, hi] = columnRange(col)
+    const pool = Array.from({ length: hi - lo + 1 }, (_, i) => lo + i)
+    for (let i = pool.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1))
+      ;[pool[i], pool[j]] = [pool[j], pool[i]]
+    }
+    for (let row = 0; row < 5; row++) board[row][col] = pool[row]
+  }
+  board[2][2] = 0 // FREE centre
+  return board
+}
+
+/**
+ * Validates a hand-built board client-side (mirrors the backend
+ * `bingo.ValidateBoard`): 5×5, FREE centre, each column within its range with no
+ * repeats. Returns a human-readable error message, or '' when the card is valid.
+ */
+export function validateBoard(board: number[][]): string {
+  if (board.length !== 5 || board.some((r) => r.length !== 5)) return 'Card must be a 5×5 grid.'
+  if (board[2][2] !== 0) return 'The centre cell must be left as the FREE space.'
+  for (let col = 0; col < 5; col++) {
+    const [lo, hi] = columnRange(col)
+    const seen = new Set<number>()
+    for (let row = 0; row < 5; row++) {
+      if (col === 2 && row === 2) continue // FREE centre
+      const n = board[row][col]
+      if (!Number.isInteger(n) || n < lo || n > hi) {
+        return `Column ${BINGO_LETTERS[col]} must only contain numbers ${lo}–${hi}.`
+      }
+      if (seen.has(n)) return `Column ${BINGO_LETTERS[col]} has the number ${n} more than once.`
+      seen.add(n)
+    }
+  }
+  return ''
+}
+
 /** Creates an empty 5×5 boolean grid for the pattern editor. */
 export function emptyGrid(): boolean[][] {
   return Array.from({ length: 5 }, () => Array.from({ length: 5 }, () => false))
 }
+
+/**
+ * Reports which of the five bingo columns (B,I,N,G,O → indices 0–4) are "active"
+ * for a game: a column is active when at least one active pattern marks a non-FREE
+ * cell in it, so numbers from that column can be drawn. Mirrors the backend
+ * `bingo.PatternColumns` exactly — the caller skips columns no pattern uses (e.g. a
+ * postage-stamp game draws no N numbers), and with no patterns every column is
+ * active. The Called Numbers panel darkens the inactive columns to show they won't
+ * be used that game.
+ */
+export function patternColumns(patterns: { pattern_data: boolean[][] }[]): boolean[] {
+  const cols = [false, false, false, false, false]
+  for (const p of patterns) {
+    const grid = p.pattern_data
+    for (let r = 0; r < 5 && r < grid.length; r++) {
+      for (let c = 0; c < 5 && c < grid[r].length; c++) {
+        if (grid[r][c] && !(r === 2 && c === 2)) cols[c] = true
+      }
+    }
+  }
+  return cols.some((active) => active) ? cols : [true, true, true, true, true]
+}
+
+/**
+ * FF14 worlds grouped by data center, for the World picker on the public Personal
+ * Card Requests page. Maintained by hand; update when Square Enix adds/moves worlds.
+ */
+export interface WorldDataCenter {
+  /** Data center name (the <optgroup> label). */
+  name: string
+  /** Region the data center belongs to (NA / EU / JP / OCE). */
+  region: string
+  worlds: string[]
+}
+
+export const FF14_WORLDS: WorldDataCenter[] = [
+  // North America
+  {
+    name: 'Aether',
+    region: 'NA',
+    worlds: [
+      'Adamantoise',
+      'Cactuar',
+      'Faerie',
+      'Gilgamesh',
+      'Jenova',
+      'Midgardsormr',
+      'Sargatanas',
+      'Siren',
+    ],
+  },
+  {
+    name: 'Crystal',
+    region: 'NA',
+    worlds: ['Balmung', 'Brynhildr', 'Coeurl', 'Diabolos', 'Goblin', 'Malboro', 'Mateus', 'Zalera'],
+  },
+  {
+    name: 'Dynamis',
+    region: 'NA',
+    worlds: [
+      'Cuchulainn',
+      'Golem',
+      'Halicarnassus',
+      'Kraken',
+      'Maduin',
+      'Marilith',
+      'Rafflesia',
+      'Seraph',
+    ],
+  },
+  {
+    name: 'Primal',
+    region: 'NA',
+    worlds: [
+      'Behemoth',
+      'Excalibur',
+      'Exodus',
+      'Famfrit',
+      'Hyperion',
+      'Lamia',
+      'Leviathan',
+      'Ultros',
+    ],
+  },
+  // Europe
+  {
+    name: 'Chaos',
+    region: 'EU',
+    worlds: [
+      'Cerberus',
+      'Louisoix',
+      'Moogle',
+      'Omega',
+      'Phantom',
+      'Ragnarok',
+      'Sagittarius',
+      'Spriggan',
+    ],
+  },
+  {
+    name: 'Light',
+    region: 'EU',
+    worlds: ['Alpha', 'Lich', 'Odin', 'Phoenix', 'Raiden', 'Shiva', 'Twintania', 'Zodiark'],
+  },
+  // Japan
+  {
+    name: 'Elemental',
+    region: 'JP',
+    worlds: ['Aegis', 'Atomos', 'Carbuncle', 'Garuda', 'Gungnir', 'Kujata', 'Tonberry', 'Typhon'],
+  },
+  {
+    name: 'Gaia',
+    region: 'JP',
+    worlds: ['Alexander', 'Bahamut', 'Durandal', 'Fenrir', 'Ifrit', 'Ridill', 'Tiamat', 'Ultima'],
+  },
+  {
+    name: 'Mana',
+    region: 'JP',
+    worlds: ['Anima', 'Asura', 'Chocobo', 'Hades', 'Ixion', 'Masamune', 'Pandaemonium', 'Titan'],
+  },
+  {
+    name: 'Meteor',
+    region: 'JP',
+    worlds: [
+      'Belias',
+      'Mandragora',
+      'Ramuh',
+      'Shinryu',
+      'Unicorn',
+      'Valefor',
+      'Yojimbo',
+      'Zeromus',
+    ],
+  },
+  // Oceania
+  {
+    name: 'Materia',
+    region: 'OCE',
+    worlds: ['Bismarck', 'Ravana', 'Sephirot', 'Sophia', 'Zurvan'],
+  },
+]
+
+/** Flat, sorted list of every FF14 world name (for validation / lookup). */
+export const FF14_WORLD_NAMES: string[] = FF14_WORLDS.flatMap((dc) => dc.worlds).sort()
 
 /**
  * Registry of book clubs shown under the admin "Book Clubs" section. Add an
@@ -134,6 +332,7 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
   anilist_api_url: 'https://graphql.anilist.co',
   bingo_join_prompt: 'Enter your unique bingo board ID to play',
   yoever_cooldown_seconds: '180',
+  custom_card_cost: '0',
   // One blank reading-list webhook default per known club so the settings form
   // binds cleanly before the server response loads.
   ...Object.fromEntries(BOOK_CLUBS.map((c) => [clubWebhookKey(c.slug), ''])),

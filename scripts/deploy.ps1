@@ -21,6 +21,12 @@
         3. Uploads the new binary to <RemoteOptDir>/app-suite (via a .new temp).
         4. Installs it and starts the service, rolling back to the previous binary
            if the new one fails to stay active.
+        5. Refreshes the local dev DB from live (unless -NoDbPull): stops the service
+           so no connection is mid-write, snapshots the just-migrated DB on the host,
+           restarts the service immediately, then downloads the snapshot to
+           devdata/database.sqlite (backing up the previous dev DB). This gives local
+           dev fresh live data on the current schema; the service is down only for a
+           local file copy, not the network transfer.
 
     -Target main (alias: both): frontend, then backend (with a short pause between
     to stay under the SSH rate limit).
@@ -33,7 +39,10 @@
 
     Each target uses at most FOUR SSH connections and does not poll during transfers,
     to stay under `ufw limit ssh` (which drops the IP after 6 connections in 30s).
-    A connection that gets rate-limited is retried once after a 35s wait.
+    A connection that gets rate-limited is retried once after a 35s wait. The
+    post-backend dev-DB refresh is a separate connection group (snapshot, download,
+    cleanup); the dispatcher inserts the standard 35s pause before it to reset the
+    rate-limit window.
 
 .PARAMETER Target
     What to deploy: frontend (default), backend, main (frontend + backend; 'both'
@@ -66,17 +75,31 @@
     Directory on the host holding the backend binary. If omitted, resolved from
     $env:DEPLOY_REMOTE_OPT_DIR, then scripts/deploy.config.ps1 ($DeployRemoteOptDir).
 
+.PARAMETER RemoteDbPath
+    Full path to the live SQLite DB on the host, used by the post-backend dev-DB
+    refresh. If omitted, resolved from $env:DEPLOY_REMOTE_DB_PATH, then
+    scripts/deploy.config.ps1 ($DeployRemoteDbPath), then defaults to
+    "<RemoteOptDir>/data/database.sqlite" (matches deploy/senpan.service).
+
 .PARAMETER SkipBuild
     Deploy the existing build artifact(s) without rebuilding.
 
 .PARAMETER NoBackup
     Remove the rollback backup (dist.old / app-suite.old) after a successful deploy.
 
+.PARAMETER NoDbPull
+    Skip refreshing the local dev DB from live after a backend deploy. By default a
+    backend deploy snapshots the just-migrated live DB and pulls it into
+    devdata/database.sqlite (backing up the previous dev DB first).
+
 .EXAMPLE
     .\scripts\deploy.ps1                 # frontend (default)
 
 .EXAMPLE
     .\scripts\deploy.ps1 -Target backend
+
+.EXAMPLE
+    .\scripts\deploy.ps1 -Target backend -NoDbPull   # deploy backend, don't refresh dev DB
 
 .EXAMPLE
     .\scripts\deploy.ps1 -Target both
@@ -106,9 +129,20 @@ param(
 
     [string]$RemoteOptDir = $env:DEPLOY_REMOTE_OPT_DIR,
 
+    # Full path to the live SQLite DB on the host. Optional; defaults to
+    # "<RemoteOptDir>/data/database.sqlite" (matches deploy/senpan.service). Resolved
+    # from -RemoteDbPath, then $env:DEPLOY_REMOTE_DB_PATH, then $DeployRemoteDbPath,
+    # then the derived default. Only used by the post-backend dev-DB refresh.
+    [string]$RemoteDbPath = $env:DEPLOY_REMOTE_DB_PATH,
+
     [switch]$SkipBuild,
 
-    [switch]$NoBackup
+    [switch]$NoBackup,
+
+    # Skip refreshing the local dev DB (devdata/database.sqlite) from live after a
+    # backend deploy. By default a backend deploy snapshots the just-migrated live DB
+    # and pulls it down so local dev has fresh data on the current schema.
+    [switch]$NoDbPull
 )
 
 $ErrorActionPreference = 'Stop'
@@ -150,6 +184,13 @@ if ($missing.Count -gt 0) {
     Fail "Missing deploy settings:`n  - $($missing -join "`n  - ")`nSet these via -params, `$env:DEPLOY_* variables, or scripts/deploy.config.ps1 (copy scripts/deploy.config.example.ps1)."
 }
 
+# The live DB path is optional (not in the required set): fall back to the config
+# value, then a default derived from the resolved opt dir (see deploy/senpan.service:
+# ExecStart runs -db <RemoteOptDir>/data/database.sqlite). Only the dev-DB refresh
+# after a backend deploy uses it.
+if (-not $RemoteDbPath) { $RemoteDbPath = $DeployRemoteDbPath }
+if (-not $RemoteDbPath) { $RemoteDbPath = "$RemoteOptDir/data/database.sqlite" }
+
 # Restore an env var to a prior value ($null => remove it).
 function Restore-Env([string]$name, $value) {
     if ($null -eq $value) { Remove-Item "Env:$name" -ErrorAction SilentlyContinue }
@@ -181,6 +222,17 @@ function Send-File([string]$localPath, [string]$remotePath) {
     Write-Host "    Upload failed - possibly the SSH rate limit. Waiting 35s, then retrying once..." -ForegroundColor Yellow
     Start-Sleep -Seconds 35
     & $pscp -batch -C -i $KeyPath "$localPath" "${remoteTarget}:$remotePath"
+    return ($LASTEXITCODE -eq 0)
+}
+
+# Download a single remote file to a local path (the live DB snapshot). Mirrors
+# Send-File: one pscp stream, retried once on failure (usually a rate-limited link).
+function Get-File([string]$remotePath, [string]$localPath) {
+    & $pscp -batch -C -i $KeyPath "${remoteTarget}:$remotePath" "$localPath"
+    if ($LASTEXITCODE -eq 0) { return $true }
+    Write-Host "    Download failed - possibly the SSH rate limit. Waiting 35s, then retrying once..." -ForegroundColor Yellow
+    Start-Sleep -Seconds 35
+    & $pscp -batch -C -i $KeyPath "${remoteTarget}:$remotePath" "$localPath"
     return ($LASTEXITCODE -eq 0)
 }
 
@@ -217,6 +269,8 @@ $DistDir = Join-Path $FrontendDir "dist"
 $HtaccessLocal = Join-Path $RepoRoot "deploy\.htaccess"
 $BackendDir = Join-Path $RepoRoot "backend"
 $LocalBinary = Join-Path $BackendDir "app-suite"
+$DevDataDir = Join-Path $RepoRoot "devdata"
+$DevDbPath = Join-Path $DevDataDir "database.sqlite"
 $PluginDir = Join-Path $RepoRoot "plugins\SenpanCompanion"
 $PluginZip = Join-Path $PluginDir "bin\Release\SenpanCompanionAdmin\latest.zip"
 $PluginManifest = Join-Path $PluginDir "bin\Release\SenpanCompanionAdmin\SenpanCompanionAdmin.json"
@@ -403,6 +457,76 @@ echo active
     }
 }
 
+# ══ Refresh the local dev DB from live (after a backend deploy) ════════════════
+# Runs after Deploy-Backend so the copy reflects any schema migrations the new
+# binary applied on startup. Snapshots the live DB on the host WHILE the service is
+# stopped (so no live connection is mid-write), restarts the service immediately,
+# then pulls the frozen snapshot down — the service is down only for a local file
+# copy, not the network transfer. Its SSH connections are a separate group; the
+# dispatcher inserts the standard 35s rate-limit pause before calling it.
+function Sync-LiveDbToDev {
+    # Snapshot beside the live DB (a name SQLite will never open as a database).
+    $remoteSnap = "$RemoteDbPath.snapshot"
+
+    # 1. On the host (1 connection): stop -> snapshot -> restart. No `set -e`: once
+    #    the service is stopped, `systemctl start` must ALWAYS run, so a failed cp (or
+    #    a slow start) never leaves the service down. A failed *stop* aborts before
+    #    the copy (the service was never taken down, so nothing to restart).
+    Write-Step "Snapshotting live DB on the host (stop -> copy -> restart $ServiceName)..."
+    $snap = @"
+rm -f '$remoteSnap'
+systemctl stop '$ServiceName' || { echo 'could not stop service for snapshot' >&2; exit 3; }
+cp -f '$RemoteDbPath' '$remoteSnap'; rc=`$?
+systemctl start '$ServiceName'
+if [ `$rc -ne 0 ]; then echo 'DB snapshot copy failed' >&2; exit 1; fi
+sleep 2
+if ! systemctl is-active --quiet '$ServiceName'; then echo 'service did not return active after snapshot' >&2; exit 2; fi
+echo snapshotted
+"@
+    if (-not (Invoke-RemoteWithRetry $snap)) {
+        Fail @"
+Live DB snapshot step failed. Depending on where it stopped, $ServiceName may be DOWN.
+  Check it:   plink -i "$KeyPath" $remoteTarget "systemctl status $ServiceName"
+  Restart it: plink -i "$KeyPath" $remoteTarget "systemctl start $ServiceName"
+The local dev DB was NOT modified.
+"@
+    }
+    Write-Ok "Live DB snapshotted; $ServiceName restarted."
+
+    # 2. Back up the current local dev DB (timestamped, matching devdata's convention)
+    #    before it's overwritten.
+    if (-not (Test-Path $DevDataDir)) { New-Item -ItemType Directory -Path $DevDataDir | Out-Null }
+    if (Test-Path $DevDbPath) {
+        $bak = "$DevDbPath.bak-$(Get-Date -Format 'yyyyMMdd-HHmmss')"
+        Copy-Item $DevDbPath $bak -Force
+        Write-Ok "Backed up existing dev DB -> $bak"
+    }
+
+    # 3. Download the snapshot into devdata/ (1 connection).
+    Write-Step "Downloading live DB -> $DevDbPath ..."
+    if (-not (Get-File $remoteSnap $DevDbPath)) {
+        # Best-effort remote cleanup even on failure, then bail. The dev DB backup
+        # (if any) is untouched and the live service is running.
+        & $plink -batch -i $KeyPath $remoteTarget "rm -f '$remoteSnap'" 2>&1 | Out-Null
+        Fail "Live DB download failed. Local dev DB left as-is; $ServiceName is running on the host."
+    }
+
+    # 4. Clear any stale local WAL/SHM sidecars from the OLD dev DB so SQLite doesn't
+    #    try to replay them onto the freshly copied file (mismatched salts = refusal
+    #    or corruption). The pulled file is self-contained (the host checkpointed the
+    #    WAL into it on the clean stop before the copy).
+    Remove-Item "$DevDbPath-wal", "$DevDbPath-shm" -Force -ErrorAction SilentlyContinue
+
+    # 5. Best-effort: remove the remote snapshot so a full copy of the live DB doesn't
+    #    linger in the host's data dir. Non-fatal, no retry (a stale snapshot is just
+    #    rm -f'd at the start of the next run anyway).
+    & $plink -batch -i $KeyPath $remoteTarget "rm -f '$remoteSnap'" 2>&1 | Out-Null
+
+    Write-Host "`n[OK] Local dev DB refreshed from live: $DevDbPath" -ForegroundColor Green
+    Write-Host "     Previous dev DB kept alongside it as *.bak-<timestamp>." -ForegroundColor DarkGray
+    Write-Host "     This now holds LIVE data (real accounts, password hashes, tokens) - keep it local." -ForegroundColor DarkGray
+}
+
 # ══ Plugin (Dalamud custom repo) ══════════════════════════════════════════════
 function Deploy-Plugin {
     # 1. Build the plugin (DalamudPackager emits .../SenpanCompanionAdmin/latest.zip).
@@ -500,21 +624,26 @@ function Deploy-Plugin {
 # ── Dispatch ──────────────────────────────────────────────────────────────────
 Write-Host "Deploy target: $Target -> $remoteTarget" -ForegroundColor Yellow
 $pause = { Write-Step "Pausing 35s between targets to stay under the SSH connection rate limit..."; Start-Sleep -Seconds 35 }
+# After a backend deploy, refresh the local dev DB from live (unless -NoDbPull). Its
+# SSH connections are a fresh group, so pause first to reset the rate-limit window.
+$dbPull = { if (-not $NoDbPull) { & $pause; Sync-LiveDbToDev } }
 switch ($Target) {
     'frontend' { Deploy-Frontend }
-    'backend' { Deploy-Backend }
+    'backend' { Deploy-Backend; & $dbPull }
     'plugin' { Deploy-Plugin }
     # 'main' is the preferred name for frontend + backend; 'both' is kept as an alias.
     { $_ -in 'both', 'main' } {
         Deploy-Frontend
         & $pause
         Deploy-Backend
+        & $dbPull
     }
     # 'all' is everything: frontend + backend + plugin.
     'all' {
         Deploy-Frontend
         & $pause
         Deploy-Backend
+        & $dbPull
         & $pause
         Deploy-Plugin
     }

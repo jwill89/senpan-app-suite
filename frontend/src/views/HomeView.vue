@@ -34,6 +34,10 @@ function viewRaffles(): void {
   void router.push({ name: 'raffles' })
 }
 
+function goCardRequests(): void {
+  void router.push({ name: 'card-requests' })
+}
+
 function goAdminLogin(): void {
   void router.push({ name: 'admin-login' })
 }
@@ -96,6 +100,12 @@ const logoUrl = '/images/logo.png'
         <h2><font-awesome-icon :icon="['fad', 'ticket']" /> Raffles</h2>
         <p>View currently open raffles and enter for a chance to win!</p>
         <button class="btn-view" @click="viewRaffles">View Raffles</button>
+      </div>
+      <!-- Personal Card Requests -->
+      <div class="home-card">
+        <h2><font-awesome-icon :icon="['fad', 'id-card']" /> Custom Card</h2>
+        <p>Design your own bingo card and request it from Senpan staff.</p>
+        <button class="btn-view" @click="goCardRequests">Request a Card</button>
       </div>
     </div>
     <!-- Admin portal (separate) -->

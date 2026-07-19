@@ -120,7 +120,8 @@ export const useAppStore = defineStore('app', () => {
     if (font) applyHeaderFont(font)
   }
 
-  /** Loads the active theme CSS on page load and injects it. */
+  /** Loads the active (admin-selected) theme CSS and injects it. This is the
+   *  "Default" look — used when the player hasn't picked a specific public theme. */
   async function loadActiveCSS(): Promise<void> {
     try {
       const data = await endpoints.styles.activeCss()
@@ -129,6 +130,48 @@ export const useAppStore = defineStore('app', () => {
     } catch {
       /* silent — custom CSS is optional */
     }
+  }
+
+  // ── Per-browser theme preference (public theme picker) ──────────────────────
+  // Players may pick any Public theme for themselves; the choice is persisted per
+  // browser as 'default' | '<style id>'. 'default' follows whatever theme the admin
+  // has activated (see loadActiveCSS) and is always labelled "Default" in the picker
+  // — the admin theme's real name is never shown, since the active-CSS endpoint and
+  // the style_update broadcast carry CSS only.
+  const THEME_PREF_KEY = 'bingo_theme'
+  const themePreference = ref(localStorage.getItem(THEME_PREF_KEY) || 'default')
+
+  /** Fetches + injects a Public theme's CSS by id. Returns false if it isn't
+   *  public/available (so the caller can fall back to Default). */
+  async function applyPublicTheme(id: number): Promise<boolean> {
+    try {
+      const data = await endpoints.styles.publicCss(id)
+      applyCustomCSS(data.css || '')
+      applyFlourishes(data.board_flourish || '', data.number_flourish || '')
+      return true
+    } catch {
+      return false
+    }
+  }
+
+  /** Resolves and applies the saved theme preference. A specific theme that is no
+   *  longer Public silently reverts to Default. */
+  async function applyThemePreference(): Promise<void> {
+    const pref = themePreference.value
+    if (pref && pref !== 'default') {
+      const id = Number(pref)
+      if (Number.isFinite(id) && id > 0 && (await applyPublicTheme(id))) return
+      themePreference.value = 'default'
+      localStorage.setItem(THEME_PREF_KEY, 'default')
+    }
+    await loadActiveCSS()
+  }
+
+  /** Sets + persists the per-browser theme preference, then applies it. */
+  async function setThemePreference(value: string): Promise<void> {
+    themePreference.value = value || 'default'
+    localStorage.setItem(THEME_PREF_KEY, themePreference.value)
+    await applyThemePreference()
   }
 
   return {
@@ -144,5 +187,8 @@ export const useAppStore = defineStore('app', () => {
     loadGoogleFontsList,
     previewHeaderFont,
     loadActiveCSS,
+    themePreference,
+    applyThemePreference,
+    setThemePreference,
   }
 })

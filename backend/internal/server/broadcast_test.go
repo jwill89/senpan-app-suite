@@ -76,6 +76,93 @@ func expectResourceChanged(t *testing.T, conn *websocket.Conn, want string) {
 	}
 }
 
+// expectCardsUpdate reads WS frames until a cards_update carrying card id, and
+// returns that entry so tests can assert on its status fields. Skips unrelated
+// message types.
+func expectCardsUpdate(t *testing.T, conn *websocket.Conn, id string) model.CardListEntry {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	for {
+		_, data, err := conn.Read(ctx)
+		if err != nil {
+			t.Fatalf("ws read (waiting for cards_update %q): %v", id, err)
+		}
+		var msg struct {
+			Type  string                `json:"type"`
+			Cards []model.CardListEntry `json:"cards"`
+		}
+		if json.Unmarshal(data, &msg) != nil || msg.Type != "cards_update" {
+			continue
+		}
+		for _, c := range msg.Cards {
+			if c.ID == id {
+				return c
+			}
+		}
+		t.Fatalf("cards_update did not contain card %q", id)
+	}
+}
+
+// ── Card status broadcasts (regression: the cards_update payload must carry the
+// full card shape, not a subset) ───────────────────────────────────────────────
+
+// TestCardProtectBroadcastsProtected guards against the cards_update broadcast
+// dropping status fields. Protecting a card must push a cards_update whose entry
+// has protected=true — a dropped field made the Protected lock lag until a manual
+// refetch, and only in one direction (the omitted field always read false, so
+// unprotect "worked" but protect didn't).
+func TestCardProtectBroadcastsProtected(t *testing.T) {
+	env := newTestEnv(t)
+	env.loginAdmin(t)
+
+	if err := env.store.SaveCard("PROT01", srvValidBoard()); err != nil {
+		t.Fatal(err)
+	}
+
+	conn := env.dialAdminWS(t)
+	defer conn.Close(websocket.StatusNormalClosure, "")
+
+	resp := env.postJSON(t, "/api/cards/PROT01/protect", map[string]any{"protected": true})
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("protect status = %d; want 200", resp.StatusCode)
+	}
+	resp.Body.Close()
+
+	if card := expectCardsUpdate(t, conn, "PROT01"); !card.Protected {
+		t.Error("cards_update dropped protected=true (the lock icon would lag until a refetch)")
+	}
+}
+
+// TestCardApproveBroadcastsStatus verifies approving a pending custom card pushes a
+// cards_update carrying custom_status="approved" and protected=true, so the star +
+// lock update live rather than only after a manual refetch.
+func TestCardApproveBroadcastsStatus(t *testing.T) {
+	env := newTestEnv(t)
+	env.loginAdmin(t)
+
+	if err := env.store.CreateCustomCard("CUST01", srvValidBoard(), "Aria", "Gilgamesh"); err != nil {
+		t.Fatal(err)
+	}
+
+	conn := env.dialAdminWS(t)
+	defer conn.Close(websocket.StatusNormalClosure, "")
+
+	resp := env.postJSON(t, "/api/cards/CUST01/approve", nil)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("approve status = %d; want 200", resp.StatusCode)
+	}
+	resp.Body.Close()
+
+	card := expectCardsUpdate(t, conn, "CUST01")
+	if card.CustomStatus != "approved" {
+		t.Errorf("cards_update custom_status = %q; want approved", card.CustomStatus)
+	}
+	if !card.Protected {
+		t.Error("cards_update dropped protected=true for the approved custom card")
+	}
+}
+
 // ── Garapon draw broadcast ──────────────────────────────────────────────────
 
 // TestGarapon_DrawBroadcastsResourceChanged verifies that a public draw (which

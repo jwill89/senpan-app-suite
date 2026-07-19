@@ -271,8 +271,17 @@ func buildPaths(doc *openapi3.T) {
 		"Generates `count` random cards (clamped 1–500).", opt{
 			body:  actionBody("Bulk generate.", nil, props("count", pint("Number of cards to generate (1–500)."))),
 			resps: []respEntry{created("GenerateCardsResponse"), r("401", "Unauthorized")}})
+	b.add("POST", "/api/cards/request", "Bingo", "Submit a custom card request", "public",
+		"Public Personal Card Request: submit a hand-built bingo card with a chosen 6-char ID, character name, and world. Validates the board and rejects a taken ID or a duplicate board; on success the card is stored pending staff approval (not yet playable). Rate-limited; Cloudflare Turnstile when configured.", opt{
+			body: actionBody("Custom card request.", nil, props(
+				"character_name", pstr("Requester's character name."),
+				"world", pstr("Requester's home world."),
+				"card_id", pstr("Chosen 6-character alphanumeric card ID."),
+				"board_data", parr("5×5 grid of numbers (row-major; centre 0 = FREE).", parr("", pint("Cell number."))),
+				"turnstile_token", pstr("Cloudflare Turnstile token (when enabled)."))),
+			resps: []respEntry{created("CardRequestResponse"), r("400", "Invalid card or fields"), r("409", "ID taken or duplicate card"), r("429", "Too many requests")}})
 	b.add("DELETE", "/api/cards/all", "Bingo", "Delete all cards", "permission:bingo-cards",
-		"Removes every card, reporting how many were deleted.", opt{
+		"Removes every non-Protected card, reporting how many were deleted. Protected cards are spared.", opt{
 			resps: []respEntry{ok("DeletedCountResponse"), r("401", "Unauthorized")}})
 	b.add("DELETE", "/api/cards/{id}", "Bingo", "Delete a card", "permission:bingo-cards", "", opt{
 		path:  []*openapi3.Parameter{pparam("id", "Card id.")},
@@ -282,6 +291,15 @@ func buildPaths(doc *openapi3.T) {
 			path:  []*openapi3.Parameter{pparam("id", "Card id.")},
 			body:  actionBody("Card player fields.", nil, props("player_name", pstr("Player name."), "details", pstr("Cardholder details."))),
 			resps: []respEntry{ok("OKResponse"), r("401", "Unauthorized")}})
+	b.add("POST", "/api/cards/{id}/approve", "Bingo", "Approve a pending custom card", "permission:bingo-cards",
+		"Approves a pending custom-card request: it becomes playable and is automatically marked Protected.", opt{
+			path:  []*openapi3.Parameter{pparam("id", "Card id.")},
+			resps: []respEntry{ok("OKResponse"), r("401", "Unauthorized"), r("404", "No pending custom card with that ID")}})
+	b.add("POST", "/api/cards/{id}/protect", "Bingo", "Set a card's Protected flag", "permission:bingo-cards",
+		"Marks or unmarks a card as Protected. Protected cards are spared by Delete All (still deletable individually).", opt{
+			path:  []*openapi3.Parameter{pparam("id", "Card id.")},
+			body:  actionBody("Protected flag.", nil, props("protected", pbool("Whether the card is Protected."))),
+			resps: []respEntry{ok("OKResponse"), r("401", "Unauthorized"), r("404", "Card not found")}})
 	b.add("GET", "/api/game", "Bingo", "Current game state", "public", "", opt{
 		resps: []respEntry{ok("GameStateResponse")}})
 	b.add("POST", "/api/game/start", "Bingo", "Start a game", "permission:bingo-game", "", opt{
@@ -381,12 +399,20 @@ func buildPaths(doc *openapi3.T) {
 		body: actionBody("New theme.", nil, props(
 			"name", pstr("Style name (required)."),
 			"tokens", desc(openapi3.NewObjectSchema(), "Design-token overrides (name→CSS value)."),
-			"board_flourish", pstr("Board flourish path."), "number_flourish", pstr("Number flourish path."))),
+			"board_flourish", pstr("Board flourish path."), "number_flourish", pstr("Number flourish path."),
+			"is_public", pbool("Whether the theme is selectable in the client-side picker (default false = admin-only)."))),
 		resps: []respEntry{created("StyleCreateResponse"), r("400", "Invalid")}})
 	b.add("POST", "/api/styles/deactivate", "Bingo", "Deactivate the active theme", "permission:system-themes",
 		"Clears the active style and broadcasts an empty style_update, reverting every client to the default look.", opt{
 			resps: []respEntry{ok("OKResponse")}})
 	b.add("GET", "/api/styles/active", "Bingo", "Active theme CSS", "public", "", opt{resps: []respEntry{ok("ActiveCSSResponse")}})
+	b.add("GET", "/api/styles/public", "Bingo", "List public themes", "public",
+		"The Public themes an end user may pick for themselves (id + name only). Private themes are never listed.", opt{
+			resps: []respEntry{ok("PublicStylesResponse")}})
+	b.add("GET", "/api/styles/public/{id}", "Bingo", "Public theme CSS", "public",
+		"Generated CSS + flourishes of a single Public theme. 404 for a Private or missing theme, so Private CSS can't be fetched by id.", opt{
+			path:  []*openapi3.Parameter{pparam("id", "Style id.")},
+			resps: []respEntry{ok("ActiveCSSResponse"), r("404", "Theme not found")}})
 	b.add("GET", "/api/styles/{id}", "Bingo", "Get a theme", "permission:system-themes", "", opt{
 		path:  []*openapi3.Parameter{pparam("id", "Style id.")},
 		resps: []respEntry{ok("StyleGetResponse"), r("404", "Style not found")}})
@@ -396,7 +422,8 @@ func buildPaths(doc *openapi3.T) {
 			body: actionBody("Theme fields.", nil, props(
 				"name", pstr("Style name (required)."),
 				"tokens", desc(openapi3.NewObjectSchema(), "Design-token overrides (name→CSS value)."),
-				"board_flourish", pstr("Board flourish path."), "number_flourish", pstr("Number flourish path."))),
+				"board_flourish", pstr("Board flourish path."), "number_flourish", pstr("Number flourish path."),
+				"is_public", pbool("Whether the theme is selectable in the client-side picker."))),
 			resps: []respEntry{ok("OKResponse"), r("400", "Invalid")}})
 	b.add("DELETE", "/api/styles/{id}", "Bingo", "Delete a theme", "permission:system-themes",
 		"If the deleted style was active, the active setting is cleared and an empty style_update reverts clients.", opt{

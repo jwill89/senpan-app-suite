@@ -46,6 +46,7 @@ var modelTypes = map[string]any{
 	"CardListEntry": model.CardListEntry{}, "CardsListResponse": model.CardsListResponse{},
 	"GeneratedCard": model.GeneratedCard{}, "GenerateCardsResponse": model.GenerateCardsResponse{},
 	"GeneratedNamedCard": model.GeneratedNamedCard{}, "GenerateSingleCardResponse": model.GenerateSingleCardResponse{},
+	"CardRequestResponse": model.CardRequestResponse{},
 	"CardResponse": model.CardResponse{}, "BoardResponse": model.BoardResponse{},
 	"GameStateResponse": model.GameStateResponse{}, "DrawResult": model.DrawResult{},
 	"EndGameResponse": model.EndGameResponse{}, "YoeverResponse": model.YoeverResponse{},
@@ -55,6 +56,7 @@ var modelTypes = map[string]any{
 	"PresetsResponse": model.PresetsResponse{}, "PresetCreateResponse": model.PresetCreateResponse{},
 	"StylesResponse": model.StylesResponse{}, "StyleGetResponse": model.StyleGetResponse{},
 	"StyleCreateResponse": model.StyleCreateResponse{}, "ActiveCSSResponse": model.ActiveCSSResponse{},
+	"PublicStylesResponse": model.PublicStylesResponse{},
 
 	// Raffles / garapons
 	"RafflesResponse": model.RafflesResponse{}, "RaffleResponse": model.RaffleResponse{},

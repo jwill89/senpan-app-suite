@@ -110,7 +110,9 @@ import {
   faPlus as faPlusSolid,
   faRotate as faRotateSolid,
   faSliders as faSlidersSolid,
+  faStar as faStarSolid,
   faSun as faSunSolid,
+  faTableCellsLock as faTableCellsLockSolid,
   faTag as faTagSolid,
   faTrash as faTrashSolid,
   faUpload as faUploadSolid,
@@ -118,6 +120,8 @@ import {
   faVolumeLow as faVolumeLowSolid,
   faVolumeXmark as faVolumeXmarkSolid,
 } from '@awesome.me/kit-46204fb6f1/icons/classic/solid'
+// Regular (outline) — the hollow star marks a pending (un-approved) custom card.
+import { faStar as faStarRegular } from '@awesome.me/kit-46204fb6f1/icons/classic/regular'
 import { faDiscord } from '@fortawesome/free-brands-svg-icons'
 
 // Kit icons, the standalone brand icon, and the SVG core are all on FontAwesome 7
@@ -210,13 +214,17 @@ const icons: IconDefinition[] = [
   faPlusSolid,
   faRotateSolid,
   faSlidersSolid,
+  faStarSolid,
   faSunSolid,
+  faTableCellsLockSolid,
   faTagSolid,
   faTrashSolid,
   faUploadSolid,
   faVolumeHighSolid,
   faVolumeLowSolid,
   faVolumeXmarkSolid,
+  // Regular (outline) — status glyphs.
+  faStarRegular,
   // Brands — social/external links.
   faDiscord,
 ]

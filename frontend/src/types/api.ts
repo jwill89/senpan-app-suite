@@ -61,6 +61,7 @@ export type {
   ReadingListItem,
   ReadingListSource,
   Style,
+  PublicStyle,
   User,
   WinnersLogEntry,
   TokenInfo,
@@ -98,6 +99,7 @@ export type {
   GenerateCardsResponse,
   GeneratedNamedCard,
   GenerateSingleCardResponse,
+  CardRequestResponse,
   CardResponse,
   BoardResponse,
   GameStateResponse,
@@ -114,6 +116,7 @@ export type {
   StylesResponse,
   StyleGetResponse,
   StyleCreateResponse,
+  PublicStylesResponse,
   // Raffles
   RafflesResponse,
   RaffleResponse,
@@ -211,6 +214,8 @@ export interface AppSettings {
   bingo_join_prompt: string
   /** Seconds a board must wait between "It's Yoever" triggers (0–3600; 0 = no limit). */
   yoever_cooldown_seconds: string
+  /** Gil cost of a custom bingo card, shown on the public Personal Card Requests page. */
+  custom_card_cost: string
   /**
    * Per-club Discord webhook URLs, keyed `discord_webhook_url_<club_slug>`
    * (e.g. `discord_webhook_url_yaoi`). Admin-only (redacted for public). Each

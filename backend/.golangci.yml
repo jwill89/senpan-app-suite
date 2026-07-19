@@ -39,6 +39,17 @@ linters:
       - linters:
           - bodyclose
         path: _test\.go
+      # SA5011 (possible nil pointer dereference) in tests: our tests follow the
+      # standard `x, err := …; if err != nil { t.Fatal(err) }; if x == nil {
+      # t.Fatal(…) }; use x` shape. t.Fatal terminates the goroutine, so the later
+      # deref is safe, but staticcheck doesn't treat t.Fatal as no-return here and
+      # flags a false positive. (A genuine nil deref in a test panics loudly and
+      # fails the test anyway.) Scoped to test files only — production nil-deref
+      # checks stay on.
+      - linters:
+          - staticcheck
+        path: _test\.go
+        text: SA5011
     paths:
       - third_party$
       - builtin$

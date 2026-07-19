@@ -256,12 +256,13 @@ describe('styles (hybrid REST)', () => {
   })
 
   it('create POSTs the theme fields to the collection', async () => {
-    await endpoints.styles.create('Midnight', { 'page-bg': '#000' }, 'b.svg', 'n.svg')
+    await endpoints.styles.create('Midnight', { 'page-bg': '#000' }, 'b.svg', 'n.svg', true)
     expect(apiPost).toHaveBeenCalledWith('styles', {
       name: 'Midnight',
       tokens: { 'page-bg': '#000' },
       board_flourish: 'b.svg',
       number_flourish: 'n.svg',
+      is_public: true,
     })
   })
 
@@ -272,6 +273,7 @@ describe('styles (hybrid REST)', () => {
       tokens: { accent: '#fff' },
       board_flourish: '',
       number_flourish: '',
+      is_public: false,
     })
   })
 
@@ -663,5 +665,38 @@ describe('bookclub reading lists (nested under the club)', () => {
   it('encodeURIComponents the club slug in the path', async () => {
     await endpoints.bookclub.lists('a b/c')
     expect(apiGet).toHaveBeenCalledWith('book-clubs/a%20b%2Fc/reading-lists')
+  })
+})
+
+describe('cards + styles additions', () => {
+  it('listPublic GETs the public styles collection', async () => {
+    await endpoints.styles.listPublic()
+    expect(apiGet).toHaveBeenCalledWith('styles/public')
+  })
+
+  it('publicCss GETs a public theme by id', async () => {
+    await endpoints.styles.publicCss(7)
+    expect(apiGet).toHaveBeenCalledWith('styles/public/7')
+  })
+
+  it('cards.approve POSTs to the approve sub-resource', async () => {
+    await endpoints.cards.approve('ABC123')
+    expect(apiPost).toHaveBeenCalledWith('cards/ABC123/approve', undefined)
+  })
+
+  it('cards.setProtected POSTs the protected flag', async () => {
+    await endpoints.cards.setProtected('ABC123', true)
+    expect(apiPost).toHaveBeenCalledWith('cards/ABC123/protect', { protected: true })
+  })
+
+  it('cards.request POSTs the custom-card payload', async () => {
+    const payload = {
+      character_name: 'Aria',
+      world: 'Gilgamesh',
+      card_id: 'ABC123',
+      board_data: [[1, 16, 31, 46, 61]],
+    }
+    await endpoints.cards.request(payload)
+    expect(apiPost).toHaveBeenCalledWith('cards/request', payload)
   })
 })

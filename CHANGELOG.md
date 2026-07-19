@@ -41,6 +41,40 @@ The format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## Frontend
 
+### [3.13.0] — 2026-07-19
+
+Adds **public/private themes with a client-side theme picker**, and a public
+**Personal Card Requests** page, plus admin card **statuses** (paired with backend
+3.10.0).
+
+#### Added
+
+- **Public theme picker.** Themes can now be marked **Public** in the admin Themes
+  editor (with a "Public" badge in the theme list). Public themes appear in a
+  **theme picker in the site footer** so each player can choose their own look; the
+  choice is remembered per browser. A **"Default"** option follows whatever theme the
+  admin has activated — it always reads "Default", never the admin theme's real name.
+  A player on a specific public theme is no longer overridden when the admin changes
+  the active theme (players on "Default" still follow it live).
+- **Personal Card Requests page** (`/card-requests`, linked from the home page). A
+  player enters their character name + **World** (a data-center-grouped dropdown of
+  FF14 worlds), builds a 5×5 bingo card by hand (per-column ranges enforced, invalid
+  cells highlighted) or with **Generate Random** (repeatable, still editable), and
+  picks a custom 6-character card ID. The page shows the gil cost and the terms, and
+  submission is blocked until the card is valid; a taken ID or a duplicate card is
+  rejected with a clear message.
+- **Card status icons + actions** on the admin Manage Cards table: a hollow star for
+  a **pending** custom card, a filled star for an **approved** one, and a lock for a
+  **Protected** card, plus **Approve** and **Protect/Unprotect** row actions. "Delete
+  All" now keeps Protected cards and says so.
+- **Custom Card Cost** setting (System → Settings → Gameplay) — the gil price shown
+  on the Personal Card Requests page.
+- **Dimmed unused columns in "Called Numbers"** (player board + admin Game tab).
+  When the active game's win patterns don't use a whole BINGO column, no number from
+  it is ever drawn (the caller already skips those columns), so that column now gets
+  a subtle dark overlay in the Called Numbers tracker to show it won't be used this
+  game — e.g. a postage-stamp game dims the N column.
+
 ### [3.12.0] — 2026-07-16
 
 Shows the **live** plugin version in the admin footer.
@@ -511,6 +545,33 @@ First tracked release — establishes versioning for the current production buil
 ---
 
 ## Backend
+
+### [3.10.0] — 2026-07-19
+
+Adds **theme visibility**, a **custom-card request** flow, and card **statuses**
+(paired with frontend 3.13.0). Backward-compatible additions only; no breaking
+contract changes.
+
+#### Added
+
+- **Theme visibility.** The `styles` table gains an `is_public` flag (default 0 =
+  Private, so every existing theme stays admin-only). New **public** endpoints
+  `GET /api/styles/public` (id + name of public themes) and `GET /api/styles/public/{id}`
+  (a public theme's generated CSS) let the client-side theme picker list and apply
+  public themes; the by-id endpoint 404s for a private theme so its CSS can't be
+  fetched by guessing an id. `POST/PUT /api/styles` accept `is_public`.
+- **Personal Card Requests.** New public `POST /api/cards/request` (rate-limited, and
+  Cloudflare-Turnstile-gated when configured) validates a hand-built board and a
+  chosen 6-character ID, rejects a taken ID or a duplicate board, and stores the card
+  as **pending** — not yet playable. Pending cards are blocked from the public board
+  join and excluded from winner computation until approved.
+- **Card statuses.** The `cards` table gains `protected`, `custom_status`
+  (`''`/`pending`/`approved`), and `world`. `POST /api/cards/{id}/approve` approves a
+  pending custom card (→ approved **and** protected); `POST /api/cards/{id}/protect`
+  toggles a card's Protected flag. **`DELETE /api/cards/all` now spares Protected
+  cards** (and only disconnects players whose card was actually deleted).
+- **`custom_card_cost`** app setting (gil), returned by the public `GET /api/settings`
+  for display on the request page.
 
 ### [3.9.0] — 2026-07-16
 
@@ -1127,6 +1188,21 @@ with a personal access token and is distributed through a Dalamud custom repo
 (`plugins/pluginmaster.json`). Versions use the four-part AssemblyVersion in
 `SenpanCompanion.csproj`. Entries below the current release were reconstructed
 from the `<Version>` history and commit messages.
+
+### [3.1.0.0] — 2026-07-19
+
+Adds custom-card request handling to the Bingo Cards tab (paired with backend 3.10.0).
+
+#### Added
+
+- **Card status + actions in the Bingo Cards tab.** A new **Status** column shows a
+  grey star for a **pending** custom-card request, a gold star for an **approved**
+  one, and a lock for a **Protected** card (hover a star for the requester's
+  character + world). Each row gains **Approve** (pending only) and
+  **Protect/Unprotect** actions. Approving a request makes the card playable and
+  automatically Protects it; Protected cards are spared by **Delete all** (still
+  individually deletable). Uses the backend's `POST /api/cards/{id}/approve` and
+  `/protect` endpoints with the existing `bingo-cards` permission.
 
 ### [3.0.1.0] — 2026-07-17
 

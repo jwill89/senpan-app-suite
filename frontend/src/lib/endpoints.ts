@@ -198,8 +198,13 @@ export const endpoints = {
   // ── Game lifecycle (hybrid REST: verb sub-paths + PATCH for controls) ────────
   game: {
     getState: () => apiGet<GameStateResponse>('game'),
-    start: (patternIds: number[]) =>
-      apiPost<GameStateResponse>('game/start', { pattern_ids: patternIds }),
+    /** POST /api/game/start — begin a game, optionally with the auto-draw loop on. */
+    start: (patternIds: number[], auto = false, autoInterval = 0) =>
+      apiPost<GameStateResponse>('game/start', {
+        pattern_ids: patternIds,
+        auto,
+        auto_interval: autoInterval,
+      }),
     draw: (delay: number) => apiPost<DrawResult>('game/draw', { delay }),
     /** PATCH /api/game {delay} — persist + broadcast the shared draw delay. */
     setDelay: (delay: number) => apiPatch<OKResponse>('game', { delay }),
@@ -207,7 +212,16 @@ export const endpoints = {
       apiPost<EndGameResponse>('game/end', { valid_winner_ids: validWinnerIds }),
     /** PATCH /api/game {details} — set + broadcast the markdown game details. */
     updateDetails: (details: string) => apiPatch<OKResponse>('game', { details }),
-    triggerHalftime: () => apiPost<OKResponse>('game/halftime', undefined),
+    /** PATCH /api/game {auto_enabled} — switch the automatic-draw loop on/off + broadcast. */
+    setAutoEnabled: (enabled: boolean) => apiPatch<OKResponse>('game', { auto_enabled: enabled }),
+    /** PATCH /api/game {auto_interval} — adjust the seconds between auto draws + broadcast. */
+    setAutoInterval: (seconds: number) => apiPatch<OKResponse>('game', { auto_interval: seconds }),
+    /**
+     * POST /api/game/halftime {minigame} — answer the half-time prompt. `true`
+     * alerts players about a mini-game (auto stays paused); `false` declines and
+     * resumes auto if it was paused for the prompt.
+     */
+    halftime: (minigame: boolean) => apiPost<OKResponse>('game/halftime', { minigame }),
     /** POST /api/game/yoever {card_id} — trigger the "It's Yoever" reaction (public). */
     yoever: (cardId: string) => apiPost<YoeverResponse>('game/yoever', { card_id: cardId }),
     /** PATCH /api/game {yoever_enabled} — switch the reaction on/off + broadcast. */
@@ -322,17 +336,34 @@ export const endpoints = {
   presets: {
     /** GET /api/presets — all saved game presets. */
     list: () => apiGet<PresetsResponse>('presets'),
-    create: (name: string, patternIds: number[], gameDetails: string) =>
+    create: (
+      name: string,
+      patternIds: number[],
+      gameDetails: string,
+      auto: boolean,
+      autoInterval: number,
+    ) =>
       apiPost<PresetCreateResponse>('presets', {
         name,
         pattern_ids: patternIds,
         game_details: gameDetails,
+        auto,
+        auto_interval: autoInterval,
       }),
-    update: (id: number, name: string, patternIds: number[], gameDetails: string) =>
+    update: (
+      id: number,
+      name: string,
+      patternIds: number[],
+      gameDetails: string,
+      auto: boolean,
+      autoInterval: number,
+    ) =>
       apiPut<OKResponse>(`presets/${id}`, {
         name,
         pattern_ids: patternIds,
         game_details: gameDetails,
+        auto,
+        auto_interval: autoInterval,
       }),
     delete: (id: number) => apiDelete(`presets/${id}`),
   },

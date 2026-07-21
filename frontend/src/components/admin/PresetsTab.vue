@@ -15,6 +15,7 @@ import PatternPicker from '@/components/common/ui/PatternPicker.vue'
 import FormField from '@/components/common/ui/FormField.vue'
 import FormActions from '@/components/common/ui/FormActions.vue'
 import EmptyState from '@/components/common/ui/EmptyState.vue'
+import { AUTO_INTERVAL_OPTIONS, autoIntervalLabel } from '@/lib/constants'
 import { usePresetsStore } from '@/stores/presets'
 import { usePatternsStore } from '@/stores/patterns'
 
@@ -73,6 +74,25 @@ function patternById(id: number) {
         />
       </FormField>
 
+      <FormField label="Auto-Draw">
+        <label class="preset-auto-check">
+          <input v-model="presets.editingPreset.auto" type="checkbox" />
+          <span>Start with auto-draw on</span>
+        </label>
+        <div v-if="presets.editingPreset.auto" class="preset-auto-interval">
+          <label class="text-dim text-sm" for="preset-auto-interval">Time Between Calls:</label>
+          <select
+            id="preset-auto-interval"
+            v-model.number="presets.editingPreset.auto_interval"
+            class="manager-filter"
+          >
+            <option v-for="s in AUTO_INTERVAL_OPTIONS" :key="s" :value="s">
+              {{ autoIntervalLabel(s) }}
+            </option>
+          </select>
+        </div>
+      </FormField>
+
       <FormActions align="start">
         <button class="btn-confirm" :disabled="presets.savingPreset" @click="presets.savePreset()">
           <LoadingSpinner v-if="presets.savingPreset" label="Saving…" />
@@ -118,6 +138,9 @@ function patternById(id: number) {
           </div>
           <p class="text-dim text-xs mt-8">
             {{ preset.game_details ? 'Includes game details' : 'No game details' }}
+            <template v-if="preset.auto">
+              · Auto-draw every {{ autoIntervalLabel(preset.auto_interval) }}</template
+            >
           </p>
           <template #actions>
             <button
@@ -140,3 +163,23 @@ function patternById(id: number) {
     </ManagerView>
   </div>
 </template>
+
+<style scoped>
+.preset-auto-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  cursor: pointer;
+  user-select: none;
+}
+.preset-auto-check input {
+  cursor: pointer;
+}
+.preset-auto-interval {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+}
+</style>

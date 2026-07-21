@@ -20,6 +20,8 @@ namespace SenpanCompanion.Windows;
 internal sealed class BingoGameTab : TabBase, IDisposable
 {
     private static readonly int[] DrawDelayOptions = { 0, 3, 5, 10, 15, 20, 30, 45, 60 };
+    private static readonly int[] AutoIntervalOptions = { 10, 15, 20, 30, 45, 60, 90, 120, 180, 300 };
+    private const int DefaultAutoInterval = 30;
     private static readonly string[] BingoLetters = { "B", "I", "N", "G", "O" };
 
     private static readonly Vector4 GridHeaderColor = new(0.72f, 0.72f, 0.78f, 1f);
@@ -47,8 +49,12 @@ internal sealed class BingoGameTab : TabBase, IDisposable
     private DrawnNumber? lastDrawn;
     private string gameDetails = string.Empty;
 
-    private bool halftimePrompted;
+    // New Game auto-draw controls (session-local, like the web's new-game form).
+    private bool newGameAuto;
+    private int newGameAutoInterval = DefaultAutoInterval;
+
     private bool openHalftimePopup;
+    private bool halftimeAutoPaused;
 
     private bool openEndGamePopup;
     private readonly HashSet<string> endGameSelected = new();
@@ -68,6 +74,8 @@ internal sealed class BingoGameTab : TabBase, IDisposable
         this.live.GameUpdate += OnGameUpdate;
         this.live.Yoever += OnYoever;
         this.live.YoeverConfig += OnYoeverConfig;
+        this.live.AutoConfig += OnAutoConfig;
+        this.live.HalftimePrompt += OnHalftimePrompt;
     }
 
     public void Dispose()
@@ -76,6 +84,8 @@ internal sealed class BingoGameTab : TabBase, IDisposable
         this.live.GameUpdate -= OnGameUpdate;
         this.live.Yoever -= OnYoever;
         this.live.YoeverConfig -= OnYoeverConfig;
+        this.live.AutoConfig -= OnAutoConfig;
+        this.live.HalftimePrompt -= OnHalftimePrompt;
     }
 
     protected override async Task LoadAsync()
@@ -96,10 +106,6 @@ internal sealed class BingoGameTab : TabBase, IDisposable
             this.winners = gameRes.Winners;
             this.gameDetails = gameRes.GameDetails;
             this.frequentWinners = freqRes?.Winners ?? new List<FrequentWinner>();
-            // Don't fire a halftime prompt for a game already past the midpoint
-            // (e.g. when joining mid-game): only a fresh crossing should prompt.
-            this.halftimePrompted = this.game != null
-                && this.game.CalledNumbers.Count >= HalftimeThreshold(this.game.Patterns);
         });
     }
 
@@ -182,6 +188,26 @@ internal sealed class BingoGameTab : TabBase, IDisposable
             Run(() => this.api.UpdateGameDetailsAsync(toSave));
         }
 
+        Ui.Section(FontAwesomeIcon.Robot, "Auto-draw");
+        var auto = this.newGameAuto;
+        if (ImGui.Checkbox("Auto-draw numbers", ref auto))
+            this.newGameAuto = auto;
+        if (this.newGameAuto)
+        {
+            ImGui.SameLine();
+            ImGui.SetNextItemWidth(140);
+            if (ImGui.BeginCombo("Time Between Calls", AutoIntervalLabel(this.newGameAutoInterval)))
+            {
+                foreach (var s in AutoIntervalOptions)
+                {
+                    if (ImGui.Selectable(AutoIntervalLabel(s), s == this.newGameAutoInterval))
+                        this.newGameAutoInterval = s;
+                }
+                ImGui.EndCombo();
+            }
+            Ui.Help("The server draws a number this often (plus the player delay). Auto turns off at half-time and when a winner is found.");
+        }
+
         ImGui.Spacing();
         var canStart = this.selectedPatterns.Count > 0;
         if (!canStart)
@@ -189,16 +215,17 @@ internal sealed class BingoGameTab : TabBase, IDisposable
         if (Ui.PrimaryButton($"Start Game ({this.selectedPatterns.Count})"))
         {
             var ids = this.selectedPatterns.ToArray();
+            var startAuto = this.newGameAuto;
+            var startInterval = this.newGameAutoInterval;
             Run(async () =>
             {
-                var g = await this.api.StartGameAsync(ids);
+                var g = await this.api.StartGameAsync(ids, startAuto, startInterval);
                 await Apply(() =>
                 {
                     this.game = g.Game;
                     this.winners = g.Winners;
                     this.gameDetails = g.GameDetails;
                     this.lastDrawn = null;
-                    this.halftimePrompted = false;
                     this.selectedPatterns.Clear();
                 });
             });
@@ -214,6 +241,10 @@ internal sealed class BingoGameTab : TabBase, IDisposable
         foreach (var id in preset.PatternIds.Where(valid.Contains))
             this.selectedPatterns.Add(id);
         this.gameDetails = preset.GameDetails;
+        // Pre-fill the auto-draw controls from the preset (tweaking here never
+        // writes back to the preset).
+        this.newGameAuto = preset.Auto;
+        this.newGameAutoInterval = preset.AutoInterval > 0 ? preset.AutoInterval : DefaultAutoInterval;
         var toSave = this.gameDetails;
         Run(() => this.api.UpdateGameDetailsAsync(toSave));
     }
@@ -272,7 +303,8 @@ internal sealed class BingoGameTab : TabBase, IDisposable
                     ApplyWinners(result.Winners);
                     if (this.game != null && !this.game.CalledNumbers.Contains(result.Drawn.Number))
                         this.game.CalledNumbers.Add(result.Drawn.Number);
-                    CheckHalftime();
+                    // The half-time prompt is server-driven now (halftime_prompt),
+                    // so it fires for manual and automatic draws alike.
                 });
             });
         }
@@ -310,6 +342,35 @@ internal sealed class BingoGameTab : TabBase, IDisposable
             ImGui.SetTooltip("Let players trigger the \"It's Yoever\" reaction. Switch off to curb spam.");
         ImGui.SameLine();
         ImGui.TextDisabled($"Yoevers: {state.YoeverCount}");
+
+        // Auto-draw live controls: switch the loop on/off and adjust the interval
+        // mid-game (never writes back to a preset).
+        var autoEnabled = state.AutoEnabled;
+        if (ImGui.Checkbox("Auto-Draw", ref autoEnabled))
+        {
+            var next = autoEnabled;
+            state.AutoEnabled = next; // optimistic; the auto_config broadcast confirms
+            Run(() => this.api.SetAutoEnabledAsync(next));
+        }
+        if (ImGui.IsItemHovered())
+            ImGui.SetTooltip("Draw numbers automatically on a timer. Turns off at half-time and when a winner is found.");
+        if (state.AutoEnabled)
+        {
+            ImGui.SameLine();
+            ImGui.SetNextItemWidth(140);
+            if (ImGui.BeginCombo("Time Between Calls##live", AutoIntervalLabel(state.AutoInterval)))
+            {
+                foreach (var s in AutoIntervalOptions)
+                {
+                    if (ImGui.Selectable(AutoIntervalLabel(s), s == state.AutoInterval))
+                    {
+                        state.AutoInterval = s; // optimistic; the auto_config broadcast confirms
+                        Run(() => this.api.SetAutoIntervalAsync(s));
+                    }
+                }
+                ImGui.EndCombo();
+            }
+        }
 
         ImGui.Separator();
 
@@ -467,15 +528,27 @@ internal sealed class BingoGameTab : TabBase, IDisposable
 
         var threshold = this.game != null ? HalftimeThreshold(this.game.Patterns) : 0;
         ImGui.TextWrapped($"You've drawn {threshold} numbers! Alert players about a half-time mini-game?");
+        if (this.halftimeAutoPaused)
+        {
+            ImGui.Spacing();
+            ImGui.TextWrapped("Auto-draw has been paused. Choose No to resume it, or Yes to run a mini-game (auto stays off until you switch it back on).");
+        }
         ImGui.Spacing();
         if (Ui.PrimaryButton("Yes"))
         {
-            Run(() => this.api.TriggerHalftimeAsync());
+            // Yes → run a mini-game (alert players; auto stays paused).
+            Run(() => this.api.TriggerHalftimeAsync(true));
+            this.halftimeAutoPaused = false;
             ImGui.CloseCurrentPopup();
         }
         ImGui.SameLine();
         if (Ui.Button("No"))
+        {
+            // No → decline the mini-game; the server resumes auto if it was paused.
+            Run(() => this.api.TriggerHalftimeAsync(false));
+            this.halftimeAutoPaused = false;
             ImGui.CloseCurrentPopup();
+        }
         ImGui.EndPopup();
     }
 
@@ -529,7 +602,6 @@ internal sealed class BingoGameTab : TabBase, IDisposable
                 this.game = null;
                 this.winners = new List<string>();
                 this.lastDrawn = null;
-                this.halftimePrompted = false;
             });
         });
     }
@@ -690,24 +762,35 @@ internal sealed class BingoGameTab : TabBase, IDisposable
         ApplyWinners(winnerIds.ToList());
         if (this.game != null && !this.game.CalledNumbers.Contains(drawn.Number))
             this.game.CalledNumbers.Add(drawn.Number);
-        CheckHalftime();
     }
 
     private void OnGameUpdate(GameState? state)
     {
-        var wasActive = this.game != null;
         this.game = state;
         if (state == null)
         {
             this.winners = new List<string>();
             this.lastDrawn = null;
-            this.halftimePrompted = false;
         }
-        else if (!wasActive)
-        {
-            // Joining an in-progress game: arm the prompt only if it hasn't passed.
-            this.halftimePrompted = state.CalledNumbers.Count >= HalftimeThreshold(state.Patterns);
-        }
+    }
+
+    // Auto-draw state changed on the server (started, toggled, interval adjusted, or
+    // switched off by a winner/half-time): mirror it onto the current game.
+    private void OnAutoConfig(bool enabled, int interval)
+    {
+        if (this.game == null)
+            return;
+        this.game.AutoEnabled = enabled;
+        this.game.AutoInterval = interval;
+    }
+
+    // The server reached the half-time mark (on any draw, manual or automatic):
+    // open the mini-game prompt. autoPaused tells the modal whether declining will
+    // resume the auto draws.
+    private void OnHalftimePrompt(bool autoPaused)
+    {
+        this.halftimeAutoPaused = autoPaused;
+        this.openHalftimePopup = true;
     }
 
     // A player fired the reaction: keep the running count in step. The dedicated
@@ -738,18 +821,16 @@ internal sealed class BingoGameTab : TabBase, IDisposable
         this.winners = next;
     }
 
-    private void CheckHalftime()
-    {
-        if (this.game == null || this.halftimePrompted)
-            return;
-        if (this.game.CalledNumbers.Count >= HalftimeThreshold(this.game.Patterns))
-        {
-            this.halftimePrompted = true;
-            this.openHalftimePopup = true;
-        }
-    }
-
     // ── Helpers ──────────────────────────────────────────────────────────────
+
+    private static string AutoIntervalLabel(int seconds)
+    {
+        if (seconds < 60)
+            return $"{seconds}s";
+        var m = seconds / 60;
+        var s = seconds % 60;
+        return s == 0 ? $"{m}m" : $"{m}m {s}s";
+    }
 
     /// <summary>
     /// The half-way call count, mirroring the web (lib/halftime.ts): the classic

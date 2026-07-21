@@ -36,14 +36,14 @@ func TestPendingCustomCardNotEligibleToWin(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := gs.Start([]int{int(patID)}); err != nil {
+	if _, err := gs.Start([]int{int(patID)}, false, 0); err != nil {
 		t.Fatal(err)
 	}
 
 	// Draw every number so both top rows are fully called.
 	var last *DrawResult
 	for i := 0; i < 75; i++ {
-		r, err := gs.Draw()
+		r, _, err := gs.Draw()
 		if err != nil {
 			t.Fatal(err)
 		}

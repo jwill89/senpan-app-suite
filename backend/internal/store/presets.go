@@ -13,7 +13,7 @@ import (
 
 // ListGamePresets returns all game presets ordered by name.
 func (s *Store) ListGamePresets() ([]model.GamePreset, error) {
-	rows, err := s.db.Query("SELECT id, name, pattern_ids, game_details, created_at FROM game_presets ORDER BY name ASC")
+	rows, err := s.db.Query("SELECT id, name, pattern_ids, game_details, auto_call, auto_interval, created_at FROM game_presets ORDER BY name ASC")
 	if err != nil {
 		return nil, err
 	}
@@ -23,7 +23,7 @@ func (s *Store) ListGamePresets() ([]model.GamePreset, error) {
 	for rows.Next() {
 		var p model.GamePreset
 		var idsJSON string
-		if err := rows.Scan(&p.ID, &p.Name, &idsJSON, &p.GameDetails, &p.CreatedAt); err != nil {
+		if err := rows.Scan(&p.ID, &p.Name, &idsJSON, &p.GameDetails, &p.Auto, &p.AutoInterval, &p.CreatedAt); err != nil {
 			return nil, err
 		}
 		p.PatternIDs = parsePresetPatternIDs(idsJSON)
@@ -37,8 +37,8 @@ func (s *Store) GetGamePreset(id int64) (*model.GamePreset, error) {
 	var p model.GamePreset
 	var idsJSON string
 	err := s.db.QueryRow(
-		"SELECT id, name, pattern_ids, game_details, created_at FROM game_presets WHERE id = ?", id,
-	).Scan(&p.ID, &p.Name, &idsJSON, &p.GameDetails, &p.CreatedAt)
+		"SELECT id, name, pattern_ids, game_details, auto_call, auto_interval, created_at FROM game_presets WHERE id = ?", id,
+	).Scan(&p.ID, &p.Name, &idsJSON, &p.GameDetails, &p.Auto, &p.AutoInterval, &p.CreatedAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
 	}
@@ -50,14 +50,14 @@ func (s *Store) GetGamePreset(id int64) (*model.GamePreset, error) {
 }
 
 // CreateGamePreset inserts a new game preset and returns its ID.
-func (s *Store) CreateGamePreset(name string, patternIDs []int64, gameDetails string) (int64, error) {
+func (s *Store) CreateGamePreset(name string, patternIDs []int64, gameDetails string, auto bool, autoInterval int) (int64, error) {
 	idsJSON, err := json.Marshal(normalizePresetIDs(patternIDs))
 	if err != nil {
 		return 0, fmt.Errorf("marshal preset pattern ids: %w", err)
 	}
 	res, err := s.db.Exec(
-		"INSERT INTO game_presets (name, pattern_ids, game_details) VALUES (?, ?, ?)",
-		name, string(idsJSON), gameDetails,
+		"INSERT INTO game_presets (name, pattern_ids, game_details, auto_call, auto_interval) VALUES (?, ?, ?, ?, ?)",
+		name, string(idsJSON), gameDetails, auto, autoInterval,
 	)
 	if err != nil {
 		return 0, err
@@ -65,15 +65,15 @@ func (s *Store) CreateGamePreset(name string, patternIDs []int64, gameDetails st
 	return res.LastInsertId()
 }
 
-// UpdateGamePreset updates a preset's name, pattern IDs, and game details.
-func (s *Store) UpdateGamePreset(id int64, name string, patternIDs []int64, gameDetails string) error {
+// UpdateGamePreset updates a preset's name, pattern IDs, game details, and auto-draw settings.
+func (s *Store) UpdateGamePreset(id int64, name string, patternIDs []int64, gameDetails string, auto bool, autoInterval int) error {
 	idsJSON, err := json.Marshal(normalizePresetIDs(patternIDs))
 	if err != nil {
 		return fmt.Errorf("marshal preset pattern ids: %w", err)
 	}
 	_, err = s.db.Exec(
-		"UPDATE game_presets SET name = ?, pattern_ids = ?, game_details = ? WHERE id = ?",
-		name, string(idsJSON), gameDetails, id,
+		"UPDATE game_presets SET name = ?, pattern_ids = ?, game_details = ?, auto_call = ?, auto_interval = ? WHERE id = ?",
+		name, string(idsJSON), gameDetails, auto, autoInterval, id,
 	)
 	return err
 }

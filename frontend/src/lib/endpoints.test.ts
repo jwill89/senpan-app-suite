@@ -109,7 +109,20 @@ describe('users + account (hybrid REST)', () => {
 describe('game lifecycle (hybrid REST)', () => {
   it('start POSTs the selected pattern ids to the /start sub-path', async () => {
     await endpoints.game.start([1, 2, 3])
-    expect(apiPost).toHaveBeenCalledWith('game/start', { pattern_ids: [1, 2, 3] })
+    expect(apiPost).toHaveBeenCalledWith('game/start', {
+      pattern_ids: [1, 2, 3],
+      auto: false,
+      auto_interval: 0,
+    })
+  })
+
+  it('start forwards the auto-draw config when provided', async () => {
+    await endpoints.game.start([1], true, 30)
+    expect(apiPost).toHaveBeenCalledWith('game/start', {
+      pattern_ids: [1],
+      auto: true,
+      auto_interval: 30,
+    })
   })
 
   it('draw POSTs the configured delay to the /draw sub-path', async () => {
@@ -122,9 +135,11 @@ describe('game lifecycle (hybrid REST)', () => {
     expect(apiPost).toHaveBeenCalledWith('game/end', { valid_winner_ids: ['AAA', 'BBB'] })
   })
 
-  it('triggerHalftime POSTs to the /halftime sub-path', async () => {
-    await endpoints.game.triggerHalftime()
-    expect(apiPost).toHaveBeenCalledWith('game/halftime', undefined)
+  it('halftime POSTs the mini-game choice to the /halftime sub-path', async () => {
+    await endpoints.game.halftime(true)
+    expect(apiPost).toHaveBeenCalledWith('game/halftime', { minigame: true })
+    await endpoints.game.halftime(false)
+    expect(apiPost).toHaveBeenCalledWith('game/halftime', { minigame: false })
   })
 
   it('setDelay PATCHes the shared draw delay', async () => {
@@ -135,6 +150,13 @@ describe('game lifecycle (hybrid REST)', () => {
   it('updateDetails PATCHes the game details', async () => {
     await endpoints.game.updateDetails('GL HF')
     expect(apiPatch).toHaveBeenCalledWith('game', { details: 'GL HF' })
+  })
+
+  it('setAutoEnabled + setAutoInterval PATCH the auto-draw controls', async () => {
+    await endpoints.game.setAutoEnabled(true)
+    expect(apiPatch).toHaveBeenCalledWith('game', { auto_enabled: true })
+    await endpoints.game.setAutoInterval(45)
+    expect(apiPatch).toHaveBeenCalledWith('game', { auto_interval: 45 })
   })
 })
 

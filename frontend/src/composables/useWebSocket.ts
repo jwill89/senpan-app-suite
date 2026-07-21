@@ -118,6 +118,23 @@ export function useWebSocket() {
           if (mode !== 'off') playEvent('minigame', mode)
         }
         break
+      case 'halftime_prompt':
+        // Server reached the half-time mark (on a manual or automatic draw): show
+        // the mini-game prompt on every admin surface. `auto_paused` tells the modal
+        // whether declining will resume the auto draws.
+        if (isAdminView()) {
+          game.showHalftimePrompt = true
+          game.halftimeAutoPaused = msg.auto_paused
+        }
+        break
+      case 'auto_config':
+        // Auto-draw state changed (started/toggled/interval/off): sync every admin's
+        // toggle + interval, like yoever_config.
+        if (isAdminView() && game.currentGame) {
+          game.currentGame.auto_enabled = msg.enabled
+          game.currentGame.auto_interval = msg.interval
+        }
+        break
       case 'yoever':
         handleYoever(msg)
         break

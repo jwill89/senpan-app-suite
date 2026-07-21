@@ -13,7 +13,7 @@
          the repo and on disk). The folder/csproj keep the shorter "SenpanCompanion"
          name; only the published assembly is "SenpanCompanionAdmin". -->
     <AssemblyName>SenpanCompanionAdmin</AssemblyName>
-    <Version>3.1.0.0</Version>
+    <Version>3.2.0.0</Version>
     <Description>Senpan Admin Companion: operate Senpan Tea House app services from inside FFXIV.</Description>
     <PackageProjectUrl>https://github.com/jwill89/senpan-app-suite</PackageProjectUrl>
     <Nullable>enable</Nullable>

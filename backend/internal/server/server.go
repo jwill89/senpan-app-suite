@@ -56,6 +56,16 @@ type Server struct {
 	// orphan a directory. See images.go. Distinct from fontSecretMu — the font
 	// metadata lives in the DB, this manifest is a filesystem dotfile.
 	imageManifestMu sync.Mutex
+
+	// autoWake is a one-slot mailbox that nudges the automatic-draw scheduler
+	// (RunAutoDrawScheduler) to re-evaluate its timer after any auto-relevant
+	// change — game start/end, enable/disable, interval or delay change. See game.go.
+	autoWake chan struct{}
+	// halftimeReadyAt records when the half-time-triggering number reaches players,
+	// so a confirmed mini-game alert is held until they've seen that number. Guarded
+	// by halftimeMu.
+	halftimeMu      sync.Mutex
+	halftimeReadyAt time.Time
 }
 
 // SetTurnstile enables the Cloudflare Turnstile bot check on the login form.
@@ -104,6 +114,7 @@ func New(st *store.Store, hub *ws.Hub, sessionSecret, webRoot string, allowedOri
 		regLimiter:     newRateLimiter(5, time.Hour),       // 5 registration attempts per hour
 		raffleLimiter:  newRateLimiter(20, 10*time.Minute), // 20 raffle entries per 10 minutes per IP
 		cardReqLimiter: newRateLimiter(10, 10*time.Minute), // 10 custom-card requests per 10 minutes per IP
+		autoWake:       make(chan struct{}, 1),             // one-slot wake mailbox for the auto-draw scheduler
 	}
 
 	s.routes()

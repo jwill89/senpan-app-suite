@@ -3,6 +3,7 @@ package bingo
 import (
 	"encoding/json"
 	"errors"
+	"math"
 	"math/rand/v2"
 	"sync"
 	"time"
@@ -55,6 +56,18 @@ type Service struct {
 	yoeverEnabled bool
 	yoeverCount   int
 	yoeverLast    map[string]time.Time // card ID (upper-case) → last trigger time
+
+	// Automatic-draw state. Transient, per-game (reset by resetAuto on each Start):
+	// whether the auto loop is running and the seconds between draws. resumeAuto
+	// remembers that auto was paused for the half-time prompt so choosing "no
+	// mini-game" can switch it back on. The loop itself lives in the server layer
+	// (it needs the WebSocket hub to broadcast); the Service only owns the state so
+	// it can be stamped onto BingoGameState and toggled from the HTTP handlers.
+	// Defaults off, including after a restart, so draws never resume unattended.
+	autoMu       sync.Mutex
+	autoEnabled  bool
+	autoInterval int
+	resumeAuto   bool
 }
 
 // NewService creates a Service backed by the given store. The "It's Yoever"
@@ -163,9 +176,10 @@ func (g *Service) cachedCards() ([]model.Card, error) {
 	return playable, nil
 }
 
-// Start begins a new game with the given pattern IDs.
-// Any currently active game is ended first.
-func (g *Service) Start(patternIDs []int) (*model.BingoGameState, error) {
+// Start begins a new game with the given pattern IDs. Any currently active game
+// is ended first. auto/autoInterval seed the automatic-draw controls for the new
+// game (interval clamped to a sane range); pass auto=false to start a manual game.
+func (g *Service) Start(patternIDs []int, auto bool, autoInterval int) (*model.BingoGameState, error) {
 	g.opMu.Lock()
 	defer g.opMu.Unlock()
 
@@ -191,39 +205,44 @@ func (g *Service) Start(patternIDs []int) (*model.BingoGameState, error) {
 	// A fresh game re-enables the reaction, zeroes the counter, and forgets every
 	// card's cooldown, so the on/off toggle and "Yoevers: N" count are per-game.
 	g.resetYoever()
+	// Seed the automatic-draw controls for this game (off unless started with auto).
+	g.resetAuto(auto, autoInterval)
 
 	state, err := g.buildGameState(gameID, createdAt)
 	if err != nil {
 		return nil, err
 	}
 	state.YoeverEnabled, state.YoeverCount = g.yoeverSnapshot()
+	state.AutoEnabled, state.AutoInterval = g.AutoState()
 	g.setStateCache(gameID, state)
 	return state, nil
 }
 
-// Draw picks a random uncalled number, computes winners, caches them,
-// and returns the full game state. Returns nil when no active game or all
-// 75 numbers have been drawn.
-func (g *Service) Draw() (*DrawResult, error) {
+// Draw picks a random uncalled number, computes winners, caches them, and returns
+// the full game state. The bool reports whether this draw produced a *new* winner
+// (a card not already in the winners cache) — the caller uses it to switch off the
+// automatic-draw loop the moment a winner is recognized. Returns (nil, false, nil)
+// when there is no active game or all callable numbers have been drawn.
+func (g *Service) Draw() (*DrawResult, bool, error) {
 	g.opMu.Lock()
 	defer g.opMu.Unlock()
 
 	game, err := g.store.GetActiveGame()
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 	if game == nil {
-		return nil, nil
+		return nil, false, nil
 	}
 
 	called, err := g.store.GetCalledNumbers(game.ID)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 
 	patterns, err := g.store.GetGamePatterns(game.ID)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 
 	// Only draw from columns whose numbers can complete one of the game's
@@ -242,14 +261,14 @@ func (g *Service) Draw() (*DrawResult, error) {
 		}
 	}
 	if len(remaining) == 0 {
-		return nil, nil
+		return nil, false, nil
 	}
 
 	number := remaining[rand.IntN(len(remaining))]
 	order := len(called) + 1
 
 	if err := g.store.AddCalledNumber(game.ID, number, order); err != nil {
-		return nil, err
+		return nil, false, err
 	}
 	called = append(called, number)
 	calledSet[number] = true
@@ -258,11 +277,12 @@ func (g *Service) Draw() (*DrawResult, error) {
 	existingWinners := parseWinnersCache(game.WinnersCache)
 	winners, err := g.computeWinners(calledSet, patterns, existingWinners)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 	if err := g.store.UpdateWinnersCache(game.ID, winners); err != nil {
-		return nil, err
+		return nil, false, err
 	}
+	newWinner := len(winners) > len(existingWinners)
 
 	state := &model.BingoGameState{
 		ID:            game.ID,
@@ -272,6 +292,7 @@ func (g *Service) Draw() (*DrawResult, error) {
 		TotalCalled:   len(called),
 	}
 	state.YoeverEnabled, state.YoeverCount = g.yoeverSnapshot()
+	state.AutoEnabled, state.AutoInterval = g.AutoState()
 	g.setStateCache(game.ID, state)
 
 	return &DrawResult{
@@ -282,7 +303,7 @@ func (g *Service) Draw() (*DrawResult, error) {
 		},
 		Game:    *state,
 		Winners: winners,
-	}, nil
+	}, newWinner, nil
 }
 
 // End ends the currently active game. Returns true if a game was ended.
@@ -298,6 +319,8 @@ func (g *Service) End() (bool, error) {
 		return false, nil
 	}
 	g.invalidateStateCache()
+	// A game with auto running must stop drawing the moment it ends.
+	g.DisableAuto()
 	return true, g.store.EndGame(game.ID)
 }
 
@@ -321,6 +344,7 @@ func (g *Service) CurrentState() (*model.BingoGameState, []string, error) {
 		stateCopy := *g.stateCache
 		g.stateMu.RUnlock()
 		stateCopy.YoeverEnabled, stateCopy.YoeverCount = g.yoeverSnapshot()
+		stateCopy.AutoEnabled, stateCopy.AutoInterval = g.AutoState()
 		winners := parseWinnersCache(game.WinnersCache)
 		return &stateCopy, winners, nil
 	}
@@ -330,9 +354,10 @@ func (g *Service) CurrentState() (*model.BingoGameState, []string, error) {
 	if err != nil {
 		return nil, nil, err
 	}
-	// Stamp the yoever snapshot before caching so the cached struct is never
+	// Stamp the yoever + auto snapshots before caching so the cached struct is never
 	// mutated after another goroutine can observe it (see the cache-hit path).
 	state.YoeverEnabled, state.YoeverCount = g.yoeverSnapshot()
+	state.AutoEnabled, state.AutoInterval = g.AutoState()
 	g.setStateCache(game.ID, state)
 
 	// Read cached winners.
@@ -408,6 +433,123 @@ func (g *Service) TriggerYoever(cardID string, now time.Time, cooldown time.Dura
 	g.yoeverLast[cardID] = now
 	g.yoeverCount++
 	return g.yoeverCount, 0, nil
+}
+
+// ── Automatic draw ──────────────────────────────────────────────────────────
+
+// Automatic-draw interval bounds (seconds). DefaultAutoInterval is used when auto
+// is switched on without a chosen interval; every interval is clamped to
+// [MinAutoInterval, MaxAutoInterval] so the loop can never spin or stall forever.
+const (
+	DefaultAutoInterval = 30
+	MinAutoInterval     = 5
+	MaxAutoInterval     = 600
+)
+
+// ClampAutoInterval coerces a requested interval (seconds) into the supported
+// range, substituting the default for a non-positive value.
+func ClampAutoInterval(sec int) int {
+	if sec <= 0 {
+		return DefaultAutoInterval
+	}
+	if sec < MinAutoInterval {
+		return MinAutoInterval
+	}
+	if sec > MaxAutoInterval {
+		return MaxAutoInterval
+	}
+	return sec
+}
+
+// resetAuto seeds the per-game auto-draw state at the start of a game: enabled
+// only when the game was started with auto, the interval clamped to range, and no
+// pending half-time resume. Called from Start.
+func (g *Service) resetAuto(enabled bool, interval int) {
+	g.autoMu.Lock()
+	g.autoEnabled = enabled
+	g.autoInterval = ClampAutoInterval(interval)
+	g.resumeAuto = false
+	g.autoMu.Unlock()
+}
+
+// AutoState returns the current auto-draw enabled flag and interval (seconds), for
+// stamping onto a BingoGameState and for the server's draw loop.
+func (g *Service) AutoState() (enabled bool, interval int) {
+	g.autoMu.Lock()
+	defer g.autoMu.Unlock()
+	return g.autoEnabled, g.autoInterval
+}
+
+// SetAutoEnabled switches the auto-draw loop on or off (admin control). Clears any
+// pending half-time resume so a later "no mini-game" choice can't re-arm a loop
+// the admin has since turned off. Returns the interval so the caller can broadcast it.
+func (g *Service) SetAutoEnabled(on bool) (interval int) {
+	g.autoMu.Lock()
+	defer g.autoMu.Unlock()
+	g.autoEnabled = on
+	g.resumeAuto = false
+	return g.autoInterval
+}
+
+// SetAutoInterval updates the seconds between automatic draws (clamped). This is a
+// live, game-level control; it never writes back to a preset. Returns the applied
+// (clamped) value so the caller can broadcast the value that actually took effect.
+func (g *Service) SetAutoInterval(sec int) int {
+	g.autoMu.Lock()
+	defer g.autoMu.Unlock()
+	g.autoInterval = ClampAutoInterval(sec)
+	return g.autoInterval
+}
+
+// DisableAuto switches the loop off and forgets any pending half-time resume. Used
+// when a winner is recognized, the callable pool is exhausted, or the game ends —
+// cases where auto must not silently come back. Returns whether auto had been
+// running, so the caller can decide whether to broadcast the change.
+func (g *Service) DisableAuto() (wasEnabled bool) {
+	g.autoMu.Lock()
+	defer g.autoMu.Unlock()
+	wasEnabled = g.autoEnabled
+	g.autoEnabled = false
+	g.resumeAuto = false
+	return wasEnabled
+}
+
+// PauseAutoForHalftime switches auto off for the half-time mini-game decision,
+// remembering (resumeAuto) that it was running so ResumeAutoAfterHalftime can turn
+// it back on if the admin declines the mini-game. Returns true only when it
+// actually paused a running loop, so the caller knows whether to broadcast.
+func (g *Service) PauseAutoForHalftime() (paused bool) {
+	g.autoMu.Lock()
+	defer g.autoMu.Unlock()
+	if !g.autoEnabled {
+		return false
+	}
+	g.autoEnabled = false
+	g.resumeAuto = true
+	return true
+}
+
+// ResumeAutoAfterHalftime re-enables auto if it was paused for half-time (the
+// admin chose "no mini-game"). Returns true when it switched auto back on, so the
+// caller can broadcast + restart the loop; false when there was nothing to resume.
+func (g *Service) ResumeAutoAfterHalftime() (resumed bool) {
+	g.autoMu.Lock()
+	defer g.autoMu.Unlock()
+	if !g.resumeAuto {
+		return false
+	}
+	g.autoEnabled = true
+	g.resumeAuto = false
+	return true
+}
+
+// ClearHalftimeResume forgets a pending half-time resume without switching auto
+// back on. Used when the admin chooses to run a mini-game: auto stays off until
+// they re-enable it, and no later action can silently resume it.
+func (g *Service) ClearHalftimeResume() {
+	g.autoMu.Lock()
+	g.resumeAuto = false
+	g.autoMu.Unlock()
 }
 
 // ── internal helpers ────────────────────────────────────────────────────────
@@ -499,6 +641,29 @@ func PatternColumns(patterns []model.BingoGamePattern) [5]bool {
 		return [5]bool{true, true, true, true, true}
 	}
 	return cols
+}
+
+// HalftimeThreshold is the call count at which the half-time mini-game prompt
+// fires: the classic 35-of-75 mark scaled to this game's callable pool (active
+// columns × 15), rounded and clamped to at least 1. Mirrors the frontend
+// lib/halftime.ts and the plugin so all three surfaces agree on the midpoint.
+func HalftimeThreshold(patterns []model.BingoGamePattern) int {
+	cols := PatternColumns(patterns)
+	active := 0
+	for _, on := range cols {
+		if on {
+			active++
+		}
+	}
+	if active == 0 {
+		active = 5
+	}
+	maxCallable := active * 15
+	threshold := int(math.Round(35.0 / 75.0 * float64(maxCallable)))
+	if threshold < 1 {
+		return 1
+	}
+	return threshold
 }
 
 // MatchesPattern checks if a card matches a win pattern given the called numbers.

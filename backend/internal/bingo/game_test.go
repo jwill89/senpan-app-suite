@@ -212,13 +212,13 @@ func TestGameService_Draw_SkipsInactiveColumns(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := gs.Start([]int{int(patID)}); err != nil {
+	if _, err := gs.Start([]int{int(patID)}, false, 0); err != nil {
 		t.Fatal(err)
 	}
 
 	count := 0
 	for {
-		r, err := gs.Draw()
+		r, _, err := gs.Draw()
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -335,7 +335,7 @@ func TestGameService_StartAndCurrentState(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	gameState, err := gs.Start([]int{int(patID)})
+	gameState, err := gs.Start([]int{int(patID)}, false, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -367,7 +367,7 @@ func TestGameService_Draw(t *testing.T) {
 	gs := NewService(st)
 
 	// Draw with no active game returns nil
-	result, err := gs.Draw()
+	result, _, err := gs.Draw()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -380,12 +380,12 @@ func TestGameService_Draw(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := gs.Start([]int{int(patID)}); err != nil {
+	if _, err := gs.Start([]int{int(patID)}, false, 0); err != nil {
 		t.Fatal(err)
 	}
 
 	// Draw a number
-	result, err = gs.Draw()
+	result, _, err = gs.Draw()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -406,7 +406,7 @@ func TestGameService_Draw(t *testing.T) {
 	}
 
 	// Draw again — number should be different, call_order increments
-	result2, err := gs.Draw()
+	result2, _, err := gs.Draw()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -426,14 +426,14 @@ func TestGameService_Draw_AllNumbers(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := gs.Start([]int{int(patID)}); err != nil {
+	if _, err := gs.Start([]int{int(patID)}, false, 0); err != nil {
 		t.Fatal(err)
 	}
 
 	// Draw all 75 numbers
 	seen := make(map[int]bool)
 	for i := 0; i < 75; i++ {
-		result, err := gs.Draw()
+		result, _, err := gs.Draw()
 		if err != nil {
 			t.Fatalf("draw %d: %v", i+1, err)
 		}
@@ -447,7 +447,7 @@ func TestGameService_Draw_AllNumbers(t *testing.T) {
 	}
 
 	// 76th draw should return nil
-	result, err := gs.Draw()
+	result, _, err := gs.Draw()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -474,7 +474,7 @@ func TestGameService_End(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := gs.Start([]int{int(patID)}); err != nil {
+	if _, err := gs.Start([]int{int(patID)}, false, 0); err != nil {
 		t.Fatal(err)
 	}
 
@@ -506,13 +506,13 @@ func TestGameService_StartEndsActiveGame(t *testing.T) {
 	}
 
 	// Start first game
-	g1, err := gs.Start([]int{int(patID)})
+	g1, err := gs.Start([]int{int(patID)}, false, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	// Start second game — should end the first
-	g2, err := gs.Start([]int{int(patID)})
+	g2, err := gs.Start([]int{int(patID)}, false, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -552,14 +552,14 @@ func TestGameService_WinnerComputation(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if _, err := gs.Start([]int{int(patID)}); err != nil {
+	if _, err := gs.Start([]int{int(patID)}, false, 0); err != nil {
 		t.Fatal(err)
 	}
 
 	// Draw all 75 numbers to guarantee the top-row numbers are called
 	var lastResult *DrawResult
 	for i := 0; i < 75; i++ {
-		r, err := gs.Draw()
+		r, _, err := gs.Draw()
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -600,10 +600,10 @@ func TestGameService_InvalidateCardCache(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := gs.Start([]int{int(patID)}); err != nil {
+	if _, err := gs.Start([]int{int(patID)}, false, 0); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := gs.Draw(); err != nil {
+	if _, _, err := gs.Draw(); err != nil {
 		t.Fatal(err)
 	}
 
@@ -614,7 +614,7 @@ func TestGameService_InvalidateCardCache(t *testing.T) {
 	}
 
 	// Draw again — cache should be repopulated with both cards
-	result, err := gs.Draw()
+	result, _, err := gs.Draw()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -688,10 +688,10 @@ func TestGameService_ComputeWinners_NoCardsOrPatterns(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := gs.Start([]int{int(patID)}); err != nil {
+	if _, err := gs.Start([]int{int(patID)}, false, 0); err != nil {
 		t.Fatal(err)
 	}
-	result, err := gs.Draw()
+	result, _, err := gs.Draw()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -731,12 +731,12 @@ func TestDrawResult_LetterMatchesNumber(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := gs.Start([]int{int(patID)}); err != nil {
+	if _, err := gs.Start([]int{int(patID)}, false, 0); err != nil {
 		t.Fatal(err)
 	}
 
 	for i := 0; i < 10; i++ {
-		result, err := gs.Draw()
+		result, _, err := gs.Draw()
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -790,7 +790,7 @@ func TestGameService_ConcurrentDrawsNoDuplicates(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := gs.Start([]int{int(patID)}); err != nil {
+	if _, err := gs.Start([]int{int(patID)}, false, 0); err != nil {
 		t.Fatal(err)
 	}
 
@@ -802,7 +802,7 @@ func TestGameService_ConcurrentDrawsNoDuplicates(t *testing.T) {
 	for i := 0; i < goroutines; i++ {
 		go func() {
 			defer wg.Done()
-			res, err := gs.Draw()
+			res, _, err := gs.Draw()
 			if err != nil {
 				t.Errorf("draw error: %v", err)
 				return
@@ -838,7 +838,7 @@ func startYoeverGame(t *testing.T, gs *Service, st *store.Store) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := gs.Start([]int{int(patID)}); err != nil {
+	if _, err := gs.Start([]int{int(patID)}, false, 0); err != nil {
 		t.Fatal(err)
 	}
 }

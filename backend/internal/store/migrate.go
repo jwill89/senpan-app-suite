@@ -14,7 +14,7 @@ import (
 // PRAGMA user_version against this constant and runs only the migrations
 // needed to bring the database up to date. Bump this when adding a new
 // migration block.
-const schemaVersion = 49
+const schemaVersion = 50
 
 // ensureSchema reads the current PRAGMA user_version from the database and
 // applies any outstanding migrations to bring it up to schemaVersion.
@@ -329,8 +329,35 @@ func ensureSchema(db *sql.DB) error {
 		}
 	}
 
+	if version < 50 {
+		if err := migrateGamePresetAuto(db); err != nil {
+			return err
+		}
+	}
+
 	_, err := db.Exec(fmt.Sprintf("PRAGMA user_version = %d", schemaVersion))
 	return err
+}
+
+// migrateGamePresetAuto (schema v50) adds the automatic-draw columns to
+// game_presets: `auto_call` (pre-select the auto toggle when the preset is
+// applied) and `auto_interval` (the "Time Between Calls" seconds). Idempotent —
+// skipped when the columns already exist (e.g. a fresh install via createTables).
+func migrateGamePresetAuto(db *sql.DB) error {
+	if !tableExists(db, "game_presets") {
+		return nil
+	}
+	if !hasColumn(db, "game_presets", "auto_call") {
+		if _, err := db.Exec(`ALTER TABLE game_presets ADD COLUMN auto_call INTEGER NOT NULL DEFAULT 0`); err != nil {
+			return fmt.Errorf("add game_presets.auto_call: %w", err)
+		}
+	}
+	if !hasColumn(db, "game_presets", "auto_interval") {
+		if _, err := db.Exec(`ALTER TABLE game_presets ADD COLUMN auto_interval INTEGER NOT NULL DEFAULT 0`); err != nil {
+			return fmt.Errorf("add game_presets.auto_interval: %w", err)
+		}
+	}
+	return nil
 }
 
 // userPasskeysTableSQL defines the WebAuthn passkey credentials table. The full
@@ -492,6 +519,8 @@ func createTables(db *sql.DB) error {
 			name TEXT NOT NULL,
 			pattern_ids TEXT NOT NULL DEFAULT '[]',
 			game_details TEXT NOT NULL DEFAULT '',
+			auto_call INTEGER NOT NULL DEFAULT 0,
+			auto_interval INTEGER NOT NULL DEFAULT 0,
 			created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 		)`,
 		announcementTypesTableSQL,

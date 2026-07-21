@@ -548,6 +548,10 @@ components:
       type: object
     BingoGameState:
       properties:
+        auto_enabled:
+          type: boolean
+        auto_interval:
+          type: integer
         called_numbers:
           items:
             type: integer
@@ -607,6 +611,10 @@ components:
         game:
           nullable: true
           properties:
+            auto_enabled:
+              type: boolean
+            auto_interval:
+              type: integer
             called_numbers:
               items:
                 type: integer
@@ -953,6 +961,10 @@ components:
           type: object
         game:
           properties:
+            auto_enabled:
+              type: boolean
+            auto_interval:
+              type: integer
             called_numbers:
               items:
                 type: integer
@@ -1135,6 +1147,10 @@ components:
       type: object
     GamePreset:
       properties:
+        auto:
+          type: boolean
+        auto_interval:
+          type: integer
         created_at:
           type: string
         game_details:
@@ -1155,6 +1171,10 @@ components:
         game:
           nullable: true
           properties:
+            auto_enabled:
+              type: boolean
+            auto_interval:
+              type: integer
             called_numbers:
               items:
                 type: integer
@@ -2041,6 +2061,10 @@ components:
         presets:
           items:
             properties:
+              auto:
+                type: boolean
+              auto_interval:
+                type: integer
               created_at:
                 type: string
               game_details:
@@ -4124,13 +4148,13 @@ info:
     - **no `id`** → **admin** channel: requires an authenticated active account
       (cookie or `?token=pat_…`); streams draws immediately plus winner card IDs.
 
-    Broadcast messages (each carries a `type` field): `resource_changed`, `cards_update`, `card_deleted`, `patterns_update`, `game_update`, `game_draw`, `halftime_minigame`, `draw_delay_update`, `details_update`, `style_update`, `settings_update`, `log`.
+    Broadcast messages (each carries a `type` field): `resource_changed`, `cards_update`, `card_deleted`, `patterns_update`, `game_update`, `game_draw`, `halftime_minigame`, `halftime_prompt`, `draw_delay_update`, `details_update`, `auto_config`, `yoever`, `yoever_config`, `style_update`, `settings_update`, `log`.
 
     The **admin** channel also receives a `log` message per server log line
     (`{ "type": "log", "entry": LogEntry }`) for the live log tail — best-effort,
     sent only while an admin is connected.
   title: Senpan App Suite API
-  version: 3.10.0
+  version: 3.11.0
 openapi: 3.0.3
 paths:
   /api/account/change-password:
@@ -6763,12 +6787,19 @@ paths:
       description: |-
         **Auth:** permission:bingo-game
 
-        Partial update: `delay` (0–60) persists the shared draw delay; `details` sets the markdown game details; `yoever_enabled` toggles the "It's Yoever" reaction. Any combination may be supplied.
+        Partial update: `delay` (0–60) persists the shared draw delay; `details` sets the markdown game details; `yoever_enabled` toggles the "It's Yoever" reaction; `auto_enabled` switches the automatic-draw loop on/off and `auto_interval` adjusts the seconds between auto draws (live, never written back to a preset). Any combination may be supplied.
       requestBody:
         content:
           application/json:
             schema:
               properties:
+                auto_enabled:
+                  description: Switch the automatic-draw loop on/off.
+                  type: boolean
+                auto_interval:
+                  description: Seconds between automatic draws ("Time Between Calls").
+                  format: int64
+                  type: integer
                 delay:
                   description: Shared draw delay seconds (0–60).
                   format: int64
@@ -6893,7 +6924,19 @@ paths:
       description: |-
         **Auth:** permission:bingo-game
 
-        Alerts players about a half-time mini-game.
+        Records the admin's half-time decision: `minigame` true alerts players about a mini-game (held until the triggering number has reached them, and auto stays paused); false declines it and resumes auto if it was paused for the prompt. An empty body defaults to true.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              properties:
+                minigame:
+                  description: Alert players about a mini-game (true) or decline and
+                    resume auto (false).
+                  type: boolean
+              type: object
+        description: Half-time choice.
+        required: true
       responses:
         "200":
           content:
@@ -6910,7 +6953,7 @@ paths:
       security:
       - cookieAuth: []
       - bearerAuth: []
-      summary: Trigger halftime
+      summary: Answer the half-time prompt
       tags:
       - Bingo
   /api/game/start:
@@ -6921,6 +6964,13 @@ paths:
           application/json:
             schema:
               properties:
+                auto:
+                  description: Start with the automatic-draw loop running.
+                  type: boolean
+                auto_interval:
+                  description: Seconds between automatic draws ("Time Between Calls").
+                  format: int64
+                  type: integer
                 pattern_ids:
                   description: Win pattern ids (≥1).
                   items:
@@ -8097,6 +8147,13 @@ paths:
           application/json:
             schema:
               properties:
+                auto:
+                  description: Pre-select the automatic-draw toggle when applied.
+                  type: boolean
+                auto_interval:
+                  description: Seconds between automatic draws ("Time Between Calls").
+                  format: int64
+                  type: integer
                 game_details:
                   description: Markdown details.
                   type: string
@@ -8164,6 +8221,13 @@ paths:
           application/json:
             schema:
               properties:
+                auto:
+                  description: Pre-select the automatic-draw toggle when applied.
+                  type: boolean
+                auto_interval:
+                  description: Seconds between automatic draws ("Time Between Calls").
+                  format: int64
+                  type: integer
                 game_details:
                   description: Markdown details.
                   type: string

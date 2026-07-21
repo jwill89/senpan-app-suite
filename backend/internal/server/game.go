@@ -3,8 +3,10 @@ package server
 import (
 	"app-suite/internal/bingo"
 	"app-suite/internal/model"
+	"context"
 	"encoding/json"
 	"errors"
+	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
@@ -33,13 +35,18 @@ func (s *Server) handleGameState(w http.ResponseWriter, r *http.Request) {
 // gameStartRequest is the JSON body for POST /api/game/start.
 type gameStartRequest struct {
 	PatternIDs []int `json:"pattern_ids"` // pattern IDs to use when starting a game
+	// Auto starts the game with the automatic-draw loop running; AutoInterval is
+	// the seconds between draws (the "Time Between Calls" setting). Both usually
+	// come from the New Game form or a preset the admin applied.
+	Auto         bool `json:"auto"`
+	AutoInterval int  `json:"auto_interval"`
 }
 
 // handleGameStart starts a new game with the selected win patterns.
 //
 //	Endpoint:    POST /api/game/start
 //	Auth:        permission:bingo-game
-//	Request:     {"pattern_ids": [...]}
+//	Request:     {"pattern_ids": [...], "auto": false, "auto_interval": 30}
 //	Response:    200 GameStateResponse
 //	Broadcasts:  game_update (start)
 func (s *Server) handleGameStart(w http.ResponseWriter, r *http.Request) {
@@ -55,7 +62,7 @@ func (s *Server) handleGameStart(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "Select at least one pattern")
 		return
 	}
-	game, err := s.game.Start(req.PatternIDs)
+	game, err := s.game.Start(req.PatternIDs, req.Auto, req.AutoInterval)
 	if err != nil {
 		writeInternalError(w, "start game", err)
 		return
@@ -67,6 +74,9 @@ func (s *Server) handleGameStart(w http.ResponseWriter, r *http.Request) {
 		GameDetails: details,
 	})
 	s.broadcastGameStart(game, details)
+	// Wake the auto-draw scheduler so it (re)arms for the new game — or stays idle
+	// when the game started manual. Safe to call unconditionally.
+	s.signalAutoWake()
 }
 
 // gameDrawRequest is the JSON body for POST /api/game/draw.
@@ -80,7 +90,8 @@ type gameDrawRequest struct {
 //	Auth:        permission:bingo-game
 //	Request:     {"delay": 0}
 //	Response:    200 DrawResult
-//	Broadcasts:  game_draw (to admins immediately; to players delayed/immediate)
+//	Broadcasts:  game_draw (to admins immediately; to players delayed/immediate),
+//	             plus auto_config / halftime_prompt as post-draw effects fire
 func (s *Server) handleGameDraw(w http.ResponseWriter, r *http.Request) {
 	if !s.requirePermission(w, r, permBingoGame) {
 		return
@@ -90,35 +101,59 @@ func (s *Server) handleGameDraw(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "Invalid JSON")
 		return
 	}
-	result, err := s.game.Draw()
+	result, newWinner, err := s.game.Draw()
 	if err != nil {
 		writeInternalError(w, "draw number", err)
 		return
 	}
 	if result == nil {
-		writeError(w, http.StatusBadRequest, "No active game or all 75 numbers have been drawn")
+		writeError(w, http.StatusBadRequest, "No active game or all callable numbers have been drawn")
 		return
 	}
 	writeJSON(w, http.StatusOK, result)
 
-	// Broadcast to admins immediately (keeps other admin tabs in sync)
+	// A manual draw uses the delay carried on the request (a per-click choice); the
+	// shared post-draw logic broadcasts it and applies the winner/half-time effects.
+	s.postDraw(result, newWinner, clampDrawDelay(req.Delay))
+}
+
+// clampDrawDelay coerces a requested player draw delay into the supported 0–60s.
+func clampDrawDelay(delay int) int {
+	return min(max(delay, 0), 60)
+}
+
+// postDraw broadcasts a completed draw and applies its side-effects, shared by the
+// manual draw handler and the automatic-draw loop. Admins see the number
+// immediately; players see it after `delay` seconds. A new winner switches the
+// auto loop off, and crossing the half-time mark pauses auto (if running) and
+// prompts admins for a mini-game.
+func (s *Server) postDraw(result *bingo.DrawResult, newWinner bool, delay int) {
+	// Admins immediately (keeps every admin surface in sync).
 	s.broadcastDrawToAdmins(result.Drawn, result.Winners)
 
-	// Broadcast to players: delayed or immediate
-	delay := req.Delay
-	if delay < 0 {
-		delay = 0
-	}
-	if delay > 60 {
-		delay = 60
-	}
+	// Players: delayed or immediate. The moment the number reaches players is used
+	// below to hold a half-time alert until they've seen the triggering number.
+	drawn := result.Drawn
 	if delay > 0 {
-		drawn := result.Drawn
 		time.AfterFunc(time.Duration(delay)*time.Second, func() {
 			s.broadcastDrawToPlayers(drawn)
 		})
 	} else {
-		s.broadcastDrawToPlayers(result.Drawn)
+		s.broadcastDrawToPlayers(drawn)
+	}
+
+	// A winner ends the auto loop straight away (before the half-time check, so a
+	// draw that both wins and crosses the midpoint leaves auto off with no resume).
+	if newWinner {
+		if s.game.DisableAuto() {
+			s.broadcastAutoConfig()
+			s.signalAutoWake()
+		}
+	}
+
+	// Half-time: fire once, exactly on the crossing draw.
+	if len(result.Game.CalledNumbers) == bingo.HalftimeThreshold(result.Game.Patterns) {
+		s.onHalftime(time.Now().Add(time.Duration(delay) * time.Second))
 	}
 }
 
@@ -177,21 +212,46 @@ func (s *Server) handleGameEnd(w http.ResponseWriter, r *http.Request) {
 
 	writeJSON(w, http.StatusOK, model.EndGameResponse{Ended: ok})
 	s.broadcastGameEnd()
+	// End() switched auto off; wake the scheduler so it parks its timer.
+	s.signalAutoWake()
 }
 
-// handleGameHalftime alerts players about a half-time mini-game.
+// gameHalftimeRequest is the JSON body for POST /api/game/halftime. `minigame`
+// records the admin's answer to the half-time prompt: true alerts players about a
+// mini-game (and leaves auto paused); false declines it and resumes auto if it was
+// paused for the prompt. An empty body defaults to true, preserving the original
+// "trigger the alert" behaviour for older clients.
+type gameHalftimeRequest struct {
+	Minigame *bool `json:"minigame"`
+}
+
+// handleGameHalftime records the admin's half-time decision.
 //
 //	Endpoint:    POST /api/game/halftime
 //	Auth:        permission:bingo-game
+//	Request:     {"minigame": true|false}
 //	Response:    200 {"ok": true}
-//	Broadcasts:  halftime_minigame (to players)
+//	Broadcasts:  halftime_minigame (players; when minigame=true, held until the
+//	             triggering number has reached them), auto_config (on resume)
 func (s *Server) handleGameHalftime(w http.ResponseWriter, r *http.Request) {
 	if !s.requirePermission(w, r, permBingoGame) {
 		return
 	}
-	s.hub.BroadcastToPlayers(struct {
-		Type string `json:"type"`
-	}{Type: "halftime_minigame"})
+	// Tolerate an absent/empty body (older clients POST nothing) → default to
+	// alerting players about a mini-game.
+	req, _ := readJSON[gameHalftimeRequest](w, r)
+	minigame := req.Minigame == nil || *req.Minigame
+
+	if minigame {
+		// Alert players, but not before the triggering number has reached them
+		// (auto stays paused; the admin re-enables it manually when ready).
+		s.game.ClearHalftimeResume() // the choice is "mini-game" — don't auto-resume
+		s.broadcastHalftimeMinigameWhenReady()
+	} else if s.game.ResumeAutoAfterHalftime() {
+		// No mini-game: switch auto back on if it was paused for the prompt.
+		s.broadcastAutoConfig()
+		s.signalAutoWake()
+	}
 	writeJSON(w, http.StatusOK, model.OKResponse{OK: true})
 }
 
@@ -299,10 +359,14 @@ func (s *Server) handleGameYoever(w http.ResponseWriter, r *http.Request) {
 //   - delay present          → validate 0–60, persist default_draw_delay, broadcast draw_delay_update
 //   - details present        → set game details, broadcast details_update
 //   - yoever_enabled present → toggle the "It's Yoever" reaction, broadcast yoever_config
+//   - auto_enabled present   → switch the automatic-draw loop on/off, broadcast auto_config
+//   - auto_interval present  → adjust the seconds between auto draws, broadcast auto_config
 type gamePatchRequest struct {
 	Delay         *int    `json:"delay"`
 	Details       *string `json:"details"`
 	YoeverEnabled *bool   `json:"yoever_enabled"`
+	AutoEnabled   *bool   `json:"auto_enabled"`
+	AutoInterval  *int    `json:"auto_interval"`
 }
 
 // handleGamePatch partially updates the shared game controls (draw delay and/or
@@ -365,5 +429,177 @@ func (s *Server) handleGamePatch(w http.ResponseWriter, r *http.Request) {
 		}{Type: "yoever_config", Enabled: *req.YoeverEnabled})
 	}
 
+	// Automatic-draw controls are shared, per-game admin controls too. Apply the
+	// interval first so an enable in the same PATCH arms with the new value, then
+	// broadcast the resulting state and wake the scheduler so it re-arms or stops.
+	if req.AutoInterval != nil {
+		s.game.SetAutoInterval(*req.AutoInterval)
+	}
+	if req.AutoEnabled != nil {
+		s.game.SetAutoEnabled(*req.AutoEnabled)
+	}
+	if req.AutoInterval != nil || req.AutoEnabled != nil {
+		s.broadcastAutoConfig()
+		s.signalAutoWake()
+	}
+
 	writeJSON(w, http.StatusOK, model.OKResponse{OK: true})
+}
+
+// ── Automatic-draw loop ──────────────────────────────────────────────────────
+//
+// The auto loop lives here (not in the bingo service) because each draw is a
+// broadcast side-effect: it reuses the exact same post-draw path as a manual
+// draw (admins immediately, players after the delay, winner/half-time effects).
+// A single long-lived goroutine (RunAutoDrawScheduler) owns the timing so there
+// is never more than one auto-drawer, and it re-reads the live delay + interval
+// on every cycle so admin changes take effect without a restart.
+
+// signalAutoWake nudges the auto-draw scheduler to re-evaluate its timer after an
+// auto-relevant change (game start/end, enable/disable, interval or delay change).
+// Non-blocking: the wake channel is a one-slot mailbox, so a burst collapses to a
+// single re-evaluation.
+func (s *Server) signalAutoWake() {
+	select {
+	case s.autoWake <- struct{}{}:
+	default:
+	}
+}
+
+// broadcastAutoConfig tells every client the current auto-draw state (enabled +
+// interval) so all admin surfaces — web and plugin — keep their toggle and "Time
+// Between Calls" selector in step, exactly like yoever_config.
+func (s *Server) broadcastAutoConfig() {
+	enabled, interval := s.game.AutoState()
+	s.hub.Broadcast(struct {
+		Type     string `json:"type"`
+		Enabled  bool   `json:"enabled"`
+		Interval int    `json:"interval"`
+	}{Type: "auto_config", Enabled: enabled, Interval: interval})
+}
+
+// currentDrawDelay reads the shared player draw delay (seconds), clamped to 0–60.
+// The auto loop adds this to the interval so a player perceives interval+delay
+// between numbers while the number still reaches admins immediately.
+func (s *Server) currentDrawDelay() int {
+	return clampDrawDelay(s.getSettingInt("default_draw_delay", 0))
+}
+
+// onHalftime handles a draw crossing the half-time mark: pause the auto loop (if
+// running) so the admin can decide on a mini-game, remember when the triggering
+// number reaches players (so a confirmed alert isn't shown before it), and prompt
+// every admin surface. `readyAt` is when the crossing number reaches players.
+func (s *Server) onHalftime(readyAt time.Time) {
+	paused := s.game.PauseAutoForHalftime()
+	if paused {
+		s.broadcastAutoConfig()
+		s.signalAutoWake()
+	}
+	s.halftimeMu.Lock()
+	s.halftimeReadyAt = readyAt
+	s.halftimeMu.Unlock()
+	// Prompt admins to choose whether to run a mini-game. `auto_paused` lets the
+	// modal explain that declining will resume the auto draws.
+	s.hub.BroadcastToAdmins(struct {
+		Type       string `json:"type"`
+		AutoPaused bool   `json:"auto_paused"`
+	}{Type: "halftime_prompt", AutoPaused: paused})
+}
+
+// broadcastHalftimeMinigameWhenReady alerts players about a mini-game, holding the
+// message until the half-time-triggering number has actually reached them (so they
+// never see the mini-game prompt before the number that caused it). The wait is
+// the remaining draw-delay recorded when half-time fired; usually zero by the time
+// an admin has answered the prompt.
+func (s *Server) broadcastHalftimeMinigameWhenReady() {
+	s.halftimeMu.Lock()
+	readyAt := s.halftimeReadyAt
+	s.halftimeMu.Unlock()
+
+	send := func() {
+		s.hub.BroadcastToPlayers(struct {
+			Type string `json:"type"`
+		}{Type: "halftime_minigame"})
+	}
+	if remaining := time.Until(readyAt); remaining > 0 {
+		time.AfterFunc(remaining, send)
+	} else {
+		send()
+	}
+}
+
+// autoDrawOnce performs one automatic draw and its side-effects, mirroring a manual
+// draw. It self-guards: it only draws while auto is enabled, and switches auto off
+// (broadcasting the change) when the callable pool is exhausted or the game has
+// gone, so the scheduler then parks.
+func (s *Server) autoDrawOnce() {
+	if enabled, _ := s.game.AutoState(); !enabled {
+		return
+	}
+	result, newWinner, err := s.game.Draw()
+	if err != nil {
+		slog.Error("auto draw failed", "error", err)
+		return
+	}
+	if result == nil {
+		// No active game or every callable number drawn — stop auto so the loop parks.
+		if s.game.DisableAuto() {
+			s.broadcastAutoConfig()
+			s.signalAutoWake()
+		}
+		return
+	}
+	s.postDraw(result, newWinner, s.currentDrawDelay())
+}
+
+// RunAutoDrawScheduler is the single goroutine that drives automatic draws. It
+// sleeps until the next draw is due (interval + the current player delay, so the
+// player-perceived gap is interval+delay), then draws — unless woken early by a
+// config change (signalAutoWake), which makes it recompute. It parks (no timer)
+// whenever auto is off. Launched once from main with a context cancelled on
+// shutdown, so it drains cleanly and never draws into a closing database.
+func (s *Server) RunAutoDrawScheduler(ctx context.Context) {
+	timer := time.NewTimer(time.Hour)
+	if !timer.Stop() {
+		<-timer.C
+	}
+	defer timer.Stop()
+
+	for {
+		enabled, interval := s.game.AutoState()
+		if enabled {
+			wait := time.Duration(s.currentDrawDelay()+bingo.ClampAutoInterval(interval)) * time.Second
+			resetTimer(timer, wait)
+		} else {
+			stopTimer(timer)
+		}
+
+		select {
+		case <-ctx.Done():
+			return
+		case <-s.autoWake:
+			// Config changed — loop to recompute the timer from the new state.
+			continue
+		case <-timer.C:
+			s.autoDrawOnce()
+			// Loop to schedule the next draw (or park if auto just switched off).
+		}
+	}
+}
+
+// resetTimer safely resets a timer to fire after d, draining a pending fire first
+// so a stale tick can't trigger an extra draw.
+func resetTimer(t *time.Timer, d time.Duration) {
+	stopTimer(t)
+	t.Reset(d)
+}
+
+// stopTimer stops a timer and drains any already-fired-but-unread tick.
+func stopTimer(t *time.Timer) {
+	if !t.Stop() {
+		select {
+		case <-t.C:
+		default:
+		}
+	}
 }

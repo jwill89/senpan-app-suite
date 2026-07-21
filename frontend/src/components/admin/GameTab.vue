@@ -14,7 +14,13 @@ import MarkdownEditor from '@/components/common/MarkdownEditor.vue'
 import MarkdownText from '@/components/common/MarkdownText.vue'
 import AdminPanel from '@/components/common/ui/AdminPanel.vue'
 import PatternPicker from '@/components/common/ui/PatternPicker.vue'
-import { DRAW_DELAY_OPTIONS, patternColumns } from '@/lib/constants'
+import {
+  DRAW_DELAY_OPTIONS,
+  AUTO_INTERVAL_OPTIONS,
+  DEFAULT_AUTO_INTERVAL,
+  autoIntervalLabel,
+  patternColumns,
+} from '@/lib/constants'
 import { parseServerTimestamp } from '@/lib/datetime'
 import { primeAudio, playWinnerChime } from '@/lib/sound'
 import { useGameStore } from '@/stores/game'
@@ -50,8 +56,21 @@ function applyPreset(): void {
   const validIds = new Set(patterns.patterns.map((p) => p.id))
   game.selectedPatternIds = preset.pattern_ids.filter((id) => validIds.has(id))
   game.gameDetails = preset.game_details || ''
+  // Pre-fill the auto-draw controls from the preset (the admin can still tweak
+  // them before starting; adjusting here never writes back to the preset).
+  game.newGameAuto = preset.auto
+  game.newGameAutoInterval = preset.auto_interval || DEFAULT_AUTO_INTERVAL
   void game.saveGameDetails()
 }
+
+/** Live "Time Between Calls" selector for the active game (writes through the
+ *  optimistic setAutoInterval action). */
+const liveAutoInterval = computed({
+  get: () => game.currentGame?.auto_interval ?? DEFAULT_AUTO_INTERVAL,
+  set: (v: number) => {
+    void game.setAutoInterval(v)
+  },
+})
 
 // ── Elapsed-game clock (admin-only, Current Game view) ──────────────────────
 // Ticks once a second while this tab is mounted; the start time comes from the
@@ -98,6 +117,11 @@ function goToPatterns(): void {
 /** Toggles the "It's Yoever" reaction on/off for all players (server-side). */
 function toggleYoever(): void {
   void game.setYoeverEnabled(!game.currentGame?.yoever_enabled)
+}
+
+/** Toggles the server-side automatic-draw loop for the current game. */
+function toggleAuto(): void {
+  void game.setAutoEnabled(!game.currentGame?.auto_enabled)
 }
 
 /**
@@ -228,6 +252,31 @@ onBeforeUnmount(() => {
             />
           </div>
 
+          <!-- Auto-draw setup: toggle on, then pick how often numbers are drawn -->
+          <div class="auto-setup mb-12">
+            <label class="auto-check">
+              <input v-model="game.newGameAuto" type="checkbox" />
+              <span>Auto-draw numbers</span>
+            </label>
+            <template v-if="game.newGameAuto">
+              <label class="text-dim text-sm" for="new-auto-interval">Time Between Calls:</label>
+              <select
+                id="new-auto-interval"
+                v-model.number="game.newGameAutoInterval"
+                class="manager-filter"
+              >
+                <option v-for="s in AUTO_INTERVAL_OPTIONS" :key="s" :value="s">
+                  {{ autoIntervalLabel(s) }}
+                </option>
+              </select>
+            </template>
+          </div>
+          <p v-if="game.newGameAuto" class="text-dim text-xs mb-12">
+            The system draws a number every {{ autoIntervalLabel(game.newGameAutoInterval) }} once
+            the game starts. Each draw still respects the player delay, and auto turns off at
+            half-time and when a winner is found.
+          </p>
+
           <button
             class="btn-action btn-lg"
             :disabled="game.selectedPatternIds.length === 0 || game.starting"
@@ -261,88 +310,20 @@ onBeforeUnmount(() => {
             <select
               v-model.number="game.drawDelay"
               aria-label="Draw delay"
-              class="btn-neutral"
-              style="padding: 10px 14px; font-size: 0.95rem; font-weight: 600; cursor: pointer"
+              class="btn-neutral delay-select"
               @change="game.persistDrawDelay()"
             >
               <option v-for="s in DRAW_DELAY_OPTIONS" :key="s" :value="s">
                 {{ delayLabel(s) }}
               </option>
             </select>
-            <button class="btn-caution" :disabled="game.ending" @click="game.endGame()">
+            <button class="btn-caution btn-lg" :disabled="game.ending" @click="game.endGame()">
               <LoadingSpinner v-if="game.ending" label="Ending…" />
               <template v-else>End Game</template>
-            </button>
-
-            <button
-              class="btn-neutral btn-sm winner-sound-toggle"
-              :aria-pressed="game.winnerSoundEnabled"
-              :title="
-                game.winnerSoundEnabled
-                  ? 'Winner sound on — click to mute'
-                  : 'Winner sound off — click to enable'
-              "
-              @click="toggleWinnerSound"
-            >
-              <font-awesome-icon
-                :icon="['fas', game.winnerSoundEnabled ? 'volume-high' : 'volume-xmark']"
-              />
-              <span>Winner Sound</span>
             </button>
           </div>
 
           <p class="text-dim text-xs mt-8">Tip: press <kbd>Space</kbd> to draw the next number.</p>
-
-          <!-- "It's Yoever" live controls: switch the reaction on/off for all
-               players, watch the running count, and toggle it for yourself. -->
-          <div class="yoever-admin-controls">
-            <button
-              class="btn-neutral btn-sm"
-              :aria-pressed="game.currentGame.yoever_enabled"
-              :title="
-                game.currentGame.yoever_enabled
-                  ? `It's Yoever is ON — click to switch it off for all players`
-                  : `It's Yoever is OFF — click to switch it on`
-              "
-              @click="toggleYoever"
-            >
-              <font-awesome-icon
-                :icon="['fas', game.currentGame.yoever_enabled ? 'circle-check' : 'circle-xmark']"
-              />
-              <span>It's Yoever: {{ game.currentGame.yoever_enabled ? 'On' : 'Off' }}</span>
-            </button>
-
-            <span class="yoever-count" title="Times It's Yoever has been triggered this game">
-              <font-awesome-icon :icon="['fad', 'megaphone']" /> Yoevers:
-              {{ game.currentGame.yoever_count }}
-            </span>
-
-            <label
-              class="yoever-selfmute"
-              title="Show or hide the reaction animation on your own screen"
-            >
-              <input type="checkbox" :checked="!yoever.muted" @change="toggleYoeverForMe" />
-              <span>Show effect for me</span>
-            </label>
-
-            <label
-              class="yoever-selfmute"
-              :class="{ 'is-disabled': yoever.muted }"
-              :title="
-                yoever.muted
-                  ? 'Turn on Show effect first to control the sound'
-                  : 'Play or mute the reaction sound on your own screen (uses your sound volume)'
-              "
-            >
-              <input
-                type="checkbox"
-                :checked="!yoever.muted && yoever.soundEnabled"
-                :disabled="yoever.muted"
-                @change="toggleYoeverSoundForMe"
-              />
-              <span>Play sound for me</span>
-            </label>
-          </div>
 
           <!-- Countdown / Sent indicator -->
           <div v-if="game.drawCountdown !== null" class="draw-countdown">
@@ -355,6 +336,140 @@ onBeforeUnmount(() => {
             <span class="sent-icon"><font-awesome-icon :icon="['fad', 'circle-check']" /></span>
             <span class="sent-label">Sent to players!</span>
           </div>
+
+          <!-- Collapsible per-feature settings: auto-draw, "It's Yoever", and the
+               winner-sound alert. Collapsed by default so the primary controls stay
+               front-and-centre. -->
+          <details class="game-settings">
+            <summary class="game-settings-summary">
+              <font-awesome-icon :icon="['fad', 'gear']" class="game-settings-icon" />
+              <span>Game Settings</span>
+              <font-awesome-icon :icon="['fas', 'chevron-down']" class="game-settings-chevron" />
+            </summary>
+
+            <div class="game-settings-body">
+              <!-- Auto-draw: switch the loop on/off and adjust the interval mid-game
+                   (never writes back to a preset). -->
+              <section class="settings-section">
+                <h4 class="settings-section-title">Auto-Draw</h4>
+                <div class="settings-controls">
+                  <button
+                    class="btn-neutral btn-sm"
+                    :aria-pressed="game.currentGame.auto_enabled"
+                    :title="
+                      game.currentGame.auto_enabled
+                        ? 'Auto-draw is ON — click to stop automatic draws'
+                        : 'Auto-draw is OFF — click to draw numbers automatically'
+                    "
+                    @click="toggleAuto"
+                  >
+                    <font-awesome-icon
+                      :icon="[
+                        'fas',
+                        game.currentGame.auto_enabled ? 'circle-play' : 'circle-pause',
+                      ]"
+                    />
+                    <span>Auto-Draw: {{ game.currentGame.auto_enabled ? 'On' : 'Off' }}</span>
+                  </button>
+
+                  <label
+                    class="auto-interval-field"
+                    title="How often a number is drawn automatically"
+                  >
+                    <span class="text-dim text-sm">Time Between Calls:</span>
+                    <select
+                      v-model.number="liveAutoInterval"
+                      aria-label="Time between calls"
+                      class="btn-neutral"
+                    >
+                      <option v-for="s in AUTO_INTERVAL_OPTIONS" :key="s" :value="s">
+                        {{ autoIntervalLabel(s) }}
+                      </option>
+                    </select>
+                  </label>
+                </div>
+              </section>
+
+              <!-- "It's Yoever" reaction: switch it on/off for all players, watch the
+                   running count, and control it for yourself. -->
+              <section class="settings-section">
+                <h4 class="settings-section-title">It's Yoever</h4>
+                <div class="settings-controls">
+                  <button
+                    class="btn-neutral btn-sm"
+                    :aria-pressed="game.currentGame.yoever_enabled"
+                    :title="
+                      game.currentGame.yoever_enabled
+                        ? `It's Yoever is ON — click to switch it off for all players`
+                        : `It's Yoever is OFF — click to switch it on`
+                    "
+                    @click="toggleYoever"
+                  >
+                    <font-awesome-icon
+                      :icon="[
+                        'fas',
+                        game.currentGame.yoever_enabled ? 'circle-check' : 'circle-xmark',
+                      ]"
+                    />
+                    <span>It's Yoever: {{ game.currentGame.yoever_enabled ? 'On' : 'Off' }}</span>
+                  </button>
+
+                  <span class="yoever-count" title="Times It's Yoever has been triggered this game">
+                    <font-awesome-icon :icon="['fad', 'megaphone']" /> Yoevers:
+                    {{ game.currentGame.yoever_count }}
+                  </span>
+
+                  <label
+                    class="yoever-selfmute"
+                    title="Show or hide the reaction animation on your own screen"
+                  >
+                    <input type="checkbox" :checked="!yoever.muted" @change="toggleYoeverForMe" />
+                    <span>Show effect for me</span>
+                  </label>
+
+                  <label
+                    class="yoever-selfmute"
+                    :class="{ 'is-disabled': yoever.muted }"
+                    :title="
+                      yoever.muted
+                        ? 'Turn on Show effect first to control the sound'
+                        : 'Play or mute the reaction sound on your own screen (uses your sound volume)'
+                    "
+                  >
+                    <input
+                      type="checkbox"
+                      :checked="!yoever.muted && yoever.soundEnabled"
+                      :disabled="yoever.muted"
+                      @change="toggleYoeverSoundForMe"
+                    />
+                    <span>Play sound for me</span>
+                  </label>
+                </div>
+              </section>
+
+              <!-- Winner sound: an admin-only chime when a draw produces a new winner. -->
+              <section class="settings-section">
+                <h4 class="settings-section-title">Sound</h4>
+                <div class="settings-controls">
+                  <button
+                    class="btn-neutral btn-sm winner-sound-toggle"
+                    :aria-pressed="game.winnerSoundEnabled"
+                    :title="
+                      game.winnerSoundEnabled
+                        ? 'Winner sound on — click to mute'
+                        : 'Winner sound off — click to enable'
+                    "
+                    @click="toggleWinnerSound"
+                  >
+                    <font-awesome-icon
+                      :icon="['fas', game.winnerSoundEnabled ? 'volume-high' : 'volume-xmark']"
+                    />
+                    <span>Winner Sound: {{ game.winnerSoundEnabled ? 'On' : 'Off' }}</span>
+                  </button>
+                </div>
+              </section>
+            </div>
+          </details>
         </div>
 
         <!-- Two-column layout, mirroring the player board: called numbers (with
@@ -451,13 +566,114 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
-/* "It's Yoever" live controls under the draw buttons. */
-.yoever-admin-controls {
+/* Auto-draw setup row in the New Game form. */
+.auto-setup {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+.auto-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  cursor: pointer;
+  user-select: none;
+}
+.auto-check input {
+  cursor: pointer;
+}
+
+/* Delay selector in the primary controls row — sized to match the btn-lg
+   Draw/End buttons beside it so the three read as one row of equal controls. A
+   <select>'s native control height ignores line-height, so pin the height to the
+   btn-lg box (14px padding + 1.1rem/line-1 ≈ 46px) explicitly. */
+.delay-select {
+  box-sizing: border-box;
+  height: 46px;
+  padding: 0 18px;
+  font-size: 1.1rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+/* ── Collapsible per-feature settings (native <details>) ─────────────────────
+   Holds the auto-draw, "It's Yoever", and winner-sound controls in labelled
+   sections; collapsed by default so the primary controls stay prominent. */
+.game-settings {
+  max-width: 720px;
+  margin: 16px auto 0;
+  text-align: left;
+  border: 1px solid var(--control-border);
+  border-radius: var(--radius);
+  background: var(--panel-raised-bg);
+}
+.game-settings-summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  cursor: pointer;
+  font-weight: 700;
+  color: var(--text);
+  user-select: none;
+  list-style: none;
+}
+/* Hide the default disclosure triangle — we render our own chevron. */
+.game-settings-summary::-webkit-details-marker {
+  display: none;
+}
+.game-settings-icon {
+  color: var(--highlight);
+}
+.game-settings-chevron {
+  margin-left: auto;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  transition: transform 0.18s ease;
+}
+.game-settings[open] .game-settings-chevron {
+  transform: rotate(180deg);
+}
+.game-settings-body {
+  display: flex;
+  flex-direction: column;
+  padding: 0 14px 14px;
+}
+.settings-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 0;
+}
+.settings-section + .settings-section {
+  border-top: 1px solid var(--control-border);
+}
+.settings-section-title {
+  margin: 0;
+  font-size: 0.8rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+}
+.settings-controls {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 14px;
-  margin-top: 10px;
+}
+.auto-interval-field {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.auto-interval-field select {
+  padding: 6px 10px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
 }
 .yoever-count {
   font-weight: 700;

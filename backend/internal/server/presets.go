@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"strings"
 
+	"app-suite/internal/bingo"
 	"app-suite/internal/model"
 )
 
@@ -13,6 +14,10 @@ type presetWriteRequest struct {
 	Name        string  `json:"name"`
 	PatternIDs  []int64 `json:"pattern_ids"`
 	GameDetails string  `json:"game_details"`
+	// Auto pre-selects the automatic-draw toggle and AutoInterval fills the "Time
+	// Between Calls" selector when a game is started from this preset.
+	Auto         bool `json:"auto"`
+	AutoInterval int  `json:"auto_interval"`
 }
 
 // validate checks the shared create/update requirements, writing a 400 and
@@ -66,7 +71,7 @@ func (s *Server) handlePresetCreate(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	id, err := s.store.CreateGamePreset(name, req.PatternIDs, req.GameDetails)
+	id, err := s.store.CreateGamePreset(name, req.PatternIDs, req.GameDetails, req.Auto, bingo.ClampAutoInterval(req.AutoInterval))
 	if err != nil {
 		writeInternalError(w, "presets", err)
 		return
@@ -96,7 +101,7 @@ func (s *Server) handlePresetUpdate(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	if err := s.store.UpdateGamePreset(id, name, req.PatternIDs, req.GameDetails); err != nil {
+	if err := s.store.UpdateGamePreset(id, name, req.PatternIDs, req.GameDetails, req.Auto, bingo.ClampAutoInterval(req.AutoInterval)); err != nil {
 		writeInternalError(w, "presets", err)
 		return
 	}

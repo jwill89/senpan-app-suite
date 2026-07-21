@@ -96,7 +96,7 @@ rotated immediately**. See **Authentication & authorization** below.
 │       │   └── migrate.go            ← Schema versioning + migrations (PRAGMA user_version)
 │       ├── bingo/
 │       │   ├── card.go               ← Card/board generation, ID generation, LetterForNumber
-│       │   └── game.go               ← bingo.Service (start, draw, end, state, winner matching, caching)
+│       │   └── game.go               ← bingo.Service (start, draw, end, state, winner matching, caching, auto-draw state + HalftimeThreshold); the auto-draw *loop* lives in server/game.go (it needs the hub to broadcast)
 │       ├── ws/hub.go                 ← WebSocket hub, client pumps, broadcast (player/admin channels; BroadcastLog = lossy live-log fan-out to true-admin (IsAdmin) clients only, never disconnects on a full buffer; isAdmin bit refreshed on the revalidate tick)
 │       ├── logging/logging.go        ← slog setup: JSON handler → stdout + a rotating file (timberjack; daily-midnight rotation, zstd) + a live-tail tap (io.Writer forwarding each line); runtime-settable level via slog.LevelVar
 │       └── server/
@@ -133,7 +133,7 @@ rotated immediately**. See **Authentication & authorization** below.
 │   └── SenpanCompanion/              ← the plugin (DLL/InternalName "SenpanCompanionAdmin"; display "Senpan Admin Companion")
 │       ├── Plugin.cs                 ← entry point: injected [PluginService]s, /senpan (+ /senpan config) command, window system
 │       ├── Configuration.cs          ← persisted config: server URL + personal-access token
-│       ├── Api/                      ← ApiClient (REST, Bearer pat_…) + ApiModels + LiveConnection (admin WS: game_draw/game_update/cards_update)
+│       ├── Api/                      ← ApiClient (REST, Bearer pat_…) + ApiModels + LiveConnection (admin WS: game_draw/game_update/cards_update/yoever(_config)/auto_config/halftime_prompt)
 │       ├── Services/                 ← Session (auth/perms), CardCache (coalesced, framework-thread), NearbyPlayers (IObjectTable), ChatSender (/tell), WinnerChime (winmm synth)
 │       ├── Windows/                  ← ImGui tabs: TabBase + Bingo{Cards,Game,Winners}Tab + RaffleTab + MainWindow
 │       ├── SenpanCompanion.csproj    ← Dalamud.NET.Sdk/15.0.0; <AssemblyName>SenpanCompanionAdmin; EnableWindowsTargeting (Linux CI)
@@ -188,7 +188,7 @@ the updated state to all connected WebSocket clients via `Hub.Broadcast()`, `Hub
 - `ListWinnersLog` uses `COUNT(*) OVER()` window function (single query for data + total).
 - SQLite connection pool allows 4 concurrent connections for WAL concurrent readers.
 
-**Schema versioning**: `store/migrate.go` uses `PRAGMA user_version` to track schema version (currently **43**). v22 added the `users` table + seeded the bootstrap admin; later migrations grew the announcements feature (roles, mention, location, thumbnail, dynamic dates, sort order) and dropped the retired `book_club_events` table (v28), moved themes to structured design tokens + added style flourishes (v34/v37), then shipped the **Garapon** festival lottery drum (v35–36), **Affiliates** (v38), the **Stamp Rally** (v39–41, including the v41 collected-log rebuild that keeps logs after a card/stamp is deleted), per-account **personal-access tokens** for the plugin/API (v42), and a `UNIQUE(game_id, number)` index on `called_numbers` as a duplicate-draw backstop (v43).
+**Schema versioning**: `store/migrate.go` uses `PRAGMA user_version` to track schema version (currently **50**; v50 added the `game_presets.auto_call`/`auto_interval` columns for auto-run games). v22 added the `users` table + seeded the bootstrap admin; later migrations grew the announcements feature (roles, mention, location, thumbnail, dynamic dates, sort order) and dropped the retired `book_club_events` table (v28), moved themes to structured design tokens + added style flourishes (v34/v37), then shipped the **Garapon** festival lottery drum (v35–36), **Affiliates** (v38), the **Stamp Rally** (v39–41, including the v41 collected-log rebuild that keeps logs after a card/stamp is deleted), per-account **personal-access tokens** for the plugin/API (v42), and a `UNIQUE(game_id, number)` index on `called_numbers` as a duplicate-draw backstop (v43).
 On the hot path (version == current), zero migration queries execute. Migrations run
 incrementally only when the version is behind.
 
@@ -224,7 +224,7 @@ The principles below are *why* the conventions exist — keep changes aligned wi
 | `called_numbers` | `game_id`, `number`, `call_order` |
 | `settings` | `key TEXT PK`, `value TEXT` — key-value config (e.g. `game_details`, `active_style_id`, `app_title`, `default_draw_delay`, `frequent_winner_threshold`/`_hours`, `header_font`, `google_fonts_api_key`, `anilist_api_url`, `bingo_join_prompt`, and per-club reading-list `discord_webhook_url_<slug>`) |
 | `styles` | `id INTEGER PK`, `name`, `tokens TEXT` (JSON token map), `created_at` |
-| `game_presets` | `id INTEGER PK`, `name`, `pattern_ids TEXT` (JSON), `game_details TEXT`, `created_at` — reusable game templates |
+| `game_presets` | `id INTEGER PK`, `name`, `pattern_ids TEXT` (JSON), `game_details TEXT`, `auto_call INTEGER` (start with auto-draw on), `auto_interval INTEGER` (seconds between auto draws), `created_at` — reusable game templates |
 | `raffles` | `id INTEGER PK`, `title`, `description`, `rules`, `max_entries`, `signup_instructions`, `cost_per_entry`, `available_from`, `available_to`, `prize_image`, `status`, `winner_entry_id`, `created_at` |
 | `raffle_entries` | `id INTEGER PK`, `raffle_id`, `character_name`, `world`, `num_entries`, `paid`, `created_at` |
 | `winners_log` | `id INTEGER PK`, `logged_at`, `card_id`, `player_name`, `game_details`, `winning_patterns TEXT` (JSON) |
@@ -354,7 +354,7 @@ Never edit it by hand. Request/response/WebSocket envelopes are hand-written in
 
 **Admin features**:
 - Per-user account login (username + argon2id password, session-based auth, 24-hour cookie); accounts are activated and granted per-page access by an admin (see **Authentication & authorization**)
-- **Game tab**: start game (select patterns with category filter + search, or apply a saved **preset**), draw numbers (optional player delay 0–60s; **press `Space`/`Enter` to draw**), live "Live" badge + elapsed-time clock, see called numbers, see winners; click winner ID to verify card with pattern-hit highlighting; frequent winners alert (3+ wins in 12h); end game with winner confirmation modal
+- **Game tab**: start game (select patterns with category filter + search, or apply a saved **preset**), draw numbers (optional player delay 0–60s; **press `Space`/`Enter` to draw**), live "Live" badge + elapsed-time clock, see called numbers, see winners; click winner ID to verify card with pattern-hit highlighting; frequent winners alert (3+ wins in 12h); end game with winner confirmation modal. **Auto-run**: a New Game "Auto-draw numbers" toggle + "Time Between Calls" interval (also on presets) starts the game auto-drawing; a live Auto-Draw on/off toggle + interval selector adjust it mid-game (never touches the preset). The server-side scheduler draws every `interval + player-delay`, pauses at half-time (the prompt is now server-driven — `halftime_prompt` — so it fires for auto draws too and across all admins), and stops the moment a winner is recognized. Auto state syncs via the `auto_config` WebSocket message
 - **Cards tab**: generate cards (1–500), view as chips with player name indicators, click to preview board, edit player name/details, delete individual or all
 - **Patterns tab** (`PatternsTab.vue`): one manager merging the former Categories/New/Edit tabs — category-grouped collapsible drag-reorder list with search + category filter; "+ New Pattern" (5×5 grid editor, duplicate detection) and "Manage Categories" (a `DataTable` of categories with Edit/Delete; add/edit opens a form with a Title + a Position dropdown — "At the beginning" / "After X" per category, plus "Keep current position" when editing — applied via the bulk-reorder endpoint) as Back sub-pages
 - **Game tab pattern picker** (`GameTab.vue`): when starting a new game, patterns render exactly like the Patterns manager — collapsible category groups (non-draggable checkboxes) with search + category filter + select-all-visible — reusing the patterns store's `patternsByCategory` + shared collapse state

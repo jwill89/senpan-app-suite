@@ -24,6 +24,18 @@ type BingoGameState struct {
 	// YoeverCount is how many times "It's Yoever" has been triggered this game
 	// (reset when a new game starts). Shown to admins as "Yoevers: N".
 	YoeverCount int `json:"yoever_count"`
+	// AutoEnabled reports whether the automatic draw loop is currently running for
+	// this game. It is a per-game control an admin can toggle live; the server
+	// draws a number every AutoInterval seconds (plus the player draw delay) while
+	// it is on. Auto is switched off automatically at half-time and as soon as a
+	// winner is recognized. Resets to off when a new game starts (unless started
+	// with Auto on) and after a server restart.
+	AutoEnabled bool `json:"auto_enabled"`
+	// AutoInterval is the seconds between automatic draws (the "Time Between Calls"
+	// setting). The gap a player perceives between numbers is AutoInterval + the
+	// draw delay, since each auto draw still respects the delay before reaching
+	// players. Adjustable live without affecting any preset the game was started from.
+	AutoInterval int `json:"auto_interval"`
 }
 
 // BingoGamePattern is a point-in-time snapshot of a pattern attached to a bingo game.

@@ -134,6 +134,15 @@ func main() {
 		srv.RunAnnouncementScheduler(schedCtx)
 	}()
 
+	// Automatic bingo-draw scheduler: draws a number on the admin-chosen interval
+	// while a game has "auto" switched on. Shares the shutdown-cancelled context so
+	// it stops drawing before the database closes.
+	autoDone := make(chan struct{})
+	go func() {
+		defer close(autoDone)
+		srv.RunAutoDrawScheduler(schedCtx)
+	}()
+
 	// Graceful shutdown: listen for SIGINT/SIGTERM.
 	shutdown := make(chan os.Signal, 1)
 	signal.Notify(shutdown, os.Interrupt, syscall.SIGTERM)
@@ -162,6 +171,14 @@ func main() {
 	case <-schedDone:
 	case <-ctx.Done():
 		slog.Warn("announcement scheduler did not stop within the shutdown deadline")
+	}
+
+	// Likewise wait for the auto-draw scheduler to return so an in-flight draw
+	// finishes writing before db.Close(). Bounded by the same shutdown deadline.
+	select {
+	case <-autoDone:
+	case <-ctx.Done():
+		slog.Warn("auto-draw scheduler did not stop within the shutdown deadline")
 	}
 
 	// Close all WebSocket connections first.

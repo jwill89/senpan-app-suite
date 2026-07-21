@@ -113,9 +113,11 @@ public sealed class ApiClient : IDisposable
     public Task<GameStateResponse> GetGameAsync(CancellationToken ct = default)
         => SendAsync<GameStateResponse>(HttpMethod.Get, "api/game", null, ct);
 
-    public Task<GameStateResponse> StartGameAsync(int[] patternIds, CancellationToken ct = default)
+    // Starts a game, optionally with the automatic-draw loop running (auto) at the
+    // given seconds between draws (autoInterval, the "Time Between Calls" setting).
+    public Task<GameStateResponse> StartGameAsync(int[] patternIds, bool auto, int autoInterval, CancellationToken ct = default)
         => SendAsync<GameStateResponse>(HttpMethod.Post, "api/game/start",
-            new { pattern_ids = patternIds }, ct);
+            new { pattern_ids = patternIds, auto, auto_interval = autoInterval }, ct);
 
     public Task<DrawResult> DrawAsync(int delaySeconds, CancellationToken ct = default)
         => SendAsync<DrawResult>(HttpMethod.Post, "api/game/draw",
@@ -125,8 +127,10 @@ public sealed class ApiClient : IDisposable
         => SendAsync<OkResponse>(HttpMethod.Post, "api/game/end",
             new { valid_winner_ids = validWinnerIds }, ct);
 
-    public Task<OkResponse> TriggerHalftimeAsync(CancellationToken ct = default)
-        => SendAsync<OkResponse>(HttpMethod.Post, "api/game/halftime", null, ct);
+    // Answers the half-time prompt: minigame=true alerts players about a mini-game
+    // (auto stays paused); false declines it and resumes auto if it was paused.
+    public Task<OkResponse> TriggerHalftimeAsync(bool minigame, CancellationToken ct = default)
+        => SendAsync<OkResponse>(HttpMethod.Post, "api/game/halftime", new { minigame }, ct);
 
     public Task<OkResponse> UpdateGameDetailsAsync(string details, CancellationToken ct = default)
         => SendAsync<OkResponse>(HttpMethod.Patch, "api/game", new { details }, ct);
@@ -135,6 +139,16 @@ public sealed class ApiClient : IDisposable
     // broadcasts a yoever_config message so every client (and admin) stays in sync.
     public Task<OkResponse> SetYoeverEnabledAsync(bool enabled, CancellationToken ct = default)
         => SendAsync<OkResponse>(HttpMethod.Patch, "api/game", new { yoever_enabled = enabled }, ct);
+
+    // Switches the automatic-draw loop on/off for the current game. The server
+    // broadcasts an auto_config message so every admin surface stays in sync.
+    public Task<OkResponse> SetAutoEnabledAsync(bool enabled, CancellationToken ct = default)
+        => SendAsync<OkResponse>(HttpMethod.Patch, "api/game", new { auto_enabled = enabled }, ct);
+
+    // Adjusts the seconds between automatic draws for the current game (live; never
+    // written back to a preset).
+    public Task<OkResponse> SetAutoIntervalAsync(int seconds, CancellationToken ct = default)
+        => SendAsync<OkResponse>(HttpMethod.Patch, "api/game", new { auto_interval = seconds }, ct);
 
     // ── Raffles ──────────────────────────────────────────────────────────────
 

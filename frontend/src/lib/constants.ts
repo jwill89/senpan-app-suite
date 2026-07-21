@@ -44,6 +44,24 @@ export const BINGO_LETTERS = ['B', 'I', 'N', 'G', 'O'] as const
 /** Draw delay options offered in the admin Draw control (seconds). */
 export const DRAW_DELAY_OPTIONS = [0, 3, 5, 10, 15, 20, 30, 45, 60] as const
 
+/**
+ * "Time Between Calls" options for the auto-draw control (seconds). Kept within
+ * the backend's accepted range (bingo.MinAutoInterval..MaxAutoInterval); the
+ * gap a player perceives between numbers is this value plus the draw delay.
+ */
+export const AUTO_INTERVAL_OPTIONS = [10, 15, 20, 30, 45, 60, 90, 120, 180, 300] as const
+
+/** Default "Time Between Calls" when auto is first switched on (seconds). */
+export const DEFAULT_AUTO_INTERVAL = 30
+
+/** Human label for an auto-draw interval, e.g. 30 → "30s", 90 → "1m 30s". */
+export function autoIntervalLabel(seconds: number): string {
+  if (seconds < 60) return `${seconds}s`
+  const m = Math.floor(seconds / 60)
+  const s = seconds % 60
+  return s === 0 ? `${m}m` : `${m}m ${s}s`
+}
+
 /** Returns the 15 bingo numbers for a column index (0=B … 4=O). */
 export function columnNumbers(colIndex: number): number[] {
   const start = colIndex * 15 + 1

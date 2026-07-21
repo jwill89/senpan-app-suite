@@ -47,6 +47,12 @@ public sealed class LiveConnection : IDisposable
     /// <summary>An admin switched the "It's Yoever" reaction on/off for the current game.</summary>
     public event Action<bool>? YoeverConfig;
 
+    /// <summary>Auto-draw state changed: the new enabled flag and interval (seconds).</summary>
+    public event Action<bool, int>? AutoConfig;
+
+    /// <summary>The server reached the half-time mark; the flag is whether auto was paused for it.</summary>
+    public event Action<bool>? HalftimePrompt;
+
     public LiveConnection(Configuration config, IPluginLog log, IFramework framework)
     {
         this.config = config;
@@ -198,6 +204,21 @@ public sealed class LiveConnection : IDisposable
                 RunOnUi(() => YoeverConfig?.Invoke(enabled));
                 break;
             }
+
+            case "auto_config":
+            {
+                var enabled = msg.Enabled;
+                var interval = msg.Interval;
+                RunOnUi(() => AutoConfig?.Invoke(enabled, interval));
+                break;
+            }
+
+            case "halftime_prompt":
+            {
+                var autoPaused = msg.AutoPaused;
+                RunOnUi(() => HalftimePrompt?.Invoke(autoPaused));
+                break;
+            }
         }
     }
 
@@ -237,5 +258,10 @@ public sealed class LiveConnection : IDisposable
         public string? PlayerName { get; set; }
         public int Count { get; set; }
         public bool Enabled { get; set; }
+
+        // "auto_config" carries the interval alongside Enabled; "halftime_prompt"
+        // carries whether auto was paused for the mini-game decision.
+        public int Interval { get; set; }
+        public bool AutoPaused { get; set; }
     }
 }

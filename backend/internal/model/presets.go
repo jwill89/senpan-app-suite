@@ -8,7 +8,13 @@ type GamePreset struct {
 	Name        string  `json:"name"`
 	PatternIDs  []int64 `json:"pattern_ids"`  // win pattern IDs to pre-select
 	GameDetails string  `json:"game_details"` // markdown game details to apply
-	CreatedAt   string  `json:"created_at"`
+	// Auto pre-selects the automatic-draw toggle when the preset is applied, and
+	// AutoInterval fills the "Time Between Calls" selector (seconds). A game
+	// started from the preset begins auto-drawing when Auto is set; adjusting the
+	// live game's auto controls never writes back to the preset.
+	Auto         bool `json:"auto"`
+	AutoInterval int  `json:"auto_interval"`
+	CreatedAt    string `json:"created_at"`
 }
 
 // PresetsResponse is the body of GET /api/presets: all saved game presets.

@@ -239,11 +239,19 @@ kbd {
 }
 
 /* "Live" badge — shown next to the admin Game heading while a game is active.
-   Pill chrome from the `.badge` object; only colours + margin here. */
+   Pill chrome from the `.badge` object; only colours + margin here. Styled to
+   match the player site's connected/"Live" indicator (.conn-badge.is-open): a
+   soft SUCCESS-tinted pill + a glowing green dot, so a live game reads as a
+   positive, connected state rather than an alarming red. */
 .live-badge {
     margin-left: 10px;
-    background: var(--danger);
-    color: var(--text-on-fill);
+    background: color-mix(in srgb, var(--success) 28%, transparent);
+    border: 1px solid color-mix(in srgb, var(--success) 45%, transparent);
+    color: var(--text);
+}
+.live-badge .live-dot {
+    background: var(--success);
+    box-shadow: 0 0 6px 1px color-mix(in srgb, var(--success) 70%, transparent);
 }
 .live-dot {
     width: 7px;
@@ -273,12 +281,13 @@ kbd {
     font-size: 0.75rem;
 }
 /* Live dot in the admin sidebar's game nav item: sits just after the label,
-   tinted with the "live" color (themes can override --danger). */
+   tinted SUCCESS green (matching the Current Game "Live" badge + the player
+   site's connected indicator) so a live game reads as a positive state. */
 .nav-live-dot {
     display: inline-block;
     margin-left: 8px;
     vertical-align: middle;
-    background: var(--danger);
+    background: var(--success);
 }
 @keyframes livePulse {
     0%, 100% { opacity: 1; transform: scale(1); }

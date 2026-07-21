@@ -97,6 +97,11 @@ public sealed class GamePreset
     public string Name { get; set; } = string.Empty;
     public List<int> PatternIds { get; set; } = new();
     public string GameDetails { get; set; } = string.Empty;
+
+    // Pre-select the auto-draw toggle (Auto) and fill the "Time Between Calls"
+    // selector (AutoInterval seconds) when this preset is applied on the Game tab.
+    public bool Auto { get; set; }
+    public int AutoInterval { get; set; }
 }
 
 public sealed class PresetsResponse
@@ -126,6 +131,12 @@ public sealed class GameState
     // GET /api/game and on the game_update WebSocket push.
     public bool YoeverEnabled { get; set; }
     public int YoeverCount { get; set; }
+
+    // Automatic-draw state: whether the server is drawing numbers on its own for
+    // this game, and the seconds between draws ("Time Between Calls"). Toggleable
+    // live; auto switches off at half-time and when a winner is recognized.
+    public bool AutoEnabled { get; set; }
+    public int AutoInterval { get; set; }
 }
 
 public sealed class GameStateResponse

@@ -494,6 +494,13 @@ export type WsMessage =
       uploaded_fonts?: UploadedFont[]
     }
   | { type: 'halftime_minigame' }
+  // Server reached the half-time mark: admins show the mini-game prompt.
+  // `auto_paused` is true when the auto-draw loop was paused for the decision, so
+  // the modal can explain that declining will resume it.
+  | { type: 'halftime_prompt'; auto_paused: boolean }
+  // Auto-draw state changed (started, toggled, interval adjusted, or switched off
+  // by a winner/half-time): every admin surface syncs its toggle + interval.
+  | { type: 'auto_config'; enabled: boolean; interval: number }
   // "It's Yoever" reaction fired by a player: play the sound + bounce the image
   // labelled `player_name` on every client; `count` is the running per-game total.
   | { type: 'yoever'; player_name: string; count: number }

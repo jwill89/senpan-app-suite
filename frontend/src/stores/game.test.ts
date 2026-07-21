@@ -1,48 +1,64 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
+import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
 
-// Spy the halftime endpoint; the store imports the endpoint + sound layers at
-// setup, so stub both (no other path here touches them).
-const { triggerHalftime, setDelay } = vi.hoisted(() => ({
-  triggerHalftime: vi.fn(async () => ({ ok: true })),
+// Spy the game endpoints the store touches; the store imports the endpoint +
+// sound layers at setup, so stub both (no other path here touches them).
+const { halftime, setDelay, setAutoEnabled, setAutoInterval } = vi.hoisted(() => ({
+  halftime: vi.fn(async () => ({ ok: true })),
   setDelay: vi.fn(async () => ({ ok: true })),
+  setAutoEnabled: vi.fn(async () => ({ ok: true })),
+  setAutoInterval: vi.fn(async () => ({ ok: true })),
 }))
-vi.mock('@/lib/endpoints', () => ({ endpoints: { game: { triggerHalftime, setDelay } } }))
+vi.mock('@/lib/endpoints', () => ({
+  endpoints: { game: { halftime, setDelay, setAutoEnabled, setAutoInterval } },
+}))
 vi.mock('@/lib/sound', () => ({ playWinnerChime: vi.fn() }))
 
 import { useGameStore } from './game'
 
 beforeEach(() => {
   setActivePinia(createPinia())
-  triggerHalftime.mockClear()
+  halftime.mockClear()
   setDelay.mockClear()
-  vi.useFakeTimers()
-})
-afterEach(() => {
-  vi.useRealTimers()
+  setAutoEnabled.mockClear()
+  setAutoInterval.mockClear()
 })
 
-describe('confirmHalftime — tied to the draw delay', () => {
-  it('sends the alert immediately when no draw delay is pending', async () => {
+describe('halftime prompt — server-driven mini-game choice', () => {
+  it('confirmHalftime answers "mini-game" (true) and closes the prompt', async () => {
     const game = useGameStore()
-    game.drawCountdown = null
+    game.showHalftimePrompt = true
+    game.halftimeAutoPaused = true
     await game.confirmHalftime()
-    expect(triggerHalftime).toHaveBeenCalledTimes(1)
+    expect(halftime).toHaveBeenCalledWith(true)
+    expect(game.showHalftimePrompt).toBe(false)
+    expect(game.halftimeAutoPaused).toBe(false)
   })
 
-  it('holds the alert until the delayed number has been sent', async () => {
+  it('dismissHalftime answers "no mini-game" (false) so the server can resume auto', async () => {
     const game = useGameStore()
-    game.drawCountdown = 15 // 15s delay still counting down
-    const done = game.confirmHalftime()
+    game.showHalftimePrompt = true
+    await game.dismissHalftime()
+    expect(halftime).toHaveBeenCalledWith(false)
+    expect(game.showHalftimePrompt).toBe(false)
+  })
+})
 
-    // Not sent yet — still within the delay window.
-    await vi.advanceTimersByTimeAsync(14_000)
-    expect(triggerHalftime).not.toHaveBeenCalled()
+describe('auto-draw live controls (optimistic)', () => {
+  it('setAutoEnabled flips currentGame.auto_enabled and PATCHes the server', async () => {
+    const game = useGameStore()
+    game.currentGame = { auto_enabled: false, auto_interval: 30 } as never
+    await game.setAutoEnabled(true)
+    expect(setAutoEnabled).toHaveBeenCalledWith(true)
+    expect((game.currentGame as unknown as { auto_enabled: boolean }).auto_enabled).toBe(true)
+  })
 
-    // Once the countdown elapses, the alert fires.
-    await vi.advanceTimersByTimeAsync(1_000)
-    await done
-    expect(triggerHalftime).toHaveBeenCalledTimes(1)
+  it('setAutoInterval updates currentGame.auto_interval and PATCHes the server', async () => {
+    const game = useGameStore()
+    game.currentGame = { auto_enabled: true, auto_interval: 30 } as never
+    await game.setAutoInterval(45)
+    expect(setAutoInterval).toHaveBeenCalledWith(45)
+    expect((game.currentGame as unknown as { auto_interval: number }).auto_interval).toBe(45)
   })
 })
 

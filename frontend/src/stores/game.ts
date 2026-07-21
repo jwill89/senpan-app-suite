@@ -12,6 +12,7 @@ import { endpoints } from '@/lib/endpoints'
 import type { BingoGameState, Card, FrequentWinner, WinnersLogEntry } from '@/types/api'
 import { playWinnerChime } from '@/lib/sound'
 import { halftimeCallThreshold } from '@/lib/halftime'
+import { DEFAULT_AUTO_INTERVAL } from '@/lib/constants'
 import { useUiStore } from './ui'
 
 export const useGameStore = defineStore('game', () => {
@@ -38,6 +39,16 @@ export const useGameStore = defineStore('game', () => {
   const drawCountdown = ref<number | null>(null)
   const drawSent = ref(false)
   let drawCountdownTimer: ReturnType<typeof setInterval> | null = null
+
+  // ── Auto-draw (server-driven) ──────────────────────────────────────────────
+  // New-game form controls: whether to start with auto on, and the "Time Between
+  // Calls" interval. The live game's auto state travels on `currentGame`
+  // (auto_enabled / auto_interval) and is toggled via setAuto*.
+  const newGameAuto = ref(false)
+  const newGameAutoInterval = ref(DEFAULT_AUTO_INTERVAL)
+  // True when the half-time prompt fired after auto was paused for it — the modal
+  // uses it to explain that declining the mini-game resumes the auto draws.
+  const halftimeAutoPaused = ref(false)
 
   // In-flight flags for the game-control buttons.
   const starting = ref(false)
@@ -104,13 +115,17 @@ export const useGameStore = defineStore('game', () => {
     }
     starting.value = true
     try {
-      const data = await endpoints.game.start(selectedPatternIds.value)
+      const data = await endpoints.game.start(
+        selectedPatternIds.value,
+        newGameAuto.value,
+        newGameAutoInterval.value,
+      )
       currentGame.value = data.game ?? null
       winners.value = []
       lastDrawn.value = null
       selectedPatternIds.value = []
       gameDetails.value = data.game_details
-      ui.notify('Game started!', 'success')
+      ui.notify(newGameAuto.value ? 'Game started — auto-drawing!' : 'Game started!', 'success')
     } catch (e) {
       ui.notify((e as Error).message, 'error')
     } finally {
@@ -153,12 +168,10 @@ export const useGameStore = defineStore('game', () => {
         drawSent.value = false
       }
 
-      // Prompt for a halftime minigame at the half-way point — the classic
-      // 35-of-75 mark scaled to how many numbers THIS game can actually call
-      // (which depends on the active win patterns; see lib/halftime).
-      if (currentGame.value.called_numbers.length === halftimeThreshold.value) {
-        showHalftimePrompt.value = true
-      }
+      // The half-time prompt is now driven by the server (it must fire for auto
+      // draws too, and consistently across every admin surface): the backend
+      // detects the crossing on any draw and broadcasts `halftime_prompt`, handled
+      // in the WebSocket layer. No client-side detection here.
     } catch (e) {
       ui.notify((e as Error).message, 'error')
     } finally {
@@ -240,6 +253,34 @@ export const useGameStore = defineStore('game', () => {
     }
   }
 
+  /**
+   * Switches the automatic-draw loop on/off for the current game. Optimistic:
+   * flips `auto_enabled` immediately (the server also broadcasts `auto_config` to
+   * every admin), reverting on failure. This is a live, game-level control — it
+   * never writes back to a preset the game was started from.
+   */
+  async function setAutoEnabled(on: boolean): Promise<void> {
+    if (currentGame.value) currentGame.value.auto_enabled = on
+    try {
+      await endpoints.game.setAutoEnabled(on)
+    } catch (e) {
+      if (currentGame.value) currentGame.value.auto_enabled = !on
+      ui.notify((e as Error).message, 'error')
+    }
+  }
+
+  /** Adjusts the seconds between automatic draws for the current game (optimistic). */
+  async function setAutoInterval(seconds: number): Promise<void> {
+    const prev = currentGame.value?.auto_interval
+    if (currentGame.value) currentGame.value.auto_interval = seconds
+    try {
+      await endpoints.game.setAutoInterval(seconds)
+    } catch (e) {
+      if (currentGame.value && prev !== undefined) currentGame.value.auto_interval = prev
+      ui.notify((e as Error).message, 'error')
+    }
+  }
+
   // ── Winner verification ────────────────────────────────────────────────────
 
   /** Fetches a winning card and highlights cells completing the win patterns. */
@@ -290,29 +331,31 @@ export const useGameStore = defineStore('game', () => {
 
   // ── Halftime ───────────────────────────────────────────────────────────────
 
+  /** "Yes, run a mini-game": alert players (the server holds the alert until the
+   *  triggering number has reached them, and keeps auto paused). */
   async function confirmHalftime(): Promise<void> {
     showHalftimePrompt.value = false
-    // Tie the alert to the draw delay: the midpoint number is broadcast to
-    // players only after its delay elapses, so if that countdown is still
-    // running, hold the minigame alert until the number has actually been sent —
-    // otherwise players see the minigame prompt before the number that triggered
-    // it. (`drawCountdown` is null/0 for an instant draw or once it has elapsed,
-    // so this is a no-op in those cases.)
-    const remaining = drawCountdown.value ?? 0
-    if (remaining > 0) {
-      ui.notify(`Halftime alert will send once the number reaches players (${remaining}s)…`, 'info')
-      await new Promise((resolve) => setTimeout(resolve, remaining * 1000))
-    }
+    halftimeAutoPaused.value = false
     try {
-      await endpoints.game.triggerHalftime()
+      await endpoints.game.halftime(true)
       ui.notify('Halftime alert sent to all players!', 'success')
     } catch (e) {
       ui.notify((e as Error).message, 'error')
     }
   }
 
-  function dismissHalftime(): void {
+  /** "No mini-game": don't alert players; the server resumes the auto loop if it
+   *  had paused it for the prompt. Also the modal's close handler. */
+  async function dismissHalftime(): Promise<void> {
     showHalftimePrompt.value = false
+    const resumed = halftimeAutoPaused.value
+    halftimeAutoPaused.value = false
+    try {
+      await endpoints.game.halftime(false)
+      if (resumed) ui.notify('Auto-draw resumed.', 'info')
+    } catch (e) {
+      ui.notify((e as Error).message, 'error')
+    }
   }
 
   // ── Frequent winners ───────────────────────────────────────────────────────
@@ -419,6 +462,9 @@ export const useGameStore = defineStore('game', () => {
     drawDelay,
     drawCountdown,
     drawSent,
+    newGameAuto,
+    newGameAutoInterval,
+    halftimeAutoPaused,
     starting,
     drawing,
     ending,
@@ -448,6 +494,8 @@ export const useGameStore = defineStore('game', () => {
     confirmEndGame,
     saveGameDetails,
     setYoeverEnabled,
+    setAutoEnabled,
+    setAutoInterval,
     viewWinner,
     isWinnerCellMatch,
     confirmHalftime,

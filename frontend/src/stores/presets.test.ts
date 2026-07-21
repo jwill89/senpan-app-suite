@@ -31,7 +31,14 @@ describe('loading and editor', () => {
   it('newPreset opens a blank form', () => {
     const s = usePresetsStore()
     s.newPreset()
-    expect(s.editingPreset).toEqual({ id: 0, name: '', pattern_ids: [], game_details: '' })
+    expect(s.editingPreset).toEqual({
+      id: 0,
+      name: '',
+      pattern_ids: [],
+      game_details: '',
+      auto: false,
+      auto_interval: 30,
+    })
   })
 
   it('editPreset copies values (array is cloned, not shared)', () => {
@@ -66,17 +73,35 @@ describe('savePreset', () => {
     s.editingPreset!.name = 'Quick'
     s.editingPreset!.pattern_ids = [5]
     await s.savePreset()
-    expect(ep.create).toHaveBeenCalledWith('Quick', [5], '')
+    expect(ep.create).toHaveBeenCalledWith('Quick', [5], '', false, 30)
     expect(ep.list).toHaveBeenCalled()
     expect(s.editingPreset).toBeNull()
   })
 
+  it('creates a preset with its auto-draw config', async () => {
+    const s = usePresetsStore()
+    s.newPreset()
+    s.editingPreset!.name = 'Auto'
+    s.editingPreset!.pattern_ids = [5]
+    s.editingPreset!.auto = true
+    s.editingPreset!.auto_interval = 45
+    await s.savePreset()
+    expect(ep.create).toHaveBeenCalledWith('Auto', [5], '', true, 45)
+  })
+
   it('updates an existing preset', async () => {
     const s = usePresetsStore()
-    s.editPreset({ id: 8, name: 'Old', pattern_ids: [1], game_details: '' } as GamePreset)
+    s.editPreset({
+      id: 8,
+      name: 'Old',
+      pattern_ids: [1],
+      game_details: '',
+      auto: true,
+      auto_interval: 20,
+    } as GamePreset)
     s.editingPreset!.name = 'New'
     await s.savePreset()
-    expect(ep.update).toHaveBeenCalledWith(8, 'New', [1], '')
+    expect(ep.update).toHaveBeenCalledWith(8, 'New', [1], '', true, 20)
     expect(ep.create).not.toHaveBeenCalled()
   })
 })

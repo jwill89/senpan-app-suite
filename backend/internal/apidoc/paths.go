@@ -303,7 +303,10 @@ func buildPaths(doc *openapi3.T) {
 	b.add("GET", "/api/game", "Bingo", "Current game state", "public", "", opt{
 		resps: []respEntry{ok("GameStateResponse")}})
 	b.add("POST", "/api/game/start", "Bingo", "Start a game", "permission:bingo-game", "", opt{
-		body:  actionBody("Game start.", nil, props("pattern_ids", parr("Win pattern ids (≥1).", pint("")))),
+		body: actionBody("Game start.", nil, props(
+			"pattern_ids", parr("Win pattern ids (≥1).", pint("")),
+			"auto", pbool("Start with the automatic-draw loop running."),
+			"auto_interval", pint("Seconds between automatic draws (\"Time Between Calls\")."))),
 		resps: []respEntry{ok("GameStateResponse"), r("400", "No pattern selected"), r("401", "Unauthorized")}})
 	b.add("POST", "/api/game/draw", "Bingo", "Draw a number", "permission:bingo-game",
 		"Draws the next number; `delay` (0–60s) delays the player broadcast.", opt{
@@ -313,8 +316,9 @@ func buildPaths(doc *openapi3.T) {
 		"Ends the active game, logging the confirmed valid winners.", opt{
 			body:  actionBody("End.", nil, props("valid_winner_ids", parr("Confirmed winner card ids.", pstr("")))),
 			resps: []respEntry{ok("EndGameResponse"), r("401", "Unauthorized")}})
-	b.add("POST", "/api/game/halftime", "Bingo", "Trigger halftime", "permission:bingo-game",
-		"Alerts players about a half-time mini-game.", opt{
+	b.add("POST", "/api/game/halftime", "Bingo", "Answer the half-time prompt", "permission:bingo-game",
+		"Records the admin's half-time decision: `minigame` true alerts players about a mini-game (held until the triggering number has reached them, and auto stays paused); false declines it and resumes auto if it was paused for the prompt. An empty body defaults to true.", opt{
+			body:  actionBody("Half-time choice.", nil, props("minigame", pbool("Alert players about a mini-game (true) or decline and resume auto (false)."))),
 			resps: []respEntry{ok("OKResponse"), r("401", "Unauthorized")}})
 	b.add("POST", "/api/game/yoever", "Bingo", "Trigger \"It's Yoever\"", "public",
 		"Broadcasts the \"It's Yoever\" reaction (sound + a bouncing image labelled with the player's name) to every connected client. Public, but each board is throttled to one trigger per `yoever_cooldown_seconds` and an admin can switch the reaction off per game.", opt{
@@ -327,11 +331,13 @@ func buildPaths(doc *openapi3.T) {
 				r("409", "No active game"),
 				r("429", "On cooldown (Retry-After)")}})
 	b.add("PATCH", "/api/game", "Bingo", "Update game controls", "permission:bingo-game",
-		"Partial update: `delay` (0–60) persists the shared draw delay; `details` sets the markdown game details; `yoever_enabled` toggles the \"It's Yoever\" reaction. Any combination may be supplied.", opt{
+		"Partial update: `delay` (0–60) persists the shared draw delay; `details` sets the markdown game details; `yoever_enabled` toggles the \"It's Yoever\" reaction; `auto_enabled` switches the automatic-draw loop on/off and `auto_interval` adjusts the seconds between auto draws (live, never written back to a preset). Any combination may be supplied.", opt{
 			body: actionBody("Game controls.", nil, props(
 				"delay", pint("Shared draw delay seconds (0–60)."),
 				"details", pstr("Markdown game details."),
-				"yoever_enabled", pbool("Switch the \"It's Yoever\" reaction on/off."))),
+				"yoever_enabled", pbool("Switch the \"It's Yoever\" reaction on/off."),
+				"auto_enabled", pbool("Switch the automatic-draw loop on/off."),
+				"auto_interval", pint("Seconds between automatic draws (\"Time Between Calls\")."))),
 			resps: []respEntry{ok("OKResponse"), r("400", "Draw delay out of range"), r("401", "Unauthorized")}})
 
 	// ── Bingo: patterns / categories / presets / styles ───────────────────────
@@ -381,7 +387,9 @@ func buildPaths(doc *openapi3.T) {
 			resps: []respEntry{noContent(), r("409", "Cannot delete the last category")}})
 	presetFields := func() openapi3.Schemas {
 		return props("name", pstr("Preset name (required)."),
-			"pattern_ids", parr("Win pattern ids (≥1).", pint("")), "game_details", pstr("Markdown details."))
+			"pattern_ids", parr("Win pattern ids (≥1).", pint("")), "game_details", pstr("Markdown details."),
+			"auto", pbool("Pre-select the automatic-draw toggle when applied."),
+			"auto_interval", pint("Seconds between automatic draws (\"Time Between Calls\")."))
 	}
 	b.add("GET", "/api/presets", "Bingo", "List presets", "permission:bingo-presets", "", opt{resps: []respEntry{ok("PresetsResponse")}})
 	b.add("POST", "/api/presets", "Bingo", "Create a preset", "permission:bingo-presets", "", opt{

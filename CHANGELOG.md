@@ -41,6 +41,50 @@ The format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## Frontend
 
+### [3.14.0] — 2026-07-20
+
+Adds **auto-run bingo games** — the system draws numbers on a timer (paired with
+backend 3.11.0).
+
+#### Added
+
+- **Auto-draw controls on the Game tab.** The New Game form has an **Auto-draw
+  numbers** toggle under Game Details; switching it on reveals a **Time Between
+  Calls** selector (10s–5m). Start the game and the server draws a number every
+  interval — no clicking. During a live game the same controls appear as an
+  **Auto-Draw On/Off** button and interval selector, so auto can be turned off or
+  re-paced at any time (this never changes the preset the game came from).
+- **Auto-draw fields on Game Presets.** The preset editor gains the same Auto +
+  Time Between Calls fields; applying a preset on the Game tab pre-fills them.
+
+#### Changed
+
+- **The half-time prompt is now server-driven.** The backend detects the midpoint
+  on any draw (manual or automatic) and prompts every admin surface at once, so the
+  prompt is consistent across admins and works for auto draws. Auto-draw is paused
+  automatically at half-time and the instant a winner is recognized; choosing **No
+  mini-game** resumes it, choosing **Yes** leaves it off until you switch it back on.
+  Each auto draw still respects the player draw delay (players see numbers
+  `interval + delay` apart; admins see them immediately).
+- **Tidier live-game controls.** The Current Game view now leads with three
+  equal-sized primary controls — **Draw Number**, the **Delay** selector, and **End
+  Game** — while the per-feature toggles (Auto-Draw, It's Yoever, Winner Sound) move
+  into a collapsible **Game Settings** panel with a labelled section each, so the
+  main controls stay front-and-centre.
+- **The "Live" indicator is now green.** The Current Game **Live** badge and the
+  sidebar's game "live" dot use the success colour (matching the player site's
+  connected/"Live" indicator) so an active game reads as a positive, connected
+  state instead of an alarming red.
+
+#### Fixed
+
+- **Missing admin icons.** Registered three Font Awesome **solid** glyphs that were
+  used but never added to the icon library, so they rendered blank and logged
+  "Could not find one or more icon(s)" console errors: `check` (the Images / Carrd
+  upload **Save** buttons), `circle-info` (the plugin **changelog** note), and
+  `triangle-exclamation` (the version-mismatch flag, the theme editor's contrast
+  warning, and the Personal Card Request form alert).
+
 ### [3.13.0] — 2026-07-19
 
 Adds **public/private themes with a client-side theme picker**, and a public
@@ -545,6 +589,40 @@ First tracked release — establishes versioning for the current production buil
 ---
 
 ## Backend
+
+### [3.11.0] — 2026-07-20
+
+Adds the **automatic bingo-draw scheduler** and moves half-time detection
+server-side (paired with frontend 3.14.0). Backward-compatible additions only.
+
+#### Added
+
+- **Auto-draw scheduler.** A single background goroutine (`RunAutoDrawScheduler`,
+  launched from `main.go` on the shutdown-cancelled context) draws a number every
+  `auto_interval + draw_delay` seconds while a game has auto switched on. The draw
+  reuses the exact manual-draw path (admins immediately, players after the delay),
+  so a player perceives `interval + delay` between numbers while an admin still sees
+  each the instant it's drawn. Auto state (enabled + interval) lives on the game
+  service, is stamped onto `BingoGameState` (`auto_enabled`, `auto_interval`), and
+  **defaults off, including after a restart**, so draws never resume unattended.
+- **Game-start + control fields.** `POST /api/game/start` accepts `auto` +
+  `auto_interval`; `PATCH /api/game` accepts `auto_enabled` + `auto_interval` (live,
+  never written back to a preset). `game_presets` gains `auto_call` + `auto_interval`
+  columns (**migration v50**), surfaced on the preset create/replace endpoints.
+- **`auto_config` WebSocket broadcast** — the new auto state (enabled + interval) is
+  pushed to every admin surface whenever it changes, like `yoever_config`.
+
+#### Changed
+
+- **Half-time detection moved server-side.** Any draw (manual or automatic) that
+  crosses the midpoint (`bingo.HalftimeThreshold`, the 35-of-75 mark scaled to the
+  callable pool) now broadcasts a **`halftime_prompt`** to admins, so every surface
+  prompts consistently and auto games prompt at all. Crossing it **pauses** a running
+  auto loop; `POST /api/game/halftime` now takes `{"minigame": bool}` — `true` alerts
+  players (held until the triggering number has reached them) and leaves auto paused;
+  `false` declines and resumes auto if it was paused. An absent body defaults to
+  `true`, preserving the old "trigger the alert" behavior. Auto is also switched off
+  the moment a new winner is recognized.
 
 ### [3.10.0] — 2026-07-19
 
@@ -1188,6 +1266,25 @@ with a personal access token and is distributed through a Dalamud custom repo
 (`plugins/pluginmaster.json`). Versions use the four-part AssemblyVersion in
 `SenpanCompanion.csproj`. Entries below the current release were reconstructed
 from the `<Version>` history and commit messages.
+
+### [3.2.0.0] — 2026-07-20
+
+Adds **auto-run bingo** controls to the Bingo Game tab (paired with backend 3.11.0).
+
+#### Added
+
+- **Auto-draw controls.** The New Game view gains an **Auto-draw numbers** checkbox
+  and a **Time Between Calls** combo; applying a preset pre-fills them. The live game
+  view gains an **Auto-Draw** on/off checkbox and interval combo, kept in sync with
+  the website and other operators via the new `auto_config` WebSocket message.
+
+#### Changed
+
+- **Half-time prompt is server-driven.** The plugin now opens the mini-game prompt
+  when the server broadcasts `halftime_prompt` (fires for manual and automatic draws
+  alike), instead of detecting the midpoint locally. Its **Yes/No** buttons send the
+  mini-game choice (`Yes` alerts players and leaves auto paused; `No` declines and
+  resumes auto if it was paused); the prompt notes when auto has been paused.
 
 ### [3.1.0.0] — 2026-07-19
 

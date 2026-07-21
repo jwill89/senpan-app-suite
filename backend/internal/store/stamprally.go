@@ -192,7 +192,7 @@ func (s *Store) UpdateStampRally(r *model.StampRally) error {
 	keep := make(map[int64]bool)
 	for i, st := range r.Stamps {
 		if st.ID > 0 {
-			if err := updateStampRallyStamp(tx, st, i); err != nil {
+			if err := updateStampRallyStamp(tx, r.ID, st, i); err != nil {
 				return err
 			}
 			keep[st.ID] = true
@@ -253,12 +253,14 @@ func insertStampRallyStamp(tx *sql.Tx, rallyID int64, st model.StampRallyStamp, 
 }
 
 // updateStampRallyStamp updates an existing stamp's editable fields + sort order.
-func updateStampRallyStamp(tx *sql.Tx, st model.StampRallyStamp, sortOrder int) error {
+// The WHERE clause is scoped to rallyID as well as the stamp id so a spoofed stamp
+// id belonging to a different event can't be updated across rallies.
+func updateStampRallyStamp(tx *sql.Tx, rallyID int64, st model.StampRallyStamp, sortOrder int) error {
 	_, err := tx.Exec(`UPDATE stamp_rally_stamps SET affiliate_id = ?, image = ?, password = ?,
 			pos_x = ?, pos_y = ?, width = ?, height = ?, rotation = ?,
-			active_from = ?, active_to = ?, paused = ?, sort_order = ? WHERE id = ?`,
+			active_from = ?, active_to = ?, paused = ?, sort_order = ? WHERE id = ? AND rally_id = ?`,
 		nullableID(st.AffiliateID), st.Image, st.Password,
-		st.X, st.Y, st.Width, st.Height, st.Rotation, st.ActiveFrom, st.ActiveTo, boolToInt(st.Paused), sortOrder, st.ID)
+		st.X, st.Y, st.Width, st.Height, st.Rotation, st.ActiveFrom, st.ActiveTo, boolToInt(st.Paused), sortOrder, st.ID, rallyID)
 	return err
 }
 
@@ -284,14 +286,23 @@ func nullableID(id *int64) any {
 // it (garapons.stamp_rally_id is a plain column, not an enforced FK). Returns true if
 // a row was deleted.
 func (s *Store) DeleteStampRally(id int64) (bool, error) {
-	if _, err := s.db.Exec(`UPDATE garapons SET stamp_rally_id = NULL WHERE stamp_rally_id = ?`, id); err != nil {
+	tx, err := s.beginImmediate()
+	if err != nil {
 		return false, err
 	}
-	res, err := s.db.Exec(`DELETE FROM stamp_rallies WHERE id = ?`, id)
+	defer func() { _ = tx.Rollback() }()
+
+	if _, err := tx.Exec(`UPDATE garapons SET stamp_rally_id = NULL WHERE stamp_rally_id = ?`, id); err != nil {
+		return false, err
+	}
+	res, err := tx.Exec(`DELETE FROM stamp_rallies WHERE id = ?`, id)
 	if err != nil {
 		return false, err
 	}
 	n, _ := res.RowsAffected()
+	if err := tx.Commit(); err != nil {
+		return false, err
+	}
 	return n > 0, nil
 }
 

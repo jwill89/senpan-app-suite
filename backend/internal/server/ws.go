@@ -1,6 +1,32 @@
 package server
 
-import "net/http"
+import (
+	"log/slog"
+	"net/http"
+)
+
+// logWSUpgrade emits an explicit audit line for a /api/ws upgrade. That route
+// bypasses the request-logging middleware (the raw ResponseWriter is handed to
+// the WebSocket upgrader), so without this the privileged admin channel would
+// open with no access-log entry. Mirrors the middleware's fields
+// (method/path/status/ip/auth[/user][/card_id]) and reuses the same real-client-IP
+// and path-redaction helpers.
+func (s *Server) logWSUpgrade(r *http.Request, status int, auth, user, cardID string) {
+	attrs := []any{
+		"method", r.Method,
+		"path", redactSensitivePath(r.URL.Path),
+		"status", status,
+		"ip", logClientIP(r),
+		"auth", auth,
+	}
+	if user != "" {
+		attrs = append(attrs, "user", user)
+	}
+	if cardID != "" {
+		attrs = append(attrs, "card_id", cardID)
+	}
+	slog.Log(r.Context(), slog.LevelInfo, "ws upgrade", attrs...)
+}
 
 // handleWS upgrades an HTTP connection to a WebSocket and registers it with the hub.
 // If id is provided, the connection is associated with that card (player);
@@ -19,9 +45,13 @@ func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 	// The /api/ws route bypasses the session middleware, so load it manually.
 	var isAdmin bool
 	var revalidate func() (active bool, isAdmin bool)
+	var actor string
 	if cardID == "" {
 		user := s.wsSessionUser(r)
 		if user == nil {
+			// Record the rejected admin-channel attempt (privileged channel — the
+			// 401 must not vanish just because /api/ws skips the access-log middleware).
+			s.logWSUpgrade(r, http.StatusUnauthorized, "anon", "", "")
 			writeError(w, http.StatusUnauthorized, "Unauthorized – login required")
 			return
 		}
@@ -30,6 +60,7 @@ func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 		// but only a true admin receives the log stream — matching requireAdmin
 		// on GET /api/logs. A staff grantee or non-admin PAT gets isAdmin=false.
 		isAdmin = user.IsAdmin
+		actor = user.Username
 		// The connection is only authorized at accept time; re-check the account
 		// periodically (see hub writePump) so an account deactivated or deleted
 		// mid-session has its admin socket dropped instead of streaming forever,
@@ -48,5 +79,12 @@ func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 			return true, u.IsAdmin
 		}
 	}
+	// Audit the accepted upgrade (status 101). Admin connections join the
+	// privileged undelayed draw feed, so this line is the record of who opened it.
+	authKind := "player"
+	if cardID == "" {
+		authKind = "admin"
+	}
+	s.logWSUpgrade(r, http.StatusSwitchingProtocols, authKind, actor, cardID)
 	s.hub.ServeWS(w, r, cardID, isAdmin, revalidate)
 }

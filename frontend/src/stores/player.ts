@@ -96,7 +96,11 @@ export const usePlayerStore = defineStore('player', () => {
    * stamp's background fill, while opacity fades the whole mark (icon included).
    */
   const stampColor = ref(resolveStoredColor(localStorage.getItem('bingo_stamp_color')))
-  const stampOpacity = ref(parseFloat(localStorage.getItem('bingo_stamp_opacity') || '') || 0.8)
+  // `?? 0.8` won't rescue a NaN and `|| 0.8` would discard a legitimately stored
+  // 0, so guard on Number.isFinite: a stored 0 (fully transparent) persists, and
+  // only an absent/corrupt value falls back to the default.
+  const storedStampOpacity = parseFloat(localStorage.getItem('bingo_stamp_opacity') ?? '')
+  const stampOpacity = ref(Number.isFinite(storedStampOpacity) ? storedStampOpacity : 0.8)
   // Data URL for the user-uploaded custom stamp. Persisted to localStorage so it
   // survives a page refresh (the saved stampShape can be 'custom'); falls back to
   // null if storage is unavailable.
@@ -328,9 +332,15 @@ export const usePlayerStore = defineStore('player', () => {
     const k = `stamps_${playerCard.value.id}_${playerGame.value.id}`
     const raw = localStorage.getItem(k)
     // Guard against corrupt/tampered storage so a bad value starts the board clean
-    // instead of throwing during load.
+    // instead of throwing during load. A literal 'null', an array, or a primitive
+    // parses without throwing but isn't a usable stamp map — reject those too so
+    // the board can't be handed a non-object.
     try {
-      stamps.value = raw ? JSON.parse(raw) : {}
+      const parsed = raw ? JSON.parse(raw) : {}
+      stamps.value =
+        parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+          ? (parsed as Record<string, boolean>)
+          : {}
     } catch {
       stamps.value = {}
     }

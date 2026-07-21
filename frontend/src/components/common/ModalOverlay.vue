@@ -24,8 +24,70 @@ defineProps<{
 
 const emit = defineEmits<{ close: [] }>()
 
+// ── Shared modal stack ───────────────────────────────────────────────────────
+// Stacked modals (e.g. a ui.confirm() dialog opened from inside an edit modal)
+// must not share Escape and focus. We keep a module-level stack of the open
+// overlays: only the TOP-MOST one reacts to Escape and owns the focus trap, and
+// every modal beneath it — plus the page behind — is made `inert` + aria-hidden
+// so keyboard/pointer/AT focus can't reach it. Closing the top one restores the
+// one beneath (or the page) automatically.
+interface ModalEntry {
+  overlay: HTMLElement | null
+}
+const modalStack: ModalEntry[] = []
+
+/** Re-apply inert/aria-hidden across the stack: only the top overlay is live. */
+function restack(): void {
+  modalStack.forEach((m, i) => {
+    if (!m.overlay) return
+    const isTop = i === modalStack.length - 1
+    m.overlay.inert = !isTop
+    if (isTop) m.overlay.removeAttribute('aria-hidden')
+    else m.overlay.setAttribute('aria-hidden', 'true')
+  })
+}
+
+/**
+ * Make everything behind `overlay` inert + aria-hidden (siblings along the path
+ * up to <body>), skipping other modal overlays and anything already hidden.
+ * Returns a restore fn. Only the bottom-most modal calls this — modals stacked
+ * above it are handled by {@link restack}.
+ */
+function inertBackground(overlay: HTMLElement): () => void {
+  const changed: HTMLElement[] = []
+  let node: HTMLElement = overlay
+  while (node.parentElement) {
+    const parent = node.parentElement
+    for (const sib of Array.from(parent.children)) {
+      if (sib === node) continue
+      const el = sib as HTMLElement
+      if (el.classList.contains('modal-overlay') || el.querySelector('.modal-overlay')) continue
+      if (el.inert || el.hasAttribute('aria-hidden')) continue
+      el.inert = true
+      el.setAttribute('aria-hidden', 'true')
+      changed.push(el)
+    }
+    if (parent === document.body) break
+    node = parent
+  }
+  return () => {
+    for (const el of changed) {
+      el.inert = false
+      el.removeAttribute('aria-hidden')
+    }
+  }
+}
+
 const box = ref<HTMLElement | null>(null)
+const overlay = ref<HTMLElement | null>(null)
+const entry: ModalEntry = { overlay: null }
 let previouslyFocused: HTMLElement | null = null
+let restoreBackground: (() => void) | null = null
+
+/** Whether this modal is the top-most open one (owns Escape + focus trap). */
+function isTop(): boolean {
+  return modalStack[modalStack.length - 1] === entry
+}
 
 /** Returns the focusable elements within the dialog, in DOM order. */
 function focusable(): HTMLElement[] {
@@ -38,8 +100,12 @@ function focusable(): HTMLElement[] {
 }
 
 function onKeydown(e: KeyboardEvent): void {
+  // Only the top-most modal reacts — a lower modal must ignore keys meant for
+  // the dialog stacked above it (e.g. Escape on a confirm dialog opened from an
+  // edit modal must not also close the edit modal).
+  if (!isTop()) return
   if (e.key === 'Escape') {
-    e.stopPropagation()
+    e.stopImmediatePropagation()
     emit('close')
     return
   }
@@ -65,6 +131,14 @@ function onKeydown(e: KeyboardEvent): void {
 
 onMounted(() => {
   previouslyFocused = document.activeElement as HTMLElement | null
+  entry.overlay = overlay.value
+  // Bottom-most modal makes the page behind it inert; ones stacked above rely
+  // on restack() to inert the modal(s) beneath them.
+  if (modalStack.length === 0 && overlay.value) {
+    restoreBackground = inertBackground(overlay.value)
+  }
+  modalStack.push(entry)
+  restack()
   document.addEventListener('keydown', onKeydown, true)
   // Focus the first focusable control, else the dialog itself.
   const items = focusable()
@@ -73,13 +147,18 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   document.removeEventListener('keydown', onKeydown, true)
+  const i = modalStack.indexOf(entry)
+  if (i !== -1) modalStack.splice(i, 1)
+  restoreBackground?.()
+  restoreBackground = null
+  restack()
   // Restore focus to whatever was focused before the modal opened.
   previouslyFocused?.focus()
 })
 </script>
 
 <template>
-  <div class="modal-overlay" @click.self="emit('close')">
+  <div ref="overlay" class="modal-overlay" @click.self="emit('close')">
     <div
       ref="box"
       class="modal-box"

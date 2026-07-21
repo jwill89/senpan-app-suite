@@ -12,26 +12,31 @@ frontend.
 
 - **Bingo** — admins run live games (draw numbers, verify winners, manage
   cards/patterns/presets) and keep a winners log; players join a board by ID,
-  stamp cells in real time, and can export their card as an image.
+  stamp cells in real time, export their card as an image, and fire an in-game
+  **Yoever** reaction. Visitors can submit a self-designed card for admin approval.
 - **Raffles** — create raffles, collect entries from players, and draw winners.
-- **Garapon** — a festival lottery-drum: per-player tokenized draw links plus a
-  public draw view.
+- **Festival** — a **Garapon** lottery-drum and a **Stamp Rally**, each with
+  per-player tokenized links (draw / stamp cards) plus public token-gated views.
 - **Senpan Tea House** — scheduled **Discord announcements** (typed
-  destinations + roles) and **book-club reading lists** (with cover lookup).
+  destinations + roles), **book-club reading lists** (with cover lookup), partner
+  **affiliates**, and bookable **tea rooms** (with a public availability API).
 - **Atelier Yao** — **font upload** (served with CORS for use on external sites)
   and **Carrd image hosting**.
 - **System** — app **settings**, a structured **theme editor** (design tokens
   with a live preview and a WCAG 2.1 contrast report), central **image hosting**,
-  **user accounts** with per-page permissions, and a live **server-log viewer**
-  (typed/colored columns, live tail over WebSocket, and a runtime DEBUG toggle).
+  **user accounts** with per-page permissions (password **or** passwordless
+  WebAuthn passkeys, with an optional Cloudflare Turnstile bot check), and a live
+  **server-log viewer** (typed/colored columns, live tail over WebSocket, and a
+  runtime DEBUG toggle).
 
 ## Stack
 
 - **Frontend:** Vue 3 (SFC, `<script setup>`) · TypeScript (strict) · Pinia ·
   Vue Router (history mode, lazy routes) · Vite 8 · PWA · Vitest
-- **Backend:** Go 1.26+ (stdlib HTTP, method-pattern routing) · SQLite (WAL) ·
-  `coder/websocket` · `alexedwards/scs` sessions · structured JSON logging
-  (`slog` + `timberjack` rotation)
+- **Backend:** Go 1.26+ (stdlib HTTP, method-pattern routing) · SQLite (WAL,
+  pure-Go `ncruces/go-sqlite3`) · `coder/websocket` · `alexedwards/scs` sessions ·
+  argon2id + `go-webauthn` passkeys · structured JSON logging (`slog` +
+  `timberjack` rotation)
 - **Tooling:** tygo (Go→TS type generation) · ESLint + Prettier · GitHub Actions CI
 
 ## Quick start

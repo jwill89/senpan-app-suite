@@ -41,6 +41,41 @@ The format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## Frontend
 
+### [3.14.1] — 2026-07-21
+
+Audit-fix patch hardening the client against CSS/SVG injection, fixing WebSocket and state-synchronization bugs (including a live socket that was needlessly torn down on admin navigation), plugging several timer/listener leaks, and adding keyboard and screen-reader support across admin controls and modals.
+
+#### Security
+
+- Injection-checked every theme token before it is written into the live-preview `:root{…}` stylesheet: values that are over-long, contain declaration/block breakers, CSS comment markers, `url(...)`, or control characters are dropped (falling back to the token default), mirroring the server-side sanitizer so a hostile theme can't smuggle CSS into the editor preview.
+- Re-sanitized theme flourish SVG markup client-side before it is inlined: the fetched artwork is parsed, required to have an `<svg>` root, stripped of scripting/embedding elements (`<script>`, `<foreignObject>`, `<iframe>`, etc.), `on*` event handlers, and `javascript:`/`data:` URLs — defense in depth over the server's upload-time sanitize (CornerFlourish).
+- Escaped asset paths interpolated into CSS `url("…")` tokens (number-flourish background) so a quote, backslash, or newline in a path can no longer terminate the string and inject further CSS (new `assetCssUrl` helper).
+- URL-encoded the `sort` and `dir` query parameters on the winners-log request so unexpected values can't alter the request URL.
+
+#### Fixed
+
+- The live WebSocket is now keyed to a stable connection target (`player:<cardId>` / `admin` / none) instead of the raw route name, so navigating between admin sub-pages no longer tears down and reconnects the socket — which previously skipped the reconnect catch-up and dropped draws, winners, and log updates that arrived during the gap.
+- Game-scoped broadcasts (`game_draw`, `halftime_minigame`) now honor the server-stamped `game_id`: stale frames for a game you are no longer watching are dropped, and a re-delivered draw can no longer double-count a number or replay its chime (older servers that omit the id behave as before).
+- Stopped the WebSocket keepalive ping from firing forever after a permanent close (and lingering between close and reconnect), and stopped an intentional reconnect from momentarily flashing the "Live" badge off with a spurious "closed" status.
+- Fixed overlapping loading operations clearing a shared loading flag prematurely; the flag is now reference-counted and only clears once the last concurrent operation settles (`withLoading`).
+- A failed image-category load is no longer cached as "loaded", so it is retried on the next access instead of being stuck empty (images store).
+- Added last-write-wins request guards so fast navigation no longer renders a stale earlier response over a newer one — carrd folder contents, public raffle detail (a superseded load also no longer falsely redirects back to the list), and stamp-rally panels; expanded "Manage stalls" panels now also refresh on a live invalidation instead of going stale.
+- Guarded the custom-card-request submit against a double-click / re-entrant submit.
+- Cleared the leftover draw-countdown reset timer so a fresh draw can no longer be flipped out of its "sent" state by a stale one (game store), and torn down the pointer drag listeners if the placement editor unmounts mid-drag.
+- Hardened winner verification against a malformed (non-5×5) board or pattern grid so it can't throw during load (game store).
+- Player board now tolerates corrupt/tampered stamp storage — a stored `null`, array, or primitive is rejected in favor of a clean board — and a saved stamp opacity of `0` (fully transparent) now persists instead of being reset to the default.
+- Removed the injected font-preview `<style>` (which lives in `<head>`) when the Fonts tab unmounts, so it no longer leaks stale `@font-face` rules after navigating away.
+- Verifying auth for a direct load/refresh of the admin login or register page so an already-logged-in visitor is redirected instead of shown the form (router).
+- The draw hotkey (Space/Enter) is now suppressed while a modal is open or when a `role="button"` control is focused, so it can't fire behind a dialog or hijack a winner chip (GameTab).
+- Fell back to the webkit-prefixed `AudioContext` on older Safari/iOS and returned safely when audio is unavailable, instead of throwing (sound).
+
+#### Changed
+
+- Stacked modals now behave correctly: only the top-most dialog reacts to Escape and owns the focus trap, and every modal beneath it — plus the page behind — is made `inert` and `aria-hidden` so keyboard, pointer, and assistive-technology focus can't reach it; closing the top one restores the one beneath automatically.
+- Added full keyboard and ARIA support to the admin sidebar accordion sections (role, `tabindex`, `aria-expanded`, `aria-controls`, Enter/Space activation).
+- Made the pattern-management controls keyboard-operable and labeled for screen readers — per-pattern delete and rename triggers and category collapse headers now expose `role`, focus, `aria-label`/`aria-expanded`, and Enter/Space handling (PatternsTab).
+- Expandable data-table rows are now keyboard-accessible (`role`, `tabindex`, `aria-expanded`, Enter/Space to toggle), and a click or key on an inner control (button, link, form field) no longer also toggles the row (DataTable).
+
 ### [3.14.0] — 2026-07-20
 
 Adds **auto-run bingo games** — the system draws numbers on a timer (paired with
@@ -591,6 +626,43 @@ First tracked release — establishes versioning for the current production buil
 ---
 
 ## Backend
+
+### [3.12.0] — 2026-07-21
+
+Security and resilience hardening pass across the API: the login throttle now keys on the real client IP behind Cloudflare, password changes/resets invalidate an account's other sessions, and several stored-XSS/SSRF/IDOR vectors were closed. Handler and background-goroutine panics are now recovered instead of crashing the process, and delayed player-draw broadcasts are game-scoped so a number can no longer leak across games. No breaking API changes — the only surface addition is an optional `game_id` field on two WebSocket payloads.
+
+#### Security
+
+- Rate limiter now keys on the true client IP. Behind Cloudflare→Apache the throttle was bucketing every visitor under the shared Cloudflare edge IP, so one tripped limit affected everyone and an attacker rotating edges could poison others; login/passkey/registration (and public raffle / card-request) throttles now resolve the real origin via a loopback-gated CF-Connecting-IP / X-Forwarded-For, falling back to the spoof-proof peer address so the header can't be forged to mint a fresh key per request.
+- Registration no longer enumerates usernames. A fresh account, an already-taken name, and the reserved bootstrap name all return one identical generic response, so `/api/register` can't be probed to discover which usernames exist (eligible accounts are still created).
+- Personal access tokens in a `?token=` query parameter are now restricted to the WebSocket upgrade only; every REST route must present the token in the `Authorization` header, keeping the secret out of access logs, browser history, and Referer headers.
+- A password change or admin reset now invalidates the account's other logged-in sessions. A new per-account password epoch (schema v51) is stamped into each session and re-checked on every request and WebSocket upgrade; the changing session is kept alive while all others are logged out, and the account's personal access token is revoked so a leaked token stops working.
+- Passkey login `begin` is now covered by the login brute-force limiter, so an unauthenticated client can't hammer it to amplify challenge/session writes.
+- SVG sanitizer hardened against stored XSS on the player board: `<style>` blocks are dropped wholesale, namespaced SMIL animation targets (`xlink:href`) can no longer slip a `javascript:` value past the animation check, and inline styles containing `url()` or `@import` are stripped alongside `javascript:`/`expression()`.
+- Raffle entry PATCH/DELETE now verify the entry belongs to the raffle named in the path, closing an IDOR where an entry from a different raffle could be marked paid or deleted by pairing its id with any raffle id. Raffle staff reads (entry lists, paid totals) now align to the same `teahouse-raffles` permission that gates raffle writes.
+- AniList SSRF closed on two fronts: the admin-configured endpoint is re-validated against the AniList allowlist at read time (not just at save), and outbound lookups now re-validate every redirect hop, so a crafted or compromised endpoint can't bounce the server's request to an internal service or cloud-metadata host.
+- Font-token HMAC now fails loudly (panics) if the platform RNG is unavailable instead of silently falling back to an all-zero key an attacker could use to forge every font token.
+- Carrd media uploads are now content-sniffed for every accepted type (images, plus MP3/MP4 container magic) rather than trusting the extension, so an HTML/script file renamed to `.png`/`.mp3`/`.mp4` can't land in a public directory.
+- Token-path log redaction now matches route prefixes case-insensitively, so a token link requested with alternate casing is still hashed in logs instead of being written verbatim.
+
+#### Fixed
+
+- Delayed player-draw broadcasts are now game-scoped: a draw held for its reveal delay is dropped if its game has ended (or ended and been replaced) within the window, so a number from one game can no longer surface in the next. The half-time mini-game alert got the same guard. Both `game_draw`/`halftime` WebSocket payloads carry an optional, backward-compatible `game_id` for the client-side check.
+- Enabling auto-draw now flips the toggle and arms the immediate first draw under a single lock, eliminating a race where two concurrent enables could each trigger a redundant first draw.
+- Announcement scheduler no longer risks a duplicate `@everyone` post: after a successful Discord post the cursor advance is retried on transient DB contention, and a persistent failure is logged loudly rather than silently re-posting next tick. Recurring-schedule inputs (minute-of-day, week-of-month) are now validated so a post time can't silently shift.
+- Deleting a Garapon player (with its auto-issued stamp card) and deleting a stamp rally (with its Garapon links) are now single atomic transactions, so a partial failure rolls back instead of orphaning rows.
+- Stamp-rally stamp updates are now scoped to their parent rally, so a stamp id from a different event can't be updated across rallies.
+- Custom-card duplicate detection now matches the canonical board JSON directly in SQL instead of loading and re-marshalling every card on each public check.
+- Migration ordering and backfill hardened: the legacy pre-versioning upgrade path de-duplicates draw rows before building the unique index (shared with the v43 dedupe), the pattern `sort_order` backfill is idempotent and no longer strandable by a mid-migration crash, and table rebuilds follow SQLite's documented safe procedure with a foreign-key integrity check before commit.
+
+#### Changed
+
+- Panic recovery added throughout: a middleware guard now turns any handler panic into a logged 500 with a proper access-log line, and background schedulers, WebSocket read/write pumps, and deferred draw/half-time broadcasts each recover so a single panic can't crash the whole process.
+- HTTP server now sets ReadHeader, Read, and Idle timeouts to guard against slow-client / Slowloris resource exhaustion (no WriteTimeout, to preserve long-lived WebSocket connections).
+- A failed `ListenAndServe` (e.g. port already in use) now runs the same graceful-shutdown path as a signal instead of calling `os.Exit`, so deferred cleanup (DB close, scheduler cancel) still runs.
+- WebSocket upgrades are now access-logged (accepted 101s and rejected 401s), so the privileged admin channel leaves an audit record even though that route bypasses the request-logging middleware.
+- Discord webhook posts (announcements, affiliates, tea rooms, reading-list publish) now honor request-context cancellation, so a client disconnect or shutdown stops an in-flight or backlogged run instead of hammering Discord.
+- Added new path-safety and SSRF regression tests (uploads, book clubs, registration enumeration, stamp rally).
 
 ### [3.11.0] — 2026-07-20
 
@@ -1273,6 +1345,23 @@ with a personal access token and is distributed through a Dalamud custom repo
 (`plugins/pluginmaster.json`). Versions use the four-part AssemblyVersion in
 `SenpanCompanion.csproj`. Entries below the current release were reconstructed
 from the `<Version>` history and commit messages.
+
+### [3.2.1.0] — 2026-07-21
+
+Hardening release from the audit-fix pass: the access token is now encrypted at rest with Windows DPAPI, and outgoing chat, connection retries, and background loads were made safe against throttle bursts, hostile servers, and off-thread state writes.
+
+#### Security
+- Encrypted the personal access token at rest with the Windows Data Protection API (DPAPI, CurrentUser scope) instead of storing it as plaintext in the config JSON, so a synced, backed-up, or world-readable config no longer exposes a usable token. An existing plaintext token is migrated to the encrypted form once on load and then cleared from disk.
+- Added a warning in the log when the configured server URL is not HTTPS, since the token would otherwise be transmitted in cleartext and could be intercepted (warned once, not on every request).
+- Bounded the live WebSocket receive buffer (1 MB per message cap), so a hostile or broken server can no longer stream an unbounded message and exhaust memory.
+
+#### Fixed
+- Routed every outgoing chat message — auto-tells and Timed Text Macros alike — through a single, globally serialized send queue that spaces messages one second apart, so concurrent features can no longer each start at once and defeat the game's outgoing-chat throttle.
+- Stopped the auth poll and live WebSocket from retrying forever on a terminal failure: an invalid/rejected token (401/403) now backs off hard until the token is changed instead of hammering the server every few seconds, while transient drops use exponential backoff that resets on a clean reconnect.
+- Allowed a failed initial card load to retry (behind a short cooldown) rather than leaving the card list empty until restart.
+- Fixed the outgoing-message length clamp to count UTF-8 bytes (the game's real limit) instead of UTF-16 characters, so a multibyte message is no longer wrongly truncated or let through over budget, and never splits a character.
+- Marshaled off-thread UI-state writes in error paths onto the framework thread (live-connection, session, and card-cache failure handling), and logged exceptions thrown by live-event subscribers instead of silently swallowing them.
+- Moved config saves off the render thread — timed-macro progress now persists on a background thread so the synchronous file write no longer stalls the UI.
 
 ### [3.2.0.0] — 2026-07-20
 

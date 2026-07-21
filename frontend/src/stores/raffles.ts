@@ -158,6 +158,7 @@ export const useRafflesStore = defineStore('raffles', () => {
    * success, false on failure (so the view can redirect back to the list).
    */
   async function loadPublicRaffleById(id: number): Promise<boolean> {
+    const reqId = ++detailSeq
     selectedRaffle.value = null
     raffleSignup.value = { characterName: '', world: '', numEntries: 1 }
     raffleSignupResult.value = null
@@ -166,14 +167,17 @@ export const useRafflesStore = defineStore('raffles', () => {
     detailLoading.value = true
     try {
       const data = await endpoints.raffles.detail(id)
+      if (reqId !== detailSeq) return true // superseded; the newer load owns the state
       selectedRaffle.value = data.raffle
       raffleTotalEntryCount.value = data.total_entries || 0
       if (data.winner_entry) raffleWinnerEntry.value = data.winner_entry
       return true
     } catch {
-      return false
+      // A superseded request must not report failure (which would redirect the
+      // view back to the list) — the newer load is in charge of the outcome.
+      return reqId !== detailSeq
     } finally {
-      detailLoading.value = false
+      if (reqId === detailSeq) detailLoading.value = false
     }
   }
 

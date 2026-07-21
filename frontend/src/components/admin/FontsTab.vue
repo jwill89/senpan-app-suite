@@ -14,7 +14,7 @@
  * sites. A live-preview panel renders custom text in any variant of the
  * selected font, so the converted WOFF2 can be compared against the uploads.
  */
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
 import AdminPanel from '@/components/common/ui/AdminPanel.vue'
 import FormField from '@/components/common/ui/FormField.vue'
@@ -127,6 +127,13 @@ watch(
   },
   { deep: true },
 )
+
+// Remove the injected preview <style> when the tab unmounts — it lives in
+// <head> outside this component's tree, so it would otherwise leak (and keep
+// stale @font-face rules) after navigating away.
+onBeforeUnmount(() => {
+  document.getElementById('font-preview-variants')?.remove()
+})
 
 /** The variant currently previewed (null when none). */
 const previewVariant = computed(

@@ -2,11 +2,13 @@ package server
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"log/slog"
+	"net/http"
 	"net/url"
 	"strconv"
 	"strings"
@@ -265,9 +267,10 @@ func colorFromHex(hex string, def int) int {
 	return int(v)
 }
 
-// postDiscordEmbed sends a single embed to the webhook URL.
-func postDiscordEmbed(webhookURL string, embed discordEmbed) error {
-	return postDiscordWebhook(webhookURL, discordWebhookPayload{Embeds: []discordEmbed{embed}})
+// postDiscordEmbed sends a single embed to the webhook URL. The context bounds the
+// request, so a caller shutdown or client disconnect cancels an in-flight POST.
+func postDiscordEmbed(ctx context.Context, webhookURL string, embed discordEmbed) error {
+	return postDiscordWebhook(ctx, webhookURL, discordWebhookPayload{Embeds: []discordEmbed{embed}})
 }
 
 // postDiscordWebhook sends a full webhook payload (embeds + optional components) to
@@ -276,7 +279,7 @@ func postDiscordEmbed(webhookURL string, embed discordEmbed) error {
 // `?with_components=true`; without it the message posts but the buttons silently
 // vanish. Link buttons are non-interactive, so channel (non-application-owned)
 // webhooks are allowed to send them once the flag is set.
-func postDiscordWebhook(webhookURL string, payload discordWebhookPayload) error {
+func postDiscordWebhook(ctx context.Context, webhookURL string, payload discordWebhookPayload) error {
 	body, err := json.Marshal(payload)
 	if err != nil {
 		return fmt.Errorf("encode embed")
@@ -285,7 +288,12 @@ func postDiscordWebhook(webhookURL string, payload discordWebhookPayload) error 
 		webhookURL = withComponentsParam(webhookURL)
 	}
 	slog.Debug("discord webhook post", "embeds", len(payload.Embeds), "components", len(payload.Components), "bytes", len(body))
-	resp, err := bookclubHTTPClient.Post(webhookURL, "application/json", bytes.NewReader(body))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, webhookURL, bytes.NewReader(body))
+	if err != nil {
+		return fmt.Errorf("build webhook request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := bookclubHTTPClient.Do(req)
 	if err != nil {
 		// Transport failure: the request may or may not have reached Discord, so
 		// mark it ambiguous (callers must not blindly retry — see errWebhookAmbiguous).

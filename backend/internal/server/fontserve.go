@@ -101,9 +101,12 @@ func (s *Server) fontSecret() []byte {
 	}
 	b := make([]byte, 32)
 	if _, err := rand.Read(b); err != nil {
-		// crypto/rand failing means the platform RNG is broken; nothing sane to
-		// do but log — the zeroed key still only guards font obfuscation.
+		// crypto/rand failing means the platform RNG is broken. Do NOT fall back
+		// to the all-zero key that was previously left in b — an attacker who
+		// knows the key can forge every font token. Fail loudly instead: a broken
+		// RNG voids the whole token scheme, so there is nothing safe to serve.
 		slog.Error("generate font token secret", "error", err)
+		panic(fmt.Sprintf("font token secret: crypto/rand unavailable: %v", err))
 	}
 	if err := s.store.SetSetting(settingFontSecret, hex.EncodeToString(b)); err != nil {
 		slog.Warn("font token secret not persisted; font tokens will rotate on restart", "error", err)

@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 using Dalamud.Plugin.Services;
 using FFXIVClientStructs.FFXIV.Client.System.String;
@@ -15,20 +17,35 @@ namespace SenpanCompanion.Services;
 /// plugin that drives the game client directly.
 ///
 /// ToS note: sending chat programmatically is the kind of automation the official
-/// Dalamud repo discourages. It's included here as an explicit, operator-initiated
-/// convenience — the /tell(s) for one card you personally hand out from the nearby
-/// list — for a private/custom-repo build, and it's opt-out in settings. A single
-/// hand-out may deliver as two or three sequential tells if the message is too long
-/// for one in-game chat message; that is still one operator-initiated action, spaced
-/// out to respect the chat throttle. It never loops or fires unattended.
+/// Dalamud repo discourages. It's included here for a private/custom-repo build and is
+/// opt-out in settings. Most sends are explicit, operator-initiated conveniences — the
+/// /tell(s) for one card you personally hand out from the nearby list. The Timed Text
+/// Macros are the exception: those DO fire unattended on a repeating timer (see
+/// <see cref="TimedMacroRunner"/>) until you stop them or their send cap is reached.
+/// A single message may deliver as two or three sequential parts if it's too long for
+/// one in-game chat message.
+///
+/// Every send — regardless of which feature enqueued it — is funnelled through one
+/// global, serialized send path (<see cref="SendSpaced"/>) that spaces consecutive
+/// messages <see cref="MessageSpacingMs"/> apart, so concurrent features can't gang up
+/// and defeat the game's outgoing-chat throttle.
 /// </summary>
 public sealed class ChatSender
 {
-    // Gap between the consecutive parts of a split message — one second — so the game's
-    // chat throttle doesn't drop a rapid follow-up. Shared by every send path (the
-    // auto-tells and the Timed Text Macros' say/yell/shout) so a split message is always
-    // delivered one part per second.
+    // Minimum gap between ANY two consecutive outgoing messages — one second — so the
+    // game's chat throttle doesn't drop a rapid follow-up. Enforced globally across every
+    // send path (the auto-tells and the Timed Text Macros' say/yell/shout), not just
+    // within a single call, so concurrent features can't each start at t=0 and burst.
     private const int MessageSpacingMs = 1000;
+
+    // Serializes every outgoing message across all callers. Held while a single message
+    // is delayed + executed, so only one send is ever in flight and the spacing below is
+    // measured from the previous message no matter which feature enqueued it.
+    private readonly SemaphoreSlim sendGate = new(1, 1);
+
+    // Earliest UtcNow.Ticks at which the next message may be sent. Read/written only while
+    // holding sendGate, so it needs no further synchronization.
+    private long nextAllowedTicks;
 
     private readonly IFramework framework;
     private readonly IPluginLog log;
@@ -94,8 +111,12 @@ public sealed class ChatSender
         _ => null,
     };
 
-    // Runs each command on the framework thread, one second apart, best-effort. Fire-and-
+    // Runs each command on the framework thread, best-effort, spaced globally. Fire-and-
     // forget — failures are logged, never thrown (the caller is often a UI click or a timer).
+    // The per-command work runs under sendGate so all sends across the whole plugin form one
+    // serialized stream: each waits until nextAllowedTicks, executes, then pushes the next
+    // slot MessageSpacingMs into the future. This holds regardless of how many features
+    // enqueue at once, so the throttle sees a steady one-per-second cadence.
     private void SendSpaced(List<string> commands)
     {
         if (commands.Count == 0)
@@ -105,13 +126,8 @@ public sealed class ChatSender
         {
             try
             {
-                for (var i = 0; i < commands.Count; i++)
-                {
-                    if (i > 0)
-                        await Task.Delay(MessageSpacingMs).ConfigureAwait(false);
-                    var command = commands[i];
-                    await this.framework.RunOnFrameworkThread(() => Execute(command)).ConfigureAwait(false);
-                }
+                foreach (var command in commands)
+                    await SendOneSpaced(command).ConfigureAwait(false);
             }
             catch (Exception ex)
             {
@@ -120,6 +136,31 @@ public sealed class ChatSender
                 this.log.Warning($"Failed to send chat message: {ex.Message}");
             }
         });
+    }
+
+    // Sends a single command through the global gate: acquire, wait out any remaining
+    // spacing from the previous message, execute on the framework thread, then reserve the
+    // next slot. Releasing only after the delay keeps the whole plugin to one send per slot.
+    private async Task SendOneSpaced(string command)
+    {
+        await this.sendGate.WaitAsync().ConfigureAwait(false);
+        try
+        {
+            var waitTicks = this.nextAllowedTicks - DateTime.UtcNow.Ticks;
+            if (waitTicks > 0)
+            {
+                var waitMs = (int)Math.Min(int.MaxValue, waitTicks / TimeSpan.TicksPerMillisecond);
+                if (waitMs > 0)
+                    await Task.Delay(waitMs).ConfigureAwait(false);
+            }
+
+            await this.framework.RunOnFrameworkThread(() => Execute(command)).ConfigureAwait(false);
+            this.nextAllowedTicks = DateTime.UtcNow.AddMilliseconds(MessageSpacingMs).Ticks;
+        }
+        finally
+        {
+            this.sendGate.Release();
+        }
     }
 
     private unsafe void Execute(string command)
@@ -153,7 +194,28 @@ public sealed class ChatSender
             return string.Empty;
         var cleaned = new string(s.Where(ch => !char.IsControl(ch)).ToArray()).Trim();
         // Last-resort clamp; the real per-message budget is enforced by TellComposer's
-        // byte-aware split (TellComposer.MaxBytes), so a valid part never hits this.
-        return cleaned.Length > TellComposer.MaxBytes ? cleaned[..TellComposer.MaxBytes] : cleaned;
+        // byte-aware split (TellComposer.MaxBytes), so a valid part never hits this. Clamp
+        // by UTF-8 byte length (the game's actual limit), not UTF-16 char count, so a
+        // multibyte message isn't wrongly truncated (or, worse, let through over budget).
+        return ClampToByteBudget(cleaned);
+    }
+
+    // Truncates to at most TellComposer.MaxBytes UTF-8 bytes at a code-point boundary, so a
+    // surrogate pair is never split. Returns the input unchanged when it already fits.
+    private static string ClampToByteBudget(string s)
+    {
+        if (Encoding.UTF8.GetByteCount(s) <= TellComposer.MaxBytes)
+            return s;
+
+        var bytes = 0;
+        var idx = 0;
+        foreach (var rune in s.EnumerateRunes())
+        {
+            if (bytes + rune.Utf8SequenceLength > TellComposer.MaxBytes)
+                break;
+            bytes += rune.Utf8SequenceLength;
+            idx += rune.Utf16SequenceLength;
+        }
+        return s[..idx];
     }
 }

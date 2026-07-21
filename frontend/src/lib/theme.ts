@@ -19,7 +19,7 @@
  * Google Fonts request for a family it knows is an uploaded one.
  */
 import type { UploadedFont } from '@/types/api'
-import { assetUrl } from '@/lib/assets'
+import { assetCssUrl } from '@/lib/assets'
 
 /**
  * Injects a Google Fonts <link> stylesheet for the given font family.
@@ -256,12 +256,13 @@ export function applyHeaderFont(fontFamily: string | null | undefined): void {
  * Sets (or clears) the active theme's number flourish — the SVG flanking the
  * "Last Called" number — via the `--number-flourish-url` CSS variable that
  * `.last-called-flourish` reads. An empty path removes the variable so the mask
- * falls back to the app's built-in `/images/called_flourish.svg`.
+ * falls back to the app's built-in `/images/called_flourish.svg`. The path is
+ * routed through assetCssUrl so it can't break out of the `url("…")` token.
  */
 export function applyNumberFlourish(path: string | null | undefined): void {
   const root = document.documentElement
   if (path) {
-    root.style.setProperty('--number-flourish-url', `url("${assetUrl(path)}")`)
+    root.style.setProperty('--number-flourish-url', `url("${assetCssUrl(path)}")`)
   } else {
     root.style.removeProperty('--number-flourish-url')
   }

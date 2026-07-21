@@ -319,11 +319,17 @@ router.onError((error, to) => {
 router.beforeEach(async (to) => {
   const auth = useAuthStore()
 
+  const isAuthPage = to.name === 'admin-login' || to.name === 'admin-register'
+
+  // Verify auth once per session (server is the source of truth). Needed for
+  // /admin routes (to gate access) *and* the auth pages: a direct load / refresh
+  // of /admin/login or /admin/register leaves authChecked false, so without this
+  // an already-logged-in visitor would be shown the form instead of redirected.
+  if ((to.meta.requiresAdmin || isAuthPage) && !auth.authChecked) {
+    await auth.checkAuth()
+  }
+
   if (to.meta.requiresAdmin) {
-    // Verify auth once per session (server is the source of truth).
-    if (!auth.authChecked) {
-      await auth.checkAuth()
-    }
     // The admin area now admits any logged-in (active) account; individual pages
     // are gated per permission below.
     if (!auth.user) {
@@ -347,12 +353,8 @@ router.beforeEach(async (to) => {
   }
 
   // If already authenticated, skip the login/register pages straight to the
-  // account's first permitted page.
-  if (
-    (to.name === 'admin-login' || to.name === 'admin-register') &&
-    auth.authChecked &&
-    auth.user
-  ) {
+  // account's first permitted page (auth was resolved above for these routes).
+  if (isAuthPage && auth.user) {
     return { name: firstAllowedAdminRoute(auth) ?? 'admin-no-access' }
   }
 

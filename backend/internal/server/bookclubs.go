@@ -111,9 +111,29 @@ func init() {
 	}
 }
 
-// bookclubHTTPClient is used for outbound calls (AniList lookups, Discord
-// webhook posts) with a sane timeout so a slow upstream can't hang a request.
+// bookclubHTTPClient is used for outbound Discord webhook posts (validated
+// against isDiscordWebhookURL at save time) with a sane timeout so a slow
+// upstream can't hang a request.
 var bookclubHTTPClient = &http.Client{Timeout: 15 * time.Second}
+
+// anilistHTTPClient is the client for AniList GraphQL lookups. The initial
+// endpoint is admin-configured and validated against isAllowedAniListURL at
+// settings-save time, but a redirect could still bounce the request to an
+// internal host (SSRF). CheckRedirect re-validates EVERY hop against the same
+// AniList allowlist, so a crafted/compromised endpoint can't redirect the
+// server's outbound request to a private service or cloud metadata endpoint.
+var anilistHTTPClient = &http.Client{
+	Timeout: 15 * time.Second,
+	CheckRedirect: func(req *http.Request, via []*http.Request) error {
+		if len(via) >= 5 {
+			return fmt.Errorf("stopped after %d redirects", len(via))
+		}
+		if !isAllowedAniListURL(req.URL.String()) {
+			return fmt.Errorf("redirect to disallowed host %q blocked", req.URL.Host)
+		}
+		return nil
+	},
+}
 
 // ── Reading lists (admin) ───────────────────────────────────────────────────
 
@@ -629,7 +649,12 @@ func (s *Server) handleBookclubLookup(w http.ResponseWriter, r *http.Request) {
 func (s *Server) anilistURL() string {
 	base, _ := s.store.GetSetting("anilist_api_url")
 	base = strings.TrimSpace(base)
-	if base == "" {
+	// Defense in depth: the settings handler validates anilist_api_url against
+	// isAllowedAniListURL at save time, but a value written another way (a
+	// migration, a direct DB edit) must not send our outbound lookup POST to an
+	// internal service or cloud-metadata host. Re-check the stored value at read
+	// time and fall back to the default endpoint when it isn't an allowed AniList URL.
+	if base == "" || !isAllowedAniListURL(base) {
 		base = defaultAniListURL
 	}
 	return strings.TrimRight(base, "/")
@@ -700,7 +725,7 @@ func anilistPost(endpoint, query string, variables map[string]any) ([]byte, erro
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("User-Agent", anilistUserAgent)
 	slog.Debug("anilist request", "endpoint", endpoint, "bytes", len(payload))
-	resp, err := bookclubHTTPClient.Do(req)
+	resp, err := anilistHTTPClient.Do(req)
 	if err != nil {
 		// Don't swallow the transport failure — surface *why* AniList was
 		// unreachable (timeout, connection reset, DNS/TLS) so it reaches the
@@ -709,7 +734,7 @@ func anilistPost(endpoint, query string, variables map[string]any) ([]byte, erro
 		// commonly sees a timeout or reset rather than a clean HTTP status.
 		if urlErr, ok := errors.AsType[*url.Error](err); ok {
 			if urlErr.Timeout() {
-				return nil, fmt.Errorf("did not respond within %s", bookclubHTTPClient.Timeout)
+				return nil, fmt.Errorf("did not respond within %s", anilistHTTPClient.Timeout)
 			}
 			return nil, fmt.Errorf("could not connect (%w)", urlErr.Err)
 		}
@@ -870,17 +895,36 @@ func (s *Server) handlePublishReadingList(w http.ResponseWriter, r *http.Request
 		return
 	}
 
+	// Posting a whole list is a slow, sequential job (one webhook POST per item
+	// plus a rate-limit pause). Thread the request context so a client that
+	// disconnects — or a shutdown — stops the loop instead of hammering Discord
+	// with the remaining items.
+	ctx := r.Context()
 	commentsLabel := commentsLabelForClub(list.ClubSlug)
 	published := 0
-	for _, it := range list.Items {
-		if err := postDiscordEmbed(webhook, buildItemEmbed(it, commentsLabel)); err != nil {
+	for i, it := range list.Items {
+		if err := ctx.Err(); err != nil {
+			writeError(w, http.StatusRequestTimeout,
+				fmt.Sprintf("Publishing cancelled after %d of %d items", published, len(list.Items)))
+			return
+		}
+		if err := postDiscordEmbed(ctx, webhook, buildItemEmbed(it, commentsLabel)); err != nil {
 			writeError(w, http.StatusBadGateway,
 				fmt.Sprintf("Published %d of %d before failing on %q: %v", published, len(list.Items), it.Title, err))
 			return
 		}
 		published++
-		// Be gentle with Discord's rate limit between posts.
-		time.Sleep(350 * time.Millisecond)
+		// Be gentle with Discord's rate limit between posts, but abort the pause
+		// promptly if the request is cancelled (skip it after the last item).
+		if i < len(list.Items)-1 {
+			select {
+			case <-ctx.Done():
+				writeError(w, http.StatusRequestTimeout,
+					fmt.Sprintf("Publishing cancelled after %d of %d items", published, len(list.Items)))
+				return
+			case <-time.After(350 * time.Millisecond):
+			}
+		}
 	}
 
 	writeJSON(w, http.StatusOK, model.PublishResponse{Published: published})

@@ -233,7 +233,7 @@ export const endpoints = {
   winnersLog: {
     list: (params: { page: number; perPage: number; sort: string; dir: 'asc' | 'desc' }) =>
       apiGet<WinnersLogResponse>(
-        `winners-log?page=${params.page}&per_page=${params.perPage}&sort=${params.sort}&dir=${params.dir}`,
+        `winners-log?page=${params.page}&per_page=${params.perPage}&sort=${enc(params.sort)}&dir=${enc(params.dir)}`,
       ),
     frequent: () => apiGet<FrequentWinnersResponse>('winners-log/frequent'),
     /** DELETE /api/winners-log/{id} — remove a single entry (204). */

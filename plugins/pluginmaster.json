@@ -3,7 +3,7 @@
     "Author": "MathDad",
     "Name": "Senpan Admin Companion",
     "InternalName": "SenpanCompanionAdmin",
-    "AssemblyVersion": "3.2.0.0",
+    "AssemblyVersion": "3.2.1.0",
     "Description": "Serves as an alternative to many of the web-interface functions, allowing staff to operate various systems from within the game.",
     "Punchline": "Allows Senpan Tea House staff to use various app services right from the game.",
     "Changelog": "The Bingo Game tab now supports auto-run games: a New Game 'Auto-draw numbers' checkbox with a 'Time Between Calls' interval (also on presets), plus a live Auto-Draw on/off toggle and interval selector that stay in sync with the website. The half-time prompt is now driven by the server so it fires for automatic draws too; its Yes/No answer alerts players or resumes auto-draw. Auto-draw pauses at half-time and stops when a winner is found.",
@@ -19,7 +19,7 @@
     "DownloadLinkUpdate": "https://apps.senpan.cafe/plugin/SenpanCompanionAdmin/latest.zip",
     "DownloadLinkTesting": "https://apps.senpan.cafe/plugin/SenpanCompanionAdmin/latest.zip",
     "DownloadCount": 0,
-    "LastUpdate": 1784419200,
+    "LastUpdate": 1784592000,
     "AcceptsFeedback": true
   }
 ]

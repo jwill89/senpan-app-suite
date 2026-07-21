@@ -159,6 +159,19 @@ ps -o user= -C app-suite                         # not root
   rotation — changing the secret is what forcibly logs out every outstanding
   session. The FFXIV plugin uses PAT bearer tokens, not the admin cookie, so it
   is unaffected.
+- **`APPSUITE_TURNSTILE_SECRET` / `APPSUITE_TURNSTILE_SITEKEY`.** Configure the
+  Cloudflare Turnstile pair (also settable as `-turnstile-secret`/`-turnstile-sitekey`
+  flags) to enable the bot check on the public POST paths — login, registration,
+  raffle sign-up, and custom card requests. When the **secret** is empty the check
+  is disabled entirely (the server logs `Turnstile not configured` at boot and the
+  frontend skips the widget), so a bad/rotated secret degrades to "no bot check,"
+  not a lockout. The **secret** is sensitive; the **sitekey** is public (it is
+  served to browsers via `GET /api/config`). Keep the secret out of the unit's
+  inline `Environment=` (visible via `systemctl show` / `/proc/<pid>/environ`) —
+  put both, alongside `APPSUITE_SESSION_SECRET`, in a root-owned `chmod 600` file
+  loaded with `EnvironmentFile=-/etc/senpan/senpan.env` (see the commented block in
+  `deploy/senpan.service`). Rotate the secret from the Cloudflare dashboard and
+  update the env file.
 
 ## Font host (protected serving)
 
@@ -281,6 +294,26 @@ the on-disk file, the Logs tab's historical snapshot, and `jlv` stay empty.**
 
 On-box viewing: `jlv /var/log/senpan/senpan.log` (install the Linux `.deb` from
 <https://github.com/hedhyw/json-log-viewer/releases>).
+
+### Systemd sandboxing
+
+`senpan.service` ships with a defense-in-depth sandbox: `NoNewPrivileges`,
+`ProtectSystem=strict` + `ProtectHome`, `PrivateTmp`/`PrivateDevices`,
+`ProtectKernel*`/`ProtectControlGroups`, `RestrictAddressFamilies=AF_INET AF_INET6
+AF_UNIX`, `RestrictNamespaces`, `LockPersonality`, `SystemCallFilter=@system-service`
++ `SystemCallArchitectures=native`, and **`MemoryDenyWriteExecute=yes`** (W^X). Every
+directory the app writes (the DB dir + the `-webroot` `images/`, `fonts/`, `carrd/`
+subtrees, plus `LogsDirectory=senpan`) must be listed in `ReadWritePaths` or writes
+fail with `EACCES` under `ProtectSystem=strict` — keep `ReadWritePaths` in sync with
+your deployed `-webroot`.
+
+> **`MemoryDenyWriteExecute` caveat.** W^X is safe here because the binary is pure
+> Go (no cgo) and the SQLite driver (`ncruces/go-sqlite3` v0.35+) **transpiles**
+> SQLite's WebAssembly to native Go ahead of time (`wasm2go`) — there is no runtime
+> JIT and no writable-executable memory. If the SQLite driver is ever pinned back to
+> an older, **wazero-JIT** version, `MemoryDenyWriteExecute=yes` will crash the
+> service with `SIGSYS` on the first query and must be removed. Verify on the box
+> with `systemctl show senpan -p MemoryDenyWriteExecute -p SystemCallArchitectures`.
 
 ### Who made each request (actor identity)
 

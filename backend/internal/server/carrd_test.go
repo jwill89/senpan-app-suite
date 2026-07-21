@@ -344,7 +344,7 @@ func TestCarrd_UploadAudioAndVideo(t *testing.T) {
 	// .mp3 and .mp4 are accepted; .txt is rejected.
 	resp := env.postCarrdUpload(t, "media", "", map[string][]byte{
 		"theme.mp3":  []byte("ID3audio"),
-		"clip.mp4":   []byte("ftypmp4"),
+		"clip.mp4":   []byte("\x00\x00\x00\x18ftypisomclip"),
 		"readme.txt": []byte("nope"),
 	})
 	data := decodeBody(t, resp)

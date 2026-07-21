@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
@@ -218,8 +219,8 @@ func TestPostDueAnnouncementsNoDoubleWhenOverdue(t *testing.T) {
 
 	s, id, _ := newSchedulerEnv(t, ts.URL)
 
-	s.postDueAnnouncements()
-	s.postDueAnnouncements() // back-to-back: a correct scheduler still posts once
+	s.postDueAnnouncements(context.Background())
+	s.postDueAnnouncements(context.Background()) // back-to-back: a correct scheduler still posts once
 
 	if got := atomic.LoadInt32(&hits); got != 1 {
 		t.Fatalf("posted %d times across two sweeps; want exactly 1", got)
@@ -239,7 +240,7 @@ func TestPostDueAnnouncementsAmbiguousAdvances(t *testing.T) {
 	ts.Close() // the port now refuses connections → transport (ambiguous) error
 
 	s, id, startCursor := newSchedulerEnv(t, closedURL)
-	s.postDueAnnouncements()
+	s.postDueAnnouncements(context.Background())
 
 	reloaded, _ := s.store.GetAnnouncement(id)
 	if reloaded == nil || reloaded.NextPostAt == startCursor {
@@ -260,7 +261,7 @@ func TestPostDueAnnouncementsHTTPErrorRetries(t *testing.T) {
 	defer ts.Close()
 
 	s, id, startCursor := newSchedulerEnv(t, ts.URL)
-	s.postDueAnnouncements()
+	s.postDueAnnouncements(context.Background())
 
 	reloaded, _ := s.store.GetAnnouncement(id)
 	if reloaded == nil || reloaded.NextPostAt != startCursor {

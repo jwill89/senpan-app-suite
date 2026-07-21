@@ -10,7 +10,7 @@
  * `select` and `update(key, placement)` rather than mutating props. Continuous drags
  * emit on each pointermove; the parent applies the new placement to the matching item.
  */
-import { ref } from 'vue'
+import { onBeforeUnmount, ref } from 'vue'
 import { assetUrl } from '@/lib/assets'
 import { placementStyle } from '@/lib/stampcard'
 import type { Placement } from '@/types/api'
@@ -112,6 +112,10 @@ function endDrag(): void {
   window.removeEventListener('pointermove', onPointerMove)
   window.removeEventListener('pointerup', endDrag)
 }
+
+// If the editor unmounts mid-drag, the window listeners would otherwise leak
+// (endDrag never fires). Tear them down defensively on unmount.
+onBeforeUnmount(endDrag)
 
 /** Click on empty card area → deselect. */
 function onCanvasPointerDown(e: PointerEvent): void {

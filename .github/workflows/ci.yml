@@ -24,14 +24,35 @@ jobs:
       run:
         working-directory: frontend
     steps:
+      # Check out WITHOUT the eslint-config PAT and WITHOUT submodules.
+      # persist-credentials: false keeps even the default GITHUB_TOKEN out of
+      # .git/config, so the untrusted npm lifecycle scripts that `npm ci` runs
+      # below can't read a stored credential. The private submodule is fetched
+      # separately in the next step with a scoped, non-persisted token.
       - uses: actions/checkout@v7
         with:
-          # The frontend ESLint config lives in the private @jwill89/eslint-config
-          # repo, wired in as the frontend/eslint-config submodule. Fetch it with a
-          # PAT that can read that repo (ESLINT_CONFIG_TOKEN secret) — the default
-          # GITHUB_TOKEN can't reach a different private repo.
-          submodules: recursive
-          token: ${{ secrets.ESLINT_CONFIG_TOKEN }}
+          persist-credentials: false
+
+      # The frontend ESLint config lives in the private @jwill89/eslint-config
+      # repo, wired in as the frontend/eslint-config submodule. Fetch it with a
+      # PAT that can read that repo (ESLINT_CONFIG_TOKEN secret — ideally a
+      # fine-grained, read-only token limited to that repo) — the default
+      # GITHUB_TOKEN can't reach a different private repo. The credential is
+      # injected via a temporary `insteadOf` rewrite and unset immediately after,
+      # so it is never written into .git/config or the submodule config where
+      # later `npm ci` lifecycle scripts could read it.
+      - name: Fetch ESLint config submodule
+        working-directory: ${{ github.workspace }}
+        env:
+          ESLINT_CONFIG_TOKEN: ${{ secrets.ESLINT_CONFIG_TOKEN }}
+        run: |
+          if [ -z "$ESLINT_CONFIG_TOKEN" ]; then
+            echo "ERROR: ESLINT_CONFIG_TOKEN secret is not set." >&2
+            exit 1
+          fi
+          git config --global url."https://x-access-token:${ESLINT_CONFIG_TOKEN}@github.com/".insteadOf "https://github.com/"
+          git submodule update --init --recursive
+          git config --global --unset url."https://x-access-token:${ESLINT_CONFIG_TOKEN}@github.com/".insteadOf
 
       - name: Set up Node
         uses: actions/setup-node@v6

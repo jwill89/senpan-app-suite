@@ -123,6 +123,26 @@ describe('AdminSidebar', () => {
     expect(push).toHaveBeenCalledWith({ name: 'admin-system-settings' })
   })
 
+  it('accordion headers carry button semantics and toggle via the keyboard', async () => {
+    const wrapper = mountAs(makeUser({ is_admin: true }))
+    const header = section(wrapper, 'System').find('.admin-nav-header')
+    expect(header.attributes('role')).toBe('button')
+    expect(header.attributes('tabindex')).toBe('0')
+    expect(header.attributes('aria-expanded')).toBe('false')
+    expect(header.attributes('aria-controls')).toBe('admin-nav-items-system')
+
+    await header.trigger('keydown', { key: 'Enter' })
+    expect(isExpanded(wrapper, 'System')).toBe(true)
+    expect(section(wrapper, 'System').find('.admin-nav-header').attributes('aria-expanded')).toBe(
+      'true',
+    )
+
+    // Space collapses it again (no navigation from a header).
+    await section(wrapper, 'System').find('.admin-nav-header').trigger('keydown', { key: ' ' })
+    expect(isExpanded(wrapper, 'System')).toBe(false)
+    expect(push).not.toHaveBeenCalled()
+  })
+
   it('hides sections the account cannot access any item in', () => {
     // A non-admin with only the Manage Cards permission sees just the Bingo
     // section (and only its Cards item) — no empty Tea House / Atelier / System —

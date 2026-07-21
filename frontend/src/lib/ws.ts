@@ -58,8 +58,11 @@ export class WsClient {
   connect(cardId?: string | null): void {
     if (cardId !== undefined) this.cardId = cardId
 
+    // Tear down any prior socket/timers *without* emitting a user-visible
+    // 'closed' status: an intentional (re)connect must not flash the "Live"
+    // badge off. `disconnect()` is the public, status-emitting variant.
     const attempts = this.reconnectAttempts
-    this.disconnect()
+    this.teardown()
     this.reconnectAttempts = attempts
 
     const isReconnect = this.reconnectAttempts > 0
@@ -91,6 +94,13 @@ export class WsClient {
 
     ws.onclose = () => {
       this.ws = null
+      // Stop the keepalive ping once the socket is gone. Without this the
+      // interval keeps firing forever after a permanent close (no reconnect),
+      // and lingers between a close and its reconnect. connect() re-arms it.
+      if (this.keepaliveTimer) {
+        clearInterval(this.keepaliveTimer)
+        this.keepaliveTimer = null
+      }
       if (this.cb.shouldReconnect()) {
         this.scheduleReconnect()
       } else {
@@ -119,6 +129,16 @@ export class WsClient {
 
   /** Close the connection and cancel reconnect/keepalive timers. */
   disconnect(): void {
+    this.teardown()
+    this.setStatus('closed')
+  }
+
+  /**
+   * Cancel timers and close the socket without emitting a status change. Shared
+   * by disconnect() (which then emits 'closed') and connect() (which re-opens),
+   * so an intentional reconnect never surfaces a spurious 'closed' to the UI.
+   */
+  private teardown(): void {
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer)
       this.reconnectTimer = null
@@ -133,7 +153,6 @@ export class WsClient {
       this.ws.close()
       this.ws = null
     }
-    this.setStatus('closed')
   }
 
   private scheduleReconnect(): void {

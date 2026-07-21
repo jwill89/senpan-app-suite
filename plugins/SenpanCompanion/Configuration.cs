@@ -22,8 +22,40 @@ public class Configuration : IPluginConfiguration
     /// </summary>
     public string ServerUrl { get; set; } = DefaultServerUrl;
 
-    /// <summary>Personal access token ("pat_…") generated on the account page.</summary>
+    /// <summary>
+    /// DPAPI-encrypted personal access token (base64), or null when none is set.
+    /// Serialized to the config JSON in place of the plaintext token. Encrypted with
+    /// the Windows Data Protection API (CurrentUser scope, see <see cref="TokenProtector"/>),
+    /// so a synced/backed-up or world-readable config no longer exposes a usable
+    /// token. Read/write the token through <see cref="GetToken"/> / <see cref="SetToken"/>.
+    /// </summary>
+    public string? TokenProtected { get; set; }
+
+    /// <summary>
+    /// Legacy plaintext token from a pre-encryption config. Public only so Dalamud's
+    /// JSON loader still populates the old "Token" key; it is migrated into
+    /// <see cref="TokenProtected"/> (encrypted) on first load and then cleared, so new
+    /// saves never persist plaintext. Do not read it — use <see cref="GetToken"/>.
+    /// </summary>
     public string Token { get; set; } = string.Empty;
+
+    // In-memory decrypted token. Private + [NonSerialized] so it never reaches disk.
+    [NonSerialized]
+    private string tokenPlain = string.Empty;
+
+    /// <summary>The decrypted personal access token ("pat_…"), or "" when none is set.</summary>
+    public string GetToken() => this.tokenPlain;
+
+    /// <summary>
+    /// Sets the personal access token, re-encrypting it for storage. Pass "" to clear.
+    /// The plaintext is held only in memory; the persisted form is DPAPI ciphertext.
+    /// </summary>
+    public void SetToken(string? value)
+    {
+        this.tokenPlain = (value ?? string.Empty).Trim();
+        this.TokenProtected = string.IsNullOrEmpty(this.tokenPlain) ? null : TokenProtector.Protect(this.tokenPlain);
+        this.Token = string.Empty; // never keep plaintext once set through the accessor
+    }
 
     /// <summary>Last-used draw delay (seconds) for the bingo game tab.</summary>
     public int DrawDelaySeconds { get; set; }
@@ -80,7 +112,36 @@ public class Configuration : IPluginConfiguration
     [NonSerialized]
     private IDalamudPluginInterface? pluginInterface;
 
-    public void Initialize(IDalamudPluginInterface pi) => this.pluginInterface = pi;
+    public void Initialize(IDalamudPluginInterface pi)
+    {
+        this.pluginInterface = pi;
+        LoadToken();
+    }
+
+    // Resolves the in-memory plaintext token after Dalamud deserializes the config,
+    // and migrates a pre-encryption plaintext token to encrypted storage once.
+    private void LoadToken()
+    {
+        if (!string.IsNullOrEmpty(this.TokenProtected))
+        {
+            this.tokenPlain = TokenProtector.Unprotect(this.TokenProtected) ?? string.Empty;
+            if (!string.IsNullOrEmpty(this.Token))
+            {
+                // Stray plaintext alongside ciphertext (e.g. a hand-edited config): drop it.
+                this.Token = string.Empty;
+                Save();
+            }
+        }
+        else if (!string.IsNullOrEmpty(this.Token))
+        {
+            // Migrate an existing plaintext token: adopt it, encrypt, persist, and
+            // clear the plaintext so it never touches disk again.
+            this.tokenPlain = this.Token.Trim();
+            this.TokenProtected = TokenProtector.Protect(this.tokenPlain);
+            this.Token = string.Empty;
+            Save();
+        }
+    }
 
     public void Save() => this.pluginInterface?.SavePluginConfig(this);
 

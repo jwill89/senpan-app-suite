@@ -15,6 +15,23 @@ import { halftimeCallThreshold } from '@/lib/halftime'
 import { DEFAULT_AUTO_INTERVAL } from '@/lib/constants'
 import { useUiStore } from './ui'
 
+// Safe cell readers for winner verification. The winner's board/pattern grids come
+// from the server; a malformed (non-5×5) grid would otherwise throw on a missing
+// row. Typed `unknown` on purpose so the shape checks are genuine (not flagged as
+// unnecessary under the project's strict-but-not-noUncheckedIndexedAccess types).
+function patternCell(grid: unknown, r: number, c: number): boolean {
+  if (!Array.isArray(grid)) return false
+  const row = grid[r]
+  return Array.isArray(row) ? Boolean(row[c]) : false
+}
+function boardCell(grid: unknown, r: number, c: number): number {
+  if (!Array.isArray(grid)) return 0
+  const row = grid[r]
+  if (!Array.isArray(row)) return 0
+  const val = row[c]
+  return typeof val === 'number' ? val : 0
+}
+
 export const useGameStore = defineStore('game', () => {
   const ui = useUiStore()
 
@@ -39,6 +56,10 @@ export const useGameStore = defineStore('game', () => {
   const drawCountdown = ref<number | null>(null)
   const drawSent = ref(false)
   let drawCountdownTimer: ReturnType<typeof setInterval> | null = null
+  // The one-shot timer that clears `drawSent` a few seconds after the countdown
+  // elapses. Tracked so a fresh draw can cancel a stale one — otherwise its
+  // callback could flip `drawSent` back off underneath a newer draw's state.
+  let drawSentTimer: ReturnType<typeof setTimeout> | null = null
 
   // ── Auto-draw (server-driven) ──────────────────────────────────────────────
   // New-game form controls: whether to start with auto on, and the "Time Between
@@ -158,8 +179,9 @@ export const useGameStore = defineStore('game', () => {
           if (drawCountdown.value <= 0) {
             clearDrawCountdown()
             drawSent.value = true
-            setTimeout(() => {
+            drawSentTimer = setTimeout(() => {
               drawSent.value = false
+              drawSentTimer = null
             }, 3000)
           }
         }, 1000)
@@ -197,6 +219,10 @@ export const useGameStore = defineStore('game', () => {
     if (drawCountdownTimer) {
       clearInterval(drawCountdownTimer)
       drawCountdownTimer = null
+    }
+    if (drawSentTimer) {
+      clearTimeout(drawSentTimer)
+      drawSentTimer = null
     }
     drawCountdown.value = null
   }
@@ -298,8 +324,8 @@ export const useGameStore = defineStore('game', () => {
         let satisfied = true
         for (let r = 0; r < 5; r++) {
           for (let c = 0; c < 5; c++) {
-            if (pd[r][c]) {
-              const val = card.board_data[r][c]
+            if (patternCell(pd, r, c)) {
+              const val = boardCell(card.board_data, r, c)
               if (val !== 0 && !calledSet.has(val)) {
                 satisfied = false
                 break
@@ -311,7 +337,7 @@ export const useGameStore = defineStore('game', () => {
         if (satisfied) {
           for (let r = 0; r < 5; r++) {
             for (let c = 0; c < 5; c++) {
-              if (pd[r][c]) matchedCells.add(`${r}-${c}`)
+              if (patternCell(pd, r, c)) matchedCells.add(`${r}-${c}`)
             }
           }
         }

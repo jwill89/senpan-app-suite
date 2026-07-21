@@ -32,21 +32,43 @@ const { client: ws } = useWebSocket()
 /** Footer shows only on the public (non-admin) pages, not the admin dashboard/login. */
 const showFooter = computed(() => !String(route.name ?? '').startsWith('admin'))
 
-// Drive the shared WebSocket from the active route: connect (with the player's
-// card id) on the player view, connect without an id on admin views, and
-// disconnect everywhere else. Watching the player's card id too ensures that on
-// a direct link / refresh to /play/:cardId we (re)connect once the board has
-// finished loading (the card id is null at the moment the route first changes).
+// Drive the shared WebSocket from the active route via a *stable connection key*
+// rather than the raw route name, so the socket is (re)connected only when the
+// intended target actually changes — not on every admin sub-route navigation
+// (which previously tore the socket down and reconnected without the reconnect
+// catch-up, dropping missed draws/winners/logs). Keys:
+//   `player:<cardId>` — a loaded player board
+//   `admin`           — any live admin page
+//   null              — no socket (home, auth pages, and the hidden
+//                       /admin/register page, which has no session yet)
+// Watching the player's card id too ensures that on a direct link / refresh to
+// /play/:cardId we connect once the board has finished loading (the card id is
+// null at the moment the route first changes).
+const wsKey = computed<string | null>(() => {
+  const name = route.name
+  if (name === 'player') {
+    return player.playerCard?.id ? `player:${player.playerCard.id}` : null
+  }
+  if (
+    typeof name === 'string' &&
+    name.startsWith('admin') &&
+    name !== 'admin-login' &&
+    name !== 'admin-register'
+  ) {
+    return 'admin'
+  }
+  return null
+})
+
+// A Vue watch on a primitive computed fires only when the value changes, so
+// navigating between admin sub-routes (key stays `admin`) is a no-op and the
+// live socket — plus its internal reconnect/catch-up — is left untouched.
 watch(
-  () => [route.name, player.playerCard?.id] as const,
-  ([name, cardId]) => {
-    if (name === 'player') {
-      if (cardId) ws.connect(cardId)
-    } else if (typeof name === 'string' && name.startsWith('admin') && name !== 'admin-login') {
-      ws.connect(null)
-    } else {
-      ws.disconnect()
-    }
+  wsKey,
+  (key) => {
+    if (key === null) ws.disconnect()
+    else if (key.startsWith('player:')) ws.connect(key.slice('player:'.length))
+    else ws.connect(null)
   },
   { immediate: true },
 )

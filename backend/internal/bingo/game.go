@@ -511,6 +511,22 @@ func (g *Service) SetAutoEnabled(on bool) (interval int) {
 	return g.autoInterval
 }
 
+// EnableAutoOnce switches the auto-draw loop on and atomically reports whether
+// THIS call actually flipped it off→on. Unlike a separate AutoState read followed
+// by SetAutoEnabled, the check and the set happen under a single lock, so two
+// concurrent enables can't both observe "was off" and each arm a redundant
+// immediate first draw (the TOCTOU the get-then-set had). Clears any pending
+// half-time resume, matching SetAutoEnabled. Returns the interval too, for
+// broadcasting.
+func (g *Service) EnableAutoOnce() (transitioned bool, interval int) {
+	g.autoMu.Lock()
+	defer g.autoMu.Unlock()
+	transitioned = !g.autoEnabled
+	g.autoEnabled = true
+	g.resumeAuto = false
+	return transitioned, g.autoInterval
+}
+
 // SetAutoInterval updates the seconds between automatic draws (clamped). This is a
 // live, game-level control; it never writes back to a preset. Returns the applied
 // (clamped) value so the caller can broadcast the value that actually took effect.

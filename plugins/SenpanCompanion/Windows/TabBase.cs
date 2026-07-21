@@ -21,8 +21,11 @@ internal abstract class TabBase
     private static readonly Vector4 ErrorColor = new(0.9f, 0.5f, 0.4f, 1f);
     private const long RetryCooldownMs = 3000;
 
-    protected string Status = string.Empty;
-    protected bool Busy;
+    // Written from the background Run op (see below) and read by Draw on the framework
+    // thread, so both are volatile — the render loop must always see the latest value the
+    // worker published, not a stale cached copy.
+    protected volatile string Status = string.Empty;
+    protected volatile bool Busy;
 
     private bool loaded;
     private long lastLoadAttempt; // 0 = no attempt yet (load immediately, no cooldown)

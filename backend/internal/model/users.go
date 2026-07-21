@@ -16,6 +16,11 @@ type User struct {
 	Permissions []string `json:"permissions"` // page-permission keys (ignored when IsAdmin)
 	CreatedAt   string   `json:"created_at"`
 	LastLoginAt string   `json:"last_login_at"` // ISO timestamp of last successful login ("" if never)
+	// PasswordEpoch increments on every password change/reset. A cookie session
+	// stores the epoch it was minted with; currentUser rejects a session whose
+	// epoch no longer matches, so changing a password logs out every other session.
+	// Never serialized to clients.
+	PasswordEpoch int64 `json:"-"`
 }
 
 // TokenInfo is the non-secret metadata about an account's personal access token

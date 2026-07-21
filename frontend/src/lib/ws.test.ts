@@ -138,4 +138,25 @@ describe('WsClient lifecycle', () => {
     vi.advanceTimersByTime(25000)
     expect(ws.sent).toContain('ping')
   })
+
+  it('clears the keepalive interval on a permanent close (no reconnect)', () => {
+    const cb = makeCb({ shouldReconnect: vi.fn(() => false) })
+    new WsClient(cb).connect()
+    expect(vi.getTimerCount()).toBeGreaterThan(0) // keepalive interval armed
+    latest().onclose?.()
+    expect(cb.onStatus).toHaveBeenLastCalledWith('closed')
+    expect(vi.getTimerCount()).toBe(0) // interval cleared — no leaked timer
+  })
+
+  it('does not emit a spurious "closed" status during an automatic reconnect', () => {
+    const cb = makeCb()
+    const c = new WsClient(cb)
+    c.connect()
+    latest().onopen?.()
+    latest().onclose?.() // schedules a reconnect (status → reconnecting)
+    vi.advanceTimersByTime(1000) // backoff elapses → connect() re-opens
+    latest().onopen?.()
+    const statuses = (cb.onStatus as ReturnType<typeof vi.fn>).mock.calls.map((call) => call[0])
+    expect(statuses).not.toContain('closed') // reconnect never flashes the badge off
+  })
 })

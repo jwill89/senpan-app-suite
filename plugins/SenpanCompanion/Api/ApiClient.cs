@@ -41,6 +41,10 @@ public sealed class ApiClient : IDisposable
     private readonly HappyEyeballsCallback happyEyeballs = new();
     private readonly CancellationTokenSource lifetime = new();
 
+    // Latches once we've warned that the token traverses a non-HTTPS connection, so the
+    // warning isn't repeated on every request.
+    private bool cleartextWarned;
+
     public ApiClient(Configuration config, IPluginLog log)
     {
         this.config = config;
@@ -224,9 +228,7 @@ public sealed class ApiClient : IDisposable
         // cancel when the plugin unloads.
         using var linked = CancellationTokenSource.CreateLinkedTokenSource(this.lifetime.Token, ct);
         using var req = new HttpRequestMessage(method, BuildUrl(path));
-        var bearer = this.config.Token.Trim();
-        if (bearer.Length > 0)
-            req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", bearer);
+        ApplyAuth(req);
         if (body != null)
             req.Content = new StringContent(JsonSerializer.Serialize(body, Json), Encoding.UTF8, "application/json");
 
@@ -253,9 +255,7 @@ public sealed class ApiClient : IDisposable
     {
         using var linked = CancellationTokenSource.CreateLinkedTokenSource(this.lifetime.Token, ct);
         using var req = new HttpRequestMessage(method, BuildUrl(path));
-        var bearer = this.config.Token.Trim();
-        if (bearer.Length > 0)
-            req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", bearer);
+        ApplyAuth(req);
         if (body != null)
             req.Content = new StringContent(JsonSerializer.Serialize(body, Json), Encoding.UTF8, "application/json");
 
@@ -266,6 +266,25 @@ public sealed class ApiClient : IDisposable
             var msg = TryExtractError(text) ?? $"Request failed ({(int)resp.StatusCode})";
             this.log.Warning($"Senpan API {method} {path} -> {(int)resp.StatusCode}: {msg}");
             throw new ApiException(msg, resp.StatusCode);
+        }
+    }
+
+    // Attaches the Bearer token (if configured) and warns once if the server URL is
+    // non-HTTPS, since the token would then be transmitted in cleartext and could be
+    // intercepted on the wire.
+    private void ApplyAuth(HttpRequestMessage req)
+    {
+        var bearer = this.config.GetToken();
+        if (bearer.Length == 0)
+            return;
+        req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", bearer);
+
+        if (!this.cleartextWarned && req.RequestUri is { } uri &&
+            !string.Equals(uri.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase))
+        {
+            this.cleartextWarned = true;
+            this.log.Warning(
+                "Senpan server URL is not HTTPS — your access token is transmitted in cleartext and can be intercepted. Configure an https:// server URL.");
         }
     }
 

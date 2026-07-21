@@ -84,29 +84,16 @@ func TestRegister_CreatesInactiveUserThatNeedsActivation(t *testing.T) {
 	resp.Body.Close()
 }
 
-func TestRegister_RejectsReservedAndDuplicateAndShort(t *testing.T) {
+func TestRegister_RejectsShortPassword(t *testing.T) {
 	env := newTestEnv(t)
 
-	// Reserved "admin" username (seeded) is not registerable.
-	resp := env.postJSON(t, "/api/register", map[string]string{"username": "admin", "password": "password123"})
-	if resp.StatusCode != http.StatusBadRequest {
-		t.Fatalf("reserved username status = %d; want 400", resp.StatusCode)
-	}
-	resp.Body.Close()
-
-	// Too-short password.
-	resp = env.postJSON(t, "/api/register", map[string]string{"username": "shorty", "password": "short"})
+	// Too-short password is rejected before any account is created. (Reserved and
+	// duplicate usernames are deliberately NOT rejected with a distinct status —
+	// they return the same generic 200 to prevent enumeration; see
+	// TestRegisterNoEnumeration.)
+	resp := env.postJSON(t, "/api/register", map[string]string{"username": "shorty", "password": "short"})
 	if resp.StatusCode != http.StatusBadRequest {
 		t.Fatalf("short password status = %d; want 400", resp.StatusCode)
-	}
-	resp.Body.Close()
-
-	// Duplicate.
-	resp = env.postJSON(t, "/api/register", map[string]string{"username": "dup", "password": "password123"})
-	resp.Body.Close()
-	resp = env.postJSON(t, "/api/register", map[string]string{"username": "dup", "password": "password123"})
-	if resp.StatusCode != http.StatusConflict {
-		t.Fatalf("duplicate username status = %d; want 409", resp.StatusCode)
 	}
 	resp.Body.Close()
 }

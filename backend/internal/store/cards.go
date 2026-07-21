@@ -202,38 +202,25 @@ func (s *Store) CreateCustomCard(id string, board [][]int, characterName, world 
 }
 
 // FindDuplicateBoard returns the id of an existing card whose numbers exactly match
-// board (same numbers in the same cells), or ("", false) when none does. Boards are
-// stored as deterministic row-major JSON, so re-marshalling both sides compares them
-// canonically regardless of any stored whitespace differences.
+// board (same numbers in the same cells), or ("", false) when none does. Every write
+// path stores board_data as the compact, deterministic row-major JSON that
+// json.Marshal produces for a [][]int, so the stored value is already canonical and
+// can be matched directly in SQL — no need to pull every row into Go and re-marshal
+// each one on the public custom-card duplicate check.
 func (s *Store) FindDuplicateBoard(board [][]int) (string, bool, error) {
 	target, err := json.Marshal(board)
 	if err != nil {
 		return "", false, fmt.Errorf("marshal board: %w", err)
 	}
-	rows, err := s.db.Query("SELECT id, board_data FROM cards")
+	var id string
+	err = s.db.QueryRow("SELECT id FROM cards WHERE board_data = ? LIMIT 1", string(target)).Scan(&id)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", false, nil
+	}
 	if err != nil {
 		return "", false, err
 	}
-	defer rows.Close()
-
-	for rows.Next() {
-		var id, data string
-		if err := rows.Scan(&id, &data); err != nil {
-			return "", false, err
-		}
-		var b [][]int
-		if json.Unmarshal([]byte(data), &b) != nil {
-			continue
-		}
-		canon, _ := json.Marshal(b)
-		if string(canon) == string(target) {
-			return id, true, nil
-		}
-	}
-	if err := rows.Err(); err != nil {
-		return "", false, err
-	}
-	return "", false, nil
+	return id, true, nil
 }
 
 // UpdateCardPlayer sets the player_name and details for a card.

@@ -481,7 +481,7 @@ export interface StampRallyForm {
 // ── WebSocket message types ─────────────────────────────────────────────────
 export type WsMessage =
   | { type: 'game_update'; game: BingoGameState | null; game_details?: string; winners?: string[] }
-  | { type: 'game_draw'; drawn: BingoDrawnNumber; winners?: string[] }
+  | { type: 'game_draw'; drawn: BingoDrawnNumber; winners?: string[]; game_id?: number }
   | { type: 'cards_update'; cards: CardListEntry[] }
   | { type: 'patterns_update'; patterns: Pattern[]; categories?: PatternCategory[] }
   | { type: 'card_deleted' }
@@ -493,7 +493,7 @@ export type WsMessage =
       header_font?: string
       uploaded_fonts?: UploadedFont[]
     }
-  | { type: 'halftime_minigame' }
+  | { type: 'halftime_minigame'; game_id?: number }
   // Server reached the half-time mark: admins show the mini-game prompt.
   // `auto_paused` is true when the auto-draw loop was paused for the decision, so
   // the modal can explain that declining will resume it.

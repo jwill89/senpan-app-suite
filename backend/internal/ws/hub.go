@@ -6,12 +6,22 @@ import (
 	"encoding/json"
 	"log/slog"
 	"net/http"
+	"runtime/debug"
 	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/coder/websocket"
 )
+
+// recoverPump is a deferred guard for the per-client read/write goroutines: a
+// panic in a pump must not crash the whole process, so recover and log it. The
+// pumps' normal cleanup defers (unregister + close) still run during unwinding.
+func recoverPump(where string) {
+	if r := recover(); r != nil {
+		slog.Error("ws: recovered from panic", "where", where, "panic", r, "stack", string(debug.Stack()))
+	}
+}
 
 const (
 	// writeWait is the maximum time allowed for writing a message to a client.
@@ -306,6 +316,7 @@ func (h *Hub) unregister(c *client) {
 // readPump reads (and discards) incoming messages; keeps the connection alive.
 // coder/websocket handles ping/pong automatically.
 func (c *client) readPump(ctx context.Context) {
+	defer recoverPump("readPump")
 	defer func() {
 		c.hub.unregister(c)
 		_ = c.conn.CloseNow()
@@ -320,6 +331,7 @@ func (c *client) readPump(ctx context.Context) {
 
 // writePump sends queued messages and periodic pings.
 func (c *client) writePump(ctx context.Context) {
+	defer recoverPump("writePump")
 	ticker := time.NewTicker(pingPeriod)
 	defer func() {
 		ticker.Stop()

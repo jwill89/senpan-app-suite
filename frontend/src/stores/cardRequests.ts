@@ -41,6 +41,7 @@ export const useCardRequestsStore = defineStore('cardRequests', () => {
   }
 
   async function submit(): Promise<void> {
+    if (submitting.value) return // guard against a double-click / re-entrant submit
     const err = validate()
     if (err) {
       ui.notify(err, 'error')

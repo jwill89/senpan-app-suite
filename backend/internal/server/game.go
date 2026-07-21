@@ -8,10 +8,31 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"runtime/debug"
 	"strconv"
 	"strings"
 	"time"
 )
+
+// recoverPanic is a deferred guard for background goroutines and timer callbacks
+// (auto-draw loop, delayed player broadcasts): it turns a panic into a logged
+// error instead of letting it crash the whole process. `where` names the site.
+func recoverPanic(where string) {
+	if r := recover(); r != nil {
+		slog.Error("recovered from panic", "where", where, "panic", r, "stack", string(debug.Stack()))
+	}
+}
+
+// currentGameID returns the id of the live game, or 0 when there is none. Used to
+// discard a deferred broadcast whose game has since ended (and possibly been
+// replaced by a new game) so game A's number/alert can't leak into game B.
+func (s *Server) currentGameID() int64 {
+	state, _, err := s.game.CurrentState()
+	if err != nil || state == nil {
+		return 0
+	}
+	return state.ID
+}
 
 // handleGameState returns the current game state and cached winners.
 //
@@ -143,6 +164,11 @@ func clampDrawDelay(delay int) int {
 // auto loop off, and crossing the half-time mark pauses auto (if running) and
 // prompts admins for a mini-game.
 func (s *Server) postDraw(result *bingo.DrawResult, newWinner bool, delay int) {
+	// Capture the game this draw belongs to. The delayed player broadcast below can
+	// fire up to 60s later; if the game is ended and a new one started within that
+	// window, the deferred closure must NOT leak game A's number into game B.
+	gameID := result.Game.ID
+
 	// Admins immediately (keeps every admin surface in sync).
 	s.broadcastDrawToAdmins(result.Drawn, result.Winners)
 
@@ -151,6 +177,12 @@ func (s *Server) postDraw(result *bingo.DrawResult, newWinner bool, delay int) {
 	drawn := result.Drawn
 	if delay > 0 {
 		time.AfterFunc(time.Duration(delay)*time.Second, func() {
+			defer recoverPanic("delayed player draw broadcast")
+			// Drop the broadcast if the game it belongs to is no longer the live
+			// game (ended, or ended+restarted within the delay window).
+			if s.currentGameID() != gameID {
+				return
+			}
 			s.broadcastDrawToPlayers(drawn)
 		})
 	} else {
@@ -451,12 +483,15 @@ func (s *Server) handleGamePatch(w http.ResponseWriter, r *http.Request) {
 		s.game.SetAutoInterval(*req.AutoInterval)
 	}
 	if req.AutoEnabled != nil {
-		wasEnabled, _ := s.game.AutoState()
-		s.game.SetAutoEnabled(*req.AutoEnabled)
-		// Turning auto on (a genuine off→on flip) draws the first number
-		// immediately; the scheduler then continues on the interval.
-		if *req.AutoEnabled && !wasEnabled {
-			s.autoDrawNow.Store(true)
+		if *req.AutoEnabled {
+			// Turning auto on: EnableAutoOnce does the check-and-set under one lock
+			// and reports a genuine off→on flip, so concurrent enables can't each
+			// arm a redundant immediate first draw (the earlier get-then-set TOCTOU).
+			if transitioned, _ := s.game.EnableAutoOnce(); transitioned {
+				s.autoDrawNow.Store(true)
+			}
+		} else {
+			s.game.SetAutoEnabled(false)
 		}
 	}
 	if req.AutoInterval != nil || req.AutoEnabled != nil {
@@ -546,10 +581,21 @@ func (s *Server) broadcastHalftimeMinigameWhenReady() {
 	readyAt := s.halftimeReadyAt
 	s.halftimeMu.Unlock()
 
+	// Capture the game this alert belongs to (the admin confirmed the mini-game
+	// while it was live) so a hold of up to the draw delay can't deliver game A's
+	// alert into a game B that started in the meantime. Also carried on the payload
+	// as game_id for the client-side guard.
+	gameID := s.currentGameID()
+
 	send := func() {
+		defer recoverPanic("halftime minigame broadcast")
+		if s.currentGameID() != gameID {
+			return
+		}
 		s.hub.BroadcastToPlayers(struct {
-			Type string `json:"type"`
-		}{Type: "halftime_minigame"})
+			Type   string `json:"type"`
+			GameID int64  `json:"game_id"`
+		}{Type: "halftime_minigame", GameID: gameID})
 	}
 	if remaining := time.Until(readyAt); remaining > 0 {
 		time.AfterFunc(remaining, send)
@@ -563,6 +609,9 @@ func (s *Server) broadcastHalftimeMinigameWhenReady() {
 // (broadcasting the change) when the callable pool is exhausted or the game has
 // gone, so the scheduler then parks.
 func (s *Server) autoDrawOnce() {
+	// A panic here (e.g. in a broadcast side-effect) must not kill the scheduler
+	// goroutine — recover, log, and let the loop continue.
+	defer recoverPanic("auto draw")
 	// DrawAuto draws only while auto is still enabled, checking the flag under the
 	// draw lock — so a disable racing with this fire (a manual draw taking over, a
 	// winner, an admin toggle) can't leak a stray number.
@@ -591,6 +640,10 @@ func (s *Server) autoDrawOnce() {
 // off. Launched once from main with a context cancelled on shutdown, so it drains
 // cleanly and never draws into a closing database.
 func (s *Server) RunAutoDrawScheduler(ctx context.Context) {
+	// Backstop: each draw is already guarded in autoDrawOnce, but a panic anywhere
+	// else in the loop must not crash the process. (autoDrawOnce's own recover keeps
+	// the loop alive across draw panics; this only catches the rare rest.)
+	defer recoverPanic("auto draw scheduler")
 	timer := time.NewTimer(time.Hour)
 	if !timer.Stop() {
 		<-timer.C

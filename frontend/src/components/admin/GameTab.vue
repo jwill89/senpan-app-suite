@@ -149,8 +149,12 @@ function toggleYoeverSoundForMe(): void {
 function onKeydown(e: KeyboardEvent): void {
   if (e.key !== ' ' && e.key !== 'Enter') return
   if (!game.currentGame || game.drawing || game.drawCountdown !== null) return
+  // Never draw while a modal is open — the hotkey must not fire behind a dialog
+  // (e.g. the winner-verify or a confirm modal opened over the game).
+  if (document.querySelector('.modal-overlay')) return
   // Don't hijack a focused form control or button — let it handle the key
-  // itself (e.g. Enter on "End Game" should end, not draw).
+  // itself (e.g. Enter on "End Game" should end, not draw; Space on a winner
+  // chip should verify, not draw).
   const el = document.activeElement as HTMLElement | null
   const tag = el?.tagName
   if (
@@ -158,6 +162,7 @@ function onKeydown(e: KeyboardEvent): void {
     tag === 'TEXTAREA' ||
     tag === 'SELECT' ||
     tag === 'BUTTON' ||
+    el?.getAttribute('role') === 'button' ||
     el?.isContentEditable
   ) {
     return

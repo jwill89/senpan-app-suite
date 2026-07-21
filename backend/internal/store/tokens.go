@@ -57,7 +57,7 @@ func (s *Store) GetUserTokenInfo(userID int64) (model.TokenInfo, error) {
 // not touched here — call TouchUserToken for that.
 func (s *Store) GetUserByTokenHash(tokenHash string) (*model.User, error) {
 	row := s.db.QueryRow(
-		`SELECT u.id, u.username, u.is_admin, u.is_active, u.permissions, u.created_at, COALESCE(u.last_login_at, '')
+		`SELECT u.id, u.username, u.is_admin, u.is_active, u.permissions, u.created_at, COALESCE(u.last_login_at, ''), COALESCE(u.password_epoch, 0)
 		   FROM user_tokens t JOIN users u ON u.id = t.user_id
 		  WHERE t.token_hash = ?`, tokenHash)
 	u, err := s.scanUser(row)

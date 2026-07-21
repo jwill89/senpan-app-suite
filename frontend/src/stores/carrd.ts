@@ -51,6 +51,11 @@ export const useCarrdStore = defineStore('carrd', () => {
   const uploading = ref(false)
   /** True while a project is being created (drives the create button). */
   const creating = ref(false)
+  // Monotonic token guarding loadContents against a last-write-wins race: fast
+  // navigation (folder → subfolder → back) fires several requests, and a slow
+  // earlier one could otherwise render the wrong path's contents. Only the latest
+  // request applies its result.
+  let contentsSeq = 0
 
   async function loadProjects(): Promise<void> {
     loading.value = true
@@ -74,17 +79,20 @@ export const useCarrdStore = defineStore('carrd', () => {
   /** Loads the contents (sub-dirs + images) of the current folder/path. */
   async function loadContents(): Promise<void> {
     if (!selectedFolder.value) return
+    const reqId = ++contentsSeq
     loadingImages.value = true
     try {
       const data = await endpoints.carrd.images(selectedFolder.value, currentPath.value)
+      if (reqId !== contentsSeq) return // a newer load superseded this one
       dirs.value = data.dirs
       images.value = data.images
     } catch (e) {
+      if (reqId !== contentsSeq) return
       ui.notify((e as Error).message, 'error')
       dirs.value = []
       images.value = []
     } finally {
-      loadingImages.value = false
+      if (reqId === contentsSeq) loadingImages.value = false
     }
   }
 

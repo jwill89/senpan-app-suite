@@ -2,6 +2,8 @@ package server
 
 import (
 	"context"
+	"log/slog"
+	"runtime/debug"
 	"time"
 )
 
@@ -14,13 +16,23 @@ import (
 func runScheduler(ctx context.Context, interval time.Duration, sweep func()) {
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
-	sweep() // sweep immediately on startup (catch up after downtime)
+	// A panic in a single sweep (e.g. one malformed announcement) must not kill the
+	// long-lived scheduler goroutine — recover, log, and keep ticking.
+	safeSweep := func() {
+		defer func() {
+			if r := recover(); r != nil {
+				slog.Error("scheduler sweep panicked", "panic", r, "stack", string(debug.Stack()))
+			}
+		}()
+		sweep()
+	}
+	safeSweep() // sweep immediately on startup (catch up after downtime)
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			sweep()
+			safeSweep()
 		}
 	}
 }

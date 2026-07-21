@@ -356,9 +356,18 @@ func TestBookclubLookupMapsAniListFields(t *testing.T) {
 			"chapters":131,"siteUrl":"https://anilist.co/manga/111621"}]}}}`)
 	}))
 	defer anilist.Close()
-	if err := e.store.SetSetting("anilist_api_url", anilist.URL); err != nil {
+	// anilistURL() now enforces the SSRF allowlist at read time, so a localhost
+	// endpoint would be rejected and fall back to the real AniList. Keep a valid,
+	// allowlisted endpoint URL and route the request to the mock via a host-rewriting
+	// transport — exercising the real allowlisted path end to end.
+	if err := e.store.SetSetting("anilist_api_url", "https://graphql.anilist.co"); err != nil {
 		t.Fatal(err)
 	}
+	restore, err := server.RouteAnilistToForTest(anilist.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(restore)
 
 	resp := e.get(t, "/api/bookclub/lookup?q=painter")
 	if resp.StatusCode != http.StatusOK {

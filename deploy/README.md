@@ -282,6 +282,26 @@ the on-disk file, the Logs tab's historical snapshot, and `jlv` stay empty.**
 On-box viewing: `jlv /var/log/senpan/senpan.log` (install the Linux `.deb` from
 <https://github.com/hedhyw/json-log-viewer/releases>).
 
+### Systemd sandboxing
+
+`senpan.service` ships with a defense-in-depth sandbox: `NoNewPrivileges`,
+`ProtectSystem=strict` + `ProtectHome`, `PrivateTmp`/`PrivateDevices`,
+`ProtectKernel*`/`ProtectControlGroups`, `RestrictAddressFamilies=AF_INET AF_INET6
+AF_UNIX`, `RestrictNamespaces`, `LockPersonality`, `SystemCallFilter=@system-service`
++ `SystemCallArchitectures=native`, and **`MemoryDenyWriteExecute=yes`** (W^X). Every
+directory the app writes (the DB dir + the `-webroot` `images/`, `fonts/`, `carrd/`
+subtrees, plus `LogsDirectory=senpan`) must be listed in `ReadWritePaths` or writes
+fail with `EACCES` under `ProtectSystem=strict` — keep `ReadWritePaths` in sync with
+your deployed `-webroot`.
+
+> **`MemoryDenyWriteExecute` caveat.** W^X is safe here because the binary is pure
+> Go (no cgo) and the SQLite driver (`ncruces/go-sqlite3` v0.35+) **transpiles**
+> SQLite's WebAssembly to native Go ahead of time (`wasm2go`) — there is no runtime
+> JIT and no writable-executable memory. If the SQLite driver is ever pinned back to
+> an older, **wazero-JIT** version, `MemoryDenyWriteExecute=yes` will crash the
+> service with `SIGSYS` on the first query and must be removed. Verify on the box
+> with `systemctl show senpan -p MemoryDenyWriteExecute -p SystemCallArchitectures`.
+
 ### Who made each request (actor identity)
 
 Every request line names the actor via an `auth` field (`session` | `token` |

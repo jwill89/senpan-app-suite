@@ -17,8 +17,18 @@ let ctx: AudioContext | null = null
 /** Lazily creates the shared AudioContext (handles the webkit-prefixed name). */
 function getCtx(): AudioContext | null {
   if (ctx) return ctx
-  const AC = window.AudioContext
-  ctx = new AC()
+  // Older Safari/iOS only expose the prefixed constructor; fall back to it.
+  const w = window as unknown as {
+    AudioContext?: typeof AudioContext
+    webkitAudioContext?: typeof AudioContext
+  }
+  const AC = w.AudioContext ?? w.webkitAudioContext
+  if (!AC) return null
+  try {
+    ctx = new AC()
+  } catch {
+    return null
+  }
   return ctx
 }
 

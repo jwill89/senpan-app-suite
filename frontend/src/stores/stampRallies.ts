@@ -118,6 +118,9 @@ export const useStampRalliesStore = defineStore('stampRallies', () => {
       const data = await endpoints.stampRallies.list()
       rallies.value = data.stamp_rallies
     })
+    // A live invalidation (admin.ts) re-runs loadRallies; refresh any expanded
+    // "Manage stalls" panels too so their cached stamps don't go stale forever.
+    await refreshLoadedCardStamps()
   }
 
   async function loadRallyDetail(id: number): Promise<void> {
@@ -308,6 +311,27 @@ export const useStampRalliesStore = defineStore('stampRallies', () => {
     }
   }
 
+  /**
+   * Silently re-fetches the stamps for every rally whose inline "Manage stalls"
+   * panel is currently loaded. Called after a list reload (initial load is a
+   * no-op — nothing is expanded yet) so a live invalidation refreshes the cached
+   * panels instead of leaving them stale. Errors are swallowed: a background
+   * refresh must not toast, and the existing cache stays put on a transient fail.
+   */
+  async function refreshLoadedCardStamps(): Promise<void> {
+    const ids = Object.keys(cardStamps.value).map(Number)
+    await Promise.all(
+      ids.map(async (rallyId) => {
+        try {
+          const data = await endpoints.stampRallies.detail(rallyId)
+          cardStamps.value = { ...cardStamps.value, [rallyId]: data.stamp_rally.stamps || [] }
+        } catch {
+          /* leave the cached stamps in place on a transient error */
+        }
+      }),
+    )
+  }
+
   /** Pause/resume a stall from the list card's inline panel, updating that card's
    *  loaded stamps and its "active stalls" count without a reload. */
   async function setStampPausedInList(
@@ -493,6 +517,7 @@ export const useStampRalliesStore = defineStore('stampRallies', () => {
     deleteRally,
     setRallyStatus,
     loadCardStamps,
+    refreshLoadedCardStamps,
     setStampPausedInList,
     setStampPaused,
     createCard,

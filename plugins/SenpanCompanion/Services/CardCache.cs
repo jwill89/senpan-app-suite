@@ -20,6 +20,7 @@ public sealed class CardCache : IDisposable
     private readonly object gate = new();
 
     private bool loadedOnce;
+    private long lastAttempt;
     private Task? inFlight;
     private Dictionary<string, string> namesById = new();
 
@@ -38,17 +39,28 @@ public sealed class CardCache : IDisposable
 
     public void Dispose() => this.live.CardsChanged -= OnCardsChanged;
 
-    /// <summary>Loads once (called each frame; self-guards).</summary>
+    /// <summary>
+    /// Loads once (called each frame; self-guards). A failed load clears the guard so
+    /// this retries after a short cooldown rather than staying empty forever.
+    /// </summary>
     public void EnsureLoaded()
     {
         if (this.loadedOnce)
             return;
+        var now = Environment.TickCount64;
+        if (this.lastAttempt != 0 && now - this.lastAttempt < 3000)
+            return;
+        this.lastAttempt = now;
         this.loadedOnce = true;
         Refresh();
     }
 
     /// <summary>Marks stale so the next EnsureLoaded reloads (e.g. token change).</summary>
-    public void MarkStale() => this.loadedOnce = false;
+    public void MarkStale()
+    {
+        this.loadedOnce = false;
+        this.lastAttempt = 0;
+    }
 
     /// <summary>Kicks a background refresh of the card list.</summary>
     public void Refresh() => _ = RefreshAsync();
@@ -85,8 +97,15 @@ public sealed class CardCache : IDisposable
         }
         catch
         {
-            // Best-effort; keep the previous contents and flag the failure.
-            this.LoadFailed = true;
+            // Best-effort; keep the previous contents, flag the failure, and clear the
+            // load-once guard so a later frame re-fetches (behind EnsureLoaded's 3s
+            // cooldown) instead of staying empty forever. Marshalled to the framework
+            // thread per the plugin's no-SyncContext rule.
+            await Plugin.Framework.RunOnFrameworkThread(() =>
+            {
+                this.LoadFailed = true;
+                this.loadedOnce = false;
+            }).ConfigureAwait(false);
         }
         finally
         {

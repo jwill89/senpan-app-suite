@@ -2,6 +2,7 @@ package server
 
 import (
 	"encoding/json"
+	"io"
 	"io/fs"
 	"mime/multipart"
 	"net/http"
@@ -111,6 +112,54 @@ func isAllowedCarrdFileExt(ext string) bool {
 // guards against traversal. Returns the clean base name and true when valid.
 func safeCarrdFileName(name string) (string, bool) {
 	return safeUploadName(name, isAllowedCarrdFileExt)
+}
+
+// carrdMediaBytesOK content-sniffs an uploaded carrd file's leading bytes and
+// reports whether they match the format its extension claims. Carrd media is
+// served publicly, so we don't trust the extension alone: an HTML/script file
+// renamed to .png/.mp3/.mp4 would otherwise land in a public directory. Images
+// reuse the shared image detector; mp3/mp4 are matched against their container
+// magic bytes. Returns a short skip reason ("" when the bytes are acceptable).
+func carrdMediaBytesOK(ext string, head []byte) string {
+	switch {
+	case isAllowedImageExt(ext):
+		if !isAllowedImageContentType(http.DetectContentType(head)) {
+			return "Not a valid image"
+		}
+	case ext == ".mp3":
+		if !isMP3Signature(head) {
+			return "Not a valid audio file"
+		}
+	case ext == ".mp4":
+		if !isMP4Signature(head) {
+			return "Not a valid video file"
+		}
+	}
+	return ""
+}
+
+// isMP3Signature reports whether b begins with an MP3 signature: an "ID3" v2 tag
+// header, or an MPEG audio frame sync (0xFF followed by the top three sync bits).
+func isMP3Signature(b []byte) bool {
+	if len(b) >= 3 && b[0] == 'I' && b[1] == 'D' && b[2] == '3' {
+		return true
+	}
+	return len(b) >= 2 && b[0] == 0xFF && (b[1]&0xE0) == 0xE0
+}
+
+// isMP4Signature reports whether b is an ISO Base Media (MP4) container: a
+// [4-byte box size]["ftyp"][major brand] header whose brand is a known
+// audio/video brand. This rejects arbitrary files that merely contain "ftyp".
+func isMP4Signature(b []byte) bool {
+	if len(b) < 12 || string(b[4:8]) != "ftyp" {
+		return false
+	}
+	switch string(b[8:12]) {
+	case "isom", "iso2", "iso4", "iso5", "iso6", "mp41", "mp42", "avc1",
+		"dash", "M4V ", "M4A ", "mmp4", "MSNV", "ndsc", "ndsm":
+		return true
+	}
+	return false
 }
 
 // readCarrdTitle reads the project Title from a folder's sidecar metadata,
@@ -689,19 +738,18 @@ func (s *Server) handleCarrdUpload(w http.ResponseWriter, r *http.Request) {
 			if !ok {
 				return header.Filename, "Unsupported type (allowed: .jpg, .jpeg, .png, .webp, .gif, .mp3, .mp4)"
 			}
-			// For image extensions, confirm the bytes are actually an image
-			// (defense in depth). mp3/mp4 sniff unreliably, so they stay
-			// extension-validated.
-			if isAllowedImageExt(strings.ToLower(filepath.Ext(name))) {
-				f, err := header.Open()
-				if err != nil {
-					return name, "Failed to read"
-				}
-				validImage := isAllowedImageContentType(sniffedImageType(f))
-				_ = f.Close()
-				if !validImage {
-					return name, "Not a valid image"
-				}
+			// Content-sniff every accepted type (defense in depth): images must
+			// carry image bytes, and mp3/mp4 must carry their container magic —
+			// these files are served publicly, so the extension is not trusted.
+			f, err := header.Open()
+			if err != nil {
+				return name, "Failed to read"
+			}
+			head := make([]byte, 512)
+			n, _ := io.ReadFull(f, head) // short reads are fine; n is what was read
+			_ = f.Close()
+			if reason := carrdMediaBytesOK(strings.ToLower(filepath.Ext(name)), head[:n]); reason != "" {
+				return name, reason
 			}
 			// Same name overwrites the existing file on purpose.
 			if err := saveMultipartFile(header, filepath.Join(destDir, name)); err != nil {

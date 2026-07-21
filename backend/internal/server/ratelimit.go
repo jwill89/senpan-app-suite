@@ -50,29 +50,22 @@ func newRateLimiter(maxFails int, window time.Duration) *rateLimiter {
 	return rl
 }
 
-// clientIP extracts the client IP for rate-limiting, reading X-Forwarded-For
-// behind the reverse proxy and falling back to RemoteAddr.
+// clientIP returns the authoritative client IP used as the per-IP key for the
+// login / passkey / registration (and public raffle / card-request) rate
+// limiters. It delegates to logClientIP so the throttle key and the IP the access
+// log records are always the SAME value.
 //
-// Security: it takes the RIGHTMOST X-Forwarded-For entry, not the leftmost. The
-// deployment sits behind a single trusted reverse proxy (Apache) that appends
-// the real client IP to the right of the header; everything to its left is
-// supplied by the client and therefore spoofable. Taking the leftmost value (as
-// this previously did) let an attacker send "X-Forwarded-For: <random>" to
-// appear as a new IP on every request and bypass the per-IP login throttle.
-// (If the topology ever grows to multiple trusted hops or a CDN, switch to a
-// trusted-proxy-count/range strategy such as realclientip-go.)
+// This deliberately reuses logClientIP's loopback-gated trust rather than the
+// naive "rightmost X-Forwarded-For" it previously used. Behind Cloudflare→Apache
+// the header at the backend is "<real client>, <cloudflare edge>", so the
+// rightmost entry is the Cloudflare EDGE IP — meaning every user behind the same
+// edge shared one throttle bucket (one victim tripping the limit, or an attacker
+// rotating edges, poisoned everyone else). logClientIP resolves the true origin
+// (CF-Connecting-IP, then leftmost XFF) but ONLY when the immediate peer is the
+// loopback reverse proxy; a direct/off-proxy peer falls back to the spoof-proof
+// RemoteAddr host, so the header can't be forged to mint a fresh key per request.
 func clientIP(r *http.Request) string {
-	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
-		parts := strings.Split(xff, ",")
-		if last := strings.TrimSpace(parts[len(parts)-1]); last != "" {
-			return last
-		}
-	}
-	host, _, err := net.SplitHostPort(r.RemoteAddr)
-	if err != nil {
-		return r.RemoteAddr
-	}
-	return host
+	return logClientIP(r)
 }
 
 // logClientIP returns the best-guess real client IP for LOGGING/display only

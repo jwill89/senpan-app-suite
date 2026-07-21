@@ -65,6 +65,25 @@ function isExpanded(row: T): boolean {
   return expandedKeys.value.has(keyFor(row))
 }
 
+/** Toggle expand on row click — but let clicks on interactive cell controls
+ *  (buttons, links, form fields) through without also toggling the row. */
+function onRowClick(row: T, e: MouseEvent): void {
+  if (!hasDetail.value) return
+  const target = e.target as HTMLElement | null
+  if (target?.closest('button, a, input, select, textarea, label')) return
+  toggleExpand(row)
+}
+
+/** Enter/Space toggle the row — only when the row itself (not an inner control)
+ *  holds focus, so activating a cell button doesn't also expand the row. */
+function onRowKeydown(row: T, e: KeyboardEvent): void {
+  if (!hasDetail.value || e.target !== e.currentTarget) return
+  if (e.key === 'Enter' || e.key === ' ') {
+    e.preventDefault()
+    toggleExpand(row)
+  }
+}
+
 /** Stable key for v-for. */
 function keyFor(row: T): string | number {
   return typeof props.rowKey === 'function'
@@ -109,7 +128,11 @@ function rowClassFor(row: T): string | Record<string, boolean> | undefined {
         <template v-for="row in rows" :key="keyFor(row)">
           <tr
             :class="[rowClassFor(row), { 'dt-expandable': hasDetail }]"
-            @click="hasDetail && toggleExpand(row)"
+            :role="hasDetail ? 'button' : undefined"
+            :tabindex="hasDetail ? 0 : undefined"
+            :aria-expanded="hasDetail ? isExpanded(row) : undefined"
+            @click="onRowClick(row, $event)"
+            @keydown="onRowKeydown(row, $event)"
           >
             <td v-for="col in columns" :key="col.key" :class="col.align ? `ta-${col.align}` : ''">
               <slot :name="`cell-${col.key}`" :row="row" :expanded="isExpanded(row)">{{

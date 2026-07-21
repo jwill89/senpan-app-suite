@@ -1,6 +1,7 @@
 package store
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
@@ -14,7 +15,7 @@ import (
 // PRAGMA user_version against this constant and runs only the migrations
 // needed to bring the database up to date. Bump this when adding a new
 // migration block.
-const schemaVersion = 50
+const schemaVersion = 51
 
 // ensureSchema reads the current PRAGMA user_version from the database and
 // applies any outstanding migrations to bring it up to schemaVersion.
@@ -40,6 +41,15 @@ func ensureSchema(db *sql.DB) error {
 			}
 		} else {
 			if err := migrateSortOrder(db); err != nil {
+				return err
+			}
+			// createIndexes builds a UNIQUE index on called_numbers(game_id, number).
+			// A pre-versioning database may hold duplicate draws that predate that
+			// constraint (the dedup that guards it lives in the much later v43
+			// migration), which would fail the index build here. Collapse duplicates
+			// first — the same dedup v43 performs — so the index is built on
+			// known-clean data.
+			if err := dedupeCalledNumbers(db); err != nil {
 				return err
 			}
 			if err := createIndexes(db); err != nil {
@@ -335,7 +345,29 @@ func ensureSchema(db *sql.DB) error {
 		}
 	}
 
+	if version < 51 {
+		if err := migrateUserPasswordEpoch(db); err != nil {
+			return err
+		}
+	}
+
 	_, err := db.Exec(fmt.Sprintf("PRAGMA user_version = %d", schemaVersion))
+	return err
+}
+
+// migrateUserPasswordEpoch (schema v51) adds users.password_epoch, a counter
+// bumped on every password change/reset. A cookie session records the epoch it
+// was minted with; a mismatch invalidates the session, so changing a password
+// logs out every other session. Idempotent — skipped when the column already
+// exists (a fresh install gets it via createTables).
+func migrateUserPasswordEpoch(db *sql.DB) error {
+	if !tableExists(db, "users") {
+		return nil
+	}
+	if hasColumn(db, "users", "password_epoch") {
+		return nil
+	}
+	_, err := db.Exec("ALTER TABLE users ADD COLUMN password_epoch INTEGER NOT NULL DEFAULT 0")
 	return err
 }
 
@@ -386,13 +418,27 @@ func migrateCalledNumbersUnique(db *sql.DB) error {
 	if !tableExists(db, "called_numbers") {
 		return nil
 	}
-	if _, err := db.Exec(`DELETE FROM called_numbers WHERE rowid NOT IN (
-		SELECT MIN(rowid) FROM called_numbers GROUP BY game_id, number)`); err != nil {
-		return fmt.Errorf("dedupe called_numbers: %w", err)
+	if err := dedupeCalledNumbers(db); err != nil {
+		return err
 	}
 	if _, err := db.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_called_numbers_game_number
 		ON called_numbers(game_id, number)`); err != nil {
 		return fmt.Errorf("create called_numbers unique index: %w", err)
+	}
+	return nil
+}
+
+// dedupeCalledNumbers collapses any duplicate (game_id, number) rows in
+// called_numbers to their first occurrence (lowest rowid), so the UNIQUE index on
+// (game_id, number) can be built on clean data. Shared by the version<1 legacy
+// upgrade path and the v43 migration. A no-op when the table doesn't exist.
+func dedupeCalledNumbers(db *sql.DB) error {
+	if !tableExists(db, "called_numbers") {
+		return nil
+	}
+	if _, err := db.Exec(`DELETE FROM called_numbers WHERE rowid NOT IN (
+		SELECT MIN(rowid) FROM called_numbers GROUP BY game_id, number)`); err != nil {
+		return fmt.Errorf("dedupe called_numbers: %w", err)
 	}
 	return nil
 }
@@ -593,12 +639,20 @@ func createIndexes(db *sql.DB) error {
 // for databases created before pattern ordering was supported.
 // Backfills sort_order based on insertion order (id).
 func migrateSortOrder(db *sql.DB) error {
-	if hasColumn(db, "patterns", "sort_order") {
+	if !tableExists(db, "patterns") {
 		return nil
 	}
-	if _, err := db.Exec("ALTER TABLE patterns ADD COLUMN sort_order INTEGER NOT NULL DEFAULT 0"); err != nil {
-		return err
+	if !hasColumn(db, "patterns", "sort_order") {
+		if _, err := db.Exec("ALTER TABLE patterns ADD COLUMN sort_order INTEGER NOT NULL DEFAULT 0"); err != nil {
+			return err
+		}
 	}
+	// The backfill is intentionally NOT gated on the column being freshly added: if a
+	// prior boot crashed between the ALTER and this UPDATE, the column would already
+	// exist and an existence-gated backfill would be skipped forever, stranding every
+	// row at sort_order 0. Running it unconditionally is safe because the
+	// WHERE sort_order = 0 clause makes it idempotent — once backfilled, every row's
+	// sort_order is >= 1 so a re-run matches nothing.
 	_, err := db.Exec(`UPDATE patterns SET sort_order = (
 		SELECT COUNT(*) FROM patterns AS p2 WHERE p2.id <= patterns.id
 	) WHERE sort_order = 0`)
@@ -1328,7 +1382,8 @@ func migrateUsers(db *sql.DB) error {
 		is_active INTEGER NOT NULL DEFAULT 0,
 		permissions TEXT NOT NULL DEFAULT '[]',
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-		last_login_at DATETIME
+		last_login_at DATETIME,
+		password_epoch INTEGER NOT NULL DEFAULT 0
 	)`); err != nil {
 		return fmt.Errorf("create users table: %w", err)
 	}
@@ -1730,12 +1785,6 @@ func migrateStampRallyKeepLogs(db *sql.DB) error {
 	if !tableExists(db, "stamp_rally_collected") || hasColumn(db, "stamp_rally_collected", "rally_id") {
 		return nil
 	}
-	tx, err := db.Begin()
-	if err != nil {
-		return err
-	}
-	defer func() { _ = tx.Rollback() }()
-
 	stmts := []string{
 		`CREATE TABLE stamp_rally_collected_new (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -1765,12 +1814,7 @@ func migrateStampRallyKeepLogs(db *sql.DB) error {
 		`CREATE INDEX IF NOT EXISTS idx_stamp_rally_collected_stamp ON stamp_rally_collected(stamp_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_stamp_rally_collected_rally ON stamp_rally_collected(rally_id)`,
 	}
-	for _, s := range stmts {
-		if _, err := tx.Exec(s); err != nil {
-			return fmt.Errorf("migrate stamp rally keep-logs: %w", err)
-		}
-	}
-	return tx.Commit()
+	return rebuildTableTx(db, "migrate stamp rally keep-logs", stmts)
 }
 
 // migrateGarapons creates the Garapon tables (garapons + garapon_prizes +
@@ -1795,6 +1839,59 @@ func migrateGarapons(db *sql.DB) error {
 	return nil
 }
 
+// rebuildTableTx runs a copy → drop → rename table rebuild following SQLite's
+// documented safe procedure for schema changes (lang_altertable.html §7): foreign-key
+// enforcement is disabled for the duration, the work runs in a transaction, and a
+// PRAGMA foreign_key_check verifies integrity before the commit; enforcement is then
+// restored. PRAGMA foreign_keys is a no-op inside a transaction, so it must be toggled
+// on the same connection OUTSIDE the tx — hence a dedicated conn rather than the pooled
+// db (whose per-connection foreign_keys=ON would otherwise stay in force through the
+// drop/rename and risk cascade surprises). The connection is restored to foreign_keys=ON
+// before it returns to the pool.
+func rebuildTableTx(db *sql.DB, what string, stmts []string) error {
+	ctx := context.Background()
+	conn, err := db.Conn(ctx)
+	if err != nil {
+		return fmt.Errorf("%s: acquire conn: %w", what, err)
+	}
+	defer conn.Close()
+
+	if _, err := conn.ExecContext(ctx, `PRAGMA foreign_keys = OFF`); err != nil {
+		return fmt.Errorf("%s: disable foreign_keys: %w", what, err)
+	}
+	// Restore enforcement on this connection before it goes back to the pool, whatever
+	// happens below (a pooled connection keeps its per-connection pragma state).
+	defer func() { _, _ = conn.ExecContext(ctx, `PRAGMA foreign_keys = ON`) }()
+
+	tx, err := conn.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("%s: begin: %w", what, err)
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	for _, s := range stmts {
+		if _, err := tx.ExecContext(ctx, s); err != nil {
+			return fmt.Errorf("%s: %w", what, err)
+		}
+	}
+	// The rebuild ran with enforcement off; verify it introduced no dangling references
+	// before committing. Any row returned by foreign_key_check means abort.
+	rows, err := tx.QueryContext(ctx, `PRAGMA foreign_key_check`)
+	if err != nil {
+		return fmt.Errorf("%s: foreign_key_check: %w", what, err)
+	}
+	violated := rows.Next()
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return fmt.Errorf("%s: foreign_key_check: %w", what, err)
+	}
+	rows.Close()
+	if violated {
+		return fmt.Errorf("%s: foreign_key_check reported violations", what)
+	}
+	return tx.Commit()
+}
+
 // migrateGaraponDrawKeepLogs rebuilds garapon_draws so player_id is nullable with
 // ON DELETE SET NULL (was NOT NULL + CASCADE), so deleting a drawing link keeps
 // its draws in the log instead of wiping them. SQLite can't ALTER a foreign key,
@@ -1808,12 +1905,6 @@ func migrateGaraponDrawKeepLogs(db *sql.DB) error {
 	if _, notNull := columnInfo(db, "garapon_draws", "player_id"); !notNull {
 		return nil
 	}
-	tx, err := db.Begin()
-	if err != nil {
-		return err
-	}
-	defer func() { _ = tx.Rollback() }()
-
 	stmts := []string{
 		`CREATE TABLE garapon_draws_new (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -1834,10 +1925,5 @@ func migrateGaraponDrawKeepLogs(db *sql.DB) error {
 		`CREATE INDEX IF NOT EXISTS idx_garapon_draws_garapon ON garapon_draws(garapon_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_garapon_draws_player ON garapon_draws(player_id)`,
 	}
-	for _, s := range stmts {
-		if _, err := tx.Exec(s); err != nil {
-			return fmt.Errorf("migrate garapon draws keep-logs: %w", err)
-		}
-	}
-	return tx.Commit()
+	return rebuildTableTx(db, "migrate garapon draws keep-logs", stmts)
 }

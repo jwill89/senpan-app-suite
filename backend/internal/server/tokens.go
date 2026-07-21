@@ -56,10 +56,13 @@ func hashToken(token string) string {
 	return hex.EncodeToString(sum[:])
 }
 
-// bearerToken extracts a personal access token from the request: an
-// `Authorization: Bearer <token>` header, or failing that a `token` query
-// parameter (the WebSocket upgrade can't always set headers). Returns "" when
-// absent or not a PAT-shaped value.
+// bearerToken extracts a personal access token from the `Authorization: Bearer
+// <token>` header only. Returns "" when absent or not a PAT-shaped value.
+//
+// The `?token=` query-param fallback is deliberately NOT accepted here: a token
+// in the URL leaks into access logs, browser history, and Referer headers. Only
+// the WebSocket upgrade (which can't always set headers) may use the query param,
+// via wsUpgradeToken — every REST route must carry the Authorization header.
 func bearerToken(r *http.Request) string {
 	if h := r.Header.Get("Authorization"); h != "" {
 		if rest, ok := strings.CutPrefix(h, "Bearer "); ok {
@@ -68,18 +71,40 @@ func bearerToken(r *http.Request) string {
 			}
 		}
 	}
+	return ""
+}
+
+// wsUpgradeToken resolves the PAT for the WebSocket upgrade path ONLY. It accepts
+// the `Authorization: Bearer` header and, additionally, the `?token=` query param
+// — the browser WebSocket API can't set request headers, so the plugin/admin
+// channel passes the token in the URL. Do NOT use this for REST routes.
+func wsUpgradeToken(r *http.Request) string {
+	if tok := bearerToken(r); tok != "" {
+		return tok
+	}
 	if tok := strings.TrimSpace(r.URL.Query().Get("token")); strings.HasPrefix(tok, tokenScheme) {
 		return tok
 	}
 	return ""
 }
 
-// userFromToken resolves the active account bearing the request's PAT, or nil
-// when there is no token, it matches nothing, or the owning account is inactive.
-// On a hit it best-effort stamps the token's last-used time (throttled in the
-// store) so the account UI can show when the token was last exercised.
+// userFromToken resolves the active account bearing the request's Authorization
+// Bearer PAT (REST routes), or nil when absent/unmatched/inactive.
 func (s *Server) userFromToken(r *http.Request) *model.User {
-	tok := bearerToken(r)
+	return s.userForToken(bearerToken(r))
+}
+
+// wsUserFromToken resolves the active account for a WebSocket upgrade, honoring
+// the `?token=` query fallback in addition to the Authorization header.
+func (s *Server) wsUserFromToken(r *http.Request) *model.User {
+	return s.userForToken(wsUpgradeToken(r))
+}
+
+// userForToken resolves the active account for a raw PAT string, or nil when the
+// token is empty, matches nothing, or the owning account is inactive. On a hit it
+// best-effort stamps the token's last-used time (throttled in the store) so the
+// account UI can show when the token was last exercised.
+func (s *Server) userForToken(tok string) *model.User {
 	if tok == "" {
 		return nil
 	}

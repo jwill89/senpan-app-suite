@@ -43,7 +43,7 @@ func (s *Store) CreateUser(username, passwordHash string) (*model.User, error) {
 // GetUserByID retrieves a user by id. Returns nil if not found.
 func (s *Store) GetUserByID(id int64) (*model.User, error) {
 	return s.scanUser(s.db.QueryRow(
-		`SELECT id, username, is_admin, is_active, permissions, created_at, COALESCE(last_login_at, '')
+		`SELECT id, username, is_admin, is_active, permissions, created_at, COALESCE(last_login_at, ''), COALESCE(password_epoch, 0)
 		 FROM users WHERE id = ?`, id))
 }
 
@@ -54,9 +54,9 @@ func (s *Store) GetUserByUsername(username string) (*model.User, string, error) 
 	var permsJSON, hash string
 	var isAdmin, isActive int
 	err := s.db.QueryRow(
-		`SELECT id, username, password_hash, is_admin, is_active, permissions, created_at, COALESCE(last_login_at, '')
+		`SELECT id, username, password_hash, is_admin, is_active, permissions, created_at, COALESCE(last_login_at, ''), COALESCE(password_epoch, 0)
 		 FROM users WHERE username = ?`, username).
-		Scan(&u.ID, &u.Username, &hash, &isAdmin, &isActive, &permsJSON, &u.CreatedAt, &u.LastLoginAt)
+		Scan(&u.ID, &u.Username, &hash, &isAdmin, &isActive, &permsJSON, &u.CreatedAt, &u.LastLoginAt, &u.PasswordEpoch)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, "", nil
 	}
@@ -141,8 +141,12 @@ func (s *Store) SetUserPermissions(id int64, perms []string) error {
 }
 
 // SetUserPassword updates a user's argon2id password hash.
+// SetUserPassword updates the password hash and bumps password_epoch in the same
+// statement, so every change/reset invalidates the account's other cookie
+// sessions (currentUser checks the epoch). Callers that want the current session
+// to survive must re-store the new epoch after this returns.
 func (s *Store) SetUserPassword(id int64, passwordHash string) error {
-	_, err := s.db.Exec("UPDATE users SET password_hash = ? WHERE id = ?", passwordHash, id)
+	_, err := s.db.Exec("UPDATE users SET password_hash = ?, password_epoch = password_epoch + 1 WHERE id = ?", passwordHash, id)
 	return err
 }
 
@@ -169,7 +173,7 @@ func (s *Store) scanUser(row *sql.Row) (*model.User, error) {
 	var u model.User
 	var permsJSON string
 	var isAdmin, isActive int
-	err := row.Scan(&u.ID, &u.Username, &isAdmin, &isActive, &permsJSON, &u.CreatedAt, &u.LastLoginAt)
+	err := row.Scan(&u.ID, &u.Username, &isAdmin, &isActive, &permsJSON, &u.CreatedAt, &u.LastLoginAt, &u.PasswordEpoch)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
 	}

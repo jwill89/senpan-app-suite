@@ -1,8 +1,38 @@
 package server
 
+import (
+	"net/http"
+	"net/url"
+)
+
 // DeriveFormatForTest exposes the unexported deriveFormat helper to the
 // external server_test package so the format-mapping logic can be unit-tested.
 var DeriveFormatForTest = deriveFormat
+
+// RouteAnilistToForTest points the AniList lookup client at targetURL (a test
+// server) by rewriting each outbound request's scheme+host, so a test can keep a
+// valid, allowlisted anilist_api_url setting — exercising the read-time SSRF
+// allowlist end to end — while still reaching its local mock. Returns a restore
+// func that reinstates the original transport.
+func RouteAnilistToForTest(targetURL string) (func(), error) {
+	target, err := url.Parse(targetURL)
+	if err != nil {
+		return nil, err
+	}
+	orig := anilistHTTPClient.Transport
+	anilistHTTPClient.Transport = rewriteHostRoundTripper{scheme: target.Scheme, host: target.Host}
+	return func() { anilistHTTPClient.Transport = orig }, nil
+}
+
+// rewriteHostRoundTripper redirects every request to a fixed scheme+host,
+// leaving the path/query intact (test-only; see RouteAnilistToForTest).
+type rewriteHostRoundTripper struct{ scheme, host string }
+
+func (rt rewriteHostRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
+	req.URL.Scheme = rt.scheme
+	req.URL.Host = rt.host
+	return http.DefaultTransport.RoundTrip(req)
+}
 
 // The following expose pure, unexported helpers to the external server_test
 // package so their logic can be unit-tested without spinning up the HTTP server.

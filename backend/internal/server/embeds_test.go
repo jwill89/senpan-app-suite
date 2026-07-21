@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -47,7 +48,7 @@ func TestPostDiscordWebhookComponentsFlag(t *testing.T) {
 			}))
 			defer srv.Close()
 
-			if err := postDiscordWebhook(srv.URL, tc.payload); err != nil {
+			if err := postDiscordWebhook(context.Background(), srv.URL, tc.payload); err != nil {
 				t.Fatalf("postDiscordWebhook: %v", err)
 			}
 			hasParam := strings.Contains(gotQuery, "with_components=true")

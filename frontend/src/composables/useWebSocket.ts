@@ -63,6 +63,15 @@ export function useWebSocket() {
     onStatus: (s) => ui.setWsStatus(s),
   })
 
+  /**
+   * Reads the optional `game_id` the server stamps onto game-scoped broadcasts
+   * (game_draw, halftime_minigame): `undefined` on older servers means "apply as
+   * before"; a present value lets us drop frames for a game we're not showing.
+   */
+  function messageGameId(msg: { game_id?: number }): number | undefined {
+    return msg.game_id
+  }
+
   /** Dispatches a parsed WebSocket message to the relevant store(s). */
   function dispatch(msg: WsMessage): void {
     switch (msg.type) {
@@ -111,13 +120,17 @@ export function useWebSocket() {
           applyHeaderFont(msg.header_font)
         }
         break
-      case 'halftime_minigame':
-        if (isPlayerView()) {
+      case 'halftime_minigame': {
+        // BE-2 stamps the owning game id; ignore a prompt for a game other than
+        // the one this player is watching (older servers omit it — apply as before).
+        const gid = messageGameId(msg)
+        if (isPlayerView() && (gid === undefined || gid === player.playerGame?.id)) {
           player.showMinigameModal = true
           const mode = player.soundMode
           if (mode !== 'off') playEvent('minigame', mode)
         }
         break
+      }
       case 'halftime_prompt':
         // Server reached the half-time mark (on a manual or automatic draw): show
         // the mini-game prompt on every admin surface. `auto_paused` tells the modal
@@ -223,22 +236,31 @@ export function useWebSocket() {
    */
   function handleGameDraw(msg: Extract<WsMessage, { type: 'game_draw' }>): void {
     const drawn = msg.drawn
+    const gid = messageGameId(msg)
 
     // Player view — append the drawn number to local called_numbers and surface
     // it as the "last called" announcement (plus the opt-in chime/vibration).
     if (isPlayerView() && player.playerGame) {
-      player.playerGame.called_numbers.push(drawn.number)
-      player.playerGame.total_called = player.playerGame.called_numbers.length
-      player.lastDrawn = drawn
-      const mode = player.soundMode
-      if (mode !== 'off') {
-        playEvent('draw', mode)
-        vibrate(60)
+      // Drop a draw stamped for a different game (stale frame around a game change).
+      if (gid !== undefined && gid !== player.playerGame.id) return
+      // Guard against a re-delivered draw double-counting: each bingo number is
+      // drawn at most once, so its presence in called_numbers means we've already
+      // applied (and announced) it — skip the append, tally, and chime.
+      if (!player.playerGame.called_numbers.includes(drawn.number)) {
+        player.playerGame.called_numbers.push(drawn.number)
+        player.playerGame.total_called = player.playerGame.called_numbers.length
+        player.lastDrawn = drawn
+        const mode = player.soundMode
+        if (mode !== 'off') {
+          playEvent('draw', mode)
+          vibrate(60)
+        }
       }
     }
 
     // Admin view — only if we don't already have this number
     if (isAdminView() && game.currentGame) {
+      if (gid !== undefined && gid !== game.currentGame.id) return
       const alreadyHas = game.currentGame.called_numbers.includes(drawn.number)
       if (!alreadyHas) {
         game.currentGame.called_numbers.push(drawn.number)

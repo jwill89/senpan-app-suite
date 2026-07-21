@@ -22,13 +22,61 @@ const app = useAppStore()
 // Module-level cache so all four corners (and re-mounts) share one fetch per URL.
 const svgCache = new Map<string, Promise<string>>()
 
+/**
+ * Sanitizes fetched flourish SVG markup before it's inlined via v-html: parses it,
+ * requires an <svg> root, drops active-content elements (<script>/<foreignObject>
+ * and other embedding/scripting vectors), and strips on* event handlers and
+ * javascript:/data: hrefs. Defense in depth against a tampered/legacy theme asset
+ * (the server sanitizes on upload); returns '' for anything that isn't clean SVG.
+ */
+function sanitizeFlourishSvg(markup: string): string {
+  if (!markup.includes('<svg')) return ''
+  let doc: Document
+  try {
+    doc = new DOMParser().parseFromString(markup, 'image/svg+xml')
+  } catch {
+    return ''
+  }
+  if (doc.getElementsByTagName('parsererror').length > 0) return ''
+  const root = doc.documentElement
+  if (root.nodeName.toLowerCase() !== 'svg') return ''
+  const BANNED_TAGS = new Set([
+    'script',
+    'foreignobject',
+    'iframe',
+    'object',
+    'embed',
+    'style',
+    'handler',
+    'set',
+    'animate',
+  ])
+  for (const el of [root, ...Array.from(root.querySelectorAll('*'))]) {
+    if (el !== root && BANNED_TAGS.has(el.nodeName.toLowerCase())) {
+      el.remove()
+      continue
+    }
+    for (const attr of Array.from(el.attributes)) {
+      const name = attr.name.toLowerCase()
+      if (name.startsWith('on')) {
+        el.removeAttribute(attr.name) // event handler
+        continue
+      }
+      if (/(?:javascript|data|vbscript)\s*:/i.test(attr.value)) {
+        el.removeAttribute(attr.name) // scripting / smuggled resource URL
+      }
+    }
+  }
+  return new XMLSerializer().serializeToString(root)
+}
+
 function fetchFlourishSvg(path: string): Promise<string> {
   const url = assetUrl(path)
   let p = svgCache.get(url)
   if (!p) {
     p = fetch(url)
       .then((r) => (r.ok ? r.text() : ''))
-      .then((text) => (text.includes('<svg') ? text : ''))
+      .then((text) => sanitizeFlourishSvg(text))
       .catch(() => '')
     svgCache.set(url, p)
   }
@@ -52,8 +100,9 @@ watch(
 </script>
 
 <template>
-  <!-- Active theme's board flourish (inlined for export capture). The SVG is
-       admin-configured trusted theme markup, not user input. -->
+  <!-- Active theme's board flourish (inlined for export capture). The markup is
+       admin-configured and server-sanitized on upload, and sanitizeFlourishSvg()
+       above re-sanitizes it client-side before this v-html as defense in depth. -->
   <!-- eslint-disable-next-line vue/no-v-html -->
   <span v-if="customSvg" class="corner-flourish-svg" aria-hidden="true" v-html="customSvg"></span>
   <!-- Built-in default artwork (used when no theme flourish is selected). -->

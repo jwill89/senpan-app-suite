@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"math"
 	"net/http"
 	"strconv"
 	"strings"
@@ -15,15 +16,26 @@ import (
 
 // ── Raffle list (public + admin) ────────────────────────────────────────────
 
+// raffleStaff reports whether the request may see the privileged raffle view
+// (all raffles, entry lists, winner_name/paid_total aggregates). Raffle writes
+// gate on permTeahouseRaffles, so the reads align to the same permission —
+// otherwise a non-admin granted teahouse-raffles could manage a raffle but not
+// see its paid totals. Admins hold every permission.
+func (s *Server) raffleStaff(r *http.Request) bool {
+	u := s.currentUser(r)
+	return u != nil && (u.IsAdmin || userHasPermission(u, permTeahouseRaffles))
+}
+
 // handleRafflesList returns all raffles visible to the requester.
-// Admins see all raffles; public users see only open raffles within availability dates.
+// Raffle staff see all raffles; public users see only open raffles within
+// availability dates.
 //
 //	Endpoint:  GET /api/raffles
 //	Auth:      public (filtered by role)
 //	Response:  {"raffles": [...]}
 func (s *Server) handleRafflesList(w http.ResponseWriter, r *http.Request) {
-	admin := s.isAdmin(r)
-	raffles, err := s.store.ListRaffles(admin)
+	staff := s.raffleStaff(r)
+	raffles, err := s.store.ListRaffles(staff)
 	if err != nil {
 		writeInternalError(w, "list raffles", err)
 		return
@@ -56,11 +68,13 @@ func (s *Server) handleRaffleDetail(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Non-admins may only view a currently-public raffle: an open one inside its
+	staff := s.raffleStaff(r)
+
+	// Non-staff may only view a currently-public raffle: an open one inside its
 	// availability window (same predicate as the public list) or a closed one
 	// (winner announcement). Otherwise 404 so a not-yet-open raffle's details
 	// can't be read by guessing its ID.
-	if !s.isAdmin(r) && !raffleIsPubliclyViewable(raffle) {
+	if !staff && !raffleIsPubliclyViewable(raffle) {
 		writeError(w, http.StatusNotFound, "Raffle not found")
 		return
 	}
@@ -73,8 +87,8 @@ func (s *Server) handleRaffleDetail(w http.ResponseWriter, r *http.Request) {
 		resp.TotalEntries = &totalEntries
 	}
 
-	// Include entries for admins, or winner entry for public on closed raffles
-	if s.isAdmin(r) {
+	// Include entries for staff, or winner entry for public on closed raffles
+	if staff {
 		entries, err := s.store.ListRaffleEntries(id)
 		if err != nil {
 			writeInternalError(w, "list raffle entries", err)
@@ -106,6 +120,21 @@ type raffleWriteRequest struct {
 	AvailableFrom      string  `json:"available_from"`
 	AvailableTo        string  `json:"available_to"`
 	PrizeImage         string  `json:"prize_image"`
+}
+
+// validate checks a raffle write request: a non-empty title, and a
+// cost_per_entry that is finite and non-negative (a NaN/Inf or negative cost
+// would corrupt every total_cost the sign-up flow reports). max_entries is
+// floored to 1 in toRaffle, so it needs no separate check here. It returns a
+// user-facing error message, or "" when the request is valid.
+func (req raffleWriteRequest) validate() string {
+	if strings.TrimSpace(req.Title) == "" {
+		return "Title is required"
+	}
+	if math.IsNaN(req.CostPerEntry) || math.IsInf(req.CostPerEntry, 0) || req.CostPerEntry < 0 {
+		return "Cost per entry must be a non-negative number"
+	}
+	return ""
 }
 
 // toRaffle builds a model.Raffle from the request, flooring max_entries to 1.
@@ -142,8 +171,8 @@ func (s *Server) handleRaffleCreate(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "Invalid JSON")
 		return
 	}
-	if strings.TrimSpace(req.Title) == "" {
-		writeError(w, http.StatusBadRequest, "Title is required")
+	if msg := req.validate(); msg != "" {
+		writeError(w, http.StatusBadRequest, msg)
 		return
 	}
 	raffle := req.toRaffle(0)
@@ -176,8 +205,8 @@ func (s *Server) handleRaffleUpdate(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "Invalid JSON")
 		return
 	}
-	if strings.TrimSpace(req.Title) == "" {
-		writeError(w, http.StatusBadRequest, "Title is required")
+	if msg := req.validate(); msg != "" {
+		writeError(w, http.StatusBadRequest, msg)
 		return
 	}
 	if err := s.store.UpdateRaffle(req.toRaffle(id)); err != nil {
@@ -500,6 +529,10 @@ func (s *Server) handleRaffleEntryPatch(w http.ResponseWriter, r *http.Request) 
 	if !s.requirePermission(w, r, permTeahouseRaffles) {
 		return
 	}
+	raffleID, ok := pathInt64(w, r, "id", "raffle")
+	if !ok {
+		return
+	}
 	entryID, ok := pathInt64(w, r, "entryId", "entry")
 	if !ok {
 		return
@@ -509,19 +542,23 @@ func (s *Server) handleRaffleEntryPatch(w http.ResponseWriter, r *http.Request) 
 		writeError(w, http.StatusBadRequest, "Invalid JSON")
 		return
 	}
-	if err := s.store.SetRaffleEntryPaid(entryID, req.Paid); err != nil {
-		writeInternalError(w, "mark entry paid", err)
-		return
-	}
+	// Scope the entry to the raffle in the path: load it first and confirm it
+	// belongs to {id}, so a valid entry id from a DIFFERENT raffle can't be
+	// mutated by pairing it with any raffle id (IDOR).
 	entry, err := s.store.GetRaffleEntryByID(entryID)
 	if err != nil {
 		writeInternalError(w, "load entry", err)
 		return
 	}
-	if entry == nil {
+	if entry == nil || entry.RaffleID != raffleID {
 		writeError(w, http.StatusNotFound, "Entry not found")
 		return
 	}
+	if err := s.store.SetRaffleEntryPaid(entryID, req.Paid); err != nil {
+		writeInternalError(w, "mark entry paid", err)
+		return
+	}
+	entry.Paid = req.Paid
 	writeJSON(w, http.StatusOK, model.RaffleEntryResponse{Entry: *entry})
 }
 
@@ -534,8 +571,24 @@ func (s *Server) handleRaffleEntryDelete(w http.ResponseWriter, r *http.Request)
 	if !s.requirePermission(w, r, permTeahouseRaffles) {
 		return
 	}
+	raffleID, ok := pathInt64(w, r, "id", "raffle")
+	if !ok {
+		return
+	}
 	entryID, ok := pathInt64(w, r, "entryId", "entry")
 	if !ok {
+		return
+	}
+	// Scope the entry to the raffle in the path: confirm it belongs to {id}
+	// before deleting, so an entry id from a DIFFERENT raffle can't be deleted
+	// by pairing it with any raffle id (IDOR).
+	entry, err := s.store.GetRaffleEntryByID(entryID)
+	if err != nil {
+		writeInternalError(w, "load entry for delete", err)
+		return
+	}
+	if entry == nil || entry.RaffleID != raffleID {
+		writeError(w, http.StatusNotFound, "Entry not found")
 		return
 	}
 	if _, err := s.store.DeleteRaffleEntry(entryID); err != nil {

@@ -253,6 +253,14 @@ func (s *Server) writePasskeyList(w http.ResponseWriter, userID int64) {
 // handlePasskeyLoginBegin starts a usernameless (discoverable) passkey login.
 // Auth: public. The browser picks a resident credential; we return the challenge.
 func (s *Server) handlePasskeyLoginBegin(w http.ResponseWriter, r *http.Request) {
+	// Reuse the login brute-force limiter so an unauthenticated client can't hammer
+	// the begin endpoint to amplify challenge/session writes (each begin stashes a
+	// WebAuthn challenge in the session store). Same per-IP budget as login/finish.
+	ip := clientIP(r)
+	if s.limiter.isLimited(ip) {
+		writeError(w, http.StatusTooManyRequests, "Too many attempts. Please try again later.")
+		return
+	}
 	wa, err := s.webAuthn(r)
 	if err != nil {
 		writeInternalError(w, "webauthn config", err)

@@ -7,19 +7,25 @@ import (
 )
 
 func TestClientIP(t *testing.T) {
+	// clientIP now delegates to logClientIP: proxy-supplied headers are trusted
+	// ONLY when the immediate peer (RemoteAddr) is the loopback reverse proxy, and
+	// the true origin is the leftmost XFF / CF-Connecting-IP — not the rightmost
+	// (Cloudflare edge) entry. An off-loopback peer falls back to RemoteAddr host.
 	cases := []struct {
 		name   string
 		xff    string
+		cf     string
 		remote string
 		want   string
 	}{
-		{"x-forwarded-for single", "1.2.3.4", "9.9.9.9:5555", "1.2.3.4"},
-		// The rightmost entry is the one the trusted proxy appended; values to its
-		// left are client-supplied and must not be trusted.
-		{"x-forwarded-for chain takes rightmost (proxy-set)", "1.2.3.4, 5.6.7.8, 9.9.9.9", "9.9.9.9:5555", "9.9.9.9"},
-		{"x-forwarded-for trims space", " 1.2.3.4 , 5.6.7.8 ", "9.9.9.9:5555", "5.6.7.8"},
-		{"remoteaddr host:port", "", "9.9.9.9:1234", "9.9.9.9"},
-		{"remoteaddr without port falls back", "", "9.9.9.9", "9.9.9.9"},
+		// Behind the loopback proxy: trust the origin-most values.
+		{"loopback trusts leftmost xff", "1.2.3.4, 5.6.7.8, 9.9.9.9", "", "127.0.0.1:5555", "1.2.3.4"},
+		{"loopback trims space", " 1.2.3.4 , 5.6.7.8 ", "", "127.0.0.1:5555", "1.2.3.4"},
+		{"loopback prefers cf-connecting-ip", "1.2.3.4, 9.9.9.9", "8.8.8.8", "127.0.0.1:5555", "8.8.8.8"},
+		{"loopback no headers falls back to host", "", "", "127.0.0.1:5555", "127.0.0.1"},
+		// Off-loopback peer: headers are untrusted (spoofable), use RemoteAddr host.
+		{"non-loopback ignores xff", "1.2.3.4", "8.8.8.8", "9.9.9.9:5555", "9.9.9.9"},
+		{"remoteaddr without port falls back", "", "", "9.9.9.9", "9.9.9.9"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -27,6 +33,9 @@ func TestClientIP(t *testing.T) {
 			r.RemoteAddr = c.remote
 			if c.xff != "" {
 				r.Header.Set("X-Forwarded-For", c.xff)
+			}
+			if c.cf != "" {
+				r.Header.Set("CF-Connecting-IP", c.cf)
 			}
 			if got := clientIP(r); got != c.want {
 				t.Fatalf("clientIP = %q, want %q", got, c.want)

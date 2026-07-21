@@ -1,6 +1,7 @@
 package server
 
 import (
+	"log/slog"
 	"net/http"
 
 	"app-suite/internal/auth"
@@ -142,6 +143,12 @@ func (s *Server) handleUserPatch(w http.ResponseWriter, r *http.Request) {
 			writeInternalError(w, "set user password", err)
 			return
 		}
+		// An admin resetting the password must also cut off the target's existing
+		// PAT so a compromised token can't outlive the reset (the user re-issues it).
+		// The target's browser sessions can't be swept from here — see 'unresolved'.
+		if _, err := s.store.DeleteUserToken(id); err != nil {
+			slog.Error("revoke token after admin password reset", "error", err, "user_id", id)
+		}
 	}
 	writeJSON(w, http.StatusOK, model.OKResponse{OK: true})
 }
@@ -228,6 +235,19 @@ func (s *Server) handleAccountChangePassword(w http.ResponseWriter, r *http.Requ
 	if err := s.store.SetUserPassword(user.ID, newHash); err != nil {
 		writeInternalError(w, "set password", err)
 		return
+	}
+	// A password change must not leave old credentials valid. SetUserPassword bumped
+	// the account's password_epoch, so every session minted before this change (any
+	// other logged-in browser) is now rejected by currentUser. Keep THIS session
+	// alive by re-stamping it with the new epoch, and rotate its token (defeats
+	// fixation / a stolen pre-change cookie value). Also revoke the account's PAT so
+	// any leaked token stops working and must be re-issued.
+	_ = s.sessions.RenewToken(r.Context())
+	if fresh, err := s.store.GetUserByID(user.ID); err == nil && fresh != nil {
+		s.sessions.Put(r.Context(), "user_epoch", fresh.PasswordEpoch)
+	}
+	if _, err := s.store.DeleteUserToken(user.ID); err != nil {
+		slog.Error("revoke token after password change", "error", err, "user_id", user.ID)
 	}
 	writeJSON(w, http.StatusOK, model.OKResponse{OK: true})
 }

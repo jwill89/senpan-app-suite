@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Threading.Tasks;
 using Dalamud.Plugin.Services;
 
 namespace SenpanCompanion.Services;
@@ -150,7 +151,7 @@ public sealed class TimedMacroRunner : IDisposable
             this.chat.SendChannelMessage(macro.Channel, parts);
 
             macro.SendsCompleted++;
-            this.config.Save();
+            SaveConfigOffThread();
         }
         catch (Exception ex)
         {
@@ -166,5 +167,24 @@ public sealed class TimedMacroRunner : IDisposable
             else
                 s.NextSendUtc = DateTime.UtcNow.AddMinutes(Math.Max(1, macro.IntervalMinutes));
         }
+    }
+
+    // Persists the bumped send count without stalling the render loop. Configuration.Save
+    // does synchronous file I/O, and Fire runs on the framework (render) thread, so the
+    // write is offloaded to the thread pool. Best-effort: a dropped save just re-saves on
+    // the next fire, so the persisted count never drifts more than one send behind.
+    private void SaveConfigOffThread()
+    {
+        _ = Task.Run(() =>
+        {
+            try
+            {
+                this.config.Save();
+            }
+            catch (Exception ex)
+            {
+                this.log.Warning($"Failed to save timed-macro progress: {ex.Message}");
+            }
+        });
     }
 }

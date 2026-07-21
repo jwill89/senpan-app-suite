@@ -8,6 +8,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"runtime/debug"
 	"strconv"
 	"strings"
 	"sync"
@@ -480,8 +481,31 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	actor := &requestActor{kind: "anon"}
 	r = r.WithContext(context.WithValue(r.Context(), actorCtxKey{}, actor))
 
-	// Wrap with SCS session middleware so session data is available in handlers.
-	s.sessHandler.ServeHTTP(rw, r)
+	// Panic recovery: a handler panic must not tear down the connection silently.
+	// Recover here — OUTSIDE the session middleware but INSIDE ServeHTTP — so the
+	// stack is logged, the client still gets a 500 JSON, and control falls through
+	// to the access-log emit below (which then records status 500 instead of the
+	// line being lost). Wrap with SCS session middleware so session data is
+	// available in handlers.
+	func() {
+		defer func() {
+			if rec := recover(); rec != nil {
+				slog.Error("handler panic recovered",
+					"panic", rec,
+					"method", r.Method,
+					"path", redactSensitivePath(r.URL.Path),
+					"stack", string(debug.Stack()))
+				if rw.wroteHeader {
+					// Response already started; can't rewrite the status line, but
+					// flag the failure for the access log below.
+					rw.status = http.StatusInternalServerError
+				} else {
+					writeError(rw, http.StatusInternalServerError, "Internal server error")
+				}
+			}
+		}()
+		s.sessHandler.ServeHTTP(rw, r)
+	}()
 	duration := time.Since(start)
 
 	// Live admin invalidation: after a successful admin-mutation POST, push a thin
@@ -632,6 +656,17 @@ func (s *Server) sessionUserID(r *http.Request) int64 {
 	return 0
 }
 
+// sessionUserEpoch returns the password epoch the cookie session was minted with
+// (0 when absent — e.g. a session predating this feature, which matches the
+// default password_epoch of an unchanged account). Compared against the user's
+// current PasswordEpoch to invalidate sessions after a password change/reset.
+func (s *Server) sessionUserEpoch(r *http.Request) int64 {
+	if e, ok := s.sessions.Get(r.Context(), "user_epoch").(int64); ok {
+		return e
+	}
+	return 0
+}
+
 // checkCSRF is a defense-in-depth CSRF guard layered on top of the SameSite=Lax
 // session cookie. It scrutinizes only cookie-authenticated, state-changing
 // requests — the shape a cross-site page could drive using the victim's ambient
@@ -696,18 +731,24 @@ func sameHost(originHost, requestHost string) bool {
 func (s *Server) wsSessionUser(r *http.Request) *model.User {
 	cookie, err := r.Cookie(s.sessions.Cookie.Name)
 	if err != nil {
-		return s.userFromToken(r)
+		return s.wsUserFromToken(r)
 	}
 	ctx, err := s.sessions.Load(r.Context(), cookie.Value)
 	if err != nil {
-		return s.userFromToken(r)
+		return s.wsUserFromToken(r)
 	}
 	id, ok := s.sessions.Get(ctx, "user_id").(int64)
 	if !ok || id == 0 {
-		return s.userFromToken(r)
+		return s.wsUserFromToken(r)
 	}
 	u, err := s.store.GetUserByID(id)
 	if err != nil || u == nil || !u.IsActive {
+		return nil
+	}
+	// Same password-epoch check as loadCurrentUser: a session minted before the
+	// account's last password change no longer opens the admin channel.
+	epoch, _ := s.sessions.Get(ctx, "user_epoch").(int64)
+	if epoch != u.PasswordEpoch {
 		return nil
 	}
 	return u
@@ -743,6 +784,13 @@ func (s *Server) loadCurrentUser(r *http.Request) *model.User {
 	}
 	u, err := s.store.GetUserByID(id)
 	if err != nil || u == nil || !u.IsActive {
+		return nil
+	}
+	// Reject a session minted before the account's last password change/reset
+	// (its stored epoch no longer matches), so a password change logs out every
+	// other session. The current session is kept valid by re-stamping its epoch
+	// in the change-password handler.
+	if s.sessionUserEpoch(r) != u.PasswordEpoch {
 		return nil
 	}
 	return u

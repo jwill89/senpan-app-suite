@@ -112,12 +112,18 @@ function toggleSection(section: AdminSection): void {
       <div
         class="admin-nav-header"
         :class="{ open: isOpen('bingo') }"
+        role="button"
+        tabindex="0"
+        :aria-expanded="isOpen('bingo')"
+        aria-controls="admin-nav-items-bingo"
         @click="toggleSection('bingo')"
+        @keydown.enter.prevent="toggleSection('bingo')"
+        @keydown.space.prevent="toggleSection('bingo')"
       >
         <span><font-awesome-icon :icon="['fad', 'circle-dot']" /> Bingo</span>
         <span class="nav-chevron">{{ isOpen('bingo') ? '▾' : '▸' }}</span>
       </div>
-      <div v-show="isOpen('bingo')" class="admin-nav-items">
+      <div v-show="isOpen('bingo')" id="admin-nav-items-bingo" class="admin-nav-items">
         <button
           v-if="can('bingo-game')"
           :class="{ active: admin.adminTab === 'bingo-game' }"
@@ -168,12 +174,18 @@ function toggleSection(section: AdminSection): void {
       <div
         class="admin-nav-header"
         :class="{ open: isOpen('teahouse') }"
+        role="button"
+        tabindex="0"
+        :aria-expanded="isOpen('teahouse')"
+        aria-controls="admin-nav-items-teahouse"
         @click="toggleSection('teahouse')"
+        @keydown.enter.prevent="toggleSection('teahouse')"
+        @keydown.space.prevent="toggleSection('teahouse')"
       >
         <span><font-awesome-icon :icon="['fad', 'torii-gate']" /> Senpan Tea House</span>
         <span class="nav-chevron">{{ isOpen('teahouse') ? '▾' : '▸' }}</span>
       </div>
-      <div v-show="isOpen('teahouse')" class="admin-nav-items">
+      <div v-show="isOpen('teahouse')" id="admin-nav-items-teahouse" class="admin-nav-items">
         <button
           v-if="can('teahouse-affiliates')"
           :class="{ active: admin.adminTab === 'teahouse-affiliates' }"
@@ -211,12 +223,18 @@ function toggleSection(section: AdminSection): void {
       <div
         class="admin-nav-header"
         :class="{ open: isOpen('festival') }"
+        role="button"
+        tabindex="0"
+        :aria-expanded="isOpen('festival')"
+        aria-controls="admin-nav-items-festival"
         @click="toggleSection('festival')"
+        @keydown.enter.prevent="toggleSection('festival')"
+        @keydown.space.prevent="toggleSection('festival')"
       >
         <span><font-awesome-icon :icon="['fad', 'pot-food']" /> Festival</span>
         <span class="nav-chevron">{{ isOpen('festival') ? '▾' : '▸' }}</span>
       </div>
-      <div v-show="isOpen('festival')" class="admin-nav-items">
+      <div v-show="isOpen('festival')" id="admin-nav-items-festival" class="admin-nav-items">
         <button
           v-if="can('festival-garapon')"
           :class="{ active: admin.adminTab === 'festival-garapon' }"
@@ -249,12 +267,18 @@ function toggleSection(section: AdminSection): void {
       <div
         class="admin-nav-header"
         :class="{ open: isOpen('atelier') }"
+        role="button"
+        tabindex="0"
+        :aria-expanded="isOpen('atelier')"
+        aria-controls="admin-nav-items-atelier"
         @click="toggleSection('atelier')"
+        @keydown.enter.prevent="toggleSection('atelier')"
+        @keydown.space.prevent="toggleSection('atelier')"
       >
         <span><font-awesome-icon :icon="['fad', 'compass-drafting']" /> Atelier Yao</span>
         <span class="nav-chevron">{{ isOpen('atelier') ? '▾' : '▸' }}</span>
       </div>
-      <div v-show="isOpen('atelier')" class="admin-nav-items">
+      <div v-show="isOpen('atelier')" id="admin-nav-items-atelier" class="admin-nav-items">
         <button
           v-if="can('atelier-carrd')"
           :class="{ active: admin.adminTab === 'atelier-carrd' }"
@@ -277,12 +301,18 @@ function toggleSection(section: AdminSection): void {
       <div
         class="admin-nav-header"
         :class="{ open: isOpen('system') }"
+        role="button"
+        tabindex="0"
+        :aria-expanded="isOpen('system')"
+        aria-controls="admin-nav-items-system"
         @click="toggleSection('system')"
+        @keydown.enter.prevent="toggleSection('system')"
+        @keydown.space.prevent="toggleSection('system')"
       >
         <span><font-awesome-icon :icon="['fad', 'gears']" /> System</span>
         <span class="nav-chevron">{{ isOpen('system') ? '▾' : '▸' }}</span>
       </div>
-      <div v-show="isOpen('system')" class="admin-nav-items">
+      <div v-show="isOpen('system')" id="admin-nav-items-system" class="admin-nav-items">
         <button
           v-if="can('system-images')"
           :class="{ active: admin.adminTab === 'system-images' }"
@@ -325,12 +355,18 @@ function toggleSection(section: AdminSection): void {
       <div
         class="admin-nav-header"
         :class="{ open: userOptionsOpen }"
+        role="button"
+        tabindex="0"
+        :aria-expanded="userOptionsOpen"
+        aria-controls="admin-nav-items-user-options"
         @click="userOptionsOpen = !userOptionsOpen"
+        @keydown.enter.prevent="userOptionsOpen = !userOptionsOpen"
+        @keydown.space.prevent="userOptionsOpen = !userOptionsOpen"
       >
         <span><font-awesome-icon :icon="['fad', 'user']" /> User Options</span>
         <span class="nav-chevron">{{ userOptionsOpen ? '▾' : '▸' }}</span>
       </div>
-      <div v-show="userOptionsOpen" class="admin-nav-items">
+      <div v-show="userOptionsOpen" id="admin-nav-items-user-options" class="admin-nav-items">
         <button @click="emit('access-token')">
           <font-awesome-icon :icon="['fad', 'key']" /> Access Token
         </button>

@@ -96,7 +96,7 @@ public sealed class MainWindow : Window, IDisposable
         // The Rolls tool (plus Settings/About) are account-free, so the window always
         // renders the sidebar + content layout — even before a token is set, where the
         // suite sections stay hidden and setup lands on the Settings page.
-        if (!string.IsNullOrWhiteSpace(this.config.Token))
+        if (!string.IsNullOrWhiteSpace(this.config.GetToken()))
         {
             this.session.EnsureLoaded();
             // Once permissions are known, land on the first page the account can reach
@@ -398,7 +398,7 @@ public sealed class MainWindow : Window, IDisposable
     private void SyncSettingsFields()
     {
         this.settingsUrl = this.config.ServerUrl;
-        this.settingsToken = this.config.Token;
+        this.settingsToken = this.config.GetToken();
     }
 
     private static readonly Vector4 WarnColor = new(0.9f, 0.65f, 0.2f, 1f);
@@ -546,7 +546,7 @@ public sealed class MainWindow : Window, IDisposable
     private void SaveSettings()
     {
         this.config.ServerUrl = this.settingsUrl.Trim();
-        this.config.Token = this.settingsToken.Trim();
+        this.config.SetToken(this.settingsToken);
         this.config.Save();
         this.plugin.OnConnectionSettingsChanged();
         this.session.MarkStale();

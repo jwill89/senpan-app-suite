@@ -28,6 +28,10 @@ export const useImagesStore = defineStore('images', () => {
   )
   /** Loaded images keyed by category directory. */
   const imagesByDir = ref<Record<string, ImageEntry[]>>({})
+  // Dirs whose images have loaded successfully (a genuinely empty category counts
+  // as loaded). ensureImages consults this rather than a cached array so a FAILED
+  // load — which leaves an empty array behind — is retried instead of cached.
+  const loadedDirs = new Set<string>()
 
   const loading = ref(false)
   const loadingImages = ref(false)
@@ -54,9 +58,11 @@ export const useImagesStore = defineStore('images', () => {
     try {
       const data = await endpoints.images.list(dir)
       imagesByDir.value = { ...imagesByDir.value, [dir]: data.images }
+      loadedDirs.add(dir)
     } catch (e) {
       ui.notify((e as Error).message, 'error')
       imagesByDir.value = { ...imagesByDir.value, [dir]: [] }
+      loadedDirs.delete(dir) // don't cache a failed load — let ensureImages retry
     } finally {
       loadingImages.value = false
     }
@@ -80,6 +86,7 @@ export const useImagesStore = defineStore('images', () => {
     try {
       const data = await endpoints.images.list(dir)
       imagesByDir.value = { ...imagesByDir.value, [dir]: data.images }
+      loadedDirs.add(dir)
     } catch (e) {
       // A 400 "Unknown image category" means this dir was renamed or deleted:
       // drop the stale key so it stops being refetched (and stops re-toasting on
@@ -89,6 +96,7 @@ export const useImagesStore = defineStore('images', () => {
         const next = { ...imagesByDir.value }
         Reflect.deleteProperty(next, dir)
         imagesByDir.value = next
+        loadedDirs.delete(dir)
       }
     }
   }
@@ -109,7 +117,7 @@ export const useImagesStore = defineStore('images', () => {
 
   /** Loads a category's images only if they aren't already cached or loading. */
   async function ensureImages(dir: string): Promise<void> {
-    if (dir in imagesByDir.value) return
+    if (loadedDirs.has(dir)) return
     let pending = imagesPromises.get(dir)
     if (!pending) {
       pending = loadImages(dir).finally(() => imagesPromises.delete(dir))
@@ -155,6 +163,7 @@ export const useImagesStore = defineStore('images', () => {
       const next = { ...imagesByDir.value }
       Reflect.deleteProperty(next, cat.dir)
       imagesByDir.value = next
+      loadedDirs.delete(cat.dir)
       await loadCategories()
     } catch (e) {
       ui.notify((e as Error).message, 'error')

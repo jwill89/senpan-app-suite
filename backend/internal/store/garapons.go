@@ -299,17 +299,24 @@ func (s *Store) SetPlayerStampCard(playerID, cardID int64) error {
 // detach rather than cascade-delete). Returns whether a row was deleted (false in
 // the non-force case can also mean "blocked because the player has drawn").
 func (s *Store) DeleteGaraponPlayer(playerID int64, force bool) (bool, error) {
+	tx, err := s.beginImmediate()
+	if err != nil {
+		return false, err
+	}
+	defer func() { _ = tx.Rollback() }()
+
 	// Note the paired stamp card (if any) before deleting the link, so it can be
 	// removed alongside (its stamp log is preserved — card_id ON DELETE SET NULL).
 	var stampCardID sql.NullInt64
-	_ = s.db.QueryRow(`SELECT stamp_card_id FROM garapon_players WHERE id = ?`, playerID).Scan(&stampCardID)
+	if err := tx.QueryRow(`SELECT stamp_card_id FROM garapon_players WHERE id = ?`, playerID).Scan(&stampCardID); err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return false, err
+	}
 
 	var res sql.Result
-	var err error
 	if force {
-		res, err = s.db.Exec(`DELETE FROM garapon_players WHERE id = ?`, playerID)
+		res, err = tx.Exec(`DELETE FROM garapon_players WHERE id = ?`, playerID)
 	} else {
-		res, err = s.db.Exec(`DELETE FROM garapon_players WHERE id = ?
+		res, err = tx.Exec(`DELETE FROM garapon_players WHERE id = ?
 			AND NOT EXISTS (SELECT 1 FROM garapon_draws d WHERE d.player_id = ?)`, playerID, playerID)
 	}
 	if err != nil {
@@ -317,9 +324,15 @@ func (s *Store) DeleteGaraponPlayer(playerID int64, force bool) (bool, error) {
 	}
 	n, _ := res.RowsAffected()
 	if n > 0 && stampCardID.Valid {
-		// Remove the auto-issued stamp card too (best-effort); its collected rows stay
-		// in the rally's log via the ON DELETE SET NULL + snapshots.
-		_, _ = s.db.Exec(`DELETE FROM stamp_rally_cards WHERE id = ?`, stampCardID.Int64)
+		// Remove the auto-issued stamp card too (in the same transaction, so a failure
+		// rolls the link delete back rather than orphaning the card); its collected
+		// rows stay in the rally's log via the ON DELETE SET NULL + snapshots.
+		if _, err := tx.Exec(`DELETE FROM stamp_rally_cards WHERE id = ?`, stampCardID.Int64); err != nil {
+			return false, err
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return false, err
 	}
 	return n > 0, nil
 }

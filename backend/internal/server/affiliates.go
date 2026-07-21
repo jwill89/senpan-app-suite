@@ -274,7 +274,7 @@ func (s *Server) handleAffiliatePost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	embed := buildAffiliateEmbed(*affiliate, s.siteBaseURL(r), time.Now())
-	if err := postDiscordEmbed(webhook, embed); err != nil {
+	if err := postDiscordEmbed(r.Context(), webhook, embed); err != nil {
 		writeError(w, http.StatusBadGateway, "Failed to post to Discord: "+err.Error())
 		return
 	}

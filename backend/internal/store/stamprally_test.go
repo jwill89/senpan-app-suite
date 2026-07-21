@@ -80,6 +80,46 @@ func TestStampRally_UpdateKeepsCollections(t *testing.T) {
 	}
 }
 
+// TestStampRally_UpdateStampScopedToRally guards the rally-scoped stamp UPDATE: a
+// stamp update must not be able to reach across events. Editing rally A while passing
+// a stamp id that actually belongs to rally B must leave rally B's stamp untouched.
+func TestStampRally_UpdateStampScopedToRally(t *testing.T) {
+	s := newTestStore(t)
+	a := makeRally(t, s, "Rally A")
+	b := makeRally(t, s, "Rally B")
+
+	victim := b.Stamps[0] // belongs to rally B
+	origPassword := victim.Password
+
+	// Craft an update to rally A that tries to hijack rally B's stamp id, rewriting
+	// its password. The rally-scoped WHERE must prevent the cross-event write.
+	a.Stamps = append(a.Stamps, model.StampRallyStamp{
+		ID:       victim.ID, // spoofed: this id lives in rally B
+		Image:    "images/stamp_stamps/x.png",
+		Password: "hijacked",
+	})
+	if err := s.UpdateStampRally(a); err != nil {
+		t.Fatalf("UpdateStampRally: %v", err)
+	}
+
+	rb, err := s.GetStampRally(b.ID)
+	if err != nil || rb == nil {
+		t.Fatalf("GetStampRally(B): rb=%v err=%v", rb, err)
+	}
+	var found *model.StampRallyStamp
+	for i := range rb.Stamps {
+		if rb.Stamps[i].ID == victim.ID {
+			found = &rb.Stamps[i]
+		}
+	}
+	if found == nil {
+		t.Fatalf("rally B stamp %d vanished after cross-rally update", victim.ID)
+	}
+	if found.Password != origPassword {
+		t.Errorf("rally B stamp password = %q; want %q (cross-rally update leaked)", found.Password, origPassword)
+	}
+}
+
 func TestStampRally_ListStallCounts(t *testing.T) {
 	s := newTestStore(t)
 	r := makeRally(t, s, "Rally") // 2 stamps, none paused

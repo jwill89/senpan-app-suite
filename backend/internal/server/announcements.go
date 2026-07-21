@@ -451,7 +451,7 @@ func (s *Server) handleAnnouncementSend(w http.ResponseWriter, r *http.Request) 
 		writeError(w, http.StatusBadRequest, "This announcement's type has no Discord webhook configured.")
 		return
 	}
-	if err := postDiscordWebhook(typ.WebhookURL, s.buildAnnouncementMessage(*a)); err != nil {
+	if err := postDiscordWebhook(r.Context(), typ.WebhookURL, s.buildAnnouncementMessage(*a)); err != nil {
 		writeError(w, http.StatusBadGateway, "Failed to post to Discord: "+err.Error())
 		return
 	}
@@ -631,7 +631,24 @@ func (s *Server) validateAndResolveAnnouncement(w http.ResponseWriter, a *model.
 		a.NextPostAt = next
 		a.Active = true
 	default:
-		// Recurring — resolved in loc by nextAnnouncementOccurrence (DST-safe).
+		// Recurring — validate the recurrence inputs first so the post time can't
+		// silently shift: an out-of-range minutes-of-day would wrap through the
+		// /60,%60 split in nextAnnouncementOccurrence and land at the wrong hour.
+		if a.ScheduleMinutes < 0 || a.ScheduleMinutes > 1439 {
+			writeError(w, http.StatusBadRequest, "Schedule time must be within a day (0–1439 minutes)")
+			return false
+		}
+		if a.ScheduleKind == "monthly" {
+			switch a.ScheduleWeekOfMonth {
+			case -1, 1, 2, 3, 4, 5:
+				// valid: 1st–5th, or -1 = last
+			default:
+				writeError(w, http.StatusBadRequest, "Week of month must be 1–5 or -1 (last)")
+				return false
+			}
+		}
+		// Resolved in loc by nextAnnouncementOccurrence (DST-safe). A missing/invalid
+		// weekday set yields "" below and is reported as an incomplete schedule.
 		next := nextAnnouncementOccurrence(*a, time.Now())
 		if next == "" {
 			writeError(w, http.StatusBadRequest, "The recurring schedule is incomplete (pick day(s) and a time)")
@@ -1165,13 +1182,15 @@ func nthWeekdayOfMonth(year int, month time.Month, wd time.Weekday, n, h, m int,
 // RunAnnouncementScheduler posts due announcements to their type's webhook on a
 // fixed interval until ctx is cancelled. Safe to call in a goroutine.
 func (s *Server) RunAnnouncementScheduler(ctx context.Context) {
-	runScheduler(ctx, announcementSchedulerInterval, s.postDueAnnouncements)
+	runScheduler(ctx, announcementSchedulerInterval, func() { s.postDueAnnouncements(ctx) })
 }
 
 // postDueAnnouncements posts every announcement whose scheduled time has arrived.
 // A "skip next" marker advances the cursor without posting; an announcement whose
-// type has no webhook is left pending; a failed post is retried next tick.
-func (s *Server) postDueAnnouncements() {
+// type has no webhook is left pending; a failed post is retried next tick. Posts
+// run sequentially; ctx is checked between them so a graceful shutdown isn't
+// delayed by a long backlog of outbound Discord calls.
+func (s *Server) postDueAnnouncements(ctx context.Context) {
 	due, err := s.store.DueAnnouncements(time.Now())
 	if err != nil {
 		slog.Error("announcement scheduler: load due", "error", err)
@@ -1181,6 +1200,11 @@ func (s *Server) postDueAnnouncements() {
 		slog.Debug("announcement scheduler: due", "count", len(due))
 	}
 	for _, a := range due {
+		if ctx.Err() != nil {
+			// Shutting down — stop issuing outbound posts; the rest stay due and are
+			// picked up on the next startup sweep.
+			return
+		}
 		if a.SkipNext {
 			next, active := s.advanceCursor(a)
 			if err := s.store.AdvanceAnnouncement(a.ID, next, active, false); err != nil {
@@ -1192,7 +1216,7 @@ func (s *Server) postDueAnnouncements() {
 		if typ == nil || strings.TrimSpace(typ.WebhookURL) == "" {
 			continue // no webhook yet; try again next tick
 		}
-		err := postDiscordWebhook(typ.WebhookURL, s.buildAnnouncementMessage(a))
+		err := postDiscordWebhook(ctx, typ.WebhookURL, s.buildAnnouncementMessage(a))
 		if err != nil && !errors.Is(err, errWebhookAmbiguous) {
 			// Definitely not delivered (HTTP error status, incl. 429 rate limit):
 			// leave the cursor where it is so the next tick retries.
@@ -1205,8 +1229,13 @@ func (s *Server) postDueAnnouncements() {
 		// resume at their next occurrence; a one-time post that truly failed needs
 		// a manual resend.
 		next, active := s.advanceCursor(a)
-		if mErr := s.store.MarkAnnouncementPosted(a.ID, next, active); mErr != nil {
-			slog.Error("announcement scheduler: mark posted", "id", a.ID, "error", mErr)
+		if mErr := s.markPostedWithRetry(a.ID, next, active); mErr != nil {
+			// The Discord post already went out, but the cursor could not be advanced
+			// even after retrying — the announcement is still "due", so the next tick
+			// would re-post it (a duplicate @everyone blast). Log loudly; a persistent
+			// failure here means the SQLite store itself is unhealthy.
+			slog.Error("announcement scheduler: mark posted failed after retries (possible duplicate next tick)",
+				"id", a.ID, "title", a.Title, "error", mErr)
 		} else if err != nil {
 			slog.Warn("announcement post ambiguous; advanced cursor to avoid a duplicate",
 				"id", a.ID, "title", a.Title, "error", err)
@@ -1214,6 +1243,24 @@ func (s *Server) postDueAnnouncements() {
 			slog.Info("posted scheduled announcement", "id", a.ID, "title", a.Title)
 		}
 	}
+}
+
+// markPostedWithRetry advances the schedule cursor and stamps the post
+// (MarkAnnouncementPosted is a single atomic UPDATE, so cursor-advance and
+// last-posted move together and a retry is idempotent). Because the Discord post
+// has ALREADY succeeded by the time this runs, a failed cursor write would leave
+// the announcement still due and re-post it next tick — a duplicate @everyone
+// blast — so a transient DB error (e.g. brief SQLite-WAL contention) is retried a
+// few times before giving up.
+func (s *Server) markPostedWithRetry(id int64, nextPostAt string, active bool) error {
+	var err error
+	for attempt := 0; attempt < 3; attempt++ {
+		if err = s.store.MarkAnnouncementPosted(id, nextPostAt, active); err == nil {
+			return nil
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	return err
 }
 
 // advanceCursor computes the next schedule cursor for an announcement after its

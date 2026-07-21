@@ -120,6 +120,14 @@ func main() {
 	httpServer := &http.Server{
 		Addr:    *addr,
 		Handler: srv,
+		// Timeouts guard against slow-client / idle-socket resource exhaustion.
+		// Deliberately NO WriteTimeout: the /api/ws WebSocket is a long-lived
+		// connection a global write deadline would sever. ReadHeaderTimeout bounds
+		// the slow-headers (Slowloris) attack; ReadTimeout bounds the full request
+		// read; IdleTimeout reaps kept-alive connections.
+		ReadHeaderTimeout: 10 * time.Second,
+		ReadTimeout:       30 * time.Second,
+		IdleTimeout:       120 * time.Second,
 	}
 
 	// Background scheduler: posts due announcement embeds to Discord. Tied to a
@@ -147,16 +155,24 @@ func main() {
 	shutdown := make(chan os.Signal, 1)
 	signal.Notify(shutdown, os.Interrupt, syscall.SIGTERM)
 
+	// A failed ListenAndServe (e.g. the port is already in use) must run the SAME
+	// graceful-shutdown path below rather than os.Exit(1) — otherwise the deferred
+	// cleanup (db.Close, scheduler cancel) is skipped and in-flight state can be
+	// left inconsistent. Send the error to a buffered channel the select awaits.
+	serverErr := make(chan error, 1)
 	go func() {
 		slog.Info("App Suite API server starting", "addr", *addr)
 		if err := httpServer.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-			slog.Error("server failed", "error", err)
-			os.Exit(1)
+			serverErr <- err
 		}
 	}()
 
-	<-shutdown
-	slog.Info("shutdown signal received, shutting down gracefully…")
+	select {
+	case <-shutdown:
+		slog.Info("shutdown signal received, shutting down gracefully…")
+	case err := <-serverErr:
+		slog.Error("server failed, shutting down", "error", err)
+	}
 	cancelSched() // stop the background announcement scheduler
 
 	// Give in-flight requests 10 seconds to complete.

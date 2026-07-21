@@ -115,4 +115,59 @@ describe('DataTable', () => {
     const wrapper = mount(DataTable, { props: { columns: wide, rows, rowKey: 'id' } })
     expect(wrapper.find('thead th').attributes('style')).toContain('width: 120px')
   })
+
+  it('exposes expandable rows as keyboard-operable buttons with aria-expanded', async () => {
+    const wrapper = mount(DataTable, {
+      props: { columns, rows, rowKey: 'id' },
+      slots: { detail: '<span class="detail">D</span>' },
+    })
+    const firstRow = wrapper.findAll('tbody tr')[0]
+    expect(firstRow.attributes('role')).toBe('button')
+    expect(firstRow.attributes('tabindex')).toBe('0')
+    expect(firstRow.attributes('aria-expanded')).toBe('false')
+    await firstRow.trigger('keydown', { key: 'Enter' })
+    expect(wrapper.findAll('.detail')).toHaveLength(1)
+    expect(wrapper.findAll('tbody tr')[0].attributes('aria-expanded')).toBe('true')
+  })
+
+  it('toggles an expandable row on Space', async () => {
+    const wrapper = mount(DataTable, {
+      props: { columns, rows, rowKey: 'id' },
+      slots: { detail: '<span class="detail">D</span>' },
+    })
+    await wrapper.findAll('tbody tr')[0].trigger('keydown', { key: ' ' })
+    expect(wrapper.findAll('.detail')).toHaveLength(1)
+  })
+
+  it('does not add button semantics to rows without a #detail slot', () => {
+    const wrapper = mount(DataTable, { props: { columns, rows, rowKey: 'id' } })
+    const tr = wrapper.findAll('tbody tr')[0]
+    expect(tr.attributes('role')).toBeUndefined()
+    expect(tr.attributes('tabindex')).toBeUndefined()
+    expect(tr.attributes('aria-expanded')).toBeUndefined()
+  })
+
+  it('lets clicks on inner cell controls through without toggling the row', async () => {
+    const wrapper = mount(DataTable, {
+      props: { columns, rows, rowKey: 'id' },
+      slots: {
+        'cell-name': '<button class="inner">Act</button>',
+        detail: '<span class="detail">D</span>',
+      },
+    })
+    await wrapper.find('.inner').trigger('click')
+    expect(wrapper.findAll('.detail')).toHaveLength(0) // row stayed collapsed
+  })
+
+  it('does not toggle when a keydown originates from an inner control', async () => {
+    const wrapper = mount(DataTable, {
+      props: { columns, rows, rowKey: 'id' },
+      slots: {
+        'cell-name': '<button class="inner">Act</button>',
+        detail: '<span class="detail">D</span>',
+      },
+    })
+    await wrapper.find('.inner').trigger('keydown', { key: 'Enter' })
+    expect(wrapper.findAll('.detail')).toHaveLength(0)
+  })
 })

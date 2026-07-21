@@ -25,6 +25,41 @@ func TestUsersSeedAdmin(t *testing.T) {
 	}
 }
 
+func TestUsersPasswordEpochBumps(t *testing.T) {
+	s := newTestStore(t)
+
+	u, err := s.CreateUser("epoch-user", "hash-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if u.PasswordEpoch != 0 {
+		t.Fatalf("a new user should start at epoch 0, got %d", u.PasswordEpoch)
+	}
+
+	// Each password change must advance the epoch so prior sessions go stale.
+	for want := int64(1); want <= 2; want++ {
+		if err := s.SetUserPassword(u.ID, "hash-new"); err != nil {
+			t.Fatal(err)
+		}
+		got, err := s.GetUserByID(u.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got.PasswordEpoch != want {
+			t.Fatalf("after %d password change(s), epoch = %d, want %d", want, got.PasswordEpoch, want)
+		}
+	}
+
+	// The epoch is also readable via the login path (GetUserByUsername).
+	byName, _, err := s.GetUserByUsername("epoch-user")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if byName.PasswordEpoch != 2 {
+		t.Fatalf("GetUserByUsername epoch = %d, want 2", byName.PasswordEpoch)
+	}
+}
+
 func TestUsersUpdateLastLogin(t *testing.T) {
 	s := newTestStore(t)
 

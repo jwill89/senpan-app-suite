@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Net;
 using System.Net.WebSockets;
 using System.Text;
 using System.Text.Json;
@@ -28,6 +29,19 @@ public sealed class LiveConnection : IDisposable
     private readonly IFramework framework;
 
     private CancellationTokenSource? cts;
+
+    // Reconnect backoff bounds. Transient drops grow the delay exponentially up to the
+    // max; a clean disconnect resets to the initial delay. A token the server rejects
+    // outright is terminal for the current credentials, so it backs off hard (a token
+    // change restarts this loop via Start(), which resets the backoff) rather than
+    // reconnecting every few seconds forever.
+    private static readonly TimeSpan InitialBackoff = TimeSpan.FromSeconds(3);
+    private static readonly TimeSpan MaxBackoff = TimeSpan.FromSeconds(60);
+    private static readonly TimeSpan AuthRejectedBackoff = TimeSpan.FromMinutes(5);
+
+    // Guard against a hostile/broken server streaming an unbounded message and OOMing
+    // us: abort the connection once an in-progress message exceeds this many bytes.
+    private const int MaxMessageBytes = 1 * 1024 * 1024;
 
     /// <summary>Whether the socket is currently up (polled by the status badge).</summary>
     public bool Connected { get; private set; }
@@ -88,15 +102,23 @@ public sealed class LiveConnection : IDisposable
 
     private async Task RunAsync(CancellationToken ct)
     {
+        var backoff = InitialBackoff;
         while (!ct.IsCancellationRequested)
         {
+            var authRejected = false;
             try
             {
                 await ConnectAndReceiveAsync(ct).ConfigureAwait(false);
+                backoff = InitialBackoff; // clean disconnect → reset the backoff
             }
             catch (OperationCanceledException)
             {
                 break;
+            }
+            catch (LiveAuthException ex)
+            {
+                authRejected = true;
+                this.log.Warning($"Senpan live connection rejected — check your token: {ex.Message}");
             }
             catch (Exception ex)
             {
@@ -107,10 +129,23 @@ public sealed class LiveConnection : IDisposable
             if (ct.IsCancellationRequested)
                 break;
 
-            // Back off before reconnecting so a downed server isn't hammered.
+            // Back off before reconnecting so a downed (or rejecting) server isn't
+            // hammered. Transient drops use exponential backoff; a rejected token backs
+            // off hard until the token changes (which restarts this loop).
+            TimeSpan delay;
+            if (authRejected)
+            {
+                delay = AuthRejectedBackoff;
+            }
+            else
+            {
+                delay = backoff;
+                backoff = TimeSpan.FromTicks(Math.Min(backoff.Ticks * 2, MaxBackoff.Ticks));
+            }
+
             try
             {
-                await Task.Delay(TimeSpan.FromSeconds(5), ct).ConfigureAwait(false);
+                await Task.Delay(delay, ct).ConfigureAwait(false);
             }
             catch (OperationCanceledException)
             {
@@ -126,11 +161,21 @@ public sealed class LiveConnection : IDisposable
             return;
 
         using var ws = new ClientWebSocket();
+        // Collect the HTTP response details so a failed handshake (e.g. 401) exposes its
+        // status code, letting us distinguish a rejected token from a transient error.
+        ws.Options.CollectHttpResponseDetails = true;
         // Send the personal access token as an Authorization header rather than a
         // URL query parameter, so it isn't captured in server/proxy access logs.
         // The server accepts either, but the header keeps the secret out of logs.
-        ws.Options.SetRequestHeader("Authorization", $"Bearer {this.config.Token.Trim()}");
-        await ws.ConnectAsync(uri, ct).ConfigureAwait(false);
+        ws.Options.SetRequestHeader("Authorization", $"Bearer {this.config.GetToken()}");
+        try
+        {
+            await ws.ConnectAsync(uri, ct).ConfigureAwait(false);
+        }
+        catch (WebSocketException) when (ws.HttpStatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden)
+        {
+            throw new LiveAuthException($"server returned {(int)ws.HttpStatusCode}");
+        }
         this.Connected = true;
 
         var buffer = new byte[16 * 1024];
@@ -146,6 +191,14 @@ public sealed class LiveConnection : IDisposable
                 {
                     await ws.CloseAsync(WebSocketCloseStatus.NormalClosure, null, CancellationToken.None).ConfigureAwait(false);
                     return;
+                }
+                if (ms.Length + result.Count > MaxMessageBytes)
+                {
+                    // Refuse an over-sized message rather than growing the buffer without
+                    // bound. Abort and throw so the reconnect loop backs off.
+                    this.log.Warning($"Senpan live message exceeded the {MaxMessageBytes:N0}-byte cap; dropping connection.");
+                    ws.Abort();
+                    throw new InvalidOperationException("live message exceeded size cap");
                 }
                 ms.Write(buffer, 0, result.Count);
             }
@@ -225,13 +278,25 @@ public sealed class LiveConnection : IDisposable
     private void RunOnUi(Action action)
     {
         // Marshal to the framework thread so subscribers can mutate UI state safely.
-        _ = this.framework.RunOnFrameworkThread(action);
+        // Guard the dispatch so a throwing subscriber is logged rather than silently
+        // swallowed by the fire-and-forget framework task.
+        _ = this.framework.RunOnFrameworkThread(() =>
+        {
+            try
+            {
+                action();
+            }
+            catch (Exception ex)
+            {
+                this.log.Error(ex, "Senpan live event subscriber threw during dispatch.");
+            }
+        });
     }
 
     private Uri? BuildWebSocketUri()
     {
         var baseUrl = this.config.ServerUrl.Trim().TrimEnd('/');
-        var token = this.config.Token.Trim();
+        var token = this.config.GetToken();
         if (baseUrl.Length == 0 || token.Length == 0)
             return null;
 
@@ -263,5 +328,13 @@ public sealed class LiveConnection : IDisposable
         // carries whether auto was paused for the mini-game decision.
         public int Interval { get; set; }
         public bool AutoPaused { get; set; }
+    }
+
+    // Raised when the WebSocket handshake is rejected because the token isn't accepted
+    // (401/403). Terminal for the current credentials — the reconnect loop backs off
+    // hard rather than retrying every few seconds.
+    private sealed class LiveAuthException : Exception
+    {
+        public LiveAuthException(string message) : base(message) { }
     }
 }

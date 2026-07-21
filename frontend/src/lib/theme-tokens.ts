@@ -281,15 +281,39 @@ export function toRgb(c: Rgba): string {
 }
 
 /**
+ * Rejects a token value that could break out of its `--name:value;` declaration
+ * or smuggle extra CSS into the live preview. Mirrors the server sanitizer's
+ * intent (store.sanitizeTokenValue) so a hostile token can't self-inject CSS into
+ * the editor's preview `:root{…}` block. Legitimate function values such as
+ * `rgb(0 0 0 / 70%)` pass; only injection vectors are blocked.
+ */
+function tokenValueSafe(v: string): boolean {
+  if (v.length > 64) return false // cap length (mirrors the server's 64-char cap)
+  if (/[;{}<>\\]/.test(v)) return false // declaration/block breakers
+  if (/\/\*|\*\//.test(v)) return false // CSS comment markers
+  if (/url\s*\(/i.test(v)) return false // no external resource loads from the preview
+  // Reject control characters (a colour/length token never contains one). Checked
+  // via char codes so no control byte has to live in this source file.
+  for (const ch of v) {
+    const code = ch.charCodeAt(0)
+    if (code < 0x20 || code === 0x7f) return false
+  }
+  return true
+}
+
+/**
  * Renders a token map as a `:root{…}` stylesheet, emitting only known tokens in
  * canonical order. Mirrors the server's TokensToCSS so live preview matches what
- * the backend will serve. Returns '' when nothing usable is present.
+ * the backend will serve. Each value is injection-checked (see tokenValueSafe) so
+ * a hostile token can't inject arbitrary CSS into the preview `:root{…}` block —
+ * an unsafe value is dropped, falling back to that token's default. Returns ''
+ * when nothing usable is present.
  */
 export function tokensToCss(tokens: Record<string, string>): string {
   const decls: string[] = []
   for (const t of THEME_TOKENS) {
     const v = (tokens[t.name] || '').trim()
-    if (v) decls.push(`--${t.name}:${v};`)
+    if (v && tokenValueSafe(v)) decls.push(`--${t.name}:${v};`)
   }
   return decls.length ? `:root{${decls.join('')}}` : ''
 }

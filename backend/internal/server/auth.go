@@ -126,6 +126,9 @@ func (s *Server) handleAuthAction(w http.ResponseWriter, r *http.Request) {
 	// Rotate session token on privilege escalation to prevent session fixation.
 	_ = s.sessions.RenewToken(r.Context())
 	s.sessions.Put(r.Context(), "user_id", user.ID)
+	// Record the password epoch this session was minted with; a later password
+	// change/reset bumps it, invalidating this (and every other) prior session.
+	s.sessions.Put(r.Context(), "user_epoch", user.PasswordEpoch)
 	s.limiter.resetFailures(ip)
 	slog.Debug("login succeeded", "user_id", user.ID, "username", username, "admin", user.IsAdmin, "ip", ip)
 	// Stamp the last-login time (best-effort — don't fail the login if it errors).
@@ -187,8 +190,20 @@ func (s *Server) handleRegister(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "Password must be at least 8 characters")
 		return
 	}
+
+	// Anti-enumeration: every path below — a fresh account, an already-taken
+	// username, or the reserved bootstrap name — returns this identical generic
+	// response (same status + body), so /api/register can't be used to probe which
+	// usernames exist (mirrors the login flow's single generic error). The account
+	// is still created when eligible; only the difference is hidden from the caller.
+	generic := model.RegisterResponse{
+		Success: true,
+		Message: "Account created. An administrator must activate it before you can log in.",
+	}
+
 	if strings.EqualFold(username, reservedUsername) {
-		writeError(w, http.StatusBadRequest, "That username is not available")
+		slog.Warn("register attempt for reserved username", "username", username, "ip", ip)
+		writeJSON(w, http.StatusOK, generic)
 		return
 	}
 
@@ -199,7 +214,8 @@ func (s *Server) handleRegister(w http.ResponseWriter, r *http.Request) {
 	}
 	if _, err := s.store.CreateUser(username, hash); err != nil {
 		if errors.Is(err, store.ErrUsernameTaken) {
-			writeError(w, http.StatusConflict, "That username is already taken")
+			slog.Info("register attempt for existing username", "username", username, "ip", ip)
+			writeJSON(w, http.StatusOK, generic)
 			return
 		}
 		writeInternalError(w, "create user", err)
@@ -207,8 +223,5 @@ func (s *Server) handleRegister(w http.ResponseWriter, r *http.Request) {
 	}
 
 	slog.Info("user registered (pending activation)", "username", username)
-	writeJSON(w, http.StatusOK, model.RegisterResponse{
-		Success: true,
-		Message: "Account created. An administrator must activate it before you can log in.",
-	})
+	writeJSON(w, http.StatusOK, generic)
 }

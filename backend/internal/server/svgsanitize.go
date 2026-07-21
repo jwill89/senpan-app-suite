@@ -17,13 +17,16 @@ import (
 // Approach: parse the markup and re-serialize it, keeping only safe tokens.
 // It is an allowlist for *structure* (we re-emit what we parsed) with a denylist
 // for the known script vectors:
-//   - <script> and <foreignObject> elements are dropped with their whole subtree
+//   - <script>, <foreignObject>, and <style> elements are dropped with their
+//     whole subtree (a <style> block can carry page-wide CSS injection —
+//     url()/@import/expression() — once the SVG is inlined)
 //   - SMIL animation elements (<animate>/<set>/…) that target href or an event
 //     attribute are dropped (they can set javascript: at runtime)
 //   - event-handler attributes (any name starting with "on") are removed
 //   - href/xlink:href/src are kept only when they are safe local fragment refs
 //     ("#id") — javascript:, data:, and external URLs are removed
-//   - style attributes containing javascript: or expression() are removed
+//   - style attributes containing javascript:, expression(), url(), or @import
+//     are removed
 //   - comments, processing instructions, and DTD/DOCTYPE directives are dropped
 //
 // Namespaces are flattened to literal prefixes on output so Go's xml encoder
@@ -100,10 +103,12 @@ func sanitizeSVG(raw []byte) ([]byte, bool) {
 }
 
 // isDroppedSVGElement reports whether an element (and its subtree) must be removed
-// wholesale. <script> is obvious; <foreignObject> can embed arbitrary HTML.
+// wholesale. <script> is obvious; <foreignObject> can embed arbitrary HTML; and
+// <style> can inject page-wide CSS (url()/@import/expression()) once the SVG is
+// inlined via v-html, so its whole subtree is dropped.
 func isDroppedSVGElement(local string) bool {
 	switch strings.ToLower(local) {
-	case "script", "foreignobject":
+	case "script", "foreignobject", "style":
 		return true
 	}
 	return false
@@ -122,7 +127,13 @@ func isDangerousAnimation(e xml.StartElement) bool {
 	for _, a := range e.Attr {
 		if strings.EqualFold(a.Name.Local, "attributeName") {
 			v := strings.ToLower(strings.TrimSpace(a.Value))
-			if v == "href" || strings.HasPrefix(v, "on") {
+			// Strip any namespace prefix ("xlink:href" → "href") before
+			// comparing, so a namespaced URL target can't slip past this check
+			// and yield stored XSS when animated to a javascript: value.
+			if i := strings.LastIndex(v, ":"); i >= 0 {
+				v = v[i+1:]
+			}
+			if v == "href" || v == "src" || strings.HasPrefix(v, "on") {
 				return true
 			}
 		}
@@ -161,10 +172,16 @@ func isSafeSVGRef(v string) bool {
 	return strings.HasPrefix(strings.TrimSpace(v), "#")
 }
 
-// hasDangerousCSS reports whether an inline style value carries a script vector.
+// hasDangerousCSS reports whether an inline style value carries a script or
+// resource-loading vector: javascript:/expression() run script, while url() and
+// @import can pull in external resources or inject page-wide CSS when the SVG is
+// inlined. Any of them means the whole style attribute is dropped.
 func hasDangerousCSS(v string) bool {
 	l := strings.ToLower(v)
-	return strings.Contains(l, "javascript:") || strings.Contains(l, "expression(")
+	return strings.Contains(l, "javascript:") ||
+		strings.Contains(l, "expression(") ||
+		strings.Contains(l, "url(") ||
+		strings.Contains(l, "@import")
 }
 
 // flattenXMLName collapses a namespaced xml.Name into a single literal Local name

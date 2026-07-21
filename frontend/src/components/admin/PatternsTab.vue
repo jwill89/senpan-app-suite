@@ -137,7 +137,15 @@ async function saveNew(): Promise<void> {
       <template v-else-if="searching">
         <div v-if="patterns.gameFilteredPatterns.length" class="saved-patterns">
           <div v-for="p in patterns.gameFilteredPatterns" :key="p.id" class="saved-pattern">
-            <span class="del-x" title="Delete pattern" @click="patterns.confirmDeletePattern(p.id)"
+            <span
+              class="del-x"
+              role="button"
+              tabindex="0"
+              :aria-label="`Delete pattern ${p.name}`"
+              title="Delete pattern"
+              @click="patterns.confirmDeletePattern(p.id)"
+              @keydown.enter.prevent="patterns.confirmDeletePattern(p.id)"
+              @keydown.space.prevent="patterns.confirmDeletePattern(p.id)"
               >&times;</span
             >
             <PatternMini :pattern-data="p.pattern_data" />
@@ -150,7 +158,16 @@ async function saveNew(): Promise<void> {
               @keyup.enter="patterns.finishPatternRename(p.id)"
               @keyup.escape="patterns.editingPatternId = null"
             />
-            <span v-else class="pattern-name" @dblclick="patterns.startPatternRename(p)">
+            <span
+              v-else
+              class="pattern-name"
+              role="button"
+              tabindex="0"
+              :aria-label="`Rename pattern ${p.name}`"
+              title="Rename (double-click or press Enter)"
+              @dblclick="patterns.startPatternRename(p)"
+              @keydown.enter.prevent="patterns.startPatternRename(p)"
+            >
               {{ p.name }}
             </span>
             <span class="text-dim text-xs">{{ p.category_name }}</span>
@@ -170,7 +187,13 @@ async function saveNew(): Promise<void> {
         <template v-for="group in visibleGroups" :key="group.category.id">
           <div
             class="pattern-group-head"
+            role="button"
+            tabindex="0"
+            :aria-expanded="!patterns.isCategoryCollapsed(group.category.id)"
+            :aria-label="`Toggle category ${group.category.name}`"
             @click="patterns.toggleCategoryCollapsed(group.category.id)"
+            @keydown.enter.prevent="patterns.toggleCategoryCollapsed(group.category.id)"
+            @keydown.space.prevent="patterns.toggleCategoryCollapsed(group.category.id)"
           >
             <span class="text-dim">
               {{ patterns.isCategoryCollapsed(group.category.id) ? '▶' : '▼' }}
@@ -198,8 +221,13 @@ async function saveNew(): Promise<void> {
               /></span>
               <span
                 class="del-x"
+                role="button"
+                tabindex="0"
+                :aria-label="`Delete pattern ${p.name}`"
                 title="Delete pattern"
                 @click="patterns.confirmDeletePattern(p.id)"
+                @keydown.enter.prevent="patterns.confirmDeletePattern(p.id)"
+                @keydown.space.prevent="patterns.confirmDeletePattern(p.id)"
                 >&times;</span
               >
               <PatternMini :pattern-data="p.pattern_data" />
@@ -212,7 +240,16 @@ async function saveNew(): Promise<void> {
                 @keyup.enter="patterns.finishPatternRename(p.id)"
                 @keyup.escape="patterns.editingPatternId = null"
               />
-              <span v-else class="pattern-name" @dblclick="patterns.startPatternRename(p)">
+              <span
+                v-else
+                class="pattern-name"
+                role="button"
+                tabindex="0"
+                :aria-label="`Rename pattern ${p.name}`"
+                title="Rename (double-click or press Enter)"
+                @dblclick="patterns.startPatternRename(p)"
+                @keydown.enter.prevent="patterns.startPatternRename(p)"
+              >
                 {{ p.name }}
               </span>
             </div>

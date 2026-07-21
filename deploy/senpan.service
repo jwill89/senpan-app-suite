@@ -28,9 +28,25 @@ ExecStart=/opt/<app>/app-suite -addr :8080 -db /opt/<app>/data/database.sqlite -
 Restart=on-failure
 RestartSec=5
 
-# Environment
-#Environment=APPSUITE_SESSION_SECRET=changeme
-# Only if cross-origin browser clients need the API (normally unset — same-origin):
+# ── Configuration & secrets ──
+# Config comes from the flags in ExecStart above OR from APPSUITE_* env vars. Two
+# of them are SECRETS — the session cookie secret and the Turnstile secret — so
+# keep them OUT of this unit file: an inline `Environment=SECRET=…` value is
+# world-readable via `systemctl show` and /proc/<pid>/environ. Put secrets in a
+# root-owned 0600 env file instead and load it here (the leading `-` makes it
+# optional, so the service still starts if it's absent):
+#
+#   /etc/senpan/senpan.env   (chown root:root, chmod 600):
+#     APPSUITE_SESSION_SECRET=<fixed 64+ hex, e.g. `openssl rand -hex 32`; a fixed
+#                              value keeps sessions alive across restarts>
+#     APPSUITE_TURNSTILE_SECRET=<Cloudflare Turnstile secret key>
+#     APPSUITE_TURNSTILE_SITEKEY=<Cloudflare Turnstile public site key>  # public, but
+#                              kept alongside the pair for convenience
+#
+#EnvironmentFile=-/etc/senpan/senpan.env
+#
+# Non-secret values are fine inline. Only if cross-origin browser clients need the
+# API (normally unset — same-origin):
 #Environment=APPSUITE_CORS_ORIGINS=https://example.com
 
 # Security hardening. These sandbox the service so a compromise of the process

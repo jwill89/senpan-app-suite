@@ -159,6 +159,19 @@ ps -o user= -C app-suite                         # not root
   rotation — changing the secret is what forcibly logs out every outstanding
   session. The FFXIV plugin uses PAT bearer tokens, not the admin cookie, so it
   is unaffected.
+- **`APPSUITE_TURNSTILE_SECRET` / `APPSUITE_TURNSTILE_SITEKEY`.** Configure the
+  Cloudflare Turnstile pair (also settable as `-turnstile-secret`/`-turnstile-sitekey`
+  flags) to enable the bot check on the public POST paths — login, registration,
+  raffle sign-up, and custom card requests. When the **secret** is empty the check
+  is disabled entirely (the server logs `Turnstile not configured` at boot and the
+  frontend skips the widget), so a bad/rotated secret degrades to "no bot check,"
+  not a lockout. The **secret** is sensitive; the **sitekey** is public (it is
+  served to browsers via `GET /api/config`). Keep the secret out of the unit's
+  inline `Environment=` (visible via `systemctl show` / `/proc/<pid>/environ`) —
+  put both, alongside `APPSUITE_SESSION_SECRET`, in a root-owned `chmod 600` file
+  loaded with `EnvironmentFile=-/etc/senpan/senpan.env` (see the commented block in
+  `deploy/senpan.service`). Rotate the secret from the Cloudflare dashboard and
+  update the env file.
 
 ## Font host (protected serving)
 

@@ -64,8 +64,10 @@ backend 3.11.0).
   prompt is consistent across admins and works for auto draws. Auto-draw is paused
   automatically at half-time and the instant a winner is recognized; choosing **No
   mini-game** resumes it, choosing **Yes** leaves it off until you switch it back on.
-  Each auto draw still respects the player draw delay (players see numbers
-  `interval + delay` apart; admins see them immediately).
+  Turning auto on draws the first number immediately, then spaces draws by the
+  interval. Each draw still respects the player draw delay — players lag the admin
+  by the delay — but the delay never stretches the admin's cadence (admins see
+  numbers exactly one interval apart, immediately as they're drawn).
 - **Tidier live-game controls.** The Current Game view now leads with three
   equal-sized primary controls — **Draw Number**, the **Delay** selector, and **End
   Game** — while the per-feature toggles (Auto-Draw, It's Yoever, Winner Sound) move
@@ -598,13 +600,18 @@ server-side (paired with frontend 3.14.0). Backward-compatible additions only.
 #### Added
 
 - **Auto-draw scheduler.** A single background goroutine (`RunAutoDrawScheduler`,
-  launched from `main.go` on the shutdown-cancelled context) draws a number every
-  `auto_interval + draw_delay` seconds while a game has auto switched on. The draw
-  reuses the exact manual-draw path (admins immediately, players after the delay),
-  so a player perceives `interval + delay` between numbers while an admin still sees
-  each the instant it's drawn. Auto state (enabled + interval) lives on the game
-  service, is stamped onto `BingoGameState` (`auto_enabled`, `auto_interval`), and
-  **defaults off, including after a restart**, so draws never resume unattended.
+  launched from `main.go` on the shutdown-cancelled context) draws the first number
+  the instant auto is switched on, then draws one every `auto_interval` seconds
+  while a game has auto switched on. The draw reuses the exact manual-draw path
+  (admins immediately, players after the delay), so the player draw delay only lags
+  when each number reaches players — it never stretches the admin's cadence. Auto
+  state (enabled + interval) lives on the game service, is stamped onto
+  `BingoGameState` (`auto_enabled`, `auto_interval`), and **defaults off, including
+  after a restart**, so draws never resume unattended. A **manual draw switches auto
+  off** (the admin is taking over), and whenever auto turns off — for any reason —
+  the scheduler cancels its pending draw. The loop's draw is guarded under the same
+  lock that serializes every draw (`DrawAuto`), so a disable racing with a scheduled
+  fire can never leak a stray number.
 - **Game-start + control fields.** `POST /api/game/start` accepts `auto` +
   `auto_interval`; `PATCH /api/game` accepts `auto_enabled` + `auto_interval` (live,
   never written back to a preset). `game_presets` gains `auto_call` + `auto_interval`

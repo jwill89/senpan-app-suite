@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/alexedwards/scs/v2"
@@ -61,6 +62,10 @@ type Server struct {
 	// (RunAutoDrawScheduler) to re-evaluate its timer after any auto-relevant
 	// change — game start/end, enable/disable, interval or delay change. See game.go.
 	autoWake chan struct{}
+	// autoDrawNow, when set, tells the scheduler to draw the first number the moment
+	// auto is switched on (rather than after one interval). Set on start-with-auto
+	// and on the enable toggle; consumed once by the scheduler. See game.go.
+	autoDrawNow atomic.Bool
 	// halftimeReadyAt records when the half-time-triggering number reaches players,
 	// so a confirmed mini-game alert is held until they've seen that number. Guarded
 	// by halftimeMu.

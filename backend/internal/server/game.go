@@ -75,8 +75,13 @@ func (s *Server) handleGameStart(w http.ResponseWriter, r *http.Request) {
 	})
 	s.broadcastGameStart(game, details)
 	// Wake the auto-draw scheduler so it (re)arms for the new game — or stays idle
-	// when the game started manual. Safe to call unconditionally.
-	s.signalAutoWake()
+	// when the game started manual. Starting with auto on draws the first number
+	// immediately (then the interval cadence).
+	if req.Auto {
+		s.requestImmediateAutoDraw()
+	} else {
+		s.signalAutoWake()
+	}
 }
 
 // gameDrawRequest is the JSON body for POST /api/game/draw.
@@ -101,6 +106,16 @@ func (s *Server) handleGameDraw(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "Invalid JSON")
 		return
 	}
+
+	// A manual draw takes over from the auto loop: switch auto off first (and wake
+	// the scheduler so it cancels its pending draw) so the two can never both fire.
+	// Done before the draw so the timer is cancelled the instant the admin takes
+	// control; DrawAuto's under-lock guard covers the microscopic overlap.
+	if s.game.DisableAuto() {
+		s.broadcastAutoConfig()
+		s.signalAutoWake()
+	}
+
 	result, newWinner, err := s.game.Draw()
 	if err != nil {
 		writeInternalError(w, "draw number", err)
@@ -436,7 +451,13 @@ func (s *Server) handleGamePatch(w http.ResponseWriter, r *http.Request) {
 		s.game.SetAutoInterval(*req.AutoInterval)
 	}
 	if req.AutoEnabled != nil {
+		wasEnabled, _ := s.game.AutoState()
 		s.game.SetAutoEnabled(*req.AutoEnabled)
+		// Turning auto on (a genuine off→on flip) draws the first number
+		// immediately; the scheduler then continues on the interval.
+		if *req.AutoEnabled && !wasEnabled {
+			s.autoDrawNow.Store(true)
+		}
 	}
 	if req.AutoInterval != nil || req.AutoEnabled != nil {
 		s.broadcastAutoConfig()
@@ -452,8 +473,9 @@ func (s *Server) handleGamePatch(w http.ResponseWriter, r *http.Request) {
 // broadcast side-effect: it reuses the exact same post-draw path as a manual
 // draw (admins immediately, players after the delay, winner/half-time effects).
 // A single long-lived goroutine (RunAutoDrawScheduler) owns the timing so there
-// is never more than one auto-drawer, and it re-reads the live delay + interval
-// on every cycle so admin changes take effect without a restart.
+// is never more than one auto-drawer, and it re-reads the live interval on every
+// cycle so admin changes take effect without a restart. The player draw delay is
+// applied only to the player broadcast (postDraw), never to the cadence.
 
 // signalAutoWake nudges the auto-draw scheduler to re-evaluate its timer after an
 // auto-relevant change (game start/end, enable/disable, interval or delay change).
@@ -464,6 +486,14 @@ func (s *Server) signalAutoWake() {
 	case s.autoWake <- struct{}{}:
 	default:
 	}
+}
+
+// requestImmediateAutoDraw asks the scheduler to draw the first number the moment
+// auto turns on (rather than after one interval), then wakes it to act on the
+// request. Used when a game starts with auto on and when auto is toggled on.
+func (s *Server) requestImmediateAutoDraw() {
+	s.autoDrawNow.Store(true)
+	s.signalAutoWake()
 }
 
 // broadcastAutoConfig tells every client the current auto-draw state (enabled +
@@ -479,8 +509,8 @@ func (s *Server) broadcastAutoConfig() {
 }
 
 // currentDrawDelay reads the shared player draw delay (seconds), clamped to 0–60.
-// The auto loop adds this to the interval so a player perceives interval+delay
-// between numbers while the number still reaches admins immediately.
+// It governs only how long each drawn number is held before it reaches players;
+// admins always see the number immediately, and it never affects the auto cadence.
 func (s *Server) currentDrawDelay() int {
 	return clampDrawDelay(s.getSettingInt("default_draw_delay", 0))
 }
@@ -533,16 +563,17 @@ func (s *Server) broadcastHalftimeMinigameWhenReady() {
 // (broadcasting the change) when the callable pool is exhausted or the game has
 // gone, so the scheduler then parks.
 func (s *Server) autoDrawOnce() {
-	if enabled, _ := s.game.AutoState(); !enabled {
-		return
-	}
-	result, newWinner, err := s.game.Draw()
+	// DrawAuto draws only while auto is still enabled, checking the flag under the
+	// draw lock — so a disable racing with this fire (a manual draw taking over, a
+	// winner, an admin toggle) can't leak a stray number.
+	result, newWinner, err := s.game.DrawAuto()
 	if err != nil {
 		slog.Error("auto draw failed", "error", err)
 		return
 	}
 	if result == nil {
-		// No active game or every callable number drawn — stop auto so the loop parks.
+		// Auto was switched off (raced), the callable pool is exhausted, or the game
+		// is gone — make sure auto is off so the loop parks.
 		if s.game.DisableAuto() {
 			s.broadcastAutoConfig()
 			s.signalAutoWake()
@@ -553,11 +584,12 @@ func (s *Server) autoDrawOnce() {
 }
 
 // RunAutoDrawScheduler is the single goroutine that drives automatic draws. It
-// sleeps until the next draw is due (interval + the current player delay, so the
-// player-perceived gap is interval+delay), then draws — unless woken early by a
-// config change (signalAutoWake), which makes it recompute. It parks (no timer)
-// whenever auto is off. Launched once from main with a context cancelled on
-// shutdown, so it drains cleanly and never draws into a closing database.
+// draws the first number the instant auto is switched on, then spaces subsequent
+// draws by the interval — the player draw delay only shifts when each number
+// reaches players (see postDraw), it never stretches the admin's cadence. A config
+// change (signalAutoWake) makes it recompute; it parks (no timer) whenever auto is
+// off. Launched once from main with a context cancelled on shutdown, so it drains
+// cleanly and never draws into a closing database.
 func (s *Server) RunAutoDrawScheduler(ctx context.Context) {
 	timer := time.NewTimer(time.Hour)
 	if !timer.Stop() {
@@ -567,10 +599,19 @@ func (s *Server) RunAutoDrawScheduler(ctx context.Context) {
 
 	for {
 		enabled, interval := s.game.AutoState()
-		if enabled {
-			wait := time.Duration(s.currentDrawDelay()+bingo.ClampAutoInterval(interval)) * time.Second
-			resetTimer(timer, wait)
-		} else {
+		switch {
+		case enabled && s.autoDrawNow.Swap(false):
+			// Auto was just switched on — draw the first number immediately, then
+			// loop to arm the interval cadence.
+			s.autoDrawOnce()
+			continue
+		case enabled:
+			// Space draws by the interval alone. The player draw delay is applied
+			// per-draw in postDraw (players lag the admin by the delay); folding it
+			// in here would wrongly stretch the gap the admin waits between numbers.
+			resetTimer(timer, time.Duration(bingo.ClampAutoInterval(interval))*time.Second)
+		default:
+			s.autoDrawNow.Store(false) // drop a stale immediate-draw request while off
 			stopTimer(timer)
 		}
 

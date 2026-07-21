@@ -156,6 +156,47 @@ func TestAutoState_HalftimeClearBlocksResume(t *testing.T) {
 	}
 }
 
+// ── DrawAuto (auto loop's guarded draw) ─────────────────────────────────────
+
+func TestDrawAuto_OnlyDrawsWhenEnabled(t *testing.T) {
+	st := testStore(t)
+	gs := NewService(st)
+	patID, err := st.SavePattern("Top Row", testPattern5x5(), 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Manual start → auto off. DrawAuto must not draw.
+	if _, err := gs.Start([]int{int(patID)}, false, 0); err != nil {
+		t.Fatal(err)
+	}
+	result, _, err := gs.DrawAuto()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result != nil {
+		t.Error("DrawAuto drew a number while auto was off")
+	}
+	if n, _ := st.GetCalledNumbers(1); len(n) != 0 {
+		t.Errorf("no number should have been recorded; got %d", len(n))
+	}
+
+	// With auto on, DrawAuto draws.
+	gs.SetAutoEnabled(true)
+	result, _, err = gs.DrawAuto()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result == nil {
+		t.Fatal("DrawAuto should draw while auto is on")
+	}
+
+	// Switching auto off again stops DrawAuto, even mid-game.
+	gs.DisableAuto()
+	if result, _, _ := gs.DrawAuto(); result != nil {
+		t.Error("DrawAuto drew after auto was switched off")
+	}
+}
+
 // ── Draw new-winner flag ────────────────────────────────────────────────────
 
 func TestDraw_NewWinnerFlag(t *testing.T) {

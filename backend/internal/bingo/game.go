@@ -226,7 +226,27 @@ func (g *Service) Start(patternIDs []int, auto bool, autoInterval int) (*model.B
 func (g *Service) Draw() (*DrawResult, bool, error) {
 	g.opMu.Lock()
 	defer g.opMu.Unlock()
+	return g.drawLocked()
+}
 
+// DrawAuto is Draw for the automatic loop: it draws only while auto is still
+// enabled, testing the flag under the *same* op lock that serializes every draw.
+// So a disable that lands between the scheduler deciding to draw and the draw
+// itself — a manual draw taking over, a winner, an admin toggling auto off — is
+// serialized against the draw and reliably prevents the stray auto-draw. Returns
+// (nil, false, nil) when auto is off, the same signal the scheduler treats as
+// "park" (like an exhausted or absent game).
+func (g *Service) DrawAuto() (*DrawResult, bool, error) {
+	g.opMu.Lock()
+	defer g.opMu.Unlock()
+	if enabled, _ := g.AutoState(); !enabled {
+		return nil, false, nil
+	}
+	return g.drawLocked()
+}
+
+// drawLocked is the shared draw body; the caller must already hold opMu.
+func (g *Service) drawLocked() (*DrawResult, bool, error) {
 	game, err := g.store.GetActiveGame()
 	if err != nil {
 		return nil, false, err

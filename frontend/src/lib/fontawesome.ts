@@ -1,8 +1,11 @@
 /**
  * FontAwesome icon registry.
  *
- * Icons come from the Font Awesome Pro kit (`@awesome.me/kit-46204fb6f1`),
- * tree-shaken to only what's used, in three styles:
+ * Icons come from the per-style packages (@fortawesome/pro-{solid,regular,duotone}-svg-icons
+ * + free @fortawesome/free-brands-svg-icons), NOT the monolithic @awesome.me kit — the kit
+ * tarball is ~760 MB and re-pulling it on each cold CI install blew the Font Awesome
+ * bandwidth quota; these per-style packages carry only JS path data. Tree-shaken to only
+ * what's used, in these styles:
  *
  *   - DUOTONE (prefix `fad`) for headers, sidebar sections/nav, and decorative
  *     icons — the two-tone look reads well at larger sizes.
@@ -84,7 +87,7 @@ import {
   faUserKey,
   faUserPlus,
   faUsersGear,
-} from '@awesome.me/kit-46204fb6f1/icons/duotone/solid'
+} from '@fortawesome/pro-duotone-svg-icons'
 import {
   faArrowLeft as faArrowLeftSolid,
   faArrowRightFromBracket as faArrowRightFromBracketSolid,
@@ -124,9 +127,9 @@ import {
   faVolumeHigh as faVolumeHighSolid,
   faVolumeLow as faVolumeLowSolid,
   faVolumeXmark as faVolumeXmarkSolid,
-} from '@awesome.me/kit-46204fb6f1/icons/classic/solid'
+} from '@fortawesome/pro-solid-svg-icons'
 // Regular (outline) — the hollow star marks a pending (un-approved) custom card.
-import { faStar as faStarRegular } from '@awesome.me/kit-46204fb6f1/icons/classic/regular'
+import { faStar as faStarRegular } from '@fortawesome/pro-regular-svg-icons'
 import { faDiscord } from '@fortawesome/free-brands-svg-icons'
 
 // Kit icons, the standalone brand icon, and the SVG core are all on FontAwesome 7

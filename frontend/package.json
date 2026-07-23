@@ -21,10 +21,12 @@
     "gen:types": "cd ../backend && go run github.com/gzuidhof/tygo@v0.2.21 generate"
   },
   "dependencies": {
-    "@awesome.me/kit-46204fb6f1": "^1.0.3",
     "@ckpack/vue-color": "^1.6.0",
     "@fortawesome/fontawesome-svg-core": "^7.2.0",
     "@fortawesome/free-brands-svg-icons": "^7.2.0",
+    "@fortawesome/pro-duotone-svg-icons": "^7.0.0",
+    "@fortawesome/pro-regular-svg-icons": "^7.0.0",
+    "@fortawesome/pro-solid-svg-icons": "^7.0.0",
     "@fortawesome/vue-fontawesome": "^3.2.0",
     "@milkdown/crepe": "^7.21.2",
     "html-to-image": "^1.11.13",

@@ -350,6 +350,38 @@ public sealed class StampRallyLogsResponse
     public List<StampRallyLogEntry> Logs { get; set; } = new();
 }
 
+// ── Tea Rooms ──────────────────────────────────────────────────────────────────
+
+// A bookable tea room. The plugin surfaces only the compact operator view — room
+// number, name, owner, per-half-hour cost, and the two quick-toggle status flags
+// (open/closed and the 50%-off discount). The server model carries more (subtitle,
+// hashtags, image, embed colour, seasonal/lockable, …) that the in-game panel
+// doesn't need, so those fields are intentionally omitted here.
+public sealed class TeaRoom
+{
+    public long Id { get; set; }
+    public string Name { get; set; } = string.Empty;
+    // The character who owns the room — optional, informational only.
+    public string RoomOwner { get; set; } = string.Empty;
+    public string RoomNumber { get; set; } = string.Empty;
+    public long CostPerHalfHour { get; set; }
+    public bool Open { get; set; }
+    public bool Discounted { get; set; }
+}
+
+// GET /api/tea-rooms also returns the shared Discord webhook, but the plugin never
+// posts rooms, so it's left out — an extra JSON field is simply ignored on decode.
+public sealed class TeaRoomsResponse
+{
+    public List<TeaRoom> TeaRooms { get; set; } = new();
+}
+
+// PATCH /api/tea-rooms/{id} echoes the saved room (nil → null when it vanished).
+public sealed class TeaRoomResponse
+{
+    public TeaRoom? TeaRoom { get; set; }
+}
+
 // ── Generic ──────────────────────────────────────────────────────────────────
 
 public sealed class OkResponse

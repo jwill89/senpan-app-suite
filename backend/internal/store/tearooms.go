@@ -15,7 +15,7 @@ import (
 // webhook they post to lives in the settings table, not here.
 
 // teaRoomColumns is the shared SELECT column list for the tea_rooms table.
-const teaRoomColumns = `id, name, subtitle, room_number, cost_per_half_hour, hashtags, description,
+const teaRoomColumns = `id, name, subtitle, room_owner, room_number, cost_per_half_hour, hashtags, description,
 	seasonal, open, lockable, discounted, image, color, sort_order, created_at`
 
 // scanTeaRoom scans one row (in teaRoomColumns order), decoding the 0/1 flag
@@ -23,7 +23,7 @@ const teaRoomColumns = `id, name, subtitle, room_number, cost_per_half_hour, has
 func scanTeaRoom(sc rowScanner) (*model.TeaRoom, error) {
 	var t model.TeaRoom
 	var seasonal, open, lockable, discounted int
-	if err := sc.Scan(&t.ID, &t.Name, &t.Subtitle, &t.RoomNumber, &t.CostPerHalfHour, &t.Hashtags, &t.Description,
+	if err := sc.Scan(&t.ID, &t.Name, &t.Subtitle, &t.RoomOwner, &t.RoomNumber, &t.CostPerHalfHour, &t.Hashtags, &t.Description,
 		&seasonal, &open, &lockable, &discounted, &t.Image, &t.Color, &t.SortOrder, &t.CreatedAt); err != nil {
 		return nil, err
 	}
@@ -89,10 +89,10 @@ func (s *Store) GetTeaRoomByNumber(number string) (*model.TeaRoom, error) {
 func (s *Store) CreateTeaRoom(t *model.TeaRoom) (int64, error) {
 	res, err := s.db.Exec(
 		`INSERT INTO tea_rooms
-			(name, subtitle, room_number, cost_per_half_hour, hashtags, description,
+			(name, subtitle, room_owner, room_number, cost_per_half_hour, hashtags, description,
 			 seasonal, open, lockable, discounted, image, color)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		t.Name, t.Subtitle, t.RoomNumber, t.CostPerHalfHour, t.Hashtags, t.Description,
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		t.Name, t.Subtitle, t.RoomOwner, t.RoomNumber, t.CostPerHalfHour, t.Hashtags, t.Description,
 		boolToInt(t.Seasonal), boolToInt(t.Open), boolToInt(t.Lockable), boolToInt(t.Discounted),
 		t.Image, t.Color)
 	if err != nil {
@@ -106,10 +106,10 @@ func (s *Store) CreateTeaRoom(t *model.TeaRoom) (int64, error) {
 // dedicated single-flag toggles (SetTeaRoomOpen/SetTeaRoomDiscounted).
 func (s *Store) UpdateTeaRoom(t *model.TeaRoom) error {
 	_, err := s.db.Exec(
-		`UPDATE tea_rooms SET name = ?, subtitle = ?, room_number = ?, cost_per_half_hour = ?, hashtags = ?,
+		`UPDATE tea_rooms SET name = ?, subtitle = ?, room_owner = ?, room_number = ?, cost_per_half_hour = ?, hashtags = ?,
 			description = ?, seasonal = ?, open = ?, lockable = ?, discounted = ?, image = ?, color = ?
 		 WHERE id = ?`,
-		t.Name, t.Subtitle, t.RoomNumber, t.CostPerHalfHour, t.Hashtags, t.Description,
+		t.Name, t.Subtitle, t.RoomOwner, t.RoomNumber, t.CostPerHalfHour, t.Hashtags, t.Description,
 		boolToInt(t.Seasonal), boolToInt(t.Open), boolToInt(t.Lockable), boolToInt(t.Discounted),
 		t.Image, t.Color, t.ID)
 	return err

@@ -1,9 +1,10 @@
 <script setup lang="ts">
 /**
- * Admin Affiliate create/edit form. Name, a repeatable owners list, location, a
- * single timezone for the affiliate, a repeatable opening-hours editor (optional
- * label + start + optional end), markdown details, and two image pickers — the
- * logo and the establishment screenshot (both browse the shared image library).
+ * Admin Affiliate create/edit form. Name, an optional subtitle (any script), a
+ * repeatable owners list, location, a single timezone for the affiliate, a
+ * repeatable opening-hours editor (optional label + start + optional end),
+ * markdown details, and two image pickers — the logo and the establishment
+ * screenshot (both browse the shared image library).
  *
  * Hosted as a Back sub-page of the Affiliates manager (AffiliatesTab): it emits
  * `saved` on a successful save and `cancel` to return to the list.
@@ -45,6 +46,17 @@ function cancel(): void {
           v-model="affiliates.affiliateForm.name"
           placeholder="Establishment name"
           aria-label="Affiliate name"
+        />
+      </FormField>
+
+      <FormField
+        label="Subtitle"
+        help="A short second line under the name (any language, e.g. a Japanese phrase)."
+      >
+        <input
+          v-model="affiliates.affiliateForm.subtitle"
+          placeholder="e.g. 「 桃の森の床の間。」"
+          aria-label="Affiliate subtitle"
         />
       </FormField>
 

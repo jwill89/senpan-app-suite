@@ -452,7 +452,7 @@ func (s *Server) handleAnnouncementSend(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	if err := postDiscordWebhook(r.Context(), typ.WebhookURL, s.buildAnnouncementMessage(*a)); err != nil {
-		writeError(w, http.StatusBadGateway, "Failed to post to Discord: "+err.Error())
+		writeUpstreamError(w, fmt.Sprintf("send announcement %d", id), err)
 		return
 	}
 	if err := s.store.TouchAnnouncementPosted(a.ID); err != nil {
@@ -833,9 +833,10 @@ func announcementComponents(a model.Announcement) []discordComponent {
 }
 
 // buildAnnouncementEmbed renders an announcement as a Discord embed. When times
-// are set they render first, as a single inline field using Discord <t:…> tokens
-// (the author-chosen start/end styles, each independent) so each viewer sees
-// their own zone. An optional location renders as an inline field beside it. The
+// are set they render first, as a single full-width field using Discord <t:…>
+// tokens (the author-chosen start/end styles, each independent) so each viewer
+// sees their own zone. An optional location renders as its own full-width field
+// below it, on the next line. The
 // markdown details follow — normalized into Discord's markdown flavor first — as
 // one or more full-width, headingless fields: details that would exceed Discord's
 // 1024-char per-field cap are split across consecutive fields at a natural line
@@ -855,11 +856,12 @@ func buildAnnouncementEmbed(a model.Announcement) discordEmbed {
 		if endT, err := time.Parse(time.RFC3339, a.EndAt); err == nil {
 			value += fmt.Sprintf(" to <t:%d:%s>", endT.Unix(), discordTimeStyle(a.EndFormat, defaultEndFormat))
 		}
-		b.field("🗓️ When", value, true)
+		b.field("🗓️ When", value, false)
 		hasTime = true
 	}
-	// Optional location, inline so it sits beside the time when both are present.
-	b.field("📍 Where", a.Location, true)
+	// Optional location on its own full-width line below the time (not inline, so
+	// "When" and "Where" stack vertically rather than sitting side by side).
+	b.field("📍 Where", a.Location, false)
 	// Details below the time, headingless (zero-width-space name) and full-width.
 	// Split into multiple fields when over the 1024-char cap so nothing is cut.
 	for _, chunk := range splitForEmbedFields(discordMarkdown(a.Details), embedFieldValueMax) {

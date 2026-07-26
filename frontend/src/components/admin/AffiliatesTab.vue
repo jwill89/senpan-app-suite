@@ -182,6 +182,7 @@ async function submitWebhook(): Promise<void> {
             </template>
 
             <h4 class="aff-title">{{ a.name }}</h4>
+            <p v-if="a.subtitle" class="text-sm text-dim aff-meta">{{ a.subtitle }}</p>
             <p v-if="a.owners.length" class="text-sm text-dim aff-meta">
               <font-awesome-icon :icon="['fad', 'user']" /> {{ a.owners.join(', ') }}
             </p>

@@ -15,7 +15,7 @@ import (
 // PRAGMA user_version against this constant and runs only the migrations
 // needed to bring the database up to date. Bump this when adding a new
 // migration block.
-const schemaVersion = 51
+const schemaVersion = 53
 
 // ensureSchema reads the current PRAGMA user_version from the database and
 // applies any outstanding migrations to bring it up to schemaVersion.
@@ -351,8 +351,54 @@ func ensureSchema(db *sql.DB) error {
 		}
 	}
 
+	if version < 52 {
+		if err := migrateAffiliateSubtitle(db); err != nil {
+			return err
+		}
+	}
+
+	if version < 53 {
+		if err := migrateTeaRoomOwner(db); err != nil {
+			return err
+		}
+	}
+
 	_, err := db.Exec(fmt.Sprintf("PRAGMA user_version = %d", schemaVersion))
 	return err
+}
+
+// migrateAffiliateSubtitle (schema v52) adds affiliates.subtitle, the optional
+// second line shown under the name (mirroring tea_rooms.subtitle). Existing rows
+// default to ''. Idempotent — skipped when the column already exists (a fresh
+// install gets it via createTables).
+func migrateAffiliateSubtitle(db *sql.DB) error {
+	if !tableExists(db, "affiliates") {
+		return nil
+	}
+	if hasColumn(db, "affiliates", "subtitle") {
+		return nil
+	}
+	if _, err := db.Exec(`ALTER TABLE affiliates ADD COLUMN subtitle TEXT NOT NULL DEFAULT ''`); err != nil {
+		return fmt.Errorf("add affiliates.subtitle: %w", err)
+	}
+	return nil
+}
+
+// migrateTeaRoomOwner (schema v53) adds tea_rooms.room_owner, the optional
+// informational "character who owns the room" line. Existing rows default to ''.
+// Idempotent — skipped when the column already exists (a fresh install gets it via
+// createTables → teaRoomsTableSQL).
+func migrateTeaRoomOwner(db *sql.DB) error {
+	if !tableExists(db, "tea_rooms") {
+		return nil
+	}
+	if hasColumn(db, "tea_rooms", "room_owner") {
+		return nil
+	}
+	if _, err := db.Exec(`ALTER TABLE tea_rooms ADD COLUMN room_owner TEXT NOT NULL DEFAULT ''`); err != nil {
+		return fmt.Errorf("add tea_rooms.room_owner: %w", err)
+	}
+	return nil
 }
 
 // migrateUserPasswordEpoch (schema v51) adds users.password_epoch, a counter
@@ -1516,6 +1562,7 @@ const garaponDrawsTableSQL = `CREATE TABLE IF NOT EXISTS garapon_draws (
 const affiliatesTableSQL = `CREATE TABLE IF NOT EXISTS affiliates (
 	id INTEGER PRIMARY KEY AUTOINCREMENT,
 	name TEXT NOT NULL,
+	subtitle TEXT NOT NULL DEFAULT '',
 	owners TEXT NOT NULL DEFAULT '[]',
 	location TEXT NOT NULL DEFAULT '',
 	timezone TEXT NOT NULL DEFAULT '',
@@ -1576,6 +1623,7 @@ const teaRoomsTableSQL = `CREATE TABLE IF NOT EXISTS tea_rooms (
 	id INTEGER PRIMARY KEY AUTOINCREMENT,
 	name TEXT NOT NULL,
 	subtitle TEXT NOT NULL DEFAULT '',
+	room_owner TEXT NOT NULL DEFAULT '',
 	room_number TEXT NOT NULL DEFAULT '',
 	cost_per_half_hour INTEGER NOT NULL DEFAULT 0,
 	hashtags TEXT NOT NULL DEFAULT '',

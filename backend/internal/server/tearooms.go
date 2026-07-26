@@ -76,6 +76,7 @@ func (req *teaRoomWriteRequest) validateAndSanitize(w http.ResponseWriter) bool 
 		return false
 	}
 	t.Subtitle = strings.TrimSpace(t.Subtitle)
+	t.RoomOwner = strings.TrimSpace(t.RoomOwner)
 	t.Description = strings.TrimSpace(t.Description)
 	t.Image = strings.TrimSpace(t.Image)
 	t.Color = strings.TrimSpace(t.Color)
@@ -297,7 +298,7 @@ func (s *Server) handleTeaRoomPost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := postDiscordEmbed(r.Context(), webhook, buildTeaRoomEmbed(*room)); err != nil {
-		writeError(w, http.StatusBadGateway, "Failed to post to Discord: "+err.Error())
+		writeUpstreamError(w, fmt.Sprintf("post tea room %d", id), err)
 		return
 	}
 	writeJSON(w, http.StatusOK, model.TeaRoomResponse{TeaRoom: room})

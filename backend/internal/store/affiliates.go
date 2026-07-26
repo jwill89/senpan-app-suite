@@ -15,7 +15,7 @@ import (
 // they're small, always loaded with the row, and edited as a set.
 
 // affiliateColumns is the shared SELECT column list (order matches scanAffiliate).
-const affiliateColumns = `id, name, owners, location, timezone, hours, details, logo, screenshot,
+const affiliateColumns = `id, name, subtitle, owners, location, timezone, hours, details, logo, screenshot,
 	embed_color, discord_link, carrd_link, sort_order, created_at`
 
 // ListAffiliates returns every affiliate in the admin's manual drag order, then
@@ -60,9 +60,9 @@ func (s *Store) GetAffiliate(id int64) (*model.Affiliate, error) {
 func (s *Store) CreateAffiliate(a *model.Affiliate) (int64, error) {
 	res, err := s.db.Exec(
 		`INSERT INTO affiliates
-		   (name, owners, location, timezone, hours, details, logo, screenshot, embed_color, discord_link, carrd_link)
-		   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		a.Name, encodeStrings(a.Owners), a.Location, a.Timezone,
+		   (name, subtitle, owners, location, timezone, hours, details, logo, screenshot, embed_color, discord_link, carrd_link)
+		   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		a.Name, a.Subtitle, encodeStrings(a.Owners), a.Location, a.Timezone,
 		encodeHours(a.Hours), a.Details, a.Logo, a.Screenshot,
 		a.EmbedColor, a.DiscordLink, a.CarrdLink)
 	if err != nil {
@@ -76,10 +76,10 @@ func (s *Store) CreateAffiliate(a *model.Affiliate) (int64, error) {
 // edit must not reset the drag order).
 func (s *Store) UpdateAffiliate(a *model.Affiliate) error {
 	_, err := s.db.Exec(
-		`UPDATE affiliates SET name = ?, owners = ?, location = ?, timezone = ?,
+		`UPDATE affiliates SET name = ?, subtitle = ?, owners = ?, location = ?, timezone = ?,
 		   hours = ?, details = ?, logo = ?, screenshot = ?,
 		   embed_color = ?, discord_link = ?, carrd_link = ? WHERE id = ?`,
-		a.Name, encodeStrings(a.Owners), a.Location, a.Timezone,
+		a.Name, a.Subtitle, encodeStrings(a.Owners), a.Location, a.Timezone,
 		encodeHours(a.Hours), a.Details, a.Logo, a.Screenshot,
 		a.EmbedColor, a.DiscordLink, a.CarrdLink, a.ID)
 	return err
@@ -123,7 +123,7 @@ type rowScanner interface {
 func scanAffiliate(sc rowScanner) (*model.Affiliate, error) {
 	var a model.Affiliate
 	var ownersJSON, hoursJSON string
-	if err := sc.Scan(&a.ID, &a.Name, &ownersJSON, &a.Location, &a.Timezone,
+	if err := sc.Scan(&a.ID, &a.Name, &a.Subtitle, &ownersJSON, &a.Location, &a.Timezone,
 		&hoursJSON, &a.Details, &a.Logo, &a.Screenshot,
 		&a.EmbedColor, &a.DiscordLink, &a.CarrdLink, &a.SortOrder, &a.CreatedAt); err != nil {
 		return nil, err

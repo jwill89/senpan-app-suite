@@ -13,6 +13,7 @@ func TestAffiliatesCRUD(t *testing.T) {
 
 	id, err := s.CreateAffiliate(&model.Affiliate{
 		Name:     "The Tipsy Moogle",
+		Subtitle: "「 静かな酒場 」", // UTF-8 (Japanese) round-trips
 		Owners:   []string{"Tataru", "Hildibrand"},
 		Location: "Ul'dah, Steps of Nald",
 		Timezone: "America/New_York",
@@ -35,6 +36,9 @@ func TestAffiliatesCRUD(t *testing.T) {
 	if got.Name != "The Tipsy Moogle" {
 		t.Errorf("name = %q; want The Tipsy Moogle", got.Name)
 	}
+	if got.Subtitle != "「 静かな酒場 」" {
+		t.Errorf("subtitle = %q; want the Japanese phrase back unchanged", got.Subtitle)
+	}
 	if len(got.Owners) != 2 || got.Owners[0] != "Tataru" || got.Owners[1] != "Hildibrand" {
 		t.Errorf("owners = %v; want [Tataru Hildibrand] in order", got.Owners)
 	}
@@ -45,8 +49,9 @@ func TestAffiliatesCRUD(t *testing.T) {
 		t.Errorf("timezone = %q; want America/New_York", got.Timezone)
 	}
 
-	// Update: rename + replace owners/hours.
+	// Update: rename + resubtitle + replace owners/hours.
 	got.Name = "The Drowned Moogle"
+	got.Subtitle = "「 沈んだ酒場 」"
 	got.Owners = []string{"Tataru"}
 	got.Hours = []model.AffiliateHour{{Start: "09:00", End: "17:00"}}
 	if err := s.UpdateAffiliate(got); err != nil {
@@ -56,8 +61,9 @@ func TestAffiliatesCRUD(t *testing.T) {
 	if err != nil || reloaded == nil {
 		t.Fatalf("GetAffiliate after update: got=%v err=%v", reloaded, err)
 	}
-	if reloaded.Name != "The Drowned Moogle" || len(reloaded.Owners) != 1 || len(reloaded.Hours) != 1 {
-		t.Errorf("after update: %+v; want renamed, 1 owner, 1 hours row", reloaded)
+	if reloaded.Name != "The Drowned Moogle" || reloaded.Subtitle != "「 沈んだ酒場 」" ||
+		len(reloaded.Owners) != 1 || len(reloaded.Hours) != 1 {
+		t.Errorf("after update: %+v; want renamed + resubtitled, 1 owner, 1 hours row", reloaded)
 	}
 
 	// List is alphabetical by name.

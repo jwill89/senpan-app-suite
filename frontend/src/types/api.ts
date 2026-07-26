@@ -410,6 +410,8 @@ export interface AffiliateOwnerForm {
 export interface AffiliateForm {
   id: number
   name: string
+  /** Optional second line under the name — any script (e.g. a Japanese phrase). */
+  subtitle: string
   owners: AffiliateOwnerForm[]
   location: string
   timezone: string
@@ -434,6 +436,8 @@ export interface TeaRoomForm {
   id: number
   name: string
   subtitle: string
+  /** Optional informational owner — the character who owns the room. */
+  room_owner: string
   room_number: string
   cost_per_half_hour: number
   hashtags: string

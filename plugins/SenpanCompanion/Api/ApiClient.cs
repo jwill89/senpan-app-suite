@@ -220,6 +220,20 @@ public sealed class ApiClient : IDisposable
     public Task<StampRallyLogsResponse> StampRallyLogsAsync(long id, CancellationToken ct = default)
         => SendAsync<StampRallyLogsResponse>(HttpMethod.Get, $"api/stamp-rallies/{id}/logs", null, ct);
 
+    // ── Tea Rooms ──────────────────────────────────────────────────────────────
+
+    public Task<TeaRoomsResponse> ListTeaRoomsAsync(CancellationToken ct = default)
+        => SendAsync<TeaRoomsResponse>(HttpMethod.Get, "api/tea-rooms", null, ct);
+
+    // PATCH /api/tea-rooms/{id} is a partial update: the server leaves any omitted
+    // flag unchanged, so each toggle sends only its own field. Both echo the saved
+    // room, which the caller swaps back into its list.
+    public Task<TeaRoomResponse> SetTeaRoomOpenAsync(long id, bool open, CancellationToken ct = default)
+        => SendAsync<TeaRoomResponse>(HttpMethod.Patch, $"api/tea-rooms/{id}", new { open }, ct);
+
+    public Task<TeaRoomResponse> SetTeaRoomDiscountedAsync(long id, bool discounted, CancellationToken ct = default)
+        => SendAsync<TeaRoomResponse>(HttpMethod.Patch, $"api/tea-rooms/{id}", new { discounted }, ct);
+
     // ── Transport ────────────────────────────────────────────────────────────
 
     private async Task<T> SendAsync<T>(HttpMethod method, string path, object? body, CancellationToken ct)

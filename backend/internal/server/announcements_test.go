@@ -290,15 +290,15 @@ func TestBuildAnnouncementEmbed(t *testing.T) {
 	if embed.Color != 0x1abc9c {
 		t.Errorf("color: got %#x, want 0x1abc9c", embed.Color)
 	}
-	// Two fields, in order: inline time first, then full-width details.
+	// Two fields, in order: full-width time first, then full-width details.
 	if len(embed.Fields) != 2 {
 		t.Fatalf("expected 2 fields (time, details), got %d", len(embed.Fields))
 	}
-	// First field: inline time. No formats set → defaults: long "F" start, short
-	// "t" end.
+	// First field: full-width time. No formats set → defaults: long "F" start,
+	// short "t" end.
 	timeField := embed.Fields[0]
-	if !timeField.Inline {
-		t.Error("time field should be inline")
+	if timeField.Inline {
+		t.Error("time field should be full-width (not inline)")
 	}
 	wantStart := "<t:" + itoa(start.Unix()) + ":F>"
 	wantEnd := "<t:" + itoa(end.Unix()) + ":t>"
@@ -353,7 +353,7 @@ func TestBuildAnnouncementEmbedNoTimes(t *testing.T) {
 func TestBuildAnnouncementEmbedLocation(t *testing.T) {
 	a := model.Announcement{Title: "Meetup", Details: "See you there.", Location: "Voice Channel #1"}
 	embed := buildAnnouncementEmbed(a)
-	// Location renders as an inline "📍 Where" field (details are the description).
+	// Location renders as a full-width "📍 Where" field on its own line.
 	var loc *discordEmbedField
 	for i := range embed.Fields {
 		if embed.Fields[i].Name == "📍 Where" {
@@ -363,7 +363,7 @@ func TestBuildAnnouncementEmbedLocation(t *testing.T) {
 	if loc == nil {
 		t.Fatalf("expected a location field, got fields %+v", embed.Fields)
 	}
-	if !loc.Inline || loc.Value != "Voice Channel #1" {
+	if loc.Inline || loc.Value != "Voice Channel #1" {
 		t.Errorf("location field: got inline=%v value=%q", loc.Inline, loc.Value)
 	}
 	// No location → no location field (just the details field remains).

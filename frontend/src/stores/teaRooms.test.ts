@@ -39,6 +39,7 @@ function room(over: Partial<TeaRoom> = {}): TeaRoom {
     id: 1,
     name: 'R',
     subtitle: '',
+    room_owner: '',
     room_number: '1',
     cost_per_half_hour: 0,
     hashtags: '',

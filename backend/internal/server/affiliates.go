@@ -47,6 +47,7 @@ func (s *Server) handleAffiliatesList(w http.ResponseWriter, r *http.Request) {
 // replacing (PUT /api/affiliates/{id}) an affiliate. The id comes from the path.
 type affiliateWriteRequest struct {
 	Name        string                `json:"name"`
+	Subtitle    string                `json:"subtitle"`
 	Owners      []string              `json:"owners"`
 	Location    string                `json:"location"`
 	Timezone    string                `json:"timezone"`
@@ -93,6 +94,7 @@ func sanitizeAffiliateHours(in []model.AffiliateHour) []model.AffiliateHour {
 func affiliateFromRequest(req affiliateWriteRequest, name string) *model.Affiliate {
 	return &model.Affiliate{
 		Name:        name,
+		Subtitle:    strings.TrimSpace(req.Subtitle),
 		Owners:      sanitizeOwners(req.Owners),
 		Location:    strings.TrimSpace(req.Location),
 		Timezone:    strings.TrimSpace(req.Timezone),
@@ -275,7 +277,7 @@ func (s *Server) handleAffiliatePost(w http.ResponseWriter, r *http.Request) {
 	}
 	embed := buildAffiliateEmbed(*affiliate, s.siteBaseURL(r), time.Now())
 	if err := postDiscordEmbed(r.Context(), webhook, embed); err != nil {
-		writeError(w, http.StatusBadGateway, "Failed to post to Discord: "+err.Error())
+		writeUpstreamError(w, fmt.Sprintf("post affiliate %d", id), err)
 		return
 	}
 	writeJSON(w, http.StatusOK, model.AffiliateResponse{Affiliate: *affiliate})

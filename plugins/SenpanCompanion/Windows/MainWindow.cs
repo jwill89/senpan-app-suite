@@ -4,6 +4,7 @@ using System.Numerics;
 using System.Threading.Tasks;
 using Dalamud.Bindings.ImGui;
 using Dalamud.Interface;
+using Dalamud.Interface.ManagedFontAtlas;
 using Dalamud.Interface.Windowing;
 using Dalamud.Utility;
 using SenpanCompanion.Api;
@@ -31,11 +32,28 @@ public sealed class MainWindow : Window, IDisposable
     private readonly BingoGameTab game;
     private readonly BingoCardsTab cards;
     private readonly BingoWinnersTab winnersLog;
+    private readonly TeaRoomsTab teaRooms;
     private readonly RaffleTab raffle;
     private readonly GaraponTab garapon;
     private readonly StampRallyTab stampRally;
     private readonly RollsTab rolls;
     private readonly TimedMacrosTab timedMacros;
+
+    // Font handle pushed around the whole window (see Draw) so glyphs the game's Axis
+    // font lacks — accented Latin like ō/ā/ē — actually render. Built in the constructor
+    // from the unchanged default font plus a Noto Sans CJK merge for Latin Extended only.
+    private readonly IFontHandle fontHandle;
+
+    // Latin Extended ranges the game's Axis font doesn't cover, supplied by the Noto
+    // merge so macron romanizations render (ō = U+014D lives in Latin Extended-A). Pairs
+    // of [first, last] codepoints terminated by 0 — the ImGui glyph-range format.
+    private static readonly ushort[] LatinExtendedGlyphRanges =
+    {
+        0x0100, 0x017F, // Latin Extended-A  (ā ē ī ō ū and the full macron set)
+        0x0180, 0x024F, // Latin Extended-B
+        0x1E00, 0x1EFF, // Latin Extended Additional
+        0,
+    };
 
     private const float NavWidth = 175f;
 
@@ -69,6 +87,7 @@ public sealed class MainWindow : Window, IDisposable
         this.game = new BingoGameTab(api, config, live, this.cardCache);
         this.cards = new BingoCardsTab(api, nearby, config, chat, this.cardCache);
         this.winnersLog = new BingoWinnersTab(api);
+        this.teaRooms = new TeaRoomsTab(api);
         this.raffle = new RaffleTab(api, nearby);
         this.garapon = new GaraponTab(api, nearby, config, chat);
         this.stampRally = new StampRallyTab(api, nearby, config, chat);
@@ -81,18 +100,41 @@ public sealed class MainWindow : Window, IDisposable
             MinimumSize = new Vector2(760, 460),
             MaximumSize = new Vector2(1500, 1100),
         };
+
+        // Keep Dalamud's default font exactly as-is (game font + FontAwesome + language
+        // glyphs), then merge Noto Sans CJK over it for the Latin Extended ranges the
+        // game's Axis font is missing. ImGui keeps the first font's glyph on any overlap,
+        // so this only fills the gaps (ō, ā, …) and changes nothing that already worked.
+        this.fontHandle = Plugin.PluginInterface.UiBuilder.FontAtlas.NewDelegateFontHandle(
+            e => e.OnPreBuild(tk =>
+            {
+                tk.AddDalamudDefaultFont(UiBuilder.DefaultFontSizePx);
+                var cfg = new SafeFontConfig
+                {
+                    SizePx = UiBuilder.DefaultFontSizePx,
+                    GlyphRanges = LatinExtendedGlyphRanges,
+                    MergeFont = tk.Font,
+                };
+                tk.AddDalamudAssetFont(Dalamud.DalamudAsset.NotoSansCjkRegular, cfg);
+            }));
     }
 
     public void Dispose()
     {
         this.game.Dispose();
         this.cardCache.Dispose();
+        this.fontHandle.Dispose();
     }
 
     public override void OnOpen() => SyncSettingsFields();
 
     public override void Draw()
     {
+        // Render the entire window with the extended font so accented glyphs (ō, ā, …)
+        // that the game's Axis font lacks are shown instead of dropped. Safe before the
+        // atlas is ready — Push keeps the current font until the build finishes.
+        using var fontScope = this.fontHandle.Push();
+
         // The Rolls tool (plus Settings/About) are account-free, so the window always
         // renders the sidebar + content layout — even before a token is set, where the
         // suite sections stay hidden and setup lands on the Settings page.
@@ -171,6 +213,13 @@ public sealed class MainWindow : Window, IDisposable
             NavItem("Winners", Page.BingoWinners, s.Has(Perms.BingoWinnersLog));
         }
 
+        // Tea House section — mirrors the web's "Senpan Tea House" group. Only the
+        // Tea Rooms page is exposed in-game; the rest of that group is website-only.
+        if (s.Has(Perms.TeahouseTeaRooms) && ImGui.CollapsingHeader("Tea House###secTeahouse", ImGuiTreeNodeFlags.DefaultOpen))
+        {
+            NavItem("Tea Rooms", Page.TeaRooms, s.Has(Perms.TeahouseTeaRooms));
+        }
+
         var showFestival = s.Has(Perms.TeahouseRaffles) || s.Has(Perms.FestivalGarapon) || s.Has(Perms.FestivalStampRally);
         if (showFestival && ImGui.CollapsingHeader("Festival###secFestival", ImGuiTreeNodeFlags.DefaultOpen))
         {
@@ -229,6 +278,10 @@ public sealed class MainWindow : Window, IDisposable
                 this.winnersLog.EnsureLoaded();
                 this.winnersLog.Draw();
                 break;
+            case Page.TeaRooms:
+                this.teaRooms.EnsureLoaded();
+                this.teaRooms.Draw();
+                break;
             case Page.Raffles:
                 this.raffle.EnsureLoaded();
                 this.raffle.Draw();
@@ -276,6 +329,7 @@ public sealed class MainWindow : Window, IDisposable
         Page.BingoGame => this.session.Has(Perms.BingoGame),
         Page.BingoCards => this.session.Has(Perms.BingoCards),
         Page.BingoWinners => this.session.Has(Perms.BingoWinnersLog),
+        Page.TeaRooms => this.session.Has(Perms.TeahouseTeaRooms),
         Page.Raffles => this.session.Has(Perms.TeahouseRaffles),
         Page.Garapon or Page.GaraponLog => this.session.Has(Perms.FestivalGarapon),
         Page.StampRally or Page.StampRallyLog => this.session.Has(Perms.FestivalStampRally),
@@ -287,7 +341,7 @@ public sealed class MainWindow : Window, IDisposable
     {
         Page[] order =
         {
-            Page.BingoGame, Page.BingoCards, Page.BingoWinners, Page.Raffles,
+            Page.BingoGame, Page.BingoCards, Page.BingoWinners, Page.TeaRooms, Page.Raffles,
             Page.Garapon, Page.GaraponLog, Page.StampRally, Page.StampRallyLog, Page.Rolls, Page.TimedMacros, Page.Settings,
         };
         foreach (var p in order)
@@ -301,6 +355,7 @@ public sealed class MainWindow : Window, IDisposable
         BingoGame,
         BingoCards,
         BingoWinners,
+        TeaRooms,
         Raffles,
         Garapon,
         GaraponLog,
@@ -337,7 +392,8 @@ public sealed class MainWindow : Window, IDisposable
         }
 
         var anyPanel = this.session.Has(Perms.BingoGame) || this.session.Has(Perms.BingoCards)
-            || this.session.Has(Perms.BingoWinnersLog) || this.session.Has(Perms.TeahouseRaffles)
+            || this.session.Has(Perms.BingoWinnersLog) || this.session.Has(Perms.TeahouseTeaRooms)
+            || this.session.Has(Perms.TeahouseRaffles)
             || this.session.Has(Perms.FestivalGarapon) || this.session.Has(Perms.FestivalStampRally);
         if (!anyPanel)
             UiText.WrappedDisabled("Your account has no Senpan panel permissions — ask an admin to grant access.");
@@ -553,6 +609,7 @@ public sealed class MainWindow : Window, IDisposable
         this.cardCache.MarkStale();
         this.game.MarkStale();
         this.winnersLog.MarkStale();
+        this.teaRooms.MarkStale();
         this.raffle.MarkStale();
         this.garapon.MarkStale();
         this.stampRally.MarkStale();

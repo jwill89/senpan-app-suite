@@ -621,6 +621,17 @@ func writeInternalError(w http.ResponseWriter, context string, err error) {
 	writeError(w, http.StatusInternalServerError, "Internal server error")
 }
 
+// writeUpstreamError logs a failed outbound Discord webhook post with context and
+// writes a 502 whose body names the reason. It logs server-side deliberately: a
+// reverse proxy (Cloudflare) can replace a 502's body with its own generic error
+// page before the admin ever sees the reason, so without this the log is often
+// the ONLY surviving record of WHY a "post to Discord" failed. err must already be
+// stripped of the webhook token — postDiscordWebhook does this (sanitizeWebhookErr).
+func writeUpstreamError(w http.ResponseWriter, context string, err error) {
+	slog.Error("discord webhook post failed", "context", context, "error", err)
+	writeError(w, http.StatusBadGateway, "Failed to post to Discord: "+err.Error())
+}
+
 // readJSON decodes the request body into a typed struct T using generics.
 // Limits the request body to 1MB to prevent memory abuse; passing w lets
 // MaxBytesReader signal the server to close the connection on an oversized body.

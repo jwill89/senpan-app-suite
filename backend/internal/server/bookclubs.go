@@ -909,6 +909,8 @@ func (s *Server) handlePublishReadingList(w http.ResponseWriter, r *http.Request
 			return
 		}
 		if err := postDiscordEmbed(ctx, webhook, buildItemEmbed(it, commentsLabel)); err != nil {
+			slog.Error("discord webhook post failed",
+				"context", fmt.Sprintf("publish reading list %d item %q", id, it.Title), "error", err)
 			writeError(w, http.StatusBadGateway,
 				fmt.Sprintf("Published %d of %d before failing on %q: %v", published, len(list.Items), it.Title, err))
 			return

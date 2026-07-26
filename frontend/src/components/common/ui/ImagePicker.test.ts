@@ -4,15 +4,18 @@ import { createPinia, setActivePinia } from 'pinia'
 import type { ImageCategory, ImageEntry } from '@/types/api'
 
 // Stub the endpoint layer the images store talks to.
-const { categories, list } = vi.hoisted(() => ({
+const { categories, list, upload } = vi.hoisted(() => ({
   categories: vi.fn(async () => ({ categories: [] as ImageCategory[] })),
   list: vi.fn(async (dir: string) => ({ dir, images: [] as ImageEntry[] })),
+  upload: vi.fn(async () => ({ uploaded: ['new.png'], skipped: [] })),
 }))
 vi.mock('@/lib/endpoints', () => ({
-  endpoints: { images: { categories, list } },
+  endpoints: { images: { categories, list, upload } },
 }))
 
 import ImagePicker from './ImagePicker.vue'
+import { useAuthStore } from '@/stores/auth'
+import type { User } from '@/types/api'
 
 function cat(name: string, dir: string): ImageCategory {
   return { name, dir, file_count: 0, total_size: 0 }
@@ -101,5 +104,67 @@ describe('ImagePicker', () => {
     await flushPromises()
     await wrapper.find('button.btn-neutral').trigger('click')
     expect(wrapper.emitted('update:modelValue')?.at(-1)).toEqual([''])
+  })
+
+  it('lists images alphabetically by file name, digit-aware', async () => {
+    list.mockImplementation(async (dir: string) => ({
+      dir,
+      images: ['img10.png', 'Zebra.png', 'img2.png', 'apple.png'].map((n) => entry(dir, n)),
+    }))
+    const wrapper = mountPicker('images/raffles/apple.png')
+    await flushPromises()
+    expect(wrapper.findAll('.img-thumb').map((t) => t.attributes('title'))).toEqual([
+      'apple.png',
+      'img2.png',
+      'img10.png',
+      'Zebra.png',
+    ])
+  })
+
+  describe('upload control', () => {
+    /** Signs in a user holding exactly the given permission keys. */
+    function signIn(...permissions: string[]): void {
+      useAuthStore().user = { is_admin: false, permissions } as unknown as User
+    }
+
+    it('is hidden for users without the system-images permission', async () => {
+      signIn('teahouse-affiliates')
+      const wrapper = mountPicker()
+      await flushPromises()
+      expect(wrapper.find('.image-picker-upload').exists()).toBe(false)
+      expect(wrapper.find('input[type="file"]').exists()).toBe(false)
+    })
+
+    it('is shown to system-images holders', async () => {
+      signIn('system-images')
+      const wrapper = mountPicker()
+      await flushPromises()
+      expect(wrapper.find('.image-picker-upload').exists()).toBe(true)
+    })
+
+    it('uploads dropped files into the category being browsed', async () => {
+      signIn('system-images')
+      const wrapper = mountPicker('images/raffles/prize.png')
+      await flushPromises()
+      const file = new File(['x'], 'new.png', { type: 'image/png' })
+      await wrapper.find('.image-picker-drop').trigger('drop', { dataTransfer: { files: [file] } })
+      await flushPromises()
+
+      expect(upload).toHaveBeenCalledTimes(1)
+      const [form] = upload.mock.calls[0] as unknown as [FormData]
+      expect(form.get('dir')).toBe('raffles')
+      expect(form.getAll('files')).toHaveLength(1)
+      // The category is re-listed so the new image appears in the grid.
+      expect(list).toHaveBeenLastCalledWith('raffles')
+    })
+
+    it('ignores drops when the user cannot upload', async () => {
+      const wrapper = mountPicker('images/raffles/prize.png')
+      await flushPromises()
+      const file = new File(['x'], 'new.png', { type: 'image/png' })
+      await wrapper.find('.image-picker-drop').trigger('drop', { dataTransfer: { files: [file] } })
+      await flushPromises()
+      expect(upload).not.toHaveBeenCalled()
+    })
   })
 })

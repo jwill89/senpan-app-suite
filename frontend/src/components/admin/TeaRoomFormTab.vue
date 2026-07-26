@@ -59,16 +59,25 @@ function cancel(): void {
         </FormField>
       </FormRow>
 
-      <FormField
-        label="Subtitle"
-        help="A short second line under the name (any language, e.g. a Japanese phrase)."
-      >
-        <input
-          v-model="store.teaRoomForm.subtitle"
-          placeholder="e.g. 「 桃の森の床の間。」"
-          aria-label="Subtitle"
-        />
-      </FormField>
+      <FormRow>
+        <FormField
+          label="Subtitle"
+          help="A short second line under the name (any language, e.g. a Japanese phrase)."
+        >
+          <input
+            v-model="store.teaRoomForm.subtitle"
+            placeholder="e.g. 「 桃の森の床の間。」"
+            aria-label="Subtitle"
+          />
+        </FormField>
+        <FormField label="Room owner" help="The character who owns the room.">
+          <input
+            v-model="store.teaRoomForm.room_owner"
+            placeholder="e.g. Firstname Lastname"
+            aria-label="Room owner"
+          />
+        </FormField>
+      </FormRow>
 
       <div class="flex-row items-start mb-10">
         <FormField

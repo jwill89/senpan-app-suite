@@ -114,7 +114,8 @@ func buildFeaturePaths(b *pb) {
 	affiliate := "permission:teahouse-affiliates"
 	affiliateFields := func() openapi3.Schemas {
 		return props(
-			"name", pstr("Name (required)."), "owners", parr("", pstr("")), "location", pstr(""),
+			"name", pstr("Name (required)."), "subtitle", pstr("Optional second line under the name (any script)."),
+			"owners", parr("", pstr("")), "location", pstr(""),
 			"timezone", pstr("IANA zone."), "hours", parr("", ref("AffiliateHour")), "details", pstr("Markdown."),
 			"logo", pstr(""), "screenshot", pstr(""), "embed_color", pstr("Discord embed accent '#rrggbb'."),
 			"discord_link", pstr("Discord link."), "carrd_link", pstr("Carrd (or other site) link."))

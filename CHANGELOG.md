@@ -41,6 +41,39 @@ The format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## Frontend
 
+### [3.16.0] — 2026-07-24
+
+Adds an optional **Room Owner** field to the tea-room form (paired with backend 3.14.0).
+
+#### Added
+
+- **Room Owner.** The tea-room form gains an optional **Room owner** field beside the
+  Subtitle — a short, informational line naming the character who owns the room. It is
+  shown in the Senpan Companion plugin's tea-room table and served by the public API.
+
+### [3.15.0] — 2026-07-24
+
+Adds an affiliate **Subtitle** field (paired with backend 3.13.0) and makes the
+shared image picker sort alphabetically and upload in place.
+
+#### Added
+
+- **Affiliate Subtitle.** The affiliate form gains an optional Subtitle under
+  Name — a short second line accepting any language, e.g. a Japanese phrase (the
+  same field tea rooms already have). It is shown beneath the name in the
+  affiliates list.
+- **Upload from any image picker.** Users holding the **Images** (`system-images`)
+  permission now get a compact **Upload** button beside the picker's category
+  select, and can drop files straight onto the thumbnail grid — both upload into
+  the category currently being browsed and refresh the grid in place, so a missing
+  image no longer means leaving the form for System → Images. Everyone else sees
+  the picker unchanged. Category management still lives on the Images page.
+
+#### Changed
+
+- **Image pickers list images alphabetically by file name** (case-insensitive and
+  digit-aware, so `img2.png` sorts before `img10.png`) instead of newest-first.
+
 ### [3.14.1] — 2026-07-21
 
 Audit-fix patch hardening the client against CSS/SVG injection, fixing WebSocket and state-synchronization bugs (including a live socket that was needlessly torn down on admin navigation), plugging several timer/listener leaks, and adding keyboard and screen-reader support across admin controls and modals.
@@ -626,6 +659,30 @@ First tracked release — establishes versioning for the current production buil
 ---
 
 ## Backend
+
+### [3.14.0] — 2026-07-24
+
+Adds an optional **Room Owner** to tea rooms (paired with frontend 3.16.0).
+
+#### Added
+
+- **`room_owner` on tea rooms** (schema v53) — an optional, informational "character
+  who owns the room" line. Stored as UTF-8 with no character validation, so any
+  script round-trips unchanged. Existing rows default to an empty owner; the field is
+  accepted on create/replace and returned by every tea-room read, including the
+  public, cross-origin API the Carrd site uses.
+
+### [3.13.0] — 2026-07-24
+
+Adds an optional **Subtitle** to affiliates (paired with frontend 3.15.0).
+
+#### Added
+
+- **`subtitle` on affiliates** (schema v52) — an optional second line stored under
+  the name, mirroring the tea-room subtitle. It is stored as UTF-8 with no
+  character validation, so any script (a Japanese phrase, for example) round-trips
+  unchanged. Existing rows default to an empty subtitle; the field is accepted on
+  create/replace and returned by every affiliate read.
 
 ### [3.12.0] — 2026-07-21
 
@@ -1345,6 +1402,40 @@ with a personal access token and is distributed through a Dalamud custom repo
 (`plugins/pluginmaster.json`). Versions use the four-part AssemblyVersion in
 `SenpanCompanion.csproj`. Entries below the current release were reconstructed
 from the `<Version>` history and commit messages.
+
+### [3.3.1.0] — 2026-07-24
+
+Shows the new **Room Owner** in the Tea Rooms table and fixes accented-character
+rendering (paired with backend 3.14.0).
+
+#### Added
+
+- **Room owner in the Tea Rooms table.** The Tea Rooms page gains an **Owner** column
+  beside the room name, showing the character who owns each room (the optional
+  `room_owner` field added in backend 3.14.0).
+
+#### Fixed
+
+- **Accented characters now render.** Text anywhere in the window (for example a room
+  name containing `ō`) previously dropped any glyph the game's Axis font doesn't
+  include. The window now merges **Noto Sans CJK** over the default font for the Latin
+  Extended ranges, so macron romanizations (ō, ā, ē, ī, ū) display correctly while
+  every other glyph is unchanged.
+
+### [3.3.0.0] — 2026-07-24
+
+Adds a **Tea Rooms** panel so Tea House staff can flip a room's availability and
+discount without leaving the game.
+
+#### Added
+
+- **Tea Rooms tab.** A new **Tea House → Tea Rooms** page lists every room by
+  **number** and **name** (with its per-half-hour cost) and lets staff toggle each
+  room's **Open** and **Discount** (50% off) status with a click. It uses the
+  existing `PATCH /api/tea-rooms/{id}` endpoint and is gated by the **Tea Rooms**
+  (`teahouse-tea-rooms`) permission, so the section, page, and toggles appear only
+  for accounts that can manage tea rooms. Everything else about a room (subtitle,
+  image, hashtags, Discord posting, reordering) stays on the website.
 
 ### [3.2.1.0] — 2026-07-21
 

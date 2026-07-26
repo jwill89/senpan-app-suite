@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"mime/multipart"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"sort"
@@ -611,8 +612,12 @@ func (s *Server) handleImagesList(w http.ResponseWriter, r *http.Request) {
 	for _, info := range infos {
 		rel := "images/" + dir + "/" + info.name
 		images = append(images, model.ImageEntry{
-			Name:     info.name,
-			URL:      base + "/" + rel,
+			Name: info.name,
+			// Percent-encode the filename segment so a name with spaces/non-ASCII
+			// yields a well-formed absolute URL (dir is validated [a-z0-9_]+). This
+			// URL is what announcement embeds store and send to Discord, which
+			// rejects a malformed image URL — see normalizeEmbedURL.
+			URL:      base + "/images/" + dir + "/" + url.PathEscape(info.name),
 			Path:     rel,
 			Size:     info.size,
 			Modified: info.mod.UTC().Format(time.RFC3339),

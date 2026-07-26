@@ -1,13 +1,18 @@
 package model
 
 // Affiliate is a partner establishment listed in the Senpan Tea House → Affiliates
-// admin section: a named place with one or more owners, a location, opening hours
-// (multiple time ranges sharing one timezone), markdown details, and two pictures
-// picked from the shared image library — a Logo and an establishment
-// Screenshot. Owners and Hours are persisted as JSON columns (no sub-tables).
+// admin section: a named place with an optional subtitle, one or more owners, a
+// location, opening hours (multiple time ranges sharing one timezone), markdown
+// details, and two pictures picked from the shared image library — a Logo and an
+// establishment Screenshot. Owners and Hours are persisted as JSON columns (no
+// sub-tables).
+// Subtitle is stored as UTF-8, so it holds any script natively (a Japanese
+// phrase, for example) — exactly like the tea room subtitle, and with the same
+// deliberate absence of any character validation.
 type Affiliate struct {
 	ID          int64           `json:"id"`
 	Name        string          `json:"name"`         // establishment name
+	Subtitle    string          `json:"subtitle"`     // optional second line under Name (any script)
 	Owners      []string        `json:"owners"`       // one or more owner names
 	Location    string          `json:"location"`     // free-text location
 	Timezone    string          `json:"timezone"`     // IANA zone anchoring every Hours entry

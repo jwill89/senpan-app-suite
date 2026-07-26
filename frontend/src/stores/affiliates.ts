@@ -67,6 +67,7 @@ export const useAffiliatesStore = defineStore('affiliates', () => {
     affiliateForm.value = {
       id: 0,
       name: '',
+      subtitle: '',
       owners: [ownerRow()],
       location: '',
       timezone: detectTimezone(),
@@ -84,6 +85,7 @@ export const useAffiliatesStore = defineStore('affiliates', () => {
     affiliateForm.value = {
       id: a.id,
       name: a.name,
+      subtitle: a.subtitle,
       owners: a.owners.length ? a.owners.map((o) => ownerRow(o)) : [ownerRow()],
       location: a.location,
       timezone: a.timezone || detectTimezone(),

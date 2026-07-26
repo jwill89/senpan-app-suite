@@ -8,8 +8,9 @@
  *
  * The shared ImagePicker (announcements, raffles, garapons, affiliates, stamp
  * rallies, theme flourishes) also uses this store to browse categories and list
- * images (`ensureCategories()` / `ensureImages(dir)` → `imagesByDir[dir]`)
- * without owning any upload UI.
+ * images (`ensureCategories()` / `ensureImages(dir)` → `imagesByDir[dir]`), and
+ * calls `uploadImages` for its own compact upload control — category management
+ * stays exclusive to this page.
  */
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'

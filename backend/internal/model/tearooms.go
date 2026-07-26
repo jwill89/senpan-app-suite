@@ -15,6 +15,10 @@ type TeaRoom struct {
 	// Subtitle is a short secondary line under the name (e.g. a Japanese phrase);
 	// stored as UTF-8, so it holds any script natively.
 	Subtitle string `json:"subtitle"`
+	// RoomOwner is the character who owns the room — optional and informational only
+	// (shown in the admin + plugin lists and served by the public API). Stored as
+	// UTF-8, so it holds any script.
+	RoomOwner string `json:"room_owner"`
 	// RoomNumber is the room's public identifier: required and unique, and the key
 	// the public API + Carrd embed look rooms up by (e.g. "12", "West 3").
 	RoomNumber string `json:"room_number"`

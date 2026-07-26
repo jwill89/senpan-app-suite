@@ -14,6 +14,7 @@ internal static class Perms
     public const string BingoWinnersLog = "bingo-winners-log";
     public const string BingoPatterns = "bingo-patterns";
     public const string BingoPresets = "bingo-presets";
+    public const string TeahouseTeaRooms = "teahouse-tea-rooms";
     public const string TeahouseRaffles = "teahouse-raffles";
     public const string FestivalGarapon = "festival-garapon";
     public const string FestivalStampRally = "festival-stamp-rally";

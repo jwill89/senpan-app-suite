@@ -34,6 +34,7 @@ function affiliate(over: Partial<Affiliate> = {}): Affiliate {
   return {
     id: 1,
     name: 'A',
+    subtitle: '',
     owners: [],
     location: '',
     timezone: 'UTC',

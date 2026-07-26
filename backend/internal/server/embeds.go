@@ -224,18 +224,21 @@ func (b *embedBuilder) field(name, value string, inline bool) *embedBuilder {
 	return b
 }
 
-// thumbnail sets the small top-right image (only for absolute http(s) URLs).
-func (b *embedBuilder) thumbnail(url string) *embedBuilder {
-	if isHTTPURL(url) {
-		b.embed.Thumbnail = &discordEmbedThumbnail{URL: url}
+// thumbnail sets the small top-right image (only for absolute http(s) URLs, with
+// any unsafe characters — e.g. a space in a filename — percent-encoded so Discord
+// accepts the embed; see normalizeEmbedURL).
+func (b *embedBuilder) thumbnail(rawURL string) *embedBuilder {
+	if u, ok := normalizeEmbedURL(rawURL); ok {
+		b.embed.Thumbnail = &discordEmbedThumbnail{URL: u}
 	}
 	return b
 }
 
-// image sets the large bottom image (only for absolute http(s) URLs).
-func (b *embedBuilder) image(url string) *embedBuilder {
-	if isHTTPURL(url) {
-		b.embed.Image = &discordEmbedImage{URL: url}
+// image sets the large bottom image (only for absolute http(s) URLs, encoded as
+// in thumbnail).
+func (b *embedBuilder) image(rawURL string) *embedBuilder {
+	if u, ok := normalizeEmbedURL(rawURL); ok {
+		b.embed.Image = &discordEmbedImage{URL: u}
 	}
 	return b
 }
@@ -290,23 +293,68 @@ func postDiscordWebhook(ctx context.Context, webhookURL string, payload discordW
 	slog.Debug("discord webhook post", "embeds", len(payload.Embeds), "components", len(payload.Components), "bytes", len(body))
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, webhookURL, bytes.NewReader(body))
 	if err != nil {
-		return fmt.Errorf("build webhook request: %w", err)
+		return fmt.Errorf("build webhook request: %s", sanitizeWebhookErr(err))
 	}
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := bookclubHTTPClient.Do(req)
 	if err != nil {
 		// Transport failure: the request may or may not have reached Discord, so
 		// mark it ambiguous (callers must not blindly retry — see errWebhookAmbiguous).
-		// Both errors are wrapped (%w) so errors.Is reaches either.
-		return fmt.Errorf("%w: %w", errWebhookAmbiguous, err)
+		// sanitizeWebhookErr strips the webhook URL (its path carries the secret
+		// token) that http.Client bakes into the *url.Error it returns.
+		return fmt.Errorf("%w: %s", errWebhookAmbiguous, sanitizeWebhookErr(err))
 	}
 	defer resp.Body.Close()
-	_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 1<<16))
+	// Read (not discard) the response so a non-2xx can report Discord's own reason
+	// — e.g. "Unknown Webhook" for a deleted webhook — instead of a bare status
+	// code. The read also drains the body so the keep-alive connection is reusable.
+	respBody, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<16))
 	slog.Debug("discord webhook response", "status", resp.StatusCode)
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return fmt.Errorf("webhook returned status %d", resp.StatusCode)
+		return fmt.Errorf("webhook returned status %d: %s", resp.StatusCode, discordErrorMessage(respBody))
 	}
 	return nil
+}
+
+// discordErrorMessage extracts a human-readable reason from a Discord webhook
+// error response body. Discord returns a JSON envelope like
+// {"message":"Unknown Webhook","code":10015}, so we surface "Unknown Webhook
+// (code 10015)" when present — telling the admin the post failed because the
+// webhook was deleted, malformed, rate-limited, etc. — and fall back to a trimmed
+// raw snippet (or "no response body") otherwise. The body is Discord's response,
+// so it never carries our webhook token.
+func discordErrorMessage(body []byte) string {
+	body = bytes.TrimSpace(body)
+	if len(body) == 0 {
+		return "no response body"
+	}
+	var e struct {
+		Message string `json:"message"`
+		Code    int    `json:"code"`
+	}
+	if err := json.Unmarshal(body, &e); err == nil && e.Message != "" {
+		if e.Code != 0 {
+			return fmt.Sprintf("%s (code %d)", e.Message, e.Code)
+		}
+		return e.Message
+	}
+	return truncateRunes(string(body), 300)
+}
+
+// sanitizeWebhookErr renders a transport error without exposing the webhook URL,
+// whose path carries the secret webhook token. http.Client.Do wraps failures in a
+// *url.Error whose Error() prints the full URL (url.Redacted masks only userinfo,
+// not a token in the path), so we surface only the underlying cause — mirroring
+// the AniList client's handling (see bookclubs.go). This keeps the token out of
+// both the API response body and the server log.
+func sanitizeWebhookErr(err error) string {
+	if urlErr, ok := errors.AsType[*url.Error](err); ok {
+		if urlErr.Timeout() {
+			return fmt.Sprintf("timed out after %s", bookclubHTTPClient.Timeout)
+		}
+		return fmt.Sprintf("could not connect (%v)", urlErr.Err)
+	}
+	return err.Error()
 }
 
 // withComponentsParam returns the webhook URL with `with_components=true` added to
@@ -327,6 +375,26 @@ func withComponentsParam(webhookURL string) string {
 // for embed thumbnails and images).
 func isHTTPURL(u string) bool {
 	return strings.HasPrefix(u, "http://") || strings.HasPrefix(u, "https://")
+}
+
+// normalizeEmbedURL trims raw and, when it is an http(s) URL, returns it with any
+// characters that aren't URL-safe percent-encoded — a space in an image filename
+// becomes %20, "café.png" becomes "caf%C3%A9.png". Discord rejects the ENTIRE
+// embed (400, "embeds" invalid) when an image/thumbnail URL isn't well-formed, so
+// this repairs URLs stored raw, e.g. an image picked from a file whose name has
+// spaces. Parsing then re-stringifying is idempotent — an already-encoded URL is
+// returned unchanged — so it is safe to apply to every URL. Returns ("", false)
+// when raw isn't a usable absolute http(s) URL, so the caller omits the field.
+func normalizeEmbedURL(raw string) (string, bool) {
+	raw = strings.TrimSpace(raw)
+	if !isHTTPURL(raw) {
+		return "", false
+	}
+	u, err := url.Parse(raw)
+	if err != nil {
+		return "", false
+	}
+	return u.String(), true
 }
 
 // truncateRunes caps a string at n runes, appending an ellipsis when trimmed,

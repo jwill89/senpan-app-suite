@@ -242,7 +242,7 @@ function onYoeverSoundToggle(): void {
                 <span class="label">Show "It's Yoever" effects:</span>
                 <button
                   type="button"
-                  class="yoever-switch"
+                  class="switch"
                   role="switch"
                   :class="{ on: !yoever.muted }"
                   :aria-checked="!yoever.muted"
@@ -253,7 +253,7 @@ function onYoeverSoundToggle(): void {
                   "
                   @click="yoever.toggleShowEffects()"
                 >
-                  <span class="yoever-knob"></span>
+                  <span class="switch-knob"></span>
                 </button>
               </div>
 
@@ -261,7 +261,7 @@ function onYoeverSoundToggle(): void {
                 <span class="label">Play "It's Yoever" sound:</span>
                 <button
                   type="button"
-                  class="yoever-switch"
+                  class="switch"
                   role="switch"
                   :class="{ on: !yoever.muted && yoever.soundEnabled }"
                   :disabled="yoever.muted"
@@ -275,7 +275,7 @@ function onYoeverSoundToggle(): void {
                   "
                   @click="onYoeverSoundToggle"
                 >
-                  <span class="yoever-knob"></span>
+                  <span class="switch-knob"></span>
                 </button>
               </div>
             </div>

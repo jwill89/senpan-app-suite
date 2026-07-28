@@ -101,7 +101,8 @@ function when(ts: string): string {
       <!-- Congratulations banner -->
       <div v-if="garapons.lastWin" class="garapon-win-banner">
         <BallSwatch :color="garapons.lastWin.ball_color" />
-        🎉 Congratulations, you've won <strong>{{ garapons.lastWin.prize_name }}</strong
+        <font-awesome-icon :icon="['fad', 'champagne-glasses']" /> Congratulations, you've won
+        <strong>{{ garapons.lastWin.prize_name }}</strong
         >!
       </div>
 

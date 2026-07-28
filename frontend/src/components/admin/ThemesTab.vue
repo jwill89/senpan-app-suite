@@ -180,14 +180,8 @@ const tokens = computed<Record<string, string>>({
   width: auto;
   margin: 0;
 }
-/* "Public" badge in the theme list. */
+/* "Public" badge in the theme list — pill chrome from the `.badge` object. */
 .style-public-badge {
-  font-size: 0.7rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  padding: 1px 6px;
-  border-radius: 999px;
   background: var(--accent-2);
   color: var(--text-on-fill);
 }

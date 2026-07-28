@@ -295,17 +295,12 @@ async function copyRepoUrl(): Promise<void> {
 .cl__group {
   margin-bottom: 16px;
 }
+/* Change-type badge — pill chrome from the `.badge` object; the type modifiers
+   below set `color`, which drives both the outline and the tinted fill. */
 .cl-badge {
-  display: inline-block;
   margin-bottom: 6px;
-  padding: 1px 9px;
   border: 1px solid currentColor;
-  border-radius: 999px;
   background: color-mix(in srgb, currentColor 14%, transparent);
-  font-size: 0.7rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
 }
 .cl-badge--added {
   color: #3fb950;

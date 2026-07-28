@@ -31,14 +31,14 @@ function onColorChange(c: { rgba: string }): void {
       <span class="label">2nd stamp:</span>
       <button
         type="button"
-        class="ss-switch"
+        class="switch"
         role="switch"
         :class="{ on: player.secondaryStampEnabled }"
         :aria-checked="player.secondaryStampEnabled"
         title="Mark cells outside the win pattern with a second colour"
         @click="player.setSecondaryStampEnabled(!player.secondaryStampEnabled)"
       >
-        <span class="ss-knob"></span>
+        <span class="switch-knob"></span>
       </button>
     </div>
 
@@ -105,45 +105,6 @@ function onColorChange(c: { rgba: string }): void {
 .secondary-stamp-toggle .label {
   font-size: 0.85rem;
   color: var(--text-muted);
-}
-
-/* On/off toggle switch. */
-.ss-switch {
-  position: relative;
-  width: 40px;
-  height: 22px;
-  flex: 0 0 auto;
-  padding: 0;
-  border: 1px solid var(--control-border);
-  border-radius: 999px;
-  background: var(--panel-raised-bg);
-  cursor: pointer;
-  transition:
-    background 0.15s,
-    border-color 0.15s;
-}
-.ss-switch.on {
-  background: var(--accent);
-  border-color: var(--accent);
-}
-.ss-knob {
-  position: absolute;
-  top: 50%;
-  left: 2px;
-  transform: translateY(-50%);
-  width: 16px;
-  height: 16px;
-  border-radius: 50%;
-  background: var(--panel-bg);
-  transition: left 0.15s;
-}
-.ss-switch.on .ss-knob {
-  left: calc(100% - 18px);
-  background: var(--text-on-accent);
-}
-.ss-switch:focus-visible {
-  outline: 2px solid var(--highlight);
-  outline-offset: 2px;
 }
 
 .color-picker-btn:disabled {

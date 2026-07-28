@@ -211,7 +211,7 @@ async function revealInPreview(id: string): Promise<void> {
               <span class="tp-badge tp-badge--danger">Error</span>
               <span class="tp-badge tp-badge--warning">Skip</span>
             </div>
-            <span class="tp-winner" data-pair="winner-chip">🏆 Winner: Player 12</span>
+            <span class="tp-winner" data-pair="winner-chip">ABC123</span>
           </section>
 
           <!-- Bingo board -->
@@ -224,7 +224,7 @@ async function revealInPreview(id: string): Promise<void> {
               <div class="tp-board__row">
                 <span class="tp-cell" data-pair="board-num board-num-hover">7</span>
                 <span class="tp-cell">23</span>
-                <span class="tp-cell tp-cell--free" data-pair="free-num">★</span>
+                <span class="tp-cell tp-cell--free" data-pair="free-num">FREE</span>
                 <span class="tp-cell">52</span>
                 <span class="tp-cell">68</span>
               </div>
@@ -621,8 +621,9 @@ async function revealInPreview(id: string): Promise<void> {
   align-self: flex-start;
   background: linear-gradient(135deg, var(--highlight), var(--text-muted));
   color: var(--text-on-accent);
-  border-radius: 999px;
+  border-radius: 8px;
   padding: 4px 12px;
+  font-family: monospace;
   font-size: 0.78rem;
   font-weight: 700;
 }
@@ -680,8 +681,11 @@ async function revealInPreview(id: string): Promise<void> {
 .tp-cell:hover {
   background: var(--board-cell-hover-bg);
 }
+/* "FREE" is 4 glyphs against the numbers' ≤2, so it needs a smaller size to fit
+   the preview cell — the same reason the real board shrinks its FREE label. */
 .tp-cell--free {
   background: var(--board-free-bg);
+  font-size: 0.55rem;
 }
 .tp-called {
   display: inline-flex;

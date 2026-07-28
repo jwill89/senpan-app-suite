@@ -97,7 +97,8 @@ async function submit(): Promise<void> {
 
       <!-- Completion banner -->
       <div v-if="store.publicCard.completed" class="stamp-complete-banner">
-        🎉 Your card is complete! Your prizes are revealed below.
+        <font-awesome-icon :icon="['fad', 'champagne-glasses']" /> Your card is complete! Your
+        prizes are revealed below.
       </div>
       <p v-else class="stamp-progress">
         <strong>{{ collectedCount }}</strong> of {{ totalStamps }} stamp{{

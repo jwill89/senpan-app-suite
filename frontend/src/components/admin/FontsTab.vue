@@ -394,8 +394,12 @@ watch(
         </template>
         <template #cell-served_type="{ row }">
           <span :title="servesConverted(row) ? 'Serving the auto-converted WOFF2 copy' : undefined">
-            {{ row.served_type
-            }}<span v-if="servesConverted(row)" class="text-dim text-xs"> ✦</span>
+            {{ row.served_type }}
+            <font-awesome-icon
+              v-if="servesConverted(row)"
+              class="text-dim text-xs"
+              :icon="['fas', 'rotate']"
+            />
           </span>
         </template>
         <template #cell-modified="{ row }">

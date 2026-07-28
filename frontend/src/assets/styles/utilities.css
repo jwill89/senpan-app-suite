@@ -269,6 +269,40 @@
 .toggle-btn:hover { border-color: var(--accent) }
 .toggle-btn.active { background: var(--accent); color: var(--text-on-accent); border-color: var(--accent) }
 
+/* ── Object: switch ────────────────────────────────────────────────────────
+   An on/off sliding switch: a `<button>` carrying `.switch` (+ `.on` when set)
+   wrapping a single `<span class="switch-knob">`. Fills with `--accent` and
+   slides the knob right when on; `:disabled` dims it. Shared by the player's
+   Yoever effect toggles and the secondary-stamp toggle. (Distinct from
+   `.toggle-btn`, which is a labelled segment — this one carries no text.) */
+.switch {
+    position: relative;
+    width: 40px;
+    height: 22px;
+    flex: 0 0 auto;
+    padding: 0;
+    border: 1px solid var(--control-border);
+    border-radius: 999px;
+    background: var(--panel-raised-bg);
+    cursor: pointer;
+    transition: background .15s, border-color .15s;
+}
+.switch.on { background: var(--accent); border-color: var(--accent) }
+.switch:focus-visible { outline: 2px solid var(--highlight); outline-offset: 2px }
+.switch:disabled { opacity: .45; cursor: not-allowed }
+.switch-knob {
+    position: absolute;
+    top: 50%;
+    left: 2px;
+    transform: translateY(-50%);
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: var(--panel-bg);
+    transition: left .15s;
+}
+.switch.on .switch-knob { left: calc(100% - 18px); background: var(--text-on-accent) }
+
 /* ── Object: badge ─────────────────────────────────────────────────────────
    A small uppercase pill. The shared chrome lives here; the specific badge
    classes (and a `.badge` used directly) only set colours/margins/states. */
@@ -276,7 +310,9 @@
 .status-badge,
 .live-badge,
 .conn-badge,
-.style-active-badge {
+.style-active-badge,
+.style-public-badge,
+.cl-badge {
     display: inline-flex;
     align-items: center;
     gap: 6px;

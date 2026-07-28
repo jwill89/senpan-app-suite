@@ -47,7 +47,7 @@ func main() {
 		slog.Warn("file logging disabled; using stdout only", "path", *logFile, "error", logErr)
 	}
 
-	// CORS allowlist: flag > env. Normally empty — the SPA and API are
+	// CORS allowlist: flag > env. Normally empty - the SPA and API are
 	// same-origin in both prod (Apache) and dev (Vite proxies /api).
 	originsCSV := *corsOrigins
 	if originsCSV == "" {
@@ -98,7 +98,7 @@ func main() {
 	srv.SetLogFile(*logFile) // GET /api/logs tails this file
 
 	// Live log tail: forward each JSON log line to admin WebSocket clients as a
-	// {"type":"log","entry":…} message. Gated on an admin actually watching so the
+	// {"type":"log","entry":...} message. Gated on an admin actually watching so the
 	// parse/broadcast is skipped entirely otherwise, and lossy so a burst can't
 	// disconnect anyone. model.ParseLogEntry runs synchronously and copies out of
 	// the line, so the slog buffer is not retained.
@@ -156,7 +156,7 @@ func main() {
 	signal.Notify(shutdown, os.Interrupt, syscall.SIGTERM)
 
 	// A failed ListenAndServe (e.g. the port is already in use) must run the SAME
-	// graceful-shutdown path below rather than os.Exit(1) — otherwise the deferred
+	// graceful-shutdown path below rather than os.Exit(1) - otherwise the deferred
 	// cleanup (db.Close, scheduler cancel) is skipped and in-flight state can be
 	// left inconsistent. Send the error to a buffered channel the select awaits.
 	serverErr := make(chan error, 1)
@@ -169,7 +169,7 @@ func main() {
 
 	select {
 	case <-shutdown:
-		slog.Info("shutdown signal received, shutting down gracefully…")
+		slog.Info("shutdown signal received, shutting down gracefully...")
 	case err := <-serverErr:
 		slog.Error("server failed, shutting down", "error", err)
 	}

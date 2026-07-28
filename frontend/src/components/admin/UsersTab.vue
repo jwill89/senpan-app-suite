@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /**
- * Admin Users tab (System section) — manages accounts and their per-page
+ * Admin Users tab (System section) - manages accounts and their per-page
  * permissions. Lists accounts in the shared DataTable with status/role badges,
  * and per-row actions to activate/deactivate, toggle admin, edit permissions,
  * set a password, and delete.
@@ -94,7 +94,7 @@ function permissionSummary(u: User): string {
   return `${u.permissions.length} page${u.permissions.length === 1 ? '' : 's'}`
 }
 
-// ── Edit-user modal ──────────────────────────────────────────────────────────
+// -- Edit-user modal ----------------------------------------------------------
 // One modal consolidates every per-account action (activate/deactivate, grant/
 // revoke admin, page permissions, set password) so the table row needs only two
 // buttons (Edit + Delete) instead of five. Changes are collected as a draft and
@@ -170,9 +170,9 @@ onMounted(() => users.loadUsers())
         </button>
       </div>
 
-      <p class="text-dim text-xs mb-12">
+      <p class="text-muted text-xs mb-12">
         Accounts sign in with a username and password. New sign-ups (via the shared registration
-        link) start <strong>inactive</strong> — activate one here and grant the pages it should
+        link) start <strong>inactive</strong> - activate one here and grant the pages it should
         access. Admins have full access to everything.
       </p>
 
@@ -180,14 +180,14 @@ onMounted(() => users.loadUsers())
         v-if="users.users.length"
         v-model="search"
         class="mb-12"
-        placeholder="Search users by name…"
+        placeholder="Search users by name..."
         aria-label="Search users by name"
       />
 
       <LoadingSpinner
         v-if="users.loading && users.users.length === 0"
         block
-        label="Loading users…"
+        label="Loading users..."
       />
 
       <DataTable
@@ -197,7 +197,7 @@ onMounted(() => users.loadUsers())
         row-key="id"
       >
         <template #cell-username="{ row }">
-          <span class="code-gold">{{ row.username }}</span>
+          <span class="code-highlight">{{ row.username }}</span>
         </template>
         <template #cell-status="{ row }">
           <span :class="row.is_active ? 'badge-active' : 'badge-inactive'">
@@ -205,20 +205,20 @@ onMounted(() => users.loadUsers())
           </span>
         </template>
         <template #cell-role="{ row }">
-          <span :class="row.is_admin ? 'badge-admin' : 'text-dim'">
+          <span :class="row.is_admin ? 'badge-admin' : 'text-muted'">
             {{ row.is_admin ? 'Admin' : 'User' }}
           </span>
         </template>
         <template #cell-permissions="{ row }">
-          <span class="text-dim">{{ permissionSummary(row) }}</span>
+          <span class="text-muted">{{ permissionSummary(row) }}</span>
         </template>
         <template #cell-lastLogin="{ row }">
-          <span class="text-dim">{{ formatLastLogin(row.last_login_at) }}</span>
+          <span class="text-muted">{{ formatLastLogin(row.last_login_at) }}</span>
         </template>
         <template #cell-actions="{ row }">
           <div class="row-actions">
             <template v-if="isProtected(row)">
-              <span class="text-dim text-xs">Protected account</span>
+              <span class="text-muted text-xs">Protected account</span>
             </template>
             <template v-else>
               <button class="btn-view btn-sm" title="Edit this account" @click="openEdit(row)">
@@ -235,7 +235,7 @@ onMounted(() => users.loadUsers())
           </div>
         </template>
         <template #empty>
-          <p class="text-dim ta-center" style="padding: 20px">No users match “{{ search }}”.</p>
+          <p class="text-muted ta-center" style="padding: 20px">No users match “{{ search }}”.</p>
         </template>
       </DataTable>
 
@@ -249,9 +249,9 @@ onMounted(() => users.loadUsers())
       box-style="max-width: 560px"
       @close="closeEdit"
     >
-      <h3 class="mt-0">
-        <font-awesome-icon :icon="['fad', 'users-gear']" /> Edit User —
-        <span class="code-gold">{{ editUser.username }}</span>
+      <h3>
+        <font-awesome-icon :icon="['fad', 'users-gear']" /> Edit User -
+        <span class="code-highlight">{{ editUser.username }}</span>
       </h3>
 
       <!-- Account -->
@@ -267,11 +267,11 @@ onMounted(() => users.loadUsers())
       <!-- Page permissions -->
       <div class="edit-section">
         <h4 class="perm-group-title">Page permissions</h4>
-        <p v-if="editAdmin" class="text-dim text-xs m-0">
-          Admins have full access to every page — per-page permissions don't apply.
+        <p v-if="editAdmin" class="text-muted text-xs m-0">
+          Admins have full access to every page - per-page permissions don't apply.
         </p>
         <div v-else class="perm-groups">
-          <div v-for="group in permissionGroups" :key="group.section" class="perm-group">
+          <div v-for="group in permissionGroups" :key="group.section">
             <h4 class="perm-group-title">{{ group.section }}</h4>
             <label v-for="perm in group.perms" :key="perm.key" class="perm-option">
               <input
@@ -311,7 +311,7 @@ onMounted(() => users.loadUsers())
       <div class="modal-actions">
         <button class="btn-neutral" :disabled="savingUser" @click="closeEdit">Cancel</button>
         <button class="btn-action" :disabled="savingUser" @click="saveUser">
-          <LoadingSpinner v-if="savingUser" label="Saving…" />
+          <LoadingSpinner v-if="savingUser" label="Saving..." />
           <template v-else>Save Changes</template>
         </button>
       </div>
@@ -321,7 +321,6 @@ onMounted(() => users.loadUsers())
 
 <style scoped>
 .badge-active {
-  color: var(--success, #2cb67d);
   font-weight: 600;
 }
 .badge-inactive {

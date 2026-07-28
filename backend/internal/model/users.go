@@ -36,7 +36,7 @@ type TokenInfo struct {
 
 // AuthCheckResponse is the body of GET /api/auth: whether a session is logged in
 // and, if so, the active user. User is null when not authenticated, so it is NOT
-// omitempty — the key is always present (null when logged out).
+// omitempty - the key is always present (null when logged out).
 type AuthCheckResponse struct {
 	Authenticated bool  `json:"authenticated"`
 	User          *User `json:"user"`
@@ -64,7 +64,7 @@ type RegisterResponse struct {
 	Message string `json:"message"`
 }
 
-// UsersResponse is the body of GET /api/users — all accounts (admin only).
+// UsersResponse is the body of GET /api/users - all accounts (admin only).
 type UsersResponse struct {
 	Users []User `json:"users"`
 }
@@ -80,7 +80,7 @@ type AccountTokenGenerateResponse struct {
 
 // TokenRevokeResponse is the body of POST /api/account/token {action:"revoke"}:
 // the {"ok": true, "deleted": bool} shape reporting whether a token row was
-// actually removed. (Distinct from the bare OKResponse — it carries deleted.)
+// actually removed. (Distinct from the bare OKResponse - it carries deleted.)
 type TokenRevokeResponse struct {
 	OK      bool `json:"ok"`
 	Deleted bool `json:"deleted"`

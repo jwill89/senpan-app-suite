@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /**
- * Bingo board (5×5) with the B-I-N-G-O header. Used in three places:
+ * Bingo board (5x5) with the B-I-N-G-O header. Used in three places:
  *  - Player view: interactive, shows stamp marks (mode="player").
  *  - Winner verification: static, highlights pattern-hit cells (mode="preview").
  *  - Card preview: static board (mode="preview").
@@ -80,7 +80,9 @@ function usesSecondaryStamp(ri: number, ci: number): boolean {
           <div
             v-for="(cell, ci) in row"
             :key="ri + '-' + ci"
-            :class="cellClass ? cellClass(ri, ci, cell) : ['board-cell', cell === 0 ? 'free' : '']"
+            :class="
+              cellClass ? cellClass(ri, ci, cell) : ['board-cell', cell === 0 ? 'is-free' : '']
+            "
             @click="emit('cellClick', ri, ci, cell)"
           >
             <span class="cell-num">{{ cell === 0 ? 'FREE' : cell }}</span>
@@ -115,7 +117,7 @@ function usesSecondaryStamp(ri: number, ci: number): boolean {
             :key="ri + '-' + ci"
             :class="[
               'board-cell',
-              cell === 0 ? 'free' : '',
+              cell === 0 ? 'is-free' : '',
               isCellMatch && isCellMatch(ri, ci) ? 'pattern-hit' : '',
             ]"
             style="cursor: default"

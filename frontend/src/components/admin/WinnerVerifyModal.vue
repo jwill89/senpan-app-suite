@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /**
- * Winner verification modal (admin) — shows a winning card's board with the
+ * Winner verification modal (admin) - shows a winning card's board with the
  * cells that complete the win pattern highlighted. Mirrors the original
  * "Winner verification modal" block. Driven by game.winnerPreview.
  */
@@ -16,11 +16,13 @@ const game = useGameStore()
     <div class="flex-between mb-12">
       <h3>
         <font-awesome-icon :icon="['fad', 'trophy']" /> Card
-        <span class="code-gold">{{ game.winnerPreview.card.id }}</span>
+        <span class="code-highlight">{{ game.winnerPreview.card.id }}</span>
       </h3>
       <button class="btn-neutral btn-sm" @click="game.winnerPreview = null">Close</button>
     </div>
-    <p class="text-dim text-sm mb-12 text-center">Highlighted cells complete the winning pattern</p>
+    <p class="text-muted text-sm mb-12 text-center">
+      Highlighted cells complete the winning pattern
+    </p>
     <div class="flex-center">
       <BingoBoard
         :board="game.winnerPreview.card.board_data"
@@ -36,7 +38,7 @@ const game = useGameStore()
       <p v-if="game.winnerPreview.card.player_name" style="font-weight: 600">
         {{ game.winnerPreview.card.player_name }}
       </p>
-      <p v-if="game.winnerPreview.card.details" class="text-dim text-sm">
+      <p v-if="game.winnerPreview.card.details" class="text-muted text-sm">
         {{ game.winnerPreview.card.details }}
       </p>
     </div>

@@ -40,7 +40,7 @@ describe('openClub (per-club freshness)', () => {
     const s = useBookclubStore()
     s.openClub('yaoi')
     expect(ep.lists).toHaveBeenCalledTimes(1)
-    s.openClub('yaoi') // within TTL → no refetch
+    s.openClub('yaoi') // within TTL -> no refetch
     expect(ep.lists).toHaveBeenCalledTimes(1)
   })
 
@@ -69,9 +69,9 @@ describe('applyExternalChange (live invalidation)', () => {
     const s = useBookclubStore()
     s.openClub('yaoi') // stamps freshness
     ep.lists.mockClear()
-    s.applyExternalChange(false) // not viewing → invalidate, no immediate fetch
+    s.applyExternalChange(false) // not viewing -> invalidate, no immediate fetch
     expect(ep.lists).not.toHaveBeenCalled()
-    s.openClub('yaoi') // now stale again → refetch
+    s.openClub('yaoi') // now stale again -> refetch
     expect(ep.lists).toHaveBeenCalledTimes(1)
   })
 })

@@ -1,6 +1,6 @@
 /**
  * Images store: manages image "categories" (curated subdirectories of
- * <webRoot>/images) and the images within them — the System → Images admin page.
+ * <webRoot>/images) and the images within them - the System -> Images admin page.
  *
  * Every category is admin-managed (a display name + a directory) and can be
  * created, renamed, and deleted. Uploading an image whose name already exists
@@ -8,8 +8,8 @@
  *
  * The shared ImagePicker (announcements, raffles, garapons, affiliates, stamp
  * rallies, theme flourishes) also uses this store to browse categories and list
- * images (`ensureCategories()` / `ensureImages(dir)` → `imagesByDir[dir]`), and
- * calls `uploadImages` for its own compact upload control — category management
+ * images (`ensureCategories()` / `ensureImages(dir)` -> `imagesByDir[dir]`), and
+ * calls `uploadImages` for its own compact upload control - category management
  * stays exclusive to this page.
  */
 import { defineStore } from 'pinia'
@@ -31,13 +31,13 @@ export const useImagesStore = defineStore('images', () => {
   const imagesByDir = ref<Record<string, ImageEntry[]>>({})
   // Dirs whose images have loaded successfully (a genuinely empty category counts
   // as loaded). ensureImages consults this rather than a cached array so a FAILED
-  // load — which leaves an empty array behind — is retried instead of cached.
+  // load - which leaves an empty array behind - is retried instead of cached.
   const loadedDirs = new Set<string>()
 
   const loading = ref(false)
   const loadingImages = ref(false)
   const uploading = ref(false)
-  // 0–100 while an upload's bytes are in flight; sits at 100 while the server
+  // 0-100 while an upload's bytes are in flight; sits at 100 while the server
   // saves the files. -1 when no upload is running (indeterminate/idle).
   const uploadProgress = ref(-1)
 
@@ -63,7 +63,7 @@ export const useImagesStore = defineStore('images', () => {
     } catch (e) {
       ui.notify((e as Error).message, 'error')
       imagesByDir.value = { ...imagesByDir.value, [dir]: [] }
-      loadedDirs.delete(dir) // don't cache a failed load — let ensureImages retry
+      loadedDirs.delete(dir) // don't cache a failed load - let ensureImages retry
     } finally {
       loadingImages.value = false
     }
@@ -71,8 +71,8 @@ export const useImagesStore = defineStore('images', () => {
 
   // Silent, self-pruning variants used by the live-invalidation handler
   // (admin.ts refreshResource). Unlike loadCategories/loadImages these NEVER
-  // toast — a background refresh triggered by someone else's mutation must not
-  // interrupt the user — and they self-heal the cache instead of blanking it.
+  // toast - a background refresh triggered by someone else's mutation must not
+  // interrupt the user - and they self-heal the cache instead of blanking it.
   async function refreshCategoriesQuiet(): Promise<void> {
     try {
       const data = await endpoints.images.categories()

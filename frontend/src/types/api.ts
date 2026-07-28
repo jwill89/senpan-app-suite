@@ -1,7 +1,7 @@
 /**
  * API types barrel.
  *
- * Re-exports the tygo-generated types from `api.generated.ts` — both the domain
+ * Re-exports the tygo-generated types from `api.generated.ts` - both the domain
  * models AND the request/response envelopes, which now live as Go structs in the
  * backend `model` package (so the Go handlers are the single source of truth for
  * every wire shape). This file adds only the handful of types that are
@@ -26,7 +26,7 @@ import type {
   LogEntry,
 } from './api.generated'
 
-// ── Domain models (generated from the Go `model` package) ────────────────────
+// -- Domain models (generated from the Go `model` package) --------------------
 export type {
   Affiliate,
   AffiliateHour,
@@ -68,7 +68,7 @@ export type {
   LogEntry,
 } from './api.generated'
 
-// ── Response envelopes (generated; backend `model` is the source of truth) ───
+// -- Response envelopes (generated; backend `model` is the source of truth) ---
 export type {
   // Shared
   OKResponse,
@@ -196,8 +196,8 @@ export type {
 // self-documenting name at call sites.
 export type AccountTokenInfoResponse = TokenInfo
 
-// ── Settings (kept hand-written) ─────────────────────────────────────────────
-// The backend response types `settings` as a dynamic string→string map; this
+// -- Settings (kept hand-written) ---------------------------------------------
+// The backend response types `settings` as a dynamic string->string map; this
 // richer view enumerates the known keys (plus the per-club webhook index
 // signature) for better editor support on the Settings page. Kept in sync by
 // hand with the backend `settingsKeys`.
@@ -212,7 +212,7 @@ export interface AppSettings {
   anilist_api_url: string
   /** Markdown prompt shown on the home page above the board-ID join field. */
   bingo_join_prompt: string
-  /** Seconds a board must wait between "It's Yoever" triggers (0–3600; 0 = no limit). */
+  /** Seconds a board must wait between "It's Yoever" triggers (0-3600; 0 = no limit). */
   yoever_cooldown_seconds: string
   /** Gil cost of a custom bingo card, shown on the public Personal Card Requests page. */
   custom_card_cost: string
@@ -224,11 +224,11 @@ export interface AppSettings {
   [key: `discord_webhook_url_${string}`]: string
 }
 
-// GET /api/settings — the richer settings view (named keys) + uploaded fonts.
+// GET /api/settings - the richer settings view (named keys) + uploaded fonts.
 export interface SettingsResponse {
   settings: AppSettings
   /**
-   * Fonts uploaded via System → Font Upload, each with its file name (family =
+   * Fonts uploaded via System -> Font Upload, each with its file name (family =
    * name without the extension) and current serving token. The frontend
    * registers an @font-face per font sourced same-origin from
    * `/api/fonts/pub/f/<token>`; tokens rotate, so never persist them.
@@ -236,7 +236,7 @@ export interface SettingsResponse {
   uploaded_fonts?: UploadedFont[]
 }
 
-// ── Form models (frontend-only) ──────────────────────────────────────────────
+// -- Form models (frontend-only) ----------------------------------------------
 
 /**
  * A reading-list source row in the item form. `_uid` is a client-only stable key
@@ -293,13 +293,13 @@ export type DiscordTimeFormat = 't' | 'T' | 'd' | 'D' | 'f' | 'F' | 'R'
  * `validTimeFormats`.
  */
 export const DISCORD_TIME_FORMATS: { value: DiscordTimeFormat; label: string }[] = [
-  { value: 'f', label: 'Short date & time — June 13, 2026 7:00 PM' },
-  { value: 'F', label: 'Long date & time — Saturday, June 13, 2026 7:00 PM' },
-  { value: 't', label: 'Short time — 7:00 PM' },
-  { value: 'T', label: 'Long time — 7:00:00 PM' },
-  { value: 'd', label: 'Short date — 06/13/2026' },
-  { value: 'D', label: 'Long date — June 13, 2026' },
-  { value: 'R', label: 'Relative — in 3 days' },
+  { value: 'f', label: 'Short date & time - June 13, 2026 7:00 PM' },
+  { value: 'F', label: 'Long date & time - Saturday, June 13, 2026 7:00 PM' },
+  { value: 't', label: 'Short time - 7:00 PM' },
+  { value: 'T', label: 'Long time - 7:00:00 PM' },
+  { value: 'd', label: 'Short date - 06/13/2026' },
+  { value: 'D', label: 'Long date - June 13, 2026' },
+  { value: 'R', label: 'Relative - in 3 days' },
 ]
 
 /**
@@ -410,7 +410,7 @@ export interface AffiliateOwnerForm {
 export interface AffiliateForm {
   id: number
   name: string
-  /** Optional second line under the name — any script (e.g. a Japanese phrase). */
+  /** Optional second line under the name - any script (e.g. a Japanese phrase). */
   subtitle: string
   owners: AffiliateOwnerForm[]
   location: string
@@ -436,7 +436,7 @@ export interface TeaRoomForm {
   id: number
   name: string
   subtitle: string
-  /** Optional informational owner — the character who owns the room. */
+  /** Optional informational owner - the character who owns the room. */
   room_owner: string
   room_number: string
   cost_per_half_hour: number
@@ -482,7 +482,7 @@ export interface StampRallyForm {
   prizes: StampRallyPrizeForm[]
 }
 
-// ── WebSocket message types ─────────────────────────────────────────────────
+// -- WebSocket message types -------------------------------------------------
 export type WsMessage =
   | { type: 'game_update'; game: BingoGameState | null; game_details?: string; winners?: string[] }
   | { type: 'game_draw'; drawn: BingoDrawnNumber; winners?: string[]; game_id?: number }
@@ -517,5 +517,5 @@ export type WsMessage =
   // 'raffles', 'announcements', 'bookclub', 'presets', 'users', etc.
   | { type: 'resource_changed'; resource: string }
   // Live server-log tail: one message per log line, sent to admin connections
-  // only (best-effort — dropped rather than queued when a client can't keep up).
+  // only (best-effort - dropped rather than queued when a client can't keep up).
   | { type: 'log'; entry: LogEntry }

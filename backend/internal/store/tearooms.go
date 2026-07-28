@@ -7,7 +7,7 @@ import (
 	"app-suite/internal/model"
 )
 
-// ── Tea Rooms ────────────────────────────────────────────────────────────────
+// -- Tea Rooms ----------------------------------------------------------------
 //
 // A tea room is a single-table entity (see model.TeaRoom): a bookable room with a
 // per-half-hour gil cost, hashtags, a markdown description, status flags, an image,
@@ -128,7 +128,7 @@ func (s *Store) SetTeaRoomDiscounted(id int64, discounted bool) error {
 }
 
 // DeleteTeaRoom removes a tea room by ID. Returns true if a row was deleted. The
-// image file lives in a centrally-managed image category (System → Images), so it
+// image file lives in a centrally-managed image category (System -> Images), so it
 // is intentionally left intact for reuse.
 func (s *Store) DeleteTeaRoom(id int64) (bool, error) {
 	res, err := s.db.Exec(`DELETE FROM tea_rooms WHERE id = ?`, id)

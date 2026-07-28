@@ -33,7 +33,7 @@ describe('AdminLoginView Turnstile', () => {
     // Login stays disabled until a token arrives.
     expect(wrapper.find('button[type="submit"]').attributes('disabled')).toBeDefined()
 
-    // Simulate a completed challenge → login enables.
+    // Simulate a completed challenge -> login enables.
     await wrapper.findComponent({ name: 'TurnstileWidget' }).vm.$emit('verified', 'tok')
     expect(wrapper.find('button[type="submit"]').attributes('disabled')).toBeUndefined()
   })

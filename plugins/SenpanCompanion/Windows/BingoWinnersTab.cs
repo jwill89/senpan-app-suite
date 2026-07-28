@@ -71,7 +71,7 @@ internal sealed class BingoWinnersTab : TabBase
             ImGui.TableNextColumn();
             ImGui.TextUnformatted(FormatTime(e.LoggedAt));
             ImGui.TableNextColumn();
-            ImGui.TextUnformatted(string.IsNullOrEmpty(e.PlayerName) ? "—" : e.PlayerName);
+            ImGui.TextUnformatted(string.IsNullOrEmpty(e.PlayerName) ? "-" : e.PlayerName);
             ImGui.TableNextColumn();
             ImGui.TextUnformatted(e.CardId);
             ImGui.TableNextColumn();
@@ -94,7 +94,7 @@ internal sealed class BingoWinnersTab : TabBase
     private static string FormatTime(string ts)
     {
         if (string.IsNullOrWhiteSpace(ts))
-            return "—";
+            return "-";
         var normalized = ts.Contains('T') ? ts : ts.Replace(' ', 'T') + "Z";
         return DateTimeOffset.TryParse(normalized, out var dto)
             ? dto.ToLocalTime().ToString("yyyy-MM-dd HH:mm")

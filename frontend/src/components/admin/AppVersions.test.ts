@@ -17,7 +17,7 @@ describe('AppVersions', () => {
     await flushPromises()
 
     expect(wrapper.text()).toContain(`v${FRONTEND_VERSION}`) // frontend row
-    expect(wrapper.find('.app-versions__flag').exists()).toBe(false) // same major → no warning
+    expect(wrapper.find('.app-versions-flag').exists()).toBe(false) // same major -> no warning
   })
 
   it('flags a major-version mismatch', async () => {
@@ -26,7 +26,7 @@ describe('AppVersions', () => {
     const wrapper = mount(AppVersions)
     await flushPromises()
 
-    expect(wrapper.find('.app-versions__flag').exists()).toBe(true)
+    expect(wrapper.find('.app-versions-flag').exists()).toBe(true)
     expect(wrapper.classes()).toContain('app-versions--warn')
   })
 })

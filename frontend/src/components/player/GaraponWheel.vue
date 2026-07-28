@@ -1,16 +1,16 @@
 <script setup lang="ts">
 /**
- * The animated Garapon drum — a hand-crank lottery barrel (ガラポン) on a stand.
+ * The animated Garapon drum - a hand-crank lottery barrel (ガラポン) on a stand.
  *
  * Tapping the drum (when draws remain) spins the barrel a few turns while the
- * authoritative draw resolves on the server, then drops a ball — tinted to the
- * won prize's color — out of the chute with a "pon" and a bounce, and rests it in
+ * authoritative draw resolves on the server, then drops a ball - tinted to the
+ * won prize's color - out of the chute with a "pon" and a bounce, and rests it in
  * the tray. The result is emitted via `settled` once the ball lands, so the page
  * reveals the prize in sync with the animation. Tapping again flings the resting
  * ball off-screen and runs another round.
  *
  * The draw is provided by the parent (`performDraw`) so this component owns only
- * the animation, never the odds — it animates to whatever the server returned.
+ * the animation, never the odds - it animates to whatever the server returned.
  */
 import { nextTick, ref } from 'vue'
 import { playPonSound, playGaraponRoll, vibrate } from '@/lib/sound'
@@ -48,7 +48,7 @@ async function spin(): Promise<void> {
     window.setTimeout(() => (leavingBall.value = null), 650)
   }
 
-  // Spin a few full turns (plus a random extra) — CSS eases it to a stop.
+  // Spin a few full turns (plus a random extra) - CSS eases it to a stop.
   const turns = 3 + Math.floor(Math.random() * 3)
   rotation.value += turns * 360 + Math.floor(Math.random() * 160)
 
@@ -76,7 +76,7 @@ async function dropBall(color: string): Promise<void> {
     vibrate(40)
     return
   }
-  // Clear the previous round's fill:forwards animation — otherwise finished
+  // Clear the previous round's fill:forwards animation - otherwise finished
   // animations compose and the resting position drifts over many draws.
   el.getAnimations().forEach((a) => a.cancel())
   const anim = el.animate(
@@ -167,10 +167,10 @@ async function dropBall(color: string): Promise<void> {
       </div>
     </div>
 
-    <p v-if="!disabled && !spinning" class="drum-hint text-dim">
+    <p v-if="!disabled && !spinning" class="drum-hint text-muted">
       <font-awesome-icon :icon="['fad', 'ferris-wheel']" /> Tap the drum to draw!
     </p>
-    <p v-else-if="spinning" class="drum-hint text-dim">Spinning…</p>
+    <p v-else-if="spinning" class="drum-hint text-muted">Spinning...</p>
   </div>
 </template>
 
@@ -198,7 +198,7 @@ async function dropBall(color: string): Promise<void> {
   display: block;
   overflow: visible;
 }
-/* Positioning context for the ball overlay — sized to the drum only, so the hint
+/* Positioning context for the ball overlay - sized to the drum only, so the hint
    text below sits clear of a dropped ball. */
 .drum-area {
   position: relative;
@@ -210,7 +210,7 @@ async function dropBall(color: string): Promise<void> {
   transform-origin: 160px 140px;
   transition: transform 1.9s cubic-bezier(0.16, 0.62, 0.18, 1);
 }
-/* Wooden barrel: a subtle seam stroke over the wood gradient, a gold band rim,
+/* Wooden barrel: a subtle seam stroke over the wood gradient, a highlight band rim,
    dark-brown facet seams, and a brass axle pin. */
 .barrel-face {
   stroke: #6f4a25;

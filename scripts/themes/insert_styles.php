@@ -1,7 +1,7 @@
 #!/usr/bin/env php
 <?php
 /**
- * insert_styles.php — insert the Senpan theme set (14 concepts x light/dark = 28
+ * insert_styles.php - insert the Senpan theme set (14 concepts x light/dark = 28
  * styles) into the App Suite SQLite database.
  *
  * Every theme has been verified WCAG 2.1 AAA-compliant against the same token
@@ -17,12 +17,12 @@
  * USAGE:
  *   php insert_styles.php /opt/senpan/data/database.sqlite
  *
- * Back up the DB first (e.g. cp database.sqlite database.sqlite.bak) — this writes
+ * Back up the DB first (e.g. cp database.sqlite database.sqlite.bak) - this writes
  * to the live styles table. Stop the service or run during a quiet window if you
  * want to avoid writing while the app holds a connection.
  */
 
-// ── Embedded theme definitions (verified WCAG AAA) ──────────────────────────
+// -- Embedded theme definitions (verified WCAG AAA) --------------------------
 const THEMES_JSON = <<<'JSON'
 [
   {
@@ -900,7 +900,7 @@ $hasTable = $db->query(
     "SELECT name FROM sqlite_master WHERE type='table' AND name='styles'"
 )->fetchColumn();
 if ($hasTable === false) {
-    fwrite(STDERR, "error: 'styles' table not found — is this the App Suite database?\n");
+    fwrite(STDERR, "error: 'styles' table not found - is this the App Suite database?\n");
     exit(1);
 }
 

@@ -6,7 +6,7 @@
  * (verifies the browser's response). The browser's credential API sits between
  * them. We use the standard JSON helpers (`parseCreationOptionsFromJSON` /
  * `parseRequestOptionsFromJSON` / `credential.toJSON()`) so there's no hand-rolled
- * base64url ⇄ ArrayBuffer conversion — at the cost of requiring a reasonably
+ * base64url <-> ArrayBuffer conversion - at the cost of requiring a reasonably
  * modern browser (feature-detected via `passkeysSupported`).
  */
 import { apiDelete, apiGet, apiPost } from './api'
@@ -47,7 +47,7 @@ export async function loginWithPasskey(): Promise<LoginResponse> {
   const options = await apiPost<{ publicKey: PublicKeyCredentialRequestOptionsJSON }>(
     'auth/passkey/begin',
     {},
-    // The user isn't authenticated yet — a failed assertion legitimately 401s and
+    // The user isn't authenticated yet - a failed assertion legitimately 401s and
     // must not trigger the global "session expired" redirect.
     { skipAuthRedirect: true },
   )

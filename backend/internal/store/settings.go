@@ -5,7 +5,7 @@ import (
 	"errors"
 )
 
-// ── Settings operations ─────────────────────────────────────────────────────
+// -- Settings operations -----------------------------------------------------
 
 // GetSetting retrieves a setting value by key. Returns empty string if not found.
 func (s *Store) GetSetting(key string) (string, error) {

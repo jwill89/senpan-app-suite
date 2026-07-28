@@ -1,13 +1,13 @@
 <script setup lang="ts">
 /**
- * Stamp shape picker — lets the player choose the stamp icon:
+ * Stamp shape picker - lets the player choose the stamp icon:
  *  - "None": no emoji, just the colored circle.
  *  - Any emoji: opens an emoji picker modal (replaces the old fixed emoji row,
  *    which wrapped once a custom stamp was added).
  *  - A custom uploaded image.
  *
  * The emoji picker (and its CSS) is lazy-loaded so it only lands when a player
- * actually opens it — the initial player payload stays small.
+ * actually opens it - the initial player payload stays small.
  */
 import { ref } from 'vue'
 import EmojiPickerModal from '@/components/common/EmojiPickerModal.vue'
@@ -30,19 +30,19 @@ function onSelectEmoji(emoji: string): void {
     <!-- None: color circle only, no emoji -->
     <button
       type="button"
-      :class="['stamp-option', player.stampShape === 'blank' ? 'active' : '']"
+      :class="['stamp-option', player.stampShape === 'blank' ? 'is-active' : '']"
       title="No emoji (color only)"
       aria-label="No stamp emoji"
       :aria-pressed="player.stampShape === 'blank'"
       @click="player.setStampShape('blank')"
     >
-      ⊘
+      <font-awesome-icon :icon="['fas', 'ban']" />
     </button>
 
     <!-- Emoji selector: shows the chosen emoji, opens the picker -->
     <button
       type="button"
-      :class="['stamp-option', player.stampShape === 'emoji' ? 'active' : '']"
+      :class="['stamp-option', player.stampShape === 'emoji' ? 'is-active' : '']"
       title="Pick an emoji"
       aria-label="Pick a stamp emoji"
       :aria-pressed="player.stampShape === 'emoji'"
@@ -56,7 +56,7 @@ function onSelectEmoji(emoji: string): void {
     <button
       v-if="player.customStampImage"
       type="button"
-      :class="['stamp-option', player.stampShape === 'custom' ? 'active' : '']"
+      :class="['stamp-option', player.stampShape === 'custom' ? 'is-active' : '']"
       title="Custom Image"
       aria-label="Stamp shape: custom image"
       :aria-pressed="player.stampShape === 'custom'"

@@ -17,7 +17,7 @@ const player = usePlayerStore()
 
 const open = ref(false)
 
-/** The picker's current value — bound to the live secondary stamp colour. */
+/** The picker's current value - bound to the live secondary stamp colour. */
 const pickerValue = computed(() => player.secondaryStampColor)
 
 function onColorChange(c: { rgba: string }): void {
@@ -26,14 +26,14 @@ function onColorChange(c: { rgba: string }): void {
 </script>
 
 <template>
-  <div class="secondary-stamp stamp-shape-color-row" role="group" aria-label="Secondary stamp">
+  <div class="stamp-shape-color-row" role="group" aria-label="Secondary stamp">
     <div class="secondary-stamp-toggle">
       <span class="label">2nd stamp:</span>
       <button
         type="button"
         class="switch"
         role="switch"
-        :class="{ on: player.secondaryStampEnabled }"
+        :class="{ 'is-on': player.secondaryStampEnabled }"
         :aria-checked="player.secondaryStampEnabled"
         title="Mark cells outside the win pattern with a second colour"
         @click="player.setSecondaryStampEnabled(!player.secondaryStampEnabled)"
@@ -67,7 +67,7 @@ function onColorChange(c: { rgba: string }): void {
       @close="open = false"
     >
       <h3 class="mb-8"><font-awesome-icon :icon="['fad', 'palette']" /> Secondary Stamp Color</h3>
-      <p class="text-dim mb-16 color-picker-help">
+      <p class="text-muted mb-16 color-picker-help">
         The colour used on cells that aren't part of a winning pattern.
       </p>
 

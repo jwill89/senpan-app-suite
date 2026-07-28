@@ -45,7 +45,7 @@ function onVolume(e: Event): void {
           :key="m.value"
           type="button"
           class="toggle-btn sound-mode-btn"
-          :class="{ active: player.soundMode === m.value }"
+          :class="{ 'is-active': player.soundMode === m.value }"
           :aria-pressed="player.soundMode === m.value"
           :title="m.title"
           @click="selectMode(m.value)"

@@ -21,7 +21,7 @@ import (
 	"app-suite/internal/ws"
 )
 
-// postFontsUpload posts a multipart upload of name→content font files.
+// postFontsUpload posts a multipart upload of name->content font files.
 func (e *testEnv) postFontsUpload(t *testing.T, files map[string][]byte) model.FontUploadResponse {
 	t.Helper()
 	var buf bytes.Buffer
@@ -126,7 +126,7 @@ func TestFontConvert_UploadCreatesWOFF2(t *testing.T) {
 	}
 	body, _ := io.ReadAll(resp.Body)
 	if !bytes.HasPrefix(body, []byte("wOF2")) {
-		t.Errorf("body does not start with the WOFF2 magic (got %q…)", body[:min(8, len(body))])
+		t.Errorf("body does not start with the WOFF2 magic (got %q...)", body[:min(8, len(body))])
 	}
 
 	// The kit serves the same variant.
@@ -308,7 +308,7 @@ func TestFontConvert_FamilyDeleteRemovesEverything(t *testing.T) {
 func TestFontConvert_StartupBackfillAndMetaMigration(t *testing.T) {
 	// Seed disk + legacy settings BEFORE the server starts: a real font, a
 	// stale pre-group conversion, v1 file-keyed metadata, and the old global
-	// origin allowlist — the startup migrations must reconcile all of it.
+	// origin allowlist - the startup migrations must reconcile all of it.
 	webRoot := t.TempDir()
 	fontsDir := filepath.Join(webRoot, "fonts")
 	if err := os.MkdirAll(filepath.Join(fontsDir, ".woff2"), 0755); err != nil {
@@ -317,7 +317,7 @@ func TestFontConvert_StartupBackfillAndMetaMigration(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(fontsDir, "Legacy.ttf"), goregular.TTF, 0644); err != nil {
 		t.Fatal(err)
 	}
-	// Old per-file conversion naming — must be swept.
+	// Old per-file conversion naming - must be swept.
 	if err := os.WriteFile(filepath.Join(fontsDir, ".woff2", "Legacy.ttf.woff2"), []byte("stale"), 0644); err != nil {
 		t.Fatal(err)
 	}

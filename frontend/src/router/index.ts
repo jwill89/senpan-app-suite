@@ -5,24 +5,24 @@
  * with real, linkable URLs and HTML5 history mode. The route map mirrors the old
  * view/tab surface exactly:
  *
- *   /                         → Home
- *   /play/:cardId             → Player board (loads the board by id)
- *   /raffles                  → Public raffle list
- *   /raffles/:id              → Public raffle detail (loads raffle by id)
- *   /admin/login              → Admin login
- *   /admin                    → redirect → /admin/bingo/game
- *   /admin/bingo/game         → Admin: Current/New Game
- *   /admin/bingo/cards        → Admin: Manage Cards
- *   /admin/bingo/winners-log  → Admin: Winners Log
- *   /admin/bingo/patterns     → Admin: Patterns (list + New Pattern / Manage Categories sub-pages)
- *   /admin/bingo/presets      → Admin: Game Presets
- *   /admin/teahouse/announcements    → Admin: Announcements
- *   /admin/teahouse/raffles          → Admin: Raffles (current cards + closed table; detail/form sub-pages)
- *   /admin/teahouse/bookclub/:slug   → Admin: a book club (Yaoi, Yuri, …)
- *   /admin/atelier/fonts      → Admin: Font Upload
- *   /admin/atelier/carrd      → Admin: Carrd Upload
- *   /admin/system/settings    → Admin: App Settings
- *   /admin/system/themes      → Admin: Themes
+ *   /                         -> Home
+ *   /play/:cardId             -> Player board (loads the board by id)
+ *   /raffles                  -> Public raffle list
+ *   /raffles/:id              -> Public raffle detail (loads raffle by id)
+ *   /admin/login              -> Admin login
+ *   /admin                    -> redirect -> /admin/bingo/game
+ *   /admin/bingo/game         -> Admin: Current/New Game
+ *   /admin/bingo/cards        -> Admin: Manage Cards
+ *   /admin/bingo/winners-log  -> Admin: Winners Log
+ *   /admin/bingo/patterns     -> Admin: Patterns (list + New Pattern / Manage Categories sub-pages)
+ *   /admin/bingo/presets      -> Admin: Game Presets
+ *   /admin/teahouse/announcements    -> Admin: Announcements
+ *   /admin/teahouse/raffles          -> Admin: Raffles (current cards + closed table; detail/form sub-pages)
+ *   /admin/teahouse/bookclub/:slug   -> Admin: a book club (Yaoi, Yuri, ...)
+ *   /admin/atelier/fonts      -> Admin: Font Upload
+ *   /admin/atelier/carrd      -> Admin: Carrd Upload
+ *   /admin/system/settings    -> Admin: App Settings
+ *   /admin/system/themes      -> Admin: Themes
  *
  * The admin tabs are child routes of the AdminView layout, so the sidebar/topbar
  * persist while the active tab is chosen by the matched child. A global guard
@@ -36,8 +36,8 @@ import { useAdminStore } from '@/stores/admin'
 import { useUiStore } from '@/stores/ui'
 import { BOOK_CLUBS, ADMIN_PERMISSIONS } from '@/lib/constants'
 
-// Views and admin tabs are lazy-loaded (dynamic import) so each route's code —
-// and its heavy deps (vue-draggable-plus, markdown-it) — is split into a separate
+// Views and admin tabs are lazy-loaded (dynamic import) so each route's code -
+// and its heavy deps (vue-draggable-plus, markdown-it) - is split into a separate
 // chunk fetched on demand. A player viewing a board never downloads the
 // admin/themes editor code. Vite + the manualChunks config keep shared
 // vendor code (vue, fontawesome) cached across these route chunks.
@@ -77,21 +77,21 @@ const adminChildren: RouteRecordRaw[] = [
     component: () => import('@/components/admin/PresetsTab.vue'),
     meta: { tab: 'bingo-presets' },
   },
-  // Senpan Tea House → Announcement Management (first item in the section).
+  // Senpan Tea House -> Announcement Management (first item in the section).
   {
     path: 'teahouse/announcements',
     name: 'admin-teahouse-announcements',
     component: () => import('@/components/admin/AnnouncementsTab.vue'),
     meta: { tab: 'teahouse-announcements' },
   },
-  // Senpan Tea House → Affiliates. Admin-only CRUD of partner establishments.
+  // Senpan Tea House -> Affiliates. Admin-only CRUD of partner establishments.
   {
     path: 'teahouse/affiliates',
     name: 'admin-teahouse-affiliates',
     component: () => import('@/components/admin/AffiliatesTab.vue'),
     meta: { tab: 'teahouse-affiliates' },
   },
-  // Senpan Tea House → Tea Rooms. Drag-orderable bookable rooms posted as Discord
+  // Senpan Tea House -> Tea Rooms. Drag-orderable bookable rooms posted as Discord
   // embeds, plus a public cross-origin read API for the Carrd site.
   {
     path: 'teahouse/tea-rooms',
@@ -99,7 +99,7 @@ const adminChildren: RouteRecordRaw[] = [
     component: () => import('@/components/admin/TeaRoomsTab.vue'),
     meta: { tab: 'teahouse-tea-rooms' },
   },
-  // Senpan Tea House → Raffles. One manager (current cards + closed table) with
+  // Senpan Tea House -> Raffles. One manager (current cards + closed table) with
   // detail/form Back sub-pages, replacing the former New/Open/Closed raffle tabs.
   {
     path: 'teahouse/raffles',
@@ -110,22 +110,20 @@ const adminChildren: RouteRecordRaw[] = [
   // One route per registered book club, all served by the generic BookClubTab
   // (the active club drives its labels). Add a club in constants.ts to get its
   // route, sidebar button, and settings webhook field automatically.
-  ...BOOK_CLUBS.map(
-    (club): RouteRecordRaw => ({
-      path: `teahouse/bookclub/${club.slug}`,
-      name: `admin-bookclub-${club.slug}`,
-      component: () => import('@/components/admin/BookClubTab.vue'),
-      meta: { tab: `bookclub-${club.slug}` as AdminTab },
-    }),
-  ),
-  // Festival → Garapon (festival lottery drum).
+  ...BOOK_CLUBS.map((club): RouteRecordRaw => ({
+    path: `teahouse/bookclub/${club.slug}`,
+    name: `admin-bookclub-${club.slug}`,
+    component: () => import('@/components/admin/BookClubTab.vue'),
+    meta: { tab: `bookclub-${club.slug}` as AdminTab },
+  })),
+  // Festival -> Garapon (festival lottery drum).
   {
     path: 'festival/garapon',
     name: 'admin-festival-garapon',
     component: () => import('@/components/admin/GaraponTab.vue'),
     meta: { tab: 'festival-garapon' },
   },
-  // Festival → Stamp Rally.
+  // Festival -> Stamp Rally.
   {
     path: 'festival/stamp-rally',
     name: 'admin-festival-stamp-rally',
@@ -191,7 +189,7 @@ const routes: RouteRecordRaw[] = [
     props: true,
   },
   { path: '/raffles', name: 'raffles', component: () => import('@/views/RafflesView.vue') },
-  // Public Personal Card Requests — build a custom bingo card and submit it for
+  // Public Personal Card Requests - build a custom bingo card and submit it for
   // staff approval. No auth (public page).
   {
     path: '/card-requests',
@@ -204,7 +202,7 @@ const routes: RouteRecordRaw[] = [
     component: () => import('@/views/RaffleDetailView.vue'),
     props: true,
   },
-  // Public Garapon player view — reached only via a per-player drawing link
+  // Public Garapon player view - reached only via a per-player drawing link
   // (an unguessable token). No admin auth; the token is the capability.
   {
     path: '/garapon/:token',
@@ -212,7 +210,7 @@ const routes: RouteRecordRaw[] = [
     component: () => import('@/views/GaraponView.vue'),
     props: true,
   },
-  // Public Stamp Rally card — reached only via a per-participant card link (an
+  // Public Stamp Rally card - reached only via a per-participant card link (an
   // unguessable token). No admin auth; the token is the capability.
   {
     path: '/stamp-card/:token',
@@ -225,7 +223,7 @@ const routes: RouteRecordRaw[] = [
     name: 'admin-login',
     component: () => import('@/views/AdminLoginView.vue'),
   },
-  // Hidden registration page — intentionally not linked anywhere in the UI.
+  // Hidden registration page - intentionally not linked anywhere in the UI.
   // Admins share this URL directly; new accounts start inactive.
   {
     path: '/admin/register',
@@ -268,7 +266,7 @@ function firstAllowedAdminRoute(auth: ReturnType<typeof useAuthStore>): string |
   return null
 }
 
-// ── Navigation guard ─────────────────────────────────────────────────────────
+// -- Navigation guard ---------------------------------------------------------
 //
 // Enforces admin auth for /admin routes and keeps the admin store's active
 // tab/section in sync with the matched route so the sidebar highlights it. Data
@@ -282,7 +280,7 @@ router.beforeEach(() => {
 })
 router.afterEach(() => {
   useUiStore().setRouteLoading(false)
-  // Navigation succeeded → clear any pending chunk-reload guard (see onError).
+  // Navigation succeeded -> clear any pending chunk-reload guard (see onError).
   sessionStorage.removeItem(CHUNK_RELOAD_KEY)
 })
 
@@ -293,7 +291,7 @@ const CHUNK_RELOAD_KEY = 'route-chunk-reload'
 /** Whether an error looks like a failed dynamic import of a route chunk. */
 function isChunkLoadError(error: unknown): boolean {
   const message = (error as Error).message || ''
-  // Browser-specific phrasings: Chrome/Firefox "…dynamically imported module…",
+  // Browser-specific phrasings: Chrome/Firefox "...dynamically imported module...",
   // Safari "Importing a module script failed", plus the bundler-style name.
   return /dynamically imported module|module script failed|ChunkLoadError/i.test(message)
 }
@@ -304,8 +302,8 @@ router.onError((error, to) => {
   // A failed dynamic import almost always means the app was redeployed while
   // this tab was open: the lazy chunk's hashed filename no longer exists on the
   // server (and the PWA prunes outdated precaches), so the import 404s and the
-  // navigation aborts. The UI then appears to "freeze" on the current view —
-  // clicking sidebar links does nothing — until a hard refresh. Recover by
+  // navigation aborts. The UI then appears to "freeze" on the current view -
+  // clicking sidebar links does nothing - until a hard refresh. Recover by
   // doing a full browser load of the target URL, which fetches the fresh
   // index.html + current chunk hashes. The sessionStorage guard ensures we only
   // attempt this once per target so a genuinely broken chunk can't loop.

@@ -15,7 +15,7 @@ import (
 	"app-suite/internal/model"
 )
 
-// ── Carrd image hosting (System → Carrd Upload admin tab) ────────────────────
+// -- Carrd image hosting (System -> Carrd Upload admin tab) --------------------
 //
 // Carrd "projects" are folders under <webRoot>/carrd. A project can contain
 // media files (images plus audio/.mp3 and video/.mp4) directly and/or in
@@ -25,7 +25,7 @@ import (
 // create/delete sub-directories, and upload/list/delete files at any path
 // within a project.
 //
-// The directory tree is the source of truth — sub-directories are not tracked
+// The directory tree is the source of truth - sub-directories are not tracked
 // anywhere but on disk. Only the top-level project carries metadata: a
 // human-readable Title separate from its URL folder name, persisted in a
 // per-project sidecar file (carrdMetaFile) so the title survives across uploads.
@@ -374,12 +374,12 @@ func (s *Server) createCarrdProject(w http.ResponseWriter, root, reqTitle, reqFo
 		folder = slugifyFolder(title)
 	}
 	if folder == "" {
-		writeError(w, http.StatusBadRequest, "Could not derive a folder name — use letters or numbers in the title or folder")
+		writeError(w, http.StatusBadRequest, "Could not derive a folder name - use letters or numbers in the title or folder")
 		return
 	}
 
 	// Enforce uniqueness of both the title and the folder across projects. Read
-	// the root entries directly and only the title sidecars — listCarrdProjects
+	// the root entries directly and only the title sidecars - listCarrdProjects
 	// would additionally walk every project's whole tree counting images, which
 	// is wasted work just to reject a duplicate name.
 	entries, err := os.ReadDir(root)
@@ -675,7 +675,7 @@ func (s *Server) handleCarrdDirCreate(w http.ResponseWriter, r *http.Request) {
 // handleCarrdDirDelete deletes a sub-directory (and its contents) within a
 // project. The directory identity (folder + path) is supplied as query
 // parameters, since the path may contain slashes. The project root cannot be
-// deleted here — use the projects endpoint instead.
+// deleted here - use the projects endpoint instead.
 //
 //	Endpoint:  DELETE /api/carrd/images/dirs?folder=<folder>&path=<subpath>
 //	Auth:      admin, or a user granted this page's permission
@@ -739,7 +739,7 @@ func (s *Server) handleCarrdUpload(w http.ResponseWriter, r *http.Request) {
 				return header.Filename, "Unsupported type (allowed: .jpg, .jpeg, .png, .webp, .gif, .mp3, .mp4)"
 			}
 			// Content-sniff every accepted type (defense in depth): images must
-			// carry image bytes, and mp3/mp4 must carry their container magic —
+			// carry image bytes, and mp3/mp4 must carry their container magic -
 			// these files are served publicly, so the extension is not trusted.
 			f, err := header.Open()
 			if err != nil {

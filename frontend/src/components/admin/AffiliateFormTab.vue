@@ -3,7 +3,7 @@
  * Admin Affiliate create/edit form. Name, an optional subtitle (any script), a
  * repeatable owners list, location, a single timezone for the affiliate, a
  * repeatable opening-hours editor (optional label + start + optional end),
- * markdown details, and two image pickers — the logo and the establishment
+ * markdown details, and two image pickers - the logo and the establishment
  * screenshot (both browse the shared image library).
  *
  * Hosted as a Back sub-page of the Affiliates manager (AffiliatesTab): it emits
@@ -102,10 +102,10 @@ function cancel(): void {
       <!-- Opening hours (repeatable) -->
       <FormField
         label="Time(s) Open"
-        help="Each row has an optional label (e.g. “Mon–Fri”), a start time, and an optional end time."
+        help="Each row has an optional label (e.g. “Mon-Fri”), a start time, and an optional end time."
       >
         <div class="repeater">
-          <div class="repeater-row hour-row hour-row-head text-dim text-xs">
+          <div class="repeater-row hour-row text-muted text-xs">
             <span>Label</span>
             <span>Start</span>
             <span>End</span>
@@ -116,7 +116,7 @@ function cancel(): void {
             :key="h._uid"
             class="repeater-row hour-row"
           >
-            <input v-model="h.label" placeholder="e.g. Mon–Fri" aria-label="Hours label" />
+            <input v-model="h.label" placeholder="e.g. Mon-Fri" aria-label="Hours label" />
             <input v-model="h.start" type="time" aria-label="Start time" />
             <input v-model="h.end" type="time" aria-label="End time (optional)" />
             <button
@@ -139,20 +139,20 @@ function cancel(): void {
         <MarkdownEditor
           v-model="affiliates.affiliateForm.details"
           min-height="120px"
-          placeholder="Describe the affiliate (supports markdown — bold, italics, lists, links…)"
+          placeholder="Describe the affiliate (supports markdown - bold, italics, lists, links...)"
         />
       </FormField>
 
       <!-- Discord embed presentation: accent colour + the two links shown in the embed. -->
       <FormField label="Embed color" help="Accent stripe on the Discord embed.">
-        <div class="aff-color-row">
+        <div class="color-field">
           <input
             v-model="affiliates.affiliateForm.embed_color"
             type="color"
-            class="aff-color-input"
+            class="color-field-input"
             aria-label="Embed accent color"
           />
-          <code class="aff-color-hex">{{ affiliates.affiliateForm.embed_color }}</code>
+          <code class="color-field-hex">{{ affiliates.affiliateForm.embed_color }}</code>
           <button
             type="button"
             class="btn-neutral btn-sm"
@@ -164,11 +164,11 @@ function cancel(): void {
         </div>
       </FormField>
 
-      <div class="aff-links-row">
+      <div class="affiliate-links-row">
         <FormField label="Discord Link" help="Optional. Shown as a link field in the embed.">
           <input
             v-model="affiliates.affiliateForm.discord_link"
-            placeholder="https://discord.gg/…"
+            placeholder="https://discord.gg/..."
             aria-label="Discord link"
           />
         </FormField>
@@ -183,14 +183,14 @@ function cancel(): void {
 
       <FormField
         label="Logo"
-        help="Used as the embed thumbnail. Pick from any image category (upload on System → Images)."
+        help="Used as the embed thumbnail. Pick from any image category (upload on System -> Images)."
       >
         <ImagePicker v-model="affiliates.affiliateForm.logo" />
       </FormField>
 
       <FormField
         label="Establishment Screenshot"
-        help="Used as the large embed image. Pick from any image category (upload on System → Images)."
+        help="Used as the large embed image. Pick from any image category (upload on System -> Images)."
       >
         <ImagePicker v-model="affiliates.affiliateForm.screenshot" />
       </FormField>
@@ -204,7 +204,7 @@ function cancel(): void {
           :disabled="!affiliates.affiliateForm.name.trim() || affiliates.savingAffiliate"
           @click="save"
         >
-          <LoadingSpinner v-if="affiliates.savingAffiliate" label="Saving…" />
+          <LoadingSpinner v-if="affiliates.savingAffiliate" label="Saving..." />
           <template v-else>Save Affiliate</template>
         </button>
       </FormActions>
@@ -237,29 +237,13 @@ function cancel(): void {
   min-width: 0;
 }
 /* Native colour picker + hex readout + reset, mirroring the Tea Room form. */
-.aff-color-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-.aff-color-input {
-  width: 48px;
-  height: 34px;
-  padding: 2px;
-  border-radius: var(--radius);
-  cursor: pointer;
-}
-.aff-color-hex {
-  font-family: 'Consolas', 'Monaco', monospace;
-  color: var(--text-muted);
-}
 /* Discord + Carrd links side by side, wrapping on narrow screens. */
-.aff-links-row {
+.affiliate-links-row {
   display: flex;
   flex-wrap: wrap;
   gap: 16px;
 }
-.aff-links-row > * {
+.affiliate-links-row > * {
   flex: 1 1 240px;
   min-width: 0;
 }

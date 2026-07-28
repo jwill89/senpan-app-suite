@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /**
- * Admin Announcements tab — the first item under "Senpan Tea House".
+ * Admin Announcements tab - the first item under "Senpan Tea House".
  *
  * List-first: the default screen shows existing announcements (with a search
  * box). Creating/editing an announcement, managing types, and creating/editing a
@@ -59,7 +59,7 @@ const WEEK_OF_MONTH = [
 const hasTypes = computed(() => store.types.length > 0)
 
 // Drag-and-drop reordering of the list is only allowed when the full list is
-// shown (no search / category filter) — reordering a filtered subset would be
+// shown (no search / category filter) - reordering a filtered subset would be
 // ambiguous to persist. When filtered, rows still render (v-show) but can't be
 // dragged, and a hint explains why.
 const canReorder = computed(() => !store.search.trim() && !store.typeFilter)
@@ -86,7 +86,7 @@ const isRecurring = computed(() =>
 )
 
 const typeName = (a: Announcement): string =>
-  a.type_name || store.types.find((t) => t.id === a.type_id)?.name || '—'
+  a.type_name || store.types.find((t) => t.id === a.type_id)?.name || '-'
 
 /** Format a stored UTC instant in the announcement's own timezone. */
 function inZone(iso: string, tz: string): string {
@@ -119,7 +119,7 @@ function scheduleLabel(a: Announcement): string {
 
 function maskWebhook(url: string): string {
   if (!url) return 'No webhook set'
-  return `…${url.slice(-6)}`
+  return `...${url.slice(-6)}`
 }
 
 function toggleWeekday(day: number): void {
@@ -128,7 +128,7 @@ function toggleWeekday(day: number): void {
   else store.form.weekdays.splice(idx, 1)
 }
 
-// ── Discord buttons (up to 5 link buttons under the embed) ───────────────────
+// -- Discord buttons (up to 5 link buttons under the embed) -------------------
 const MAX_BUTTONS = 5
 function addButton(): void {
   if (store.form.buttons.length >= MAX_BUTTONS) return
@@ -145,7 +145,7 @@ function onButtonEmoji(emoji: string): void {
   emojiPickerRow.value = null
 }
 
-// ── Navigation ───────────────────────────────────────────────────────────────
+// -- Navigation ---------------------------------------------------------------
 function openNew(): void {
   store.resetForm()
   screen.value = 'form'
@@ -197,7 +197,7 @@ async function submitRole(): Promise<void> {
 
 <template>
   <div class="tab-body">
-    <!-- ── List ───────────────────────────────────────────────────────────── -->
+    <!-- -- List ------------------------------------------------------------- -->
     <ManagerView v-if="screen === 'list'" title="Announcements" :icon="['fad', 'megaphone']">
       <template #actions>
         <button class="btn-view btn-sm" @click="openTypes()">
@@ -214,7 +214,7 @@ async function submitRole(): Promise<void> {
       <template #toolbar>
         <SearchInput
           v-model="store.search"
-          placeholder="Search announcements…"
+          placeholder="Search announcements..."
           aria-label="Search announcements"
         />
         <select
@@ -229,17 +229,17 @@ async function submitRole(): Promise<void> {
 
       <EmptyState v-if="!hasTypes">
         Create an <strong>Announcement Type</strong> (with a Discord webhook) under
-        <button class="link-btn" @click="openTypes()">Manage Types</button> first — every
+        <button class="link-btn" @click="openTypes()">Manage Types</button> first - every
         announcement posts through a type.
       </EmptyState>
 
       <LoadingSpinner
         v-if="store.loading && store.announcements.length === 0"
         block
-        label="Loading announcements…"
+        label="Loading announcements..."
       />
       <template v-else>
-        <p v-if="store.announcements.length > 1" class="text-dim text-xs mb-12">
+        <p v-if="store.announcements.length > 1" class="text-muted text-xs mb-12">
           <template v-if="canReorder">
             <font-awesome-icon :icon="['fad', 'bars']" /> Drag a row by its handle to reorder the
             list. The order is saved automatically.
@@ -254,9 +254,9 @@ async function submitRole(): Promise<void> {
           v-show="store.filteredAnnouncements.length"
           v-model="store.announcements"
           class="list-rows"
-          handle=".ann-drag"
+          handle=".drag-handle"
           :animation="150"
-          ghost-class="dragging"
+          ghost-class="is-dragging"
           :disabled="!canReorder"
           @end="onReorder"
         >
@@ -264,14 +264,14 @@ async function submitRole(): Promise<void> {
             <template #media>
               <span
                 v-if="canReorder"
-                class="ann-drag drag-handle"
+                class="drag-handle"
                 title="Drag to reorder"
                 aria-label="Drag to reorder"
               >
                 <font-awesome-icon :icon="['fad', 'bars']" />
               </span>
               <span
-                class="ann-swatch"
+                class="list-row-swatch"
                 :style="{ background: a.color || '#ff3131' }"
                 aria-hidden="true"
               ></span>
@@ -286,25 +286,27 @@ async function submitRole(): Promise<void> {
               </div>
             </template>
 
-            <h4 class="ann-title">{{ a.title }}</h4>
-            <p class="text-sm text-dim ann-meta">
+            <h4 class="list-row-title">{{ a.title }}</h4>
+            <p class="text-sm text-muted list-row-meta">
               <font-awesome-icon :icon="['fad', 'folder-open']" /> {{ typeName(a) }}
             </p>
-            <p v-if="a.start_at" class="text-sm ann-meta">
+            <p v-if="a.start_at" class="text-sm list-row-meta">
               <font-awesome-icon :icon="['fad', 'calendar-days']" />
               {{ inZone(a.start_at, a.timezone) }}
-              <span v-if="a.end_at">– {{ inZone(a.end_at, a.timezone) }}</span>
-              <span v-if="a.timezone" class="text-dim">({{ a.timezone }})</span>
+              <span v-if="a.end_at">- {{ inZone(a.end_at, a.timezone) }}</span>
+              <span v-if="a.timezone" class="text-muted">({{ a.timezone }})</span>
             </p>
-            <p class="text-sm ann-meta">
-              <span v-if="a.schedule_kind" class="badge badge--accent ann-badge">
+            <p class="text-sm list-row-meta">
+              <span v-if="a.schedule_kind" class="badge badge--accent announcement-badge">
                 {{ scheduleLabel(a) }}
                 <template v-if="a.next_post_at">
-                  · next {{ inZone(a.next_post_at, a.timezone) }}
+                  - next {{ inZone(a.next_post_at, a.timezone) }}
                 </template>
               </span>
-              <span v-else class="badge badge--muted ann-badge">Manual only</span>
-              <span v-if="a.skip_next" class="badge badge--warning ann-badge">⏭ next skipped</span>
+              <span v-else class="badge badge--muted announcement-badge">Manual only</span>
+              <span v-if="a.skip_next" class="badge badge--warning announcement-badge"
+                ><font-awesome-icon :icon="['fas', 'forward-step']" /> next skipped</span
+              >
             </p>
 
             <template #actions>
@@ -314,7 +316,7 @@ async function submitRole(): Promise<void> {
                 title="Post to Discord now"
                 @click="store.sendNow(a)"
               >
-                <LoadingSpinner v-if="store.sendingId === a.id" label="Sending…" />
+                <LoadingSpinner v-if="store.sendingId === a.id" label="Sending..." />
                 <template v-else
                   ><font-awesome-icon :icon="['fas', 'paper-plane']" /> Send now</template
                 >
@@ -358,7 +360,7 @@ async function submitRole(): Promise<void> {
       </template>
     </ManagerView>
 
-    <!-- ── Announcement form ──────────────────────────────────────────────── -->
+    <!-- -- Announcement form ------------------------------------------------ -->
     <AdminPanel v-else-if="screen === 'form'">
       <SubPageHeader
         :icon="['fad', 'megaphone']"
@@ -376,7 +378,7 @@ async function submitRole(): Promise<void> {
         </FormField>
         <FormField label="Type" required style="flex: 1; min-width: 160px">
           <select v-model.number="store.form.type_id" aria-label="Announcement type">
-            <option :value="0" disabled>Select a type…</option>
+            <option :value="0" disabled>Select a type...</option>
             <option v-for="t in store.sortedTypes" :key="t.id" :value="t.id">{{ t.name }}</option>
           </select>
         </FormField>
@@ -398,14 +400,14 @@ async function submitRole(): Promise<void> {
           style="flex: 0 0 auto"
           help="Accent stripe on the embed's left edge."
         >
-          <div class="ann-color-row">
+          <div class="color-field">
             <input
               v-model="store.form.color"
               type="color"
-              class="ann-color-input"
+              class="color-field-input"
               aria-label="Embed accent color"
             />
-            <code class="ann-color-hex">{{ store.form.color }}</code>
+            <code class="color-field-hex">{{ store.form.color }}</code>
             <button
               type="button"
               class="btn-neutral btn-sm"
@@ -438,7 +440,7 @@ async function submitRole(): Promise<void> {
       <FormField
         v-if="store.form.start_local"
         label="Dynamic dates"
-        help="For recurring day-of events: each time this announcement posts, the Start/End shift to the day it's sent, keeping the same time of day (and a next-day end stays next-day). The dates above define that time-of-day template — e.g. set the first occurrence's 10pm–1am and every post shows that day's 10pm–1am."
+        help="For recurring day-of events: each time this announcement posts, the Start/End shift to the day it's sent, keeping the same time of day (and a next-day end stays next-day). The dates above define that time-of-day template - e.g. set the first occurrence's 10pm-1am and every post shows that day's 10pm-1am."
       >
         <label class="checkbox-inline">
           <input v-model="store.form.dynamic_dates" type="checkbox" />
@@ -477,7 +479,7 @@ async function submitRole(): Promise<void> {
       >
         <input
           v-model="store.form.location"
-          placeholder="e.g. Discord — Voice Channel 1"
+          placeholder="e.g. Discord - Voice Channel 1"
           aria-label="Location"
         />
       </FormField>
@@ -486,9 +488,9 @@ async function submitRole(): Promise<void> {
         <MarkdownEditor
           v-model="store.form.details"
           min-height="120px"
-          placeholder="The announcement body (supports markdown — bold, italics, lists, links…)"
+          placeholder="The announcement body (supports markdown - bold, italics, lists, links...)"
         />
-        <p v-if="detailParts > 1" class="ann-split-note text-xs">
+        <p v-if="detailParts > 1" class="announcement-split-note text-xs">
           <font-awesome-icon :icon="['fad', 'triangle-exclamation']" />
           These details exceed Discord's 1024-character limit per embed field, so the post will be
           split into <strong>{{ detailParts }}</strong> stacked sections (at line breaks). Nothing
@@ -497,18 +499,18 @@ async function submitRole(): Promise<void> {
       </FormField>
 
       <!-- Embed images (optional): pick a thumbnail and/or a main image from any
-           image category. Upload new images on System → Images. -->
+           image category. Upload new images on System -> Images. -->
       <FormField
         label="Embed images (optional)"
-        help="Pick a thumbnail (small, top-right) and/or a main image (large, bottom) from any image category. Upload new images on the System → Images page."
+        help="Pick a thumbnail (small, top-right) and/or a main image (large, bottom) from any image category. Upload new images on the System -> Images page."
       >
         <div class="image-pickers">
           <div class="image-picker-block">
-            <span class="field-label">Thumbnail — small, top-right</span>
+            <span class="field-label">Thumbnail - small, top-right</span>
             <ImagePicker v-model="store.form.thumbnail" value-key="url" />
           </div>
           <div class="image-picker-block">
-            <span class="field-label">Main image — large, bottom</span>
+            <span class="field-label">Main image - large, bottom</span>
             <ImagePicker v-model="store.form.image" value-key="url" />
           </div>
         </div>
@@ -527,17 +529,17 @@ async function submitRole(): Promise<void> {
       </FormField>
 
       <!-- Discord buttons: optional link buttons rendered beneath the embed -->
-      <hr class="ann-divider" />
+      <hr class="announcement-divider" />
       <h4 class="section-heading"><font-awesome-icon :icon="['fab', 'discord']" /> Buttons</h4>
-      <p class="text-dim text-sm mb-8">
+      <p class="text-muted text-sm mb-8">
         Up to {{ MAX_BUTTONS }} link buttons shown under the embed. Each needs a label and URL; the
-        emoji is optional — click the emoji box to pick one.
+        emoji is optional - click the emoji box to pick one.
       </p>
-      <div v-if="store.form.buttons.length" class="ann-buttons">
-        <div v-for="(btn, i) in store.form.buttons" :key="btn._uid" class="ann-button-row">
+      <div v-if="store.form.buttons.length" class="announcement-buttons">
+        <div v-for="(btn, i) in store.form.buttons" :key="btn._uid" class="announcement-button-row">
           <button
             type="button"
-            class="ann-button-emoji"
+            class="announcement-button-emoji"
             :title="btn.emoji ? 'Change emoji' : 'Pick an emoji'"
             aria-label="Button emoji"
             @click="emojiPickerRow = i"
@@ -547,14 +549,14 @@ async function submitRole(): Promise<void> {
           </button>
           <input
             v-model="btn.label"
-            class="ann-button-label"
+            class="announcement-button-label"
             placeholder="Button label"
             aria-label="Button label"
           />
           <input
             v-model="btn.url"
-            class="ann-button-url"
-            placeholder="https://…"
+            class="announcement-button-url"
+            placeholder="https://..."
             aria-label="Button URL"
           />
           <button
@@ -585,7 +587,7 @@ async function submitRole(): Promise<void> {
       />
 
       <!-- Scheduling: when (if ever) this announcement auto-posts to Discord -->
-      <hr class="ann-divider" />
+      <hr class="announcement-divider" />
       <h4 class="section-heading"><font-awesome-icon :icon="['fad', 'clock']" /> Scheduling</h4>
 
       <!-- Schedule builder -->
@@ -609,13 +611,13 @@ async function submitRole(): Promise<void> {
 
       <template v-else-if="isRecurring">
         <FormField v-if="store.form.schedule_kind === 'weekly'" label="On these days" required>
-          <div class="ann-weekdays">
+          <div class="announcement-weekdays">
             <button
               v-for="(label, day) in WEEKDAYS"
               :key="day"
               type="button"
               class="toggle-btn"
-              :class="{ active: store.form.weekdays.includes(day) }"
+              :class="{ 'is-active': store.form.weekdays.includes(day) }"
               @click="toggleWeekday(day)"
             >
               {{ label }}
@@ -637,7 +639,7 @@ async function submitRole(): Promise<void> {
               aria-label="Weekday"
               @change="store.form.weekdays = [Number(($event.target as HTMLSelectElement).value)]"
             >
-              <option value="" disabled>Pick…</option>
+              <option value="" disabled>Pick...</option>
               <option v-for="(label, day) in WEEKDAYS" :key="day" :value="day">{{ label }}</option>
             </select>
           </FormField>
@@ -660,13 +662,13 @@ async function submitRole(): Promise<void> {
           :disabled="store.saving || !store.form.title.trim()"
           @click="submit()"
         >
-          <LoadingSpinner v-if="store.saving" label="Saving…" />
+          <LoadingSpinner v-if="store.saving" label="Saving..." />
           <template v-else>{{ store.form.id ? 'Save Changes' : 'Create Announcement' }}</template>
         </button>
       </FormActions>
     </AdminPanel>
 
-    <!-- ── Types list ─────────────────────────────────────────────────────── -->
+    <!-- -- Types list ------------------------------------------------------- -->
     <AdminPanel v-else-if="screen === 'types'">
       <SubPageHeader
         title="Announcement Types"
@@ -681,8 +683,8 @@ async function submitRole(): Promise<void> {
 
       <div v-if="store.types.length" class="list-rows">
         <ListRow v-for="t in store.sortedTypes" :key="t.id">
-          <h4 class="ann-title">{{ t.name }}</h4>
-          <p class="text-sm text-dim">
+          <h4 class="list-row-title">{{ t.name }}</h4>
+          <p class="text-sm text-muted">
             <font-awesome-icon :icon="['fab', 'discord']" /> {{ maskWebhook(t.webhook_url) }}
           </p>
           <template #actions>
@@ -698,7 +700,7 @@ async function submitRole(): Promise<void> {
       <EmptyState v-else text="No types yet. Add one with “New Type”." />
     </AdminPanel>
 
-    <!-- ── Type form ──────────────────────────────────────────────────────── -->
+    <!-- -- Type form -------------------------------------------------------- -->
     <AdminPanel v-else-if="screen === 'type-form'">
       <SubPageHeader
         :icon="['fad', 'folder-open']"
@@ -719,7 +721,7 @@ async function submitRole(): Promise<void> {
       >
         <input
           v-model="store.typeForm.webhook_url"
-          placeholder="https://discord.com/api/webhooks/…"
+          placeholder="https://discord.com/api/webhooks/..."
           aria-label="Discord webhook URL"
         />
       </FormField>
@@ -730,18 +732,18 @@ async function submitRole(): Promise<void> {
           :disabled="store.savingType || !store.typeForm.name.trim()"
           @click="submitType()"
         >
-          <LoadingSpinner v-if="store.savingType" label="Saving…" />
+          <LoadingSpinner v-if="store.savingType" label="Saving..." />
           <template v-else>{{ store.typeForm.id ? 'Save Changes' : 'Add Type' }}</template>
         </button>
       </FormActions>
     </AdminPanel>
 
-    <!-- ── Roles list ─────────────────────────────────────────────────────── -->
+    <!-- -- Roles list ------------------------------------------------------- -->
     <AdminPanel v-else-if="screen === 'roles'">
       <SubPageHeader title="Taggable Roles" :icon="['fad', 'at']" @back="screen = 'list'" />
-      <p class="text-dim text-sm mb-16">
+      <p class="text-muted text-sm mb-16">
         Roles available to tag on an announcement. Each is a group name plus its Discord role ID
-        (enable Developer Mode in Discord, right-click a role → “Copy Role ID”).
+        (enable Developer Mode in Discord, right-click a role -> “Copy Role ID”).
       </p>
       <div class="flex-toolbar flex-end mb-16">
         <button class="btn-confirm btn-sm" @click="openNewRole()">
@@ -751,8 +753,8 @@ async function submitRole(): Promise<void> {
 
       <div v-if="store.roles.length" class="list-rows">
         <ListRow v-for="r in store.roles" :key="r.id">
-          <h4 class="ann-title">{{ r.name }}</h4>
-          <p class="text-sm text-dim">
+          <h4 class="list-row-title">{{ r.name }}</h4>
+          <p class="text-sm text-muted">
             <font-awesome-icon :icon="['fad', 'at']" /> {{ r.role_id }}
           </p>
           <template #actions>
@@ -768,7 +770,7 @@ async function submitRole(): Promise<void> {
       <EmptyState v-else text="No roles yet. Add one with “New Role”." />
     </AdminPanel>
 
-    <!-- ── Role form ──────────────────────────────────────────────────────── -->
+    <!-- -- Role form -------------------------------------------------------- -->
     <AdminPanel v-else-if="screen === 'role-form'">
       <SubPageHeader
         :icon="['fad', 'at']"
@@ -786,7 +788,7 @@ async function submitRole(): Promise<void> {
       <FormField
         label="Discord role ID"
         required
-        help="The numeric role ID. In Discord: Settings → Advanced → Developer Mode, then right-click the role → Copy Role ID."
+        help="The numeric role ID. In Discord: Settings -> Advanced -> Developer Mode, then right-click the role -> Copy Role ID."
       >
         <input
           v-model="store.roleForm.role_id"
@@ -804,7 +806,7 @@ async function submitRole(): Promise<void> {
           "
           @click="submitRole()"
         >
-          <LoadingSpinner v-if="store.savingRole" label="Saving…" />
+          <LoadingSpinner v-if="store.savingRole" label="Saving..." />
           <template v-else>{{ store.roleForm.id ? 'Save Changes' : 'Add Role' }}</template>
         </button>
       </FormActions>
@@ -814,12 +816,6 @@ async function submitRole(): Promise<void> {
 
 <style scoped>
 /* Inline checkbox + label (e.g. the dynamic-dates toggle). */
-.checkbox-inline {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  cursor: pointer;
-}
 
 /* The two embed-image pickers (thumbnail + main) stacked below the shared upload. */
 .image-pickers {
@@ -832,72 +828,33 @@ async function submitRole(): Promise<void> {
   margin-bottom: 6px;
 }
 
-.link-btn {
-  background: none;
-  border: none;
-  color: var(--accent);
-  cursor: pointer;
-  text-decoration: underline;
-  padding: 0;
-  font: inherit;
-}
-.ann-swatch {
-  width: 6px;
-  align-self: stretch;
-  border-radius: 3px;
-  flex: 0 0 auto;
-}
-/* Drag handle for reordering the list; grab cursor + muted until hovered. */
-.ann-drag {
-  display: inline-flex;
-  align-items: center;
-  align-self: stretch;
-  padding: 0 2px;
-  color: var(--text-muted);
-  cursor: grab;
-}
-.ann-drag:hover {
-  color: var(--highlight);
-}
-.ann-drag:active {
-  cursor: grabbing;
-}
 /* vue-draggable-plus ghost while dragging a row. */
-.dragging {
-  opacity: 0.5;
-}
-.ann-title {
-  margin: 0 0 4px;
-}
 /* Heads-up note under the Details editor when the post will be split into
    multiple embed fields (long details past Discord's 1024-char field cap). */
-.ann-split-note {
+.announcement-split-note {
   margin: 8px 0 0;
   color: var(--text-muted);
 }
-.ann-split-note strong {
+.announcement-split-note strong {
   color: var(--highlight);
 }
-.ann-meta {
-  margin: 0 0 4px;
-}
-.ann-divider {
+.announcement-divider {
   border: none;
   border-top: 1px solid var(--panel-raised-bg);
   margin: 20px 0 12px;
 }
-.ann-buttons {
+.announcement-buttons {
   display: flex;
   flex-direction: column;
   gap: 8px;
   margin-bottom: 10px;
 }
-.ann-button-row {
+.announcement-button-row {
   display: flex;
   gap: 8px;
   align-items: center;
 }
-.ann-button-emoji {
+.announcement-button-emoji {
   flex: 0 0 56px;
   display: flex;
   align-items: center;
@@ -910,45 +867,26 @@ async function submitRole(): Promise<void> {
   border-radius: var(--radius);
   cursor: pointer;
 }
-.ann-button-emoji:hover {
+.announcement-button-emoji:hover {
   border-color: var(--accent);
 }
-.ann-button-label {
+.announcement-button-label {
   flex: 1 1 160px;
   min-width: 120px;
 }
-.ann-button-url {
+.announcement-button-url {
   flex: 2 1 220px;
   min-width: 160px;
 }
-.ann-color-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-.ann-color-input {
-  width: 48px;
-  height: 36px;
-  padding: 2px;
-  border: 1px solid var(--panel-raised-bg);
-  border-radius: 6px;
-  background: var(--panel-bg);
-  cursor: pointer;
-}
-.ann-color-hex {
-  font-family: monospace;
-  text-transform: uppercase;
-  color: var(--text-muted);
-}
 /* Weekday buttons are `.toggle-btn`s; this is just their flex container. */
-.ann-weekdays {
+.announcement-weekdays {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
 }
 /* Status pills use the global `.badge` object + shared `.badge--*` state
    modifiers; only the inter-pill spacing is component-specific. */
-.ann-badge {
+.announcement-badge {
   margin-right: 6px;
 }
 </style>

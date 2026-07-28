@@ -47,11 +47,25 @@ describe('DataTable', () => {
     expect(wrapper.emitted('sort')).toBeUndefined()
   })
 
-  it('shows a sort arrow only on the active sorted column', () => {
+  it('shows a sort icon only on the active sorted column', () => {
     const wrapper = mount(DataTable, {
       props: { columns, rows, rowKey: 'id', sortKey: 'name', sortDir: 'asc' as const },
     })
-    expect(wrapper.findAll('thead th')[0].text()).toContain('▲')
+    const headers = wrapper.findAll('thead th')
+    expect(headers[0].find('.dt-sort-icon').exists()).toBe(true)
+    expect(headers[1].find('.dt-sort-icon').exists()).toBe(false)
+  })
+
+  it('points the sort icon in the sorted direction', () => {
+    const asc = mount(DataTable, {
+      props: { columns, rows, rowKey: 'id', sortKey: 'name', sortDir: 'asc' as const },
+    })
+    const desc = mount(DataTable, {
+      props: { columns, rows, rowKey: 'id', sortKey: 'name', sortDir: 'desc' as const },
+    })
+    // The global stub exposes the rendered icon name as `data-icon`.
+    expect(asc.find('.dt-sort-icon').attributes('data-icon')).toBe('chevron-up')
+    expect(desc.find('.dt-sort-icon').attributes('data-icon')).toBe('chevron-down')
   })
 
   it('applies alignment classes from the column align option', () => {

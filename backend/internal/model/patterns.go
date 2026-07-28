@@ -1,12 +1,12 @@
 package model
 
 // Pattern represents a reusable win pattern template.
-// PatternData is a 5×5 boolean grid where true means the cell must be
+// PatternData is a 5x5 boolean grid where true means the cell must be
 // called (matched) for a card to win with this pattern.
 type Pattern struct {
 	ID           int64    `json:"id"`
 	Name         string   `json:"name"`
-	PatternData  [][]bool `json:"pattern_data"`  // 5×5 grid; true = required cell
+	PatternData  [][]bool `json:"pattern_data"`  // 5x5 grid; true = required cell
 	SortOrder    int      `json:"sort_order"`    // display order within category
 	CategoryID   int64    `json:"category_id"`   // FK to pattern_categories
 	CategoryName string   `json:"category_name"` // denormalized for display

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 /**
- * Standard "manage items" page shell — the shared structure behind every admin
- * tab that lists/manages a collection (announcements, raffles, patterns, …).
+ * Standard "manage items" page shell - the shared structure behind every admin
+ * tab that lists/manages a collection (announcements, raffles, patterns, ...).
  *
  * Renders the `.admin-panel` card with a header (icon + title on the left, the
  * `#actions` slot on the right for buttons like "Manage Categories" / "+ New"),

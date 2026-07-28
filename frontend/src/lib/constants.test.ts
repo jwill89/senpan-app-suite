@@ -14,7 +14,7 @@ import {
   DEFAULT_APP_SETTINGS,
 } from './constants'
 
-// Build a 5×5 pattern grid marking the given columns (a true cell in row 0 of each).
+// Build a 5x5 pattern grid marking the given columns (a true cell in row 0 of each).
 function markCols(...columns: number[]): boolean[][] {
   const g = Array.from({ length: 5 }, () => Array.from({ length: 5 }, () => false))
   for (const c of columns) g[0][c] = true
@@ -22,11 +22,11 @@ function markCols(...columns: number[]): boolean[][] {
 }
 
 describe('columnNumbers', () => {
-  it('returns the B column 1–15', () => {
+  it('returns the B column 1-15', () => {
     expect(columnNumbers(0)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15])
   })
 
-  it('returns the O column 61–75', () => {
+  it('returns the O column 61-75', () => {
     const o = columnNumbers(4)
     expect(o[0]).toBe(61)
     expect(o.at(-1)).toBe(75)
@@ -43,7 +43,7 @@ describe('columnNumbers', () => {
 })
 
 describe('emptyGrid', () => {
-  it('is a 5×5 grid of false', () => {
+  it('is a 5x5 grid of false', () => {
     const g = emptyGrid()
     expect(g).toHaveLength(5)
     expect(g.every((row) => row.length === 5)).toBe(true)
@@ -106,7 +106,7 @@ describe('patternColumns', () => {
     ])
   })
 
-  it('ignores the FREE centre — a free-only pattern is treated as all-active', () => {
+  it('ignores the FREE centre - a free-only pattern is treated as all-active', () => {
     const freeOnly = Array.from({ length: 5 }, () => Array.from({ length: 5 }, () => false))
     freeOnly[2][2] = true
     expect(patternColumns([{ pattern_data: freeOnly }])).toEqual([true, true, true, true, true])
@@ -132,7 +132,7 @@ describe('bingo card helpers', () => {
     expect(columnRange(4)).toEqual([61, 75])
   })
 
-  it('emptyNumberBoard is a 5×5 all-zero grid', () => {
+  it('emptyNumberBoard is a 5x5 all-zero grid', () => {
     const b = emptyNumberBoard()
     expect(b).toHaveLength(5)
     expect(b.every((r) => r.length === 5 && r.every((n) => n === 0))).toBe(true)
@@ -150,8 +150,8 @@ describe('bingo card helpers', () => {
     expect(validateBoard(validBoard())).toBe('')
   })
 
-  it('validateBoard rejects a non-5×5 grid', () => {
-    expect(validateBoard([[1, 2, 3]])).toMatch(/5×5/)
+  it('validateBoard rejects a non-5x5 grid', () => {
+    expect(validateBoard([[1, 2, 3]])).toMatch(/5x5/)
   })
 
   it('validateBoard requires the FREE centre', () => {
@@ -162,7 +162,7 @@ describe('bingo card helpers', () => {
 
   it('validateBoard rejects an out-of-range number', () => {
     const b = validBoard()
-    b[0][0] = 99 // B column only allows 1–15
+    b[0][0] = 99 // B column only allows 1-15
     expect(validateBoard(b)).toMatch(/Column B/)
   })
 

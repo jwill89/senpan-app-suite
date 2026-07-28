@@ -11,7 +11,7 @@ import (
 	"app-suite/internal/model"
 )
 
-// ── Pattern Category operations ─────────────────────────────────────────────
+// -- Pattern Category operations ---------------------------------------------
 
 // ListPatternCategories returns all pattern categories ordered by sort_order.
 func (s *Store) ListPatternCategories() ([]model.PatternCategory, error) {
@@ -179,7 +179,7 @@ func (s *Store) swapCategoryOrder(idA, idB int64) (bool, error) {
 	return true, tx.Commit()
 }
 
-// ── Pattern operations ──────────────────────────────────────────────────────
+// -- Pattern operations ------------------------------------------------------
 
 // SavePattern inserts a new pattern and returns its ID.
 func (s *Store) SavePattern(name string, data [][]bool, categoryID int64) (int64, error) {

@@ -34,12 +34,12 @@ const showFooter = computed(() => !String(route.name ?? '').startsWith('admin'))
 
 // Drive the shared WebSocket from the active route via a *stable connection key*
 // rather than the raw route name, so the socket is (re)connected only when the
-// intended target actually changes — not on every admin sub-route navigation
+// intended target actually changes - not on every admin sub-route navigation
 // (which previously tore the socket down and reconnected without the reconnect
 // catch-up, dropping missed draws/winners/logs). Keys:
-//   `player:<cardId>` — a loaded player board
-//   `admin`           — any live admin page
-//   null              — no socket (home, auth pages, and the hidden
+//   `player:<cardId>` - a loaded player board
+//   `admin`           - any live admin page
+//   null              - no socket (home, auth pages, and the hidden
 //                       /admin/register page, which has no session yet)
 // Watching the player's card id too ensures that on a direct link / refresh to
 // /play/:cardId we connect once the board has finished loading (the card id is
@@ -62,7 +62,7 @@ const wsKey = computed<string | null>(() => {
 
 // A Vue watch on a primitive computed fires only when the value changes, so
 // navigating between admin sub-routes (key stays `admin`) is a no-op and the
-// live socket — plus its internal reconnect/catch-up — is left untouched.
+// live socket - plus its internal reconnect/catch-up - is left untouched.
 watch(
   wsKey,
   (key) => {
@@ -94,7 +94,7 @@ onBeforeUnmount(() => {
     <ConfirmModal />
     <router-view />
     <AppFooter v-if="showFooter" />
-    <!-- "It's Yoever" reaction — global so it shows on both player and admin views -->
+    <!-- "It's Yoever" reaction - global so it shows on both player and admin views -->
     <YoeverOverlay />
   </div>
 </template>

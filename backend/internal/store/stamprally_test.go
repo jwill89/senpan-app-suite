@@ -171,7 +171,7 @@ func TestStampRally_LogsAndDelete(t *testing.T) {
 	if len(logs) != 2 {
 		t.Fatalf("logs = %d; want 2", len(logs))
 	}
-	// No affiliate → the default stall name.
+	// No affiliate -> the default stall name.
 	if logs[0].StallName != "Senpan Tea House" {
 		t.Errorf("stall = %q; want Senpan Tea House", logs[0].StallName)
 	}

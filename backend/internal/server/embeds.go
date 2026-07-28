@@ -17,7 +17,7 @@ import (
 // errWebhookAmbiguous marks a transport-level failure (timeout, connection reset)
 // where the request may still have reached Discord. The scheduler must NOT retry
 // these: if the message did in fact arrive, retrying would double-post it. An
-// HTTP error *status* (4xx/5xx, incl. 429) is NOT ambiguous — Discord received
+// HTTP error *status* (4xx/5xx, incl. 429) is NOT ambiguous - Discord received
 // the request and declined it, so the message was not delivered and is safe to
 // retry.
 var errWebhookAmbiguous = errors.New("discord webhook delivery ambiguous (transport failure)")
@@ -26,7 +26,7 @@ var errWebhookAmbiguous = errors.New("discord webhook delivery ambiguous (transp
 // that posts to a webhook (reading lists, book-club events, announcements):
 // the embed schema types, a fluent builder for assembling one in a customizable
 // way, the colour helper, and the HTTP post. Feature code builds an embed with
-// newEmbed()… and sends it with postDiscordEmbed; new embed shapes only need a
+// newEmbed()... and sends it with postDiscordEmbed; new embed shapes only need a
 // new builder chain, not new transport code.
 
 // accentColor is the brand accent (pink) used as the default embed colour.
@@ -79,7 +79,7 @@ type discordEmbed struct {
 }
 
 type discordWebhookPayload struct {
-	// Content is the plain message text above the embed — used to carry a role
+	// Content is the plain message text above the embed - used to carry a role
 	// mention (@everyone or <@&id>), since mentions inside an embed don't notify.
 	Content         string                  `json:"content,omitempty"`
 	Embeds          []discordEmbed          `json:"embeds"`
@@ -106,7 +106,7 @@ const (
 	buttonLabelMax     = 80 // Discord's per-button label length cap
 )
 
-// discordEmoji is the emoji shown on a button — either a unicode emoji (Name holds
+// discordEmoji is the emoji shown on a button - either a unicode emoji (Name holds
 // the character) or a custom guild emoji (Name + numeric ID, Animated for "a:").
 type discordEmoji struct {
 	Name     string `json:"name,omitempty"`
@@ -225,7 +225,7 @@ func (b *embedBuilder) field(name, value string, inline bool) *embedBuilder {
 }
 
 // thumbnail sets the small top-right image (only for absolute http(s) URLs, with
-// any unsafe characters — e.g. a space in a filename — percent-encoded so Discord
+// any unsafe characters - e.g. a space in a filename - percent-encoded so Discord
 // accepts the embed; see normalizeEmbedURL).
 func (b *embedBuilder) thumbnail(rawURL string) *embedBuilder {
 	if u, ok := normalizeEmbedURL(rawURL); ok {
@@ -299,14 +299,14 @@ func postDiscordWebhook(ctx context.Context, webhookURL string, payload discordW
 	resp, err := bookclubHTTPClient.Do(req)
 	if err != nil {
 		// Transport failure: the request may or may not have reached Discord, so
-		// mark it ambiguous (callers must not blindly retry — see errWebhookAmbiguous).
+		// mark it ambiguous (callers must not blindly retry - see errWebhookAmbiguous).
 		// sanitizeWebhookErr strips the webhook URL (its path carries the secret
 		// token) that http.Client bakes into the *url.Error it returns.
 		return fmt.Errorf("%w: %s", errWebhookAmbiguous, sanitizeWebhookErr(err))
 	}
 	defer resp.Body.Close()
 	// Read (not discard) the response so a non-2xx can report Discord's own reason
-	// — e.g. "Unknown Webhook" for a deleted webhook — instead of a bare status
+	// - e.g. "Unknown Webhook" for a deleted webhook - instead of a bare status
 	// code. The read also drains the body so the keep-alive connection is reusable.
 	respBody, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<16))
 	slog.Debug("discord webhook response", "status", resp.StatusCode)
@@ -319,8 +319,8 @@ func postDiscordWebhook(ctx context.Context, webhookURL string, payload discordW
 // discordErrorMessage extracts a human-readable reason from a Discord webhook
 // error response body. Discord returns a JSON envelope like
 // {"message":"Unknown Webhook","code":10015}, so we surface "Unknown Webhook
-// (code 10015)" when present — telling the admin the post failed because the
-// webhook was deleted, malformed, rate-limited, etc. — and fall back to a trimmed
+// (code 10015)" when present - telling the admin the post failed because the
+// webhook was deleted, malformed, rate-limited, etc. - and fall back to a trimmed
 // raw snippet (or "no response body") otherwise. The body is Discord's response,
 // so it never carries our webhook token.
 func discordErrorMessage(body []byte) string {
@@ -344,7 +344,7 @@ func discordErrorMessage(body []byte) string {
 // sanitizeWebhookErr renders a transport error without exposing the webhook URL,
 // whose path carries the secret webhook token. http.Client.Do wraps failures in a
 // *url.Error whose Error() prints the full URL (url.Redacted masks only userinfo,
-// not a token in the path), so we surface only the underlying cause — mirroring
+// not a token in the path), so we surface only the underlying cause - mirroring
 // the AniList client's handling (see bookclubs.go). This keeps the token out of
 // both the API response body and the server log.
 func sanitizeWebhookErr(err error) string {
@@ -378,12 +378,12 @@ func isHTTPURL(u string) bool {
 }
 
 // normalizeEmbedURL trims raw and, when it is an http(s) URL, returns it with any
-// characters that aren't URL-safe percent-encoded — a space in an image filename
+// characters that aren't URL-safe percent-encoded - a space in an image filename
 // becomes %20, "café.png" becomes "caf%C3%A9.png". Discord rejects the ENTIRE
 // embed (400, "embeds" invalid) when an image/thumbnail URL isn't well-formed, so
 // this repairs URLs stored raw, e.g. an image picked from a file whose name has
-// spaces. Parsing then re-stringifying is idempotent — an already-encoded URL is
-// returned unchanged — so it is safe to apply to every URL. Returns ("", false)
+// spaces. Parsing then re-stringifying is idempotent - an already-encoded URL is
+// returned unchanged - so it is safe to apply to every URL. Returns ("", false)
 // when raw isn't a usable absolute http(s) URL, so the caller omits the field.
 func normalizeEmbedURL(raw string) (string, bool) {
 	raw = strings.TrimSpace(raw)
@@ -407,5 +407,5 @@ func truncateRunes(s string, n int) string {
 	if n <= 1 {
 		return string(runes[:n])
 	}
-	return string(runes[:n-1]) + "…"
+	return string(runes[:n-1]) + "..."
 }

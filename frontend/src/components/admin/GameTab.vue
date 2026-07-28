@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /**
- * Admin Game tab — "New Game" setup (pattern picker + game details) when no
+ * Admin Game tab - "New Game" setup (pattern picker + game details) when no
  * game is active, and the live "Current Game" controls (draw, countdown, last
  * drawn, patterns, winners, frequent winners, called numbers) once started.
  * Mirrors the original `adminTab==='bingo-game'` block exactly.
@@ -31,7 +31,7 @@ import { useYoeverStore } from '@/stores/yoever'
 
 const router = useRouter()
 const game = useGameStore()
-// Which BINGO columns this game can draw from (undefined when no game is active →
+// Which BINGO columns this game can draw from (undefined when no game is active ->
 // no dimming). Columns no active pattern uses get a dim overlay in the Called
 // Numbers panel, since no number in them will be called this game.
 const calledActiveColumns = computed(() =>
@@ -72,7 +72,7 @@ const liveAutoInterval = computed({
   },
 })
 
-// ── Elapsed-game clock (admin-only, Current Game view) ──────────────────────
+// -- Elapsed-game clock (admin-only, Current Game view) ----------------------
 // Ticks once a second while this tab is mounted; the start time comes from the
 // game state's `created_at` (stored as UTC), so it stays accurate across
 // refreshes and for multiple admins.
@@ -126,7 +126,7 @@ function toggleAuto(): void {
 
 /**
  * Master local toggle: whether *this admin* sees the reaction on their screen.
- * "Show effect" governs the sound too — turning it off also mutes the sound (and
+ * "Show effect" governs the sound too - turning it off also mutes the sound (and
  * disables that sub-toggle); turning it on re-enables the sound.
  */
 function toggleYoeverForMe(): void {
@@ -134,7 +134,7 @@ function toggleYoeverForMe(): void {
 }
 
 /**
- * Toggles whether this admin hears the reaction sound locally — only while the
+ * Toggles whether this admin hears the reaction sound locally - only while the
  * effect is shown. Independent of the main sound options; enabling it is the
  * audio-unlocking gesture so the sound can play on the next trigger.
  */
@@ -144,15 +144,15 @@ function toggleYoeverSoundForMe(): void {
 }
 
 // Keyboard shortcut: Space (or Enter) draws the next number during an active
-// game — speeds up calling a fast game. Ignored while typing in a form field,
+// game - speeds up calling a fast game. Ignored while typing in a form field,
 // while a draw is already in flight, or during the inter-draw countdown.
 function onKeydown(e: KeyboardEvent): void {
   if (e.key !== ' ' && e.key !== 'Enter') return
   if (!game.currentGame || game.drawing || game.drawCountdown !== null) return
-  // Never draw while a modal is open — the hotkey must not fire behind a dialog
+  // Never draw while a modal is open - the hotkey must not fire behind a dialog
   // (e.g. the winner-verify or a confirm modal opened over the game).
   if (document.querySelector('.modal-overlay')) return
-  // Don't hijack a focused form control or button — let it handle the key
+  // Don't hijack a focused form control or button - let it handle the key
   // itself (e.g. Enter on "End Game" should end, not draw; Space on a winner
   // chip should verify, not draw).
   const el = document.activeElement as HTMLElement | null
@@ -209,10 +209,10 @@ onBeforeUnmount(() => {
         </span>
       </h3>
 
-      <!-- No active game → start one -->
+      <!-- No active game -> start one -->
       <div v-if="!game.currentGame" class="game-setup">
         <div v-if="patterns.patterns.length === 0" class="mb-12">
-          <p class="text-dim mb-8">Create some win patterns first.</p>
+          <p class="text-muted mb-8">Create some win patterns first.</p>
           <button class="btn-confirm btn-sm" @click="goToPatterns">
             <font-awesome-icon :icon="['fas', 'plus']" /> Create a Pattern
           </button>
@@ -220,13 +220,13 @@ onBeforeUnmount(() => {
         <div v-else>
           <!-- Start from a saved preset (auto-fills patterns + details) -->
           <div v-if="presets.presets.length" class="flex-toolbar mb-12">
-            <label class="text-dim text-sm">Start from a preset:</label>
+            <label class="text-muted text-sm">Start from a preset:</label>
             <select
               v-model.number="selectedPresetId"
               aria-label="Game preset"
               class="manager-filter"
             >
-              <option :value="null">— None —</option>
+              <option :value="null">- None -</option>
               <option v-for="p in presets.presets" :key="p.id" :value="p.id">{{ p.name }}</option>
             </select>
             <button
@@ -239,7 +239,7 @@ onBeforeUnmount(() => {
             </button>
           </div>
 
-          <p class="text-dim mb-12">Select one or more win patterns:</p>
+          <p class="text-muted mb-12">Select one or more win patterns:</p>
 
           <PatternPicker v-model="game.selectedPatternIds" />
 
@@ -247,24 +247,24 @@ onBeforeUnmount(() => {
           <div class="game-details-editor">
             <label class="field-label">
               Game Details
-              <span class="text-dim fw-normal text-xs"> (Markdown supported) </span>
+              <span class="text-muted fw-normal text-xs"> (Markdown supported) </span>
             </label>
             <MarkdownEditor
               v-model="game.gameDetails"
               min-height="120px"
-              placeholder="Enter game details, rules, prizes, etc. Supports bold, italics, lists, and more…"
+              placeholder="Enter game details, rules, prizes, etc. Supports bold, italics, lists, and more..."
               @blur="game.saveGameDetails()"
             />
           </div>
 
           <!-- Auto-draw setup: toggle on, then pick how often numbers are drawn -->
           <div class="auto-setup mb-12">
-            <label class="auto-check">
+            <label class="checkbox-inline checkbox-inline--strong">
               <input v-model="game.newGameAuto" type="checkbox" />
               <span>Auto-draw numbers</span>
             </label>
             <template v-if="game.newGameAuto">
-              <label class="text-dim text-sm" for="new-auto-interval">Time Between Calls:</label>
+              <label class="text-muted text-sm" for="new-auto-interval">Time Between Calls:</label>
               <select
                 id="new-auto-interval"
                 v-model.number="game.newGameAutoInterval"
@@ -276,7 +276,7 @@ onBeforeUnmount(() => {
               </select>
             </template>
           </div>
-          <p v-if="game.newGameAuto" class="text-dim text-xs mb-12">
+          <p v-if="game.newGameAuto" class="text-muted text-xs mb-12">
             The system draws a number every {{ autoIntervalLabel(game.newGameAutoInterval) }} once
             the game starts. Each draw still respects the player delay, and auto turns off at
             half-time and when a winner is found.
@@ -287,7 +287,7 @@ onBeforeUnmount(() => {
             :disabled="game.selectedPatternIds.length === 0 || game.starting"
             @click="game.startGame()"
           >
-            <LoadingSpinner v-if="game.starting" label="Starting…" />
+            <LoadingSpinner v-if="game.starting" label="Starting..." />
             <template v-else>
               Start Game
               <span v-if="game.selectedPatternIds.length" style="opacity: 0.85">
@@ -307,7 +307,7 @@ onBeforeUnmount(() => {
               :disabled="game.drawCountdown !== null || game.drawing"
               @click="game.drawNumber()"
             >
-              <LoadingSpinner v-if="game.drawing" label="Drawing…" />
+              <LoadingSpinner v-if="game.drawing" label="Drawing..." />
               <template v-else
                 ><font-awesome-icon :icon="['fas', 'circle-dot']" /> Draw Number</template
               >
@@ -323,19 +323,21 @@ onBeforeUnmount(() => {
               </option>
             </select>
             <button class="btn-caution btn-lg" :disabled="game.ending" @click="game.endGame()">
-              <LoadingSpinner v-if="game.ending" label="Ending…" />
+              <LoadingSpinner v-if="game.ending" label="Ending..." />
               <template v-else>End Game</template>
             </button>
           </div>
 
-          <p class="text-dim text-xs mt-8">Tip: press <kbd>Space</kbd> to draw the next number.</p>
+          <p class="text-muted text-xs mt-8">
+            Tip: press <kbd>Space</kbd> to draw the next number.
+          </p>
 
           <!-- Countdown / Sent indicator -->
           <div v-if="game.drawCountdown !== null" class="draw-countdown">
             <div class="countdown-ring">
               <span class="countdown-number">{{ game.drawCountdown }}</span>
             </div>
-            <span class="countdown-label">Sending to players…</span>
+            <span class="countdown-label">Sending to players...</span>
           </div>
           <div v-else-if="game.drawSent" class="draw-sent">
             <span class="sent-icon"><font-awesome-icon :icon="['fad', 'circle-check']" /></span>
@@ -363,8 +365,8 @@ onBeforeUnmount(() => {
                     :aria-pressed="game.currentGame.auto_enabled"
                     :title="
                       game.currentGame.auto_enabled
-                        ? 'Auto-draw is ON — click to stop automatic draws'
-                        : 'Auto-draw is OFF — click to draw numbers automatically'
+                        ? 'Auto-draw is ON - click to stop automatic draws'
+                        : 'Auto-draw is OFF - click to draw numbers automatically'
                     "
                     @click="toggleAuto"
                   >
@@ -381,7 +383,7 @@ onBeforeUnmount(() => {
                     class="auto-interval-field"
                     title="How often a number is drawn automatically"
                   >
-                    <span class="text-dim text-sm">Time Between Calls:</span>
+                    <span class="text-muted text-sm">Time Between Calls:</span>
                     <select
                       v-model.number="liveAutoInterval"
                       aria-label="Time between calls"
@@ -405,8 +407,8 @@ onBeforeUnmount(() => {
                     :aria-pressed="game.currentGame.yoever_enabled"
                     :title="
                       game.currentGame.yoever_enabled
-                        ? `It's Yoever is ON — click to switch it off for all players`
-                        : `It's Yoever is OFF — click to switch it on`
+                        ? `It's Yoever is ON - click to switch it off for all players`
+                        : `It's Yoever is OFF - click to switch it on`
                     "
                     @click="toggleYoever"
                   >
@@ -461,8 +463,8 @@ onBeforeUnmount(() => {
                     :aria-pressed="game.winnerSoundEnabled"
                     :title="
                       game.winnerSoundEnabled
-                        ? 'Winner sound on — click to mute'
-                        : 'Winner sound off — click to enable'
+                        ? 'Winner sound on - click to mute'
+                        : 'Winner sound off - click to enable'
                     "
                     @click="toggleWinnerSound"
                   >
@@ -488,10 +490,7 @@ onBeforeUnmount(() => {
                 <div class="last-called">
                   <span class="last-called-label">Last Called</span>
                   <div class="last-called-row">
-                    <span
-                      class="last-called-flourish last-called-flourish--left"
-                      aria-hidden="true"
-                    ></span>
+                    <span class="last-called-flourish" aria-hidden="true"></span>
                     <div :key="game.lastDrawn.call_order" class="last-drawn last-drawn--pop">
                       <span class="letter">{{ game.lastDrawn.letter }}</span>
                       <span class="number">{{ game.lastDrawn.number }}</span>
@@ -517,7 +516,7 @@ onBeforeUnmount(() => {
           <div class="game-active-right">
             <div v-if="game.winners.length" class="winners-panel">
               <h3><font-awesome-icon :icon="['fad', 'trophy']" /> Winning Cards</h3>
-              <p class="text-dim text-xs mb-8">Click a card ID to verify</p>
+              <p class="text-muted text-xs mb-8">Click a card ID to verify</p>
               <div class="winner-chips">
                 <span
                   v-for="w in game.winners"
@@ -578,22 +577,11 @@ onBeforeUnmount(() => {
   align-items: center;
   gap: 12px;
 }
-.auto-check {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  font-weight: 600;
-  cursor: pointer;
-  user-select: none;
-}
-.auto-check input {
-  cursor: pointer;
-}
 
-/* Delay selector in the primary controls row — sized to match the btn-lg
+/* Delay selector in the primary controls row - sized to match the btn-lg
    Draw/End buttons beside it so the three read as one row of equal controls. A
    <select>'s native control height ignores line-height, so pin the height to the
-   btn-lg box (14px padding + 1.1rem/line-1 ≈ 46px) explicitly. */
+   btn-lg box (14px padding + 1.1rem/line-1 ~ 46px) explicitly. */
 .delay-select {
   box-sizing: border-box;
   height: 46px;
@@ -603,7 +591,7 @@ onBeforeUnmount(() => {
   cursor: pointer;
 }
 
-/* ── Collapsible per-feature settings (native <details>) ─────────────────────
+/* -- Collapsible per-feature settings (native <details>) ---------------------
    Holds the auto-draw, "It's Yoever", and winner-sound controls in labelled
    sections; collapsed by default so the primary controls stay prominent. */
 .game-settings {
@@ -625,7 +613,7 @@ onBeforeUnmount(() => {
   user-select: none;
   list-style: none;
 }
-/* Hide the default disclosure triangle — we render our own chevron. */
+/* Hide the default disclosure triangle - we render our own chevron. */
 .game-settings-summary::-webkit-details-marker {
   display: none;
 }

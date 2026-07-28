@@ -11,10 +11,10 @@ import (
 	"app-suite/internal/store"
 )
 
-// ── Garapon admin (list + detail + CRUD + drawing links) ────────────────────
+// -- Garapon admin (list + detail + CRUD + drawing links) --------------------
 //
 // A garapon is a festival lottery drum (see model.Garapon). Admins manage it like
-// a raffle — create/edit/close — but instead of public sign-up, each player gets a
+// a raffle - create/edit/close - but instead of public sign-up, each player gets a
 // private tokenized link (a GaraponPlayer) with a draw allowance. The public draw
 // endpoints below need no auth; the token is the capability.
 
@@ -82,7 +82,7 @@ type garaponWriteRequest struct {
 	Prizes          []model.GaraponPrize `json:"prizes"`
 }
 
-// resolveStampRallyLink validates an optional garapon→rally link: nil/0 means
+// resolveStampRallyLink validates an optional garapon->rally link: nil/0 means
 // unlinked; a supplied id must be a real, OPEN rally (closed/unknown rallies are
 // rejected). Writes the error and returns ok=false on any problem.
 func (s *Server) resolveStampRallyLink(w http.ResponseWriter, id *int64) (*int64, bool) {
@@ -188,7 +188,7 @@ func (s *Server) handleGaraponCreate(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleGaraponUpdate replaces a garapon's editable fields (status is not editable
-// here and is preserved — use the close/reopen verbs).
+// here and is preserved - use the close/reopen verbs).
 //
 //	Endpoint:  PUT /api/garapons/{id}
 //	Auth:      admin, or a user granted festival-garapon
@@ -236,8 +236,8 @@ func (s *Server) handleGaraponUpdate(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleGaraponDelete deletes a garapon. The grand-prize image is managed
-// centrally on System → Images (the "Garapon" category), so the file is left
-// intact — it may be reused.
+// centrally on System -> Images (the "Garapon" category), so the file is left
+// intact - it may be reused.
 //
 //	Endpoint:  DELETE /api/garapons/{id}
 //	Auth:      admin, or a user granted festival-garapon
@@ -349,7 +349,7 @@ func (s *Server) handleGaraponPlayerCreate(w http.ResponseWriter, r *http.Reques
 				if err := s.store.SetPlayerStampCard(player.ID, card.ID); err == nil {
 					player.StampCardToken = card.Token
 				}
-				// A stamp card was issued — let admins viewing the rally see it live.
+				// A stamp card was issued - let admins viewing the rally see it live.
 				s.broadcastResourceChanged("stamp-rallies")
 			}
 		}
@@ -379,7 +379,7 @@ func (s *Server) handleGaraponPlayerDelete(w http.ResponseWriter, r *http.Reques
 		writeInternalError(w, "get garapon player", err)
 		return
 	}
-	// The link must belong to the garapon in the path — otherwise the
+	// The link must belong to the garapon in the path - otherwise the
 	// open/closed check below would read the wrong garapon's status and could
 	// force-delete a drawn link from a different, still-open garapon.
 	if existing == nil || existing.GaraponID != garaponID {
@@ -407,7 +407,7 @@ func (s *Server) handleGaraponPlayerDelete(w http.ResponseWriter, r *http.Reques
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// ── Garapon public (tokenized player view + draw) ───────────────────────────
+// -- Garapon public (tokenized player view + draw) ---------------------------
 
 // toPublicGarapon copies a garapon for the player view, zeroing each prize's Rate
 // so the configured odds aren't exposed. The trimmed wire shape (no odds, no
@@ -523,7 +523,7 @@ func (s *Server) handleGaraponDraw(w http.ResponseWriter, r *http.Request) {
 	s.broadcastResourceChanged("garapons")
 
 	// Exactly one draw was just recorded, so the fresh usage is player.DrawsUsed+1
-	// (its allowance is unchanged) — no need to reload the player.
+	// (its allowance is unchanged) - no need to reload the player.
 	writeJSON(w, http.StatusOK, model.GaraponDrawResponse{
 		Draw:      *draw,
 		DrawsUsed: player.DrawsUsed + 1,

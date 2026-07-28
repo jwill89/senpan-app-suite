@@ -10,7 +10,7 @@ public readonly record struct NearbyPlayer(string Name, string World);
 /// <summary>
 /// Reads visible player characters from the object table so the bingo/raffle forms
 /// can offer a "pick nearby" shortcut instead of typing names by hand. Only the
-/// name + home world are read — the same fields the player would type to enter —
+/// name + home world are read - the same fields the player would type to enter -
 /// and nothing is collected or sent anywhere until the operator picks someone and
 /// submits the form.
 /// </summary>
@@ -22,7 +22,7 @@ public sealed class NearbyPlayers
 
     /// <summary>
     /// Returns the distinct nearby players, sorted by name. Must be called on the
-    /// game's framework thread — the window Draw loop already is, so calling it from
+    /// game's framework thread - the window Draw loop already is, so calling it from
     /// UI code is safe.
     /// </summary>
     public List<NearbyPlayer> Snapshot()

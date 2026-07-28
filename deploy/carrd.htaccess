@@ -1,9 +1,9 @@
 # ============================================================================
-# Apache .htaccess — Carrd image host (serves https://carrd.senpan.cafe/)
+# Apache .htaccess - Carrd image host (serves https://carrd.senpan.cafe/)
 # ----------------------------------------------------------------------------
 # PLACEMENT: copy this file to the document root that serves
 # https://carrd.senpan.cafe/ as ".htaccess". That directory is <webRoot>/carrd/
-# — the folder the Go server creates per-project subfolders in and writes
+# - the folder the Go server creates per-project subfolders in and writes
 # uploaded images to (see internal/server/carrd.go: carrdDir() =
 # <webRoot>/carrd). The Go server only ever adds/removes project folders and
 # image files there, so this .htaccess persists across uploads.
@@ -23,7 +23,7 @@
 Options -Indexes
 
 # Hide the per-project metadata sidecar (.carrd.json) and any other dotfiles
-# from public access — they store the project title, not anything to serve.
+# from public access - they store the project title, not anything to serve.
 <FilesMatch "^\.">
     Require all denied
 </FilesMatch>

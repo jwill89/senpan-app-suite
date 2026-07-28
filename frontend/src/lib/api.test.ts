@@ -13,7 +13,7 @@ function jsonResponse(body: unknown, init: { ok?: boolean; status?: number } = {
 /**
  * Controllable stand-in for XMLHttpRequest. `apiUpload` wires up the handlers,
  * then calls send(); each test sets `FakeXHR.onSend` to drive the outcome
- * (progress → onload / onerror / etc.) synchronously.
+ * (progress -> onload / onerror / etc.) synchronously.
  */
 class FakeXHR {
   static instances: FakeXHR[] = []

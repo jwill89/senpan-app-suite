@@ -2,7 +2,7 @@
 #
 # Auto-tag + GitHub Release per component when its current version has no release
 # yet. Run by the CI "release" job on pushes to `main`, AFTER the frontend /
-# backend / plugin gate jobs pass — so only green commits are ever released.
+# backend / plugin gate jobs pass - so only green commits are ever released.
 #
 # Each component's tag is <Component>-v<version> (matching the manual scheme:
 # Frontend-v3.5.0, Backend-v3.4.0, Plugin-v2.0.1.0) and the release body is that
@@ -14,16 +14,16 @@
 # otherwise the tag is created at the pushed commit.
 set -euo pipefail
 
-# ── Version extraction (source of truth per component) ────────────────────────
+# -- Version extraction (source of truth per component) ------------------------
 # The frontend version is JSON, so parse it with jq (preinstalled on the CI
-# runner). The backend (Go const) and plugin (XML csproj) are not JSON — grep
+# runner). The backend (Go const) and plugin (XML csproj) are not JSON - grep
 # them. The `|| true` keeps a malformed/missing version file from aborting the
 # whole run under `set -e`; an empty result just skips that component (below).
 frontend_version() { jq -r '.version // empty' frontend/package.json || true; }
 backend_version()  { grep -oP 'const Version = "\K[^"]+' backend/internal/version/version.go || true; }
 plugin_version()   { grep -oP -m1 '<Version>\K[^<]+' plugins/SenpanCompanion/SenpanCompanion.csproj || true; }
 
-# ── CHANGELOG section extraction ──────────────────────────────────────────────
+# -- CHANGELOG section extraction ----------------------------------------------
 # Print the block under "## <section>" / "### [<version>]" up to the next
 # version (### [), section (## ), or separator (---). Section-scoped so a version
 # number shared across components (e.g. 3.4.0) resolves to the right section.
@@ -37,17 +37,17 @@ changelog_section() {
   ' CHANGELOG.md
 }
 
-# ── Release one component ─────────────────────────────────────────────────────
+# -- Release one component -----------------------------------------------------
 release_component() {
   local component="$1" section="$2" version="$3"
   local tag="${component}-v${version}"
 
   if [ -z "$version" ]; then
-    echo "!! Could not read a version for ${component} — skipping" >&2
+    echo "!! Could not read a version for ${component} - skipping" >&2
     return
   fi
   if gh release view "$tag" >/dev/null 2>&1; then
-    echo "== ${tag}: release already exists — skipping"
+    echo "== ${tag}: release already exists - skipping"
     return
   fi
 
@@ -56,7 +56,7 @@ release_component() {
   changelog_section "$section" "$version" > "$notes_file"
   if [ ! -s "$notes_file" ]; then
     printf '_No CHANGELOG entry found for %s %s._\n' "$section" "$version" > "$notes_file"
-    echo "!! ${tag}: no CHANGELOG section found — releasing with a placeholder" >&2
+    echo "!! ${tag}: no CHANGELOG section found - releasing with a placeholder" >&2
   fi
 
   if git rev-parse -q --verify "refs/tags/${tag}" >/dev/null 2>&1; then

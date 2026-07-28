@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /**
- * Admin content panel — the standard card surface every admin tab sits in.
+ * Admin content panel - the standard card surface every admin tab sits in.
  * Renders the shared `.admin-panel` chrome with an optional icon + title
  * heading (the heading picks up the panel's bottom-border rule automatically).
  *

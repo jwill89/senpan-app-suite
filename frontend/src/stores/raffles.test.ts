@@ -88,7 +88,7 @@ describe('raffleTotalCost', () => {
     const raffles = useRafflesStore()
     raffles.selectedRaffle = raffle(3, 250)
     raffles.raffleSignup.numEntries = 50 // over max
-    // Clamped to 3 → 3 × 250, not 50 × 250.
+    // Clamped to 3 -> 3 x 250, not 50 x 250.
     expect(raffles.raffleTotalCost()).toBe(750)
   })
 

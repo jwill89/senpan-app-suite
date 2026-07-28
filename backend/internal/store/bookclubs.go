@@ -7,7 +7,7 @@ import (
 	"app-suite/internal/model"
 )
 
-// ── Reading lists ───────────────────────────────────────────────────────────
+// -- Reading lists -----------------------------------------------------------
 
 // ListReadingLists returns all reading lists for a book club, newest first.
 // Items are not loaded (use GetReadingList for the full detail).
@@ -109,7 +109,7 @@ func (s *Store) DeleteReadingList(id int64) (bool, error) {
 	return n > 0, nil
 }
 
-// ── Reading list items ──────────────────────────────────────────────────────
+// -- Reading list items ------------------------------------------------------
 
 // CreateReadingListItem inserts a new item at the end of its list (next
 // sort_order) and returns its ID. Sources are stored as JSON.
@@ -155,7 +155,7 @@ func (s *Store) DeleteReadingListItem(itemID int64) (bool, error) {
 // CountReadingListItemsByCover returns how many items still reference a cover URL.
 // Cover images are uploaded under their original filename (so two items can share a
 // file), so callers check this after deleting an item before removing its cover
-// file — a shared file must survive while another item still points at it.
+// file - a shared file must survive while another item still points at it.
 func (s *Store) CountReadingListItemsByCover(coverImage string) (int, error) {
 	var n int
 	err := s.db.QueryRow(`SELECT COUNT(*) FROM reading_list_items WHERE cover_image = ?`, coverImage).Scan(&n)

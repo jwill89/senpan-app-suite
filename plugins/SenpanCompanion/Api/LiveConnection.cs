@@ -13,8 +13,8 @@ namespace SenpanCompanion.Api;
 /// <summary>
 /// Maintains the admin WebSocket to the Senpan server (/api/ws), authenticated via
 /// the personal access token on the query string. It surfaces the same live events
-/// the web admin receives — number draws (with winners), game start/end, and card
-/// list changes — so the bingo tab updates in real time, including when another
+/// the web admin receives - number draws (with winners), game start/end, and card
+/// list changes - so the bingo tab updates in real time, including when another
 /// operator (or the website) drives the game.
 ///
 /// Connecting is user-initiated (it starts when the window is open and a token is
@@ -109,7 +109,7 @@ public sealed class LiveConnection : IDisposable
             try
             {
                 await ConnectAndReceiveAsync(ct).ConfigureAwait(false);
-                backoff = InitialBackoff; // clean disconnect → reset the backoff
+                backoff = InitialBackoff; // clean disconnect -> reset the backoff
             }
             catch (OperationCanceledException)
             {
@@ -118,7 +118,7 @@ public sealed class LiveConnection : IDisposable
             catch (LiveAuthException ex)
             {
                 authRejected = true;
-                this.log.Warning($"Senpan live connection rejected — check your token: {ex.Message}");
+                this.log.Warning($"Senpan live connection rejected - check your token: {ex.Message}");
             }
             catch (Exception ex)
             {
@@ -309,7 +309,7 @@ public sealed class LiveConnection : IDisposable
         return new Uri($"{scheme}://{parsed.Authority}{parsed.AbsolutePath.TrimEnd('/')}/api/ws");
     }
 
-    // Combined admin-channel message envelope — deserialized once; only the fields
+    // Combined admin-channel message envelope - deserialized once; only the fields
     // relevant to each `type` are populated.
     private sealed class WsMessage
     {
@@ -331,7 +331,7 @@ public sealed class LiveConnection : IDisposable
     }
 
     // Raised when the WebSocket handshake is rejected because the token isn't accepted
-    // (401/403). Terminal for the current credentials — the reconnect loop backs off
+    // (401/403). Terminal for the current credentials - the reconnect loop backs off
     // hard rather than retrying every few seconds.
     private sealed class LiveAuthException : Exception
     {

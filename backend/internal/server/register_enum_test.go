@@ -15,7 +15,7 @@ import (
 
 // TestRegisterNoEnumeration verifies POST /api/register returns an IDENTICAL
 // generic response (status + body) whether the username is brand new, already
-// taken, or the reserved bootstrap "admin" — so the endpoint can't be used to
+// taken, or the reserved bootstrap "admin" - so the endpoint can't be used to
 // enumerate which accounts exist. The eligible account is still created.
 func TestRegisterNoEnumeration(t *testing.T) {
 	st, err := store.New(filepath.Join(t.TempDir(), "test.db"))

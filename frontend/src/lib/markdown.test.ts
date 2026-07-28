@@ -16,7 +16,7 @@ describe('useMarkdown', () => {
     expect(render('**bold** and _em_')).toContain('<em>em</em>')
   })
 
-  it('escapes raw HTML rather than rendering it (html: false — XSS guard)', async () => {
+  it('escapes raw HTML rather than rendering it (html: false - XSS guard)', async () => {
     const render = await renderer()
     const out = render('<script>alert(1)</script>')
     expect(out).not.toContain('<script>')
@@ -26,7 +26,7 @@ describe('useMarkdown', () => {
   it('escapes a raw <img onerror> payload instead of emitting a live tag', async () => {
     const render = await renderer()
     const out = render('<img src=x onerror=alert(1)>')
-    // The XSS guard: no real <img> element is produced — the payload is rendered
+    // The XSS guard: no real <img> element is produced - the payload is rendered
     // as inert, escaped text (so the onerror handler can never run).
     expect(out).not.toMatch(/<img\b/)
     expect(out).toContain('&lt;img')

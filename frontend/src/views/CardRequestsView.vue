@@ -62,7 +62,7 @@ function onTurnstileCleared(): void {
 
 async function submit(): Promise<void> {
   await cr.submit()
-  // On failure the (single-use) token was cleared — re-issue a fresh one.
+  // On failure the (single-use) token was cleared - re-issue a fresh one.
   if (!cr.result) turnstile.value?.reset()
 }
 
@@ -74,18 +74,20 @@ function back(): void {
 <template>
   <div>
     <div class="topbar">
-      <button class="btn-neutral btn-sm" @click="back">← Back</button>
+      <button class="btn-neutral btn-sm" @click="back">
+        <font-awesome-icon :icon="['fas', 'arrow-left']" /> Back
+      </button>
       <h2>Personal Card Request</h2>
       <span></span>
     </div>
     <div class="tab-body card-request-body">
       <!-- Success state -->
       <div v-if="cr.result" class="request-result">
-        <h3 class="text-success mb-8">
+        <h3 class="mb-8">
           <font-awesome-icon :icon="['fad', 'circle-check']" /> Request submitted!
         </h3>
         <p>
-          Your custom card <strong class="code-gold">{{ cr.result.id }}</strong> is now
+          Your custom card <strong class="code-highlight">{{ cr.result.id }}</strong> is now
           <strong>pending staff approval</strong>. Once it's approved (and paid for), it becomes
           playable on regular bingo nights.
         </p>
@@ -99,7 +101,7 @@ function back(): void {
             Design your own bingo card below. <strong>Senpan staff must approve</strong> each custom
             card, and it costs <strong>{{ cost.toLocaleString() }} gil</strong>.
           </p>
-          <p class="text-dim text-sm">
+          <p class="text-muted text-sm">
             A custom card lasts until the end of the calendar year and can be used on any regular
             (non-event) bingo night.
           </p>
@@ -119,7 +121,7 @@ function back(): void {
           <div class="field">
             <label class="field-label">World</label>
             <select v-model="cr.world" aria-label="World">
-              <option value="" disabled>Select your world…</option>
+              <option value="" disabled>Select your world...</option>
               <optgroup
                 v-for="dc in FF14_WORLDS"
                 :key="dc.name"
@@ -142,13 +144,13 @@ function back(): void {
               aria-label="Custom card ID"
               @input="onCardIdInput"
             />
-            <p class="text-dim text-xs mt-4">6 letters or numbers — your card's join code.</p>
+            <p class="text-muted text-xs mt-4">6 letters or numbers - your card's join code.</p>
           </div>
 
           <div class="field">
             <label class="field-label">Your Card</label>
-            <p class="text-dim text-sm mb-8">
-              Enter a number in each cell (B 1–15, I 16–30, N 31–45, G 46–60, O 61–75), or use
+            <p class="text-muted text-sm mb-8">
+              Enter a number in each cell (B 1-15, I 16-30, N 31-45, G 46-60, O 61-75), or use
               “Generate Random” and tweak from there. The centre is a free space.
             </p>
             <div class="card-editor-wrap">
@@ -184,7 +186,7 @@ function back(): void {
             "
             @click="submit"
           >
-            <LoadingSpinner v-if="cr.submitting" label="Submitting…" />
+            <LoadingSpinner v-if="cr.submitting" label="Submitting..." />
             <template v-else>Submit Request</template>
           </button>
         </div>

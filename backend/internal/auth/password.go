@@ -20,7 +20,7 @@ import (
 // 64 MB memory with a single pass is the OWASP-recommended argon2id baseline.
 const (
 	argonTime    = 1
-	argonMemory  = 64 * 1024 // KiB → 64 MB
+	argonMemory  = 64 * 1024 // KiB -> 64 MB
 	argonThreads = 4
 	argonKeyLen  = 32
 	argonSaltLen = 16

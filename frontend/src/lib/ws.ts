@@ -109,7 +109,7 @@ export class WsClient {
     }
 
     ws.onerror = () => {
-      // onclose fires after onerror — reconnect handled there.
+      // onclose fires after onerror - reconnect handled there.
     }
 
     this.ws = ws
@@ -117,7 +117,7 @@ export class WsClient {
     // Keepalive: send a text "ping" every 25s to defeat reverse-proxy idle
     // timeouts that only reset on data frames. The Go hub's readPump reads and
     // *discards* all incoming client frames (it never JSON-parses them), so this
-    // is a safe no-op server-side — it's purely traffic to keep the link warm.
+    // is a safe no-op server-side - it's purely traffic to keep the link warm.
     // (The server also sends its own protocol-level pings every 30s.)
     if (this.keepaliveTimer) clearInterval(this.keepaliveTimer)
     this.keepaliveTimer = setInterval(() => {
@@ -169,7 +169,7 @@ export class WsClient {
     this.setStatus('reconnecting')
     const delay = Math.min(1000 * Math.pow(2, this.reconnectAttempts - 1), 16000)
     this.cb.notify?.(
-      `Connection lost. Reconnecting (${this.reconnectAttempts}/${MAX_RECONNECT})…`,
+      `Connection lost. Reconnecting (${this.reconnectAttempts}/${MAX_RECONNECT})...`,
       'info',
     )
 

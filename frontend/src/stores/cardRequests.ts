@@ -62,7 +62,7 @@ export const useCardRequestsStore = defineStore('cardRequests', () => {
       // The server rejects a taken ID / duplicate board with an actionable message.
       ui.notify((e as Error).message, 'error')
     } finally {
-      // Turnstile tokens are single-use — clear so the widget re-issues one.
+      // Turnstile tokens are single-use - clear so the widget re-issues one.
       turnstileToken.value = ''
       submitting.value = false
     }

@@ -38,7 +38,7 @@ func TestStyles_List(t *testing.T) {
 }
 
 // TestStyles_TokenRoundTrip verifies a theme stores its tokens and that GET
-// /api/styles/{id} returns both the tokens and the server-generated :root{} CSS —
+// /api/styles/{id} returns both the tokens and the server-generated :root{} CSS -
 // and that an unknown token / injection attempt is dropped rather than persisted.
 func TestStyles_TokenRoundTrip(t *testing.T) {
 	env := newTestEnv(t)
@@ -49,8 +49,8 @@ func TestStyles_TokenRoundTrip(t *testing.T) {
 		"tokens": map[string]string{
 			"page-bg": "#1a0a0b",
 			"accent":  "#fbc95d",
-			"bogus":   "drop-me",     // unknown → dropped
-			"shadow":  "x; } body{}", // injection → stripped
+			"bogus":   "drop-me",     // unknown -> dropped
+			"shadow":  "x; } body{}", // injection -> stripped
 		},
 	})
 	if resp.StatusCode != http.StatusCreated {

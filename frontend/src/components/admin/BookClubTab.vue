@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /**
- * Admin Book Club tab — manage reading lists and their items, then publish a
+ * Admin Book Club tab - manage reading lists and their items, then publish a
  * list to Discord. Master/detail in one tab (like the Open Raffles tab): the
  * list of reading lists, and the selected list's items + add/edit form.
  *
@@ -8,7 +8,7 @@
  * `bookclub.openClub`) supplies the club name, icon, and the curator-comments
  * field label (e.g. "Yao's Comments" for Yaoi, "Drani's Comments" for Yuri).
  *
- * Items can be filled manually or pulled from AniList (search → pick a result →
+ * Items can be filled manually or pulled from AniList (search -> pick a result ->
  * the form is populated, cover image URL included). "Publish" posts every item
  * in the list as its own Discord embed via the club's configured webhook.
  */
@@ -31,6 +31,16 @@ const bookclub = useBookclubStore()
 // Inline rename state for a reading list (themed, avoids native prompt()).
 const editingListId = ref<number | null>(null)
 const editingTitle = ref('')
+
+/** Hidden <input type="file"> behind the cover Upload button. A bare file input
+ *  renders the browser's own grey "Choose File" control, which cannot be themed
+ *  (only ::file-selector-button can, and not consistently) - so every upload in
+ *  the app hides the input and triggers it from a real button instead. */
+const coverInput = ref<HTMLInputElement | null>(null)
+
+function pickCover(): void {
+  coverInput.value?.click()
+}
 
 function startRename(list: ReadingList): void {
   editingListId.value = list.id
@@ -60,14 +70,14 @@ function cancelRename(): void {
           :disabled="bookclub.publishing || !bookclub.selectedList.items?.length"
           @click="bookclub.publishList(bookclub.selectedList)"
         >
-          <LoadingSpinner v-if="bookclub.publishing" label="Publishing…" />
+          <LoadingSpinner v-if="bookclub.publishing" label="Publishing..." />
           <template v-else
             ><font-awesome-icon :icon="['fas', 'paper-plane']" /> Publish to Discord</template
           >
         </button>
       </div>
 
-      <LoadingSpinner v-if="bookclub.detailLoading" block label="Loading items…" />
+      <LoadingSpinner v-if="bookclub.detailLoading" block label="Loading items..." />
 
       <!-- Items -->
       <template v-else>
@@ -84,21 +94,21 @@ function cancelRename(): void {
                 <font-awesome-icon :icon="['fad', 'image']" />
               </div>
             </template>
-            <h4 class="bc-item-title">{{ item.title }}</h4>
-            <p class="text-dim text-sm bc-item-meta">
+            <h4 class="list-row-title">{{ item.title }}</h4>
+            <p class="text-muted text-sm list-row-meta">
               <span v-if="item.format">{{ item.format }}</span>
-              <span v-if="item.chapters">· {{ item.chapters }} ch</span>
+              <span v-if="item.chapters">- {{ item.chapters }} ch</span>
             </p>
-            <p v-if="item.genres" class="text-dim text-sm">{{ item.genres }}</p>
-            <p v-if="item.tropes" class="text-dim text-sm">Tropes: {{ item.tropes }}</p>
-            <p v-if="item.sources.length" class="text-sm bc-item-sources">
+            <p v-if="item.genres" class="text-muted text-sm">{{ item.genres }}</p>
+            <p v-if="item.tropes" class="text-muted text-sm">Tropes: {{ item.tropes }}</p>
+            <p v-if="item.sources.length" class="text-sm book-club-item-sources">
               <a
                 v-for="(src, i) in item.sources"
                 :key="i"
                 :href="src.url"
                 target="_blank"
                 rel="noopener"
-                class="bc-source-link"
+                class="book-club-source-link"
               >
                 <font-awesome-icon :icon="['fad', 'link']" /> {{ src.title || 'Source' }}
               </a>
@@ -113,22 +123,22 @@ function cancelRename(): void {
             </template>
           </ListRow>
         </div>
-        <EmptyState v-else text="No items yet — add one below." />
+        <EmptyState v-else text="No items yet - add one below." />
 
         <!-- Add / edit item form -->
-        <div class="bc-form mt-16">
+        <div class="subpanel mt-16">
           <h3 class="section-heading">
             <font-awesome-icon :icon="['fad', 'plus']" />
             {{ bookclub.itemForm.id ? 'Edit Item' : 'Add Item' }}
           </h3>
 
           <!-- AniList lookup -->
-          <FormField label="Pull from AniList" class="bc-lookup">
+          <FormField label="Pull from AniList">
             <div class="flex-toolbar">
               <input
                 v-model="bookclub.lookupQuery"
                 class="field-input-full"
-                placeholder="Search title…"
+                placeholder="Search title..."
                 aria-label="AniList search"
                 @keyup.enter="bookclub.runLookup()"
               />
@@ -137,17 +147,17 @@ function cancelRename(): void {
                 :disabled="bookclub.looking || !bookclub.lookupQuery.trim()"
                 @click="bookclub.runLookup()"
               >
-                <LoadingSpinner v-if="bookclub.looking" label="Searching…" />
+                <LoadingSpinner v-if="bookclub.looking" label="Searching..." />
                 <template v-else
                   ><font-awesome-icon :icon="['fas', 'magnifying-glass']" /> Search</template
                 >
               </button>
             </div>
-            <div v-if="bookclub.lookupResults.length" class="bc-results mt-8">
+            <div v-if="bookclub.lookupResults.length" class="book-club-results mt-8">
               <button
                 v-for="(res, i) in bookclub.lookupResults"
                 :key="i"
-                class="bc-result"
+                class="book-club-result"
                 @click="bookclub.applyLookupResult(res)"
               >
                 <img
@@ -156,9 +166,9 @@ function cancelRename(): void {
                   class="media-cover media-cover--book-sm"
                   alt=""
                 />
-                <span class="bc-result-info">
+                <span class="book-club-result-info">
                   <strong>{{ res.title }}</strong>
-                  <small class="text-dim">{{ res.format }} · {{ res.chapters }} ch</small>
+                  <small class="text-muted">{{ res.format }} - {{ res.chapters }} ch</small>
                 </span>
               </button>
             </div>
@@ -172,14 +182,22 @@ function cancelRename(): void {
                 class="media-cover media-cover--book-lg"
                 alt="Cover preview"
               />
+              <button
+                class="btn-action btn-sm mt-8"
+                :disabled="bookclub.coverUploading"
+                @click="pickCover"
+              >
+                <LoadingSpinner v-if="bookclub.coverUploading" label="Uploading..." />
+                <template v-else><font-awesome-icon :icon="['fas', 'upload']" /> Upload</template>
+              </button>
               <input
+                ref="coverInput"
                 type="file"
                 accept="image/*"
                 aria-label="Cover image"
-                :disabled="bookclub.coverUploading"
+                hidden
                 @change="bookclub.uploadCover($event)"
               />
-              <span v-if="bookclub.coverUploading" class="text-dim text-sm">Uploading…</span>
               <button
                 v-if="bookclub.itemForm.cover_image"
                 class="btn-neutral btn-sm mt-8"
@@ -199,7 +217,7 @@ function cancelRename(): void {
               <FormField label="Cover Image URL">
                 <input
                   v-model="bookclub.itemForm.cover_image"
-                  placeholder="https://…"
+                  placeholder="https://..."
                   aria-label="Cover image URL"
                 />
               </FormField>
@@ -209,7 +227,7 @@ function cancelRename(): void {
           <FormField label="Summary">
             <MarkdownEditor
               v-model="bookclub.itemForm.summary"
-              placeholder="Summary (supports markdown — bold, italics, lists, links…)"
+              placeholder="Summary (supports markdown - bold, italics, lists, links...)"
             />
           </FormField>
 
@@ -217,7 +235,7 @@ function cancelRename(): void {
             <FormField label="Format" style="flex: 1; min-width: 140px">
               <input
                 v-model="bookclub.itemForm.format"
-                placeholder="Manga, Manhwa, Danmei…"
+                placeholder="Manga, Manhwa, Danmei..."
                 aria-label="Format"
               />
             </FormField>
@@ -272,7 +290,7 @@ function cancelRename(): void {
                 v-model="src.url"
                 class="field-input-full"
                 style="flex: 2"
-                placeholder="https://…"
+                placeholder="https://..."
                 aria-label="Source URL"
               />
               <button class="btn-danger btn-sm" @click="bookclub.removeSourceRow(i)">
@@ -297,7 +315,7 @@ function cancelRename(): void {
               :disabled="bookclub.savingItem || !bookclub.itemForm.title.trim()"
               @click="bookclub.saveItem()"
             >
-              <LoadingSpinner v-if="bookclub.savingItem" label="Saving…" />
+              <LoadingSpinner v-if="bookclub.savingItem" label="Saving..." />
               <template v-else>{{ bookclub.itemForm.id ? 'Save Changes' : 'Add Item' }}</template>
             </button>
           </FormActions>
@@ -306,11 +324,11 @@ function cancelRename(): void {
     </AdminPanel>
 
     <!-- Reading lists overview -->
-    <ManagerView v-else :title="`${bookclub.clubName} — Reading Lists`" :icon="['fad', 'book']">
+    <ManagerView v-else :title="`${bookclub.clubName} - Reading Lists`" :icon="['fad', 'book']">
       <template #toolbar>
         <input
           v-model="bookclub.newListTitle"
-          placeholder="New reading list title…"
+          placeholder="New reading list title..."
           aria-label="New reading list title"
           style="flex: 1; min-width: 160px; max-width: 360px"
           @keyup.enter="bookclub.createList()"
@@ -320,7 +338,7 @@ function cancelRename(): void {
           :disabled="bookclub.creatingList || !bookclub.newListTitle.trim()"
           @click="bookclub.createList()"
         >
-          <LoadingSpinner v-if="bookclub.creatingList" label="Creating…" />
+          <LoadingSpinner v-if="bookclub.creatingList" label="Creating..." />
           <template v-else><font-awesome-icon :icon="['fas', 'plus']" /> Create List</template>
         </button>
       </template>
@@ -328,7 +346,7 @@ function cancelRename(): void {
       <LoadingSpinner
         v-if="bookclub.listsLoading && bookclub.lists.length === 0"
         block
-        label="Loading reading lists…"
+        label="Loading reading lists..."
       />
       <template v-else>
         <div v-if="bookclub.lists.length" class="list-rows">
@@ -342,7 +360,7 @@ function cancelRename(): void {
               @keyup.enter="commitRename(list)"
               @keyup.esc="cancelRename()"
             />
-            <button v-else class="bc-list-title" @click="bookclub.selectList(list)">
+            <button v-else class="book-club-list-title" @click="bookclub.selectList(list)">
               {{ list.title }}
             </button>
             <template #actions>
@@ -381,7 +399,7 @@ function cancelRename(): void {
 </template>
 
 <style scoped>
-.bc-list-title {
+.book-club-list-title {
   background: none;
   border: none;
   color: inherit;
@@ -392,52 +410,41 @@ function cancelRename(): void {
   flex: 1;
   min-width: 140px;
 }
-.bc-list-title:hover {
+.book-club-list-title:hover {
   text-decoration: underline;
 }
-.bc-item-title {
-  margin: 0 0 4px;
-}
-.bc-item-meta {
-  margin: 0 0 4px;
-}
-.bc-item-sources {
+.book-club-item-sources {
   margin: 6px 0 0;
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
 }
-.bc-source-link {
+.book-club-source-link {
   white-space: nowrap;
 }
-.bc-form {
-  background: var(--panel-raised-bg);
-  border-radius: var(--radius);
-  padding: 14px 16px;
-}
-.bc-results {
+.book-club-results {
   display: flex;
   flex-direction: column;
   gap: 6px;
   max-height: 280px;
   overflow-y: auto;
 }
-.bc-result {
+.book-club-result {
   display: flex;
   align-items: center;
   gap: 10px;
   background: var(--panel-bg);
   color: var(--text);
   border: 1px solid var(--panel-raised-bg);
-  border-radius: 6px;
+  border-radius: 0;
   padding: 6px 8px;
   cursor: pointer;
   text-align: left;
 }
-.bc-result:hover {
+.book-club-result:hover {
   border-color: var(--accent);
 }
-.bc-result-info {
+.book-club-result-info {
   display: flex;
   flex-direction: column;
 }

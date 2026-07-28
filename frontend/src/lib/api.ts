@@ -7,7 +7,7 @@
  */
 
 // Absolute (leading slash) so requests always resolve against the site root.
-// A relative base ('api') would resolve against the current route — e.g. from
+// A relative base ('api') would resolve against the current route - e.g. from
 // /admin/cards it would hit /admin/api/... and 404.
 export const API_BASE = '/api'
 
@@ -15,8 +15,8 @@ export class ApiError extends Error {
   status: number
   /**
    * The parsed error response body (our `{ error, ... }` JSON), if any. Lets
-   * callers read extra fields the server included alongside the message — e.g. a
-   * 429's `retry_after` seconds — without a second round-trip.
+   * callers read extra fields the server included alongside the message - e.g. a
+   * 429's `retry_after` seconds - without a second round-trip.
    */
   body?: unknown
   constructor(message: string, status: number, body?: unknown) {
@@ -35,16 +35,16 @@ const DEFAULT_TIMEOUT_MS = 30_000
 export interface ApiOptions extends Omit<RequestInit, 'body'> {
   // Body objects are auto-stringified (unless FormData).
   body?: unknown
-  // Skip the global 401 → "session expired" handler for this request. Set on
+  // Skip the global 401 -> "session expired" handler for this request. Set on
   // the auth endpoints themselves (a bad-password login legitimately 401s and
-  // must not trigger a redirect/“session expired” toast).
+  // must not trigger a redirect/"session expired" toast).
   skipAuthRedirect?: boolean
   // Abort the request after this many ms when the caller doesn't supply its own
   // `signal`. Defaults to 30s; pass 0 to disable the timeout for this request.
   timeoutMs?: number
 }
 
-// ── Global 401 handler ────────────────────────────────────────────────────────
+// -- Global 401 handler --------------------------------------------------------
 // Registered once at startup (see main.ts) so this low-level module stays free
 // of router/store imports (avoids a circular dependency). Invoked whenever a
 // request that isn't explicitly opted out returns 401, so an expired/cleared
@@ -121,7 +121,7 @@ export async function api<T = unknown>(endpoint: string, options: ApiOptions = {
   if (!res.ok) {
     // A 401 means the admin session is missing/expired. Surface it once,
     // centrally, unless the caller opted out (the auth endpoints handle their
-    // own 401s — e.g. an invalid password).
+    // own 401s - e.g. an invalid password).
     if (res.status === 401 && !options.skipAuthRedirect) {
       onUnauthorized?.()
     }
@@ -154,7 +154,7 @@ export function apiPost<T = unknown>(
   return api<T>(endpoint, { method: 'POST', body, ...options })
 }
 
-/** PUT — full replace of the resource at `endpoint` (idempotent). */
+/** PUT - full replace of the resource at `endpoint` (idempotent). */
 export function apiPut<T = unknown>(
   endpoint: string,
   body: unknown,
@@ -163,7 +163,7 @@ export function apiPut<T = unknown>(
   return api<T>(endpoint, { method: 'PUT', body, ...options })
 }
 
-/** PATCH — partial/field update of the resource at `endpoint`. */
+/** PATCH - partial/field update of the resource at `endpoint`. */
 export function apiPatch<T = unknown>(
   endpoint: string,
   body: unknown,
@@ -172,21 +172,21 @@ export function apiPatch<T = unknown>(
   return api<T>(endpoint, { method: 'PATCH', body, ...options })
 }
 
-/** DELETE — remove the resource at `endpoint` (idempotent; no body). */
+/** DELETE - remove the resource at `endpoint` (idempotent; no body). */
 export function apiDelete<T = unknown>(endpoint: string, options: ApiOptions = {}): Promise<T> {
   return api<T>(endpoint, { method: 'DELETE', ...options })
 }
 
-// ── File uploads ──────────────────────────────────────────────────────────────
+// -- File uploads --------------------------------------------------------------
 
 export interface UploadOptions {
-  // Invoked with 0–100 as the request body is sent. Fires only while bytes are
+  // Invoked with 0-100 as the request body is sent. Fires only while bytes are
   // in flight; once the last byte is sent it sits at 100 while the server saves
   // the files and responds.
   onProgress?: (percent: number) => void
   // Cancels the in-flight upload (e.g. the user navigated away).
   signal?: AbortSignal
-  // Skip the global 401 → "session expired" handler (parity with ApiOptions).
+  // Skip the global 401 -> "session expired" handler (parity with ApiOptions).
   skipAuthRedirect?: boolean
 }
 
@@ -198,7 +198,7 @@ export interface UploadOptions {
  *   1. No client-side timeout. A big image (up to the server's 64 MB cap) over a
  *      slow uplink can legitimately take minutes; api()'s 30s default would abort
  *      it mid-transfer with a bogus "timed out" error. Here `xhr.timeout` stays 0
- *      — the transfer takes as long as it takes, and only the network or the user
+ *      - the transfer takes as long as it takes, and only the network or the user
  *      can end it.
  *   2. Upload progress. fetch exposes no upload-progress events; XHR does (via
  *      `upload.onprogress`), so the UI can show a real percentage instead of an

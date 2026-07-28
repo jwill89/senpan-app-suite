@@ -195,7 +195,7 @@ export const useAdminStore = defineStore('admin', () => {
    * admin CRUD resource (see the WebSocket `resource_changed` message). If this
    * admin is currently viewing that resource, refetch it now (the REST load
    * re-applies the per-feature permission guard); otherwise just drop its
-   * freshness stamp so the next navigation refetches — closing the gap where a
+   * freshness stamp so the next navigation refetches - closing the gap where a
    * change made while you were on another tab wouldn't show on a quick return.
    *
    * Refetching reuses the normal list/detail loaders, which only show a spinner
@@ -290,7 +290,7 @@ export const useAdminStore = defineStore('admin', () => {
         // The shared image picker reads the cached category list + per-dir
         // images from many tabs (announcements, raffles, garapons, affiliates,
         // stamp rallies, themes), so keep those caches fresh regardless of the
-        // open tab — but SILENTLY (a background invalidation must never toast)
+        // open tab - but SILENTLY (a background invalidation must never toast)
         // and only when something is actually cached. An admin without image
         // access (or who never opened a picker) has empty caches, so this makes
         // no request and can't raise a 403 toast. Renamed/deleted dirs self-prune
@@ -299,7 +299,7 @@ export const useAdminStore = defineStore('admin', () => {
         const viewing = tab === 'system-images'
         if (viewing || images.categories.length > 0) void images.refreshCategoriesQuiet()
         for (const dir of Object.keys(images.imagesByDir)) void images.refreshImagesQuiet(dir)
-        // Freshness governs the System → Images tab specifically.
+        // Freshness governs the System -> Images tab specifically.
         if (viewing) tabData.touch('images')
         else tabData.invalidate('images')
         break
@@ -307,7 +307,7 @@ export const useAdminStore = defineStore('admin', () => {
       case 'bookclub':
         // Book club lists use the store's own per-club freshness, so route the
         // signal through it (the signal isn't club-specific, so it acts on the
-        // currently-open club — cross-club staleness self-heals via the TTL).
+        // currently-open club - cross-club staleness self-heals via the TTL).
         useBookclubStore().applyExternalChange(tab.startsWith('bookclub-'))
         break
     }

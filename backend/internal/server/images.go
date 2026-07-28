@@ -17,7 +17,7 @@ import (
 	"app-suite/internal/model"
 )
 
-// ── Central image hosting (System → Images admin page) ───────────────────────
+// -- Central image hosting (System -> Images admin page) -----------------------
 //
 // Image "categories" are curated subdirectories of <webRoot>/images. Each
 // category maps to exactly one subfolder; uploaded images for that category live
@@ -25,8 +25,8 @@ import (
 //
 // Every category is admin-managed (a display name + a directory name): all of
 // them can be created, renamed, and deleted. Categories are tracked in a dotfile
-// manifest at <webRoot>/images/.categories.json — the directory tree holds the
-// files, the manifest records the human-readable name ↔ directory mapping
+// manifest at <webRoot>/images/.categories.json - the directory tree holds the
+// files, the manifest records the human-readable name <-> directory mapping
 // (mirrors the carrd title sidecar approach, so no database/model change is
 // needed). Deleting a category removes its folder and all files within it.
 //
@@ -92,17 +92,17 @@ func (s *Server) imagesRootDir() string {
 func slugifyImageDir(s string) string { return slugify(s, '_') }
 
 // validImageDir reports whether dir is a safe, already-normalized directory name
-// (lowercase letters, digits, underscores only — no path separators). Guards
+// (lowercase letters, digits, underscores only - no path separators). Guards
 // against traversal for dir names received from the client on list/upload/delete.
 func validImageDir(dir string) bool { return validSlug(dir, '_') }
 
 // reservedImageDir reports whether dir is owned by another feature that writes
-// under images/ WITHOUT going through the category manifest — currently the
+// under images/ WITHOUT going through the category manifest - currently the
 // book-club cover folder and the legacy announcements source dir. A system-images
 // grantee must not be able to create/rename a category onto one of these and thus
 // list, overwrite, or (via category delete's RemoveAll) wipe files guarded by a
 // different permission. The seeded default categories (announcements_main,
-// raffles, …) are manifest-managed and deliberately NOT reserved.
+// raffles, ...) are manifest-managed and deliberately NOT reserved.
 func reservedImageDir(dir string) bool {
 	switch dir {
 	case filepath.Base(bookclubCoverRelDir), "announcements":
@@ -142,7 +142,7 @@ func (s *Server) readImageCategories() []model.ImageCategory {
 
 // writeImageCategories persists the categories to the manifest dotfile. The
 // write is atomic (temp file + rename) so a crash or disk-full mid-write can't
-// leave a truncated, unparseable manifest — which would otherwise disable the
+// leave a truncated, unparseable manifest - which would otherwise disable the
 // whole image subsystem (see migrateImageCategoryManifest's corrupt handling).
 func (s *Server) writeImageCategories(cats []model.ImageCategory) error {
 	if err := os.MkdirAll(s.imagesRootDir(), 0755); err != nil {
@@ -185,10 +185,10 @@ func (s *Server) migrateImageCategoryManifest() {
 			// Present but unparseable. Do NOT reseed: that would wipe custom
 			// categories and resurrect deleted defaults (silent data loss).
 			// Leave the file for manual recovery and log loudly, once, at
-			// startup — image administration is disabled until it's repaired,
+			// startup - image administration is disabled until it's repaired,
 			// but bingo/raffle keep running. (readImageCategories stays quiet on
 			// the per-request path so a persistent corruption can't flood logs.)
-			slog.Error("image category manifest is corrupt; leaving it untouched — image admin disabled until repaired",
+			slog.Error("image category manifest is corrupt; leaving it untouched - image admin disabled until repaired",
 				"path", path, "error", uerr)
 			return
 		}
@@ -282,11 +282,11 @@ func canBrowseImages(u *model.User) bool {
 func (s *Server) requireImageBrowse(w http.ResponseWriter, r *http.Request) bool {
 	u := s.currentUser(r)
 	if u == nil {
-		writeError(w, http.StatusUnauthorized, "Unauthorized – login required")
+		writeError(w, http.StatusUnauthorized, "Unauthorized - login required")
 		return false
 	}
 	if !canBrowseImages(u) {
-		writeError(w, http.StatusForbidden, "Forbidden – you do not have access to the image library")
+		writeError(w, http.StatusForbidden, "Forbidden - you do not have access to the image library")
 		return false
 	}
 	return true
@@ -399,7 +399,7 @@ func (s *Server) createImageCategory(w http.ResponseWriter, reqName, reqDir stri
 		dir = slugifyImageDir(name)
 	}
 	if dir == "" {
-		writeError(w, http.StatusBadRequest, "Could not derive a directory name — use letters or numbers in the name or directory")
+		writeError(w, http.StatusBadRequest, "Could not derive a directory name - use letters or numbers in the name or directory")
 		return
 	}
 	if reservedImageDir(dir) {
@@ -457,7 +457,7 @@ func (s *Server) renameImageCategory(w http.ResponseWriter, reqDir, reqName, req
 		return
 	}
 	// Block renaming ONTO a reserved dir, but only when the directory actually
-	// changes — a pure display-name change on an existing category is fine.
+	// changes - a pure display-name change on an existing category is fine.
 	if newDir != dir && reservedImageDir(newDir) {
 		writeError(w, http.StatusConflict, "That directory name is reserved for another feature")
 		return
@@ -584,7 +584,7 @@ func (s *Server) handleImagesList(w http.ResponseWriter, r *http.Request) {
 
 	entries, err := os.ReadDir(filepath.Join(s.imagesRootDir(), dir))
 	if err != nil {
-		// Missing dir (no uploads yet) → empty list, not an error.
+		// Missing dir (no uploads yet) -> empty list, not an error.
 		writeJSON(w, http.StatusOK, model.ImagesResponse{Dir: dir, Images: []model.ImageEntry{}})
 		return
 	}
@@ -616,7 +616,7 @@ func (s *Server) handleImagesList(w http.ResponseWriter, r *http.Request) {
 			// Percent-encode the filename segment so a name with spaces/non-ASCII
 			// yields a well-formed absolute URL (dir is validated [a-z0-9_]+). This
 			// URL is what announcement embeds store and send to Discord, which
-			// rejects a malformed image URL — see normalizeEmbedURL.
+			// rejects a malformed image URL - see normalizeEmbedURL.
 			URL:      base + "/images/" + dir + "/" + url.PathEscape(info.name),
 			Path:     rel,
 			Size:     info.size,
@@ -751,7 +751,7 @@ func (s *Server) migrateAnnouncementImages() {
 	srcDir := filepath.Join(s.imagesRootDir(), "announcements")
 	entries, err := os.ReadDir(srcDir)
 	if err != nil {
-		return // legacy dir absent → nothing to migrate
+		return // legacy dir absent -> nothing to migrate
 	}
 	dstDir := filepath.Join(s.imagesRootDir(), imageDirAnnouncementsMain)
 	for _, e := range entries {
@@ -787,7 +787,7 @@ func (s *Server) seedFlourishes() {
 		}
 		data, err := os.ReadFile(filepath.Join(s.imagesRootDir(), name))
 		if err != nil {
-			continue // source not deployed → nothing to seed
+			continue // source not deployed -> nothing to seed
 		}
 		if err := os.MkdirAll(dstDir, 0755); err != nil {
 			return

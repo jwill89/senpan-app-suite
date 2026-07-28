@@ -9,16 +9,16 @@ import (
 	"app-suite/internal/model"
 )
 
-// ── Garapon operations ──────────────────────────────────────────────────────
+// -- Garapon operations ------------------------------------------------------
 //
 // A garapon is a festival lottery drum (see model.Garapon). It owns prize tiers
 // (each a ball color + appearance weight), tokenized per-player drawing links,
 // and a draw log. Draws are server-authoritative: RecordGaraponDraw atomically
 // re-checks the open status + remaining-draw cap, weighted-picks a prize, and
-// logs it — so a player can never exceed their allowance or bias the odds.
+// logs it - so a player can never exceed their allowance or bias the odds.
 
 // Sentinel errors returned by RecordGaraponDraw so the handler can map them to
-// the right HTTP status (closed → 400, capped → 409, misconfigured → 400).
+// the right HTTP status (closed -> 400, capped -> 409, misconfigured -> 400).
 var (
 	ErrGaraponClosed   = errors.New("garapon is closed")
 	ErrGaraponNoDraws  = errors.New("no draws remaining")
@@ -26,7 +26,7 @@ var (
 )
 
 // randToken returns an unguessable URL-safe token (16 random bytes, hex-encoded)
-// for a player's private drawing link. Uses crypto/rand — these links are the
+// for a player's private drawing link. Uses crypto/rand - these links are the
 // only thing gating access to a draw, so they must not be predictable.
 func randToken() (string, error) {
 	b := make([]byte, 16)
@@ -110,8 +110,8 @@ func (s *Store) CreateGarapon(g *model.Garapon) (int64, error) {
 }
 
 // UpdateGarapon updates a garapon's editable fields and replaces its prize rows
-// (delete + reinsert) in one transaction. Existing draws are unaffected — they
-// snapshot the prize name/color and don't FK the prize row — so the draw log
+// (delete + reinsert) in one transaction. Existing draws are unaffected - they
+// snapshot the prize name/color and don't FK the prize row - so the draw log
 // survives prize edits.
 func (s *Store) UpdateGarapon(g *model.Garapon) error {
 	tx, err := s.beginImmediate()
@@ -209,7 +209,7 @@ func (s *Store) ListGarapons() ([]model.Garapon, error) {
 	return garapons, rows.Err()
 }
 
-// ── Garapon players (tokenized drawing links) ───────────────────────────────
+// -- Garapon players (tokenized drawing links) -------------------------------
 
 // ListGaraponPlayers returns a garapon's drawing links with each player's
 // read-only draws-used count, oldest first.
@@ -293,7 +293,7 @@ func (s *Store) SetPlayerStampCard(playerID, cardID int64) error {
 }
 
 // DeleteGaraponPlayer removes a drawing link. With force=false (garapon still
-// open) it only deletes links that have not drawn yet — the NOT EXISTS guard.
+// open) it only deletes links that have not drawn yet - the NOT EXISTS guard.
 // With force=true (garapon closed) it deletes regardless; the player's draws are
 // KEPT in the log because garapon_draws.player_id is ON DELETE SET NULL (they
 // detach rather than cascade-delete). Returns whether a row was deleted (false in
@@ -306,7 +306,7 @@ func (s *Store) DeleteGaraponPlayer(playerID int64, force bool) (bool, error) {
 	defer func() { _ = tx.Rollback() }()
 
 	// Note the paired stamp card (if any) before deleting the link, so it can be
-	// removed alongside (its stamp log is preserved — card_id ON DELETE SET NULL).
+	// removed alongside (its stamp log is preserved - card_id ON DELETE SET NULL).
 	var stampCardID sql.NullInt64
 	if err := tx.QueryRow(`SELECT stamp_card_id FROM garapon_players WHERE id = ?`, playerID).Scan(&stampCardID); err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return false, err
@@ -337,7 +337,7 @@ func (s *Store) DeleteGaraponPlayer(playerID int64, force bool) (bool, error) {
 	return n > 0, nil
 }
 
-// ── Garapon draws ───────────────────────────────────────────────────────────
+// -- Garapon draws -----------------------------------------------------------
 
 // GetGaraponDraw returns a single draw row by id (nil if not found).
 func (s *Store) GetGaraponDraw(id int64) (*model.GaraponDraw, error) {

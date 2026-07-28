@@ -44,12 +44,12 @@ type BingoGameState struct {
 type BingoGamePattern struct {
 	ID          int      `json:"id"`           // original pattern ID at time of snapshot
 	Name        string   `json:"name"`         // pattern name at time of snapshot
-	PatternData [][]bool `json:"pattern_data"` // 5×5 boolean grid
+	PatternData [][]bool `json:"pattern_data"` // 5x5 boolean grid
 }
 
 // BingoDrawnNumber holds details of a single drawn bingo number, returned after each draw action.
 type BingoDrawnNumber struct {
-	Number    int    `json:"number"`     // the bingo number (1–75)
+	Number    int    `json:"number"`     // the bingo number (1-75)
 	Letter    string `json:"letter"`     // column letter: B, I, N, G, or O
 	CallOrder int    `json:"call_order"` // 1-based position in the draw sequence
 }

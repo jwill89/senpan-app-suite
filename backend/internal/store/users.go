@@ -10,7 +10,7 @@ import (
 	"app-suite/internal/model"
 )
 
-// ── User operations ──────────────────────────────────────────────────────────
+// -- User operations ----------------------------------------------------------
 //
 // Permissions are stored as a JSON array string in the users.permissions column
 // (the same pattern used by presets.pattern_ids and announcements.buttons). The
@@ -188,7 +188,7 @@ func (s *Store) scanUser(row *sql.Row) (*model.User, error) {
 
 // decodeUserFlags applies the scanned integer flags and permissions JSON onto u.
 // Shared by every user-row reader (scanUser, ListUsers, GetUserByUsername) so the
-// int→bool + JSON-unmarshal logic lives in one place.
+// int->bool + JSON-unmarshal logic lives in one place.
 func decodeUserFlags(u *model.User, isAdmin, isActive int, permsJSON string) error {
 	u.IsAdmin = isAdmin == 1
 	u.IsActive = isActive == 1

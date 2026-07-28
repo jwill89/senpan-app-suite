@@ -9,7 +9,7 @@ import (
 
 // runScheduler is the shared engine behind the background Discord-post
 // schedulers (announcements, book-club events). It calls sweep once immediately
-// — to catch up on anything that came due while the process was down — and then
+// - to catch up on anything that came due while the process was down - and then
 // on every tick of interval, until ctx is cancelled. The schedulers differ only
 // in their interval and sweep function, so each is a one-line wrapper around
 // this. Safe to call in a goroutine; it returns when ctx is done.
@@ -17,7 +17,7 @@ func runScheduler(ctx context.Context, interval time.Duration, sweep func()) {
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 	// A panic in a single sweep (e.g. one malformed announcement) must not kill the
-	// long-lived scheduler goroutine — recover, log, and keep ticking.
+	// long-lived scheduler goroutine - recover, log, and keep ticking.
 	safeSweep := func() {
 		defer func() {
 			if r := recover(); r != nil {

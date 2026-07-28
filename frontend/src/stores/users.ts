@@ -1,5 +1,5 @@
 /**
- * Users store: manages accounts for the System → Users admin tab (admin only).
+ * Users store: manages accounts for the System -> Users admin tab (admin only).
  * Lists accounts, activates/deactivates them, toggles admin, edits per-page
  * permissions, sets a user's password, and deletes accounts. All mutations
  * refresh the list so the table reflects server state.

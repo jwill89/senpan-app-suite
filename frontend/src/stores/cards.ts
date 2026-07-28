@@ -135,7 +135,7 @@ export const useCardsStore = defineStore('cards', () => {
       const href = router.resolve({ name: 'player', params: { cardId: data.card.id } }).href
       ui.copyToClipboard(
         window.location.origin + href,
-        `Created card ${data.card.id} for ${name} — link copied to clipboard`,
+        `Created card ${data.card.id} for ${name} - link copied to clipboard`,
       )
     } catch (e) {
       ui.notify((e as Error).message, 'error')
@@ -172,7 +172,7 @@ export const useCardsStore = defineStore('cards', () => {
     }
   }
 
-  /** Approve a pending custom card (→ approved + protected). List updates via the
+  /** Approve a pending custom card (-> approved + protected). List updates via the
    *  cards_update broadcast. */
   async function approveCard(id: string): Promise<void> {
     try {

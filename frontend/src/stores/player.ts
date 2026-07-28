@@ -20,7 +20,7 @@ export type SoundMode = 'off' | 'basic' | 'game'
 function readSoundMode(): SoundMode {
   const stored = localStorage.getItem('bingo_sound_mode')
   if (stored === 'off' || stored === 'basic' || stored === 'game') return stored
-  // Legacy `bingo_sound_enabled` ('1' = on) → the basic beeps that were in place.
+  // Legacy `bingo_sound_enabled` ('1' = on) -> the basic beeps that were in place.
   return localStorage.getItem('bingo_sound_enabled') === '1' ? 'basic' : 'off'
 }
 
@@ -34,12 +34,12 @@ function readSoundVolume(): number {
 /** Fallback stamp tint (pink @ 55% alpha) when nothing is stored. */
 const DEFAULT_STAMP_COLOR = 'rgba(229,49,112,0.55)'
 
-/** Default secondary-stamp tint — blue @ 55% alpha, distinct from the primary. */
+/** Default secondary-stamp tint - blue @ 55% alpha, distinct from the primary. */
 const DEFAULT_SECONDARY_STAMP_COLOR = 'rgba(56,128,255,0.55)'
 
 /**
  * Resolves the persisted stamp colour. New installs store a full CSS color
- * string; legacy installs stored a preset id (e.g. `"pink"`) — map those to the
+ * string; legacy installs stored a preset id (e.g. `"pink"`) - map those to the
  * matching preset value so returning players keep their chosen colour.
  */
 function resolveStoredColor(stored: string | null): string {
@@ -51,7 +51,7 @@ function resolveStoredColor(stored: string | null): string {
 /**
  * Resolves the persisted stamp shape into a { mode, emoji } pair. New installs
  * store a mode ('blank' | 'emoji' | 'custom') plus the chosen emoji character
- * separately; legacy installs stored a fixed shape id (e.g. 'heart') — map those
+ * separately; legacy installs stored a fixed shape id (e.g. 'heart') - map those
  * forward to the matching emoji so a returning player keeps their stamp.
  */
 function resolveStoredShape(): { mode: string; emoji: string } {
@@ -59,7 +59,7 @@ function resolveStoredShape(): { mode: string; emoji: string } {
   const emoji = localStorage.getItem('bingo_stamp_emoji') || ''
   if (mode === 'custom' || mode === 'emoji') return { mode, emoji }
   if (mode === 'blank') return { mode: 'blank', emoji: '' }
-  // Legacy fixed shape id (heart/star/…): map to its emoji, else fall back blank.
+  // Legacy fixed shape id (heart/star/...): map to its emoji, else fall back blank.
   const legacy = STAMP_SHAPES.find((s) => s.id === mode)
   return legacy && legacy.emoji
     ? { mode: 'emoji', emoji: legacy.emoji }
@@ -90,7 +90,7 @@ export const usePlayerStore = defineStore('player', () => {
   /**
    * The stamp tint as a full CSS color string *including its own alpha channel*
    * (e.g. `rgba(229,49,112,0.55)`). Chosen via the color-picker modal. Legacy
-   * installs stored a preset id (e.g. `"pink"`) here — `resolveStoredColor()`
+   * installs stored a preset id (e.g. `"pink"`) here - `resolveStoredColor()`
    * maps those forward so a returning player keeps their colour. This alpha is
    * deliberately separate from `stampOpacity` (below): the alpha tints only the
    * stamp's background fill, while opacity fades the whole mark (icon included).
@@ -109,7 +109,7 @@ export const usePlayerStore = defineStore('player', () => {
   /**
    * Optional secondary stamp: a plain coloured circle (no emoji/custom image)
    * with its own colour. When enabled, it auto-marks cells that are NOT part of
-   * any active win pattern, while the primary stamp marks the pattern cells —
+   * any active win pattern, while the primary stamp marks the pattern cells -
    * giving players an at-a-glance view of which cells matter for the win. Shares
    * the single `stampOpacity` slider. Off by default (preserves prior behaviour).
    */
@@ -122,7 +122,7 @@ export const usePlayerStore = defineStore('player', () => {
 
   const showMinigameModal = ref(false)
 
-  // ── Live-game feedback (ambient; never tracks the player's own board) ───────
+  // -- Live-game feedback (ambient; never tracks the player's own board) -------
   /** The most recently called number, for the player's "last called" banner. */
   const lastDrawn = ref<BingoDrawnNumber | null>(null)
   /** True after a game the player was watching ends (drives the end summary). */
@@ -138,7 +138,7 @@ export const usePlayerStore = defineStore('player', () => {
   /** Whether any sound mode is enabled (drives the volume slider's enabled state). */
   const soundOn = computed(() => soundMode.value !== 'off')
 
-  // ── "It's Yoever" reaction ──────────────────────────────────────────────────
+  // -- "It's Yoever" reaction --------------------------------------------------
   /** In-flight flag for the trigger button. */
   const yoeverTriggering = ref(false)
   /**
@@ -158,7 +158,7 @@ export const usePlayerStore = defineStore('player', () => {
   const stampShapes = STAMP_SHAPES
   const stampColors = STAMP_COLORS
 
-  // ── Computed ───────────────────────────────────────────────────────────────
+  // -- Computed ---------------------------------------------------------------
 
   /** Set of called numbers (O(1) lookup in templates). */
   const playerCalledSet = computed(() => {
@@ -185,7 +185,7 @@ export const usePlayerStore = defineStore('player', () => {
   }))
 
   /**
-   * Cell keys ("ri-ci") that are part of an active win pattern — the union of
+   * Cell keys ("ri-ci") that are part of an active win pattern - the union of
    * every active pattern's required cells. Mirrors how the backend treats a cell
    * as pattern-relevant (`pattern_data[r][c] === true`). Used to route the
    * secondary stamp onto the non-pattern cells.
@@ -211,7 +211,7 @@ export const usePlayerStore = defineStore('player', () => {
    * without this freeze every stamp would flip to the "non-pattern" secondary
    * stamp before the player can save their board. We mirror the live set here
    * while a game runs, and drop it when a new game starts (the game id changes)
-   * or the board is cleared — exactly the moments the player expects a reset.
+   * or the board is cleared - exactly the moments the player expects a reset.
    */
   const frozenPatternCells = ref<Set<string> | null>(null)
   // A new game (different id) invalidates the old snapshot; the next watcher then
@@ -249,7 +249,7 @@ export const usePlayerStore = defineStore('player', () => {
 
   /**
    * Frozen copy of the game-details markdown, kept so the card-image export still
-   * includes them after a game ends — game end clears the live `game.gameDetails`
+   * includes them after a game ends - game end clears the live `game.gameDetails`
    * (server sends game=null), which would otherwise leave the exported card
    * without its details if the player saves after the game is over. We mirror the
    * live details while a game is active and fall back to this once it has ended.
@@ -272,7 +272,7 @@ export const usePlayerStore = defineStore('player', () => {
     playerGame.value ? game.gameDetails : frozenGameDetails.value,
   )
 
-  // ── Stamp helpers ────────────────────────────────────────────────────────
+  // -- Stamp helpers --------------------------------------------------------
 
   function isCalledPlayer(n: number): boolean {
     return playerCalledSet.value.has(n)
@@ -284,8 +284,8 @@ export const usePlayerStore = defineStore('player', () => {
 
   function boardCellClass(ri: number, ci: number, cell: number): (string | false)[] {
     const classes: (string | false)[] = ['board-cell']
-    if (cell === 0) classes.push('free')
-    if (stamps.value[`${ri}-${ci}`]) classes.push('stamped')
+    if (cell === 0) classes.push('is-free')
+    if (stamps.value[`${ri}-${ci}`]) classes.push('is-stamped')
     return classes
   }
 
@@ -320,7 +320,7 @@ export const usePlayerStore = defineStore('player', () => {
     try {
       localStorage.setItem(k, JSON.stringify(stamps.value))
     } catch {
-      /* storage unavailable — stamps still work this session, just won't persist */
+      /* storage unavailable - stamps still work this session, just won't persist */
     }
   }
 
@@ -333,7 +333,7 @@ export const usePlayerStore = defineStore('player', () => {
     const raw = localStorage.getItem(k)
     // Guard against corrupt/tampered storage so a bad value starts the board clean
     // instead of throwing during load. A literal 'null', an array, or a primitive
-    // parses without throwing but isn't a usable stamp map — reject those too so
+    // parses without throwing but isn't a usable stamp map - reject those too so
     // the board can't be handed a non-object.
     try {
       const parsed = raw ? JSON.parse(raw) : {}
@@ -361,15 +361,15 @@ export const usePlayerStore = defineStore('player', () => {
       try {
         localStorage.setItem(k, String(yoeverCooldownUntil.value))
       } catch {
-        /* storage unavailable — the timer still works this session */
+        /* storage unavailable - the timer still works this session */
       }
     }
   }
 
   /**
    * Restores the persisted cooldown for the current card+game (0 when none or
-   * already elapsed). Called whenever the loaded game changes so a new game — for
-   * which the server has cleared cooldowns — starts with the button enabled.
+   * already elapsed). Called whenever the loaded game changes so a new game - for
+   * which the server has cleared cooldowns - starts with the button enabled.
    */
   function loadYoeverCooldown(): void {
     const k = yoeverCooldownKey()
@@ -384,7 +384,7 @@ export const usePlayerStore = defineStore('player', () => {
 
   /**
    * Triggers the "It's Yoever" reaction for this board. The server broadcasts the
-   * sound + animation to everyone (including us), so we don't play it here — we
+   * sound + animation to everyone (including us), so we don't play it here - we
    * just arm the local cooldown on success. Returns true if the trigger was sent.
    */
   async function triggerYoever(): Promise<boolean> {
@@ -398,14 +398,14 @@ export const usePlayerStore = defineStore('player', () => {
     } catch (e) {
       const err = e as ApiError
       if (err.status === 429) {
-        // Our local timer disagreed with the server — re-arm from the server's
+        // Our local timer disagreed with the server - re-arm from the server's
         // reported retry_after (exact remaining time) when present, falling back
         // to the last-known cooldown length so we don't over-disable the button.
         const retryAfter = (err.body as { retry_after?: number } | null | undefined)?.retry_after
         setYoeverCooldown(
           typeof retryAfter === 'number' && retryAfter > 0 ? retryAfter : yoeverCooldownHint.value,
         )
-        ui.notify('You just did that — give it a moment.', 'info')
+        ui.notify('You just did that - give it a moment.', 'info')
       } else if (err.status === 403) {
         ui.notify("It's Yoever is switched off right now.", 'info')
       } else if (err.status === 409) {
@@ -490,7 +490,7 @@ export const usePlayerStore = defineStore('player', () => {
       img.onload = () => {
         if (img.width !== img.height) {
           ui.notify(
-            `Image is ${img.width}×${img.height}. Square images work best — non-square images will be stretched to fit.`,
+            `Image is ${img.width}x${img.height}. Square images work best - non-square images will be stretched to fit.`,
             'error',
           )
         }
@@ -508,20 +508,20 @@ export const usePlayerStore = defineStore('player', () => {
   /**
    * Persists the custom stamp data URL to localStorage. If the image is too
    * large for the storage quota, the stamp still works for this session but
-   * won't survive a refresh — warn the player rather than failing silently.
+   * won't survive a refresh - warn the player rather than failing silently.
    */
   function saveCustomStamp(dataUrl: string): void {
     try {
       localStorage.setItem('bingo_custom_stamp', dataUrl)
     } catch {
       ui.notify(
-        "Custom stamp is too large to save — it'll reset if you refresh. Try a smaller image.",
+        "Custom stamp is too large to save - it'll reset if you refresh. Try a smaller image.",
         'error',
       )
     }
   }
 
-  // ── Join / leave ───────────────────────────────────────────────────────────
+  // -- Join / leave -----------------------------------------------------------
 
   /**
    * Joins a game by card ID. Returns the loaded game details string so the

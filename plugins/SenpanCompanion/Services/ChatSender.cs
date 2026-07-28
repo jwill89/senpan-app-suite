@@ -18,21 +18,21 @@ namespace SenpanCompanion.Services;
 ///
 /// ToS note: sending chat programmatically is the kind of automation the official
 /// Dalamud repo discourages. It's included here for a private/custom-repo build and is
-/// opt-out in settings. Most sends are explicit, operator-initiated conveniences — the
+/// opt-out in settings. Most sends are explicit, operator-initiated conveniences - the
 /// /tell(s) for one card you personally hand out from the nearby list. The Timed Text
 /// Macros are the exception: those DO fire unattended on a repeating timer (see
 /// <see cref="TimedMacroRunner"/>) until you stop them or their send cap is reached.
 /// A single message may deliver as two or three sequential parts if it's too long for
 /// one in-game chat message.
 ///
-/// Every send — regardless of which feature enqueued it — is funnelled through one
+/// Every send - regardless of which feature enqueued it - is funnelled through one
 /// global, serialized send path (<see cref="SendSpaced"/>) that spaces consecutive
 /// messages <see cref="MessageSpacingMs"/> apart, so concurrent features can't gang up
 /// and defeat the game's outgoing-chat throttle.
 /// </summary>
 public sealed class ChatSender
 {
-    // Minimum gap between ANY two consecutive outgoing messages — one second — so the
+    // Minimum gap between ANY two consecutive outgoing messages - one second - so the
     // game's chat throttle doesn't drop a rapid follow-up. Enforced globally across every
     // send path (the auto-tells and the Timed Text Macros' say/yell/shout), not just
     // within a single call, so concurrent features can't each start at t=0 and burst.
@@ -58,7 +58,7 @@ public sealed class ChatSender
 
     /// <summary>
     /// Sends one or more /tell messages to a character (the parts of a single message
-    /// that was split to fit the in-game chat limit — see <see cref="TellComposer"/>).
+    /// that was split to fit the in-game chat limit - see <see cref="TellComposer"/>).
     /// Each part is marshalled to the framework thread, best-effort (failures are
     /// logged, never thrown), and multiple parts are spaced out by
     /// <see cref="MessageSpacingMs"/> so the chat throttle doesn't drop the follow-up.
@@ -82,7 +82,7 @@ public sealed class ChatSender
 
     /// <summary>
     /// Sends a plain message over a public channel (<c>say</c> / <c>yell</c> / <c>shout</c>)
-    /// — the Timed Text Macros. Like <see cref="SendTell"/>, the message is pre-split into
+    /// - the Timed Text Macros. Like <see cref="SendTell"/>, the message is pre-split into
     /// <paramref name="parts"/> (see <see cref="TellComposer.SplitPlain"/>) and the parts are
     /// delivered one second apart. An unknown channel is ignored.
     /// </summary>
@@ -112,7 +112,7 @@ public sealed class ChatSender
     };
 
     // Runs each command on the framework thread, best-effort, spaced globally. Fire-and-
-    // forget — failures are logged, never thrown (the caller is often a UI click or a timer).
+    // forget - failures are logged, never thrown (the caller is often a UI click or a timer).
     // The per-command work runs under sendGate so all sends across the whole plugin form one
     // serialized stream: each waits until nextAllowedTicks, executes, then pushes the next
     // slot MessageSpacingMs into the future. This holds regardless of how many features
@@ -131,7 +131,7 @@ public sealed class ChatSender
             }
             catch (Exception ex)
             {
-                // Best-effort (e.g. the framework tore down between parts) — never throw
+                // Best-effort (e.g. the framework tore down between parts) - never throw
                 // from this fire-and-forget task.
                 this.log.Warning($"Failed to send chat message: {ex.Message}");
             }

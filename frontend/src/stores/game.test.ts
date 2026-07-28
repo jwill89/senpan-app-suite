@@ -24,7 +24,7 @@ beforeEach(() => {
   setAutoInterval.mockClear()
 })
 
-describe('halftime prompt — server-driven mini-game choice', () => {
+describe('halftime prompt - server-driven mini-game choice', () => {
   it('confirmHalftime answers "mini-game" (true) and closes the prompt', async () => {
     const game = useGameStore()
     game.showHalftimePrompt = true
@@ -62,7 +62,7 @@ describe('auto-draw live controls (optimistic)', () => {
   })
 })
 
-describe('persistDrawDelay — shared delay control', () => {
+describe('persistDrawDelay - shared delay control', () => {
   it('sends the current drawDelay to the server', async () => {
     const game = useGameStore()
     game.drawDelay = 15

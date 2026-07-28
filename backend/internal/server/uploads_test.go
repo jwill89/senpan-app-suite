@@ -9,7 +9,7 @@ import (
 // TestSafeUploadName covers the shared upload-name guard that turns an
 // attacker-controlled multipart filename into a safe on-disk (and URL) basename.
 // The security invariant is: whenever a name is accepted, the result is a bare
-// basename — no path separators, no traversal, no leading-dot dotfile — with an
+// basename - no path separators, no traversal, no leading-dot dotfile - with an
 // allowed extension. Traversal attempts must either be rejected or reduced to
 // that safe basename.
 func TestSafeUploadName(t *testing.T) {
@@ -22,7 +22,7 @@ func TestSafeUploadName(t *testing.T) {
 		wantOK   bool
 		wantName string // only checked when wantOK
 	}{
-		{"../../etc/passwd", false, ""},        // Base → "passwd", no ext → rejected
+		{"../../etc/passwd", false, ""},        // Base -> "passwd", no ext -> rejected
 		{"foo/bar.png", true, "bar.png"},       // sub-path stripped to basename
 		{".htaccess", false, ""},               // leading-dot dotfile rejected
 		{"", false, ""},                        // empty rejected
@@ -52,7 +52,7 @@ func TestSafeUploadName(t *testing.T) {
 
 	// Backslash traversal ("..\..\x.png") is platform-dependent: on Windows the
 	// backslash is a path separator (stripped to "x.png"); on POSIX it is a
-	// literal filename character (caught by the separator check → rejected).
+	// literal filename character (caught by the separator check -> rejected).
 	// Either way the traversal must be neutralized, so assert only the invariant.
 	if got, ok := safeUploadName(`..\..\x.png`, allow); ok {
 		assertSafeBasename(t, `..\..\x.png`, got)

@@ -34,7 +34,7 @@ func TestSanitizeSVG_StripsScriptVectors(t *testing.T) {
 		{
 			// Well-formed foreignObject subtree must be dropped entirely. (A
 			// *malformed*-HTML foreignObject makes the whole parse fail, which is
-			// also safe — the upload is rejected — but here we prove the strip.)
+			// also safe - the upload is rejected - but here we prove the strip.)
 			name:     "foreignObject html",
 			in:       `<svg xmlns="http://www.w3.org/2000/svg"><foreignObject><img src="x" onerror="alert(1)"/></foreignObject><path d="Z"/></svg>`,
 			mustDrop: []string{"foreignObject", "onerror", "alert(1)"},

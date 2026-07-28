@@ -1,13 +1,13 @@
 package model
 
-// Affiliate is a partner establishment listed in the Senpan Tea House → Affiliates
+// Affiliate is a partner establishment listed in the Senpan Tea House -> Affiliates
 // admin section: a named place with an optional subtitle, one or more owners, a
 // location, opening hours (multiple time ranges sharing one timezone), markdown
-// details, and two pictures picked from the shared image library — a Logo and an
+// details, and two pictures picked from the shared image library - a Logo and an
 // establishment Screenshot. Owners and Hours are persisted as JSON columns (no
 // sub-tables).
 // Subtitle is stored as UTF-8, so it holds any script natively (a Japanese
-// phrase, for example) — exactly like the tea room subtitle, and with the same
+// phrase, for example) - exactly like the tea room subtitle, and with the same
 // deliberate absence of any character validation.
 type Affiliate struct {
 	ID          int64           `json:"id"`
@@ -18,8 +18,8 @@ type Affiliate struct {
 	Timezone    string          `json:"timezone"`     // IANA zone anchoring every Hours entry
 	Hours       []AffiliateHour `json:"hours"`        // open time ranges (wall-clock in Timezone)
 	Details     string          `json:"details"`      // markdown
-	Logo        string          `json:"logo"`         // root-relative web path (images/affiliate_logos/…)
-	Screenshot  string          `json:"screenshot"`   // root-relative web path (images/affiliate_images/…)
+	Logo        string          `json:"logo"`         // root-relative web path (images/affiliate_logos/...)
+	Screenshot  string          `json:"screenshot"`   // root-relative web path (images/affiliate_images/...)
 	EmbedColor  string          `json:"embed_color"`  // Discord embed accent, "#rrggbb" ("" = brand default)
 	DiscordLink string          `json:"discord_link"` // optional Discord invite/link
 	CarrdLink   string          `json:"carrd_link"`   // optional Carrd (or other) site link
@@ -28,16 +28,16 @@ type Affiliate struct {
 }
 
 // AffiliateHour is one opening-hours entry on an affiliate: an optional label
-// (e.g. "Mon–Fri" or "Weekends"), a required start time, and an optional end time.
+// (e.g. "Mon-Fri" or "Weekends"), a required start time, and an optional end time.
 // Times are wall-clock "HH:MM" values interpreted in the affiliate's Timezone.
 type AffiliateHour struct {
-	Label string `json:"label"` // optional descriptor, e.g. "Mon–Fri"
+	Label string `json:"label"` // optional descriptor, e.g. "Mon-Fri"
 	Start string `json:"start"` // wall-clock "HH:MM"
 	End   string `json:"end"`   // optional wall-clock "HH:MM"
 }
 
 // AffiliatesResponse is the body of GET /api/affiliates. It also carries the
-// single shared Discord webhook every affiliate posts to — safe to include here
+// single shared Discord webhook every affiliate posts to - safe to include here
 // because the endpoint is permission-gated (it is kept out of public settings).
 type AffiliatesResponse struct {
 	Affiliates []Affiliate `json:"affiliates"`

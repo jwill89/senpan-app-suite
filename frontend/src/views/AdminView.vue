@@ -58,7 +58,7 @@ onMounted(async () => {
   }
 })
 
-// ── Mobile nav drawer ────────────────────────────────────────────────────────
+// -- Mobile nav drawer --------------------------------------------------------
 // On narrow viewports the sidebar collapses into a hamburger-triggered drawer
 // (see app.css). Selecting a nav item navigates, so close the drawer on every
 // route change; tapping the backdrop closes it too.
@@ -79,7 +79,7 @@ const isNarrow = ref(false)
 let navMql: MediaQueryList | null = null
 function syncIsNarrow(): void {
   isNarrow.value = !!navMql?.matches
-  if (!isNarrow.value) navOpen.value = false // back to desktop → ensure the drawer is closed
+  if (!isNarrow.value) navOpen.value = false // back to desktop -> ensure the drawer is closed
 }
 onMounted(() => {
   navMql = window.matchMedia(NARROW_QUERY)
@@ -94,7 +94,7 @@ async function logout(): Promise<void> {
   void router.push({ name: 'home' })
 }
 
-// ── Change-password modal (available to every logged-in account) ──────────────
+// -- Change-password modal (available to every logged-in account) --------------
 const showChangePw = ref(false)
 const currentPw = ref('')
 const newPw = ref('')
@@ -110,7 +110,7 @@ function openChangePw(): void {
   showChangePw.value = true
 }
 
-/** Sidebar "Change Password" → close the mobile drawer, then open the modal. */
+/** Sidebar "Change Password" -> close the mobile drawer, then open the modal. */
 function onChangePassword(): void {
   navOpen.value = false
   openChangePw()
@@ -138,13 +138,13 @@ async function submitChangePw(): Promise<void> {
   }
 }
 
-// ── Access-token modal (personal access token for external API clients) ───────
+// -- Access-token modal (personal access token for external API clients) -------
 const showToken = ref(false)
 const tokenInfo = ref<AccountTokenInfoResponse | null>(null)
 const tokenLoading = ref(false)
 const tokenBusy = ref(false)
 const tokenError = ref('')
-/** The freshly generated token plaintext — shown exactly once, then forgotten. */
+/** The freshly generated token plaintext - shown exactly once, then forgotten. */
 const newToken = ref('')
 
 /** Formats a SQLite UTC timestamp ("YYYY-MM-DD HH:MM:SS") for local display. */
@@ -154,7 +154,7 @@ function fmtTokenTime(ts: string): string {
   return Number.isNaN(d.getTime()) ? ts : d.toLocaleString()
 }
 
-/** Sidebar "Access Token" → close the mobile drawer, open the modal, load info. */
+/** Sidebar "Access Token" -> close the mobile drawer, open the modal, load info. */
 async function onAccessToken(): Promise<void> {
   navOpen.value = false
   newToken.value = ''
@@ -208,11 +208,11 @@ async function copyToken(): Promise<void> {
     await navigator.clipboard.writeText(newToken.value)
     ui.notify('Token copied to clipboard', 'success')
   } catch {
-    ui.notify('Copy failed — select the token and copy it manually', 'error')
+    ui.notify('Copy failed - select the token and copy it manually', 'error')
   }
 }
 
-// ── Passkeys modal (WebAuthn credentials — add / list / remove) ───────────────
+// -- Passkeys modal (WebAuthn credentials - add / list / remove) ---------------
 const showPasskeys = ref(false)
 const passkeys = ref<Passkey[]>([])
 const passkeysLoading = ref(false)
@@ -220,7 +220,7 @@ const passkeyBusy = ref(false)
 const passkeyError = ref('')
 const newPasskeyName = ref('')
 
-/** Sidebar "Add Passkey" → close the drawer, open the modal, load the list. */
+/** Sidebar "Add Passkey" -> close the drawer, open the modal, load the list. */
 async function onManagePasskeys(): Promise<void> {
   navOpen.value = false
   passkeyError.value = ''
@@ -293,7 +293,7 @@ function fmtPasskeyTime(ts: string): string {
         <h2><font-awesome-icon :icon="['fad', 'gear']" /> Admin Dashboard</h2>
       </div>
       <div class="topbar-actions">
-        <span v-if="auth.user" class="topbar-user text-dim">
+        <span v-if="auth.user" class="topbar-user text-muted">
           <font-awesome-icon :icon="['fad', 'user']" /> {{ auth.user.username }}
         </span>
       </div>
@@ -330,7 +330,7 @@ function fmtPasskeyTime(ts: string): string {
       box-style="max-width: 420px"
       @close="showChangePw = false"
     >
-      <h3 class="mt-0"><font-awesome-icon :icon="['fad', 'lock']" /> Change Password</h3>
+      <h3><font-awesome-icon :icon="['fad', 'lock']" /> Change Password</h3>
       <form autocomplete="off" @submit.prevent="submitChangePw">
         <FormField label="Current password" html-for="cur-pw">
           <input id="cur-pw" v-model="currentPw" type="password" autocomplete="current-password" />
@@ -358,7 +358,7 @@ function fmtPasskeyTime(ts: string): string {
             Cancel
           </button>
           <button type="submit" class="btn-action" :disabled="savingPw">
-            <LoadingSpinner v-if="savingPw" label="Saving…" />
+            <LoadingSpinner v-if="savingPw" label="Saving..." />
             <template v-else>Change Password</template>
           </button>
         </div>
@@ -371,25 +371,25 @@ function fmtPasskeyTime(ts: string): string {
       box-style="max-width: 540px"
       @close="showToken = false"
     >
-      <h3 class="mt-0"><font-awesome-icon :icon="['fad', 'key']" /> Access Token</h3>
-      <p class="text-dim pat-intro">
-        A personal access token lets an external client — such as the FFXIV plugin — sign in to this
+      <h3><font-awesome-icon :icon="['fad', 'key']" /> Access Token</h3>
+      <p class="text-muted access-token-intro">
+        A personal access token lets an external client - such as the FFXIV plugin - sign in to this
         server as you, with your exact permissions. Treat it like a password: anyone who has it can
         act as your account.
       </p>
 
-      <p v-if="tokenLoading"><LoadingSpinner label="Loading…" /></p>
+      <p v-if="tokenLoading"><LoadingSpinner label="Loading..." /></p>
 
       <!-- Freshly generated token: revealed exactly once. -->
       <template v-else-if="newToken">
         <FormField
-          label="Your new token — copy it now, it won't be shown again"
+          label="Your new token - copy it now, it won't be shown again"
           html-for="pat-value"
         >
-          <div class="pat-reveal">
+          <div class="access-token-reveal">
             <input
               id="pat-value"
-              class="pat-input"
+              class="access-token-input"
               :value="newToken"
               readonly
               @focus="($event.target as HTMLInputElement).select()"
@@ -399,7 +399,7 @@ function fmtPasskeyTime(ts: string): string {
             </button>
           </div>
         </FormField>
-        <p class="text-dim pat-note">
+        <p class="text-muted access-token-note">
           Paste it into the plugin's settings. Generating or revoking a token later invalidates this
           one immediately.
         </p>
@@ -411,19 +411,19 @@ function fmtPasskeyTime(ts: string): string {
       <!-- Existing-token metadata + controls. -->
       <template v-else>
         <template v-if="tokenInfo?.has_token">
-          <dl class="pat-meta">
-            <dt class="text-dim">Token</dt>
+          <dl class="access-token-meta">
+            <dt class="text-muted">Token</dt>
             <dd>
-              <code>{{ tokenInfo.prefix }}…</code>
+              <code>{{ tokenInfo.prefix }}...</code>
             </dd>
-            <dt class="text-dim">Created</dt>
+            <dt class="text-muted">Created</dt>
             <dd>{{ fmtTokenTime(tokenInfo.created_at) }}</dd>
-            <dt class="text-dim">Last used</dt>
+            <dt class="text-muted">Last used</dt>
             <dd>{{ fmtTokenTime(tokenInfo.last_used_at) }}</dd>
           </dl>
-          <p class="text-dim pat-note">
+          <p class="text-muted access-token-note">
             For security the token itself can't be shown again. If you've lost it, regenerate to get
-            a new one — the old token stops working immediately.
+            a new one - the old token stops working immediately.
           </p>
         </template>
         <p v-else>You don't have an access token yet. Generate one to connect a plugin.</p>
@@ -441,7 +441,7 @@ function fmtPasskeyTime(ts: string): string {
             <font-awesome-icon :icon="['fas', 'trash']" /> Revoke
           </button>
           <button type="button" class="btn-action" :disabled="tokenBusy" @click="generateToken">
-            <LoadingSpinner v-if="tokenBusy" label="Working…" />
+            <LoadingSpinner v-if="tokenBusy" label="Working..." />
             <template v-else>
               <font-awesome-icon
                 :icon="tokenInfo?.has_token ? ['fas', 'rotate'] : ['fad', 'key']"
@@ -459,22 +459,22 @@ function fmtPasskeyTime(ts: string): string {
       box-style="max-width: 520px"
       @close="showPasskeys = false"
     >
-      <h3 class="mt-0"><font-awesome-icon :icon="['fad', 'user-key']" /> Passkeys</h3>
-      <p class="text-dim pat-intro">
+      <h3><font-awesome-icon :icon="['fad', 'user-key']" /> Passkeys</h3>
+      <p class="text-muted access-token-intro">
         A passkey lets you sign in with your device's fingerprint, face, PIN, or a security key
         instead of your password. You can add more than one (e.g. one per device); your password
         still works too.
       </p>
 
-      <p v-if="passkeysLoading"><LoadingSpinner label="Loading…" /></p>
+      <p v-if="passkeysLoading"><LoadingSpinner label="Loading..." /></p>
       <template v-else>
         <ul v-if="passkeys.length" class="passkey-list">
           <li v-for="pk in passkeys" :key="pk.id" class="passkey-row">
             <span class="passkey-info">
               <font-awesome-icon :icon="['fad', 'user-key']" />
               <strong>{{ pk.name }}</strong>
-              <span class="text-dim text-xs">
-                Added {{ fmtPasskeyTime(pk.created_at) }} · Last used
+              <span class="text-muted text-xs">
+                Added {{ fmtPasskeyTime(pk.created_at) }} - Last used
                 {{ fmtPasskeyTime(pk.last_used_at) }}
               </span>
             </span>
@@ -489,7 +489,7 @@ function fmtPasskeyTime(ts: string): string {
             </button>
           </li>
         </ul>
-        <p v-else class="text-dim">No passkeys yet.</p>
+        <p v-else class="text-muted">No passkeys yet.</p>
 
         <form class="passkey-add" @submit.prevent="addPasskey">
           <FormField label="Name this passkey (optional)" html-for="pk-name">
@@ -511,7 +511,7 @@ function fmtPasskeyTime(ts: string): string {
               Close
             </button>
             <button type="submit" class="btn-action" :disabled="passkeyBusy">
-              <LoadingSpinner v-if="passkeyBusy" label="Working…" />
+              <LoadingSpinner v-if="passkeyBusy" label="Working..." />
               <template v-else>
                 <font-awesome-icon :icon="['fad', 'user-key']" /> Add Passkey
               </template>
@@ -538,30 +538,30 @@ function fmtPasskeyTime(ts: string): string {
   justify-content: flex-end;
   margin-top: 16px;
 }
-.pat-intro {
+.access-token-intro {
   font-size: 0.9rem;
 }
-.pat-note {
+.access-token-note {
   font-size: 0.85rem;
 }
-.pat-reveal {
+.access-token-reveal {
   display: flex;
   gap: 8px;
 }
-.pat-input {
+.access-token-input {
   flex: 1;
   font-family: monospace;
 }
-.pat-meta {
+.access-token-meta {
   display: grid;
   grid-template-columns: auto 1fr;
   gap: 4px 16px;
   margin: 0 0 12px;
 }
-.pat-meta dt {
+.access-token-meta dt {
   font-size: 0.85rem;
 }
-.pat-meta dd {
+.access-token-meta dd {
   margin: 0;
 }
 .passkey-list {
@@ -578,8 +578,8 @@ function fmtPasskeyTime(ts: string): string {
   justify-content: space-between;
   gap: 12px;
   padding: 8px 12px;
-  border-radius: var(--radius-sm, 6px);
-  background: color-mix(in srgb, var(--color-text) 6%, transparent);
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--text) 6%, transparent);
 }
 .passkey-info {
   display: flex;

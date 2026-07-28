@@ -4,7 +4,7 @@
  * earned stamp/prize art overlaid at each slot's %-based {@link Placement} (rotated
  * about its centre). Used by the public participant view and the admin detail preview.
  *
- * The card image is the complete design — decorative frame, the "?"/empty slot
+ * The card image is the complete design - decorative frame, the "?"/empty slot
  * placeholders, the stall labels, and any prize panel are all part of it. This
  * component therefore only draws an item when it has an image to show (a collected
  * stamp, or a revealed prize): an item with no image renders nothing, letting the
@@ -67,7 +67,7 @@ defineProps<{
   align-items: center;
   justify-content: center;
   font-size: 2rem;
-  color: var(--text-dim);
+  color: var(--text-muted);
   background: var(--panel-raised-bg);
   border: 1px dashed var(--control-border);
 }

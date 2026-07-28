@@ -2,17 +2,17 @@
  * DOM head manipulation helpers for fonts and custom themes.
  *
  * Mirrors the original app.js methods:
- *   _applyHeaderFont / _loadGoogleFont — load a Google Font and set the
+ *   _applyHeaderFont / _loadGoogleFont - load a Google Font and set the
  *     --header-font CSS variable used by headings and the bingo board.
- *   _applyCustomCSS — inject/update the active custom theme <style> element.
+ *   _applyCustomCSS - inject/update the active custom theme <style> element.
  *
  * Custom themes are global, class-based CSS that override the design tokens on
- * :root — so they must continue to be injected into <head> verbatim.
+ * :root - so they must continue to be injected into <head> verbatim.
  *
  * In addition to Google Fonts, the header/board font can be one of the fonts
- * uploaded via System → Font Upload. `applyUploadedFonts()` registers an
+ * uploaded via System -> Font Upload. `applyUploadedFonts()` registers an
  * @font-face for each uploaded font so those families are usable anywhere
- * `--header-font` is — for players too, not just the admin preview. Fonts are
+ * `--header-font` is - for players too, not just the admin preview. Fonts are
  * sourced SAME-ORIGIN from `/api/fonts/pub/f/<token>` (rotating opaque tokens;
  * see the backend's fontserve.go), so the app never depends on the external
  * fonts host or its origin allowlist. `applyHeaderFont()` then skips the
@@ -38,7 +38,7 @@ export function loadGoogleFont(fontFamily: string): void {
   document.head.appendChild(link)
 }
 
-// ── Uploaded fonts (System → Font Upload) ───────────────────────────────────
+// -- Uploaded fonts (System -> Font Upload) -----------------------------------
 
 /** Maps a font file extension to its CSS @font-face format() hint. */
 const FONT_FORMAT_HINTS: Record<string, string> = {
@@ -64,7 +64,7 @@ export function fontFamily(font: Pick<UploadedFont, 'name' | 'family'>): string 
 }
 
 /** Rejects font-family names that could break out of a single-quoted CSS string
- *  or identifier — control chars, quotes, backslash, or the structural chars
+ *  or identifier - control chars, quotes, backslash, or the structural chars
  *  { } ; < >. The server validates admin-set families and uploaded filenames too
  *  (fonts.go cssNameUnsafe); this is defense in depth so a family that predates
  *  that validation cannot inject CSS into the <style> sinks built here. */
@@ -83,7 +83,7 @@ export function isUploadedFamily(family: string): boolean {
   return uploadedFamilies.has(family.trim())
 }
 
-// ── Font-metric clamping ────────────────────────────────────────────────────
+// -- Font-metric clamping ----------------------------------------------------
 //
 // Some fonts bake oversized vertical metrics (ascent / descent / line-gap) into
 // the file, so the browser reserves a huge empty box above and below the
@@ -104,7 +104,7 @@ export interface FontMetricOverride {
 
 /** Only clamp fonts whose total box (ascent+descent) exceeds this many ems. */
 const METRIC_CLAMP_THRESHOLD = 1.5
-/** Target total box for a clamped font — comfortable, even breathing room. */
+/** Target total box for a clamped font - comfortable, even breathing room. */
 const METRIC_CLAMP_TARGET = 1.25
 
 /**
@@ -198,7 +198,7 @@ async function clampUploadedFontMetrics(fonts: UploadedFont[]): Promise<void> {
       try {
         await document.fonts.load(`32px '${family}'`)
       } catch {
-        return false // unloaded font would measure as the fallback — skip, retry later
+        return false // unloaded font would measure as the fallback - skip, retry later
       }
       measuredFamilies.add(family)
       const o = measureFontOverride(family)
@@ -253,11 +253,11 @@ export function applyHeaderFont(fontFamily: string | null | undefined): void {
 }
 
 /**
- * Sets (or clears) the active theme's number flourish — the SVG flanking the
- * "Last Called" number — via the `--number-flourish-url` CSS variable that
+ * Sets (or clears) the active theme's number flourish - the SVG flanking the
+ * "Last Called" number - via the `--number-flourish-url` CSS variable that
  * `.last-called-flourish` reads. An empty path removes the variable so the mask
  * falls back to the app's built-in `/images/called_flourish.svg`. The path is
- * routed through assetCssUrl so it can't break out of the `url("…")` token.
+ * routed through assetCssUrl so it can't break out of the `url("...")` token.
  */
 export function applyNumberFlourish(path: string | null | undefined): void {
   const root = document.documentElement

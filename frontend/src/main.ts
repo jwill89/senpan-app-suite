@@ -34,7 +34,7 @@ app.config.errorHandler = (err, _instance, info) => {
   try {
     useUiStore().notify('Something went wrong. Please try again.', 'error')
   } catch {
-    /* Pinia not ready / store unavailable — console log above is the fallback. */
+    /* Pinia not ready / store unavailable - console log above is the fallback. */
   }
 }
 

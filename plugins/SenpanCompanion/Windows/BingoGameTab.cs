@@ -15,7 +15,7 @@ namespace SenpanCompanion.Windows;
 /// win patterns + game details) and the live Current Game view (draw controls,
 /// last-drawn, the B-I-N-G-O called-numbers grid, winners, active patterns). Draws,
 /// winners, and the halftime prompt arrive live over the WebSocket; a chime plays
-/// when a new winner appears. Card → player-name lookups come from the shared cache.
+/// when a new winner appears. Card -> player-name lookups come from the shared cache.
 /// </summary>
 internal sealed class BingoGameTab : TabBase, IDisposable
 {
@@ -93,7 +93,7 @@ internal sealed class BingoGameTab : TabBase, IDisposable
         // Patterns, presets and frequent-winners are gated by their own permissions
         // (bingo-patterns / bingo-presets / bingo-winners-log). Fetch them optionally,
         // so an operator with only bingo-game still gets the (public) game state and
-        // can draw — a missing sub-permission just leaves that section empty.
+        // can draw - a missing sub-permission just leaves that section empty.
         var patternsRes = await OptionalAsync(() => this.api.ListPatternsAsync());
         var presetsRes = await OptionalAsync(() => this.api.ListPresetsAsync());
         var gameRes = await this.api.GetGameAsync();
@@ -137,7 +137,7 @@ internal sealed class BingoGameTab : TabBase, IDisposable
         DrawViewCardPopup();
     }
 
-    // ── New game ─────────────────────────────────────────────────────────────
+    // -- New game -------------------------------------------------------------
 
     private void DrawNewGame()
     {
@@ -151,9 +151,9 @@ internal sealed class BingoGameTab : TabBase, IDisposable
         {
             var current = this.presets.FirstOrDefault(p => p.Id == this.selectedPresetId);
             ImGui.SetNextItemWidth(220);
-            if (ImGui.BeginCombo("Preset", current?.Name ?? "— None —"))
+            if (ImGui.BeginCombo("Preset", current?.Name ?? "- None -"))
             {
-                if (ImGui.Selectable("— None —", this.selectedPresetId == 0))
+                if (ImGui.Selectable("- None -", this.selectedPresetId == 0))
                     this.selectedPresetId = 0;
                 foreach (var p in this.presets)
                 {
@@ -285,7 +285,7 @@ internal sealed class BingoGameTab : TabBase, IDisposable
         this.pendingPatternOpen = null;
     }
 
-    // ── Current game ─────────────────────────────────────────────────────────
+    // -- Current game ---------------------------------------------------------
 
     private void DrawCurrentGame(GameState state)
     {
@@ -536,7 +536,7 @@ internal sealed class BingoGameTab : TabBase, IDisposable
         ImGui.Spacing();
         if (Ui.PrimaryButton("Yes"))
         {
-            // Yes → run a mini-game (alert players; auto stays paused).
+            // Yes -> run a mini-game (alert players; auto stays paused).
             Run(() => this.api.TriggerHalftimeAsync(true));
             this.halftimeAutoPaused = false;
             ImGui.CloseCurrentPopup();
@@ -544,7 +544,7 @@ internal sealed class BingoGameTab : TabBase, IDisposable
         ImGui.SameLine();
         if (Ui.Button("No"))
         {
-            // No → decline the mini-game; the server resumes auto if it was paused.
+            // No -> decline the mini-game; the server resumes auto if it was paused.
             Run(() => this.api.TriggerHalftimeAsync(false));
             this.halftimeAutoPaused = false;
             ImGui.CloseCurrentPopup();
@@ -606,7 +606,7 @@ internal sealed class BingoGameTab : TabBase, IDisposable
         });
     }
 
-    // ── View winning card ─────────────────────────────────────────────────────
+    // -- View winning card -----------------------------------------------------
 
     private void OpenViewCard(string cardId)
     {
@@ -689,19 +689,19 @@ internal sealed class BingoGameTab : TabBase, IDisposable
             : $"Viewing {who}'s Card###viewcard";
 
         // AlwaysAutoResize so the window fits the board once it loads (a fixed
-        // appearing-size locked it to the tiny "Loading…" content and stayed small).
+        // appearing-size locked it to the tiny "Loading..." content and stayed small).
         var open = true;
         if (!ImGui.BeginPopupModal(title, ref open, ImGuiWindowFlags.AlwaysAutoResize))
             return;
 
         if (this.viewCard == null)
         {
-            ImGui.TextDisabled("Loading…");
+            ImGui.TextDisabled("Loading...");
             ImGui.EndPopup();
             return;
         }
 
-        ImGui.TextDisabled($"Card {this.viewCard.Id} · gold = winning pattern");
+        ImGui.TextDisabled($"Card {this.viewCard.Id} - gold = winning pattern");
         ImGui.Spacing();
 
         DrawCardBoard(this.viewCard.BoardData, this.viewMatched);
@@ -754,7 +754,7 @@ internal sealed class BingoGameTab : TabBase, IDisposable
         ImGui.PopStyleVar();
     }
 
-    // ── Live event handlers (already on the framework thread) ─────────────────
+    // -- Live event handlers (already on the framework thread) -----------------
 
     private void OnGameDraw(DrawnNumber drawn, string[] winnerIds)
     {
@@ -821,7 +821,7 @@ internal sealed class BingoGameTab : TabBase, IDisposable
         this.winners = next;
     }
 
-    // ── Helpers ──────────────────────────────────────────────────────────────
+    // -- Helpers --------------------------------------------------------------
 
     private static string AutoIntervalLabel(int seconds)
     {
@@ -834,7 +834,7 @@ internal sealed class BingoGameTab : TabBase, IDisposable
 
     /// <summary>
     /// The half-way call count, mirroring the web (lib/halftime.ts): the classic
-    /// 35-of-75 ratio scaled to this game's callable pool (active columns × 15).
+    /// 35-of-75 ratio scaled to this game's callable pool (active columns x 15).
     /// </summary>
     private static int HalftimeThreshold(List<GamePattern> patterns)
     {

@@ -4,7 +4,7 @@
  * Used in manager toolbars (replaces `.ann-search`, `.font-search`, etc.).
  */
 withDefaults(defineProps<{ modelValue: string; placeholder?: string; ariaLabel?: string }>(), {
-  placeholder: 'Search…',
+  placeholder: 'Search...',
   ariaLabel: 'Search',
 })
 defineEmits<{ 'update:modelValue': [value: string] }>()

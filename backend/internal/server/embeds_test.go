@@ -71,9 +71,9 @@ func TestWithComponentsParam(t *testing.T) {
 }
 
 // TestPostDiscordWebhookSurfacesDiscordReason is the regression for the opaque-502
-// bug: when Discord rejects a post (e.g. a deleted webhook → 404 "Unknown
+// bug: when Discord rejects a post (e.g. a deleted webhook -> 404 "Unknown
 // Webhook"), the returned error must carry Discord's own reason and status, not a
-// bare status code — that reason is what the send handlers now log.
+// bare status code - that reason is what the send handlers now log.
 func TestPostDiscordWebhookSurfacesDiscordReason(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_, _ = io.Copy(io.Discard, r.Body)
@@ -115,7 +115,7 @@ func TestDiscordErrorMessage(t *testing.T) {
 }
 
 // TestSanitizeWebhookErrHidesToken verifies a transport error never leaks the
-// webhook URL — whose path carries the secret token — into the string that gets
+// webhook URL - whose path carries the secret token - into the string that gets
 // logged and returned to the client.
 func TestSanitizeWebhookErrHidesToken(t *testing.T) {
 	const secret = "SUPERSECRETTOKEN"

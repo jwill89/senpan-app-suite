@@ -2,7 +2,7 @@ package apidoc
 
 import "github.com/getkin/kin-openapi/openapi3"
 
-// ── small schema/builder helpers ─────────────────────────────────────────────
+// -- small schema/builder helpers ---------------------------------------------
 
 func ref(name string) *openapi3.SchemaRef { return openapi3.NewSchemaRef("#/components/schemas/"+name, nil) }
 
@@ -53,7 +53,7 @@ func errResp(desc string) *openapi3.ResponseRef {
 }
 
 // actionBody builds an action-dispatcher request body: an object with an `action`
-// enum plus the union of fields the actions use (each action uses a subset — see
+// enum plus the union of fields the actions use (each action uses a subset - see
 // the operation description). Pass actions=nil for a plain (non-dispatch) body.
 func actionBody(desc string, actions []string, p openapi3.Schemas) *openapi3.RequestBodyRef {
 	s := openapi3.NewObjectSchema()
@@ -110,7 +110,7 @@ func pparam(name, desc string) *openapi3.Parameter {
 }
 
 // add registers one operation. auth is one of: "public", "auth", "admin",
-// "permission:<key>", "any-bookclub" — it sets the security requirement and is
+// "permission:<key>", "any-bookclub" - it sets the security requirement and is
 // echoed into the description.
 func (b *pb) add(method, path, tag, summary, auth, descExtra string, o opt) {
 	op := openapi3.NewOperation()
@@ -158,7 +158,7 @@ func noContent() respEntry          { return respEntry{"204", jsonResp("No Conte
 func r(code, desc string) respEntry { return respEntry{code, errResp(desc)} }
 
 // rawResp is a 200 response with a non-JSON media type (e.g. the generated font
-// kit CSS, or font bytes — binary sets the string schema's format accordingly).
+// kit CSS, or font bytes - binary sets the string schema's format accordingly).
 func rawResp(desc, mediaType string, binary bool) respEntry {
 	s := openapi3.NewStringSchema()
 	if binary {
@@ -172,14 +172,14 @@ func rawResp(desc, mediaType string, binary bool) respEntry {
 func buildPaths(doc *openapi3.T) {
 	b := &pb{doc: doc}
 
-	// ── System ──────────────────────────────────────────────────────────────
+	// -- System --------------------------------------------------------------
 	b.add("GET", "/api/version", "System", "Backend version", "public", "", opt{
 		resps: []respEntry{{"200", jsonResp("The backend semver", "")}}})
 	b.add("GET", "/api/config", "System", "Client bootstrap config", "public",
 		"Returns the non-secret Cloudflare Turnstile site key (empty when disabled).", opt{
 			resps: []respEntry{{"200", jsonResp("Config", "")}}})
 
-	// ── Auth ────────────────────────────────────────────────────────────────
+	// -- Auth ----------------------------------------------------------------
 	b.add("GET", "/api/auth", "Auth", "Current auth status + user", "public", "", opt{
 		resps: []respEntry{ok("AuthCheckResponse")}})
 	b.add("POST", "/api/auth", "Auth", "Log in or out", "public",
@@ -199,17 +199,17 @@ func buildPaths(doc *openapi3.T) {
 		"Hidden registration: creates an inactive, non-admin account an admin must activate. IP rate-limited and Turnstile-gated when configured.",
 		opt{
 			body: actionBody("New account credentials.", nil, props(
-				"username", pstr("1–32 chars; may not be the reserved `admin`."),
+				"username", pstr("1-32 chars; may not be the reserved `admin`."),
 				"password", pstr("At least 8 characters."),
 				"turnstile_token", pstr("Turnstile token, when enabled."),
 			)),
 			resps: []respEntry{ok("RegisterResponse"), r("400", "Validation failed"), r("409", "Username taken"), r("429", "Too many attempts")}})
 
-	// ── Users & Account ───────────────────────────────────────────────────────
+	// -- Users & Account -------------------------------------------------------
 	b.add("GET", "/api/users", "Users & Account", "List accounts", "admin", "", opt{
 		resps: []respEntry{ok("UsersResponse"), r("401", "Unauthorized")}})
 	b.add("PATCH", "/api/users/{id}", "Users & Account", "Update an account", "admin",
-		"Partial update — any supplied field is applied: `active`, `admin`, `permissions` (page-permission keys), `password` (min 8). The reserved `admin` account is protected (its `active`/`admin`/`password` can't be changed here; `permissions` may).",
+		"Partial update - any supplied field is applied: `active`, `admin`, `permissions` (page-permission keys), `password` (min 8). The reserved `admin` account is protected (its `active`/`admin`/`password` can't be changed here; `permissions` may).",
 		opt{
 			path: []*openapi3.Parameter{pparam("id", "Target user id.")},
 			body: actionBody("Account fields to update.", nil, props(
@@ -230,7 +230,7 @@ func buildPaths(doc *openapi3.T) {
 		"Personal access token metadata (never the secret). Shape is the `TokenInfo` schema.", opt{
 			resps: []respEntry{ok("TokenInfo"), r("401", "Unauthorized")}})
 	b.add("POST", "/api/account/token", "Users & Account", "Generate a token", "auth",
-		"Mints a `pat_…` (plaintext returned once), replacing any existing token.", opt{
+		"Mints a `pat_...` (plaintext returned once), replacing any existing token.", opt{
 			resps: []respEntry{ok("AccountTokenGenerateResponse"), r("401", "Unauthorized")}})
 	b.add("DELETE", "/api/account/token", "Users & Account", "Revoke a token", "auth",
 		"Deletes the account's token, reporting whether a row was removed.", opt{
@@ -257,7 +257,7 @@ func buildPaths(doc *openapi3.T) {
 		path:  []*openapi3.Parameter{pparam("id", "Passkey row id.")},
 		resps: []respEntry{ok("PasskeysResponse"), r("401", "Unauthorized"), r("404", "Passkey not found")}})
 
-	// ── Bingo: board / cards / game ───────────────────────────────────────────
+	// -- Bingo: board / cards / game -------------------------------------------
 	b.add("GET", "/api/board", "Bingo", "Player board (card + game)", "public", "", opt{
 		query: []*openapi3.Parameter{qparam("id", "6-char card ID (required).", true), qparam("preview", "Any non-empty value returns only the card.", false)},
 		resps: []respEntry{{"200", jsonResp("BoardResponse (full) or CardResponse (preview)", "BoardResponse")}, r("400", "Board ID required"), r("404", "Board not found")}})
@@ -268,8 +268,8 @@ func buildPaths(doc *openapi3.T) {
 			body:  actionBody("New named card.", nil, props("player_name", pstr("Player name to assign (optional)."))),
 			resps: []respEntry{created("GenerateSingleCardResponse"), r("401", "Unauthorized")}})
 	b.add("POST", "/api/cards/generate", "Bingo", "Bulk-generate cards", "permission:bingo-cards",
-		"Generates `count` random cards (clamped 1–500).", opt{
-			body:  actionBody("Bulk generate.", nil, props("count", pint("Number of cards to generate (1–500)."))),
+		"Generates `count` random cards (clamped 1-500).", opt{
+			body:  actionBody("Bulk generate.", nil, props("count", pint("Number of cards to generate (1-500)."))),
 			resps: []respEntry{created("GenerateCardsResponse"), r("401", "Unauthorized")}})
 	b.add("POST", "/api/cards/request", "Bingo", "Submit a custom card request", "public",
 		"Public Personal Card Request: submit a hand-built bingo card with a chosen 6-char ID, character name, and world. Validates the board and rejects a taken ID or a duplicate board; on success the card is stored pending staff approval (not yet playable). Rate-limited; Cloudflare Turnstile when configured.", opt{
@@ -277,7 +277,7 @@ func buildPaths(doc *openapi3.T) {
 				"character_name", pstr("Requester's character name."),
 				"world", pstr("Requester's home world."),
 				"card_id", pstr("Chosen 6-character alphanumeric card ID."),
-				"board_data", parr("5×5 grid of numbers (row-major; centre 0 = FREE).", parr("", pint("Cell number."))),
+				"board_data", parr("5x5 grid of numbers (row-major; centre 0 = FREE).", parr("", pint("Cell number."))),
 				"turnstile_token", pstr("Cloudflare Turnstile token (when enabled)."))),
 			resps: []respEntry{created("CardRequestResponse"), r("400", "Invalid card or fields"), r("409", "ID taken or duplicate card"), r("429", "Too many requests")}})
 	b.add("DELETE", "/api/cards/all", "Bingo", "Delete all cards", "permission:bingo-cards",
@@ -304,13 +304,13 @@ func buildPaths(doc *openapi3.T) {
 		resps: []respEntry{ok("GameStateResponse")}})
 	b.add("POST", "/api/game/start", "Bingo", "Start a game", "permission:bingo-game", "", opt{
 		body: actionBody("Game start.", nil, props(
-			"pattern_ids", parr("Win pattern ids (≥1).", pint("")),
+			"pattern_ids", parr("Win pattern ids (>=1).", pint("")),
 			"auto", pbool("Start with the automatic-draw loop running."),
 			"auto_interval", pint("Seconds between automatic draws (\"Time Between Calls\")."))),
 		resps: []respEntry{ok("GameStateResponse"), r("400", "No pattern selected"), r("401", "Unauthorized")}})
 	b.add("POST", "/api/game/draw", "Bingo", "Draw a number", "permission:bingo-game",
-		"Draws the next number; `delay` (0–60s) delays the player broadcast.", opt{
-			body:  actionBody("Draw.", nil, props("delay", pint("Player broadcast delay seconds (0–60)."))),
+		"Draws the next number; `delay` (0-60s) delays the player broadcast.", opt{
+			body:  actionBody("Draw.", nil, props("delay", pint("Player broadcast delay seconds (0-60)."))),
 			resps: []respEntry{ok("DrawResult"), r("400", "No active game / all drawn"), r("401", "Unauthorized")}})
 	b.add("POST", "/api/game/end", "Bingo", "End the game", "permission:bingo-game",
 		"Ends the active game, logging the confirmed valid winners.", opt{
@@ -331,22 +331,22 @@ func buildPaths(doc *openapi3.T) {
 				r("409", "No active game"),
 				r("429", "On cooldown (Retry-After)")}})
 	b.add("PATCH", "/api/game", "Bingo", "Update game controls", "permission:bingo-game",
-		"Partial update: `delay` (0–60) persists the shared draw delay; `details` sets the markdown game details; `yoever_enabled` toggles the \"It's Yoever\" reaction; `auto_enabled` switches the automatic-draw loop on/off and `auto_interval` adjusts the seconds between auto draws (live, never written back to a preset). Any combination may be supplied.", opt{
+		"Partial update: `delay` (0-60) persists the shared draw delay; `details` sets the markdown game details; `yoever_enabled` toggles the \"It's Yoever\" reaction; `auto_enabled` switches the automatic-draw loop on/off and `auto_interval` adjusts the seconds between auto draws (live, never written back to a preset). Any combination may be supplied.", opt{
 			body: actionBody("Game controls.", nil, props(
-				"delay", pint("Shared draw delay seconds (0–60)."),
+				"delay", pint("Shared draw delay seconds (0-60)."),
 				"details", pstr("Markdown game details."),
 				"yoever_enabled", pbool("Switch the \"It's Yoever\" reaction on/off."),
 				"auto_enabled", pbool("Switch the automatic-draw loop on/off."),
 				"auto_interval", pint("Seconds between automatic draws (\"Time Between Calls\")."))),
 			resps: []respEntry{ok("OKResponse"), r("400", "Draw delay out of range"), r("401", "Unauthorized")}})
 
-	// ── Bingo: patterns / categories / presets / styles ───────────────────────
+	// -- Bingo: patterns / categories / presets / styles -----------------------
 	b.add("GET", "/api/patterns", "Bingo", "List patterns + categories", "permission:bingo-patterns", "", opt{resps: []respEntry{ok("PatternsResponse")}})
 	b.add("POST", "/api/patterns", "Bingo", "Create a pattern", "permission:bingo-patterns",
-		"Creates a win pattern (rejects a duplicate 5×5 grid).", opt{
+		"Creates a win pattern (rejects a duplicate 5x5 grid).", opt{
 			body: actionBody("New pattern.", nil, props(
 				"name", pstr("Pattern name (required)."),
-				"pattern_data", parr("5×5 boolean grid (required).", parr("", pbool(""))),
+				"pattern_data", parr("5x5 boolean grid (required).", parr("", pbool(""))),
 				"category_id", pint("Owning category id."))),
 			resps: []respEntry{created("PatternCreateResponse"), r("400", "Invalid"), r("409", "Duplicate pattern")}})
 	b.add("POST", "/api/patterns/reorder", "Bingo", "Reorder patterns in a category", "permission:bingo-patterns",
@@ -387,7 +387,7 @@ func buildPaths(doc *openapi3.T) {
 			resps: []respEntry{noContent(), r("409", "Cannot delete the last category")}})
 	presetFields := func() openapi3.Schemas {
 		return props("name", pstr("Preset name (required)."),
-			"pattern_ids", parr("Win pattern ids (≥1).", pint("")), "game_details", pstr("Markdown details."),
+			"pattern_ids", parr("Win pattern ids (>=1).", pint("")), "game_details", pstr("Markdown details."),
 			"auto", pbool("Pre-select the automatic-draw toggle when applied."),
 			"auto_interval", pint("Seconds between automatic draws (\"Time Between Calls\")."))
 	}
@@ -406,7 +406,7 @@ func buildPaths(doc *openapi3.T) {
 	b.add("POST", "/api/styles", "Bingo", "Create a theme", "permission:system-themes", "", opt{
 		body: actionBody("New theme.", nil, props(
 			"name", pstr("Style name (required)."),
-			"tokens", desc(openapi3.NewObjectSchema(), "Design-token overrides (name→CSS value)."),
+			"tokens", desc(openapi3.NewObjectSchema(), "Design-token overrides (name->CSS value)."),
 			"board_flourish", pstr("Board flourish path."), "number_flourish", pstr("Number flourish path."),
 			"is_public", pbool("Whether the theme is selectable in the client-side picker (default false = admin-only)."))),
 		resps: []respEntry{created("StyleCreateResponse"), r("400", "Invalid")}})
@@ -429,7 +429,7 @@ func buildPaths(doc *openapi3.T) {
 			path: []*openapi3.Parameter{pparam("id", "Style id.")},
 			body: actionBody("Theme fields.", nil, props(
 				"name", pstr("Style name (required)."),
-				"tokens", desc(openapi3.NewObjectSchema(), "Design-token overrides (name→CSS value)."),
+				"tokens", desc(openapi3.NewObjectSchema(), "Design-token overrides (name->CSS value)."),
 				"board_flourish", pstr("Board flourish path."), "number_flourish", pstr("Number flourish path."),
 				"is_public", pbool("Whether the theme is selectable in the client-side picker."))),
 			resps: []respEntry{ok("OKResponse"), r("400", "Invalid")}})

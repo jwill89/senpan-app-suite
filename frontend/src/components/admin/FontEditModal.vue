@@ -1,15 +1,15 @@
 <script setup lang="ts">
 /**
- * Edit Font modal (Atelier → Font Upload). Everything about ONE font that
+ * Edit Font modal (Atelier -> Font Upload). Everything about ONE font that
  * doesn't belong in the slim table lives here:
  *
- *   - CSS name — the font-family used by the kit, the app, and the picker
+ *   - CSS name - the font-family used by the kit, the app, and the picker
  *     (blank = the font's base name).
- *   - Served version — which variant type external sites and the app receive
+ *   - Served version - which variant type external sites and the app receive
  *     (Auto = WOFF2 when available).
- *   - Allowed sites — THIS font's external-origin allowlist (the app itself is
+ *   - Allowed sites - THIS font's external-origin allowlist (the app itself is
  *     always allowed).
- *   - Files — every variant with its size; uploaded files can be renamed or
+ *   - Files - every variant with its size; uploaded files can be renamed or
  *     deleted here (the converted WOFF2 copy is managed automatically).
  *
  * The metadata fields are drafts applied together with Save; file rename and
@@ -40,7 +40,7 @@ watch(font, (f) => {
   if (!f) emit('close')
 })
 
-// ── Metadata drafts (applied together with Save) ─────────────────────────────
+// -- Metadata drafts (applied together with Save) -----------------------------
 
 /** Custom CSS name draft ("" = base-name default). */
 const familyDraft = ref('')
@@ -57,7 +57,7 @@ watch(
   (f, old) => {
     if (!f) return
     // Only reset when the target font changes (not on every list refresh, or
-    // typing would be clobbered by unrelated reloads) — except the first run.
+    // typing would be clobbered by unrelated reloads) - except the first run.
     if (old && old.base === f.base) return
     familyDraft.value = f.family === f.base ? '' : f.family
     serveDraft.value = f.serve
@@ -119,7 +119,7 @@ async function save(): Promise<void> {
   if (ok) emit('close')
 }
 
-// ── Files (apply immediately) ────────────────────────────────────────────────
+// -- Files (apply immediately) ------------------------------------------------
 
 /** Name of the file currently being renamed inline, or null. */
 const renamingFile = ref<string | null>(null)
@@ -161,8 +161,8 @@ function formatSize(bytes: number): string {
     @close="emit('close')"
   >
     <h3 class="m-0 mb-12">
-      <font-awesome-icon :icon="['fad', 'font']" /> Edit Font —
-      <span class="code-gold">{{ font.family }}</span>
+      <font-awesome-icon :icon="['fad', 'font']" /> Edit Font -
+      <span class="code-highlight">{{ font.family }}</span>
     </h3>
 
     <FormField
@@ -186,7 +186,7 @@ function formatSize(bytes: number): string {
       <select id="font-edit-serve" v-model="serveDraft" aria-label="Served font version">
         <option value="">Auto (WOFF2 preferred)</option>
         <option v-for="v in font.variants" :key="v.name + v.type" :value="v.type">
-          {{ variantLabel(v) }} — {{ formatSize(v.size) }}
+          {{ variantLabel(v) }} - {{ formatSize(v.size) }}
         </option>
       </select>
     </FormField>
@@ -194,7 +194,7 @@ function formatSize(bytes: number): string {
     <FormField
       label="Allowed sites"
       html-for="font-edit-origin"
-      help="External sites allowed to use THIS font (origin only, no path). This app is always allowed — no need to list it."
+      help="External sites allowed to use THIS font (origin only, no path). This app is always allowed - no need to list it."
     >
       <div class="font-modal-row">
         <input
@@ -210,14 +210,14 @@ function formatSize(bytes: number): string {
     </FormField>
     <ul v-if="originsDraft.length" class="font-modal-origins">
       <li v-for="o in originsDraft" :key="o">
-        <span class="code-gold">{{ o }}</span>
+        <span class="code-highlight">{{ o }}</span>
         <button class="btn-danger btn-sm" :title="`Remove ${o}`" @click="removeOrigin(o)">
           <font-awesome-icon :icon="['fas', 'trash']" /> Remove
         </button>
       </li>
     </ul>
-    <p v-else class="text-dim text-xs" style="margin: 0 0 12px">
-      No external sites yet — this font can only be used by the app itself.
+    <p v-else class="text-muted text-xs" style="margin: 0 0 12px">
+      No external sites yet - this font can only be used by the app itself.
     </p>
 
     <h4 class="font-modal-files-heading">Files</h4>
@@ -238,10 +238,10 @@ function formatSize(bytes: number): string {
         </template>
         <template v-else>
           <span class="font-modal-file">
-            <span class="code-gold">{{ v.name }}</span>
-            <span class="text-dim text-xs">
-              {{ variantLabel(v) }} · {{ formatSize(v.size) }}
-              <template v-if="v.modified"> · {{ new Date(v.modified).toLocaleString() }}</template>
+            <span class="code-highlight">{{ v.name }}</span>
+            <span class="text-muted text-xs">
+              {{ variantLabel(v) }} - {{ formatSize(v.size) }}
+              <template v-if="v.modified"> - {{ new Date(v.modified).toLocaleString() }}</template>
             </span>
           </span>
           <span v-if="!v.converted" class="font-modal-file-actions">
@@ -260,14 +260,14 @@ function formatSize(bytes: number): string {
               <font-awesome-icon :icon="['fas', 'trash']" /> Delete
             </button>
           </span>
-          <span v-else class="text-dim text-xs">managed automatically</span>
+          <span v-else class="text-muted text-xs">managed automatically</span>
         </template>
       </li>
     </ul>
 
     <div class="font-modal-actions">
       <button class="btn-confirm" :disabled="!dirty || fonts.saving" @click="save">
-        <LoadingSpinner v-if="fonts.saving" label="Saving…" />
+        <LoadingSpinner v-if="fonts.saving" label="Saving..." />
         <template v-else>Save</template>
       </button>
       <button class="btn-neutral" @click="emit('close')">Close</button>

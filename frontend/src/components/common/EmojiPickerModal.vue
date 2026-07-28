@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /**
- * Shared emoji-picker modal — the `vue3-emoji-picker` inside a centered
+ * Shared emoji-picker modal - the `vue3-emoji-picker` inside a centered
  * ModalOverlay, lazy-loaded (picker + its CSS in one on-demand chunk) and
  * re-skinned to the app theme. Render it with `v-if` when open; it emits the
  * chosen emoji character via `select` and a `close` request.
@@ -17,7 +17,7 @@ const EmojiPicker = defineAsyncComponent(async () => {
   return (await import('vue3-emoji-picker')).default
 })
 
-/** The emoji-picker `select` payload — `i` is the chosen emoji character. */
+/** The emoji-picker `select` payload - `i` is the chosen emoji character. */
 interface EmojiSelect {
   i: string
 }
@@ -42,7 +42,7 @@ function onSelect(e: EmojiSelect): void {
     @close="emit('close')"
   >
     <div class="emoji-picker-head">
-      <h3 class="mb-0"><font-awesome-icon :icon="['fad', 'face-smile']" /> Pick an Emoji</h3>
+      <h3><font-awesome-icon :icon="['fad', 'face-smile']" /> Pick an Emoji</h3>
       <button
         v-if="allowClear"
         type="button"
@@ -72,7 +72,7 @@ function onSelect(e: EmojiSelect): void {
 }
 
 /* The picker ships its own dark theme, but the app's global `input` rule would
-   otherwise override the search field — re-skin it to the app surface so it
+   otherwise override the search field - re-skin it to the app surface so it
    stays legible and on-theme. */
 .emoji-picker-wrap :deep(input) {
   background: var(--panel-bg);

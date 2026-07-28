@@ -7,7 +7,7 @@
  *  - `role="dialog"` + `aria-modal` mark it as a modal for assistive tech.
  *  - Focus is moved into the dialog on open, trapped within it while open
  *    (Tab/Shift+Tab cycle), and restored to the previously focused element on
- *    close — so keyboard and screen-reader users aren't stranded.
+ *    close - so keyboard and screen-reader users aren't stranded.
  *
  * The dialog content is provided via the default slot.
  */
@@ -24,11 +24,11 @@ defineProps<{
 
 const emit = defineEmits<{ close: [] }>()
 
-// ── Shared modal stack ───────────────────────────────────────────────────────
+// -- Shared modal stack -------------------------------------------------------
 // Stacked modals (e.g. a ui.confirm() dialog opened from inside an edit modal)
 // must not share Escape and focus. We keep a module-level stack of the open
 // overlays: only the TOP-MOST one reacts to Escape and owns the focus trap, and
-// every modal beneath it — plus the page behind — is made `inert` + aria-hidden
+// every modal beneath it - plus the page behind - is made `inert` + aria-hidden
 // so keyboard/pointer/AT focus can't reach it. Closing the top one restores the
 // one beneath (or the page) automatically.
 interface ModalEntry {
@@ -50,7 +50,7 @@ function restack(): void {
 /**
  * Make everything behind `overlay` inert + aria-hidden (siblings along the path
  * up to <body>), skipping other modal overlays and anything already hidden.
- * Returns a restore fn. Only the bottom-most modal calls this — modals stacked
+ * Returns a restore fn. Only the bottom-most modal calls this - modals stacked
  * above it are handled by {@link restack}.
  */
 function inertBackground(overlay: HTMLElement): () => void {
@@ -100,7 +100,7 @@ function focusable(): HTMLElement[] {
 }
 
 function onKeydown(e: KeyboardEvent): void {
-  // Only the top-most modal reacts — a lower modal must ignore keys meant for
+  // Only the top-most modal reacts - a lower modal must ignore keys meant for
   // the dialog stacked above it (e.g. Escape on a confirm dialog opened from an
   // edit modal must not also close the edit modal).
   if (!isTop()) return

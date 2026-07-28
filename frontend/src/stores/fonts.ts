@@ -1,12 +1,12 @@
 /**
- * Fonts store: manages the uploaded fonts (the Atelier → Font Upload admin
+ * Fonts store: manages the uploaded fonts (the Atelier -> Font Upload admin
  * tab). A logical font GROUPS the uploaded files sharing a base name as format
  * variants (TTF/OTF/WOFF/WOFF2/EOT, plus an auto-converted WOFF2 copy). The
  * store lists fonts, uploads files (multiple at once), renames/deletes
  * individual variant files, deletes whole fonts, and edits a font's metadata:
  * its CSS family name, the variant type it serves publicly, and its PER-FONT
  * allowed-site origins. Uploads of a name that already exists are rejected
- * server-side — the existing file must be deleted first.
+ * server-side - the existing file must be deleted first.
  *
  * Fonts are not served as static files: external sites embed the generated kit
  * stylesheet (FONT_KIT_URL) and load fonts through obfuscated, rotating token
@@ -26,8 +26,8 @@ export const FONT_BASE_URL = 'https://fonts.senpan.cafe'
 /** The kit stylesheet external (Carrd) sites embed via <link rel="stylesheet">. */
 export const FONT_KIT_URL = `${FONT_BASE_URL}/kit.css`
 
-/** Builds the external tokenized URL for a variant token (rotates every 1–2
- *  weeks — embed the kit stylesheet, not this, for anything permanent). */
+/** Builds the external tokenized URL for a variant token (rotates every 1-2
+ *  weeks - embed the kit stylesheet, not this, for anything permanent). */
 export function fontShareUrl(token: string): string {
   return `${FONT_BASE_URL}/f/${encodeURIComponent(token)}`
 }
@@ -80,7 +80,7 @@ export const useFontsStore = defineStore('fonts', () => {
         ui.notify(`${s.name}: ${s.reason}`, 'error')
       }
       // Conversion warnings: the file uploaded, but its WOFF2 conversion
-      // failed — an uploaded format is served for that font.
+      // failed - an uploaded format is served for that font.
       for (const w of res.warnings ?? []) {
         ui.notify(w, 'info')
       }

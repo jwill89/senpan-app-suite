@@ -25,7 +25,7 @@ function makeUser(partial: Partial<User>): User {
 }
 
 /** Mounts the sidebar with the given logged-in account. The AppVersions footer
- * (which fetches GET /api/version on mount) is stubbed — it's covered by its own
+ * (which fetches GET /api/version on mount) is stubbed - it's covered by its own
  * test and irrelevant to the navigation assertions here. */
 function mountAs(user: User): VueWrapper {
   const auth = useAuthStore()
@@ -41,11 +41,11 @@ function section(wrapper: VueWrapper, label: string) {
     .find((s) => s.find('.admin-nav-header').text().includes(label))!
 }
 
-/** Whether a section is expanded — its header carries the `open` class, which is
+/** Whether a section is expanded - its header carries the `open` class, which is
  * the exact expression (`openSection === <section>`) that also drives the items'
  * `v-show`, so it is the source of truth for accordion state. */
 function isExpanded(wrapper: VueWrapper, label: string): boolean {
-  return section(wrapper, label).find('.admin-nav-header').classes().includes('open')
+  return section(wrapper, label).find('.admin-nav-header').classes().includes('is-open')
 }
 
 /** Clicks a section's accordion header. */
@@ -95,7 +95,7 @@ describe('AdminSidebar', () => {
     await clickHeader(wrapper, 'System')
 
     // Independent accordion: System expands while the already-open Bingo stays
-    // open, and no navigation happened — headers are pure toggles now.
+    // open, and no navigation happened - headers are pure toggles now.
     expect(isExpanded(wrapper, 'System')).toBe(true)
     expect(isExpanded(wrapper, 'Bingo')).toBe(true)
     expect(push).not.toHaveBeenCalled()
@@ -145,7 +145,7 @@ describe('AdminSidebar', () => {
 
   it('hides sections the account cannot access any item in', () => {
     // A non-admin with only the Manage Cards permission sees just the Bingo
-    // section (and only its Cards item) — no empty Tea House / Atelier / System —
+    // section (and only its Cards item) - no empty Tea House / Atelier / System -
     // plus the always-present User Options section.
     const wrapper = mountAs(makeUser({ permissions: ['bingo-cards'] }))
     const sections = wrapper.findAll('.admin-nav-section')

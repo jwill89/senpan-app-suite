@@ -1,7 +1,7 @@
 // Package logging configures the process-wide slog logger.
 //
 // The app logs structured JSON. Output always goes to stdout (captured by
-// systemd/journald for ops), and — when a file path is configured — ALSO to a
+// systemd/journald for ops), and - when a file path is configured - ALSO to a
 // rotating file so the in-app log viewer has a durable, machine-readable source
 // that survives restarts and can be tailed without SSH.
 //
@@ -24,7 +24,7 @@ import (
 // tailSink taps the log stream for the live viewer. It is an io.Writer plugged
 // into the log MultiWriter, so its Write receives each fully-formatted JSON log
 // line (all attributes included) exactly once. It forwards the raw line to a
-// callback registered later — once the WebSocket hub exists — and is a cheap
+// callback registered later - once the WebSocket hub exists - and is a cheap
 // no-op until then (and whenever nobody is watching). Tapping the stream here
 // (rather than tailing the file) means the live tail also works when file
 // logging is disabled, and never has to deal with rotation.
@@ -63,7 +63,7 @@ const (
 )
 
 // levelVar is the process-wide minimum log level, held in a slog.LevelVar so it
-// can be changed at runtime (see SetLevel) — the admin log viewer flips DEBUG on
+// can be changed at runtime (see SetLevel) - the admin log viewer flips DEBUG on
 // and off live without a restart, and the change takes effect immediately across
 // stdout, the file, and the live tail.
 var levelVar = new(slog.LevelVar)

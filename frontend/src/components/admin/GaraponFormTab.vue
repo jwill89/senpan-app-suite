@@ -3,8 +3,8 @@
  * Admin Garapon create/edit form. Title, a markdown details field, a repeatable
  * prize editor (each row: name + ball color + appearance-rate weight + a
  * grand-prize radio), and the grand-prize image picker (the "Garapon" image
- * category). Appearance rates are relative weights — a live normalized % shows
- * each prize's real odds — so they need not total 100.
+ * category). Appearance rates are relative weights - a live normalized % shows
+ * each prize's real odds - so they need not total 100.
  *
  * Hosted as a Back sub-page of the Garapon manager (GaraponTab): it emits `saved`
  * on a successful save and `cancel` to return to the list.
@@ -28,7 +28,7 @@ onMounted(() => {
   void garapons.loadStampRallyOptions()
 })
 
-/** Set the linked stamp rally from the select ('' → null = not linked). */
+/** Set the linked stamp rally from the select ('' -> null = not linked). */
 function setStampRally(value: string): void {
   if (garapons.garaponForm) garapons.garaponForm.stamp_rally_id = value ? Number(value) : null
 }
@@ -67,14 +67,14 @@ function cancel(): void {
 
       <FormField
         label="Linked Stamp Rally"
-        help="Optional. When linked, every drawing link you issue also issues that participant a stamp card for this rally — sharing the same link. Only open rallies are listed."
+        help="Optional. When linked, every drawing link you issue also issues that participant a stamp card for this rally - sharing the same link. Only open rallies are listed."
       >
         <select
           :value="garapons.garaponForm.stamp_rally_id ?? ''"
           aria-label="Linked stamp rally"
           @change="setStampRally(($event.target as HTMLSelectElement).value)"
         >
-          <option value="">None — not linked</option>
+          <option value="">None - not linked</option>
           <option v-for="r in garapons.stampRallyOptions" :key="r.id" :value="r.id">
             {{ r.title }}
           </option>
@@ -85,20 +85,20 @@ function cancel(): void {
         <MarkdownEditor
           v-model="garapons.garaponForm.details"
           min-height="120px"
-          placeholder="Describe the event (supports markdown — bold, italics, lists, links…)"
+          placeholder="Describe the event (supports markdown - bold, italics, lists, links...)"
         />
       </FormField>
 
       <!-- Prizes editor -->
       <FormField
         label="Prizes"
-        help="Each prize has a ball color and an appearance rate (a relative weight; the % shows its real odds). Mark exactly one as the grand prize — it gets the picture below."
+        help="Each prize has a ball color and an appearance rate (a relative weight; the % shows its real odds). Mark exactly one as the grand prize - it gets the picture below."
       >
         <div class="prize-editor">
-          <div class="prize-row prize-row-head text-dim text-xs">
+          <div class="prize-row prize-row-head text-muted text-xs">
             <span class="prize-grand-col">Grand</span>
             <span class="prize-name-col">Name</span>
-            <span class="prize-color-col">Ball Color</span>
+            <span>Ball Color</span>
             <span class="prize-rate-col">Draw Weight</span>
             <span class="prize-pct-col">Odds</span>
             <span class="prize-del-col"></span>
@@ -116,7 +116,7 @@ function cancel(): void {
             <span class="prize-name-col">
               <input v-model="p.name" placeholder="Prize name" aria-label="Prize name" />
             </span>
-            <span class="prize-color-col">
+            <span>
               <input
                 v-model="p.ball_color"
                 type="color"
@@ -133,7 +133,7 @@ function cancel(): void {
                 aria-label="Appearance rate"
               />
             </span>
-            <span class="prize-pct-col text-dim">{{ ratePct(p.rate) }}</span>
+            <span class="prize-pct-col text-muted">{{ ratePct(p.rate) }}</span>
             <span class="prize-del-col">
               <button
                 class="btn-danger btn-sm"
@@ -154,7 +154,7 @@ function cancel(): void {
 
       <FormField
         label="Grand Prize Image"
-        help="Pick from any image category. Upload new images on the System → Images page."
+        help="Pick from any image category. Upload new images on the System -> Images page."
       >
         <ImagePicker v-model="garapons.garaponForm.grand_prize_image" />
       </FormField>
@@ -168,7 +168,7 @@ function cancel(): void {
           :disabled="!garapons.garaponForm.title.trim() || garapons.savingGarapon"
           @click="save"
         >
-          <LoadingSpinner v-if="garapons.savingGarapon" label="Saving…" />
+          <LoadingSpinner v-if="garapons.savingGarapon" label="Saving..." />
           <template v-else>Save Garapon</template>
         </button>
       </FormActions>

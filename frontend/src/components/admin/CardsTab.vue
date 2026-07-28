@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /**
- * Admin Cards tab — generate cards (batch or a single named card), search, and
+ * Admin Cards tab - generate cards (batch or a single named card), search, and
  * manage them in a paginated, sortable table (board id, player name, created
  * date, and view/edit + delete actions). Clicking view/edit opens the board
  * preview modal (which also allows inline player-name/details edits).
@@ -41,7 +41,7 @@ function copyCardUrl(id: string): void {
       <!-- All generation controls on one line (wraps on narrow widths): a batch
            count generator, a single named-card generator, and Delete All. -->
       <div class="flex-toolbar cards-toolbar mb-20">
-        <span class="text-dim">Generate</span>
+        <span class="text-muted">Generate</span>
         <input
           v-model.number="cards.generateCount"
           type="number"
@@ -49,13 +49,13 @@ function copyCardUrl(id: string): void {
           min="1"
           max="500"
         />
-        <span class="text-dim">cards</span>
+        <span class="text-muted">cards</span>
         <button class="btn-action" :disabled="cards.generating" @click="cards.generateCards()">
-          <LoadingSpinner v-if="cards.generating" label="Generating…" />
+          <LoadingSpinner v-if="cards.generating" label="Generating..." />
           <template v-else>Generate</template>
         </button>
 
-        <span class="text-dim">or one for</span>
+        <span class="text-muted">or one for</span>
         <input
           v-model="cards.singleCardName"
           type="text"
@@ -70,7 +70,7 @@ function copyCardUrl(id: string): void {
           :disabled="cards.generatingSingle || !cards.singleCardName.trim()"
           @click="cards.generateSingleCard()"
         >
-          <LoadingSpinner v-if="cards.generatingSingle" label="Creating…" />
+          <LoadingSpinner v-if="cards.generatingSingle" label="Creating..." />
           <template v-else>Generate card</template>
         </button>
 
@@ -84,28 +84,28 @@ function copyCardUrl(id: string): void {
       </div>
 
       <div class="flex-toolbar mb-12">
-        <label class="text-dim text-xs">Per page:</label>
+        <label class="text-muted text-xs">Per page:</label>
         <select v-model.number="cards.cardsPerPage" aria-label="Cards per page" style="width: 70px">
           <option :value="10">10</option>
           <option :value="25">25</option>
           <option :value="50">50</option>
           <option :value="100">100</option>
         </select>
-        <span class="text-dim text-xs push-right">
+        <span class="text-muted text-xs push-right">
           {{ cards.filteredCards.length }}/{{ cards.cards.length }} cards
         </span>
       </div>
       <SearchInput
         v-model="cards.cardSearchQuery"
         class="mb-12"
-        placeholder="Search by ID or player name…"
+        placeholder="Search by ID or player name..."
         aria-label="Search cards"
       />
 
       <LoadingSpinner
         v-if="cards.cardsLoading && cards.cards.length === 0"
         block
-        label="Loading cards…"
+        label="Loading cards..."
       />
       <template v-else>
         <DataTable
@@ -117,18 +117,18 @@ function copyCardUrl(id: string): void {
           @sort="cards.cardsSetSort"
         >
           <template #cell-id="{ row }">
-            <span class="code-gold">{{ row.id }}</span>
+            <span class="code-highlight">{{ row.id }}</span>
           </template>
-          <template #cell-player_name="{ row }">{{ row.player_name || '—' }}</template>
+          <template #cell-player_name="{ row }">{{ row.player_name || '-' }}</template>
           <template #cell-created_at="{ row }">
-            {{ row.created_at ? formatServerTimestamp(row.created_at) : '—' }}
+            {{ row.created_at ? formatServerTimestamp(row.created_at) : '-' }}
           </template>
           <template #cell-status="{ row }">
             <span class="status-icons">
               <span
                 v-if="row.custom_status === 'pending'"
                 class="status-pending"
-                title="Pending custom card — awaiting approval"
+                title="Pending custom card - awaiting approval"
                 aria-label="Pending custom card"
               >
                 <font-awesome-icon :icon="['far', 'star']" />
@@ -144,12 +144,12 @@ function copyCardUrl(id: string): void {
               <span
                 v-if="row.protected"
                 class="status-protected"
-                title="Protected — kept when deleting all cards"
+                title="Protected - kept when deleting all cards"
                 aria-label="Protected card"
               >
                 <font-awesome-icon :icon="['fas', 'table-cells-lock']" />
               </span>
-              <span v-if="!row.custom_status && !row.protected" class="text-dim">—</span>
+              <span v-if="!row.custom_status && !row.protected" class="text-muted">-</span>
             </span>
           </template>
           <template #cell-actions="{ row }">
@@ -225,12 +225,12 @@ function copyCardUrl(id: string): void {
 </template>
 
 <style scoped>
-/* Keep the single-line generation toolbar compact — a fixed-ish name field so
+/* Keep the single-line generation toolbar compact - a fixed-ish name field so
    the row doesn't stretch (it still wraps on narrow widths via .flex-toolbar). */
 .cards-name-input {
   width: 160px;
 }
-/* Status icon column: pending (hollow star), approved (gold star), protected (lock). */
+/* Status icon column: pending (hollow star), approved (highlight star), protected (lock). */
 .status-icons {
   display: inline-flex;
   gap: 8px;

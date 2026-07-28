@@ -15,9 +15,9 @@ import { ref } from 'vue'
 type MarkdownRenderer = { render: (src: string) => string }
 
 // Two configured instances share one lazy import: `md` converts single newlines
-// to <br> (breaks: true — for user-entered game details/raffle copy where a line
+// to <br> (breaks: true - for user-entered game details/raffle copy where a line
 // break is intended), while `mdFlow` follows standard markdown (soft newlines are
-// spaces) — right for prose that's soft-wrapped in source, like CHANGELOG.md.
+// spaces) - right for prose that's soft-wrapped in source, like CHANGELOG.md.
 let md: MarkdownRenderer | null = null
 let mdFlow: MarkdownRenderer | null = null
 let loadPromise: Promise<void> | null = null
@@ -46,7 +46,7 @@ function useRenderer(get: () => MarkdownRenderer | null) {
 }
 
 /**
- * Reactive markdown renderer (single newline → <br>). Use in <script setup>:
+ * Reactive markdown renderer (single newline -> <br>). Use in <script setup>:
  *   const { render: renderMarkdown } = useMarkdown()
  * then bind `v-html="renderMarkdown(text)"`. Triggers the lazy load on first
  * use and re-renders when the parser becomes available.

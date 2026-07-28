@@ -21,8 +21,8 @@ func randInt(n int) int { return rand.IntN(n) }
 // per-database, so setting them once after open would leave the pool's other
 // connections without them. Two of these are correctness-critical, not just
 // tuning: foreign_keys (defaults OFF) is what makes the ON DELETE CASCADE rules
-// actually fire — a delete that lands on a connection without it would silently
-// orphan child rows — and busy_timeout prevents spurious "database is locked"
+// actually fire - a delete that lands on a connection without it would silently
+// orphan child rows - and busy_timeout prevents spurious "database is locked"
 // errors under WAL write contention. journal_mode/mmap_size persist in the
 // database file, but asserting them here too is harmless and keeps it explicit.
 const connectPragmas = `
@@ -48,7 +48,7 @@ func New(path string) (*Store, error) {
 	}
 
 	// driver.Open's init callback runs for every connection the pool opens, so
-	// the per-connection pragmas apply to all of them — not just the first.
+	// the per-connection pragmas apply to all of them - not just the first.
 	db, err := driver.Open(path, func(conn *sqlite3.Conn) error {
 		return conn.Exec(connectPragmas)
 	})
@@ -78,8 +78,8 @@ func (s *Store) Close() error { return s.db.Close() }
 // two read-modify-write transactions both read the same snapshot and then collide
 // when the second tries to upgrade its read to a write, failing with a stale-
 // snapshot error. Taking the write lock up front instead makes concurrent writers
-// serialize on busy_timeout — SQLite allows only one writer anyway, so there is no
-// throughput cost — which keeps count/cap checks (e.g. a garapon's remaining
+// serialize on busy_timeout - SQLite allows only one writer anyway, so there is no
+// throughput cost - which keeps count/cap checks (e.g. a garapon's remaining
 // draws) race-free. Every multi-statement mutation in this package uses it.
 func (s *Store) beginImmediate() (*sql.Tx, error) {
 	return s.db.BeginTx(context.Background(), &sql.TxOptions{Isolation: sql.LevelSerializable})

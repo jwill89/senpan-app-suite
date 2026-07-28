@@ -11,7 +11,7 @@ import (
 // requested entries would push a character+world over the raffle's per-player cap.
 var ErrRaffleEntryLimit = errors.New("raffle entry limit exceeded")
 
-// ── Raffle operations ───────────────────────────────────────────────────────
+// -- Raffle operations -------------------------------------------------------
 
 // CreateRaffle inserts a new raffle and returns its ID.
 func (s *Store) CreateRaffle(r *model.Raffle) (int64, error) {
@@ -81,7 +81,7 @@ func (s *Store) GetRaffle(id int64) (*model.Raffle, error) {
 //
 // In admin mode each raffle also carries two read-only aggregates used by the
 // closed-raffle table: WinnerName (the verified winner entry's "Character @ World",
-// joined from raffle_entries) and PaidTotal (the sum of paid tickets × cost_per_entry,
+// joined from raffle_entries) and PaidTotal (the sum of paid tickets x cost_per_entry,
 // the gil collected). The public list omits both.
 func (s *Store) ListRaffles(adminMode bool) ([]model.Raffle, error) {
 	if adminMode {
@@ -91,7 +91,7 @@ func (s *Store) ListRaffles(adminMode bool) ([]model.Raffle, error) {
 	// window. Availability dates are stored as UTC (RFC-3339 with 'Z' for new
 	// values, legacy naive strings treated as UTC); datetime() normalizes both
 	// to a UTC timestamp so the comparison against datetime('now') (also UTC)
-	// is timezone-correct — a raffle past its "available to" instant no longer
+	// is timezone-correct - a raffle past its "available to" instant no longer
 	// shows regardless of the admin's timezone.
 	rows, err := s.db.Query(`SELECT ` + raffleColumns + ` FROM raffles WHERE status = 'open' AND (available_from = '' OR datetime(available_from) <= datetime('now')) AND (available_to = '' OR datetime(available_to) >= datetime('now')) ORDER BY created_at DESC`)
 	if err != nil {

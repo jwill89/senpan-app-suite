@@ -2,7 +2,7 @@
  * Garapons store: admin management (CRUD, prizes, per-player drawing links, draw
  * log) plus the public token-based player view + authoritative draw.
  *
- * Structurally a leaner cousin of the raffles store — a garapon has no ticket
+ * Structurally a leaner cousin of the raffles store - a garapon has no ticket
  * sign-up or cost; instead an admin issues each player a tokenized link with a
  * draw allowance, and the server picks each prize. The grand-prize image is
  * picked from the "Garapon" image category, exactly like raffle prize images.
@@ -26,7 +26,7 @@ import { useUiStore } from './ui'
 import { nextUid } from '@/lib/uid'
 import { withLoading } from '@/lib/withLoading'
 
-/** A sensible default ball color for a fresh prize row (a festival gold). */
+/** A sensible default ball color for a fresh prize row (a festival highlight). */
 const DEFAULT_BALL_COLOR = '#e5b53f'
 
 /** A fresh prize row for the editor (the first/grand row defaults to a higher weight). */
@@ -37,7 +37,7 @@ function blankPrize(rate: number, isGrand = false): GaraponPrizeForm {
 export const useGaraponsStore = defineStore('garapons', () => {
   const ui = useUiStore()
 
-  // ── Admin state ──────────────────────────────────────────────────────────
+  // -- Admin state ----------------------------------------------------------
   const garapons = ref<Garapon[]>([])
   const selectedGarapon = ref<Garapon | null>(null)
   const garaponPlayers = ref<GaraponPlayer[]>([])
@@ -56,7 +56,7 @@ export const useGaraponsStore = defineStore('garapons', () => {
   const savingGarapon = ref(false)
   const creatingPlayer = ref(false)
 
-  // ── Public (player view) state ───────────────────────────────────────────
+  // -- Public (player view) state -------------------------------------------
   // The public token view returns the trimmed PublicGarapon (no odds/aggregates).
   const publicGarapon = ref<PublicGarapon | null>(null)
   const publicPlayer = ref<GaraponPublicPlayer | null>(null)
@@ -66,7 +66,7 @@ export const useGaraponsStore = defineStore('garapons', () => {
   const publicLoading = ref(false)
   const drawing = ref(false)
 
-  // ── Computed ─────────────────────────────────────────────────────────────
+  // -- Computed -------------------------------------------------------------
   const openGarapons = computed(() => garapons.value.filter((g) => g.status === 'open'))
   const closedGarapons = computed(() => garapons.value.filter((g) => g.status === 'closed'))
 
@@ -95,7 +95,7 @@ export const useGaraponsStore = defineStore('garapons', () => {
    */
   const publicStampCardToken = computed(() => publicPlayer.value?.stamp_card_token ?? '')
 
-  // ── Admin: load ──────────────────────────────────────────────────────────
+  // -- Admin: load ----------------------------------------------------------
   async function loadGarapons(): Promise<void> {
     await withLoading(garaponsLoading, async () => {
       const data = await endpoints.garapons.list()
@@ -142,7 +142,7 @@ export const useGaraponsStore = defineStore('garapons', () => {
     }
   }
 
-  // ── Admin: form ──────────────────────────────────────────────────────────
+  // -- Admin: form ----------------------------------------------------------
   function newGaraponForm(): void {
     garaponForm.value = {
       id: 0,
@@ -272,7 +272,7 @@ export const useGaraponsStore = defineStore('garapons', () => {
     }
   }
 
-  // ── Admin: drawing links ─────────────────────────────────────────────────
+  // -- Admin: drawing links -------------------------------------------------
   async function createPlayer(): Promise<void> {
     if (!selectedGarapon.value) return
     const name = playerAdd.value.playerName.trim()
@@ -296,7 +296,7 @@ export const useGaraponsStore = defineStore('garapons', () => {
         await navigator.clipboard.writeText(playerLinkUrl(data.player))
         copied = true
       } catch {
-        /* clipboard blocked (insecure context / permissions) — the per-row Copy link button still works */
+        /* clipboard blocked (insecure context / permissions) - the per-row Copy link button still works */
       }
       ui.notify(
         copied ? 'Drawing link created and copied to clipboard' : 'Drawing link created',
@@ -343,7 +343,7 @@ export const useGaraponsStore = defineStore('garapons', () => {
       await navigator.clipboard.writeText(url)
       ui.notify('Link copied to clipboard', 'success')
     } catch {
-      // Clipboard blocked (insecure context / permissions) — surface the URL.
+      // Clipboard blocked (insecure context / permissions) - surface the URL.
       ui.notify(url, 'info')
     }
   }
@@ -367,7 +367,7 @@ export const useGaraponsStore = defineStore('garapons', () => {
     }
   }
 
-  // ── Public: player view + draw ───────────────────────────────────────────
+  // -- Public: player view + draw -------------------------------------------
   function resetPublic(): void {
     publicGarapon.value = null
     publicPlayer.value = null

@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-// ── Garapon admin CRUD ──────────────────────────────────────────────────────
+// -- Garapon admin CRUD ------------------------------------------------------
 
 func TestGarapons_RequiresAuth(t *testing.T) {
 	env := newTestEnv(t)
@@ -102,7 +102,7 @@ func TestGarapons_DefaultsSingleGrand(t *testing.T) {
 	env := newTestEnv(t)
 	env.loginAdmin(t)
 
-	// No prize flagged grand → the first row is promoted.
+	// No prize flagged grand -> the first row is promoted.
 	resp := env.postJSON(t, "/api/garapons", map[string]any{
 		"title":  "T",
 		"prizes": []map[string]any{{"name": "A", "rate": 1}, {"name": "B", "rate": 1}},
@@ -142,7 +142,7 @@ func TestGarapons_CloseReopen(t *testing.T) {
 	env.loginAdmin(t)
 	id := env.createGarapon(t, "G")
 
-	// Close → status flips to closed.
+	// Close -> status flips to closed.
 	resp := env.postJSON(t, fmt.Sprintf("/api/garapons/%d/close", id), map[string]any{})
 	if resp.StatusCode != 200 {
 		t.Fatalf("close status = %d; want 200", resp.StatusCode)
@@ -154,7 +154,7 @@ func TestGarapons_CloseReopen(t *testing.T) {
 		t.Errorf("status = %v; want closed", got)
 	}
 
-	// Reopen → status flips back to open.
+	// Reopen -> status flips back to open.
 	resp = env.postJSON(t, fmt.Sprintf("/api/garapons/%d/reopen", id), map[string]any{})
 	if resp.StatusCode != 200 {
 		t.Fatalf("reopen status = %d; want 200", resp.StatusCode)
@@ -193,7 +193,7 @@ func TestGarapon_DetailNotFound(t *testing.T) {
 	}
 }
 
-// ── Garapon drawing links (players) ─────────────────────────────────────────
+// -- Garapon drawing links (players) -----------------------------------------
 
 // createGaraponPlayer issues a drawing link and returns its token + id.
 func (e *testEnv) createGaraponPlayer(t *testing.T, garaponID int, name string, maxDraws int) (token string, id int) {
@@ -269,7 +269,7 @@ func TestGaraponPlayers_DeleteUnknown(t *testing.T) {
 	resp.Body.Close()
 }
 
-// ── Garapon public view + draw ──────────────────────────────────────────────
+// -- Garapon public view + draw ----------------------------------------------
 
 func TestGaraponPublic_View(t *testing.T) {
 	env := newTestEnv(t)
@@ -277,7 +277,7 @@ func TestGaraponPublic_View(t *testing.T) {
 	gid := env.createGarapon(t, "Festival")
 	token, _ := env.createGaraponPlayer(t, gid, "Hero", 3)
 
-	// The public view needs no auth — use a fresh, cookie-less client.
+	// The public view needs no auth - use a fresh, cookie-less client.
 	env.client.Jar = nil
 	data := decodeBody(t, env.get(t, "/api/garapon/"+token))
 	g := data["garapon"].(map[string]any)

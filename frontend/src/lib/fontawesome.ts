@@ -5,19 +5,19 @@
  * tree-shaken to only what's used, in three styles:
  *
  *   - DUOTONE (prefix `fad`) for headers, sidebar sections/nav, and decorative
- *     icons — the two-tone look reads well at larger sizes.
+ *     icons - the two-tone look reads well at larger sizes.
  *   - SOLID (prefix `fas`) for action-button icons (Save, Delete, Upload, Copy,
- *     …), where the flat single-tone glyph stays crisp and clear.
+ *     ...), where the flat single-tone glyph stays crisp and clear.
  *   - BRANDS (prefix `fab`) for the Discord icon.
  *
  * Icons are added to the core `library` here and rendered in templates with the
  * `<font-awesome-icon :icon="[prefix, name]" />` component (registered globally
- * in main.ts) — e.g. `:icon="['fad', 'gear']"` / `:icon="['fas', 'trash']"` /
+ * in main.ts) - e.g. `:icon="['fad', 'gear']"` / `:icon="['fas', 'trash']"` /
  * `:icon="['fab', 'discord']"`. Vue owns the rendered <svg> directly, so there
  * is no `dom.watch()` / MutationObserver (the old hosted-kit approach); core
  * auto-injects its CSS, which supplies the duotone primary/secondary layering.
  *
- * To add an icon: import its `fa…` name from the matching style module below
+ * To add an icon: import its `fa...` name from the matching style module below
  * (alias solid imports with the `Solid` suffix to avoid name clashes with the
  * duotone set), add it to `icons`, and reference it by `[prefix, name]`.
  */
@@ -88,8 +88,12 @@ import {
 import {
   faArrowLeft as faArrowLeftSolid,
   faArrowRightFromBracket as faArrowRightFromBracketSolid,
+  faArrowUpRightFromSquare as faArrowUpRightFromSquareSolid,
+  faBan as faBanSolid,
   faCheck as faCheckSolid,
   faChevronDown as faChevronDownSolid,
+  faChevronLeft as faChevronLeftSolid,
+  faChevronRight as faChevronRightSolid,
   faChevronUp as faChevronUpSolid,
   faCircleCheck as faCircleCheckSolid,
   faCircleDot as faCircleDotSolid,
@@ -125,14 +129,14 @@ import {
   faVolumeLow as faVolumeLowSolid,
   faVolumeXmark as faVolumeXmarkSolid,
 } from '@awesome.me/kit-46204fb6f1/icons/classic/solid'
-// Regular (outline) — the hollow star marks a pending (un-approved) custom card.
+// Regular (outline) - the hollow star marks a pending (un-approved) custom card.
 import { faStar as faStarRegular } from '@awesome.me/kit-46204fb6f1/icons/classic/regular'
 import { faDiscord } from '@fortawesome/free-brands-svg-icons'
 
 // Kit icons, the standalone brand icon, and the SVG core are all on FontAwesome 7
-// now, so their IconDefinition types line up directly — no cast needed.
+// now, so their IconDefinition types line up directly - no cast needed.
 const icons: IconDefinition[] = [
-  // Duotone — headers, sidebar sections/nav, decorative.
+  // Duotone - headers, sidebar sections/nav, decorative.
   faAt,
   faBallot,
   faBars,
@@ -194,11 +198,15 @@ const icons: IconDefinition[] = [
   faUserKey,
   faUserPlus,
   faUsersGear,
-  // Solid — action-button icons.
+  // Solid - action-button icons.
   faArrowLeftSolid,
   faArrowRightFromBracketSolid,
+  faArrowUpRightFromSquareSolid,
+  faBanSolid,
   faCheckSolid,
   faChevronDownSolid,
+  faChevronLeftSolid,
+  faChevronRightSolid,
   faChevronUpSolid,
   faCircleCheckSolid,
   faCircleDotSolid,
@@ -233,9 +241,9 @@ const icons: IconDefinition[] = [
   faVolumeHighSolid,
   faVolumeLowSolid,
   faVolumeXmarkSolid,
-  // Regular (outline) — status glyphs.
+  // Regular (outline) - status glyphs.
   faStarRegular,
-  // Brands — social/external links.
+  // Brands - social/external links.
   faDiscord,
 ]
 

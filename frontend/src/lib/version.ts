@@ -8,7 +8,7 @@
  * compatible after a partial deploy.
  */
 
-/** This build's frontend version (package.json → vite `define`). Falls back to a
+/** This build's frontend version (package.json -> vite `define`). Falls back to a
  *  dev sentinel if the define is absent (e.g. an un-configured runtime). */
 export const FRONTEND_VERSION: string =
   typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : '0.0.0-dev'

@@ -2,7 +2,7 @@ package apidoc
 
 import "app-suite/internal/model"
 
-// modelTypes is every struct exposed on the wire — domain types plus response
+// modelTypes is every struct exposed on the wire - domain types plus response
 // envelopes. Each becomes a named entry in components/schemas (nested types are
 // inlined by the reflector). Keep in sync with the model package; the CI test
 // fails if this list falls behind (a documented response would reference a

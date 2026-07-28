@@ -135,7 +135,7 @@ var anilistHTTPClient = &http.Client{
 	},
 }
 
-// ── Reading lists (admin) ───────────────────────────────────────────────────
+// -- Reading lists (admin) ---------------------------------------------------
 
 // bookClubFromPath reads the {club} path segment, defaults it, and enforces the
 // caller holds that club's page permission. Writes the 401/403 itself and
@@ -315,7 +315,7 @@ func (s *Server) handleReadingListDelete(w http.ResponseWriter, r *http.Request)
 	}
 	// Capture cover URLs before deleting the list (items cascade-delete in the
 	// DB, but their files would otherwise be orphaned), then clean up each file
-	// after the rows are gone — skipping any still referenced by another list.
+	// after the rows are gone - skipping any still referenced by another list.
 	var covers []string
 	for _, it := range existing.Items {
 		covers = append(covers, it.CoverImage)
@@ -449,7 +449,7 @@ func (s *Server) handleReadingListItemDelete(w http.ResponseWriter, r *http.Requ
 		return
 	}
 	// Capture the cover URL before deleting so the file can be cleaned up after
-	// the row is gone — but only if no other item still references it.
+	// the row is gone - but only if no other item still references it.
 	var cover string
 	if list, err := s.store.GetReadingList(listID); err == nil && list != nil {
 		for _, it := range list.Items {
@@ -482,7 +482,7 @@ func sanitizeSources(sources []model.ReadingListSource) []model.ReadingListSourc
 	return out
 }
 
-// ── Cover image upload ──────────────────────────────────────────────────────
+// -- Cover image upload ------------------------------------------------------
 
 // handleBookclubUpload handles multipart cover-image uploads for reading list
 // items, storing them under <webRoot>/images/bookclub and returning the full
@@ -558,7 +558,7 @@ func (s *Server) removeUploadedBookclubImage(coverURL string) {
 	_ = os.Remove(target)
 }
 
-// ── AniList lookup ──────────────────────────────────────────────────────────
+// -- AniList lookup ----------------------------------------------------------
 
 // anilistMedia is the subset of the AniList Media object we map to a reading
 // list item. AniList is a GraphQL API; these fields match the selection set in
@@ -594,7 +594,7 @@ const anilistMediaFields = `id title { romaji english native } description(asHtm
 //	Endpoint:  GET /api/bookclub/lookup?q=<query>  |  ?id=<anilist id>
 //	Auth:      admin, or any book-club page permission
 //	Response:  {"results": [ReadingListItem-shaped, ...]}
-//	Errors:    424 Failed Dependency when AniList is unavailable — a 4xx, not a
+//	Errors:    424 Failed Dependency when AniList is unavailable - a 4xx, not a
 //	           5xx, on purpose: Cloudflare replaces origin 5xx bodies with its own
 //	           error page, so a 5xx would hide the real reason from the client.
 func (s *Server) handleBookclubLookup(w http.ResponseWriter, r *http.Request) {
@@ -628,10 +628,10 @@ func (s *Server) handleBookclubLookup(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		// Return 424 (Failed Dependency), not 502. This is genuinely a failed
 		// upstream dependency, but Cloudflare fronts the site and replaces origin
-		// *5xx* responses with its own branded error page — discarding our JSON
+		// *5xx* responses with its own branded error page - discarding our JSON
 		// body, so the SPA only ever sees a bodyless 502. Cloudflare passes 4xx
 		// bodies through untouched, so a 4xx is what actually delivers the real
-		// reason (e.g. "AniList API temporarily disabled… (status 403)") to the
+		// reason (e.g. "AniList API temporarily disabled... (status 403)") to the
 		// client. See handleBookclubLookup's doc comment.
 		writeError(w, http.StatusFailedDependency, "AniList request failed: "+err.Error())
 		return
@@ -727,7 +727,7 @@ func anilistPost(endpoint, query string, variables map[string]any) ([]byte, erro
 	slog.Debug("anilist request", "endpoint", endpoint, "bytes", len(payload))
 	resp, err := anilistHTTPClient.Do(req)
 	if err != nil {
-		// Don't swallow the transport failure — surface *why* AniList was
+		// Don't swallow the transport failure - surface *why* AniList was
 		// unreachable (timeout, connection reset, DNS/TLS) so it reaches the
 		// operator instead of an opaque "request failed". http.Client wraps these
 		// in *url.Error; a datacenter IP hitting AniList's Cloudflare front
@@ -746,7 +746,7 @@ func anilistPost(endpoint, query string, variables map[string]any) ([]byte, erro
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		// AniList returns its GraphQL error shape even on non-2xx (e.g. a 403 when
 		// the API is disabled for stability). Surface that message so the operator
-		// sees the real reason ("AniList API temporarily disabled…") rather than a
+		// sees the real reason ("AniList API temporarily disabled...") rather than a
 		// bare status code.
 		if msg := anilistErrorMessage(body); msg != "" {
 			return nil, fmt.Errorf("%s (status %d)", msg, resp.StatusCode)
@@ -824,7 +824,7 @@ func deriveFormat(format, country string) string {
 	case "JP":
 		return "Manga"
 	}
-	// Fall back to a title-cased version of the raw enum (e.g. "MANGA" → "Manga").
+	// Fall back to a title-cased version of the raw enum (e.g. "MANGA" -> "Manga").
 	if format == "" {
 		return ""
 	}
@@ -838,7 +838,7 @@ var (
 	blankRe   = regexp.MustCompile(`\n{3,}`)
 )
 
-// stripHTML removes HTML tags (AniList descriptions use <br>, <i>, <b>, …),
+// stripHTML removes HTML tags (AniList descriptions use <br>, <i>, <b>, ...),
 // unescapes entities, and collapses runs of blank lines so the summary reads
 // cleanly as plain text.
 func stripHTML(s string) string {
@@ -849,7 +849,7 @@ func stripHTML(s string) string {
 	return strings.TrimSpace(s)
 }
 
-// ── Discord publish ─────────────────────────────────────────────────────────
+// -- Discord publish ---------------------------------------------------------
 //
 // The embed schema types, builder, colour helper, and transport live in
 // embeds.go (shared by every webhook-posting feature).
@@ -891,13 +891,13 @@ func (s *Server) handlePublishReadingList(w http.ResponseWriter, r *http.Request
 	webhook, _ := s.store.GetSetting(webhookSettingKey(list.ClubSlug))
 	webhook = strings.TrimSpace(webhook)
 	if webhook == "" {
-		writeError(w, http.StatusBadRequest, "No Discord webhook configured for this book club. Set it under System → Settings.")
+		writeError(w, http.StatusBadRequest, "No Discord webhook configured for this book club. Set it under System -> Settings.")
 		return
 	}
 
 	// Posting a whole list is a slow, sequential job (one webhook POST per item
 	// plus a rate-limit pause). Thread the request context so a client that
-	// disconnects — or a shutdown — stops the loop instead of hammering Discord
+	// disconnects - or a shutdown - stops the loop instead of hammering Discord
 	// with the remaining items.
 	ctx := r.Context()
 	commentsLabel := commentsLabelForClub(list.ClubSlug)

@@ -1,11 +1,11 @@
 <script setup lang="ts">
 /**
- * Admin Settings tab — app title, default draw delay, frequent-winner
+ * Admin Settings tab - app title, default draw delay, frequent-winner
  * thresholds, Google Fonts API key, and the header/board font (with live
  * preview). Mirrors the original `adminTab==='system-settings'` block.
  *
  * The header/board font is chosen from a single combo box grouped into two
- * <optgroup>s: fonts uploaded via System → Font Upload (listed first) and
+ * <optgroup>s: fonts uploaded via System -> Font Upload (listed first) and
  * Google Fonts (the live API list when an API key is set, else the shared
  * FALLBACK_GOOGLE_FONTS list). Uploaded fonts' @font-face rules are registered
  * (applyUploadedFonts) so they preview live and can be selected. A previously
@@ -81,7 +81,7 @@ watch(
            layout: cards fill the row, capped at two per row, collapsing to one
            column on mobile so the page isn't one long scroll. -->
       <div class="settings-grid">
-        <!-- General ───────────────────────────────────────────────────── -->
+        <!-- General ----------------------------------------------------- -->
         <section class="settings-section">
           <h4 class="section-heading"><font-awesome-icon :icon="['fad', 'sliders']" /> General</h4>
           <FormField label="App Title" help="Displayed in the browser tab and home page header.">
@@ -92,7 +92,7 @@ watch(
           >
             <template #label>
               Bingo Join Prompt
-              <span class="text-dim fw-normal">(Markdown supported)</span>
+              <span class="text-muted fw-normal">(Markdown supported)</span>
             </template>
             <MarkdownEditor
               v-model="app.settings.bingo_join_prompt"
@@ -102,7 +102,7 @@ watch(
           </FormField>
         </section>
 
-        <!-- Gameplay ───────────────────────────────────────────────────── -->
+        <!-- Gameplay ----------------------------------------------------- -->
         <section class="settings-section">
           <h4 class="section-heading"><font-awesome-icon :icon="['fad', 'dice']" /> Gameplay</h4>
           <!-- The draw delay is set live on the Game page (in-game "Draw Delay"
@@ -122,7 +122,7 @@ watch(
           </FormField>
           <FormField
             label="Frequent Winner Lookback (hours)"
-            help="Time window to check for frequent winners (1–168 hours)."
+            help="Time window to check for frequent winners (1-168 hours)."
           >
             <input
               v-model="app.settings.frequent_winner_hours"
@@ -134,7 +134,7 @@ watch(
           </FormField>
           <FormField
             label='"It&apos;s Yoever" Cooldown (seconds)'
-            help="How long each player must wait between triggering the It's Yoever reaction (0–3600; 0 disables the limit)."
+            help="How long each player must wait between triggering the It's Yoever reaction (0-3600; 0 disables the limit)."
           >
             <input
               v-model="app.settings.yoever_cooldown_seconds"
@@ -158,7 +158,7 @@ watch(
           </FormField>
         </section>
 
-        <!-- Fonts & Branding ───────────────────────────────────────────── -->
+        <!-- Fonts & Branding --------------------------------------------- -->
         <section class="settings-section">
           <h4 class="section-heading">
             <font-awesome-icon :icon="['fad', 'font']" /> Fonts &amp; Branding
@@ -177,8 +177,8 @@ watch(
                 href="https://developers.google.com/fonts/docs/developer_api#APIKey"
                 target="_blank"
                 rel="noopener"
-                >Get a free key ↗</a
-              >
+                >Get a free key <font-awesome-icon :icon="['fas', 'arrow-up-right-from-square']"
+              /></a>
             </template>
           </FormField>
           <FormField html-for="header-font-select">
@@ -213,11 +213,11 @@ watch(
                 target="_blank"
                 rel="noopener"
                 class="btn-view btn-sm nowrap"
-                >Browse Fonts ↗</a
-              >
+                >Browse Fonts <font-awesome-icon :icon="['fas', 'arrow-up-right-from-square']"
+              /></a>
             </div>
             <template #help>
-              Choose a Google font or one uploaded under System → Font Upload (uploaded fonts are
+              Choose a Google font or one uploaded under System -> Font Upload (uploaded fonts are
               listed first). The preview below updates live.
             </template>
           </FormField>
@@ -225,27 +225,27 @@ watch(
             class="font-preview"
             :style="{ fontFamily: '\'' + (app.settings.header_font || 'Arapey') + '\', serif' }"
           >
-            <span class="fp-bingo">B I N G O</span><br />
-            <span class="fp-nums">1 &nbsp; 23 &nbsp; 45 &nbsp; 67</span><br />
-            <span class="fp-title">
+            <span class="font-preview-bingo">B I N G O</span><br />
+            <span class="font-preview-numbers">1 &nbsp; 23 &nbsp; 45 &nbsp; 67</span><br />
+            <span class="font-preview-title">
               {{ app.settings.app_title || 'App Title' }}
             </span>
           </div>
         </section>
 
-        <!-- Book Club Integrations ─────────────────────────────────────── -->
+        <!-- Book Club Integrations --------------------------------------- -->
         <section class="settings-section">
           <h4 class="section-heading">
             <font-awesome-icon :icon="['fad', 'book-open-cover']" /> Book Club Integrations
           </h4>
           <template v-for="club in BOOK_CLUBS" :key="club.slug">
             <FormField
-              :label="`${club.name} — Reading List Webhook URL`"
-              help="Publishes this club's reading lists — each item posted as its own embed to this channel. Kept private; never sent to non-admin visitors."
+              :label="`${club.name} - Reading List Webhook URL`"
+              help="Publishes this club's reading lists - each item posted as its own embed to this channel. Kept private; never sent to non-admin visitors."
             >
               <input
                 v-model="app.settings[clubWebhookKey(club.slug)]"
-                placeholder="https://discord.com/api/webhooks/…"
+                placeholder="https://discord.com/api/webhooks/..."
                 :aria-label="club.name + ' reading list Discord webhook URL'"
                 type="password"
                 autocomplete="off"
@@ -267,7 +267,7 @@ watch(
 
       <FormActions align="start">
         <button class="btn-confirm" :disabled="app.savingSettings" @click="app.saveSettings()">
-          <LoadingSpinner v-if="app.savingSettings" label="Saving…" />
+          <LoadingSpinner v-if="app.savingSettings" label="Saving..." />
           <template v-else>Save Settings</template>
         </button>
       </FormActions>
@@ -277,8 +277,8 @@ watch(
 
 <style scoped>
 /* Two-column flex layout: each logical group is a raised card. The ~50% basis
-   (half the 20px gap subtracted) caps the row at two cards — a third can never
-   fit — and `min-width: min(100%, 340px)` drops it to a single column once a
+   (half the 20px gap subtracted) caps the row at two cards - a third can never
+   fit - and `min-width: min(100%, 340px)` drops it to a single column once a
    card can't hold ~340px (mobile), without overflowing very narrow screens. */
 .settings-grid {
   display: flex;
@@ -307,16 +307,16 @@ watch(
   margin-top: 4px;
 }
 /* The three sample lines inside the live font preview (chosen header font). */
-.fp-bingo {
+.font-preview-bingo {
   font-size: 2rem;
   font-weight: 800;
   letter-spacing: 2px;
 }
-.fp-nums {
+.font-preview-numbers {
   font-size: 1.3rem;
   font-weight: 700;
 }
-.fp-title {
+.font-preview-title {
   font-size: 3rem;
   font-weight: 700;
   text-transform: uppercase;

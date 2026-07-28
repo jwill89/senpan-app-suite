@@ -21,7 +21,7 @@ func TestMigrateBookClubEventsRetired(t *testing.T) {
 	// A minimal legacy DB at v15: the settings table (present since v3 in any real
 	// DB) with an events webhook, plus a stray book_club_events table + row. The
 	// remaining migrations never touch the table's columns, so its exact shape
-	// doesn't matter — only that it exists to be dropped.
+	// doesn't matter - only that it exists to be dropped.
 	const webhook = "https://discord.com/api/webhooks/123/abc"
 	setup := []string{
 		`CREATE TABLE settings (key TEXT PRIMARY KEY, value TEXT NOT NULL DEFAULT '')`,

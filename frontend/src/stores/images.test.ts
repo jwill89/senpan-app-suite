@@ -105,7 +105,7 @@ describe('images quiet refreshers (live invalidation)', () => {
     const notify = vi.spyOn(useUiStore(), 'notify')
     store.imagesByDir = { gone: [entry('a.png')], kept: [entry('b.png')] }
 
-    // 400 Unknown image category → the renamed/deleted dir key is pruned.
+    // 400 Unknown image category -> the renamed/deleted dir key is pruned.
     list.mockRejectedValueOnce(new ApiError('Unknown image category', 400))
     await store.refreshImagesQuiet('gone')
     expect('gone' in store.imagesByDir).toBe(false)

@@ -4,7 +4,7 @@
  * (no audio asset to ship/precache) and triggers a brief vibration on devices
  * that support it.
  *
- * This is purely an ambient *alert* that a number was called — it announces the
+ * This is purely an ambient *alert* that a number was called - it announces the
  * caller's draw, exactly like a physical caller's voice. It deliberately knows
  * nothing about the player's board, so it never does the player's job for them.
  *
@@ -32,7 +32,7 @@ function getCtx(): AudioContext | null {
   return ctx
 }
 
-// ── Volume ───────────────────────────────────────────────────────────────────
+// -- Volume -------------------------------------------------------------------
 // Shared 0..1 master volume scaling both the synthesized "basic" chimes (applied
 // to each note's gain peak) and the "game" MP3 samples (HTMLAudioElement.volume).
 // Kept in sync with the player's preference via setSoundVolume.
@@ -44,7 +44,7 @@ export function setSoundVolume(v: number): void {
   volume = Math.min(1, Math.max(0, Number.isFinite(v) ? v : 0.7))
 }
 
-// ── Game sound samples (MP3s served from /sounds) ────────────────────────────
+// -- Game sound samples (MP3s served from /sounds) ----------------------------
 // One reusable <audio> per file, played by resetting currentTime. Best-effort:
 // any failure (missing file, blocked autoplay) is swallowed.
 
@@ -185,7 +185,7 @@ export function playEvent(event: SoundEvent, mode: 'basic' | 'game'): void {
 }
 
 /**
- * Plays the "It's Yoever" reaction sound — the bundled this_is_bad.mp3 sample.
+ * Plays the "It's Yoever" reaction sound - the bundled this_is_bad.mp3 sample.
  * Triggered for every connected client when a player fires the reaction, gated on
  * that client having game sounds enabled (and not having opted out of the effect).
  */
@@ -200,7 +200,7 @@ export function playYoeverSound(): void {
  * to tell apart.
  */
 export function playWinnerChime(): void {
-  // C5 → E5 → G5 → C6 ascending arpeggio.
+  // C5 -> E5 -> G5 -> C6 ascending arpeggio.
   playChime([
     { freq: 523.25, at: 0, peak: 0.25, dur: 0.32, type: 'triangle' },
     { freq: 659.25, at: 0.1, peak: 0.25, dur: 0.32, type: 'triangle' },
@@ -210,7 +210,7 @@ export function playWinnerChime(): void {
 }
 
 /**
- * Plays a short, metallic "pon" — the clink a Garapon ball makes as it drops out
+ * Plays a short, metallic "pon" - the clink a Garapon ball makes as it drops out
  * of the drum and lands in the tray. A handful of inharmonic partials (not integer
  * multiples, so the timbre reads as metallic rather than tonal) with a fast,
  * ringing decay and a slight downward pitch chirp. No audio asset; no-op when muted.
@@ -232,7 +232,7 @@ export function playPonSound(): void {
       const osc = ac.createOscillator()
       const gain = ac.createGain()
       osc.type = 'triangle'
-      // A quick chirp down into the partial gives the "p…on" attack a bright clink.
+      // A quick chirp down into the partial gives the "p...on" attack a bright clink.
       osc.frequency.setValueAtTime(p.f * 1.22, now)
       osc.frequency.exponentialRampToValueAtTime(p.f, now + 0.04)
       const peak = p.g * 0.5 * volume
@@ -263,7 +263,7 @@ export function playGaraponRoll(durationMs = 1900): void {
     const now = ac.currentTime
     const dur = Math.max(0.2, durationMs / 1000)
 
-    // Brown-ish noise (integrated white) → a low, woody rumble.
+    // Brown-ish noise (integrated white) -> a low, woody rumble.
     const frames = Math.floor(ac.sampleRate * dur)
     const buf = ac.createBuffer(1, frames, ac.sampleRate)
     const data = buf.getChannelData(0)

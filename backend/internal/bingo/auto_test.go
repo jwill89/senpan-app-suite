@@ -6,32 +6,32 @@ import (
 	"app-suite/internal/model"
 )
 
-// ── HalftimeThreshold ───────────────────────────────────────────────────────
+// -- HalftimeThreshold -------------------------------------------------------
 
 func TestHalftimeThreshold(t *testing.T) {
 	// A full five-column game keeps the classic 35-of-75 mark.
 	if got := HalftimeThreshold([]model.BingoGamePattern{{PatternData: testPattern5x5()}}); got != 35 {
 		t.Errorf("full-board threshold = %d; want 35", got)
 	}
-	// A postage-stamp game uses four columns (60 callable) → round(35/75*60) = 28.
+	// A postage-stamp game uses four columns (60 callable) -> round(35/75*60) = 28.
 	if got := HalftimeThreshold([]model.BingoGamePattern{{PatternData: postageStampPattern()}}); got != 28 {
 		t.Errorf("postage-stamp threshold = %d; want 28", got)
 	}
-	// No patterns fall back to all five columns → 35.
+	// No patterns fall back to all five columns -> 35.
 	if got := HalftimeThreshold(nil); got != 35 {
 		t.Errorf("no-pattern threshold = %d; want 35", got)
 	}
 }
 
-// ── ClampAutoInterval ───────────────────────────────────────────────────────
+// -- ClampAutoInterval -------------------------------------------------------
 
 func TestClampAutoInterval(t *testing.T) {
 	cases := []struct{ in, want int }{
-		{0, DefaultAutoInterval},  // unset → default
-		{-5, DefaultAutoInterval}, // negative → default
-		{3, MinAutoInterval},      // below floor → floor
-		{45, 45},                  // in range → unchanged
-		{9999, MaxAutoInterval},   // above ceiling → ceiling
+		{0, DefaultAutoInterval},  // unset -> default
+		{-5, DefaultAutoInterval}, // negative -> default
+		{3, MinAutoInterval},      // below floor -> floor
+		{45, 45},                  // in range -> unchanged
+		{9999, MaxAutoInterval},   // above ceiling -> ceiling
 		{MinAutoInterval, MinAutoInterval},
 		{MaxAutoInterval, MaxAutoInterval},
 	}
@@ -42,7 +42,7 @@ func TestClampAutoInterval(t *testing.T) {
 	}
 }
 
-// ── Auto state lifecycle ────────────────────────────────────────────────────
+// -- Auto state lifecycle ----------------------------------------------------
 
 func TestAutoState_StartSeedsAndStamps(t *testing.T) {
 	st := testStore(t)
@@ -156,7 +156,7 @@ func TestAutoState_HalftimeClearBlocksResume(t *testing.T) {
 	}
 }
 
-// ── DrawAuto (auto loop's guarded draw) ─────────────────────────────────────
+// -- DrawAuto (auto loop's guarded draw) -------------------------------------
 
 func TestDrawAuto_OnlyDrawsWhenEnabled(t *testing.T) {
 	st := testStore(t)
@@ -165,7 +165,7 @@ func TestDrawAuto_OnlyDrawsWhenEnabled(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// Manual start → auto off. DrawAuto must not draw.
+	// Manual start -> auto off. DrawAuto must not draw.
 	if _, err := gs.Start([]int{int(patID)}, false, 0); err != nil {
 		t.Fatal(err)
 	}
@@ -197,7 +197,7 @@ func TestDrawAuto_OnlyDrawsWhenEnabled(t *testing.T) {
 	}
 }
 
-// ── Draw new-winner flag ────────────────────────────────────────────────────
+// -- Draw new-winner flag ----------------------------------------------------
 
 func TestDraw_NewWinnerFlag(t *testing.T) {
 	st := testStore(t)

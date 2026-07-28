@@ -2,14 +2,14 @@ package model
 
 // Garapon is a festival lottery-drum event (ガラポン / 福引): a hand-crank drum a
 // player spins to drop a colored ball and win a prize. Like a raffle it is created
-// instantly "open" and later "closed" (archived), but players don't buy tickets —
+// instantly "open" and later "closed" (archived), but players don't buy tickets -
 // an admin issues each player a private tokenized link (a GaraponPlayer) with a
 // fixed number of draws.
 type Garapon struct {
 	ID              int64  `json:"id"`
 	Title           string `json:"title"`
 	Details         string `json:"details"`           // markdown event description
-	GrandPrizeImage string `json:"grand_prize_image"` // root-relative web path (images/garapons/…), "" = none
+	GrandPrizeImage string `json:"grand_prize_image"` // root-relative web path (images/garapons/...), "" = none
 	Status          string `json:"status"`            // "open" or "closed"
 	// Optional link to a Stamp Rally: when set, every drawing link issued for this
 	// garapon also issues that participant a Stamp Rally card (sharing the token).
@@ -28,7 +28,7 @@ type Garapon struct {
 }
 
 // GaraponPrize is one prize tier in a garapon: a named prize, the color of the
-// ball that wins it, and an appearance rate (a relative weight — the rates need
+// ball that wins it, and an appearance rate (a relative weight - the rates need
 // not total 100; the server draws weighted by them). Exactly one prize per garapon
 // is flagged IsGrand: the headline prize that carries the garapon's picture.
 type GaraponPrize struct {
@@ -53,7 +53,7 @@ type GaraponPlayer struct {
 	DrawsUsed  int    `json:"draws_used"` // read-only: COUNT of recorded draws
 	CreatedAt  string `json:"created_at"`
 	// StampCardToken is the token of the Stamp Rally card auto-issued alongside this
-	// drawing link when its garapon is linked to a rally — the SAME value as Token, so
+	// drawing link when its garapon is linked to a rally - the SAME value as Token, so
 	// one hash serves both /garapon/<token> and /stamp-card/<token>. "" when unlinked.
 	StampCardToken string `json:"stamp_card_token,omitempty"`
 }
@@ -71,19 +71,19 @@ type GaraponDraw struct {
 	DrawnAt    string `json:"drawn_at"`
 }
 
-// GaraponsResponse is the body of GET /api/garapons — the admin garapon list
+// GaraponsResponse is the body of GET /api/garapons - the admin garapon list
 // (each carrying player_count/draw_count aggregates).
 type GaraponsResponse struct {
 	Garapons []Garapon `json:"garapons"`
 }
 
-// GaraponResponse wraps a single garapon — the body of POST /api/garapons
+// GaraponResponse wraps a single garapon - the body of POST /api/garapons
 // {action:"create"} (HTTP 201) with the freshly created garapon.
 type GaraponResponse struct {
 	Garapon Garapon `json:"garapon"`
 }
 
-// GaraponDetailResponse is the body of GET /api/garapons/{id} — the admin detail:
+// GaraponDetailResponse is the body of GET /api/garapons/{id} - the admin detail:
 // the garapon (with prizes), its drawing links, and the full draw log.
 type GaraponDetailResponse struct {
 	Garapon Garapon         `json:"garapon"`
@@ -91,7 +91,7 @@ type GaraponDetailResponse struct {
 	Draws   []GaraponDraw   `json:"draws"`
 }
 
-// GaraponPlayerResponse wraps a single drawing link — the body of POST
+// GaraponPlayerResponse wraps a single drawing link - the body of POST
 // /api/garapons/{id}/players {action:"create_player"} (HTTP 201).
 type GaraponPlayerResponse struct {
 	Player GaraponPlayer `json:"player"`
@@ -116,20 +116,20 @@ type PublicGarapon struct {
 }
 
 // GaraponPublicPlayer is the trimmed player shape sent to the public view (no
-// token — the caller already holds it in the URL). Exported equivalent of
+// token - the caller already holds it in the URL). Exported equivalent of
 // server.publicPlayer.
 type GaraponPublicPlayer struct {
 	PlayerName string `json:"player_name"`
 	MaxDraws   int    `json:"max_draws"`
 	DrawsUsed  int    `json:"draws_used"`
 	// StampCardToken is set when this drawing link's garapon is tied to a Stamp
-	// Rally and a card was issued for the player — it equals the garapon token, so
+	// Rally and a card was issued for the player - it equals the garapon token, so
 	// the public view can link to /stamp-card/<token>. "" when there is no linked
 	// card, which gates whether the rally link is shown.
 	StampCardToken string `json:"stamp_card_token,omitempty"`
 }
 
-// GaraponPublicResponse is the body of GET /api/garapon/{token} — the player-facing
+// GaraponPublicResponse is the body of GET /api/garapon/{token} - the player-facing
 // view: the garapon (no odds), the player's name + draw allowance/usage, and their
 // own draw history.
 type GaraponPublicResponse struct {
@@ -138,7 +138,7 @@ type GaraponPublicResponse struct {
 	Draws   []GaraponDraw       `json:"draws"`
 }
 
-// GaraponDrawResponse is the body of POST /api/garapon/{token}/draw — the recorded
+// GaraponDrawResponse is the body of POST /api/garapon/{token}/draw - the recorded
 // draw plus the fresh usage counts.
 type GaraponDrawResponse struct {
 	Draw      GaraponDraw `json:"draw"`

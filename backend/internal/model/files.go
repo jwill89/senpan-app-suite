@@ -62,7 +62,7 @@ type CarrdProjectsResponse struct {
 }
 
 // CarrdProjectCreateResponse is the body of POST /api/carrd/projects for the
-// create/rename actions — JSON: {"ok": true, "project": {...}}.
+// create/rename actions - JSON: {"ok": true, "project": {...}}.
 type CarrdProjectCreateResponse struct {
 	OK      bool         `json:"ok"`
 	Project CarrdProject `json:"project"`
@@ -105,7 +105,7 @@ type ImageCategoriesResponse struct {
 }
 
 // ImageCategoryActionResponse is the body of POST /api/image-categories for the
-// create/rename actions — JSON: {"ok": true, "category": {...}}.
+// create/rename actions - JSON: {"ok": true, "category": {...}}.
 type ImageCategoryActionResponse struct {
 	OK       bool          `json:"ok"`
 	Category ImageCategory `json:"category"`

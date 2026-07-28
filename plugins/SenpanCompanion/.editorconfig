@@ -1,4 +1,4 @@
-# EditorConfig for the Senpan Companion plugin — the repo's only C# project.
+# EditorConfig for the Senpan Companion plugin - the repo's only C# project.
 #
 # Its job is to pin the handful of C# formatting rules that `dotnet format`
 # (run in CI) enforces, so the formatter agrees with the code as written rather
@@ -6,7 +6,7 @@
 # no effect on the Go/TS code elsewhere in the repo.
 #
 # Deliberately minimal: only options the existing code already satisfies, plus
-# the one case-block rule below. `end_of_line` is intentionally left UNSET — the
+# the one case-block rule below. `end_of_line` is intentionally left UNSET - the
 # repo normalizes text to LF (.gitattributes `eol=lf`), so CI checks out LF while
 # a Windows working tree may hold CRLF; leaving it unset lets `dotnet format`
 # preserve each file's existing endings instead of failing on one platform.
@@ -24,10 +24,10 @@ csharp_indent_switch_labels = true
 csharp_indent_case_contents = true
 csharp_indent_case_contents_when_block = false
 
-# ── Lint rule severities ──
+# -- Lint rule severities --
 # Read by the `roslynator analyze` gate (scripts/check.ps1) as well as the build and
 # IDE. This is where the C# lint ruleset is curated, the way .golangci.yml curates the
-# Go linters — disable a rule here (with a reason) when it doesn't fit the project.
+# Go linters - disable a rule here (with a reason) when it doesn't fit the project.
 #
 # The one winmm P/Invoke (WinnerChime) works fine as a classic [DllImport]; don't
 # require rewriting it to source-generated [LibraryImport] for a one-shot chime.

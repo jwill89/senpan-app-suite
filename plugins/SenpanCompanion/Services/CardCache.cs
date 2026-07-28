@@ -8,7 +8,7 @@ namespace SenpanCompanion.Services;
 
 /// <summary>
 /// Shared, live card list. Both the Bingo Cards tab (which manages cards) and the
-/// Bingo Game tab (which needs card → player-name lookups for winners) read from
+/// Bingo Game tab (which needs card -> player-name lookups for winners) read from
 /// this single source, so they stay consistent and the WebSocket card-change event
 /// refreshes them once rather than per tab. Concurrent refreshes coalesce, and the
 /// list + name index are swapped together on the framework thread.

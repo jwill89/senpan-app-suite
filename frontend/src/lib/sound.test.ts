@@ -31,7 +31,7 @@ function sampleFor(file: string) {
   return created.find((a) => a.src.endsWith(`/sounds/${file}.mp3`))
 }
 
-describe('playEvent — game mode', () => {
+describe('playEvent - game mode', () => {
   it('maps each event to its bundled sound file and plays it', async () => {
     const { playEvent, setSoundVolume } = await loadSound()
     setSoundVolume(0.8)
@@ -65,11 +65,11 @@ describe('playEvent — game mode', () => {
   })
 })
 
-describe('playEvent — basic mode', () => {
+describe('playEvent - basic mode', () => {
   it('does not touch the game samples (uses synthesized chimes)', async () => {
     const { playEvent, setSoundVolume } = await loadSound()
     setSoundVolume(0.8)
-    // No AudioContext in jsdom, so the chime no-ops — but crucially it must not
+    // No AudioContext in jsdom, so the chime no-ops - but crucially it must not
     // fall through to an MP3 sample.
     playEvent('draw', 'basic')
     expect(created.length).toBe(0)

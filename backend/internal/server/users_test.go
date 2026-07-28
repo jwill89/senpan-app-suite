@@ -52,7 +52,7 @@ func findUserID(t *testing.T, e *testEnv, username string) int64 {
 	return 0
 }
 
-// ── Registration ─────────────────────────────────────────────────────────────
+// -- Registration -------------------------------------------------------------
 
 func TestRegister_CreatesInactiveUserThatNeedsActivation(t *testing.T) {
 	env := newTestEnv(t)
@@ -88,7 +88,7 @@ func TestRegister_RejectsShortPassword(t *testing.T) {
 	env := newTestEnv(t)
 
 	// Too-short password is rejected before any account is created. (Reserved and
-	// duplicate usernames are deliberately NOT rejected with a distinct status —
+	// duplicate usernames are deliberately NOT rejected with a distinct status -
 	// they return the same generic 200 to prevent enumeration; see
 	// TestRegisterNoEnumeration.)
 	resp := env.postJSON(t, "/api/register", map[string]string{"username": "shorty", "password": "short"})
@@ -98,7 +98,7 @@ func TestRegister_RejectsShortPassword(t *testing.T) {
 	resp.Body.Close()
 }
 
-// ── Permission enforcement ───────────────────────────────────────────────────
+// -- Permission enforcement ---------------------------------------------------
 
 // makeActiveUser registers a user, then (as admin) activates it and grants the
 // given page permissions. Returns a logged-in client for that user.
@@ -127,7 +127,7 @@ func TestPermission_GrantedAllowedOthersForbidden(t *testing.T) {
 	env := newTestEnv(t)
 	user := makeActiveUser(t, env, "host", "password123", []string{"bingo-cards"})
 
-	// Granted page: creating a card works (POST /api/cards → 201).
+	// Granted page: creating a card works (POST /api/cards -> 201).
 	resp := postAs(t, user, env, "/api/cards", map[string]any{"player_name": "Guest"})
 	if resp.StatusCode != http.StatusCreated {
 		t.Fatalf("granted cards create status = %d; want 201", resp.StatusCode)
@@ -164,7 +164,7 @@ func TestUsers_RequireAdmin(t *testing.T) {
 	resp.Body.Close()
 }
 
-// ── Protected admin account ──────────────────────────────────────────────────
+// -- Protected admin account --------------------------------------------------
 
 func TestProtectedAdmin_CannotBeModifiedByAdmins(t *testing.T) {
 	env := newTestEnv(t)
@@ -194,7 +194,7 @@ func TestProtectedAdmin_CannotBeModifiedByAdmins(t *testing.T) {
 }
 
 // TestProtectedAdmin_PermissionsStillEditable confirms setting permissions on the
-// admin account is allowed (deliberately not part of the protected field set —
+// admin account is allowed (deliberately not part of the protected field set -
 // admins hold every permission implicitly, so it's a harmless no-op here).
 func TestProtectedAdmin_PermissionsStillEditable(t *testing.T) {
 	env := newTestEnv(t)
@@ -208,7 +208,7 @@ func TestProtectedAdmin_PermissionsStillEditable(t *testing.T) {
 	resp.Body.Close()
 }
 
-// ── Self-service password change ─────────────────────────────────────────────
+// -- Self-service password change ---------------------------------------------
 
 func TestAccount_ChangePassword(t *testing.T) {
 	env := newTestEnv(t)

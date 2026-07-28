@@ -1,15 +1,15 @@
 /**
- * Client-side table view state: search → sort → paginate, in one place.
+ * Client-side table view state: search -> sort -> paginate, in one place.
  *
- * Admin tables repeat the same trio — a search box, optional column sorting, and
- * a pager — each with its own refs, derived lists, and page-clamping watchers.
+ * Admin tables repeat the same trio - a search box, optional column sorting, and
+ * a pager - each with its own refs, derived lists, and page-clamping watchers.
  * This composable owns that pipeline so a tab just supplies the source rows, a
  * match predicate, and (optionally) a starting sort; it gets back the slice to
  * render plus the bindings for `SearchInput`, `DataTable`, and `PaginationBar`.
  *
  * Sorting is a locale-aware, numeric-aware string compare on the active column
- * key — which orders text, numbers, and the app's fixed-format timestamps
- * correctly — matching the behavior the tabs previously hand-rolled.
+ * key - which orders text, numbers, and the app's fixed-format timestamps
+ * correctly - matching the behavior the tabs previously hand-rolled.
  */
 import { computed, ref, toValue, watch, type MaybeRefOrGetter, type Ref } from 'vue'
 
@@ -30,12 +30,12 @@ export interface DataTableView<T> {
   /** Active sort column key ('' when the view is unsorted). */
   sortKey: Ref<string>
   sortDir: Ref<'asc' | 'desc'>
-  /** Rows after search + sort (before pagination) — for result counts. */
+  /** Rows after search + sort (before pagination) - for result counts. */
   filtered: Ref<T[]>
   /** The current page's rows (what the table renders). */
   paged: Ref<T[]>
   totalPages: Ref<number>
-  /** Toggle a column's direction, or switch to it ascending — a `@sort` handler. */
+  /** Toggle a column's direction, or switch to it ascending - a `@sort` handler. */
   setSort: (key: string) => void
   /** Clear the search, sort, and page back to their initial state. */
   reset: () => void

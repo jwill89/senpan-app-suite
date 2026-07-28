@@ -12,7 +12,7 @@ namespace SenpanCompanion;
 
 /// <summary>
 /// Senpan Companion: a second UI over the Senpan App Suite server. It is purely an
-/// API client — the server stays the single source of truth, and every action here
+/// API client - the server stays the single source of truth, and every action here
 /// still broadcasts to the website via the server's WebSocket.
 /// </summary>
 public sealed class Plugin : IDalamudPlugin
@@ -55,7 +55,7 @@ public sealed class Plugin : IDalamudPlugin
         this.live = new LiveConnection(this.config, Log, Framework);
         var nearby = new NearbyPlayers(ObjectTable);
         var chat = new ChatSender(Framework, Log);
-        // Roll tracking is server-independent — it starts watching chat as soon as the
+        // Roll tracking is server-independent - it starts watching chat as soon as the
         // plugin loads, regardless of whether an account is connected.
         this.rollTracker = new RollTracker(ChatGui, ClientState, ObjectTable, Log);
         // Timed Text Macros are likewise account-free; the runner drives their timers off

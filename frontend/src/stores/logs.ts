@@ -3,7 +3,7 @@
  *
  * Holds the newest-first tail of the backend's structured log. On load it
  * fetches a filtered snapshot from `GET /api/logs`; while open it also receives
- * a live feed — each server log line arrives as a `log` WebSocket message and is
+ * a live feed - each server log line arrives as a `log` WebSocket message and is
  * prepended via {@link appendLive} (see useWebSocket). The in-memory list is
  * capped so a long-running session can't grow unbounded, mirroring the server's
  * own rotation/retention.

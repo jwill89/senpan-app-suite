@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /**
- * Admin Raffles manager — one tab (under Senpan Tea House) unifying the former
+ * Admin Raffles manager - one tab (under Senpan Tea House) unifying the former
  * New / Open / Closed raffle tabs into the standard manager model:
  *
  *   - list: "Current Raffles" (every non-closed raffle) as image cards with a
@@ -9,7 +9,7 @@
  *     searchable + paginated "Closed Raffles" table (title, winner, open period,
  *     and the gil collected from paid entries) with a Copy action that seeds a new
  *     raffle from a past one.
- *   - detail: the selected raffle (winner pick/verify, add entry, entries table) —
+ *   - detail: the selected raffle (winner pick/verify, add entry, entries table) -
  *     open-only controls are gated by status, so it doubles as the read-only closed
  *     view. Opened with a Back sub-header.
  *   - form: the create/edit/copy form (RaffleFormTab), also a Back sub-page.
@@ -40,8 +40,8 @@ const screen = ref<Screen>('list')
 
 const isOpen = computed(() => raffles.selectedRaffle?.status === 'open')
 
-// ── Closed-raffle table: client-side search + pagination ─────────────────────
-// The shared view composable owns the search → paginate pipeline (and the
+// -- Closed-raffle table: client-side search + pagination ---------------------
+// The shared view composable owns the search -> paginate pipeline (and the
 // page-clamp watchers) so only the columns + match predicate live here.
 const closedColumns: DataColumn[] = [
   { key: 'title', label: 'Title' },
@@ -61,7 +61,7 @@ const {
   perPage: 10,
 })
 
-// ── Entries table (DataTable) ────────────────────────────────────────────────
+// -- Entries table (DataTable) ------------------------------------------------
 // The Actions column (delete) only exists while the raffle is open; the closed
 // view is read-only, so it's dropped there.
 const entryColumns = computed<DataColumn[]>(() => {
@@ -80,7 +80,7 @@ function entryRowClass(e: RaffleEntry): string {
   return raffles.raffleWinner?.id === e.id ? 'entry-winner-row' : ''
 }
 
-// ── Display helpers ──────────────────────────────────────────────────────────
+// -- Display helpers ----------------------------------------------------------
 
 /**
  * Timing badge for an open raffle relative to its availability window:
@@ -97,21 +97,21 @@ function raffleTiming(r: Raffle): 'upcoming' | 'ended' | '' {
   return ''
 }
 
-/** Compact "from – to" availability window for the closed table. */
+/** Compact "from - to" availability window for the closed table. */
 function periodLabel(r: Raffle): string {
   const from = r.available_from ? formatServerTimestamp(r.available_from) : ''
   const to = r.available_to ? formatServerTimestamp(r.available_to) : ''
   if (!from && !to) return 'Always open'
-  return `${from || '—'} – ${to || '—'}`
+  return `${from || '-'} - ${to || '-'}`
 }
 
-/** Gil amount formatted with thousands separators (or "—" for nothing). */
+/** Gil amount formatted with thousands separators (or "-" for nothing). */
 function gilLabel(amount: number | undefined): string {
-  if (!amount) return '—'
+  if (!amount) return '-'
   return `${amount.toLocaleString()} gil`
 }
 
-// ── Navigation ───────────────────────────────────────────────────────────────
+// -- Navigation ---------------------------------------------------------------
 function openNew(): void {
   raffles.newRaffleForm()
   screen.value = 'form'
@@ -140,17 +140,17 @@ async function deleteSelected(): Promise<void> {
   const r = raffles.selectedRaffle
   if (!r) return
   await raffles.deleteRaffle(r.id)
-  // deleteRaffle clears selectedRaffle on success → return to the list.
+  // deleteRaffle clears selectedRaffle on success -> return to the list.
   if (!raffles.selectedRaffle) screen.value = 'list'
 }
 </script>
 
 <template>
   <div class="tab-body">
-    <!-- ── Form ──────────────────────────────────────────────────────────────── -->
+    <!-- -- Form ---------------------------------------------------------------- -->
     <RaffleFormTab v-if="screen === 'form'" @saved="onFormDone" @cancel="onFormDone" />
 
-    <!-- ── Detail (open controls gated by status; doubles as the closed view) ──── -->
+    <!-- -- Detail (open controls gated by status; doubles as the closed view) ---- -->
     <AdminPanel v-else-if="screen === 'detail' && raffles.selectedRaffle">
       <SubPageHeader @back="backToList">
         {{ raffles.selectedRaffle.title }}
@@ -179,7 +179,7 @@ async function deleteSelected(): Promise<void> {
           {{ raffles.raffleWinner.character_name }} @
           {{ raffles.raffleWinner.world }}
         </h3>
-        <p class="text-dim text-sm mb-12">{{ raffles.raffleWinner.num_entries }} entries</p>
+        <p class="text-muted text-sm mb-12">{{ raffles.raffleWinner.num_entries }} entries</p>
         <div v-if="isOpen" class="flex-toolbar">
           <button
             class="btn-action"
@@ -193,7 +193,7 @@ async function deleteSelected(): Promise<void> {
             :disabled="raffles.pickingWinner"
             @click="raffles.pickAnotherWinner()"
           >
-            <LoadingSpinner v-if="raffles.pickingWinner" label="Picking…" />
+            <LoadingSpinner v-if="raffles.pickingWinner" label="Picking..." />
             <template v-else><font-awesome-icon :icon="['fas', 'rotate']" /> Pick Another</template>
           </button>
         </div>
@@ -206,13 +206,13 @@ async function deleteSelected(): Promise<void> {
           :disabled="raffles.pickingWinner"
           @click="raffles.pickRaffleWinner()"
         >
-          <LoadingSpinner v-if="raffles.pickingWinner" label="Picking…" />
+          <LoadingSpinner v-if="raffles.pickingWinner" label="Picking..." />
           <template v-else><font-awesome-icon :icon="['fas', 'dice']" /> Pick a Winner</template>
         </button>
       </div>
 
       <!-- Add entry (admin, open only) -->
-      <div v-if="isOpen" class="entry-add mt-16 mb-16">
+      <div v-if="isOpen" class="subpanel mt-16 mb-16">
         <h3 class="section-heading"><font-awesome-icon :icon="['fad', 'plus']" /> Add Entry</h3>
         <div class="flex-row mb-10">
           <FormField label="Character Name" style="flex: 2; min-width: 160px">
@@ -255,7 +255,7 @@ async function deleteSelected(): Promise<void> {
             "
             @click="raffles.addRaffleEntry()"
           >
-            <LoadingSpinner v-if="raffles.addingEntry" label="Adding…" />
+            <LoadingSpinner v-if="raffles.addingEntry" label="Adding..." />
             <template v-else><font-awesome-icon :icon="['fas', 'plus']" /> Add Entry</template>
           </button>
         </div>
@@ -287,7 +287,7 @@ async function deleteSelected(): Promise<void> {
           </button>
           <template v-else>
             <font-awesome-icon v-if="row.paid" :icon="['fad', 'circle-check']" />
-            <template v-else>—</template>
+            <template v-else>-</template>
           </template>
         </template>
         <template #cell-actions="{ row }">
@@ -297,7 +297,7 @@ async function deleteSelected(): Promise<void> {
       <EmptyState v-else text="No entries yet." />
     </AdminPanel>
 
-    <!-- ── List ──────────────────────────────────────────────────────────────── -->
+    <!-- -- List ---------------------------------------------------------------- -->
     <ManagerView v-else title="Raffles" :icon="['fad', 'ticket']">
       <template #actions>
         <button class="btn-confirm btn-sm" @click="openNew">
@@ -308,7 +308,7 @@ async function deleteSelected(): Promise<void> {
       <LoadingSpinner
         v-if="raffles.rafflesLoading && raffles.raffles.length === 0"
         block
-        label="Loading raffles…"
+        label="Loading raffles..."
       />
       <template v-else>
         <!-- Current (non-closed) raffles -->
@@ -362,14 +362,14 @@ async function deleteSelected(): Promise<void> {
           <div class="manager-toolbar">
             <SearchInput
               v-model="closedSearch"
-              placeholder="Search closed raffles…"
+              placeholder="Search closed raffles..."
               aria-label="Search closed raffles"
             />
-            <span class="text-dim text-xs push-right"> {{ filteredClosed.length }} closed </span>
+            <span class="text-muted text-xs push-right"> {{ filteredClosed.length }} closed </span>
           </div>
           <DataTable :columns="closedColumns" :rows="pagedClosed" row-key="id">
             <template #cell-title="{ row }">{{ row.title }}</template>
-            <template #cell-winner="{ row }">{{ row.winner_name || '—' }}</template>
+            <template #cell-winner="{ row }">{{ row.winner_name || '-' }}</template>
             <template #cell-period="{ row }">
               <span class="text-sm">{{ periodLabel(row) }}</span>
             </template>
@@ -421,11 +421,6 @@ async function deleteSelected(): Promise<void> {
 </template>
 
 <style scoped>
-.entry-add {
-  background: var(--panel-raised-bg);
-  border-radius: var(--radius);
-  padding: 14px 16px;
-}
 .entry-add-actions {
   justify-content: space-between;
 }

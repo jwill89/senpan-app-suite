@@ -1,8 +1,8 @@
 <script setup lang="ts">
 /**
- * Admin Carrd Upload tab (Atelier Yao section) — image hosting for external Carrd
+ * Admin Carrd Upload tab (Atelier Yao section) - image hosting for external Carrd
  * sites. The admin creates "projects" (folders under <webRoot>/carrd, served at
- * carrd.senpan.cafe/<folder>/…), then uploads images into the project root or
+ * carrd.senpan.cafe/<folder>/...), then uploads images into the project root or
  * into arbitrarily nested sub-directories.
  *
  * Two screens, following the standard manager model:
@@ -101,7 +101,7 @@ const breadcrumbs = computed(() => {
 /** Live preview of the folder slug the modal's inputs would produce. */
 const formDerivedFolder = computed(() => slugify(formFolder.value || formTitle.value))
 
-// ── Navigation ─────────────────────────────────────────────────────────────────
+// -- Navigation -----------------------------------------------------------------
 async function openProject(p: CarrdProject): Promise<void> {
   await carrd.openProject(p.folder)
   screen.value = 'detail'
@@ -112,7 +112,7 @@ function backToList(): void {
   void carrd.loadProjects() // refresh counts/size after edits in the project
 }
 
-// ── Create / rename modal ──────────────────────────────────────────────────────
+// -- Create / rename modal ------------------------------------------------------
 function openNew(): void {
   formTitle.value = ''
   formFolder.value = ''
@@ -153,7 +153,7 @@ async function submitProject(): Promise<void> {
   }
 }
 
-// ── Upload + sub-folders (detail screen) ───────────────────────────────────────
+// -- Upload + sub-folders (detail screen) ---------------------------------------
 function pickFiles(): void {
   fileInput.value?.click()
 }
@@ -220,27 +220,27 @@ onMounted(() => carrd.loadProjects())
 
 <template>
   <div class="tab-body">
-    <!-- ── Detail: open project (breadcrumb + folders + upload + media grid) ──── -->
+    <!-- -- Detail: open project (breadcrumb + folders + upload + media grid) ---- -->
     <AdminPanel v-if="screen === 'detail' && selectedProject">
       <SubPageHeader @back="backToList">
         <font-awesome-icon :icon="['fad', 'folder-open']" /> {{ selectedProject.title }}
       </SubPageHeader>
 
-      <p class="text-dim text-xs mb-12">
+      <p class="text-muted text-xs mb-12">
         Served from
-        <span class="code-gold">{{ CARRD_BASE_URL }}/{{ selectedProject.folder }}/…</span>. Allowed
-        types: .jpg, .jpeg, .png, .webp, .gif, .mp3, .mp4. Uploading a file with an existing name
-        replaces it.
+        <span class="code-highlight">{{ CARRD_BASE_URL }}/{{ selectedProject.folder }}/...</span>.
+        Allowed types: .jpg, .jpeg, .png, .webp, .gif, .mp3, .mp4. Uploading a file with an existing
+        name replaces it.
       </p>
 
       <div class="flex-toolbar mb-12" style="gap: 12px; align-items: center">
-        <!-- Breadcrumb: project root → nested path -->
+        <!-- Breadcrumb: project root -> nested path -->
         <nav class="carrd-breadcrumb" aria-label="Folder path">
           <template v-for="(crumb, i) in breadcrumbs" :key="crumb.path">
             <span v-if="i > 0" class="carrd-crumb-sep">/</span>
             <button
               class="carrd-crumb"
-              :class="{ current: i === breadcrumbs.length - 1 }"
+              :class="{ 'is-current': i === breadcrumbs.length - 1 }"
               :disabled="i === breadcrumbs.length - 1"
               @click="carrd.navigate(crumb.path)"
             >
@@ -249,7 +249,7 @@ onMounted(() => carrd.loadProjects())
           </template>
         </nav>
         <button class="btn-action btn-sm push-right" :disabled="carrd.uploading" @click="pickFiles">
-          <LoadingSpinner v-if="carrd.uploading" label="Uploading…" />
+          <LoadingSpinner v-if="carrd.uploading" label="Uploading..." />
           <template v-else><font-awesome-icon :icon="['fas', 'upload']" /> Upload Images</template>
         </button>
         <input
@@ -302,8 +302,8 @@ onMounted(() => carrd.loadProjects())
 
       <!-- Drag-and-drop zone -->
       <div
-        class="carrd-dropzone"
-        :class="{ 'drag-over': dragOver }"
+        class="file-dropzone"
+        :class="{ 'is-dragover': dragOver }"
         @dragover.prevent="dragOver = true"
         @dragenter.prevent="dragOver = true"
         @dragleave.prevent="dragOver = false"
@@ -317,19 +317,19 @@ onMounted(() => carrd.loadProjects())
       <LoadingSpinner
         v-if="carrd.loadingImages && carrd.images.length === 0"
         block
-        label="Loading images…"
+        label="Loading images..."
       />
 
-      <div v-else-if="carrd.images.length" class="carrd-grid">
-        <figure v-for="img in carrd.images" :key="img.name" class="carrd-card">
-          <div class="carrd-thumb-wrap">
+      <div v-else-if="carrd.images.length" class="file-grid">
+        <figure v-for="img in carrd.images" :key="img.name" class="file-card">
+          <div class="media-tile-wrap">
             <!-- Image: clickable thumbnail -->
             <a
               v-if="fileKind(img.name) === 'image'"
               :href="fileUrl(img.name)"
               target="_blank"
               rel="noopener"
-              class="carrd-thumb"
+              class="media-tile"
             >
               <img :src="fileUrl(img.name)" :alt="img.name" loading="lazy" />
             </a>
@@ -337,25 +337,25 @@ onMounted(() => carrd.loadProjects())
             <video
               v-else-if="fileKind(img.name) === 'video'"
               :src="fileUrl(img.name)"
-              class="carrd-thumb carrd-media"
+              class="media-tile carrd-media"
               controls
               preload="metadata"
             ></video>
             <!-- Audio: icon placeholder (player lives in the card body) -->
-            <div v-else class="carrd-thumb carrd-file-icon">
+            <div v-else class="media-tile carrd-file-icon">
               <font-awesome-icon :icon="['fad', 'file-audio']" />
             </div>
             <button
-              class="carrd-del-overlay"
+              class="file-del-overlay"
               title="Delete this file"
               @click="carrd.deleteImage(img.name)"
             >
               <font-awesome-icon :icon="['fas', 'trash']" />
             </button>
           </div>
-          <figcaption class="carrd-card-body">
-            <span class="carrd-img-name code-gold" :title="img.name">{{ img.name }}</span>
-            <span class="text-dim text-xs">{{ formatSize(img.size) }}</span>
+          <figcaption class="file-card-body">
+            <span class="file-name code-highlight" :title="img.name">{{ img.name }}</span>
+            <span class="text-muted text-xs">{{ formatSize(img.size) }}</span>
             <audio
               v-if="fileKind(img.name) === 'audio'"
               :src="fileUrl(img.name)"
@@ -364,7 +364,7 @@ onMounted(() => carrd.loadProjects())
               preload="none"
             ></audio>
             <button
-              class="btn-view btn-sm carrd-copy-btn"
+              class="btn-view btn-sm file-copy-btn"
               title="Copy public URL to clipboard"
               @click="copyUrl(img.name)"
             >
@@ -374,12 +374,12 @@ onMounted(() => carrd.loadProjects())
         </figure>
       </div>
 
-      <p v-else-if="!carrd.loadingImages" class="text-dim" style="padding: 16px 0">
+      <p v-else-if="!carrd.loadingImages" class="text-muted" style="padding: 16px 0">
         No images in this folder yet. Drop some above, or create a sub-folder to organize them.
       </p>
     </AdminPanel>
 
-    <!-- ── List: projects table (create/rename via modal) ─────────────────────── -->
+    <!-- -- List: projects table (create/rename via modal) ----------------------- -->
     <ManagerView v-else title="Carrd Upload" :icon="['fad', 'images']">
       <template #actions>
         <button class="btn-confirm btn-sm" @click="openNew">
@@ -387,9 +387,9 @@ onMounted(() => carrd.loadProjects())
         </button>
       </template>
 
-      <p class="text-dim text-xs mb-12">
+      <p class="text-muted text-xs mb-12">
         Images are served from
-        <span class="code-gold">{{ CARRD_BASE_URL }}/&lt;folder&gt;/…</span>
+        <span class="code-highlight">{{ CARRD_BASE_URL }}/&lt;folder&gt;/...</span>
         for embedding in external Carrd sites. A project can hold files directly or in nested
         sub-folders. Open a project to upload and organize its files.
       </p>
@@ -397,17 +397,17 @@ onMounted(() => carrd.loadProjects())
       <LoadingSpinner
         v-if="carrd.loading && carrd.projects.length === 0"
         block
-        label="Loading projects…"
+        label="Loading projects..."
       />
 
       <template v-else-if="carrd.projects.length">
         <div class="manager-toolbar">
           <SearchInput
             v-model="search"
-            placeholder="Search projects…"
+            placeholder="Search projects..."
             aria-label="Search projects by title or folder"
           />
-          <span class="text-dim text-xs push-right">
+          <span class="text-muted text-xs push-right">
             {{ filteredProjects.length }} of {{ carrd.projects.length }}
           </span>
         </div>
@@ -419,16 +419,16 @@ onMounted(() => carrd.loadProjects())
             </button>
           </template>
           <template #cell-folder="{ row }">
-            <span class="code-gold">/{{ row.folder }}</span>
+            <span class="code-highlight">/{{ row.folder }}</span>
           </template>
           <template #cell-subfolder_count="{ row }">
-            <span class="text-dim">{{ row.subfolder_count }}</span>
+            <span class="text-muted">{{ row.subfolder_count }}</span>
           </template>
           <template #cell-file_count="{ row }">
-            <span class="text-dim">{{ row.file_count }}</span>
+            <span class="text-muted">{{ row.file_count }}</span>
           </template>
           <template #cell-total_size="{ row }">
-            <span class="text-dim">{{ formatSize(row.total_size) }}</span>
+            <span class="text-muted">{{ formatSize(row.total_size) }}</span>
           </template>
           <template #cell-actions="{ row }">
             <div class="row-actions">
@@ -460,7 +460,7 @@ onMounted(() => carrd.loadProjects())
       />
     </ManagerView>
 
-    <!-- ── Create / rename project modal ─────────────────────────────────────── -->
+    <!-- -- Create / rename project modal --------------------------------------- -->
     <ModalOverlay
       v-if="projectModal"
       centered
@@ -485,7 +485,7 @@ onMounted(() => carrd.loadProjects())
       <FormField html-for="carrd-form-folder">
         <template #label>
           Folder Name
-          <span v-if="projectModal.mode === 'create'" class="text-dim">(optional)</span>
+          <span v-if="projectModal.mode === 'create'" class="text-muted">(optional)</span>
         </template>
         <input
           id="carrd-form-folder"
@@ -494,11 +494,12 @@ onMounted(() => carrd.loadProjects())
           @keyup.enter="submitProject"
         />
       </FormField>
-      <p v-if="formDerivedFolder" class="text-dim text-xs mb-12">
-        URL folder: <span class="code-gold">{{ CARRD_BASE_URL }}/{{ formDerivedFolder }}/</span>
+      <p v-if="formDerivedFolder" class="text-muted text-xs mb-12">
+        URL folder:
+        <span class="code-highlight">{{ CARRD_BASE_URL }}/{{ formDerivedFolder }}/</span>
       </p>
-      <p v-if="projectModal.mode === 'edit'" class="text-dim text-xs mb-12">
-        Renaming the folder changes the public URL of every file in this project — existing Carrd
+      <p v-if="projectModal.mode === 'edit'" class="text-muted text-xs mb-12">
+        Renaming the folder changes the public URL of every file in this project - existing Carrd
         embeds pointing at the old folder will break.
       </p>
       <div class="flex-toolbar flex-end">
@@ -508,7 +509,7 @@ onMounted(() => carrd.loadProjects())
           :disabled="savingProject || !formTitle.trim()"
           @click="submitProject"
         >
-          <LoadingSpinner v-if="savingProject" label="Saving…" />
+          <LoadingSpinner v-if="savingProject" label="Saving..." />
           <template v-else-if="projectModal.mode === 'edit'">
             <font-awesome-icon :icon="['fas', 'check']" /> Save
           </template>
@@ -552,12 +553,12 @@ onMounted(() => carrd.loadProjects())
   font: inherit;
   color: var(--text-muted);
   cursor: pointer;
-  border-radius: 4px;
+  border-radius: 0;
 }
 .carrd-crumb:hover:not(:disabled) {
   color: var(--highlight);
 }
-.carrd-crumb.current {
+.carrd-crumb.is-current {
   color: var(--highlight);
   font-weight: 600;
   cursor: default;
@@ -589,62 +590,6 @@ onMounted(() => carrd.loadProjects())
   width: 160px;
 }
 
-/* Drag-and-drop zone. */
-.carrd-dropzone {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  padding: 28px;
-  margin-bottom: 16px;
-  border: 2px dashed var(--panel-raised-bg);
-  border-radius: var(--radius);
-  color: var(--text-muted);
-  cursor: pointer;
-  transition:
-    border-color 0.15s,
-    background 0.15s;
-}
-.carrd-dropzone:hover {
-  border-color: var(--highlight);
-}
-.carrd-dropzone.drag-over {
-  border-color: var(--highlight);
-  background: color-mix(in srgb, var(--highlight) 12%, transparent);
-  color: var(--highlight);
-}
-.carrd-dropzone .svg-inline--fa {
-  font-size: 1.6rem;
-}
-
-/* Image grid. */
-.carrd-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
-  gap: 14px;
-}
-.carrd-card {
-  margin: 0;
-  background: var(--panel-raised-bg);
-  border-radius: var(--radius);
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
-}
-.carrd-thumb-wrap {
-  position: relative;
-}
-.carrd-thumb {
-  display: block;
-  aspect-ratio: 1 / 1;
-  background: var(--panel-bg);
-}
-.carrd-thumb img {
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
-}
 /* Video preview fills the square thumb like an image. */
 .carrd-media {
   width: 100%;
@@ -666,47 +611,6 @@ onMounted(() => carrd.loadProjects())
 }
 /* Delete control sits in the thumbnail corner so the caption row has space for
    a full-width Copy URL button (which would otherwise wrap in a narrow cell). */
-.carrd-del-overlay {
-  position: absolute;
-  top: 6px;
-  right: 6px;
-  width: 28px;
-  height: 28px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0;
-  border: 0;
-  border-radius: 50%;
-  background: color-mix(in srgb, #000 55%, transparent);
-  color: #fff;
-  cursor: pointer;
-  opacity: 0.85;
-  transition:
-    background 0.15s,
-    opacity 0.15s;
-}
-.carrd-del-overlay:hover {
-  opacity: 1;
-  background: var(--danger);
-}
-.carrd-card-body {
-  padding: 8px 10px;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-.carrd-img-name {
-  font-size: 0.78rem;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
 /* Full-width copy action under each media card. Fill + hover come from the
    `.btn-view` intent; only the full-width layout is component-specific. */
-.carrd-copy-btn {
-  margin-top: 4px;
-  width: 100%;
-  white-space: nowrap;
-}
 </style>

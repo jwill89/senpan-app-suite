@@ -1,6 +1,6 @@
 <Project Sdk="Dalamud.NET.Sdk/15.0.0">
   <!--
-    Senpan Companion — a Final Fantasy XIV Dalamud plugin that acts as a second UI
+    Senpan Companion - a Final Fantasy XIV Dalamud plugin that acts as a second UI
     over the Senpan App Suite server (the Go backend stays the single source of
     truth; this is just another client). See ../README.md for build/install steps.
 
@@ -13,7 +13,7 @@
          the repo and on disk). The folder/csproj keep the shorter "SenpanCompanion"
          name; only the published assembly is "SenpanCompanionAdmin". -->
     <AssemblyName>SenpanCompanionAdmin</AssemblyName>
-    <Version>3.3.1.0</Version>
+    <Version>3.3.2.0</Version>
     <Description>Senpan Admin Companion: operate Senpan Tea House app services from inside FFXIV.</Description>
     <PackageProjectUrl>https://github.com/jwill89/senpan-app-suite</PackageProjectUrl>
     <Nullable>enable</Nullable>
@@ -21,7 +21,7 @@
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
 
     <!-- Lets CI compile (and `dotnet format`-check) this net*-windows plugin on a
-         Linux runner — build/lint only; it never runs there. Conditioned to
+         Linux runner - build/lint only; it never runs there. Conditioned to
          non-Windows, so it is a no-op locally: the normal Windows build and the
          `dotnet build -c Release` deploy step are unaffected. -->
     <EnableWindowsTargeting Condition="'$(OS)' != 'Windows_NT'">true</EnableWindowsTargeting>

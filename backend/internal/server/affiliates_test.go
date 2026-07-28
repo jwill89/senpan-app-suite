@@ -8,7 +8,7 @@ import (
 	"app-suite/internal/auth"
 )
 
-// ── Affiliates admin CRUD ───────────────────────────────────────────────────
+// -- Affiliates admin CRUD ---------------------------------------------------
 
 func TestAffiliates_RequiresAuth(t *testing.T) {
 	env := newTestEnv(t)
@@ -34,7 +34,7 @@ func (e *testEnv) createAffiliate(t *testing.T, name string) int {
 		"location": "Ul'dah",
 		"timezone": "America/New_York",
 		"hours": []map[string]any{
-			{"label": "Mon–Fri", "start": "18:00", "end": "23:00"},
+			{"label": "Mon-Fri", "start": "18:00", "end": "23:00"},
 			{"label": "Closed row", "start": "  "}, // dropped (no start)
 		},
 		"details":    "Cozy.",
@@ -101,7 +101,7 @@ func TestAffiliates_UpdateAndDelete(t *testing.T) {
 		t.Errorf("name = %v; want Renamed", list[0].(map[string]any)["name"])
 	}
 
-	// Delete (DELETE /api/affiliates/{id} → 204).
+	// Delete (DELETE /api/affiliates/{id} -> 204).
 	resp = env.del(t, fmt.Sprintf("/api/affiliates/%d", id))
 	if resp.StatusCode != http.StatusNoContent {
 		t.Fatalf("delete status = %d; want 204", resp.StatusCode)
@@ -147,7 +147,7 @@ func TestAffiliates_PermissionGating(t *testing.T) {
 	if err := env.store.SetUserActive(staff.ID, true); err != nil {
 		t.Fatal(err)
 	}
-	// Grant an unrelated permission first → still forbidden on affiliates.
+	// Grant an unrelated permission first -> still forbidden on affiliates.
 	if err := env.store.SetUserPermissions(staff.ID, []string{"bingo-cards"}); err != nil {
 		t.Fatal(err)
 	}
@@ -161,7 +161,7 @@ func TestAffiliates_PermissionGating(t *testing.T) {
 		resp.Body.Close()
 	}
 
-	// Grant teahouse-affiliates → the next request reloads perms and is allowed.
+	// Grant teahouse-affiliates -> the next request reloads perms and is allowed.
 	if err := env.store.SetUserPermissions(staff.ID, []string{"teahouse-affiliates"}); err != nil {
 		t.Fatal(err)
 	}
@@ -171,7 +171,7 @@ func TestAffiliates_PermissionGating(t *testing.T) {
 	}
 }
 
-// ── Reorder, webhook, and post-to-Discord ───────────────────────────────────
+// -- Reorder, webhook, and post-to-Discord -----------------------------------
 
 func TestAffiliates_Reorder(t *testing.T) {
 	env := newTestEnv(t)

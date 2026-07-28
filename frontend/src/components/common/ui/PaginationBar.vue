@@ -15,15 +15,15 @@ const emit = defineEmits<{ go: [page: number] }>()
       :disabled="props.page <= 1"
       @click="emit('go', props.page - 1)"
     >
-      ‹ Prev
+      <font-awesome-icon :icon="['fas', 'chevron-left']" /> Prev
     </button>
-    <span class="text-dim text-xs">Page {{ props.page }} / {{ props.totalPages }}</span>
+    <span class="text-muted text-xs">Page {{ props.page }} / {{ props.totalPages }}</span>
     <button
       class="btn-neutral btn-sm"
       :disabled="props.page >= props.totalPages"
       @click="emit('go', props.page + 1)"
     >
-      Next ›
+      Next <font-awesome-icon :icon="['fas', 'chevron-right']" />
     </button>
   </div>
 </template>

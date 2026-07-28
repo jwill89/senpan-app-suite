@@ -10,18 +10,18 @@ import (
 	"app-suite/internal/model"
 )
 
-// ── Affiliates admin (list + CRUD + drag order + post to Discord) ────────────
+// -- Affiliates admin (list + CRUD + drag order + post to Discord) ------------
 //
 // An affiliate is a partner establishment (see model.Affiliate). Admins manage a
-// drag-orderable list of them — create/edit/delete/reorder — with owners and
+// drag-orderable list of them - create/edit/delete/reorder - with owners and
 // opening hours edited as repeatable rows and persisted as JSON. The logo +
-// screenshot are picked from the shared image library (System → Images). A single
+// screenshot are picked from the shared image library (System -> Images). A single
 // shared Discord webhook (kept out of public settings) lets each affiliate be
 // posted as an embed. All of this is admin-only, gated by permTeahouseAffiliates.
 
 // affiliateWebhookSettingKey stores the single shared Discord webhook every
 // affiliate posts to. Deliberately NOT in settingsKeys (server/settings.go), so it
-// never leaks through the public GET /api/settings — read/written only through
+// never leaks through the public GET /api/settings - read/written only through
 // these permission-gated endpoints.
 const affiliateWebhookSettingKey = "affiliate_webhook_url"
 
@@ -224,8 +224,8 @@ type affiliateWebhookRequest struct {
 //
 //	Endpoint:  PUT /api/affiliates/webhook
 //	Auth:      admin, or a user granted teahouse-affiliates
-//	Request:   {"webhook_url": "https://discord.com/api/webhooks/…"}  ('' clears)
-//	Response:  200 {"webhook_url": "…"}
+//	Request:   {"webhook_url": "https://discord.com/api/webhooks/..."}  ('' clears)
+//	Response:  200 {"webhook_url": "..."}
 func (s *Server) handleAffiliateWebhookSet(w http.ResponseWriter, r *http.Request) {
 	if !s.requirePermission(w, r, permTeahouseAffiliates) {
 		return
@@ -237,7 +237,7 @@ func (s *Server) handleAffiliateWebhookSet(w http.ResponseWriter, r *http.Reques
 	}
 	webhook := strings.TrimSpace(req.WebhookURL)
 	if webhook != "" && !isDiscordWebhookURL(webhook) {
-		writeError(w, http.StatusBadRequest, "Discord webhook URLs must look like https://discord.com/api/webhooks/…")
+		writeError(w, http.StatusBadRequest, "Discord webhook URLs must look like https://discord.com/api/webhooks/...")
 		return
 	}
 	if err := s.store.SetSetting(affiliateWebhookSettingKey, webhook); err != nil {
@@ -285,7 +285,7 @@ func (s *Server) handleAffiliatePost(w http.ResponseWriter, r *http.Request) {
 
 // buildAffiliateEmbed renders an affiliate as a Discord embed: colour + name +
 // markdown details, the logo as the thumbnail and the establishment screenshot as
-// the large image, and — in order, each skipped when absent — the location
+// the large image, and - in order, each skipped when absent - the location
 // (full-width), the opening hours (full-width, as Discord "Short Time" tokens
 // <t:unix:t> so each viewer sees them in their own timezone), and finally the
 // Discord + Carrd links as two side-by-side fields. baseURL (scheme://host) turns
@@ -298,7 +298,7 @@ func buildAffiliateEmbed(a model.Affiliate, baseURL string, now time.Time) disco
 	// Location first, full-width.
 	b.field("📍 Location", strings.TrimSpace(a.Location), false)
 
-	// Opening hours next, full-width — one line per row (days in the admin's order),
+	// Opening hours next, full-width - one line per row (days in the admin's order),
 	// each time as a local-time token.
 	if hours := formatAffiliateHours(a, now); hours != "" {
 		b.field("🕒 Open Times", hours, false)
@@ -338,11 +338,11 @@ func formatAffiliateHours(a model.Affiliate, now time.Time) string {
 		}
 		var line strings.Builder
 		if label := strings.TrimSpace(h.Label); label != "" {
-			line.WriteString("**" + label + "** — ")
+			line.WriteString("**" + label + "** - ")
 		}
 		fmt.Fprintf(&line, "<t:%d:t>", start)
 		if end, ok := hhmmToUnix(h.End, loc, now); ok {
-			fmt.Fprintf(&line, " – <t:%d:t>", end)
+			fmt.Fprintf(&line, " - <t:%d:t>", end)
 		}
 		lines = append(lines, line.String())
 	}
@@ -351,7 +351,7 @@ func formatAffiliateHours(a model.Affiliate, now time.Time) string {
 
 // hhmmToUnix converts a "HH:MM" wall-clock time, interpreted in loc and anchored
 // to now's calendar date, into a Unix timestamp. The date is irrelevant to a
-// "Short Time" (t) token — only the time-of-day shows — but anchoring on "now"
+// "Short Time" (t) token - only the time-of-day shows - but anchoring on "now"
 // keeps the DST offset current.
 func hhmmToUnix(hhmm string, loc *time.Location, now time.Time) (int64, bool) {
 	hs, ms, found := strings.Cut(strings.TrimSpace(hhmm), ":")

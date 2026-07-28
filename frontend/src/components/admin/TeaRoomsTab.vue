@@ -1,10 +1,10 @@
 <script setup lang="ts">
 /**
- * Admin Tea Rooms manager (Senpan Tea House → Tea Rooms). Three screens:
+ * Admin Tea Rooms manager (Senpan Tea House -> Tea Rooms). Three screens:
  *
  *   - list: a drag-orderable list of rooms (image + name + cost + status badges)
- *     with per-row actions — post to Discord, toggle open/closed, toggle the
- *     discount, edit, delete — plus a search box. Reordering persists like the
+ *     with per-row actions - post to Discord, toggle open/closed, toggle the
+ *     discount, edit, delete - plus a search box. Reordering persists like the
  *     Announcements list.
  *   - form: the create/edit form (TeaRoomFormTab), a Back sub-page.
  *   - webhook: set the single shared Discord webhook every room posts to.
@@ -32,7 +32,7 @@ const store = useTeaRoomsStore()
 const ui = useUiStore()
 
 /**
- * The public (cross-origin) rooms API URL an external site fetches — the all-rooms
+ * The public (cross-origin) rooms API URL an external site fetches - the all-rooms
  * list, or one room when a room number is given (the public lookup key). Built from
  * the current origin so it points at whichever host serves the admin
  * (apps.senpan.cafe in production).
@@ -67,7 +67,7 @@ function costText(t: TeaRoom): string {
   return `${t.cost_per_half_hour.toLocaleString()} gil/half hour`
 }
 
-// ── Navigation ───────────────────────────────────────────────────────────────
+// -- Navigation ---------------------------------------------------------------
 function openNew(): void {
   store.newTeaRoomForm()
   screen.value = 'form'
@@ -80,7 +80,7 @@ function onFormDone(): void {
   screen.value = 'list'
 }
 
-// ── Webhook sub-page ─────────────────────────────────────────────────────────
+// -- Webhook sub-page ---------------------------------------------------------
 const webhookDraft = ref('')
 function openWebhook(): void {
   webhookDraft.value = store.webhookUrl
@@ -93,19 +93,19 @@ async function submitWebhook(): Promise<void> {
 
 <template>
   <div class="tab-body">
-    <!-- ── Form ──────────────────────────────────────────────────────────────── -->
+    <!-- -- Form ---------------------------------------------------------------- -->
     <TeaRoomFormTab v-if="screen === 'form'" @saved="onFormDone" @cancel="onFormDone" />
 
-    <!-- ── Webhook ───────────────────────────────────────────────────────────── -->
+    <!-- -- Webhook ------------------------------------------------------------- -->
     <AdminPanel v-else-if="screen === 'webhook'">
       <SubPageHeader
         :icon="['fab', 'discord']"
         title="Tea Rooms Discord Webhook"
         @back="screen = 'list'"
       />
-      <p class="text-dim text-sm mb-16">
-        Every tea room posts to this one channel webhook. In Discord: Channel Settings →
-        Integrations → Webhooks → New Webhook → Copy Webhook URL.
+      <p class="text-muted text-sm mb-16">
+        Every tea room posts to this one channel webhook. In Discord: Channel Settings ->
+        Integrations -> Webhooks -> New Webhook -> Copy Webhook URL.
       </p>
       <FormField
         label="Discord webhook URL"
@@ -113,7 +113,7 @@ async function submitWebhook(): Promise<void> {
       >
         <input
           v-model="webhookDraft"
-          placeholder="https://discord.com/api/webhooks/…"
+          placeholder="https://discord.com/api/webhooks/..."
           aria-label="Discord webhook URL"
         />
       </FormField>
@@ -122,13 +122,13 @@ async function submitWebhook(): Promise<void> {
           Cancel
         </button>
         <button class="btn-confirm" :disabled="store.savingWebhook" @click="submitWebhook">
-          <LoadingSpinner v-if="store.savingWebhook" label="Saving…" />
+          <LoadingSpinner v-if="store.savingWebhook" label="Saving..." />
           <template v-else>Save Webhook</template>
         </button>
       </FormActions>
     </AdminPanel>
 
-    <!-- ── List ──────────────────────────────────────────────────────────────── -->
+    <!-- -- List ---------------------------------------------------------------- -->
     <ManagerView v-else title="Tea Rooms" :icon="['fad', 'booth-curtain']">
       <template #actions>
         <button
@@ -149,13 +149,13 @@ async function submitWebhook(): Promise<void> {
       <template #toolbar>
         <SearchInput
           v-model="store.search"
-          placeholder="Search tea rooms…"
+          placeholder="Search tea rooms..."
           aria-label="Search tea rooms"
         />
       </template>
 
-      <div v-if="!store.webhookUrl && store.teaRooms.length" class="text-dim text-xs mb-12">
-        <font-awesome-icon :icon="['fad', 'triangle-exclamation']" /> No Discord webhook set yet —
+      <div v-if="!store.webhookUrl && store.teaRooms.length" class="text-muted text-xs mb-12">
+        <font-awesome-icon :icon="['fad', 'triangle-exclamation']" /> No Discord webhook set yet -
         add one with the <button class="link-btn" @click="openWebhook">Webhook</button> button to
         post rooms.
       </div>
@@ -163,10 +163,10 @@ async function submitWebhook(): Promise<void> {
       <LoadingSpinner
         v-if="store.loading && store.teaRooms.length === 0"
         block
-        label="Loading tea rooms…"
+        label="Loading tea rooms..."
       />
       <template v-else>
-        <p v-if="store.teaRooms.length > 1" class="text-dim text-xs mb-12">
+        <p v-if="store.teaRooms.length > 1" class="text-muted text-xs mb-12">
           <template v-if="canReorder">
             <font-awesome-icon :icon="['fad', 'bars']" /> Drag a row by its handle to reorder the
             list. The order is saved automatically.
@@ -179,9 +179,9 @@ async function submitWebhook(): Promise<void> {
           v-show="store.filteredTeaRooms.length"
           v-model="store.teaRooms"
           class="list-rows"
-          handle=".room-drag"
+          handle=".drag-handle"
           :animation="150"
-          ghost-class="dragging"
+          ghost-class="is-dragging"
           :disabled="!canReorder"
           @end="onReorder"
         >
@@ -189,14 +189,14 @@ async function submitWebhook(): Promise<void> {
             <template #media>
               <span
                 v-if="canReorder"
-                class="room-drag drag-handle"
+                class="drag-handle"
                 title="Drag to reorder"
                 aria-label="Drag to reorder"
               >
                 <font-awesome-icon :icon="['fad', 'bars']" />
               </span>
               <span
-                class="room-swatch"
+                class="list-row-swatch"
                 :style="{ background: t.color || '#ff3131' }"
                 aria-hidden="true"
               ></span>
@@ -211,17 +211,19 @@ async function submitWebhook(): Promise<void> {
               </div>
             </template>
 
-            <h4 class="room-title">
+            <h4 class="list-row-title">
               {{ t.name }}
-              <span v-if="t.room_number" class="text-dim fw-normal"
-                >· Room {{ t.room_number }}</span
+              <span v-if="t.room_number" class="text-muted fw-normal"
+                >- Room {{ t.room_number }}</span
               >
             </h4>
-            <p v-if="t.subtitle" class="text-sm text-dim room-meta">{{ t.subtitle }}</p>
-            <p class="text-sm room-meta">
+            <p v-if="t.subtitle" class="text-sm text-muted list-row-meta list-row-meta--inline">
+              {{ t.subtitle }}
+            </p>
+            <p class="text-sm list-row-meta list-row-meta--inline">
               <font-awesome-icon :icon="['fad', 'coins']" /> {{ costText(t) }}
             </p>
-            <p class="room-meta">
+            <p class="list-row-meta list-row-meta--inline">
               <span class="badge" :class="t.open ? 'badge--success' : 'badge--muted'">
                 {{ t.open ? 'Open' : 'Closed' }}
               </span>
@@ -231,7 +233,9 @@ async function submitWebhook(): Promise<void> {
               <span v-if="t.discounted" class="badge badge--warning">50% off</span>
               <span v-if="t.lockable" class="badge badge--muted">Lockable</span>
             </p>
-            <p v-if="t.hashtags" class="text-sm text-dim room-meta">{{ t.hashtags }}</p>
+            <p v-if="t.hashtags" class="text-sm text-muted list-row-meta list-row-meta--inline">
+              {{ t.hashtags }}
+            </p>
 
             <template #actions>
               <button
@@ -240,7 +244,7 @@ async function submitWebhook(): Promise<void> {
                 title="Post to Discord now"
                 @click="store.postRoom(t)"
               >
-                <LoadingSpinner v-if="store.postingId === t.id" label="Posting…" />
+                <LoadingSpinner v-if="store.postingId === t.id" label="Posting..." />
                 <template v-else
                   ><font-awesome-icon :icon="['fas', 'paper-plane']" /> Post</template
                 >
@@ -304,49 +308,5 @@ async function submitWebhook(): Promise<void> {
 </template>
 
 <style scoped>
-.link-btn {
-  background: none;
-  border: none;
-  color: var(--accent);
-  cursor: pointer;
-  text-decoration: underline;
-  padding: 0;
-  font: inherit;
-}
-/* Accent swatch mirroring the room's embed colour (like the announcement swatch). */
-.room-swatch {
-  width: 6px;
-  align-self: stretch;
-  border-radius: 3px;
-  flex: 0 0 auto;
-}
-/* Drag handle for reordering; grab cursor + muted until hovered. */
-.room-drag {
-  display: inline-flex;
-  align-items: center;
-  align-self: stretch;
-  padding: 0 2px;
-  color: var(--text-muted);
-  cursor: grab;
-}
-.room-drag:hover {
-  color: var(--highlight);
-}
-.room-drag:active {
-  cursor: grabbing;
-}
 /* vue-draggable-plus ghost while dragging a row. */
-.dragging {
-  opacity: 0.5;
-}
-.room-title {
-  margin: 0 0 4px;
-}
-.room-meta {
-  margin: 0 0 4px;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  align-items: center;
-}
 </style>

@@ -10,7 +10,7 @@ import (
 	"app-suite/internal/model"
 )
 
-// ── Card operations ─────────────────────────────────────────────────────────
+// -- Card operations ---------------------------------------------------------
 
 // SaveCard inserts a new card with the given board data.
 func (s *Store) SaveCard(id string, board [][]int) error {
@@ -144,7 +144,7 @@ func (s *Store) DeleteCard(id string) (bool, error) {
 
 // DeleteAllCards removes every non-Protected card and returns the IDs it deleted.
 // Protected cards (approved custom cards, or any card an admin has marked Protected)
-// are spared — they can only be removed individually via DeleteCard.
+// are spared - they can only be removed individually via DeleteCard.
 func (s *Store) DeleteAllCards() ([]string, error) {
 	rows, err := s.db.Query("DELETE FROM cards WHERE protected = 0 RETURNING id")
 	if err != nil {
@@ -175,7 +175,7 @@ func (s *Store) SetCardProtected(id string, protected bool) (bool, error) {
 
 // ApproveCustomCard approves a pending custom card: it becomes live ('approved') and
 // is automatically Protected. Returns true only if a still-pending card with that id
-// existed (approving a normal or already-approved card is a no-op → false).
+// existed (approving a normal or already-approved card is a no-op -> false).
 func (s *Store) ApproveCustomCard(id string) (bool, error) {
 	res, err := s.db.Exec(
 		"UPDATE cards SET custom_status = 'approved', protected = 1 WHERE id = ? AND custom_status = 'pending'", id)
@@ -186,9 +186,9 @@ func (s *Store) ApproveCustomCard(id string) (bool, error) {
 	return n > 0, nil
 }
 
-// CreateCustomCard inserts a Personal Card Request as a pending custom card — stored
+// CreateCustomCard inserts a Personal Card Request as a pending custom card - stored
 // but not yet playable until an admin approves it. The character name goes in
-// player_name and the home world in world; board is the 5×5 grid the requester built.
+// player_name and the home world in world; board is the 5x5 grid the requester built.
 func (s *Store) CreateCustomCard(id string, board [][]int, characterName, world string) error {
 	data, err := json.Marshal(board)
 	if err != nil {
@@ -205,7 +205,7 @@ func (s *Store) CreateCustomCard(id string, board [][]int, characterName, world 
 // board (same numbers in the same cells), or ("", false) when none does. Every write
 // path stores board_data as the compact, deterministic row-major JSON that
 // json.Marshal produces for a [][]int, so the stored value is already canonical and
-// can be matched directly in SQL — no need to pull every row into Go and re-marshal
+// can be matched directly in SQL - no need to pull every row into Go and re-marshal
 // each one on the public custom-card duplicate check.
 func (s *Store) FindDuplicateBoard(board [][]int) (string, bool, error) {
 	target, err := json.Marshal(board)
@@ -254,7 +254,7 @@ func (s *Store) ListCardIDsWithNames() ([]model.Card, error) {
 	return cards, rows.Err()
 }
 
-// GetCardPlayerNames returns a map of card ID → player name for the given IDs.
+// GetCardPlayerNames returns a map of card ID -> player name for the given IDs.
 func (s *Store) GetCardPlayerNames(ids []string) (map[string]string, error) {
 	if len(ids) == 0 {
 		return map[string]string{}, nil

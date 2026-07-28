@@ -15,7 +15,7 @@ declare module 'vue3-emoji-picker/css'
 // Parsed CHANGELOG.md, provided at build/dev time by config/changelog-plugin.ts
 // (registered in vite.config.ts + vitest.config.ts). Read it via lib/changelog.ts.
 declare module 'virtual:changelog' {
-  /** One labelled change-group (Added / Fixed / …); `body` is its bullet markdown. */
+  /** One labelled change-group (Added / Fixed / ...); `body` is its bullet markdown. */
   export interface ChangelogGroup {
     label: string
     body: string
@@ -44,7 +44,7 @@ declare module 'virtual:changelog' {
 // `define` + vitest.config.ts). Read it via `lib/version.ts`, not directly.
 declare const __APP_VERSION__: string
 
-// Cloudflare Turnstile (loaded at runtime from challenges.cloudflare.com — see
+// Cloudflare Turnstile (loaded at runtime from challenges.cloudflare.com - see
 // components/common/TurnstileWidget.vue). Minimal surface of the global API.
 interface TurnstileRenderOptions {
   sitekey: string

@@ -49,7 +49,7 @@ function cancel(): void {
         <FormField
           label="Room number"
           required
-          help="Unique — this is the public key the Carrd site and public API look the room up by."
+          help="Unique - this is the public key the Carrd site and public API look the room up by."
         >
           <input
             v-model="store.teaRoomForm.room_number"
@@ -99,14 +99,14 @@ function cancel(): void {
           style="flex: 0 0 auto"
           help="Accent stripe on the Discord embed."
         >
-          <div class="room-color-row">
+          <div class="color-field">
             <input
               v-model="store.teaRoomForm.color"
               type="color"
-              class="room-color-input"
+              class="color-field-input"
               aria-label="Embed accent color"
             />
-            <code class="room-color-hex">{{ store.teaRoomForm.color }}</code>
+            <code class="color-field-hex">{{ store.teaRoomForm.color }}</code>
             <button
               type="button"
               class="btn-neutral btn-sm"
@@ -134,7 +134,7 @@ function cancel(): void {
         <MarkdownEditor
           v-model="store.teaRoomForm.description"
           min-height="120px"
-          placeholder="Describe the room (supports markdown — bold, italics, lists, links…)"
+          placeholder="Describe the room (supports markdown - bold, italics, lists, links...)"
         />
       </FormField>
 
@@ -161,7 +161,7 @@ function cancel(): void {
 
       <FormField
         label="Image"
-        help="Pick from any image category. Upload new images on the System → Images page."
+        help="Pick from any image category. Upload new images on the System -> Images page."
       >
         <ImagePicker v-model="store.teaRoomForm.image" value-key="url" />
       </FormField>
@@ -175,7 +175,7 @@ function cancel(): void {
           "
           @click="save"
         >
-          <LoadingSpinner v-if="store.saving" label="Saving…" />
+          <LoadingSpinner v-if="store.saving" label="Saving..." />
           <template v-else>{{
             store.teaRoomForm.id ? 'Save Changes' : 'Create Tea Room'
           }}</template>
@@ -190,30 +190,5 @@ function cancel(): void {
   display: flex;
   flex-wrap: wrap;
   gap: 8px 20px;
-}
-.checkbox-inline {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  cursor: pointer;
-}
-.room-color-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-.room-color-input {
-  width: 48px;
-  height: 36px;
-  padding: 2px;
-  border: 1px solid var(--panel-raised-bg);
-  border-radius: 6px;
-  background: var(--panel-bg);
-  cursor: pointer;
-}
-.room-color-hex {
-  font-family: monospace;
-  text-transform: uppercase;
-  color: var(--text-muted);
 }
 </style>

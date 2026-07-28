@@ -10,11 +10,11 @@ import (
 	"app-suite/internal/model"
 )
 
-// ── Style operations ────────────────────────────────────────────────────────
+// -- Style operations --------------------------------------------------------
 //
-// A theme ("style") is a set of design-token overrides — a map of token name to
-// CSS value — not free-form CSS. The applied stylesheet is generated from those
-// tokens as a ":root{…}" block (see TokensToCSS), so themes can only retint the
+// A theme ("style") is a set of design-token overrides - a map of token name to
+// CSS value - not free-form CSS. The applied stylesheet is generated from those
+// tokens as a ":root{...}" block (see TokensToCSS), so themes can only retint the
 // app's design tokens and never carry arbitrary CSS. This keeps themes safe (an
 // admin can't break the layout for every player) and lets the base stylesheet's
 // class names be refactored freely.
@@ -84,7 +84,7 @@ func SanitizeTokens(in map[string]string) map[string]string {
 	return out
 }
 
-// TokensToCSS renders a token map as a ":root{…}" stylesheet, emitting only
+// TokensToCSS renders a token map as a ":root{...}" stylesheet, emitting only
 // known tokens in canonical order. Returns "" when no known tokens are present
 // (so an empty/again-default theme injects nothing).
 func TokensToCSS(tokens map[string]string) string {
@@ -113,16 +113,16 @@ func TokensToCSS(tokens map[string]string) string {
 	return b.String()
 }
 
-// rootBlockRe matches the first ":root { … }" block; declRe matches each
+// rootBlockRe matches the first ":root { ... }" block; declRe matches each
 // "--name: value;" declaration within it. Used to migrate legacy css_content.
 var (
 	rootBlockRe = regexp.MustCompile(`(?s):root\s*\{(.*?)\}`)
 	declRe      = regexp.MustCompile(`--([a-zA-Z0-9-]+)\s*:\s*([^;]+);`)
 )
 
-// parseRootTokens extracts known design tokens from the first :root{…} block of
+// parseRootTokens extracts known design tokens from the first :root{...} block of
 // a CSS string (the legacy theme format). Unknown declarations are ignored. Used
-// by the css_content → tokens migration backfill.
+// by the css_content -> tokens migration backfill.
 func parseRootTokens(css string) map[string]string {
 	out := make(map[string]string)
 	m := rootBlockRe.FindStringSubmatch(css)

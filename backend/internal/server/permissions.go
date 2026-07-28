@@ -11,7 +11,7 @@ import (
 // every permission; non-admin users are limited to the keys granted to them.
 //
 // The Users page itself ("system-users") is intentionally NOT a grantable
-// permission — it is admin-only and guarded with requireAdmin.
+// permission - it is admin-only and guarded with requireAdmin.
 const (
 	permBingoGame          = "bingo-game"
 	permBingoCards         = "bingo-cards"
@@ -94,12 +94,12 @@ func anyBookClubPerm(u *model.User) bool {
 func (s *Server) requireAnyBookClub(w http.ResponseWriter, r *http.Request) bool {
 	u := s.currentUser(r)
 	if u == nil {
-		writeError(w, http.StatusUnauthorized, "Unauthorized – login required")
+		writeError(w, http.StatusUnauthorized, "Unauthorized - login required")
 		return false
 	}
 	if anyBookClubPerm(u) {
 		return true
 	}
-	writeError(w, http.StatusForbidden, "Forbidden – you do not have access to this feature")
+	writeError(w, http.StatusForbidden, "Forbidden - you do not have access to this feature")
 	return false
 }

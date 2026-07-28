@@ -11,7 +11,7 @@ import (
 //
 //	Endpoint:  GET /api/winners-log?page=1&per_page=25&sort=logged_at&dir=desc
 //	Auth:      admin, or a user granted this page's permission
-//	Params:    page, per_page (1–200), sort (logged_at|card_id|player_name|game_details), dir (asc|desc)
+//	Params:    page, per_page (1-200), sort (logged_at|card_id|player_name|game_details), dir (asc|desc)
 //	Response:  {"entries": [...], "total": int, "page": int, "per_page": int}
 func (s *Server) handleWinnersLog(w http.ResponseWriter, r *http.Request) {
 	if !s.requirePermission(w, r, permBingoWinnersLog) {

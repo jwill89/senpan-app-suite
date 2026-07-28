@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /**
- * Halftime prompt modal (admin) — appears at the game's half-way point (the
+ * Halftime prompt modal (admin) - appears at the game's half-way point (the
  * 35-of-75 mark scaled to this game's callable pool), asking whether to alert
  * players about a half-time minigame.
  */
@@ -13,11 +13,11 @@ const game = useGameStore()
 <template>
   <ModalOverlay v-if="game.showHalftimePrompt" centered @close="game.dismissHalftime()">
     <h3 class="mb-16"><font-awesome-icon :icon="['fad', 'circle-pause']" /> Half-Time!</h3>
-    <p class="text-dim mb-8">
+    <p class="text-muted mb-8">
       You've drawn {{ game.halftimeThreshold }} numbers! Would you like to alert users about a
       half-time minigame?
     </p>
-    <p v-if="game.halftimeAutoPaused" class="text-dim text-sm mb-20">
+    <p v-if="game.halftimeAutoPaused" class="text-muted text-sm mb-20">
       <font-awesome-icon :icon="['fas', 'circle-pause']" /> Auto-draw has been paused. Choose
       <strong>No</strong> to resume it, or <strong>Yes</strong> to run a mini-game (auto stays off
       until you switch it back on).

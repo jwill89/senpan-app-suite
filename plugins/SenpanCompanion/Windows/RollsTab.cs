@@ -10,9 +10,9 @@ namespace SenpanCompanion.Windows;
 
 /// <summary>
 /// Rolls tool. A permission-free, server-independent helper that lists the
-/// <c>/random</c> · <c>/dice</c> rolls <see cref="RollTracker"/> has seen in chat this
-/// session. Laid out as distinct sections — session summary, filters, a Highest / Lowest /
-/// Closest-to query, and the results table — so each control cluster reads on its own. A
+/// <c>/random</c> - <c>/dice</c> rolls <see cref="RollTracker"/> has seen in chat this
+/// session. Laid out as distinct sections - session summary, filters, a Highest / Lowest /
+/// Closest-to query, and the results table - so each control cluster reads on its own. A
 /// query brings the matching roll(s) to the top and highlights them, with a heads-up when
 /// the winner rolled more than once in the window. Nothing here is stored: the log lives
 /// only in memory and clears on logout.
@@ -77,7 +77,7 @@ internal sealed class RollsTab
         Ui.Section(FontAwesomeIcon.ListOl, $"Rolls ({ordered.Count})");
         if (all.Count == 0)
         {
-            UiText.WrappedDisabled("No rolls captured yet — they appear here as people use /random or /dice near you.");
+            UiText.WrappedDisabled("No rolls captured yet - they appear here as people use /random or /dice near you.");
             return;
         }
         if (ordered.Count == 0)
@@ -90,16 +90,16 @@ internal sealed class RollsTab
         DrawTable(ordered, winners);
     }
 
-    // ── Session summary ──────────────────────────────────────────────────────────
+    // -- Session summary ----------------------------------------------------------
 
     private void DrawToolbar()
     {
         var total = this.tracker.Count;
         ImGui.AlignTextToFramePadding();
-        Ui.Help($"{total} roll{(total == 1 ? string.Empty : "s")} this session · kept in memory only");
+        Ui.Help($"{total} roll{(total == 1 ? string.Empty : "s")} this session - kept in memory only");
         ImGui.SameLine();
         Ui.HelpMarker(
-            "This tool keeps rolls in memory only — nothing is saved or sent anywhere. The list " +
+            "This tool keeps rolls in memory only - nothing is saved or sent anywhere. The list " +
             "clears when you log out, and is gone entirely once the game closes and the plugin unloads.");
         ImGui.SameLine();
         if (Ui.SmallButton("Clear"))
@@ -109,7 +109,7 @@ internal sealed class RollsTab
         }
     }
 
-    // ── Filters ──────────────────────────────────────────────────────────────────
+    // -- Filters ------------------------------------------------------------------
 
     private void DrawFilters()
     {
@@ -132,7 +132,7 @@ internal sealed class RollsTab
         ImGui.EndDisabled();
     }
 
-    // ── Query ────────────────────────────────────────────────────────────────────
+    // -- Query --------------------------------------------------------------------
 
     private void DrawQuery()
     {
@@ -167,11 +167,11 @@ internal sealed class RollsTab
         RollQuery.Off => "Show all",
         RollQuery.Highest => "Highest roll",
         RollQuery.Lowest => "Lowest roll",
-        RollQuery.ClosestTo => "Closest to…",
+        RollQuery.ClosestTo => "Closest to...",
         _ => "Show all",
     };
 
-    // ── Filtering + query ────────────────────────────────────────────────────────
+    // -- Filtering + query --------------------------------------------------------
 
     private List<RollEntry> ApplyFilters(List<RollEntry> rolls)
     {
@@ -218,7 +218,7 @@ internal sealed class RollsTab
 
     private void DrawResultBanner(List<RollEntry> filtered, HashSet<RollEntry> winners)
     {
-        // Nothing in range — the "no rolls match" line below the banner covers it.
+        // Nothing in range - the "no rolls match" line below the banner covers it.
         if (winners.Count == 0)
             return;
 
@@ -231,14 +231,16 @@ internal sealed class RollsTab
         };
         var scope = this.windowEnabled ? $" in the last {this.windowMinutes} min" : string.Empty;
         ImGui.Spacing();
-        ImGui.TextColored(StarColor, $"★ {headline}{scope}:");
+        Ui.Icon(FontAwesomeIcon.Star, StarColor);
+        ImGui.SameLine(0, ImGui.GetStyle().ItemInnerSpacing.X * 1.5f);
+        ImGui.TextColored(StarColor, $"{headline}{scope}:");
         ImGui.SameLine();
         ImGui.TextUnformatted(winners.Count == 1 ? "1 match" : $"{winners.Count} matches (tie)");
 
         foreach (var w in winners.OrderByDescending(e => e.Time))
-            ImGui.BulletText($"{Who(w)} — {RollText(w)}  ·  {w.Time:HH:mm:ss}");
+            ImGui.BulletText($"{Who(w)} - {RollText(w)}  -  {w.Time:HH:mm:ss}");
 
-        // Warn when a winning player also rolled other times in the window — the operator
+        // Warn when a winning player also rolled other times in the window - the operator
         // may need to know they didn't roll just once.
         foreach (var key in winners.Select(PlayerKey).Distinct())
         {
@@ -248,12 +250,12 @@ internal sealed class RollsTab
             UiText.WrappedColored(NoteColor, $"Multiple rolls detected in the time frame for {Who(theirs[0])}:");
             ImGui.Indent(18f);
             foreach (var e in theirs)
-                ImGui.TextColored(NoteColor, $"• {RollText(e)}  ·  {e.Time:HH:mm:ss}");
+                ImGui.TextColored(NoteColor, $"* {RollText(e)}  -  {e.Time:HH:mm:ss}");
             ImGui.Unindent(18f);
         }
     }
 
-    // ── Pagination + table ───────────────────────────────────────────────────────
+    // -- Pagination + table -------------------------------------------------------
 
     private void DrawPager(int total)
     {
@@ -326,11 +328,11 @@ internal sealed class RollsTab
 
             ImGui.TableNextColumn();
             if (win)
-                ImGui.TextColored(StarColor, "★");
+                Ui.Icon(FontAwesomeIcon.Star, StarColor);
             ImGui.TableNextColumn();
-            ImGui.TextUnformatted(string.IsNullOrEmpty(e.PlayerName) ? "—" : e.PlayerName);
+            ImGui.TextUnformatted(string.IsNullOrEmpty(e.PlayerName) ? "-" : e.PlayerName);
             ImGui.TableNextColumn();
-            ImGui.TextUnformatted(string.IsNullOrEmpty(e.World) ? "—" : e.World);
+            ImGui.TextUnformatted(string.IsNullOrEmpty(e.World) ? "-" : e.World);
             ImGui.TableNextColumn();
             ImGui.TextUnformatted(RollText(e));
             ImGui.TableNextColumn();
@@ -340,7 +342,7 @@ internal sealed class RollsTab
         ImGui.EndTable();
     }
 
-    // ── Helpers ──────────────────────────────────────────────────────────────────
+    // -- Helpers ------------------------------------------------------------------
 
     private static string RollText(RollEntry e)
         => e.OutOf.HasValue ? $"{e.Value} (out of {e.OutOf.Value})" : e.Value.ToString();

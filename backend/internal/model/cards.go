@@ -1,12 +1,12 @@
 package model
 
 // Card represents a bingo card stored in the database.
-// BoardData is a 5×5 grid where board[row][col] holds the number;
-// col 0=B(1–15), col 1=I(16–30), col 2=N(31–45), col 3=G(46–60), col 4=O(61–75).
+// BoardData is a 5x5 grid where board[row][col] holds the number;
+// col 0=B(1-15), col 1=I(16-30), col 2=N(31-45), col 3=G(46-60), col 4=O(61-75).
 // The centre cell [2][2] is always 0, representing the FREE space.
 type Card struct {
 	ID         string  `json:"id"`          // 6-char alphanumeric unique identifier
-	BoardData  [][]int `json:"board_data"`  // 5×5 grid of numbers (0 = FREE)
+	BoardData  [][]int `json:"board_data"`  // 5x5 grid of numbers (0 = FREE)
 	PlayerName string  `json:"player_name"` // optional player name assigned by admin / custom-card character name
 	Details    string  `json:"details"`     // optional extra info about the cardholder
 	CreatedAt  string  `json:"created_at"`  // ISO timestamp the card was generated ("" if pre-dates tracking)
@@ -14,7 +14,7 @@ type Card struct {
 	// deleted individually). Approved custom cards are automatically Protected.
 	Protected bool `json:"protected"`
 	// CustomStatus is the custom-card lifecycle: "" (a normal generated card),
-	// "pending" (a Personal Card Request awaiting staff approval — not yet playable),
+	// "pending" (a Personal Card Request awaiting staff approval - not yet playable),
 	// or "approved" (an approved, live custom card).
 	CustomStatus string `json:"custom_status"`
 	// World is the requester's home world for a custom-card request ("" otherwise).

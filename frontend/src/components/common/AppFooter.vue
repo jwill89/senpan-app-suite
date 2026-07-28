@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /**
- * Site footer shown on the public (non-admin) pages — credits + external links,
+ * Site footer shown on the public (non-admin) pages - credits + external links,
  * plus a mobile-only "Install App" link that adds the PWA to the home screen.
  */
 import ThemePicker from '@/components/common/ThemePicker.vue'
@@ -12,14 +12,14 @@ const ui = useUiStore()
 
 /**
  * Installs the PWA. On Chromium with a captured prompt we fire the native
- * dialog; otherwise we surface manual steps — iOS uses the Share sheet, while
- * other browsers without `beforeinstallprompt` (Vivaldi, Firefox, …) install
+ * dialog; otherwise we surface manual steps - iOS uses the Share sheet, while
+ * other browsers without `beforeinstallprompt` (Vivaldi, Firefox, ...) install
  * from their own menu.
  */
 async function onInstall(): Promise<void> {
   if (canPrompt.value) {
     const outcome = await promptInstall()
-    if (outcome === 'accepted') ui.notify('Installing — check your home screen!', 'success')
+    if (outcome === 'accepted') ui.notify('Installing - check your home screen!', 'success')
     return
   }
   if (needsIosInstructions.value) {

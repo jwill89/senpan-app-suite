@@ -9,7 +9,7 @@ import (
 )
 
 // TestSpecIsCurrent fails if the committed backend/openapi.yaml differs from a
-// fresh generation — the OpenAPI equivalent of the gen:types check. Because the
+// fresh generation - the OpenAPI equivalent of the gen:types check. Because the
 // schemas are reflected from the model structs, this guarantees the documented
 // shapes never drift from the code: change a struct and this test goes red until
 // you run `go run ./cmd/openapi-gen`.
@@ -23,7 +23,7 @@ func TestSpecIsCurrent(t *testing.T) {
 		t.Fatalf("read committed openapi.yaml: %v", err)
 	}
 	if string(got) != string(want) {
-		t.Fatalf("backend/openapi.yaml is out of date — run `go run ./cmd/openapi-gen` and commit the result")
+		t.Fatalf("backend/openapi.yaml is out of date - run `go run ./cmd/openapi-gen` and commit the result")
 	}
 }
 
@@ -46,7 +46,7 @@ func TestEveryRouteIsDocumented(t *testing.T) {
 	for _, m := range handleFuncPattern.FindAllStringSubmatch(string(src), -1) {
 		pat := m[1]
 		if pat == "/api/ws" {
-			continue // WebSocket upgrade — documented in the spec description, not as an operation
+			continue // WebSocket upgrade - documented in the spec description, not as an operation
 		}
 		method, path, ok := strings.Cut(pat, " ")
 		if !ok {
@@ -55,7 +55,7 @@ func TestEveryRouteIsDocumented(t *testing.T) {
 		routes[method+" "+path] = true
 	}
 	if len(routes) == 0 {
-		t.Fatal("no routes parsed from server.go — did the HandleFunc format change?")
+		t.Fatal("no routes parsed from server.go - did the HandleFunc format change?")
 	}
 
 	doc, err := Build()

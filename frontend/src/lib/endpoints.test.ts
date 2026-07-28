@@ -309,7 +309,7 @@ describe('styles (hybrid REST)', () => {
     expect(apiPost).toHaveBeenCalledWith('styles/5/activate', undefined)
   })
 
-  it('setActive POSTs to /deactivate when id≤0 (the "None" button)', async () => {
+  it('setActive POSTs to /deactivate when id<=0 (the "None" button)', async () => {
     await endpoints.styles.setActive(0)
     expect(apiPost).toHaveBeenCalledWith('styles/deactivate', undefined)
   })

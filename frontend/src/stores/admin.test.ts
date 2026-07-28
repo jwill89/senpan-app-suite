@@ -89,7 +89,7 @@ describe('setTabFromRoute (section highlight + per-tab load)', () => {
     { tab: 'system-users', section: 'system' },
   ]
   for (const { tab, section } of cases) {
-    it(`maps ${tab} → ${section}`, () => {
+    it(`maps ${tab} -> ${section}`, () => {
       stubLoaders()
       const admin = useAdminStore()
       // eslint-disable-next-line @typescript-eslint/no-explicit-any

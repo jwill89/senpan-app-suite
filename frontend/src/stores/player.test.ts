@@ -41,13 +41,13 @@ describe('boardCellClass', () => {
 
   it('adds free for the center (0) cell', () => {
     const player = usePlayerStore()
-    expect(player.boardCellClass(2, 2, 0)).toContain('free')
+    expect(player.boardCellClass(2, 2, 0)).toContain('is-free')
   })
 
   it('adds stamped once the cell is stamped', () => {
     const player = usePlayerStore()
     player.toggleStamp(1, 1)
-    expect(player.boardCellClass(1, 1, 9)).toContain('stamped')
+    expect(player.boardCellClass(1, 1, 9)).toContain('is-stamped')
   })
 })
 
@@ -200,7 +200,7 @@ describe('secondary stamp', () => {
 
   it('isWinningPatternCell reflects the active patterns (FREE-cell agnostic union)', () => {
     const player = usePlayerStore()
-    // Pattern marks the top row (B..O at row 0) → those cells are pattern cells.
+    // Pattern marks the top row (B..O at row 0) -> those cells are pattern cells.
     const topRow = [true, true, true, true, true]
     const blank = [false, false, false, false, false]
     player.playerGame = {
@@ -231,12 +231,12 @@ describe('secondary stamp', () => {
     } as unknown as BingoGameState
   }
 
-  it('keeps the pattern split after the game ends (playerGame → null)', () => {
+  it('keeps the pattern split after the game ends (playerGame -> null)', () => {
     const player = usePlayerStore()
     player.playerGame = topRowGame(7)
     expect(player.isWinningPatternCell(0, 0)).toBe(true)
 
-    // Game ends — the server sends game=null. The primary/secondary split must
+    // Game ends - the server sends game=null. The primary/secondary split must
     // survive so stamps don't all flip to secondary before the player saves.
     player.playerGame = null
     expect(player.isWinningPatternCell(0, 0)).toBe(true)
@@ -306,7 +306,7 @@ describe('game details persistence for export', () => {
     const player = usePlayerStore()
     player.playerGame = activeGame(5)
     game.gameDetails = 'old'
-    player.playerGame = null // ended → frozen = 'old'
+    player.playerGame = null // ended -> frozen = 'old'
     expect(player.cardExportDetails).toBe('old')
     // A new game with no details should export blank, not the stale 'old'.
     game.gameDetails = ''

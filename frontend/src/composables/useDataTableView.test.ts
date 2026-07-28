@@ -26,7 +26,7 @@ describe('useDataTableView', () => {
     const v = useDataTableView(ref(rows), { matches, sort: { key: 'score' } })
     // 2 < 9 < 10 (numeric compare, not lexicographic where "10" < "2").
     expect(v.filtered.value.map((r) => r.score)).toEqual([2, 9, 10])
-    v.setSort('score') // same key → flip to desc
+    v.setSort('score') // same key -> flip to desc
     expect(v.sortDir.value).toBe('desc')
     expect(v.filtered.value.map((r) => r.score)).toEqual([10, 9, 2])
   })
@@ -57,7 +57,7 @@ describe('useDataTableView', () => {
   it('clamps the page back into range when results shrink', async () => {
     const v = useDataTableView(ref(rows), { matches, perPage: 1 })
     v.page.value = 3
-    v.search.value = 'alice' // one match → one page
+    v.search.value = 'alice' // one match -> one page
     await nextTick()
     expect(v.page.value).toBe(1)
   })
@@ -66,7 +66,7 @@ describe('useDataTableView', () => {
     const v = useDataTableView(ref(rows), { matches, sort: { key: 'score', dir: 'desc' } })
     v.search.value = 'bob'
     v.page.value = 2
-    v.setSort('score') // desc → asc
+    v.setSort('score') // desc -> asc
     await nextTick()
     v.reset()
     expect(v.search.value).toBe('')

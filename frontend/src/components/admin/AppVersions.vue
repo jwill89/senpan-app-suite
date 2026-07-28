@@ -23,7 +23,7 @@ const livePlugin = ref<string | null>(null)
 const openComponent = ref<ChangelogComponent | null>(null)
 
 // .then/.catch (not async/await) so the rejection handler is attached
-// synchronously — no unhandled-rejection window if the probe fails.
+// synchronously - no unhandled-rejection window if the probe fails.
 onMounted(() => {
   endpoints.system
     .version()
@@ -33,7 +33,7 @@ onMounted(() => {
     .catch(() => {
       failed.value = true
     })
-  // Live plugin version (what Dalamud serves). fetchLivePluginVersion never rejects —
+  // Live plugin version (what Dalamud serves). fetchLivePluginVersion never rejects -
   // it resolves to null on failure, so the computed falls back to the bundled value.
   // `void` marks it deliberately fire-and-forget (no rejection to handle).
   void fetchLivePluginVersion().then((v) => {
@@ -52,11 +52,11 @@ const pluginVersion = computed(() => livePlugin.value ?? changelog.plugin.latest
 
 <template>
   <div class="app-versions" :class="{ 'app-versions--warn': incompatible || failed }">
-    <span class="app-versions__row">
-      <span class="app-versions__label">Frontend</span>
+    <span class="app-versions-row">
+      <span class="app-versions-label">Frontend</span>
       <button
         type="button"
-        class="app-versions__val app-versions__link"
+        class="app-versions-val app-versions-link"
         title="View the Frontend changelog"
         @click="openComponent = 'frontend'"
       >
@@ -64,38 +64,38 @@ const pluginVersion = computed(() => livePlugin.value ?? changelog.plugin.latest
       </button>
     </span>
 
-    <span class="app-versions__row">
-      <span class="app-versions__label">Backend</span>
+    <span class="app-versions-row">
+      <span class="app-versions-label">Backend</span>
       <button
         v-if="backend"
         type="button"
-        class="app-versions__val app-versions__link"
+        class="app-versions-val app-versions-link"
         title="View the Backend changelog"
         @click="openComponent = 'backend'"
       >
         v{{ backend }}
       </button>
-      <span v-else class="app-versions__val">{{ failed ? 'unknown' : '…' }}</span>
+      <span v-else class="app-versions-val">{{ failed ? 'unknown' : '...' }}</span>
     </span>
 
-    <span class="app-versions__row">
-      <span class="app-versions__label">Plugin</span>
+    <span class="app-versions-row">
+      <span class="app-versions-label">Plugin</span>
       <button
         v-if="pluginVersion"
         type="button"
-        class="app-versions__val app-versions__link"
+        class="app-versions-val app-versions-link"
         title="View the Plugin changelog + install steps"
         @click="openComponent = 'plugin'"
       >
         v{{ pluginVersion }}
       </button>
-      <span v-else class="app-versions__val">—</span>
+      <span v-else class="app-versions-val">-</span>
     </span>
 
     <span
       v-if="incompatible"
-      class="app-versions__flag"
-      title="Frontend and backend major versions differ — check compatibility."
+      class="app-versions-flag"
+      title="Frontend and backend major versions differ - check compatibility."
     >
       <font-awesome-icon :icon="['fas', 'triangle-exclamation']" /> version mismatch
     </span>
@@ -115,21 +115,21 @@ const pluginVersion = computed(() => livePlugin.value ?? changelog.plugin.latest
   font-size: 0.72rem;
   color: var(--text-muted);
 }
-.app-versions__row {
+.app-versions-row {
   display: flex;
   justify-content: space-between;
   gap: 10px;
 }
-.app-versions__label {
+.app-versions-label {
   opacity: 0.85;
 }
-.app-versions__val {
+.app-versions-val {
   font-family: 'Consolas', 'Monaco', monospace;
   color: var(--text);
 }
-/* Version numbers are buttons that open the changelog — reset button chrome and
+/* Version numbers are buttons that open the changelog - reset button chrome and
    surface them as subtle links. */
-.app-versions__link {
+.app-versions-link {
   background: none;
   border: none;
   padding: 0;
@@ -139,14 +139,14 @@ const pluginVersion = computed(() => livePlugin.value ?? changelog.plugin.latest
   text-decoration-style: dotted;
   text-underline-offset: 2px;
 }
-.app-versions__link:hover,
-.app-versions__link:focus-visible {
+.app-versions-link:hover,
+.app-versions-link:focus-visible {
   color: var(--accent);
 }
-.app-versions--warn .app-versions__val {
+.app-versions--warn .app-versions-val {
   color: var(--warning);
 }
-.app-versions__flag {
+.app-versions-flag {
   margin-top: 3px;
   color: var(--warning);
   font-weight: 600;

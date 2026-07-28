@@ -17,7 +17,7 @@ namespace SenpanCompanion.Services;
 public readonly record struct RollEntry(string PlayerName, string World, int Value, int? OutOf, DateTime Time);
 
 /// <summary>
-/// Watches chat for <c>/random</c> · <c>/dice</c> rolls and keeps them in memory only,
+/// Watches chat for <c>/random</c> - <c>/dice</c> rolls and keeps them in memory only,
 /// for the Rolls tool. It is deliberately independent of the Senpan server: nothing is
 /// sent anywhere and nothing is persisted. The log is wiped on logout (and, because it
 /// lives only in this object, is gone the moment the plugin unloads / the game closes).
@@ -34,13 +34,13 @@ public readonly record struct RollEntry(string PlayerName, string World, int Val
 public sealed partial class RollTracker : IDisposable
 {
     // A long venue session can rack up a lot of rolls; cap the buffer so it can't grow
-    // without bound. The oldest entries fall off first — the tool is about the recent
+    // without bound. The oldest entries fall off first - the tool is about the recent
     // window, never the whole history.
     private const int MaxEntries = 5000;
 
     // Every number in a roll line (any client language): a plain /random has one (the
     // roll); /random N has two (the roll and its ceiling). ASCII digits with an optional
-    // thousands separator — a ceiling of 1,000 renders "1,000". Source-generated.
+    // thousands separator - a ceiling of 1,000 renders "1,000". Source-generated.
     [GeneratedRegex(@"[0-9][0-9,]*")]
     private static partial Regex NumberPattern();
 
@@ -118,8 +118,8 @@ public sealed partial class RollTracker : IDisposable
             if (numbers.Count == 0)
                 return;
 
-            // One number → a plain /random (no ceiling). Two → the roll and its ceiling in
-            // whatever order the client's language writes them; a roll is always ≤ its
+            // One number -> a plain /random (no ceiling). Two -> the roll and its ceiling in
+            // whatever order the client's language writes them; a roll is always <= its
             // ceiling, so the smaller is the roll and the larger the ceiling.
             var value = numbers.Min();
             int? outOf = numbers.Count > 1 ? numbers.Max() : null;

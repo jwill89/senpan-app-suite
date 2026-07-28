@@ -2,7 +2,7 @@
 # Keeps Go (gofmt) happy and matches the Linux deploy target.
 * text=auto eol=lf
 
-# Binary assets — never touch.
+# Binary assets - never touch.
 *.png binary
 *.jpg binary
 *.jpeg binary

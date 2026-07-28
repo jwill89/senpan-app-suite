@@ -12,7 +12,7 @@ namespace SenpanCompanion.Windows;
 
 /// <summary>
 /// Raffle operator panel: pick an open raffle, add entrants (with nearby-player
-/// quick-fill), toggle paid status, and draw a winner (pick → confirm, or pick
+/// quick-fill), toggle paid status, and draw a winner (pick -> confirm, or pick
 /// again). Matches the website's admin raffle entry flow; raffle creation stays on
 /// the website by design. Raffles aren't broadcast over the WebSocket, so Refresh
 /// re-pulls both the list and the open raffle's detail.
@@ -83,7 +83,7 @@ internal sealed class RaffleTab : TabBase
     private void DrawRafflePicker()
     {
         var current = this.raffles.FirstOrDefault(r => r.Id == this.selectedRaffleId);
-        var preview = current != null ? $"{current.Title} ({current.Status})" : "Select raffle…";
+        var preview = current != null ? $"{current.Title} ({current.Status})" : "Select raffle...";
 
         ImGui.SetNextItemWidth(280);
         if (!ImGui.BeginCombo("##rafflepick", preview))
@@ -112,9 +112,9 @@ internal sealed class RaffleTab : TabBase
     {
         ImGui.Text($"{d.Raffle.Title}");
         ImGui.SameLine();
-        ImGui.TextDisabled($"— {d.Raffle.Status}, {d.TotalEntries} entr{(d.TotalEntries == 1 ? "y" : "ies")}");
+        ImGui.TextDisabled($"- {d.Raffle.Status}, {d.TotalEntries} entr{(d.TotalEntries == 1 ? "y" : "ies")}");
         if (d.Raffle.CostPerEntry > 0)
-            ImGui.TextDisabled($"Cost per entry: {d.Raffle.CostPerEntry:0.##}  •  Max per person: {d.Raffle.MaxEntries}");
+            ImGui.TextDisabled($"Cost per entry: {d.Raffle.CostPerEntry:0.##}  *  Max per person: {d.Raffle.MaxEntries}");
     }
 
     private void DrawAddEntry()
@@ -122,7 +122,7 @@ internal sealed class RaffleTab : TabBase
         var open = string.Equals(this.detail?.Raffle.Status, "open", StringComparison.OrdinalIgnoreCase);
         if (!open)
         {
-            UiText.WrappedDisabled("This raffle is closed — entries can't be added.");
+            UiText.WrappedDisabled("This raffle is closed - entries can't be added.");
             return;
         }
 
@@ -279,7 +279,7 @@ internal sealed class RaffleTab : TabBase
 
     private void DrawNearbyPicker()
     {
-        if (!ImGui.BeginCombo("##rafflenearby", "Nearby…", ImGuiComboFlags.NoArrowButton))
+        if (!ImGui.BeginCombo("##rafflenearby", "Nearby...", ImGuiComboFlags.NoArrowButton))
             return;
         foreach (var np in this.nearby.Snapshot())
         {

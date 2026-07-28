@@ -1,12 +1,12 @@
 # ============================================================================
-# Apache .htaccess — Dalamud plugin repo (<webRoot>/plugin/)
+# Apache .htaccess - Dalamud plugin repo (<webRoot>/plugin/)
 # ----------------------------------------------------------------------------
 # PLACEMENT: <webRoot>/plugin/.htaccess. That directory holds the custom Dalamud
 # repo the plugin is distributed through:
-#   pluginmaster.json                  ← the repo index Dalamud reads
-#   SenpanCompanionAdmin/latest.zip    ← the plugin package it downloads
+#   pluginmaster.json                  <- the repo index Dalamud reads
+#   SenpanCompanionAdmin/latest.zip    <- the plugin package it downloads
 # Both are published by `scripts/deploy.ps1 -Target plugin`, which uploads THIS
-# file too — so it's synced automatically and persists across releases.
+# file too - so it's synced automatically and persists across releases.
 #
 # WHY no-cache: apps.senpan.cafe sits behind Cloudflare, which by default
 # edge-caches .zip (but not .json). After a release, the edge kept serving the

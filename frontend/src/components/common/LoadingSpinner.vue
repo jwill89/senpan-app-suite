@@ -4,8 +4,8 @@
  * `.spinner` rules in app.css) so custom themes restyle it automatically.
  *
  *   <LoadingSpinner />                      inline spinner
- *   <LoadingSpinner label="Loading…" />     spinner + muted label
- *   <LoadingSpinner block label="Loading…"/> centered block (for list/data loads)
+ *   <LoadingSpinner label="Loading..." />     spinner + muted label
+ *   <LoadingSpinner block label="Loading..."/> centered block (for list/data loads)
  */
 defineProps<{
   /** Optional muted text shown next to the spinner. */

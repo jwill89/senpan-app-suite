@@ -146,7 +146,7 @@ func TestGaraponClosedBlocksDraw(t *testing.T) {
 }
 
 // TestDeleteGaraponCascades verifies that deleting a garapon removes ALL of its
-// associated rows — prizes, drawing links (players), and draw-log entries — via
+// associated rows - prizes, drawing links (players), and draw-log entries - via
 // the ON DELETE CASCADE foreign keys (which only fire with PRAGMA foreign_keys =
 // ON). This guards the admin "delete garapon" action against leaving orphaned
 // links/logs behind.

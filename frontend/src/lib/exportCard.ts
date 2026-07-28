@@ -2,15 +2,15 @@
  * Exports a bingo board to a downloadable PNG "card" image.
  *
  * The board itself is captured directly from the live, already-themed DOM
- * element (`.board-wrap`) so it follows the active custom theme — gradients,
+ * element (`.board-wrap`) so it follows the active custom theme - gradients,
  * colors, header font, and the player's stamps (emoji + custom data-URL images)
  * are preserved exactly as rendered.
  *
  * The captured board is then composited into a larger, themed frame that adds:
- *   • a header  — site title + "Bingo Card" hugging the top-left corner, the
+ *   * a header  - site title + "Bingo Card" hugging the top-left corner, the
  *                 player name and (smaller) card id beneath them, and a large
  *                 site logo on the right spanning from the top down to the board;
- *   • a footer  — a link to the site and a short excerpt of the game details.
+ *   * a footer  - a link to the site and a short excerpt of the game details.
  *
  * Frame colors/fonts are read from the active theme's CSS custom properties so
  * the surround matches whatever theme is in use.
@@ -32,13 +32,13 @@ export interface ExportCardOptions {
   playerName?: string
   /** Site link shown in the footer (e.g. `window.location.host`). */
   link: string
-  /** Optional game details (markdown) — excerpted into the footer. */
+  /** Optional game details (markdown) - excerpted into the footer. */
   gameDetails?: string
   /** Logo URL to draw top-right (defaults to `/images/logo.png`). */
   logoUrl?: string
 }
 
-/** Device-pixel scale — matches the board capture pixelRatio for crispness. */
+/** Device-pixel scale - matches the board capture pixelRatio for crispness. */
 const SCALE = 2
 
 /** Reads a CSS custom property off :root, with a fallback. */
@@ -119,7 +119,7 @@ export function parseDetailParagraphs(md: string): Word[][] {
   const cleaned = md
     .replace(/```[\s\S]*?```/g, ' ') // fenced code
     .replace(/!\[[^\]]*\]\([^)]*\)/g, ' ') // images
-    .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1') // links → text
+    .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1') // links -> text
     .replace(/`([^`]*)`/g, '$1') // inline-code backticks (keep text)
     .replace(/\r/g, '')
 
@@ -131,12 +131,12 @@ export function parseDetailParagraphs(md: string): Word[][] {
     if (heading) line = heading[2]
     line = line
       .replace(/^\s{0,3}>\s?/, '') // blockquote
-      .replace(/^\s*[-*+]\s+/, '• ') // list bullet
+      .replace(/^\s*[-*+]\s+/, '* ') // list bullet
       .replace(/[ \t]{2,}/g, ' ')
       .trim()
     if (!line) continue
 
-    // Flatten styled runs → words (split on spaces, preserving style).
+    // Flatten styled runs -> words (split on spaces, preserving style).
     const words: Word[] = []
     let current: Word = []
     for (const run of parseInlineRuns(line)) {
@@ -200,7 +200,7 @@ function wrapWords(
   }
   if (all.length <= maxLines) return all
   const kept = all.slice(0, maxLines)
-  kept[kept.length - 1] = [...kept[kept.length - 1], [{ ch: '…', bold: false, italic: false }]]
+  kept[kept.length - 1] = [...kept[kept.length - 1], [{ ch: '...', bold: false, italic: false }]]
   return kept
 }
 
@@ -258,7 +258,7 @@ function roundRectPath(
 
 /**
  * Captures the themed board element and composites it into a framed PNG card
- * (header + board + footer), then downloads it. Renders at 2× for a crisp image.
+ * (header + board + footer), then downloads it. Renders at 2x for a crisp image.
  */
 export async function exportCardImage(opts: ExportCardOptions): Promise<void> {
   const { toCanvas } = await import('html-to-image')
@@ -288,7 +288,7 @@ export async function exportCardImage(opts: ExportCardOptions): Promise<void> {
 
   // 2. Theme colors/fonts for the frame.
   const headerFont = cssVar('--header-font', "'Arapey', serif")
-  const gold = cssVar('--highlight', '#d6bdae')
+  const highlight = cssVar('--highlight', '#d6bdae')
   const text = cssVar('--text', '#f0ebe3')
   const textDim = cssVar('--text-muted', '#a5a58c')
   const bgStart = cssVar('--board-gradient-start', '#2f3328')
@@ -312,15 +312,15 @@ export async function exportCardImage(opts: ExportCardOptions): Promise<void> {
   const linkSize = 14 * S // small, tucked into the bottom-right corner
   const detailSize = 19 * S
   const detailLineH = 27 * S
-  // No hard cap — the canvas grows to fit every detail line so nothing is cut
+  // No hard cap - the canvas grows to fit every detail line so nothing is cut
   // off (long details simply make a taller card).
   const maxDetailLines = 1000
 
-  // Player name with the "@ World" suffix stripped (e.g. "Alice @ Foo" → "Alice").
+  // Player name with the "@ World" suffix stripped (e.g. "Alice @ Foo" -> "Alice").
   const cleanName = (opts.playerName || '').split('@')[0].trim()
 
   // Header left-stack baselines, measured from the header top (topY added later):
-  //   title → "Bingo Card" → [player name] → card id.
+  //   title -> "Bingo Card" -> [player name] -> card id.
   const titleBaseRel = titleSize
   const subBaseRel = titleBaseRel + tGap + subSize
   const nameBaseRel = cleanName ? subBaseRel + groupGap + nameSize : subBaseRel
@@ -353,14 +353,14 @@ export async function exportCardImage(opts: ExportCardOptions): Promise<void> {
   ctx.fillStyle = bg
   ctx.fillRect(0, 0, totalW, totalH)
 
-  // Subtle gold inset border.
-  ctx.strokeStyle = gold
+  // Subtle highlight inset border.
+  ctx.strokeStyle = highlight
   ctx.globalAlpha = 0.35
   ctx.lineWidth = 2 * S
   ctx.strokeRect(pad / 2, pad / 2, totalW - pad, totalH - pad)
   ctx.globalAlpha = 1
 
-  // ── Header ────────────────────────────────────────────────────────────────
+  // -- Header ----------------------------------------------------------------
   const topY = headInset
 
   // Logo on the right, larger than the text stack: it extends down through most
@@ -388,9 +388,9 @@ export async function exportCardImage(opts: ExportCardOptions): Promise<void> {
   const headerX = pad
   const leftMaxW = totalW - headerX - headInset - (logoW ? logoW + 20 * S : 0)
 
-  // Title (gold, themed header font) — raised by the logo's top padding so it
+  // Title (highlight, themed header font) - raised by the logo's top padding so it
   // hugs the visible logo top.
-  ctx.fillStyle = gold
+  ctx.fillStyle = highlight
   ctx.font = `700 ${titleSize}px ${headerFont}`
   fitText(ctx, opts.title || 'Bingo', leftMaxW)
   ctx.fillText(opts.title || 'Bingo', headerX, topY + titleBaseRel - logoTopInset)
@@ -403,36 +403,37 @@ export async function exportCardImage(opts: ExportCardOptions): Promise<void> {
   // Player name + card id, shifted down by the logo's overhang (less its bottom
   // padding) so the card-id baseline lines up with the *visible* logo bottom.
   if (cleanName) {
-    ctx.fillStyle = gold
+    ctx.fillStyle = highlight
     ctx.font = `600 ${nameSize}px ${DETAIL_FONT}`
     fitText(ctx, cleanName, leftMaxW)
     ctx.fillText(cleanName, headerX, topY + nameBaseRel + logoOverhang - logoBottomInset)
   }
 
-  // Card id — smaller and dim, beneath the name.
+  // Card id - smaller and dim, beneath the name.
   ctx.fillStyle = textDim
   ctx.font = `600 ${cardIdSize}px ${DETAIL_FONT}`
   ctx.fillText(`Card #${opts.cardId}`, headerX, topY + idBaseRel + logoOverhang - logoBottomInset)
 
-  // ── Board (centered) ───────────────────────────────────────────────────────
-  // The captured board has rounded corners (board-wrap border-radius). Clip to a
-  // matching rounded rect so the corner triangles reveal the frame gradient
-  // behind (no mismatched solid fill), then stroke a border so the card stands
-  // out from the background instead of blending into it.
+  // -- Board (centered) -------------------------------------------------------
+  // Clip to the board's own corner radius, read off the live element rather than
+  // hardcoded: `.board-wrap` follows `--radius`, which is 0 (square) today. Any
+  // mismatch here would either round off cells or leave corner triangles of the
+  // wrong fill, so the value comes from the element being captured. Then stroke a
+  // border so the card stands out from the background instead of blending in.
   const boardX = Math.round((totalW - boardW) / 2)
   const boardY = topY + headerH + gap
-  const boardRadius = 16 * S
+  const boardRadius = (parseFloat(getComputedStyle(opts.element).borderTopLeftRadius) || 0) * S
   ctx.save()
   roundRectPath(ctx, boardX, boardY, boardW, boardH, boardRadius)
   ctx.clip()
   ctx.drawImage(boardCanvas, boardX, boardY)
   ctx.restore()
   roundRectPath(ctx, boardX, boardY, boardW, boardH, boardRadius)
-  ctx.strokeStyle = gold
+  ctx.strokeStyle = highlight
   ctx.lineWidth = 3 * S
   ctx.stroke()
 
-  // ── Footer ─────────────────────────────────────────────────────────────────
+  // -- Footer -----------------------------------------------------------------
   // Game-details excerpt (left), with markdown bold/italic preserved.
   if (detailLines.length) {
     ctx.textAlign = 'left'
@@ -445,7 +446,7 @@ export async function exportCardImage(opts: ExportCardOptions): Promise<void> {
     }
   }
 
-  // Site link — small and dim, tucked into the bottom-right corner, out of the way.
+  // Site link - small and dim, tucked into the bottom-right corner, out of the way.
   ctx.textAlign = 'right'
   ctx.textBaseline = 'bottom'
   ctx.fillStyle = textDim

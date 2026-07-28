@@ -1,13 +1,13 @@
 <script setup lang="ts">
 /**
- * Stamp color picker — a single swatch button that opens a modal color picker.
+ * Stamp color picker - a single swatch button that opens a modal color picker.
  *
  * The modal hosts the Chrome picker (`@ckpack/vue-color`) so the player can dial
  * in any colour via the spectrum/hue interface, a HEX field, *and* an alpha
  * channel. The picked value is stored as a full CSS `rgba()` string (including
  * its alpha) and used directly as the stamp tint.
  *
- * Note: this alpha is intentionally distinct from the separate opacity slider —
+ * Note: this alpha is intentionally distinct from the separate opacity slider -
  * the alpha tints only the stamp's background fill, whereas opacity fades the
  * entire mark (the emoji/custom-image icon included). The picker is lazy-loaded
  * so its weight only lands when a player actually opens it.
@@ -21,7 +21,7 @@ const player = usePlayerStore()
 
 const open = ref(false)
 
-/** The picker's current value — bound to the live stamp colour. */
+/** The picker's current value - bound to the live stamp colour. */
 const pickerValue = computed(() => player.stampColor)
 
 /** Persists the chosen colour as a full CSS rgba() string (alpha included). */
@@ -51,7 +51,7 @@ function onColorChange(c: { rgba: string }): void {
       @close="open = false"
     >
       <h3 class="mb-8"><font-awesome-icon :icon="['fad', 'palette']" /> Stamp Color</h3>
-      <p class="text-dim mb-16 color-picker-help">
+      <p class="text-muted mb-16 color-picker-help">
         Choose any color and transparency for your board stamps.
       </p>
 

@@ -1,5 +1,5 @@
 /*
- * app.css — stylesheet index.
+ * app.css - stylesheet index.
  *
  * The former monolithic stylesheet is split by domain into ./styles/*, imported
  * here in cascade order: tokens first, then base, utilities, shared components,

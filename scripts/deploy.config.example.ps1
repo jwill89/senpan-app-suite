@@ -1,5 +1,5 @@
 # Deploy configuration TEMPLATE. Copy this file to `deploy.config.ps1` (which is
-# untracked — see .gitignore) and fill in your values. scripts/deploy.ps1
+# untracked - see .gitignore) and fill in your values. scripts/deploy.ps1
 # dot-sources deploy.config.ps1 to resolve every environment-specific setting
 # when it isn't passed as a -param or set via the matching $env:DEPLOY_* variable.
 #

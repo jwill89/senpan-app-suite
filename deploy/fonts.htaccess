@@ -1,12 +1,12 @@
 # ============================================================================
-# Apache .htaccess — font storage folder (<webRoot>/fonts/)
+# Apache .htaccess - font storage folder (<webRoot>/fonts/)
 # ----------------------------------------------------------------------------
-# PLACEMENT: copy this file to <webRoot>/fonts/.htaccess — the folder the Go
+# PLACEMENT: copy this file to <webRoot>/fonts/.htaccess - the folder the Go
 # server writes uploaded fonts to (see internal/server/fonts.go: fontsDir()).
 #
 # Fonts are LICENSED assets and are no longer served statically. The
 # fonts.senpan.cafe vhost must be a reverse proxy to the Go server's tokenized,
-# origin-gated font endpoints (see deploy/README.md → Font host):
+# origin-gated font endpoints (see deploy/README.md -> Font host):
 #
 #   ProxyPass        / http://localhost:8080/api/fonts/pub/
 #   ProxyPassReverse / http://localhost:8080/api/fonts/pub/

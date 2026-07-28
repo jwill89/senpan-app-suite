@@ -31,7 +31,7 @@ func mustCreateRaffle(t *testing.T, s *store.Store, title, from, to string) int6
 }
 
 // TestListRafflesAvailabilityWindow verifies the public list honours the
-// availability window using UTC instants — a raffle past its "available to"
+// availability window using UTC instants - a raffle past its "available to"
 // time must not appear (the timezone bug), while in-window and unbounded
 // raffles do. It also confirms SQLite's datetime() normalizes the UTC ISO 'Z'
 // format the frontend now stores.
@@ -122,14 +122,14 @@ func TestAddOrCreateRaffleEntry(t *testing.T) {
 
 // TestListRafflesAdminAggregates verifies the admin list carries the closed-table
 // aggregates: the winner entry's "Character @ World" and the gil collected from
-// paid tickets only (sum of paid num_entries × cost_per_entry).
+// paid tickets only (sum of paid num_entries x cost_per_entry).
 func TestListRafflesAdminAggregates(t *testing.T) {
 	s := newTestStore(t)
 	id, err := s.CreateRaffle(&model.Raffle{Title: "Prize", MaxEntries: 10, CostPerEntry: 100})
 	if err != nil {
 		t.Fatalf("CreateRaffle: %v", err)
 	}
-	// One paid entry (3 tickets) → counts; one unpaid (2 tickets) → excluded.
+	// One paid entry (3 tickets) -> counts; one unpaid (2 tickets) -> excluded.
 	paidID, err := s.CreateRaffleEntry(id, "Aria", "Gilgamesh", 3)
 	if err != nil {
 		t.Fatalf("CreateRaffleEntry (paid): %v", err)
@@ -163,7 +163,7 @@ func TestListRafflesAdminAggregates(t *testing.T) {
 	if got.WinnerName != "Aria @ Gilgamesh" {
 		t.Errorf("winner_name = %q; want %q", got.WinnerName, "Aria @ Gilgamesh")
 	}
-	if got.PaidTotal != 300 { // 3 paid tickets × 100 gil
+	if got.PaidTotal != 300 { // 3 paid tickets x 100 gil
 		t.Errorf("paid_total = %v; want 300", got.PaidTotal)
 	}
 

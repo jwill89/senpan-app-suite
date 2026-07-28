@@ -8,7 +8,7 @@ import (
 	"testing"
 )
 
-// ── Carrd image hosting (admin-only) ─────────────────────────────────────────
+// -- Carrd image hosting (admin-only) -----------------------------------------
 
 func TestCarrd_RequiresAuth(t *testing.T) {
 	env := newTestEnv(t)
@@ -41,7 +41,7 @@ func TestCarrd_CreateProject_DefaultFolder(t *testing.T) {
 	if project == nil {
 		t.Fatal("expected project in response")
 	}
-	// "My Cool Project!" → letters/numbers only, spaces → hyphens.
+	// "My Cool Project!" -> letters/numbers only, spaces -> hyphens.
 	if project["folder"] != "my-cool-project" {
 		t.Errorf("folder = %v; want my-cool-project", project["folder"])
 	}
@@ -88,7 +88,7 @@ func TestCarrd_CreateProject_DuplicateTitle(t *testing.T) {
 		"title": "Gallery", "folder": "gallery-a",
 	}).Body.Close()
 
-	// Same title (case-insensitive), different folder → conflict.
+	// Same title (case-insensitive), different folder -> conflict.
 	resp := env.postJSON(t, "/api/carrd/projects", map[string]any{
 		"title": "gallery", "folder": "gallery-b",
 	})
@@ -218,7 +218,7 @@ func TestCarrd_RenameProject_TitleOnly(t *testing.T) {
 		"title": "Keep Folder", "folder": "keep",
 	}).Body.Close()
 
-	// No new_folder → the folder stays, only the title changes.
+	// No new_folder -> the folder stays, only the title changes.
 	resp := env.patchJSON(t, "/api/carrd/projects/keep", map[string]any{
 		"title": "Renamed",
 	})
@@ -242,7 +242,7 @@ func TestCarrd_RenameProject_DuplicateTitle(t *testing.T) {
 		"title": "Beta", "folder": "beta",
 	}).Body.Close()
 
-	// Renaming Beta to Alpha's title (case-insensitive) → conflict.
+	// Renaming Beta to Alpha's title (case-insensitive) -> conflict.
 	resp := env.patchJSON(t, "/api/carrd/projects/beta", map[string]any{
 		"title": "alpha",
 	})
@@ -314,7 +314,7 @@ func TestCarrd_UploadOverwrites(t *testing.T) {
 	}).Body.Close()
 
 	env.postCarrdUpload(t, "over", "", map[string][]byte{"a.png": []byte("\x89PNG\r\n\x1a\nfirst")}).Body.Close()
-	// Same name again — should overwrite, not error or duplicate.
+	// Same name again - should overwrite, not error or duplicate.
 	resp := env.postCarrdUpload(t, "over", "", map[string][]byte{"a.png": []byte("\x89PNG\r\n\x1a\nsecond-longer")})
 	data := decodeBody(t, resp)
 	uploaded, _ := data["uploaded"].([]any)
@@ -403,7 +403,7 @@ func TestCarrd_DeleteImage_InvalidName(t *testing.T) {
 	}
 	resp.Body.Close()
 
-	// A valid name that doesn't exist → 404.
+	// A valid name that doesn't exist -> 404.
 	resp = env.del(t, "/api/carrd/images?folder=names&name=missing.png")
 	if resp.StatusCode != http.StatusNotFound {
 		t.Errorf("status = %d; want 404", resp.StatusCode)
@@ -451,7 +451,7 @@ func TestCarrd_SubDir_CreateUploadListDelete(t *testing.T) {
 		t.Fatalf("nested upload status = %d; want 200", resp.StatusCode)
 	}
 
-	// The image is listed at the nested path…
+	// The image is listed at the nested path...
 	resp = env.get(t, "/api/carrd/images?folder=client&path=spring-sale/banners")
 	data = decodeBody(t, resp)
 	images, _ := data["images"].([]any)
@@ -459,7 +459,7 @@ func TestCarrd_SubDir_CreateUploadListDelete(t *testing.T) {
 		t.Fatalf("nested images = %v; want [top.png]", images)
 	}
 
-	// …and the project's recursive stats reflect it: 1 file and the two nested
+	// ...and the project's recursive stats reflect it: 1 file and the two nested
 	// sub-folders (spring-sale and its banners child).
 	resp = env.get(t, "/api/carrd/projects")
 	data = decodeBody(t, resp)
@@ -560,7 +560,7 @@ func TestCarrd_Path_TraversalRejected(t *testing.T) {
 	resp.Body.Close()
 }
 
-// postCarrdUpload posts a multipart upload of name→content files to a path
+// postCarrdUpload posts a multipart upload of name->content files to a path
 // within a project folder via /api/carrd/upload (path "" = project root).
 func (e *testEnv) postCarrdUpload(t *testing.T, folder, path string, files map[string][]byte) *http.Response {
 	t.Helper()

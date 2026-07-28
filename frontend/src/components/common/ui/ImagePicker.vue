@@ -1,7 +1,7 @@
 <script setup lang="ts">
 /**
- * Image picker — a preview (or empty placeholder), a Remove button, and a
- * browser over the central image library (System → Images): pick any category,
+ * Image picker - a preview (or empty placeholder), a Remove button, and a
+ * browser over the central image library (System -> Images): pick any category,
  * then click an image in it. Every category is available to every picker, and
  * images are listed alphabetically by file name.
  *
@@ -9,10 +9,10 @@
  * category select (and can drop files straight onto the thumbnail grid), so a
  * missing image can be added without leaving the form. Uploads land in the
  * category currently being browsed. Category management still lives on the
- * System → Images page.
+ * System -> Images page.
  *
  * `v-model` is the selected image reference ('' = none). `valueKey` picks the
- * stored form: 'path' (root-relative, the default) or 'url' (absolute —
+ * stored form: 'path' (root-relative, the default) or 'url' (absolute -
  * announcement Discord embeds need absolute URLs). Previews resolve through
  * `assetUrl`, which leaves absolute URLs untouched and prefixes relative paths
  * with "/".
@@ -56,7 +56,7 @@ const entries = computed(() => {
   const filtered = exts
     ? list.filter((img) => exts.some((ext) => img.name.toLowerCase().endsWith(ext)))
     : list
-  // Copy before sorting — the store's array must not be reordered in place.
+  // Copy before sorting - the store's array must not be reordered in place.
   return [...filtered].sort((a, b) => byName.compare(a.name, b.name))
 })
 
@@ -69,7 +69,7 @@ function onDirChange(e: Event): void {
   browseDir((e.target as HTMLSelectElement).value)
 }
 
-// ── Uploading ───────────────────────────────────────────────────────────────
+// -- Uploading ---------------------------------------------------------------
 // Only `system-images` holders may upload; every other editor sees the picker
 // exactly as before (the backend enforces the same permission on the endpoint).
 const canUpload = computed(() => auth.hasPermission('system-images'))
@@ -78,7 +78,7 @@ const fileInput = ref<HTMLInputElement | null>(null)
 const dragOver = ref(false)
 /**
  * True only while THIS picker's upload runs. The store's `uploading` flag is
- * global, and a form can host several pickers — keying the button off a local
+ * global, and a form can host several pickers - keying the button off a local
  * flag keeps the progress in the one the user actually clicked.
  */
 const busy = ref(false)
@@ -86,12 +86,12 @@ const busy = ref(false)
 /** Narrow the file dialog to the picker's extensions when it has any. */
 const accept = computed(() => props.extensions?.join(',') ?? '.jpg,.jpeg,.png,.webp,.gif,.svg')
 
-/** Compact progress text — this sits inside a small button, so keep it short. */
+/** Compact progress text - this sits inside a small button, so keep it short. */
 const uploadLabel = computed(() => {
   const p = images.uploadProgress
-  if (p < 0) return 'Uploading…'
+  if (p < 0) return 'Uploading...'
   if (p < 100) return `${p}%`
-  return 'Saving…'
+  return 'Saving...'
 })
 
 function pickFiles(): void {
@@ -125,7 +125,7 @@ function onDrop(e: DragEvent): void {
 }
 
 // Follow external model changes (e.g. the form loads another record) into the
-// new value's category — but never interrupt the user's own browsing.
+// new value's category - but never interrupt the user's own browsing.
 watch(model, (value) => {
   const dir = dirFromValue(value)
   if (dir && dir !== selectedDir.value && images.categories.some((c) => c.dir === dir)) {
@@ -152,8 +152,8 @@ onMounted(async () => {
     </div>
     <div class="image-field-reuse">
       <label class="field-label">Select an uploaded image</label>
-      <p v-if="!images.sortedCategories.length" class="text-dim text-sm">
-        No image categories yet — create one on the System → Images page.
+      <p v-if="!images.sortedCategories.length" class="text-muted text-sm">
+        No image categories yet - create one on the System -> Images page.
       </p>
       <template v-else>
         <div class="image-picker-bar">
@@ -202,7 +202,7 @@ onMounted(async () => {
               :key="img.name"
               type="button"
               class="img-thumb"
-              :class="{ active: model === img[valueKey] }"
+              :class="{ 'is-active': model === img[valueKey] }"
               :title="img.name"
               aria-label="Use this image"
               @click="model = img[valueKey]"
@@ -210,8 +210,8 @@ onMounted(async () => {
               <img :src="assetUrl(img.path)" alt="" />
             </button>
           </div>
-          <p v-else-if="images.loadingImages" class="text-dim text-sm">Loading images…</p>
-          <p v-else class="text-dim text-sm">
+          <p v-else-if="images.loadingImages" class="text-muted text-sm">Loading images...</p>
+          <p v-else class="text-muted text-sm">
             No images in this category yet.<span v-if="canUpload"> Upload or drop one here.</span>
           </p>
         </div>
@@ -232,7 +232,7 @@ onMounted(async () => {
   width: 150px;
   height: 85px;
   object-fit: cover;
-  border-radius: 6px;
+  border-radius: var(--radius-media);
   margin-bottom: 8px;
 }
 .image-picker-bar {
@@ -253,7 +253,7 @@ onMounted(async () => {
 /* The thumbnail grid doubles as the drop target, so drag-to-upload costs no
    extra vertical space. The outline only appears mid-drag. */
 .image-picker-drop {
-  border-radius: 6px;
+  border-radius: var(--radius-media);
   outline: 2px dashed transparent;
   outline-offset: 3px;
   transition: outline-color 0.15s ease;

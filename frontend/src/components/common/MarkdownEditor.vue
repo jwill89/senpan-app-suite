@@ -2,7 +2,7 @@
 /**
  * WYSIWYG markdown editor (Milkdown "Crepe") exposed as a v-model component.
  *
- * The bound value is **markdown** — that's what we store and what Discord
+ * The bound value is **markdown** - that's what we store and what Discord
  * renders natively when a reading list is published. So the editor is limited
  * to a Discord-safe subset: inline formatting + headings, quotes, lists,
  * dividers and links. Block types Discord can't render (tables, images, LaTeX,
@@ -15,11 +15,11 @@
  *
  * Built via Crepe's tree-shakable `CrepeBuilder` rather than the all-in-one
  * `Crepe` class: we import only the features we use, so the code-mirror
- * (≈1.2 MB of language parsers) and LaTeX/KaTeX features are dropped from the
+ * (~1.2 MB of language parsers) and LaTeX/KaTeX features are dropped from the
  * bundle entirely. The base commonmark/gfm editing comes from the builder.
  *
  * The library + its CSS are dynamically imported on mount so this (still
- * sizeable) editor stays out of the initial load — only fetched when an admin
+ * sizeable) editor stays out of the initial load - only fetched when an admin
  * opens a view that uses it. Colors are mapped to the app theme variables so
  * the editor follows the active theme (including custom themes).
  */
@@ -45,7 +45,7 @@ let disposed = false
 let ready = false
 
 // Read `disposed` through a call so control-flow analysis doesn't treat it as
-// still-false after the awaits below — it can flip to true if the component
+// still-false after the awaits below - it can flip to true if the component
 // unmounts while the editor is loading.
 const isDisposed = (): boolean => disposed
 
@@ -136,7 +136,7 @@ watch(
  * Map Crepe's design tokens onto the app theme variables so the editor follows
  * the active theme (including custom themes). The classic theme defines these
  * variables ON `.milkdown` itself, so the overrides must live on `.milkdown`
- * too — a rule on the parent `.md-editor` gets shadowed by the child's own
+ * too - a rule on the parent `.md-editor` gets shadowed by the child's own
  * definitions, leaving the content text at the theme's dark default instead of
  * --text. Widgets inside `.milkdown` (toolbar, slash menu) inherit these.
  */
@@ -159,7 +159,7 @@ watch(
   --crepe-color-secondary: var(--panel-raised-bg);
   --crepe-color-on-secondary: var(--text);
   /* Crepe uses --outline as a FOREGROUND color for toolbar/handle icons and
-     dividers, so it must be a readable text tone — not a background color, or
+     dividers, so it must be a readable text tone - not a background color, or
      the icons are invisible (and vanish entirely when hover swaps the bg). */
   --crepe-color-outline: var(--text-muted);
   --crepe-color-hover: color-mix(in srgb, var(--text) 8%, var(--panel-raised-bg));

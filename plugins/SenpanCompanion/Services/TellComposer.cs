@@ -7,15 +7,15 @@ namespace SenpanCompanion.Services;
 /// <summary>
 /// Turns a user-editable auto-tell template into the actual /tell message(s).
 ///
-/// Placeholders are expanded to their literal text FIRST, then the length is checked —
+/// Placeholders are expanded to their literal text FIRST, then the length is checked -
 /// so a link placeholder (which the plugin, not the game, expands) is measured at the
 /// full width of the URL it becomes. <c>&lt;t&gt;</c> is likewise expanded by the plugin to
 /// the recipient's character name: a raw <c>&lt;t&gt;</c> sent through the chat command would
 /// be delivered as the literal text, not a name, so the plugin must substitute it.
 ///
 /// If the expanded message is longer than one in-game chat message allows, it is split
-/// into multiple tells at the best break point — the latest sentence end within budget,
-/// else the latest word boundary, else a hard cut — so nothing is dropped.
+/// into multiple tells at the best break point - the latest sentence end within budget,
+/// else the latest word boundary, else a hard cut - so nothing is dropped.
 ///
 /// Pure (System-only, no Dalamud) so the splitting logic is easy to reason about and
 /// exercise in isolation.
@@ -43,10 +43,10 @@ public static class TellComposer
     };
 
     /// <summary>
-    /// Expands <paramref name="template"/> with <paramref name="values"/> (token → text),
+    /// Expands <paramref name="template"/> with <paramref name="values"/> (token -> text),
     /// blanks any unsupplied recognized token, flattens to a single line, and splits the
     /// result into tell-sized parts. Always returns at least one entry (an empty string
-    /// for an empty template — callers skip empty sends).
+    /// for an empty template - callers skip empty sends).
     /// </summary>
     public static List<string> Compose(string template, IReadOnlyDictionary<string, string> values)
         => Split(Expand(template, values));
@@ -57,7 +57,7 @@ public static class TellComposer
 
     /// <summary>
     /// Splits arbitrary text into chat-sized parts using the same collapse + break-point
-    /// logic as <see cref="Compose"/>, but WITHOUT placeholder expansion — for the Timed
+    /// logic as <see cref="Compose"/>, but WITHOUT placeholder expansion - for the Timed
     /// Text Macros, whose text is sent verbatim over say/yell/shout (a literal
     /// <c>&lt;t&gt;</c> in the text must survive, not be blanked).
     /// </summary>
@@ -104,8 +104,8 @@ public static class TellComposer
     {
         var parts = new List<string>();
         var remaining = message;
-        // Guard against a pathological non-advancing cut (shouldn't happen — FindCut
-        // returns >= 1 — but keep the loop provably terminating).
+        // Guard against a pathological non-advancing cut (shouldn't happen - FindCut
+        // returns >= 1 - but keep the loop provably terminating).
         while (Utf8Len(remaining) > MaxBytes)
         {
             var cut = FindCut(remaining);

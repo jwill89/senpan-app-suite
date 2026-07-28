@@ -159,7 +159,7 @@ func decodeBody(t *testing.T, resp *http.Response) map[string]any {
 	return result
 }
 
-// ── CSRF ────────────────────────────────────────────────────────────────────
+// -- CSRF --------------------------------------------------------------------
 
 // TestCSRF_CrossOriginMutationBlocked verifies the defense-in-depth Origin check:
 // a state-changing request carrying the session cookie but a cross-origin Origin
@@ -198,14 +198,14 @@ func TestCSRF_CrossOriginMutationBlocked(t *testing.T) {
 		t.Errorf("same-origin POST was blocked (403); want it allowed through")
 	}
 
-	resp = post("") // no Origin header — SameSite cookie stays the primary defense
+	resp = post("") // no Origin header - SameSite cookie stays the primary defense
 	resp.Body.Close()
 	if resp.StatusCode == http.StatusForbidden {
 		t.Errorf("Origin-less POST was blocked (403); want it allowed through")
 	}
 }
 
-// ── CORS ────────────────────────────────────────────────────────────────────
+// -- CORS --------------------------------------------------------------------
 
 // TestCORS_OptionsPreflight verifies OPTIONS is short-circuited with 204 and,
 // under the default (empty) allowlist, carries no CORS headers.
@@ -230,7 +230,7 @@ func TestCORS_OptionsPreflight(t *testing.T) {
 
 // TestCORS_UnlistedOriginGetsNoHeaders locks in the secure default: an origin
 // not on the allowlist gets no CORS headers, so no arbitrary site can read
-// credentialed responses. (The allowlist is normally empty — same-origin app.)
+// credentialed responses. (The allowlist is normally empty - same-origin app.)
 func TestCORS_UnlistedOriginGetsNoHeaders(t *testing.T) {
 	env := newTestEnv(t)
 
@@ -277,7 +277,7 @@ func TestCORS_AllowlistedOriginReflected(t *testing.T) {
 	}
 }
 
-// ── Auth ────────────────────────────────────────────────────────────────────
+// -- Auth --------------------------------------------------------------------
 
 func TestAuth_CheckNotAuthenticated(t *testing.T) {
 	env := newTestEnv(t)
@@ -331,7 +331,7 @@ func TestAuth_Logout(t *testing.T) {
 	}
 }
 
-// ── Board ───────────────────────────────────────────────────────────────────
+// -- Board -------------------------------------------------------------------
 
 func TestBoard_MissingID(t *testing.T) {
 	env := newTestEnv(t)
@@ -433,7 +433,7 @@ func TestBoard_CaseInsensitive(t *testing.T) {
 	resp.Body.Close()
 }
 
-// ── Cards (admin-only, hybrid REST) ─────────────────────────────────────────
+// -- Cards (admin-only, hybrid REST) -----------------------------------------
 
 func TestCards_RequiresAuth(t *testing.T) {
 	env := newTestEnv(t)
@@ -535,7 +535,7 @@ func TestCards_Delete(t *testing.T) {
 	cards := data["cards"].([]any)
 	cardID := cards[0].(map[string]any)["id"].(string)
 
-	// Delete it (DELETE → 204)
+	// Delete it (DELETE -> 204)
 	resp = env.del(t, "/api/cards/"+cardID)
 	if resp.StatusCode != http.StatusNoContent {
 		t.Errorf("delete status = %d; want 204", resp.StatusCode)
@@ -626,7 +626,7 @@ func TestCards_GenerateClampedCount(t *testing.T) {
 	}
 }
 
-// ── Patterns (admin-only) ──────────────────────────────────────────────────
+// -- Patterns (admin-only) --------------------------------------------------
 
 func TestPatterns_RequiresAuth(t *testing.T) {
 	env := newTestEnv(t)
@@ -649,7 +649,7 @@ func testPattern5x5() [][]bool {
 	return grid
 }
 
-// testPattern5x5Alt returns a different 5×5 pattern (bottom row) to avoid
+// testPattern5x5Alt returns a different 5x5 pattern (bottom row) to avoid
 // duplicate detection when a test needs two distinct patterns.
 func testPattern5x5Alt() [][]bool {
 	grid := make([][]bool, 5)
@@ -730,7 +730,7 @@ func TestPatterns_Create_Duplicate(t *testing.T) {
 
 	createPattern(t, env, "Top Row", testPattern5x5())
 
-	// Same grid → 409 duplicate.
+	// Same grid -> 409 duplicate.
 	resp := env.postJSON(t, "/api/patterns", map[string]any{
 		"name": "Also Top Row", "pattern_data": testPattern5x5(),
 	})
@@ -812,7 +812,7 @@ func TestPatterns_PatchEmpty(t *testing.T) {
 	resp.Body.Close()
 }
 
-// TestPatterns_Delete covers DELETE /api/patterns/{id} → 204.
+// TestPatterns_Delete covers DELETE /api/patterns/{id} -> 204.
 func TestPatterns_Delete(t *testing.T) {
 	env := newTestEnv(t)
 	env.loginAdmin(t)
@@ -879,7 +879,7 @@ func TestPatterns_BulkReorder(t *testing.T) {
 	}
 }
 
-// ── Game ────────────────────────────────────────────────────────────────────
+// -- Game --------------------------------------------------------------------
 
 func TestGame_State_NoActive(t *testing.T) {
 	env := newTestEnv(t)
@@ -960,7 +960,7 @@ func TestGame_FullLifecycle(t *testing.T) {
 	}
 	num, _ := drawn["number"].(float64)
 	if num < 1 || num > 75 {
-		t.Errorf("drawn number = %v; want 1–75", num)
+		t.Errorf("drawn number = %v; want 1-75", num)
 	}
 	letter, _ := drawn["letter"].(string)
 	if letter == "" {
@@ -978,7 +978,7 @@ func TestGame_FullLifecycle(t *testing.T) {
 		t.Errorf("expected ended=true, got %v", data["ended"])
 	}
 
-	// End again — should return false
+	// End again - should return false
 	resp = env.postJSON(t, "/api/game/end", map[string]any{})
 	data = decodeBody(t, resp)
 	if data["ended"] != false {
@@ -1094,7 +1094,7 @@ func TestGame_BoardWithActiveGame(t *testing.T) {
 	}
 }
 
-// ── JSON error format ───────────────────────────────────────────────────────
+// -- JSON error format -------------------------------------------------------
 
 func TestErrorFormat(t *testing.T) {
 	env := newTestEnv(t)
@@ -1130,7 +1130,7 @@ func TestCacheControlNoStore(t *testing.T) {
 	}
 }
 
-// ── Raffles ─────────────────────────────────────────────────────────────────
+// -- Raffles -----------------------------------------------------------------
 
 func TestRaffles_RequiresAuth(t *testing.T) {
 	env := newTestEnv(t)
@@ -1331,7 +1331,7 @@ func TestRaffles_EnterAddsToExisting(t *testing.T) {
 		"character_name": "Player", "world": "World", "num_entries": 3,
 	}).Body.Close()
 
-	// Second entry for same player — should add
+	// Second entry for same player - should add
 	resp = env.postJSON(t, fmt.Sprintf("/api/raffles/%d/enter", id), map[string]any{
 		"character_name": "Player", "world": "World", "num_entries": 2,
 	})
@@ -1706,7 +1706,7 @@ func TestRaffles_AddEntryIgnoresAvailabilityWindow(t *testing.T) {
 	})
 	raffleID := int(decodeBody(t, resp)["raffle"].(map[string]any)["id"].(float64))
 
-	// Public sign-up is rejected (past the window)…
+	// Public sign-up is rejected (past the window)...
 	resp = env.postJSON(t, fmt.Sprintf("/api/raffles/%d/enter", raffleID), map[string]any{
 		"character_name": "P", "world": "W", "num_entries": 1,
 	})
@@ -1715,7 +1715,7 @@ func TestRaffles_AddEntryIgnoresAvailabilityWindow(t *testing.T) {
 	}
 	resp.Body.Close()
 
-	// …but the admin can still add manually.
+	// ...but the admin can still add manually.
 	resp = env.postJSON(t, fmt.Sprintf("/api/raffles/%d/entries", raffleID), map[string]any{
 		"action": "add_entry", "character_name": "P", "world": "W", "num_entries": 1,
 	})
@@ -1725,7 +1725,7 @@ func TestRaffles_AddEntryIgnoresAvailabilityWindow(t *testing.T) {
 	resp.Body.Close()
 }
 
-// ── Styles ──────────────────────────────────────────────────────────────────
+// -- Styles ------------------------------------------------------------------
 
 func TestStyles_RequiresAuth(t *testing.T) {
 	env := newTestEnv(t)
@@ -1747,7 +1747,7 @@ func TestStyles_ActiveNoStyle(t *testing.T) {
 	}
 }
 
-// ── Winners Log ─────────────────────────────────────────────────────────────
+// -- Winners Log -------------------------------------------------------------
 
 func TestWinnersLog_RequiresAuth(t *testing.T) {
 	env := newTestEnv(t)
@@ -1774,7 +1774,7 @@ func TestWinnersLog_Empty(t *testing.T) {
 	}
 }
 
-// ── Settings ────────────────────────────────────────────────────────────────
+// -- Settings ----------------------------------------------------------------
 
 func TestSettings_GetDefaults(t *testing.T) {
 	env := newTestEnv(t)
@@ -1856,7 +1856,7 @@ func TestSettings_InvalidKey(t *testing.T) {
 
 // TestSettings_GoogleFontsKeyNotValidatedAsWebhook guards that a non-empty
 // google_fonts_api_key (a secret setting, but NOT a Discord webhook) saves
-// successfully — the Discord-URL validation must apply only to webhook keys.
+// successfully - the Discord-URL validation must apply only to webhook keys.
 func TestSettings_GoogleFontsKeyNotValidatedAsWebhook(t *testing.T) {
 	env := newTestEnv(t)
 	env.loginAdmin(t)

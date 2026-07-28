@@ -15,15 +15,15 @@ export interface DataColumn {
 
 <script setup lang="ts" generic="T">
 /**
- * Generic admin data table — the single table style behind the winners log,
+ * Generic admin data table - the single table style behind the winners log,
  * raffle entries, the server-log viewer, and any future tabular admin view
  * (replaces the former `.entries-table` and `.winners-log-table`).
  *
  * Define `columns` (key + label, optional `sortable`, `align`, `width`) and pass
  * `rows`. Each cell defaults to `row[col.key]` but can be overridden per column
  * via a `#cell-<key>` slot that receives `{ row, expanded }`. Sortable headers
- * show a ▲/▼ arrow for the active `sortKey`/`sortDir` and emit `sort` with the
- * column key — the parent owns sort + data state, so sorting can happen
+ * show a chevron icon for the active `sortKey`/`sortDir` and emit `sort` with the
+ * column key - the parent owns sort + data state, so sorting can happen
  * server-side.
  *
  * **Expandable rows (opt-in):** provide a `#detail` slot and each row becomes
@@ -39,11 +39,11 @@ import { computed, ref, useSlots } from 'vue'
 const props = defineProps<{
   columns: DataColumn[]
   rows: T[]
-  /** Stable per-row key — a field name or a function deriving one. */
+  /** Stable per-row key - a field name or a function deriving one. */
   rowKey: string | ((row: T) => string | number)
   sortKey?: string
   sortDir?: 'asc' | 'desc'
-  /** Optional per-row class hook — a static class or a function of the row
+  /** Optional per-row class hook - a static class or a function of the row
    *  (e.g. to highlight a selected row). Applied to each `<tr>`. */
   rowClass?: string | ((row: T) => string | Record<string, boolean>)
 }>()
@@ -65,7 +65,7 @@ function isExpanded(row: T): boolean {
   return expandedKeys.value.has(keyFor(row))
 }
 
-/** Toggle expand on row click — but let clicks on interactive cell controls
+/** Toggle expand on row click - but let clicks on interactive cell controls
  *  (buttons, links, form fields) through without also toggling the row. */
 function onRowClick(row: T, e: MouseEvent): void {
   if (!hasDetail.value) return
@@ -74,7 +74,7 @@ function onRowClick(row: T, e: MouseEvent): void {
   toggleExpand(row)
 }
 
-/** Enter/Space toggle the row — only when the row itself (not an inner control)
+/** Enter/Space toggle the row - only when the row itself (not an inner control)
  *  holds focus, so activating a cell button doesn't also expand the row. */
 function onRowKeydown(row: T, e: KeyboardEvent): void {
   if (!hasDetail.value || e.target !== e.currentTarget) return
@@ -96,10 +96,12 @@ function cellValue(row: T, key: string): unknown {
   return (row as Record<string, unknown>)[key]
 }
 
-/** Sort arrow for the active column, empty otherwise. */
-function arrow(col: DataColumn): string {
-  if (!col.sortable || props.sortKey !== col.key) return ''
-  return props.sortDir === 'asc' ? ' ▲' : ' ▼'
+/** Sort-direction icon for the active column; null when this column isn't sorted.
+ *  A FontAwesome chevron rather than a text glyph, so it renders in the icon font
+ *  everywhere instead of depending on the platform having the arrow characters. */
+function sortIcon(col: DataColumn): ['fas', string] | null {
+  if (!col.sortable || props.sortKey !== col.key) return null
+  return ['fas', props.sortDir === 'asc' ? 'chevron-up' : 'chevron-down']
 }
 
 /** Resolve the optional per-row class (static string or row-derived). */
@@ -120,7 +122,13 @@ function rowClassFor(row: T): string | Record<string, boolean> | undefined {
             :style="col.width ? { width: col.width } : undefined"
             @click="col.sortable && $emit('sort', col.key)"
           >
-            {{ col.label }}{{ arrow(col) }}
+            {{ col.label }}
+            <font-awesome-icon
+              v-if="sortIcon(col)"
+              :icon="sortIcon(col)!"
+              class="dt-sort-icon"
+              aria-hidden="true"
+            />
           </th>
         </tr>
       </thead>
@@ -151,6 +159,13 @@ function rowClassFor(row: T): string | Record<string, boolean> | undefined {
 </template>
 
 <style scoped>
+/* Sort chevron: smaller than the label and dimmed, so it marks the active column
+   without competing with the header text. */
+.dt-sort-icon {
+  margin-left: 0.35em;
+  font-size: 0.72em;
+  color: var(--highlight);
+}
 .dt-expandable {
   cursor: pointer;
 }

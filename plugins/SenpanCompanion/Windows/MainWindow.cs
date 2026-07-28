@@ -14,11 +14,11 @@ namespace SenpanCompanion.Windows;
 
 /// <summary>
 /// Main window. Before a token is set it shows the setup panel inline; afterwards a
-/// live-status badge above a collapsible left sidebar (Bingo · Festival sections,
+/// live-status badge above a collapsible left sidebar (Bingo - Festival sections,
 /// plus Settings/About) whose selection drives the right-hand content pane. Sections
 /// and page links are hidden for permissions the account lacks, mirroring the web
 /// sidebar. Each page lazily loads the first time it's viewed (no manual refresh),
-/// and the Bingo pages share one live card cache. Settings live on their own page —
+/// and the Bingo pages share one live card cache. Settings live on their own page -
 /// there is no separate window.
 /// </summary>
 public sealed class MainWindow : Window, IDisposable
@@ -40,13 +40,13 @@ public sealed class MainWindow : Window, IDisposable
     private readonly TimedMacrosTab timedMacros;
 
     // Font handle pushed around the whole window (see Draw) so glyphs the game's Axis
-    // font lacks — accented Latin like ō/ā/ē — actually render. Built in the constructor
+    // font lacks - accented Latin like ō/ā/ē - actually render. Built in the constructor
     // from the unchanged default font plus a Noto Sans CJK merge for Latin Extended only.
     private readonly IFontHandle fontHandle;
 
     // Latin Extended ranges the game's Axis font doesn't cover, supplied by the Noto
     // merge so macron romanizations render (ō = U+014D lives in Latin Extended-A). Pairs
-    // of [first, last] codepoints terminated by 0 — the ImGui glyph-range format.
+    // of [first, last] codepoints terminated by 0 - the ImGui glyph-range format.
     private static readonly ushort[] LatinExtendedGlyphRanges =
     {
         0x0100, 0x017F, // Latin Extended-A  (ā ē ī ō ū and the full macron set)
@@ -104,7 +104,7 @@ public sealed class MainWindow : Window, IDisposable
         // Keep Dalamud's default font exactly as-is (game font + FontAwesome + language
         // glyphs), then merge Noto Sans CJK over it for the Latin Extended ranges the
         // game's Axis font is missing. ImGui keeps the first font's glyph on any overlap,
-        // so this only fills the gaps (ō, ā, …) and changes nothing that already worked.
+        // so this only fills the gaps (ō, ā, ...) and changes nothing that already worked.
         this.fontHandle = Plugin.PluginInterface.UiBuilder.FontAtlas.NewDelegateFontHandle(
             e => e.OnPreBuild(tk =>
             {
@@ -130,20 +130,20 @@ public sealed class MainWindow : Window, IDisposable
 
     public override void Draw()
     {
-        // Render the entire window with the extended font so accented glyphs (ō, ā, …)
+        // Render the entire window with the extended font so accented glyphs (ō, ā, ...)
         // that the game's Axis font lacks are shown instead of dropped. Safe before the
-        // atlas is ready — Push keeps the current font until the build finishes.
+        // atlas is ready - Push keeps the current font until the build finishes.
         using var fontScope = this.fontHandle.Push();
 
         // The Rolls tool (plus Settings/About) are account-free, so the window always
-        // renders the sidebar + content layout — even before a token is set, where the
+        // renders the sidebar + content layout - even before a token is set, where the
         // suite sections stay hidden and setup lands on the Settings page.
         if (!string.IsNullOrWhiteSpace(this.config.GetToken()))
         {
             this.session.EnsureLoaded();
             // Once permissions are known, land on the first page the account can reach
             // (the default is Bingo Game; an account without it shouldn't stare at a
-            // blank panel). Runs once per session load — token changes re-arm it.
+            // blank panel). Runs once per session load - token changes re-arm it.
             if (this.session.Loaded && !this.navInitialized)
             {
                 this.navInitialized = true;
@@ -170,7 +170,10 @@ public sealed class MainWindow : Window, IDisposable
             this.landOnConnect = true;
             if (this.currentPage is not (Page.Rolls or Page.TimedMacros or Page.Settings or Page.About))
                 this.currentPage = Page.Settings;
-            ImGui.TextColored(new Vector4(0.85f, 0.55f, 0.2f, 1f), "○ Not connected");
+            var offlineColor = new Vector4(0.85f, 0.55f, 0.2f, 1f);
+            Ui.Icon(FontAwesomeIcon.CircleNotch, offlineColor);
+            ImGui.SameLine(0, ImGui.GetStyle().ItemInnerSpacing.X * 1.5f);
+            ImGui.TextColored(offlineColor, "Not connected");
             UiText.WrappedDisabled("Connect your account on the Settings page. The Rolls and Timed Text Macros tools work without an account.");
             ImGui.Separator();
         }
@@ -185,7 +188,7 @@ public sealed class MainWindow : Window, IDisposable
         // right. Child regions (not table cells) host the pages so their full-height
         // scrolling tables get a properly bounded region and behave exactly as they did
         // as top-level tabs. EndChild is always called regardless of BeginChild's
-        // return (ImGui requires it). Borderless — the ImGuiChildFlags border member's
+        // return (ImGui requires it). Borderless - the ImGuiChildFlags border member's
         // name varies across ImGui versions, and the layout reads clearly without it.
         ImGui.BeginChild("##senpanNav", new Vector2(NavWidth, 0f));
         DrawSidebar();
@@ -196,7 +199,7 @@ public sealed class MainWindow : Window, IDisposable
         ImGui.EndChild();
     }
 
-    // ── Sidebar navigation ─────────────────────────────────────────────────────
+    // -- Sidebar navigation -----------------------------------------------------
 
     private void DrawSidebar()
     {
@@ -213,7 +216,7 @@ public sealed class MainWindow : Window, IDisposable
             NavItem("Winners", Page.BingoWinners, s.Has(Perms.BingoWinnersLog));
         }
 
-        // Tea House section — mirrors the web's "Senpan Tea House" group. Only the
+        // Tea House section - mirrors the web's "Senpan Tea House" group. Only the
         // Tea Rooms page is exposed in-game; the rest of that group is website-only.
         if (s.Has(Perms.TeahouseTeaRooms) && ImGui.CollapsingHeader("Tea House###secTeahouse", ImGuiTreeNodeFlags.DefaultOpen))
         {
@@ -373,9 +376,11 @@ public sealed class MainWindow : Window, IDisposable
         var color = connected
             ? new Vector4(0.3f, 0.85f, 0.35f, 1f)
             : new Vector4(0.85f, 0.55f, 0.2f, 1f);
-        ImGui.TextColored(color, connected ? "● Live" : "○ Offline");
+        Ui.Icon(connected ? FontAwesomeIcon.Circle : FontAwesomeIcon.CircleNotch, color);
+        ImGui.SameLine(0, ImGui.GetStyle().ItemInnerSpacing.X * 1.5f);
+        ImGui.TextColored(color, connected ? "Live" : "Offline");
         ImGui.SameLine();
-        ImGui.TextDisabled(connected ? "receiving live updates" : "connecting…");
+        ImGui.TextDisabled(connected ? "receiving live updates" : "connecting...");
         ImGui.Separator();
     }
 
@@ -385,9 +390,9 @@ public sealed class MainWindow : Window, IDisposable
         {
             if (this.session.LoadFailed)
                 UiText.WrappedColored(new Vector4(0.9f, 0.5f, 0.4f, 1f),
-                    "Couldn't verify your account — check your token on the Settings tab.");
+                    "Couldn't verify your account - check your token on the Settings tab.");
             else
-                ImGui.TextDisabled("Verifying your account…");
+                ImGui.TextDisabled("Verifying your account...");
             return;
         }
 
@@ -396,10 +401,10 @@ public sealed class MainWindow : Window, IDisposable
             || this.session.Has(Perms.TeahouseRaffles)
             || this.session.Has(Perms.FestivalGarapon) || this.session.Has(Perms.FestivalStampRally);
         if (!anyPanel)
-            UiText.WrappedDisabled("Your account has no Senpan panel permissions — ask an admin to grant access.");
+            UiText.WrappedDisabled("Your account has no Senpan panel permissions - ask an admin to grant access.");
     }
 
-    // ── About ─────────────────────────────────────────────────────────────────
+    // -- About -----------------------------------------------------------------
 
     private static readonly Vector4 LinkColor = new(0.40f, 0.70f, 1f, 1f);
 
@@ -449,7 +454,7 @@ public sealed class MainWindow : Window, IDisposable
             Util.OpenLink(url);
     }
 
-    // ── Settings ──────────────────────────────────────────────────────────────
+    // -- Settings --------------------------------------------------------------
 
     private void SyncSettingsFields()
     {
@@ -459,12 +464,12 @@ public sealed class MainWindow : Window, IDisposable
 
     private static readonly Vector4 WarnColor = new(0.9f, 0.65f, 0.2f, 1f);
 
-    // A representative recipient name for the settings-time split estimate — the real
+    // A representative recipient name for the settings-time split estimate - the real
     // name is only known when a card is issued. Uses the maximum FFXIV name width
     // (forename 15 + space + surname 15 = 31) so the estimate is a conservative upper
     // bound: it errs toward showing the split warning rather than silently splitting a
     // <t>-containing message at send time. (Link widths in the estimate are already
-    // exact — real server URL + real 32/6-char token widths.)
+    // exact - real server URL + real 32/6-char token widths.)
     private static readonly string ReprName = new('W', 31);
 
     // Auto-tell checkbox + (when enabled) a template editor, a placeholder hint, and a
@@ -529,7 +534,7 @@ public sealed class MainWindow : Window, IDisposable
     {
         Ui.Section(FontAwesomeIcon.Plug, "Connection");
         ImGui.TextWrapped(
-            "Generate a personal access token on the website (User Options → Access " +
+            "Generate a personal access token on the website (User Options -> Access " +
             "Token) and paste it here. The token signs in as your account, so the " +
             "plugin can only do what your account is allowed to.");
         ImGui.Spacing();
@@ -553,7 +558,7 @@ public sealed class MainWindow : Window, IDisposable
             () => this.config.TellCardUrlOnCreate, v => this.config.TellCardUrlOnCreate = v,
             () => this.config.BingoCardTellTemplate, v => this.config.BingoCardTellTemplate = v,
             "##bingotelltmpl",
-            "Placeholders: <t> = player name  ·  <bingocard-link> = the card link.",
+            "Placeholders: <t> = player name  -  <bingocard-link> = the card link.",
             t => TellComposer.PartCount(t, BingoReprValues()));
 
         DrawTellSetting(
@@ -561,7 +566,7 @@ public sealed class MainWindow : Window, IDisposable
             () => this.config.TellGaraponUrlOnCreate, v => this.config.TellGaraponUrlOnCreate = v,
             () => this.config.GaraponTellTemplate, v => this.config.GaraponTellTemplate = v,
             "##garapontelltmpl",
-            "Placeholders: <t> = player name  ·  <garapon-link> = the drawing link.",
+            "Placeholders: <t> = player name  -  <garapon-link> = the drawing link.",
             t => TellComposer.PartCount(t, GaraponReprValues()));
 
         DrawTellSetting(
@@ -569,10 +574,10 @@ public sealed class MainWindow : Window, IDisposable
             () => this.config.TellStampCardUrlOnCreate, v => this.config.TellStampCardUrlOnCreate = v,
             () => this.config.StampCardTellTemplate, v => this.config.StampCardTellTemplate = v,
             "##stamptelltmpl",
-            "Placeholders: <t> = player name  ·  <stamprally-link> = the card link.",
+            "Placeholders: <t> = player name  -  <stamprally-link> = the card link.",
             t => TellComposer.PartCount(t, StampReprValues()));
 
-        UiText.WrappedDisabled("Each sends an outgoing chat message on your behalf — a long message splits into multiple tells. See the README's ToS note.");
+        UiText.WrappedDisabled("Each sends an outgoing chat message on your behalf - a long message splits into multiple tells. See the README's ToS note.");
 
         ImGui.Spacing();
         if (Ui.PrimaryButton("Save"))
@@ -584,7 +589,7 @@ public sealed class MainWindow : Window, IDisposable
         {
             SaveSettings();
             TestSettings();
-            // The user explicitly asked to see the connection result — don't let the
+            // The user explicitly asked to see the connection result - don't let the
             // first-run land-on-connect jump yank them off Settings before they read it.
             this.landOnConnect = false;
         }
@@ -613,7 +618,7 @@ public sealed class MainWindow : Window, IDisposable
         this.raffle.MarkStale();
         this.garapon.MarkStale();
         this.stampRally.MarkStale();
-        // Re-arm the "jump to first accessible page" once permissions reload — a new
+        // Re-arm the "jump to first accessible page" once permissions reload - a new
         // token may grant or revoke access to the current page.
         this.navInitialized = false;
         this.settingsStatus = "Saved.";
@@ -622,7 +627,7 @@ public sealed class MainWindow : Window, IDisposable
     private void TestSettings()
     {
         this.settingsTesting = true;
-        this.settingsStatus = "Testing…";
+        this.settingsStatus = "Testing...";
         _ = Task.Run(async () =>
         {
             try
@@ -632,7 +637,7 @@ public sealed class MainWindow : Window, IDisposable
                 {
                     var who = res.User.IsAdmin
                         ? $"{res.User.Username} (admin)"
-                        : $"{res.User.Username} — permissions: {string.Join(", ", res.User.Permissions)}";
+                        : $"{res.User.Username} - permissions: {string.Join(", ", res.User.Permissions)}";
                     this.settingsStatus = $"Connected as {who}.";
                 }
                 else

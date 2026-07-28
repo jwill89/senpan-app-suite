@@ -31,8 +31,13 @@
     <!-- Fonts (header font loaded dynamically from settings) -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <!-- Body face. Static (not loadGoogleFont) because it applies to every page
+         of every theme and must not FOUT the whole app while settings load. 300
+         is the muted/secondary weight, 600/700 the emphasis weights. -->
+    <link rel="stylesheet"
+          href="https://fonts.googleapis.com/css2?family=Montserrat:ital,wght@0,300;0,400;0,600;0,700;1,400&display=swap">
 
-    <!-- Stylesheets — app.css is imported in src/main.ts so Vite content-hashes
+    <!-- Stylesheets - app.css is imported in src/main.ts so Vite content-hashes
          it (cache-busting); its <link> is injected into <head> at build time. -->
     <link rel="icon" type="image/x-icon" href="/images/favicon.png">
     <!-- iOS home-screen icon (Safari ignores the web manifest icons). -->

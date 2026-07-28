@@ -5,7 +5,7 @@ import type { Pattern, PatternCategory } from '@/types/api'
 // Capture the bulk-reorder calls so the category position math can be asserted.
 // listPatterns backs the loadPatterns() refresh that saveCategoryForm runs.
 // (Cross-category moves + drag-order persistence go through the bulk `/reorder`
-// endpoints — patterns.bulkReorder / patternCategories.bulkReorder.)
+// endpoints - patterns.bulkReorder / patternCategories.bulkReorder.)
 const { reorderCats, reorderPats, listPatterns } = vi.hoisted(() => ({
   reorderCats: vi.fn(async () => ({})),
   reorderPats: vi.fn(async () => ({})),
@@ -118,7 +118,7 @@ describe('category positioning (index math + persistence)', () => {
 
   it('moves a category to right after another', async () => {
     const s = usePatternsStore()
-    s.categoryForm = { id: 3, name: 'C', position: 'after:1' } // C after A → [A, C, B]
+    s.categoryForm = { id: 3, name: 'C', position: 'after:1' } // C after A -> [A, C, B]
     await s.saveCategoryForm()
     expect(reorderCats).toHaveBeenCalledWith([1, 3, 2])
   })
@@ -149,7 +149,7 @@ describe('applyGroupedOrder', () => {
     s.categories = [cat(1, 'Lines'), cat(2, 'Shapes')]
     s.editableGroups = [
       { category: cat(1, 'Lines'), patterns: [pat(11, 'Col', 1), pat(10, 'Row', 1)] },
-      { category: cat(2, 'Shapes'), patterns: [pat(12, 'Box', 1)] }, // moved from cat 1 → 2
+      { category: cat(2, 'Shapes'), patterns: [pat(12, 'Box', 1)] }, // moved from cat 1 -> 2
     ]
     await s.applyGroupedOrder()
     // Flattened order + reassigned category for the moved pattern.

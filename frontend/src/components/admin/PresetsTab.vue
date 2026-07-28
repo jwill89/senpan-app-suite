@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /**
- * Admin Game Presets tab — manage reusable game templates. Each preset bundles
+ * Admin Game Presets tab - manage reusable game templates. Each preset bundles
  * a set of win patterns with pre-written (markdown) game details so an admin can
  * start a recurring game in one click from the Game tab.
  */
@@ -37,7 +37,7 @@ function patternById(id: number) {
 
 <template>
   <div class="tab-body">
-    <!-- ── Editor sub-page (create / edit) ───────────────────────────────── -->
+    <!-- -- Editor sub-page (create / edit) --------------------------------- -->
     <div v-if="presets.editingPreset" class="admin-panel">
       <SubPageHeader
         :icon="['fad', 'ballot']"
@@ -55,7 +55,7 @@ function patternById(id: number) {
       </FormField>
 
       <!-- Pattern picker -->
-      <p v-if="patterns.patterns.length === 0" class="text-dim mb-12">
+      <p v-if="patterns.patterns.length === 0" class="text-muted mb-12">
         Create some win patterns first.
       </p>
       <FormField v-else label="Win Patterns">
@@ -65,22 +65,22 @@ function patternById(id: number) {
       <FormField>
         <template #label>
           Game Details
-          <span class="text-dim fw-normal text-xs"> (Markdown supported) </span>
+          <span class="text-muted fw-normal text-xs"> (Markdown supported) </span>
         </template>
         <MarkdownEditor
           v-model="presets.editingPreset.game_details"
           min-height="120px"
-          placeholder="Enter game details, rules, prizes, etc. Supports bold, italics, lists, and more…"
+          placeholder="Enter game details, rules, prizes, etc. Supports bold, italics, lists, and more..."
         />
       </FormField>
 
       <FormField label="Auto-Draw">
-        <label class="preset-auto-check">
+        <label class="checkbox-inline checkbox-inline--strong">
           <input v-model="presets.editingPreset.auto" type="checkbox" />
           <span>Start with auto-draw on</span>
         </label>
         <div v-if="presets.editingPreset.auto" class="preset-auto-interval">
-          <label class="text-dim text-sm" for="preset-auto-interval">Time Between Calls:</label>
+          <label class="text-muted text-sm" for="preset-auto-interval">Time Between Calls:</label>
           <select
             id="preset-auto-interval"
             v-model.number="presets.editingPreset.auto_interval"
@@ -95,7 +95,7 @@ function patternById(id: number) {
 
       <FormActions align="start">
         <button class="btn-confirm" :disabled="presets.savingPreset" @click="presets.savePreset()">
-          <LoadingSpinner v-if="presets.savingPreset" label="Saving…" />
+          <LoadingSpinner v-if="presets.savingPreset" label="Saving..." />
           <template v-else>
             <font-awesome-icon :icon="['fas', 'circle-check']" />
             {{ presets.editingPreset.id ? 'Save Changes' : 'Create Preset' }}
@@ -107,7 +107,7 @@ function patternById(id: number) {
       </FormActions>
     </div>
 
-    <!-- ── List ──────────────────────────────────────────────────────────── -->
+    <!-- -- List ------------------------------------------------------------ -->
     <ManagerView v-else title="Game Presets" :icon="['fad', 'ballot']">
       <template #actions>
         <button class="btn-confirm btn-sm" @click="presets.newPreset()">
@@ -115,12 +115,12 @@ function patternById(id: number) {
         </button>
       </template>
 
-      <p class="text-dim mb-12">
-        Save reusable game templates — a set of win patterns plus pre-written game details. Pick a
+      <p class="text-muted mb-12">
+        Save reusable game templates - a set of win patterns plus pre-written game details. Pick a
         preset on the Game tab to start a game with everything filled in.
       </p>
 
-      <LoadingSpinner v-if="presets.presetsLoading" label="Loading presets…" />
+      <LoadingSpinner v-if="presets.presetsLoading" label="Loading presets..." />
       <EmptyState v-else-if="presets.presets.length === 0" text="No presets yet." />
       <div v-else class="list-rows">
         <ListRow v-for="preset in presets.presets" :key="preset.id">
@@ -136,10 +136,10 @@ function patternById(id: number) {
               <span>{{ patternById(pid)?.name || 'Deleted pattern' }}</span>
             </div>
           </div>
-          <p class="text-dim text-xs mt-8">
+          <p class="text-muted text-xs mt-8">
             {{ preset.game_details ? 'Includes game details' : 'No game details' }}
             <template v-if="preset.auto">
-              · Auto-draw every {{ autoIntervalLabel(preset.auto_interval) }}</template
+              - Auto-draw every {{ autoIntervalLabel(preset.auto_interval) }}</template
             >
           </p>
           <template #actions>
@@ -165,17 +165,6 @@ function patternById(id: number) {
 </template>
 
 <style scoped>
-.preset-auto-check {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  font-weight: 600;
-  cursor: pointer;
-  user-select: none;
-}
-.preset-auto-check input {
-  cursor: pointer;
-}
 .preset-auto-interval {
   display: flex;
   align-items: center;

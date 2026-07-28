@@ -4,14 +4,14 @@
  *
  * The SVG is inlined (rather than referenced as a CSS `mask`/`background` URL)
  * so it is captured into the exported card image: html-to-image rasterizes the
- * board DOM through an <img>-loaded SVG, which cannot fetch external resources —
+ * board DOM through an <img>-loaded SVG, which cannot fetch external resources -
  * inline markup survives the capture, so the flourish shows up in the saved PNG.
  *
  * The active theme may override the artwork via its Board Flourish (an SVG in
  * images/flourishes). When set, its markup is fetched once (shared across the
  * four corners via a module cache) and inlined here; when unset, the built-in
  * default below is used. Source artwork is oriented for the TOP-LEFT corner; the
- * other three corners reuse this markup, mirrored with CSS transforms (app.css §6).
+ * other three corners reuse this markup, mirrored with CSS transforms (app.css section 6).
  */
 import { ref, watch } from 'vue'
 import { useAppStore } from '@/stores/app'

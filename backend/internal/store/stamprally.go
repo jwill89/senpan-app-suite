@@ -7,7 +7,7 @@ import (
 	"app-suite/internal/model"
 )
 
-// ── Stamp Rally ──────────────────────────────────────────────────────────────
+// -- Stamp Rally --------------------------------------------------------------
 //
 // A Stamp Rally (see model.StampRally) is an event owning stamps + prizes (each
 // with a placement on the card image), tokenized per-participant cards, and a
@@ -17,10 +17,10 @@ import (
 // availability checks in the server layer.
 
 // ErrStampAlreadyCollected is returned by CollectStamp when the (card, stamp) pair
-// already exists (the UNIQUE constraint) — a stamp can't be collected twice.
+// already exists (the UNIQUE constraint) - a stamp can't be collected twice.
 var ErrStampAlreadyCollected = errors.New("stamp already collected")
 
-// ── Events ───────────────────────────────────────────────────────────────────
+// -- Events -------------------------------------------------------------------
 
 // ListStampRallies returns every rally, newest first, each with its issued-card
 // and completed-card counts. Stamps/prizes are omitted (use GetStampRally).
@@ -79,7 +79,7 @@ func (s *Store) GetStampRally(id int64) (*model.StampRally, error) {
 }
 
 // listStampRallyStamps loads a rally's stamps in display order, joining the
-// affiliate name (empty when the stamp has no affiliate → the Senpan Tea House
+// affiliate name (empty when the stamp has no affiliate -> the Senpan Tea House
 // default, resolved for display on the frontend).
 func (s *Store) listStampRallyStamps(rallyID int64) ([]model.StampRallyStamp, error) {
 	rows, err := s.db.Query(`SELECT st.id, st.rally_id, st.affiliate_id, COALESCE(a.name, ''),
@@ -227,7 +227,7 @@ func (s *Store) UpdateStampRally(r *model.StampRally) error {
 		}
 	}
 
-	// Prizes have no per-user references → replace wholesale.
+	// Prizes have no per-user references -> replace wholesale.
 	if _, err := tx.Exec(`DELETE FROM stamp_rally_prizes WHERE rally_id = ?`, r.ID); err != nil {
 		return err
 	}
@@ -325,7 +325,7 @@ func (s *Store) SetStampPaused(rallyID, stampID int64, paused bool) (bool, error
 	return n > 0, nil
 }
 
-// ── Participant cards (tokenized) ────────────────────────────────────────────
+// -- Participant cards (tokenized) --------------------------------------------
 
 // IssueRallyCard creates a tokenized card for a named participant (fresh token) and
 // returns it.
@@ -446,7 +446,7 @@ func (s *Store) SetRallyCardCompleted(cardID int64, completedAt string) error {
 	return err
 }
 
-// ── Collected stamps ─────────────────────────────────────────────────────────
+// -- Collected stamps ---------------------------------------------------------
 
 // ListCollectedStampIDs returns the set of stamp ids a card has collected.
 func (s *Store) ListCollectedStampIDs(cardID int64) (map[int64]string, error) {

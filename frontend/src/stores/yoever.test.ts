@@ -150,7 +150,7 @@ describe('player.triggerYoever', () => {
     player.playerGame = enabledGame()
     const before = Date.now()
     expect(await player.triggerYoever()).toBe(false)
-    // No retry_after → the 180s hint default keeps the button disabled.
+    // No retry_after -> the 180s hint default keeps the button disabled.
     expect(player.yoeverCooldownUntil).toBeGreaterThan(before + 120_000)
   })
 })

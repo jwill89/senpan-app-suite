@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /**
- * Admin Winners Log tab — paginated, sortable table of past game winners with
+ * Admin Winners Log tab - paginated, sortable table of past game winners with
  * per-page controls. Mirrors the original `adminTab==='bingo-winners-log'` block.
  */
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
@@ -26,9 +26,9 @@ const columns: DataColumn[] = [
 function patternsLabel(json: string): string {
   try {
     const arr = JSON.parse(json || '[]') as string[]
-    return arr.join(', ') || '—'
+    return arr.join(', ') || '-'
   } catch {
-    return '—'
+    return '-'
   }
 }
 
@@ -42,7 +42,7 @@ function onPerPageChange(): void {
   <div class="tab-body">
     <AdminPanel title="Winners Log" :icon="['fad', 'trophy']">
       <div class="flex-toolbar mb-12">
-        <label class="text-dim text-xs">Per page:</label>
+        <label class="text-muted text-xs">Per page:</label>
         <select
           v-model.number="game.winnersLogPerPage"
           aria-label="Entries per page"
@@ -54,7 +54,9 @@ function onPerPageChange(): void {
           <option :value="50">50</option>
           <option :value="100">100</option>
         </select>
-        <span class="text-dim text-xs push-right"> {{ game.winnersLogTotal }} total entries </span>
+        <span class="text-muted text-xs push-right">
+          {{ game.winnersLogTotal }} total entries
+        </span>
         <button
           class="btn-danger btn-sm"
           :disabled="!game.winnersLogTotal"
@@ -67,7 +69,7 @@ function onPerPageChange(): void {
       <LoadingSpinner
         v-if="game.winnersLogLoading && game.winnersLog.length === 0"
         block
-        label="Loading winners…"
+        label="Loading winners..."
       />
       <template v-else>
         <DataTable
@@ -80,10 +82,10 @@ function onPerPageChange(): void {
         >
           <template #cell-logged_at="{ row }">{{ formatServerTimestamp(row.logged_at) }}</template>
           <template #cell-card_id="{ row }">
-            <span class="code-gold">{{ row.card_id }}</span>
+            <span class="code-highlight">{{ row.card_id }}</span>
           </template>
-          <template #cell-player_name="{ row }">{{ row.player_name || '—' }}</template>
-          <template #cell-game_details="{ row }">{{ row.game_details || '—' }}</template>
+          <template #cell-player_name="{ row }">{{ row.player_name || '-' }}</template>
+          <template #cell-game_details="{ row }">{{ row.game_details || '-' }}</template>
           <template #cell-winning_patterns="{ row }">
             {{ patternsLabel(row.winning_patterns) }}
           </template>

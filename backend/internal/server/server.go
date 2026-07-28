@@ -32,7 +32,7 @@ type Server struct {
 	sessHandler http.Handler // pre-built session middleware wrapping mux
 	webRoot     string
 	// allowedOrigins is the CORS allowlist (exact origin strings). Normally
-	// empty — the SPA and API are same-origin — so no CORS headers are sent.
+	// empty - the SPA and API are same-origin - so no CORS headers are sent.
 	allowedOrigins map[string]bool
 	mux            *http.ServeMux
 	limiter        *rateLimiter // failed-login brute-force limiter
@@ -40,7 +40,7 @@ type Server struct {
 	raffleLimiter  *rateLimiter // public raffle-entry limiter (entry flooding)
 	cardReqLimiter *rateLimiter // public custom-card-request limiter (request flooding)
 	// Cloudflare Turnstile bot check on the admin login. Disabled (verification
-	// skipped) when turnstileSecret is empty — see SetTurnstile / turnstile.go.
+	// skipped) when turnstileSecret is empty - see SetTurnstile / turnstile.go.
 	turnstileSecret  string
 	turnstileSiteKey string
 	// openAPISpec is the embedded openapi.yaml served at GET /api/openapi.yaml
@@ -49,19 +49,19 @@ type Server struct {
 	// logFile is the path to the rotating JSON log file the admin log viewer
 	// (GET /api/logs) tails. Empty disables the viewer. Injected via SetLogFile.
 	logFile string
-	// Lazily-loaded HMAC key for the tokenized public font URLs — see
+	// Lazily-loaded HMAC key for the tokenized public font URLs - see
 	// fontserve.go. Generated and persisted to settings on first use.
 	fontSecretMu  sync.Mutex
 	fontSecretVal []byte
 	// Serializes the image-category manifest read-modify-write (create/rename/
 	// delete + startup migration) so concurrent admin edits can't lose a write or
-	// orphan a directory. See images.go. Distinct from fontSecretMu — the font
+	// orphan a directory. See images.go. Distinct from fontSecretMu - the font
 	// metadata lives in the DB, this manifest is a filesystem dotfile.
 	imageManifestMu sync.Mutex
 
 	// autoWake is a one-slot mailbox that nudges the automatic-draw scheduler
 	// (RunAutoDrawScheduler) to re-evaluate its timer after any auto-relevant
-	// change — game start/end, enable/disable, interval or delay change. See game.go.
+	// change - game start/end, enable/disable, interval or delay change. See game.go.
 	autoWake chan struct{}
 	// autoDrawNow, when set, tells the scheduler to draw the first number the moment
 	// auto is switched on (rather than after one interval). Set on start-with-auto
@@ -137,7 +137,7 @@ func New(st *store.Store, hub *ws.Hub, sessionSecret, webRoot string, allowedOri
 	// are pickable in the theme flourish selectors (idempotent).
 	s.seedFlourishes()
 	// Upgrade pre-group font metadata (file-keyed entries, the old global
-	// origin allowlist), then reconcile every font's WOFF2 conversion —
+	// origin allowlist), then reconcile every font's WOFF2 conversion -
 	// backfilling missing ones and sweeping stale copies. Both idempotent;
 	// conversion failures log and fall back to serving an uploaded format.
 	s.migrateFontMetaV2()
@@ -176,7 +176,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("GET /api/auth", s.handleAuthCheck)
 	s.mux.HandleFunc("POST /api/auth", s.handleAuthAction)
 	s.mux.HandleFunc("POST /api/register", s.handleRegister)
-	// Passkey (WebAuthn) login — public, usernameless discoverable-credential flow.
+	// Passkey (WebAuthn) login - public, usernameless discoverable-credential flow.
 	s.mux.HandleFunc("POST /api/auth/passkey/begin", s.handlePasskeyLoginBegin)
 	s.mux.HandleFunc("POST /api/auth/passkey/finish", s.handlePasskeyLoginFinish)
 
@@ -290,9 +290,9 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("GET /api/garapon/{token}", s.handleGaraponPublic)
 	s.mux.HandleFunc("POST /api/garapon/{token}/draw", s.handleGaraponDraw)
 
-	// Affiliates (Senpan Tea House → Affiliates). Admin-only CRUD of partner
+	// Affiliates (Senpan Tea House -> Affiliates). Admin-only CRUD of partner
 	// establishments; logo/screenshot images are picked from the shared image
-	// library managed on System → Images.
+	// library managed on System -> Images.
 	s.mux.HandleFunc("GET /api/affiliates", s.handleAffiliatesList)
 	s.mux.HandleFunc("POST /api/affiliates", s.handleAffiliateCreate)
 	s.mux.HandleFunc("POST /api/affiliates/reorder", s.handleAffiliatesReorder)
@@ -301,7 +301,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("DELETE /api/affiliates/{id}", s.handleAffiliateDelete)
 	s.mux.HandleFunc("POST /api/affiliates/{id}/post", s.handleAffiliatePost)
 
-	// Tea Rooms (Senpan Tea House → Tea Rooms). Admin CRUD + drag reorder + the
+	// Tea Rooms (Senpan Tea House -> Tea Rooms). Admin CRUD + drag reorder + the
 	// open/discounted flag toggles (PATCH) + post-to-Discord, the shared webhook
 	// setter, and a public cross-origin read API for external Carrd sites. The
 	// literal /reorder, /webhook, /public sub-paths are matched ahead of the {id}
@@ -317,7 +317,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("DELETE /api/tea-rooms/{id}", s.handleTeaRoomDelete)
 	s.mux.HandleFunc("POST /api/tea-rooms/{id}/post", s.handleTeaRoomPost)
 
-	// Stamp Rally (Festival → Stamp Rally; resource-oriented: methods for CRUD,
+	// Stamp Rally (Festival -> Stamp Rally; resource-oriented: methods for CRUD,
 	// POST /{id}/{verb} for status, PATCH for the per-stamp pause toggle). Admin
 	// CRUD of events (stamps + prizes with placements) + close/reopen, tokenized
 	// participant cards, and the event-wide stamp log, plus the tokenized public
@@ -393,7 +393,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("GET /api/logs", s.handleLogs)
 	s.mux.HandleFunc("POST /api/logs/level", s.handleLogLevelSet)
 
-	// Font management (Atelier → Font Upload). Font FILES are keyed by filename
+	// Font management (Atelier -> Font Upload). Font FILES are keyed by filename
 	// ({name}); logical FONTS (groups of variants sharing a base name) are keyed
 	// by base under the literal /families sub-path, which the Go 1.22 mux
 	// matches ahead of the single-segment {name} wildcard. The literal /upload
@@ -405,13 +405,13 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("PATCH /api/fonts/families/{base}", s.handleFontFamilyPatch)
 	s.mux.HandleFunc("DELETE /api/fonts/families/{base}", s.handleFontFamilyDelete)
 	// Public tokenized font serving (fontserve.go). The fonts.senpan.cafe vhost
-	// reverse-proxies to these ("/" → /api/fonts/pub/); the SPA loads the same
+	// reverse-proxies to these ("/" -> /api/fonts/pub/); the SPA loads the same
 	// endpoints same-origin via the /api ProxyPass, so per-font allowlists never
 	// affect the app itself.
 	s.mux.HandleFunc("GET /api/fonts/pub/kit.css", s.handleFontKitCSS)
 	s.mux.HandleFunc("GET /api/fonts/pub/f/{token}", s.handleFontPublicFile)
 
-	// Carrd image hosting (System → Carrd Upload). Projects are keyed by folder
+	// Carrd image hosting (System -> Carrd Upload). Projects are keyed by folder
 	// name (a path param); images/sub-dirs are keyed by folder+path (+name), which
 	// may contain slashes, so those deletes take query params. The literal
 	// /images/dirs sub-path coexists with /images (different method+path pairs).
@@ -425,7 +425,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("DELETE /api/carrd/images/dirs", s.handleCarrdDirDelete)
 	s.mux.HandleFunc("POST /api/carrd/upload", s.handleCarrdUpload)
 
-	// Central image hosting (System → Images). Categories are keyed by directory
+	// Central image hosting (System -> Images). Categories are keyed by directory
 	// name (a path param); image deletes take dir+name query params. /upload
 	// before the bare path so the more specific pattern wins.
 	s.mux.HandleFunc("GET /api/image-categories", s.handleImageCategoriesList)
@@ -442,7 +442,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// CORS: only echo the Origin (and allow credentials) for explicitly
 	// allow-listed cross-origin sites. The SPA and API are same-origin in both
 	// prod (Apache) and dev (Vite proxies /api), so the allowlist is normally
-	// empty and these headers are simply not sent — the browser doesn't consult
+	// empty and these headers are simply not sent - the browser doesn't consult
 	// CORS for same-origin requests. This replaces a previous "reflect ANY Origin
 	// with credentials" policy, under which any website could make credentialed
 	// cross-origin requests to the API.
@@ -460,7 +460,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// WebSocket connections must bypass session middleware and response
-	// wrappers — coder/websocket needs the raw ResponseWriter for upgrade.
+	// wrappers - coder/websocket needs the raw ResponseWriter for upgrade.
 	if r.URL.Path == "/api/ws" {
 		s.mux.ServeHTTP(w, r)
 		return
@@ -482,7 +482,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	r = r.WithContext(context.WithValue(r.Context(), actorCtxKey{}, actor))
 
 	// Panic recovery: a handler panic must not tear down the connection silently.
-	// Recover here — OUTSIDE the session middleware but INSIDE ServeHTTP — so the
+	// Recover here - OUTSIDE the session middleware but INSIDE ServeHTTP - so the
 	// stack is logged, the client still gets a 500 JSON, and control falls through
 	// to the access-log emit below (which then records status 500 instead of the
 	// line being lost). Wrap with SCS session middleware so session data is
@@ -511,7 +511,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// Live admin invalidation: after a successful admin-mutation POST, push a thin
 	// "resource changed" signal so any admin viewing that resource refetches it via
 	// REST (which re-applies the per-feature permission guard). The signal carries
-	// no data — see broadcastResourceChanged. Public/auth/self-service paths and the
+	// no data - see broadcastResourceChanged. Public/auth/self-service paths and the
 	// rich-realtime endpoints (game/cards/patterns/styles/settings, which emit their
 	// own targeted events) are excluded by adminMutationResource.
 	switch r.Method {
@@ -599,7 +599,7 @@ func (rw *responseWriter) Write(b []byte) (int, error) {
 	return rw.ResponseWriter.Write(b)
 }
 
-// ── JSON helpers ────────────────────────────────────────────────────────────
+// -- JSON helpers ------------------------------------------------------------
 
 // writeJSON serializes v as JSON and writes it with the given status code.
 // Sets Content-Type and Cache-Control: no-store to prevent caching of API responses.
@@ -626,7 +626,7 @@ func writeInternalError(w http.ResponseWriter, context string, err error) {
 // reverse proxy (Cloudflare) can replace a 502's body with its own generic error
 // page before the admin ever sees the reason, so without this the log is often
 // the ONLY surviving record of WHY a "post to Discord" failed. err must already be
-// stripped of the webhook token — postDiscordWebhook does this (sanitizeWebhookErr).
+// stripped of the webhook token - postDiscordWebhook does this (sanitizeWebhookErr).
 func writeUpstreamError(w http.ResponseWriter, context string, err error) {
 	slog.Error("discord webhook post failed", "context", context, "error", err)
 	writeError(w, http.StatusBadGateway, "Failed to post to Discord: "+err.Error())
@@ -655,7 +655,7 @@ func pathInt64(w http.ResponseWriter, r *http.Request, name, label string) (int6
 	return v, true
 }
 
-// ── Auth helpers ────────────────────────────────────────────────────────────
+// -- Auth helpers ------------------------------------------------------------
 
 // sessionUserID returns the logged-in user's id from the session, or 0 if none.
 // The id is stored as int64 (see handleAuthAction), so it is read back via a
@@ -668,7 +668,7 @@ func (s *Server) sessionUserID(r *http.Request) int64 {
 }
 
 // sessionUserEpoch returns the password epoch the cookie session was minted with
-// (0 when absent — e.g. a session predating this feature, which matches the
+// (0 when absent - e.g. a session predating this feature, which matches the
 // default password_epoch of an unchanged account). Compared against the user's
 // current PasswordEpoch to invalidate sessions after a password change/reset.
 func (s *Server) sessionUserEpoch(r *http.Request) int64 {
@@ -680,7 +680,7 @@ func (s *Server) sessionUserEpoch(r *http.Request) int64 {
 
 // checkCSRF is a defense-in-depth CSRF guard layered on top of the SameSite=Lax
 // session cookie. It scrutinizes only cookie-authenticated, state-changing
-// requests — the shape a cross-site page could drive using the victim's ambient
+// requests - the shape a cross-site page could drive using the victim's ambient
 // cookie. Bearer-token (plugin) and cookie-less requests carry no ambient
 // credential and are exempt, as are safe methods. For a checked request it
 // requires the Origin header (when the browser sends one) to be same-host or an
@@ -721,8 +721,8 @@ func (s *Server) checkCSRF(w http.ResponseWriter, r *http.Request) bool {
 }
 
 // sameHost reports whether an Origin's hostname matches the request's host. It
-// compares hostnames (port-stripped) so a default-vs-explicit port — e.g. the dev
-// setup's :5173 origin against a :8080 host, both "localhost" — isn't a false
+// compares hostnames (port-stripped) so a default-vs-explicit port - e.g. the dev
+// setup's :5173 origin against a :8080 host, both "localhost" - isn't a false
 // mismatch, while a different host (including a sibling subdomain) still fails.
 func sameHost(originHost, requestHost string) bool {
 	if h, _, err := net.SplitHostPort(requestHost); err == nil {
@@ -732,7 +732,7 @@ func sameHost(originHost, requestHost string) bool {
 }
 
 // wsSessionUser loads the account for a request that bypasses the session
-// middleware — specifically the /api/ws upgrade, which is dispatched straight to
+// middleware - specifically the /api/ws upgrade, which is dispatched straight to
 // the mux (coder/websocket needs the raw ResponseWriter, so it can't go through
 // LoadAndSave/withUserCache). It reads the session cookie, loads the SCS session
 // manually, and returns the authenticated, active account or nil. A request with
@@ -789,7 +789,7 @@ func (s *Server) currentUser(r *http.Request) *model.User {
 func (s *Server) loadCurrentUser(r *http.Request) *model.User {
 	id := s.sessionUserID(r)
 	if id == 0 {
-		// No cookie session — fall back to a personal access token, so external
+		// No cookie session - fall back to a personal access token, so external
 		// API clients (e.g. the FFXIV plugin) authenticate through the same guards.
 		return s.userFromToken(r)
 	}
@@ -820,7 +820,7 @@ func (s *Server) isAdmin(r *http.Request) bool {
 func (s *Server) requireAuth(w http.ResponseWriter, r *http.Request) (*model.User, bool) {
 	u := s.currentUser(r)
 	if u == nil {
-		writeError(w, http.StatusUnauthorized, "Unauthorized – login required")
+		writeError(w, http.StatusUnauthorized, "Unauthorized - login required")
 		return nil, false
 	}
 	return u, true
@@ -831,7 +831,7 @@ func (s *Server) requireAuth(w http.ResponseWriter, r *http.Request) (*model.Use
 // when this returns false.
 func (s *Server) requireAdmin(w http.ResponseWriter, r *http.Request) bool {
 	if !s.isAdmin(r) {
-		writeError(w, http.StatusUnauthorized, "Unauthorized – admin login required")
+		writeError(w, http.StatusUnauthorized, "Unauthorized - admin login required")
 		return false
 	}
 	return true
@@ -844,17 +844,17 @@ func (s *Server) requireAdmin(w http.ResponseWriter, r *http.Request) bool {
 func (s *Server) requirePermission(w http.ResponseWriter, r *http.Request, perm string) bool {
 	u := s.currentUser(r)
 	if u == nil {
-		writeError(w, http.StatusUnauthorized, "Unauthorized – login required")
+		writeError(w, http.StatusUnauthorized, "Unauthorized - login required")
 		return false
 	}
 	if u.IsAdmin || userHasPermission(u, perm) {
 		return true
 	}
-	writeError(w, http.StatusForbidden, "Forbidden – you do not have access to this feature")
+	writeError(w, http.StatusForbidden, "Forbidden - you do not have access to this feature")
 	return false
 }
 
-// ── Broadcast helpers ───────────────────────────────────────────────────────
+// -- Broadcast helpers -------------------------------------------------------
 
 // broadcastResourceChanged notifies all admin clients that a named admin resource
 // changed, so any admin currently viewing it refetches via REST. It deliberately
@@ -862,7 +862,7 @@ func (s *Server) requirePermission(w http.ResponseWriter, r *http.Request, perm 
 // (keeping authorization fresh, unlike a per-connection cached check) and keeps
 // the REST handler the single source of truth for the data's shape. Rich,
 // high-frequency streams (the bingo game, cards, patterns, theme, settings) emit
-// their own targeted broadcasts instead — see adminMutationResource.
+// their own targeted broadcasts instead - see adminMutationResource.
 func (s *Server) broadcastResourceChanged(resource string) {
 	s.hub.BroadcastToAdmins(struct {
 		Type     string `json:"type"`
@@ -874,9 +874,9 @@ func (s *Server) broadcastResourceChanged(resource string) {
 // DELETE) to the frontend resource key to refetch, returning ok=false when the
 // path should emit no invalidation. It keys on the first path segment after
 // /api/, so every resource-oriented sub-path (/{id}, /{id}/entries/{entryId},
-// /{id}/{verb}, …) is covered automatically. Public, auth, self-service
+// /{id}/{verb}, ...) is covered automatically. Public, auth, self-service
 // (/api/account), and the rich-realtime endpoints (game/cards/patterns/styles/
-// settings) are intentionally absent — they broadcast their own targeted events
+// settings) are intentionally absent - they broadcast their own targeted events
 // (or none). The public raffle sign-up (.../enter) is excluded explicitly; it
 // broadcasts "raffles" itself.
 func adminMutationResource(path string) (string, bool) {
@@ -902,11 +902,11 @@ func adminMutationResource(path string) (string, bool) {
 }
 
 // broadcastCards sends the updated card list to all WebSocket clients. It carries
-// the FULL GET /api/cards shape (model.CardListEntry — including protected,
+// the FULL GET /api/cards shape (model.CardListEntry - including protected,
 // custom_status, and world) so a client that replaces its list from this broadcast
 // keeps every indicator (player-assignment, the pending/approved star, the
 // Protected lock) live. Using the model type keeps this in lockstep with
-// handleCardsList — a broadcast that dropped a field would show a stale status
+// handleCardsList - a broadcast that dropped a field would show a stale status
 // until a manual refetch (e.g. protecting a card wouldn't show the lock).
 func (s *Server) broadcastCards() {
 	cards, err := s.store.ListCardIDsWithNames()

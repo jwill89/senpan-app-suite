@@ -65,7 +65,7 @@ func TestReadingListItemsRoundTrip(t *testing.T) {
 		ListID:     listID,
 		CoverImage: "https://media.example.org/cover.webp",
 		Title:      "Sex Stopwatch",
-		Summary:    "He stopped time…",
+		Summary:    "He stopped time...",
 		Format:     "Manhwa",
 		Genres:     "Fantasy, Comedy",
 		Tropes:     "Enemies to Lovers, Time Travel",

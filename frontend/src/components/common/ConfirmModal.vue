@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /**
- * Global themed confirmation dialog — a styled replacement for window.confirm.
+ * Global themed confirmation dialog - a styled replacement for window.confirm.
  *
  * Driven entirely by the `ui` store: `ui.confirm(message, opts)` opens it and
  * resolves the returned promise when the user picks Confirm/Cancel. Rendered

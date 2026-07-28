@@ -22,7 +22,7 @@ const announcementSchedulerInterval = 30 * time.Second
 // validScheduleKinds is the set of accepted schedule kinds (empty = unscheduled).
 var validScheduleKinds = map[string]bool{"": true, "once": true, "daily": true, "weekly": true, "monthly": true}
 
-// ── Announcement types ──────────────────────────────────────────────────────
+// -- Announcement types ------------------------------------------------------
 
 // handleAnnouncementTypesList returns all announcement types.
 //
@@ -57,7 +57,7 @@ func (req announcementTypeWriteRequest) validate(w http.ResponseWriter) (name, w
 	// pointed at an arbitrary outbound host. Empty = this type has no webhook.
 	webhook = strings.TrimSpace(req.WebhookURL)
 	if webhook != "" && !isDiscordWebhookURL(webhook) {
-		writeError(w, http.StatusBadRequest, "Discord webhook URLs must look like https://discord.com/api/webhooks/…")
+		writeError(w, http.StatusBadRequest, "Discord webhook URLs must look like https://discord.com/api/webhooks/...")
 		return "", "", false
 	}
 	name = strings.TrimSpace(req.Name)
@@ -156,7 +156,7 @@ func (s *Server) handleAnnouncementTypeDelete(w http.ResponseWriter, r *http.Req
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// ── Announcement roles (taggable Discord roles) ─────────────────────────────
+// -- Announcement roles (taggable Discord roles) -----------------------------
 
 // handleAnnouncementRolesList returns all taggable roles.
 //
@@ -301,7 +301,7 @@ func isDiscordSnowflake(s string) bool {
 	return true
 }
 
-// ── Announcements ───────────────────────────────────────────────────────────
+// -- Announcements -----------------------------------------------------------
 
 // handleAnnouncementsList returns all announcements (with their type name).
 //
@@ -395,15 +395,15 @@ func (s *Server) handleAnnouncementUpdate(w http.ResponseWriter, r *http.Request
 		writeInternalError(w, "update announcement", err)
 		return
 	}
-	// Images are managed centrally on the System → Images page (a shared
+	// Images are managed centrally on the System -> Images page (a shared
 	// library), so replacing an announcement's image no longer deletes the
-	// old file here — it may be reused by another announcement.
+	// old file here - it may be reused by another announcement.
 	saved, _ := s.store.GetAnnouncement(a.ID)
 	writeJSON(w, http.StatusOK, model.AnnouncementResponse{Announcement: saved})
 }
 
 // handleAnnouncementDelete deletes an announcement. Images are managed centrally
-// on the System → Images page, so the announcement's image/thumbnail files are
+// on the System -> Images page, so the announcement's image/thumbnail files are
 // left intact on delete.
 //
 //	Endpoint:  DELETE /api/announcements/{id}
@@ -521,7 +521,7 @@ func (s *Server) handleAnnouncementsReorder(w http.ResponseWriter, r *http.Reque
 
 // validateAndResolveAnnouncement validates required fields, confirms the type
 // exists, and resolves every wall-clock time against the announcement's single
-// IANA timezone — computing the absolute UTC instants (start_at/end_at and, for a
+// IANA timezone - computing the absolute UTC instants (start_at/end_at and, for a
 // schedule, next_post_at). On failure it writes the error response, returns false.
 func (s *Server) validateAndResolveAnnouncement(w http.ResponseWriter, a *model.Announcement) bool {
 	a.Title = strings.TrimSpace(a.Title)
@@ -603,7 +603,7 @@ func (s *Server) validateAndResolveAnnouncement(w http.ResponseWriter, a *model.
 		loc = l
 	}
 
-	// Resolve the optional event window (wall-clock in loc → UTC instant).
+	// Resolve the optional event window (wall-clock in loc -> UTC instant).
 	if a.StartAt, err = resolveLocalInstant(a.StartLocal, loc); err != nil {
 		writeError(w, http.StatusBadRequest, "Invalid start date/time")
 		return false
@@ -615,7 +615,7 @@ func (s *Server) validateAndResolveAnnouncement(w http.ResponseWriter, a *model.
 
 	switch a.ScheduleKind {
 	case "":
-		// Unscheduled — manual posting only.
+		// Unscheduled - manual posting only.
 		a.NextPostAt = ""
 		a.Active = false
 	case "once":
@@ -631,19 +631,19 @@ func (s *Server) validateAndResolveAnnouncement(w http.ResponseWriter, a *model.
 		a.NextPostAt = next
 		a.Active = true
 	default:
-		// Recurring — validate the recurrence inputs first so the post time can't
+		// Recurring - validate the recurrence inputs first so the post time can't
 		// silently shift: an out-of-range minutes-of-day would wrap through the
 		// /60,%60 split in nextAnnouncementOccurrence and land at the wrong hour.
 		if a.ScheduleMinutes < 0 || a.ScheduleMinutes > 1439 {
-			writeError(w, http.StatusBadRequest, "Schedule time must be within a day (0–1439 minutes)")
+			writeError(w, http.StatusBadRequest, "Schedule time must be within a day (0-1439 minutes)")
 			return false
 		}
 		if a.ScheduleKind == "monthly" {
 			switch a.ScheduleWeekOfMonth {
 			case -1, 1, 2, 3, 4, 5:
-				// valid: 1st–5th, or -1 = last
+				// valid: 1st-5th, or -1 = last
 			default:
-				writeError(w, http.StatusBadRequest, "Week of month must be 1–5 or -1 (last)")
+				writeError(w, http.StatusBadRequest, "Week of month must be 1-5 or -1 (last)")
 				return false
 			}
 		}
@@ -692,7 +692,7 @@ func parseLocalInZone(value string, loc *time.Location) (time.Time, error) {
 	return time.Time{}, fmt.Errorf("invalid datetime %q", value)
 }
 
-// ── Embed ───────────────────────────────────────────────────────────────────
+// -- Embed -------------------------------------------------------------------
 
 // maxAnnouncementButtons caps how many link buttons an announcement can carry
 // (Discord allows five buttons in a single action row).
@@ -747,8 +747,8 @@ func (s *Server) buildAnnouncementMessage(a model.Announcement) discordWebhookPa
 
 // dynamicEventTimes returns the start/end UTC instants the embed should display.
 // When DynamicDates is on (and a start time is set), the stored StartLocal/EndLocal
-// are treated as a template — their time-of-day, and how many days the end runs
-// past the start — and re-anchored onto the day the announcement posts (`ref`, read
+// are treated as a template - their time-of-day, and how many days the end runs
+// past the start - and re-anchored onto the day the announcement posts (`ref`, read
 // in the announcement's timezone). Otherwise the stored StartAt/EndAt are returned
 // unchanged. Any parse failure falls back to the stored values.
 func dynamicEventTimes(a model.Announcement, ref time.Time) (startAt, endAt string) {
@@ -773,7 +773,7 @@ func dynamicEventTimes(a model.Announcement, ref time.Time) (startAt, endAt stri
 	if strings.TrimSpace(a.EndLocal) != "" {
 		if end, perr := parseLocalInZone(a.EndLocal, loc); perr == nil {
 			// Keep the end's time-of-day, plus however many days it ran past the
-			// start in the template (e.g. 10pm → 1am next day = +1 day).
+			// start in the template (e.g. 10pm -> 1am next day = +1 day).
 			endDay := newStart.AddDate(0, 0, daysBetween(start, end))
 			newEnd := time.Date(endDay.Year(), endDay.Month(), endDay.Day(), end.Hour(), end.Minute(), 0, 0, loc)
 			endAt = newEnd.UTC().Format(time.RFC3339)
@@ -793,12 +793,12 @@ func daysBetween(a, b time.Time) int {
 // announcementMention resolves an announcement's Mention selection into the
 // message content string and the allowed-mentions whitelist that lets it ping:
 //
-//	""                  → no mention (nil whitelist)
-//	"everyone"          → "@everyone", parse ["everyone"]
-//	"role:<role_id>"    → "<@&DISCORD_ID>", roles [DISCORD_ID]
+//	""                  -> no mention (nil whitelist)
+//	"everyone"          -> "@everyone", parse ["everyone"]
+//	"role:<role_id>"    -> "<@&DISCORD_ID>", roles [DISCORD_ID]
 //
 // A role whose managed entry was deleted (or has no Discord ID) resolves to no
-// mention, so the announcement still posts — just without a tag.
+// mention, so the announcement still posts - just without a tag.
 func (s *Server) announcementMention(a model.Announcement) (string, *discordAllowedMentions) {
 	mention := strings.TrimSpace(a.Mention)
 	switch {
@@ -833,11 +833,11 @@ func announcementComponents(a model.Announcement) []discordComponent {
 }
 
 // buildAnnouncementEmbed renders an announcement as a Discord embed. When times
-// are set they render first, as a single full-width field using Discord <t:…>
+// are set they render first, as a single full-width field using Discord <t:...>
 // tokens (the author-chosen start/end styles, each independent) so each viewer
 // sees their own zone. An optional location renders as its own full-width field
 // below it, on the next line. The
-// markdown details follow — normalized into Discord's markdown flavor first — as
+// markdown details follow - normalized into Discord's markdown flavor first - as
 // one or more full-width, headingless fields: details that would exceed Discord's
 // 1024-char per-field cap are split across consecutive fields at a natural line
 // break (see splitForEmbedFields) so nothing is truncated AND the time-first
@@ -880,7 +880,7 @@ func buildAnnouncementEmbed(a model.Announcement) discordEmbed {
 // (Discord's per-field value cap), so long announcement details render across
 // consecutive fields instead of being truncated at the cap. Each chunk breaks at
 // the last newline within the window (the natural marker), falling back to the
-// last space, then to a hard cut when neither exists — so a split never lands
+// last space, then to a hard cut when neither exists - so a split never lands
 // mid-word when it can avoid it. Chunks are trimmed of surrounding whitespace
 // (the boundary newline/space is consumed by the break); empty input yields nil
 // and text already within the cap yields a single chunk.
@@ -949,7 +949,7 @@ const (
 	defaultEndFormat   = "t"
 )
 
-// discordTimeStyle returns the Discord <t:…:X> style letter for a chosen format,
+// discordTimeStyle returns the Discord <t:...:X> style letter for a chosen format,
 // falling back to def for an empty or unrecognized value.
 func discordTimeStyle(format, def string) string {
 	format = strings.TrimSpace(format)
@@ -964,21 +964,21 @@ func discordTimeStyle(format, def string) string {
 // that Discord doesn't understand:
 //
 //   - hard line breaks serialized as a literal <br>/<br/>/<br /> tag, which the
-//     serializer follows with a source newline — Discord prints the tag as text,
+//     serializer follows with a source newline - Discord prints the tag as text,
 //     so collapse the tag AND that trailing newline into a SINGLE newline. (The
 //     earlier fix turned the tag into a newline but left the source newline,
 //     producing a blank line between every line.)
-//   - hard line breaks serialized as a trailing backslash ("…/\" then newline) —
+//   - hard line breaks serialized as a trailing backslash (".../\" then newline) -
 //     Discord shows the literal "\", so drop the backslash and keep the break.
 //     This is what makes a URL ending in "/" appear to gain a stray "\".
 //   - "loose" lists, where the serializer separates each list item with a blank
-//     line ("- a\n\n- b") — Discord renders that blank line between every bullet,
+//     line ("- a\n\n- b") - Discord renders that blank line between every bullet,
 //     so collapse a blank line that sits between two list items into a single
 //     newline (the blank line before/after the whole list, and real paragraphs,
 //     are left untouched).
-//   - Discord timestamp tokens (<t:1718…:F>) whose angle brackets the serializer
-//     backslash-escapes ("\<t:…\>"), which stops Discord parsing them as a
-//     timestamp — unescape the brackets so the timestamp renders.
+//   - Discord timestamp tokens (<t:1718...:F>) whose angle brackets the serializer
+//     backslash-escapes ("\<t:...\>"), which stops Discord parsing them as a
+//     timestamp - unescape the brackets so the timestamp renders.
 func discordMarkdown(s string) string {
 	if s == "" {
 		return s
@@ -988,9 +988,9 @@ func discordMarkdown(s string) string {
 	// "\n" fine, so emit LF throughout.
 	s = strings.ReplaceAll(s, "\r\n", "\n")
 	s = strings.ReplaceAll(s, "\r", "\n")
-	// <br> hard break (+ its trailing source newline, if any) → one newline.
+	// <br> hard break (+ its trailing source newline, if any) -> one newline.
 	s = brBreakRe.ReplaceAllString(s, "\n")
-	// Backslash hard breaks: "\" at end of a line (or the string) → drop it.
+	// Backslash hard breaks: "\" at end of a line (or the string) -> drop it.
 	s = backslashBreakRe.ReplaceAllString(s, "$1")
 	s = strings.TrimRight(s, "\\")
 	// Never emit more than a paragraph break (guards against any stacked breaks).
@@ -1035,7 +1035,7 @@ func tightenLists(s string) string {
 		case listItemRe.MatchString(line):
 			inList = true
 		case inList && (line[0] == ' ' || line[0] == '\t'):
-			// indented continuation of the current item — stay in the list
+			// indented continuation of the current item - stay in the list
 		default:
 			inList = false
 		}
@@ -1061,7 +1061,7 @@ var (
 	timestampEscapeRe = regexp.MustCompile(`\\?<t:(\d+)(:[tTdDfFR])?\\?>`)
 )
 
-// ── Recurrence ──────────────────────────────────────────────────────────────
+// -- Recurrence --------------------------------------------------------------
 
 // nextAnnouncementOccurrence returns the next scheduled instant strictly after
 // `after`, as a UTC RFC-3339 string, or "" when there is no further occurrence.
@@ -1173,13 +1173,13 @@ func nthWeekdayOfMonth(year int, month time.Month, wd time.Weekday, n, h, m int,
 	return time.Date(year, month, day, h, m, 0, 0, loc)
 }
 
-// Announcement images are uploaded and managed centrally on the System → Images
-// page (categories "Announcement Main" → images/announcements_main and
-// "Announcement Thumbnail" → images/announcements_thumb). The editor's pickers
+// Announcement images are uploaded and managed centrally on the System -> Images
+// page (categories "Announcement Main" -> images/announcements_main and
+// "Announcement Thumbnail" -> images/announcements_thumb). The editor's pickers
 // read those categories via GET /api/images; there is no per-announcement upload
 // or cleanup here anymore.
 
-// ── Scheduler ───────────────────────────────────────────────────────────────
+// -- Scheduler ---------------------------------------------------------------
 
 // RunAnnouncementScheduler posts due announcements to their type's webhook on a
 // fixed interval until ctx is cancelled. Safe to call in a goroutine.
@@ -1203,7 +1203,7 @@ func (s *Server) postDueAnnouncements(ctx context.Context) {
 	}
 	for _, a := range due {
 		if ctx.Err() != nil {
-			// Shutting down — stop issuing outbound posts; the rest stay due and are
+			// Shutting down - stop issuing outbound posts; the rest stay due and are
 			// picked up on the next startup sweep.
 			return
 		}
@@ -1227,13 +1227,13 @@ func (s *Server) postDueAnnouncements(ctx context.Context) {
 		}
 		// Success OR an ambiguous transport failure: advance the cursor either way.
 		// On ambiguity the message may already be on Discord, so retrying would
-		// duplicate it — we advance instead and log a warning. Recurring posts
+		// duplicate it - we advance instead and log a warning. Recurring posts
 		// resume at their next occurrence; a one-time post that truly failed needs
 		// a manual resend.
 		next, active := s.advanceCursor(a)
 		if mErr := s.markPostedWithRetry(a.ID, next, active); mErr != nil {
 			// The Discord post already went out, but the cursor could not be advanced
-			// even after retrying — the announcement is still "due", so the next tick
+			// even after retrying - the announcement is still "due", so the next tick
 			// would re-post it (a duplicate @everyone blast). Log loudly; a persistent
 			// failure here means the SQLite store itself is unhealthy.
 			slog.Error("announcement scheduler: mark posted failed after retries (possible duplicate next tick)",
@@ -1251,8 +1251,8 @@ func (s *Server) postDueAnnouncements(ctx context.Context) {
 // (MarkAnnouncementPosted is a single atomic UPDATE, so cursor-advance and
 // last-posted move together and a retry is idempotent). Because the Discord post
 // has ALREADY succeeded by the time this runs, a failed cursor write would leave
-// the announcement still due and re-post it next tick — a duplicate @everyone
-// blast — so a transient DB error (e.g. brief SQLite-WAL contention) is retried a
+// the announcement still due and re-post it next tick - a duplicate @everyone
+// blast - so a transient DB error (e.g. brief SQLite-WAL contention) is retried a
 // few times before giving up.
 func (s *Server) markPostedWithRetry(id int64, nextPostAt string, active bool) error {
 	var err error
@@ -1273,11 +1273,11 @@ func (s *Server) advanceCursor(a model.Announcement) (nextPostAt string, active 
 
 // advanceCursorAt computes the next schedule cursor as of `now`. Recurring kinds
 // roll forward to the next occurrence STRICTLY IN THE FUTURE; a one-time schedule
-// has no further occurrence (returns "", false → deactivated).
+// has no further occurrence (returns "", false -> deactivated).
 //
 // The anchor is the later of `now` and the just-fired cursor. Anchoring on `now`
 // (not the stale cursor) is essential: when an announcement is overdue by more
-// than one period — e.g. the server was down across a scheduled slot — advancing
+// than one period - e.g. the server was down across a scheduled slot - advancing
 // from the old cursor would land on ANOTHER past slot, leaving it still due so it
 // re-posts every tick until it catches up (the double-post bug). Anchoring on now
 // jumps straight to the next future slot; missed occurrences are skipped, not

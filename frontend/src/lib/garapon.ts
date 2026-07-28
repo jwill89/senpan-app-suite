@@ -6,13 +6,13 @@
  * weights are floored at 0 (the server sanitizes them the same way).
  */
 
-/** Sum of the positive prize weights — the denominator for normalized odds. */
+/** Sum of the positive prize weights - the denominator for normalized odds. */
 export function rateTotal(prizes: { rate: number }[]): number {
   return prizes.reduce((sum, p) => sum + (p.rate > 0 ? p.rate : 0), 0)
 }
 
-/** A weight's share of `total` as a percent string (e.g. "33.3%"), or "—" when total ≤ 0. */
+/** A weight's share of `total` as a percent string (e.g. "33.3%"), or "-" when total <= 0. */
 export function ratePct(rate: number, total: number): string {
-  if (total <= 0) return '—'
+  if (total <= 0) return '-'
   return `${((Math.max(0, rate) / total) * 100).toFixed(1)}%`
 }

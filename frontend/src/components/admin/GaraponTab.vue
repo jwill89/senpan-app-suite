@@ -1,10 +1,10 @@
 <script setup lang="ts">
 /**
- * Admin Garapon manager (Festival → Garapon). Screens:
+ * Admin Garapon manager (Festival -> Garapon). Screens:
  *
  *   - list: "Current Garapons" (open) as image cards (with a card-level delete),
  *     then a searchable + paginated "Closed Garapons" table.
- *   - detail: the selected garapon — status/actions, grand-prize image, prizes —
+ *   - detail: the selected garapon - status/actions, grand-prize image, prizes -
  *     plus links into the two sub-pages below (with live counts).
  *   - links: "Generate Drawing" form (open garapons) + the per-player drawing
  *     links as a searchable, paginated table.
@@ -108,7 +108,7 @@ const {
   sort: { key: 'drawn_at', dir: 'desc' },
 })
 
-// ── Display helpers ──────────────────────────────────────────────────────────
+// -- Display helpers ----------------------------------------------------------
 
 /** Sum of the selected garapon's prize weights (for the normalized-% column). */
 const prizeRateTotal = computed(() => rateTotal(garapons.selectedGarapon?.prizes || []))
@@ -118,10 +118,10 @@ function ratePct(p: GaraponPrize): string {
 }
 
 function created(ts: string): string {
-  return ts ? formatServerTimestamp(ts) : '—'
+  return ts ? formatServerTimestamp(ts) : '-'
 }
 
-// ── Navigation ───────────────────────────────────────────────────────────────
+// -- Navigation ---------------------------------------------------------------
 /** Reset the per-sub-page search/sort/pagination when opening a garapon. */
 function resetSubPages(): void {
   resetLinks()
@@ -174,10 +174,10 @@ function toggleClosed(): void {
 
 <template>
   <div class="tab-body">
-    <!-- ── Form ──────────────────────────────────────────────────────────────── -->
+    <!-- -- Form ---------------------------------------------------------------- -->
     <GaraponFormTab v-if="screen === 'form'" @saved="onFormDone" @cancel="onFormDone" />
 
-    <!-- ── Detail ──────────────────────────────────────────────────────────────── -->
+    <!-- -- Detail ---------------------------------------------------------------- -->
     <AdminPanel v-else-if="screen === 'detail' && garapons.selectedGarapon">
       <SubPageHeader @back="backToList">
         {{ garapons.selectedGarapon.title }}
@@ -241,22 +241,22 @@ function toggleClosed(): void {
                 <BallSwatch :color="p.ball_color" />
               </td>
               <td class="ta-right">{{ p.rate }}</td>
-              <td class="ta-right text-dim">{{ ratePct(p) }}</td>
+              <td class="ta-right text-muted">{{ ratePct(p) }}</td>
             </tr>
           </tbody>
         </table>
       </div>
     </AdminPanel>
 
-    <!-- ── Drawing Links sub-page ──────────────────────────────────────────────── -->
+    <!-- -- Drawing Links sub-page ------------------------------------------------ -->
     <AdminPanel v-else-if="screen === 'links' && garapons.selectedGarapon">
       <SubPageHeader @back="backToDetail">
-        <font-awesome-icon :icon="['fad', 'link']" /> Drawing Links —
+        <font-awesome-icon :icon="['fad', 'link']" /> Drawing Links -
         {{ garapons.selectedGarapon.title }}
       </SubPageHeader>
 
       <!-- Generate a drawing (open only) -->
-      <div v-if="isOpen" class="entry-add mb-16">
+      <div v-if="isOpen" class="subpanel mb-16">
         <h3 class="section-heading">
           <font-awesome-icon :icon="['fad', 'ticket']" /> Generate Drawing
         </h3>
@@ -284,7 +284,7 @@ function toggleClosed(): void {
             :disabled="garapons.creatingPlayer || !garapons.playerAdd.playerName.trim()"
             @click="garapons.createPlayer()"
           >
-            <LoadingSpinner v-if="garapons.creatingPlayer" label="Creating…" />
+            <LoadingSpinner v-if="garapons.creatingPlayer" label="Creating..." />
             <template v-else><font-awesome-icon :icon="['fas', 'plus']" /> Create Link</template>
           </button>
         </div>
@@ -295,10 +295,10 @@ function toggleClosed(): void {
         <div class="manager-toolbar">
           <SearchInput
             v-model="linkSearch"
-            placeholder="Search by player…"
+            placeholder="Search by player..."
             aria-label="Search drawing links"
           />
-          <span class="text-dim text-xs push-right">
+          <span class="text-muted text-xs push-right">
             {{ filteredLinks.length }} link{{ filteredLinks.length === 1 ? '' : 's' }}
           </span>
         </div>
@@ -338,12 +338,12 @@ function toggleClosed(): void {
                 :disabled="row.draws_used > 0 && isOpen"
                 :aria-label="
                   row.draws_used > 0 && isOpen
-                    ? 'Cannot delete — player has drawn (garapon is open)'
+                    ? 'Cannot delete - player has drawn (garapon is open)'
                     : 'Delete drawing link'
                 "
                 :title="
                   row.draws_used > 0 && isOpen
-                    ? 'Player has already drawn — close the garapon to delete this link (its draws stay in the log)'
+                    ? 'Player has already drawn - close the garapon to delete this link (its draws stay in the log)'
                     : 'Delete drawing link'
                 "
                 @click="garapons.deletePlayer(row)"
@@ -367,10 +367,10 @@ function toggleClosed(): void {
       <EmptyState v-else text="No drawing links yet." />
     </AdminPanel>
 
-    <!-- ── Draw Log sub-page ───────────────────────────────────────────────────── -->
+    <!-- -- Draw Log sub-page ----------------------------------------------------- -->
     <AdminPanel v-else-if="screen === 'log' && garapons.selectedGarapon">
       <SubPageHeader @back="backToDetail">
-        <font-awesome-icon :icon="['fad', 'clipboard-list']" /> Draw Log —
+        <font-awesome-icon :icon="['fad', 'clipboard-list']" /> Draw Log -
         {{ garapons.selectedGarapon.title }}
       </SubPageHeader>
 
@@ -378,10 +378,10 @@ function toggleClosed(): void {
         <div class="manager-toolbar">
           <SearchInput
             v-model="logSearch"
-            placeholder="Search by player or prize…"
+            placeholder="Search by player or prize..."
             aria-label="Search draw log"
           />
-          <span class="text-dim text-xs push-right">
+          <span class="text-muted text-xs push-right">
             {{ filteredLog.length }} draw{{ filteredLog.length === 1 ? '' : 's' }}
           </span>
         </div>
@@ -399,7 +399,7 @@ function toggleClosed(): void {
             >
           </template>
           <template #cell-drawn_at="{ row }">
-            <span class="text-sm text-dim">{{ created(row.drawn_at) }}</span>
+            <span class="text-sm text-muted">{{ created(row.drawn_at) }}</span>
           </template>
           <template #empty>
             <EmptyState text="No draws match your search." />
@@ -416,7 +416,7 @@ function toggleClosed(): void {
       <EmptyState v-else text="No draws yet." />
     </AdminPanel>
 
-    <!-- ── List ──────────────────────────────────────────────────────────────── -->
+    <!-- -- List ---------------------------------------------------------------- -->
     <ManagerView v-else title="Garapon" :icon="['fad', 'ferris-wheel']">
       <template #actions>
         <button class="btn-confirm btn-sm" @click="openNew">
@@ -427,7 +427,7 @@ function toggleClosed(): void {
       <LoadingSpinner
         v-if="garapons.garaponsLoading && garapons.garapons.length === 0"
         block
-        label="Loading garapons…"
+        label="Loading garapons..."
       />
       <template v-else>
         <!-- Current (open) garapons -->
@@ -453,8 +453,8 @@ function toggleClosed(): void {
             />
             <div class="media-card-body">
               <h3>{{ g.title }}</h3>
-              <p class="text-dim text-sm">
-                {{ g.player_count || 0 }} drawing{{ g.player_count === 1 ? '' : 's' }} ·
+              <p class="text-muted text-sm">
+                {{ g.player_count || 0 }} drawing{{ g.player_count === 1 ? '' : 's' }} -
                 {{ g.draw_count || 0 }} draw{{ g.draw_count === 1 ? '' : 's' }}
               </p>
               <!-- @click.stop so deleting doesn't also open the detail view. -->
@@ -481,10 +481,10 @@ function toggleClosed(): void {
           <div class="manager-toolbar">
             <SearchInput
               v-model="closedSearch"
-              placeholder="Search closed garapons…"
+              placeholder="Search closed garapons..."
               aria-label="Search closed garapons"
             />
-            <span class="text-dim text-xs push-right">{{ filteredClosed.length }} closed</span>
+            <span class="text-muted text-xs push-right">{{ filteredClosed.length }} closed</span>
           </div>
           <DataTable
             :columns="closedColumns"
@@ -538,11 +538,6 @@ function toggleClosed(): void {
 </template>
 
 <style scoped>
-.entry-add {
-  background: var(--panel-raised-bg);
-  border-radius: var(--radius);
-  padding: 14px 16px;
-}
 .garapon-table-wrap {
   overflow-x: auto;
 }

@@ -2,7 +2,7 @@
 /**
  * Header for a manager sub-page (new / edit / manage-categories screen): the
  * title on the left and a "Back" button on the right. Emits `back` when Back is
- * clicked — the parent sets its `screen` ref back to the list. Title via the
+ * clicked - the parent sets its `screen` ref back to the list. Title via the
  * `title` prop (+ optional `icon`) or the default slot for markup.
  */
 import type { IconPrefix } from '@fortawesome/fontawesome-svg-core'

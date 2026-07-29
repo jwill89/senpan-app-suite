@@ -99,8 +99,6 @@ export const useGameStore = defineStore('game', () => {
   const winnersLogTotal = ref(0)
   const winnersLogPage = ref(1)
   const winnersLogPerPage = ref(25)
-  const winnersLogSort = ref('logged_at')
-  const winnersLogDir = ref<'asc' | 'desc'>('desc')
 
   // -- Computed ---------------------------------------------------------------
 
@@ -397,42 +395,40 @@ export const useGameStore = defineStore('game', () => {
 
   // -- Winners log ------------------------------------------------------------
 
+  /**
+   * Loads the whole winners log so the table can sort and paginate it client-side
+   * like every other admin table.
+   *
+   * The API caps `per_page` at 200 (backend/internal/server/winners.go), so this
+   * pages through until it has `total` rows rather than requesting one huge page
+   * - asking for more than the cap would silently come back truncated, and a
+   *   client-side sort over a truncated list is wrong in a way that looks right.
+   */
   async function loadWinnersLog(): Promise<void> {
     winnersLogLoading.value = true
     try {
-      const data = await endpoints.winnersLog.list({
-        page: winnersLogPage.value,
-        perPage: winnersLogPerPage.value,
-        sort: winnersLogSort.value,
-        dir: winnersLogDir.value,
-      })
-      winnersLog.value = data.entries
-      winnersLogTotal.value = data.total || 0
+      const PER_PAGE = 200
+      const all: WinnersLogEntry[] = []
+      let page = 1
+      let total = 0
+      do {
+        const data = await endpoints.winnersLog.list({
+          page,
+          perPage: PER_PAGE,
+          sort: 'logged_at',
+          dir: 'desc',
+        })
+        all.push(...data.entries)
+        total = data.total || all.length
+        page++
+      } while (all.length < total && all.length > 0)
+      winnersLog.value = all
+      winnersLogTotal.value = total
     } catch (e) {
       ui.notify((e as Error).message, 'error')
     } finally {
       winnersLogLoading.value = false
     }
-  }
-
-  function winnersLogTotalPages(): number {
-    return Math.ceil(winnersLogTotal.value / winnersLogPerPage.value) || 1
-  }
-
-  function winnersLogSetSort(field: string): void {
-    if (winnersLogSort.value === field) {
-      winnersLogDir.value = winnersLogDir.value === 'asc' ? 'desc' : 'asc'
-    } else {
-      winnersLogSort.value = field
-      winnersLogDir.value = 'desc'
-    }
-    winnersLogPage.value = 1
-    void loadWinnersLog()
-  }
-
-  function winnersLogGoPage(p: number): void {
-    winnersLogPage.value = p
-    void loadWinnersLog()
   }
 
   /** Deletes one winners-log entry (with confirm), then reloads the page. */
@@ -459,6 +455,33 @@ export const useGameStore = defineStore('game', () => {
   }
 
   /** Clears the entire winners log (with confirm), then reloads from page 1. */
+  /** Bulk delete from the table's selection: one confirm for the whole set and
+   *  a single reload afterwards, rather than a prompt and a refetch per row. */
+  async function deleteWinnerLogEntries(ids: number[]): Promise<number> {
+    if (ids.length === 0) return 0
+    if (
+      !(await ui.confirm(
+        `Delete ${ids.length} selected entr${ids.length === 1 ? 'y' : 'ies'}? This cannot be undone.`,
+        { title: 'Delete selected entries', confirmText: `Delete ${ids.length}` },
+      ))
+    )
+      return 0
+    let done = 0
+    for (const id of ids) {
+      try {
+        await endpoints.winnersLog.delete(id)
+        done++
+      } catch (e) {
+        ui.notify((e as Error).message, 'error')
+      }
+    }
+    if (done) {
+      ui.notify(`${done} entr${done === 1 ? 'y' : 'ies'} deleted`, 'info')
+      await loadWinnersLog()
+    }
+    return done
+  }
+
   async function deleteAllWinnersLog(): Promise<void> {
     if (
       !(await ui.confirm('Delete ALL winners-log entries? This cannot be undone.', {
@@ -506,8 +529,6 @@ export const useGameStore = defineStore('game', () => {
     winnersLogTotal,
     winnersLogPage,
     winnersLogPerPage,
-    winnersLogSort,
-    winnersLogDir,
     adminCalledSet,
     adminGameLabel,
     isCalledAdmin,
@@ -528,10 +549,8 @@ export const useGameStore = defineStore('game', () => {
     dismissHalftime,
     loadFrequentWinners,
     loadWinnersLog,
-    winnersLogTotalPages,
-    winnersLogSetSort,
-    winnersLogGoPage,
     deleteWinnerLogEntry,
+    deleteWinnerLogEntries,
     deleteAllWinnersLog,
   }
 })

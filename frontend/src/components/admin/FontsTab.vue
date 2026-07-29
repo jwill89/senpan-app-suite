@@ -20,7 +20,11 @@ import AdminPanel from '@/components/common/ui/AdminPanel.vue'
 import FormField from '@/components/common/ui/FormField.vue'
 import EmptyState from '@/components/common/ui/EmptyState.vue'
 import SearchInput from '@/components/common/ui/SearchInput.vue'
-import DataTable, { type DataColumn } from '@/components/common/ui/DataTable.vue'
+import DataTableToolbar from '@/components/common/ui/DataTableToolbar.vue'
+import DataTable, {
+  type DataColumn,
+  type DataTableView,
+} from '@/components/common/ui/DataTable.vue'
 import FontEditModal from '@/components/admin/FontEditModal.vue'
 import { applyUploadedFonts, uploadedFontUrl } from '@/lib/theme'
 import { useFontsStore, fontShareUrl, toUploadedFont, FONT_KIT_URL } from '@/stores/fonts'
@@ -156,10 +160,7 @@ function selectForPreview(base: string): void {
 
 // -- Table --------------------------------------------------------------------
 
-type SortKey = 'family' | 'served_type' | 'modified'
 /** Active sort column + direction. */
-const sortKey = ref<SortKey>('family')
-const sortDir = ref<'asc' | 'desc'>('asc')
 
 /** Columns for the shared DataTable (the last is the right-aligned actions). */
 const fontColumns: DataColumn[] = [
@@ -169,50 +170,22 @@ const fontColumns: DataColumn[] = [
   { key: 'actions', label: '', align: 'right' },
 ]
 
-/** Toggles direction when re-clicking the active column, else sorts ascending.
- *  Receives the column key (string) from DataTable's `sort` event. */
-function sortBy(key: string): void {
-  if (sortKey.value === key) {
-    sortDir.value = sortDir.value === 'asc' ? 'desc' : 'asc'
-  } else {
-    sortKey.value = key as SortKey
-    sortDir.value = 'asc'
-  }
-}
-
 /** Highlights the row whose font is currently shown in the live preview. */
 function previewRowClass(f: Font): Record<string, boolean> {
   return { 'row-selected': selectedBase.value === f.base }
 }
 
-/** Filtered + sorted rows for display (searches CSS names and file names). */
-const displayedFonts = computed(() => {
-  const term = search.value.trim().toLowerCase()
-  const rows = term
-    ? fonts.fonts.filter(
-        (f) =>
-          f.family.toLowerCase().includes(term) ||
-          f.variants.some((v) => v.name.toLowerCase().includes(term)),
-      )
-    : fonts.fonts.slice()
-
-  const dir = sortDir.value === 'asc' ? 1 : -1
-  rows.sort((a, b) => {
-    let cmp = 0
-    if (sortKey.value === 'family') {
-      cmp = a.family.toLowerCase().localeCompare(b.family.toLowerCase())
-    } else if (sortKey.value === 'served_type') {
-      cmp = a.served_type.localeCompare(b.served_type)
-    } else {
-      cmp = new Date(a.modified).getTime() - new Date(b.modified).getTime()
-    }
-    return cmp * dir
-  })
-  return rows
-})
+/** A font matches the search on its CSS family or any variant's file name.
+ *  `modified` is RFC3339, so the table's generic comparator orders it correctly. */
+function fontMatches(f: Font, q: string): boolean {
+  return (
+    f.family.toLowerCase().includes(q) || f.variants.some((v) => v.name.toLowerCase().includes(q))
+  )
+}
 
 /** Free-text filter applied to CSS names and file names. */
 const search = ref('')
+const fontsView = ref<DataTableView>({ total: 0, totalPages: 1, facets: {} })
 
 /** True when the served variant is the auto-converted WOFF2 copy. */
 function servesConverted(f: Font): boolean {
@@ -370,13 +343,20 @@ watch(
         </div>
       </div>
 
-      <SearchInput
+      <DataTableToolbar
         v-if="fonts.fonts.length"
-        v-model="search"
-        class="mb-12"
-        placeholder="Search fonts by name..."
-        aria-label="Search fonts by name"
-      />
+        :count="fontsView.total"
+        :total="fonts.fonts.length"
+        noun="font"
+      >
+        <template #search>
+          <SearchInput
+            v-model="search"
+            placeholder="Search fonts by name..."
+            aria-label="Search fonts by name"
+          />
+        </template>
+      </DataTableToolbar>
 
       <LoadingSpinner
         v-if="fonts.loading && fonts.fonts.length === 0"
@@ -387,12 +367,13 @@ watch(
       <DataTable
         v-else-if="fonts.fonts.length"
         :columns="fontColumns"
-        :rows="displayedFonts"
+        :rows="fonts.fonts"
         row-key="base"
-        :sort-key="sortKey"
-        :sort-dir="sortDir"
+        :filter="search"
+        :filter-fn="fontMatches"
+        :default-sort="{ key: 'family', dir: 'asc' }"
         :row-class="previewRowClass"
-        @sort="sortBy"
+        @update:view="fontsView = $event"
       >
         <template #cell-family="{ row }">
           <span class="code-highlight">{{ row.family }}</span>

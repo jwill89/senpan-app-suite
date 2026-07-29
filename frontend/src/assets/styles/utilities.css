@@ -250,6 +250,57 @@
   justify-content: space-between;
 }
 
+/* DataTableToolbar: the one toolbar layout above every admin table. Inputs on
+   the left, state + actions on the right, in a fixed order - see the component
+   for why this is not left to each caller. The two groups wrap as units on a
+   narrow screen, so a table never ends up with its count orphaned above its
+   search box. */
+.dt-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.dt-toolbar-start,
+.dt-toolbar-end {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+/* The left group takes the slack, which pins the right group to the far edge on
+   every table whether or not a search box is present. */
+.dt-toolbar-start {
+  flex: 1 1 240px;
+  min-width: 0;
+}
+.dt-toolbar-end {
+  margin-left: auto;
+  flex-wrap: wrap;
+}
+/* The search box is a FIXED preferred width here, not flex-grow. Left to grow,
+   it filled whatever the right-hand group didn't need - so the same control came
+   out 360px on a table with one button and 253px on one with three, which reads
+   as three different components rather than one. It still shrinks when it has
+   to, so narrow viewports are unaffected. */
+.dt-toolbar-start .search-input {
+  flex: 0 1 320px;
+}
+
+.dt-toolbar-count {
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  white-space: nowrap;
+}
+.dt-toolbar-perpage {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.dt-toolbar-perpage select {
+  width: 70px;
+}
+
 /* DataTable: the single admin table style (merges the former .entries-table
    and .winners-log-table). Wrap scrolls horizontally on narrow screens. */
 .data-table-wrap {
@@ -287,6 +338,51 @@
 .data-table tbody tr:nth-child(even) {
   background: color-mix(in srgb, var(--panel-raised-bg) 55%, transparent);
 }
+/* Expandable rows: the whole row is the toggle, and the detail band sits under it. */
+.data-table .dt-expandable {
+  cursor: pointer;
+}
+.data-table .dt-detail-row > td {
+  background: rgba(127, 127, 127, 0.08);
+}
+
+/* Checkbox column for bulk actions: only as wide as the control. */
+.data-table .dt-select-col {
+  width: 34px;
+  text-align: center;
+}
+
+/* Resize grip on a column's trailing edge. Full header height so it is easy to
+   grab, but its rule only appears on hover/drag so idle headers stay clean.
+   `touch-action: none` keeps a touch drag from scrolling the table instead. */
+.data-table.is-resizable th {
+  position: relative;
+}
+.dt-resizer {
+  position: absolute;
+  top: 0;
+  right: 0;
+  height: 100%;
+  width: 8px;
+  cursor: col-resize;
+  touch-action: none;
+  user-select: none;
+}
+.dt-resizer::after {
+  content: '';
+  position: absolute;
+  top: 15%;
+  right: 3px;
+  height: 70%;
+  width: 2px;
+  background: transparent;
+  transition: background 0.15s;
+}
+.dt-resizer:hover::after,
+.dt-resizer:active::after {
+  background: var(--highlight);
+}
+
 .data-table tbody tr:hover {
   background: color-mix(in srgb, var(--accent) 15%, transparent);
   box-shadow: inset 2px 0 0 0 var(--highlight);
@@ -378,7 +474,7 @@
    consistent spacing (pair with a right-aligned column). */
 .row-actions {
   display: flex;
-  gap: 6px;
+  gap: 8px;
   justify-content: flex-end;
   align-items: center;
 }

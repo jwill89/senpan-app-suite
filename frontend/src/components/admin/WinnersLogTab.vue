@@ -3,15 +3,29 @@
  * Admin Winners Log tab - paginated, sortable table of past game winners with
  * per-page controls. Mirrors the original `adminTab==='bingo-winners-log'` block.
  */
+import { ref } from 'vue'
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
 import AdminPanel from '@/components/common/ui/AdminPanel.vue'
-import DataTable, { type DataColumn } from '@/components/common/ui/DataTable.vue'
+import DataTableToolbar from '@/components/common/ui/DataTableToolbar.vue'
+import DataTable, {
+  type DataColumn,
+  type DataTableView,
+} from '@/components/common/ui/DataTable.vue'
 import PaginationBar from '@/components/common/ui/PaginationBar.vue'
 import EmptyState from '@/components/common/ui/EmptyState.vue'
 import { useGameStore } from '@/stores/game'
 import { formatServerTimestamp } from '@/lib/datetime'
 
 const game = useGameStore()
+const view = ref<DataTableView>({ total: 0, totalPages: 1, facets: {} })
+const selectedEntries = ref<(string | number)[]>([])
+const tableRef = ref<{ exportCsv: (name?: string) => void } | null>(null)
+
+/** Bulk-delete the checked entries, then drop the now-stale selection. */
+async function deleteSelectedEntries(): Promise<void> {
+  const done = await game.deleteWinnerLogEntries(selectedEntries.value.map(Number))
+  if (done) selectedEntries.value = []
+}
 
 const columns: DataColumn[] = [
   { key: 'logged_at', label: 'Date', sortable: true },
@@ -31,41 +45,46 @@ function patternsLabel(json: string): string {
     return '-'
   }
 }
-
-function onPerPageChange(): void {
-  game.winnersLogPage = 1
-  void game.loadWinnersLog()
-}
 </script>
 
 <template>
   <div class="tab-body">
     <AdminPanel title="Winners Log" :icon="['fad', 'trophy']">
-      <div class="flex-toolbar mb-12">
-        <label class="text-muted text-xs">Per page:</label>
-        <select
-          v-model.number="game.winnersLogPerPage"
-          aria-label="Entries per page"
-          style="width: 70px"
-          @change="onPerPageChange"
-        >
-          <option :value="10">10</option>
-          <option :value="25">25</option>
-          <option :value="50">50</option>
-          <option :value="100">100</option>
-        </select>
-        <span class="text-muted text-xs push-right">
-          {{ game.winnersLogTotal }} total entries
-        </span>
-        <button
-          class="btn-danger btn-sm"
-          :disabled="!game.winnersLogTotal"
-          title="Delete all winners-log entries"
-          @click="game.deleteAllWinnersLog()"
-        >
-          <font-awesome-icon :icon="['fas', 'trash']" /> Delete All
-        </button>
-      </div>
+      <DataTableToolbar
+        v-model:per-page="game.winnersLogPerPage"
+        :count="view.total"
+        :total="game.winnersLogTotal"
+        noun="entry"
+        plural="entries"
+        :per-page-options="[10, 25, 50, 100]"
+      >
+        <template #actions>
+          <button
+            class="btn-view btn-sm"
+            :disabled="!view.total"
+            title="Download the entries currently shown, as CSV"
+            @click="tableRef?.exportCsv('winners-log')"
+          >
+            <font-awesome-icon :icon="['fas', 'file-arrow-down']" /> Export CSV
+          </button>
+          <button
+            v-if="selectedEntries.length"
+            class="btn-danger btn-sm"
+            @click="deleteSelectedEntries"
+          >
+            <font-awesome-icon :icon="['fas', 'trash']" /> Delete
+            {{ selectedEntries.length }} selected
+          </button>
+          <button
+            class="btn-danger btn-sm"
+            :disabled="!game.winnersLogTotal"
+            title="Delete all winners-log entries"
+            @click="game.deleteAllWinnersLog()"
+          >
+            <font-awesome-icon :icon="['fas', 'trash']" /> Delete All
+          </button>
+        </template>
+      </DataTableToolbar>
       <LoadingSpinner
         v-if="game.winnersLogLoading && game.winnersLog.length === 0"
         block
@@ -73,12 +92,17 @@ function onPerPageChange(): void {
       />
       <template v-else>
         <DataTable
+          ref="tableRef"
+          v-model:page="game.winnersLogPage"
+          v-model:selected="selectedEntries"
           :columns="columns"
           :rows="game.winnersLog"
           row-key="id"
-          :sort-key="game.winnersLogSort"
-          :sort-dir="game.winnersLogDir"
-          @sort="game.winnersLogSetSort"
+          selectable
+          resizable
+          :page-size="game.winnersLogPerPage"
+          :default-sort="{ key: 'logged_at', dir: 'desc' }"
+          @update:view="view = $event"
         >
           <template #cell-logged_at="{ row }">{{ formatServerTimestamp(row.logged_at) }}</template>
           <template #cell-card_id="{ row }">
@@ -108,8 +132,8 @@ function onPerPageChange(): void {
         <PaginationBar
           class="mt-12"
           :page="game.winnersLogPage"
-          :total-pages="game.winnersLogTotalPages()"
-          @go="game.winnersLogGoPage"
+          :total-pages="view.totalPages"
+          @go="(p: number) => (game.winnersLogPage = p)"
         />
       </template>
     </AdminPanel>

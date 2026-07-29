@@ -1,5 +1,5 @@
 {
-  "total": 2701,
+  "total": 2695,
   "cap": 120,
   "files": {
     "frontend/src/components/admin/AffiliateFormTab.vue": 34,
@@ -36,7 +36,7 @@
     "frontend/src/components/common/TurnstileWidget.vue": 5,
     "frontend/src/components/common/YoeverOverlay.vue": 111,
     "frontend/src/components/common/ui/BallSwatch.vue": 24,
-    "frontend/src/components/common/ui/DataTable.vue": 13,
+    "frontend/src/components/common/ui/DataTable.vue": 7,
     "frontend/src/components/common/ui/ImagePicker.vue": 40,
     "frontend/src/components/common/ui/StampCardCanvas.vue": 33,
     "frontend/src/components/player/GaraponWheel.vue": 124,

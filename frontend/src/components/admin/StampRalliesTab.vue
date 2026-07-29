@@ -17,13 +17,16 @@ import ManagerView from '@/components/common/ui/ManagerView.vue'
 import SubPageHeader from '@/components/common/ui/SubPageHeader.vue'
 import SearchInput from '@/components/common/ui/SearchInput.vue'
 import FormField from '@/components/common/ui/FormField.vue'
-import DataTable, { type DataColumn } from '@/components/common/ui/DataTable.vue'
+import DataTableToolbar from '@/components/common/ui/DataTableToolbar.vue'
+import DataTable, {
+  type DataColumn,
+  type DataTableView,
+} from '@/components/common/ui/DataTable.vue'
 import PaginationBar from '@/components/common/ui/PaginationBar.vue'
 import EmptyState from '@/components/common/ui/EmptyState.vue'
 import StampCardCanvas, { type CanvasItem } from '@/components/common/ui/StampCardCanvas.vue'
 import StampRallyFormTab from './StampRallyFormTab.vue'
-import { useStampRalliesStore, groupedByParticipant } from '@/stores/stampRallies'
-import { useDataTableView } from '@/composables/useDataTableView'
+import { useStampRalliesStore } from '@/stores/stampRallies'
 import { assetUrl } from '@/lib/assets'
 import { formatServerTimestamp } from '@/lib/datetime'
 import { stallName } from '@/lib/stampcard'
@@ -49,18 +52,10 @@ const closedColumns: DataColumn[] = [
   { key: 'created_at', label: 'Created', sortable: true },
   { key: 'actions', label: '', align: 'right' },
 ]
-const {
-  search: closedSearch,
-  page: closedPage,
-  totalPages: closedTotalPages,
-  paged: pagedClosed,
-  filtered: filteredClosed,
-  sortKey: closedSortKey,
-  sortDir: closedSortDir,
-  setSort: setClosedSort,
-} = useDataTableView<StampRally>(() => store.closedRallies, {
-  matches: (r, q) => r.title.toLowerCase().includes(q),
-})
+const closedSearch = ref('')
+const closedPage = ref(1)
+const closedView = ref<DataTableView>({ total: 0, totalPages: 1, facets: {} })
+const closedMatches = (r: StampRally, q: string): boolean => r.title.toLowerCase().includes(q)
 
 const isClosed = computed(() => store.selectedRally?.status === 'closed')
 function toggleClosed(): void {
@@ -102,20 +97,18 @@ const logColumns: DataColumn[] = [
   { key: 'stall_name', label: 'Stall / Vendor', sortable: true },
   { key: 'stamped_at', label: 'When', sortable: true, align: 'right' },
 ]
-const {
-  search: logSearch,
-  filtered: logFiltered,
-  sortKey: logSortKey,
-  sortDir: logSortDir,
-  setSort: setLogSort,
-  reset: resetLogs,
-} = useDataTableView<StampRallyLogEntry>(() => store.rallyLogs, {
-  matches: (e, q) =>
-    e.participant_name.toLowerCase().includes(q) || e.stall_name.toLowerCase().includes(q),
-  sort: { key: 'participant_name', dir: 'asc' },
-})
-// Keep each participant's rows contiguous regardless of the active column sort.
-const groupedLogs = computed(() => groupedByParticipant(logFiltered.value))
+// The table keeps each participant's rows together via `group-by`, which is a
+// primary sort key - so a column sort still orders rows WITHIN a participant.
+const logSearch = ref('')
+const logMatches = (e: StampRallyLogEntry, q: string): boolean =>
+  e.participant_name.toLowerCase().includes(q) || e.stall_name.toLowerCase().includes(q)
+
+const logView = ref<DataTableView>({ total: 0, totalPages: 1, facets: {} })
+const logTableRef = ref<{ exportCsv: (name?: string) => void } | null>(null)
+
+function resetLogs(): void {
+  logSearch.value = ''
+}
 
 function when(ts: string): string {
   return ts ? formatServerTimestamp(ts) : '-'
@@ -350,21 +343,35 @@ async function deleteSelected(): Promise<void> {
       </SubPageHeader>
 
       <template v-if="store.rallyLogs.length">
-        <div class="manager-toolbar">
-          <SearchInput
-            v-model="logSearch"
-            placeholder="Search by participant or stall..."
-            aria-label="Search logs"
-          />
-          <span class="text-muted text-xs push-right">{{ groupedLogs.length }} stamps</span>
-        </div>
+        <DataTableToolbar :count="logView.total" :total="store.rallyLogs.length" noun="stamp">
+          <template #search>
+            <SearchInput
+              v-model="logSearch"
+              placeholder="Search by participant or stall..."
+              aria-label="Search logs"
+            />
+          </template>
+          <template #actions>
+            <button
+              class="btn-view btn-sm"
+              :disabled="!logView.total"
+              title="Download the stamps currently shown, as CSV"
+              @click="logTableRef?.exportCsv('stamp-log')"
+            >
+              <font-awesome-icon :icon="['fas', 'file-arrow-down']" /> Export CSV
+            </button>
+          </template>
+        </DataTableToolbar>
         <DataTable
+          ref="logTableRef"
           :columns="logColumns"
-          :rows="groupedLogs"
+          :rows="store.rallyLogs"
           :row-key="(row: StampRallyLogEntry) => `${row.card_id}-${row.stamp_id}`"
-          :sort-key="logSortKey"
-          :sort-dir="logSortDir"
-          @sort="setLogSort"
+          :filter="logSearch"
+          :filter-fn="logMatches"
+          group-by="participant_name"
+          resizable
+          @update:view="logView = $event"
         >
           <template #cell-stamped_at="{ row }">
             <span class="text-sm text-muted">{{
@@ -500,21 +507,29 @@ async function deleteSelected(): Promise<void> {
           <font-awesome-icon :icon="['fad', 'lock']" /> Closed Stamp Rallies
         </h4>
         <template v-if="store.closedRallies.length">
-          <div class="manager-toolbar">
-            <SearchInput
-              v-model="closedSearch"
-              placeholder="Search closed stamp rallies..."
-              aria-label="Search closed stamp rallies"
-            />
-            <span class="text-muted text-xs push-right">{{ filteredClosed.length }} closed</span>
-          </div>
+          <DataTableToolbar
+            :count="closedView.total"
+            :total="store.closedRallies.length"
+            noun="closed rally"
+            plural="closed rallies"
+          >
+            <template #search>
+              <SearchInput
+                v-model="closedSearch"
+                placeholder="Search closed stamp rallies..."
+                aria-label="Search closed stamp rallies"
+              />
+            </template>
+          </DataTableToolbar>
           <DataTable
+            v-model:page="closedPage"
             :columns="closedColumns"
-            :rows="pagedClosed"
+            :rows="store.closedRallies"
             row-key="id"
-            :sort-key="closedSortKey"
-            :sort-dir="closedSortDir"
-            @sort="setClosedSort"
+            :filter="closedSearch"
+            :filter-fn="closedMatches"
+            :page-size="10"
+            @update:view="closedView = $event"
           >
             <template #cell-card_count="{ row }">{{
               (row as StampRally).card_count || 0
@@ -550,10 +565,10 @@ async function deleteSelected(): Promise<void> {
             /></template>
           </DataTable>
           <PaginationBar
-            v-if="closedTotalPages > 1"
+            v-if="closedView.totalPages > 1"
             class="mt-12"
             :page="closedPage"
-            :total-pages="closedTotalPages"
+            :total-pages="closedView.totalPages"
             @go="(p: number) => (closedPage = p)"
           />
         </template>

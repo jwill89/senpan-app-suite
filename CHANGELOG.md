@@ -52,6 +52,33 @@ the stylesheets under enforced formatting.
 
 #### Added
 
+- **`@tanstack/vue-table`** as the row engine behind `DataTable` (see **Changed**). The
+  only new runtime dependency; it is headless, so it adds no CSS and no markup.
+- **Five table features that were previously too costly to hand-roll.** Each is opt-in
+  per table, so nothing changes on a table that doesn't ask:
+  - **Column resizing** (`resizable`) - drag a column's trailing edge. Declared widths
+    are kept and unsized columns stay auto **until you actually drag one**; reading the
+    engine's size eagerly would have pinned every unsized column to a 150px default and
+    silently relaid out tables nobody touched. On Manage Cards, the Winners Log, the
+    Server Logs and the garapon + rally logs.
+  - **Row selection + bulk delete** (`selectable` + `v-model:selected`) - a checkbox
+    column whose header selects every row matching the **current filter**, not just the
+    page on screen. Wired to a "Delete N selected" action on **Manage Cards** and the
+    **Winners Log**, each confirming once for the whole set rather than per row.
+  - **Grouping** (`group-by`) - keeps rows sharing a column value contiguous. It is a
+    primary sort key, not an aggregate row, so column sorting still orders rows _within_
+    each group. This replaces the rally stamp log's bespoke `groupedByParticipant` pass
+    and, with it, the `sort-mode="external"` escape hatch that existed only to protect
+    that grouping.
+  - **Faceted filters** (`facetable` column + `column-filters`) - the table reports each
+    facetable column's distinct values with counts, so a toolbar can offer them as a
+    dropdown. On the garapon draw log: filter to a single prize and see how many of each
+    went out.
+  - **CSV export** (`exportCsv(filename)` on a template ref) - writes the rows the
+    filters currently match, in the current sort order, across **all** pages, with
+    RFC 4180 quoting and a UTF-8 BOM so Excel reads it correctly. Columns marked
+    `noExport` (action buttons, expand carets) are left out. On the Winners Log, the
+    garapon draw log and the rally stamp log.
 - **`--radius-media` token** (6px), used by image previews only - thumbnails, covers and
   prize art keep one soft edge so a photo reads as a picture rather than a hole punched
   in the panel, while everything that is chrome is square. Like `--radius` it is not
@@ -95,6 +122,53 @@ the stylesheets under enforced formatting.
 
 #### Changed
 
+- **One toolbar layout above every table** (`DataTableToolbar`). Seven tables had each
+  grown their own: the row count sat left of the actions on one screen and right of them
+  on the next, the same button read "CSV" here and "Export CSV" there, the counts said
+  "6/6 cards", "40 total entries", "10 stamps" and "3 draws", and Manage Cards split its
+  controls over two rows while the rest used one. Composing the pieces by hand is what
+  allowed that, so the order is now fixed by the component -
+  `[search filters] ....... [per-page count actions]` - with slots for the parts that
+  genuinely differ. Counts read `40 entries`, or `3 of 12 draws` once a filter is
+  narrowing the set.
+  - The toolbar's **search box is a fixed 320px**, not flex-grow. Growing, it filled
+    whatever the right-hand group didn't need, so the same control came out 360px on a
+    table with one button and 253px on one with three - which reads as three different
+    components rather than one. It still shrinks on narrow viewports.
+  - **`.row-actions` gap 6px -> 8px.** At six icon buttons (Manage Cards) the cluster
+    read as a single blob.
+  - Changing the page size returns you to page 1 on every table; that was previously
+    wired by hand on the Winners Log only, so it now lives in `DataTable`.
+- **`DataTable` owns the row pipeline: filter -> sort -> paginate**, built on
+  [TanStack Table](https://tanstack.com/table) (`@tanstack/vue-table`). TanStack is
+  _headless_ - it supplies the row model and no markup or CSS - so every element is
+  still ours, carrying our classes, and the theme tokens and WCAG audit see the tables
+  exactly as before. AdminView grows 2.7 KB; the hand-rolled pipelines it replaced
+  roughly offset it.
+
+  The ordering is the point. Tables used to be handed a **page** (`pagedCards`,
+  `pagedLinks`, `pagedLog`, `pagedClosed`), so a table could not have sorted for itself
+  without sorting _within the current page_ - which looks right and is wrong. Pass the
+  full list now; the table filters, sorts, then pages, and reports
+  `{ total, totalPages }` back via `@update:view` for the toolbar count and
+  `PaginationBar`.
+
+  This retires `composables/useDataTableView.ts` and the per-tab and per-store copies of
+  the same pipeline (cards, fonts, server logs). Eight tables across six tabs moved over.
+  Two behaviours were deliberately preserved and are covered by tests: a first click on
+  any column sorts **ascending** (TanStack defaults numeric columns to descending-first,
+  which would have silently reversed half the admin tables), and sorting stays locale-
+  and numeric-aware, so `9 < 10 < 100` rather than `10 < 100 < 9`.
+
+  One exception: the rally stamp log regroups rows by participant _after_ sorting, so a
+  table that sorted them would undo the grouping. It drives `DataTable` in
+  `sort-mode="external"`, documented as the single case for that escape hatch.
+
+- **The winners log loads in full and sorts client-side** like every other admin table.
+  It was the one server-paginated, server-sorted table, which made client sorting
+  impossible there - it would have sorted the 25 loaded rows and looked correct. Because
+  the API caps `per_page` at 200, the store pages through until it has `total` rows
+  rather than requesting one oversized page, which would come back silently truncated.
 - **Montserrat is the body face**, paired with the display face already configured in
   System -> Settings. Declared once on `body` so every control inherits it.
 - **The display face now carries the page and panel titles.** `--header-font` previously

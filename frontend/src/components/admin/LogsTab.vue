@@ -11,11 +11,14 @@
  * per-page control; the "Debug" toggle flips the server's runtime level live and
  * "Live" pauses the feed for inspection.
  */
-import { computed, onMounted, ref, watch } from 'vue'
+import { onMounted, ref } from 'vue'
 import AdminPanel from '@/components/common/ui/AdminPanel.vue'
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
 import EmptyState from '@/components/common/ui/EmptyState.vue'
-import DataTable, { type DataColumn } from '@/components/common/ui/DataTable.vue'
+import DataTable, {
+  type DataColumn,
+  type DataTableView,
+} from '@/components/common/ui/DataTable.vue'
 import PaginationBar from '@/components/common/ui/PaginationBar.vue'
 import { useLogsStore, type LogRow } from '@/stores/logs'
 
@@ -33,21 +36,13 @@ const columns: DataColumn[] = [
   { key: 'msg', label: 'Path / Message' },
 ]
 
-// -- Pagination (client-side over the in-memory buffer) ------------------------
+// -- Pagination ---------------------------------------------------------------
+// The table paginates the in-memory buffer (and keeps the page in range as the
+// buffer shrinks on a filter change or the entry cap); this side just holds the
+// page and the totals the table reports back.
 const page = ref(1)
 const perPage = ref(50)
-const totalPages = computed(() => Math.max(1, Math.ceil(logs.entries.length / perPage.value)))
-const pagedEntries = computed(() => {
-  const start = (page.value - 1) * perPage.value
-  return logs.entries.slice(start, start + perPage.value)
-})
-// Keep the page in range as the list shrinks (filter change / 1000-entry cap).
-watch(totalPages, (tp) => {
-  if (page.value > tp) page.value = tp
-})
-function goPage(p: number): void {
-  page.value = Math.min(Math.max(1, p), totalPages.value)
-}
+const view = ref<DataTableView>({ total: 0, totalPages: 1, facets: {} })
 function resetToFirstPage(): void {
   page.value = 1
 }
@@ -238,7 +233,16 @@ onMounted(() => void logs.load())
         label="Loading logs..."
       />
       <template v-else>
-        <DataTable :columns="columns" :rows="pagedEntries" row-key="_id" class="log-table">
+        <DataTable
+          v-model:page="page"
+          :columns="columns"
+          :rows="logs.entries"
+          row-key="_id"
+          :page-size="perPage"
+          resizable
+          class="log-table"
+          @update:view="view = $event"
+        >
           <template #cell-_expand="{ row, expanded }">
             <span v-if="row.fields" class="log-caret"
               ><font-awesome-icon :icon="['fas', expanded ? 'chevron-down' : 'chevron-right']"
@@ -285,7 +289,12 @@ onMounted(() => void logs.load())
             <EmptyState v-if="!logs.loading" text="No log entries match the current filters." />
           </template>
         </DataTable>
-        <PaginationBar class="mt-12" :page="page" :total-pages="totalPages" @go="goPage" />
+        <PaginationBar
+          class="mt-12"
+          :page="page"
+          :total-pages="view.totalPages"
+          @go="(p: number) => (page = p)"
+        />
       </template>
     </AdminPanel>
   </div>

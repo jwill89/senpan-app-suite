@@ -5,10 +5,15 @@
  * date, and view/edit + delete actions). Clicking view/edit opens the board
  * preview modal (which also allows inline player-name/details edits).
  */
+import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
 import AdminPanel from '@/components/common/ui/AdminPanel.vue'
-import DataTable, { type DataColumn } from '@/components/common/ui/DataTable.vue'
+import DataTableToolbar from '@/components/common/ui/DataTableToolbar.vue'
+import DataTable, {
+  type DataColumn,
+  type DataTableView,
+} from '@/components/common/ui/DataTable.vue'
 import PaginationBar from '@/components/common/ui/PaginationBar.vue'
 import EmptyState from '@/components/common/ui/EmptyState.vue'
 import SearchInput from '@/components/common/ui/SearchInput.vue'
@@ -17,6 +22,14 @@ import { useUiStore } from '@/stores/ui'
 import { formatServerTimestamp } from '@/lib/datetime'
 
 const cards = useCardsStore()
+const cardsView = ref<DataTableView>({ total: 0, totalPages: 1, facets: {} })
+const selectedCards = ref<(string | number)[]>([])
+
+/** Bulk-delete the checked cards, then drop the now-stale selection. */
+async function deleteSelectedCards(): Promise<void> {
+  const done = await cards.deleteCards(selectedCards.value.map(String))
+  if (done) selectedCards.value = []
+}
 const ui = useUiStore()
 const router = useRouter()
 
@@ -83,24 +96,31 @@ function copyCardUrl(id: string): void {
         </button>
       </div>
 
-      <div class="flex-toolbar mb-12">
-        <label class="text-muted text-xs">Per page:</label>
-        <select v-model.number="cards.cardsPerPage" aria-label="Cards per page" style="width: 70px">
-          <option :value="10">10</option>
-          <option :value="25">25</option>
-          <option :value="50">50</option>
-          <option :value="100">100</option>
-        </select>
-        <span class="text-muted text-xs push-right">
-          {{ cards.filteredCards.length }}/{{ cards.cards.length }} cards
-        </span>
-      </div>
-      <SearchInput
-        v-model="cards.cardSearchQuery"
-        class="mb-12"
-        placeholder="Search by ID or player name..."
-        aria-label="Search cards"
-      />
+      <DataTableToolbar
+        v-model:per-page="cards.cardsPerPage"
+        :count="cardsView.total"
+        :total="cards.cards.length"
+        noun="card"
+        :per-page-options="[10, 25, 50, 100]"
+      >
+        <template #search>
+          <SearchInput
+            v-model="cards.cardSearchQuery"
+            placeholder="Search by ID or player name..."
+            aria-label="Search cards"
+          />
+        </template>
+        <template #actions>
+          <button
+            v-if="selectedCards.length"
+            class="btn-danger btn-sm"
+            @click="deleteSelectedCards"
+          >
+            <font-awesome-icon :icon="['fas', 'trash']" /> Delete
+            {{ selectedCards.length }} selected
+          </button>
+        </template>
+      </DataTableToolbar>
 
       <LoadingSpinner
         v-if="cards.cardsLoading && cards.cards.length === 0"
@@ -109,12 +129,18 @@ function copyCardUrl(id: string): void {
       />
       <template v-else>
         <DataTable
+          v-model:page="cards.cardsPage"
+          v-model:selected="selectedCards"
           :columns="columns"
-          :rows="cards.pagedCards"
+          :rows="cards.cards"
           row-key="id"
-          :sort-key="cards.cardsSortKey"
-          :sort-dir="cards.cardsSortDir"
-          @sort="cards.cardsSetSort"
+          selectable
+          resizable
+          :filter="cards.cardSearchQuery"
+          :filter-fn="cards.cardMatches"
+          :page-size="cards.cardsPerPage"
+          :default-sort="{ key: 'created_at', dir: 'desc' }"
+          @update:view="cardsView = $event"
         >
           <template #cell-id="{ row }">
             <span class="code-highlight">{{ row.id }}</span>
@@ -216,8 +242,8 @@ function copyCardUrl(id: string): void {
         <PaginationBar
           class="mt-12"
           :page="cards.cardsPage"
-          :total-pages="cards.cardsTotalPages"
-          @go="cards.cardsGoPage"
+          :total-pages="cardsView.totalPages"
+          @go="(p: number) => (cards.cardsPage = p)"
         />
       </template>
     </AdminPanel>

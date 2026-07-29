@@ -30,6 +30,7 @@
     "@fortawesome/free-brands-svg-icons": "^7.2.0",
     "@fortawesome/vue-fontawesome": "^3.2.0",
     "@milkdown/crepe": "^7.21.2",
+    "@tanstack/vue-table": "^8.21.3",
     "html-to-image": "^1.11.13",
     "markdown-it": "^14.1.0",
     "pinia": "^3.0.4",

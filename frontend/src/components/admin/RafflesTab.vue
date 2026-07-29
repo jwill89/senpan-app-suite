@@ -23,11 +23,14 @@ import ManagerView from '@/components/common/ui/ManagerView.vue'
 import SubPageHeader from '@/components/common/ui/SubPageHeader.vue'
 import SearchInput from '@/components/common/ui/SearchInput.vue'
 import FormField from '@/components/common/ui/FormField.vue'
-import DataTable, { type DataColumn } from '@/components/common/ui/DataTable.vue'
+import DataTableToolbar from '@/components/common/ui/DataTableToolbar.vue'
+import DataTable, {
+  type DataColumn,
+  type DataTableView,
+} from '@/components/common/ui/DataTable.vue'
 import PaginationBar from '@/components/common/ui/PaginationBar.vue'
 import EmptyState from '@/components/common/ui/EmptyState.vue'
 import RaffleFormTab from './RaffleFormTab.vue'
-import { useDataTableView } from '@/composables/useDataTableView'
 import { useRafflesStore } from '@/stores/raffles'
 import { assetUrl } from '@/lib/assets'
 import { formatServerTimestamp, parseServerTimestamp } from '@/lib/datetime'
@@ -40,9 +43,7 @@ const screen = ref<Screen>('list')
 
 const isOpen = computed(() => raffles.selectedRaffle?.status === 'open')
 
-// -- Closed-raffle table: client-side search + pagination ---------------------
-// The shared view composable owns the search -> paginate pipeline (and the
-// page-clamp watchers) so only the columns + match predicate live here.
+// -- Closed-raffle table ------------------------------------------------------
 const closedColumns: DataColumn[] = [
   { key: 'title', label: 'Title' },
   { key: 'winner', label: 'Winner' },
@@ -50,16 +51,13 @@ const closedColumns: DataColumn[] = [
   { key: 'total', label: 'Total', align: 'right' },
   { key: 'actions', label: '', align: 'right' },
 ]
-const {
-  search: closedSearch,
-  page: closedPage,
-  totalPages: closedTotalPages,
-  paged: pagedClosed,
-  filtered: filteredClosed,
-} = useDataTableView<Raffle>(() => raffles.closedRaffles, {
-  matches: (r, q) => [r.title, r.winner_name ?? ''].some((s) => s.toLowerCase().includes(q)),
-  perPage: 10,
-})
+// Closed-raffle table view. DataTable owns filter -> sort -> paginate; this side
+// keeps only the search box, the page, and the counts it reports back.
+const closedSearch = ref('')
+const closedPage = ref(1)
+const closedView = ref<DataTableView>({ total: 0, totalPages: 1, facets: {} })
+const closedMatches = (r: Raffle, q: string): boolean =>
+  [r.title, r.winner_name ?? ''].some((s) => s.toLowerCase().includes(q))
 
 // -- Entries table (DataTable) ------------------------------------------------
 // The Actions column (delete) only exists while the raffle is open; the closed
@@ -359,15 +357,29 @@ async function deleteSelected(): Promise<void> {
           <font-awesome-icon :icon="['fad', 'lock']" /> Closed Raffles
         </h4>
         <template v-if="raffles.closedRaffles.length">
-          <div class="manager-toolbar">
-            <SearchInput
-              v-model="closedSearch"
-              placeholder="Search closed raffles..."
-              aria-label="Search closed raffles"
-            />
-            <span class="text-muted text-xs push-right"> {{ filteredClosed.length }} closed </span>
-          </div>
-          <DataTable :columns="closedColumns" :rows="pagedClosed" row-key="id">
+          <DataTableToolbar
+            :count="closedView.total"
+            :total="raffles.closedRaffles.length"
+            noun="closed raffle"
+          >
+            <template #search>
+              <SearchInput
+                v-model="closedSearch"
+                placeholder="Search closed raffles..."
+                aria-label="Search closed raffles"
+              />
+            </template>
+          </DataTableToolbar>
+          <DataTable
+            v-model:page="closedPage"
+            :columns="closedColumns"
+            :rows="raffles.closedRaffles"
+            row-key="id"
+            :filter="closedSearch"
+            :filter-fn="closedMatches"
+            :page-size="10"
+            @update:view="closedView = $event"
+          >
             <template #cell-title="{ row }">{{ row.title }}</template>
             <template #cell-winner="{ row }">{{ row.winner_name || '-' }}</template>
             <template #cell-period="{ row }">
@@ -407,10 +419,10 @@ async function deleteSelected(): Promise<void> {
             </template>
           </DataTable>
           <PaginationBar
-            v-if="closedTotalPages > 1"
+            v-if="closedView.totalPages > 1"
             class="mt-12"
             :page="closedPage"
-            :total-pages="closedTotalPages"
+            :total-pages="closedView.totalPages"
             @go="(p: number) => (closedPage = p)"
           />
         </template>

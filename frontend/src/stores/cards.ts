@@ -4,7 +4,7 @@
  * (id + player_name + details); board data is fetched on demand for previews.
  */
 import { defineStore } from 'pinia'
-import { computed, ref, watch } from 'vue'
+import { ref } from 'vue'
 import { endpoints } from '@/lib/endpoints'
 import { router } from '@/router'
 import type { Card, CardListEntry } from '@/types/api'
@@ -30,66 +30,17 @@ export const useCardsStore = defineStore('cards', () => {
   const previewCardEditing = ref<'player_name' | 'details' | null>(null)
   const previewCardEditValue = ref('')
 
-  /** Sort + pagination state for the Manage Cards table (all client-side, since
-   *  the full list is already in memory). */
-  type CardSortKey = 'id' | 'player_name' | 'created_at'
-  const cardsSortKey = ref<CardSortKey>('created_at')
-  const cardsSortDir = ref<'asc' | 'desc'>('desc')
+  /** Page + page size for the Manage Cards table. The filter -> sort -> paginate
+   *  pipeline itself lives in DataTable; the store keeps only what outlives the
+   *  table (the query the toolbar binds, and the page the pager drives). */
   const cardsPage = ref(1)
   const cardsPerPage = ref(25)
 
-  /** Cards filtered by search query matching ID or player name. */
-  const filteredCards = computed(() => {
-    const q = cardSearchQuery.value.trim().toLowerCase()
-    if (!q) return cards.value
-    return cards.value.filter(
-      (c) =>
-        c.id.toLowerCase().includes(q) ||
-        (c.player_name && c.player_name.toLowerCase().includes(q)),
-    )
-  })
-
-  /** Filtered cards sorted by the active column/direction. */
-  const sortedCards = computed(() => {
-    const key = cardsSortKey.value
-    const dir = cardsSortDir.value === 'asc' ? 1 : -1
-    return [...filteredCards.value].sort((a, b) => {
-      const av = (a[key] || '').toLowerCase()
-      const bv = (b[key] || '').toLowerCase()
-      if (av < bv) return -dir
-      if (av > bv) return dir
-      return 0
-    })
-  })
-
-  const cardsTotalPages = computed(() =>
-    Math.max(1, Math.ceil(sortedCards.value.length / cardsPerPage.value)),
-  )
-
-  /** The current page of sorted cards (page clamped to the available range). */
-  const pagedCards = computed(() => {
-    const page = Math.min(cardsPage.value, cardsTotalPages.value)
-    const start = (page - 1) * cardsPerPage.value
-    return sortedCards.value.slice(start, start + cardsPerPage.value)
-  })
-
-  /** Reset to the first page whenever the result set shape changes. */
-  watch([cardSearchQuery, cardsPerPage, cardsSortKey, cardsSortDir], () => {
-    cardsPage.value = 1
-  })
-
-  function cardsGoPage(page: number): void {
-    cardsPage.value = Math.min(Math.max(1, page), cardsTotalPages.value)
-  }
-
-  /** Toggle direction when re-selecting the active column, else sort ascending. */
-  function cardsSetSort(key: string): void {
-    if (cardsSortKey.value === key) {
-      cardsSortDir.value = cardsSortDir.value === 'asc' ? 'desc' : 'asc'
-    } else {
-      cardsSortKey.value = key as CardSortKey
-      cardsSortDir.value = 'asc'
-    }
+  /** A card matches the search when its ID or player name contains the query.
+   *  Passed to DataTable as its `filter-fn`; kept here so the search semantics
+   *  stay testable independently of the table. */
+  function cardMatches(c: CardListEntry, q: string): boolean {
+    return c.id.toLowerCase().includes(q) || c.player_name.toLowerCase().includes(q)
   }
 
   async function loadCards(): Promise<void> {
@@ -152,6 +103,34 @@ export const useCardsStore = defineStore('cards', () => {
     } catch (e) {
       ui.notify((e as Error).message, 'error')
     }
+  }
+
+  /** Bulk delete from the table's selection: confirms ONCE for the whole set
+   *  (a per-card prompt would be unusable), then removes them together. */
+  async function deleteCards(ids: string[]): Promise<number> {
+    if (ids.length === 0) return 0
+    if (
+      !(await ui.confirm(
+        `Delete ${ids.length} selected card${ids.length === 1 ? '' : 's'}? This cannot be undone.`,
+        { title: 'Delete selected cards', confirmText: `Delete ${ids.length}` },
+      ))
+    )
+      return 0
+    let done = 0
+    for (const id of ids) {
+      try {
+        await endpoints.cards.delete(id)
+        done++
+      } catch (e) {
+        ui.notify((e as Error).message, 'error')
+      }
+    }
+    if (done) {
+      const gone = new Set(ids)
+      cards.value = cards.value.filter((c) => !gone.has(c.id))
+      ui.notify(`${done} card${done === 1 ? '' : 's'} deleted`, 'info')
+    }
+    return done
   }
 
   async function deleteAllCards(): Promise<void> {
@@ -242,8 +221,6 @@ export const useCardsStore = defineStore('cards', () => {
     generateCount,
     cardSearchQuery,
     singleCardName,
-    cardsSortKey,
-    cardsSortDir,
     cardsPage,
     cardsPerPage,
     cardsLoading,
@@ -253,16 +230,12 @@ export const useCardsStore = defineStore('cards', () => {
     previewLoading,
     previewCardEditing,
     previewCardEditValue,
-    filteredCards,
-    sortedCards,
-    pagedCards,
-    cardsTotalPages,
-    cardsGoPage,
-    cardsSetSort,
+    cardMatches,
     loadCards,
     generateCards,
     generateSingleCard,
     deleteCard,
+    deleteCards,
     deleteAllCards,
     approveCard,
     setProtected,

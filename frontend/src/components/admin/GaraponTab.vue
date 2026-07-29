@@ -22,13 +22,16 @@ import ManagerView from '@/components/common/ui/ManagerView.vue'
 import SubPageHeader from '@/components/common/ui/SubPageHeader.vue'
 import SearchInput from '@/components/common/ui/SearchInput.vue'
 import FormField from '@/components/common/ui/FormField.vue'
-import DataTable, { type DataColumn } from '@/components/common/ui/DataTable.vue'
+import DataTableToolbar from '@/components/common/ui/DataTableToolbar.vue'
+import DataTable, {
+  type DataColumn,
+  type DataTableView,
+} from '@/components/common/ui/DataTable.vue'
 import PaginationBar from '@/components/common/ui/PaginationBar.vue'
 import EmptyState from '@/components/common/ui/EmptyState.vue'
 import BallSwatch from '@/components/common/ui/BallSwatch.vue'
 import GaraponFormTab from './GaraponFormTab.vue'
 import { useGaraponsStore } from '@/stores/garapons'
-import { useDataTableView } from '@/composables/useDataTableView'
 import { rateTotal, ratePct as normalizedPct } from '@/lib/garapon'
 import { assetUrl } from '@/lib/assets'
 import { formatServerTimestamp } from '@/lib/datetime'
@@ -42,9 +45,9 @@ const screen = ref<Screen>('list')
 const isOpen = computed(() => garapons.selectedGarapon?.status === 'open')
 
 // Each admin table (closed garapons, drawing links, draw log) is the same
-// search + column-sort + paginate view, so useDataTableView owns that pipeline
-// and only the columns, match predicate, and starting sort differ here. Column
-// keys match the row fields so the generic sort reads them directly.
+// search + column-sort + paginate view, and DataTable owns that pipeline - only
+// the columns, match predicate, and starting sort differ here. Column keys match
+// the row fields so the table's sort reads them directly.
 const closedColumns: DataColumn[] = [
   { key: 'title', label: 'Title', sortable: true },
   { key: 'player_count', label: 'Drawings', align: 'right', sortable: true },
@@ -52,18 +55,10 @@ const closedColumns: DataColumn[] = [
   { key: 'created_at', label: 'Created', sortable: true },
   { key: 'actions', label: '', align: 'right' },
 ]
-const {
-  search: closedSearch,
-  page: closedPage,
-  totalPages: closedTotalPages,
-  paged: pagedClosed,
-  filtered: filteredClosed,
-  sortKey: closedSortKey,
-  sortDir: closedSortDir,
-  setSort: setClosedSort,
-} = useDataTableView<Garapon>(() => garapons.closedGarapons, {
-  matches: (g, q) => g.title.toLowerCase().includes(q),
-})
+const closedSearch = ref('')
+const closedPage = ref(1)
+const closedView = ref<DataTableView>({ total: 0, totalPages: 1, facets: {} })
+const closedMatches = (g: Garapon, q: string): boolean => g.title.toLowerCase().includes(q)
 
 const linkColumns: DataColumn[] = [
   { key: 'player_name', label: 'Player', sortable: true },
@@ -71,42 +66,30 @@ const linkColumns: DataColumn[] = [
   { key: 'created_at', label: 'Created', sortable: true },
   { key: 'actions', label: '', align: 'right' },
 ]
-const {
-  search: linkSearch,
-  page: linkPage,
-  totalPages: linkTotalPages,
-  paged: pagedLinks,
-  filtered: filteredLinks,
-  sortKey: linkSortKey,
-  sortDir: linkSortDir,
-  setSort: setLinkSort,
-  reset: resetLinks,
-} = useDataTableView<GaraponPlayer>(() => garapons.garaponPlayers, {
-  matches: (p, q) => p.player_name.toLowerCase().includes(q),
-  // Newest links first by default (a freshly generated link lands on top).
-  sort: { key: 'created_at', dir: 'desc' },
-})
+const linkSearch = ref('')
+const linkPage = ref(1)
+const linkView = ref<DataTableView>({ total: 0, totalPages: 1, facets: {} })
+const linkMatches = (p: GaraponPlayer, q: string): boolean =>
+  p.player_name.toLowerCase().includes(q)
+// Newest links first by default (a freshly generated link lands on top).
+const linkSort = { key: 'created_at', dir: 'desc' } as const
 
 const logColumns: DataColumn[] = [
   { key: 'player_name', label: 'Player', sortable: true },
-  { key: 'prize_name', label: 'Prize', sortable: true },
+  // Facetable: "which prizes actually went out, and how many of each" is the
+  // question this log gets asked, so its distinct values drive a filter.
+  { key: 'prize_name', label: 'Prize', sortable: true, facetable: true },
   { key: 'drawn_at', label: 'When', sortable: true, align: 'right' },
 ]
-const {
-  search: logSearch,
-  page: logPage,
-  totalPages: logTotalPages,
-  paged: pagedLog,
-  filtered: filteredLog,
-  sortKey: logSortKey,
-  sortDir: logSortDir,
-  setSort: setLogSort,
-  reset: resetLog,
-} = useDataTableView<GaraponDraw>(() => garapons.garaponDraws, {
-  matches: (d, q) =>
-    d.player_name.toLowerCase().includes(q) || d.prize_name.toLowerCase().includes(q),
-  sort: { key: 'drawn_at', dir: 'desc' },
-})
+const logSearch = ref('')
+const logPage = ref(1)
+const logView = ref<DataTableView>({ total: 0, totalPages: 1, facets: {} })
+const logMatches = (d: GaraponDraw, q: string): boolean =>
+  d.player_name.toLowerCase().includes(q) || d.prize_name.toLowerCase().includes(q)
+const logSort = { key: 'drawn_at', dir: 'desc' } as const
+const logPrizeFilter = ref('')
+const logFilters = computed(() => ({ prize_name: logPrizeFilter.value }))
+const logTableRef = ref<{ exportCsv: (name?: string) => void } | null>(null)
 
 // -- Display helpers ----------------------------------------------------------
 
@@ -124,8 +107,10 @@ function created(ts: string): string {
 // -- Navigation ---------------------------------------------------------------
 /** Reset the per-sub-page search/sort/pagination when opening a garapon. */
 function resetSubPages(): void {
-  resetLinks()
-  resetLog()
+  linkSearch.value = ''
+  linkPage.value = 1
+  logSearch.value = ''
+  logPage.value = 1
 }
 function openNew(): void {
   garapons.newGaraponForm()
@@ -292,23 +277,29 @@ function toggleClosed(): void {
 
       <!-- Links table (searchable + paginated) -->
       <template v-if="garapons.garaponPlayers.length">
-        <div class="manager-toolbar">
-          <SearchInput
-            v-model="linkSearch"
-            placeholder="Search by player..."
-            aria-label="Search drawing links"
-          />
-          <span class="text-muted text-xs push-right">
-            {{ filteredLinks.length }} link{{ filteredLinks.length === 1 ? '' : 's' }}
-          </span>
-        </div>
+        <DataTableToolbar
+          :count="linkView.total"
+          :total="garapons.garaponPlayers.length"
+          noun="link"
+        >
+          <template #search>
+            <SearchInput
+              v-model="linkSearch"
+              placeholder="Search by player..."
+              aria-label="Search drawing links"
+            />
+          </template>
+        </DataTableToolbar>
         <DataTable
+          v-model:page="linkPage"
           :columns="linkColumns"
-          :rows="pagedLinks"
+          :rows="garapons.garaponPlayers"
           row-key="id"
-          :sort-key="linkSortKey"
-          :sort-dir="linkSortDir"
-          @sort="setLinkSort"
+          :filter="linkSearch"
+          :filter-fn="linkMatches"
+          :page-size="10"
+          :default-sort="linkSort"
+          @update:view="linkView = $event"
         >
           <template #cell-draws_used="{ row }">{{ row.draws_used }}/{{ row.max_draws }}</template>
           <template #cell-created_at="{ row }">
@@ -357,10 +348,10 @@ function toggleClosed(): void {
           </template>
         </DataTable>
         <PaginationBar
-          v-if="linkTotalPages > 1"
+          v-if="linkView.totalPages > 1"
           class="mt-12"
           :page="linkPage"
-          :total-pages="linkTotalPages"
+          :total-pages="linkView.totalPages"
           @go="(p: number) => (linkPage = p)"
         />
       </template>
@@ -375,23 +366,46 @@ function toggleClosed(): void {
       </SubPageHeader>
 
       <template v-if="garapons.garaponDraws.length">
-        <div class="manager-toolbar">
-          <SearchInput
-            v-model="logSearch"
-            placeholder="Search by player or prize..."
-            aria-label="Search draw log"
-          />
-          <span class="text-muted text-xs push-right">
-            {{ filteredLog.length }} draw{{ filteredLog.length === 1 ? '' : 's' }}
-          </span>
-        </div>
+        <DataTableToolbar :count="logView.total" :total="garapons.garaponDraws.length" noun="draw">
+          <template #search>
+            <SearchInput
+              v-model="logSearch"
+              placeholder="Search by player or prize..."
+              aria-label="Search draw log"
+            />
+          </template>
+          <template #filters>
+            <select v-model="logPrizeFilter" aria-label="Filter by prize" style="width: 170px">
+              <option value="">All prizes</option>
+              <option v-for="f in logView.facets.prize_name" :key="f.value" :value="f.value">
+                {{ f.value }} ({{ f.count }})
+              </option>
+            </select>
+          </template>
+          <template #actions>
+            <button
+              class="btn-view btn-sm"
+              :disabled="!logView.total"
+              title="Download the draws currently shown, as CSV"
+              @click="logTableRef?.exportCsv('garapon-draw-log')"
+            >
+              <font-awesome-icon :icon="['fas', 'file-arrow-down']" /> Export CSV
+            </button>
+          </template>
+        </DataTableToolbar>
         <DataTable
+          ref="logTableRef"
+          v-model:page="logPage"
           :columns="logColumns"
-          :rows="pagedLog"
+          :rows="garapons.garaponDraws"
           row-key="id"
-          :sort-key="logSortKey"
-          :sort-dir="logSortDir"
-          @sort="setLogSort"
+          :filter="logSearch"
+          :filter-fn="logMatches"
+          :column-filters="logFilters"
+          :page-size="10"
+          :default-sort="logSort"
+          resizable
+          @update:view="logView = $event"
         >
           <template #cell-prize_name="{ row }">
             <span class="prize-cell"
@@ -406,10 +420,10 @@ function toggleClosed(): void {
           </template>
         </DataTable>
         <PaginationBar
-          v-if="logTotalPages > 1"
+          v-if="logView.totalPages > 1"
           class="mt-12"
           :page="logPage"
-          :total-pages="logTotalPages"
+          :total-pages="logView.totalPages"
           @go="(p: number) => (logPage = p)"
         />
       </template>
@@ -478,21 +492,28 @@ function toggleClosed(): void {
           <font-awesome-icon :icon="['fad', 'lock']" /> Closed Garapons
         </h4>
         <template v-if="garapons.closedGarapons.length">
-          <div class="manager-toolbar">
-            <SearchInput
-              v-model="closedSearch"
-              placeholder="Search closed garapons..."
-              aria-label="Search closed garapons"
-            />
-            <span class="text-muted text-xs push-right">{{ filteredClosed.length }} closed</span>
-          </div>
+          <DataTableToolbar
+            :count="closedView.total"
+            :total="garapons.closedGarapons.length"
+            noun="closed garapon"
+          >
+            <template #search>
+              <SearchInput
+                v-model="closedSearch"
+                placeholder="Search closed garapons..."
+                aria-label="Search closed garapons"
+              />
+            </template>
+          </DataTableToolbar>
           <DataTable
+            v-model:page="closedPage"
             :columns="closedColumns"
-            :rows="pagedClosed"
+            :rows="garapons.closedGarapons"
             row-key="id"
-            :sort-key="closedSortKey"
-            :sort-dir="closedSortDir"
-            @sort="setClosedSort"
+            :filter="closedSearch"
+            :filter-fn="closedMatches"
+            :page-size="10"
+            @update:view="closedView = $event"
           >
             <template #cell-player_count="{ row }">{{ row.player_count || 0 }}</template>
             <template #cell-draw_count="{ row }">{{ row.draw_count || 0 }}</template>
@@ -524,10 +545,10 @@ function toggleClosed(): void {
             </template>
           </DataTable>
           <PaginationBar
-            v-if="closedTotalPages > 1"
+            v-if="closedView.totalPages > 1"
             class="mt-12"
             :page="closedPage"
-            :total-pages="closedTotalPages"
+            :total-pages="closedView.totalPages"
             @go="(p: number) => (closedPage = p)"
           />
         </template>

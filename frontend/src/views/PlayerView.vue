@@ -15,6 +15,7 @@ import BingoBoard from '@/components/common/BingoBoard.vue'
 import CalledNumbers from '@/components/common/CalledNumbers.vue'
 import MarkdownText from '@/components/common/MarkdownText.vue'
 import ModalOverlay from '@/components/common/ModalOverlay.vue'
+import KonamiEgg from '@/components/player/KonamiEgg.vue'
 import StampShapePicker from '@/components/player/StampShapePicker.vue'
 import StampColorPicker from '@/components/player/StampColorPicker.vue'
 import StampOpacitySlider from '@/components/player/StampOpacitySlider.vue'
@@ -237,17 +238,17 @@ function onYoeverSoundToggle(): void {
             <SoundControls />
 
             <!-- Per-player toggles (above the action bar), for my screen only: show/
-                 hide the reaction animation, and play/mute its sound. Independent of
-                 each other and of the main Sound options; both on by default. -->
-            <div v-if="player.playerGame" class="yoever-toggles">
-              <div class="yoever-toggle">
-                <span class="label">Show "It's Yoever" effects:</span>
+                 hide the reaction animation, and play/mute its sound. Both on by
+                 default. Effects is the master - turning it off locks the sound
+                 segment, since a muted animation has no sound to control. -->
+            <div v-if="player.playerGame" class="yoever-row">
+              <span class="label">It's Yoever:</span>
+              <div class="yoever-btns">
                 <button
                   type="button"
-                  class="switch"
-                  role="switch"
-                  :class="{ 'is-on': !yoever.muted }"
-                  :aria-checked="!yoever.muted"
+                  class="toggle-btn toggle-btn--sm"
+                  :class="{ 'is-active': !yoever.muted }"
+                  :aria-pressed="!yoever.muted"
                   :title="
                     yoever.muted
                       ? `Hidden for you - click to show the It's Yoever effect (and its sound)`
@@ -255,29 +256,25 @@ function onYoeverSoundToggle(): void {
                   "
                   @click="yoever.toggleShowEffects()"
                 >
-                  <span class="switch-knob"></span>
+                  <font-awesome-icon :icon="['fas', 'eye']" /> Effects
                 </button>
-              </div>
 
-              <div class="yoever-toggle" :class="{ 'is-disabled': yoever.muted }">
-                <span class="label">Play "It's Yoever" sound:</span>
                 <button
                   type="button"
-                  class="switch"
-                  role="switch"
-                  :class="{ 'is-on': !yoever.muted && yoever.soundEnabled }"
+                  class="toggle-btn toggle-btn--sm"
+                  :class="{ 'is-active': !yoever.muted && yoever.soundEnabled }"
                   :disabled="yoever.muted"
-                  :aria-checked="!yoever.muted && yoever.soundEnabled"
+                  :aria-pressed="!yoever.muted && yoever.soundEnabled"
                   :title="
                     yoever.muted
-                      ? `Turn on Show effects first to control the sound`
+                      ? `Turn Effects on first to control the sound`
                       : yoever.soundEnabled
                         ? `On - click to mute the It's Yoever sound for you (uses your sound volume)`
                         : `Off - click to play the It's Yoever sound for you (uses your sound volume)`
                   "
                   @click="onYoeverSoundToggle"
                 >
-                  <span class="switch-knob"></span>
+                  <font-awesome-icon :icon="['fas', 'volume-high']" /> Sounds
                 </button>
               </div>
             </div>
@@ -395,5 +392,8 @@ function onYoeverSoundToggle(): void {
       </p>
       <button class="btn-neutral" @click="player.showMinigameModal = false">Got it!</button>
     </ModalOverlay>
+
+    <!-- Konami-code easter egg (clears the board, on purpose) -->
+    <KonamiEgg />
   </div>
 </template>

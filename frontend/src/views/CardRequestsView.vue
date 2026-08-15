@@ -227,33 +227,9 @@ function back(): void {
   padding: 16px;
 }
 
-/* Validation error shown as a danger callout (icon + tinted box). */
-.form-alert {
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
-  padding: 10px 14px;
-  border-radius: var(--radius, 8px);
-  font-size: 0.9rem;
-  margin-bottom: 14px;
-}
-.form-alert-danger {
-  background: color-mix(in srgb, var(--danger) 15%, transparent);
-  border: 1px solid var(--danger);
-  color: var(--text);
-}
-.form-alert-icon {
-  color: var(--danger);
-  margin-top: 2px;
-  flex-shrink: 0;
-}
-
-/* Centre the bot-check widget. */
-.turnstile-row {
-  display: flex;
-  justify-content: center;
-  margin-bottom: 14px;
-}
+/* The validation callout and the bot-check row are the shared `.form-alert` /
+   `.turnstile-row` objects (utilities.css) - the stamp-rally sign-up form needs
+   both too. */
 
 .card-request-submit {
   width: 100%;

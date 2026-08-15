@@ -244,6 +244,22 @@ func buildFeaturePaths(b *pb) {
 		path: []*openapi3.Parameter{pparam("token", "The participant's card token.")},
 		body: actionBody("Stamp collection.", nil, props("password", pstr("The stall's password (required)."))),
 		resps: []respEntry{ok("StampSubmitResponse"), r("400", "Wrong/empty password / stall closed"), r("409", "Already collected")}})
+	b.add("GET", "/api/stamp-signup", "Stamp Rally", "Rallies open to public sign-up", "public",
+		"Rallies whose `public_signup` opt-in is on, that are open, and that are inside their availability window.", opt{
+			resps: []respEntry{ok("SignupRalliesResponse")}})
+	b.add("POST", "/api/stamp-signup/{id}", "Stamp Rally", "Sign yourself up for a rally", "public",
+		"Issues the caller a card. When an open Garapon is linked to the rally, a drawing link is issued too, "+
+			"sharing the same token. Names are unique per rally, compared case-insensitively. Rate limited per IP; "+
+			"a rally that has not opted in answers 404 rather than 403.", opt{
+			path:  []*openapi3.Parameter{pparam("id", "Rally id.")},
+			body:  actionBody("Sign-up.", nil, props("name", pstr("Character name, ideally with @ World (required)."))),
+			resps: []respEntry{created("StampSignupResponse"), r("400", "Missing/too-long name, or rally closed"), r("404", "Not open for sign-ups"), r("409", "Name already signed up"), r("429", "Rate limited")}})
+	b.add("POST", "/api/stamp-lookup", "Stamp Rally", "Find my links", "public",
+		"Returns the cards (and paired drawing links) held under an EXACT participant name, case-insensitive, "+
+			"across open rallies. POST so the name stays out of URLs and logs; a miss returns an empty list rather "+
+			"than a 404, so the endpoint cannot be walked to discover participants.", opt{
+			body:  actionBody("Lookup.", nil, props("name", pstr("The name signed up with (required)."))),
+			resps: []respEntry{ok("StampLookupResponse"), r("400", "Missing name"), r("429", "Rate limited")}})
 
 	// -- Book Club -------------------------------------------------------------
 	b.add("POST", "/api/bookclub/upload", "Book Club", "Upload a cover image", "any-bookclub",

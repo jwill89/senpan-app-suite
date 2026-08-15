@@ -1,9 +1,11 @@
 package server
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -50,7 +52,8 @@ func TestPostDiscordWebhookComponentsFlag(t *testing.T) {
 			}))
 			defer srv.Close()
 
-			if err := postDiscordWebhook(context.Background(), srv.URL, tc.payload); err != nil {
+			target := webhookTarget{Kind: "test", Name: tc.name}
+			if err := postDiscordWebhook(context.Background(), target, srv.URL, tc.payload); err != nil {
 				t.Fatalf("postDiscordWebhook: %v", err)
 			}
 			hasParam := strings.Contains(gotQuery, "with_components=true")
@@ -59,6 +62,61 @@ func TestPostDiscordWebhookComponentsFlag(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestPostDiscordWebhookLogsSuccess covers the "did that post actually go out?"
+// gap: a delivered post used to log nothing at all, so the only Discord posts
+// visible in the log were the ones that failed. Every feature posts through this
+// funnel, so this one line is what makes all of them auditable.
+func TestPostDiscordWebhookLogsSuccess(t *testing.T) {
+	logged := captureLogs(t)
+
+	ok := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = io.Copy(io.Discard, r.Body)
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer ok.Close()
+
+	target := webhookTarget{Kind: "announcement", Name: "Bingo Night"}
+	payload := discordWebhookPayload{Embeds: []discordEmbed{{Title: "Hi"}}}
+	if err := postDiscordWebhook(context.Background(), target, ok.URL, payload); err != nil {
+		t.Fatalf("postDiscordWebhook: %v", err)
+	}
+	for _, want := range []string{
+		`"msg":"discord post sent"`, `"kind":"announcement"`, `"name":"Bingo Night"`,
+		`"status":204`, `"embeds":1`, `"duration_ms"`,
+	} {
+		if !strings.Contains(logged(), want) {
+			t.Errorf("log %q missing %q", logged(), want)
+		}
+	}
+
+	// A rejected post must NOT log here. The caller decides whether that is a retry
+	// (the scheduler) or a 502 (an admin's manual send) and logs it with that
+	// context, so reporting it here too would double every failure in the log.
+	before := len(logged())
+	bad := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = io.Copy(io.Discard, r.Body)
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer bad.Close()
+	if err := postDiscordWebhook(context.Background(), target, bad.URL, payload); err == nil {
+		t.Fatal("expected an error for a 404 response, got nil")
+	}
+	if added := logged()[before:]; strings.Contains(added, "discord post sent") {
+		t.Errorf("a failed post logged a success line: %q", added)
+	}
+}
+
+// captureLogs routes the default slog logger into a buffer for the duration of the
+// test, returning an accessor for what has been written so far.
+func captureLogs(t *testing.T) func() string {
+	t.Helper()
+	var buf bytes.Buffer
+	prev := slog.Default()
+	slog.SetDefault(slog.New(slog.NewJSONHandler(&buf, &slog.HandlerOptions{Level: slog.LevelInfo})))
+	t.Cleanup(func() { slog.SetDefault(prev) })
+	return buf.String
 }
 
 // TestWithComponentsParam checks the flag is merged into an existing query string
@@ -82,7 +140,8 @@ func TestPostDiscordWebhookSurfacesDiscordReason(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	err := postDiscordWebhook(context.Background(), srv.URL, discordWebhookPayload{Embeds: []discordEmbed{{Title: "Hi"}}})
+	err := postDiscordWebhook(context.Background(), webhookTarget{Kind: "test"}, srv.URL,
+		discordWebhookPayload{Embeds: []discordEmbed{{Title: "Hi"}}})
 	if err == nil {
 		t.Fatal("expected an error for a 404 response, got nil")
 	}

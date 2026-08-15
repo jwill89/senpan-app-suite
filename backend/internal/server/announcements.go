@@ -451,10 +451,13 @@ func (s *Server) handleAnnouncementSend(w http.ResponseWriter, r *http.Request) 
 		writeError(w, http.StatusBadRequest, "This announcement's type has no Discord webhook configured.")
 		return
 	}
-	if err := postDiscordWebhook(r.Context(), typ.WebhookURL, s.buildAnnouncementMessage(*a)); err != nil {
+	target := webhookTarget{Kind: "announcement", Name: a.Title}
+	if err := postDiscordWebhook(r.Context(), target, typ.WebhookURL, s.buildAnnouncementMessage(*a)); err != nil {
 		writeUpstreamError(w, fmt.Sprintf("send announcement %d", id), err)
 		return
 	}
+	slog.Info("announcement sent manually", "id", a.ID, "title", a.Title, "type", typ.Name,
+		"by", s.actorName(r))
 	if err := s.store.TouchAnnouncementPosted(a.ID); err != nil {
 		writeInternalError(w, "stamp announcement posted", err)
 		return
@@ -1184,7 +1187,7 @@ func nthWeekdayOfMonth(year int, month time.Month, wd time.Weekday, n, h, m int,
 // RunAnnouncementScheduler posts due announcements to their type's webhook on a
 // fixed interval until ctx is cancelled. Safe to call in a goroutine.
 func (s *Server) RunAnnouncementScheduler(ctx context.Context) {
-	runScheduler(ctx, announcementSchedulerInterval, func() { s.postDueAnnouncements(ctx) })
+	runScheduler(ctx, "announcements", announcementSchedulerInterval, func() { s.postDueAnnouncements(ctx) })
 }
 
 // postDueAnnouncements posts every announcement whose scheduled time has arrived.
@@ -1211,14 +1214,20 @@ func (s *Server) postDueAnnouncements(ctx context.Context) {
 			next, active := s.advanceCursor(a)
 			if err := s.store.AdvanceAnnouncement(a.ID, next, active, false); err != nil {
 				slog.Error("announcement scheduler: clear skip", "id", a.ID, "error", err)
+				continue
 			}
+			// Worth a line: from the outside a consumed skip looks exactly like an
+			// announcement that failed to post, since neither puts anything in Discord.
+			slog.Info("announcement occurrence skipped", "id", a.ID, "title", a.Title,
+				"next", next, "still_active", active)
 			continue
 		}
 		typ, _ := s.store.GetAnnouncementType(a.TypeID)
 		if typ == nil || strings.TrimSpace(typ.WebhookURL) == "" {
 			continue // no webhook yet; try again next tick
 		}
-		err := postDiscordWebhook(ctx, typ.WebhookURL, s.buildAnnouncementMessage(a))
+		target := webhookTarget{Kind: "announcement_scheduled", Name: a.Title}
+		err := postDiscordWebhook(ctx, target, typ.WebhookURL, s.buildAnnouncementMessage(a))
 		if err != nil && !errors.Is(err, errWebhookAmbiguous) {
 			// Definitely not delivered (HTTP error status, incl. 429 rate limit):
 			// leave the cursor where it is so the next tick retries.

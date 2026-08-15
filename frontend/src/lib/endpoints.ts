@@ -66,6 +66,9 @@ import type {
   PausedResponse,
   PublicStampCard,
   StampSubmitResponse,
+  SignupRalliesResponse,
+  StampSignupResponse,
+  StampLookupResponse,
   GaraponsResponse,
   GaraponResponse,
   GaraponDetailResponse,
@@ -569,6 +572,24 @@ export const endpoints = {
     /** POST /api/stamp-card/{token}/stamp - collect a stamp by password. */
     stamp: (token: string, password: string) =>
       apiPost<StampSubmitResponse>(`stamp-card/${enc(token)}/stamp`, { password }),
+  },
+
+  // -- Public stamp-rally sign-up (self-service) --------------------------------
+  //
+  // Singular paths, like stamp-card above: the plural /api/stamp-rallies tree is
+  // the permission-gated admin surface.
+  stampSignup: {
+    /** GET /api/stamp-signup - rallies currently open to public sign-up. */
+    list: () => apiGet<SignupRalliesResponse>('stamp-signup'),
+    /** POST /api/stamp-signup/{id} - issue yourself a card (+ garapon link if paired). */
+    signUp: (rallyId: number, name: string, turnstileToken: string) =>
+      apiPost<StampSignupResponse>(`stamp-signup/${rallyId}`, {
+        name,
+        turnstile_token: turnstileToken,
+      }),
+    /** POST /api/stamp-lookup - find your links by the exact name you signed up with.
+     *  POST, not GET, so the name stays out of URLs and the access log. */
+    lookup: (name: string) => apiPost<StampLookupResponse>('stamp-lookup', { name }),
   },
 
   // -- Book clubs / reading lists -----------------------------------------------

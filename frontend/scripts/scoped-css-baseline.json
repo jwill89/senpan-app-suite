@@ -1,5 +1,5 @@
 {
-  "total": 2695,
+  "total": 2667,
   "cap": 120,
   "files": {
     "frontend/src/components/admin/AffiliateFormTab.vue": 34,
@@ -41,11 +41,11 @@
     "frontend/src/components/common/ui/StampCardCanvas.vue": 33,
     "frontend/src/components/player/GaraponWheel.vue": 124,
     "frontend/src/components/player/SecondaryStampControl.vue": 36,
-    "frontend/src/components/player/SoundControls.vue": 41,
+    "frontend/src/components/player/SoundControls.vue": 36,
     "frontend/src/components/player/StampColorPicker.vue": 24,
     "frontend/src/views/AdminLoginView.vue": 19,
     "frontend/src/views/AdminView.vue": 66,
-    "frontend/src/views/CardRequestsView.vue": 64,
+    "frontend/src/views/CardRequestsView.vue": 41,
     "frontend/src/views/GaraponView.vue": 72,
     "frontend/src/views/RegisterView.vue": 5,
     "frontend/src/views/StampCardView.vue": 94

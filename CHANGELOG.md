@@ -42,6 +42,44 @@ The format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## Frontend
 
+### [3.18.0] - 2026-08-11
+
+Stamp Rally sign-up moves to the participant. Requires backend 3.15.0.
+
+#### Added
+
+- **Public Stamp Rally sign-up**, three pages mirroring how raffles work:
+  `/stamp-rallies` lists the rallies open for it, `/stamp-rallies/:id` is one rally's
+  sign-up form, and `/stamp-lookup` is "find my links". The per-rally URL is directly
+  linkable on purpose - staff post it into Discord and people land on the form rather
+  than hunting for the rally. A Home destination card appears only while at least one
+  rally is open to sign-up.
+- **The name field pushes for a full character name.** The form asks for
+  `Firstname Lastname @ World` and says why: staff match sign-ups to characters when
+  handing out prizes, so a nickname can leave someone unrecognized. One name per rally,
+  and the server's 409 sends a repeat sign-up to the lookup page instead of quietly
+  issuing a second card.
+- **The links are the deliverable**, so the result panel treats them that way: the
+  stamp card, the Garapon draw when the rally has one, a copy button on each, and a
+  blunt warning that there is no account to log back into and these links are the only
+  way in. The lookup page is one click away from every dead end.
+- **The lookup page claims nothing it shouldn't.** No search yet, a fruitless search,
+  and an unknown name are three different states in the store (`null` vs `[]`), and the
+  page only says "nothing matched that name" once a search has actually run. Results are
+  dropped on leaving the page rather than left on screen for whoever opens it next.
+- **Admin: a "Public sign-up" toggle** on the rally form, off by default, explaining
+  what turning it on exposes.
+- **Admin: a "Default Draws" field** on the garapon form - the draw allowance a
+  self-service sign-up issues, and the number the Issue Link field now starts at
+  instead of a bare 1. Still overridable per link.
+
+#### Changed
+
+- **`.form-alert` and `.turnstile-row` are now shared objects** (`utilities.css`) with a
+  `--warning` variant alongside `--danger`. They were scoped inside `CardRequestsView`;
+  the sign-up pages are the second occurrence, which is where the conventions say to
+  promote rather than copy. Scoped CSS drops 23 lines.
+
 ### [3.17.0] - 2026-07-28
 
 A visual pass aligning the app with the senpan.cafe website: square corners, no
@@ -119,9 +157,36 @@ the stylesheets under enforced formatting.
   looked populated and all 672 tests passed, but the objects rendered unstyled. `is-*`
   state and co-class modifiers (`class="opacity-slider sound-volume"`) are exempt,
   since those legitimately have no base of their own.
+- **A Konami code on the player board.** ↑ ↑ ↓ ↓ ← → ← → B A clears every stamp and puts
+  Drani's grin over the screen with "Oi, what'd you think was gonna happen?", swelling past
+  the edge of the viewport as it fades out (`KonamiEgg.vue`, mounted by `PlayerView`; styles
+  in player.css section 20). Entirely client-side - it calls the same `clearAllStamps()` the
+  Clear Board button does, with no store, endpoint or broadcast behind it. Keys match against
+  a **rolling window of the last ten** rather than a progress counter, so a fumbled repeat
+  (↑ ↑ ↑ ↓ ↓ …) still resolves instead of dropping the run, and anything typed into a field
+  is left alone. The image is warmed on mount at low priority: fetching it lazily meant the
+  first reveal of a session raced its own download and showed the caption over an empty gap
+  when the fetch lost. It is 36 KB (1200x675, lossy) rather than the 892 KB lossless original
+  it started as, which is what made eager loading affordable. Reduced motion fades it in place
+  instead of swelling, and the caption is a `role="status"` so a keyboard-only player is told
+  the board just emptied. The art is a **bundled import** from `src/assets/images/`, not a
+  `${BASE_URL}images/…` URL like the yoever head: `public/images/` mirrors the persistent
+  admin-upload tree that the build strips from `dist/`, so an asset referenced only there has
+  to be copied onto the server by hand and 404s until someone does - and a cached miss then
+  outlives the upload. A hashed `dist/assets/` file needs no deploy step and can never serve
+  a stale entry.
 
 #### Changed
 
+- **The player's "It's Yoever" controls are one row instead of two.** They were two labeled
+  `.switch` rows - "Show "It's Yoever" effects:" and "Play "It's Yoever" sound:" - whose labels
+  had grown long enough to wrap onto three lines in the board column. Now a single
+  `It's Yoever: [Effects] [Sounds]` row of segments, laid out like the Sound row directly above
+  it, with Effects still the master (turning it off locks the Sounds segment, since a hidden
+  animation has no sound to control). The compact segment style those two rows now share was
+  promoted out of `SoundControls`' scoped block into a `.toggle-btn--sm` modifier rather than
+  copied, and `.toggle-btn` gained a `:disabled` state - it fills only when active, so without
+  one a locked segment looked identical to an off-but-clickable one.
 - **One toolbar layout above every table** (`DataTableToolbar`). Seven tables had each
   grown their own: the row count sat left of the actions on one screen and right of them
   on the next, the same button read "CSV" here and "Export CSV" there, the counts said
@@ -310,6 +375,16 @@ z-index: 500` and would cover the editor. A contained stand-in borrows only the
 
 #### Fixed
 
+- **Page titles sat off-center on every three-slot topbar.** `.topbar` is
+  `justify-content: space-between` over a leading control, the title and a trailing spacer -
+  and that spacer is an empty `<span>`, 0px wide, so the title was centered in the space the
+  Back button left rather than on the page. It landed half a button width right of center:
+  a measured 45px against a 91px button on Personal Card Request, visibly off against the
+  centered form below it. The three-slot bars are now a grid with matched side tracks, which
+  also corrects Raffles, Raffle Detail and the player board id. The two-slot admin shell,
+  whose title deliberately sits left beside the nav toggle, keeps the flex layout. Side
+  tracks are `1fr` rather than `minmax(0, 1fr)` so a phone-width bar gives up perfect
+  centering instead of squashing the Back button.
 - **Pattern previews had uneven cell spacing on three screens.** `.pattern-mini` sized its
   columns with `repeat(5, 1fr)` while `.pattern-mini-cell` carries a fixed px size, so any
   container wider than the cells left slack that read as extra gap. Inside a
@@ -1015,6 +1090,85 @@ First tracked release - establishes versioning for the current production build.
 ---
 
 ## Backend
+
+### [3.15.0] - 2026-08-11
+
+Stamp Rally participants can sign themselves up, instead of waiting for staff to issue
+every card by hand. Paired with frontend 3.18.0.
+
+#### Added
+
+- **`public_signup` on a stamp rally** (schema v54) - the opt-in that makes a rally
+  self-serve. It defaults to **0**, including for every rally that already exists: each
+  of those was built assuming staff hand out its cards, and none of them may quietly
+  become public because this shipped. Accepted on create/replace and returned by every
+  rally read.
+- **`GET /api/stamp-signup`** - the rallies open to sign-up: opted in, status open, and
+  inside their availability window. Carries the linked Garapon's title when there is
+  one, so the sign-up page can say what else comes with it.
+- **`POST /api/stamp-signup/{id}`** - issues the caller a card. When an **open Garapon
+  is linked to the rally**, it issues that drawing link too, on the **same token** -
+  the arrangement an admin-issued link already uses, so one hash serves both
+  `/garapon/<token>` and `/stamp-card/<token>`. Names are **unique per rally**,
+  compared case-insensitively after trimming, so `"Yao Ming"` and `"  yao ming  "` are
+  one participant; a repeat gets a 409 naming the lookup page rather than a second
+  card. The check and both inserts run in one immediate transaction - checking outside
+  it would let two sign-ups racing on the same name both read "free". Rate limited per
+  IP and gated by Turnstile when configured, like the raffle sign-up.
+- **`POST /api/stamp-lookup`** - hands a participant their links back from the exact
+  name they used. Deliberately narrow: whole-string match only (no prefix or substring
+  search), POST so the name never reaches a URL or the access log, results limited to
+  open rallies, and a miss returns an **empty 200** rather than a 404 - "no such
+  participant" and "that participant holds no cards" are indistinguishable, so the
+  endpoint can't be walked to discover who signed up. Shares the sign-up rate limit,
+  since guessing names is the abuse worth throttling.
+- **A rally that hasn't opted in answers 404, not 403**, on sign-up. A 403 would
+  confirm the rally exists, which is exactly what staff-issued rallies shouldn't do.
+- **`default_draws` on a garapon** (schema v55) - how many draws a link carries when
+  nobody picks a number. A public sign-up has no admin present to choose one, so it was
+  issuing a hardcoded 1; now the allowance is configured once per event. It is also the
+  fallback when an **admin** issues a link and leaves the field blank, which previously
+  fell back to its own hardcoded 1 - so "everyone gets three draws at this festival" is
+  now stated in one place and honoured by both paths. Existing garapons migrate to 1,
+  the value both paths already used, so nothing changes until someone sets it. Clamped
+  to at least 1: a zero-draw default would issue links that cannot draw, and zero is
+  what an omitted field sends.
+
+### [3.14.1] - 2026-08-09
+
+Fills in the log where things happened silently. The log only recorded Discord posts
+that **failed**, so "did that announcement actually go out?" was unanswerable, and a
+bingo night left no trace at all. Logs are rotated daily with bounded retention, so
+the extra volume costs nothing and a misfire is now visible after the fact.
+
+#### Added
+
+- **Every delivered Discord post is logged**, at the one funnel all five posting
+  features share (`postDiscordWebhook`): `discord post sent` with the posting feature
+  (`announcement`, `announcement_scheduled`, `bookclub_item`, `affiliate`,
+  `tea_room`), the record's name, the HTTP status, the embed count and how long the
+  POST took. Callers pass a `webhookTarget` label, so a new posting feature is
+  logged by construction rather than by remembering to add a line. Failures stay with
+  the caller that knows whether it will retry (the scheduler) or return a 502 (a
+  manual send), so nothing is double-reported - and a regression test asserts both
+  halves of that.
+- **Scheduler lifecycle.** Both background loops log `scheduler started` / `scheduler
+  stopped` with their name (and interval), because a scheduler that never started and
+  one whose queue was empty looked identical from the outside. Individual sweeps are
+  **Debug**, deliberately: at the announcement scheduler's 30s tick, Info would add
+  ~2,880 "nothing was due" lines a day and bury the ones that acted.
+- **Bingo game lifecycle**, with the acting admin: `bingo game started` (game id,
+  pattern count, auto + interval), `bingo game ended` (game id, numbers called,
+  confirmed winner cards, patterns) and `bingo halftime decision`. Individual draws
+  are **not** logged - ~75 lines a game would drown everything else, and the start
+  and end lines already carry the shape of the game.
+- **`announcement occurrence skipped`** when a "skip next" marker is consumed. A
+  skipped occurrence and a post that silently failed both put nothing in Discord, so
+  the log could not tell them apart.
+- **Manual posts name who did it** - `announcement sent manually` and
+  `published reading list` carry a `by` attribute from the session
+  (`Server.actorName`, which reuses the per-request user cache the permission guard
+  already populated, so attribution costs no extra query).
 
 ### [3.14.0] - 2026-07-24
 

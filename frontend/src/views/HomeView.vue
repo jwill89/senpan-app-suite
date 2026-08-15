@@ -13,11 +13,13 @@ import { useAppStore } from '@/stores/app'
 import { useGameStore } from '@/stores/game'
 import { usePlayerStore } from '@/stores/player'
 import { useRafflesStore } from '@/stores/raffles'
+import { useStampRalliesStore } from '@/stores/stampRallies'
 
 const router = useRouter()
 const app = useAppStore()
 const player = usePlayerStore()
 const raffles = useRafflesStore()
+const stampRallies = useStampRalliesStore()
 const game = useGameStore()
 const { ready: markdownReady } = useMarkdown()
 
@@ -34,6 +36,10 @@ function viewRaffles(): void {
   void router.push({ name: 'raffles' })
 }
 
+function viewStampRallies(): void {
+  void router.push({ name: 'stamp-rallies' })
+}
+
 function goCardRequests(): void {
   void router.push({ name: 'card-requests' })
 }
@@ -48,7 +54,13 @@ function onJoinInput(e: Event): void {
 
 // Focus the board-ID field on load so players can type their code immediately.
 const joinInput = ref<HTMLInputElement | null>(null)
-onMounted(() => joinInput.value?.focus())
+onMounted(() => {
+  joinInput.value?.focus()
+  // Decides whether the Stamp Rallies card is offered at all - the endpoint
+  // returns only rallies open to public sign-up, so an empty list means there is
+  // nothing to send anyone to.
+  void stampRallies.loadSignupRallies()
+})
 
 // The logo (and the other brand images) are served at runtime from the web
 // root's persistent `images/` folder - see vite.config.ts - not bundled. Bind
@@ -109,6 +121,14 @@ const logoUrl = '/images/logo.png'
           <p>View currently open raffles and enter for a chance to win!</p>
         </div>
         <button class="btn-view" @click="viewRaffles">View Raffles</button>
+      </div>
+      <!-- Stamp Rallies (only when one is open to public sign-up) -->
+      <div v-if="stampRallies.signupRallies.length" class="home-card home-card--dest">
+        <div class="home-dest-body">
+          <h2><font-awesome-icon :icon="['fad', 'stamp']" /> Stamp Rallies</h2>
+          <p>Sign up for a stamp card and collect stamps from every stall!</p>
+        </div>
+        <button class="btn-view" @click="viewStampRallies">View Stamp Rallies</button>
       </div>
       <!-- Personal Card Requests -->
       <div class="home-card home-card--dest">

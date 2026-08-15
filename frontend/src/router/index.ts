@@ -202,6 +202,27 @@ const routes: RouteRecordRaw[] = [
     component: () => import('@/views/RaffleDetailView.vue'),
     props: true,
   },
+  // Public Stamp Rally self-service sign-up: the list of rallies open for it, and
+  // one rally's sign-up form. The detail path is deliberately linkable so staff can
+  // post a rally's sign-up URL directly. `/stamp-lookup` is a separate top-level
+  // path rather than a child of /stamp-rallies, so it can never be shadowed by the
+  // `:id` param route.
+  {
+    path: '/stamp-rallies',
+    name: 'stamp-rallies',
+    component: () => import('@/views/StampRalliesView.vue'),
+  },
+  {
+    path: '/stamp-rallies/:id',
+    name: 'stamp-rally-signup',
+    component: () => import('@/views/StampRallySignupView.vue'),
+    props: true,
+  },
+  {
+    path: '/stamp-lookup',
+    name: 'stamp-lookup',
+    component: () => import('@/views/StampLookupView.vue'),
+  },
   // Public Garapon player view - reached only via a per-player drawing link
   // (an unguessable token). No admin auth; the token is the capability.
   {

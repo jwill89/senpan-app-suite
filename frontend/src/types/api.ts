@@ -154,6 +154,11 @@ export type {
   PublicPrize,
   PublicStampCard,
   StampSubmitResponse,
+  SignupRally,
+  SignupRalliesResponse,
+  StampSignupResponse,
+  StampLookupEntry,
+  StampLookupResponse,
   // Book club / reading lists
   ReadingListsResponse,
   ReadingListDetailResponse,
@@ -385,6 +390,8 @@ export interface GaraponForm {
   grand_prize_image: string
   /** Optional link to an open Stamp Rally (null = not linked). */
   stamp_rally_id: number | null
+  /** Draws a link carries when nobody picks a number (public sign-up, or a blank admin field). */
+  default_draws: number
   prizes: GaraponPrizeForm[]
 }
 
@@ -478,6 +485,8 @@ export interface StampRallyForm {
   details: string
   redeem_instructions: string
   redeem_image: string
+  /** Opt-in that lists the rally publicly and lets participants issue themselves a card. */
+  public_signup: boolean
   stamps: StampRallyStampForm[]
   prizes: StampRallyPrizeForm[]
 }

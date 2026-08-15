@@ -153,6 +153,24 @@
   border-bottom: 2px solid var(--highlight);
 }
 
+/* Three-slot bars (leading control | title | trailing slot) center their title on
+   the PAGE, not in the space the leading control leaves behind. The trailing slot
+   is usually an empty <span>, so it is 0px wide and `space-between` alone lands the
+   title half a Back button right of center - visibly off against a centered body
+   below it. Equal side tracks put it back over the page center. The two-slot admin
+   shell, whose title deliberately sits left beside the nav toggle, keeps the flex
+   layout above. */
+.topbar:has(> :nth-child(3):last-child) {
+  display: grid;
+  /* `1fr`, not `minmax(0, 1fr)`: the side tracks match each other while there is
+     room, but never squash the Back button on a narrow screen. */
+  grid-template-columns: 1fr auto 1fr;
+  justify-items: start;
+}
+.topbar:has(> :nth-child(3):last-child) > :last-child {
+  justify-self: end;
+}
+
 /* Bar-sized, not page-sized: the title shares a 48px-ish row with its buttons. */
 .topbar h2 {
   font-size: 1.35rem;
@@ -767,31 +785,27 @@
   white-space: nowrap;
 }
 
-/* Per-player "It's Yoever" toggles (show effects / play sound) above the action
-   buttons - the shared `.switch` object with a label. Sit side by side,
-   wrapping to their own line on a narrow board column. */
-.yoever-toggles {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px 20px;
-  margin-bottom: 4px;
-}
-
-.yoever-toggle {
+/* Per-player "It's Yoever" toggles (effects / sounds) above the action buttons.
+   One labeled row of `.toggle-btn--sm` segments, laid out like the Sound row
+   above it - two labeled switch rows wrapped onto three lines in the board
+   column once the labels grew. */
+.yoever-row {
   display: flex;
   align-items: center;
   gap: 8px;
+  margin-bottom: 4px;
 }
 
-.yoever-toggle .label {
+.yoever-row .label {
+  min-width: 58px;
   font-size: 0.85rem;
   color: var(--text-muted);
 }
 
-/* The sound sub-toggle is locked (`:disabled`, dimmed by `.switch`) while "Show
-   effects" is off; dim its label to match. */
-.yoever-toggle.is-disabled .label {
-  opacity: 0.55;
+.yoever-btns {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
 }
 
 /* ================================================================
@@ -1313,7 +1327,103 @@ span.pattern-mini {
 }
 
 /* ================================================================
-   20. SITE FOOTER - credits/links on the public (non-admin) pages
+   20. KONAMI EASTER EGG - Drani reveal over the player board
+   ================================================================ */
+
+/* Full-viewport, click-through layer, at the same stacking level as the yoever
+   layer (the two never run together). The component renders it only while a
+   reveal is on screen, so there is no idle layer sitting over the board. */
+.konami-egg {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 9999;
+}
+
+/* Grow-and-fade. Only transform + opacity animate. The duration arrives inline
+   from the component so the CSS and the removal timer cannot drift apart - the
+   same arrangement YoeverOverlay uses.
+
+   No `will-change` on purpose: it promotes the element to its own composited
+   layer, which Chrome rasterizes at the animation's MAXIMUM scale - a ~1800px-wide
+   image here, doubled again on a 2x display - and a 2.6s one-shot does not need
+   the hint to run on the compositor. */
+.konami-egg-reveal {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  animation-name: konami-egg-swell;
+  animation-timing-function: ease-in;
+  animation-fill-mode: forwards;
+}
+
+/* `box-shadow`, not `filter: drop-shadow()`: the art is an opaque rectangle, so
+   the two look identical here, but a filter forces an offscreen render target -
+   at the scaled-up size, on every frame - for no visible gain. */
+.konami-egg-art {
+  width: clamp(220px, 44vw, 560px);
+  height: auto;
+  user-select: none;
+  box-shadow: 0 8px 14px rgba(0, 0, 0, 0.5);
+}
+
+/* Lands over the board rather than a panel, so the line carries its own dark
+   plate instead of a theme surface - as the yoever caption does. */
+.konami-egg-line {
+  max-width: 80vw;
+  margin: 0;
+  padding: 6px 16px;
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff;
+  font-weight: 700;
+  font-style: italic;
+  font-size: clamp(1rem, 3.2vw, 1.6rem);
+  text-align: center;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
+}
+
+@keyframes konami-egg-swell {
+  0% {
+    transform: scale(0.4);
+    opacity: 0;
+  }
+  12% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  70% {
+    opacity: 0.85;
+  }
+  100% {
+    transform: scale(3.2);
+    opacity: 0;
+  }
+}
+
+/* Reduced motion: hold it at rest size and just fade in and out. */
+@media (prefers-reduced-motion: reduce) {
+  .konami-egg-reveal {
+    animation-name: konami-egg-fade;
+    animation-timing-function: ease-in-out;
+  }
+  @keyframes konami-egg-fade {
+    0%,
+    100% {
+      opacity: 0;
+    }
+    12%,
+    72% {
+      opacity: 1;
+    }
+  }
+}
+
+/* ================================================================
+   21. SITE FOOTER - credits/links on the public (non-admin) pages
    ================================================================ */
 .app-footer {
   margin-top: auto;

@@ -15,7 +15,12 @@ type Garapon struct {
 	// garapon also issues that participant a Stamp Rally card (sharing the token).
 	StampRallyID    *int64 `json:"stamp_rally_id"`
 	StampRallyTitle string `json:"stamp_rally_title,omitempty"` // read-only, joined for display
-	CreatedAt       string `json:"created_at"`
+	// DefaultDraws is how many draws a link for this garapon carries when nobody
+	// picks a number: what a public stamp-rally sign-up issues (no admin is present
+	// to choose), and the fallback when an admin issues a link and leaves the field
+	// blank. At least 1; the admin can still override it per link.
+	DefaultDraws int    `json:"default_draws"`
+	CreatedAt    string `json:"created_at"`
 
 	// Prizes is populated on detail fetches (the ball/prize tiers). Omitted from
 	// list responses for efficiency.

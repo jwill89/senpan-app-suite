@@ -55,10 +55,17 @@ func rallyOpen(r *model.StampRally, now time.Time) bool {
 	if r.Status == "closed" {
 		return false
 	}
-	if from, ok := parseRaffleTime(r.AvailableFrom); ok && now.Before(from) {
+	return withinWindow(r.AvailableFrom, r.AvailableTo, now)
+}
+
+// withinWindow reports whether now falls inside an availability window, treating an
+// empty bound as unbounded. Shared by the stamping gate above and the public
+// sign-up list, which holds only the window strings rather than a whole rally.
+func withinWindow(from, to string, now time.Time) bool {
+	if f, ok := parseRaffleTime(from); ok && now.Before(f) {
 		return false
 	}
-	if to, ok := parseRaffleTime(r.AvailableTo); ok && now.After(to) {
+	if t, ok := parseRaffleTime(to); ok && now.After(t) {
 		return false
 	}
 	return true
@@ -239,6 +246,7 @@ type stampRallyWriteRequest struct {
 	Details            string                  `json:"details"`
 	RedeemInstructions string                  `json:"redeem_instructions"`
 	RedeemImage        string                  `json:"redeem_image"`
+	PublicSignup       bool                    `json:"public_signup"`
 	Stamps             []model.StampRallyStamp `json:"stamps"`
 	Prizes             []model.StampRallyPrize `json:"prizes"`
 }
@@ -269,6 +277,7 @@ func rallyFromRequest(req stampRallyWriteRequest, title string) *model.StampRall
 		Details:            req.Details,
 		RedeemInstructions: req.RedeemInstructions,
 		RedeemImage:        strings.TrimSpace(req.RedeemImage),
+		PublicSignup:       req.PublicSignup,
 		Stamps:             stamps,
 		Prizes:             prizes,
 	}

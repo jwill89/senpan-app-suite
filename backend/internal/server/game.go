@@ -89,6 +89,8 @@ func (s *Server) handleGameStart(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	details, _ := s.game.GameDetails()
+	slog.Info("bingo game started", "game_id", game.ID, "patterns", len(req.PatternIDs),
+		"auto", req.Auto, "auto_interval", req.AutoInterval, "by", s.actorName(r))
 	writeJSON(w, http.StatusOK, model.GameStateResponse{
 		Game:        game,
 		Winners:     []string{},
@@ -163,6 +165,10 @@ func clampDrawDelay(delay int) int {
 // immediately; players see it after `delay` seconds. A new winner switches the
 // auto loop off, and crossing the half-time mark pauses auto (if running) and
 // prompts admins for a mini-game.
+//
+// Deliberately not logged per draw: a full game is ~75 draws, which would bury
+// everything else in the log. The game's start and end lines carry the shape of it
+// (patterns, called count, winners) and a draw that actually fails still logs.
 func (s *Server) postDraw(result *bingo.DrawResult, newWinner bool, delay int) {
 	// Capture the game this draw belongs to. The delayed player broadcast below can
 	// fire up to 60s later; if the game is ended and a new one started within that
@@ -228,10 +234,14 @@ func (s *Server) handleGameEnd(w http.ResponseWriter, r *http.Request) {
 
 	// Before ending, gather game info for winners log
 	var patternNames []string
+	var gameID int64
+	var calledCount int
 	if state, _, err := s.game.CurrentState(); err == nil && state != nil {
 		for _, p := range state.Patterns {
 			patternNames = append(patternNames, p.Name)
 		}
+		// Captured for the log before End() clears the live game out from under us.
+		gameID, calledCount = state.ID, len(state.CalledNumbers)
 	}
 	gameDetails, _ := s.game.GameDetails()
 
@@ -257,6 +267,9 @@ func (s *Server) handleGameEnd(w http.ResponseWriter, r *http.Request) {
 		_ = s.store.InsertWinnersLog(entries)
 	}
 
+	slog.Info("bingo game ended", "game_id", gameID, "ended", ok, "called", calledCount,
+		"winners", len(req.ValidWinnerIDs), "winner_cards", req.ValidWinnerIDs,
+		"patterns", patternNames, "by", s.actorName(r))
 	writeJSON(w, http.StatusOK, model.EndGameResponse{Ended: ok})
 	s.broadcastGameEnd()
 	// End() switched auto off; wake the scheduler so it parks its timer.
@@ -299,6 +312,7 @@ func (s *Server) handleGameHalftime(w http.ResponseWriter, r *http.Request) {
 		s.broadcastAutoConfig()
 		s.signalAutoWake()
 	}
+	slog.Info("bingo halftime decision", "minigame", minigame, "by", s.actorName(r))
 	writeJSON(w, http.StatusOK, model.OKResponse{OK: true})
 }
 
@@ -644,6 +658,8 @@ func (s *Server) RunAutoDrawScheduler(ctx context.Context) {
 	// else in the loop must not crash the process. (autoDrawOnce's own recover keeps
 	// the loop alive across draw panics; this only catches the rare rest.)
 	defer recoverPanic("auto draw scheduler")
+	slog.Info("scheduler started", "scheduler", "auto-draw")
+	defer func() { slog.Info("scheduler stopped", "scheduler", "auto-draw") }()
 	timer := time.NewTimer(time.Hour)
 	if !timer.Stop() {
 		<-timer.C

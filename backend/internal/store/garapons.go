@@ -91,8 +91,9 @@ func (s *Store) CreateGarapon(g *model.Garapon) (int64, error) {
 	}
 	defer func() { _ = tx.Rollback() }()
 
-	res, err := tx.Exec(`INSERT INTO garapons (title, details, grand_prize_image, status, stamp_rally_id)
-		VALUES (?, ?, ?, 'open', ?)`, g.Title, g.Details, g.GrandPrizeImage, nullableID(g.StampRallyID))
+	res, err := tx.Exec(`INSERT INTO garapons (title, details, grand_prize_image, status, stamp_rally_id, default_draws)
+		VALUES (?, ?, ?, 'open', ?, ?)`,
+		g.Title, g.Details, g.GrandPrizeImage, nullableID(g.StampRallyID), g.DefaultDraws)
 	if err != nil {
 		return 0, err
 	}
@@ -120,8 +121,9 @@ func (s *Store) UpdateGarapon(g *model.Garapon) error {
 	}
 	defer func() { _ = tx.Rollback() }()
 
-	if _, err := tx.Exec(`UPDATE garapons SET title = ?, details = ?, grand_prize_image = ?, stamp_rally_id = ? WHERE id = ?`,
-		g.Title, g.Details, g.GrandPrizeImage, nullableID(g.StampRallyID), g.ID); err != nil {
+	if _, err := tx.Exec(`UPDATE garapons SET title = ?, details = ?, grand_prize_image = ?,
+			stamp_rally_id = ?, default_draws = ? WHERE id = ?`,
+		g.Title, g.Details, g.GrandPrizeImage, nullableID(g.StampRallyID), g.DefaultDraws, g.ID); err != nil {
 		return err
 	}
 	if _, err := tx.Exec(`DELETE FROM garapon_prizes WHERE garapon_id = ?`, g.ID); err != nil {
@@ -150,15 +152,36 @@ func (s *Store) SetGaraponStatus(id int64, status string) error {
 	return err
 }
 
+// OpenGaraponForRally returns the open garapon linked to a rally, or nil when the
+// rally has none. This is the reverse of Garapon.StampRallyID: public sign-up starts
+// from the rally and has to discover whether a drawing link comes with it. Prizes
+// are not loaded - callers only need the id and title. If several open garapons
+// point at one rally (nothing forbids it), the oldest wins, so the pairing is
+// stable rather than dependent on row order.
+func (s *Store) OpenGaraponForRally(rallyID int64) (*model.Garapon, error) {
+	var g model.Garapon
+	err := s.db.QueryRow(`SELECT id, title, status, default_draws FROM garapons
+		WHERE stamp_rally_id = ? AND status = 'open' ORDER BY id LIMIT 1`, rallyID).
+		Scan(&g.ID, &g.Title, &g.Status, &g.DefaultDraws)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	g.StampRallyID = &rallyID
+	return &g, nil
+}
+
 // GetGarapon retrieves a single garapon with its prizes. Returns nil if not found.
 func (s *Store) GetGarapon(id int64) (*model.Garapon, error) {
 	var g model.Garapon
 	var stampRallyID sql.NullInt64
 	err := s.db.QueryRow(`SELECT g.id, g.title, g.details, g.grand_prize_image, g.status,
-			g.stamp_rally_id, COALESCE(sr.title, ''), g.created_at
+			g.stamp_rally_id, COALESCE(sr.title, ''), g.default_draws, g.created_at
 		FROM garapons g LEFT JOIN stamp_rallies sr ON sr.id = g.stamp_rally_id WHERE g.id = ?`, id).
 		Scan(&g.ID, &g.Title, &g.Details, &g.GrandPrizeImage, &g.Status,
-			&stampRallyID, &g.StampRallyTitle, &g.CreatedAt)
+			&stampRallyID, &g.StampRallyTitle, &g.DefaultDraws, &g.CreatedAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
 	}
@@ -182,7 +205,7 @@ func (s *Store) GetGarapon(id int64) (*model.Garapon, error) {
 // efficiency (the detail fetch loads them).
 func (s *Store) ListGarapons() ([]model.Garapon, error) {
 	rows, err := s.db.Query(`SELECT g.id, g.title, g.details, g.grand_prize_image, g.status,
-			g.stamp_rally_id, COALESCE(sr.title, ''), g.created_at,
+			g.stamp_rally_id, COALESCE(sr.title, ''), g.default_draws, g.created_at,
 			COALESCE((SELECT COUNT(*) FROM garapon_players p WHERE p.garapon_id = g.id), 0),
 			COALESCE((SELECT COUNT(*) FROM garapon_draws d WHERE d.garapon_id = g.id), 0)
 		FROM garapons g LEFT JOIN stamp_rallies sr ON sr.id = g.stamp_rally_id
@@ -197,7 +220,7 @@ func (s *Store) ListGarapons() ([]model.Garapon, error) {
 		var g model.Garapon
 		var stampRallyID sql.NullInt64
 		if err := rows.Scan(&g.ID, &g.Title, &g.Details, &g.GrandPrizeImage, &g.Status,
-			&stampRallyID, &g.StampRallyTitle, &g.CreatedAt,
+			&stampRallyID, &g.StampRallyTitle, &g.DefaultDraws, &g.CreatedAt,
 			&g.PlayerCount, &g.DrawCount); err != nil {
 			return nil, err
 		}

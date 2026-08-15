@@ -128,8 +128,17 @@ export const useGaraponsStore = defineStore('garapons', () => {
     void loadGaraponDetail(g.id)
   }
 
+  /**
+   * Clears the issue-link form, starting the draw count at the garapon's own
+   * default so the common case ("everyone gets N draws at this event") is typed
+   * once on the garapon rather than re-entered for every link. Falls back to 1 for
+   * a garapon saved before the field existed, matching what the server applies.
+   */
   function resetPlayerAdd(): void {
-    playerAdd.value = { playerName: '', maxDraws: 1 }
+    playerAdd.value = {
+      playerName: '',
+      maxDraws: selectedGarapon.value?.default_draws || 1,
+    }
   }
 
   /** Loads the OPEN stamp rallies for the form's "Linked Stamp Rally" picker. */
@@ -150,6 +159,7 @@ export const useGaraponsStore = defineStore('garapons', () => {
       details: '',
       grand_prize_image: '',
       stamp_rally_id: null,
+      default_draws: 1,
       prizes: [blankPrize(50, true)],
     }
   }
@@ -170,6 +180,9 @@ export const useGaraponsStore = defineStore('garapons', () => {
       details: g.details,
       grand_prize_image: g.grand_prize_image,
       stamp_rally_id: g.stamp_rally_id ?? null,
+      // A garapon saved before this field existed reads back as 0; show the 1 the
+      // server would apply rather than a 0 the admin never chose.
+      default_draws: g.default_draws || 1,
       prizes: prizes.length ? prizes : [blankPrize(50, true)],
     }
   }

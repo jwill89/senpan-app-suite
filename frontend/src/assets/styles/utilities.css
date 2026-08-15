@@ -727,11 +727,29 @@
   border-color: var(--accent);
 }
 
+/* Compact variant for a segment that shares a labeled row with other controls
+   rather than standing on its own - the player's Sound and "It's Yoever" rows. */
+.toggle-btn--sm {
+  padding: 4px 10px;
+  font-size: 0.85rem;
+}
+
+/* A segment can be locked by something upstream (the Yoever sound segment is
+   pointless while its effects are hidden), so it needs its own dimmed state -
+   `.toggle-btn` carries no fill of its own to read as unavailable. */
+.toggle-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.toggle-btn:disabled:hover {
+  border-color: transparent;
+}
+
 /* -- Object: switch --------------------------------------------------------
    An on/off sliding switch: a `<button>` carrying `.switch` (+ `.on` when set)
    wrapping a single `<span class="switch-knob">`. Fills with `--accent` and
-   slides the knob right when on; `:disabled` dims it. Shared by the player's
-   Yoever effect toggles and the secondary-stamp toggle. (Distinct from
+   slides the knob right when on; `:disabled` dims it. Used by the player's
+   secondary-stamp toggle. (Distinct from
    `.toggle-btn`, which is a labelled segment - this one carries no text.) */
 .switch {
   position: relative;
@@ -1046,6 +1064,138 @@
 .pattern-mini-sm .pattern-mini-cell {
   width: 10px;
   height: 10px;
+}
+
+/* -- Object: form alert ----------------------------------------------------
+   An inline callout inside a form: a tinted box with a leading status icon,
+   carrying a validation error (`--danger`) or a caution the reader must act on
+   (`--warning`). Distinct from a toast, which is transient and lives in the
+   corner - this one sits in the flow, next to what it is about, and stays.
+   Promoted out of CardRequestsView when the stamp-rally sign-up needed the same
+   thing. */
+.form-alert {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 14px;
+  border-radius: var(--radius, 8px);
+  font-size: 0.9rem;
+  margin-bottom: 14px;
+  color: var(--text);
+}
+.form-alert-danger {
+  background: color-mix(in srgb, var(--danger) 15%, transparent);
+  border: 1px solid var(--danger);
+}
+.form-alert-warning {
+  background: color-mix(in srgb, var(--warning) 15%, transparent);
+  border: 1px solid var(--warning);
+}
+.form-alert-icon {
+  margin-top: 2px;
+  flex-shrink: 0;
+}
+.form-alert-danger .form-alert-icon {
+  color: var(--danger);
+}
+.form-alert-warning .form-alert-icon {
+  color: var(--warning);
+}
+
+/* Centers a bot-check widget on its own row in a public form. */
+.turnstile-row {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 14px;
+}
+
+/* -- Public stamp-rally sign-up + link lookup -------------------------------
+   The self-service pages: pick a rally, sign up with your character name, and
+   get your card (and Garapon) links back - plus the "I lost my link" lookup. */
+.stamp-signup-body,
+.stamp-lookup-body {
+  max-width: 640px;
+  margin: 0 auto;
+}
+
+.stamp-signup-card-image {
+  display: block;
+  width: 100%;
+  max-width: 420px;
+  margin: 0 auto 16px;
+  border-radius: var(--radius-media);
+}
+
+/* "This rally comes with a Garapon draw" note above the form. */
+.stamp-signup-note {
+  background: var(--panel-raised-bg);
+  border-radius: var(--radius);
+  padding: 10px 14px;
+}
+
+.stamp-signup-form {
+  background: var(--panel-bg);
+  border: 1px solid var(--control-border);
+  border-radius: var(--radius);
+  padding: 20px;
+}
+.stamp-signup-form input {
+  width: 100%;
+}
+.stamp-signup-submit {
+  width: 100%;
+  margin-top: 4px;
+}
+
+/* Success panel, in the `--success` frame the raffle sign-up result uses. */
+.stamp-signup-result {
+  background: var(--panel-bg);
+  border: 2px solid var(--success);
+  border-radius: var(--radius);
+  padding: 20px;
+}
+
+/* One issued link: its label, the URL, and a copy button. The URL wraps rather
+   than scrolls - a token link is long, and someone reading it off a phone to
+   type elsewhere needs to see all of it. */
+.stamp-signup-link {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 0;
+  border-top: 1px solid color-mix(in srgb, var(--text-muted) 20%, transparent);
+}
+.stamp-signup-link-url {
+  color: var(--highlight);
+  font-size: 0.9rem;
+  overflow-wrap: anywhere;
+}
+.stamp-signup-link .btn-view {
+  align-self: flex-start;
+}
+
+/* The quiet "lost your link?" line under a list or form. */
+.stamp-signup-lookup-line {
+  margin-top: 20px;
+  text-align: center;
+  font-size: 0.9rem;
+  color: var(--text-muted);
+}
+
+.stamp-lookup-form {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+.stamp-lookup-form input {
+  flex: 1;
+  min-width: 0;
+}
+
+.stamp-lookup-results {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
 }
 
 /* Prize image helpers (shared by the raffle + garapon detail views) and the

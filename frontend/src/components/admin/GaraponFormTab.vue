@@ -81,6 +81,18 @@ function cancel(): void {
         </select>
       </FormField>
 
+      <FormField
+        label="Default Draws"
+        help="How many draws a link carries when nobody picks a number: what a public stamp-rally sign-up issues (no staff member is there to choose), and what the Issue Link field starts at. You can still override it per link."
+      >
+        <input
+          v-model.number="garapons.garaponForm.default_draws"
+          type="number"
+          min="1"
+          aria-label="Default draws per link"
+        />
+      </FormField>
+
       <FormField label="Details">
         <MarkdownEditor
           v-model="garapons.garaponForm.details"

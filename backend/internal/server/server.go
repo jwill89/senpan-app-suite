@@ -39,6 +39,7 @@ type Server struct {
 	regLimiter     *rateLimiter // registration-rate limiter (mass-signup abuse)
 	raffleLimiter  *rateLimiter // public raffle-entry limiter (entry flooding)
 	cardReqLimiter *rateLimiter // public custom-card-request limiter (request flooding)
+	rallyLimiter   *rateLimiter // public stamp-rally sign-up + link-lookup limiter
 	// Cloudflare Turnstile bot check on the admin login. Disabled (verification
 	// skipped) when turnstileSecret is empty - see SetTurnstile / turnstile.go.
 	turnstileSecret  string
@@ -120,6 +121,10 @@ func New(st *store.Store, hub *ws.Hub, sessionSecret, webRoot string, allowedOri
 		regLimiter:     newRateLimiter(5, time.Hour),       // 5 registration attempts per hour
 		raffleLimiter:  newRateLimiter(20, 10*time.Minute), // 20 raffle entries per 10 minutes per IP
 		cardReqLimiter: newRateLimiter(10, 10*time.Minute), // 10 custom-card requests per 10 minutes per IP
+		// Covers sign-up AND link lookup: the lookup is the enumeration risk (guessing
+		// names to harvest links), so both share one budget per IP. Generous enough for
+		// a participant who signs up for a couple of rallies and re-checks their links.
+		rallyLimiter: newRateLimiter(15, 10*time.Minute),
 		autoWake:       make(chan struct{}, 1),             // one-slot wake mailbox for the auto-draw scheduler
 	}
 
@@ -338,6 +343,13 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("DELETE /api/stamp-rallies/{id}/cards/{cardId}", s.handleStampRallyCardDelete)
 	s.mux.HandleFunc("GET /api/stamp-card/{token}", s.handleStampCardPublic)
 	s.mux.HandleFunc("POST /api/stamp-card/{token}/stamp", s.handleStampCardStamp)
+	// Public self-service sign-up + the "lost my link" lookup (stampsignup.go).
+	// Singular prefixes for the same reason as stamp-card: adminMutationResource
+	// treats the plural "stamp-rallies" segment as an admin mutation, and these
+	// broadcast their own invalidation.
+	s.mux.HandleFunc("GET /api/stamp-signup", s.handleStampSignupList)
+	s.mux.HandleFunc("POST /api/stamp-signup/{id}", s.handleStampSignup)
+	s.mux.HandleFunc("POST /api/stamp-lookup", s.handleStampLookup)
 
 	// Book club / reading list routes. Reading lists are nested under their owning
 	// club ({club} path segment), making each book club a first-class parent
@@ -782,6 +794,19 @@ func (s *Server) currentUser(r *http.Request) *model.User {
 		cache.user = u
 	}
 	return u
+}
+
+// actorName is the username behind a request, for the "by" attribute on
+// admin-action logs. Reads the per-request cache currentUser already populated for
+// the permission guard, so attributing an action costs no extra store read. Falls
+// back to "unknown" rather than omitting the field, so a log query can filter on
+// `by` without missing lines (an authenticated handler should never hit it - only
+// a public endpoint or an expired session can).
+func (s *Server) actorName(r *http.Request) string {
+	if u := s.currentUser(r); u != nil {
+		return u.Username
+	}
+	return "unknown"
 }
 
 // loadCurrentUser reads the session's user id and loads the active account from

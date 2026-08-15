@@ -297,7 +297,8 @@ func (s *Server) handleTeaRoomPost(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "No Tea Rooms Discord webhook is configured. Set one on the Tea Rooms page first.")
 		return
 	}
-	if err := postDiscordEmbed(r.Context(), webhook, buildTeaRoomEmbed(*room)); err != nil {
+	target := webhookTarget{Kind: "tea_room", Name: room.Name}
+	if err := postDiscordEmbed(r.Context(), target, webhook, buildTeaRoomEmbed(*room)); err != nil {
 		writeUpstreamError(w, fmt.Sprintf("post tea room %d", id), err)
 		return
 	}

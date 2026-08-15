@@ -137,6 +137,16 @@ function cancel(): void {
         </FormField>
       </FormRow>
 
+      <FormField
+        label="Public sign-up"
+        help="Off by default. When on, this rally is listed publicly and anyone can issue themselves a card - one per character name. If a Garapon is linked to it, signing up also issues that drawing link. Leave off for a rally whose cards staff hand out."
+      >
+        <label class="checkbox-inline">
+          <input v-model="store.rallyForm.public_signup" type="checkbox" />
+          Let participants sign themselves up
+        </label>
+      </FormField>
+
       <FormField label="Details">
         <MarkdownEditor
           v-model="store.rallyForm.details"

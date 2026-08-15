@@ -1,6 +1,13 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
-import type { PublicStampCard, StampRally, StampRallyLogEntry } from '@/types/api'
+import type {
+  PublicStampCard,
+  SignupRally,
+  StampLookupEntry,
+  StampRally,
+  StampRallyLogEntry,
+  StampSignupResponse,
+} from '@/types/api'
 
 // Mock the typed endpoint layer so store actions run without the network.
 const ep = vi.hoisted(() => ({
@@ -10,6 +17,15 @@ const ep = vi.hoisted(() => ({
   stamp: vi.fn(async () => ({ card: {} as PublicStampCard, collected_stamp_id: 5 })),
   get: vi.fn(async () => ({}) as PublicStampCard),
   setStatus: vi.fn(async () => ({ ok: true })),
+  signupList: vi.fn(async () => ({ rallies: [] as SignupRally[] })),
+  // Typed as the full response so a test can override it with the optional garapon
+  // fields, which a rally with a linked garapon returns.
+  signUp: vi.fn(async (): Promise<StampSignupResponse> => ({
+    participant_name: 'Yao Ming',
+    rally_title: 'Festival',
+    card_token: 'tok_card',
+  })),
+  signupLookup: vi.fn(async () => ({ entries: [] as StampLookupEntry[] })),
 }))
 vi.mock('@/lib/endpoints', () => ({
   endpoints: {
@@ -26,6 +42,7 @@ vi.mock('@/lib/endpoints', () => ({
       deleteCard: vi.fn(),
     },
     stampCard: { get: ep.get, stamp: ep.stamp },
+    stampSignup: { list: ep.signupList, signUp: ep.signUp, lookup: ep.signupLookup },
     affiliates: { list: vi.fn(async () => ({ affiliates: [] })) },
   },
 }))
@@ -168,5 +185,66 @@ describe('public', () => {
     const s = useStampRalliesStore()
     expect(await s.submitPassword('tok', '   ')).toBe(false)
     expect(ep.stamp).not.toHaveBeenCalled()
+  })
+})
+
+describe('public sign-up + lookup', () => {
+  it('signUp trims the name and keeps the issued tokens', async () => {
+    ep.signUp.mockResolvedValueOnce({
+      participant_name: 'Yao Ming @ Balmung',
+      rally_title: 'Festival',
+      card_token: 'tok_card',
+      garapon_token: 'tok_card',
+      garapon_title: 'Festival Garapon',
+    })
+    const s = useStampRalliesStore()
+    expect(await s.signUp(3, '  Yao Ming @ Balmung  ')).toBe(true)
+    expect(ep.signUp).toHaveBeenCalledWith(3, 'Yao Ming @ Balmung', '')
+    expect(s.signupResult?.card_token).toBe('tok_card')
+    // A paired garapon shares the card's token, so both links resolve from it.
+    expect(s.garaponUrl('tok_card')).toContain('/garapon/tok_card')
+    expect(s.stampCardUrl('tok_card')).toContain('/stamp-card/tok_card')
+  })
+
+  it('signUp rejects a blank name without calling the API', async () => {
+    const ui = useUiStore()
+    ui.notify = vi.fn()
+    const s = useStampRalliesStore()
+    expect(await s.signUp(3, '   ')).toBe(false)
+    expect(ep.signUp).not.toHaveBeenCalled()
+  })
+
+  it('signUp surfaces the server message on a taken name and keeps no result', async () => {
+    const ui = useUiStore()
+    ui.notify = vi.fn()
+    ep.signUp.mockRejectedValueOnce(new Error('Someone has already signed up under that name.'))
+    const s = useStampRalliesStore()
+    expect(await s.signUp(3, 'Yao Ming')).toBe(false)
+    expect(s.signupResult).toBeNull()
+    expect(ui.notify).toHaveBeenCalledWith(
+      'Someone has already signed up under that name.',
+      'error',
+    )
+  })
+
+  it('lookupLinks distinguishes "not searched" from "searched, found nothing"', async () => {
+    const s = useStampRalliesStore()
+    // Nothing searched yet -> null, so the view claims nothing either way.
+    expect(s.lookupResults).toBeNull()
+
+    ep.signupLookup.mockResolvedValueOnce({ entries: [] })
+    await s.lookupLinks('Nobody')
+    expect(s.lookupResults).toEqual([])
+
+    s.resetLookup()
+    expect(s.lookupResults).toBeNull()
+  })
+
+  it('lookupLinks rejects a blank name without calling the API', async () => {
+    const ui = useUiStore()
+    ui.notify = vi.fn()
+    const s = useStampRalliesStore()
+    await s.lookupLinks('  ')
+    expect(ep.signupLookup).not.toHaveBeenCalled()
   })
 })

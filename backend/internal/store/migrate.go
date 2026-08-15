@@ -15,7 +15,7 @@ import (
 // PRAGMA user_version against this constant and runs only the migrations
 // needed to bring the database up to date. Bump this when adding a new
 // migration block.
-const schemaVersion = 53
+const schemaVersion = 55
 
 // ensureSchema reads the current PRAGMA user_version from the database and
 // applies any outstanding migrations to bring it up to schemaVersion.
@@ -363,6 +363,18 @@ func ensureSchema(db *sql.DB) error {
 		}
 	}
 
+	if version < 54 {
+		if err := migrateStampRallyPublicSignup(db); err != nil {
+			return err
+		}
+	}
+
+	if version < 55 {
+		if err := migrateGaraponDefaultDraws(db); err != nil {
+			return err
+		}
+	}
+
 	_, err := db.Exec(fmt.Sprintf("PRAGMA user_version = %d", schemaVersion))
 	return err
 }
@@ -380,6 +392,44 @@ func migrateAffiliateSubtitle(db *sql.DB) error {
 	}
 	if _, err := db.Exec(`ALTER TABLE affiliates ADD COLUMN subtitle TEXT NOT NULL DEFAULT ''`); err != nil {
 		return fmt.Errorf("add affiliates.subtitle: %w", err)
+	}
+	return nil
+}
+
+// migrateStampRallyPublicSignup (schema v54) adds stamp_rallies.public_signup, the
+// opt-in that lists a rally on the public sign-up page and lets participants issue
+// themselves a card. It defaults to 0 deliberately: every rally that exists when this
+// runs was built on the assumption that staff hand out its cards, so none of them may
+// silently become self-serve. Idempotent - skipped when the column already exists (a
+// fresh install gets it via createTables).
+func migrateStampRallyPublicSignup(db *sql.DB) error {
+	if !tableExists(db, "stamp_rallies") {
+		return nil
+	}
+	if hasColumn(db, "stamp_rallies", "public_signup") {
+		return nil
+	}
+	if _, err := db.Exec(`ALTER TABLE stamp_rallies ADD COLUMN public_signup INTEGER NOT NULL DEFAULT 0`); err != nil {
+		return fmt.Errorf("add stamp_rallies.public_signup: %w", err)
+	}
+	return nil
+}
+
+// migrateGaraponDefaultDraws (schema v55) adds garapons.default_draws: how many
+// draws a link issued for this garapon carries when nobody says otherwise. It is
+// what a public stamp-rally sign-up issues (there is no admin around to choose),
+// and the fallback when an admin issues a link without a number. Existing garapons
+// default to 1, which is the fallback both paths already used, so nothing changes
+// until someone sets it. Idempotent - skipped when the column already exists.
+func migrateGaraponDefaultDraws(db *sql.DB) error {
+	if !tableExists(db, "garapons") {
+		return nil
+	}
+	if hasColumn(db, "garapons", "default_draws") {
+		return nil
+	}
+	if _, err := db.Exec(`ALTER TABLE garapons ADD COLUMN default_draws INTEGER NOT NULL DEFAULT 1`); err != nil {
+		return fmt.Errorf("add garapons.default_draws: %w", err)
 	}
 	return nil
 }
@@ -1511,6 +1561,7 @@ const garaponsTableSQL = `CREATE TABLE IF NOT EXISTS garapons (
 	grand_prize_image TEXT NOT NULL DEFAULT '',
 	status TEXT NOT NULL DEFAULT 'open',
 	stamp_rally_id INTEGER,
+	default_draws INTEGER NOT NULL DEFAULT 1,
 	created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 )`
 
@@ -1691,6 +1742,7 @@ const stampRalliesTableSQL = `CREATE TABLE IF NOT EXISTS stamp_rallies (
 	redeem_instructions TEXT NOT NULL DEFAULT '',
 	redeem_image TEXT NOT NULL DEFAULT '',
 	status TEXT NOT NULL DEFAULT 'open',
+	public_signup INTEGER NOT NULL DEFAULT 0,
 	created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 )`
 

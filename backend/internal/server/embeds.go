@@ -12,6 +12,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // errWebhookAmbiguous marks a transport-level failure (timeout, connection reset)
@@ -270,10 +271,25 @@ func colorFromHex(hex string, def int) int {
 	return int(v)
 }
 
+// webhookTarget labels a Discord post for the log: the feature that posted (a
+// stable key to filter on) and which record went out. Every outbound post funnels
+// through postDiscordWebhook, so carrying the label there is what makes a
+// SUCCESSFUL post visible - failures were already logged (writeUpstreamError, the
+// announcement scheduler), but a post that worked left no trace at all, which made
+// "did that actually go out, and when?" unanswerable from the log alone.
+type webhookTarget struct {
+	// Kind is the posting feature: "announcement", "announcement_scheduled",
+	// "bookclub_item", "affiliate" or "tea_room".
+	Kind string
+	// Name is the record's human identity - an announcement or item title, an
+	// affiliate or tea-room name. Empty when the record has no useful name.
+	Name string
+}
+
 // postDiscordEmbed sends a single embed to the webhook URL. The context bounds the
 // request, so a caller shutdown or client disconnect cancels an in-flight POST.
-func postDiscordEmbed(ctx context.Context, webhookURL string, embed discordEmbed) error {
-	return postDiscordWebhook(ctx, webhookURL, discordWebhookPayload{Embeds: []discordEmbed{embed}})
+func postDiscordEmbed(ctx context.Context, target webhookTarget, webhookURL string, embed discordEmbed) error {
+	return postDiscordWebhook(ctx, target, webhookURL, discordWebhookPayload{Embeds: []discordEmbed{embed}})
 }
 
 // postDiscordWebhook sends a full webhook payload (embeds + optional components) to
@@ -282,7 +298,7 @@ func postDiscordEmbed(ctx context.Context, webhookURL string, embed discordEmbed
 // `?with_components=true`; without it the message posts but the buttons silently
 // vanish. Link buttons are non-interactive, so channel (non-application-owned)
 // webhooks are allowed to send them once the flag is set.
-func postDiscordWebhook(ctx context.Context, webhookURL string, payload discordWebhookPayload) error {
+func postDiscordWebhook(ctx context.Context, target webhookTarget, webhookURL string, payload discordWebhookPayload) error {
 	body, err := json.Marshal(payload)
 	if err != nil {
 		return fmt.Errorf("encode embed")
@@ -290,7 +306,9 @@ func postDiscordWebhook(ctx context.Context, webhookURL string, payload discordW
 	if len(payload.Components) > 0 {
 		webhookURL = withComponentsParam(webhookURL)
 	}
-	slog.Debug("discord webhook post", "embeds", len(payload.Embeds), "components", len(payload.Components), "bytes", len(body))
+	slog.Debug("discord webhook post", "kind", target.Kind, "name", target.Name,
+		"embeds", len(payload.Embeds), "components", len(payload.Components), "bytes", len(body))
+	start := time.Now()
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, webhookURL, bytes.NewReader(body))
 	if err != nil {
 		return fmt.Errorf("build webhook request: %s", sanitizeWebhookErr(err))
@@ -313,6 +331,13 @@ func postDiscordWebhook(ctx context.Context, webhookURL string, payload discordW
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return fmt.Errorf("webhook returned status %d: %s", resp.StatusCode, discordErrorMessage(respBody))
 	}
+	// The one record that a post reached Discord. Failures are logged by the caller,
+	// which is the layer that knows whether it will retry (scheduler) or surface a
+	// 502 (an admin's manual send), so this deliberately covers the success path only
+	// rather than double-reporting every error.
+	slog.Info("discord post sent", "kind", target.Kind, "name", target.Name,
+		"status", resp.StatusCode, "embeds", len(payload.Embeds),
+		"duration_ms", time.Since(start).Milliseconds())
 	return nil
 }
 

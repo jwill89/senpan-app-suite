@@ -80,6 +80,9 @@ var modelTypes = map[string]any{
 	"StampRallyLogsResponse": model.StampRallyLogsResponse{}, "PublicStampRally": model.PublicStampRally{},
 	"PublicStamp": model.PublicStamp{}, "PublicPrize": model.PublicPrize{},
 	"PublicStampCard": model.PublicStampCard{}, "StampSubmitResponse": model.StampSubmitResponse{},
+	"SignupRally": model.SignupRally{}, "SignupRalliesResponse": model.SignupRalliesResponse{},
+	"StampSignupResponse": model.StampSignupResponse{},
+	"StampLookupEntry":    model.StampLookupEntry{}, "StampLookupResponse": model.StampLookupResponse{},
 
 	// Book club / announcements
 	"ReadingListsResponse": model.ReadingListsResponse{}, "ReadingListDetailResponse": model.ReadingListDetailResponse{},

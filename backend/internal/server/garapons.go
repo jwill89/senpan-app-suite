@@ -79,7 +79,15 @@ type garaponWriteRequest struct {
 	Details         string               `json:"details"`
 	GrandPrizeImage string               `json:"grand_prize_image"`
 	StampRallyID    *int64               `json:"stamp_rally_id"` // optional link to an open rally
+	DefaultDraws    int                  `json:"default_draws"`  // draws per link when unspecified (min 1)
 	Prizes          []model.GaraponPrize `json:"prizes"`
+}
+
+// clampDefaultDraws coerces a garapon's default draw allowance to at least 1. A
+// zero-draw default would issue links that can't draw at all - and zero is what an
+// older client (or an omitted field) sends, so it has to mean "unset", not "none".
+func clampDefaultDraws(n int) int {
+	return max(n, 1)
 }
 
 // resolveStampRallyLink validates an optional garapon->rally link: nil/0 means
@@ -175,6 +183,7 @@ func (s *Server) handleGaraponCreate(w http.ResponseWriter, r *http.Request) {
 		Details:         req.Details,
 		GrandPrizeImage: req.GrandPrizeImage,
 		StampRallyID:    link,
+		DefaultDraws:    clampDefaultDraws(req.DefaultDraws),
 		Prizes:          prizes,
 	}
 	id, err := s.store.CreateGarapon(garapon)
@@ -226,6 +235,7 @@ func (s *Server) handleGaraponUpdate(w http.ResponseWriter, r *http.Request) {
 		Details:         req.Details,
 		GrandPrizeImage: req.GrandPrizeImage,
 		StampRallyID:    link,
+		DefaultDraws:    clampDefaultDraws(req.DefaultDraws),
 		Prizes:          prizes,
 	}
 	if err := s.store.UpdateGarapon(garapon); err != nil {
@@ -321,10 +331,6 @@ func (s *Server) handleGaraponPlayerCreate(w http.ResponseWriter, r *http.Reques
 		writeError(w, http.StatusBadRequest, "Player name is required")
 		return
 	}
-	maxDraws := req.MaxDraws
-	if maxDraws < 1 {
-		maxDraws = 1
-	}
 	garapon, err := s.store.GetGarapon(garaponID)
 	if err != nil {
 		writeInternalError(w, "get garapon for player", err)
@@ -333,6 +339,13 @@ func (s *Server) handleGaraponPlayerCreate(w http.ResponseWriter, r *http.Reques
 	if garapon == nil {
 		writeError(w, http.StatusNotFound, "Garapon not found")
 		return
+	}
+	// An unspecified allowance falls back to the garapon's own default rather than a
+	// bare 1, so "two draws each for this event" is configured once instead of being
+	// retyped per link (and matching what a public sign-up issues).
+	maxDraws := req.MaxDraws
+	if maxDraws < 1 {
+		maxDraws = clampDefaultDraws(garapon.DefaultDraws)
 	}
 	player, err := s.store.CreateGaraponPlayer(garaponID, name, maxDraws)
 	if err != nil {

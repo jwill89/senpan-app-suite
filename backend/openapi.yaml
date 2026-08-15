@@ -1223,6 +1223,8 @@ components:
       properties:
         created_at:
           type: string
+        default_draws:
+          type: integer
         details:
           type: string
         draw_count:
@@ -1298,6 +1300,8 @@ components:
           properties:
             created_at:
               type: string
+            default_draws:
+              type: integer
             details:
               type: string
             draw_count:
@@ -1576,6 +1580,8 @@ components:
           properties:
             created_at:
               type: string
+            default_draws:
+              type: integer
             details:
               type: string
             draw_count:
@@ -1628,6 +1634,8 @@ components:
             properties:
               created_at:
                 type: string
+              default_draws:
+                type: integer
               details:
                 type: string
               draw_count:
@@ -2890,12 +2898,90 @@ components:
             type: object
           type: array
       type: object
+    SignupRalliesResponse:
+      properties:
+        rallies:
+          items:
+            properties:
+              available_from:
+                type: string
+              available_to:
+                type: string
+              card_image:
+                type: string
+              details:
+                type: string
+              garapon_title:
+                type: string
+              id:
+                format: int64
+                type: integer
+              title:
+                type: string
+            type: object
+          type: array
+      type: object
+    SignupRally:
+      properties:
+        available_from:
+          type: string
+        available_to:
+          type: string
+        card_image:
+          type: string
+        details:
+          type: string
+        garapon_title:
+          type: string
+        id:
+          format: int64
+          type: integer
+        title:
+          type: string
+      type: object
     SkippedUpload:
       properties:
         name:
           type: string
         reason:
           type: string
+      type: object
+    StampLookupEntry:
+      properties:
+        card_token:
+          type: string
+        completed:
+          type: boolean
+        garapon_title:
+          type: string
+        garapon_token:
+          type: string
+        rally_id:
+          format: int64
+          type: integer
+        rally_title:
+          type: string
+      type: object
+    StampLookupResponse:
+      properties:
+        entries:
+          items:
+            properties:
+              card_token:
+                type: string
+              completed:
+                type: boolean
+              garapon_title:
+                type: string
+              garapon_token:
+                type: string
+              rally_id:
+                format: int64
+                type: integer
+              rally_title:
+                type: string
+            type: object
+          type: array
       type: object
     StampRalliesResponse:
       properties:
@@ -2958,6 +3044,8 @@ components:
                       type: integer
                   type: object
                 type: array
+              public_signup:
+                type: boolean
               redeem_image:
                 type: string
               redeem_instructions:
@@ -3076,6 +3164,8 @@ components:
                 type: integer
             type: object
           type: array
+        public_signup:
+          type: boolean
         redeem_image:
           type: string
         redeem_instructions:
@@ -3283,6 +3373,8 @@ components:
                     type: integer
                 type: object
               type: array
+            public_signup:
+              type: boolean
             redeem_image:
               type: string
             redeem_instructions:
@@ -3470,6 +3562,8 @@ components:
                     type: integer
                 type: object
               type: array
+            public_signup:
+              type: boolean
             redeem_image:
               type: string
             redeem_instructions:
@@ -3573,6 +3667,19 @@ components:
           type: integer
         sort_order:
           type: integer
+      type: object
+    StampSignupResponse:
+      properties:
+        card_token:
+          type: string
+        garapon_title:
+          type: string
+        garapon_token:
+          type: string
+        participant_name:
+          type: string
+        rally_title:
+          type: string
       type: object
     StampSubmitResponse:
       properties:
@@ -4170,7 +4277,7 @@ info:
     (`{ "type": "log", "entry": LogEntry }`) for the live log tail - best-effort,
     sent only while an admin is connected.
   title: Senpan App Suite API
-  version: 3.14.0
+  version: 3.15.0
 openapi: 3.0.3
 paths:
   /api/account/change-password:
@@ -8923,6 +9030,46 @@ paths:
       summary: Collect a stamp
       tags:
       - Stamp Rally
+  /api/stamp-lookup:
+    post:
+      description: |-
+        **Auth:** public
+
+        Returns the cards (and paired drawing links) held under an EXACT participant name, case-insensitive, across open rallies. POST so the name stays out of URLs and logs; a miss returns an empty list rather than a 404, so the endpoint cannot be walked to discover participants.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              properties:
+                name:
+                  description: The name signed up with (required).
+                  type: string
+              type: object
+        description: Lookup.
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StampLookupResponse'
+          description: Success
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: Missing name
+        "429":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: Rate limited
+      security: []
+      summary: Find my links
+      tags:
+      - Stamp Rally
   /api/stamp-rallies:
     get:
       description: '**Auth:** permission:festival-stamp-rally'
@@ -9325,6 +9472,82 @@ paths:
       - cookieAuth: []
       - bearerAuth: []
       summary: Pause/resume a stall
+      tags:
+      - Stamp Rally
+  /api/stamp-signup:
+    get:
+      description: |-
+        **Auth:** public
+
+        Rallies whose `public_signup` opt-in is on, that are open, and that are inside their availability window.
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SignupRalliesResponse'
+          description: Success
+      security: []
+      summary: Rallies open to public sign-up
+      tags:
+      - Stamp Rally
+  /api/stamp-signup/{id}:
+    post:
+      description: |-
+        **Auth:** public
+
+        Issues the caller a card. When an open Garapon is linked to the rally, a drawing link is issued too, sharing the same token. Names are unique per rally, compared case-insensitively. Rate limited per IP; a rally that has not opted in answers 404 rather than 403.
+      parameters:
+      - description: Rally id.
+        in: path
+        name: id
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              properties:
+                name:
+                  description: Character name, ideally with @ World (required).
+                  type: string
+              type: object
+        description: Sign-up.
+        required: true
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StampSignupResponse'
+          description: Created
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: Missing/too-long name, or rally closed
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: Not open for sign-ups
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: Name already signed up
+        "429":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: Rate limited
+      security: []
+      summary: Sign yourself up for a rally
       tags:
       - Stamp Rally
   /api/styles:

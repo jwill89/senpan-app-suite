@@ -21,6 +21,9 @@ import type {
   StampRallyPrizeForm,
   StampRallyStamp,
   StampRallyStampForm,
+  SignupRally,
+  StampSignupResponse,
+  StampLookupEntry,
 } from '@/types/api'
 import { datetimeLocalToUtc, utcToDatetimeLocal } from '@/lib/datetime'
 import { withLoading } from '@/lib/withLoading'
@@ -176,6 +179,7 @@ export const useStampRalliesStore = defineStore('stampRallies', () => {
       details: '',
       redeem_instructions: '',
       redeem_image: '',
+      public_signup: false,
       stamps: [],
       prizes: [],
     }
@@ -193,6 +197,7 @@ export const useStampRalliesStore = defineStore('stampRallies', () => {
       details: r.details,
       redeem_instructions: r.redeem_instructions,
       redeem_image: r.redeem_image,
+      public_signup: r.public_signup,
       stamps: (r.stamps || []).map((s) => ({
         id: s.id,
         affiliate_id: s.affiliate_id ?? null,
@@ -421,14 +426,110 @@ export const useStampRalliesStore = defineStore('stampRallies', () => {
     return `${window.location.origin}/stamp-card/${card.token}`
   }
 
-  async function copyCardLink(card: StampRallyCard): Promise<void> {
-    const url = cardLinkUrl(card)
+  /**
+   * Copies a link to the clipboard, falling back to showing it in a toast when
+   * the clipboard is unavailable (an insecure origin, or a browser that refuses
+   * without a user gesture) - the participant can still read and copy it by hand
+   * rather than being told nothing happened.
+   */
+  async function copyLink(url: string): Promise<void> {
     try {
       await navigator.clipboard.writeText(url)
       ui.notify('Link copied to clipboard', 'success')
     } catch {
       ui.notify(url, 'info')
     }
+  }
+
+  async function copyCardLink(card: StampRallyCard): Promise<void> {
+    await copyLink(cardLinkUrl(card))
+  }
+
+  // -- Public: self-service sign-up + link lookup ----------------------------
+  //
+  // The tokens the server hands back are turned into links here rather than by
+  // each view, so the participant-facing URLs are built in exactly one place (the
+  // same shape cardLinkUrl produces for the admin card list).
+
+  /** Rallies currently open to public sign-up (empty until loadSignupRallies). */
+  const signupRallies = ref<SignupRally[]>([])
+  const signupLoading = ref(false)
+  /** The result of a successful sign-up, held so the view can show the links. */
+  const signupResult = ref<StampSignupResponse | null>(null)
+  /** Lookup results; null = no search run yet, [] = searched and found nothing. */
+  const lookupResults = ref<StampLookupEntry[] | null>(null)
+  const lookupLoading = ref(false)
+
+  /** A stamp card's public link for a bare token. */
+  function stampCardUrl(token: string): string {
+    return `${window.location.origin}/stamp-card/${token}`
+  }
+
+  /** A garapon drawing link for a bare token. */
+  function garaponUrl(token: string): string {
+    return `${window.location.origin}/garapon/${token}`
+  }
+
+  async function loadSignupRallies(): Promise<void> {
+    signupLoading.value = true
+    try {
+      signupRallies.value = (await endpoints.stampSignup.list()).rallies
+    } catch {
+      signupRallies.value = []
+    } finally {
+      signupLoading.value = false
+    }
+  }
+
+  /**
+   * Signs the participant up for a rally. Returns true on success, leaving the
+   * issued tokens in signupResult. A duplicate name comes back as a 409 whose
+   * message names the fix (the lookup page), so it is surfaced verbatim rather
+   * than replaced with a generic failure.
+   */
+  async function signUp(rallyId: number, name: string, turnstileToken = ''): Promise<boolean> {
+    if (submitting.value) return false
+    const trimmed = name.trim()
+    if (!trimmed) {
+      ui.notify('Enter your character name', 'error')
+      return false
+    }
+    submitting.value = true
+    try {
+      signupResult.value = await endpoints.stampSignup.signUp(rallyId, trimmed, turnstileToken)
+      return true
+    } catch (e) {
+      ui.notify((e as Error).message, 'error')
+      return false
+    } finally {
+      submitting.value = false
+    }
+  }
+
+  /** Looks up a participant's links by the exact name they signed up with. */
+  async function lookupLinks(name: string): Promise<void> {
+    const trimmed = name.trim()
+    if (!trimmed) {
+      ui.notify('Enter the name you signed up with', 'error')
+      return
+    }
+    lookupLoading.value = true
+    try {
+      lookupResults.value = (await endpoints.stampSignup.lookup(trimmed)).entries
+    } catch (e) {
+      ui.notify((e as Error).message, 'error')
+      lookupResults.value = null
+    } finally {
+      lookupLoading.value = false
+    }
+  }
+
+  function resetSignup(): void {
+    signupResult.value = null
+  }
+
+  function resetLookup(): void {
+    lookupResults.value = null
   }
 
   // -- Public: card view + collect ------------------------------------------
@@ -523,10 +624,24 @@ export const useStampRalliesStore = defineStore('stampRallies', () => {
     createCard,
     deleteCard,
     cardLinkUrl,
+    copyLink,
     copyCardLink,
     // public actions
     resetPublic,
     loadByToken,
     submitPassword,
+    // public self-service sign-up + lookup
+    signupRallies,
+    signupLoading,
+    signupResult,
+    lookupResults,
+    lookupLoading,
+    stampCardUrl,
+    garaponUrl,
+    loadSignupRallies,
+    signUp,
+    lookupLinks,
+    resetSignup,
+    resetLookup,
   }
 })

@@ -9,19 +9,19 @@ import (
 	"strings"
 )
 
-// Column ranges for standard 75-ball bingo: B(1–15), I(16–30), N(31–45), G(46–60), O(61–75).
+// Column ranges for standard 75-ball bingo: B(1-15), I(16-30), N(31-45), G(46-60), O(61-75).
 var columnRanges = [5][2]int{
 	{1, 15}, {16, 30}, {31, 45}, {46, 60}, {61, 75},
 }
 
-// columnLetters maps a column index (0–4) to its bingo letter.
+// columnLetters maps a column index (0-4) to its bingo letter.
 var columnLetters = [5]string{"B", "I", "N", "G", "O"}
 
 // idChars excludes ambiguous characters 0/O/1/I/l.
 const idChars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
 
-// GenerateBoard creates a standard 75-ball bingo board as a 5×5 array.
-// board[row][col] — col 0=B … col 4=O. Center cell [2][2] = 0 (FREE).
+// GenerateBoard creates a standard 75-ball bingo board as a 5x5 array.
+// board[row][col] - col 0=B ... col 4=O. Center cell [2][2] = 0 (FREE).
 func GenerateBoard() [][]int {
 	board := make([][]int, 5)
 	for r := range board {
@@ -62,9 +62,9 @@ func GenerateID(exists func(string) (bool, error)) (string, error) {
 	}
 }
 
-// ValidateBoard checks that board is a structurally valid 75-ball bingo card: a 5×5
+// ValidateBoard checks that board is a structurally valid 75-ball bingo card: a 5x5
 // grid, the FREE (0) space at centre [2][2], and every other cell within its
-// column's range (B 1–15 … O 61–75) with no repeats inside a column. It returns a
+// column's range (B 1-15 ... O 61-75) with no repeats inside a column. It returns a
 // human-readable error describing the first problem found, or nil when the card is
 // valid. Used to validate hand-built custom-card requests before they are stored.
 func ValidateBoard(board [][]int) error {
@@ -88,7 +88,7 @@ func ValidateBoard(board [][]int) error {
 			}
 			n := board[row][col]
 			if n < lo || n > hi {
-				return fmt.Errorf("column %s must only contain numbers %d–%d (found %d)", columnLetters[col], lo, hi, n)
+				return fmt.Errorf("column %s must only contain numbers %d-%d (found %d)", columnLetters[col], lo, hi, n)
 			}
 			if seen[n] {
 				return fmt.Errorf("column %s has the number %d more than once", columnLetters[col], n)
@@ -115,7 +115,7 @@ func ValidateCustomID(raw string) (string, error) {
 	return id, nil
 }
 
-// LetterForNumber returns the bingo column letter for a number (1–75).
+// LetterForNumber returns the bingo column letter for a number (1-75).
 func LetterForNumber(n int) string {
 	switch {
 	case n <= 15:

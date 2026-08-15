@@ -7,7 +7,7 @@ import (
 	"app-suite/internal/model"
 )
 
-// ── Affiliates ───────────────────────────────────────────────────────────────
+// -- Affiliates ---------------------------------------------------------------
 //
 // An affiliate is a partner establishment (see model.Affiliate). It's a single
 // table: owners and opening hours are stored as JSON arrays in the owners/hours
@@ -72,7 +72,7 @@ func (s *Store) CreateAffiliate(a *model.Affiliate) (int64, error) {
 }
 
 // UpdateAffiliate updates an affiliate's editable fields (everything but
-// id/created_at/sort_order — sort_order is managed by BulkReorderAffiliates, so an
+// id/created_at/sort_order - sort_order is managed by BulkReorderAffiliates, so an
 // edit must not reset the drag order).
 func (s *Store) UpdateAffiliate(a *model.Affiliate) error {
 	_, err := s.db.Exec(
@@ -102,7 +102,7 @@ func (s *Store) BulkReorderAffiliates(ids []int64) error {
 }
 
 // DeleteAffiliate removes an affiliate. Returns true if a row was deleted. The
-// logo/screenshot files live in centrally-managed image categories (System →
+// logo/screenshot files live in centrally-managed image categories (System ->
 // Images), so they're intentionally left intact for reuse.
 func (s *Store) DeleteAffiliate(id int64) (bool, error) {
 	res, err := s.db.Exec(`DELETE FROM affiliates WHERE id = ?`, id)

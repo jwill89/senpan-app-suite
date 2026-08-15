@@ -35,7 +35,7 @@ func listAnnouncementTitles(t *testing.T, s *store.Store) []string {
 }
 
 // TestListAnnouncements_DefaultOrder verifies the default (un-reordered) list is
-// newest-first — the behavior preserved by sort_order defaulting to 0.
+// newest-first - the behavior preserved by sort_order defaulting to 0.
 func TestListAnnouncements_DefaultOrder(t *testing.T) {
 	s := newTestStore(t)
 	typeID, err := s.CreateAnnouncementType("Events", "https://discord/webhook")
@@ -71,7 +71,7 @@ func TestBulkReorderAnnouncements(t *testing.T) {
 		t.Fatalf("after reorder = %v; want [alpha charlie bravo]", got)
 	}
 
-	// A new announcement defaults to sort_order 0 → appears at the very top.
+	// A new announcement defaults to sort_order 0 -> appears at the very top.
 	mustCreateAnnouncement(t, s, typeID, "delta")
 	if got := listAnnouncementTitles(t, s); got[0] != "delta" {
 		t.Errorf("new announcement should be first; got %v", got)

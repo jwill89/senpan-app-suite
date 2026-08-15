@@ -8,7 +8,7 @@ import (
 	"app-suite/internal/auth"
 )
 
-// ── Stamp Rally admin CRUD ──────────────────────────────────────────────────
+// -- Stamp Rally admin CRUD --------------------------------------------------
 
 func TestStampRally_RequiresAuth(t *testing.T) {
 	env := newTestEnv(t)
@@ -91,7 +91,7 @@ func TestStampRally_CreateValidation(t *testing.T) {
 	resp.Body.Close()
 }
 
-// ── Public flow (token view + password collection + completion) ─────────────
+// -- Public flow (token view + password collection + completion) -------------
 
 func TestStampCard_PublicFlowAndCompletion(t *testing.T) {
 	env := newTestEnv(t)
@@ -112,14 +112,14 @@ func TestStampCard_PublicFlowAndCompletion(t *testing.T) {
 		t.Error("prizes revealed before completion")
 	}
 
-	// Wrong password → 400.
+	// Wrong password -> 400.
 	resp := env.postJSON(t, "/api/stamp-card/"+token+"/stamp", map[string]any{"password": "nope"})
 	if resp.StatusCode != http.StatusBadRequest {
 		t.Errorf("wrong password status = %d; want 400", resp.StatusCode)
 	}
 	resp.Body.Close()
 
-	// Correct password → collected; the only stamp → card completes + prizes reveal.
+	// Correct password -> collected; the only stamp -> card completes + prizes reveal.
 	resp = env.postJSON(t, "/api/stamp-card/"+token+"/stamp", map[string]any{"password": "alpha"})
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("collect status = %d; want 200", resp.StatusCode)
@@ -134,7 +134,7 @@ func TestStampCard_PublicFlowAndCompletion(t *testing.T) {
 		t.Errorf("revealed prize name = %v; want Trophy", prize["name"])
 	}
 
-	// Re-collecting the same stamp → 409.
+	// Re-collecting the same stamp -> 409.
 	resp = env.postJSON(t, "/api/stamp-card/"+token+"/stamp", map[string]any{"password": "alpha"})
 	if resp.StatusCode != http.StatusConflict {
 		t.Errorf("re-collect status = %d; want 409", resp.StatusCode)
@@ -214,7 +214,7 @@ func TestStampRally_CloseKeepsLogs(t *testing.T) {
 	}
 	resp.Body.Close()
 
-	// Close the rally → stamping is now blocked (read-only)...
+	// Close the rally -> stamping is now blocked (read-only)...
 	env.setRallyStatus(t, id, "closed")
 	resp = env.postJSON(t, "/api/stamp-card/"+token+"/stamp", map[string]any{"password": "alpha"})
 	if resp.StatusCode != http.StatusBadRequest {
@@ -255,7 +255,7 @@ func TestGarapon_LinkedStampRally(t *testing.T) {
 	}
 	gid := int(decodeBody(t, resp)["garapon"].(map[string]any)["id"].(float64))
 
-	// Issue a drawing link → it also issues a stamp card with the SAME token.
+	// Issue a drawing link -> it also issues a stamp card with the SAME token.
 	resp = env.postJSON(t, fmt.Sprintf("/api/garapons/%d/players", gid), map[string]any{
 		"player_name": "Tester", "max_draws": 1,
 	})
@@ -290,7 +290,7 @@ func TestGarapon_LinkedStampRally(t *testing.T) {
 }
 
 // TestStampRally_PermissionGating verifies the festival-stamp-rally page permission
-// gates the admin API (store-driven, single session — see affiliates_test.go).
+// gates the admin API (store-driven, single session - see affiliates_test.go).
 func TestStampRally_PermissionGating(t *testing.T) {
 	env := newTestEnv(t)
 	hash, err := auth.Hash("password123")

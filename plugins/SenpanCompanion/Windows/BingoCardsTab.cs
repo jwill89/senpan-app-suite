@@ -93,7 +93,7 @@ internal sealed class BingoCardsTab : TabBase
                 ImGui.TableNextColumn();
                 ImGui.TextUnformatted(card.Id);
                 ImGui.TableNextColumn();
-                ImGui.TextUnformatted(string.IsNullOrEmpty(card.PlayerName) ? "—" : card.PlayerName);
+                ImGui.TextUnformatted(string.IsNullOrEmpty(card.PlayerName) ? "-" : card.PlayerName);
                 ImGui.TableNextColumn();
                 DrawStatusIcons(card);
                 ImGui.TableNextColumn();
@@ -126,12 +126,12 @@ internal sealed class BingoCardsTab : TabBase
         {
             if (drewAny)
                 ImGui.SameLine();
-            StatusIcon(FontAwesomeIcon.Lock, Ui.AccentColor, "Protected — kept when deleting all cards");
+            StatusIcon(FontAwesomeIcon.Lock, Ui.AccentColor, "Protected - kept when deleting all cards");
             drewAny = true;
         }
 
         if (!drewAny)
-            ImGui.TextDisabled("—");
+            ImGui.TextDisabled("-");
     }
 
     /// <summary>Render a status glyph with a hover tooltip (no click).</summary>
@@ -148,7 +148,7 @@ internal sealed class BingoCardsTab : TabBase
         var who = card.PlayerName;
         if (!string.IsNullOrEmpty(card.World))
             who = string.IsNullOrEmpty(who) ? card.World : $"{who} @ {card.World}";
-        return string.IsNullOrEmpty(who) ? label : $"{label} — {who}";
+        return string.IsNullOrEmpty(who) ? label : $"{label} - {who}";
     }
 
     /// <summary>Row action buttons: approve (pending only), protect toggle, copy URL, delete.</summary>
@@ -156,7 +156,7 @@ internal sealed class BingoCardsTab : TabBase
     {
         var id = card.Id;
 
-        // Approve — only shown for a pending custom-card request.
+        // Approve - only shown for a pending custom-card request.
         if (card.CustomStatus == "pending")
         {
             if (Ui.IconButton($"approve{id}", FontAwesomeIcon.Check, "Approve custom card"))
@@ -280,7 +280,7 @@ internal sealed class BingoCardsTab : TabBase
 
     private void DrawNearbyPicker()
     {
-        if (!ImGui.BeginCombo("##cardnearby", "Nearby…", ImGuiComboFlags.NoArrowButton))
+        if (!ImGui.BeginCombo("##cardnearby", "Nearby...", ImGuiComboFlags.NoArrowButton))
             return;
         foreach (var np in this.nearby.Snapshot())
         {

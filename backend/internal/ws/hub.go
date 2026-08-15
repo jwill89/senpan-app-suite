@@ -142,10 +142,10 @@ func (h *Hub) HasAdminClients() bool {
 // BroadcastLog sends a best-effort live-log line to true-admin clients only.
 // The log carries client IPs, request paths, and internal detail, so it must
 // NOT reach the permission-limited staff accounts and plugin PATs that also sit
-// on the cardID=="" channel — it is gated on the per-client isAdmin flag, which
+// on the cardID=="" channel - it is gated on the per-client isAdmin flag, which
 // matches the requireAdmin gate on GET /api/logs. Unlike the other Broadcast*
 // methods, a client whose send buffer is full simply MISSES this line instead
-// of being disconnected — a log burst must never knock an admin off the socket
+// of being disconnected - a log burst must never knock an admin off the socket
 // (which would also drop resource-invalidation). It never logs on failure, so
 // it can be called from inside the logging path without recursing.
 func (h *Hub) BroadcastLog(msg any) {
@@ -161,7 +161,7 @@ func (h *Hub) BroadcastLog(msg any) {
 		}
 		select {
 		case c.send <- data:
-		default: // buffer full — drop this log line, keep the client connected
+		default: // buffer full - drop this log line, keep the client connected
 		}
 	}
 }
@@ -296,7 +296,7 @@ func (h *Hub) register(c *client) {
 
 // unregister removes a client from the hub, closes its send channel
 // (which signals writePump to exit), and cancels its context.
-// Safe to call multiple times — the map check prevents double-close.
+// Safe to call multiple times - the map check prevents double-close.
 func (h *Hub) unregister(c *client) {
 	h.mu.Lock()
 	removed := false

@@ -13,7 +13,7 @@ import { changelogPlugin } from './config/changelog-plugin'
 // PERSISTENT `images/` folder that sits next to `dist/` at the Apache document
 // root (see deploy/.htaccess), so the copies Vite would otherwise bake into
 // `dist/images/` are redundant. This plugin removes `dist/images/` after the
-// build so `dist/` contains only the SPA shell + hashed `assets/` — keeping the
+// build so `dist/` contains only the SPA shell + hashed `assets/` - keeping the
 // build output cleanly separate from the root `images/` folder.
 function stripDistImages(): Plugin {
   return {
@@ -28,13 +28,13 @@ function stripDistImages(): Plugin {
   }
 }
 
-// Social platforms (Discord, Twitter/X, Facebook…) aggressively cache an OG/
+// Social platforms (Discord, Twitter/X, Facebook...) aggressively cache an OG/
 // Twitter card image by URL, so a replaced share banner keeps showing the stale
 // one. This plugin appends a `?v=<hash>` cache-buster to the og:image/
 // twitter:image URLs in index.html (replacing the `__OG_VERSION__` placeholder),
 // derived from the SHA-256 of the actual share_banner.png. The query string
 // doesn't affect file serving (Apache ignores it), but a new hash is a new URL
-// to scrapers — so the card refreshes exactly when the image changes, and stays
+// to scrapers - so the card refreshes exactly when the image changes, and stays
 // stable (no needless re-scrapes) when it doesn't. Falls back to a build
 // timestamp if the file can't be read.
 function ogImageCacheBust(): Plugin {
@@ -60,7 +60,7 @@ function ogImageCacheBust(): Plugin {
 // Milkdown + the emoji picker are lazy-loaded). Vite 8 / Rolldown dropped the
 // object form of `manualChunks`, so the same grouping is expressed as a function
 // that maps a module's node_modules package to its chunk. Purely a
-// caching/loading win — no behavioural change.
+// caching/loading win - no behavioural change.
 const vendorChunkGroups: ReadonlyArray<readonly [string, readonly string[]]> = [
   ['vue', ['vue', '@vue', 'pinia', 'vue-router']],
   ['fontawesome', ['@fortawesome']],
@@ -101,7 +101,7 @@ const frontendVersion = JSON.parse(
 // (with /api proxied to the Go server), so relative `api/...` URLs resolve.
 //
 // Static assets (logo, favicon, share banner) and uploaded raffle images live
-// under `/images/` — copied verbatim from `public/` into `dist/` at build time.
+// under `/images/` - copied verbatim from `public/` into `dist/` at build time.
 // For uploaded-image preview to work in dev, run the Go server with
 // `-webroot ../frontend/public` so uploads land in `public/images/raffles/`,
 // which Vite serves directly (the proxy below is a fallback for other setups).
@@ -116,7 +116,7 @@ export default defineConfig({
     VitePWA({
       registerType: 'autoUpdate',
       // Static images live in the persistent root images/ folder (stripped from
-      // dist), so they are not bundled/precached — referenced by absolute URL.
+      // dist), so they are not bundled/precached - referenced by absolute URL.
       includeAssets: [],
       manifest: {
         name: 'Senpan App Suite',
@@ -128,10 +128,10 @@ export default defineConfig({
         start_url: '/',
         scope: '/',
         icons: [
-          // Generated as full-bleed resizes of the 512×512 favicon (see
+          // Generated as full-bleed resizes of the 512x512 favicon (see
           // deploy/images + public/images). The favicon already has its own
           // square, centered background (sage), so it doubles as the maskable
-          // icon — the solid bg fills the mask's margins while the logo stays
+          // icon - the solid bg fills the mask's margins while the logo stays
           // centered (no extra padding/letter-boxing, no white-on-white).
           { src: '/images/pwa-192x192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
           { src: '/images/pwa-512x512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
@@ -181,12 +181,12 @@ export default defineConfig({
   server: {
     port: 5173,
     proxy: {
-      // WebSocket upgrade for /api/ws — MUST come before the '/api' entry so it
+      // WebSocket upgrade for /api/ws - MUST come before the '/api' entry so it
       // matches first. `changeOrigin` is left false here on purpose: the Go hub
       // (coder/websocket) enforces a same-origin check (the request's Origin host
-      // must equal its Host header). Rewriting Host to the target (:8080) — as the
-      // REST proxy below does — would leave Origin as the browser's :5173 and fail
-      // that check (403 → the socket drops → "Connection lost. Reconnecting").
+      // must equal its Host header). Rewriting Host to the target (:8080) - as the
+      // REST proxy below does - would leave Origin as the browser's :5173 and fail
+      // that check (403 -> the socket drops -> "Connection lost. Reconnecting").
       // Preserving Host keeps it equal to Origin, mirroring production's Apache
       // `ProxyPreserveHost On`, so the check passes without weakening it.
       '/api/ws': {
@@ -194,7 +194,7 @@ export default defineConfig({
         ws: true,
         changeOrigin: false,
       },
-      // REST API → Go backend
+      // REST API -> Go backend
       '/api': {
         target: process.env.VITE_API_TARGET || 'http://localhost:8080',
         changeOrigin: true,
@@ -207,7 +207,7 @@ export default defineConfig({
     sourcemap: false,
     // The largest chunk (the Milkdown editor ~620 kB) is a monolithic
     // third-party library already split into its own lazy-loaded chunk (fetched
-    // only when an admin opens a view that needs it) — it never touches the
+    // only when an admin opens a view that needs it) - it never touches the
     // initial player/home load. It can't be split further (it ships as one
     // bundle), so we lift the advisory warning to 650 kB: above this intentional
     // vendor chunk, but still low enough to flag genuinely new bloat.

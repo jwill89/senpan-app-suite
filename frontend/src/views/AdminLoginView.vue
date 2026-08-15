@@ -40,7 +40,7 @@ onMounted(async () => {
   try {
     turnstileSiteKey.value = (await endpoints.system.config()).turnstile_site_key
   } catch {
-    turnstileSiteKey.value = '' // config probe failed → behave as if disabled
+    turnstileSiteKey.value = '' // config probe failed -> behave as if disabled
   }
 })
 
@@ -56,12 +56,12 @@ async function submit(): Promise<void> {
   const ok = await auth.login(name, pw, turnstileToken.value || undefined)
   if (ok) {
     // Only honor a same-origin redirect path; otherwise land on /admin, where the
-    // router guard forwards to the first page this account may access (admins →
-    // the game tab, others → their first permitted page).
+    // router guard forwards to the first page this account may access (admins ->
+    // the game tab, others -> their first permitted page).
     void router.push(safeRedirect(route.query.redirect))
     return
   }
-  // Turnstile tokens are single-use — re-issue one for the next attempt.
+  // Turnstile tokens are single-use - re-issue one for the next attempt.
   turnstileToken.value = ''
   turnstile.value?.reset()
 }
@@ -112,7 +112,7 @@ function goHome(): void {
             class="btn-action"
             :disabled="auth.loggingIn || (!!turnstileSiteKey && !turnstileToken)"
           >
-            <LoadingSpinner v-if="auth.loggingIn" label="Logging in…" />
+            <LoadingSpinner v-if="auth.loggingIn" label="Logging in..." />
             <template v-else>Login</template>
           </button>
         </div>
@@ -139,7 +139,7 @@ function goHome(): void {
   align-items: center;
   gap: 12px;
   margin: 16px 0;
-  color: var(--color-text-dim, #888);
+  color: var(--text-muted);
   font-size: 0.85rem;
 }
 .login-or::before,
@@ -147,7 +147,7 @@ function goHome(): void {
   content: '';
   flex: 1;
   height: 1px;
-  background: color-mix(in srgb, var(--color-text) 15%, transparent);
+  background: color-mix(in srgb, var(--text) 15%, transparent);
 }
 .login-passkey {
   width: 100%;

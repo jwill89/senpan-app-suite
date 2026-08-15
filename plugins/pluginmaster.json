@@ -3,7 +3,7 @@
     "Author": "MathDad",
     "Name": "Senpan Admin Companion",
     "InternalName": "SenpanCompanionAdmin",
-    "AssemblyVersion": "3.3.1.0",
+    "AssemblyVersion": "3.3.2.0",
     "Description": "Serves as an alternative to many of the web-interface functions, allowing staff to operate various systems from within the game.",
     "Punchline": "Allows Senpan Tea House staff to use various app services right from the game.",
     "Changelog": "Adds an Owner column to the Tea Rooms table showing the character who owns each room, and fixes accented characters (e.g. the o-with-macron in a room name) that the game font lacks by merging Noto Sans CJK so they render across the window.",

@@ -2,7 +2,7 @@
 /**
  * Client-side theme picker. Lets a player choose any Public theme for their own
  * browser (persisted via the app store's theme preference). "Default" always
- * follows whatever theme the admin has activated — its real name is deliberately
+ * follows whatever theme the admin has activated - its real name is deliberately
  * never shown. The picker is hidden entirely when there are no public themes to
  * choose from (a lone "Default" option is pointless).
  */
@@ -19,7 +19,7 @@ onMounted(async () => {
     const data = await endpoints.styles.listPublic()
     publicThemes.value = data.styles
   } catch {
-    /* silent — the picker just stays hidden if the list can't load */
+    /* silent - the picker just stays hidden if the list can't load */
   }
 })
 

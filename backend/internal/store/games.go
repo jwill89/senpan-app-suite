@@ -9,7 +9,7 @@ import (
 	"app-suite/internal/model"
 )
 
-// ── Game operations ─────────────────────────────────────────────────────────
+// -- Game operations ---------------------------------------------------------
 
 // CreateGame inserts a new active game and returns its ID.
 func (s *Store) CreateGame() (int64, error) {
@@ -21,7 +21,7 @@ func (s *Store) CreateGame() (int64, error) {
 }
 
 // StartGame atomically ends any active game, creates a new active game, and
-// snapshots the given patterns into game_patterns — all in one transaction, so a
+// snapshots the given patterns into game_patterns - all in one transaction, so a
 // failure part-way can't leave a new active game with only a partial pattern set
 // (which would silently miscalibrate winner detection). Returns the new game's id
 // and created_at timestamp.

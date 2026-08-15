@@ -11,7 +11,7 @@ import (
 	"app-suite/internal/store"
 )
 
-// ── MatchesPattern ──────────────────────────────────────────────────────────
+// -- MatchesPattern ----------------------------------------------------------
 
 func TestMatchesPattern_FullMatch(t *testing.T) {
 	board := [][]int{
@@ -73,7 +73,7 @@ func TestMatchesPattern_FreeSpace(t *testing.T) {
 		{false, false, false, false, false},
 		{false, false, false, false, false},
 	}
-	// No numbers called at all — FREE always counts
+	// No numbers called at all - FREE always counts
 	if !MatchesPattern(board, pattern, map[int]bool{}) {
 		t.Error("pattern requiring only FREE space should always match")
 	}
@@ -139,9 +139,9 @@ func TestMatchesPattern_AllTrue(t *testing.T) {
 	}
 }
 
-// ── PatternColumns ──────────────────────────────────────────────────────────
+// -- PatternColumns ----------------------------------------------------------
 
-// postageStampPattern is a 2×2 block in each corner — it uses columns B, I, G, O
+// postageStampPattern is a 2x2 block in each corner - it uses columns B, I, G, O
 // but never the centre N column.
 func postageStampPattern() [][]bool {
 	p := make([][]bool, 5)
@@ -161,7 +161,7 @@ func postageStampPattern() [][]bool {
 
 func TestPatternColumns_PostageStampsSkipsN(t *testing.T) {
 	cols := PatternColumns([]model.BingoGamePattern{{PatternData: postageStampPattern()}})
-	want := [5]bool{true, true, false, true, true} // B,I,_,G,O — no N
+	want := [5]bool{true, true, false, true, true} // B,I,_,G,O - no N
 	if cols != want {
 		t.Errorf("postage-stamp columns = %v; want %v", cols, want)
 	}
@@ -172,7 +172,7 @@ func TestPatternColumns_FreeCentreOnlyFallsBack(t *testing.T) {
 	for i := range p {
 		p[i] = make([]bool, 5)
 	}
-	p[2][2] = true // only the FREE centre → no real cell
+	p[2][2] = true // only the FREE centre -> no real cell
 	cols := PatternColumns([]model.BingoGamePattern{{PatternData: p}})
 	if cols != ([5]bool{true, true, true, true, true}) {
 		t.Errorf("free-only pattern = %v; want all columns active (fallback)", cols)
@@ -230,12 +230,12 @@ func TestGameService_Draw_SkipsInactiveColumns(t *testing.T) {
 			t.Errorf("drew N number %d, but no pattern uses the N column", r.Drawn.Number)
 		}
 	}
-	if count != 60 { // B+I+G+O = 4 columns × 15
+	if count != 60 { // B+I+G+O = 4 columns x 15
 		t.Errorf("expected 60 drawable numbers (N skipped), got %d", count)
 	}
 }
 
-// ── makeCalledSet ───────────────────────────────────────────────────────────
+// -- makeCalledSet -----------------------------------------------------------
 
 func TestMakeCalledSet(t *testing.T) {
 	s := makeCalledSet([]int{5, 22, 48})
@@ -259,7 +259,7 @@ func TestMakeCalledSet_Empty(t *testing.T) {
 	}
 }
 
-// ── parseWinnersCache ───────────────────────────────────────────────────────
+// -- parseWinnersCache -------------------------------------------------------
 
 func TestParseWinnersCache_Empty(t *testing.T) {
 	w := parseWinnersCache("")
@@ -289,7 +289,7 @@ func TestParseWinnersCache_Null(t *testing.T) {
 	}
 }
 
-// ── GameService integration (with real SQLite) ──────────────────────────────
+// -- GameService integration (with real SQLite) ------------------------------
 
 func testStore(t *testing.T) *store.Store {
 	t.Helper()
@@ -405,7 +405,7 @@ func TestGameService_Draw(t *testing.T) {
 		t.Errorf("expected 1 total called, got %d", result.Game.TotalCalled)
 	}
 
-	// Draw again — number should be different, call_order increments
+	// Draw again - number should be different, call_order increments
 	result2, _, err := gs.Draw()
 	if err != nil {
 		t.Fatal(err)
@@ -511,7 +511,7 @@ func TestGameService_StartEndsActiveGame(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Start second game — should end the first
+	// Start second game - should end the first
 	g2, err := gs.Start([]int{int(patID)}, false, 0)
 	if err != nil {
 		t.Fatal(err)
@@ -613,7 +613,7 @@ func TestGameService_InvalidateCardCache(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Draw again — cache should be repopulated with both cards
+	// Draw again - cache should be repopulated with both cards
 	result, _, err := gs.Draw()
 	if err != nil {
 		t.Fatal(err)
@@ -621,11 +621,11 @@ func TestGameService_InvalidateCardCache(t *testing.T) {
 	if result == nil {
 		t.Fatal("expected non-nil result after cache invalidation")
 	}
-	// Winners list is computed from cached cards — we can't directly inspect
+	// Winners list is computed from cached cards - we can't directly inspect
 	// the cache, but the draw should succeed without error.
 }
 
-// ── MatchesPattern with GamePattern ─────────────────────────────────────────
+// -- MatchesPattern with GamePattern -----------------------------------------
 
 func TestMatchesPattern_DiagonalPattern(t *testing.T) {
 	board := [][]int{
@@ -677,13 +677,13 @@ func TestMatchesPattern_ColumnPattern(t *testing.T) {
 	}
 }
 
-// ── computeWinners edge cases ───────────────────────────────────────────────
+// -- computeWinners edge cases -----------------------------------------------
 
 func TestGameService_ComputeWinners_NoCardsOrPatterns(t *testing.T) {
 	st := testStore(t)
 	gs := NewService(st)
 
-	// No cards in DB, start a game and draw — should return empty winners
+	// No cards in DB, start a game and draw - should return empty winners
 	patID, err := st.SavePattern("Test", testPattern5x5(), 1)
 	if err != nil {
 		t.Fatal(err)
@@ -711,7 +711,7 @@ func TestMatchesPattern_EmptyPattern(t *testing.T) {
 		{4, 19, 34, 49, 64},
 		{5, 20, 35, 50, 65},
 	}
-	// All-false pattern — vacuously true
+	// All-false pattern - vacuously true
 	pattern := make([][]bool, 5)
 	for i := range pattern {
 		pattern[i] = make([]bool, 5)
@@ -721,7 +721,7 @@ func TestMatchesPattern_EmptyPattern(t *testing.T) {
 	}
 }
 
-// ── Helpers: verify LetterForNumber agrees with drawn numbers ────────────────
+// -- Helpers: verify LetterForNumber agrees with drawn numbers ----------------
 
 func TestDrawResult_LetterMatchesNumber(t *testing.T) {
 	st := testStore(t)
@@ -745,13 +745,13 @@ func TestDrawResult_LetterMatchesNumber(t *testing.T) {
 		}
 		want := LetterForNumber(result.Drawn.Number)
 		if result.Drawn.Letter != want {
-			t.Errorf("draw %d: number %d → letter %q; want %q",
+			t.Errorf("draw %d: number %d -> letter %q; want %q",
 				i+1, result.Drawn.Number, result.Drawn.Letter, want)
 		}
 	}
 }
 
-// ── MatchesPattern with GamePattern type (matches real usage) ───────────────
+// -- MatchesPattern with GamePattern type (matches real usage) ---------------
 
 func TestMatchesPattern_WithGamePatternType(t *testing.T) {
 	board := [][]int{
@@ -829,7 +829,7 @@ func TestGameService_ConcurrentDrawsNoDuplicates(t *testing.T) {
 	}
 }
 
-// ── "It's Yoever" reaction ──────────────────────────────────────────────────
+// -- "It's Yoever" reaction --------------------------------------------------
 
 // startYoeverGame starts a fresh game so the reaction state is initialized.
 func startYoeverGame(t *testing.T, gs *Service, st *store.Store) {

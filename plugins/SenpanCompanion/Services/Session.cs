@@ -22,7 +22,7 @@ internal static class Perms
 
 /// <summary>
 /// Caches the authenticated account's identity + permissions (from GET /api/auth)
-/// so the UI can hide panels the user can't access — mirroring the web, which hides
+/// so the UI can hide panels the user can't access - mirroring the web, which hides
 /// nav sections you lack permission for. Admins implicitly hold every permission.
 /// </summary>
 public sealed class Session
@@ -100,7 +100,7 @@ public sealed class Session
                 }
                 else
                 {
-                    // Reachable server, token not accepted → terminal: stop polling
+                    // Reachable server, token not accepted -> terminal: stop polling
                     // (until MarkStale) instead of retrying a token that won't work.
                     this.IsAdmin = false;
                     this.Username = string.Empty;
@@ -113,7 +113,7 @@ public sealed class Session
         }
         catch (ApiException ex) when (ex.Status is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden)
         {
-            // Token rejected outright → terminal; back off until the token changes.
+            // Token rejected outright -> terminal; back off until the token changes.
             // Marshal the state write to the framework thread (Dalamud has no SyncContext).
             await Plugin.Framework.RunOnFrameworkThread(() =>
             {
@@ -123,7 +123,7 @@ public sealed class Session
         }
         catch
         {
-            // Transient failure (network / 5xx / timeout) → keep the 3s retry cadence.
+            // Transient failure (network / 5xx / timeout) -> keep the 3s retry cadence.
             // Marshal the status write to the framework thread per the plugin's rule.
             await Plugin.Framework.RunOnFrameworkThread(() => this.LoadFailed = true).ConfigureAwait(false);
         }

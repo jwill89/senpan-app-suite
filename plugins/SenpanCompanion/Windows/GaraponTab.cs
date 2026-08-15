@@ -16,13 +16,13 @@ namespace SenpanCompanion.Windows;
 /// picked garapon + its detail (a single GET /api/garapons/{id} returns the drawing
 /// links and the full draw log):
 /// <list type="bullet">
-/// <item><see cref="DrawManage"/> — issue a per-player drawing link (nearby-player
+/// <item><see cref="DrawManage"/> - issue a per-player drawing link (nearby-player
 /// quick-fill, optional /tell, copy link + the paired stamp-card link). Deliberately
 /// create-only: no edit/delete, mirroring "limited to creating new entries".</item>
-/// <item><see cref="DrawLog"/> — the read-only draw log for the picked garapon.</item>
+/// <item><see cref="DrawLog"/> - the read-only draw log for the picked garapon.</item>
 /// </list>
 /// When the garapon is linked to an open Stamp Rally, the server auto-issues the
-/// paired stamp card (same token) on create — the plugin makes one call and reads
+/// paired stamp card (same token) on create - the plugin makes one call and reads
 /// back player.stamp_card_token. Garapons aren't pushed over the WebSocket, so a
 /// Refresh button re-pulls the list + detail.
 /// </summary>
@@ -66,7 +66,7 @@ internal sealed class GaraponTab : TabBase
         });
     }
 
-    // ── Manage page ────────────────────────────────────────────────────────────
+    // -- Manage page ------------------------------------------------------------
 
     public void DrawManage()
     {
@@ -76,7 +76,7 @@ internal sealed class GaraponTab : TabBase
         var d = this.detail;
         if (d == null)
         {
-            ImGui.TextDisabled(this.selectedGaraponId == 0 ? "Select a garapon." : "Loading…");
+            ImGui.TextDisabled(this.selectedGaraponId == 0 ? "Select a garapon." : "Loading...");
             return;
         }
 
@@ -88,7 +88,7 @@ internal sealed class GaraponTab : TabBase
         if (open)
             DrawCreateForm();
         else
-            UiText.WrappedDisabled("This garapon is closed — no new drawing links can be issued.");
+            UiText.WrappedDisabled("This garapon is closed - no new drawing links can be issued.");
 
         Ui.Section(FontAwesomeIcon.Link, $"Drawing links ({d.Players.Count})");
         DrawPlayers(d.Players);
@@ -124,7 +124,7 @@ internal sealed class GaraponTab : TabBase
         var maxDraws = Math.Max(1, this.newMaxDraws);
 
         // Only /tell when the name came from the nearby picker (so we have a world)
-        // and it still matches — never guess a target. Opt-in via settings.
+        // and it still matches - never guess a target. Opt-in via settings.
         var doTell = this.config.TellGaraponUrlOnCreate
                      && !string.IsNullOrEmpty(this.pendingTellWorld)
                      && string.Equals(this.pendingTellName, name, StringComparison.Ordinal);
@@ -178,7 +178,7 @@ internal sealed class GaraponTab : TabBase
         {
             ImGui.TableNextRow();
             ImGui.TableNextColumn();
-            ImGui.TextUnformatted(string.IsNullOrEmpty(p.PlayerName) ? "—" : p.PlayerName);
+            ImGui.TextUnformatted(string.IsNullOrEmpty(p.PlayerName) ? "-" : p.PlayerName);
             ImGui.TableNextColumn();
             ImGui.TextUnformatted($"{p.DrawsUsed}/{p.MaxDraws}");
             ImGui.TableNextColumn();
@@ -195,7 +195,7 @@ internal sealed class GaraponTab : TabBase
         ImGui.EndTable();
     }
 
-    // ── Draw-log page ──────────────────────────────────────────────────────────
+    // -- Draw-log page ----------------------------------------------------------
 
     public void DrawLog()
     {
@@ -205,7 +205,7 @@ internal sealed class GaraponTab : TabBase
         var d = this.detail;
         if (d == null)
         {
-            ImGui.TextDisabled(this.selectedGaraponId == 0 ? "Select a garapon." : "Loading…");
+            ImGui.TextDisabled(this.selectedGaraponId == 0 ? "Select a garapon." : "Loading...");
             return;
         }
 
@@ -234,9 +234,9 @@ internal sealed class GaraponTab : TabBase
             ImGui.TableNextColumn();
             ImGui.TextUnformatted(FormatTime(draw.DrawnAt));
             ImGui.TableNextColumn();
-            ImGui.TextUnformatted(string.IsNullOrEmpty(draw.PlayerName) ? "—" : draw.PlayerName);
+            ImGui.TextUnformatted(string.IsNullOrEmpty(draw.PlayerName) ? "-" : draw.PlayerName);
             ImGui.TableNextColumn();
-            ImGui.TextColored(ParseColor(draw.BallColor), "●"); // ● ball swatch
+            Ui.Icon(FontAwesomeIcon.Circle, ParseColor(draw.BallColor)); // ball swatch
             ImGui.SameLine();
             ImGui.TextUnformatted(draw.PrizeName);
         }
@@ -244,7 +244,7 @@ internal sealed class GaraponTab : TabBase
         ImGui.EndTable();
     }
 
-    // ── Shared ───────────────────────────────────────────────────────────────
+    // -- Shared ---------------------------------------------------------------
 
     private void DrawPickerRow()
     {
@@ -257,7 +257,7 @@ internal sealed class GaraponTab : TabBase
     private void DrawGaraponPicker()
     {
         var current = this.garapons.FirstOrDefault(g => g.Id == this.selectedGaraponId);
-        var preview = current != null ? $"{current.Title} ({current.Status})" : "Select garapon…";
+        var preview = current != null ? $"{current.Title} ({current.Status})" : "Select garapon...";
 
         // Lock selection while a load/action is in flight so the picked garapon and the
         // loaded detail can't diverge: TabBase.Run is busy-gated, so a selection made
@@ -282,7 +282,7 @@ internal sealed class GaraponTab : TabBase
     private void LoadGarapon(long id)
     {
         this.selectedGaraponId = id;
-        this.detail = null; // clear stale detail; the body shows "Loading…" until it arrives
+        this.detail = null; // clear stale detail; the body shows "Loading..." until it arrives
         Run(async () =>
         {
             var d = await this.api.GetGaraponAsync(id);
@@ -298,14 +298,14 @@ internal sealed class GaraponTab : TabBase
     {
         ImGui.Text(g.Title);
         ImGui.SameLine();
-        ImGui.TextDisabled($"— {g.Status}");
+        ImGui.TextDisabled($"- {g.Status}");
         if (!string.IsNullOrEmpty(g.StampRallyTitle))
-            UiText.WrappedDisabled($"Linked to Stamp Rally \"{g.StampRallyTitle}\" — a stamp card is issued with each drawing link.");
+            UiText.WrappedDisabled($"Linked to Stamp Rally \"{g.StampRallyTitle}\" - a stamp card is issued with each drawing link.");
     }
 
     private void DrawNearbyPicker()
     {
-        if (!ImGui.BeginCombo("##garaponnearby", "Nearby…", ImGuiComboFlags.NoArrowButton))
+        if (!ImGui.BeginCombo("##garaponnearby", "Nearby...", ImGuiComboFlags.NoArrowButton))
             return;
         foreach (var np in this.nearby.Snapshot())
         {
@@ -322,7 +322,7 @@ internal sealed class GaraponTab : TabBase
     private static string FormatTime(string ts)
     {
         if (string.IsNullOrWhiteSpace(ts))
-            return "—";
+            return "-";
         var normalized = ts.Contains('T') ? ts : ts.Replace(' ', 'T') + "Z";
         return DateTimeOffset.TryParse(normalized, out var dto)
             ? dto.ToLocalTime().ToString("yyyy-MM-dd HH:mm")

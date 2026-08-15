@@ -16,7 +16,7 @@ import { DEFAULT_AUTO_INTERVAL } from '@/lib/constants'
 import { useUiStore } from './ui'
 
 // Safe cell readers for winner verification. The winner's board/pattern grids come
-// from the server; a malformed (non-5×5) grid would otherwise throw on a missing
+// from the server; a malformed (non-5x5) grid would otherwise throw on a missing
 // row. Typed `unknown` on purpose so the shape checks are genuine (not flagged as
 // unnecessary under the project's strict-but-not-noUncheckedIndexedAccess types).
 function patternCell(grid: unknown, r: number, c: number): boolean {
@@ -42,7 +42,7 @@ export const useGameStore = defineStore('game', () => {
   /**
    * Admin opt-in: play a chime when a draw produces a new winner so the caller
    * can hear a bingo without watching the screen. Persisted across sessions;
-   * off by default (audio needs a user gesture to start — the toggle provides it).
+   * off by default (audio needs a user gesture to start - the toggle provides it).
    */
   const winnerSoundEnabled = ref(localStorage.getItem('bingo_admin_winner_sound') === '1')
   function setWinnerSoundEnabled(on: boolean): void {
@@ -57,17 +57,17 @@ export const useGameStore = defineStore('game', () => {
   const drawSent = ref(false)
   let drawCountdownTimer: ReturnType<typeof setInterval> | null = null
   // The one-shot timer that clears `drawSent` a few seconds after the countdown
-  // elapses. Tracked so a fresh draw can cancel a stale one — otherwise its
+  // elapses. Tracked so a fresh draw can cancel a stale one - otherwise its
   // callback could flip `drawSent` back off underneath a newer draw's state.
   let drawSentTimer: ReturnType<typeof setTimeout> | null = null
 
-  // ── Auto-draw (server-driven) ──────────────────────────────────────────────
+  // -- Auto-draw (server-driven) ----------------------------------------------
   // New-game form controls: whether to start with auto on, and the "Time Between
   // Calls" interval. The live game's auto state travels on `currentGame`
   // (auto_enabled / auto_interval) and is toggled via setAuto*.
   const newGameAuto = ref(false)
   const newGameAutoInterval = ref(DEFAULT_AUTO_INTERVAL)
-  // True when the half-time prompt fired after auto was paused for it — the modal
+  // True when the half-time prompt fired after auto was paused for it - the modal
   // uses it to explain that declining the mini-game resumes the auto draws.
   const halftimeAutoPaused = ref(false)
 
@@ -83,7 +83,7 @@ export const useGameStore = defineStore('game', () => {
 
   // Halftime modals
   const showHalftimePrompt = ref(false)
-  /** Call number at which the halftime prompt fires — the 35-of-75 mark scaled
+  /** Call number at which the halftime prompt fires - the 35-of-75 mark scaled
    *  to the current game's actual callable pool (driven by its win patterns). */
   const halftimeThreshold = computed(() => halftimeCallThreshold(currentGame.value?.patterns))
 
@@ -99,10 +99,8 @@ export const useGameStore = defineStore('game', () => {
   const winnersLogTotal = ref(0)
   const winnersLogPage = ref(1)
   const winnersLogPerPage = ref(25)
-  const winnersLogSort = ref('logged_at')
-  const winnersLogDir = ref<'asc' | 'desc'>('desc')
 
-  // ── Computed ───────────────────────────────────────────────────────────────
+  // -- Computed ---------------------------------------------------------------
 
   const adminCalledSet = computed(() => {
     if (!currentGame.value) return new Set<number>()
@@ -115,7 +113,7 @@ export const useGameStore = defineStore('game', () => {
     return adminCalledSet.value.has(n)
   }
 
-  // ── Game state ─────────────────────────────────────────────────────────────
+  // -- Game state -------------------------------------------------------------
 
   async function loadGameState(): Promise<void> {
     try {
@@ -146,7 +144,7 @@ export const useGameStore = defineStore('game', () => {
       lastDrawn.value = null
       selectedPatternIds.value = []
       gameDetails.value = data.game_details
-      ui.notify(newGameAuto.value ? 'Game started — auto-drawing!' : 'Game started!', 'success')
+      ui.notify(newGameAuto.value ? 'Game started - auto-drawing!' : 'Game started!', 'success')
     } catch (e) {
       ui.notify((e as Error).message, 'error')
     } finally {
@@ -282,7 +280,7 @@ export const useGameStore = defineStore('game', () => {
   /**
    * Switches the automatic-draw loop on/off for the current game. Optimistic:
    * flips `auto_enabled` immediately (the server also broadcasts `auto_config` to
-   * every admin), reverting on failure. This is a live, game-level control — it
+   * every admin), reverting on failure. This is a live, game-level control - it
    * never writes back to a preset the game was started from.
    */
   async function setAutoEnabled(on: boolean): Promise<void> {
@@ -307,7 +305,7 @@ export const useGameStore = defineStore('game', () => {
     }
   }
 
-  // ── Winner verification ────────────────────────────────────────────────────
+  // -- Winner verification ----------------------------------------------------
 
   /** Fetches a winning card and highlights cells completing the win patterns. */
   async function viewWinner(cardId: string): Promise<void> {
@@ -355,7 +353,7 @@ export const useGameStore = defineStore('game', () => {
     return winnerPreview.value.matchedCells.has(`${ri}-${ci}`)
   }
 
-  // ── Halftime ───────────────────────────────────────────────────────────────
+  // -- Halftime ---------------------------------------------------------------
 
   /** "Yes, run a mini-game": alert players (the server holds the alert until the
    *  triggering number has reached them, and keeps auto paused). */
@@ -384,7 +382,7 @@ export const useGameStore = defineStore('game', () => {
     }
   }
 
-  // ── Frequent winners ───────────────────────────────────────────────────────
+  // -- Frequent winners -------------------------------------------------------
 
   async function loadFrequentWinners(): Promise<void> {
     try {
@@ -395,44 +393,42 @@ export const useGameStore = defineStore('game', () => {
     }
   }
 
-  // ── Winners log ────────────────────────────────────────────────────────────
+  // -- Winners log ------------------------------------------------------------
 
+  /**
+   * Loads the whole winners log so the table can sort and paginate it client-side
+   * like every other admin table.
+   *
+   * The API caps `per_page` at 200 (backend/internal/server/winners.go), so this
+   * pages through until it has `total` rows rather than requesting one huge page
+   * - asking for more than the cap would silently come back truncated, and a
+   *   client-side sort over a truncated list is wrong in a way that looks right.
+   */
   async function loadWinnersLog(): Promise<void> {
     winnersLogLoading.value = true
     try {
-      const data = await endpoints.winnersLog.list({
-        page: winnersLogPage.value,
-        perPage: winnersLogPerPage.value,
-        sort: winnersLogSort.value,
-        dir: winnersLogDir.value,
-      })
-      winnersLog.value = data.entries
-      winnersLogTotal.value = data.total || 0
+      const PER_PAGE = 200
+      const all: WinnersLogEntry[] = []
+      let page = 1
+      let total = 0
+      do {
+        const data = await endpoints.winnersLog.list({
+          page,
+          perPage: PER_PAGE,
+          sort: 'logged_at',
+          dir: 'desc',
+        })
+        all.push(...data.entries)
+        total = data.total || all.length
+        page++
+      } while (all.length < total && all.length > 0)
+      winnersLog.value = all
+      winnersLogTotal.value = total
     } catch (e) {
       ui.notify((e as Error).message, 'error')
     } finally {
       winnersLogLoading.value = false
     }
-  }
-
-  function winnersLogTotalPages(): number {
-    return Math.ceil(winnersLogTotal.value / winnersLogPerPage.value) || 1
-  }
-
-  function winnersLogSetSort(field: string): void {
-    if (winnersLogSort.value === field) {
-      winnersLogDir.value = winnersLogDir.value === 'asc' ? 'desc' : 'asc'
-    } else {
-      winnersLogSort.value = field
-      winnersLogDir.value = 'desc'
-    }
-    winnersLogPage.value = 1
-    void loadWinnersLog()
-  }
-
-  function winnersLogGoPage(p: number): void {
-    winnersLogPage.value = p
-    void loadWinnersLog()
   }
 
   /** Deletes one winners-log entry (with confirm), then reloads the page. */
@@ -459,6 +455,33 @@ export const useGameStore = defineStore('game', () => {
   }
 
   /** Clears the entire winners log (with confirm), then reloads from page 1. */
+  /** Bulk delete from the table's selection: one confirm for the whole set and
+   *  a single reload afterwards, rather than a prompt and a refetch per row. */
+  async function deleteWinnerLogEntries(ids: number[]): Promise<number> {
+    if (ids.length === 0) return 0
+    if (
+      !(await ui.confirm(
+        `Delete ${ids.length} selected entr${ids.length === 1 ? 'y' : 'ies'}? This cannot be undone.`,
+        { title: 'Delete selected entries', confirmText: `Delete ${ids.length}` },
+      ))
+    )
+      return 0
+    let done = 0
+    for (const id of ids) {
+      try {
+        await endpoints.winnersLog.delete(id)
+        done++
+      } catch (e) {
+        ui.notify((e as Error).message, 'error')
+      }
+    }
+    if (done) {
+      ui.notify(`${done} entr${done === 1 ? 'y' : 'ies'} deleted`, 'info')
+      await loadWinnersLog()
+    }
+    return done
+  }
+
   async function deleteAllWinnersLog(): Promise<void> {
     if (
       !(await ui.confirm('Delete ALL winners-log entries? This cannot be undone.', {
@@ -506,8 +529,6 @@ export const useGameStore = defineStore('game', () => {
     winnersLogTotal,
     winnersLogPage,
     winnersLogPerPage,
-    winnersLogSort,
-    winnersLogDir,
     adminCalledSet,
     adminGameLabel,
     isCalledAdmin,
@@ -528,10 +549,8 @@ export const useGameStore = defineStore('game', () => {
     dismissHalftime,
     loadFrequentWinners,
     loadWinnersLog,
-    winnersLogTotalPages,
-    winnersLogSetSort,
-    winnersLogGoPage,
     deleteWinnerLogEntry,
+    deleteWinnerLogEntries,
     deleteAllWinnersLog,
   }
 })

@@ -16,7 +16,7 @@ describe('ThemeTokenEditor', () => {
     const wrapper = mount(ThemeTokenEditor, { props: { modelValue: model } })
 
     // The first value field corresponds to the first token (page-bg).
-    const firstValue = wrapper.find('.token-row__value')
+    const firstValue = wrapper.find('.token-row-value')
     await firstValue.setValue('#123456')
 
     const emits = wrapper.emitted('update:modelValue')
@@ -29,14 +29,14 @@ describe('ThemeTokenEditor', () => {
 
   it('shows a WCAG compliance verdict (AAA for the default token set)', () => {
     const wrapper = mount(ThemeTokenEditor, { props: { modelValue: defaultTokens() } })
-    const verdict = wrapper.find('.wcag__verdict')
+    const verdict = wrapper.find('.wcag-verdict')
     expect(verdict.exists()).toBe(true)
     expect(verdict.text()).toBe('WCAG AAA')
   })
 
   it('shows help text (the usage description) under every token', () => {
     const wrapper = mount(ThemeTokenEditor, { props: { modelValue: defaultTokens() } })
-    const descs = wrapper.findAll('.token-row__desc')
+    const descs = wrapper.findAll('.token-row-desc')
     expect(descs).toHaveLength(THEME_TOKENS.length)
     // The first token (page-bg) shows its description.
     expect(descs[0].text()).toBe(THEME_TOKENS[0].desc)
@@ -55,22 +55,30 @@ describe('ThemeTokenEditor', () => {
 
   it('includes the neutral button, link, and winner chip in the preview', () => {
     const wrapper = mount(ThemeTokenEditor, { props: { modelValue: defaultTokens() } })
-    expect(wrapper.find('.tp-btn--neutral').exists()).toBe(true)
-    expect(wrapper.find('.tp-link').exists()).toBe(true)
-    expect(wrapper.find('.tp-winner').exists()).toBe(true)
+    // Anchored on the pairing id (what "Find in preview" queries) plus the real
+    // global object, so each assertion tests the UI kind rather than a preview-only
+    // class name. The preview is built from the app's own objects now, so asserting
+    // the real class is also what proves it still looks like the app.
+    expect(wrapper.find('button.btn-neutral[data-pair~="neutral-btn"]').exists()).toBe(true)
+    expect(wrapper.find('a[data-pair~="link-panel"]').exists()).toBe(true)
+    expect(wrapper.find('.winner-chip[data-pair~="winner-chip"]').exists()).toBe(true)
   })
 
   it('renders detailed findings with a live contrast chip for a failing theme', () => {
     // text == page-bg fails the body/page pairing.
     const broken = { ...defaultTokens(), text: '#1a1c17', 'page-bg': '#1a1c17' }
     const wrapper = mount(ThemeTokenEditor, { props: { modelValue: broken } })
-    const findings = wrapper.findAll('.wcag__finding--error')
+    // `--fail` is the class a failing pairing actually produces (PairStatus is
+    // 'fail' | 'aa' | 'aaa'). This previously asserted `--error`, a name the
+    // stylesheet never defined - so it passed while every error row rendered
+    // untinted. Assert the modifier that is really styled.
+    const findings = wrapper.findAll('.wcag-finding--fail')
     expect(findings.length).toBeGreaterThan(0)
     // Each finding carries a chip and a Find-in-preview button.
     const first = findings[0]
-    expect(first.find('.wcag__chip').exists()).toBe(true)
-    expect(first.find('.wcag__find').exists()).toBe(true)
-    expect(first.find('.wcag__tokens').text()).toContain('--')
+    expect(first.find('.wcag-chip').exists()).toBe(true)
+    expect(first.find('.wcag-find').exists()).toBe(true)
+    expect(first.find('.wcag-tokens').text()).toContain('--')
   })
 
   it('uses a native colour input for solid tokens and a picker button for alpha tokens', () => {
@@ -80,7 +88,7 @@ describe('ThemeTokenEditor', () => {
     // Solid tokens get the lightweight native picker; alpha tokens get a swatch
     // button that opens the cross-browser (alpha-capable) Chrome picker.
     expect(wrapper.findAll('input[type="color"]')).toHaveLength(solid)
-    expect(wrapper.findAll('.token-row__color--btn')).toHaveLength(alpha)
+    expect(wrapper.findAll('.token-row-color--btn')).toHaveLength(alpha)
     expect(alpha).toBeGreaterThan(0)
   })
 })

@@ -65,7 +65,7 @@ func TestPresets_CreateListUpdateDelete(t *testing.T) {
 	}
 	resp.Body.Close()
 
-	// Delete (DELETE → 204).
+	// Delete (DELETE -> 204).
 	resp = env.del(t, fmt.Sprintf("/api/presets/%d", id))
 	if resp.StatusCode != http.StatusNoContent {
 		t.Fatalf("delete status = %d; want 204", resp.StatusCode)

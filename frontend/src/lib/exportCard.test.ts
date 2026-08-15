@@ -48,10 +48,10 @@ describe('parseDetailParagraphs', () => {
     expect(word.every((c) => c.bold)).toBe(true)
   })
 
-  it('converts list bullets to a • marker', () => {
+  it('converts list bullets to a * marker', () => {
     const [para] = parseDetailParagraphs('- item one')
     const firstWord = para[0].map((c) => c.ch).join('')
-    expect(firstWord).toBe('•')
+    expect(firstWord).toBe('*')
   })
 
   it('strips images and keeps link text', () => {

@@ -5,7 +5,7 @@ import "github.com/getkin/kin-openapi/openapi3"
 // buildFeaturePaths registers the raffle/garapon/festival/book-club/announcement/
 // system endpoints (continuation of buildPaths, split to keep files readable).
 func buildFeaturePaths(b *pb) {
-	// ── Raffles (resource-oriented: methods for CRUD, POST /{id}/{verb} commands)
+	// -- Raffles (resource-oriented: methods for CRUD, POST /{id}/{verb} commands)
 	raffleFields := func() openapi3.Schemas {
 		return props(
 			"title", pstr("Title (required)."), "description", pstr(""), "rules", pstr(""),
@@ -34,14 +34,14 @@ func buildFeaturePaths(b *pb) {
 	b.add("POST", "/api/raffles/{id}/enter", "Raffles", "Enter a raffle", "public", "", opt{
 		path: []*openapi3.Parameter{pparam("id", "Raffle id.")},
 		body: actionBody("Public sign-up.", nil, props(
-			"character_name", pstr("Required."), "world", pstr("Required."), "num_entries", pint("Tickets (≥1)."))),
+			"character_name", pstr("Required."), "world", pstr("Required."), "num_entries", pint("Tickets (>=1)."))),
 		resps: []respEntry{{"200", jsonResp("Merged into an existing entry", "RaffleEnterResponse")}, {"201", jsonResp("New entry", "RaffleEnterResponse")}, r("400", "Closed / cap exceeded / outside window"), r("404", "Not found")}})
 	b.add("POST", "/api/raffles/{id}/entries", "Raffles", "Add an entry (admin)", "permission:teahouse-raffles",
 		"Admin add; skips the availability window but enforces the per-player cap. 201 when a new entry is created, 200 when merged into an existing one.", opt{
 			path: []*openapi3.Parameter{pparam("id", "Raffle id.")},
 			body: actionBody("Entry to add.", nil, props(
 				"character_name", pstr("Required."), "world", pstr("Required."),
-				"num_entries", pint("Tickets (≥1)."), "paid", pbool("Mark paid immediately."))),
+				"num_entries", pint("Tickets (>=1)."), "paid", pbool("Mark paid immediately."))),
 			resps: []respEntry{created("RaffleEntryResponse"), {"200", jsonResp("Merged into an existing entry", "RaffleEntryResponse")}, r("400", "Invalid / cap exceeded")}})
 	b.add("PATCH", "/api/raffles/{id}/entries/{entryId}", "Raffles", "Update an entry's paid flag", "permission:teahouse-raffles", "", opt{
 		path:  []*openapi3.Parameter{pparam("id", "Raffle id."), pparam("entryId", "Entry id.")},
@@ -63,12 +63,12 @@ func buildFeaturePaths(b *pb) {
 			path:  []*openapi3.Parameter{pparam("id", "Raffle id.")},
 			resps: []respEntry{ok("StatusResponse"), r("400", "No winner selected")}})
 
-	// ── Garapon (resource-oriented: methods for CRUD, POST /{id}/{verb} status) ─
+	// -- Garapon (resource-oriented: methods for CRUD, POST /{id}/{verb} status) -
 	garaponFields := func() openapi3.Schemas {
 		return props(
 			"title", pstr("Title (required)."), "details", pstr("Markdown."), "grand_prize_image", pstr(""),
 			"stamp_rally_id", pint("Optional linked open rally."),
-			"prizes", parr("Prize tiers (≥1, exactly one grand).", ref("GaraponPrize")))
+			"prizes", parr("Prize tiers (>=1, exactly one grand).", ref("GaraponPrize")))
 	}
 	b.add("GET", "/api/garapons", "Garapon", "List garapons", "permission:festival-garapon", "", opt{resps: []respEntry{ok("GaraponsResponse")}})
 	b.add("POST", "/api/garapons", "Garapon", "Create a garapon", "permission:festival-garapon", "", opt{
@@ -78,7 +78,7 @@ func buildFeaturePaths(b *pb) {
 		path:  []*openapi3.Parameter{pparam("id", "Garapon id.")},
 		resps: []respEntry{ok("GaraponDetailResponse"), r("404", "Not found")}})
 	b.add("PUT", "/api/garapons/{id}", "Garapon", "Replace a garapon", "permission:festival-garapon",
-		"Full replace of the editable fields (status is preserved — use close/reopen).", opt{
+		"Full replace of the editable fields (status is preserved - use close/reopen).", opt{
 			path:  []*openapi3.Parameter{pparam("id", "Garapon id.")},
 			body:  actionBody("Full garapon fields.", nil, garaponFields()),
 			resps: []respEntry{ok("OKResponse"), r("400", "Validation failed")}})
@@ -96,7 +96,7 @@ func buildFeaturePaths(b *pb) {
 	b.add("POST", "/api/garapons/{id}/players", "Garapon", "Create a drawing link", "permission:festival-garapon",
 		"Issues a per-player drawing link (returns its token).", opt{
 			path:  []*openapi3.Parameter{pparam("id", "Garapon id.")},
-			body:  actionBody("New drawing link.", nil, props("player_name", pstr("Required."), "max_draws", pint("≥1."))),
+			body:  actionBody("New drawing link.", nil, props("player_name", pstr("Required."), "max_draws", pint(">=1."))),
 			resps: []respEntry{created("GaraponPlayerResponse"), r("404", "Not found")}})
 	b.add("DELETE", "/api/garapons/{id}/players/{playerId}", "Garapon", "Delete a drawing link", "permission:festival-garapon",
 		"A link that has already drawn can only be deleted once the garapon is closed (the draw stays in the log).", opt{
@@ -110,7 +110,7 @@ func buildFeaturePaths(b *pb) {
 		path:  []*openapi3.Parameter{pparam("token", "The player's private link token.")},
 		resps: []respEntry{ok("GaraponDrawResponse"), r("400", "Closed / no prizes"), r("409", "No draws remaining"), r("404", "Not found")}})
 
-	// ── Affiliates (admin CRUD + drag reorder + post to Discord) ──────────────
+	// -- Affiliates (admin CRUD + drag reorder + post to Discord) --------------
 	affiliate := "permission:teahouse-affiliates"
 	affiliateFields := func() openapi3.Schemas {
 		return props(
@@ -135,7 +135,7 @@ func buildFeaturePaths(b *pb) {
 			body:  actionBody("Webhook URL.", nil, props("webhook_url", pstr("Discord webhook URL ('' clears)."))),
 			resps: []respEntry{ok("AffiliateWebhookResponse"), r("400", "Not a Discord webhook URL")}})
 	b.add("PUT", "/api/affiliates/{id}", "Affiliates", "Replace an affiliate", affiliate,
-		"Full replace of the editable fields (sort_order is preserved — reordering is separate).", opt{
+		"Full replace of the editable fields (sort_order is preserved - reordering is separate).", opt{
 			path:  []*openapi3.Parameter{pparam("id", "Affiliate id.")},
 			body:  actionBody("Full affiliate fields.", nil, affiliateFields()),
 			resps: []respEntry{ok("OKResponse"), r("400", "Name required")}})
@@ -147,7 +147,7 @@ func buildFeaturePaths(b *pb) {
 			path:  []*openapi3.Parameter{pparam("id", "Affiliate id.")},
 			resps: []respEntry{ok("AffiliateResponse"), r("400", "No webhook configured"), r("404", "Not found"), r("502", "Discord failed")}})
 
-	// ── Tea Rooms (admin CRUD + toggles + post; plus a public cross-origin read API)
+	// -- Tea Rooms (admin CRUD + toggles + post; plus a public cross-origin read API)
 	teaRoom := "permission:teahouse-tea-rooms"
 	b.add("GET", "/api/tea-rooms", "Tea Rooms", "List tea rooms", teaRoom,
 		"Also returns the shared Discord webhook (`webhook_url`); safe here since the endpoint is permission-gated.", opt{
@@ -172,7 +172,7 @@ func buildFeaturePaths(b *pb) {
 			path:  []*openapi3.Parameter{pparam("number", "The room's unique room number.")},
 			resps: []respEntry{ok("TeaRoomPublicResponse"), r("404", "Not found")}})
 	b.add("PUT", "/api/tea-rooms/{id}", "Tea Rooms", "Replace a tea room", teaRoom,
-		"Full replace of the editable fields (sort_order is preserved — reordering is separate). Room number is required and must be unique.", opt{
+		"Full replace of the editable fields (sort_order is preserved - reordering is separate). Room number is required and must be unique.", opt{
 			path:  []*openapi3.Parameter{pparam("id", "Tea-room id.")},
 			body:  actionBody("Full tea-room fields.", nil, props("tea_room", ref("TeaRoom"))),
 			resps: []respEntry{ok("TeaRoomResponse"), r("400", "Name / unique room number required"), r("404", "Not found")}})
@@ -189,7 +189,7 @@ func buildFeaturePaths(b *pb) {
 			path:  []*openapi3.Parameter{pparam("id", "Tea-room id.")},
 			resps: []respEntry{ok("TeaRoomResponse"), r("400", "No webhook configured"), r("404", "Not found"), r("502", "Discord failed")}})
 
-	// ── Stamp Rally (resource-oriented: methods for CRUD, POST /{id}/{verb}) ────
+	// -- Stamp Rally (resource-oriented: methods for CRUD, POST /{id}/{verb}) ----
 	rallyFields := func() openapi3.Schemas {
 		return props(
 			"title", pstr("Title (required)."), "card_image", pstr(""), "not_stamped_image", pstr(""),
@@ -205,7 +205,7 @@ func buildFeaturePaths(b *pb) {
 		path:  []*openapi3.Parameter{pparam("id", "Rally id.")},
 		resps: []respEntry{ok("StampRallyDetailResponse"), r("404", "Not found")}})
 	b.add("PUT", "/api/stamp-rallies/{id}", "Stamp Rally", "Replace a rally", "permission:festival-stamp-rally",
-		"Full replace of the editable fields (status is preserved — use close/reopen).", opt{
+		"Full replace of the editable fields (status is preserved - use close/reopen).", opt{
 			path:  []*openapi3.Parameter{pparam("id", "Rally id.")},
 			body:  actionBody("Full rally fields.", nil, rallyFields()),
 			resps: []respEntry{ok("OKResponse"), r("400", "Title required")}})
@@ -244,8 +244,24 @@ func buildFeaturePaths(b *pb) {
 		path: []*openapi3.Parameter{pparam("token", "The participant's card token.")},
 		body: actionBody("Stamp collection.", nil, props("password", pstr("The stall's password (required)."))),
 		resps: []respEntry{ok("StampSubmitResponse"), r("400", "Wrong/empty password / stall closed"), r("409", "Already collected")}})
+	b.add("GET", "/api/stamp-signup", "Stamp Rally", "Rallies open to public sign-up", "public",
+		"Rallies whose `public_signup` opt-in is on, that are open, and that are inside their availability window.", opt{
+			resps: []respEntry{ok("SignupRalliesResponse")}})
+	b.add("POST", "/api/stamp-signup/{id}", "Stamp Rally", "Sign yourself up for a rally", "public",
+		"Issues the caller a card. When an open Garapon is linked to the rally, a drawing link is issued too, "+
+			"sharing the same token. Names are unique per rally, compared case-insensitively. Rate limited per IP; "+
+			"a rally that has not opted in answers 404 rather than 403.", opt{
+			path:  []*openapi3.Parameter{pparam("id", "Rally id.")},
+			body:  actionBody("Sign-up.", nil, props("name", pstr("Character name, ideally with @ World (required)."))),
+			resps: []respEntry{created("StampSignupResponse"), r("400", "Missing/too-long name, or rally closed"), r("404", "Not open for sign-ups"), r("409", "Name already signed up"), r("429", "Rate limited")}})
+	b.add("POST", "/api/stamp-lookup", "Stamp Rally", "Find my links", "public",
+		"Returns the cards (and paired drawing links) held under an EXACT participant name, case-insensitive, "+
+			"across open rallies. POST so the name stays out of URLs and logs; a miss returns an empty list rather "+
+			"than a 404, so the endpoint cannot be walked to discover participants.", opt{
+			body:  actionBody("Lookup.", nil, props("name", pstr("The name signed up with (required)."))),
+			resps: []respEntry{ok("StampLookupResponse"), r("400", "Missing name"), r("429", "Rate limited")}})
 
-	// ── Book Club ─────────────────────────────────────────────────────────────
+	// -- Book Club -------------------------------------------------------------
 	b.add("POST", "/api/bookclub/upload", "Book Club", "Upload a cover image", "any-bookclub",
 		"multipart field `image` (max 5 MB; jpg/png/webp/gif). Keeps the uploaded filename.", opt{
 			body:  multipartBody("Cover image.", props("image", pbinary("Image file."))),
@@ -289,7 +305,7 @@ func buildFeaturePaths(b *pb) {
 		path: []*openapi3.Parameter{clubParam(), pparam("id", "List id.")},
 		resps: []respEntry{ok("PublishResponse"), r("400", "No items / no webhook"), r("502", "Discord failed")}})
 
-	// ── Announcements ─────────────────────────────────────────────────────────
+	// -- Announcements ---------------------------------------------------------
 	ann := "permission:teahouse-announcements"
 	typeFields := func() openapi3.Schemas {
 		return props("name", pstr("Type name (required)."), "webhook_url", pstr("Discord webhook URL."))
@@ -345,11 +361,11 @@ func buildFeaturePaths(b *pb) {
 			path:  []*openapi3.Parameter{pparam("id", "Announcement id.")},
 			resps: []respEntry{ok("AnnouncementResponse"), r("400", "Not scheduled"), r("404", "Not found")}})
 
-	// ── Winners Log ───────────────────────────────────────────────────────────
+	// -- Winners Log -----------------------------------------------------------
 	wl := "permission:bingo-winners-log"
 	b.add("GET", "/api/winners-log", "Winners Log", "List winners", wl, "", opt{
 		query: []*openapi3.Parameter{
-			qparam("page", "Page (default 1).", false), qparam("per_page", "1–200 (default 25).", false),
+			qparam("page", "Page (default 1).", false), qparam("per_page", "1-200 (default 25).", false),
 			qparam("sort", "logged_at|card_id|player_name|game_details.", false), qparam("dir", "asc|desc.", false)},
 		resps: []respEntry{ok("WinnersLogResponse")}})
 	b.add("DELETE", "/api/winners-log/all", "Winners Log", "Clear the winners log", wl,
@@ -361,16 +377,16 @@ func buildFeaturePaths(b *pb) {
 			resps: []respEntry{noContent()}})
 	b.add("GET", "/api/winners-log/frequent", "Winners Log", "Frequent winners", wl, "", opt{resps: []respEntry{ok("FrequentWinnersResponse")}})
 
-	// ── Settings ──────────────────────────────────────────────────────────────
+	// -- Settings --------------------------------------------------------------
 	b.add("GET", "/api/settings", "Settings", "Get settings", "public",
 		"Secret settings (per-club webhook URLs) are blanked for non-admins.", opt{resps: []respEntry{ok("SettingsResponse")}})
 	b.add("POST", "/api/settings", "Settings", "Update settings", "permission:system-settings", "", opt{
-		body:  actionBody("Setting values.", nil, props("settings", desc(openapi3.NewObjectSchema(), "Map of setting key → value."))),
+		body:  actionBody("Setting values.", nil, props("settings", desc(openapi3.NewObjectSchema(), "Map of setting key -> value."))),
 		resps: []respEntry{ok("OKResponse"), r("400", "Unknown / invalid setting")}})
 
-	// ── Server logs ───────────────────────────────────────────────────────────
+	// -- Server logs -----------------------------------------------------------
 	b.add("GET", "/api/logs", "System", "Server logs (tail)", "admin",
-		"Tails the server's rotating JSON log file, newest-first. `level` filters to that minimum severity; `q` is a case-insensitive substring match; `limit` caps entries. The response `level` is the current runtime minimum level. Admin-only — the log contains IPs, usernames, and internal error detail.", opt{
+		"Tails the server's rotating JSON log file, newest-first. `level` filters to that minimum severity; `q` is a case-insensitive substring match; `limit` caps entries. The response `level` is the current runtime minimum level. Admin-only - the log contains IPs, usernames, and internal error detail.", opt{
 			query: []*openapi3.Parameter{
 				qparam("level", "Minimum level: debug|info|warn|error.", false),
 				qparam("q", "Case-insensitive substring filter.", false),
@@ -378,7 +394,7 @@ func buildFeaturePaths(b *pb) {
 			},
 			resps: []respEntry{ok("LogsResponse")}})
 	b.add("POST", "/api/logs/level", "System", "Set runtime log level", "admin",
-		"Changes the process-wide minimum log level live (no restart) — used to toggle DEBUG on/off. Reverts to the startup default on restart.", opt{
+		"Changes the process-wide minimum log level live (no restart) - used to toggle DEBUG on/off. Reverts to the startup default on restart.", opt{
 			body:  actionBody("The new level.", nil, props("level", desc(openapi3.NewStringSchema(), "One of debug, info, warn, error."))),
 			resps: []respEntry{ok("LogLevelResponse"), r("400", "Invalid level")}})
 
@@ -422,7 +438,7 @@ func buildFilePaths(b *pb) {
 		"Generated `@font-face` stylesheet for external sites (embedded via the fonts vhost as `https://fonts.senpan.cafe/kit.css`). Sources are relative tokenized URLs that rotate on a schedule. Content is filtered per requesting site: a foreign Referer only sees fonts whose allowlist includes its origin; the font files themselves are the real gate.", opt{
 			resps: []respEntry{rawResp("The @font-face stylesheet.", "text/css", false)}})
 	b.add("GET", "/api/fonts/pub/f/{token}", "Files", "Serve a font file by token", "public",
-		"Streams the font behind an opaque rotating token (valid 7–14 days). Same-origin requests are always allowed; cross-origin requests need an `Origin` on THAT FONT's allowlist, echoed in `Access-Control-Allow-Origin` (browsers require CORS for cross-origin fonts, so this is enforced by the browser too). Requests with no usable Origin (e.g. pasting the URL) are refused.", opt{
+		"Streams the font behind an opaque rotating token (valid 7-14 days). Same-origin requests are always allowed; cross-origin requests need an `Origin` on THAT FONT's allowlist, echoed in `Access-Control-Allow-Origin` (browsers require CORS for cross-origin fonts, so this is enforced by the browser too). Requests with no usable Origin (e.g. pasting the URL) are refused.", opt{
 			path:  []*openapi3.Parameter{pparam("token", "Opaque font token from the kit stylesheet / settings payload.")},
 			resps: []respEntry{rawResp("The font bytes.", "application/octet-stream", true), r("403", "Origin not approved"), r("404", "Unknown or expired token")}})
 	// Carrd

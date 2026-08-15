@@ -6,7 +6,7 @@ import (
 	"app-suite/internal/model"
 )
 
-// TestAffiliatesCRUD exercises create → get → list → update → delete and verifies
+// TestAffiliatesCRUD exercises create -> get -> list -> update -> delete and verifies
 // the owners/hours JSON columns round-trip (including order preservation).
 func TestAffiliatesCRUD(t *testing.T) {
 	s := newTestStore(t)
@@ -18,7 +18,7 @@ func TestAffiliatesCRUD(t *testing.T) {
 		Location: "Ul'dah, Steps of Nald",
 		Timezone: "America/New_York",
 		Hours: []model.AffiliateHour{
-			{Label: "Mon–Fri", Start: "18:00", End: "23:00"},
+			{Label: "Mon-Fri", Start: "18:00", End: "23:00"},
 			{Label: "Weekends", Start: "12:00"}, // open-ended
 		},
 		Details:    "**Cozy** tavern.",
@@ -42,8 +42,8 @@ func TestAffiliatesCRUD(t *testing.T) {
 	if len(got.Owners) != 2 || got.Owners[0] != "Tataru" || got.Owners[1] != "Hildibrand" {
 		t.Errorf("owners = %v; want [Tataru Hildibrand] in order", got.Owners)
 	}
-	if len(got.Hours) != 2 || got.Hours[0].Label != "Mon–Fri" || got.Hours[1].End != "" {
-		t.Errorf("hours = %+v; want 2 rows, first labelled Mon–Fri, second open-ended", got.Hours)
+	if len(got.Hours) != 2 || got.Hours[0].Label != "Mon-Fri" || got.Hours[1].End != "" {
+		t.Errorf("hours = %+v; want 2 rows, first labelled Mon-Fri, second open-ended", got.Hours)
 	}
 	if got.Timezone != "America/New_York" {
 		t.Errorf("timezone = %q; want America/New_York", got.Timezone)

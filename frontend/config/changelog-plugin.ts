@@ -13,7 +13,7 @@ const CHANGELOG_PATH = fileURLToPath(new URL('../../CHANGELOG.md', import.meta.u
 // A structured view of the changelog so the UI can render it with proper
 // typography + navigation instead of dumping raw markdown. Each component section
 // becomes an ordered list of version entries; each entry has an intro paragraph
-// and labelled change-groups (Added / Fixed / …) whose `body` is the markdown of
+// and labelled change-groups (Added / Fixed / ...) whose `body` is the markdown of
 // that group's bullet list (rendered with markdown-it in the modal).
 interface ChangelogGroup {
   label: string
@@ -61,8 +61,8 @@ function parseEntries(lines: string[]): ChangelogEntry[] {
   }
 
   for (const line of lines) {
-    // `### [version] — date` starts a version entry (date optional).
-    const v = /^###\s+\[([^\]]+)\]\s*(?:[—–-]\s*(.+?))?\s*$/.exec(line)
+    // `### [version] - date` starts a version entry (date optional).
+    const v = /^###\s+\[([^\]]+)\]\s*(?:[---]\s*(.+?))?\s*$/.exec(line)
     if (v) {
       flush()
       // .at() is typed `string | undefined` (the date group is optional), unlike
@@ -72,7 +72,7 @@ function parseEntries(lines: string[]): ChangelogEntry[] {
       continue
     }
     if (!cur) continue
-    // `#### Added` / `#### Fixed` / … starts a change-group within the entry.
+    // `#### Added` / `#### Fixed` / ... starts a change-group within the entry.
     const g = /^####\s+(.+?)\s*$/.exec(line)
     if (g) {
       group = { label: g[1].trim(), body: '' }
@@ -99,7 +99,7 @@ export function parseChangelog(md: string): Changelog {
     const h2 = /^##\s+(.+?)\s*$/.exec(line)
     if (h2) {
       // A level-2 heading either starts a known component section or (any other
-      // `## …`) ends the current one.
+      // `## ...`) ends the current one.
       current = HEADING_TO_KEY[h2[1].trim()] ?? null
       continue
     }

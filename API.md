@@ -1,12 +1,12 @@
-# Senpan App Suite — API
+# Senpan App Suite - API
 
 The HTTP & WebSocket API is described by a machine-readable **OpenAPI 3** spec:
 
-- **Spec (source of truth):** [`backend/openapi.yaml`](backend/openapi.yaml) — also
+- **Spec (source of truth):** [`backend/openapi.yaml`](backend/openapi.yaml) - also
   served live at **`GET /api/openapi.yaml`**.
 - **Interactive reference:** **`GET /api/docs`** renders the spec with
   [Scalar](https://scalar.com) (an explorable, try-it-out API reference). Both
-  endpoints are public — the API contract carries no secrets.
+  endpoints are public - the API contract carries no secrets.
 
 ## How the spec stays accurate
 
@@ -31,7 +31,7 @@ The spec is **generated from the Go code**, not hand-written prose:
 ## Authentication (orientation)
 
 Identity comes from either a **session cookie** (set by `POST /api/auth` login) or a
-**personal access token** — `Authorization: Bearer pat_…` (or `?token=pat_…` on the
+**personal access token** - `Authorization: Bearer pat_...` (or `?token=pat_...` on the
 WebSocket upgrade). A token inherits its account's permissions, so external clients
 (e.g. the FFXIV plugin) pass through the same guards as the SPA.
 
@@ -54,18 +54,18 @@ query param (player vs. admin), and the broadcast message types are listed there
 The API is **hybrid REST**: HTTP methods carry the intent, resources live at
 predictable paths, and non-CRUD commands are explicit verb sub-paths.
 
-- **Methods:** `GET` reads, `POST` creates (→ `201`) or runs a command, `PUT`
-  replaces, `PATCH` applies a partial update, `DELETE` removes (→ `204`).
+- **Methods:** `GET` reads, `POST` creates (-> `201`) or runs a command, `PUT`
+  replaces, `PATCH` applies a partial update, `DELETE` removes (-> `204`).
 - **Resources & items:** a collection is `/api/<resource>` and a single item is
   `/api/<resource>/{id}` (string keys such as a card id, font filename, or carrd
   folder use the same shape). Sub-collections nest: `/api/<resource>/{id}/<subs>`
   and `/api/<resource>/{id}/<subs>/{subId}`.
 - **Commands (non-CRUD):** state transitions and processes that aren't a plain
-  field-set are `POST /api/<resource>/{id}/<verb>` — e.g. `…/close`, `…/reopen`,
-  `…/activate`, `…/pick-winner`, an announcement's `…/send`, the game's
+  field-set are `POST /api/<resource>/{id}/<verb>` - e.g. `.../close`, `.../reopen`,
+  `.../activate`, `.../pick-winner`, an announcement's `.../send`, the game's
   `/api/game/start`. A declarative field-set (including a single reorder or
   toggling a flag) is a `PATCH` instead.
-- **Bulk:** bulk writes are `POST` (e.g. `…/reorder`, `/api/cards/generate`);
+- **Bulk:** bulk writes are `POST` (e.g. `.../reorder`, `/api/cards/generate`);
   bulk deletes are `DELETE /api/<resource>/all` (returning `{ "deleted": N }`).
 - All responses are `application/json` with `Cache-Control: no-store`; errors use
   `{ "error": "message" }`. Request bodies are JSON (1 MB cap); uploads are

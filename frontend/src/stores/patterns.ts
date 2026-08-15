@@ -3,7 +3,7 @@
  * collapse state, and reordering. Drag-and-drop reordering is now handled by
  * vue-draggable-plus in the components; this store exposes `persistPatternOrder` and
  * `persistCategoryOrder` (and a cross-category move) that the components call
- * after a drag, plus `setPatternCategory` — replacing the old manual HTML5 DnD.
+ * after a drag, plus `setPatternCategory` - replacing the old manual HTML5 DnD.
  */
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
@@ -53,7 +53,7 @@ export const usePatternsStore = defineStore('patterns', () => {
   const patternCategoryFilter = ref<number | null>(null)
   const patternSearchQuery = ref('')
 
-  // ── Computed ───────────────────────────────────────────────────────────────
+  // -- Computed ---------------------------------------------------------------
 
   /** Patterns grouped by category, in category sort order. */
   const patternsByCategory = computed<PatternGroup[]>(() => {
@@ -88,7 +88,7 @@ export const usePatternsStore = defineStore('patterns', () => {
    * Patterns currently *visible* in the picker: the category filter + search and,
    * when not searching, only patterns in expanded (non-collapsed) categories.
    * Drives "Select all" so it never touches patterns hidden by the filter or by a
-   * collapsed category — those keep their current selection.
+   * collapsed category - those keep their current selection.
    */
   const displayedPatterns = computed<Pattern[]>(() => {
     if ((patternSearchQuery.value || '').trim()) return gameFilteredPatterns.value
@@ -98,7 +98,7 @@ export const usePatternsStore = defineStore('patterns', () => {
     return groups.filter((g) => !isCategoryCollapsed(g.category.id)).flatMap((g) => g.patterns)
   })
 
-  // ── Load ─────────────────────────────────────────────────────────────────
+  // -- Load -----------------------------------------------------------------
 
   async function loadPatterns(): Promise<void> {
     patternsLoading.value = true
@@ -114,7 +114,7 @@ export const usePatternsStore = defineStore('patterns', () => {
     }
   }
 
-  // ── New pattern editor ─────────────────────────────────────────────────────
+  // -- New pattern editor -----------------------------------------------------
 
   function clearPatternEditor(): void {
     newPatternName.value = ''
@@ -166,7 +166,7 @@ export const usePatternsStore = defineStore('patterns', () => {
     }
   }
 
-  // ── Collapse ───────────────────────────────────────────────────────────────
+  // -- Collapse ---------------------------------------------------------------
 
   function togglePatternsCollapsed(): void {
     patternsCollapsed.value = !patternsCollapsed.value
@@ -186,7 +186,7 @@ export const usePatternsStore = defineStore('patterns', () => {
     return collapsedCategories.value[catId]
   }
 
-  // ── Pattern CRUD ───────────────────────────────────────────────────────────
+  // -- Pattern CRUD -----------------------------------------------------------
 
   async function deletePattern(id: number): Promise<void> {
     try {
@@ -228,7 +228,7 @@ export const usePatternsStore = defineStore('patterns', () => {
     }
   }
 
-  // ── Category CRUD (table + position form) ──────────────────────────────────
+  // -- Category CRUD (table + position form) ----------------------------------
 
   /** Open the form to add a new category (defaults to inserting at the end). */
   function startNewCategory(): void {
@@ -246,8 +246,8 @@ export const usePatternsStore = defineStore('patterns', () => {
   }
 
   /**
-   * Reorders the categories so `targetId` lands at the chosen position token —
-   * 'start' (first) or 'after:<id>' (right after that category) — and persists
+   * Reorders the categories so `targetId` lands at the chosen position token -
+   * 'start' (first) or 'after:<id>' (right after that category) - and persists
    * the new order via the bulk-reorder endpoint. ('keep' is handled by callers.)
    */
   async function applyCategoryPosition(targetId: number, position: string): Promise<void> {
@@ -326,7 +326,7 @@ export const usePatternsStore = defineStore('patterns', () => {
     void deleteCategory(id)
   }
 
-  // ── Pattern reordering (called by vue-draggable-plus handlers) ───────────────────
+  // -- Pattern reordering (called by vue-draggable-plus handlers) -------------------
 
   /**
    * Editable grouping used by the Edit Patterns drag-and-drop view. Unlike

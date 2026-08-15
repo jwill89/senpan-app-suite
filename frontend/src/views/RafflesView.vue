@@ -44,12 +44,14 @@ function goHome(): void {
 <template>
   <div>
     <div class="topbar">
-      <button class="btn-neutral btn-sm" @click="goHome">← Home</button>
+      <button class="btn-neutral btn-sm" @click="goHome">
+        <font-awesome-icon :icon="['fas', 'arrow-left']" /> Home
+      </button>
       <h2><font-awesome-icon :icon="['fad', 'ticket']" /> Raffles</h2>
       <span></span>
     </div>
     <div class="tab-body content-container">
-      <LoadingSpinner v-if="loading" block label="Loading raffles…" />
+      <LoadingSpinner v-if="loading" block label="Loading raffles..." />
       <div v-else-if="raffles.raffles.length" class="card-grid card-grid--center">
         <div
           v-for="r in raffles.raffles"
@@ -72,7 +74,7 @@ function goHome(): void {
             <p v-if="r.cost_per_entry > 0" class="raffle-cost">
               {{ r.cost_per_entry.toLocaleString() }} gil per entry
             </p>
-            <p v-if="r.max_entries > 1" class="text-sm text-dim">
+            <p v-if="r.max_entries > 1" class="text-sm text-muted">
               Up to {{ r.max_entries }} entries
             </p>
           </div>
@@ -82,7 +84,7 @@ function goHome(): void {
         v-else
         :icon="['fad', 'ticket']"
         text="No raffles are currently open."
-        hint="Check back soon — new raffles appear here when they go live."
+        hint="Check back soon - new raffles appear here when they go live."
       />
     </div>
   </div>

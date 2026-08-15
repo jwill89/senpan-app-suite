@@ -1,12 +1,12 @@
 <script setup lang="ts">
 /**
- * Admin Patterns manager — one tab (under Bingo) unifying the former Pattern
+ * Admin Patterns manager - one tab (under Bingo) unifying the former Pattern
  * Categories, New Pattern, and Edit Patterns tabs into the standard manager model:
  *
  *   - list: patterns grouped by category, collapsible, drag to reorder / move
  *     between categories, with a search box + category filter. A search query
  *     flattens the body to the matching patterns (drag is a no-search affordance).
- *   - "+ New Pattern": the 5×5 grid editor on a Back sub-page.
+ *   - "+ New Pattern": the 5x5 grid editor on a Back sub-page.
  *   - "Manage Categories": category create / rename / delete / reorder sub-page.
  *
  * All state + actions come from the patterns store (unchanged); this only
@@ -71,7 +71,7 @@ function onChange(): void {
   void patterns.applyGroupedOrder()
 }
 
-/** True when a text search is active — switches the body to a flat result list. */
+/** True when a text search is active - switches the body to a flat result list. */
 const searching = computed(() => patterns.patternSearchQuery.trim().length > 0)
 
 /** Groups for the grouped (no-search) view, limited by the category filter. */
@@ -92,7 +92,7 @@ async function saveNew(): Promise<void> {
 
 <template>
   <div class="tab-body">
-    <!-- ── List ──────────────────────────────────────────────────────────── -->
+    <!-- -- List ------------------------------------------------------------ -->
     <ManagerView v-if="screen === 'list'" title="Patterns" :icon="['fad', 'grid']">
       <template #actions>
         <button class="btn-view btn-sm" @click="screen = 'categories'">
@@ -106,7 +106,7 @@ async function saveNew(): Promise<void> {
       <template #toolbar>
         <SearchInput
           v-model="patterns.patternSearchQuery"
-          placeholder="Search patterns…"
+          placeholder="Search patterns..."
           aria-label="Search patterns"
         />
         <select
@@ -117,7 +117,7 @@ async function saveNew(): Promise<void> {
           <option :value="null">All categories</option>
           <option v-for="c in patterns.categories" :key="c.id" :value="c.id">{{ c.name }}</option>
         </select>
-        <span class="text-dim text-xs push-right">
+        <span class="text-muted text-xs push-right">
           {{ patterns.patterns.length }} pattern{{ patterns.patterns.length === 1 ? '' : 's' }}
         </span>
       </template>
@@ -125,7 +125,7 @@ async function saveNew(): Promise<void> {
       <LoadingSpinner
         v-if="patterns.patternsLoading && patterns.patterns.length === 0"
         block
-        label="Loading patterns…"
+        label="Loading patterns..."
       />
 
       <EmptyState
@@ -170,7 +170,7 @@ async function saveNew(): Promise<void> {
             >
               {{ p.name }}
             </span>
-            <span class="text-dim text-xs">{{ p.category_name }}</span>
+            <span class="text-muted text-xs">{{ p.category_name }}</span>
           </div>
         </div>
         <EmptyState v-else :text="`No patterns match “${patterns.patternSearchQuery}”.`" />
@@ -180,7 +180,10 @@ async function saveNew(): Promise<void> {
       <template v-else>
         <div class="flex-toolbar mb-12">
           <button class="btn-neutral btn-sm" @click="patterns.togglePatternsCollapsed()">
-            {{ patterns.patternsCollapsed ? '▶ Show all' : '▼ Hide all' }}
+            <font-awesome-icon
+              :icon="['fas', patterns.patternsCollapsed ? 'chevron-right' : 'chevron-down']"
+            />
+            {{ patterns.patternsCollapsed ? 'Show all' : 'Hide all' }}
           </button>
         </div>
 
@@ -195,12 +198,19 @@ async function saveNew(): Promise<void> {
             @keydown.enter.prevent="patterns.toggleCategoryCollapsed(group.category.id)"
             @keydown.space.prevent="patterns.toggleCategoryCollapsed(group.category.id)"
           >
-            <span class="text-dim">
-              {{ patterns.isCategoryCollapsed(group.category.id) ? '▶' : '▼' }}
+            <span class="text-muted">
+              <font-awesome-icon
+                :icon="[
+                  'fas',
+                  patterns.isCategoryCollapsed(group.category.id)
+                    ? 'chevron-right'
+                    : 'chevron-down',
+                ]"
+              />
             </span>
             <h4>
               {{ group.category.name }}
-              <span class="text-dim fw-normal">({{ group.patterns.length }})</span>
+              <span class="text-muted fw-normal">({{ group.patterns.length }})</span>
             </h4>
           </div>
 
@@ -211,7 +221,7 @@ async function saveNew(): Promise<void> {
             :group="{ name: 'patterns' }"
             handle=".drag-handle"
             :animation="150"
-            ghost-class="dragging"
+            ghost-class="is-dragging"
             :draggable="'.saved-pattern'"
             @end="onChange"
           >
@@ -259,13 +269,13 @@ async function saveNew(): Promise<void> {
           </VueDraggable>
         </template>
 
-        <p class="text-dim text-xs mt-12">
+        <p class="text-muted text-xs mt-12">
           Double-click a name to rename. Drag to reorder or move between categories.
         </p>
       </template>
     </ManagerView>
 
-    <!-- ── New pattern ───────────────────────────────────────────────────── -->
+    <!-- -- New pattern ----------------------------------------------------- -->
     <div v-else-if="screen === 'new'" class="admin-panel">
       <SubPageHeader title="New Pattern" :icon="['fad', 'plus']" @back="screen = 'list'" />
       <div class="pattern-editor">
@@ -278,17 +288,17 @@ async function saveNew(): Promise<void> {
             @keyup.enter="saveNew"
           />
           <select v-model="patterns.newPatternCategoryId" aria-label="Pattern category">
-            <option :value="null" disabled>Category…</option>
+            <option :value="null" disabled>Category...</option>
             <option v-for="c in patterns.categories" :key="c.id" :value="c.id">{{ c.name }}</option>
           </select>
         </div>
-        <p class="text-center text-dim text-sm mb-4">Click cells to toggle</p>
+        <p class="text-center text-muted text-sm mb-4">Click cells to toggle</p>
         <div class="pattern-editor-grid">
           <template v-for="(row, ri) in patterns.newPatternGrid" :key="'r' + ri">
             <div
               v-for="(cell, ci) in row"
               :key="ri + '-' + ci"
-              :class="['pattern-editor-cell', cell ? 'on' : '']"
+              :class="['pattern-editor-cell', cell ? 'is-on' : '']"
               @click="patterns.toggleNewPatternCell(ri, ci)"
             ></div>
           </template>
@@ -300,14 +310,14 @@ async function saveNew(): Promise<void> {
             :disabled="!patterns.newPatternName.trim() || patterns.savingPattern"
             @click="saveNew"
           >
-            <LoadingSpinner v-if="patterns.savingPattern" label="Saving…" />
+            <LoadingSpinner v-if="patterns.savingPattern" label="Saving..." />
             <template v-else>Save Pattern</template>
           </button>
         </div>
       </div>
     </div>
 
-    <!-- ── Manage categories (table) ─────────────────────────────────────── -->
+    <!-- -- Manage categories (table) --------------------------------------- -->
     <div v-else-if="screen === 'categories'" class="admin-panel">
       <SubPageHeader
         title="Manage Categories"
@@ -346,7 +356,7 @@ async function saveNew(): Promise<void> {
       </DataTable>
     </div>
 
-    <!-- ── Category form (add / edit) ────────────────────────────────────── -->
+    <!-- -- Category form (add / edit) -------------------------------------- -->
     <div v-else class="admin-panel">
       <SubPageHeader
         :title="patterns.categoryForm.id ? 'Edit Category' : 'New Category'"
@@ -379,7 +389,7 @@ async function saveNew(): Promise<void> {
           :disabled="!patterns.categoryForm.name.trim() || patterns.savingCategory"
           @click="saveCategory"
         >
-          <LoadingSpinner v-if="patterns.savingCategory" label="Saving…" />
+          <LoadingSpinner v-if="patterns.savingCategory" label="Saving..." />
           <template v-else>{{
             patterns.categoryForm.id ? 'Save Changes' : 'Add Category'
           }}</template>

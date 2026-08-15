@@ -13,7 +13,7 @@ type ReadingList struct {
 }
 
 // ReadingListItem is a single entry in a reading list (a manga/manhwa/danmei
-// title). CoverImage is stored as a full URL — either an uploaded image served
+// title). CoverImage is stored as a full URL - either an uploaded image served
 // from this site or a cover URL pulled from AniList.
 type ReadingListItem struct {
 	ID         int64               `json:"id"`
@@ -36,14 +36,14 @@ type ReadingListSource struct {
 	URL   string `json:"url"`
 }
 
-// ReadingListsResponse is the body of GET /api/book-clubs/{club}/reading-lists —
+// ReadingListsResponse is the body of GET /api/book-clubs/{club}/reading-lists -
 // all reading lists for a club, without their items. JSON: {"reading_lists": [...]}.
 type ReadingListsResponse struct {
 	ReadingLists []ReadingList `json:"reading_lists"`
 }
 
 // ReadingListDetailResponse is the body of GET /api/book-clubs/{club}/reading-lists/{id}
-// and of POST /api/book-clubs/{club}/reading-lists (create) — a single reading
+// and of POST /api/book-clubs/{club}/reading-lists (create) - a single reading
 // list (with its items). The handler passes the ReadingList straight through, so
 // the pointer is preserved (a nil would serialize to null, matching the old map
 // literal). JSON: {"reading_list": ReadingList}.
@@ -52,26 +52,26 @@ type ReadingListDetailResponse struct {
 }
 
 // ReadingListItemResponse is the body of POST /api/book-clubs/{club}/reading-lists/{id}/items
-// (create) and PUT …/items/{itemId} (replace) — the created/updated item. JSON: {"item": ...}.
+// (create) and PUT .../items/{itemId} (replace) - the created/updated item. JSON: {"item": ...}.
 type ReadingListItemResponse struct {
 	Item ReadingListItem `json:"item"`
 }
 
-// BookclubLookupResponse is the body of GET /api/bookclub/lookup — AniList
+// BookclubLookupResponse is the body of GET /api/bookclub/lookup - AniList
 // suggestions shaped like reading-list items. JSON: {"results": [...]}.
 type BookclubLookupResponse struct {
 	Results []ReadingListItem `json:"results"`
 }
 
 // BookclubUploadResponse is the shared single-image upload response (book-club
-// cover uploads via saveSingleImageUpload) — the full URL of the stored image.
+// cover uploads via saveSingleImageUpload) - the full URL of the stored image.
 // JSON: {"url": <fullURL>}.
 type BookclubUploadResponse struct {
 	URL string `json:"url"`
 }
 
 // PublishResponse is the body of POST /api/book-clubs/{club}/reading-lists/{id}/publish
-// — the number of items posted to Discord. JSON: {"published": <int>}.
+// - the number of items posted to Discord. JSON: {"published": <int>}.
 type PublishResponse struct {
 	Published int `json:"published"`
 }

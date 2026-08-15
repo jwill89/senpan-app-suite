@@ -10,7 +10,7 @@ import (
 	"app-suite/internal/model"
 )
 
-// ── Tea Rooms (Senpan Tea House → Tea Rooms) ────────────────────────────────
+// -- Tea Rooms (Senpan Tea House -> Tea Rooms) --------------------------------
 //
 // A tea room is a single-table entity (see model.TeaRoom): admins manage a
 // drag-orderable list of bookable rooms and post each as a Discord embed to one
@@ -23,17 +23,17 @@ import (
 
 // teaRoomWebhookSettingKey is the settings-table key holding the single shared
 // Discord webhook that Tea Rooms post to. It is deliberately NOT in settingsKeys
-// (server/settings.go), so it never leaks through the public GET /api/settings —
+// (server/settings.go), so it never leaks through the public GET /api/settings -
 // it's read/written only through the permission-gated tea-room endpoints.
 const teaRoomWebhookSettingKey = "tearoom_webhook_url"
 
 // maxTeaRoomHashtags caps how many hashtags a room keeps (abuse guard).
 const maxTeaRoomHashtags = 30
 
-// ── Admin list + CRUD ────────────────────────────────────────────────────────
+// -- Admin list + CRUD --------------------------------------------------------
 
 // handleTeaRoomsList returns every tea room (admin order) plus the shared Discord
-// webhook (safe here — the endpoint is permission-gated, unlike public settings).
+// webhook (safe here - the endpoint is permission-gated, unlike public settings).
 //
 //	Endpoint:  GET /api/tea-rooms
 //	Auth:      admin, or a user granted teahouse-tea-rooms
@@ -86,7 +86,7 @@ func (req *teaRoomWriteRequest) validateAndSanitize(w http.ResponseWriter) bool 
 
 // checkTeaRoomNumberUnique reports whether room_number is free to use (unique, or
 // already this room's). It writes a 400 and returns false when another room owns
-// it — a friendly guard ahead of the DB's UNIQUE index backstop.
+// it - a friendly guard ahead of the DB's UNIQUE index backstop.
 func (s *Server) checkTeaRoomNumberUnique(w http.ResponseWriter, number string, exceptID int64) bool {
 	other, err := s.store.GetTeaRoomByNumber(number)
 	if err != nil {
@@ -130,7 +130,7 @@ func (s *Server) handleTeaRoomCreate(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleTeaRoomUpdate replaces a tea room's editable fields (its sort_order is
-// preserved — reordering is a separate bulk operation).
+// preserved - reordering is a separate bulk operation).
 //
 //	Endpoint:  PUT /api/tea-rooms/{id}
 //	Auth:      admin, or a user granted teahouse-tea-rooms
@@ -224,7 +224,7 @@ func (s *Server) handleTeaRoomPatch(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleTeaRoomDelete deletes a tea room. Its image is a shared library asset
-// (System → Images), so the file is left intact.
+// (System -> Images), so the file is left intact.
 //
 //	Endpoint:  DELETE /api/tea-rooms/{id}
 //	Auth:      admin, or a user granted teahouse-tea-rooms
@@ -297,14 +297,15 @@ func (s *Server) handleTeaRoomPost(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "No Tea Rooms Discord webhook is configured. Set one on the Tea Rooms page first.")
 		return
 	}
-	if err := postDiscordEmbed(r.Context(), webhook, buildTeaRoomEmbed(*room)); err != nil {
+	target := webhookTarget{Kind: "tea_room", Name: room.Name}
+	if err := postDiscordEmbed(r.Context(), target, webhook, buildTeaRoomEmbed(*room)); err != nil {
 		writeUpstreamError(w, fmt.Sprintf("post tea room %d", id), err)
 		return
 	}
 	writeJSON(w, http.StatusOK, model.TeaRoomResponse{TeaRoom: room})
 }
 
-// ── Shared Discord webhook ──────────────────────────────────────────────────
+// -- Shared Discord webhook --------------------------------------------------
 
 // teaRoomWebhookRequest is the JSON body for PUT /api/tea-rooms/webhook.
 type teaRoomWebhookRequest struct {
@@ -330,7 +331,7 @@ func (s *Server) handleTeaRoomWebhookSet(w http.ResponseWriter, r *http.Request)
 	// A provided webhook must be a Discord webhook so the server can't be pointed at
 	// an arbitrary outbound host. Empty clears it.
 	if webhook != "" && !isDiscordWebhookURL(webhook) {
-		writeError(w, http.StatusBadRequest, "Discord webhook URLs must look like https://discord.com/api/webhooks/…")
+		writeError(w, http.StatusBadRequest, "Discord webhook URLs must look like https://discord.com/api/webhooks/...")
 		return
 	}
 	if err := s.store.SetSetting(teaRoomWebhookSettingKey, webhook); err != nil {
@@ -340,7 +341,7 @@ func (s *Server) handleTeaRoomWebhookSet(w http.ResponseWriter, r *http.Request)
 	writeJSON(w, http.StatusOK, model.TeaRoomWebhookResponse{WebhookURL: webhook})
 }
 
-// ── Public API (cross-origin, read-only) ────────────────────────────────────
+// -- Public API (cross-origin, read-only) ------------------------------------
 
 // handleTeaRoomsPublic returns every tea room for an external site (e.g. a Carrd
 // embed). Unauthenticated and cross-origin (`Access-Control-Allow-Origin: *`); the
@@ -385,10 +386,10 @@ func (s *Server) handleTeaRoomPublic(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, model.TeaRoomPublicResponse{TeaRoom: room})
 }
 
-// ── Embed ────────────────────────────────────────────────────────────────────
+// -- Embed --------------------------------------------------------------------
 
 // buildTeaRoomEmbed renders a tea room as a Discord embed: the room name as the
-// title, the markdown description as the body, then three inline fields — the
+// title, the markdown description as the body, then three inline fields - the
 // per-half-hour cost (halved, with a note, when discounted), the room number, and
 // the open/closed status. Hashtags render in the footer, always capitalized. The
 // room image renders full-width at the bottom, and the accent colour comes from
@@ -399,7 +400,7 @@ func buildTeaRoomEmbed(t model.TeaRoom) discordEmbed {
 	// Body: the markdown description.
 	b.description(discordMarkdown(strings.TrimSpace(t.Description)))
 
-	// Cost — full price, or the fixed 50%-off price plus a note when discounted.
+	// Cost - full price, or the fixed 50%-off price plus a note when discounted.
 	// Inline so the room number + status sit beside it.
 	if t.Discounted {
 		b.field("💰 Cost", fmt.Sprintf("~~%s gil~~ **%s gil**/half hour\n**Currently Discounted!**",
@@ -421,7 +422,7 @@ func buildTeaRoomEmbed(t model.TeaRoom) discordEmbed {
 	return b.build()
 }
 
-// boolLabel returns yes when b is true, else no — a tiny helper for the embed's
+// boolLabel returns yes when b is true, else no - a tiny helper for the embed's
 // status fields (Seasonal/Permanent, Open/Closed).
 func boolLabel(b bool, yes, no string) string {
 	if b {
@@ -430,8 +431,8 @@ func boolLabel(b bool, yes, no string) string {
 	return no
 }
 
-// formatGil formats a gil amount with thousands separators, e.g. 125000 →
-// "125,000". Negative values keep their sign (though costs are validated ≥ 0).
+// formatGil formats a gil amount with thousands separators, e.g. 125000 ->
+// "125,000". Negative values keep their sign (though costs are validated >= 0).
 func formatGil(n int64) string {
 	s := strconv.FormatInt(n, 10)
 	sign := ""
@@ -477,7 +478,7 @@ func normalizeHashtags(raw string) string {
 }
 
 // capitalizeHashtags upper-cases the first letter of each "#tag" in a normalized
-// hashtag string (e.g. "#cozy #private" → "#Cozy #Private"), for the embed footer.
+// hashtag string (e.g. "#cozy #private" -> "#Cozy #Private"), for the embed footer.
 // Only the leading letter is forced up; the rest of each tag is left as stored.
 func capitalizeHashtags(tags string) string {
 	fields := strings.Fields(tags)

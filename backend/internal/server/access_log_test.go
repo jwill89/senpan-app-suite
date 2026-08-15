@@ -9,8 +9,8 @@ import (
 )
 
 // TestAccessLog_IncludesActor verifies the request log names who made each
-// request — an authenticated account (cookie session), a Cloudflare-verified
-// bot, or anonymous — exercising the actor-through-context wiring end to end.
+// request - an authenticated account (cookie session), a Cloudflare-verified
+// bot, or anonymous - exercising the actor-through-context wiring end to end.
 func TestAccessLog_IncludesActor(t *testing.T) {
 	var buf bytes.Buffer
 	prev := slog.Default()
@@ -28,7 +28,7 @@ func TestAccessLog_IncludesActor(t *testing.T) {
 		t.Errorf("authenticated request: want auth=session + user=admin in log; got:\n%s", out)
 	}
 
-	// A client that trusts the test cert but carries NO cookie jar → anonymous.
+	// A client that trusts the test cert but carries NO cookie jar -> anonymous.
 	// (env.ts.Client() returns the shared client that already holds the admin
 	// session cookie, so reuse only its transport.)
 	anon := &http.Client{Transport: env.ts.Client().Transport}
@@ -41,7 +41,7 @@ func TestAccessLog_IncludesActor(t *testing.T) {
 		t.Errorf("anonymous request: want auth=anon in log; got:\n%s", out)
 	}
 
-	// Cloudflare-verified bot (custom transform-rule header) → auth=bot + name.
+	// Cloudflare-verified bot (custom transform-rule header) -> auth=bot + name.
 	buf.Reset()
 	req, _ := http.NewRequest(http.MethodGet, env.ts.URL+"/api/version", nil)
 	req.Header.Set("X-Verified-Bot", "true")

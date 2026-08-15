@@ -1,6 +1,6 @@
 /**
  * Carrd store: manages image-hosting "projects" (folders under <webRoot>/carrd)
- * and the images/sub-directories within them (the System → Carrd Upload admin
+ * and the images/sub-directories within them (the System -> Carrd Upload admin
  * tab).
  *
  * A project has a human-readable title and a URL folder name. Within a project,
@@ -52,7 +52,7 @@ export const useCarrdStore = defineStore('carrd', () => {
   /** True while a project is being created (drives the create button). */
   const creating = ref(false)
   // Monotonic token guarding loadContents against a last-write-wins race: fast
-  // navigation (folder → subfolder → back) fires several requests, and a slow
+  // navigation (folder -> subfolder -> back) fires several requests, and a slow
   // earlier one could otherwise render the wrong path's contents. Only the latest
   // request applies its result.
   let contentsSeq = 0

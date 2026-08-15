@@ -2,7 +2,7 @@
  * Announcement management store (admin).
  *
  * Covers Announcement Types (a named Discord webhook destination) and the
- * Announcements that post to them — CRUD, image upload + reuse, manual "send
+ * Announcements that post to them - CRUD, image upload + reuse, manual "send
  * now", "skip next occurrence", and a client-side search filter. Mirrors the
  * structure of the book-club store.
  *
@@ -66,7 +66,7 @@ function emptyForm(): AnnouncementForm {
 
 const pad = (n: number): string => String(n).padStart(2, '0')
 
-/** Parse an "HH:mm" wall-clock string into minutes-of-day (0–1439). */
+/** Parse an "HH:mm" wall-clock string into minutes-of-day (0-1439). */
 function timeToMinutes(time: string): number {
   const [hh, mm] = time.split(':').map((n) => Number(n) || 0)
   return hh * 60 + mm
@@ -123,7 +123,7 @@ export const useAnnouncementsStore = defineStore('announcements', () => {
   const sendingId = ref<number | null>(null)
   const skippingId = ref<number | null>(null)
 
-  // ── Loads ──────────────────────────────────────────────────────────────────
+  // -- Loads ------------------------------------------------------------------
 
   async function load(): Promise<void> {
     loading.value = true
@@ -184,7 +184,7 @@ export const useAnnouncementsStore = defineStore('announcements', () => {
     }
   }
 
-  // ── Types ──────────────────────────────────────────────────────────────────
+  // -- Types ------------------------------------------------------------------
 
   function resetTypeForm(): void {
     typeForm.value = emptyTypeForm()
@@ -238,7 +238,7 @@ export const useAnnouncementsStore = defineStore('announcements', () => {
     }
   }
 
-  // ── Roles (taggable Discord roles) ───────────────────────────────────────────
+  // -- Roles (taggable Discord roles) -------------------------------------------
 
   function resetRoleForm(): void {
     roleForm.value = emptyRoleForm()
@@ -296,7 +296,7 @@ export const useAnnouncementsStore = defineStore('announcements', () => {
     }
   }
 
-  // ── Announcements ──────────────────────────────────────────────────────────
+  // -- Announcements ----------------------------------------------------------
 
   function resetForm(): void {
     form.value = emptyForm()

@@ -140,7 +140,7 @@ describe('saveAffiliate', () => {
     s.affiliateForm!.name = 'Tavern'
     s.affiliateForm!.owners = [{ value: 'Tataru' }, { value: '  ' }, { value: 'Hildibrand' }]
     s.affiliateForm!.hours = [
-      { label: 'Mon–Fri', start: '18:00', end: '23:00' },
+      { label: 'Mon-Fri', start: '18:00', end: '23:00' },
       { label: 'blank', start: '  ', end: '' }, // dropped (no start)
     ]
     const ok = await s.saveAffiliate()

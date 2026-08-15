@@ -68,7 +68,7 @@ func TestLogLevelName_RoundTrip(t *testing.T) {
 			t.Fatalf("ParseLogLevelName(%q) not ok", name)
 		}
 		if got := server.LogLevelNameForTest(lvl); got != name {
-			t.Errorf("round-trip %q → %v → %q", name, lvl, got)
+			t.Errorf("round-trip %q -> %v -> %q", name, lvl, got)
 		}
 	}
 	if _, ok := server.ParseLogLevelNameForTest("nonsense"); ok {

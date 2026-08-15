@@ -90,7 +90,7 @@ func (s *Server) handleCardCreate(w http.ResponseWriter, r *http.Request) {
 
 // cardGenerateRequest is the JSON body for POST /api/cards/generate (bulk generate).
 type cardGenerateRequest struct {
-	Count int `json:"count"` // number of cards to generate (clamped 1–500)
+	Count int `json:"count"` // number of cards to generate (clamped 1-500)
 }
 
 // handleCardsGenerate bulk-generates N random cards.
@@ -152,7 +152,7 @@ func (s *Server) handleCardsDeleteAll(w http.ResponseWriter, r *http.Request) {
 	s.game.InvalidateCardCache()
 	writeJSON(w, http.StatusOK, model.DeletedCountResponse{Deleted: int64(len(deleted))})
 	s.broadcastCards()
-	// Disconnect only the players whose card was actually deleted — a player on a
+	// Disconnect only the players whose card was actually deleted - a player on a
 	// surviving Protected card keeps their live board.
 	if msg, err := json.Marshal(map[string]string{"type": "card_deleted"}); err == nil {
 		for _, id := range deleted {
@@ -313,7 +313,7 @@ type cardRequestRequest struct {
 // handleCardRequest accepts a public Personal Card Request: a hand-built bingo card
 // with a user-chosen 6-character ID, character name, and home world. It validates
 // the card structurally, rejects a taken ID or a board identical to an existing
-// card, and on success stores the card as pending — awaiting staff approval and not
+// card, and on success stores the card as pending - awaiting staff approval and not
 // yet playable (see handleBoard / cachedCards).
 //
 //	Endpoint:    POST /api/cards/request
@@ -375,7 +375,7 @@ func (s *Server) handleCardRequest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if exists {
-		writeError(w, http.StatusConflict, "That card ID is already taken — please choose another.")
+		writeError(w, http.StatusConflict, "That card ID is already taken - please choose another.")
 		return
 	}
 

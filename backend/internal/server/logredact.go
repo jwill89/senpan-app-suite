@@ -22,13 +22,13 @@ var tokenPathPrefixes = []string{
 
 // redactSensitivePath replaces a capability-token path segment with a short,
 // non-reversible hash (tok_ + 8 hex of SHA-256). Requests for the same link
-// still correlate in the logs — needed for draw-abuse / stamp-fraud
-// investigation — while the raw replayable secret never appears. Any trailing
+// still correlate in the logs - needed for draw-abuse / stamp-fraud
+// investigation - while the raw replayable secret never appears. Any trailing
 // segment (/draw, /stamp) is preserved. Non-token paths are returned unchanged.
 func redactSensitivePath(path string) string {
 	// Match the route prefix case-INSENSITIVELY: a token link requested with any
-	// casing (/API/Garapon/…, /Stamp-Card/…) still routes on the server and so must
-	// still be redacted — a case-exact prefix check would leak the raw token verbatim
+	// casing (/API/Garapon/..., /Stamp-Card/...) still routes on the server and so must
+	// still be redacted - a case-exact prefix check would leak the raw token verbatim
 	// for those variants. The token segment itself is hashed with its original casing
 	// (tokens are case-sensitive), and the request's original prefix casing is kept.
 	lower := strings.ToLower(path)
@@ -45,7 +45,7 @@ func redactSensitivePath(path string) string {
 		if tok == "" {
 			return path
 		}
-		// 8 hex chars (32 bits) of the token's SHA-256 — a stable, non-reversible
+		// 8 hex chars (32 bits) of the token's SHA-256 - a stable, non-reversible
 		// correlation key (hashToken returns the full hex digest; see tokens.go).
 		return origPre + "tok_" + hashToken(tok)[:8] + tail
 	}

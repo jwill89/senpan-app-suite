@@ -86,7 +86,7 @@ func TestBuildTeaRoomEmbed(t *testing.T) {
 	if !strings.Contains(embed.Description, "A quiet room.") {
 		t.Errorf("description missing body: %q", embed.Description)
 	}
-	// Hashtags render in the footer, capitalized — not in the description.
+	// Hashtags render in the footer, capitalized - not in the description.
 	if strings.Contains(embed.Description, "#cozy") {
 		t.Errorf("hashtags should not be in the description: %q", embed.Description)
 	}

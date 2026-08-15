@@ -7,7 +7,7 @@ import BingoBoard from './BingoBoard.vue'
 // a Pinia instance must be active for those mounts.
 beforeEach(() => setActivePinia(createPinia()))
 
-/** A standard 5×5 board with the conventional FREE (0) center square. */
+/** A standard 5x5 board with the conventional FREE (0) center square. */
 function sampleBoard(): number[][] {
   return [
     [1, 16, 31, 46, 61],
@@ -29,7 +29,7 @@ describe('BingoBoard', () => {
     const wrapper = mount(BingoBoard, { props: { board: sampleBoard(), mode: 'preview' } })
     const cells = wrapper.findAll('.board-cell')
     expect(cells).toHaveLength(25)
-    expect(wrapper.find('.board-cell.free .cell-num').text()).toBe('FREE')
+    expect(wrapper.find('.board-cell.is-free .cell-num').text()).toBe('FREE')
   })
 
   it('applies the board-preview modifier when preview is set', () => {
@@ -52,13 +52,13 @@ describe('BingoBoard', () => {
         mode: 'player',
         isStamped: (ri: number, ci: number) => ri === 0 && ci === 0,
         cellClass: (ri: number, ci: number) =>
-          ri === 0 && ci === 0 ? ['board-cell', 'stamped'] : ['board-cell'],
+          ri === 0 && ci === 0 ? ['board-cell', 'is-stamped'] : ['board-cell'],
         stampEmoji: '⭐',
         stampShape: 'star',
       },
     })
     const first = wrapper.findAll('.board-cell')[0]
-    expect(first.classes()).toContain('stamped')
+    expect(first.classes()).toContain('is-stamped')
     expect(first.find('.stamp-mark').text()).toBe('⭐')
   })
 
@@ -69,7 +69,7 @@ describe('BingoBoard', () => {
         board: sampleBoard(),
         mode: 'player',
         isStamped: () => true,
-        cellClass: () => ['board-cell', 'stamped'],
+        cellClass: () => ['board-cell', 'is-stamped'],
         stampShape: 'custom',
         customStampImage: dataUrl,
       },
@@ -85,7 +85,7 @@ describe('BingoBoard', () => {
         board: sampleBoard(),
         mode: 'player',
         isStamped: () => true, // every cell stamped
-        cellClass: () => ['board-cell', 'stamped'],
+        cellClass: () => ['board-cell', 'is-stamped'],
         stampEmoji: '⭐',
         stampShape: 'star',
         stampMarkStyle: { background: 'pink' },
@@ -95,10 +95,10 @@ describe('BingoBoard', () => {
       },
     })
     const marks = wrapper.findAll('.stamp-mark')
-    // Pattern cell (0,0): primary stamp → shows the emoji.
+    // Pattern cell (0,0): primary stamp -> shows the emoji.
     expect(marks[0].text()).toBe('⭐')
     expect(marks[0].attributes('style')).toContain('background: pink')
-    // Non-pattern cell (0,1): secondary stamp → plain circle, no emoji.
+    // Non-pattern cell (0,1): secondary stamp -> plain circle, no emoji.
     expect(marks[1].text()).toBe('')
     expect(marks[1].attributes('style')).toContain('background: blue')
   })
@@ -109,7 +109,7 @@ describe('BingoBoard', () => {
         board: sampleBoard(),
         mode: 'player',
         isStamped: () => true,
-        cellClass: () => ['board-cell', 'stamped'],
+        cellClass: () => ['board-cell', 'is-stamped'],
         stampEmoji: '⭐',
         isWinningPatternCell: () => false, // would be "non-pattern" everywhere
       },

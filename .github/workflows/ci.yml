@@ -18,7 +18,7 @@ permissions:
 
 jobs:
   frontend:
-    name: Frontend (lint · types · tests · build)
+    name: Frontend (lint - types - tests - build)
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -35,8 +35,8 @@ jobs:
 
       # The frontend ESLint config lives in the private @jwill89/eslint-config
       # repo, wired in as the frontend/eslint-config submodule. Fetch it with a
-      # PAT that can read that repo (ESLINT_CONFIG_TOKEN secret — ideally a
-      # fine-grained, read-only token limited to that repo) — the default
+      # PAT that can read that repo (ESLINT_CONFIG_TOKEN secret - ideally a
+      # fine-grained, read-only token limited to that repo) - the default
       # GITHUB_TOKEN can't reach a different private repo. The credential is
       # injected via a temporary `insteadOf` rewrite and unset immediately after,
       # so it is never written into .git/config or the submodule config where
@@ -73,8 +73,8 @@ jobs:
       # FontAwesome Pro packages (@fortawesome + the @awesome.me kit) install from
       # FontAwesome's private registry. The local frontend/.npmrc that points those
       # scopes at it is gitignored (it carries an auth token), so CI must recreate
-      # it from the FONTAWESOME_TOKEN repo secret (Settings → Secrets and variables
-      # → Actions). Without this, `npm ci` fails with "E401 missing password".
+      # it from the FONTAWESOME_TOKEN repo secret (Settings -> Secrets and variables
+      # -> Actions). Without this, `npm ci` fails with "E401 missing password".
       - name: Configure FontAwesome registry
         env:
           FONTAWESOME_TOKEN: ${{ secrets.FONTAWESOME_TOKEN }}
@@ -91,8 +91,8 @@ jobs:
 
       # --prefer-offline installs from the setup-node npm cache and only hits the
       # network for packages MISSING from it. That stops `npm ci` from revalidating
-      # cached packages against their registry every run — notably the Font Awesome
-      # Pro kit (@awesome.me/kit-…), whose fetches count against the kit's bandwidth.
+      # cached packages against their registry every run - notably the Font Awesome
+      # Pro kit (@awesome.me/kit-...), whose fetches count against the kit's bandwidth.
       # So FontAwesome is contacted only when package-lock.json actually changes.
       - name: Install dependencies
         run: npm ci --prefer-offline
@@ -102,6 +102,14 @@ jobs:
 
       - name: Lint
         run: npm run lint:check
+
+      # Prettier covers the CSS layer, which ESLint does not lint at all.
+      - name: Format check
+        run: npm run format:check
+
+      # CSS naming rules + the theme-token list agreeing across its three sources.
+      - name: Conventions check
+        run: npm run lint:conventions
 
       - name: Type-check
         run: npm run typecheck
@@ -113,7 +121,7 @@ jobs:
         run: npm run build
 
   backend:
-    name: Backend (lint · build · vet · test)
+    name: Backend (lint - build - vet - test)
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -152,14 +160,14 @@ jobs:
         run: go run golang.org/x/vuln/cmd/govulncheck@latest ./...
 
   plugin:
-    name: Plugin (build · warnings=errors · format · lint)
+    name: Plugin (build - warnings=errors - format - lint)
     runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: plugins/SenpanCompanion
     env:
       # The FFXIV Dalamud plugin. Dalamud.NET.Sdk normally resolves its reference
-      # assemblies from a local XIVLauncher install, which CI doesn't have — so we
+      # assemblies from a local XIVLauncher install, which CI doesn't have - so we
       # download the official Dalamud dev distribution and point DALAMUD_HOME at it
       # (the SDK honors that override). Tracking `latest` means an upstream Dalamud
       # API bump can turn this job red, which is the cue to bump DalamudApiLevel.
@@ -182,7 +190,7 @@ jobs:
 
       # Promote warnings to errors so the plugin's 0-warning rule is enforced, not
       # merely observed.
-      - name: Build (Release · warnings = errors)
+      - name: Build (Release - warnings = errors)
         run: dotnet build -c Release -p:TreatWarningsAsErrors=true
 
       # Whitespace/style gate. Rules are pinned in plugins/SenpanCompanion/.editorconfig.
@@ -201,7 +209,7 @@ jobs:
   # whose current version has no release yet. Tags follow <Component>-v<version>
   # (Frontend-v3.5.0, Backend-v3.4.0, Plugin-v2.0.1.0) and each release body is
   # that component's CHANGELOG.md section, so a green version bump auto-publishes
-  # a release linked to its notes. Idempotent — versions already released are
+  # a release linked to its notes. Idempotent - versions already released are
   # skipped, so ordinary main pushes are a no-op here.
   release:
     name: Tag + release (main, on version bump)

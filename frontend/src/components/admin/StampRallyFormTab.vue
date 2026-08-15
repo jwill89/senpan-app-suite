@@ -28,7 +28,7 @@ onMounted(() => store.loadFormSources())
 
 const selectedKey = ref<string | null>(null)
 
-/** Combined stamp + prize items for the placement editor (empty image → placeholder). */
+/** Combined stamp + prize items for the placement editor (empty image -> placeholder). */
 const items = computed<PlaceItem[]>(() => {
   const f = store.rallyForm
   if (!f) return []
@@ -88,7 +88,7 @@ function removeSelected(): void {
   selectedKey.value = null
 }
 
-/** Set a stamp's affiliate from the select ('' → Senpan Tea House default). */
+/** Set a stamp's affiliate from the select ('' -> Senpan Tea House default). */
 function setAffiliate(stampIndex: number, value: string): void {
   const f = store.rallyForm
   if (!f || !f.stamps[stampIndex]) return
@@ -137,6 +137,16 @@ function cancel(): void {
         </FormField>
       </FormRow>
 
+      <FormField
+        label="Public sign-up"
+        help="Off by default. When on, this rally is listed publicly and anyone can issue themselves a card - one per character name. If a Garapon is linked to it, signing up also issues that drawing link. Leave off for a rally whose cards staff hand out."
+      >
+        <label class="checkbox-inline">
+          <input v-model="store.rallyForm.public_signup" type="checkbox" />
+          Let participants sign themselves up
+        </label>
+      </FormField>
+
       <FormField label="Details">
         <MarkdownEditor
           v-model="store.rallyForm.details"
@@ -163,7 +173,7 @@ function cancel(): void {
       <FormRow>
         <FormField
           label="Stamp Card Image"
-          help="The full designed card — its frame, slot placeholders, stall labels, and any prize panel are all part of this image. Earned stamp/prize art is overlaid on top."
+          help="The full designed card - its frame, slot placeholders, stall labels, and any prize panel are all part of this image. Earned stamp/prize art is overlaid on top."
         >
           <ImagePicker v-model="store.rallyForm.card_image" />
         </FormField>
@@ -197,7 +207,7 @@ function cancel(): void {
       />
 
       <!-- Selected item panel -->
-      <div v-if="selected" class="item-panel mt-16">
+      <div v-if="selected" class="subpanel mt-16">
         <div class="flex-toolbar flex-between mb-10">
           <h4 class="section-heading no-margin">
             <font-awesome-icon :icon="['fad', selected.kind === 'prize' ? 'gift' : 'stamp']" />
@@ -242,7 +252,7 @@ function cancel(): void {
             <ImagePicker v-model="selected.stamp.image" />
           </FormField>
           <FormRow>
-            <FormField label="Active From" help="Optional — defaults to the whole event.">
+            <FormField label="Active From" help="Optional - defaults to the whole event.">
               <input
                 v-model="selected.stamp.active_from"
                 type="datetime-local"
@@ -273,7 +283,7 @@ function cancel(): void {
           </FormField>
         </template>
       </div>
-      <p v-else class="text-dim text-sm mt-10">
+      <p v-else class="text-muted text-sm mt-10">
         Add a stamp or prize, then click it on the card to position it and edit its settings.
       </p>
 
@@ -284,7 +294,7 @@ function cancel(): void {
           :disabled="!store.rallyForm.title.trim() || store.savingRally"
           @click="save"
         >
-          <LoadingSpinner v-if="store.savingRally" label="Saving…" />
+          <LoadingSpinner v-if="store.savingRally" label="Saving..." />
           <template v-else>Save Stamp Rally</template>
         </button>
       </FormActions>
@@ -293,11 +303,6 @@ function cancel(): void {
 </template>
 
 <style scoped>
-.item-panel {
-  background: var(--panel-raised-bg);
-  border-radius: var(--radius);
-  padding: 14px 16px;
-}
 .no-margin {
   margin: 0;
 }

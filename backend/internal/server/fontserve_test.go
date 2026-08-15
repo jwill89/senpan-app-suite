@@ -217,7 +217,7 @@ func TestFontServe_TokenExpiry(t *testing.T) {
 	same := map[string]string{"Sec-Fetch-Site": "same-origin"}
 	bucket := server.FontTokenBucketForTest(time.Now())
 
-	// Previous-bucket tokens still serve (grace window)…
+	// Previous-bucket tokens still serve (grace window)...
 	prev := server.FontFileTokenForTest(env.srv, "Old.ttf", bucket-1)
 	resp := env.getWithHeaders(t, "/api/fonts/pub/f/"+prev, same)
 	resp.Body.Close()
@@ -225,7 +225,7 @@ func TestFontServe_TokenExpiry(t *testing.T) {
 		t.Errorf("previous-bucket token = %d; want 200", resp.StatusCode)
 	}
 
-	// …older ones have expired.
+	// ...older ones have expired.
 	stale := server.FontFileTokenForTest(env.srv, "Old.ttf", bucket-2)
 	resp = env.getWithHeaders(t, "/api/fonts/pub/f/"+stale, same)
 	resp.Body.Close()

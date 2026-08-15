@@ -5,8 +5,8 @@ namespace SenpanCompanion.Services;
 /// <summary>
 /// A user-defined timed announcement: some text repeatedly sent over a public chat
 /// channel on a fixed interval. Persisted in <see cref="Configuration"/> (so it survives
-/// logout / restart); the run state — whether it's currently ticking and when the next
-/// send is due — is NOT persisted and lives in <see cref="TimedMacroRunner"/>, so a macro
+/// logout / restart); the run state - whether it's currently ticking and when the next
+/// send is due - is NOT persisted and lives in <see cref="TimedMacroRunner"/>, so a macro
 /// always comes back stopped and must be started by hand.
 ///
 /// <see cref="SendsCompleted"/> is saved after every send, so a crash mid-run leaves the

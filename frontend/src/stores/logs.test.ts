@@ -3,17 +3,15 @@ import { createPinia, setActivePinia } from 'pinia'
 import type { LogsResponse, LogEntry } from '@/types/api'
 
 const ep = vi.hoisted(() => ({
-  list: vi.fn(
-    async (): Promise<LogsResponse> => ({
-      entries: [
-        { time: '2026-07-05T19:00:00Z', level: 'INFO', message: 'started' },
-        { time: '2026-07-05T19:00:01Z', level: 'ERROR', message: 'boom', fields: { code: 500 } },
-      ],
-      file: '/var/log/senpan/senpan.log',
-      truncated: true,
-      level: 'info',
-    }),
-  ),
+  list: vi.fn(async (): Promise<LogsResponse> => ({
+    entries: [
+      { time: '2026-07-05T19:00:00Z', level: 'INFO', message: 'started' },
+      { time: '2026-07-05T19:00:01Z', level: 'ERROR', message: 'boom', fields: { code: 500 } },
+    ],
+    file: '/var/log/senpan/senpan.log',
+    truncated: true,
+    level: 'info',
+  })),
   setLevel: vi.fn(async (level: string) => ({ level })),
 }))
 vi.mock('@/lib/endpoints', () => ({

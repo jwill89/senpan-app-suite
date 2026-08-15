@@ -19,7 +19,7 @@ type Raffle struct {
 
 	// Read-only aggregates populated for the admin list view only (the closed-raffle
 	// table): the verified winner's "Character @ World", and the collected total
-	// (sum of paid tickets × cost_per_entry). Omitted from public responses.
+	// (sum of paid tickets x cost_per_entry). Omitted from public responses.
 	WinnerName string  `json:"winner_name,omitempty"`
 	PaidTotal  float64 `json:"paid_total,omitempty"`
 }
@@ -35,7 +35,7 @@ type RaffleEntry struct {
 	CreatedAt     string `json:"created_at"`
 }
 
-// RafflesResponse is the body of GET /api/raffles — the visible raffle list
+// RafflesResponse is the body of GET /api/raffles - the visible raffle list
 // (filtered by role: admins see all, public sees open + in-window).
 type RafflesResponse struct {
 	Raffles []Raffle `json:"raffles"`
@@ -49,16 +49,16 @@ type RaffleResponse struct {
 
 // RaffleDetailResponse is the body of GET /api/raffles/{id}. The shape varies by
 // role and raffle state, so several fields are conditional:
-//   - raffle        — always present.
-//   - total_entries — present whenever the count query succeeds (pointer +
+//   - raffle        - always present.
+//   - total_entries - present whenever the count query succeeds (pointer +
 //     omitempty so a count error omits the key, matching the map that only sets it
 //     on err == nil).
-//   - entries       — admins only: the full entry list. A POINTER to the slice so
+//   - entries       - admins only: the full entry list. A POINTER to the slice so
 //     the admin branch always emits the key (even "entries":[] when there are no
-//     entries — the store returns a non-nil empty slice), while a nil pointer omits
+//     entries - the store returns a non-nil empty slice), while a nil pointer omits
 //     the key entirely for public callers. A plain []RaffleEntry with omitempty
 //     would wrongly drop the key on an empty admin list.
-//   - winner_entry  — public only, and only for a closed raffle that has a verified
+//   - winner_entry  - public only, and only for a closed raffle that has a verified
 //     winner whose entry loads (omitempty pointer; absent otherwise).
 //
 // entries and winner_entry are mutually exclusive in practice (admin vs public
@@ -70,7 +70,7 @@ type RaffleDetailResponse struct {
 	WinnerEntry  *RaffleEntry   `json:"winner_entry,omitempty"`
 }
 
-// RaffleEnterResponse is the body of POST /api/raffles/{id}/enter — the public
+// RaffleEnterResponse is the body of POST /api/raffles/{id}/enter - the public
 // sign-up confirmation (HTTP 201 on a new entry, 200 when adding to an existing
 // one; the body shape is identical either way).
 type RaffleEnterResponse struct {
@@ -80,13 +80,13 @@ type RaffleEnterResponse struct {
 	SignupInstructions string  `json:"signup_instructions"`
 }
 
-// RaffleEntryResponse wraps a single entry — the body of POST
+// RaffleEntryResponse wraps a single entry - the body of POST
 // /api/raffles/{id}/entries {action:"add_entry"} (the created/updated entry).
 type RaffleEntryResponse struct {
 	Entry RaffleEntry `json:"entry"`
 }
 
-// RaffleWinnerResponse wraps the picked entry — the body of POST
+// RaffleWinnerResponse wraps the picked entry - the body of POST
 // /api/raffles/{id}/entries {action:"pick_winner"|"pick_another"}.
 type RaffleWinnerResponse struct {
 	Winner RaffleEntry `json:"winner"`

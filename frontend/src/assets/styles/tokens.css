@@ -1,54 +1,82 @@
 /*
- * Theme design tokens — the :root custom properties every theme overrides.
+ * Theme design tokens - the :root custom properties every theme overrides.
  * Split out of app.css; see app.css for the import order.
  */
 
-/* Dark theme design tokens — all colors, radii, and effect values */
+/* Dark theme design tokens - all colors, radii, and effect values */
 :root {
-    /* ── Theme tokens ──────────────────────────────────────────────────────────
-       Every colour below is a theme token: saved CSS themes override these in
-       their own :root, and the runtime theme editor + colour-picker tool target
-       them by name. Names are role-descriptive (what the colour is *for*), not
-       palette names. --radius / --header-font are the only non-colour tokens. */
+  /* -- Theme tokens ----------------------------------------------------------
+     Every colour below is a theme token: saved CSS themes override these in
+     their own :root, and the runtime theme editor + colour-picker tool target
+     them by name. Names are role-descriptive (what the colour is *for*), not
+     palette names.
 
-    /* Backgrounds */
-    --page-bg: #1a1c17; /* App/page background, behind all panels */
-    --panel-bg: #272a22; /* Card / panel surface */
-    --panel-raised-bg: #2f3228; /* Raised/nested surface: panels-within-panels, table rows, chips */
-    --control-border: #4a4d3f; /* Control & divider outline + neutral-button fill — dark enough for --text (AAA), still visible on both panel surfaces */
-    --input-bg: #272a22; /* Form control (input/select/textarea) fill — consistent on any surface */
+     The exceptions - present here but NOT themeable, and absent from
+     lib/theme-tokens.ts by design - are --radius, --radius-media, --body-font,
+     --header-font. */
 
-    /* Accents & actions */
-    --accent: #d6bdae; /* Primary action / accent (primary buttons, links, focus) */
-    --accent-hover: #c4a999; /* --accent hover */
-    --accent-2: #474b3c; /* Secondary action / accent (secondary buttons) — dark enough for --text-on-fill (AAA) */
-    --accent-2-hover: #3a3d30; /* --accent-2 hover */
-    --highlight: #d6bdae; /* Highlight accent (called numbers, section headings, gold trim) */
+  /* Backgrounds */
+  --page-bg: #1a1c17; /* App/page background, behind all panels */
+  --panel-bg: #272a22; /* Card / panel surface */
+  --panel-raised-bg: #2f3228; /* Raised/nested surface: panels-within-panels, table rows, chips */
+  --control-border: #4a4d3f; /* Control & divider outline + neutral-button fill -
+     dark enough for --text (AAA), still visible on both panel surfaces */
+  --input-bg: #272a22; /* Form control (input/select/textarea) fill - consistent on any surface */
 
-    /* Text */
-    --text: #f0ebe3; /* Primary text */
-    --text-muted: #d3d3bf; /* Muted / secondary text (AAA on panel + raised surfaces) */
-    --text-on-accent: #1a1c17; /* Text on --accent / --highlight fills */
-    --text-on-fill: #f5f1ea; /* Text on toast / badge / status fills */
+  /* Accents & actions */
+  --accent: #d6bdae; /* Primary action / accent (primary buttons, links, focus) */
+  --accent-hover: #c4a999; /* --accent hover */
+  --accent-2: #474b3c; /* Secondary action / accent (secondary buttons) -
+     dark enough for --text-on-fill (AAA) */
+  --accent-2-hover: #3a3d30; /* --accent-2 hover */
+  --highlight: #d6bdae; /* Highlight accent (called numbers, section headings, trim) */
 
-    /* Status */
-    --success: #175020; /* Success state — a clear green, dark enough for --text-on-fill (AAA) */
-    --danger: #9a2018; /* Danger / error state — a clear red, dark enough for --text-on-fill (AAA) */
-    --warning: #e0a82e; /* Warning / caution state (skip badges, alerts); caution buttons use --text-on-accent */
+  /* Text */
+  --text: #f0ebe3; /* Primary text */
+  --text-muted: #d3d3bf; /* Muted / secondary text (AAA on panel + raised surfaces) */
+  --text-on-accent: #1a1c17; /* Text on --accent / --highlight fills */
+  --text-on-fill: #f5f1ea; /* Text on toast / badge / status fills */
 
-    /* Bingo board */
-    --board-cell-bg: #f0ebe3; /* Board cell background */
-    --board-cell-hover-bg: #e5ded4; /* Board cell hover */
-    --board-free-bg: #d6bdae; /* FREE (centre) cell background */
-    --board-gradient-start: #2f3328; /* Board wrapper gradient (top) */
-    --board-gradient-end: #272a22; /* Board wrapper gradient (bottom) */
+  /* Status */
+  --success: #175020; /* Success state - a clear green, dark enough for --text-on-fill (AAA) */
+  --danger: #9a2018; /* Danger / error state - a clear red, dark enough for --text-on-fill (AAA) */
+  --warning: #e0a82e; /* Warning / caution state (skip badges, alerts);
+     caution buttons use --text-on-accent */
 
-    /* Effects */
-    --modal-overlay: rgb(0 0 0 / 70%); /* Full-screen modal backdrop */
-    --shadow: rgb(0 0 0 / 50%); /* Box-shadow colour */
-    --highlight-glow: rgb(214 189 174 / 50%); /* Glow around --highlight elements */
+  /* NOTE: --success and --danger are FILL colours - dark, meant to be paired with
+     --text-on-fill on a badge, button or border. They are NOT text colours: on the
+     default theme --success as text scores 1.53:1 on --panel-bg and --danger 1.80:1,
+     against a 4.5:1 AA minimum. To show a success/danger state in text, tint a
+     surface with it (the `.badge--success` / `.badge--danger` idiom in
+     utilities.css) or put it on a border, and leave the text itself --text. */
 
-    /* Non-colour */
-    --radius: 10px; /* Shared corner radius */
-    --header-font: 'Arapey', serif; /* Header/board font (overridden dynamically via settings) */
+  /* Bingo board */
+  --board-cell-bg: #f0ebe3; /* Board cell background */
+  --board-cell-hover-bg: #e5ded4; /* Board cell hover */
+  --board-free-bg: #d6bdae; /* FREE (centre) cell background */
+  --board-gradient-start: #2f3328; /* Board wrapper gradient (top) */
+  --board-gradient-end: #272a22; /* Board wrapper gradient (bottom) */
+
+  /* Effects */
+  --modal-overlay: rgb(0 0 0 / 70%); /* Full-screen modal backdrop */
+  --shadow: rgb(0 0 0 / 50%); /* Box-shadow colour */
+  --highlight-glow: rgb(214 189 174 / 50%); /* Glow around --highlight elements */
+
+  /* Non-colour, and none of these are themeable.
+
+     --radius-media is deliberately not 0. A photo needs one soft edge to read as a
+     picture rather than as a hole punched in the panel, and in a manager row it is
+     the cue for where the object begins. Everything that is chrome - panels, cards,
+     buttons, inputs, badges, rows - uses --radius and is square. Genuine circles
+     (dots, spinner, slider thumbs, the toggle knob) and the toggle switch track
+     keep their own literals: squaring a switch makes it read as a checkbox.
+
+     --body-font exists so small chrome can NAME the body face rather than inherit
+     it. Badges and the game clock are inline children of a panel <h3>, so plain
+     inheritance hands them the display face at 0.7rem, where it is unreadable.
+     `font-family: inherit` cannot fix that - it inherits the heading. */
+  --radius: 0px; /* Chrome corner radius - square, matching senpan.cafe */
+  --radius-media: 6px; /* Image-preview corner radius (thumbnails, covers, prize art) */
+  --body-font: 'Montserrat', 'Segoe UI', system-ui, sans-serif; /* Body/UI face */
+  --header-font: 'Arapey', serif; /* Header/board font (overridden dynamically via settings) */
 }

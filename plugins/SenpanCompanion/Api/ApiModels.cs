@@ -8,7 +8,7 @@ namespace SenpanCompanion.Api;
 // these PascalCase properties map to the server's snake_case fields without
 // per-property attributes (e.g. PlayerName <-> "player_name").
 
-// ── Auth ─────────────────────────────────────────────────────────────────────
+// -- Auth ---------------------------------------------------------------------
 
 public sealed class User
 {
@@ -25,7 +25,7 @@ public sealed class AuthCheckResponse
     public User? User { get; set; }
 }
 
-// ── Bingo: cards ─────────────────────────────────────────────────────────────
+// -- Bingo: cards -------------------------------------------------------------
 
 public sealed class CardListEntry
 {
@@ -64,7 +64,7 @@ public sealed class GenerateSingleResponse
 public sealed class Card
 {
     public string Id { get; set; } = string.Empty;
-    public int[][] BoardData { get; set; } = Array.Empty<int[]>(); // 5×5; board[row][col], 0 = FREE
+    public int[][] BoardData { get; set; } = Array.Empty<int[]>(); // 5x5; board[row][col], 0 = FREE
     public string PlayerName { get; set; } = string.Empty;
     public string Details { get; set; } = string.Empty;
 }
@@ -74,14 +74,14 @@ public sealed class BoardResponse
     public Card Card { get; set; } = new();
 }
 
-// ── Bingo: patterns ──────────────────────────────────────────────────────────
+// -- Bingo: patterns ----------------------------------------------------------
 
 public sealed class Pattern
 {
     public long Id { get; set; }
     public string Name { get; set; } = string.Empty;
     public string CategoryName { get; set; } = string.Empty;
-    public bool[][] PatternData { get; set; } = Array.Empty<bool[]>(); // 5×5 grid; true = required cell
+    public bool[][] PatternData { get; set; } = Array.Empty<bool[]>(); // 5x5 grid; true = required cell
 }
 
 public sealed class PatternsResponse
@@ -89,7 +89,7 @@ public sealed class PatternsResponse
     public List<Pattern> Patterns { get; set; } = new();
 }
 
-// ── Bingo: presets ───────────────────────────────────────────────────────────
+// -- Bingo: presets -----------------------------------------------------------
 
 public sealed class GamePreset
 {
@@ -109,13 +109,13 @@ public sealed class PresetsResponse
     public List<GamePreset> Presets { get; set; } = new();
 }
 
-// ── Bingo: game ──────────────────────────────────────────────────────────────
+// -- Bingo: game --------------------------------------------------------------
 
 public sealed class GamePattern
 {
     public int Id { get; set; }
     public string Name { get; set; } = string.Empty;
-    public bool[][] PatternData { get; set; } = Array.Empty<bool[]>(); // 5×5 snapshot grid
+    public bool[][] PatternData { get; set; } = Array.Empty<bool[]>(); // 5x5 snapshot grid
 }
 
 public sealed class GameState
@@ -159,7 +159,7 @@ public sealed class DrawResult
     public List<string> Winners { get; set; } = new();
 }
 
-// ── Raffles ──────────────────────────────────────────────────────────────────
+// -- Raffles ------------------------------------------------------------------
 
 public sealed class Raffle
 {
@@ -202,7 +202,7 @@ public sealed class RaffleWinnerResponse
     public RaffleEntry? Winner { get; set; }
 }
 
-// ── Winners ──────────────────────────────────────────────────────────────────
+// -- Winners ------------------------------------------------------------------
 
 public sealed class FrequentWinner
 {
@@ -233,7 +233,7 @@ public sealed class WinnersLogResponse
     public int PerPage { get; set; }
 }
 
-// ── Garapon ──────────────────────────────────────────────────────────────────
+// -- Garapon ------------------------------------------------------------------
 
 public sealed class Garapon
 {
@@ -285,7 +285,7 @@ public sealed class GaraponPlayerResponse
     public GaraponPlayer Player { get; set; } = new();
 }
 
-// ── Stamp Rally ──────────────────────────────────────────────────────────────
+// -- Stamp Rally --------------------------------------------------------------
 
 // One collectable stamp (a "stall"). AffiliateName "" renders as "Senpan Tea House".
 public sealed class StampRallyStamp
@@ -350,18 +350,18 @@ public sealed class StampRallyLogsResponse
     public List<StampRallyLogEntry> Logs { get; set; } = new();
 }
 
-// ── Tea Rooms ──────────────────────────────────────────────────────────────────
+// -- Tea Rooms ------------------------------------------------------------------
 
-// A bookable tea room. The plugin surfaces only the compact operator view — room
+// A bookable tea room. The plugin surfaces only the compact operator view - room
 // number, name, owner, per-half-hour cost, and the two quick-toggle status flags
 // (open/closed and the 50%-off discount). The server model carries more (subtitle,
-// hashtags, image, embed colour, seasonal/lockable, …) that the in-game panel
+// hashtags, image, embed colour, seasonal/lockable, ...) that the in-game panel
 // doesn't need, so those fields are intentionally omitted here.
 public sealed class TeaRoom
 {
     public long Id { get; set; }
     public string Name { get; set; } = string.Empty;
-    // The character who owns the room — optional, informational only.
+    // The character who owns the room - optional, informational only.
     public string RoomOwner { get; set; } = string.Empty;
     public string RoomNumber { get; set; } = string.Empty;
     public long CostPerHalfHour { get; set; }
@@ -370,19 +370,19 @@ public sealed class TeaRoom
 }
 
 // GET /api/tea-rooms also returns the shared Discord webhook, but the plugin never
-// posts rooms, so it's left out — an extra JSON field is simply ignored on decode.
+// posts rooms, so it's left out - an extra JSON field is simply ignored on decode.
 public sealed class TeaRoomsResponse
 {
     public List<TeaRoom> TeaRooms { get; set; } = new();
 }
 
-// PATCH /api/tea-rooms/{id} echoes the saved room (nil → null when it vanished).
+// PATCH /api/tea-rooms/{id} echoes the saved room (nil -> null when it vanished).
 public sealed class TeaRoomResponse
 {
     public TeaRoom? TeaRoom { get; set; }
 }
 
-// ── Generic ──────────────────────────────────────────────────────────────────
+// -- Generic ------------------------------------------------------------------
 
 public sealed class OkResponse
 {
@@ -391,7 +391,7 @@ public sealed class OkResponse
     public string? Error { get; set; }
 }
 
-// DeletedCountResponse mirrors the server's bulk-delete envelope — {"deleted": N}.
+// DeletedCountResponse mirrors the server's bulk-delete envelope - {"deleted": N}.
 public sealed class DeletedCountResponse
 {
     public long Deleted { get; set; }

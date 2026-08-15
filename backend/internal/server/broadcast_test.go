@@ -13,18 +13,18 @@ import (
 	"github.com/coder/websocket"
 )
 
-// ── WebSocket test helpers ──────────────────────────────────────────────────
+// -- WebSocket test helpers --------------------------------------------------
 //
 // These exercise the live-admin invalidation path end-to-end: an authenticated
 // admin opens the privileged WebSocket channel, a *public* mutation happens, and
 // the admin should receive a thin "resource_changed" signal (see
 // server.broadcastResourceChanged). The public draw/enter paths are excluded from
-// the adminMutationResource middleware, so the handlers broadcast explicitly —
+// the adminMutationResource middleware, so the handlers broadcast explicitly -
 // these tests guard that wiring.
 
 // dialAdminWS opens an authenticated admin WebSocket (no card id) to the test
 // server and returns the connection. The caller must already be logged in as an
-// admin — the session cookie rides on e.client's jar, and websocket.Dial reuses
+// admin - the session cookie rides on e.client's jar, and websocket.Dial reuses
 // that client (TLS pool + cookies). It then waits until the hub has registered
 // the connection so a subsequent broadcast can't race ahead of registration.
 func (e *testEnv) dialAdminWS(t *testing.T) *websocket.Conn {
@@ -104,12 +104,12 @@ func expectCardsUpdate(t *testing.T, conn *websocket.Conn, id string) model.Card
 	}
 }
 
-// ── Card status broadcasts (regression: the cards_update payload must carry the
-// full card shape, not a subset) ───────────────────────────────────────────────
+// -- Card status broadcasts (regression: the cards_update payload must carry the
+// full card shape, not a subset) -----------------------------------------------
 
 // TestCardProtectBroadcastsProtected guards against the cards_update broadcast
 // dropping status fields. Protecting a card must push a cards_update whose entry
-// has protected=true — a dropped field made the Protected lock lag until a manual
+// has protected=true - a dropped field made the Protected lock lag until a manual
 // refetch, and only in one direction (the omitted field always read false, so
 // unprotect "worked" but protect didn't).
 func TestCardProtectBroadcastsProtected(t *testing.T) {
@@ -163,7 +163,7 @@ func TestCardApproveBroadcastsStatus(t *testing.T) {
 	}
 }
 
-// ── Garapon draw broadcast ──────────────────────────────────────────────────
+// -- Garapon draw broadcast --------------------------------------------------
 
 // TestGarapon_DrawBroadcastsResourceChanged verifies that a public draw (which
 // goes through the token path, excluded from the adminMutationResource
@@ -189,7 +189,7 @@ func TestGarapon_DrawBroadcastsResourceChanged(t *testing.T) {
 	conn := env.dialAdminWS(t)
 	defer conn.Close(websocket.StatusNormalClosure, "")
 
-	// Public draw — note the singular "garapon" token path.
+	// Public draw - note the singular "garapon" token path.
 	resp := env.postJSON(t, "/api/garapon/"+player.Token+"/draw", map[string]any{})
 	if resp.StatusCode != 200 {
 		t.Fatalf("draw status = %d; want 200", resp.StatusCode)
@@ -199,7 +199,7 @@ func TestGarapon_DrawBroadcastsResourceChanged(t *testing.T) {
 	expectResourceChanged(t, conn, "garapons")
 }
 
-// ── Raffle enter broadcast ──────────────────────────────────────────────────
+// -- Raffle enter broadcast --------------------------------------------------
 
 // TestRaffle_EnterBroadcastsResourceChanged verifies that a public raffle sign-up
 // (the ".../enter" path, excluded from the adminMutationResource middleware)

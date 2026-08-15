@@ -22,8 +22,8 @@ describe('ratePct', () => {
   })
 
   it('returns an em dash when the total is non-positive', () => {
-    expect(ratePct(5, 0)).toBe('—')
-    expect(ratePct(5, -2)).toBe('—')
+    expect(ratePct(5, 0)).toBe('-')
+    expect(ratePct(5, -2)).toBe('-')
   })
 
   it('floors a negative weight to 0% rather than going negative', () => {

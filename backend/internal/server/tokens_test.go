@@ -8,7 +8,7 @@ import (
 
 // bearerGet performs a GET carrying a PAT bearer token on a fresh, cookieless
 // client (its own http.Client with no jar, reusing the test server's TLS-trusting
-// transport). This exercises the token-auth path in isolation — no session cookie
+// transport). This exercises the token-auth path in isolation - no session cookie
 // can leak in from env.client.
 func bearerGet(t *testing.T, e *testEnv, path, token string) *http.Response {
 	t.Helper()
@@ -46,7 +46,7 @@ func TestAccountToken_GenerateInfoRevoke(t *testing.T) {
 		t.Fatalf("prefix %q is not a non-empty prefix of the token", gen["prefix"])
 	}
 
-	// Info now reports the token exists — but never echoes the secret itself.
+	// Info now reports the token exists - but never echoes the secret itself.
 	info := decodeBody(t, env.get(t, "/api/account/token"))
 	if info["has_token"] != true {
 		t.Fatalf("has_token = %v; want true after generation", info["has_token"])
@@ -90,7 +90,7 @@ func TestTokenAuth_RejectsMissingAndBogus(t *testing.T) {
 }
 
 // TestTokenAuth_EnforcesUserPermissions confirms a token carries exactly its
-// owner's access — the headline guarantee that logging in via PAT still respects
+// owner's access - the headline guarantee that logging in via PAT still respects
 // per-page permissions (a token-holder can't exceed what the account may do).
 func TestTokenAuth_EnforcesUserPermissions(t *testing.T) {
 	env := newTestEnv(t)
@@ -112,14 +112,14 @@ func TestTokenAuth_EnforcesUserPermissions(t *testing.T) {
 		t.Fatal("expected a generated token for the plugin user")
 	}
 
-	// Granted page → 200 via the token.
+	// Granted page -> 200 via the token.
 	resp := bearerGet(t, env, "/api/cards", token)
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("granted endpoint via token = %d; want 200", resp.StatusCode)
 	}
 	resp.Body.Close()
 
-	// Admin-only page → rejected (the token is not admin).
+	// Admin-only page -> rejected (the token is not admin).
 	resp = bearerGet(t, env, "/api/users", token)
 	if resp.StatusCode == http.StatusOK {
 		t.Fatal("admin-only endpoint must reject a non-admin token")

@@ -24,7 +24,7 @@ func TestValidateBoard(t *testing.T) {
 		mutate func(b [][]int)
 	}{
 		{"free centre not 0", func(b [][]int) { b[2][2] = 33 }},
-		{"out of column range", func(b [][]int) { b[0][0] = 99 }}, // 99 not in B (1–15)
+		{"out of column range", func(b [][]int) { b[0][0] = 99 }}, // 99 not in B (1-15)
 		{"wrong column band", func(b [][]int) { b[0][0] = 20 }},   // 20 belongs in I, not B
 		{"duplicate in column", func(b [][]int) { b[1][0] = b[0][0] }},
 	}
@@ -46,7 +46,7 @@ func TestValidateBoard(t *testing.T) {
 
 	// Wrong shapes.
 	if err := ValidateBoard([][]int{{1, 2, 3}}); err == nil {
-		t.Error("non-5×5 board should be rejected")
+		t.Error("non-5x5 board should be rejected")
 	}
 }
 

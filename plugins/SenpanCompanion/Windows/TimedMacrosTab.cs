@@ -11,7 +11,7 @@ namespace SenpanCompanion.Windows;
 /// <summary>
 /// Timed Text Macros tool. A permission-free, account-free helper for venue-style timed
 /// announcements: define a named message, a channel (Say / Yell / Shout), an interval, and
-/// an optional send cap, then start it — the first send goes out immediately and it repeats
+/// an optional send cap, then start it - the first send goes out immediately and it repeats
 /// on the interval (via <see cref="TimedMacroRunner"/>) until stopped or the cap is reached.
 /// Long messages are split with the same logic as the auto-tells and sent one part per
 /// second. Macros persist across logout but always reload stopped.
@@ -73,13 +73,13 @@ internal sealed class TimedMacrosTab
 
         if (macros.Count == 0)
         {
-            Ui.Help("No macros yet — create one above.");
+            Ui.Help("No macros yet - create one above.");
             return;
         }
 
         var loggedIn = Plugin.ClientState.IsLoggedIn;
         if (!loggedIn)
-            UiText.WrappedColored(StoppedColor, "You're logged out — log in to start a macro.");
+            UiText.WrappedColored(StoppedColor, "You're logged out - log in to start a macro.");
 
         string? toDelete = null;
         for (var i = 0; i < macros.Count; i++)
@@ -100,17 +100,17 @@ internal sealed class TimedMacrosTab
     private static void DrawIntro()
     {
         ImGui.AlignTextToFramePadding();
-        Ui.Help("Sends real /say · /yell · /shout chat on your behalf, on a timer.");
+        Ui.Help("Sends real /say - /yell - /shout chat on your behalf, on a timer.");
         ImGui.SameLine();
         Ui.HelpMarker(
             "Timed Text Macros send real chat over /say, /yell, or /shout on your behalf, " +
-            "automatically on a timer — the same kind of outgoing chat as the auto-tells (see " +
+            "automatically on a timer - the same kind of outgoing chat as the auto-tells (see " +
             "the README's ToS note). A message too long for one line is split and sent one part " +
-            "per second. Macros are saved and survive logout, but always reload stopped — you " +
+            "per second. Macros are saved and survive logout, but always reload stopped - you " +
             "must start each one again by hand.");
     }
 
-    // ── Shared create/edit form ──────────────────────────────────────────────────
+    // -- Shared create/edit form --------------------------------------------------
 
     private static void DrawForm(MacroForm form, string idPrefix)
     {
@@ -153,7 +153,7 @@ internal sealed class TimedMacrosTab
             Ui.Help("Fits in a single message.");
         else
             UiText.WrappedColored(SplitWarnColor,
-                $"Too long for one line — will be sent as {parts} messages, one second apart.");
+                $"Too long for one line - will be sent as {parts} messages, one second apart.");
     }
 
     private void AddMacro()
@@ -167,7 +167,7 @@ internal sealed class TimedMacrosTab
         this.createForm.ClearNameAndText();
     }
 
-    // ── One macro card ───────────────────────────────────────────────────────────
+    // -- One macro card -----------------------------------------------------------
 
     /// <summary>Draws one macro card; returns true if the user asked to delete it.</summary>
     private bool DrawMacroCard(TimedTextMacro macro, int index, bool loggedIn)
@@ -186,8 +186,8 @@ internal sealed class TimedMacrosTab
         DrawStatusBadge(macro, running);
 
         // Meta line.
-        var cap = macro.MaxSends > 0 ? $"  ·  {macro.MaxSends}× max" : string.Empty;
-        var partsNote = parts > 1 ? $"  ·  {parts} messages/send" : string.Empty;
+        var cap = macro.MaxSends > 0 ? $"  -  {macro.MaxSends}x max" : string.Empty;
+        var partsNote = parts > 1 ? $"  -  {parts} messages/send" : string.Empty;
         Ui.Help($"every {macro.IntervalMinutes} min{cap}{partsNote}");
 
         DrawStatusLine(macro, running);
@@ -230,11 +230,11 @@ internal sealed class TimedMacrosTab
             var remaining = macro.MaxSends > 0
                 ? $"{macro.SendsCompleted}/{macro.MaxSends} sent, {Math.Max(0, macro.MaxSends - macro.SendsCompleted)} left"
                 : $"{macro.SendsCompleted} sent";
-            UiText.WrappedColored(RunningColor, $"Next send in {FormatCountdown(left)}  ·  {remaining}");
+            UiText.WrappedColored(RunningColor, $"Next send in {FormatCountdown(left)}  -  {remaining}");
         }
         else if (macro.IsComplete)
         {
-            UiText.WrappedColored(DoneColor, $"Sent {macro.SendsCompleted} time{(macro.SendsCompleted == 1 ? string.Empty : "s")} — send cap reached.");
+            UiText.WrappedColored(DoneColor, $"Sent {macro.SendsCompleted} time{(macro.SendsCompleted == 1 ? string.Empty : "s")} - send cap reached.");
         }
         else
         {
@@ -251,7 +251,7 @@ internal sealed class TimedMacrosTab
     {
         ImGui.Spacing();
         var chars = (macro.Text ?? string.Empty).Length;
-        var sizeNote = $"{chars} char{(chars == 1 ? string.Empty : "s")}{(parts > 1 ? $"  ·  {parts} messages" : string.Empty)}";
+        var sizeNote = $"{chars} char{(chars == 1 ? string.Empty : "s")}{(parts > 1 ? $"  -  {parts} messages" : string.Empty)}";
         var shown = this.expanded.Contains(macro.Id);
 
         // The message is hidden by default and only rendered when expanded, so a long
@@ -283,7 +283,7 @@ internal sealed class TimedMacrosTab
 
         if (running)
         {
-            // A running macro can't be edited — stop it first.
+            // A running macro can't be edited - stop it first.
             if (Ui.Button("Stop"))
                 this.runner.Stop(macro.Id);
         }
@@ -342,7 +342,7 @@ internal sealed class TimedMacrosTab
             this.editingId = null;
     }
 
-    // ── Helpers ──────────────────────────────────────────────────────────────────
+    // -- Helpers ------------------------------------------------------------------
 
     private static string ChannelLabel(string key) => key?.Trim().ToLowerInvariant() switch
     {
@@ -375,7 +375,7 @@ internal sealed class TimedMacrosTab
             : $"{t.Minutes:00}:{t.Seconds:00}";
     }
 
-    // ── Create/edit form state ───────────────────────────────────────────────────
+    // -- Create/edit form state ---------------------------------------------------
 
     /// <summary>
     /// Mutable working copy of a macro's editable fields, shared by the create form and

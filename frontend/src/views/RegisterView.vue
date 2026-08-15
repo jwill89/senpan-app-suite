@@ -1,7 +1,7 @@
 <script setup lang="ts">
 /**
  * Account registration. This page is intentionally NOT linked anywhere in the
- * UI — an admin shares the /admin/register URL directly. New accounts are
+ * UI - an admin shares the /admin/register URL directly. New accounts are
  * created inactive and cannot log in until an admin activates them, so an
  * unsolicited signup is harmless.
  */
@@ -63,7 +63,7 @@ async function submit(): Promise<void> {
     done.value = message
     return
   }
-  // Failure → re-issue a fresh single-use token for the next attempt.
+  // Failure -> re-issue a fresh single-use token for the next attempt.
   turnstileToken.value = ''
   turnstile.value?.reset()
 }
@@ -120,7 +120,7 @@ function goLogin(): void {
               class="btn-action"
               :disabled="auth.loggingIn || (!!turnstileSiteKey && !turnstileToken)"
             >
-              <LoadingSpinner v-if="auth.loggingIn" label="Creating…" />
+              <LoadingSpinner v-if="auth.loggingIn" label="Creating..." />
               <template v-else>Create Account</template>
             </button>
           </div>

@@ -15,7 +15,7 @@ func botReq(headers map[string]string) *http.Request {
 }
 
 func TestVerifiedBot(t *testing.T) {
-	// No Cloudflare signal → not a verified bot.
+	// No Cloudflare signal -> not a verified bot.
 	if _, ok := verifiedBot(botReq(nil)); ok {
 		t.Error("no header should not be a verified bot")
 	}
@@ -23,7 +23,7 @@ func TestVerifiedBot(t *testing.T) {
 		t.Error("x-verified-bot:false should not be a verified bot")
 	}
 
-	// Custom transform-rule header (works on any plan) → verified; named by UA,
+	// Custom transform-rule header (works on any plan) -> verified; named by UA,
 	// which is trustworthy now that Cloudflare vouched for the source.
 	if name, ok := verifiedBot(botReq(map[string]string{
 		"X-Verified-Bot": "true", "User-Agent": "Googlebot/2.1",
@@ -31,14 +31,14 @@ func TestVerifiedBot(t *testing.T) {
 		t.Errorf("x-verified-bot true: got (%q, %v); want (Googlebot/2.1, true)", name, ok)
 	}
 
-	// Native managed-transform headers (Bot Management) → category preferred.
+	// Native managed-transform headers (Bot Management) -> category preferred.
 	if name, ok := verifiedBot(botReq(map[string]string{
 		"Cf-Verified-Bot": "true", "Cf-Verified-Bot-Category": "Search Engine Crawler", "User-Agent": "x",
 	})); !ok || name != "Search Engine Crawler" {
 		t.Errorf("cf category: got (%q, %v); want (Search Engine Crawler, true)", name, ok)
 	}
 
-	// Verified but no category and no UA → a generic label, still flagged.
+	// Verified but no category and no UA -> a generic label, still flagged.
 	if name, ok := verifiedBot(botReq(map[string]string{"Cf-Verified-Bot": "1"})); !ok || name != "verified" {
 		t.Errorf("verified no name: got (%q, %v); want (verified, true)", name, ok)
 	}

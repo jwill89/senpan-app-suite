@@ -15,7 +15,7 @@ namespace SenpanCompanion.Services;
 /// </summary>
 internal static class TokenProtector
 {
-    // CRYPTPROTECT_UI_FORBIDDEN — never show a UI prompt (we run headless of any dialog).
+    // CRYPTPROTECT_UI_FORBIDDEN - never show a UI prompt (we run headless of any dialog).
     private const int UiForbidden = 0x1;
 
     /// <summary>

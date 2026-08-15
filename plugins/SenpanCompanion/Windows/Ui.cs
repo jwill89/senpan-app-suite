@@ -17,7 +17,7 @@ namespace SenpanCompanion.Windows;
 /// </summary>
 internal static class Ui
 {
-    // ── palette ────────────────────────────────────────────────────────────────
+    // -- palette ----------------------------------------------------------------
     // Mirrors the web admin dashboard's default dark theme
     // (frontend/src/assets/styles/tokens.css) so the plugin reads as the same product.
     public static readonly Vector4 SectionColor = Rgb(0xD6, 0xBD, 0xAE);         // --highlight (warm tan)
@@ -47,7 +47,7 @@ internal static class Ui
 
     private static Vector4 Rgb(byte r, byte g, byte b) => new(r / 255f, g / 255f, b / 255f, 1f);
 
-    // ── icons ──────────────────────────────────────────────────────────────────
+    // -- icons ------------------------------------------------------------------
 
     /// <summary>Render a FontAwesome glyph inline (default text colour).</summary>
     public static void Icon(FontAwesomeIcon icon)
@@ -64,7 +64,7 @@ internal static class Ui
             ImGui.TextUnformatted(icon.ToIconString());
     }
 
-    // ── section headers ────────────────────────────────────────────────────────
+    // -- section headers --------------------------------------------------------
 
     /// <summary>A non-collapsible section header: icon + gold label + rule.</summary>
     public static void Section(FontAwesomeIcon icon, string label)
@@ -96,12 +96,12 @@ internal static class Ui
     /// <summary>Indent a section's body so grouped controls read as one section.</summary>
     public static IDisposable Body() => ImRaii.PushIndent();
 
-    // ── text hierarchy ─────────────────────────────────────────────────────────
+    // -- text hierarchy ---------------------------------------------------------
 
-    /// <summary>A field label — normal (bright) text, brighter than its help.</summary>
+    /// <summary>A field label - normal (bright) text, brighter than its help.</summary>
     public static void Label(string text) => ImGui.TextUnformatted(text);
 
-    /// <summary>Secondary/help text — dimmed.</summary>
+    /// <summary>Secondary/help text - dimmed.</summary>
     public static void Help(string text) => ImGui.TextDisabled(text);
 
     /// <summary>A dimmed "(?)" that shows <paramref name="text"/> as a wrapped tooltip on hover.</summary>
@@ -118,9 +118,9 @@ internal static class Ui
         ImGui.EndTooltip();
     }
 
-    // ── buttons (three tiers) ────────────────────────────────────────────────────
+    // -- buttons (three tiers) ----------------------------------------------------
 
-    /// <summary>Primary call-to-action — the web accent (tan) fill with dark text on it.</summary>
+    /// <summary>Primary call-to-action - the web accent (tan) fill with dark text on it.</summary>
     public static bool PrimaryButton(string label, Vector2 size = default)
     {
         using (ImRaii.PushColor(ImGuiCol.Button, Primary))
@@ -130,7 +130,7 @@ internal static class Ui
             return ImGui.Button(label, size);
     }
 
-    /// <summary>Secondary action — the web olive accent-2 fill, bordered.</summary>
+    /// <summary>Secondary action - the web olive accent-2 fill, bordered.</summary>
     public static bool Button(string label, Vector2 size = default)
     {
         using (ImRaii.PushStyle(ImGuiStyleVar.FrameBorderSize, 1f))
@@ -140,7 +140,7 @@ internal static class Ui
             return ImGui.Button(label, size);
     }
 
-    /// <summary>Destructive / caution action — red + bordered.</summary>
+    /// <summary>Destructive / caution action - red + bordered.</summary>
     public static bool DangerButton(string label, Vector2 size = default)
     {
         using (ImRaii.PushStyle(ImGuiStyleVar.FrameBorderSize, 1f))
@@ -150,7 +150,7 @@ internal static class Ui
             return ImGui.Button(label, size);
     }
 
-    /// <summary>A compact secondary button (table rows, toolbars) — olive + bordered.</summary>
+    /// <summary>A compact secondary button (table rows, toolbars) - olive + bordered.</summary>
     public static bool SmallButton(string label)
     {
         using (ImRaii.PushStyle(ImGuiStyleVar.FrameBorderSize, 1f))
@@ -178,10 +178,10 @@ internal static class Ui
         return clicked;
     }
 
-    // ── badge ────────────────────────────────────────────────────────────────────
+    // -- badge --------------------------------------------------------------------
 
     /// <summary>
-    /// A small pill (framed, tinted) in <paramref name="color"/> — for a channel tag or a
+    /// A small pill (framed, tinted) in <paramref name="color"/> - for a channel tag or a
     /// run-status chip. Lays out as a single item, so <c>SameLine</c> works around it.
     /// </summary>
     public static void Badge(string text, Vector4 color)
@@ -198,7 +198,7 @@ internal static class Ui
         ImGui.Dummy(size);
     }
 
-    // ── card container ────────────────────────────────────────────────────────────
+    // -- card container ------------------------------------------------------------
 
     /// <summary>
     /// Draws <paramref name="content"/> inside a rounded, faintly-filled, bordered card.
@@ -206,7 +206,7 @@ internal static class Ui
     /// This ImGui build has no <c>ImGuiChildFlags.AutoResizeY</c>, so a bordered child
     /// can't fit variable-height content. Instead the content is laid out inside a group
     /// on a foreground draw channel, then the fill + border are painted behind it on a
-    /// background channel around the measured group rect — a version-independent card.
+    /// background channel around the measured group rect - a version-independent card.
     /// Do not place a <c>BeginTable</c> inside a box: tables manage their own draw
     /// channels and would collide with the split. Ids inside are scoped by
     /// <paramref name="id"/>.

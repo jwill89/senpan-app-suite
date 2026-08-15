@@ -15,13 +15,13 @@ func TestBuildAffiliateEmbed(t *testing.T) {
 		Location:    "Ul'dah, Steps of Nald",
 		Details:     "**Cozy** spot.",
 		EmbedColor:  "#3fb950",
-		DiscordLink: "discord.gg/abc", // no scheme → normalized to https
+		DiscordLink: "discord.gg/abc", // no scheme -> normalized to https
 		CarrdLink:   "https://tipsy.carrd.co",
 		Logo:        "images/affiliate_logos/x.png",
 		Screenshot:  "images/affiliate_images/y.png",
 		Timezone:    "America/New_York",
 		Hours: []model.AffiliateHour{
-			{Label: "Mon–Fri", Start: "18:00", End: "23:00"},
+			{Label: "Mon-Fri", Start: "18:00", End: "23:00"},
 			{Label: "Sat", Start: "20:00"}, // open-ended (no end)
 		},
 	}
@@ -60,7 +60,7 @@ func TestBuildAffiliateEmbed(t *testing.T) {
 		t.Fatalf("field[1] should be full-width Open Times: %+v", hours)
 	}
 	// Local-time (t) tokens, both labelled days present, in order.
-	for _, want := range []string{"**Mon–Fri**", "**Sat**", "<t:", ":t>"} {
+	for _, want := range []string{"**Mon-Fri**", "**Sat**", "<t:", ":t>"} {
 		if !strings.Contains(hours.Value, want) {
 			t.Errorf("open-times value missing %q: %q", want, hours.Value)
 		}
@@ -76,7 +76,7 @@ func TestBuildAffiliateEmbed(t *testing.T) {
 }
 
 func TestBuildAffiliateEmbed_Minimal(t *testing.T) {
-	// No hours/links/images/color → a valid embed with just a title.
+	// No hours/links/images/color -> a valid embed with just a title.
 	e := buildAffiliateEmbed(model.Affiliate{Name: "Bare"}, "https://x", time.Now())
 	if e.Title != "Bare" {
 		t.Errorf("title = %q", e.Title)
@@ -100,13 +100,13 @@ func TestHHMMToUnix(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	now := time.Date(2026, 7, 1, 12, 0, 0, 0, time.UTC) // summer → EDT (UTC-4)
+	now := time.Date(2026, 7, 1, 12, 0, 0, 0, time.UTC) // summer -> EDT (UTC-4)
 	u, ok := hhmmToUnix("18:00", loc, now)
 	if !ok {
 		t.Fatal("expected ok for 18:00")
 	}
 	if got := time.Unix(u, 0).UTC(); got.Hour() != 22 || got.Minute() != 0 {
-		t.Errorf("18:00 EDT → %02d:%02d UTC; want 22:00", got.Hour(), got.Minute())
+		t.Errorf("18:00 EDT -> %02d:%02d UTC; want 22:00", got.Hour(), got.Minute())
 	}
 	if _, ok := hhmmToUnix("bad", loc, now); ok {
 		t.Error("non-numeric time should fail")

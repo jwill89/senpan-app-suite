@@ -7,7 +7,7 @@ import (
 	"app-suite/internal/server"
 )
 
-// ── adminMutationResource (live-admin invalidation mapping) ──────────────────
+// -- adminMutationResource (live-admin invalidation mapping) ------------------
 
 // TestAdminMutationResource is the unit-level guard for the live-admin
 // invalidation feature: admin CRUD POSTs map to a resource key, while public,
@@ -43,8 +43,8 @@ func TestAdminMutationResource(t *testing.T) {
 	}
 
 	excluded := []string{
-		"/api/garapon/abc123/draw", // public draw — broadcasts explicitly
-		"/api/raffles/9/enter",     // public sign-up — broadcasts explicitly
+		"/api/garapon/abc123/draw", // public draw - broadcasts explicitly
+		"/api/raffles/9/enter",     // public sign-up - broadcasts explicitly
 		"/api/garapon/abc123",      // public token view
 		"/api/auth",                // auth
 		"/api/account",             // self-service
@@ -60,7 +60,7 @@ func TestAdminMutationResource(t *testing.T) {
 	}
 }
 
-// ── safeFontName ─────────────────────────────────────────────────────────────
+// -- safeFontName -------------------------------------------------------------
 
 func TestSafeFontName(t *testing.T) {
 	valid := map[string]string{
@@ -91,14 +91,14 @@ func TestSafeFontName(t *testing.T) {
 	}
 }
 
-// ── sanitizeGaraponPrizes ────────────────────────────────────────────────────
+// -- sanitizeGaraponPrizes ----------------------------------------------------
 
 func TestSanitizeGaraponPrizes(t *testing.T) {
 	t.Run("drops blanks, defaults color, floors negative rate", func(t *testing.T) {
 		out, msg := server.SanitizeGaraponPrizesForTest([]model.GaraponPrize{
-			{Name: "  ", Rate: 5},                    // blank → dropped
-			{Name: "Grand", Rate: -3, IsGrand: true}, // negative rate → 0
-			{Name: "Other", BallColor: "", Rate: 2},  // empty color → default
+			{Name: "  ", Rate: 5},                    // blank -> dropped
+			{Name: "Grand", Rate: -3, IsGrand: true}, // negative rate -> 0
+			{Name: "Other", BallColor: "", Rate: 2},  // empty color -> default
 		})
 		if msg != "" {
 			t.Fatalf("unexpected error msg: %q", msg)
@@ -138,7 +138,7 @@ func TestSanitizeGaraponPrizes(t *testing.T) {
 	})
 }
 
-// ── isDiscordSnowflake ───────────────────────────────────────────────────────
+// -- isDiscordSnowflake -------------------------------------------------------
 
 func TestIsDiscordSnowflake(t *testing.T) {
 	if !server.IsDiscordSnowflakeForTest("123456789012345678") {
@@ -151,7 +151,7 @@ func TestIsDiscordSnowflake(t *testing.T) {
 	}
 }
 
-// ── parseRaffleTime ──────────────────────────────────────────────────────────
+// -- parseRaffleTime ----------------------------------------------------------
 
 func TestParseRaffleTime(t *testing.T) {
 	if _, ok := server.ParseRaffleTimeForTest(""); ok {

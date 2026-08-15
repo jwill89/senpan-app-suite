@@ -1,10 +1,10 @@
 <script setup lang="ts">
 /**
- * Player view — the bingo board, stamp controls, win patterns, called numbers,
+ * Player view - the bingo board, stamp controls, win patterns, called numbers,
  * game details, and the halftime minigame alert.
  *
  * Receives the board id via the `cardId` route param. On mount (and when the
- * param changes) it loads the board if it isn't already loaded — this makes the
+ * param changes) it loads the board if it isn't already loaded - this makes the
  * URL directly linkable and survive a refresh. If the board can't be loaded
  * (e.g. bad/expired id) it redirects home. The WebSocket connect/disconnect is
  * driven by App.vue off the active route + loaded card.
@@ -15,6 +15,7 @@ import BingoBoard from '@/components/common/BingoBoard.vue'
 import CalledNumbers from '@/components/common/CalledNumbers.vue'
 import MarkdownText from '@/components/common/MarkdownText.vue'
 import ModalOverlay from '@/components/common/ModalOverlay.vue'
+import KonamiEgg from '@/components/player/KonamiEgg.vue'
 import StampShapePicker from '@/components/player/StampShapePicker.vue'
 import StampColorPicker from '@/components/player/StampColorPicker.vue'
 import StampOpacitySlider from '@/components/player/StampOpacitySlider.vue'
@@ -84,7 +85,7 @@ async function ensureLoaded(id: string): Promise<void> {
   if (player.playerCard && player.playerCard.id === id) return
   const details = await player.loadBoardById(id)
   if (details === null && !player.playerCard) {
-    // Failed to load (bad id) → bounce home with the error toast.
+    // Failed to load (bad id) -> bounce home with the error toast.
     void router.replace({ name: 'home' })
     return
   }
@@ -97,10 +98,10 @@ watch(
   (id) => ensureLoaded(id),
 )
 
-// ── Live connection badge ────────────────────────────────────────────────────
+// -- Live connection badge ----------------------------------------------------
 // On the player view the socket is always meant to be connected, so the brief
 // pre-connect `closed` state (before App.vue opens the connection) is shown as
-// "Connecting…" rather than an alarming red "Offline" — the player should never
+// "Connecting..." rather than an alarming red "Offline" - the player should never
 // think something is broken just because the link hasn't opened yet. A genuine
 // give-up after max reconnect attempts still raises its own "please refresh"
 // error toast (see WsClient), so no information is lost.
@@ -109,14 +110,14 @@ const connLabel = computed(() => {
     case 'open':
       return 'Live'
     case 'reconnecting':
-      return 'Reconnecting…'
+      return 'Reconnecting...'
     default: // 'connecting' or the transient pre-connect 'closed'
-      return 'Connecting…'
+      return 'Connecting...'
   }
 })
 const connClass = computed(() => (ui.wsStatus === 'closed' ? 'is-connecting' : `is-${ui.wsStatus}`))
 
-// Which BINGO columns this game can draw from (undefined when there's no game → no
+// Which BINGO columns this game can draw from (undefined when there's no game -> no
 // dimming). Columns no active pattern uses get a dim overlay in the Called Numbers
 // panel, since no number in them will be called this game.
 const calledActiveColumns = computed(() =>
@@ -126,7 +127,7 @@ const calledActiveColumns = computed(() =>
 /**
  * Leave the board and return home (App.vue disconnects the WS on the route
  * change). We navigate *first* and only clear the player's card/stamps once
- * we've actually left — so a navigation that can't complete (e.g. fetching the
+ * we've actually left - so a navigation that can't complete (e.g. fetching the
  * lazily-loaded Home chunk fails on a direct link, or its hash is stale after a
  * redeploy) can't strand the player on an emptied board. If the in-app
  * navigation fails or is aborted, fall back to a full page load to home.
@@ -135,7 +136,7 @@ async function leave(): Promise<void> {
   let failed = false
   try {
     // router.push resolves to a NavigationFailure (truthy) when aborted/
-    // redirected, and rejects when a chunk fails to load — treat both as failed.
+    // redirected, and rejects when a chunk fails to load - treat both as failed.
     failed = Boolean(await router.push({ name: 'home' }))
   } catch {
     failed = true
@@ -163,10 +164,12 @@ function onYoeverSoundToggle(): void {
 <template>
   <div>
     <div class="topbar">
-      <button class="btn-neutral btn-sm" @click="leave">← Leave</button>
+      <button class="btn-neutral btn-sm" @click="leave">
+        <font-awesome-icon :icon="['fas', 'arrow-left']" /> Leave
+      </button>
       <div class="topbar-id">
         <h2>
-          Board <span class="code-gold">{{ player.playerCard?.id }}</span>
+          Board <span class="code-highlight">{{ player.playerCard?.id }}</span>
         </h2>
         <span v-if="player.playerCard?.player_name" class="topbar-player">
           {{ player.playerCard.player_name }}
@@ -204,7 +207,7 @@ function onYoeverSoundToggle(): void {
           @cell-click="(ri, ci) => player.toggleStamp(ri, ci)"
         />
 
-        <!-- Stamp Settings & Game Controls (collapsible — set once, then tuck away) -->
+        <!-- Stamp Settings & Game Controls (collapsible - set once, then tuck away) -->
         <div class="stamp-customization">
           <button
             class="stamp-custom-toggle"
@@ -235,47 +238,43 @@ function onYoeverSoundToggle(): void {
             <SoundControls />
 
             <!-- Per-player toggles (above the action bar), for my screen only: show/
-                 hide the reaction animation, and play/mute its sound. Independent of
-                 each other and of the main Sound options; both on by default. -->
-            <div v-if="player.playerGame" class="yoever-toggles">
-              <div class="yoever-toggle">
-                <span class="label">Show "It's Yoever" effects:</span>
+                 hide the reaction animation, and play/mute its sound. Both on by
+                 default. Effects is the master - turning it off locks the sound
+                 segment, since a muted animation has no sound to control. -->
+            <div v-if="player.playerGame" class="yoever-row">
+              <span class="label">It's Yoever:</span>
+              <div class="yoever-btns">
                 <button
                   type="button"
-                  class="switch"
-                  role="switch"
-                  :class="{ on: !yoever.muted }"
-                  :aria-checked="!yoever.muted"
+                  class="toggle-btn toggle-btn--sm"
+                  :class="{ 'is-active': !yoever.muted }"
+                  :aria-pressed="!yoever.muted"
                   :title="
                     yoever.muted
-                      ? `Hidden for you — click to show the It's Yoever effect (and its sound)`
-                      : `Shown — click to hide the It's Yoever effect on your screen only`
+                      ? `Hidden for you - click to show the It's Yoever effect (and its sound)`
+                      : `Shown - click to hide the It's Yoever effect on your screen only`
                   "
                   @click="yoever.toggleShowEffects()"
                 >
-                  <span class="switch-knob"></span>
+                  <font-awesome-icon :icon="['fas', 'eye']" /> Effects
                 </button>
-              </div>
 
-              <div class="yoever-toggle" :class="{ 'is-disabled': yoever.muted }">
-                <span class="label">Play "It's Yoever" sound:</span>
                 <button
                   type="button"
-                  class="switch"
-                  role="switch"
-                  :class="{ on: !yoever.muted && yoever.soundEnabled }"
+                  class="toggle-btn toggle-btn--sm"
+                  :class="{ 'is-active': !yoever.muted && yoever.soundEnabled }"
                   :disabled="yoever.muted"
-                  :aria-checked="!yoever.muted && yoever.soundEnabled"
+                  :aria-pressed="!yoever.muted && yoever.soundEnabled"
                   :title="
                     yoever.muted
-                      ? `Turn on Show effects first to control the sound`
+                      ? `Turn Effects on first to control the sound`
                       : yoever.soundEnabled
-                        ? `On — click to mute the It's Yoever sound for you (uses your sound volume)`
-                        : `Off — click to play the It's Yoever sound for you (uses your sound volume)`
+                        ? `On - click to mute the It's Yoever sound for you (uses your sound volume)`
+                        : `Off - click to play the It's Yoever sound for you (uses your sound volume)`
                   "
                   @click="onYoeverSoundToggle"
                 >
-                  <span class="switch-knob"></span>
+                  <font-awesome-icon :icon="['fas', 'volume-high']" /> Sounds
                 </button>
               </div>
             </div>
@@ -288,19 +287,17 @@ function onYoeverSoundToggle(): void {
                 @click="player.clearAllStamps()"
               >
                 <font-awesome-icon :icon="['fas', 'eraser']" />
-                <span class="player-actions__label">Clear Board</span>
+                <span>Clear Board</span>
               </button>
 
               <button
                 class="btn-view btn-sm"
                 :disabled="exporting"
-                :title="exporting ? 'Saving card image…' : 'Save card as image'"
+                :title="exporting ? 'Saving card image...' : 'Save card as image'"
                 @click="exportCard"
               >
                 <font-awesome-icon :icon="['fas', 'download']" />
-                <span class="player-actions__label">{{
-                  exporting ? 'Saving…' : 'Save Board'
-                }}</span>
+                <span>{{ exporting ? 'Saving...' : 'Save Board' }}</span>
               </button>
 
               <!-- Broadcasts the "It's Yoever" reaction to everyone (active game +
@@ -314,15 +311,12 @@ function onYoeverSoundToggle(): void {
       <!-- Column 2: last called number + called numbers list, in one box -->
       <div class="player-col player-col-called">
         <div class="called-combined">
-          <!-- Last number the caller drew (announcement only — no board tracking) -->
+          <!-- Last number the caller drew (announcement only - no board tracking) -->
           <template v-if="player.playerGame && player.lastDrawn">
             <div class="last-called">
               <span class="last-called-label">Last Called</span>
               <div class="last-called-row">
-                <span
-                  class="last-called-flourish last-called-flourish--left"
-                  aria-hidden="true"
-                ></span>
+                <span class="last-called-flourish" aria-hidden="true"></span>
                 <div :key="player.lastDrawn.call_order" class="last-drawn last-drawn--pop">
                   <span class="letter">{{ player.lastDrawn.letter }}</span>
                   <span class="number">{{ player.lastDrawn.number }}</span>
@@ -346,7 +340,7 @@ function onYoeverSoundToggle(): void {
 
       <!-- Column 3: game details, winning patterns, misc messages -->
       <div class="player-col player-col-info">
-        <!-- Game details (Markdown) — above the win patterns, full column width -->
+        <!-- Game details (Markdown) - above the win patterns, full column width -->
         <MarkdownText
           v-if="player.playerGame && game.gameDetails"
           class="game-details"
@@ -357,26 +351,28 @@ function onYoeverSoundToggle(): void {
 
         <template v-if="!player.playerGame">
           <div v-if="player.gameEnded" class="game-over-msg">
-            <div class="go-icon"><font-awesome-icon :icon="['fad', 'trophy']" /></div>
-            <p class="go-title">We have a Winner — Thanks for Playing!</p>
-            <p class="go-sub">Numbers called this game: {{ player.endedCalledCount }}</p>
+            <div class="game-over-icon"><font-awesome-icon :icon="['fad', 'trophy']" /></div>
+            <p class="game-over-title">We have a Winner - Thanks for Playing!</p>
+            <p class="game-over-subtitle">
+              Numbers called this game: {{ player.endedCalledCount }}
+            </p>
             <br />
-            <p class="go-sub">
+            <p class="game-over-subtitle">
               Feel free to save your board and dump them into the bingo-boards channel in the Senpan
               Discord server if you want to show off your cursed boards! Afterwards, you can clear
               your board.
             </p>
             <br />
-            <p class="go-sub">
+            <p class="game-over-subtitle">
               If you'd like more refreshments, please let our staff know before the round starts!
             </p>
             <br />
-            <p class="go-sub">The next game will begin soon — hang tight!</p>
-            <button class="btn-action go-discord-btn" @click="openDiscord">
+            <p class="game-over-subtitle">The next game will begin soon - hang tight!</p>
+            <button class="btn-action game-over-discord-btn" @click="openDiscord">
               <font-awesome-icon :icon="['fab', 'discord']" /> Join the Discord Server
             </button>
           </div>
-          <div v-else class="no-game-msg">No game is currently active. Waiting…</div>
+          <div v-else class="no-game-msg">No game is currently active. Waiting...</div>
         </template>
       </div>
     </div>
@@ -390,11 +386,14 @@ function onYoeverSoundToggle(): void {
       <h3 class="mb-16">
         <font-awesome-icon :icon="['fad', 'champagne-glasses']" /> Half-Time Minigame!
       </h3>
-      <p class="text-dim mb-20">
+      <p class="text-muted mb-20">
         It's time for a half-time minigame! Please check your in-game chat for details and
         instructions!
       </p>
       <button class="btn-neutral" @click="player.showMinigameModal = false">Got it!</button>
     </ModalOverlay>
+
+    <!-- Konami-code easter egg (clears the board, on purpose) -->
+    <KonamiEgg />
   </div>
 </template>

@@ -3,10 +3,10 @@
  * establishments. Each affiliate has one or more owners, a location, opening
  * hours (multiple time ranges under a single timezone), markdown details, and a
  * logo + establishment screenshot picked from dedicated permanent image
- * categories (System → Images), exactly like raffle/garapon prize images.
+ * categories (System -> Images), exactly like raffle/garapon prize images.
  *
  * A lean cousin of the garapons store: no sub-tables, no public token view, no
- * status lifecycle — owners and hours are edited as repeatable form rows.
+ * status lifecycle - owners and hours are edited as repeatable form rows.
  */
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
@@ -53,7 +53,7 @@ export const useAffiliatesStore = defineStore('affiliates', () => {
   const savingWebhook = ref(false)
   const postingId = ref<number | null>(null)
 
-  // ── Load ───────────────────────────────────────────────────────────────────
+  // -- Load -------------------------------------------------------------------
   async function loadAffiliates(): Promise<void> {
     await withLoading(affiliatesLoading, async () => {
       const data = await endpoints.affiliates.list()
@@ -62,7 +62,7 @@ export const useAffiliatesStore = defineStore('affiliates', () => {
     })
   }
 
-  // ── Form ───────────────────────────────────────────────────────────────────
+  // -- Form -------------------------------------------------------------------
   function newAffiliateForm(): void {
     affiliateForm.value = {
       id: 0,

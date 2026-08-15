@@ -2,7 +2,7 @@ package store_test
 
 import "testing"
 
-// validBoard returns a structurally valid 5×5 bingo board (centre = FREE).
+// validBoard returns a structurally valid 5x5 bingo board (centre = FREE).
 func validBoard() [][]int {
 	return [][]int{
 		{1, 16, 31, 46, 61},

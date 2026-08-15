@@ -57,7 +57,7 @@ export const useTeaRoomsStore = defineStore('teaRooms', () => {
   const postingId = ref<number | null>(null)
   const togglingId = ref<number | null>(null)
 
-  // ── Load ───────────────────────────────────────────────────────────────────
+  // -- Load -------------------------------------------------------------------
   async function loadTeaRooms(): Promise<void> {
     await withLoading(loading, async () => {
       const data = await endpoints.teaRooms.list()
@@ -66,7 +66,7 @@ export const useTeaRoomsStore = defineStore('teaRooms', () => {
     })
   }
 
-  // ── Form ───────────────────────────────────────────────────────────────────
+  // -- Form -------------------------------------------------------------------
   function newTeaRoomForm(): void {
     teaRoomForm.value = emptyForm()
   }

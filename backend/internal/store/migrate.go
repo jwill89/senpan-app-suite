@@ -15,7 +15,7 @@ import (
 // PRAGMA user_version against this constant and runs only the migrations
 // needed to bring the database up to date. Bump this when adding a new
 // migration block.
-const schemaVersion = 53
+const schemaVersion = 55
 
 // ensureSchema reads the current PRAGMA user_version from the database and
 // applies any outstanding migrations to bring it up to schemaVersion.
@@ -47,7 +47,7 @@ func ensureSchema(db *sql.DB) error {
 			// A pre-versioning database may hold duplicate draws that predate that
 			// constraint (the dedup that guards it lives in the much later v43
 			// migration), which would fail the index build here. Collapse duplicates
-			// first — the same dedup v43 performs — so the index is built on
+			// first - the same dedup v43 performs - so the index is built on
 			// known-clean data.
 			if err := dedupeCalledNumbers(db); err != nil {
 				return err
@@ -363,13 +363,25 @@ func ensureSchema(db *sql.DB) error {
 		}
 	}
 
+	if version < 54 {
+		if err := migrateStampRallyPublicSignup(db); err != nil {
+			return err
+		}
+	}
+
+	if version < 55 {
+		if err := migrateGaraponDefaultDraws(db); err != nil {
+			return err
+		}
+	}
+
 	_, err := db.Exec(fmt.Sprintf("PRAGMA user_version = %d", schemaVersion))
 	return err
 }
 
 // migrateAffiliateSubtitle (schema v52) adds affiliates.subtitle, the optional
 // second line shown under the name (mirroring tea_rooms.subtitle). Existing rows
-// default to ''. Idempotent — skipped when the column already exists (a fresh
+// default to ''. Idempotent - skipped when the column already exists (a fresh
 // install gets it via createTables).
 func migrateAffiliateSubtitle(db *sql.DB) error {
 	if !tableExists(db, "affiliates") {
@@ -384,10 +396,48 @@ func migrateAffiliateSubtitle(db *sql.DB) error {
 	return nil
 }
 
+// migrateStampRallyPublicSignup (schema v54) adds stamp_rallies.public_signup, the
+// opt-in that lists a rally on the public sign-up page and lets participants issue
+// themselves a card. It defaults to 0 deliberately: every rally that exists when this
+// runs was built on the assumption that staff hand out its cards, so none of them may
+// silently become self-serve. Idempotent - skipped when the column already exists (a
+// fresh install gets it via createTables).
+func migrateStampRallyPublicSignup(db *sql.DB) error {
+	if !tableExists(db, "stamp_rallies") {
+		return nil
+	}
+	if hasColumn(db, "stamp_rallies", "public_signup") {
+		return nil
+	}
+	if _, err := db.Exec(`ALTER TABLE stamp_rallies ADD COLUMN public_signup INTEGER NOT NULL DEFAULT 0`); err != nil {
+		return fmt.Errorf("add stamp_rallies.public_signup: %w", err)
+	}
+	return nil
+}
+
+// migrateGaraponDefaultDraws (schema v55) adds garapons.default_draws: how many
+// draws a link issued for this garapon carries when nobody says otherwise. It is
+// what a public stamp-rally sign-up issues (there is no admin around to choose),
+// and the fallback when an admin issues a link without a number. Existing garapons
+// default to 1, which is the fallback both paths already used, so nothing changes
+// until someone sets it. Idempotent - skipped when the column already exists.
+func migrateGaraponDefaultDraws(db *sql.DB) error {
+	if !tableExists(db, "garapons") {
+		return nil
+	}
+	if hasColumn(db, "garapons", "default_draws") {
+		return nil
+	}
+	if _, err := db.Exec(`ALTER TABLE garapons ADD COLUMN default_draws INTEGER NOT NULL DEFAULT 1`); err != nil {
+		return fmt.Errorf("add garapons.default_draws: %w", err)
+	}
+	return nil
+}
+
 // migrateTeaRoomOwner (schema v53) adds tea_rooms.room_owner, the optional
 // informational "character who owns the room" line. Existing rows default to ''.
-// Idempotent — skipped when the column already exists (a fresh install gets it via
-// createTables → teaRoomsTableSQL).
+// Idempotent - skipped when the column already exists (a fresh install gets it via
+// createTables -> teaRoomsTableSQL).
 func migrateTeaRoomOwner(db *sql.DB) error {
 	if !tableExists(db, "tea_rooms") {
 		return nil
@@ -404,7 +454,7 @@ func migrateTeaRoomOwner(db *sql.DB) error {
 // migrateUserPasswordEpoch (schema v51) adds users.password_epoch, a counter
 // bumped on every password change/reset. A cookie session records the epoch it
 // was minted with; a mismatch invalidates the session, so changing a password
-// logs out every other session. Idempotent — skipped when the column already
+// logs out every other session. Idempotent - skipped when the column already
 // exists (a fresh install gets it via createTables).
 func migrateUserPasswordEpoch(db *sql.DB) error {
 	if !tableExists(db, "users") {
@@ -419,7 +469,7 @@ func migrateUserPasswordEpoch(db *sql.DB) error {
 
 // migrateGamePresetAuto (schema v50) adds the automatic-draw columns to
 // game_presets: `auto_call` (pre-select the auto toggle when the preset is
-// applied) and `auto_interval` (the "Time Between Calls" seconds). Idempotent —
+// applied) and `auto_interval` (the "Time Between Calls" seconds). Idempotent -
 // skipped when the columns already exist (e.g. a fresh install via createTables).
 func migrateGamePresetAuto(db *sql.DB) error {
 	if !tableExists(db, "game_presets") {
@@ -697,7 +747,7 @@ func migrateSortOrder(db *sql.DB) error {
 	// prior boot crashed between the ALTER and this UPDATE, the column would already
 	// exist and an existence-gated backfill would be skipped forever, stranding every
 	// row at sort_order 0. Running it unconditionally is safe because the
-	// WHERE sort_order = 0 clause makes it idempotent — once backfilled, every row's
+	// WHERE sort_order = 0 clause makes it idempotent - once backfilled, every row's
 	// sort_order is >= 1 so a re-run matches nothing.
 	_, err := db.Exec(`UPDATE patterns SET sort_order = (
 		SELECT COUNT(*) FROM patterns AS p2 WHERE p2.id <= patterns.id
@@ -716,7 +766,7 @@ func migrateWinnersCache(db *sql.DB) error {
 }
 
 // columnInfo reports whether a table has the given column and, if so, whether it
-// is declared NOT NULL — both read from PRAGMA table_info. A missing table (or a
+// is declared NOT NULL - both read from PRAGMA table_info. A missing table (or a
 // query error) reports (false, false). Backs hasColumn (idempotent ALTER TABLE
 // guards) and the v36 garapon_draws schema detection.
 func columnInfo(db *sql.DB, table, column string) (exists, notNull bool) {
@@ -945,8 +995,8 @@ func migrateBookClubTropes(db *sql.DB) error {
 // migrateRaffleImagePaths rewrites legacy raffle prize-image web paths. When the
 // uploads directory was moved out of `assets/` into a top-level `images/`
 // folder (so it no longer collides with the Vite `dist/assets/` output).
-// Old rows stored paths like "assets/images/raffles/raffle_….png"; rewrite
-// the prefix to "images/raffles/…". A leading-slash variant is handled too.
+// Old rows stored paths like "assets/images/raffles/raffle_....png"; rewrite
+// the prefix to "images/raffles/...". A leading-slash variant is handled too.
 func migrateRaffleImagePaths(db *sql.DB) error {
 	stmts := []string{
 		`UPDATE raffles SET prize_image = 'images/raffles/' || substr(prize_image, length('assets/images/raffles/') + 1)
@@ -1165,7 +1215,7 @@ func migrateStyleFlourishes(db *sql.DB) error {
 
 // migrateStyleTokens moves themes from free-form `css_content` blobs to
 // structured design-token storage. It adds a `tokens` column (a JSON map of
-// token name → CSS value), backfills it by parsing the `:root{…}` block out of
+// token name -> CSS value), backfills it by parsing the `:root{...}` block out of
 // each theme's existing css_content (keeping only known tokens), and then drops
 // the now-unused css_content column. The applied stylesheet is generated from
 // the tokens at read time (see TokensToCSS), so themes can no longer carry
@@ -1242,7 +1292,7 @@ func migrateAnnouncementLocation(db *sql.DB) error {
 }
 
 // migrateAnnouncementTimeFormats adds the optional `start_format` / `end_format`
-// columns (the Discord timestamp style letters — t|T|d|D|f|F|R — used to render
+// columns (the Discord timestamp style letters - t|T|d|D|f|F|R - used to render
 // the embed's start and end times independently; "" falls back to the defaults).
 // Idempotent.
 func migrateAnnouncementTimeFormats(db *sql.DB) error {
@@ -1260,7 +1310,7 @@ func migrateAnnouncementTimeFormats(db *sql.DB) error {
 // migrateCardCreatedAt adds the `created_at` column to the cards table so the
 // Manage Cards table can show when each card was generated. SQLite forbids a
 // CURRENT_TIMESTAMP default on ADD COLUMN, so the column is nullable here (older
-// cards predate tracking and read as NULL → blank); new inserts set it
+// cards predate tracking and read as NULL -> blank); new inserts set it
 // explicitly. Idempotent.
 func migrateCardCreatedAt(db *sql.DB) error {
 	// A fresh/partial DB may not have the cards table yet (createTables builds it
@@ -1349,7 +1399,7 @@ func migrateBookClubEventWebhooks(db *sql.DB) error {
 	// Insert-then-delete each webhook inside one transaction so a crash between
 	// the INSERT and the DELETE can't leave the setting behind for this migration
 	// (which isn't version-gated as committed until all migrations finish) to
-	// re-insert on the next boot — which would accumulate duplicate types. The
+	// re-insert on the next boot - which would accumulate duplicate types. The
 	// NOT-EXISTS guard makes it idempotent even if a prior partial run committed.
 	tx, err := db.Begin()
 	if err != nil {
@@ -1460,8 +1510,8 @@ func migrateUserLastLogin(db *sql.DB) error {
 
 // userTokensTableSQL defines the personal-access-token table backing the
 // plugin/API bearer auth (one active token per account). Only a SHA-256 hash of
-// the token is stored — the plaintext is shown to the user exactly once, at
-// generation — so a database leak can't yield usable tokens. token_prefix keeps
+// the token is stored - the plaintext is shown to the user exactly once, at
+// generation - so a database leak can't yield usable tokens. token_prefix keeps
 // the first few visible characters for at-a-glance identification in the UI. The
 // row cascade-deletes with its user. Shared between createTables (fresh install)
 // and migrateUserTokens (existing databases) so the schema is defined once.
@@ -1511,6 +1561,7 @@ const garaponsTableSQL = `CREATE TABLE IF NOT EXISTS garapons (
 	grand_prize_image TEXT NOT NULL DEFAULT '',
 	status TEXT NOT NULL DEFAULT 'open',
 	stamp_rally_id INTEGER,
+	default_draws INTEGER NOT NULL DEFAULT 1,
 	created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 )`
 
@@ -1553,7 +1604,7 @@ const garaponDrawsTableSQL = `CREATE TABLE IF NOT EXISTS garapon_draws (
 	FOREIGN KEY (player_id) REFERENCES garapon_players(id) ON DELETE SET NULL
 )`
 
-// affiliatesTableSQL defines the Affiliates table (Senpan Tea House → Affiliates):
+// affiliatesTableSQL defines the Affiliates table (Senpan Tea House -> Affiliates):
 // a partner establishment with one or more owners and opening-hours ranges stored
 // as JSON arrays (owners/hours), a single timezone anchoring those hours, markdown
 // details, and a logo + screenshot picked from the shared image library.
@@ -1613,7 +1664,7 @@ func migrateAffiliateFields(db *sql.DB) error {
 	return nil
 }
 
-// teaRoomsTableSQL defines the Tea Rooms table (Senpan Tea House → Tea Rooms): a
+// teaRoomsTableSQL defines the Tea Rooms table (Senpan Tea House -> Tea Rooms): a
 // bookable room with a per-half-hour gil cost, hashtags, markdown description, a
 // handful of status flags, an image picked from the shared library, and a Discord
 // embed accent colour. sort_order backs the admin's drag-and-drop ordering. Shared
@@ -1654,7 +1705,7 @@ func migrateTeaRooms(db *sql.DB) error {
 }
 
 // migrateTeaRoomSubtitle adds the `subtitle` column and a UNIQUE index on
-// room_number (now a required, unique public lookup key). Both idempotent — the
+// room_number (now a required, unique public lookup key). Both idempotent - the
 // column ALTER is guarded by hasColumn, the index by IF NOT EXISTS. The unique
 // index is safe to build on existing data because room_number was already
 // effectively per-room; a duplicate would surface here as a build error.
@@ -1670,7 +1721,7 @@ func migrateTeaRoomSubtitle(db *sql.DB) error {
 	return nil
 }
 
-// stampRally*TableSQL define the Stamp Rally tables (Festival → Stamp Rally). An
+// stampRally*TableSQL define the Stamp Rally tables (Festival -> Stamp Rally). An
 // event (stamp_rallies) owns its stamps and prizes (each carries a %-based placement
 // on the card image), plus tokenized per-participant cards and a collected-stamp log.
 // Stamp/prize/card/collected rows cascade-delete with their rally; a collected row
@@ -1691,6 +1742,7 @@ const stampRalliesTableSQL = `CREATE TABLE IF NOT EXISTS stamp_rallies (
 	redeem_instructions TEXT NOT NULL DEFAULT '',
 	redeem_image TEXT NOT NULL DEFAULT '',
 	status TEXT NOT NULL DEFAULT 'open',
+	public_signup INTEGER NOT NULL DEFAULT 0,
 	created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 )`
 
@@ -1740,8 +1792,8 @@ const stampRallyCardsTableSQL = `CREATE TABLE IF NOT EXISTS stamp_rally_cards (
 
 // stamp_rally_collected snapshots participant_name + stall_name so the log survives
 // card/stamp deletion. Like garapon_draws it carries both a rally_id (ON DELETE
-// CASCADE — deleting the whole rally removes its log) and a nullable card_id/stamp_id
-// (ON DELETE SET NULL — deleting just a card/stamp KEEPS the log row). UNIQUE
+// CASCADE - deleting the whole rally removes its log) and a nullable card_id/stamp_id
+// (ON DELETE SET NULL - deleting just a card/stamp KEEPS the log row). UNIQUE
 // (card_id, stamp_id) still prevents double-collection while a card exists; once the
 // card is gone its card_id is NULL and NULLs don't collide.
 const stampRallyCollectedTableSQL = `CREATE TABLE IF NOT EXISTS stamp_rally_collected (
@@ -1810,7 +1862,7 @@ func migrateStampRallyGaraponLink(db *sql.DB) error {
 }
 
 // migrateStampRallyRedeemImage (schema v48) adds the "Where to Redeem" screenshot column
-// to stamp_rallies — a card image shown to participants (alongside the redeem instructions)
+// to stamp_rallies - a card image shown to participants (alongside the redeem instructions)
 // once their card is complete. Idempotent.
 func migrateStampRallyRedeemImage(db *sql.DB) error {
 	if tableExists(db, "stamp_rallies") && !hasColumn(db, "stamp_rallies", "redeem_image") {
@@ -1825,9 +1877,9 @@ func migrateStampRallyRedeemImage(db *sql.DB) error {
 // survives the deletion of its card/stamp: it adds rally_id (ON DELETE CASCADE) +
 // participant_name/stall_name snapshots and switches card_id/stamp_id to nullable with
 // ON DELETE SET NULL. SQLite can't ALTER a foreign key, so the table is rebuilt
-// (copy → drop → rename) in a transaction, exactly like migrateGaraponDrawKeepLogs.
+// (copy -> drop -> rename) in a transaction, exactly like migrateGaraponDrawKeepLogs.
 // Only runs when the old schema is detected (no rally_id column); a fresh DB built with
-// the updated const — or a re-run — is a no-op. The table is a leaf (nothing references
+// the updated const - or a re-run - is a no-op. The table is a leaf (nothing references
 // it), so the rebuild is foreign-key-safe.
 func migrateStampRallyKeepLogs(db *sql.DB) error {
 	if !tableExists(db, "stamp_rally_collected") || hasColumn(db, "stamp_rally_collected", "rally_id") {
@@ -1887,12 +1939,12 @@ func migrateGarapons(db *sql.DB) error {
 	return nil
 }
 
-// rebuildTableTx runs a copy → drop → rename table rebuild following SQLite's
-// documented safe procedure for schema changes (lang_altertable.html §7): foreign-key
+// rebuildTableTx runs a copy -> drop -> rename table rebuild following SQLite's
+// documented safe procedure for schema changes (lang_altertable.html section 7): foreign-key
 // enforcement is disabled for the duration, the work runs in a transaction, and a
 // PRAGMA foreign_key_check verifies integrity before the commit; enforcement is then
 // restored. PRAGMA foreign_keys is a no-op inside a transaction, so it must be toggled
-// on the same connection OUTSIDE the tx — hence a dedicated conn rather than the pooled
+// on the same connection OUTSIDE the tx - hence a dedicated conn rather than the pooled
 // db (whose per-connection foreign_keys=ON would otherwise stay in force through the
 // drop/rename and risk cascade surprises). The connection is restored to foreign_keys=ON
 // before it returns to the pool.
@@ -1943,9 +1995,9 @@ func rebuildTableTx(db *sql.DB, what string, stmts []string) error {
 // migrateGaraponDrawKeepLogs rebuilds garapon_draws so player_id is nullable with
 // ON DELETE SET NULL (was NOT NULL + CASCADE), so deleting a drawing link keeps
 // its draws in the log instead of wiping them. SQLite can't ALTER a foreign key,
-// so the table is rebuilt (copy → drop → rename) inside a transaction. Only runs
+// so the table is rebuilt (copy -> drop -> rename) inside a transaction. Only runs
 // when the old schema is detected (player_id NOT NULL), so a fresh DB created with
-// the updated const — or a re-run — is a no-op. garapon_draws is a leaf table
+// the updated const - or a re-run - is a no-op. garapon_draws is a leaf table
 // (nothing references it), so the rebuild is foreign-key-safe.
 func migrateGaraponDrawKeepLogs(db *sql.DB) error {
 	// A missing column/table reports notNull=false, so this also no-ops on a DB

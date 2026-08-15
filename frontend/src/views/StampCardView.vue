@@ -2,8 +2,8 @@
 /**
  * Public Stamp Rally card (reached via a per-participant card link, /stamp-card/:token).
  *
- * Shows the participant their card with stamps rendered at their positions — the real
- * stamp art once collected, the "not stamped" placeholder until then — a password
+ * Shows the participant their card with stamps rendered at their positions - the real
+ * stamp art once collected, the "not stamped" placeholder until then - a password
  * field to collect a stamp (the server checks the stall is open), progress, and, once
  * every still-collectable stamp is accounted for, the revealed prizes with redemption
  * instructions.
@@ -44,7 +44,7 @@ const items = computed<CanvasItem[]>(() => {
   if (!c) return []
   const stamps = c.stamps.map((s) => ({
     key: `s${s.id}`,
-    // Collected → the stamp art; otherwise the optional not-stamped overlay ('' →
+    // Collected -> the stamp art; otherwise the optional not-stamped overlay ('' ->
     // nothing, so a card with its own slot placeholders shows through).
     image: s.collected ? s.image : c.rally.not_stamped_image,
     placement: s.placement,
@@ -71,9 +71,9 @@ function stampStatus(s: PublicStamp): { label: string; cls: string } {
 
 function windowText(s: PublicStamp): string {
   if (!s.active_from && !s.active_to) return ''
-  const from = s.active_from ? formatServerTimestamp(s.active_from) : '…'
-  const to = s.active_to ? formatServerTimestamp(s.active_to) : '…'
-  return `${from} – ${to}`
+  const from = s.active_from ? formatServerTimestamp(s.active_from) : '...'
+  const to = s.active_to ? formatServerTimestamp(s.active_to) : '...'
+  return `${from} - ${to}`
 }
 
 async function submit(): Promise<void> {
@@ -96,7 +96,7 @@ async function submit(): Promise<void> {
       </p>
 
       <!-- Completion banner -->
-      <div v-if="store.publicCard.completed" class="stamp-complete-banner">
+      <div v-if="store.publicCard.completed" class="callout">
         <font-awesome-icon :icon="['fad', 'champagne-glasses']" /> Your card is complete! Your
         prizes are revealed below.
       </div>
@@ -122,7 +122,7 @@ async function submit(): Promise<void> {
           :disabled="store.submitting"
         />
         <button class="btn-confirm" type="submit" :disabled="store.submitting || !password.trim()">
-          <LoadingSpinner v-if="store.submitting" label="Stamping…" />
+          <LoadingSpinner v-if="store.submitting" label="Stamping..." />
           <template v-else><font-awesome-icon :icon="['fad', 'stamp']" /> Stamp</template>
         </button>
       </form>
@@ -136,10 +136,10 @@ async function submit(): Promise<void> {
 
       <!-- Stalls + availability -->
       <h3 class="section-heading"><font-awesome-icon :icon="['fad', 'stamp']" /> Stalls</h3>
-      <ul class="stamp-stall-list mb-16">
+      <ul class="list-stack mb-16">
         <li v-for="s in store.publicCard.stamps" :key="s.id" class="stamp-stall">
           <span class="stamp-stall-name">{{ stallName(s.affiliate_name) }}</span>
-          <span v-if="windowText(s)" class="stamp-stall-window text-dim text-xs">{{
+          <span v-if="windowText(s)" class="stamp-stall-window text-muted text-xs">{{
             windowText(s)
           }}</span>
           <span :class="['status-badge', `stall-${stampStatus(s).cls}`]">{{
@@ -159,7 +159,7 @@ async function submit(): Promise<void> {
         </div>
         <MarkdownText
           v-if="store.publicCard.rally.redeem_instructions"
-          class="game-details redeem"
+          class="game-details"
           :source="store.publicCard.rally.redeem_instructions"
         />
         <figure v-if="store.publicCard.rally.redeem_image" class="stamp-redeem-where">
@@ -175,7 +175,7 @@ async function submit(): Promise<void> {
 
   <!-- Not found -->
   <div v-else-if="notFound" class="tab-body">
-    <p class="stamp-notfound text-dim">
+    <p class="stamp-notfound text-muted">
       <font-awesome-icon :icon="['fad', 'stamp']" /> This stamp card link is invalid or has been
       removed.
     </p>
@@ -183,7 +183,7 @@ async function submit(): Promise<void> {
 
   <!-- Loading -->
   <div v-else-if="store.publicLoading" class="tab-body">
-    <LoadingSpinner block label="Loading stamp card…" />
+    <LoadingSpinner block label="Loading stamp card..." />
   </div>
 </template>
 
@@ -202,15 +202,6 @@ async function submit(): Promise<void> {
   font-weight: 600;
   margin-bottom: 16px;
 }
-.stamp-complete-banner {
-  text-align: center;
-  background: color-mix(in srgb, var(--highlight) 16%, transparent);
-  border: 1px solid var(--highlight);
-  border-radius: var(--radius);
-  padding: 12px 16px;
-  margin-bottom: 16px;
-  font-size: 1.05rem;
-}
 .stamp-canvas-wrap {
   margin: 8px auto 16px;
 }
@@ -221,14 +212,6 @@ async function submit(): Promise<void> {
 }
 .stamp-password {
   flex: 1;
-}
-.stamp-stall-list {
-  list-style: none;
-  padding: 0;
-  margin: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
 }
 .stamp-stall {
   display: flex;
@@ -248,16 +231,16 @@ async function submit(): Promise<void> {
   margin-left: 8px;
 }
 .stall-ok {
-  background: var(--success, #2cb67d);
-  color: #fff;
+  background: var(--success);
+  color: var(--text-on-fill);
 }
 .stall-open {
   background: var(--highlight);
-  color: #fff;
+  color: var(--text-on-accent);
 }
 .stall-closed {
   background: var(--control-border);
-  color: var(--text-dim);
+  color: var(--text-muted);
 }
 .stamp-prizes {
   display: flex;
@@ -276,7 +259,7 @@ async function submit(): Promise<void> {
   width: 100%;
   height: 110px;
   object-fit: contain;
-  border-radius: 8px;
+  border-radius: var(--radius-media);
   background: var(--panel-raised-bg);
 }
 .stamp-notfound {

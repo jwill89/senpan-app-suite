@@ -34,7 +34,7 @@ func TestWinnersLog_DeleteAndDeleteAll(t *testing.T) {
 	env.loginAdmin(t)
 
 	// DELETE /api/winners-log/{id}: deleting a non-existent entry is a no-op
-	// success (idempotent) → 204.
+	// success (idempotent) -> 204.
 	resp := env.del(t, "/api/winners-log/12345")
 	if resp.StatusCode != http.StatusNoContent {
 		t.Errorf("delete status = %d; want 204", resp.StatusCode)
@@ -42,7 +42,7 @@ func TestWinnersLog_DeleteAndDeleteAll(t *testing.T) {
 	resp.Body.Close()
 
 	// DELETE /api/winners-log/all clears the log and returns the deleted count
-	// (0 on an empty log) → 200.
+	// (0 on an empty log) -> 200.
 	body := decodeBody(t, env.del(t, "/api/winners-log/all"))
 	if _, ok := body["deleted"]; !ok {
 		t.Errorf("delete_all response missing 'deleted' count: %v", body)

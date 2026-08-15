@@ -11,8 +11,8 @@ var DeriveFormatForTest = deriveFormat
 
 // RouteAnilistToForTest points the AniList lookup client at targetURL (a test
 // server) by rewriting each outbound request's scheme+host, so a test can keep a
-// valid, allowlisted anilist_api_url setting — exercising the read-time SSRF
-// allowlist end to end — while still reaching its local mock. Returns a restore
+// valid, allowlisted anilist_api_url setting - exercising the read-time SSRF
+// allowlist end to end - while still reaching its local mock. Returns a restore
 // func that reinstates the original transport.
 func RouteAnilistToForTest(targetURL string) (func(), error) {
 	target, err := url.Parse(targetURL)
@@ -38,7 +38,7 @@ func (rt rewriteHostRoundTripper) RoundTrip(req *http.Request) (*http.Response, 
 // package so their logic can be unit-tested without spinning up the HTTP server.
 var (
 	// AdminMutationResourceForTest maps a POST path to its invalidation resource
-	// key — the core of the live-admin invalidation feature, including the
+	// key - the core of the live-admin invalidation feature, including the
 	// deliberate exclusion of the public ".../enter" and ".../draw" paths.
 	AdminMutationResourceForTest = adminMutationResource
 	// SafeFontNameForTest validates/normalizes an uploaded font filename.
@@ -59,10 +59,10 @@ var (
 	// ParseLogLinesForTest exposes the NDJSON log parser (level/text filtering,
 	// time/level/msg promotion, malformed-line skipping) for unit testing.
 	ParseLogLinesForTest = parseLogLines
-	// SlogLevelValueForTest exposes the level-name → severity mapping.
+	// SlogLevelValueForTest exposes the level-name -> severity mapping.
 	SlogLevelValueForTest = slogLevelValue
 	// LogLevelNameForTest / ParseLogLevelNameForTest expose the runtime-level
-	// name↔slog.Level mapping used by the live DEBUG toggle.
+	// name<->slog.Level mapping used by the live DEBUG toggle.
 	LogLevelNameForTest      = logLevelName
 	ParseLogLevelNameForTest = parseLogLevelName
 	// LogClientIPForTest exposes the CF-Connecting-IP-first client-IP extraction

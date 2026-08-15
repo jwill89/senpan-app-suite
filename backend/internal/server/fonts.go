@@ -13,14 +13,14 @@ import (
 	"app-suite/internal/model"
 )
 
-// ── Font file management (Atelier → Font Upload admin tab) ────────────────────
+// -- Font file management (Atelier -> Font Upload admin tab) --------------------
 //
 // Uploaded font FILES live flat in <webRoot>/fonts and group into logical FONTS
 // by base name (see fontconvert.go). These admin-only endpoints let the admin
 // list fonts (grouped, with variants), upload files (multiple at once), rename
 // or delete individual files, edit a font's metadata (CSS family name, served
 // variant, per-font allowed sites), and delete a whole font. Uploads of a name
-// that already exists are rejected — the existing file must be deleted first —
+// that already exists are rejected - the existing file must be deleted first -
 // so an in-use font is never silently overwritten.
 //
 // Fonts are served publicly ONLY through the tokenized, origin-gated endpoints
@@ -66,7 +66,7 @@ func (s *Server) fontFileNames() []string {
 }
 
 // cssNameUnsafe reports whether s contains characters that could break out of a
-// single-quoted CSS string or font-family identifier — control characters
+// single-quoted CSS string or font-family identifier - control characters
 // (including newlines, which CSS requires be escaped as \A), quotes, backslash,
 // or the structural characters { } ; < >. Font family names (set explicitly, or
 // derived from an uploaded filename) are emitted into the generated kit.css and
@@ -89,7 +89,7 @@ func cssNameUnsafe(s string) bool {
 // accepting only permitted font extensions. See safeUploadName (uploads.go). The
 // base name (filename minus extension) becomes the default CSS font-family when
 // no custom family is set, so it is additionally rejected if it carries any
-// CSS-breaking character — closing the upload path that the family PATCH
+// CSS-breaking character - closing the upload path that the family PATCH
 // validator never sees.
 func safeFontName(name string) (string, bool) {
 	n, ok := safeUploadName(name, func(ext string) bool { return allowedFontExts[ext] })
@@ -264,12 +264,12 @@ func (s *Server) handleFontRename(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, model.NamedOKResponse{OK: true, Name: newName})
 		return
 	}
-	// Source must exist…
+	// Source must exist...
 	if _, err := os.Stat(filepath.Join(dir, name)); err != nil {
 		writeError(w, http.StatusNotFound, "Font file not found")
 		return
 	}
-	// …and the target must not (don't clobber an existing font file).
+	// ...and the target must not (don't clobber an existing font file).
 	dst := filepath.Join(dir, newName)
 	if _, err := os.Stat(dst); err == nil {
 		writeError(w, http.StatusConflict, "A font file named \""+newName+"\" already exists")
@@ -295,7 +295,7 @@ func (s *Server) handleFontRename(w http.ResponseWriter, r *http.Request) {
 type fontFamilyRequest struct {
 	// Family sets the CSS font-family name ("" resets to the base name).
 	Family *string `json:"family"`
-	// Serve sets the served variant type ("TTF"/"WOFF2"/…; "" = auto).
+	// Serve sets the served variant type ("TTF"/"WOFF2"/...; "" = auto).
 	Serve *string `json:"serve"`
 	// Origins replaces this font's external-site allowlist.
 	Origins *[]string `json:"origins"`
@@ -387,7 +387,7 @@ func (s *Server) handleFontFamilyPatch(w http.ResponseWriter, r *http.Request) {
 			norm, ok := normalizeFontOrigin(raw)
 			if !ok {
 				writeError(w, http.StatusBadRequest,
-					"Invalid site origin: "+raw+" (expected e.g. https://mysite.carrd.co — no path)")
+					"Invalid site origin: "+raw+" (expected e.g. https://mysite.carrd.co - no path)")
 				return
 			}
 			if seen[norm] {
@@ -484,19 +484,19 @@ func (s *Server) handleFontUpload(w http.ResponseWriter, r *http.Request) {
 				return header.Filename, "Unsupported type (allowed: .ttf, .otf, .woff, .woff2, .eot)"
 			}
 			dst := filepath.Join(destDir, name)
-			// Reject if a file with this name already exists — an in-use font must
+			// Reject if a file with this name already exists - an in-use font must
 			// be deleted first, never silently overwritten.
 			if _, err := os.Stat(dst); err == nil {
-				return name, "Already exists — delete the existing file first"
+				return name, "Already exists - delete the existing file first"
 			}
 			if err := saveMultipartFile(header, dst); err != nil {
 				return name, "Failed to save"
 			}
 			// Reconcile the group's WOFF2 conversion. Failure is a warning, not a
-			// rejection — an uploaded format is served for this font instead.
+			// rejection - an uploaded format is served for this font instead.
 			if err := s.refreshGroupDerivativeByKey(fontGroupKey(name)); err != nil {
 				warnings = append(warnings,
-					name+": WOFF2 conversion failed — an uploaded format will be served")
+					name+": WOFF2 conversion failed - an uploaded format will be served")
 			}
 			return name, ""
 		},

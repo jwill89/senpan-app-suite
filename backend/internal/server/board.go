@@ -12,7 +12,7 @@ import (
 //
 //	Endpoint:  GET /api/board?id=XXXXXX[&preview=1]
 //	Auth:      public
-//	Params:    id (required) — 6-char card ID; preview (optional) — skip game state
+//	Params:    id (required) - 6-char card ID; preview (optional) - skip game state
 //	Response:  {"card": Card, "game": GameState|null, "game_details": "..."}
 //	           or with preview=1: {"card": Card}
 func (s *Server) handleBoard(w http.ResponseWriter, r *http.Request) {
@@ -32,7 +32,7 @@ func (s *Server) handleBoard(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// A pending custom-card request is not yet playable — it's awaiting staff
+	// A pending custom-card request is not yet playable - it's awaiting staff
 	// approval (and payment). Block it on the public board so it can't be used
 	// early; admins may still load it (e.g. the Manage Cards preview) to review it.
 	if card.CustomStatus == "pending" && !s.isAdmin(r) {
@@ -40,7 +40,7 @@ func (s *Server) handleBoard(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Lightweight preview mode — return only the card, skip game state.
+	// Lightweight preview mode - return only the card, skip game state.
 	if r.URL.Query().Get("preview") != "" {
 		writeJSON(w, http.StatusOK, model.CardResponse{Card: *card})
 		return

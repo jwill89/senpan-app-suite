@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /**
- * Admin Server Logs tab (admin-only) — a live-tailing viewer over the backend's
+ * Admin Server Logs tab (admin-only) - a live-tailing viewer over the backend's
  * structured JSON log, rendered through the shared DataTable.
  *
  * On mount it loads a filtered snapshot from `GET /api/logs`; while open, each
@@ -11,11 +11,14 @@
  * per-page control; the "Debug" toggle flips the server's runtime level live and
  * "Live" pauses the feed for inspection.
  */
-import { computed, onMounted, ref, watch } from 'vue'
+import { onMounted, ref } from 'vue'
 import AdminPanel from '@/components/common/ui/AdminPanel.vue'
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
 import EmptyState from '@/components/common/ui/EmptyState.vue'
-import DataTable, { type DataColumn } from '@/components/common/ui/DataTable.vue'
+import DataTable, {
+  type DataColumn,
+  type DataTableView,
+} from '@/components/common/ui/DataTable.vue'
 import PaginationBar from '@/components/common/ui/PaginationBar.vue'
 import { useLogsStore, type LogRow } from '@/stores/logs'
 
@@ -33,21 +36,13 @@ const columns: DataColumn[] = [
   { key: 'msg', label: 'Path / Message' },
 ]
 
-// ── Pagination (client-side over the in-memory buffer) ────────────────────────
+// -- Pagination ---------------------------------------------------------------
+// The table paginates the in-memory buffer (and keeps the page in range as the
+// buffer shrinks on a filter change or the entry cap); this side just holds the
+// page and the totals the table reports back.
 const page = ref(1)
 const perPage = ref(50)
-const totalPages = computed(() => Math.max(1, Math.ceil(logs.entries.length / perPage.value)))
-const pagedEntries = computed(() => {
-  const start = (page.value - 1) * perPage.value
-  return logs.entries.slice(start, start + perPage.value)
-})
-// Keep the page in range as the list shrinks (filter change / 1000-entry cap).
-watch(totalPages, (tp) => {
-  if (page.value > tp) page.value = tp
-})
-function goPage(p: number): void {
-  page.value = Math.min(Math.max(1, p), totalPages.value)
-}
+const view = ref<DataTableView>({ total: 0, totalPages: 1, facets: {} })
 function resetToFirstPage(): void {
   page.value = 1
 }
@@ -66,7 +61,7 @@ function onLevelChange(): void {
   resetToFirstPage()
 }
 
-// ── Field accessors (fields is a free-form map; coerce safely) ────────────────
+// -- Field accessors (fields is a free-form map; coerce safely) ----------------
 function field(row: LogRow, key: string): unknown {
   return row.fields?.[key]
 }
@@ -84,7 +79,7 @@ function fieldNum(row: LogRow, key: string): number | null {
   return null
 }
 
-/** HTTP method label — the WebSocket upgrade path reads as "WS". */
+/** HTTP method label - the WebSocket upgrade path reads as "WS". */
 function methodLabel(row: LogRow): string {
   const m = fieldStr(row, 'method')
   if (!m) return ''
@@ -92,17 +87,17 @@ function methodLabel(row: LogRow): string {
 }
 function methodClass(row: LogRow): string {
   const m = methodLabel(row)
-  return m ? `m m-${m.toLowerCase()}` : ''
+  return m ? `log-method log-method--${m.toLowerCase()}` : ''
 }
 function statusClass(status: number): string {
-  if (status >= 500) return 'st st-5xx'
-  if (status >= 400) return 'st st-4xx'
-  if (status >= 300) return 'st st-3xx'
-  if (status >= 200) return 'st st-2xx'
-  return 'st'
+  if (status >= 500) return 'log-status log-status--5xx'
+  if (status >= 400) return 'log-status log-status--4xx'
+  if (status >= 300) return 'log-status log-status--3xx'
+  if (status >= 200) return 'log-status log-status--2xx'
+  return 'log-status'
 }
 
-/** Nanoseconds → compact human duration. */
+/** Nanoseconds -> compact human duration. */
 function formatDuration(ns: number | null): string {
   if (ns == null) return ''
   if (ns < 1000) return `${ns}ns`
@@ -122,7 +117,7 @@ function shortTime(iso: string): string {
   )
 }
 
-/** Message shown in the Message column — blank for the redundant "http request"
+/** Message shown in the Message column - blank for the redundant "http request"
  *  label (its method/path/status carry the info), otherwise the msg. */
 function messageText(row: LogRow): string {
   return row.message === 'http request' ? '' : row.message
@@ -150,20 +145,21 @@ function extraFieldsPreview(row: LogRow): string {
 
 function levelClass(level: string): string {
   const l = level.toUpperCase()
-  if (l === 'ERROR') return 'lvl lvl-error'
-  if (l === 'WARN' || l === 'WARNING') return 'lvl lvl-warn'
-  if (l === 'DEBUG') return 'lvl lvl-debug'
-  return 'lvl lvl-info'
+  if (l === 'ERROR') return 'log-level log-level--error'
+  if (l === 'WARN' || l === 'WARNING') return 'log-level log-level--warn'
+  if (l === 'DEBUG') return 'log-level log-level--debug'
+  return 'log-level log-level--info'
 }
 
 onMounted(() => void logs.load())
 </script>
 
 <template>
-  <div class="tab-body">
+  <!-- `logs-tab` scopes the diagnostic hue palette declared in <style> below. -->
+  <div class="tab-body logs-tab">
     <AdminPanel title="Server Logs" :icon="['fad', 'clipboard-clock']">
       <div class="flex-toolbar mb-12">
-        <label class="text-dim text-xs">Show:</label>
+        <label class="text-muted text-xs">Show:</label>
         <select
           v-model="logs.level"
           aria-label="Minimum level to show"
@@ -180,13 +176,13 @@ onMounted(() => void logs.load())
           v-model="logs.query"
           type="search"
           class="log-search"
-          placeholder="Filter text…"
+          placeholder="Filter text..."
           aria-label="Filter logs by text"
           @input="onQueryInput"
         />
         <button
           class="btn-sm"
-          :class="logs.live ? 'btn-success' : 'btn-secondary'"
+          :class="logs.live ? 'btn-confirm' : 'btn-view'"
           :title="logs.live ? 'Pause live tail' : 'Resume live tail'"
           @click="logs.toggleLive()"
         >
@@ -196,11 +192,11 @@ onMounted(() => void logs.load())
         </button>
         <button
           class="btn-sm"
-          :class="logs.serverLevel === 'debug' ? 'debug-on' : 'btn-secondary'"
+          :class="logs.serverLevel === 'debug' ? 'btn-caution' : 'btn-view'"
           :disabled="logs.settingLevel"
           :title="
             logs.serverLevel === 'debug'
-              ? 'Server-wide DEBUG logging is ON — click to turn off'
+              ? 'Server-wide DEBUG logging is ON - click to turn off'
               : 'Turn on server-wide DEBUG logging (live, no restart)'
           "
           @click="logs.setDebug(logs.serverLevel !== 'debug')"
@@ -208,7 +204,7 @@ onMounted(() => void logs.load())
           <font-awesome-icon :icon="['fad', 'bug']" />
           Debug {{ logs.serverLevel === 'debug' ? 'On' : 'Off' }}
         </button>
-        <label class="text-dim text-xs">Per page:</label>
+        <label class="text-muted text-xs">Per page:</label>
         <select
           v-model.number="perPage"
           aria-label="Entries per page"
@@ -220,13 +216,13 @@ onMounted(() => void logs.load())
           <option :value="100">100</option>
           <option :value="200">200</option>
         </select>
-        <span class="text-dim text-xs push-right">{{ logs.entries.length }} shown</span>
-        <button class="btn-secondary btn-sm" title="Clear the view" @click="logs.clear()">
+        <span class="text-muted text-xs push-right">{{ logs.entries.length }} shown</span>
+        <button class="btn-view btn-sm" title="Clear the view" @click="logs.clear()">
           <font-awesome-icon :icon="['fas', 'eraser']" /> Clear
         </button>
       </div>
 
-      <p v-if="logs.truncated" class="text-dim text-xs mb-12">
+      <p v-if="logs.truncated" class="text-muted text-xs mb-12">
         Showing the most recent lines; older history is in the rotated log files
         <code v-if="logs.file">({{ logs.file }})</code>.
       </p>
@@ -234,18 +230,29 @@ onMounted(() => void logs.load())
       <LoadingSpinner
         v-if="logs.loading && logs.entries.length === 0"
         block
-        label="Loading logs…"
+        label="Loading logs..."
       />
       <template v-else>
-        <DataTable :columns="columns" :rows="pagedEntries" row-key="_id" class="log-table">
+        <DataTable
+          v-model:page="page"
+          :columns="columns"
+          :rows="logs.entries"
+          row-key="_id"
+          :page-size="perPage"
+          resizable
+          class="log-table"
+          @update:view="view = $event"
+        >
           <template #cell-_expand="{ row, expanded }">
-            <span v-if="row.fields" class="log-caret">{{ expanded ? '▾' : '▸' }}</span>
+            <span v-if="row.fields" class="log-caret"
+              ><font-awesome-icon :icon="['fas', expanded ? 'chevron-down' : 'chevron-right']"
+            /></span>
           </template>
           <template #cell-time="{ row }">
             <span class="log-time" :title="row.time">{{ shortTime(row.time) }}</span>
           </template>
           <template #cell-level="{ row }">
-            <span :class="levelClass(row.level)">{{ row.level || '—' }}</span>
+            <span :class="levelClass(row.level)">{{ row.level || '-' }}</span>
           </template>
           <template #cell-method="{ row }">
             <span v-if="methodLabel(row)" :class="methodClass(row)">{{ methodLabel(row) }}</span>
@@ -265,7 +272,7 @@ onMounted(() => void logs.load())
           </template>
           <template #cell-user="{ row }">
             <span :class="actorClass(row)" :title="fieldStr(row, 'auth')">{{
-              actorLabel(row) || '—'
+              actorLabel(row) || '-'
             }}</span>
           </template>
           <template #cell-msg="{ row, expanded }">
@@ -282,7 +289,12 @@ onMounted(() => void logs.load())
             <EmptyState v-if="!logs.loading" text="No log entries match the current filters." />
           </template>
         </DataTable>
-        <PaginationBar class="mt-12" :page="page" :total-pages="totalPages" @go="goPage" />
+        <PaginationBar
+          class="mt-12"
+          :page="page"
+          :total-pages="view.totalPages"
+          @go="(p: number) => (page = p)"
+        />
       </template>
     </AdminPanel>
   </div>
@@ -296,14 +308,14 @@ onMounted(() => void logs.load())
   font-size: 0.85rem;
 }
 .log-caret {
-  color: var(--text-dim, #888);
+  color: var(--text-muted);
 }
 .log-time,
 .log-dur,
 .log-ip {
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
-  color: var(--text-dim, #888);
+  color: var(--text-muted);
   font-family: ui-monospace, monospace;
   font-size: 0.78rem;
 }
@@ -315,14 +327,14 @@ onMounted(() => void logs.load())
   max-width: 100%;
   font-size: 0.78rem;
 }
-/* Anonymous rows fade the "—"; a verified bot is italic; a plugin token (token)
+/* Anonymous rows fade the "-"; a verified bot is italic; a plugin token (token)
    auth and admin (session) auth read as normal account names. */
 .actor-anon {
-  color: var(--text-dim, #888);
+  color: var(--text-muted);
 }
 .actor-bot {
   font-style: italic;
-  color: var(--text-dim, #888);
+  color: var(--text-muted);
 }
 .log-path {
   font-family: ui-monospace, monospace;
@@ -334,7 +346,7 @@ onMounted(() => void logs.load())
 }
 .log-fields-preview {
   margin-left: 0.5rem;
-  color: var(--text-dim, #888);
+  color: var(--text-muted);
   font-family: ui-monospace, monospace;
   font-size: 0.78rem;
   opacity: 0.85;
@@ -347,87 +359,104 @@ onMounted(() => void logs.load())
   white-space: pre-wrap;
   word-break: break-word;
 }
-/* Debug toggle (on) — amber, distinct from the green Live button. */
-.debug-on {
-  color: #1a1a1a;
-  background: #e0a100;
-  border-color: #e0a100;
+/* -- Diagnostic palette -----------------------------------------------------
+   A log tailer needs severity and method to be scannable by hue, and the theme
+   tokens can't supply that: --danger/--success are dark FILL colours meant to be
+   paired with --text-on-fill, so using them as text would be near-invisible, and
+   there is no blue/violet token at all. So the hue SEEDS below stay literal, the
+   way syntax highlighting does.
+
+   What they must not do is assume a dark background - 14 of the 28 shipped themes
+   are light, and the old values (#ff6b6b, #e0a100, #5aa0e6 ...) were picked against
+   the dark default. Since themes are pure token swaps with no light/dark signal in
+   CSS, the fix is to anchor every ink to `--text`: 38% of the final colour is
+   whatever the theme guarantees is readable on this surface, and the remaining 62%
+   carries the hue. Readable on any ground, still obviously red/amber/green. */
+.logs-tab {
+  --log-ink: 62%;
+  --log-tint: 16%;
+  --log-red: color-mix(in srgb, #e53131 var(--log-ink), var(--text));
+  --log-amber: color-mix(in srgb, #f5a623 var(--log-ink), var(--text));
+  --log-blue: color-mix(in srgb, #4aa3df var(--log-ink), var(--text));
+  --log-green: color-mix(in srgb, #2ecc71 var(--log-ink), var(--text));
+  --log-orange: color-mix(in srgb, #e67e22 var(--log-ink), var(--text));
+  --log-violet: color-mix(in srgb, #9b59b6 var(--log-ink), var(--text));
 }
 /* Level badges. */
-.lvl {
+.log-level {
   display: inline-block;
   padding: 0.05rem 0.4rem;
-  border-radius: 4px;
+  border-radius: 0;
   font-size: 0.7rem;
   font-weight: 700;
   letter-spacing: 0.02em;
 }
-.lvl-error {
-  color: #ff6b6b;
-  background: rgba(229, 49, 49, 0.16);
+.log-level--error {
+  color: var(--log-red);
+  background: color-mix(in srgb, #e53131 var(--log-tint), transparent);
 }
-.lvl-warn {
-  color: #e0a100;
-  background: rgba(245, 166, 35, 0.18);
+.log-level--warn {
+  color: var(--log-amber);
+  background: color-mix(in srgb, #f5a623 var(--log-tint), transparent);
 }
-.lvl-info {
-  color: #5aa0e6;
-  background: rgba(90, 160, 230, 0.15);
+.log-level--info {
+  color: var(--log-blue);
+  background: color-mix(in srgb, #4aa3df var(--log-tint), transparent);
 }
-.lvl-debug {
-  color: var(--text-dim, #888);
-  background: rgba(127, 127, 127, 0.14);
+.log-level--debug {
+  color: var(--text-muted);
+  background: color-mix(in srgb, var(--text-muted) 14%, transparent);
 }
 /* Method badges. */
-.m {
+.log-method {
   display: inline-block;
   padding: 0.05rem 0.35rem;
-  border-radius: 4px;
+  border-radius: 0;
   font-size: 0.68rem;
   font-weight: 700;
   font-family: ui-monospace, monospace;
 }
-.m-get {
-  color: #4aa3df;
-  background: rgba(74, 163, 223, 0.15);
+.log-method--get {
+  color: var(--log-blue);
+  background: color-mix(in srgb, #4aa3df var(--log-tint), transparent);
 }
-.m-post {
-  color: #2ecc71;
-  background: rgba(46, 204, 113, 0.15);
+.log-method--post {
+  color: var(--log-green);
+  background: color-mix(in srgb, #2ecc71 var(--log-tint), transparent);
 }
-.m-put {
-  color: #e0a100;
-  background: rgba(245, 166, 35, 0.16);
+.log-method--put {
+  color: var(--log-amber);
+  background: color-mix(in srgb, #f5a623 var(--log-tint), transparent);
 }
-.m-patch {
-  color: #e67e22;
-  background: rgba(230, 126, 34, 0.16);
+.log-method--patch {
+  color: var(--log-orange);
+  background: color-mix(in srgb, #e67e22 var(--log-tint), transparent);
 }
-.m-delete {
-  color: #ff6b6b;
-  background: rgba(229, 49, 49, 0.16);
+.log-method--delete {
+  color: var(--log-red);
+  background: color-mix(in srgb, #e53131 var(--log-tint), transparent);
 }
-.m-ws {
-  color: #9b59b6;
-  background: rgba(155, 89, 182, 0.16);
+.log-method--ws {
+  color: var(--log-violet);
+  background: color-mix(in srgb, #9b59b6 var(--log-tint), transparent);
 }
 /* Status codes. */
-.st {
+.log-status {
   font-variant-numeric: tabular-nums;
   font-weight: 700;
   font-family: ui-monospace, monospace;
   font-size: 0.78rem;
 }
-.st-2xx {
-  color: #2ecc71;
+.log-status--2xx {
+  color: var(--log-green);
 }
-.st-3xx {
-  color: #4aa3df;
+.log-status--3xx {
+  color: var(--log-blue);
 }
-.st-4xx {
-  color: #e0a100;
+.log-status--4xx {
+  color: var(--log-amber);
 }
-.st-5xx {
-  color: #ff6b6b;
+.log-status--5xx {
+  color: var(--log-red);
 }
 </style>

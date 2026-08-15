@@ -119,7 +119,7 @@ describe('save() payload building', () => {
         { label: 'Two', emoji: '', url: 'https://2.com' },
         { label: 'Three', emoji: '', url: 'https://3.com' },
         { label: 'Four', emoji: '', url: 'https://4.com' },
-        { label: 'Five', emoji: '', url: 'https://5.com' }, // 6th valid → sliced off
+        { label: 'Five', emoji: '', url: 'https://5.com' }, // 6th valid -> sliced off
       ],
     })
     await s.save()
@@ -221,10 +221,10 @@ describe('editAnnouncement round-trip', () => {
     expect(s.form.time_local).toBe('19:30')
     expect(s.form.weekdays).toEqual([1, 3, 5]) // parsed + sorted
     expect(s.form.color).toBe('#ff3131') // blank colour falls back to brand default
-    expect(s.form.thumbnail).toBe('') // absent thumbnail → empty
-    expect(s.form.dynamic_dates).toBe(false) // flag round-trips (API always sends it — no omitempty)
-    expect(s.form.start_format).toBe('F') // blank start format → default
-    expect(s.form.end_format).toBe('t') // blank end format → default
+    expect(s.form.thumbnail).toBe('') // absent thumbnail -> empty
+    expect(s.form.dynamic_dates).toBe(false) // flag round-trips (API always sends it - no omitempty)
+    expect(s.form.start_format).toBe('F') // blank start format -> default
+    expect(s.form.end_format).toBe('t') // blank end format -> default
     // Buttons round-trip; each also gains a client-only `_uid` for stable
     // repeater keying (stripped again when the payload is built).
     expect(s.form.buttons).toMatchObject([{ label: 'Go', emoji: '', url: 'https://a.com' }])

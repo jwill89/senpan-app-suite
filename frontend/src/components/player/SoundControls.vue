@@ -44,8 +44,8 @@ function onVolume(e: Event): void {
           v-for="m in MODES"
           :key="m.value"
           type="button"
-          class="toggle-btn sound-mode-btn"
-          :class="{ active: player.soundMode === m.value }"
+          class="toggle-btn toggle-btn--sm"
+          :class="{ 'is-active': player.soundMode === m.value }"
           :aria-pressed="player.soundMode === m.value"
           :title="m.title"
           @click="selectMode(m.value)"
@@ -93,11 +93,6 @@ function onVolume(e: Event): void {
   display: flex;
   gap: 6px;
   flex-wrap: wrap;
-}
-/* Compact toggle buttons (reuse the global .toggle-btn intent + active state). */
-.sound-mode-btn {
-  padding: 4px 10px;
-  font-size: 0.85rem;
 }
 /* The volume row reuses the global .opacity-slider styling; only the disabled
    (sound-off) affordance is local. */

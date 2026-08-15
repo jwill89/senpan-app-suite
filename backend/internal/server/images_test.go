@@ -19,7 +19,7 @@ import (
 // passes the upload content-type check (mirrors the carrd upload tests).
 var pngBytes = []byte("\x89PNG\r\n\x1a\nimg")
 
-// postImagesUpload posts a multipart upload of name→content files to a category
+// postImagesUpload posts a multipart upload of name->content files to a category
 // dir via /api/images/upload.
 func (e *testEnv) postImagesUpload(t *testing.T, dir string, files map[string][]byte) *http.Response {
 	t.Helper()
@@ -126,7 +126,7 @@ func TestImages_CreateCategory_DefaultDir(t *testing.T) {
 	}
 	data := decodeBody(t, resp)
 	cat := data["category"].(map[string]any)
-	if cat["dir"] != "event_banners" { // spaces → underscores, punctuation dropped
+	if cat["dir"] != "event_banners" { // spaces -> underscores, punctuation dropped
 		t.Errorf("dir = %v; want event_banners", cat["dir"])
 	}
 }

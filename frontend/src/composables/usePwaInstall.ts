@@ -7,7 +7,7 @@
  *   - Chromium (Android/desktop) fires `beforeinstallprompt` before any component
  *     mounts, so we capture + defer it at MODULE load (singleton) and expose it
  *     reactively. Calling `promptInstall()` shows the native install dialog.
- *   - iOS Safari has no install API at all — apps are added via Share → "Add to
+ *   - iOS Safari has no install API at all - apps are added via Share -> "Add to
  *     Home Screen". There we surface manual instructions instead (the caller
  *     checks `needsIosInstructions`).
  *   - When the app is already running installed (standalone display-mode, or
@@ -58,7 +58,7 @@ function isStandalone(): boolean {
   )
 }
 
-/** iPhone/iPod/iPad — including iPadOS 13+ which reports as desktop Safari. */
+/** iPhone/iPod/iPad - including iPadOS 13+ which reports as desktop Safari. */
 function isIosDevice(): boolean {
   if (typeof navigator === 'undefined') return false
   const ua = navigator.userAgent
@@ -66,7 +66,7 @@ function isIosDevice(): boolean {
 }
 
 /**
- * Coarse mobile/tablet check — where "add to home screen" makes sense.
+ * Coarse mobile/tablet check - where "add to home screen" makes sense.
  *
  * We deliberately do NOT rely on the user-agent string alone: privacy-focused
  * browsers (e.g. Vivaldi) mask/omit the usual "Android"/"Mobile" tokens, so a UA
@@ -90,21 +90,21 @@ export function usePwaInstall() {
   /** A native installation prompt is available (Chromium browsers that support it). */
   const canPrompt = computed(() => deferredPrompt.value !== null)
 
-  /** iOS has no prompt API — show iOS-specific Add-to-Home-Screen instructions. */
+  /** iOS has no prompt API - show iOS-specific Add-to-Home-Screen instructions. */
   const needsIosInstructions = computed(() => ios && !standalone)
 
   /**
    * Whether the footer install link should render. Shown on any mobile device
-   * that isn't already running the installed app — NOT gated on `canPrompt`,
+   * that isn't already running the installed app - NOT gated on `canPrompt`,
    * because several Chromium-based mobile browsers (Vivaldi, Firefox, Samsung
-   * Internet, …) never fire `beforeinstallprompt` yet can still install via their
+   * Internet, ...) never fire `beforeinstallprompt` yet can still install via their
    * menu. When no native prompt is available the caller shows manual steps.
    */
   const showInstall = computed(() => mobile && !standalone && !installed.value)
 
   /**
    * Triggers the native install prompt. Resolves to the user's choice, or
-   * `'unavailable'` when there's no deferred prompt (e.g. iOS — the caller then
+   * `'unavailable'` when there's no deferred prompt (e.g. iOS - the caller then
    * shows manual instructions).
    */
   async function promptInstall(): Promise<'accepted' | 'dismissed' | 'unavailable'> {

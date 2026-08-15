@@ -12,7 +12,7 @@
            (rollback backup, overwritten each deploy), new build -> "dist".
         4. Syncs deploy/.htaccess -> <WebRoot>/.htaccess so Apache header/caching/
            rewrite changes ship with the frontend (non-fatal if it fails). The repo
-           copy is the source of truth — edit it there, not on the host.
+           copy is the source of truth - edit it there, not on the host.
 
     -Target backend:
         1. Cross-compiles a static linux/amd64 binary:
@@ -112,7 +112,7 @@ param(
     [ValidateSet('frontend', 'backend', 'both', 'main', 'all', 'plugin')]
     [string]$Target = 'frontend',
 
-    # Server-specific settings are NOT baked into this (tracked) script — nothing
+    # Server-specific settings are NOT baked into this (tracked) script - nothing
     # here reveals the host, SSH user, filesystem paths, or service name. Each is
     # resolved below from its -param, then the matching $env:DEPLOY_* variable (the
     # param default), then the untracked scripts/deploy.config.ps1. See
@@ -158,7 +158,7 @@ function Fail($msg) { Write-Host "`nERROR: $msg" -ForegroundColor Red; exit 1 }
 # Catch-all: show any unexpected terminating error instead of exiting silently.
 trap { Write-Host "`nERROR: $($_.Exception.Message)" -ForegroundColor Red; exit 1 }
 
-# ── Server settings resolution ────────────────────────────────────────────────
+# -- Server settings resolution ------------------------------------------------
 # Every environment-specific value (host, SSH user, key, webroot, service name,
 # opt dir) lives OUTSIDE this tracked script. Resolution order for each: its
 # -param, then the matching $env:DEPLOY_* variable (already applied as the param
@@ -198,7 +198,7 @@ function Restore-Env([string]$name, $value) {
 }
 
 # Run a remote command via plink. Retry once (after the 30s ufw window) ONLY when
-# the failure looks like a dropped/refused connection — not a genuine command
+# the failure looks like a dropped/refused connection - not a genuine command
 # error (so a real failure isn't misreported as a rate-limit and re-run).
 function Invoke-RemoteWithRetry([string]$cmd) {
     $out = & $plink -batch -i $KeyPath $remoteTarget $cmd 2>&1
@@ -262,7 +262,7 @@ function Invoke-Upload([int]$FileCount) {
     return [pscustomobject]@{ Ok = ($code -eq 0); Err = $err; Elapsed = $sw.Elapsed }
 }
 
-# ── Resolve paths & tools ─────────────────────────────────────────────────────
+# -- Resolve paths & tools -----------------------------------------------------
 $RepoRoot = Split-Path $PSScriptRoot -Parent
 $FrontendDir = Join-Path $RepoRoot "frontend"
 $DistDir = Join-Path $FrontendDir "dist"
@@ -296,7 +296,7 @@ $remoteOld = "$WebRoot/dist.old"
 $remotePluginDir = "$WebRoot/plugin"
 $remotePluginZipDir = "$remotePluginDir/SenpanCompanionAdmin"
 
-# ══ Frontend ══════════════════════════════════════════════════════════════════
+# == Frontend ==================================================================
 function Deploy-Frontend {
     # 1. Build
     if ($SkipBuild) {
@@ -361,7 +361,7 @@ rm -rf '$remoteNew'
     }
 
     # 5. Sync the Apache config so header/caching/rewrite changes ship with the
-    #    frontend. The repo copy (deploy/.htaccess) is the source of truth — edit it
+    #    frontend. The repo copy (deploy/.htaccess) is the source of truth - edit it
     #    there, not on the host, since this overwrites the live file on each deploy.
     #    Non-fatal: the bundle is already live, so a failed config sync only warns.
     Write-Step "Syncing .htaccess (Apache config)..."
@@ -384,7 +384,7 @@ rm -rf '$remoteNew'
     Write-Host "     Assets are content-hashed and the PWA auto-updates, so no manual cache bust is needed." -ForegroundColor DarkGray
 }
 
-# ══ Backend ═══════════════════════════════════════════════════════════════════
+# == Backend ===================================================================
 function Deploy-Backend {
     $remoteBin = "$RemoteOptDir/app-suite"
     $remoteBinNew = "$RemoteOptDir/app-suite.new"
@@ -457,11 +457,11 @@ echo active
     }
 }
 
-# ══ Refresh the local dev DB from live (after a backend deploy) ════════════════
+# == Refresh the local dev DB from live (after a backend deploy) ================
 # Runs after Deploy-Backend so the copy reflects any schema migrations the new
 # binary applied on startup. Snapshots the live DB on the host WHILE the service is
 # stopped (so no live connection is mid-write), restarts the service immediately,
-# then pulls the frozen snapshot down — the service is down only for a local file
+# then pulls the frozen snapshot down - the service is down only for a local file
 # copy, not the network transfer. Its SSH connections are a separate group; the
 # dispatcher inserts the standard 35s rate-limit pause before calling it.
 function Sync-LiveDbToDev {
@@ -527,7 +527,7 @@ The local dev DB was NOT modified.
     Write-Host "     This now holds LIVE data (real accounts, password hashes, tokens) - keep it local." -ForegroundColor DarkGray
 }
 
-# ══ Plugin (Dalamud custom repo) ══════════════════════════════════════════════
+# == Plugin (Dalamud custom repo) ==============================================
 function Deploy-Plugin {
     # 1. Build the plugin (DalamudPackager emits .../SenpanCompanionAdmin/latest.zip).
     if ($SkipBuild) {
@@ -551,7 +551,7 @@ function Deploy-Plugin {
 
     # 2. Version guardrail. Read the version DalamudPackager baked into latest.zip's
     #    manifest and make sure the repo index (pluginmaster.json) advertises the same
-    #    one — Dalamud refuses an update whose packaged version doesn't match the repo
+    #    one - Dalamud refuses an update whose packaged version doesn't match the repo
     #    ("Distributed plugin version does not match repo version"), so fail early with
     #    guidance rather than publishing a package that can't install.
     $pkgVersion = (Get-Content $PluginManifest -Raw | ConvertFrom-Json).AssemblyVersion
@@ -621,7 +621,7 @@ function Deploy-Plugin {
     Write-Host "     Bump AssemblyVersion + LastUpdate in pluginmaster.json before each release; the ?v= cache-bust and no-cache headers are automatic." -ForegroundColor DarkGray
 }
 
-# ── Dispatch ──────────────────────────────────────────────────────────────────
+# -- Dispatch ------------------------------------------------------------------
 Write-Host "Deploy target: $Target -> $remoteTarget" -ForegroundColor Yellow
 $pause = { Write-Step "Pausing 35s between targets to stay under the SSH connection rate limit..."; Start-Sleep -Seconds 35 }
 # After a backend deploy, refresh the local dev DB from live (unless -NoDbPull). Its

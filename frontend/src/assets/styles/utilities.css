@@ -1,103 +1,183 @@
 /*
- * Utilities & component helpers — layout/text/spacing utilities and the admin
+ * Utilities & component helpers - layout/text/spacing utilities and the admin
  * form + data-table primitives.
  */
 
 /* ================================================================
-   2. LAYOUT HELPERS — Quick flex, margin, and alignment utilities
+   2. LAYOUT HELPERS - Quick flex, margin, and alignment utilities
    ================================================================ */
 
 .flex {
-    display: flex;
-    align-items: center;
-    gap: 12px
+  display: flex;
+  align-items: center;
+  gap: 12px;
 }
 
 .gap-sm {
-    gap: 8px
+  gap: 8px;
 }
 
 /* Visually hidden but available to screen readers */
 .sr-only {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    padding: 0;
-    margin: -1px;
-    overflow: hidden;
-    clip: rect(0, 0, 0, 0);
-    white-space: nowrap;
-    border: 0
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 
-
 .mt {
-    margin-top: 16px
+  margin-top: 16px;
 }
 
 .mb {
-    margin-bottom: 16px
+  margin-bottom: 16px;
 }
 
 .text-center {
-    text-align: center
+  text-align: center;
 }
 
 /* ================================================================
-   3. UTILITY & COMPONENT HELPERS — Reusable single-purpose classes
+   3. UTILITY & COMPONENT HELPERS - Reusable single-purpose classes
    ================================================================ */
 
 /* Text color utilities */
-.text-dim { color: var(--text-muted) }
-.text-gold { color: var(--highlight) }
-.text-success { color: var(--success) }
-.text-sm { font-size: .85rem }
-.text-xs { font-size: .8rem }
-.fw-normal { font-weight: 400 }
-.code-gold { font-family: monospace; color: var(--highlight) }
+.text-muted {
+  color: var(--text-muted);
+}
+.text-highlight {
+  color: var(--highlight);
+}
+.text-sm {
+  font-size: 0.85rem;
+}
+.text-xs {
+  font-size: 0.8rem;
+}
+.fw-normal {
+  font-weight: 400;
+}
+.code-highlight {
+  font-family: monospace;
+  color: var(--highlight);
+}
 
 /* Margin utilities */
-.mb-4 { margin-bottom: 4px }
-.mb-6 { margin-bottom: 6px }
-.mb-8 { margin-bottom: 8px }
-.mb-10 { margin-bottom: 10px }
-.mb-12 { margin-bottom: 12px }
-.mb-16 { margin-bottom: 16px }
-.mb-20 { margin-bottom: 20px }
-.mt-8 { margin-top: 8px }
-.mt-12 { margin-top: 12px }
-.mt-16 { margin-top: 16px }
-.mt-20 { margin-top: 20px }
+.mb-4 {
+  margin-bottom: 4px;
+}
+.mb-6 {
+  margin-bottom: 6px;
+}
+.mb-8 {
+  margin-bottom: 8px;
+}
+.mb-10 {
+  margin-bottom: 10px;
+}
+.mb-12 {
+  margin-bottom: 12px;
+}
+.mb-16 {
+  margin-bottom: 16px;
+}
+.mb-20 {
+  margin-bottom: 20px;
+}
+.mt-4 {
+  margin-top: 4px;
+}
+.mt-8 {
+  margin-top: 8px;
+}
+.mt-10 {
+  margin-top: 10px;
+}
+.mt-12 {
+  margin-top: 12px;
+}
+.mt-16 {
+  margin-top: 16px;
+}
+.mt-20 {
+  margin-top: 20px;
+}
 
 /* Push an element to the far end of its flex row (e.g. a trailing count). */
-.push-right { margin-left: auto }
+.push-right {
+  margin-left: auto;
+}
 
 /* Misc single-purpose helpers (siblings of the text/margin utilities above). */
-.nowrap { white-space: nowrap }
-.w-full { width: 100% }
-.m-0 { margin: 0 }
+.nowrap {
+  white-space: nowrap;
+}
+.w-full {
+  width: 100%;
+}
+.m-0 {
+  margin: 0;
+}
 
 /* Flex layout utilities */
 /* Object: horizontal toolbar (search/filter/action controls). `.manager-toolbar`
    is the same toolbar with bottom spacing for a manager page header row. */
-.flex-toolbar, .manager-toolbar { display: flex; gap: 12px; flex-wrap: wrap; align-items: center }
-.flex-row { display: flex; gap: 16px; flex-wrap: wrap }
-.items-start { align-items: flex-start }
-.flex-center { display: flex; justify-content: center }
+.flex-toolbar,
+.manager-toolbar {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+.flex-row {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.items-start {
+  align-items: flex-start;
+}
+.flex-center {
+  display: flex;
+  justify-content: center;
+}
 
 /* Centred max-width wrapper. Frames page content on wide viewports so it isn't
    pinned hard to the left edge (admin tabs via AdminView, public pages directly).
    1200px keeps forms/tables a comfortable measure without feeling cramped. */
-.content-container { max-width: 1200px; margin-inline: auto }
-.flex-between { display: flex; justify-content: space-between; align-items: center }
-.flex-end { display: flex; justify-content: flex-end }
+.content-container {
+  max-width: 1200px;
+  margin-inline: auto;
+}
+.flex-between {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.flex-end {
+  display: flex;
+  justify-content: flex-end;
+}
 
 /* Form input helpers */
-.field-label { color: var(--text); font-size: .9rem; font-weight: 600; display: block; margin-bottom: 4px }
-.field-input-full { width: 100% }
+.field-label {
+  color: var(--text);
+  font-size: 0.9rem;
+  font-weight: 600;
+  display: block;
+  margin-bottom: 4px;
+}
+.field-input-full {
+  width: 100%;
+}
 
 /* ----------------------------------------------------------------
-   FORM & TABLE PRIMITIVES — shared structure behind the ui/ admin
+   FORM & TABLE PRIMITIVES - shared structure behind the ui/ admin
    components (FormField, FormRow, FormActions, DataTable, AdminPanel).
    Every admin form/table routes through these so pages stay consistent
    by construction. All use theme tokens so custom themes restyle them.
@@ -105,110 +185,301 @@
 
 /* FormField: a labelled control. Default vertical rhythm between fields
    (flex-row field contexts such as .home-card/.pattern-editor set their own). */
-.field { margin-bottom: 14px }
+.field {
+  margin-bottom: 14px;
+}
 
 /* Controls stretch full-width by default, replacing the per-input
    .field-input-full class. The child combinator keeps flex-row field
    layouts (.home-card/.pattern-editor) untouched. */
 .field > input,
 .field > select,
-.field > textarea,
-.field > .field-control { width: 100% }
-/* Pattern editor reuses .field as a centered flex row — keep auto width. */
+.field > textarea {
+  width: 100%;
+}
+/* Pattern editor reuses .field as a centered flex row - keep auto width. */
 .pattern-editor .field > input,
-.pattern-editor .field > select { width: auto }
+.pattern-editor .field > select {
+  width: auto;
+}
 
 /* Required-field marker appended to the label. */
-.req { color: var(--danger); margin-left: 2px }
+.req {
+  color: var(--danger);
+  margin-left: 2px;
+}
 
 /* Help text shown beneath a field's control. */
 .field-help {
-    display: block;
-    margin-top: 4px;
-    color: var(--text-muted);
-    font-size: .85rem;
-    line-height: 1.4;
+  display: block;
+  margin-top: 4px;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  line-height: 1.4;
 }
 
 /* FormRow: side-by-side fields that wrap on narrow widths. Direct field
    children share the width equally (replacing inline flex:1;min-width hacks). */
-.form-row { display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 14px }
-.form-row > .field { flex: 1; min-width: 180px; margin-bottom: 0 }
+.form-row {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+.form-row > .field {
+  flex: 1;
+  min-width: 180px;
+  margin-bottom: 0;
+}
 
 /* FormActions: a form's button row. Right-aligned by default. */
-.form-actions { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; margin-top: 4px }
-.form-actions--start { justify-content: flex-start }
-.form-actions--end { justify-content: flex-end }
-.form-actions--between { justify-content: space-between }
+.form-actions {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  align-items: center;
+  margin-top: 4px;
+}
+.form-actions--start {
+  justify-content: flex-start;
+}
+.form-actions--end {
+  justify-content: flex-end;
+}
+.form-actions--between {
+  justify-content: space-between;
+}
+
+/* DataTableToolbar: the one toolbar layout above every admin table. Inputs on
+   the left, state + actions on the right, in a fixed order - see the component
+   for why this is not left to each caller. The two groups wrap as units on a
+   narrow screen, so a table never ends up with its count orphaned above its
+   search box. */
+.dt-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.dt-toolbar-start,
+.dt-toolbar-end {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+/* The left group takes the slack, which pins the right group to the far edge on
+   every table whether or not a search box is present. */
+.dt-toolbar-start {
+  flex: 1 1 240px;
+  min-width: 0;
+}
+.dt-toolbar-end {
+  margin-left: auto;
+  flex-wrap: wrap;
+}
+/* The search box is a FIXED preferred width here, not flex-grow. Left to grow,
+   it filled whatever the right-hand group didn't need - so the same control came
+   out 360px on a table with one button and 253px on one with three, which reads
+   as three different components rather than one. It still shrinks when it has
+   to, so narrow viewports are unaffected. */
+.dt-toolbar-start .search-input {
+  flex: 0 1 320px;
+}
+
+.dt-toolbar-count {
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  white-space: nowrap;
+}
+.dt-toolbar-perpage {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.dt-toolbar-perpage select {
+  width: 70px;
+}
 
 /* DataTable: the single admin table style (merges the former .entries-table
    and .winners-log-table). Wrap scrolls horizontally on narrow screens. */
-.data-table-wrap { overflow-x: auto }
-.data-table { width: 100%; border-collapse: collapse; font-size: .85rem }
+.data-table-wrap {
+  overflow-x: auto;
+}
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
 .data-table th,
 .data-table td {
-    padding: 8px 12px;
-    text-align: left;
-    border-bottom: 1px solid var(--panel-raised-bg);
+  padding: 8px 12px;
+  text-align: left;
+  border-bottom: 1px solid var(--panel-raised-bg);
 }
-.data-table thead th { border-bottom-width: 2px }
+.data-table thead th {
+  border-bottom-width: 2px;
+}
 .data-table th {
-    color: var(--text-muted);
-    font-weight: 600;
-    user-select: none;
-    white-space: nowrap;
+  color: var(--text-muted);
+  font-weight: 600;
+  user-select: none;
+  white-space: nowrap;
 }
-.data-table th.is-sortable { cursor: pointer }
-.data-table tbody tr:hover { background: var(--panel-raised-bg) }
+.data-table th.is-sortable {
+  cursor: pointer;
+}
+
+/* Banded rows. Hover deliberately differs in HUE, not lightness: the band already
+   occupies the lightness axis, so a lighter-still hover was nearly invisible on a
+   banded row and obvious on an unbanded one. A warm --accent wash plus a 2px
+   leading edge reads identically on both. The inset shadow here is a row marker,
+   not elevation. */
+.data-table tbody tr:nth-child(even) {
+  background: color-mix(in srgb, var(--panel-raised-bg) 55%, transparent);
+}
+/* Expandable rows: the whole row is the toggle, and the detail band sits under it. */
+.data-table .dt-expandable {
+  cursor: pointer;
+}
+.data-table .dt-detail-row > td {
+  background: rgba(127, 127, 127, 0.08);
+}
+
+/* Checkbox column for bulk actions: only as wide as the control. */
+.data-table .dt-select-col {
+  width: 34px;
+  text-align: center;
+}
+
+/* Resize grip on a column's trailing edge. Full header height so it is easy to
+   grab, but its rule only appears on hover/drag so idle headers stay clean.
+   `touch-action: none` keeps a touch drag from scrolling the table instead. */
+.data-table.is-resizable th {
+  position: relative;
+}
+.dt-resizer {
+  position: absolute;
+  top: 0;
+  right: 0;
+  height: 100%;
+  width: 8px;
+  cursor: col-resize;
+  touch-action: none;
+  user-select: none;
+}
+.dt-resizer::after {
+  content: '';
+  position: absolute;
+  top: 15%;
+  right: 3px;
+  height: 70%;
+  width: 2px;
+  background: transparent;
+  transition: background 0.15s;
+}
+.dt-resizer:hover::after,
+.dt-resizer:active::after {
+  background: var(--highlight);
+}
+
+.data-table tbody tr:hover {
+  background: color-mix(in srgb, var(--accent) 15%, transparent);
+  box-shadow: inset 2px 0 0 0 var(--highlight);
+}
 
 /* Cell alignment helpers (used by DataTable column `align`). */
-.ta-left { text-align: left }
-.ta-center { text-align: center }
-.ta-right { text-align: right }
+.ta-left {
+  text-align: left;
+}
+.ta-center {
+  text-align: center;
+}
+.ta-right {
+  text-align: right;
+}
 
 /* ----------------------------------------------------------------
-   MANAGER LAYOUT — shared "manage items" page structure behind the
+   MANAGER LAYOUT - shared "manage items" page structure behind the
    ui/ components (ManagerView, ListRow, SubPageHeader, SearchInput).
    Every admin tab that lists/manages a collection uses these so the
    header, toolbar, list rows, and sub-page navigation are identical.
    ---------------------------------------------------------------- */
 
-/* ManagerView / SubPageHeader header rows share the panel-title divider. */
+/* -- PAGE-level heading - the one heading that owns the screen --------------
+   These flex ROWS hold a title beside its action buttons, so the rule sits on the
+   container. They take the loud 2px `--highlight` rule - the same weight
+   `.topbar` uses on the public views (player.css section 9) - against the 1px muted
+   hairline a panel title gets (admin.css `.admin-panel > h3`). One rule per
+   heading, always full-width; the rule's WEIGHT is what says which level you're
+   looking at, so a page title and the panel titles stacked beneath it don't
+   compete for the same emphasis. */
 .manager-header,
 .subpage-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    flex-wrap: wrap;
-    gap: 12px;
-    padding-bottom: 12px;
-    margin-bottom: 16px;
-    border-bottom: 1px solid color-mix(in srgb, var(--text-muted) 25%, transparent);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding-bottom: 12px;
+  margin-bottom: 16px;
+  border-bottom: 2px solid var(--highlight);
 }
+/* Top step of the heading scale - panel titles are set in admin.css, section
+   labels keep the browser default. */
 .manager-header > h3,
-.subpage-header > h3 { margin: 0 }
-.manager-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center }
+.subpage-header > h3 {
+  margin: 0;
+  font-size: 2rem;
+  line-height: 1.1;
+}
+
+/* Trailing period - the display-face heading convention from senpan.cafe.
+   Applied to the page- and panel-level titles only; `.section-heading`
+   (level 3) is a short label inside a panel, where a period reads as noise. */
+.manager-header > h3::after,
+.subpage-header > h3::after,
+.admin-panel > h3:first-child::after {
+  content: '.';
+}
+
+.manager-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
 
 /* Leading icon in a panel / manager / sub-page heading: space it from the title
    (these headings render `<font-awesome-icon/>{{ title }}` with no literal space). */
 .admin-panel > h3 > .svg-inline--fa:first-child,
 .manager-header > h3 > .svg-inline--fa:first-child,
-.subpage-header > h3 > .svg-inline--fa:first-child { margin-right: .45em }
+.subpage-header > h3 > .svg-inline--fa:first-child {
+  margin-right: 0.45em;
+}
 
 /* Manager toolbar = the `.flex-toolbar` object (grouped above) + header spacing. */
 .manager-toolbar {
-    margin-bottom: 16px;
+  margin-bottom: 16px;
 }
 
-/* A filter control (e.g. category <select>) in a manager toolbar — sits at its
+/* A filter control (e.g. category <select>) in a manager toolbar - sits at its
    natural width beside the grow-to-fill SearchInput. */
-.manager-filter { flex: 0 0 auto; max-width: 220px }
+.manager-filter {
+  flex: 0 0 auto;
+  max-width: 220px;
+}
 
-/* Row-action button group for DataTable cells — pinned to the far right with
+/* Row-action button group for DataTable cells - pinned to the far right with
    consistent spacing (pair with a right-aligned column). */
-.row-actions { display: flex; gap: 6px; justify-content: flex-end; align-items: center }
+.row-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  align-items: center;
+}
 
-/* ── Object: card ──────────────────────────────────────────────────────────
+/* -- Object: card ----------------------------------------------------------
    A bordered surface tile. The shared chrome lives here; the specific card
    classes (home/raffle/saved-pattern) only set their own size/radius/hover/
    layout. New tiles can use `.card` directly. */
@@ -216,94 +487,313 @@
 .home-card,
 .media-card,
 .saved-pattern {
-    background: var(--panel-bg);
-    border: 2px solid var(--panel-raised-bg);
-    border-radius: var(--radius);
-    transition: border-color .2s;
+  background: var(--panel-bg);
+  border: 2px solid var(--panel-raised-bg);
+  border-radius: var(--radius);
+  transition: border-color 0.2s;
 }
 
-/* ── Object: chip ──────────────────────────────────────────────────────────
+/* Object: sub-panel - a raised box nested INSIDE a panel, for an inline "add an
+   entry" form or a selected-item detail. Was written five times under four names
+   (`.entry-add` in three tabs, `.item-panel`, `.book-club-form`) with an identical
+   body. Distinct from `.card`, which is a bordered tile on the page surface. */
+.subpanel {
+  background: var(--panel-raised-bg);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+}
+
+/* Object: callout - a highlight-tinted notice band announcing an outcome ("you
+   won", "card complete"). Was written twice, byte-identical, as
+   `.garapon-win-banner` and `.stamp-complete-banner`. */
+.callout {
+  text-align: center;
+  background: color-mix(in srgb, var(--highlight) 16%, transparent);
+  border: 1px solid var(--highlight);
+  border-radius: var(--radius);
+  padding: 12px 16px;
+  margin-bottom: 16px;
+  font-size: 1.05rem;
+}
+
+/* Object: inline checkbox - a <label> wrapping a checkbox and its text. Was
+   written four times under three names. `--strong` is the settings-form variant
+   whose label reads as a field heading. */
+.checkbox-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
+.checkbox-inline input {
+  cursor: pointer;
+}
+.checkbox-inline--strong {
+  font-weight: 600;
+  user-select: none;
+}
+
+/* Object: stacked list - a <ul>/<ol> with its markers and indent removed, laid out
+   as a vertical stack. */
+.list-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+/* ---------------------------------------------------------------------------
+   FILE BROWSER - the upload/grid/delete UI shared by System -> Images and
+   Atelier -> Carrd Upload. Both tabs are the same media manager; every rule below
+   was byte-identical in the two components under a `carrd-` and an `image-`
+   prefix. Named `file-` rather than `media-` because `.media-card` is already the
+   raffle tile and `.media-tile` the square thumbnail inside one of these cards.
+   --------------------------------------------------------------------------- */
+.file-dropzone {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 28px;
+  margin-bottom: 16px;
+  border: 2px dashed var(--panel-raised-bg);
+  border-radius: var(--radius);
+  color: var(--text-muted);
+  cursor: pointer;
+  transition:
+    border-color 0.15s,
+    background 0.15s;
+}
+.file-dropzone:hover {
+  border-color: var(--highlight);
+}
+.file-dropzone.is-dragover {
+  border-color: var(--highlight);
+  background: color-mix(in srgb, var(--highlight) 12%, transparent);
+  color: var(--highlight);
+}
+/* Images can be dropped only once a category is chosen. */
+.file-dropzone.is-disabled {
+  opacity: 0.5;
+  pointer-events: none;
+}
+.file-dropzone .svg-inline--fa {
+  font-size: 1.6rem;
+}
+
+/* Responsive tile grid; the tile itself is `.media-tile` inside `.media-tile-wrap`. */
+.file-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 14px;
+}
+.file-card {
+  margin: 0;
+  background: var(--panel-raised-bg);
+  border-radius: var(--radius);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+.file-card-body {
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.file-name {
+  font-size: 0.78rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Delete control sits in the thumbnail corner so the caption row has space for a
+   full-width Copy URL button (which would otherwise wrap in a narrow cell). */
+.file-del-overlay {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: color-mix(in srgb, #000 55%, transparent);
+  color: #fff;
+  cursor: pointer;
+  opacity: 0.85;
+  transition:
+    background 0.15s,
+    opacity 0.15s;
+}
+.file-del-overlay:hover {
+  opacity: 1;
+  background: var(--danger);
+}
+/* Full-width copy action under each card. Fill + hover come from the `.btn-view`
+   intent; only the full-width layout belongs here. */
+.file-copy-btn {
+  margin-top: 4px;
+  width: 100%;
+  white-space: nowrap;
+}
+
+/* Object: link-button - a real <button> that reads as a link, for an action offered
+   mid-sentence ("add one with the Webhook button"). Not a ghost button: it has no
+   border or fill to mistake for one, and it never sits in a button row. */
+.link-btn {
+  background: none;
+  border: none;
+  color: var(--accent);
+  cursor: pointer;
+  text-decoration: underline;
+  padding: 0;
+  font: inherit;
+}
+
+/* -- Object: chip ----------------------------------------------------------
    A raised, rounded, clickable pill with a transparent border that lights up to
    `--highlight` on hover. Shared by the card manager (card-id chips) and the
    Carrd manager (sub-folder chips); each consumer keeps only its own layout/
-   extras. `.chip-del` is the muted→danger delete affordance that sits inside a
+   extras. `.chip-del` is the muted->danger delete affordance that sits inside a
    chip. */
 .chip {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    background: var(--panel-raised-bg);
-    color: var(--text);
-    border: 1px solid transparent;
-    border-radius: var(--radius);
-    padding: 8px 12px;
-    cursor: pointer;
-    transition: border-color .15s;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--panel-raised-bg);
+  color: var(--text);
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  padding: 8px 12px;
+  cursor: pointer;
+  transition: border-color 0.15s;
 }
-.chip:hover { border-color: var(--highlight) }
-.chip-del { color: var(--text-muted); cursor: pointer }
-.chip-del:hover { color: var(--danger) }
+.chip:hover {
+  border-color: var(--highlight);
+}
+.chip-del {
+  color: var(--text-muted);
+  cursor: pointer;
+}
+.chip-del:hover {
+  color: var(--danger);
+}
 
-/* Prominent "×" delete glyph — danger by default, dims to `--text` on hover (the
+/* Prominent "x" delete glyph - danger by default, dims to `--text` on hover (the
    loud counterpart to the subtle `.chip-del`). Shared by the card-id chips and
    the saved-pattern cards; each consumer adds its own positioning/margin. */
-.del-x { color: var(--danger); font-weight: 700; font-size: 1.1rem; line-height: 1; cursor: pointer; transition: color .12s }
-.del-x:hover { color: var(--text) }
+.del-x {
+  color: var(--danger);
+  font-weight: 700;
+  font-size: 1.1rem;
+  line-height: 1;
+  cursor: pointer;
+  transition: color 0.12s;
+}
+.del-x:hover {
+  color: var(--text);
+}
 
-/* ── Object: toggle button ─────────────────────────────────────────────────
+/* -- Object: toggle button -------------------------------------------------
    A segmented/selectable pill: a raised pill with a transparent border that
    lights to `--accent` on hover and fills with `--accent` / `--text-on-accent`
    when `.active`. Shared by the announcement weekday picker and the book-club
    view switcher; stack them in a flex container. (Distinct from `.chip`, whose
-   `.active` is a ring rather than a fill — toggles read as a chosen segment.) */
+   `.active` is a ring rather than a fill - toggles read as a chosen segment.) */
 .toggle-btn {
-    background: var(--panel-raised-bg);
-    color: var(--text);
-    border: 1px solid transparent;
-    border-radius: var(--radius);
-    padding: 8px 16px;
-    font-weight: 600;
-    cursor: pointer;
-    transition: border-color .15s;
+  background: var(--panel-raised-bg);
+  color: var(--text);
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  padding: 8px 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color 0.15s;
 }
-.toggle-btn:hover { border-color: var(--accent) }
-.toggle-btn.active { background: var(--accent); color: var(--text-on-accent); border-color: var(--accent) }
+.toggle-btn:hover {
+  border-color: var(--accent);
+}
+.toggle-btn.is-active {
+  background: var(--accent);
+  color: var(--text-on-accent);
+  border-color: var(--accent);
+}
 
-/* ── Object: switch ────────────────────────────────────────────────────────
+/* Compact variant for a segment that shares a labeled row with other controls
+   rather than standing on its own - the player's Sound and "It's Yoever" rows. */
+.toggle-btn--sm {
+  padding: 4px 10px;
+  font-size: 0.85rem;
+}
+
+/* A segment can be locked by something upstream (the Yoever sound segment is
+   pointless while its effects are hidden), so it needs its own dimmed state -
+   `.toggle-btn` carries no fill of its own to read as unavailable. */
+.toggle-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.toggle-btn:disabled:hover {
+  border-color: transparent;
+}
+
+/* -- Object: switch --------------------------------------------------------
    An on/off sliding switch: a `<button>` carrying `.switch` (+ `.on` when set)
    wrapping a single `<span class="switch-knob">`. Fills with `--accent` and
-   slides the knob right when on; `:disabled` dims it. Shared by the player's
-   Yoever effect toggles and the secondary-stamp toggle. (Distinct from
-   `.toggle-btn`, which is a labelled segment — this one carries no text.) */
+   slides the knob right when on; `:disabled` dims it. Used by the player's
+   secondary-stamp toggle. (Distinct from
+   `.toggle-btn`, which is a labelled segment - this one carries no text.) */
 .switch {
-    position: relative;
-    width: 40px;
-    height: 22px;
-    flex: 0 0 auto;
-    padding: 0;
-    border: 1px solid var(--control-border);
-    border-radius: 999px;
-    background: var(--panel-raised-bg);
-    cursor: pointer;
-    transition: background .15s, border-color .15s;
+  position: relative;
+  width: 40px;
+  height: 22px;
+  flex: 0 0 auto;
+  padding: 0;
+  border: 1px solid var(--control-border);
+  border-radius: 999px;
+  background: var(--panel-raised-bg);
+  cursor: pointer;
+  transition:
+    background 0.15s,
+    border-color 0.15s;
 }
-.switch.on { background: var(--accent); border-color: var(--accent) }
-.switch:focus-visible { outline: 2px solid var(--highlight); outline-offset: 2px }
-.switch:disabled { opacity: .45; cursor: not-allowed }
+.switch.is-on {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+.switch:focus-visible {
+  outline: 2px solid var(--highlight);
+  outline-offset: 2px;
+}
+.switch:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
 .switch-knob {
-    position: absolute;
-    top: 50%;
-    left: 2px;
-    transform: translateY(-50%);
-    width: 16px;
-    height: 16px;
-    border-radius: 50%;
-    background: var(--panel-bg);
-    transition: left .15s;
+  position: absolute;
+  top: 50%;
+  left: 2px;
+  transform: translateY(-50%);
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--panel-bg);
+  transition: left 0.15s;
 }
-.switch.on .switch-knob { left: calc(100% - 18px); background: var(--text-on-accent) }
+.switch.is-on .switch-knob {
+  left: calc(100% - 18px);
+  background: var(--text-on-accent);
+}
 
-/* ── Object: badge ─────────────────────────────────────────────────────────
+/* -- Object: badge ---------------------------------------------------------
    A small uppercase pill. The shared chrome lives here; the specific badge
    classes (and a `.badge` used directly) only set colours/margins/states. */
 .badge,
@@ -312,158 +802,445 @@
 .conn-badge,
 .style-active-badge,
 .style-public-badge,
-.cl-badge {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    vertical-align: middle;
-    padding: 2px 10px;
-    border-radius: 999px;
-    font-size: .7rem;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: .04em;
-    white-space: nowrap;
+.changelog-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  vertical-align: middle;
+  padding: 2px 10px;
+  border-radius: 0;
+  /* Named, not inherited: `.live-badge` sits INSIDE the Current Game panel's <h3>,
+     so inheriting would hand a 0.7rem badge the display serif. A badge is always
+     chrome, never a display-face element. */
+  font-family: var(--body-font);
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
 }
 
 /* Shared badge state modifiers (colours only; chrome from `.badge`). The
    announcement + book-club status pills draw from this one vocabulary instead
    of per-page classes. Tints are theme-aware via color-mix so custom themes
    restyle them. */
-.badge--accent  { background: color-mix(in srgb, var(--accent) 22%, transparent); color: var(--text) }
-.badge--success { background: color-mix(in srgb, var(--success) 30%, transparent); color: var(--text) }
-.badge--warning { background: color-mix(in srgb, var(--warning) 22%, transparent); color: var(--text) }
-.badge--danger  { background: color-mix(in srgb, var(--danger) 26%, transparent); color: var(--text) }
-.badge--muted   { background: var(--panel-bg); color: var(--text-muted); border: 1px solid var(--panel-raised-bg) }
+.badge--accent {
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
+  color: var(--text);
+}
+.badge--success {
+  background: color-mix(in srgb, var(--success) 30%, transparent);
+  color: var(--text);
+}
+.badge--warning {
+  background: color-mix(in srgb, var(--warning) 22%, transparent);
+  color: var(--text);
+}
+.badge--danger {
+  background: color-mix(in srgb, var(--danger) 26%, transparent);
+  color: var(--text);
+}
+.badge--muted {
+  background: var(--panel-bg);
+  color: var(--text-muted);
+  border: 1px solid var(--panel-raised-bg);
+}
 
-/* ── Object: media (image picker, thumbnail, cover, placeholder) ────────────
+/* -- Object: media (image picker, thumbnail, cover, placeholder) ------------
    Shared by the announcement + book-club image fields (reuse-an-image pickers,
    cover/preview images, and the empty placeholder shown when none is set). */
 .img-picker {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-    max-height: 180px;
-    overflow-y: auto;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  max-height: 180px;
+  overflow-y: auto;
 }
 .img-thumb {
-    width: 72px;
-    height: 48px;
-    padding: 0;
-    border: 2px solid var(--panel-raised-bg);
-    border-radius: 6px;
-    overflow: hidden;
-    cursor: pointer;
-    background: var(--panel-bg);
+  width: 72px;
+  height: 48px;
+  padding: 0;
+  border: 2px solid var(--panel-raised-bg);
+  border-radius: var(--radius-media);
+  overflow: hidden;
+  cursor: pointer;
+  background: var(--panel-bg);
 }
 .img-thumb img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-    display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
 }
 .img-thumb:hover,
-.img-thumb.active {
-    border-color: var(--accent);
+.img-thumb.is-active {
+  border-color: var(--accent);
 }
 /* Placeholder box shown in a cover/preview slot when no image is set. A dashed
    inset + larger, dimmed glyph reads as a deliberate "no image" state rather
    than a broken/missing graphic. */
 .media-empty {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: var(--panel-bg);
-    color: var(--text-muted);
-    border: 1px dashed var(--control-border);
-    font-size: 1.4rem;
-    opacity: .7;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--panel-bg);
+  color: var(--text-muted);
+  border: 1px dashed var(--control-border);
+  font-size: 1.4rem;
+  opacity: 0.7;
 }
-/* Cover/preview image — shared chrome; a size modifier sets the dimensions so
+/* Cover/preview image - shared chrome; a size modifier sets the dimensions so
    every announcement/book-club cover matches. Pairs with `.media-empty` for the
-   no-image placeholder (which keeps its own centred flex display — base sets no
+   no-image placeholder (which keeps its own centred flex display - base sets no
    `display`, so the inline imgs and the flex placeholder both render correctly). */
-.media-cover { object-fit: cover; border-radius: 6px; flex: 0 0 auto }
-.media-cover--wide { width: 120px; height: 68px }                        /* 16:9 — announcement covers */
-.media-cover--book { width: 64px; height: 90px }                         /* book portrait — reading-list item */
-.media-cover--book-sm { width: 36px; height: 50px; border-radius: 4px }  /* small — lookup result */
-.media-cover--book-lg { width: 100px; height: 140px; display: block; margin-bottom: 8px } /* large — form preview */
+.media-cover {
+  object-fit: cover;
+  border-radius: var(--radius-media);
+  flex: 0 0 auto;
+}
+.media-cover--wide {
+  width: 120px;
+  height: 68px;
+} /* 16:9 - announcement covers */
+.media-cover--book {
+  width: 64px;
+  height: 90px;
+} /* book portrait - reading-list item */
+.media-cover--book-sm {
+  width: 36px;
+  height: 50px;
+  border-radius: var(--radius-media);
+} /* small - lookup result */
+.media-cover--book-lg {
+  width: 100px;
+  height: 140px;
+  display: block;
+  margin-bottom: 8px;
+} /* large - form preview */
 
 /* SearchInput: leading icon + grow-to-fill input. */
 .search-input {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    flex: 1;
-    min-width: 160px;
-    max-width: 360px;
-    color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 160px;
+  max-width: 360px;
+  color: var(--text-muted);
 }
-.search-input input { flex: 1 }
+.search-input input {
+  flex: 1;
+}
 
-/* ListRow: one item — optional media (left), body, actions pinned far right.
+/* ListRow: one item - optional media (left), body, actions pinned far right.
    The row stretches so a media accent (e.g. a color swatch bar) can run its full
    height; body + actions stay top-aligned. */
-.list-rows { display: flex; flex-direction: column; gap: 12px }
-.list-row {
-    display: flex;
-    align-items: stretch;
-    gap: 12px;
-    background: var(--panel-raised-bg);
-    border-radius: var(--radius);
-    padding: 12px;
+.list-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
-.list-row-media { display: flex; flex: 0 0 auto; gap: 8px }
-.list-row-body { flex: 1; min-width: 0; align-self: flex-start }
+.list-row {
+  display: flex;
+  align-items: stretch;
+  gap: 12px;
+  background: var(--panel-raised-bg);
+  border-radius: var(--radius);
+  padding: 12px;
+}
+.list-row-media {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 8px;
+}
+.list-row-body {
+  flex: 1;
+  min-width: 0;
+  align-self: flex-start;
+}
 .list-row-actions {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 6px;
-    align-items: flex-start;
-    justify-content: flex-end;
-    margin-left: auto;
-    align-self: flex-start;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: flex-start;
+  justify-content: flex-end;
+  margin-left: auto;
+  align-self: flex-start;
+}
+
+/* The parts OF a manager row. Affiliates, Announcements, Book Club and Tea Rooms
+   each had their own byte-identical copy of these under a per-tab prefix
+   (`.aff-title`, `.ann-title`, `.room-title`, `.bc-item-title`, ...). One object
+   each now, so a change lands everywhere instead of in one tab.
+
+   `--inline` is for a meta line that is a wrapping row of chips/badges rather than
+   a single sentence. */
+.list-row-swatch {
+  width: 6px;
+  align-self: stretch;
+  border-radius: 0;
+  flex: 0 0 auto;
+}
+.list-row-title {
+  margin: 0 0 4px;
+}
+.list-row-meta {
+  margin: 0 0 4px;
+}
+.list-row-meta--inline {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+
+/* A square media tile in a picker/browser grid (Images, Carrd upload). Distinct
+   from `.img-thumb`, which is the fixed 72x48 thumbnail inside a form's image
+   picker. */
+.media-tile-wrap {
+  position: relative;
+}
+.media-tile {
+  display: block;
+  aspect-ratio: 1 / 1;
+  background: var(--panel-bg);
+}
+/* The image fills the square without cropping - a thumbnail is a preview of the
+   whole asset, not a crop of it. Was written identically in both media managers. */
+.media-tile img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+/* A colour field: native swatch input beside its hex read-out. Was implemented
+   three times (affiliates, announcements, tea rooms) with the copies having drifted
+   apart - one used a different monospace stack and skipped the uppercase, so the
+   same control rendered differently on one tab. */
+.color-field {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.color-field-input {
+  width: 48px;
+  height: 36px;
+  padding: 2px;
+  border: 1px solid var(--panel-raised-bg);
+  border-radius: 0;
+  background: var(--panel-bg);
+  cursor: pointer;
+}
+.color-field-hex {
+  font-family: monospace;
+  text-transform: uppercase;
+  color: var(--text-muted);
 }
 
 /* Live font preview panel in settings */
 .font-preview {
-    background: var(--panel-raised-bg);
-    border-radius: var(--radius);
-    padding: 16px 20px;
-    text-align: center;
-    color: var(--highlight);
-    line-height: 1.4
+  background: var(--panel-raised-bg);
+  border-radius: var(--radius);
+  padding: 16px 20px;
+  text-align: center;
+  color: var(--highlight);
+  line-height: 1.4;
 }
 
 /* Modal helpers */
-.modal-centered { max-width: 440px; text-align: center }
+.modal-centered {
+  max-width: 440px;
+  text-align: center;
+}
 
 /* Scaled-down board preview (admin card preview modal) */
-.board-preview { transform: scale(.85); transform-origin: top center; margin-bottom: -15% }
+.board-preview {
+  transform: scale(0.85);
+  transform-origin: top center;
+  margin-bottom: -15%;
+}
 
 /* Smaller pattern mini cells for game start pattern picker */
-.pattern-mini-sm .pattern-mini-cell { width: 10px; height: 10px }
+.pattern-mini-sm .pattern-mini-cell {
+  width: 10px;
+  height: 10px;
+}
+
+/* -- Object: form alert ----------------------------------------------------
+   An inline callout inside a form: a tinted box with a leading status icon,
+   carrying a validation error (`--danger`) or a caution the reader must act on
+   (`--warning`). Distinct from a toast, which is transient and lives in the
+   corner - this one sits in the flow, next to what it is about, and stays.
+   Promoted out of CardRequestsView when the stamp-rally sign-up needed the same
+   thing. */
+.form-alert {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 14px;
+  border-radius: var(--radius, 8px);
+  font-size: 0.9rem;
+  margin-bottom: 14px;
+  color: var(--text);
+}
+.form-alert-danger {
+  background: color-mix(in srgb, var(--danger) 15%, transparent);
+  border: 1px solid var(--danger);
+}
+.form-alert-warning {
+  background: color-mix(in srgb, var(--warning) 15%, transparent);
+  border: 1px solid var(--warning);
+}
+.form-alert-icon {
+  margin-top: 2px;
+  flex-shrink: 0;
+}
+.form-alert-danger .form-alert-icon {
+  color: var(--danger);
+}
+.form-alert-warning .form-alert-icon {
+  color: var(--warning);
+}
+
+/* Centers a bot-check widget on its own row in a public form. */
+.turnstile-row {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 14px;
+}
+
+/* -- Public stamp-rally sign-up + link lookup -------------------------------
+   The self-service pages: pick a rally, sign up with your character name, and
+   get your card (and Garapon) links back - plus the "I lost my link" lookup. */
+.stamp-signup-body,
+.stamp-lookup-body {
+  max-width: 640px;
+  margin: 0 auto;
+}
+
+.stamp-signup-card-image {
+  display: block;
+  width: 100%;
+  max-width: 420px;
+  margin: 0 auto 16px;
+  border-radius: var(--radius-media);
+}
+
+/* "This rally comes with a Garapon draw" note above the form. */
+.stamp-signup-note {
+  background: var(--panel-raised-bg);
+  border-radius: var(--radius);
+  padding: 10px 14px;
+}
+
+.stamp-signup-form {
+  background: var(--panel-bg);
+  border: 1px solid var(--control-border);
+  border-radius: var(--radius);
+  padding: 20px;
+}
+.stamp-signup-form input {
+  width: 100%;
+}
+.stamp-signup-submit {
+  width: 100%;
+  margin-top: 4px;
+}
+
+/* Success panel, in the `--success` frame the raffle sign-up result uses. */
+.stamp-signup-result {
+  background: var(--panel-bg);
+  border: 2px solid var(--success);
+  border-radius: var(--radius);
+  padding: 20px;
+}
+
+/* One issued link: its label, the URL, and a copy button. The URL wraps rather
+   than scrolls - a token link is long, and someone reading it off a phone to
+   type elsewhere needs to see all of it. */
+.stamp-signup-link {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 0;
+  border-top: 1px solid color-mix(in srgb, var(--text-muted) 20%, transparent);
+}
+.stamp-signup-link-url {
+  color: var(--highlight);
+  font-size: 0.9rem;
+  overflow-wrap: anywhere;
+}
+.stamp-signup-link .btn-view {
+  align-self: flex-start;
+}
+
+/* The quiet "lost your link?" line under a list or form. */
+.stamp-signup-lookup-line {
+  margin-top: 20px;
+  text-align: center;
+  font-size: 0.9rem;
+  color: var(--text-muted);
+}
+
+.stamp-lookup-form {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+.stamp-lookup-form input {
+  flex: 1;
+  min-width: 0;
+}
+
+.stamp-lookup-results {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
 
 /* Prize image helpers (shared by the raffle + garapon detail views) and the
    raffle detail page wrapper. */
-.raffle-detail-body { max-width: 700px; margin: 0 auto }
-.prize-container { text-align: center; margin-bottom: 20px }
-.prize-img { max-width: 100%; max-height: 400px; border-radius: 12px; box-shadow: 0 4px 20px var(--shadow) }
-.prize-img-sm { max-width: 300px; max-height: 200px; border-radius: 8px }
-/* Object: gold sub-section heading. */
-.section-heading { color: var(--highlight); margin-bottom: 8px }
+.raffle-detail-body {
+  max-width: 700px;
+  margin: 0 auto;
+}
+.prize-container {
+  text-align: center;
+  margin-bottom: 20px;
+}
+.prize-img {
+  max-width: 100%;
+  max-height: 400px;
+  border-radius: var(--radius-media);
+}
+.prize-img-sm {
+  max-width: 300px;
+  max-height: 200px;
+  border-radius: var(--radius-media);
+}
+/* Object: highlight sub-section heading - level 3 of the heading scale. No separator
+   rule (the colour carries it) and the body face, because the display face is not
+   readable at this size (see base.css section 1). Uppercase + letter-spacing is what
+   makes a small label read AS a label, and the explicit size keeps the `h3` and `h4`
+   spellings identical - they were inheriting two different browser defaults. */
+.section-heading {
+  color: var(--highlight);
+  margin-bottom: 8px;
+  font-size: 0.95rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
 
 /* Empty-state drop placeholder (dashed border box) */
 .drop-placeholder {
-    padding: 16px;
-    text-align: center;
-    color: var(--text-muted);
-    font-size: .85rem;
-    border: 2px dashed var(--panel-raised-bg);
-    border-radius: 8px;
-    min-height: 80px;
-    display: flex;
-    align-items: center;
-    justify-content: center
+  padding: 16px;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  border: 2px dashed var(--panel-raised-bg);
+  border-radius: 0;
+  min-height: 80px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
-

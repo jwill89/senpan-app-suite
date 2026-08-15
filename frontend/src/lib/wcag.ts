@@ -2,16 +2,16 @@
  * WCAG 2.1 contrast auditing for themes.
  *
  * Scores the real text/background pairings a theme produces (body text, muted
- * text, links, headings, board numbers, every button intent, …) against the
+ * text, links, headings, board numbers, every button intent, ...) against the
  * WCAG 2.1 contrast minimums and returns a report the theme editor surfaces via
  * the "Check WCAG compliance" button. Mirrors the Go checker in
- * `src/cmd/themetool` — keep the pair list in sync.
+ * `src/cmd/themetool` - keep the pair list in sync.
  *
  * Thresholds: normal text AA 4.5:1 / AAA 7:1; large text AA 3:1 / AAA 4.5:1.
  */
 
 /** Fixed dark ink the caution button paints on the (always light) warning fill
- *  — decoupled from --text-on-accent. Keep in sync with .btn-caution (base.css). */
+ *  - decoupled from --text-on-accent. Keep in sync with .btn-caution (base.css). */
 export const CAUTION_INK = '#1f1a06'
 
 /** A checked pairing. `fg` is a token name or a literal "#hex"; `bg` is a token name. */
@@ -22,9 +22,9 @@ interface Pair {
   bg: string
   /** What the user sees this pairing as. */
   label: string
-  /** Where in the UI this pairing appears — shown in the report for context. */
+  /** Where in the UI this pairing appears - shown in the report for context. */
   where: string
-  /** Large/display text (board numbers, called number) — relaxed thresholds. */
+  /** Large/display text (board numbers, called number) - relaxed thresholds. */
   large?: boolean
   /** Short glyph shown in the report's live contrast chip. */
   sample?: string
@@ -130,7 +130,7 @@ const PAIRS: Pair[] = [
     where: 'Headings inside rows/nested panels',
   },
   // The B-I-N-G-O column letters paint with --highlight over the board wrapper's
-  // gradient (--board-gradient-start → --board-gradient-end); check both stops.
+  // gradient (--board-gradient-start -> --board-gradient-end); check both stops.
   {
     id: 'bingo-top',
     fg: 'highlight',
@@ -204,7 +204,7 @@ const PAIRS: Pair[] = [
     label: 'FREE cell number',
     where: 'The centre FREE cell',
     large: true,
-    sample: '★',
+    sample: 'FREE',
   },
   {
     id: 'secondary-btn',
@@ -243,7 +243,7 @@ const PAIRS: Pair[] = [
   },
 ]
 
-/** Parsed RGB (0–255). Alpha is ignored — no checked pair uses an alpha token. */
+/** Parsed RGB (0-255). Alpha is ignored - no checked pair uses an alpha token. */
 function parseRgb(input: string): [number, number, number] | null {
   const s = (input || '').trim()
   const hex = s.match(/^#([0-9a-f]{3,8})$/i)
@@ -323,7 +323,7 @@ export interface WcagReport {
 }
 
 /**
- * Audits a fully-populated token map (token name → CSS value) and returns a
+ * Audits a fully-populated token map (token name -> CSS value) and returns a
  * per-pairing report plus the overall level. Unparseable pairs are reported as
  * failures so they're never silently passed.
  */

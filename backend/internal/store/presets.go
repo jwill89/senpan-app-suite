@@ -9,7 +9,7 @@ import (
 	"app-suite/internal/model"
 )
 
-// ── Game preset operations ──────────────────────────────────────────────────
+// -- Game preset operations --------------------------------------------------
 
 // ListGamePresets returns all game presets ordered by name.
 func (s *Store) ListGamePresets() ([]model.GamePreset, error) {

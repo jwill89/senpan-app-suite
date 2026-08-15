@@ -7,7 +7,7 @@ describe('BingoCardEditor', () => {
   it('renders 24 number inputs and a FREE centre', () => {
     const w = mount(BingoCardEditor, { props: { modelValue: emptyNumberBoard() } })
     expect(w.findAll('.card-editor-grid input')).toHaveLength(24)
-    expect(w.find('.ce-free').text()).toBe('FREE')
+    expect(w.find('.card-editor-free').text()).toBe('FREE')
   })
 
   it('emits an updated board when a cell changes', async () => {
@@ -29,8 +29,8 @@ describe('BingoCardEditor', () => {
 
   it('flags an out-of-range cell as invalid', () => {
     const board = emptyNumberBoard()
-    board[0][0] = 99 // out of the B (1–15) range
+    board[0][0] = 99 // out of the B (1-15) range
     const w = mount(BingoCardEditor, { props: { modelValue: board } })
-    expect(w.find('.ce-invalid').exists()).toBe(true)
+    expect(w.find('.card-editor-invalid').exists()).toBe(true)
   })
 })

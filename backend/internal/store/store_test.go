@@ -19,7 +19,7 @@ func newTestStore(t *testing.T) *store.Store {
 	return s
 }
 
-// ── Card operations ─────────────────────────────────────────────────────────
+// -- Card operations ---------------------------------------------------------
 
 func TestCardSaveAndGet(t *testing.T) {
 	s := newTestStore(t)
@@ -181,7 +181,7 @@ func TestCardDelete(t *testing.T) {
 		t.Error("expected true for deleted card")
 	}
 
-	// Delete again — should return false
+	// Delete again - should return false
 	deleted, err = s.DeleteCard("DEL001")
 	if err != nil {
 		t.Fatal(err)
@@ -218,7 +218,7 @@ func TestCardDeleteAll(t *testing.T) {
 	}
 }
 
-// ── Pattern operations ────────────────────────────────────────────────────��─
+// -- Pattern operations -------------------------------------------------------
 
 func testPattern() [][]bool {
 	grid := make([][]bool, 5)
@@ -363,7 +363,7 @@ func TestPatternMove(t *testing.T) {
 	idB, _ := s.SavePattern("B", testPattern(), 1)
 	_, _ = s.SavePattern("C", testPattern(), 1)
 
-	// Move B up → order should be B, A, C
+	// Move B up -> order should be B, A, C
 	moved, err := s.MovePattern(int(idB), "up")
 	if err != nil {
 		t.Fatal(err)
@@ -389,7 +389,7 @@ func TestPatternMove_Down(t *testing.T) {
 	idB, _ := s.SavePattern("B", testPattern(), 1)
 	_, _ = s.SavePattern("C", testPattern(), 1)
 
-	// Move B down → order should be A, C, B
+	// Move B down -> order should be A, C, B
 	moved, err := s.MovePattern(int(idB), "down")
 	if err != nil {
 		t.Fatal(err)
@@ -413,7 +413,7 @@ func TestPatternMove_Boundary(t *testing.T) {
 
 	idA, _ := s.SavePattern("A", testPattern(), 1)
 
-	// Moving the only pattern up — should be a no-op
+	// Moving the only pattern up - should be a no-op
 	moved, err := s.MovePattern(int(idA), "up")
 	if err != nil {
 		t.Fatal(err)
@@ -435,7 +435,7 @@ func TestPatternMove_NotFound(t *testing.T) {
 	}
 }
 
-// ── Game operations ─────────────────────────────────────────────────────────
+// -- Game operations ---------------------------------------------------------
 
 func TestGameCreateAndGetActive(t *testing.T) {
 	s := newTestStore(t)
@@ -606,7 +606,7 @@ func TestGamePatterns_Empty(t *testing.T) {
 	}
 }
 
-// ── Raffle operations ───────────────────────────────────────────────────────
+// -- Raffle operations -------------------------------------------------------
 
 func TestRaffleCreateAndGet(t *testing.T) {
 	s := newTestStore(t)
@@ -997,7 +997,7 @@ func TestRaffleSetWinnerAndStatus(t *testing.T) {
 	}
 }
 
-// ── Settings operations ─────────────────────────────────────────────────────
+// -- Settings operations -----------------------------------------------------
 
 func TestSettingsGetSet(t *testing.T) {
 	s := newTestStore(t)
@@ -1033,7 +1033,7 @@ func TestSettingsGetSet(t *testing.T) {
 	}
 }
 
-// ── Style operations ─────────────────────────���──────────────────────────────
+// -- Style operations ----------------------------------------------------------
 
 func TestStyleCRUD(t *testing.T) {
 	s := newTestStore(t)
@@ -1166,7 +1166,7 @@ func TestActiveStyleCSS(t *testing.T) {
 	}
 }
 
-// ── Winners log operations ──────────────────────────────────────────────────
+// -- Winners log operations --------------------------------------------------
 
 func TestWinnersLogInsertAndList(t *testing.T) {
 	s := newTestStore(t)

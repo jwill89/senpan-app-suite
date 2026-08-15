@@ -30,7 +30,7 @@ type Service struct {
 	store *store.Store
 
 	// opMu serializes state-mutating lifecycle operations (Start, Draw, End)
-	// so concurrent calls cannot race on the called-numbers set — e.g. two
+	// so concurrent calls cannot race on the called-numbers set - e.g. two
 	// simultaneous draws picking the same call order or drawing a duplicate
 	// number (there is no UNIQUE constraint on called_numbers).
 	opMu sync.Mutex
@@ -55,7 +55,7 @@ type Service struct {
 	yoeverMu      sync.Mutex
 	yoeverEnabled bool
 	yoeverCount   int
-	yoeverLast    map[string]time.Time // card ID (upper-case) → last trigger time
+	yoeverLast    map[string]time.Time // card ID (upper-case) -> last trigger time
 
 	// Automatic-draw state. Transient, per-game (reset by resetAuto on each Start):
 	// whether the auto loop is running and the seconds between draws. resumeAuto
@@ -73,7 +73,7 @@ type Service struct {
 // NewService creates a Service backed by the given store. The "It's Yoever"
 // reaction defaults to enabled so that if the process restarts while a game is
 // live (e.g. a redeploy), the reaction stays on for that game rather than
-// silently switching off until the next Start() — matching its enabled-by-default
+// silently switching off until the next Start() - matching its enabled-by-default
 // semantics. (The per-game count resets to 0 on restart, which is acceptable for
 // an ephemeral fun stat.)
 func NewService(s *store.Store) *Service {
@@ -220,7 +220,7 @@ func (g *Service) Start(patternIDs []int, auto bool, autoInterval int) (*model.B
 
 // Draw picks a random uncalled number, computes winners, caches them, and returns
 // the full game state. The bool reports whether this draw produced a *new* winner
-// (a card not already in the winners cache) — the caller uses it to switch off the
+// (a card not already in the winners cache) - the caller uses it to switch off the
 // automatic-draw loop the moment a winner is recognized. Returns (nil, false, nil)
 // when there is no active game or all callable numbers have been drawn.
 func (g *Service) Draw() (*DrawResult, bool, error) {
@@ -232,7 +232,7 @@ func (g *Service) Draw() (*DrawResult, bool, error) {
 // DrawAuto is Draw for the automatic loop: it draws only while auto is still
 // enabled, testing the flag under the *same* op lock that serializes every draw.
 // So a disable that lands between the scheduler deciding to draw and the draw
-// itself — a manual draw taking over, a winner, an admin toggling auto off — is
+// itself - a manual draw taking over, a winner, an admin toggling auto off - is
 // serialized against the draw and reliably prevents the stray auto-draw. Returns
 // (nil, false, nil) when auto is off, the same signal the scheduler treats as
 // "park" (like an exhausted or absent game).
@@ -271,7 +271,7 @@ func (g *Service) drawLocked() (*DrawResult, bool, error) {
 	// numbers are never called.
 	cols := PatternColumns(patterns)
 
-	// Find remaining numbers: 1–75 minus already called, restricted to the
+	// Find remaining numbers: 1-75 minus already called, restricted to the
 	// active columns above (column index = (n-1)/15).
 	calledSet := makeCalledSet(called)
 	remaining := make([]int, 0, 75-len(called))
@@ -386,7 +386,7 @@ func (g *Service) CurrentState() (*model.BingoGameState, []string, error) {
 	return state, winners, nil
 }
 
-// ── "It's Yoever" reaction ──────────────────────────────────────────────────
+// -- "It's Yoever" reaction --------------------------------------------------
 
 // resetYoever restores the per-game reaction state: enabled, zero count, and no
 // per-card cooldowns. Called from Start so each game begins fresh.
@@ -423,7 +423,7 @@ func (g *Service) SetYoeverEnabled(on bool) {
 // TriggerYoever records a reaction trigger for cardID and returns the new
 // per-game count. It enforces, in order: an active game must exist
 // (ErrYoeverNoGame), the reaction must be enabled (ErrYoeverDisabled), and the
-// same card must not have triggered within the cooldown window — in which case
+// same card must not have triggered within the cooldown window - in which case
 // it returns retryAfter > 0 (and does not count the trigger). `now` is passed in
 // so tests can control the clock. A non-positive cooldown disables the throttle.
 func (g *Service) TriggerYoever(cardID string, now time.Time, cooldown time.Duration) (count int, retryAfter time.Duration, err error) {
@@ -455,7 +455,7 @@ func (g *Service) TriggerYoever(cardID string, now time.Time, cooldown time.Dura
 	return g.yoeverCount, 0, nil
 }
 
-// ── Automatic draw ──────────────────────────────────────────────────────────
+// -- Automatic draw ----------------------------------------------------------
 
 // Automatic-draw interval bounds (seconds). DefaultAutoInterval is used when auto
 // is switched on without a chosen interval; every interval is clamped to
@@ -512,7 +512,7 @@ func (g *Service) SetAutoEnabled(on bool) (interval int) {
 }
 
 // EnableAutoOnce switches the auto-draw loop on and atomically reports whether
-// THIS call actually flipped it off→on. Unlike a separate AutoState read followed
+// THIS call actually flipped it off->on. Unlike a separate AutoState read followed
 // by SetAutoEnabled, the check and the set happen under a single lock, so two
 // concurrent enables can't both observe "was off" and each arm a redundant
 // immediate first draw (the TOCTOU the get-then-set had). Clears any pending
@@ -538,7 +538,7 @@ func (g *Service) SetAutoInterval(sec int) int {
 }
 
 // DisableAuto switches the loop off and forgets any pending half-time resume. Used
-// when a winner is recognized, the callable pool is exhausted, or the game ends —
+// when a winner is recognized, the callable pool is exhausted, or the game ends -
 // cases where auto must not silently come back. Returns whether auto had been
 // running, so the caller can decide whether to broadcast the change.
 func (g *Service) DisableAuto() (wasEnabled bool) {
@@ -588,7 +588,7 @@ func (g *Service) ClearHalftimeResume() {
 	g.autoMu.Unlock()
 }
 
-// ── internal helpers ────────────────────────────────────────────────────────
+// -- internal helpers --------------------------------------------------------
 
 // setStateCache stores the built game state in the in-memory cache.
 func (g *Service) setStateCache(gameID int64, state *model.BingoGameState) {
@@ -654,10 +654,10 @@ func (g *Service) computeWinners(calledSet map[int]bool, patterns []model.BingoG
 	return winners, nil
 }
 
-// PatternColumns reports which of the five bingo columns (B,I,N,G,O → indices
-// 0–4) hold at least one required cell across the given patterns, ignoring the
+// PatternColumns reports which of the five bingo columns (B,I,N,G,O -> indices
+// 0-4) hold at least one required cell across the given patterns, ignoring the
 // FREE centre [2][2] (which never needs a number drawn). Draw uses this to skip
-// columns no pattern can win from — e.g. a postage-stamp game has no required N
+// columns no pattern can win from - e.g. a postage-stamp game has no required N
 // cells, so no N numbers are drawn. A column is active if ANY pattern uses it,
 // which keeps every pattern winnable (each pattern's columns are a subset). If no
 // pattern marks a real cell (e.g. a game with no patterns), every column is
@@ -681,7 +681,7 @@ func PatternColumns(patterns []model.BingoGamePattern) [5]bool {
 
 // HalftimeThreshold is the call count at which the half-time mini-game prompt
 // fires: the classic 35-of-75 mark scaled to this game's callable pool (active
-// columns × 15), rounded and clamped to at least 1. Mirrors the frontend
+// columns x 15), rounded and clamped to at least 1. Mirrors the frontend
 // lib/halftime.ts and the plugin so all three surfaces agree on the midpoint.
 func HalftimeThreshold(patterns []model.BingoGamePattern) int {
 	cols := PatternColumns(patterns)

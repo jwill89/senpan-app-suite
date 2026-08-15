@@ -62,12 +62,12 @@ public sealed class ApiClient : IDisposable
         this.lifetime.Dispose();
     }
 
-    // ── Auth ─────────────────────────────────────────────────────────────────
+    // -- Auth -----------------------------------------------------------------
 
     public Task<AuthCheckResponse> CheckAuthAsync(CancellationToken ct = default)
         => SendAsync<AuthCheckResponse>(HttpMethod.Get, "api/auth", null, ct);
 
-    // ── Bingo: cards ───────────────────────────────────────────────────────────
+    // -- Bingo: cards -----------------------------------------------------------
 
     public Task<CardsResponse> ListCardsAsync(CancellationToken ct = default)
         => SendAsync<CardsResponse>(HttpMethod.Get, "api/cards", null, ct);
@@ -85,7 +85,7 @@ public sealed class ApiClient : IDisposable
     public Task<DeletedCountResponse> DeleteAllCardsAsync(CancellationToken ct = default)
         => SendAsync<DeletedCountResponse>(HttpMethod.Delete, "api/cards/all", null, ct);
 
-    /// <summary>Approve a pending custom card (→ approved and auto-protected).</summary>
+    /// <summary>Approve a pending custom card (-> approved and auto-protected).</summary>
     public Task<OkResponse> ApproveCardAsync(string id, CancellationToken ct = default)
         => SendAsync<OkResponse>(HttpMethod.Post, $"api/cards/{Uri.EscapeDataString(id)}/approve", null, ct);
 
@@ -94,7 +94,7 @@ public sealed class ApiClient : IDisposable
         => SendAsync<OkResponse>(HttpMethod.Post, $"api/cards/{Uri.EscapeDataString(id)}/protect",
             new { @protected = isProtected }, ct);
 
-    // ── Bingo: patterns + game ───────────────────────────────────────────────
+    // -- Bingo: patterns + game -----------------------------------------------
 
     public Task<PatternsResponse> ListPatternsAsync(CancellationToken ct = default)
         => SendAsync<PatternsResponse>(HttpMethod.Get, "api/patterns", null, ct);
@@ -109,7 +109,7 @@ public sealed class ApiClient : IDisposable
         => SendAsync<WinnersLogResponse>(HttpMethod.Get,
             $"api/winners-log?page={page}&per_page={perPage}&sort={Uri.EscapeDataString(sort)}&dir={Uri.EscapeDataString(dir)}", null, ct);
 
-    // Per-entry delete only — the plugin deliberately exposes no "clear all" for
+    // Per-entry delete only - the plugin deliberately exposes no "clear all" for
     // the winners log, so it can't be wiped from in-game. Returns no body (204).
     public Task DeleteWinnersLogEntryAsync(long id, CancellationToken ct = default)
         => SendNoContentAsync(HttpMethod.Delete, $"api/winners-log/{id}", null, ct);
@@ -154,7 +154,7 @@ public sealed class ApiClient : IDisposable
     public Task<OkResponse> SetAutoIntervalAsync(int seconds, CancellationToken ct = default)
         => SendAsync<OkResponse>(HttpMethod.Patch, "api/game", new { auto_interval = seconds }, ct);
 
-    // ── Raffles ──────────────────────────────────────────────────────────────
+    // -- Raffles --------------------------------------------------------------
 
     public Task<RafflesResponse> ListRafflesAsync(CancellationToken ct = default)
         => SendAsync<RafflesResponse>(HttpMethod.Get, "api/raffles", null, ct);
@@ -182,24 +182,24 @@ public sealed class ApiClient : IDisposable
     public Task<OkResponse> VerifyRaffleWinnerAsync(long raffleId, CancellationToken ct = default)
         => SendAsync<OkResponse>(HttpMethod.Post, $"api/raffles/{raffleId}/verify-winner", null, ct);
 
-    // ── Garapon ────────────────────────────────────────────────────────────────
+    // -- Garapon ----------------------------------------------------------------
 
     public Task<GaraponsResponse> ListGaraponsAsync(CancellationToken ct = default)
         => SendAsync<GaraponsResponse>(HttpMethod.Get, "api/garapons", null, ct);
 
     // Detail carries the drawing links AND the full draw log in one call (there is
-    // no separate draw-log endpoint) — both the manage and log pages read from it.
+    // no separate draw-log endpoint) - both the manage and log pages read from it.
     public Task<GaraponDetailResponse> GetGaraponAsync(long id, CancellationToken ct = default)
         => SendAsync<GaraponDetailResponse>(HttpMethod.Get, $"api/garapons/{id}", null, ct);
 
     // Issues a per-player drawing link. When the garapon is linked to an open rally,
     // the server also auto-issues the paired stamp card (same token) and returns it
-    // as player.stamp_card_token — no second call is needed.
+    // as player.stamp_card_token - no second call is needed.
     public Task<GaraponPlayerResponse> CreateGaraponPlayerAsync(long garaponId, string playerName, int maxDraws, CancellationToken ct = default)
         => SendAsync<GaraponPlayerResponse>(HttpMethod.Post, $"api/garapons/{garaponId}/players",
             new { player_name = playerName, max_draws = maxDraws }, ct);
 
-    // ── Stamp Rally ──────────────────────────────────────────────────────────────
+    // -- Stamp Rally --------------------------------------------------------------
 
     public Task<StampRalliesResponse> ListStampRalliesAsync(CancellationToken ct = default)
         => SendAsync<StampRalliesResponse>(HttpMethod.Get, "api/stamp-rallies", null, ct);
@@ -220,7 +220,7 @@ public sealed class ApiClient : IDisposable
     public Task<StampRallyLogsResponse> StampRallyLogsAsync(long id, CancellationToken ct = default)
         => SendAsync<StampRallyLogsResponse>(HttpMethod.Get, $"api/stamp-rallies/{id}/logs", null, ct);
 
-    // ── Tea Rooms ──────────────────────────────────────────────────────────────
+    // -- Tea Rooms --------------------------------------------------------------
 
     public Task<TeaRoomsResponse> ListTeaRoomsAsync(CancellationToken ct = default)
         => SendAsync<TeaRoomsResponse>(HttpMethod.Get, "api/tea-rooms", null, ct);
@@ -234,7 +234,7 @@ public sealed class ApiClient : IDisposable
     public Task<TeaRoomResponse> SetTeaRoomDiscountedAsync(long id, bool discounted, CancellationToken ct = default)
         => SendAsync<TeaRoomResponse>(HttpMethod.Patch, $"api/tea-rooms/{id}", new { discounted }, ct);
 
-    // ── Transport ────────────────────────────────────────────────────────────
+    // -- Transport ------------------------------------------------------------
 
     private async Task<T> SendAsync<T>(HttpMethod method, string path, object? body, CancellationToken ct)
     {
@@ -298,7 +298,7 @@ public sealed class ApiClient : IDisposable
         {
             this.cleartextWarned = true;
             this.log.Warning(
-                "Senpan server URL is not HTTPS — your access token is transmitted in cleartext and can be intercepted. Configure an https:// server URL.");
+                "Senpan server URL is not HTTPS - your access token is transmitted in cleartext and can be intercepted. Configure an https:// server URL.");
         }
     }
 
@@ -322,7 +322,7 @@ public sealed class ApiClient : IDisposable
         }
         catch (JsonException)
         {
-            // Non-JSON error body — fall through.
+            // Non-JSON error body - fall through.
         }
         return null;
     }

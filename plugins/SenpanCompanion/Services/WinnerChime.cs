@@ -6,7 +6,7 @@ namespace SenpanCompanion.Services;
 
 /// <summary>
 /// Plays a short ascending arpeggio when a new bingo winner appears, so the caller
-/// hears it without watching the window — mirroring the web admin's winner chime.
+/// hears it without watching the window - mirroring the web admin's winner chime.
 ///
 /// The sound is synthesized once into an in-memory WAV and played via the Windows
 /// multimedia API (winmm PlaySound, async). It deliberately uses NO game interop,
@@ -24,7 +24,7 @@ public static class WinnerChime
     [DllImport("winmm.dll", SetLastError = true)]
     private static extern bool PlaySound(byte[]? data, IntPtr hModule, uint flags);
 
-    /// <summary>Plays the chime asynchronously. Best-effort — failures are swallowed.</summary>
+    /// <summary>Plays the chime asynchronously. Best-effort - failures are swallowed.</summary>
     public static void Play()
     {
         try
@@ -41,7 +41,7 @@ public static class WinnerChime
     private static byte[] Build()
     {
         const int sampleRate = 44100;
-        // C5 → E5 → G5 → C6, a short celebratory arpeggio.
+        // C5 -> E5 -> G5 -> C6, a short celebratory arpeggio.
         double[] freqs = { 523.25, 659.25, 783.99, 1046.50 };
         const double noteSeconds = 0.16;
         var perNote = (int)(sampleRate * noteSeconds);

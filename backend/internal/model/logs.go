@@ -8,7 +8,7 @@ import (
 // LogEntry is one parsed record from the server's JSON log file (slog output).
 // Time/Level/Message are the standard slog keys; Fields carries any additional
 // structured attributes the log call attached (method, path, status, ip, error,
-// …), kept as a free-form map so the viewer renders them generically without the
+// ...), kept as a free-form map so the viewer renders them generically without the
 // model having to know every attribute a call site might add.
 type LogEntry struct {
 	Time    string         `json:"time"`
@@ -30,7 +30,7 @@ type LogsResponse struct {
 }
 
 // LogLevelResponse reports the process-wide minimum log level after a change
-// (POST /api/logs/level) — one of "debug", "info", "warn", "error".
+// (POST /api/logs/level) - one of "debug", "info", "warn", "error".
 type LogLevelResponse struct {
 	Level string `json:"level"`
 }

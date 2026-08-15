@@ -14,11 +14,11 @@ import (
 	"app-suite/internal/store"
 )
 
-// ── Raffle list (public + admin) ────────────────────────────────────────────
+// -- Raffle list (public + admin) --------------------------------------------
 
 // raffleStaff reports whether the request may see the privileged raffle view
 // (all raffles, entry lists, winner_name/paid_total aggregates). Raffle writes
-// gate on permTeahouseRaffles, so the reads align to the same permission —
+// gate on permTeahouseRaffles, so the reads align to the same permission -
 // otherwise a non-admin granted teahouse-raffles could manage a raffle but not
 // see its paid totals. Admins hold every permission.
 func (s *Server) raffleStaff(r *http.Request) bool {
@@ -43,7 +43,7 @@ func (s *Server) handleRafflesList(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, model.RafflesResponse{Raffles: raffles})
 }
 
-// ── Raffle detail (public + admin) ──────────────────────────────────────────
+// -- Raffle detail (public + admin) ------------------------------------------
 
 // handleRaffleDetail returns a single raffle with entries (admin) or winner info (public).
 //
@@ -96,7 +96,7 @@ func (s *Server) handleRaffleDetail(w http.ResponseWriter, r *http.Request) {
 		}
 		resp.Entries = &entries
 	} else if raffle.Status == "closed" && raffle.WinnerEntryID != nil {
-		// Show the winner entry to public — fetch directly by ID
+		// Show the winner entry to public - fetch directly by ID
 		entry, err := s.store.GetRaffleEntryByID(*raffle.WinnerEntryID)
 		if err == nil && entry != nil {
 			resp.WinnerEntry = entry
@@ -106,7 +106,7 @@ func (s *Server) handleRaffleDetail(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, resp)
 }
 
-// ── Raffle create / update / delete ─────────────────────────────────────────
+// -- Raffle create / update / delete -----------------------------------------
 
 // raffleWriteRequest is the JSON body for creating (POST /api/raffles) or
 // replacing (PUT /api/raffles/{id}) a raffle. The id comes from the path on PUT.
@@ -222,7 +222,7 @@ func (s *Server) handleRaffleUpdate(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleRaffleDelete deletes a raffle. Prize images are managed centrally on
-// System → Images (the "Raffle" category), so the file is left intact — it may
+// System -> Images (the "Raffle" category), so the file is left intact - it may
 // be reused by another raffle.
 //
 //	Endpoint:  DELETE /api/raffles/{id}
@@ -243,13 +243,13 @@ func (s *Server) handleRaffleDelete(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// ── Raffle entry (public sign-up) ───────────────────────────────────────────
+// -- Raffle entry (public sign-up) -------------------------------------------
 
 // parseRaffleTime parses a raffle availability timestamp into a UTC instant.
 // New values are stored as UTC RFC-3339 (e.g. "2026-06-13T20:00:00.000Z");
 // legacy values are naive "2006-01-02T15:04" strings, which we interpret as UTC
 // to stay consistent with the SQL availability filter. Returns the instant and
-// whether parsing succeeded (false for empty/unparseable input → no constraint).
+// whether parsing succeeded (false for empty/unparseable input -> no constraint).
 func parseRaffleTime(s string) (time.Time, bool) {
 	if s == "" {
 		return time.Time{}, false
@@ -359,7 +359,7 @@ func (s *Server) handleRaffleEnter(w http.ResponseWriter, r *http.Request) {
 
 	// Check availability dates. Stored timestamps are UTC (RFC-3339 with 'Z' for
 	// new values; legacy naive strings are interpreted as UTC), so we compare
-	// against the current UTC instant — timezone-correct regardless of where the
+	// against the current UTC instant - timezone-correct regardless of where the
 	// raffle was created.
 	now := time.Now().UTC()
 	if from, ok := parseRaffleTime(raffle.AvailableFrom); ok && now.Before(from) {
@@ -415,11 +415,11 @@ func (s *Server) handleRaffleEnter(w http.ResponseWriter, r *http.Request) {
 	// middleware (which matches the admin ".../entries" suffix, not ".../enter").
 	// Broadcast the "raffles" signal explicitly so an admin viewing the raffle
 	// detail sees the new entry appear live (the refetch re-applies the guard).
-	// Only success reaches here — every validation/error path above returns first.
+	// Only success reaches here - every validation/error path above returns first.
 	s.broadcastResourceChanged("raffles")
 }
 
-// ── Raffle entries (admin) ──────────────────────────────────────────────────
+// -- Raffle entries (admin) --------------------------------------------------
 
 // raffleEntryAddRequest is the JSON body for POST /api/raffles/{id}/entries.
 type raffleEntryAddRequest struct {
@@ -598,7 +598,7 @@ func (s *Server) handleRaffleEntryDelete(w http.ResponseWriter, r *http.Request)
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// ── Raffle winner commands ──────────────────────────────────────────────────
+// -- Raffle winner commands --------------------------------------------------
 
 // pickRaffleWinner picks a random paid entry as the pending winner and returns it,
 // or writes a 400 when there are no paid entries. Shared by pick-winner and
@@ -685,7 +685,7 @@ func (s *Server) handleRaffleVerifyWinner(w http.ResponseWriter, r *http.Request
 	writeJSON(w, http.StatusOK, model.StatusResponse{OK: true, Status: "closed"})
 }
 
-// Raffle prize images are uploaded and managed centrally on the System → Images
-// page (the "Raffle" category → images/raffles). The raffle editor's picker
+// Raffle prize images are uploaded and managed centrally on the System -> Images
+// page (the "Raffle" category -> images/raffles). The raffle editor's picker
 // reads that category via GET /api/images; there is no per-raffle upload or
 // cleanup here anymore.

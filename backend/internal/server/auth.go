@@ -83,7 +83,7 @@ func (s *Server) handleAuthAction(w http.ResponseWriter, r *http.Request) {
 	// Bot check: when Cloudflare Turnstile is configured, a valid one-time token
 	// is required before we do any credential work, so automated brute-force
 	// clients can't reach the password check. A failed challenge isn't counted
-	// against the login limiter — a legit user with an expired token shouldn't be
+	// against the login limiter - a legit user with an expired token shouldn't be
 	// locked out of password attempts; the token is just re-issued on retry.
 	if s.turnstileEnabled() && !s.verifyTurnstile(r.Context(), req.TurnstileToken, ip) {
 		slog.Warn("turnstile verification failed", "ip", ip)
@@ -118,7 +118,7 @@ func (s *Server) handleAuthAction(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if !user.IsActive {
-		// Don't count this against the rate limiter — the credentials were correct.
+		// Don't count this against the rate limiter - the credentials were correct.
 		writeError(w, http.StatusForbidden, "Account pending activation by an administrator")
 		return
 	}
@@ -131,7 +131,7 @@ func (s *Server) handleAuthAction(w http.ResponseWriter, r *http.Request) {
 	s.sessions.Put(r.Context(), "user_epoch", user.PasswordEpoch)
 	s.limiter.resetFailures(ip)
 	slog.Debug("login succeeded", "user_id", user.ID, "username", username, "admin", user.IsAdmin, "ip", ip)
-	// Stamp the last-login time (best-effort — don't fail the login if it errors).
+	// Stamp the last-login time (best-effort - don't fail the login if it errors).
 	// The returned user still carries the *previous* value, which is the intended
 	// "last seen" semantic; the users table reloads to show the fresh time.
 	if err := s.store.UpdateLastLogin(user.ID); err != nil {
@@ -150,7 +150,7 @@ type registerRequest struct {
 // handleRegister creates a new account from the hidden registration page. The
 // account is created inactive (and non-admin, no permissions); an admin must
 // activate it before the user can log in. There is no link to this endpoint in
-// the UI — admins share the /admin/register URL directly.
+// the UI - admins share the /admin/register URL directly.
 //
 //	Endpoint:  POST /api/register
 //	Auth:      public
@@ -183,7 +183,7 @@ func (s *Server) handleRegister(w http.ResponseWriter, r *http.Request) {
 
 	username := strings.TrimSpace(req.Username)
 	if username == "" || len(username) > 32 {
-		writeError(w, http.StatusBadRequest, "Username must be 1–32 characters")
+		writeError(w, http.StatusBadRequest, "Username must be 1-32 characters")
 		return
 	}
 	if len(req.Password) < minPasswordLen {
@@ -191,8 +191,8 @@ func (s *Server) handleRegister(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Anti-enumeration: every path below — a fresh account, an already-taken
-	// username, or the reserved bootstrap name — returns this identical generic
+	// Anti-enumeration: every path below - a fresh account, an already-taken
+	// username, or the reserved bootstrap name - returns this identical generic
 	// response (same status + body), so /api/register can't be used to probe which
 	// usernames exist (mirrors the login flow's single generic error). The account
 	// is still created when eligible; only the difference is hidden from the caller.

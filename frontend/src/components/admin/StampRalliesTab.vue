@@ -1,12 +1,12 @@
 <script setup lang="ts">
 /**
- * Admin Stamp Rally manager (Festival → Stamp Rally). Screens:
+ * Admin Stamp Rally manager (Festival -> Stamp Rally). Screens:
  *
  *   - list:   searchable grid of event cards (card image + title + counts).
- *   - detail: the selected event — a read-only card preview, the stamps (with
+ *   - detail: the selected event - a read-only card preview, the stamps (with
  *             pause/resume + passwords) and prizes, and links to the sub-pages.
  *   - cards:  issue participant card links + the issued-card table (copy/delete).
- *   - logs:   the event-wide "View Logs" stamp collection table — sortable, with a
+ *   - logs:   the event-wide "View Logs" stamp collection table - sortable, with a
  *             participant's rows always grouped together. Live-refreshed over the WS.
  *   - form:   the create/edit form (StampRallyFormTab), a Back sub-page.
  */
@@ -17,13 +17,16 @@ import ManagerView from '@/components/common/ui/ManagerView.vue'
 import SubPageHeader from '@/components/common/ui/SubPageHeader.vue'
 import SearchInput from '@/components/common/ui/SearchInput.vue'
 import FormField from '@/components/common/ui/FormField.vue'
-import DataTable, { type DataColumn } from '@/components/common/ui/DataTable.vue'
+import DataTableToolbar from '@/components/common/ui/DataTableToolbar.vue'
+import DataTable, {
+  type DataColumn,
+  type DataTableView,
+} from '@/components/common/ui/DataTable.vue'
 import PaginationBar from '@/components/common/ui/PaginationBar.vue'
 import EmptyState from '@/components/common/ui/EmptyState.vue'
 import StampCardCanvas, { type CanvasItem } from '@/components/common/ui/StampCardCanvas.vue'
 import StampRallyFormTab from './StampRallyFormTab.vue'
-import { useStampRalliesStore, groupedByParticipant } from '@/stores/stampRallies'
-import { useDataTableView } from '@/composables/useDataTableView'
+import { useStampRalliesStore } from '@/stores/stampRallies'
 import { assetUrl } from '@/lib/assets'
 import { formatServerTimestamp } from '@/lib/datetime'
 import { stallName } from '@/lib/stampcard'
@@ -34,7 +37,7 @@ const store = useStampRalliesStore()
 type Screen = 'list' | 'detail' | 'cards' | 'logs' | 'form'
 const screen = ref<Screen>('list')
 
-// ── List: open card grid (searchable) + closed table ─────────────────────────
+// -- List: open card grid (searchable) + closed table -------------------------
 const search = ref('')
 const filteredOpen = computed(() => {
   const q = search.value.trim().toLowerCase()
@@ -49,18 +52,10 @@ const closedColumns: DataColumn[] = [
   { key: 'created_at', label: 'Created', sortable: true },
   { key: 'actions', label: '', align: 'right' },
 ]
-const {
-  search: closedSearch,
-  page: closedPage,
-  totalPages: closedTotalPages,
-  paged: pagedClosed,
-  filtered: filteredClosed,
-  sortKey: closedSortKey,
-  sortDir: closedSortDir,
-  setSort: setClosedSort,
-} = useDataTableView<StampRally>(() => store.closedRallies, {
-  matches: (r, q) => r.title.toLowerCase().includes(q),
-})
+const closedSearch = ref('')
+const closedPage = ref(1)
+const closedView = ref<DataTableView>({ total: 0, totalPages: 1, facets: {} })
+const closedMatches = (r: StampRally, q: string): boolean => r.title.toLowerCase().includes(q)
 
 const isClosed = computed(() => store.selectedRally?.status === 'closed')
 function toggleClosed(): void {
@@ -79,7 +74,7 @@ function toggleManage(r: StampRally): void {
   }
 }
 
-// ── Detail preview (card + stamps + prizes at their placements) ──────────────
+// -- Detail preview (card + stamps + prizes at their placements) --------------
 const previewItems = computed<CanvasItem[]>(() => {
   const r = store.selectedRally
   if (!r) return []
@@ -96,32 +91,30 @@ const previewItems = computed<CanvasItem[]>(() => {
   return [...stamps, ...prizes]
 })
 
-// ── View Logs table (sortable, grouped by participant) ───────────────────────
+// -- View Logs table (sortable, grouped by participant) -----------------------
 const logColumns: DataColumn[] = [
   { key: 'participant_name', label: 'Participant', sortable: true },
   { key: 'stall_name', label: 'Stall / Vendor', sortable: true },
   { key: 'stamped_at', label: 'When', sortable: true, align: 'right' },
 ]
-const {
-  search: logSearch,
-  filtered: logFiltered,
-  sortKey: logSortKey,
-  sortDir: logSortDir,
-  setSort: setLogSort,
-  reset: resetLogs,
-} = useDataTableView<StampRallyLogEntry>(() => store.rallyLogs, {
-  matches: (e, q) =>
-    e.participant_name.toLowerCase().includes(q) || e.stall_name.toLowerCase().includes(q),
-  sort: { key: 'participant_name', dir: 'asc' },
-})
-// Keep each participant's rows contiguous regardless of the active column sort.
-const groupedLogs = computed(() => groupedByParticipant(logFiltered.value))
+// The table keeps each participant's rows together via `group-by`, which is a
+// primary sort key - so a column sort still orders rows WITHIN a participant.
+const logSearch = ref('')
+const logMatches = (e: StampRallyLogEntry, q: string): boolean =>
+  e.participant_name.toLowerCase().includes(q) || e.stall_name.toLowerCase().includes(q)
 
-function when(ts: string): string {
-  return ts ? formatServerTimestamp(ts) : '—'
+const logView = ref<DataTableView>({ total: 0, totalPages: 1, facets: {} })
+const logTableRef = ref<{ exportCsv: (name?: string) => void } | null>(null)
+
+function resetLogs(): void {
+  logSearch.value = ''
 }
 
-// ── Navigation ───────────────────────────────────────────────────────────────
+function when(ts: string): string {
+  return ts ? formatServerTimestamp(ts) : '-'
+}
+
+// -- Navigation ---------------------------------------------------------------
 function openNew(): void {
   store.newRallyForm()
   screen.value = 'form'
@@ -163,10 +156,10 @@ async function deleteSelected(): Promise<void> {
 
 <template>
   <div class="tab-body">
-    <!-- ── Form ──────────────────────────────────────────────────────────────── -->
+    <!-- -- Form ---------------------------------------------------------------- -->
     <StampRallyFormTab v-if="screen === 'form'" @saved="onFormDone" @cancel="onFormDone" />
 
-    <!-- ── Detail ────────────────────────────────────────────────────────────── -->
+    <!-- -- Detail -------------------------------------------------------------- -->
     <AdminPanel v-else-if="screen === 'detail' && store.selectedRally">
       <SubPageHeader @back="backToList">
         {{ store.selectedRally.title }}
@@ -196,7 +189,7 @@ async function deleteSelected(): Promise<void> {
       <LoadingSpinner
         v-if="store.detailLoading && !store.selectedRally.stamps"
         block
-        label="Loading…"
+        label="Loading..."
       />
       <template v-else>
         <!-- Read-only card preview -->
@@ -223,7 +216,7 @@ async function deleteSelected(): Promise<void> {
               <tr v-for="s in store.selectedRally.stamps" :key="s.id">
                 <td>{{ stallName(s.affiliate_name) }}</td>
                 <td>
-                  <code>{{ s.password || '—' }}</code>
+                  <code>{{ s.password || '-' }}</code>
                 </td>
                 <td class="ta-center">
                   <span v-if="s.paused" class="status-badge status-badge-closed">paused</span>
@@ -256,13 +249,13 @@ async function deleteSelected(): Promise<void> {
       </template>
     </AdminPanel>
 
-    <!-- ── Cards sub-page ────────────────────────────────────────────────────── -->
+    <!-- -- Cards sub-page ------------------------------------------------------ -->
     <AdminPanel v-else-if="screen === 'cards' && store.selectedRally">
       <SubPageHeader @back="backToDetail">
-        <font-awesome-icon :icon="['fad', 'id-card']" /> Cards — {{ store.selectedRally.title }}
+        <font-awesome-icon :icon="['fad', 'id-card']" /> Cards - {{ store.selectedRally.title }}
       </SubPageHeader>
 
-      <div class="entry-add mb-16">
+      <div class="subpanel mb-16">
         <h3 class="section-heading"><font-awesome-icon :icon="['fad', 'id-card']" /> Issue Card</h3>
         <div class="flex-row mb-10">
           <FormField label="Participant Name" style="flex: 1; min-width: 160px">
@@ -280,7 +273,7 @@ async function deleteSelected(): Promise<void> {
             :disabled="store.creatingCard || !store.cardAdd.participantName.trim()"
             @click="store.createCard()"
           >
-            <LoadingSpinner v-if="store.creatingCard" label="Creating…" />
+            <LoadingSpinner v-if="store.creatingCard" label="Creating..." />
             <template v-else
               ><font-awesome-icon :icon="['fas', 'plus']" /> Create Card Link</template
             >
@@ -304,7 +297,7 @@ async function deleteSelected(): Promise<void> {
               <td class="ta-center">{{ c.collected_count || 0 }}</td>
               <td class="ta-center">
                 <span v-if="c.completed" class="status-badge status-badge-open">complete</span>
-                <span v-else class="text-dim text-sm">in progress</span>
+                <span v-else class="text-muted text-sm">in progress</span>
               </td>
               <td class="ta-right">
                 <div class="row-actions">
@@ -321,12 +314,12 @@ async function deleteSelected(): Promise<void> {
                     :disabled="(c.collected_count || 0) > 0 && !isClosed"
                     :aria-label="
                       (c.collected_count || 0) > 0 && !isClosed
-                        ? 'Cannot delete — card has stamps (rally is open)'
+                        ? 'Cannot delete - card has stamps (rally is open)'
                         : 'Delete card'
                     "
                     :title="
                       (c.collected_count || 0) > 0 && !isClosed
-                        ? 'This card has stamps — close the rally to delete it (its log is kept)'
+                        ? 'This card has stamps - close the rally to delete it (its log is kept)'
                         : 'Delete card'
                     "
                     @click="store.deleteCard(c)"
@@ -342,32 +335,48 @@ async function deleteSelected(): Promise<void> {
       <EmptyState v-else text="No cards issued yet." />
     </AdminPanel>
 
-    <!-- ── View Logs sub-page ────────────────────────────────────────────────── -->
+    <!-- -- View Logs sub-page -------------------------------------------------- -->
     <AdminPanel v-else-if="screen === 'logs' && store.selectedRally">
       <SubPageHeader @back="backToDetail">
-        <font-awesome-icon :icon="['fad', 'clipboard-list']" /> Stamp Log —
+        <font-awesome-icon :icon="['fad', 'clipboard-list']" /> Stamp Log -
         {{ store.selectedRally.title }}
       </SubPageHeader>
 
       <template v-if="store.rallyLogs.length">
-        <div class="manager-toolbar">
-          <SearchInput
-            v-model="logSearch"
-            placeholder="Search by participant or stall…"
-            aria-label="Search logs"
-          />
-          <span class="text-dim text-xs push-right">{{ groupedLogs.length }} stamps</span>
-        </div>
+        <DataTableToolbar :count="logView.total" :total="store.rallyLogs.length" noun="stamp">
+          <template #search>
+            <SearchInput
+              v-model="logSearch"
+              placeholder="Search by participant or stall..."
+              aria-label="Search logs"
+            />
+          </template>
+          <template #actions>
+            <button
+              class="btn-view btn-sm"
+              :disabled="!logView.total"
+              title="Download the stamps currently shown, as CSV"
+              @click="logTableRef?.exportCsv('stamp-log')"
+            >
+              <font-awesome-icon :icon="['fas', 'file-arrow-down']" /> Export CSV
+            </button>
+          </template>
+        </DataTableToolbar>
         <DataTable
+          ref="logTableRef"
           :columns="logColumns"
-          :rows="groupedLogs"
+          :rows="store.rallyLogs"
           :row-key="(row: StampRallyLogEntry) => `${row.card_id}-${row.stamp_id}`"
-          :sort-key="logSortKey"
-          :sort-dir="logSortDir"
-          @sort="setLogSort"
+          :filter="logSearch"
+          :filter-fn="logMatches"
+          group-by="participant_name"
+          resizable
+          @update:view="logView = $event"
         >
           <template #cell-stamped_at="{ row }">
-            <span class="text-sm text-dim">{{ when((row as StampRallyLogEntry).stamped_at) }}</span>
+            <span class="text-sm text-muted">{{
+              when((row as StampRallyLogEntry).stamped_at)
+            }}</span>
           </template>
           <template #empty><EmptyState text="No stamps match your search." /></template>
         </DataTable>
@@ -375,7 +384,7 @@ async function deleteSelected(): Promise<void> {
       <EmptyState v-else text="No stamps collected yet." />
     </AdminPanel>
 
-    <!-- ── List ──────────────────────────────────────────────────────────────── -->
+    <!-- -- List ---------------------------------------------------------------- -->
     <ManagerView v-else title="Stamp Rally" :icon="['fad', 'stamp']">
       <template #actions>
         <button class="btn-confirm btn-sm" @click="openNew">
@@ -386,7 +395,7 @@ async function deleteSelected(): Promise<void> {
       <LoadingSpinner
         v-if="store.ralliesLoading && store.rallies.length === 0"
         block
-        label="Loading stamp rallies…"
+        label="Loading stamp rallies..."
       />
       <template v-else>
         <!-- Open rallies -->
@@ -397,10 +406,10 @@ async function deleteSelected(): Promise<void> {
           <div class="manager-toolbar">
             <SearchInput
               v-model="search"
-              placeholder="Search open stamp rallies…"
+              placeholder="Search open stamp rallies..."
               aria-label="Search stamp rallies"
             />
-            <span class="text-dim text-xs push-right">{{ filteredOpen.length }} open</span>
+            <span class="text-muted text-xs push-right">{{ filteredOpen.length }} open</span>
           </div>
           <div v-if="filteredOpen.length" class="card-grid">
             <div
@@ -421,11 +430,11 @@ async function deleteSelected(): Promise<void> {
               />
               <div class="media-card-body">
                 <h3>{{ r.title }}</h3>
-                <p class="text-dim text-sm">
-                  {{ r.card_count || 0 }} card{{ r.card_count === 1 ? '' : 's' }} ·
+                <p class="text-muted text-sm">
+                  {{ r.card_count || 0 }} card{{ r.card_count === 1 ? '' : 's' }} -
                   {{ r.completed_count || 0 }} complete
                 </p>
-                <p v-if="(r.stamp_count || 0) > 0" class="text-dim text-sm">
+                <p v-if="(r.stamp_count || 0) > 0" class="text-muted text-sm">
                   <font-awesome-icon :icon="['fad', 'stamp']" />
                   <strong
                     :class="{ 'has-paused': (r.active_stamp_count ?? 0) < (r.stamp_count || 0) }"
@@ -444,7 +453,10 @@ async function deleteSelected(): Promise<void> {
                     @click.stop="toggleManage(r)"
                   >
                     <font-awesome-icon :icon="['fad', 'sliders']" /> Manage stalls
-                    <span class="text-xs">{{ expandedCard === r.id ? '▾' : '▸' }}</span>
+                    <span class="text-xs"
+                      ><font-awesome-icon
+                        :icon="['fas', expandedCard === r.id ? 'chevron-down' : 'chevron-right']"
+                    /></span>
                   </button>
                   <button
                     class="btn-danger btn-sm"
@@ -458,7 +470,9 @@ async function deleteSelected(): Promise<void> {
 
                 <!-- Inline stall pause panel (no full edit needed). -->
                 <div v-if="expandedCard === r.id" class="stall-panel" @click.stop>
-                  <div v-if="!store.cardStamps[r.id]" class="text-dim text-sm">Loading stalls…</div>
+                  <div v-if="!store.cardStamps[r.id]" class="text-muted text-sm">
+                    Loading stalls...
+                  </div>
                   <template v-else-if="store.cardStamps[r.id].length">
                     <div v-for="s in store.cardStamps[r.id]" :key="s.id" class="stall-row">
                       <span class="stall-row-name">{{ stallName(s.affiliate_name) }}</span>
@@ -479,7 +493,7 @@ async function deleteSelected(): Promise<void> {
                       </button>
                     </div>
                   </template>
-                  <div v-else class="text-dim text-sm">No stalls on this card.</div>
+                  <div v-else class="text-muted text-sm">No stalls on this card.</div>
                 </div>
               </div>
             </div>
@@ -493,21 +507,29 @@ async function deleteSelected(): Promise<void> {
           <font-awesome-icon :icon="['fad', 'lock']" /> Closed Stamp Rallies
         </h4>
         <template v-if="store.closedRallies.length">
-          <div class="manager-toolbar">
-            <SearchInput
-              v-model="closedSearch"
-              placeholder="Search closed stamp rallies…"
-              aria-label="Search closed stamp rallies"
-            />
-            <span class="text-dim text-xs push-right">{{ filteredClosed.length }} closed</span>
-          </div>
+          <DataTableToolbar
+            :count="closedView.total"
+            :total="store.closedRallies.length"
+            noun="closed rally"
+            plural="closed rallies"
+          >
+            <template #search>
+              <SearchInput
+                v-model="closedSearch"
+                placeholder="Search closed stamp rallies..."
+                aria-label="Search closed stamp rallies"
+              />
+            </template>
+          </DataTableToolbar>
           <DataTable
+            v-model:page="closedPage"
             :columns="closedColumns"
-            :rows="pagedClosed"
+            :rows="store.closedRallies"
             row-key="id"
-            :sort-key="closedSortKey"
-            :sort-dir="closedSortDir"
-            @sort="setClosedSort"
+            :filter="closedSearch"
+            :filter-fn="closedMatches"
+            :page-size="10"
+            @update:view="closedView = $event"
           >
             <template #cell-card_count="{ row }">{{
               (row as StampRally).card_count || 0
@@ -543,10 +565,10 @@ async function deleteSelected(): Promise<void> {
             /></template>
           </DataTable>
           <PaginationBar
-            v-if="closedTotalPages > 1"
+            v-if="closedView.totalPages > 1"
             class="mt-12"
             :page="closedPage"
-            :total-pages="closedTotalPages"
+            :total-pages="closedView.totalPages"
             @go="(p: number) => (closedPage = p)"
           />
         </template>
@@ -557,11 +579,6 @@ async function deleteSelected(): Promise<void> {
 </template>
 
 <style scoped>
-.entry-add {
-  background: var(--panel-raised-bg);
-  border-radius: var(--radius);
-  padding: 14px 16px;
-}
 .rally-table-wrap {
   overflow-x: auto;
 }
@@ -577,7 +594,7 @@ async function deleteSelected(): Promise<void> {
 }
 /* "X/Y active" turns to the caution colour when any stall is paused. */
 .has-paused {
-  color: var(--caution, #d98324);
+  color: var(--warning);
 }
 /* Inline stall pause panel on a list card. */
 .stall-panel {
@@ -613,7 +630,7 @@ async function deleteSelected(): Promise<void> {
   gap: 6px;
   background: var(--panel-raised-bg);
   border: 1px solid var(--control-border);
-  border-radius: 999px;
+  border-radius: 0;
   padding: 4px 12px 4px 4px;
   font-size: 0.9rem;
 }

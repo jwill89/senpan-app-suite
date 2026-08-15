@@ -12,7 +12,7 @@ type AnnouncementType struct {
 
 // AnnouncementRole is a named Discord role that an announcement can optionally
 // tag (ping) when it posts: a friendly group label plus the role's Discord ID.
-// It's a convenience picker — managed like announcement types — so admins choose
+// It's a convenience picker - managed like announcement types - so admins choose
 // a role by name instead of pasting raw snowflake IDs. Tagging happens in the
 // message content (above the embed), because role mentions inside an embed don't
 // notify anyone.
@@ -24,7 +24,7 @@ type AnnouncementRole struct {
 }
 
 // Announcement is an admin-authored message posted to Discord as an embed via
-// its type's webhook — manually ("send now") or automatically on a schedule.
+// its type's webhook - manually ("send now") or automatically on a schedule.
 //
 // One IANA Timezone anchors every time on the announcement: the admin enters
 // wall-clock values (StartLocal/EndLocal for the event window, OnceLocal for a
@@ -47,7 +47,7 @@ type Announcement struct {
 	StartAt    string `json:"start_at"`    // computed event start, UTC RFC-3339
 	EndAt      string `json:"end_at"`      // computed event end, UTC RFC-3339
 	// Discord timestamp styles (t|T|d|D|f|F|R) for how the start/end render in the
-	// embed; each is chosen independently ("" = default — F for start, t for end).
+	// embed; each is chosen independently ("" = default - F for start, t for end).
 	StartFormat string `json:"start_format"`
 	EndFormat   string `json:"end_format"`
 	// DynamicDates re-anchors the start/end onto the day the announcement is posted
@@ -56,7 +56,7 @@ type Announcement struct {
 	// than the first one. StartLocal/EndLocal define the template time-of-day.
 	DynamicDates bool `json:"dynamic_dates"`
 
-	// Schedule (all optional; ScheduleKind == "" means unscheduled — manual only).
+	// Schedule (all optional; ScheduleKind == "" means unscheduled - manual only).
 	// All recurring/one-time times are wall-clock values anchored to Timezone.
 	ScheduleKind        string `json:"schedule_kind"`          // ""|once|daily|weekly|monthly
 	Timezone            string `json:"timezone"`               // IANA zone anchoring every time on the announcement
@@ -93,14 +93,14 @@ type AnnouncementButton struct {
 	URL   string `json:"url"`
 }
 
-// AnnouncementTypesResponse is the body of GET /api/announcement-types — all
+// AnnouncementTypesResponse is the body of GET /api/announcement-types - all
 // announcement types. JSON: {"types": [...]}.
 type AnnouncementTypesResponse struct {
 	Types []AnnouncementType `json:"types"`
 }
 
 // AnnouncementTypeResponse is the body of POST /api/announcement-types (create)
-// and PUT /api/announcement-types/{id} (update) — the saved type. The handler
+// and PUT /api/announcement-types/{id} (update) - the saved type. The handler
 // passes the *AnnouncementType from GetAnnouncementType through, so the pointer is
 // preserved (a nil serializes to null, matching the old map literal). JSON:
 // {"type": ...}.
@@ -108,29 +108,29 @@ type AnnouncementTypeResponse struct {
 	Type *AnnouncementType `json:"type"`
 }
 
-// AnnouncementRolesResponse is the body of GET /api/announcement-roles — all
+// AnnouncementRolesResponse is the body of GET /api/announcement-roles - all
 // taggable Discord roles. JSON: {"roles": [...]}.
 type AnnouncementRolesResponse struct {
 	Roles []AnnouncementRole `json:"roles"`
 }
 
 // AnnouncementRoleResponse is the body of POST /api/announcement-roles (create)
-// and PUT /api/announcement-roles/{id} (update) — the saved role. The handler
-// passes the *AnnouncementRole through (nil → null). JSON: {"role": ...}.
+// and PUT /api/announcement-roles/{id} (update) - the saved role. The handler
+// passes the *AnnouncementRole through (nil -> null). JSON: {"role": ...}.
 type AnnouncementRoleResponse struct {
 	Role *AnnouncementRole `json:"role"`
 }
 
-// AnnouncementsResponse is the body of GET /api/announcements — all announcements
+// AnnouncementsResponse is the body of GET /api/announcements - all announcements
 // (with type_name joined). JSON: {"announcements": [...]}.
 type AnnouncementsResponse struct {
 	Announcements []Announcement `json:"announcements"`
 }
 
 // AnnouncementResponse is the body of POST /api/announcements
-// {action:"create"|"update"|"send_now"|"skip_next"} — the saved announcement.
+// {action:"create"|"update"|"send_now"|"skip_next"} - the saved announcement.
 // The handler passes the *Announcement from GetAnnouncement through, so the
-// pointer is preserved (nil → null, matching the old map literal). JSON:
+// pointer is preserved (nil -> null, matching the old map literal). JSON:
 // {"announcement": ...}.
 type AnnouncementResponse struct {
 	Announcement *Announcement `json:"announcement"`

@@ -63,7 +63,7 @@ describe('ImagePicker', () => {
     await flushPromises()
     const select = wrapper.find('select').element
     expect(select.value).toBe('raffles')
-    expect(wrapper.find('.img-thumb.active').exists()).toBe(true)
+    expect(wrapper.find('.img-thumb.is-active').exists()).toBe(true)
   })
 
   it('emits the path by default when an image is clicked', async () => {

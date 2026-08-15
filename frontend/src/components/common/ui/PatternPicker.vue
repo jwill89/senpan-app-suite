@@ -1,13 +1,13 @@
 <script setup lang="ts">
 /**
- * Shared win-pattern picker — one toolbar row (search + category filter + Select
+ * Shared win-pattern picker - one toolbar row (search + category filter + Select
  * All + Hide/Show All) over a grouped, collapsible checkbox grid that flattens
  * while searching. Used by the New Game setup (GameTab) and the Game Preset
  * editor (PresetsTab), so the two stay identical by construction.
  *
  * `v-model` is the selected pattern-id array. "Select All" acts only on the
- * patterns actually *displayed* — it respects the category filter, the search,
- * and collapsed categories — so patterns hidden by any of those keep their
+ * patterns actually *displayed* - it respects the category filter, the search,
+ * and collapsed categories - so patterns hidden by any of those keep their
  * current selection (`patterns.displayedPatterns`).
  *
  * Search/filter/collapse state lives in the patterns store (shared with the
@@ -53,11 +53,11 @@ function toggleSelectAll(): void {
 </script>
 
 <template>
-  <div class="pattern-picker">
+  <div>
     <div class="flex-toolbar mb-12">
       <SearchInput
         v-model="patterns.patternSearchQuery"
-        placeholder="Search patterns…"
+        placeholder="Search patterns..."
         aria-label="Search patterns"
       />
       <select
@@ -86,7 +86,10 @@ function toggleSelectAll(): void {
         class="btn-neutral btn-sm"
         @click="patterns.togglePatternsCollapsed()"
       >
-        {{ patterns.patternsCollapsed ? '▶ Show all' : '▼ Hide all' }}
+        <font-awesome-icon
+          :icon="['fas', patterns.patternsCollapsed ? 'chevron-right' : 'chevron-down']"
+        />
+        {{ patterns.patternsCollapsed ? 'Show all' : 'Hide all' }}
       </button>
     </div>
 
@@ -95,7 +98,7 @@ function toggleSelectAll(): void {
       <label
         v-for="p in patterns.gameFilteredPatterns"
         :key="p.id"
-        :class="['pattern-check', model.includes(p.id) ? 'selected' : '']"
+        :class="['pattern-check', model.includes(p.id) ? 'is-selected' : '']"
       >
         <input v-model="model" type="checkbox" :value="p.id" />
         <span class="dot"></span>
@@ -118,19 +121,24 @@ function toggleSelectAll(): void {
           @keydown.enter="patterns.toggleCategoryCollapsed(group.category.id)"
           @keydown.space.prevent="patterns.toggleCategoryCollapsed(group.category.id)"
         >
-          <span class="text-dim">
-            {{ patterns.isCategoryCollapsed(group.category.id) ? '▶' : '▼' }}
+          <span class="text-muted">
+            <font-awesome-icon
+              :icon="[
+                'fas',
+                patterns.isCategoryCollapsed(group.category.id) ? 'chevron-right' : 'chevron-down',
+              ]"
+            />
           </span>
           <h4>
             {{ group.category.name }}
-            <span class="text-dim fw-normal">({{ group.patterns.length }})</span>
+            <span class="text-muted fw-normal">({{ group.patterns.length }})</span>
           </h4>
         </div>
         <div v-show="!patterns.isCategoryCollapsed(group.category.id)" class="pattern-checks">
           <label
             v-for="p in group.patterns"
             :key="p.id"
-            :class="['pattern-check', model.includes(p.id) ? 'selected' : '']"
+            :class="['pattern-check', model.includes(p.id) ? 'is-selected' : '']"
           >
             <input v-model="model" type="checkbox" :value="p.id" />
             <span class="dot"></span>

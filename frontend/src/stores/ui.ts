@@ -34,7 +34,7 @@ export const useUiStore = defineStore('ui', () => {
   })
   let toastTimer: ReturnType<typeof setTimeout> | undefined
 
-  // ── Route loading ──────────────────────────────────────────────────────────
+  // -- Route loading ----------------------------------------------------------
   // True while a route navigation is in flight (async guard + lazy chunk fetch),
   // driving the top progress bar. Set from the router guards (see src/router).
   const routeLoading = ref(false)
@@ -42,15 +42,15 @@ export const useUiStore = defineStore('ui', () => {
     routeLoading.value = v
   }
 
-  // ── Realtime connection status ───────────────────────────────────────────────
+  // -- Realtime connection status -----------------------------------------------
   // Reflects the shared WebSocket state so the player view can show a "Live" /
-  // "Reconnecting…" badge. Driven by WsClient via the useWebSocket composable.
+  // "Reconnecting..." badge. Driven by WsClient via the useWebSocket composable.
   const wsStatus = ref<'closed' | 'connecting' | 'open' | 'reconnecting'>('closed')
   function setWsStatus(s: 'closed' | 'connecting' | 'open' | 'reconnecting'): void {
     wsStatus.value = s
   }
 
-  // ── Themed confirm dialog ──────────────────────────────────────────────────
+  // -- Themed confirm dialog --------------------------------------------------
   const confirmState = ref<ConfirmState>({
     show: false,
     message: '',

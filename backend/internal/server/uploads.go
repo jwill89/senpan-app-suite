@@ -81,7 +81,7 @@ func slugify(s string, sep byte) string {
 	return strings.Trim(out, string(sep))
 }
 
-// validSlug reports whether name is a non-empty string of [a-z0-9] plus sep — the
+// validSlug reports whether name is a non-empty string of [a-z0-9] plus sep - the
 // shape slugify produces. Used to validate a client-supplied directory name.
 func validSlug(name string, sep byte) bool {
 	if name == "" {
@@ -98,7 +98,7 @@ func validSlug(name string, sep byte) bool {
 // uploadFileFunc validates and saves one multipart file part into destDir. It
 // returns the display name plus an empty reason on success, or a name and a
 // non-empty skip reason to record the file as skipped. It never writes to the
-// ResponseWriter — the shared skeleton accumulates its result.
+// ResponseWriter - the shared skeleton accumulates its result.
 type uploadFileFunc func(header *multipart.FileHeader, destDir string) (name, reason string)
 
 // handleMultipartUploads runs the shared "upload one or more files" skeleton used
@@ -197,7 +197,7 @@ func isAllowedImageContentType(ct string) bool {
 // an allowed raster image, writes it under <webRoot>/<relDir> keeping the uploaded
 // filename, and writes the JSON {"url": <fullURL>} success response. On any failure
 // it writes the error response itself. relDir is a forward-slash path that doubles
-// as the URL path. A same-named upload overwrites the existing file — matching the
+// as the URL path. A same-named upload overwrites the existing file - matching the
 // central image-hosting and Carrd uploads; the app no longer rewrites uploaded
 // names (callers that auto-clean covers must therefore guard against shared files).
 func (s *Server) saveSingleImageUpload(w http.ResponseWriter, r *http.Request, relDir string) {

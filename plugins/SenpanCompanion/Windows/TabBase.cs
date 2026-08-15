@@ -22,7 +22,7 @@ internal abstract class TabBase
     private const long RetryCooldownMs = 3000;
 
     // Written from the background Run op (see below) and read by Draw on the framework
-    // thread, so both are volatile — the render loop must always see the latest value the
+    // thread, so both are volatile - the render loop must always see the latest value the
     // worker published, not a stale cached copy.
     protected volatile string Status = string.Empty;
     protected volatile bool Busy;

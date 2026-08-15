@@ -55,7 +55,7 @@ func (s *Server) handleSettingsGet(w http.ResponseWriter, r *http.Request) {
 	result := make(map[string]string, len(settingsKeys))
 	for _, key := range settingsKeys {
 		// Never leak secret settings (e.g. the Discord webhook URL) to public
-		// callers — only admins, who need them to edit on the settings page.
+		// callers - only admins, who need them to edit on the settings page.
 		if secretSettings[key] && !admin {
 			result[key] = ""
 			continue
@@ -68,7 +68,7 @@ func (s *Server) handleSettingsGet(w http.ResponseWriter, r *http.Request) {
 	}
 	// Uploaded fonts (name + serving token) so the frontend can register
 	// @font-face rules and offer them in the header-font picker (alongside
-	// Google Fonts). Tokens are minted fresh per response — see fontserve.go.
+	// Google Fonts). Tokens are minted fresh per response - see fontserve.go.
 	writeJSON(w, http.StatusOK, model.SettingsResponse{
 		Settings:      result,
 		UploadedFonts: s.uploadedFontRefs(),
@@ -108,14 +108,14 @@ func (s *Server) handleSettingsUpdate(w http.ResponseWriter, r *http.Request) {
 		// Per-club Discord webhook settings must be a Discord webhook URL so a saved
 		// value can't point the server's outbound POSTs at an arbitrary host. An
 		// empty value clears it. Scope this to the webhook keys only (prefix set by
-		// clubWebhookKey) — NOT every secret setting, since google_fonts_api_key is
+		// clubWebhookKey) - NOT every secret setting, since google_fonts_api_key is
 		// also secret but is not a webhook and must not be validated as one.
 		if strings.HasPrefix(key, "discord_webhook_url_") && val != "" && !isDiscordWebhookURL(val) {
-			writeError(w, http.StatusBadRequest, "Discord webhook URLs must look like https://discord.com/api/webhooks/…")
+			writeError(w, http.StatusBadRequest, "Discord webhook URLs must look like https://discord.com/api/webhooks/...")
 			return
 		}
 		// The AniList endpoint drives an outbound server request, so restrict it
-		// to anilist.co (SSRF defense) — an empty value falls back to the default.
+		// to anilist.co (SSRF defense) - an empty value falls back to the default.
 		if key == "anilist_api_url" && val != "" && !isAllowedAniListURL(val) {
 			writeError(w, http.StatusBadRequest, "AniList API URL must be an https URL under anilist.co")
 			return
@@ -125,25 +125,25 @@ func (s *Server) handleSettingsUpdate(w http.ResponseWriter, r *http.Request) {
 		case "default_draw_delay":
 			n, err := strconv.Atoi(val)
 			if err != nil || n < 0 || n > 60 {
-				writeError(w, http.StatusBadRequest, "Draw delay must be 0–60")
+				writeError(w, http.StatusBadRequest, "Draw delay must be 0-60")
 				return
 			}
 		case "frequent_winner_threshold":
 			n, err := strconv.Atoi(val)
 			if err != nil || n < 1 || n > 100 {
-				writeError(w, http.StatusBadRequest, "Winner threshold must be 1–100")
+				writeError(w, http.StatusBadRequest, "Winner threshold must be 1-100")
 				return
 			}
 		case "frequent_winner_hours":
 			n, err := strconv.Atoi(val)
 			if err != nil || n < 1 || n > 168 {
-				writeError(w, http.StatusBadRequest, "Winner hours must be 1–168")
+				writeError(w, http.StatusBadRequest, "Winner hours must be 1-168")
 				return
 			}
 		case "yoever_cooldown_seconds":
 			n, err := strconv.Atoi(val)
 			if err != nil || n < 0 || n > 3600 {
-				writeError(w, http.StatusBadRequest, "It's Yoever cooldown must be 0–3600 seconds")
+				writeError(w, http.StatusBadRequest, "It's Yoever cooldown must be 0-3600 seconds")
 				return
 			}
 		case "custom_card_cost":
@@ -151,13 +151,13 @@ func (s *Server) handleSettingsUpdate(w http.ResponseWriter, r *http.Request) {
 			// non-negative number; capped well above any realistic price.
 			n, err := strconv.Atoi(val)
 			if err != nil || n < 0 || n > 1_000_000_000 {
-				writeError(w, http.StatusBadRequest, "Custom card cost must be 0–1,000,000,000 gil")
+				writeError(w, http.StatusBadRequest, "Custom card cost must be 0-1,000,000,000 gil")
 				return
 			}
 		case "header_font":
 			// Flows verbatim into the --header-font CSS variable on every client
 			// (theme.ts applyHeaderFont), so reject anything that could break out
-			// of the quoted CSS value and inject rules — same guard as font names.
+			// of the quoted CSS value and inject rules - same guard as font names.
 			if len(val) > 100 {
 				writeError(w, http.StatusBadRequest, "Header font name is too long (max 100 characters)")
 				return

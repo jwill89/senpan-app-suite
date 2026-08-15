@@ -3,8 +3,8 @@
  *
  * Holds the transient list of on-screen reactions (the bouncing image + the
  * triggering player's name) and the per-client opt-out. It is deliberately
- * view-agnostic — the overlay lives in the app shell so the effect shows on both
- * the player and admin views — and knows nothing about the trigger button or the
+ * view-agnostic - the overlay lives in the app shell so the effect shows on both
+ * the player and admin views - and knows nothing about the trigger button or the
  * server toggle (those live in the player/game stores). The WebSocket dispatch
  * calls `show()` when a `yoever` message arrives; `muted` (persisted locally)
  * lets a user suppress the sound + animation on their own screen without
@@ -23,7 +23,7 @@ const MAX_ACTIVE = 8
 export interface ActiveYoever {
   /** Unique key for the v-for / removal. */
   id: number
-  /** Player name shown under the image (may be empty → the overlay shows a fallback). */
+  /** Player name shown under the image (may be empty -> the overlay shows a fallback). */
   name: string
   /** Random vertical baseline (vh) so stacked reactions don't perfectly overlap. */
   top: number
@@ -36,7 +36,7 @@ export const useYoeverStore = defineStore('yoever', () => {
   const muted = ref(localStorage.getItem('bingo_yoever_muted') === '1')
   /**
    * Client toggle for the reaction SOUND (this_is_bad.mp3). Independent of the
-   * main Sound mode (off/basic/game) — it plays whenever this is on, regardless —
+   * main Sound mode (off/basic/game) - it plays whenever this is on, regardless -
    * but still respects the master sound volume. On by default.
    */
   const soundEnabled = ref(localStorage.getItem('bingo_yoever_sound') !== '0')
@@ -59,12 +59,12 @@ export const useYoeverStore = defineStore('yoever', () => {
    * it. The sound is only independently adjustable while effects are shown.
    */
   function toggleShowEffects(): void {
-    const willShow = muted.value // currently hidden → about to show
+    const willShow = muted.value // currently hidden -> about to show
     setMuted(!willShow)
     setSoundEnabled(willShow)
   }
 
-  /** Toggles the reaction sound — only while effects are shown (locked off
+  /** Toggles the reaction sound - only while effects are shown (locked off
    *  otherwise, since the sound can't play without the effect being active). */
   function toggleSound(): void {
     if (muted.value) return

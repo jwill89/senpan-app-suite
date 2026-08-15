@@ -13,7 +13,7 @@ import (
 	"app-suite/internal/server"
 )
 
-// itoa is a tiny local int64→string helper to keep test call sites terse.
+// itoa is a tiny local int64->string helper to keep test call sites terse.
 func itoa(n int64) string { return strconv.FormatInt(n, 10) }
 
 // createReadingListIn creates a list in the given club, returning its id.
@@ -96,7 +96,7 @@ func TestReadingListAndItemHTTPCRUD(t *testing.T) {
 	}
 	resp.Body.Close()
 
-	// Delete the item (DELETE the item resource → 204).
+	// Delete the item (DELETE the item resource -> 204).
 	resp = e.del(t, "/api/book-clubs/yaoi/reading-lists/"+itoa(listID)+"/items/"+itoa(itemID))
 	if resp.StatusCode != http.StatusNoContent {
 		t.Fatalf("delete item status = %d; want 204", resp.StatusCode)
@@ -113,8 +113,8 @@ func TestReadingListAndItemHTTPCRUD(t *testing.T) {
 
 // TestReadingListClubMismatchGuard verifies the security guard: a list created in
 // one club cannot be read or mutated through another club's path, even by an
-// admin (who holds every club's permission). The mismatch is a 404 — the id is
-// not disclosed to the wrong club — while the correct-club path still works.
+// admin (who holds every club's permission). The mismatch is a 404 - the id is
+// not disclosed to the wrong club - while the correct-club path still works.
 func TestReadingListClubMismatchGuard(t *testing.T) {
 	e := newTestEnv(t)
 	e.loginAdmin(t)
@@ -150,7 +150,7 @@ func TestReadingListClubMismatchGuard(t *testing.T) {
 		m.resp.Body.Close()
 	}
 
-	// The correct (yaoi) path still resolves the list — the guard didn't touch it.
+	// The correct (yaoi) path still resolves the list - the guard didn't touch it.
 	resp = e.get(t, yaoi)
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("yaoi detail status = %d; want 200", resp.StatusCode)
@@ -359,7 +359,7 @@ func TestBookclubLookupMapsAniListFields(t *testing.T) {
 	// anilistURL() now enforces the SSRF allowlist at read time, so a localhost
 	// endpoint would be rejected and fall back to the real AniList. Keep a valid,
 	// allowlisted endpoint URL and route the request to the mock via a host-rewriting
-	// transport — exercising the real allowlisted path end to end.
+	// transport - exercising the real allowlisted path end to end.
 	if err := e.store.SetSetting("anilist_api_url", "https://graphql.anilist.co"); err != nil {
 		t.Fatal(err)
 	}
@@ -395,7 +395,7 @@ func TestBookclubLookupMapsAniListFields(t *testing.T) {
 	if r0["cover_image"] != "https://s4.anilist.co/cover.jpg" {
 		t.Errorf("cover_image = %v", r0["cover_image"])
 	}
-	// MANGA + KR → Manhwa.
+	// MANGA + KR -> Manhwa.
 	if r0["format"] != "Manhwa" {
 		t.Errorf("format = %v; want Manhwa", r0["format"])
 	}
@@ -405,7 +405,7 @@ func TestBookclubLookupMapsAniListFields(t *testing.T) {
 	if r0["chapters"] != "131" {
 		t.Errorf("chapters = %v", r0["chapters"])
 	}
-	// HTML stripped from the summary (<br> → newline, no tags left).
+	// HTML stripped from the summary (<br> -> newline, no tags left).
 	s, _ := r0["summary"].(string)
 	if strings.Contains(s, "<br>") || !strings.Contains(s, "Na-kyum is a talented artist.") {
 		t.Errorf("summary not stripped cleanly: %q", s)

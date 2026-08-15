@@ -60,13 +60,13 @@ func (s *Server) handleStyleGet(w http.ResponseWriter, r *http.Request) {
 // (PUT /api/styles/{id}) a style. The id comes from the path on PUT.
 type styleWriteRequest struct {
 	Name string `json:"name"`
-	// Tokens are the theme's design-token overrides (token name → CSS value). The
+	// Tokens are the theme's design-token overrides (token name -> CSS value). The
 	// store sanitizes them to the known allowlist; arbitrary CSS is not accepted.
 	Tokens         map[string]string `json:"tokens"`
 	BoardFlourish  string            `json:"board_flourish"`
 	NumberFlourish string            `json:"number_flourish"`
 	// IsPublic marks the theme as selectable by end users in the client-side picker.
-	// Only settable here (the admin panel) — private themes stay admin-only.
+	// Only settable here (the admin panel) - private themes stay admin-only.
 	IsPublic bool `json:"is_public"`
 }
 

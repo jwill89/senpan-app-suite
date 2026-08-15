@@ -62,7 +62,7 @@ describe('WsClient URL building', () => {
 })
 
 describe('WsClient lifecycle', () => {
-  it('reports connecting → open and does not fire onReconnected on the first open', () => {
+  it('reports connecting -> open and does not fire onReconnected on the first open', () => {
     const cb = makeCb()
     const c = new WsClient(cb)
     c.connect()
@@ -110,7 +110,7 @@ describe('WsClient lifecycle', () => {
     const cb = makeCb()
     const c = new WsClient(cb)
     c.connect()
-    // Drive repeated close→backoff cycles until the limit (10) is exceeded.
+    // Drive repeated close->backoff cycles until the limit (10) is exceeded.
     for (let i = 0; i < 11; i++) {
       latest().onclose?.()
       vi.advanceTimersByTime(16000) // >= max backoff cap
@@ -145,7 +145,7 @@ describe('WsClient lifecycle', () => {
     expect(vi.getTimerCount()).toBeGreaterThan(0) // keepalive interval armed
     latest().onclose?.()
     expect(cb.onStatus).toHaveBeenLastCalledWith('closed')
-    expect(vi.getTimerCount()).toBe(0) // interval cleared — no leaked timer
+    expect(vi.getTimerCount()).toBe(0) // interval cleared - no leaked timer
   })
 
   it('does not emit a spurious "closed" status during an automatic reconnect', () => {
@@ -153,8 +153,8 @@ describe('WsClient lifecycle', () => {
     const c = new WsClient(cb)
     c.connect()
     latest().onopen?.()
-    latest().onclose?.() // schedules a reconnect (status → reconnecting)
-    vi.advanceTimersByTime(1000) // backoff elapses → connect() re-opens
+    latest().onclose?.() // schedules a reconnect (status -> reconnecting)
+    vi.advanceTimersByTime(1000) // backoff elapses -> connect() re-opens
     latest().onopen?.()
     const statuses = (cb.onStatus as ReturnType<typeof vi.fn>).mock.calls.map((call) => call[0])
     expect(statuses).not.toContain('closed') // reconnect never flashes the badge off

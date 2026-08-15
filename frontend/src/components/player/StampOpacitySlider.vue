@@ -3,9 +3,9 @@
  * Stamp opacity slider. Mirrors the original "Stamp opacity" block.
  *
  * Uses a fully custom-styled range input (appearance:none) rather than the
- * native `accent-color` slider, whose thumb is inset from the track ends — that
+ * native `accent-color` slider, whose thumb is inset from the track ends - that
  * inset made 0% / 100% look reachable "past" the visible track. Here the thumb
- * travels flush to both edges, and `--fill` positions the gold fill to end at
+ * travels flush to both edges, and `--fill` positions the highlight fill to end at
  * the thumb centre (accounting for the 16px thumb width) so the two stay aligned.
  */
 import { computed } from 'vue'

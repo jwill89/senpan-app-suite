@@ -27,12 +27,12 @@ func mustParse(t *testing.T, s string) time.Time {
 
 func TestNextOccurrenceDaily(t *testing.T) {
 	a := model.Announcement{ScheduleKind: "daily", Timezone: "UTC", ScheduleMinutes: 19*60 + 30} // 19:30 UTC
-	// Before today's time → fires today.
+	// Before today's time -> fires today.
 	got := nextAnnouncementOccurrence(a, mustParse(t, "2026-06-13T10:00:00Z"))
 	if got != "2026-06-13T19:30:00Z" {
 		t.Errorf("daily (before): got %q", got)
 	}
-	// After today's time → fires tomorrow.
+	// After today's time -> fires tomorrow.
 	got = nextAnnouncementOccurrence(a, mustParse(t, "2026-06-13T20:00:00Z"))
 	if got != "2026-06-14T19:30:00Z" {
 		t.Errorf("daily (after): got %q", got)
@@ -42,11 +42,11 @@ func TestNextOccurrenceDaily(t *testing.T) {
 func TestNextOccurrenceWeekly(t *testing.T) {
 	// "Every Saturday at 19:00 UTC". 2026-06-13 is a Saturday.
 	a := model.Announcement{ScheduleKind: "weekly", Timezone: "UTC", ScheduleWeekdays: "6", ScheduleMinutes: 19 * 60}
-	// Saturday morning → same day 19:00.
+	// Saturday morning -> same day 19:00.
 	if got := nextAnnouncementOccurrence(a, mustParse(t, "2026-06-13T09:00:00Z")); got != "2026-06-13T19:00:00Z" {
 		t.Errorf("weekly same-day: got %q", got)
 	}
-	// Saturday evening (after) → next Saturday.
+	// Saturday evening (after) -> next Saturday.
 	if got := nextAnnouncementOccurrence(a, mustParse(t, "2026-06-13T19:30:00Z")); got != "2026-06-20T19:00:00Z" {
 		t.Errorf("weekly next-week: got %q", got)
 	}
@@ -55,13 +55,13 @@ func TestNextOccurrenceWeekly(t *testing.T) {
 func TestNextOccurrenceWeeklyMultiDay(t *testing.T) {
 	// Tuesday(2) & Thursday(4) at 18:00 UTC. 2026-06-13 is Saturday.
 	a := model.Announcement{ScheduleKind: "weekly", Timezone: "UTC", ScheduleWeekdays: "2,4", ScheduleMinutes: 18 * 60}
-	// From Saturday → next is Tuesday 2026-06-16.
+	// From Saturday -> next is Tuesday 2026-06-16.
 	if got := nextAnnouncementOccurrence(a, mustParse(t, "2026-06-13T12:00:00Z")); got != "2026-06-16T18:00:00Z" {
-		t.Errorf("multi-day → Tue: got %q", got)
+		t.Errorf("multi-day -> Tue: got %q", got)
 	}
-	// From Tuesday after the time → Thursday 2026-06-18.
+	// From Tuesday after the time -> Thursday 2026-06-18.
 	if got := nextAnnouncementOccurrence(a, mustParse(t, "2026-06-16T19:00:00Z")); got != "2026-06-18T18:00:00Z" {
-		t.Errorf("multi-day → Thu: got %q", got)
+		t.Errorf("multi-day -> Thu: got %q", got)
 	}
 }
 
@@ -74,11 +74,11 @@ func TestNextOccurrenceMonthlyNth(t *testing.T) {
 		ScheduleWeekOfMonth: 3,
 		ScheduleMinutes:     20*60 + 21,
 	}
-	// June 2026: Saturdays fall on 6, 13, 20, 27 → 3rd = the 20th.
+	// June 2026: Saturdays fall on 6, 13, 20, 27 -> 3rd = the 20th.
 	if got := nextAnnouncementOccurrence(a, mustParse(t, "2026-06-01T00:00:00Z")); got != "2026-06-20T20:21:00Z" {
 		t.Errorf("monthly 3rd Sat (June): got %q", got)
 	}
-	// After June's occurrence → July's 3rd Saturday (Saturdays 4,11,18,25 → 18th).
+	// After June's occurrence -> July's 3rd Saturday (Saturdays 4,11,18,25 -> 18th).
 	if got := nextAnnouncementOccurrence(a, mustParse(t, "2026-06-20T21:00:00Z")); got != "2026-07-18T20:21:00Z" {
 		t.Errorf("monthly 3rd Sat (July): got %q", got)
 	}
@@ -100,7 +100,7 @@ func TestNextOccurrenceMonthlyLast(t *testing.T) {
 
 func TestNextOccurrenceMonthlyFifthSkipsShortMonths(t *testing.T) {
 	// "5th Saturday at 12:00". June 2026 has only 4 Saturdays; first 5th-Saturday
-	// month after is August 2026 (Saturdays 1,8,15,22,29 → the 29th).
+	// month after is August 2026 (Saturdays 1,8,15,22,29 -> the 29th).
 	a := model.Announcement{
 		ScheduleKind:        "monthly",
 		Timezone:            "UTC",
@@ -114,7 +114,7 @@ func TestNextOccurrenceMonthlyFifthSkipsShortMonths(t *testing.T) {
 }
 
 func TestNextOccurrenceTimezoneDST(t *testing.T) {
-	// "Every Sunday at 10:00 America/New_York" — the same wall-clock time maps to
+	// "Every Sunday at 10:00 America/New_York" - the same wall-clock time maps to
 	// a different UTC instant in summer (EDT, UTC-4) vs winter (EST, UTC-5),
 	// proving the recurrence is anchored to the zone and survives DST.
 	a := model.Announcement{
@@ -134,7 +134,7 @@ func TestNextOccurrenceTimezoneDST(t *testing.T) {
 }
 
 func TestNextOccurrenceOnceAndUnscheduled(t *testing.T) {
-	// once/"" recurrence math has no "next" — the cursor is managed elsewhere.
+	// once/"" recurrence math has no "next" - the cursor is managed elsewhere.
 	if got := nextAnnouncementOccurrence(model.Announcement{ScheduleKind: "once"}, time.Now()); got != "" {
 		t.Errorf("once should yield no recurrence: got %q", got)
 	}
@@ -149,7 +149,7 @@ func TestAdvanceCursor(t *testing.T) {
 		ScheduleKind: "weekly", Timezone: "UTC", ScheduleWeekdays: "6", ScheduleMinutes: 19 * 60,
 	}
 
-	// Fired on time → rolls forward to next week's Saturday slot.
+	// Fired on time -> rolls forward to next week's Saturday slot.
 	onTime := weekly
 	onTime.NextPostAt = "2026-06-13T19:00:00Z" // a Saturday
 	next, active := s.advanceCursorAt(onTime, mustParse(t, "2026-06-13T19:00:05Z"))
@@ -158,7 +158,7 @@ func TestAdvanceCursor(t *testing.T) {
 	}
 
 	// Overdue by more than a week (e.g. the server was down across a slot): the
-	// cursor must jump to the next FUTURE slot, not replay a past one — otherwise
+	// cursor must jump to the next FUTURE slot, not replay a past one - otherwise
 	// it stays due and re-posts every tick (the double-post bug).
 	overdue := weekly
 	overdue.NextPostAt = "2026-05-30T19:00:00Z" // ~2 Saturdays earlier
@@ -168,10 +168,10 @@ func TestAdvanceCursor(t *testing.T) {
 		t.Errorf("advance overdue: next=%q active=%v (want the next future slot)", next, active)
 	}
 	if !mustParse(t, next).After(now) {
-		t.Errorf("advance overdue: next %q is not after now %q — it would re-fire", next, now)
+		t.Errorf("advance overdue: next %q is not after now %q - it would re-fire", next, now)
 	}
 
-	// One-time has no next → deactivates.
+	// One-time has no next -> deactivates.
 	once := model.Announcement{ScheduleKind: "once", NextPostAt: "2026-06-13T19:00:00Z"}
 	if next, active := s.advanceCursorAt(once, mustParse(t, "2026-06-14T00:00:00Z")); active || next != "" {
 		t.Errorf("advance once: next=%q active=%v", next, active)
@@ -237,7 +237,7 @@ func TestPostDueAnnouncementsNoDoubleWhenOverdue(t *testing.T) {
 func TestPostDueAnnouncementsAmbiguousAdvances(t *testing.T) {
 	ts := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
 	closedURL := ts.URL
-	ts.Close() // the port now refuses connections → transport (ambiguous) error
+	ts.Close() // the port now refuses connections -> transport (ambiguous) error
 
 	s, id, startCursor := newSchedulerEnv(t, closedURL)
 	s.postDueAnnouncements(context.Background())
@@ -253,7 +253,7 @@ func TestPostDueAnnouncementsAmbiguousAdvances(t *testing.T) {
 
 // TestPostDueAnnouncementsHTTPErrorRetries verifies a definite non-delivery (an
 // HTTP error status, e.g. a 429 rate limit or 5xx) leaves the cursor untouched so
-// the next tick retries — preserving delivery without duplicating.
+// the next tick retries - preserving delivery without duplicating.
 func TestPostDueAnnouncementsHTTPErrorRetries(t *testing.T) {
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
@@ -294,7 +294,7 @@ func TestBuildAnnouncementEmbed(t *testing.T) {
 	if len(embed.Fields) != 2 {
 		t.Fatalf("expected 2 fields (time, details), got %d", len(embed.Fields))
 	}
-	// First field: full-width time. No formats set → defaults: long "F" start,
+	// First field: full-width time. No formats set -> defaults: long "F" start,
 	// short "t" end.
 	timeField := embed.Fields[0]
 	if timeField.Inline {
@@ -341,12 +341,12 @@ func TestBuildAnnouncementEmbedNoTimes(t *testing.T) {
 	if embed.Fields[0].Value != "Plain note." {
 		t.Errorf("details value: got %q", embed.Fields[0].Value)
 	}
-	// No explicit colour → brand accent default.
+	// No explicit colour -> brand accent default.
 	if embed.Color != accentColor {
 		t.Errorf("color: got %#x, want default %#x", embed.Color, accentColor)
 	}
 	if embed.Footer != nil {
-		t.Error("no time → no footer expected")
+		t.Error("no time -> no footer expected")
 	}
 }
 
@@ -366,7 +366,7 @@ func TestBuildAnnouncementEmbedLocation(t *testing.T) {
 	if loc.Inline || loc.Value != "Voice Channel #1" {
 		t.Errorf("location field: got inline=%v value=%q", loc.Inline, loc.Value)
 	}
-	// No location → no location field (just the details field remains).
+	// No location -> no location field (just the details field remains).
 	if got := buildAnnouncementEmbed(model.Announcement{Title: "X", Details: "y"}); len(got.Fields) != 1 {
 		t.Errorf("no location should yield only the details field, got %d", len(got.Fields))
 	}
@@ -389,8 +389,8 @@ func TestBuildAnnouncementEmbedLongDetails(t *testing.T) {
 		if len([]rune(f.Value)) > embedFieldValueMax {
 			t.Errorf("field %d length %d exceeds the %d cap", i, len([]rune(f.Value)), embedFieldValueMax)
 		}
-		if strings.Contains(f.Value, "…") {
-			t.Errorf("field %d was truncated with an ellipsis: %q…", i, f.Value[:20])
+		if strings.Contains(f.Value, "...") {
+			t.Errorf("field %d was truncated with an ellipsis: %q...", i, f.Value[:20])
 		}
 	}
 	if embed.Fields[0].Value != strings.Repeat("a", 1000) || embed.Fields[1].Value != strings.Repeat("b", 1000) {
@@ -432,12 +432,12 @@ func TestDynamicEventTimes(t *testing.T) {
 	}
 	ref := mustParse(t, "2026-06-17T09:00:00Z") // a Wednesday morning post
 
-	// Off → stored values unchanged.
+	// Off -> stored values unchanged.
 	if s, e := dynamicEventTimes(base, ref); s != base.StartAt || e != base.EndAt {
 		t.Errorf("dynamic off: got (%q, %q), want stored", s, e)
 	}
 
-	// On → re-anchored onto the post day, keeping 10pm and the next-day end.
+	// On -> re-anchored onto the post day, keeping 10pm and the next-day end.
 	on := base
 	on.DynamicDates = true
 	if s, e := dynamicEventTimes(on, ref); s != "2026-06-17T22:00:00Z" || e != "2026-06-18T01:00:00Z" {
@@ -453,7 +453,7 @@ func TestDynamicEventTimes(t *testing.T) {
 		t.Errorf("same-day: got (%q, %q), want (10:00, 14:00 on 06-17)", s, e)
 	}
 
-	// No start time → unchanged even when the flag is on.
+	// No start time -> unchanged even when the flag is on.
 	noStart := model.Announcement{DynamicDates: true, EndLocal: "2026-06-12T14:00", StartAt: "", EndAt: "x"}
 	if s, e := dynamicEventTimes(noStart, ref); s != "" || e != "x" {
 		t.Errorf("no start: got (%q, %q), want stored", s, e)
@@ -483,13 +483,13 @@ func TestBuildAnnouncementEmbedTimeFormat(t *testing.T) {
 
 func TestDiscordTimeStyle(t *testing.T) {
 	cases := []struct{ in, def, want string }{
-		{"", "F", "F"},     // empty → given default
-		{"", "t", "t"},     // empty → given default
+		{"", "F", "F"},     // empty -> given default
+		{"", "t", "t"},     // empty -> given default
 		{"f", "F", "f"},    // valid honored
 		{"R", "t", "R"},    // valid honored
 		{" t ", "F", "t"},  // trimmed
-		{"bad", "F", "F"},  // unknown → default
-		{"long", "t", "t"}, // unknown → default
+		{"bad", "F", "F"},  // unknown -> default
+		{"long", "t", "t"}, // unknown -> default
 	}
 	for _, c := range cases {
 		if got := discordTimeStyle(c.in, c.def); got != c.want {
@@ -498,7 +498,7 @@ func TestDiscordTimeStyle(t *testing.T) {
 	}
 }
 
-// TestDiscordMarkdown verifies the three Milkdown→Discord normalizations:
+// TestDiscordMarkdown verifies the three Milkdown->Discord normalizations:
 // backslash hard breaks, <br> tags, and escaped timestamp tokens.
 func TestDiscordMarkdown(t *testing.T) {
 	cases := []struct {
@@ -523,9 +523,9 @@ func TestDiscordMarkdown(t *testing.T) {
 		// CRLF (the editor stores it) is normalized to LF.
 		{"crlf normalized", "a\r\nb", "a\nb"},
 		// A <br> used as a standalone spacer paragraph (blank lines on both sides,
-		// CRLF) collapses to a single blank line — not a stack of them.
+		// CRLF) collapses to a single blank line - not a stack of them.
 		{"br spacer paragraph crlf", "a\r\n\r\n<br />\r\n\r\nb", "a\n\nb"},
-		// Loose list (blank line between every item) → tight list.
+		// Loose list (blank line between every item) -> tight list.
 		{"loose bullet list", "* one\r\n\r\n* two\r\n\r\n* three", "* one\n* two\n* three"},
 		{"loose ordered list", "1. a\r\n\r\n2. b", "1. a\n2. b"},
 		// A loose list whose items span multiple (indented) lines still tightens.
@@ -550,9 +550,9 @@ func TestColorFromHex(t *testing.T) {
 		{"#1abc9c", 0x1abc9c},
 		{"1abc9c", 0x1abc9c},
 		{"  #FFFFFF  ", 0xFFFFFF},
-		{"", accentColor},            // empty → default
-		{"not-a-color", accentColor}, // invalid hex → default
-		{"#ffffffff", accentColor},   // out of 24-bit range → default
+		{"", accentColor},            // empty -> default
+		{"not-a-color", accentColor}, // invalid hex -> default
+		{"#ffffffff", accentColor},   // out of 24-bit range -> default
 	}
 	for _, c := range cases {
 		if got := colorFromHex(c.in, accentColor); got != c.want {
@@ -561,7 +561,7 @@ func TestColorFromHex(t *testing.T) {
 	}
 }
 
-// itoa is a tiny int64→string helper for assembling expected token strings.
+// itoa is a tiny int64->string helper for assembling expected token strings.
 func itoa(n int64) string {
 	return strconv.FormatInt(n, 10)
 }
@@ -575,7 +575,7 @@ func TestSanitizeAnnouncementButtons(t *testing.T) {
 		{Label: "Two", URL: "https://example.com/2"},
 		{Label: "Three", URL: "https://example.com/3"},
 		{Label: "Four", URL: "https://example.com/4"},
-		{Label: "Five", URL: "https://example.com/5"}, // 6th valid → capped out
+		{Label: "Five", URL: "https://example.com/5"}, // 6th valid -> capped out
 	}
 	got := sanitizeAnnouncementButtons(in)
 	if len(got) != maxAnnouncementButtons {
@@ -612,7 +612,7 @@ func TestAnnouncementComponents(t *testing.T) {
 	if row[1].Emoji == nil || row[1].Emoji.Name != "wave" || row[1].Emoji.ID != "123" {
 		t.Errorf("button 1 custom emoji: %+v", row[1].Emoji)
 	}
-	// No buttons → no components (so the payload omits the field entirely).
+	// No buttons -> no components (so the payload omits the field entirely).
 	if got := announcementComponents(model.Announcement{}); got != nil {
 		t.Errorf("no buttons should yield nil components, got %+v", got)
 	}
@@ -626,18 +626,18 @@ func TestAnnouncementMention(t *testing.T) {
 	defer st.Close()
 	s := &Server{store: st}
 
-	// No mention → empty content, no whitelist.
+	// No mention -> empty content, no whitelist.
 	if c, am := s.announcementMention(model.Announcement{}); c != "" || am != nil {
 		t.Errorf("none: got content=%q allowed=%+v", c, am)
 	}
 
-	// @everyone → content + parse ["everyone"].
+	// @everyone -> content + parse ["everyone"].
 	c, am := s.announcementMention(model.Announcement{Mention: "everyone"})
 	if c != "@everyone" || am == nil || len(am.Parse) != 1 || am.Parse[0] != "everyone" {
 		t.Errorf("everyone: got content=%q allowed=%+v", c, am)
 	}
 
-	// A managed role → "<@&id>" with the role whitelisted (and parse suppressed).
+	// A managed role -> "<@&id>" with the role whitelisted (and parse suppressed).
 	id, err := st.CreateAnnouncementRole("Crew", "123456789012345678")
 	if err != nil {
 		t.Fatal(err)
@@ -650,7 +650,7 @@ func TestAnnouncementMention(t *testing.T) {
 		t.Errorf("role: parse should be empty to suppress other mentions, got %+v", am.Parse)
 	}
 
-	// A role reference that no longer resolves → no mention (announcement still posts).
+	// A role reference that no longer resolves -> no mention (announcement still posts).
 	if c, am := s.announcementMention(model.Announcement{Mention: "role:999999"}); c != "" || am != nil {
 		t.Errorf("missing role: got content=%q allowed=%+v", c, am)
 	}
@@ -658,7 +658,7 @@ func TestAnnouncementMention(t *testing.T) {
 
 func TestParseEmoji(t *testing.T) {
 	if e := parseEmoji("  "); e != nil {
-		t.Errorf("blank → nil, got %+v", e)
+		t.Errorf("blank -> nil, got %+v", e)
 	}
 	if e := parseEmoji("🎉"); e == nil || e.Name != "🎉" || e.ID != "" {
 		t.Errorf("unicode emoji: %+v", e)

@@ -36,13 +36,13 @@ export function useWebSocket() {
   const logs = useLogsStore()
   const yoever = useYoeverStore()
 
-  // Route-based context predicates (replace the old `ui.view === …` checks).
+  // Route-based context predicates (replace the old `ui.view === ...` checks).
   const isPlayerView = (): boolean => router.currentRoute.value.name === 'player'
   const isAdminView = (): boolean => {
     const n = router.currentRoute.value.name
     // The auth pages (login/register) are under the `admin-` name prefix but have
-    // no live data, so they must NOT keep a socket open — otherwise a post-logout
-    // landing on them fires "Connection lost. Reconnecting…" toasts.
+    // no live data, so they must NOT keep a socket open - otherwise a post-logout
+    // landing on them fires "Connection lost. Reconnecting..." toasts.
     return (
       typeof n === 'string' &&
       n.startsWith('admin') &&
@@ -122,7 +122,7 @@ export function useWebSocket() {
         break
       case 'halftime_minigame': {
         // BE-2 stamps the owning game id; ignore a prompt for a game other than
-        // the one this player is watching (older servers omit it — apply as before).
+        // the one this player is watching (older servers omit it - apply as before).
         const gid = messageGameId(msg)
         if (isPlayerView() && (gid === undefined || gid === player.playerGame?.id)) {
           player.showMinigameModal = true
@@ -173,7 +173,7 @@ export function useWebSocket() {
         if (isAdminView()) admin.refreshResource(msg.resource)
         break
       case 'log':
-        // Live server-log tail — append to the viewer (it self-limits to the
+        // Live server-log tail - append to the viewer (it self-limits to the
         // admin Logs tab: entries only accumulate while that store is in use).
         if (isAdminView()) logs.appendLive(msg.entry)
         break
@@ -194,7 +194,7 @@ export function useWebSocket() {
     if (isPlayerView() && player.playerCard) {
       const oldGameId = player.playerGame?.id
       if (!g && player.playerGame) {
-        // The game the player was watching has ended — show a thank-you summary
+        // The game the player was watching has ended - show a thank-you summary
         // (a neutral fact, the call count; we never track their board for them).
         player.endedCalledCount = player.playerGame.called_numbers.length
         player.gameEnded = true
@@ -206,10 +206,10 @@ export function useWebSocket() {
       if (g) {
         if (g.id !== oldGameId) {
           player.loadStamps()
-          // A new game clears every card's cooldown server-side — re-read ours
+          // A new game clears every card's cooldown server-side - re-read ours
           // (a fresh game id has no stored expiry) so the button starts enabled.
           player.loadYoeverCooldown()
-          // A new game started — clear any prior "game over"/last-called state.
+          // A new game started - clear any prior "game over"/last-called state.
           player.gameEnded = false
           player.lastDrawn = null
         }
@@ -238,14 +238,14 @@ export function useWebSocket() {
     const drawn = msg.drawn
     const gid = messageGameId(msg)
 
-    // Player view — append the drawn number to local called_numbers and surface
+    // Player view - append the drawn number to local called_numbers and surface
     // it as the "last called" announcement (plus the opt-in chime/vibration).
     if (isPlayerView() && player.playerGame) {
       // Drop a draw stamped for a different game (stale frame around a game change).
       if (gid !== undefined && gid !== player.playerGame.id) return
       // Guard against a re-delivered draw double-counting: each bingo number is
       // drawn at most once, so its presence in called_numbers means we've already
-      // applied (and announced) it — skip the append, tally, and chime.
+      // applied (and announced) it - skip the append, tally, and chime.
       if (!player.playerGame.called_numbers.includes(drawn.number)) {
         player.playerGame.called_numbers.push(drawn.number)
         player.playerGame.total_called = player.playerGame.called_numbers.length
@@ -258,7 +258,7 @@ export function useWebSocket() {
       }
     }
 
-    // Admin view — only if we don't already have this number
+    // Admin view - only if we don't already have this number
     if (isAdminView() && game.currentGame) {
       if (gid !== undefined && gid !== game.currentGame.id) return
       const alreadyHas = game.currentGame.called_numbers.includes(drawn.number)
@@ -280,7 +280,7 @@ export function useWebSocket() {
    * counter always updates (even when this client has opted out, so an admin
    * monitoring the game still sees it climb). "Show effects" (not muted) is the
    * master: `show()` self-gates the animation on it, and the sound only plays when
-   * effects are shown AND the separate "play sound" toggle is on — the latter is
+   * effects are shown AND the separate "play sound" toggle is on - the latter is
    * independent of the main sound mode, but still at the master volume.
    */
   function handleYoever(msg: Extract<WsMessage, { type: 'yoever' }>): void {
@@ -290,7 +290,7 @@ export function useWebSocket() {
   }
 
   /**
-   * Handle a card_deleted message — the player's card was deleted server-side.
+   * Handle a card_deleted message - the player's card was deleted server-side.
    * Disconnect, reset, and return home.
    */
   function handleCardDeleted(): void {
@@ -316,7 +316,7 @@ export function useWebSocket() {
         await game.loadGameState()
       }
     } catch {
-      /* silent — WebSocket will deliver future updates */
+      /* silent - WebSocket will deliver future updates */
     }
   }
 

@@ -12,7 +12,7 @@ namespace SenpanCompanion.Services;
 /// so it keeps ticking whether or not the window is open, and the actual chat is sent through
 /// <see cref="ChatSender"/> (split to fit, one part per second).
 ///
-/// Run state (running / next-due) is intentionally in-memory only — macros persist, but a
+/// Run state (running / next-due) is intentionally in-memory only - macros persist, but a
 /// macro always reloads stopped. <see cref="TimedTextMacro.SendsCompleted"/> is saved after
 /// every fire, so a crash mid-run leaves the remaining count correct. Logout stops every
 /// macro (you can't chat while logged out, and the spec is "won't resume until restarted").
@@ -77,7 +77,7 @@ public sealed class TimedMacroRunner : IDisposable
 
     /// <summary>
     /// Starts (or resumes) a macro: fires one send now, then schedules the next. Refused
-    /// while logged out — otherwise a click at the title/character screen would bank a
+    /// while logged out - otherwise a click at the title/character screen would bank a
     /// phantom send and leave the macro armed to auto-resume on the next login (there is
     /// no logout event to clear it, since we're already logged out).
     /// </summary>

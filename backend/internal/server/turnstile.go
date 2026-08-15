@@ -24,7 +24,7 @@ var turnstileVerifyURL = "https://challenges.cloudflare.com/turnstile/v0/sitever
 var turnstileHTTPClient = &http.Client{Timeout: 10 * time.Second}
 
 // turnstileEnabled reports whether the bot check is configured (a secret key is
-// set). When false, verification is skipped entirely — keeping local/dev and the
+// set). When false, verification is skipped entirely - keeping local/dev and the
 // test harness usable without keys.
 func (s *Server) turnstileEnabled() bool {
 	return s.turnstileSecret != ""
@@ -65,7 +65,7 @@ func (s *Server) verifyTurnstile(ctx context.Context, token, remoteIP string) bo
 	return out.Success
 }
 
-// handleConfig serves the client bootstrap config. Public — it carries only the
+// handleConfig serves the client bootstrap config. Public - it carries only the
 // non-secret Turnstile site key (empty when the bot check is disabled), which the
 // login page reads to decide whether to render the challenge.
 //

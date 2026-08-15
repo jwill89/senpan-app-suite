@@ -9,8 +9,8 @@ import (
 type actorCtxKey struct{}
 
 // requestActor identifies who made a request, for the access log. It is created
-// in ServeHTTP — which logs OUTSIDE the session middleware and so can't resolve
-// the session itself — and populated by withActor INSIDE the handler chain,
+// in ServeHTTP - which logs OUTSIDE the session middleware and so can't resolve
+// the session itself - and populated by withActor INSIDE the handler chain,
 // where the loaded session, the per-request user cache, and any auth token are
 // available. The pointer is shared through the request context, so ServeHTTP
 // reads back what withActor filled in.
@@ -35,7 +35,7 @@ func (s *Server) withActor(next http.Handler) http.Handler {
 }
 
 // fillActor classifies the request: an authenticated account (cookie session or
-// PAT — currentUser resolves both), a Cloudflare-verified good bot, or plain
+// PAT - currentUser resolves both), a Cloudflare-verified good bot, or plain
 // anonymous traffic.
 func (s *Server) fillActor(r *http.Request, a *requestActor) {
 	if u := s.currentUser(r); u != nil {
@@ -43,7 +43,7 @@ func (s *Server) fillActor(r *http.Request, a *requestActor) {
 		if s.sessionUserID(r) != 0 {
 			a.kind = "session"
 		} else {
-			a.kind = "token" // no cookie session → authenticated by PAT (the plugin)
+			a.kind = "token" // no cookie session -> authenticated by PAT (the plugin)
 		}
 		return
 	}
@@ -60,13 +60,13 @@ func (s *Server) fillActor(r *http.Request, a *requestActor) {
 // origin one of two ways:
 //
 //   - cf-verified-bot (+ cf-verified-bot-category): the "Add bot protection
-//     headers" managed transform — Enterprise plan with Bot Management; or
+//     headers" managed transform - Enterprise plan with Bot Management; or
 //   - x-verified-bot: a custom Request Header Transform Rule on the cf.client.bot
 //     field, which works on any plan (Free/Pro included).
 //
 // The bot's own User-Agent is used as the name when Cloudflare sends no category,
 // and that UA is trustworthy here precisely because Cloudflare already verified
-// the source — it is no longer a spoofable self-claim.
+// the source - it is no longer a spoofable self-claim.
 //
 // This is a logging hint only, never a security decision. Like CF-Connecting-IP
 // it is forgeable by a client that reaches the origin without passing through

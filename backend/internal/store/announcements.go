@@ -9,7 +9,7 @@ import (
 	"app-suite/internal/model"
 )
 
-// ── Announcement types ──────────────────────────────────────────────────────
+// -- Announcement types ------------------------------------------------------
 //
 // An announcement type is a named Discord destination (label + channel webhook).
 // Every announcement references one type and posts to its webhook.
@@ -79,7 +79,7 @@ func (s *Store) DeleteAnnouncementType(id int64) (bool, error) {
 	return n > 0, nil
 }
 
-// CountAnnouncementsByType returns how many announcements reference a type — used
+// CountAnnouncementsByType returns how many announcements reference a type - used
 // to block deleting a type that's still in use.
 func (s *Store) CountAnnouncementsByType(typeID int64) (int, error) {
 	var n int
@@ -87,7 +87,7 @@ func (s *Store) CountAnnouncementsByType(typeID int64) (int, error) {
 	return n, err
 }
 
-// ── Announcement roles ──────────────────────────────────────────────────────
+// -- Announcement roles ------------------------------------------------------
 //
 // An announcement role is a named, taggable Discord role (label + role ID). It's
 // a convenience picker so admins tag a role by name; an announcement stores its
@@ -158,7 +158,7 @@ func (s *Store) DeleteAnnouncementRole(id int64) (bool, error) {
 	return n > 0, nil
 }
 
-// CountAnnouncementsByRole returns how many announcements tag a given role — used
+// CountAnnouncementsByRole returns how many announcements tag a given role - used
 // to block deleting a role that's still referenced by an announcement's mention.
 func (s *Store) CountAnnouncementsByRole(roleID int64) (int, error) {
 	var n int
@@ -169,7 +169,7 @@ func (s *Store) CountAnnouncementsByRole(roleID int64) (int, error) {
 	return n, err
 }
 
-// ── Announcements ───────────────────────────────────────────────────────────
+// -- Announcements -----------------------------------------------------------
 
 // announcementColumns is the shared SELECT column list for the announcements
 // table (alias a), with the joined type name appended.
@@ -203,8 +203,8 @@ func scanAnnouncement(sc interface{ Scan(...any) error }) (model.Announcement, e
 
 // These wrap the shared generic JSON-array codecs (jsonarray.go). decode returns
 // an empty (non-nil) slice for empty/legacy-NULL values, so the API always sends
-// buttons as an array (never null) — matching the generated TS type, which is
-// non-nullable — rather than the client having to guard against null.
+// buttons as an array (never null) - matching the generated TS type, which is
+// non-nullable - rather than the client having to guard against null.
 func encodeAnnouncementButtons(buttons []model.AnnouncementButton) string {
 	return encodeJSONArray(buttons)
 }
@@ -318,7 +318,7 @@ func (s *Store) DeleteAnnouncement(id int64) (bool, error) {
 }
 
 // DueAnnouncements returns active announcements whose next_post_at has arrived
-// (set and at/before now), soonest first — the scheduler's work queue.
+// (set and at/before now), soonest first - the scheduler's work queue.
 func (s *Store) DueAnnouncements(now time.Time) ([]model.Announcement, error) {
 	rows, err := s.db.Query(
 		`SELECT `+announcementColumns+` FROM announcements a
@@ -355,7 +355,7 @@ func (s *Store) MarkAnnouncementPosted(id int64, nextPostAt string, active bool)
 }
 
 // AdvanceAnnouncement updates only the schedule cursor (next instant + active +
-// skip flag) without stamping a post — used when a scheduled occurrence is skipped.
+// skip flag) without stamping a post - used when a scheduled occurrence is skipped.
 func (s *Store) AdvanceAnnouncement(id int64, nextPostAt string, active, skipNext bool) error {
 	_, err := s.db.Exec(
 		`UPDATE announcements SET next_post_at = ?, active = ?, skip_next = ? WHERE id = ?`,
@@ -370,7 +370,7 @@ func (s *Store) SetAnnouncementSkip(id int64, skip bool) error {
 	return err
 }
 
-// TouchAnnouncementPosted stamps last_posted_at without touching the schedule —
+// TouchAnnouncementPosted stamps last_posted_at without touching the schedule -
 // used by a manual "send now" that should not advance the recurrence cursor.
 func (s *Store) TouchAnnouncementPosted(id int64) error {
 	_, err := s.db.Exec(

@@ -12,7 +12,7 @@ import (
 	"github.com/tdewolff/font"
 )
 
-// ── Font groups, WOFF2 conversion, and per-font metadata ─────────────────────
+// -- Font groups, WOFF2 conversion, and per-font metadata ---------------------
 //
 // A logical "font" is a GROUP of uploaded files sharing a base name (the
 // filename minus its extension, case-insensitive): "Jasper.otf" and
@@ -35,7 +35,7 @@ import (
 const fontDerivedDirName = ".woff2"
 
 // settingFontMeta is the settings key holding the per-font metadata map
-// (JSON: group key → fontMeta). Deliberately not in settingsKeys (managed via
+// (JSON: group key -> fontMeta). Deliberately not in settingsKeys (managed via
 // the fonts API, never the settings API).
 const settingFontMeta = "font_meta"
 
@@ -51,7 +51,7 @@ var fontTypeLabels = map[string]string{
 	".ttf": "TTF", ".otf": "OTF", ".woff": "WOFF", ".woff2": "WOFF2", ".eot": "EOT",
 }
 
-// fontTypeExts is the reverse of fontTypeLabels (label → extension).
+// fontTypeExts is the reverse of fontTypeLabels (label -> extension).
 var fontTypeExts = func() map[string]string {
 	m := make(map[string]string, len(fontTypeLabels))
 	for ext, label := range fontTypeLabels {
@@ -69,7 +69,7 @@ var fontConvertPreference = []string{".ttf", ".otf", ".woff", ".eot"}
 // web formats.
 var fontServePreference = []string{".woff2", ".woff", ".ttf", ".otf", ".eot"}
 
-// fontBase returns a filename's base (extension stripped) — the group's
+// fontBase returns a filename's base (extension stripped) - the group's
 // display name and the default CSS family.
 func fontBase(name string) string {
 	return strings.TrimSpace(strings.TrimSuffix(name, filepath.Ext(name)))
@@ -143,7 +143,7 @@ func (s *Server) fontDerivativeInfo(groupKey string) (size int64, ok bool) {
 
 // convertFontToWOFF2 converts font bytes in any supported format (TTF, OTF,
 // TTC, WOFF, WOFF2, EOT) to WOFF2. The underlying parser handles hostile
-// input, but it is an untagged third-party library fed admin uploads — a panic
+// input, but it is an untagged third-party library fed admin uploads - a panic
 // is recovered into an error so a bad file can never take the server down.
 func convertFontToWOFF2(data []byte) (out []byte, err error) {
 	defer func() {
@@ -220,7 +220,7 @@ func (s *Server) refreshGroupDerivativeByKey(key string) error {
 			return s.refreshGroupDerivative(g)
 		}
 	}
-	return s.refreshGroupDerivative(fontGroup{Key: key}) // empty → removes the copy
+	return s.refreshGroupDerivative(fontGroup{Key: key}) // empty -> removes the copy
 }
 
 // sweepFontDerivatives removes files in the converted-copies directory that no
@@ -272,13 +272,13 @@ func (s *Server) migrateFontDerivatives() {
 	}
 }
 
-// ── Per-font metadata ─────────────────────────────────────────────────────────
+// -- Per-font metadata ---------------------------------------------------------
 
 // fontMeta is the admin-editable metadata for one font group.
 type fontMeta struct {
 	// Family is the custom CSS font-family name ("" = the group's base name).
 	Family string `json:"family,omitempty"`
-	// Serve is the variant type label served publicly ("TTF"/"WOFF2"/…;
+	// Serve is the variant type label served publicly ("TTF"/"WOFF2"/...;
 	// "" = auto: WOFF2 when available, else the best remaining format).
 	Serve string `json:"serve,omitempty"`
 	// Origins is this font's external-site allowlist (normalized bare origins).
@@ -344,8 +344,8 @@ func fontFamilyFor(base string, m fontMeta) string {
 }
 
 // migrateFontMetaV2 upgrades pre-group metadata at startup, idempotently:
-//   - v1 entries were keyed by FILENAME with an "original" bool — re-key them
-//     by group and translate original→Serve (that file's type).
+//   - v1 entries were keyed by FILENAME with an "original" bool - re-key them
+//     by group and translate original->Serve (that file's type).
 //   - the global origin allowlist becomes every font's per-font Origins, and
 //     the legacy settings key is cleared.
 func (s *Server) migrateFontMetaV2() {

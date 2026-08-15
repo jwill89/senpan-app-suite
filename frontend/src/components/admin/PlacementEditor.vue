@@ -6,7 +6,7 @@
  * the top handle to ROTATE it. Positions are emitted as percentages of the card box
  * so they render identically at any display size (read-only view = StampCardCanvas).
  *
- * The parent owns the stamp/prize arrays; this component is controlled — it emits
+ * The parent owns the stamp/prize arrays; this component is controlled - it emits
  * `select` and `update(key, placement)` rather than mutating props. Continuous drags
  * emit on each pointermove; the parent applies the new placement to the matching item.
  */
@@ -98,7 +98,7 @@ function onPointerMove(e: PointerEvent): void {
     }
   } else {
     // Rotate: angle from the item's centre to the pointer; the handle sits above the
-    // item, so add 90° to map "pointer straight up" → 0°.
+    // item, so add 90° to map "pointer straight up" -> 0°.
     const cx = rect.left + ((start.x + start.width / 2) / 100) * rect.width
     const cy = rect.top + ((start.y + start.height / 2) / 100) * rect.height
     const deg = (Math.atan2(e.clientY - cy, e.clientX - cx) * 180) / Math.PI + 90
@@ -117,43 +117,46 @@ function endDrag(): void {
 // (endDrag never fires). Tear them down defensively on unmount.
 onBeforeUnmount(endDrag)
 
-/** Click on empty card area → deselect. */
+/** Click on empty card area -> deselect. */
 function onCanvasPointerDown(e: PointerEvent): void {
-  if (e.target === canvasRef.value || (e.target as HTMLElement).classList.contains('pe-bg')) {
+  if (
+    e.target === canvasRef.value ||
+    (e.target as HTMLElement).classList.contains('placement-bg')
+  ) {
     emit('select', null)
   }
 }
 </script>
 
 <template>
-  <div class="pe-wrap">
-    <div ref="canvasRef" class="pe-canvas" @pointerdown="onCanvasPointerDown">
+  <div>
+    <div ref="canvasRef" class="placement-canvas" @pointerdown="onCanvasPointerDown">
       <img
         v-if="cardImage"
         :src="assetUrl(cardImage)"
-        class="pe-bg"
+        class="placement-bg"
         alt="Stamp card"
         draggable="false"
       />
-      <div v-else class="pe-bg pe-empty">
+      <div v-else class="placement-bg placement-empty">
         <font-awesome-icon :icon="['fad', 'image']" /> Pick a card image
       </div>
 
       <div
         v-for="item in items"
         :key="item.key"
-        class="pe-item"
-        :class="{ selected: item.key === selectedKey, prize: item.kind === 'prize' }"
+        class="placement-item"
+        :class="{ 'is-selected': item.key === selectedKey, prize: item.kind === 'prize' }"
         :style="placementStyle(item.placement)"
         @pointerdown="beginDrag('move', item, $event)"
       >
         <img v-if="item.image" :src="assetUrl(item.image)" alt="" draggable="false" />
-        <div v-else class="pe-item-empty">{{ item.label }}</div>
+        <div v-else class="placement-item-empty">{{ item.label }}</div>
 
         <template v-if="item.key === selectedKey">
           <!-- Rotate handle (above, top-centre) -->
           <button
-            class="pe-handle pe-rotate"
+            class="placement-handle placement-rotate"
             type="button"
             aria-label="Rotate"
             title="Drag to rotate"
@@ -163,7 +166,7 @@ function onCanvasPointerDown(e: PointerEvent): void {
           </button>
           <!-- Resize handle (bottom-right) -->
           <button
-            class="pe-handle pe-resize"
+            class="placement-handle placement-resize"
             type="button"
             aria-label="Resize"
             title="Drag to resize"
@@ -172,57 +175,57 @@ function onCanvasPointerDown(e: PointerEvent): void {
         </template>
       </div>
     </div>
-    <p class="pe-hint text-dim text-xs">
-      Drag an item to move · drag the corner to resize · drag the top handle to rotate. Positions
+    <p class="placement-hint text-muted text-xs">
+      Drag an item to move - drag the corner to resize - drag the top handle to rotate. Positions
       are saved as a share of the card, so they scale to any screen.
     </p>
   </div>
 </template>
 
 <style scoped>
-.pe-canvas {
+.placement-canvas {
   position: relative;
   width: 100%;
   user-select: none;
   touch-action: none;
 }
-.pe-bg {
+.placement-bg {
   display: block;
   width: 100%;
   height: auto;
   border-radius: var(--radius);
 }
-.pe-empty {
+.placement-empty {
   aspect-ratio: 16 / 10;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 8px;
-  color: var(--text-dim);
+  color: var(--text-muted);
   background: var(--panel-raised-bg);
   border: 1px dashed var(--control-border);
 }
-.pe-item {
+.placement-item {
   position: absolute;
   cursor: move;
   box-sizing: border-box;
   border: 1px solid transparent;
 }
-.pe-item.selected {
+.placement-item.is-selected {
   border-color: var(--highlight);
   box-shadow: 0 0 0 1px var(--highlight);
 }
-.pe-item.prize:not(.selected) {
+.placement-item.prize:not(.is-selected) {
   border-color: color-mix(in srgb, var(--highlight) 40%, transparent);
   border-style: dashed;
 }
-.pe-item img {
+.placement-item img {
   width: 100%;
   height: 100%;
   object-fit: contain;
   pointer-events: none;
 }
-.pe-item-empty {
+.placement-item-empty {
   width: 100%;
   height: 100%;
   display: flex;
@@ -230,12 +233,12 @@ function onCanvasPointerDown(e: PointerEvent): void {
   justify-content: center;
   font-size: 0.7rem;
   text-align: center;
-  color: var(--text-dim);
+  color: var(--text-muted);
   background: color-mix(in srgb, var(--panel-raised-bg) 80%, transparent);
   border: 1px dashed var(--control-border);
-  border-radius: 4px;
+  border-radius: 0;
 }
-.pe-handle {
+.placement-handle {
   position: absolute;
   padding: 0;
   border: 2px solid var(--highlight);
@@ -243,7 +246,7 @@ function onCanvasPointerDown(e: PointerEvent): void {
   border-radius: 50%;
   cursor: pointer;
 }
-.pe-rotate {
+.placement-rotate {
   width: 22px;
   height: 22px;
   top: -34px;
@@ -256,15 +259,15 @@ function onCanvasPointerDown(e: PointerEvent): void {
   color: var(--highlight);
   cursor: grab;
 }
-.pe-resize {
+.placement-resize {
   width: 16px;
   height: 16px;
   right: -8px;
   bottom: -8px;
-  border-radius: 3px;
+  border-radius: 0;
   cursor: nwse-resize;
 }
-.pe-hint {
+.placement-hint {
   margin-top: 8px;
 }
 </style>

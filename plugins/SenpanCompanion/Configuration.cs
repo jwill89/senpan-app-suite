@@ -35,7 +35,7 @@ public class Configuration : IPluginConfiguration
     /// Legacy plaintext token from a pre-encryption config. Public only so Dalamud's
     /// JSON loader still populates the old "Token" key; it is migrated into
     /// <see cref="TokenProtected"/> (encrypted) on first load and then cleared, so new
-    /// saves never persist plaintext. Do not read it — use <see cref="GetToken"/>.
+    /// saves never persist plaintext. Do not read it - use <see cref="GetToken"/>.
     /// </summary>
     public string Token { get; set; } = string.Empty;
 
@@ -43,7 +43,7 @@ public class Configuration : IPluginConfiguration
     [NonSerialized]
     private string tokenPlain = string.Empty;
 
-    /// <summary>The decrypted personal access token ("pat_…"), or "" when none is set.</summary>
+    /// <summary>The decrypted personal access token ("pat_..."), or "" when none is set.</summary>
     public string GetToken() => this.tokenPlain;
 
     /// <summary>
@@ -66,7 +66,7 @@ public class Configuration : IPluginConfiguration
     /// <summary>
     /// When creating a card for a player picked from the nearby list, send them a
     /// /tell with the card's URL. This sends an outgoing chat message on your
-    /// behalf — see ChatSender for the ToS caveat — so it is opt-out here.
+    /// behalf - see ChatSender for the ToS caveat - so it is opt-out here.
     /// </summary>
     public bool TellCardUrlOnCreate { get; set; } = true;
 
@@ -107,7 +107,7 @@ public class Configuration : IPluginConfiguration
     /// <summary>The production server, used as the default and for fresh installs.</summary>
     public const string DefaultServerUrl = "https://apps.senpan.cafe";
 
-    // Not serialized — wired up at load so Save() can round-trip without the caller
+    // Not serialized - wired up at load so Save() can round-trip without the caller
     // needing the plugin interface.
     [NonSerialized]
     private IDalamudPluginInterface? pluginInterface;
@@ -145,12 +145,12 @@ public class Configuration : IPluginConfiguration
 
     public void Save() => this.pluginInterface?.SavePluginConfig(this);
 
-    /// <summary>The public player URL for a card id (…/play/{id}).</summary>
+    /// <summary>The public player URL for a card id (.../play/{id}).</summary>
     public string CardUrl(string id) => $"{this.ServerUrl.Trim().TrimEnd('/')}/play/{id}";
 
-    /// <summary>The public Garapon drawing-link URL for a player token (…/garapon/{token}).</summary>
+    /// <summary>The public Garapon drawing-link URL for a player token (.../garapon/{token}).</summary>
     public string GaraponUrl(string token) => $"{this.ServerUrl.Trim().TrimEnd('/')}/garapon/{token}";
 
-    /// <summary>The public Stamp Rally card URL for a token (…/stamp-card/{token}).</summary>
+    /// <summary>The public Stamp Rally card URL for a token (.../stamp-card/{token}).</summary>
     public string StampCardUrl(string token) => $"{this.ServerUrl.Trim().TrimEnd('/')}/stamp-card/{token}";
 }

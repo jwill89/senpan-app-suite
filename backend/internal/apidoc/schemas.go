@@ -2,7 +2,7 @@ package apidoc
 
 import "app-suite/internal/model"
 
-// modelTypes is every struct exposed on the wire — domain types plus response
+// modelTypes is every struct exposed on the wire - domain types plus response
 // envelopes. Each becomes a named entry in components/schemas (nested types are
 // inlined by the reflector). Keep in sync with the model package; the CI test
 // fails if this list falls behind (a documented response would reference a
@@ -80,6 +80,9 @@ var modelTypes = map[string]any{
 	"StampRallyLogsResponse": model.StampRallyLogsResponse{}, "PublicStampRally": model.PublicStampRally{},
 	"PublicStamp": model.PublicStamp{}, "PublicPrize": model.PublicPrize{},
 	"PublicStampCard": model.PublicStampCard{}, "StampSubmitResponse": model.StampSubmitResponse{},
+	"SignupRally": model.SignupRally{}, "SignupRalliesResponse": model.SignupRalliesResponse{},
+	"StampSignupResponse": model.StampSignupResponse{},
+	"StampLookupEntry":    model.StampLookupEntry{}, "StampLookupResponse": model.StampLookupResponse{},
 
 	// Book club / announcements
 	"ReadingListsResponse": model.ReadingListsResponse{}, "ReadingListDetailResponse": model.ReadingListDetailResponse{},

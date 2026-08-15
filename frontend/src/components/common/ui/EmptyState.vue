@@ -19,13 +19,13 @@ defineProps<{
 
 <template>
   <div class="empty-state">
-    <font-awesome-icon v-if="icon" :icon="icon" class="empty-state__icon" />
-    <div class="empty-state__title">
+    <font-awesome-icon v-if="icon" :icon="icon" class="empty-state-icon" />
+    <div class="empty-state-title">
       <slot>{{ text }}</slot>
     </div>
-    <div v-if="hint || $slots.hint" class="empty-state__hint">
+    <div v-if="hint || $slots.hint" class="empty-state-hint">
       <slot name="hint">{{ hint }}</slot>
     </div>
-    <div v-if="$slots.action" class="empty-state__action"><slot name="action" /></div>
+    <div v-if="$slots.action" class="empty-state-action"><slot name="action" /></div>
   </div>
 </template>

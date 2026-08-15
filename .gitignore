@@ -29,7 +29,7 @@ frontend/coverage/
 /backend/junit.xml
 /backend/gl-code-quality-report.json
 
-# Secrets — never commit credentials. systemd EnvironmentFiles, etc.
+# Secrets - never commit credentials. systemd EnvironmentFiles, etc.
 *.env
 !*.env.example
 
@@ -63,10 +63,10 @@ Thumbs.db
 # Ignore ONLY the genuine secret under scripts/: the deploy script's
 # environment-specific host + key live in scripts/deploy.config.ps1 (dot-sourced
 # at runtime). Everything else in scripts/ is shared tooling with no secrets and
-# stays tracked — the quality gate (check.ps1), the deploy script (deploy.ps1),
+# stays tracked - the quality gate (check.ps1), the deploy script (deploy.ps1),
 # the deploy-config TEMPLATE (deploy.config.example.ps1), and the theme scripts
 # (scripts/themes/insert_styles.php, themes.json, README.md). Do NOT re-broaden
-# this to /scripts/* — that silently drops new scripts from version control.
+# this to /scripts/* - that silently drops new scripts from version control.
 /scripts/deploy.config.ps1
 /frontend/public/sounds/
 /frontend/public/images/flourishes/corner_flourish.svg

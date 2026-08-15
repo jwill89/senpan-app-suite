@@ -114,7 +114,7 @@ func TestLoginUngatedWhenDisabled(t *testing.T) {
 }
 
 // TestRegisterGatedByTurnstile checks the bot gate also guards account creation:
-// no token → 403; a valid token lets a valid signup through (200).
+// no token -> 403; a valid token lets a valid signup through (200).
 func TestRegisterGatedByTurnstile(t *testing.T) {
 	st, err := store.New(filepath.Join(t.TempDir(), "test.db"))
 	if err != nil {

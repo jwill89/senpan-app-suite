@@ -11,7 +11,7 @@ import (
 	"app-suite/internal/store"
 )
 
-// ── Stamp Rally admin (events + stamps + prizes + cards + logs) ──────────────
+// -- Stamp Rally admin (events + stamps + prizes + cards + logs) --------------
 //
 // A Stamp Rally is an event (see model.StampRally) whose stamps participants
 // collect by entering per-stall passwords on a tokenized card. The admin authors
@@ -20,7 +20,7 @@ import (
 // time.Now (the store stays pure data access), reusing parseRaffleTime for the
 // UTC window parsing shared with raffles.
 
-// clampPct constrains a placement percentage to the card's box (0–100). Width/height
+// clampPct constrains a placement percentage to the card's box (0-100). Width/height
 // are also floored just above zero so an item can't collapse to nothing.
 func clampPct(v float64) float64 {
 	if v < 0 {
@@ -47,7 +47,7 @@ func sanitizePlacement(p model.Placement) model.Placement {
 	return p
 }
 
-// ── Availability + completion (time logic) ───────────────────────────────────
+// -- Availability + completion (time logic) -----------------------------------
 
 // rallyOpen reports whether the event accepts stamping now: it must be manually open
 // (status "open", not "closed") AND within its availability window.
@@ -55,10 +55,17 @@ func rallyOpen(r *model.StampRally, now time.Time) bool {
 	if r.Status == "closed" {
 		return false
 	}
-	if from, ok := parseRaffleTime(r.AvailableFrom); ok && now.Before(from) {
+	return withinWindow(r.AvailableFrom, r.AvailableTo, now)
+}
+
+// withinWindow reports whether now falls inside an availability window, treating an
+// empty bound as unbounded. Shared by the stamping gate above and the public
+// sign-up list, which holds only the window strings rather than a whole rally.
+func withinWindow(from, to string, now time.Time) bool {
+	if f, ok := parseRaffleTime(from); ok && now.Before(f) {
 		return false
 	}
-	if to, ok := parseRaffleTime(r.AvailableTo); ok && now.After(to) {
+	if t, ok := parseRaffleTime(to); ok && now.After(t) {
 		return false
 	}
 	return true
@@ -79,7 +86,7 @@ func stampAvailable(r *model.StampRally, st *model.StampRallyStamp, now time.Tim
 	return true
 }
 
-// stampExpired reports whether a stamp can NEVER be collected again — its own active
+// stampExpired reports whether a stamp can NEVER be collected again - its own active
 // window ended, or the whole event ended. Such a stamp no longer blocks completion.
 func stampExpired(r *model.StampRally, st *model.StampRallyStamp, now time.Time) bool {
 	if to, ok := parseRaffleTime(st.ActiveTo); ok && now.After(to) {
@@ -104,13 +111,13 @@ func rallyCardComplete(r *model.StampRally, stamps []model.StampRallyStamp, coll
 			continue
 		}
 		if !stampExpired(r, st, now) {
-			return false // still collectable and not collected → not complete
+			return false // still collectable and not collected -> not complete
 		}
 	}
 	return true
 }
 
-// ── Public payload shapes (no passwords; prizes hidden until complete) ────────
+// -- Public payload shapes (no passwords; prizes hidden until complete) --------
 //
 // The exported wire structs (model.PublicStampCard and its nested
 // model.PublicStampRally/PublicStamp/PublicPrize) live in the model package; the
@@ -155,7 +162,7 @@ func buildPublicCard(r *model.StampRally, card *model.StampRallyCard, stamps []m
 	return pc
 }
 
-// ── Admin: list / detail ─────────────────────────────────────────────────────
+// -- Admin: list / detail -----------------------------------------------------
 
 // handleStampRalliesList returns every rally (admin only).
 //
@@ -225,7 +232,7 @@ func (s *Server) handleStampRallyLogs(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, model.StampRallyLogsResponse{Logs: logs})
 }
 
-// ── Admin: CRUD ──────────────────────────────────────────────────────────────
+// -- Admin: CRUD --------------------------------------------------------------
 
 // stampRallyWriteRequest is the JSON body for creating (POST /api/stamp-rallies)
 // or replacing (PUT /api/stamp-rallies/{id}) a rally. The id comes from the path
@@ -239,6 +246,7 @@ type stampRallyWriteRequest struct {
 	Details            string                  `json:"details"`
 	RedeemInstructions string                  `json:"redeem_instructions"`
 	RedeemImage        string                  `json:"redeem_image"`
+	PublicSignup       bool                    `json:"public_signup"`
 	Stamps             []model.StampRallyStamp `json:"stamps"`
 	Prizes             []model.StampRallyPrize `json:"prizes"`
 }
@@ -269,6 +277,7 @@ func rallyFromRequest(req stampRallyWriteRequest, title string) *model.StampRall
 		Details:            req.Details,
 		RedeemInstructions: req.RedeemInstructions,
 		RedeemImage:        strings.TrimSpace(req.RedeemImage),
+		PublicSignup:       req.PublicSignup,
 		Stamps:             stamps,
 		Prizes:             prizes,
 	}
@@ -305,7 +314,7 @@ func (s *Server) handleStampRallyCreate(w http.ResponseWriter, r *http.Request) 
 }
 
 // handleStampRallyUpdate replaces a rally's editable fields (stamps + prizes
-// inline). Status is not editable here and is preserved — use close/reopen.
+// inline). Status is not editable here and is preserved - use close/reopen.
 //
 //	Endpoint:  PUT /api/stamp-rallies/{id}
 //	Auth:      admin, or a user granted festival-stamp-rally
@@ -398,7 +407,7 @@ type stampPausedRequest struct {
 }
 
 // handleStampRallyStampPatch pauses/resumes a single stamp without a full event
-// re-save (flipping a boolean → PATCH).
+// re-save (flipping a boolean -> PATCH).
 //
 //	Endpoint:  PATCH /api/stamp-rallies/{id}/stamps/{stampId}
 //	Auth:      admin, or a user granted festival-stamp-rally
@@ -495,7 +504,7 @@ func (s *Server) handleStampRallyCardDelete(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	// A card with collected stamps can only be deleted once the rally is closed
-	// (its log is preserved either way — collected rows snapshot participant/stall
+	// (its log is preserved either way - collected rows snapshot participant/stall
 	// and detach via ON DELETE SET NULL). Mirrors garapon drawing-link deletion.
 	rally, err := s.store.GetStampRally(rallyID)
 	if err != nil {
@@ -515,7 +524,7 @@ func (s *Server) handleStampRallyCardDelete(w http.ResponseWriter, r *http.Reque
 		}
 		if len(collected) > 0 {
 			writeError(w, http.StatusConflict,
-				"This card has collected stamps and can't be deleted while the rally is open — close the rally first (the stamp log is kept).")
+				"This card has collected stamps and can't be deleted while the rally is open - close the rally first (the stamp log is kept).")
 			return
 		}
 	}
@@ -526,7 +535,7 @@ func (s *Server) handleStampRallyCardDelete(w http.ResponseWriter, r *http.Reque
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// ── Public (tokenized card view + stamp) ─────────────────────────────────────
+// -- Public (tokenized card view + stamp) -------------------------------------
 
 // loadCardByToken resolves a token to its card + rally, writing the 404 itself when
 // the token is unknown. Returns (card, rally, ok).

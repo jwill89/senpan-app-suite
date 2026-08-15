@@ -33,7 +33,7 @@ func TestCategories_CreateListRenameDelete(t *testing.T) {
 		t.Fatal("expected a seeded default category")
 	}
 
-	// Create (POST /api/pattern-categories → 201).
+	// Create (POST /api/pattern-categories -> 201).
 	resp := env.postJSON(t, "/api/pattern-categories", map[string]any{"name": "Bonus"})
 	if resp.StatusCode != http.StatusCreated {
 		t.Fatalf("create status = %d; want 201", resp.StatusCode)
@@ -45,14 +45,14 @@ func TestCategories_CreateListRenameDelete(t *testing.T) {
 		t.Fatalf("expected %d categories, got %d", len(before)+1, len(after))
 	}
 
-	// Rename (PATCH /api/pattern-categories/{id} → 200).
+	// Rename (PATCH /api/pattern-categories/{id} -> 200).
 	resp = env.patchJSON(t, fmt.Sprintf("/api/pattern-categories/%d", id), map[string]any{"name": "Bonus Patterns"})
 	if resp.StatusCode != 200 {
 		t.Fatalf("rename status = %d; want 200", resp.StatusCode)
 	}
 	resp.Body.Close()
 
-	// Delete (not the last → 204).
+	// Delete (not the last -> 204).
 	resp = env.del(t, fmt.Sprintf("/api/pattern-categories/%d", id))
 	if resp.StatusCode != http.StatusNoContent {
 		t.Fatalf("delete status = %d; want 204", resp.StatusCode)

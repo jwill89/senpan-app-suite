@@ -25,7 +25,7 @@ import (
 
 // webAuthn builds a relying-party config for this request. The RP ID is the
 // request host (no scheme/port) and the origin is scheme://host, so passkeys work
-// on whatever domain serves the app (prod + dev) without extra config — relying
+// on whatever domain serves the app (prod + dev) without extra config - relying
 // on the reverse proxy passing the real Host (ProxyPreserveHost On), like
 // siteBaseURL does.
 func (s *Server) webAuthn(r *http.Request) (*webauthn.WebAuthn, error) {
@@ -42,7 +42,7 @@ func (s *Server) webAuthn(r *http.Request) (*webauthn.WebAuthn, error) {
 }
 
 // webauthnUser adapts a model.User + its stored credentials to webauthn.User. The
-// user handle is the 8-byte big-endian user id — stable, opaque, and free of PII
+// user handle is the 8-byte big-endian user id - stable, opaque, and free of PII
 // (the WebAuthn spec requires authz decisions be made on this handle, not name).
 type webauthnUser struct {
 	user  *model.User

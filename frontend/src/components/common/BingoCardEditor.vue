@@ -1,10 +1,10 @@
 <script setup lang="ts">
 /**
- * Editable 5×5 bingo card grid for the public Personal Card Requests page. Each
- * column accepts only its own number range (B 1–15 … O 61–75); the centre cell is
+ * Editable 5x5 bingo card grid for the public Personal Card Requests page. Each
+ * column accepts only its own number range (B 1-15 ... O 61-75); the centre cell is
  * the fixed FREE space. Out-of-range or duplicated cells are highlighted so the
  * player can see exactly what to fix. "Generate Random" fills a valid random card
- * (still fully editable afterwards). v-model is the 5×5 number grid (0 = blank/FREE).
+ * (still fully editable afterwards). v-model is the 5x5 number grid (0 = blank/FREE).
  */
 import { computed } from 'vue'
 import { BINGO_LETTERS, columnRange, randomBoard } from '@/lib/constants'
@@ -37,7 +37,7 @@ const invalidCells = computed(() => {
     for (let row = 0; row < 5; row++) {
       if (isFree(row, col)) continue
       const n = props.modelValue[row][col]
-      if (n === 0) continue // blank — incomplete, not yet an error
+      if (n === 0) continue // blank - incomplete, not yet an error
       if (n < lo || n > hi) bad.add(`${row}-${col}`)
       const rows = rowsByValue.get(n) || []
       rows.push(row)
@@ -54,16 +54,18 @@ const invalidCells = computed(() => {
 <template>
   <div class="card-editor">
     <div class="card-editor-header">
-      <div v-for="letter in BINGO_LETTERS" :key="letter" class="ce-letter">{{ letter }}</div>
+      <div v-for="letter in BINGO_LETTERS" :key="letter" class="card-editor-letter">
+        {{ letter }}
+      </div>
     </div>
     <div class="card-editor-grid">
       <template v-for="row in 5" :key="row">
         <template v-for="col in 5" :key="`${row}-${col}`">
-          <div v-if="isFree(row - 1, col - 1)" class="ce-cell ce-free">FREE</div>
+          <div v-if="isFree(row - 1, col - 1)" class="card-editor-cell card-editor-free">FREE</div>
           <input
             v-else
-            class="ce-cell"
-            :class="{ 'ce-invalid': invalidCells.has(`${row - 1}-${col - 1}`) }"
+            class="card-editor-cell"
+            :class="{ 'card-editor-invalid': invalidCells.has(`${row - 1}-${col - 1}`) }"
             type="number"
             inputmode="numeric"
             :min="columnRange(col - 1)[0]"
@@ -98,18 +100,18 @@ const invalidCells = computed(() => {
 .card-editor-header {
   margin-bottom: 6px;
 }
-.ce-letter {
+.card-editor-letter {
   text-align: center;
   font-weight: 700;
   color: var(--highlight);
 }
-.ce-cell {
+.card-editor-cell {
   aspect-ratio: 1;
   text-align: center;
   font-size: 1rem;
   padding: 0;
 }
-.ce-free {
+.card-editor-free {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -119,7 +121,7 @@ const invalidCells = computed(() => {
   color: var(--text-on-accent);
   border-radius: var(--radius, 6px);
 }
-.ce-invalid {
+.card-editor-invalid {
   border-color: var(--danger) !important;
   outline: 1px solid var(--danger);
 }

@@ -1,7 +1,7 @@
 /**
  * Styles store: theme CRUD + activation. A theme is a set of design-token
  * overrides (see lib/theme-tokens), edited via the structured ThemeTokenEditor
- * in the component — this store manages the theme list, the currently-edited
+ * in the component - this store manages the theme list, the currently-edited
  * theme, and persistence. The applied stylesheet is generated from the tokens
  * (server-side; and locally via tokensToCss for the live activation).
  */

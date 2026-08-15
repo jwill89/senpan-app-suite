@@ -12,7 +12,7 @@ import { withLoading } from '@/lib/withLoading'
 
 /**
  * Whether a raffle is enterable by the public right now: it must be `open` and
- * inside its availability window — past `available_from` (if set) and before
+ * inside its availability window - past `available_from` (if set) and before
  * `available_to` (if set). This mirrors the backend's public list query
  * (store.ListRaffles, non-admin) so the two never disagree.
  *
@@ -22,7 +22,7 @@ import { withLoading } from '@/lib/withLoading'
  * (GetRaffle ignores the window), and an admin browsing the public pages (the
  * list endpoint returns every raffle in admin mode). A raffle keeps its `open`
  * status outside its window, so checking `status` alone is not enough. (Admin
- * tabs intentionally do not use this — admins manage out-of-window raffles.)
+ * tabs intentionally do not use this - admins manage out-of-window raffles.)
  */
 export function isRaffleEnterable(r: Raffle): boolean {
   if (r.status !== 'open') return false
@@ -69,7 +69,7 @@ export const useRafflesStore = defineStore('raffles', () => {
   const entering = ref(false)
   const pickingWinner = ref(false)
 
-  // ── Computed ───────────────────────────────────────────────────────────────
+  // -- Computed ---------------------------------------------------------------
 
   const openRaffles = computed(() => raffles.value.filter((r) => r.status === 'open'))
   const closedRaffles = computed(() => raffles.value.filter((r) => r.status === 'closed'))
@@ -79,7 +79,7 @@ export const useRafflesStore = defineStore('raffles', () => {
     () => selectedRaffle.value !== null && isRaffleEnterable(selectedRaffle.value),
   )
 
-  // ── Load ─────────────────────────────────────────────────────────────────
+  // -- Load -----------------------------------------------------------------
 
   async function loadRaffles(): Promise<void> {
     await withLoading(rafflesLoading, async () => {
@@ -174,14 +174,14 @@ export const useRafflesStore = defineStore('raffles', () => {
       return true
     } catch {
       // A superseded request must not report failure (which would redirect the
-      // view back to the list) — the newer load is in charge of the outcome.
+      // view back to the list) - the newer load is in charge of the outcome.
       return reqId !== detailSeq
     } finally {
       if (reqId === detailSeq) detailLoading.value = false
     }
   }
 
-  // ── Admin form ─────────────────────────────────────────────────────────────
+  // -- Admin form -------------------------------------------------------------
 
   function newRaffleForm(): void {
     raffleForm.value = {
@@ -210,7 +210,7 @@ export const useRafflesStore = defineStore('raffles', () => {
   }
 
   /**
-   * Seed a brand-new raffle form from an existing (e.g. closed) raffle — copies
+   * Seed a brand-new raffle form from an existing (e.g. closed) raffle - copies
    * the reusable content (title, markdown bodies, limits, cost, prize image) but
    * starts with a cleared availability window and a zero id, so saving creates a
    * fresh open raffle rather than editing the original.
@@ -287,13 +287,13 @@ export const useRafflesStore = defineStore('raffles', () => {
     }
   }
 
-  // ── Public sign-up ─────────────────────────────────────────────────────────
+  // -- Public sign-up ---------------------------------------------------------
 
   /**
    * The entry count clamped to a whole number in [1, max_entries]. The raw
    * `numEntries` can be out of range or non-integer (typed value, stepper, or a
    * cleared field), so both the live cost preview and the submitted request go
-   * through this — the displayed total can never disagree with what's sent, and
+   * through this - the displayed total can never disagree with what's sent, and
    * the server's own bound is never the first line of defence.
    */
   function clampedEntries(): number {
@@ -334,13 +334,13 @@ export const useRafflesStore = defineStore('raffles', () => {
     } catch (e) {
       ui.notify((e as Error).message, 'error')
     } finally {
-      // Turnstile tokens are single-use — clear it so the widget re-issues one.
+      // Turnstile tokens are single-use - clear it so the widget re-issues one.
       signupTurnstileToken.value = ''
       entering.value = false
     }
   }
 
-  // ── Admin entries ──────────────────────────────────────────────────────────
+  // -- Admin entries ----------------------------------------------------------
 
   /**
    * Admin: manually add a player to the selected open raffle (optionally already

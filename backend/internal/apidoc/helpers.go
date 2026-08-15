@@ -22,34 +22,34 @@ hosting, and a themeable, permissioned admin dashboard).
 ## Authentication
 
 Identity is resolved from either a **session cookie** (set by ` + "`POST /api/auth`" + `
-login) or a **personal access token** (PAT) supplied as ` + "`Authorization: Bearer pat_…`" + `
-(or ` + "`?token=pat_…`" + ` on the WebSocket upgrade). A PAT inherits its owning account's
+login) or a **personal access token** (PAT) supplied as ` + "`Authorization: Bearer pat_...`" + `
+(or ` + "`?token=pat_...`" + ` on the WebSocket upgrade). A PAT inherits its owning account's
 permissions, so external clients use the same guards as the SPA.
 
 Guard levels referenced in each operation's description:
-- **public** — no auth.
-- **auth** — any authenticated, active account.
-- **admin** — an active admin account.
-- **permission:<key>** — an admin, or a non-admin holding that page-permission key.
+- **public** - no auth.
+- **auth** - any authenticated, active account.
+- **admin** - an active admin account.
+- **permission:<key>** - an admin, or a non-admin holding that page-permission key.
 
 Page-permission keys: ` + "`bingo-game`, `bingo-cards`, `bingo-winners-log`, `bingo-patterns`, `bingo-presets`, `teahouse-announcements`, `teahouse-affiliates`, `teahouse-tea-rooms`, `teahouse-raffles`, `festival-garapon`, `festival-stamp-rally`, `atelier-fonts`, `atelier-carrd`, `system-settings`, `system-themes`, `system-images`" + `,
 plus per-book-club ` + "`bookclub-yaoi` / `bookclub-yuri`" + `. The Users page is admin-only
 (not a grantable key).
 
-## WebSocket — ` + "`GET /api/ws`" + `
+## WebSocket - ` + "`GET /api/ws`" + `
 
 Not an HTTP operation (OpenAPI can't model the upgrade), so it is documented here.
 Connect with ` + "`GET /api/ws`" + `; the channel is chosen by the ` + "`id`" + ` query param:
 
-- ` + "`?id=<cardID>`" + ` → **player** channel (public): receives draws after the
+- ` + "`?id=<cardID>`" + ` -> **player** channel (public): receives draws after the
   configured delay; targeted by card-deletion disconnects.
-- **no ` + "`id`" + `** → **admin** channel: requires an authenticated active account
-  (cookie or ` + "`?token=pat_…`" + `); streams draws immediately plus winner card IDs.
+- **no ` + "`id`" + `** -> **admin** channel: requires an authenticated active account
+  (cookie or ` + "`?token=pat_...`" + `); streams draws immediately plus winner card IDs.
 
 Broadcast messages (each carries a ` + "`type`" + ` field): ` + "`resource_changed`, `cards_update`, `card_deleted`, `patterns_update`, `game_update`, `game_draw`, `halftime_minigame`, `halftime_prompt`, `draw_delay_update`, `details_update`, `auto_config`, `yoever`, `yoever_config`, `style_update`, `settings_update`, `log`" + `.
 
 The **admin** channel also receives a ` + "`log`" + ` message per server log line
-(` + "`{ \"type\": \"log\", \"entry\": LogEntry }`" + `) for the live log tail — best-effort,
+(` + "`{ \"type\": \"log\", \"entry\": LogEntry }`" + `) for the live log tail - best-effort,
 sent only while an admin is connected.`
 
 // securitySchemes declares the two ways a request can authenticate.
@@ -63,7 +63,7 @@ func securitySchemes() openapi3.SecuritySchemes {
 	bearer := openapi3.NewSecurityScheme()
 	bearer.Type = "http"
 	bearer.Scheme = "bearer"
-	bearer.Description = "Personal access token (pat_…). Also accepted as ?token= on the WebSocket upgrade."
+	bearer.Description = "Personal access token (pat_...). Also accepted as ?token= on the WebSocket upgrade."
 
 	return openapi3.SecuritySchemes{
 		"cookieAuth": &openapi3.SecuritySchemeRef{Value: cookie},

@@ -30,7 +30,7 @@ func waitForCalled(t *testing.T, env *testEnv, want int, timeout time.Duration) 
 	t.Fatalf("timed out waiting for %d called number(s); have %d", want, calledCount(t, env))
 }
 
-// autoTestGame creates a top-row pattern (all five columns → half-time at 35) and
+// autoTestGame creates a top-row pattern (all five columns -> half-time at 35) and
 // returns its id, ready to start games from.
 func autoTestPattern(t *testing.T, env *testEnv) int {
 	t.Helper()
@@ -42,7 +42,7 @@ func autoTestPattern(t *testing.T, env *testEnv) int {
 }
 
 // autoTestBColumnPattern creates a pattern that marks only the B column, so the
-// game has one active column (15 callable) and its half-time mark lands at 7 —
+// game has one active column (15 callable) and its half-time mark lands at 7 -
 // low enough that a test can reach it quickly.
 func autoTestBColumnPattern(t *testing.T, env *testEnv) int {
 	t.Helper()
@@ -77,7 +77,7 @@ func TestGame_StartWithAuto(t *testing.T) {
 	patID := autoTestPattern(t, env)
 
 	resp := env.postJSON(t, "/api/game/start", map[string]any{
-		"pattern_ids": []int{patID}, "auto": true, "auto_interval": 3, // 3 → clamped up to 5
+		"pattern_ids": []int{patID}, "auto": true, "auto_interval": 3, // 3 -> clamped up to 5
 	})
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("status = %d; want 200", resp.StatusCode)
@@ -125,7 +125,7 @@ func TestGame_PatchAuto(t *testing.T) {
 
 // TestGame_HalftimePausesAndResumesAuto reaches the half-time mark via an auto
 // draw (a manual draw would instead switch auto off), confirms auto was paused,
-// then verifies that declining the mini-game resumes it. Numbers 1–6 are drawn
+// then verifies that declining the mini-game resumes it. Numbers 1-6 are drawn
 // manually with auto off; enabling auto then draws the 7th (the B-column half-time
 // mark), which pauses the loop.
 func TestGame_HalftimePausesAndResumesAuto(t *testing.T) {
@@ -144,14 +144,14 @@ func TestGame_HalftimePausesAndResumesAuto(t *testing.T) {
 		t.Fatalf("expected 6 numbers drawn before enabling auto; got %d", n)
 	}
 
-	// Enable auto → the immediate auto draw crosses the half-time mark and pauses.
+	// Enable auto -> the immediate auto draw crosses the half-time mark and pauses.
 	env.patchJSON(t, "/api/game", map[string]any{"auto_enabled": true, "auto_interval": 600}).Body.Close()
 	waitForCalled(t, env, 7, 2*time.Second)
 	if enabled, _ := gameAuto(t, env); enabled {
 		t.Error("auto should be paused at the half-time mark")
 	}
 
-	// Decline the mini-game → auto resumes.
+	// Decline the mini-game -> auto resumes.
 	env.postJSON(t, "/api/game/halftime", map[string]any{"minigame": false}).Body.Close()
 	if enabled, _ := gameAuto(t, env); !enabled {
 		t.Error("declining the mini-game should resume auto")
@@ -159,7 +159,7 @@ func TestGame_HalftimePausesAndResumesAuto(t *testing.T) {
 }
 
 // TestGame_ManualDrawDisablesAuto verifies that manually drawing during an
-// auto-run game takes over — switching auto off.
+// auto-run game takes over - switching auto off.
 func TestGame_ManualDrawDisablesAuto(t *testing.T) {
 	env := newTestEnv(t)
 	env.loginAdmin(t)
@@ -171,7 +171,7 @@ func TestGame_ManualDrawDisablesAuto(t *testing.T) {
 		t.Fatal("expected auto on after start-with-auto")
 	}
 
-	// A single manual draw takes over → auto switches off.
+	// A single manual draw takes over -> auto switches off.
 	env.postJSON(t, "/api/game/draw", map[string]any{}).Body.Close()
 	if enabled, _ := gameAuto(t, env); enabled {
 		t.Error("a manual draw should disable auto-draw")
@@ -179,7 +179,7 @@ func TestGame_ManualDrawDisablesAuto(t *testing.T) {
 }
 
 // TestGame_DisablingAutoCancelsPendingDraw confirms that turning auto off cancels
-// the scheduler's pending draw — no stray number appears after the interval that
+// the scheduler's pending draw - no stray number appears after the interval that
 // was counting down.
 func TestGame_DisablingAutoCancelsPendingDraw(t *testing.T) {
 	env := newTestEnv(t)
@@ -195,15 +195,15 @@ func TestGame_DisablingAutoCancelsPendingDraw(t *testing.T) {
 	env.patchJSON(t, "/api/game", map[string]any{"auto_enabled": false}).Body.Close()
 	n := calledCount(t, env)
 
-	// Wait past the 5s interval — the cancelled timer must not draw again.
+	// Wait past the 5s interval - the cancelled timer must not draw again.
 	time.Sleep(6 * time.Second)
 	if got := calledCount(t, env); got != n {
-		t.Errorf("auto drew after being disabled (%d → %d); the pending timer was not cancelled", n, got)
+		t.Errorf("auto drew after being disabled (%d -> %d); the pending timer was not cancelled", n, got)
 	}
 }
 
 // TestGame_AutoDrawsImmediatelyOnEnable verifies that toggling auto on mid-game
-// draws the first number right away (not after a full interval), then holds off —
+// draws the first number right away (not after a full interval), then holds off -
 // the delay/interval never postpone that first draw.
 func TestGame_AutoDrawsImmediatelyOnEnable(t *testing.T) {
 	env := newTestEnv(t)
@@ -218,13 +218,13 @@ func TestGame_AutoDrawsImmediatelyOnEnable(t *testing.T) {
 		t.Fatalf("expected 0 numbers drawn before auto is on; got %d", n)
 	}
 
-	// Turn auto on with the maximum interval — only the immediate draw should land.
+	// Turn auto on with the maximum interval - only the immediate draw should land.
 	env.patchJSON(t, "/api/game", map[string]any{"auto_enabled": true, "auto_interval": 600}).Body.Close()
 
 	// First number arrives ~immediately.
 	waitForCalled(t, env, 1, 2*time.Second)
 
-	// …and it does not keep drawing (next draw is a full 600s away).
+	// ...and it does not keep drawing (next draw is a full 600s away).
 	time.Sleep(300 * time.Millisecond)
 	if n := calledCount(t, env); n != 1 {
 		t.Errorf("expected exactly 1 draw (the immediate one); got %d", n)
@@ -267,7 +267,7 @@ func TestGame_HalftimeMinigameKeepsAutoOff(t *testing.T) {
 		t.Fatal("auto should be paused at the half-time mark")
 	}
 
-	// Choose the mini-game → auto stays off.
+	// Choose the mini-game -> auto stays off.
 	env.postJSON(t, "/api/game/halftime", map[string]any{"minigame": true}).Body.Close()
 	if enabled, _ := gameAuto(t, env); enabled {
 		t.Error("running a mini-game should leave auto off until re-enabled")

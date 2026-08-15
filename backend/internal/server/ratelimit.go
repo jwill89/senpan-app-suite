@@ -56,9 +56,9 @@ func newRateLimiter(maxFails int, window time.Duration) *rateLimiter {
 // log records are always the SAME value.
 //
 // This deliberately reuses logClientIP's loopback-gated trust rather than the
-// naive "rightmost X-Forwarded-For" it previously used. Behind Cloudflare→Apache
+// naive "rightmost X-Forwarded-For" it previously used. Behind Cloudflare->Apache
 // the header at the backend is "<real client>, <cloudflare edge>", so the
-// rightmost entry is the Cloudflare EDGE IP — meaning every user behind the same
+// rightmost entry is the Cloudflare EDGE IP - meaning every user behind the same
 // edge shared one throttle bucket (one victim tripping the limit, or an attacker
 // rotating edges, poisoned everyone else). logClientIP resolves the true origin
 // (CF-Connecting-IP, then leftmost XFF) but ONLY when the immediate peer is the
@@ -77,7 +77,7 @@ func clientIP(r *http.Request) string {
 // entry for rate-limiting.
 //
 // Security: the proxy-supplied headers are honored ONLY when the immediate peer
-// (RemoteAddr) is the local reverse proxy — i.e. a loopback address, since Apache
+// (RemoteAddr) is the local reverse proxy - i.e. a loopback address, since Apache
 // ProxyPasses to localhost:8080. A client that can reach the backend directly (or
 // craft the header) could otherwise forge CF-Connecting-IP / X-Forwarded-For and
 // poison the audit log's `ip` field. If the proxy is ever bound off-loopback,

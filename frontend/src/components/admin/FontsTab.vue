@@ -2,13 +2,13 @@
 /**
  * Admin Font Upload tab (Atelier Yao section). A logical FONT groups the
  * uploaded files sharing a base name as format variants (TTF/OTF/WOFF/WOFF2/
- * EOT, plus an auto-converted WOFF2 copy — created only when no WOFF2 was
+ * EOT, plus an auto-converted WOFF2 copy - created only when no WOFF2 was
  * uploaded). Fonts are licensed assets, so they are not downloadable by direct
- * link: they're served through obfuscated token URLs that rotate every 1–2
+ * link: they're served through obfuscated token URLs that rotate every 1-2
  * weeks, and each font may only be loaded by ITS allowed sites (this app is
- * always allowed — the font selector keeps working no matter what).
+ * always allowed - the font selector keeps working no matter what).
  *
- * The table stays slim — CSS name, served version, modified, actions — and
+ * The table stays slim - CSS name, served version, modified, actions - and
  * everything else lives in the Edit modal (FontEditModal): file names with
  * rename/delete, sizes, the served-version picker, and the font's allowed
  * sites. A live-preview panel renders custom text in any variant of the
@@ -20,7 +20,11 @@ import AdminPanel from '@/components/common/ui/AdminPanel.vue'
 import FormField from '@/components/common/ui/FormField.vue'
 import EmptyState from '@/components/common/ui/EmptyState.vue'
 import SearchInput from '@/components/common/ui/SearchInput.vue'
-import DataTable, { type DataColumn } from '@/components/common/ui/DataTable.vue'
+import DataTableToolbar from '@/components/common/ui/DataTableToolbar.vue'
+import DataTable, {
+  type DataColumn,
+  type DataTableView,
+} from '@/components/common/ui/DataTable.vue'
 import FontEditModal from '@/components/admin/FontEditModal.vue'
 import { applyUploadedFonts, uploadedFontUrl } from '@/lib/theme'
 import { useFontsStore, fontShareUrl, toUploadedFont, FONT_KIT_URL } from '@/stores/fonts'
@@ -30,7 +34,7 @@ import type { Font, FontVariant } from '@/types/api'
 const fonts = useFontsStore()
 const ui = useUiStore()
 
-// ── External use (the kit embed) ─────────────────────────────────────────────
+// -- External use (the kit embed) ---------------------------------------------
 
 /** The <link> tag external sites paste into their custom code. */
 const kitSnippet = `<link rel="stylesheet" href="${FONT_KIT_URL}">`
@@ -46,7 +50,7 @@ async function copyKitSnippet(): Promise<void> {
   }
 }
 
-// ── Upload ───────────────────────────────────────────────────────────────────
+// -- Upload -------------------------------------------------------------------
 
 /** Hidden <input type="file"> used by the Upload button. */
 const fileInput = ref<HTMLInputElement | null>(null)
@@ -64,12 +68,12 @@ async function onFilesSelected(e: Event): Promise<void> {
   input.value = ''
 }
 
-// ── Edit modal ───────────────────────────────────────────────────────────────
+// -- Edit modal ---------------------------------------------------------------
 
 /** Base name of the font open in the Edit modal (null = closed). */
 const editingBase = ref<string | null>(null)
 
-// ── Live preview ─────────────────────────────────────────────────────────────
+// -- Live preview -------------------------------------------------------------
 
 /** Custom text shown in the live-preview panel. */
 const previewText = ref('The quick brown fox jumps over the lazy dog 1234567890')
@@ -102,7 +106,7 @@ function previewVariantFamily(f: Font, v: FontVariant): string {
 
 // Register ad-hoc @font-face rules for EVERY variant of the selected font, so
 // the preview toggle can compare formats. These live in their own <style> and
-// use "(… preview)" family names that never collide with the app-registered
+// use "(... preview)" family names that never collide with the app-registered
 // set; a variant's font only downloads when the preview actually renders it.
 watch(
   [selectedFont, () => fonts.fonts],
@@ -128,7 +132,7 @@ watch(
   { deep: true },
 )
 
-// Remove the injected preview <style> when the tab unmounts — it lives in
+// Remove the injected preview <style> when the tab unmounts - it lives in
 // <head> outside this component's tree, so it would otherwise leak (and keep
 // stale @font-face rules) after navigating away.
 onBeforeUnmount(() => {
@@ -154,12 +158,9 @@ function selectForPreview(base: string): void {
   previewExpanded.value = true
 }
 
-// ── Table ────────────────────────────────────────────────────────────────────
+// -- Table --------------------------------------------------------------------
 
-type SortKey = 'family' | 'served_type' | 'modified'
 /** Active sort column + direction. */
-const sortKey = ref<SortKey>('family')
-const sortDir = ref<'asc' | 'desc'>('asc')
 
 /** Columns for the shared DataTable (the last is the right-aligned actions). */
 const fontColumns: DataColumn[] = [
@@ -169,50 +170,22 @@ const fontColumns: DataColumn[] = [
   { key: 'actions', label: '', align: 'right' },
 ]
 
-/** Toggles direction when re-clicking the active column, else sorts ascending.
- *  Receives the column key (string) from DataTable's `sort` event. */
-function sortBy(key: string): void {
-  if (sortKey.value === key) {
-    sortDir.value = sortDir.value === 'asc' ? 'desc' : 'asc'
-  } else {
-    sortKey.value = key as SortKey
-    sortDir.value = 'asc'
-  }
-}
-
 /** Highlights the row whose font is currently shown in the live preview. */
 function previewRowClass(f: Font): Record<string, boolean> {
   return { 'row-selected': selectedBase.value === f.base }
 }
 
-/** Filtered + sorted rows for display (searches CSS names and file names). */
-const displayedFonts = computed(() => {
-  const term = search.value.trim().toLowerCase()
-  const rows = term
-    ? fonts.fonts.filter(
-        (f) =>
-          f.family.toLowerCase().includes(term) ||
-          f.variants.some((v) => v.name.toLowerCase().includes(term)),
-      )
-    : fonts.fonts.slice()
-
-  const dir = sortDir.value === 'asc' ? 1 : -1
-  rows.sort((a, b) => {
-    let cmp = 0
-    if (sortKey.value === 'family') {
-      cmp = a.family.toLowerCase().localeCompare(b.family.toLowerCase())
-    } else if (sortKey.value === 'served_type') {
-      cmp = a.served_type.localeCompare(b.served_type)
-    } else {
-      cmp = new Date(a.modified).getTime() - new Date(b.modified).getTime()
-    }
-    return cmp * dir
-  })
-  return rows
-})
+/** A font matches the search on its CSS family or any variant's file name.
+ *  `modified` is RFC3339, so the table's generic comparator orders it correctly. */
+function fontMatches(f: Font, q: string): boolean {
+  return (
+    f.family.toLowerCase().includes(q) || f.variants.some((v) => v.name.toLowerCase().includes(q))
+  )
+}
 
 /** Free-text filter applied to CSS names and file names. */
 const search = ref('')
+const fontsView = ref<DataTableView>({ total: 0, totalPages: 1, facets: {} })
 
 /** True when the served variant is the auto-converted WOFF2 copy. */
 function servesConverted(f: Font): boolean {
@@ -220,12 +193,12 @@ function servesConverted(f: Font): boolean {
 }
 
 /** Copies the tokenized URL of a font's SERVED variant to the clipboard. The
- *  token rotates every 1–2 weeks — for anything permanent, embed the kit. */
+ *  token rotates every 1-2 weeks - for anything permanent, embed the kit. */
 async function copyLink(f: Font): Promise<void> {
   const url = fontShareUrl(f.served_token)
   try {
     await navigator.clipboard.writeText(url)
-    ui.notify('Link copied — note it expires in 1–2 weeks (use the kit for embeds)', 'success')
+    ui.notify('Link copied - note it expires in 1-2 weeks (use the kit for embeds)', 'success')
   } catch {
     ui.notify(url, 'info')
   }
@@ -256,7 +229,7 @@ watch(
       <div class="flex-toolbar mb-12">
         <h3 class="m-0"><font-awesome-icon :icon="['fad', 'font']" /> Font Upload</h3>
         <button class="btn-action btn-sm push-right" :disabled="fonts.uploading" @click="pickFiles">
-          <LoadingSpinner v-if="fonts.uploading" label="Uploading…" />
+          <LoadingSpinner v-if="fonts.uploading" label="Uploading..." />
           <template v-else><font-awesome-icon :icon="['fas', 'plus']" /> Upload Fonts</template>
         </button>
         <input
@@ -269,12 +242,13 @@ watch(
         />
       </div>
 
-      <p class="text-dim text-xs mb-12">
+      <p class="text-muted text-xs mb-12">
         Allowed types: .ttf, .otf, .woff, .woff2, .eot. Files sharing a name (e.g.
-        <span class="code-gold">Jasper.ttf</span> + <span class="code-gold">Jasper.woff2</span>) are
-        versions of one font; fonts without a WOFF2 get one converted automatically. Fonts are
-        protected: served through obfuscated links that rotate every 1–2 weeks, usable only by this
-        app and each font's own allowed sites (managed via <strong>Edit</strong>).
+        <span class="code-highlight">Jasper.ttf</span> +
+        <span class="code-highlight">Jasper.woff2</span>) are versions of one font; fonts without a
+        WOFF2 get one converted automatically. Fonts are protected: served through obfuscated links
+        that rotate every 1-2 weeks, usable only by this app and each font's own allowed sites
+        (managed via <strong>Edit</strong>).
       </p>
 
       <!-- External use: the kit embed snippet. -->
@@ -292,7 +266,7 @@ watch(
         <div v-show="externalExpanded" id="font-external-body">
           <FormField
             label="Embed on an external site (e.g. Carrd)"
-            help="Paste this into the site's custom <head> code, then use each font with CSS: font-family: '<CSS Name>' (the table below). The kit URL never changes — font links inside it refresh automatically, and each site only receives the fonts whose Allowed Sites (Edit) include it."
+            help="Paste this into the site's custom <head> code, then use each font with CSS: font-family: '<CSS Name>' (the table below). The kit URL never changes - font links inside it refresh automatically, and each site only receives the fonts whose Allowed Sites (Edit) include it."
           >
             <div class="font-inline-row">
               <input
@@ -327,7 +301,7 @@ watch(
             <input
               id="font-preview-text"
               v-model="previewText"
-              placeholder="Type text to preview…"
+              placeholder="Type text to preview..."
               aria-label="Preview text"
             />
           </FormField>
@@ -338,12 +312,12 @@ watch(
             class="font-variant-toggle"
             role="group"
           >
-            <span class="text-dim text-xs">Version:</span>
+            <span class="text-muted text-xs">Version:</span>
             <button
               v-for="v in selectedFont.variants"
               :key="v.token"
               class="btn-view btn-sm"
-              :class="{ active: previewToken === v.token }"
+              :class="{ 'is-active': previewToken === v.token }"
               @click="previewToken = v.token"
             >
               {{ v.type }}{{ v.converted ? ' (converted)' : '' }}
@@ -353,63 +327,75 @@ watch(
             class="font-preview-stage"
             :style="selectedFamily ? { fontFamily: `'${selectedFamily}', serif` } : undefined"
           >
-            <span v-if="selectedFamily">{{ previewText || 'Type text to preview…' }}</span>
-            <span v-else class="text-dim">
+            <span v-if="selectedFamily">{{ previewText || 'Type text to preview...' }}</span>
+            <span v-else class="text-muted">
               Select a font below (the “Preview” action) to see your text rendered here.
             </span>
           </div>
-          <p v-if="selectedFont && previewVariant" class="text-dim text-xs" style="margin: 6px 0 0">
-            Previewing <span class="code-gold">{{ selectedFont.family }}</span> —
+          <p
+            v-if="selectedFont && previewVariant"
+            class="text-muted text-xs"
+            style="margin: 6px 0 0"
+          >
+            Previewing <span class="code-highlight">{{ selectedFont.family }}</span> -
             {{ previewVariant.type }}{{ previewVariant.converted ? ' (converted)' : '' }}
           </p>
         </div>
       </div>
 
-      <SearchInput
+      <DataTableToolbar
         v-if="fonts.fonts.length"
-        v-model="search"
-        class="mb-12"
-        placeholder="Search fonts by name…"
-        aria-label="Search fonts by name"
-      />
+        :count="fontsView.total"
+        :total="fonts.fonts.length"
+        noun="font"
+      >
+        <template #search>
+          <SearchInput
+            v-model="search"
+            placeholder="Search fonts by name..."
+            aria-label="Search fonts by name"
+          />
+        </template>
+      </DataTableToolbar>
 
       <LoadingSpinner
         v-if="fonts.loading && fonts.fonts.length === 0"
         block
-        label="Loading fonts…"
+        label="Loading fonts..."
       />
 
       <DataTable
         v-else-if="fonts.fonts.length"
         :columns="fontColumns"
-        :rows="displayedFonts"
+        :rows="fonts.fonts"
         row-key="base"
-        :sort-key="sortKey"
-        :sort-dir="sortDir"
+        :filter="search"
+        :filter-fn="fontMatches"
+        :default-sort="{ key: 'family', dir: 'asc' }"
         :row-class="previewRowClass"
-        @sort="sortBy"
+        @update:view="fontsView = $event"
       >
         <template #cell-family="{ row }">
-          <span class="code-gold">{{ row.family }}</span>
+          <span class="code-highlight">{{ row.family }}</span>
         </template>
         <template #cell-served_type="{ row }">
           <span :title="servesConverted(row) ? 'Serving the auto-converted WOFF2 copy' : undefined">
             {{ row.served_type }}
             <font-awesome-icon
               v-if="servesConverted(row)"
-              class="text-dim text-xs"
+              class="text-muted text-xs"
               :icon="['fas', 'rotate']"
             />
           </span>
         </template>
         <template #cell-modified="{ row }">
-          <span class="text-dim">{{ new Date(row.modified).toLocaleString() }}</span>
+          <span class="text-muted">{{ new Date(row.modified).toLocaleString() }}</span>
         </template>
         <template #cell-actions="{ row }">
           <div class="row-actions">
             <button
               class="btn-view btn-sm"
-              :class="{ active: selectedBase === row.base }"
+              :class="{ 'is-active': selectedBase === row.base }"
               title="Preview this font in the panel above"
               @click="selectForPreview(row.base)"
             >
@@ -417,7 +403,7 @@ watch(
             </button>
             <button
               class="btn-view btn-sm"
-              title="Copy the served version's tokenized URL (expires in 1–2 weeks — embed the kit stylesheet for anything permanent)"
+              title="Copy the served version's tokenized URL (expires in 1-2 weeks - embed the kit stylesheet for anything permanent)"
               @click="copyLink(row)"
             >
               <font-awesome-icon :icon="['fas', 'copy']" /> Copy URL
@@ -439,7 +425,7 @@ watch(
           </div>
         </template>
         <template #empty>
-          <p class="text-dim ta-center" style="padding: 20px">No fonts match “{{ search }}”.</p>
+          <p class="text-muted ta-center" style="padding: 20px">No fonts match “{{ search }}”.</p>
         </template>
       </DataTable>
 
@@ -512,9 +498,9 @@ watch(
   overflow-wrap: anywhere;
 }
 
-/* Highlight the row whose font is currently in the live preview. A warm gold
+/* Highlight the row whose font is currently in the live preview. A warm highlight
    tint (not the gray --panel-raised-bg used by the ghost buttons' borders) keeps the
-   action buttons clearly visible; a gold bar marks the selected row. */
+   action buttons clearly visible; a highlight bar marks the selected row. */
 .row-selected td {
   background: color-mix(in srgb, var(--highlight) 14%, transparent);
 }

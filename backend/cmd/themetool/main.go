@@ -102,7 +102,7 @@ func aaaTarget(large bool) float64 {
 var rgbFuncRe = regexp.MustCompile(`rgba?\(([^)]+)\)`)
 
 // parseColor converts a hex or rgb()/rgba() string to 0-255 channels (alpha
-// ignored — none of the checked pairs use alpha tokens).
+// ignored - none of the checked pairs use alpha tokens).
 func parseColor(s string) (r, g, b float64, ok bool) {
 	s = strings.TrimSpace(s)
 	if strings.HasPrefix(s, "#") {
@@ -276,12 +276,12 @@ func main() {
 			aa, aaa := checkTheme(fmt.Sprintf("[%s] %s", m["__id"], m["__name"]), tokensOnly(m))
 			totalAA, totalAAA = totalAA+aa, totalAAA+aaa
 		}
-		fmt.Printf("\nTOTAL across all themes — AA fails: %d   AAA fails: %d\n", totalAA, totalAAA)
+		fmt.Printf("\nTOTAL across all themes - AA fails: %d   AAA fails: %d\n", totalAA, totalAAA)
 
 	case "sqldump":
 		// Emit targeted SQL to bring another DB's `styles` table to this DB's
 		// token state: UPDATE every theme by id (ids match because the target was
-		// seeded from this DB). Touches only `styles` — safe on the live prod DB.
+		// seeded from this DB). Touches only `styles` - safe on the live prod DB.
 		esc := func(s string) string { return strings.ReplaceAll(s, "'", "''") }
 		fmt.Println("BEGIN IMMEDIATE;")
 		for _, m := range loadThemes(st) {

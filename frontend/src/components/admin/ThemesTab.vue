@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /**
- * Admin Themes tab — theme CRUD with a structured design-token editor
+ * Admin Themes tab - theme CRUD with a structured design-token editor
  * (ThemeTokenEditor). A theme is a set of token overrides, not free-form CSS;
  * the applied stylesheet is generated from the tokens (server-side, and locally
  * for the live preview). A theme-list sidebar + the editor pane, with
@@ -40,7 +40,7 @@ const tokens = computed<Record<string, string>>({
               :key="st.id"
               :class="[
                 'style-item',
-                styles.editingStyle && styles.editingStyle.id === st.id ? 'selected' : '',
+                styles.editingStyle && styles.editingStyle.id === st.id ? 'is-selected' : '',
               ]"
               @click="styles.loadStyle(st.id)"
             >
@@ -53,9 +53,13 @@ const tokens = computed<Record<string, string>>({
             <LoadingSpinner
               v-if="styles.stylesLoading && styles.styles.length === 0"
               block
-              label="Loading…"
+              label="Loading..."
             />
-            <p v-else-if="styles.styles.length === 0" class="text-dim text-sm" style="padding: 8px">
+            <p
+              v-else-if="styles.styles.length === 0"
+              class="text-muted text-sm"
+              style="padding: 8px"
+            >
               No themes yet.
             </p>
           </div>
@@ -97,7 +101,7 @@ const tokens = computed<Record<string, string>>({
                 :disabled="styles.savingStyle"
                 @click="styles.saveStyle()"
               >
-                <LoadingSpinner v-if="styles.savingStyle" label="Saving…" />
+                <LoadingSpinner v-if="styles.savingStyle" label="Saving..." />
                 <template v-else>Save</template>
               </button>
               <button
@@ -114,9 +118,9 @@ const tokens = computed<Record<string, string>>({
                  separately as a name-hiding "Default". -->
             <label class="visibility-toggle mb">
               <input v-model="styles.editingStyle.is_public" type="checkbox" />
-              <span>Public — players can pick this theme for themselves</span>
+              <span>Public - players can pick this theme for themselves</span>
             </label>
-            <p class="text-dim text-xs mb-8">
+            <p class="text-muted text-xs mb-8">
               Private themes are admin-only. Public themes appear in the client-side theme picker
               (each player opts in per browser); the admin's active theme is always offered there as
               “Default”.
@@ -124,21 +128,21 @@ const tokens = computed<Record<string, string>>({
 
             <ThemeTokenEditor v-model="tokens" />
 
-            <!-- Decorative flourishes (SVG only — the board flourish inlines for
+            <!-- Decorative flourishes (SVG only - the board flourish inlines for
                  card export and the number flourish is a CSS mask) picked from the
                  shared image library. Empty = the app's built-in flourishes. -->
             <div class="flourish-options">
               <div class="flourish-option">
                 <label class="field-label">Board Flourish</label>
-                <p class="text-dim text-xs mb-8">
+                <p class="text-muted text-xs mb-8">
                   SVG drawn at the four corners of the player bingo board. Upload SVGs on the System
-                  → Images page. Leave unset to use the built-in flourish.
+                  -> Images page. Leave unset to use the built-in flourish.
                 </p>
                 <ImagePicker v-model="styles.editingStyle.board_flourish" :extensions="['.svg']" />
               </div>
               <div class="flourish-option">
                 <label class="field-label">Number Flourish</label>
-                <p class="text-dim text-xs mb-8">
+                <p class="text-muted text-xs mb-8">
                   SVG shown either side of the “Last Called” number (player view + Game tab). Leave
                   unset to use the built-in flourish.
                 </p>
@@ -180,7 +184,7 @@ const tokens = computed<Record<string, string>>({
   width: auto;
   margin: 0;
 }
-/* "Public" badge in the theme list — pill chrome from the `.badge` object. */
+/* "Public" badge in the theme list - pill chrome from the `.badge` object. */
 .style-public-badge {
   background: var(--accent-2);
   color: var(--text-on-fill);

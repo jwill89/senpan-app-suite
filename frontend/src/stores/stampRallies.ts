@@ -3,7 +3,7 @@
  * tokenized participant cards, and the event-wide collection log) plus the public
  * token-based participant view (load a card, collect stamps by password).
  *
- * Structurally a cousin of the garapons store — an event owns sub-entities and the
+ * Structurally a cousin of the garapons store - an event owns sub-entities and the
  * admin issues each participant a tokenized link; the difference is the visual
  * placement of stamps/prizes and the password-driven public collection flow.
  */
@@ -21,6 +21,9 @@ import type {
   StampRallyPrizeForm,
   StampRallyStamp,
   StampRallyStampForm,
+  SignupRally,
+  StampSignupResponse,
+  StampLookupEntry,
 } from '@/types/api'
 import { datetimeLocalToUtc, utcToDatetimeLocal } from '@/lib/datetime'
 import { withLoading } from '@/lib/withLoading'
@@ -73,7 +76,7 @@ export function groupedByParticipant(rows: StampRallyLogEntry[]): StampRallyLogE
 export const useStampRalliesStore = defineStore('stampRallies', () => {
   const ui = useUiStore()
 
-  // ── Admin state ──────────────────────────────────────────────────────────
+  // -- Admin state ----------------------------------------------------------
   const rallies = ref<StampRally[]>([])
   const selectedRally = ref<StampRally | null>(null)
   const rallyCards = ref<StampRallyCard[]>([])
@@ -95,14 +98,14 @@ export const useStampRalliesStore = defineStore('stampRallies', () => {
   const savingRally = ref(false)
   const creatingCard = ref(false)
 
-  // ── Public state ─────────────────────────────────────────────────────────
+  // -- Public state ---------------------------------------------------------
   const publicCard = ref<PublicStampCard | null>(null)
   const publicLoading = ref(false)
   const submitting = ref(false)
   /** The most recently collected stamp id (drives the reveal animation/highlight). */
   const lastCollectedId = ref<number | null>(null)
 
-  // ── Computed ─────────────────────────────────────────────────────────────
+  // -- Computed -------------------------------------------------------------
   const openRallies = computed(() => rallies.value.filter((r) => r.status !== 'closed'))
   const closedRallies = computed(() => rallies.value.filter((r) => r.status === 'closed'))
 
@@ -112,7 +115,7 @@ export const useStampRalliesStore = defineStore('stampRallies', () => {
     return c.stamps.filter((s) => !s.collected && s.available).length
   })
 
-  // ── Admin: load ──────────────────────────────────────────────────────────
+  // -- Admin: load ----------------------------------------------------------
   async function loadRallies(): Promise<void> {
     await withLoading(ralliesLoading, async () => {
       const data = await endpoints.stampRallies.list()
@@ -164,7 +167,7 @@ export const useStampRalliesStore = defineStore('stampRallies', () => {
     }
   }
 
-  // ── Admin: form ──────────────────────────────────────────────────────────
+  // -- Admin: form ----------------------------------------------------------
   function newRallyForm(): void {
     rallyForm.value = {
       id: 0,
@@ -176,6 +179,7 @@ export const useStampRalliesStore = defineStore('stampRallies', () => {
       details: '',
       redeem_instructions: '',
       redeem_image: '',
+      public_signup: false,
       stamps: [],
       prizes: [],
     }
@@ -187,12 +191,13 @@ export const useStampRalliesStore = defineStore('stampRallies', () => {
       title: r.title,
       card_image: r.card_image,
       not_stamped_image: r.not_stamped_image,
-      // Stored UTC → this admin's local wall-clock for the datetime-local inputs.
+      // Stored UTC -> this admin's local wall-clock for the datetime-local inputs.
       available_from: utcToDatetimeLocal(r.available_from),
       available_to: utcToDatetimeLocal(r.available_to),
       details: r.details,
       redeem_instructions: r.redeem_instructions,
       redeem_image: r.redeem_image,
+      public_signup: r.public_signup,
       stamps: (r.stamps || []).map((s) => ({
         id: s.id,
         affiliate_id: s.affiliate_id ?? null,
@@ -314,7 +319,7 @@ export const useStampRalliesStore = defineStore('stampRallies', () => {
   /**
    * Silently re-fetches the stamps for every rally whose inline "Manage stalls"
    * panel is currently loaded. Called after a list reload (initial load is a
-   * no-op — nothing is expanded yet) so a live invalidation refreshes the cached
+   * no-op - nothing is expanded yet) so a live invalidation refreshes the cached
    * panels instead of leaving them stale. Errors are swallowed: a background
    * refresh must not toast, and the existing cache stays put on a transient fail.
    */
@@ -364,7 +369,7 @@ export const useStampRalliesStore = defineStore('stampRallies', () => {
     }
   }
 
-  // ── Admin: participant cards ─────────────────────────────────────────────
+  // -- Admin: participant cards ---------------------------------------------
   async function createCard(): Promise<void> {
     if (!selectedRally.value) return
     const name = cardAdd.value.participantName.trim()
@@ -380,7 +385,7 @@ export const useStampRalliesStore = defineStore('stampRallies', () => {
         await navigator.clipboard.writeText(cardLinkUrl(data.card))
         copied = true
       } catch {
-        /* clipboard blocked — the per-row copy button still works */
+        /* clipboard blocked - the per-row copy button still works */
       }
       ui.notify(
         copied ? 'Card link created and copied to clipboard' : 'Card link created',
@@ -421,8 +426,13 @@ export const useStampRalliesStore = defineStore('stampRallies', () => {
     return `${window.location.origin}/stamp-card/${card.token}`
   }
 
-  async function copyCardLink(card: StampRallyCard): Promise<void> {
-    const url = cardLinkUrl(card)
+  /**
+   * Copies a link to the clipboard, falling back to showing it in a toast when
+   * the clipboard is unavailable (an insecure origin, or a browser that refuses
+   * without a user gesture) - the participant can still read and copy it by hand
+   * rather than being told nothing happened.
+   */
+  async function copyLink(url: string): Promise<void> {
     try {
       await navigator.clipboard.writeText(url)
       ui.notify('Link copied to clipboard', 'success')
@@ -431,7 +441,98 @@ export const useStampRalliesStore = defineStore('stampRallies', () => {
     }
   }
 
-  // ── Public: card view + collect ──────────────────────────────────────────
+  async function copyCardLink(card: StampRallyCard): Promise<void> {
+    await copyLink(cardLinkUrl(card))
+  }
+
+  // -- Public: self-service sign-up + link lookup ----------------------------
+  //
+  // The tokens the server hands back are turned into links here rather than by
+  // each view, so the participant-facing URLs are built in exactly one place (the
+  // same shape cardLinkUrl produces for the admin card list).
+
+  /** Rallies currently open to public sign-up (empty until loadSignupRallies). */
+  const signupRallies = ref<SignupRally[]>([])
+  const signupLoading = ref(false)
+  /** The result of a successful sign-up, held so the view can show the links. */
+  const signupResult = ref<StampSignupResponse | null>(null)
+  /** Lookup results; null = no search run yet, [] = searched and found nothing. */
+  const lookupResults = ref<StampLookupEntry[] | null>(null)
+  const lookupLoading = ref(false)
+
+  /** A stamp card's public link for a bare token. */
+  function stampCardUrl(token: string): string {
+    return `${window.location.origin}/stamp-card/${token}`
+  }
+
+  /** A garapon drawing link for a bare token. */
+  function garaponUrl(token: string): string {
+    return `${window.location.origin}/garapon/${token}`
+  }
+
+  async function loadSignupRallies(): Promise<void> {
+    signupLoading.value = true
+    try {
+      signupRallies.value = (await endpoints.stampSignup.list()).rallies
+    } catch {
+      signupRallies.value = []
+    } finally {
+      signupLoading.value = false
+    }
+  }
+
+  /**
+   * Signs the participant up for a rally. Returns true on success, leaving the
+   * issued tokens in signupResult. A duplicate name comes back as a 409 whose
+   * message names the fix (the lookup page), so it is surfaced verbatim rather
+   * than replaced with a generic failure.
+   */
+  async function signUp(rallyId: number, name: string, turnstileToken = ''): Promise<boolean> {
+    if (submitting.value) return false
+    const trimmed = name.trim()
+    if (!trimmed) {
+      ui.notify('Enter your character name', 'error')
+      return false
+    }
+    submitting.value = true
+    try {
+      signupResult.value = await endpoints.stampSignup.signUp(rallyId, trimmed, turnstileToken)
+      return true
+    } catch (e) {
+      ui.notify((e as Error).message, 'error')
+      return false
+    } finally {
+      submitting.value = false
+    }
+  }
+
+  /** Looks up a participant's links by the exact name they signed up with. */
+  async function lookupLinks(name: string): Promise<void> {
+    const trimmed = name.trim()
+    if (!trimmed) {
+      ui.notify('Enter the name you signed up with', 'error')
+      return
+    }
+    lookupLoading.value = true
+    try {
+      lookupResults.value = (await endpoints.stampSignup.lookup(trimmed)).entries
+    } catch (e) {
+      ui.notify((e as Error).message, 'error')
+      lookupResults.value = null
+    } finally {
+      lookupLoading.value = false
+    }
+  }
+
+  function resetSignup(): void {
+    signupResult.value = null
+  }
+
+  function resetLookup(): void {
+    lookupResults.value = null
+  }
+
+  // -- Public: card view + collect ------------------------------------------
   function resetPublic(): void {
     publicCard.value = null
     lastCollectedId.value = null
@@ -465,7 +566,7 @@ export const useStampRalliesStore = defineStore('stampRallies', () => {
       lastCollectedId.value = data.collected_stamp_id
       ui.notify('Stamp collected!', 'success')
       if (data.card.completed) {
-        ui.notify('Card complete — your prizes are revealed below!', 'success')
+        ui.notify('Card complete - your prizes are revealed below!', 'success')
       }
       return true
     } catch (e) {
@@ -523,10 +624,24 @@ export const useStampRalliesStore = defineStore('stampRallies', () => {
     createCard,
     deleteCard,
     cardLinkUrl,
+    copyLink,
     copyCardLink,
     // public actions
     resetPublic,
     loadByToken,
     submitPassword,
+    // public self-service sign-up + lookup
+    signupRallies,
+    signupLoading,
+    signupResult,
+    lookupResults,
+    lookupLoading,
+    stampCardUrl,
+    garaponUrl,
+    loadSignupRallies,
+    signUp,
+    lookupLinks,
+    resetSignup,
+    resetLookup,
   }
 })

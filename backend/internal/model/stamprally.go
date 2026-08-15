@@ -1,7 +1,7 @@
 package model
 
 // Placement positions a stamp or prize on the card image: x/y/width/height are
-// percentages of the card image's box (0–100) and Rotation is in degrees. The
+// percentages of the card image's box (0-100) and Rotation is in degrees. The
 // admin sets these by dragging/resizing/rotating in the visual placement editor.
 type Placement struct {
 	X        float64 `json:"x"`
@@ -17,18 +17,23 @@ type Placement struct {
 type StampRally struct {
 	ID                 int64  `json:"id"`
 	Title              string `json:"title"`
-	CardImage          string `json:"card_image"`          // images/stamp_cards/… (background)
-	NotStampedImage    string `json:"not_stamped_image"`   // images/stamp_stamps/… (uncollected/locked placeholder)
+	CardImage          string `json:"card_image"`          // images/stamp_cards/... (background)
+	NotStampedImage    string `json:"not_stamped_image"`   // images/stamp_stamps/... (uncollected/locked placeholder)
 	AvailableFrom      string `json:"available_from"`      // UTC RFC-3339 ("" = unbounded)
 	AvailableTo        string `json:"available_to"`        // UTC RFC-3339 ("" = unbounded)
 	Details            string `json:"details"`             // markdown
 	RedeemInstructions string `json:"redeem_instructions"` // markdown, shown once complete
-	RedeemImage        string `json:"redeem_image"`        // images/… screenshot of where to redeem, shown once complete
+	RedeemImage        string `json:"redeem_image"`        // images/... screenshot of where to redeem, shown once complete
 	// Status is a manual "open"/"closed" flag, independent of the availability window:
 	// a closed rally is read-only (no more stamping), moves to the admin's closed table,
 	// and isn't offered for Garapon linking.
-	Status    string `json:"status"`
-	CreatedAt string `json:"created_at"`
+	Status string `json:"status"`
+	// PublicSignup opts the rally into self-service sign-up: it is then listed on the
+	// public sign-up page and anyone may issue themselves a card. Off by default, so a
+	// rally whose cards the staff hand out (via Garapon links or the admin card list)
+	// stays invite-only unless someone deliberately opens it.
+	PublicSignup bool   `json:"public_signup"`
+	CreatedAt    string `json:"created_at"`
 
 	// Populated on detail fetches only (omitted from list responses for efficiency).
 	Stamps []StampRallyStamp `json:"stamps,omitempty"`
@@ -52,8 +57,8 @@ type StampRallyStamp struct {
 	ID            int64  `json:"id"`
 	RallyID       int64  `json:"rally_id"`
 	AffiliateID   *int64 `json:"affiliate_id"`       // nil = Senpan Tea House (default)
-	AffiliateName string `json:"affiliate_name"`     // joined for display ("" → "Senpan Tea House")
-	Image         string `json:"image"`              // images/stamp_stamps/…
+	AffiliateName string `json:"affiliate_name"`     // joined for display ("" -> "Senpan Tea House")
+	Image         string `json:"image"`              // images/stamp_stamps/...
 	Password      string `json:"password,omitempty"` // omitted from public payloads
 	Placement     `json:"placement"`
 	ActiveFrom    string `json:"active_from"` // UTC RFC-3339 within event window ("" = whole event)
@@ -69,7 +74,7 @@ type StampRallyPrize struct {
 	ID        int64  `json:"id"`
 	RallyID   int64  `json:"rally_id"`
 	Name      string `json:"name"`
-	Image     string `json:"image"` // images/stamp_prizes/…
+	Image     string `json:"image"` // images/stamp_prizes/...
 	Placement `json:"placement"`
 	SortOrder int `json:"sort_order"`
 }
@@ -89,7 +94,7 @@ type StampRallyCard struct {
 }
 
 // StampRallyCollected records one stamp a participant collected on their card, with
-// the time it was stamped. The (card_id, stamp_id) pair is unique — a stamp can't be
+// the time it was stamped. The (card_id, stamp_id) pair is unique - a stamp can't be
 // collected twice and collection can't be undone. ParticipantName + StallName are
 // snapshotted at collect time so the stamp log survives card/stamp deletion (RallyID
 // cascade-deletes the row only when the whole rally is removed).
@@ -119,7 +124,7 @@ type StampRalliesResponse struct {
 	StampRallies []StampRally `json:"stamp_rallies"`
 }
 
-// StampRallyResponse is the body of POST /api/stamp-rallies {action:"create"} — the
+// StampRallyResponse is the body of POST /api/stamp-rallies {action:"create"} - the
 // freshly created rally echoed back.
 type StampRallyResponse struct {
 	StampRally StampRally `json:"stamp_rally"`
@@ -133,7 +138,7 @@ type StampRallyDetailResponse struct {
 }
 
 // StampRallyCardResponse is the body of POST /api/stamp-rallies/{id}/cards
-// {action:"create_card"} — the issued card (with token).
+// {action:"create_card"} - the issued card (with token).
 type StampRallyCardResponse struct {
 	Card StampRallyCard `json:"card"`
 }
@@ -198,4 +203,54 @@ type PublicStampCard struct {
 type StampSubmitResponse struct {
 	Card             PublicStampCard `json:"card"`
 	CollectedStampID int64           `json:"collected_stamp_id"`
+}
+
+// -- Public self-service sign-up ----------------------------------------------
+
+// SignupRally is one rally on the public sign-up page: enough to describe the
+// event and set expectations, with no passwords, no card list and no participant
+// names. GaraponTitle is set when an open Garapon is linked to the rally, in which
+// case signing up also issues a drawing link for it.
+type SignupRally struct {
+	ID            int64  `json:"id"`
+	Title         string `json:"title"`
+	CardImage     string `json:"card_image"`
+	Details       string `json:"details"` // markdown
+	AvailableFrom string `json:"available_from"`
+	AvailableTo   string `json:"available_to"`
+	GaraponTitle  string `json:"garapon_title,omitempty"`
+}
+
+// SignupRalliesResponse is the body of GET /api/stamp-signup.
+type SignupRalliesResponse struct {
+	Rallies []SignupRally `json:"rallies"`
+}
+
+// StampSignupResponse is the body of POST /api/stamp-signup/{id}: the tokens the
+// participant needs, which the client turns into links. GaraponToken is "" when the
+// rally has no open linked Garapon; when it is set it equals CardToken, since a
+// paired drawing link and stamp card share one token.
+type StampSignupResponse struct {
+	ParticipantName string `json:"participant_name"`
+	RallyTitle      string `json:"rally_title"`
+	CardToken       string `json:"card_token"`
+	GaraponToken    string `json:"garapon_token,omitempty"`
+	GaraponTitle    string `json:"garapon_title,omitempty"`
+}
+
+// StampLookupEntry is one rally a looked-up participant holds a card for.
+type StampLookupEntry struct {
+	RallyID      int64  `json:"rally_id"`
+	RallyTitle   string `json:"rally_title"`
+	CardToken    string `json:"card_token"`
+	GaraponToken string `json:"garapon_token,omitempty"`
+	GaraponTitle string `json:"garapon_title,omitempty"`
+	Completed    bool   `json:"completed"`
+}
+
+// StampLookupResponse is the body of POST /api/stamp-lookup. An unknown name and a
+// name with no cards return the same empty list - the endpoint never distinguishes
+// them, so it can't be used to probe who signed up.
+type StampLookupResponse struct {
+	Entries []StampLookupEntry `json:"entries"`
 }

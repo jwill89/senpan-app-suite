@@ -1,7 +1,7 @@
 /**
- * Canonical theme design tokens — the single source of truth for the theme
+ * Canonical theme design tokens - the single source of truth for the theme
  * editor. A theme is just a set of overrides for these tokens; the applied
- * stylesheet is a generated `:root{…}` block (see tokensToCss), so themes can
+ * stylesheet is a generated `:root{...}` block (see tokensToCss), so themes can
  * only retint the design tokens and never carry arbitrary CSS.
  *
  * Keep this list in sync with the `:root` block in `assets/app.css` and with
@@ -14,12 +14,12 @@ export interface ThemeTokenMeta {
   name: string
   /** Human-readable label shown in the editor. */
   label: string
-  /** Where the colour is used — shown as help text under the editor row (sourced
+  /** Where the colour is used - shown as help text under the editor row (sourced
    *  from the app.css :root comments). */
   desc: string
   /** Default value, mirroring app.css :root. */
   default: string
-  /** True for tokens whose values use alpha (rgba) — edited as text, not a swatch. */
+  /** True for tokens whose values use alpha (rgba) - edited as text, not a swatch. */
   alpha?: boolean
 }
 
@@ -42,7 +42,7 @@ export const THEME_TOKEN_GROUPS: ThemeTokenGroup[] = [
       {
         name: 'panel-bg',
         label: 'Panel surface',
-        desc: 'Card and panel surfaces — the main raised areas content sits on.',
+        desc: 'Card and panel surfaces - the main raised areas content sits on.',
         default: '#272a22',
       },
       {
@@ -71,7 +71,7 @@ export const THEME_TOKEN_GROUPS: ThemeTokenGroup[] = [
       {
         name: 'accent',
         label: 'Primary accent',
-        desc: 'Primary actions — primary buttons, links, and focus rings.',
+        desc: 'Primary actions - primary buttons, links, and focus rings.',
         default: '#d6bdae',
       },
       {
@@ -83,7 +83,7 @@ export const THEME_TOKEN_GROUPS: ThemeTokenGroup[] = [
       {
         name: 'accent-2',
         label: 'Secondary accent',
-        desc: 'Secondary actions — secondary buttons.',
+        desc: 'Secondary actions - secondary buttons.',
         default: '#474b3c',
       },
       {
@@ -95,7 +95,7 @@ export const THEME_TOKEN_GROUPS: ThemeTokenGroup[] = [
       {
         name: 'highlight',
         label: 'Highlight',
-        desc: 'Highlight accent — called numbers, section headings, and gold trim.',
+        desc: 'Highlight accent - called numbers, section headings, and highlight trim.',
         default: '#d6bdae',
       },
     ],
@@ -112,7 +112,7 @@ export const THEME_TOKEN_GROUPS: ThemeTokenGroup[] = [
       {
         name: 'text-muted',
         label: 'Muted text',
-        desc: 'Secondary / muted text — hints, captions, help text.',
+        desc: 'Secondary / muted text - hints, captions, help text.',
         default: '#d3d3bf',
       },
       {
@@ -135,19 +135,19 @@ export const THEME_TOKEN_GROUPS: ThemeTokenGroup[] = [
       {
         name: 'success',
         label: 'Success',
-        desc: 'Success state — confirmations and “paid” badges.',
+        desc: 'Success state - confirmations and “paid” badges.',
         default: '#175020',
       },
       {
         name: 'danger',
         label: 'Danger',
-        desc: 'Danger / error state — destructive actions and error messages.',
+        desc: 'Danger / error state - destructive actions and error messages.',
         default: '#9a2018',
       },
       {
         name: 'warning',
         label: 'Warning',
-        desc: 'Warning / caution state — skip badges and alerts.',
+        desc: 'Warning / caution state - skip badges and alerts.',
         default: '#e0a82e',
       },
     ],
@@ -242,7 +242,7 @@ export function withDefaults(tokens: Record<string, string> | undefined): Record
   return out
 }
 
-/** An RGBA colour with 0–255 channels and a 0–1 alpha. */
+/** An RGBA colour with 0-255 channels and a 0-1 alpha. */
 export interface Rgba {
   r: number
   g: number
@@ -250,18 +250,18 @@ export interface Rgba {
   a: number
 }
 
-/** Clamps + rounds a channel to an integer in 0–255. */
+/** Clamps + rounds a channel to an integer in 0-255. */
 function channel(n: number): number {
   return Math.max(0, Math.min(255, Math.round(n)))
 }
 
-/** Opaque `#rrggbb` for a colour (drops alpha) — for the native colour input. */
+/** Opaque `#rrggbb` for a colour (drops alpha) - for the native colour input. */
 export function toHex(c: Rgba): string {
   const p = (n: number) => channel(n).toString(16).padStart(2, '0')
   return '#' + p(c.r) + p(c.g) + p(c.b)
 }
 
-/** 8-digit `#rrggbbaa` for a colour — the value an alpha-enabled `<input
+/** 8-digit `#rrggbbaa` for a colour - the value an alpha-enabled `<input
  *  type="color" alpha>` accepts/serializes. */
 export function toHex8(c: Rgba): string {
   const p = (n: number) => channel(n).toString(16).padStart(2, '0')
@@ -270,7 +270,7 @@ export function toHex8(c: Rgba): string {
 }
 
 /**
- * Renders a colour as a modern CSS `rgb()` string — `rgb(r g b / a%)` when it has
+ * Renders a colour as a modern CSS `rgb()` string - `rgb(r g b / a%)` when it has
  * alpha, or `rgb(r g b)` when fully opaque. (CSS Color 4 makes `rgba()` a legacy
  * alias; the slash-separated form is the current standard.)
  */
@@ -284,7 +284,7 @@ export function toRgb(c: Rgba): string {
  * Rejects a token value that could break out of its `--name:value;` declaration
  * or smuggle extra CSS into the live preview. Mirrors the server sanitizer's
  * intent (store.sanitizeTokenValue) so a hostile token can't self-inject CSS into
- * the editor's preview `:root{…}` block. Legitimate function values such as
+ * the editor's preview `:root{...}` block. Legitimate function values such as
  * `rgb(0 0 0 / 70%)` pass; only injection vectors are blocked.
  */
 function tokenValueSafe(v: string): boolean {
@@ -302,10 +302,10 @@ function tokenValueSafe(v: string): boolean {
 }
 
 /**
- * Renders a token map as a `:root{…}` stylesheet, emitting only known tokens in
+ * Renders a token map as a `:root{...}` stylesheet, emitting only known tokens in
  * canonical order. Mirrors the server's TokensToCSS so live preview matches what
  * the backend will serve. Each value is injection-checked (see tokenValueSafe) so
- * a hostile token can't inject arbitrary CSS into the preview `:root{…}` block —
+ * a hostile token can't inject arbitrary CSS into the preview `:root{...}` block -
  * an unsafe value is dropped, falling back to that token's default. Returns ''
  * when nothing usable is present.
  */

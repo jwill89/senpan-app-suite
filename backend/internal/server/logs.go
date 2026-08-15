@@ -75,7 +75,7 @@ func parseLogLevelName(s string) (slog.Level, bool) {
 //
 //	Endpoint: GET /api/logs?level=<debug|info|warn|error>&q=<text>&limit=<n>
 //	Auth:     admin
-//	Response: {"entries":[LogEntry…], "file":"…", "truncated":bool, "level":"…"}
+//	Response: {"entries":[LogEntry...], "file":"...", "truncated":bool, "level":"..."}
 func (s *Server) handleLogs(w http.ResponseWriter, r *http.Request) {
 	if !s.requireAdmin(w, r) {
 		return
@@ -117,7 +117,7 @@ func (s *Server) handleLogs(w http.ResponseWriter, r *http.Request) {
 
 // handleLogLevelSet changes the process-wide minimum log level at runtime
 // (admin-only). Turning DEBUG on captures far more detail; turning it back to
-// INFO quiets it again — no restart, effective immediately across stdout, the
+// INFO quiets it again - no restart, effective immediately across stdout, the
 // rotating file, and the live tail. Reverts to the startup default on restart.
 //
 //	Endpoint: POST /api/logs/level  {"level":"debug|info|warn|error"}
@@ -182,7 +182,7 @@ func tailFile(path string, capBytes int64) (data []byte, truncated bool, err err
 // non-JSON lines (jlv does the same). When hasMin is set, entries below minLevel
 // are dropped; when query is non-empty, only lines containing it (case-
 // insensitive, matched against the whole raw line) are kept. Per-line promotion
-// of time/level/msg → typed fields is shared with the live tail via
+// of time/level/msg -> typed fields is shared with the live tail via
 // model.ParseLogEntry.
 func parseLogLines(raw []byte, minLevel int, hasMin bool, query string) []model.LogEntry {
 	out := []model.LogEntry{}
@@ -192,7 +192,7 @@ func parseLogLines(raw []byte, minLevel int, hasMin bool, query string) []model.
 		}
 		e, ok := model.ParseLogEntry(line)
 		if !ok {
-			continue // not a JSON object — skip
+			continue // not a JSON object - skip
 		}
 		if hasMin {
 			if lvl, ok := slogLevelValue(e.Level); !ok || lvl < minLevel {

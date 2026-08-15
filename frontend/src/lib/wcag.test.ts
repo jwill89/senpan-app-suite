@@ -55,7 +55,7 @@ describe('auditTheme', () => {
 
   it('covers the B-I-N-G-O header letters and the button hover states', () => {
     const ids = auditTheme(defaultTokens()).results.map((r) => r.id)
-    // Pairings that earlier sweeps missed — guard against regressions.
+    // Pairings that earlier sweeps missed - guard against regressions.
     expect(ids).toContain('bingo-top')
     expect(ids).toContain('bingo-bottom')
     expect(ids).toContain('primary-btn-hover')

@@ -47,13 +47,13 @@ const countdown = computed(() => {
 /** Tooltip explaining the current (possibly disabled) state. */
 const title = computed(() => {
   if (!player.yoeverEnabled) return `"It's Yoever" is switched off by the host`
-  if (onCooldown.value) return `Hold on — you can do this again in ${countdown.value}`
-  if (player.yoeverTriggering) return 'Sending…'
+  if (onCooldown.value) return `Hold on - you can do this again in ${countdown.value}`
+  if (player.yoeverTriggering) return 'Sending...'
   return `Trigger "It's Yoever" for everyone`
 })
 
 function onTrigger(): void {
-  // The click is a user gesture — warm audio so the reaction sound (arriving via
+  // The click is a user gesture - warm audio so the reaction sound (arriving via
   // the broadcast a moment later) isn't blocked by the browser's autoplay policy.
   primeAudio()
   void player.triggerYoever()
@@ -63,14 +63,12 @@ function onTrigger(): void {
 <template>
   <button
     v-if="player.playerGame"
-    class="btn-view btn-sm yoever-trigger"
+    class="btn-view btn-sm"
     :disabled="!canTrigger"
     :title="title"
     @click="onTrigger"
   >
     <font-awesome-icon :icon="['fad', 'megaphone']" />
-    <span class="player-actions__label">{{
-      onCooldown ? `Yoever ${countdown}` : "It's Yoever"
-    }}</span>
+    <span>{{ onCooldown ? `Yoever ${countdown}` : "It's Yoever" }}</span>
   </button>
 </template>

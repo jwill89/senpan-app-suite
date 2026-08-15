@@ -41,7 +41,7 @@ onMounted(async () => {
   try {
     turnstileSiteKey.value = (await endpoints.system.config()).turnstile_site_key
   } catch {
-    turnstileSiteKey.value = '' // config probe failed → behave as if disabled
+    turnstileSiteKey.value = '' // config probe failed -> behave as if disabled
   }
 })
 watch(raffleId, (id) => load(id))
@@ -70,7 +70,9 @@ function back(): void {
 <template>
   <div v-if="raffles.selectedRaffle">
     <div class="topbar">
-      <button class="btn-neutral btn-sm" @click="back">← Back</button>
+      <button class="btn-neutral btn-sm" @click="back">
+        <font-awesome-icon :icon="['fas', 'arrow-left']" /> Back
+      </button>
       <h2>{{ raffles.selectedRaffle.title }}</h2>
       <span></span>
     </div>
@@ -95,7 +97,7 @@ function back(): void {
 
       <!-- Sign-up result (shown after signing up) -->
       <div v-if="raffles.raffleSignupResult" class="raffle-signup-result">
-        <h3 class="text-success mb-8">
+        <h3 class="mb-8">
           <font-awesome-icon :icon="['fad', 'circle-check']" />
           {{ raffles.raffleSignupResult.message }}
         </h3>
@@ -105,7 +107,7 @@ function back(): void {
           {{ raffles.raffleSignupResult.total_cost.toLocaleString() }} gil
         </p>
         <div v-if="raffles.raffleSignupResult.signup_instructions" class="game-details mt-12">
-          <h4 class="text-gold mb-6">Sign-Up Instructions</h4>
+          <h4 class="text-highlight mb-6">Sign-Up Instructions</h4>
           <MarkdownText :source="raffles.raffleSignupResult.signup_instructions" />
         </div>
       </div>
@@ -170,7 +172,7 @@ function back(): void {
           "
           @click="signUp()"
         >
-          <LoadingSpinner v-if="raffles.entering" label="Signing up…" />
+          <LoadingSpinner v-if="raffles.entering" label="Signing up..." />
           <template v-else>Sign Up</template>
         </button>
       </div>
@@ -179,13 +181,13 @@ function back(): void {
         v-if="!raffles.selectedRaffleEnterable && !raffles.raffleSignupResult"
         class="raffle-closed-msg"
       >
-        <p class="text-dim" style="text-align: center; padding: 20px; font-size: 1.1rem">
+        <p class="text-muted" style="text-align: center; padding: 20px; font-size: 1.1rem">
           <font-awesome-icon :icon="['fad', 'lock']" /> This raffle is closed.
         </p>
       </div>
     </div>
   </div>
   <div v-else-if="raffles.detailLoading" class="tab-body">
-    <LoadingSpinner block label="Loading raffle…" />
+    <LoadingSpinner block label="Loading raffle..." />
   </div>
 </template>

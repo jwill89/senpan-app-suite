@@ -1,6 +1,6 @@
 /**
  * Book club store: admin management of reading lists and their items for the
- * book clubs (Yaoi, Yuri, …). Covers list CRUD, item CRUD (manual or pulled
+ * book clubs (Yaoi, Yuri, ...). Covers list CRUD, item CRUD (manual or pulled
  * from AniList), cover-image upload, and publishing a list to Discord. Mirrors
  * the structure of the raffles store.
  *
@@ -78,7 +78,7 @@ export const useBookclubStore = defineStore('bookclub', () => {
   const looking = ref(false)
   const publishing = ref(false)
 
-  // ── Lists ────────────────────────────────────────────────────────────────
+  // -- Lists ----------------------------------------------------------------
 
   /**
    * Switch to a club (called when its tab is entered) and load its lists.
@@ -105,7 +105,7 @@ export const useBookclubStore = defineStore('bookclub', () => {
    * Apply a live "bookclub changed" signal (another admin edited a reading list
    * or its items). If a book-club tab is open, refetch the open club's lists now
    * (and the open list's detail); otherwise drop the freshness stamp so re-entry
-   * refetches. The signal isn't club-specific, so it acts on the active club —
+   * refetches. The signal isn't club-specific, so it acts on the active club -
    * any other club's staleness self-heals via the freshness TTL.
    */
   function applyExternalChange(viewing: boolean): void {
@@ -230,7 +230,7 @@ export const useBookclubStore = defineStore('bookclub', () => {
     }
   }
 
-  // ── Items ──────────────────────────────────────────────────────────────────
+  // -- Items ------------------------------------------------------------------
 
   function resetItemForm(): void {
     itemForm.value = emptyItemForm()
@@ -328,7 +328,7 @@ export const useBookclubStore = defineStore('bookclub', () => {
     }
   }
 
-  // ── AniList lookup ─────────────────────────────────────────────────────────
+  // -- AniList lookup ---------------------------------------------------------
 
   async function runLookup(): Promise<void> {
     const q = lookupQuery.value.trim()
@@ -356,7 +356,7 @@ export const useBookclubStore = defineStore('bookclub', () => {
       summary: result.summary || '',
       format: result.format || '',
       genres: result.genres || '',
-      // AniList has no "tropes" concept — keep whatever the admin typed.
+      // AniList has no "tropes" concept - keep whatever the admin typed.
       tropes: itemForm.value.tropes,
       chapters: result.chapters || '',
       comments: itemForm.value.comments,
@@ -364,7 +364,7 @@ export const useBookclubStore = defineStore('bookclub', () => {
     }
     lookupResults.value = []
     lookupQuery.value = ''
-    ui.notify('Form filled from AniList — review and submit', 'info')
+    ui.notify('Form filled from AniList - review and submit', 'info')
   }
 
   return {

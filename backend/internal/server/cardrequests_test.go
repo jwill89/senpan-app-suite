@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-// srvValidBoard returns a fresh structurally valid 5×5 bingo board (centre = FREE).
+// srvValidBoard returns a fresh structurally valid 5x5 bingo board (centre = FREE).
 func srvValidBoard() [][]int {
 	return [][]int{
 		{1, 16, 31, 46, 61},
@@ -24,7 +24,7 @@ func TestCardRequestPublicFlow(t *testing.T) {
 	resp := env.postJSON(t, "/api/cards/request", map[string]any{
 		"character_name": "Aria Nightsong",
 		"world":          "Gilgamesh",
-		"card_id":        "tst001", // lower-case → normalised to TST001
+		"card_id":        "tst001", // lower-case -> normalised to TST001
 		"board_data":     srvValidBoard(),
 	})
 	if resp.StatusCode != http.StatusCreated {
@@ -109,7 +109,7 @@ func TestCardApproveAndProtect(t *testing.T) {
 
 	env.loginAdmin(t)
 
-	// Approve the pending card → approved + protected.
+	// Approve the pending card -> approved + protected.
 	resp = env.postJSON(t, "/api/cards/CUST01/approve", nil)
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("approve = %d; want 200", resp.StatusCode)
@@ -150,7 +150,7 @@ func TestCardApproveAndProtect(t *testing.T) {
 		t.Error("card should be Protected after protect")
 	}
 
-	// Protecting a missing card → 404.
+	// Protecting a missing card -> 404.
 	resp = env.postJSON(t, "/api/cards/NOPE99/protect", map[string]any{"protected": true})
 	if resp.StatusCode != http.StatusNotFound {
 		t.Errorf("protect missing = %d; want 404", resp.StatusCode)

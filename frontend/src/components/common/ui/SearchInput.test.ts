@@ -18,10 +18,10 @@ describe('SearchInput', () => {
 
   it('uses the placeholder and aria-label props', () => {
     const wrapper = mount(SearchInput, {
-      props: { modelValue: '', placeholder: 'Find patterns…', ariaLabel: 'Search patterns' },
+      props: { modelValue: '', placeholder: 'Find patterns...', ariaLabel: 'Search patterns' },
     })
     const input = wrapper.find('input')
-    expect(input.attributes('placeholder')).toBe('Find patterns…')
+    expect(input.attributes('placeholder')).toBe('Find patterns...')
     expect(input.attributes('aria-label')).toBe('Search patterns')
   })
 })

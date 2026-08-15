@@ -73,13 +73,13 @@ func (s *Server) handlePatternCreate(w http.ResponseWriter, r *http.Request) {
 	}
 	name := strings.TrimSpace(req.Name)
 	if name == "" || len(req.PatternData) != 5 {
-		writeError(w, http.StatusBadRequest, "Provide a name and a 5×5 pattern_data array")
+		writeError(w, http.StatusBadRequest, "Provide a name and a 5x5 pattern_data array")
 		return
 	}
 	// Validate each row is length 5.
 	for _, row := range req.PatternData {
 		if len(row) != 5 {
-			writeError(w, http.StatusBadRequest, "Provide a name and a 5×5 pattern_data array")
+			writeError(w, http.StatusBadRequest, "Provide a name and a 5x5 pattern_data array")
 			return
 		}
 	}
@@ -258,7 +258,7 @@ func (s *Server) handlePatternsReorder(w http.ResponseWriter, r *http.Request) {
 	s.broadcastPatterns()
 }
 
-// ── Pattern Category handlers ───────────────────────────────────────────────
+// -- Pattern Category handlers -----------------------------------------------
 
 // handleCategoriesList returns all pattern categories ordered by sort_order.
 //
@@ -314,7 +314,7 @@ func (s *Server) handleCategoryCreate(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleCategoryDelete deletes a pattern category. Deleting the last remaining
-// category is refused (409) — the store reports deleted=false in that case.
+// category is refused (409) - the store reports deleted=false in that case.
 //
 //	Endpoint:    DELETE /api/pattern-categories/{id}
 //	Auth:        permission:bingo-patterns

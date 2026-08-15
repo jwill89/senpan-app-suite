@@ -44,7 +44,7 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   /**
-   * Clears the cached session in place — drops the user and admin flag while
+   * Clears the cached session in place - drops the user and admin flag while
    * keeping `authChecked` true. Called by the global 401 handler when the server
    * reports the admin session is missing/expired, so both the router guard and
    * per-page permission checks (which read `user`) see a logged-out state.

@@ -51,7 +51,7 @@ function cancel(): void {
         <MarkdownEditor
           v-model="raffles.raffleForm.description"
           min-height="120px"
-          placeholder="Description (supports markdown — bold, italics, lists, links…)"
+          placeholder="Description (supports markdown - bold, italics, lists, links...)"
         />
       </FormField>
       <FormField label="Rules">
@@ -105,7 +105,7 @@ function cancel(): void {
       </FormRow>
       <FormField
         label="Prize Image"
-        help="Pick from any image category. Upload new images on the System → Images page."
+        help="Pick from any image category. Upload new images on the System -> Images page."
       >
         <ImagePicker v-model="raffles.raffleForm.prize_image" />
       </FormField>
@@ -116,7 +116,7 @@ function cancel(): void {
           :disabled="!raffles.raffleForm.title.trim() || raffles.savingRaffle"
           @click="save"
         >
-          <LoadingSpinner v-if="raffles.savingRaffle" label="Saving…" />
+          <LoadingSpinner v-if="raffles.savingRaffle" label="Saving..." />
           <template v-else>Save Raffle</template>
         </button>
       </FormActions>

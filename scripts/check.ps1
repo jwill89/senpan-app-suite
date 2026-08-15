@@ -4,9 +4,9 @@
     Run the full local quality gate (the same checks CI runs) before pushing.
 
 .DESCRIPTION
-    Backend (backend/):   golangci-lint · go build · go vet · go test · govulncheck
-    Frontend (frontend/): gen:types · lint:check · typecheck · test · build
-    Plugin (plugins/SenpanCompanion/): dotnet build (warnings=errors) · dotnet format · roslynator analyze
+    Backend (backend/):   golangci-lint - go build - go vet - go test - govulncheck
+    Frontend (frontend/): gen:types - lint:check - format:check - lint:conventions - typecheck - test - build
+    Plugin (plugins/SenpanCompanion/): dotnet build (warnings=errors) - dotnet format - roslynator analyze
 
     Stops at the first failing step with a clear message, so `golangci-lint`
     (which is NOT part of `go build`/`go vet`) can't be forgotten and slip
@@ -21,7 +21,7 @@
     locking semantics than production ships (false confidence). Concurrency
     correctness instead rests on the game service's opMu serialization, the v43
     UNIQUE(game_id, number) constraint, the ws hub's lock discipline, and the
-    manifest/settings mutexes — all covered by targeted tests under this gate.
+    manifest/settings mutexes - all covered by targeted tests under this gate.
 
 .PARAMETER SkipFrontend
     Run only the backend checks.
@@ -80,7 +80,7 @@ if (-not $SkipFrontend) {
     try {
         # The shared ESLint config (@jwill89/eslint-config) is a git submodule linked
         # as a file: dependency. Without it checked out AND npm-linked, `eslint` fails
-        # to START ("Cannot find package") instead of reporting violations — silently
+        # to START ("Cannot find package") instead of reporting violations - silently
         # disabling the lint gate. Fail early with the fix rather than skipping lint.
         if (-not (Test-Path "$root\frontend\node_modules\@jwill89\eslint-config\package.json")) {
             Write-Host "`nFAILED: frontend ESLint config (@jwill89/eslint-config) is not linked; lint can't run." -ForegroundColor Red
@@ -92,6 +92,14 @@ if (-not $SkipFrontend) {
         # api.generated.ts is gitignored; regenerate so typecheck/build are current.
         Invoke-Step "frontend: gen:types" { npm run gen:types }
         Invoke-Step "frontend: lint" { npm run lint:check }
+        # Prettier covers what ESLint doesn't: the CSS layer. Formatting used to be
+        # hand-maintained there because themes were authored as raw CSS in a code
+        # editor; themes are token-only now, so the stylesheets are ordinary source
+        # and get the same enforced formatting as everything else.
+        Invoke-Step "frontend: format" { npm run format:check }
+        # Naming rules Prettier can't see, plus the theme-token list agreeing across
+        # tokens.css / theme-tokens.ts / styles.go. See AGENTS.md "CSS conventions".
+        Invoke-Step "frontend: conventions" { npm run lint:conventions }
         Invoke-Step "frontend: typecheck" { npm run typecheck }
         Invoke-Step "frontend: test" { npm run test }
         Invoke-Step "frontend: build" { npm run build }
@@ -99,13 +107,13 @@ if (-not $SkipFrontend) {
     finally { Pop-Location }
 }
 
-# Plugin (FFXIV Dalamud) — the third CI job. Only runs on a full check (neither
+# Plugin (FFXIV Dalamud) - the third CI job. Only runs on a full check (neither
 # -SkipFrontend nor -SkipBackend), so those flags keep their "only X" meaning.
 # Requires the .NET SDK; no-ops with a clear message when `dotnet` isn't installed
 # so this script still runs on a machine without it.
 if (-not $SkipFrontend -and -not $SkipBackend) {
     if (-not (Get-Command dotnet -ErrorAction SilentlyContinue)) {
-        Write-Host "`n==> plugin: dotnet SDK not found on PATH — skipping plugin build/format checks." -ForegroundColor Yellow
+        Write-Host "`n==> plugin: dotnet SDK not found on PATH - skipping plugin build/format checks." -ForegroundColor Yellow
     }
     else {
         Push-Location "$root\plugins\SenpanCompanion"

@@ -14,18 +14,18 @@ describe('CalledNumbers', () => {
     const w = mount(CalledNumbers, {
       props: { count: 0, isCalled: noneCalled, activeColumns: [true, false, false, false, true] },
     })
-    const dimmed = w.findAll('.numbers-col').map((c) => c.classes().includes('col-unused'))
+    const dimmed = w.findAll('.numbers-col').map((c) => c.classes().includes('numbers-col--unused'))
     expect(dimmed).toEqual([false, true, true, true, false])
   })
 
   it('dims nothing when activeColumns is omitted', () => {
     const w = mount(CalledNumbers, { props: { count: 0, isCalled: noneCalled } })
-    expect(w.findAll('.numbers-col.col-unused')).toHaveLength(0)
+    expect(w.findAll('.numbers-col.numbers-col--unused')).toHaveLength(0)
   })
 
   it('highlights a called number', () => {
     const w = mount(CalledNumbers, { props: { count: 1, isCalled: (n: number) => n === 5 } })
-    const called = w.findAll('.num-cell.called')
+    const called = w.findAll('.num-cell.is-called')
     expect(called).toHaveLength(1)
     expect(called[0].text()).toBe('5')
   })

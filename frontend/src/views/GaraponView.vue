@@ -6,7 +6,7 @@
  * the garapon is open and they have draws left), the grand-prize showcase, the
  * other prizes, the event details, and their own draw record. Spinning the drum
  * performs an authoritative draw; the win reveals as the ball lands. After the
- * garapon closes — or once draws run out — the wheel disappears and the page is a
+ * garapon closes - or once draws run out - the wheel disappears and the page is a
  * read-only record.
  */
 import { computed, onMounted, ref, watch } from 'vue'
@@ -99,7 +99,7 @@ function when(ts: string): string {
       </p>
 
       <!-- Congratulations banner -->
-      <div v-if="garapons.lastWin" class="garapon-win-banner">
+      <div v-if="garapons.lastWin" class="callout">
         <BallSwatch :color="garapons.lastWin.ball_color" />
         <font-awesome-icon :icon="['fad', 'champagne-glasses']" /> Congratulations, you've won
         <strong>{{ garapons.lastWin.prize_name }}</strong
@@ -175,7 +175,7 @@ function when(ts: string): string {
                 <BallSwatch :color="d.ball_color" />
               </td>
               <td>{{ d.prize_name }}</td>
-              <td class="ta-right text-sm text-dim">{{ when(d.drawn_at) }}</td>
+              <td class="ta-right text-sm text-muted">{{ when(d.drawn_at) }}</td>
             </tr>
           </tbody>
         </table>
@@ -185,7 +185,7 @@ function when(ts: string): string {
 
   <!-- Not found -->
   <div v-else-if="notFound" class="tab-body">
-    <p class="garapon-notfound text-dim">
+    <p class="garapon-notfound text-muted">
       <font-awesome-icon :icon="['fad', 'ferris-wheel']" /> This drawing link is invalid or has been
       removed.
     </p>
@@ -193,7 +193,7 @@ function when(ts: string): string {
 
   <!-- Loading -->
   <div v-else-if="garapons.publicLoading" class="tab-body">
-    <LoadingSpinner block label="Loading garapon…" />
+    <LoadingSpinner block label="Loading garapon..." />
   </div>
 </template>
 
@@ -234,15 +234,6 @@ function when(ts: string): string {
 .garapon-wheel-wrap {
   margin: 8px 0 20px;
 }
-.garapon-win-banner {
-  text-align: center;
-  background: color-mix(in srgb, var(--highlight) 16%, transparent);
-  border: 1px solid var(--highlight);
-  border-radius: var(--radius);
-  padding: 12px 16px;
-  margin-bottom: 16px;
-  font-size: 1.05rem;
-}
 .garapon-grand {
   margin-bottom: 16px;
 }
@@ -253,14 +244,13 @@ function when(ts: string): string {
   gap: 10px;
   background: var(--panel-raised-bg);
   border: 1px solid var(--control-border);
-  border-radius: 12px;
+  border-radius: 0;
   padding: 16px;
 }
 .garapon-grand-img {
   max-width: 100%;
   max-height: 320px;
-  border-radius: 8px;
-  box-shadow: 0 4px 20px var(--shadow);
+  border-radius: var(--radius-media);
 }
 .garapon-grand-meta {
   display: flex;

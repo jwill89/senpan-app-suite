@@ -18,13 +18,13 @@ import (
 // It is an allowlist for *structure* (we re-emit what we parsed) with a denylist
 // for the known script vectors:
 //   - <script>, <foreignObject>, and <style> elements are dropped with their
-//     whole subtree (a <style> block can carry page-wide CSS injection —
-//     url()/@import/expression() — once the SVG is inlined)
-//   - SMIL animation elements (<animate>/<set>/…) that target href or an event
+//     whole subtree (a <style> block can carry page-wide CSS injection -
+//     url()/@import/expression() - once the SVG is inlined)
+//   - SMIL animation elements (<animate>/<set>/...) that target href or an event
 //     attribute are dropped (they can set javascript: at runtime)
 //   - event-handler attributes (any name starting with "on") are removed
 //   - href/xlink:href/src are kept only when they are safe local fragment refs
-//     ("#id") — javascript:, data:, and external URLs are removed
+//     ("#id") - javascript:, data:, and external URLs are removed
 //   - style attributes containing javascript:, expression(), url(), or @import
 //     are removed
 //   - comments, processing instructions, and DTD/DOCTYPE directives are dropped
@@ -127,7 +127,7 @@ func isDangerousAnimation(e xml.StartElement) bool {
 	for _, a := range e.Attr {
 		if strings.EqualFold(a.Name.Local, "attributeName") {
 			v := strings.ToLower(strings.TrimSpace(a.Value))
-			// Strip any namespace prefix ("xlink:href" → "href") before
+			// Strip any namespace prefix ("xlink:href" -> "href") before
 			// comparing, so a namespaced URL target can't slip past this check
 			// and yield stored XSS when animated to a javascript: value.
 			if i := strings.LastIndex(v, ":"); i >= 0 {
@@ -147,7 +147,7 @@ func sanitizeSVGAttrs(attrs []xml.Attr) []xml.Attr {
 	cleaned := make([]xml.Attr, 0, len(attrs))
 	for _, a := range attrs {
 		local := strings.ToLower(a.Name.Local)
-		if strings.HasPrefix(local, "on") { // onload, onclick, onmouseover, …
+		if strings.HasPrefix(local, "on") { // onload, onclick, onmouseover, ...
 			continue
 		}
 		switch local {
@@ -166,8 +166,8 @@ func sanitizeSVGAttrs(attrs []xml.Attr) []xml.Attr {
 }
 
 // isSafeSVGRef reports whether an href/src value is a safe local fragment
-// reference (e.g. "#gradient1"). Everything else — javascript:, data:, and
-// absolute/relative external URLs — is rejected so the attribute is dropped.
+// reference (e.g. "#gradient1"). Everything else - javascript:, data:, and
+// absolute/relative external URLs - is rejected so the attribute is dropped.
 func isSafeSVGRef(v string) bool {
 	return strings.HasPrefix(strings.TrimSpace(v), "#")
 }

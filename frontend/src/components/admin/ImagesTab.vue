@@ -1,13 +1,13 @@
 <script setup lang="ts">
 /**
- * Admin Images tab (System section) — central image hosting. The admin picks a
+ * Admin Images tab (System section) - central image hosting. The admin picks a
  * category (which maps to a subdirectory of <webRoot>/images) and uploads any
  * number of images at once (drag-and-drop or click to browse), browses the
  * images in that category, and deletes them.
  *
  * Every category is admin-managed (a display name + a directory): all of them
  * can be created, renamed, and deleted. The shared ImagePicker used by the
- * feature editors (announcements, raffles, garapons, …) browses all of them.
+ * feature editors (announcements, raffles, garapons, ...) browses all of them.
  *
  * Two screens (a lightweight in-tab router via `screen`):
  *   - browse:     category picker + upload drop zone + image grid.
@@ -49,13 +49,13 @@ const currentImages = computed(() =>
   selectedDir.value in images.imagesByDir ? images.imagesByDir[selectedDir.value] : [],
 )
 
-// Upload progress. `uploadProgress` is 0–100 while bytes transfer, then sits at
+// Upload progress. `uploadProgress` is 0-100 while bytes transfer, then sits at
 // 100 while the server saves the files; -1 when idle.
 const uploadLabel = computed(() => {
   const p = images.uploadProgress
-  if (p < 0) return 'Uploading…'
+  if (p < 0) return 'Uploading...'
   if (p < 100) return `Uploading ${p}%`
-  return 'Processing…'
+  return 'Processing...'
 })
 const uploadBarWidth = computed(() => `${images.uploadProgress < 0 ? 0 : images.uploadProgress}%`)
 
@@ -74,7 +74,7 @@ watch(selectedDir, (dir) => {
   if (dir) void images.loadImages(dir)
 })
 
-// ── Category management modal ────────────────────────────────────────────────
+// -- Category management modal ------------------------------------------------
 const categoryModal = ref<{ mode: 'create' | 'edit'; dir: string } | null>(null)
 const formName = ref('')
 const formDir = ref('')
@@ -127,7 +127,7 @@ async function submitCategory(): Promise<void> {
   }
 }
 
-// ── Upload + delete (browse screen) ──────────────────────────────────────────
+// -- Upload + delete (browse screen) ------------------------------------------
 function pickFiles(): void {
   fileInput.value?.click()
 }
@@ -161,17 +161,17 @@ onMounted(() => images.loadCategories())
 
 <template>
   <div class="tab-body">
-    <!-- ── Manage categories ─────────────────────────────────────────────────── -->
+    <!-- -- Manage categories --------------------------------------------------- -->
     <AdminPanel v-if="screen === 'categories'">
       <SubPageHeader
         title="Image Categories"
         :icon="['fad', 'folder-open']"
         @back="screen = 'browse'"
       />
-      <p class="text-dim text-xs mb-12">
-        Each category maps to a subdirectory of <span class="code-gold">images/</span>. Deleting a
-        category removes its folder and all images in it — anything still referencing those images
-        (announcements, raffles, …) will lose them.
+      <p class="text-muted text-xs mb-12">
+        Each category maps to a subdirectory of <span class="code-highlight">images/</span>.
+        Deleting a category removes its folder and all images in it - anything still referencing
+        those images (announcements, raffles, ...) will lose them.
       </p>
       <div class="flex-toolbar flex-end mb-16">
         <button class="btn-confirm btn-sm" @click="openNewCategory">
@@ -184,13 +184,13 @@ onMounted(() => images.loadCategories())
           <font-awesome-icon :icon="['fad', 'folder']" /> {{ row.name }}
         </template>
         <template #cell-dir="{ row }">
-          <span class="code-gold">images/{{ row.dir }}</span>
+          <span class="code-highlight">images/{{ row.dir }}</span>
         </template>
         <template #cell-file_count="{ row }">
-          <span class="text-dim">{{ row.file_count }}</span>
+          <span class="text-muted">{{ row.file_count }}</span>
         </template>
         <template #cell-total_size="{ row }">
-          <span class="text-dim">{{ formatSize(row.total_size) }}</span>
+          <span class="text-muted">{{ formatSize(row.total_size) }}</span>
         </template>
         <template #cell-actions="{ row }">
           <div class="row-actions">
@@ -216,7 +216,7 @@ onMounted(() => images.loadCategories())
       </DataTable>
     </AdminPanel>
 
-    <!-- ── Browse: category picker + upload + image grid ─────────────────────── -->
+    <!-- -- Browse: category picker + upload + image grid ----------------------- -->
     <ManagerView v-else title="Images" :icon="['fad', 'images']">
       <template #actions>
         <button class="btn-view btn-sm" @click="screen = 'categories'">
@@ -224,7 +224,7 @@ onMounted(() => images.loadCategories())
         </button>
       </template>
 
-      <p class="text-dim text-xs mb-12">
+      <p class="text-muted text-xs mb-12">
         Pick a category, then drag &amp; drop images (or click to browse) to upload them. Allowed
         types: .jpg, .jpeg, .png, .webp, .gif, .svg. Uploading a file with an existing name replaces
         it.
@@ -233,7 +233,7 @@ onMounted(() => images.loadCategories())
       <LoadingSpinner
         v-if="images.loading && images.categories.length === 0"
         block
-        label="Loading categories…"
+        label="Loading categories..."
       />
 
       <template v-else>
@@ -265,14 +265,14 @@ onMounted(() => images.loadCategories())
           />
         </div>
 
-        <p v-if="selectedCategory" class="text-dim text-xs mb-12">
-          Uploading to <span class="code-gold">images/{{ selectedCategory.dir }}/</span>
+        <p v-if="selectedCategory" class="text-muted text-xs mb-12">
+          Uploading to <span class="code-highlight">images/{{ selectedCategory.dir }}/</span>
         </p>
 
         <!-- Drag-and-drop zone -->
         <div
-          class="image-dropzone"
-          :class="{ 'drag-over': dragOver, disabled: !selectedDir }"
+          class="file-dropzone"
+          :class="{ 'is-dragover': dragOver, 'is-disabled': !selectedDir }"
           @dragover.prevent="dragOver = true"
           @dragenter.prevent="dragOver = true"
           @dragleave.prevent="dragOver = false"
@@ -293,41 +293,41 @@ onMounted(() => images.loadCategories())
           aria-valuemin="0"
           aria-valuemax="100"
         >
-          <div class="upload-progress__track">
+          <div class="upload-progress-track">
             <div
-              class="upload-progress__bar"
+              class="upload-progress-bar"
               :class="{ 'is-processing': images.uploadProgress >= 100 }"
               :style="{ width: uploadBarWidth }"
             ></div>
           </div>
-          <span class="upload-progress__label">{{ uploadLabel }}</span>
+          <span class="upload-progress-label">{{ uploadLabel }}</span>
         </div>
 
         <LoadingSpinner
           v-if="images.loadingImages && currentImages.length === 0"
           block
-          label="Loading images…"
+          label="Loading images..."
         />
 
-        <div v-else-if="currentImages.length" class="image-grid">
-          <figure v-for="img in currentImages" :key="img.name" class="image-card">
-            <div class="image-thumb-wrap">
-              <a :href="assetUrl(img.url)" target="_blank" rel="noopener" class="image-thumb">
+        <div v-else-if="currentImages.length" class="file-grid">
+          <figure v-for="img in currentImages" :key="img.name" class="file-card">
+            <div class="media-tile-wrap">
+              <a :href="assetUrl(img.url)" target="_blank" rel="noopener" class="media-tile">
                 <img :src="assetUrl(img.path)" :alt="img.name" loading="lazy" />
               </a>
               <button
-                class="image-del-overlay"
+                class="file-del-overlay"
                 title="Delete this image"
                 @click="images.deleteImage(selectedDir, img.name)"
               >
                 <font-awesome-icon :icon="['fas', 'trash']" />
               </button>
             </div>
-            <figcaption class="image-card-body">
-              <span class="image-name code-gold" :title="img.name">{{ img.name }}</span>
-              <span class="text-dim text-xs">{{ formatSize(img.size) }}</span>
+            <figcaption class="file-card-body">
+              <span class="file-name code-highlight" :title="img.name">{{ img.name }}</span>
+              <span class="text-muted text-xs">{{ formatSize(img.size) }}</span>
               <button
-                class="btn-view btn-sm image-copy-btn"
+                class="btn-view btn-sm file-copy-btn"
                 title="Copy public URL to clipboard"
                 @click="copyUrl(img.url)"
               >
@@ -337,13 +337,13 @@ onMounted(() => images.loadCategories())
           </figure>
         </div>
 
-        <p v-else-if="!images.loadingImages" class="text-dim" style="padding: 16px 0">
+        <p v-else-if="!images.loadingImages" class="text-muted" style="padding: 16px 0">
           No images in this category yet. Drop some above to get started.
         </p>
       </template>
     </ManagerView>
 
-    <!-- ── Create / rename category modal ────────────────────────────────────── -->
+    <!-- -- Create / rename category modal -------------------------------------- -->
     <ModalOverlay
       v-if="categoryModal"
       centered
@@ -366,7 +366,7 @@ onMounted(() => images.loadCategories())
         />
       </FormField>
       <FormField html-for="image-form-dir">
-        <template #label>Directory Name <span class="text-dim">(optional)</span></template>
+        <template #label>Directory Name <span class="text-muted">(optional)</span></template>
         <input
           id="image-form-dir"
           v-model="formDir"
@@ -374,12 +374,12 @@ onMounted(() => images.loadCategories())
           @keyup.enter="submitCategory"
         />
       </FormField>
-      <p v-if="formDerivedDir" class="text-dim text-xs mb-12">
-        Directory: <span class="code-gold">images/{{ formDerivedDir }}/</span>
+      <p v-if="formDerivedDir" class="text-muted text-xs mb-12">
+        Directory: <span class="code-highlight">images/{{ formDerivedDir }}/</span>
       </p>
-      <p v-if="categoryModal.mode === 'edit'" class="text-dim text-xs mb-12">
+      <p v-if="categoryModal.mode === 'edit'" class="text-muted text-xs mb-12">
         Renaming the directory moves the folder on disk and changes the public URL of every image in
-        it — existing references to the old path will break.
+        it - existing references to the old path will break.
       </p>
       <div class="flex-toolbar flex-end">
         <button class="btn-neutral btn-sm" @click="closeModal">Cancel</button>
@@ -388,7 +388,7 @@ onMounted(() => images.loadCategories())
           :disabled="savingCategory || !formName.trim()"
           @click="submitCategory"
         >
-          <LoadingSpinner v-if="savingCategory" label="Saving…" />
+          <LoadingSpinner v-if="savingCategory" label="Saving..." />
           <template v-else-if="categoryModal.mode === 'edit'">
             <font-awesome-icon :icon="['fas', 'check']" /> Save
           </template>
@@ -401,39 +401,8 @@ onMounted(() => images.loadCategories())
 
 <style scoped>
 /* Drag-and-drop zone. */
-.image-dropzone {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  padding: 28px;
-  margin-bottom: 16px;
-  border: 2px dashed var(--panel-raised-bg);
-  border-radius: var(--radius);
-  color: var(--text-muted);
-  cursor: pointer;
-  transition:
-    border-color 0.15s,
-    background 0.15s;
-}
-.image-dropzone:hover {
-  border-color: var(--highlight);
-}
-.image-dropzone.drag-over {
-  border-color: var(--highlight);
-  background: color-mix(in srgb, var(--highlight) 12%, transparent);
-  color: var(--highlight);
-}
-.image-dropzone.disabled {
-  opacity: 0.5;
-  pointer-events: none;
-}
-.image-dropzone .svg-inline--fa {
-  font-size: 1.6rem;
-}
 
-/* Upload progress bar (shown while an upload is in flight — large uploads over a
+/* Upload progress bar (shown while an upload is in flight - large uploads over a
    slow link can take a while, so a real percentage beats an idle spinner). */
 .upload-progress {
   display: flex;
@@ -441,24 +410,24 @@ onMounted(() => images.loadCategories())
   gap: 10px;
   margin-bottom: 16px;
 }
-.upload-progress__track {
+.upload-progress-track {
   flex: 1;
   height: 8px;
   background: var(--panel-raised-bg);
-  border-radius: 999px;
+  border-radius: 0;
   overflow: hidden;
 }
-.upload-progress__bar {
+.upload-progress-bar {
   height: 100%;
   background: var(--highlight);
-  border-radius: inherit;
+  border-radius: 0;
   transition: width 0.2s ease;
 }
 /* Bytes are all sent; the bar is full while the server saves the files. */
-.upload-progress__bar.is-processing {
+.upload-progress-bar.is-processing {
   animation: upload-pulse 1s ease-in-out infinite;
 }
-.upload-progress__label {
+.upload-progress-label {
   min-width: 92px;
   font-size: 0.8rem;
   color: var(--text-muted);
@@ -475,80 +444,11 @@ onMounted(() => images.loadCategories())
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  .upload-progress__bar {
+  .upload-progress-bar {
     transition: none;
   }
-  .upload-progress__bar.is-processing {
+  .upload-progress-bar.is-processing {
     animation: none;
   }
-}
-
-/* Image grid. */
-.image-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
-  gap: 14px;
-}
-.image-card {
-  margin: 0;
-  background: var(--panel-raised-bg);
-  border-radius: var(--radius);
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
-}
-.image-thumb-wrap {
-  position: relative;
-}
-.image-thumb {
-  display: block;
-  aspect-ratio: 1 / 1;
-  background: var(--panel-bg);
-}
-.image-thumb img {
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
-}
-.image-del-overlay {
-  position: absolute;
-  top: 6px;
-  right: 6px;
-  width: 28px;
-  height: 28px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0;
-  border: 0;
-  border-radius: 50%;
-  background: color-mix(in srgb, #000 55%, transparent);
-  color: #fff;
-  cursor: pointer;
-  opacity: 0.85;
-  transition:
-    background 0.15s,
-    opacity 0.15s;
-}
-.image-del-overlay:hover {
-  opacity: 1;
-  background: var(--danger);
-}
-.image-card-body {
-  padding: 8px 10px;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-.image-name {
-  font-size: 0.78rem;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.image-copy-btn {
-  margin-top: 4px;
-  width: 100%;
-  white-space: nowrap;
 }
 </style>

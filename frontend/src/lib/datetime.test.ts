@@ -18,7 +18,7 @@ describe('datetime helpers', () => {
   })
 
   it('round-trips a local input value through UTC unchanged', () => {
-    // local → UTC → local is identity regardless of the runner's timezone.
+    // local -> UTC -> local is identity regardless of the runner's timezone.
     const local = '2026-06-13T20:00'
     expect(utcToDatetimeLocal(datetimeLocalToUtc(local))).toBe(local)
   })
@@ -31,7 +31,7 @@ describe('datetime helpers', () => {
   })
 
   it('treats a legacy naive timestamp (no zone) as UTC', () => {
-    // A zone-less value must be read as UTC — same instant as the explicit Z form.
+    // A zone-less value must be read as UTC - same instant as the explicit Z form.
     expect(utcToDatetimeLocal('2026-06-13T20:00')).toBe(
       utcToDatetimeLocal('2026-06-13T20:00:00.000Z'),
     )
@@ -56,7 +56,7 @@ describe('parseServerTimestamp', () => {
   })
 
   it('treats a SQLite "YYYY-MM-DD HH:MM:SS" timestamp as UTC, not local', () => {
-    // The zone-less space form must be read as UTC — same instant as the Z form.
+    // The zone-less space form must be read as UTC - same instant as the Z form.
     expect(parseServerTimestamp('2026-06-13 20:00:00')).toBe(Date.UTC(2026, 5, 13, 20, 0, 0))
   })
 

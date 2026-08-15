@@ -198,7 +198,7 @@ func TestHub_BroadcastLog_AdminsOnly(t *testing.T) {
 	h := NewHub()
 	defer h.Shutdown(context.Background())
 
-	// admin: true-admin account on the cardID=="" channel — should receive logs.
+	// admin: true-admin account on the cardID=="" channel - should receive logs.
 	admin := &client{hub: h, send: make(chan []byte, 64), cancel: func() {}}
 	admin.isAdmin.Store(true)
 	// staff: a non-admin grantee (or plugin PAT) also sits on cardID=="" for

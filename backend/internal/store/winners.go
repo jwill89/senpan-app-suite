@@ -6,7 +6,7 @@ import (
 	"app-suite/internal/model"
 )
 
-// ── Winners Log operations ──────────────────────────────────────────────────
+// -- Winners Log operations --------------------------------------------------
 
 // InsertWinnersLog inserts multiple winners log entries in a transaction.
 func (s *Store) InsertWinnersLog(entries []model.WinnersLogEntry) error {

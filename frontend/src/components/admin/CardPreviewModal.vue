@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /**
- * Card preview modal (admin) — shows a card's board, a Copy-ID button, and
+ * Card preview modal (admin) - shows a card's board, a Copy-ID button, and
  * inline-editable player name + details (double-click to edit, Enter/blur to
  * save, Escape to cancel). Mirrors the original "Card preview modal" block.
  *
@@ -47,7 +47,7 @@ watch(
   >
     <div class="flex-between mb-12">
       <h3 class="nowrap">
-        Card <span class="code-gold">{{ cards.previewCard.id }}</span>
+        Card <span class="code-highlight">{{ cards.previewCard.id }}</span>
       </h3>
       <div class="flex-toolbar" style="flex-wrap: nowrap; gap: 8px">
         <button
@@ -88,7 +88,7 @@ watch(
         @dblclick="cards.startPreviewCardEdit('player_name')"
       >
         {{ cards.previewCard.player_name || 'No player assigned' }}
-        <span v-if="!cards.previewCard.player_name" class="text-dim text-sm">
+        <span v-if="!cards.previewCard.player_name" class="text-muted text-sm">
           (double-click to edit)</span
         >
       </p>
@@ -97,7 +97,7 @@ watch(
           ref="editInput"
           v-model="cards.previewCardEditValue"
           placeholder="Details (e.g. character name)"
-          class="inline-edit-input text-dim text-sm ta-center"
+          class="inline-edit-input text-muted text-sm ta-center"
           @blur="cards.savePreviewCardField('details')"
           @keydown.enter="($event.target as HTMLInputElement).blur()"
           @keydown.escape="cards.previewCardEditing = null"
@@ -105,7 +105,7 @@ watch(
       </template>
       <p
         v-else
-        class="text-dim text-sm"
+        class="text-muted text-sm"
         style="cursor: pointer"
         :title="cards.previewCard.details ? 'Double-click to edit' : 'Double-click to set details'"
         @dblclick="cards.startPreviewCardEdit('details')"

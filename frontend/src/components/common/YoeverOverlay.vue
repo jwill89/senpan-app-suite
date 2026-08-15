@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /**
- * "It's Yoever" overlay — a full-viewport, click-through layer that renders each
+ * "It's Yoever" overlay - a full-viewport, click-through layer that renders each
  * active reaction from the yoever store as a reduced-size, reduced-opacity image
  * that bounces across the screen and fades out over a few seconds, with the
  * triggering player's name captioned below it. Mounted once in the app shell so
@@ -86,7 +86,7 @@ const durationMs = YOEVER_DURATION_MS
   gap: 1px;
   max-width: 44vw;
   padding: 4px 12px;
-  border-radius: 14px;
+  border-radius: 0;
   background: rgba(0, 0, 0, 0.55);
   color: #fff;
   text-align: center;
@@ -137,7 +137,7 @@ const durationMs = YOEVER_DURATION_MS
   }
 }
 
-/* Reduced motion: don't fly or bounce — fade in and out, centred. */
+/* Reduced motion: don't fly or bounce - fade in and out, centred. */
 @media (prefers-reduced-motion: reduce) {
   .yoever-fly {
     left: 50%;

@@ -9,9 +9,9 @@ using SenpanCompanion.Api;
 namespace SenpanCompanion.Windows;
 
 /// <summary>
-/// Tea Rooms operator panel (Senpan Tea House → Tea Rooms). A compact, at-a-glance
+/// Tea Rooms operator panel (Senpan Tea House -> Tea Rooms). A compact, at-a-glance
 /// availability board: every room listed by number, name, and owner (with its
-/// per-half-hour cost), and the two toggles staff flip most often — a room's
+/// per-half-hour cost), and the two toggles staff flip most often - a room's
 /// open/closed status and its 50%-off discount. Everything else about a room
 /// (subtitle, image, hashtags, Discord posting, reordering) stays on the website.
 ///
@@ -45,7 +45,7 @@ internal sealed class TeaRoomsTab : TabBase
 
         if (this.rooms.Count == 0)
         {
-            ImGui.TextDisabled(this.Busy ? "Loading…" : "No tea rooms yet.");
+            ImGui.TextDisabled(this.Busy ? "Loading..." : "No tea rooms yet.");
             return;
         }
 
@@ -53,7 +53,7 @@ internal sealed class TeaRoomsTab : TabBase
             "Tick a room's Open box to open it, or its Discount box for 50% off. " +
             "Everything else about a room is managed on the website.");
 
-        // A flat table (not a Ui.Box — tables manage their own draw channels). Name and
+        // A flat table (not a Ui.Box - tables manage their own draw channels). Name and
         // Owner stretch; the number, cost, and the two toggles are fixed. It fills the rest
         // of the content pane and scrolls internally with a pinned header row, so a long
         // room list stays usable, like the other list tabs.
@@ -76,13 +76,13 @@ internal sealed class TeaRoomsTab : TabBase
             ImGui.TableNextRow();
 
             ImGui.TableNextColumn();
-            ImGui.TextUnformatted(string.IsNullOrEmpty(room.RoomNumber) ? "—" : room.RoomNumber);
+            ImGui.TextUnformatted(string.IsNullOrEmpty(room.RoomNumber) ? "-" : room.RoomNumber);
 
             ImGui.TableNextColumn();
-            ImGui.TextUnformatted(string.IsNullOrEmpty(room.Name) ? "—" : room.Name);
+            ImGui.TextUnformatted(string.IsNullOrEmpty(room.Name) ? "-" : room.Name);
 
             ImGui.TableNextColumn();
-            ImGui.TextUnformatted(string.IsNullOrEmpty(room.RoomOwner) ? "—" : room.RoomOwner);
+            ImGui.TextUnformatted(string.IsNullOrEmpty(room.RoomOwner) ? "-" : room.RoomOwner);
 
             ImGui.TableNextColumn();
             ImGui.TextUnformatted(CostText(room));
@@ -127,7 +127,7 @@ internal sealed class TeaRoomsTab : TabBase
     }
 
     /// <summary>
-    /// The per-half-hour cost, halved with a "(50% off)" note when discounted — the
+    /// The per-half-hour cost, halved with a "(50% off)" note when discounted - the
     /// same fixed 50% rule the website and Discord embed use. Formatted with
     /// invariant thousands separators so it reads the same on any locale.
     /// </summary>

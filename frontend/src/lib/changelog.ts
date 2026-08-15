@@ -2,7 +2,7 @@
  * Changelog access for the admin dashboard.
  *
  * Re-exports the parsed CHANGELOG.md (provided by the `virtual:changelog` build
- * plugin — see config/changelog-plugin.ts) and adds the Dalamud install steps
+ * plugin - see config/changelog-plugin.ts) and adds the Dalamud install steps
  * shown for the plugin. The admin sidebar shows each component's version and opens
  * its changelog on click (see AppVersions.vue / ChangelogModal.vue).
  */
@@ -32,7 +32,7 @@ export const PLUGIN_REPO_URL = 'https://apps.senpan.cafe/plugin/pluginmaster.jso
 /**
  * Same-origin path to the deployed Dalamud repo index. Fetched at runtime (see
  * {@link fetchLivePluginVersion}) so the admin footer can show the LIVE plugin
- * version — what Dalamud actually serves — instead of the version baked into this
+ * version - what Dalamud actually serves - instead of the version baked into this
  * bundle at build time. Publishing a new plugin (deploy `-Target plugin`) then
  * refreshes the shown version without a frontend rebuild. Relative so it stays
  * same-origin (the SPA and `/plugin/` share the doc root in production); in dev it
@@ -76,15 +76,15 @@ export interface InstallStep {
 export const PLUGIN_INSTALL_STEPS: InstallStep[] = [
   {
     title: 'Generate an access token',
-    detail: 'On this site, open **User Options → Access Token → Generate**, and copy the token.',
+    detail: 'On this site, open **User Options -> Access Token -> Generate**, and copy the token.',
   },
   {
     title: 'Open Dalamud’s custom repositories',
-    detail: 'In game, run **`/xlsettings`** → **Experimental** → **Custom Plugin Repositories**.',
+    detail: 'In game, run **`/xlsettings`** -> **Experimental** -> **Custom Plugin Repositories**.',
   },
   {
     title: 'Add the Senpan repository',
-    detail: `Paste the repo URL into the empty row, click the **＋**, then **Save**.`,
+    detail: `Paste the repo URL into the empty row, click the **plus**, then **Save**.`,
   },
   {
     title: 'Install the plugin',
@@ -94,6 +94,6 @@ export const PLUGIN_INSTALL_STEPS: InstallStep[] = [
   {
     title: 'Connect it',
     detail:
-      'Run **`/senpan`**, paste your token, and **Save & Connect**. A green **● Live** badge means it’s connected.',
+      'Run **`/senpan`**, paste your token, and **Save & Connect**. A green **Live** badge means it’s connected.',
   },
 ]

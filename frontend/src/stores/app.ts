@@ -22,7 +22,7 @@ export const useAppStore = defineStore('app', () => {
 
   const settings = ref<AppSettings>({ ...DEFAULT_APP_SETTINGS })
   const googleFontsList = ref<string[]>([])
-  /** Fonts uploaded via System → Font Upload (name + serving token). */
+  /** Fonts uploaded via System -> Font Upload (name + serving token). */
   const uploadedFonts = ref<UploadedFont[]>([])
   let googleFontsCacheKey = ''
   /** True while settings are being saved (drives the Save button). */
@@ -66,8 +66,8 @@ export const useAppStore = defineStore('app', () => {
   async function saveSettings(): Promise<void> {
     savingSettings.value = true
     try {
-      // The settings API is a string→string map, but a number <input> bound with
-      // v-model yields a *number* for any field the admin edited — and a numeric
+      // The settings API is a string->string map, but a number <input> bound with
+      // v-model yields a *number* for any field the admin edited - and a numeric
       // JSON value fails the backend's map[string]string decode ("Invalid JSON").
       // Coerce every value back to a string before sending. (The AppSettings type
       // says the values are already strings, hence the `unknown` view to allow it.)
@@ -121,22 +121,22 @@ export const useAppStore = defineStore('app', () => {
   }
 
   /** Loads the active (admin-selected) theme CSS and injects it. This is the
-   *  "Default" look — used when the player hasn't picked a specific public theme. */
+   *  "Default" look - used when the player hasn't picked a specific public theme. */
   async function loadActiveCSS(): Promise<void> {
     try {
       const data = await endpoints.styles.activeCss()
       applyCustomCSS(data.css || '')
       applyFlourishes(data.board_flourish || '', data.number_flourish || '')
     } catch {
-      /* silent — custom CSS is optional */
+      /* silent - custom CSS is optional */
     }
   }
 
-  // ── Per-browser theme preference (public theme picker) ──────────────────────
+  // -- Per-browser theme preference (public theme picker) ----------------------
   // Players may pick any Public theme for themselves; the choice is persisted per
   // browser as 'default' | '<style id>'. 'default' follows whatever theme the admin
   // has activated (see loadActiveCSS) and is always labelled "Default" in the picker
-  // — the admin theme's real name is never shown, since the active-CSS endpoint and
+  // - the admin theme's real name is never shown, since the active-CSS endpoint and
   // the style_update broadcast carry CSS only.
   const THEME_PREF_KEY = 'bingo_theme'
   const themePreference = ref(localStorage.getItem(THEME_PREF_KEY) || 'default')

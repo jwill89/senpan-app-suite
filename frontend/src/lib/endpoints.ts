@@ -66,6 +66,9 @@ import type {
   PausedResponse,
   PublicStampCard,
   StampSubmitResponse,
+  SignupRalliesResponse,
+  StampSignupResponse,
+  StampLookupResponse,
   GaraponsResponse,
   GaraponResponse,
   GaraponDetailResponse,
@@ -112,11 +115,11 @@ import type { AppSettings } from '@/types/api'
 const enc = encodeURIComponent
 
 export const endpoints = {
-  // ── Auth ───────────────────────────────────────────────────────────────────
+  // -- Auth -------------------------------------------------------------------
   auth: {
-    /** GET /api/auth — current auth status + the logged-in user (always 200). */
+    /** GET /api/auth - current auth status + the logged-in user (always 200). */
     check: () => apiGet<AuthCheckResponse>('auth'),
-    /** POST /api/auth {login} — bad credentials 401 without a global redirect.
+    /** POST /api/auth {login} - bad credentials 401 without a global redirect.
      *  turnstileToken carries the Cloudflare Turnstile result when the bot check
      *  is enabled (omitted/ignored otherwise). */
     login: (username: string, password: string, turnstileToken?: string) =>
@@ -127,7 +130,7 @@ export const endpoints = {
       ),
     /** POST /api/auth {logout}. */
     logout: () => apiPost<OKResponse>('auth', { action: 'logout' }, { skipAuthRedirect: true }),
-    /** POST /api/register — create an account (hidden page; pending activation).
+    /** POST /api/register - create an account (hidden page; pending activation).
      *  turnstileToken carries the Turnstile result when the bot check is enabled. */
     register: (username: string, password: string, turnstileToken?: string) =>
       apiPost<RegisterResponse>(
@@ -137,68 +140,68 @@ export const endpoints = {
       ),
   },
 
-  // ── Users (admin, hybrid REST) + self-service account ────────────────────────
+  // -- Users (admin, hybrid REST) + self-service account ------------------------
   users: {
-    /** GET /api/users — all accounts (admin only). */
+    /** GET /api/users - all accounts (admin only). */
     list: () => apiGet<UsersResponse>('users'),
-    /** PATCH /api/users/{id} {active} — activate/deactivate the account. */
+    /** PATCH /api/users/{id} {active} - activate/deactivate the account. */
     setActive: (id: number, active: boolean) => apiPatch<OKResponse>(`users/${id}`, { active }),
-    /** PATCH /api/users/{id} {admin} — grant/revoke admin. */
+    /** PATCH /api/users/{id} {admin} - grant/revoke admin. */
     setAdmin: (id: number, admin: boolean) => apiPatch<OKResponse>(`users/${id}`, { admin }),
-    /** PATCH /api/users/{id} {permissions} — set the account's page-permission set. */
+    /** PATCH /api/users/{id} {permissions} - set the account's page-permission set. */
     setPermissions: (id: number, permissions: string[]) =>
       apiPatch<OKResponse>(`users/${id}`, { permissions }),
-    /** PATCH /api/users/{id} {password} — reset the account's password. */
+    /** PATCH /api/users/{id} {password} - reset the account's password. */
     setPassword: (id: number, password: string) =>
       apiPatch<OKResponse>(`users/${id}`, { password }),
-    /** DELETE /api/users/{id} — delete the account (204). */
+    /** DELETE /api/users/{id} - delete the account (204). */
     delete: (id: number) => apiDelete(`users/${id}`),
   },
   account: {
-    /** POST /api/account/change-password — change the logged-in user's own password. */
+    /** POST /api/account/change-password - change the logged-in user's own password. */
     changePassword: (currentPassword: string, newPassword: string) =>
       apiPost<OKResponse>('account/change-password', {
         current_password: currentPassword,
         new_password: newPassword,
       }),
-    /** GET /api/account/token — the account's personal-access-token metadata
+    /** GET /api/account/token - the account's personal-access-token metadata
      *  (never the secret itself; that is only returned once at generation). */
     tokenInfo: () => apiGet<AccountTokenInfoResponse>('account/token'),
-    /** POST /api/account/token — mint (replacing any existing) a token.
+    /** POST /api/account/token - mint (replacing any existing) a token.
      *  The returned `token` plaintext is shown to the user exactly once. */
     generateToken: () => apiPost<AccountTokenGenerateResponse>('account/token', {}),
-    /** DELETE /api/account/token — delete the account's token (200 w/ deleted flag). */
+    /** DELETE /api/account/token - delete the account's token (200 w/ deleted flag). */
     revokeToken: () => apiDelete<TokenRevokeResponse>('account/token'),
   },
 
-  // ── Board (player + admin card fetch) ────────────────────────────────────────
+  // -- Board (player + admin card fetch) ----------------------------------------
   board: {
     /**
-     * GET /api/board?id=… — a card plus (for players) the active game + details.
+     * GET /api/board?id=... - a card plus (for players) the active game + details.
      * `preview` requests the admin preview shape (card board data only).
      */
     get: (id: string, opts: { preview?: boolean } = {}) =>
       apiGet<BoardResponse>(`board?id=${enc(id)}${opts.preview ? '&preview=1' : ''}`),
   },
 
-  // ── Settings ─────────────────────────────────────────────────────────────────
+  // -- Settings -----------------------------------------------------------------
   settings: {
     get: () => apiGet<SettingsResponse>('settings'),
     save: (settings: AppSettings) => apiPost<OKResponse>('settings', { settings }),
   },
 
-  // ── System ───────────────────────────────────────────────────────────────────
+  // -- System -------------------------------------------------------------------
   system: {
-    /** GET /api/version — the backend's semantic version (public). */
+    /** GET /api/version - the backend's semantic version (public). */
     version: () => apiGet<{ backend: string }>('version'),
-    /** GET /api/config — client bootstrap config (Turnstile site key; "" = off). */
+    /** GET /api/config - client bootstrap config (Turnstile site key; "" = off). */
     config: () => apiGet<{ turnstile_site_key: string }>('config'),
   },
 
-  // ── Game lifecycle (hybrid REST: verb sub-paths + PATCH for controls) ────────
+  // -- Game lifecycle (hybrid REST: verb sub-paths + PATCH for controls) --------
   game: {
     getState: () => apiGet<GameStateResponse>('game'),
-    /** POST /api/game/start — begin a game, optionally with the auto-draw loop on. */
+    /** POST /api/game/start - begin a game, optionally with the auto-draw loop on. */
     start: (patternIds: number[], auto = false, autoInterval = 0) =>
       apiPost<GameStateResponse>('game/start', {
         pattern_ids: patternIds,
@@ -206,45 +209,45 @@ export const endpoints = {
         auto_interval: autoInterval,
       }),
     draw: (delay: number) => apiPost<DrawResult>('game/draw', { delay }),
-    /** PATCH /api/game {delay} — persist + broadcast the shared draw delay. */
+    /** PATCH /api/game {delay} - persist + broadcast the shared draw delay. */
     setDelay: (delay: number) => apiPatch<OKResponse>('game', { delay }),
     end: (validWinnerIds: string[]) =>
       apiPost<EndGameResponse>('game/end', { valid_winner_ids: validWinnerIds }),
-    /** PATCH /api/game {details} — set + broadcast the markdown game details. */
+    /** PATCH /api/game {details} - set + broadcast the markdown game details. */
     updateDetails: (details: string) => apiPatch<OKResponse>('game', { details }),
-    /** PATCH /api/game {auto_enabled} — switch the automatic-draw loop on/off + broadcast. */
+    /** PATCH /api/game {auto_enabled} - switch the automatic-draw loop on/off + broadcast. */
     setAutoEnabled: (enabled: boolean) => apiPatch<OKResponse>('game', { auto_enabled: enabled }),
-    /** PATCH /api/game {auto_interval} — adjust the seconds between auto draws + broadcast. */
+    /** PATCH /api/game {auto_interval} - adjust the seconds between auto draws + broadcast. */
     setAutoInterval: (seconds: number) => apiPatch<OKResponse>('game', { auto_interval: seconds }),
     /**
-     * POST /api/game/halftime {minigame} — answer the half-time prompt. `true`
+     * POST /api/game/halftime {minigame} - answer the half-time prompt. `true`
      * alerts players about a mini-game (auto stays paused); `false` declines and
      * resumes auto if it was paused for the prompt.
      */
     halftime: (minigame: boolean) => apiPost<OKResponse>('game/halftime', { minigame }),
-    /** POST /api/game/yoever {card_id} — trigger the "It's Yoever" reaction (public). */
+    /** POST /api/game/yoever {card_id} - trigger the "It's Yoever" reaction (public). */
     yoever: (cardId: string) => apiPost<YoeverResponse>('game/yoever', { card_id: cardId }),
-    /** PATCH /api/game {yoever_enabled} — switch the reaction on/off + broadcast. */
+    /** PATCH /api/game {yoever_enabled} - switch the reaction on/off + broadcast. */
     setYoeverEnabled: (enabled: boolean) =>
       apiPatch<OKResponse>('game', { yoever_enabled: enabled }),
   },
 
-  // ── Winners log ──────────────────────────────────────────────────────────────
+  // -- Winners log --------------------------------------------------------------
   winnersLog: {
     list: (params: { page: number; perPage: number; sort: string; dir: 'asc' | 'desc' }) =>
       apiGet<WinnersLogResponse>(
         `winners-log?page=${params.page}&per_page=${params.perPage}&sort=${enc(params.sort)}&dir=${enc(params.dir)}`,
       ),
     frequent: () => apiGet<FrequentWinnersResponse>('winners-log/frequent'),
-    /** DELETE /api/winners-log/{id} — remove a single entry (204). */
+    /** DELETE /api/winners-log/{id} - remove a single entry (204). */
     delete: (id: number) => apiDelete(`winners-log/${id}`),
-    /** DELETE /api/winners-log/all — clear the log, returning the deleted count. */
+    /** DELETE /api/winners-log/all - clear the log, returning the deleted count. */
     deleteAll: () => apiDelete<DeletedCountResponse>('winners-log/all'),
   },
 
-  // ── Server logs (admin-only) ─────────────────────────────────────────────────
+  // -- Server logs (admin-only) -------------------------------------------------
   logs: {
-    /** GET /api/logs — tail the server JSON log, newest-first, filtered. */
+    /** GET /api/logs - tail the server JSON log, newest-first, filtered. */
     list: (params: { level?: string; q?: string; limit?: number } = {}) => {
       const qs = new URLSearchParams()
       if (params.level) qs.set('level', params.level)
@@ -253,31 +256,31 @@ export const endpoints = {
       const s = qs.toString()
       return apiGet<LogsResponse>(`logs${s ? `?${s}` : ''}`)
     },
-    /** POST /api/logs/level — set the runtime minimum log level (live DEBUG toggle). */
+    /** POST /api/logs/level - set the runtime minimum log level (live DEBUG toggle). */
     setLevel: (level: string) => apiPost<LogLevelResponse>('logs/level', { level }),
   },
 
-  // ── Cards (hybrid REST) ──────────────────────────────────────────────────────
+  // -- Cards (hybrid REST) ------------------------------------------------------
   cards: {
     list: () => apiGet<CardsListResponse>('cards'),
-    /** POST /api/cards — create one card, optionally assigned to a player name. */
+    /** POST /api/cards - create one card, optionally assigned to a player name. */
     create: (playerName: string) =>
       apiPost<GenerateSingleCardResponse>('cards', { player_name: playerName }),
-    /** POST /api/cards/generate — bulk-generate `count` random cards. */
+    /** POST /api/cards/generate - bulk-generate `count` random cards. */
     generate: (count: number) => apiPost<GenerateCardsResponse>('cards/generate', { count }),
-    /** DELETE /api/cards/{id} — delete a single card (204). */
+    /** DELETE /api/cards/{id} - delete a single card (204). */
     delete: (id: string) => apiDelete(`cards/${enc(id)}`),
-    /** DELETE /api/cards/all — delete every non-Protected card, returning the deleted count. */
+    /** DELETE /api/cards/all - delete every non-Protected card, returning the deleted count. */
     deleteAll: () => apiDelete<DeletedCountResponse>('cards/all'),
-    /** PATCH /api/cards/{id} — update the card's assigned player name + details. */
+    /** PATCH /api/cards/{id} - update the card's assigned player name + details. */
     updatePlayer: (id: string, playerName: string, details: string) =>
       apiPatch<OKResponse>(`cards/${enc(id)}`, { player_name: playerName, details }),
-    /** POST /api/cards/{id}/approve — approve a pending custom card (→ approved + protected). */
+    /** POST /api/cards/{id}/approve - approve a pending custom card (-> approved + protected). */
     approve: (id: string) => apiPost<OKResponse>(`cards/${enc(id)}/approve`, undefined),
-    /** POST /api/cards/{id}/protect — mark/unmark a card as Protected (spared by Delete All). */
+    /** POST /api/cards/{id}/protect - mark/unmark a card as Protected (spared by Delete All). */
     setProtected: (id: string, protectedFlag: boolean) =>
       apiPost<OKResponse>(`cards/${enc(id)}/protect`, { protected: protectedFlag }),
-    /** POST /api/cards/request — public Personal Card Request (custom card, pending approval). */
+    /** POST /api/cards/request - public Personal Card Request (custom card, pending approval). */
     request: (payload: {
       character_name: string
       world: string
@@ -287,27 +290,27 @@ export const endpoints = {
     }) => apiPost<CardRequestResponse>('cards/request', payload),
   },
 
-  // ── Patterns (hybrid REST) ───────────────────────────────────────────────────
+  // -- Patterns (hybrid REST) ---------------------------------------------------
   patterns: {
     list: () => apiGet<PatternsResponse>('patterns'),
-    /** POST /api/patterns — create a win pattern (201). */
+    /** POST /api/patterns - create a win pattern (201). */
     create: (name: string, patternData: boolean[][], categoryId: number) =>
       apiPost<PatternCreateResponse>('patterns', {
         name,
         pattern_data: patternData,
         category_id: categoryId,
       }),
-    /** DELETE /api/patterns/{id} — delete a single pattern (204). */
+    /** DELETE /api/patterns/{id} - delete a single pattern (204). */
     delete: (id: number) => apiDelete(`patterns/${id}`),
-    /** PATCH /api/patterns/{id} {name} — rename (merged PATCH). */
+    /** PATCH /api/patterns/{id} {name} - rename (merged PATCH). */
     rename: (id: number, name: string) => apiPatch<OKResponse>(`patterns/${id}`, { name }),
-    /** PATCH /api/patterns/{id} {category_id} — move to a category (merged PATCH). */
+    /** PATCH /api/patterns/{id} {category_id} - move to a category (merged PATCH). */
     setCategory: (id: number, categoryId: number) =>
       apiPatch<OKResponse>(`patterns/${id}`, { category_id: categoryId }),
-    /** PATCH /api/patterns/{id} {direction} — reorder within its category; returns the fresh list. */
+    /** PATCH /api/patterns/{id} {direction} - reorder within its category; returns the fresh list. */
     reorder: (id: number, direction: 'up' | 'down') =>
       apiPatch<PatternsResponse>(`patterns/${id}`, { direction }),
-    /** POST /api/patterns/reorder — persist a category's new drag order; returns the fresh list. */
+    /** POST /api/patterns/reorder - persist a category's new drag order; returns the fresh list. */
     bulkReorder: (categoryId: number, orderedIds: number[]) =>
       apiPost<PatternsResponse>('patterns/reorder', {
         category_id: categoryId,
@@ -315,26 +318,26 @@ export const endpoints = {
       }),
   },
 
-  // ── Pattern categories (hybrid REST) ─────────────────────────────────────────
+  // -- Pattern categories (hybrid REST) -----------------------------------------
   patternCategories: {
-    /** POST /api/pattern-categories — create a category (201). */
+    /** POST /api/pattern-categories - create a category (201). */
     create: (name: string) => apiPost<CategoryCreateResponse>('pattern-categories', { name }),
-    /** PATCH /api/pattern-categories/{id} {name} — rename. */
+    /** PATCH /api/pattern-categories/{id} {name} - rename. */
     rename: (id: number, name: string) =>
       apiPatch<OKResponse>(`pattern-categories/${id}`, { name }),
-    /** DELETE /api/pattern-categories/{id} — delete (204; 409 on the last category). */
+    /** DELETE /api/pattern-categories/{id} - delete (204; 409 on the last category). */
     delete: (id: number) => apiDelete(`pattern-categories/${id}`),
-    /** PATCH /api/pattern-categories/{id} {direction} — reorder; returns the fresh list. */
+    /** PATCH /api/pattern-categories/{id} {direction} - reorder; returns the fresh list. */
     reorder: (id: number, direction: 'up' | 'down') =>
       apiPatch<CategoriesResponse>(`pattern-categories/${id}`, { direction }),
-    /** POST /api/pattern-categories/reorder — persist a new order; returns the fresh list. */
+    /** POST /api/pattern-categories/reorder - persist a new order; returns the fresh list. */
     bulkReorder: (orderedIds: number[]) =>
       apiPost<CategoriesResponse>('pattern-categories/reorder', { ordered_ids: orderedIds }),
   },
 
-  // ── Game presets ─────────────────────────────────────────────────────────────
+  // -- Game presets -------------------------------------------------------------
   presets: {
-    /** GET /api/presets — all saved game presets. */
+    /** GET /api/presets - all saved game presets. */
     list: () => apiGet<PresetsResponse>('presets'),
     create: (
       name: string,
@@ -368,17 +371,17 @@ export const endpoints = {
     delete: (id: number) => apiDelete(`presets/${id}`),
   },
 
-  // ── Styles / themes (hybrid REST) ────────────────────────────────────────────
+  // -- Styles / themes (hybrid REST) --------------------------------------------
   styles: {
     list: () => apiGet<StylesResponse>('styles'),
     activeCss: () => apiGet<ActiveCSSResponse>('styles/active'),
-    /** GET /api/styles/public — public themes (id + name) for the client-side picker. */
+    /** GET /api/styles/public - public themes (id + name) for the client-side picker. */
     listPublic: () => apiGet<PublicStylesResponse>('styles/public'),
-    /** GET /api/styles/public/{id} — a public theme's generated CSS + flourishes. */
+    /** GET /api/styles/public/{id} - a public theme's generated CSS + flourishes. */
     publicCss: (id: number) => apiGet<ActiveCSSResponse>(`styles/public/${id}`),
-    /** GET /api/styles/{id} — one theme (tokens + generated CSS). */
+    /** GET /api/styles/{id} - one theme (tokens + generated CSS). */
     get: (id: number) => apiGet<StyleGetResponse>(`styles/${id}`),
-    /** POST /api/styles — create a theme (201). */
+    /** POST /api/styles - create a theme (201). */
     create: (
       name: string,
       tokens: Record<string, string>,
@@ -393,7 +396,7 @@ export const endpoints = {
         number_flourish: numberFlourish,
         is_public: isPublic,
       }),
-    /** PUT /api/styles/{id} — full replace of a theme. */
+    /** PUT /api/styles/{id} - full replace of a theme. */
     update: (
       id: number,
       name: string,
@@ -409,16 +412,16 @@ export const endpoints = {
         number_flourish: numberFlourish,
         is_public: isPublic,
       }),
-    /** DELETE /api/styles/{id} — delete a theme (204). */
+    /** DELETE /api/styles/{id} - delete a theme (204). */
     delete: (id: number) => apiDelete(`styles/${id}`),
-    /** Activate a theme (id>0) or clear the active theme (id≤0, the "None" button). */
+    /** Activate a theme (id>0) or clear the active theme (id<=0, the "None" button). */
     setActive: (id: number) =>
       id > 0
         ? apiPost<OKResponse>(`styles/${id}/activate`, undefined)
         : apiPost<OKResponse>('styles/deactivate', undefined),
   },
 
-  // ── Raffles ──────────────────────────────────────────────────────────────────
+  // -- Raffles ------------------------------------------------------------------
   raffles: {
     list: () => apiGet<RafflesResponse>('raffles'),
     detail: (id: number) => apiGet<RaffleDetailResponse>(`raffles/${id}`),
@@ -451,145 +454,163 @@ export const endpoints = {
       apiPost<StatusResponse>(`raffles/${raffleId}/verify-winner`, undefined),
   },
 
-  // ── Garapon (admin, hybrid REST) ─────────────────────────────────────────────
+  // -- Garapon (admin, hybrid REST) ---------------------------------------------
   garapons: {
-    /** GET /api/garapons — all garapons (admin). */
+    /** GET /api/garapons - all garapons (admin). */
     list: () => apiGet<GaraponsResponse>('garapons'),
-    /** GET /api/garapons/{id} — a garapon with prizes, drawing links, draw log. */
+    /** GET /api/garapons/{id} - a garapon with prizes, drawing links, draw log. */
     detail: (id: number) => apiGet<GaraponDetailResponse>(`garapons/${id}`),
-    /** POST /api/garapons — create a garapon (201). The form omits an id. */
+    /** POST /api/garapons - create a garapon (201). The form omits an id. */
     create: (garapon: Record<string, unknown>) => apiPost<GaraponResponse>('garapons', garapon),
-    /** PUT /api/garapons/{id} — full replace of the editable fields. */
+    /** PUT /api/garapons/{id} - full replace of the editable fields. */
     update: (garapon: { id: number } & Record<string, unknown>) =>
       apiPut<OKResponse>(`garapons/${garapon.id}`, garapon),
-    /** DELETE /api/garapons/{id} — delete a garapon (204). */
+    /** DELETE /api/garapons/{id} - delete a garapon (204). */
     delete: (id: number) => apiDelete(`garapons/${id}`),
     /** Close (POST /{id}/close) or reopen (POST /{id}/reopen) a garapon. */
     setStatus: (id: number, status: 'open' | 'closed') =>
       status === 'closed'
         ? apiPost<StatusResponse>(`garapons/${id}/close`, undefined)
         : apiPost<StatusResponse>(`garapons/${id}/reopen`, undefined),
-    /** POST /api/garapons/{id}/players — create a per-player drawing link (returns its token). */
+    /** POST /api/garapons/{id}/players - create a per-player drawing link (returns its token). */
     createPlayer: (garaponId: number, body: { player_name: string; max_draws: number }) =>
       apiPost<GaraponPlayerResponse>(`garapons/${garaponId}/players`, body),
-    /** DELETE /api/garapons/{id}/players/{playerId} — delete a drawing link (204). */
+    /** DELETE /api/garapons/{id}/players/{playerId} - delete a drawing link (204). */
     deletePlayer: (garaponId: number, playerId: number) =>
       apiDelete(`garapons/${garaponId}/players/${playerId}`),
   },
 
-  // ── Garapon (public player view, via per-player token) ───────────────────────
+  // -- Garapon (public player view, via per-player token) -----------------------
   garapon: {
-    /** GET /api/garapon/{token} — the player view (garapon + prizes + their record). */
+    /** GET /api/garapon/{token} - the player view (garapon + prizes + their record). */
     get: (token: string) => apiGet<GaraponPublicResponse>(`garapon/${enc(token)}`),
-    /** POST /api/garapon/{token}/draw — perform one authoritative draw. */
+    /** POST /api/garapon/{token}/draw - perform one authoritative draw. */
     draw: (token: string) => apiPost<GaraponDrawResponse>(`garapon/${enc(token)}/draw`, {}),
   },
 
-  // ── Affiliates (admin) ───────────────────────────────────────────────────────
+  // -- Affiliates (admin) -------------------------------------------------------
   affiliates: {
-    /** GET /api/affiliates — all affiliates + the shared Discord webhook (admin). */
+    /** GET /api/affiliates - all affiliates + the shared Discord webhook (admin). */
     list: () => apiGet<AffiliatesResponse>('affiliates'),
     create: (affiliate: Record<string, unknown>) =>
       apiPost<AffiliateResponse>('affiliates', affiliate),
     update: (id: number, affiliate: Record<string, unknown>) =>
       apiPut<OKResponse>(`affiliates/${id}`, affiliate),
     delete: (id: number) => apiDelete(`affiliates/${id}`),
-    /** POST /api/affiliates/reorder — persist a new drag order (top-first ids). */
+    /** POST /api/affiliates/reorder - persist a new drag order (top-first ids). */
     reorder: (orderedIds: number[]) =>
       apiPost<OKResponse>('affiliates/reorder', { ordered_ids: orderedIds }),
-    /** POST /api/affiliates/{id}/post — post the affiliate's embed to the shared webhook now. */
+    /** POST /api/affiliates/{id}/post - post the affiliate's embed to the shared webhook now. */
     post: (id: number) => apiPost<AffiliateResponse>(`affiliates/${id}/post`, undefined),
-    /** PUT /api/affiliates/webhook — set the single shared Discord webhook ('' clears). */
+    /** PUT /api/affiliates/webhook - set the single shared Discord webhook ('' clears). */
     setWebhook: (webhookUrl: string) =>
       apiPut<AffiliateWebhookResponse>('affiliates/webhook', { webhook_url: webhookUrl }),
   },
 
-  // ── Tea Rooms (admin) ────────────────────────────────────────────────────────
+  // -- Tea Rooms (admin) --------------------------------------------------------
   teaRooms: {
-    /** GET /api/tea-rooms — all rooms + the shared Discord webhook (admin/perm). */
+    /** GET /api/tea-rooms - all rooms + the shared Discord webhook (admin/perm). */
     list: () => apiGet<TeaRoomsResponse>('tea-rooms'),
-    /** POST /api/tea-rooms — create a room (201). */
+    /** POST /api/tea-rooms - create a room (201). */
     create: (room: Record<string, unknown>) =>
       apiPost<TeaRoomResponse>('tea-rooms', { tea_room: room }),
-    /** PUT /api/tea-rooms/{id} — full replace of the editable fields. */
+    /** PUT /api/tea-rooms/{id} - full replace of the editable fields. */
     update: (id: number, room: Record<string, unknown>) =>
       apiPut<TeaRoomResponse>(`tea-rooms/${id}`, { tea_room: room }),
-    /** PATCH /api/tea-rooms/{id} — toggle the open and/or discounted flag. */
+    /** PATCH /api/tea-rooms/{id} - toggle the open and/or discounted flag. */
     patch: (id: number, fields: { open?: boolean; discounted?: boolean }) =>
       apiPatch<TeaRoomResponse>(`tea-rooms/${id}`, fields),
-    /** DELETE /api/tea-rooms/{id} — delete a room (204). */
+    /** DELETE /api/tea-rooms/{id} - delete a room (204). */
     delete: (id: number) => apiDelete(`tea-rooms/${id}`),
-    /** POST /api/tea-rooms/reorder — persist a new drag order (top-first ids). */
+    /** POST /api/tea-rooms/reorder - persist a new drag order (top-first ids). */
     reorder: (orderedIds: number[]) =>
       apiPost<OKResponse>('tea-rooms/reorder', { ordered_ids: orderedIds }),
-    /** POST /api/tea-rooms/{id}/post — post a room's embed to the shared webhook now. */
+    /** POST /api/tea-rooms/{id}/post - post a room's embed to the shared webhook now. */
     post: (id: number) => apiPost<TeaRoomResponse>(`tea-rooms/${id}/post`, undefined),
-    /** PUT /api/tea-rooms/webhook — set the single shared Discord webhook ('' clears). */
+    /** PUT /api/tea-rooms/webhook - set the single shared Discord webhook ('' clears). */
     setWebhook: (webhookUrl: string) =>
       apiPut<TeaRoomWebhookResponse>('tea-rooms/webhook', { webhook_url: webhookUrl }),
   },
 
-  // ── Stamp Rally (admin, hybrid REST) ─────────────────────────────────────────
+  // -- Stamp Rally (admin, hybrid REST) -----------------------------------------
   stampRallies: {
-    /** GET /api/stamp-rallies — all rallies (admin). */
+    /** GET /api/stamp-rallies - all rallies (admin). */
     list: () => apiGet<StampRalliesResponse>('stamp-rallies'),
-    /** GET /api/stamp-rallies/{id} — a rally with stamps, prizes, and issued cards. */
+    /** GET /api/stamp-rallies/{id} - a rally with stamps, prizes, and issued cards. */
     detail: (id: number) => apiGet<StampRallyDetailResponse>(`stamp-rallies/${id}`),
-    /** GET /api/stamp-rallies/{id}/logs — the event-wide stamp collection log. */
+    /** GET /api/stamp-rallies/{id}/logs - the event-wide stamp collection log. */
     logs: (id: number) => apiGet<StampRallyLogsResponse>(`stamp-rallies/${id}/logs`),
-    /** POST /api/stamp-rallies — create a rally (201). The form omits an id. */
+    /** POST /api/stamp-rallies - create a rally (201). The form omits an id. */
     create: (rally: Record<string, unknown>) => apiPost<StampRallyResponse>('stamp-rallies', rally),
-    /** PUT /api/stamp-rallies/{id} — full replace of the editable fields. */
+    /** PUT /api/stamp-rallies/{id} - full replace of the editable fields. */
     update: (rally: { id: number } & Record<string, unknown>) =>
       apiPut<OKResponse>(`stamp-rallies/${rally.id}`, rally),
-    /** DELETE /api/stamp-rallies/{id} — delete a rally (204). */
+    /** DELETE /api/stamp-rallies/{id} - delete a rally (204). */
     delete: (id: number) => apiDelete(`stamp-rallies/${id}`),
     /** Close (POST /{id}/close) or reopen (POST /{id}/reopen) a rally. */
     setStatus: (id: number, status: 'open' | 'closed') =>
       status === 'closed'
         ? apiPost<StatusResponse>(`stamp-rallies/${id}/close`, undefined)
         : apiPost<StatusResponse>(`stamp-rallies/${id}/reopen`, undefined),
-    /** PATCH /api/stamp-rallies/{id}/stamps/{stampId} — pause/resume a single stamp. */
+    /** PATCH /api/stamp-rallies/{id}/stamps/{stampId} - pause/resume a single stamp. */
     setStampPaused: (rallyId: number, stampId: number, paused: boolean) =>
       apiPatch<PausedResponse>(`stamp-rallies/${rallyId}/stamps/${stampId}`, { paused }),
-    /** POST /api/stamp-rallies/{id}/cards — issue a tokenized participant card (returns its token). */
+    /** POST /api/stamp-rallies/{id}/cards - issue a tokenized participant card (returns its token). */
     createCard: (rallyId: number, participantName: string) =>
       apiPost<StampRallyCardResponse>(`stamp-rallies/${rallyId}/cards`, {
         participant_name: participantName,
       }),
-    /** DELETE /api/stamp-rallies/{id}/cards/{cardId} — delete a participant card (204). */
+    /** DELETE /api/stamp-rallies/{id}/cards/{cardId} - delete a participant card (204). */
     deleteCard: (rallyId: number, cardId: number) =>
       apiDelete(`stamp-rallies/${rallyId}/cards/${cardId}`),
   },
 
-  // ── Stamp Rally (public, via per-participant card token) ─────────────────────
+  // -- Stamp Rally (public, via per-participant card token) ---------------------
   stampCard: {
-    /** GET /api/stamp-card/{token} — the participant card view (no passwords). */
+    /** GET /api/stamp-card/{token} - the participant card view (no passwords). */
     get: (token: string) => apiGet<PublicStampCard>(`stamp-card/${enc(token)}`),
-    /** POST /api/stamp-card/{token}/stamp — collect a stamp by password. */
+    /** POST /api/stamp-card/{token}/stamp - collect a stamp by password. */
     stamp: (token: string, password: string) =>
       apiPost<StampSubmitResponse>(`stamp-card/${enc(token)}/stamp`, { password }),
   },
 
-  // ── Book clubs / reading lists ───────────────────────────────────────────────
+  // -- Public stamp-rally sign-up (self-service) --------------------------------
+  //
+  // Singular paths, like stamp-card above: the plural /api/stamp-rallies tree is
+  // the permission-gated admin surface.
+  stampSignup: {
+    /** GET /api/stamp-signup - rallies currently open to public sign-up. */
+    list: () => apiGet<SignupRalliesResponse>('stamp-signup'),
+    /** POST /api/stamp-signup/{id} - issue yourself a card (+ garapon link if paired). */
+    signUp: (rallyId: number, name: string, turnstileToken: string) =>
+      apiPost<StampSignupResponse>(`stamp-signup/${rallyId}`, {
+        name,
+        turnstile_token: turnstileToken,
+      }),
+    /** POST /api/stamp-lookup - find your links by the exact name you signed up with.
+     *  POST, not GET, so the name stays out of URLs and the access log. */
+    lookup: (name: string) => apiPost<StampLookupResponse>('stamp-lookup', { name }),
+  },
+
+  // -- Book clubs / reading lists -----------------------------------------------
   //
   // Reading lists are nested under their owning club: every function takes the
   // club slug as its first argument and targets /api/book-clubs/{club}/reading-
-  // lists…. The two club-agnostic utilities (uploadImage, lookup*) keep the flat
+  // lists.... The two club-agnostic utilities (uploadImage, lookup*) keep the flat
   // /api/bookclub/* paths.
   bookclub: {
-    /** GET /api/book-clubs/{club}/reading-lists — reading lists for a club (no items). */
+    /** GET /api/book-clubs/{club}/reading-lists - reading lists for a club (no items). */
     lists: (club: string) => apiGet<ReadingListsResponse>(`book-clubs/${enc(club)}/reading-lists`),
-    /** GET /api/book-clubs/{club}/reading-lists/{id} — a reading list with its items. */
+    /** GET /api/book-clubs/{club}/reading-lists/{id} - a reading list with its items. */
     listDetail: (club: string, id: number) =>
       apiGet<ReadingListDetailResponse>(`book-clubs/${enc(club)}/reading-lists/${id}`),
-    /** POST /api/book-clubs/{club}/reading-lists — create a list (201; returns it with its items). */
+    /** POST /api/book-clubs/{club}/reading-lists - create a list (201; returns it with its items). */
     createList: (club: string, title: string) =>
       apiPost<ReadingListDetailResponse>(`book-clubs/${enc(club)}/reading-lists`, { title }),
-    /** PUT /api/book-clubs/{club}/reading-lists/{id} — rename a list. */
+    /** PUT /api/book-clubs/{club}/reading-lists/{id} - rename a list. */
     renameList: (club: string, id: number, title: string) =>
       apiPut<OKResponse>(`book-clubs/${enc(club)}/reading-lists/${id}`, { title }),
-    /** DELETE /api/book-clubs/{club}/reading-lists/{id} — delete a list + its items (204). */
+    /** DELETE /api/book-clubs/{club}/reading-lists/{id} - delete a list + its items (204). */
     deleteList: (club: string, id: number) =>
       apiDelete(`book-clubs/${enc(club)}/reading-lists/${id}`),
     /**
@@ -606,30 +627,30 @@ export const endpoints = {
             `book-clubs/${enc(club)}/reading-lists/${listId}/items`,
             { item },
           ),
-    /** DELETE /api/book-clubs/{club}/reading-lists/{id}/items/{itemId} — delete an item (204). */
+    /** DELETE /api/book-clubs/{club}/reading-lists/{id}/items/{itemId} - delete an item (204). */
     deleteItem: (club: string, listId: number, itemId: number) =>
       apiDelete(`book-clubs/${enc(club)}/reading-lists/${listId}/items/${itemId}`),
     publish: (club: string, listId: number) =>
       apiPost<PublishResponse>(`book-clubs/${enc(club)}/reading-lists/${listId}/publish`, {}),
     uploadImage: (form: FormData, onProgress?: (percent: number) => void) =>
       apiUpload<BookclubUploadResponse>('bookclub/upload', form, { onProgress }),
-    /** GET /api/bookclub/lookup?q=… — AniList suggestions shaped like items. */
+    /** GET /api/bookclub/lookup?q=... - AniList suggestions shaped like items. */
     lookup: (query: string) => apiGet<BookclubLookupResponse>(`bookclub/lookup?q=${enc(query)}`),
-    /** GET /api/bookclub/lookup?id=… — a single AniList title by numeric id. */
+    /** GET /api/bookclub/lookup?id=... - a single AniList title by numeric id. */
     lookupById: (id: number) => apiGet<BookclubLookupResponse>(`bookclub/lookup?id=${id}`),
   },
 
-  // ── Announcement management ──────────────────────────────────────────────────
+  // -- Announcement management --------------------------------------------------
   announcements: {
-    /** GET /api/announcement-types — Discord destinations. */
+    /** GET /api/announcement-types - Discord destinations. */
     types: () => apiGet<AnnouncementTypesResponse>('announcement-types'),
-    /** POST /api/announcement-types — create a type. */
+    /** POST /api/announcement-types - create a type. */
     createType: (form: AnnouncementTypeForm) =>
       apiPost<AnnouncementTypeResponse>('announcement-types', {
         name: form.name,
         webhook_url: form.webhook_url,
       }),
-    /** PUT /api/announcement-types/{id} — replace a type. */
+    /** PUT /api/announcement-types/{id} - replace a type. */
     updateType: (id: number, form: AnnouncementTypeForm) =>
       apiPut<AnnouncementTypeResponse>(`announcement-types/${id}`, {
         name: form.name,
@@ -637,15 +658,15 @@ export const endpoints = {
       }),
     deleteType: (id: number) => apiDelete(`announcement-types/${id}`),
 
-    /** GET /api/announcement-roles — taggable Discord roles. */
+    /** GET /api/announcement-roles - taggable Discord roles. */
     roles: () => apiGet<AnnouncementRolesResponse>('announcement-roles'),
-    /** POST /api/announcement-roles — create a taggable role. */
+    /** POST /api/announcement-roles - create a taggable role. */
     createRole: (form: AnnouncementRoleForm) =>
       apiPost<AnnouncementRoleResponse>('announcement-roles', {
         name: form.name,
         role_id: form.role_id,
       }),
-    /** PUT /api/announcement-roles/{id} — replace a taggable role. */
+    /** PUT /api/announcement-roles/{id} - replace a taggable role. */
     updateRole: (id: number, form: AnnouncementRoleForm) =>
       apiPut<AnnouncementRoleResponse>(`announcement-roles/${id}`, {
         name: form.name,
@@ -653,32 +674,32 @@ export const endpoints = {
       }),
     deleteRole: (id: number) => apiDelete(`announcement-roles/${id}`),
 
-    /** GET /api/announcements — all announcements (filtering is client-side). */
+    /** GET /api/announcements - all announcements (filtering is client-side). */
     list: () => apiGet<AnnouncementsResponse>('announcements'),
     /**
      * Create (POST) or update (PUT /{id}) an announcement, chosen by whether an id
      * is supplied. The store builds `payload` from the form, having already
-     * converted local times → the stored UTC instants / UTC recurrence fields.
+     * converted local times -> the stored UTC instants / UTC recurrence fields.
      * Both wrap the payload under `{announcement}`.
      */
     save: (id: number, payload: Partial<Announcement>) =>
       id
         ? apiPut<AnnouncementResponse>(`announcements/${id}`, { announcement: payload })
         : apiPost<AnnouncementResponse>('announcements', { announcement: payload }),
-    /** DELETE /api/announcements/{id} — delete an announcement (204). */
+    /** DELETE /api/announcements/{id} - delete an announcement (204). */
     delete: (id: number) => apiDelete(`announcements/${id}`),
-    /** POST /api/announcements/reorder — persist a new drag order (top-first ids). */
+    /** POST /api/announcements/reorder - persist a new drag order (top-first ids). */
     reorder: (orderedIds: number[]) =>
       apiPost<OKResponse>('announcements/reorder', { ordered_ids: orderedIds }),
-    /** POST /api/announcements/{id}/send — post an announcement's embed to Discord now. */
+    /** POST /api/announcements/{id}/send - post an announcement's embed to Discord now. */
     sendNow: (id: number) => apiPost<AnnouncementResponse>(`announcements/${id}/send`, undefined),
-    /** POST /api/announcements/{id}/skip — skip the next scheduled occurrence. */
+    /** POST /api/announcements/{id}/skip - skip the next scheduled occurrence. */
     skipNext: (id: number) => apiPost<AnnouncementResponse>(`announcements/${id}/skip`, undefined),
   },
 
-  // ── Central image hosting (System → Images) ──────────────────────────────────
+  // -- Central image hosting (System -> Images) ----------------------------------
   images: {
-    /** GET /api/image-categories — permanent + custom categories. */
+    /** GET /api/image-categories - permanent + custom categories. */
     categories: () => apiGet<ImageCategoriesResponse>('image-categories'),
     /**
      * Create or rename a category. `create` POSTs to the collection; `rename`
@@ -691,73 +712,73 @@ export const endpoints = {
             new_dir: newDir,
           })
         : apiPost<ImageCategoryActionResponse>('image-categories', { name, dir }),
-    /** DELETE /api/image-categories/{dir} — delete a custom category + its files (204). */
+    /** DELETE /api/image-categories/{dir} - delete a custom category + its files (204). */
     deleteCategory: (dir: string) => apiDelete(`image-categories/${enc(dir)}`),
-    /** GET /api/images?dir=… — images in a category (newest first). */
+    /** GET /api/images?dir=... - images in a category (newest first). */
     list: (dir: string) => apiGet<ImagesResponse>(`images?dir=${enc(dir)}`),
     /**
-     * POST /api/images/upload — multipart "dir" + one or more "files".
+     * POST /api/images/upload - multipart "dir" + one or more "files".
      * Uses apiUpload (XHR) so large uploads aren't killed by the 30s fetch
      * timeout and can report progress; pass `onProgress` for a live percentage.
      */
     upload: (form: FormData, onProgress?: (percent: number) => void) =>
       apiUpload<ImagesUploadResponse>('images/upload', form, { onProgress }),
-    /** DELETE /api/images?dir=…&name=… — remove an image from a category (204). */
+    /** DELETE /api/images?dir=...&name=... - remove an image from a category (204). */
     deleteImage: (dir: string, name: string) =>
       apiDelete(`images?dir=${enc(dir)}&name=${enc(name)}`),
   },
 
-  // ── Fonts (Atelier → Font Upload) ────────────────────────────────────────────
+  // -- Fonts (Atelier -> Font Upload) --------------------------------------------
   fonts: {
-    /** GET /api/fonts — fonts grouped by base name with their variants. */
+    /** GET /api/fonts - fonts grouped by base name with their variants. */
     list: () => apiGet<FontsResponse>('fonts'),
-    /** POST /api/fonts/upload — multipart upload of one or more "files" fields.
+    /** POST /api/fonts/upload - multipart upload of one or more "files" fields.
      *  XHR-based (apiUpload) so large font files aren't cut off by the fetch timeout. */
     upload: (form: FormData, onProgress?: (percent: number) => void) =>
       apiUpload<FontUploadResponse>('fonts/upload', form, { onProgress }),
-    /** DELETE /api/fonts/{name} — remove ONE variant file by name (204). */
+    /** DELETE /api/fonts/{name} - remove ONE variant file by name (204). */
     deleteFile: (name: string) => apiDelete(`fonts/${enc(name)}`),
-    /** PATCH /api/fonts/{name} — rename one variant file (fails if the target exists). */
+    /** PATCH /api/fonts/{name} - rename one variant file (fails if the target exists). */
     renameFile: (name: string, newName: string) =>
       apiPatch<NamedOKResponse>(`fonts/${enc(name)}`, { new_name: newName }),
-    /** PATCH /api/fonts/families/{base} — partial update of a font's metadata:
+    /** PATCH /api/fonts/families/{base} - partial update of a font's metadata:
      *  CSS family name ("" = base default), served variant type ("" = auto),
      *  and/or its per-font allowed-site origins. */
     updateFamily: (base: string, fields: { family?: string; serve?: string; origins?: string[] }) =>
       apiPatch<OKResponse>(`fonts/families/${enc(base)}`, fields),
-    /** DELETE /api/fonts/families/{base} — delete a whole font (all variants, 204). */
+    /** DELETE /api/fonts/families/{base} - delete a whole font (all variants, 204). */
     deleteFont: (base: string) => apiDelete(`fonts/families/${enc(base)}`),
   },
 
-  // ── Carrd image hosting (System → Carrd Upload) ──────────────────────────────
+  // -- Carrd image hosting (System -> Carrd Upload) ------------------------------
   carrd: {
-    /** GET /api/carrd/projects — list project folders under <webRoot>/carrd. */
+    /** GET /api/carrd/projects - list project folders under <webRoot>/carrd. */
     projects: () => apiGet<CarrdProjectsResponse>('carrd/projects'),
-    /** POST /api/carrd/projects — create a project (folder optional). */
+    /** POST /api/carrd/projects - create a project (folder optional). */
     createProject: (title: string, folder: string) =>
       apiPost<CarrdProjectCreateResponse>('carrd/projects', { title, folder }),
-    /** PATCH /api/carrd/projects/{folder} — rename a project's title and/or folder. */
+    /** PATCH /api/carrd/projects/{folder} - rename a project's title and/or folder. */
     renameProject: (folder: string, title: string, newFolder: string) =>
       apiPatch<CarrdProjectCreateResponse>(`carrd/projects/${enc(folder)}`, {
         title,
         new_folder: newFolder,
       }),
-    /** DELETE /api/carrd/projects/{folder} — delete a project folder + contents (204). */
+    /** DELETE /api/carrd/projects/{folder} - delete a project folder + contents (204). */
     deleteProject: (folder: string) => apiDelete(`carrd/projects/${enc(folder)}`),
-    /** GET /api/carrd/images?folder=…&path=… — sub-dirs + images at a path. */
+    /** GET /api/carrd/images?folder=...&path=... - sub-dirs + images at a path. */
     images: (folder: string, path = '') =>
       apiGet<CarrdImagesResponse>(`carrd/images?folder=${enc(folder)}&path=${enc(path)}`),
-    /** POST /api/carrd/upload — multipart upload of "files" to "folder"/"path".
+    /** POST /api/carrd/upload - multipart upload of "files" to "folder"/"path".
      *  XHR-based (apiUpload) so large uploads aren't cut off by the fetch timeout. */
     upload: (form: FormData, onProgress?: (percent: number) => void) =>
       apiUpload<CarrdUploadResponse>('carrd/upload', form, { onProgress }),
-    /** DELETE /api/carrd/images?folder=…&path=…&name=… — remove an image at a path (204). */
+    /** DELETE /api/carrd/images?folder=...&path=...&name=... - remove an image at a path (204). */
     deleteImage: (folder: string, path: string, name: string) =>
       apiDelete(`carrd/images?folder=${enc(folder)}&path=${enc(path)}&name=${enc(name)}`),
-    /** POST /api/carrd/images/dirs — create a sub-directory at a path. */
+    /** POST /api/carrd/images/dirs - create a sub-directory at a path. */
     createDir: (folder: string, path: string, name: string) =>
       apiPost<NamedOKResponse>('carrd/images/dirs', { folder, path, name }),
-    /** DELETE /api/carrd/images/dirs?folder=…&path=… — delete a sub-directory + contents (204). */
+    /** DELETE /api/carrd/images/dirs?folder=...&path=... - delete a sub-directory + contents (204). */
     deleteDir: (folder: string, path: string) =>
       apiDelete(`carrd/images/dirs?folder=${enc(folder)}&path=${enc(path)}`),
   },

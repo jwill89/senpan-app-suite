@@ -33,11 +33,11 @@ func TestRedactSensitivePath(t *testing.T) {
 	if redactSensitivePath("/api/garapon/SECRET123") == "/api/garapon/SECRET123" {
 		t.Error("garapon token (no action) was not redacted")
 	}
-	// Stable correlation: same token → same placeholder.
+	// Stable correlation: same token -> same placeholder.
 	if redactSensitivePath("/api/garapon/SECRET123/draw") != drawA {
 		t.Error("redaction is not stable for the same token")
 	}
-	// Different token → different placeholder.
+	// Different token -> different placeholder.
 	if redactSensitivePath("/api/garapon/OTHER/draw") == drawA {
 		t.Error("different tokens collided to the same placeholder")
 	}

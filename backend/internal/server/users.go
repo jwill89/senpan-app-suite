@@ -8,7 +8,7 @@ import (
 	"app-suite/internal/model"
 )
 
-// ── User management (admin) + self-service account (any user) ─────────────────
+// -- User management (admin) + self-service account (any user) -----------------
 //
 // The Users page is admin-only: GET /api/users lists accounts, PATCH/DELETE
 // /api/users/{id} modify one. Every account, admin or not, can change its own
@@ -16,7 +16,7 @@ import (
 //
 // The seeded "admin" account is protected: no one but "admin" itself can delete,
 // deactivate, demote, or change the password of "admin". (Its page permissions
-// may still be edited here — permissions are deliberately not part of the
+// may still be edited here - permissions are deliberately not part of the
 // protected set.)
 
 // handleUsersList returns all accounts (without password hashes).
@@ -49,7 +49,7 @@ type userPatchRequest struct {
 // handleUserPatch applies one or more account changes in a single request. It
 // merges the former set_active / set_admin / set_permissions / set_password
 // actions: any present field is applied. The bootstrap "admin" account is
-// protected — active/admin/password may not be changed on it (permissions may,
+// protected - active/admin/password may not be changed on it (permissions may,
 // matching the former behavior where set_permissions was not a protected action).
 //
 //	Endpoint:  PATCH /api/users/{id}
@@ -59,7 +59,7 @@ type userPatchRequest struct {
 func (s *Server) handleUserPatch(w http.ResponseWriter, r *http.Request) {
 	actor := s.currentUser(r)
 	if actor == nil || !actor.IsAdmin {
-		writeError(w, http.StatusUnauthorized, "Unauthorized – admin login required")
+		writeError(w, http.StatusUnauthorized, "Unauthorized - admin login required")
 		return
 	}
 	id, ok := pathInt64(w, r, "id", "user")
@@ -85,7 +85,7 @@ func (s *Server) handleUserPatch(w http.ResponseWriter, r *http.Request) {
 	// Protect the bootstrap "admin" account: it can't be activated/deactivated,
 	// promoted/demoted, or have its password reset by anyone here (it rotates its
 	// own password via /api/account/change-password). Permissions are deliberately
-	// allowed — mirrors the former action set, where set_permissions was not
+	// allowed - mirrors the former action set, where set_permissions was not
 	// protected.
 	protected := target.Username == reservedUsername
 	if protected && (req.Active != nil || req.Admin != nil || req.Password != nil) {
@@ -145,7 +145,7 @@ func (s *Server) handleUserPatch(w http.ResponseWriter, r *http.Request) {
 		}
 		// An admin resetting the password must also cut off the target's existing
 		// PAT so a compromised token can't outlive the reset (the user re-issues it).
-		// The target's browser sessions can't be swept from here — see 'unresolved'.
+		// The target's browser sessions can't be swept from here - see 'unresolved'.
 		if _, err := s.store.DeleteUserToken(id); err != nil {
 			slog.Error("revoke token after admin password reset", "error", err, "user_id", id)
 		}
@@ -161,7 +161,7 @@ func (s *Server) handleUserPatch(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleUserDelete(w http.ResponseWriter, r *http.Request) {
 	actor := s.currentUser(r)
 	if actor == nil || !actor.IsAdmin {
-		writeError(w, http.StatusUnauthorized, "Unauthorized – admin login required")
+		writeError(w, http.StatusUnauthorized, "Unauthorized - admin login required")
 		return
 	}
 	id, ok := pathInt64(w, r, "id", "user")

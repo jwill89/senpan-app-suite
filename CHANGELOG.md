@@ -5,18 +5,19 @@ All notable changes to the **Senpan App Suite** are recorded here.
 The **frontend** (Vue SPA), **backend** (Go API), and **plugin** (SenpanCompanion,
 a Dalamud/FFXIV plugin) are versioned independently with
 [Semantic Versioning](https://semver.org/) and tracked in their own sections below
-— a change usually touches only one, and they deploy separately. The admin
-dashboard shows the live frontend + backend versions (sidebar footer) so operators
-can confirm the two web halves are compatible; the plugin ships through its own
-Dalamud custom repo and talks to the backend over the same API (PAT-authenticated).
+
+- a change usually touches only one, and they deploy separately. The admin
+  dashboard shows the live frontend + backend versions (sidebar footer) so operators
+  can confirm the two web halves are compatible; the plugin ships through its own
+  Dalamud custom repo and talks to the backend over the same API (PAT-authenticated).
 
 **Sources of truth**
 
-- Frontend version → `frontend/package.json` (`"version"`), baked into the build
+- Frontend version -> `frontend/package.json` (`"version"`), baked into the build
   and read via `frontend/src/lib/version.ts`.
-- Backend version → `backend/internal/version/version.go` (`Version`), served at
+- Backend version -> `backend/internal/version/version.go` (`Version`), served at
   `GET /api/version`.
-- Plugin version → `plugins/SenpanCompanion/SenpanCompanion.csproj` (`<Version>`,
+- Plugin version -> `plugins/SenpanCompanion/SenpanCompanion.csproj` (`<Version>`,
   a four-part Dalamud AssemblyVersion) + `plugins/pluginmaster.json` (the repo
   listing consumed by Dalamud).
 
@@ -26,13 +27,13 @@ the SPA depends on; MINOR for backward-compatible additions; PATCH for fixes.
 When you change one side, bump its version and add an entry under its section.
 
 **Releases & tags.** Each version corresponds to a Git tag and GitHub Release
-named `<Component>-v<version>` — e.g. `Frontend-v3.5.0`, `Backend-v3.4.0`,
+named `<Component>-v<version>` - e.g. `Frontend-v3.5.0`, `Backend-v3.4.0`,
 `Plugin-v2.0.1.0`. These are created **automatically** by the CI `release` job
-(`.github/workflows/ci.yml` → `.github/scripts/release.sh`): on a push to `main`,
+(`.github/workflows/ci.yml` -> `.github/scripts/release.sh`): on a push to `main`,
 after the full gate passes, any component whose current version has no release
 yet is tagged and released, with the release body taken verbatim from that
 component's section below. So bumping a version here and pushing a green commit
-is all it takes — no manual tagging. To publish a release, make sure the version
+is all it takes - no manual tagging. To publish a release, make sure the version
 source and its section here are updated in the same commit.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/).
@@ -41,17 +42,447 @@ The format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## Frontend
 
-### [3.16.0] — 2026-07-24
+### [3.18.0] - 2026-08-11
+
+Stamp Rally sign-up moves to the participant. Requires backend 3.15.0.
+
+#### Added
+
+- **Public Stamp Rally sign-up**, three pages mirroring how raffles work:
+  `/stamp-rallies` lists the rallies open for it, `/stamp-rallies/:id` is one rally's
+  sign-up form, and `/stamp-lookup` is "find my links". The per-rally URL is directly
+  linkable on purpose - staff post it into Discord and people land on the form rather
+  than hunting for the rally. A Home destination card appears only while at least one
+  rally is open to sign-up.
+- **The name field pushes for a full character name.** The form asks for
+  `Firstname Lastname @ World` and says why: staff match sign-ups to characters when
+  handing out prizes, so a nickname can leave someone unrecognized. One name per rally,
+  and the server's 409 sends a repeat sign-up to the lookup page instead of quietly
+  issuing a second card.
+- **The links are the deliverable**, so the result panel treats them that way: the
+  stamp card, the Garapon draw when the rally has one, a copy button on each, and a
+  blunt warning that there is no account to log back into and these links are the only
+  way in. The lookup page is one click away from every dead end.
+- **The lookup page claims nothing it shouldn't.** No search yet, a fruitless search,
+  and an unknown name are three different states in the store (`null` vs `[]`), and the
+  page only says "nothing matched that name" once a search has actually run. Results are
+  dropped on leaving the page rather than left on screen for whoever opens it next.
+- **Admin: a "Public sign-up" toggle** on the rally form, off by default, explaining
+  what turning it on exposes.
+- **Admin: a "Default Draws" field** on the garapon form - the draw allowance a
+  self-service sign-up issues, and the number the Issue Link field now starts at
+  instead of a bare 1. Still overridable per link.
+
+#### Changed
+
+- **`.form-alert` and `.turnstile-row` are now shared objects** (`utilities.css`) with a
+  `--warning` variant alongside `--danger`. They were scoped inside `CardRequestsView`;
+  the sign-up pages are the second occurrence, which is where the conventions say to
+  promote rather than copy. Scoped CSS drops 23 lines.
+
+### [3.17.0] - 2026-07-28
+
+A visual pass aligning the app with the senpan.cafe website: square corners, no
+elevation, the display face on every heading, and Montserrat as the body face. **No
+colour token changed value**, so all 28 saved themes render exactly as before. Also
+fixes success and error text that was effectively invisible on every theme, and brings
+the stylesheets under enforced formatting.
+
+#### Added
+
+- **`@tanstack/vue-table`** as the row engine behind `DataTable` (see **Changed**). The
+  only new runtime dependency; it is headless, so it adds no CSS and no markup.
+- **Five table features that were previously too costly to hand-roll.** Each is opt-in
+  per table, so nothing changes on a table that doesn't ask:
+  - **Column resizing** (`resizable`) - drag a column's trailing edge. Declared widths
+    are kept and unsized columns stay auto **until you actually drag one**; reading the
+    engine's size eagerly would have pinned every unsized column to a 150px default and
+    silently relaid out tables nobody touched. On Manage Cards, the Winners Log, the
+    Server Logs and the garapon + rally logs.
+  - **Row selection + bulk delete** (`selectable` + `v-model:selected`) - a checkbox
+    column whose header selects every row matching the **current filter**, not just the
+    page on screen. Wired to a "Delete N selected" action on **Manage Cards** and the
+    **Winners Log**, each confirming once for the whole set rather than per row.
+  - **Grouping** (`group-by`) - keeps rows sharing a column value contiguous. It is a
+    primary sort key, not an aggregate row, so column sorting still orders rows _within_
+    each group. This replaces the rally stamp log's bespoke `groupedByParticipant` pass
+    and, with it, the `sort-mode="external"` escape hatch that existed only to protect
+    that grouping.
+  - **Faceted filters** (`facetable` column + `column-filters`) - the table reports each
+    facetable column's distinct values with counts, so a toolbar can offer them as a
+    dropdown. On the garapon draw log: filter to a single prize and see how many of each
+    went out.
+  - **CSV export** (`exportCsv(filename)` on a template ref) - writes the rows the
+    filters currently match, in the current sort order, across **all** pages, with
+    RFC 4180 quoting and a UTF-8 BOM so Excel reads it correctly. Columns marked
+    `noExport` (action buttons, expand carets) are left out. On the Winners Log, the
+    garapon draw log and the rally stamp log.
+- **`--radius-media` token** (6px), used by image previews only - thumbnails, covers and
+  prize art keep one soft edge so a photo reads as a picture rather than a hole punched
+  in the panel, while everything that is chrome is square. Like `--radius` it is not
+  themeable and is absent from the theme editor's token list.
+- **`--body-font` token**, so small chrome can name the body face rather than inherit
+  one. Badges and the game clock are inline children of a panel's `<h3>`, so plain
+  inheritance handed them the display face at 0.7rem; `font-family: inherit` cannot fix
+  that, because what it inherits _is_ the heading. Not themeable.
+- **Banded data tables.** Alternating row tints on all 11 admin tables. Hover moved off
+  the lightness axis - which the band now occupies - onto a warm `--accent` wash plus a
+  leading edge, so it reads identically on banded and unbanded rows.
+- **`npm run format:check`**, wired into `scripts/check.ps1` and CI. Prettier covers the
+  CSS layer, which ESLint does not lint at all, so stylesheet formatting had been
+  unenforced.
+
+- **`npm run lint:conventions`** (`frontend/scripts/check-conventions.mjs`), wired into
+  `scripts/check.ps1` and CI. ESLint does not lint CSS and Prettier only formats it, so
+  the naming rules and the token list had nothing enforcing them. It fails on an
+  appearance-named class, a `__` separator, a bare state class, a `var(--x)` that
+  resolves to nothing, and any drift between the three copies of the themeable token
+  list (`tokens.css`, `lib/theme-tokens.ts`, `backend/internal/store/styles.go`).
+  It also **ratchets scoped CSS**: `scripts/scoped-css-baseline.json` records every SFC's
+  scoped line count and the check fails when one grows. Files already in the baseline are
+  grandfathered at their current size; a _new_ SFC caps at 120 scoped lines, since new
+  work has no legacy to plead. The total is pinned as well, so rules cannot be shuffled
+  between files for free. `npm run lint:conventions:baseline` re-records after a
+  reduction; going under baseline prints a note rather than failing. Scoped CSS had
+  reached near-parity with the global stylesheets (3,360 vs 4,013) before anyone noticed,
+  and nothing measured it - this is what makes the extraction stick.
+  It further fails on a **themeable token with no consumer outside the theme editor** -
+  the editor renders every token by definition, so a token only it references is a knob
+  that changes nothing in the app. `--accent-hover` / `--accent-2-hover` failed the
+  inverse way, dropped from the stylesheets while still offered in the editor.
+  It also fails on an **object with no base rule** - a class styled only as `.x:hover`
+  or `.x.is-y` with nothing defining `.x` itself. That check was written after a bulk
+  rule-dropper matching `^\.name {` was run over all of `src/` and stripped base rules
+  out of `utilities.css` while leaving their `:hover` compounds behind: the file still
+  looked populated and all 672 tests passed, but the objects rendered unstyled. `is-*`
+  state and co-class modifiers (`class="opacity-slider sound-volume"`) are exempt,
+  since those legitimately have no base of their own.
+- **A Konami code on the player board.** ↑ ↑ ↓ ↓ ← → ← → B A clears every stamp and puts
+  Drani's grin over the screen with "Oi, what'd you think was gonna happen?", swelling past
+  the edge of the viewport as it fades out (`KonamiEgg.vue`, mounted by `PlayerView`; styles
+  in player.css section 20). Entirely client-side - it calls the same `clearAllStamps()` the
+  Clear Board button does, with no store, endpoint or broadcast behind it. Keys match against
+  a **rolling window of the last ten** rather than a progress counter, so a fumbled repeat
+  (↑ ↑ ↑ ↓ ↓ …) still resolves instead of dropping the run, and anything typed into a field
+  is left alone. The image is warmed on mount at low priority: fetching it lazily meant the
+  first reveal of a session raced its own download and showed the caption over an empty gap
+  when the fetch lost. It is 36 KB (1200x675, lossy) rather than the 892 KB lossless original
+  it started as, which is what made eager loading affordable. Reduced motion fades it in place
+  instead of swelling, and the caption is a `role="status"` so a keyboard-only player is told
+  the board just emptied. The art is a **bundled import** from `src/assets/images/`, not a
+  `${BASE_URL}images/…` URL like the yoever head: `public/images/` mirrors the persistent
+  admin-upload tree that the build strips from `dist/`, so an asset referenced only there has
+  to be copied onto the server by hand and 404s until someone does - and a cached miss then
+  outlives the upload. A hashed `dist/assets/` file needs no deploy step and can never serve
+  a stale entry.
+
+#### Changed
+
+- **The player's "It's Yoever" controls are one row instead of two.** They were two labeled
+  `.switch` rows - "Show "It's Yoever" effects:" and "Play "It's Yoever" sound:" - whose labels
+  had grown long enough to wrap onto three lines in the board column. Now a single
+  `It's Yoever: [Effects] [Sounds]` row of segments, laid out like the Sound row directly above
+  it, with Effects still the master (turning it off locks the Sounds segment, since a hidden
+  animation has no sound to control). The compact segment style those two rows now share was
+  promoted out of `SoundControls`' scoped block into a `.toggle-btn--sm` modifier rather than
+  copied, and `.toggle-btn` gained a `:disabled` state - it fills only when active, so without
+  one a locked segment looked identical to an off-but-clickable one.
+- **One toolbar layout above every table** (`DataTableToolbar`). Seven tables had each
+  grown their own: the row count sat left of the actions on one screen and right of them
+  on the next, the same button read "CSV" here and "Export CSV" there, the counts said
+  "6/6 cards", "40 total entries", "10 stamps" and "3 draws", and Manage Cards split its
+  controls over two rows while the rest used one. Composing the pieces by hand is what
+  allowed that, so the order is now fixed by the component -
+  `[search filters] ....... [per-page count actions]` - with slots for the parts that
+  genuinely differ. Counts read `40 entries`, or `3 of 12 draws` once a filter is
+  narrowing the set.
+  - The toolbar's **search box is a fixed 320px**, not flex-grow. Growing, it filled
+    whatever the right-hand group didn't need, so the same control came out 360px on a
+    table with one button and 253px on one with three - which reads as three different
+    components rather than one. It still shrinks on narrow viewports.
+  - **`.row-actions` gap 6px -> 8px.** At six icon buttons (Manage Cards) the cluster
+    read as a single blob.
+  - Changing the page size returns you to page 1 on every table; that was previously
+    wired by hand on the Winners Log only, so it now lives in `DataTable`.
+- **`DataTable` owns the row pipeline: filter -> sort -> paginate**, built on
+  [TanStack Table](https://tanstack.com/table) (`@tanstack/vue-table`). TanStack is
+  _headless_ - it supplies the row model and no markup or CSS - so every element is
+  still ours, carrying our classes, and the theme tokens and WCAG audit see the tables
+  exactly as before. AdminView grows 2.7 KB; the hand-rolled pipelines it replaced
+  roughly offset it.
+
+  The ordering is the point. Tables used to be handed a **page** (`pagedCards`,
+  `pagedLinks`, `pagedLog`, `pagedClosed`), so a table could not have sorted for itself
+  without sorting _within the current page_ - which looks right and is wrong. Pass the
+  full list now; the table filters, sorts, then pages, and reports
+  `{ total, totalPages }` back via `@update:view` for the toolbar count and
+  `PaginationBar`.
+
+  This retires `composables/useDataTableView.ts` and the per-tab and per-store copies of
+  the same pipeline (cards, fonts, server logs). Eight tables across six tabs moved over.
+  Two behaviours were deliberately preserved and are covered by tests: a first click on
+  any column sorts **ascending** (TanStack defaults numeric columns to descending-first,
+  which would have silently reversed half the admin tables), and sorting stays locale-
+  and numeric-aware, so `9 < 10 < 100` rather than `10 < 100 < 9`.
+
+  One exception: the rally stamp log regroups rows by participant _after_ sorting, so a
+  table that sorted them would undo the grouping. It drives `DataTable` in
+  `sort-mode="external"`, documented as the single case for that escape hatch.
+
+- **The winners log loads in full and sorts client-side** like every other admin table.
+  It was the one server-paginated, server-sorted table, which made client sorting
+  impossible there - it would have sorted the 25 loaded rows and looked correct. Because
+  the API caps `per_page` at 200, the store pages through until it has `total` rows
+  rather than requesting one oversized page, which would come back silently truncated.
+- **Montserrat is the body face**, paired with the display face already configured in
+  System -> Settings. Declared once on `body` so every control inherits it.
+- **The display face now carries the page and panel titles.** `--header-font` previously
+  applied to `h1` plus the two bingo-board rules, so it appeared roughly once per page.
+  It now sets the topbar title, manager and sub-page headers, panel titles and the auth
+  box - uppercase, with a trailing period. It is deliberately **not** used below that:
+  it is a high-contrast display serif, and at the ~16px most headings sit at (manager
+  list item names, settings sub-section labels) its thin strokes stop being readable.
+  Those use the body face at weight 700 instead, as do the **Live** badge and the game
+  clock on Current Game, which are inline children of that panel's heading and so were
+  inheriting the display face at 0.7rem.
+- **Sub-section labels are consistent.** `.section-heading` was inheriting two different
+  browser sizes depending on whether a tab spelled it `h3` or `h4`; all 22 now render at
+  one size, uppercase and letter-spaced so a small label reads as a label.
+- **One full-width rule per heading, weighted by level.** Page titles (the topbar,
+  manager and sub-page headers) take a 2px `--highlight` rule; panel titles keep the
+  quiet 1px hairline. The rule's weight is what says which heading owns the screen.
+- **Square corners.** `--radius` is `0` and the 160 hard-coded radii across the
+  stylesheets and components follow it - except image previews, genuine circles (dots,
+  spinner, slider thumbs, the toggle knob), and the toggle switch track, which stays a
+  pill so it does not read as a checkbox.
+- **No elevation.** Eleven drop shadows, the board halo and the logo glow are gone. The
+  two floating surfaces that relied on a shadow for separation, the mobile admin drawer
+  and the colour-picker popover, use a keyline instead.
+- **Home recomposed.** The logo sits in a centred masthead band terminated by a
+  `--highlight` rule, with the destinations below it as full-width rows: **Join Bingo**
+  as the primary panel, Raffles and Custom Card as compact rows. The separate page title
+  is gone (the logo artwork already carries the wordmark), and `app_title` is now its alt
+  text - it still drives the browser tab title and the player topbar.
+- **Glyph icons replaced with FontAwesome** throughout: back buttons, pagination, table
+  sort arrows, sidebar and row-expander chevrons, external-link markers, the skipped
+  badge, and the "no emoji" stamp option. A text glyph depends on the platform having
+  that character; an icon does not.
+- **The Server Logs severity palette is theme-safe.** Level, method and status colours
+  were picked against the dark default and washed out on the 14 light themes. Each hue
+  now mixes in the theme's own `--text`, so it stays readable on any surface while still
+  reading as red / amber / green.
+
+- **Class names follow one stated convention now**, documented in AGENTS.md and gated by
+  `npm run lint:conventions`. Shared objects are role-named with no prefix, a part joins
+  its parent with `-`, a modifier uses `--`, state uses `is-`, and a scoped component's
+  classes carry its full name. Around 650 renames: `.text-dim` -> `.text-muted`,
+  `.code-gold` -> `.code-highlight`, `ann-` -> `announcement-`, `cl__` -> `changelog-`,
+  `tp-` -> `theme-preview-`, `pat-` -> `access-token-`, and LogsTab's `.lvl` / `.m` /
+  `.st` -> `log-level` / `log-method` / `log-status`.
+- **Appearance-based names are gone.** `.text-gold` named a colour the palette no longer
+  has - the token had been renamed to `--highlight` years ago and the class was left
+  describing something untrue. Classes now name the role, or the token they apply.
+- **BEM's `__` separator dropped** (86 classes). It exists to manufacture uniqueness in a
+  global namespace, which Vue's `<style scoped>` already provides; only 6 of 48
+  components had adopted it.
+- **State classes are `is-*`** (87 rewrites). A bare `.active` or `.disabled` collides
+  with data values (`status === 'active'`) and with HTML attributes of the same name.
+- **Duplicated objects consolidated.** The manager-row title, meta line, colour swatch,
+  drag handle, media tile and colour-picker field had each been re-implemented per tab
+  under a different prefix - 24 byte-identical rules across Affiliates, Announcements,
+  Book Club and Tea Rooms. They are single shared objects now (`.list-row-title`,
+  `.list-row-meta`, `.list-row-swatch`, `.media-tile`, `.color-field`, `.drag-handle`).
+- **Shared styles are the default; scoped CSS is the exception.** An early goal had been
+  to keep reusable rules out of `<style scoped>`, but the global stylesheets were only
+  split out on 2026-06-27, well after the first components were written, and the debt was
+  never repaid - 91% of the duplicated lines predate or coincide with that split. Scoped
+  CSS had grown to 3,360 lines against 4,013 global, near parity. Another ~300 lines are
+  now shared objects and scoped CSS is down to ~3,060:
+  - **`.file-*`** - the upload dropzone, tile grid, card, caption, delete overlay and
+    copy button. System -> Images and Atelier -> Carrd Upload are the same media manager,
+    and every rule was byte-identical between them under a `carrd-` and an `image-`
+    prefix (~82 lines). Named `file-` because `.media-card` is already the raffle tile.
+  - **`.subpanel`** - the raised box nested inside a panel for an inline add form or a
+    selected-item detail. Written five times under four names.
+  - **`.link-btn`** - a real `<button>` that reads as a link, for an action offered
+    mid-sentence. Written ten times. Not a ghost button: no border or fill, and it never
+    sits in a button row.
+  - **`.checkbox-inline`**, **`.list-stack`** and **`.callout`** - the inline
+    checkbox-and-label, the marker-less vertical list, and the tinted "you won" notice.
+    AGENTS.md now states the trigger: a rule becomes a shared object at its **second**
+    occurrence, not its third. The doc previously described the 50/50 split as the norm,
+    which ratified the drift instead of bounding it.
+- **`.is-dragging` is global.** All three sortable admin tabs defined their own copy, so
+  which one applied depended on stylesheet order.
+- **The theme editor's live preview is built from the app's own objects.** It was a
+  hand-written replica - ~220 lines of `.theme-preview-*` re-implementing panels,
+  headings, six buttons, badges, the winner chip, the bingo board and a modal. A replica
+  can drift from what it previews, which for a WCAG tool means it can report contrast for
+  chrome the app no longer renders. It now uses the real `.admin-panel`,
+  `.section-heading`, `.subpanel`, `.btn-action` / `-view` / `-neutral` / `-confirm` /
+  `-danger` / `-caution`, `.badge`, `.winner-chip`, `.board-wrap` / `.board-cell` /
+  `.cell-num`, `.num-cell` and `.modal-box`, so the preview _is_ the app. What remains
+  scoped is geometry only - never colour, since a colour declaration would re-create the
+  replica. ThemeTokenEditor drops from 553 scoped CSS lines to 394.
+  - The board now renders at the app's real 68px cells instead of a shrunken miniature,
+    which makes the six pairings marked `large` in the audit genuinely WCAG-large for the
+    first time - previously they were scored large but drawn at 0.8rem.
+  - `color: var(--text)` on the preview stage is load-bearing and commented as such: an
+    inherited colour is an already-resolved value, so a bare `<p>` would otherwise paint
+    the _saved_ theme's text colour while the editor showed the edited one.
+  - `.modal-overlay` is deliberately **not** reused - it is `position: fixed; inset: 0;
+z-index: 500` and would cover the editor. A contained stand-in borrows only the
+    `--modal-overlay` token.
+  - Two preview changes are visible: panel headings now carry the app's real
+    `.section-heading` treatment (uppercase, letter-spaced, `--highlight`), and the three
+    status badges are the app's real tinted `.badge--*` rather than solid fills. Both are
+    what the app actually renders; the solid `--success` / `--danger` / `--warning` fills
+    are still demonstrated by the buttons beside them.
+- **`.numbers-col` is global.** The called-numbers family (`.numbers-cols`,
+  `.numbers-col-header`, `.num-cell`) has always lived in `player.css`, but the column
+  wrapper was scoped to CalledNumbers.vue, so the tracker could not be reused. Its
+  modifier is now `.numbers-col--unused` rather than the bare `.col-unused`.
+- **`.media-tile img`** promoted - byte-identical in both media managers.
+- **Dead markup classes removed** (14), each hard-coded in a `class="..."` with no rule
+  anywhere: `.pe-wrap`, `.token-group`, `.perm-group`, `.pattern-picker`, `.bc-lookup`,
+  `.home-card-prompt`, `.hour-row-head`, `.player-actions-label`, `.prize-color-col`,
+  `.redeem`, `.secondary-stamp`, `.yoever-trigger` and `.last-called-flourish--left` (the
+  base _is_ the left orientation; only `--right` mirrors it). `.mt-0` went too - all four
+  uses were on `<h3>`s that already compute `margin-top: 0`, so it never did anything.
+- **`.debug-on` folded into `.btn-caution`.** The scoped rule set the same `--warning`
+  fill and the same `#1f1a06` ink, and its own comment said so.
+
+#### Accessibility
+
+- **Success and error text is readable again - no new tokens.** `--success` and
+  `--danger` are fill colours meant to pair with `--text-on-fill`, but four rules used
+  them as a text colour and scored **1.53:1** and **1.80:1** on the default theme,
+  against a 4.5:1 AA minimum. Each is now fixed with what the design already provided
+  rather than a new token:
+  - the "request submitted" and "you're entered" confirmations sit inside a container
+    that already carries `border: 2px solid var(--success)`, so the heading was tinting
+    redundantly - it drops to `--text` and the `.text-success` utility is gone;
+  - `.error-msg` carries the danger signal on a tint plus a leading edge (the
+    `.badge--danger` idiom) and leaves the text `--text`;
+  - the "Sent to players!" line is already paired with a check icon, so it needs no
+    colour;
+  - the Users active badge distinguishes itself by weight, matching its `.badge-inactive`
+    (muted) and `.badge-admin` (highlight) siblings.
+
+  `tokens.css` now states outright that `--success` / `--danger` are fills, not text
+  colours, so the next author does not repeat it. The theme editor's WCAG audit never
+  flagged the original because it only ever checks those two tokens as backgrounds.
+
+#### Fixed
+
+- **Page titles sat off-center on every three-slot topbar.** `.topbar` is
+  `justify-content: space-between` over a leading control, the title and a trailing spacer -
+  and that spacer is an empty `<span>`, 0px wide, so the title was centered in the space the
+  Back button left rather than on the page. It landed half a button width right of center:
+  a measured 45px against a 91px button on Personal Card Request, visibly off against the
+  centered form below it. The three-slot bars are now a grid with matched side tracks, which
+  also corrects Raffles, Raffle Detail and the player board id. The two-slot admin shell,
+  whose title deliberately sits left beside the nav toggle, keeps the flex layout. Side
+  tracks are `1fr` rather than `minmax(0, 1fr)` so a phone-width bar gives up perfect
+  centering instead of squashing the Back button.
+- **Pattern previews had uneven cell spacing on three screens.** `.pattern-mini` sized its
+  columns with `repeat(5, 1fr)` while `.pattern-mini-cell` carries a fixed px size, so any
+  container wider than the cells left slack that read as extra gap. Inside a
+  `.pattern-card` (100px) the tracks grew to 18.4px around 16px cells, turning the declared
+  2px gap into **4.4px** - Game Presets, Current Game and the player's win-patterns panel
+  were all spaced differently from the Patterns manager. The manager was only correct by
+  accident: it set `width: fit-content` itself, and the pattern picker got away with it by
+  being a centred flex item. The grid now sizes to its cells (`repeat(5, auto)` +
+  `width: fit-content`, centred with `margin-inline: auto`), so all five pattern previews
+  render an identical 2px gap. Cell _sizes_ still vary by context on purpose (18px in the
+  manager, 16px on the game screens, 11px in the player panel, 10px in the picker).
+- **The Book Club cover upload showed a raw browser "Choose File" control.** It was the
+  only visible `<input type="file">` in the app - a native file input renders its own
+  unthemeable button, so it ignored the theme and sat outside the field styling beside
+  the Title and Cover Image URL inputs. It now uses the pattern the other four uploads
+  (Carrd, Fonts, Images, custom stamp) already used: the input is `hidden` and a real
+  `.btn-action` triggers it, with the upload spinner inside the button instead of a
+  separate "Uploading..." line.
+- **Three Server Logs buttons rendered with no fill at all.** The Live/Paused toggle, the
+  debug toggle's off state and Clear were all marked `btn-secondary`, and `btn-secondary`
+  was never a class this app defines - so those buttons carried only `.btn-sm` and got no
+  background or ink. `btn-success` was equally undefined. They now use the documented
+  intents: `.btn-confirm` for live, `.btn-caution` for debug-on, `.btn-view` for the
+  secondary slots.
+- **Two spacing utilities did nothing.** `mt-4` (the join-code hint on Card Requests) and
+  `mt-10` (the empty-state line on Stamp Rallies) were written in markup but never
+  defined; `.mb-4` and `.mb-10` existed, `mt` just never got the small end of the scale.
+  Both are defined now, so those elements get the margin the markup always asked for.
+- **Every WCAG error and warning row rendered untinted.** The report's two problem
+  lists wrote `wcag-finding--error` / `--warn`, but the stylesheet only ever defined
+  `--fail` / `--aa` / `--aaa`, so neither list was ever coloured - only the opt-in
+  "show all checks" list, which derives its modifier from the finding's status. All
+  three lists derive it now, so they cannot drift apart again. The unit test asserted
+  on `--error`, the name with no rule behind it, which is how this survived.
+- **Reduced motion did not stop the connection-status dot.** The kill rule
+  (`.conn-badge .conn-dot`, specificity 0,2,0) lost to the rule that starts the pulse
+  (`.conn-badge.is-connecting .conn-dot`, 0,3,0) - a media query adds no specificity.
+  Users who ask for reduced motion got an animated dot anyway.
+- **Stamp-rally stall badges were unreadable, on every theme.** `.stall-ok` and
+  `.stall-open` hardcoded `color: #fff`; white on `--highlight` scores **1.79:1**, so
+  this failed on the default dark theme, not just the 14 light ones. Pairing each fill
+  with its documented ink (`--text-on-fill`, `--text-on-accent`) gives 8.46:1 and 9.61:1.
+- **`--accent-hover` and `--accent-2-hover` did nothing.** `bcff003` ("Unify button
+  design") moved every intent onto a derived `color-mix` darkening and dropped the two
+  hover tokens with it, six weeks ago. They stayed themeable, stayed in the WCAG audit,
+  and all 28 shipped themes carry deliberate values for them - which no button read.
+  An intent that owns a hover token now uses it (`--btn-fill-hover`); the rest keep the
+  derived darkening.
+- **`.is-dragging` was defined twice with different values.** Global said `0.4`, three
+  admin tabs re-declared `0.5`. Scoped CSS compiles to `.is-dragging[data-v-...]`
+  (0,2,0) and so always beat the global - meaning three of the four drag surfaces had
+  silently been on 0.5. The global is `0.5` now and the three copies are gone, which
+  changes only PatternsTab.
+- **15 references to CSS variables that do not exist** (`--text-dim`, `--color-text`,
+  `--color-text-dim`, `--caution`, `--radius-sm`) across six files now point at the real
+  tokens. Four had no fallback, so those elements silently inherited a colour instead of
+  following the theme.
+- **The exported card PNG no longer rounds corners the board does not.** The export
+  hard-coded a 16px clip to match the board's old radius; it reads the captured
+  element's computed radius now, so the two cannot drift apart.
+- **Markdown headings keep the body face.** With the display face applying to `h2`/`h3`,
+  an admin writing `## Heading` in a join prompt or raffle description would have had it
+  rendered as an uppercase display-face title. `MarkdownText` marks its output as prose
+  and opts out.
+- **The home logo was double-shadowed** - the artwork carries its own soft shadow and
+  the stylesheet added a second one.
+
+- **WCAG finding colours never applied.** The theme editor's contrast report bound
+  `` `wcag__finding--${r.status}` `` while the stylesheet defined
+  `.wcag-finding--fail` / `--aa` / `--aaa`. The `__` / `-` mismatch meant no finding was
+  ever tinted by its result.
+- **The colour picker rendered differently on the Affiliates tab.** Its hex read-out
+  declared a different monospace stack and skipped the uppercase its two copies applied.
+  Consolidating onto `.color-field-hex` makes the three consistent.
+- **Three dead style rules removed** (`.color-picker-wrap`, `.field-control`,
+  `.raffle-entries-table`) plus five markup classes that had no styling at all.
+
+#### Documentation
+
+- **AGENTS.md gains a "CSS conventions" section** under Frontend: the naming rules, the
+  two-tier split between the global stylesheets and scoped component blocks, the
+  deliberate exceptions, and which tokens are intentionally not themeable.
+- Comments and inline documentation across the repo use plain ASCII instead of
+  box-drawing runs, em-dashes and arrow glyphs. Two divider comments had also picked up
+  literal replacement characters from a past encoding mishap; those are gone. The retired
+  word `gold` is out of 30 comments as well.
+
+### [3.16.0] - 2026-07-24
 
 Adds an optional **Room Owner** field to the tea-room form (paired with backend 3.14.0).
 
 #### Added
 
 - **Room Owner.** The tea-room form gains an optional **Room owner** field beside the
-  Subtitle — a short, informational line naming the character who owns the room. It is
+  Subtitle - a short, informational line naming the character who owns the room. It is
   shown in the Senpan Companion plugin's tea-room table and served by the public API.
 
-### [3.15.0] — 2026-07-24
+### [3.15.0] - 2026-07-24
 
 Adds an affiliate **Subtitle** field (paired with backend 3.13.0) and makes the
 shared image picker sort alphabetically and upload in place.
@@ -59,14 +490,14 @@ shared image picker sort alphabetically and upload in place.
 #### Added
 
 - **Affiliate Subtitle.** The affiliate form gains an optional Subtitle under
-  Name — a short second line accepting any language, e.g. a Japanese phrase (the
+  Name - a short second line accepting any language, e.g. a Japanese phrase (the
   same field tea rooms already have). It is shown beneath the name in the
   affiliates list.
 - **Upload from any image picker.** Users holding the **Images** (`system-images`)
   permission now get a compact **Upload** button beside the picker's category
-  select, and can drop files straight onto the thumbnail grid — both upload into
+  select, and can drop files straight onto the thumbnail grid - both upload into
   the category currently being browsed and refresh the grid in place, so a missing
-  image no longer means leaving the form for System → Images. Everyone else sees
+  image no longer means leaving the form for System -> Images. Everyone else sees
   the picker unchanged. Category management still lives on the Images page.
 
 #### Changed
@@ -74,29 +505,29 @@ shared image picker sort alphabetically and upload in place.
 - **Image pickers list images alphabetically by file name** (case-insensitive and
   digit-aware, so `img2.png` sorts before `img10.png`) instead of newest-first.
 
-### [3.14.1] — 2026-07-21
+### [3.14.1] - 2026-07-21
 
 Audit-fix patch hardening the client against CSS/SVG injection, fixing WebSocket and state-synchronization bugs (including a live socket that was needlessly torn down on admin navigation), plugging several timer/listener leaks, and adding keyboard and screen-reader support across admin controls and modals.
 
 #### Security
 
-- Injection-checked every theme token before it is written into the live-preview `:root{…}` stylesheet: values that are over-long, contain declaration/block breakers, CSS comment markers, `url(...)`, or control characters are dropped (falling back to the token default), mirroring the server-side sanitizer so a hostile theme can't smuggle CSS into the editor preview.
-- Re-sanitized theme flourish SVG markup client-side before it is inlined: the fetched artwork is parsed, required to have an `<svg>` root, stripped of scripting/embedding elements (`<script>`, `<foreignObject>`, `<iframe>`, etc.), `on*` event handlers, and `javascript:`/`data:` URLs — defense in depth over the server's upload-time sanitize (CornerFlourish).
-- Escaped asset paths interpolated into CSS `url("…")` tokens (number-flourish background) so a quote, backslash, or newline in a path can no longer terminate the string and inject further CSS (new `assetCssUrl` helper).
+- Injection-checked every theme token before it is written into the live-preview `:root{...}` stylesheet: values that are over-long, contain declaration/block breakers, CSS comment markers, `url(...)`, or control characters are dropped (falling back to the token default), mirroring the server-side sanitizer so a hostile theme can't smuggle CSS into the editor preview.
+- Re-sanitized theme flourish SVG markup client-side before it is inlined: the fetched artwork is parsed, required to have an `<svg>` root, stripped of scripting/embedding elements (`<script>`, `<foreignObject>`, `<iframe>`, etc.), `on*` event handlers, and `javascript:`/`data:` URLs - defense in depth over the server's upload-time sanitize (CornerFlourish).
+- Escaped asset paths interpolated into CSS `url("...")` tokens (number-flourish background) so a quote, backslash, or newline in a path can no longer terminate the string and inject further CSS (new `assetCssUrl` helper).
 - URL-encoded the `sort` and `dir` query parameters on the winners-log request so unexpected values can't alter the request URL.
 
 #### Fixed
 
-- The live WebSocket is now keyed to a stable connection target (`player:<cardId>` / `admin` / none) instead of the raw route name, so navigating between admin sub-pages no longer tears down and reconnects the socket — which previously skipped the reconnect catch-up and dropped draws, winners, and log updates that arrived during the gap.
+- The live WebSocket is now keyed to a stable connection target (`player:<cardId>` / `admin` / none) instead of the raw route name, so navigating between admin sub-pages no longer tears down and reconnects the socket - which previously skipped the reconnect catch-up and dropped draws, winners, and log updates that arrived during the gap.
 - Game-scoped broadcasts (`game_draw`, `halftime_minigame`) now honor the server-stamped `game_id`: stale frames for a game you are no longer watching are dropped, and a re-delivered draw can no longer double-count a number or replay its chime (older servers that omit the id behave as before).
 - Stopped the WebSocket keepalive ping from firing forever after a permanent close (and lingering between close and reconnect), and stopped an intentional reconnect from momentarily flashing the "Live" badge off with a spurious "closed" status.
 - Fixed overlapping loading operations clearing a shared loading flag prematurely; the flag is now reference-counted and only clears once the last concurrent operation settles (`withLoading`).
 - A failed image-category load is no longer cached as "loaded", so it is retried on the next access instead of being stuck empty (images store).
-- Added last-write-wins request guards so fast navigation no longer renders a stale earlier response over a newer one — carrd folder contents, public raffle detail (a superseded load also no longer falsely redirects back to the list), and stamp-rally panels; expanded "Manage stalls" panels now also refresh on a live invalidation instead of going stale.
+- Added last-write-wins request guards so fast navigation no longer renders a stale earlier response over a newer one - carrd folder contents, public raffle detail (a superseded load also no longer falsely redirects back to the list), and stamp-rally panels; expanded "Manage stalls" panels now also refresh on a live invalidation instead of going stale.
 - Guarded the custom-card-request submit against a double-click / re-entrant submit.
 - Cleared the leftover draw-countdown reset timer so a fresh draw can no longer be flipped out of its "sent" state by a stale one (game store), and torn down the pointer drag listeners if the placement editor unmounts mid-drag.
-- Hardened winner verification against a malformed (non-5×5) board or pattern grid so it can't throw during load (game store).
-- Player board now tolerates corrupt/tampered stamp storage — a stored `null`, array, or primitive is rejected in favor of a clean board — and a saved stamp opacity of `0` (fully transparent) now persists instead of being reset to the default.
+- Hardened winner verification against a malformed (non-5x5) board or pattern grid so it can't throw during load (game store).
+- Player board now tolerates corrupt/tampered stamp storage - a stored `null`, array, or primitive is rejected in favor of a clean board - and a saved stamp opacity of `0` (fully transparent) now persists instead of being reset to the default.
 - Removed the injected font-preview `<style>` (which lives in `<head>`) when the Fonts tab unmounts, so it no longer leaks stale `@font-face` rules after navigating away.
 - Verifying auth for a direct load/refresh of the admin login or register page so an already-logged-in visitor is redirected instead of shown the form (router).
 - The draw hotkey (Space/Enter) is now suppressed while a modal is open or when a `role="button"` control is focused, so it can't fire behind a dialog or hijack a winner chip (GameTab).
@@ -104,22 +535,22 @@ Audit-fix patch hardening the client against CSS/SVG injection, fixing WebSocket
 
 #### Changed
 
-- Stacked modals now behave correctly: only the top-most dialog reacts to Escape and owns the focus trap, and every modal beneath it — plus the page behind — is made `inert` and `aria-hidden` so keyboard, pointer, and assistive-technology focus can't reach it; closing the top one restores the one beneath automatically.
+- Stacked modals now behave correctly: only the top-most dialog reacts to Escape and owns the focus trap, and every modal beneath it - plus the page behind - is made `inert` and `aria-hidden` so keyboard, pointer, and assistive-technology focus can't reach it; closing the top one restores the one beneath automatically.
 - Added full keyboard and ARIA support to the admin sidebar accordion sections (role, `tabindex`, `aria-expanded`, `aria-controls`, Enter/Space activation).
-- Made the pattern-management controls keyboard-operable and labeled for screen readers — per-pattern delete and rename triggers and category collapse headers now expose `role`, focus, `aria-label`/`aria-expanded`, and Enter/Space handling (PatternsTab).
+- Made the pattern-management controls keyboard-operable and labeled for screen readers - per-pattern delete and rename triggers and category collapse headers now expose `role`, focus, `aria-label`/`aria-expanded`, and Enter/Space handling (PatternsTab).
 - Expandable data-table rows are now keyboard-accessible (`role`, `tabindex`, `aria-expanded`, Enter/Space to toggle), and a click or key on an inner control (button, link, form field) no longer also toggles the row (DataTable).
 
-### [3.14.0] — 2026-07-20
+### [3.14.0] - 2026-07-20
 
-Adds **auto-run bingo games** — the system draws numbers on a timer (paired with
+Adds **auto-run bingo games** - the system draws numbers on a timer (paired with
 backend 3.11.0).
 
 #### Added
 
 - **Auto-draw controls on the Game tab.** The New Game form has an **Auto-draw
   numbers** toggle under Game Details; switching it on reveals a **Time Between
-  Calls** selector (10s–5m). Start the game and the server draws a number every
-  interval — no clicking. During a live game the same controls appear as an
+  Calls** selector (10s-5m). Start the game and the server draws a number every
+  interval - no clicking. During a live game the same controls appear as an
   **Auto-Draw On/Off** button and interval selector, so auto can be turned off or
   re-paced at any time (this never changes the preset the game came from).
 - **Auto-draw fields on Game Presets.** The preset editor gains the same Auto +
@@ -133,12 +564,12 @@ backend 3.11.0).
   automatically at half-time and the instant a winner is recognized; choosing **No
   mini-game** resumes it, choosing **Yes** leaves it off until you switch it back on.
   Turning auto on draws the first number immediately, then spaces draws by the
-  interval. Each draw still respects the player draw delay — players lag the admin
-  by the delay — but the delay never stretches the admin's cadence (admins see
+  interval. Each draw still respects the player draw delay - players lag the admin
+  by the delay - but the delay never stretches the admin's cadence (admins see
   numbers exactly one interval apart, immediately as they're drawn).
 - **Tidier live-game controls.** The Current Game view now leads with three
-  equal-sized primary controls — **Draw Number**, the **Delay** selector, and **End
-  Game** — while the per-feature toggles (Auto-Draw, It's Yoever, Winner Sound) move
+  equal-sized primary controls - **Draw Number**, the **Delay** selector, and **End
+  Game** - while the per-feature toggles (Auto-Draw, It's Yoever, Winner Sound) move
   into a collapsible **Game Settings** panel with a labelled section each, so the
   main controls stay front-and-centre.
 - **The "Live" indicator is now green.** The Current Game **Live** badge and the
@@ -155,7 +586,7 @@ backend 3.11.0).
   `triangle-exclamation` (the version-mismatch flag, the theme editor's contrast
   warning, and the Personal Card Request form alert).
 
-### [3.13.0] — 2026-07-19
+### [3.13.0] - 2026-07-19
 
 Adds **public/private themes with a client-side theme picker**, and a public
 **Personal Card Requests** page, plus admin card **statuses** (paired with backend
@@ -167,12 +598,12 @@ Adds **public/private themes with a client-side theme picker**, and a public
   editor (with a "Public" badge in the theme list). Public themes appear in a
   **theme picker in the site footer** so each player can choose their own look; the
   choice is remembered per browser. A **"Default"** option follows whatever theme the
-  admin has activated — it always reads "Default", never the admin theme's real name.
+  admin has activated - it always reads "Default", never the admin theme's real name.
   A player on a specific public theme is no longer overridden when the admin changes
   the active theme (players on "Default" still follow it live).
 - **Personal Card Requests page** (`/card-requests`, linked from the home page). A
   player enters their character name + **World** (a data-center-grouped dropdown of
-  FF14 worlds), builds a 5×5 bingo card by hand (per-column ranges enforced, invalid
+  FF14 worlds), builds a 5x5 bingo card by hand (per-column ranges enforced, invalid
   cells highlighted) or with **Generate Random** (repeatable, still editable), and
   picks a custom 6-character card ID. The page shows the gil cost and the terms, and
   submission is blocked until the card is valid; a taken ID or a duplicate card is
@@ -181,15 +612,15 @@ Adds **public/private themes with a client-side theme picker**, and a public
   a **pending** custom card, a filled star for an **approved** one, and a lock for a
   **Protected** card, plus **Approve** and **Protect/Unprotect** row actions. "Delete
   All" now keeps Protected cards and says so.
-- **Custom Card Cost** setting (System → Settings → Gameplay) — the gil price shown
+- **Custom Card Cost** setting (System -> Settings -> Gameplay) - the gil price shown
   on the Personal Card Requests page.
 - **Dimmed unused columns in "Called Numbers"** (player board + admin Game tab).
   When the active game's win patterns don't use a whole BINGO column, no number from
   it is ever drawn (the caller already skips those columns), so that column now gets
   a subtle dark overlay in the Called Numbers tracker to show it won't be used this
-  game — e.g. a postage-stamp game dims the N column.
+  game - e.g. a postage-stamp game dims the N column.
 
-### [3.12.0] — 2026-07-16
+### [3.12.0] - 2026-07-16
 
 Shows the **live** plugin version in the admin footer.
 
@@ -203,7 +634,7 @@ Shows the **live** plugin version in the admin footer.
   changelog version when the index isn't reachable (e.g. local dev). The plugin's
   changelog **modal** content is still bundled at build time.
 
-### [3.11.0] — 2026-07-16
+### [3.11.0] - 2026-07-16
 
 Adds a **Stamp Rally link on the public Garapon page** (paired with backend 3.9.0).
 
@@ -211,23 +642,23 @@ Adds a **Stamp Rally link on the public Garapon page** (paired with backend 3.9.
 
 - **"View your Stamp Rally card" link** on the Garapon drawing page
   (`/garapon/:token`). When a drawing link was issued for a garapon tied to a Stamp
-  Rally — so the player also holds a stamp card sharing the same token — the page
+  Rally - so the player also holds a stamp card sharing the same token - the page
   now shows a link straight to their `/stamp-card/:token`. It's gated on the new
   `stamp_card_token` the public endpoint returns, so it appears only when a linked
   card actually exists.
 
-### [3.10.0] — 2026-07-12
+### [3.10.0] - 2026-07-12
 
 Adds a **"Where to Redeem"** image to stamp rallies (paired with backend 3.8.0).
 
 #### Added
 
-- **"Where to Redeem"** field on the stamp-rally editor — an image picker below
+- **"Where to Redeem"** field on the stamp-rally editor - an image picker below
   **How to Redeem**, usually a screenshot of where in the area a participant goes
   to redeem their completed card. It's shown on the participant's card, alongside
   the redeem instructions, once the card is complete.
 
-### [3.9.0] — 2026-07-12
+### [3.9.0] - 2026-07-12
 
 Fixes large image uploads timing out, and adds a live upload-progress indicator.
 
@@ -236,36 +667,36 @@ Fixes large image uploads timing out, and adds a live upload-progress indicator.
 - **Image uploads no longer time out.** Uploads went through the API client's
   30-second request timeout, so a large image (or several at once) over a slow
   connection was aborted mid-transfer with _"Request timed out. Please try
-  again."_ Uploads now run over `XMLHttpRequest` with no client-side deadline —
+  again."_ Uploads now run over `XMLHttpRequest` with no client-side deadline -
   the transfer takes as long as it needs (the server still caps a request at
   64 MB). The same fix covers the **font**, **Carrd**, and **book-club** uploads,
   which shared the timeout.
 
 #### Added
 
-- **Live upload progress** on the Images tab — a real percentage bar while the
-  bytes are in flight, then a "Processing…" state while the server saves the
+- **Live upload progress** on the Images tab - a real percentage bar while the
+  bytes are in flight, then a "Processing..." state while the server saves the
   files, replacing the indeterminate spinner that looked stuck on long uploads.
 
-### [3.8.0] — 2026-07-12
+### [3.8.0] - 2026-07-12
 
-Reworks the **Affiliates** admin page (Senpan Tea House → Affiliates) to match Tea
-Rooms — a drag-sortable list that posts rich embeds to Discord (paired with backend
+Reworks the **Affiliates** admin page (Senpan Tea House -> Affiliates) to match Tea
+Rooms - a drag-sortable list that posts rich embeds to Discord (paired with backend
 3.7.0).
 
 #### Added
 
-- **Shared Discord webhook** for Affiliates — a Webhook sub-screen (with a "no
+- **Shared Discord webhook** for Affiliates - a Webhook sub-screen (with a "no
   webhook set yet" hint on the list), and a per-row **Post** button that posts the
   affiliate to that channel as an embed.
 - **Drag-and-drop reordering** of the affiliate list (the order persists), replacing
   the old alphabetical card grid with a Tea Rooms-style list.
-- Each row shows the **logo — or the establishment screenshot when there's no logo**
-  — plus an embed-colour swatch and Discord / Carrd / open-times badges.
+- Each row shows the **logo - or the establishment screenshot when there's no logo**
+  - plus an embed-colour swatch and Discord / Carrd / open-times badges.
 - Form fields for an **embed accent colour** (native colour picker), a **Discord
   Link**, and a **Carrd Link**.
 
-### [3.7.0] — 2026-07-11
+### [3.7.0] - 2026-07-11
 
 Adds the **"It's Yoever"** bingo reaction, and makes the admin sidebar version
 numbers open per-component changelogs (paired with backend 3.6.0).
@@ -287,7 +718,7 @@ numbers open per-component changelogs (paired with backend 3.6.0).
 - **Per-client toggles** (above the board actions, and mirrored on the admin Game
   tab), on by default and affecting only your own screen. **"Show It's Yoever
   effects"** is the master switch for the reaction; **"Play It's Yoever sound"** is
-  a sub-toggle that only applies while effects are shown — turning the master off
+  a sub-toggle that only applies while effects are shown - turning the master off
   also mutes the sound (and disables that sub-toggle), and turning it back on
   re-enables the sound. While effects are shown, the sound toggle is independent of
   the main Sound options (off/basic/game) but still plays at your master sound
@@ -296,9 +727,9 @@ numbers open per-component changelogs (paired with backend 3.6.0).
   (broadcast to every client so players' buttons show/hide live) and a
   **"Yoevers: N"** running counter. Both reset when a new game starts.
 - **Settings.** New **"It's Yoever" Cooldown (seconds)** field (Gameplay section,
-  0–3600; 0 disables the limit).
+  0-3600; 0 disables the limit).
 - **Version changelogs in the admin sidebar.** The **Frontend / Backend / Plugin**
-  version numbers in the sidebar footer are now clickable — each opens that
+  version numbers in the sidebar footer are now clickable - each opens that
   component's changelog in a modal, parsed from `CHANGELOG.md` at build time (via
   a `virtual:changelog` Vite plugin). The **Plugin** version is new, and its
   changelog is prefixed with **Dalamud install steps** (the custom-repo URL and the
@@ -307,20 +738,20 @@ numbers open per-component changelogs (paired with backend 3.6.0).
 #### Fixed
 
 - **Saving a numeric setting no longer fails with "Invalid JSON."** A number
-  `<input>` bound with `v-model` yields a JS *number* for any edited field, which
-  the string→string settings API rejected on decode; every value is now coerced to
+  `<input>` bound with `v-model` yields a JS _number_ for any edited field, which
+  the string->string settings API rejected on decode; every value is now coerced to
   a string before the save. Affected all numeric settings, not just the new
   cooldown.
 
-### [3.6.0] — 2026-07-10
+### [3.6.0] - 2026-07-10
 
 Adds the **Tea Rooms** admin page under Senpan Tea House (paired with backend
 3.5.0).
 
 #### Added
 
-- **Tea Rooms** (Senpan Tea House → Tea Rooms, `booth-curtain` icon). A
-  drag-orderable list of bookable rooms — name, subtitle (any language), a
+- **Tea Rooms** (Senpan Tea House -> Tea Rooms, `booth-curtain` icon). A
+  drag-orderable list of bookable rooms - name, subtitle (any language), a
   **required + unique** room number, per-half-hour gil cost, hashtags, markdown
   description, seasonal/open/lockable/discounted flags, an image, and an embed
   accent colour. Each row has Post-to-Discord, open/close toggle, discount toggle,
@@ -329,12 +760,12 @@ Adds the **Tea Rooms** admin page under Senpan Tea House (paired with backend
   Gated by the new **`teahouse-tea-rooms`** page permission (in the Users-page
   permission editor). The Copy-API-link buttons build the public URL from the
   room's **room number** (the one number the admin manages).
-- The Discord embed shows the room name, description, then three inline fields —
+- The Discord embed shows the room name, description, then three inline fields -
   the cost (halved with a "Currently Discounted!" note when discounted), the room
-  number, and the Open/Closed status — with the hashtags (capitalized) in the
+  number, and the Open/Closed status - with the hashtags (capitalized) in the
   footer.
 
-### [3.5.0] — 2026-07-07
+### [3.5.0] - 2026-07-07
 
 A security/correctness bugfix pass plus request-log identity, released together
 (paired with backend 3.4.0).
@@ -342,9 +773,9 @@ A security/correctness bugfix pass plus request-log identity, released together
 #### Added
 
 - **Server Logs viewer now shows a "User" column.** Each request line names who
-  made it — the account username for an admin (cookie session) or the FFXIV
+  made it - the account username for an admin (cookie session) or the FFXIV
   plugin (personal access token), a verified-bot name for a Cloudflare-verified
-  crawler, or "—" for anonymous traffic. A verified bot renders italic; the
+  crawler, or "-" for anonymous traffic. A verified bot renders italic; the
   `auth` classifier (`session` / `token` / `bot` / `anon`) is shown on hover and
   in the expanded JSON.
 
@@ -365,20 +796,20 @@ A security/correctness bugfix pass plus request-log identity, released together
   "Unknown image category" toast on every subsequent update. Explicit user
   actions still surface errors loudly.
 
-### [3.4.0] — 2026-07-05
+### [3.4.0] - 2026-07-05
 
 #### Added
 
-- **Server Logs admin tab (System → Logs, admin-only).** A live-tailing viewer
+- **Server Logs admin tab (System -> Logs, admin-only).** A live-tailing viewer
   over the backend's structured log: loads a filtered snapshot from
   `GET /api/logs`, then live-appends new lines over the admin WebSocket. Runs on
   the shared `DataTable` with a per-page selector (25/50/100/200) and pagination.
-  Common HTTP-request fields are promoted to typed, colored columns — **Method**
-  badges (GET/POST/PUT/PATCH/DELETE/WS), **Status** (2xx green → 5xx red),
-  formatted **Duration**, and **IP** — with any other fields previewed inline and
+  Common HTTP-request fields are promoted to typed, colored columns - **Method**
+  badges (GET/POST/PUT/PATCH/DELETE/WS), **Status** (2xx green -> 5xx red),
+  formatted **Duration**, and **IP** - with any other fields previewed inline and
   click-to-expand to full JSON. Includes a minimum-level filter + debounced text
   search, a pause/resume "Live" toggle, and a **Debug On/Off** button that flips
-  the server's runtime log level live (`POST /api/logs/level`) — capture detail on
+  the server's runtime log level live (`POST /api/logs/level`) - capture detail on
   demand and quiet it again without a restart. The in-memory buffer self-caps at
   1000 entries.
 
@@ -387,17 +818,17 @@ A security/correctness bugfix pass plus request-log identity, released together
 - **`DataTable` gained opt-in expandable rows + column widths** (used by the logs
   viewer). Providing a `#detail` slot makes each row toggle a full-width detail
   row on click (cell slots receive an `expanded` flag), and a column can set a
-  fixed `width`. Both are backward-compatible — tables without a `#detail`
+  fixed `width`. Both are backward-compatible - tables without a `#detail`
   slot/`width` are unchanged.
 
 #### Fixed
 
-- **API errors with no JSON body now show the HTTP status** — a non-JSON gateway
+- **API errors with no JSON body now show the HTTP status** - a non-JSON gateway
   failure (e.g. an empty/HTML `502` from Cloudflare/Apache) surfaces as `Request
-  failed (HTTP 502)` instead of a bare `Request failed`; our own `{ "error": … }`
+failed (HTTP 502)` instead of a bare `Request failed`; our own `{ "error": ... }`
   messages are still preferred when present.
 
-### [3.1.0] — 2026-07-03
+### [3.1.0] - 2026-07-03
 
 #### Changed
 
@@ -409,15 +840,15 @@ A security/correctness bugfix pass plus request-log identity, released together
   picker opens in the category of the currently selected image. The per-feature
   image lists (and their store plumbing) are gone.
 - **All image categories are editable.** The "Permanent" badge and the disabled
-  Edit/Delete buttons on System → Images → Manage Categories are gone — every
+  Edit/Delete buttons on System -> Images -> Manage Categories are gone - every
   category can be renamed and deleted (deleting still removes its folder and
   files, so existing references lose their images).
-- System → Images now lists `.svg` in the upload help + file-browser filter
+- System -> Images now lists `.svg` in the upload help + file-browser filter
   (SVG uploads were already accepted and sanitized server-side).
 - Image caches refresh live on any image change, whichever admin tab is open,
   so open pickers pick up another admin's uploads.
 
-### [3.0.0] — 2026-07-02
+### [3.0.0] - 2026-07-02
 
 #### Changed
 
@@ -425,14 +856,14 @@ A security/correctness bugfix pass plus request-log identity, released together
   no longer referenced by static `https://fonts.senpan.cafe/<file>` URLs. The
   app registers `@font-face` rules from the rotating tokenized URLs in the
   settings payload (`uploaded_fonts` is now `[{name, family, token}]`), loading
-  fonts **same-origin** via `/api/fonts/pub/f/<token>` — so the header/board
+  fonts **same-origin** via `/api/fonts/pub/f/<token>` - so the header/board
   font picker and player-facing fonts always work regardless of any external
   allowlist. Requires backend 3.0.0.
 - **Font Upload reworked around font families.** Files sharing a base name
   (e.g. `Jasper.ttf` + `Jasper.woff2`) appear as ONE font. The table stays
-  slim — **CSS Name**, **Serves** (the actual served format:
+  slim - **CSS Name**, **Serves** (the actual served format:
   TTF/OTF/WOFF/WOFF2/EOT; ✦ marks the auto-converted copy), **Modified**, and
-  actions — and a new **Edit** modal holds everything else: the CSS
+  actions - and a new **Edit** modal holds everything else: the CSS
   `font-family` name (blank = base-name default; flows through the kit, the
   app, and the picker), the served-version picker (any uploaded format or the
   converted WOFF2), the font's **own allowed-sites list**, and the files
@@ -443,25 +874,25 @@ A security/correctness bugfix pass plus request-log identity, released together
 - **Embed on External Sites** panel: copy the permanent `kit.css`
   `<link>` snippet for Carrd sites; each site automatically receives only the
   fonts whose allowed sites include it. Per-font **Copy URL** copies the
-  served version's tokenized link (expires in 1–2 weeks) instead of a
+  served version's tokenized link (expires in 1-2 weeks) instead of a
   permanent direct download link.
 - **Live-preview format switch**: preview any font's text sample in each of
   its actual formats (e.g. TTF vs the converted WOFF2) to sanity-check a
   conversion before serving it.
 
-### [2.2.0] — 2026-07-02
+### [2.2.0] - 2026-07-02
 
 #### Added
 
 - **Sign in with a passkey.** The login page offers a usernameless "Sign in with
   a passkey" option (WebAuthn discoverable credentials), and every account can
-  add / name / remove passkeys under **User Options → Add Passkey**. Passkeys
-  complement the password — both continue to work.
+  add / name / remove passkeys under **User Options -> Add Passkey**. Passkeys
+  complement the password - both continue to work.
 - **Cloudflare Turnstile on public raffle sign-up.** When Turnstile is
   configured, the raffle entry form shows the bot check and requires it before
   submitting, matching the admin login.
 
-### [2.1.0] — 2026-07-02
+### [2.1.0] - 2026-07-02
 
 #### Fixed
 
@@ -504,85 +935,85 @@ A security/correctness bugfix pass plus request-log identity, released together
   strict CSP `script-src` would block); the modern one doesn't, so the site can
   enforce CSP without `'unsafe-eval'`. Also ~200 KB smaller in that chunk.
 
-### [2.0.0] — 2026-06-30
+### [2.0.0] - 2026-06-30
 
 #### Changed
 
 - **API client migrated to hybrid REST (breaking).** Every admin data call in
   `src/lib/endpoints.ts` moved off the old action-dispatcher POSTs to REST
-  methods — `apiGet`/`apiPost`/`apiPut`/`apiPatch`/`apiDelete` (new helpers in
+  methods - `apiGet`/`apiPost`/`apiPut`/`apiPatch`/`apiDelete` (new helpers in
   `src/lib/api.ts`) against resource paths (`/api/<resource>/{id}`, nested
-  sub-resources, `POST …/{id}/<verb>` commands such as `close`/`reopen`/
-  `activate`/`send`/`pick-winner`, `DELETE …/all` bulk deletes). Store call-site
+  sub-resources, `POST .../{id}/<verb>` commands such as `close`/`reopen`/
+  `activate`/`send`/`pick-winner`, `DELETE .../all` bulk deletes). Store call-site
   names/signatures were preserved, so components are unchanged; the wire calls
-  now line up with the backend 2.0 contract. Requires **backend ≥ 2.0.0**.
+  now line up with the backend 2.0 contract. Requires **backend >= 2.0.0**.
 - **Book-club calls carry the club slug in the path.** The `bookclub` endpoint
-  group targets `/api/book-clubs/{club}/reading-lists…`; the store threads its
+  group targets `/api/book-clubs/{club}/reading-lists...`; the store threads its
   `activeClubSlug` through, so component-facing signatures are unchanged.
 
-### [1.5.2] — 2026-06-30
+### [1.5.2] - 2026-06-30
 
 #### Changed
 
 - **Response types are now generated, not hand-maintained.** The hand-written
   response envelopes in `src/types/api.ts` were replaced by re-exports of the
   tygo-generated types (the backend `model` structs are now the source of truth),
-  eliminating the backend↔frontend drift surface. No behavioural change; the
+  eliminating the backend<->frontend drift surface. No behavioural change; the
   public garapon view is now precisely typed as `PublicGarapon`.
 
-### [1.5.1] — 2026-06-30
+### [1.5.1] - 2026-06-30
 
 #### Fixed
 
 - **Player stamp persistence is crash-safe.** Loading stamps now tolerates corrupt
   or tampered `localStorage` (a bad value starts the board clean instead of
   throwing during load), and saving stamps no longer throws out of the
-  high-frequency toggle path when storage is full — bringing both in line with the
+  high-frequency toggle path when storage is full - bringing both in line with the
   custom-stamp save, which already degraded gracefully.
 
-### [1.5.0] — 2026-06-29
+### [1.5.0] - 2026-06-29
 
 #### Added
 
-- **Personal access tokens** (User Options → **Access Token**). Generate a token from the
-  account menu so an external client — such as a Final Fantasy XIV Dalamud plugin — can
+- **Personal access tokens** (User Options -> **Access Token**). Generate a token from the
+  account menu so an external client - such as a Final Fantasy XIV Dalamud plugin - can
   sign in to this server as you, with your exact page permissions. The modal shows the
   token's prefix and its created / last-used times; the secret itself is revealed **once**
   at generation (with a copy button) and can be **regenerated** (invalidating the old one)
   or **revoked**.
 
-### [1.4.0] — 2026-06-29
+### [1.4.0] - 2026-06-29
 
 #### Added
 
-- **Garapon ↔ Stamp Rally linking.** A Garapon can optionally **link to an open Stamp
+- **Garapon <-> Stamp Rally linking.** A Garapon can optionally **link to an open Stamp
   Rally**; issuing a participant a drawing link then also issues them a Stamp Rally card
   **sharing the same token** (one hash works for both `/garapon/<token>` and
   `/stamp-card/<token>`), with a copy button for each in the drawing-links table.
 - **Stamp Rally open/closed status** (separate from the date window): the manager now
   splits into an **Open** card grid and a **Closed** table (like Raffles/Garapon), with a
   Close/Reopen button. A closed rally is read-only and isn't offered for Garapon linking.
-  A card with collected stamps can only be deleted once the rally is closed — and its
+  A card with collected stamps can only be deleted once the rally is closed - and its
   **View Logs** entries are preserved (the log now groups by the participant-name snapshot).
 - **Inline stall pause from the main list.** Each open rally card shows an at-a-glance
   "X/Y stalls active" summary and a **Manage stalls** panel to Pause/Resume individual
-  vendor stalls right there — no need to open the rally or its placement editor.
+  vendor stalls right there - no need to open the rally or its placement editor.
 
-### [1.3.1] — 2026-06-29
+### [1.3.1] - 2026-06-29
 
 #### Changed
 
 - Reordered the admin sidebar: Bingo ends with **Winners Log**; Senpan Tea House
   leads with **Affiliates** (above Announcements); Festival lists **Stamp Rally**
   below Raffles; Atelier Yao shows **Carrd Upload** before Font Upload; and System is
-  ordered **Images → Themes → Users → Settings**.
+  ordered **Images -> Themes -> Users -> Settings**.
 
-### [1.3.0] — 2026-06-29
+### [1.3.0] - 2026-06-29
 
 #### Added
 
-- **Stamp Rally** (Festival → **Stamp Rally**): an admin tool to author stamp-rally
-  events — a card background + "not stamped" placeholder, an availability window,
+- **Stamp Rally** (Festival -> **Stamp Rally**): an admin tool to author stamp-rally
+  events - a card background + "not stamped" placeholder, an availability window,
   markdown details + "How to Redeem" instructions, and **stamps** and **prizes**
   placed on the card with a visual **drag / resize / rotate** editor. The card image
   is the full designed card (frame, slot placeholders, labels, prize panel); earned
@@ -593,30 +1024,30 @@ A security/correctness bugfix pass plus request-log identity, released together
   `/stamp-card/<token>` link; participants enter stall passwords to collect stamps,
   and once every still-collectable stamp is accounted for the card completes and its
   prizes + redeem instructions reveal. A per-event **View Logs** page shows every
-  collection (participant · stall · time), sortable with each participant's rows
+  collection (participant - stall - time), sortable with each participant's rows
   grouped, and updates **live** over the WebSocket as stamps come in. Three new
   permanent image categories: **Stamp Cards**, **Stamp Stamps**, **Stamp Prizes**.
   Gated by the new `festival-stamp-rally` page permission.
 
-### [1.2.0] — 2026-06-29
+### [1.2.0] - 2026-06-29
 
 #### Added
 
-- **Affiliates management** (Senpan Tea House → **Affiliates**): an admin page to
-  manage partner establishments — name, one or more owners, location, opening
+- **Affiliates management** (Senpan Tea House -> **Affiliates**): an admin page to
+  manage partner establishments - name, one or more owners, location, opening
   hours (multiple time ranges under a single timezone), markdown details, and a
   logo + establishment screenshot picked from two new permanent image categories
   (**Affiliate Logos**, **Affiliate Images**). Gated by the new
   `teahouse-affiliates` page permission; live-refreshes across admin sessions.
 
-### [1.1.1] — 2026-06-28
+### [1.1.1] - 2026-06-28
 
 #### Added
 
 - Cloudflare Turnstile bot check on the hidden **registration** form too (same
   widget + gating as the login form).
 
-### [1.1.0] — 2026-06-28
+### [1.1.0] - 2026-06-28
 
 #### Added
 
@@ -626,9 +1057,9 @@ A security/correctness bugfix pass plus request-log identity, released together
   request and verified server-side). When no key is configured, the form behaves
   as before. New `TurnstileWidget` component + `endpoints.system.config()`.
 
-### [1.0.0] — 2026-06-28
+### [1.0.0] - 2026-06-28
 
-First tracked release — establishes versioning for the current production build.
+First tracked release - establishes versioning for the current production build.
 
 #### Added
 
@@ -660,37 +1091,116 @@ First tracked release — establishes versioning for the current production buil
 
 ## Backend
 
-### [3.14.0] — 2026-07-24
+### [3.15.0] - 2026-08-11
+
+Stamp Rally participants can sign themselves up, instead of waiting for staff to issue
+every card by hand. Paired with frontend 3.18.0.
+
+#### Added
+
+- **`public_signup` on a stamp rally** (schema v54) - the opt-in that makes a rally
+  self-serve. It defaults to **0**, including for every rally that already exists: each
+  of those was built assuming staff hand out its cards, and none of them may quietly
+  become public because this shipped. Accepted on create/replace and returned by every
+  rally read.
+- **`GET /api/stamp-signup`** - the rallies open to sign-up: opted in, status open, and
+  inside their availability window. Carries the linked Garapon's title when there is
+  one, so the sign-up page can say what else comes with it.
+- **`POST /api/stamp-signup/{id}`** - issues the caller a card. When an **open Garapon
+  is linked to the rally**, it issues that drawing link too, on the **same token** -
+  the arrangement an admin-issued link already uses, so one hash serves both
+  `/garapon/<token>` and `/stamp-card/<token>`. Names are **unique per rally**,
+  compared case-insensitively after trimming, so `"Yao Ming"` and `"  yao ming  "` are
+  one participant; a repeat gets a 409 naming the lookup page rather than a second
+  card. The check and both inserts run in one immediate transaction - checking outside
+  it would let two sign-ups racing on the same name both read "free". Rate limited per
+  IP and gated by Turnstile when configured, like the raffle sign-up.
+- **`POST /api/stamp-lookup`** - hands a participant their links back from the exact
+  name they used. Deliberately narrow: whole-string match only (no prefix or substring
+  search), POST so the name never reaches a URL or the access log, results limited to
+  open rallies, and a miss returns an **empty 200** rather than a 404 - "no such
+  participant" and "that participant holds no cards" are indistinguishable, so the
+  endpoint can't be walked to discover who signed up. Shares the sign-up rate limit,
+  since guessing names is the abuse worth throttling.
+- **A rally that hasn't opted in answers 404, not 403**, on sign-up. A 403 would
+  confirm the rally exists, which is exactly what staff-issued rallies shouldn't do.
+- **`default_draws` on a garapon** (schema v55) - how many draws a link carries when
+  nobody picks a number. A public sign-up has no admin present to choose one, so it was
+  issuing a hardcoded 1; now the allowance is configured once per event. It is also the
+  fallback when an **admin** issues a link and leaves the field blank, which previously
+  fell back to its own hardcoded 1 - so "everyone gets three draws at this festival" is
+  now stated in one place and honoured by both paths. Existing garapons migrate to 1,
+  the value both paths already used, so nothing changes until someone sets it. Clamped
+  to at least 1: a zero-draw default would issue links that cannot draw, and zero is
+  what an omitted field sends.
+
+### [3.14.1] - 2026-08-09
+
+Fills in the log where things happened silently. The log only recorded Discord posts
+that **failed**, so "did that announcement actually go out?" was unanswerable, and a
+bingo night left no trace at all. Logs are rotated daily with bounded retention, so
+the extra volume costs nothing and a misfire is now visible after the fact.
+
+#### Added
+
+- **Every delivered Discord post is logged**, at the one funnel all five posting
+  features share (`postDiscordWebhook`): `discord post sent` with the posting feature
+  (`announcement`, `announcement_scheduled`, `bookclub_item`, `affiliate`,
+  `tea_room`), the record's name, the HTTP status, the embed count and how long the
+  POST took. Callers pass a `webhookTarget` label, so a new posting feature is
+  logged by construction rather than by remembering to add a line. Failures stay with
+  the caller that knows whether it will retry (the scheduler) or return a 502 (a
+  manual send), so nothing is double-reported - and a regression test asserts both
+  halves of that.
+- **Scheduler lifecycle.** Both background loops log `scheduler started` / `scheduler
+  stopped` with their name (and interval), because a scheduler that never started and
+  one whose queue was empty looked identical from the outside. Individual sweeps are
+  **Debug**, deliberately: at the announcement scheduler's 30s tick, Info would add
+  ~2,880 "nothing was due" lines a day and bury the ones that acted.
+- **Bingo game lifecycle**, with the acting admin: `bingo game started` (game id,
+  pattern count, auto + interval), `bingo game ended` (game id, numbers called,
+  confirmed winner cards, patterns) and `bingo halftime decision`. Individual draws
+  are **not** logged - ~75 lines a game would drown everything else, and the start
+  and end lines already carry the shape of the game.
+- **`announcement occurrence skipped`** when a "skip next" marker is consumed. A
+  skipped occurrence and a post that silently failed both put nothing in Discord, so
+  the log could not tell them apart.
+- **Manual posts name who did it** - `announcement sent manually` and
+  `published reading list` carry a `by` attribute from the session
+  (`Server.actorName`, which reuses the per-request user cache the permission guard
+  already populated, so attribution costs no extra query).
+
+### [3.14.0] - 2026-07-24
 
 Adds an optional **Room Owner** to tea rooms (paired with frontend 3.16.0).
 
 #### Added
 
-- **`room_owner` on tea rooms** (schema v53) — an optional, informational "character
+- **`room_owner` on tea rooms** (schema v53) - an optional, informational "character
   who owns the room" line. Stored as UTF-8 with no character validation, so any
   script round-trips unchanged. Existing rows default to an empty owner; the field is
   accepted on create/replace and returned by every tea-room read, including the
   public, cross-origin API the Carrd site uses.
 
-### [3.13.0] — 2026-07-24
+### [3.13.0] - 2026-07-24
 
 Adds an optional **Subtitle** to affiliates (paired with frontend 3.15.0).
 
 #### Added
 
-- **`subtitle` on affiliates** (schema v52) — an optional second line stored under
+- **`subtitle` on affiliates** (schema v52) - an optional second line stored under
   the name, mirroring the tea-room subtitle. It is stored as UTF-8 with no
   character validation, so any script (a Japanese phrase, for example) round-trips
   unchanged. Existing rows default to an empty subtitle; the field is accepted on
   create/replace and returned by every affiliate read.
 
-### [3.12.0] — 2026-07-21
+### [3.12.0] - 2026-07-21
 
-Security and resilience hardening pass across the API: the login throttle now keys on the real client IP behind Cloudflare, password changes/resets invalidate an account's other sessions, and several stored-XSS/SSRF/IDOR vectors were closed. Handler and background-goroutine panics are now recovered instead of crashing the process, and delayed player-draw broadcasts are game-scoped so a number can no longer leak across games. No breaking API changes — the only surface addition is an optional `game_id` field on two WebSocket payloads.
+Security and resilience hardening pass across the API: the login throttle now keys on the real client IP behind Cloudflare, password changes/resets invalidate an account's other sessions, and several stored-XSS/SSRF/IDOR vectors were closed. Handler and background-goroutine panics are now recovered instead of crashing the process, and delayed player-draw broadcasts are game-scoped so a number can no longer leak across games. No breaking API changes - the only surface addition is an optional `game_id` field on two WebSocket payloads.
 
 #### Security
 
-- Rate limiter now keys on the true client IP. Behind Cloudflare→Apache the throttle was bucketing every visitor under the shared Cloudflare edge IP, so one tripped limit affected everyone and an attacker rotating edges could poison others; login/passkey/registration (and public raffle / card-request) throttles now resolve the real origin via a loopback-gated CF-Connecting-IP / X-Forwarded-For, falling back to the spoof-proof peer address so the header can't be forged to mint a fresh key per request.
+- Rate limiter now keys on the true client IP. Behind Cloudflare->Apache the throttle was bucketing every visitor under the shared Cloudflare edge IP, so one tripped limit affected everyone and an attacker rotating edges could poison others; login/passkey/registration (and public raffle / card-request) throttles now resolve the real origin via a loopback-gated CF-Connecting-IP / X-Forwarded-For, falling back to the spoof-proof peer address so the header can't be forged to mint a fresh key per request.
 - Registration no longer enumerates usernames. A fresh account, an already-taken name, and the reserved bootstrap name all return one identical generic response, so `/api/register` can't be probed to discover which usernames exist (eligible accounts are still created).
 - Personal access tokens in a `?token=` query parameter are now restricted to the WebSocket upgrade only; every REST route must present the token in the `Authorization` header, keeping the secret out of access logs, browser history, and Referer headers.
 - A password change or admin reset now invalidates the account's other logged-in sessions. A new per-account password epoch (schema v51) is stamped into each session and re-checked on every request and WebSocket upgrade; the changing session is kept alive while all others are logged out, and the account's personal access token is revoked so a leaked token stops working.
@@ -721,7 +1231,7 @@ Security and resilience hardening pass across the API: the login throttle now ke
 - Discord webhook posts (announcements, affiliates, tea rooms, reading-list publish) now honor request-context cancellation, so a client disconnect or shutdown stops an in-flight or backlogged run instead of hammering Discord.
 - Added new path-safety and SSRF regression tests (uploads, book clubs, registration enumeration, stamp rally).
 
-### [3.11.0] — 2026-07-20
+### [3.11.0] - 2026-07-20
 
 Adds the **automatic bingo-draw scheduler** and moves half-time detection
 server-side (paired with frontend 3.14.0). Backward-compatible additions only.
@@ -733,11 +1243,11 @@ server-side (paired with frontend 3.14.0). Backward-compatible additions only.
   the instant auto is switched on, then draws one every `auto_interval` seconds
   while a game has auto switched on. The draw reuses the exact manual-draw path
   (admins immediately, players after the delay), so the player draw delay only lags
-  when each number reaches players — it never stretches the admin's cadence. Auto
+  when each number reaches players - it never stretches the admin's cadence. Auto
   state (enabled + interval) lives on the game service, is stamped onto
   `BingoGameState` (`auto_enabled`, `auto_interval`), and **defaults off, including
   after a restart**, so draws never resume unattended. A **manual draw switches auto
-  off** (the admin is taking over), and whenever auto turns off — for any reason —
+  off** (the admin is taking over), and whenever auto turns off - for any reason -
   the scheduler cancels its pending draw. The loop's draw is guarded under the same
   lock that serializes every draw (`DrawAuto`), so a disable racing with a scheduled
   fire can never leak a stray number.
@@ -745,7 +1255,7 @@ server-side (paired with frontend 3.14.0). Backward-compatible additions only.
   `auto_interval`; `PATCH /api/game` accepts `auto_enabled` + `auto_interval` (live,
   never written back to a preset). `game_presets` gains `auto_call` + `auto_interval`
   columns (**migration v50**), surfaced on the preset create/replace endpoints.
-- **`auto_config` WebSocket broadcast** — the new auto state (enabled + interval) is
+- **`auto_config` WebSocket broadcast** - the new auto state (enabled + interval) is
   pushed to every admin surface whenever it changes, like `yoever_config`.
 
 #### Changed
@@ -754,13 +1264,13 @@ server-side (paired with frontend 3.14.0). Backward-compatible additions only.
   crosses the midpoint (`bingo.HalftimeThreshold`, the 35-of-75 mark scaled to the
   callable pool) now broadcasts a **`halftime_prompt`** to admins, so every surface
   prompts consistently and auto games prompt at all. Crossing it **pauses** a running
-  auto loop; `POST /api/game/halftime` now takes `{"minigame": bool}` — `true` alerts
+  auto loop; `POST /api/game/halftime` now takes `{"minigame": bool}` - `true` alerts
   players (held until the triggering number has reached them) and leaves auto paused;
   `false` declines and resumes auto if it was paused. An absent body defaults to
   `true`, preserving the old "trigger the alert" behavior. Auto is also switched off
   the moment a new winner is recognized.
 
-### [3.10.0] — 2026-07-19
+### [3.10.0] - 2026-07-19
 
 Adds **theme visibility**, a **custom-card request** flow, and card **statuses**
 (paired with frontend 3.13.0). Backward-compatible additions only; no breaking
@@ -777,31 +1287,31 @@ contract changes.
 - **Personal Card Requests.** New public `POST /api/cards/request` (rate-limited, and
   Cloudflare-Turnstile-gated when configured) validates a hand-built board and a
   chosen 6-character ID, rejects a taken ID or a duplicate board, and stores the card
-  as **pending** — not yet playable. Pending cards are blocked from the public board
+  as **pending** - not yet playable. Pending cards are blocked from the public board
   join and excluded from winner computation until approved.
 - **Card statuses.** The `cards` table gains `protected`, `custom_status`
   (`''`/`pending`/`approved`), and `world`. `POST /api/cards/{id}/approve` approves a
-  pending custom card (→ approved **and** protected); `POST /api/cards/{id}/protect`
+  pending custom card (-> approved **and** protected); `POST /api/cards/{id}/protect`
   toggles a card's Protected flag. **`DELETE /api/cards/all` now spares Protected
   cards** (and only disconnects players whose card was actually deleted).
 - **`custom_card_cost`** app setting (gil), returned by the public `GET /api/settings`
   for display on the request page.
 
-### [3.9.0] — 2026-07-16
+### [3.9.0] - 2026-07-16
 
 Surfaces the linked **stamp-card token** on the public garapon payload (paired with
 frontend 3.11.0). Backward-compatible addition only; no breaking contract changes.
 
 #### Added
 
-- **`stamp_card_token` on `GET /api/garapon/{token}`** — the public player object
+- **`stamp_card_token` on `GET /api/garapon/{token}`** - the public player object
   (`GaraponPublicResponse.player`) now carries the token of the Stamp Rally card
   auto-issued alongside the drawing link (equal to the drawing-link token) when the
   garapon is tied to a rally, and is omitted otherwise. The value was already loaded
   server-side (the `LEFT JOIN` in `GetGaraponPlayerByToken`); it is now forwarded so
   the public Garapon page can link to the participant's stamp card. No schema change.
 
-### [3.8.0] — 2026-07-12
+### [3.8.0] - 2026-07-12
 
 Adds a **"Where to Redeem"** image to stamp rallies (paired with frontend 3.10.0).
 Backward-compatible addition only (one new column via schema **v48**); no breaking
@@ -809,20 +1319,20 @@ contract changes.
 
 #### Added
 
-- **Stamp-rally `redeem_image`** — a card image (the "Where to Redeem" screenshot)
+- **Stamp-rally `redeem_image`** - a card image (the "Where to Redeem" screenshot)
   stored on the rally, accepted on create/replace and returned on the admin and
   public (`GET /api/stamp-card/{token}`) payloads. Schema **v48** (idempotent
   `ALTER TABLE stamp_rallies ADD COLUMN redeem_image`).
 
-### [3.7.1] — 2026-07-12
+### [3.7.1] - 2026-07-12
 
 #### Changed
 
-- **Affiliate embed open times** now render as Discord **Short Time** (`<t:…:t>`,
+- **Affiliate embed open times** now render as Discord **Short Time** (`<t:...:t>`,
   e.g. "4:00 PM") instead of Long Time (which included seconds). Still local to
   each viewer's time zone.
 
-### [3.7.0] — 2026-07-12
+### [3.7.0] - 2026-07-12
 
 Adds Discord posting + drag ordering to **Affiliates** (paired with frontend 3.8.0).
 Backward-compatible additions only (new columns via schema **v47**, new endpoints,
@@ -831,22 +1341,22 @@ and a settings-stored webhook); no breaking contract changes.
 #### Added
 
 - **Affiliate fields** `embed_color`, `discord_link`, `carrd_link`, and a
-  `sort_order` for the drag order (schema **v47** — idempotent `ALTER TABLE` column
+  `sort_order` for the drag order (schema **v47** - idempotent `ALTER TABLE` column
   adds + an `idx_affiliates_sort` index). Editing an affiliate preserves its order.
 - **Shared webhook** (settings key `affiliate_webhook_url`, deliberately kept out of
   the public settings) returned on `GET /api/affiliates` and set via
   `PUT /api/affiliates/webhook` (validated as a Discord webhook URL).
-- **Reorder** — `POST /api/affiliates/reorder` persists a new top-first id order.
-- **Post to Discord** — `POST /api/affiliates/{id}/post` builds and sends the embed:
+- **Reorder** - `POST /api/affiliates/reorder` persists a new top-first id order.
+- **Post to Discord** - `POST /api/affiliates/{id}/post` builds and sends the embed:
   the embed **colour**, the **name** as the title, the markdown **details** as the
   description, the **logo as the thumbnail** and the **establishment screenshot as
-  the image**, and — each shown only when set — the **location** (full-width), the
+  the image**, and - each shown only when set - the **location** (full-width), the
   **opening hours** (full-width, as Discord "Long Time" tokens `<t:unix:T>` anchored
   in the affiliate's IANA timezone so each viewer sees them in their own, with the
   footer "Times are displayed in your local time zone."), and finally the
   **Discord/Carrd links as two side-by-side fields**.
 
-### [3.6.0] — 2026-07-11
+### [3.6.0] - 2026-07-11
 
 Adds the **"It's Yoever"** bingo reaction. Backward-compatible additions only
 (one new endpoint, one folded PATCH field, two new game-state fields, a new
@@ -855,7 +1365,7 @@ setting, and a new WebSocket message type); no breaking contract changes.
 #### Added
 
 - **Trigger endpoint.** `POST /api/game/yoever` (public, body `{card_id}`)
-  broadcasts a `yoever` message — `{player_name, count}` — to every connected
+  broadcasts a `yoever` message - `{player_name, count}` - to every connected
   client. Guarded, in order: an active game must exist (409), the reaction must be
   enabled (403), and the card must be off cooldown (429 with `Retry-After` +
   `retry_after`). The player name for the broadcast is resolved from the card.
@@ -865,15 +1375,15 @@ setting, and a new WebSocket message type); no breaking contract changes.
   `game_update` push) now carries `yoever_enabled` and `yoever_count`.
 - **Admin on/off switch** folded into `PATCH /api/game` as `yoever_enabled`,
   broadcasting a `yoever_config` message so every client updates live.
-- **Setting `yoever_cooldown_seconds`** (default `180`, range 0–3600; 0 disables
+- **Setting `yoever_cooldown_seconds`** (default `180`, range 0-3600; 0 disables
   the per-card cooldown).
 
 #### Fixed
 
 - **Saving settings no longer rejects a Google Fonts API key as a Discord
   webhook.** The webhook-URL validation was gated on `secretSettings`, which also
-  contains `google_fonts_api_key` — so any admin with that key set got
-  "Discord webhook URLs must look like…" and couldn't save *any* setting. The
+  contains `google_fonts_api_key` - so any admin with that key set got
+  "Discord webhook URLs must look like..." and couldn't save _any_ setting. The
   check is now scoped to the `discord_webhook_url_*` keys only.
 - The reaction now defaults to **enabled** on service construction, so a backend
   redeploy mid-game keeps it available for the running game instead of silently
@@ -886,7 +1396,7 @@ setting, and a new WebSocket message type); no breaking contract changes.
   clean. CI installs the toolchain from `go.mod` (`go-version-file`), so no
   workflow change was needed.
 
-### [3.5.0] — 2026-07-10
+### [3.5.0] - 2026-07-10
 
 Adds the **Tea Rooms** feature under Senpan Tea House. Backward-compatible
 additions only (new endpoints + a schema migration); no breaking API/WebSocket
@@ -894,8 +1404,8 @@ contract changes.
 
 #### Added
 
-- **Tea Rooms.** A new single-table entity (`tea_rooms`, schema **v45–46**) for
-  bookable tea rooms — name, subtitle (UTF-8, e.g. a Japanese phrase), a
+- **Tea Rooms.** A new single-table entity (`tea_rooms`, schema **v45-46**) for
+  bookable tea rooms - name, subtitle (UTF-8, e.g. a Japanese phrase), a
   **required + unique** room number, per-half-hour gil cost, hashtags, markdown
   description, seasonal/open/lockable/discounted flags, an image, and a Discord
   embed accent colour. Admin CRUD lives under `GET/POST /api/tea-rooms`,
@@ -903,9 +1413,9 @@ contract changes.
   flags), and `POST /api/tea-rooms/reorder` for the drag order, all gated by the
   new **`teahouse-tea-rooms`** page permission.
 - **Post a room to Discord.** `POST /api/tea-rooms/{id}/post` renders the room as
-  an embed (name title, description body, then three inline fields — the cost,
+  an embed (name title, description body, then three inline fields - the cost,
   halved with a "Currently Discounted!" note when discounted; the room number; and
-  the Open/Closed status — with the hashtags capitalized in the footer) and posts
+  the Open/Closed status - with the hashtags capitalized in the footer) and posts
   it to a single shared webhook stored via `PUT /api/tea-rooms/webhook` (kept out
   of the public settings so it never leaks).
 - **Public rooms API (cross-origin).** `GET /api/tea-rooms/public` (all rooms) and
@@ -914,7 +1424,7 @@ contract changes.
   external Carrd site can read live availability/pricing keyed off the one number
   the admin already knows.
 
-### [3.4.0] — 2026-07-07
+### [3.4.0] - 2026-07-07
 
 A security/correctness bugfix pass plus request-log identity, released together
 (paired with frontend 3.5.0). No breaking API/WebSocket contract changes.
@@ -924,21 +1434,21 @@ A security/correctness bugfix pass plus request-log identity, released together
 - **Request logs now identify the actor.** Every access-log line carries an
   `auth` field (`session` | `token` | `bot` | `anon`) and, when applicable, a
   `user` (account username) and `bot` (verified-bot name). Admin actions resolve
-  via the cookie session; plugin actions resolve via the personal access token —
+  via the cookie session; plugin actions resolve via the personal access token -
   both through the existing `currentUser` path, so no extra store reads for
   authenticated requests and none for anonymous ones. The actor is resolved
   inside the handler chain and carried out to the logging layer via a
   per-request holder (the log runs outside the session middleware).
 - **Cloudflare-verified bot detection.** For anonymous requests, the log reads
-  Cloudflare's verified-bot signal — either the native `cf-verified-bot`
+  Cloudflare's verified-bot signal - either the native `cf-verified-bot`
   (+`cf-verified-bot-category`) headers from the "Add bot protection headers"
   managed transform (Enterprise Bot Management), or a custom `x-verified-bot`
   header set by a Transform Rule on `cf.client.bot` (works on any plan). A
-  verified bot is named by its category, or by its User-Agent — trustworthy here
+  verified bot is named by its category, or by its User-Agent - trustworthy here
   because Cloudflare has already vouched for the source. This is a logging hint
   only, never a security decision (like `CF-Connecting-IP`, it's forgeable by a
   client that bypasses Cloudflare; lock the origin to Cloudflare IPs for
-  assurance). No new endpoints or response-shape changes — the fields ride the
+  assurance). No new endpoints or response-shape changes - the fields ride the
   existing free-form log-entry map, so the log viewer surfaces them
   automatically.
 
@@ -946,7 +1456,7 @@ A security/correctness bugfix pass plus request-log identity, released together
 
 - **Live server-log WebSocket tail is now admin-only.** The log stream was
   broadcast to every account on the admin channel (`cardID == ""`), which admits
-  any authenticated active account and any plugin PAT — not just admins — even
+  any authenticated active account and any plugin PAT - not just admins - even
   though `GET /api/logs` is admin-gated. Log lines carry client IPs, request
   paths (which embed capability tokens), and failed-login usernames. The hub now
   gates the tail on a per-connection `isAdmin` flag, refreshed on each revalidate
@@ -956,7 +1466,7 @@ A security/correctness bugfix pass plus request-log identity, released together
 - **Capability tokens are redacted from request logs.** Garapon/stamp-card draw
   tokens and font-kit tokens in the URL path (and the PAT `token` query
   parameter, and Referer) are replaced with a short non-reversible hash in both
-  the standard and DEBUG log lines — so they no longer land verbatim in the
+  the standard and DEBUG log lines - so they no longer land verbatim in the
   rotating log file, the `GET /api/logs` viewer, or the admin WS tail. The hash
   keeps per-link correlation for abuse investigation.
 - **Font-family / header-font / theme-flourish injection closed at the source.**
@@ -978,7 +1488,7 @@ A security/correctness bugfix pass plus request-log identity, released together
   (create/rename/delete + startup migration) is now serialized by a mutex, and
   the manifest is written atomically (temp file + rename). A present-but-corrupt
   manifest is left untouched and logged (once, at startup) instead of being
-  silently reseeded to defaults — which used to wipe custom categories. A
+  silently reseeded to defaults - which used to wipe custom categories. A
   reserved-directory denylist stops a category from being created/renamed onto a
   folder owned by another feature (book-club covers, the legacy announcements
   dir).
@@ -1007,26 +1517,26 @@ A security/correctness bugfix pass plus request-log identity, released together
   backend; `both` kept as an alias) and `-Target all` (frontend + backend +
   plugin).
 
-### [3.3.0] — 2026-07-05
+### [3.3.0] - 2026-07-05
 
 #### Added
 
 - **Structured logging + admin log viewer.** `slog` now emits JSON (was the
   default text handler) to stdout **and**, when `-log-file` is set (default
-  `/var/log/senpan/senpan.log`), to a rotating file via timberjack — daily
+  `/var/log/senpan/senpan.log`), to a rotating file via timberjack - daily
   rotation at local midnight, zstd-compressed backups, bounded retention
   (`MaxBackups=14`, `MaxAge=30d`, plus a 100 MB safety cap). `GET /api/logs`
   (admin) tails the file newest-first with `level`/`q`/`limit` filters (4 MB read
   cap, `truncated` flag) and reports the current runtime `level`; each line is
   also forwarded to admin WebSocket clients as a `{"type":"log","entry":LogEntry}`
-  message for a live tail — tapped at the slog writer (so it needs no file
+  message for a live tail - tapped at the slog writer (so it needs no file
   polling and works even with file logging off), admin-gated, and **lossy** so a
   burst can't disconnect anyone. The on-box `jlv` tool reads the same file. Pass
   `-log-file=""` in dev for stdout-only. Requires `LogsDirectory=senpan` on the
   systemd unit (see `deploy/README.md`) so the log dir is writable under
   `ProtectSystem=strict`.
 - **Live DEBUG toggle (no restart).** `POST /api/logs/level` (admin) flips the
-  process-wide minimum level at runtime via a `slog.LevelVar` — effective
+  process-wide minimum level at runtime via a `slog.LevelVar` - effective
   immediately across stdout, the file, and the live tail, reverting to INFO on
   restart. When DEBUG is on, every request emits a richer `request detail`
   companion line (query, user-agent, referer, ip), and DEBUG logs run across the
@@ -1035,43 +1545,43 @@ A security/correctness bugfix pass plus request-log identity, released together
 
 #### Changed
 
-- **Book club covers post as the Discord embed image** — the large, full-width
-  image instead of the small top-right thumbnail — when publishing a reading list.
+- **Book club covers post as the Discord embed image** - the large, full-width
+  image instead of the small top-right thumbnail - when publishing a reading list.
 
 #### Fixed
 
 - **Request logs record the real client IP.** The `ip` field used `RemoteAddr`
   (always the Apache proxy, e.g. `[::1]:44686`); it now prefers `CF-Connecting-IP`
   (Cloudflare's authoritative client address), then the leftmost
-  `X-Forwarded-For`, then the RemoteAddr host. Display-only — rate limiting still
+  `X-Forwarded-For`, then the RemoteAddr host. Display-only - rate limiting still
   uses the spoof-resistant `clientIP`.
 - **Book-club AniList lookup surfaces the real error.** Lookups now return
   **`424 Failed Dependency`** carrying AniList's actual message (e.g. "API
-  temporarily disabled… (status 403)", or a transport reason like "did not
+  temporarily disabled... (status 403)", or a transport reason like "did not
   respond within 15s") instead of a `502`. Cloudflare replaces origin **5xx**
   bodies with its own error page, so a 5xx hid the message from the SPA; a 4xx
   body passes through. Outbound AniList requests also send a descriptive
   `User-Agent` (`SenpanAppSuite (+https://apps.senpan.cafe)`).
 
-### [3.1.0] — 2026-07-03
+### [3.1.0] - 2026-07-03
 
 #### Changed
 
 - **No more permanent image categories.** The ten formerly hardcoded categories
-  (announcements, raffle, garapon, flourishes, affiliates ×2, stamp rally ×3)
+  (announcements, raffle, garapon, flourishes, affiliates x2, stamp rally x3)
   are folded into the `.categories.json` manifest by a one-time startup
-  migration (manifest schema v2) and become ordinary categories — renamable and
+  migration (manifest schema v2) and become ordinary categories - renamable and
   deletable like any other. Fresh installs seed the same set as defaults. The
   `permanent` field is gone from `ImageCategory`, and rename/delete no longer
   return `403 Permanent category`.
 - **Image read access widened for the shared picker.** `GET
-  /api/image-categories` and `GET /api/images` now allow any user holding an
+/api/image-categories` and `GET /api/images` now allow any user holding an
   image-using page permission (announcements, raffles, garapon, affiliates,
   stamp rally, themes, or system-images) instead of gating each directory to
   the single editor permission that owned it. Management endpoints
   (upload/delete/category CRUD) still require `system-images`.
 
-### [3.0.0] — 2026-07-02
+### [3.0.0] - 2026-07-02
 
 #### Changed
 
@@ -1079,7 +1589,7 @@ A security/correctness bugfix pass plus request-log identity, released together
   are no longer served as static files. The server streams them itself:
   `GET /api/fonts/pub/kit.css` (generated `@font-face` stylesheet for external
   sites) and `GET /api/fonts/pub/f/{token}` (font bytes behind an opaque,
-  rotating HMAC token, valid 7–14 days; key auto-generated into the
+  rotating HMAC token, valid 7-14 days; key auto-generated into the
   `font_url_secret` settings key). Font requests are **origin-gated per
   font**: same-origin (the SPA) is always allowed; cross-origin needs an
   origin on THAT font's allowlist (echoed via `Access-Control-Allow-Origin`,
@@ -1098,8 +1608,8 @@ A security/correctness bugfix pass plus request-log identity, released together
   (e.g. `Jasper.otf` + `Jasper.woff2`) are format VARIANTS of one font.
   `GET /api/fonts` returns the grouped shape (base, family, served type/token,
   per-font origins, variants); `PATCH /api/fonts/{name}` renames one file;
-  `PATCH /api/fonts/families/{base}` edits a font's metadata (`family` — the
-  CSS name, `serve` — the served variant type, `origins` — its allowlist,
+  `PATCH /api/fonts/families/{base}` edits a font's metadata (`family` - the
+  CSS name, `serve` - the served variant type, `origins` - its allowlist,
   stored under the `font_meta` settings key) and
   `DELETE /api/fonts/families/{base}` removes a whole font.
 
@@ -1107,18 +1617,18 @@ A security/correctness bugfix pass plus request-log identity, released together
 
 - **Automatic WOFF2 conversion** (via `github.com/tdewolff/font`, pure Go). A
   font with no uploaded WOFF2 gets one converted from its best source into
-  `<webRoot>/fonts/.woff2/` — the served variant by default (selectable per
+  `<webRoot>/fonts/.woff2/` - the served variant by default (selectable per
   font); uploading a real WOFF2 suppresses/removes the converted copy. A
   startup backfill converts pre-existing fonts and sweeps stale copies.
   Conversion failure keeps the upload and serves an uploaded format instead
   (reported via the new `warnings` field on the upload response).
 
-### [2.2.0] — 2026-07-02
+### [2.2.0] - 2026-07-02
 
 #### Added
 
 - **Passkey (WebAuthn) support.** Register / list / delete passkeys for an account
-  (`/api/account/passkeys…`) and a usernameless, discoverable-credential login
+  (`/api/account/passkeys...`) and a usernameless, discoverable-credential login
   (`POST /api/auth/passkey/{begin,finish}`) that establishes the session like a
   password login. Credentials (the full go-webauthn `Credential`, as JSON) live in
   the new `user_passkeys` table (schema **v44**); the relying-party id/origin
@@ -1129,13 +1639,13 @@ A security/correctness bugfix pass plus request-log identity, released together
   bot-flooded entries can't skew the weighted winner pick (on top of the per-IP
   rate limiter).
 
-### [2.1.0] — 2026-07-02
+### [2.1.0] - 2026-07-02
 
 #### Security
 
-- Sanitize uploaded SVGs server-side before persisting — drop `<script>`/
+- Sanitize uploaded SVGs server-side before persisting - drop `<script>`/
   `<foreignObject>`, event-handler attributes, `javascript:`/external refs, and
-  dangerous inline styles — closing a stored-XSS vector (SVGs are served from our
+  dangerous inline styles - closing a stored-XSS vector (SVGs are served from our
   origin and inlined on the player board).
 - Restrict the `anilist_api_url` setting to hosts under `anilist.co` (SSRF
   defense), mirroring the existing Discord-webhook allowlist.
@@ -1153,14 +1663,14 @@ A security/correctness bugfix pass plus request-log identity, released together
   rejected at connect while deactivated.
 - Add an **enforcing** full resource Content-Security-Policy (`deploy/.htaccess`).
   Verified via a Report-Only pass; the only external scripts (Cloudflare Turnstile
-  + Web Analytics) are allow-listed and nothing needs `'unsafe-eval'` after the
-  drag-library swap, so `script-src` stays strict.
+  - Web Analytics) are allow-listed and nothing needs `'unsafe-eval'` after the
+    drag-library swap, so `script-src` stays strict.
 
 #### Fixed
 
 - Fix a send-on-closed-channel panic in the WebSocket hub's disconnect helpers
   (the message send now happens under the read lock).
-- Fix an HTTP 500 on a participant's stamp-card page after a stamp is removed —
+- Fix an HTTP 500 on a participant's stamp-card page after a stamp is removed -
   the nullable `stamp_id` is now scanned via `sql.NullInt64`.
 - Wait for the announcement scheduler's in-flight sweep on shutdown before
   closing the DB, so a post that already succeeded advances its cursor and can't
@@ -1168,7 +1678,7 @@ A security/correctness bugfix pass plus request-log identity, released together
 - Clean up multipart temp files after each upload (`RemoveAll`), so a batch that
   spills over the in-memory budget no longer leaves files behind in the temp dir.
 - Announcement `buttons` now serialize as an empty array (never `null`) when a
-  post has none, matching the generated TS type — fixes a client-side crash when
+  post has none, matching the generated TS type - fixes a client-side crash when
   editing a button-less announcement.
 
 #### Added
@@ -1187,18 +1697,18 @@ A security/correctness bugfix pass plus request-log identity, released together
   missing hidden-file check on font uploads) and the JSON-array / raffle-row scan
   helpers in the store layer.
 
-### [2.0.0] — 2026-06-30
+### [2.0.0] - 2026-06-30
 
 #### Changed
 
 - **HTTP API migrated from action dispatchers to hybrid REST (breaking).** Every
-  admin/resource endpoint that previously multiplexed on a `{"action":"…"}` body
+  admin/resource endpoint that previously multiplexed on a `{"action":"..."}` body
   now uses HTTP methods and resource paths: `POST` create (`201`), `PUT` replace,
   `PATCH` partial-update, `DELETE` remove (`204`), plus `POST /api/<resource>/{id}/<verb>`
   for non-CRUD commands (`close`/`reopen`, `activate`/`deactivate`, `send`/`skip`,
-  `pick-winner`, `/api/game/{start,draw,end,halftime}`, …). Bulk writes are `POST`
-  (`…/reorder`, `/api/cards/generate`); bulk deletes are `DELETE /api/<resource>/all`
-  → `{ "deleted": N }`. A single reorder or flag toggle is a declarative `PATCH`.
+  `pick-winner`, `/api/game/{start,draw,end,halftime}`, ...). Bulk writes are `POST`
+  (`.../reorder`, `/api/cards/generate`); bulk deletes are `DELETE /api/<resource>/all`
+  -> `{ "deleted": N }`. A single reorder or flag toggle is a declarative `PATCH`.
   All per-handler auth guards, validation, error codes, and WebSocket broadcasts
   are unchanged; the protected `admin` account and permission-key validation on
   `PATCH /api/users/{id}` are preserved (and now covered by dedicated tests). The
@@ -1207,15 +1717,15 @@ A security/correctness bugfix pass plus request-log identity, released together
   remain small action/credential bodies. Requires the **2.0.0 SPA**; the Dalamud
   plugin was migrated in lockstep.
 - **Book clubs are now a first-class path entity.** Reading lists moved from the
-  flat, query-scoped `/api/reading-lists?club=…` to nested resources under the
+  flat, query-scoped `/api/reading-lists?club=...` to nested resources under the
   club slug: `/api/book-clubs/{club}/reading-lists[/{id}[/items/{itemId}|/publish]]`.
   The club slug leaves request bodies (it's in the path), and every load-by-id
-  handler now verifies the record belongs to the `{club}` in the path — a caller
+  handler now verifies the record belongs to the `{club}` in the path - a caller
   holding one club's permission can no longer reach another club's list by id
   (404 on mismatch). The shared utilities `POST /api/bookclub/upload` and
   `GET /api/bookclub/lookup` are unchanged.
 
-### [1.7.0] — 2026-06-30
+### [1.7.0] - 2026-06-30
 
 #### Added
 
@@ -1225,7 +1735,7 @@ A security/correctness bugfix pass plus request-log identity, released together
   `internal/apidoc` + `cmd/openapi-gen`) so they can't drift, and a hand-maintained
   paths table adds auth, params, action-dispatcher requests, and the WebSocket
   channel (in the description). The server serves it at **`GET /api/openapi.yaml`**
-  and renders it with **Scalar** at **`GET /api/docs`** (both public — the API
+  and renders it with **Scalar** at **`GET /api/docs`** (both public - the API
   contract carries no secrets). The spec is embedded so the binary is
   self-contained.
 - **CI accuracy guards** (`internal/apidoc/openapi_test.go`): one test regenerates
@@ -1241,7 +1751,7 @@ A security/correctness bugfix pass plus request-log identity, released together
   existing tests); the structs are the single source of truth for the JSON wire
   format, the tygo-generated frontend types, and the OpenAPI schemas.
 
-### [1.6.0] — 2026-06-30
+### [1.6.0] - 2026-06-30
 
 #### Changed
 
@@ -1249,7 +1759,7 @@ A security/correctness bugfix pass plus request-log identity, released together
   (`POST /api/bookclub/upload`) was the last endpoint that rewrote uploaded names
   (`cover_<nanos>.ext`); it now preserves the uploaded filename (sanitized) and
   overwrites a same-named file, matching the central image-hosting and Carrd
-  uploads. Cover cleanup on item/list delete is now **reference-safe** — a shared
+  uploads. Cover cleanup on item/list delete is now **reference-safe** - a shared
   file is removed only once no reading-list item still points at it
   (`CountReadingListItemsByCover`).
 
@@ -1269,12 +1779,12 @@ A security/correctness bugfix pass plus request-log identity, released together
 
 #### Documentation
 
-- Added [`API.md`](API.md) — a full HTTP & WebSocket API reference (auth, request/
-  response shapes, action types, broadcast messages) — linked from the README.
+- Added [`API.md`](API.md) - a full HTTP & WebSocket API reference (auth, request/
+  response shapes, action types, broadcast messages) - linked from the README.
 - Corrected stale comments (the `.golangci.yml` run directory, the `cards` and
   `game` action lists) and the `uploads.go` / AGENTS.md upload-helper docs.
 
-### [1.5.0] — 2026-06-29
+### [1.5.0] - 2026-06-29
 
 #### Added
 
@@ -1285,22 +1795,22 @@ A security/correctness bugfix pass plus request-log identity, released together
   per-page permission guards** apply, so a token never grants more than the account holds.
   Resolution is wired into `loadCurrentUser` + `wsSessionUser`, so every existing endpoint
   accepts a token with no per-handler change.
-- `GET` / `POST /api/account/token` — self-service token metadata + generate (replace) /
+- `GET` / `POST /api/account/token` - self-service token metadata + generate (replace) /
   revoke. One token per account; only a SHA-256 hash is stored and the plaintext is
   returned **exactly once**, at generation. Schema migration **v42** adds the `user_tokens`
   table (cascade-deleted with its user; resolves active accounts only).
 
-### [1.4.0] — 2026-06-29
+### [1.4.0] - 2026-06-29
 
 #### Added
 
-- **Garapon ↔ Stamp Rally linking.** Garapons carry an optional `stamp_rally_id` (to an
+- **Garapon <-> Stamp Rally linking.** Garapons carry an optional `stamp_rally_id` (to an
   **open** rally; closed/unknown rejected). Creating a drawing link on a linked garapon
   auto-issues a Stamp Rally card via `IssueRallyCardWithToken` using the **same token** as
   the drawing link, recorded on `garapon_players.stamp_card_id` (and surfaced as
   `stamp_card_token`). Deleting the link removes the paired card; deleting the rally clears
   any garapon link.
-- **Stamp Rally `status` (open/closed)** with a `set_status` action — closed rallies are
+- **Stamp Rally `status` (open/closed)** with a `set_status` action - closed rallies are
   read-only (`rallyOpen`/`stampAvailable` reject them). Cards with collected stamps are
   deletable only when the rally is closed.
 - `GET /api/stamp-rallies` now returns per-rally `stamp_count` + `active_stamp_count`
@@ -1310,14 +1820,14 @@ A security/correctness bugfix pass plus request-log identity, released together
 
 - **Stamp logs are preserved on card/stamp deletion** (schema migration v40 + v41):
   `stamp_rally_collected` now snapshots `participant_name`/`stall_name` and carries a
-  `rally_id` (CASCADE) with nullable `card_id`/`stamp_id` (`ON DELETE SET NULL`) — mirroring
+  `rally_id` (CASCADE) with nullable `card_id`/`stamp_id` (`ON DELETE SET NULL`) - mirroring
   `garapon_draws`. Deleting a rally still removes its whole log.
 
-### [1.3.0] — 2026-06-29
+### [1.3.0] - 2026-06-29
 
 #### Added
 
-- **Stamp Rally API** — admin CRUD at `GET/POST /api/stamp-rallies` (events with
+- **Stamp Rally API** - admin CRUD at `GET/POST /api/stamp-rallies` (events with
   stamps + prizes carrying %-based placements, saved inline; stamps upserted by id so
   collection history survives edits), per-stamp pause/resume and tokenized participant
   cards (`/{id}/stamps`, `/{id}/cards`), and the event-wide collection log
@@ -1330,44 +1840,44 @@ A security/correctness bugfix pass plus request-log identity, released together
   permanent image categories (`stamp_cards`, `stamp_stamps`, `stamp_prizes`). Gated by
   the new `festival-stamp-rally` page permission.
 
-### [1.2.0] — 2026-06-29
+### [1.2.0] - 2026-06-29
 
 #### Added
 
-- **Affiliates API** — `GET/POST /api/affiliates` (admin CRUD of partner
+- **Affiliates API** - `GET/POST /api/affiliates` (admin CRUD of partner
   establishments), gated by the new `teahouse-affiliates` page permission. Owners
   and opening hours persist as JSON columns on a new `affiliates` table (schema
-  migration v38). Adds two permanent image categories — **Affiliate Logos**
-  (`affiliate_logos`) and **Affiliate Images** (`affiliate_images`) — readable by
+  migration v38). Adds two permanent image categories - **Affiliate Logos**
+  (`affiliate_logos`) and **Affiliate Images** (`affiliate_images`) - readable by
   affiliate editors for the logo/screenshot pickers.
 
-### [1.1.1] — 2026-06-28
+### [1.1.1] - 2026-06-28
 
 #### Added
 
 - Cloudflare Turnstile verification on `POST /api/register` as well (mass-signup
-  protection), gated the same way as login — enforced only when a secret is set.
+  protection), gated the same way as login - enforced only when a secret is set.
 
-### [1.1.0] — 2026-06-28
+### [1.1.0] - 2026-06-28
 
 #### Added
 
 - **Cloudflare Turnstile verification on login.** When `APPSUITE_TURNSTILE_SECRET`
   (flag `-turnstile-secret`) is set, `POST /api/auth` requires a valid Turnstile
-  token — verified against Cloudflare's siteverify API (fail-closed) — before any
+  token - verified against Cloudflare's siteverify API (fail-closed) - before any
   credential work, blocking automated brute-force at the door. Disabled (skipped)
   when no secret is configured, so dev/test keep working.
-- **`GET /api/config`** — public endpoint exposing the non-secret Turnstile site
+- **`GET /api/config`** - public endpoint exposing the non-secret Turnstile site
   key (flag `-turnstile-sitekey` / `APPSUITE_TURNSTILE_SITEKEY`) for the login page.
 
-### [1.0.1] — 2026-06-28
+### [1.0.1] - 2026-06-28
 
 #### Fixed
 
 - **Scheduled announcements could post more than once.** Two independent causes:
   1. An announcement overdue by more than one period (e.g. the server was down
      across a slot) advanced its schedule cursor from the stale slot, landing on
-     _another_ past slot — so it stayed "due" and re-posted on every scheduler
+     _another_ past slot - so it stayed "due" and re-posted on every scheduler
      tick until it caught up. The cursor now advances to the next occurrence
      strictly in the **future** (missed slots are skipped, not replayed).
   2. A webhook call that failed at the **transport** layer (timeout / connection
@@ -1376,16 +1886,16 @@ A security/correctness bugfix pass plus request-log identity, released together
      the cursor is advanced (no retry); genuine HTTP error responses (e.g. a 429
      rate limit or a 5xx) are still retried, so delivery isn't dropped.
 
-### [1.0.0] — 2026-06-28
+### [1.0.0] - 2026-06-28
 
-First tracked release — establishes versioning for the current production build.
+First tracked release - establishes versioning for the current production build.
 
 #### Added
 
-- **`GET /api/version`** — public endpoint returning the backend's semantic
+- **`GET /api/version`** - public endpoint returning the backend's semantic
   version (powers the admin compatibility readout; doubles as a version probe).
 - **Token-based theming**: themes stored as a structured token map; the applied
-  stylesheet is generated server-side (`:root { … }`) and sanitized against a
+  stylesheet is generated server-side (`:root { ... }`) and sanitized against a
   token allowlist (migration `user_version` 37 backfills + drops `css_content`).
 - **Live admin invalidation**: a thin `resource_changed` WebSocket signal after
   admin-mutation POSTs prompts a scoped REST refetch (Garapon draws and raffle
@@ -1396,14 +1906,30 @@ First tracked release — establishes versioning for the current production buil
 
 ## Plugin
 
-**SenpanCompanion** — a Dalamud/FFXIV plugin ("Senpan Admin Companion") that lets
+**SenpanCompanion** - a Dalamud/FFXIV plugin ("Senpan Admin Companion") that lets
 Tea House staff drive app services from in-game. It authenticates to the backend
 with a personal access token and is distributed through a Dalamud custom repo
 (`plugins/pluginmaster.json`). Versions use the four-part AssemblyVersion in
 `SenpanCompanion.csproj`. Entries below the current release were reconstructed
 from the `<Version>` history and commit messages.
 
-### [3.3.1.0] — 2026-07-24
+### [3.3.2.0] - 2026-07-28
+
+Replaces the last text glyphs in the window with FontAwesome icons and normalises the
+punctuation in on-screen text.
+
+#### Changed
+
+- **Status and table glyphs are FontAwesome icons now.** The live/offline badge, the
+  garapon ball swatch, the stamp-rally completion mark and the roll stars drew filled and
+  hollow circles, a check mark and a star as plain text, which the game's Axis font
+  renders inconsistently. They go through the existing `Ui.Icon` helper and the bundled
+  icon font instead.
+- **On-screen text uses plain ASCII punctuation:** a hyphen for an empty table cell and
+  three dots for progress labels such as "Loading...", in place of the em-dash and
+  ellipsis characters.
+
+### [3.3.1.0] - 2026-07-24
 
 Shows the new **Room Owner** in the Tea Rooms table and fixes accented-character
 rendering (paired with backend 3.14.0).
@@ -1422,14 +1948,14 @@ rendering (paired with backend 3.14.0).
   Extended ranges, so macron romanizations (ō, ā, ē, ī, ū) display correctly while
   every other glyph is unchanged.
 
-### [3.3.0.0] — 2026-07-24
+### [3.3.0.0] - 2026-07-24
 
 Adds a **Tea Rooms** panel so Tea House staff can flip a room's availability and
 discount without leaving the game.
 
 #### Added
 
-- **Tea Rooms tab.** A new **Tea House → Tea Rooms** page lists every room by
+- **Tea Rooms tab.** A new **Tea House -> Tea Rooms** page lists every room by
   **number** and **name** (with its per-half-hour cost) and lets staff toggle each
   room's **Open** and **Discount** (50% off) status with a click. It uses the
   existing `PATCH /api/tea-rooms/{id}` endpoint and is gated by the **Tea Rooms**
@@ -1437,24 +1963,26 @@ discount without leaving the game.
   for accounts that can manage tea rooms. Everything else about a room (subtitle,
   image, hashtags, Discord posting, reordering) stays on the website.
 
-### [3.2.1.0] — 2026-07-21
+### [3.2.1.0] - 2026-07-21
 
 Hardening release from the audit-fix pass: the access token is now encrypted at rest with Windows DPAPI, and outgoing chat, connection retries, and background loads were made safe against throttle bursts, hostile servers, and off-thread state writes.
 
 #### Security
+
 - Encrypted the personal access token at rest with the Windows Data Protection API (DPAPI, CurrentUser scope) instead of storing it as plaintext in the config JSON, so a synced, backed-up, or world-readable config no longer exposes a usable token. An existing plaintext token is migrated to the encrypted form once on load and then cleared from disk.
 - Added a warning in the log when the configured server URL is not HTTPS, since the token would otherwise be transmitted in cleartext and could be intercepted (warned once, not on every request).
 - Bounded the live WebSocket receive buffer (1 MB per message cap), so a hostile or broken server can no longer stream an unbounded message and exhaust memory.
 
 #### Fixed
-- Routed every outgoing chat message — auto-tells and Timed Text Macros alike — through a single, globally serialized send queue that spaces messages one second apart, so concurrent features can no longer each start at once and defeat the game's outgoing-chat throttle.
+
+- Routed every outgoing chat message - auto-tells and Timed Text Macros alike - through a single, globally serialized send queue that spaces messages one second apart, so concurrent features can no longer each start at once and defeat the game's outgoing-chat throttle.
 - Stopped the auth poll and live WebSocket from retrying forever on a terminal failure: an invalid/rejected token (401/403) now backs off hard until the token is changed instead of hammering the server every few seconds, while transient drops use exponential backoff that resets on a clean reconnect.
 - Allowed a failed initial card load to retry (behind a short cooldown) rather than leaving the card list empty until restart.
 - Fixed the outgoing-message length clamp to count UTF-8 bytes (the game's real limit) instead of UTF-16 characters, so a multibyte message is no longer wrongly truncated or let through over budget, and never splits a character.
 - Marshaled off-thread UI-state writes in error paths onto the framework thread (live-connection, session, and card-cache failure handling), and logged exceptions thrown by live-event subscribers instead of silently swallowing them.
-- Moved config saves off the render thread — timed-macro progress now persists on a background thread so the synchronous file write no longer stalls the UI.
+- Moved config saves off the render thread - timed-macro progress now persists on a background thread so the synchronous file write no longer stalls the UI.
 
-### [3.2.0.0] — 2026-07-20
+### [3.2.0.0] - 2026-07-20
 
 Adds **auto-run bingo** controls to the Bingo Game tab (paired with backend 3.11.0).
 
@@ -1473,7 +2001,7 @@ Adds **auto-run bingo** controls to the Bingo Game tab (paired with backend 3.11
   mini-game choice (`Yes` alerts players and leaves auto paused; `No` declines and
   resumes auto if it was paused); the prompt notes when auto has been paused.
 
-### [3.1.0.0] — 2026-07-19
+### [3.1.0.0] - 2026-07-19
 
 Adds custom-card request handling to the Bingo Cards tab (paired with backend 3.10.0).
 
@@ -1488,14 +2016,14 @@ Adds custom-card request handling to the Bingo Cards tab (paired with backend 3.
   individually deletable). Uses the backend's `POST /api/cards/{id}/approve` and
   `/protect` endpoints with the existing `bingo-cards` permission.
 
-### [3.0.1.0] — 2026-07-17
+### [3.0.1.0] - 2026-07-17
 
 Polish on the 3.0.0.0 UI overhaul.
 
 #### Changed
 
-- **Button colours now match the web admin dashboard's default theme** — a tan primary
-  action (dark text), an olive secondary, and a red destructive — replacing the initial
+- **Button colours now match the web admin dashboard's default theme** - a tan primary
+  action (dark text), an olive secondary, and a red destructive - replacing the initial
   purple accent, so the plugin and the site read as one product.
 - **Bingo win patterns** gain a **Collapse all / Show all** toggle to fold or unfold every
   pattern category at once while building a game.
@@ -1505,22 +2033,22 @@ Polish on the 3.0.0.0 UI overhaul.
 - **A Timed Text Macro's message is now actually hidden until you expand it.** Previously
   the preview text stayed visible and only the button label flipped; **Show message** /
   **Hide message** now genuinely shows or hides the full text, and the button's stray glyph
-  (which didn't render in the game font, showing as a stray "≡") is gone.
+  (which didn't render in the game font, showing as a stray "=") is gone.
 
-### [3.0.0.0] — 2026-07-17
+### [3.0.0.0] - 2026-07-17
 
 A major **UI/UX overhaul** of the companion window, plus the ability to **edit saved
-macros**. What the tools do is unchanged — this is about how they look and how easy they
+macros**. What the tools do is unchanged - this is about how they look and how easy they
 are to operate.
 
 #### Added
 
 - **Edit a saved Timed Text Macro in place.** Each macro now has an **Edit** button that
   reopens its name, channel, message, interval, and send cap in an inline editor
-  (Save / Cancel) — no more delete-and-recreate. (Stop a running macro first to edit it.)
+  (Save / Cancel) - no more delete-and-recreate. (Stop a running macro first to edit it.)
 - **Shared design system across every page:** icon + accent **section headers**, a
   three-tier **button system** (primary / secondary / destructive), compact **icon buttons**
-  for table-row actions (copy / delete), pill **badges**, and rounded **cards** — so related
+  for table-row actions (copy / delete), pill **badges**, and rounded **cards** - so related
   controls read as a group and a Delete never looks like a Create.
 
 #### Changed
@@ -1528,7 +2056,7 @@ are to operate.
 - **Sidebar:** the always-available tools (**Rolls**, **Timed Text Macros**, **Settings**,
   **About**) now live under a collapsible **General** group at the bottom, mirroring the
   Bingo and Festival accordions.
-- **Timed Text Macros** renders each macro as its own **card** — an enumerated title with
+- **Timed Text Macros** renders each macro as its own **card** - an enumerated title with
   channel and status badges, a schedule summary, and a one-line message preview that
   **expands on demand**, so a long (multi-message) macro no longer floods the panel.
 - **Rolls** is split into labelled **Captured rolls / Filter / Find the winner / Rolls**
@@ -1537,24 +2065,24 @@ are to operate.
   the **Bingo, Raffle, Garapon, and Stamp Rally** pages pick up the same section headers,
   button tiers, and copy / delete icon buttons.
 
-### [2.3.0.0] — 2026-07-16
+### [2.3.0.0] - 2026-07-16
 
 Adds two permission-free, account-free tools: a **Rolls** helper for in-game roll games
 and **Timed Text Macros** for repeating announcements.
 
 #### Added
 
-- **Rolls page** (no account or permission required — it works even before a token is
-  set). It watches chat for `/random` · `/dice` rolls near you and lists them in a
+- **Rolls page** (no account or permission required - it works even before a token is
+  set). It watches chat for `/random` - `/dice` rolls near you and lists them in a
   **paginated table** (15 / 30 / 45 per page, scrolls when needed) showing the player,
   home world, the number rolled (with its ceiling for `/random N`, e.g. _"11 (out of
   20)"_), and the time.
 - **Rolls filtering & search:** narrow to a player by name and/or to the **last N
   minutes**, and run a **Highest / Lowest / Closest-to-N** query over that window.
-  Matching rolls are brought to the top and highlighted, with a summary banner — and
+  Matching rolls are brought to the top and highlighted, with a summary banner - and
   when the winning player rolled more than once in the window, a **"multiple rolls
   detected in the time frame"** notice lists all of their rolls.
-- **Rolls privacy by design:** rolls are held **in memory only** — nothing is saved or
+- **Rolls privacy by design:** rolls are held **in memory only** - nothing is saved or
   sent anywhere. The log clears automatically on **logout** (and is gone entirely once
   the game closes and the plugin unloads); a **Clear** button wipes it on demand. A
   disclaimer on the page states this.
@@ -1564,7 +2092,7 @@ and **Timed Text Macros** for repeating announcements.
   every 15 minutes, 8 times). The **first send fires when you press Send** and it repeats
   until stopped or the cap is reached; each running macro shows a **live countdown to the
   next send** and its **remaining count**.
-- **Macro message splitting:** the text can be any length — if it exceeds one in-game
+- **Macro message splitting:** the text can be any length - if it exceeds one in-game
   chat message it is split with the **same logic as the auto-tells** and the page tells
   you up front **how many messages** each send will become; the parts are delivered **one
   second apart**.
@@ -1584,7 +2112,7 @@ and **Timed Text Macros** for repeating announcements.
   notices, warnings, and other multi-sentence text across the pages (Rolls, Timed Text
   Macros, Settings, Garapon, Stamp Rally, Raffle, Bingo) now wrap at the window width.
 
-### [2.2.1.0] — 2026-07-16
+### [2.2.1.0] - 2026-07-16
 
 Makes the auto-`/tell` messages fully customizable, with length-aware splitting.
 
@@ -1592,7 +2120,7 @@ Makes the auto-`/tell` messages fully customizable, with length-aware splitting.
 
 - **Editable auto-tell templates** for all three tells (bingo card, garapon, stamp
   rally): enabling a tell in Settings now reveals a message editor. Templates use
-  placeholders the plugin expands — `<t>` (recipient's character name) and
+  placeholders the plugin expands - `<t>` (recipient's character name) and
   `<bingocard-link>` / `<garapon-link>` / `<stamprally-link>` (the relevant link).
   Defaults reproduce the previous fixed messages, so an already-enabled tell behaves
   the same until it's customized.
@@ -1603,11 +2131,11 @@ Makes the auto-`/tell` messages fully customizable, with length-aware splitting.
   placeholders are expanded by the plugin, not the game, they're **measured at the
   full width of the URL** they become. A message longer than one chat message is split
   into multiple tells at the best break point (a sentence end where possible, else a
-  word boundary — nothing is dropped) and the parts are delivered a second apart to
-  respect the chat throttle. The Settings editor shows a live warning — _"This message
-  is too long and will be split into two separate tells."_ — when a template will split.
+  word boundary - nothing is dropped) and the parts are delivered a second apart to
+  respect the chat throttle. The Settings editor shows a live warning - _"This message
+  is too long and will be split into two separate tells."_ - when a template will split.
 
-### [2.2.0.0] — 2026-07-16
+### [2.2.0.0] - 2026-07-16
 
 Adds **Garapon** and **Stamp Rally** management, and replaces the tab bar with a
 **collapsible sidebar**. Uses only existing server endpoints (paired with backend
@@ -1616,11 +2144,11 @@ Adds **Garapon** and **Stamp Rally** management, and replaces the tab bar with a
 #### Added
 
 - **Garapon management** (gated on `festival-garapon`): a **Garapon** page to issue
-  a per-player drawing link for an existing garapon — quick-fill the name from the
+  a per-player drawing link for an existing garapon - quick-fill the name from the
   nearby list, set the draw count, and **copy the link** (plus a **copy stamp-card
   link** button when the garapon is tied to a Stamp Rally; the server issues that
   paired card automatically on create, sharing the token). It is create-only, by
-  design — no edit/delete from in-game. A separate **Garapon Draw Log** page lists
+  design - no edit/delete from in-game. A separate **Garapon Draw Log** page lists
   the recorded pulls.
 - **Stamp Rally management** (gated on `festival-stamp-rally`): a **Stamp Rally**
   page to issue a participant card for a nearby player (**copy the card link**) and
@@ -1628,26 +2156,26 @@ Adds **Garapon** and **Stamp Rally** management, and replaces the tab bar with a
   collected-stamp log.
 - **Optional `/tell` on create** for both, **off by default** (opt-in per feature in
   Settings): when you issue a link/card for a player picked from the nearby list, the
-  plugin can `/tell` them the URL. Outgoing chat — see the ToS note in Settings.
+  plugin can `/tell` them the URL. Outgoing chat - see the ToS note in Settings.
 - **Collapsible sidebar navigation** replacing the flat tab bar: **Bingo** and
   **Festival** sections with per-page links, plus **Settings** and **About**.
   Sections and links are hidden for permissions the account lacks, mirroring the web
   admin sidebar; the window opens on the first page the account can reach.
 
-### [2.1.0.0] — 2026-07-11
+### [2.1.0.0] - 2026-07-11
 
 Adds the **"It's Yoever"** bingo controls (paired with backend 3.6.0).
 
 #### Added
 
 - **"It's Yoever" live controls** on the Bingo Game tab: a checkbox to switch the
-  reaction on/off for all players during a live game (`PATCH /api/game` →
-  `yoever_enabled`), and a **"Yoevers: N"** counter. Both track the server live —
+  reaction on/off for all players during a live game (`PATCH /api/game` ->
+  `yoever_enabled`), and a **"Yoevers: N"** counter. Both track the server live -
   the count updates on the `yoever` broadcast (between draws) and the toggle syncs
-  on `yoever_config` — and the game-state model carries `yoever_enabled` /
+  on `yoever_config` - and the game-state model carries `yoever_enabled` /
   `yoever_count`.
 
-### [2.0.1.0] — 2026-07-02
+### [2.0.1.0] - 2026-07-02
 
 #### Security
 
@@ -1655,15 +2183,15 @@ Adds the **"It's Yoever"** bingo controls (paired with backend 3.6.0).
   connection** (was previously on the WS URL query string, where it could land in
   access logs). REST calls already used the header. Plus assorted bug fixes.
 
-### [2.0.0.0] — 2026-07-01
+### [2.0.0.0] - 2026-07-01
 
 #### Changed
 
 - **Major API migration** to match the backend's move to a hybrid RESTful-RPC
-  style with proper HTTP status codes — the plugin's API client was reworked
+  style with proper HTTP status codes - the plugin's API client was reworked
   accordingly. (Major bump: it requires the correspondingly migrated backend.)
 
-### [1.0.0.0] — 2026-06-29
+### [1.0.0.0] - 2026-06-29
 
 #### Added
 
@@ -1674,7 +2202,7 @@ Adds the **"It's Yoever"** bingo controls (paired with backend 3.6.0).
 
 - Cards sorted by creation date.
 
-### [0.1.0.0] — 2026-06-29
+### [0.1.0.0] - 2026-06-29
 
 #### Added
 

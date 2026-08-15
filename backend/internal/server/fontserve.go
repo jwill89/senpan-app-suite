@@ -19,7 +19,7 @@ import (
 	"app-suite/internal/model"
 )
 
-// ── Public font serving (tokenized, origin-gated) ─────────────────────────────
+// -- Public font serving (tokenized, origin-gated) -----------------------------
 //
 // Uploaded fonts are licensed assets, so they are never served as static files.
 // Instead the Go server serves them itself through obfuscated, rotating token
@@ -29,21 +29,21 @@ import (
 //	GET /api/fonts/pub/f/{token}   the font bytes behind an opaque token
 //
 // The fonts.senpan.cafe vhost reverse-proxies everything to these endpoints
-// (ProxyPass / → http://localhost:8080/api/fonts/pub/), so an external Carrd
+// (ProxyPass / -> http://localhost:8080/api/fonts/pub/), so an external Carrd
 // site embeds  <link rel="stylesheet" href="https://fonts.senpan.cafe/kit.css">
 // and the kit's relative url('f/<token>') sources resolve on the same host. The
 // SPA does not use the kit: it builds its own @font-face rules (with metric
 // clamping) from the tokens in the settings payload, loading fonts SAME-ORIGIN
-// via /api/fonts/pub/f/{token} — so the app itself always has font access, no
+// via /api/fonts/pub/f/{token} - so the app itself always has font access, no
 // matter what any font's allowlist says.
 //
 // Access model per font request:
-//   - Same-origin requests (the SPA, dev via the Vite proxy) — always allowed.
-//   - Cross-origin requests — allowed only when the Origin header is on THAT
-//     FONT's allowlist (Atelier → Font Upload → Edit); the response echoes the
+//   - Same-origin requests (the SPA, dev via the Vite proxy) - always allowed.
+//   - Cross-origin requests - allowed only when the Origin header is on THAT
+//     FONT's allowlist (Atelier -> Font Upload -> Edit); the response echoes the
 //     origin in Access-Control-Allow-Origin, which browsers REQUIRE for
 //     cross-origin @font-face, so a non-listed site cannot render the font.
-//   - No usable Origin (address bar, wget, casual scrapers) — 403.
+//   - No usable Origin (address bar, wget, casual scrapers) - 403.
 //
 // The kit stylesheet is additionally filtered by the requesting site: a
 // foreign Referer only sees @font-face rules for fonts that allow its origin.
@@ -51,7 +51,7 @@ import (
 // Tokens are deterministic HMACs over a coarse time bucket, so they need no
 // storage, survive restarts, stay stable long enough to cache well, and still
 // expire: a copied font URL goes stale after one to two bucket widths. This
-// raises the bar considerably, but it is not DRM — a determined client that
+// raises the bar considerably, but it is not DRM - a determined client that
 // forges an Origin header can still fetch the bytes (true of every web font
 // host, including the commercial ones).
 
@@ -61,7 +61,7 @@ const settingFontSecret = "font_url_secret"
 
 // fontTokenBucketSeconds is the width of the token time bucket (one week).
 // Tokens from the current and previous bucket are accepted, so any served URL
-// stays valid for 7–14 days and font responses may be cached up to one bucket.
+// stays valid for 7-14 days and font responses may be cached up to one bucket.
 const fontTokenBucketSeconds = 7 * 24 * 60 * 60
 
 // fontContentTypes maps served font extensions to their MIME types (Go's
@@ -86,7 +86,7 @@ var fontFormatHints = map[string]string{
 
 // fontSecret returns the HMAC key for font tokens, generating and persisting a
 // 32-byte secret on first use. If persisting fails the in-memory secret is still
-// used — tokens then rotate on restart, which only forces clients to re-fetch.
+// used - tokens then rotate on restart, which only forces clients to re-fetch.
 func (s *Server) fontSecret() []byte {
 	s.fontSecretMu.Lock()
 	defer s.fontSecretMu.Unlock()
@@ -102,7 +102,7 @@ func (s *Server) fontSecret() []byte {
 	b := make([]byte, 32)
 	if _, err := rand.Read(b); err != nil {
 		// crypto/rand failing means the platform RNG is broken. Do NOT fall back
-		// to the all-zero key that was previously left in b — an attacker who
+		// to the all-zero key that was previously left in b - an attacker who
 		// knows the key can forge every font token. Fail loudly instead: a broken
 		// RNG voids the whole token scheme, so there is nothing safe to serve.
 		slog.Error("generate font token secret", "error", err)
@@ -154,7 +154,7 @@ func (g fontGroup) fontVariantByType(label string) string {
 
 // servedFontVariant resolves which variant a group serves publicly, honoring
 // the admin's Serve selection and falling back to the auto preference order
-// (WOFF2 first — including the converted copy — then the remaining formats).
+// (WOFF2 first - including the converted copy - then the remaining formats).
 // Returns the serving token and the variant's type label.
 func (s *Server) servedFontVariant(g fontGroup, m fontMeta, bucket int64) (token, typeLabel string) {
 	_, hasConverted := s.fontDerivativeInfo(g.Key)
@@ -210,7 +210,7 @@ func (s *Server) fontFileForToken(token string) (path, groupKey string, ok bool)
 }
 
 // uploadedFontRefs returns the fonts (one per group) with their effective CSS
-// family names and current serving tokens — the shape the public settings
+// family names and current serving tokens - the shape the public settings
 // payload exposes for the SPA's @font-face registration and header-font picker.
 func (s *Server) uploadedFontRefs() []model.UploadedFont {
 	groups := s.fontGroupList()
@@ -234,7 +234,7 @@ func (s *Server) uploadedFontRefs() []model.UploadedFont {
 	return refs
 }
 
-// ── Origin allowlisting ───────────────────────────────────────────────────────
+// -- Origin allowlisting -------------------------------------------------------
 
 // normalizeFontOrigin validates a site origin ("https://host[:port]") and
 // returns it normalized (lowercased, no path/query/fragment/credentials). A
@@ -275,7 +275,7 @@ func fontOriginAllowed(origin string, m fontMeta) bool {
 func (s *Server) fontRequestAllowed(r *http.Request, m fontMeta) (echoOrigin string, allowed bool) {
 	if origin := r.Header.Get("Origin"); origin != "" {
 		if u, err := url.Parse(origin); err == nil && sameHost(u.Hostname(), r.Host) {
-			return origin, true // the app itself (or dev) — always allowed
+			return origin, true // the app itself (or dev) - always allowed
 		}
 		if fontOriginAllowed(origin, m) {
 			return origin, true
@@ -295,7 +295,7 @@ func (s *Server) fontRequestAllowed(r *http.Request, m fontMeta) (echoOrigin str
 	return "", false
 }
 
-// ── Handlers ──────────────────────────────────────────────────────────────────
+// -- Handlers ------------------------------------------------------------------
 
 // cssFamilyEscape escapes a font family name for use in a single-quoted CSS
 // string (filenames may contain quotes on some filesystems; better safe).
@@ -308,7 +308,7 @@ var cssFamilyEscape = strings.NewReplacer(`\`, `\\`, `'`, `\'`)
 // The stylesheet is filtered per requesting site: a foreign Referer only sees
 // the fonts whose allowlist includes its origin (a site with no allowed fonts
 // gets an empty stylesheet). Same-host or Referer-less requests see every font
-// — the tokens aren't secrets; each font FILE request re-checks its own
+// - the tokens aren't secrets; each font FILE request re-checks its own
 // allowlist, which is the real gate. Short cache so changes propagate quickly.
 //
 //	Endpoint:  GET /api/fonts/pub/kit.css
@@ -326,7 +326,7 @@ func (s *Server) handleFontKitCSS(w http.ResponseWriter, r *http.Request) {
 	bucket := fontTokenBucket(time.Now())
 	metas := s.fontMetaMap()
 	var b strings.Builder
-	b.WriteString("/* Senpan font kit — generated. Font URLs are tokenized and rotate;\n")
+	b.WriteString("/* Senpan font kit - generated. Font URLs are tokenized and rotate;\n")
 	b.WriteString("   always reference fonts through this stylesheet, never by copied URL. */\n")
 	for _, g := range s.fontGroupList() {
 		m := metas[g.Key]
@@ -336,7 +336,7 @@ func (s *Server) handleFontKitCSS(w http.ResponseWriter, r *http.Request) {
 		family := fontFamilyFor(g.Base, m)
 		if family == "" || cssNameUnsafe(family) {
 			// Skip a font whose family carries CSS-breaking characters rather than
-			// emit a rule that could inject CSS — mirrors the empty-family skip.
+			// emit a rule that could inject CSS - mirrors the empty-family skip.
 			// New families are rejected at write time; this guards any value that
 			// predates that validation.
 			continue
@@ -356,7 +356,7 @@ func (s *Server) handleFontKitCSS(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/css; charset=utf-8")
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	// PRIVATE: shared caches (Cloudflare fronts the site and ignores Vary on
-	// non-image responses) must never store this — the content is filtered per
+	// non-image responses) must never store this - the content is filtered per
 	// requesting site, and an edge-cached copy would leak one site's kit (and
 	// tokens) to every other. Browsers may still cache it briefly.
 	w.Header().Set("Cache-Control", "private, max-age=300")
@@ -367,7 +367,7 @@ func (s *Server) handleFontKitCSS(w http.ResponseWriter, r *http.Request) {
 // handleFontPublicFile streams a font file identified by its opaque token,
 // applying the owning font's origin gate. The echoed
 // Access-Control-Allow-Origin is what lets an allowed site's browser actually
-// use the font — cross-origin @font-face loads hard-require CORS, so this
+// use the font - cross-origin @font-face loads hard-require CORS, so this
 // check is enforcement, not advice.
 //
 //	Endpoint:  GET /api/fonts/pub/f/{token}
@@ -381,7 +381,7 @@ func (s *Server) handleFontPublicFile(w http.ResponseWriter, r *http.Request) {
 	}
 	origin, allowed := s.fontRequestAllowed(r, s.fontMetaMap()[groupKey])
 	// The response varies by Origin (both the ACAO header and the 403), so
-	// caches must key on it — set even on the refusal path.
+	// caches must key on it - set even on the refusal path.
 	w.Header().Set("Vary", "Origin")
 	if !allowed {
 		writeError(w, http.StatusForbidden, "This font may only be used by approved sites")
@@ -396,7 +396,7 @@ func (s *Server) handleFontPublicFile(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	// PRIVATE, one bucket width (a browser-cached copy never outlives its
 	// token's validity). It must not be "public": Cloudflare fronts the site,
-	// caches *.woff2 by default, and ignores Vary: Origin — a shared-cache copy
+	// caches *.woff2 by default, and ignores Vary: Origin - a shared-cache copy
 	// primed by an ALLOWED request would then be served to ungated bare
 	// requests, silently bypassing this handler's origin gate.
 	w.Header().Set("Cache-Control", "private, max-age=604800")

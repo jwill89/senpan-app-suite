@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /**
- * End-game winner selection modal (admin) — lets the admin uncheck card IDs
+ * End-game winner selection modal (admin) - lets the admin uncheck card IDs
  * that should NOT count as valid winners before ending the game. Mirrors the
  * original "End Game winner selection modal" block.
  */
@@ -23,9 +23,9 @@ function playerNameFor(id: string): string | undefined {
     @close="game.showEndGameModal = false"
   >
     <h3 class="mb-12">
-      <font-awesome-icon :icon="['fad', 'flag-checkered']" /> End Game — Select Valid Winners
+      <font-awesome-icon :icon="['fad', 'flag-checkered']" /> End Game - Select Valid Winners
     </h3>
-    <p class="text-dim text-xs mb-12">
+    <p class="text-muted text-xs mb-12">
       Uncheck any card IDs that should NOT count as valid winners.
     </p>
     <div style="display: flex; gap: 8px; margin-bottom: 12px">
@@ -53,8 +53,8 @@ function playerNameFor(id: string): string | undefined {
         style="display: flex; align-items: center; gap: 8px; cursor: pointer"
       >
         <input v-model="game.endGameSelectedWinners" type="checkbox" :value="w" />
-        <span class="code-gold">{{ w }}</span>
-        <small v-if="playerNameFor(w)" class="text-dim">— {{ playerNameFor(w) }}</small>
+        <span class="code-highlight">{{ w }}</span>
+        <small v-if="playerNameFor(w)" class="text-muted">- {{ playerNameFor(w) }}</small>
       </label>
     </div>
     <div style="display: flex; gap: 8px; justify-content: flex-end">

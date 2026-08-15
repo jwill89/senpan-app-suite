@@ -39,7 +39,7 @@ func TestRallyCardComplete(t *testing.T) {
 			true,
 		},
 		{
-			"zero collected, all expired → not complete",
+			"zero collected, all expired -> not complete",
 			open,
 			[]model.StampRallyStamp{{ID: 1, ActiveTo: srPast}, {ID: 2, ActiveTo: srPast}},
 			map[int64]string{},
@@ -53,7 +53,7 @@ func TestRallyCardComplete(t *testing.T) {
 			false,
 		},
 		{
-			"event ended → complete with one collected",
+			"event ended -> complete with one collected",
 			&model.StampRally{AvailableTo: srPast},
 			two,
 			map[int64]string{1: ""},

@@ -17,7 +17,7 @@
 export function createFreshness(ttlMs = 30_000) {
   const stamps = new Map<string, number>()
   return {
-    /** True when `key` has no fresh stamp — i.e. the caller should (re)load. */
+    /** True when `key` has no fresh stamp - i.e. the caller should (re)load. */
     isStale(key = ''): boolean {
       const at = stamps.get(key)
       return at === undefined || Date.now() - at >= ttlMs

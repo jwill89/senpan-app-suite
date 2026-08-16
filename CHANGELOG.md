@@ -72,9 +72,27 @@ Stamp Rally sign-up moves to the participant. Requires backend 3.15.0.
 - **Admin: a "Default Draws" field** on the garapon form - the draw allowance a
   self-service sign-up issues, and the number the Issue Link field now starts at
   instead of a bare 1. Still overridable per link.
+- **An emoji button on the WYSIWYG editor**, opening the same picker the stamp and
+  Discord-button fields already use. It inserts the **literal character** at the
+  cursor rather than a `:shortcode:` - a shortcode is what the markdown serializer
+  escapes into `:video\_game:`, and the character survives every hop and renders in
+  our own preview too. No new dependency: `vue3-emoji-picker` and `EmojiPickerModal`
+  were already here, and the picker stays lazy inside the modal. The insert waits for
+  the modal to unmount before running: `ModalOverlay` restores focus to whatever was
+  focused when it opened - the editor - with a raw `.focus()`, and focusing a
+  contenteditable that way collapses the caret to the start of the block. Inserting
+  first let that restoration land last and undo the editor's own selection, which put
+  the cursor at the beginning of the line instead of after the emoji.
 
 #### Changed
 
+- **The markdown editor uses Crepe's persistent top bar** instead of the floating
+  selection toolbar, so the formatting controls are visible before you select
+  anything. The default bar ships buttons for features this editor deliberately does
+  not enable - image, table, code block, math - plus task lists Discord can't render,
+  so `buildTopBar` prunes them to the same Discord-safe set the slash menu keeps. The
+  emptied "block" group is reused for the emoji button rather than left empty,
+  because the bar renders a divider per group whether or not that group has items.
 - **`.form-alert` and `.turnstile-row` are now shared objects** (`utilities.css`) with a
   `--warning` variant alongside `--danger`. They were scoped inside `CardRequestsView`;
   the sign-up pages are the second occurrence, which is where the conventions say to
@@ -1095,6 +1113,44 @@ First tracked release - establishes versioning for the current production build.
 
 Stamp Rally participants can sign themselves up, instead of waiting for staff to issue
 every card by hand. Paired with frontend 3.18.0.
+
+#### Fixed
+
+- **Saving an announcement silently cancelled a pending skip.** The write path reset
+  the flag on every save and the update statement wrote it, so editing anything -
+  fixing a typo, changing the image - quietly un-skipped an occurrence the admin had
+  already told it to sit out, with no sign in the UI. The skip is schedule-cursor
+  state, so `UpdateAnnouncement` no longer touches it at all (the same treatment
+  `last_posted_at` already had); it is written only by the skip endpoint and the
+  scheduler. Structurally immune now rather than relying on each caller to carry the
+  value forward, with a regression test that fails against the old code. Worth noting
+  for anyone who saw this as "it doesn't survive a restart": the value is a database
+  column and nothing at boot touches it - a *save* was always what cleared it.
+
+- **Multi-word emoji shortcodes posted as literal text in Discord embeds.**
+  `:video_game:` came out as `:video\_game:`, while a one-word name like `:tada:` was
+  fine - the giveaway that this was about the underscore, not the emoji. The WYSIWYG
+  editor's markdown serializer escapes `_` because it is an emphasis marker, so every
+  multi-word shortcode reached Discord with backslashes in the middle of the name and
+  stopped resolving. `discordMarkdown` now unescapes underscores **inside a shortcode
+  token**, which fixes announcements, affiliates and tea rooms in one place (all three
+  embed builders normalize through it). Scoped to the token deliberately: an escaped
+  underscore in ordinary prose (`snake\_case`) is correct - Discord honors the escape
+  and renders the underscore without italicizing - so a global unescape would trade
+  one bug for another. Same class as the existing timestamp repair, and the test cases
+  are verbatim serializer output rather than hand-written guesses.
+
+#### Changed
+
+- **"Skip next occurrence" is now "skip the next N occurrences"** (`skip_count`,
+  schema v56, replacing the `skip_next` boolean). An announcement that posts Friday
+  and Saturday can be told once to skip 2 and sit out the whole weekend, instead of
+  skipping, waiting a day, and skipping again. Each skipped occurrence decrements the
+  count. The admin list gets a dialog to set the number (seeded with whatever is
+  pending) and the badge reads "next 2 skipped"; setting **0 clears it**, so a
+  mis-click is now undoable - the old button disabled itself once pressed and offered
+  no way back. A pending `skip_next` migrates to a count of 1, and the endpoint still
+  accepts an empty body as "skip 1", so nothing in flight is lost. Capped at 52.
 
 #### Added
 

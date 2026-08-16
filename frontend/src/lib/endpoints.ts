@@ -693,8 +693,10 @@ export const endpoints = {
       apiPost<OKResponse>('announcements/reorder', { ordered_ids: orderedIds }),
     /** POST /api/announcements/{id}/send - post an announcement's embed to Discord now. */
     sendNow: (id: number) => apiPost<AnnouncementResponse>(`announcements/${id}/send`, undefined),
-    /** POST /api/announcements/{id}/skip - skip the next scheduled occurrence. */
-    skipNext: (id: number) => apiPost<AnnouncementResponse>(`announcements/${id}/skip`, undefined),
+    /** POST /api/announcements/{id}/skip - set how many upcoming scheduled
+     *  occurrences to pass over (0 clears a pending skip). */
+    setSkip: (id: number, count: number) =>
+      apiPost<AnnouncementResponse>(`announcements/${id}/skip`, { count }),
   },
 
   // -- Central image hosting (System -> Images) ----------------------------------

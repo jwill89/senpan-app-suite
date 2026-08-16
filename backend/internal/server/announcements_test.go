@@ -534,6 +534,31 @@ func TestDiscordMarkdown(t *testing.T) {
 		{"blank around list kept", "intro\r\n\r\n- a\r\n\r\n- b\r\n\r\nouttro", "intro\n\n- a\n- b\n\nouttro"},
 		// A bullet (*) item followed by a dash (-) list joins into one tight list.
 		{"mixed markers tighten", "* a\r\n\r\n- b\r\n- c", "* a\n- b\n- c"},
+		// Emoji shortcodes: the serializer escapes the underscores in a multi-word
+		// name, which stops Discord resolving it - so ":tada:" rendered and
+		// ":video_game:" posted as literal text. Unescape inside the token only.
+		// These inputs are verbatim mdast-util-to-markdown output (the serializer
+		// Milkdown uses): it escapes the underscore and leaves the colons alone.
+		{"escaped shortcode mid-sentence", "Play :video\\_game: now", "Play :video_game: now"},
+		{"escaped shortcode at start", ":video\\_game: at start", ":video_game: at start"},
+		{"escaped shortcode at end", "end with :video\\_game:", "end with :video_game:"},
+		{"escaped three-word shortcode", ":white\\_check\\_mark:", ":white_check_mark:"},
+		{"single word shortcode untouched", ":tada:", ":tada:"},
+		{"unescaped shortcode untouched", ":video_game:", ":video_game:"},
+		{"plus shortcode untouched", ":+1:", ":+1:"},
+		{"hyphen and underscore name", ":non-potable\\_water:", ":non-potable_water:"},
+		{"two shortcodes on a line", ":video\\_game: and :white\\_check\\_mark:", ":video_game: and :white_check_mark:"},
+		// Prose keeps its escape: Discord honors "\_" and renders the underscore
+		// without italicizing, so unescaping globally would be the wrong fix.
+		{"prose underscore stays escaped", "a snake\\_case name", "a snake\\_case name"},
+		{"colon prose not a shortcode", "note: some\\_thing: here", "note: some\\_thing: here"},
+		// A realistic announcement: emoji and a timestamp in one line, both escaped
+		// by the serializer, both repaired without interfering with each other.
+		{
+			"shortcodes and timestamp together",
+			"Bingo night :video\\_game: - starts \\<t:1782009000:t\\>",
+			"Bingo night :video_game: - starts <t:1782009000:t>",
+		},
 	}
 	for _, tc := range cases {
 		if got := discordMarkdown(tc.in); got != tc.want {

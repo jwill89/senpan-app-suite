@@ -327,6 +327,18 @@ type announcementWriteRequest struct {
 	Announcement model.Announcement `json:"announcement"`
 }
 
+// maxSkipCount bounds how many upcoming occurrences an admin can skip in one go.
+// Fifty-two is a year of a weekly announcement - past that, "skip" is the wrong
+// tool and the announcement should be deactivated.
+const maxSkipCount = 52
+
+// announcementSkipRequest is the JSON body for POST /api/announcements/{id}/skip.
+// An omitted count means 1 (what the endpoint did before it took a body); 0 or a
+// negative count clears a pending skip.
+type announcementSkipRequest struct {
+	Count int `json:"count"`
+}
+
 // announcementReorderRequest is the JSON body for POST /api/announcements/reorder.
 type announcementReorderRequest struct {
 	OrderedIDs []int64 `json:"ordered_ids"`
@@ -492,10 +504,31 @@ func (s *Server) handleAnnouncementSkip(w http.ResponseWriter, r *http.Request) 
 		writeError(w, http.StatusBadRequest, "This announcement isn't scheduled.")
 		return
 	}
-	if err := s.store.SetAnnouncementSkip(a.ID, true); err != nil {
+	req, err := readJSON[announcementSkipRequest](w, r)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "Invalid JSON")
+		return
+	}
+	// An absent/zero count means "skip the next one", preserving what this endpoint
+	// did when it took no body at all - an older client keeps working.
+	count := req.Count
+	if count == 0 {
+		count = 1
+	}
+	if count < 0 {
+		count = 0 // a negative count is how a caller says "cancel the skip"
+	}
+	if count > maxSkipCount {
+		writeError(w, http.StatusBadRequest,
+			fmt.Sprintf("You can skip at most %d upcoming occurrences.", maxSkipCount))
+		return
+	}
+	if err := s.store.SetAnnouncementSkip(a.ID, count); err != nil {
 		writeInternalError(w, "skip announcement", err)
 		return
 	}
+	slog.Info("announcement skip set", "id", a.ID, "title", a.Title, "skip_count", count,
+		"by", s.actorName(r))
 	saved, _ := s.store.GetAnnouncement(a.ID)
 	writeJSON(w, http.StatusOK, model.AnnouncementResponse{Announcement: saved})
 }
@@ -586,7 +619,10 @@ func (s *Server) validateAndResolveAnnouncement(w http.ResponseWriter, a *model.
 		writeError(w, http.StatusBadRequest, "Invalid schedule kind")
 		return false
 	}
-	a.SkipNext = false
+	// Note: skip_count is deliberately NOT reset here. It is schedule-cursor state
+	// owned by the skip endpoint and the scheduler, and the store's update no longer
+	// writes it - clearing it on save is what silently dropped a pending skip
+	// whenever an admin edited anything else about the announcement.
 
 	// One timezone anchors every wall-clock time. It's required whenever any time
 	// is present (the event window or a schedule); otherwise it's irrelevant.
@@ -982,6 +1018,10 @@ func discordTimeStyle(format, def string) string {
 //   - Discord timestamp tokens (<t:1718...:F>) whose angle brackets the serializer
 //     backslash-escapes ("\<t:...\>"), which stops Discord parsing them as a
 //     timestamp - unescape the brackets so the timestamp renders.
+//   - emoji shortcodes whose underscores the serializer backslash-escapes
+//     (":video_game:" -> ":video\_game:"), which stops Discord resolving the name.
+//     This is why a one-word shortcode like ":tada:" worked while every multi-word
+//     one silently posted as literal text.
 func discordMarkdown(s string) string {
 	if s == "" {
 		return s
@@ -1002,6 +1042,13 @@ func discordMarkdown(s string) string {
 	s = tightenLists(s)
 	// Unescape backslash-escaped angle brackets around Discord timestamp tokens.
 	s = timestampEscapeRe.ReplaceAllString(s, "<t:$1$2>")
+	// Unescape the underscores inside an emoji shortcode. Scoped to the token rather
+	// than done globally on purpose: an escaped underscore in ordinary prose
+	// ("snake\_case") is CORRECT - Discord honors the escape and renders the
+	// underscore without italicizing - so only the shortcode form is repaired.
+	s = emojiShortcodeEscapeRe.ReplaceAllStringFunc(s, func(tok string) string {
+		return strings.ReplaceAll(tok, `\_`, "_")
+	})
 	return s
 }
 
@@ -1062,6 +1109,14 @@ var (
 	// timestampEscapeRe matches a Discord timestamp token whose "<"/">" may have
 	// been backslash-escaped by the markdown serializer (e.g. "\<t:123:F\>").
 	timestampEscapeRe = regexp.MustCompile(`\\?<t:(\d+)(:[tTdDfFR])?\\?>`)
+	// emojiShortcodeEscapeRe matches an emoji shortcode carrying at least one
+	// underscore, escaped or not (":video\_game:", ":white\_check\_mark:"). The name
+	// charset is Discord's own - letters, digits, underscore, and the "+"/"-" that
+	// appear in ":+1:" and ":non-potable_water:". Requiring an underscore keeps it off
+	// the single-word shortcodes that were never broken, and requiring name characters
+	// on both sides of every underscore keeps it off prose like "a: b_c:" (the space
+	// ends the match).
+	emojiShortcodeEscapeRe = regexp.MustCompile(`:[A-Za-z0-9+\-]+(?:\\?_[A-Za-z0-9+\-]+)+:`)
 )
 
 // -- Recurrence --------------------------------------------------------------
@@ -1210,16 +1265,19 @@ func (s *Server) postDueAnnouncements(ctx context.Context) {
 			// picked up on the next startup sweep.
 			return
 		}
-		if a.SkipNext {
+		if a.SkipCount > 0 {
+			// Consume ONE occurrence per due tick: an announcement told to skip 2 sits
+			// out this occurrence and the next, rather than the whole run at once.
+			remaining := a.SkipCount - 1
 			next, active := s.advanceCursor(a)
-			if err := s.store.AdvanceAnnouncement(a.ID, next, active, false); err != nil {
-				slog.Error("announcement scheduler: clear skip", "id", a.ID, "error", err)
+			if err := s.store.AdvanceAnnouncement(a.ID, next, active, remaining); err != nil {
+				slog.Error("announcement scheduler: consume skip", "id", a.ID, "error", err)
 				continue
 			}
 			// Worth a line: from the outside a consumed skip looks exactly like an
 			// announcement that failed to post, since neither puts anything in Discord.
 			slog.Info("announcement occurrence skipped", "id", a.ID, "title", a.Title,
-				"next", next, "still_active", active)
+				"next", next, "still_active", active, "skips_remaining", remaining)
 			continue
 		}
 		typ, _ := s.store.GetAnnouncementType(a.TypeID)

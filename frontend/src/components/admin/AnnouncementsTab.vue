@@ -28,6 +28,7 @@ import SubPageHeader from '@/components/common/ui/SubPageHeader.vue'
 import SearchInput from '@/components/common/ui/SearchInput.vue'
 import ImagePicker from '@/components/common/ui/ImagePicker.vue'
 import EmojiPickerModal from '@/components/common/EmojiPickerModal.vue'
+import ModalOverlay from '@/components/common/ModalOverlay.vue'
 import FormField from '@/components/common/ui/FormField.vue'
 import FormRow from '@/components/common/ui/FormRow.vue'
 import FormActions from '@/components/common/ui/FormActions.vue'
@@ -143,6 +144,27 @@ const emojiPickerRow = ref<number | null>(null)
 function onButtonEmoji(emoji: string): void {
   if (emojiPickerRow.value !== null) store.form.buttons[emojiPickerRow.value].emoji = emoji
   emojiPickerRow.value = null
+}
+
+// -- Skip upcoming occurrences ------------------------------------------------
+/** The announcement whose skip dialog is open (null = closed). */
+const skipTarget = ref<Announcement | null>(null)
+const skipValue = ref(1)
+/** Guards the Save button: the field is a number input, so it can be emptied. */
+const skipValueValid = computed(
+  () => Number.isInteger(skipValue.value) && skipValue.value >= 0 && skipValue.value <= 52,
+)
+
+/** Opens the dialog seeded with what's already pending (or 1 for a fresh skip). */
+function openSkip(a: Announcement): void {
+  skipTarget.value = a
+  skipValue.value = a.skip_count > 0 ? a.skip_count : 1
+}
+
+async function submitSkip(): Promise<void> {
+  const a = skipTarget.value
+  if (!a || !skipValueValid.value) return
+  if (await store.setSkip(a, skipValue.value)) skipTarget.value = null
 }
 
 // -- Navigation ---------------------------------------------------------------
@@ -304,8 +326,9 @@ async function submitRole(): Promise<void> {
                 </template>
               </span>
               <span v-else class="badge badge--muted announcement-badge">Manual only</span>
-              <span v-if="a.skip_next" class="badge badge--warning announcement-badge"
-                ><font-awesome-icon :icon="['fas', 'forward-step']" /> next skipped</span
+              <span v-if="a.skip_count > 0" class="badge badge--warning announcement-badge"
+                ><font-awesome-icon :icon="['fas', 'forward-step']" />
+                {{ a.skip_count === 1 ? 'next skipped' : `next ${a.skip_count} skipped` }}</span
               >
             </p>
 
@@ -324,11 +347,12 @@ async function submitRole(): Promise<void> {
               <button
                 v-if="a.schedule_kind && a.next_post_at"
                 class="btn-caution btn-sm"
-                :disabled="store.skippingId === a.id || a.skip_next"
-                title="Skip the next scheduled occurrence"
-                @click="store.skipNext(a)"
+                :disabled="store.skippingId === a.id"
+                title="Skip one or more upcoming occurrences"
+                @click="openSkip(a)"
               >
-                <font-awesome-icon :icon="['fas', 'forward-step']" /> Skip next
+                <font-awesome-icon :icon="['fas', 'forward-step']" />
+                {{ a.skip_count > 0 ? 'Change skip' : 'Skip' }}
               </button>
               <button
                 class="btn-confirm btn-sm"
@@ -811,6 +835,44 @@ async function submitRole(): Promise<void> {
         </button>
       </FormActions>
     </AdminPanel>
+
+    <!-- How many upcoming occurrences to skip. A count rather than a toggle so a
+         Friday+Saturday announcement can sit out a whole weekend in one go, and
+         setting 0 undoes a mis-click. -->
+    <ModalOverlay
+      v-if="skipTarget"
+      centered
+      aria-label="Skip occurrences"
+      box-style="max-width: 420px"
+      @close="skipTarget = null"
+    >
+      <h3 class="mb-8"><font-awesome-icon :icon="['fad', 'forward-step']" /> Skip Occurrences</h3>
+      <p class="text-muted mb-16">
+        How many upcoming postings of <strong>{{ skipTarget.title }}</strong> should be skipped?
+        Each skipped posting uses one up. Set <strong>0</strong> to post as scheduled.
+      </p>
+      <FormField label="Occurrences to skip">
+        <input
+          v-model.number="skipValue"
+          type="number"
+          min="0"
+          max="52"
+          aria-label="Occurrences to skip"
+          @keydown.enter.prevent="submitSkip()"
+        />
+      </FormField>
+      <FormActions align="end">
+        <button class="btn-neutral" @click="skipTarget = null">Cancel</button>
+        <button
+          class="btn-caution"
+          :disabled="store.skippingId === skipTarget.id || !skipValueValid"
+          @click="submitSkip()"
+        >
+          <LoadingSpinner v-if="store.skippingId === skipTarget.id" label="Saving..." />
+          <template v-else>Save</template>
+        </button>
+      </FormActions>
+    </ModalOverlay>
   </div>
 </template>
 

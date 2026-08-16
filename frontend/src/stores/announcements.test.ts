@@ -3,12 +3,15 @@ import { createPinia, setActivePinia } from 'pinia'
 import type { Announcement } from '@/types/api'
 
 // Capture the payload save() builds; list() backs the post-save refresh.
-const { save, list, reorder } = vi.hoisted(() => ({
+const { save, list, reorder, setSkip } = vi.hoisted(() => ({
   save: vi.fn(async () => ({ announcement: {} })),
   list: vi.fn(async () => ({ announcements: [] })),
   reorder: vi.fn(async () => ({ ok: true })),
+  setSkip: vi.fn(async () => ({ announcement: {} })),
 }))
-vi.mock('@/lib/endpoints', () => ({ endpoints: { announcements: { save, list, reorder } } }))
+vi.mock('@/lib/endpoints', () => ({
+  endpoints: { announcements: { save, list, reorder, setSkip } },
+}))
 
 import { useAnnouncementsStore } from './announcements'
 
@@ -248,5 +251,30 @@ describe('editAnnouncement round-trip', () => {
       } as unknown as Announcement),
     ).not.toThrow()
     expect(s.form.buttons).toEqual([])
+  })
+})
+
+describe('setSkip', () => {
+  it('sends the requested count and refreshes the list', async () => {
+    const s = useAnnouncementsStore()
+    const a = { id: 4, title: 'Bingo Night' } as Announcement
+    expect(await s.setSkip(a, 2)).toBe(true)
+    expect(setSkip).toHaveBeenCalledWith(4, 2)
+    // The list is reloaded so the row's badge reflects the new count.
+    expect(list).toHaveBeenCalled()
+    expect(s.skippingId).toBeNull()
+  })
+
+  it('sends 0 to clear a pending skip', async () => {
+    const s = useAnnouncementsStore()
+    expect(await s.setSkip({ id: 4, title: 'X' } as Announcement, 0)).toBe(true)
+    expect(setSkip).toHaveBeenCalledWith(4, 0)
+  })
+
+  it('reports failure and clears the in-flight marker', async () => {
+    setSkip.mockRejectedValueOnce(new Error('nope'))
+    const s = useAnnouncementsStore()
+    expect(await s.setSkip({ id: 4, title: 'X' } as Announcement, 1)).toBe(false)
+    expect(s.skippingId).toBeNull()
   })
 })

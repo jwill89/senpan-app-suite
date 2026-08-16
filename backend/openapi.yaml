@@ -232,8 +232,8 @@ components:
           type: integer
         schedule_weekdays:
           type: string
-        skip_next:
-          type: boolean
+        skip_count:
+          type: integer
         start_at:
           type: string
         start_format:
@@ -316,8 +316,8 @@ components:
               type: integer
             schedule_weekdays:
               type: string
-            skip_next:
-              type: boolean
+            skip_count:
+              type: integer
             start_at:
               type: string
             start_format:
@@ -482,8 +482,8 @@ components:
                 type: integer
               schedule_weekdays:
                 type: string
-              skip_next:
-                type: boolean
+              skip_count:
+                type: integer
               start_at:
                 type: string
               start_format:
@@ -5213,7 +5213,7 @@ paths:
       description: |-
         **Auth:** permission:teahouse-announcements
 
-        Skips the next scheduled occurrence of a scheduled announcement.
+        Sets how many upcoming scheduled occurrences to pass over - `{"count": 2}` sits out a Friday-and-Saturday weekend in one go. Each skipped occurrence decrements the count. An omitted count means 1 (what this endpoint did before it took a body); 0 or negative clears a pending skip. Capped at 52.
       parameters:
       - description: Announcement id.
         in: path
@@ -5221,6 +5221,18 @@ paths:
         required: true
         schema:
           type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              properties:
+                count:
+                  description: Occurrences to skip (omit for 1, 0 to clear).
+                  format: int64
+                  type: integer
+              type: object
+        description: How many occurrences to skip.
+        required: true
       responses:
         "200":
           content:
@@ -5233,7 +5245,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
-          description: Not scheduled
+          description: Not scheduled / count too large
         "404":
           content:
             application/json:
@@ -5243,7 +5255,7 @@ paths:
       security:
       - cookieAuth: []
       - bearerAuth: []
-      summary: Skip next occurrence
+      summary: Skip upcoming occurrences
       tags:
       - Announcements
   /api/announcements/reorder:

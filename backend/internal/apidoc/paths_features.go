@@ -356,10 +356,14 @@ func buildFeaturePaths(b *pb) {
 		"Posts the announcement's embed to Discord immediately.", opt{
 			path:  []*openapi3.Parameter{pparam("id", "Announcement id.")},
 			resps: []respEntry{ok("AnnouncementResponse"), r("400", "No Discord webhook configured"), r("404", "Not found"), r("502", "Discord failed")}})
-	b.add("POST", "/api/announcements/{id}/skip", "Announcements", "Skip next occurrence", ann,
-		"Skips the next scheduled occurrence of a scheduled announcement.", opt{
+	b.add("POST", "/api/announcements/{id}/skip", "Announcements", "Skip upcoming occurrences", ann,
+		"Sets how many upcoming scheduled occurrences to pass over - `{\"count\": 2}` sits out a "+
+			"Friday-and-Saturday weekend in one go. Each skipped occurrence decrements the count. An "+
+			"omitted count means 1 (what this endpoint did before it took a body); 0 or negative clears "+
+			"a pending skip. Capped at 52.", opt{
 			path:  []*openapi3.Parameter{pparam("id", "Announcement id.")},
-			resps: []respEntry{ok("AnnouncementResponse"), r("400", "Not scheduled"), r("404", "Not found")}})
+			body:  actionBody("How many occurrences to skip.", nil, props("count", pint("Occurrences to skip (omit for 1, 0 to clear)."))),
+			resps: []respEntry{ok("AnnouncementResponse"), r("400", "Not scheduled / count too large"), r("404", "Not found")}})
 
 	// -- Winners Log -----------------------------------------------------------
 	wl := "permission:bingo-winners-log"

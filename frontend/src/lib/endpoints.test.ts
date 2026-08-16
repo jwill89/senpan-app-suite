@@ -626,9 +626,14 @@ describe('announcements (hybrid REST)', () => {
     expect(apiPost).toHaveBeenCalledWith('announcements/7/send', undefined)
   })
 
-  it('skipNext POSTs to the /{id}/skip verb sub-resource', async () => {
-    await endpoints.announcements.skipNext(7)
-    expect(apiPost).toHaveBeenCalledWith('announcements/7/skip', undefined)
+  it('setSkip POSTs the occurrence count to the /{id}/skip verb sub-resource', async () => {
+    await endpoints.announcements.setSkip(7, 2)
+    expect(apiPost).toHaveBeenCalledWith('announcements/7/skip', { count: 2 })
+  })
+
+  it('setSkip sends 0 to clear a pending skip', async () => {
+    await endpoints.announcements.setSkip(7, 0)
+    expect(apiPost).toHaveBeenCalledWith('announcements/7/skip', { count: 0 })
   })
 })
 

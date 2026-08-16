@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"strings"
 
 	"app-suite/internal/auth"
@@ -15,7 +16,7 @@ import (
 // PRAGMA user_version against this constant and runs only the migrations
 // needed to bring the database up to date. Bump this when adding a new
 // migration block.
-const schemaVersion = 55
+const schemaVersion = 56
 
 // ensureSchema reads the current PRAGMA user_version from the database and
 // applies any outstanding migrations to bring it up to schemaVersion.
@@ -375,6 +376,12 @@ func ensureSchema(db *sql.DB) error {
 		}
 	}
 
+	if version < 56 {
+		if err := migrateAnnouncementSkipCount(db); err != nil {
+			return err
+		}
+	}
+
 	_, err := db.Exec(fmt.Sprintf("PRAGMA user_version = %d", schemaVersion))
 	return err
 }
@@ -411,6 +418,37 @@ func migrateStampRallyPublicSignup(db *sql.DB) error {
 	}
 	if _, err := db.Exec(`ALTER TABLE stamp_rallies ADD COLUMN public_signup INTEGER NOT NULL DEFAULT 0`); err != nil {
 		return fmt.Errorf("add stamp_rallies.public_signup: %w", err)
+	}
+	return nil
+}
+
+// migrateAnnouncementSkipCount (schema v56) replaces announcements.skip_next (a
+// boolean "skip the next occurrence") with skip_count, the NUMBER of upcoming
+// occurrences to skip - so an announcement that posts Friday and Saturday can be
+// told once to skip both, instead of skipping, waiting a day, and skipping again.
+// A pending skip_next carries over as a count of 1, so nothing set before the
+// upgrade is lost.
+//
+// Dropping the old column is best-effort: SQLite has supported DROP COLUMN since
+// 3.35, but a failure here must not stop the server booting - a leftover unused
+// column is harmless, and skip_count is the only one anything reads afterwards.
+func migrateAnnouncementSkipCount(db *sql.DB) error {
+	if !tableExists(db, "announcements") {
+		return nil
+	}
+	if !hasColumn(db, "announcements", "skip_count") {
+		if _, err := db.Exec(`ALTER TABLE announcements ADD COLUMN skip_count INTEGER NOT NULL DEFAULT 0`); err != nil {
+			return fmt.Errorf("add announcements.skip_count: %w", err)
+		}
+	}
+	if hasColumn(db, "announcements", "skip_next") {
+		if _, err := db.Exec(`UPDATE announcements SET skip_count = 1 WHERE skip_next = 1 AND skip_count = 0`); err != nil {
+			return fmt.Errorf("carry announcements.skip_next into skip_count: %w", err)
+		}
+		if _, err := db.Exec(`ALTER TABLE announcements DROP COLUMN skip_next`); err != nil {
+			slog.Warn("could not drop the superseded announcements.skip_next column; it is unused from here on",
+				"error", err)
+		}
 	}
 	return nil
 }
@@ -1045,7 +1083,7 @@ const announcementsTableSQL = `CREATE TABLE IF NOT EXISTS announcements (
 	schedule_weekdays TEXT NOT NULL DEFAULT '',
 	schedule_week_of_month INTEGER NOT NULL DEFAULT 0,
 	next_post_at TEXT NOT NULL DEFAULT '',
-	skip_next INTEGER NOT NULL DEFAULT 0,
+	skip_count INTEGER NOT NULL DEFAULT 0,
 	active INTEGER NOT NULL DEFAULT 1,
 	last_posted_at DATETIME,
 	created_at DATETIME DEFAULT CURRENT_TIMESTAMP,

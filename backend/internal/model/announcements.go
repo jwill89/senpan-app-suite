@@ -65,8 +65,11 @@ type Announcement struct {
 	ScheduleWeekdays    string `json:"schedule_weekdays"`      // CSV of local weekdays 0=Sun..6=Sat (weekly; first value reused for monthly)
 	ScheduleWeekOfMonth int    `json:"schedule_week_of_month"` // 1..5 or -1=last (monthly)
 
-	NextPostAt   string `json:"next_post_at"`   // next scheduled instant, UTC RFC-3339 ("" = none)
-	SkipNext     bool   `json:"skip_next"`      // skip the next occurrence, then resume
+	NextPostAt string `json:"next_post_at"` // next scheduled instant, UTC RFC-3339 ("" = none)
+	// SkipCount is how many upcoming occurrences to pass over before posting again.
+	// Each skipped occurrence decrements it, so a Friday+Saturday announcement can
+	// be told once to skip 2 and sit out a whole weekend. 0 = post as scheduled.
+	SkipCount    int    `json:"skip_count"`
 	Active       bool   `json:"active"`         // whether the schedule is live
 	LastPostedAt string `json:"last_posted_at"` // ISO timestamp of last post ("" if never)
 	CreatedAt    string `json:"created_at"`

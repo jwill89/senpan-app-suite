@@ -452,21 +452,26 @@ export const useAnnouncementsStore = defineStore('announcements', () => {
     }
   }
 
-  async function skipNext(a: Announcement): Promise<void> {
-    if (
-      !(await ui.confirm(`Skip the next scheduled posting of "${a.title}"?`, {
-        title: 'Skip next occurrence',
-        confirmText: 'Skip next',
-      }))
-    )
-      return
+  /**
+   * Sets how many upcoming occurrences to skip (0 clears it). No confirm dialog:
+   * the caller's number prompt IS the deliberate step, and unlike the old
+   * fire-and-forget toggle this is reversible - setting 0 undoes it.
+   */
+  async function setSkip(a: Announcement, count: number): Promise<boolean> {
     skippingId.value = a.id
     try {
-      await endpoints.announcements.skipNext(a.id)
-      ui.notify('Next occurrence will be skipped', 'info')
+      await endpoints.announcements.setSkip(a.id, count)
+      ui.notify(
+        count > 0
+          ? `Skipping the next ${count} ${count === 1 ? 'occurrence' : 'occurrences'}`
+          : 'Skip cleared - this announcement posts as scheduled',
+        'info',
+      )
       await loadAnnouncements()
+      return true
     } catch (e) {
       ui.notify((e as Error).message, 'error')
+      return false
     } finally {
       skippingId.value = null
     }
@@ -507,6 +512,6 @@ export const useAnnouncementsStore = defineStore('announcements', () => {
     save,
     deleteAnnouncement,
     sendNow,
-    skipNext,
+    setSkip,
   }
 })

@@ -176,22 +176,22 @@ func (s *Store) CountAnnouncementsByRole(roleID int64) (int, error) {
 const announcementColumns = `a.id, a.type_id, a.title, a.details, a.image, a.thumbnail, a.color, a.location, a.start_local, a.end_local,
 	a.start_at, a.end_at, a.start_format, a.end_format, a.dynamic_dates, a.schedule_kind, a.timezone, a.once_local, a.schedule_minutes,
 	a.schedule_weekdays, a.schedule_week_of_month,
-	a.next_post_at, a.skip_next, a.active, a.last_posted_at, a.created_at, a.buttons, a.mention, COALESCE(t.name, '')`
+	a.next_post_at, a.skip_count, a.active, a.last_posted_at, a.created_at, a.buttons, a.mention, COALESCE(t.name, '')`
 
 // scanAnnouncement scans one row (in announcementColumns order) into a model.
 func scanAnnouncement(sc interface{ Scan(...any) error }) (model.Announcement, error) {
 	var a model.Announcement
-	var skip, active, dynamicDates int
+	var skipCount, active, dynamicDates int
 	var lastPosted sql.NullString
 	var buttons sql.NullString
 	err := sc.Scan(&a.ID, &a.TypeID, &a.Title, &a.Details, &a.Image, &a.Thumbnail, &a.Color, &a.Location, &a.StartLocal, &a.EndLocal,
 		&a.StartAt, &a.EndAt, &a.StartFormat, &a.EndFormat, &dynamicDates, &a.ScheduleKind, &a.Timezone, &a.OnceLocal, &a.ScheduleMinutes,
 		&a.ScheduleWeekdays, &a.ScheduleWeekOfMonth,
-		&a.NextPostAt, &skip, &active, &lastPosted, &a.CreatedAt, &buttons, &a.Mention, &a.TypeName)
+		&a.NextPostAt, &skipCount, &active, &lastPosted, &a.CreatedAt, &buttons, &a.Mention, &a.TypeName)
 	if err != nil {
 		return a, err
 	}
-	a.SkipNext = skip != 0
+	a.SkipCount = skipCount
 	a.Active = active != 0
 	a.DynamicDates = dynamicDates != 0
 	if lastPosted.Valid {
@@ -274,17 +274,20 @@ func (s *Store) CreateAnnouncement(a *model.Announcement) (int64, error) {
 }
 
 // UpdateAnnouncement updates an announcement's editable fields. It does not touch
-// last_posted_at (that's stamped only when actually posting).
+// last_posted_at (that's stamped only when actually posting) - nor skip_count,
+// which belongs to the schedule cursor rather than the form: it is written only by
+// SetAnnouncementSkip and AdvanceAnnouncement. Writing it here is what silently
+// cleared a pending skip every time an admin saved an unrelated edit.
 func (s *Store) UpdateAnnouncement(a *model.Announcement) error {
 	_, err := s.db.Exec(
 		`UPDATE announcements SET type_id = ?, title = ?, details = ?, image = ?, thumbnail = ?, color = ?, location = ?,
 			start_local = ?, end_local = ?, start_at = ?, end_at = ?, start_format = ?, end_format = ?, dynamic_dates = ?, schedule_kind = ?,
 			timezone = ?, once_local = ?, schedule_minutes = ?, schedule_weekdays = ?,
-			schedule_week_of_month = ?, next_post_at = ?, skip_next = ?, active = ?, buttons = ?, mention = ?
+			schedule_week_of_month = ?, next_post_at = ?, active = ?, buttons = ?, mention = ?
 		 WHERE id = ?`,
 		a.TypeID, a.Title, a.Details, a.Image, a.Thumbnail, a.Color, a.Location, a.StartLocal, a.EndLocal, a.StartAt, a.EndAt, a.StartFormat, a.EndFormat, boolToInt(a.DynamicDates),
 		a.ScheduleKind, a.Timezone, a.OnceLocal, a.ScheduleMinutes, a.ScheduleWeekdays,
-		a.ScheduleWeekOfMonth, a.NextPostAt, boolToInt(a.SkipNext), boolToInt(a.Active),
+		a.ScheduleWeekOfMonth, a.NextPostAt, boolToInt(a.Active),
 		encodeAnnouncementButtons(a.Buttons), a.Mention, a.ID,
 	)
 	return err
@@ -355,18 +358,19 @@ func (s *Store) MarkAnnouncementPosted(id int64, nextPostAt string, active bool)
 }
 
 // AdvanceAnnouncement updates only the schedule cursor (next instant + active +
-// skip flag) without stamping a post - used when a scheduled occurrence is skipped.
-func (s *Store) AdvanceAnnouncement(id int64, nextPostAt string, active, skipNext bool) error {
+// remaining skips) without stamping a post - used when a scheduled occurrence is
+// skipped.
+func (s *Store) AdvanceAnnouncement(id int64, nextPostAt string, active bool, skipCount int) error {
 	_, err := s.db.Exec(
-		`UPDATE announcements SET next_post_at = ?, active = ?, skip_next = ? WHERE id = ?`,
-		nextPostAt, boolToInt(active), boolToInt(skipNext), id,
+		`UPDATE announcements SET next_post_at = ?, active = ?, skip_count = ? WHERE id = ?`,
+		nextPostAt, boolToInt(active), skipCount, id,
 	)
 	return err
 }
 
-// SetAnnouncementSkip flags (or clears) the "skip the next occurrence" marker.
-func (s *Store) SetAnnouncementSkip(id int64, skip bool) error {
-	_, err := s.db.Exec(`UPDATE announcements SET skip_next = ? WHERE id = ?`, boolToInt(skip), id)
+// SetAnnouncementSkip sets how many upcoming occurrences to skip (0 clears it).
+func (s *Store) SetAnnouncementSkip(id int64, count int) error {
+	_, err := s.db.Exec(`UPDATE announcements SET skip_count = ? WHERE id = ?`, count, id)
 	return err
 }
 

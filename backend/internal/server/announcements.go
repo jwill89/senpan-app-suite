@@ -464,7 +464,7 @@ func (s *Server) handleAnnouncementSend(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	target := webhookTarget{Kind: "announcement", Name: a.Title}
-	if err := postDiscordWebhook(r.Context(), target, typ.WebhookURL, s.buildAnnouncementMessage(*a)); err != nil {
+	if err := s.postDiscordWebhook(r.Context(), target, typ.WebhookURL, s.buildAnnouncementMessage(*a)); err != nil {
 		writeUpstreamError(w, fmt.Sprintf("send announcement %d", id), err)
 		return
 	}
@@ -1285,7 +1285,7 @@ func (s *Server) postDueAnnouncements(ctx context.Context) {
 			continue // no webhook yet; try again next tick
 		}
 		target := webhookTarget{Kind: "announcement_scheduled", Name: a.Title}
-		err := postDiscordWebhook(ctx, target, typ.WebhookURL, s.buildAnnouncementMessage(a))
+		err := s.postDiscordWebhook(ctx, target, typ.WebhookURL, s.buildAnnouncementMessage(a))
 		if err != nil && !errors.Is(err, errWebhookAmbiguous) {
 			// Definitely not delivered (HTTP error status, incl. 429 rate limit):
 			// leave the cursor where it is so the next tick retries.

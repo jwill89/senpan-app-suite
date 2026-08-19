@@ -37,6 +37,15 @@ describe('useMarkdown', () => {
     expect(render('see https://example.com now')).toContain('href="https://example.com"')
   })
 
+  // markdown-it 15 pulled in linkify-it 6, which defaults `fuzzyLink` to false -
+  // silently dropping the link on a scheme-less address an author typed. We turn it
+  // back on, so this pins the behavior rather than whatever the transitive default
+  // happens to be.
+  it('linkifies a scheme-less www address', async () => {
+    const render = await renderer()
+    expect(render('visit www.example.com today')).toContain('href="http://www.example.com"')
+  })
+
   it('converts single newlines to <br> (breaks: true)', async () => {
     const render = await renderer()
     expect(render('line one\nline two')).toContain('<br>')

@@ -47,7 +47,11 @@ frontend.
 # 1. Backend - run the API/WebSocket server on :8080
 cd backend
 # -log-file="" keeps logs on stdout only (the default writes to /var/log/senpan)
-go run . -addr :8080 -db ../devdata/database.sqlite -webroot ../devdata/webroot -log-file ""
+# -webhook-dry-run suppresses outbound Discord posts. Keep it on: devdata is a copy
+# of the live database and carries real webhook URLs, so the announcement scheduler
+# would otherwise post to production channels by itself. Use
+# -webhook-override <url> to send everything to a test channel instead.
+go run . -addr :8080 -db ../devdata/database.sqlite -webroot ../devdata/webroot -log-file "" -webhook-dry-run
 
 # 2. Frontend (in a second terminal)
 cd frontend

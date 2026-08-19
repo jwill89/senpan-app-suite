@@ -6,7 +6,7 @@ require (
 	github.com/DeRuina/timberjack v1.4.6
 	github.com/alexedwards/scs/v2 v2.9.0
 	github.com/coder/websocket v1.8.15
-	github.com/getkin/kin-openapi v0.146.0
+	github.com/getkin/kin-openapi v0.147.0
 	github.com/go-webauthn/webauthn v0.17.4
 	github.com/ncruces/go-sqlite3 v0.35.3
 	github.com/tdewolff/font v0.0.0-20260809175822-e00d3ed980cd

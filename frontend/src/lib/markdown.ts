@@ -27,8 +27,17 @@ const ready = ref(false)
 function ensureLoaded(): Promise<void> {
   if (loadPromise) return loadPromise
   loadPromise = import('markdown-it').then(({ default: MarkdownIt }) => {
-    md = new MarkdownIt({ html: false, breaks: true, linkify: true })
-    mdFlow = new MarkdownIt({ html: false, breaks: false, linkify: true })
+    const inline = new MarkdownIt({ html: false, breaks: true, linkify: true })
+    const flow = new MarkdownIt({ html: false, breaks: false, linkify: true })
+    // markdown-it 15 ships linkify-it 6, which flipped `fuzzyLink` to false by
+    // default - so a bare "www.senpan.cafe" stopped becoming a link while an
+    // explicit https:// one still worked. Authors write both, and the rendering
+    // an admin already knows shouldn't change under them because a transitive
+    // default moved, so keep the pre-15 behavior explicitly.
+    inline.linkify.set({ fuzzyLink: true })
+    flow.linkify.set({ fuzzyLink: true })
+    md = inline
+    mdFlow = flow
     ready.value = true
   })
   return loadPromise

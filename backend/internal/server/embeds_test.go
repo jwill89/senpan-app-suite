@@ -53,7 +53,7 @@ func TestPostDiscordWebhookComponentsFlag(t *testing.T) {
 			defer srv.Close()
 
 			target := webhookTarget{Kind: "test", Name: tc.name}
-			if err := postDiscordWebhook(context.Background(), target, srv.URL, tc.payload); err != nil {
+			if err := (&Server{}).postDiscordWebhook(context.Background(), target, srv.URL, tc.payload); err != nil {
 				t.Fatalf("postDiscordWebhook: %v", err)
 			}
 			hasParam := strings.Contains(gotQuery, "with_components=true")
@@ -79,7 +79,7 @@ func TestPostDiscordWebhookLogsSuccess(t *testing.T) {
 
 	target := webhookTarget{Kind: "announcement", Name: "Bingo Night"}
 	payload := discordWebhookPayload{Embeds: []discordEmbed{{Title: "Hi"}}}
-	if err := postDiscordWebhook(context.Background(), target, ok.URL, payload); err != nil {
+	if err := (&Server{}).postDiscordWebhook(context.Background(), target, ok.URL, payload); err != nil {
 		t.Fatalf("postDiscordWebhook: %v", err)
 	}
 	for _, want := range []string{
@@ -100,7 +100,7 @@ func TestPostDiscordWebhookLogsSuccess(t *testing.T) {
 		w.WriteHeader(http.StatusNotFound)
 	}))
 	defer bad.Close()
-	if err := postDiscordWebhook(context.Background(), target, bad.URL, payload); err == nil {
+	if err := (&Server{}).postDiscordWebhook(context.Background(), target, bad.URL, payload); err == nil {
 		t.Fatal("expected an error for a 404 response, got nil")
 	}
 	if added := logged()[before:]; strings.Contains(added, "discord post sent") {
@@ -117,6 +117,90 @@ func captureLogs(t *testing.T) func() string {
 	slog.SetDefault(slog.New(slog.NewJSONHandler(&buf, &slog.HandlerOptions{Level: slog.LevelInfo})))
 	t.Cleanup(func() { slog.SetDefault(prev) })
 	return buf.String
+}
+
+// TestWebhookPolicy covers the two dev-safety valves. They exist because a
+// development server runs against a COPY OF THE LIVE DATABASE, whose rows carry
+// real webhook URLs - so "it only posts if I click something" is false: the
+// announcement scheduler posts on its own. Both are enforced at this funnel, which
+// is the only place outbound posts can leave from.
+func TestWebhookPolicy(t *testing.T) {
+	// A stand-in for a production channel. If a guard leaks, this counter moves.
+	var hits int
+	live := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hits++
+		_, _ = io.Copy(io.Discard, r.Body)
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer live.Close()
+
+	payload := discordWebhookPayload{Embeds: []discordEmbed{{Title: "Hi"}}}
+	target := webhookTarget{Kind: "announcement", Name: "Bingo Night"}
+
+	t.Run("dry run sends nothing", func(t *testing.T) {
+		hits = 0
+		srv := &Server{}
+		srv.SetWebhookPolicy("", true)
+		if err := srv.postDiscordWebhook(context.Background(), target, live.URL, payload); err != nil {
+			t.Fatalf("dry run should succeed without posting: %v", err)
+		}
+		if hits != 0 {
+			t.Errorf("dry run reached the webhook %d time(s); want 0", hits)
+		}
+	})
+
+	t.Run("override redirects away from the configured webhook", func(t *testing.T) {
+		hits = 0
+		var overrideHits int
+		test := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			overrideHits++
+			_, _ = io.Copy(io.Discard, r.Body)
+			w.WriteHeader(http.StatusNoContent)
+		}))
+		defer test.Close()
+
+		srv := &Server{}
+		srv.SetWebhookPolicy(test.URL, false)
+		if err := srv.postDiscordWebhook(context.Background(), target, live.URL, payload); err != nil {
+			t.Fatalf("override post: %v", err)
+		}
+		if hits != 0 {
+			t.Errorf("override still reached the configured webhook %d time(s); want 0", hits)
+		}
+		if overrideHits != 1 {
+			t.Errorf("override webhook got %d post(s); want 1", overrideHits)
+		}
+	})
+
+	t.Run("dry run wins over override", func(t *testing.T) {
+		var overrideHits int
+		test := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			overrideHits++
+			w.WriteHeader(http.StatusNoContent)
+		}))
+		defer test.Close()
+
+		srv := &Server{}
+		srv.SetWebhookPolicy(test.URL, true)
+		if err := srv.postDiscordWebhook(context.Background(), target, live.URL, payload); err != nil {
+			t.Fatalf("dry run + override: %v", err)
+		}
+		if overrideHits != 0 {
+			t.Errorf("dry run still posted to the override %d time(s); want 0", overrideHits)
+		}
+	})
+
+	t.Run("unset policy posts normally", func(t *testing.T) {
+		hits = 0
+		srv := &Server{}
+		srv.SetWebhookPolicy("", false)
+		if err := srv.postDiscordWebhook(context.Background(), target, live.URL, payload); err != nil {
+			t.Fatalf("normal post: %v", err)
+		}
+		if hits != 1 {
+			t.Errorf("production path posted %d time(s); want 1", hits)
+		}
+	})
 }
 
 // TestWithComponentsParam checks the flag is merged into an existing query string
@@ -140,7 +224,7 @@ func TestPostDiscordWebhookSurfacesDiscordReason(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	err := postDiscordWebhook(context.Background(), webhookTarget{Kind: "test"}, srv.URL,
+	err := (&Server{}).postDiscordWebhook(context.Background(), webhookTarget{Kind: "test"}, srv.URL,
 		discordWebhookPayload{Embeds: []discordEmbed{{Title: "Hi"}}})
 	if err == nil {
 		t.Fatal("expected an error for a 404 response, got nil")

@@ -33,6 +33,8 @@ func main() {
 	turnstileSecret := flag.String("turnstile-secret", "", "Cloudflare Turnstile secret key (env APPSUITE_TURNSTILE_SECRET; empty = login bot check disabled)")
 	turnstileSiteKey := flag.String("turnstile-sitekey", "", "Cloudflare Turnstile public site key (env APPSUITE_TURNSTILE_SITEKEY)")
 	logFile := flag.String("log-file", "/var/log/senpan/senpan.log", "Rotating JSON log file path (daily midnight rotation); empty = stdout only")
+	webhookOverride := flag.String("webhook-override", "", "Redirect EVERY outbound Discord post to this webhook URL (env APPSUITE_WEBHOOK_OVERRIDE; dev safety when running on a copy of live data)")
+	webhookDryRun := flag.Bool("webhook-dry-run", false, "Log outbound Discord posts instead of sending them (env APPSUITE_WEBHOOK_DRY_RUN=1); wins over -webhook-override")
 	flag.Parse()
 
 	// Logging: install the JSON slog handler before anything logs. Always writes
@@ -96,6 +98,25 @@ func main() {
 	srv := server.New(db, hub, finalSecret, *webRoot, allowedOrigins)
 	srv.SetTurnstile(tsSecret, tsSiteKey)
 	srv.SetLogFile(*logFile) // GET /api/logs tails this file
+
+	// Outbound-Discord safety valves. A development server is normally pointed at a
+	// COPY OF THE LIVE DATABASE, whose announcement types, book clubs, affiliates and
+	// tea rooms all carry real webhook URLs - so without one of these, simply starting
+	// the process lets the announcement scheduler post to production channels. Both
+	// are off unless asked for, so production behaviour is unchanged; both are logged
+	// loudly at startup, because "did that actually post?" must never be a guess.
+	hookOverride := *webhookOverride
+	if hookOverride == "" {
+		hookOverride = os.Getenv("APPSUITE_WEBHOOK_OVERRIDE")
+	}
+	hookDryRun := *webhookDryRun || os.Getenv("APPSUITE_WEBHOOK_DRY_RUN") == "1"
+	srv.SetWebhookPolicy(hookOverride, hookDryRun)
+	switch {
+	case hookDryRun:
+		slog.Warn("DISCORD DRY RUN: outbound posts are suppressed and only logged")
+	case hookOverride != "":
+		slog.Warn("DISCORD OVERRIDE: every outbound post is redirected to the override webhook")
+	}
 
 	// Live log tail: forward each JSON log line to admin WebSocket clients as a
 	// {"type":"log","entry":...} message. Gated on an admin actually watching so the

@@ -298,7 +298,7 @@ func (s *Server) handleTeaRoomPost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	target := webhookTarget{Kind: "tea_room", Name: room.Name}
-	if err := postDiscordEmbed(r.Context(), target, webhook, buildTeaRoomEmbed(*room)); err != nil {
+	if err := s.postDiscordEmbed(r.Context(), target, webhook, buildTeaRoomEmbed(*room)); err != nil {
 		writeUpstreamError(w, fmt.Sprintf("post tea room %d", id), err)
 		return
 	}

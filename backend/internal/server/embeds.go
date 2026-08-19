@@ -288,8 +288,8 @@ type webhookTarget struct {
 
 // postDiscordEmbed sends a single embed to the webhook URL. The context bounds the
 // request, so a caller shutdown or client disconnect cancels an in-flight POST.
-func postDiscordEmbed(ctx context.Context, target webhookTarget, webhookURL string, embed discordEmbed) error {
-	return postDiscordWebhook(ctx, target, webhookURL, discordWebhookPayload{Embeds: []discordEmbed{embed}})
+func (s *Server) postDiscordEmbed(ctx context.Context, target webhookTarget, webhookURL string, embed discordEmbed) error {
+	return s.postDiscordWebhook(ctx, target, webhookURL, discordWebhookPayload{Embeds: []discordEmbed{embed}})
 }
 
 // postDiscordWebhook sends a full webhook payload (embeds + optional components) to
@@ -298,7 +298,25 @@ func postDiscordEmbed(ctx context.Context, target webhookTarget, webhookURL stri
 // `?with_components=true`; without it the message posts but the buttons silently
 // vanish. Link buttons are non-interactive, so channel (non-application-owned)
 // webhooks are allowed to send them once the flag is set.
-func postDiscordWebhook(ctx context.Context, target webhookTarget, webhookURL string, payload discordWebhookPayload) error {
+func (s *Server) postDiscordWebhook(ctx context.Context, target webhookTarget, webhookURL string, payload discordWebhookPayload) error {
+	// Dev safety, applied before anything leaves the process. A development server
+	// is routinely pointed at a COPY OF THE LIVE DATABASE, which carries real
+	// webhook URLs for every announcement type, book club, affiliate and tea room -
+	// so an ordinary local run (or just the announcement scheduler ticking) posts to
+	// production channels. Both guards sit at this funnel, the one place every
+	// posting feature already goes through, so no feature can forget them and a
+	// future one inherits them for free.
+	if s.webhookDryRun {
+		slog.Warn("discord post SUPPRESSED (dry run)", "kind", target.Kind, "name", target.Name,
+			"embeds", len(payload.Embeds))
+		return nil
+	}
+	if s.webhookOverride != "" {
+		slog.Warn("discord post REDIRECTED to the override webhook", "kind", target.Kind,
+			"name", target.Name)
+		webhookURL = s.webhookOverride
+	}
+
 	body, err := json.Marshal(payload)
 	if err != nil {
 		return fmt.Errorf("encode embed")

@@ -40,6 +40,10 @@ type Server struct {
 	raffleLimiter  *rateLimiter // public raffle-entry limiter (entry flooding)
 	cardReqLimiter *rateLimiter // public custom-card-request limiter (request flooding)
 	rallyLimiter   *rateLimiter // public stamp-rally sign-up + link-lookup limiter
+	// Dev-safety valves for outbound Discord posts (see SetWebhookPolicy). Empty /
+	// false in production, where posts go to the webhook the feature configured.
+	webhookOverride string
+	webhookDryRun   bool
 	// Cloudflare Turnstile bot check on the admin login. Disabled (verification
 	// skipped) when turnstileSecret is empty - see SetTurnstile / turnstile.go.
 	turnstileSecret  string
@@ -84,6 +88,23 @@ func (s *Server) SetTurnstile(secret, siteKey string) {
 	s.turnstileSiteKey = strings.TrimSpace(siteKey)
 }
 
+// SetWebhookPolicy installs the outbound-Discord safety valves used when the
+// server runs against non-production data. A development database is usually a
+// copy of the live one, so it carries REAL webhook URLs: without these, starting a
+// local server is enough for the announcement scheduler to post to production.
+//
+//   - dryRun blocks every outbound post and logs it instead. Strongest option:
+//     the process becomes incapable of posting anywhere.
+//   - override redirects every outbound post to one URL (a test channel),
+//     whatever the feature or database row says. Use it to exercise the real
+//     posting path without touching production channels.
+//
+// dryRun wins when both are set. Both are off in production.
+func (s *Server) SetWebhookPolicy(override string, dryRun bool) {
+	s.webhookOverride = strings.TrimSpace(override)
+	s.webhookDryRun = dryRun
+}
+
 // SetLogFile tells the admin log viewer (GET /api/logs) which rotating JSON log
 // file to tail. Empty leaves the viewer with nothing to read. Injected from main
 // so it matches the -log-file the process actually writes to.
@@ -125,7 +146,7 @@ func New(st *store.Store, hub *ws.Hub, sessionSecret, webRoot string, allowedOri
 		// names to harvest links), so both share one budget per IP. Generous enough for
 		// a participant who signs up for a couple of rallies and re-checks their links.
 		rallyLimiter: newRateLimiter(15, 10*time.Minute),
-		autoWake:       make(chan struct{}, 1),             // one-slot wake mailbox for the auto-draw scheduler
+		autoWake:     make(chan struct{}, 1), // one-slot wake mailbox for the auto-draw scheduler
 	}
 
 	s.routes()

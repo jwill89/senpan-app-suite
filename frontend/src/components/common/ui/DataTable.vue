@@ -33,7 +33,7 @@ export interface DataTableView {
 }
 </script>
 
-<script setup lang="ts" generic="T">
+<script setup lang="ts" generic="T extends Record<string, any>">
 /**
  * Generic admin data table - the single table style behind every tabular admin
  * view (cards, fonts, server logs, garapon links + draws, raffle + rally logs,
@@ -82,17 +82,45 @@ export interface DataTableView {
  */
 import { computed, ref, useSlots, watch } from 'vue'
 import {
-  getCoreRowModel,
-  getFacetedRowModel,
-  getFacetedUniqueValues,
-  getFilteredRowModel,
-  getPaginationRowModel,
-  getSortedRowModel,
-  useVueTable,
+  columnFacetingFeature,
+  columnFilteringFeature,
+  columnResizingFeature,
+  columnSizingFeature,
+  createFacetedRowModel,
+  createFacetedUniqueValues,
+  createFilteredRowModel,
+  createPaginatedRowModel,
+  createSortedRowModel,
+  globalFilteringFeature,
+  rowPaginationFeature,
+  rowSortingFeature,
+  tableFeatures,
+  useTable,
   type ColumnDef,
   type ColumnFiltersState,
   type SortingState,
 } from '@tanstack/vue-table'
+
+// v9 composes the engine from explicit features instead of bundling everything:
+// each capability is opted into here, and a row model must come AFTER the feature
+// it depends on. The core row model is implicit now, so it has no entry. This is
+// the whole engine this table uses - filtering (global + per-column facets),
+// sorting, paging, and interactive column resizing (which needs BOTH the sizing
+// and resizing features).
+const features = tableFeatures({
+  columnFilteringFeature,
+  globalFilteringFeature,
+  rowSortingFeature,
+  rowPaginationFeature,
+  columnFacetingFeature,
+  columnSizingFeature,
+  columnResizingFeature,
+  filteredRowModel: createFilteredRowModel(),
+  sortedRowModel: createSortedRowModel(),
+  paginatedRowModel: createPaginatedRowModel(),
+  facetedRowModel: createFacetedRowModel(),
+  facetedUniqueValues: createFacetedUniqueValues(),
+})
 
 const props = defineProps<{
   columns: DataColumn[]
@@ -188,7 +216,7 @@ const filterState = computed<ColumnFiltersState>(() =>
     .map(([id, value]) => ({ id, value })),
 )
 
-const tableColumns = computed<ColumnDef<T>[]>(() =>
+const tableColumns = computed<ColumnDef<typeof features, T>[]>(() =>
   props.columns.map((col) => ({
     id: col.key,
     accessorFn: (row: T) => cellOf(row, col.key),
@@ -199,12 +227,13 @@ const tableColumns = computed<ColumnDef<T>[]>(() =>
     // to descending-first, which would silently reverse the meaning of a click on
     // half the admin tables relative to how they behaved before.
     sortDescFirst: false,
-    sortingFn: (rowA, rowB, id) => compareCells(rowA.getValue(id), rowB.getValue(id)),
+    sortFn: (rowA, rowB, id) => compareCells(rowA.getValue(id), rowB.getValue(id)),
     filterFn: (row, id, value: string) => asText(row.getValue(id)) === value,
   })),
 )
 
-const table = useVueTable<T>({
+const table = useTable<typeof features, T>({
+  features,
   get data() {
     return props.rows
   },
@@ -248,12 +277,6 @@ const table = useVueTable<T>({
     if (props.filterFn) return props.filterFn(original, query)
     return props.columns.some((c) => asText(cellOf(original, c.key)).toLowerCase().includes(query))
   },
-  getCoreRowModel: getCoreRowModel(),
-  getSortedRowModel: getSortedRowModel(),
-  getFilteredRowModel: getFilteredRowModel(),
-  getPaginationRowModel: getPaginationRowModel(),
-  getFacetedRowModel: getFacetedRowModel(),
-  getFacetedUniqueValues: getFacetedUniqueValues(),
 })
 
 /** Rows after the filters AND the sort, before paging - the count, the CSV, and

@@ -277,7 +277,7 @@ func (s *Server) handleAffiliatePost(w http.ResponseWriter, r *http.Request) {
 	}
 	embed := buildAffiliateEmbed(*affiliate, s.siteBaseURL(r), time.Now())
 	target := webhookTarget{Kind: "affiliate", Name: affiliate.Name}
-	if err := postDiscordEmbed(r.Context(), target, webhook, embed); err != nil {
+	if err := s.postDiscordEmbed(r.Context(), target, webhook, embed); err != nil {
 		writeUpstreamError(w, fmt.Sprintf("post affiliate %d", id), err)
 		return
 	}

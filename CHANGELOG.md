@@ -194,6 +194,33 @@ the stylesheets under enforced formatting.
   outlives the upload. A hashed `dist/assets/` file needs no deploy step and can never serve
   a stale entry.
 
+#### Dependencies
+
+- **pinia 3 -> 4**, **markdown-it 14 -> 15**, **jsdom 29 -> 30**, plus in-range bumps
+  (vite 8.2.1, vue 3.5.41, vitest 4.1.11, eslint 10.8.1, `@milkdown/crepe` 7.22.1,
+  vue-tsc 3.3.10). `npm audit` is back to **0 vulnerabilities** - the four advisories
+  (brace-expansion, fast-uri, nanoid high; dompurify moderate) were all transitive with
+  non-breaking fixes.
+- **markdown-it 15 quietly stopped linkifying scheme-less addresses.** It ships
+  linkify-it 6, which flipped `fuzzyLink` to `false`, so `www.senpan.cafe` rendered as
+  plain text while an explicit `https://` link still worked. `lib/markdown.ts` now sets
+  `fuzzyLink: true` explicitly, pinning the behavior to our intent rather than a
+  transitive default, with a test covering it.
+- **`@tanstack/vue-table` 8 -> 9.** Not a version bump but a new engine: `useVueTable`
+  and all six `getXRowModel` factories are gone, replaced by `useTable` plus an
+  explicit `tableFeatures({...})` composition where each row model is registered after
+  the feature it depends on and the core model is implicit. `DataTable`'s row generic
+  is now `T extends Record<string, any>` to match v9's own `RowData` (not
+  `Record<string, unknown>` - a plain interface has no index signature and every
+  consumer passes one). Verified in the running admin UI, not just the 34 unit tests,
+  because the risk was reactivity silently breaking: sorting, search filtering, row
+  selection including filter-scoped select-all, pagination, drag column resizing,
+  faceted filters with counts, and CSV export across all pages were each exercised
+  against real data.
+- **Held back deliberately:** `typescript` 6 -> 7 (vue-tsc isn't compatible),
+  and `@types/node` 24 -> 26 (types should track the Node you
+  actually run - `engines` says >=24 and the runtime is 24.16).
+
 #### Changed
 
 - **The player's "It's Yoever" controls are one row instead of two.** They were two labeled
@@ -1114,6 +1141,16 @@ First tracked release - establishes versioning for the current production build.
 Stamp Rally participants can sign themselves up, instead of waiting for staff to issue
 every card by hand. Paired with frontend 3.18.0.
 
+#### Dependencies
+
+- **Go toolchain 1.26.5 -> 1.26.6** (`go.mod`), which clears the six standard-library
+  advisories - `net/url`, `crypto/tls`, `net/http` x2, `encoding/xml`, `encoding/asn1` -
+  that were failing `govulncheck` in the pre-push gate and would have failed CI too,
+  since the workflow installs from `go-version-file`. `govulncheck` now reports no
+  vulnerabilities. `kin-openapi` 0.146.0 -> 0.147.0 (the regenerated spec is
+  byte-identical). One advisory remains untouchable: `golang.org/x/crypto`
+  GO-2026-5932 has no fixed version yet, and nothing here calls it.
+
 #### Fixed
 
 - **Saving an announcement silently cancelled a pending skip.** The write path reset
@@ -1180,6 +1217,18 @@ every card by hand. Paired with frontend 3.18.0.
   since guessing names is the abuse worth throttling.
 - **A rally that hasn't opted in answers 404, not 403**, on sign-up. A 403 would
   confirm the rally exists, which is exactly what staff-issued rallies shouldn't do.
+- **Two safety valves on outbound Discord posts**, both at the `postDiscordWebhook`
+  funnel every posting feature already shares: `-webhook-dry-run` /
+  `APPSUITE_WEBHOOK_DRY_RUN=1` suppresses every post and logs it instead, and
+  `-webhook-override` / `APPSUITE_WEBHOOK_OVERRIDE` redirects every post to a single
+  webhook whatever the database row says. Dry run wins when both are set, both are
+  off in production, and both log a WARN at startup so "did that post?" is never a
+  guess. This exists because a development server is routinely pointed at a **copy of
+  the live database**, where every announcement type, book club, affiliate and tea
+  room carries a real webhook: starting the process was enough for the announcement
+  scheduler to post to production channels on its own. Enforcing it at the transport
+  means no feature can forget it and a future posting feature inherits it. The
+  override URL belongs in the environment, not the repo - it is a credential.
 - **`default_draws` on a garapon** (schema v55) - how many draws a link carries when
   nobody picks a number. A public sign-up has no admin present to choose one, so it was
   issuing a hardcoded 1; now the allowance is configured once per event. It is also the

@@ -909,7 +909,7 @@ func (s *Server) handlePublishReadingList(w http.ResponseWriter, r *http.Request
 			return
 		}
 		target := webhookTarget{Kind: "bookclub_item", Name: it.Title}
-		if err := postDiscordEmbed(ctx, target, webhook, buildItemEmbed(it, commentsLabel)); err != nil {
+		if err := s.postDiscordEmbed(ctx, target, webhook, buildItemEmbed(it, commentsLabel)); err != nil {
 			slog.Error("discord webhook post failed",
 				"context", fmt.Sprintf("publish reading list %d item %q", id, it.Title), "error", err)
 			writeError(w, http.StatusBadGateway,

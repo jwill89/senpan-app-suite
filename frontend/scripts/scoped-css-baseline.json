@@ -1,10 +1,10 @@
 {
-  "total": 2667,
+  "total": 2638,
   "cap": 120,
   "files": {
     "frontend/src/components/admin/AffiliateFormTab.vue": 34,
     "frontend/src/components/admin/AffiliatesTab.vue": 1,
-    "frontend/src/components/admin/AnnouncementsTab.vue": 72,
+    "frontend/src/components/admin/AnnouncementsTab.vue": 55,
     "frontend/src/components/admin/AppVersions.vue": 46,
     "frontend/src/components/admin/BookClubTab.vue": 49,
     "frontend/src/components/admin/CardsTab.vue": 26,
@@ -48,6 +48,6 @@
     "frontend/src/views/CardRequestsView.vue": 41,
     "frontend/src/views/GaraponView.vue": 72,
     "frontend/src/views/RegisterView.vue": 5,
-    "frontend/src/views/StampCardView.vue": 94
+    "frontend/src/views/StampCardView.vue": 82
   }
 }

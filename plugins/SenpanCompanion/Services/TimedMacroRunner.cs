@@ -91,6 +91,45 @@ public sealed class TimedMacroRunner : IDisposable
         return true;
     }
 
+    /// <summary>
+    /// Sends the macro's text ONCE, right now, as a dry run - so the operator can see
+    /// how it lands in chat before committing to a schedule. Deliberately does not
+    /// touch <see cref="TimedTextMacro.SendsCompleted"/> or the run state: a test is
+    /// not one of the sends the operator asked for, and counting it would eat into a
+    /// send cap and shift every later "N of M". Refused while logged out, same as
+    /// <see cref="Start"/>. Returns false if the send could not be attempted.
+    /// </summary>
+    public bool SendOnce(TimedTextMacro macro)
+    {
+        if (!this.clientState.IsLoggedIn)
+            return false;
+        try
+        {
+            this.chat.SendChannelMessage(macro.Channel, TellComposer.SplitPlain(macro.Text));
+            return true;
+        }
+        catch (Exception ex)
+        {
+            this.log.Warning($"Failed to test-send timed macro '{macro.Name}': {ex.Message}");
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Puts a macro's progress back to zero so it can run its full course again -
+    /// what a repeated event needs between nights. Refused while it is running, since
+    /// resetting the count under a live schedule would leave the countdown and the
+    /// "N of M" disagreeing about the same run. Returns false when it was refused.
+    /// </summary>
+    public bool ResetProgress(TimedTextMacro macro)
+    {
+        if (IsRunning(macro.Id))
+            return false;
+        macro.SendsCompleted = 0;
+        this.config.Save();
+        return true;
+    }
+
     /// <summary>Halts a macro without touching its progress.</summary>
     public void Stop(string id)
     {

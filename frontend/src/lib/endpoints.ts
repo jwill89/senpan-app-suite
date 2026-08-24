@@ -47,6 +47,7 @@ import type {
   PresetCreateResponse,
   RaffleDetailResponse,
   RaffleEnterResponse,
+  RaffleLookupResponse,
   RaffleEntryResponse,
   RaffleWinnerResponse,
   RaffleResponse,
@@ -438,12 +439,43 @@ export const endpoints = {
         turnstile_token?: string
       },
     ) => apiPost<RaffleEnterResponse>(`raffles/${id}/enter`, body),
+    /**
+     * POST /api/raffles/{id}/lookup - the public "have I already entered?" search.
+     * Matches a substring of the character name (at least 2 characters); the name
+     * travels in the body so it stays out of proxy and access logs.
+     */
+    lookup: (id: number, name: string) =>
+      apiPost<RaffleLookupResponse>(`raffles/${id}/lookup`, { name }),
     addEntry: (
       raffleId: number,
-      body: { character_name: string; world: string; num_entries: number; paid: boolean },
+      body: {
+        character_name: string
+        world: string
+        num_entries: number
+        paid: boolean
+        amount_waived?: number
+      },
     ) => apiPost<RaffleEntryResponse>(`raffles/${raffleId}/entries`, body),
-    markEntryPaid: (raffleId: number, entryId: number, paid: boolean) =>
-      apiPatch<RaffleEntryResponse>(`raffles/${raffleId}/entries/${entryId}`, { paid }),
+    /**
+     * Record a settlement (`paid: true`) or clear one (`paid: false`, which resets
+     * both counters).
+     *
+     * `paidEntries` is how many of the entry's tickets the payment covers - 0 means
+     * all of them, a smaller number records a PART payment. The waiver is ADDITIVE
+     * server-side: send only what is being forgiven now, never a running total.
+     */
+    markEntryPaid: (
+      raffleId: number,
+      entryId: number,
+      paid: boolean,
+      amountWaived = 0,
+      paidEntries = 0,
+    ) =>
+      apiPatch<RaffleEntryResponse>(`raffles/${raffleId}/entries/${entryId}`, {
+        paid,
+        paid_entries: paidEntries,
+        amount_waived: amountWaived,
+      }),
     deleteEntry: (raffleId: number, entryId: number) =>
       apiDelete(`raffles/${raffleId}/entries/${entryId}`),
     pickWinner: (raffleId: number) =>
@@ -452,6 +484,13 @@ export const endpoints = {
       apiPost<RaffleWinnerResponse>(`raffles/${raffleId}/pick-another`, undefined),
     verifyWinner: (raffleId: number) =>
       apiPost<StatusResponse>(`raffles/${raffleId}/verify-winner`, undefined),
+    /**
+     * Close (POST /{id}/close) or reopen (POST /{id}/reopen) a raffle without
+     * touching its winner. verify-winner also closes, but only as the last step of
+     * confirming a winner - a raffle that drew nobody needs this instead.
+     */
+    setStatus: (raffleId: number, closed: boolean) =>
+      apiPost<StatusResponse>(`raffles/${raffleId}/${closed ? 'close' : 'reopen'}`, undefined),
   },
 
   // -- Garapon (admin, hybrid REST) ---------------------------------------------

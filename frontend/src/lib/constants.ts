@@ -38,6 +38,20 @@ export const STAMP_COLORS: StampColor[] = [
   { id: 'purple', name: 'Purple', value: 'rgba(127,90,240,.55)' },
 ]
 
+/**
+ * Most entries one person may hold in a raffle, and so the longest custom-cost
+ * ladder (whose length IS the allowance). Mirrors the backend's
+ * `maxRaffleEntries` - the server rejects anything past it.
+ */
+export const RAFFLE_MAX_ENTRIES = 100
+
+/**
+ * Shortest accepted "have I already entered?" search, in CODE POINTS. Mirrors the
+ * backend's `raffleLookupMinQuery`: entrants are looking for a name they know, so
+ * anything shorter is a request for the entrant list rather than a search.
+ */
+export const RAFFLE_LOOKUP_MIN_QUERY = 2
+
 /** The BINGO column letters, in order. */
 export const BINGO_LETTERS = ['B', 'I', 'N', 'G', 'O'] as const
 
@@ -351,6 +365,7 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
   bingo_join_prompt: 'Enter your unique bingo board ID to play',
   yoever_cooldown_seconds: '180',
   custom_card_cost: '0',
+  hide_bingo: '0',
   // One blank reading-list webhook default per known club so the settings form
   // binds cleanly before the server response loads.
   ...Object.fromEntries(BOOK_CLUBS.map((c) => [clubWebhookKey(c.slug), ''])),

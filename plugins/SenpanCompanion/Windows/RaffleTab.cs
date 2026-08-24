@@ -32,6 +32,11 @@ internal sealed class RaffleTab : TabBase
     private int numEntries = 1;
     private bool markPaidOnAdd = true;
 
+    // Payment popup form state. One set is enough: only one popup is open at a time,
+    // and OpenPaymentPopup reseeds both fields for the entry being settled.
+    private int payTickets = 1;
+    private int payWaived;
+
     public RaffleTab(ApiClient api, NearbyPlayers nearby)
     {
         this.api = api;
@@ -113,8 +118,30 @@ internal sealed class RaffleTab : TabBase
         ImGui.Text($"{d.Raffle.Title}");
         ImGui.SameLine();
         ImGui.TextDisabled($"- {d.Raffle.Status}, {d.TotalEntries} entr{(d.TotalEntries == 1 ? "y" : "ies")}");
-        if (d.Raffle.CostPerEntry > 0)
-            ImGui.TextDisabled($"Cost per entry: {d.Raffle.CostPerEntry:0.##}  *  Max per person: {d.Raffle.MaxEntries}");
+
+        var costs = DescribeCost(d.Raffle);
+        if (costs.Length > 0)
+            ImGui.TextDisabled($"{costs}  *  Max per person: {d.Raffle.MaxEntries}");
+        else if (!d.Raffle.AcceptsSignups)
+            ImGui.TextDisabled($"Details only - players sign up elsewhere  *  Max per person: {d.Raffle.MaxEntries}");
+    }
+
+    /// <summary>
+    /// The raffle's pricing as one line: a flat cost per entry, or the whole
+    /// ladder when each entry has its own price. Empty when nothing is charged.
+    /// </summary>
+    private static string DescribeCost(Raffle raffle)
+    {
+        if (string.Equals(raffle.EntryMode, "custom", StringComparison.OrdinalIgnoreCase))
+        {
+            return raffle.TierCosts.Count == 0
+                ? string.Empty
+                : "Cost per entry: " + string.Join(" / ", raffle.TierCosts.Select(c => c.ToString("0.##")));
+        }
+
+        return raffle.AcceptsSignups && raffle.CostPerEntry > 0
+            ? $"Cost per entry: {raffle.CostPerEntry:0.##}"
+            : string.Empty;
     }
 
     private void DrawAddEntry()
@@ -123,6 +150,18 @@ internal sealed class RaffleTab : TabBase
         if (!open)
         {
             UiText.WrappedDisabled("This raffle is closed - entries can't be added.");
+            return;
+        }
+
+        // A details-only raffle is published for reference and entered somewhere else
+        // entirely, so nobody is signed up through the app. Say why, rather than
+        // offering a form that would quietly create an entrant this raffle never
+        // meant to collect. (Entrants for one are recorded on the website.)
+        if (this.detail != null && !this.detail.Raffle.AcceptsSignups)
+        {
+            UiText.WrappedDisabled(
+                "This raffle is details only - players enter it outside the app, so there is " +
+                "no sign-up to take here.");
             return;
         }
 
@@ -183,8 +222,8 @@ internal sealed class RaffleTab : TabBase
 
         ImGui.TableSetupColumn("Name");
         ImGui.TableSetupColumn("World");
-        ImGui.TableSetupColumn("Tickets", ImGuiTableColumnFlags.WidthFixed, 60);
-        ImGui.TableSetupColumn("Paid", ImGuiTableColumnFlags.WidthFixed, 50);
+        ImGui.TableSetupColumn("Tickets", ImGuiTableColumnFlags.WidthFixed, 70);
+        ImGui.TableSetupColumn("Paid", ImGuiTableColumnFlags.WidthFixed, 90);
         ImGui.TableSetupColumn("##actions", ImGuiTableColumnFlags.WidthFixed, 70);
         ImGui.TableHeadersRow();
 
@@ -196,22 +235,21 @@ internal sealed class RaffleTab : TabBase
             ImGui.TableNextColumn();
             ImGui.TextUnformatted(entry.World);
             ImGui.TableNextColumn();
-            ImGui.TextUnformatted(entry.NumEntries.ToString());
+            // Entries merge per character+world, so an entrant who settled up and
+            // then bought more tickets is only PARTLY paid - show both numbers
+            // rather than a bare total that hides the outstanding ones.
+            if (entry.PartiallyPaid)
+            {
+                ImGui.TextUnformatted($"{entry.PaidEntries} / {entry.NumEntries}");
+                Ui.ItemTooltip($"{entry.PaidEntries} of {entry.NumEntries} tickets settled");
+            }
+            else
+            {
+                ImGui.TextUnformatted(entry.NumEntries.ToString());
+            }
 
             ImGui.TableNextColumn();
-            var paid = entry.Paid;
-            if (ImGui.Checkbox($"##paid{entry.Id}", ref paid))
-            {
-                var id = this.selectedRaffleId;
-                var entryId = entry.Id;
-                var value = paid;
-                Run(async () =>
-                {
-                    await this.api.MarkRaffleEntryPaidAsync(id, entryId, value);
-                    var d2 = await this.api.GetRaffleAsync(id);
-                    await Apply(() => this.detail = d2);
-                });
-            }
+            DrawPaymentCell(d.Raffle, entry);
 
             ImGui.TableNextColumn();
             if (Ui.DangerIconButton($"e{entry.Id}", FontAwesomeIcon.Trash, "Delete entrant"))
@@ -228,6 +266,121 @@ internal sealed class RaffleTab : TabBase
         }
 
         ImGui.EndTable();
+    }
+
+    // -- Payment -------------------------------------------------------------
+
+    /// <summary>
+    /// The Paid column: a button showing how far the entry has settled, opening a
+    /// popup that records a payment. The popup is where part payments and waived gil
+    /// live - both need a number typed, which a checkbox has nowhere to put.
+    /// </summary>
+    private void DrawPaymentCell(Raffle raffle, RaffleEntry entry)
+    {
+        var (label, color) = entry.Paid
+            ? ("Paid", Ui.SuccessColor)
+            : entry.PartiallyPaid
+                ? ("Partial", Ui.WarnColor)
+                : ("Unpaid", Ui.InfoColor);
+
+        ImGui.PushStyleColor(ImGuiCol.Text, color);
+        var open = ImGui.SmallButton($"{label}##pay{entry.Id}");
+        ImGui.PopStyleColor();
+        Ui.ItemTooltip("Record a payment");
+        if (open)
+            OpenPaymentPopup(entry);
+
+        DrawPaymentPopup(raffle, entry);
+    }
+
+    /// <summary>
+    /// Seeds the popup for one entry and opens it. The ticket box starts at
+    /// everything outstanding (the common case - somebody paying up in full) and the
+    /// waiver starts at zero, never at what was waived before: the server ADDS what
+    /// is sent, so re-sending the running total would double it.
+    /// </summary>
+    private void OpenPaymentPopup(RaffleEntry entry)
+    {
+        this.payTickets = Math.Max(1, entry.NumEntries);
+        this.payWaived = 0;
+        ImGui.OpenPopup(PaymentPopupId(entry));
+    }
+
+    private static string PaymentPopupId(RaffleEntry entry) => $"##paypopup{entry.Id}";
+
+    private void DrawPaymentPopup(Raffle raffle, RaffleEntry entry)
+    {
+        if (!ImGui.BeginPopup(PaymentPopupId(entry)))
+            return;
+
+        ImGui.TextUnformatted($"{entry.CharacterName} @ {entry.World}");
+        Ui.Help($"{entry.NumEntries} ticket{(entry.NumEntries == 1 ? string.Empty : "s")}"
+                + (entry.PaidEntries > 0 ? $"  -  {entry.PaidEntries} already settled" : string.Empty));
+
+        var charges = raffle.AcceptsSignups && (raffle.CostPerEntry > 0 || raffle.TierCosts.Count > 0);
+        if (charges)
+        {
+            var outstanding = raffle.EntryCost(entry.NumEntries) - raffle.EntryCost(entry.PaidEntries);
+            Ui.Help($"Outstanding: {Math.Max(0, outstanding):0.##}"
+                    + (entry.AmountWaived > 0 ? $"  -  {entry.AmountWaived:0.##} waived so far" : string.Empty));
+        }
+
+        ImGui.Separator();
+
+        // Part payments: how many of the tickets this settlement covers. Only worth
+        // a control when there is more than one left to pay for.
+        if (entry.NumEntries > 1)
+        {
+            ImGui.SetNextItemWidth(120);
+            if (ImGui.InputInt("Tickets paid for", ref this.payTickets))
+                this.payTickets = Math.Clamp(this.payTickets, 1, entry.NumEntries);
+            if (this.payTickets < entry.NumEntries)
+                Ui.Help($"Leaves {entry.NumEntries - this.payTickets} outstanding.");
+        }
+
+        if (charges)
+        {
+            ImGui.SetNextItemWidth(140);
+            if (ImGui.InputInt("Amount waived", ref this.payWaived, 1000, 10000))
+                this.payWaived = Math.Max(0, this.payWaived);
+            Ui.Help("Forgiven on this payment only - added to anything waived before.");
+        }
+
+        ImGui.Separator();
+
+        if (Ui.PrimaryButton("Mark paid"))
+        {
+            Settle(entry.Id, true, this.payTickets, this.payWaived);
+            ImGui.CloseCurrentPopup();
+        }
+        if (entry.PaidEntries > 0)
+        {
+            ImGui.SameLine();
+            if (Ui.DangerButton("Clear payment"))
+            {
+                // Clearing resets the whole row - settled tickets AND waived gil -
+                // which is also the only way to walk a settlement back.
+                Settle(entry.Id, false, 0, 0);
+                ImGui.CloseCurrentPopup();
+            }
+        }
+        ImGui.SameLine();
+        if (Ui.Button("Cancel"))
+            ImGui.CloseCurrentPopup();
+
+        ImGui.EndPopup();
+    }
+
+    /// <summary>Sends one settlement and re-pulls the raffle so the table reflects it.</summary>
+    private void Settle(long entryId, bool paid, int tickets, int waived)
+    {
+        var id = this.selectedRaffleId;
+        Run(async () =>
+        {
+            await this.api.MarkRaffleEntryPaidAsync(id, entryId, paid, tickets, waived);
+            var d = await this.api.GetRaffleAsync(id);
+            await Apply(() => this.detail = d);
+        });
     }
 
     private void DrawWinnerControls()
@@ -274,7 +427,11 @@ internal sealed class RaffleTab : TabBase
             });
         }
         ImGui.SameLine();
-        ImGui.TextDisabled("Draws from paid entries only.");
+        // A details-only raffle collects nothing through the app, so every entry is
+        // eligible; anything that charges draws on tickets that were settled.
+        ImGui.TextDisabled(this.detail?.Raffle.AcceptsSignups == false
+            ? "Draws from every entrant."
+            : "Draws on paid tickets only.");
     }
 
     private void DrawNearbyPicker()

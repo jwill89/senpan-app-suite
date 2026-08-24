@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"app-suite/internal/model"
 	"app-suite/internal/server"
@@ -1316,6 +1317,142 @@ func TestRaffles_Enter(t *testing.T) {
 	}
 }
 
+// TestRaffles_CreateCustomCost covers the "Custom Cost per Entry" mode: the
+// ladder is stored as sent, and max_entries is pinned to its length regardless
+// of what the client asked for (a 4th ticket in a 3-rung ladder has no price).
+func TestRaffles_CreateCustomCost(t *testing.T) {
+	env := newTestEnv(t)
+	env.loginAdmin(t)
+
+	resp := env.postJSON(t, "/api/raffles", map[string]any{
+		"action": "create", "title": "Tiered", "entry_mode": "custom",
+		"max_entries": 99, "cost_per_entry": 777,
+		"tier_costs": []any{50000, 100000, 150000},
+	})
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("status = %d; want 201", resp.StatusCode)
+	}
+	raffle := decodeBody(t, resp)["raffle"].(map[string]any)
+	if raffle["entry_mode"] != "custom" {
+		t.Errorf("entry_mode = %v; want custom", raffle["entry_mode"])
+	}
+	if raffle["max_entries"] != float64(3) {
+		t.Errorf("max_entries = %v; want 3 (the ladder length)", raffle["max_entries"])
+	}
+	// The flat cost belongs to the other mode and must not linger as a shadow price.
+	if raffle["cost_per_entry"] != float64(0) {
+		t.Errorf("cost_per_entry = %v; want 0 in custom mode", raffle["cost_per_entry"])
+	}
+	tiers, _ := raffle["tier_costs"].([]any)
+	if len(tiers) != 3 || tiers[2] != float64(150000) {
+		t.Errorf("tier_costs = %v; want [50000 100000 150000]", raffle["tier_costs"])
+	}
+}
+
+// TestRaffles_CreateCustomCostNeedsTiers rejects a custom raffle with no ladder -
+// there would be no price for any ticket.
+func TestRaffles_CreateCustomCostNeedsTiers(t *testing.T) {
+	env := newTestEnv(t)
+	env.loginAdmin(t)
+
+	resp := env.postJSON(t, "/api/raffles", map[string]any{
+		"action": "create", "title": "Tiered", "entry_mode": "custom", "tier_costs": []any{},
+	})
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Errorf("status = %d; want 400", resp.StatusCode)
+	}
+	resp.Body.Close()
+
+	resp = env.postJSON(t, "/api/raffles", map[string]any{
+		"action": "create", "title": "Tiered", "entry_mode": "custom", "tier_costs": []any{50000, -1},
+	})
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Errorf("negative tier: status = %d; want 400", resp.StatusCode)
+	}
+	resp.Body.Close()
+}
+
+// TestRaffles_EnterCustomCost checks the sign-up total climbs the ladder rather
+// than multiplying one price: 3 tickets at 50k/100k/150k owe 300,000.
+func TestRaffles_EnterCustomCost(t *testing.T) {
+	env := newTestEnv(t)
+	env.loginAdmin(t)
+
+	resp := env.postJSON(t, "/api/raffles", map[string]any{
+		"action": "create", "title": "Tiered", "entry_mode": "custom",
+		"tier_costs": []any{50000, 100000, 150000},
+	})
+	id := int(decodeBody(t, resp)["raffle"].(map[string]any)["id"].(float64))
+
+	resp = env.postJSON(t, fmt.Sprintf("/api/raffles/%d/enter", id), map[string]any{
+		"character_name": "Aria", "world": "Gilgamesh", "num_entries": 3,
+	})
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("status = %d; want 201", resp.StatusCode)
+	}
+	data := decodeBody(t, resp)
+	if data["total_cost"] != float64(300000) {
+		t.Errorf("total_cost = %v; want 300000", data["total_cost"])
+	}
+
+	// A 4th ticket is over the ladder-derived cap.
+	resp = env.postJSON(t, fmt.Sprintf("/api/raffles/%d/enter", id), map[string]any{
+		"character_name": "Aria", "world": "Gilgamesh", "num_entries": 1,
+	})
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Errorf("over-cap entry: status = %d; want 400", resp.StatusCode)
+	}
+	resp.Body.Close()
+}
+
+// TestRaffles_EnterDetailsOnlyRejected covers the "Details Only" mode: the raffle
+// is published for reference and entered elsewhere, so the public entry endpoint
+// refuses it even though the raffle is open and in-window.
+func TestRaffles_EnterDetailsOnlyRejected(t *testing.T) {
+	env := newTestEnv(t)
+	env.loginAdmin(t)
+
+	resp := env.postJSON(t, "/api/raffles", map[string]any{
+		"action": "create", "title": "Info Only", "entry_mode": "details", "max_entries": 3,
+		"signup_instructions": "Whisper a staff member in game.",
+	})
+	id := int(decodeBody(t, resp)["raffle"].(map[string]any)["id"].(float64))
+
+	resp = env.postJSON(t, fmt.Sprintf("/api/raffles/%d/enter", id), map[string]any{
+		"character_name": "Aria", "world": "Gilgamesh", "num_entries": 1,
+	})
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Errorf("status = %d; want 400", resp.StatusCode)
+	}
+	resp.Body.Close()
+}
+
+// TestRaffles_PickWinnerDetailsOnly checks a details-only raffle draws from every
+// entry: staff record them from a sign-up run elsewhere, so none is marked paid
+// and a paid-only draw would always come up empty.
+func TestRaffles_PickWinnerDetailsOnly(t *testing.T) {
+	env := newTestEnv(t)
+	env.loginAdmin(t)
+
+	resp := env.postJSON(t, "/api/raffles", map[string]any{
+		"action": "create", "title": "Info Only", "entry_mode": "details", "max_entries": 3,
+	})
+	id := int(decodeBody(t, resp)["raffle"].(map[string]any)["id"].(float64))
+
+	env.postJSON(t, fmt.Sprintf("/api/raffles/%d/entries", id), map[string]any{
+		"character_name": "Aria", "world": "Gilgamesh", "num_entries": 1, "paid": false,
+	}).Body.Close()
+
+	resp = env.postJSON(t, fmt.Sprintf("/api/raffles/%d/pick-winner", id), nil)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d; want 200", resp.StatusCode)
+	}
+	winner := decodeBody(t, resp)["winner"].(map[string]any)
+	if winner["character_name"] != "Aria" {
+		t.Errorf("winner = %v; want Aria", winner["character_name"])
+	}
+}
+
 func TestRaffles_EnterAddsToExisting(t *testing.T) {
 	env := newTestEnv(t)
 	env.loginAdmin(t)
@@ -1459,7 +1596,7 @@ func TestRaffles_PickWinner(t *testing.T) {
 	raffleID := int(data["raffle"].(map[string]any)["id"].(float64))
 
 	entryID := createRaffleEntry(t, env.store, int64(raffleID), "Winner", "World", 3)
-	_ = env.store.SetRaffleEntryPaid(entryID, true)
+	_, _ = env.store.SetRaffleEntryPaid(entryID, true, 0, 0)
 
 	resp = env.postJSON(t, fmt.Sprintf("/api/raffles/%d/pick-winner", raffleID), nil)
 	data = decodeBody(t, resp)
@@ -1500,7 +1637,7 @@ func TestRaffles_VerifyWinner(t *testing.T) {
 	raffleID := int(data["raffle"].(map[string]any)["id"].(float64))
 
 	entryID := createRaffleEntry(t, env.store, int64(raffleID), "W", "X", 1)
-	_ = env.store.SetRaffleEntryPaid(entryID, true)
+	_, _ = env.store.SetRaffleEntryPaid(entryID, true, 0, 0)
 	_ = env.store.SetRaffleWinner(int64(raffleID), &entryID)
 
 	resp = env.postJSON(t, fmt.Sprintf("/api/raffles/%d/verify-winner", raffleID), nil)
@@ -1617,12 +1754,14 @@ func TestRaffles_AddEntryMergesExisting(t *testing.T) {
 	})
 	raffleID := int(decodeBody(t, resp)["raffle"].(map[string]any)["id"].(float64))
 
-	// Pre-existing paid entry.
+	// Pre-existing settled entry, with one of its tickets waived.
 	entryID := createRaffleEntry(t, env.store, int64(raffleID), "Aerith", "Gaia", 3)
-	_ = env.store.SetRaffleEntryPaid(entryID, true)
+	_, _ = env.store.SetRaffleEntryPaid(entryID, true, 0, 500)
 
 	// Admin adds 2 more (case-insensitive match) WITHOUT the paid flag: the
-	// tickets must merge and the existing paid status must be preserved.
+	// tickets merge onto the same row, and because those two are NOT settled the
+	// row drops out of "paid" into partial - what it already collected and waived
+	// stays on record.
 	resp = env.postJSON(t, fmt.Sprintf("/api/raffles/%d/entries", raffleID), map[string]any{
 		"action": "add_entry", "character_name": "aerith", "world": "GAIA", "num_entries": 2,
 	})
@@ -1633,11 +1772,308 @@ func TestRaffles_AddEntryMergesExisting(t *testing.T) {
 
 	stored := getRaffleEntryByName(t, env.store, int64(raffleID), "Aerith", "Gaia")
 	if stored == nil || stored.NumEntries != 5 {
-		t.Errorf("num_entries = %+v; want 5 (3+2 merged)", stored)
+		t.Fatalf("num_entries = %+v; want 5 (3+2 merged)", stored)
 	}
-	if stored != nil && !stored.Paid {
-		t.Error("expected existing paid status to be preserved")
+	if stored.Paid {
+		t.Error("expected the row to fall out of paid once unsettled tickets were added")
 	}
+	if stored.PaidEntries != 3 {
+		t.Errorf("paid_entries = %d; want 3 (what was actually settled)", stored.PaidEntries)
+	}
+	if stored.AmountWaived != 500 {
+		t.Errorf("amount_waived = %v; want 500 (preserved across the merge)", stored.AmountWaived)
+	}
+	if stored.PaymentState() != "partial" {
+		t.Errorf("state = %q; want partial", stored.PaymentState())
+	}
+}
+
+// TestRaffles_MarkPaidWaiverAccumulates drives the waiver through the HTTP
+// surface: two settlements on the same entry add up rather than overwriting, and
+// clearing the settlement wipes both counters.
+func TestRaffles_MarkPaidWaiverAccumulates(t *testing.T) {
+	env := newTestEnv(t)
+	env.loginAdmin(t)
+
+	resp := env.postJSON(t, "/api/raffles", map[string]any{
+		"action": "create", "title": "Waiver", "max_entries": 3, "cost_per_entry": 50000,
+	})
+	raffleID := int(decodeBody(t, resp)["raffle"].(map[string]any)["id"].(float64))
+	entryID := createRaffleEntry(t, env.store, int64(raffleID), "Aria", "Gilgamesh", 1)
+
+	path := fmt.Sprintf("/api/raffles/%d/entries/%d", raffleID, entryID)
+	entry := decodeBody(t, env.patchJSON(t, path, map[string]any{"paid": true, "amount_waived": 10000}))["entry"].(map[string]any)
+	if entry["amount_waived"] != float64(10000) || entry["paid_entries"] != float64(1) {
+		t.Fatalf("first settlement = %+v; want amount_waived=10000 paid_entries=1", entry)
+	}
+
+	// Two more tickets, then settle again with another waiver.
+	env.postJSON(t, fmt.Sprintf("/api/raffles/%d/entries", raffleID), map[string]any{
+		"character_name": "Aria", "world": "Gilgamesh", "num_entries": 2,
+	}).Body.Close()
+	entry = decodeBody(t, env.patchJSON(t, path, map[string]any{"paid": true, "amount_waived": 5000}))["entry"].(map[string]any)
+	if entry["amount_waived"] != float64(15000) {
+		t.Errorf("amount_waived = %v; want 15000 (10000 + 5000)", entry["amount_waived"])
+	}
+	if entry["paid_entries"] != float64(3) || entry["paid"] != true {
+		t.Errorf("second settlement = %+v; want paid_entries=3 paid=true", entry)
+	}
+
+	// Clearing resets the row - no waiver left credited against an unpaid entry.
+	entry = decodeBody(t, env.patchJSON(t, path, map[string]any{"paid": false}))["entry"].(map[string]any)
+	if entry["amount_waived"] != float64(0) || entry["paid_entries"] != float64(0) || entry["paid"] != false {
+		t.Errorf("after clearing = %+v; want everything reset", entry)
+	}
+}
+
+// TestRaffles_MarkPaidRejectsBadWaiver keeps a negative or non-finite waiver out
+// of the row - either would corrupt every collected-gil total that reads it.
+// TestRaffles_MarkPaidPartial records a part payment over HTTP - gil for two of
+// three entries now, the rest later - and checks the entry reads as partial
+// rather than paid.
+func TestRaffles_MarkPaidPartial(t *testing.T) {
+	env := newTestEnv(t)
+	env.loginAdmin(t)
+
+	resp := env.postJSON(t, "/api/raffles", map[string]any{
+		"action": "create", "title": "Part", "max_entries": 3, "cost_per_entry": 50000,
+	})
+	raffleID := int(decodeBody(t, resp)["raffle"].(map[string]any)["id"].(float64))
+	entryID := createRaffleEntry(t, env.store, int64(raffleID), "Aria", "Gilgamesh", 3)
+	path := fmt.Sprintf("/api/raffles/%d/entries/%d", raffleID, entryID)
+
+	entry := decodeBody(t, env.patchJSON(t, path, map[string]any{
+		"paid": true, "paid_entries": 2, "amount_waived": 10000,
+	}))["entry"].(map[string]any)
+	if entry["paid_entries"] != float64(2) {
+		t.Errorf("paid_entries = %v; want 2", entry["paid_entries"])
+	}
+	if entry["paid"] != false {
+		t.Error("an entry with a ticket still owing must not read as paid")
+	}
+	if entry["amount_waived"] != float64(10000) {
+		t.Errorf("amount_waived = %v; want 10000", entry["amount_waived"])
+	}
+
+	// Omitting the count settles everything, which is the common counter case.
+	entry = decodeBody(t, env.patchJSON(t, path, map[string]any{"paid": true}))["entry"].(map[string]any)
+	if entry["paid_entries"] != float64(3) || entry["paid"] != true {
+		t.Errorf("entry = %+v; want all 3 settled and paid", entry)
+	}
+
+	// A negative count is rejected rather than quietly floored.
+	resp = env.patchJSON(t, path, map[string]any{"paid": true, "paid_entries": -1})
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Errorf("negative paid_entries = %d; want 400", resp.StatusCode)
+	}
+	resp.Body.Close()
+}
+
+func TestRaffles_MarkPaidRejectsBadWaiver(t *testing.T) {
+	env := newTestEnv(t)
+	env.loginAdmin(t)
+
+	resp := env.postJSON(t, "/api/raffles", map[string]any{
+		"action": "create", "title": "Waiver", "max_entries": 1, "cost_per_entry": 50000,
+	})
+	raffleID := int(decodeBody(t, resp)["raffle"].(map[string]any)["id"].(float64))
+	entryID := createRaffleEntry(t, env.store, int64(raffleID), "Aria", "Gilgamesh", 1)
+
+	resp = env.patchJSON(t, fmt.Sprintf("/api/raffles/%d/entries/%d", raffleID, entryID),
+		map[string]any{"paid": true, "amount_waived": -1})
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Errorf("status = %d; want 400", resp.StatusCode)
+	}
+	resp.Body.Close()
+}
+
+// TestRaffles_WinnerEntryHidesSettlement keeps the settlement columns staff-only.
+// The winner of a closed raffle is shown publicly by name, so leaking that they
+// had their entries comped would put a private arrangement on the public page.
+func TestRaffles_WinnerEntryHidesSettlement(t *testing.T) {
+	env := newTestEnv(t)
+	env.loginAdmin(t)
+
+	resp := env.postJSON(t, "/api/raffles", map[string]any{
+		"action": "create", "title": "Closed", "max_entries": 3, "cost_per_entry": 50000,
+	})
+	raffleID := int(decodeBody(t, resp)["raffle"].(map[string]any)["id"].(float64))
+	entryID := createRaffleEntry(t, env.store, int64(raffleID), "Aria", "Gilgamesh", 3)
+	env.patchJSON(t, fmt.Sprintf("/api/raffles/%d/entries/%d", raffleID, entryID),
+		map[string]any{"paid": true, "amount_waived": 150000}).Body.Close()
+	env.postJSON(t, fmt.Sprintf("/api/raffles/%d/pick-winner", raffleID), nil).Body.Close()
+	env.postJSON(t, fmt.Sprintf("/api/raffles/%d/verify-winner", raffleID), nil).Body.Close()
+
+	// Staff still see the whole settlement.
+	entries := decodeBody(t, env.get(t, fmt.Sprintf("/api/raffles/%d", raffleID)))["entries"].([]any)
+	staffEntry := entries[0].(map[string]any)
+	if staffEntry["amount_waived"] != float64(150000) {
+		t.Fatalf("staff amount_waived = %v; want 150000", staffEntry["amount_waived"])
+	}
+
+	env.postJSON(t, "/api/auth", map[string]string{"action": "logout"}).Body.Close()
+	winner := decodeBody(t, env.get(t, fmt.Sprintf("/api/raffles/%d", raffleID)))["winner_entry"].(map[string]any)
+	if winner["character_name"] != "Aria" {
+		t.Fatalf("winner_entry = %+v; want the winner shown", winner)
+	}
+	if winner["amount_waived"] != float64(0) {
+		t.Errorf("public amount_waived = %v; want 0 (staff-only)", winner["amount_waived"])
+	}
+	if winner["paid_entries"] != float64(0) {
+		t.Errorf("public paid_entries = %v; want 0 (staff-only)", winner["paid_entries"])
+	}
+}
+
+// TestRaffles_EnterAmountDueSkipsSettledTickets is the returning-entrant case:
+// somebody who already paid for a ticket and comes back for two more must be
+// quoted for the NEW ones only. Quoting the full ladder would invite them to pay
+// for the first ticket twice.
+func TestRaffles_EnterAmountDueSkipsSettledTickets(t *testing.T) {
+	env := newTestEnv(t)
+	env.loginAdmin(t)
+
+	resp := env.postJSON(t, "/api/raffles", map[string]any{
+		"action": "create", "title": "Tiered", "entry_mode": "custom",
+		"tier_costs": []any{50000, 100000, 150000},
+	})
+	raffleID := int(decodeBody(t, resp)["raffle"].(map[string]any)["id"].(float64))
+
+	// First entry: nothing settled, so the two figures agree.
+	body := decodeBody(t, env.postJSON(t, fmt.Sprintf("/api/raffles/%d/enter", raffleID), map[string]any{
+		"character_name": "Aria", "world": "Gilgamesh", "num_entries": 1,
+	}))
+	if body["total_cost"] != float64(50000) || body["amount_due"] != float64(50000) {
+		t.Fatalf("first sign-up = %+v; want both 50000", body)
+	}
+
+	// Staff settle that ticket, waiving half of it.
+	entryID := getRaffleEntryByName(t, env.store, int64(raffleID), "Aria", "Gilgamesh").ID
+	env.patchJSON(t, fmt.Sprintf("/api/raffles/%d/entries/%d", raffleID, entryID),
+		map[string]any{"paid": true, "amount_waived": 25000}).Body.Close()
+
+	// Coming back for two more: the sticker price is the whole ladder, but only the
+	// two new tickets are owed.
+	body = decodeBody(t, env.postJSON(t, fmt.Sprintf("/api/raffles/%d/enter", raffleID), map[string]any{
+		"character_name": "Aria", "world": "Gilgamesh", "num_entries": 2,
+	}))
+	if body["total_cost"] != float64(300000) {
+		t.Errorf("total_cost = %v; want 300000 (all three tickets)", body["total_cost"])
+	}
+	if body["amount_due"] != float64(250000) {
+		t.Errorf("amount_due = %v; want 250000 (the two new tickets only)", body["amount_due"])
+	}
+}
+
+// TestRaffles_MaxEntriesCapped rejects an allowance past the cap rather than
+// silently storing a different one, on create and on update, and for the custom
+// ladder whose length IS the allowance.
+func TestRaffles_MaxEntriesCapped(t *testing.T) {
+	env := newTestEnv(t)
+	env.loginAdmin(t)
+
+	resp := env.postJSON(t, "/api/raffles", map[string]any{
+		"action": "create", "title": "Too many", "max_entries": 101,
+	})
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Errorf("create over cap: status = %d; want 400", resp.StatusCode)
+	}
+	resp.Body.Close()
+
+	// The cap itself is allowed.
+	resp = env.postJSON(t, "/api/raffles", map[string]any{
+		"action": "create", "title": "At the cap", "max_entries": 100,
+	})
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("create at cap: status = %d; want 201", resp.StatusCode)
+	}
+	raffleID := int(decodeBody(t, resp)["raffle"].(map[string]any)["id"].(float64))
+
+	resp = env.putJSON(t, fmt.Sprintf("/api/raffles/%d", raffleID), map[string]any{
+		"title": "At the cap", "max_entries": 101,
+	})
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Errorf("update over cap: status = %d; want 400", resp.StatusCode)
+	}
+	resp.Body.Close()
+
+	ladder := make([]any, 101)
+	for i := range ladder {
+		ladder[i] = 100
+	}
+	resp = env.postJSON(t, "/api/raffles", map[string]any{
+		"action": "create", "title": "Long ladder", "entry_mode": "custom", "tier_costs": ladder,
+	})
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Errorf("ladder over cap: status = %d; want 400", resp.StatusCode)
+	}
+	resp.Body.Close()
+}
+
+// TestRaffles_EntryLookup drives the public search over HTTP: it finds a partial
+// name, refuses a one-character query, and never carries money out with it.
+func TestRaffles_EntryLookup(t *testing.T) {
+	env := newTestEnv(t)
+	env.loginAdmin(t)
+
+	resp := env.postJSON(t, "/api/raffles", map[string]any{
+		"action": "create", "title": "Search", "max_entries": 3, "cost_per_entry": 50000,
+	})
+	raffleID := int(decodeBody(t, resp)["raffle"].(map[string]any)["id"].(float64))
+	entryID := createRaffleEntry(t, env.store, int64(raffleID), "Aria Fairwind", "Gilgamesh", 3)
+	env.patchJSON(t, fmt.Sprintf("/api/raffles/%d/entries/%d", raffleID, entryID),
+		map[string]any{"paid": true, "amount_waived": 90000}).Body.Close()
+	env.postJSON(t, "/api/auth", map[string]string{"action": "logout"}).Body.Close()
+
+	path := fmt.Sprintf("/api/raffles/%d/lookup", raffleID)
+	body := decodeBody(t, env.postJSON(t, path, map[string]any{"name": "fairwind"}))
+	hits := body["entries"].([]any)
+	if len(hits) != 1 {
+		t.Fatalf("entries = %+v; want one hit", hits)
+	}
+	hit := hits[0].(map[string]any)
+	if hit["character_name"] != "Aria Fairwind" || hit["world"] != "Gilgamesh" {
+		t.Errorf("hit = %+v; want the exact name back", hit)
+	}
+	if hit["num_entries"] != float64(3) || hit["payment_state"] != "paid" {
+		t.Errorf("hit = %+v; want 3 entries, paid", hit)
+	}
+	// The waiver is a private arrangement and must not ride along.
+	for _, k := range []string{"amount_waived", "id", "total_cost", "amount_due"} {
+		if _, present := hit[k]; present {
+			t.Errorf("lookup hit leaked %q: %+v", k, hit)
+		}
+	}
+	if body["truncated"] != false {
+		t.Errorf("truncated = %v; want false", body["truncated"])
+	}
+
+	// One character is a request for the entrant list, not a name search.
+	resp = env.postJSON(t, path, map[string]any{"name": "a"})
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Errorf("one-character query: status = %d; want 400", resp.StatusCode)
+	}
+	resp.Body.Close()
+}
+
+// TestRaffles_EntryLookupHiddenRaffle keeps a raffle that isn't public yet out of
+// reach: guessing its id must not make its entrants searchable.
+func TestRaffles_EntryLookupHiddenRaffle(t *testing.T) {
+	env := newTestEnv(t)
+	env.loginAdmin(t)
+
+	future := time.Now().UTC().Add(48 * time.Hour).Format("2006-01-02T15:04:05.000Z")
+	resp := env.postJSON(t, "/api/raffles", map[string]any{
+		"action": "create", "title": "Not yet", "max_entries": 3, "available_from": future,
+	})
+	raffleID := int(decodeBody(t, resp)["raffle"].(map[string]any)["id"].(float64))
+	createRaffleEntry(t, env.store, int64(raffleID), "Aria", "Gilgamesh", 1)
+	env.postJSON(t, "/api/auth", map[string]string{"action": "logout"}).Body.Close()
+
+	resp = env.postJSON(t, fmt.Sprintf("/api/raffles/%d/lookup", raffleID), map[string]any{"name": "aria"})
+	if resp.StatusCode != http.StatusNotFound {
+		t.Errorf("status = %d; want 404 for a raffle that isn't public yet", resp.StatusCode)
+	}
+	resp.Body.Close()
 }
 
 func TestRaffles_AddEntryExceedsMax(t *testing.T) {
@@ -1912,4 +2348,95 @@ func TestSettings_InvalidThreshold(t *testing.T) {
 		t.Errorf("status = %d; want 400", resp.StatusCode)
 	}
 	resp.Body.Close()
+}
+
+// TestRaffles_CloseWithoutWinner is the case verify-winner can't serve: a raffle
+// with no entries and no winner - a details-only one whose draw happened
+// elsewhere, or simply one nobody entered - still has to be closable, or it stays
+// on the public list forever.
+func TestRaffles_CloseWithoutWinner(t *testing.T) {
+	env := newTestEnv(t)
+	env.loginAdmin(t)
+
+	resp := env.postJSON(t, "/api/raffles", map[string]any{
+		"action": "create", "title": "Info Only", "entry_mode": "details", "max_entries": 3,
+	})
+	raffleID := int(decodeBody(t, resp)["raffle"].(map[string]any)["id"].(float64))
+
+	// verify-winner refuses, which is what left these stuck.
+	resp = env.postJSON(t, fmt.Sprintf("/api/raffles/%d/verify-winner", raffleID), nil)
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Errorf("verify-winner with no winner = %d; want 400", resp.StatusCode)
+	}
+	resp.Body.Close()
+
+	resp = env.postJSON(t, fmt.Sprintf("/api/raffles/%d/close", raffleID), nil)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("close = %d; want 200", resp.StatusCode)
+	}
+	if decodeBody(t, resp)["status"] != "closed" {
+		t.Error("close must report the new status")
+	}
+
+	raffle := decodeBody(t, env.get(t, fmt.Sprintf("/api/raffles/%d", raffleID)))["raffle"].(map[string]any)
+	if raffle["status"] != "closed" {
+		t.Errorf("status = %v; want closed", raffle["status"])
+	}
+	if raffle["winner_entry_id"] != nil {
+		t.Errorf("winner_entry_id = %v; closing must not invent a winner", raffle["winner_entry_id"])
+	}
+
+	// Reopen is the undo, and it leaves the raffle exactly as it was.
+	resp = env.postJSON(t, fmt.Sprintf("/api/raffles/%d/reopen", raffleID), nil)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("reopen = %d; want 200", resp.StatusCode)
+	}
+	resp.Body.Close()
+	raffle = decodeBody(t, env.get(t, fmt.Sprintf("/api/raffles/%d", raffleID)))["raffle"].(map[string]any)
+	if raffle["status"] != "open" {
+		t.Errorf("status = %v; want open after reopen", raffle["status"])
+	}
+}
+
+// TestRaffles_CloseKeepsAnExistingWinner guards the verified-winner result: a
+// close (or a stray reopen) must never rewrite who won.
+func TestRaffles_CloseKeepsAnExistingWinner(t *testing.T) {
+	env := newTestEnv(t)
+	env.loginAdmin(t)
+
+	resp := env.postJSON(t, "/api/raffles", map[string]any{
+		"action": "create", "title": "Drawn", "max_entries": 3, "cost_per_entry": 100,
+	})
+	raffleID := int(decodeBody(t, resp)["raffle"].(map[string]any)["id"].(float64))
+	entryID := createRaffleEntry(t, env.store, int64(raffleID), "Aria", "Gilgamesh", 1)
+	env.patchJSON(t, fmt.Sprintf("/api/raffles/%d/entries/%d", raffleID, entryID),
+		map[string]any{"paid": true}).Body.Close()
+	env.postJSON(t, fmt.Sprintf("/api/raffles/%d/pick-winner", raffleID), nil).Body.Close()
+	env.postJSON(t, fmt.Sprintf("/api/raffles/%d/verify-winner", raffleID), nil).Body.Close()
+
+	env.postJSON(t, fmt.Sprintf("/api/raffles/%d/reopen", raffleID), nil).Body.Close()
+	env.postJSON(t, fmt.Sprintf("/api/raffles/%d/close", raffleID), nil).Body.Close()
+
+	raffle := decodeBody(t, env.get(t, fmt.Sprintf("/api/raffles/%d", raffleID)))["raffle"].(map[string]any)
+	if raffle["winner_entry_id"] != float64(entryID) {
+		t.Errorf("winner_entry_id = %v; want the verified winner %d kept", raffle["winner_entry_id"], entryID)
+	}
+}
+
+// TestRaffles_CloseRequiresPermission keeps the status verbs behind the same
+// permission as every other raffle write.
+func TestRaffles_CloseRequiresPermission(t *testing.T) {
+	env := newTestEnv(t)
+	env.loginAdmin(t)
+	resp := env.postJSON(t, "/api/raffles", map[string]any{"action": "create", "title": "R"})
+	raffleID := int(decodeBody(t, resp)["raffle"].(map[string]any)["id"].(float64))
+	env.postJSON(t, "/api/auth", map[string]string{"action": "logout"}).Body.Close()
+
+	for _, verb := range []string{"close", "reopen"} {
+		resp := env.postJSON(t, fmt.Sprintf("/api/raffles/%d/%s", raffleID, verb), nil)
+		if resp.StatusCode != http.StatusUnauthorized && resp.StatusCode != http.StatusForbidden {
+			t.Errorf("%s while logged out = %d; want 401/403", verb, resp.StatusCode)
+		}
+		resp.Body.Close()
+	}
 }

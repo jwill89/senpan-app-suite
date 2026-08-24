@@ -16,7 +16,7 @@ import (
 // PRAGMA user_version against this constant and runs only the migrations
 // needed to bring the database up to date. Bump this when adding a new
 // migration block.
-const schemaVersion = 56
+const schemaVersion = 59
 
 // ensureSchema reads the current PRAGMA user_version from the database and
 // applies any outstanding migrations to bring it up to schemaVersion.
@@ -382,8 +382,98 @@ func ensureSchema(db *sql.DB) error {
 		}
 	}
 
+	if version < 57 {
+		if err := migrateRaffleEntryModes(db); err != nil {
+			return err
+		}
+	}
+
+	if version < 58 {
+		if err := migrateRaffleEntryPayments(db); err != nil {
+			return err
+		}
+	}
+
+	if version < 59 {
+		if err := migrateRafflePayImage(db); err != nil {
+			return err
+		}
+	}
+
 	_, err := db.Exec(fmt.Sprintf("PRAGMA user_version = %d", schemaVersion))
 	return err
+}
+
+// migrateRafflePayImage (schema v59) adds raffles.pay_image, the "Where to Pay"
+// screenshot shown beneath a raffle's sign-up instructions - the counterpart to
+// stamp_rallies.redeem_image, which does the same job for "Where to Redeem".
+// Existing raffles default to '' (no image), so nothing changes until someone
+// picks one. Idempotent - skipped when the column already exists.
+func migrateRafflePayImage(db *sql.DB) error {
+	if !tableExists(db, "raffles") {
+		return nil
+	}
+	if hasColumn(db, "raffles", "pay_image") {
+		return nil
+	}
+	if _, err := db.Exec(`ALTER TABLE raffles ADD COLUMN pay_image TEXT NOT NULL DEFAULT ''`); err != nil {
+		return fmt.Errorf("add raffles.pay_image: %w", err)
+	}
+	return nil
+}
+
+// migrateRaffleEntryPayments (schema v58) adds the two columns that turn
+// raffle_entries.paid from a bare flag into a settlement record: paid_entries
+// (how many of the row's tickets are settled) and amount_waived (the running
+// total of gil forgiven on it).
+//
+// Entries merge per character+world, so a settled row can gain tickets later.
+// Without paid_entries those new tickets hid behind the existing paid=1 and
+// nobody could tell the row was only PARTLY settled. Existing paid rows backfill
+// to fully settled with nothing waived, which is exactly what they meant before.
+// Idempotent - each column is skipped when it is already there, and the backfill
+// only runs alongside the column it fills.
+func migrateRaffleEntryPayments(db *sql.DB) error {
+	if !tableExists(db, "raffle_entries") {
+		return nil
+	}
+	if !hasColumn(db, "raffle_entries", "paid_entries") {
+		if _, err := db.Exec(`ALTER TABLE raffle_entries ADD COLUMN paid_entries INTEGER NOT NULL DEFAULT 0`); err != nil {
+			return fmt.Errorf("add raffle_entries.paid_entries: %w", err)
+		}
+		if _, err := db.Exec(`UPDATE raffle_entries SET paid_entries = num_entries WHERE paid = 1`); err != nil {
+			return fmt.Errorf("backfill raffle_entries.paid_entries: %w", err)
+		}
+	}
+	if !hasColumn(db, "raffle_entries", "amount_waived") {
+		if _, err := db.Exec(`ALTER TABLE raffle_entries ADD COLUMN amount_waived REAL NOT NULL DEFAULT 0`); err != nil {
+			return fmt.Errorf("add raffle_entries.amount_waived: %w", err)
+		}
+	}
+	return nil
+}
+
+// migrateRaffleEntryModes (schema v57) adds the two columns behind a raffle's
+// entry mode: entry_mode ("details" | "single" | "custom") and tier_costs, the
+// JSON ladder of per-ticket prices a "custom" raffle charges. Existing raffles
+// default to "single" with an empty ladder, which is exactly what they did before
+// the mode existed, so nothing changes until someone edits one. Idempotent -
+// each column is skipped when it is already there.
+func migrateRaffleEntryModes(db *sql.DB) error {
+	if !tableExists(db, "raffles") {
+		return nil
+	}
+	if !hasColumn(db, "raffles", "entry_mode") {
+		if _, err := db.Exec(`ALTER TABLE raffles ADD COLUMN entry_mode TEXT NOT NULL DEFAULT 'single'`); err != nil {
+			return fmt.Errorf("add raffles.entry_mode: %w", err)
+		}
+	}
+	if !hasColumn(db, "raffles", "tier_costs") {
+		if _, err := db.Exec(`ALTER TABLE raffles ADD COLUMN tier_costs TEXT NOT NULL DEFAULT '[]'`); err != nil {
+			return fmt.Errorf("add raffles.tier_costs: %w", err)
+		}
+	}
+	return nil
 }
 
 // migrateAffiliateSubtitle (schema v52) adds affiliates.subtitle, the optional
@@ -647,10 +737,13 @@ func createTables(db *sql.DB) error {
 			rules TEXT NOT NULL DEFAULT '',
 			max_entries INTEGER NOT NULL DEFAULT 1,
 			signup_instructions TEXT NOT NULL DEFAULT '',
+			entry_mode TEXT NOT NULL DEFAULT 'single',
 			cost_per_entry REAL NOT NULL DEFAULT 0,
+			tier_costs TEXT NOT NULL DEFAULT '[]',
 			available_from TEXT NOT NULL DEFAULT '',
 			available_to TEXT NOT NULL DEFAULT '',
 			prize_image TEXT NOT NULL DEFAULT '',
+			pay_image TEXT NOT NULL DEFAULT '',
 			status TEXT NOT NULL DEFAULT 'open',
 			winner_entry_id INTEGER,
 			created_at DATETIME DEFAULT CURRENT_TIMESTAMP
@@ -661,6 +754,8 @@ func createTables(db *sql.DB) error {
 			character_name TEXT NOT NULL,
 			world TEXT NOT NULL,
 			num_entries INTEGER NOT NULL DEFAULT 1,
+			paid_entries INTEGER NOT NULL DEFAULT 0,
+			amount_waived REAL NOT NULL DEFAULT 0,
 			paid INTEGER NOT NULL DEFAULT 0,
 			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 			FOREIGN KEY (raffle_id) REFERENCES raffles(id) ON DELETE CASCADE
@@ -911,10 +1006,13 @@ func migrateRaffles(db *sql.DB) error {
 			rules TEXT NOT NULL DEFAULT '',
 			max_entries INTEGER NOT NULL DEFAULT 1,
 			signup_instructions TEXT NOT NULL DEFAULT '',
+			entry_mode TEXT NOT NULL DEFAULT 'single',
 			cost_per_entry REAL NOT NULL DEFAULT 0,
+			tier_costs TEXT NOT NULL DEFAULT '[]',
 			available_from TEXT NOT NULL DEFAULT '',
 			available_to TEXT NOT NULL DEFAULT '',
 			prize_image TEXT NOT NULL DEFAULT '',
+			pay_image TEXT NOT NULL DEFAULT '',
 			status TEXT NOT NULL DEFAULT 'open',
 			winner_entry_id INTEGER,
 			created_at DATETIME DEFAULT CURRENT_TIMESTAMP
@@ -925,6 +1023,8 @@ func migrateRaffles(db *sql.DB) error {
 			character_name TEXT NOT NULL,
 			world TEXT NOT NULL,
 			num_entries INTEGER NOT NULL DEFAULT 1,
+			paid_entries INTEGER NOT NULL DEFAULT 0,
+			amount_waived REAL NOT NULL DEFAULT 0,
 			paid INTEGER NOT NULL DEFAULT 0,
 			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 			FOREIGN KEY (raffle_id) REFERENCES raffles(id) ON DELETE CASCADE

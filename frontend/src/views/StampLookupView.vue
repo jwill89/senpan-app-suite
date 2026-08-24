@@ -68,7 +68,7 @@ function back(): void {
       <!-- Results (null = nothing searched yet, so nothing is claimed either way) -->
       <template v-if="store.lookupResults">
         <div v-if="store.lookupResults.length" class="stamp-lookup-results">
-          <div v-for="entry in store.lookupResults" :key="entry.rally_id" class="card">
+          <div v-for="entry in store.lookupResults" :key="entry.rally_id" class="card card--padded">
             <h3 class="mb-8">
               {{ entry.rally_title }}
               <span v-if="entry.completed" class="badge badge--success">Complete</span>

@@ -12,16 +12,67 @@ import { useRouter } from 'vue-router'
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
 import MarkdownText from '@/components/common/MarkdownText.vue'
 import TurnstileWidget from '@/components/common/TurnstileWidget.vue'
-import { useRafflesStore } from '@/stores/raffles'
+import {
+  useRafflesStore,
+  isRaffleEnterable,
+  raffleAcceptsSignups,
+  raffleCostLabel,
+  raffleTicketCost,
+} from '@/stores/raffles'
 import { assetUrl } from '@/lib/assets'
 import { endpoints } from '@/lib/endpoints'
+import { RAFFLE_LOOKUP_MIN_QUERY } from '@/lib/constants'
+import type { RaffleLookupEntry } from '@/types/api'
 
 const props = defineProps<{ id: string }>()
+
+/** Payment status wording + badge tint for a search hit. */
+const PAYMENT_LABELS: Record<string, { text: string; badge: string }> = {
+  paid: { text: 'Paid', badge: 'badge--success' },
+  partial: { text: 'Partly paid', badge: 'badge--warning' },
+  unpaid: { text: 'Not paid yet', badge: 'badge--muted' },
+}
 
 const router = useRouter()
 const raffles = useRafflesStore()
 
 const raffleId = computed(() => Number(props.id))
+
+/**
+ * A "Details Only" raffle that is currently live: it has no sign-up form, so the
+ * page shows its sign-up instructions inline (that IS how a player enters) rather
+ * than the "this raffle is closed" notice a non-enterable raffle would get.
+ */
+const detailsOnly = computed(
+  () =>
+    !!raffles.selectedRaffle &&
+    !raffleAcceptsSignups(raffles.selectedRaffle) &&
+    isRaffleEnterable(raffles.selectedRaffle),
+)
+
+/**
+ * Gil this character's entry is already square for - settled tickets and anything
+ * waived, folded together. Nonzero only for someone coming back for more entries,
+ * which is exactly when quoting the full total would invite an overpayment.
+ */
+const alreadyCovered = computed(() => {
+  const r = raffles.raffleSignupResult
+  return r ? Math.max(0, r.total_cost - r.amount_due) : 0
+})
+
+/**
+ * The per-entry price ladder of a custom-cost raffle, so a player can see up
+ * front what a 2nd and 3rd entry cost. Empty for every other mode.
+ */
+const costTiers = computed(() => {
+  const r = raffles.selectedRaffle
+  if (!r || r.entry_mode !== 'custom') return []
+  return r.tier_costs.map((_, i) => ({
+    n: i + 1,
+    cost: raffleTicketCost(r, i + 1),
+    running: r.tier_costs.slice(0, i + 1).reduce((sum, c) => sum + c, 0),
+  }))
+})
 
 // Cloudflare Turnstile bot check for the public sign-up (empty site key = disabled).
 const turnstileSiteKey = ref('')
@@ -61,8 +112,32 @@ async function signUp(): Promise<void> {
   }
 }
 
+// What the entrant typed into the "have I already entered?" box.
+const lookupName = ref('')
+
+/** Long enough to search - same code-point rule the store and server apply. */
+const lookupReady = computed(
+  () => Array.from(lookupName.value.trim()).length >= RAFFLE_LOOKUP_MIN_QUERY,
+)
+
+function runLookup(): void {
+  void raffles.lookupEntries(lookupName.value)
+}
+
+/**
+ * Copy a hit's exact name into the sign-up form. The whole point of the search is
+ * to reproduce the spelling that was used before - entries merge on
+ * character+world, so retyping it slightly differently starts a second entry and
+ * splits the tickets across both.
+ */
+function useHit(hit: RaffleLookupEntry): void {
+  raffles.raffleSignup.characterName = hit.character_name
+  raffles.raffleSignup.world = hit.world
+}
+
 function back(): void {
   raffles.selectedRaffle = null
+  raffles.clearEntryLookup()
   void router.push({ name: 'raffles' })
 }
 </script>
@@ -95,6 +170,21 @@ function back(): void {
         <MarkdownText class="game-details" :source="raffles.selectedRaffle.rules" />
       </div>
 
+      <!-- Entry costs. A custom-cost raffle lists every rung so a player can
+           see what a 2nd and 3rd entry cost before committing to the first. -->
+      <div v-if="costTiers.length" class="mb-16">
+        <h3 class="section-heading">Entry Costs</h3>
+        <ul class="stack">
+          <li v-for="tier in costTiers" :key="tier.n" class="stack-row">
+            <span class="stack-label">Entry {{ tier.n }}</span>
+            <strong class="text-highlight">{{ tier.cost.toLocaleString() }} gil</strong>
+            <span v-if="tier.n > 1" class="text-muted text-sm">
+              ({{ tier.running.toLocaleString() }} gil for all {{ tier.n }})
+            </span>
+          </li>
+        </ul>
+      </div>
+
       <!-- Sign-up result (shown after signing up) -->
       <div v-if="raffles.raffleSignupResult" class="raffle-signup-result">
         <h3 class="mb-8">
@@ -106,10 +196,110 @@ function back(): void {
           <strong>Total Cost:</strong>
           {{ raffles.raffleSignupResult.total_cost.toLocaleString() }} gil
         </p>
+        <!-- What they actually send. It only differs from the total once part of
+             this character's entry has already been settled, so the "already
+             covered" line only appears for a returning entrant. -->
+        <p v-if="alreadyCovered > 0" class="text-muted">
+          <strong>Already Covered:</strong> {{ alreadyCovered.toLocaleString() }} gil
+        </p>
+        <!-- The figure the player acts on, so it outweighs the totals above it. -->
+        <p class="text-lg text-highlight">
+          <strong>Amount Due:</strong>
+          {{ raffles.raffleSignupResult.amount_due.toLocaleString() }} gil
+        </p>
         <div v-if="raffles.raffleSignupResult.signup_instructions" class="game-details mt-12">
           <h4 class="text-highlight mb-6">Sign-Up Instructions</h4>
           <MarkdownText :source="raffles.raffleSignupResult.signup_instructions" />
         </div>
+        <figure v-if="raffles.selectedRaffle.pay_image" class="captioned-figure">
+          <figcaption>Where to pay</figcaption>
+          <img :src="assetUrl(raffles.selectedRaffle.pay_image)" alt="Where to pay" />
+        </figure>
+      </div>
+
+      <!-- Details-only raffle: there is no form here, so the instructions for
+           entering elsewhere are the point of the page. -->
+      <div v-if="detailsOnly" class="raffle-signup-form">
+        <h3 class="mb-12">How to Enter</h3>
+        <MarkdownText
+          v-if="raffles.selectedRaffle.signup_instructions"
+          class="game-details"
+          :source="raffles.selectedRaffle.signup_instructions"
+        />
+        <p v-else class="text-muted m-0">
+          Sign-ups for this raffle are handled outside the site - check the description above.
+        </p>
+        <figure v-if="raffles.selectedRaffle.pay_image" class="captioned-figure">
+          <figcaption>Where to pay</figcaption>
+          <img :src="assetUrl(raffles.selectedRaffle.pay_image)" alt="Where to pay" />
+        </figure>
+      </div>
+
+      <!-- "Have I already entered?" - shown alongside the sign-up form, because
+           entries merge on character + world and a different spelling starts a
+           second entry that splits the tickets. -->
+      <div
+        v-if="raffles.selectedRaffleEnterable && !raffles.raffleSignupResult"
+        class="raffle-signup-form mb-16"
+      >
+        <h3 class="mb-8">Already Entered?</h3>
+        <p class="text-muted text-sm mb-10">
+          Search your character name to check, and to sign up again under the same spelling.
+        </p>
+        <div class="flex-toolbar mb-10">
+          <input
+            v-model="lookupName"
+            placeholder="Character name"
+            aria-label="Search your character name"
+            style="flex: 1; min-width: 160px"
+            @keyup.enter="runLookup"
+          />
+          <button
+            class="btn-view"
+            :disabled="raffles.entryLookupLoading || !lookupReady"
+            @click="runLookup"
+          >
+            <LoadingSpinner v-if="raffles.entryLookupLoading" label="Searching..." />
+            <template v-else>
+              <font-awesome-icon :icon="['fas', 'magnifying-glass']" /> Search
+            </template>
+          </button>
+        </div>
+
+        <!-- null = no search yet, [] = a search that matched nothing. Saying
+             "nothing matched" before a search has run would tell someone they
+             hadn't entered when nobody had looked. -->
+        <template v-if="raffles.entryLookupResults !== null">
+          <ul v-if="raffles.entryLookupResults.length" class="stack">
+            <li
+              v-for="hit in raffles.entryLookupResults"
+              :key="hit.character_name + hit.world"
+              class="stack-row"
+            >
+              <strong>{{ hit.character_name }} @ {{ hit.world }}</strong>
+              <span class="text-sm text-muted">
+                {{ hit.num_entries }} {{ hit.num_entries === 1 ? 'entry' : 'entries' }}
+              </span>
+              <span :class="['badge', PAYMENT_LABELS[hit.payment_state]?.badge ?? 'badge--muted']">
+                {{ PAYMENT_LABELS[hit.payment_state]?.text ?? hit.payment_state }}
+                <template v-if="hit.payment_state === 'partial'">
+                  ({{ hit.paid_entries }}/{{ hit.num_entries }})
+                </template>
+              </span>
+              <button
+                class="btn-view btn-sm push-right"
+                title="Fill the sign-up form with this exact name"
+                @click="useHit(hit)"
+              >
+                Use this name
+              </button>
+            </li>
+          </ul>
+          <p v-else class="text-muted m-0">No entries match that name yet.</p>
+          <p v-if="raffles.entryLookupTruncated" class="text-muted text-sm mt-8">
+            More entries matched than are shown - try a longer part of the name.
+          </p>
+        </template>
       </div>
 
       <!-- Sign-up form (only while the raffle is open, not past its end, and no result yet) -->
@@ -145,11 +335,7 @@ function back(): void {
             @blur="raffles.clampSignupEntries()"
           />
         </div>
-        <p
-          v-if="raffles.selectedRaffle.cost_per_entry > 0"
-          class="mb-12"
-          style="font-size: 0.95rem"
-        >
+        <p v-if="raffleCostLabel(raffles.selectedRaffle)" class="mb-12" style="font-size: 0.95rem">
           <strong>Total Cost:</strong> {{ raffles.raffleTotalCost().toLocaleString() }} gil
         </p>
         <!-- Cloudflare Turnstile bot check (only when a site key is configured). -->
@@ -178,7 +364,7 @@ function back(): void {
       </div>
 
       <div
-        v-if="!raffles.selectedRaffleEnterable && !raffles.raffleSignupResult"
+        v-if="!raffles.selectedRaffleEnterable && !detailsOnly && !raffles.raffleSignupResult"
         class="raffle-closed-msg"
       >
         <p class="text-muted" style="text-align: center; padding: 20px; font-size: 1.1rem">

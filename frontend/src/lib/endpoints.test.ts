@@ -434,7 +434,25 @@ describe('raffles nested paths', () => {
 
   it('markEntryPaid PATCHes the entry resource', async () => {
     await endpoints.raffles.markEntryPaid(7, 42, false)
-    expect(apiPatch).toHaveBeenCalledWith('raffles/7/entries/42', { paid: false })
+    expect(apiPatch).toHaveBeenCalledWith('raffles/7/entries/42', {
+      paid: false,
+      paid_entries: 0,
+      amount_waived: 0,
+    })
+  })
+
+  it('markEntryPaid sends the waiver for this settlement only', async () => {
+    await endpoints.raffles.markEntryPaid(7, 42, true, 5000)
+    expect(apiPatch).toHaveBeenCalledWith('raffles/7/entries/42', {
+      paid: true,
+      paid_entries: 0,
+      amount_waived: 5000,
+    })
+  })
+
+  it('lookup POSTs the search name in the body, not the URL', async () => {
+    await endpoints.raffles.lookup(7, 'fairwind')
+    expect(apiPost).toHaveBeenCalledWith('raffles/7/lookup', { name: 'fairwind' })
   })
 
   it('deleteEntry DELETEs the entry resource', async () => {

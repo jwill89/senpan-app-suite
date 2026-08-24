@@ -118,6 +118,17 @@ internal static class Ui
         ImGui.EndTooltip();
     }
 
+    /// <summary>
+    /// Shows <paramref name="text"/> as a tooltip when the item drawn just before this
+    /// call is hovered. Unlike <see cref="HelpMarker"/> it draws nothing of its own, so
+    /// it can annotate a table cell or checkbox without taking up room.
+    /// </summary>
+    public static void ItemTooltip(string text)
+    {
+        if (ImGui.IsItemHovered())
+            ImGui.SetTooltip(text);
+    }
+
     // -- buttons (three tiers) ----------------------------------------------------
 
     /// <summary>Primary call-to-action - the web accent (tan) fill with dark text on it.</summary>

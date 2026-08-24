@@ -22,6 +22,8 @@ import { useAuthStore } from '@/stores/auth'
 import { useGameStore } from '@/stores/game'
 import { useCardsStore } from '@/stores/cards'
 import { useRafflesStore } from '@/stores/raffles'
+import { useStampRalliesStore } from '@/stores/stampRallies'
+import { useGaraponsStore } from '@/stores/garapons'
 import { BOOK_CLUBS } from '@/lib/constants'
 import AppVersions from '@/components/admin/AppVersions.vue'
 
@@ -31,6 +33,8 @@ const auth = useAuthStore()
 const game = useGameStore()
 const cards = useCardsStore()
 const raffles = useRafflesStore()
+const stampRallies = useStampRalliesStore()
+const garapons = useGaraponsStore()
 
 // Change Password / Logout are actions, not navigation: the sidebar emits them so
 // the admin shell (which owns the change-password modal + session) handles them.
@@ -249,6 +253,9 @@ function toggleSection(section: AdminSection): void {
           @click="go('festival-garapon')"
         >
           <font-awesome-icon :icon="['fad', 'ferris-wheel']" /> Garapon
+          <span v-if="garapons.openGarapons.length" class="nav-count">
+            ({{ garapons.openGarapons.length }})
+          </span>
         </button>
         <button
           v-if="can('teahouse-raffles')"
@@ -266,6 +273,9 @@ function toggleSection(section: AdminSection): void {
           @click="go('festival-stamp-rally')"
         >
           <font-awesome-icon :icon="['fad', 'stamp']" /> Stamp Rally
+          <span v-if="stampRallies.openRallies.length" class="nav-count">
+            ({{ stampRallies.openRallies.length }})
+          </span>
         </button>
       </div>
     </div>

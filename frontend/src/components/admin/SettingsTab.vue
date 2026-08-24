@@ -100,6 +100,22 @@ watch(
               placeholder="Enter your unique bingo board ID to play"
             />
           </FormField>
+          <FormField
+            label="Hide Bingo"
+            help="Takes Join Bingo and Custom Card off the public home page, for a stretch when no game is running. Existing board and request links keep working."
+          >
+            <button
+              type="button"
+              class="switch"
+              role="switch"
+              :class="{ 'is-on': app.hideBingo }"
+              :aria-checked="app.hideBingo"
+              aria-label="Hide Bingo on the public home page"
+              @click="app.settings.hide_bingo = app.hideBingo ? '0' : '1'"
+            >
+              <span class="switch-knob"></span>
+            </button>
+          </FormField>
         </section>
 
         <!-- Gameplay ----------------------------------------------------- -->

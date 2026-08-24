@@ -283,30 +283,41 @@ internal sealed class TimedMacrosTab
 
         if (running)
         {
-            // A running macro can't be edited - stop it first.
+            // A running macro can't be edited or reset - stop it first.
             if (Ui.Button("Stop"))
                 this.runner.Stop(macro.Id);
         }
-        else if (macro.IsComplete)
-        {
-            if (Ui.Button("Reset"))
-            {
-                macro.SendsCompleted = 0;
-                this.config.Save();
-            }
-            ImGui.SameLine();
-            if (Ui.Button("Edit"))
-                BeginEdit(macro);
-        }
         else
         {
-            // Starting sends immediately, which needs to be logged in (the runner refuses
-            // otherwise); disable the button so it's clear rather than a silent no-op.
+            // Both starting and test-sending put real chat out, which needs a logged-in
+            // character (the runner refuses otherwise); disable rather than let the
+            // click be a silent no-op. A completed macro has to be reset before it can
+            // run again, so it offers no Start.
             using (ImRaii.Disabled(!loggedIn))
             {
-                if (Ui.PrimaryButton(macro.SendsCompleted > 0 ? "Resume" : "Send"))
-                    this.runner.Start(macro);
+                if (!macro.IsComplete)
+                {
+                    if (Ui.PrimaryButton(macro.SendsCompleted > 0 ? "Resume" : "Start"))
+                        this.runner.Start(macro);
+                    ImGui.SameLine();
+                }
+
+                if (Ui.Button($"Test send##test{macro.Id}"))
+                    this.runner.SendOnce(macro);
             }
+            Ui.ItemTooltip("Sends the message once, now. Doesn't start the timer or count towards the send total.");
+
+            // Reset whenever there is progress to clear - not just at the send cap.
+            // An uncapped macro never "completes", and a capped one is often stopped
+            // part-way and wanted fresh for the next night.
+            if (macro.SendsCompleted > 0)
+            {
+                ImGui.SameLine();
+                if (Ui.Button($"Reset##reset{macro.Id}"))
+                    this.runner.ResetProgress(macro);
+                Ui.ItemTooltip($"Puts the count back to 0 (currently {macro.SendsCompleted}).");
+            }
+
             ImGui.SameLine();
             if (Ui.Button("Edit"))
                 BeginEdit(macro);

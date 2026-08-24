@@ -864,7 +864,7 @@ func TestRaffleEntryPaid(t *testing.T) {
 	}
 
 	// Mark paid
-	if err := s.SetRaffleEntryPaid(eID, true); err != nil {
+	if _, err := s.SetRaffleEntryPaid(eID, true, 0, 0); err != nil {
 		t.Fatal(err)
 	}
 	entry, _ = s.GetRaffleEntry(rID, "P1", "W1")
@@ -873,7 +873,7 @@ func TestRaffleEntryPaid(t *testing.T) {
 	}
 
 	// Unmark
-	if err := s.SetRaffleEntryPaid(eID, false); err != nil {
+	if _, err := s.SetRaffleEntryPaid(eID, false, 0, 0); err != nil {
 		t.Fatal(err)
 	}
 	entry, _ = s.GetRaffleEntry(rID, "P1", "W1")
@@ -919,9 +919,9 @@ func TestRafflePickWinner(t *testing.T) {
 
 	rID, _ := s.CreateRaffle(&model.Raffle{Title: "R", MaxEntries: 5})
 	eID, _ := s.CreateRaffleEntry(rID, "P1", "W1", 3)
-	_ = s.SetRaffleEntryPaid(eID, true)
+	_, _ = s.SetRaffleEntryPaid(eID, true, 0, 0)
 
-	winner, err := s.PickRaffleWinner(rID)
+	winner, err := s.PickRaffleWinner(rID, true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -939,7 +939,7 @@ func TestRafflePickWinner_NoPaidEntries(t *testing.T) {
 	rID, _ := s.CreateRaffle(&model.Raffle{Title: "R", MaxEntries: 5})
 	_, _ = s.CreateRaffleEntry(rID, "P1", "W1", 3) // not paid
 
-	winner, err := s.PickRaffleWinner(rID)
+	winner, err := s.PickRaffleWinner(rID, true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -953,7 +953,7 @@ func TestRafflePickWinner_NoEntries(t *testing.T) {
 
 	rID, _ := s.CreateRaffle(&model.Raffle{Title: "R", MaxEntries: 5})
 
-	winner, err := s.PickRaffleWinner(rID)
+	winner, err := s.PickRaffleWinner(rID, true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -967,7 +967,7 @@ func TestRaffleSetWinnerAndStatus(t *testing.T) {
 
 	rID, _ := s.CreateRaffle(&model.Raffle{Title: "R", MaxEntries: 5})
 	eID, _ := s.CreateRaffleEntry(rID, "P1", "W1", 1)
-	_ = s.SetRaffleEntryPaid(eID, true)
+	_, _ = s.SetRaffleEntryPaid(eID, true, 0, 0)
 
 	// Set winner
 	if err := s.SetRaffleWinner(rID, &eID); err != nil {

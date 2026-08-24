@@ -96,10 +96,13 @@ func (s *Server) handleRaffleDetail(w http.ResponseWriter, r *http.Request) {
 		}
 		resp.Entries = &entries
 	} else if raffle.Status == "closed" && raffle.WinnerEntryID != nil {
-		// Show the winner entry to public - fetch directly by ID
+		// Show the winner entry to public - fetch directly by ID, minus the
+		// settlement columns (what they paid for and what was waived is staff-only;
+		// see RaffleEntry.PublicView).
 		entry, err := s.store.GetRaffleEntryByID(*raffle.WinnerEntryID)
 		if err == nil && entry != nil {
-			resp.WinnerEntry = entry
+			public := entry.PublicView()
+			resp.WinnerEntry = &public
 		}
 	}
 
@@ -111,50 +114,121 @@ func (s *Server) handleRaffleDetail(w http.ResponseWriter, r *http.Request) {
 // raffleWriteRequest is the JSON body for creating (POST /api/raffles) or
 // replacing (PUT /api/raffles/{id}) a raffle. The id comes from the path on PUT.
 type raffleWriteRequest struct {
-	Title              string  `json:"title"`
-	Description        string  `json:"description"`
-	Rules              string  `json:"rules"`
-	MaxEntries         int     `json:"max_entries"`
-	SignupInstructions string  `json:"signup_instructions"`
-	CostPerEntry       float64 `json:"cost_per_entry"`
-	AvailableFrom      string  `json:"available_from"`
-	AvailableTo        string  `json:"available_to"`
-	PrizeImage         string  `json:"prize_image"`
+	Title              string    `json:"title"`
+	Description        string    `json:"description"`
+	Rules              string    `json:"rules"`
+	MaxEntries         int       `json:"max_entries"`
+	SignupInstructions string    `json:"signup_instructions"`
+	EntryMode          string    `json:"entry_mode"`
+	CostPerEntry       float64   `json:"cost_per_entry"`
+	TierCosts          []float64 `json:"tier_costs"`
+	AvailableFrom      string    `json:"available_from"`
+	AvailableTo        string    `json:"available_to"`
+	PrizeImage         string    `json:"prize_image"`
+	PayImage           string    `json:"pay_image"`
 }
 
-// validate checks a raffle write request: a non-empty title, and a
-// cost_per_entry that is finite and non-negative (a NaN/Inf or negative cost
-// would corrupt every total_cost the sign-up flow reports). max_entries is
-// floored to 1 in toRaffle, so it needs no separate check here. It returns a
+// maxRaffleEntries caps the per-player allowance, and with it the custom-cost
+// ladder (whose length IS the allowance). A raffle hands out tickets, not a shop
+// inventory, so a hundred per person is already far past any real use. The bound
+// keeps a typo (or a scripted client) from storing an allowance nothing can
+// render sanely, or an unbounded JSON array on the row.
+const maxRaffleEntries = 100
+
+// validate checks a raffle write request: a non-empty title, plus whichever cost
+// the entry mode actually uses. Every price must be finite and non-negative - a
+// NaN/Inf or negative cost would corrupt every total_cost the sign-up flow
+// reports. max_entries is floored to 1 (or pinned to the ladder) in toRaffle, so
+// it needs no separate check here.
+//
+// An unknown or absent entry_mode normalizes to "single", so a client written
+// before entry modes existed still validates the way it always did. It returns a
 // user-facing error message, or "" when the request is valid.
 func (req raffleWriteRequest) validate() string {
 	if strings.TrimSpace(req.Title) == "" {
 		return "Title is required"
 	}
-	if math.IsNaN(req.CostPerEntry) || math.IsInf(req.CostPerEntry, 0) || req.CostPerEntry < 0 {
-		return "Cost per entry must be a non-negative number"
+	switch model.NormalizeRaffleMode(req.EntryMode) {
+	case model.RaffleModeDetails:
+		// Details-only raffles record no money at all; any cost sent with one is
+		// dropped in toRaffle rather than rejected.
+		return ""
+	case model.RaffleModeCustom:
+		if len(req.TierCosts) == 0 {
+			return "Add at least one entry cost"
+		}
+		// The ladder length IS the allowance in this mode, so it takes the same cap.
+		if len(req.TierCosts) > maxRaffleEntries {
+			return fmt.Sprintf("A raffle can have at most %d entry costs", maxRaffleEntries)
+		}
+		for i, c := range req.TierCosts {
+			if math.IsNaN(c) || math.IsInf(c, 0) || c < 0 {
+				return fmt.Sprintf("Cost for entry %d must be a non-negative number", i+1)
+			}
+		}
+		return ""
+	default:
+		if math.IsNaN(req.CostPerEntry) || math.IsInf(req.CostPerEntry, 0) || req.CostPerEntry < 0 {
+			return "Cost per entry must be a non-negative number"
+		}
+		return ""
+	}
+}
+
+// validateMaxEntries bounds the per-player allowance for the modes that set it
+// directly. It is a rejection rather than a silent clamp: an admin who typed 1000
+// meant something, and quietly storing 100 instead would surface later as a cap
+// nobody chose. (The <1 floor stays silent in toRaffle - 0 has no other sensible
+// reading.) Custom mode derives max_entries from its ladder, which validate()
+// bounds instead.
+func (req raffleWriteRequest) validateMaxEntries() string {
+	if model.NormalizeRaffleMode(req.EntryMode) == model.RaffleModeCustom {
+		return ""
+	}
+	if req.MaxEntries > maxRaffleEntries {
+		return fmt.Sprintf("Max entries per person cannot exceed %d", maxRaffleEntries)
 	}
 	return ""
 }
 
-// toRaffle builds a model.Raffle from the request, flooring max_entries to 1.
+// toRaffle builds a model.Raffle from the request, flooring max_entries to 1 and
+// keeping only the cost fields its entry mode uses - so switching a raffle from
+// custom back to single doesn't leave a stale ladder behind that later reads as
+// the live price.
+//
+// In custom mode the ladder IS the allowance: max_entries is pinned to its
+// length, because a 4th ticket in a 3-rung ladder would have no price.
 func (req raffleWriteRequest) toRaffle(id int64) *model.Raffle {
 	maxEntries := req.MaxEntries
 	if maxEntries < 1 {
 		maxEntries = 1
 	}
-	return &model.Raffle{
+	mode := model.NormalizeRaffleMode(req.EntryMode)
+	raffle := &model.Raffle{
 		ID:                 id,
 		Title:              strings.TrimSpace(req.Title),
 		Description:        req.Description,
 		Rules:              req.Rules,
 		MaxEntries:         maxEntries,
 		SignupInstructions: req.SignupInstructions,
-		CostPerEntry:       req.CostPerEntry,
-		AvailableFrom:      req.AvailableFrom,
-		AvailableTo:        req.AvailableTo,
-		PrizeImage:         req.PrizeImage,
+		EntryMode:          mode,
+		// Empty, not nil: the create response echoes this struct straight back,
+		// and a nil slice would marshal as `null` where every later read of the
+		// same raffle returns `[]` (the store decodes it that way).
+		TierCosts:     []float64{},
+		AvailableFrom: req.AvailableFrom,
+		AvailableTo:   req.AvailableTo,
+		PrizeImage:    req.PrizeImage,
+		PayImage:      strings.TrimSpace(req.PayImage),
 	}
+	switch mode {
+	case model.RaffleModeCustom:
+		raffle.TierCosts = req.TierCosts
+		raffle.MaxEntries = len(req.TierCosts)
+	case model.RaffleModeSingle:
+		raffle.CostPerEntry = req.CostPerEntry
+	}
+	return raffle
 }
 
 // handleRaffleCreate creates a raffle.
@@ -172,6 +246,10 @@ func (s *Server) handleRaffleCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if msg := req.validate(); msg != "" {
+		writeError(w, http.StatusBadRequest, msg)
+		return
+	}
+	if msg := req.validateMaxEntries(); msg != "" {
 		writeError(w, http.StatusBadRequest, msg)
 		return
 	}
@@ -206,6 +284,10 @@ func (s *Server) handleRaffleUpdate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if msg := req.validate(); msg != "" {
+		writeError(w, http.StatusBadRequest, msg)
+		return
+	}
+	if msg := req.validateMaxEntries(); msg != "" {
 		writeError(w, http.StatusBadRequest, msg)
 		return
 	}
@@ -356,6 +438,13 @@ func (s *Server) handleRaffleEnter(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "This raffle is no longer accepting entries")
 		return
 	}
+	// A details-only raffle publishes its instructions and takes sign-ups
+	// elsewhere; it has no public entry form, so a POST here is always a client
+	// out of step with the raffle (or one poking at the endpoint directly).
+	if !raffle.AcceptsSignups() {
+		writeError(w, http.StatusBadRequest, "This raffle does not take sign-ups here. Follow its sign-up instructions.")
+		return
+	}
 
 	// Check availability dates. Stored timestamps are UTC (RFC-3339 with 'Z' for
 	// new values; legacy naive strings are interpreted as UTC), so we compare
@@ -375,7 +464,7 @@ func (s *Server) handleRaffleEnter(w http.ResponseWriter, r *http.Request) {
 	// add-vs-create decision inside one write transaction, so two simultaneous
 	// sign-ups for the same character+world can't both pass a stale count check and
 	// exceed the cap (or create duplicate rows).
-	_, newTotal, prevEntries, created, err := s.store.AddOrCreateRaffleEntry(
+	entryID, newTotal, prevEntries, created, err := s.store.AddOrCreateRaffleEntry(
 		raffleID, charName, world, req.NumEntries, raffle.MaxEntries)
 	if errors.Is(err, store.ErrRaffleEntryLimit) {
 		if prevEntries > 0 {
@@ -393,22 +482,29 @@ func (s *Server) handleRaffleEnter(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	totalCost := float64(newTotal) * raffle.CostPerEntry
-	if created {
-		writeJSON(w, http.StatusCreated, model.RaffleEnterResponse{
-			Message:            "Signed up successfully",
-			TotalEntries:       newTotal,
-			TotalCost:          totalCost,
-			SignupInstructions: raffle.SignupInstructions,
-		})
-	} else {
-		writeJSON(w, http.StatusOK, model.RaffleEnterResponse{
-			Message:            "Entries added successfully",
-			TotalEntries:       newTotal,
-			TotalCost:          totalCost,
-			SignupInstructions: raffle.SignupInstructions,
-		})
+	// What they owe is the sticker price MINUS whatever this character has already
+	// settled on this raffle - a returning entrant must not be quoted for tickets
+	// they have already paid for. A brand-new entry has nothing settled, so the two
+	// figures coincide. A read failure falls back to the full price: over-quoting is
+	// recoverable (staff see the real balance), silently under-quoting is not.
+	totalCost := raffle.EntryCost(newTotal)
+	amountDue := totalCost
+	if entry, err := s.store.GetRaffleEntryByID(entryID); err == nil && entry != nil {
+		amountDue = raffle.AmountOutstanding(*entry)
 	}
+	message := "Entries added successfully"
+	status := http.StatusOK
+	if created {
+		message = "Signed up successfully"
+		status = http.StatusCreated
+	}
+	writeJSON(w, status, model.RaffleEnterResponse{
+		Message:            message,
+		TotalEntries:       newTotal,
+		TotalCost:          totalCost,
+		AmountDue:          amountDue,
+		SignupInstructions: raffle.SignupInstructions,
+	})
 
 	// A sign-up mutates the admin-visible entry list + counts, but this is the
 	// *public* entry path, so it's excluded from the adminMutationResource
@@ -419,14 +515,104 @@ func (s *Server) handleRaffleEnter(w http.ResponseWriter, r *http.Request) {
 	s.broadcastResourceChanged("raffles")
 }
 
+// -- Raffle entry lookup (public) --------------------------------------------
+
+// raffleLookupRequest is the JSON body for POST /api/raffles/{id}/lookup. The
+// name travels in the body rather than a query string so it stays out of proxy
+// and access logs.
+type raffleLookupRequest struct {
+	Name string `json:"name"`
+}
+
+const (
+	// raffleLookupMinQuery is the shortest search accepted. Entrants are looking
+	// for their own name, which they know; a one-character query is not that, it
+	// is a request for the entrant list.
+	raffleLookupMinQuery = 2
+	// raffleLookupLimit bounds one response. Past it the reply says so, so a broad
+	// search is asked to narrow rather than shown a clipped list as if it were all.
+	raffleLookupLimit = 50
+)
+
+// handleRaffleEntryLookup answers "have I already entered this raffle?" so a
+// returning entrant can reproduce the exact name they used - entries merge on
+// character+world, and a different spelling silently creates a second entry that
+// splits their tickets.
+//
+// This is deliberately more open than the stamp-rally lookup, which matches whole
+// names to keep participation private: here a partial match is the point, and the
+// operator has accepted that a raffle's entrant list is public. What it still
+// withholds is money - the amount waived on an entry is a private arrangement
+// (see model.RaffleLookupEntry).
+//
+//	Endpoint:  POST /api/raffles/{id}/lookup
+//	Auth:      public
+//	Request:   {"name": "ari"}
+//	Response:  {"entries": [...], "truncated": bool}
+func (s *Server) handleRaffleEntryLookup(w http.ResponseWriter, r *http.Request) {
+	// Its OWN limiter, not the entry limiter: searching is what somebody does
+	// right before signing up, and sharing a budget would let a few searches lock
+	// them out of the entry they were searching in order to get right.
+	ip := clientIP(r)
+	if s.raffleLookupLimiter.isLimited(ip) {
+		slog.Warn("raffle entry lookup rate limited", "ip", ip)
+		writeError(w, http.StatusTooManyRequests, "Too many searches. Please try again later.")
+		return
+	}
+	s.raffleLookupLimiter.recordFailure(ip)
+
+	raffleID, ok := pathInt64(w, r, "id", "raffle")
+	if !ok {
+		return
+	}
+	req, err := readJSON[raffleLookupRequest](w, r)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "Invalid JSON")
+		return
+	}
+	name := strings.TrimSpace(req.Name)
+	if len([]rune(name)) < raffleLookupMinQuery {
+		writeError(w, http.StatusBadRequest,
+			fmt.Sprintf("Enter at least %d characters of the name you signed up with", raffleLookupMinQuery))
+		return
+	}
+
+	// Only a raffle the caller could already see: a scheduled or hidden one must
+	// not become searchable just because its id was guessed.
+	raffle, err := s.store.GetRaffle(raffleID)
+	if err != nil {
+		writeInternalError(w, "get raffle for lookup", err)
+		return
+	}
+	if raffle == nil || (!s.raffleStaff(r) && !raffleIsPubliclyViewable(raffle)) {
+		writeError(w, http.StatusNotFound, "Raffle not found")
+		return
+	}
+
+	entries, truncated, err := s.store.LookupRaffleEntries(raffleID, name, raffleLookupLimit)
+	if err != nil {
+		writeInternalError(w, "look up raffle entries", err)
+		return
+	}
+	writeJSON(w, http.StatusOK, model.RaffleLookupResponse{Entries: entries, Truncated: truncated})
+}
+
 // -- Raffle entries (admin) --------------------------------------------------
 
 // raffleEntryAddRequest is the JSON body for POST /api/raffles/{id}/entries.
 type raffleEntryAddRequest struct {
-	CharacterName string `json:"character_name"`
-	World         string `json:"world"`
-	NumEntries    int    `json:"num_entries"`
-	Paid          bool   `json:"paid"`
+	CharacterName string  `json:"character_name"`
+	World         string  `json:"world"`
+	NumEntries    int     `json:"num_entries"`
+	Paid          bool    `json:"paid"`
+	AmountWaived  float64 `json:"amount_waived"`
+}
+
+// validWaiver reports whether a waived amount can be recorded: finite and not
+// negative. A NaN/Inf would poison every collected-gil total that ever reads the
+// row, and a negative "waiver" would silently invent income.
+func validWaiver(amount float64) bool {
+	return !math.IsNaN(amount) && !math.IsInf(amount, 0) && amount >= 0
 }
 
 // handleRaffleEntryAdd adds an entry to an open raffle (admin). Unlike the public
@@ -457,6 +643,10 @@ func (s *Server) handleRaffleEntryAdd(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.NumEntries < 1 {
 		req.NumEntries = 1
+	}
+	if !validWaiver(req.AmountWaived) {
+		writeError(w, http.StatusBadRequest, "Amount waived must be a non-negative number")
+		return
 	}
 
 	raffle, err := s.store.GetRaffle(raffleID)
@@ -494,9 +684,10 @@ func (s *Server) handleRaffleEntryAdd(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Mark paid right away when requested (never un-marks an existing entry).
+	// Settle right away when requested (never un-settles an existing entry). The
+	// tickets just added are outstanding by definition, so this always applies.
 	if req.Paid {
-		if err := s.store.SetRaffleEntryPaid(entryID, true); err != nil {
+		if _, err := s.store.SetRaffleEntryPaid(entryID, true, 0, req.AmountWaived); err != nil {
 			writeInternalError(w, "mark added entry paid", err)
 			return
 		}
@@ -518,9 +709,21 @@ func (s *Server) handleRaffleEntryAdd(w http.ResponseWriter, r *http.Request) {
 // raffleEntryPatchRequest is the JSON body for PATCH /api/raffles/{id}/entries/{entryId}.
 type raffleEntryPatchRequest struct {
 	Paid bool `json:"paid"`
+	// How many of the entry's tickets this settlement covers. Omitted or 0 means
+	// all of them (the common counter case); a smaller number records a PART
+	// payment and leaves the entry reading as partial. Ignored when paid is false.
+	PaidEntries int `json:"paid_entries"`
+	// Gil forgiven as part of THIS settlement. It is added to whatever the entry
+	// has already had waived, never substituted for it - a player whose first
+	// entry was free and who later buys two more keeps both waivers. Ignored when
+	// paid is false, which clears the row outright.
+	AmountWaived float64 `json:"amount_waived"`
 }
 
-// handleRaffleEntryPatch updates an entry's paid flag.
+// handleRaffleEntryPatch records or clears a settlement on an entry: paid=true
+// settles paid_entries tickets (all of them when it is omitted) and adds
+// amount_waived to the running waiver, paid=false resets the row to nothing
+// settled and nothing waived.
 //
 //	Endpoint:  PATCH /api/raffles/{id}/entries/{entryId}
 //	Auth:      permission:teahouse-raffles
@@ -554,12 +757,27 @@ func (s *Server) handleRaffleEntryPatch(w http.ResponseWriter, r *http.Request) 
 		writeError(w, http.StatusNotFound, "Entry not found")
 		return
 	}
-	if err := s.store.SetRaffleEntryPaid(entryID, req.Paid); err != nil {
+	if !validWaiver(req.AmountWaived) {
+		writeError(w, http.StatusBadRequest, "Amount waived must be a non-negative number")
+		return
+	}
+	if req.PaidEntries < 0 {
+		writeError(w, http.StatusBadRequest, "Entries paid for cannot be negative")
+		return
+	}
+	if _, err := s.store.SetRaffleEntryPaid(entryID, req.Paid, req.PaidEntries, req.AmountWaived); err != nil {
 		writeInternalError(w, "mark entry paid", err)
 		return
 	}
-	entry.Paid = req.Paid
-	writeJSON(w, http.StatusOK, model.RaffleEntryResponse{Entry: *entry})
+	// Re-read rather than patching the local copy: the store derives
+	// paid_entries and accumulates amount_waived, so only the row knows the
+	// result.
+	updated, err := s.store.GetRaffleEntryByID(entryID)
+	if err != nil || updated == nil {
+		writeInternalError(w, "load settled entry", err)
+		return
+	}
+	writeJSON(w, http.StatusOK, model.RaffleEntryResponse{Entry: *updated})
 }
 
 // handleRaffleEntryDelete removes a raffle entry.
@@ -600,17 +818,35 @@ func (s *Server) handleRaffleEntryDelete(w http.ResponseWriter, r *http.Request)
 
 // -- Raffle winner commands --------------------------------------------------
 
-// pickRaffleWinner picks a random paid entry as the pending winner and returns it,
-// or writes a 400 when there are no paid entries. Shared by pick-winner and
+// pickRaffleWinner picks a random entry as the pending winner and returns it, or
+// writes a 400 when there is nothing to pick from. Shared by pick-winner and
 // pick-another (which clears the current winner first).
+//
+// A raffle that charges for tickets draws from PAID entries only. A details-only
+// raffle never collects payment through the app - staff record entries from a
+// sign-up run elsewhere - so it draws from all of them.
 func (s *Server) pickRaffleWinner(w http.ResponseWriter, raffleID int64) {
-	winner, err := s.store.PickRaffleWinner(raffleID)
+	raffle, err := s.store.GetRaffle(raffleID)
+	if err != nil {
+		writeInternalError(w, "get raffle for winner pick", err)
+		return
+	}
+	if raffle == nil {
+		writeError(w, http.StatusNotFound, "Raffle not found")
+		return
+	}
+	paidOnly := raffle.AcceptsSignups()
+	winner, err := s.store.PickRaffleWinner(raffleID, paidOnly)
 	if err != nil {
 		writeInternalError(w, "pick raffle winner", err)
 		return
 	}
 	if winner == nil {
-		writeError(w, http.StatusBadRequest, "No paid entries to pick from")
+		if paidOnly {
+			writeError(w, http.StatusBadRequest, "No paid entries to pick from")
+		} else {
+			writeError(w, http.StatusBadRequest, "No entries to pick from")
+		}
 		return
 	}
 	if err := s.store.SetRaffleWinner(raffleID, &winner.ID); err != nil {
@@ -654,6 +890,58 @@ func (s *Server) handleRafflePickAnother(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	s.pickRaffleWinner(w, raffleID)
+}
+
+// setRaffleStatus applies a status change and responds with {ok, status}. Shared
+// by the close and reopen verb handlers.
+//
+// This is the counterpart to verify-winner, which also closes but only as the last
+// step of confirming a winner. Plenty of raffles never reach that: a details-only
+// one collects nothing through the app, and any raffle can simply draw no entries.
+// Without a plain close those sit open forever, still listed to the public.
+func (s *Server) setRaffleStatus(w http.ResponseWriter, r *http.Request, status string) {
+	if !s.requirePermission(w, r, permTeahouseRaffles) {
+		return
+	}
+	id, ok := pathInt64(w, r, "id", "raffle")
+	if !ok {
+		return
+	}
+	raffle, err := s.store.GetRaffle(id)
+	if err != nil {
+		writeInternalError(w, "get raffle for status", err)
+		return
+	}
+	if raffle == nil {
+		writeError(w, http.StatusNotFound, "Raffle not found")
+		return
+	}
+	if err := s.store.SetRaffleStatus(id, status); err != nil {
+		writeInternalError(w, "set raffle status", err)
+		return
+	}
+	writeJSON(w, http.StatusOK, model.StatusResponse{OK: true, Status: status})
+}
+
+// handleRaffleClose closes a raffle without picking a winner - for one that drew
+// no entries, or a details-only raffle whose draw happened elsewhere. Any winner
+// already recorded is left alone, so this never rewrites a result.
+//
+//	Endpoint:  POST /api/raffles/{id}/close
+//	Auth:      permission:teahouse-raffles
+//	Response:  200 {"ok": true, "status": "closed"}
+func (s *Server) handleRaffleClose(w http.ResponseWriter, r *http.Request) {
+	s.setRaffleStatus(w, r, "closed")
+}
+
+// handleRaffleReopen puts a closed raffle back on the public list - the undo for
+// a close, including one done by mistake.
+//
+//	Endpoint:  POST /api/raffles/{id}/reopen
+//	Auth:      permission:teahouse-raffles
+//	Response:  200 {"ok": true, "status": "open"}
+func (s *Server) handleRaffleReopen(w http.ResponseWriter, r *http.Request) {
+	s.setRaffleStatus(w, r, "open")
 }
 
 // handleRaffleVerifyWinner finalizes the pending winner and closes the raffle.

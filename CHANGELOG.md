@@ -42,6 +42,131 @@ The format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## Frontend
 
+### [3.20.0] - 2026-08-24
+
+Duplicating an event, and closing a raffle that never had a winner. Requires
+backend 3.17.0.
+
+#### Added
+
+- **Close / Reopen on a raffle**, next to Duplicate. Verifying a winner also
+  closes, but only as the last step of confirming one - so a raffle that drew no
+  entries, and every details-only raffle (whose draw happens outside the app), had
+  no way to close at all and stayed on the public list forever. Closing asks first,
+  since it takes a live raffle off that list; reopening is the undo and doesn't.
+  Neither touches a winner already recorded.
+- **Duplicate on raffles, stamp rallies and garapons** - a detail-toolbar action
+  that opens the create form pre-filled from an existing item, for an event that
+  runs again. Each drops every id (so saving creates rather than overwrites the
+  original), marks the title `(Copy)`, and clears the dates belonging to the run
+  that already happened - including a rally's per-stamp active windows, where a
+  stale one would silently gate a stall. A duplicated garapon also drops its
+  stamp-rally link, which would otherwise leave two drums issuing draws off one
+  rally's sign-ups. Issued cards, drawing links, draw logs and raffle entries stay
+  with the original. Raffles already had this as Copy on the closed table; it now
+  works from the detail view too, so an open raffle can be duplicated.
+- **Open counts for Garapon and Stamp Rally in the admin sidebar**, matching the
+  ones Manage Cards and Raffles already showed. `AdminView` preloads both lists
+  (permission-gated) so the counts are right before their tabs are opened.
+- **Record a part payment from the raffle payment dialog** - an "Entries Paid For"
+  box, defaulting to all of them, that reports what this payment covers and how many
+  it leaves unpaid.
+
+### [3.19.0] - 2026-08-21
+
+Raffles gain three entry types and a real payment record. Requires backend 3.16.0.
+
+#### Added
+
+- **Three raffle entry types**, chosen on the raffle form's new **Entry Type** picker,
+  which swaps the cost controls to match:
+  - **Details Only** - the raffle is published for reference and has no sign-up form.
+    Its sign-up instructions move to the page itself, under "How to Enter", because
+    that IS how a player enters; the "this raffle is closed" notice no longer fires
+    for one that is simply entered elsewhere.
+  - **Single Cost per Entry** - the original behavior, unchanged.
+  - **Custom Cost per Entry** - a price per entry, edited as a ladder of rows. The
+    number of rows is also the per-player limit, so it can't quote a ticket it has no
+    price for. The form shows the running "all N entries" total as you type.
+- **The public raffle page lists a custom raffle's ladder up front** - each entry's
+  price plus the running total for two, three, and so on - so nobody commits to the
+  first entry without knowing what the next one costs. The sign-up form's Total Cost
+  climbs the same ladder rather than multiplying one price.
+- **Raffle cards name the pricing** rather than assuming a flat cost: a ladder reads
+  `50,000 / 100,000 / 150,000 gil`, and a Details Only raffle says sign-ups happen
+  outside the site.
+- **An amount waived when recording a payment.** The Paid button now opens
+  `RafflePaymentModal.vue` instead of toggling: it shows the entry's tickets, what
+  they cost, what has already been waived, and what is outstanding, then takes the
+  gil forgiven on THIS payment and quotes what is actually due. The waiver is added
+  to the entry's running total server-side, never substituted for it, so the field
+  opens at zero every time. The admin Add Entry row takes a waived amount too, next
+  to "Mark as paid".
+- **Partly-paid entries are visible.** Entries merge per character+world, so someone
+  who settled up and then bought two more tickets used to sit behind an unchanged
+  "Paid". The entries table now reads `3 (1 paid)` with a **Partial** pay button, and
+  the Cost column shows `-X waived = Y` where a waiver applies.
+
+- **The stamp-rally lookup results had no inner spacing** - the rally title, the
+  links and their Copy buttons all sat against the card border. `.card` is chrome
+  only (the image tiles bleed their picture to the edge and pad the body beneath
+  instead), so a card of plain content needs the new **`.card--padded`** modifier;
+  the lookup was the one place using `.card` bare. The raffle lookup was checked
+  for the same fault and has none - it sits inside the padded sign-up panel.
+- **Stamp Rally sign-up: the links open in a new tab**, and the warning now reads
+  "Save these links or keep this page open." That page is the only copy of the card
+  (and Garapon draw) link until the participant saves it somewhere, so following one
+  used to navigate away from the very thing they were told to keep.
+- **A "Hide Bingo" switch** (System -> Settings, under the Bingo Join Prompt).
+  Turning it on removes Join Bingo and the Custom Card request from the public home
+  page for a stretch when no game is running; the two are one feature and hide
+  together. Existing `/play/:cardId` and `/card-requests` links keep working, so
+  flipping it can't strand a player mid-game. The home page waits for the settings
+  to actually arrive before rendering either card - the defaults say "visible", so
+  rendering first would flash the thing being hidden and leave it clickable for a
+  moment - and says "nothing is running just now" when bingo is hidden and no
+  raffle or rally is open either.
+- **Custom Card now sits directly under Join Bingo** on the home page instead of
+  last, so the bingo card and the request for a bingo card read as one pair.
+- **A "Where to Pay" image on raffles**, picked on the raffle form directly under
+  the Sign-Up Instructions and shown to players beneath those instructions - both on
+  a Details Only raffle's "How to Enter" panel and on the confirmation after signing
+  up, which is where the amount due is quoted. Mirrors the stamp rally's "Where to
+  Redeem"; the two now share a **`.captioned-figure`** object rather than a scoped
+  copy each.
+- **An "Already Entered?" search on the raffle page**, beside the sign-up form.
+  It reports each match's name, world, entry count and payment status, and a "Use
+  this name" button fills the form with that exact spelling - which is the point,
+  since a near-miss spelling starts a second entry instead of adding to the first.
+  A search that has not run and one that matched nothing are different states, so
+  the page never says "no entries match" before anyone looked.
+- **The sign-up confirmation leads with Amount Due**, and adds an "Already
+  Covered" line for a returning entrant, so somebody who has part-paid isn't reading
+  the full ladder total as their bill. The admin form caps Max Entries Per Person at
+  100 and stops the cost ladder there too.
+
+#### Fixed
+
+- **The stamp rally's "Where to Redeem" screenshot had square corners.** It set
+  `--radius` (chrome, deliberately 0) where every other image object uses
+  `--radius-media` (6px) - `tokens.css` is explicit that a picture takes the soft
+  edge. Fixed in the shared `.captioned-figure`, so it applies to both it and the
+  raffle's "Where to Pay".
+- **A long price ladder no longer overruns the raffle card.** A raffle may carry up
+  to 50 rungs; past four, the one-line summary switches from spelling every price
+  out to `12 entries, 78,000 gil for all`. The full ladder is still listed on the
+  raffle's own page.
+- **The cost helper walks the ladder rather than the ticket count**, mirroring the
+  backend - a raffle with a large per-player allowance could otherwise lock the tab
+  while pricing an entry.
+
+#### Changed
+
+- The announcement Discord-button rows, the weekday picker, and the new raffle cost
+  ladder share two promoted objects - **`.stack` / `.stack-row` / `.stack-label`**
+  (a vertical run of rows with a fixed key column) and **`.toggle-group`** (the flex
+  container for a run of `.toggle-btn` segments) - replacing three scoped clones.
+
 ### [3.18.0] - 2026-08-11
 
 Stamp Rally sign-up moves to the participant. Requires backend 3.15.0.
@@ -1136,6 +1261,116 @@ First tracked release - establishes versioning for the current production build.
 
 ## Backend
 
+### [3.17.0] - 2026-08-24
+
+A raffle can be closed without a winner. Paired with frontend 3.20.0.
+
+#### Added
+
+- **`POST /api/raffles/{id}/close` + `/reopen`** - the raffle counterpart to the
+  garapon and stamp-rally status verbs. verify-winner also closes, but only as the
+  last step of confirming a winner, so a raffle that drew no entries - and every
+  `details` raffle, whose draw happens outside the app - had no way to close and
+  stayed on the public list indefinitely. Closing leaves any winner already
+  recorded untouched, so it can never rewrite a result, and reopen is its undo.
+
+### [3.16.0] - 2026-08-21
+
+Raffles get entry modes and per-entry payment records. Paired with frontend 3.19.0.
+
+#### Added
+
+- **`raffles.entry_mode`** (schema v57, with `tier_costs`): `details`, `single` or
+  `custom`. `single` is the original flat `cost_per_entry`; `custom` prices the 1st,
+  2nd, ... ticket from the `tier_costs` ladder, so 50k/100k/150k charges 300,000 for
+  three; `details` prices nothing and rejects public sign-ups (the raffle is entered
+  elsewhere). Existing raffles migrate to `single` with an empty ladder - exactly
+  what they already did - and any unrecognized or absent mode normalizes to `single`,
+  so an API client written before this still behaves the way it did.
+- **`amount_due` on the sign-up confirmation.** `total_cost` is the sticker price
+  of every ticket the character now holds; `amount_due` is what they actually have
+  to send, which is lower once part of their entry is already settled. Entries merge
+  per character+world, so somebody who paid for a ticket and comes back for two more
+  was previously quoted the whole ladder and invited to pay twice for the first one.
+  The field folds settled tickets and waived gil together, so it can't be used to
+  work out that a character was comped, and there is deliberately no pre-sign-up
+  lookup - one would be an enumeration oracle over who entered which raffle.
+- **`paid_entries` on the settlement PATCH** - how many of an entry's tickets a
+  payment covers. Omitted means all of them (unchanged); a smaller number records a
+  part payment, which previously could only happen by accident, when someone bought
+  more tickets after settling. Clamped to the entry's tickets in SQL (`num_entries`
+  can grow between a read and the write) and forward-only, so a stale count can't
+  walk a settlement backwards - clearing is the undo.
+- **A `hide_bingo` setting**, validated to exactly `'0'` or `'1'` so a flag that
+  decides whether a whole feature appears on the page can't be stored as something
+  truthy in one place and falsy in another. Public on `GET /api/settings`, since
+  the home page reads it before anyone logs in.
+- **`raffles.pay_image`** (schema v59) - a "Where to Pay" screenshot, the raffle
+  counterpart to a stamp rally's `redeem_image`. Existing raffles default to none.
+- **`POST /api/raffles/{id}/lookup`** - a public "have I already entered?" search.
+  Entries merge on character+world, so someone who retypes their name slightly
+  differently starts a second entry and splits their tickets; this hands back the
+  exact spelling they used. Matches a substring, case-insensitively, over a raffle
+  the caller can already see. Looser than the stamp-rally lookup on purpose (that
+  one matches whole names to keep participation private; a raffle's entrant list is
+  public by decision), but still guarded: a 2-character minimum, 50 rows with a
+  `truncated` flag rather than a silent clip, escaped LIKE wildcards, and its own
+  rate limiter so searching can't spend the budget for the sign-up it precedes. The
+  response is a separate type from the stored entry and carries no entry id and no
+  gil figures - a waiver stays a private arrangement.
+- **A cap of 100 on the per-player allowance** (and so on the custom ladder, whose
+  length is that allowance). Over the cap is a 400 rather than a silent clamp, so an
+  admin who typed 1000 finds out instead of discovering a limit nobody chose.
+  Raffles saved before the cap keep their value until someone edits them.
+- **`raffle_entries.paid_entries` + `amount_waived`** (schema v58). Entries merge per
+  character+world, so a settled row can gain tickets later; `paid_entries` records
+  how many are actually settled, which is what makes that PARTIAL state visible
+  instead of the new tickets hiding behind the existing `paid=1`. `amount_waived`
+  accumulates - `PATCH /api/raffles/{id}/entries/{entryId}` carries the gil forgiven
+  on THAT settlement and the server adds it, so a player whose first entry was comped
+  and who later buys two more keeps both waivers. Clearing a payment resets both.
+  Existing paid rows backfill to fully settled with nothing waived.
+
+#### Changed
+
+- **The collected-gil total is computed, not summed.** A tiered raffle prices "one
+  entry holding 3 tickets" differently from "three entries holding 1", and each entry
+  carries its own waiver, so `listRafflesAdmin` now reads the settlements and prices
+  them through `Raffle.AmountCollected` (floored at 0, so an over-generous waiver
+  can't eat into another entry's contribution). Partly-settled entries count for what
+  they actually paid.
+- **A details-only raffle draws from every entry**, not just paid ones - it collects
+  nothing through the app, so requiring a paid flag would leave it undrawable.
+- **Adding tickets to a settled entry drops it back to unpaid** (keeping
+  `paid_entries` and `amount_waived`), so the outstanding tickets are collected for
+  rather than absorbed. Previously the entry stayed "paid" and the new tickets were
+  invisible.
+- `custom` mode pins `max_entries` to the ladder length, and a write keeps only the
+  cost fields its mode uses, so switching back to `single` leaves no stale ladder
+  behind as a shadow price.
+- **The draw weights settled tickets, not tickets held.** A part-paid entrant gets
+  one chance per ticket they actually paid for; previously the paid flag was
+  all-or-nothing, so buying more tickets either carried the unpaid ones into the
+  draw at full weight or (once partial state existed) dropped a paying entrant out
+  of it entirely. A fully-settled entry is unaffected.
+- **Settling an entry is idempotent.** The write carries
+  `AND paid_entries < num_entries`, so two staff settling the same entry at once -
+  or one double-submit - can no longer stack the same waiver twice and quietly
+  understate what the raffle collected. The guard is in the statement because a
+  read-then-write would race identically.
+- **Pricing walks the ladder, not the ticket count.** `max_entries` is admin-set
+  and unbounded, so a per-ticket loop meant a large allowance could spin on every
+  admin raffle-list load. Only rungs that exist carry a price, and a details-only
+  raffle short-circuits to zero.
+
+#### Security
+
+- **The settlement columns no longer reach the public.** A closed raffle publishes
+  its winner by name, and `winner_entry` was carrying `paid_entries` and
+  `amount_waived` with it - putting "this named person had their entries comped" on
+  a public page. `RaffleEntry.PublicView()` strips both; the bare `paid` flag, which
+  was already public, is unchanged.
+
 ### [3.15.0] - 2026-08-11
 
 Stamp Rally participants can sign themselves up, instead of waiting for staff to issue
@@ -2017,6 +2252,59 @@ with a personal access token and is distributed through a Dalamud custom repo
 (`plugins/pluginmaster.json`). Versions use the four-part AssemblyVersion in
 `SenpanCompanion.csproj`. Entries below the current release were reconstructed
 from the `<Version>` history and commit messages.
+
+### [3.4.1.0] - 2026-08-23
+
+Finishes the raffle panel's move to the new entry types and payment record, and gives
+the timed macros a dry run.
+
+#### Added
+
+- **A payment dialog on the Paid cell**, replacing the paid checkbox. It carries the
+  same settlement the website offers - how many tickets the payment covers, and gil
+  waived on it - because both need a number typed, which a checkbox has nowhere to
+  put. The cell itself now reads Paid / Partial / Unpaid, and Clear payment is there
+  too, since resetting the row is the only way to undo a settlement.
+- **Timed macros: a Test send**, putting the message out once so it can be checked in
+  chat before committing to a schedule. It deliberately does not count towards the
+  send total or start the timer - a test is not one of the sends that was asked for,
+  and counting it would eat into a send cap and shift every later "N of M".
+- **Timed macros: Reset is offered whenever there is progress to clear**, not only
+  once a send cap is reached. That was the real gap: an uncapped macro never
+  "completes", so it could never be reset at all. It is refused while the macro is
+  running, where the countdown and the "N of M" would otherwise disagree about the
+  same run.
+
+#### Fixed
+
+- **A details-only raffle no longer offers to sign anyone up.** The Add entrant form
+  is replaced by a note explaining that players enter it outside the app, rather than
+  a form whose Add would create an entrant the raffle never meant to collect. The
+  draw's caption follows suit, saying it runs over every entrant rather than paid
+  tickets. (Entrants for one are still recorded on the website.)
+
+#### Changed
+
+- The macro start button reads **Start** rather than **Send**, now that Test send
+  sits next to it and "Send" would have been ambiguous about which one fired once.
+
+### [3.4.0.0] - 2026-08-21
+
+Keeps the raffle panel honest about the new entry types and part-paid entrants.
+
+#### Added
+
+- **The raffle header names the pricing per entry type**: the ladder for a
+  custom-cost raffle (`Cost per entry: 50000 / 100000 / 150000`), the flat price for a
+  single-cost one, and "Details only - players sign up elsewhere" for a raffle that
+  takes no sign-ups through the app.
+- **Part-paid entrants read as `settled / total` tickets** with a tooltip, instead of
+  a bare total that hid the outstanding ones, and a hover on the Paid box reports what
+  has been waived on that entry. Ticking the box settles the rest waiving nothing -
+  entering an amount waived stays on the website, where the figures are on screen.
+- `Ui.ItemTooltip` - a hover tooltip for the item just drawn, for annotating a table
+  cell or checkbox without taking up room (unlike `Ui.HelpMarker`, which draws a
+  "(?)").
 
 ### [3.3.2.0] - 2026-07-28
 

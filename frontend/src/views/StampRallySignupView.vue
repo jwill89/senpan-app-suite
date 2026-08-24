@@ -12,6 +12,8 @@
  * On success the card token (and the Garapon token, when the rally has one) is shown
  * as a link the participant must keep - there is no account to log back into, so the
  * page is emphatic about saving it and points at the lookup page as the way back.
+ * Those links open in a NEW TAB: this page is the only copy of them until the
+ * participant saves them somewhere, so following one must not navigate it away.
  */
 import { computed, onMounted, ref, useTemplateRef, watch } from 'vue'
 import { useRouter } from 'vue-router'
@@ -115,7 +117,9 @@ function goLookup(): void {
 
           <div class="stamp-signup-link">
             <span class="field-label">Your stamp card</span>
-            <a :href="cardLink" class="stamp-signup-link-url">{{ cardLink }}</a>
+            <a :href="cardLink" target="_blank" rel="noopener" class="stamp-signup-link-url">
+              {{ cardLink }}
+            </a>
             <button class="btn-view btn-sm" @click="store.copyLink(cardLink)">
               <font-awesome-icon :icon="['fas', 'copy']" /> Copy
             </button>
@@ -123,7 +127,9 @@ function goLookup(): void {
 
           <div v-if="garaponLink" class="stamp-signup-link">
             <span class="field-label">Your {{ store.signupResult.garapon_title }} draw</span>
-            <a :href="garaponLink" class="stamp-signup-link-url">{{ garaponLink }}</a>
+            <a :href="garaponLink" target="_blank" rel="noopener" class="stamp-signup-link-url">
+              {{ garaponLink }}
+            </a>
             <button class="btn-view btn-sm" @click="store.copyLink(garaponLink)">
               <font-awesome-icon :icon="['fas', 'copy']" /> Copy
             </button>
@@ -132,8 +138,8 @@ function goLookup(): void {
           <div class="form-alert form-alert-warning mt-16" role="alert">
             <font-awesome-icon :icon="['fas', 'triangle-exclamation']" class="form-alert-icon" />
             <span>
-              <strong>Save these links.</strong> They are the only way back to your card - there is
-              no account to log into. If you lose them, you can
+              <strong>Save these links or keep this page open.</strong> They are the only way back
+              to your card - there is no account to log into. If you lose them, you can
               <button class="link-btn" @click="goLookup">look them up by name</button>.
             </span>
           </div>

@@ -5,7 +5,7 @@
  * loadGoogleFontsList, _applyHeaderFont, _loadActiveCSS/_applyCustomCSS).
  */
 import { defineStore } from 'pinia'
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import { endpoints } from '@/lib/endpoints'
 import {
   applyCustomCSS,
@@ -38,6 +38,23 @@ export const useAppStore = defineStore('app', () => {
   const activeBoardFlourish = ref('')
   const activeNumberFlourish = ref('')
 
+  /**
+   * True once the server's settings have been read (successfully or not). Until
+   * then `settings` holds DEFAULT_APP_SETTINGS, which is a guess - anything that
+   * would SHOW something the settings might hide has to wait for this, or the
+   * hidden thing flashes up and vanishes, and can be clicked while it's there.
+   */
+  const settingsLoaded = ref(false)
+
+  /**
+   * Whether the public home page hides its Bingo entry points (Join Bingo and the
+   * Custom Card request that belongs with it). Settings are stored as strings, so
+   * this is the one place that decides what counts as "on" - the server only ever
+   * stores '0' or '1', and anything else is treated as off so a surprise value
+   * can't hide the site's main feature.
+   */
+  const hideBingo = computed(() => settings.value.hide_bingo === '1')
+
   /** Sets the active flourishes + applies the number-flourish CSS variable. */
   function applyFlourishes(board: string, number: string): void {
     activeBoardFlourish.value = board || ''
@@ -59,6 +76,10 @@ export const useAppStore = defineStore('app', () => {
       void loadGoogleFontsList()
     } catch {
       /* silent */
+    } finally {
+      // Set even on failure: the defaults are then the best answer available, and
+      // leaving this false would hide the home page's cards for good.
+      settingsLoaded.value = true
     }
   }
 
@@ -181,6 +202,8 @@ export const useAppStore = defineStore('app', () => {
     savingSettings,
     activeBoardFlourish,
     activeNumberFlourish,
+    settingsLoaded,
+    hideBingo,
     applyFlourishes,
     loadSettings,
     saveSettings,

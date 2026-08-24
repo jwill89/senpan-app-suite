@@ -248,3 +248,96 @@ describe('public sign-up + lookup', () => {
     expect(ep.signupLookup).not.toHaveBeenCalled()
   })
 })
+
+describe('copyRallyForm', () => {
+  /** A rally with the pieces a duplicate has to carry over - and the ones it must not. */
+  function sourceRally(): StampRally {
+    return {
+      id: 7,
+      title: 'Obon Rally',
+      card_image: 'images/rally/card.png',
+      not_stamped_image: 'images/rally/blank.png',
+      available_from: '2026-08-01T00:00:00.000Z',
+      available_to: '2026-08-07T00:00:00.000Z',
+      details: 'Collect them all',
+      redeem_instructions: 'See staff',
+      redeem_image: 'images/rally/where.png',
+      public_signup: true,
+      status: 'closed',
+      created_at: '',
+      stamps: [
+        {
+          id: 41,
+          rally_id: 7,
+          affiliate_id: 3,
+          affiliate_name: 'Lunaria',
+          image: 'images/stamp.png',
+          password: 'moon',
+          placement: { x: 1, y: 2, width: 10, height: 10, rotation: 0 },
+          active_from: '2026-08-01T00:00:00.000Z',
+          active_to: '2026-08-02T00:00:00.000Z',
+          paused: true,
+        },
+      ],
+      prizes: [
+        {
+          id: 88,
+          rally_id: 7,
+          name: 'Grand',
+          image: 'images/prize.png',
+          placement: { x: 3, y: 4, width: 20, height: 20, rotation: 0 },
+        },
+      ],
+    } as unknown as StampRally
+  }
+
+  it('carries the reusable content and marks the title as a copy', () => {
+    const store = useStampRalliesStore()
+    store.copyRallyForm(sourceRally())
+    const f = store.rallyForm!
+
+    expect(f.title).toBe('Obon Rally (Copy)')
+    expect(f.card_image).toBe('images/rally/card.png')
+    expect(f.redeem_instructions).toBe('See staff')
+    expect(f.public_signup).toBe(true)
+    expect(f.stamps).toHaveLength(1)
+    expect(f.stamps[0].password).toBe('moon')
+    expect(f.stamps[0].affiliate_id).toBe(3)
+    expect(f.prizes[0].name).toBe('Grand')
+  })
+
+  it('drops every id so saving creates instead of overwriting the original', () => {
+    const store = useStampRalliesStore()
+    store.copyRallyForm(sourceRally())
+    const f = store.rallyForm!
+
+    expect(f.id).toBe(0)
+    expect(f.stamps[0].id).toBe(0)
+    expect(f.prizes[0].id).toBe(0)
+  })
+
+  it('clears the dates and paused flags tied to the run that already happened', () => {
+    const store = useStampRalliesStore()
+    store.copyRallyForm(sourceRally())
+    const f = store.rallyForm!
+
+    expect(f.available_from).toBe('')
+    expect(f.available_to).toBe('')
+    // A stale per-stamp window would silently gate a stall on last event's dates.
+    expect(f.stamps[0].active_from).toBe('')
+    expect(f.stamps[0].active_to).toBe('')
+    expect(f.stamps[0].paused).toBe(false)
+  })
+
+  it('leaves the original untouched', () => {
+    const store = useStampRalliesStore()
+    const source = sourceRally()
+    store.copyRallyForm(source)
+    store.rallyForm!.title = 'Something else'
+    store.rallyForm!.stamps[0].password = 'changed'
+
+    expect(source.title).toBe('Obon Rally')
+    expect(source.stamps?.[0].password).toBe('moon')
+    expect(source.stamps?.[0].id).toBe(41)
+  })
+})

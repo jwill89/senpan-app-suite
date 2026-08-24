@@ -187,6 +187,24 @@ export const useGaraponsStore = defineStore('garapons', () => {
     }
   }
 
+  /**
+   * Seed a brand-new garapon form from an existing one - the same drum run again,
+   * with its prize table, ball colours, rates and artwork already in place.
+   *
+   * The stamp-rally link is deliberately dropped: it points at the rally the
+   * ORIGINAL drum served, and carrying it over would quietly leave two garapons
+   * issuing draws off one rally's sign-ups. Pick the new rally on the form. The
+   * original's draw log and issued links stay with it.
+   */
+  function copyGaraponForm(g: Garapon): void {
+    editGaraponForm(g)
+    const f = garaponForm.value
+    if (!f) return
+    f.id = 0
+    f.title = `${g.title} (Copy)`
+    f.stamp_rally_id = null
+  }
+
   function cancelGaraponForm(): void {
     garaponForm.value = null
   }
@@ -469,6 +487,7 @@ export const useGaraponsStore = defineStore('garapons', () => {
     loadStampRallyOptions,
     newGaraponForm,
     editGaraponForm,
+    copyGaraponForm,
     cancelGaraponForm,
     addPrizeRow,
     removePrizeRow,

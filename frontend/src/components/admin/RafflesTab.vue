@@ -31,7 +31,16 @@ import DataTable, {
 import PaginationBar from '@/components/common/ui/PaginationBar.vue'
 import EmptyState from '@/components/common/ui/EmptyState.vue'
 import RaffleFormTab from './RaffleFormTab.vue'
-import { useRafflesStore } from '@/stores/raffles'
+import RafflePaymentModal from './RafflePaymentModal.vue'
+import {
+  useRafflesStore,
+  entryAmountCollected,
+  entryPaymentState,
+  entryTicketPrice,
+  raffleAcceptsSignups,
+  raffleCostLabel,
+  raffleHasCost,
+} from '@/stores/raffles'
 import { assetUrl } from '@/lib/assets'
 import { formatServerTimestamp, parseServerTimestamp } from '@/lib/datetime'
 import type { Raffle, RaffleEntry } from '@/types/api'
@@ -66,12 +75,39 @@ const entryColumns = computed<DataColumn[]>(() => {
   const cols: DataColumn[] = [
     { key: 'character', label: 'Character' },
     { key: 'num_entries', label: 'Entries', align: 'center' },
-    { key: 'cost', label: 'Cost', align: 'center' },
-    { key: 'paid', label: 'Paid', align: 'center' },
   ]
+  // A details-only (or free) raffle collects nothing, so the money column would
+  // only ever read 0. The paid column stays: the draw still runs off it.
+  if (charges.value) cols.push({ key: 'cost', label: 'Cost', align: 'center' })
+  cols.push({ key: 'paid', label: 'Paid', align: 'center' })
   if (isOpen.value) cols.push({ key: 'actions', label: 'Actions', align: 'center' })
   return cols
 })
+
+/** Does the selected raffle charge for entries (drives the cost/paid columns)? */
+const charges = computed(() => !!raffles.selectedRaffle && raffleHasCost(raffles.selectedRaffle))
+
+/** Sticker price of one entry row, priced through the raffle's entry mode. */
+function entryCost(e: RaffleEntry): string {
+  if (!raffles.selectedRaffle) return '-'
+  return entryTicketPrice(raffles.selectedRaffle, e).toLocaleString()
+}
+
+/** What an entry has actually handed over, once its waivers are netted off. */
+function entryCollected(e: RaffleEntry): number {
+  if (!raffles.selectedRaffle) return 0
+  return entryAmountCollected(raffles.selectedRaffle, e)
+}
+
+// The entry whose payment is being recorded (null = modal closed).
+const payingEntry = ref<RaffleEntry | null>(null)
+
+/** Label + intent for the Paid button, by how far the entry has settled. */
+const PAID_BUTTON = {
+  paid: { label: 'Paid', cls: 'btn-confirm' },
+  partial: { label: 'Partial', cls: 'btn-caution' },
+  unpaid: { label: 'Unpaid', cls: 'btn-neutral' },
+} as const
 
 /** Highlights the winner's row in the entries table. */
 function entryRowClass(e: RaffleEntry): string {
@@ -127,8 +163,13 @@ function copyRaffle(r: Raffle): void {
   raffles.copyRaffleForm(r)
   screen.value = 'form'
 }
+/** Same as copyRaffle, for the raffle currently open in the detail view. */
+function duplicateSelected(): void {
+  if (raffles.selectedRaffle) copyRaffle(raffles.selectedRaffle)
+}
 function backToList(): void {
   raffles.selectedRaffle = null
+  payingEntry.value = null
   screen.value = 'list'
 }
 function onFormDone(): void {
@@ -155,10 +196,41 @@ async function deleteSelected(): Promise<void> {
         <span :class="['status-badge', 'status-badge-' + raffles.selectedRaffle.status]">
           {{ raffles.selectedRaffle.status }}
         </span>
+        <span v-if="!raffleAcceptsSignups(raffles.selectedRaffle)" class="badge badge--muted">
+          Details only
+        </span>
+        <span
+          v-else-if="raffles.selectedRaffle.entry_mode === 'custom'"
+          class="badge badge--accent"
+        >
+          {{ raffleCostLabel(raffles.selectedRaffle) }}
+        </span>
       </SubPageHeader>
       <div class="flex-toolbar flex-end mb-16">
         <button v-if="isOpen" class="btn-confirm btn-sm" @click="editSelected">
           <font-awesome-icon :icon="['fas', 'pen-to-square']" /> Edit
+        </button>
+        <button
+          class="btn-view btn-sm"
+          title="Start a new raffle pre-filled from this one"
+          @click="duplicateSelected"
+        >
+          <font-awesome-icon :icon="['fas', 'copy']" /> Duplicate
+        </button>
+        <!-- Close without a winner: what a raffle that drew nobody needs, and the
+             only way to retire a details-only one, whose draw happens elsewhere.
+             Verifying a winner still closes as part of that flow. -->
+        <button
+          class="btn-caution btn-sm"
+          :title="
+            isOpen
+              ? 'Close without picking a winner - it stops appearing publicly'
+              : 'Put this raffle back on the public list'
+          "
+          @click="raffles.setRaffleClosed(isOpen)"
+        >
+          <font-awesome-icon :icon="['fas', isOpen ? 'lock' : 'rotate']" />
+          {{ isOpen ? 'Close' : 'Reopen' }}
         </button>
         <button class="btn-danger btn-sm" @click="deleteSelected">
           <font-awesome-icon :icon="['fas', 'trash']" /> Delete
@@ -240,10 +312,23 @@ async function deleteSelected(): Promise<void> {
           </FormField>
         </div>
         <div class="flex-toolbar entry-add-actions">
-          <label class="entry-add-paid">
-            <input v-model="raffles.entryAdd.paid" type="checkbox" />
-            Mark as paid
-          </label>
+          <div class="flex-toolbar">
+            <label class="entry-add-paid">
+              <input v-model="raffles.entryAdd.paid" type="checkbox" />
+              Mark as paid
+            </label>
+            <label v-if="charges && raffles.entryAdd.paid" class="entry-add-paid">
+              Waived
+              <input
+                v-model.number="raffles.entryAdd.amountWaived"
+                type="number"
+                min="0"
+                step="any"
+                style="width: 110px"
+                aria-label="Amount waived"
+              />
+            </label>
+          </div>
           <button
             class="btn-confirm btn-sm"
             :disabled="
@@ -269,23 +354,34 @@ async function deleteSelected(): Promise<void> {
         :row-class="entryRowClass"
       >
         <template #cell-character="{ row }">{{ row.character_name }} @ {{ row.world }}</template>
+        <template #cell-num_entries="{ row }">
+          {{ row.num_entries }}
+          <span v-if="entryPaymentState(row) === 'partial'" class="text-muted text-xs nowrap">
+            ({{ row.paid_entries }} paid)
+          </span>
+        </template>
         <template #cell-cost="{ row }">
-          {{ (row.num_entries * (raffles.selectedRaffle?.cost_per_entry ?? 0)).toLocaleString() }}
+          {{ entryCost(row) }}
+          <!-- A waiver only makes sense next to what it reduced, so the collected
+               figure rides along with it rather than earning its own column. -->
+          <div v-if="row.amount_waived > 0" class="text-muted text-xs nowrap">
+            -{{ row.amount_waived.toLocaleString() }} waived =
+            {{ entryCollected(row).toLocaleString() }}
+          </div>
         </template>
         <template #cell-paid="{ row }">
           <button
             v-if="isOpen"
-            :class="['btn-sm', row.paid ? 'btn-confirm' : 'btn-neutral']"
-            @click="raffles.toggleEntryPaid(row)"
+            :class="['btn-sm', PAID_BUTTON[entryPaymentState(row)].cls]"
+            :title="charges ? 'Record a payment' : 'Mark this entry paid'"
+            @click="payingEntry = row"
           >
-            <template v-if="row.paid"
-              ><font-awesome-icon :icon="['fas', 'circle-check']" /> Paid</template
-            >
-            <template v-else>Unpaid</template>
+            <font-awesome-icon v-if="row.paid" :icon="['fas', 'circle-check']" />
+            {{ PAID_BUTTON[entryPaymentState(row)].label }}
           </button>
           <template v-else>
             <font-awesome-icon v-if="row.paid" :icon="['fad', 'circle-check']" />
-            <template v-else>-</template>
+            <template v-else>{{ PAID_BUTTON[entryPaymentState(row)].label }}</template>
           </template>
         </template>
         <template #cell-actions="{ row }">
@@ -293,6 +389,14 @@ async function deleteSelected(): Promise<void> {
         </template>
       </DataTable>
       <EmptyState v-else text="No entries yet." />
+
+      <RafflePaymentModal
+        v-if="payingEntry"
+        :raffle="raffles.selectedRaffle"
+        :entry="payingEntry"
+        @saved="payingEntry = null"
+        @close="payingEntry = null"
+      />
     </AdminPanel>
 
     <!-- -- List ---------------------------------------------------------------- -->
@@ -344,9 +448,8 @@ async function deleteSelected(): Promise<void> {
                 <font-awesome-icon :icon="['fad', 'calendar-circle-exclamation']" /> Window passed
               </span>
               <h3>{{ r.title }}</h3>
-              <p v-if="r.cost_per_entry > 0" class="raffle-cost">
-                {{ r.cost_per_entry.toLocaleString() }} gil per entry
-              </p>
+              <p v-if="raffleCostLabel(r)" class="raffle-cost">{{ raffleCostLabel(r) }}</p>
+              <p v-if="!raffleAcceptsSignups(r)" class="text-sm text-muted">Details only</p>
             </div>
           </div>
         </div>

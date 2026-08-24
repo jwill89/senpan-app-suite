@@ -8,7 +8,7 @@ import { useRouter } from 'vue-router'
 import type { Raffle } from '@/types/api'
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
 import EmptyState from '@/components/common/ui/EmptyState.vue'
-import { useRafflesStore } from '@/stores/raffles'
+import { useRafflesStore, raffleAcceptsSignups, raffleCostLabel } from '@/stores/raffles'
 import { assetUrl } from '@/lib/assets'
 
 const raffles = useRafflesStore()
@@ -71,11 +71,12 @@ function goHome(): void {
           />
           <div class="media-card-body">
             <h3>{{ r.title }}</h3>
-            <p v-if="r.cost_per_entry > 0" class="raffle-cost">
-              {{ r.cost_per_entry.toLocaleString() }} gil per entry
-            </p>
+            <p v-if="raffleCostLabel(r)" class="raffle-cost">{{ raffleCostLabel(r) }}</p>
             <p v-if="r.max_entries > 1" class="text-sm text-muted">
               Up to {{ r.max_entries }} entries
+            </p>
+            <p v-if="!raffleAcceptsSignups(r)" class="text-sm text-muted">
+              Sign up outside the site - see details
             </p>
           </div>
         </div>

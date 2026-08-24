@@ -27,6 +27,8 @@ import { useGameStore } from '@/stores/game'
 import { useCardsStore } from '@/stores/cards'
 import { usePatternsStore } from '@/stores/patterns'
 import { useRafflesStore } from '@/stores/raffles'
+import { useStampRalliesStore } from '@/stores/stampRallies'
+import { useGaraponsStore } from '@/stores/garapons'
 import { useUiStore } from '@/stores/ui'
 import { endpoints } from '@/lib/endpoints'
 import { listPasskeys, registerPasskey, deletePasskey, passkeysSupported } from '@/lib/passkeys'
@@ -39,6 +41,8 @@ const game = useGameStore()
 const cards = useCardsStore()
 const patterns = usePatternsStore()
 const raffles = useRafflesStore()
+const stampRallies = useStampRalliesStore()
+const garapons = useGaraponsStore()
 const ui = useUiStore()
 
 onMounted(async () => {
@@ -51,6 +55,10 @@ onMounted(async () => {
     if (auth.hasPermission('bingo-patterns')) loads.push(patterns.loadPatterns())
     if (auth.hasPermission('bingo-game')) loads.push(game.loadGameState())
     if (auth.hasPermission('teahouse-raffles')) loads.push(raffles.loadRaffles())
+    // Loaded for the sidebar's open-count badges, same as cards + raffles above -
+    // without these the counts would read 0 until the tab itself was visited.
+    if (auth.hasPermission('festival-stamp-rally')) loads.push(stampRallies.loadRallies())
+    if (auth.hasPermission('festival-garapon')) loads.push(garapons.loadGarapons())
     await Promise.allSettled(loads)
     game.drawDelay = parseInt(app.settings.default_draw_delay) || 0
   } catch {

@@ -4,7 +4,7 @@
  * optional Raffles card. Navigates via the router (`/play/:cardId`,
  * `/raffles`, `/admin/login`).
  */
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
 import MarkdownText from '@/components/common/MarkdownText.vue'
@@ -52,6 +52,27 @@ function onJoinInput(e: Event): void {
   player.joinId = (e.target as HTMLInputElement).value.toUpperCase()
 }
 
+/**
+ * Whether to offer the Bingo entry points. Waits for the settings to actually
+ * arrive rather than trusting the defaults: rendering first and hiding a moment
+ * later would flash the very thing Hide Bingo exists to remove, and leave it
+ * clickable while it showed.
+ */
+const showBingo = computed(() => app.settingsLoaded && !app.hideBingo)
+
+/**
+ * Nothing at all to offer - bingo hidden, no open raffles, no rally taking
+ * sign-ups. Rather than leave the page as a logo above an Admin Portal button,
+ * say so. Gated on the loads having finished so it can't flash before the cards.
+ */
+const nothingOn = computed(
+  () =>
+    app.settingsLoaded &&
+    !showBingo.value &&
+    raffles.homeRaffles.length === 0 &&
+    stampRallies.signupRallies.length === 0,
+)
+
 // Focus the board-ID field on load so players can type their code immediately.
 const joinInput = ref<HTMLInputElement | null>(null)
 onMounted(() => {
@@ -84,8 +105,10 @@ const logoUrl = '/images/logo.png'
          squeezed the destination text into three wrapped lines beside a one-line
          button, and left a gap whenever the conditional Raffles row was absent. -->
     <div class="home-stack">
-      <!-- Join game - the primary task. Its board-ID field is focused on mount. -->
-      <div class="home-card home-card--primary">
+      <!-- Join game - the primary task. Its board-ID field is focused on mount.
+           Both bingo entry points are hidden together by the Hide Bingo setting,
+           and the Custom Card request sits directly under the game it belongs to. -->
+      <div v-if="showBingo" class="home-card home-card--primary">
         <h2><font-awesome-icon :icon="['fad', 'game-board-simple']" /> Join Bingo</h2>
         <!-- Admin-editable markdown prompt; plain-text fallback until parser loads -->
         <p v-if="!markdownReady">{{ app.settings.bingo_join_prompt }}</p>
@@ -114,6 +137,14 @@ const logoUrl = '/images/logo.png'
         </div>
         <p v-if="player.joinError" class="error-msg">{{ player.joinError }}</p>
       </div>
+      <!-- Personal Card Requests - a bingo card, so it goes with Join Bingo. -->
+      <div v-if="showBingo" class="home-card home-card--dest">
+        <div class="home-dest-body">
+          <h2><font-awesome-icon :icon="['fad', 'id-card']" /> Custom Card</h2>
+          <p>Design your own bingo card and request it from Senpan staff.</p>
+        </div>
+        <button class="btn-view" @click="goCardRequests">Request a Card</button>
+      </div>
       <!-- Raffles (only if open raffles exist) -->
       <div v-if="raffles.homeRaffles.length" class="home-card home-card--dest">
         <div class="home-dest-body">
@@ -130,14 +161,9 @@ const logoUrl = '/images/logo.png'
         </div>
         <button class="btn-view" @click="viewStampRallies">View Stamp Rallies</button>
       </div>
-      <!-- Personal Card Requests -->
-      <div class="home-card home-card--dest">
-        <div class="home-dest-body">
-          <h2><font-awesome-icon :icon="['fad', 'id-card']" /> Custom Card</h2>
-          <p>Design your own bingo card and request it from Senpan staff.</p>
-        </div>
-        <button class="btn-view" @click="goCardRequests">Request a Card</button>
-      </div>
+      <p v-if="nothingOn" class="text-muted ta-center">
+        Nothing is running just now - check back soon!
+      </p>
     </div>
     <!-- Admin portal (separate) -->
     <div class="home-admin">

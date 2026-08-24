@@ -4,7 +4,8 @@ import { createPinia, setActivePinia } from 'pinia'
 // The app store imports the endpoints layer at module load; stub it so the store
 // can be instantiated without a real API. activeCss/publicCss are spies so the
 // theme-preference tests can assert which one was fetched.
-const { activeCss, publicCss } = vi.hoisted(() => ({
+const { activeCss, publicCss, settingsGet } = vi.hoisted(() => ({
+  settingsGet: vi.fn(async () => ({ settings: {}, uploaded_fonts: [] })),
   activeCss: vi.fn(async () => ({
     css: ':root{--t:active}',
     board_flourish: '',
@@ -17,7 +18,7 @@ const { activeCss, publicCss } = vi.hoisted(() => ({
   })),
 }))
 vi.mock('@/lib/endpoints', () => ({
-  endpoints: { styles: { activeCss, publicCss }, settings: {} },
+  endpoints: { styles: { activeCss, publicCss }, settings: { get: settingsGet } },
 }))
 
 import { useAppStore } from './app'
@@ -104,5 +105,45 @@ describe('app theme preference', () => {
     expect(localStorage.getItem('bingo_theme')).toBe('default')
     expect(activeCss).toHaveBeenCalled()
     expect(injectedThemeCss()).toBe(':root{--t:active}')
+  })
+})
+
+describe('hideBingo', () => {
+  beforeEach(() => {
+    settingsGet.mockClear()
+    settingsGet.mockResolvedValue({ settings: {}, uploaded_fonts: [] })
+  })
+
+  it('is off until the server says otherwise', () => {
+    const app = useAppStore()
+    expect(app.hideBingo).toBe(false)
+    // Nothing has been read yet, so the home page must not act on the default.
+    expect(app.settingsLoaded).toBe(false)
+  })
+
+  it("is on only for the exact flag value '1'", async () => {
+    const app = useAppStore()
+    settingsGet.mockResolvedValue({ settings: { hide_bingo: '1' }, uploaded_fonts: [] })
+    await app.loadSettings()
+    expect(app.hideBingo).toBe(true)
+    expect(app.settingsLoaded).toBe(true)
+  })
+
+  it('treats any other stored value as off, never hiding the main feature by accident', async () => {
+    const app = useAppStore()
+    for (const val of ['0', 'true', 'yes', '', '2']) {
+      settingsGet.mockResolvedValue({ settings: { hide_bingo: val }, uploaded_fonts: [] })
+      await app.loadSettings()
+      expect(app.hideBingo, `hide_bingo=${JSON.stringify(val)}`).toBe(false)
+    }
+  })
+
+  it('reports settings as loaded even when the read fails', async () => {
+    const app = useAppStore()
+    settingsGet.mockRejectedValueOnce(new Error('offline'))
+    await app.loadSettings()
+    // Otherwise the home page would wait forever and show nothing at all.
+    expect(app.settingsLoaded).toBe(true)
+    expect(app.hideBingo).toBe(false)
   })
 })

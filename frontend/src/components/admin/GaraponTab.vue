@@ -130,6 +130,13 @@ function openLog(): void {
 function backToDetail(): void {
   screen.value = 'detail'
 }
+/** Opens the create form pre-filled from this garapon (see copyGaraponForm). */
+function duplicateSelected(): void {
+  if (!garapons.selectedGarapon) return
+  garapons.copyGaraponForm(garapons.selectedGarapon)
+  screen.value = 'form'
+}
+
 function editSelected(): void {
   if (!garapons.selectedGarapon) return
   garapons.editGaraponForm(garapons.selectedGarapon)
@@ -183,6 +190,13 @@ function toggleClosed(): void {
         </button>
         <button v-if="isOpen" class="btn-confirm btn-sm" @click="editSelected">
           <font-awesome-icon :icon="['fas', 'pen-to-square']" /> Edit
+        </button>
+        <button
+          class="btn-view btn-sm"
+          title="Start a new garapon pre-filled from this one"
+          @click="duplicateSelected"
+        >
+          <font-awesome-icon :icon="['fas', 'copy']" /> Duplicate
         </button>
         <button class="btn-caution btn-sm" @click="toggleClosed">
           <font-awesome-icon :icon="['fas', isOpen ? 'lock' : 'rotate']" />

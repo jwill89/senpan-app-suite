@@ -56,6 +56,11 @@
 .text-sm {
   font-size: 0.85rem;
 }
+/* Completes the size scale upward, for the one figure on a panel that has to
+   outweigh the lines around it (the raffle sign-up's Amount Due). */
+.text-lg {
+  font-size: 1.1rem;
+}
 .text-xs {
   font-size: 0.8rem;
 }
@@ -482,7 +487,12 @@
 /* -- Object: card ----------------------------------------------------------
    A bordered surface tile. The shared chrome lives here; the specific card
    classes (home/raffle/saved-pattern) only set their own size/radius/hover/
-   layout. New tiles can use `.card` directly. */
+   layout.
+
+   Chrome only - deliberately NO padding, because the image tiles bleed their
+   picture to the border and pad the body beneath it instead (`.media-card-body`).
+   A card whose content starts at the border is the failure that produces, so a
+   tile used bare needs `.card--padded`. */
 .card,
 .home-card,
 .media-card,
@@ -491,6 +501,12 @@
   border: 2px solid var(--panel-raised-bg);
   border-radius: var(--radius);
   transition: border-color 0.2s;
+}
+/* Modifier: inset the content, for a card of plain content rather than one built
+   around an edge-to-edge image. Matches the inner spacing of the other boxes a
+   reader meets on these pages (`.raffle-signup-form`, `.stamp-signup-result`). */
+.card--padded {
+  padding: 20px;
 }
 
 /* Object: sub-panel - a raised box nested INSIDE a panel, for an inline "add an
@@ -700,6 +716,66 @@
 }
 .del-x:hover {
   color: var(--text);
+}
+
+/* -- Object: stack ---------------------------------------------------------
+   A vertical run of sibling rows sharing one rhythm: a field's repeated inputs
+   (the announcement's Discord buttons, a raffle's per-entry cost ladder) or a
+   short read-only list of the same shape. `.stack-row` is one row - controls laid
+   out horizontally and vertically centred, each child sizing itself, so the
+   object owns only the rhythm and never a column width. Put it on a <ul> and the
+   markers go too, so a list that reads as rows needn't fight `list-style`. */
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.stack-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+/* Part: the fixed first column that turns a run of rows into a key/value list
+   (a raffle's per-entry prices, the payment summary). Fixed width so the values
+   line up down the column instead of stepping in and out with the label. */
+.stack-label {
+  flex: 0 0 110px;
+  color: var(--text-muted);
+}
+
+/* -- Object: captioned figure ----------------------------------------------
+   A labelled reference screenshot: <figure class="captioned-figure"> with a
+   <figcaption> heading and one <img>. Used for the "where to go and do this"
+   pictures - a stamp rally's Where to Redeem, a raffle's Where to Pay - which sit
+   under the instructions they illustrate. The border keeps a screenshot with pale
+   edges from bleeding into the page. */
+.captioned-figure {
+  margin: 12px 0 0;
+}
+.captioned-figure figcaption {
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+.captioned-figure img {
+  max-width: 100%;
+  /* --radius-media, not --radius: chrome is square by design here, but a picture
+     takes the soft edge every other image object uses (see tokens.css). The scoped
+     rule this object replaces used the square token, which read as a hard crop. */
+  border-radius: var(--radius-media);
+  border: 1px solid var(--control-border);
+}
+
+/* -- Object: toggle group --------------------------------------------------
+   Flex container for a run of `.toggle-btn` segments (the announcement weekday
+   picker, the raffle entry-type picker). Wraps instead of overflowing, so a long
+   run still reads inside a narrow panel. */
+.toggle-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
 }
 
 /* -- Object: toggle button -------------------------------------------------

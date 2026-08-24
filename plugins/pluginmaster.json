@@ -3,10 +3,10 @@
     "Author": "MathDad",
     "Name": "Senpan Admin Companion",
     "InternalName": "SenpanCompanionAdmin",
-    "AssemblyVersion": "3.3.2.0",
+    "AssemblyVersion": "3.4.1.0",
     "Description": "Serves as an alternative to many of the web-interface functions, allowing staff to operate various systems from within the game.",
     "Punchline": "Allows Senpan Tea House staff to use various app services right from the game.",
-    "Changelog": "Adds an Owner column to the Tea Rooms table showing the character who owns each room, and fixes accented characters (e.g. the o-with-macron in a room name) that the game font lacks by merging Noto Sans CJK so they render across the window.",
+    "Changelog": "The raffle Paid cell now opens a payment dialog carrying the same settlement the website offers - how many tickets a payment covers, and gil waived on it - and reads Paid / Partial / Unpaid. A Details Only raffle no longer offers to sign anyone up. Timed macros gain a Test send that fires once without counting towards the send total, and Reset is now offered whenever there is progress to clear rather than only at the send cap.",
     "Tags": ["bingo", "raffle", "venue", "senpan"],
     "RepoUrl": "https://github.com/jwill89/senpan-app-suite",
     "ApplicableVersion": "any",
@@ -19,7 +19,7 @@
     "DownloadLinkUpdate": "https://apps.senpan.cafe/plugin/SenpanCompanionAdmin/latest.zip",
     "DownloadLinkTesting": "https://apps.senpan.cafe/plugin/SenpanCompanionAdmin/latest.zip",
     "DownloadCount": 0,
-    "LastUpdate": 1784851200,
+    "LastUpdate": 1787443200,
     "AcceptsFeedback": true
   }
 ]

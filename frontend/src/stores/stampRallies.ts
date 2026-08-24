@@ -217,6 +217,33 @@ export const useStampRalliesStore = defineStore('stampRallies', () => {
     }
   }
 
+  /**
+   * Seed a brand-new rally form from an existing one - the same event run again,
+   * with its stalls, prizes, artwork and instructions already in place.
+   *
+   * What it deliberately does NOT carry over is everything tied to the run that
+   * already happened: every id (so saving creates rather than overwrites), the
+   * availability window, and the per-stamp active windows - a stale window would
+   * silently gate a stall on dates from the last event. Issued cards belong to the
+   * original rally and are not touched at all.
+   */
+  function copyRallyForm(r: StampRally): void {
+    editRallyForm(r)
+    const f = rallyForm.value
+    if (!f) return
+    f.id = 0
+    f.title = `${r.title} (Copy)`
+    f.available_from = ''
+    f.available_to = ''
+    for (const stamp of f.stamps) {
+      stamp.id = 0
+      stamp.active_from = ''
+      stamp.active_to = ''
+      stamp.paused = false
+    }
+    for (const prize of f.prizes) prize.id = 0
+  }
+
   function cancelRallyForm(): void {
     rallyForm.value = null
   }
@@ -609,6 +636,7 @@ export const useStampRalliesStore = defineStore('stampRallies', () => {
     loadFormSources,
     newRallyForm,
     editRallyForm,
+    copyRallyForm,
     cancelRallyForm,
     addStamp,
     removeStamp,

@@ -38,8 +38,11 @@ type Server struct {
 	limiter        *rateLimiter // failed-login brute-force limiter
 	regLimiter     *rateLimiter // registration-rate limiter (mass-signup abuse)
 	raffleLimiter  *rateLimiter // public raffle-entry limiter (entry flooding)
-	cardReqLimiter *rateLimiter // public custom-card-request limiter (request flooding)
-	rallyLimiter   *rateLimiter // public stamp-rally sign-up + link-lookup limiter
+	// Separate from raffleLimiter on purpose: a search is what somebody does right
+	// before signing up, so the two must not share a budget.
+	raffleLookupLimiter *rateLimiter
+	cardReqLimiter      *rateLimiter // public custom-card-request limiter (request flooding)
+	rallyLimiter        *rateLimiter // public stamp-rally sign-up + link-lookup limiter
 	// Dev-safety valves for outbound Discord posts (see SetWebhookPolicy). Empty /
 	// false in production, where posts go to the webhook the feature configured.
 	webhookOverride string
@@ -141,7 +144,9 @@ func New(st *store.Store, hub *ws.Hub, sessionSecret, webRoot string, allowedOri
 		limiter:        newRateLimiter(5, 15*time.Minute),  // 5 failed logins per 15 minutes
 		regLimiter:     newRateLimiter(5, time.Hour),       // 5 registration attempts per hour
 		raffleLimiter:  newRateLimiter(20, 10*time.Minute), // 20 raffle entries per 10 minutes per IP
-		cardReqLimiter: newRateLimiter(10, 10*time.Minute), // 10 custom-card requests per 10 minutes per IP
+		// Reads, and a legitimate entrant may try a few spellings.
+		raffleLookupLimiter: newRateLimiter(30, 10*time.Minute),
+		cardReqLimiter:      newRateLimiter(10, 10*time.Minute), // 10 custom-card requests per 10 minutes per IP
 		// Covers sign-up AND link lookup: the lookup is the enumeration risk (guessing
 		// names to harvest links), so both share one budget per IP. Generous enough for
 		// a participant who signs up for a couple of rallies and re-checks their links.
@@ -290,7 +295,10 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("GET /api/raffles/{id}", s.handleRaffleDetail)
 	s.mux.HandleFunc("PUT /api/raffles/{id}", s.handleRaffleUpdate)
 	s.mux.HandleFunc("DELETE /api/raffles/{id}", s.handleRaffleDelete)
-	s.mux.HandleFunc("POST /api/raffles/{id}/enter", s.handleRaffleEnter) // public sign-up
+	s.mux.HandleFunc("POST /api/raffles/{id}/enter", s.handleRaffleEnter)        // public sign-up
+	s.mux.HandleFunc("POST /api/raffles/{id}/lookup", s.handleRaffleEntryLookup) // public "have I entered?"
+	s.mux.HandleFunc("POST /api/raffles/{id}/close", s.handleRaffleClose)
+	s.mux.HandleFunc("POST /api/raffles/{id}/reopen", s.handleRaffleReopen)
 	s.mux.HandleFunc("POST /api/raffles/{id}/entries", s.handleRaffleEntryAdd)
 	s.mux.HandleFunc("PATCH /api/raffles/{id}/entries/{entryId}", s.handleRaffleEntryPatch)
 	s.mux.HandleFunc("DELETE /api/raffles/{id}/entries/{entryId}", s.handleRaffleEntryDelete)

@@ -2358,6 +2358,8 @@ components:
           type: string
         description:
           type: string
+        entry_mode:
+          type: string
         id:
           format: int64
           type: integer
@@ -2366,6 +2368,8 @@ components:
         paid_total:
           format: double
           type: number
+        pay_image:
+          type: string
         prize_image:
           type: string
         rules:
@@ -2374,6 +2378,11 @@ components:
           type: string
         status:
           type: string
+        tier_costs:
+          items:
+            format: double
+            type: number
+          type: array
         title:
           type: string
         winner_entry_id:
@@ -2388,6 +2397,9 @@ components:
         entries:
           items:
             properties:
+              amount_waived:
+                format: double
+                type: number
               character_name:
                 type: string
               created_at:
@@ -2399,6 +2411,8 @@ components:
                 type: integer
               paid:
                 type: boolean
+              paid_entries:
+                type: integer
               raffle_id:
                 format: int64
                 type: integer
@@ -2420,6 +2434,8 @@ components:
               type: string
             description:
               type: string
+            entry_mode:
+              type: string
             id:
               format: int64
               type: integer
@@ -2428,6 +2444,8 @@ components:
             paid_total:
               format: double
               type: number
+            pay_image:
+              type: string
             prize_image:
               type: string
             rules:
@@ -2436,6 +2454,11 @@ components:
               type: string
             status:
               type: string
+            tier_costs:
+              items:
+                format: double
+                type: number
+              type: array
             title:
               type: string
             winner_entry_id:
@@ -2451,6 +2474,9 @@ components:
         winner_entry:
           nullable: true
           properties:
+            amount_waived:
+              format: double
+              type: number
             character_name:
               type: string
             created_at:
@@ -2462,6 +2488,8 @@ components:
               type: integer
             paid:
               type: boolean
+            paid_entries:
+              type: integer
             raffle_id:
               format: int64
               type: integer
@@ -2471,6 +2499,9 @@ components:
       type: object
     RaffleEnterResponse:
       properties:
+        amount_due:
+          format: double
+          type: number
         message:
           type: string
         signup_instructions:
@@ -2483,6 +2514,9 @@ components:
       type: object
     RaffleEntry:
       properties:
+        amount_waived:
+          format: double
+          type: number
         character_name:
           type: string
         created_at:
@@ -2494,6 +2528,8 @@ components:
           type: integer
         paid:
           type: boolean
+        paid_entries:
+          type: integer
         raffle_id:
           format: int64
           type: integer
@@ -2504,6 +2540,9 @@ components:
       properties:
         entry:
           properties:
+            amount_waived:
+              format: double
+              type: number
             character_name:
               type: string
             created_at:
@@ -2515,12 +2554,34 @@ components:
               type: integer
             paid:
               type: boolean
+            paid_entries:
+              type: integer
             raffle_id:
               format: int64
               type: integer
             world:
               type: string
           type: object
+      type: object
+    RaffleLookupResponse:
+      properties:
+        entries:
+          items:
+            properties:
+              character_name:
+                type: string
+              num_entries:
+                type: integer
+              paid_entries:
+                type: integer
+              payment_state:
+                type: string
+              world:
+                type: string
+            type: object
+          type: array
+        truncated:
+          type: boolean
       type: object
     RaffleResponse:
       properties:
@@ -2537,6 +2598,8 @@ components:
               type: string
             description:
               type: string
+            entry_mode:
+              type: string
             id:
               format: int64
               type: integer
@@ -2545,6 +2608,8 @@ components:
             paid_total:
               format: double
               type: number
+            pay_image:
+              type: string
             prize_image:
               type: string
             rules:
@@ -2553,6 +2618,11 @@ components:
               type: string
             status:
               type: string
+            tier_costs:
+              items:
+                format: double
+                type: number
+              type: array
             title:
               type: string
             winner_entry_id:
@@ -2567,6 +2637,9 @@ components:
       properties:
         winner:
           properties:
+            amount_waived:
+              format: double
+              type: number
             character_name:
               type: string
             created_at:
@@ -2578,6 +2651,8 @@ components:
               type: integer
             paid:
               type: boolean
+            paid_entries:
+              type: integer
             raffle_id:
               format: int64
               type: integer
@@ -2601,6 +2676,8 @@ components:
                 type: string
               description:
                 type: string
+              entry_mode:
+                type: string
               id:
                 format: int64
                 type: integer
@@ -2609,6 +2686,8 @@ components:
               paid_total:
                 format: double
                 type: number
+              pay_image:
+                type: string
               prize_image:
                 type: string
               rules:
@@ -2617,6 +2696,11 @@ components:
                 type: string
               status:
                 type: string
+              tier_costs:
+                items:
+                  format: double
+                  type: number
+                type: array
               title:
                 type: string
               winner_entry_id:
@@ -4277,7 +4361,7 @@ info:
     (`{ "type": "log", "entry": LogEntry }`) for the live log tail - best-effort,
     sent only while an admin is connected.
   title: Senpan App Suite API
-  version: 3.15.0
+  version: 3.17.0
 openapi: 3.0.3
 paths:
   /api/account/change-password:
@@ -8434,19 +8518,37 @@ paths:
                   description: UTC RFC-3339.
                   type: string
                 cost_per_entry:
+                  description: '`single` mode: price of every ticket. Ignored otherwise.'
                   type: number
                 description:
                   type: string
+                entry_mode:
+                  description: '`details` (published for reference, no sign-up form),
+                    `single` (flat cost_per_entry) or `custom` (per-ticket tier_costs
+                    ladder). Absent/unknown = `single`.'
+                  type: string
                 max_entries:
-                  description: Per-player cap.
+                  description: Per-player cap, 1-100. Ignored in `custom` mode, where
+                    the tier_costs length sets it.
                   format: int64
                   type: integer
+                pay_image:
+                  description: '"Where to Pay" screenshot, shown under the sign-up
+                    instructions.'
+                  type: string
                 prize_image:
                   type: string
                 rules:
                   type: string
                 signup_instructions:
                   type: string
+                tier_costs:
+                  description: '`custom` mode: price of the 1st, 2nd, ... ticket.
+                    Required (non-empty, at most 100) in that mode, ignored otherwise
+                    - its length also sets max_entries.'
+                  items:
+                    type: number
+                  type: array
                 title:
                   description: Title (required).
                   type: string
@@ -8465,7 +8567,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
-          description: Title required
+          description: Title required / bad cost / max_entries over 100
       security:
       - cookieAuth: []
       - bearerAuth: []
@@ -8550,19 +8652,37 @@ paths:
                   description: UTC RFC-3339.
                   type: string
                 cost_per_entry:
+                  description: '`single` mode: price of every ticket. Ignored otherwise.'
                   type: number
                 description:
                   type: string
+                entry_mode:
+                  description: '`details` (published for reference, no sign-up form),
+                    `single` (flat cost_per_entry) or `custom` (per-ticket tier_costs
+                    ladder). Absent/unknown = `single`.'
+                  type: string
                 max_entries:
-                  description: Per-player cap.
+                  description: Per-player cap, 1-100. Ignored in `custom` mode, where
+                    the tier_costs length sets it.
                   format: int64
                   type: integer
+                pay_image:
+                  description: '"Where to Pay" screenshot, shown under the sign-up
+                    instructions.'
+                  type: string
                 prize_image:
                   type: string
                 rules:
                   type: string
                 signup_instructions:
                   type: string
+                tier_costs:
+                  description: '`custom` mode: price of the 1st, 2nd, ... ticket.
+                    Required (non-empty, at most 100) in that mode, ignored otherwise
+                    - its length also sets max_entries.'
+                  items:
+                    type: number
+                  type: array
                 title:
                   description: Title (required).
                   type: string
@@ -8581,16 +8701,51 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
-          description: Title required
+          description: Title required / bad cost / max_entries over 100
       security:
       - cookieAuth: []
       - bearerAuth: []
       summary: Replace a raffle
       tags:
       - Raffles
+  /api/raffles/{id}/close:
+    post:
+      description: |-
+        **Auth:** permission:teahouse-raffles
+
+        Closes a raffle WITHOUT picking a winner - for one that drew no entries, or a `details` raffle whose draw happened elsewhere. verify-winner also closes, but only as the last step of confirming a winner, so without this such a raffle would stay open and publicly listed forever. Any winner already recorded is left alone.
+      parameters:
+      - description: Raffle id.
+        in: path
+        name: id
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StatusResponse'
+          description: Success
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: Not found
+      security:
+      - cookieAuth: []
+      - bearerAuth: []
+      summary: Close a raffle
+      tags:
+      - Raffles
   /api/raffles/{id}/enter:
     post:
-      description: '**Auth:** public'
+      description: |-
+        **Auth:** public
+
+        `total_cost` is the sticker price of every ticket the character now holds; `amount_due` is what they still owe, which is lower once part of the entry has been settled. `amount_due` folds settled tickets and waived gil together, so it can't be used to tell that a character was comped.
       parameters:
       - description: Raffle id.
         in: path
@@ -8634,7 +8789,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
-          description: Closed / cap exceeded / outside window
+          description: Closed / details-only / cap exceeded / outside window
         "404":
           content:
             application/json:
@@ -8650,7 +8805,7 @@ paths:
       description: |-
         **Auth:** permission:teahouse-raffles
 
-        Admin add; skips the availability window but enforces the per-player cap. 201 when a new entry is created, 200 when merged into an existing one.
+        Admin add; skips the availability window but enforces the per-player cap. 201 when a new entry is created, 200 when merged into an existing one. Merging onto a settled entry leaves the new tickets unsettled, so the entry falls back to partial.
       parameters:
       - description: Raffle id.
         in: path
@@ -8663,6 +8818,9 @@ paths:
           application/json:
             schema:
               properties:
+                amount_waived:
+                  description: Gil forgiven on that settlement. Ignored unless `paid`.
+                  type: number
                 character_name:
                   description: Required.
                   type: string
@@ -8671,7 +8829,7 @@ paths:
                   format: int64
                   type: integer
                 paid:
-                  description: Mark paid immediately.
+                  description: Settle immediately.
                   type: boolean
                 world:
                   description: Required.
@@ -8730,7 +8888,10 @@ paths:
       tags:
       - Raffles
     patch:
-      description: '**Auth:** permission:teahouse-raffles'
+      description: |-
+        **Auth:** permission:teahouse-raffles
+
+        `paid: true` settles `paid_entries` tickets (all of them when omitted) and ADDS `amount_waived` to the running waiver (it never replaces it, so a player who had one entry waived and later bought more keeps both). `paid: false` resets the entry to nothing settled and nothing waived. Entries merge per character+world, so buying more tickets later drops a settled entry back to partial (`paid_entries` < `num_entries`).
       parameters:
       - description: Raffle id.
         in: path
@@ -8749,11 +8910,22 @@ paths:
           application/json:
             schema:
               properties:
+                amount_waived:
+                  description: Gil forgiven on THIS settlement, added to the entry's
+                    running total. Ignored when `paid` is false.
+                  type: number
                 paid:
-                  description: Paid flag.
+                  description: Settle (true) or clear (false).
                   type: boolean
+                paid_entries:
+                  description: How many of the entry's tickets this settlement covers.
+                    Omitted or 0 = all of them; a smaller number records a PART payment.
+                    Clamped to the ticket count, and only ever moves forward - clear
+                    the entry to undo.
+                  format: int64
+                  type: integer
               type: object
-        description: Entry patch.
+        description: Settlement.
         required: true
       responses:
         "200":
@@ -8762,6 +8934,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/RaffleEntryResponse'
           description: Success
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: Negative / non-finite waiver
         "404":
           content:
             application/json:
@@ -8771,7 +8949,60 @@ paths:
       security:
       - cookieAuth: []
       - bearerAuth: []
-      summary: Update an entry's paid flag
+      summary: Record or clear a settlement
+      tags:
+      - Raffles
+  /api/raffles/{id}/lookup:
+    post:
+      description: |-
+        **Auth:** public
+
+        Public "have I already entered?" search, so a returning entrant can reproduce the exact name they signed up with (entries merge on character+world, and a different spelling splits their tickets). Matches a SUBSTRING of the character name, case-insensitively, over a raffle the caller can already see. Needs at least 2 characters; returns at most 50 rows and sets `truncated` when more matched. Carries no entry id and no gil figures - the amount waived on an entry stays staff-only. Rate-limited per IP, separately from the entry endpoint.
+      parameters:
+      - description: Raffle id.
+        in: path
+        name: id
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              properties:
+                name:
+                  description: At least 2 characters of the character name.
+                  type: string
+              type: object
+        description: Search.
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RaffleLookupResponse'
+          description: Success
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: Query too short
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: Not found
+        "429":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: Too many searches
+      security: []
+      summary: Find your entry
       tags:
       - Raffles
   /api/raffles/{id}/pick-another:
@@ -8799,7 +9030,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
-          description: No paid entries
+          description: Nothing to pick from
       security:
       - cookieAuth: []
       - bearerAuth: []
@@ -8811,7 +9042,7 @@ paths:
       description: |-
         **Auth:** permission:teahouse-raffles
 
-        Selects a random paid entry as the pending winner.
+        Selects a random paid entry as the pending winner. A `details` raffle collects no payment here, so it draws from every entry.
       parameters:
       - description: Raffle id.
         in: path
@@ -8831,11 +9062,43 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
-          description: No paid entries
+          description: Nothing to pick from
       security:
       - cookieAuth: []
       - bearerAuth: []
       summary: Pick a winner
+      tags:
+      - Raffles
+  /api/raffles/{id}/reopen:
+    post:
+      description: |-
+        **Auth:** permission:teahouse-raffles
+
+        Puts a closed raffle back on the public list - the undo for a close, including one done by mistake.
+      parameters:
+      - description: Raffle id.
+        in: path
+        name: id
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StatusResponse'
+          description: Success
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: Not found
+      security:
+      - cookieAuth: []
+      - bearerAuth: []
+      summary: Reopen a raffle
       tags:
       - Raffles
   /api/raffles/{id}/verify-winner:

@@ -322,3 +322,61 @@ describe('linked stamp rally', () => {
     expect(s.publicStampCardToken).toBe('')
   })
 })
+
+describe('copyGaraponForm', () => {
+  /** A garapon with a prize table and a rally link - the link must not carry over. */
+  function sourceGarapon(): Garapon {
+    return {
+      id: 4,
+      title: 'Obon Garapon',
+      details: 'Spin the drum',
+      grand_prize_image: 'images/grand.png',
+      stamp_rally_id: 11,
+      default_draws: 3,
+      status: 'closed',
+      created_at: '',
+      prizes: [
+        { id: 1, garapon_id: 4, name: 'Grand', ball_color: '#ffd700', rate: 5, is_grand: true },
+        { id: 2, garapon_id: 4, name: 'Minor', ball_color: '#88ccff', rate: 95, is_grand: false },
+      ],
+    } as unknown as Garapon
+  }
+
+  it('carries the prize table and marks the title as a copy', () => {
+    const store = useGaraponsStore()
+    store.copyGaraponForm(sourceGarapon())
+    const f = store.garaponForm!
+
+    expect(f.title).toBe('Obon Garapon (Copy)')
+    expect(f.details).toBe('Spin the drum')
+    expect(f.grand_prize_image).toBe('images/grand.png')
+    expect(f.default_draws).toBe(3)
+    expect(f.prizes.map((p) => [p.name, p.ball_color, p.rate, p.is_grand])).toEqual([
+      ['Grand', '#ffd700', 5, true],
+      ['Minor', '#88ccff', 95, false],
+    ])
+  })
+
+  it('creates rather than overwrites, and drops the old rally link', () => {
+    const store = useGaraponsStore()
+    store.copyGaraponForm(sourceGarapon())
+    const f = store.garaponForm!
+
+    expect(f.id).toBe(0)
+    // Carrying the link over would leave two garapons issuing draws off one
+    // rally's sign-ups.
+    expect(f.stamp_rally_id).toBeNull()
+  })
+
+  it('leaves the original untouched', () => {
+    const store = useGaraponsStore()
+    const source = sourceGarapon()
+    store.copyGaraponForm(source)
+    store.garaponForm!.title = 'Something else'
+    store.garaponForm!.prizes[0].name = 'Changed'
+
+    expect(source.title).toBe('Obon Garapon')
+    expect(source.prizes?.[0].name).toBe('Grand')
+    expect(source.stamp_rally_id).toBe(11)
+  })
+})

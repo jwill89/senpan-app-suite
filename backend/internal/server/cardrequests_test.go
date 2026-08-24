@@ -258,3 +258,45 @@ func TestCustomCardCostSetting(t *testing.T) {
 		resp.Body.Close()
 	}
 }
+
+// TestHideBingoSetting covers the "Hide Bingo" flag: it reaches the public
+// settings (the home page has to read it without logging in), defaults to off,
+// and only ever stores "0" or "1" - anything else would read as truthy in one
+// place and falsy in another, and this flag decides whether a whole feature
+// appears on the page.
+func TestHideBingoSetting(t *testing.T) {
+	env := newTestEnv(t)
+
+	settings, ok := decodeBody(t, env.get(t, "/api/settings"))["settings"].(map[string]any)
+	if !ok {
+		t.Fatal("settings missing from response")
+	}
+	if settings["hide_bingo"] != "0" {
+		t.Errorf("hide_bingo = %v; want \"0\" (bingo visible unless switched off)", settings["hide_bingo"])
+	}
+
+	env.loginAdmin(t)
+
+	for _, good := range []string{"1", "0"} {
+		resp := env.postJSON(t, "/api/settings", map[string]any{"settings": map[string]string{"hide_bingo": good}})
+		if resp.StatusCode != http.StatusOK {
+			t.Errorf("hide_bingo %q = %d; want 200", good, resp.StatusCode)
+		}
+		resp.Body.Close()
+	}
+
+	for _, bad := range []string{"true", "yes", "2", ""} {
+		resp := env.postJSON(t, "/api/settings", map[string]any{"settings": map[string]string{"hide_bingo": bad}})
+		if resp.StatusCode != http.StatusBadRequest {
+			t.Errorf("hide_bingo %q = %d; want 400", bad, resp.StatusCode)
+		}
+		resp.Body.Close()
+	}
+
+	// The saved flag comes back on the public read.
+	env.postJSON(t, "/api/settings", map[string]any{"settings": map[string]string{"hide_bingo": "1"}}).Body.Close()
+	settings, _ = decodeBody(t, env.get(t, "/api/settings"))["settings"].(map[string]any)
+	if settings["hide_bingo"] != "1" {
+		t.Errorf("hide_bingo = %v; want \"1\" after saving", settings["hide_bingo"])
+	}
+}

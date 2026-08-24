@@ -9,16 +9,21 @@ func buildFeaturePaths(b *pb) {
 	raffleFields := func() openapi3.Schemas {
 		return props(
 			"title", pstr("Title (required)."), "description", pstr(""), "rules", pstr(""),
-			"max_entries", pint("Per-player cap."), "signup_instructions", pstr(""),
-			"cost_per_entry", pnum(""), "available_from", pstr("UTC RFC-3339."),
-			"available_to", pstr("UTC RFC-3339."), "prize_image", pstr(""))
+			"max_entries", pint("Per-player cap, 1-100. Ignored in `custom` mode, where the tier_costs length sets it."),
+			"signup_instructions", pstr(""),
+			"entry_mode", pstr("`details` (published for reference, no sign-up form), `single` (flat cost_per_entry) or `custom` (per-ticket tier_costs ladder). Absent/unknown = `single`."),
+			"cost_per_entry", pnum("`single` mode: price of every ticket. Ignored otherwise."),
+			"tier_costs", parr("`custom` mode: price of the 1st, 2nd, ... ticket. Required (non-empty, at most 100) in that mode, ignored otherwise - its length also sets max_entries.", pnum("")),
+			"available_from", pstr("UTC RFC-3339."),
+			"available_to", pstr("UTC RFC-3339."), "prize_image", pstr(""),
+			"pay_image", pstr("\"Where to Pay\" screenshot, shown under the sign-up instructions."))
 	}
 	b.add("GET", "/api/raffles", "Raffles", "List raffles", "public",
 		"Role-filtered: admins see all; the public sees only open raffles within their availability window.", opt{
 			resps: []respEntry{ok("RafflesResponse")}})
 	b.add("POST", "/api/raffles", "Raffles", "Create a raffle", "permission:teahouse-raffles", "", opt{
 		body:  actionBody("Raffle fields.", nil, raffleFields()),
-		resps: []respEntry{created("RaffleResponse"), r("400", "Title required")}})
+		resps: []respEntry{created("RaffleResponse"), r("400", "Title required / bad cost / max_entries over 100")}})
 	b.add("GET", "/api/raffles/{id}", "Raffles", "Raffle detail", "public",
 		"Admins get `entries`; the public gets `winner_entry` on a closed, verified raffle.", opt{
 			path:  []*openapi3.Parameter{pparam("id", "Raffle id.")},
@@ -27,37 +32,56 @@ func buildFeaturePaths(b *pb) {
 		"Full replace of the editable fields (status/winner are preserved).", opt{
 			path:  []*openapi3.Parameter{pparam("id", "Raffle id.")},
 			body:  actionBody("Full raffle fields.", nil, raffleFields()),
-			resps: []respEntry{ok("RaffleResponse"), r("400", "Title required")}})
+			resps: []respEntry{ok("RaffleResponse"), r("400", "Title required / bad cost / max_entries over 100")}})
 	b.add("DELETE", "/api/raffles/{id}", "Raffles", "Delete a raffle", "permission:teahouse-raffles", "", opt{
 		path:  []*openapi3.Parameter{pparam("id", "Raffle id.")},
 		resps: []respEntry{noContent()}})
-	b.add("POST", "/api/raffles/{id}/enter", "Raffles", "Enter a raffle", "public", "", opt{
-		path: []*openapi3.Parameter{pparam("id", "Raffle id.")},
-		body: actionBody("Public sign-up.", nil, props(
-			"character_name", pstr("Required."), "world", pstr("Required."), "num_entries", pint("Tickets (>=1)."))),
-		resps: []respEntry{{"200", jsonResp("Merged into an existing entry", "RaffleEnterResponse")}, {"201", jsonResp("New entry", "RaffleEnterResponse")}, r("400", "Closed / cap exceeded / outside window"), r("404", "Not found")}})
+	b.add("POST", "/api/raffles/{id}/enter", "Raffles", "Enter a raffle", "public",
+		"`total_cost` is the sticker price of every ticket the character now holds; `amount_due` is what they still owe, which is lower once part of the entry has been settled. `amount_due` folds settled tickets and waived gil together, so it can't be used to tell that a character was comped.", opt{
+			path: []*openapi3.Parameter{pparam("id", "Raffle id.")},
+			body: actionBody("Public sign-up.", nil, props(
+				"character_name", pstr("Required."), "world", pstr("Required."), "num_entries", pint("Tickets (>=1)."))),
+			resps: []respEntry{{"200", jsonResp("Merged into an existing entry", "RaffleEnterResponse")}, {"201", jsonResp("New entry", "RaffleEnterResponse")}, r("400", "Closed / details-only / cap exceeded / outside window"), r("404", "Not found")}})
+	b.add("POST", "/api/raffles/{id}/lookup", "Raffles", "Find your entry", "public",
+		"Public \"have I already entered?\" search, so a returning entrant can reproduce the exact name they signed up with (entries merge on character+world, and a different spelling splits their tickets). Matches a SUBSTRING of the character name, case-insensitively, over a raffle the caller can already see. Needs at least 2 characters; returns at most 50 rows and sets `truncated` when more matched. Carries no entry id and no gil figures - the amount waived on an entry stays staff-only. Rate-limited per IP, separately from the entry endpoint.", opt{
+			path:  []*openapi3.Parameter{pparam("id", "Raffle id.")},
+			body:  actionBody("Search.", nil, props("name", pstr("At least 2 characters of the character name."))),
+			resps: []respEntry{ok("RaffleLookupResponse"), r("400", "Query too short"), r("404", "Not found"), r("429", "Too many searches")}})
 	b.add("POST", "/api/raffles/{id}/entries", "Raffles", "Add an entry (admin)", "permission:teahouse-raffles",
-		"Admin add; skips the availability window but enforces the per-player cap. 201 when a new entry is created, 200 when merged into an existing one.", opt{
+		"Admin add; skips the availability window but enforces the per-player cap. 201 when a new entry is created, 200 when merged into an existing one. Merging onto a settled entry leaves the new tickets unsettled, so the entry falls back to partial.", opt{
 			path: []*openapi3.Parameter{pparam("id", "Raffle id.")},
 			body: actionBody("Entry to add.", nil, props(
 				"character_name", pstr("Required."), "world", pstr("Required."),
-				"num_entries", pint("Tickets (>=1)."), "paid", pbool("Mark paid immediately."))),
+				"num_entries", pint("Tickets (>=1)."), "paid", pbool("Settle immediately."),
+				"amount_waived", pnum("Gil forgiven on that settlement. Ignored unless `paid`."))),
 			resps: []respEntry{created("RaffleEntryResponse"), {"200", jsonResp("Merged into an existing entry", "RaffleEntryResponse")}, r("400", "Invalid / cap exceeded")}})
-	b.add("PATCH", "/api/raffles/{id}/entries/{entryId}", "Raffles", "Update an entry's paid flag", "permission:teahouse-raffles", "", opt{
-		path:  []*openapi3.Parameter{pparam("id", "Raffle id."), pparam("entryId", "Entry id.")},
-		body:  actionBody("Entry patch.", nil, props("paid", pbool("Paid flag."))),
-		resps: []respEntry{ok("RaffleEntryResponse"), r("404", "Entry not found")}})
+	b.add("PATCH", "/api/raffles/{id}/entries/{entryId}", "Raffles", "Record or clear a settlement", "permission:teahouse-raffles",
+		"`paid: true` settles `paid_entries` tickets (all of them when omitted) and ADDS `amount_waived` to the running waiver (it never replaces it, so a player who had one entry waived and later bought more keeps both). `paid: false` resets the entry to nothing settled and nothing waived. Entries merge per character+world, so buying more tickets later drops a settled entry back to partial (`paid_entries` < `num_entries`).", opt{
+			path: []*openapi3.Parameter{pparam("id", "Raffle id."), pparam("entryId", "Entry id.")},
+			body: actionBody("Settlement.", nil, props(
+				"paid", pbool("Settle (true) or clear (false)."),
+				"paid_entries", pint("How many of the entry's tickets this settlement covers. Omitted or 0 = all of them; a smaller number records a PART payment. Clamped to the ticket count, and only ever moves forward - clear the entry to undo."),
+				"amount_waived", pnum("Gil forgiven on THIS settlement, added to the entry's running total. Ignored when `paid` is false."))),
+			resps: []respEntry{ok("RaffleEntryResponse"), r("400", "Negative / non-finite waiver"), r("404", "Entry not found")}})
 	b.add("DELETE", "/api/raffles/{id}/entries/{entryId}", "Raffles", "Delete an entry", "permission:teahouse-raffles", "", opt{
 		path:  []*openapi3.Parameter{pparam("id", "Raffle id."), pparam("entryId", "Entry id.")},
 		resps: []respEntry{noContent()}})
 	b.add("POST", "/api/raffles/{id}/pick-winner", "Raffles", "Pick a winner", "permission:teahouse-raffles",
-		"Selects a random paid entry as the pending winner.", opt{
+		"Selects a random paid entry as the pending winner. A `details` raffle collects no payment here, so it draws from every entry.", opt{
 			path:  []*openapi3.Parameter{pparam("id", "Raffle id.")},
-			resps: []respEntry{ok("RaffleWinnerResponse"), r("400", "No paid entries")}})
+			resps: []respEntry{ok("RaffleWinnerResponse"), r("400", "Nothing to pick from")}})
 	b.add("POST", "/api/raffles/{id}/pick-another", "Raffles", "Re-pick a winner", "permission:teahouse-raffles",
 		"Clears the pending winner and picks again.", opt{
 			path:  []*openapi3.Parameter{pparam("id", "Raffle id.")},
-			resps: []respEntry{ok("RaffleWinnerResponse"), r("400", "No paid entries")}})
+			resps: []respEntry{ok("RaffleWinnerResponse"), r("400", "Nothing to pick from")}})
+	b.add("POST", "/api/raffles/{id}/close", "Raffles", "Close a raffle", "permission:teahouse-raffles",
+		"Closes a raffle WITHOUT picking a winner - for one that drew no entries, or a `details` raffle whose draw happened elsewhere. verify-winner also closes, but only as the last step of confirming a winner, so without this such a raffle would stay open and publicly listed forever. Any winner already recorded is left alone.", opt{
+			path:  []*openapi3.Parameter{pparam("id", "Raffle id.")},
+			resps: []respEntry{ok("StatusResponse"), r("404", "Not found")}})
+	b.add("POST", "/api/raffles/{id}/reopen", "Raffles", "Reopen a raffle", "permission:teahouse-raffles",
+		"Puts a closed raffle back on the public list - the undo for a close, including one done by mistake.", opt{
+			path:  []*openapi3.Parameter{pparam("id", "Raffle id.")},
+			resps: []respEntry{ok("StatusResponse"), r("404", "Not found")}})
 	b.add("POST", "/api/raffles/{id}/verify-winner", "Raffles", "Finalize the winner", "permission:teahouse-raffles",
 		"Confirms the pending winner and closes the raffle.", opt{
 			path:  []*openapi3.Parameter{pparam("id", "Raffle id.")},
@@ -238,11 +262,11 @@ func buildFeaturePaths(b *pb) {
 			path:  []*openapi3.Parameter{pparam("id", "Rally id."), pparam("cardId", "Card id.")},
 			resps: []respEntry{noContent(), r("404", "Not found"), r("409", "Card has stamps")}})
 	b.add("GET", "/api/stamp-card/{token}", "Stamp Rally", "Public card view", "public", "", opt{
-		path: []*openapi3.Parameter{pparam("token", "The participant's card token.")},
+		path:  []*openapi3.Parameter{pparam("token", "The participant's card token.")},
 		resps: []respEntry{ok("PublicStampCard"), r("404", "Not found")}})
 	b.add("POST", "/api/stamp-card/{token}/stamp", "Stamp Rally", "Collect a stamp", "public", "", opt{
-		path: []*openapi3.Parameter{pparam("token", "The participant's card token.")},
-		body: actionBody("Stamp collection.", nil, props("password", pstr("The stall's password (required)."))),
+		path:  []*openapi3.Parameter{pparam("token", "The participant's card token.")},
+		body:  actionBody("Stamp collection.", nil, props("password", pstr("The stall's password (required)."))),
 		resps: []respEntry{ok("StampSubmitResponse"), r("400", "Wrong/empty password / stall closed"), r("409", "Already collected")}})
 	b.add("GET", "/api/stamp-signup", "Stamp Rally", "Rallies open to public sign-up", "public",
 		"Rallies whose `public_signup` opt-in is on, that are open, and that are inside their availability window.", opt{
@@ -275,34 +299,34 @@ func buildFeaturePaths(b *pb) {
 		resps: []respEntry{ok("ReadingListsResponse")}})
 	b.add("POST", "/api/book-clubs/{club}/reading-lists", "Book Club", "Create a reading list", "permission:bookclub-<club>",
 		"The owning club comes from the path; the caller must hold that club's page permission.", opt{
-			path: []*openapi3.Parameter{clubParam()},
-			body: actionBody("New reading list.", nil, props("title", pstr("List title (required)."))),
+			path:  []*openapi3.Parameter{clubParam()},
+			body:  actionBody("New reading list.", nil, props("title", pstr("List title (required)."))),
 			resps: []respEntry{created("ReadingListDetailResponse"), r("400", "Title required")}})
 	b.add("GET", "/api/book-clubs/{club}/reading-lists/{id}", "Book Club", "Reading list detail", "permission:bookclub-<club>", "", opt{
-		path: []*openapi3.Parameter{clubParam(), pparam("id", "List id.")},
+		path:  []*openapi3.Parameter{clubParam(), pparam("id", "List id.")},
 		resps: []respEntry{ok("ReadingListDetailResponse"), r("404", "Not found")}})
 	b.add("PUT", "/api/book-clubs/{club}/reading-lists/{id}", "Book Club", "Rename a reading list", "permission:bookclub-<club>", "", opt{
-		path: []*openapi3.Parameter{clubParam(), pparam("id", "List id.")},
-		body: actionBody("New title.", nil, props("title", pstr("List title (required)."))),
+		path:  []*openapi3.Parameter{clubParam(), pparam("id", "List id.")},
+		body:  actionBody("New title.", nil, props("title", pstr("List title (required)."))),
 		resps: []respEntry{ok("OKResponse"), r("400", "Title required"), r("404", "Not found")}})
 	b.add("DELETE", "/api/book-clubs/{club}/reading-lists/{id}", "Book Club", "Delete a reading list", "permission:bookclub-<club>",
 		"Cascade-deletes its items and cleans up any orphaned cover images.", opt{
 			path:  []*openapi3.Parameter{clubParam(), pparam("id", "List id.")},
 			resps: []respEntry{noContent(), r("404", "Not found")}})
 	b.add("POST", "/api/book-clubs/{club}/reading-lists/{id}/items", "Book Club", "Create an item", "permission:bookclub-<club>", "", opt{
-		path: []*openapi3.Parameter{clubParam(), pparam("id", "List id.")},
-		body: actionBody("New item.", nil, props("item", ref("ReadingListItem"))),
+		path:  []*openapi3.Parameter{clubParam(), pparam("id", "List id.")},
+		body:  actionBody("New item.", nil, props("item", ref("ReadingListItem"))),
 		resps: []respEntry{created("ReadingListItemResponse"), r("400", "Title required"), r("404", "Not found")}})
 	b.add("PUT", "/api/book-clubs/{club}/reading-lists/{id}/items/{itemId}", "Book Club", "Replace an item", "permission:bookclub-<club>", "", opt{
-		path: []*openapi3.Parameter{clubParam(), pparam("id", "List id."), pparam("itemId", "Item id.")},
-		body: actionBody("Full item fields.", nil, props("item", ref("ReadingListItem"))),
+		path:  []*openapi3.Parameter{clubParam(), pparam("id", "List id."), pparam("itemId", "Item id.")},
+		body:  actionBody("Full item fields.", nil, props("item", ref("ReadingListItem"))),
 		resps: []respEntry{ok("ReadingListItemResponse"), r("400", "Title required"), r("404", "Not found")}})
 	b.add("DELETE", "/api/book-clubs/{club}/reading-lists/{id}/items/{itemId}", "Book Club", "Delete an item", "permission:bookclub-<club>",
 		"Cleans up the item's cover image when no other item references it.", opt{
 			path:  []*openapi3.Parameter{clubParam(), pparam("id", "List id."), pparam("itemId", "Item id.")},
 			resps: []respEntry{noContent(), r("404", "Not found")}})
 	b.add("POST", "/api/book-clubs/{club}/reading-lists/{id}/publish", "Book Club", "Publish to Discord", "permission:bookclub-<club>", "", opt{
-		path: []*openapi3.Parameter{clubParam(), pparam("id", "List id.")},
+		path:  []*openapi3.Parameter{clubParam(), pparam("id", "List id.")},
 		resps: []respEntry{ok("PublishResponse"), r("400", "No items / no webhook"), r("502", "Discord failed")}})
 
 	// -- Announcements ---------------------------------------------------------

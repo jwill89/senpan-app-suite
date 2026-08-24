@@ -166,9 +166,20 @@ public sealed class ApiClient : IDisposable
         => SendAsync<RaffleEntryResponse>(HttpMethod.Post, $"api/raffles/{raffleId}/entries",
             new { character_name = characterName, world, num_entries = numEntries, paid }, ct);
 
-    public Task<RaffleEntryResponse> MarkRaffleEntryPaidAsync(long raffleId, long entryId, bool paid, CancellationToken ct = default)
+    /// <summary>
+    /// Records a settlement on a raffle entry, or clears one.
+    /// <para><paramref name="paidEntries"/> is how many of the entry's tickets the payment
+    /// covers; 0 means all of them, and a smaller number records a PART payment. It only
+    /// ever moves forward - to undo, clear the entry and record it again.</para>
+    /// <para><paramref name="amountWaived"/> is the gil forgiven on THIS payment - the server
+    /// adds it to whatever the entry has already had waived, so never pass a running
+    /// total.</para>
+    /// Both are ignored when <paramref name="paid"/> is false, which resets the entry to
+    /// nothing settled and nothing waived.
+    /// </summary>
+    public Task<RaffleEntryResponse> MarkRaffleEntryPaidAsync(long raffleId, long entryId, bool paid, int paidEntries = 0, double amountWaived = 0, CancellationToken ct = default)
         => SendAsync<RaffleEntryResponse>(HttpMethod.Patch, $"api/raffles/{raffleId}/entries/{entryId}",
-            new { paid }, ct);
+            new { paid, paid_entries = paidEntries, amount_waived = amountWaived }, ct);
 
     public Task DeleteRaffleEntryAsync(long raffleId, long entryId, CancellationToken ct = default)
         => SendNoContentAsync(HttpMethod.Delete, $"api/raffles/{raffleId}/entries/{entryId}", null, ct);

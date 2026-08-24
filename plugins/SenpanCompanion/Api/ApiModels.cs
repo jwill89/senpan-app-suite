@@ -167,8 +167,48 @@ public sealed class Raffle
     public string Title { get; set; } = string.Empty;
     public string Status { get; set; } = string.Empty;
     public int MaxEntries { get; set; }
+
+    /// <summary>
+    /// How entries are priced: "details" (published for reference, no sign-up here),
+    /// "single" (flat <see cref="CostPerEntry"/>) or "custom" (the per-ticket
+    /// <see cref="TierCosts"/> ladder). A raffle saved before entry modes existed
+    /// sends "", which means "single".
+    /// </summary>
+    public string EntryMode { get; set; } = string.Empty;
+
+    /// <summary>"single" mode: the price of every ticket.</summary>
     public double CostPerEntry { get; set; }
+
+    /// <summary>"custom" mode: the price of the 1st, 2nd, ... ticket.</summary>
+    public List<double> TierCosts { get; set; } = new();
+
     public string SignupInstructions { get; set; } = string.Empty;
+
+    /// <summary>True unless this raffle is details-only (entered outside the app).</summary>
+    public bool AcceptsSignups => !string.Equals(this.EntryMode, "details", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// What holding <paramref name="tickets"/> tickets costs, priced by the entry
+    /// mode: a flat multiple in "single" mode, the sum of the first N rungs in
+    /// "custom" mode, and nothing for a details-only raffle. Mirrors the server's
+    /// Raffle.EntryCost so the plugin can never quote a different total.
+    /// </summary>
+    public double EntryCost(int tickets)
+    {
+        if (tickets < 1)
+            return 0;
+        if (string.Equals(this.EntryMode, "details", StringComparison.OrdinalIgnoreCase))
+            return 0;
+        if (!string.Equals(this.EntryMode, "custom", StringComparison.OrdinalIgnoreCase))
+            return tickets * this.CostPerEntry;
+
+        // Walk the ladder, not the ticket count - only rungs that exist have a price.
+        var rungs = Math.Min(tickets, this.TierCosts.Count);
+        var total = 0d;
+        for (var i = 0; i < rungs; i++)
+            total += this.TierCosts[i];
+        return total;
+    }
 }
 
 public sealed class RaffleEntry
@@ -177,7 +217,21 @@ public sealed class RaffleEntry
     public string CharacterName { get; set; } = string.Empty;
     public string World { get; set; } = string.Empty;
     public int NumEntries { get; set; }
+
+    /// <summary>How many of <see cref="NumEntries"/> have been settled.</summary>
+    public int PaidEntries { get; set; }
+
+    /// <summary>Gil forgiven on this entry across every settlement (cumulative).</summary>
+    public double AmountWaived { get; set; }
+
+    /// <summary>Derived: nothing outstanding (<see cref="PaidEntries"/> covers every ticket).</summary>
     public bool Paid { get; set; }
+
+    /// <summary>
+    /// Entries merge per character+world, so a settled entry can gain tickets later
+    /// and fall back to partly settled.
+    /// </summary>
+    public bool PartiallyPaid => this.PaidEntries > 0 && this.PaidEntries < this.NumEntries;
 }
 
 public sealed class RafflesResponse

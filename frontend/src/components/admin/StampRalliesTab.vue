@@ -139,6 +139,12 @@ function editSelected(): void {
   store.editRallyForm(store.selectedRally)
   screen.value = 'form'
 }
+/** Opens the create form pre-filled from this rally (see copyRallyForm). */
+function duplicateSelected(): void {
+  if (!store.selectedRally) return
+  store.copyRallyForm(store.selectedRally)
+  screen.value = 'form'
+}
 function backToList(): void {
   store.selectedRally = null
   screen.value = 'list'
@@ -176,6 +182,13 @@ async function deleteSelected(): Promise<void> {
         </button>
         <button v-if="!isClosed" class="btn-confirm btn-sm" @click="editSelected">
           <font-awesome-icon :icon="['fas', 'pen-to-square']" /> Edit
+        </button>
+        <button
+          class="btn-view btn-sm"
+          title="Start a new rally pre-filled from this one"
+          @click="duplicateSelected"
+        >
+          <font-awesome-icon :icon="['fas', 'copy']" /> Duplicate
         </button>
         <button class="btn-caution btn-sm" @click="toggleClosed">
           <font-awesome-icon :icon="['fas', isClosed ? 'rotate' : 'lock']" />

@@ -559,8 +559,8 @@ async function submitRole(): Promise<void> {
         Up to {{ MAX_BUTTONS }} link buttons shown under the embed. Each needs a label and URL; the
         emoji is optional - click the emoji box to pick one.
       </p>
-      <div v-if="store.form.buttons.length" class="announcement-buttons">
-        <div v-for="(btn, i) in store.form.buttons" :key="btn._uid" class="announcement-button-row">
+      <div v-if="store.form.buttons.length" class="stack mb-10">
+        <div v-for="(btn, i) in store.form.buttons" :key="btn._uid" class="stack-row">
           <button
             type="button"
             class="announcement-button-emoji"
@@ -635,7 +635,7 @@ async function submitRole(): Promise<void> {
 
       <template v-else-if="isRecurring">
         <FormField v-if="store.form.schedule_kind === 'weekly'" label="On these days" required>
-          <div class="announcement-weekdays">
+          <div class="toggle-group">
             <button
               v-for="(label, day) in WEEKDAYS"
               :key="day"
@@ -905,17 +905,6 @@ async function submitRole(): Promise<void> {
   border-top: 1px solid var(--panel-raised-bg);
   margin: 20px 0 12px;
 }
-.announcement-buttons {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  margin-bottom: 10px;
-}
-.announcement-button-row {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-}
 .announcement-button-emoji {
   flex: 0 0 56px;
   display: flex;
@@ -939,12 +928,6 @@ async function submitRole(): Promise<void> {
 .announcement-button-url {
   flex: 2 1 220px;
   min-width: 160px;
-}
-/* Weekday buttons are `.toggle-btn`s; this is just their flex container. */
-.announcement-weekdays {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
 }
 /* Status pills use the global `.badge` object + shared `.badge--*` state
    modifiers; only the inter-pill spacing is component-specific. */

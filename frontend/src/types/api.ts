@@ -124,6 +124,8 @@ export type {
   RaffleEnterResponse,
   RaffleEntryResponse,
   RaffleWinnerResponse,
+  RaffleLookupEntry,
+  RaffleLookupResponse,
   // Garapons
   GaraponsResponse,
   GaraponResponse,
@@ -221,6 +223,13 @@ export interface AppSettings {
   yoever_cooldown_seconds: string
   /** Gil cost of a custom bingo card, shown on the public Personal Card Requests page. */
   custom_card_cost: string
+  /**
+   * `'1'` hides every Bingo entry point on the public home page - Join Bingo and
+   * the Custom Card request that goes with it - for a period when no game is
+   * running. `'0'` (the default) shows them. Stored as a string like every other
+   * setting; read through the app store's `hideBingo`, never compared by hand.
+   */
+  hide_bingo: string
   /**
    * Per-club Discord webhook URLs, keyed `discord_webhook_url_<club_slug>`
    * (e.g. `discord_webhook_url_yaoi`). Admin-only (redacted for public). Each
@@ -358,6 +367,34 @@ export interface AnnouncementForm {
   mention: string
 }
 
+/**
+ * How a raffle prices entries, and whether it takes sign-ups here at all.
+ * Mirrors the backend's `RaffleMode*` constants (model/raffles.go).
+ *   'details' - published for reference; players sign up somewhere else.
+ *   'single'  - every ticket costs `cost_per_entry` (the original behavior).
+ *   'custom'  - the Nth ticket costs `tier_costs[N-1]`.
+ */
+export type RaffleMode = 'details' | 'single' | 'custom'
+
+/** Raffle entry modes with their admin-facing labels, in picker order. */
+export const RAFFLE_MODES: { value: RaffleMode; label: string; help: string }[] = [
+  {
+    value: 'details',
+    label: 'Details Only',
+    help: 'Show the raffle without a sign-up form - players follow the sign-up instructions to enter elsewhere.',
+  },
+  {
+    value: 'single',
+    label: 'Single Cost per Entry',
+    help: 'Every entry costs the same.',
+  },
+  {
+    value: 'custom',
+    label: 'Custom Cost per Entry',
+    help: 'Each entry has its own price, and the number of prices sets the per-player limit.',
+  },
+]
+
 // Form model for the admin raffle create/edit form.
 export interface RaffleForm {
   id: number
@@ -366,10 +403,15 @@ export interface RaffleForm {
   rules: string
   max_entries: number
   signup_instructions: string
+  entry_mode: RaffleMode
   cost_per_entry: number
+  /** 'custom' mode: price of the 1st, 2nd, ... entry (its length sets max_entries). */
+  tier_costs: number[]
   available_from: string
   available_to: string
   prize_image: string
+  /** "Where to Pay" screenshot, shown under the sign-up instructions. */
+  pay_image: string
 }
 
 // Form models for the admin garapon create/edit form. A prize row carries a name,

@@ -20,6 +20,7 @@ var settingsKeys = []string{
 	"bingo_join_prompt",
 	"yoever_cooldown_seconds",
 	"custom_card_cost",
+	"hide_bingo",
 }
 
 // settingsDefaults provides fallback values for settings that have not been configured.
@@ -33,6 +34,7 @@ var settingsDefaults = map[string]string{
 	"bingo_join_prompt":         "Enter your unique bingo board ID to play",
 	"yoever_cooldown_seconds":   strconv.Itoa(defaultYoeverCooldownSeconds),
 	"custom_card_cost":          "0",
+	"hide_bingo":                "0",
 }
 
 // secretSettings are setting keys that must not be exposed to non-admin
@@ -152,6 +154,14 @@ func (s *Server) handleSettingsUpdate(w http.ResponseWriter, r *http.Request) {
 			n, err := strconv.Atoi(val)
 			if err != nil || n < 0 || n > 1_000_000_000 {
 				writeError(w, http.StatusBadRequest, "Custom card cost must be 0-1,000,000,000 gil")
+				return
+			}
+		case "hide_bingo":
+			// A flag, so pin it to the two values the frontend reads. Anything else
+			// stored here would be truthy-by-accident somewhere and falsy somewhere
+			// else, and this one decides whether a whole feature is on the page.
+			if val != "0" && val != "1" {
+				writeError(w, http.StatusBadRequest, "Hide Bingo must be 0 or 1")
 				return
 			}
 		case "header_font":

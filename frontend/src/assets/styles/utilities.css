@@ -531,6 +531,12 @@
   margin-bottom: 16px;
   font-size: 1.05rem;
 }
+/* `--warning` recolors the band for a notice the reader has to accept rather than
+   celebrate - e.g. a stamp card whose remaining stalls have closed for good. */
+.callout--warning {
+  background: color-mix(in srgb, var(--warning) 16%, transparent);
+  border-color: var(--warning);
+}
 
 /* Object: inline checkbox - a <label> wrapping a checkbox and its text. Was
    written four times under three names. `--strong` is the settings-form variant

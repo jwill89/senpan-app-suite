@@ -27,7 +27,7 @@ var ErrStampAlreadyCollected = errors.New("stamp already collected")
 func (s *Store) ListStampRallies() ([]model.StampRally, error) {
 	rows, err := s.db.Query(`SELECT r.id, r.title, r.card_image, r.not_stamped_image,
 			r.available_from, r.available_to, r.details, r.redeem_instructions, r.redeem_image, r.status,
-			r.public_signup, r.created_at,
+			r.public_signup, r.completion_mode, r.required_food, r.required_game, r.created_at,
 			COALESCE((SELECT COUNT(*) FROM stamp_rally_cards c WHERE c.rally_id = r.id), 0),
 			COALESCE((SELECT COUNT(*) FROM stamp_rally_cards c WHERE c.rally_id = r.id AND c.completed = 1), 0),
 			COALESCE((SELECT COUNT(*) FROM stamp_rally_stamps st WHERE st.rally_id = r.id), 0),
@@ -44,11 +44,12 @@ func (s *Store) ListStampRallies() ([]model.StampRally, error) {
 		var publicSignup int
 		if err := rows.Scan(&r.ID, &r.Title, &r.CardImage, &r.NotStampedImage,
 			&r.AvailableFrom, &r.AvailableTo, &r.Details, &r.RedeemInstructions, &r.RedeemImage, &r.Status,
-			&publicSignup, &r.CreatedAt,
+			&publicSignup, &r.CompletionMode, &r.RequiredFood, &r.RequiredGame, &r.CreatedAt,
 			&r.CardCount, &r.CompletedCount, &r.StampCount, &r.ActiveStampCount); err != nil {
 			return nil, err
 		}
 		r.PublicSignup = publicSignup == 1
+		r.CompletionMode = model.NormalizeRallyCompletion(r.CompletionMode)
 		rallies = append(rallies, r)
 	}
 	return rallies, rows.Err()
@@ -60,11 +61,12 @@ func (s *Store) GetStampRally(id int64) (*model.StampRally, error) {
 	var r model.StampRally
 	var publicSignup int
 	err := s.db.QueryRow(`SELECT id, title, card_image, not_stamped_image,
-			available_from, available_to, details, redeem_instructions, redeem_image, status, public_signup, created_at
+			available_from, available_to, details, redeem_instructions, redeem_image, status, public_signup,
+			completion_mode, required_food, required_game, created_at
 		FROM stamp_rallies WHERE id = ?`, id).
 		Scan(&r.ID, &r.Title, &r.CardImage, &r.NotStampedImage,
 			&r.AvailableFrom, &r.AvailableTo, &r.Details, &r.RedeemInstructions, &r.RedeemImage, &r.Status,
-			&publicSignup, &r.CreatedAt)
+			&publicSignup, &r.CompletionMode, &r.RequiredFood, &r.RequiredGame, &r.CreatedAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
 	}
@@ -72,6 +74,7 @@ func (s *Store) GetStampRally(id int64) (*model.StampRally, error) {
 		return nil, err
 	}
 	r.PublicSignup = publicSignup == 1
+	r.CompletionMode = model.NormalizeRallyCompletion(r.CompletionMode)
 	stamps, err := s.listStampRallyStamps(id)
 	if err != nil {
 		return nil, err
@@ -90,7 +93,7 @@ func (s *Store) GetStampRally(id int64) (*model.StampRally, error) {
 // default, resolved for display on the frontend).
 func (s *Store) listStampRallyStamps(rallyID int64) ([]model.StampRallyStamp, error) {
 	rows, err := s.db.Query(`SELECT st.id, st.rally_id, st.affiliate_id, COALESCE(a.name, ''),
-			st.image, st.password, st.pos_x, st.pos_y, st.width, st.height, st.rotation,
+			st.image, st.password, st.stamp_type, st.pos_x, st.pos_y, st.width, st.height, st.rotation,
 			st.active_from, st.active_to, st.paused, st.sort_order
 		FROM stamp_rally_stamps st
 		LEFT JOIN affiliates a ON a.id = st.affiliate_id
@@ -106,7 +109,7 @@ func (s *Store) listStampRallyStamps(rallyID int64) ([]model.StampRallyStamp, er
 		var affiliateID sql.NullInt64
 		var paused int
 		if err := rows.Scan(&st.ID, &st.RallyID, &affiliateID, &st.AffiliateName,
-			&st.Image, &st.Password, &st.X, &st.Y, &st.Width, &st.Height, &st.Rotation,
+			&st.Image, &st.Password, &st.StampType, &st.X, &st.Y, &st.Width, &st.Height, &st.Rotation,
 			&st.ActiveFrom, &st.ActiveTo, &paused, &st.SortOrder); err != nil {
 			return nil, err
 		}
@@ -115,6 +118,7 @@ func (s *Store) listStampRallyStamps(rallyID int64) ([]model.StampRallyStamp, er
 			st.AffiliateID = &id
 		}
 		st.Paused = paused != 0
+		st.StampType = model.NormalizeStampType(st.StampType)
 		stamps = append(stamps, st)
 	}
 	return stamps, rows.Err()
@@ -151,10 +155,11 @@ func (s *Store) CreateStampRally(r *model.StampRally) (int64, error) {
 	defer func() { _ = tx.Rollback() }()
 
 	res, err := tx.Exec(`INSERT INTO stamp_rallies
-			(title, card_image, not_stamped_image, available_from, available_to, details, redeem_instructions, redeem_image, public_signup)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			(title, card_image, not_stamped_image, available_from, available_to, details, redeem_instructions, redeem_image,
+			public_signup, completion_mode, required_food, required_game)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		r.Title, r.CardImage, r.NotStampedImage, r.AvailableFrom, r.AvailableTo, r.Details, r.RedeemInstructions, r.RedeemImage,
-		boolToInt(r.PublicSignup))
+		boolToInt(r.PublicSignup), r.CompletionMode, r.RequiredFood, r.RequiredGame)
 	if err != nil {
 		return 0, err
 	}
@@ -191,9 +196,10 @@ func (s *Store) UpdateStampRally(r *model.StampRally) error {
 
 	if _, err := tx.Exec(`UPDATE stamp_rallies SET title = ?, card_image = ?, not_stamped_image = ?,
 			available_from = ?, available_to = ?, details = ?, redeem_instructions = ?, redeem_image = ?,
-			public_signup = ? WHERE id = ?`,
+			public_signup = ?, completion_mode = ?, required_food = ?, required_game = ? WHERE id = ?`,
 		r.Title, r.CardImage, r.NotStampedImage, r.AvailableFrom, r.AvailableTo,
-		r.Details, r.RedeemInstructions, r.RedeemImage, boolToInt(r.PublicSignup), r.ID); err != nil {
+		r.Details, r.RedeemInstructions, r.RedeemImage, boolToInt(r.PublicSignup),
+		r.CompletionMode, r.RequiredFood, r.RequiredGame, r.ID); err != nil {
 		return err
 	}
 
@@ -251,9 +257,10 @@ func (s *Store) UpdateStampRally(r *model.StampRally) error {
 // insertStampRallyStamp inserts one stamp at the given sort order, returning its ID.
 func insertStampRallyStamp(tx *sql.Tx, rallyID int64, st model.StampRallyStamp, sortOrder int) (int64, error) {
 	res, err := tx.Exec(`INSERT INTO stamp_rally_stamps
-			(rally_id, affiliate_id, image, password, pos_x, pos_y, width, height, rotation, active_from, active_to, paused, sort_order)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		rallyID, nullableID(st.AffiliateID), st.Image, st.Password,
+			(rally_id, affiliate_id, image, password, stamp_type, pos_x, pos_y, width, height, rotation,
+			active_from, active_to, paused, sort_order)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		rallyID, nullableID(st.AffiliateID), st.Image, st.Password, st.StampType,
 		st.X, st.Y, st.Width, st.Height, st.Rotation, st.ActiveFrom, st.ActiveTo, boolToInt(st.Paused), sortOrder)
 	if err != nil {
 		return 0, err
@@ -265,10 +272,10 @@ func insertStampRallyStamp(tx *sql.Tx, rallyID int64, st model.StampRallyStamp, 
 // The WHERE clause is scoped to rallyID as well as the stamp id so a spoofed stamp
 // id belonging to a different event can't be updated across rallies.
 func updateStampRallyStamp(tx *sql.Tx, rallyID int64, st model.StampRallyStamp, sortOrder int) error {
-	_, err := tx.Exec(`UPDATE stamp_rally_stamps SET affiliate_id = ?, image = ?, password = ?,
+	_, err := tx.Exec(`UPDATE stamp_rally_stamps SET affiliate_id = ?, image = ?, password = ?, stamp_type = ?,
 			pos_x = ?, pos_y = ?, width = ?, height = ?, rotation = ?,
 			active_from = ?, active_to = ?, paused = ?, sort_order = ? WHERE id = ? AND rally_id = ?`,
-		nullableID(st.AffiliateID), st.Image, st.Password,
+		nullableID(st.AffiliateID), st.Image, st.Password, st.StampType,
 		st.X, st.Y, st.Width, st.Height, st.Rotation, st.ActiveFrom, st.ActiveTo, boolToInt(st.Paused), sortOrder, st.ID, rallyID)
 	return err
 }
@@ -607,13 +614,13 @@ func (s *Store) ListCollectedStampIDs(cardID int64) (map[int64]string, error) {
 }
 
 // CollectStamp records that a card collected a stamp, snapshotting the participant
-// name + stall name (so the log survives card/stamp deletion) and the rally id (so it
-// cascade-deletes only with the whole rally). Returns ErrStampAlreadyCollected when the
-// (card, stamp) pair already exists (the UNIQUE guard).
-func (s *Store) CollectStamp(rallyID, cardID, stampID int64, participantName, stallName string) (*model.StampRallyCollected, error) {
+// name + stall name + stamp type (so the log survives card/stamp deletion) and the
+// rally id (so it cascade-deletes only with the whole rally). Returns
+// ErrStampAlreadyCollected when the (card, stamp) pair already exists (the UNIQUE guard).
+func (s *Store) CollectStamp(rallyID, cardID, stampID int64, participantName, stallName, stampType string) (*model.StampRallyCollected, error) {
 	res, err := s.db.Exec(`INSERT INTO stamp_rally_collected
-			(rally_id, card_id, stamp_id, participant_name, stall_name) VALUES (?, ?, ?, ?, ?)`,
-		rallyID, cardID, stampID, participantName, stallName)
+			(rally_id, card_id, stamp_id, participant_name, stall_name, stamp_type) VALUES (?, ?, ?, ?, ?, ?)`,
+		rallyID, cardID, stampID, participantName, stallName, stampType)
 	if err != nil {
 		if isUniqueViolation(err) {
 			return nil, ErrStampAlreadyCollected
@@ -626,9 +633,9 @@ func (s *Store) CollectStamp(rallyID, cardID, stampID int64, participantName, st
 	}
 	var c model.StampRallyCollected
 	var cardCol, stampCol sql.NullInt64
-	err = s.db.QueryRow(`SELECT id, rally_id, card_id, stamp_id, participant_name, stall_name, stamped_at
+	err = s.db.QueryRow(`SELECT id, rally_id, card_id, stamp_id, participant_name, stall_name, stamp_type, stamped_at
 		FROM stamp_rally_collected WHERE id = ?`, id).
-		Scan(&c.ID, &c.RallyID, &cardCol, &stampCol, &c.ParticipantName, &c.StallName, &c.StampedAt)
+		Scan(&c.ID, &c.RallyID, &cardCol, &stampCol, &c.ParticipantName, &c.StallName, &c.StampType, &c.StampedAt)
 	if err != nil {
 		return nil, err
 	}
@@ -641,7 +648,7 @@ func (s *Store) CollectStamp(rallyID, cardID, stampID int64, participantName, st
 // columns, so rows persist after their card or stamp is deleted. Ordered by participant
 // then time so the admin table can group a participant's rows together by default.
 func (s *Store) ListRallyCollections(rallyID int64) ([]model.StampRallyLogEntry, error) {
-	rows, err := s.db.Query(`SELECT card_id, stamp_id, participant_name, stall_name, stamped_at
+	rows, err := s.db.Query(`SELECT card_id, stamp_id, participant_name, stall_name, stamp_type, stamped_at
 		FROM stamp_rally_collected WHERE rally_id = ?
 		ORDER BY participant_name COLLATE NOCASE ASC, stamped_at ASC, id ASC`, rallyID)
 	if err != nil {
@@ -653,7 +660,7 @@ func (s *Store) ListRallyCollections(rallyID int64) ([]model.StampRallyLogEntry,
 	for rows.Next() {
 		var e model.StampRallyLogEntry
 		var cardID, stampID sql.NullInt64
-		if err := rows.Scan(&cardID, &stampID, &e.ParticipantName, &e.StallName, &e.StampedAt); err != nil {
+		if err := rows.Scan(&cardID, &stampID, &e.ParticipantName, &e.StallName, &e.StampType, &e.StampedAt); err != nil {
 			return nil, err
 		}
 		e.CardID = cardID.Int64

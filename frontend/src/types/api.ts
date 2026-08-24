@@ -499,6 +499,11 @@ export interface TeaRoomForm {
   color: string
 }
 
+/** A stamp rally stall's kind. Everything that predates types is a food stamp. */
+export type StampType = 'food' | 'game'
+/** What finishing a stamp card takes - the whole card, or a count of each type. */
+export type RallyCompletionMode = 'all' | 'counts'
+
 // Form models for the admin stamp-rally editor. Placement is the same %-based box as
 // the model. A stamp's affiliate_id is null for the "Senpan Tea House" default.
 export interface StampRallyStampForm {
@@ -506,6 +511,7 @@ export interface StampRallyStampForm {
   affiliate_id: number | null
   image: string
   password: string
+  stamp_type: StampType
   placement: Placement
   active_from: string
   active_to: string
@@ -529,6 +535,10 @@ export interface StampRallyForm {
   redeem_image: string
   /** Opt-in that lists the rally publicly and lets participants issue themselves a card. */
   public_signup: boolean
+  /** 'all' = collect the whole card; 'counts' = required_food + required_game. */
+  completion_mode: RallyCompletionMode
+  required_food: number
+  required_game: number
   stamps: StampRallyStampForm[]
   prizes: StampRallyPrizeForm[]
 }

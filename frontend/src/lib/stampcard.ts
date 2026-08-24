@@ -7,7 +7,7 @@
  * card, so the style computation lives here in one place.
  */
 import type { CSSProperties } from 'vue'
-import type { Placement } from '@/types/api'
+import type { Placement, StampType } from '@/types/api'
 
 /** Absolute-position style for an item at the given placement (rotated about its centre). */
 export function placementStyle(p: Placement): CSSProperties {
@@ -24,4 +24,24 @@ export function placementStyle(p: Placement): CSSProperties {
 /** Display name for a stamp's stall: its affiliate, or the Senpan Tea House default. */
 export function stallName(affiliateName: string): string {
   return affiliateName.trim() || 'Senpan Tea House'
+}
+
+/**
+ * The stamp types, in picker order. Anything unrecognized (including the empty
+ * value every stamp written before types existed carries) reads as a food stamp,
+ * matching the server's normalization.
+ */
+export const STAMP_TYPES: { value: StampType; label: string }[] = [
+  { value: 'food', label: 'Food Stamp' },
+  { value: 'game', label: 'Game Stamp' },
+]
+
+/** Label for a stamp type ("Food Stamp" / "Game Stamp"). */
+export function stampTypeLabel(type: string): string {
+  return type === 'game' ? 'Game Stamp' : 'Food Stamp'
+}
+
+/** Short label for a stamp type, for tables and badges ("Food" / "Game"). */
+export function stampTypeShort(type: string): string {
+  return type === 'game' ? 'Game' : 'Food'
 }

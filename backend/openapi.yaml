@@ -2174,6 +2174,8 @@ components:
           type: boolean
         collected_at:
           type: string
+        expired:
+          type: boolean
         id:
           format: int64
           type: integer
@@ -2197,6 +2199,8 @@ components:
               format: double
               type: number
           type: object
+        stamp_type:
+          type: string
       type: object
     PublicStampCard:
       properties:
@@ -2246,6 +2250,8 @@ components:
               type: string
             card_image:
               type: string
+            completion_mode:
+              type: string
             details:
               type: string
             id:
@@ -2259,6 +2265,10 @@ components:
               type: string
             redeem_instructions:
               type: string
+            required_food:
+              type: integer
+            required_game:
+              type: integer
             title:
               type: string
           type: object
@@ -2277,6 +2287,8 @@ components:
                 type: boolean
               collected_at:
                 type: string
+              expired:
+                type: boolean
               id:
                 format: int64
                 type: integer
@@ -2300,6 +2312,8 @@ components:
                     format: double
                     type: number
                 type: object
+              stamp_type:
+                type: string
             type: object
           type: array
       type: object
@@ -2310,6 +2324,8 @@ components:
         available_to:
           type: string
         card_image:
+          type: string
+        completion_mode:
           type: string
         details:
           type: string
@@ -2324,6 +2340,10 @@ components:
           type: string
         redeem_instructions:
           type: string
+        required_food:
+          type: integer
+        required_game:
+          type: integer
         title:
           type: string
       type: object
@@ -3084,6 +3104,8 @@ components:
                 type: string
               completed_count:
                 type: integer
+              completion_mode:
+                type: string
               created_at:
                 type: string
               details:
@@ -3134,6 +3156,10 @@ components:
                 type: string
               redeem_instructions:
                 type: string
+              required_food:
+                type: integer
+              required_game:
+                type: integer
               stamp_count:
                 type: integer
               stamps:
@@ -3181,6 +3207,8 @@ components:
                       type: integer
                     sort_order:
                       type: integer
+                    stamp_type:
+                      type: string
                   type: object
                 type: array
               status:
@@ -3204,6 +3232,8 @@ components:
           type: string
         completed_count:
           type: integer
+        completion_mode:
+          type: string
         created_at:
           type: string
         details:
@@ -3254,6 +3284,10 @@ components:
           type: string
         redeem_instructions:
           type: string
+        required_food:
+          type: integer
+        required_game:
+          type: integer
         stamp_count:
           type: integer
         stamps:
@@ -3301,6 +3335,8 @@ components:
                 type: integer
               sort_order:
                 type: integer
+              stamp_type:
+                type: string
             type: object
           type: array
         status:
@@ -3371,6 +3407,8 @@ components:
         stamp_id:
           format: int64
           type: integer
+        stamp_type:
+          type: string
         stamped_at:
           type: string
       type: object
@@ -3413,6 +3451,8 @@ components:
               type: string
             completed_count:
               type: integer
+            completion_mode:
+              type: string
             created_at:
               type: string
             details:
@@ -3463,6 +3503,10 @@ components:
               type: string
             redeem_instructions:
               type: string
+            required_food:
+              type: integer
+            required_game:
+              type: integer
             stamp_count:
               type: integer
             stamps:
@@ -3510,6 +3554,8 @@ components:
                     type: integer
                   sort_order:
                     type: integer
+                  stamp_type:
+                    type: string
                 type: object
               type: array
             status:
@@ -3530,6 +3576,8 @@ components:
         stamp_id:
           format: int64
           type: integer
+        stamp_type:
+          type: string
         stamped_at:
           type: string
       type: object
@@ -3548,6 +3596,8 @@ components:
               stamp_id:
                 format: int64
                 type: integer
+              stamp_type:
+                type: string
               stamped_at:
                 type: string
             type: object
@@ -3602,6 +3652,8 @@ components:
               type: string
             completed_count:
               type: integer
+            completion_mode:
+              type: string
             created_at:
               type: string
             details:
@@ -3652,6 +3704,10 @@ components:
               type: string
             redeem_instructions:
               type: string
+            required_food:
+              type: integer
+            required_game:
+              type: integer
             stamp_count:
               type: integer
             stamps:
@@ -3699,6 +3755,8 @@ components:
                     type: integer
                   sort_order:
                     type: integer
+                  stamp_type:
+                    type: string
                 type: object
               type: array
             status:
@@ -3751,6 +3809,8 @@ components:
           type: integer
         sort_order:
           type: integer
+        stamp_type:
+          type: string
       type: object
     StampSignupResponse:
       properties:
@@ -3815,6 +3875,8 @@ components:
                   type: string
                 card_image:
                   type: string
+                completion_mode:
+                  type: string
                 details:
                   type: string
                 id:
@@ -3828,6 +3890,10 @@ components:
                   type: string
                 redeem_instructions:
                   type: string
+                required_food:
+                  type: integer
+                required_game:
+                  type: integer
                 title:
                   type: string
               type: object
@@ -3846,6 +3912,8 @@ components:
                     type: boolean
                   collected_at:
                     type: string
+                  expired:
+                    type: boolean
                   id:
                     format: int64
                     type: integer
@@ -3869,6 +3937,8 @@ components:
                         format: double
                         type: number
                     type: object
+                  stamp_type:
+                    type: string
                 type: object
               type: array
           type: object
@@ -4361,7 +4431,7 @@ info:
     (`{ "type": "log", "entry": LogEntry }`) for the live log tail - best-effort,
     sent only while an admin is connected.
   title: Senpan App Suite API
-  version: 3.17.0
+  version: 3.18.0
 openapi: 3.0.3
 paths:
   /api/account/change-password:
@@ -9376,6 +9446,10 @@ paths:
                   type: string
                 card_image:
                   type: string
+                completion_mode:
+                  description: '"all" (collect the whole card, the default) or "counts"
+                    (per-type requirements).'
+                  type: string
                 details:
                   description: Markdown.
                   type: string
@@ -9391,6 +9465,16 @@ paths:
                 redeem_instructions:
                   description: Markdown.
                   type: string
+                required_food:
+                  description: '"counts" mode: food stamps needed; clamped to the
+                    food stamps on the card.'
+                  format: int64
+                  type: integer
+                required_game:
+                  description: '"counts" mode: game stamps needed; clamped to the
+                    game stamps on the card. At least one of the two must be non-zero.'
+                  format: int64
+                  type: integer
                 stamps:
                   items:
                     $ref: '#/components/schemas/StampRallyStamp'
@@ -9413,7 +9497,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
-          description: Title required
+          description: Title required, or a "counts" rally requiring nothing
       security:
       - cookieAuth: []
       - bearerAuth: []
@@ -9492,6 +9576,10 @@ paths:
                   type: string
                 card_image:
                   type: string
+                completion_mode:
+                  description: '"all" (collect the whole card, the default) or "counts"
+                    (per-type requirements).'
+                  type: string
                 details:
                   description: Markdown.
                   type: string
@@ -9507,6 +9595,16 @@ paths:
                 redeem_instructions:
                   description: Markdown.
                   type: string
+                required_food:
+                  description: '"counts" mode: food stamps needed; clamped to the
+                    food stamps on the card.'
+                  format: int64
+                  type: integer
+                required_game:
+                  description: '"counts" mode: game stamps needed; clamped to the
+                    game stamps on the card. At least one of the two must be non-zero.'
+                  format: int64
+                  type: integer
                 stamps:
                   items:
                     $ref: '#/components/schemas/StampRallyStamp'
@@ -9529,7 +9627,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
-          description: Title required
+          description: Title required, or a "counts" rally requiring nothing
       security:
       - cookieAuth: []
       - bearerAuth: []

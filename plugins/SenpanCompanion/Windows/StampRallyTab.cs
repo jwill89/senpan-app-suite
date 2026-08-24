@@ -196,19 +196,21 @@ internal sealed class StampRallyTab : TabBase
     private void DrawStalls(List<StampRallyStamp> stamps)
     {
         var active = stamps.Count(s => !s.Paused);
-        ImGui.TextDisabled($"{active}/{stamps.Count} stall(s) active");
+        var games = stamps.Count(s => IsGame(s.StampType));
+        ImGui.TextDisabled($"{active}/{stamps.Count} stall(s) active  *  {stamps.Count - games} food, {games} game");
         if (stamps.Count == 0)
         {
             ImGui.TextDisabled("This rally has no stalls.");
             return;
         }
 
-        if (!ImGui.BeginTable("rallystalls", 3,
+        if (!ImGui.BeginTable("rallystalls", 4,
                 ImGuiTableFlags.Borders | ImGuiTableFlags.RowBg | ImGuiTableFlags.ScrollY,
                 new Vector2(0, 200)))
             return;
 
         ImGui.TableSetupColumn("Stall");
+        ImGui.TableSetupColumn("Type", ImGuiTableColumnFlags.WidthFixed, 60);
         ImGui.TableSetupColumn("Status", ImGuiTableColumnFlags.WidthFixed, 80);
         ImGui.TableSetupColumn("##actions", ImGuiTableColumnFlags.WidthFixed, 90);
         ImGui.TableHeadersRow();
@@ -218,6 +220,8 @@ internal sealed class StampRallyTab : TabBase
             ImGui.TableNextRow();
             ImGui.TableNextColumn();
             ImGui.TextUnformatted(StallName(s.AffiliateName));
+            ImGui.TableNextColumn();
+            ImGui.TextUnformatted(StampTypeName(s.StampType));
             ImGui.TableNextColumn();
             if (s.Paused)
                 ImGui.TextColored(new Vector4(0.85f, 0.55f, 0.2f, 1f), "Paused");
@@ -271,12 +275,13 @@ internal sealed class StampRallyTab : TabBase
             return;
         }
 
-        if (!ImGui.BeginTable("rallylog", 3,
+        if (!ImGui.BeginTable("rallylog", 4,
                 ImGuiTableFlags.Borders | ImGuiTableFlags.RowBg | ImGuiTableFlags.ScrollY | ImGuiTableFlags.Resizable))
             return;
 
         ImGui.TableSetupColumn("Participant");
         ImGui.TableSetupColumn("Stall");
+        ImGui.TableSetupColumn("Type", ImGuiTableColumnFlags.WidthFixed, 60);
         ImGui.TableSetupColumn("When", ImGuiTableColumnFlags.WidthFixed, 150);
         ImGui.TableHeadersRow();
 
@@ -288,6 +293,8 @@ internal sealed class StampRallyTab : TabBase
             ImGui.TextUnformatted(string.IsNullOrEmpty(e.ParticipantName) ? "-" : e.ParticipantName);
             ImGui.TableNextColumn();
             ImGui.TextUnformatted(StallName(e.StallName));
+            ImGui.TableNextColumn();
+            ImGui.TextUnformatted(StampTypeName(e.StampType));
             ImGui.TableNextColumn();
             ImGui.TextUnformatted(FormatTime(e.StampedAt));
         }
@@ -356,6 +363,7 @@ internal sealed class StampRallyTab : TabBase
         ImGui.SameLine();
         ImGui.TextDisabled($"- {d.StampRally.Status}");
         ImGui.TextDisabled($"{d.Cards.Count} card(s), {completed} completed  *  {active}/{d.StampRally.Stamps.Count} stall(s) active");
+        ImGui.TextDisabled(CompletionText(d.StampRally));
     }
 
     private void DrawNearbyPicker()
@@ -377,6 +385,19 @@ internal sealed class StampRallyTab : TabBase
     /// <summary>A stall with no affiliate is the Senpan Tea House default.</summary>
     private static string StallName(string affiliateName)
         => string.IsNullOrWhiteSpace(affiliateName) ? "Senpan Tea House" : affiliateName;
+
+    /// <summary>Anything that isn't explicitly a game stamp is a food stamp (matching
+    /// the server, where every stamp written before types existed is food).</summary>
+    private static bool IsGame(string stampType)
+        => string.Equals(stampType, "game", StringComparison.OrdinalIgnoreCase);
+
+    private static string StampTypeName(string stampType) => IsGame(stampType) ? "Game" : "Food";
+
+    /// <summary>One line describing what finishes a card on this rally.</summary>
+    private static string CompletionText(StampRally r)
+        => string.Equals(r.CompletionMode, "counts", StringComparison.OrdinalIgnoreCase)
+            ? $"Completes at {r.RequiredFood} food + {r.RequiredGame} game stamp(s)"
+            : "Completes when every stamp is collected";
 
     private static string FormatTime(string ts)
     {

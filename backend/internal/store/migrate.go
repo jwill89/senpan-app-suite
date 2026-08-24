@@ -16,7 +16,7 @@ import (
 // PRAGMA user_version against this constant and runs only the migrations
 // needed to bring the database up to date. Bump this when adding a new
 // migration block.
-const schemaVersion = 59
+const schemaVersion = 60
 
 // ensureSchema reads the current PRAGMA user_version from the database and
 // applies any outstanding migrations to bring it up to schemaVersion.
@@ -400,6 +400,12 @@ func ensureSchema(db *sql.DB) error {
 		}
 	}
 
+	if version < 60 {
+		if err := migrateStampTypes(db); err != nil {
+			return err
+		}
+	}
+
 	_, err := db.Exec(fmt.Sprintf("PRAGMA user_version = %d", schemaVersion))
 	return err
 }
@@ -508,6 +514,37 @@ func migrateStampRallyPublicSignup(db *sql.DB) error {
 	}
 	if _, err := db.Exec(`ALTER TABLE stamp_rallies ADD COLUMN public_signup INTEGER NOT NULL DEFAULT 0`); err != nil {
 		return fmt.Errorf("add stamp_rallies.public_signup: %w", err)
+	}
+	return nil
+}
+
+// migrateStampTypes (schema v60) splits stamp-rally stamps into food and game
+// stamps and lets a rally require a number of each instead of the whole card:
+//
+//   - stamp_rally_stamps.stamp_type + stamp_rally_collected.stamp_type default to
+//     'food', so every stamp on every past rally (and every stamp already collected
+//     on one) is a food stamp - which is exactly what they all were.
+//   - stamp_rallies.completion_mode defaults to 'all', the original "collect the
+//     whole card" rule, so no existing rally silently changes what completes it.
+//     required_food/required_game are only read in 'counts' mode.
+//
+// Idempotent - each column is skipped when it already exists (a fresh install gets
+// them via createTables).
+func migrateStampTypes(db *sql.DB) error {
+	cols := []struct{ table, column, spec string }{
+		{"stamp_rally_stamps", "stamp_type", "TEXT NOT NULL DEFAULT 'food'"},
+		{"stamp_rally_collected", "stamp_type", "TEXT NOT NULL DEFAULT 'food'"},
+		{"stamp_rallies", "completion_mode", "TEXT NOT NULL DEFAULT 'all'"},
+		{"stamp_rallies", "required_food", "INTEGER NOT NULL DEFAULT 0"},
+		{"stamp_rallies", "required_game", "INTEGER NOT NULL DEFAULT 0"},
+	}
+	for _, c := range cols {
+		if !tableExists(db, c.table) || hasColumn(db, c.table, c.column) {
+			continue
+		}
+		if _, err := db.Exec(fmt.Sprintf("ALTER TABLE %s ADD COLUMN %s %s", c.table, c.column, c.spec)); err != nil {
+			return fmt.Errorf("add %s.%s: %w", c.table, c.column, err)
+		}
 	}
 	return nil
 }
@@ -1881,6 +1918,9 @@ const stampRalliesTableSQL = `CREATE TABLE IF NOT EXISTS stamp_rallies (
 	redeem_image TEXT NOT NULL DEFAULT '',
 	status TEXT NOT NULL DEFAULT 'open',
 	public_signup INTEGER NOT NULL DEFAULT 0,
+	completion_mode TEXT NOT NULL DEFAULT 'all',
+	required_food INTEGER NOT NULL DEFAULT 0,
+	required_game INTEGER NOT NULL DEFAULT 0,
 	created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 )`
 
@@ -1890,6 +1930,7 @@ const stampRallyStampsTableSQL = `CREATE TABLE IF NOT EXISTS stamp_rally_stamps 
 	affiliate_id INTEGER,
 	image TEXT NOT NULL DEFAULT '',
 	password TEXT NOT NULL DEFAULT '',
+	stamp_type TEXT NOT NULL DEFAULT 'food',
 	pos_x REAL NOT NULL DEFAULT 0,
 	pos_y REAL NOT NULL DEFAULT 0,
 	width REAL NOT NULL DEFAULT 20,
@@ -1941,6 +1982,7 @@ const stampRallyCollectedTableSQL = `CREATE TABLE IF NOT EXISTS stamp_rally_coll
 	stamp_id INTEGER,
 	participant_name TEXT NOT NULL DEFAULT '',
 	stall_name TEXT NOT NULL DEFAULT '',
+	stamp_type TEXT NOT NULL DEFAULT 'food',
 	stamped_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 	UNIQUE (card_id, stamp_id),
 	FOREIGN KEY (rally_id) REFERENCES stamp_rallies(id) ON DELETE CASCADE,

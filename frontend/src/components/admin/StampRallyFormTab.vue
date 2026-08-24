@@ -8,7 +8,7 @@
  *
  * Hosted as a Back sub-page of the Stamp Rally manager: emits `saved` / `cancel`.
  */
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
 import MarkdownEditor from '@/components/common/MarkdownEditor.vue'
 import AdminPanel from '@/components/common/ui/AdminPanel.vue'
@@ -18,8 +18,9 @@ import FormRow from '@/components/common/ui/FormRow.vue'
 import FormActions from '@/components/common/ui/FormActions.vue'
 import ImagePicker from '@/components/common/ui/ImagePicker.vue'
 import PlacementEditor, { type PlaceItem } from './PlacementEditor.vue'
-import { useStampRalliesStore } from '@/stores/stampRallies'
-import type { Placement } from '@/types/api'
+import { toStampCount, useStampRalliesStore } from '@/stores/stampRallies'
+import { STAMP_TYPES, stampTypeLabel } from '@/lib/stampcard'
+import type { Placement, StampType } from '@/types/api'
 
 const emit = defineEmits<{ saved: []; cancel: [] }>()
 const store = useStampRalliesStore()
@@ -34,7 +35,7 @@ const items = computed<PlaceItem[]>(() => {
   if (!f) return []
   const stamps = f.stamps.map((s, i) => ({
     key: `s${i}`,
-    label: `Stamp ${i + 1}`,
+    label: `${stampTypeLabel(s.stamp_type)} ${i + 1}`,
     image: s.image || f.not_stamped_image,
     placement: s.placement,
     kind: 'stamp' as const,
@@ -72,8 +73,8 @@ const selected = computed(() => {
   return { kind: 'prize' as const, index: idx, prize }
 })
 
-function addStamp(): void {
-  store.addStamp()
+function addStamp(type: StampType): void {
+  store.addStamp(type)
   selectedKey.value = `s${(store.rallyForm?.stamps.length ?? 1) - 1}`
 }
 function addPrize(): void {
@@ -88,11 +89,57 @@ function removeSelected(): void {
   selectedKey.value = null
 }
 
+/** How many stamps of each type the card carries - the ceiling on what completion
+ *  can require (the server clamps to the same numbers on save). */
+const foodCount = computed(
+  () => store.rallyForm?.stamps.filter((s) => s.stamp_type !== 'game').length ?? 0,
+)
+const gameCount = computed(
+  () => store.rallyForm?.stamps.filter((s) => s.stamp_type === 'game').length ?? 0,
+)
+
 /** Set a stamp's affiliate from the select ('' -> Senpan Tea House default). */
 function setAffiliate(stampIndex: number, value: string): void {
   const f = store.rallyForm
   if (!f || !f.stamps[stampIndex]) return
   f.stamps[stampIndex].affiliate_id = value ? Number(value) : null
+}
+
+/**
+ * Settles both requirements into whole counts no larger than the stamps of that
+ * type on the card - the same ceiling the server applies on save, applied here so
+ * the field always shows the number that will actually be stored.
+ *
+ * Deliberately NOT done on every keystroke: clamping in an `@input` handler leaves
+ * the typed text on screen whenever the clamped result equals the value already
+ * held (the model doesn't change, so nothing re-renders), and the field ends up
+ * displaying a requirement that was never saved.
+ */
+function clampRequirements(): void {
+  const f = store.rallyForm
+  if (!f) return
+  f.required_food = Math.min(foodCount.value, toStampCount(f.required_food))
+  f.required_game = Math.min(gameCount.value, toStampCount(f.required_game))
+}
+
+// Removing stalls (or switching one between food and game) lowers a ceiling, so
+// re-settle the requirements against the new counts instead of showing a number
+// the save would silently reduce.
+watch([foodCount, gameCount], clampRequirements)
+
+/**
+ * Switching to per-type completion seeds the requirements from the stalls on the
+ * card, so the mode never starts out requiring nothing of either type - which
+ * would finish every card at its first stamp (and is refused on save).
+ */
+function setCompletionMode(mode: string): void {
+  const f = store.rallyForm
+  if (!f) return
+  f.completion_mode = mode === 'counts' ? 'counts' : 'all'
+  if (f.completion_mode === 'counts' && f.required_food === 0 && f.required_game === 0) {
+    f.required_food = foodCount.value
+    f.required_game = gameCount.value
+  }
 }
 
 async function save(): Promise<void> {
@@ -185,13 +232,53 @@ function cancel(): void {
         </FormField>
       </FormRow>
 
+      <FormField
+        label="Card Completion"
+        help="What finishes a card. Requiring a number of each type leaves the rest of the stalls optional - e.g. 3 of 5 food stalls and 3 of 5 games."
+      >
+        <select
+          :value="store.rallyForm.completion_mode"
+          aria-label="Card completion rule"
+          @change="setCompletionMode(($event.target as HTMLSelectElement).value)"
+        >
+          <option value="all">Every stamp on the card</option>
+          <option value="counts">A number of food stamps and game stamps</option>
+        </select>
+      </FormField>
+
+      <FormRow v-if="store.rallyForm.completion_mode === 'counts'">
+        <FormField label="Food Stamps Required" :help="`${foodCount} food stamp(s) on this card.`">
+          <input
+            v-model.number="store.rallyForm.required_food"
+            type="number"
+            min="0"
+            :max="foodCount"
+            aria-label="Food stamps required"
+            @blur="clampRequirements"
+          />
+        </FormField>
+        <FormField label="Game Stamps Required" :help="`${gameCount} game stamp(s) on this card.`">
+          <input
+            v-model.number="store.rallyForm.required_game"
+            type="number"
+            min="0"
+            :max="gameCount"
+            aria-label="Game stamps required"
+            @blur="clampRequirements"
+          />
+        </FormField>
+      </FormRow>
+
       <!-- Placement editor -->
       <h3 class="section-heading mt-16">
         <font-awesome-icon :icon="['fad', 'stamp']" /> Stamps &amp; Prizes
       </h3>
       <div class="flex-toolbar flex-end mb-10">
-        <button class="btn-neutral btn-sm" @click="addStamp">
-          <font-awesome-icon :icon="['fas', 'plus']" /> Add Stamp
+        <button class="btn-neutral btn-sm" @click="addStamp('food')">
+          <font-awesome-icon :icon="['fas', 'plus']" /> Add Food Stamp
+        </button>
+        <button class="btn-neutral btn-sm" @click="addStamp('game')">
+          <font-awesome-icon :icon="['fas', 'plus']" /> Add Game Stamp
         </button>
         <button class="btn-neutral btn-sm" @click="addPrize">
           <font-awesome-icon :icon="['fas', 'plus']" /> Add Prize
@@ -214,7 +301,7 @@ function cancel(): void {
             {{
               selected.kind === 'prize'
                 ? `Prize ${selected.index + 1}`
-                : `Stamp ${selected.index + 1}`
+                : `${stampTypeLabel(selected.stamp.stamp_type)} ${selected.index + 1}`
             }}
           </h4>
           <button class="btn-danger btn-sm" @click="removeSelected">
@@ -246,6 +333,13 @@ function cancel(): void {
                 placeholder="Stamp password"
                 aria-label="Stamp password"
               />
+            </FormField>
+            <FormField label="Stamp Type" help="What a completion requirement counts it as.">
+              <select v-model="selected.stamp.stamp_type" aria-label="Stamp type">
+                <option v-for="t in STAMP_TYPES" :key="t.value" :value="t.value">
+                  {{ t.label }}
+                </option>
+              </select>
             </FormField>
           </FormRow>
           <FormField label="Stamp Image" help="Pick from any image category.">

@@ -1,5 +1,54 @@
 package model
 
+// Stamp types - what kind of stall a stamp belongs to, so a rally can require a
+// number of each. Stored in stamp_rally_stamps.stamp_type and snapshotted onto
+// each collected-stamp log row.
+const (
+	// StampTypeFood - a food stall's stamp. The original (and only) kind of stamp,
+	// so every stamp that predates types is one.
+	StampTypeFood = "food"
+	// StampTypeGame - a game stall's stamp.
+	StampTypeGame = "game"
+)
+
+// NormalizeStampType maps a stored/received stamp type onto a known one, falling
+// back to StampTypeFood. Rows written before stamp types existed hold "", and API
+// clients that predate the field omit it - both mean a food stamp, which is what
+// every stamp on every past rally was.
+func NormalizeStampType(t string) string {
+	switch t {
+	case StampTypeGame:
+		return StampTypeGame
+	default:
+		return StampTypeFood
+	}
+}
+
+// Rally completion modes - what it takes to finish a card. Stored in
+// stamp_rallies.completion_mode.
+const (
+	// RallyCompletionAll - collect every stamp on the card (any that can never be
+	// collected again no longer blocks it). The original behavior and the default
+	// for any rally created before completion modes existed.
+	RallyCompletionAll = "all"
+	// RallyCompletionCounts - collect RequiredFood food stamps and RequiredGame
+	// game stamps; the rest are optional. A rally with 5 food stalls and 5 game
+	// stalls can ask for 3 of each.
+	RallyCompletionCounts = "counts"
+)
+
+// NormalizeRallyCompletion maps a stored/received completion mode onto a known
+// one, falling back to RallyCompletionAll - so a rally written before the field
+// existed (or by an older client) keeps requiring the whole card.
+func NormalizeRallyCompletion(mode string) string {
+	switch mode {
+	case RallyCompletionCounts:
+		return RallyCompletionCounts
+	default:
+		return RallyCompletionAll
+	}
+}
+
 // Placement positions a stamp or prize on the card image: x/y/width/height are
 // percentages of the card image's box (0-100) and Rotation is in degrees. The
 // admin sets these by dragging/resizing/rotating in the visual placement editor.
@@ -32,7 +81,14 @@ type StampRally struct {
 	// public sign-up page and anyone may issue themselves a card. Off by default, so a
 	// rally whose cards the staff hand out (via Garapon links or the admin card list)
 	// stays invite-only unless someone deliberately opens it.
-	PublicSignup bool   `json:"public_signup"`
+	PublicSignup bool `json:"public_signup"`
+	// CompletionMode is "all" (collect the whole card) or "counts" (collect
+	// RequiredFood food stamps + RequiredGame game stamps) - see the constants above.
+	CompletionMode string `json:"completion_mode"`
+	// RequiredFood/RequiredGame are the per-type stamp counts a card needs in
+	// "counts" mode; both are ignored in "all" mode.
+	RequiredFood int    `json:"required_food"`
+	RequiredGame int    `json:"required_game"`
 	CreatedAt    string `json:"created_at"`
 
 	// Populated on detail fetches only (omitted from list responses for efficiency).
@@ -50,9 +106,10 @@ type StampRally struct {
 }
 
 // StampRallyStamp is one collectable stamp on a rally card: an image, the password
-// a participant enters to collect it, its placement on the card, an optional active
-// window (within the event window) and a manual pause toggle, and the affiliate
-// (stall) it belongs to. AffiliateID is nil for the "Senpan Tea House" default.
+// a participant enters to collect it, its type (food or game - what a "counts"
+// rally counts), its placement on the card, an optional active window (within the
+// event window) and a manual pause toggle, and the affiliate (stall) it belongs
+// to. AffiliateID is nil for the "Senpan Tea House" default.
 type StampRallyStamp struct {
 	ID            int64  `json:"id"`
 	RallyID       int64  `json:"rally_id"`
@@ -60,6 +117,7 @@ type StampRallyStamp struct {
 	AffiliateName string `json:"affiliate_name"`     // joined for display ("" -> "Senpan Tea House")
 	Image         string `json:"image"`              // images/stamp_stamps/...
 	Password      string `json:"password,omitempty"` // omitted from public payloads
+	StampType     string `json:"stamp_type"`         // "food" | "game" - see the constants above
 	Placement     `json:"placement"`
 	ActiveFrom    string `json:"active_from"` // UTC RFC-3339 within event window ("" = whole event)
 	ActiveTo      string `json:"active_to"`   // UTC RFC-3339 ("" = whole event)
@@ -105,6 +163,7 @@ type StampRallyCollected struct {
 	StampID         int64  `json:"stamp_id"`
 	ParticipantName string `json:"participant_name"`
 	StallName       string `json:"stall_name"`
+	StampType       string `json:"stamp_type"` // snapshotted alongside StallName
 	StampedAt       string `json:"stamped_at"`
 }
 
@@ -116,6 +175,7 @@ type StampRallyLogEntry struct {
 	ParticipantName string `json:"participant_name"`
 	StampID         int64  `json:"stamp_id"`
 	StallName       string `json:"stall_name"`
+	StampType       string `json:"stamp_type"`
 	StampedAt       string `json:"stamped_at"`
 }
 
@@ -161,6 +221,12 @@ type PublicStampRally struct {
 	AvailableFrom      string `json:"available_from"`
 	AvailableTo        string `json:"available_to"`
 	IsActive           bool   `json:"is_active"`
+	// What finishing the card takes: "all" (every stamp) or "counts" (RequiredFood
+	// food stamps + RequiredGame game stamps). Sent so the card can show progress
+	// against the same rule the server applies.
+	CompletionMode string `json:"completion_mode"`
+	RequiredFood   int    `json:"required_food"`
+	RequiredGame   int    `json:"required_game"`
 }
 
 // PublicStamp is one stamp slot in the participant-facing card. AffiliateName ""
@@ -169,13 +235,19 @@ type PublicStampRally struct {
 type PublicStamp struct {
 	ID            int64  `json:"id"`
 	AffiliateName string `json:"affiliate_name"`
+	StampType     string `json:"stamp_type"` // "food" | "game"
 	Image         string `json:"image"`
 	Placement     `json:"placement"`
 	ActiveFrom    string `json:"active_from"`
 	ActiveTo      string `json:"active_to"`
 	Available     bool   `json:"available"`
-	Collected     bool   `json:"collected"`
-	CollectedAt   string `json:"collected_at"`
+	// Expired reports that the stamp can never be collected again (its own window
+	// ended, or the event did), as opposed to merely closed right now. The card uses
+	// it to tell a participant when a per-type requirement has gone out of reach,
+	// which is otherwise indistinguishable from a stall that reopens later.
+	Expired     bool   `json:"expired"`
+	Collected   bool   `json:"collected"`
+	CollectedAt string `json:"collected_at"`
 }
 
 // PublicPrize always carries the placement so the card can show the not-stamped

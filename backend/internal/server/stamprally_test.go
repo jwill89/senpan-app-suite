@@ -152,6 +152,132 @@ func TestStampCard_PublicFlowAndCompletion(t *testing.T) {
 	}
 }
 
+// TestStampCard_TypedCompletion covers a "counts" rally end to end: two food
+// stalls and two game stalls, one of each required. Two food stamps must NOT
+// complete the card; adding a game stamp must.
+func TestStampCard_TypedCompletion(t *testing.T) {
+	env := newTestEnv(t)
+	env.loginAdmin(t)
+
+	place := map[string]any{"x": 10, "y": 10, "width": 15, "height": 15}
+	resp := env.postJSON(t, "/api/stamp-rallies", map[string]any{
+		"title":           "Festival",
+		"completion_mode": "counts",
+		"required_food":   1,
+		"required_game":   1,
+		"stamps": []map[string]any{
+			{"password": "food1", "stamp_type": "food", "placement": place},
+			{"password": "food2", "stamp_type": "food", "placement": place},
+			{"password": "game1", "stamp_type": "game", "placement": place},
+			{"password": "game2", "stamp_type": "game", "placement": place},
+		},
+	})
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("create status = %d; want 201", resp.StatusCode)
+	}
+	id := int(decodeBody(t, resp)["stamp_rally"].(map[string]any)["id"].(float64))
+	token := env.issueCard(t, id, "Tataru")
+
+	// The public card carries the rule and each stall's type, so it can show
+	// progress per type.
+	card := decodeBody(t, env.get(t, "/api/stamp-card/"+token))
+	rally := card["rally"].(map[string]any)
+	if rally["completion_mode"] != "counts" || rally["required_food"].(float64) != 1 || rally["required_game"].(float64) != 1 {
+		t.Errorf("public rally completion = %v", rally)
+	}
+	if card["stamps"].([]any)[2].(map[string]any)["stamp_type"] != "game" {
+		t.Errorf("public stamp types not exposed: %v", card["stamps"])
+	}
+
+	collect := func(password string) map[string]any {
+		t.Helper()
+		r := env.postJSON(t, "/api/stamp-card/"+token+"/stamp", map[string]any{"password": password})
+		if r.StatusCode != http.StatusOK {
+			t.Fatalf("collect %q status = %d; want 200", password, r.StatusCode)
+		}
+		return decodeBody(t, r)["card"].(map[string]any)
+	}
+
+	if got := collect("food1"); got["completed"] != false {
+		t.Error("card completed on the first food stamp")
+	}
+	// Both food stamps collected still leaves the game requirement outstanding.
+	if got := collect("food2"); got["completed"] != false {
+		t.Error("card completed on food stamps alone; the game requirement was ignored")
+	}
+	got := collect("game1")
+	if got["completed"] != true || got["prizes_revealed"] != true {
+		t.Errorf("after one of each: completed=%v revealed=%v; want true,true", got["completed"], got["prizes_revealed"])
+	}
+
+	// The log snapshots each collection's type.
+	logs := decodeBody(t, env.get(t, fmt.Sprintf("/api/stamp-rallies/%d/logs", id)))["logs"].([]any)
+	if len(logs) != 3 {
+		t.Fatalf("logs = %d; want 3", len(logs))
+	}
+	if logs[2].(map[string]any)["stamp_type"] != "game" {
+		t.Errorf("log types = %v; want the third row to be a game stamp", logs)
+	}
+}
+
+// TestStampRally_CountsNeedARequirement verifies a per-type rally that requires
+// nothing of either type is refused: taken literally it would finish every card at
+// its first stamp, and 0/0 is where the admin form's mode starts.
+func TestStampRally_CountsNeedARequirement(t *testing.T) {
+	env := newTestEnv(t)
+	env.loginAdmin(t)
+
+	place := map[string]any{"x": 10, "y": 10, "width": 15, "height": 15}
+	body := map[string]any{
+		"title":           "Nothing Required",
+		"completion_mode": "counts",
+		"required_food":   0,
+		"required_game":   0,
+		"stamps": []map[string]any{
+			{"password": "alpha", "stamp_type": "food", "placement": place},
+		},
+	}
+	resp := env.postJSON(t, "/api/stamp-rallies", body)
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("create status = %d; want 400", resp.StatusCode)
+	}
+	resp.Body.Close()
+
+	// The same rule applies to an edit: an existing rally can't be turned into one.
+	id := env.createRally(t, "Real Rally", false)
+	body["title"] = "Real Rally"
+	resp = env.putJSON(t, fmt.Sprintf("/api/stamp-rallies/%d", id), body)
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("update status = %d; want 400", resp.StatusCode)
+	}
+	resp.Body.Close()
+}
+
+// TestStampRally_RequiredCountsClamped verifies a requirement can't exceed the
+// stamps of that type the card actually carries.
+func TestStampRally_RequiredCountsClamped(t *testing.T) {
+	env := newTestEnv(t)
+	env.loginAdmin(t)
+
+	resp := env.postJSON(t, "/api/stamp-rallies", map[string]any{
+		"title":           "Impossible",
+		"completion_mode": "counts",
+		"required_food":   9,  // only one food stall exists
+		"required_game":   -3, // nonsense input
+		"stamps": []map[string]any{
+			{"password": "alpha", "stamp_type": "food",
+				"placement": map[string]any{"x": 10, "y": 10, "width": 15, "height": 15}},
+		},
+	})
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("create status = %d; want 201", resp.StatusCode)
+	}
+	r := decodeBody(t, resp)["stamp_rally"].(map[string]any)
+	if r["required_food"].(float64) != 1 || r["required_game"].(float64) != 0 {
+		t.Errorf("required = %v/%v; want 1/0 (clamped to the stamps that exist)", r["required_food"], r["required_game"])
+	}
+}
+
 func TestStampCard_ClosedStall(t *testing.T) {
 	env := newTestEnv(t)
 	env.loginAdmin(t)

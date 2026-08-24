@@ -219,12 +219,15 @@ func buildFeaturePaths(b *pb) {
 			"title", pstr("Title (required)."), "card_image", pstr(""), "not_stamped_image", pstr(""),
 			"available_from", pstr("UTC RFC-3339."), "available_to", pstr("UTC RFC-3339."),
 			"details", pstr("Markdown."), "redeem_instructions", pstr("Markdown."), "redeem_image", pstr("Where-to-redeem screenshot."),
+			"completion_mode", pstr("\"all\" (collect the whole card, the default) or \"counts\" (per-type requirements)."),
+			"required_food", pint("\"counts\" mode: food stamps needed; clamped to the food stamps on the card."),
+			"required_game", pint("\"counts\" mode: game stamps needed; clamped to the game stamps on the card. At least one of the two must be non-zero."),
 			"stamps", parr("", ref("StampRallyStamp")), "prizes", parr("", ref("StampRallyPrize")))
 	}
 	b.add("GET", "/api/stamp-rallies", "Stamp Rally", "List rallies", "permission:festival-stamp-rally", "", opt{resps: []respEntry{ok("StampRalliesResponse")}})
 	b.add("POST", "/api/stamp-rallies", "Stamp Rally", "Create a rally", "permission:festival-stamp-rally", "", opt{
 		body:  actionBody("Rally fields.", nil, rallyFields()),
-		resps: []respEntry{created("StampRallyResponse"), r("400", "Title required")}})
+		resps: []respEntry{created("StampRallyResponse"), r("400", "Title required, or a \"counts\" rally requiring nothing")}})
 	b.add("GET", "/api/stamp-rallies/{id}", "Stamp Rally", "Rally detail", "permission:festival-stamp-rally", "", opt{
 		path:  []*openapi3.Parameter{pparam("id", "Rally id.")},
 		resps: []respEntry{ok("StampRallyDetailResponse"), r("404", "Not found")}})
@@ -232,7 +235,7 @@ func buildFeaturePaths(b *pb) {
 		"Full replace of the editable fields (status is preserved - use close/reopen).", opt{
 			path:  []*openapi3.Parameter{pparam("id", "Rally id.")},
 			body:  actionBody("Full rally fields.", nil, rallyFields()),
-			resps: []respEntry{ok("OKResponse"), r("400", "Title required")}})
+			resps: []respEntry{ok("OKResponse"), r("400", "Title required, or a \"counts\" rally requiring nothing")}})
 	b.add("DELETE", "/api/stamp-rallies/{id}", "Stamp Rally", "Delete a rally", "permission:festival-stamp-rally", "", opt{
 		path:  []*openapi3.Parameter{pparam("id", "Rally id.")},
 		resps: []respEntry{noContent()}})

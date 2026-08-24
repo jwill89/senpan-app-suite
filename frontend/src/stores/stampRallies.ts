@@ -21,6 +21,7 @@ import type {
   StampRallyPrizeForm,
   StampRallyStamp,
   StampRallyStampForm,
+  StampType,
   SignupRally,
   StampSignupResponse,
   StampLookupEntry,
@@ -34,12 +35,13 @@ function defaultPlacement(): Placement {
   return { x: 42, y: 42, width: 16, height: 16, rotation: 0 }
 }
 
-function blankStamp(): StampRallyStampForm {
+function blankStamp(type: StampType): StampRallyStampForm {
   return {
     id: 0,
     affiliate_id: null,
     image: '',
     password: '',
+    stamp_type: type,
     placement: defaultPlacement(),
     active_from: '',
     active_to: '',
@@ -49,6 +51,16 @@ function blankStamp(): StampRallyStampForm {
 
 function blankPrize(): StampRallyPrizeForm {
   return { id: 0, name: '', image: '', placement: defaultPlacement() }
+}
+
+/**
+ * Settles whatever a number input left in a per-type requirement into a whole,
+ * non-negative count. An emptied `<input type="number">` binds as '', which would
+ * otherwise be sent as a string and rejected by the API. Exported for the form,
+ * which clamps against the stamps on the card as well.
+ */
+export function toStampCount(value: number): number {
+  return Number.isFinite(value) ? Math.max(0, Math.floor(value)) : 0
 }
 
 /**
@@ -113,6 +125,42 @@ export const useStampRalliesStore = defineStore('stampRallies', () => {
     const c = publicCard.value
     if (!c) return 0
     return c.stamps.filter((s) => !s.collected && s.available).length
+  })
+
+  /**
+   * Progress on the loaded public card, phrased the way the rally's completion
+   * rule works: a "counts" rally is measured per type (so many food stamps, so
+   * many game stamps, the rest optional), anything else against the whole card.
+   */
+  const cardProgress = computed(() => {
+    const c = publicCard.value
+    const stamps = c?.stamps ?? []
+    /**
+     * One type's tally. `unreachable` means the requirement can no longer be met -
+     * what is collected plus what is still collectable falls short, because stalls
+     * closed for good (the server's `expired`, not a stall that merely reopens
+     * later). The card says so rather than leaving the participant to work out why
+     * it never finishes.
+     */
+    const tally = (type: StampType, required: number) => {
+      const of = stamps.filter((s) => (s.stamp_type === 'game' ? 'game' : 'food') === type)
+      const collected = of.filter((s) => s.collected).length
+      const open = of.filter((s) => !s.collected && !s.expired).length
+      return {
+        collected,
+        open,
+        required,
+        total: of.length,
+        unreachable: required > 0 && collected < required && collected + open < required,
+      }
+    }
+    return {
+      byType: c?.rally.completion_mode === 'counts',
+      food: tally('food', c?.rally.required_food ?? 0),
+      game: tally('game', c?.rally.required_game ?? 0),
+      collected: stamps.filter((s) => s.collected).length,
+      total: stamps.length,
+    }
   })
 
   // -- Admin: load ----------------------------------------------------------
@@ -180,6 +228,9 @@ export const useStampRalliesStore = defineStore('stampRallies', () => {
       redeem_instructions: '',
       redeem_image: '',
       public_signup: false,
+      completion_mode: 'all',
+      required_food: 0,
+      required_game: 0,
       stamps: [],
       prizes: [],
     }
@@ -198,11 +249,15 @@ export const useStampRalliesStore = defineStore('stampRallies', () => {
       redeem_instructions: r.redeem_instructions,
       redeem_image: r.redeem_image,
       public_signup: r.public_signup,
+      completion_mode: r.completion_mode === 'counts' ? 'counts' : 'all',
+      required_food: r.required_food,
+      required_game: r.required_game,
       stamps: (r.stamps || []).map((s) => ({
         id: s.id,
         affiliate_id: s.affiliate_id ?? null,
         image: s.image,
         password: s.password ?? '',
+        stamp_type: s.stamp_type === 'game' ? 'game' : 'food',
         placement: { ...s.placement },
         active_from: utcToDatetimeLocal(s.active_from),
         active_to: utcToDatetimeLocal(s.active_to),
@@ -248,8 +303,8 @@ export const useStampRalliesStore = defineStore('stampRallies', () => {
     rallyForm.value = null
   }
 
-  function addStamp(): void {
-    rallyForm.value?.stamps.push(blankStamp())
+  function addStamp(type: StampType = 'food'): void {
+    rallyForm.value?.stamps.push(blankStamp(type))
   }
   function removeStamp(index: number): void {
     rallyForm.value?.stamps.splice(index, 1)
@@ -269,6 +324,20 @@ export const useStampRalliesStore = defineStore('stampRallies', () => {
       ui.notify('Title is required', 'error')
       return false
     }
+    // The number inputs can hold anything the admin typed (including an empty
+    // field), so settle them into whole counts before they are validated or sent.
+    const requiredFood = toStampCount(f.required_food)
+    const requiredGame = toStampCount(f.required_game)
+    // Per-type completion that requires nothing of either type would finish every
+    // card at its first stamp - the server refuses it, so say so here rather than
+    // bouncing the admin off a 400.
+    if (f.completion_mode === 'counts' && requiredFood + requiredGame === 0) {
+      ui.notify(
+        'Set how many food or game stamps a card needs, or switch completion back to every stamp.',
+        'error',
+      )
+      return false
+    }
     savingRally.value = true
     try {
       // The form holds local datetime-local values; convert the event + per-stamp
@@ -277,6 +346,8 @@ export const useStampRalliesStore = defineStore('stampRallies', () => {
         ...f,
         available_from: datetimeLocalToUtc(f.available_from),
         available_to: datetimeLocalToUtc(f.available_to),
+        required_food: requiredFood,
+        required_game: requiredGame,
         stamps: f.stamps.map((s) => ({
           ...s,
           active_from: datetimeLocalToUtc(s.active_from),
@@ -586,13 +657,17 @@ export const useStampRalliesStore = defineStore('stampRallies', () => {
       ui.notify('Enter a password', 'error')
       return false
     }
+    // A "counts" card can be finished with stalls left to visit, so completion is
+    // announced only when this stamp is the one that finished it - otherwise every
+    // later stamp re-congratulates the participant.
+    const wasComplete = publicCard.value?.completed ?? false
     submitting.value = true
     try {
       const data = await endpoints.stampCard.stamp(token, pw)
       publicCard.value = data.card
       lastCollectedId.value = data.collected_stamp_id
       ui.notify('Stamp collected!', 'success')
-      if (data.card.completed) {
+      if (data.card.completed && !wasComplete) {
         ui.notify('Card complete - your prizes are revealed below!', 'success')
       }
       return true
@@ -628,6 +703,7 @@ export const useStampRalliesStore = defineStore('stampRallies', () => {
     openRallies,
     closedRallies,
     drawsRemaining,
+    cardProgress,
     // admin actions
     loadRallies,
     loadRallyDetail,

@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
 import type {
+  PublicStamp,
   PublicStampCard,
   SignupRally,
   StampLookupEntry,
@@ -56,6 +57,7 @@ function logRow(over: Partial<StampRallyLogEntry>): StampRallyLogEntry {
     participant_name: 'A',
     stamp_id: 1,
     stall_name: 'X',
+    stamp_type: 'food',
     stamped_at: '',
     ...over,
   }
@@ -74,6 +76,9 @@ function publicCard(over: Partial<PublicStampCard> = {}): PublicStampCard {
       available_from: '',
       available_to: '',
       is_active: true,
+      completion_mode: 'all',
+      required_food: 0,
+      required_game: 0,
     },
     participant_name: 'Tataru',
     completed: false,
@@ -81,6 +86,23 @@ function publicCard(over: Partial<PublicStampCard> = {}): PublicStampCard {
     stamps: [],
     prizes: [],
     prizes_revealed: false,
+    ...over,
+  }
+}
+
+function publicStamp(over: Partial<PublicStamp> = {}): PublicStamp {
+  return {
+    id: 1,
+    affiliate_name: '',
+    stamp_type: 'food',
+    image: '',
+    placement: { x: 0, y: 0, width: 10, height: 10, rotation: 0 },
+    active_from: '',
+    active_to: '',
+    available: true,
+    expired: false,
+    collected: false,
+    collected_at: '',
     ...over,
   }
 }
@@ -158,6 +180,38 @@ describe('admin', () => {
     expect(ep.create).not.toHaveBeenCalled()
   })
 
+  it('saveRally refuses per-type completion that requires nothing', async () => {
+    const ui = useUiStore()
+    ui.notify = vi.fn()
+    const s = useStampRalliesStore()
+    s.newRallyForm()
+    s.rallyForm!.title = 'Festival'
+    s.rallyForm!.completion_mode = 'counts'
+
+    expect(await s.saveRally()).toBe(false)
+    // Never reaches the API: 0/0 would finish every card at its first stamp.
+    expect(ep.create).not.toHaveBeenCalled()
+    expect(ui.notify).toHaveBeenCalledWith(
+      expect.stringContaining('how many food or game'),
+      'error',
+    )
+  })
+
+  it('saveRally settles the requirement fields into whole counts', async () => {
+    const s = useStampRalliesStore()
+    s.newRallyForm()
+    s.rallyForm!.title = 'Festival'
+    s.rallyForm!.completion_mode = 'counts'
+    // What an emptied / half-typed number input can leave behind.
+    s.rallyForm!.required_food = 2.7
+    s.rallyForm!.required_game = '' as unknown as number
+
+    expect(await s.saveRally()).toBe(true)
+    expect(ep.create).toHaveBeenCalledWith(
+      expect.objectContaining({ required_food: 2, required_game: 0 }),
+    )
+  })
+
   it('saveRally creates and clears the form', async () => {
     const s = useStampRalliesStore()
     s.newRallyForm()
@@ -169,6 +223,26 @@ describe('admin', () => {
 })
 
 describe('public', () => {
+  it('submitPassword announces completion only when this stamp finished the card', async () => {
+    const ui = useUiStore()
+    ui.notify = vi.fn()
+    const s = useStampRalliesStore()
+    const done = publicCard({ completed: true })
+
+    // The stamp that completes the card announces it...
+    s.publicCard = publicCard({ completed: false })
+    ep.stamp.mockResolvedValueOnce({ card: done, collected_stamp_id: 1 })
+    await s.submitPassword('tok', 'alpha')
+    expect(ui.notify).toHaveBeenCalledWith(expect.stringContaining('Card complete'), 'success')
+
+    // ...an optional stall collected afterwards does not say it again.
+    ui.notify = vi.fn()
+    ep.stamp.mockResolvedValueOnce({ card: done, collected_stamp_id: 2 })
+    await s.submitPassword('tok', 'bravo')
+    expect(ui.notify).toHaveBeenCalledWith('Stamp collected!', 'success')
+    expect(ui.notify).not.toHaveBeenCalledWith(expect.stringContaining('Card complete'), 'success')
+  })
+
   it('submitPassword commits the refreshed card + last collected id', async () => {
     const card = publicCard({ completed: false })
     ep.stamp.mockResolvedValueOnce({ card, collected_stamp_id: 9 })
@@ -185,6 +259,70 @@ describe('public', () => {
     const s = useStampRalliesStore()
     expect(await s.submitPassword('tok', '   ')).toBe(false)
     expect(ep.stamp).not.toHaveBeenCalled()
+  })
+
+  it('cardProgress counts the whole card on an "all" rally', () => {
+    const s = useStampRalliesStore()
+    s.publicCard = publicCard({
+      stamps: [publicStamp({ id: 1, collected: true }), publicStamp({ id: 2, stamp_type: 'game' })],
+    })
+    expect(s.cardProgress.byType).toBe(false)
+    expect(s.cardProgress.collected).toBe(1)
+    expect(s.cardProgress.total).toBe(2)
+  })
+
+  it('cardProgress flags a requirement that closed stalls put out of reach', () => {
+    const s = useStampRalliesStore()
+    const card = publicCard({
+      stamps: [
+        publicStamp({ id: 1, collected: true }),
+        // The only game stall closed for good with nothing collected from it.
+        publicStamp({ id: 2, stamp_type: 'game', available: false, expired: true }),
+      ],
+    })
+    card.rally.completion_mode = 'counts'
+    card.rally.required_food = 1
+    card.rally.required_game = 1
+    s.publicCard = card
+
+    expect(s.cardProgress.food.unreachable).toBe(false)
+    expect(s.cardProgress.game.unreachable).toBe(true)
+    // A stall that is merely closed right now can still be collected later.
+    // (Mutate through the store, so the computed sees the change.)
+    s.publicCard.stamps[1].expired = false
+    expect(s.cardProgress.game.unreachable).toBe(false)
+  })
+
+  it('cardProgress splits by type against the requirement on a "counts" rally', () => {
+    const s = useStampRalliesStore()
+    const card = publicCard({
+      stamps: [
+        publicStamp({ id: 1, collected: true }),
+        publicStamp({ id: 2 }),
+        publicStamp({ id: 3, stamp_type: 'game', collected: true }),
+        publicStamp({ id: 4, stamp_type: 'game' }),
+      ],
+    })
+    card.rally.completion_mode = 'counts'
+    card.rally.required_food = 2
+    card.rally.required_game = 1
+    s.publicCard = card
+
+    expect(s.cardProgress.byType).toBe(true)
+    expect(s.cardProgress.food).toEqual({
+      collected: 1,
+      open: 1,
+      required: 2,
+      total: 2,
+      unreachable: false,
+    })
+    expect(s.cardProgress.game).toEqual({
+      collected: 1,
+      open: 1,
+      required: 1,
+      total: 2,
+      unreachable: false,
+    })
   })
 })
 
@@ -263,6 +401,9 @@ describe('copyRallyForm', () => {
       redeem_instructions: 'See staff',
       redeem_image: 'images/rally/where.png',
       public_signup: true,
+      completion_mode: 'counts',
+      required_food: 1,
+      required_game: 1,
       status: 'closed',
       created_at: '',
       stamps: [
@@ -273,6 +414,7 @@ describe('copyRallyForm', () => {
           affiliate_name: 'Lunaria',
           image: 'images/stamp.png',
           password: 'moon',
+          stamp_type: 'game',
           placement: { x: 1, y: 2, width: 10, height: 10, rotation: 0 },
           active_from: '2026-08-01T00:00:00.000Z',
           active_to: '2026-08-02T00:00:00.000Z',
@@ -303,6 +445,11 @@ describe('copyRallyForm', () => {
     expect(f.stamps).toHaveLength(1)
     expect(f.stamps[0].password).toBe('moon')
     expect(f.stamps[0].affiliate_id).toBe(3)
+    expect(f.stamps[0].stamp_type).toBe('game')
+    // The completion rule describes the event, not the run that already happened.
+    expect(f.completion_mode).toBe('counts')
+    expect(f.required_food).toBe(1)
+    expect(f.required_game).toBe(1)
     expect(f.prizes[0].name).toBe('Grand')
   })
 

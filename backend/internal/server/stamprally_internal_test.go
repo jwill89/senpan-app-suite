@@ -67,6 +67,92 @@ func TestRallyCardComplete(t *testing.T) {
 	}
 }
 
+// TestRallyCardCompleteCounts covers the per-type rule: a "counts" rally completes
+// on the required number of food + game stamps, whatever is left uncollected, and
+// never on expiry alone (running out of time short of the requirement is a miss).
+func TestRallyCardCompleteCounts(t *testing.T) {
+	// Two food stalls + two game stalls, requiring one of each.
+	stamps := []model.StampRallyStamp{
+		{ID: 1, StampType: model.StampTypeFood},
+		{ID: 2, StampType: model.StampTypeFood},
+		{ID: 3, StampType: model.StampTypeGame},
+		{ID: 4, StampType: model.StampTypeGame},
+	}
+	rally := &model.StampRally{CompletionMode: model.RallyCompletionCounts, RequiredFood: 1, RequiredGame: 1}
+	ended := &model.StampRally{CompletionMode: model.RallyCompletionCounts, RequiredFood: 1, RequiredGame: 1,
+		AvailableTo: srPast}
+
+	cases := []struct {
+		name      string
+		rally     *model.StampRally
+		collected map[int64]string
+		want      bool
+	}{
+		{"nothing collected", rally, map[int64]string{}, false},
+		{"one food only", rally, map[int64]string{1: ""}, false},
+		{"both food, no game", rally, map[int64]string{1: "", 2: ""}, false},
+		{"one of each - the rest are optional", rally, map[int64]string{1: "", 3: ""}, true},
+		{"more than required", rally, map[int64]string{1: "", 2: "", 3: "", 4: ""}, true},
+		{"event ended short of the requirement", ended, map[int64]string{1: ""}, false},
+		{"event ended having met it", ended, map[int64]string{2: "", 4: ""}, true},
+	}
+	for _, c := range cases {
+		if got := rallyCardComplete(c.rally, stamps, c.collected, srNow); got != c.want {
+			t.Errorf("%s: complete = %v; want %v", c.name, got, c.want)
+		}
+	}
+
+	// A "counts" rally requiring nothing of either type must NOT finish a card at
+	// its first stamp - it falls back to the whole-card rule (saving one is
+	// rejected, so this only guards a row that predates that check).
+	none := &model.StampRally{CompletionMode: model.RallyCompletionCounts}
+	if rallyCardComplete(none, stamps, map[int64]string{1: ""}, srNow) {
+		t.Error("counts rally requiring 0/0 completed on one stamp; want the whole-card rule")
+	}
+	all := map[int64]string{1: "", 2: "", 3: "", 4: ""}
+	if !rallyCardComplete(none, stamps, all, srNow) {
+		t.Error("counts rally requiring 0/0 did not complete on the whole card")
+	}
+}
+
+// TestCompletionRuleError guards the save-time refusal of a per-type rule that
+// requires nothing, which would finish every card at its first stamp.
+func TestCompletionRuleError(t *testing.T) {
+	cases := []struct {
+		name   string
+		rally  model.StampRally
+		reject bool
+	}{
+		{"counts, nothing required", model.StampRally{CompletionMode: model.RallyCompletionCounts}, true},
+		{"counts, food only", model.StampRally{CompletionMode: model.RallyCompletionCounts, RequiredFood: 2}, false},
+		{"counts, game only", model.StampRally{CompletionMode: model.RallyCompletionCounts, RequiredGame: 1}, false},
+		{"all mode ignores the counts", model.StampRally{CompletionMode: model.RallyCompletionAll}, false},
+	}
+	for _, c := range cases {
+		r := c.rally
+		if got := completionRuleError(&r) != ""; got != c.reject {
+			t.Errorf("%s: rejected = %v; want %v", c.name, got, c.reject)
+		}
+	}
+}
+
+// TestClampRequired guards the save-time clamp: a rally can never be configured to
+// need more stamps of a type than it carries (which no card could ever satisfy).
+func TestClampRequired(t *testing.T) {
+	cases := []struct{ want, available, expect int }{
+		{-1, 5, 0},
+		{0, 5, 0},
+		{3, 5, 3},
+		{9, 5, 5},
+		{2, 0, 0},
+	}
+	for _, c := range cases {
+		if got := clampRequired(c.want, c.available); got != c.expect {
+			t.Errorf("clampRequired(%d, %d) = %d; want %d", c.want, c.available, got, c.expect)
+		}
+	}
+}
+
 // TestStampAvailable covers the availability rule used to gate collection.
 func TestStampAvailable(t *testing.T) {
 	open := &model.StampRally{}

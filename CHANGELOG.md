@@ -42,6 +42,44 @@ The format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## Frontend
 
+### [3.21.0] - 2026-08-24
+
+Stamp rally stalls are food stamps or game stamps, and a rally can ask for so many
+of each. Requires backend 3.18.0.
+
+#### Added
+
+- **Food stamps and game stamps.** Every stall on a stamp rally card now carries a
+  type, picked in the rally form (Add Food Stamp / Add Game Stamp, and a Stamp Type
+  select on the selected stall). Every stall on every existing rally is a food
+  stamp, which is what they all were.
+- **Card Completion on the rally form**: keep the original rule (every stamp on the
+  card), or require a number of each type - 3 of 5 food stalls and 3 of 5 games,
+  leaving the rest optional. Picking the per-type rule seeds both counts from the
+  stalls already on the card, and saving one that requires nothing of either type is
+  refused - it would finish every card at its first stamp. The counts are capped at
+  the stamps of that type the card carries, and re-settle when stalls are removed or
+  switched between types, so the number on screen is the one that gets saved.
+- **Type shown wherever a stall is listed**: the rally detail's Stamps table, the
+  stamp log (a sortable, searchable Type column), and the participant's Stalls list.
+  The detail also states in one line what finishes a card.
+- **Per-type progress on the participant's card** - "1 of 3 food stamps - 0 of 3
+  game stamps collected" - instead of a single count against the whole card, when
+  the rally asks for counts. Only the types the rally actually requires are listed,
+  and each tally stops at what it asks for (visiting 2 of 5 food stalls on a card
+  that needs 1 reads "1 of 1", not "2 of 1").
+- **A notice when a card can no longer be finished.** If the stalls a per-type
+  requirement still needs have closed for good, the card says so rather than leaving
+  the participant guessing at passwords - staff can still see everything they
+  collected.
+
+#### Changed
+
+- **A complete card can keep collecting** when the rally counts types and stalls it
+  didn't need are still open. Completion is no longer necessarily the end of the
+  card, so the password field stays (with a note), rather than locking a
+  participant out of a stall they can still visit.
+
 ### [3.20.0] - 2026-08-24
 
 Duplicating an event, and closing a raffle that never had a winner. Requires
@@ -1261,6 +1299,44 @@ First tracked release - establishes versioning for the current production build.
 
 ## Backend
 
+### [3.18.0] - 2026-08-24
+
+Stamp rally stamps have a type, and a rally can complete on a count of each. Paired
+with frontend 3.21.0.
+
+#### Added
+
+- **`stamp_rally_stamps.stamp_type`** (schema v60): `food` or `game`. Existing rows,
+  and any client that omits the field, read as `food` - which is what every stamp on
+  every past rally was. `stamp_rally_collected.stamp_type` snapshots it alongside the
+  participant and stall names, so the log still says which kind of stall a stamp came
+  from after that stamp is deleted.
+- **`stamp_rallies.completion_mode` + `required_food` / `required_game`** (schema
+  v60). `all` (the default, and every rally that predates this) completes a card
+  when every stamp is collected or permanently expired; `counts` completes it at
+  RequiredFood food stamps and RequiredGame game stamps, leaving the rest of the
+  card optional. Requirements are clamped on save to the stamps of that type the
+  rally carries, and a `counts` rally that requires nothing of either type is
+  rejected with a 400 (it would finish every card at its first stamp, and 0/0 is
+  where the admin form's mode starts). The clamp bounds what can be *asked for* - it
+  can't keep a requirement reachable, since pausing a stall or letting its window
+  end takes stamps out of play afterwards.
+- **The public card carries the rule** (`completion_mode`, `required_food`,
+  `required_game` on the rally, `stamp_type` on each stamp), so a participant sees
+  progress measured the same way the server measures completion.
+- **`expired` on each public stamp** - the stall can never be collected again (its
+  window ended, or the event did), as opposed to merely closed right now. The card
+  needs the difference to tell a participant when a per-type requirement has gone
+  out of reach; a paused stall may still reopen.
+
+#### Changed
+
+- **Expiry does not complete a `counts` card.** In `all` mode a stamp that can never
+  be collected again stops blocking completion - that is how a card finishes when a
+  stall closes early. Under a per-type requirement the same rule would hand a
+  completed card to someone who ran out of time two stamps short, so a `counts` card
+  completes only by actually meeting its counts.
+
 ### [3.17.0] - 2026-08-24
 
 A raffle can be closed without a winner. Paired with frontend 3.20.0.
@@ -2252,6 +2328,19 @@ with a personal access token and is distributed through a Dalamud custom repo
 (`plugins/pluginmaster.json`). Versions use the four-part AssemblyVersion in
 `SenpanCompanion.csproj`. Entries below the current release were reconstructed
 from the `<Version>` history and commit messages.
+
+### [3.5.0.0] - 2026-08-24
+
+Follows the stamp rally's split into food and game stamps (backend 3.18.0).
+
+#### Added
+
+- **A Type column on the Stalls table and the collected-stamp log**, reading Food or
+  Game. A stall the server sends without a type reads as Food, matching every stall
+  that existed before types.
+- **What finishes a card, on the rally header** - every stamp, or the required food
+  + game counts - so an operator answering "am I done?" at a stall doesn't have to
+  open the website to find out. The stall summary also splits into food and game.
 
 ### [3.4.1.0] - 2026-08-23
 

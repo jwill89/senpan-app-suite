@@ -341,11 +341,13 @@ public sealed class GaraponPlayerResponse
 
 // -- Stamp Rally --------------------------------------------------------------
 
-// One collectable stamp (a "stall"). AffiliateName "" renders as "Senpan Tea House".
+// One collectable stamp (a "stall"). AffiliateName "" renders as "Senpan Tea House";
+// StampType is "food" or "game" (anything else, including "", reads as food).
 public sealed class StampRallyStamp
 {
     public long Id { get; set; }
     public string AffiliateName { get; set; } = string.Empty;
+    public string StampType { get; set; } = string.Empty;
     public bool Paused { get; set; }
     public int SortOrder { get; set; }
 }
@@ -355,6 +357,10 @@ public sealed class StampRally
     public long Id { get; set; }
     public string Title { get; set; } = string.Empty;
     public string Status { get; set; } = string.Empty;
+    // "all" = collect every stamp; "counts" = RequiredFood + RequiredGame of each type.
+    public string CompletionMode { get; set; } = string.Empty;
+    public int RequiredFood { get; set; }
+    public int RequiredGame { get; set; }
     public int CardCount { get; set; }
     public int CompletedCount { get; set; }
     public int StampCount { get; set; }
@@ -379,6 +385,7 @@ public sealed class StampRallyLogEntry
     public string ParticipantName { get; set; } = string.Empty;
     public long StampId { get; set; }
     public string StallName { get; set; } = string.Empty;
+    public string StampType { get; set; } = string.Empty;
     public string StampedAt { get; set; } = string.Empty;
 }
 

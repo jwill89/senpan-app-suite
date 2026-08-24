@@ -17,8 +17,10 @@ func makeRally(t *testing.T, s *store.Store, title string) *model.StampRally {
 		CardImage:       "images/stamp_cards/card.png",
 		NotStampedImage: "images/stamp_stamps/blank.png",
 		Stamps: []model.StampRallyStamp{
-			{Image: "images/stamp_stamps/a.png", Password: "alpha", Placement: model.Placement{X: 10, Y: 10, Width: 15, Height: 15}},
-			{Image: "images/stamp_stamps/b.png", Password: "bravo", Placement: model.Placement{X: 50, Y: 50, Width: 15, Height: 15, Rotation: 30}},
+			{Image: "images/stamp_stamps/a.png", Password: "alpha", StampType: model.StampTypeFood,
+				Placement: model.Placement{X: 10, Y: 10, Width: 15, Height: 15}},
+			{Image: "images/stamp_stamps/b.png", Password: "bravo", StampType: model.StampTypeGame,
+				Placement: model.Placement{X: 50, Y: 50, Width: 15, Height: 15, Rotation: 30}},
 		},
 		Prizes: []model.StampRallyPrize{
 			{Name: "Trophy", Image: "images/stamp_prizes/t.png", Placement: model.Placement{X: 70, Y: 20, Width: 20, Height: 20}},
@@ -48,6 +50,34 @@ func TestStampRally_CreateGet(t *testing.T) {
 	if r.Stamps[0].Password != "alpha" {
 		t.Errorf("stamp password = %q; want alpha", r.Stamps[0].Password)
 	}
+	if r.Stamps[0].StampType != model.StampTypeFood || r.Stamps[1].StampType != model.StampTypeGame {
+		t.Errorf("stamp types = %q/%q; want food/game", r.Stamps[0].StampType, r.Stamps[1].StampType)
+	}
+	// A rally that says nothing about completion requires the whole card.
+	if r.CompletionMode != model.RallyCompletionAll {
+		t.Errorf("completion mode = %q; want %q", r.CompletionMode, model.RallyCompletionAll)
+	}
+}
+
+// TestStampRally_CompletionCounts covers the per-type completion requirement
+// round-tripping through create + update (the rule itself is server-side).
+func TestStampRally_CompletionCounts(t *testing.T) {
+	s := newTestStore(t)
+	r := makeRally(t, s, "Rally")
+
+	r.CompletionMode = model.RallyCompletionCounts
+	r.RequiredFood = 1
+	r.RequiredGame = 1
+	if err := s.UpdateStampRally(r); err != nil {
+		t.Fatalf("UpdateStampRally: %v", err)
+	}
+	got, err := s.GetStampRally(r.ID)
+	if err != nil || got == nil {
+		t.Fatalf("GetStampRally: got=%v err=%v", got, err)
+	}
+	if got.CompletionMode != model.RallyCompletionCounts || got.RequiredFood != 1 || got.RequiredGame != 1 {
+		t.Errorf("completion = %q %d/%d; want counts 1/1", got.CompletionMode, got.RequiredFood, got.RequiredGame)
+	}
 }
 
 func TestStampRally_UpdateKeepsCollections(t *testing.T) {
@@ -59,7 +89,7 @@ func TestStampRally_UpdateKeepsCollections(t *testing.T) {
 	if err != nil {
 		t.Fatalf("IssueRallyCard: %v", err)
 	}
-	if _, err := s.CollectStamp(r.ID, card.ID, stamp1.ID, "Tataru", "Senpan Tea House"); err != nil {
+	if _, err := s.CollectStamp(r.ID, card.ID, stamp1.ID, "Tataru", "Senpan Tea House", model.StampTypeFood); err != nil {
 		t.Fatalf("CollectStamp: %v", err)
 	}
 
@@ -147,10 +177,10 @@ func TestStampRally_CollectUniqueGuard(t *testing.T) {
 	r := makeRally(t, s, "Rally")
 	card, _ := s.IssueRallyCard(r.ID, "Solo")
 
-	if _, err := s.CollectStamp(r.ID, card.ID, r.Stamps[0].ID, "Solo", "Senpan Tea House"); err != nil {
+	if _, err := s.CollectStamp(r.ID, card.ID, r.Stamps[0].ID, "Solo", "Senpan Tea House", model.StampTypeFood); err != nil {
 		t.Fatalf("first collect: %v", err)
 	}
-	_, err := s.CollectStamp(r.ID, card.ID, r.Stamps[0].ID, "Solo", "Senpan Tea House")
+	_, err := s.CollectStamp(r.ID, card.ID, r.Stamps[0].ID, "Solo", "Senpan Tea House", model.StampTypeFood)
 	if !errors.Is(err, store.ErrStampAlreadyCollected) {
 		t.Errorf("second collect err = %v; want ErrStampAlreadyCollected", err)
 	}
@@ -161,8 +191,8 @@ func TestStampRally_LogsAndDelete(t *testing.T) {
 	r := makeRally(t, s, "Rally")
 	c1, _ := s.IssueRallyCard(r.ID, "Aria")
 	c2, _ := s.IssueRallyCard(r.ID, "Borin")
-	_, _ = s.CollectStamp(r.ID, c1.ID, r.Stamps[0].ID, "Aria", "Senpan Tea House")
-	_, _ = s.CollectStamp(r.ID, c2.ID, r.Stamps[1].ID, "Borin", "Senpan Tea House")
+	_, _ = s.CollectStamp(r.ID, c1.ID, r.Stamps[0].ID, "Aria", "Senpan Tea House", model.StampTypeFood)
+	_, _ = s.CollectStamp(r.ID, c2.ID, r.Stamps[1].ID, "Borin", "Senpan Tea House", model.StampTypeGame)
 
 	logs, err := s.ListRallyCollections(r.ID)
 	if err != nil {
@@ -171,9 +201,13 @@ func TestStampRally_LogsAndDelete(t *testing.T) {
 	if len(logs) != 2 {
 		t.Fatalf("logs = %d; want 2", len(logs))
 	}
-	// No affiliate -> the default stall name.
+	// No affiliate -> the default stall name. The type is snapshotted alongside it,
+	// so the log still reads correctly after its stamp is gone.
 	if logs[0].StallName != "Senpan Tea House" {
 		t.Errorf("stall = %q; want Senpan Tea House", logs[0].StallName)
+	}
+	if logs[0].StampType != model.StampTypeFood || logs[1].StampType != model.StampTypeGame {
+		t.Errorf("log types = %q/%q; want food/game", logs[0].StampType, logs[1].StampType)
 	}
 
 	// Delete cascades cards + collections.

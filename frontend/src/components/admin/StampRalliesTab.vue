@@ -29,7 +29,7 @@ import StampRallyFormTab from './StampRallyFormTab.vue'
 import { useStampRalliesStore } from '@/stores/stampRallies'
 import { assetUrl } from '@/lib/assets'
 import { formatServerTimestamp } from '@/lib/datetime'
-import { stallName } from '@/lib/stampcard'
+import { stallName, stampTypeShort } from '@/lib/stampcard'
 import type { StampRally, StampRallyLogEntry } from '@/types/api'
 
 const store = useStampRalliesStore()
@@ -56,6 +56,16 @@ const closedSearch = ref('')
 const closedPage = ref(1)
 const closedView = ref<DataTableView>({ total: 0, totalPages: 1, facets: {} })
 const closedMatches = (r: StampRally, q: string): boolean => r.title.toLowerCase().includes(q)
+
+/** One-line summary of what completes a card on the selected rally. */
+const completionText = computed(() => {
+  const r = store.selectedRally
+  if (!r) return ''
+  if (r.completion_mode !== 'counts') return 'A card completes when every stamp is collected.'
+  return `A card completes at ${r.required_food} food stamp${
+    r.required_food === 1 ? '' : 's'
+  } and ${r.required_game} game stamp${r.required_game === 1 ? '' : 's'}.`
+})
 
 const isClosed = computed(() => store.selectedRally?.status === 'closed')
 function toggleClosed(): void {
@@ -95,13 +105,16 @@ const previewItems = computed<CanvasItem[]>(() => {
 const logColumns: DataColumn[] = [
   { key: 'participant_name', label: 'Participant', sortable: true },
   { key: 'stall_name', label: 'Stall / Vendor', sortable: true },
+  { key: 'stamp_type', label: 'Type', sortable: true },
   { key: 'stamped_at', label: 'When', sortable: true, align: 'right' },
 ]
 // The table keeps each participant's rows together via `group-by`, which is a
 // primary sort key - so a column sort still orders rows WITHIN a participant.
 const logSearch = ref('')
 const logMatches = (e: StampRallyLogEntry, q: string): boolean =>
-  e.participant_name.toLowerCase().includes(q) || e.stall_name.toLowerCase().includes(q)
+  e.participant_name.toLowerCase().includes(q) ||
+  e.stall_name.toLowerCase().includes(q) ||
+  stampTypeShort(e.stamp_type).toLowerCase().includes(q)
 
 const logView = ref<DataTableView>({ total: 0, totalPages: 1, facets: {} })
 const logTableRef = ref<{ exportCsv: (name?: string) => void } | null>(null)
@@ -212,6 +225,10 @@ async function deleteSelected(): Promise<void> {
 
         <!-- Stamps -->
         <h3 class="section-heading"><font-awesome-icon :icon="['fad', 'stamp']" /> Stamps</h3>
+        <p class="text-muted text-sm mb-8">
+          <font-awesome-icon :icon="['fad', 'circle-check']" />
+          {{ completionText }}
+        </p>
         <div
           v-if="store.selectedRally.stamps && store.selectedRally.stamps.length"
           class="rally-table-wrap mb-16"
@@ -220,6 +237,7 @@ async function deleteSelected(): Promise<void> {
             <thead>
               <tr>
                 <th>Stall</th>
+                <th>Type</th>
                 <th>Password</th>
                 <th class="ta-center">Status</th>
                 <th class="ta-right"></th>
@@ -228,6 +246,9 @@ async function deleteSelected(): Promise<void> {
             <tbody>
               <tr v-for="s in store.selectedRally.stamps" :key="s.id">
                 <td>{{ stallName(s.affiliate_name) }}</td>
+                <td>
+                  <span class="badge badge--muted">{{ stampTypeShort(s.stamp_type) }}</span>
+                </td>
                 <td>
                   <code>{{ s.password || '-' }}</code>
                 </td>
@@ -386,6 +407,11 @@ async function deleteSelected(): Promise<void> {
           resizable
           @update:view="logView = $event"
         >
+          <template #cell-stamp_type="{ row }">
+            <span class="badge badge--muted">{{
+              stampTypeShort((row as StampRallyLogEntry).stamp_type)
+            }}</span>
+          </template>
           <template #cell-stamped_at="{ row }">
             <span class="text-sm text-muted">{{
               when((row as StampRallyLogEntry).stamped_at)

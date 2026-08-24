@@ -98,12 +98,53 @@ func stampExpired(r *model.StampRally, st *model.StampRallyStamp, now time.Time)
 	return false
 }
 
-// rallyCardComplete reports whether a card is complete: every stamp is either
-// collected or permanently expired, and the participant collected at least one.
-// A merely-paused stamp still within its window keeps the card incomplete.
+// requiresCounts reports whether a rally's completion is measured per type: the
+// "counts" mode AND at least one type actually required (see rallyCardComplete).
+func requiresCounts(r *model.StampRally) bool {
+	return model.NormalizeRallyCompletion(r.CompletionMode) == model.RallyCompletionCounts &&
+		(r.RequiredFood > 0 || r.RequiredGame > 0)
+}
+
+// collectedByType tallies a card's collected stamps by type. Ids are resolved
+// against the rally's CURRENT stamps, so a stamp that has since been deleted
+// counts for nothing (ListCollectedStampIDs already drops its detached log row).
+func collectedByType(stamps []model.StampRallyStamp, collected map[int64]string) (food, game int) {
+	for i := range stamps {
+		if _, ok := collected[stamps[i].ID]; !ok {
+			continue
+		}
+		if model.NormalizeStampType(stamps[i].StampType) == model.StampTypeGame {
+			game++
+		} else {
+			food++
+		}
+	}
+	return food, game
+}
+
+// rallyCardComplete reports whether a card is complete.
+//
+// In "counts" mode that is purely the per-type tallies: the required number of
+// food stamps and of game stamps, with the rest of the card optional. Expiry does
+// NOT finish such a card - a participant who ran out of time short of the
+// requirement simply didn't complete it.
+//
+// In "all" mode (the default, and every rally that predates completion modes)
+// every stamp must be either collected or permanently expired, and the
+// participant must have collected at least one. A merely-paused stamp still
+// within its window keeps the card incomplete.
+//
+// A "counts" rally that requires nothing of either type falls back to the "all"
+// rule: taken literally it would finish every card at the first stamp collected
+// (and reveal its prizes). Saving one is rejected - see completionRuleError - so
+// this only guards a row written before that check, or by hand.
 func rallyCardComplete(r *model.StampRally, stamps []model.StampRallyStamp, collected map[int64]string, now time.Time) bool {
 	if len(collected) == 0 {
 		return false
+	}
+	if requiresCounts(r) {
+		food, game := collectedByType(stamps, collected)
+		return food >= r.RequiredFood && game >= r.RequiredGame
 	}
 	for i := range stamps {
 		st := &stamps[i]
@@ -133,6 +174,8 @@ func buildPublicCard(r *model.StampRally, card *model.StampRallyCard, stamps []m
 			ID: r.ID, Title: r.Title, CardImage: r.CardImage, NotStampedImage: r.NotStampedImage,
 			Details: r.Details, RedeemInstructions: r.RedeemInstructions, RedeemImage: r.RedeemImage,
 			AvailableFrom: r.AvailableFrom, AvailableTo: r.AvailableTo, IsActive: rallyOpen(r, now),
+			CompletionMode: model.NormalizeRallyCompletion(r.CompletionMode),
+			RequiredFood:   r.RequiredFood, RequiredGame: r.RequiredGame,
 		},
 		ParticipantName: card.ParticipantName,
 		Completed:       card.Completed,
@@ -145,9 +188,11 @@ func buildPublicCard(r *model.StampRally, card *model.StampRallyCard, stamps []m
 		st := &stamps[i]
 		at, got := collected[st.ID]
 		pc.Stamps = append(pc.Stamps, model.PublicStamp{
-			ID: st.ID, AffiliateName: st.AffiliateName, Image: st.Image, Placement: st.Placement,
+			ID: st.ID, AffiliateName: st.AffiliateName, StampType: model.NormalizeStampType(st.StampType),
+			Image: st.Image, Placement: st.Placement,
 			ActiveFrom: st.ActiveFrom, ActiveTo: st.ActiveTo,
-			Available: stampAvailable(r, st, now), Collected: got, CollectedAt: at,
+			Available: stampAvailable(r, st, now), Expired: stampExpired(r, st, now),
+			Collected: got, CollectedAt: at,
 		})
 	}
 	for i := range prizes {
@@ -247,18 +292,55 @@ type stampRallyWriteRequest struct {
 	RedeemInstructions string                  `json:"redeem_instructions"`
 	RedeemImage        string                  `json:"redeem_image"`
 	PublicSignup       bool                    `json:"public_signup"`
+	CompletionMode     string                  `json:"completion_mode"`
+	RequiredFood       int                     `json:"required_food"`
+	RequiredGame       int                     `json:"required_game"`
 	Stamps             []model.StampRallyStamp `json:"stamps"`
 	Prizes             []model.StampRallyPrize `json:"prizes"`
+}
+
+// completionRuleError returns the message to reject a rally whose completion rule
+// can't mean what it says, or "" when the rule is usable. A "counts" rally that
+// requires nothing of either type would finish every card at the first stamp
+// collected and reveal its prizes - and 0/0 is exactly the state the admin form
+// starts in when the mode is first picked, so it has to be refused rather than
+// stored and quietly reinterpreted.
+func completionRuleError(r *model.StampRally) string {
+	if r.CompletionMode == model.RallyCompletionCounts && r.RequiredFood == 0 && r.RequiredGame == 0 {
+		return "Set how many food or game stamps a card needs, or switch completion back to every stamp."
+	}
+	return ""
+}
+
+// clampRequired constrains a per-type stamp requirement to the stamps of that type
+// the rally carries: never negative, never more than exist. It bounds what can be
+// asked for; it can't promise the requirement stays reachable, since pausing a
+// stall or letting its window end takes stamps out of play afterwards.
+func clampRequired(want, available int) int {
+	if want < 0 {
+		return 0
+	}
+	if want > available {
+		return available
+	}
+	return want
 }
 
 // rallyFromRequest builds a sanitized model.StampRally (sans ID) from a request.
 func rallyFromRequest(req stampRallyWriteRequest, title string) *model.StampRally {
 	stamps := make([]model.StampRallyStamp, 0, len(req.Stamps))
+	foodStamps, gameStamps := 0, 0
 	for _, st := range req.Stamps {
 		st.Image = strings.TrimSpace(st.Image)
 		st.Password = strings.TrimSpace(st.Password)
 		st.AffiliateName = ""
+		st.StampType = model.NormalizeStampType(st.StampType)
 		st.Placement = sanitizePlacement(st.Placement)
+		if st.StampType == model.StampTypeGame {
+			gameStamps++
+		} else {
+			foodStamps++
+		}
 		stamps = append(stamps, st)
 	}
 	prizes := make([]model.StampRallyPrize, 0, len(req.Prizes))
@@ -278,8 +360,13 @@ func rallyFromRequest(req stampRallyWriteRequest, title string) *model.StampRall
 		RedeemInstructions: req.RedeemInstructions,
 		RedeemImage:        strings.TrimSpace(req.RedeemImage),
 		PublicSignup:       req.PublicSignup,
-		Stamps:             stamps,
-		Prizes:             prizes,
+		CompletionMode:     model.NormalizeRallyCompletion(req.CompletionMode),
+		// Kept (clamped) whatever the mode, so switching back to "counts" doesn't
+		// lose the numbers the admin already set.
+		RequiredFood: clampRequired(req.RequiredFood, foodStamps),
+		RequiredGame: clampRequired(req.RequiredGame, gameStamps),
+		Stamps:       stamps,
+		Prizes:       prizes,
 	}
 }
 
@@ -303,6 +390,10 @@ func (s *Server) handleStampRallyCreate(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	rally := rallyFromRequest(req, title)
+	if msg := completionRuleError(rally); msg != "" {
+		writeError(w, http.StatusBadRequest, msg)
+		return
+	}
 	id, err := s.store.CreateStampRally(rally)
 	if err != nil {
 		writeInternalError(w, "create stamp rally", err)
@@ -339,6 +430,10 @@ func (s *Server) handleStampRallyUpdate(w http.ResponseWriter, r *http.Request) 
 	}
 	rally := rallyFromRequest(req, title)
 	rally.ID = id
+	if msg := completionRuleError(rally); msg != "" {
+		writeError(w, http.StatusBadRequest, msg)
+		return
+	}
 	if err := s.store.UpdateStampRally(rally); err != nil {
 		writeInternalError(w, "update stamp rally", err)
 		return
@@ -650,7 +745,8 @@ func (s *Server) handleStampCardStamp(w http.ResponseWriter, r *http.Request) {
 	if stall == "" {
 		stall = "Senpan Tea House"
 	}
-	if _, err := s.store.CollectStamp(card.RallyID, card.ID, match.ID, card.ParticipantName, stall); err != nil {
+	if _, err := s.store.CollectStamp(card.RallyID, card.ID, match.ID, card.ParticipantName, stall,
+		model.NormalizeStampType(match.StampType)); err != nil {
 		if errors.Is(err, store.ErrStampAlreadyCollected) {
 			writeError(w, http.StatusConflict, "You've already collected this stamp")
 			return

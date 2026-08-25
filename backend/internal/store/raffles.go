@@ -16,11 +16,12 @@ var ErrRaffleEntryLimit = errors.New("raffle entry limit exceeded")
 
 // CreateRaffle inserts a new raffle and returns its ID.
 func (s *Store) CreateRaffle(r *model.Raffle) (int64, error) {
-	res, err := s.db.Exec(`INSERT INTO raffles (title, description, rules, max_entries, signup_instructions, entry_mode, cost_per_entry, tier_costs, available_from, available_to, prize_image, pay_image, status)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+	res, err := s.db.Exec(`INSERT INTO raffles (title, description, rules, max_entries, signup_instructions, entry_mode, cost_per_entry, tier_costs, available_from, available_to, prize_image, pay_image, status, festival_map_id, occupant_id)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		r.Title, r.Description, r.Rules, r.MaxEntries, r.SignupInstructions,
 		r.Mode(), r.CostPerEntry, encodeTierCosts(r.TierCosts),
 		r.AvailableFrom, r.AvailableTo, r.PrizeImage, r.PayImage, "open",
+		nullableID(r.FestivalMapID), nullableID(r.OccupantID),
 	)
 	if err != nil {
 		return 0, err
@@ -30,10 +31,11 @@ func (s *Store) CreateRaffle(r *model.Raffle) (int64, error) {
 
 // UpdateRaffle updates an existing raffle's editable fields.
 func (s *Store) UpdateRaffle(r *model.Raffle) error {
-	_, err := s.db.Exec(`UPDATE raffles SET title=?, description=?, rules=?, max_entries=?, signup_instructions=?, entry_mode=?, cost_per_entry=?, tier_costs=?, available_from=?, available_to=?, prize_image=?, pay_image=? WHERE id=?`,
+	_, err := s.db.Exec(`UPDATE raffles SET title=?, description=?, rules=?, max_entries=?, signup_instructions=?, entry_mode=?, cost_per_entry=?, tier_costs=?, available_from=?, available_to=?, prize_image=?, pay_image=?, festival_map_id=?, occupant_id=? WHERE id=?`,
 		r.Title, r.Description, r.Rules, r.MaxEntries, r.SignupInstructions,
 		r.Mode(), r.CostPerEntry, encodeTierCosts(r.TierCosts),
-		r.AvailableFrom, r.AvailableTo, r.PrizeImage, r.PayImage, r.ID,
+		r.AvailableFrom, r.AvailableTo, r.PrizeImage, r.PayImage,
+		nullableID(r.FestivalMapID), nullableID(r.OccupantID), r.ID,
 	)
 	return err
 }
@@ -50,7 +52,19 @@ func (s *Store) DeleteRaffle(id int64) (bool, error) {
 
 // raffleColumns is the shared SELECT list for the base raffles row, matching the
 // scan order in scanRaffle. (listRafflesAdmin appends its own aggregate columns.)
-const raffleColumns = "id, title, description, rules, max_entries, signup_instructions, entry_mode, cost_per_entry, tier_costs, available_from, available_to, prize_image, pay_image, status, winner_entry_id, created_at"
+// It is written against raffleFrom's aliases, so the two are always used together.
+const raffleColumns = `r.id, r.title, r.description, r.rules, r.max_entries, r.signup_instructions,
+	r.entry_mode, r.cost_per_entry, r.tier_costs, r.available_from, r.available_to, r.prize_image,
+	r.pay_image, r.status, r.winner_entry_id,
+	r.festival_map_id, COALESCE(fm.title, ''), r.occupant_id, COALESCE(fo.title, ''), r.created_at`
+
+// raffleFrom is the FROM clause raffleColumns is written against: the raffle plus
+// the two optional festival joins - the map it is filed under, and the stall
+// occupant it is assigned to. Both are LEFT joins; most raffles belong to no
+// festival and both columns are NULL.
+const raffleFrom = `FROM raffles r
+	LEFT JOIN festival_maps fm ON fm.id = r.festival_map_id
+	LEFT JOIN festival_stall_occupants fo ON fo.id = r.occupant_id`
 
 // encodeTierCosts / decodeTierCosts persist the "custom" mode's per-ticket price
 // ladder in the tier_costs TEXT column, via the shared JSON-array codecs
@@ -63,11 +77,12 @@ func decodeTierCosts(raw string) []float64   { return decodeJSONArray[float64](r
 // GetRaffle and the public ListRaffles so the column order lives in one place.
 func scanRaffle(sc rowScanner) (model.Raffle, error) {
 	var r model.Raffle
-	var winnerID sql.NullInt64
+	var winnerID, mapID, occupantID sql.NullInt64
 	var tierJSON string
 	if err := sc.Scan(&r.ID, &r.Title, &r.Description, &r.Rules, &r.MaxEntries, &r.SignupInstructions,
 		&r.EntryMode, &r.CostPerEntry, &tierJSON, &r.AvailableFrom, &r.AvailableTo, &r.PrizeImage,
-		&r.PayImage, &r.Status, &winnerID, &r.CreatedAt); err != nil {
+		&r.PayImage, &r.Status, &winnerID,
+		&mapID, &r.FestivalMapName, &occupantID, &r.StallName, &r.CreatedAt); err != nil {
 		return r, err
 	}
 	r.EntryMode = model.NormalizeRaffleMode(r.EntryMode)
@@ -75,12 +90,20 @@ func scanRaffle(sc rowScanner) (model.Raffle, error) {
 	if winnerID.Valid {
 		r.WinnerEntryID = &winnerID.Int64
 	}
+	if mapID.Valid {
+		id := mapID.Int64
+		r.FestivalMapID = &id
+	}
+	if occupantID.Valid {
+		id := occupantID.Int64
+		r.OccupantID = &id
+	}
 	return r, nil
 }
 
 // GetRaffle retrieves a single raffle by ID. Returns nil if not found.
 func (s *Store) GetRaffle(id int64) (*model.Raffle, error) {
-	r, err := scanRaffle(s.db.QueryRow(`SELECT `+raffleColumns+` FROM raffles WHERE id = ?`, id))
+	r, err := scanRaffle(s.db.QueryRow(`SELECT ` + raffleColumns + ` ` + raffleFrom + ` WHERE r.id = ?`, id))
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
 	}
@@ -107,7 +130,11 @@ func (s *Store) ListRaffles(adminMode bool) ([]model.Raffle, error) {
 	// to a UTC timestamp so the comparison against datetime('now') (also UTC)
 	// is timezone-correct - a raffle past its "available to" instant no longer
 	// shows regardless of the admin's timezone.
-	rows, err := s.db.Query(`SELECT ` + raffleColumns + ` FROM raffles WHERE status = 'open' AND (available_from = '' OR datetime(available_from) <= datetime('now')) AND (available_to = '' OR datetime(available_to) >= datetime('now')) ORDER BY created_at DESC`)
+	rows, err := s.db.Query(`SELECT ` + raffleColumns + ` ` + raffleFrom + `
+		WHERE r.status = 'open'
+		  AND (r.available_from = '' OR datetime(r.available_from) <= datetime('now'))
+		  AND (r.available_to = '' OR datetime(r.available_to) >= datetime('now'))
+		ORDER BY r.created_at DESC`)
 	if err != nil {
 		return nil, err
 	}
@@ -135,7 +162,7 @@ func (s *Store) ListRaffles(adminMode bool) ([]model.Raffle, error) {
 // which knows each mode's rule. That is three small queries over an admin-only
 // list rather than one, and it keeps the pricing rule in exactly one place.
 func (s *Store) listRafflesAdmin() ([]model.Raffle, error) {
-	rows, err := s.db.Query(`SELECT ` + raffleColumns + ` FROM raffles ORDER BY created_at DESC`)
+	rows, err := s.db.Query(`SELECT ` + raffleColumns + ` ` + raffleFrom + ` ORDER BY r.created_at DESC`)
 	if err != nil {
 		return nil, err
 	}

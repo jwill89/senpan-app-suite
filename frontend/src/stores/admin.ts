@@ -15,6 +15,7 @@ import { useAffiliatesStore } from './affiliates'
 import { useTeaRoomsStore } from './teaRooms'
 import { useGaraponsStore } from './garapons'
 import { useStampRalliesStore } from './stampRallies'
+import { useFestivalMapsStore } from './festivalMaps'
 import { useBookclubStore } from './bookclub'
 import { useStylesStore } from './styles'
 import { useAppStore } from './app'
@@ -44,6 +45,7 @@ export type AdminTab =
   | 'teahouse-tea-rooms'
   | 'teahouse-raffles'
   | BookClubTab
+  | 'festival-map'
   | 'festival-garapon'
   | 'festival-stamp-rally'
   | 'atelier-fonts'
@@ -98,6 +100,7 @@ export const useAdminStore = defineStore('admin', () => {
     const teaRooms = useTeaRoomsStore()
     const garapons = useGaraponsStore()
     const stampRallies = useStampRalliesStore()
+    const festivalMaps = useFestivalMapsStore()
     const bookclub = useBookclubStore()
     const styles = useStylesStore()
     const app = useAppStore()
@@ -113,6 +116,13 @@ export const useAdminStore = defineStore('admin', () => {
       raffles.selectedRaffle = null
       loadFresh('raffles', () => {
         void raffles.loadRaffles()
+      })
+    }
+    if (tab === 'festival-map') {
+      festivalMaps.selectedMap = null
+      festivalMaps.mapForm = null
+      loadFresh('festival-maps', () => {
+        void festivalMaps.loadMaps()
       })
     }
     if (tab === 'festival-garapon') {
@@ -242,6 +252,13 @@ export const useAdminStore = defineStore('admin', () => {
       case 'tea-rooms':
         apply('tea-rooms', tab === 'teahouse-tea-rooms', () => {
           void useTeaRoomsStore().loadTeaRooms()
+        })
+        break
+      case 'festival-maps':
+        apply('festival-maps', tab === 'festival-map', () => {
+          const fm = useFestivalMapsStore()
+          void fm.loadMaps()
+          if (fm.selectedMap) void fm.loadMapDetail(fm.selectedMap.id)
         })
         break
       case 'stamp-rallies':

@@ -158,6 +158,20 @@ function duplicateSelected(): void {
   store.copyRallyForm(store.selectedRally)
   screen.value = 'form'
 }
+/**
+ * Row action on the closed table: start a new rally from a past one without
+ * opening it first - the same shortcut the closed raffle table offers.
+ *
+ * The row comes from the LIST, which carries no stamps or prizes (they load with
+ * the detail), so a copy seeded straight off it would have an empty card. Fetch
+ * the detail first and copy that.
+ */
+async function copyRally(r: StampRally): Promise<void> {
+  await store.loadRallyDetail(r.id)
+  if (!store.selectedRally) return
+  store.copyRallyForm(store.selectedRally)
+  screen.value = 'form'
+}
 function backToList(): void {
   store.selectedRally = null
   screen.value = 'list'
@@ -588,6 +602,14 @@ async function deleteSelected(): Promise<void> {
                   @click="openRally(row as StampRally)"
                 >
                   <font-awesome-icon :icon="['fas', 'eye']" />
+                </button>
+                <button
+                  class="btn-view btn-sm"
+                  aria-label="Copy to new stamp rally"
+                  title="Copy to new stamp rally"
+                  @click="copyRally(row as StampRally)"
+                >
+                  <font-awesome-icon :icon="['fas', 'copy']" />
                 </button>
                 <button
                   class="btn-danger btn-sm"

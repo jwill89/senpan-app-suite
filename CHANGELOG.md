@@ -42,6 +42,101 @@ The format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## Frontend
 
+### [3.22.0] - 2026-08-24
+
+Festivals have an interactive map. Requires backend 3.19.0.
+
+#### Added
+
+- **Festival Map** - a new page at the top of the admin Festival section, and the
+  public pages that go with it. A map is a titled floor plan: a markdown
+  description, the datetime ranges the festival runs across, and a base image (the
+  bare venue outline - walls, rest areas, the stage). Its publish status is
+  In Progress, Published or Closed, and only a Published map reaches the public.
+- **A visual stall editor.** Stalls are drawn ON TOP of the base image by the app,
+  each a circle or rectangle in its own color with its title rendered inside, so
+  renaming or moving a stall never means re-exporting the artwork. Select a stall
+  and drag it to move, drag the square handle at its bottom-right to resize, or
+  drag the round handle above it to rotate - the same gestures as the stamp-rally
+  card editor - with a Rotation field beside the shape for setting an exact angle
+  (handy for a row of stalls that should all sit at the same one). Positions are
+  saved as a share of the map, so they scale to any screen.
+  A **circle takes its height from its own width** rather than from a percentage
+  of the map box: the plan is almost never square, so equal percentages would draw
+  a squashed oval. Its stored height is left alone, so switching a stall between
+  circle and rectangle and back doesn't lose the rectangle's proportions.
+- **Each stall names what it offers under its title**, the way a printed floor plan
+  does - "SENPAN TEA HOUSE / GAME". A named type captions itself; picking **Other**
+  opens a wording field so the stall can read "Omikuji" or "Art Raffle" instead of
+  the meaningless "Other", and an Other stall left blank simply shows its title
+  alone. The caption follows the stall onto the public map, its detail panel and
+  the admin stall list.
+- **A stall can change hands between days.** A stall on the plan is now a PITCH -
+  where it sits and how it is drawn - holding one or more OCCUPANTS, each with its
+  own affiliate, title, description, offering and dates. Most pitches keep the same
+  business all festival and nothing about them changes; a booth that doesn't gets a
+  second occupant from "Add another day" in its panel, and the plan draws one shape
+  listing both rather than two stalls stacked on the same coordinates.
+- **A day switcher on the public map**, offered whenever the festival runs across
+  more than one date. Picking a day leads with whoever is standing in each pitch
+  that day and pushes the other tenants back; a pitch nobody occupies that day dims
+  out entirely. An occupant that states no dates of its own runs the whole festival
+  and shows on every day. The stall's detail panel filters the same way, so tapping
+  a shared pitch on Day 2 tells you who is actually there.
+- **Raffles can join a festival too.** A raffle can be filed under a Festival Map -
+  the same grouping a stamp rally gets, so a festival's map, rally and raffles hang
+  off one event - and optionally pinned to one stall on it. A pinned raffle appears
+  in that stall's panel on the public plan with a link to it, but only while it is
+  actually enterable: open, and inside its availability window. Close it, or set a
+  window that hasn't opened, and the link simply isn't offered rather than sending
+  a visitor to a page they can't use.
+- **Copy from the closed tables.** Closed Garapons, Stamp Rallies and Festival Maps
+  now carry the same row-level Copy action closed Raffles already had, so last
+  year's event can seed this year's without opening it first.
+- **Rally stamps name an occupant, not a pitch.** A linked rally's Stall / Vendor
+  list now shows each tenant separately - "Flora Teahouse (Day 1)", "The Great
+  Below (Day 2)" - because they are different businesses running different
+  activities and each needs its own stamp. The public map badges the occupant that
+  carries the stamp, not everyone who shares the pitch. Each stall carries what it offers (Game, Food,
+  Food & Game, Other - which seeds its shape and color), the affiliate running it,
+  a markdown description, and its own opening times when they differ from the
+  festival's.
+- **Public interactive map** at `/festival-maps` (the published maps) and
+  `/festival-maps/:id` (one map). Drag to pan, wheel or pinch to zoom - anchored
+  on the cursor, so zooming into a stall keeps that stall under the pointer - plus
+  zoom buttons and a Fit control. Tapping a stall opens its details: what it
+  offers, its hours, whether it is open right now, and the affiliate's card with a
+  link to their site or Discord. A Festival Map card appears on the home page
+  whenever a map is published.
+- **Optional map shortcodes.** A map can carry a shortcode - "obon-2026" - so it
+  links as `/festival-maps/obon-2026` instead of by its numeric id. Set it in the
+  form (spaces and underscores fold into dashes on save, so "Obon 2026" works);
+  leave it empty and nothing changes. The admin's "Copy public link" and the
+  public list both use it once set, and the id URL keeps working either way.
+- **Stamp rally stalls on the map.** A stamp rally can be linked to a festival map
+  in its form; the "Stall / Vendor" select then lists that map's stalls instead of
+  the affiliate list, and picking one takes the stall's affiliate and seeds the
+  stamp type from what the stall offers. On the public map those stalls are ringed
+  and show their stamp art, with a "Highlight <rally> stalls only" toggle that
+  pushes everything else into the background rather than removing it - the plan
+  keeps its shape either way - and a link to the rally's sign-up page when it takes
+  public sign-ups.
+
+#### Changed
+
+- **A duplicate no longer inherits the festival it was run at.** Copying a stamp
+  rally used to keep its `festival_map_id` and each stamp's stall. Those rows still
+  exist, so nothing on the server cleared them - next year's rally quietly filed
+  itself under the finished festival with its stamps naming last year's stalls.
+  Both are cleared now, and a raffle copy drops its festival link the same way,
+  matching the garapon copy that has always dropped its `stamp_rally_id`.
+- **The placement drag geometry is shared** between the stamp-rally card editor and
+  the new map editor (`composables/usePlacementDrag.ts`), rather than living twice.
+  The `.placement-*` styles moved out of `PlacementEditor.vue`'s scoped block into
+  `assets/styles/mapeditor.css` alongside the new map canvas rules, and the
+  `.repeater` / `.repeater-row` objects moved from `AffiliateFormTab.vue` into
+  `utilities.css` now that a second form uses them.
+
 ### [3.21.0] - 2026-08-24
 
 Stamp rally stalls are food stamps or game stamps, and a rally can ask for so many
@@ -1298,6 +1393,91 @@ First tracked release - establishes versioning for the current production build.
 ---
 
 ## Backend
+
+### [3.19.0] - 2026-08-24
+
+Festival maps: floor plans with placed stalls, a publish status, and a public read
+API. Paired with frontend 3.22.0.
+
+#### Added
+
+- **`festival_maps` + `festival_stalls`** (schema v61). A map holds a title,
+  markdown description, its datetime ranges (a JSON array, like `affiliates.hours`),
+  the base image its stalls are placed on, and a `status` of `in_progress`
+  (the default for anything new or unrecognized), `published` or `closed`. A stall
+  holds its affiliate (NULL = the venue itself), title, markdown description,
+  `stall_type`, `shape`, `color`, the same pos/size/rotation placement columns the
+  stamp-rally tables use, and its own datetime ranges.
+- **`GET/POST /api/festival-maps`, `GET/PUT/PATCH/DELETE /api/festival-maps/{id}`**
+  behind a new `festival-map` page permission. Stalls are sent inline and reconciled
+  by id on save, so a stall a stamp rally names survives an edit. Placements are
+  clamped into the map box, an unknown shape/type falls back to `rect`/`other`, and
+  a color that isn't `#rrggbb` is dropped - a stall's color can only ever be a
+  literal the stylesheet can use. `PATCH` sets the publish status and refuses to
+  publish a map with no base image, since the stalls are positioned against it.
+- **`GET /api/festival-maps/public` + `/public/{id}`** - no auth, published maps
+  only. The detail resolves each stall for a visitor: the affiliate card (name,
+  subtitle, owners, logo, Discord/Carrd links - never the webhook or embed color),
+  whether it is open right now, and its stamp-rally badge when an OPEN rally linked
+  to the map places a stamp on it. An unpublished map answers 404 rather than 403,
+  so a draft's existence is never confirmed.
+- **`raffles.festival_map_id` + `raffles.occupant_id`** (schema v65) - the festival
+  a raffle belongs to, and the pitch occupant it is assigned to. Both are FK-less
+  for the same reason as the other festival links (ALTER can't add a foreign key,
+  and createTables builds raffles long before festival_maps), so the store clears
+  them itself: deleting a map releases its raffles, and removing an occupant leaves
+  the raffle filed under the festival while dropping the pitch that no longer
+  exists. `resolveRaffleStall` mirrors the rally's resolver - a raffle naming no map
+  has its stall cleared, and a stall that isn't on the linked map is dropped rather
+  than failing the save.
+- **The public map links a stall's raffle** only when it is RUNNING - open and
+  inside its availability window. That check is the server's, against `time.Now`,
+  not the query's; a closed or not-yet-open raffle is left off the payload entirely.
+- **`festival_stall_occupants`** (schema v64) - a stall is split into the PITCH on
+  the plan (`festival_stalls`: shape, color, placement) and the OCCUPANTS standing
+  in it (affiliate, title, description, offering, times), so a booth that changes
+  hands between days is one shape with two names. Every existing stall migrates to
+  a pitch with exactly one occupant carrying its identity, which is what it always
+  was; ids are preserved through the rebuild. An occupant with neither a title nor
+  an affiliate is dropped on save, and a pitch left with none is dropped with it.
+- **`stamp_rally_stamps.stall_id` is now `occupant_id`** (schema v64). A stamp
+  belongs to whoever runs the pitch on the day, not to the pitch - Flora's game
+  stamp isn't The Great Below's - so the column is renamed AND its values remapped
+  in the same pass. Because each stall becomes exactly one occupant, the remap is
+  unambiguous and no rally loses the stall its stamps name. Removing an occupant
+  clears the stamps that named it (they fall back to their affiliate) rather than
+  deleting them.
+- **`festival_stalls.type_label`** (schema v63) - the caption drawn under a stall's
+  title when its `stall_type` is `other`, so a booth reads "Omikuji" rather than
+  "Other". Stored whatever the type (flipping a stall to a named type and back
+  doesn't lose the wording) but rendered only for `other`, and dropped from the
+  caption entirely when blank. Existing stalls default to `''` and keep captioning
+  themselves from their named type.
+- **`festival_maps.slug`** (schema v62) - the optional shortcode a map can be
+  linked by, behind a PARTIAL unique index (`WHERE slug != ''`, since "no
+  shortcode" is the empty string and every map without one would otherwise
+  collide). `GET /api/festival-maps/public/{id}` resolves the segment as a
+  shortcode FIRST and falls back to a numeric id, so both forms always work and
+  adding or changing a shortcode never breaks a link already posted. What is sent
+  is trimmed, lowercased and has whitespace/underscore runs folded into single
+  dashes before validation; an all-numeric shortcode is a 400 (it would be
+  indistinguishable from an id) and one already held by another map is a 409.
+  Existing maps default to `''` and stay reachable by id.
+- **`stamp_rallies.festival_map_id` + `stamp_rally_stamps.stall_id`** (schema v61).
+  A rally linked to a map names that map's stalls instead of bare affiliates, and
+  each linked stamp takes its affiliate FROM its stall - one source of truth rather
+  than two that can drift. A stall id that isn't on the linked map falls back to the
+  stamp's affiliate rather than failing the save, and an unlinked rally has every
+  stall id cleared. Both link columns are FK-less (ALTER can't add a foreign key),
+  so deleting a map clears them itself: the rally survives with its stamps falling
+  back to their affiliates.
+
+#### Changed
+
+- **A stamp's stall name comes from its map stall when it has one**, then its
+  affiliate, then the venue (`model.StampRallyStamp.DisplayStall`). The public card
+  and the event stamp log both read it from that one place, so a stall named on the
+  plan is logged under the name visitors saw.
 
 ### [3.18.0] - 2026-08-24
 

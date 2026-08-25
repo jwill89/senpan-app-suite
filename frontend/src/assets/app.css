@@ -3,8 +3,8 @@
  *
  * The former monolithic stylesheet is split by domain into ./styles/*, imported
  * here in cascade order: tokens first, then base, utilities, shared components,
- * the player/public views, the admin views, and finally the small-screen
- * overrides. main.ts imports this single file.
+ * the visual map/placement editors, the player/public views, the admin views,
+ * and finally the small-screen overrides. main.ts imports this single file.
  *
  * Theme customisation only overrides the :root design tokens (styles/tokens.css);
  * class names are not a theme API, so these files can be reorganised freely.
@@ -13,6 +13,7 @@
 @import './styles/base.css';
 @import './styles/utilities.css';
 @import './styles/components.css';
+@import './styles/mapeditor.css';
 @import './styles/player.css';
 @import './styles/admin.css';
 @import './styles/responsive.css';

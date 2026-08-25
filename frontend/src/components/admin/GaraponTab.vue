@@ -137,6 +137,21 @@ function duplicateSelected(): void {
   screen.value = 'form'
 }
 
+/**
+ * Row action on the closed table: start a new garapon from a past one without
+ * opening it first - the same shortcut the closed raffle table offers.
+ *
+ * The row comes from the LIST, which carries no prizes (they load with the
+ * detail), so a copy seeded straight off it would have none. Fetch the detail
+ * first and copy that.
+ */
+async function copyGarapon(g: Garapon): Promise<void> {
+  await garapons.loadGaraponDetail(g.id)
+  if (!garapons.selectedGarapon) return
+  garapons.copyGaraponForm(garapons.selectedGarapon)
+  screen.value = 'form'
+}
+
 function editSelected(): void {
   if (!garapons.selectedGarapon) return
   garapons.editGaraponForm(garapons.selectedGarapon)
@@ -543,6 +558,14 @@ function toggleClosed(): void {
                   @click="openGarapon(row)"
                 >
                   <font-awesome-icon :icon="['fas', 'eye']" />
+                </button>
+                <button
+                  class="btn-view btn-sm"
+                  aria-label="Copy to new garapon"
+                  title="Copy to new garapon"
+                  @click="copyGarapon(row)"
+                >
+                  <font-awesome-icon :icon="['fas', 'copy']" />
                 </button>
                 <button
                   class="btn-danger btn-sm"

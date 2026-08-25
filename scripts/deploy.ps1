@@ -6,10 +6,17 @@
 .DESCRIPTION
     -Target frontend (default):
         1. Builds frontend/ (vue-tsc + vite) -> frontend/dist.
-        2. Uploads it to <WebRoot>/dist.new via pscp (one stream; elapsed-time
-           indicator, not per-file output).
-        3. Verifies every file arrived, then swaps it in: live "dist" -> "dist.old"
-           (rollback backup, overwritten each deploy), new build -> "dist".
+        2. Packs dist/ into ONE .tar.gz and uploads that to <WebRoot>/dist.new via
+           pscp (one stream; elapsed-time indicator, not per-file output). SCP
+           negotiates each file separately, so uploading ~180 loose files spends
+           most of its wall clock on round trips rather than payload; one archive
+           also halves the bytes and fails cleanly - a truncated archive refuses to
+           extract, where a half-finished directory copy can look plausible.
+        3. Extracts it on the host, verifies every file arrived, then swaps it in:
+           live "dist" -> "dist.old" (rollback backup, overwritten each deploy),
+           new build -> "dist". Extract/verify/swap share one connection and one
+           `set -e`, so a bad archive never reaches the swap and the live site keeps
+           serving the previous build.
         4. Syncs deploy/.htaccess -> <WebRoot>/.htaccess so Apache header/caching/
            rewrite changes ship with the frontend (non-fatal if it fails). The repo
            copy is the source of truth - edit it there, not on the host.
@@ -36,6 +43,8 @@
     Uses PuTTY's pscp/plink so the DigitalOcean .ppk key works directly. pscp/plink
     run in batch mode, so a passphrase-protected .ppk must be loaded into Pageant
     first:  pageant.exe "<KeyPath>"  (enter the passphrase once per Windows session).
+    The frontend target also needs `tar`, which Windows has shipped since 10 1803
+    (System32/tar.exe); the host needs it too, to extract.
 
     Each target uses at most FOUR SSH connections and does not poll during transfers,
     to stay under `ufw limit ssh` (which drops the IP after 6 connections in 30s).
@@ -236,20 +245,26 @@ function Get-File([string]$remotePath, [string]$localPath) {
     return ($LASTEXITCODE -eq 0)
 }
 
-# One pscp upload of dist/ -> the frontend staging dir, with an elapsed-time
+# One pscp upload of the frontend TARBALL -> the staging dir, with an elapsed-time
 # indicator and no polling. Returns @{ Ok; Err; Elapsed }.
-function Invoke-Upload([int]$FileCount) {
+#
+# A single archive rather than `pscp -r dist`: SCP negotiates each file separately,
+# so a ~180-file bundle spends most of its wall clock on per-file round trips
+# rather than on payload. One stream also fails cleanly - a truncated archive
+# refuses to extract, where a half-finished directory copy can look plausible.
+function Invoke-Upload([string]$ArchivePath, [string]$RemotePath) {
     $outFile = Join-Path $env:TEMP ("pscp-out-{0}.log" -f [guid]::NewGuid())
     $errFile = Join-Path $env:TEMP ("pscp-err-{0}.log" -f [guid]::NewGuid())
+    $sizeKb = [math]::Round((Get-Item $ArchivePath).Length / 1KB)
     $proc = Start-Process -FilePath $pscp -NoNewWindow -PassThru -WorkingDirectory $FrontendDir `
         -RedirectStandardOutput $outFile -RedirectStandardError $errFile `
-        -ArgumentList @('-batch', '-C', '-r', '-i', $KeyPath, 'dist', "${remoteTarget}:$remoteNew")
+        -ArgumentList @('-batch', '-C', '-i', $KeyPath, $ArchivePath, "${remoteTarget}:$RemotePath")
     $sw = [System.Diagnostics.Stopwatch]::StartNew()
     $maxSeconds = 900
     $killed = $false
     while (-not $proc.HasExited) {
         Start-Sleep -Seconds 1
-        Write-Progress -Activity "Uploading frontend" -Status ("{0} files - {1:mm\:ss} elapsed" -f $FileCount, $sw.Elapsed)
+        Write-Progress -Activity "Uploading frontend" -Status ("{0} KB archive - {1:mm\:ss} elapsed" -f $sizeKb, $sw.Elapsed)
         if ($sw.Elapsed.TotalSeconds -gt $maxSeconds) { try { $proc.Kill() } catch {}; $killed = $true; break }
     }
     $proc.WaitForExit()
@@ -289,9 +304,18 @@ function Resolve-PuttyTool($name) {
 $pscp = Resolve-PuttyTool "pscp"
 $plink = Resolve-PuttyTool "plink"
 
+# bsdtar, shipped with Windows since 10 1803 (C:\Windows\System32\tar.exe). Used to
+# pack frontend/dist into one archive for upload - see Invoke-Upload.
+$tar = (Get-Command tar -ErrorAction SilentlyContinue)?.Source
+if (-not $tar) { $tar = "$env:SystemRoot\System32\tar.exe" }
+if (-not (Test-Path $tar)) {
+    Fail "tar not found (expected $env:SystemRoot\System32\tar.exe, shipped with Windows 10 1803+). The frontend deploy packs dist/ into one archive before uploading."
+}
+
 $remoteTarget = "$VpsUser@$VpsHost"
 $remoteLive = "$WebRoot/dist"
 $remoteNew = "$WebRoot/dist.new"
+$remoteArchive = "$remoteNew/dist.tar.gz"
 $remoteOld = "$WebRoot/dist.old"
 $remotePluginDir = "$WebRoot/plugin"
 $remotePluginZipDir = "$remotePluginDir/SenpanCompanionAdmin"
@@ -330,26 +354,50 @@ Could not connect, or $WebRoot does not exist / is not writable.
     }
     Write-Ok "Connected; staging dir ready."
 
-    # 3. Upload (1 connection)
+    # 3. Pack + upload (1 connection)
     $localFileCount = (Get-ChildItem -Recurse -File $DistDir).Count
     if ($localFileCount -eq 0) { Fail "No files in $DistDir to upload." }
-    Write-Step ("Uploading {0} files (single stream)..." -f $localFileCount)
-    $r = Invoke-Upload -FileCount $localFileCount
-    if (-not $r.Ok) {
-        Write-Host "    Upload failed - possibly the SSH rate limit (ufw limit ssh)." -ForegroundColor Yellow
-        Write-Host "    Waiting 35s for the 30s window to clear, then retrying once..." -ForegroundColor Yellow
-        Start-Sleep -Seconds 35
-        $r = Invoke-Upload -FileCount $localFileCount
+
+    $archive = Join-Path $env:TEMP ("senpan-dist-{0}.tar.gz" -f [guid]::NewGuid())
+    Write-Step ("Packing {0} files into one archive..." -f $localFileCount)
+    Push-Location $FrontendDir
+    try {
+        # Paths inside the archive stay rooted at `dist/`, so extracting with
+        # `-C $remoteNew` lands exactly where `pscp -r dist` used to put them.
+        & $tar -czf $archive dist
+        if ($LASTEXITCODE -ne 0) { Fail "Could not pack $DistDir into an archive (tar exit $LASTEXITCODE)." }
     }
+    finally { Pop-Location }
+    $archiveKb = [math]::Round((Get-Item $archive).Length / 1KB)
+    $rawKb = [math]::Round(((Get-ChildItem -Recurse -File $DistDir | Measure-Object Length -Sum).Sum / 1KB))
+    Write-Ok ("Packed {0} KB -> {1} KB." -f $rawKb, $archiveKb)
+
+    try {
+        Write-Step ("Uploading the {0} KB archive (single stream)..." -f $archiveKb)
+        $r = Invoke-Upload -ArchivePath $archive -RemotePath $remoteArchive
+        if (-not $r.Ok) {
+            Write-Host "    Upload failed - possibly the SSH rate limit (ufw limit ssh)." -ForegroundColor Yellow
+            Write-Host "    Waiting 35s for the 30s window to clear, then retrying once..." -ForegroundColor Yellow
+            Start-Sleep -Seconds 35
+            $r = Invoke-Upload -ArchivePath $archive -RemotePath $remoteArchive
+        }
+    }
+    finally { Remove-Item $archive -Force -ErrorAction SilentlyContinue }
     if (-not $r.Ok) { Fail "Upload failed. Live site untouched (still serving the previous build).`n$($r.Err)" }
     Write-Ok ("Upload finished in {0:mm\:ss}." -f $r.Elapsed)
 
-    # 4. Verify + swap (1 connection)
-    Write-Step "Verifying upload and swapping into place..."
+    # 4. Extract + verify + swap (1 connection)
+    #    All three in one command so the connection count is unchanged. `set -e`
+    #    means a truncated archive fails at tar and never reaches the swap, so the
+    #    live site keeps serving the previous build.
+    Write-Step "Extracting, verifying and swapping into place..."
     $swap = @"
 set -e
+tar -xzf '$remoteArchive' -C '$remoteNew'
+rm -f '$remoteArchive'
 cnt=`$(find '$remoteNew/dist' -type f | wc -l)
 if [ "`$cnt" -ne $localFileCount ]; then echo "incomplete upload: `$cnt/$localFileCount files" >&2; exit 3; fi
+chmod -R a+rX '$remoteNew/dist'
 rm -rf '$remoteOld'
 if [ -d '$remoteLive' ]; then mv '$remoteLive' '$remoteOld'; fi
 mv '$remoteNew/dist' '$remoteLive'
@@ -357,7 +405,7 @@ rm -rf '$remoteNew'
 "@
     if ($NoBackup) { $swap += "`nrm -rf '$remoteOld'" }
     if (-not (Invoke-RemoteWithRetry $swap)) {
-        Fail "Verify/swap failed. The previous build may be at $remoteOld - on the host, restore with: mv '$remoteOld' '$remoteLive'"
+        Fail "Extract/verify/swap failed. The previous build may be at $remoteOld - on the host, restore with: mv '$remoteOld' '$remoteLive'"
     }
 
     # 5. Sync the Apache config so header/caching/rewrite changes ship with the

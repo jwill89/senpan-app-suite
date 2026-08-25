@@ -369,12 +369,23 @@ draw/stamp/font links never appear verbatim in the log or the viewer.
 > any that are unset.
 
 **Frontend** (`-Target frontend`, the default): builds `frontend/` (vue-tsc +
-vite), uploads the result to a staging dir on the host (`<DocumentRoot>/dist.new`)
-via PuTTY's `pscp` - so the DigitalOcean `.ppk` key works directly - verifies
-every file arrived, then swaps it in (`dist` -> `dist.old` rollback backup,
-`dist.new` -> `dist`). The build runs first, so a broken build never reaches the
-server; only `dist/` is replaced - `images/` and `.htaccess` are never touched;
-and the single `dist.old` backup is overwritten each deploy (no accumulation).
+vite), packs `dist/` into a single `.tar.gz`, uploads that to a staging dir on the
+host (`<DocumentRoot>/dist.new`) via PuTTY's `pscp` - so the DigitalOcean `.ppk`
+key works directly - then extracts it, verifies every file arrived, and swaps it
+in (`dist` -> `dist.old` rollback backup, `dist.new` -> `dist`). The build runs
+first, so a broken build never reaches the server; only `dist/` is replaced -
+`images/` and `.htaccess` are never touched; and the single `dist.old` backup is
+overwritten each deploy (no accumulation).
+
+The archive is why the upload is one stream rather than ~180: SCP negotiates each
+file separately, so a bundle of small hashed assets spends most of its wall clock
+on per-file round trips rather than on payload, and gzip roughly halves the bytes
+on top of that. It is also safer - a truncated archive refuses to extract, where a
+half-finished directory copy can look plausible to a file count. Extract, verify
+and swap share one connection under `set -e`, so a bad archive never reaches the
+swap and the live site keeps serving the previous build. This needs `tar` at both
+ends: Windows has shipped it since 10 1803 (`System32/tar.exe`), and it is present
+on any normal Linux host.
 
 **Backend** (`-Target backend`): cross-compiles a static `linux/amd64` binary
 (`GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -ldflags="-s -w" -o app-suite .`

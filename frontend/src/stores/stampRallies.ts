@@ -12,6 +12,8 @@ import { computed, ref } from 'vue'
 import { endpoints } from '@/lib/endpoints'
 import type {
   Affiliate,
+  FestivalMap,
+  FestivalStallOccupant,
   Placement,
   PublicStampCard,
   StampRally,
@@ -27,6 +29,7 @@ import type {
   StampLookupEntry,
 } from '@/types/api'
 import { datetimeLocalToUtc, utcToDatetimeLocal } from '@/lib/datetime'
+import { stampTypeForStall } from '@/lib/festivalmap'
 import { withLoading } from '@/lib/withLoading'
 import { useUiStore } from './ui'
 
@@ -38,6 +41,7 @@ function defaultPlacement(): Placement {
 function blankStamp(type: StampType): StampRallyStampForm {
   return {
     id: 0,
+    occupant_id: null,
     affiliate_id: null,
     image: '',
     password: '',
@@ -96,6 +100,15 @@ export const useStampRalliesStore = defineStore('stampRallies', () => {
   const rallyForm = ref<StampRallyForm | null>(null)
   /** Affiliates, for the per-stamp "stall" select (null = Senpan Tea House). */
   const affiliates = ref<Affiliate[]>([])
+  /** Festival maps a rally can be linked to (published or still in progress). */
+  const festivalMaps = ref<FestivalMap[]>([])
+  /**
+   * The linked map's pitch OCCUPANTS - the stall list a linked rally picks from,
+   * flattened across pitches. A pitch that changes hands between days contributes
+   * one entry per occupant, since each is a different business running a
+   * different activity and so needs its own stamp.
+   */
+  const mapStalls = ref<FestivalStallOccupant[]>([])
   /** New-card form state. */
   const cardAdd = ref<{ participantName: string }>({ participantName: '' })
   /** Stamps loaded for an expanded "Manage stalls" panel on a list card, by rally id. */
@@ -205,14 +218,74 @@ export const useStampRalliesStore = defineStore('stampRallies', () => {
     void loadRallyDetail(r.id)
   }
 
-  /** Loads the affiliates list for the form's per-stamp "stall" selects. */
+  /**
+   * Loads what the form's per-stamp "stall" select offers: the affiliates, plus
+   * the festival maps a rally can be linked to. A rally already linked to a map
+   * also loads that map's stalls, which then REPLACE the affiliate list - a
+   * linked rally names stalls, not bare partners.
+   *
+   * A closed map is deliberately still offered: a rally is usually authored
+   * against the map at the same time, and dropping the link the moment the
+   * festival closed would silently strip every stamp's stall.
+   */
   async function loadFormSources(): Promise<void> {
     try {
-      const data = await endpoints.affiliates.list()
-      affiliates.value = data.affiliates
+      affiliates.value = (await endpoints.affiliates.list()).affiliates
     } catch {
       affiliates.value = []
     }
+    try {
+      festivalMaps.value = (await endpoints.festivalMaps.list()).maps
+    } catch {
+      // No festival-map permission (or none exist) - the link select just stays
+      // empty and the rally keeps naming affiliates.
+      festivalMaps.value = []
+    }
+    await loadMapStalls(rallyForm.value?.festival_map_id ?? null)
+  }
+
+  /** Loads a festival map's stalls for the stall select ('' / null clears them). */
+  async function loadMapStalls(mapId: number | null): Promise<void> {
+    if (!mapId) {
+      mapStalls.value = []
+      return
+    }
+    try {
+      const stalls = (await endpoints.festivalMaps.detail(mapId)).map.stalls ?? []
+      mapStalls.value = stalls.flatMap((stall) => stall.occupants)
+    } catch {
+      mapStalls.value = []
+    }
+  }
+
+  /**
+   * Links (or unlinks) the form's rally to a festival map and reloads its stalls.
+   * Switching maps clears every stamp's stall: the ids belong to the map that was
+   * linked before, and the server would drop them on save anyway - better the
+   * admin sees the empty selects now than a silent reset afterwards.
+   */
+  async function setFestivalMap(mapId: number | null): Promise<void> {
+    const f = rallyForm.value
+    if (!f) return
+    if (f.festival_map_id === mapId) return
+    f.festival_map_id = mapId
+    for (const stamp of f.stamps) stamp.occupant_id = null
+    await loadMapStalls(mapId)
+  }
+
+  /**
+   * Points a stamp at one of the linked map's stall OCCUPANTS, taking its
+   * affiliate and seeding the stamp type from what it offers. Both stay editable
+   * afterwards - the occupant is the starting point, not a lock.
+   */
+  function setStampStall(stampIndex: number, occupantId: number | null): void {
+    const stamp = rallyForm.value?.stamps[stampIndex]
+    if (!stamp) return
+    stamp.occupant_id = occupantId
+    const occupant = mapStalls.value.find((o) => o.id === occupantId)
+    if (!occupant) return
+    stamp.affiliate_id = occupant.affiliate_id ?? null
+    stamp.stamp_type = stampTypeForStall(occupant.stall_type)
   }
 
   // -- Admin: form ----------------------------------------------------------
@@ -231,6 +304,7 @@ export const useStampRalliesStore = defineStore('stampRallies', () => {
       completion_mode: 'all',
       required_food: 0,
       required_game: 0,
+      festival_map_id: null,
       stamps: [],
       prizes: [],
     }
@@ -252,8 +326,10 @@ export const useStampRalliesStore = defineStore('stampRallies', () => {
       completion_mode: r.completion_mode === 'counts' ? 'counts' : 'all',
       required_food: r.required_food,
       required_game: r.required_game,
+      festival_map_id: r.festival_map_id ?? null,
       stamps: (r.stamps || []).map((s) => ({
         id: s.id,
+        occupant_id: s.occupant_id ?? null,
         affiliate_id: s.affiliate_id ?? null,
         image: s.image,
         password: s.password ?? '',
@@ -290,8 +366,15 @@ export const useStampRalliesStore = defineStore('stampRallies', () => {
     f.title = `${r.title} (Copy)`
     f.available_from = ''
     f.available_to = ''
+    // The festival link points at the map the ORIGINAL rally ran at, whose stalls
+    // still exist - so nothing on the server would clear it, and next year's rally
+    // would quietly file itself under the finished festival with its stamps
+    // naming last year's stalls. Both go, the same way a garapon copy drops its
+    // stamp_rally_id; pick the festival again on the copy.
+    f.festival_map_id = null
     for (const stamp of f.stamps) {
       stamp.id = 0
+      stamp.occupant_id = null
       stamp.active_from = ''
       stamp.active_to = ''
       stamp.paused = false
@@ -687,6 +770,8 @@ export const useStampRalliesStore = defineStore('stampRallies', () => {
     rallyLogs,
     rallyForm,
     affiliates,
+    festivalMaps,
+    mapStalls,
     cardStamps,
     cardAdd,
     ralliesLoading,
@@ -710,6 +795,8 @@ export const useStampRalliesStore = defineStore('stampRallies', () => {
     loadRallyLogs,
     viewRally,
     loadFormSources,
+    setFestivalMap,
+    setStampStall,
     newRallyForm,
     editRallyForm,
     copyRallyForm,

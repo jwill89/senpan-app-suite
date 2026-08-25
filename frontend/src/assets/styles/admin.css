@@ -906,12 +906,15 @@
   font-size: 0.9rem;
 }
 
-/* Open/Closed status badge on raffle cards - `.badge` object chrome + margin. */
+/* Open/Closed status badge on raffle cards - `.badge` object chrome + margin.
+   The festival map adds two more states: published reads as live (same fill as
+   open) and in-progress as a draft that is deliberately NOT public yet. */
 .status-badge {
   margin-left: 6px;
 }
 
-.status-badge-open {
+.status-badge-open,
+.status-badge-published {
   background: var(--success);
   color: var(--text-on-fill);
 }
@@ -919,6 +922,11 @@
 .status-badge-closed {
   background: var(--danger);
   color: var(--text-on-fill);
+}
+
+.status-badge-in-progress {
+  background: var(--warning);
+  color: var(--text-on-accent);
 }
 
 /* Public raffle entry sign-up form */

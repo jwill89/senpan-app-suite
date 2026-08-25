@@ -1,8 +1,8 @@
 {
-  "total": 2638,
+  "total": 2537,
   "cap": 120,
   "files": {
-    "frontend/src/components/admin/AffiliateFormTab.vue": 34,
+    "frontend/src/components/admin/AffiliateFormTab.vue": 20,
     "frontend/src/components/admin/AffiliatesTab.vue": 1,
     "frontend/src/components/admin/AnnouncementsTab.vue": 55,
     "frontend/src/components/admin/AppVersions.vue": 46,
@@ -17,7 +17,6 @@
     "frontend/src/components/admin/GaraponTab.vue": 19,
     "frontend/src/components/admin/ImagesTab.vue": 50,
     "frontend/src/components/admin/LogsTab.vue": 157,
-    "frontend/src/components/admin/PlacementEditor.vue": 87,
     "frontend/src/components/admin/PresetsTab.vue": 6,
     "frontend/src/components/admin/RafflesTab.vue": 18,
     "frontend/src/components/admin/SettingsTab.vue": 45,

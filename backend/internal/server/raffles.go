@@ -126,6 +126,44 @@ type raffleWriteRequest struct {
 	AvailableTo        string    `json:"available_to"`
 	PrizeImage         string    `json:"prize_image"`
 	PayImage           string    `json:"pay_image"`
+	FestivalMapID      *int64    `json:"festival_map_id"` // optional Festival Map the raffle belongs to
+	OccupantID         *int64    `json:"occupant_id"`     // optional stall on that map
+}
+
+// resolveRaffleStall settles a raffle's Festival Map link and its assigned stall
+// against what actually exists, writing the error response itself and returning
+// false when the link can't be honored.
+//
+// Mirrors the stamp rally's resolveMapStalls: a raffle that names no map has its
+// stall cleared (naming one would claim a festival link it doesn't have), and a
+// stall that isn't on the linked map is dropped rather than failing the save -
+// the raffle is still a perfectly good raffle, it just isn't pinned to a pitch.
+func (s *Server) resolveRaffleStall(w http.ResponseWriter, raffle *model.Raffle) bool {
+	if raffle.FestivalMapID == nil {
+		raffle.OccupantID = nil
+		return true
+	}
+	m, err := s.store.GetFestivalMap(*raffle.FestivalMapID)
+	if err != nil {
+		writeInternalError(w, "get festival map for raffle", err)
+		return false
+	}
+	if m == nil {
+		writeError(w, http.StatusBadRequest, "That festival map no longer exists")
+		return false
+	}
+	if raffle.OccupantID == nil {
+		return true
+	}
+	for i := range m.Stalls {
+		for j := range m.Stalls[i].Occupants {
+			if m.Stalls[i].Occupants[j].ID == *raffle.OccupantID {
+				return true
+			}
+		}
+	}
+	raffle.OccupantID = nil
+	return true
 }
 
 // maxRaffleEntries caps the per-player allowance, and with it the custom-cost
@@ -220,6 +258,8 @@ func (req raffleWriteRequest) toRaffle(id int64) *model.Raffle {
 		AvailableTo:   req.AvailableTo,
 		PrizeImage:    req.PrizeImage,
 		PayImage:      strings.TrimSpace(req.PayImage),
+		FestivalMapID: req.FestivalMapID,
+		OccupantID:    req.OccupantID,
 	}
 	switch mode {
 	case model.RaffleModeCustom:
@@ -254,6 +294,9 @@ func (s *Server) handleRaffleCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	raffle := req.toRaffle(0)
+	if !s.resolveRaffleStall(w, raffle) {
+		return
+	}
 	id, err := s.store.CreateRaffle(raffle)
 	if err != nil {
 		writeInternalError(w, "create raffle", err)
@@ -291,7 +334,11 @@ func (s *Server) handleRaffleUpdate(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, msg)
 		return
 	}
-	if err := s.store.UpdateRaffle(req.toRaffle(id)); err != nil {
+	updated := req.toRaffle(id)
+	if !s.resolveRaffleStall(w, updated) {
+		return
+	}
+	if err := s.store.UpdateRaffle(updated); err != nil {
 		writeInternalError(w, "update raffle", err)
 		return
 	}

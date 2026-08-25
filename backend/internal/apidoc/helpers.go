@@ -83,6 +83,7 @@ func tags() openapi3.Tags {
 		{"Affiliates", "Partner establishments"},
 		{"Tea Rooms", "Bookable tea rooms (admin + public cross-origin read API)"},
 		{"Stamp Rally", "Stamp-rally events (admin + tokenized public)"},
+		{"Festival Map", "Interactive festival floor plans and their stalls (admin + public)"},
 		{"Book Club", "Reading lists and Discord publishing"},
 		{"Announcements", "Scheduled Discord announcements, types, and roles"},
 		{"Winners Log", "Confirmed winners log"},

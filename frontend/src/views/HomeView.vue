@@ -14,12 +14,14 @@ import { useGameStore } from '@/stores/game'
 import { usePlayerStore } from '@/stores/player'
 import { useRafflesStore } from '@/stores/raffles'
 import { useStampRalliesStore } from '@/stores/stampRallies'
+import { useFestivalMapsStore } from '@/stores/festivalMaps'
 
 const router = useRouter()
 const app = useAppStore()
 const player = usePlayerStore()
 const raffles = useRafflesStore()
 const stampRallies = useStampRalliesStore()
+const festivalMaps = useFestivalMapsStore()
 const game = useGameStore()
 const { ready: markdownReady } = useMarkdown()
 
@@ -38,6 +40,10 @@ function viewRaffles(): void {
 
 function viewStampRallies(): void {
   void router.push({ name: 'stamp-rallies' })
+}
+
+function viewFestivalMaps(): void {
+  void router.push({ name: 'festival-maps' })
 }
 
 function goCardRequests(): void {
@@ -70,7 +76,8 @@ const nothingOn = computed(
     app.settingsLoaded &&
     !showBingo.value &&
     raffles.homeRaffles.length === 0 &&
-    stampRallies.signupRallies.length === 0,
+    stampRallies.signupRallies.length === 0 &&
+    festivalMaps.publicMaps.length === 0,
 )
 
 // Focus the board-ID field on load so players can type their code immediately.
@@ -79,8 +86,10 @@ onMounted(() => {
   joinInput.value?.focus()
   // Decides whether the Stamp Rallies card is offered at all - the endpoint
   // returns only rallies open to public sign-up, so an empty list means there is
-  // nothing to send anyone to.
+  // nothing to send anyone to. The festival-map list works the same way: it
+  // returns published maps only.
   void stampRallies.loadSignupRallies()
+  void festivalMaps.loadPublicMaps()
 })
 
 // The logo (and the other brand images) are served at runtime from the web
@@ -152,6 +161,14 @@ const logoUrl = '/images/logo.png'
           <p>View currently open raffles and enter for a chance to win!</p>
         </div>
         <button class="btn-view" @click="viewRaffles">View Raffles</button>
+      </div>
+      <!-- Festival Maps (only when one is published) -->
+      <div v-if="festivalMaps.publicMaps.length" class="home-card home-card--dest">
+        <div class="home-dest-body">
+          <h2><font-awesome-icon :icon="['fad', 'map-location-dot']" /> Festival Map</h2>
+          <p>Explore the festival grounds and find out what every stall is offering.</p>
+        </div>
+        <button class="btn-view" @click="viewFestivalMaps">View Festival Maps</button>
       </div>
       <!-- Stamp Rallies (only when one is open to public sign-up) -->
       <div v-if="stampRallies.signupRallies.length" class="home-card home-card--dest">

@@ -16,7 +16,7 @@ import (
 // PRAGMA user_version against this constant and runs only the migrations
 // needed to bring the database up to date. Bump this when adding a new
 // migration block.
-const schemaVersion = 60
+const schemaVersion = 65
 
 // ensureSchema reads the current PRAGMA user_version from the database and
 // applies any outstanding migrations to bring it up to schemaVersion.
@@ -402,6 +402,36 @@ func ensureSchema(db *sql.DB) error {
 
 	if version < 60 {
 		if err := migrateStampTypes(db); err != nil {
+			return err
+		}
+	}
+
+	if version < 61 {
+		if err := migrateFestivalMaps(db); err != nil {
+			return err
+		}
+	}
+
+	if version < 62 {
+		if err := migrateFestivalMapSlug(db); err != nil {
+			return err
+		}
+	}
+
+	if version < 63 {
+		if err := migrateFestivalStallTypeLabel(db); err != nil {
+			return err
+		}
+	}
+
+	if version < 64 {
+		if err := migrateFestivalStallOccupants(db); err != nil {
+			return err
+		}
+	}
+
+	if version < 65 {
+		if err := migrateRaffleFestivalLink(db); err != nil {
 			return err
 		}
 	}
@@ -850,6 +880,9 @@ func createTables(db *sql.DB) error {
 		stampRallyCollectedTableSQL,
 		userTokensTableSQL,
 		teaRoomsTableSQL,
+		festivalMapsTableSQL,
+		festivalStallsTableSQL,
+		festivalStallOccupantsTableSQL,
 	}
 	for _, s := range stmts {
 		if _, err := db.Exec(s); err != nil {
@@ -2206,4 +2239,284 @@ func migrateGaraponDrawKeepLogs(db *sql.DB) error {
 		`CREATE INDEX IF NOT EXISTS idx_garapon_draws_player ON garapon_draws(player_id)`,
 	}
 	return rebuildTableTx(db, "migrate garapon draws keep-logs", stmts)
+}
+
+// festivalMapsTableSQL defines the Festival Map table (Festival -> Festival Map):
+// a titled floor plan with a markdown description, the datetime ranges the
+// festival runs across (a JSON array, like affiliates.hours), the base map image
+// its stalls are drawn on, and a publish status. Shared between createTables
+// (fresh install) and migrateFestivalMaps (existing databases).
+const festivalMapsTableSQL = `CREATE TABLE IF NOT EXISTS festival_maps (
+	id INTEGER PRIMARY KEY AUTOINCREMENT,
+	title TEXT NOT NULL,
+	slug TEXT NOT NULL DEFAULT '',
+	description TEXT NOT NULL DEFAULT '',
+	times TEXT NOT NULL DEFAULT '[]',
+	map_image TEXT NOT NULL DEFAULT '',
+	status TEXT NOT NULL DEFAULT 'in_progress',
+	created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+)`
+
+// festivalStallsTableSQL defines one booth on a festival map: the affiliate
+// running it (NULL = the venue itself), its own title/description, what it offers
+// (stall_type), how it is drawn (shape + color + the same pos/size/rotation
+// placement columns the stamp-rally tables use), and its own opening times as a
+// JSON array. Shared between createTables and migrateFestivalMaps.
+const festivalStallsTableSQL = `CREATE TABLE IF NOT EXISTS festival_stalls (
+	id INTEGER PRIMARY KEY AUTOINCREMENT,
+	map_id INTEGER NOT NULL,
+	shape TEXT NOT NULL DEFAULT 'rect',
+	color TEXT NOT NULL DEFAULT '',
+	pos_x REAL NOT NULL DEFAULT 0,
+	pos_y REAL NOT NULL DEFAULT 0,
+	width REAL NOT NULL DEFAULT 12,
+	height REAL NOT NULL DEFAULT 8,
+	rotation REAL NOT NULL DEFAULT 0,
+	sort_order INTEGER NOT NULL DEFAULT 0,
+	FOREIGN KEY (map_id) REFERENCES festival_maps(id) ON DELETE CASCADE
+)`
+
+// festivalStallOccupantsTableSQL defines who stands in a pitch: the affiliate
+// (NULL = the venue itself), the title and description shown for them, what they
+// offer, and the hours THEY keep - which is how a pitch that changes hands
+// between days decides whose name the map leads with. Shared between createTables
+// and migrateFestivalStallOccupants.
+const festivalStallOccupantsTableSQL = `CREATE TABLE IF NOT EXISTS festival_stall_occupants (
+	id INTEGER PRIMARY KEY AUTOINCREMENT,
+	stall_id INTEGER NOT NULL,
+	affiliate_id INTEGER,
+	title TEXT NOT NULL DEFAULT '',
+	description TEXT NOT NULL DEFAULT '',
+	stall_type TEXT NOT NULL DEFAULT 'other',
+	type_label TEXT NOT NULL DEFAULT '',
+	times TEXT NOT NULL DEFAULT '[]',
+	sort_order INTEGER NOT NULL DEFAULT 0,
+	FOREIGN KEY (stall_id) REFERENCES festival_stalls(id) ON DELETE CASCADE,
+	FOREIGN KEY (affiliate_id) REFERENCES affiliates(id) ON DELETE SET NULL
+)`
+
+// migrateFestivalMaps (schema v61) creates the Festival Map tables and the two
+// columns that tie a Stamp Rally to a map: stamp_rallies.festival_map_id (the
+// rally's map) and stamp_rally_stamps.stall_id (which stall each stamp belongs
+// to). Both link columns are FK-less for the same reason as the garapon link -
+// ALTER can't add a foreign key, and createTables builds stamp_rallies before
+// festival_maps - so the store nulls them itself on delete. Idempotent.
+func migrateFestivalMaps(db *sql.DB) error {
+	stmts := []string{
+		festivalMapsTableSQL,
+		festivalStallsTableSQL,
+		`CREATE INDEX IF NOT EXISTS idx_festival_stalls_map ON festival_stalls(map_id)`,
+		festivalStallOccupantsTableSQL,
+		festivalStallOccupantIndexSQL,
+		`CREATE INDEX IF NOT EXISTS idx_festival_maps_status ON festival_maps(status)`,
+		festivalMapSlugIndexSQL,
+	}
+	for _, s := range stmts {
+		if _, err := db.Exec(s); err != nil {
+			return fmt.Errorf("migrate festival maps: %w", err)
+		}
+	}
+	cols := []struct{ table, column, spec string }{
+		{"stamp_rallies", "festival_map_id", "INTEGER"},
+		{"stamp_rally_stamps", "stall_id", "INTEGER"},
+	}
+	for _, c := range cols {
+		if !tableExists(db, c.table) || hasColumn(db, c.table, c.column) {
+			continue
+		}
+		if _, err := db.Exec(fmt.Sprintf("ALTER TABLE %s ADD COLUMN %s %s", c.table, c.column, c.spec)); err != nil {
+			return fmt.Errorf("add %s.%s: %w", c.table, c.column, err)
+		}
+	}
+	if _, err := db.Exec(`CREATE INDEX IF NOT EXISTS idx_stamp_rally_stamps_stall ON stamp_rally_stamps(stall_id)`); err != nil {
+		return fmt.Errorf("migrate festival maps: %w", err)
+	}
+	return nil
+}
+
+// festivalMapSlugIndexSQL enforces that a shortcode names at most one map. It is
+// a PARTIAL index: the empty string means "no shortcode", and every map without
+// one would otherwise collide with every other. Shared between migrateFestivalMaps
+// (fresh install) and migrateFestivalMapSlug (existing databases).
+const festivalMapSlugIndexSQL = `CREATE UNIQUE INDEX IF NOT EXISTS idx_festival_maps_slug
+	ON festival_maps(slug) WHERE slug != ''`
+
+// migrateFestivalMapSlug (schema v62) adds festival_maps.slug - the optional
+// shortcode that lets a map be linked as /festival-maps/obon-2026 instead of by
+// its numeric id - plus the partial UNIQUE index above. Existing maps default to
+// '' (no shortcode) and stay reachable by id, which is the only way they were
+// ever linked. Idempotent.
+func migrateFestivalMapSlug(db *sql.DB) error {
+	if !tableExists(db, "festival_maps") {
+		return nil
+	}
+	if !hasColumn(db, "festival_maps", "slug") {
+		if _, err := db.Exec(`ALTER TABLE festival_maps ADD COLUMN slug TEXT NOT NULL DEFAULT ''`); err != nil {
+			return fmt.Errorf("add festival_maps.slug: %w", err)
+		}
+	}
+	if _, err := db.Exec(festivalMapSlugIndexSQL); err != nil {
+		return fmt.Errorf("index festival_maps.slug: %w", err)
+	}
+	return nil
+}
+
+// migrateFestivalStallTypeLabel (schema v63) adds festival_stalls.type_label -
+// the caption drawn under a stall's title when its type is "other", so a booth can
+// read "Omikuji" or "Art Raffle" rather than the meaningless "Other". Existing
+// stalls default to '' and keep showing their named type. Idempotent.
+func migrateFestivalStallTypeLabel(db *sql.DB) error {
+	if !tableExists(db, "festival_stalls") || hasColumn(db, "festival_stalls", "type_label") {
+		return nil
+	}
+	// A database that reached the occupant split (v64) - or was built fresh after
+	// it - holds identity on festival_stall_occupants, not on the pitch. `title` is
+	// the pre-split marker; without this the column would be bolted onto a pitch
+	// table that has no use for it.
+	if !hasColumn(db, "festival_stalls", "title") {
+		return nil
+	}
+	if _, err := db.Exec(`ALTER TABLE festival_stalls ADD COLUMN type_label TEXT NOT NULL DEFAULT ''`); err != nil {
+		return fmt.Errorf("add festival_stalls.type_label: %w", err)
+	}
+	return nil
+}
+
+// festivalStallOccupantIndexSQL indexes occupants by the pitch they stand in -
+// the only way they are ever looked up.
+const festivalStallOccupantIndexSQL = `CREATE INDEX IF NOT EXISTS idx_festival_stall_occupants_stall
+	ON festival_stall_occupants(stall_id)`
+
+// migrateFestivalStallOccupants (schema v64) splits a festival stall into the
+// PITCH on the plan (shape, color, placement) and the OCCUPANTS standing in it
+// (affiliate, title, description, offering, hours), so a booth that changes hands
+// between days is one shape with two names rather than two stalls stacked on the
+// same coordinates.
+//
+// Every existing stall becomes a pitch with exactly one occupant carrying its
+// identity, which is what it always was. Because that mapping is 1:1, a stamp
+// rally's per-stamp link can be repointed from the stall to its occupant in the
+// same pass: the column is renamed and its values remapped, so no rally loses the
+// stall its stamps name. Idempotent - it no-ops once the occupants table exists.
+func migrateFestivalStallOccupants(db *sql.DB) error {
+	if err := splitFestivalStallOccupants(db); err != nil {
+		return err
+	}
+	// Runs whether or not the split did: a FRESH install builds the post-split
+	// tables in createTables, so the split no-ops, but v61 still added the rally's
+	// link column under its old name and it has to be repointed all the same.
+	return migrateRallyStampOccupantLink(db)
+}
+
+// splitFestivalStallOccupants moves each stall's identity onto a single occupant
+// row and rebuilds the stall as a bare pitch. No-ops once the occupants table
+// exists - which is also the case on a fresh install.
+func splitFestivalStallOccupants(db *sql.DB) error {
+	if !tableExists(db, "festival_stalls") || tableExists(db, "festival_stall_occupants") {
+		return nil
+	}
+	// Ordered so the pitch rebuild happens BEFORE anything references it: dropping
+	// festival_stalls while occupants pointed at it would (with enforcement on)
+	// take them with it. rebuildTableTx runs the lot with foreign_keys off and
+	// runs foreign_key_check before committing, so a mistake here aborts rather
+	// than silently orphaning rows.
+	stmts := []string{
+		// 1. Park each stall's identity, keyed by the pitch it belongs to.
+		`CREATE TABLE festival_stall_identity_tmp AS
+			SELECT id AS stall_id, affiliate_id, title, description, stall_type, type_label, times
+			FROM festival_stalls`,
+		// 2. Rebuild the pitch without the identity columns, preserving every id so
+		//    placements - and any rally link - still resolve.
+		`CREATE TABLE festival_stalls_new (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			map_id INTEGER NOT NULL,
+			shape TEXT NOT NULL DEFAULT 'rect',
+			color TEXT NOT NULL DEFAULT '',
+			pos_x REAL NOT NULL DEFAULT 0,
+			pos_y REAL NOT NULL DEFAULT 0,
+			width REAL NOT NULL DEFAULT 12,
+			height REAL NOT NULL DEFAULT 8,
+			rotation REAL NOT NULL DEFAULT 0,
+			sort_order INTEGER NOT NULL DEFAULT 0,
+			FOREIGN KEY (map_id) REFERENCES festival_maps(id) ON DELETE CASCADE
+		)`,
+		`INSERT INTO festival_stalls_new (id, map_id, shape, color, pos_x, pos_y, width, height, rotation, sort_order)
+			SELECT id, map_id, shape, color, pos_x, pos_y, width, height, rotation, sort_order FROM festival_stalls`,
+		`DROP TABLE festival_stalls`,
+		`ALTER TABLE festival_stalls_new RENAME TO festival_stalls`,
+		`CREATE INDEX IF NOT EXISTS idx_festival_stalls_map ON festival_stalls(map_id)`,
+		// 3. Give every pitch its single occupant, back from the parked identity.
+		festivalStallOccupantsTableSQL,
+		`INSERT INTO festival_stall_occupants
+				(stall_id, affiliate_id, title, description, stall_type, type_label, times, sort_order)
+			SELECT stall_id, affiliate_id, title, description, stall_type, type_label, times, 0
+			FROM festival_stall_identity_tmp`,
+		festivalStallOccupantIndexSQL,
+		`DROP TABLE festival_stall_identity_tmp`,
+	}
+	return rebuildTableTx(db, "migrate festival stall occupants", stmts)
+}
+
+// migrateRallyStampOccupantLink repoints stamp_rally_stamps.stall_id at the
+// occupant that stall became (see migrateFestivalStallOccupants). A stamp belongs
+// to whoever runs the pitch on the day, not to the pitch itself - Flora's game
+// stamp isn't The Great Below's - so the column is renamed as well as remapped.
+// Idempotent: it no-ops once the column has been renamed.
+func migrateRallyStampOccupantLink(db *sql.DB) error {
+	if !tableExists(db, "stamp_rally_stamps") || hasColumn(db, "stamp_rally_stamps", "occupant_id") {
+		return nil
+	}
+	if !hasColumn(db, "stamp_rally_stamps", "stall_id") {
+		return nil
+	}
+	stmts := []string{
+		`ALTER TABLE stamp_rally_stamps RENAME COLUMN stall_id TO occupant_id`,
+		// The old value is a stall id; each stall has exactly one occupant at this
+		// point, so the remap is unambiguous. A link to a stall that no longer
+		// exists resolves to NULL, which is what an unlinked stamp already means.
+		`UPDATE stamp_rally_stamps SET occupant_id =
+			(SELECT o.id FROM festival_stall_occupants o WHERE o.stall_id = stamp_rally_stamps.occupant_id)
+			WHERE occupant_id IS NOT NULL`,
+		`DROP INDEX IF EXISTS idx_stamp_rally_stamps_stall`,
+		`CREATE INDEX IF NOT EXISTS idx_stamp_rally_stamps_occupant ON stamp_rally_stamps(occupant_id)`,
+	}
+	for _, stmt := range stmts {
+		if _, err := db.Exec(stmt); err != nil {
+			return fmt.Errorf("migrate rally stamp occupant link: %w", err)
+		}
+	}
+	return nil
+}
+
+// migrateRaffleFestivalLink (schema v65) files a raffle under a Festival Map and,
+// optionally, one stall on it: raffles.festival_map_id groups the raffle with that
+// festival (the same thing stamp_rallies.festival_map_id does), and
+// raffles.occupant_id assigns it to a pitch occupant so the stall's panel on the
+// public plan can link to it.
+//
+// Both are FK-less for the same reason as the other festival links - ALTER can't
+// add a foreign key, and createTables builds raffles long before festival_maps -
+// so the store clears them itself when a map or occupant goes away. Existing
+// raffles default to NULL and belong to no festival, which is what they all were.
+// Idempotent.
+func migrateRaffleFestivalLink(db *sql.DB) error {
+	if !tableExists(db, "raffles") {
+		return nil
+	}
+	cols := []struct{ column, spec string }{
+		{"festival_map_id", "INTEGER"},
+		{"occupant_id", "INTEGER"},
+	}
+	for _, c := range cols {
+		if hasColumn(db, "raffles", c.column) {
+			continue
+		}
+		if _, err := db.Exec(fmt.Sprintf("ALTER TABLE raffles ADD COLUMN %s %s", c.column, c.spec)); err != nil {
+			return fmt.Errorf("add raffles.%s: %w", c.column, err)
+		}
+	}
+	if _, err := db.Exec(`CREATE INDEX IF NOT EXISTS idx_raffles_occupant ON raffles(occupant_id)`); err != nil {
+		return fmt.Errorf("index raffles.occupant_id: %w", err)
+	}
+	return nil
 }

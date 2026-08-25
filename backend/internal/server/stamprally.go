@@ -188,7 +188,7 @@ func buildPublicCard(r *model.StampRally, card *model.StampRallyCard, stamps []m
 		st := &stamps[i]
 		at, got := collected[st.ID]
 		pc.Stamps = append(pc.Stamps, model.PublicStamp{
-			ID: st.ID, AffiliateName: st.AffiliateName, StampType: model.NormalizeStampType(st.StampType),
+			ID: st.ID, AffiliateName: st.DisplayStall(), StampType: model.NormalizeStampType(st.StampType),
 			Image: st.Image, Placement: st.Placement,
 			ActiveFrom: st.ActiveFrom, ActiveTo: st.ActiveTo,
 			Available: stampAvailable(r, st, now), Expired: stampExpired(r, st, now),
@@ -295,6 +295,7 @@ type stampRallyWriteRequest struct {
 	CompletionMode     string                  `json:"completion_mode"`
 	RequiredFood       int                     `json:"required_food"`
 	RequiredGame       int                     `json:"required_game"`
+	FestivalMapID      *int64                  `json:"festival_map_id"` // optional Festival Map link
 	Stamps             []model.StampRallyStamp `json:"stamps"`
 	Prizes             []model.StampRallyPrize `json:"prizes"`
 }
@@ -334,6 +335,7 @@ func rallyFromRequest(req stampRallyWriteRequest, title string) *model.StampRall
 		st.Image = strings.TrimSpace(st.Image)
 		st.Password = strings.TrimSpace(st.Password)
 		st.AffiliateName = ""
+		st.StallName = ""
 		st.StampType = model.NormalizeStampType(st.StampType)
 		st.Placement = sanitizePlacement(st.Placement)
 		if st.StampType == model.StampTypeGame {
@@ -363,11 +365,62 @@ func rallyFromRequest(req stampRallyWriteRequest, title string) *model.StampRall
 		CompletionMode:     model.NormalizeRallyCompletion(req.CompletionMode),
 		// Kept (clamped) whatever the mode, so switching back to "counts" doesn't
 		// lose the numbers the admin already set.
-		RequiredFood: clampRequired(req.RequiredFood, foodStamps),
-		RequiredGame: clampRequired(req.RequiredGame, gameStamps),
-		Stamps:       stamps,
-		Prizes:       prizes,
+		RequiredFood:  clampRequired(req.RequiredFood, foodStamps),
+		RequiredGame:  clampRequired(req.RequiredGame, gameStamps),
+		FestivalMapID: req.FestivalMapID,
+		Stamps:        stamps,
+		Prizes:        prizes,
 	}
+}
+
+// resolveMapStalls settles a rally's Festival Map link and every stamp's stall
+// against what actually exists, writing the error response itself and returning
+// false when the link can't be honored.
+//
+// A rally linked to a map names the OCCUPANTS of its pitches (stamp.OccupantID)
+// rather than the pitches themselves: a booth that changes hands between days is
+// two different businesses running two different activities, and Flora's game
+// stamp isn't The Great Below's. Each linked stamp takes its affiliate FROM its
+// occupant - one source of truth, rather than an occupant and an affiliate that
+// can drift apart. A stamp naming an occupant that isn't on the map (one deleted
+// since, or a spoofed id) falls back to its affiliate rather than failing the
+// whole save, and an unlinked rally has every occupant id cleared: naming one
+// would claim a map link the rally doesn't have.
+func (s *Server) resolveMapStalls(w http.ResponseWriter, rally *model.StampRally) bool {
+	if rally.FestivalMapID == nil {
+		for i := range rally.Stamps {
+			rally.Stamps[i].OccupantID = nil
+		}
+		return true
+	}
+	m, err := s.store.GetFestivalMap(*rally.FestivalMapID)
+	if err != nil {
+		writeInternalError(w, "get festival map for rally", err)
+		return false
+	}
+	if m == nil {
+		writeError(w, http.StatusBadRequest, "That festival map no longer exists")
+		return false
+	}
+	byID := make(map[int64]*model.FestivalStallOccupant)
+	for i := range m.Stalls {
+		for j := range m.Stalls[i].Occupants {
+			byID[m.Stalls[i].Occupants[j].ID] = &m.Stalls[i].Occupants[j]
+		}
+	}
+	for i := range rally.Stamps {
+		st := &rally.Stamps[i]
+		if st.OccupantID == nil {
+			continue
+		}
+		occupant, found := byID[*st.OccupantID]
+		if !found {
+			st.OccupantID = nil
+			continue
+		}
+		st.AffiliateID = occupant.AffiliateID
+	}
+	return true
 }
 
 // handleStampRallyCreate creates a rally (stamps + prizes inline).
@@ -392,6 +445,9 @@ func (s *Server) handleStampRallyCreate(w http.ResponseWriter, r *http.Request) 
 	rally := rallyFromRequest(req, title)
 	if msg := completionRuleError(rally); msg != "" {
 		writeError(w, http.StatusBadRequest, msg)
+		return
+	}
+	if !s.resolveMapStalls(w, rally) {
 		return
 	}
 	id, err := s.store.CreateStampRally(rally)
@@ -432,6 +488,9 @@ func (s *Server) handleStampRallyUpdate(w http.ResponseWriter, r *http.Request) 
 	rally.ID = id
 	if msg := completionRuleError(rally); msg != "" {
 		writeError(w, http.StatusBadRequest, msg)
+		return
+	}
+	if !s.resolveMapStalls(w, rally) {
 		return
 	}
 	if err := s.store.UpdateStampRally(rally); err != nil {
@@ -741,10 +800,7 @@ func (s *Server) handleStampCardStamp(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Snapshot the participant + stall onto the log so it survives card/stamp deletion.
-	stall := strings.TrimSpace(match.AffiliateName)
-	if stall == "" {
-		stall = "Senpan Tea House"
-	}
+	stall := match.DisplayStall()
 	if _, err := s.store.CollectStamp(card.RallyID, card.ID, match.ID, card.ParticipantName, stall,
 		model.NormalizeStampType(match.StampType)); err != nil {
 		if errors.Is(err, store.ErrStampAlreadyCollected) {

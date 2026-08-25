@@ -70,6 +70,11 @@ import type {
   SignupRalliesResponse,
   StampSignupResponse,
   StampLookupResponse,
+  FestivalMapsResponse,
+  FestivalMapResponse,
+  FestivalMapDetailResponse,
+  PublicFestivalMapsResponse,
+  PublicFestivalMap,
   GaraponsResponse,
   GaraponResponse,
   GaraponDetailResponse,
@@ -569,6 +574,31 @@ export const endpoints = {
     /** PUT /api/tea-rooms/webhook - set the single shared Discord webhook ('' clears). */
     setWebhook: (webhookUrl: string) =>
       apiPut<TeaRoomWebhookResponse>('tea-rooms/webhook', { webhook_url: webhookUrl }),
+  },
+
+  // -- Festival Map (admin CRUD + the public read API) --------------------------
+  festivalMaps: {
+    /** GET /api/festival-maps - every map with its stall count (admin). */
+    list: () => apiGet<FestivalMapsResponse>('festival-maps'),
+    /** GET /api/festival-maps/{id} - a map with its stalls. */
+    detail: (id: number) => apiGet<FestivalMapDetailResponse>(`festival-maps/${id}`),
+    /** POST /api/festival-maps - create a map (201). The form omits an id. */
+    create: (map: Record<string, unknown>) => apiPost<FestivalMapResponse>('festival-maps', map),
+    /** PUT /api/festival-maps/{id} - full replace of the editable fields. */
+    update: (map: { id: number } & Record<string, unknown>) =>
+      apiPut<OKResponse>(`festival-maps/${map.id}`, map),
+    /** PATCH /api/festival-maps/{id} - set the publish status. */
+    setStatus: (id: number, status: string) =>
+      apiPatch<StatusResponse>(`festival-maps/${id}`, { status }),
+    /** DELETE /api/festival-maps/{id} - delete a map and its stalls (204). */
+    delete: (id: number) => apiDelete(`festival-maps/${id}`),
+    /** GET /api/festival-maps/public - the published maps (no auth). */
+    publicList: () => apiGet<PublicFestivalMapsResponse>('festival-maps/public'),
+    /** GET /api/festival-maps/public/{id} - one published map with its stalls (no
+     *  auth). The segment is the map's shortcode or its numeric id; the server
+     *  resolves either. */
+    publicDetail: (idOrSlug: string) =>
+      apiGet<PublicFestivalMap>(`festival-maps/public/${enc(idOrSlug)}`),
   },
 
   // -- Stamp Rally (admin, hybrid REST) -----------------------------------------

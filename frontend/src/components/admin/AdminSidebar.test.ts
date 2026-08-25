@@ -68,12 +68,13 @@ describe('AdminSidebar', () => {
     expect(section(wrapper, 'Bingo').find('.admin-nav-items').isVisible()).toBe(true)
     expect(isExpanded(wrapper, 'System')).toBe(false)
     expect(section(wrapper, 'System').find('.admin-nav-items').isVisible()).toBe(false)
-    // The Festival section carries Garapon + Stamp Rally + Raffles (Raffles moved
-    // here from Tea House).
+    // The Festival section carries Festival Map + Garapon + Stamp Rally +
+    // Raffles (Raffles moved here from Tea House).
     const festivalText = section(wrapper, 'Festival')
       .findAll('.admin-nav-items button')
       .map((b) => b.text())
-    expect(festivalText).toHaveLength(3)
+    expect(festivalText).toHaveLength(4)
+    expect(festivalText.join(' ')).toContain('Festival Map')
     expect(festivalText.join(' ')).toContain('Garapon')
     expect(festivalText.join(' ')).toContain('Stamp Rally')
     expect(festivalText.join(' ')).toContain('Raffles')

@@ -342,6 +342,7 @@ export const ADMIN_PERMISSIONS: AdminPermission[] = [
     label: c.name,
     section: 'Senpan Tea House',
   })),
+  { key: 'festival-map', label: 'Festival Map', section: 'Festival' },
   { key: 'festival-garapon', label: 'Garapon', section: 'Festival' },
   { key: 'festival-stamp-rally', label: 'Stamp Rally', section: 'Festival' },
   // Raffles moved under Festival; the permission/route id stays `teahouse-raffles`.

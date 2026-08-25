@@ -19,6 +19,7 @@
  *   /admin/teahouse/announcements    -> Admin: Announcements
  *   /admin/teahouse/raffles          -> Admin: Raffles (current cards + closed table; detail/form sub-pages)
  *   /admin/teahouse/bookclub/:slug   -> Admin: a book club (Yaoi, Yuri, ...)
+ *   /admin/festival/map              -> Admin: Festival Map (plan + stalls)
  *   /admin/atelier/fonts      -> Admin: Font Upload
  *   /admin/atelier/carrd      -> Admin: Carrd Upload
  *   /admin/system/settings    -> Admin: App Settings
@@ -116,6 +117,13 @@ const adminChildren: RouteRecordRaw[] = [
     component: () => import('@/components/admin/BookClubTab.vue'),
     meta: { tab: `bookclub-${club.slug}` as AdminTab },
   })),
+  // Festival -> Festival Map (the interactive floor plan + its stalls).
+  {
+    path: 'festival/map',
+    name: 'admin-festival-map',
+    component: () => import('@/components/admin/FestivalMapsTab.vue'),
+    meta: { tab: 'festival-map' },
+  },
   // Festival -> Garapon (festival lottery drum).
   {
     path: 'festival/garapon',
@@ -200,6 +208,20 @@ const routes: RouteRecordRaw[] = [
     path: '/raffles/:id',
     name: 'raffle-detail',
     component: () => import('@/views/RaffleDetailView.vue'),
+    props: true,
+  },
+  // Public Festival Maps: the published maps, and one map's interactive floor
+  // plan. The detail path is deliberately linkable so staff can post a festival's
+  // map URL straight into Discord.
+  {
+    path: '/festival-maps',
+    name: 'festival-maps',
+    component: () => import('@/views/FestivalMapsView.vue'),
+  },
+  {
+    path: '/festival-maps/:id',
+    name: 'festival-map',
+    component: () => import('@/views/FestivalMapView.vue'),
     props: true,
   },
   // Public Stamp Rally self-service sign-up: the list of rallies open for it, and

@@ -351,6 +351,20 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("DELETE /api/tea-rooms/{id}", s.handleTeaRoomDelete)
 	s.mux.HandleFunc("POST /api/tea-rooms/{id}/post", s.handleTeaRoomPost)
 
+	// Festival Map (Festival -> Festival Map; resource-oriented: methods for CRUD,
+	// PATCH for the publish status). Admin CRUD of maps (stalls with placements
+	// inline), plus the public read API for PUBLISHED maps only. The literal
+	// /public sub-path is matched ahead of the {id} wildcard by the Go 1.22 mux,
+	// and /public/{id} coexists with it (mirrors the tea-room split).
+	s.mux.HandleFunc("GET /api/festival-maps", s.handleFestivalMapsList)
+	s.mux.HandleFunc("POST /api/festival-maps", s.handleFestivalMapCreate)
+	s.mux.HandleFunc("GET /api/festival-maps/public", s.handleFestivalMapsPublic)
+	s.mux.HandleFunc("GET /api/festival-maps/public/{id}", s.handleFestivalMapPublic)
+	s.mux.HandleFunc("GET /api/festival-maps/{id}", s.handleFestivalMapDetail)
+	s.mux.HandleFunc("PUT /api/festival-maps/{id}", s.handleFestivalMapUpdate)
+	s.mux.HandleFunc("PATCH /api/festival-maps/{id}", s.handleFestivalMapPatch)
+	s.mux.HandleFunc("DELETE /api/festival-maps/{id}", s.handleFestivalMapDelete)
+
 	// Stamp Rally (Festival -> Stamp Rally; resource-oriented: methods for CRUD,
 	// POST /{id}/{verb} for status, PATCH for the per-stamp pause toggle). Admin
 	// CRUD of events (stamps + prizes with placements) + close/reopen, tokenized
@@ -936,7 +950,7 @@ func (s *Server) broadcastResourceChanged(resource string) {
 func adminMutationResource(path string) (string, bool) {
 	seg, _, _ := strings.Cut(strings.TrimPrefix(path, "/api/"), "/")
 	switch seg {
-	case "garapons", "affiliates", "tea-rooms", "stamp-rallies", "presets", "users", "winners-log", "fonts":
+	case "garapons", "affiliates", "tea-rooms", "stamp-rallies", "festival-maps", "presets", "users", "winners-log", "fonts":
 		return seg, true
 	case "raffles":
 		if strings.HasSuffix(path, "/enter") {

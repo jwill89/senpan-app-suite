@@ -1,6 +1,8 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
 import type {
+  FestivalMap,
+  FestivalStallOccupant,
   PublicStamp,
   PublicStampCard,
   SignupRally,
@@ -27,6 +29,8 @@ const ep = vi.hoisted(() => ({
     card_token: 'tok_card',
   })),
   signupLookup: vi.fn(async () => ({ entries: [] as StampLookupEntry[] })),
+  mapList: vi.fn(async () => ({ maps: [] as FestivalMap[] })),
+  mapDetail: vi.fn(async () => ({ map: { stalls: [] } as unknown as FestivalMap })),
 }))
 vi.mock('@/lib/endpoints', () => ({
   endpoints: {
@@ -45,6 +49,7 @@ vi.mock('@/lib/endpoints', () => ({
     stampCard: { get: ep.get, stamp: ep.stamp },
     stampSignup: { list: ep.signupList, signUp: ep.signUp, lookup: ep.signupLookup },
     affiliates: { list: vi.fn(async () => ({ affiliates: [] })) },
+    festivalMaps: { list: ep.mapList, detail: ep.mapDetail },
   },
 }))
 
@@ -476,6 +481,20 @@ describe('copyRallyForm', () => {
     expect(f.stamps[0].paused).toBe(false)
   })
 
+  it('drops the festival link, so a copy is not filed under the finished festival', () => {
+    const store = useStampRalliesStore()
+    const source = sourceRally()
+    source.festival_map_id = 4
+    source.stamps![0].occupant_id = 21
+    store.copyRallyForm(source)
+    const f = store.rallyForm!
+
+    // The original's stalls still exist, so nothing on the server would clear
+    // these - next year's rally would silently name last year's stalls.
+    expect(f.festival_map_id).toBeNull()
+    expect(f.stamps[0].occupant_id).toBeNull()
+  })
+
   it('leaves the original untouched', () => {
     const store = useStampRalliesStore()
     const source = sourceRally()
@@ -486,5 +505,119 @@ describe('copyRallyForm', () => {
     expect(source.title).toBe('Obon Rally')
     expect(source.stamps?.[0].password).toBe('moon')
     expect(source.stamps?.[0].id).toBe(41)
+  })
+})
+
+// -- Festival Map linkage -----------------------------------------------------
+//
+// A rally linked to a map names that map's STALLS instead of bare affiliates, so
+// the map can badge the stalls that are part of the rally.
+
+describe('festival map linkage', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    vi.clearAllMocks()
+  })
+
+  /** One occupant of a map pitch - what the rally's stall select actually lists. */
+  function mapOccupant(over: Partial<FestivalStallOccupant> = {}): FestivalStallOccupant {
+    return {
+      id: 21,
+      stall_id: 4,
+      affiliate_id: 9,
+      affiliate_name: 'The Green Gaelicat',
+      title: 'The Green Gaelicat',
+      description: '',
+      stall_type: 'game',
+      type_label: '',
+      times: [],
+      sort_order: 0,
+      ...over,
+    }
+  }
+
+  /** A map detail response wrapping the given occupants in one pitch. */
+  function mapWith(occupants: FestivalStallOccupant[]) {
+    return {
+      map: {
+        stalls: [
+          {
+            id: 4,
+            map_id: 4,
+            shape: 'rect',
+            color: '',
+            placement: { x: 0, y: 0, width: 10, height: 10, rotation: 0 },
+            sort_order: 0,
+            occupants,
+          },
+        ],
+      } as unknown as FestivalMap,
+    }
+  }
+
+  it('flattens the linked map into an occupant list and clears stamps on change', async () => {
+    ep.mapDetail.mockResolvedValue(mapWith([mapOccupant()]))
+    const store = useStampRalliesStore()
+    store.newRallyForm()
+    store.addStamp('food')
+    store.rallyForm!.stamps[0].occupant_id = 999 // belonged to some other map
+
+    await store.setFestivalMap(4)
+
+    expect(store.rallyForm!.festival_map_id).toBe(4)
+    expect(store.mapStalls).toHaveLength(1)
+    // The old stall id belonged to the previously-linked map, so it can't stand.
+    expect(store.rallyForm!.stamps[0].occupant_id).toBeNull()
+  })
+
+  it('unlinking clears the stall list and every stamp stall', async () => {
+    ep.mapDetail.mockResolvedValue(mapWith([mapOccupant()]))
+    const store = useStampRalliesStore()
+    store.newRallyForm()
+    store.addStamp('food')
+    await store.setFestivalMap(4)
+    store.setStampStall(0, 21)
+
+    await store.setFestivalMap(null)
+
+    expect(store.mapStalls).toEqual([])
+    expect(store.rallyForm!.stamps[0].occupant_id).toBeNull()
+  })
+
+  it("takes the stall's affiliate and seeds the stamp type from what it offers", async () => {
+    ep.mapDetail.mockResolvedValue(
+      mapWith([
+        mapOccupant(),
+        mapOccupant({ id: 22, stall_type: 'food', affiliate_id: undefined }),
+      ]),
+    )
+    const store = useStampRalliesStore()
+    store.newRallyForm()
+    store.addStamp('food')
+    await store.setFestivalMap(4)
+
+    store.setStampStall(0, 21)
+    expect(store.rallyForm!.stamps[0].affiliate_id).toBe(9)
+    expect(store.rallyForm!.stamps[0].stamp_type).toBe('game')
+
+    // A stall with no affiliate of its own falls back to the venue, as a food stamp.
+    store.setStampStall(0, 22)
+    expect(store.rallyForm!.stamps[0].affiliate_id).toBeNull()
+    expect(store.rallyForm!.stamps[0].stamp_type).toBe('food')
+  })
+
+  it('sends the map link and each stamp stall on save', async () => {
+    ep.mapDetail.mockResolvedValue(mapWith([mapOccupant()]))
+    const store = useStampRalliesStore()
+    store.newRallyForm()
+    store.rallyForm!.title = 'Obon Rally'
+    store.addStamp('food')
+    await store.setFestivalMap(4)
+    store.setStampStall(0, 21)
+
+    expect(await store.saveRally()).toBe(true)
+    const payload = (ep.create.mock.calls.at(-1) as unknown[])[0] as Record<string, unknown>
+    expect(payload.festival_map_id).toBe(4)
+    expect((payload.stamps as Record<string, unknown>[])[0].occupant_id).toBe(21)
   })
 })

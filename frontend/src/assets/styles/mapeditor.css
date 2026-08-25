@@ -1,0 +1,401 @@
+/*
+ * Visual placement editors and map canvases.
+ *
+ * Two features place items on a background image by percentage: the Stamp Rally
+ * card (`.placement-*`, shared by the admin editor) and the Festival Map floor
+ * plan (`.map-*`, shared by the admin editor and the public interactive view).
+ * They share the drag handles, so those live here rather than scoped inside one
+ * of the editors - see composables/usePlacementDrag.ts for the geometry.
+ */
+
+/* -- Stamp Rally card editor ------------------------------------------------ */
+
+.placement-canvas {
+  position: relative;
+  width: 100%;
+  user-select: none;
+  touch-action: none;
+}
+.placement-bg {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: var(--radius);
+}
+.placement-empty {
+  aspect-ratio: 16 / 10;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: var(--text-muted);
+  background: var(--panel-raised-bg);
+  border: 1px dashed var(--control-border);
+}
+.placement-item {
+  position: absolute;
+  cursor: move;
+  box-sizing: border-box;
+  border: 1px solid transparent;
+}
+.placement-item.is-selected {
+  border-color: var(--highlight);
+  box-shadow: 0 0 0 1px var(--highlight);
+}
+/* A prize slot is outlined so it reads as a different kind of item from a stamp. */
+.placement-item--prize:not(.is-selected) {
+  border-color: color-mix(in srgb, var(--highlight) 40%, transparent);
+  border-style: dashed;
+}
+.placement-item img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  pointer-events: none;
+}
+.placement-item-empty {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.7rem;
+  text-align: center;
+  color: var(--text-muted);
+  background: color-mix(in srgb, var(--panel-raised-bg) 80%, transparent);
+  border: 1px dashed var(--control-border);
+  border-radius: 0;
+}
+
+/* -- Shared drag handles ---------------------------------------------------- */
+
+.placement-handle {
+  position: absolute;
+  padding: 0;
+  border: 2px solid var(--highlight);
+  background: var(--page-bg);
+  border-radius: 50%;
+  cursor: pointer;
+}
+.placement-rotate {
+  width: 22px;
+  height: 22px;
+  top: -34px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.7rem;
+  color: var(--highlight);
+  cursor: grab;
+}
+.placement-resize {
+  width: 16px;
+  height: 16px;
+  right: -8px;
+  bottom: -8px;
+  border-radius: 0;
+  cursor: nwse-resize;
+}
+.placement-hint {
+  margin-top: 8px;
+}
+
+/* -- Festival map canvas ---------------------------------------------------- */
+
+.map-canvas {
+  position: relative;
+  width: 100%;
+}
+/* The admin editor drags stalls around; the public canvas is dragged as a whole
+   (see .map-viewport), so only the editor suppresses native gestures. */
+.map-canvas.is-editable {
+  user-select: none;
+  touch-action: none;
+}
+.map-canvas-bg {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: var(--radius);
+}
+.map-canvas-empty {
+  aspect-ratio: 16 / 10;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: var(--text-muted);
+  background: var(--panel-raised-bg);
+  border: 1px dashed var(--control-border);
+}
+
+.map-stall {
+  position: absolute;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px;
+  cursor: move;
+  border: 1px solid color-mix(in srgb, var(--page-bg) 55%, transparent);
+  /* Sizes the label against the stall's own box - see .map-stall-label.
+     Size containment only; it deliberately does NOT clip, because the drag
+     handles sit OUTSIDE this box (see .placement-handle). Clipping here is what
+     hid the rotate handle entirely and left the resize handle as an unusable
+     nub - the label clips itself instead. */
+  container-type: size;
+}
+.map-stall.is-selected {
+  border-color: var(--highlight);
+  box-shadow: 0 0 0 2px var(--highlight);
+  /* Stalls are absolutely-positioned siblings, so without this the selected
+     stall's handles can end up beneath a stall drawn later in the list. */
+  z-index: 2;
+}
+/* The stall's two lines: its title, and the caption naming what it offers. */
+.map-stall-label {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--body-font);
+  font-weight: 700;
+  line-height: 1.1;
+  text-align: center;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  color: var(--text-on-accent);
+  pointer-events: none;
+  overflow-wrap: anywhere;
+  /* The label, not the stall, is what clips - so a long title stays inside its
+     shape without taking the drag handles with it. */
+  max-width: 100%;
+  max-height: 100%;
+  overflow: hidden;
+  /* Scale the label with the stall's height so a small booth doesn't overflow.
+     The literal is the fallback for engines without container-query units - an
+     unsupported unit invalidates the whole declaration, leaving the one above. */
+  font-size: 0.6rem;
+  font-size: clamp(0.34rem, 26cqh, 0.85rem);
+}
+
+/* One occupant's TWO LINES inside a pitch - its title, then the caption naming
+   what it offers. The column has to be declared here as well as on the label: the
+   label stacks the OCCUPANTS, and without this each occupant is a bare inline
+   span, so its title and caption run together on one line. */
+.map-stall-occupant {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  max-width: 100%;
+}
+/* A pitch with several occupants stacks them, the way a printed plan lists both
+   of a booth's tenants. */
+.map-stall-occupant + .map-stall-occupant {
+  margin-top: 0.35em;
+  padding-top: 0.3em;
+  border-top: 1px solid color-mix(in srgb, var(--text-on-accent) 35%, transparent);
+}
+/* Under a day filter the occupants who aren't on that day are still drawn, so the
+   pitch keeps its size, but pushed back behind the one who is. */
+.map-stall-occupant.is-dimmed {
+  opacity: 0.35;
+}
+
+/* The caption reads as a subtitle: same family and case, lighter and smaller, so
+   the title still leads at a glance. Sized in `em` so it tracks the label's own
+   container-scaled font size rather than needing its own clamp. */
+.map-stall-caption {
+  display: block;
+  font-weight: 500;
+  font-size: 0.82em;
+  opacity: 0.85;
+}
+
+/* A circle's corners fall outside the disc, so its label is held to the largest
+   square that fits inside: side = diameter / sqrt(2), i.e. ~70.7%. */
+.map-stall--round .map-stall-label {
+  max-width: 70%;
+  max-height: 70%;
+}
+
+/* -- Festival map: public interactive view ---------------------------------- */
+
+/* The window the map is panned inside. The canvas itself can be larger than this
+   box once zoomed in, so the overflow is clipped here rather than on the page. */
+.map-viewport {
+  position: relative;
+  overflow: hidden;
+  cursor: grab;
+  touch-action: none;
+  background: var(--panel-raised-bg);
+  border: 1px solid var(--control-border);
+  border-radius: var(--radius);
+  aspect-ratio: 16 / 10;
+}
+.map-viewport.is-dragging {
+  cursor: grabbing;
+}
+/* The pan/zoom transform wrapper. Its transform-origin is the top-left so the
+   pan offset is in plain, unscaled canvas coordinates. */
+.map-pan {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  transform-origin: 0 0;
+}
+.map-stall.is-interactive {
+  cursor: pointer;
+}
+.map-stall.is-interactive:hover,
+.map-stall.is-interactive:focus-visible {
+  outline: 2px solid var(--highlight);
+  outline-offset: 1px;
+}
+/* Filtered out by the "stamp rally stalls only" toggle: still drawn, so the plan
+   keeps its shape, but pushed back so the rally stalls read at a glance. */
+.map-stall.is-dimmed {
+  opacity: 0.22;
+  pointer-events: none;
+}
+/* A stall carrying a stamp on the open rally. */
+.map-stall.is-rally {
+  box-shadow: 0 0 0 2px var(--highlight);
+}
+.map-stall-stamp {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 26%;
+  max-width: 22px;
+  pointer-events: none;
+}
+
+.map-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.map-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 10px 0 0;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+.map-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.map-legend-swatch {
+  width: 14px;
+  height: 14px;
+  border: 1px solid color-mix(in srgb, var(--page-bg) 55%, transparent);
+}
+.map-legend-swatch--round {
+  border-radius: 50%;
+}
+/* The legend's key for a stamp-rally stall - the same ring .map-stall.is-rally
+   draws, without inheriting that object's absolute positioning. */
+.map-legend-swatch.is-rally {
+  box-shadow: 0 0 0 2px var(--highlight);
+}
+
+/* One occupant's block of fields in the admin form. Ruled apart so a pitch with
+   two tenants reads as two entries rather than one long column of inputs. */
+.stall-occupant + .stall-occupant {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--control-border);
+}
+
+/* The day switcher, grouped so its buttons read as one control rather than three
+   loose ones beside the zoom buttons. */
+.map-day-picker {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.map-day-picker .is-active {
+  background: var(--accent);
+  color: var(--text-on-accent);
+}
+
+/* The stall detail that opens under (or beside) the map when one is clicked. */
+.map-stall-panel {
+  margin-top: 12px;
+  padding: 14px;
+  background: var(--panel-raised-bg);
+  border: 1px solid var(--control-border);
+  border-radius: var(--radius);
+}
+/* A pitch with two tenants lists them one after another, ruled apart so it reads
+   as two businesses rather than one run-on entry. */
+.map-stall-occupant-panel + .map-stall-occupant-panel {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--control-border);
+}
+.map-stall-panel-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+.map-stall-logo {
+  width: 56px;
+  height: 56px;
+  object-fit: contain;
+  border-radius: var(--radius-media);
+}
+.map-stall-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+.map-stall-hours {
+  margin: 10px 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+.map-stall-rally {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 12px;
+  padding: 10px;
+  background: color-mix(in srgb, var(--highlight) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--highlight) 45%, transparent);
+  border-radius: var(--radius);
+}
+.map-stall-rally img {
+  width: 44px;
+  height: 44px;
+  object-fit: contain;
+}
+
+/* The festival's own datetime list, on the map page and the public list cards. */
+.map-times {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+/* A festival/stall datetime range row: label + start + end + delete. Shares the
+   .repeater objects in utilities.css; only the column template is its own. */
+.event-time-row {
+  grid-template-columns: minmax(110px, 1fr) minmax(160px, 190px) minmax(160px, 190px) 46px;
+}

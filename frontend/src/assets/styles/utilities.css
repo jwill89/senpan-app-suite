@@ -1095,6 +1095,25 @@
   object-fit: contain;
 }
 
+/* A repeatable form-row group (affiliate owners + hours, festival-map datetime
+   ranges): a stack of grid rows sharing one column template, which each form
+   declares for its own row shape. */
+.repeater {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  overflow-x: auto;
+}
+.repeater-row {
+  display: grid;
+  align-items: center;
+  column-gap: 8px;
+}
+.repeater-row > input {
+  width: 100%;
+  min-width: 0;
+}
+
 /* A colour field: native swatch input beside its hex read-out. Was implemented
    three times (affiliates, announcements, tea rooms) with the copies having drifted
    apart - one used a different monospace stack and skipped the uppercase, so the

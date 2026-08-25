@@ -23,6 +23,7 @@ import { useGameStore } from '@/stores/game'
 import { useCardsStore } from '@/stores/cards'
 import { useRafflesStore } from '@/stores/raffles'
 import { useStampRalliesStore } from '@/stores/stampRallies'
+import { useFestivalMapsStore } from '@/stores/festivalMaps'
 import { useGaraponsStore } from '@/stores/garapons'
 import { BOOK_CLUBS } from '@/lib/constants'
 import AppVersions from '@/components/admin/AppVersions.vue'
@@ -34,6 +35,7 @@ const game = useGameStore()
 const cards = useCardsStore()
 const raffles = useRafflesStore()
 const stampRallies = useStampRalliesStore()
+const festivalMaps = useFestivalMapsStore()
 const garapons = useGaraponsStore()
 
 // Change Password / Logout are actions, not navigation: the sidebar emits them so
@@ -73,7 +75,7 @@ const showTeahouse = computed(() =>
 // Festival now also hosts Raffles (moved out of Senpan Tea House). The Raffles
 // page keeps its `teahouse-raffles` permission/route id; only its placement moved.
 const showFestival = computed(() =>
-  ['festival-garapon', 'festival-stamp-rally', 'teahouse-raffles'].some(can),
+  ['festival-map', 'festival-garapon', 'festival-stamp-rally', 'teahouse-raffles'].some(can),
 )
 const showAtelier = computed(() => ['atelier-fonts', 'atelier-carrd'].some(can))
 const showSystem = computed(
@@ -227,7 +229,7 @@ function toggleSection(section: AdminSection): void {
       </div>
     </div>
 
-    <!-- Festival section (Garapon) -->
+    <!-- Festival section (Festival Map + Garapon + Raffles + Stamp Rally) -->
     <div v-if="showFestival" class="admin-nav-section">
       <div
         class="admin-nav-header"
@@ -247,6 +249,16 @@ function toggleSection(section: AdminSection): void {
         /></span>
       </div>
       <div v-show="isOpen('festival')" id="admin-nav-items-festival" class="admin-nav-items">
+        <button
+          v-if="can('festival-map')"
+          :class="{ 'is-active': admin.adminTab === 'festival-map' }"
+          @click="go('festival-map')"
+        >
+          <font-awesome-icon :icon="['fad', 'map-location-dot']" /> Festival Map
+          <span v-if="festivalMaps.publishedMaps.length" class="nav-count">
+            ({{ festivalMaps.publishedMaps.length }})
+          </span>
+        </button>
         <button
           v-if="can('festival-garapon')"
           :class="{ 'is-active': admin.adminTab === 'festival-garapon' }"

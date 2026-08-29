@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Numerics;
 using Dalamud.Bindings.ImGui;
 using Dalamud.Interface;
@@ -17,6 +17,28 @@ namespace SenpanCompanion.Windows;
 /// </summary>
 internal static class Ui
 {
+    /// <summary>
+    /// Renders a participant the one way the whole suite displays one:
+    /// "Firstname Lastname @ World".
+    /// </summary>
+    /// <remarks>
+    /// Mirrors the server's model.ParticipantLabel. Name and world are stored in
+    /// separate fields everywhere - custom cards, raffle entries, stamp rally cards
+    /// and garapon links - so that the same person is matchable across them; this is
+    /// where the two are put back together for reading. A blank world yields just
+    /// the name (a record predating that change, or one entered without one) rather
+    /// than a dangling separator, and a blank name reads as "-" the way every other
+    /// empty cell in these tables does.
+    /// </remarks>
+    internal static string ParticipantLabel(string name, string world)
+    {
+        var trimmedName = (name ?? string.Empty).Trim();
+        var trimmedWorld = (world ?? string.Empty).Trim();
+        if (trimmedName.Length == 0)
+            return "-";
+        return trimmedWorld.Length == 0 ? trimmedName : $"{trimmedName} @ {trimmedWorld}";
+    }
+
     // -- palette ----------------------------------------------------------------
     // Mirrors the web admin dashboard's default dark theme
     // (frontend/src/assets/styles/tokens.css) so the plugin reads as the same product.

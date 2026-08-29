@@ -185,8 +185,12 @@ func TestGaraponClosedDeletePlayerKeepsLog(t *testing.T) {
 	if len(draws) != 1 {
 		t.Fatalf("draw log = %d; want 1 (kept after the link was deleted)", len(draws))
 	}
-	if draws[0].PlayerName != "Aria" {
-		t.Errorf("kept draw player_name = %q; want %q", draws[0].PlayerName, "Aria")
+	// The snapshot carries the WHOLE identity, not the bare name: this row is what
+	// staff read to hand out the prize, and the drawing link it came from is gone.
+	// A bare name could not tell two players apart who share one across worlds.
+	if draws[0].PlayerName != "Aria @ Gilgamesh" {
+		t.Errorf("kept draw player_name = %q; want the composed identity %q",
+			draws[0].PlayerName, "Aria @ Gilgamesh")
 	}
 }
 

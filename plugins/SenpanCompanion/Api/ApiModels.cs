@@ -305,12 +305,18 @@ public sealed class Garapon
 }
 
 // A per-player drawing link. StampCardToken is non-empty only when the garapon is
-// tied to a rally and a dual card was auto-issued (it equals Token).
+// tied to a rally and a card was auto-issued alongside this link; it is a DIFFERENT
+// token from Token. The two used to be one string, which made the shareable stamp
+// card a spendable drawing link - a screenshot of the card burned the player's
+// draws, and those cannot be undone.
 public sealed class GaraponPlayer
 {
     public long Id { get; set; }
     public string Token { get; set; } = string.Empty;
     public string PlayerName { get; set; } = string.Empty;
+    // Home world, stored apart from the name as every system now records one.
+    // Empty on links issued before that change, or entered without one.
+    public string World { get; set; } = string.Empty;
     public int MaxDraws { get; set; }
     public int DrawsUsed { get; set; }
     public string StampCardToken { get; set; } = string.Empty;
@@ -378,6 +384,9 @@ public sealed class StampRallyCard
     public long Id { get; set; }
     public string Token { get; set; } = string.Empty;
     public string ParticipantName { get; set; } = string.Empty;
+    // Home world, stored apart from the name. Empty on cards issued before that
+    // change, or entered without one.
+    public string World { get; set; } = string.Empty;
     public bool Completed { get; set; }
     public int CollectedCount { get; set; }
 }

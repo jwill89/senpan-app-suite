@@ -834,7 +834,10 @@ func (s *Server) handleStampCardStamp(w http.ResponseWriter, r *http.Request) {
 
 	// Snapshot the participant + stall onto the log so it survives card/stamp deletion.
 	stall := match.DisplayStall()
-	if _, err := s.store.CollectStamp(card.RallyID, card.ID, match.ID, card.ParticipantName, stall,
+	// Snapshot the composed identity - the log outlives the card, and a bare name
+	// cannot tell two players apart who share one across worlds.
+	if _, err := s.store.CollectStamp(card.RallyID, card.ID, match.ID,
+		model.ParticipantLabel(card.ParticipantName, card.World), stall,
 		model.NormalizeStampType(match.StampType)); err != nil {
 		if errors.Is(err, store.ErrStampAlreadyCollected) {
 			writeError(w, http.StatusConflict, "You've already collected this stamp")

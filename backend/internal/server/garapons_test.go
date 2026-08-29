@@ -355,6 +355,31 @@ func TestGaraponDraw_RateLimited(t *testing.T) {
 	}
 }
 
+// The draw log is what staff read when handing out a prize, and it outlives the
+// drawing link (player_id goes NULL on delete, the snapshot stays). Once names and
+// worlds were stored apart, snapshotting the bare name would have left two players
+// who share a character name across worlds indistinguishable at exactly the moment
+// it matters.
+func TestGaraponDraw_LogSnapshotsNameAndWorld(t *testing.T) {
+	env := newTestEnv(t)
+	env.loginAdmin(t)
+	gid := env.createGarapon(t, "G")
+
+	resp := env.postJSON(t, fmt.Sprintf("/api/garapons/%d/players", gid), map[string]any{
+		"player_name": "Aria Ashwood", "world": "Gilgamesh", "max_draws": 1,
+	})
+	token := decodeBody(t, resp)["player"].(map[string]any)["token"].(string)
+
+	drawn := decodeBody(t, env.postJSON(t, "/api/garapon/"+token+"/draw", map[string]any{}))
+	draw, _ := drawn["draw"].(map[string]any)
+	if draw == nil {
+		t.Fatal("no draw returned")
+	}
+	if draw["player_name"] != "Aria Ashwood @ Gilgamesh" {
+		t.Errorf("logged player_name = %v; want the composed identity", draw["player_name"])
+	}
+}
+
 func TestGaraponDraw_NoDrawsRemaining(t *testing.T) {
 	env := newTestEnv(t)
 	env.loginAdmin(t)

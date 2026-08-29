@@ -3041,6 +3041,32 @@ with a personal access token and is distributed through a Dalamud custom repo
 `SenpanCompanion.csproj`. Entries below the current release were reconstructed
 from the `<Version>` history and commit messages.
 
+### [3.7.0.0] - 2026-08-28
+
+Keeps the Companion in step with how the suite now records a participant. Requires
+backend 3.21.0.
+
+#### Changed
+
+- **A drawing link or stamp card issued from the Companion now carries the home
+  world.** Every system stores a participant as a name plus a world, so a record
+  written without one cannot be matched to that person's raffle entry or other
+  cards. When the name came from the **Nearby...** picker the world is taken
+  straight from the game's object table - the most reliable source there is - and
+  sent with it. Typing a name by hand still works: the server splits a
+  "Name @ World", and the hint now says so.
+- **Player and participant lists show the world.** Both tables render the same
+  "Name @ World" the rest of the suite shows.
+
+#### Fixed
+
+- **A stamp card issued alongside a drawing link is no longer the same secret.**
+  The Companion's create-player call auto-issues a paired stamp card; the two used
+  to share one token, so the shareable card link spent the player's draws - a
+  screenshot of the card, or a link pasted to a friend, burned draws that cannot be
+  undone. The server now issues each on its own token, and the Companion's models
+  no longer claim they are equal.
+
 ### [3.6.0.0] - 2026-08-26
 
 Fixes from a full-project security and correctness review. Requires backend 3.20.0.

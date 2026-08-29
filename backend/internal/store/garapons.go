@@ -473,11 +473,11 @@ func (s *Store) RecordGaraponDraw(playerID int64) (*model.GaraponDraw, error) {
 	defer func() { _ = tx.Rollback() }()
 
 	var garaponID int64
-	var playerName, status string
+	var playerName, playerWorld, status string
 	var maxDraws int
-	err = tx.QueryRow(`SELECT p.garapon_id, p.player_name, p.max_draws, g.status
+	err = tx.QueryRow(`SELECT p.garapon_id, p.player_name, p.world, p.max_draws, g.status
 		FROM garapon_players p JOIN garapons g ON g.id = p.garapon_id WHERE p.id = ?`, playerID).
-		Scan(&garaponID, &playerName, &maxDraws, &status)
+		Scan(&garaponID, &playerName, &playerWorld, &maxDraws, &status)
 	if err != nil {
 		return nil, err // includes sql.ErrNoRows when the player is gone
 	}
@@ -502,8 +502,13 @@ func (s *Store) RecordGaraponDraw(playerID int64) (*model.GaraponDraw, error) {
 	}
 	win := pickGaraponPrize(prizes)
 
+	// The log snapshots the WHOLE identity, not just the name: it is what staff read
+	// when handing out a prize, and it has to survive the drawing link being deleted.
+	// Storing the bare name would leave two players who share one across worlds
+	// indistinguishable at exactly the moment it matters.
 	res, err := tx.Exec(`INSERT INTO garapon_draws (garapon_id, player_id, prize_id, player_name, prize_name, ball_color)
-		VALUES (?, ?, ?, ?, ?, ?)`, garaponID, playerID, win.ID, playerName, win.Name, win.BallColor)
+		VALUES (?, ?, ?, ?, ?, ?)`, garaponID, playerID, win.ID,
+		model.ParticipantLabel(playerName, playerWorld), win.Name, win.BallColor)
 	if err != nil {
 		return nil, err
 	}

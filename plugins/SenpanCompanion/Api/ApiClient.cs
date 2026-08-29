@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Net;
 using System.Net.Http;
 using System.Net.Http.Headers;
@@ -204,11 +204,17 @@ public sealed class ApiClient : IDisposable
         => SendAsync<GaraponDetailResponse>(HttpMethod.Get, $"api/garapons/{id}", null, ct);
 
     // Issues a per-player drawing link. When the garapon is linked to an open rally,
-    // the server also auto-issues the paired stamp card (same token) and returns it
-    // as player.stamp_card_token - no second call is needed.
-    public Task<GaraponPlayerResponse> CreateGaraponPlayerAsync(long garaponId, string playerName, int maxDraws, CancellationToken ct = default)
+    // the server also auto-issues a paired stamp card - on its OWN token - and
+    // returns it as player.stamp_card_token, so no second call is needed.
+    //
+    // Send the world whenever it is known: every system stores a participant as a
+    // name plus a home world, and a record written without one cannot be matched to
+    // the same person's raffle entry or stamp card. The nearby-player picker reads
+    // it from the game itself, which is the most reliable source there is. An empty
+    // world is still accepted - the server splits a composed "Name @ World".
+    public Task<GaraponPlayerResponse> CreateGaraponPlayerAsync(long garaponId, string playerName, string world, int maxDraws, CancellationToken ct = default)
         => SendAsync<GaraponPlayerResponse>(HttpMethod.Post, $"api/garapons/{garaponId}/players",
-            new { player_name = playerName, max_draws = maxDraws }, ct);
+            new { player_name = playerName, world, max_draws = maxDraws }, ct);
 
     // -- Stamp Rally --------------------------------------------------------------
 
@@ -218,9 +224,11 @@ public sealed class ApiClient : IDisposable
     public Task<StampRallyDetailResponse> GetStampRallyAsync(long id, CancellationToken ct = default)
         => SendAsync<StampRallyDetailResponse>(HttpMethod.Get, $"api/stamp-rallies/{id}", null, ct);
 
-    public Task<StampRallyCardResponse> CreateStampRallyCardAsync(long rallyId, string participantName, CancellationToken ct = default)
+    // World as above: sent when known so the card matches the same person's other
+    // records, and optional because staff may issue one without it.
+    public Task<StampRallyCardResponse> CreateStampRallyCardAsync(long rallyId, string participantName, string world, CancellationToken ct = default)
         => SendAsync<StampRallyCardResponse>(HttpMethod.Post, $"api/stamp-rallies/{rallyId}/cards",
-            new { participant_name = participantName }, ct);
+            new { participant_name = participantName, world }, ct);
 
     // Pause/resume one stall (stamp_rally_stamps.paused). The 200 body echoes the new
     // paused value; callers refetch detail, so OkResponse suffices (extra field ignored).

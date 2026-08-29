@@ -269,6 +269,12 @@ func canBrowseImages(u *model.User) bool {
 		permFestivalGarapon,
 		permFestivalStampRally,
 		permSystemThemes,
+		// Both of these editors embed the shared image picker (FestivalMapFormTab
+		// needs the base plan, TeaRoomFormTab its room art), so leaving them out
+		// meant a grantee of either page got a 403 from the picker their own form
+		// depends on and could not finish the task the permission exists for.
+		permFestivalMap,
+		permTeahouseTeaRooms,
 	} {
 		if userHasPermission(u, perm) {
 			return true

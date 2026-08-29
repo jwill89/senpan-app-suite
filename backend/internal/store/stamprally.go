@@ -211,7 +211,19 @@ func (s *Store) CreateStampRally(r *model.StampRally) (int64, error) {
 // prizes in one transaction. Stamps are UPSERTED by id (existing ids updated, id==0
 // inserted, omitted ids deleted) so that collected-stamp history survives edits;
 // prizes (which nothing references) are simply replaced.
-func (s *Store) UpdateStampRally(r *model.StampRally) error {
+// replaceStamps and replacePrizes say whether this save is authoritative for each
+// child collection. False leaves that collection exactly as it is.
+//
+// The distinction matters because these are FULL-REPLACE collections: whatever the
+// save carries becomes the whole set, and anything missing is deleted. That is
+// correct when the client really is sending the complete list, and catastrophic
+// when it isn't - an admin screen that opened its editor before the detail fetch
+// landed (or after it failed) holds a list row whose stamps/prizes are simply
+// absent, and saving it deleted every stamp on the rally along with every
+// participant's collected rows. "The request didn't mention them" and "the request
+// wants none of them" have to be different answers, so the handler decides from
+// whether the JSON key was present at all and passes it down here.
+func (s *Store) UpdateStampRally(r *model.StampRally, replaceStamps, replacePrizes bool) error {
 	tx, err := s.beginImmediate()
 	if err != nil {
 		return err
@@ -228,7 +240,29 @@ func (s *Store) UpdateStampRally(r *model.StampRally) error {
 		return err
 	}
 
-	// Reconcile stamps by id (preserving collected history for kept stamps).
+	if replaceStamps {
+		if err := reconcileRallyStamps(tx, r); err != nil {
+			return err
+		}
+	}
+	if replacePrizes {
+		// Prizes have no per-user references -> replace wholesale.
+		if _, err := tx.Exec(`DELETE FROM stamp_rally_prizes WHERE rally_id = ?`, r.ID); err != nil {
+			return err
+		}
+		for i, p := range r.Prizes {
+			if err := insertStampRallyPrize(tx, r.ID, p, i); err != nil {
+				return err
+			}
+		}
+	}
+	return tx.Commit()
+}
+
+// reconcileRallyStamps makes the rally's stamps match r.Stamps exactly: an
+// existing id is updated in place (so its collected history survives), id==0 is
+// inserted, and anything left out is deleted along with its collected rows.
+func reconcileRallyStamps(tx *sql.Tx, r *model.StampRally) error {
 	keep := make(map[int64]bool)
 	for i, st := range r.Stamps {
 		if st.ID > 0 {
@@ -261,22 +295,18 @@ func (s *Store) UpdateStampRally(r *model.StampRally) error {
 		}
 	}
 	existing.Close()
+	// A read that stopped early is not the same as a short list: without this the
+	// truncation reads as "these are all the stamps", and the ones never seen are
+	// silently kept when the save meant to delete them.
+	if err := existing.Err(); err != nil {
+		return err
+	}
 	for _, id := range toDelete {
 		if _, err := tx.Exec(`DELETE FROM stamp_rally_stamps WHERE id = ?`, id); err != nil {
 			return err
 		}
 	}
-
-	// Prizes have no per-user references -> replace wholesale.
-	if _, err := tx.Exec(`DELETE FROM stamp_rally_prizes WHERE rally_id = ?`, r.ID); err != nil {
-		return err
-	}
-	for i, p := range r.Prizes {
-		if err := insertStampRallyPrize(tx, r.ID, p, i); err != nil {
-			return err
-		}
-	}
-	return tx.Commit()
+	return nil
 }
 
 // insertStampRallyStamp inserts one stamp at the given sort order, returning its ID.
@@ -369,21 +399,20 @@ func (s *Store) SetStampPaused(rallyID, stampID int64, paused bool) (bool, error
 // -- Participant cards (tokenized) --------------------------------------------
 
 // IssueRallyCard creates a tokenized card for a named participant (fresh token) and
-// returns it.
-func (s *Store) IssueRallyCard(rallyID int64, name string) (*model.StampRallyCard, error) {
+// returns it. World may be "" - staff issuing a card by hand do not always know it.
+func (s *Store) IssueRallyCard(rallyID int64, name, world string) (*model.StampRallyCard, error) {
 	token, err := randToken()
 	if err != nil {
 		return nil, err
 	}
-	return s.IssueRallyCardWithToken(rallyID, name, token)
+	return s.IssueRallyCardWithToken(rallyID, name, world, token)
 }
 
-// IssueRallyCardWithToken creates a card using a SUPPLIED token, so a Garapon drawing
-// link and its auto-issued stamp card can share one hash (one link serves both
-// /garapon/<token> and /stamp-card/<token>).
-func (s *Store) IssueRallyCardWithToken(rallyID int64, name, token string) (*model.StampRallyCard, error) {
-	res, err := s.db.Exec(`INSERT INTO stamp_rally_cards (rally_id, token, participant_name)
-		VALUES (?, ?, ?)`, rallyID, token, name)
+// IssueRallyCardWithToken creates a card using a SUPPLIED token, for a caller that
+// needs to know the token before the row exists.
+func (s *Store) IssueRallyCardWithToken(rallyID int64, name, world, token string) (*model.StampRallyCard, error) {
+	res, err := s.db.Exec(`INSERT INTO stamp_rally_cards (rally_id, token, participant_name, world)
+		VALUES (?, ?, ?, ?)`, rallyID, token, name, world)
 	if err != nil {
 		return nil, err
 	}
@@ -433,55 +462,76 @@ func (s *Store) ListSignupRallies() ([]model.SignupRally, error) {
 }
 
 // SignUpForRally issues a participant their own card for a rally and, when
-// garaponID is non-nil, a Garapon drawing link sharing the SAME token (matching how
-// an admin-issued link pairs the two, so one hash serves /garapon/<token> and
-// /stamp-card/<token>). Returns ErrParticipantNameTaken if the rally already has a
-// card under that name.
+// garaponID is non-nil, a Garapon drawing link with its OWN separate token, which
+// it returns alongside the card (empty when there is no garapon).
+//
+// The two tokens used to be one string, so a single hash served /garapon/<token>
+// and /stamp-card/<token>. That made the card link itself a spendable capability:
+// a screenshot of a stamp card, or a card link pasted in Discord, let anyone spend
+// that participant's draws - which are irreversible - and it meant any path that
+// recovered a card link handed over the draws with it. Viewing and spending are
+// now separate secrets, so a card link can be shared freely.
+//
+// Cards issued BEFORE this change still share one token; they are left alone
+// deliberately, so links already in participants' hands keep working. The overlap
+// ends as those rallies close.
 //
 // The name check and both inserts run inside one immediate transaction. Checking
 // outside it would let two sign-ups racing on the same name both read "free" and
 // both insert - the whole point of the check is that the second one loses.
-func (s *Store) SignUpForRally(rallyID int64, name string, garaponID *int64, maxDraws int) (*model.StampRallyCard, error) {
+func (s *Store) SignUpForRally(rallyID int64, name, world string, garaponID *int64, maxDraws int) (*model.StampRallyCard, string, error) {
 	tx, err := s.beginImmediate()
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 	defer func() { _ = tx.Rollback() }()
 
+	// Matched on name AND world. Two players who share a character name on
+	// different worlds are two people, and before the world had its own column the
+	// second of them was turned away as a duplicate.
 	var taken int
 	err = tx.QueryRow(`SELECT COUNT(*) FROM stamp_rally_cards
-		WHERE rally_id = ? AND participant_name = ? COLLATE NOCASE`, rallyID, name).Scan(&taken)
+		WHERE rally_id = ? AND participant_name = ? COLLATE NOCASE
+		  AND world = ? COLLATE NOCASE`, rallyID, name, world).Scan(&taken)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 	if taken > 0 {
-		return nil, ErrParticipantNameTaken
+		return nil, "", ErrParticipantNameTaken
 	}
 
 	token, err := randToken()
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
-	res, err := tx.Exec(`INSERT INTO stamp_rally_cards (rally_id, token, participant_name)
-		VALUES (?, ?, ?)`, rallyID, token, name)
+	res, err := tx.Exec(`INSERT INTO stamp_rally_cards (rally_id, token, participant_name, world)
+		VALUES (?, ?, ?, ?)`, rallyID, token, name, world)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 	cardID, err := res.LastInsertId()
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 
+	var garaponToken string
 	if garaponID != nil {
-		if _, err := tx.Exec(`INSERT INTO garapon_players (garapon_id, token, player_name, max_draws, stamp_card_id)
-			VALUES (?, ?, ?, ?, ?)`, *garaponID, token, name, maxDraws, cardID); err != nil {
-			return nil, err
+		if garaponToken, err = randToken(); err != nil {
+			return nil, "", err
+		}
+		if _, err := tx.Exec(`INSERT INTO garapon_players (garapon_id, token, player_name, world, max_draws, stamp_card_id)
+			VALUES (?, ?, ?, ?, ?, ?)`, *garaponID, garaponToken, name, world, maxDraws, cardID); err != nil {
+			return nil, "", err
 		}
 	}
 	if err := tx.Commit(); err != nil {
-		return nil, err
+		return nil, "", err
 	}
-	return s.GetRallyCardByID(cardID)
+	card, err := s.GetRallyCardByID(cardID)
+	if err != nil {
+		return nil, "", err
+	}
+	return card, garaponToken, nil
 }
 
 // LookupParticipantCards returns the cards held under an exact participant name
@@ -489,16 +539,32 @@ func (s *Store) SignUpForRally(rallyID int64, name string, garaponID *int64, max
 // that are still open, with the paired Garapon drawing link when its garapon is
 // also open. An unknown name simply yields no rows: the caller returns that as an
 // empty list, so the endpoint can't be used to probe who signed up for what.
-func (s *Store) LookupParticipantCards(name string) ([]model.StampLookupEntry, error) {
-	rows, err := s.db.Query(`SELECT r.id, r.title, c.token, c.completed,
-			COALESCE(CASE WHEN g.id IS NOT NULL THEN gp.token END, ''),
-			COALESCE(g.title, '')
+func (s *Store) LookupParticipantCards(name, world string) ([]model.StampLookupEntry, error) {
+	// gp.token is deliberately NOT selected. A draw is irreversible and the token is
+	// the whole capability, so a lookup keyed on a character name - which is public,
+	// and appears on the entrant lists the app publishes by design - must never
+	// return one. What it reports instead is how many draws are LEFT, which tells a
+	// participant on a borrowed device that their draws are intact without handing
+	// anyone the means to spend them. The card token is still returned: it opens the
+	// stamp card and, since the tokens were split, nothing else.
+	rows, err := s.db.Query(`SELECT r.id, r.title, c.token, c.participant_name, c.world, c.completed,
+			COALESCE(g.title, ''),
+			COALESCE(gp.max_draws, 0) - COALESCE((
+				SELECT COUNT(*) FROM garapon_draws d WHERE d.player_id = gp.id), 0)
 		FROM stamp_rally_cards c
 		JOIN stamp_rallies r ON r.id = c.rally_id
 		LEFT JOIN garapon_players gp ON gp.stamp_card_id = c.id
 		LEFT JOIN garapons g ON g.id = gp.garapon_id AND g.status = 'open'
-		WHERE r.status = 'open' AND c.participant_name = ? COLLATE NOCASE
-		ORDER BY r.created_at DESC, r.id DESC`, name)
+		WHERE r.status = 'open' AND (
+			(c.participant_name = ? COLLATE NOCASE AND c.world = ? COLLATE NOCASE)
+			-- A card with no world is one the v66 backfill could not split (the
+			-- participant never typed a world) or one staff issued without asking.
+			-- It is still findable by the name alone, and by the whole label in case
+			-- it kept the composed form.
+			OR (c.world = '' AND c.participant_name IN (?, ?) COLLATE NOCASE)
+		)
+		ORDER BY r.created_at DESC, r.id DESC`,
+		name, world, name, model.ParticipantLabel(name, world))
 	if err != nil {
 		return nil, err
 	}
@@ -508,9 +574,14 @@ func (s *Store) LookupParticipantCards(name string) ([]model.StampLookupEntry, e
 	for rows.Next() {
 		var e model.StampLookupEntry
 		var completed int
-		if err := rows.Scan(&e.RallyID, &e.RallyTitle, &e.CardToken, &completed,
-			&e.GaraponToken, &e.GaraponTitle); err != nil {
+		if err := rows.Scan(&e.RallyID, &e.RallyTitle, &e.CardToken,
+			&e.ParticipantName, &e.World, &completed,
+			&e.GaraponTitle, &e.GaraponDrawsLeft); err != nil {
 			return nil, err
+		}
+		// No garapon row joined, so the subtraction above is meaningless.
+		if e.GaraponTitle == "" {
+			e.GaraponDrawsLeft = 0
 		}
 		e.Completed = completed == 1
 		entries = append(entries, e)
@@ -545,7 +616,7 @@ func scanRallyCard(sc rowScanner) (*model.StampRallyCard, error) {
 	var c model.StampRallyCard
 	var completed int
 	var completedAt sql.NullString
-	if err := sc.Scan(&c.ID, &c.RallyID, &c.Token, &c.ParticipantName, &completed, &completedAt, &c.CreatedAt); err != nil {
+	if err := sc.Scan(&c.ID, &c.RallyID, &c.Token, &c.ParticipantName, &c.World, &completed, &completedAt, &c.CreatedAt); err != nil {
 		return nil, err
 	}
 	c.Completed = completed != 0
@@ -555,7 +626,7 @@ func scanRallyCard(sc rowScanner) (*model.StampRallyCard, error) {
 
 // GetRallyCardByID returns a single card by id (nil if not found).
 func (s *Store) GetRallyCardByID(id int64) (*model.StampRallyCard, error) {
-	row := s.db.QueryRow(`SELECT id, rally_id, token, participant_name, completed, completed_at, created_at
+	row := s.db.QueryRow(`SELECT id, rally_id, token, participant_name, world, completed, completed_at, created_at
 		FROM stamp_rally_cards WHERE id = ?`, id)
 	c, err := scanRallyCard(row)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -567,7 +638,7 @@ func (s *Store) GetRallyCardByID(id int64) (*model.StampRallyCard, error) {
 // GetRallyCardByToken returns a single card by its token (nil if not found). This is the
 // public stamp-card view's entry point.
 func (s *Store) GetRallyCardByToken(token string) (*model.StampRallyCard, error) {
-	row := s.db.QueryRow(`SELECT id, rally_id, token, participant_name, completed, completed_at, created_at
+	row := s.db.QueryRow(`SELECT id, rally_id, token, participant_name, world, completed, completed_at, created_at
 		FROM stamp_rally_cards WHERE token = ?`, token)
 	c, err := scanRallyCard(row)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -579,7 +650,7 @@ func (s *Store) GetRallyCardByToken(token string) (*model.StampRallyCard, error)
 // ListRallyCards returns a rally's participant cards (newest first) with each card's
 // collected-stamp count.
 func (s *Store) ListRallyCards(rallyID int64) ([]model.StampRallyCard, error) {
-	rows, err := s.db.Query(`SELECT c.id, c.rally_id, c.token, c.participant_name, c.completed, c.completed_at, c.created_at,
+	rows, err := s.db.Query(`SELECT c.id, c.rally_id, c.token, c.participant_name, c.world, c.completed, c.completed_at, c.created_at,
 			COALESCE((SELECT COUNT(*) FROM stamp_rally_collected col WHERE col.card_id = c.id), 0)
 		FROM stamp_rally_cards c WHERE c.rally_id = ? ORDER BY c.created_at DESC, c.id DESC`, rallyID)
 	if err != nil {
@@ -592,7 +663,7 @@ func (s *Store) ListRallyCards(rallyID int64) ([]model.StampRallyCard, error) {
 		var c model.StampRallyCard
 		var completed int
 		var completedAt sql.NullString
-		if err := rows.Scan(&c.ID, &c.RallyID, &c.Token, &c.ParticipantName, &completed, &completedAt, &c.CreatedAt,
+		if err := rows.Scan(&c.ID, &c.RallyID, &c.Token, &c.ParticipantName, &c.World, &completed, &completedAt, &c.CreatedAt,
 			&c.CollectedCount); err != nil {
 			return nil, err
 		}

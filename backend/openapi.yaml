@@ -1910,6 +1910,8 @@ components:
                 type: string
               token:
                 type: string
+              world:
+                type: string
             type: object
           type: array
       type: object
@@ -1986,6 +1988,8 @@ components:
           type: string
         token:
           type: string
+        world:
+          type: string
       type: object
     GaraponPlayerResponse:
       properties:
@@ -2008,6 +2012,8 @@ components:
             stamp_card_token:
               type: string
             token:
+              type: string
+            world:
               type: string
           type: object
       type: object
@@ -3953,14 +3959,18 @@ components:
           type: string
         completed:
           type: boolean
+        garapon_draws_left:
+          type: integer
         garapon_title:
           type: string
-        garapon_token:
+        participant_name:
           type: string
         rally_id:
           format: int64
           type: integer
         rally_title:
+          type: string
+        world:
           type: string
       type: object
     StampLookupResponse:
@@ -3972,14 +3982,18 @@ components:
                 type: string
               completed:
                 type: boolean
+              garapon_draws_left:
+                type: integer
               garapon_title:
                 type: string
-              garapon_token:
+              participant_name:
                 type: string
               rally_id:
                 format: int64
                 type: integer
               rally_title:
+                type: string
+              world:
                 type: string
             type: object
           type: array
@@ -4285,6 +4299,8 @@ components:
           type: integer
         token:
           type: string
+        world:
+          type: string
       type: object
     StampRallyCardResponse:
       properties:
@@ -4307,6 +4323,8 @@ components:
               format: int64
               type: integer
             token:
+              type: string
+            world:
               type: string
           type: object
       type: object
@@ -4355,6 +4373,8 @@ components:
                 format: int64
                 type: integer
               token:
+                type: string
+              world:
                 type: string
             type: object
           type: array
@@ -4774,6 +4794,8 @@ components:
         participant_name:
           type: string
         rally_title:
+          type: string
+        world:
           type: string
       type: object
     StampSubmitResponse:
@@ -5382,7 +5404,7 @@ info:
     (`{ "type": "log", "entry": LogEntry }`) for the live log tail - best-effort,
     sent only while an admin is connected.
   title: Senpan App Suite API
-  version: 3.19.0
+  version: 3.21.0
 openapi: 3.0.3
 paths:
   /api/account/change-password:
@@ -10773,6 +10795,11 @@ paths:
                   items:
                     $ref: '#/components/schemas/StampRallyPrize'
                   type: array
+                public_signup:
+                  description: Whether the rally takes public self-service sign-ups.
+                    OMITTING it on a PUT sends false and TURNS SIGN-UP OFF - the save
+                    replaces the rally's fields, it does not merge them.
+                  type: boolean
                 redeem_image:
                   description: Where-to-redeem screenshot.
                   type: string
@@ -10911,6 +10938,11 @@ paths:
                   items:
                     $ref: '#/components/schemas/StampRallyPrize'
                   type: array
+                public_signup:
+                  description: Whether the rally takes public self-service sign-ups.
+                    OMITTING it on a PUT sends false and TURNS SIGN-UP OFF - the save
+                    replaces the rally's fields, it does not merge them.
+                  type: boolean
                 redeem_image:
                   description: Where-to-redeem screenshot.
                   type: string

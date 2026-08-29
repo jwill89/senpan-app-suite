@@ -2,6 +2,7 @@ package server
 
 import (
 	"errors"
+	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
@@ -177,7 +178,7 @@ func buildPublicCard(r *model.StampRally, card *model.StampRallyCard, stamps []m
 			CompletionMode: model.NormalizeRallyCompletion(r.CompletionMode),
 			RequiredFood:   r.RequiredFood, RequiredGame: r.RequiredGame,
 		},
-		ParticipantName: card.ParticipantName,
+		ParticipantName: model.ParticipantLabel(card.ParticipantName, card.World),
 		Completed:       card.Completed,
 		CompletedAt:     card.CompletedAt,
 		PrizesRevealed:  card.Completed,
@@ -493,7 +494,13 @@ func (s *Server) handleStampRallyUpdate(w http.ResponseWriter, r *http.Request) 
 	if !s.resolveMapStalls(w, rally) {
 		return
 	}
-	if err := s.store.UpdateStampRally(rally); err != nil {
+	// A save is authoritative for a child collection only when it actually carried
+	// one. Go's JSON decode leaves an omitted key as a nil slice while an explicit
+	// [] decodes to an empty non-nil one, so "the client sent no stamps" and "the
+	// client wants no stamps" stay distinguishable - and only the second deletes
+	// anything. This is what stops an editor opened before (or without) a detail
+	// fetch from wiping every stamp and every participant's collected rows.
+	if err := s.store.UpdateStampRally(rally, req.Stamps != nil, req.Prizes != nil); err != nil {
 		writeInternalError(w, "update stamp rally", err)
 		return
 	}
@@ -598,6 +605,9 @@ func (s *Server) handleStampRallyStampPatch(w http.ResponseWriter, r *http.Reque
 // stampRallyCardCreateRequest is the JSON body for POST /api/stamp-rallies/{id}/cards.
 type stampRallyCardCreateRequest struct {
 	ParticipantName string `json:"participant_name"`
+	// Home world, its own field as everywhere else. Optional: a composed
+	// "Name @ World" is split server-side, and staff may not know the world.
+	World string `json:"world"`
 }
 
 // handleStampRallyCardCreate issues a tokenized participant card link.
@@ -623,6 +633,10 @@ func (s *Server) handleStampRallyCardCreate(w http.ResponseWriter, r *http.Reque
 		writeError(w, http.StatusBadRequest, "Participant name is required")
 		return
 	}
+	world := strings.TrimSpace(req.World)
+	if world == "" {
+		name, world = model.SplitParticipantLabel(name)
+	}
 	rally, err := s.store.GetStampRally(rallyID)
 	if err != nil {
 		writeInternalError(w, "get rally for card", err)
@@ -632,7 +646,7 @@ func (s *Server) handleStampRallyCardCreate(w http.ResponseWriter, r *http.Reque
 		writeError(w, http.StatusNotFound, "Stamp rally not found")
 		return
 	}
-	card, err := s.store.IssueRallyCard(rallyID, name)
+	card, err := s.store.IssueRallyCard(rallyID, name, world)
 	if err != nil {
 		writeInternalError(w, "issue rally card", err)
 		return
@@ -725,10 +739,17 @@ func (s *Server) maybeComplete(card *model.StampRallyCard, rally *model.StampRal
 	}
 	if rallyCardComplete(rally, rally.Stamps, collected, now) {
 		ts := now.UTC().Format(time.RFC3339)
-		if err := s.store.SetRallyCardCompleted(card.ID, ts); err == nil {
-			card.Completed = true
-			card.CompletedAt = ts
+		if err := s.store.SetRallyCardCompleted(card.ID, ts); err != nil {
+			// Don't fail the request over it - the participant's collected stamps are
+			// already durable and the card completes on the next view. But say so:
+			// swallowing this made a failed completion write invisible server-side,
+			// so the card silently reported completed=false (prizes still hidden)
+			// with nothing anywhere to explain why.
+			slog.Error("mark stamp card completed", "card_id", card.ID, "rally_id", rally.ID, "error", err)
+			return
 		}
+		card.Completed = true
+		card.CompletedAt = ts
 	}
 }
 
@@ -764,6 +785,16 @@ type stampSubmitRequest struct {
 //	Request:   {"password":"..."}
 //	Response:  the refreshed public card + "collected_stamp_id"
 func (s *Server) handleStampCardStamp(w http.ResponseWriter, r *http.Request) {
+	// Stamp passwords are short words staff read out at a stall, so an unthrottled
+	// endpoint is a password oracle: a script could collect a card's stamps without
+	// visiting anything. Only a MISS costs budget, so a participant collecting
+	// normally never notices this.
+	ip := clientIP(r)
+	if s.stampGuessLimiter.isLimited(ip) {
+		slog.Warn("stamp password guessing rate limited", "ip", ip)
+		writeError(w, http.StatusTooManyRequests, "Too many incorrect passwords. Please try again later.")
+		return
+	}
 	token := strings.TrimSpace(r.PathValue("token"))
 	card, rally, ok := s.loadCardByToken(w, token)
 	if !ok {
@@ -789,9 +820,11 @@ func (s *Server) handleStampCardStamp(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if match == nil {
+		s.stampGuessLimiter.recordFailure(ip)
 		writeError(w, http.StatusBadRequest, "That password doesn't match any stamp on this card")
 		return
 	}
+	s.stampGuessLimiter.resetFailures(ip)
 
 	now := time.Now().UTC()
 	if !stampAvailable(rally, match, now) {

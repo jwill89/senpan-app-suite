@@ -381,18 +381,34 @@ func TestGarapon_LinkedStampRally(t *testing.T) {
 	}
 	gid := int(decodeBody(t, resp)["garapon"].(map[string]any)["id"].(float64))
 
-	// Issue a drawing link -> it also issues a stamp card with the SAME token.
+	// Issue a drawing link -> it also issues a stamp card, on its OWN token.
 	resp = env.postJSON(t, fmt.Sprintf("/api/garapons/%d/players", gid), map[string]any{
-		"player_name": "Tester", "max_draws": 1,
+		"player_name": "Tester", "world": "Gilgamesh", "max_draws": 1,
 	})
 	player := decodeBody(t, resp)["player"].(map[string]any)
 	token := player["token"].(string)
-	if player["stamp_card_token"] != token {
-		t.Errorf("stamp_card_token = %v; want same as drawing token %q", player["stamp_card_token"], token)
+	cardToken, _ := player["stamp_card_token"].(string)
+	if cardToken == "" {
+		t.Fatal("no stamp card was issued alongside the drawing link")
 	}
-	// The shared token resolves as a stamp card too.
-	if r := env.get(t, "/api/stamp-card/"+token); r.StatusCode != http.StatusOK {
-		t.Errorf("/stamp-card/<shared token> = %d; want 200", r.StatusCode)
+	// They must differ. While they were one string, the stamp-card link a staff
+	// member handed out was itself a spendable drawing token - a screenshot of the
+	// card, or the link pasted to a friend, burned draws that cannot be undone.
+	if cardToken == token {
+		t.Errorf("stamp_card_token and drawing token are both %q; viewing a card and "+
+			"spending its draws must be separate secrets", token)
+	}
+	if r := env.get(t, "/api/stamp-card/"+cardToken); r.StatusCode != http.StatusOK {
+		t.Errorf("/stamp-card/<card token> = %d; want 200", r.StatusCode)
+		r.Body.Close()
+	}
+	// ...and neither reaches the other's endpoint.
+	if r := env.get(t, "/api/garapon/"+cardToken); r.StatusCode != http.StatusNotFound {
+		t.Errorf("garapon by CARD token = %d; want 404", r.StatusCode)
+		r.Body.Close()
+	}
+	if r := env.get(t, "/api/stamp-card/"+token); r.StatusCode != http.StatusNotFound {
+		t.Errorf("card by DRAWING token = %d; want 404", r.StatusCode)
 		r.Body.Close()
 	}
 

@@ -28,10 +28,18 @@ const affiliateWebhookSettingKey = "affiliate_webhook_url"
 // handleAffiliatesList returns every affiliate, alphabetically by name.
 //
 //	Endpoint:  GET /api/affiliates
-//	Auth:      admin, or a user granted teahouse-affiliates
-//	Response:  {"affiliates": [...]}
+//	Auth:      admin, or a user granted teahouse-affiliates, festival-map or
+//	           festival-stamp-rally (the latter two only to name a stall's operator)
+//	Response:  {"affiliates": [...], "webhook_url": "..." (affiliates page only)}
 func (s *Server) handleAffiliatesList(w http.ResponseWriter, r *http.Request) {
-	if !s.requirePermission(w, r, permTeahouseAffiliates) {
+	// The festival map and stamp rally editors both pick an affiliate to name who
+	// runs a pitch, so they need to READ this list - gating it on the affiliates
+	// page alone left those grantees with an empty operator select and no way to
+	// finish the form. They get the names only: the shared Discord webhook this
+	// response also carries belongs to the affiliates page, and a caller who cannot
+	// edit affiliates has no business holding it.
+	u := s.requireAnyPermission(w, r, permTeahouseAffiliates, permFestivalMap, permFestivalStampRally)
+	if u == nil {
 		return
 	}
 	affiliates, err := s.store.ListAffiliates()
@@ -39,7 +47,10 @@ func (s *Server) handleAffiliatesList(w http.ResponseWriter, r *http.Request) {
 		writeInternalError(w, "list affiliates", err)
 		return
 	}
-	webhook, _ := s.store.GetSetting(affiliateWebhookSettingKey)
+	var webhook string
+	if u.IsAdmin || userHasPermission(u, permTeahouseAffiliates) {
+		webhook, _ = s.store.GetSetting(affiliateWebhookSettingKey)
+	}
 	writeJSON(w, http.StatusOK, model.AffiliatesResponse{Affiliates: affiliates, WebhookURL: webhook})
 }
 
@@ -93,18 +104,23 @@ func sanitizeAffiliateHours(in []model.AffiliateHour) []model.AffiliateHour {
 // affiliateFromRequest builds a sanitized model.Affiliate (sans ID) from a request.
 func affiliateFromRequest(req affiliateWriteRequest, name string) *model.Affiliate {
 	return &model.Affiliate{
-		Name:        name,
-		Subtitle:    strings.TrimSpace(req.Subtitle),
-		Owners:      sanitizeOwners(req.Owners),
-		Location:    strings.TrimSpace(req.Location),
-		Timezone:    strings.TrimSpace(req.Timezone),
-		Hours:       sanitizeAffiliateHours(req.Hours),
-		Details:     req.Details,
-		Logo:        strings.TrimSpace(req.Logo),
-		Screenshot:  strings.TrimSpace(req.Screenshot),
-		EmbedColor:  strings.TrimSpace(req.EmbedColor),
-		DiscordLink: strings.TrimSpace(req.DiscordLink),
-		CarrdLink:   strings.TrimSpace(req.CarrdLink),
+		Name:       name,
+		Subtitle:   strings.TrimSpace(req.Subtitle),
+		Owners:     sanitizeOwners(req.Owners),
+		Location:   strings.TrimSpace(req.Location),
+		Timezone:   strings.TrimSpace(req.Timezone),
+		Hours:      sanitizeAffiliateHours(req.Hours),
+		Details:    req.Details,
+		Logo:       strings.TrimSpace(req.Logo),
+		Screenshot: strings.TrimSpace(req.Screenshot),
+		EmbedColor: strings.TrimSpace(req.EmbedColor),
+		// Normalize rather than merely trim: these two are rendered as `href` on the
+		// PUBLIC festival map, and normalizeExternalURL turns anything that is not
+		// already an http(s) URL into "https://<what they typed>" - so a stored
+		// "javascript:..." becomes an inert https link instead of a live one. The
+		// embed builder already ran these through it; the stored value did not.
+		DiscordLink: normalizeExternalURL(req.DiscordLink),
+		CarrdLink:   normalizeExternalURL(req.CarrdLink),
 	}
 }
 

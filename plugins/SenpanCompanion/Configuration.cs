@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using Dalamud.Configuration;
 using Dalamud.Plugin;
@@ -143,7 +143,21 @@ public class Configuration : IPluginConfiguration
         }
     }
 
-    public void Save() => this.pluginInterface?.SavePluginConfig(this);
+    /// <summary>
+    /// Serializes the config to disk. Dalamud's writer goes to a fixed
+    /// "<config>.json.tmp" and then renames, so two callers writing at once collide
+    /// on that one temp path - and there ARE two: the draw thread (settings edits)
+    /// and the thread pool (TimedMacroRunner's progress saves). The lock also stops
+    /// the background serializer walking a collection the draw thread is adding to
+    /// or clearing at the same moment.
+    /// </summary>
+    public void Save()
+    {
+        lock (SaveGate)
+            this.pluginInterface?.SavePluginConfig(this);
+    }
+
+    private static readonly object SaveGate = new();
 
     /// <summary>The public player URL for a card id (.../play/{id}).</summary>
     public string CardUrl(string id) => $"{this.ServerUrl.Trim().TrimEnd('/')}/play/{id}";

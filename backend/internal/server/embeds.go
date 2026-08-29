@@ -40,7 +40,17 @@ const (
 	embedDescriptionMax = 4096
 	embedFieldValueMax  = 1024
 	maxEmbedFields      = 25 // Discord's hard cap on fields per embed
+	// Discord also caps the SUM of title + description + every field name and
+	// value + footer at 6000 characters, and rejects the whole payload with a 400
+	// when it is exceeded. Nothing enforced that, so a long enough announcement
+	// simply failed to post.
+	embedTotalMax = 6000
 )
+
+// embedTruncatedNotice is appended as a final field when content had to be left
+// out, so a clipped announcement says so in the channel instead of quietly
+// arriving short. It is counted against the budget like any other field.
+const embedTruncatedNotice = "Too long to post in full - see the site for the rest."
 
 // embedNoHeading is a zero-width space (U+200B) used as a field name when a field
 // should render with no visible heading (Discord requires a non-empty field name).
@@ -185,6 +195,10 @@ func parseEmoji(s string) *discordEmoji {
 // pre-checking. New embed shapes extend this with more chainable setters.
 type embedBuilder struct {
 	embed discordEmbed
+	// dropped records that at least one field was left out, either because the
+	// 25-field cap was reached or because adding it would have blown the 6000-char
+	// total. Surfaced as a trailing notice by build().
+	dropped bool
 }
 
 // newEmbed starts a builder pre-seeded with the brand accent colour.
@@ -216,13 +230,37 @@ func (b *embedBuilder) colorHex(hex string) *embedBuilder {
 // can append freely without bookkeeping.
 func (b *embedBuilder) field(name, value string, inline bool) *embedBuilder {
 	value = strings.TrimSpace(value)
-	if value == "" || len(b.embed.Fields) >= maxEmbedFields {
+	if value == "" {
+		return b
+	}
+	if len(b.embed.Fields) >= maxEmbedFields {
+		b.dropped = true
+		return b
+	}
+	value = truncateRunes(value, embedFieldValueMax)
+	// Leave room for the trailing notice, so a clipped embed can still say it was
+	// clipped without itself pushing the payload over the limit.
+	if b.charCount()+len([]rune(name))+len([]rune(value)) > embedTotalMax-len([]rune(embedTruncatedNotice))-len([]rune(embedNoHeading)) {
+		b.dropped = true
 		return b
 	}
 	b.embed.Fields = append(b.embed.Fields, discordEmbedField{
-		Name: name, Value: truncateRunes(value, embedFieldValueMax), Inline: inline,
+		Name: name, Value: value, Inline: inline,
 	})
 	return b
+}
+
+// charCount is Discord's accounting for the 6000-character total: title,
+// description, every field name and value, and the footer.
+func (b *embedBuilder) charCount() int {
+	n := len([]rune(b.embed.Title)) + len([]rune(b.embed.Description))
+	for _, f := range b.embed.Fields {
+		n += len([]rune(f.Name)) + len([]rune(f.Value))
+	}
+	if b.embed.Footer != nil {
+		n += len([]rune(b.embed.Footer.Text))
+	}
+	return n
 }
 
 // thumbnail sets the small top-right image (only for absolute http(s) URLs, with
@@ -252,8 +290,16 @@ func (b *embedBuilder) footer(text string) *embedBuilder {
 	return b
 }
 
-// build returns the assembled embed.
+// build returns the assembled embed, appending a visible notice when content had
+// to be left out. Dropping silently is the part that made this a bug rather than a
+// limit: an announcement would arrive in the channel looking complete while its
+// later details were simply gone.
 func (b *embedBuilder) build() discordEmbed {
+	if b.dropped && len(b.embed.Fields) < maxEmbedFields {
+		b.embed.Fields = append(b.embed.Fields, discordEmbedField{
+			Name: embedNoHeading, Value: embedTruncatedNotice,
+		})
+	}
 	return b.embed
 }
 
@@ -447,8 +493,15 @@ func truncateRunes(s string, n int) string {
 	if len(runes) <= n {
 		return s
 	}
-	if n <= 1 {
+	if n <= 0 {
+		return ""
+	}
+	// The ellipsis counts toward the limit. Keeping n-1 runes and appending three
+	// more returned n+2, so every truncated field came back OVER the Discord cap it
+	// was truncated to satisfy - and Discord rejects the whole payload with a 400,
+	// which is why this only ever showed up on long content.
+	if n <= 3 {
 		return string(runes[:n])
 	}
-	return string(runes[:n-1]) + "..."
+	return string(runes[:n-3]) + "..."
 }

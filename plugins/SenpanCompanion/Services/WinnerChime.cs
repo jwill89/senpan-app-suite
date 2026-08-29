@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.IO;
 using System.Runtime.InteropServices;
 
@@ -19,18 +19,35 @@ public static class WinnerChime
     private const uint SndMemory = 0x0004;
     private const uint SndNoDefault = 0x0002;
 
-    private static byte[]? wav;
+    /// <summary>
+    /// Address of the PINNED WAV buffer handed to winmm.
+    ///
+    /// SND_ASYNC means PlaySound returns immediately and keeps reading this memory
+    /// for the ~0.64s the chime lasts, but the P/Invoke marshaller only pins a
+    /// managed array for the duration of the CALL - so a compacting GC during
+    /// playback was free to relocate the ~56KB buffer out from under winmm, leaving
+    /// it streaming whatever now occupies that address. Pinning for the process
+    /// lifetime is the fix and costs one small permanently-pinned array; the chime
+    /// exists for as long as the plugin does, so there is nothing to free.
+    /// </summary>
+    private static IntPtr wavPtr;
 
     [DllImport("winmm.dll", SetLastError = true)]
-    private static extern bool PlaySound(byte[]? data, IntPtr hModule, uint flags);
+    private static extern bool PlaySound(IntPtr data, IntPtr hModule, uint flags);
 
     /// <summary>Plays the chime asynchronously. Best-effort - failures are swallowed.</summary>
     public static void Play()
     {
         try
         {
-            wav ??= Build();
-            PlaySound(wav, IntPtr.Zero, SndAsync | SndMemory | SndNoDefault);
+            if (wavPtr == IntPtr.Zero)
+            {
+                // Deliberately never freed: the handle must outlive every async
+                // playback, and the plugin unloading takes the whole buffer with it.
+                var handle = GCHandle.Alloc(Build(), GCHandleType.Pinned);
+                wavPtr = handle.AddrOfPinnedObject();
+            }
+            PlaySound(wavPtr, IntPtr.Zero, SndAsync | SndMemory | SndNoDefault);
         }
         catch
         {

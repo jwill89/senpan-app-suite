@@ -12,18 +12,21 @@ import { onUnmounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
 import { useStampRalliesStore } from '@/stores/stampRallies'
+import WorldPicker from '@/components/common/ui/WorldPicker.vue'
+import { participantLabel } from '@/lib/participant'
 
 const router = useRouter()
 const store = useStampRalliesStore()
 
 const name = ref('')
+const world = ref('')
 
 // Results are a transient answer to a question just asked; leaving the page must
 // not leave someone else's links on screen when it is re-entered.
 onUnmounted(() => store.resetLookup())
 
 function submit(): void {
-  void store.lookupLinks(name.value)
+  void store.lookupLinks(name.value, world.value)
 }
 
 function back(): void {
@@ -43,21 +46,33 @@ function back(): void {
 
     <div class="tab-body stamp-lookup-body">
       <p class="text-muted mb-16">
-        Enter the character name you signed up with and we'll hand your links back. It has to be the
-        <strong>exact</strong> name you used - spelling and spacing included - though capitalization
-        doesn't matter.
+        Enter the character name and world you signed up with and we'll hand your stamp card back.
+        It has to be the <strong>exact</strong> name you used - spelling and spacing included -
+        though capitalization doesn't matter.
       </p>
 
       <form class="stamp-lookup-form" @submit.prevent="submit">
         <input
           v-model="name"
-          placeholder="Firstname Lastname @ World"
+          placeholder="Firstname Lastname"
           maxlength="60"
           autocomplete="off"
           aria-label="The name you signed up with"
           :disabled="store.lookupLoading"
         />
-        <button class="btn-confirm" type="submit" :disabled="store.lookupLoading || !name.trim()">
+        <!-- Picked, not typed: the lookup matches the world exactly, so a typo
+             here would report that a real sign-up does not exist. -->
+        <WorldPicker
+          v-model="world"
+          label=""
+          placeholder="World..."
+          :disabled="store.lookupLoading"
+        />
+        <button
+          class="btn-confirm"
+          type="submit"
+          :disabled="store.lookupLoading || !name.trim() || !world"
+        >
           <LoadingSpinner v-if="store.lookupLoading" label="Searching..." />
           <template v-else
             ><font-awesome-icon :icon="['fas', 'magnifying-glass']" /> Search</template
@@ -73,6 +88,13 @@ function back(): void {
               {{ entry.rally_title }}
               <span v-if="entry.completed" class="badge badge--success">Complete</span>
             </h3>
+            <!-- Which record this is. A card issued before worlds had their own
+                 field, or one staff typed by hand, may be spelled differently from
+                 what was just searched for. -->
+            <p class="text-muted text-sm mb-8">
+              Held by
+              <strong>{{ participantLabel(entry.participant_name, entry.world) }}</strong>
+            </p>
 
             <div class="stamp-signup-link">
               <span class="field-label">Stamp card</span>
@@ -87,18 +109,25 @@ function back(): void {
               </button>
             </div>
 
-            <div v-if="entry.garapon_token" class="stamp-signup-link">
-              <span class="field-label">{{ entry.garapon_title }} draw</span>
-              <a :href="store.garaponUrl(entry.garapon_token)" class="stamp-signup-link-url">
-                {{ store.garaponUrl(entry.garapon_token) }}
-              </a>
-              <button
-                class="btn-view btn-sm"
-                @click="store.copyLink(store.garaponUrl(entry.garapon_token))"
-              >
-                <font-awesome-icon :icon="['fas', 'copy']" /> Copy
-              </button>
-            </div>
+            <!--
+              Deliberately states the draws rather than linking them. A draw cannot
+              be undone and the link is the whole capability, so a lookup keyed on a
+              character name - which anyone can read off an entrant list - must not
+              hand it out. Saying the draws are still there is what a participant on
+              a borrowed device actually needs to know.
+            -->
+            <p v-if="entry.garapon_title" class="stamp-lookup-draws">
+              <font-awesome-icon :icon="['fas', 'ticket']" />
+              <span>
+                <strong>{{ entry.garapon_title }}</strong> &mdash;
+                {{ entry.garapon_draws_left || 0 }}
+                {{ entry.garapon_draws_left === 1 ? 'draw' : 'draws' }} left.
+              </span>
+              <span class="text-muted">
+                Your drawing link was saved on the device you signed up with. Ask a staff member if
+                you need it again.
+              </span>
+            </p>
           </div>
         </div>
 

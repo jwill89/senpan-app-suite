@@ -18,6 +18,7 @@ import type {
 } from '@/types/api'
 import { useUiStore } from './ui'
 import { withLoading } from '@/lib/withLoading'
+import { saveRaffleSignup } from '@/lib/signups'
 import { RAFFLE_MAX_ENTRIES, RAFFLE_LOOKUP_MIN_QUERY } from '@/lib/constants'
 
 /**
@@ -628,6 +629,15 @@ export const useRafflesStore = defineStore('raffles', () => {
         turnstile_token: signupTurnstileToken.value || undefined,
       })
       raffleSignupResult.value = data
+      // Entries merge on character+world, so the exact spelling is what a repeat
+      // visit needs: a different one silently starts a second entry and splits
+      // this person's tickets. The server still owns the per-player cap.
+      saveRaffleSignup({
+        raffleId: selectedRaffle.value.id,
+        raffleTitle: selectedRaffle.value.title,
+        name: s.characterName.trim(),
+        world: s.world.trim(),
+      })
       ui.notify(data.message, 'success')
     } catch (e) {
       ui.notify((e as Error).message, 'error')

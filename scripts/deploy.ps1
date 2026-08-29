@@ -24,7 +24,11 @@
     -Target backend:
         1. Cross-compiles a static linux/amd64 binary:
                GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -ldflags="-s -w" -o app-suite .
-        2. Stops <ServiceName>.service and backs up the current binary.
+        2. Stops <ServiceName>.service, backs up the current binary AND snapshots
+           the live DB to <RemoteDbPath>.pre-<timestamp> (the newest three are
+           kept). Starting the new binary migrates the database irreversibly, and
+           the step-4 binary rollback cannot undo that - this snapshot is the way
+           back.
         3. Uploads the new binary to <RemoteOptDir>/app-suite (via a .new temp).
         4. Installs it and starts the service, rolling back to the previous binary
            if the new one fails to stay active.
@@ -35,10 +39,12 @@
            dev fresh live data on the current schema; the service is down only for a
            local file copy, not the network transfer.
 
-    -Target main (alias: both): frontend, then backend (with a short pause between
-    to stay under the SSH rate limit).
+    -Target main (alias: both): backend, then frontend (with a short pause between
+    to stay under the SSH rate limit). The API leads because a new backend is
+    additive to the old SPA, while a new SPA calls endpoints an old backend does
+    not have yet.
 
-    -Target all: frontend, then backend, then plugin (paused between each).
+    -Target all: backend, then frontend, then plugin (paused between each).
 
     Uses PuTTY's pscp/plink so the DigitalOcean .ppk key works directly. pscp/plink
     run in batch mode, so a passphrase-protected .ppk must be loaded into Pageant
@@ -54,8 +60,8 @@
     rate-limit window.
 
 .PARAMETER Target
-    What to deploy: frontend (default), backend, main (frontend + backend; 'both'
-    is a kept alias), all (frontend + backend + plugin), or plugin (build + publish
+    What to deploy: frontend (default), backend, main (backend + frontend; 'both'
+    is a kept alias), all (backend + frontend + plugin), or plugin (build + publish
     the Dalamud custom-repo files: SenpanCompanionAdmin/latest.zip, pluginmaster.json
     with a ?v=<version> cache-bust on its download links, and plugin.htaccess).
 
@@ -232,6 +238,38 @@ function Send-File([string]$localPath, [string]$remotePath) {
     Start-Sleep -Seconds 35
     & $pscp -batch -C -i $KeyPath "$localPath" "${remoteTarget}:$remotePath"
     return ($LASTEXITCODE -eq 0)
+}
+
+# Upload a file and only then move it into place, refusing to publish a torn copy.
+#
+# Send-File writes straight onto the live path, which is fine for the backend
+# binary (its caller stages to a .new name and swaps separately) but not for the
+# files served directly to users: a truncated latest.zip is a broken plugin
+# download, a truncated pluginmaster.json breaks the Dalamud repo listing, and a
+# truncated .htaccess changes how the site is served. Upload beside the target,
+# check the SHA-256 the host computes against the one we computed locally, and mv
+# only on a match - the mv itself is atomic within a filesystem, so readers see
+# either the old file or the new one.
+#
+# The remote command is idempotent so a retry after a mid-command network drop
+# does not report failure for work that already succeeded: if the staged file is
+# gone the mv already ran, and the final check confirms what is actually in place.
+function Send-FileVerified([string]$localPath, [string]$remotePath) {
+    $staged = "$remotePath.new"
+    if (-not (Send-File $localPath $staged)) { return $false }
+    $hash = (Get-FileHash -Algorithm SHA256 -LiteralPath $localPath).Hash.ToLower()
+    $cmd = @"
+set -e
+if [ -f '$staged' ]; then
+  echo '$hash  $staged' | sha256sum -c - >/dev/null
+  mv -f '$staged' '$remotePath'
+fi
+echo '$hash  $remotePath' | sha256sum -c - >/dev/null
+"@
+    if (Invoke-RemoteWithRetry $cmd) { return $true }
+    # Leave the live file untouched and clear the staged copy.
+    & $plink -batch -i $KeyPath $remoteTarget "rm -f '$staged'" 2>&1 | Out-Null
+    return $false
 }
 
 # Download a single remote file to a local path (the live DB snapshot). Mirrors
@@ -414,7 +452,7 @@ rm -rf '$remoteNew'
     #    Non-fatal: the bundle is already live, so a failed config sync only warns.
     Write-Step "Syncing .htaccess (Apache config)..."
     if (Test-Path $HtaccessLocal) {
-        if (Send-File $HtaccessLocal "$WebRoot/.htaccess") {
+        if (Send-FileVerified $HtaccessLocal "$WebRoot/.htaccess") {
             Write-Ok ".htaccess synced to $WebRoot/.htaccess"
         }
         else {
@@ -464,12 +502,30 @@ function Deploy-Backend {
     if (-not (Test-Path $LocalBinary)) { Fail "Backend binary not found at $LocalBinary - nothing to deploy." }
     Write-Ok ("Binary present: $LocalBinary ({0:N1} MB)" -f ((Get-Item $LocalBinary).Length / 1MB))
 
-    # 2. Stop the service + back up the current binary (1 connection)
-    Write-Step "Stopping $ServiceName.service and backing up the current binary..."
-    if (-not (Invoke-RemoteWithRetry "systemctl stop '$ServiceName' && (cp -f '$remoteBin' '$remoteBinOld' 2>/dev/null || true)")) {
+    # 2. Stop the service, back up the current binary AND snapshot the database
+    #    (1 connection).
+    #
+    #    The database snapshot is the important half. Starting the new binary runs
+    #    ensureSchema against the LIVE database, and several migrations rebuild
+    #    tables (create-copy-drop-rename) - irreversible once committed. Step 4
+    #    rolls the BINARY back if the new one won't stay up, but nothing can
+    #    un-migrate the database, so without a snapshot taken here a bad release
+    #    leaves no way back. The service is already stopped, so a plain cp is a
+    #    consistent copy (the same reasoning Sync-LiveDbToDev relies on) - and the
+    #    -wal/-shm sidecars are checkpointed into the file by the clean stop.
+    $dbSnap = "$RemoteDbPath.pre-$(Get-Date -Format 'yyyyMMdd-HHmmss')"
+    Write-Step "Stopping $ServiceName.service, backing up the binary and snapshotting the database..."
+    $stopCmd = @"
+systemctl stop '$ServiceName'
+cp -f '$remoteBin' '$remoteBinOld' 2>/dev/null || true
+if [ -f '$RemoteDbPath' ]; then cp -f '$RemoteDbPath' '$dbSnap'; fi
+# Keep the three most recent pre-deploy snapshots; older ones are just disk.
+ls -1t '$RemoteDbPath'.pre-* 2>/dev/null | tail -n +4 | xargs -r rm -f
+"@
+    if (-not (Invoke-RemoteWithRetry $stopCmd)) {
         Fail "Could not stop $ServiceName.service (or connect). Check: plink -i `"$KeyPath`" $remoteTarget `"systemctl status $ServiceName`""
     }
-    Write-Ok "Service stopped."
+    Write-Ok "Service stopped; database snapshotted -> $dbSnap"
 
     # 3. Upload the new binary to a temp name (1 connection)
     Write-Step "Uploading binary -> $remoteBinNew ..."
@@ -497,6 +553,15 @@ echo active
 "@
     if ($NoBackup) { $install += "`nrm -f '$remoteBinOld'" }
     if (-not (Invoke-RemoteWithRetry $install)) {
+        # The new binary already migrated the live database before it failed, and a
+        # binary rollback cannot undo that. A backend at or below the old schema
+        # version now refuses to start rather than running against a schema it has
+        # never seen, so say plainly how to get back.
+        Write-Host ""
+        Write-Host "    The new binary ran its migrations against the live database before failing." -ForegroundColor Yellow
+        Write-Host "    If the rolled-back binary refuses to start because the schema is newer than it," -ForegroundColor Yellow
+        Write-Host "    restore the pre-deploy snapshot on the host:" -ForegroundColor Yellow
+        Write-Host "      systemctl stop $ServiceName && cp -f '$dbSnap' '$RemoteDbPath' && systemctl start $ServiceName" -ForegroundColor Yellow
         Fail "New binary failed to start; rolled back to the previous one (if a backup existed). Check: plink -i `"$KeyPath`" $remoteTarget `"journalctl -u $ServiceName -n 50 --no-pager`""
     }
     Write-Host "`n[OK] Backend deployed; $ServiceName.service is active on $remoteTarget." -ForegroundColor Green
@@ -570,9 +635,21 @@ The local dev DB was NOT modified.
     #    rm -f'd at the start of the next run anyway).
     & $plink -batch -i $KeyPath $remoteTarget "rm -f '$remoteSnap'" 2>&1 | Out-Null
 
+    # 6. Prune old dev-DB backups. Every backend deploy timestamps a fresh copy, and
+    #    nothing removed the previous ones - so full copies of the LIVE database,
+    #    each carrying real password hashes, API tokens and Discord webhook URLs,
+    #    accumulated on the workstation indefinitely. Keep the three most recent.
+    $keep = 3
+    $stale = @(Get-ChildItem "$DevDbPath.bak-*" -ErrorAction SilentlyContinue |
+        Sort-Object Name -Descending | Select-Object -Skip $keep)
+    if ($stale.Count -gt 0) {
+        $stale | Remove-Item -Force -ErrorAction SilentlyContinue
+        Write-Ok "Pruned $($stale.Count) old dev DB backup(s); keeping the newest $keep."
+    }
+
     Write-Host "`n[OK] Local dev DB refreshed from live: $DevDbPath" -ForegroundColor Green
-    Write-Host "     Previous dev DB kept alongside it as *.bak-<timestamp>." -ForegroundColor DarkGray
-    Write-Host "     This now holds LIVE data (real accounts, password hashes, tokens) - keep it local." -ForegroundColor DarkGray
+    Write-Host "     The previous dev DB is kept alongside it as *.bak-<timestamp> (newest $keep retained)." -ForegroundColor DarkGray
+    Write-Host "     These hold LIVE data (real accounts, password hashes, tokens) - keep them local." -ForegroundColor DarkGray
 }
 
 # == Plugin (Dalamud custom repo) ==============================================
@@ -631,14 +708,14 @@ function Deploy-Plugin {
 
         # 5. Upload the package (connection 2).
         Write-Step "Uploading latest.zip -> $remotePluginZipDir/latest.zip ..."
-        if (-not (Send-File $PluginZip "$remotePluginZipDir/latest.zip")) {
+        if (-not (Send-FileVerified $PluginZip "$remotePluginZipDir/latest.zip")) {
             Fail "Plugin package upload failed."
         }
         Write-Ok "Package uploaded."
 
         # 6. Upload the repo index with cache-busted download links (connection 3).
         Write-Step "Uploading pluginmaster.json (cache-bust ?v=$pkgVersion) -> $remotePluginDir/pluginmaster.json ..."
-        if (-not (Send-File $tmpMaster "$remotePluginDir/pluginmaster.json")) {
+        if (-not (Send-FileVerified $tmpMaster "$remotePluginDir/pluginmaster.json")) {
             Fail "pluginmaster.json upload failed."
         }
         Write-Ok "Repo index uploaded."
@@ -653,7 +730,7 @@ function Deploy-Plugin {
     #    protects updates, so a failed header sync only warns.
     Write-Step "Syncing plugin .htaccess (no-cache headers)..."
     if (Test-Path $PluginHtaccess) {
-        if (Send-File $PluginHtaccess "$remotePluginDir/.htaccess") {
+        if (Send-FileVerified $PluginHtaccess "$remotePluginDir/.htaccess") {
             Write-Ok ".htaccess synced to $remotePluginDir/.htaccess"
         }
         else {
@@ -680,19 +757,27 @@ switch ($Target) {
     'backend' { Deploy-Backend; & $dbPull }
     'plugin' { Deploy-Plugin }
     # 'main' is the preferred name for frontend + backend; 'both' is kept as an alias.
+    #
+    # The API goes FIRST. A new backend is additive to the old SPA - the endpoints
+    # and fields it adds are simply unused - whereas a new SPA against the old API
+    # calls routes that do not exist yet. Deploying the shell first left the site
+    # serving a frontend that 404s on this release's new endpoints for the whole
+    # backend step (the 35s rate-limit pause plus a local go build, about a minute).
+    # $dbPull already opens with its own pause, so it goes last and no extra pause
+    # is needed between the two deploys.
     { $_ -in 'both', 'main' } {
-        Deploy-Frontend
-        & $pause
         Deploy-Backend
+        & $pause
+        Deploy-Frontend
         & $dbPull
     }
-    # 'all' is everything: frontend + backend + plugin.
+    # 'all' is everything: backend + frontend + plugin, API first for the same reason.
     'all' {
+        Deploy-Backend
+        & $pause
         Deploy-Frontend
         & $pause
-        Deploy-Backend
-        & $dbPull
-        & $pause
         Deploy-Plugin
+        & $dbPull
     }
 }

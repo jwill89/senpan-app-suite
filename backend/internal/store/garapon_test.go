@@ -27,7 +27,7 @@ func TestGaraponDrawCapAndWeighting(t *testing.T) {
 		{Name: "Nothing", BallColor: "#111111", Rate: 0},
 		{Name: "Jackpot", BallColor: "#ffcc00", Rate: 100, IsGrand: true},
 	})
-	player, err := s.CreateGaraponPlayer(gid, "Aria", 25)
+	player, err := s.CreateGaraponPlayer(gid, "Aria", "Gilgamesh", 25)
 	if err != nil {
 		t.Fatalf("CreateGaraponPlayer: %v", err)
 	}
@@ -60,7 +60,7 @@ func TestGaraponDeletePlayerGuard(t *testing.T) {
 	s := newTestStore(t)
 	gid := mustCreateGarapon(t, s, "Fest", []model.GaraponPrize{{Name: "Prize", BallColor: "#ffcc00", Rate: 1, IsGrand: true}})
 
-	p1, err := s.CreateGaraponPlayer(gid, "Borin", 3)
+	p1, err := s.CreateGaraponPlayer(gid, "Borin", "Gilgamesh", 3)
 	if err != nil {
 		t.Fatalf("CreateGaraponPlayer: %v", err)
 	}
@@ -69,7 +69,7 @@ func TestGaraponDeletePlayerGuard(t *testing.T) {
 		t.Fatalf("delete unused player: deleted=%v err=%v; want true,nil", deleted, err)
 	}
 
-	p2, err := s.CreateGaraponPlayer(gid, "Cyra", 3)
+	p2, err := s.CreateGaraponPlayer(gid, "Cyra", "Gilgamesh", 3)
 	if err != nil {
 		t.Fatalf("CreateGaraponPlayer: %v", err)
 	}
@@ -88,13 +88,74 @@ func TestGaraponDeletePlayerGuard(t *testing.T) {
 	}
 }
 
+// TestGaraponDeletePlayerRespectsStampedCard pins the paired-card sweep to the same
+// rule the stamp rally's own card delete enforces: a card with collected stamps
+// survives until its rally is closed. Deleting a drawing link swept the paired
+// stamp card unconditionally, so removing a link mid-rally silently destroyed the
+// participant's part-stamped card - something the stamp-rally page refuses with a
+// 409 on the very same row.
+func TestGaraponDeletePlayerRespectsStampedCard(t *testing.T) {
+	s := newTestStore(t)
+	rally := makeRally(t, s, "Festival Rally")
+	gid := mustCreateGarapon(t, s, "Fest", []model.GaraponPrize{
+		{Name: "Prize", BallColor: "#ffcc00", Rate: 1, IsGrand: true},
+	})
+
+	card, err := s.IssueRallyCard(rally.ID, "Tataru", "Gilgamesh")
+	if err != nil {
+		t.Fatalf("IssueRallyCard: %v", err)
+	}
+	if _, err := s.CollectStamp(rally.ID, card.ID, rally.Stamps[0].ID, "Tataru", "Senpan Tea House", model.StampTypeFood); err != nil {
+		t.Fatalf("CollectStamp: %v", err)
+	}
+	player, err := s.CreateGaraponPlayer(gid, "Tataru", "Gilgamesh", 3)
+	if err != nil {
+		t.Fatalf("CreateGaraponPlayer: %v", err)
+	}
+	if err := s.SetPlayerStampCard(player.ID, card.ID); err != nil {
+		t.Fatalf("SetPlayerStampCard: %v", err)
+	}
+
+	// Rally still open: the link goes, the stamped card stays.
+	deleted, err := s.DeleteGaraponPlayer(player.ID, false)
+	if err != nil || !deleted {
+		t.Fatalf("delete link: deleted=%v err=%v; want true,nil", deleted, err)
+	}
+	got, err := s.GetRallyCardByID(card.ID)
+	if err != nil {
+		t.Fatalf("GetRallyCardByID: %v", err)
+	}
+	if got == nil {
+		t.Fatal("a part-stamped card was destroyed by deleting the garapon drawing link while the rally was open")
+	}
+
+	// Once the rally is closed the card is sweepable, which is the rule everywhere
+	// else - so re-link a fresh player and confirm the sweep still happens.
+	player2, err := s.CreateGaraponPlayer(gid, "Tataru Again", "Gilgamesh", 3)
+	if err != nil {
+		t.Fatalf("CreateGaraponPlayer: %v", err)
+	}
+	if err := s.SetPlayerStampCard(player2.ID, card.ID); err != nil {
+		t.Fatalf("SetPlayerStampCard: %v", err)
+	}
+	if err := s.SetStampRallyStatus(rally.ID, "closed"); err != nil {
+		t.Fatalf("SetStampRallyStatus: %v", err)
+	}
+	if _, err := s.DeleteGaraponPlayer(player2.ID, false); err != nil {
+		t.Fatalf("delete link after close: %v", err)
+	}
+	if got, _ := s.GetRallyCardByID(card.ID); got != nil {
+		t.Error("with the rally closed the paired card should be swept with the link")
+	}
+}
+
 // TestGaraponClosedDeletePlayerKeepsLog verifies that once a garapon is closed a
 // drawing link can be force-deleted even after it has drawn, and the draw stays in
 // the log (detached via ON DELETE SET NULL rather than cascade-deleted).
 func TestGaraponClosedDeletePlayerKeepsLog(t *testing.T) {
 	s := newTestStore(t)
 	gid := mustCreateGarapon(t, s, "Fest", []model.GaraponPrize{{Name: "Prize", BallColor: "#ffcc00", Rate: 1, IsGrand: true}})
-	p, err := s.CreateGaraponPlayer(gid, "Aria", 3)
+	p, err := s.CreateGaraponPlayer(gid, "Aria", "Gilgamesh", 3)
 	if err != nil {
 		t.Fatalf("CreateGaraponPlayer: %v", err)
 	}
@@ -133,7 +194,7 @@ func TestGaraponClosedDeletePlayerKeepsLog(t *testing.T) {
 func TestGaraponClosedBlocksDraw(t *testing.T) {
 	s := newTestStore(t)
 	gid := mustCreateGarapon(t, s, "Fest", []model.GaraponPrize{{Name: "Prize", BallColor: "#ffcc00", Rate: 1, IsGrand: true}})
-	p, err := s.CreateGaraponPlayer(gid, "Dee", 3)
+	p, err := s.CreateGaraponPlayer(gid, "Dee", "Gilgamesh", 3)
 	if err != nil {
 		t.Fatalf("CreateGaraponPlayer: %v", err)
 	}
@@ -156,7 +217,7 @@ func TestDeleteGaraponCascades(t *testing.T) {
 		{Name: "A", BallColor: "#111111", Rate: 50, IsGrand: true},
 		{Name: "B", BallColor: "#222222", Rate: 50},
 	})
-	p, err := s.CreateGaraponPlayer(gid, "Aria", 3)
+	p, err := s.CreateGaraponPlayer(gid, "Aria", "Gilgamesh", 3)
 	if err != nil {
 		t.Fatalf("CreateGaraponPlayer: %v", err)
 	}
@@ -204,11 +265,11 @@ func TestGaraponListAggregatesAndUpdate(t *testing.T) {
 		{Name: "A", BallColor: "#111111", Rate: 50, IsGrand: true},
 		{Name: "B", BallColor: "#222222", Rate: 50},
 	})
-	pa, err := s.CreateGaraponPlayer(gid, "Aria", 2)
+	pa, err := s.CreateGaraponPlayer(gid, "Aria", "Gilgamesh", 2)
 	if err != nil {
 		t.Fatalf("CreateGaraponPlayer: %v", err)
 	}
-	if _, err := s.CreateGaraponPlayer(gid, "Borin", 2); err != nil {
+	if _, err := s.CreateGaraponPlayer(gid, "Borin", "Gilgamesh", 2); err != nil {
 		t.Fatalf("CreateGaraponPlayer: %v", err)
 	}
 	if _, err := s.RecordGaraponDraw(pa.ID); err != nil {

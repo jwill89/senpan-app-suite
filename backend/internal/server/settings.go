@@ -94,6 +94,10 @@ func (s *Server) handleSettingsUpdate(w http.ResponseWriter, r *http.Request) {
 	if !s.requirePermission(w, r, permSystemSettings) {
 		return
 	}
+	// This page is grantable, but the READ path blanks secretSettings for anyone
+	// who is not a full admin - so the write path has to apply the same rule. See
+	// the skip in the save loop below.
+	admin := s.isAdmin(r)
 
 	req, err := readJSON[settingsRequest](w, r)
 	if err != nil || req.Settings == nil {
@@ -180,6 +184,16 @@ func (s *Server) handleSettingsUpdate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	for key, val := range req.Settings {
+		// A caller who cannot read a secret must not be able to write it either.
+		// handleSettingsGet hands non-admins "" for every secretSettings key, so a
+		// permission-granted non-admin loads this form with the Google Fonts key and
+		// every club webhook blank - and, without this skip, saves those blanks
+		// straight over the stored values, silently destroying every book club's
+		// Discord webhook on an unrelated edit. Skipping rather than rejecting keeps
+		// the rest of their save working, which is the point of granting the page.
+		if secretSettings[key] && !admin {
+			continue
+		}
 		if err := s.store.SetSetting(key, val); err != nil {
 			writeInternalError(w, "save setting", err)
 			return

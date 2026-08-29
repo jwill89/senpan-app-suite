@@ -330,10 +330,16 @@ func (s *Store) AddOrCreateRaffleEntry(raffleID int64, charName, world string, n
 		return 0, 0, 0, false, scanErr
 	}
 
-	newTotal = prevEntries + num
-	if newTotal > maxEntries {
+	// Test the cap by subtraction, never by summing first: num arrives from a
+	// request body, and prevEntries+num on a huge num wraps negative, sails past
+	// a "> maxEntries" check, and writes an overflowed count SQLite has to widen
+	// to REAL - a value no read path can scan back into an int, which strands the
+	// whole raffle. Subtracting cannot overflow here because both operands are
+	// already in range.
+	if num > maxEntries-prevEntries {
 		return 0, 0, prevEntries, created, ErrRaffleEntryLimit
 	}
+	newTotal = prevEntries + num
 
 	if created {
 		res, err := tx.Exec(`INSERT INTO raffle_entries (raffle_id, character_name, world, num_entries) VALUES (?, ?, ?, ?)`,
@@ -500,11 +506,28 @@ func (s *Store) PickRaffleWinner(raffleID int64, paidOnly bool) (*model.RaffleEn
 
 // DeleteRaffleEntry removes a raffle entry by ID.
 func (s *Store) DeleteRaffleEntry(entryID int64) (bool, error) {
-	res, err := s.db.Exec("DELETE FROM raffle_entries WHERE id = ?", entryID)
+	tx, err := s.beginImmediate()
+	if err != nil {
+		return false, err
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	// raffles.winner_entry_id is a plain column, not an enforced FK, so deleting the
+	// row it points at left the raffle naming an entry that no longer exists -
+	// and verify-winner then closed the raffle announcing nobody. Clear the pointer
+	// in the same transaction so the raffle falls back to "no winner picked yet",
+	// which is recoverable: staff can simply pick again.
+	if _, err := tx.Exec(`UPDATE raffles SET winner_entry_id = NULL WHERE winner_entry_id = ?`, entryID); err != nil {
+		return false, err
+	}
+	res, err := tx.Exec("DELETE FROM raffle_entries WHERE id = ?", entryID)
 	if err != nil {
 		return false, err
 	}
 	n, _ := res.RowsAffected()
+	if err := tx.Commit(); err != nil {
+		return false, err
+	}
 	return n > 0, nil
 }
 
@@ -512,7 +535,13 @@ func (s *Store) DeleteRaffleEntry(entryID int64) (bool, error) {
 // pattern. Without it a search for "_" or "%" is a wildcard that matches every
 // entrant instead of the literal character they typed. Pair it with ESCAPE '\'.
 func escapeLikePattern(q string) string {
-	r := strings.NewReplacer(`\`, `\`, `%`, `\%`, `_`, `\_`)
+	// The escape character has to be escaped FIRST and with itself doubled -
+	// replacing a backslash with a backslash was a no-op, so a typed backslash
+	// stayed live: "\%" reached SQLite as an escaped percent (matching a literal %
+	// rather than the two characters typed), and a trailing backslash left a
+	// dangling escape. NewReplacer scans left to right and never re-processes what
+	// it emits, so listing the backslash pair first is safe.
+	r := strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`)
 	return r.Replace(q)
 }
 

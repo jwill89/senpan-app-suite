@@ -166,10 +166,15 @@ export const endpoints = {
   account: {
     /** POST /api/account/change-password - change the logged-in user's own password. */
     changePassword: (currentPassword: string, newPassword: string) =>
-      apiPost<OKResponse>('account/change-password', {
-        current_password: currentPassword,
-        new_password: newPassword,
-      }),
+      apiPost<OKResponse>(
+        'account/change-password',
+        { current_password: currentPassword, new_password: newPassword },
+        // A mistyped CURRENT password answers 401, but the session is perfectly
+        // valid - requireAuth already passed. Without this the global 401 handler
+        // reads it as "your session expired" and logs the user out of the admin UI
+        // for a typo. Matches auth.login / auth.register / auth.logout.
+        { skipAuthRedirect: true },
+      ),
     /** GET /api/account/token - the account's personal-access-token metadata
      *  (never the secret itself; that is only returned once at generation). */
     tokenInfo: () => apiGet<AccountTokenInfoResponse>('account/token'),
@@ -651,14 +656,16 @@ export const endpoints = {
     /** GET /api/stamp-signup - rallies currently open to public sign-up. */
     list: () => apiGet<SignupRalliesResponse>('stamp-signup'),
     /** POST /api/stamp-signup/{id} - issue yourself a card (+ garapon link if paired). */
-    signUp: (rallyId: number, name: string, turnstileToken: string) =>
+    signUp: (rallyId: number, name: string, world: string, turnstileToken: string) =>
       apiPost<StampSignupResponse>(`stamp-signup/${rallyId}`, {
         name,
+        world,
         turnstile_token: turnstileToken,
       }),
     /** POST /api/stamp-lookup - find your links by the exact name you signed up with.
      *  POST, not GET, so the name stays out of URLs and the access log. */
-    lookup: (name: string) => apiPost<StampLookupResponse>('stamp-lookup', { name }),
+    lookup: (name: string, world: string) =>
+      apiPost<StampLookupResponse>('stamp-lookup', { name, world }),
   },
 
   // -- Book clubs / reading lists -----------------------------------------------

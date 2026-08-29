@@ -84,6 +84,11 @@ func (s *Server) handleGameStart(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	game, err := s.game.Start(req.PatternIDs, req.Auto, req.AutoInterval)
+	if errors.Is(err, bingo.ErrNoPatternsResolved) {
+		writeError(w, http.StatusBadRequest,
+			"Those patterns no longer exist - reload the page and pick again.")
+		return
+	}
 	if err != nil {
 		writeInternalError(w, "start game", err)
 		return
@@ -176,7 +181,7 @@ func (s *Server) postDraw(result *bingo.DrawResult, newWinner bool, delay int) {
 	gameID := result.Game.ID
 
 	// Admins immediately (keeps every admin surface in sync).
-	s.broadcastDrawToAdmins(result.Drawn, result.Winners)
+	s.broadcastDrawToAdmins(gameID, result.Drawn, result.Winners)
 
 	// Players: delayed or immediate. The moment the number reaches players is used
 	// below to hold a half-time alert until they've seen the triggering number.
@@ -189,10 +194,10 @@ func (s *Server) postDraw(result *bingo.DrawResult, newWinner bool, delay int) {
 			if s.currentGameID() != gameID {
 				return
 			}
-			s.broadcastDrawToPlayers(drawn)
+			s.broadcastDrawToPlayers(gameID, drawn)
 		})
 	} else {
-		s.broadcastDrawToPlayers(drawn)
+		s.broadcastDrawToPlayers(gameID, drawn)
 	}
 
 	// A winner ends the auto loop straight away (before the half-time check, so a
@@ -506,6 +511,14 @@ func (s *Server) handleGamePatch(w http.ResponseWriter, r *http.Request) {
 			}
 		} else {
 			s.game.SetAutoEnabled(false)
+			// Clear any pending immediate-draw request HERE, where auto is actually
+			// being switched off, rather than in the scheduler loop. The loop used to
+			// clear it in its "auto is off" branch, which races the enable path: the
+			// loop reads enabled=false, an admin switches auto on and sets the flag,
+			// and the loop's unconditional Store(false) then wipes that fresh request -
+			// so the first number waits a whole interval instead of coming straight
+			// away. This ordering cannot swallow a request that arrives after it.
+			s.autoDrawNow.Store(false)
 		}
 	}
 	if req.AutoInterval != nil || req.AutoEnabled != nil {
@@ -680,7 +693,9 @@ func (s *Server) RunAutoDrawScheduler(ctx context.Context) {
 			// in here would wrongly stretch the gap the admin waits between numbers.
 			resetTimer(timer, time.Duration(bingo.ClampAutoInterval(interval))*time.Second)
 		default:
-			s.autoDrawNow.Store(false) // drop a stale immediate-draw request while off
+			// Deliberately does NOT clear autoDrawNow: the disable path owns that (see
+			// handleGamePatch), and clearing it from here raced a concurrent enable.
+			// A request that survives to the next enable is consumed by the Swap above.
 			stopTimer(timer)
 		}
 

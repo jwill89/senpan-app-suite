@@ -245,3 +245,105 @@ func TestAccount_ChangePassword(t *testing.T) {
 	}
 	resp.Body.Close()
 }
+
+// TestLoginAfterPasswordChangeStampsEpoch guards the session contract that every
+// login path now shares via establishSession. A session carries the account's
+// password epoch as well as its id; one minted without the epoch reads back as
+// epoch 0, which loadCurrentUser rejects for any account whose password has ever
+// changed. The failure is nasty precisely because the login itself looks fine -
+// it returns 200 with the user object, and only the NEXT request 401s. That is
+// what a passkey login did for every account past epoch 0, because it stamped the
+// id and not the epoch.
+func TestLoginAfterPasswordChangeStampsEpoch(t *testing.T) {
+	env := newTestEnv(t)
+	env.loginAdmin(t)
+
+	// Bump the account past epoch 0. Below this point a session missing the epoch
+	// is indistinguishable from a stale one and gets rejected.
+	resp := env.postJSON(t, "/api/account/change-password", map[string]string{
+		"current_password": seedAdminPass, "new_password": "newpassword1",
+	})
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("change password status = %d; want 200", resp.StatusCode)
+	}
+	resp.Body.Close()
+
+	c := newClient(t, env)
+	resp = postAs(t, c, env, "/api/auth", map[string]string{
+		"action": "login", "username": seedAdminUser, "password": "newpassword1",
+	})
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("login status = %d; want 200", resp.StatusCode)
+	}
+	resp.Body.Close()
+
+	// The assertion that matters: the session survives into the next request.
+	resp = getAs(t, c, env, "/api/auth")
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("auth check after login status = %d; want 200", resp.StatusCode)
+	}
+	if authed, _ := decodeBody(t, resp)["authenticated"].(bool); !authed {
+		t.Error("session minted by login does not resolve on the next request (password epoch not stamped)")
+	}
+}
+
+// TestPermission_EveryPageGuardsAReadRoute is the coverage the suite was missing.
+// Only a handful of the grantable permission keys had ANY negative test, so a guard
+// silently dropped or loosened on the other features would have gone unnoticed -
+// and the whole point of per-page permissions is that a grantee of one page cannot
+// reach another.
+//
+// One representative READ route per page: a GET is enough to prove the guard is
+// wired, needs no fixture, and leaves nothing behind if the guard is broken. Every
+// route listed here was confirmed against its handler to be permission-gated;
+// deliberately public reads are NOT listed, since asserting 403 on them would be
+// asserting the wrong thing: GET /api/game is what every player's board polls, and
+// GET /api/raffles is the public raffle list, which varies its payload by role
+// (raffleStaff) rather than refusing outright.
+//
+// ONE user for the whole table on purpose. Registration is rate limited to 5 per
+// hour per IP, and newClient hands back the httptest server's SHARED *http.Client
+// with only the cookie jar swapped - so juggling several "separate" clients in one
+// test really means one client whose last login wins.
+func TestPermission_EveryPageGuardsAReadRoute(t *testing.T) {
+	routes := map[string]string{
+		"bingo-cards":            "/api/cards",
+		"bingo-winners-log":      "/api/winners-log",
+		"bingo-patterns":         "/api/patterns",
+		"teahouse-announcements": "/api/announcements",
+		"teahouse-affiliates":    "/api/affiliates",
+		"teahouse-tea-rooms":     "/api/tea-rooms",
+		"festival-map":           "/api/festival-maps",
+		"festival-garapon":       "/api/garapons",
+		"festival-stamp-rally":   "/api/stamp-rallies",
+		"atelier-fonts":          "/api/fonts",
+		"system-themes":          "/api/styles",
+		"system-images":          "/api/images?dir=announcements",
+		"bookclub-yaoi":          "/api/book-clubs/yaoi/reading-lists",
+		"bookclub-yuri":          "/api/book-clubs/yuri/reading-lists",
+	}
+
+	env := newTestEnv(t)
+	// Holds exactly one page, and it is not any of the ones under test - so every
+	// assertion below is asserting a refusal.
+	user := makeActiveUser(t, env, "onepage", "correct horse battery", []string{"bingo-presets"})
+
+	for perm, route := range routes {
+		resp := getAs(t, user, env, route)
+		resp.Body.Close()
+		if resp.StatusCode != http.StatusForbidden {
+			t.Errorf("GET %s without %q = %d; want 403 - that page's guard is missing or too loose",
+				route, perm, resp.StatusCode)
+		}
+	}
+
+	// The page they DO hold stays reachable, so the table above is proving a guard
+	// rather than an endpoint that is broken for everyone.
+	resp := getAs(t, user, env, "/api/presets")
+	resp.Body.Close()
+	if resp.StatusCode == http.StatusForbidden || resp.StatusCode == http.StatusUnauthorized {
+		t.Errorf("GET /api/presets WITH bingo-presets = %d; the grantee cannot reach their own page",
+			resp.StatusCode)
+	}
+}

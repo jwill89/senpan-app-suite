@@ -147,15 +147,24 @@ function openLogs(): void {
 function backToDetail(): void {
   screen.value = 'detail'
 }
+/**
+ * Whether the detail fetch has actually landed. Both entry points below seed a
+ * form that saves as a FULL REPLACE, so acting on a list row (which carries no
+ * stamps or prizes) would delete the rally's whole card. See hasRallyDetail.
+ */
+const detailReady = computed(
+  () => !store.detailLoading && store.hasRallyDetail(store.selectedRally),
+)
+
 function editSelected(): void {
   if (!store.selectedRally) return
-  store.editRallyForm(store.selectedRally)
+  if (!store.editRallyForm(store.selectedRally)) return
   screen.value = 'form'
 }
 /** Opens the create form pre-filled from this rally (see copyRallyForm). */
 function duplicateSelected(): void {
   if (!store.selectedRally) return
-  store.copyRallyForm(store.selectedRally)
+  if (!store.copyRallyForm(store.selectedRally)) return
   screen.value = 'form'
 }
 /**
@@ -169,7 +178,8 @@ function duplicateSelected(): void {
 async function copyRally(r: StampRally): Promise<void> {
   await store.loadRallyDetail(r.id)
   if (!store.selectedRally) return
-  store.copyRallyForm(store.selectedRally)
+  // The fetch can still have failed, which leaves the stamp-less list row here.
+  if (!store.copyRallyForm(store.selectedRally)) return
   screen.value = 'form'
 }
 function backToList(): void {
@@ -207,12 +217,21 @@ async function deleteSelected(): Promise<void> {
         <button class="btn-neutral btn-sm" @click="openLogs">
           <font-awesome-icon :icon="['fad', 'clipboard-list']" /> View Logs
         </button>
-        <button v-if="!isClosed" class="btn-confirm btn-sm" @click="editSelected">
+        <button
+          v-if="!isClosed"
+          class="btn-confirm btn-sm"
+          :disabled="!detailReady"
+          :title="detailReady ? undefined : 'Still loading this rally'"
+          @click="editSelected"
+        >
           <font-awesome-icon :icon="['fas', 'pen-to-square']" /> Edit
         </button>
         <button
           class="btn-view btn-sm"
-          title="Start a new rally pre-filled from this one"
+          :disabled="!detailReady"
+          :title="
+            detailReady ? 'Start a new rally pre-filled from this one' : 'Still loading this rally'
+          "
           @click="duplicateSelected"
         >
           <font-awesome-icon :icon="['fas', 'copy']" /> Duplicate
@@ -259,7 +278,7 @@ async function deleteSelected(): Promise<void> {
             </thead>
             <tbody>
               <tr v-for="s in store.selectedRally.stamps" :key="s.id">
-                <td>{{ stallName(s.affiliate_name) }}</td>
+                <td>{{ stallName(s.stall_name, s.affiliate_name) }}</td>
                 <td>
                   <span class="badge badge--muted">{{ stampTypeShort(s.stamp_type) }}</span>
                 </td>
@@ -528,7 +547,9 @@ async function deleteSelected(): Promise<void> {
                   </div>
                   <template v-else-if="store.cardStamps[r.id].length">
                     <div v-for="s in store.cardStamps[r.id]" :key="s.id" class="stall-row">
-                      <span class="stall-row-name">{{ stallName(s.affiliate_name) }}</span>
+                      <span class="stall-row-name">{{
+                        stallName(s.stall_name, s.affiliate_name)
+                      }}</span>
                       <span
                         :class="[
                           'status-badge',

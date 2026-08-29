@@ -113,15 +113,22 @@ function backToList(): void {
   store.selectedMap = null
   screen.value = 'list'
 }
+/**
+ * Whether the detail fetch has actually landed. Both entry points below seed a
+ * form that saves as a FULL REPLACE, so acting on a list row (which carries no
+ * stalls) would delete every pitch on the map. See hasMapDetail.
+ */
+const detailReady = computed(() => !store.detailLoading && store.hasMapDetail(store.selectedMap))
+
 function editSelected(): void {
   if (!store.selectedMap) return
-  store.editMapForm(store.selectedMap)
+  if (!store.editMapForm(store.selectedMap)) return
   screen.value = 'form'
 }
 /** Opens the create form pre-filled from this map (see copyMapForm). */
 function duplicateSelected(): void {
   if (!store.selectedMap) return
-  store.copyMapForm(store.selectedMap)
+  if (!store.copyMapForm(store.selectedMap)) return
   screen.value = 'form'
 }
 /**
@@ -135,7 +142,8 @@ function duplicateSelected(): void {
 async function copyMap(m: FestivalMap): Promise<void> {
   await store.loadMapDetail(m.id)
   if (!store.selectedMap) return
-  store.copyMapForm(store.selectedMap)
+  // The fetch can still have failed, which leaves the stall-less list row here.
+  if (!store.copyMapForm(store.selectedMap)) return
   screen.value = 'form'
 }
 function onFormDone(): void {
@@ -167,10 +175,20 @@ function setStatus(status: FestivalMapStatus): void {
       </SubPageHeader>
 
       <div class="flex-toolbar flex-end mb-16">
-        <button class="btn-confirm btn-sm" @click="editSelected">
+        <button
+          class="btn-confirm btn-sm"
+          :disabled="!detailReady"
+          :title="detailReady ? undefined : 'Still loading this map'"
+          @click="editSelected"
+        >
           <font-awesome-icon :icon="['fas', 'pen-to-square']" /> Edit
         </button>
-        <button class="btn-neutral btn-sm" @click="duplicateSelected">
+        <button
+          class="btn-neutral btn-sm"
+          :disabled="!detailReady"
+          :title="detailReady ? undefined : 'Still loading this map'"
+          @click="duplicateSelected"
+        >
           <font-awesome-icon :icon="['fas', 'copy']" /> Duplicate
         </button>
         <button

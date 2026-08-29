@@ -85,6 +85,125 @@ function manualChunks(id: string): string | undefined {
   return undefined
 }
 
+// Output files a public visitor can never reach. Filled during the build and read
+// by the service worker's `manifestTransforms` below.
+//
+// Precaching is a SEPARATE question from code-splitting, and the two disagreed.
+// The admin bundles are lazy-loaded, so they never touch a player's initial page
+// load - but `globPatterns` swept every emitted file into the precache, so the
+// service worker downloaded them anyway on first visit: ~1.2 MB of admin-only
+// JavaScript plus the KaTeX web faces, for visitors who cannot open the admin at
+// all.
+//
+// This is computed from the real module graph rather than from file-name
+// patterns, because the names do not carry the answer: `DataTable` is admin-only
+// while `emojipicker` and `fontawesome` - which look like admin tooling - are
+// both reachable from public views.
+const adminOnlyOutput = new Set<string>()
+
+function markAdminOnlyOutput(): Plugin {
+  type Chunk = {
+    isEntry: boolean
+    facadeModuleId: string | null
+    imports: string[]
+    dynamicImports: string[]
+    viteMetadata?: { importedCss?: Set<string>; importedAssets?: Set<string> }
+  }
+  return {
+    name: 'mark-admin-only-output',
+    apply: 'build',
+    generateBundle(_options, bundle) {
+      const chunks = new Map<string, Chunk>()
+      for (const [file, output] of Object.entries(bundle))
+        if (output.type === 'chunk') chunks.set(file, output)
+
+      const facadeOf = (file: string) =>
+        (chunks.get(file)?.facadeModuleId || '').split('\\').join('/')
+      const isAdmin = (file: string) =>
+        facadeOf(file).includes('/components/admin/') || facadeOf(file).includes('/AdminView.')
+
+      // The entry dynamically imports the router, which in turn dynamically
+      // imports AdminView - so an unrestricted walk reaches every chunk and
+      // proves nothing. Admin chunks are barriers: what a public visitor can
+      // reach is what the walk finds WITHOUT passing through one.
+      const reachable = new Set<string>()
+      const queue = [...chunks.keys()].filter(
+        (f) => chunks.get(f)?.isEntry || (facadeOf(f).includes('/views/') && !isAdmin(f)),
+      )
+      while (queue.length) {
+        const file = queue.pop()
+        if (!file || reachable.has(file) || !chunks.has(file) || isAdmin(file)) continue
+        reachable.add(file)
+        const chunk = chunks.get(file)
+        if (chunk) queue.push(...chunk.imports, ...chunk.dynamicImports)
+      }
+
+      // A chunk's stylesheet and the fonts that stylesheet pulls ride with it:
+      // the KaTeX faces (~546 kB) are reached only through Milkdown's CSS. A
+      // sidecar shared with anything public stays precached.
+      const sidecarsOf = (file: string) => [
+        ...(chunks.get(file)?.viteMetadata?.importedCss ?? []),
+        ...(chunks.get(file)?.viteMetadata?.importedAssets ?? []),
+      ]
+      const publicSidecars = new Set([...reachable].flatMap(sidecarsOf))
+      adminOnlyOutput.clear()
+      for (const file of chunks.keys()) {
+        if (reachable.has(file)) continue
+        adminOnlyOutput.add(file)
+        for (const sidecar of sidecarsOf(file))
+          if (!publicSidecars.has(sidecar)) adminOnlyOutput.add(sidecar)
+      }
+    },
+  }
+}
+
+// Proves the exclusion above actually reached the generated service worker.
+//
+// It rests on two things that are not ours: that `generateBundle` runs before
+// vite-plugin-pwa's `closeBundle`, and that workbox still honours
+// `manifestTransforms`. If either stops holding, the precache silently returns to
+// carrying every admin bundle - no error, no visible symptom, just ~1.8 MB back
+// on every first visit. Registered AFTER VitePWA so sw.js exists by the time this
+// runs; `closeBundle` hooks fire in plugin order.
+function verifyAdminNotPrecached(): Plugin {
+  let outDir = 'dist'
+  return {
+    name: 'verify-admin-not-precached',
+    apply: 'build',
+    enforce: 'post',
+    configResolved(config) {
+      outDir = config.build.outDir
+    },
+    closeBundle() {
+      const sw = fileURLToPath(new URL(`./${outDir}/sw.js`, import.meta.url))
+      let source: string
+      try {
+        source = readFileSync(sw, 'utf-8')
+      } catch {
+        // Not "no PWA in this build" - this plugin is ordered after the one that
+        // writes sw.js, so by here it must exist. Reading a stale copy from an
+        // earlier build is exactly how this check silently passed while the
+        // exclusion was broken, so a missing file is a failure, not a skip.
+        this.error(`expected a generated service worker at ${sw}, found none`)
+        return
+      }
+      const precached = new Set([...source.matchAll(/url:"([^"]+)"/g)].map((match) => match[1]))
+      const leaked = [...adminOnlyOutput].filter((file) => precached.has(file))
+      if (leaked.length)
+        this.error(
+          `${leaked.length} admin-only file(s) reached the service-worker precache, ` +
+            `so every visitor would download them: ${leaked.slice(0, 3).join(', ')}` +
+            (leaked.length > 3 ? ', ...' : ''),
+        )
+      if (!adminOnlyOutput.size)
+        this.error(
+          'no admin-only output was identified - the reachability walk in ' +
+            'markAdminOnlyOutput is no longer finding the admin chunks',
+        )
+    },
+  }
+}
+
 // The frontend's semantic version, read from package.json and baked into the
 // bundle as the global `__APP_VERSION__` (see env.d.ts). The admin dashboard
 // shows it next to the backend version for a compatibility check; bump
@@ -109,6 +228,9 @@ export default defineConfig({
   plugins: [
     vue(),
     changelogPlugin(),
+    // Must precede VitePWA: it fills `adminOnlyOutput` in `generateBundle`, which
+    // the PWA plugin's manifest transform reads later, at `closeBundle`.
+    markAdminOnlyOutput(),
     // Installable PWA + offline app-shell. The service worker auto-updates on
     // each deploy (new precache manifest). API/WebSocket and the persistent
     // root images/ are explicitly excluded from the SPA navigation fallback so
@@ -146,12 +268,36 @@ export default defineConfig({
       workbox: {
         // Precache the built SPA shell + hashed assets.
         globPatterns: ['**/*.{js,css,html,svg,woff,woff2}'],
+        // ...minus the admin-only half of them (see markAdminOnlyOutput). A
+        // player or public visitor never downloads the admin bundles; an admin
+        // fetches them on demand and the runtime rule below keeps them, so they
+        // still work offline after one visit.
+        manifestTransforms: [
+          (entries) => ({
+            manifest: entries.filter((entry) => !adminOnlyOutput.has(entry.url)),
+            warnings: [],
+          }),
+        ],
+        runtimeCaching: [
+          {
+            // Everything under assets/ is content-hashed, so a cached copy can
+            // never be stale - a changed file is a changed URL. This is what
+            // catches the admin bundles the precache no longer carries.
+            urlPattern: /\/assets\/.+\.(?:js|css|woff2?|ttf)$/,
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'app-assets',
+              expiration: { maxEntries: 150, maxAgeSeconds: 60 * 60 * 24 * 30 },
+            },
+          },
+        ],
         // SPA deep-link fallback, but never intercept the API or root images.
         navigateFallback: '/index.html',
         navigateFallbackDenylist: [/^\/api\//, /^\/images\//],
         cleanupOutdatedCaches: true,
       },
     }),
+    verifyAdminNotPrecached(),
     stripDistImages(),
     ogImageCacheBust(),
     // `npm run analyze` writes dist/stats.html with a treemap of bundle sizes.

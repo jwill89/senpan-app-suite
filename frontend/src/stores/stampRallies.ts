@@ -10,6 +10,7 @@
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 import { endpoints } from '@/lib/endpoints'
+import { saveRallySignup } from '@/lib/signups'
 import type {
   Affiliate,
   FestivalMap,
@@ -229,19 +230,30 @@ export const useStampRalliesStore = defineStore('stampRallies', () => {
    * festival closed would silently strip every stamp's stall.
    */
   async function loadFormSources(): Promise<void> {
-    try {
-      affiliates.value = (await endpoints.affiliates.list()).affiliates
-    } catch {
-      affiliates.value = []
-    }
-    try {
-      festivalMaps.value = (await endpoints.festivalMaps.list()).maps
-    } catch {
-      // No festival-map permission (or none exist) - the link select just stays
-      // empty and the rally keeps naming affiliates.
-      festivalMaps.value = []
-    }
-    await loadMapStalls(rallyForm.value?.festival_map_id ?? null)
+    // All three are independent - none consumes another's result - so run them
+    // together rather than paying two or three sequential round trips every time
+    // the form opens. Each keeps its own fallback, so one failing (typically the
+    // map list, for a grantee without that page) still leaves the others loaded.
+    const mapID = rallyForm.value?.festival_map_id ?? null
+    await Promise.all([
+      (async () => {
+        try {
+          affiliates.value = (await endpoints.affiliates.list()).affiliates
+        } catch {
+          affiliates.value = []
+        }
+      })(),
+      (async () => {
+        try {
+          festivalMaps.value = (await endpoints.festivalMaps.list()).maps
+        } catch {
+          // No festival-map permission (or none exist) - the link select just
+          // stays empty and the rally keeps naming affiliates.
+          festivalMaps.value = []
+        }
+      })(),
+      loadMapStalls(mapID),
+    ])
   }
 
   /** Loads a festival map's stalls for the stall select ('' / null clears them). */
@@ -310,7 +322,26 @@ export const useStampRalliesStore = defineStore('stampRallies', () => {
     }
   }
 
-  function editRallyForm(r: StampRally): void {
+  /**
+   * True when `r` carries its child collections, i.e. it came from a detail fetch
+   * rather than the list.
+   *
+   * The list omits `stamps`/`prizes` entirely (`omitempty` server-side), and a
+   * save is a FULL REPLACE - so seeding the form from a list row and saving it
+   * would delete every stamp on the rally and every participant's collected rows.
+   * The server now refuses to touch a collection a request didn't carry, but the
+   * form must not offer the edit in the first place: silently saving fewer stamps
+   * than the admin can see is its own bug.
+   */
+  function hasRallyDetail(r: StampRally | null | undefined): boolean {
+    return !!r && Array.isArray(r.stamps) && Array.isArray(r.prizes)
+  }
+
+  function editRallyForm(r: StampRally): boolean {
+    if (!hasRallyDetail(r)) {
+      ui.notify('This rally is still loading. Try again in a moment.', 'error')
+      return false
+    }
     rallyForm.value = {
       id: r.id,
       title: r.title,
@@ -346,6 +377,7 @@ export const useStampRalliesStore = defineStore('stampRallies', () => {
         placement: { ...p.placement },
       })),
     }
+    return true
   }
 
   /**
@@ -358,10 +390,10 @@ export const useStampRalliesStore = defineStore('stampRallies', () => {
    * silently gate a stall on dates from the last event. Issued cards belong to the
    * original rally and are not touched at all.
    */
-  function copyRallyForm(r: StampRally): void {
-    editRallyForm(r)
+  function copyRallyForm(r: StampRally): boolean {
+    if (!editRallyForm(r)) return false
     const f = rallyForm.value
-    if (!f) return
+    if (!f) return false
     f.id = 0
     f.title = `${r.title} (Copy)`
     f.available_from = ''
@@ -380,6 +412,7 @@ export const useStampRalliesStore = defineStore('stampRallies', () => {
       stamp.paused = false
     }
     for (const prize of f.prizes) prize.id = 0
+    return true
   }
 
   function cancelRallyForm(): void {
@@ -668,16 +701,46 @@ export const useStampRalliesStore = defineStore('stampRallies', () => {
    * message names the fix (the lookup page), so it is surfaced verbatim rather
    * than replaced with a generic failure.
    */
-  async function signUp(rallyId: number, name: string, turnstileToken = ''): Promise<boolean> {
+  async function signUp(
+    rallyId: number,
+    name: string,
+    world: string,
+    turnstileToken = '',
+  ): Promise<boolean> {
     if (submitting.value) return false
     const trimmed = name.trim()
     if (!trimmed) {
       ui.notify('Enter your character name', 'error')
       return false
     }
+    // Both halves are required: the world is what tells two players who share a
+    // character name apart, here and in every other system that records one.
+    const trimmedWorld = world.trim()
+    if (!trimmedWorld) {
+      ui.notify('Pick your home world', 'error')
+      return false
+    }
     submitting.value = true
     try {
-      signupResult.value = await endpoints.stampSignup.signUp(rallyId, trimmed, turnstileToken)
+      const issued = await endpoints.stampSignup.signUp(
+        rallyId,
+        trimmed,
+        trimmedWorld,
+        turnstileToken,
+      )
+      signupResult.value = issued
+      // The only moment the drawing token exists client-side: no name-keyed lookup
+      // returns it, because a draw is irreversible and a character name is public.
+      // Saving it here is what lets this browser show the link again later.
+      saveRallySignup({
+        rallyId,
+        rallyTitle: issued.rally_title,
+        name: issued.participant_name,
+        world: issued.world,
+        cardToken: issued.card_token,
+        garaponToken: issued.garapon_token || undefined,
+        garaponTitle: issued.garapon_title || undefined,
+      })
       return true
     } catch (e) {
       ui.notify((e as Error).message, 'error')
@@ -688,7 +751,7 @@ export const useStampRalliesStore = defineStore('stampRallies', () => {
   }
 
   /** Looks up a participant's links by the exact name they signed up with. */
-  async function lookupLinks(name: string): Promise<void> {
+  async function lookupLinks(name: string, world: string): Promise<void> {
     const trimmed = name.trim()
     if (!trimmed) {
       ui.notify('Enter the name you signed up with', 'error')
@@ -696,7 +759,7 @@ export const useStampRalliesStore = defineStore('stampRallies', () => {
     }
     lookupLoading.value = true
     try {
-      lookupResults.value = (await endpoints.stampSignup.lookup(trimmed)).entries
+      lookupResults.value = (await endpoints.stampSignup.lookup(trimmed, world.trim())).entries
     } catch (e) {
       ui.notify((e as Error).message, 'error')
       lookupResults.value = null
@@ -798,6 +861,7 @@ export const useStampRalliesStore = defineStore('stampRallies', () => {
     setFestivalMap,
     setStampStall,
     newRallyForm,
+    hasRallyDetail,
     editRallyForm,
     copyRallyForm,
     cancelRallyForm,

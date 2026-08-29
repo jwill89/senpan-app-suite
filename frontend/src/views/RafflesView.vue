@@ -19,15 +19,16 @@ const router = useRouter()
 const loading = ref(false)
 
 onMounted(async () => {
-  // Populate the list if arriving directly (not via the Home card click).
-  if (raffles.raffles.length === 0) {
-    loading.value = true
-    try {
-      await raffles.loadHomeRaffles()
-      raffles.raffles = raffles.homeRaffles
-    } finally {
-      loading.value = false
-    }
+  // Always load, and read `homeRaffles` rather than the shared `raffles` array.
+  // That array is the ADMIN list - unfiltered, including closed and out-of-window
+  // raffles - so a session where the admin surface had already populated it showed
+  // staff-only rows on this public page, and the old "only if empty" guard meant
+  // the public list was never fetched at all in that case.
+  loading.value = true
+  try {
+    await raffles.loadHomeRaffles()
+  } finally {
+    loading.value = false
   }
 })
 
@@ -52,9 +53,9 @@ function goHome(): void {
     </div>
     <div class="tab-body content-container">
       <LoadingSpinner v-if="loading" block label="Loading raffles..." />
-      <div v-else-if="raffles.raffles.length" class="card-grid card-grid--center">
+      <div v-else-if="raffles.homeRaffles.length" class="card-grid card-grid--center">
         <div
-          v-for="r in raffles.raffles"
+          v-for="r in raffles.homeRaffles"
           :key="r.id"
           class="media-card"
           role="button"

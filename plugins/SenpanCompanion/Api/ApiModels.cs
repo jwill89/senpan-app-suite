@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 
 namespace SenpanCompanion.Api;
@@ -298,6 +298,10 @@ public sealed class Garapon
     public string StampRallyTitle { get; set; } = string.Empty; // joined for display when linked
     public int PlayerCount { get; set; }                        // admin-list aggregate
     public int DrawCount { get; set; }                          // admin-list aggregate
+    // Draws a new link gets when the caller doesn't say. The server has always sent
+    // this; omitting it here is why the plugin issued every link with 1 draw while
+    // the web admin and the public sign-up both honored the garapon's own default.
+    public int DefaultDraws { get; set; }
 }
 
 // A per-player drawing link. StampCardToken is non-empty only when the garapon is

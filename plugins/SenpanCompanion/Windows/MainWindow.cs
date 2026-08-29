@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Numerics;
 using System.Threading.Tasks;
@@ -495,10 +495,13 @@ public sealed class MainWindow : Window, IDisposable
         ImGui.Indent(22f);
         var tmpl = getTemplate();
         if (ImGui.InputTextMultiline(editorId, ref tmpl, 2048, new Vector2(-1f, 54f)))
-        {
             setTemplate(tmpl);
+        // Persist when the field is done, not on every character. Save() is a full
+        // JSON serialize plus Dalamud's write-temp-flush-rename, and FlushFileBuffers
+        // is a forced disk barrier - running that from the render thread once per
+        // keystroke stalled the frame. Same pattern as the game-details box.
+        if (ImGui.IsItemDeactivatedAfterEdit())
             this.config.Save();
-        }
         UiText.WrappedDisabled(placeholderHint);
 
         var parts = estimateParts(getTemplate());
@@ -583,7 +586,10 @@ public sealed class MainWindow : Window, IDisposable
         if (Ui.PrimaryButton("Save"))
             SaveSettings();
         ImGui.SameLine();
-        if (this.settingsTesting)
+        // Snapshot: TestSettings() below sets settingsTesting true synchronously, so
+        // re-reading the field at the End would pop a scope that was never pushed.
+        var testDisabled = this.settingsTesting;
+        if (testDisabled)
             ImGui.BeginDisabled();
         if (Ui.Button("Save & Test Connection"))
         {
@@ -593,7 +599,7 @@ public sealed class MainWindow : Window, IDisposable
             // first-run land-on-connect jump yank them off Settings before they read it.
             this.landOnConnect = false;
         }
-        if (this.settingsTesting)
+        if (testDisabled)
             ImGui.EndDisabled();
 
         if (!string.IsNullOrEmpty(this.settingsStatus))

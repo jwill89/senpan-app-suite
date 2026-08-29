@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.IO;
 using System.Net;
 using System.Net.WebSockets;
@@ -67,6 +67,17 @@ public sealed class LiveConnection : IDisposable
     /// <summary>The server reached the half-time mark; the flag is whether auto was paused for it.</summary>
     public event Action<bool>? HalftimePrompt;
 
+    /// <summary>
+    /// Raised on the UI thread each time the socket comes back up after a drop.
+    /// Everything the plugin holds from a push (called numbers, winners, game state)
+    /// is only as complete as the stream it arrived on, so a gap leaves the local
+    /// copy silently short - End Game would then log the wrong winners. Subscribers
+    /// should mark their state stale and let the per-frame EnsureLoaded re-pull it,
+    /// exactly as the web client does. Not raised for the first connection: there is
+    /// nothing to re-sync yet.
+    /// </summary>
+    public event Action? Reconnected;
+
     public LiveConnection(Configuration config, IPluginLog log, IFramework framework)
     {
         this.config = config;
@@ -99,6 +110,12 @@ public sealed class LiveConnection : IDisposable
     }
 
     public void Dispose() => Stop();
+
+    /// <summary>
+    /// Whether the socket has ever been established, so Reconnected fires on a real
+    /// re-connect rather than at start-up. Only touched from the connection loop.
+    /// </summary>
+    private bool hasConnectedBefore;
 
     private async Task RunAsync(CancellationToken ct)
     {
@@ -177,6 +194,10 @@ public sealed class LiveConnection : IDisposable
             throw new LiveAuthException($"server returned {(int)ws.HttpStatusCode}");
         }
         this.Connected = true;
+        // Only after a previous session: the first connect has nothing to re-sync.
+        if (this.hasConnectedBefore)
+            RunOnUi(() => Reconnected?.Invoke());
+        this.hasConnectedBefore = true;
 
         var buffer = new byte[16 * 1024];
         using var ms = new MemoryStream();

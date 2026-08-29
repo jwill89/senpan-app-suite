@@ -87,12 +87,16 @@ describe('users + account (hybrid REST)', () => {
     expect(apiDelete).toHaveBeenCalledWith('users/3')
   })
 
-  it('changePassword POSTs the current + new password to the change-password sub-path', async () => {
+  it('changePassword POSTs the current + new password, opting out of the 401 redirect', async () => {
     await endpoints.account.changePassword('old', 'new')
-    expect(apiPost).toHaveBeenCalledWith('account/change-password', {
-      current_password: 'old',
-      new_password: 'new',
-    })
+    // skipAuthRedirect matters here: a mistyped CURRENT password answers 401 even
+    // though the session is perfectly valid, and without this the global handler
+    // reads that as an expired session and logs the user out over a typo.
+    expect(apiPost).toHaveBeenCalledWith(
+      'account/change-password',
+      { current_password: 'old', new_password: 'new' },
+      { skipAuthRedirect: true },
+    )
   })
 
   it('generateToken POSTs to the token resource with no action field', async () => {

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Numerics;
@@ -55,6 +55,21 @@ internal sealed class BingoGameTab : TabBase, IDisposable
 
     private bool openHalftimePopup;
     private bool halftimeAutoPaused;
+    /// <summary>
+    /// The game the pending half-time prompt belongs to. The prompt is a latch that
+    /// only the Bingo Game page consumes, and nothing used to clear it on a game
+    /// boundary - so a prompt raised near the end of one game sat there and popped
+    /// during the NEXT one, where answering "Yes" broadcast a half-time mini-game
+    /// alert to players who had never reached half time.
+    /// </summary>
+    private long halftimeGameId;
+    /// <summary>
+    /// When this page last drew a frame. The half-time prompt is a modal on THIS
+    /// page, so it is invisible while the window is closed or showing something
+    /// else - and the server has paused auto-draw waiting for an answer, so the
+    /// game just stalls with nothing said. This is how the prompt knows to speak up.
+    /// </summary>
+    private DateTime lastDrawnAt = DateTime.MinValue;
 
     private bool openEndGamePopup;
     private readonly HashSet<string> endGameSelected = new();
@@ -76,6 +91,7 @@ internal sealed class BingoGameTab : TabBase, IDisposable
         this.live.YoeverConfig += OnYoeverConfig;
         this.live.AutoConfig += OnAutoConfig;
         this.live.HalftimePrompt += OnHalftimePrompt;
+        this.live.Reconnected += OnReconnected;
     }
 
     public void Dispose()
@@ -86,6 +102,7 @@ internal sealed class BingoGameTab : TabBase, IDisposable
         this.live.YoeverConfig -= OnYoeverConfig;
         this.live.AutoConfig -= OnAutoConfig;
         this.live.HalftimePrompt -= OnHalftimePrompt;
+        this.live.Reconnected -= OnReconnected;
     }
 
     protected override async Task LoadAsync()
@@ -125,6 +142,9 @@ internal sealed class BingoGameTab : TabBase, IDisposable
 
     public void Draw()
     {
+        // Stamped every frame this page is visible, so a prompt arriving later can
+        // tell whether the operator is actually looking at it (see OnHalftimePrompt).
+        this.lastDrawnAt = DateTime.UtcNow;
         DrawStatusLine();
 
         if (this.game == null)
@@ -289,7 +309,12 @@ internal sealed class BingoGameTab : TabBase, IDisposable
 
     private void DrawCurrentGame(GameState state)
     {
-        if (this.Busy)
+        // Snapshot Busy: the click handler below calls Run(), which sets Busy true
+        // synchronously, so re-reading the field at the End would pop a disabled
+        // scope that was never pushed and corrupt ImGui's stack for the rest of the
+        // frame. Same reason the canStart/canCreate/canAdd sites use a local.
+        var drawDisabled = this.Busy;
+        if (drawDisabled)
             ImGui.BeginDisabled();
         if (Ui.PrimaryButton("Draw Number"))
         {
@@ -308,7 +333,7 @@ internal sealed class BingoGameTab : TabBase, IDisposable
                 });
             });
         }
-        if (this.Busy)
+        if (drawDisabled)
             ImGui.EndDisabled();
 
         ImGui.SameLine();
@@ -515,6 +540,12 @@ internal sealed class BingoGameTab : TabBase, IDisposable
 
     private void DrawHalftimePopup()
     {
+        // Refuse a prompt that outlived the game it was raised for. OnGameUpdate
+        // clears it on a boundary, but the operator may not have had this page open
+        // when that arrived, so check again at the point of use.
+        if (this.halftimeGameId != 0 && this.halftimeGameId != (this.game?.Id ?? 0))
+            ClearHalftimePrompt();
+
         if (this.openHalftimePopup)
         {
             ImGui.OpenPopup("Half-Time###halftime");
@@ -766,12 +797,23 @@ internal sealed class BingoGameTab : TabBase, IDisposable
 
     private void OnGameUpdate(GameState? state)
     {
+        // A different game (or none at all) makes any pending half-time prompt
+        // meaningless - drop it rather than letting it surface against the new game.
+        if (state == null || state.Id != this.game?.Id)
+            ClearHalftimePrompt();
         this.game = state;
         if (state == null)
         {
             this.winners = new List<string>();
             this.lastDrawn = null;
         }
+    }
+
+    private void ClearHalftimePrompt()
+    {
+        this.openHalftimePopup = false;
+        this.halftimeAutoPaused = false;
+        this.halftimeGameId = 0;
     }
 
     // Auto-draw state changed on the server (started, toggled, interval adjusted, or
@@ -787,10 +829,51 @@ internal sealed class BingoGameTab : TabBase, IDisposable
     // The server reached the half-time mark (on any draw, manual or automatic):
     // open the mini-game prompt. autoPaused tells the modal whether declining will
     // resume the auto draws.
+    /// <summary>
+    /// The socket came back after a drop. Anything that arrived only as a push while
+    /// we were disconnected is missing: CalledNumbers is short, and the winners and
+    /// game state may be stale. Nothing on the wire fills that gap - the server sends
+    /// no snapshot on connect - so mark both this tab and the card cache stale and let
+    /// the per-frame EnsureLoaded re-pull GET /api/game. Without this, ending a game
+    /// after a reconnect wrote the WRONG winners into the permanent log, and the
+    /// called-numbers grid stayed wrong for the rest of the session.
+    /// </summary>
+    private void OnReconnected()
+    {
+        MarkStale();
+        this.cardCache.MarkStale();
+    }
+
+    /// <summary>
+    /// Tells the operator half time was reached while the Companion window was
+    /// closed or on another page.
+    /// </summary>
+    /// <remarks>
+    /// Both channels are purely LOCAL. IChatGui.Print writes into this client's own
+    /// chat log and sends nothing to the server - it is not ChatSender, which
+    /// actually transmits and carries the account risk that comes with automated
+    /// chat. The chime is the same one a new winner already plays, and is
+    /// documented there as using no game interop at all. So this adds a message
+    /// only the operator can see, on a prompt that has genuinely paused their game.
+    /// </remarks>
+    private static void AlertHalftimeOffPage(bool autoPaused)
+    {
+        WinnerChime.Play();
+        var paused = autoPaused ? " Auto-draw is paused until you answer." : string.Empty;
+        Plugin.ChatGui.Print(
+            $"[Senpan] Half time reached - open the Companion window to answer the mini-game prompt.{paused}");
+    }
+
     private void OnHalftimePrompt(bool autoPaused)
     {
         this.halftimeAutoPaused = autoPaused;
         this.openHalftimePopup = true;
+        this.halftimeGameId = this.game?.Id ?? 0;
+
+        // If this page was not on screen a moment ago, nobody is going to see the
+        // modal. Say so where the operator IS looking - the game itself.
+        if (DateTime.UtcNow - this.lastDrawnAt > TimeSpan.FromSeconds(1))
+            AlertHalftimeOffPage(autoPaused);
     }
 
     // A player fired the reaction: keep the running count in step. The dedicated

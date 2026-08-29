@@ -43,6 +43,23 @@ type Server struct {
 	raffleLookupLimiter *rateLimiter
 	cardReqLimiter      *rateLimiter // public custom-card-request limiter (request flooding)
 	rallyLimiter        *rateLimiter // public stamp-rally sign-up + link-lookup limiter
+	// Wrong stamp passwords. Counted only on a MISS, so a participant collecting
+	// stamps normally never touches it; a script guessing short human-typed
+	// passwords ("alpha", "bravo") runs out quickly.
+	stampGuessLimiter *rateLimiter
+	// Garapon draws. Every other public mutating path has a limiter and this one
+	// had none, even though it is the only IRREVERSIBLE public action in the app:
+	// a draw is recorded against the player's allowance and cannot be undone. The
+	// token is the capability, so anyone who obtains one - and a stamp-card link
+	// doubles as one - could spend a whole allowance in a single burst. Counted on
+	// every draw, not just failures: a legitimate player has a handful of draws
+	// total, so the ceiling is only reachable by a script.
+	garaponDrawLimiter *rateLimiter
+	// Public passkey-login BEGIN. Separate from limiter on purpose: every begin
+	// stores a WebAuthn challenge in the session store, so it needs a budget of its
+	// own, but counting it against the 5-per-15-minutes login limiter would lock a
+	// user out of password login for merely opening the passkey prompt a few times.
+	passkeyBeginLimiter *rateLimiter
 	// Dev-safety valves for outbound Discord posts (see SetWebhookPolicy). Empty /
 	// false in production, where posts go to the webhook the feature configured.
 	webhookOverride string
@@ -66,6 +83,19 @@ type Server struct {
 	// orphan a directory. See images.go. Distinct from fontSecretMu - the font
 	// metadata lives in the DB, this manifest is a filesystem dotfile.
 	imageManifestMu sync.Mutex
+	// Serializes the font-metadata read-modify-write. Every font's family, serving
+	// preference and origin allowlist share ONE settings JSON blob, so two admin
+	// edits landing together each read the same map, mutate their own copy and
+	// write it back - and whichever saves second silently discards the other's
+	// change. Same reasoning as imageManifestMu, different store.
+	fontMetaMu sync.Mutex
+
+	// Consecutive failed Discord posts per announcement id, used to stop the
+	// scheduler retrying a permanently-broken webhook every 30 seconds forever (see
+	// postDueAnnouncements). In memory on purpose: it is a back-off, not a record,
+	// and a restart is a perfectly good reason to try again. Guarded by postFailMu.
+	postFailMu sync.Mutex
+	postFails  map[int64]int
 
 	// autoWake is a one-slot mailbox that nudges the automatic-draw scheduler
 	// (RunAutoDrawScheduler) to re-evaluate its timer after any auto-relevant
@@ -150,8 +180,18 @@ func New(st *store.Store, hub *ws.Hub, sessionSecret, webRoot string, allowedOri
 		// Covers sign-up AND link lookup: the lookup is the enumeration risk (guessing
 		// names to harvest links), so both share one budget per IP. Generous enough for
 		// a participant who signs up for a couple of rallies and re-checks their links.
-		rallyLimiter: newRateLimiter(15, 10*time.Minute),
-		autoWake:     make(chan struct{}, 1), // one-slot wake mailbox for the auto-draw scheduler
+		rallyLimiter:      newRateLimiter(15, 10*time.Minute),
+		stampGuessLimiter: newRateLimiter(10, 10*time.Minute),
+		// A generous allowance is still far below a burst: real garapons issue a
+		// few draws per player, and a player who draws them one at a time while
+		// watching the animation stays well under this.
+		garaponDrawLimiter: newRateLimiter(20, 10*time.Minute),
+		postFails:          make(map[int64]int),
+		// Generous: a real user may open the passkey prompt, cancel, pick the wrong
+		// authenticator and retry several times in a sitting. It exists to bound
+		// unauthenticated session-store growth, not to police login attempts.
+		passkeyBeginLimiter: newRateLimiter(30, 10*time.Minute),
+		autoWake:            make(chan struct{}, 1), // one-slot wake mailbox for the auto-draw scheduler
 	}
 
 	s.routes()
@@ -733,6 +773,19 @@ func (s *Server) sessionUserEpoch(r *http.Request) int64 {
 	return 0
 }
 
+// establishSession mints a logged-in session for u. EVERY login path must go
+// through here rather than writing the session keys itself: a session carries the
+// account's password epoch as well as its id, and one minted without the epoch
+// reads back as epoch 0 - which loadCurrentUser rejects outright for any account
+// whose password has ever been changed or reset, leaving a login that returns 200
+// and then 401s on the very next request. Rotating the token first defeats
+// session fixation.
+func (s *Server) establishSession(r *http.Request, u *model.User) {
+	_ = s.sessions.RenewToken(r.Context())
+	s.sessions.Put(r.Context(), "user_id", u.ID)
+	s.sessions.Put(r.Context(), "user_epoch", u.PasswordEpoch)
+}
+
 // checkCSRF is a defense-in-depth CSRF guard layered on top of the SameSite=Lax
 // session cookie. It scrutinizes only cookie-authenticated, state-changing
 // requests - the shape a cross-site page could drive using the victim's ambient
@@ -922,6 +975,28 @@ func (s *Server) requirePermission(w http.ResponseWriter, r *http.Request, perm 
 	return false
 }
 
+// requireAnyPermission is requirePermission for a READ that several pages legitimately
+// need. It returns the caller so the handler can narrow what it sends: a page granted
+// access because its editor needs a list is not thereby entitled to that list's
+// secrets. Writes 401/403 and returns nil when the caller holds none of perms.
+func (s *Server) requireAnyPermission(w http.ResponseWriter, r *http.Request, perms ...string) *model.User {
+	u := s.currentUser(r)
+	if u == nil {
+		writeError(w, http.StatusUnauthorized, "Unauthorized - login required")
+		return nil
+	}
+	if u.IsAdmin {
+		return u
+	}
+	for _, p := range perms {
+		if userHasPermission(u, p) {
+			return u
+		}
+	}
+	writeError(w, http.StatusForbidden, "Forbidden - you do not have access to this feature")
+	return nil
+}
+
 // -- Broadcast helpers -------------------------------------------------------
 
 // broadcastResourceChanged notifies all admin clients that a named admin resource
@@ -993,13 +1068,19 @@ func (s *Server) broadcastCards() {
 			World:        c.World,
 		}
 	}
-	s.hub.Broadcast(struct {
+	// Admin channel only. This is the permission-gated GET /api/cards payload
+	// (requirePermission(permBingoCards)), and an unfiltered Broadcast would hand
+	// every card id, character name, world and staff note to anonymous player
+	// sockets - which subscribe with just ?id=<card>. No player client consumes it
+	// either: the SPA discards cards_update outside the admin view, and the plugin
+	// sits on this same no-card-id channel.
+	s.hub.BroadcastToAdmins(struct {
 		Type  string                `json:"type"`
 		Cards []model.CardListEntry `json:"cards"`
 	}{Type: "cards_update", Cards: entries})
 }
 
-// broadcastPatterns sends updated patterns and categories to all WebSocket clients.
+// broadcastPatterns sends updated patterns and categories to the admin channel.
 func (s *Server) broadcastPatterns() {
 	patterns, err := s.store.ListPatterns()
 	if err != nil {
@@ -1009,7 +1090,9 @@ func (s *Server) broadcastPatterns() {
 	if err != nil {
 		return
 	}
-	s.hub.Broadcast(struct {
+	// Admin channel only, for the same reason as broadcastCards: this is the
+	// permission-gated GET /api/patterns payload, and players never render it.
+	s.hub.BroadcastToAdmins(struct {
 		Type       string                  `json:"type"`
 		Patterns   []model.Pattern         `json:"patterns"`
 		Categories []model.PatternCategory `json:"categories"`
@@ -1042,20 +1125,26 @@ func (s *Server) broadcastGameEnd() {
 }
 
 // broadcastDrawToPlayers sends just the drawn number to all player clients.
-func (s *Server) broadcastDrawToPlayers(drawn model.BingoDrawnNumber) {
+// gameID stamps the draw with the game it belongs to, so a client can drop a frame
+// for a game it is no longer showing. The SPA already reads and honors this field
+// (useWebSocket's messageGameId); nothing was sending it, which left that guard
+// dead code and a delayed draw indistinguishable from a current one.
+func (s *Server) broadcastDrawToPlayers(gameID int64, drawn model.BingoDrawnNumber) {
 	s.hub.BroadcastToPlayers(struct {
-		Type  string                 `json:"type"`
-		Drawn model.BingoDrawnNumber `json:"drawn"`
-	}{Type: "game_draw", Drawn: drawn})
+		Type   string                 `json:"type"`
+		GameID int64                  `json:"game_id"`
+		Drawn  model.BingoDrawnNumber `json:"drawn"`
+	}{Type: "game_draw", GameID: gameID, Drawn: drawn})
 }
 
 // broadcastDrawToAdmins sends the drawn number + updated winners to all admin clients.
-func (s *Server) broadcastDrawToAdmins(drawn model.BingoDrawnNumber, winners []string) {
+func (s *Server) broadcastDrawToAdmins(gameID int64, drawn model.BingoDrawnNumber, winners []string) {
 	s.hub.BroadcastToAdmins(struct {
 		Type    string                 `json:"type"`
+		GameID  int64                  `json:"game_id"`
 		Drawn   model.BingoDrawnNumber `json:"drawn"`
 		Winners []string               `json:"winners"`
-	}{Type: "game_draw", Drawn: drawn, Winners: winners})
+	}{Type: "game_draw", GameID: gameID, Drawn: drawn, Winners: winners})
 }
 
 // broadcastStyleUpdate sends a style_update message with the active theme's CSS

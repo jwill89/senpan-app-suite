@@ -45,6 +45,26 @@ function beginDrag(mode: DragMode, stall: FestivalStallForm, e: PointerEvent): v
   startDrag(mode, stall._uid ?? 0, stall.placement, e, { square: isCircle(stall.shape) })
 }
 
+/**
+ * Keyboard equivalent of grabbing a pitch. Dragging is inherently pointer-only, but
+ * SELECTING one must not be: once selected, the form's numeric position, size and
+ * rotation fields edit the same values a drag would, so a keyboard user can place a
+ * stall precisely. Without this the whole editor was unreachable without a mouse -
+ * the pitches were bare divs carrying only @pointerdown.
+ */
+function selectStall(stall: FestivalStallForm): void {
+  emit('select', stall._uid ?? 0)
+}
+
+/** A stall's accessible name: who is in it, plus its place in the list. */
+function stallLabel(stall: FestivalStallForm, index: number): string {
+  const names = stall.occupants
+    .map((o) => o.title.trim())
+    .filter(Boolean)
+    .join(', ')
+  return `Pitch ${index + 1}${names ? `: ${names}` : ''} - select to edit its position and size`
+}
+
 /** Click on empty map area -> deselect. */
 function onCanvasPointerDown(e: PointerEvent): void {
   const target = e.target as HTMLElement
@@ -69,7 +89,7 @@ function onCanvasPointerDown(e: PointerEvent): void {
       </div>
 
       <div
-        v-for="stall in stalls"
+        v-for="(stall, stallIndex) in stalls"
         :key="stall._uid"
         class="map-stall"
         :class="{
@@ -77,7 +97,13 @@ function onCanvasPointerDown(e: PointerEvent): void {
           'map-stall--round': isCircle(stall.shape),
         }"
         :style="stallStyle(stall.placement, stall.shape, stallColor(stall))"
+        role="button"
+        tabindex="0"
+        :aria-pressed="stall._uid === selectedUid"
+        :aria-label="stallLabel(stall, stallIndex)"
         @pointerdown="beginDrag('move', stall, $event)"
+        @keydown.enter.prevent="selectStall(stall)"
+        @keydown.space.prevent="selectStall(stall)"
       >
         <span class="map-stall-label">
           <span v-for="occupant in stall.occupants" :key="occupant._uid" class="map-stall-occupant">

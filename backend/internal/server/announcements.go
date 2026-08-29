@@ -336,7 +336,10 @@ const maxSkipCount = 52
 // An omitted count means 1 (what the endpoint did before it took a body); 0 or a
 // negative count clears a pending skip.
 type announcementSkipRequest struct {
-	Count int `json:"count"`
+	// A POINTER so "no count field at all" stays distinguishable from an explicit
+	// 0. Treating them the same turned the UI's documented "Set 0 to post as
+	// scheduled" into the opposite - setting a skip of one.
+	Count *int `json:"count"`
 }
 
 // announcementReorderRequest is the JSON body for POST /api/announcements/reorder.
@@ -359,7 +362,7 @@ func (s *Server) handleAnnouncementCreate(w http.ResponseWriter, r *http.Request
 		return
 	}
 	a := req.Announcement
-	if !s.validateAndResolveAnnouncement(w, &a) {
+	if !s.validateAndResolveAnnouncement(w, &a, nil) {
 		return
 	}
 	id, err := s.store.CreateAnnouncement(&a)
@@ -399,7 +402,7 @@ func (s *Server) handleAnnouncementUpdate(w http.ResponseWriter, r *http.Request
 		return
 	}
 	a := req.Announcement
-	if !s.validateAndResolveAnnouncement(w, &a) {
+	if !s.validateAndResolveAnnouncement(w, &a, existing) {
 		return
 	}
 	a.ID = id
@@ -509,14 +512,16 @@ func (s *Server) handleAnnouncementSkip(w http.ResponseWriter, r *http.Request) 
 		writeError(w, http.StatusBadRequest, "Invalid JSON")
 		return
 	}
-	// An absent/zero count means "skip the next one", preserving what this endpoint
-	// did when it took no body at all - an older client keeps working.
-	count := req.Count
-	if count == 0 {
-		count = 1
-	}
-	if count < 0 {
-		count = 0 // a negative count is how a caller says "cancel the skip"
+	// An ABSENT count means "skip the next one", preserving what this endpoint did
+	// when it took no body at all, so an older client keeps working. An explicit 0
+	// (or negative) clears a pending skip, which is what the form's "Set 0 to post
+	// as scheduled" promises and what this struct's doc comment always said.
+	count := 1
+	if req.Count != nil {
+		count = *req.Count
+		if count < 0 {
+			count = 0
+		}
 	}
 	if count > maxSkipCount {
 		writeError(w, http.StatusBadRequest,
@@ -559,7 +564,11 @@ func (s *Server) handleAnnouncementsReorder(w http.ResponseWriter, r *http.Reque
 // exists, and resolves every wall-clock time against the announcement's single
 // IANA timezone - computing the absolute UTC instants (start_at/end_at and, for a
 // schedule, next_post_at). On failure it writes the error response, returns false.
-func (s *Server) validateAndResolveAnnouncement(w http.ResponseWriter, a *model.Announcement) bool {
+//
+// existing is the stored row on an update, nil on a create. It is needed because
+// next_post_at/active are schedule-CURSOR state (like skip_count) that the edit
+// form does not own - see the "once" branch below.
+func (s *Server) validateAndResolveAnnouncement(w http.ResponseWriter, a *model.Announcement, existing *model.Announcement) bool {
 	a.Title = strings.TrimSpace(a.Title)
 	if a.Title == "" {
 		writeError(w, http.StatusBadRequest, "Title is required")
@@ -667,8 +676,29 @@ func (s *Server) validateAndResolveAnnouncement(w http.ResponseWriter, a *model.
 			writeError(w, http.StatusBadRequest, "Invalid one-time date/time")
 			return false
 		}
-		a.NextPostAt = next
-		a.Active = true
+		// Arm the cursor only when the instant is genuinely in the future. On an
+		// UPDATE this is what stops an ordinary edit from resurrecting a one-time
+		// announcement that has already gone out: the scheduler clears the cursor to
+		// ("", false) when it posts (advanceCursorAt), and rewriting it here made the
+		// very next 30-second sweep post the whole thing again, @everyone and all,
+		// because someone fixed a typo. Same principle as skip_count above - the
+		// cursor belongs to the scheduler, not the form. Moving the date to a future
+		// instant is still a deliberate re-arm and works.
+		//
+		// A create (existing == nil) keeps its old behavior in full, including the
+		// deliberate "schedule it in the past so it goes out on the next sweep" case.
+		rearm := true
+		if existing != nil {
+			t, perr := time.Parse(time.RFC3339, next)
+			rearm = perr == nil && t.After(time.Now())
+		}
+		if rearm {
+			a.NextPostAt = next
+			a.Active = true
+		} else {
+			a.NextPostAt = existing.NextPostAt
+			a.Active = existing.Active
+		}
 	default:
 		// Recurring - validate the recurrence inputs first so the post time can't
 		// silently shift: an out-of-range minutes-of-day would wrap through the
@@ -1250,6 +1280,33 @@ func (s *Server) RunAnnouncementScheduler(ctx context.Context) {
 // type has no webhook is left pending; a failed post is retried next tick. Posts
 // run sequentially; ctx is checked between them so a graceful shutdown isn't
 // delayed by a long backlog of outbound Discord calls.
+// maxAnnouncementPostRetries is how many consecutive failed posts one occurrence
+// gets before the scheduler moves its cursor on. At the 30-second sweep interval
+// this is a couple of minutes of retrying, which covers a Discord blip while not
+// letting a deleted webhook wedge the sweep indefinitely.
+const maxAnnouncementPostRetries = 5
+
+// recordPostFailure counts one consecutive failure for an announcement and returns
+// the new count.
+func (s *Server) recordPostFailure(id int64) int {
+	s.postFailMu.Lock()
+	defer s.postFailMu.Unlock()
+	// Lazily created: tests construct a Server directly rather than through New.
+	if s.postFails == nil {
+		s.postFails = make(map[int64]int)
+	}
+	s.postFails[id]++
+	return s.postFails[id]
+}
+
+// clearPostFailures forgets an announcement's failure streak - on a successful
+// post, or once its occurrence has been given up on.
+func (s *Server) clearPostFailures(id int64) {
+	s.postFailMu.Lock()
+	defer s.postFailMu.Unlock()
+	delete(s.postFails, id)
+}
+
 func (s *Server) postDueAnnouncements(ctx context.Context) {
 	due, err := s.store.DueAnnouncements(time.Now())
 	if err != nil {
@@ -1270,8 +1327,16 @@ func (s *Server) postDueAnnouncements(ctx context.Context) {
 			// out this occurrence and the next, rather than the whole run at once.
 			remaining := a.SkipCount - 1
 			next, active := s.advanceCursor(a)
-			if err := s.store.AdvanceAnnouncement(a.ID, next, active, remaining); err != nil {
+			applied, err := s.store.AdvanceAnnouncement(a.ID, a.NextPostAt, next, active, remaining)
+			if err != nil {
 				slog.Error("announcement scheduler: consume skip", "id", a.ID, "error", err)
+				continue
+			}
+			if !applied {
+				// An admin edited the schedule while this sweep was running; their
+				// cursor wins over one computed from a snapshot taken before it.
+				slog.Info("announcement changed during the sweep; leaving the admin's cursor alone",
+					"id", a.ID, "title", a.Title)
 				continue
 			}
 			// Worth a line: from the outside a consumed skip looks exactly like an
@@ -1288,17 +1353,37 @@ func (s *Server) postDueAnnouncements(ctx context.Context) {
 		err := s.postDiscordWebhook(ctx, target, typ.WebhookURL, s.buildAnnouncementMessage(a))
 		if err != nil && !errors.Is(err, errWebhookAmbiguous) {
 			// Definitely not delivered (HTTP error status, incl. 429 rate limit):
-			// leave the cursor where it is so the next tick retries.
-			slog.Error("announcement scheduler: post", "id", a.ID, "error", err)
+			// leave the cursor where it is so the next tick retries - but only up to a
+			// point. A webhook that has been deleted answers 404 every time, and
+			// retrying that every 30 seconds forever both spams the log and keeps a
+			// stuck announcement permanently "due", so nothing after it in the sweep
+			// ever gets a clean run. After maxAnnouncementPostRetries consecutive
+			// failures, give up on THIS occurrence and move the cursor on; a recurring
+			// announcement simply tries again at its next occurrence.
+			n := s.recordPostFailure(a.ID)
+			slog.Error("announcement scheduler: post", "id", a.ID, "error", err, "consecutive_failures", n)
+			if n < maxAnnouncementPostRetries {
+				continue
+			}
+			next, active := s.advanceCursor(a)
+			if applied, err := s.store.AdvanceAnnouncement(a.ID, a.NextPostAt, next, active, a.SkipCount); err != nil || !applied {
+				slog.Error("announcement scheduler: give up on occurrence",
+					"id", a.ID, "error", err, "applied", applied)
+				continue
+			}
+			slog.Error("announcement scheduler: giving up on this occurrence after repeated failures",
+				"id", a.ID, "title", a.Title, "failures", n, "next", next, "still_active", active)
+			s.clearPostFailures(a.ID)
 			continue
 		}
+		s.clearPostFailures(a.ID)
 		// Success OR an ambiguous transport failure: advance the cursor either way.
 		// On ambiguity the message may already be on Discord, so retrying would
 		// duplicate it - we advance instead and log a warning. Recurring posts
 		// resume at their next occurrence; a one-time post that truly failed needs
 		// a manual resend.
 		next, active := s.advanceCursor(a)
-		if mErr := s.markPostedWithRetry(a.ID, next, active); mErr != nil {
+		if mErr := s.markPostedWithRetry(a.ID, a.NextPostAt, next, active); mErr != nil {
 			// The Discord post already went out, but the cursor could not be advanced
 			// even after retrying - the announcement is still "due", so the next tick
 			// would re-post it (a duplicate @everyone blast). Log loudly; a persistent
@@ -1321,10 +1406,18 @@ func (s *Server) postDueAnnouncements(ctx context.Context) {
 // the announcement still due and re-post it next tick - a duplicate @everyone
 // blast - so a transient DB error (e.g. brief SQLite-WAL contention) is retried a
 // few times before giving up.
-func (s *Server) markPostedWithRetry(id int64, nextPostAt string, active bool) error {
+// prevNextPostAt is the cursor read before posting. A write that no longer matches
+// it means an admin edited the schedule during the post: their cursor stands, and
+// this returns nil rather than retrying, because retrying would only overwrite the
+// edit again. The message is already on Discord either way.
+func (s *Server) markPostedWithRetry(id int64, prevNextPostAt, nextPostAt string, active bool) error {
 	var err error
 	for attempt := 0; attempt < 3; attempt++ {
-		if err = s.store.MarkAnnouncementPosted(id, nextPostAt, active); err == nil {
+		var applied bool
+		if applied, err = s.store.MarkAnnouncementPosted(id, prevNextPostAt, nextPostAt, active); err == nil {
+			if !applied {
+				slog.Info("announcement changed during its post; leaving the admin's cursor alone", "id", id)
+			}
 			return nil
 		}
 		time.Sleep(50 * time.Millisecond)

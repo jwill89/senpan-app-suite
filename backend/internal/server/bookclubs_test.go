@@ -111,6 +111,54 @@ func TestReadingListAndItemHTTPCRUD(t *testing.T) {
 	}
 }
 
+// TestReadingListItemMustBelongToItsList closes the gap the club-mismatch guard
+// above does NOT cover. That guard checks the LIST belongs to the club in the
+// path; nothing checked the ITEM belongs to that list. So a caller working through
+// a list they legitimately own could pass any item id at all - including one from
+// another club's list - and the store keyed the UPDATE and DELETE on the item id
+// alone, editing or destroying another club's item. Both statements are now scoped
+// to the parent list, and a non-member id reports 404.
+func TestReadingListItemMustBelongToItsList(t *testing.T) {
+	e := newTestEnv(t)
+	e.loginAdmin(t)
+
+	// The victim: an item on a yaoi list.
+	victimList := createReadingListIn(t, e, "yaoi", "Yaoi Only")
+	resp := e.postJSON(t, "/api/book-clubs/yaoi/reading-lists/"+itoa(victimList)+"/items", map[string]any{
+		"item": map[string]any{"title": "Secret"},
+	})
+	victimItem := int64(decodeBody(t, resp)["item"].(map[string]any)["id"].(float64))
+
+	// The attacker's own list, in a different club, reached by its correct path -
+	// so the club-mismatch guard passes and only the item scope stands in the way.
+	ownList := createReadingListIn(t, e, "yuri", "Yuri Own")
+	own := "/api/book-clubs/yuri/reading-lists/" + itoa(ownList)
+
+	resp = e.putJSON(t, own+"/items/"+itoa(victimItem), map[string]any{
+		"item": map[string]any{"title": "Hijacked"},
+	})
+	if resp.StatusCode != http.StatusNotFound {
+		t.Errorf("cross-list item update status = %d; want 404", resp.StatusCode)
+	}
+	resp.Body.Close()
+
+	resp = e.del(t, own+"/items/"+itoa(victimItem))
+	if resp.StatusCode != http.StatusNotFound {
+		t.Errorf("cross-list item delete status = %d; want 404", resp.StatusCode)
+	}
+	resp.Body.Close()
+
+	// The victim item is untouched, by both name and existence.
+	list := decodeBody(t, e.get(t, "/api/book-clubs/yaoi/reading-lists/"+itoa(victimList)))["reading_list"].(map[string]any)
+	items := list["items"].([]any)
+	if len(items) != 1 {
+		t.Fatalf("victim list items = %d; want 1 (item was deleted across lists)", len(items))
+	}
+	if got := items[0].(map[string]any)["title"]; got != "Secret" {
+		t.Errorf("victim item title = %v; want \"Secret\" (overwritten across lists)", got)
+	}
+}
+
 // TestReadingListClubMismatchGuard verifies the security guard: a list created in
 // one club cannot be read or mutated through another club's path, even by an
 // admin (who holds every club's permission). The mismatch is a 404 - the id is

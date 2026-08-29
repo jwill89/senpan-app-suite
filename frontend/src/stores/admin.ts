@@ -285,7 +285,10 @@ export const useAdminStore = defineStore('admin', () => {
         break
       case 'winners-log':
         apply('winners-log', tab === 'bingo-winners-log', () => {
-          void useGameStore().loadWinnersLog()
+          // Debounced: the server emits one of these per deleted row, so a bulk
+          // delete arrives as a burst and would otherwise re-walk the whole log
+          // once per row.
+          useGameStore().refreshWinnersLogSoon()
         })
         break
       case 'users':

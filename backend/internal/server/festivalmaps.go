@@ -1,6 +1,7 @@
 package server
 
 import (
+	"errors"
 	"net/http"
 	"regexp"
 	"strconv"
@@ -206,7 +207,15 @@ func sanitizeOccupants(in []model.FestivalStallOccupant) []model.FestivalStallOc
 		o.StallType = model.NormalizeStallType(o.StallType)
 		o.TypeLabel = strings.TrimSpace(o.TypeLabel)
 		o.Times = sanitizeEventTimes(o.Times)
-		if o.Title == "" && o.AffiliateID == nil {
+		// Only drop a row that ARRIVED with no identity - the blank repeater the
+		// form leaves behind when someone adds an occupant and thinks better of it.
+		// A stored occupant (id > 0) that has lost its identity is a different
+		// thing: an affiliate it named was deleted underneath it, and discarding it
+		// here would silently take the whole pitch with it on the next unrelated
+		// save, since a pitch left with no occupants is dropped below. Removal is
+		// expressed by leaving the occupant OUT of the array, not by blanking it,
+		// so nothing legitimate depends on the old behavior.
+		if o.ID == 0 && o.Title == "" && o.AffiliateID == nil {
 			continue
 		}
 		out = append(out, o)
@@ -313,7 +322,19 @@ func (s *Server) handleFestivalMapUpdate(w http.ResponseWriter, r *http.Request)
 	if !s.checkMapSlugUnique(w, m.Slug, id) {
 		return
 	}
-	if err := s.store.UpdateFestivalMap(m); err != nil {
+	// Authoritative for the pitches only when the request actually carried a
+	// "stalls" key - see the note in UpdateStampRally. An omitted key decodes to a
+	// nil slice and leaves the map's pitches alone; an explicit [] still clears
+	// them, so deliberately emptying a map keeps working.
+	if err := s.store.UpdateFestivalMap(m, req.Stalls != nil); err != nil {
+		// A stall id that isn't on this map means a stale editor (someone deleted
+		// the pitch meanwhile) or a spoofed body - the caller's problem, not ours,
+		// and the save was rejected whole rather than applied across two maps.
+		if errors.Is(err, store.ErrStallNotOnMap) {
+			writeError(w, http.StatusBadRequest,
+				"This map changed since you opened it. Reload the map and reapply your edit.")
+			return
+		}
 		writeInternalError(w, "update festival map", err)
 		return
 	}
@@ -368,7 +389,18 @@ func (s *Server) handleFestivalMapPatch(w http.ResponseWriter, r *http.Request) 
 		writeError(w, http.StatusBadRequest, "Invalid JSON")
 		return
 	}
-	status := model.NormalizeMapStatus(req.Status)
+	// Validate rather than normalize. NormalizeMapStatus exists to make sense of a
+	// STORED value and falls back to in_progress for anything it doesn't recognize,
+	// which is right when reading a row and wrong here: it turned a typo - or a body
+	// with no status at all - into a silent unpublish of a live map.
+	switch req.Status {
+	case model.MapStatusInProgress, model.MapStatusPublished, model.MapStatusClosed:
+	default:
+		writeError(w, http.StatusBadRequest,
+			`Status must be one of "in_progress", "published" or "closed"`)
+		return
+	}
+	status := req.Status
 	if status == model.MapStatusPublished {
 		m, err := s.store.GetFestivalMap(id)
 		if err != nil {
@@ -467,6 +499,14 @@ func (s *Server) handleFestivalMapPublic(w http.ResponseWriter, r *http.Request)
 	if err != nil {
 		writeInternalError(w, "get rally for festival map", err)
 		return
+	}
+	// Not-closed is not the same as running. The query cannot know the time, so the
+	// availability window is checked here against the clock - exactly as
+	// raffleRunning does for the raffles on this same payload. Without it the public
+	// map badged stalls and advertised sign-up for a rally that had not opened yet,
+	// or had already finished its window.
+	if rally != nil && !withinWindow(rally.AvailableFrom, rally.AvailableTo, time.Now().UTC()) {
+		rally = nil
 	}
 	if rally != nil {
 		rallyStamps, err = s.store.ListRallyStampsForMap(rally.ID)

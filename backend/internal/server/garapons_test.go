@@ -319,6 +319,42 @@ func TestGaraponDraw_Success(t *testing.T) {
 	}
 }
 
+// The draw endpoint is the only IRREVERSIBLE public action in the app and was the
+// one public mutating path with no limiter at all. Because a stamp-card link
+// doubles as a drawing token, anyone who saw a participant's card link could spend
+// their whole allowance in a burst; the limiter is what bounds that.
+//
+// Asserted against WRONG tokens on purpose: the budget has to be spent before the
+// token is resolved, or an attacker gets unlimited attempts against tokens that
+// miss and the limiter only ever sees the ones that hit.
+func TestGaraponDraw_RateLimited(t *testing.T) {
+	env := newTestEnv(t)
+	env.loginAdmin(t)
+	gid := env.createGarapon(t, "G")
+	token, _ := env.createGaraponPlayer(t, gid, "Hero", 1)
+
+	limited := false
+	for i := 0; i < 25; i++ {
+		resp := env.postJSON(t, "/api/garapon/deadbeef00/draw", map[string]any{})
+		resp.Body.Close()
+		if resp.StatusCode == http.StatusTooManyRequests {
+			limited = true
+			break
+		}
+	}
+	if !limited {
+		t.Fatal("25 draws against an unknown token were never rate limited")
+	}
+
+	// And the limit covers a REAL token too - the player still has a draw left, so
+	// a 429 here can only come from the limiter, not from the allowance.
+	resp := env.postJSON(t, "/api/garapon/"+token+"/draw", map[string]any{})
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusTooManyRequests {
+		t.Errorf("status = %d; want 429 once the per-IP budget is spent", resp.StatusCode)
+	}
+}
+
 func TestGaraponDraw_NoDrawsRemaining(t *testing.T) {
 	env := newTestEnv(t)
 	env.loginAdmin(t)

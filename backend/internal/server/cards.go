@@ -113,12 +113,24 @@ func (s *Server) handleCardsGenerate(w http.ResponseWriter, r *http.Request) {
 
 	cards := make([]model.GeneratedCard, 0, count)
 	batch := make([]store.CardBatchEntry, 0, count)
+	// Uniqueness has to cover the batch being built as well as the rows already
+	// stored: nothing in this batch is saved until the end, so checking the DB alone
+	// let two cards in the same run take the same id - and the batch insert then
+	// silently kept one of them, handing out fewer cards than were asked for.
+	seen := make(map[string]bool, count)
+	unused := func(id string) (bool, error) {
+		if seen[id] {
+			return true, nil
+		}
+		return s.store.CardExists(id)
+	}
 	for range count {
-		id, err := bingo.GenerateID(s.store.CardExists)
+		id, err := bingo.GenerateID(unused)
 		if err != nil {
 			writeInternalError(w, "generate card ID", err)
 			return
 		}
+		seen[id] = true
 		board := bingo.GenerateBoard()
 		cards = append(cards, model.GeneratedCard{ID: id, BoardData: board})
 		batch = append(batch, store.CardBatchEntry{ID: id, Board: board})

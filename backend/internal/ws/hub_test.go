@@ -199,13 +199,13 @@ func TestHub_BroadcastLog_AdminsOnly(t *testing.T) {
 	defer h.Shutdown(context.Background())
 
 	// admin: true-admin account on the cardID=="" channel - should receive logs.
-	admin := &client{hub: h, send: make(chan []byte, 64), cancel: func() {}}
+	admin := &client{hub: h, send: make(chan []byte, 64), logSend: make(chan []byte, 64), cancel: func() {}}
 	admin.isAdmin.Store(true)
 	// staff: a non-admin grantee (or plugin PAT) also sits on cardID=="" for
 	// resource_changed, but must NOT receive the log tail.
-	staff := &client{hub: h, send: make(chan []byte, 64), cancel: func() {}}
+	staff := &client{hub: h, send: make(chan []byte, 64), logSend: make(chan []byte, 64), cancel: func() {}}
 	// player: card-scoped public connection, never an admin.
-	player := &client{hub: h, send: make(chan []byte, 64), cardID: "CARD1", cancel: func() {}}
+	player := &client{hub: h, send: make(chan []byte, 64), logSend: make(chan []byte, 64), cardID: "CARD1", cancel: func() {}}
 	h.register(admin)
 	h.register(staff)
 	h.register(player)
@@ -216,21 +216,30 @@ func TestHub_BroadcastLog_AdminsOnly(t *testing.T) {
 
 	h.BroadcastLog(map[string]string{"type": "log", "entry": "secret"})
 
+	// The tail rides its OWN buffer, so a log burst cannot consume the one that
+	// operational broadcasts need (see the logSend comment on client).
 	select {
-	case <-admin.send:
+	case <-admin.logSend:
 		// expected
 	default:
 		t.Error("admin should have received the log line")
 	}
 	select {
-	case got := <-staff.send:
+	case got := <-staff.logSend:
 		t.Errorf("non-admin staff must NOT receive the log line, got %s", got)
 	default:
 		// expected
 	}
 	select {
-	case got := <-player.send:
+	case got := <-player.logSend:
 		t.Errorf("player must NOT receive the log line, got %s", got)
+	default:
+		// expected
+	}
+	// And it must not have touched the operational buffer at all.
+	select {
+	case got := <-admin.send:
+		t.Errorf("the log tail consumed the operational send buffer: %s", got)
 	default:
 		// expected
 	}
@@ -266,5 +275,40 @@ func TestHub_DisconnectAllPlayerClients_NoPlayers(t *testing.T) {
 
 	if h.ClientCount() != 1 {
 		t.Errorf("expected 1 client (admin), got %d", h.ClientCount())
+	}
+}
+
+// TestHub_LogBurstDoesNotDisconnectAdmin pins the guarantee BroadcastLog's comment
+// makes. It drops a log line rather than disconnecting when the buffer is full -
+// but it used to share the client's single send buffer, so a log burst filled that
+// buffer and the NEXT ordinary broadcast found it full and dropped the admin. The
+// tail now has its own buffer, so flooding it leaves the client connected and its
+// operational messages still deliverable.
+func TestHub_LogBurstDoesNotDisconnectAdmin(t *testing.T) {
+	h := NewHub()
+	defer h.Shutdown(context.Background())
+
+	admin := &client{hub: h, send: make(chan []byte, 64), logSend: make(chan []byte, 64), cancel: func() {}}
+	admin.isAdmin.Store(true)
+	h.register(admin)
+
+	// Flood the tail well past its buffer. Nothing is reading it.
+	for range 500 {
+		h.BroadcastLog(map[string]string{"type": "log", "entry": "burst"})
+	}
+	if h.ClientCount() != 1 {
+		t.Fatalf("a log burst disconnected the admin: clients = %d", h.ClientCount())
+	}
+
+	// An ordinary broadcast must still land, because its buffer was never touched.
+	h.BroadcastToAdmins(map[string]string{"type": "resource_changed", "resource": "cards"})
+	select {
+	case <-admin.send:
+		// expected
+	default:
+		t.Error("an operational broadcast was lost because the log burst had consumed the buffer")
+	}
+	if h.ClientCount() != 1 {
+		t.Errorf("the admin was dropped after the burst: clients = %d", h.ClientCount())
 	}
 }

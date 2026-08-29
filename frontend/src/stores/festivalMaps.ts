@@ -183,7 +183,25 @@ export const useFestivalMapsStore = defineStore('festivalMaps', () => {
     }
   }
 
-  function editMapForm(m: FestivalMap): void {
+  /**
+   * True when `m` carries its pitches, i.e. it came from a detail fetch rather
+   * than the list.
+   *
+   * The list omits `stalls` (`omitempty` server-side) and a save is a FULL
+   * REPLACE, so seeding the form from a list row and saving it would delete every
+   * pitch on the map along with the rally stamps and raffles pinned to them. The
+   * server now leaves a collection alone when the request didn't carry it, but the
+   * form must not offer an edit it cannot honor.
+   */
+  function hasMapDetail(m: FestivalMap | null | undefined): boolean {
+    return !!m && Array.isArray(m.stalls)
+  }
+
+  function editMapForm(m: FestivalMap): boolean {
+    if (!hasMapDetail(m)) {
+      ui.notify('This map is still loading. Try again in a moment.', 'error')
+      return false
+    }
     mapForm.value = {
       id: m.id,
       title: m.title,
@@ -209,6 +227,7 @@ export const useFestivalMapsStore = defineStore('festivalMaps', () => {
         _uid: nextUid(),
       })),
     }
+    return true
   }
 
   /**
@@ -220,10 +239,10 @@ export const useFestivalMapsStore = defineStore('festivalMaps', () => {
    * datetime, on the map and on each stall alike. A stale window would quietly
    * mark the new festival as long over.
    */
-  function copyMapForm(m: FestivalMap): void {
-    editMapForm(m)
+  function copyMapForm(m: FestivalMap): boolean {
+    if (!editMapForm(m)) return false
     const f = mapForm.value
-    if (!f) return
+    if (!f) return false
     f.id = 0
     f.title = `${m.title} (Copy)`
     // A shortcode names exactly one map, so a copy can't keep the original's -
@@ -238,6 +257,7 @@ export const useFestivalMapsStore = defineStore('festivalMaps', () => {
         occupant.times = []
       }
     }
+    return true
   }
 
   function cancelMapForm(): void {
@@ -425,6 +445,7 @@ export const useFestivalMapsStore = defineStore('festivalMaps', () => {
     viewMap,
     loadFormSources,
     newMapForm,
+    hasMapDetail,
     editMapForm,
     copyMapForm,
     cancelMapForm,

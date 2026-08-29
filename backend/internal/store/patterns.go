@@ -155,6 +155,12 @@ func (s *Store) swapCategoryOrder(idA, idB int64) (bool, error) {
 		}
 		orderMap[id] = sortOrder
 	}
+	// A read that stopped early leaves fewer than two rows, which is indistinguishable
+	// from "one of these ids doesn't exist" - and that reports (false, nil), so the
+	// swap silently no-ops instead of surfacing the failure.
+	if err := rows.Err(); err != nil {
+		return false, err
+	}
 	if len(orderMap) != 2 {
 		return false, nil
 	}
@@ -381,6 +387,12 @@ func (s *Store) swapPatternOrder(idA, idB int) (bool, error) {
 			return false, err
 		}
 		orderMap[id] = sortOrder
+	}
+	// A read that stopped early leaves fewer than two rows, which is indistinguishable
+	// from "one of these ids doesn't exist" - and that reports (false, nil), so the
+	// swap silently no-ops instead of surfacing the failure.
+	if err := rows.Err(); err != nil {
+		return false, err
 	}
 	if len(orderMap) != 2 {
 		return false, nil

@@ -54,12 +54,16 @@ type GaraponPlayer struct {
 	GaraponID  int64  `json:"garapon_id"`
 	Token      string `json:"token"` // unguessable URL token (the player's private link)
 	PlayerName string `json:"player_name"`
-	MaxDraws   int    `json:"max_draws"`
-	DrawsUsed  int    `json:"draws_used"` // read-only: COUNT of recorded draws
-	CreatedAt  string `json:"created_at"`
+	// Home world, stored apart from the name as every other system does
+	// (see model.ParticipantLabel). "" on links issued before schema v66.
+	World     string `json:"world"`
+	MaxDraws  int    `json:"max_draws"`
+	DrawsUsed int    `json:"draws_used"` // read-only: COUNT of recorded draws
+	CreatedAt string `json:"created_at"`
 	// StampCardToken is the token of the Stamp Rally card auto-issued alongside this
-	// drawing link when its garapon is linked to a rally - the SAME value as Token, so
-	// one hash serves both /garapon/<token> and /stamp-card/<token>. "" when unlinked.
+	// drawing link when its garapon is linked to a rally. It is a DIFFERENT value
+	// from Token: the card link can be shared, the drawing link spends draws, so
+	// the two are separate secrets. "" when unlinked.
 	StampCardToken string `json:"stamp_card_token,omitempty"`
 }
 

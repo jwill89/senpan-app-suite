@@ -207,7 +207,11 @@ onMounted(async () => {
               aria-label="Use this image"
               @click="model = img[valueKey]"
             >
-              <img :src="assetUrl(img.path)" alt="" />
+              <!-- The grid paints 72x48 thumbs from the ORIGINALS, so without
+                   lazy loading opening a form fetches and decodes every image in
+                   the category at full resolution. Lazy resolves against the
+                   clipping .img-picker scrollport, so only visible rows load. -->
+              <img :src="assetUrl(img.path)" alt="" loading="lazy" decoding="async" />
             </button>
           </div>
           <p v-else-if="images.loadingImages" class="text-muted text-sm">Loading images...</p>

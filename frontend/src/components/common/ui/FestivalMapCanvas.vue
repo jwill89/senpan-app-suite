@@ -187,15 +187,36 @@ const isRally = (id: number): boolean => props.rallyIds?.has(id) ?? false
  * day that carries one, so a pitch shows the stamp belonging to whoever is
  * actually there rather than whichever tenant happens to be listed first.
  */
+/**
+ * Day-dependent derivation for every pitch, computed ONCE per (stalls, day) rather
+ * than per render.
+ *
+ * These two answers used to be derived inside the template - stampArt up to twice
+ * per stall and onSelectedDay once per occupant - so every pointermove during a pan
+ * or pinch re-walked and re-filtered every pitch's occupant list, on a map that is
+ * being dragged at frame rate. A computed keyed on the props they actually depend
+ * on collapses that to one pass whenever the day or the map really changes.
+ */
+const perStall = computed(() => {
+  const byStall = new Map<PublicFestivalStall, { shown: Set<PublicStallOccupant>; art: string }>()
+  for (const stall of props.stalls) {
+    const onDay = occupantsOnDay(stall.occupants, props.day)
+    byStall.set(stall, {
+      shown: new Set(onDay),
+      art: onDay.find((o) => o.stamp_image)?.stamp_image ?? '',
+    })
+  }
+  return byStall
+})
+
 function stampArt(stall: PublicFestivalStall): string {
-  const onDay = occupantsOnDay(stall.occupants, props.day)
-  return onDay.find((o) => o.stamp_image)?.stamp_image ?? ''
+  return perStall.value.get(stall)?.art ?? ''
 }
 
 /** Whether an occupant is one of those standing here on the day being browsed. */
 function onSelectedDay(stall: PublicFestivalStall, occupant: PublicStallOccupant): boolean {
   if (!props.day) return true
-  return occupantsOnDay(stall.occupants, props.day).includes(occupant)
+  return perStall.value.get(stall)?.shown.has(occupant) ?? false
 }
 
 defineExpose({ zoomBy, reset, zoom })

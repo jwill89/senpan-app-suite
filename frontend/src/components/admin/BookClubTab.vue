@@ -114,10 +114,24 @@ function cancelRename(): void {
               </a>
             </p>
             <template #actions>
-              <button class="btn-confirm btn-sm" @click="bookclub.editItem(item)">
+              <!-- Icon-only buttons in a repeating list: FontAwesome renders the
+                   glyph aria-hidden, so without a label these announce as just
+                   "button". Naming them per ITEM also distinguishes one row's
+                   Edit from the next when tabbing or listing controls. -->
+              <button
+                class="btn-confirm btn-sm"
+                :aria-label="`Edit ${item.title}`"
+                :title="`Edit ${item.title}`"
+                @click="bookclub.editItem(item)"
+              >
                 <font-awesome-icon :icon="['fas', 'pen-to-square']" />
               </button>
-              <button class="btn-danger btn-sm" @click="bookclub.deleteItem(item)">
+              <button
+                class="btn-danger btn-sm"
+                :aria-label="`Delete ${item.title}`"
+                :title="`Delete ${item.title}`"
+                @click="bookclub.deleteItem(item)"
+              >
                 <font-awesome-icon :icon="['fas', 'trash']" />
               </button>
             </template>

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Numerics;
@@ -319,7 +319,12 @@ internal sealed class StampRallyTab : TabBase
 
         // Lock selection while a load/action is in flight so the picked rally and the
         // loaded detail/log can't diverge (see the same guard on the Garapon picker).
-        if (this.Busy)
+        // Snapshot Busy: the Selectable below calls LoadRally, which calls Run(), which sets Busy true
+        // synchronously, so re-reading the field at the End would pop a disabled
+        // scope that was never pushed and corrupt ImGui's stack for the rest of the
+        // frame. Same reason the canStart/canCreate/canAdd sites use a local.
+        var pickDisabled = this.Busy;
+        if (pickDisabled)
             ImGui.BeginDisabled();
         ImGui.SetNextItemWidth(280);
         if (ImGui.BeginCombo("##rallypick", preview))
@@ -331,7 +336,7 @@ internal sealed class StampRallyTab : TabBase
             }
             ImGui.EndCombo();
         }
-        if (this.Busy)
+        if (pickDisabled)
             ImGui.EndDisabled();
     }
 

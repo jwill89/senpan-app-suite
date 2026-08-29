@@ -213,8 +213,16 @@ func checkTheme(name string, tok map[string]string) (aaFail, aaaFail int) {
 	return
 }
 
-func openDB(path string) *store.Store {
-	st, err := store.New(path)
+// openDB opens the database for a command. readOnly commands (dump, check) open
+// WITHOUT migrating: this tool is routinely pointed at a copy of production, and
+// migrating is irreversible - a `themetool dump` should never leave the file it
+// inspected on a different schema than it found it.
+func openDB(path string, readOnly bool) *store.Store {
+	openFn := store.New
+	if readOnly {
+		openFn = store.OpenNoMigrate
+	}
+	st, err := openFn(path)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "open db:", err)
 		os.Exit(1)
@@ -256,7 +264,8 @@ func main() {
 		os.Exit(2)
 	}
 	cmd, dbPath := os.Args[1], os.Args[2]
-	st := openDB(dbPath)
+	// Only "apply" writes; everything else just reads and must not migrate.
+	st := openDB(dbPath, cmd != "apply")
 	defer st.Close()
 
 	switch cmd {

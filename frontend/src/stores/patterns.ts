@@ -6,7 +6,7 @@
  * after a drag, plus `setPatternCategory` - replacing the old manual HTML5 DnD.
  */
 import { defineStore } from 'pinia'
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { endpoints } from '@/lib/endpoints'
 import { emptyGrid } from '@/lib/constants'
 import type { Pattern, PatternCategory } from '@/types/api'
@@ -337,6 +337,12 @@ export const usePatternsStore = defineStore('patterns', () => {
    */
   const editableGroups = ref<PatternGroup[]>([])
 
+  /**
+   * Set while applyGroupedOrder writes its own result back into `patterns`, so the
+   * watcher below does not rebuild the very list the user just dragged.
+   */
+  let applyingOrder = false
+
   /** Rebuilds `editableGroups` from the current `patterns` + `categories`. */
   function rebuildEditableGroups(): void {
     const map: Record<number, PatternGroup> = {}
@@ -352,6 +358,27 @@ export const usePatternsStore = defineStore('patterns', () => {
     }
     editableGroups.value = categories.value.map((c) => map[c.id]).filter(Boolean)
   }
+
+  /**
+   * Keep the drag view in step with server state. `editableGroups` holds shallow
+   * COPIES so vue-draggable-plus can reorder them freely, which means it silently
+   * goes stale the moment `patterns` changes underneath it - and it used to be
+   * rebuilt in only two places, so deleting a pattern, renaming one, or receiving a
+   * patterns_update broadcast all left the admin looking at a list that no longer
+   * matched what would be saved. Watching the source instead of remembering to call
+   * rebuild at each write site also covers whatever write path gets added next.
+   *
+   * Deep, because a rename mutates a pattern object in place rather than replacing
+   * the array. The list is a few dozen rows, so the traversal is not a concern.
+   */
+  watch(
+    [patterns, categories],
+    () => {
+      if (applyingOrder) return
+      rebuildEditableGroups()
+    },
+    { deep: true },
+  )
 
   /**
    * After a vue-draggable-plus change in the Edit Patterns view, flattens
@@ -372,6 +399,7 @@ export const usePatternsStore = defineStore('patterns', () => {
         })
       }
     }
+    applyingOrder = true
     patterns.value = flat
 
     try {
@@ -388,8 +416,12 @@ export const usePatternsStore = defineStore('patterns', () => {
       }
     } catch (e) {
       ui.notify((e as Error).message, 'error')
+      // Drop the suppression before reloading so the watcher rebuilds the drag
+      // view from what the server actually has, discarding the failed arrangement.
+      applyingOrder = false
       await loadPatterns()
-      rebuildEditableGroups()
+    } finally {
+      applyingOrder = false
     }
   }
 

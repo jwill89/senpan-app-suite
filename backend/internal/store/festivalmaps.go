@@ -19,6 +19,12 @@ import (
 // affiliates.hours) rather than sub-tables: they are small, always loaded with
 // their row, and edited as a set.
 
+// ErrStallNotOnMap is returned by UpdateFestivalMap when a save carries a stall id
+// that does not belong to the map being saved - a stale client or a spoofed id.
+// The whole save is rejected rather than partially applied, because reconciling
+// that stall's occupants would edit a DIFFERENT map's pitch.
+var ErrStallNotOnMap = errors.New("stall does not belong to this map")
+
 // encodeEventTimes marshals a datetime-range list for its TEXT column.
 func encodeEventTimes(times []model.EventTime) string { return encodeJSONArray(times) }
 
@@ -205,7 +211,11 @@ func (s *Store) CreateFestivalMap(m *model.FestivalMap) (int64, error) {
 // naming it across map edits; a deleted stall's stamps fall back to their
 // affiliate (stall_id is cleared, not cascaded, since it is an unenforced link).
 // Status is not touched here - it is set through SetFestivalMapStatus.
-func (s *Store) UpdateFestivalMap(m *model.FestivalMap) error {
+// replaceStalls says whether this save is authoritative for the map's pitches.
+// False leaves them exactly as they are - see the note on UpdateStampRally about
+// why "the request didn't mention them" and "the request wants none" have to be
+// different answers.
+func (s *Store) UpdateFestivalMap(m *model.FestivalMap, replaceStalls bool) error {
 	tx, err := s.beginImmediate()
 	if err != nil {
 		return err
@@ -216,6 +226,10 @@ func (s *Store) UpdateFestivalMap(m *model.FestivalMap) error {
 		WHERE id = ?`,
 		m.Title, m.Slug, m.Description, encodeEventTimes(m.Times), m.MapImage, m.ID); err != nil {
 		return err
+	}
+
+	if !replaceStalls {
+		return tx.Commit()
 	}
 
 	keep := make(map[int64]bool, len(m.Stalls))
@@ -289,14 +303,28 @@ func insertFestivalStall(tx *sql.Tx, mapID int64, st model.FestivalStall, sortOr
 // updateFestivalStall updates an existing pitch's drawn form + sort order and
 // reconciles its occupants. The WHERE clause is scoped to mapID as well as the
 // stall id so a spoofed stall id belonging to a different map can't be updated
-// across maps.
+// across maps - and the row count is CHECKED, because the occupant reconciliation
+// below is keyed on the stall id alone. Scoping only the UPDATE left the guard
+// half-applied: a save of map A carrying a stall id from map B matched no row
+// here (correctly), then went on to rewrite and delete map B's occupants for that
+// pitch, clearing the rally stamps and raffles that named them. A zero row count
+// also catches the benign race where a concurrent save deleted the stall, which
+// otherwise resurrects its occupants as orphans.
 func updateFestivalStall(tx *sql.Tx, mapID int64, st model.FestivalStall, sortOrder int) error {
-	if _, err := tx.Exec(`UPDATE festival_stalls SET shape = ?, color = ?,
+	res, err := tx.Exec(`UPDATE festival_stalls SET shape = ?, color = ?,
 			pos_x = ?, pos_y = ?, width = ?, height = ?, rotation = ?, sort_order = ?
 		WHERE id = ? AND map_id = ?`,
 		st.Shape, st.Color, st.X, st.Y, st.Width, st.Height, st.Rotation, sortOrder,
-		st.ID, mapID); err != nil {
+		st.ID, mapID)
+	if err != nil {
 		return err
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if n == 0 {
+		return ErrStallNotOnMap
 	}
 	return replaceStallOccupants(tx, st.ID, st.Occupants)
 }
@@ -508,6 +536,11 @@ type RallyForMap struct {
 	ID           int64
 	Title        string
 	PublicSignup bool
+	// The availability window, so the caller can decide against the clock whether
+	// the rally is actually RUNNING - the same way ListRafflesForMap reports a
+	// raffle's window rather than pre-filtering on status alone.
+	AvailableFrom string
+	AvailableTo   string
 }
 
 // GetOpenRallyForMap returns the open stamp rally linked to a map, or nil when the
@@ -516,9 +549,10 @@ type RallyForMap struct {
 func (s *Store) GetOpenRallyForMap(mapID int64) (*RallyForMap, error) {
 	var r RallyForMap
 	var publicSignup int
-	err := s.db.QueryRow(`SELECT id, title, public_signup FROM stamp_rallies
+	err := s.db.QueryRow(`SELECT id, title, public_signup, available_from, available_to
+		FROM stamp_rallies
 		WHERE festival_map_id = ? AND status != 'closed' ORDER BY id DESC LIMIT 1`, mapID).
-		Scan(&r.ID, &r.Title, &publicSignup)
+		Scan(&r.ID, &r.Title, &publicSignup, &r.AvailableFrom, &r.AvailableTo)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
 	}

@@ -3,7 +3,7 @@
     "Author": "MathDad",
     "Name": "Senpan Admin Companion",
     "InternalName": "SenpanCompanionAdmin",
-    "AssemblyVersion": "3.5.0.0",
+    "AssemblyVersion": "3.6.0.0",
     "Description": "Serves as an alternative to many of the web-interface functions, allowing staff to operate various systems from within the game.",
     "Punchline": "Allows Senpan Tea House staff to use various app services right from the game.",
     "Changelog": "Stamp rally stalls are now food or game stamps: the Stalls table and the collected-stamp log both show which, and the rally header says what finishes a card - every stamp, or so many of each type.",

@@ -7,18 +7,31 @@
  * given. Picking one opens its sign-up page, which is directly linkable so staff can
  * post a rally's sign-up URL straight into Discord.
  */
-import { onMounted } from 'vue'
+import { onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import EmptyState from '@/components/common/ui/EmptyState.vue'
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
 import { useStampRalliesStore } from '@/stores/stampRallies'
 import { assetUrl } from '@/lib/assets'
+import { savedSignups } from '@/lib/signups'
 import type { SignupRally } from '@/types/api'
 
 const router = useRouter()
 const store = useStampRalliesStore()
 
-onMounted(() => store.loadSignupRallies())
+/**
+ * Rally ids this browser has already signed up for. Read once on mount rather than
+ * per render: it is a synchronous localStorage hit, and the set cannot change while
+ * this list is on screen.
+ */
+const signedUpIds = ref(new Set<number>())
+
+onMounted(() => {
+  signedUpIds.value = new Set(
+    savedSignups().flatMap((entry) => (entry.kind === 'rally' ? [entry.rallyId] : [])),
+  )
+  void store.loadSignupRallies()
+})
 
 function openRally(r: SignupRally): void {
   void router.push({ name: 'stamp-rally-signup', params: { id: String(r.id) } })
@@ -65,7 +78,12 @@ function goLookup(): void {
               alt="Stamp card"
             />
             <div class="media-card-body">
-              <h3>{{ r.title }}</h3>
+              <h3>
+                {{ r.title }}
+                <!-- Signing up again would only 409 on the duplicate name, so say
+                     so here rather than letting someone walk into the error. -->
+                <span v-if="signedUpIds.has(r.id)" class="badge badge--success">Signed up</span>
+              </h3>
               <p v-if="r.garapon_title" class="text-sm text-muted">
                 <font-awesome-icon :icon="['fad', 'circle-dot']" /> Includes a
                 {{ r.garapon_title }} garapon draw

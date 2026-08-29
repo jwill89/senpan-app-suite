@@ -426,8 +426,16 @@ func (s *Server) handleReadingListItemUpdate(w http.ResponseWriter, r *http.Requ
 	it.ListID = listID
 	it.Title = title
 	it.Sources = sanitizeSources(it.Sources)
-	if err := s.store.UpdateReadingListItem(&it); err != nil {
+	updated, err := s.store.UpdateReadingListItem(&it)
+	if err != nil {
 		writeInternalError(w, "update reading list item", err)
+		return
+	}
+	// No match means the item is not on this list - a stale editor, or an id
+	// pointed at another club's list. 404 rather than 403: whether that id exists
+	// elsewhere is not this caller's business.
+	if !updated {
+		writeError(w, http.StatusNotFound, "Reading list item not found")
 		return
 	}
 	writeJSON(w, http.StatusOK, model.ReadingListItemResponse{Item: it})
@@ -459,8 +467,15 @@ func (s *Server) handleReadingListItemDelete(w http.ResponseWriter, r *http.Requ
 			}
 		}
 	}
-	if _, err := s.store.DeleteReadingListItem(itemID); err != nil {
+	deleted, err := s.store.DeleteReadingListItem(listID, itemID)
+	if err != nil {
 		writeInternalError(w, "delete reading list item", err)
+		return
+	}
+	// Not on this list: a stale editor, or an id belonging to another club's list.
+	// Report it missing rather than 204ing on a delete that did nothing.
+	if !deleted {
+		writeError(w, http.StatusNotFound, "Reading list item not found")
 		return
 	}
 	s.removeBookclubCoverIfUnused(cover)

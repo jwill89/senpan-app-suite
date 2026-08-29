@@ -695,3 +695,81 @@ func TestParseEmoji(t *testing.T) {
 		t.Errorf("animated custom emoji: %+v", e)
 	}
 }
+
+// TestPostDueAnnouncementsGivesUpAfterRepeatedFailures pins the retry bound. A
+// definite non-delivery leaves the cursor pending so the next tick retries, which
+// is right for a blip - but a webhook that has been DELETED answers 404 every
+// time, and retrying that every 30 seconds forever both floods the log and keeps a
+// stuck announcement permanently due, so it is reconsidered ahead of everything
+// else on every sweep. After a handful of consecutive failures the occurrence is
+// given up on and the cursor moves.
+func TestPostDueAnnouncementsGivesUpAfterRepeatedFailures(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNotFound) // a deleted webhook, permanently
+	}))
+	defer ts.Close()
+
+	s, id, startCursor := newSchedulerEnv(t, ts.URL)
+
+	// Every sweep up to the limit must leave the cursor alone, so a transient
+	// outage is still ridden out rather than skipped.
+	for i := 1; i < maxAnnouncementPostRetries; i++ {
+		s.postDueAnnouncements(context.Background())
+		reloaded, _ := s.store.GetAnnouncement(id)
+		if reloaded.NextPostAt != startCursor {
+			t.Fatalf("sweep %d advanced the cursor early; a short outage must still be retried", i)
+		}
+	}
+
+	// The one that crosses the limit gives up on this occurrence and moves on.
+	s.postDueAnnouncements(context.Background())
+	reloaded, _ := s.store.GetAnnouncement(id)
+	if reloaded.NextPostAt == startCursor {
+		t.Error("a permanently failing webhook is still being retried every sweep; the cursor never moved")
+	}
+	if !reloaded.Active {
+		t.Error("a recurring announcement should stay active and try again at its next occurrence")
+	}
+}
+
+// TestPostDueAnnouncementsRespectsAConcurrentEdit pins the snapshot guard on the
+// cursor write. The sweep reads an announcement, posts it (up to 15 seconds of
+// HTTP), and then advances the cursor from the values it read at the start - keyed
+// on id alone, so an admin edit that landed during the post was silently reverted.
+// The write now only applies while the row still holds the cursor the sweep read.
+func TestPostDueAnnouncementsRespectsAConcurrentEdit(t *testing.T) {
+	var s *Server
+	var id int64
+	edited := make(chan struct{})
+
+	// Rescheduling mid-post is what a real admin edit does: it moves next_post_at.
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		if _, err := s.store.AdvanceAnnouncement(id, currentCursor(t, s, id),
+			"2099-01-01T00:00:00Z", true, 0); err != nil {
+			t.Errorf("simulated admin edit: %v", err)
+		}
+		close(edited)
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer ts.Close()
+
+	s, id, _ = newSchedulerEnv(t, ts.URL)
+	s.postDueAnnouncements(context.Background())
+	<-edited
+
+	reloaded, _ := s.store.GetAnnouncement(id)
+	if reloaded.NextPostAt != "2099-01-01T00:00:00Z" {
+		t.Errorf("cursor = %q; want the admin's edit preserved, not overwritten from the pre-post snapshot",
+			reloaded.NextPostAt)
+	}
+}
+
+// currentCursor reads an announcement's stored next_post_at.
+func currentCursor(t *testing.T, s *Server, id int64) string {
+	t.Helper()
+	a, err := s.store.GetAnnouncement(id)
+	if err != nil || a == nil {
+		t.Fatalf("GetAnnouncement: %v", err)
+	}
+	return a.NextPostAt
+}

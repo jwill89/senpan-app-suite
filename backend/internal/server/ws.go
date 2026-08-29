@@ -32,10 +32,19 @@ func (s *Server) logWSUpgrade(r *http.Request, status int, auth, user, cardID st
 // If id is provided, the connection is associated with that card (player);
 // otherwise it joins the privileged admin channel and must be authenticated.
 //
-//	Endpoint:  GET /api/ws[?id=XXXXXX]
-//	Auth:      player connections (id present) are public; admin connections
-//	           (no id) require an authenticated, active account
-//	Params:    id (optional) - card ID for player connections
+// maxPlayerConnections bounds the PUBLIC WebSocket channel. Every socket costs a
+// goroutine pair, a 64-slot send buffer and a copy of each broadcast, and this
+// path takes no credential, so without a cap one client could hold the server's
+// memory open. Set well above any plausible bingo night; admin connections are
+// authenticated and are not counted against it.
+const maxPlayerConnections = 500
+
+// Endpoint:  GET /api/ws[?id=XXXXXX]
+// Auth:      player connections (id present) are public; admin connections
+//
+//	(no id) require an authenticated, active account
+//
+// Params:    id (optional) - card ID for player connections
 func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 	cardID := r.URL.Query().Get("id")
 	// Admin connections (no card id) join the channel that streams draws
@@ -46,6 +55,32 @@ func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 	var isAdmin bool
 	var revalidate func() (active bool, isAdmin bool)
 	var actor string
+	if cardID != "" {
+		// A player connection must name a card that actually exists. Nothing checked
+		// this, so any string registered a client: an anonymous caller could park
+		// sockets on ids that were never real, and a player whose card was deleted
+		// reconnected to it forever (DisconnectCardClients can only target a live id).
+		exists, err := s.store.CardExists(cardID)
+		if err != nil {
+			writeInternalError(w, "check card for ws", err)
+			return
+		}
+		if !exists {
+			s.logWSUpgrade(r, http.StatusNotFound, "player", "", cardID)
+			writeError(w, http.StatusNotFound, "Board not found")
+			return
+		}
+		// Bound the public channel. Each socket costs a goroutine pair, a 64-slot
+		// send buffer, and a slice of every broadcast, and this path takes no
+		// credential at all - so cap it rather than letting one client hold the
+		// server's memory open. Admin connections are authenticated and exempt.
+		if s.hub.ClientCount() >= maxPlayerConnections {
+			slog.Warn("ws player connection cap reached", "ip", clientIP(r), "cap", maxPlayerConnections)
+			s.logWSUpgrade(r, http.StatusServiceUnavailable, "player", "", cardID)
+			writeError(w, http.StatusServiceUnavailable, "Too many connections right now. Please try again in a moment.")
+			return
+		}
+	}
 	if cardID == "" {
 		user := s.wsSessionUser(r)
 		if user == nil {

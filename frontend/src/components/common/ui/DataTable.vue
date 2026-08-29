@@ -81,6 +81,7 @@ export interface DataTableView {
  * `{ row }`). Cell slots get an `expanded` flag so a column can render a caret.
  */
 import { computed, ref, useSlots, watch } from 'vue'
+import { triggerDownload } from '@/lib/download'
 import {
   columnFacetingFeature,
   columnFilteringFeature,
@@ -327,7 +328,12 @@ watch(
 watch(
   [matchedRows, totalPages, facets],
   ([rows, pages, f]) => emit('update:view', { total: rows.length, totalPages: pages, facets: f }),
-  { immediate: true, deep: true },
+  // NOT deep. matchedRows/totalPages/facets are computeds that already produce a
+  // fresh value whenever anything they depend on changes, so a deep watcher adds
+  // nothing but an unbounded traverse() of every matched row on each fire - and
+  // TanStack rows are Object.create({ table }), so that traversal follows the
+  // inherited `table` property into the entire table instance.
+  { immediate: true },
 )
 
 // -- Selection ----------------------------------------------------------------
@@ -362,9 +368,19 @@ function toggleSelectAll(): void {
 }
 
 // -- CSV ----------------------------------------------------------------------
-/** RFC 4180 field: quote when it contains a comma, quote or newline. */
+/**
+ * RFC 4180 field, with the formula lead-in neutralized first.
+ *
+ * Excel and Sheets treat a cell starting with = + - @ (or a tab/CR) as a live
+ * FORMULA, and several of these exports carry text typed by the public - the
+ * stamp log and garapon draw log both include participant names. A name of
+ * `=HYPERLINK(...)` would evaluate in the spreadsheet of whichever staff member
+ * opened the export. Prefixing a single quote is the standard neutralization: the
+ * cell still reads as the original text, it just is not evaluated.
+ */
 function csvField(v: string): string {
-  return /[",\n\r]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v
+  const safe = /^[=+\-@\t\r]/.test(v) ? `'${v}` : v
+  return /[",\n\r]/.test(safe) ? `"${safe.replace(/"/g, '""')}"` : safe
 }
 
 /**
@@ -381,12 +397,7 @@ function exportCsv(filename = 'export.csv'): void {
     .join('\r\n')
   // The BOM makes Excel read it as UTF-8 rather than the local codepage.
   const blob = new Blob(['﻿' + head + '\r\n' + body], { type: 'text/csv;charset=utf-8;' })
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = filename.endsWith('.csv') ? filename : `${filename}.csv`
-  a.click()
-  URL.revokeObjectURL(url)
+  triggerDownload(blob, filename.endsWith('.csv') ? filename : `${filename}.csv`)
 }
 
 defineExpose({ exportCsv })

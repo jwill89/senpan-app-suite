@@ -42,7 +42,26 @@ type Store struct {
 
 // New opens (or creates) the SQLite database at path, applies migrations,
 // and returns a ready-to-use Store.
+// New opens the database and brings its schema up to date, which is what a server
+// wants. Anything that only READS should use OpenNoMigrate instead.
 func New(path string) (*Store, error) {
+	return open(path, true)
+}
+
+// OpenNoMigrate opens an existing database WITHOUT running migrations, for tools
+// that only read. Migrating is irreversible, so a read-only command should never
+// do it as a side effect of being pointed at a file - a stray `themetool dump`
+// against a production copy would otherwise silently upgrade that copy's schema.
+// The file must already exist; a missing one is an error rather than a fresh,
+// empty database.
+func OpenNoMigrate(path string) (*Store, error) {
+	if _, err := os.Stat(path); err != nil {
+		return nil, fmt.Errorf("open database: %w", err)
+	}
+	return open(path, false)
+}
+
+func open(path string, migrate bool) (*Store, error) {
 	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
 		return nil, fmt.Errorf("create data directory: %w", err)
 	}
@@ -60,9 +79,11 @@ func New(path string) (*Store, error) {
 	// lock contention with the pure-Go driver.
 	db.SetMaxOpenConns(4)
 
-	if err := ensureSchema(db); err != nil {
-		db.Close()
-		return nil, fmt.Errorf("ensure schema: %w", err)
+	if migrate {
+		if err := ensureSchema(db); err != nil {
+			db.Close()
+			return nil, fmt.Errorf("ensure schema: %w", err)
+		}
 	}
 
 	return &Store{db: db}, nil

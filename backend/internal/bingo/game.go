@@ -21,6 +21,11 @@ type DrawResult = model.DrawResult
 var (
 	// ErrYoeverNoGame is returned when there is no active game to react to.
 	ErrYoeverNoGame = errors.New("no active game")
+	// ErrNoPatternsResolved is returned by Start when none of the requested pattern
+	// ids still exists. The handler checks the request carries ids at all; this is
+	// the case where every one of them has since been deleted, which would otherwise
+	// start a game with an empty win set - permanently unwinnable, and silent.
+	ErrNoPatternsResolved = errors.New("none of the selected patterns exist any more")
 	// ErrYoeverDisabled is returned when an admin has switched the reaction off.
 	ErrYoeverDisabled = errors.New("yoever reaction disabled")
 )
@@ -187,6 +192,13 @@ func (g *Service) Start(patternIDs []int, auto bool, autoInterval int) (*model.B
 	patterns, err := g.store.GetPatternsByIDs(patternIDs)
 	if err != nil {
 		return nil, err
+	}
+	// GetPatternsByIDs returns only the ids that still exist, so a selection whose
+	// patterns were all deleted between opening the form and pressing Start comes
+	// back empty. Starting on that would produce a game nobody can ever win, with
+	// nothing said about it.
+	if len(patterns) == 0 {
+		return nil, ErrNoPatternsResolved
 	}
 	snapshots := make([]model.BingoGamePattern, len(patterns))
 	for i, p := range patterns {
@@ -593,9 +605,19 @@ func (g *Service) ClearHalftimeResume() {
 // setStateCache stores the built game state in the in-memory cache.
 func (g *Service) setStateCache(gameID int64, state *model.BingoGameState) {
 	g.stateMu.Lock()
+	defer g.stateMu.Unlock()
+	// Never install an OLDER state over a newer one for the same game. CurrentState
+	// fills this cache from two unlocked reads, so a Draw that completes while those
+	// reads are in flight caches the fresher state first and then has it clobbered
+	// by the one CurrentState assembled before the draw - and every board load is
+	// served that stale state until the next draw. TotalCalled only ever increases
+	// within a game, which makes it a sound ordering key.
+	if g.stateCache != nil && g.stateGameID == gameID && state != nil &&
+		state.TotalCalled < g.stateCache.TotalCalled {
+		return
+	}
 	g.stateCache = state
 	g.stateGameID = gameID
-	g.stateMu.Unlock()
 }
 
 // buildGameState assembles a GameState from the database for the given game ID.

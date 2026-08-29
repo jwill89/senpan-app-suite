@@ -268,6 +268,7 @@ func buildFeaturePaths(b *pb) {
 			"completion_mode", pstr("\"all\" (collect the whole card, the default) or \"counts\" (per-type requirements)."),
 			"required_food", pint("\"counts\" mode: food stamps needed; clamped to the food stamps on the card."),
 			"required_game", pint("\"counts\" mode: game stamps needed; clamped to the game stamps on the card. At least one of the two must be non-zero."),
+			"public_signup", pbool("Whether the rally takes public self-service sign-ups. OMITTING it on a PUT sends false and TURNS SIGN-UP OFF - the save replaces the rally's fields, it does not merge them."),
 			"festival_map_id", pint("Optional Festival Map link. When set, each stamp's `occupant_id` names one of that map's pitch OCCUPANTS (not the pitch - a booth that changes hands between days hosts two different stalls) and the stamp takes its affiliate from that occupant; when null, every `occupant_id` is cleared."),
 			"stamps", parr("", ref("StampRallyStamp")), "prizes", parr("", ref("StampRallyPrize")))
 	}

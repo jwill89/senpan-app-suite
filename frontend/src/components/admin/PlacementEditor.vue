@@ -50,6 +50,21 @@ function beginDrag(mode: DragMode, item: PlaceItem, e: PointerEvent): void {
   startDrag(mode, item.key, item.placement, e)
 }
 
+/**
+ * Keyboard equivalent of grabbing an item. Dragging is inherently pointer-only,
+ * but SELECTING is not: once selected, the form's numeric position/size/rotation
+ * fields edit exactly what a drag would, so a keyboard user can place a stamp or
+ * prize precisely. Without this the editor was unreachable without a mouse.
+ */
+function selectItem(item: PlaceItem): void {
+  emit('select', item.key)
+}
+
+/** An item's accessible name: what it is, plus its place in the list. */
+function itemLabel(item: PlaceItem, index: number): string {
+  return `${item.kind === 'prize' ? 'Prize' : 'Stamp'} ${index + 1}: ${item.label} - select to edit its position and size`
+}
+
 /** Click on empty card area -> deselect. */
 function onCanvasPointerDown(e: PointerEvent): void {
   if (
@@ -76,7 +91,7 @@ function onCanvasPointerDown(e: PointerEvent): void {
       </div>
 
       <div
-        v-for="item in items"
+        v-for="(item, itemIndex) in items"
         :key="item.key"
         class="placement-item"
         :class="{
@@ -84,7 +99,13 @@ function onCanvasPointerDown(e: PointerEvent): void {
           'placement-item--prize': item.kind === 'prize',
         }"
         :style="placementStyle(item.placement)"
+        role="button"
+        tabindex="0"
+        :aria-pressed="item.key === selectedKey"
+        :aria-label="itemLabel(item, itemIndex)"
         @pointerdown="beginDrag('move', item, $event)"
+        @keydown.enter.prevent="selectItem(item)"
+        @keydown.space.prevent="selectItem(item)"
       >
         <img v-if="item.image" :src="assetUrl(item.image)" alt="" draggable="false" />
         <div v-else class="placement-item-empty">{{ item.label }}</div>

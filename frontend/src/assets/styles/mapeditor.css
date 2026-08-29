@@ -107,6 +107,11 @@
 .map-canvas {
   position: relative;
   width: 100%;
+  /* The plan is the yardstick for label size, so every stall on a map gets the
+     same one - see .map-stall's font-size. Only the inline axis is contained:
+     the canvas is externally sized at 100% width, but its HEIGHT comes from the
+     background image in flow, and `size` containment would collapse it. */
+  container-type: inline-size;
 }
 /* The admin editor drags stalls around; the public canvas is dragged as a whole
    (see .map-viewport), so only the editor suppresses native gestures. */
@@ -146,6 +151,15 @@
      hid the rotate handle entirely and left the resize handle as an unusable
      nub - the label clips itself instead. */
   container-type: size;
+  /* THE one label size for the whole plan. It is declared here rather than on
+     the label because an element's own container-type does not apply to its own
+     declarations: `cqw` here resolves against the nearest ANCESTOR container,
+     .map-canvas, which is the whole point - a pitch's own dimensions must not
+     feed the size every OTHER pitch is drawn at. The label then inherits this as
+     a plain px value and only trims it when its own box demands it.
+     The literal is the fallback for engines without container-query units. */
+  font-size: 0.6rem;
+  font-size: 1.3cqw;
 }
 .map-stall.is-selected {
   border-color: var(--highlight);
@@ -174,11 +188,17 @@
   max-width: 100%;
   max-height: 100%;
   overflow: hidden;
-  /* Scale the label with the stall's height so a small booth doesn't overflow.
-     The literal is the fallback for engines without container-query units - an
-     unsupported unit invalidates the whole declaration, leaving the one above. */
-  font-size: 0.6rem;
-  font-size: clamp(0.34rem, 26cqh, 0.85rem);
+  /* Uniform across the plan, shrinking ONLY where the pitch truly cannot hold
+     it. `1em` is the size inherited from .map-stall, identical for every stall;
+     `42cqh` is this pitch's own ceiling, and at 42% of the box a title plus its
+     caption (1 + 0.82em at line-height 1.1, so ~2em tall) still fits inside.
+     Sizing straight off the box - as `26cqh` alone did - meant a tall pitch and
+     a short one on the same plan drew their names at wildly different sizes, and
+     dragging a resize handle rescaled the text the whole way. Now the ceiling
+     engages only below roughly 5% of the map's height.
+     Dropping the declaration on an engine without `cqh` leaves the plain
+     inherited size, which is already the uniform one. */
+  font-size: max(0.34rem, min(1em, 42cqh));
 }
 
 /* One occupant's TWO LINES inside a pitch - its title, then the caption naming

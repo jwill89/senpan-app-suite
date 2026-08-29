@@ -42,6 +42,158 @@ The format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## Frontend
 
+### [3.24.0] - 2026-08-28
+
+#### Changed
+
+- **Links saved in your browser survive the change.** A sign-up this browser
+  remembered before home worlds had their own field held the whole thing in one
+  name. Those are split on read using the same rule the server's migration uses, so
+  an upgrade does not leave anyone looking like a stranger to their own records -
+  the rally page still shows their links, and a raffle still fills in their exact
+  name and world.
+- **Home world is picked from a list on every form.** Sign-up, raffle entry, the
+  "Find My Links" lookup and the custom-card request all use one picker
+  (`WorldPicker`), so a world cannot be misspelled into a second, unmatchable
+  person. The rally sign-up field no longer asks for "@ World" in the name box; it
+  asks for the name, and the world beside it.
+
+Requires backend 3.21.0.
+
+#### Security
+
+- **Your browser now remembers what you signed up for.** Sign-up is the only
+  moment the app can hand you your drawing link - no name lookup will return it,
+  because a draw cannot be undone and a character name is public - so the browser
+  keeps it. Coming back to a rally you already joined shows your links again
+  instead of a form that would only reject the duplicate name, the rally list
+  marks what you have joined, and a "Forget these links here" button takes them
+  off a device that is not yours. Kept for 60 days, and never trusted for
+  anything: every cap and every ownership check stays on the server.
+- **A raffle you have already entered fills in the name you used.** Entries merge
+  on character plus world, so a slightly different spelling silently starts a
+  second entry and splits your tickets - the reason the name search exists. If you
+  entered from this device, the form now arrives pre-filled with the exact
+  spelling, so adding entries later tops up the entry you have rather than
+  starting a rival one. The per-player cap is still the server's to enforce.
+- **"Find My Links" no longer shows a drawing link.** The lookup is keyed on a
+  character name anyone can read off an entrant list, so it now states the garapon
+  and how many draws are left rather than linking them, and points at the device
+  the link was saved on or at staff. The stamp-card link is still returned - after
+  the backend's token split it opens the card and nothing else.
+
+### [3.23.0] - 2026-08-26
+
+Fixes from a full-project security and correctness review. Requires backend 3.20.0.
+
+#### Security
+
+- **The Settings page no longer shows secret fields to non-admins.** The Google
+  Fonts API key and the per-club Discord webhook URLs are served blank to anyone
+  who is not a full admin, and the backend now refuses to store what it did not
+  show them - so leaving the inputs on screen would only offer a box that silently
+  discards what you type. They are hidden instead. The AniList API URL and every
+  non-secret setting stay editable, so the `system-settings` grant still does its
+  job.
+
+#### Fixed
+
+- **CSV exports cannot carry a live spreadsheet formula.** Excel and Sheets treat
+  a cell starting with `=`, `+`, `-`, `@`, tab or CR as a formula, and the stamp
+  log and garapon draw log both export participant names typed by the public - so a
+  name of `=HYPERLINK(...)` evaluated in the spreadsheet of whichever staff member
+  opened the file. Those leading characters are now neutralized; the cell still
+  reads as the text that was typed.
+- **Affiliate links can no longer carry a non-http scheme onto a public page.**
+  `carrd_link` and `discord_link` are rendered as `href` on the public festival map
+  and nothing checked their scheme at any layer, leaving the production CSP as the
+  only thing in the way. They are normalized on write, so anything that is not
+  already an http(s) URL becomes an inert `https://` link.
+- **The Edit Patterns drag view no longer goes stale.** It works on shallow copies
+  of the patterns so they can be dragged freely, and those copies were rebuilt in
+  only two places - so deleting a pattern, renaming one, or receiving a
+  `patterns_update` broadcast each left the admin rearranging a list that no longer
+  matched what a save would write. The copies are now rebuilt from a watcher on the
+  underlying patterns and categories, which also covers whatever write path gets
+  added next, and is suppressed only while a drag's own result is being written
+  back.
+- **A mistyped current password no longer logs you out.** Changing your own
+  password answers 401 when the CURRENT password is wrong, even though the session
+  is perfectly valid - and that call did not opt out of the global 401 handler, so
+  a typo signed the user out of the admin UI.
+- **The public raffle list shows only enterable raffles.** It rendered the shared
+  ADMIN array, which is unfiltered, so any session where the admin surface had
+  already loaded showed closed and out-of-window raffles on the public page - and
+  the "only fetch if empty" guard meant the real public list was never loaded at
+  all in that case.
+- **Map-linked stamps are labelled by their stall, not their affiliate.** A rally
+  linked to a festival map takes its stamps from pitch occupants and the server
+  joins that occupant's name, but the admin tables read the affiliate instead - so
+  a stamp showed the partner behind the booth, or "Senpan Tea House" for an
+  occupant with no affiliate, which is exactly what a festival map describes.
+- **Four icons that rendered as nothing now render.** `file-arrow-down` was not in
+  the icon library in any style and `forward-step` was missing its duotone
+  variant, so three Export CSV buttons and the Skip Occurrences heading drew blank.
+- **The placement editors are usable without a mouse.** Every pitch and every
+  stamp/prize was a bare `div` with only a pointer handler - no role, no tabindex,
+  no key handler - so the festival map and stamp card editors could not be reached
+  by keyboard at all. Each is now a focusable button with its own label, and
+  selecting one exposes the numeric position, size and rotation fields that do the
+  same job as dragging.
+- **Book club row actions have accessible names**, per item rather than a repeated
+  generic label, so they no longer announce as just "button".
+- **Stamp Rally and Festival Map: Edit and Duplicate wait for the detail to load.**
+  Both screens open on a list row and fetch the full record separately, and a save
+  replaces the record's children wholesale - so acting on a row whose stamps,
+  prizes or pitches had not arrived yet (or whose fetch failed) sent a save that
+  deleted them. Both buttons are now disabled until the detail is in hand, and the
+  form seeders refuse a record that is missing its children rather than quietly
+  treating it as empty. Backend 3.20.0 enforces the same rule server-side.
+- **Festival map pitch names are one size across the plan.** Each label was sized
+  from its own pitch's height, so a tall pitch and a short one on the same map
+  drew their names at 13.6px and 5.5px, and dragging a resize handle rescaled the
+  text the whole way down. The size is now measured once against the map itself,
+  and a pitch trims it only when its own box genuinely cannot hold the name -
+  below roughly 5% of the map's height. Measured on one canvas, pitches from 5% to
+  30% tall now all render at the same size, where before they ranged over 2.5x.
+
+#### Performance
+
+- **The app no longer pushes the admin bundles to every visitor.** The service
+  worker precached every emitted file, so a first visit downloaded ~1.8 MB that a
+  player or public visitor can never use: the Milkdown editor, the KaTeX web
+  faces, the admin shell and all of its tabs. Code-splitting had always kept these
+  off the initial page load, but the precache pulled them down anyway. The
+  precache now carries only what a public visitor can actually reach - **160
+  entries / 2784 KiB down to 62 / 939 KiB** - and the admin half is fetched on
+  demand and kept by a runtime cache, so an admin still has it offline after one
+  visit. The split is computed from the real module graph, not from file names,
+  which do not carry the answer: `DataTable` is admin-only while `emojipicker` and
+  `fontawesome` are not. This does not change build time.
+- **The winners log stops re-fetching itself in a storm, and loads in two round
+  trips instead of fifteen.** Three separate costs, all on one screen. Every delete
+  echoes back over the WebSocket as a `resource_changed` - one per deleted row - and
+  each started another full walk of the log; overlapping loads now share a pass and
+  the invalidation path is debounced, so a burst collapses into one reload. The walk
+  itself was serial, so a couple of years of history meant fifteen sequential
+  requests before a single row painted; it now fetches page 1 (which reports the
+  total) and then every remaining page at once. And a bulk delete issued its DELETEs
+  one at a time - forty selected rows was forty sequential requests - which now go
+  together. The log is still loaded in full deliberately: Export CSV and the
+  client-side sort and filter all need every row.
+- **The data table no longer deep-traverses every row on each view update.** Its
+  `update:view` watcher was `deep`, and the values it watches are computeds that
+  already change identity - so the traversal added nothing except a walk of every
+  matched row and, through TanStack's row prototype, the entire table instance.
+- **The festival map derives day occupancy once, not per pointer move.** Panning or
+  pinching the map re-walked and re-filtered every pitch's occupant list on every
+  `pointermove`; it is now computed once per map and selected day.
+- **The image picker loads thumbnails lazily.** The grid painted 72x48 thumbs from
+  the originals with no lazy loading, so opening a form fetched and decoded every
+  image in the category at full resolution.
+- **The stamp rally form loads its three sources concurrently.** They are mutually
+  independent, so opening the form cost two or three sequential round trips.
+
 ### [3.22.0] - 2026-08-24
 
 Festivals have an interactive map. Requires backend 3.19.0.
@@ -1394,6 +1546,386 @@ First tracked release - establishes versioning for the current production build.
 
 ## Backend
 
+### [3.21.0] - 2026-08-28
+
+Also gives every system one way to record a participant, so the same person is
+recognisable across all of them.
+
+#### Changed
+
+- **A participant is now a character name plus a picked home world, everywhere.**
+  Custom cards and raffle entries already stored the two apart; stamp rally cards
+  and garapon links held one free-text blob that people were merely asked to type
+  as "Firstname Lastname @ World" - the API docs said "ideally". The same person
+  was therefore unmatchable between systems. All four now store the two fields, the
+  world comes from a list rather than a keyboard, and a client that still sends one
+  composed string has it split on arrival. Existing rows are migrated (schema v66)
+  by splitting on the last " @ "; a name with no world keeps what the participant
+  typed. What people see is unchanged - a stamp card still reads "Name @ World".
+- **Sign-up and lookup match on name AND world.** Two players sharing a character
+  name on different worlds are two people; before, the second was turned away from a
+  rally as a duplicate. A lookup with the wrong world now correctly finds nothing.
+
+#### Security
+
+- **The staff-issued drawing link no longer doubles as its stamp card.** Splitting
+  the two tokens was applied to public sign-up first; `POST /api/garapons/{id}/players`
+  was still issuing the card on the drawing link's own token, so a card link a staff
+  member handed out spent draws just as well.
+
+Closes the highest-severity finding from the security review: a public character
+name could be turned into someone else's garapon draws.
+
+#### Security
+
+- **A stamp-card link is no longer a spendable drawing token.** A rally sign-up
+  used to put the SAME token on the stamp card and on its paired garapon drawing
+  link, so one hash served `/stamp-card/<token>` and `/garapon/<token>`. That made
+  a card link - the thing participants screenshot and paste to each other - a
+  capability that spends draws, and draws cannot be undone. New sign-ups now issue
+  two separate tokens: the card link can be shared freely, the drawing link cannot.
+  Cards issued before this change keep their shared token on purpose, so links
+  already in participants' hands keep working; the overlap ends as those rallies
+  close.
+- **`POST /api/stamp-lookup` no longer hands out a spendable capability.** It is
+  keyed on a character name - which is public, and appears on the entrant lists the
+  app publishes by design - and it returned the garapon token, so anyone who typed
+  a name could burn that participant's draws before the participant ever opened
+  their own link. It now returns the card token (which since the split opens the
+  card and nothing else) and how many draws REMAIN, so someone on a borrowed device
+  can confirm their draws are intact without being handed the means to spend them.
+- **`POST /api/garapon/{token}/draw` is rate limited.** It was the only public
+  mutating path with no limiter at all, and it is the only irreversible public
+  action in the app. The budget is spent before the token is resolved, so attempts
+  against wrong tokens count too.
+
+### [3.20.0] - 2026-08-26
+
+Fixes from a full-project security and correctness review. Paired with frontend
+3.23.0.
+
+#### Security
+
+- **Card and pattern broadcasts no longer reach player sockets.** `broadcastCards`
+  and `broadcastPatterns` used the unfiltered `hub.Broadcast`, which reaches every
+  connection - including the anonymous player channel, which a visitor joins with
+  nothing but `?id=<card>`. Every card create, rename, approve, protect or public
+  card request therefore handed out the whole `GET /api/cards` payload (card ids,
+  character names, home worlds, staff notes, approval status) that
+  `permission:bingo-cards` protects on the REST route, and the same for the
+  `bingo-patterns`-gated pattern library. Both now use `BroadcastToAdmins`. No
+  client loses anything: the SPA already discarded both messages outside the admin
+  view, and the plugin sits on the same no-card-id channel the admin view uses.
+- **A settings key you cannot read, you can no longer write.** `GET /api/settings`
+  blanks the secret settings (the Google Fonts key, every club's Discord webhook
+  URL) for anyone who is not a full admin, but `POST` admitted any holder of the
+  grantable `system-settings` page and stored whatever it was sent. A non-admin
+  therefore loaded the form with those fields empty and, on their next save, wrote
+  the blanks over the stored values - silently destroying every book club's webhook
+  while editing something unrelated. The save loop now skips secret keys for
+  non-admins, so the rest of their edit still applies. Admins are unaffected and
+  can still clear a secret deliberately.
+- **Raffle sign-up counts are bounded.** `num_entries` was floored at 1 and never
+  capped, and the per-player cap was checked by summing first
+  (`prevEntries + num > maxEntries`). A public sign-up posting a count near
+  `MaxInt64` wrapped that sum negative, passed the cap, and pushed the row's
+  `num_entries` past what SQLite can hold as an integer - leaving a REAL that no
+  read path can scan back. The raffle was then stranded: the staff detail view and
+  the entry-delete route both failed on the scan, so the poisoned row could not be
+  removed without deleting the whole raffle. The cap is now tested by subtraction
+  so it cannot overflow, and both entry handlers reject a count above the
+  100-per-person ceiling that already bounds every raffle's own allowance.
+- **A reading list item can only be reached through the list it is on.** The route
+  already checked that the LIST belongs to the club in the path, but nothing
+  checked that the ITEM belongs to that list, and the store keyed both the update
+  and the delete on the item id alone. A user holding one club's page permission
+  could therefore work through a list they legitimately own, pass any item id, and
+  overwrite or permanently delete an item belonging to another club. Both
+  statements are now scoped to their parent list, and an id that is not on it
+  answers 404 rather than silently succeeding.
+- **The passkey-login rate limit now actually fires.** `POST /api/auth/passkey/begin`
+  consulted the shared login limiter, but nothing on that path ever incremented its
+  counter, so the guard could never trigger. Every call stashes a WebAuthn challenge
+  in the in-memory session store, which is evicted only on expiry, so an
+  unauthenticated client could translate request volume straight into resident
+  memory. It now has its own counting budget, deliberately separate from the login
+  limiter so opening the passkey prompt a few times cannot lock the account out of
+  password login.
+- **A festival map save can no longer reach another map's pitch.** The stall
+  `UPDATE` was scoped to `map_id`, but its row count was never checked and the
+  occupant reconciliation that follows is keyed on the stall id alone. A save of
+  map A carrying a stall id from map B matched no row here (correctly) and then
+  went on to rewrite and delete map B's occupants for that pitch, clearing the
+  rally stamps and raffles that named them - while reporting success. A stall that
+  is not on the map being saved now rejects the whole save with a 400, which also
+  catches the benign version of the same thing: a pitch a concurrent edit deleted
+  out from under you.
+
+#### Changed
+
+- **Grantees can reach what their own pages need.** Three permission gates were
+  narrower than the features behind them: the shared image picker refused
+  `festival-map` and `tea-rooms` holders even though both editors embed it, the
+  affiliate list was gated on the affiliates page even though the festival map and
+  stamp rally forms pick an affiliate to name a stall's operator, and the pending
+  custom-card preview required full admin even though approving those cards is the
+  Manage Cards page's job. Each now admits the pages that need it. The affiliate
+  list additionally withholds the shared Discord webhook it carries unless the
+  caller actually owns the affiliates page - a read granted for names does not
+  confer a secret.
+- **`POST /api/announcements/{id}/skip` honors an explicit `count: 0`.** The form
+  says "Set 0 to post as scheduled", and the field's own documentation agreed, but
+  the handler folded 0 into "skip 1" so it could keep supporting an older client
+  that sent no body at all. The count is now optional rather than zero-defaulted,
+  so an absent field still means 1 while an explicit 0 clears the skip.
+- **Public raffle sign-up caps `character_name` and `world` at 60 characters**, the
+  same bound the public custom-card request already applied. Both values render on
+  the staff entry list and inside a Discord embed, and nothing but the 1MB body
+  limit stood in the way.
+- **Wrong stamp passwords are rate limited.** `POST /api/stamp-card/{token}/stamp`
+  had no throttle at all, and stamp passwords are short words staff read out at a
+  stall, so a script could collect a whole card without visiting anything. Only a
+  MISS costs budget, so a participant collecting normally is unaffected.
+
+#### Fixed
+
+- **An admin edit made during a post is no longer reverted.** The sweep reads an
+  announcement, spends up to fifteen seconds posting it, then advances the cursor
+  from the values it read at the start - keyed on id alone, so an edit that landed
+  in between was silently overwritten. The write now applies only while the row
+  still holds the cursor the sweep read; when it does not, the admin's edit stands.
+- **A permanently broken webhook stops being retried forever.** A definite
+  non-delivery leaves the cursor pending so the next tick retries, which is right
+  for a blip - but a deleted webhook answers 404 every time, and retrying that every
+  thirty seconds both floods the log and keeps a stuck announcement permanently due.
+  After five consecutive failures the occurrence is given up on and the schedule
+  moves along; a recurring announcement simply tries again next time.
+- **Bulk card generation cannot hand out duplicate ids.** Uniqueness was checked
+  against the database, but nothing in the batch is saved until the end - so two
+  cards in one run could take the same id and the insert quietly kept one of them,
+  producing fewer cards than were asked for with no error.
+- **Deleting a raffle entry clears a winner pointing at it.** `winner_entry_id` is
+  a plain column with no foreign key, so deleting the winning entry left the raffle
+  naming a row that no longer existed and verify-winner closed it announcing nobody.
+- **Deleting a theme no longer reverts everyone before it succeeds.** The active
+  theme was cleared and every client reverted BEFORE a delete that can still fail,
+  leaving the site on the default theme with the style it was using still in the
+  table. The delete happens first now.
+- **Renaming a font is held to the same name-collision rule as editing one.** A
+  rename changes the derived CSS family, so renaming a font onto another's name
+  produced two `@font-face` rules with one name - the later silently winning, and
+  the loser simply never served.
+- **The live log tail no longer gets admins disconnected.** `BroadcastLog` drops a
+  line rather than dropping the client when its buffer is full, but it shared the
+  client's single send buffer - so a log burst filled that buffer and the next
+  ordinary broadcast found it full and dropped the admin, which is exactly what the
+  drop-instead-of-disconnect rule exists to prevent. The tail has its own buffer now.
+- **Concurrent font edits cannot lose one another.** Every font's family, serving
+  preference and origin allowlist share one settings blob, and the read-modify-write
+  around it was unguarded, so two admin edits each read the same map and whichever
+  saved second discarded the other's change.
+- **The immediate-draw request survives a concurrent enable.** The auto-draw
+  scheduler cleared the flag in its "auto is off" branch, which races the enable
+  path: the loop reads off, an admin switches auto on and sets the flag, and the
+  loop wipes it - so the first number waited a full interval instead of coming
+  straight away. Clearing now happens where auto is switched off.
+- **The public participant lookup is indexed.** It filters on `participant_name`
+  case-insensitively and joins `garapon_players` by `stamp_card_id`, and neither
+  had an index - so an unauthenticated endpoint scanned every card ever issued and
+  made SQLite build a transient index on every call.
+- **`themetool`'s read-only commands no longer migrate the database they inspect.**
+  `dump` and `check` opened through the migrating path, so pointing the tool at a
+  copy of production irreversibly upgraded that copy's schema as a side effect of
+  looking at it.
+- **A failed stamp-card completion is logged instead of discarded.** The write's
+  error was dropped with a bare `err == nil`, so a failure was invisible server-side
+  and the card silently reported itself incomplete, prizes still hidden, until the
+  participant reloaded.
+- **A long announcement posts instead of failing, and says when it was clipped.**
+  Discord caps the SUM of an embed's title, description, field names and values at
+  6000 characters and rejects the whole payload with a 400 past that; nothing
+  tracked it, so a long enough announcement simply never went out. The 25-field cap
+  WAS enforced, but by dropping fields silently, which is worse than failing - the
+  announcement arrived looking complete. The builder now budgets against the total
+  and appends a visible "too long to post in full" notice when anything is left out.
+- **A draw during a board load is no longer undone.** `CurrentState` builds its
+  state from two unlocked reads and then installs it into the shared cache, with
+  nothing checking whether a newer state was cached in the meantime - so a draw
+  landing during those reads had its fresher state clobbered by the older one, and
+  every board load was served the stale state until the next draw. The cache is now
+  monotonic within a game.
+- **The public map only badges a stamp rally that is actually running.** The lookup
+  selected on "not closed" alone and returned no availability window, so the map
+  badged stalls and advertised sign-up for a rally that had not opened yet or whose
+  window had passed - unlike the raffles on the same payload, which were already
+  gated against the clock.
+- **The player WebSocket validates its card id and is capped.** `GET /api/ws?id=`
+  registered a hub client for any non-empty id, with no auth and no lookup: sockets
+  could be parked on ids that never existed, and a player whose card was deleted
+  reconnected to it forever, because the disconnect can only target a live id. The
+  upgrade now 404s for an unknown card, and the public channel is bounded at 500
+  concurrent connections - each one costs a goroutine pair, a send buffer and a
+  slice of every broadcast, on a path that takes no credential. Authenticated admin
+  connections are not counted against it.
+- **Migrations that could stop the server booting, or silently lose a backfill.**
+  Four in one pass. The `paid_entries` backfill sat inside its `ALTER`'s guard, and
+  `user_version` is only written after every migration has run - so a boot that died
+  anywhere in between came back with the column present and the backfill skipped for
+  good, leaving historically paid raffle entries reading as unpaid; it is now
+  outside the guard and safe to re-run without clobbering a later partial
+  settlement. The tea-room `room_number` unique index was built plain over data the
+  previous release let contain blanks and duplicates, which fails - it is now
+  partial, and genuine duplicates are blanked rather than deleted first. The v61
+  festival-map migration was guarded only on the pre-rename column name, so
+  re-running the chain after v64 resurrected a dead `stall_id` column and index that
+  nothing then cleaned up. And `createTables` now runs in one transaction, because
+  the fresh-install probe asks whether `cards` exists and `cards` is the FIRST of
+  forty statements - an interrupted first boot left a database that every later boot
+  misread as a legacy one and never finished creating.
+- **`idx_affiliates_sort` exists on upgraded databases, not just fresh ones.** It
+  was only ever created by `createIndexes`, which runs on a fresh install, so every
+  database that had already been upgraded lacked an index a new one had. It is now a
+  shared constant both paths use, widened to match the full ordering the affiliate
+  list actually queries by.
+- **Truncated Discord embeds no longer exceed the limit they were truncated to.**
+  `truncateRunes` kept `n-1` runes and appended a three-rune ellipsis, returning
+  `n+2` - so every truncated field came back over its cap and Discord rejected the
+  whole payload with a 400. Only long content ever hit it, which is exactly when
+  truncation runs.
+- **A game cannot start with no win patterns.** The handler checked that the
+  request carried pattern ids, but the store returns only the ids that still exist,
+  so a selection whose patterns were all deleted in the meantime resolved to an
+  empty set and started a game nobody could ever win, silently. That now fails with
+  a message telling the operator to reload and pick again.
+- **The winners log reports its real total on a page past the end.** The count rode
+  along on each returned row, so an over-shot page returned none and reported a
+  total of 0 - telling the client the log was empty and collapsing its pager.
+- **A festival map is no longer unpublished by a typo.** `PATCH` normalized its
+  status, and the normalizer falls back to `in_progress` for anything unrecognized -
+  correct when reading a stored row, wrong on a write, where a misspelled status or
+  a body with none at all silently took a live map off the public site. It now
+  validates instead.
+- **Searching raffle entrants for a backslash finds a backslash.** The LIKE escape
+  helper "escaped" the escape character by replacing a backslash with a backslash,
+  a no-op, so a typed backslash stayed live: `\%` reached SQLite as an escaped
+  percent rather than the two characters somebody typed, and a trailing backslash
+  left a dangling escape.
+
+- **Deleting an affiliate no longer deletes the festival pitches it named.** An
+  occupant may be identified by its affiliate alone - a blank title, with the
+  identity carried entirely by the link, which the map editor allows on purpose.
+  `festival_stall_occupants.affiliate_id` is `ON DELETE SET NULL`, so removing the
+  affiliate left that occupant with no identity at all; the next save of the map,
+  however unrelated, discarded the nameless occupant as an empty row and dropped
+  the whole pitch with it, since a pitch with no occupants is dropped. Editing a
+  map's description could therefore silently erase a stall, its placement, and the
+  rally stamps and raffles pinned to it. The affiliate's name is now copied down
+  into any occupant that would otherwise be left blank, in the same transaction as
+  the delete, so the pitch survives and still says who was standing in it. As a
+  second guard, normalization now only discards an occupant that ARRIVED with no
+  identity (a blank repeater row), never a stored one that lost its identity.
+- **A garapon drawing link no longer destroys a part-stamped rally card.** Deleting
+  a link swept its paired stamp card unconditionally, in both the forced and
+  unforced paths, bypassing the rule the stamp rally enforces on that very same
+  row: a card with collected stamps survives until its rally is closed. Removing a
+  drawing link mid-rally therefore destroyed the participant's progress, something
+  the stamp rally page refuses with a 409. The sweep now carries that rule in SQL,
+  so no caller can skip it; a card left behind is simply an ordinary rally card.
+- **Editing a one-time announcement that already posted no longer re-posts it.**
+  The scheduler clears a one-time announcement's cursor when it fires
+  (`next_post_at` empty, `active` false), but the edit handler re-resolved
+  `once_local` and rewrote both unconditionally - so fixing a typo in an
+  announcement that had already gone out re-armed it, and the next 30-second sweep
+  sent the whole thing to Discord again, `@everyone` and all. The cursor is now
+  treated as scheduler state the form does not own, exactly as `skip_count`
+  already was: it is only written when the resolved instant is genuinely in the
+  future. Moving the date forward is still a deliberate reschedule and works.
+- **A stamp rally or festival map save no longer wipes children it never carried.**
+  Both saves replace their child collections wholesale - a rally's stamps and
+  prizes, a map's pitches - which is correct when the client sends the complete
+  list and catastrophic when it does not. The admin list omits those collections
+  (`omitempty`), so an editor opened before the detail fetch landed, or after it
+  failed, held a row carrying none of them; saving it deleted every stamp on the
+  rally along with every participant's collected rows, or every pitch on the map
+  along with the rally stamps and raffles pinned to them. A collection the request
+  did not carry at all is now left untouched, while an explicit empty array still
+  clears it, so deliberately emptying a rally or map keeps working. The admin UI
+  additionally disables Edit and Duplicate until the detail has actually loaded,
+  and both form seeders refuse a record whose children are missing.
+- **A deleted card now reaches the player before the socket closes.** Deleting a
+  card queues a `card_deleted` message on that player's WebSocket and then
+  unregisters them - but unregistering also cancelled the client's context, and the
+  write pump selects on that context alongside the send channel. The cancelled
+  context won the race roughly half the time, and even when the message was picked
+  its write deadline derived from the same dead context and failed immediately, so
+  in practice the message never went out. The player kept a board for a card that
+  no longer existed and silently reconnected to it. The context is now released by
+  whichever pump finishes last, so a queued final message is still written.
+- **A backend refuses to start against a database newer than it.** `ensureSchema`
+  treated any version at or above its own `schemaVersion` as up to date, so a
+  binary opening a database migrated by a NEWER build started silently and ran
+  every query against a shape it had never seen. That is exactly what the deploy
+  script's automatic rollback produces: it restores the previous binary but cannot
+  un-migrate the database. Starting now fails with a message naming both versions,
+  so the operator can restore the pre-deploy snapshot or roll forward instead of
+  discovering the mismatch through corrupted data.
+- **The process exits non-zero when the server cannot start.** A fatal
+  `ListenAndServe` error was funneled into the same graceful-shutdown path as
+  SIGTERM and `main` then returned normally, so a backend that could not bind its
+  port exited 0 - which `Restart=on-failure` reads as a clean stop, leaving the
+  unit neither restarted nor marked failed. The real work moved into a `run()` that
+  returns an error, so the deferred cleanup still runs in full and the exit status
+  finally reflects what happened. A signal-driven stop is still a success.
+- **`game_draw` broadcasts carry the game they belong to.** The SPA already read
+  and honored a `game_id` on this message to drop frames for a game it is no longer
+  showing, but nothing sent it - so that guard was dead code and a delayed draw was
+  indistinguishable from a current one. (`halftime_minigame` already stamped it.)
+- **Four `rows.Next` loops now check `rows.Err`.** A read that stops part way
+  through is otherwise indistinguishable from one that ran to the end, so each site
+  took a wrong branch on short data: `columnInfo` reported a column absent (which
+  in a migration means re-running an `ALTER` or skipping a backfill, permanently),
+  the stamp reconciliation kept stamps a save meant to delete, and both pattern
+  reorder helpers silently did nothing. `columnInfo` gained an error return;
+  `hasColumn` keeps its bare bool - about 55 guards read `if !hasColumn(...)` and
+  threading an error through each would bury the migration logic - but now panics
+  rather than guessing, which at boot is a loud, safe failure. A missing table or
+  column is still a plain `false` with no error, so it cannot fire for anything the
+  migration chain expects.
+- **Passkey login now stamps the password epoch.** A session carries the account's
+  `password_epoch` alongside its id, and one minted without it reads back as epoch
+  0 - which `loadCurrentUser` rejects for any account whose password has ever been
+  changed or reset. Passkey login set only the id, so for those accounts it
+  returned 200 with the user object and then 401'd on the very next request, with
+  no way to get in by passkey again. Both login paths now go through a single
+  `establishSession`, so a future third path cannot repeat the omission.
+
+#### Deploy
+
+- **The backend deploy snapshots the live database before migrating it.** Starting
+  the new binary runs `ensureSchema` against the live database, and several
+  migrations rebuild tables outright, which cannot be undone. The deploy backed up
+  only the Go binary, so its own rollback step could restore the previous build but
+  leave it facing a schema from the future. The stop step now also copies the
+  database to `<db>.pre-<timestamp>` while the service is down (so the copy is
+  consistent and the WAL is already checkpointed into it), keeps the newest three,
+  and prints the exact restore command if the rollback fires.
+- **`-Target main`/`both`/`all` deploy the API before the SPA.** The frontend went
+  first, so for the length of the backend step - the rate-limit pause plus a local
+  `go build`, around a minute - the new shell was live against the old API and any
+  endpoint added in that release returned 404. A new backend is additive to the old
+  SPA; the reverse is not true.
+- **Files served directly to users are staged and checksummed before going live.**
+  `latest.zip`, `pluginmaster.json` and both `.htaccess` files were written straight
+  onto their live paths, so a truncated upload published a broken plugin download or
+  a broken repo listing. They now upload beside the target, are verified against a
+  locally computed SHA-256, and are moved into place only on a match - the move
+  being atomic, a reader sees either the old file or the new one. The backend binary
+  already worked this way.
+- **Old dev-database copies are pruned.** Every backend deploy timestamped a fresh
+  copy of the live database into `devdata/` and removed none, so full copies
+  carrying real password hashes, API tokens and Discord webhook URLs accumulated on
+  the workstation indefinitely. The newest three are kept.
+
 ### [3.19.0] - 2026-08-24
 
 Festival maps: floor plans with placed stalls, a publish status, and a public read
@@ -2508,6 +3040,75 @@ with a personal access token and is distributed through a Dalamud custom repo
 (`plugins/pluginmaster.json`). Versions use the four-part AssemblyVersion in
 `SenpanCompanion.csproj`. Entries below the current release were reconstructed
 from the `<Version>` history and commit messages.
+
+### [3.6.0.0] - 2026-08-26
+
+Fixes from a full-project security and correctness review. Requires backend 3.20.0.
+
+#### Fixed
+
+- **A failed refresh no longer wedges the card cache or the session.** Both
+  `RefreshAsync` methods stored whatever `RefreshCore()` returned, but a fetch that
+  faults before its first `await` - an invalid server URL does - completes
+  synchronously, and its `finally` clears the in-flight slot before the assignment
+  puts the finished task back. That latched a completed task forever, so every
+  later refresh returned it and did nothing, with no error anywhere.
+- **The winner chime no longer plays from memory the GC may have moved.** The WAV
+  was handed to winmm with `SND_ASYNC | SND_MEMORY`, so playback keeps reading that
+  buffer for the ~0.64s the chime lasts - but the marshaller only pins a managed
+  array for the duration of the call, leaving a compacting GC free to relocate it
+  mid-playback. The buffer is now pinned for the plugin's lifetime.
+- **A half-time prompt can no longer fire against the wrong game.** The prompt is a
+  latch only the Bingo Game page consumes, and nothing cleared it on a game
+  boundary, so one raised near the end of a game could pop during the NEXT one -
+  where answering Yes broadcast a half-time mini-game alert to players who had not
+  reached half time. It now carries the game it belongs to and is dropped when that
+  game ends.
+- **A half-time prompt that arrives off-page now says so in game.** The prompt is a
+  modal on the Bingo Game page, so with the window closed or showing something else
+  it was invisible - while the server had already PAUSED auto-draw waiting for an
+  answer, so the game simply stalled with nothing said anywhere. When the page was
+  not on screen a moment before, the plugin now chimes and prints a line into the
+  operator's own chat log telling them to open the window. Both channels are purely
+  local: the print goes to this client's chat log and transmits nothing (it is not
+  the chat SENDER), and the chime is the same no-interop one a new winner already
+  plays.
+- **The plugin honors a garapon's configured default draws.** Its `Garapon` DTO
+  omitted `default_draws`, so the Draws box started at a hardcoded 1 and the
+  server's "use the garapon default" fallback was unreachable from in-game, even
+  though the web admin and the public sign-up both honored it.
+- **The raffle panel cannot act on a raffle that is not on screen.** Picking a
+  raffle while another load was in flight left the selection on the new one while
+  the header, entrant table and winner controls still rendered the old - so "Add
+  entrant" and "Pick a winner" applied to the wrong raffle. Detail is now cleared on
+  pick and only written back when the selection still matches, the pattern the
+  stamp-rally and garapon tabs already used.
+- **Settings no longer write the config file on every keystroke.** The auto-tell
+  template called `Configuration.Save()` per character - a full JSON serialize plus
+  a write-flush-rename with a forced disk barrier, on the render thread. It now
+  saves when the field is done. `Save()` is also serialized, because the macro
+  runner writes the same file from the thread pool and Dalamud's writer uses one
+  fixed temp path.
+- **Game state is re-synced after the live connection drops.** Called numbers,
+  winners and game state arrive as WebSocket pushes, so anything sent while the
+  socket was down was simply missing - and nothing filled the gap, because the
+  server sends no snapshot on connect. A drop that spanned a draw left the
+  called-numbers grid permanently short and the winners stale, and ending the game
+  before the next draw wrote those wrong winners into the permanent log.
+  `LiveConnection` now raises a `Reconnected` event on the UI thread when the
+  socket comes back (not on the first connect, which has nothing to re-sync), and
+  the Bingo Game tab marks itself and the card cache stale so the existing
+  per-frame `EnsureLoaded` re-pulls `GET /api/game`. This mirrors what the web
+  client already did.
+- **Four ImGui disabled scopes could pop without pushing.** Each read a mutable
+  field (`Busy`, `settingsTesting`) twice - once to decide whether to call
+  `BeginDisabled`, once to decide whether to call `EndDisabled` - and the control
+  in between flips that field synchronously when clicked. On the click frame the
+  `End` ran without a matching `Begin`, under-popping ImGui's disabled and
+  item-flag stacks and corrupting the rest of the frame. Each site now snapshots
+  the flag into a local first, matching the neighboring pairs that already did.
+  Affects Draw Number, the garapon and stamp-rally pickers, and Save & Test
+  Connection.
 
 ### [3.5.0.0] - 2026-08-24
 

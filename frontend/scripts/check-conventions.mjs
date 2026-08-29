@@ -387,6 +387,64 @@ for (const t of themeableCss) {
     )
 }
 
+// ---------------------------------------------------------------- rule 10
+// A festival-map pitch label is sized ONCE for the whole plan, and a pitch may
+// only trim that size - never derive its own. Sizing straight off the pitch's box
+// (`clamp(0.34rem, 26cqh, 0.85rem)`) made every pitch compute a different number
+// from its own height: a tall pitch and a short one on one plan drew their names
+// at 13.6px and 5.5px, and dragging a resize handle rescaled the text the whole
+// way. The three declarations below are what keep it uniform, and they only work
+// together, so they are checked as a set. It lives here rather than in a vitest
+// file because container-query units need real layout - jsdom resolves neither
+// `cqw` nor `cqh` - so the source IS the only thing assertable off a browser.
+{
+  const mapCss = readFileSync(join(SRC, 'assets/styles/mapeditor.css'), 'utf8').replace(
+    /\/\*[\s\S]*?\*\//g,
+    '',
+  )
+  /** Declarations of the top-level rule whose selector is exactly `selector`. */
+  const declsOf = (selector) => {
+    const at = mapCss.indexOf(`\n${selector} {`)
+    if (at === -1) return null
+    return mapCss.slice(mapCss.indexOf('{', at) + 1, mapCss.indexOf('}', at))
+  }
+  const need = (selector, re, detail) => {
+    const decls = declsOf(selector)
+    if (decls === null) fail('map label sizing', `${selector} rule is gone from mapeditor.css`)
+    else if (!re.test(decls)) fail('map label sizing', detail)
+  }
+  // `cqw` below resolves against .map-canvas only while the canvas is a
+  // container. It must stay inline-size: the canvas takes its HEIGHT from the
+  // background image in flow, and `size` containment collapses it to nothing.
+  need(
+    '.map-canvas',
+    /container-type:\s*inline-size/,
+    '.map-canvas must be `container-type: inline-size` - it is what the shared label size is measured against',
+  )
+  // Declared on .map-stall, NOT on .map-stall-label: an element's own
+  // container-type does not apply to its own declarations, so `cqw` here reads
+  // the ancestor container (the canvas). Move it onto the label and every pitch
+  // silently starts measuring itself again.
+  need(
+    '.map-stall',
+    /font-size:\s*[\d.]+cqw/,
+    '.map-stall must set the shared label size in `cqw` so it resolves against .map-canvas, not the pitch',
+  )
+  const label = declsOf('.map-stall-label')
+  if (label !== null) {
+    if (!/min\(\s*1em\s*,\s*[\d.]+cqh\s*\)/.test(label))
+      fail(
+        'map label sizing',
+        '.map-stall-label must be `min(1em, <n>cqh)` - the pitch may cap the shared size but not replace it',
+      )
+    if (/font-size:\s*(clamp\()?[\d.]+cqh/.test(label))
+      fail(
+        'map label sizing',
+        '.map-stall-label sizes itself from its own box again (`cqh` as the size, not a ceiling)',
+      )
+  }
+}
+
 // ---------------------------------------------------------------- report
 if (!failures.length) {
   console.log(

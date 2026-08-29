@@ -352,7 +352,7 @@ Never edit it by hand. Request/response/WebSocket envelopes are hand-written in
 **Performance / tooling**:
 
 - **Lazy routes**: every view + admin tab is a dynamic `import()` in `router/index.ts`, so heavy deps (the Milkdown editor, vue-draggable-plus, markdown-it) load only when their route is visited - the player/home payload stays small. `manualChunks` (vite.config) keeps shared vendors cached across route chunks.
-- **PWA**: `vite-plugin-pwa` (`registerType: 'autoUpdate'`) emits `sw.js` + `manifest.webmanifest`; the SW precaches the app shell and falls back to `index.html` for SPA routes, with `/api/` and `/images/` denylisted. The deploy `.htaccess` exempts `sw.js`/`registerSW.js`/`*.webmanifest` from the immutable cache so updates land.
+- **PWA**: `vite-plugin-pwa` (`registerType: 'autoUpdate'`) emits `sw.js` + `manifest.webmanifest`; the SW precaches the app shell and falls back to `index.html` for SPA routes, with `/api/` and `/images/` denylisted. The deploy `.htaccess` exempts `sw.js`/`registerSW.js`/`*.webmanifest` from the immutable cache so updates land. **The precache carries only what a public visitor can reach**: `markAdminOnlyOutput` in `vite.config.ts` walks the bundle graph treating admin chunks as barriers, and everything unreachable (Milkdown, the KaTeX faces, `AdminView`, the `*Tab` chunks, `DataTable`) is dropped from the manifest and left to a `CacheFirst` runtime rule, so an admin still gets it offline after one visit. Do not swap that for a file-name glob - names do not carry the answer (`DataTable` is admin-only; `emojipicker` and `fontawesome` are not). `verifyAdminNotPrecached` fails the build if any of it reaches the precache again.
 - **Route progress + loading UX**: a top progress bar (`RouteProgressBar.vue`, driven by `ui.routeLoading` from the router guards) shows during async navigation/lazy-chunk loads; stores expose per-action loading flags (`joining`, `drawing`, `starting`, ...) that drive `LoadingSpinner.vue` + disabled buttons.
 - **Global error handler**: `app.config.errorHandler` (`main.ts`) surfaces uncaught errors as a toast.
 - **Accessible modals**: `ModalOverlay.vue` traps focus, restores it on close, supports Escape, and sets `role="dialog"`/`aria-modal`.
@@ -379,7 +379,7 @@ Never edit it by hand. Request/response/WebSocket envelopes are hand-written in
 - **Live-game feedback** (ambient only - never tracks the player's own board, by design, to preserve player agency): a "Last Called" announcement banner for the most recent draw, an opt-in draw **chime + vibration** (`lib/sound.ts`, persisted in `localStorage`), a **Live / Reconnecting** connection badge (off `ui.wsStatus`), and an end-of-game thank-you summary
 - **Yoever** ("It's Yoever") - a shared, opt-in reaction during a live game: a player taps the button (`POST /api/game/yoever`), and every connected client plays a sound + shows a bouncing captioned overlay (`YoeverOverlay.vue`) while admins watch a "Yoevers: N" counter climb. State is **in-memory only** on `bingo.Service` (no table): a per-card cooldown (`yoever_cooldown_seconds`, default 180) is enforced server-side (429 + `Retry-After`) and mirrored client-side; admins toggle it via `PATCH /api/game {yoever_enabled}`; it broadcasts over WS as `yoever` / `yoever_config`. Client-local mute/opt-out only.
 - **Konami easter egg** (`KonamiEgg.vue`, mounted by `PlayerView`) - ↑ ↑ ↓ ↓ ← → ← → B A clears every stamp (the same `clearAllStamps()` the Clear Board button calls) and swells Drani's grin over the screen with "Oi, what'd you think was gonna happen?" before it fades out. Purely client-side: no store, no server, no broadcast. Keys match on a rolling ten-key window (a fumbled repeat still resolves) and keystrokes aimed at a text field are ignored. Its art is a **bundled import** (`src/assets/images/DraniGrin.webp`), warmed on mount - see the asset rule below
-- **Public Stamp Rally sign-up** (`StampRalliesView` -> `StampRallySignupView`, plus `StampLookupView` at `/stamp-lookup`): a participant issues themselves a card for any rally an admin opted in (`public_signup`, off by default). A rally with an **open linked Garapon** also issues that drawing link on the **same token**, matching admin-issued links. Names are unique per rally (trimmed, case-insensitive); a repeat is a 409 pointing at the lookup page. The lookup matches the WHOLE name and returns an empty 200 on a miss, so it can't be walked to harvest links. Both endpoints are IP rate-limited (`rallyLimiter`) and Turnstile-gated when configured
+- **Public Stamp Rally sign-up** (`StampRalliesView` -> `StampRallySignupView`, plus `StampLookupView` at `/stamp-lookup`): a participant issues themselves a card for any rally an admin opted in (`public_signup`, off by default). A rally with an **open linked Garapon** also issues that drawing link, on its **own separate token**. The two used to share one string, which made the shareable card link a spendable drawing capability and meant any recovery of a card link handed the draws over with it; viewing and spending are now separate secrets. Cards issued before the split still share one token and are left alone on purpose, so links already in participants' hands keep working. Names are unique per rally (trimmed, case-insensitive); a repeat is a 409 pointing at the lookup page. The lookup matches the WHOLE name and returns an empty 200 on a miss, so it can't be walked to harvest links. Both endpoints are IP rate-limited (`rallyLimiter`); **only sign-up is Turnstile-gated** - the lookup is not. The lookup returns the card token and how many garapon draws REMAIN, never the drawing token: it is keyed on a character name, which is public, and a draw cannot be undone. The drawing token is issued once, at sign-up, and lives on the participant's device or with staff. `POST /api/garapon/{token}/draw` has its own limiter (`garaponDrawLimiter`)
 - WebSocket reconnect with exponential back-off on disconnect
 - **Hide Bingo** (`hide_bingo` setting, System -> Settings): takes Join Bingo AND the Custom Card request off the public home page for a stretch when no game is running - the two are one feature and hide together. The setting is stored as `'0'`/`'1'` and validated to exactly those, and the home page reads it through the app store's `hideBingo`, never by comparing the raw string. Entry points only: `/play/:cardId` and `/card-requests` stay reachable so flipping it can't strand a player mid-game or lose a pending request. The home page waits for `app.settingsLoaded` before rendering either card - the defaults say "visible", so rendering first would flash the thing being hidden and leave it clickable - and shows a "nothing is running" line when bingo is hidden with no open raffle or rally either.
 - Browse open raffles from home page (card shown only when open raffles exist); view raffle detail with prize image, markdown description/rules, and sign-up form (character name, world, number of entries); after sign-up see confirmation with total cost and sign-up instructions
@@ -476,6 +476,36 @@ none). Scoped total should trend **down**; a change that grows it wants a look.
 **Deliberate exceptions**: `.btn-sm` / `.btn-lg` (an established pair), and
 `ball-swatch-{sm,md,lg}` (bound from a prop, so the class and the prop values would
 have to change together).
+
+**One way to write a participant.** Four systems record people - custom cards,
+raffle entries, stamp rally cards and garapon links - and all four store a
+**character name and a home world in two separate fields**. The world is always
+**picked** (`components/common/ui/WorldPicker.vue`, backed by `FF14_WORLDS`), never
+typed: a free-text world spells the same person three ways, which makes them
+unmatchable across systems and, in a raffle, splits one entrant's tickets across
+rows. `model.ParticipantLabel` / `SplitParticipantLabel` (Go) are the only place
+those two fields become the display string `"Name @ World"` and back; a handler that
+receives one composed string splits it on arrival rather than storing something no
+other system can match. Schema v66 (`migrateParticipantWorlds`) added the column to
+the two stamp/garapon tables and backfilled by splitting on the LAST `" @ "`; rows
+with no separator keep the whole string and an empty world. Display is unchanged -
+a public stamp card still reads `"Name @ World"`.
+
+**Festival map label size.** A pitch's label is sized **once for the whole plan**, and
+a pitch may only trim that size - never derive its own. Three declarations in
+`mapeditor.css` do it together, and the gate checks them as a set:
+
+| Where              | Declaration                        | Why there                                                                                              |
+| ------------------ | ---------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| `.map-canvas`      | `container-type: inline-size`      | The plan is the yardstick. Only the inline axis: the canvas takes its **height** from the background image in flow, and `size` containment collapses it. |
+| `.map-stall`       | `font-size: 1.3cqw`                | An element's own `container-type` does not apply to its **own** declarations, so `cqw` here resolves against the canvas. On the label it would resolve against the pitch. |
+| `.map-stall-label` | `max(0.34rem, min(1em, 42cqh))`    | `1em` is the shared size; the pitch's own height is only a **ceiling**, engaging below roughly 5% of the map height. |
+
+Sizing the label straight off its box - as `clamp(0.34rem, 26cqh, 0.85rem)` did - made
+every pitch compute its own number: on one plan a tall pitch and a short one drew their
+names at 13.6px and 5.5px, and dragging a resize handle rescaled the text the whole way.
+This cannot be covered by a vitest file: container-query units need real layout and jsdom
+resolves neither `cqw` nor `cqh`, so the stylesheet source is what gets asserted.
 
 **Every object keeps its base rule.** `.x:hover`, `.x.is-y` and `.x .part` style a
 state or a part of `.x`; if nothing defines `.x` itself, they modify an object that

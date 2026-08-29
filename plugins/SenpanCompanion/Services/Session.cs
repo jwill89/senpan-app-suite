@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Net;
 using System.Threading.Tasks;
@@ -80,7 +80,20 @@ public sealed class Session
     public Task RefreshAsync()
     {
         lock (this.gate)
-            return this.inFlight ??= RefreshCore();
+        {
+            if (this.inFlight is { } running)
+                return running;
+            var task = RefreshCore();
+            // Only remember a task that is genuinely still running. RefreshCore's
+            // finally re-enters this same re-entrant lock to null inFlight, so a
+            // fetch that faults BEFORE its first await - an invalid ServerUrl throws
+            // synchronously - completes entirely inside this call, clears inFlight,
+            // and then the assignment below would put the finished task back. That
+            // latched a completed task forever and turned every later refresh into a
+            // silent no-op.
+            this.inFlight = task.IsCompleted ? null : task;
+            return task;
+        }
     }
 
     private async Task RefreshCore()

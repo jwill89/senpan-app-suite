@@ -35,7 +35,7 @@ func (s *Server) handleBoard(w http.ResponseWriter, r *http.Request) {
 	// A pending custom-card request is not yet playable - it's awaiting staff
 	// approval (and payment). Block it on the public board so it can't be used
 	// early; admins may still load it (e.g. the Manage Cards preview) to review it.
-	if card.CustomStatus == "pending" && !s.isAdmin(r) {
+	if card.CustomStatus == "pending" && !s.canReviewPendingCard(r) {
 		writeError(w, http.StatusForbidden, "This custom card is awaiting staff approval and can't be used yet.")
 		return
 	}
@@ -59,4 +59,17 @@ func (s *Server) handleBoard(w http.ResponseWriter, r *http.Request) {
 		Game:        state,
 		GameDetails: details,
 	})
+}
+
+// canReviewPendingCard reports whether this request may load a custom card that is
+// still awaiting approval. Reviewing those cards IS the Manage Cards page's job, so
+// gating the preview on full admin locked a bingo-cards grantee out of the approval
+// they were granted the page to perform. Anonymous callers are still refused - the
+// point of the gate is that a pending card cannot be played before it is approved.
+func (s *Server) canReviewPendingCard(r *http.Request) bool {
+	u := s.currentUser(r)
+	if u == nil {
+		return false
+	}
+	return u.IsAdmin || userHasPermission(u, permBingoCards)
 }

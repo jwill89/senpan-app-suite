@@ -173,6 +173,13 @@ func (s *Server) resolveRaffleStall(w http.ResponseWriter, raffle *model.Raffle)
 // render sanely, or an unbounded JSON array on the row.
 const maxRaffleEntries = 100
 
+// maxEntrantFieldLen bounds the free-text identity fields a PUBLIC sign-up sends
+// (character name, world). An FFXIV character name plus world is well under this;
+// the cap exists so an unauthenticated caller can't store an unbounded string that
+// then has to render on the staff entry list and inside a Discord embed. Matches
+// the public custom-card request's limit (see handleCardRequest).
+const maxEntrantFieldLen = 60
+
 // validate checks a raffle write request: a non-empty title, plus whichever cost
 // the entry mode actually uses. Every price must be finite and non-negative - a
 // NaN/Inf or negative cost would corrupt every total_cost the sign-up flow
@@ -468,8 +475,25 @@ func (s *Server) handleRaffleEnter(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "Character name and world are required")
 		return
 	}
+	// Same cap the public custom-card request applies. This endpoint is public and
+	// its values are rendered on the staff entry list and into a Discord embed, so
+	// without a bound a single sign-up could store a megabyte of "name" - the JSON
+	// body limit was the only thing standing in the way.
+	if len(charName) > maxEntrantFieldLen || len(world) > maxEntrantFieldLen {
+		writeError(w, http.StatusBadRequest,
+			fmt.Sprintf("Character name and world must each be %d characters or fewer", maxEntrantFieldLen))
+		return
+	}
 	if req.NumEntries < 1 {
 		req.NumEntries = 1
+	}
+	// Ceiling as well as floor. maxRaffleEntries already bounds every raffle's
+	// own allowance, so nothing legitimate asks for more, and rejecting here
+	// keeps an absurd count from reaching the cap arithmetic at all.
+	if req.NumEntries > maxRaffleEntries {
+		writeError(w, http.StatusBadRequest,
+			fmt.Sprintf("Number of entries cannot exceed %d", maxRaffleEntries))
+		return
 	}
 
 	raffle, err := s.store.GetRaffle(raffleID)
@@ -690,6 +714,11 @@ func (s *Server) handleRaffleEntryAdd(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.NumEntries < 1 {
 		req.NumEntries = 1
+	}
+	if req.NumEntries > maxRaffleEntries {
+		writeError(w, http.StatusBadRequest,
+			fmt.Sprintf("Number of entries cannot exceed %d", maxRaffleEntries))
+		return
 	}
 	if !validWaiver(req.AmountWaived) {
 		writeError(w, http.StatusBadRequest, "Amount waived must be a non-negative number")

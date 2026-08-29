@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
@@ -139,7 +139,7 @@ internal sealed class GaraponTab : TabBase
                 if (this.selectedGaraponId == id)
                     this.detail = d;
                 this.newPlayerName = string.Empty;
-                this.newMaxDraws = 1;
+                this.newMaxDraws = Math.Max(1, this.detail?.Garapon.DefaultDraws ?? 1);
                 this.pendingTellName = string.Empty;
                 this.pendingTellWorld = string.Empty;
             });
@@ -263,7 +263,12 @@ internal sealed class GaraponTab : TabBase
         // loaded detail can't diverge: TabBase.Run is busy-gated, so a selection made
         // mid-load would drop its fetch and leave the body (and the create target) on a
         // different garapon than the picker shows.
-        if (this.Busy)
+        // Snapshot Busy: the Selectable below calls LoadGarapon, which calls Run(), which sets Busy true
+        // synchronously, so re-reading the field at the End would pop a disabled
+        // scope that was never pushed and corrupt ImGui's stack for the rest of the
+        // frame. Same reason the canStart/canCreate/canAdd sites use a local.
+        var pickDisabled = this.Busy;
+        if (pickDisabled)
             ImGui.BeginDisabled();
         ImGui.SetNextItemWidth(280);
         if (ImGui.BeginCombo("##garaponpick", preview))
@@ -275,7 +280,7 @@ internal sealed class GaraponTab : TabBase
             }
             ImGui.EndCombo();
         }
-        if (this.Busy)
+        if (pickDisabled)
             ImGui.EndDisabled();
     }
 
@@ -289,7 +294,12 @@ internal sealed class GaraponTab : TabBase
             await Apply(() =>
             {
                 if (this.selectedGaraponId == id)
+                {
                     this.detail = d;
+                    // Seed the Draws box from the garapon's own default, the way the
+                    // web form does, rather than leaving it on a hardcoded 1.
+                    this.newMaxDraws = Math.Max(1, d.Garapon.DefaultDraws);
+                }
             });
         });
     }

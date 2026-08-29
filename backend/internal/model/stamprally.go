@@ -177,10 +177,14 @@ type StampRallyCard struct {
 	RallyID         int64  `json:"rally_id"`
 	Token           string `json:"token"`
 	ParticipantName string `json:"participant_name"`
-	Completed       bool   `json:"completed"`
-	CompletedAt     string `json:"completed_at"`
-	CreatedAt       string `json:"created_at"`
-	CollectedCount  int    `json:"collected_count,omitempty"`
+	// Home world, kept apart from the name the way every other system stores it
+	// (see model.ParticipantLabel). "" on cards written before schema v66, and on
+	// any a staff member entered without one.
+	World          string `json:"world"`
+	Completed      bool   `json:"completed"`
+	CompletedAt    string `json:"completed_at"`
+	CreatedAt      string `json:"created_at"`
+	CollectedCount int    `json:"collected_count,omitempty"`
 }
 
 // StampRallyCollected records one stamp a participant collected on their card, with
@@ -332,10 +336,13 @@ type SignupRalliesResponse struct {
 
 // StampSignupResponse is the body of POST /api/stamp-signup/{id}: the tokens the
 // participant needs, which the client turns into links. GaraponToken is "" when the
-// rally has no open linked Garapon; when it is set it equals CardToken, since a
-// paired drawing link and stamp card share one token.
+// rally has no open linked Garapon, and is otherwise a SEPARATE secret from
+// CardToken - the card link can be shared, the drawing link spends draws and
+// cannot. This response is the only time the drawing token is issued: no name-keyed
+// lookup returns it, so the client keeps it locally.
 type StampSignupResponse struct {
 	ParticipantName string `json:"participant_name"`
+	World           string `json:"world"`
 	RallyTitle      string `json:"rally_title"`
 	CardToken       string `json:"card_token"`
 	GaraponToken    string `json:"garapon_token,omitempty"`
@@ -343,13 +350,24 @@ type StampSignupResponse struct {
 }
 
 // StampLookupEntry is one rally a looked-up participant holds a card for.
+//
+// There is deliberately no garapon token here. The lookup is keyed on a character
+// name, which is public, so it may report that draws exist and how many remain, but
+// never the token that spends them - that is issued once, at sign-up, and lives on
+// the participant's own device (or with staff). GaraponDrawsLeft is 0 when the
+// rally has no open linked garapon.
 type StampLookupEntry struct {
-	RallyID      int64  `json:"rally_id"`
-	RallyTitle   string `json:"rally_title"`
-	CardToken    string `json:"card_token"`
-	GaraponToken string `json:"garapon_token,omitempty"`
-	GaraponTitle string `json:"garapon_title,omitempty"`
-	Completed    bool   `json:"completed"`
+	RallyID    int64  `json:"rally_id"`
+	RallyTitle string `json:"rally_title"`
+	CardToken  string `json:"card_token"`
+	// The name and world the card is actually held under, echoed back so the page
+	// can show which record it found - a card issued before schema v66 may carry no
+	// world, and one staff typed by hand may be spelled differently.
+	ParticipantName  string `json:"participant_name"`
+	World            string `json:"world"`
+	GaraponTitle     string `json:"garapon_title,omitempty"`
+	GaraponDrawsLeft int    `json:"garapon_draws_left,omitempty"`
+	Completed        bool   `json:"completed"`
 }
 
 // StampLookupResponse is the body of POST /api/stamp-lookup. An unknown name and a

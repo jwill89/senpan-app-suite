@@ -105,11 +105,35 @@ func (s *Store) BulkReorderAffiliates(ids []int64) error {
 // logo/screenshot files live in centrally-managed image categories (System ->
 // Images), so they're intentionally left intact for reuse.
 func (s *Store) DeleteAffiliate(id int64) (bool, error) {
-	res, err := s.db.Exec(`DELETE FROM affiliates WHERE id = ?`, id)
+	tx, err := s.beginImmediate()
+	if err != nil {
+		return false, err
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	// A festival pitch may name this affiliate and NOTHING else - a blank title
+	// with the identity carried entirely by the link, which the map editor allows
+	// on purpose. festival_stall_occupants.affiliate_id is ON DELETE SET NULL, so
+	// dropping the affiliate would leave that occupant with no identity at all -
+	// and the next save of the map, however unrelated, would sanitize the nameless
+	// occupant away and take the whole pitch with it (a pitch left with no
+	// occupants is dropped). Copy the name down first so the pitch keeps saying who
+	// was standing in it. COALESCE guards the no-such-affiliate case, where the
+	// subquery is NULL and title is NOT NULL.
+	if _, err := tx.Exec(`UPDATE festival_stall_occupants
+		SET title = COALESCE((SELECT name FROM affiliates WHERE id = ?), title)
+		WHERE affiliate_id = ? AND TRIM(title) = ''`, id, id); err != nil {
+		return false, err
+	}
+
+	res, err := tx.Exec(`DELETE FROM affiliates WHERE id = ?`, id)
 	if err != nil {
 		return false, err
 	}
 	n, _ := res.RowsAffected()
+	if err := tx.Commit(); err != nil {
+		return false, err
+	}
 	return n > 0, nil
 }
 

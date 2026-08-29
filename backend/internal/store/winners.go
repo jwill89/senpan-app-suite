@@ -67,7 +67,20 @@ func (s *Store) ListWinnersLog(limit, offset int, sortField, sortDir string) ([]
 		}
 		entries = append(entries, e)
 	}
-	return entries, total, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, 0, err
+	}
+	// COUNT(*) OVER() rides along on each returned row, so a page past the last
+	// entry returns no rows and leaves total at 0 - telling the client the log is
+	// empty and collapsing its pager, when it is merely past the end. Ask for the
+	// count directly in that case; it only costs a query on a page that had nothing
+	// to show anyway.
+	if len(entries) == 0 {
+		if err := s.db.QueryRow("SELECT COUNT(*) FROM winners_log").Scan(&total); err != nil {
+			return nil, 0, err
+		}
+	}
+	return entries, total, nil
 }
 
 // DeleteWinnerLogEntry removes a single winners-log entry by id.

@@ -25,6 +25,7 @@ const ep = vi.hoisted(() => ({
   // fields, which a rally with a linked garapon returns.
   signUp: vi.fn(async (): Promise<StampSignupResponse> => ({
     participant_name: 'Yao Ming',
+    world: 'Balmung',
     rally_title: 'Festival',
     card_token: 'tok_card',
   })),
@@ -332,20 +333,33 @@ describe('public', () => {
 })
 
 describe('public sign-up + lookup', () => {
-  it('signUp trims the name and keeps the issued tokens', async () => {
+  it('refuses to sign up without a world', async () => {
+    // The world is what tells two players who share a character name apart. Sending
+    // the name alone would create a record no other system can match.
+    const s = useStampRalliesStore()
+    expect(await s.signUp(3, 'Yao Ming', '   ')).toBe(false)
+    expect(ep.signUp).not.toHaveBeenCalled()
+  })
+
+  it('signUp trims both fields and keeps the issued tokens', async () => {
     ep.signUp.mockResolvedValueOnce({
-      participant_name: 'Yao Ming @ Balmung',
+      participant_name: 'Yao Ming',
+      world: 'Balmung',
       rally_title: 'Festival',
       card_token: 'tok_card',
-      garapon_token: 'tok_card',
+      garapon_token: 'tok_draw',
       garapon_title: 'Festival Garapon',
     })
     const s = useStampRalliesStore()
-    expect(await s.signUp(3, '  Yao Ming @ Balmung  ')).toBe(true)
-    expect(ep.signUp).toHaveBeenCalledWith(3, 'Yao Ming @ Balmung', '')
+    // Name and world go as two fields, the way every system now stores a person.
+    expect(await s.signUp(3, '  Yao Ming  ', '  Balmung  ')).toBe(true)
+    expect(ep.signUp).toHaveBeenCalledWith(3, 'Yao Ming', 'Balmung', '')
     expect(s.signupResult?.card_token).toBe('tok_card')
-    // A paired garapon shares the card's token, so both links resolve from it.
-    expect(s.garaponUrl('tok_card')).toContain('/garapon/tok_card')
+    // The two tokens are SEPARATE secrets: the card link can be shared, the drawing
+    // link spends draws. Sign-up is the only time the drawing token is issued, so
+    // the store has to keep both rather than deriving one from the other.
+    expect(s.signupResult?.garapon_token).toBe('tok_draw')
+    expect(s.garaponUrl('tok_draw')).toContain('/garapon/tok_draw')
     expect(s.stampCardUrl('tok_card')).toContain('/stamp-card/tok_card')
   })
 
@@ -353,7 +367,7 @@ describe('public sign-up + lookup', () => {
     const ui = useUiStore()
     ui.notify = vi.fn()
     const s = useStampRalliesStore()
-    expect(await s.signUp(3, '   ')).toBe(false)
+    expect(await s.signUp(3, '   ', 'Balmung', 'Balmung')).toBe(false)
     expect(ep.signUp).not.toHaveBeenCalled()
   })
 
@@ -362,7 +376,7 @@ describe('public sign-up + lookup', () => {
     ui.notify = vi.fn()
     ep.signUp.mockRejectedValueOnce(new Error('Someone has already signed up under that name.'))
     const s = useStampRalliesStore()
-    expect(await s.signUp(3, 'Yao Ming')).toBe(false)
+    expect(await s.signUp(3, 'Yao Ming', 'Balmung', 'Balmung')).toBe(false)
     expect(s.signupResult).toBeNull()
     expect(ui.notify).toHaveBeenCalledWith(
       'Someone has already signed up under that name.',
@@ -376,7 +390,7 @@ describe('public sign-up + lookup', () => {
     expect(s.lookupResults).toBeNull()
 
     ep.signupLookup.mockResolvedValueOnce({ entries: [] })
-    await s.lookupLinks('Nobody')
+    await s.lookupLinks('Nobody', 'Balmung')
     expect(s.lookupResults).toEqual([])
 
     s.resetLookup()
@@ -387,7 +401,7 @@ describe('public sign-up + lookup', () => {
     const ui = useUiStore()
     ui.notify = vi.fn()
     const s = useStampRalliesStore()
-    await s.lookupLinks('  ')
+    await s.lookupLinks('  ', 'Balmung')
     expect(ep.signupLookup).not.toHaveBeenCalled()
   })
 })
@@ -456,6 +470,32 @@ describe('copyRallyForm', () => {
     expect(f.required_food).toBe(1)
     expect(f.required_game).toBe(1)
     expect(f.prizes[0].name).toBe('Grand')
+  })
+
+  /**
+   * A save is a FULL REPLACE, and the admin LIST omits stamps/prizes entirely. So
+   * seeding the form from a list row and saving it deleted every stamp on the
+   * rally, taking every participant's collected rows with it. Both entry points
+   * must refuse a rally that has not had its detail loaded.
+   */
+  it('refuses a rally whose detail has not loaded, rather than seeding an empty card', () => {
+    const store = useStampRalliesStore()
+    const listRow = { ...sourceRally() } as Record<string, unknown>
+    delete listRow.stamps
+    delete listRow.prizes
+
+    expect(store.hasRallyDetail(listRow as unknown as StampRally)).toBe(false)
+    expect(store.editRallyForm(listRow as unknown as StampRally)).toBe(false)
+    expect(store.copyRallyForm(listRow as unknown as StampRally)).toBe(false)
+    // Nothing was seeded, so there is no way to save the destructive payload.
+    expect(store.rallyForm).toBeNull()
+  })
+
+  it('accepts a rally that carries its detail', () => {
+    const store = useStampRalliesStore()
+    expect(store.hasRallyDetail(sourceRally())).toBe(true)
+    expect(store.editRallyForm(sourceRally())).toBe(true)
+    expect(store.rallyForm!.stamps).toHaveLength(1)
   })
 
   it('drops every id so saving creates instead of overwriting the original', () => {

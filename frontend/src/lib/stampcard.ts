@@ -21,9 +21,19 @@ export function placementStyle(p: Placement): CSSProperties {
   }
 }
 
-/** Display name for a stamp's stall: its affiliate, or the Senpan Tea House default. */
-export function stallName(affiliateName: string): string {
-  return affiliateName.trim() || 'Senpan Tea House'
+/**
+ * Display name for a stamp's stall, mirroring Go's StampRallyStamp.DisplayStall:
+ * the first non-blank of the map occupant's stall name, then the affiliate, then
+ * the venue's own default.
+ *
+ * The stall name has to come first. A rally linked to a festival map takes its
+ * stamps from PITCH OCCUPANTS, and the server joins that occupant's name - so
+ * naming a map-linked stamp by its affiliate showed the partner behind the booth
+ * rather than the booth, and "Senpan Tea House" for any occupant with no affiliate
+ * at all, which is exactly the case a festival map exists to describe.
+ */
+export function stallName(stallNameValue: string, affiliateName = ''): string {
+  return stallNameValue.trim() || affiliateName.trim() || 'Senpan Tea House'
 }
 
 /**

@@ -1,16 +1,19 @@
 package server
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestRedactSensitivePath(t *testing.T) {
 	// Admin / non-token paths must be left completely untouched.
 	unchanged := []string{
-		"/api/garapons/5",              // plural admin route, integer id
-		"/api/garapons/5/players",      // plural admin sub-route
-		"/api/stamp-rallies/12/logs",   // plural admin route
-		"/api/settings",                // ordinary route
-		"/api/fonts/pub/kit.css",       // font kit (not a token file)
-		"/",                            // root
+		"/api/garapons/5",            // plural admin route, integer id
+		"/api/garapons/5/players",    // plural admin sub-route
+		"/api/stamp-rallies/12/logs", // plural admin route
+		"/api/settings",              // ordinary route
+		"/api/fonts/pub/kit.css",     // font kit (not a token file)
+		"/",                          // root
 	}
 	for _, p := range unchanged {
 		if got := redactSensitivePath(p); got != p {
@@ -72,5 +75,36 @@ func TestRedactReferer(t *testing.T) {
 	}
 	if got := redactReferer("https://apps.example/admin/themes"); got != "https://apps.example/admin/themes" {
 		t.Errorf("non-token referer changed: %q", got)
+	}
+}
+
+// TestRedactSensitivePathIsCaseInsensitive pins the deliberate case-insensitive
+// prefix match. Every other case in this file uses an all-lowercase route prefix,
+// so removing the strings.ToLower - which the function's own comment spends five
+// lines justifying - was an undetected mutation. The routes really do match any
+// casing on the server, so a token link requested as /API/Garapon/... reaches the
+// handler and must not then be written to the log verbatim.
+func TestRedactSensitivePathIsCaseInsensitive(t *testing.T) {
+	const token = "abcdef0123456789abcdef0123456789"
+	cases := []string{
+		"/API/Garapon/" + token,
+		"/Api/Stamp-Card/" + token + "/stamp",
+		"/GARAPON/" + token + "/draw",
+		"/api/Fonts/Pub/F/" + token,
+	}
+	for _, path := range cases {
+		got := redactSensitivePath(path)
+		if strings.Contains(got, token) {
+			t.Errorf("redactSensitivePath(%q) = %q; the raw token survived a differently-cased prefix", path, got)
+		}
+		if !strings.Contains(got, "tok_") {
+			t.Errorf("redactSensitivePath(%q) = %q; want the tok_ correlation hash", path, got)
+		}
+	}
+
+	// The prefix's ORIGINAL casing is preserved, and a trailing segment survives.
+	if got := redactSensitivePath("/API/Garapon/" + token + "/draw"); !strings.HasPrefix(got, "/API/Garapon/") ||
+		!strings.HasSuffix(got, "/draw") {
+		t.Errorf("redaction rewrote the request's own casing or dropped its tail: %q", got)
 	}
 }

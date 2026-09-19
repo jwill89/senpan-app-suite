@@ -25,7 +25,7 @@ import ImagePicker from '@/components/common/ui/ImagePicker.vue'
 import { useRafflesStore } from '@/stores/raffles'
 import { RAFFLE_MODES, type RaffleMode } from '@/types/api'
 import { RAFFLE_MAX_ENTRIES } from '@/lib/constants'
-import { stallCaption } from '@/lib/festivalmap'
+import { occupantListLabel, stallCaption } from '@/lib/festivalmap'
 
 const emit = defineEmits<{ saved: []; cancel: [] }>()
 const raffles = useRafflesStore()
@@ -160,7 +160,7 @@ function cancel(): void {
           >
             <option value="">Not pinned to a stall</option>
             <option v-for="o in raffles.mapStalls" :key="o.id" :value="o.id">
-              {{ o.title || 'Untitled stall' }} ({{ stallCaption(o) || 'Other' }})
+              {{ occupantListLabel(o) }} ({{ stallCaption(o) || 'Other' }})
             </option>
           </select>
         </FormField>

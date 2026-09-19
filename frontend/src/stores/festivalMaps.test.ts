@@ -49,6 +49,8 @@ function makeMap(over: Partial<FestivalMap> = {}): FestivalMap {
         map_id: 7,
         shape: 'rect',
         color: '#e0a480',
+        selection_color: '',
+        text_color: '',
         placement: { x: 10, y: 20, width: 15, height: 10, rotation: 0 },
         sort_order: 0,
         occupants: [
@@ -59,6 +61,7 @@ function makeMap(over: Partial<FestivalMap> = {}): FestivalMap {
             affiliate_name: 'Flora Teahouse',
             title: 'Flora Teahouse',
             description: 'Tea and cakes.',
+            event_carrd: '',
             stall_type: 'food',
             type_label: '',
             times: [{ label: 'Day 1', start: '2026-08-01T19:00:00Z', end: '' }],
@@ -216,6 +219,34 @@ describe('festivalMaps store', () => {
       expect(ui.toast.message).toBe('Title is required')
     })
 
+    /**
+     * The map labels a stall by its AFFILIATE, so one saved without leaves a blank
+     * shape on the plan. There is no default to fall back on either: the venue is
+     * an affiliate in its own right now, with its own logo and links, rather than a
+     * hard-coded name in the form.
+     */
+    it('refuses a stall whose occupant names no affiliate', async () => {
+      const store = useFestivalMapsStore()
+      const ui = useUiStore()
+      store.newMapForm()
+      store.mapForm!.title = 'Obon'
+      store.addStall('food')
+      store.mapForm!.stalls[0].occupants[0].affiliate_id = null
+
+      expect(await store.saveMap()).toBe(false)
+      expect(ep.create).not.toHaveBeenCalled()
+      expect(ui.toast.message).toMatch(/affiliate/i)
+    })
+
+    it('saves once every occupant names one', async () => {
+      const store = useFestivalMapsStore()
+      store.newMapForm()
+      store.mapForm!.title = 'Obon'
+      store.addStall('food')
+      store.mapForm!.stalls[0].occupants[0].affiliate_id = 7
+      expect(await store.saveMap()).toBe(true)
+    })
+
     it('drops a datetime range with no start - an unstarted range says nothing', async () => {
       const store = useFestivalMapsStore()
       store.newMapForm()
@@ -226,12 +257,51 @@ describe('festivalMaps store', () => {
       expect(lastPayload(ep.create).times).toEqual([])
     })
 
+    /**
+     * The payload used to be built from an explicit list of fields, which had to be
+     * extended every time the editor gained one - and three were missed: the event
+     * Carrd link, the selection colour and the label colour. Each was set in the
+     * editor, saved without complaint, and gone on reload.
+     *
+     * Asserted field-by-field against the form rather than by naming today's
+     * fields, so a field added tomorrow is covered without anyone remembering to
+     * come back here.
+     */
+    it('sends every field the editor holds, not a hand-maintained subset', async () => {
+      const store = useFestivalMapsStore()
+      store.newMapForm()
+      store.mapForm!.title = 'Obon'
+      store.addStall('food')
+
+      const stall = store.mapForm!.stalls[0]
+      stall.occupants[0].affiliate_id = 7 // required before a map will save
+      stall.color = '#112233'
+      stall.selection_color = '#ff3ea5'
+      stall.text_color = '#ffe9a8'
+      stall.occupants[0].event_carrd = 'https://ev.carrd.co'
+      stall.occupants[0].title = 'Tea Bar'
+      await store.saveMap()
+
+      const pitch = (lastPayload(ep.create).stalls as Record<string, unknown>[])[0]
+      const occupant = (pitch.occupants as Record<string, unknown>[])[0]
+      // Every form key except the client-only row id must reach the wire.
+      for (const [key, value] of Object.entries(stall)) {
+        if (key === '_uid' || key === 'occupants') continue
+        expect({ key, value: pitch[key] }).toEqual({ key, value })
+      }
+      for (const [key, value] of Object.entries(stall.occupants[0])) {
+        if (key === '_uid' || key === 'times') continue
+        expect({ key, value: occupant[key] }).toEqual({ key, value })
+      }
+    })
+
     it('sends UTC datetimes and no client-only row keys', async () => {
       const store = useFestivalMapsStore()
       store.newMapForm()
       store.mapForm!.title = 'Obon'
       store.mapForm!.times[0] = { label: 'Day 1', start: '2026-08-01T18:00', end: '', _uid: 99 }
       store.addStall('game')
+      store.mapForm!.stalls[0].occupants[0].affiliate_id = 7 // required before a map will save
       await store.saveMap()
 
       const payload = lastPayload(ep.create)

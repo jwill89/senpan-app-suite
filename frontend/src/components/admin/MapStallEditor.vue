@@ -13,9 +13,10 @@
  */
 import { ref } from 'vue'
 import { assetUrl } from '@/lib/assets'
-import { isCircle, stallCaption, stallColor, stallStyle } from '@/lib/festivalmap'
+import { isCircle, occupantMapLabel, stallCaption, stallColor, stallStyle } from '@/lib/festivalmap'
+import { useFestivalMapsStore } from '@/stores/festivalMaps'
 import { usePlacementDrag, type DragMode } from '@/composables/usePlacementDrag'
-import type { FestivalStallForm, Placement } from '@/types/api'
+import type { FestivalStallForm, FestivalStallOccupantForm, Placement } from '@/types/api'
 
 defineProps<{
   mapImage: string
@@ -30,6 +31,23 @@ const emit = defineEmits<{
 }>()
 
 const canvasRef = ref<HTMLElement | null>(null)
+
+const store = useFestivalMapsStore()
+
+/**
+ * What a pitch is labelled with here: its AFFILIATE, the same as the public map.
+ * Labelling by title showed "Untitled stall" on every pitch whose title was left
+ * blank - which is most of them, since a title is optional and the map never uses
+ * one - naming a pitch after the fact that it has no name.
+ *
+ * The form holds an affiliate ID rather than a name, so it is resolved against the
+ * same list the affiliate picker offers. No match (or none chosen) is the venue's
+ * own booth, which occupantMapLabel names.
+ */
+function editorLabel(occupant: FestivalStallOccupantForm): string {
+  const affiliate = store.affiliates.find((a) => a.id === occupant.affiliate_id)
+  return occupantMapLabel({ affiliate_name: affiliate?.name ?? '' })
+}
 
 const { beginDrag: startDrag } = usePlacementDrag<number>(canvasRef, (uid, placement) =>
   emit('update', uid, placement),
@@ -96,7 +114,16 @@ function onCanvasPointerDown(e: PointerEvent): void {
           'is-selected': stall._uid === selectedUid,
           'map-stall--round': isCircle(stall.shape),
         }"
-        :style="stallStyle(stall.placement, stall.shape, stallColor(stall))"
+        :style="
+          stallStyle(
+            stall.placement,
+            stall.shape,
+            stallColor(stall),
+            '',
+            stall.text_color,
+            stall.occupants.length,
+          )
+        "
         role="button"
         tabindex="0"
         :aria-pressed="stall._uid === selectedUid"
@@ -107,7 +134,7 @@ function onCanvasPointerDown(e: PointerEvent): void {
       >
         <span class="map-stall-label">
           <span v-for="occupant in stall.occupants" :key="occupant._uid" class="map-stall-occupant">
-            <span>{{ occupant.title || 'Untitled stall' }}</span>
+            <span>{{ editorLabel(occupant) }}</span>
             <span v-if="stallCaption(occupant)" class="map-stall-caption">{{
               stallCaption(occupant)
             }}</span>

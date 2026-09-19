@@ -7,9 +7,14 @@ const ep = vi.hoisted(() => ({
   list: vi.fn(async () => ({ tea_rooms: [] as TeaRoom[], webhook_url: '' })),
   create: vi.fn(async () => ({ tea_room: null })),
   update: vi.fn(async () => ({ tea_room: null })),
-  patch: vi.fn(async (_id: number, fields: { open?: boolean; discounted?: boolean }) => ({
-    tea_room: room({ id: _id, ...fields }),
-  })),
+  patch: vi.fn(
+    async (
+      _id: number,
+      fields: { open?: boolean; discounted?: boolean; locked?: boolean; locked_until?: string },
+    ) => ({
+      tea_room: room({ id: _id, ...fields }),
+    }),
+  ),
   del: vi.fn(async () => undefined),
   reorder: vi.fn(async () => ({ ok: true })),
   post: vi.fn(async () => ({ tea_room: null })),
@@ -48,6 +53,8 @@ function room(over: Partial<TeaRoom> = {}): TeaRoom {
     open: true,
     lockable: false,
     discounted: false,
+    locked: false,
+    locked_until: '',
     image: '',
     color: '#ff3131',
     sort_order: 0,
@@ -179,6 +186,51 @@ describe('toggles', () => {
     await s.toggleDiscounted(s.teaRooms[0])
     expect(ep.patch).toHaveBeenCalledWith(1, { discounted: true })
     expect(s.teaRooms[0].discounted).toBe(true)
+  })
+})
+
+describe('locking', () => {
+  it('locks with no expiry when no unlock time is given', async () => {
+    const s = useTeaRoomsStore()
+    s.teaRooms = [room({ id: 1 })]
+    expect(await s.lockRoom(s.teaRooms[0], '')).toBe(true)
+    expect(ep.patch).toHaveBeenCalledWith(1, { locked: true, locked_until: '' })
+  })
+
+  it('sends the unlock time as a UTC instant', async () => {
+    const s = useTeaRoomsStore()
+    s.teaRooms = [room({ id: 1 })]
+    // A local wall-clock value from the datetime-local input, well in the future.
+    const future = new Date(Date.now() + 60 * 60 * 1000)
+    const pad = (n: number): string => String(n).padStart(2, '0')
+    const local =
+      `${future.getFullYear()}-${pad(future.getMonth() + 1)}-${pad(future.getDate())}` +
+      `T${pad(future.getHours())}:${pad(future.getMinutes())}`
+
+    expect(await s.lockRoom(s.teaRooms[0], local)).toBe(true)
+    const [, fields] = ep.patch.mock.calls[0]
+    expect(fields.locked).toBe(true)
+    // The same instant, expressed in UTC - not the local string passed straight
+    // through, which would land the unlock at the wrong moment for anyone else.
+    expect(fields.locked_until).toMatch(/Z$/)
+    expect(new Date(fields.locked_until as string).getTime()).toBe(new Date(local).getTime())
+  })
+
+  it('refuses an unlock time that has already passed', async () => {
+    const ui = useUiStore()
+    ui.notify = vi.fn()
+    const s = useTeaRoomsStore()
+    s.teaRooms = [room({ id: 1 })]
+    expect(await s.lockRoom(s.teaRooms[0], '2020-01-01T00:00')).toBe(false)
+    expect(ep.patch).not.toHaveBeenCalled()
+    expect(ui.notify).toHaveBeenCalled()
+  })
+
+  it('unlockRoom clears the lock', async () => {
+    const s = useTeaRoomsStore()
+    s.teaRooms = [room({ id: 4, locked: true, locked_until: '2030-01-01T00:00:00Z' })]
+    await s.unlockRoom(s.teaRooms[0])
+    expect(ep.patch).toHaveBeenCalledWith(4, { locked: false })
   })
 })
 

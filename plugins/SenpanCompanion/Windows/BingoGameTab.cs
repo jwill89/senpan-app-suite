@@ -858,7 +858,7 @@ internal sealed class BingoGameTab : TabBase, IDisposable
     /// </remarks>
     private static void AlertHalftimeOffPage(bool autoPaused)
     {
-        WinnerChime.Play();
+        Chime.Winner();
         var paused = autoPaused ? " Auto-draw is paused until you answer." : string.Empty;
         Plugin.ChatGui.Print(
             $"[Senpan] Half time reached - open the Companion window to answer the mini-game prompt.{paused}");
@@ -900,7 +900,7 @@ internal sealed class BingoGameTab : TabBase, IDisposable
     private void ApplyWinners(List<string> next)
     {
         if (next.Count > this.winners.Count)
-            WinnerChime.Play();
+            Chime.Winner();
         this.winners = next;
     }
 

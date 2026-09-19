@@ -202,11 +202,19 @@ func buildFeaturePaths(b *pb) {
 			path:  []*openapi3.Parameter{pparam("id", "Tea-room id.")},
 			body:  actionBody("Full tea-room fields.", nil, props("tea_room", ref("TeaRoom"))),
 			resps: []respEntry{ok("TeaRoomResponse"), r("400", "Name / unique room number required"), r("404", "Not found")}})
-	b.add("PATCH", "/api/tea-rooms/{id}", "Tea Rooms", "Toggle open/discounted", teaRoom,
-		"Partial update of the quick-toggle flags; absent fields are left unchanged.", opt{
-			path:  []*openapi3.Parameter{pparam("id", "Tea-room id.")},
-			body:  actionBody("Flag toggles.", nil, props("open", pbool("Open/closed."), "discounted", pbool("50%-off flag."))),
-			resps: []respEntry{ok("TeaRoomResponse"), r("404", "Not found")}})
+	b.add("PATCH", "/api/tea-rooms/{id}", "Tea Rooms", "Toggle open/discounted/locked", teaRoom,
+		"Partial update of the quick-toggle flags; absent fields are left unchanged. `locked` and `locked_until` "+
+			"move independently: `locked` alone locks or unlocks the room, `locked_until` alone re-times a lock "+
+			"already in place. A lock with no `locked_until` stands until someone unlocks it; one with an expiry is "+
+			"lifted by the server when that moment passes (and announced over the WebSocket as `tea_room_unlocked`). "+
+			"Unlocking clears the expiry.", opt{
+			path: []*openapi3.Parameter{pparam("id", "Tea-room id.")},
+			body: actionBody("Flag toggles.", nil, props(
+				"open", pbool("Open/closed."),
+				"discounted", pbool("50%-off flag."),
+				"locked", pbool("Locked/unlocked."),
+				"locked_until", pstr("UTC RFC-3339 instant the lock lifts ('' = no expiry, manual unlock)."))),
+			resps: []respEntry{ok("TeaRoomResponse"), r("400", "Unreadable unlock time"), r("404", "Not found")}})
 	b.add("DELETE", "/api/tea-rooms/{id}", "Tea Rooms", "Delete a tea room", teaRoom, "", opt{
 		path:  []*openapi3.Parameter{pparam("id", "Tea-room id.")},
 		resps: []respEntry{noContent()}})

@@ -3,10 +3,10 @@
     "Author": "MathDad",
     "Name": "Senpan Admin Companion",
     "InternalName": "SenpanCompanionAdmin",
-    "AssemblyVersion": "3.7.0.0",
+    "AssemblyVersion": "3.8.0.0",
     "Description": "Serves as an alternative to many of the web-interface functions, allowing staff to operate various systems from within the game.",
     "Punchline": "Allows Senpan Tea House staff to use various app services right from the game.",
-    "Changelog": "Stamp rally stalls are now food or game stamps: the Stalls table and the collected-stamp log both show which, and the rally header says what finishes a card - every stamp, or so many of each type.",
+    "Changelog": "Tea rooms can be locked from the Tea Rooms page, with an optional unlock time (or quick +30m / +1h / +2h / +4h). When that time arrives the room unlocks itself and you are told in game - a chime, a toast, and a line in your own chat log naming the room.",
     "Tags": ["bingo", "raffle", "venue", "senpan"],
     "RepoUrl": "https://github.com/jwill89/senpan-app-suite",
     "ApplicableVersion": "any",
@@ -19,7 +19,7 @@
     "DownloadLinkUpdate": "https://apps.senpan.cafe/plugin/SenpanCompanionAdmin/latest.zip",
     "DownloadLinkTesting": "https://apps.senpan.cafe/plugin/SenpanCompanionAdmin/latest.zip",
     "DownloadCount": 0,
-    "LastUpdate": 1787443200,
+    "LastUpdate": 1788566400,
     "AcceptsFeedback": true
   }
 ]

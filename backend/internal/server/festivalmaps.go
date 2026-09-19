@@ -234,6 +234,10 @@ func mapFromRequest(req festivalMapWriteRequest, title string) *model.FestivalMa
 	for _, st := range req.Stalls {
 		st.Shape = model.NormalizeStallShape(st.Shape)
 		st.Color = sanitizeColor(st.Color)
+		// Validated like the fill: it reaches CSS as a custom property, so only the
+		// "#rrggbb" the picker produces is accepted and anything else becomes "".
+		st.SelectionColor = sanitizeColor(st.SelectionColor)
+		st.TextColor = sanitizeColor(st.TextColor)
 		st.Placement = sanitizePlacement(st.Placement)
 		st.Occupants = sanitizeOccupants(st.Occupants)
 		if len(st.Occupants) == 0 {
@@ -544,14 +548,17 @@ func (s *Server) handleFestivalMapPublic(w http.ResponseWriter, r *http.Request)
 	for i := range m.Stalls {
 		st := &m.Stalls[i]
 		ps := model.PublicFestivalStall{
-			ID: st.ID, Shape: st.Shape, Color: st.Color, Placement: st.Placement,
+			ID: st.ID, Shape: st.Shape, Color: st.Color,
+			TextColor: st.TextColor, SelectionColor: st.SelectionColor,
+			Placement: st.Placement,
 			Occupants: make([]model.PublicStallOccupant, 0, len(st.Occupants)),
 		}
 		for j := range st.Occupants {
 			o := &st.Occupants[j]
 			po := model.PublicStallOccupant{
 				ID: o.ID, Title: o.Title, Description: o.Description,
-				StallType: o.StallType, TypeLabel: o.TypeLabel, Times: o.Times,
+				EventCarrd: o.EventCarrd,
+				StallType:  o.StallType, TypeLabel: o.TypeLabel, Times: o.Times,
 				// An occupant that keeps no hours of its own follows the festival's.
 				IsOpen: withinAnyEventTime(o.Times, now) && withinAnyEventTime(m.Times, now),
 			}

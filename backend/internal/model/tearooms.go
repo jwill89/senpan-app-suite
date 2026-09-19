@@ -3,9 +3,10 @@ package model
 // TeaRoom is a bookable room listed in the Senpan Tea House -> Tea Rooms admin
 // section: a named, numbered room with a per-half-hour gil cost, hashtags, a
 // markdown description, a handful of status flags (seasonal, open, lockable,
-// discounted), an image picked from the shared image library, and a Discord embed
-// accent colour. Admins manage a drag-orderable list of them and post each as a
-// Discord embed to a single shared webhook (see the tea-room webhook setting).
+// discounted), a lock with an optional expiry, an image picked from the shared
+// image library, and a Discord embed accent colour. Admins manage a
+// drag-orderable list of them and post each as a Discord embed to a single shared
+// webhook (see the tea-room webhook setting).
 //
 // The list is also exposed read-only through a public, cross-origin API so an
 // external Carrd site can render live room availability and pricing.
@@ -31,10 +32,17 @@ type TeaRoom struct {
 	Open            bool   `json:"open"`        // open vs closed
 	Lockable        bool   `json:"lockable"`    // can be locked for an extra fee
 	Discounted      bool   `json:"discounted"`  // currently 50%-off
-	Image           string `json:"image"`       // full URL, shown full-width in the embed
-	Color           string `json:"color"`       // embed accent colour, "#rrggbb" ("" = brand default)
-	SortOrder       int    `json:"sort_order"`
-	CreatedAt       string `json:"created_at"`
+	// Locked is whether the room is locked right now (booked out for a guest),
+	// as opposed to Lockable, which is only whether it CAN be locked.
+	Locked bool `json:"locked"`
+	// LockedUntil is when the lock lifts, as a UTC RFC-3339 instant. Empty means
+	// the lock has no expiry and stands until someone unlocks the room by hand.
+	// Only meaningful while Locked is set; unlocking clears it.
+	LockedUntil string `json:"locked_until"`
+	Image       string `json:"image"` // full URL, shown full-width in the embed
+	Color       string `json:"color"` // embed accent colour, "#rrggbb" ("" = brand default)
+	SortOrder   int    `json:"sort_order"`
+	CreatedAt   string `json:"created_at"`
 }
 
 // TeaRoomsResponse is the body of GET /api/tea-rooms - every room in the admin's

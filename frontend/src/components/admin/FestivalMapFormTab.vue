@@ -105,6 +105,36 @@ function clearColor(): void {
   if (selected.value) selected.value.stall.color = ''
 }
 
+/**
+ * The halo drawn around this pitch when a visitor selects it on the public map.
+ * Its own colour rather than the fill's, so it can be made to contrast: a ring in
+ * the same colour as the shape it surrounds is the one thing that would not read
+ * as a selection. '' follows the app highlight.
+ */
+const selectedRingColor = computed(() => selected.value?.stall.selection_color || '#d6bdae')
+
+function setRingColor(value: string): void {
+  if (selected.value) selected.value.stall.selection_color = value
+}
+
+function clearRingColor(): void {
+  if (selected.value) selected.value.stall.selection_color = ''
+}
+
+/**
+ * The colour this pitch's label is drawn in. Its own setting beside the fill,
+ * because a label that reads on a pale fill disappears on a deep one. '' = white.
+ */
+const selectedTextColor = computed(() => selected.value?.stall.text_color || '#ffffff')
+
+function setTextColor(value: string): void {
+  if (selected.value) selected.value.stall.text_color = value
+}
+
+function clearTextColor(): void {
+  if (selected.value) selected.value.stall.text_color = ''
+}
+
 function setShape(value: string): void {
   if (selected.value) selected.value.stall.shape = value === 'circle' ? 'circle' : 'rect'
 }
@@ -303,6 +333,49 @@ function cancel(): void {
               </button>
             </div>
           </FormField>
+          <FormField label="Label color" help="The stall's text on the map. Reset for white.">
+            <div class="color-field">
+              <input
+                :value="selectedTextColor"
+                type="color"
+                class="color-field-input"
+                aria-label="Stall label color"
+                @input="setTextColor(($event.target as HTMLInputElement).value)"
+              />
+              <code class="color-field-hex">{{ selectedTextColor }}</code>
+              <button
+                type="button"
+                class="btn-neutral btn-sm"
+                :disabled="!selected.stall.text_color"
+                @click="clearTextColor"
+              >
+                Reset
+              </button>
+            </div>
+          </FormField>
+          <FormField
+            label="Selected outline"
+            help="The ring shown when a visitor taps this stall. Reset to use the site highlight."
+          >
+            <div class="color-field">
+              <input
+                :value="selectedRingColor"
+                type="color"
+                class="color-field-input"
+                aria-label="Stall selection outline color"
+                @input="setRingColor(($event.target as HTMLInputElement).value)"
+              />
+              <code class="color-field-hex">{{ selectedRingColor }}</code>
+              <button
+                type="button"
+                class="btn-neutral btn-sm"
+                :disabled="!selected.stall.selection_color"
+                @click="clearRingColor"
+              >
+                Reset
+              </button>
+            </div>
+          </FormField>
         </FormRow>
 
         <!-- Occupants: who stands in this pitch, and when -->
@@ -348,22 +421,28 @@ function cancel(): void {
           </div>
 
           <FormRow>
-            <FormField label="Affiliate" help="Who runs it. Defaults to the owning venue.">
+            <FormField label="Affiliate*" help="Who runs it. Every stall needs one.">
               <select
                 :value="occupant.affiliate_id ?? ''"
                 aria-label="Stall affiliate"
                 @change="setAffiliate(occupant, ($event.target as HTMLSelectElement).value)"
               >
-                <option value="">Senpan Tea House (default)</option>
+                <!-- No "the venue" default: the venue is an affiliate in its own
+                     right now, with its own logo and links, so hard-coding it here
+                     would offer a second, lesser version of a real record. -->
+                <option value="" disabled>Select an affiliate...</option>
                 <option v-for="a in store.affiliates" :key="a.id" :value="a.id">
                   {{ a.name }}
                 </option>
               </select>
             </FormField>
-            <FormField label="Title" help="Shown on the map itself, inside the stall's shape.">
+            <FormField
+              label="Title (optional)"
+              help="The map labels a stall by its affiliate. A title adds detail beside it in the info panel; a trailing (Day 1) is shown under the affiliate name on the map."
+            >
               <input
                 v-model="occupant.title"
-                placeholder="e.g. Flora Teahouse (Day 1)"
+                placeholder="e.g. Tea Bar (Day 1)"
                 aria-label="Stall title"
               />
             </FormField>
@@ -396,6 +475,18 @@ function cancel(): void {
               />
             </FormField>
           </FormRow>
+
+          <FormField
+            label="Booth Page"
+            help="This occupant's own event page. Per occupant, so a stall that changes hands between days links a different page each day. Leave blank to hide the button."
+          >
+            <input
+              v-model="occupant.event_carrd"
+              placeholder="https://example.carrd.co"
+              inputmode="url"
+              aria-label="Booth Page link"
+            />
+          </FormField>
 
           <FormField label="Description" help="What this stall offers (supports markdown).">
             <MarkdownEditor

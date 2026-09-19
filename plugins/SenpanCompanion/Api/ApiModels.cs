@@ -427,10 +427,10 @@ public sealed class StampRallyLogsResponse
 // -- Tea Rooms ------------------------------------------------------------------
 
 // A bookable tea room. The plugin surfaces only the compact operator view - room
-// number, name, owner, per-half-hour cost, and the two quick-toggle status flags
-// (open/closed and the 50%-off discount). The server model carries more (subtitle,
-// hashtags, image, embed colour, seasonal/lockable, ...) that the in-game panel
-// doesn't need, so those fields are intentionally omitted here.
+// number, name, owner, per-half-hour cost, the two quick-toggle status flags
+// (open/closed and the 50%-off discount), and the lock. The server model carries
+// more (subtitle, hashtags, image, embed colour, seasonal/lockable, ...) that the
+// in-game panel doesn't need, so those fields are intentionally omitted here.
 public sealed class TeaRoom
 {
     public long Id { get; set; }
@@ -441,6 +441,13 @@ public sealed class TeaRoom
     public long CostPerHalfHour { get; set; }
     public bool Open { get; set; }
     public bool Discounted { get; set; }
+    // Whether the room is locked right now (the server's `lockable` flag, which
+    // only says a room CAN be locked, is a different thing and isn't shown here).
+    public bool Locked { get; set; }
+    // When the lock lifts, as a UTC RFC-3339 instant; empty means it stands until
+    // somebody unlocks the room. The server sweeps expiries and announces each
+    // one over the WebSocket (see LiveConnection.TeaRoomUnlocked).
+    public string LockedUntil { get; set; } = string.Empty;
 }
 
 // GET /api/tea-rooms also returns the shared Discord webhook, but the plugin never

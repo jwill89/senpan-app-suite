@@ -24,18 +24,21 @@ import DataTable, {
 import DataTableToolbar from '@/components/common/ui/DataTableToolbar.vue'
 import PaginationBar from '@/components/common/ui/PaginationBar.vue'
 import EmptyState from '@/components/common/ui/EmptyState.vue'
+import FormField from '@/components/common/ui/FormField.vue'
 import MarkdownText from '@/components/common/MarkdownText.vue'
 import FestivalMapFormTab from './FestivalMapFormTab.vue'
+import FestivalMapCanvas from '@/components/common/ui/FestivalMapCanvas.vue'
 import { useFestivalMapsStore } from '@/stores/festivalMaps'
 import { assetUrl } from '@/lib/assets'
 import { formatServerTimestamp } from '@/lib/datetime'
 import {
+  MAP_EMBED_HEIGHT,
   formatEventTime,
-  isCircle,
+  mapEmbedPath,
+  mapEmbedSnippet,
+  occupantListLabel,
   stallCaption,
-  stallColor,
-  stallStyle,
-  stallOperator,
+  toPublicStalls,
 } from '@/lib/festivalmap'
 import type { FestivalMap, FestivalMapStatus } from '@/types/api'
 
@@ -92,11 +95,30 @@ const publicUrl = computed(() =>
     : '',
 )
 
-async function copyPublicUrl(): Promise<void> {
+/**
+ * The map with none of our page around it, for an <iframe> somewhere else - and
+ * the tag to paste to get it there.
+ *
+ * The same map, not a copy of it: the embed reads the same published map through
+ * the same public endpoint, so a stall added here appears on every site the
+ * snippet was pasted into without anyone repasting anything.
+ */
+const embedUrl = computed(() =>
+  store.selectedMap
+    ? `${window.location.origin}${mapEmbedPath(store.mapPath(store.selectedMap))}`
+    : '',
+)
+const embedSnippet = computed(() =>
+  store.selectedMap ? mapEmbedSnippet(embedUrl.value, store.selectedMap.title) : '',
+)
+/** Whether the embed panel is open. Closed by default - it is the rarer errand. */
+const showEmbed = ref(false)
+
+async function copyText(text: string): Promise<void> {
   try {
-    await navigator.clipboard.writeText(publicUrl.value)
+    await navigator.clipboard.writeText(text)
   } catch {
-    /* clipboard blocked - the link is shown beside the button either way */
+    /* clipboard blocked - both values are shown beside their buttons either way */
   }
 }
 
@@ -118,6 +140,9 @@ function backToList(): void {
  * form that saves as a FULL REPLACE, so acting on a list row (which carries no
  * stalls) would delete every pitch on the map. See hasMapDetail.
  */
+/** The selected map's stalls in the shape the public canvas draws. */
+const previewStalls = computed(() => toPublicStalls(selectedStalls.value))
+
 const detailReady = computed(() => !store.detailLoading && store.hasMapDetail(store.selectedMap))
 
 function editSelected(): void {
@@ -146,8 +171,19 @@ async function copyMap(m: FestivalMap): Promise<void> {
   if (!store.copyMapForm(store.selectedMap)) return
   screen.value = 'form'
 }
+/**
+ * Where the form leaves you.
+ *
+ * Saving used to drop the admin back at the map picker, several clicks from the
+ * thing they had just been working on - and saving a map is rarely "done with this
+ * map": publishing it, or reading how it turned out, is the usual next step. A save
+ * leaves the map selected (see saveMap), so it lands on that map's own page.
+ *
+ * Cancelling goes wherever it came FROM: back to the map when editing one, back to
+ * the list when the form was a brand-new map with nothing behind it.
+ */
 function onFormDone(): void {
-  screen.value = 'list'
+  screen.value = store.selectedMap ? 'detail' : 'list'
 }
 async function deleteSelected(): Promise<void> {
   const m = store.selectedMap
@@ -219,12 +255,60 @@ function setStatus(status: FestivalMapStatus): void {
 
       <LoadingSpinner v-if="store.detailLoading" block label="Loading map..." />
       <template v-else>
-        <p v-if="store.selectedMap.status === 'published'" class="flex-toolbar mb-16">
-          <button class="btn-neutral btn-sm" @click="copyPublicUrl">
-            <font-awesome-icon :icon="['fad', 'link']" /> Copy public link
-          </button>
-          <code class="text-xs text-muted">{{ publicUrl }}</code>
-        </p>
+        <!-- Published only: both of these are the PUBLIC map, and a map nobody
+             can see yet has no link worth handing out and no embed worth
+             pasting. -->
+        <div v-if="store.selectedMap.status === 'published'" class="mb-16">
+          <p class="flex-toolbar">
+            <button class="btn-neutral btn-sm" @click="copyText(publicUrl)">
+              <font-awesome-icon :icon="['fad', 'link']" /> Copy public link
+            </button>
+            <code class="text-xs text-muted">{{ publicUrl }}</code>
+          </p>
+
+          <p class="flex-toolbar mt-8">
+            <button
+              class="btn-neutral btn-sm"
+              :aria-expanded="showEmbed"
+              aria-controls="map-embed-panel"
+              @click="showEmbed = !showEmbed"
+            >
+              <font-awesome-icon :icon="['fas', 'code']" /> Embed code
+            </button>
+            <span class="text-xs text-muted">
+              Puts the interactive map on a Carrd, or any page that takes HTML.
+            </span>
+          </p>
+
+          <div v-if="showEmbed" id="map-embed-panel" class="mt-8">
+            <FormField label="Embed on an external site (e.g. Carrd)" html-for="map-embed-snippet">
+              <div class="map-embed-code-row">
+                <input
+                  id="map-embed-snippet"
+                  readonly
+                  :value="embedSnippet"
+                  @focus="($event.target as HTMLInputElement).select()"
+                />
+                <button
+                  class="btn-view btn-sm"
+                  title="Copy embed code"
+                  @click="copyText(embedSnippet)"
+                >
+                  <font-awesome-icon :icon="['fas', 'copy']" /> Copy
+                </button>
+                <a class="btn-neutral btn-sm" :href="embedUrl" target="_blank" rel="noopener">
+                  <font-awesome-icon :icon="['fas', 'arrow-up-right-from-square']" /> Preview
+                </a>
+              </div>
+              <template #help>
+                Paste it into the other site's HTML. The map stays live - stalls, hours and links
+                follow this map, so changes here reach every site it was pasted into without
+                repasting. It is {{ MAP_EMBED_HEIGHT }}px tall; edit that number in the snippet to
+                give the map more or less room.
+              </template>
+            </FormField>
+          </div>
+        </div>
 
         <MarkdownText
           v-if="store.selectedMap.description"
@@ -237,38 +321,18 @@ function setStatus(status: FestivalMapStatus): void {
           </li>
         </ul>
 
-        <!-- Read-only preview: the plan exactly as the public sees it. -->
-        <div class="map-canvas">
-          <img
-            v-if="store.selectedMap.map_image"
-            :src="assetUrl(store.selectedMap.map_image)"
-            class="map-canvas-bg"
-            alt="Festival map"
-          />
-          <div v-else class="map-canvas-bg map-canvas-empty">
-            <font-awesome-icon :icon="['fad', 'image']" /> No base map image yet
-          </div>
-          <div
-            v-for="stall in selectedStalls"
-            :key="stall.id"
-            class="map-stall"
-            :class="{ 'map-stall--round': isCircle(stall.shape) }"
-            :style="stallStyle(stall.placement, stall.shape, stallColor(stall))"
-          >
-            <span class="map-stall-label">
-              <span
-                v-for="occupant in stall.occupants"
-                :key="occupant.id"
-                class="map-stall-occupant"
-              >
-                <span>{{ occupant.title }}</span>
-                <span v-if="stallCaption(occupant)" class="map-stall-caption">{{
-                  stallCaption(occupant)
-                }}</span>
-              </span>
-            </span>
-          </div>
-        </div>
+        <!--
+          The plan drawn by the SAME component the public map uses, against adapted
+          data. This screen used to re-implement it in its own markup, which is how
+          it drifted: it still labelled stalls by title long after the map had moved
+          to labelling by affiliate, so every untitled stall showed up blank here.
+          One drawing of a festival map, not two kept in step by hand.
+        -->
+        <FestivalMapCanvas
+          :map-image="store.selectedMap.map_image"
+          :stalls="previewStalls"
+          :festival-days="store.selectedMap.times"
+        />
 
         <h3 class="section-heading mt-16">
           <font-awesome-icon :icon="['fad', 'shop']" /> Stalls ({{ selectedStalls.length }})
@@ -283,9 +347,8 @@ function setStatus(status: FestivalMapStatus): void {
           <li v-for="stall in selectedStalls" :key="stall.id">
             <template v-for="(occupant, oi) in stall.occupants" :key="occupant.id">
               <template v-if="oi">, then </template>
-              <strong>{{ occupant.title || 'Untitled stall' }}</strong>
+              <strong>{{ occupantListLabel(occupant) }}</strong>
               <template v-if="stallCaption(occupant)"> ({{ stallCaption(occupant) }})</template>
-              - {{ stallOperator(occupant.affiliate_name) }}
               <template v-if="occupant.times.length">
                 - {{ occupant.times.map(formatEventTime).join(' / ') }}
               </template>

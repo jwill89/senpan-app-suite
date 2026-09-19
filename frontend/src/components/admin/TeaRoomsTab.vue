@@ -4,8 +4,8 @@
  *
  *   - list: a drag-orderable list of rooms (image + name + cost + status badges)
  *     with per-row actions - post to Discord, toggle open/closed, toggle the
- *     discount, edit, delete - plus a search box. Reordering persists like the
- *     Announcements list.
+ *     discount, lock/unlock, edit, delete - plus a search box. Reordering
+ *     persists like the Announcements list.
  *   - form: the create/edit form (TeaRoomFormTab), a Back sub-page.
  *   - webhook: set the single shared Discord webhook every room posts to.
  *
@@ -14,6 +14,7 @@
 import { computed, ref } from 'vue'
 import { VueDraggable } from 'vue-draggable-plus'
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
+import ModalOverlay from '@/components/common/ModalOverlay.vue'
 import ManagerView from '@/components/common/ui/ManagerView.vue'
 import AdminPanel from '@/components/common/ui/AdminPanel.vue'
 import ListRow from '@/components/common/ui/ListRow.vue'
@@ -26,6 +27,7 @@ import TeaRoomFormTab from './TeaRoomFormTab.vue'
 import { useTeaRoomsStore } from '@/stores/teaRooms'
 import { useUiStore } from '@/stores/ui'
 import { assetUrl } from '@/lib/assets'
+import { formatServerTimestamp } from '@/lib/datetime'
 import type { TeaRoom } from '@/types/api'
 
 const store = useTeaRoomsStore()
@@ -65,6 +67,29 @@ function costText(t: TeaRoom): string {
     return `${Math.floor(t.cost_per_half_hour / 2).toLocaleString()} gil/half hour (50% off)`
   }
   return `${t.cost_per_half_hour.toLocaleString()} gil/half hour`
+}
+
+/** Lock line for a room: when the lock lifts, or that it waits on a person. */
+function lockText(t: TeaRoom): string {
+  const at = formatServerTimestamp(t.locked_until)
+  return at ? `Locked until ${at}` : 'Locked'
+}
+
+// -- Lock modal ---------------------------------------------------------------
+// Locking asks for the unlock time up front, because a lock set without one is a
+// lock somebody has to remember to lift. The field is optional all the same -
+// blank keeps the old behaviour, locked until an admin says otherwise.
+const lockTarget = ref<TeaRoom | null>(null)
+const lockUntil = ref('')
+
+function openLock(t: TeaRoom): void {
+  lockTarget.value = t
+  lockUntil.value = ''
+}
+async function submitLock(): Promise<void> {
+  const t = lockTarget.value
+  if (!t) return
+  if (await store.lockRoom(t, lockUntil.value)) lockTarget.value = null
 }
 
 // -- Navigation ---------------------------------------------------------------
@@ -231,6 +256,9 @@ async function submitWebhook(): Promise<void> {
                 {{ t.seasonal ? 'Seasonal' : 'Permanent' }}
               </span>
               <span v-if="t.discounted" class="badge badge--warning">50% off</span>
+              <span v-if="t.locked" class="badge badge--danger">
+                <font-awesome-icon :icon="['fas', 'lock']" /> {{ lockText(t) }}
+              </span>
               <span v-if="t.lockable" class="badge badge--muted">Lockable</span>
             </p>
             <p v-if="t.hashtags" class="text-sm text-muted list-row-meta list-row-meta--inline">
@@ -266,6 +294,15 @@ async function submitWebhook(): Promise<void> {
               >
                 <font-awesome-icon :icon="['fas', 'tag']" />
                 {{ t.discounted ? 'Undiscount' : 'Discount' }}
+              </button>
+              <button
+                class="btn-action btn-sm"
+                :disabled="store.togglingId === t.id"
+                :title="t.locked ? 'Unlock this room now' : 'Lock this room'"
+                @click="t.locked ? store.unlockRoom(t) : openLock(t)"
+              >
+                <font-awesome-icon :icon="['fas', t.locked ? 'lock-open' : 'lock']" />
+                {{ t.locked ? 'Unlock' : 'Lock' }}
               </button>
               <button
                 class="btn-view btn-sm"
@@ -304,6 +341,34 @@ async function submitWebhook(): Promise<void> {
         />
       </template>
     </ManagerView>
+
+    <!-- -- Lock a room --------------------------------------------------------- -->
+    <ModalOverlay
+      v-if="lockTarget"
+      aria-label="Lock tea room"
+      box-style="max-width: 460px"
+      @close="lockTarget = null"
+    >
+      <h3><font-awesome-icon :icon="['fad', 'lock']" /> Lock {{ lockTarget.name }}</h3>
+      <FormField
+        label="Unlock at"
+        help="When the lock lifts on its own. Leave empty to keep the room locked until someone unlocks it."
+      >
+        <input v-model="lockUntil" type="datetime-local" aria-label="Unlock at" />
+      </FormField>
+      <FormActions align="start">
+        <button
+          class="btn-neutral"
+          :disabled="store.togglingId !== null"
+          @click="lockTarget = null"
+        >
+          Cancel
+        </button>
+        <button class="btn-action" :disabled="store.togglingId !== null" @click="submitLock">
+          <font-awesome-icon :icon="['fas', 'lock']" /> Lock Room
+        </button>
+      </FormActions>
+    </ModalOverlay>
   </div>
 </template>
 

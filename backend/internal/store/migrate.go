@@ -16,7 +16,7 @@ import (
 // PRAGMA user_version against this constant and runs only the migrations
 // needed to bring the database up to date. Bump this when adding a new
 // migration block.
-const schemaVersion = 66
+const schemaVersion = 69
 
 // ensureSchema reads the current PRAGMA user_version from the database and
 // applies any outstanding migrations to bring it up to schemaVersion.
@@ -456,6 +456,24 @@ func ensureSchema(db *sql.DB) error {
 		}
 	}
 
+	if version < 67 {
+		if err := migrateStallSelectionAndCarrd(db); err != nil {
+			return err
+		}
+	}
+
+	if version < 68 {
+		if err := migrateStallTextColor(db); err != nil {
+			return err
+		}
+	}
+
+	if version < 69 {
+		if err := migrateTeaRoomLocks(db); err != nil {
+			return err
+		}
+	}
+
 	_, err := db.Exec(fmt.Sprintf("PRAGMA user_version = %d", schemaVersion))
 	return err
 }
@@ -556,6 +574,52 @@ func backfillWorlds(db *sql.DB, table, nameCol string) error {
 		}
 	}
 	return tx.Commit()
+}
+
+// migrateStallTextColor (schema v68) adds festival_stalls.text_color: the colour a
+// pitch's label is drawn in, chosen per pitch alongside its fill.
+//
+// The label was a fixed dark colour, which only reads on a light fill - a pitch
+// tinted anything deep left its own name barely legible. Existing rows default to
+// ” and the frontend draws those white, which is what most fills want; an admin
+// picks something else where it does not. Idempotent - guarded by hasColumn.
+func migrateStallTextColor(db *sql.DB) error {
+	if !tableExists(db, "festival_stalls") || hasColumn(db, "festival_stalls", "text_color") {
+		return nil
+	}
+	if _, err := db.Exec(
+		`ALTER TABLE festival_stalls ADD COLUMN text_color TEXT NOT NULL DEFAULT ''`); err != nil {
+		return fmt.Errorf("add festival_stalls.text_color: %w", err)
+	}
+	return nil
+}
+
+// migrateStallSelectionAndCarrd (schema v67) adds two per-pitch fields to the
+// festival map:
+//
+//   - festival_stalls.selection_color - the halo drawn around a pitch the visitor
+//     has tapped. Its own colour rather than the pitch's `color`, so the ring can
+//     be made to contrast with the fill instead of disappearing into it.
+//   - festival_stall_occupants.event_carrd - a per-OCCUPANT link to that stall's
+//     event page. It sits on the occupant, not the pitch, because a pitch that
+//     changes hands between days has a different event page each day.
+//
+// Both default to ” (not set), which is what every existing row gets: nothing
+// renders until someone fills one in. Idempotent - each column is guarded.
+func migrateStallSelectionAndCarrd(db *sql.DB) error {
+	for _, c := range []struct{ table, column string }{
+		{"festival_stalls", "selection_color"},
+		{"festival_stall_occupants", "event_carrd"},
+	} {
+		if !tableExists(db, c.table) || hasColumn(db, c.table, c.column) {
+			continue
+		}
+		if _, err := db.Exec(fmt.Sprintf(
+			`ALTER TABLE %s ADD COLUMN %s TEXT NOT NULL DEFAULT ''`, c.table, c.column)); err != nil {
+			return fmt.Errorf("add %s.%s: %w", c.table, c.column, err)
+		}
+	}
+	return nil
 }
 
 // migrateRafflePayImage (schema v59) adds raffles.pay_image, the "Where to Pay"
@@ -2076,6 +2140,8 @@ const teaRoomsTableSQL = `CREATE TABLE IF NOT EXISTS tea_rooms (
 	open INTEGER NOT NULL DEFAULT 1,
 	lockable INTEGER NOT NULL DEFAULT 0,
 	discounted INTEGER NOT NULL DEFAULT 0,
+	locked INTEGER NOT NULL DEFAULT 0,
+	locked_until TEXT NOT NULL DEFAULT '',
 	image TEXT NOT NULL DEFAULT '',
 	color TEXT NOT NULL DEFAULT '',
 	sort_order INTEGER NOT NULL DEFAULT 0,
@@ -2131,6 +2197,31 @@ func migrateTeaRoomSubtitle(db *sql.DB) error {
 	}
 	if _, err := db.Exec(teaRoomNumberIndexSQL); err != nil {
 		return fmt.Errorf("create tea_rooms room_number unique index: %w", err)
+	}
+	return nil
+}
+
+// migrateTeaRoomLocks (schema v69) adds the two columns behind a room lock:
+// `locked` is whether the room is locked right NOW - distinct from `lockable`,
+// which only says it can be - and `locked_until` is the UTC RFC-3339 instant the
+// lock lifts, empty meaning it stands until an admin unlocks the room by hand
+// (how every lock behaved before this). Existing rooms therefore come out
+// unlocked with no expiry, which is what they all were. Idempotent.
+func migrateTeaRoomLocks(db *sql.DB) error {
+	if !tableExists(db, "tea_rooms") {
+		return nil
+	}
+	cols := []struct{ column, spec string }{
+		{"locked", "INTEGER NOT NULL DEFAULT 0"},
+		{"locked_until", "TEXT NOT NULL DEFAULT ''"},
+	}
+	for _, c := range cols {
+		if hasColumn(db, "tea_rooms", c.column) {
+			continue
+		}
+		if _, err := db.Exec(fmt.Sprintf("ALTER TABLE tea_rooms ADD COLUMN %s %s", c.column, c.spec)); err != nil {
+			return fmt.Errorf("add tea_rooms.%s: %w", c.column, err)
+		}
 	}
 	return nil
 }
@@ -2485,6 +2576,8 @@ const festivalStallsTableSQL = `CREATE TABLE IF NOT EXISTS festival_stalls (
 	map_id INTEGER NOT NULL,
 	shape TEXT NOT NULL DEFAULT 'rect',
 	color TEXT NOT NULL DEFAULT '',
+	selection_color TEXT NOT NULL DEFAULT '',
+	text_color TEXT NOT NULL DEFAULT '',
 	pos_x REAL NOT NULL DEFAULT 0,
 	pos_y REAL NOT NULL DEFAULT 0,
 	width REAL NOT NULL DEFAULT 12,
@@ -2505,6 +2598,7 @@ const festivalStallOccupantsTableSQL = `CREATE TABLE IF NOT EXISTS festival_stal
 	affiliate_id INTEGER,
 	title TEXT NOT NULL DEFAULT '',
 	description TEXT NOT NULL DEFAULT '',
+	event_carrd TEXT NOT NULL DEFAULT '',
 	stall_type TEXT NOT NULL DEFAULT 'other',
 	type_label TEXT NOT NULL DEFAULT '',
 	times TEXT NOT NULL DEFAULT '[]',

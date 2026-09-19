@@ -25,7 +25,7 @@ import ImagePicker from '@/components/common/ui/ImagePicker.vue'
 import PlacementEditor, { type PlaceItem } from './PlacementEditor.vue'
 import { toStampCount, useStampRalliesStore } from '@/stores/stampRallies'
 import { STAMP_TYPES, stampTypeLabel } from '@/lib/stampcard'
-import { stallCaption } from '@/lib/festivalmap'
+import { occupantListLabel, stallCaption } from '@/lib/festivalmap'
 import type { Placement, StampType } from '@/types/api'
 
 const emit = defineEmits<{ saved: []; cancel: [] }>()
@@ -366,7 +366,7 @@ function cancel(): void {
               >
                 <option value="">Pick a stall on the map</option>
                 <option v-for="o in store.mapStalls" :key="o.id" :value="o.id">
-                  {{ o.title || 'Untitled stall' }} ({{ stallCaption(o) || 'Other' }})
+                  {{ occupantListLabel(o) }} ({{ stallCaption(o) || 'Other' }})
                 </option>
               </select>
               <select

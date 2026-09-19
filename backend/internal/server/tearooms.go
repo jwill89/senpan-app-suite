@@ -1,10 +1,13 @@
 package server
 
 import (
+	"context"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 	"unicode"
 
 	"app-suite/internal/model"
@@ -81,7 +84,56 @@ func (req *teaRoomWriteRequest) validateAndSanitize(w http.ResponseWriter) bool 
 	t.Image = strings.TrimSpace(t.Image)
 	t.Color = strings.TrimSpace(t.Color)
 	t.Hashtags = normalizeHashtags(t.Hashtags)
+	until, ok := normalizeLockUntil(w, t.Locked, t.LockedUntil)
+	if !ok {
+		return false
+	}
+	t.LockedUntil = until
 	return true
+}
+
+// -- Room locks ---------------------------------------------------------------
+//
+// A room can be locked (booked out) either indefinitely - lifted when an admin
+// unlocks it, which is how locking has always worked - or until a set moment,
+// after which the background sweeper unlocks it and tells every admin client
+// (including the in-game plugin, which alerts its operator). `locked_until` is
+// therefore only ever read while `locked` is set, and unlocking clears it.
+
+// parseTeaRoomLockTime parses a lock expiry into a UTC instant. Values are stored
+// canonically (every write goes through normalizeLockUntil), so RFC-3339 is the
+// only accepted form; anything else is a client sending something we never wrote.
+// Returns the instant and whether it parsed.
+func parseTeaRoomLockTime(s string) (time.Time, bool) {
+	t, err := time.Parse(time.RFC3339, s)
+	if err != nil {
+		return time.Time{}, false
+	}
+	return t.UTC(), true
+}
+
+// normalizeLockUntil canonicalizes a lock expiry for storage and reports whether
+// it was acceptable, writing the 400 itself when it wasn't. An unlocked room has
+// no expiry (so a stale time can't outlive the lock it belonged to), and a locked
+// room may have none - that is the manual-unlock lock. A time already in the past
+// is accepted rather than refused: it simply means the lock is over, and the next
+// sweep lifts it. Clients guard against typing one, but a form submitted a moment
+// after its own expiry passed must not fail on an unrelated edit.
+func normalizeLockUntil(w http.ResponseWriter, locked bool, lockedUntil string) (string, bool) {
+	if !locked {
+		return "", true
+	}
+	s := strings.TrimSpace(lockedUntil)
+	if s == "" {
+		return "", true
+	}
+	at, ok := parseTeaRoomLockTime(s)
+	if !ok {
+		writeError(w, http.StatusBadRequest,
+			"The unlock time must be a date and time (RFC-3339, e.g. 2026-06-13T20:00:00Z).")
+		return "", false
+	}
+	return at.Format(time.RFC3339), true
 }
 
 // checkTeaRoomNumberUnique reports whether room_number is free to use (unique, or
@@ -174,13 +226,21 @@ func (s *Server) handleTeaRoomUpdate(w http.ResponseWriter, r *http.Request) {
 
 // teaRoomPatchRequest is the JSON body for PATCH /api/tea-rooms/{id}: a partial
 // update of the quick-toggle flags. Absent (nil) fields are left unchanged, so the
-// same endpoint backs both the open/closed and the discounted toggles.
+// same endpoint backs the open/closed and discounted toggles and the lock.
+//
+// `locked` and `locked_until` are separate fields rather than one, so a lock can
+// be placed and re-timed independently: sending `locked` alone locks (or unlocks)
+// the room, `locked_until` alone re-times a lock already in place, and the two
+// together do both. A lock with no `locked_until` stands until someone unlocks it.
 type teaRoomPatchRequest struct {
-	Open       *bool `json:"open"`
-	Discounted *bool `json:"discounted"`
+	Open        *bool   `json:"open"`
+	Discounted  *bool   `json:"discounted"`
+	Locked      *bool   `json:"locked"`
+	LockedUntil *string `json:"locked_until"`
 }
 
-// handleTeaRoomPatch toggles a room's open and/or discounted flag.
+// handleTeaRoomPatch toggles a room's open and/or discounted flag, and sets or
+// lifts its lock.
 //
 //	Endpoint:  PATCH /api/tea-rooms/{id}
 //	Auth:      admin, or a user granted teahouse-tea-rooms
@@ -207,6 +267,24 @@ func (s *Server) handleTeaRoomPatch(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "Invalid JSON")
 		return
 	}
+	// Work out the lock BEFORE writing anything: the flags below each go to the
+	// database on their own, so a request that toggles a flag and carries an
+	// unreadable unlock time would otherwise 400 with the toggle already applied.
+	//
+	// Start from what the room already is, so either lock field can be sent alone.
+	// An unlocked room never carries an expiry (SetTeaRoomLock and the sweeper both
+	// clear it), so locking without a time always starts from "no expiry".
+	locked, lockedUntil := existing.Locked, existing.LockedUntil
+	if req.Locked != nil {
+		locked = *req.Locked
+	}
+	if req.LockedUntil != nil {
+		lockedUntil = *req.LockedUntil
+	}
+	if lockedUntil, ok = normalizeLockUntil(w, locked, lockedUntil); !ok {
+		return
+	}
+
 	if req.Open != nil {
 		if err := s.store.SetTeaRoomOpen(id, *req.Open); err != nil {
 			writeInternalError(w, "toggle tea room open", err)
@@ -216,6 +294,12 @@ func (s *Server) handleTeaRoomPatch(w http.ResponseWriter, r *http.Request) {
 	if req.Discounted != nil {
 		if err := s.store.SetTeaRoomDiscounted(id, *req.Discounted); err != nil {
 			writeInternalError(w, "toggle tea room discounted", err)
+			return
+		}
+	}
+	if req.Locked != nil || req.LockedUntil != nil {
+		if err := s.store.SetTeaRoomLock(id, locked, lockedUntil); err != nil {
+			writeInternalError(w, "set tea room lock", err)
 			return
 		}
 	}
@@ -303,6 +387,78 @@ func (s *Server) handleTeaRoomPost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, model.TeaRoomResponse{TeaRoom: room})
+}
+
+// -- Lock-expiry scheduler ----------------------------------------------------
+
+// teaRoomLockSchedulerInterval is how often the sweeper looks for locks that have
+// run out. Shorter than the announcement scheduler's 30s: an expiry is a moment
+// staff are waiting on (the plugin alerts the operator in game the instant it
+// lands), and the sweep is one small query against a table of a few dozen rows.
+const teaRoomLockSchedulerInterval = 15 * time.Second
+
+// RunTeaRoomLockScheduler lifts tea-room locks whose set expiry has passed, until
+// ctx is cancelled. Safe to call in a goroutine.
+func (s *Server) RunTeaRoomLockScheduler(ctx context.Context) {
+	runScheduler(ctx, "tea-room-locks", teaRoomLockSchedulerInterval, s.expireDueTeaRoomLocks)
+}
+
+// expireDueTeaRoomLocks unlocks every room whose lock expiry has arrived and
+// announces each one. Locks with no expiry are never touched - they are the ones
+// waiting on a person. Like the announcement sweep, it runs on startup too, so a
+// lock that ran out while the process was down is lifted as soon as it is back.
+func (s *Server) expireDueTeaRoomLocks() {
+	rooms, err := s.store.ExpiringTeaRoomLocks()
+	if err != nil {
+		slog.Error("tea room lock scheduler: load expiring locks", "error", err)
+		return
+	}
+	now := time.Now()
+	for _, room := range rooms {
+		at, ok := parseTeaRoomLockTime(room.LockedUntil)
+		// An expiry we can't read is not one we can honour, and leaving it would
+		// wedge the room locked while logging the same complaint every sweep. Treat
+		// it as due: the room unlocks, the warning is written once, and the bad
+		// value is gone with it.
+		if !ok {
+			slog.Warn("tea room lock has an unreadable expiry; unlocking it",
+				"id", room.ID, "name", room.Name, "locked_until", room.LockedUntil)
+		} else if now.Before(at) {
+			continue
+		}
+		applied, err := s.store.ExpireTeaRoomLock(room.ID, room.LockedUntil)
+		if err != nil {
+			slog.Error("tea room lock scheduler: expire lock", "id", room.ID, "error", err)
+			continue
+		}
+		if !applied {
+			// An admin re-locked or re-timed the room while this sweep was running;
+			// their lock wins over one judged from a snapshot taken before it.
+			slog.Info("tea room lock changed during the sweep; leaving the admin's lock alone",
+				"id", room.ID, "name", room.Name)
+			continue
+		}
+		slog.Info("tea room lock expired", "id", room.ID, "name", room.Name, "room_number", room.RoomNumber)
+		s.broadcastTeaRoomUnlocked(room)
+		// The rooms list itself changed, and nothing here went through the admin
+		// mutation middleware (no request made this happen), so invalidate it too.
+		s.broadcastResourceChanged("tea-rooms")
+	}
+}
+
+// broadcastTeaRoomUnlocked tells admin clients that a room's lock has just run
+// out. It carries the room's name and number rather than only its id because the
+// consumers announce it rather than render it: the in-game plugin alerts its
+// operator by name the moment this lands, and looking the name up would mean a
+// REST round-trip for a room the server has right here. Admin channel only - the
+// tea-room list is permission-gated, and no player client has any use for it.
+func (s *Server) broadcastTeaRoomUnlocked(room model.TeaRoom) {
+	s.hub.BroadcastToAdmins(struct {
+		Type       string `json:"type"`
+		ID         int64  `json:"id"`
+		Name       string `json:"name"`
+		RoomNumber string `json:"room_number"`
+	}{Type: "tea_room_unlocked", ID: room.ID, Name: room.Name, RoomNumber: room.RoomNumber})
 }
 
 // -- Shared Discord webhook --------------------------------------------------

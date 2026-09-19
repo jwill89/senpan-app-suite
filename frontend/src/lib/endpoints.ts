@@ -566,9 +566,22 @@ export const endpoints = {
     /** PUT /api/tea-rooms/{id} - full replace of the editable fields. */
     update: (id: number, room: Record<string, unknown>) =>
       apiPut<TeaRoomResponse>(`tea-rooms/${id}`, { tea_room: room }),
-    /** PATCH /api/tea-rooms/{id} - toggle the open and/or discounted flag. */
-    patch: (id: number, fields: { open?: boolean; discounted?: boolean }) =>
-      apiPatch<TeaRoomResponse>(`tea-rooms/${id}`, fields),
+    /**
+     * PATCH /api/tea-rooms/{id} - toggle the open/discounted flags or set the lock.
+     * `locked` and `locked_until` move independently: `locked` alone locks or
+     * unlocks, `locked_until` alone re-times a lock already in place. A UTC
+     * RFC-3339 `locked_until` expires the lock server-side; '' leaves it standing
+     * until someone unlocks the room.
+     */
+    patch: (
+      id: number,
+      fields: {
+        open?: boolean
+        discounted?: boolean
+        locked?: boolean
+        locked_until?: string
+      },
+    ) => apiPatch<TeaRoomResponse>(`tea-rooms/${id}`, fields),
     /** DELETE /api/tea-rooms/{id} - delete a room (204). */
     delete: (id: number) => apiDelete(`tea-rooms/${id}`),
     /** POST /api/tea-rooms/reorder - persist a new drag order (top-first ids). */

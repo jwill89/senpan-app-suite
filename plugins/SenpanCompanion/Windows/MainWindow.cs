@@ -87,7 +87,7 @@ public sealed class MainWindow : Window, IDisposable
         this.game = new BingoGameTab(api, config, live, this.cardCache);
         this.cards = new BingoCardsTab(api, nearby, config, chat, this.cardCache);
         this.winnersLog = new BingoWinnersTab(api);
-        this.teaRooms = new TeaRoomsTab(api);
+        this.teaRooms = new TeaRoomsTab(api, live);
         this.raffle = new RaffleTab(api, nearby);
         this.garapon = new GaraponTab(api, nearby, config, chat);
         this.stampRally = new StampRallyTab(api, nearby, config, chat);
@@ -122,6 +122,9 @@ public sealed class MainWindow : Window, IDisposable
     public void Dispose()
     {
         this.game.Dispose();
+        // The Tea Rooms page listens for expiring locks whether or not it is on
+        // screen, so it holds live-event subscriptions to let go of.
+        this.teaRooms.Dispose();
         this.cardCache.Dispose();
         this.fontHandle.Dispose();
     }

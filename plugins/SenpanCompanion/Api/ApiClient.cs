@@ -253,6 +253,17 @@ public sealed class ApiClient : IDisposable
     public Task<TeaRoomResponse> SetTeaRoomDiscountedAsync(long id, bool discounted, CancellationToken ct = default)
         => SendAsync<TeaRoomResponse>(HttpMethod.Patch, $"api/tea-rooms/{id}", new { discounted }, ct);
 
+    /// <summary>
+    /// Locks or unlocks a room. <paramref name="lockedUntil"/> is a UTC RFC-3339
+    /// instant the server lifts the lock at, or empty for a lock that stands until
+    /// somebody unlocks the room. Both fields are always sent: locking after an
+    /// earlier timed lock must not inherit its leftover time, and unlocking clears
+    /// it server-side anyway.
+    /// </summary>
+    public Task<TeaRoomResponse> SetTeaRoomLockAsync(long id, bool locked, string lockedUntil, CancellationToken ct = default)
+        => SendAsync<TeaRoomResponse>(HttpMethod.Patch, $"api/tea-rooms/{id}",
+            new { locked, locked_until = lockedUntil }, ct);
+
     // -- Transport ------------------------------------------------------------
 
     private async Task<T> SendAsync<T>(HttpMethod method, string path, object? body, CancellationToken ct)

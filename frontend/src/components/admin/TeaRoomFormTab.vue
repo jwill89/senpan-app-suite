@@ -1,9 +1,9 @@
 <script setup lang="ts">
 /**
  * Admin Tea Room create/edit form. Name, room number, per-half-hour gil cost,
- * hashtags, markdown description, the seasonal/open/lockable/discounted flags, an
- * image picker (stored as an absolute URL for the Discord embed), and an embed
- * accent colour.
+ * hashtags, markdown description, the seasonal/open/lockable/discounted flags, the
+ * lock and its optional unlock time, an image picker (stored as an absolute URL
+ * for the Discord embed), and an embed accent colour.
  *
  * Hosted as a Back sub-page of the Tea Rooms manager (TeaRoomsTab): emits `saved`
  * on a successful save and `cancel` to return to the list.
@@ -156,7 +156,23 @@ function cancel(): void {
             <input v-model="store.teaRoomForm.discounted" type="checkbox" />
             Discounted (50% off)
           </label>
+          <label class="checkbox-inline">
+            <input v-model="store.teaRoomForm.locked" type="checkbox" />
+            Locked
+          </label>
         </div>
+      </FormField>
+
+      <FormField
+        v-if="store.teaRoomForm.locked"
+        label="Unlock at"
+        help="When the lock lifts on its own. Leave empty to keep the room locked until someone unlocks it."
+      >
+        <input
+          v-model="store.teaRoomForm.locked_until"
+          type="datetime-local"
+          aria-label="Unlock at"
+        />
       </FormField>
 
       <FormField

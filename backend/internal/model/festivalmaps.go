@@ -128,12 +128,20 @@ type FestivalMap struct {
 // once, in one place, whatever the week's rota, instead of two stalls stacked on
 // the same coordinates fighting for the same pixels.
 type FestivalStall struct {
-	ID        int64  `json:"id"`
-	MapID     int64  `json:"map_id"`
-	Shape     string `json:"shape"` // "circle" | "rect"
-	Color     string `json:"color"` // "#rrggbb" ("" = the first occupant's type default)
-	Placement `json:"placement"`
-	SortOrder int `json:"sort_order"`
+	ID    int64  `json:"id"`
+	MapID int64  `json:"map_id"`
+	Shape string `json:"shape"` // "circle" | "rect"
+	Color string `json:"color"` // "#rrggbb" ("" = the first occupant's type default)
+	// TextColor is the colour this pitch's label is drawn in. Its own setting
+	// beside Color, because a label that reads on a pale fill disappears on a deep
+	// one. "" = white, which is what most fills want.
+	TextColor string `json:"text_color"`
+	// SelectionColor is the halo drawn around this pitch when a visitor taps it.
+	// Its own colour rather than Color, so the ring can be made to contrast with
+	// the fill instead of vanishing into it. "" = the app's default highlight.
+	SelectionColor string `json:"selection_color"`
+	Placement      `json:"placement"`
+	SortOrder      int `json:"sort_order"`
 
 	// Occupants is who stands here, in display order. Never empty on a stored
 	// pitch - a pitch nobody occupies is a shape with nothing to say, and is
@@ -151,9 +159,16 @@ type FestivalStallOccupant struct {
 	StallID       int64  `json:"stall_id"`
 	AffiliateID   *int64 `json:"affiliate_id"`   // nil = Senpan Tea House (default)
 	AffiliateName string `json:"affiliate_name"` // joined for display ("" -> "Senpan Tea House")
-	Title         string `json:"title"`
-	Description   string `json:"description"` // markdown
-	StallType     string `json:"stall_type"`  // see the StallType* constants
+	// Title is OPTIONAL. The map labels a pitch by its AFFILIATE; a title only
+	// adds detail alongside it in the info panel.
+	Title       string `json:"title"`
+	Description string `json:"description"` // markdown
+	// EventCarrd is this occupant's own event page. Per occupant, not per pitch: a
+	// pitch that changes hands between days has a different page each day. "" hides
+	// the button rather than falling back to the affiliate's own link, which sits
+	// beside it and would otherwise be duplicated.
+	EventCarrd string `json:"event_carrd"`
+	StallType  string `json:"stall_type"` // see the StallType* constants
 	// TypeLabel is the caption drawn under the title when StallType is "other" -
 	// "Omikuji", "Art Raffle", "Food & Fortunes". It is kept whatever the type, so
 	// flipping to a named type and back doesn't lose the wording, but only an
@@ -221,12 +236,14 @@ type PublicStallAffiliate struct {
 // that is open right now - the badge follows the occupant, not the pitch, since
 // Flora's game stamp isn't The Great Below's.
 type PublicStallOccupant struct {
-	ID          int64       `json:"id"`
-	Title       string      `json:"title"`
-	Description string      `json:"description"` // markdown
-	StallType   string      `json:"stall_type"`
-	TypeLabel   string      `json:"type_label"`
-	Times       []EventTime `json:"times"`
+	ID          int64  `json:"id"`
+	Title       string `json:"title"` // optional; the map labels by affiliate
+	Description string `json:"description"`
+	// EventCarrd is this occupant's own event page ("" = none; no fallback).
+	EventCarrd string      `json:"event_carrd,omitempty"`
+	StallType  string      `json:"stall_type"`
+	TypeLabel  string      `json:"type_label"`
+	Times      []EventTime `json:"times"`
 	// IsOpen reports that now falls inside one of this occupant's time ranges (or
 	// inside the festival's, when it keeps no separate hours).
 	IsOpen bool `json:"is_open"`
@@ -258,10 +275,12 @@ type PublicStallRaffle struct {
 // which occupant's name to lead with (see Occupants) rather than stacking two
 // stalls on the same coordinates.
 type PublicFestivalStall struct {
-	ID        int64  `json:"id"`
-	Shape     string `json:"shape"`
-	Color     string `json:"color"`
-	Placement `json:"placement"`
+	ID             int64  `json:"id"`
+	Shape          string `json:"shape"`
+	Color          string `json:"color"`
+	TextColor      string `json:"text_color"`
+	SelectionColor string `json:"selection_color"`
+	Placement      `json:"placement"`
 	// Occupants is who stands here, in display order - one entry for a pitch that
 	// keeps the same business all festival, several when it changes hands by day.
 	Occupants []PublicStallOccupant `json:"occupants"`

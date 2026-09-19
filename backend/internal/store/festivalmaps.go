@@ -106,7 +106,7 @@ func (s *Store) getFestivalMapWhere(where string, arg any) (*model.FestivalMap, 
 // booth, resolved for display on the frontend). Occupants are fetched for the
 // whole map in one query rather than per pitch.
 func (s *Store) ListFestivalStalls(mapID int64) ([]model.FestivalStall, error) {
-	rows, err := s.db.Query(`SELECT id, map_id, shape, color,
+	rows, err := s.db.Query(`SELECT id, map_id, shape, color, selection_color, text_color,
 			pos_x, pos_y, width, height, rotation, sort_order
 		FROM festival_stalls WHERE map_id = ? ORDER BY sort_order ASC, id ASC`, mapID)
 	if err != nil {
@@ -117,7 +117,7 @@ func (s *Store) ListFestivalStalls(mapID int64) ([]model.FestivalStall, error) {
 	stalls := make([]model.FestivalStall, 0)
 	for rows.Next() {
 		var st model.FestivalStall
-		if err := rows.Scan(&st.ID, &st.MapID, &st.Shape, &st.Color,
+		if err := rows.Scan(&st.ID, &st.MapID, &st.Shape, &st.Color, &st.SelectionColor, &st.TextColor,
 			&st.X, &st.Y, &st.Width, &st.Height, &st.Rotation, &st.SortOrder); err != nil {
 			return nil, err
 		}
@@ -145,7 +145,7 @@ func (s *Store) ListFestivalStalls(mapID int64) ([]model.FestivalStall, error) {
 // keyed by pitch id - one query for the whole plan rather than one per pitch.
 func (s *Store) listOccupantsForMap(mapID int64) (map[int64][]model.FestivalStallOccupant, error) {
 	rows, err := s.db.Query(`SELECT o.id, o.stall_id, o.affiliate_id, COALESCE(a.name, ''),
-			o.title, o.description, o.stall_type, o.type_label, o.times, o.sort_order
+			o.title, o.description, o.event_carrd, o.stall_type, o.type_label, o.times, o.sort_order
 		FROM festival_stall_occupants o
 		JOIN festival_stalls st ON st.id = o.stall_id
 		LEFT JOIN affiliates a ON a.id = o.affiliate_id
@@ -161,7 +161,8 @@ func (s *Store) listOccupantsForMap(mapID int64) (map[int64][]model.FestivalStal
 		var affiliateID sql.NullInt64
 		var times string
 		if err := rows.Scan(&o.ID, &o.StallID, &affiliateID, &o.AffiliateName,
-			&o.Title, &o.Description, &o.StallType, &o.TypeLabel, &times, &o.SortOrder); err != nil {
+			&o.Title, &o.Description, &o.EventCarrd, &o.StallType, &o.TypeLabel,
+			&times, &o.SortOrder); err != nil {
 			return nil, err
 		}
 		if affiliateID.Valid {
@@ -287,9 +288,10 @@ func (s *Store) UpdateFestivalMap(m *model.FestivalMap, replaceStalls bool) erro
 // occupants, returning its ID.
 func insertFestivalStall(tx *sql.Tx, mapID int64, st model.FestivalStall, sortOrder int) (int64, error) {
 	res, err := tx.Exec(`INSERT INTO festival_stalls
-			(map_id, shape, color, pos_x, pos_y, width, height, rotation, sort_order)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		mapID, st.Shape, st.Color, st.X, st.Y, st.Width, st.Height, st.Rotation, sortOrder)
+			(map_id, shape, color, selection_color, text_color, pos_x, pos_y, width, height, rotation, sort_order)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		mapID, st.Shape, st.Color, st.SelectionColor, st.TextColor,
+		st.X, st.Y, st.Width, st.Height, st.Rotation, sortOrder)
 	if err != nil {
 		return 0, err
 	}
@@ -311,10 +313,11 @@ func insertFestivalStall(tx *sql.Tx, mapID int64, st model.FestivalStall, sortOr
 // also catches the benign race where a concurrent save deleted the stall, which
 // otherwise resurrects its occupants as orphans.
 func updateFestivalStall(tx *sql.Tx, mapID int64, st model.FestivalStall, sortOrder int) error {
-	res, err := tx.Exec(`UPDATE festival_stalls SET shape = ?, color = ?,
+	res, err := tx.Exec(`UPDATE festival_stalls SET shape = ?, color = ?, selection_color = ?, text_color = ?,
 			pos_x = ?, pos_y = ?, width = ?, height = ?, rotation = ?, sort_order = ?
 		WHERE id = ? AND map_id = ?`,
-		st.Shape, st.Color, st.X, st.Y, st.Width, st.Height, st.Rotation, sortOrder,
+		st.Shape, st.Color, st.SelectionColor, st.TextColor,
+		st.X, st.Y, st.Width, st.Height, st.Rotation, sortOrder,
 		st.ID, mapID)
 	if err != nil {
 		return err
@@ -338,21 +341,21 @@ func replaceStallOccupants(tx *sql.Tx, stallID int64, occupants []model.Festival
 	for i, o := range occupants {
 		if o.ID > 0 {
 			if _, err := tx.Exec(`UPDATE festival_stall_occupants
-					SET affiliate_id = ?, title = ?, description = ?, stall_type = ?,
-						type_label = ?, times = ?, sort_order = ?
+					SET affiliate_id = ?, title = ?, description = ?, event_carrd = ?,
+						stall_type = ?, type_label = ?, times = ?, sort_order = ?
 					WHERE id = ? AND stall_id = ?`,
-				nullableID(o.AffiliateID), o.Title, o.Description, o.StallType,
-				o.TypeLabel, encodeEventTimes(o.Times), i, o.ID, stallID); err != nil {
+				nullableID(o.AffiliateID), o.Title, o.Description, o.EventCarrd,
+				o.StallType, o.TypeLabel, encodeEventTimes(o.Times), i, o.ID, stallID); err != nil {
 				return err
 			}
 			keep[o.ID] = true
 			continue
 		}
 		res, err := tx.Exec(`INSERT INTO festival_stall_occupants
-				(stall_id, affiliate_id, title, description, stall_type, type_label, times, sort_order)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-			stallID, nullableID(o.AffiliateID), o.Title, o.Description, o.StallType,
-			o.TypeLabel, encodeEventTimes(o.Times), i)
+				(stall_id, affiliate_id, title, description, event_carrd, stall_type, type_label, times, sort_order)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			stallID, nullableID(o.AffiliateID), o.Title, o.Description, o.EventCarrd,
+			o.StallType, o.TypeLabel, encodeEventTimes(o.Times), i)
 		if err != nil {
 			return err
 		}

@@ -42,6 +42,181 @@ The format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## Frontend
 
+### [3.26.0] - 2026-09-05
+
+Requires backend 3.23.0.
+
+#### Added
+
+- **A tea room can be locked, and can unlock itself.** Locking a room is now a
+  button on its row rather than something to describe in a note somewhere, and it
+  asks when the lock should lift. Give it a time and the server unlocks the room at
+  that moment; leave it blank and the room stays locked until somebody unlocks it,
+  which is what a lock has always meant here. The room's row says which of the two
+  it is - "Locked until 8:00 PM" or just "Locked" - so the list answers "is this
+  free yet?" without anyone having to remember what was agreed. The same pair of
+  fields sits on the room's edit form, beside the other status flags, and the
+  unlock time is entered in your own timezone whatever timezone the person who set
+  it was in.
+
+### [3.25.0] - 2026-08-31
+
+Requires backend 3.22.0.
+
+#### Added
+
+- **A festival map can be embedded on another site.** A published map's admin page
+  hands out an `<iframe>` snippet to paste into a Carrd, or anywhere else that takes
+  HTML. What lands there is the real map rather than a picture of one - panning,
+  zoom, the day switcher and every stall's details all work inside the frame - and
+  because it reads the same published map, a stall added here reaches every site the
+  snippet was pasted into without anyone repasting anything. The embed brings none
+  of our page with it: no header, no description, no footer, since the host page has
+  its own of each. Links inside an embedded map open in a new tab, so following one
+  never replaces the page a visitor was reading with ours squeezed into a box sized
+  for a map. It exposes nothing new either - the same public map, from the same
+  endpoint, so an unpublished map has no embed.
+
+#### Fixed
+
+- **The public festival map no longer opens cropped, and can be dragged.** The
+  viewport is a fixed shape while the map takes its height from the plan image, so
+  any plan taller than that shape ran off the bottom. Three symptoms, one cause:
+  panning was measured against the viewport instead of the map, so at the opening
+  zoom the drag range was zero, and "Fit" reset to the same crop because the zoom
+  floor of 1 could not reach the whole plan. The map is now measured, opens fitted,
+  drags as far as it actually overflows, and centres on an axis where it is
+  narrower than the viewport.
+- **The map is a self-contained widget.** Tapping a stall now opens its details in
+  a panel over the map rather than further down the page, the zoom / fit / day
+  controls sit on the map itself, and the legend is gone. Everything the map needs
+  is inside the map, so it stands on its own with no page around it to lean on.
+- **The details panel can be moved and resized.** It necessarily covers part of the
+  plan, and the stall being read about is as likely to be underneath it as not - so
+  it drags by the bar at its top (kept within the map, never off it) and resizes
+  from its corner. The bar takes the surface one step below the panel's own, so it
+  reads as the part you grab rather than as the first line of the content, and the
+  close control is an icon in that bar instead of a boxed button in the corner.
+- **Closing and dragging the stall panel work again.** The close button sat inside
+  the panel's drag bar, so pressing it started a drag instead - which swallowed the
+  click - and the drag itself measured from the top of the widget rather than the
+  top of the plan, so the panel jumped down by the height of the toolbar above it.
+- **A vendor not there on the day you are viewing is gone, not faded.** A stall
+  that changes hands still showed both names under a day filter, and a visitor
+  reads the stall, not the opacity. The combined form now appears only when two
+  vendors really are there on the same day.
+- **A vendor is placed on the day it actually belongs to.** Festival days are
+  entered as broad spans that run into one another - a "Day 1" ending at 7:35pm the
+  following evening, with "Day 2" already begun at 7:39pm - so a vendor booked for
+  Day 1 clipped the start of Day 2 by nine minutes. Counting that as "present on Day
+  2" put the vendor on both: it showed under the Day 2 filter and named no day at
+  all, because it looked like it was there throughout. Each of a vendor's time
+  ranges now belongs to the ONE day it overlaps most.
+- **A stall's day shows even when its vendors' hours are unnamed.** The label came
+  from the vendor's own time ranges, which are usually left unlabelled because the
+  FESTIVAL is what names its days. The day a vendor belongs to now names it.
+- **The map controls sit in their own bar above the plan.** Floating over it, they
+  covered whatever was underneath - and the top of a floor plan is exactly where
+  stalls tend to be. The bar costs a strip of height once and obscures nothing.
+- **The stall panel opens on the right and is only as tall as it needs to be.** It
+  was a full-height column against the left edge whatever it held, so a stall with
+  two lines of detail took the whole side of the map.
+- **The "drag to move" hint is a wash over the whole plan**, the way a web map
+  explains itself, rather than a note in the corner - which is exactly the place an
+  eye slides past. Dimming the thing being explained is what makes the sentence
+  unmissable, and it clears itself again on the first interaction with the map, or
+  after seven seconds if there is none. It never intercepts anything: the first drag
+  both clears the hint and moves the map, rather than being spent on the overlay.
+- **A stamp rally stall is marked with a stamp icon, not the stamp's artwork.** A
+  rally stamp is often a picture of food, and printed on a stall it read as a menu -
+  a visitor took it for what the stall serves rather than for something to collect.
+  The plan now carries one consistent mark, in that stall's own label colour, and
+  the artwork stays where it is actually explained: in the panel the stall opens,
+  beside the rally's name. The mark also follows rally membership rather than
+  whether artwork has been uploaded, so a stall whose stamp has no image yet is
+  still marked. It is drawn at about the height of the stall's own label text - a
+  mark only has to be noticed, where artwork had to be recognisable as a picture -
+  and on a round stall it sits at the top of the disc, where the label leaves room,
+  rather than over the name.
+- **A festival time no longer repeats the date on its end.** "Sun, Aug 30, 2026,
+  10:00 PM - 2:00 AM" rather than a second full date for the far side of midnight:
+  an evening that runs late is one sitting, and dating both ends read as two
+  separate things.
+- **Per-stall settings save from the map editor.** The booth page link, the
+  selection outline colour and the label colour were all set in the editor, saved
+  without complaint, and gone on reload: the save built its request from a
+  hand-maintained list of fields that none of the three had been added to. The
+  request is now built from the form itself, so a field the editor gains reaches
+  the server without anyone remembering to add it in a second place.
+- **A shared stall's tenants are no longer cut off.** The label's size ceiling was
+  written for one tenant - roughly a name and a caption - so a stall held by two
+  overflowed and the label, which clips rather than spills, simply cut the second
+  one short. The ceiling now scales with how many tenants share the stall: a normal
+  stall is untouched, a shared one shrinks only as far as it must (about 11% here,
+  not half).
+- **A stamp on a round stall sits on the stall.** It was pinned to the corner of
+  the stall's box, which for a circle is outside the disc, leaving the stamp
+  floating in open space beside the stall it belonged to.
+- **Two tenants sharing a stall have daylight between them** rather than the second
+  name reading as a third line of the first.
+- **A day is named on a stall only when it means something.** A stall whose
+  occupant is there for the whole festival was still labelled "(Day 1)", because
+  the text came from the title an admin typed rather than from the schedule. The
+  schedule now decides: the day shows only for an occupant who is NOT there every
+  day. On a one-day festival it never shows, since naming the only day says
+  nothing. Where a festival declares no days of its own, the stall's own tenants
+  define them between them - which is what a shared stall needs, since its second
+  tenant rarely has the day typed into its title. The wording is still the admin's
+  where they wrote one, and otherwise comes from the hours' own labels.
+- **The stall type is back on the map.** It was dropped from any stall whose title
+  carried a day - the two were wired as alternatives when they are independent. It
+  now sits under the name and any day, in a lighter weight than them, and the whole
+  label is heavier than before so it reads over a coloured fill.
+- **The panel leads with what is needed first**: whether the stall is open on its
+  own row, then its type beside a shop icon, then when it is open, then the
+  details, then its links - which now sit on one line at the panel's default width
+  instead of breaking one-then-two. Status, type and hours are spaced as one group
+  and the prose is pushed clear of them, so the panel reads as two blocks rather
+  than five evenly spaced lines.
+- **Festival datetimes read like dates.** "Sun, Aug 30, 2026, 8:00 PM - 1:00 AM
+  EST" in place of "8/30/2026, 8:00:00 PM to 8/31/2026, 1:00:00 AM" - seconds
+  nobody set, and the date repeated for what a reader thinks of as one evening. An
+  evening that runs past midnight states its date once; a range that genuinely
+  spans days still carries both. Festival pages only; the rest of the app keeps its
+  own formats.
+- **The map opens fitted, instead of a few percent small inside its own frame.**
+  The frame takes its shape from the plan, so until the plan's image has loaded it
+  is still the fallback shape - and the fit was measured against that. It came out
+  at exactly the fallback's aspect over the plan's: a 3:2 plan opened at 0.9375,
+  visibly inset, and pressing "Fit" (which measures again, by then against the right
+  frame) was the only thing that put it right. The measurement it was spent on
+  arrives first whenever the plan is already in the browser's cache - the ordinary
+  case for a second visit - which is why it looked intermittent. The opening fit now
+  waits for the frame to have the plan's shape.
+- **The map frame now takes the plan's own shape, and stops at its edges.** It was
+  a fixed 16/10 whatever the plan was, so anything else had to be shrunk to fit and
+  sat letterboxed between empty margins. The height is still capped at 80% of the
+  window so a tall plan cannot push the page down - but capping the height alone
+  left the frame full width, which made it a different shape from the plan inside
+  it, with a band of dead background either side that no amount of fitting could
+  remove. The whole widget, toolbar included, is now held to the width that height
+  allows at the plan's own shape, so a map opens meeting its frame on all four
+  sides. Only a ribbon is still letterboxed - past 2:5 or 5:1, which is not a map
+  a person can read at any proportion.
+- **Selecting a stall is now obvious**: a 5px ring in that stall's own colour, held
+  5px clear of the shape.
+- **Line breaks in a description render as line breaks.** Raw HTML is escaped, so
+  text holding a literal "<br />" showed those characters to the reader. Break tags
+  are now turned into real newlines before parsing - one inert tag promoted to what
+  it always meant, with every other tag still escaped, and any shown inside code
+  left alone.
+- **Links styled as buttons no longer look half-underlined.** Button classes are
+  worn by anchors as often as by buttons; they now clear the underline, so a button
+  looks like a button. The Booth Page, Website and Discord buttons sit together at
+  the LEFT of the panel, on the same edge every line of text above them starts from
+  - pushed to the far right they read as belonging to the panel rather than to the
+  stall.
+
 ### [3.24.0] - 2026-08-28
 
 #### Changed
@@ -1546,6 +1721,83 @@ First tracked release - establishes versioning for the current production build.
 
 ## Backend
 
+### [3.23.0] - 2026-09-05
+
+A tea room's lock can now carry an unlock time the server honours by itself.
+
+#### Added
+
+- **Tea rooms have a lock, separate from being lockable.** `lockable` only ever
+  said a room _can_ be locked for a fee; nothing recorded that one _is_. Two new
+  fields do: `locked`, and `locked_until` for when it lifts. `PATCH
+  /api/tea-rooms/{id}` takes them the way it already takes the open and discount
+  toggles, and takes them independently - `locked` alone locks or unlocks a room,
+  `locked_until` alone re-times a lock already in place. Unlocking clears the
+  expiry, so a leftover time can never outlive the lock it belonged to. Both fields
+  ride along on the public rooms API, so an external site showing live availability
+  gets the lock with everything else. Schema v69; existing rooms come out unlocked
+  with no expiry, which is what they all were.
+- **A lock with an expiry lifts on its own, and says so.** A background sweeper
+  (15s, alongside the announcement and auto-draw schedulers) unlocks rooms whose
+  time has come and broadcasts `tea_room_unlocked` on the admin channel, carrying
+  the room's name and number - the in-game plugin alerts its operator off that
+  message, and looking the name up afterwards would be a round-trip for something
+  the server already had. Like the announcement sweep it also runs at startup, so a
+  lock that ran out while the process was down is lifted as soon as it is back. The
+  unlock is conditional on the expiry the sweep saw still being in place: an admin
+  who re-locks or re-times a room mid-sweep keeps their lock rather than having it
+  undone by a decision made from a stale snapshot. A lock with no expiry is never
+  touched - it is waiting on a person, not on the clock.
+
+### [3.22.0] - 2026-08-30
+
+Festival map fixes and three new per-stall fields.
+
+#### Added
+
+- **A per-stall label colour.** The stall's name was drawn in a fixed dark colour,
+  which only reads on a pale fill - a stall tinted anything deep left its own name
+  barely legible. Defaults to white, which suits most fills.
+
+- **A per-stall "selected outline" colour.** The ring drawn around a stall a
+  visitor taps is now its own colour rather than the fill's - a ring in the same
+  colour as the shape it surrounds is the one thing that cannot read as a
+  selection. Blank follows the site highlight.
+- **A per-occupant Booth Page link.** It sits on the occupant, not the stall,
+  because a stall that changes hands between days has a different booth page each
+  day. The button joins the affiliate's Website and Discord at the right of the
+  panel. Blank hides it; there is deliberately no fallback to the affiliate's own
+  link, which sits beside it.
+
+#### Changed
+
+- **A stall names its affiliate, and must.** The venue is an affiliate in its own
+  right now - with its own logo and links - so the form no longer offers a
+  hard-coded "Senpan Tea House (default)" beneath the real ones. The field starts
+  empty on "Select an affiliate..." and a map will not save until every stall has
+  one, because the map LABELS a stall by its affiliate and one saved without leaves
+  a blank shape on the plan.
+- **The admin map page shows the real map.** It drew its own copy of the plan in
+  its own markup, which drifted: it still labelled stalls by title long after the
+  map itself had moved to labelling by affiliate, so every untitled stall showed up
+  blank there. It now renders the SAME component the public map uses, so there is
+  one drawing of a festival map rather than two kept in step by hand.
+- **Saving a map leaves you on that map**, not back at the map picker several
+  clicks away - publishing it, or reading how it turned out, is the usual next
+  step. Cancelling still goes back where it came from.
+- **An untitled stall is named by its affiliate, not "Untitled stall".** A title is
+  optional and the map never uses one, so most stalls read as "Untitled stall" in
+  the editor, the admin stall list, and the raffle and stamp-rally pickers - naming
+  a stall after the fact that it has no name. Where there is no affiliate either,
+  its own title stands in; that used to be the venue's name, which drew a stall
+  titled "Atelier YAO" as "Senpan Tea House".
+- **A stall title is optional.** The map labels a stall by its AFFILIATE, which is
+  who a visitor is looking for - labelling by title left untitled stalls blank. A
+  title now adds detail beside the affiliate in the info panel, and its trailing
+  "(Day 1)" renders under the affiliate name on the map rather than beside it.
+- The stall info panel no longer repeats the affiliate name under the heading it
+  now leads, and no longer lists the affiliate's owners.
+
 ### [3.21.0] - 2026-08-28
 
 Also gives every system one way to record a participant, so the same person is
@@ -3040,6 +3292,35 @@ with a personal access token and is distributed through a Dalamud custom repo
 (`plugins/pluginmaster.json`). Versions use the four-part AssemblyVersion in
 `SenpanCompanion.csproj`. Entries below the current release were reconstructed
 from the `<Version>` history and commit messages.
+
+### [3.8.0.0] - 2026-09-05
+
+Locks a tea room from in game, and tells you when the lock runs out. Requires
+backend 3.23.0.
+
+#### Added
+
+- **Lock a room from the Tea Rooms page, with an unlock time.** The board gains a
+  Lock column beside Open and Discount. Locking opens a small prompt for when the
+  room should free up - typed as a local date and time, or filled in by a +30m /
+  +1h / +2h / +4h button, since "half an hour from now" is the usual answer and
+  nobody wants to work out the timestamp for it. Leave it blank and the room stays
+  locked until someone unlocks it. A locked row shows when it lifts, in your own
+  timezone.
+- **An expiring lock alerts you in game.** When the server lifts a lock, the
+  Companion plays a short two-note chime, shows a toast, and prints a line in your
+  own chat log, each naming the room - so you find out a room is free while looking
+  at the game, not by having this window open on the Tea Rooms page. All three are
+  purely local: the chat line is `IChatGui.Print` into your own log, which sends
+  nothing anywhere, and the chime is synthesized audio with no game interop, the
+  same as the winner chime.
+
+#### Fixed
+
+- **The room list corrects itself after a dropped connection.** Locks can expire
+  while the socket is down, and the pushes that said so are gone - leaving a list
+  that claims a room is still locked when it isn't. The page now reloads after a
+  reconnect, as the Bingo page already did.
 
 ### [3.7.0.0] - 2026-08-28
 

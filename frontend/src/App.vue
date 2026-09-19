@@ -29,8 +29,14 @@ const raffles = useRafflesStore()
 
 const { client: ws } = useWebSocket()
 
-/** Footer shows only on the public (non-admin) pages, not the admin dashboard/login. */
-const showFooter = computed(() => !String(route.name ?? '').startsWith('admin'))
+/**
+ * Footer shows only on the public (non-admin) pages, not the admin
+ * dashboard/login - and not on an embed, which is our document inside somebody
+ * else's page: our footer there would be a second one stacked inside theirs.
+ */
+const showFooter = computed(
+  () => !String(route.name ?? '').startsWith('admin') && !route.meta.embed,
+)
 
 // Drive the shared WebSocket from the active route via a *stable connection key*
 // rather than the raw route name, so the socket is (re)connected only when the

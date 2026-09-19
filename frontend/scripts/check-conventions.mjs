@@ -432,10 +432,10 @@ for (const t of themeableCss) {
   )
   const label = declsOf('.map-stall-label')
   if (label !== null) {
-    if (!/min\(\s*1em\s*,\s*[\d.]+cqh\s*\)/.test(label))
+    if (!/min\(\s*1em\s*,\s*(calc\(\s*)?[\d.]+cqh/.test(label))
       fail(
         'map label sizing',
-        '.map-stall-label must be `min(1em, <n>cqh)` - the pitch may cap the shared size but not replace it',
+        '.map-stall-label must be `min(1em, <n>cqh...)` - the pitch may cap the shared size but not replace it',
       )
     if (/font-size:\s*(clamp\()?[\d.]+cqh/.test(label))
       fail(

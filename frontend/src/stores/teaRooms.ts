@@ -1,7 +1,8 @@
 /**
  * Tea Rooms store: admin management (list + create/edit/delete) of bookable tea
- * rooms, drag-reorder of the list, quick open/discounted toggles, posting a room
- * to Discord, and the single shared Discord webhook the posts go to.
+ * rooms, drag-reorder of the list, quick open/discounted toggles, locking a room
+ * (with or without an unlock time), posting a room to Discord, and the single
+ * shared Discord webhook the posts go to.
  *
  * A cousin of the affiliates store (a flat single-table entity with an image
  * picked from the shared library) crossed with the announcements store (a
@@ -13,6 +14,7 @@ import { endpoints } from '@/lib/endpoints'
 import type { TeaRoom, TeaRoomForm } from '@/types/api'
 import { useUiStore } from './ui'
 import { withLoading } from '@/lib/withLoading'
+import { datetimeLocalToUtc, utcToDatetimeLocal } from '@/lib/datetime'
 
 /** A fresh, empty tea-room form (open by default, brand-pink accent). */
 function emptyForm(): TeaRoomForm {
@@ -29,6 +31,8 @@ function emptyForm(): TeaRoomForm {
     open: true,
     lockable: false,
     discounted: false,
+    locked: false,
+    locked_until: '',
     image: '',
     color: '#ff3131',
   }
@@ -85,6 +89,9 @@ export const useTeaRoomsStore = defineStore('teaRooms', () => {
       open: t.open,
       lockable: t.lockable,
       discounted: t.discounted,
+      locked: t.locked,
+      // Stored as a UTC instant; the form edits it as local wall-clock time.
+      locked_until: utcToDatetimeLocal(t.locked_until),
       image: t.image,
       color: t.color || '#ff3131',
     }
@@ -112,7 +119,10 @@ export const useTeaRoomsStore = defineStore('teaRooms', () => {
     }
     saving.value = true
     try {
-      const { id, ...payload } = f
+      // The form holds a local datetime-local value; the stored unlock time is a
+      // UTC instant, so the two clients (and the sweeper) agree on the moment.
+      const { id, ...rest } = f
+      const payload = { ...rest, locked_until: datetimeLocalToUtc(f.locked_until) }
       if (id) {
         await endpoints.teaRooms.update(id, payload)
         ui.notify('Tea room updated', 'success')
@@ -196,10 +206,38 @@ export const useTeaRoomsStore = defineStore('teaRooms', () => {
     await patchFlag(t, { discounted: !t.discounted })
   }
 
+  /**
+   * Lock a room. `untilLocal` is a datetime-local value (local wall clock) for a
+   * lock that lifts by itself, or '' for one that stands until someone unlocks
+   * the room - the way every lock behaved before expiries existed.
+   *
+   * A time already gone is refused here rather than sent: the server would take
+   * it, expire the lock on its next sweep and alert the staff about a room that
+   * was never really locked, which reads as a bug rather than as the typo it is.
+   */
+  async function lockRoom(t: TeaRoom, untilLocal: string): Promise<boolean> {
+    const until = datetimeLocalToUtc(untilLocal)
+    if (untilLocal && !until) {
+      ui.notify('That unlock time is not a valid date and time', 'error')
+      return false
+    }
+    if (until && new Date(until).getTime() <= Date.now()) {
+      ui.notify('The unlock time must be in the future', 'error')
+      return false
+    }
+    await patchFlag(t, { locked: true, locked_until: until })
+    return true
+  }
+
+  /** Unlock a room now, whatever expiry its lock carried. */
+  async function unlockRoom(t: TeaRoom): Promise<void> {
+    await patchFlag(t, { locked: false })
+  }
+
   /** Shared PATCH for the quick-toggle flags, replacing the row with the server's copy. */
   async function patchFlag(
     t: TeaRoom,
-    fields: { open?: boolean; discounted?: boolean },
+    fields: { open?: boolean; discounted?: boolean; locked?: boolean; locked_until?: string },
   ): Promise<void> {
     togglingId.value = t.id
     try {
@@ -252,6 +290,8 @@ export const useTeaRoomsStore = defineStore('teaRooms', () => {
     postRoom,
     toggleOpen,
     toggleDiscounted,
+    lockRoom,
+    unlockRoom,
     saveWebhook,
   }
 })

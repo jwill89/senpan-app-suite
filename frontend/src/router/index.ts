@@ -20,6 +20,7 @@
  *   /admin/teahouse/raffles          -> Admin: Raffles (current cards + closed table; detail/form sub-pages)
  *   /admin/teahouse/bookclub/:slug   -> Admin: a book club (Yaoi, Yuri, ...)
  *   /admin/festival/map              -> Admin: Festival Map (plan + stalls)
+ *   /embed/festival-maps/:id  -> One festival map, bare, for embedding in an iframe
  *   /admin/atelier/fonts      -> Admin: Font Upload
  *   /admin/atelier/carrd      -> Admin: Carrd Upload
  *   /admin/system/settings    -> Admin: App Settings
@@ -223,6 +224,16 @@ const routes: RouteRecordRaw[] = [
     name: 'festival-map',
     component: () => import('@/views/FestivalMapView.vue'),
     props: true,
+  },
+  // The same map with none of our page around it, for an <iframe> on another
+  // site (the snippet the admin map screen hands out). `meta.embed` is what tells
+  // the shell to leave off the site footer - the host page has its own.
+  {
+    path: '/embed/festival-maps/:id',
+    name: 'festival-map-embed',
+    component: () => import('@/views/FestivalMapEmbedView.vue'),
+    props: true,
+    meta: { embed: true },
   },
   // Public Stamp Rally self-service sign-up: the list of rallies open for it, and
   // one rally's sign-up form. The detail path is deliberately linkable so staff can

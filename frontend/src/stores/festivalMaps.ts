@@ -50,6 +50,7 @@ export function blankOccupant(type: StallType): FestivalStallOccupantForm {
     affiliate_id: null,
     title: '',
     description: '',
+    event_carrd: '',
     stall_type: type,
     type_label: '',
     times: [],
@@ -71,6 +72,12 @@ function blankStall(type: StallType): FestivalStallForm {
     // picks one - changing the type then still restyles it, which a copied
     // literal wouldn't.
     color: '',
+    // Also empty: the selection halo falls back to the app's highlight until an
+    // admin picks a colour that reads against this pitch's fill.
+    selection_color: '',
+    // Empty means white, which reads on most fills; an admin picks another where
+    // it does not.
+    text_color: '',
     placement: defaultPlacement(meta.shape),
     occupants: [blankOccupant(type)],
     _uid: nextUid(),
@@ -172,6 +179,9 @@ export const useFestivalMapsStore = defineStore('festivalMaps', () => {
 
   // -- Admin: form ----------------------------------------------------------
   function newMapForm(): void {
+    // A brand-new map has nothing behind it, so nothing stays selected: cancelling
+    // it must fall back to the list rather than to whichever map was last open.
+    selectedMap.value = null
     mapForm.value = {
       id: 0,
       title: '',
@@ -213,12 +223,15 @@ export const useFestivalMapsStore = defineStore('festivalMaps', () => {
         id: s.id,
         shape: s.shape === 'circle' ? 'circle' : 'rect',
         color: s.color,
+        selection_color: s.selection_color,
+        text_color: s.text_color,
         placement: { ...s.placement },
         occupants: s.occupants.map((o) => ({
           id: o.id,
           affiliate_id: o.affiliate_id ?? null,
           title: o.title,
           description: o.description,
+          event_carrd: o.event_carrd,
           stall_type: o.stall_type as StallType,
           type_label: o.type_label,
           times: timesToForm(o.times),
@@ -308,36 +321,50 @@ export const useFestivalMapsStore = defineStore('festivalMaps', () => {
       ui.notify('Title is required', 'error')
       return false
     }
+    // Every stall names who runs it. The map LABELS a stall by its affiliate, so
+    // one saved without leaves a blank shape on the plan - and the venue is an
+    // affiliate in its own right now, so there is no default to fall back on.
+    const missing = f.stalls.findIndex((stall) =>
+      stall.occupants.some((o) => o.affiliate_id === null),
+    )
+    if (missing >= 0) {
+      ui.notify(`Stall ${missing + 1} needs an affiliate`, 'error')
+      return false
+    }
     savingMap.value = true
     try {
+      // Spread the form rather than listing fields. The list here was an
+      // allow-list that had to be extended every time the editor gained a field,
+      // and three of them - the event Carrd link, the selection colour and the
+      // label colour - were silently dropped by it: set in the editor, saved
+      // without complaint, gone on reload. Only the client-only `_uid` and the
+      // datetime shapes need handling; anything else the form holds goes as-is,
+      // and the server ignores what it does not know.
       const payload = {
         ...f,
         times: timesToPayload(f.times),
-        stalls: f.stalls.map((s) => ({
-          id: s.id,
-          shape: s.shape,
-          color: s.color,
-          placement: s.placement,
-          occupants: s.occupants.map((o) => ({
-            id: o.id,
-            affiliate_id: o.affiliate_id,
-            title: o.title,
-            description: o.description,
-            stall_type: o.stall_type,
-            type_label: o.type_label,
-            times: timesToPayload(o.times),
+        stalls: f.stalls.map(({ _uid, occupants, ...stall }) => ({
+          ...stall,
+          occupants: occupants.map(({ _uid: _occupantUid, times, ...occupant }) => ({
+            ...occupant,
+            times: timesToPayload(times),
           })),
         })),
       }
+      let savedId = f.id
       if (f.id) {
         await endpoints.festivalMaps.update(payload)
         ui.notify('Festival map updated', 'success')
       } else {
-        await endpoints.festivalMaps.create(payload)
+        savedId = (await endpoints.festivalMaps.create(payload)).map.id
         ui.notify('Festival map created', 'success')
       }
       mapForm.value = null
       await loadMaps()
+      // Leave the saved map SELECTED, so the caller can show it rather than
+      // dropping the admin back to the list. Saving is not "done with this map" -
+      // publishing it, or checking how it reads, is the usual next step.
+      await loadMapDetail(savedId)
       return true
     } catch (e) {
       ui.notify((e as Error).message, 'error')

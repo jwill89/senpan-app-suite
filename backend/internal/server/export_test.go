@@ -68,6 +68,12 @@ var (
 	// LogClientIPForTest exposes the CF-Connecting-IP-first client-IP extraction
 	// used for the request log's ip field.
 	LogClientIPForTest = logClientIP
+	// ParseTeaRoomLockTimeForTest parses a tea-room lock expiry to a UTC instant.
+	ParseTeaRoomLockTimeForTest = parseTeaRoomLockTime
+	// ExpireDueTeaRoomLocksForTest runs ONE pass of the lock-expiry sweep, so what
+	// the scheduler decides - unlock and announce, or leave the lock alone - can be
+	// exercised without waiting on its ticker.
+	ExpireDueTeaRoomLocksForTest = (*Server).expireDueTeaRoomLocks
 )
 
 // WebRootForTest exposes the server's webRoot so external tests can seed

@@ -514,6 +514,10 @@ export interface TeaRoomForm {
   open: boolean
   lockable: boolean
   discounted: boolean
+  /** Whether the room is locked right now (`lockable` is only whether it can be). */
+  locked: boolean
+  /** UTC RFC-3339 instant the lock lifts; '' = it stands until someone unlocks it. */
+  locked_until: string
   image: string
   color: string
 }
@@ -598,8 +602,11 @@ export interface FestivalStallOccupantForm {
   id: number
   /** null = the venue's own booth (Senpan Tea House). */
   affiliate_id: number | null
+  /** Optional: the map labels a pitch by its AFFILIATE, not by this. */
   title: string
   description: string
+  /** This occupant's own event page ('' = none; no fallback to the affiliate's). */
+  event_carrd: string
   stall_type: StallType
   /** Caption shown under the title when `stall_type` is 'other' ('' = none). */
   type_label: string
@@ -613,6 +620,10 @@ export interface FestivalStallForm {
   shape: StallShape
   /** '#rrggbb', or '' to follow the first occupant's stall-type default color. */
   color: string
+  /** Halo drawn when a visitor selects this pitch ('' = the app highlight). */
+  selection_color: string
+  /** Colour of this pitch's label ('' = white). */
+  text_color: string
   placement: Placement
   occupants: FestivalStallOccupantForm[]
   /** Client-only stable key for the pitch list; never sent. */
@@ -659,6 +670,11 @@ export type WsMessage =
   // button shows/hides, other admins' toggle syncs).
   | { type: 'yoever_config'; enabled: boolean }
   | { type: 'draw_delay_update'; delay: number }
+  // A tea room's lock ran out and the server lifted it. Admin channel only. It
+  // carries the room's name because its consumers ANNOUNCE it rather than render
+  // it - the in-game plugin alerts its operator by name the moment this lands.
+  // The SPA's own list refreshes off the `resource_changed` that follows.
+  | { type: 'tea_room_unlocked'; id: number; name: string; room_number: string }
   // Thin "an admin resource changed" signal (no payload): an admin viewing that
   // resource refetches it via REST. `resource` is a key like 'garapons',
   // 'raffles', 'announcements', 'bookclub', 'presets', 'users', etc.

@@ -183,6 +183,15 @@ func run() error {
 		srv.RunAutoDrawScheduler(schedCtx)
 	}()
 
+	// Tea-room lock scheduler: unlocks rooms whose set expiry has passed and tells
+	// the admin clients (the in-game plugin alerts its operator). Same shared
+	// context, so it stops sweeping before the database closes.
+	roomLockDone := make(chan struct{})
+	go func() {
+		defer close(roomLockDone)
+		srv.RunTeaRoomLockScheduler(schedCtx)
+	}()
+
 	// Graceful shutdown: listen for SIGINT/SIGTERM.
 	shutdown := make(chan os.Signal, 1)
 	signal.Notify(shutdown, os.Interrupt, syscall.SIGTERM)
@@ -233,6 +242,14 @@ func run() error {
 	case <-autoDone:
 	case <-ctx.Done():
 		slog.Warn("auto-draw scheduler did not stop within the shutdown deadline")
+	}
+
+	// And the tea-room lock sweeper, so an unlock it has already written is not
+	// interrupted part-way by db.Close(). Bounded by the same shutdown deadline.
+	select {
+	case <-roomLockDone:
+	case <-ctx.Done():
+		slog.Warn("tea-room lock scheduler did not stop within the shutdown deadline")
 	}
 
 	// Close all WebSocket connections first.

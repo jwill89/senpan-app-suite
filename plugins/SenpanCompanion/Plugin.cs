@@ -24,6 +24,9 @@ public sealed class Plugin : IDalamudPlugin
     [PluginService] internal static IFramework Framework { get; private set; } = null!;
     [PluginService] internal static ITextureProvider TextureProvider { get; private set; } = null!;
     [PluginService] internal static IChatGui ChatGui { get; private set; } = null!;
+    // The game's own toast overlay - display only, used for alerts the operator
+    // should catch while looking at the game rather than at this window.
+    [PluginService] internal static IToastGui ToastGui { get; private set; } = null!;
     [PluginService] internal static IPluginLog Log { get; private set; } = null!;
 
     /// <summary>Path to the bundled Senpan Tea House logo (copied next to the DLL).</summary>

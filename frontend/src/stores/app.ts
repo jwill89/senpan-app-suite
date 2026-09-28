@@ -55,6 +55,14 @@ export const useAppStore = defineStore('app', () => {
    */
   const hideBingo = computed(() => settings.value.hide_bingo === '1')
 
+  /**
+   * Whether the home page hides the Custom Card request on its own, leaving Join
+   * Bingo where it is - for a stretch when staff aren't taking requests but games
+   * are still running. Same '0'/'1' rule as `hideBingo`, which is the wider switch
+   * of the two: it hides this section as well, so the home page checks both.
+   */
+  const hideCustomCards = computed(() => settings.value.hide_custom_cards === '1')
+
   /** Sets the active flourishes + applies the number-flourish CSS variable. */
   function applyFlourishes(board: string, number: string): void {
     activeBoardFlourish.value = board || ''
@@ -204,6 +212,7 @@ export const useAppStore = defineStore('app', () => {
     activeNumberFlourish,
     settingsLoaded,
     hideBingo,
+    hideCustomCards,
     applyFlourishes,
     loadSettings,
     saveSettings,

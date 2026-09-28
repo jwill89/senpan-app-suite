@@ -118,6 +118,22 @@ watch(
               <span class="switch-knob"></span>
             </button>
           </FormField>
+          <FormField
+            label="Hide Custom Cards"
+            help="Takes only the Custom Card request off the public home page, for when requests are closed but games are still running. Hide Bingo already hides it. Existing request links keep working."
+          >
+            <button
+              type="button"
+              class="switch"
+              role="switch"
+              :class="{ 'is-on': app.hideCustomCards }"
+              :aria-checked="app.hideCustomCards"
+              aria-label="Hide Custom Cards on the public home page"
+              @click="app.settings.hide_custom_cards = app.hideCustomCards ? '0' : '1'"
+            >
+              <span class="switch-knob"></span>
+            </button>
+          </FormField>
         </section>
 
         <!-- Gameplay ----------------------------------------------------- -->

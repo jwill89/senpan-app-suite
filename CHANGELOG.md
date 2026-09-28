@@ -42,6 +42,24 @@ The format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## Frontend
 
+### [3.27.0] - 2026-09-19
+
+Requires backend 3.24.0.
+
+#### Added
+
+- **Custom card requests can be closed without closing bingo.** Hide Bingo takes
+  Join Bingo and the Custom Card request off the home page together, which is right
+  when nothing is running at all - but it was the only switch there was, so a night
+  where games carry on while staff have stopped taking card requests meant either
+  leaving a request button that nobody was going to answer, or taking the game down
+  with it. A second toggle in System -> Settings, **Hide Custom Cards**, drops just
+  that row. Hide Bingo still hides both, so turning bingo off does not need this
+  one thought about; the narrower switch only matters while bingo is up. Like Hide
+  Bingo it hides the entry point and nothing else - a request link already in
+  somebody's hands, and the pending requests staff still owe an answer to, are
+  untouched.
+
 ### [3.26.0] - 2026-09-05
 
 Requires backend 3.23.0.
@@ -1720,6 +1738,19 @@ First tracked release - establishes versioning for the current production build.
 ---
 
 ## Backend
+
+### [3.24.0] - 2026-09-19
+
+#### Added
+
+- **A `hide_custom_cards` setting**, the narrower companion to `hide_bingo`: it
+  takes the Custom Card request off the public home page while bingo itself stays
+  up. Validated to exactly `'0'` or `'1'` for the same reason `hide_bingo` is - a
+  flag that reads truthy in one place and falsy in another decides whether a whole
+  section appears - and served on the public settings read, since the home page has
+  to answer the question before anyone logs in. The two flags are stored and
+  validated independently; which one wins is the home page's business, not the
+  API's. Defaults to `'0'`, so nothing changes until it is switched on.
 
 ### [3.23.0] - 2026-09-05
 

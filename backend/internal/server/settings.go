@@ -21,6 +21,7 @@ var settingsKeys = []string{
 	"yoever_cooldown_seconds",
 	"custom_card_cost",
 	"hide_bingo",
+	"hide_custom_cards",
 }
 
 // settingsDefaults provides fallback values for settings that have not been configured.
@@ -35,6 +36,7 @@ var settingsDefaults = map[string]string{
 	"yoever_cooldown_seconds":   strconv.Itoa(defaultYoeverCooldownSeconds),
 	"custom_card_cost":          "0",
 	"hide_bingo":                "0",
+	"hide_custom_cards":         "0",
 }
 
 // secretSettings are setting keys that must not be exposed to non-admin
@@ -166,6 +168,14 @@ func (s *Server) handleSettingsUpdate(w http.ResponseWriter, r *http.Request) {
 			// else, and this one decides whether a whole feature is on the page.
 			if val != "0" && val != "1" {
 				writeError(w, http.StatusBadRequest, "Hide Bingo must be 0 or 1")
+				return
+			}
+		case "hide_custom_cards":
+			// Same flag discipline as hide_bingo, and for the same reason - this
+			// one decides whether the Custom Card section is on the page while the
+			// rest of bingo stays up.
+			if val != "0" && val != "1" {
+				writeError(w, http.StatusBadRequest, "Hide Custom Cards must be 0 or 1")
 				return
 			}
 		case "header_font":

@@ -300,3 +300,48 @@ func TestHideBingoSetting(t *testing.T) {
 		t.Errorf("hide_bingo = %v; want \"1\" after saving", settings["hide_bingo"])
 	}
 }
+
+// TestHideCustomCardsSetting covers the narrower "Hide Custom Cards" flag, which
+// takes the Custom Card request off the home page while bingo itself stays up.
+// Same public read and same strict "0"/"1" storage as hide_bingo, and the two
+// are independent - setting one must not move the other.
+func TestHideCustomCardsSetting(t *testing.T) {
+	env := newTestEnv(t)
+
+	settings, ok := decodeBody(t, env.get(t, "/api/settings"))["settings"].(map[string]any)
+	if !ok {
+		t.Fatal("settings missing from response")
+	}
+	if settings["hide_custom_cards"] != "0" {
+		t.Errorf("hide_custom_cards = %v; want \"0\" (custom cards visible unless switched off)", settings["hide_custom_cards"])
+	}
+
+	env.loginAdmin(t)
+
+	for _, good := range []string{"1", "0"} {
+		resp := env.postJSON(t, "/api/settings", map[string]any{"settings": map[string]string{"hide_custom_cards": good}})
+		if resp.StatusCode != http.StatusOK {
+			t.Errorf("hide_custom_cards %q = %d; want 200", good, resp.StatusCode)
+		}
+		resp.Body.Close()
+	}
+
+	for _, bad := range []string{"true", "yes", "2", ""} {
+		resp := env.postJSON(t, "/api/settings", map[string]any{"settings": map[string]string{"hide_custom_cards": bad}})
+		if resp.StatusCode != http.StatusBadRequest {
+			t.Errorf("hide_custom_cards %q = %d; want 400", bad, resp.StatusCode)
+		}
+		resp.Body.Close()
+	}
+
+	// Hiding the custom card section leaves bingo alone - that separation is the
+	// whole reason this flag exists alongside hide_bingo.
+	env.postJSON(t, "/api/settings", map[string]any{"settings": map[string]string{"hide_custom_cards": "1"}}).Body.Close()
+	settings, _ = decodeBody(t, env.get(t, "/api/settings"))["settings"].(map[string]any)
+	if settings["hide_custom_cards"] != "1" {
+		t.Errorf("hide_custom_cards = %v; want \"1\" after saving", settings["hide_custom_cards"])
+	}
+	if settings["hide_bingo"] != "0" {
+		t.Errorf("hide_bingo = %v; want \"0\" (untouched by hide_custom_cards)", settings["hide_bingo"])
+	}
+}

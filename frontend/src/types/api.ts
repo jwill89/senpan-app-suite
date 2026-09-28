@@ -246,6 +246,13 @@ export interface AppSettings {
    */
   hide_bingo: string
   /**
+   * `'1'` hides only the Custom Card request on the public home page, leaving Join
+   * Bingo and the rest of bingo up - for a period when staff aren't taking card
+   * requests but games are still running. `'0'` (the default) shows it. Read
+   * through the app store's `hideCustomCards`. `hide_bingo` still hides both.
+   */
+  hide_custom_cards: string
+  /**
    * Per-club Discord webhook URLs, keyed `discord_webhook_url_<club_slug>`
    * (e.g. `discord_webhook_url_yaoi`). Admin-only (redacted for public). Each
    * book club publishes its reading lists to its own channel. See BOOK_CLUBS.

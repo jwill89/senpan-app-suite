@@ -67,6 +67,14 @@ function onJoinInput(e: Event): void {
 const showBingo = computed(() => app.settingsLoaded && !app.hideBingo)
 
 /**
+ * Whether to offer the Custom Card request. It rides along with Join Bingo - a
+ * card request is a bingo card, so Hide Bingo takes it too - but has its own
+ * switch on top, for the common case of games still running while staff have
+ * stopped taking requests.
+ */
+const showCustomCard = computed(() => showBingo.value && !app.hideCustomCards)
+
+/**
  * Nothing at all to offer - bingo hidden, no open raffles, no rally taking
  * sign-ups. Rather than leave the page as a logo above an Admin Portal button,
  * say so. Gated on the loads having finished so it can't flash before the cards.
@@ -115,8 +123,9 @@ const logoUrl = '/images/logo.png'
          button, and left a gap whenever the conditional Raffles row was absent. -->
     <div class="home-stack">
       <!-- Join game - the primary task. Its board-ID field is focused on mount.
-           Both bingo entry points are hidden together by the Hide Bingo setting,
-           and the Custom Card request sits directly under the game it belongs to. -->
+           Hide Bingo takes both bingo entry points off together; Hide Custom Cards
+           takes only the request row below, which sits directly under the game it
+           belongs to. -->
       <div v-if="showBingo" class="home-card home-card--primary">
         <h2><font-awesome-icon :icon="['fad', 'game-board-simple']" /> Join Bingo</h2>
         <!-- Admin-editable markdown prompt; plain-text fallback until parser loads -->
@@ -146,8 +155,10 @@ const logoUrl = '/images/logo.png'
         </div>
         <p v-if="player.joinError" class="error-msg">{{ player.joinError }}</p>
       </div>
-      <!-- Personal Card Requests - a bingo card, so it goes with Join Bingo. -->
-      <div v-if="showBingo" class="home-card home-card--dest">
+      <!-- Personal Card Requests - a bingo card, so it goes with Join Bingo and
+           goes away with it. Hide Custom Cards drops this row on its own, when
+           requests are closed but games are not. -->
+      <div v-if="showCustomCard" class="home-card home-card--dest">
         <div class="home-dest-body">
           <h2><font-awesome-icon :icon="['fad', 'id-card']" /> Custom Card</h2>
           <p>Design your own bingo card and request it from Senpan staff.</p>

@@ -367,6 +367,7 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
   yoever_cooldown_seconds: '180',
   custom_card_cost: '0',
   hide_bingo: '0',
+  hide_custom_cards: '0',
   // One blank reading-list webhook default per known club so the settings form
   // binds cleanly before the server response loads.
   ...Object.fromEntries(BOOK_CLUBS.map((c) => [clubWebhookKey(c.slug), ''])),

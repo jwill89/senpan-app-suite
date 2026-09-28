@@ -671,7 +671,7 @@ cd backend; go run . -addr :8080 -db ../devdata/database.sqlite -webroot ../devd
 
 # Vet / lint
 cd backend; go vet ./...
-cd backend; golangci-lint run ./...   # config: backend/.golangci.yml (pinned v2.12.2 in CI)
+cd backend; golangci-lint run ./...   # config: backend/.golangci.yml (pinned v2.13.1 in CI)
 
 # Run tests
 cd backend; go test ./...
@@ -697,7 +697,7 @@ jobs plus a release job:
   `typecheck` -> `test` -> `build`. Mirrors the local gate, so a green CI ==
   the checks a developer runs locally have passed.
 - **backend** (`working-directory: backend`): `golangci-lint run` (pinned
-  v2.12.2, config `backend/.golangci.yml`) -> `go build ./...` -> `go vet ./...` ->
+  v2.13.1, config `backend/.golangci.yml`) -> `go build ./...` -> `go vet ./...` ->
   `go test ./...` (Go version read from `backend/go.mod`; the tests include the
   OpenAPI spec-freshness + route-coverage checks in `internal/apidoc`) ->
   `govulncheck ./...` (`go run golang.org/x/vuln/cmd/govulncheck@latest`, run at

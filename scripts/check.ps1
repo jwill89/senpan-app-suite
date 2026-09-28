@@ -59,7 +59,7 @@ function Invoke-Step($name, [scriptblock]$body) {
 if (-not $SkipBackend) {
     if (-not (Get-Command golangci-lint -ErrorAction SilentlyContinue)) {
         Write-Host "golangci-lint not found on PATH. Install the pinned version:" -ForegroundColor Red
-        Write-Host "  go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.12.2" -ForegroundColor Yellow
+        Write-Host "  go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.13.1" -ForegroundColor Yellow
         exit 1
     }
     Push-Location "$root\backend"

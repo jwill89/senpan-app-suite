@@ -70,6 +70,11 @@ import type {
   SignupRalliesResponse,
   StampSignupResponse,
   StampLookupResponse,
+  FestivalMapsResponse,
+  FestivalMapResponse,
+  FestivalMapDetailResponse,
+  PublicFestivalMapsResponse,
+  PublicFestivalMap,
   GaraponsResponse,
   GaraponResponse,
   GaraponDetailResponse,
@@ -161,10 +166,15 @@ export const endpoints = {
   account: {
     /** POST /api/account/change-password - change the logged-in user's own password. */
     changePassword: (currentPassword: string, newPassword: string) =>
-      apiPost<OKResponse>('account/change-password', {
-        current_password: currentPassword,
-        new_password: newPassword,
-      }),
+      apiPost<OKResponse>(
+        'account/change-password',
+        { current_password: currentPassword, new_password: newPassword },
+        // A mistyped CURRENT password answers 401, but the session is perfectly
+        // valid - requireAuth already passed. Without this the global 401 handler
+        // reads it as "your session expired" and logs the user out of the admin UI
+        // for a typo. Matches auth.login / auth.register / auth.logout.
+        { skipAuthRedirect: true },
+      ),
     /** GET /api/account/token - the account's personal-access-token metadata
      *  (never the secret itself; that is only returned once at generation). */
     tokenInfo: () => apiGet<AccountTokenInfoResponse>('account/token'),
@@ -556,9 +566,22 @@ export const endpoints = {
     /** PUT /api/tea-rooms/{id} - full replace of the editable fields. */
     update: (id: number, room: Record<string, unknown>) =>
       apiPut<TeaRoomResponse>(`tea-rooms/${id}`, { tea_room: room }),
-    /** PATCH /api/tea-rooms/{id} - toggle the open and/or discounted flag. */
-    patch: (id: number, fields: { open?: boolean; discounted?: boolean }) =>
-      apiPatch<TeaRoomResponse>(`tea-rooms/${id}`, fields),
+    /**
+     * PATCH /api/tea-rooms/{id} - toggle the open/discounted flags or set the lock.
+     * `locked` and `locked_until` move independently: `locked` alone locks or
+     * unlocks, `locked_until` alone re-times a lock already in place. A UTC
+     * RFC-3339 `locked_until` expires the lock server-side; '' leaves it standing
+     * until someone unlocks the room.
+     */
+    patch: (
+      id: number,
+      fields: {
+        open?: boolean
+        discounted?: boolean
+        locked?: boolean
+        locked_until?: string
+      },
+    ) => apiPatch<TeaRoomResponse>(`tea-rooms/${id}`, fields),
     /** DELETE /api/tea-rooms/{id} - delete a room (204). */
     delete: (id: number) => apiDelete(`tea-rooms/${id}`),
     /** POST /api/tea-rooms/reorder - persist a new drag order (top-first ids). */
@@ -569,6 +592,31 @@ export const endpoints = {
     /** PUT /api/tea-rooms/webhook - set the single shared Discord webhook ('' clears). */
     setWebhook: (webhookUrl: string) =>
       apiPut<TeaRoomWebhookResponse>('tea-rooms/webhook', { webhook_url: webhookUrl }),
+  },
+
+  // -- Festival Map (admin CRUD + the public read API) --------------------------
+  festivalMaps: {
+    /** GET /api/festival-maps - every map with its stall count (admin). */
+    list: () => apiGet<FestivalMapsResponse>('festival-maps'),
+    /** GET /api/festival-maps/{id} - a map with its stalls. */
+    detail: (id: number) => apiGet<FestivalMapDetailResponse>(`festival-maps/${id}`),
+    /** POST /api/festival-maps - create a map (201). The form omits an id. */
+    create: (map: Record<string, unknown>) => apiPost<FestivalMapResponse>('festival-maps', map),
+    /** PUT /api/festival-maps/{id} - full replace of the editable fields. */
+    update: (map: { id: number } & Record<string, unknown>) =>
+      apiPut<OKResponse>(`festival-maps/${map.id}`, map),
+    /** PATCH /api/festival-maps/{id} - set the publish status. */
+    setStatus: (id: number, status: string) =>
+      apiPatch<StatusResponse>(`festival-maps/${id}`, { status }),
+    /** DELETE /api/festival-maps/{id} - delete a map and its stalls (204). */
+    delete: (id: number) => apiDelete(`festival-maps/${id}`),
+    /** GET /api/festival-maps/public - the published maps (no auth). */
+    publicList: () => apiGet<PublicFestivalMapsResponse>('festival-maps/public'),
+    /** GET /api/festival-maps/public/{id} - one published map with its stalls (no
+     *  auth). The segment is the map's shortcode or its numeric id; the server
+     *  resolves either. */
+    publicDetail: (idOrSlug: string) =>
+      apiGet<PublicFestivalMap>(`festival-maps/public/${enc(idOrSlug)}`),
   },
 
   // -- Stamp Rally (admin, hybrid REST) -----------------------------------------
@@ -621,14 +669,16 @@ export const endpoints = {
     /** GET /api/stamp-signup - rallies currently open to public sign-up. */
     list: () => apiGet<SignupRalliesResponse>('stamp-signup'),
     /** POST /api/stamp-signup/{id} - issue yourself a card (+ garapon link if paired). */
-    signUp: (rallyId: number, name: string, turnstileToken: string) =>
+    signUp: (rallyId: number, name: string, world: string, turnstileToken: string) =>
       apiPost<StampSignupResponse>(`stamp-signup/${rallyId}`, {
         name,
+        world,
         turnstile_token: turnstileToken,
       }),
     /** POST /api/stamp-lookup - find your links by the exact name you signed up with.
      *  POST, not GET, so the name stays out of URLs and the access log. */
-    lookup: (name: string) => apiPost<StampLookupResponse>('stamp-lookup', { name }),
+    lookup: (name: string, world: string) =>
+      apiPost<StampLookupResponse>('stamp-lookup', { name, world }),
   },
 
   // -- Book clubs / reading lists -----------------------------------------------

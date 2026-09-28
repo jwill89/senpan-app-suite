@@ -1095,6 +1095,25 @@
   object-fit: contain;
 }
 
+/* A repeatable form-row group (affiliate owners + hours, festival-map datetime
+   ranges): a stack of grid rows sharing one column template, which each form
+   declares for its own row shape. */
+.repeater {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  overflow-x: auto;
+}
+.repeater-row {
+  display: grid;
+  align-items: center;
+  column-gap: 8px;
+}
+.repeater-row > input {
+  width: 100%;
+  min-width: 0;
+}
+
 /* A colour field: native swatch input beside its hex read-out. Was implemented
    three times (affiliates, announcements, tea rooms) with the copies having drifted
    apart - one used a different monospace stack and skipped the uppercase, so the
@@ -1173,9 +1192,19 @@
   background: color-mix(in srgb, var(--warning) 15%, transparent);
   border: 1px solid var(--warning);
 }
+/* Neither a danger nor a warning: a statement of something already true and in the
+   reader's favour (e.g. "we filled your name in from your last entry"). Built on
+   --highlight rather than a new semantic colour, since nothing is wrong. */
+.form-alert-info {
+  background: color-mix(in srgb, var(--highlight) 15%, transparent);
+  border: 1px solid color-mix(in srgb, var(--highlight) 60%, transparent);
+}
 .form-alert-icon {
   margin-top: 2px;
   flex-shrink: 0;
+}
+.form-alert-info .form-alert-icon {
+  color: var(--highlight);
 }
 .form-alert-danger .form-alert-icon {
   color: var(--danger);
@@ -1254,6 +1283,23 @@
 }
 .stamp-signup-link .btn-view {
   align-self: flex-start;
+}
+
+/* A garapon a lookup found but deliberately did NOT link: the draws are stated,
+   not handed over, because a draw is irreversible and the link is the whole
+   capability (see StampLookupView). Shaped like .stamp-signup-link's sibling so
+   the two read as one list, but it is a statement rather than a link row. */
+.stamp-lookup-draws {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 10px 0;
+  border-top: 1px solid color-mix(in srgb, var(--text-muted) 20%, transparent);
+  font-size: 0.9rem;
+}
+.stamp-lookup-draws .text-muted {
+  font-size: 0.85rem;
 }
 
 /* The quiet "lost your link?" line under a list or form. */

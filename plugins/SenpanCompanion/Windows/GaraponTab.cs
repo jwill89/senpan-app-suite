@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
@@ -97,7 +97,7 @@ internal sealed class GaraponTab : TabBase
     private void DrawCreateForm()
     {
         ImGui.SetNextItemWidth(220);
-        ImGui.InputTextWithHint("##garaponname", "Player name", ref this.newPlayerName, 64);
+        ImGui.InputTextWithHint("##garaponname", "Player name (or Name @ World)", ref this.newPlayerName, 64);
         ImGui.SameLine();
         DrawNearbyPicker();
 
@@ -123,23 +123,34 @@ internal sealed class GaraponTab : TabBase
             return;
         var maxDraws = Math.Max(1, this.newMaxDraws);
 
-        // Only /tell when the name came from the nearby picker (so we have a world)
-        // and it still matches - never guess a target. Opt-in via settings.
-        var doTell = this.config.TellGaraponUrlOnCreate
-                     && !string.IsNullOrEmpty(this.pendingTellWorld)
-                     && string.Equals(this.pendingTellName, name, StringComparison.Ordinal);
-        var tellWorld = this.pendingTellWorld;
+        // The world is trustworthy only when the name still matches the one the
+        // nearby picker supplied it with - otherwise it belongs to whoever was
+        // picked before the name was edited. That is the same test the /tell uses,
+        // for the same reason: never attach a world to the wrong character.
+        //
+        // Reading it from the game's object table beats every other source in the
+        // app, and every system stores a participant as a name plus a home world -
+        // so a link created without one cannot be matched to that person's raffle
+        // entry or stamp card. A blank world is still accepted; the server also
+        // splits a hand-typed "Name @ World".
+        var pickedWorld = string.Equals(this.pendingTellName, name, StringComparison.Ordinal)
+            ? this.pendingTellWorld
+            : string.Empty;
+
+        // Only /tell when we have that world - never guess a target. Opt-in via settings.
+        var doTell = this.config.TellGaraponUrlOnCreate && !string.IsNullOrEmpty(pickedWorld);
+        var tellWorld = pickedWorld;
 
         Run(async () =>
         {
-            var created = (await this.api.CreateGaraponPlayerAsync(id, name, maxDraws)).Player;
+            var created = (await this.api.CreateGaraponPlayerAsync(id, name, pickedWorld, maxDraws)).Player;
             var d = await this.api.GetGaraponAsync(id);
             await Apply(() =>
             {
                 if (this.selectedGaraponId == id)
                     this.detail = d;
                 this.newPlayerName = string.Empty;
-                this.newMaxDraws = 1;
+                this.newMaxDraws = Math.Max(1, this.detail?.Garapon.DefaultDraws ?? 1);
                 this.pendingTellName = string.Empty;
                 this.pendingTellWorld = string.Empty;
             });
@@ -178,7 +189,7 @@ internal sealed class GaraponTab : TabBase
         {
             ImGui.TableNextRow();
             ImGui.TableNextColumn();
-            ImGui.TextUnformatted(string.IsNullOrEmpty(p.PlayerName) ? "-" : p.PlayerName);
+            ImGui.TextUnformatted(Ui.ParticipantLabel(p.PlayerName, p.World));
             ImGui.TableNextColumn();
             ImGui.TextUnformatted($"{p.DrawsUsed}/{p.MaxDraws}");
             ImGui.TableNextColumn();
@@ -263,7 +274,12 @@ internal sealed class GaraponTab : TabBase
         // loaded detail can't diverge: TabBase.Run is busy-gated, so a selection made
         // mid-load would drop its fetch and leave the body (and the create target) on a
         // different garapon than the picker shows.
-        if (this.Busy)
+        // Snapshot Busy: the Selectable below calls LoadGarapon, which calls Run(), which sets Busy true
+        // synchronously, so re-reading the field at the End would pop a disabled
+        // scope that was never pushed and corrupt ImGui's stack for the rest of the
+        // frame. Same reason the canStart/canCreate/canAdd sites use a local.
+        var pickDisabled = this.Busy;
+        if (pickDisabled)
             ImGui.BeginDisabled();
         ImGui.SetNextItemWidth(280);
         if (ImGui.BeginCombo("##garaponpick", preview))
@@ -275,7 +291,7 @@ internal sealed class GaraponTab : TabBase
             }
             ImGui.EndCombo();
         }
-        if (this.Busy)
+        if (pickDisabled)
             ImGui.EndDisabled();
     }
 
@@ -289,7 +305,12 @@ internal sealed class GaraponTab : TabBase
             await Apply(() =>
             {
                 if (this.selectedGaraponId == id)
+                {
                     this.detail = d;
+                    // Seed the Draws box from the garapon's own default, the way the
+                    // web form does, rather than leaving it on a hardcoded 1.
+                    this.newMaxDraws = Math.Max(1, d.Garapon.DefaultDraws);
+                }
             });
         });
     }

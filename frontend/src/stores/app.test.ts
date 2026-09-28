@@ -147,3 +147,54 @@ describe('hideBingo', () => {
     expect(app.hideBingo).toBe(false)
   })
 })
+
+describe('hideCustomCards', () => {
+  beforeEach(() => {
+    settingsGet.mockClear()
+    settingsGet.mockResolvedValue({ settings: {}, uploaded_fonts: [] })
+  })
+
+  it('is off until the server says otherwise', () => {
+    const app = useAppStore()
+    expect(app.hideCustomCards).toBe(false)
+    expect(app.settingsLoaded).toBe(false)
+  })
+
+  it("is on only for the exact flag value '1'", async () => {
+    const app = useAppStore()
+    settingsGet.mockResolvedValue({ settings: { hide_custom_cards: '1' }, uploaded_fonts: [] })
+    await app.loadSettings()
+    expect(app.hideCustomCards).toBe(true)
+  })
+
+  it('treats any other stored value as off', async () => {
+    const app = useAppStore()
+    for (const val of ['0', 'true', 'yes', '', '2']) {
+      settingsGet.mockResolvedValue({ settings: { hide_custom_cards: val }, uploaded_fonts: [] })
+      await app.loadSettings()
+      expect(app.hideCustomCards, `hide_custom_cards=${JSON.stringify(val)}`).toBe(false)
+    }
+  })
+
+  it('is independent of hideBingo, which is the wider switch', async () => {
+    const app = useAppStore()
+    // Custom cards off on their own: bingo stays up, so the home page keeps Join
+    // Bingo and drops only the request row.
+    settingsGet.mockResolvedValue({
+      settings: { hide_custom_cards: '1', hide_bingo: '0' },
+      uploaded_fonts: [],
+    })
+    await app.loadSettings()
+    expect(app.hideCustomCards).toBe(true)
+    expect(app.hideBingo).toBe(false)
+
+    // Hiding bingo does not set this flag - the home page is what combines them.
+    settingsGet.mockResolvedValue({
+      settings: { hide_custom_cards: '0', hide_bingo: '1' },
+      uploaded_fonts: [],
+    })
+    await app.loadSettings()
+    expect(app.hideCustomCards).toBe(false)
+    expect(app.hideBingo).toBe(true)
+  })
+})

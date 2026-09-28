@@ -1,27 +1,39 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
-import type { Raffle, RaffleEntry, RaffleLookupEntry } from '@/types/api'
+import type {
+  FestivalMap,
+  FestivalStallOccupant,
+  Raffle,
+  RaffleEntry,
+  RaffleLookupEntry,
+} from '@/types/api'
 import { RAFFLE_MAX_ENTRIES } from '@/lib/constants'
 
 // Mock the typed endpoint layer so the admin add-entry flow can be exercised
 // without touching the network. Only the endpoints the tested paths call are
 // stubbed; `detail` backs the loadRaffleDetail() refresh that runs after a
 // successful add. `vi.hoisted` lets the spies be referenced in the mock factory.
-const { addEntry, detail, create, list, markEntryPaid, lookup, setStatus } = vi.hoisted(() => ({
-  setStatus: vi.fn(async () => ({ ok: true, status: 'closed' })),
-  // Typed so a test can resolve it with real hits; a bare [] would infer never[].
-  lookup: vi.fn(async () => ({ entries: [] as RaffleLookupEntry[], truncated: false })),
-  addEntry: vi.fn(async () => ({ entry: {} })),
-  markEntryPaid: vi.fn(async () => ({ entry: {} })),
-  detail: vi.fn(async () => ({
-    raffle: { id: 1, status: 'open', max_entries: 5, cost_per_entry: 0 },
-    entries: [],
-  })),
-  create: vi.fn(async () => ({ raffle: {} })),
-  list: vi.fn(async () => ({ raffles: [] })),
-}))
+const { addEntry, detail, create, list, markEntryPaid, lookup, setStatus, mapList, mapDetail } =
+  vi.hoisted(() => ({
+    mapList: vi.fn(async () => ({ maps: [] as FestivalMap[] })),
+    mapDetail: vi.fn(async () => ({ map: { stalls: [] } as unknown as FestivalMap })),
+    setStatus: vi.fn(async () => ({ ok: true, status: 'closed' })),
+    // Typed so a test can resolve it with real hits; a bare [] would infer never[].
+    lookup: vi.fn(async () => ({ entries: [] as RaffleLookupEntry[], truncated: false })),
+    addEntry: vi.fn(async () => ({ entry: {} })),
+    markEntryPaid: vi.fn(async () => ({ entry: {} })),
+    detail: vi.fn(async () => ({
+      raffle: { id: 1, status: 'open', max_entries: 5, cost_per_entry: 0 },
+      entries: [],
+    })),
+    create: vi.fn(async () => ({ raffle: {} })),
+    list: vi.fn(async () => ({ raffles: [] })),
+  }))
 vi.mock('@/lib/endpoints', () => ({
-  endpoints: { raffles: { addEntry, detail, create, list, markEntryPaid, lookup, setStatus } },
+  endpoints: {
+    raffles: { addEntry, detail, create, list, markEntryPaid, lookup, setStatus },
+    festivalMaps: { list: mapList, detail: mapDetail },
+  },
 }))
 
 import { useUiStore } from './ui'
@@ -642,5 +654,124 @@ describe('setRaffleClosed', () => {
     await raffles.setRaffleClosed(true)
 
     expect(raffles.selectedRaffle.status).toBe('open')
+  })
+})
+
+// -- Festival Map linkage -----------------------------------------------------
+//
+// A raffle can be filed under a Festival Map and pinned to one stall on it, so
+// the stall's panel on the public plan links to the raffle while it is running.
+
+describe('festival map linkage', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    vi.clearAllMocks()
+  })
+
+  function mapOccupant(over: Partial<FestivalStallOccupant> = {}): FestivalStallOccupant {
+    return {
+      id: 21,
+      stall_id: 4,
+      affiliate_id: 9,
+      affiliate_name: 'The Green Gaelicat',
+      title: 'The Green Gaelicat',
+      description: '',
+      event_carrd: '',
+      stall_type: 'game',
+      type_label: '',
+      times: [],
+      sort_order: 0,
+      ...over,
+    }
+  }
+
+  /** A map detail response wrapping the given occupants in one pitch. */
+  function mapWith(occupants: FestivalStallOccupant[]) {
+    return {
+      map: {
+        stalls: [
+          {
+            id: 4,
+            map_id: 4,
+            shape: 'rect',
+            color: '',
+            selection_color: '',
+            text_color: '',
+            placement: { x: 0, y: 0, width: 10, height: 10, rotation: 0 },
+            sort_order: 0,
+            occupants,
+          },
+        ],
+      } as unknown as FestivalMap,
+    }
+  }
+
+  it('starts a new raffle belonging to no festival', () => {
+    const raffles = useRafflesStore()
+    raffles.newRaffleForm()
+    expect(raffles.raffleForm!.festival_map_id).toBeNull()
+    expect(raffles.raffleForm!.occupant_id).toBeNull()
+  })
+
+  it('flattens the linked map into a stall list', async () => {
+    mapDetail.mockResolvedValue(mapWith([mapOccupant(), mapOccupant({ id: 22 })]))
+    const raffles = useRafflesStore()
+    raffles.newRaffleForm()
+
+    await raffles.setFestivalMap(4)
+
+    expect(raffles.raffleForm!.festival_map_id).toBe(4)
+    expect(raffles.mapStalls.map((o) => o.id)).toEqual([21, 22])
+  })
+
+  it('clears the pinned stall when the map changes', async () => {
+    mapDetail.mockResolvedValue(mapWith([mapOccupant()]))
+    const raffles = useRafflesStore()
+    raffles.newRaffleForm()
+    await raffles.setFestivalMap(4)
+    raffles.raffleForm!.occupant_id = 21
+
+    await raffles.setFestivalMap(9)
+
+    // The id belonged to the map that was linked before.
+    expect(raffles.raffleForm!.occupant_id).toBeNull()
+  })
+
+  it('unlinking the map empties the stall list', async () => {
+    mapDetail.mockResolvedValue(mapWith([mapOccupant()]))
+    const raffles = useRafflesStore()
+    raffles.newRaffleForm()
+    await raffles.setFestivalMap(4)
+
+    await raffles.setFestivalMap(null)
+
+    expect(raffles.mapStalls).toEqual([])
+    expect(raffles.raffleForm!.occupant_id).toBeNull()
+  })
+
+  it('a copy is not filed under the original festival', () => {
+    const raffles = useRafflesStore()
+    raffles.copyRaffleForm(
+      makeRaffle({ title: 'Obon Raffle', festival_map_id: 4, occupant_id: 21 }),
+    )
+    // A copy is almost always next year's; keeping the link would quietly file it
+    // under the finished festival.
+    expect(raffles.raffleForm!.festival_map_id).toBeNull()
+    expect(raffles.raffleForm!.occupant_id).toBeNull()
+    expect(raffles.raffleForm!.title).toBe('Obon Raffle (Copy)')
+  })
+
+  it('sends both links on save', async () => {
+    mapDetail.mockResolvedValue(mapWith([mapOccupant()]))
+    const raffles = useRafflesStore()
+    raffles.newRaffleForm()
+    raffles.raffleForm!.title = 'Obon Raffle'
+    await raffles.setFestivalMap(4)
+    raffles.raffleForm!.occupant_id = 21
+
+    expect(await raffles.saveRaffle()).toBe(true)
+    expect(create).toHaveBeenCalledWith(
+      expect.objectContaining({ festival_map_id: 4, occupant_id: 21 }),
+    )
   })
 })

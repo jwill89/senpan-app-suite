@@ -6,6 +6,11 @@
  * with a per-item panel below for the selected item's settings (a stamp's stall +
  * image + password + active window + pause; a prize's name + image).
  *
+ * A rally can also be LINKED to a Festival Map. When it is, each stamp names one
+ * of that map's stalls instead of a bare affiliate - so the map can badge the
+ * stalls that are part of the rally, and the stamp log records the stall by the
+ * name it carries on the plan.
+ *
  * Hosted as a Back sub-page of the Stamp Rally manager: emits `saved` / `cancel`.
  */
 import { computed, onMounted, ref, watch } from 'vue'
@@ -20,6 +25,7 @@ import ImagePicker from '@/components/common/ui/ImagePicker.vue'
 import PlacementEditor, { type PlaceItem } from './PlacementEditor.vue'
 import { toStampCount, useStampRalliesStore } from '@/stores/stampRallies'
 import { STAMP_TYPES, stampTypeLabel } from '@/lib/stampcard'
+import { occupantListLabel, stallCaption } from '@/lib/festivalmap'
 import type { Placement, StampType } from '@/types/api'
 
 const emit = defineEmits<{ saved: []; cancel: [] }>()
@@ -103,6 +109,24 @@ function setAffiliate(stampIndex: number, value: string): void {
   const f = store.rallyForm
   if (!f || !f.stamps[stampIndex]) return
   f.stamps[stampIndex].affiliate_id = value ? Number(value) : null
+}
+
+/**
+ * Whether this rally names Festival Map stalls instead of bare affiliates. The
+ * link is what swaps the "Stall / Vendor" select's contents, so it is read off
+ * the form rather than off the loaded stall list (which is momentarily empty
+ * while a newly-picked map's stalls are fetched).
+ */
+const linkedToMap = computed(() => store.rallyForm?.festival_map_id != null)
+
+/** Link (or unlink) the rally to a festival map ('' -> not linked). */
+function setFestivalMap(value: string): void {
+  void store.setFestivalMap(value ? Number(value) : null)
+}
+
+/** Point a stamp at one of the linked map's stalls ('' -> no stall). */
+function setStall(stampIndex: number, value: string): void {
+  store.setStampStall(stampIndex, value ? Number(value) : null)
 }
 
 /**
@@ -233,6 +257,20 @@ function cancel(): void {
       </FormRow>
 
       <FormField
+        label="Festival Map"
+        help="Link this rally to a festival map and each stamp names one of its stalls instead of an affiliate. The map then badges those stalls for visitors."
+      >
+        <select
+          :value="store.rallyForm.festival_map_id ?? ''"
+          aria-label="Linked festival map"
+          @change="setFestivalMap(($event.target as HTMLSelectElement).value)"
+        >
+          <option value="">Not linked to a map</option>
+          <option v-for="m in store.festivalMaps" :key="m.id" :value="m.id">{{ m.title }}</option>
+        </select>
+      </FormField>
+
+      <FormField
         label="Card Completion"
         help="What finishes a card. Requiring a number of each type leaves the rest of the stalls optional - e.g. 3 of 5 food stalls and 3 of 5 games."
       >
@@ -314,9 +352,25 @@ function cancel(): void {
           <FormRow>
             <FormField
               label="Stall / Vendor"
-              help="Recorded in the View Logs (the card's stall labels are part of the card art)."
+              :help="
+                linkedToMap
+                  ? 'A stall on the linked festival map. A pitch that changes hands between days lists each day separately. Picking one takes its affiliate and seeds the stamp type.'
+                  : `Recorded in the View Logs (the card's stall labels are part of the card art).`
+              "
             >
               <select
+                v-if="linkedToMap"
+                :value="selected.stamp.occupant_id ?? ''"
+                aria-label="Map stall"
+                @change="setStall(selected.index, ($event.target as HTMLSelectElement).value)"
+              >
+                <option value="">Pick a stall on the map</option>
+                <option v-for="o in store.mapStalls" :key="o.id" :value="o.id">
+                  {{ occupantListLabel(o) }} ({{ stallCaption(o) || 'Other' }})
+                </option>
+              </select>
+              <select
+                v-else
                 :value="selected.stamp.affiliate_id ?? ''"
                 aria-label="Stall affiliate"
                 @change="setAffiliate(selected.index, ($event.target as HTMLSelectElement).value)"

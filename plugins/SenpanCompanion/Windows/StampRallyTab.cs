@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Numerics;
@@ -102,7 +102,7 @@ internal sealed class StampRallyTab : TabBase
     private void DrawIssueCardForm()
     {
         ImGui.SetNextItemWidth(220);
-        ImGui.InputTextWithHint("##rallyname", "Participant name", ref this.newParticipantName, 64);
+        ImGui.InputTextWithHint("##rallyname", "Participant name (or Name @ World)", ref this.newParticipantName, 64);
         ImGui.SameLine();
         DrawNearbyPicker();
 
@@ -122,16 +122,22 @@ internal sealed class StampRallyTab : TabBase
         if (id == 0 || name.Length == 0)
             return;
 
-        // Only /tell when the name came from the nearby picker (so we have a world)
-        // and it still matches. Opt-in via settings.
-        var doTell = this.config.TellStampCardUrlOnCreate
-                     && !string.IsNullOrEmpty(this.pendingTellWorld)
-                     && string.Equals(this.pendingTellName, name, StringComparison.Ordinal);
-        var tellWorld = this.pendingTellWorld;
+        // Trustworthy only while the name still matches the one the nearby picker
+        // supplied the world with - otherwise it belongs to whoever was picked
+        // before the name was edited. See GaraponTab for the full reasoning: the
+        // game's object table is the best world source in the app, and a card
+        // written without one cannot be matched to that person's other records.
+        var pickedWorld = string.Equals(this.pendingTellName, name, StringComparison.Ordinal)
+            ? this.pendingTellWorld
+            : string.Empty;
+
+        // Only /tell when we have that world - never guess a target. Opt-in via settings.
+        var doTell = this.config.TellStampCardUrlOnCreate && !string.IsNullOrEmpty(pickedWorld);
+        var tellWorld = pickedWorld;
 
         Run(async () =>
         {
-            var created = (await this.api.CreateStampRallyCardAsync(id, name)).Card;
+            var created = (await this.api.CreateStampRallyCardAsync(id, name, pickedWorld)).Card;
             var d = await this.api.GetStampRallyAsync(id);
             await Apply(() =>
             {
@@ -177,7 +183,7 @@ internal sealed class StampRallyTab : TabBase
         {
             ImGui.TableNextRow();
             ImGui.TableNextColumn();
-            ImGui.TextUnformatted(string.IsNullOrEmpty(c.ParticipantName) ? "-" : c.ParticipantName);
+            ImGui.TextUnformatted(Ui.ParticipantLabel(c.ParticipantName, c.World));
             ImGui.TableNextColumn();
             ImGui.TextUnformatted(c.CollectedCount.ToString());
             ImGui.TableNextColumn();
@@ -319,7 +325,12 @@ internal sealed class StampRallyTab : TabBase
 
         // Lock selection while a load/action is in flight so the picked rally and the
         // loaded detail/log can't diverge (see the same guard on the Garapon picker).
-        if (this.Busy)
+        // Snapshot Busy: the Selectable below calls LoadRally, which calls Run(), which sets Busy true
+        // synchronously, so re-reading the field at the End would pop a disabled
+        // scope that was never pushed and corrupt ImGui's stack for the rest of the
+        // frame. Same reason the canStart/canCreate/canAdd sites use a local.
+        var pickDisabled = this.Busy;
+        if (pickDisabled)
             ImGui.BeginDisabled();
         ImGui.SetNextItemWidth(280);
         if (ImGui.BeginCombo("##rallypick", preview))
@@ -331,7 +342,7 @@ internal sealed class StampRallyTab : TabBase
             }
             ImGui.EndCombo();
         }
-        if (this.Busy)
+        if (pickDisabled)
             ImGui.EndDisabled();
     }
 

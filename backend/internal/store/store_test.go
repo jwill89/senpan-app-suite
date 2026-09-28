@@ -1323,3 +1323,70 @@ func TestDuplicatePatternDetection(t *testing.T) {
 		t.Error("expected no duplicate for different pattern")
 	}
 }
+
+// TestWinnersLogPagePastEndReportsTotal pins the count on an over-shot page. The
+// total rides along on each row via COUNT(*) OVER(), so a page past the last entry
+// returned no rows and left total at 0 - telling the client the log was empty and
+// collapsing its pager, when it had merely scrolled past the end.
+func TestWinnersLogPagePastEndReportsTotal(t *testing.T) {
+	s := newTestStore(t)
+	if err := s.InsertWinnersLog([]model.WinnersLogEntry{
+		{CardID: "AAA111", PlayerName: "Alice", GameDetails: "Round 1", WinningPatterns: `["Top Row"]`},
+		{CardID: "BBB222", PlayerName: "Bob", GameDetails: "Round 1", WinningPatterns: `["Full Card"]`},
+		{CardID: "CCC333", PlayerName: "Cyra", GameDetails: "Round 1", WinningPatterns: `["Line"]`},
+	}); err != nil {
+		t.Fatalf("InsertWinnersLog: %v", err)
+	}
+
+	// A page well past the end: no rows, but the total must still be the truth.
+	entries, total, err := s.ListWinnersLog(10, 100, "logged_at", "DESC")
+	if err != nil {
+		t.Fatalf("ListWinnersLog: %v", err)
+	}
+	if len(entries) != 0 {
+		t.Fatalf("entries = %d; want 0 on a page past the end", len(entries))
+	}
+	if total != 3 {
+		t.Errorf("total = %d; want 3 (a page past the end must still report the real count)", total)
+	}
+}
+
+// TestOpenNoMigrateLeavesTheSchemaAlone pins the read-only opener. themetool is
+// routinely pointed at a copy of production, and its dump/check commands used the
+// migrating opener - so merely INSPECTING a file irreversibly upgraded its schema.
+func TestOpenNoMigrateLeavesTheSchemaAlone(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "readonly.db")
+
+	// A database one version behind: created normally, then stamped backwards.
+	s, err := store.New(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SetUserVersionForTest(1); err != nil {
+		t.Fatalf("stamp user_version: %v", err)
+	}
+	before, err := s.UserVersionForTest()
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.Close()
+
+	ro, err := store.OpenNoMigrate(path)
+	if err != nil {
+		t.Fatalf("OpenNoMigrate: %v", err)
+	}
+	after, err := ro.UserVersionForTest()
+	if err != nil {
+		t.Fatal(err)
+	}
+	ro.Close()
+
+	if after != before {
+		t.Errorf("read-only open migrated the database: user_version %d -> %d", before, after)
+	}
+
+	// A missing file is an error, not a silently created empty database.
+	if _, err := store.OpenNoMigrate(filepath.Join(t.TempDir(), "nope.db")); err == nil {
+		t.Error("OpenNoMigrate created a database that did not exist")
+	}
+}

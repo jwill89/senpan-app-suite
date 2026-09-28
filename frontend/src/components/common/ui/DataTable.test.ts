@@ -428,6 +428,38 @@ describe('DataTable opt-in features', () => {
     expect(exportFrom(wrapper)).toContain('"Last, First ""Nick"""')
   })
 
+  it('exportCsv neutralizes cells that a spreadsheet would run as a formula', () => {
+    // Excel and Sheets evaluate a cell starting with = + - @ (or a tab/CR). The
+    // stamp log and garapon draw log both export participant names typed by the
+    // public, so an unneutralized export runs whatever they typed in the
+    // spreadsheet of whichever staff member opened it.
+    const wrapper = mount(DataTable, {
+      props: {
+        columns: [{ key: 'name', label: 'Name' }] as DataColumn[],
+        rows: [
+          { id: 1, name: '=HYPERLINK("http://evil.test","click")', count: 0 },
+          { id: 2, name: '+1234', count: 0 },
+          { id: 3, name: '-cmd', count: 0 },
+          { id: 4, name: '@SUM(A1)', count: 0 },
+          { id: 5, name: 'Aria Fairwind', count: 0 },
+        ],
+        rowKey: 'id',
+      },
+    })
+    const csv = exportFrom(wrapper)
+    for (const lead of ['=', '+', '-', '@']) {
+      expect(csv).not.toContain(`
+${lead}`)
+      expect(csv).not.toContain(`"${lead}`)
+    }
+    // The text itself is preserved, just prefixed so it is not evaluated.
+    expect(csv).toContain(`'=HYPERLINK`)
+    expect(csv).toContain(`'+1234`)
+    // An ordinary name is untouched.
+    expect(csv).toContain('Aria Fairwind')
+    expect(csv).not.toContain("'Aria Fairwind")
+  })
+
   it('exportCsv leaves out columns marked noExport', () => {
     const wrapper = mount(DataTable, {
       props: {

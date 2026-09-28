@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"net/http/cookiejar"
 	"net/http/httptest"
@@ -1497,6 +1498,49 @@ func TestRaffles_EnterExceedsMax(t *testing.T) {
 	})
 	if resp.StatusCode != http.StatusBadRequest {
 		t.Errorf("status = %d; want 400", resp.StatusCode)
+	}
+	resp.Body.Close()
+}
+
+// TestRaffles_EnterRejectsOverflowingCount pins the ceiling on num_entries. The
+// handler used to floor the value at 1 and never cap it, so an unauthenticated
+// sign-up could post a count near MaxInt64: the store's cap check summed it with
+// the existing total, wrapped negative, passed the cap, and wrote a num_entries
+// SQLite had to widen to REAL - permanently 500ing the staff raffle view and the
+// entry-delete route for that raffle. Two sign-ups are needed to reach the
+// overflow, so the second is the one that must be refused.
+func TestRaffles_EnterRejectsOverflowingCount(t *testing.T) {
+	env := newTestEnv(t)
+	env.loginAdmin(t)
+
+	resp := env.postJSON(t, "/api/raffles", map[string]any{
+		"action": "create", "title": "Overflow Test", "max_entries": 3,
+	})
+	data := decodeBody(t, resp)
+	id := int(data["raffle"].(map[string]any)["id"].(float64))
+
+	resp = env.postJSON(t, fmt.Sprintf("/api/raffles/%d/enter", id), map[string]any{
+		"character_name": "Aria", "world": "Gilgamesh", "num_entries": 1,
+	})
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("first entry status = %d; want 201", resp.StatusCode)
+	}
+	resp.Body.Close()
+
+	resp = env.postJSON(t, fmt.Sprintf("/api/raffles/%d/enter", id), map[string]any{
+		"character_name": "Aria", "world": "Gilgamesh", "num_entries": math.MaxInt64,
+	})
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Errorf("overflowing entry status = %d; want 400", resp.StatusCode)
+	}
+	resp.Body.Close()
+
+	// The raffle must still be readable. This is the assertion that actually
+	// catches the regression: an overflowed count breaks the entry scan, so the
+	// detail view 500s rather than merely reporting a wrong total.
+	resp = env.get(t, fmt.Sprintf("/api/raffles/%d", id))
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("raffle detail after overflowing entry: status = %d; want 200", resp.StatusCode)
 	}
 	resp.Body.Close()
 }

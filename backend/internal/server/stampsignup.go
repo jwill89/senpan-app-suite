@@ -16,17 +16,20 @@ import (
 //
 // A rally carrying the public_signup opt-in is listed here and anyone may issue
 // themselves a card, rather than waiting for staff to hand one out. Signing up for a
-// rally that has an open Garapon linked to it also issues that drawing link, on the
-// SAME token - matching what an admin-issued link does (handleGaraponPlayerCreate),
-// so one hash serves both /garapon/<token> and /stamp-card/<token>.
+// rally that has an open Garapon linked to it also issues that drawing link, on its
+// OWN token: the card link can be shared, the drawing link spends draws, and they
+// must not be the same secret.
+//
+// A participant is recorded as a character name plus a home world, in two fields,
+// the way every other system in the app records one (model.ParticipantLabel).
 //
 // These paths are singular ("stamp-signup", "stamp-lookup") like the existing public
 // "stamp-card/{token}". They deliberately do NOT sit under the plural "stamp-rallies"
 // prefix, which adminMutationResource treats as an admin mutation; they broadcast
 // their own invalidation instead.
 
-// maxParticipantNameLen bounds a submitted name, counted in runes so a multi-byte
-// name isn't cut short by a byte count. Long enough for "Firstname Lastname @ World".
+// maxParticipantNameLen bounds a submitted name or world, counted in runes so a
+// multi-byte name isn't cut short by a byte count.
 const maxParticipantNameLen = 60
 
 // handleStampSignupList returns the rallies currently open to public sign-up.
@@ -54,7 +57,10 @@ func (s *Server) handleStampSignupList(w http.ResponseWriter, r *http.Request) {
 
 // stampSignupRequest is the JSON body for POST /api/stamp-signup/{id}.
 type stampSignupRequest struct {
-	Name           string `json:"name"`
+	Name string `json:"name"`
+	// Home world, picked from a list rather than typed. Optional on the wire so an
+	// older client still works, but the form always sends it.
+	World          string `json:"world"`
 	TurnstileToken string `json:"turnstile_token"` // Cloudflare Turnstile token (when enabled)
 }
 
@@ -62,9 +68,9 @@ type stampSignupRequest struct {
 //
 //	Endpoint:  POST /api/stamp-signup/{id}
 //	Auth:      public
-//	Request:   {"name": "Firstname Lastname @ World"}
+//	Request:   {"name": "Firstname Lastname", "world": "Gilgamesh"}
 //	Response:  201 StampSignupResponse - the card token, plus the garapon token when
-//	           the rally has an open linked Garapon (the same value)
+//	           the rally has an open linked Garapon (a separate token)
 func (s *Server) handleStampSignup(w http.ResponseWriter, r *http.Request) {
 	// Public endpoint: throttle per IP so a bot can't fill a rally's card table with
 	// junk names. Every attempt counts against it, as on the raffle sign-up path.
@@ -98,6 +104,17 @@ func (s *Server) handleStampSignup(w http.ResponseWriter, r *http.Request) {
 	}
 	if utf8.RuneCountInString(name) > maxParticipantNameLen {
 		writeError(w, http.StatusBadRequest, "That name is too long")
+		return
+	}
+	// The world arrives as its own field now, the way every other system stores it.
+	// A client that still sends "Name @ World" in one string is split here rather
+	// than being stored as a name nothing else can match.
+	world := strings.TrimSpace(req.World)
+	if world == "" {
+		name, world = model.SplitParticipantLabel(name)
+	}
+	if utf8.RuneCountInString(world) > maxParticipantNameLen {
+		writeError(w, http.StatusBadRequest, "That world name is too long")
 		return
 	}
 
@@ -134,7 +151,7 @@ func (s *Server) handleStampSignup(w http.ResponseWriter, r *http.Request) {
 		garaponDraws = clampDefaultDraws(g.DefaultDraws)
 	}
 
-	card, err := s.store.SignUpForRally(rallyID, name, garaponID, garaponDraws)
+	card, garaponToken, err := s.store.SignUpForRally(rallyID, name, world, garaponID, garaponDraws)
 	if errors.Is(err, store.ErrParticipantNameTaken) {
 		writeError(w, http.StatusConflict,
 			`Someone has already signed up for this rally under that name. `+
@@ -148,12 +165,15 @@ func (s *Server) handleStampSignup(w http.ResponseWriter, r *http.Request) {
 
 	resp := model.StampSignupResponse{
 		ParticipantName: card.ParticipantName,
+		World:           card.World,
 		RallyTitle:      rally.Title,
 		CardToken:       card.Token,
 	}
 	if garaponID != nil {
-		// The pair shares one token by construction - see Store.SignUpForRally.
-		resp.GaraponToken = card.Token
+		// Its own token, not the card's - see Store.SignUpForRally. This is the one
+		// moment the drawing link is handed out, so the client stores it locally;
+		// no name-keyed lookup will return it again.
+		resp.GaraponToken = garaponToken
 		resp.GaraponTitle = garaponTitle
 	}
 	writeJSON(w, http.StatusCreated, resp)
@@ -173,6 +193,9 @@ func (s *Server) handleStampSignup(w http.ResponseWriter, r *http.Request) {
 // stampLookupRequest is the JSON body for POST /api/stamp-lookup.
 type stampLookupRequest struct {
 	Name string `json:"name"`
+	// Picked from the same world list the sign-up form uses. Optional: a client
+	// that still sends one composed "Name @ World" string is split server-side.
+	World string `json:"world"`
 }
 
 // handleStampLookup returns the cards - and paired drawing links - held under an
@@ -207,7 +230,11 @@ func (s *Server) handleStampLookup(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "Enter the name you signed up with")
 		return
 	}
-	entries, err := s.store.LookupParticipantCards(name)
+	world := strings.TrimSpace(req.World)
+	if world == "" {
+		name, world = model.SplitParticipantLabel(name)
+	}
+	entries, err := s.store.LookupParticipantCards(name, world)
 	if err != nil {
 		writeInternalError(w, "look up participant cards", err)
 		return

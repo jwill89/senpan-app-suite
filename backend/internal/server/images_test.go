@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"app-suite/internal/server"
@@ -514,4 +515,46 @@ func newTestEnvWithWebRoot(t *testing.T, webRoot string) *testEnv {
 	client := ts.Client()
 	client.Jar = jar
 	return &testEnv{ts: ts, client: client, store: st, srv: srv}
+}
+
+// TestImages_SVGUploadPersistsTheSanitizedBytes closes the gap the test above
+// leaves. That one proves sanitizeSVG runs as a VALIDATOR - a malformed file is
+// rejected - but never reads the stored file back, so swapping the sanitized bytes
+// for the raw upload at the os.WriteFile would not fail anything. An SVG is served
+// same-origin and inlined by the frontend, so what lands on disk is the part that
+// matters.
+func TestImages_SVGUploadPersistsTheSanitizedBytes(t *testing.T) {
+	webRoot := t.TempDir()
+	env := newTestEnvWithWebRoot(t, webRoot)
+	env.loginAdmin(t)
+
+	// Valid SVG carrying the things the sanitizer is there to strip.
+	hostile := []byte(`<?xml version="1.0"?><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1 1">` +
+		`<script>alert(1)</script>` +
+		`<a href="javascript:alert(2)"><path d="M0 0h1v1H0z" onload="alert(3)"/></a>` +
+		`</svg>`)
+
+	resp := env.postImagesUpload(t, "flourishes", map[string][]byte{"evil.svg": hostile})
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("upload status = %d; want 200", resp.StatusCode)
+	}
+	if up, _ := decodeBody(t, resp)["uploaded"].([]any); len(up) != 1 {
+		t.Fatal("the SVG was not accepted; this test needs it stored to inspect")
+	}
+
+	stored, err := os.ReadFile(filepath.Join(webRoot, "images", "flourishes", "evil.svg"))
+	if err != nil {
+		t.Fatalf("read stored svg: %v", err)
+	}
+	got := string(stored)
+	for _, banned := range []string{"<script", "javascript:", "onload"} {
+		if strings.Contains(strings.ToLower(got), banned) {
+			t.Errorf("stored SVG still contains %q - the RAW upload was persisted, not the sanitized output:\n%s",
+				banned, got)
+		}
+	}
+	// It must still be a usable SVG, not an empty file.
+	if !strings.Contains(got, "<svg") || !strings.Contains(got, "<path") {
+		t.Errorf("sanitized SVG lost its drawable content: %s", got)
+	}
 }

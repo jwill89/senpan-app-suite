@@ -213,18 +213,9 @@ function cancel(): void {
 </template>
 
 <style scoped>
-.repeater {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  overflow-x: auto;
-}
-.repeater-row {
-  display: grid;
-  align-items: center;
-  column-gap: 8px;
-}
-/* Owner: a single growing text input + the small delete button. */
+/* Owner: a single growing text input + the small delete button.
+   The .repeater/.repeater-row objects themselves are shared (utilities.css);
+   only these per-shape grid templates are this form's own. */
 .owner-row {
   grid-template-columns: minmax(140px, 1fr) 46px;
 }
@@ -232,11 +223,6 @@ function cancel(): void {
 .hour-row {
   grid-template-columns: minmax(120px, 1fr) 120px 120px 46px;
 }
-.repeater-row > input {
-  width: 100%;
-  min-width: 0;
-}
-/* Native colour picker + hex readout + reset, mirroring the Tea Room form. */
 /* Discord + Carrd links side by side, wrapping on narrow screens. */
 .affiliate-links-row {
   display: flex;

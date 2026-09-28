@@ -349,23 +349,38 @@ func (s *Store) DueAnnouncements(now time.Time) ([]model.Announcement, error) {
 // MarkAnnouncementPosted stamps last_posted_at and updates the schedule cursor:
 // the next instant to fire (empty for a finished one-time) and whether it stays
 // active.
-func (s *Store) MarkAnnouncementPosted(id int64, nextPostAt string, active bool) error {
-	_, err := s.db.Exec(
+// prevNextPostAt is the cursor the caller READ before it started posting. The
+// update only applies while the row still holds it, so an admin edit that landed
+// during the (up to 15s) Discord POST is not silently reverted by a write computed
+// from a stale snapshot. Returns whether the row still matched.
+func (s *Store) MarkAnnouncementPosted(id int64, prevNextPostAt, nextPostAt string, active bool) (bool, error) {
+	res, err := s.db.Exec(
 		`UPDATE announcements SET last_posted_at = CURRENT_TIMESTAMP, next_post_at = ?, active = ?
-		 WHERE id = ?`, nextPostAt, boolToInt(active), id,
+		 WHERE id = ? AND next_post_at = ?`, nextPostAt, boolToInt(active), id, prevNextPostAt,
 	)
-	return err
+	if err != nil {
+		return false, err
+	}
+	n, _ := res.RowsAffected()
+	return n > 0, nil
 }
 
 // AdvanceAnnouncement updates only the schedule cursor (next instant + active +
 // remaining skips) without stamping a post - used when a scheduled occurrence is
 // skipped.
-func (s *Store) AdvanceAnnouncement(id int64, nextPostAt string, active bool, skipCount int) error {
-	_, err := s.db.Exec(
-		`UPDATE announcements SET next_post_at = ?, active = ?, skip_count = ? WHERE id = ?`,
-		nextPostAt, boolToInt(active), skipCount, id,
+// prevNextPostAt guards against a concurrent admin edit the same way
+// MarkAnnouncementPosted does. Returns whether the row still matched.
+func (s *Store) AdvanceAnnouncement(id int64, prevNextPostAt, nextPostAt string, active bool, skipCount int) (bool, error) {
+	res, err := s.db.Exec(
+		`UPDATE announcements SET next_post_at = ?, active = ?, skip_count = ?
+		 WHERE id = ? AND next_post_at = ?`,
+		nextPostAt, boolToInt(active), skipCount, id, prevNextPostAt,
 	)
-	return err
+	if err != nil {
+		return false, err
+	}
+	n, _ := res.RowsAffected()
+	return n > 0, nil
 }
 
 // SetAnnouncementSkip sets how many upcoming occurrences to skip (0 clears it).

@@ -253,14 +253,19 @@ func (s *Server) writePasskeyList(w http.ResponseWriter, userID int64) {
 // handlePasskeyLoginBegin starts a usernameless (discoverable) passkey login.
 // Auth: public. The browser picks a resident credential; we return the challenge.
 func (s *Server) handlePasskeyLoginBegin(w http.ResponseWriter, r *http.Request) {
-	// Reuse the login brute-force limiter so an unauthenticated client can't hammer
-	// the begin endpoint to amplify challenge/session writes (each begin stashes a
-	// WebAuthn challenge in the session store). Same per-IP budget as login/finish.
+	// Bound unauthenticated session-store growth: every begin stashes a WebAuthn
+	// challenge in the session store, which only expires on its own. This used to
+	// consult s.limiter, whose counter nothing on this path ever incremented - the
+	// guard could not fire, so an unauthenticated client could mint challenges
+	// without limit. It gets its own counting budget instead of sharing the login
+	// limiter, so opening the passkey prompt a few times can't lock the account out
+	// of password login.
 	ip := clientIP(r)
-	if s.limiter.isLimited(ip) {
+	if s.passkeyBeginLimiter.isLimited(ip) {
 		writeError(w, http.StatusTooManyRequests, "Too many attempts. Please try again later.")
 		return
 	}
+	s.passkeyBeginLimiter.recordFailure(ip)
 	wa, err := s.webAuthn(r)
 	if err != nil {
 		writeInternalError(w, "webauthn config", err)
@@ -335,9 +340,11 @@ func (s *Server) handlePasskeyLoginFinish(w http.ResponseWriter, r *http.Request
 		}
 	}
 
-	// Establish the session (rotate token to prevent fixation), same as password login.
-	_ = s.sessions.RenewToken(r.Context())
-	s.sessions.Put(r.Context(), "user_id", acct.ID)
+	// Establish the session exactly as password login does - including the password
+	// epoch. Stamping only the id here left every passkey session reading as epoch
+	// 0, which loadCurrentUser rejects for any account that has ever changed its
+	// password: the login succeeded and every request after it 401'd.
+	s.establishSession(r, acct)
 	s.limiter.resetFailures(ip)
 	if err := s.store.UpdateLastLogin(acct.ID); err != nil {
 		slog.Error("update last login", "error", err, "user_id", acct.ID)

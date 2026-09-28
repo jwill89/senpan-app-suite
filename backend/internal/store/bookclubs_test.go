@@ -111,8 +111,8 @@ func TestReadingListItemsRoundTrip(t *testing.T) {
 	// Update the first item.
 	first.Title = "Renamed"
 	first.Sources = []model.ReadingListSource{{Title: "Only", URL: "https://x.test"}}
-	if err := s.UpdateReadingListItem(&first); err != nil {
-		t.Fatal(err)
+	if updated, err := s.UpdateReadingListItem(&first); err != nil || !updated {
+		t.Fatalf("UpdateReadingListItem = %v, err=%v", updated, err)
 	}
 	got2, _ := s.GetReadingList(listID)
 	if got2.Items[0].Title != "Renamed" || len(got2.Items[0].Sources) != 1 {
@@ -120,7 +120,7 @@ func TestReadingListItemsRoundTrip(t *testing.T) {
 	}
 
 	// Delete the first item.
-	deleted, err := s.DeleteReadingListItem(itemID)
+	deleted, err := s.DeleteReadingListItem(listID, itemID)
 	if err != nil || !deleted {
 		t.Fatalf("DeleteReadingListItem = %v, err=%v", deleted, err)
 	}
@@ -163,7 +163,7 @@ func TestCountReadingListItemsByCover(t *testing.T) {
 		t.Fatalf("CountReadingListItemsByCover = %d, %v; want 2, nil", n, err)
 	}
 	// After deleting one item the shared cover is still referenced by the other.
-	if _, err := s.DeleteReadingListItem(a); err != nil {
+	if _, err := s.DeleteReadingListItem(listID, a); err != nil {
 		t.Fatal(err)
 	}
 	if n, _ := s.CountReadingListItemsByCover(shared); n != 1 {

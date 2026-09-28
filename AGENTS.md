@@ -14,7 +14,8 @@ Beyond bingo, the app is a small "suite" for a Discord community: **raffles**,
 and **announcements** - these post **Discord embeds** (manually or on a
 schedule via background goroutines). It has since grown a **Senpan Tea House** side
 (partner **affiliates** and bookable **tea rooms**) and a **festival** side (the
-**Garapon** lottery drum and **Stamp Rally**), plus player-submitted **custom card
+**Garapon** lottery drum, the **Stamp Rally** and the interactive **Festival Map**),
+plus player-submitted **custom card
 requests** and an in-game **Yoever** reaction. It also hosts images for external
 **Carrd** sites and admin-uploaded **fonts**. Admin login is per-user with optional
 passwordless **passkeys** and an optional Cloudflare **Turnstile** bot check.
@@ -82,7 +83,7 @@ immediately**. See **Authentication & authorization** below.
 |       |   +-- common/               <- BingoBoard, CalledNumbers, PatternMini, ModalOverlay, ConfirmModal, ToastNotification, LoadingSpinner, RouteProgressBar, MarkdownEditor (WYSIWYG), AppFooter, CornerFlourish
 |       |   |   \-- ui/                <- admin UI primitives (presentational, render stable themeable classes). Forms/tables: AdminPanel, FormField, FormRow, FormActions, DataTable, PaginationBar, EmptyState. Manager model: ManagerView (list page shell), ListRow (item row, actions far-right), SubPageHeader (Back sub-page header), SearchInput. Shared widgets: PatternPicker (v-model selected pattern ids - search + category filter + Select-All + collapse-all over a grouped collapsible checkbox grid; used by GameTab + the Preset editor), ImageField (upload-or-reuse-an-image field; announcement forms), ColorPicker (lazy vue-color Chrome wrapper + .color-picker skin; player stamp-colour modal). Every admin "manage items" tab routes through these for one consistent structure
 |       |   +-- player/               <- Stamp{Shape,Color,Opacity} pickers, WinPatternsPanel
-|       |   \-- admin/                <- AdminSidebar + one component per tab + modals (CardPreview, EndGame, WinnerVerify, HalftimePrompt) + ThemeTokenEditor. Tabs: Game, Cards, WinnersLog, Patterns (one manager unifying the patterns list + New Pattern / Manage Categories sub-pages), Presets, RaffleForm, Raffles, Announcements, Affiliates + AffiliateForm, BookClub (one generic tab serves every club), Garapon + GaraponForm, StampRallies + StampRallyForm, Settings, Themes, Images, Users (admin-only account+permission manager), Logs (admin-only live server-log viewer - typed/colored columns, filters, live tail, DEBUG toggle), Fonts, CarrdUpload; PlacementEditor (shared %-based image placement widget for Garapon/Stamp Rally forms)
+|       |   \-- admin/                <- AdminSidebar + one component per tab + modals (CardPreview, EndGame, WinnerVerify, HalftimePrompt) + ThemeTokenEditor. Tabs: Game, Cards, WinnersLog, Patterns (one manager unifying the patterns list + New Pattern / Manage Categories sub-pages), Presets, RaffleForm, Raffles, Announcements, Affiliates + AffiliateForm, BookClub (one generic tab serves every club), Garapon + GaraponForm, StampRallies + StampRallyForm, FestivalMaps + FestivalMapForm, Settings, Themes, Images, Users (admin-only account+permission manager), Logs (admin-only live server-log viewer - typed/colored columns, filters, live tail, DEBUG toggle), Fonts, CarrdUpload; PlacementEditor (shared %-based image placement widget for Garapon/Stamp Rally forms) + MapStallEditor (the same for Festival Map stalls - both share the drag geometry in `composables/usePlacementDrag.ts` and the `.placement-*`/`.map-*` styles in `assets/styles/mapeditor.css`)
 |       +-- views/                    <- HomeView, PlayerView, RafflesView, RaffleDetailView, GaraponView (public token-gated draw), StampCardView (public token-gated stamp card), AdminLoginView, RegisterView (hidden), NoAccessView (active account, no granted pages), AdminView
 |       \-- **/*.test.ts              <- Vitest unit/component tests, colocated next to the code they cover
 +-- .github/workflows/ci.yml          <- CI: frontend (lint-typecheck-test-build) + backend (lint-build-vet-test-govulncheck) + plugin (build-format-lint) + release (main: auto tag + GitHub Release per component on version bump)
@@ -203,7 +204,7 @@ the updated state to all connected WebSocket clients via `Hub.Broadcast()`, `Hub
 - `ListWinnersLog` uses `COUNT(*) OVER()` window function (single query for data + total).
 - SQLite connection pool allows 4 concurrent connections for WAL concurrent readers.
 
-**Schema versioning**: `store/migrate.go` uses `PRAGMA user_version` to track schema version (currently **60**; v60 split stamp-rally stamps into food and game stamps (`stamp_rally_stamps.stamp_type` + a `stamp_rally_collected.stamp_type` snapshot, both defaulting to `food` so every stamp on every past rally stays what it was) and let a rally complete on a count of each rather than the whole card (`stamp_rallies.completion_mode` defaulting to `all`, plus `required_food`/`required_game` - a `counts` rally requiring nothing of either type is refused on save, and falls back to the whole-card rule if such a row is ever read); v59 added `raffles.pay_image`; v58 added the raffle-entry settlement columns (`paid_entries`/`waived`); v57 added `raffles.entry_mode` + `tier_costs`; v56 replaced `announcements.skip_next` (a boolean) with `skip_count` - how many upcoming occurrences to skip, carrying a pending skip over as 1; v55 added `garapons.default_draws` - the draw allowance a link carries when nobody picks a number, used by public stamp-rally sign-up and as the admin fallback; v54 added `stamp_rallies.public_signup` - the self-service sign-up opt-in, defaulting to 0 so no existing rally became public; v53 added `tea_rooms.room_owner`; v52 added `affiliates.subtitle`; v51 added `users.password_epoch` - a counter bumped on every password change/reset that invalidates the account's other sessions; v50 added the `game_presets.auto_call`/`auto_interval` columns for auto-run games). v22 added the `users` table + seeded the bootstrap admin; later migrations grew the announcements feature (roles, mention, location, thumbnail, dynamic dates, sort order) and dropped the retired `book_club_events` table (v28), moved themes to structured design tokens + added style flourishes (v34/v37), then shipped the **Garapon** festival lottery drum (v35-36), **Affiliates** (v38), the **Stamp Rally** (v39-41, including the v41 collected-log rebuild that keeps logs after a card/stamp is deleted), per-account **personal-access tokens** for the plugin/API (v42), and a `UNIQUE(game_id, number)` index on `called_numbers` as a duplicate-draw backstop (v43), then **passkeys** (WebAuthn `user_passkeys`, v44), **Tea Rooms** (v45; `subtitle` + a unique `room_number` v46), added affiliate fields (v47) and the stamp-rally redeem image (v48), and **public/private theme visibility** plus **custom card requests** (the `cards.protected`/`custom_status`/`world` columns, v49).
+**Schema versioning**: `store/migrate.go` uses `PRAGMA user_version` to track schema version (currently **69**; v69 added the tea-room lock - `tea_rooms.locked` (locked right now, as opposed to `lockable`, which only says a room CAN be locked) and `tea_rooms.locked_until` (the UTC instant a background sweeper lifts it at; '' = it stands until an admin unlocks the room, how every lock behaved before); v68 added `festival_stalls.text_color` - the colour a pitch's label is drawn in, since the old fixed dark ink only read on a light fill; v67 added `festival_stalls.selection_color` (the halo around a tapped pitch, its own colour so it can contrast with the fill) and `festival_stall_occupants.event_carrd` (a per-OCCUPANT event-page link, since a pitch that changes hands has a different page each day); v66 gave `stamp_rally_cards` and `garapon_players` their own `world` column so every system records a participant the same way - name and home world, kept apart; v65 added `raffles.festival_map_id` + `raffles.occupant_id` - the festival a raffle belongs to and the pitch occupant it is assigned to, so the public map's stall panel can link to a raffle that is running; v64 split a festival stall into the PITCH on the plan (`festival_stalls`) and the OCCUPANTS standing in it (`festival_stall_occupants`), so a booth that changes hands between days is one shape with two names, and renamed/remapped `stamp_rally_stamps.stall_id` to `occupant_id` since a stamp belongs to whoever runs the pitch that day; v63 added `festival_stalls.type_label` - the caption drawn under a stall's title, used when its type is `other` so a booth can read "Omikuji" rather than "Other"; v62 added `festival_maps.slug` - the optional shortcode a map is linked by - behind a PARTIAL unique index (`WHERE slug != ''`, since '' means "no shortcode" and every map without one would otherwise collide); v61 added the **Festival Map** tables (`festival_maps` + `festival_stalls`) and the two columns that tie a Stamp Rally to one - `stamp_rallies.festival_map_id` and `stamp_rally_stamps.stall_id`, both FK-less like the garapon link, so the store clears them itself on delete; v60 split stamp-rally stamps into food and game stamps (`stamp_rally_stamps.stamp_type` + a `stamp_rally_collected.stamp_type` snapshot, both defaulting to `food` so every stamp on every past rally stays what it was) and let a rally complete on a count of each rather than the whole card (`stamp_rallies.completion_mode` defaulting to `all`, plus `required_food`/`required_game` - a `counts` rally requiring nothing of either type is refused on save, and falls back to the whole-card rule if such a row is ever read); v59 added `raffles.pay_image`; v58 added the raffle-entry settlement columns (`paid_entries`/`waived`); v57 added `raffles.entry_mode` + `tier_costs`; v56 replaced `announcements.skip_next` (a boolean) with `skip_count` - how many upcoming occurrences to skip, carrying a pending skip over as 1; v55 added `garapons.default_draws` - the draw allowance a link carries when nobody picks a number, used by public stamp-rally sign-up and as the admin fallback; v54 added `stamp_rallies.public_signup` - the self-service sign-up opt-in, defaulting to 0 so no existing rally became public; v53 added `tea_rooms.room_owner`; v52 added `affiliates.subtitle`; v51 added `users.password_epoch` - a counter bumped on every password change/reset that invalidates the account's other sessions; v50 added the `game_presets.auto_call`/`auto_interval` columns for auto-run games). v22 added the `users` table + seeded the bootstrap admin; later migrations grew the announcements feature (roles, mention, location, thumbnail, dynamic dates, sort order) and dropped the retired `book_club_events` table (v28), moved themes to structured design tokens + added style flourishes (v34/v37), then shipped the **Garapon** festival lottery drum (v35-36), **Affiliates** (v38), the **Stamp Rally** (v39-41, including the v41 collected-log rebuild that keeps logs after a card/stamp is deleted), per-account **personal-access tokens** for the plugin/API (v42), and a `UNIQUE(game_id, number)` index on `called_numbers` as a duplicate-draw backstop (v43), then **passkeys** (WebAuthn `user_passkeys`, v44), **Tea Rooms** (v45; `subtitle` + a unique `room_number` v46), added affiliate fields (v47) and the stamp-rally redeem image (v48), and **public/private theme visibility** plus **custom card requests** (the `cards.protected`/`custom_status`/`world` columns, v49).
 On the hot path (version == current), zero migration queries execute. Migrations run
 incrementally only when the version is behind.
 
@@ -249,16 +250,19 @@ The principles below are _why_ the conventions exist - keep changes aligned with
 | `announcement_roles`    | `id INTEGER PK`, `name`, `role_id` (Discord role snowflake), `created_at` - a taggable role an announcement can ping                                                                                                                                                                                                                                                                                                                                                   |
 | `announcements`         | `id INTEGER PK`, `type_id`, `title`, `details` (markdown), `image`, `color`, `location`, event window (`start_local`/`end_local` + computed `start_at`/`end_at`), schedule (`schedule_kind`, `timezone`, `once_local`, `schedule_minutes`, `schedule_weekdays`, `schedule_week_of_month`), `next_post_at`, `skip_count` (upcoming occurrences to skip), `active`, `last_posted_at`, `buttons TEXT` (JSON array of up to 5 Discord link buttons), `mention` (`""`/`everyone`/`role:<id>`), `created_at` |
 | `affiliates`            | `id INTEGER PK`, `name`, `owners TEXT` (JSON), `location`, `timezone`, `hours TEXT` (JSON opening-hours ranges), `details` (markdown), `logo`, `screenshot`, `created_at` - a partner establishment (Senpan Tea House -> Affiliates)                                                                                                                                                                                                                                   |
-| `tea_rooms`             | `id INTEGER PK`, `name`, `subtitle`, `room_number` (UNIQUE public key), `cost_per_half_hour`, `hashtags`, `description` (markdown), `seasonal`/`open`/`lockable`/`discounted` (flags), `image` (library URL), `color` (embed accent), `sort_order`, `created_at` - a bookable room (Senpan Tea House -> Tea Rooms); a public CORS read API (`/api/tea-rooms/public`) feeds external Carrd sites its live availability + gil pricing                                    |
+| `tea_rooms`             | `id INTEGER PK`, `name`, `subtitle`, `room_number` (UNIQUE public key), `cost_per_half_hour`, `hashtags`, `description` (markdown), `seasonal`/`open`/`lockable`/`discounted` (flags), `locked` + `locked_until` (the lock and the UTC instant it lifts at; '' = until an admin unlocks it), `image` (library URL), `color` (embed accent), `sort_order`, `created_at` - a bookable room (Senpan Tea House -> Tea Rooms); a public CORS read API (`/api/tea-rooms/public`) feeds external Carrd sites its live availability + gil pricing                                    |
 | `garapons`              | `id INTEGER PK`, `title`, `details` (markdown), `grand_prize_image`, `status` (open/closed), `stamp_rally_id` (optional link), `default_draws` (draws per link when unspecified), `created_at` - a festival lottery drum                                                                                                                                                                                                                                                                                                  |
 | `garapon_prizes`        | `id INTEGER PK`, `garapon_id`, `name`, `ball_color`, `rate REAL`, `is_grand`, `sort_order` - a garapon prize tier                                                                                                                                                                                                                                                                                                                                                      |
 | `garapon_players`       | `id INTEGER PK`, `garapon_id`, `token TEXT UNIQUE`, `player_name`, `max_draws`, `stamp_card_id` (optional, for a linked rally), `created_at` - a per-player drawing link                                                                                                                                                                                                                                                                                               |
 | `garapon_draws`         | `id INTEGER PK`, `garapon_id`, `player_id` (nullable, `ON DELETE SET NULL`), `prize_id`, snapshots `player_name`/`prize_name`/`ball_color`, `drawn_at` - the draw log (survives link deletion)                                                                                                                                                                                                                                                                         |
-| `stamp_rallies`         | `id INTEGER PK`, `title`, `card_image`, `not_stamped_image`, `available_from`/`available_to`, `details`, `redeem_instructions`, `status` (open/closed), `public_signup` (self-service sign-up opt-in, default 0), `completion_mode` (`all` = collect the whole card, the default; `counts` = per-type requirement), `required_food`/`required_game` (the counts, read in `counts` mode only), `created_at` - a stamp-rally event (Festival -> Stamp Rally)                                                                                                                                                                                                                                                   |
-| `stamp_rally_stamps`    | `id INTEGER PK`, `rally_id`, `affiliate_id` (nullable = Tea House default), `image`, `password`, `stamp_type` (`food`/`game`, default `food`), `%`-based placement (`pos_x`/`pos_y`/`width`/`height`/`rotation`), `active_from`/`active_to`, `paused`, `sort_order`                                                                                                                                                                                                                                                  |
+| `stamp_rallies`         | `id INTEGER PK`, `title`, `card_image`, `not_stamped_image`, `available_from`/`available_to`, `details`, `redeem_instructions`, `status` (open/closed), `public_signup` (self-service sign-up opt-in, default 0), `completion_mode` (`all` = collect the whole card, the default; `counts` = per-type requirement), `required_food`/`required_game` (the counts, read in `counts` mode only), `festival_map_id` (optional Festival Map link), `created_at` - a stamp-rally event (Festival -> Stamp Rally)                                                                                                                                                                                                                                                   |
+| `stamp_rally_stamps`    | `id INTEGER PK`, `rally_id`, `occupant_id` (nullable; a `festival_stall_occupants` row when the rally is linked to a map - the stamp then takes its affiliate from that occupant, and names the occupant rather than the pitch because a pitch that changes hands hosts two different stalls), `affiliate_id` (nullable = Tea House default), `image`, `password`, `stamp_type` (`food`/`game`, default `food`), `%`-based placement (`pos_x`/`pos_y`/`width`/`height`/`rotation`), `active_from`/`active_to`, `paused`, `sort_order`                                                                                                                                                                                                                                                  |
 | `stamp_rally_prizes`    | `id INTEGER PK`, `rally_id`, `name`, `image`, `%`-based placement (`pos_x`/`pos_y`/`width`/`height`/`rotation`), `sort_order`                                                                                                                                                                                                                                                                                                                                          |
 | `stamp_rally_cards`     | `id INTEGER PK`, `rally_id`, `token TEXT UNIQUE`, `participant_name`, `completed`, `completed_at`, `created_at` - a per-participant card                                                                                                                                                                                                                                                                                                                               |
 | `stamp_rally_collected` | `id INTEGER PK`, `rally_id`, `card_id`/`stamp_id` (nullable, `ON DELETE SET NULL`), snapshots `participant_name`/`stall_name`/`stamp_type`, `stamped_at`, `UNIQUE(card_id, stamp_id)` - the collected-stamp log (survives card/stamp deletion)                                                                                                                                                                                                                                      |
+| `festival_maps`         | `id INTEGER PK`, `title`, `slug` (optional shortcode, '' = linked by id only; PARTIAL UNIQUE index), `description` (markdown), `times TEXT` (JSON datetime ranges), `map_image` (the bare floor plan), `status` (`in_progress`/`published`/`closed`; only `published` is public), `created_at` - an interactive festival floor plan (Festival -> Festival Map) |
+| `festival_stalls`       | `id INTEGER PK`, `map_id`, `shape` (`circle`/`rect`), `color` (`#rrggbb`, '' = the leading occupant's type default), `%`-based placement (`pos_x`/`pos_y`/`width`/`height`/`rotation`), `sort_order` - one PITCH on the plan: where a booth sits and how it is drawn, not who is in it |
+| `festival_stall_occupants` | `id INTEGER PK`, `stall_id`, `affiliate_id` (nullable = the venue itself), `title`, `description` (markdown), `stall_type` (`game`/`food`/`both`/`other`), `type_label` (the caption under the title, rendered only when the type is `other`), `times TEXT` (JSON; empty = the whole festival), `sort_order` - who stands in a pitch. Several rows when a booth changes hands between days |
 | `user_tokens`           | `user_id INTEGER PK`, `token_hash TEXT UNIQUE` (SHA-256; plaintext shown once), `token_prefix`, `created_at`, `last_used_at` - one personal-access token per account for the plugin/API bearer auth                                                                                                                                                                                                                                                                    |
 | `user_passkeys`         | `id INTEGER PK`, `user_id` (FK->users, `ON DELETE CASCADE`), `credential_id TEXT UNIQUE` (base64url), `credential TEXT` (go-webauthn Credential JSON - key material, never on the API model), `name`, `created_at`, `last_used_at` - a WebAuthn passkey for passwordless login                                                                                                                                                                                         |
 
@@ -293,7 +297,9 @@ dispatches WS messages into the stores.
 **Routing is Vue Router** (history mode, `router/index.ts`) - real linkable URLs,
 not store-driven view switching:
 
-- Public: `/`, `/play/:cardId`, `/raffles`, `/raffles/:id`, `/garapon/:token`
+- Public: `/`, `/play/:cardId`, `/raffles`, `/raffles/:id`, `/festival-maps`,
+  `/festival-maps/:id` (the published festival maps and one map's interactive
+  floor plan), `/garapon/:token`
   (per-player Garapon draw - the unguessable token is the capability, no admin
   auth), `/stamp-card/:token` (per-participant Stamp Rally card, likewise
   token-gated), `/admin/login`, `/admin/register` (hidden - linked nowhere; admins
@@ -346,7 +352,7 @@ Never edit it by hand. Request/response/WebSocket envelopes are hand-written in
 **Performance / tooling**:
 
 - **Lazy routes**: every view + admin tab is a dynamic `import()` in `router/index.ts`, so heavy deps (the Milkdown editor, vue-draggable-plus, markdown-it) load only when their route is visited - the player/home payload stays small. `manualChunks` (vite.config) keeps shared vendors cached across route chunks.
-- **PWA**: `vite-plugin-pwa` (`registerType: 'autoUpdate'`) emits `sw.js` + `manifest.webmanifest`; the SW precaches the app shell and falls back to `index.html` for SPA routes, with `/api/` and `/images/` denylisted. The deploy `.htaccess` exempts `sw.js`/`registerSW.js`/`*.webmanifest` from the immutable cache so updates land.
+- **PWA**: `vite-plugin-pwa` (`registerType: 'autoUpdate'`) emits `sw.js` + `manifest.webmanifest`; the SW precaches the app shell and falls back to `index.html` for SPA routes, with `/api/` and `/images/` denylisted. The deploy `.htaccess` exempts `sw.js`/`registerSW.js`/`*.webmanifest` from the immutable cache so updates land. **The precache carries only what a public visitor can reach**: `markAdminOnlyOutput` in `vite.config.ts` walks the bundle graph treating admin chunks as barriers, and everything unreachable (Milkdown, the KaTeX faces, `AdminView`, the `*Tab` chunks, `DataTable`) is dropped from the manifest and left to a `CacheFirst` runtime rule, so an admin still gets it offline after one visit. Do not swap that for a file-name glob - names do not carry the answer (`DataTable` is admin-only; `emojipicker` and `fontawesome` are not). `verifyAdminNotPrecached` fails the build if any of it reaches the precache again.
 - **Route progress + loading UX**: a top progress bar (`RouteProgressBar.vue`, driven by `ui.routeLoading` from the router guards) shows during async navigation/lazy-chunk loads; stores expose per-action loading flags (`joining`, `drawing`, `starting`, ...) that drive `LoadingSpinner.vue` + disabled buttons.
 - **Global error handler**: `app.config.errorHandler` (`main.ts`) surfaces uncaught errors as a toast.
 - **Accessible modals**: `ModalOverlay.vue` traps focus, restores it on close, supports Escape, and sets `role="dialog"`/`aria-modal`.
@@ -373,9 +379,9 @@ Never edit it by hand. Request/response/WebSocket envelopes are hand-written in
 - **Live-game feedback** (ambient only - never tracks the player's own board, by design, to preserve player agency): a "Last Called" announcement banner for the most recent draw, an opt-in draw **chime + vibration** (`lib/sound.ts`, persisted in `localStorage`), a **Live / Reconnecting** connection badge (off `ui.wsStatus`), and an end-of-game thank-you summary
 - **Yoever** ("It's Yoever") - a shared, opt-in reaction during a live game: a player taps the button (`POST /api/game/yoever`), and every connected client plays a sound + shows a bouncing captioned overlay (`YoeverOverlay.vue`) while admins watch a "Yoevers: N" counter climb. State is **in-memory only** on `bingo.Service` (no table): a per-card cooldown (`yoever_cooldown_seconds`, default 180) is enforced server-side (429 + `Retry-After`) and mirrored client-side; admins toggle it via `PATCH /api/game {yoever_enabled}`; it broadcasts over WS as `yoever` / `yoever_config`. Client-local mute/opt-out only.
 - **Konami easter egg** (`KonamiEgg.vue`, mounted by `PlayerView`) - ↑ ↑ ↓ ↓ ← → ← → B A clears every stamp (the same `clearAllStamps()` the Clear Board button calls) and swells Drani's grin over the screen with "Oi, what'd you think was gonna happen?" before it fades out. Purely client-side: no store, no server, no broadcast. Keys match on a rolling ten-key window (a fumbled repeat still resolves) and keystrokes aimed at a text field are ignored. Its art is a **bundled import** (`src/assets/images/DraniGrin.webp`), warmed on mount - see the asset rule below
-- **Public Stamp Rally sign-up** (`StampRalliesView` -> `StampRallySignupView`, plus `StampLookupView` at `/stamp-lookup`): a participant issues themselves a card for any rally an admin opted in (`public_signup`, off by default). A rally with an **open linked Garapon** also issues that drawing link on the **same token**, matching admin-issued links. Names are unique per rally (trimmed, case-insensitive); a repeat is a 409 pointing at the lookup page. The lookup matches the WHOLE name and returns an empty 200 on a miss, so it can't be walked to harvest links. Both endpoints are IP rate-limited (`rallyLimiter`) and Turnstile-gated when configured
+- **Public Stamp Rally sign-up** (`StampRalliesView` -> `StampRallySignupView`, plus `StampLookupView` at `/stamp-lookup`): a participant issues themselves a card for any rally an admin opted in (`public_signup`, off by default). A rally with an **open linked Garapon** also issues that drawing link, on its **own separate token**. The two used to share one string, which made the shareable card link a spendable drawing capability and meant any recovery of a card link handed the draws over with it; viewing and spending are now separate secrets. Cards issued before the split still share one token and are left alone on purpose, so links already in participants' hands keep working. Names are unique per rally (trimmed, case-insensitive); a repeat is a 409 pointing at the lookup page. The lookup matches the WHOLE name and returns an empty 200 on a miss, so it can't be walked to harvest links. Both endpoints are IP rate-limited (`rallyLimiter`); **only sign-up is Turnstile-gated** - the lookup is not. The lookup returns the card token and how many garapon draws REMAIN, never the drawing token: it is keyed on a character name, which is public, and a draw cannot be undone. The drawing token is issued once, at sign-up, and lives on the participant's device or with staff. `POST /api/garapon/{token}/draw` has its own limiter (`garaponDrawLimiter`)
 - WebSocket reconnect with exponential back-off on disconnect
-- **Hide Bingo** (`hide_bingo` setting, System -> Settings): takes Join Bingo AND the Custom Card request off the public home page for a stretch when no game is running - the two are one feature and hide together. The setting is stored as `'0'`/`'1'` and validated to exactly those, and the home page reads it through the app store's `hideBingo`, never by comparing the raw string. Entry points only: `/play/:cardId` and `/card-requests` stay reachable so flipping it can't strand a player mid-game or lose a pending request. The home page waits for `app.settingsLoaded` before rendering either card - the defaults say "visible", so rendering first would flash the thing being hidden and leave it clickable - and shows a "nothing is running" line when bingo is hidden with no open raffle or rally either.
+- **Hide Bingo** (`hide_bingo` setting, System -> Settings): takes Join Bingo AND the Custom Card request off the public home page for a stretch when no game is running - the two are one feature and hide together. A second, narrower flag (`hide_custom_cards`, read as `hideCustomCards`) takes ONLY the Custom Card request off, for when staff have stopped taking requests but games are still running; the home page combines them (`showCustomCard = showBingo && !hideCustomCards`), so the wider switch still wins and neither flag writes the other. The settings are stored as `'0'`/`'1'` and validated to exactly those, and the home page reads them through the app store's `hideBingo`/`hideCustomCards`, never by comparing the raw string. Entry points only: `/play/:cardId` and `/card-requests` stay reachable so flipping it can't strand a player mid-game or lose a pending request. The home page waits for `app.settingsLoaded` before rendering either card - the defaults say "visible", so rendering first would flash the thing being hidden and leave it clickable - and shows a "nothing is running" line when bingo is hidden with no open raffle or rally either.
 - Browse open raffles from home page (card shown only when open raffles exist); view raffle detail with prize image, markdown description/rules, and sign-up form (character name, world, number of entries); after sign-up see confirmation with total cost and sign-up instructions
 - **Raffle entry modes** (`raffles.entry_mode`, see **Raffle entry modes** below) change what the detail page offers: `single` and `custom` show the sign-up form (a `custom` raffle also lists its per-entry price ladder up front, with the running total for 2, 3, ... entries), while `details` shows the sign-up instructions inline INSTEAD of a form - it is published for reference and entered elsewhere
 - View closed raffles with winner announcement and total entry count
@@ -385,12 +391,12 @@ Never edit it by hand. Request/response/WebSocket envelopes are hand-written in
 - Per-user account login (username + argon2id password, session-based auth, 24-hour cookie); accounts are activated and granted per-page access by an admin (see **Authentication & authorization**)
 - **Game tab**: start game (select patterns with category filter + search, or apply a saved **preset**), draw numbers (optional player delay 0-60s; **press `Space`/`Enter` to draw**), live "Live" badge + elapsed-time clock, see called numbers, see winners; click winner ID to verify card with pattern-hit highlighting; frequent winners alert (3+ wins in 12h); end game with winner confirmation modal. **Auto-run**: a New Game "Auto-draw numbers" toggle + "Time Between Calls" interval (also on presets) starts the game auto-drawing; a live Auto-Draw on/off toggle + interval selector adjust it mid-game (never touches the preset). The server-side scheduler draws the first number immediately when auto is switched on, then draws every `interval` (the player draw delay only lags when each number reaches players - it never stretches the admin's cadence); it pauses at half-time (the prompt is now server-driven - `halftime_prompt` - so it fires for auto draws too and across all admins), stops the moment a winner is recognized, and switches off if the admin **manually draws** (taking over). Whenever auto turns off for any reason the scheduler cancels its pending draw, and the loop's draw (`bingo.DrawAuto`) re-checks the enabled flag under the draw lock so a disable racing a scheduled fire can't leak a stray number. Auto state syncs via the `auto_config` WebSocket message
 - **Cards tab**: generate cards (1-500), view as chips with player name indicators, click to preview board, edit player name/details, delete individual or all. Also reviews **custom card requests**: the public `/card-requests` page lets a visitor hand-build a 5x5 board + pick a 6-char ID / character name / world and submit (no login; IP-rate-limited + Turnstile) -> stored as a `pending` card; a `bingo-cards` admin **approves** it (`POST /api/cards/{id}/approve`), making it a live, auto-**protected** card (protected cards are spared by Delete-All). Submissions validate the ID/board and reject duplicate IDs or identical boards (409).
-- **Senpan Tea House -> Tea Rooms tab** (`TeaRoomsTab.vue` + `TeaRoomFormTab.vue`, perm `teahouse-tea-rooms`): manage bookable **tea rooms** - name/subtitle, a unique public **room number**, per-half-hour **gil** cost, hashtags, markdown description, status flags (seasonal / open / lockable / discounted), a library **image** + embed accent colour; drag-reorder. Each room can be **posted as a Discord embed** to the shared `tearoom_webhook_url`. A public CORS read API (`GET /api/tea-rooms/public[/{number}]`) lets external Carrd sites render live availability + pricing.
+- **Senpan Tea House -> Tea Rooms tab** (`TeaRoomsTab.vue` + `TeaRoomFormTab.vue`, perm `teahouse-tea-rooms`): manage bookable **tea rooms** - name/subtitle, a unique public **room number**, per-half-hour **gil** cost, hashtags, markdown description, status flags (seasonal / open / lockable / discounted), a **lock** with an optional unlock time (a background sweeper lifts it and broadcasts `tea_room_unlocked`, which the plugin alerts on in game), a library **image** + embed accent colour; drag-reorder. Each room can be **posted as a Discord embed** to the shared `tearoom_webhook_url`. A public CORS read API (`GET /api/tea-rooms/public[/{number}]`) lets external Carrd sites render live availability + pricing.
 - **Patterns tab** (`PatternsTab.vue`): one manager merging the former Categories/New/Edit tabs - category-grouped collapsible drag-reorder list with search + category filter; "+ New Pattern" (5x5 grid editor, duplicate detection) and "Manage Categories" (a `DataTable` of categories with Edit/Delete; add/edit opens a form with a Title + a Position dropdown - "At the beginning" / "After X" per category, plus "Keep current position" when editing - applied via the bulk-reorder endpoint) as Back sub-pages
 - **Game tab pattern picker** (`GameTab.vue`): when starting a new game, patterns render exactly like the Patterns manager - collapsible category groups (non-draggable checkboxes) with search + category filter + select-all-visible - reusing the patterns store's `patternsByCategory` + shared collapse state
 - **Presets tab**: CRUD reusable game templates (a named set of win-pattern IDs + pre-written markdown game details); selectable on the Game tab to auto-apply patterns + details when starting a game
 - **Winners Log tab**: paginated table of past winners with sorting and per-page controls; delete an individual entry (per-row trash button) or **Delete All** to clear the log (both confirm first)
-- The sidebar shows an **open count** beside Manage Cards, Raffles, Garapon and Stamp Rally. The counts read `openRaffles` / `openGarapons` / `openRallies` from their stores, which `AdminView`'s mount preloads (permission-gated) - without that preload a count reads 0 until its own tab is visited.
+- The sidebar shows a **count** beside Manage Cards, Festival Map, Raffles, Garapon and Stamp Rally (open items, or published maps). The counts read `openRaffles` / `openGarapons` / `openRallies` / `publishedMaps` from their stores, which `AdminView`'s mount preloads (permission-gated) - without that preload a count reads 0 until its own tab is visited.
 - **Senpan Tea House -> Raffles tab** (`RafflesTab.vue`): one manager (replacing the former New/Open/Closed tabs) - **Current Raffles** (every non-closed raffle) as image cards with a corner status icon (calendar-clock when it opens later, red calendar-circle-exclamation when its open window has passed), then a searchable + paginated **Closed Raffles** table (title, winner, open period, and the gil collected from paid entries - `Raffle.winner_name`/`paid_total`, admin-only aggregates joined in `listRafflesAdmin`) with a **Copy** action that seeds a new raffle from a past one (`copyRaffleForm`). The form also carries a **"Where to Pay"** image (`pay_image`), shown to players under the sign-up instructions - the raffle counterpart to a stamp rally's Where to Redeem. Detail (winner pick/verify, **manually add an entry - optionally paid, with an amount waived**, record/clear payments via `RafflePaymentModal.vue`, delete; read-only when closed) and the create/edit form (`RaffleFormTab.vue`, emits `saved`/`cancel`) open as Back sub-pages. The form's **Entry Type** picker swaps the cost controls per mode, and in `custom` mode edits the price ladder (a `.stack` of rows; its length sets `max_entries`). Weighted random winner pick; **Close / Reopen** (a raffle with no entries and no winner - every details-only one - can't reach verify-winner, which closes only as the last step of confirming a winner, so without this it stays on the public list forever; neither verb touches a winner already recorded); delete raffles. **Duplicate** (detail toolbar, and the Copy action on the closed table) seeds the create form from an existing raffle - the same `copyRaffleForm` the Garapon and Stamp Rally managers mirror, see **Duplicating an event** below.
 - **Senpan Tea House -> Announcements tab** (`AnnouncementsTab.vue`): manage **announcement types** (a named Discord channel webhook), **taggable roles** (a friendly name + Discord role ID - managed like types under "Manage Roles"), and **announcements** authored as Discord embeds (title, markdown details, accent colour, optional location + event window, image upload/reuse, an optional **role tag** posted in the message content above the embed - _Do Not Tag_ / _@everyone_ / a managed role, since mentions inside an embed don't notify - and **up to 5 Discord link buttons** - label + optional emoji + URL - rendered as an action row beneath the embed; sanitized server-side and stored as JSON in `announcements.buttons`). Post manually (**send now**) or on a schedule (once / daily / weekly / monthly, anchored to an IANA timezone so times survive DST); **skip next** occurrence; the background scheduler posts due items. Client-side search + type filter. (Link buttons require a webhook whose target supports message components.) Book-club meeting/event posts are authored here too (the retired per-club "event posts" feature was merged in; its webhooks migrated to dedicated "<Club> Book Club Events" types).
 - **Senpan Tea House -> Book Club tabs** (`BookClubTab.vue`, one route per registered club): manage **reading lists** + their items - add items manually or pull them from **AniList** (search/by-id proxy that prefills title/summary/cover/format/genres/chapters/source), drag-reorder, upload covers; **publish** a list to the club's Discord channel (one embed per item).
@@ -470,6 +476,36 @@ none). Scoped total should trend **down**; a change that grows it wants a look.
 **Deliberate exceptions**: `.btn-sm` / `.btn-lg` (an established pair), and
 `ball-swatch-{sm,md,lg}` (bound from a prop, so the class and the prop values would
 have to change together).
+
+**One way to write a participant.** Four systems record people - custom cards,
+raffle entries, stamp rally cards and garapon links - and all four store a
+**character name and a home world in two separate fields**. The world is always
+**picked** (`components/common/ui/WorldPicker.vue`, backed by `FF14_WORLDS`), never
+typed: a free-text world spells the same person three ways, which makes them
+unmatchable across systems and, in a raffle, splits one entrant's tickets across
+rows. `model.ParticipantLabel` / `SplitParticipantLabel` (Go) are the only place
+those two fields become the display string `"Name @ World"` and back; a handler that
+receives one composed string splits it on arrival rather than storing something no
+other system can match. Schema v66 (`migrateParticipantWorlds`) added the column to
+the two stamp/garapon tables and backfilled by splitting on the LAST `" @ "`; rows
+with no separator keep the whole string and an empty world. Display is unchanged -
+a public stamp card still reads `"Name @ World"`.
+
+**Festival map label size.** A pitch's label is sized **once for the whole plan**, and
+a pitch may only trim that size - never derive its own. Three declarations in
+`mapeditor.css` do it together, and the gate checks them as a set:
+
+| Where              | Declaration                        | Why there                                                                                              |
+| ------------------ | ---------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| `.map-canvas`      | `container-type: inline-size`      | The plan is the yardstick. Only the inline axis: the canvas takes its **height** from the background image in flow, and `size` containment collapses it. |
+| `.map-stall`       | `font-size: 1.3cqw`                | An element's own `container-type` does not apply to its **own** declarations, so `cqw` here resolves against the canvas. On the label it would resolve against the pitch. |
+| `.map-stall-label` | `max(0.34rem, min(1em, 42cqh))`    | `1em` is the shared size; the pitch's own height is only a **ceiling**, engaging below roughly 5% of the map height. |
+
+Sizing the label straight off its box - as `clamp(0.34rem, 26cqh, 0.85rem)` did - made
+every pitch compute its own number: on one plan a tall pitch and a short one drew their
+names at 13.6px and 5.5px, and dragging a resize handle rescaled the text the whole way.
+This cannot be covered by a vitest file: container-query units need real layout and jsdom
+resolves neither `cqw` nor `cqh`, so the stylesheet source is what gets asserted.
 
 **Every object keeps its base rule.** `.x:hover`, `.x.is-y` and `.x .part` style a
 state or a part of `.x`; if nothing defines `.x` itself, they modify an object that
@@ -635,7 +671,7 @@ cd backend; go run . -addr :8080 -db ../devdata/database.sqlite -webroot ../devd
 
 # Vet / lint
 cd backend; go vet ./...
-cd backend; golangci-lint run ./...   # config: backend/.golangci.yml (pinned v2.12.2 in CI)
+cd backend; golangci-lint run ./...   # config: backend/.golangci.yml (pinned v2.13.1 in CI)
 
 # Run tests
 cd backend; go test ./...
@@ -661,7 +697,7 @@ jobs plus a release job:
   `typecheck` -> `test` -> `build`. Mirrors the local gate, so a green CI ==
   the checks a developer runs locally have passed.
 - **backend** (`working-directory: backend`): `golangci-lint run` (pinned
-  v2.12.2, config `backend/.golangci.yml`) -> `go build ./...` -> `go vet ./...` ->
+  v2.13.1, config `backend/.golangci.yml`) -> `go build ./...` -> `go vet ./...` ->
   `go test ./...` (Go version read from `backend/go.mod`; the tests include the
   OpenAPI spec-freshness + route-coverage checks in `internal/apidoc`) ->
   `govulncheck ./...` (`go run golang.org/x/vuln/cmd/govulncheck@latest`, run at
@@ -765,11 +801,97 @@ http://localhost:8080/api/fonts/pub/`); external Carrd sites embed
     per-connection `isAdmin` bit (not merely the admin channel), matching the
     `requireAdmin` gate on `GET /api/logs`.
 
+### Festival Map
+
+A **Festival Map** (`festival_maps` + `festival_stalls` + `festival_stall_occupants`)
+is a floor plan the public can explore.
+
+A stall on the plan is a **PITCH** (where it sits, how it is drawn) holding one or
+more **OCCUPANTS** (affiliate, title, description, offering, times). Most pitches
+keep the same business all festival and have exactly one; a booth that changes
+hands between days has one per day. Splitting the two is what keeps the plan
+readable - the pitch is drawn ONCE, in one place, whatever the rota, instead of two
+stalls fighting for the same pixels. The base image is the bare venue - walls, rest areas, the stage - and
+every stall is **drawn on top of it by the app**: a circle or rectangle at a %-based
+`Placement` in the stall's color, with its title rendered inside. Nothing about a
+stall is baked into the artwork, so renaming or moving one never means re-exporting
+the image.
+
+- **Admin** (`FestivalMapsTab.vue` -> `FestivalMapFormTab.vue` -> `MapStallEditor.vue`,
+  permission `festival-map`, first item in the Festival section). The form carries the
+  festival's title, markdown description, its datetime ranges and the base image; the
+  editor drops stalls onto the plan and drags/resizes/rotates them (the handles sit
+  OUTSIDE the stall's box, so `.map-stall` must never clip - the label clips itself
+  instead), with a per-stall panel for the affiliate, title, markdown description,
+  what it offers, shape, color, an exact rotation, and its own hours. Every stall
+  draws TWO lines - its title and a caption naming what it offers (`stallCaption`):
+  a named type captions itself, while `other` captions with the stall's own
+  `type_label` wording, and drops the line entirely when that is blank, since
+  "Other" tells a visitor nothing. A **circle
+  takes its height from its own rendered width** (`aspect-ratio: 1`) rather than
+  from `placement.height`: the map box is almost never square, so equal percentages
+  draw an oval. `usePlacementDrag`'s `square` option bounds such a stall by that
+  rendered height, and `placement.height` is left untouched so switching a stall
+  back to a rectangle restores its proportions. `stall_type` (Game / Food / Food & Game / Other) seeds the shape
+  and color, and changing it re-shapes the stall - the shape is the at-a-glance signal,
+  so the type wins on change.
+- **Publishing is a separate step** on the detail screen (`PATCH .../{id}` with a
+  `status`), not a field in the form: `in_progress` -> `published` -> `closed`. Only a
+  `published` map is public, and publishing one with **no base image** is refused - the
+  stalls are positioned as a share of that image's box.
+- **Shortcodes**: a map may carry an optional `slug` ("obon-2026") so it links as
+  `/festival-maps/obon-2026`. `GET .../public/{id}` resolves the segment as a
+  SHORTCODE first and falls back to a numeric id (`resolvePublicMap`), so both forms
+  always work and adding or changing one never breaks a link already posted. What
+  the admin types is normalized on save (trimmed, lowercased, whitespace/underscore
+  runs folded to single dashes), an all-numeric shortcode is refused with a 400 - it
+  would be indistinguishable from an id, which is exactly what makes the dual lookup
+  safe - and one another map holds is a 409. `store.mapPath()` is the single place
+  that decides which form a link uses, so the admin's "Copy public link", the public
+  list and the map page can't disagree.
+- **Public** (`FestivalMapsView` -> `FestivalMapView`, `FestivalMapCanvas.vue`): drag
+  to pan, wheel or pinch to zoom (anchored on the cursor), plus zoom buttons and Fit.
+  Tapping a stall opens its details, including the affiliate's public card - name,
+  subtitle, owners, logo, Discord/Carrd links, and NEVER the webhook or embed colour.
+  A drag that ends over a stall doesn't open it (`onStallPointerUp` compares against
+  where the press started).
+- **Day switcher** (public): built from the map's own `times` rows. Picking a day
+  leads with the occupants standing in each pitch that day (`occupantsOnDay`, which
+  overlaps each occupant's ranges against the day's) and pushes the rest back; a
+  pitch nobody occupies that day dims out. An occupant that states NO times runs the
+  whole festival and matches every day - hiding a permanent stall because it never
+  spelled out its hours would take it off the plan entirely.
+- **Raffle linkage**: a raffle may set `festival_map_id` (the festival it belongs
+  to - the same grouping a rally gets) and `occupant_id` (one stall on that map).
+  A pinned raffle shows in that stall's panel on the public plan, but ONLY while
+  `raffleRunning` holds: status is not `closed` AND now is inside its availability
+  window. A closed or not-yet-open raffle is left off the payload rather than
+  linking a visitor somewhere they can't enter. `resolveRaffleStall` settles the
+  pair on save exactly like the rally's resolver.
+- **Stamp Rally linkage**: a rally may set `festival_map_id`, after which each stamp
+  names an `occupant_id` on that map instead of a bare affiliate, takes its affiliate
+  FROM the occupant, and seeds its stamp type from what the occupant offers. It names
+  the OCCUPANT rather than the pitch because two tenants of one pitch are different
+  businesses running different activities, each needing its own stamp. `resolveMapStalls`
+  (server) settles this on every save: an unlinked rally has every `stall_id` cleared,
+  and a `stall_id` that isn't on the linked map falls back to the affiliate rather than
+  failing the whole save. `model.StampRallyStamp.DisplayStall` then decides the ONE
+  name the card, the stamp log and the map all use: the map stall's title, else the
+  affiliate, else "Senpan Tea House". On the public map, stalls carrying a stamp on an
+  **open** rally are ringed and show their stamp art, with a "highlight rally stalls
+  only" toggle that dims the rest rather than removing them - the plan keeps its shape.
+- **Deleting a map** keeps any rally that was linked to it: `DeleteFestivalMap` clears
+  `stamp_rallies.festival_map_id` and the occupants' `stamp_rally_stamps.occupant_id` itself
+  (both are plain columns, not enforced FKs - `ALTER` can't add one, and `createTables`
+  builds `stamp_rallies` before `festival_maps`), so the stamps survive and fall back
+  to their affiliates.
+
 ### Duplicating an event
 
-Raffles, Stamp Rallies and Garapons each expose a **Duplicate** on their detail
-toolbar, backed by a `copy*Form` in the store. Each one runs the normal `edit*Form`
-first and then strips what belongs to the run that already happened, so the three
+Raffles, Stamp Rallies, Garapons and Festival Maps each expose a **Duplicate** on
+their detail toolbar AND a row-level **Copy** on their closed table, both backed
+by a `copy*Form` in the store. Each one runs the normal `edit*Form`
+first and then strips what belongs to the run that already happened, so all four
 behave the same way:
 
 - **every id goes to 0** (the item's own, plus nested stamp/prize rows), so saving
@@ -783,6 +905,26 @@ behave the same way:
 - **a garapon drops its `stamp_rally_id`** - it points at the rally the ORIGINAL
   drum served, and keeping it would leave two garapons issuing draws off one
   rally's sign-ups.
+
+**Every copy drops its FESTIVAL link** - a raffle's and a rally's
+`festival_map_id`, a rally's per-stamp `occupant_id`, a garapon's `stamp_rally_id`.
+A copy is almost always next year's, and those rows still exist, so nothing on the
+server would clear them: the duplicate would quietly file itself under the finished
+festival, naming last year's stalls. Pick the festival again on the copy.
+
+A festival map is the one exception worth naming: it also drops its SHORTCODE (a
+shortcode names exactly one map, so keeping it would be refused on save and would
+take over the URL the original is already linked by), and its stalls keep their
+placements (re-laying out a venue by hand is exactly what a copy exists to avoid)
+while losing the festival's dates AND each stall's own hours, since a stale window
+would mark the new festival as long over.
+
+**Copying from a closed TABLE loads the detail first.** Every closed table (raffles,
+garapons, rallies, maps) carries a row-level Copy beside View/Delete, but a list row
+holds no sub-entities - the list endpoints omit garapon prizes, rally stamps/prizes
+and map stalls on purpose. Seeding a form straight off the row produces an empty
+duplicate, which is precisely what the button exists to avoid, so each row action
+awaits the detail fetch and copies that.
 
 What is NOT copied is anything the original owns: issued stamp cards, garapon
 drawing links and draw logs, raffle entries. Those stay with the item they were
@@ -908,7 +1050,7 @@ draw and the collected-gil totals read.
 - **Player state is client-side**: stamp marks stored in `localStorage` keyed by `stamps_{cardId}_{gameId}`.
 - **Real-time updates**: WebSocket hub broadcasts game/card/pattern/style changes; separate player/admin channels.
 - **Draw delay**: admin can set 0-60s delay before players receive drawn number via WebSocket.
-- **Schema versioning**: `PRAGMA user_version` in SQLite tracks migration state; `schemaVersion` constant in `store/migrate.go` controls the target (currently 51). Migrations are idempotent (`hasColumn` guards) and run incrementally only when behind.
+- **Schema versioning**: `PRAGMA user_version` in SQLite tracks migration state; `schemaVersion` constant in `store/migrate.go` controls the target (currently 65). Migrations are idempotent (`hasColumn` guards) and run incrementally only when behind.
 - **Optimistic UI**: pattern/category reordering swaps locally before API call; reverts on failure.
 - **Lightweight endpoints**: `GET /api/cards` returns only IDs + player names (no board data); `GET /api/board?preview=1` returns only the card (no game state).
 - **Batch operations**: `GetCardPlayerNames()` fetches multiple cards in one query; `SaveCardsBatch()` uses transactions.
@@ -961,7 +1103,7 @@ draw and the collected-gil totals read.
 7. `frontend/src/App.vue` + `frontend/src/composables/useWebSocket.ts` - root shell (`<RouterView>`), WebSocket message dispatch
 8. `frontend/src/lib/endpoints.ts` - the typed surface over every backend path (what stores call)
 9. `frontend/src/stores/*.ts` - all client state + actions (mirror of the old app.js data/methods)
-10. `frontend/src/assets/app.css` - stylesheet **index** that `@imports` `assets/styles/*.css` (tokens, base, utilities, components, player, admin, responsive - split by domain); imported in `main.ts` (content-hashed by Vite)
+10. `frontend/src/assets/app.css` - stylesheet **index** that `@imports` `assets/styles/*.css` (tokens, base, utilities, components, mapeditor, player, admin, responsive - split by domain); imported in `main.ts` (content-hashed by Vite)
 
 ## Extending the project
 

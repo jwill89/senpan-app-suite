@@ -43,13 +43,41 @@ function ensureLoaded(): Promise<void> {
   return loadPromise
 }
 
+/**
+ * Matches a fenced block or an inline code span FIRST, then a <br> tag. Ordering
+ * is the point: the alternation consumes code before the tag can match inside it,
+ * so a <br> being shown as an example in a code sample stays literal.
+ */
+const CODE_SPAN_OR_BREAK_TAG = /(```[\s\S]*?```|~~~[\s\S]*?~~~|`[^`\n]*`)|<br\s*\/?>/gi
+
+/**
+ * Turns literal <br> tags in the SOURCE into real newlines.
+ *
+ * Raw HTML is disabled (html: false) so the parser escapes anything tag-shaped,
+ * which is what we want for safety - but it meant a description holding a literal
+ * "<br />" rendered those five characters to the reader instead of breaking the
+ * line. Text arrives that way from more than one direction: pasted from somewhere
+ * that emitted HTML, or serialized by a WYSIWYG editor that writes hard breaks as
+ * tags.
+ *
+ * Rewriting them to newlines rather than allowing raw HTML keeps the escape intact
+ * for every OTHER tag: this promotes one inert, unambiguous tag to the line break
+ * it was always meant to be, and nothing else. `breaks: true` then renders the
+ * newline as a <br> the parser itself produced.
+ */
+export function normalizeHardBreaks(text: string): string {
+  return text.replace(CODE_SPAN_OR_BREAK_TAG, (_match, code: string | undefined) =>
+    code === undefined ? '\n' : code,
+  )
+}
+
 /** Shared reactive renderer factory over one of the configured instances. */
 function useRenderer(get: () => MarkdownRenderer | null) {
   void ensureLoaded()
   function render(text: string | null | undefined): string {
     // Touch `ready` so the rendering effect re-runs once the parser loads.
     if (!ready.value || !text) return ''
-    return get()?.render(text) ?? ''
+    return get()?.render(normalizeHardBreaks(text)) ?? ''
   }
   return { render, ready }
 }

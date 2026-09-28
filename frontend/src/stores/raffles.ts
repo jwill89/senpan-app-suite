@@ -7,6 +7,8 @@ import { computed, ref } from 'vue'
 import { endpoints } from '@/lib/endpoints'
 import { utcToDatetimeLocal, datetimeLocalToUtc, parseServerTimestamp } from '@/lib/datetime'
 import type {
+  FestivalMap,
+  FestivalStallOccupant,
   Raffle,
   RaffleEnterResponse,
   RaffleEntry,
@@ -16,6 +18,7 @@ import type {
 } from '@/types/api'
 import { useUiStore } from './ui'
 import { withLoading } from '@/lib/withLoading'
+import { saveRaffleSignup } from '@/lib/signups'
 import { RAFFLE_MAX_ENTRIES, RAFFLE_LOOKUP_MIN_QUERY } from '@/lib/constants'
 
 /**
@@ -160,6 +163,15 @@ export function entryAmountOutstanding(r: Raffle, e: RaffleEntry): number {
 }
 
 export const useRafflesStore = defineStore('raffles', () => {
+  // -- Festival Map linkage -------------------------------------------------
+  // A raffle can be filed under a Festival Map (the same grouping a Stamp Rally
+  // gets) and pinned to one stall on it, so the stall's panel on the public plan
+  // links to the raffle while it is running.
+  /** Maps a raffle can be filed under. */
+  const festivalMaps = ref<FestivalMap[]>([])
+  /** The linked map's pitch occupants, flattened - the stall list to pick from. */
+  const mapStalls = ref<FestivalStallOccupant[]>([])
+
   const ui = useUiStore()
 
   const homeRaffles = ref<Raffle[]>([]) // open raffles for home card visibility
@@ -344,6 +356,8 @@ export const useRafflesStore = defineStore('raffles', () => {
       available_to: '',
       prize_image: '',
       pay_image: '',
+      festival_map_id: null,
+      occupant_id: null,
     }
   }
 
@@ -385,11 +399,62 @@ export const useRafflesStore = defineStore('raffles', () => {
       available_to: '',
       prize_image: raffle.prize_image,
       pay_image: raffle.pay_image,
+      // The festival link points at the map the ORIGINAL raffle ran at. A copy is
+      // almost always next year's, so keeping it would quietly file the new raffle
+      // under the finished festival - the same reason a garapon copy drops its
+      // stamp_rally_id. Pick the festival again on the copy.
+      festival_map_id: null,
+      occupant_id: null,
     }
   }
 
   function cancelRaffleForm(): void {
     raffleForm.value = null
+  }
+
+  /**
+   * Loads the festival maps a raffle can be filed under, plus - when the form is
+   * already linked to one - that map's stalls. A closed map is deliberately still
+   * offered: a raffle is often authored alongside the map, and dropping the link
+   * the moment the festival closed would silently unpin it.
+   */
+  async function loadFormSources(): Promise<void> {
+    try {
+      festivalMaps.value = (await endpoints.festivalMaps.list()).maps
+    } catch {
+      // No festival-map permission (or none exist) - the link select stays empty
+      // and the raffle simply belongs to no festival.
+      festivalMaps.value = []
+    }
+    await loadMapStalls(raffleForm.value?.festival_map_id ?? null)
+  }
+
+  /** Loads a festival map's stalls for the stall select (null clears them). */
+  async function loadMapStalls(mapId: number | null): Promise<void> {
+    if (!mapId) {
+      mapStalls.value = []
+      return
+    }
+    try {
+      const stalls = (await endpoints.festivalMaps.detail(mapId)).map.stalls ?? []
+      mapStalls.value = stalls.flatMap((stall) => stall.occupants)
+    } catch {
+      mapStalls.value = []
+    }
+  }
+
+  /**
+   * Files the form's raffle under a festival map (or none) and reloads its stalls.
+   * Switching maps clears the assigned stall: the id belongs to the map that was
+   * linked before, and the server would drop it on save anyway - better the admin
+   * sees the empty select now than a silent reset afterwards.
+   */
+  async function setFestivalMap(mapId: number | null): Promise<void> {
+    const f = raffleForm.value
+    if (!f || f.festival_map_id === mapId) return
+    f.festival_map_id = mapId
+    f.occupant_id = null
+    await loadMapStalls(mapId)
   }
 
   /**
@@ -564,6 +629,15 @@ export const useRafflesStore = defineStore('raffles', () => {
         turnstile_token: signupTurnstileToken.value || undefined,
       })
       raffleSignupResult.value = data
+      // Entries merge on character+world, so the exact spelling is what a repeat
+      // visit needs: a different one silently starts a second entry and splits
+      // this person's tickets. The server still owns the per-player cap.
+      saveRaffleSignup({
+        raffleId: selectedRaffle.value.id,
+        raffleTitle: selectedRaffle.value.title,
+        name: s.characterName.trim(),
+        world: s.world.trim(),
+      })
       ui.notify(data.message, 'success')
     } catch (e) {
       ui.notify((e as Error).message, 'error')
@@ -761,6 +835,10 @@ export const useRafflesStore = defineStore('raffles', () => {
     viewRaffle,
     viewPublicRaffle,
     loadPublicRaffleById,
+    festivalMaps,
+    mapStalls,
+    loadFormSources,
+    setFestivalMap,
     newRaffleForm,
     editRaffleForm,
     copyRaffleForm,

@@ -50,7 +50,17 @@ type Raffle struct {
 	PayImage           string    `json:"pay_image"`           // images/... "Where to Pay" screenshot, shown under the sign-up instructions
 	Status             string    `json:"status"`              // "open" or "closed"
 	WinnerEntryID      *int64    `json:"winner_entry_id"`
-	CreatedAt          string    `json:"created_at"`
+	// FestivalMapID optionally files the raffle under a Festival Map - the same
+	// grouping a Stamp Rally gets, so a festival's raffles, rallies and floor plan
+	// all hang off one event. nil = not part of a festival.
+	FestivalMapID   *int64 `json:"festival_map_id"`
+	FestivalMapName string `json:"festival_map_name,omitempty"` // joined for display
+	// OccupantID assigns the raffle to one stall on that map, so the stall's panel
+	// on the public plan can link to it. Only meaningful with FestivalMapID set;
+	// cleared on save when the raffle names no map (see resolveRaffleStall).
+	OccupantID *int64 `json:"occupant_id"`
+	StallName  string `json:"stall_name,omitempty"` // joined from the occupant
+	CreatedAt  string `json:"created_at"`
 
 	// Read-only aggregates populated for the admin list view only (the closed-raffle
 	// table): the verified winner's "Character @ World", and the collected total

@@ -326,8 +326,12 @@ func (s *Server) saveFontMetaMap(metas map[string]fontMeta) error {
 	return s.store.SetSetting(settingFontMeta, string(data))
 }
 
-// updateFontMeta applies mutate to a group's metadata entry and persists it.
+// updateFontMeta applies mutate to a group's metadata entry and persists it,
+// holding fontMetaMu across the read-modify-write so a concurrent edit to a
+// DIFFERENT font cannot be lost - every font shares one settings blob.
 func (s *Server) updateFontMeta(groupKey string, mutate func(*fontMeta)) error {
+	s.fontMetaMu.Lock()
+	defer s.fontMetaMu.Unlock()
 	metas := s.fontMetaMap()
 	m := metas[groupKey]
 	mutate(&m)
@@ -403,6 +407,8 @@ func (s *Server) renameFontMetaKey(oldKey, newKey string) {
 	if _, stillExists := s.fontGroupByBase(oldKey); stillExists {
 		return // other members keep the metadata
 	}
+	s.fontMetaMu.Lock()
+	defer s.fontMetaMu.Unlock()
 	metas := s.fontMetaMap()
 	m, ok := metas[oldKey]
 	if !ok {
@@ -420,6 +426,8 @@ func (s *Server) renameFontMetaKey(oldKey, newKey string) {
 // deleteFontMetaKey removes a group's metadata entry (used when its last file
 // is deleted).
 func (s *Server) deleteFontMetaKey(key string) {
+	s.fontMetaMu.Lock()
+	defer s.fontMetaMu.Unlock()
 	metas := s.fontMetaMap()
 	if _, ok := metas[key]; !ok {
 		return

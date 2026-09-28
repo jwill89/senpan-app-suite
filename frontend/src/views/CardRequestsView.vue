@@ -11,9 +11,9 @@ import { useRouter } from 'vue-router'
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
 import TurnstileWidget from '@/components/common/TurnstileWidget.vue'
 import BingoCardEditor from '@/components/common/BingoCardEditor.vue'
+import WorldPicker from '@/components/common/ui/WorldPicker.vue'
 import { useCardRequestsStore } from '@/stores/cardRequests'
 import { useAppStore } from '@/stores/app'
-import { FF14_WORLDS } from '@/lib/constants'
 import { endpoints } from '@/lib/endpoints'
 
 const router = useRouter()
@@ -118,19 +118,7 @@ function back(): void {
             />
           </div>
 
-          <div class="field">
-            <label class="field-label">World</label>
-            <select v-model="cr.world" aria-label="World">
-              <option value="" disabled>Select your world...</option>
-              <optgroup
-                v-for="dc in FF14_WORLDS"
-                :key="dc.name"
-                :label="`${dc.name} (${dc.region})`"
-              >
-                <option v-for="w in dc.worlds" :key="w" :value="w">{{ w }}</option>
-              </optgroup>
-            </select>
-          </div>
+          <WorldPicker v-model="cr.world" />
 
           <div class="field">
             <label class="field-label">Custom Card ID</label>

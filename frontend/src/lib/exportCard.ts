@@ -19,6 +19,8 @@
  * player actually exports a card (keeps the player route payload small).
  */
 
+import { triggerDownload } from '@/lib/download'
+
 export interface ExportCardOptions {
   /** The `.board-wrap` element to capture (BingoBoard's root). */
   element: HTMLElement
@@ -56,19 +58,6 @@ function loadImage(url: string): Promise<HTMLImageElement | null> {
     img.onerror = () => resolve(null)
     img.src = url
   })
-}
-
-/** Triggers a browser download for the given blob + file name. */
-function triggerDownload(blob: Blob, fileName: string): void {
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = fileName
-  document.body.appendChild(a)
-  a.click()
-  a.remove()
-  // Revoke on the next tick so the download has started.
-  setTimeout(() => URL.revokeObjectURL(url), 1000)
 }
 
 /** Font family used for all non-header (details/card-id/link) text. */

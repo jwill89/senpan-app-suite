@@ -342,6 +342,7 @@ export const ADMIN_PERMISSIONS: AdminPermission[] = [
     label: c.name,
     section: 'Senpan Tea House',
   })),
+  { key: 'festival-map', label: 'Festival Map', section: 'Festival' },
   { key: 'festival-garapon', label: 'Garapon', section: 'Festival' },
   { key: 'festival-stamp-rally', label: 'Stamp Rally', section: 'Festival' },
   // Raffles moved under Festival; the permission/route id stays `teahouse-raffles`.
@@ -366,6 +367,7 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
   yoever_cooldown_seconds: '180',
   custom_card_cost: '0',
   hide_bingo: '0',
+  hide_custom_cards: '0',
   // One blank reading-list webhook default per known club so the settings form
   // binds cleanly before the server response loads.
   ...Object.fromEntries(BOOK_CLUBS.map((c) => [clubWebhookKey(c.slug), ''])),

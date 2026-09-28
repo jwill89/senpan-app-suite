@@ -29,6 +29,7 @@ import { usePatternsStore } from '@/stores/patterns'
 import { useRafflesStore } from '@/stores/raffles'
 import { useStampRalliesStore } from '@/stores/stampRallies'
 import { useGaraponsStore } from '@/stores/garapons'
+import { useFestivalMapsStore } from '@/stores/festivalMaps'
 import { useUiStore } from '@/stores/ui'
 import { endpoints } from '@/lib/endpoints'
 import { listPasskeys, registerPasskey, deletePasskey, passkeysSupported } from '@/lib/passkeys'
@@ -43,6 +44,7 @@ const patterns = usePatternsStore()
 const raffles = useRafflesStore()
 const stampRallies = useStampRalliesStore()
 const garapons = useGaraponsStore()
+const festivalMaps = useFestivalMapsStore()
 const ui = useUiStore()
 
 onMounted(async () => {
@@ -59,6 +61,7 @@ onMounted(async () => {
     // without these the counts would read 0 until the tab itself was visited.
     if (auth.hasPermission('festival-stamp-rally')) loads.push(stampRallies.loadRallies())
     if (auth.hasPermission('festival-garapon')) loads.push(garapons.loadGarapons())
+    if (auth.hasPermission('festival-map')) loads.push(festivalMaps.loadMaps())
     await Promise.allSettled(loads)
     game.drawDelay = parseInt(app.settings.default_draw_delay) || 0
   } catch {

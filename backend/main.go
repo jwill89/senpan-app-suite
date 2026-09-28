@@ -9,6 +9,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"flag"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
@@ -24,7 +25,19 @@ import (
 	"app-suite/internal/ws"
 )
 
+// main keeps the process's exit status truthful. run does the real work and
+// returns an error for anything fatal; a non-zero exit is what tells systemd's
+// Restart=on-failure that this was a crash and not a clean stop. Exiting here
+// rather than inside run means run's deferred cleanup (db.Close, the log closer)
+// has already completed by the time the process goes away.
 func main() {
+	if err := run(); err != nil {
+		slog.Error("fatal", "error", err)
+		os.Exit(1)
+	}
+}
+
+func run() error {
 	addr := flag.String("addr", ":8080", "HTTP listen address")
 	dbPath := flag.String("db", "/opt/app-suite/data/database.sqlite", "SQLite database path")
 	webRoot := flag.String("webroot", "/var/www/www.yoursite.com", "Web root directory for static assets (e.g. image uploads)")
@@ -70,8 +83,7 @@ func main() {
 		b := make([]byte, 32)
 		_, err := rand.Read(b)
 		if err != nil {
-			slog.Error("failed to generate random session secret", "error", err)
-			os.Exit(1)
+			return fmt.Errorf("generate random session secret: %w", err)
 		}
 		finalSecret = base64.RawURLEncoding.EncodeToString(b)
 		slog.Warn("No session secret provided; generated random secret (sessions will be invalidated on restart)")
@@ -79,8 +91,7 @@ func main() {
 
 	db, err := store.New(*dbPath)
 	if err != nil {
-		slog.Error("failed to open database", "error", err)
-		os.Exit(1)
+		return fmt.Errorf("open database: %w", err)
 	}
 	defer db.Close()
 
@@ -172,14 +183,24 @@ func main() {
 		srv.RunAutoDrawScheduler(schedCtx)
 	}()
 
+	// Tea-room lock scheduler: unlocks rooms whose set expiry has passed and tells
+	// the admin clients (the in-game plugin alerts its operator). Same shared
+	// context, so it stops sweeping before the database closes.
+	roomLockDone := make(chan struct{})
+	go func() {
+		defer close(roomLockDone)
+		srv.RunTeaRoomLockScheduler(schedCtx)
+	}()
+
 	// Graceful shutdown: listen for SIGINT/SIGTERM.
 	shutdown := make(chan os.Signal, 1)
 	signal.Notify(shutdown, os.Interrupt, syscall.SIGTERM)
 
 	// A failed ListenAndServe (e.g. the port is already in use) must run the SAME
-	// graceful-shutdown path below rather than os.Exit(1) - otherwise the deferred
-	// cleanup (db.Close, scheduler cancel) is skipped and in-flight state can be
-	// left inconsistent. Send the error to a buffered channel the select awaits.
+	// graceful-shutdown path below rather than exiting on the spot - otherwise the
+	// deferred cleanup (db.Close, scheduler cancel) is skipped and in-flight state
+	// can be left inconsistent. Send the error to a buffered channel the select
+	// awaits, then return it so the process still exits non-zero.
 	serverErr := make(chan error, 1)
 	go func() {
 		slog.Info("App Suite API server starting", "addr", *addr)
@@ -188,11 +209,16 @@ func main() {
 		}
 	}()
 
+	// Non-nil only when the server itself failed. A signal-driven stop is a clean
+	// exit; a bind failure is not, and reporting both as success is what let a
+	// backend that could never start sit there looking healthy.
+	var fatal error
 	select {
 	case <-shutdown:
 		slog.Info("shutdown signal received, shutting down gracefully...")
 	case err := <-serverErr:
 		slog.Error("server failed, shutting down", "error", err)
+		fatal = err
 	}
 	cancelSched() // stop the background announcement scheduler
 
@@ -218,6 +244,14 @@ func main() {
 		slog.Warn("auto-draw scheduler did not stop within the shutdown deadline")
 	}
 
+	// And the tea-room lock sweeper, so an unlock it has already written is not
+	// interrupted part-way by db.Close(). Bounded by the same shutdown deadline.
+	select {
+	case <-roomLockDone:
+	case <-ctx.Done():
+		slog.Warn("tea-room lock scheduler did not stop within the shutdown deadline")
+	}
+
 	// Close all WebSocket connections first.
 	hub.Shutdown(ctx)
 
@@ -227,4 +261,5 @@ func main() {
 	}
 
 	slog.Info("server stopped")
+	return fatal
 }

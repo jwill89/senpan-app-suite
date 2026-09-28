@@ -78,7 +78,7 @@ go test ./...
 > aborts it on any failure - bypass a single push with `git push --no-verify`.
 > `golangci-lint` is **not** covered
 > by `go build`/`go vet`, so don't skip it (install the pinned version:
-> `go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.12.2`).
+> `go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.13.1`).
 > The race detector is intentionally not run - the pure-Go SQLite driver
 > (`CGO_ENABLED=0`) can't use it; see the note in `check.ps1`. (`scripts/check.ps1`
 > and `scripts/deploy.ps1` are version-controlled; all deploy server settings

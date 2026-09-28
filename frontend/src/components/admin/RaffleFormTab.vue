@@ -13,7 +13,7 @@
  * on a successful save and `cancel`/`back` to return to the list, rather than
  * navigating routes itself.
  */
-import { computed } from 'vue'
+import { computed, onMounted } from 'vue'
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
 import MarkdownEditor from '@/components/common/MarkdownEditor.vue'
 import AdminPanel from '@/components/common/ui/AdminPanel.vue'
@@ -25,9 +25,29 @@ import ImagePicker from '@/components/common/ui/ImagePicker.vue'
 import { useRafflesStore } from '@/stores/raffles'
 import { RAFFLE_MODES, type RaffleMode } from '@/types/api'
 import { RAFFLE_MAX_ENTRIES } from '@/lib/constants'
+import { occupantListLabel, stallCaption } from '@/lib/festivalmap'
 
 const emit = defineEmits<{ saved: []; cancel: [] }>()
 const raffles = useRafflesStore()
+
+onMounted(() => raffles.loadFormSources())
+
+/**
+ * Whether this raffle is filed under a festival map, which is what turns the
+ * Stall select on. Read off the form rather than off the loaded stall list, which
+ * is momentarily empty while a newly-picked map's stalls are fetched.
+ */
+const linkedToMap = computed(() => raffles.raffleForm?.festival_map_id != null)
+
+/** File the raffle under a festival map ('' -> not part of a festival). */
+function setFestivalMap(value: string): void {
+  void raffles.setFestivalMap(value ? Number(value) : null)
+}
+
+/** Pin the raffle to one stall on the linked map ('' -> not pinned). */
+function setOccupant(value: string): void {
+  if (raffles.raffleForm) raffles.raffleForm.occupant_id = value ? Number(value) : null
+}
 
 const mode = computed<RaffleMode>(() => raffles.raffleForm?.entry_mode ?? 'single')
 
@@ -109,6 +129,42 @@ function cancel(): void {
       >
         <ImagePicker v-model="raffles.raffleForm.pay_image" />
       </FormField>
+
+      <!-- Festival Map: files the raffle under a festival and, optionally, pins it
+           to one stall so the public plan links to it. -->
+      <FormRow>
+        <FormField
+          label="Festival Map"
+          help="Optional. Files this raffle under a festival, the same way a stamp rally is."
+        >
+          <select
+            :value="raffles.raffleForm.festival_map_id ?? ''"
+            aria-label="Linked festival map"
+            @change="setFestivalMap(($event.target as HTMLSelectElement).value)"
+          >
+            <option value="">Not part of a festival</option>
+            <option v-for="m in raffles.festivalMaps" :key="m.id" :value="m.id">
+              {{ m.title }}
+            </option>
+          </select>
+        </FormField>
+        <FormField
+          v-if="linkedToMap"
+          label="Stall"
+          help="Optional. The stall running it - its panel on the map links here while the raffle is open and inside its dates."
+        >
+          <select
+            :value="raffles.raffleForm.occupant_id ?? ''"
+            aria-label="Festival map stall"
+            @change="setOccupant(($event.target as HTMLSelectElement).value)"
+          >
+            <option value="">Not pinned to a stall</option>
+            <option v-for="o in raffles.mapStalls" :key="o.id" :value="o.id">
+              {{ occupantListLabel(o) }} ({{ stallCaption(o) || 'Other' }})
+            </option>
+          </select>
+        </FormField>
+      </FormRow>
 
       <!-- Entry mode: decides which cost controls below exist at all. -->
       <FormField label="Entry Type" :help="modeHelp">

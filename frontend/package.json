@@ -1,10 +1,10 @@
 {
   "name": "app-suite-frontend",
   "private": true,
-  "version": "3.21.0",
+  "version": "3.27.0",
   "type": "module",
   "engines": {
-    "node": ">=24"
+    "node": "^24"
   },
   "scripts": {
     "dev": "vite",

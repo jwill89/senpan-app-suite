@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
+import { nextTick } from 'vue'
 import type { Pattern, PatternCategory } from '@/types/api'
 
 // Capture the bulk-reorder calls so the category position math can be asserted.
@@ -140,6 +141,54 @@ describe('collapse toggles', () => {
     expect(s.isCategoryCollapsed(2)).toBe(true)
     s.togglePatternsCollapsed()
     expect(s.isCategoryCollapsed(1)).toBe(false)
+  })
+})
+
+describe('editableGroups stays in step with server state', () => {
+  /**
+   * The drag view holds shallow COPIES of the patterns so vue-draggable-plus can
+   * reorder them, which means it drifts the moment `patterns` changes underneath
+   * it. It used to be rebuilt in only two places, so deleting a pattern, renaming
+   * one, or receiving a patterns_update broadcast each left the admin editing a
+   * list that no longer matched what a save would write.
+   */
+  it('follows a replaced patterns array (delete, or a patterns_update broadcast)', async () => {
+    const s = usePatternsStore()
+    s.categories = [cat(1, 'Lines')]
+    s.patterns = [pat(10, 'Row', 1), pat(11, 'Col', 1)]
+    await nextTick()
+    expect(s.editableGroups[0].patterns.map((p) => p.id)).toEqual([10, 11])
+
+    // The shape deletePattern uses.
+    s.patterns = s.patterns.filter((p) => p.id !== 10)
+    await nextTick()
+    expect(s.editableGroups[0].patterns.map((p) => p.id)).toEqual([11])
+  })
+
+  it('follows an in-place rename', async () => {
+    const s = usePatternsStore()
+    s.categories = [cat(1, 'Lines')]
+    s.patterns = [pat(10, 'Row', 1)]
+    await nextTick()
+    expect(s.editableGroups[0].patterns[0].name).toBe('Row')
+
+    // The shape finishPatternRename uses: mutate the object, not the array.
+    s.patterns[0].name = 'Top Row'
+    await nextTick()
+    expect(s.editableGroups[0].patterns[0].name).toBe('Top Row')
+  })
+
+  it('follows a new category appearing', async () => {
+    const s = usePatternsStore()
+    s.categories = [cat(1, 'Lines')]
+    s.patterns = [pat(10, 'Row', 1)]
+    await nextTick()
+    expect(s.editableGroups).toHaveLength(1)
+
+    s.categories = [cat(1, 'Lines'), cat(2, 'Shapes')]
+    s.patterns = [pat(10, 'Row', 1), pat(20, 'Box', 2)]
+    await nextTick()
+    expect(s.editableGroups.map((g) => g.category.id)).toEqual([1, 2])
   })
 })
 

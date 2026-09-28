@@ -81,8 +81,14 @@ func TestStampSignup_IssuesACard(t *testing.T) {
 	if token == "" {
 		t.Fatal("signup returned no card token")
 	}
-	if body["participant_name"] != "Yao Ming @ Balmung" {
-		t.Errorf("participant_name = %v; want the submitted name", body["participant_name"])
+	// A client that still submits one composed string is split server-side, so the
+	// record matches what a raffle or a custom card would have stored for the same
+	// person - which is the whole point of giving worlds their own column.
+	if body["participant_name"] != "Yao Ming" {
+		t.Errorf("participant_name = %v; want the name alone", body["participant_name"])
+	}
+	if body["world"] != "Balmung" {
+		t.Errorf("world = %v; want the world split out of the submitted string", body["world"])
 	}
 	// No linked garapon -> the garapon fields stay absent.
 	if _, ok := body["garapon_token"]; ok {
@@ -95,8 +101,11 @@ func TestStampSignup_IssuesACard(t *testing.T) {
 		t.Fatalf("public card status = %d; want 200", cardResp.StatusCode)
 	}
 	card := decodeBody(t, cardResp)
+	// Stored apart, but the CARD still reads the way it always did - it is what a
+	// participant holds up at a stall, and splitting the columns must not change
+	// what they show.
 	if card["participant_name"] != "Yao Ming @ Balmung" {
-		t.Errorf("card participant = %v; want the signed-up name", card["participant_name"])
+		t.Errorf("card participant = %v; want the composed label", card["participant_name"])
 	}
 }
 
@@ -205,9 +214,13 @@ func TestStampSignup_IssuesGaraponLinkWhenLinked(t *testing.T) {
 	if garaponToken == "" {
 		t.Fatal("signup issued no garapon token despite a linked open garapon")
 	}
-	if garaponToken != cardToken {
-		t.Errorf("garapon token %q != card token %q; the pair must share one token",
-			garaponToken, cardToken)
+	// They must NOT be the same string. While they were, the stamp-card link was
+	// itself a spendable drawing token: a screenshotted card, or one pasted in
+	// Discord, let anyone burn that participant's draws - which cannot be undone -
+	// and any path that recovered a card link handed the draws over with it.
+	if garaponToken == cardToken {
+		t.Errorf("garapon token and card token are both %q; viewing a card and "+
+			"spending its draws must be separate secrets", cardToken)
 	}
 	if body["garapon_title"] != "Festival Garapon" {
 		t.Errorf("garapon_title = %v; want the linked garapon's title", body["garapon_title"])
@@ -219,6 +232,82 @@ func TestStampSignup_IssuesGaraponLinkWhenLinked(t *testing.T) {
 	}
 	if r := env.get(t, "/api/stamp-card/"+cardToken); r.StatusCode != http.StatusOK {
 		t.Errorf("public card status = %d; want 200", r.StatusCode)
+	}
+	// ...and neither addresses the OTHER thing. This is the whole point of the
+	// split: holding a card link must not reach the drawing endpoint.
+	if r := env.get(t, "/api/garapon/"+cardToken); r.StatusCode != http.StatusNotFound {
+		t.Errorf("garapon by CARD token = %d; want 404 - a card link must not draw",
+			r.StatusCode)
+	}
+	if r := env.get(t, "/api/stamp-card/"+garaponToken); r.StatusCode != http.StatusNotFound {
+		t.Errorf("card by GARAPON token = %d; want 404", r.StatusCode)
+	}
+}
+
+// The lookup is keyed on a character name, which is public and appears on the
+// entrant lists the app publishes by design. It therefore must not return anything
+// SPENDABLE: it used to hand back the garapon token, so anyone who typed a name
+// could burn that participant's draws, irreversibly, before the participant ever
+// opened their own link.
+//
+// What it may return is the card token (opens the stamp card, and since the split
+// nothing else) and the number of draws REMAINING, so someone on a borrowed device
+// can see their draws are intact without being handed the means to spend them.
+func TestStampLookup_NeverReturnsASpendableToken(t *testing.T) {
+	env := newTestEnv(t)
+	env.loginAdmin(t)
+	rallyID := env.createSignupRally(t, "Festival Rally")
+	garaponID := env.createGarapon(t, "Festival Garapon")
+	linkResp := env.putJSON(t, fmt.Sprintf("/api/garapons/%d", garaponID), map[string]any{
+		"title":          "Festival Garapon",
+		"stamp_rally_id": rallyID,
+		"prizes": []map[string]any{
+			{"name": "Grand", "ball_color": "#e5b53f", "rate": 1, "is_grand": true},
+		},
+	})
+	linkResp.Body.Close()
+
+	signup := decodeBody(t, env.signUp(t, rallyID, "Aria Ashwood"))
+	garaponToken, _ := signup["garapon_token"].(string)
+	if garaponToken == "" {
+		t.Fatal("signup issued no garapon token")
+	}
+
+	body := decodeBody(t, env.postJSON(t, "/api/stamp-lookup", map[string]any{"name": "Aria Ashwood"}))
+	entries, _ := body["entries"].([]any)
+	if len(entries) != 1 {
+		t.Fatalf("entries = %d; want 1", len(entries))
+	}
+	entry, _ := entries[0].(map[string]any)
+
+	// The token itself must be absent - not blank, not present under another key.
+	for key, value := range entry {
+		if str, ok := value.(string); ok && str == garaponToken {
+			t.Fatalf("lookup returned the drawing token under %q; a public name must "+
+				"never yield a spendable capability", key)
+		}
+	}
+	if _, present := entry["garapon_token"]; present {
+		t.Error("lookup response still carries a garapon_token field")
+	}
+
+	// It still tells the participant their draws exist and are unspent.
+	if entry["garapon_title"] != "Festival Garapon" {
+		t.Errorf("garapon_title = %v; want the linked garapon's title", entry["garapon_title"])
+	}
+	if left, _ := entry["garapon_draws_left"].(float64); left != 1 {
+		t.Errorf("garapon_draws_left = %v; want 1", entry["garapon_draws_left"])
+	}
+
+	// And the card token it DOES return cannot be used to draw.
+	cardToken, _ := entry["card_token"].(string)
+	if cardToken == "" {
+		t.Fatal("lookup returned no card token")
+	}
+	resp := env.postJSON(t, "/api/garapon/"+cardToken+"/draw", map[string]any{})
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusNotFound {
+		t.Errorf("draw with the looked-up card token = %d; want 404", resp.StatusCode)
 	}
 }
 

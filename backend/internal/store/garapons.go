@@ -237,7 +237,7 @@ func (s *Store) ListGarapons() ([]model.Garapon, error) {
 // ListGaraponPlayers returns a garapon's drawing links with each player's
 // read-only draws-used count, oldest first.
 func (s *Store) ListGaraponPlayers(garaponID int64) ([]model.GaraponPlayer, error) {
-	rows, err := s.db.Query(`SELECT p.id, p.garapon_id, p.token, p.player_name, p.max_draws, p.created_at,
+	rows, err := s.db.Query(`SELECT p.id, p.garapon_id, p.token, p.player_name, p.world, p.max_draws, p.created_at,
 			COALESCE((SELECT COUNT(*) FROM garapon_draws d WHERE d.player_id = p.id), 0),
 			COALESCE(sc.token, '')
 		FROM garapon_players p LEFT JOIN stamp_rally_cards sc ON sc.id = p.stamp_card_id
@@ -250,7 +250,7 @@ func (s *Store) ListGaraponPlayers(garaponID int64) ([]model.GaraponPlayer, erro
 	players := make([]model.GaraponPlayer, 0)
 	for rows.Next() {
 		var p model.GaraponPlayer
-		if err := rows.Scan(&p.ID, &p.GaraponID, &p.Token, &p.PlayerName, &p.MaxDraws, &p.CreatedAt, &p.DrawsUsed,
+		if err := rows.Scan(&p.ID, &p.GaraponID, &p.Token, &p.PlayerName, &p.World, &p.MaxDraws, &p.CreatedAt, &p.DrawsUsed,
 			&p.StampCardToken); err != nil {
 			return nil, err
 		}
@@ -263,11 +263,11 @@ func (s *Store) ListGaraponPlayers(garaponID int64) ([]model.GaraponPlayer, erro
 // WHERE clause, shared by the by-id and by-token lookups.
 func (s *Store) getGaraponPlayer(where string, arg any) (*model.GaraponPlayer, error) {
 	var p model.GaraponPlayer
-	err := s.db.QueryRow(`SELECT p.id, p.garapon_id, p.token, p.player_name, p.max_draws, p.created_at,
+	err := s.db.QueryRow(`SELECT p.id, p.garapon_id, p.token, p.player_name, p.world, p.max_draws, p.created_at,
 			COALESCE((SELECT COUNT(*) FROM garapon_draws d WHERE d.player_id = p.id), 0),
 			COALESCE(sc.token, '')
 		FROM garapon_players p LEFT JOIN stamp_rally_cards sc ON sc.id = p.stamp_card_id WHERE `+where, arg).
-		Scan(&p.ID, &p.GaraponID, &p.Token, &p.PlayerName, &p.MaxDraws, &p.CreatedAt, &p.DrawsUsed,
+		Scan(&p.ID, &p.GaraponID, &p.Token, &p.PlayerName, &p.World, &p.MaxDraws, &p.CreatedAt, &p.DrawsUsed,
 			&p.StampCardToken)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
@@ -291,13 +291,13 @@ func (s *Store) GetGaraponPlayerByToken(token string) (*model.GaraponPlayer, err
 
 // CreateGaraponPlayer issues a new drawing link (a fresh unguessable token) for a
 // named player with the given draw allowance, and returns it.
-func (s *Store) CreateGaraponPlayer(garaponID int64, name string, maxDraws int) (*model.GaraponPlayer, error) {
+func (s *Store) CreateGaraponPlayer(garaponID int64, name, world string, maxDraws int) (*model.GaraponPlayer, error) {
 	token, err := randToken()
 	if err != nil {
 		return nil, err
 	}
-	res, err := s.db.Exec(`INSERT INTO garapon_players (garapon_id, token, player_name, max_draws)
-		VALUES (?, ?, ?, ?)`, garaponID, token, name, maxDraws)
+	res, err := s.db.Exec(`INSERT INTO garapon_players (garapon_id, token, player_name, world, max_draws)
+		VALUES (?, ?, ?, ?, ?)`, garaponID, token, name, world, maxDraws)
 	if err != nil {
 		return nil, err
 	}
@@ -350,7 +350,20 @@ func (s *Store) DeleteGaraponPlayer(playerID int64, force bool) (bool, error) {
 		// Remove the auto-issued stamp card too (in the same transaction, so a failure
 		// rolls the link delete back rather than orphaning the card); its collected
 		// rows stay in the rally's log via the ON DELETE SET NULL + snapshots.
-		if _, err := tx.Exec(`DELETE FROM stamp_rally_cards WHERE id = ?`, stampCardID.Int64); err != nil {
+		//
+		// The sweep obeys the SAME rule the rally's own card delete enforces: a card
+		// that has collected stamps survives until its rally is closed. Without this
+		// the garapon side was a back door onto that rule - removing a drawing link
+		// mid-rally silently destroyed the participant's part-stamped card, which the
+		// stamp-rally page would have refused with a 409. The condition lives in SQL
+		// rather than in the handler so no future caller can skip it. Leaving the card
+		// behind is safe: the link row is what's being deleted, and a card with no
+		// garapon link is an ordinary rally card.
+		if _, err := tx.Exec(`DELETE FROM stamp_rally_cards WHERE id = ?
+			AND (NOT EXISTS (SELECT 1 FROM stamp_rally_collected col WHERE col.card_id = stamp_rally_cards.id)
+				OR EXISTS (SELECT 1 FROM stamp_rallies sr
+					WHERE sr.id = stamp_rally_cards.rally_id AND sr.status = 'closed'))`,
+			stampCardID.Int64); err != nil {
 			return false, err
 		}
 	}
@@ -460,11 +473,11 @@ func (s *Store) RecordGaraponDraw(playerID int64) (*model.GaraponDraw, error) {
 	defer func() { _ = tx.Rollback() }()
 
 	var garaponID int64
-	var playerName, status string
+	var playerName, playerWorld, status string
 	var maxDraws int
-	err = tx.QueryRow(`SELECT p.garapon_id, p.player_name, p.max_draws, g.status
+	err = tx.QueryRow(`SELECT p.garapon_id, p.player_name, p.world, p.max_draws, g.status
 		FROM garapon_players p JOIN garapons g ON g.id = p.garapon_id WHERE p.id = ?`, playerID).
-		Scan(&garaponID, &playerName, &maxDraws, &status)
+		Scan(&garaponID, &playerName, &playerWorld, &maxDraws, &status)
 	if err != nil {
 		return nil, err // includes sql.ErrNoRows when the player is gone
 	}
@@ -489,8 +502,13 @@ func (s *Store) RecordGaraponDraw(playerID int64) (*model.GaraponDraw, error) {
 	}
 	win := pickGaraponPrize(prizes)
 
+	// The log snapshots the WHOLE identity, not just the name: it is what staff read
+	// when handing out a prize, and it has to survive the drawing link being deleted.
+	// Storing the bare name would leave two players who share one across worlds
+	// indistinguishable at exactly the moment it matters.
 	res, err := tx.Exec(`INSERT INTO garapon_draws (garapon_id, player_id, prize_id, player_name, prize_name, ball_color)
-		VALUES (?, ?, ?, ?, ?, ?)`, garaponID, playerID, win.ID, playerName, win.Name, win.BallColor)
+		VALUES (?, ?, ?, ?, ?, ?)`, garaponID, playerID, win.ID,
+		model.ParticipantLabel(playerName, playerWorld), win.Name, win.BallColor)
 	if err != nil {
 		return nil, err
 	}

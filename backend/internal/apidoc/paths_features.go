@@ -16,7 +16,9 @@ func buildFeaturePaths(b *pb) {
 			"tier_costs", parr("`custom` mode: price of the 1st, 2nd, ... ticket. Required (non-empty, at most 100) in that mode, ignored otherwise - its length also sets max_entries.", pnum("")),
 			"available_from", pstr("UTC RFC-3339."),
 			"available_to", pstr("UTC RFC-3339."), "prize_image", pstr(""),
-			"pay_image", pstr("\"Where to Pay\" screenshot, shown under the sign-up instructions."))
+			"pay_image", pstr("\"Where to Pay\" screenshot, shown under the sign-up instructions."),
+			"festival_map_id", pint("Optional Festival Map the raffle belongs to - the same grouping a Stamp Rally gets, so a festival's raffles, rallies and floor plan hang off one event."),
+			"occupant_id", pint("Optional stall on that map (a pitch OCCUPANT id), so the stall's panel on the public plan links to the raffle. Cleared when `festival_map_id` is null, and dropped when it names a stall that isn't on the linked map."))
 	}
 	b.add("GET", "/api/raffles", "Raffles", "List raffles", "public",
 		"Role-filtered: admins see all; the public sees only open raffles within their availability window.", opt{
@@ -200,11 +202,19 @@ func buildFeaturePaths(b *pb) {
 			path:  []*openapi3.Parameter{pparam("id", "Tea-room id.")},
 			body:  actionBody("Full tea-room fields.", nil, props("tea_room", ref("TeaRoom"))),
 			resps: []respEntry{ok("TeaRoomResponse"), r("400", "Name / unique room number required"), r("404", "Not found")}})
-	b.add("PATCH", "/api/tea-rooms/{id}", "Tea Rooms", "Toggle open/discounted", teaRoom,
-		"Partial update of the quick-toggle flags; absent fields are left unchanged.", opt{
-			path:  []*openapi3.Parameter{pparam("id", "Tea-room id.")},
-			body:  actionBody("Flag toggles.", nil, props("open", pbool("Open/closed."), "discounted", pbool("50%-off flag."))),
-			resps: []respEntry{ok("TeaRoomResponse"), r("404", "Not found")}})
+	b.add("PATCH", "/api/tea-rooms/{id}", "Tea Rooms", "Toggle open/discounted/locked", teaRoom,
+		"Partial update of the quick-toggle flags; absent fields are left unchanged. `locked` and `locked_until` "+
+			"move independently: `locked` alone locks or unlocks the room, `locked_until` alone re-times a lock "+
+			"already in place. A lock with no `locked_until` stands until someone unlocks it; one with an expiry is "+
+			"lifted by the server when that moment passes (and announced over the WebSocket as `tea_room_unlocked`). "+
+			"Unlocking clears the expiry.", opt{
+			path: []*openapi3.Parameter{pparam("id", "Tea-room id.")},
+			body: actionBody("Flag toggles.", nil, props(
+				"open", pbool("Open/closed."),
+				"discounted", pbool("50%-off flag."),
+				"locked", pbool("Locked/unlocked."),
+				"locked_until", pstr("UTC RFC-3339 instant the lock lifts ('' = no expiry, manual unlock)."))),
+			resps: []respEntry{ok("TeaRoomResponse"), r("400", "Unreadable unlock time"), r("404", "Not found")}})
 	b.add("DELETE", "/api/tea-rooms/{id}", "Tea Rooms", "Delete a tea room", teaRoom, "", opt{
 		path:  []*openapi3.Parameter{pparam("id", "Tea-room id.")},
 		resps: []respEntry{noContent()}})
@@ -212,6 +222,50 @@ func buildFeaturePaths(b *pb) {
 		"Posts the room's embed to the shared Discord webhook now.", opt{
 			path:  []*openapi3.Parameter{pparam("id", "Tea-room id.")},
 			resps: []respEntry{ok("TeaRoomResponse"), r("400", "No webhook configured"), r("404", "Not found"), r("502", "Discord failed")}})
+
+	// -- Festival Map (resource-oriented: methods for CRUD, PATCH for the status)
+	mapPerm := "permission:festival-map"
+	mapFields := func() openapi3.Schemas {
+		return props(
+			"title", pstr("Title (required)."),
+			"slug", pstr("Optional shortcode, so the map can be linked as `/festival-maps/obon-2026` instead of by id. Lowercase letters, numbers and dashes, 2-64 characters; whatever is sent is trimmed, lowercased and has spaces/underscores folded into dashes first. An all-numeric shortcode is refused (it would be indistinguishable from a map id), and it must not already belong to another map."),
+			"description", pstr("Markdown."),
+			"times", parr("When the festival runs; several ranges are allowed.", ref("EventTime")),
+			"map_image", pstr("The base floor-plan image the stalls are placed on."),
+			"stalls", parr("The PITCHES on the plan, replaced wholesale. A pitch carries only how it is drawn (shape, color, placement); who stands in it lives in its `occupants`, one entry per business - several when a booth changes hands between days, each with its own `times`. An occupant with no `times` runs the whole festival. Placements are clamped to 0-100% of the map box; unknown shapes/types fall back to \"rect\"/\"other\" and a color that isn't `#rrggbb` is dropped. `type_label` is the caption drawn under an occupant's title when its `stall_type` is `other` (\"Omikuji\", \"Art Raffle\"); it is stored whatever the type but only rendered for `other`. Occupants are reconciled BY ID so a rally stamp keeps naming the same one; an occupant with neither a title nor an affiliate is dropped, and a pitch left with no occupants is dropped with it.", ref("FestivalStall")))
+	}
+	b.add("GET", "/api/festival-maps", "Festival Map", "List maps", mapPerm,
+		"Every map whatever its status, each with a `stall_count`.", opt{
+			resps: []respEntry{ok("FestivalMapsResponse")}})
+	b.add("POST", "/api/festival-maps", "Festival Map", "Create a map", mapPerm,
+		"A new map always starts `in_progress` - publishing is a separate PATCH.", opt{
+			body:  actionBody("Map fields.", nil, mapFields()),
+			resps: []respEntry{created("FestivalMapResponse"), r("400", "Title required, or an invalid shortcode"), r("409", "Shortcode already used by another map")}})
+	b.add("GET", "/api/festival-maps/{id}", "Festival Map", "Map detail", mapPerm,
+		"The map with its stalls (affiliate name joined).", opt{
+			path:  []*openapi3.Parameter{pparam("id", "Map id.")},
+			resps: []respEntry{ok("FestivalMapDetailResponse"), r("404", "Not found")}})
+	b.add("PUT", "/api/festival-maps/{id}", "Festival Map", "Replace a map", mapPerm,
+		"Full replace of the editable fields. Stalls are reconciled by id, so a stall a stamp rally names survives the edit; status is preserved (use PATCH).", opt{
+			path:  []*openapi3.Parameter{pparam("id", "Map id.")},
+			body:  actionBody("Full map fields.", nil, mapFields()),
+			resps: []respEntry{ok("OKResponse"), r("400", "Title required, or an invalid shortcode"), r("409", "Shortcode already used by another map")}})
+	b.add("PATCH", "/api/festival-maps/{id}", "Festival Map", "Set the publish status", mapPerm,
+		"Publishing needs a base map image - the stalls are positioned against it.", opt{
+			path:  []*openapi3.Parameter{pparam("id", "Map id.")},
+			body:  actionBody("Status.", nil, props("status", pstr("\"in_progress\", \"published\" or \"closed\"; anything else reads as \"in_progress\"."))),
+			resps: []respEntry{ok("StatusResponse"), r("400", "Publishing without a map image"), r("404", "Not found")}})
+	b.add("DELETE", "/api/festival-maps/{id}", "Festival Map", "Delete a map", mapPerm,
+		"Deletes the map and its stalls. A stamp rally linked to it survives, with its stamps falling back to their affiliates.", opt{
+			path:  []*openapi3.Parameter{pparam("id", "Map id.")},
+			resps: []respEntry{noContent()}})
+	b.add("GET", "/api/festival-maps/public", "Festival Map", "Published maps", "public",
+		"Maps whose status is `published`; `is_active` reports that now falls inside one of the festival's datetime ranges.", opt{
+			resps: []respEntry{ok("PublicFestivalMapsResponse")}})
+	b.add("GET", "/api/festival-maps/public/{id}", "Festival Map", "Public map view", "public",
+		"One published map with every stall resolved for a visitor: the affiliate card, whether the stall is open right now, the stall's rally badge and stamp art when an OPEN stamp rally is linked to the map, and a `raffle` link when a raffle assigned to that stall is RUNNING - open and inside its availability window (a closed raffle, or one whose window has not opened, is left off rather than linking somewhere a visitor cannot enter). The path segment is the map's SHORTCODE or its numeric id; both always resolve, so a link posted before a shortcode existed keeps working. An unpublished map answers 404 rather than 403, so a draft's existence isn't confirmed.", opt{
+			path:  []*openapi3.Parameter{pparam("id", "Map shortcode or numeric id.")},
+			resps: []respEntry{ok("PublicFestivalMap"), r("404", "Not found or not published")}})
 
 	// -- Stamp Rally (resource-oriented: methods for CRUD, POST /{id}/{verb}) ----
 	rallyFields := func() openapi3.Schemas {
@@ -222,6 +276,8 @@ func buildFeaturePaths(b *pb) {
 			"completion_mode", pstr("\"all\" (collect the whole card, the default) or \"counts\" (per-type requirements)."),
 			"required_food", pint("\"counts\" mode: food stamps needed; clamped to the food stamps on the card."),
 			"required_game", pint("\"counts\" mode: game stamps needed; clamped to the game stamps on the card. At least one of the two must be non-zero."),
+			"public_signup", pbool("Whether the rally takes public self-service sign-ups. OMITTING it on a PUT sends false and TURNS SIGN-UP OFF - the save replaces the rally's fields, it does not merge them."),
+			"festival_map_id", pint("Optional Festival Map link. When set, each stamp's `occupant_id` names one of that map's pitch OCCUPANTS (not the pitch - a booth that changes hands between days hosts two different stalls) and the stamp takes its affiliate from that occupant; when null, every `occupant_id` is cleared."),
 			"stamps", parr("", ref("StampRallyStamp")), "prizes", parr("", ref("StampRallyPrize")))
 	}
 	b.add("GET", "/api/stamp-rallies", "Stamp Rally", "List rallies", "permission:festival-stamp-rally", "", opt{resps: []respEntry{ok("StampRalliesResponse")}})

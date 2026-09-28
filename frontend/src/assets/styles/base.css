@@ -232,6 +232,11 @@ h1,
 .btn-neutral {
   background: var(--btn-fill);
   color: var(--btn-text);
+  /* These classes are worn by <a> as often as by <button> - an external link
+     styled as a button. Without this the anchor keeps the browser's underline and
+     reads as half link, half button. A thing is one or the other: a button looks
+     like a button, and .link-btn is what a link-shaped control uses. */
+  text-decoration: none;
 }
 
 /* One hover language: darken the fill ~15%. Neutral is a dark surface, so it

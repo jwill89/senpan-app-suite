@@ -16,7 +16,7 @@ import (
 // PRAGMA user_version against this constant and runs only the migrations
 // needed to bring the database up to date. Bump this when adding a new
 // migration block.
-const schemaVersion = 60
+const schemaVersion = 69
 
 // ensureSchema reads the current PRAGMA user_version from the database and
 // applies any outstanding migrations to bring it up to schemaVersion.
@@ -27,8 +27,22 @@ func ensureSchema(db *sql.DB) error {
 	if err := db.QueryRow("PRAGMA user_version").Scan(&version); err != nil {
 		return fmt.Errorf("read user_version: %w", err)
 	}
-	if version >= schemaVersion {
+	if version == schemaVersion {
 		return nil
+	}
+	// A database migrated by a NEWER binary is not "up to date", it is from the
+	// future: its tables carry columns and constraints this build has never heard
+	// of, and every query here was written against an older shape. Starting anyway
+	// is how a rolled-back deploy quietly corrupts data - the rollback restores the
+	// previous binary but cannot un-migrate the database, so the old code would run
+	// against the new schema and no one would be told. Refuse instead: the operator
+	// sees why immediately, and the fix (restore the pre-migration snapshot the
+	// deploy now takes, or roll the binary forward again) is theirs to choose.
+	if version > schemaVersion {
+		return fmt.Errorf(
+			"database schema v%d is newer than this binary (v%d); refusing to start - "+
+				"restore the pre-deploy snapshot or run a build at or above v%d",
+			version, schemaVersion, version)
 	}
 
 	if version < 1 {
@@ -406,14 +420,212 @@ func ensureSchema(db *sql.DB) error {
 		}
 	}
 
+	if version < 61 {
+		if err := migrateFestivalMaps(db); err != nil {
+			return err
+		}
+	}
+
+	if version < 62 {
+		if err := migrateFestivalMapSlug(db); err != nil {
+			return err
+		}
+	}
+
+	if version < 63 {
+		if err := migrateFestivalStallTypeLabel(db); err != nil {
+			return err
+		}
+	}
+
+	if version < 64 {
+		if err := migrateFestivalStallOccupants(db); err != nil {
+			return err
+		}
+	}
+
+	if version < 65 {
+		if err := migrateRaffleFestivalLink(db); err != nil {
+			return err
+		}
+	}
+
+	if version < 66 {
+		if err := migrateParticipantWorlds(db); err != nil {
+			return err
+		}
+	}
+
+	if version < 67 {
+		if err := migrateStallSelectionAndCarrd(db); err != nil {
+			return err
+		}
+	}
+
+	if version < 68 {
+		if err := migrateStallTextColor(db); err != nil {
+			return err
+		}
+	}
+
+	if version < 69 {
+		if err := migrateTeaRoomLocks(db); err != nil {
+			return err
+		}
+	}
+
 	_, err := db.Exec(fmt.Sprintf("PRAGMA user_version = %d", schemaVersion))
 	return err
+}
+
+// migrateParticipantWorlds (schema v66) gives stamp_rally_cards and garapon_players
+// their own `world` column, so every system that records a participant stores the
+// SAME two fields: character name and home world, kept apart.
+//
+// `cards` and `raffle_entries` already did. The two stamp/garapon tables instead
+// held one free-text blob that people were merely asked to type as
+// "Firstname Lastname @ World" - the API docs said "ideally". That made the same
+// person unmatchable across systems: a raffle knew ("Aria Ashwood", "Gilgamesh")
+// while a rally knew whatever they typed, which might be "aria ashwood@gilgamesh"
+// or carry no world at all.
+//
+// The split runs in Go rather than SQL: SQLite has no right-hand index function,
+// and doing it here is both readable and exercised by a test. A name with no
+// separator keeps the whole string and an empty world - that is what the
+// participant typed, and inventing a world for them would be worse than leaving it
+// blank for staff to correct.
+//
+// Idempotent: the column add is guarded by hasColumn, and only rows whose world is
+// still ” are touched, so a second run changes nothing.
+func migrateParticipantWorlds(db *sql.DB) error {
+	for _, t := range []struct{ table, nameCol string }{
+		{"stamp_rally_cards", "participant_name"},
+		{"garapon_players", "player_name"},
+	} {
+		if !tableExists(db, t.table) {
+			continue
+		}
+		if !hasColumn(db, t.table, "world") {
+			if _, err := db.Exec(fmt.Sprintf(
+				`ALTER TABLE %s ADD COLUMN world TEXT NOT NULL DEFAULT ''`, t.table)); err != nil {
+				return fmt.Errorf("add %s.world: %w", t.table, err)
+			}
+		}
+		if err := backfillWorlds(db, t.table, t.nameCol); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// backfillWorlds splits one table's composed participant names into name + world.
+// Runs in a single transaction so a crash part-way cannot leave half a table split
+// and half not - which would be invisible afterwards, since both states look like
+// ordinary data.
+func backfillWorlds(db *sql.DB, table, nameCol string) error {
+	rows, err := db.Query(fmt.Sprintf(
+		`SELECT id, %s FROM %s WHERE world = '' AND %s LIKE '%% @ %%'`, nameCol, table, nameCol))
+	if err != nil {
+		return fmt.Errorf("scan %s for world backfill: %w", table, err)
+	}
+	type split struct {
+		id          int64
+		name, world string
+	}
+	var pending []split
+	for rows.Next() {
+		var id int64
+		var composed string
+		if err := rows.Scan(&id, &composed); err != nil {
+			rows.Close()
+			return fmt.Errorf("scan %s row for world backfill: %w", table, err)
+		}
+		// The LAST separator: a world never contains " @ ", so anything before the
+		// final one belongs to the name.
+		at := strings.LastIndex(composed, " @ ")
+		pending = append(pending, split{
+			id:    id,
+			name:  strings.TrimSpace(composed[:at]),
+			world: strings.TrimSpace(composed[at+len(" @ "):]),
+		})
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("read %s for world backfill: %w", table, err)
+	}
+	if len(pending) == 0 {
+		return nil
+	}
+
+	tx, err := db.Begin()
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+	stmt := fmt.Sprintf(`UPDATE %s SET %s = ?, world = ? WHERE id = ?`, table, nameCol)
+	for _, p := range pending {
+		// A blank half means the blob was " @ Something" or "Something @ " - keep
+		// the original rather than storing a nameless row.
+		if p.name == "" || p.world == "" {
+			continue
+		}
+		if _, err := tx.Exec(stmt, p.name, p.world, p.id); err != nil {
+			return fmt.Errorf("backfill %s.world: %w", table, err)
+		}
+	}
+	return tx.Commit()
+}
+
+// migrateStallTextColor (schema v68) adds festival_stalls.text_color: the colour a
+// pitch's label is drawn in, chosen per pitch alongside its fill.
+//
+// The label was a fixed dark colour, which only reads on a light fill - a pitch
+// tinted anything deep left its own name barely legible. Existing rows default to
+// ” and the frontend draws those white, which is what most fills want; an admin
+// picks something else where it does not. Idempotent - guarded by hasColumn.
+func migrateStallTextColor(db *sql.DB) error {
+	if !tableExists(db, "festival_stalls") || hasColumn(db, "festival_stalls", "text_color") {
+		return nil
+	}
+	if _, err := db.Exec(
+		`ALTER TABLE festival_stalls ADD COLUMN text_color TEXT NOT NULL DEFAULT ''`); err != nil {
+		return fmt.Errorf("add festival_stalls.text_color: %w", err)
+	}
+	return nil
+}
+
+// migrateStallSelectionAndCarrd (schema v67) adds two per-pitch fields to the
+// festival map:
+//
+//   - festival_stalls.selection_color - the halo drawn around a pitch the visitor
+//     has tapped. Its own colour rather than the pitch's `color`, so the ring can
+//     be made to contrast with the fill instead of disappearing into it.
+//   - festival_stall_occupants.event_carrd - a per-OCCUPANT link to that stall's
+//     event page. It sits on the occupant, not the pitch, because a pitch that
+//     changes hands between days has a different event page each day.
+//
+// Both default to ” (not set), which is what every existing row gets: nothing
+// renders until someone fills one in. Idempotent - each column is guarded.
+func migrateStallSelectionAndCarrd(db *sql.DB) error {
+	for _, c := range []struct{ table, column string }{
+		{"festival_stalls", "selection_color"},
+		{"festival_stall_occupants", "event_carrd"},
+	} {
+		if !tableExists(db, c.table) || hasColumn(db, c.table, c.column) {
+			continue
+		}
+		if _, err := db.Exec(fmt.Sprintf(
+			`ALTER TABLE %s ADD COLUMN %s TEXT NOT NULL DEFAULT ''`, c.table, c.column)); err != nil {
+			return fmt.Errorf("add %s.%s: %w", c.table, c.column, err)
+		}
+	}
+	return nil
 }
 
 // migrateRafflePayImage (schema v59) adds raffles.pay_image, the "Where to Pay"
 // screenshot shown beneath a raffle's sign-up instructions - the counterpart to
 // stamp_rallies.redeem_image, which does the same job for "Where to Redeem".
-// Existing raffles default to '' (no image), so nothing changes until someone
+// Existing raffles default to ” (no image), so nothing changes until someone
 // picks one. Idempotent - skipped when the column already exists.
 func migrateRafflePayImage(db *sql.DB) error {
 	if !tableExists(db, "raffles") {
@@ -447,9 +659,22 @@ func migrateRaffleEntryPayments(db *sql.DB) error {
 		if _, err := db.Exec(`ALTER TABLE raffle_entries ADD COLUMN paid_entries INTEGER NOT NULL DEFAULT 0`); err != nil {
 			return fmt.Errorf("add raffle_entries.paid_entries: %w", err)
 		}
-		if _, err := db.Exec(`UPDATE raffle_entries SET paid_entries = num_entries WHERE paid = 1`); err != nil {
-			return fmt.Errorf("backfill raffle_entries.paid_entries: %w", err)
-		}
+	}
+	// The backfill sits OUTSIDE the ALTER's guard and is written to be safe to
+	// re-run, the way migrateSortOrder and migrateAnnouncementSkipCount are.
+	// ensureSchema bumps user_version once, after every migration has run, so a boot
+	// that died anywhere between this ALTER committing and that final write - a
+	// failure in any later migration counts - would come back with the column
+	// present and the guard therefore skipping the backfill for good. Historically
+	// paid entries would have stayed at paid_entries=0, which reads as unpaid: they
+	// drop out of the raffle's collected-gil total, and the next ticket that player
+	// buys flips the row's paid flag back to 0.
+	//
+	// "WHERE paid = 1 AND paid_entries = 0" makes the re-run a no-op once the data
+	// is right, and cannot clobber a partial settlement recorded after the upgrade
+	// (those rows have paid_entries > 0).
+	if _, err := db.Exec(`UPDATE raffle_entries SET paid_entries = num_entries WHERE paid = 1 AND paid_entries = 0`); err != nil {
+		return fmt.Errorf("backfill raffle_entries.paid_entries: %w", err)
 	}
 	if !hasColumn(db, "raffle_entries", "amount_waived") {
 		if _, err := db.Exec(`ALTER TABLE raffle_entries ADD COLUMN amount_waived REAL NOT NULL DEFAULT 0`); err != nil {
@@ -484,7 +709,7 @@ func migrateRaffleEntryModes(db *sql.DB) error {
 
 // migrateAffiliateSubtitle (schema v52) adds affiliates.subtitle, the optional
 // second line shown under the name (mirroring tea_rooms.subtitle). Existing rows
-// default to ''. Idempotent - skipped when the column already exists (a fresh
+// default to ”. Idempotent - skipped when the column already exists (a fresh
 // install gets it via createTables).
 func migrateAffiliateSubtitle(db *sql.DB) error {
 	if !tableExists(db, "affiliates") {
@@ -600,7 +825,7 @@ func migrateGaraponDefaultDraws(db *sql.DB) error {
 }
 
 // migrateTeaRoomOwner (schema v53) adds tea_rooms.room_owner, the optional
-// informational "character who owns the room" line. Existing rows default to ''.
+// informational "character who owns the room" line. Existing rows default to ”.
 // Idempotent - skipped when the column already exists (a fresh install gets it via
 // createTables -> teaRoomsTableSQL).
 func migrateTeaRoomOwner(db *sql.DB) error {
@@ -850,11 +1075,30 @@ func createTables(db *sql.DB) error {
 		stampRallyCollectedTableSQL,
 		userTokensTableSQL,
 		teaRoomsTableSQL,
+		festivalMapsTableSQL,
+		festivalStallsTableSQL,
+		festivalStallOccupantsTableSQL,
 	}
+	// All or nothing. The fresh-install probe in ensureSchema asks whether `cards`
+	// exists, and `cards` is the FIRST of these statements - so a first boot
+	// interrupted anywhere after it (a crash, a full disk, the container being
+	// killed) left a database holding one table out of forty, which the next boot
+	// read as "an existing pre-versioning database" and sent down the legacy branch.
+	// Table creation was then never retried, and that empty database could never
+	// boot again. SQLite runs DDL inside a transaction, so wrapping the batch makes
+	// the probe's question have only two possible answers.
+	tx, err := db.Begin()
+	if err != nil {
+		return fmt.Errorf("create tables: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
 	for _, s := range stmts {
-		if _, err := db.Exec(s); err != nil {
+		if _, err := tx.Exec(s); err != nil {
 			return fmt.Errorf("create tables: %w", err)
 		}
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("create tables: %w", err)
 	}
 	return createIndexes(db)
 }
@@ -878,6 +1122,7 @@ func createIndexes(db *sql.DB) error {
 		"CREATE INDEX IF NOT EXISTS idx_announcements_due ON announcements(active, next_post_at)",
 		"CREATE INDEX IF NOT EXISTS idx_garapon_prizes_garapon ON garapon_prizes(garapon_id)",
 		"CREATE INDEX IF NOT EXISTS idx_garapon_players_garapon ON garapon_players(garapon_id)",
+		`CREATE INDEX IF NOT EXISTS idx_garapon_players_stamp_card ON garapon_players(stamp_card_id)`,
 		"CREATE INDEX IF NOT EXISTS idx_garapon_players_token ON garapon_players(token)",
 		"CREATE INDEX IF NOT EXISTS idx_garapon_draws_garapon ON garapon_draws(garapon_id)",
 		"CREATE INDEX IF NOT EXISTS idx_garapon_draws_player ON garapon_draws(player_id)",
@@ -885,13 +1130,13 @@ func createIndexes(db *sql.DB) error {
 		"CREATE INDEX IF NOT EXISTS idx_stamp_rally_prizes_rally ON stamp_rally_prizes(rally_id)",
 		"CREATE INDEX IF NOT EXISTS idx_stamp_rally_cards_rally ON stamp_rally_cards(rally_id)",
 		"CREATE INDEX IF NOT EXISTS idx_stamp_rally_cards_token ON stamp_rally_cards(token)",
+		`CREATE INDEX IF NOT EXISTS idx_stamp_rally_cards_participant ON stamp_rally_cards(participant_name COLLATE NOCASE)`,
 		"CREATE INDEX IF NOT EXISTS idx_stamp_rally_collected_card ON stamp_rally_collected(card_id)",
 		"CREATE INDEX IF NOT EXISTS idx_stamp_rally_collected_stamp ON stamp_rally_collected(stamp_id)",
 		"CREATE INDEX IF NOT EXISTS idx_stamp_rally_collected_rally ON stamp_rally_collected(rally_id)",
 		"CREATE INDEX IF NOT EXISTS idx_tea_rooms_sort ON tea_rooms(sort_order, id)",
-		// room_number is the public/embed lookup key and must be unique.
-		"CREATE UNIQUE INDEX IF NOT EXISTS idx_tea_rooms_room_number ON tea_rooms(room_number)",
-		"CREATE INDEX IF NOT EXISTS idx_affiliates_sort ON affiliates(sort_order, id)",
+		teaRoomNumberIndexSQL,
+		affiliatesSortIndexSQL,
 	}
 	for _, idx := range indexes {
 		if _, err := db.Exec(idx); err != nil {
@@ -936,13 +1181,18 @@ func migrateWinnersCache(db *sql.DB) error {
 }
 
 // columnInfo reports whether a table has the given column and, if so, whether it
-// is declared NOT NULL - both read from PRAGMA table_info. A missing table (or a
-// query error) reports (false, false). Backs hasColumn (idempotent ALTER TABLE
-// guards) and the v36 garapon_draws schema detection.
-func columnInfo(db *sql.DB, table, column string) (exists, notNull bool) {
+// is declared NOT NULL - both read from PRAGMA table_info. Backs hasColumn
+// (idempotent ALTER TABLE guards) and the v36 garapon_draws schema detection.
+//
+// A MISSING TABLE is not an error: PRAGMA table_info on an unknown table returns
+// zero rows, which reports (false, false, nil) - the same "no such column" answer
+// a present table without that column gives. So a non-nil error here is always a
+// genuine fault (I/O, corruption, a closed handle), never an absence, and callers
+// must not read it as one.
+func columnInfo(db *sql.DB, table, column string) (exists, notNull bool, err error) {
 	rows, err := db.Query(fmt.Sprintf("PRAGMA table_info(%s)", table))
 	if err != nil {
-		return false, false
+		return false, false, err
 	}
 	defer rows.Close()
 
@@ -953,19 +1203,36 @@ func columnInfo(db *sql.DB, table, column string) (exists, notNull bool) {
 		var dfltValue sql.NullString
 		var pk int
 		if err := rows.Scan(&cid, &name, &typ, &notnull, &dfltValue, &pk); err != nil {
-			return false, false
+			return false, false, err
 		}
 		if name == column {
-			return true, notnull == 1
+			return true, notnull == 1, nil
 		}
 	}
-	return false, false
+	// Without this an iteration that stopped early is indistinguishable from one
+	// that ran off the end, so a truncated read reports the column absent.
+	if err := rows.Err(); err != nil {
+		return false, false, err
+	}
+	return false, false, nil
 }
 
 // hasColumn checks whether a table has a given column. Used by migration
 // functions to make ALTER TABLE operations idempotent (safe to re-run).
+//
+// It keeps a bare bool because ~55 guards read like `if !hasColumn(...) { ALTER }`
+// and threading an error through every one of them would bury the migration logic
+// this file exists to make legible. Instead a genuine probe failure PANICS: this
+// runs at boot, before the server serves anything, and a wrong answer here is not
+// a wrong answer to a request - it makes a migration take a permanent wrong branch
+// on a production database (re-running an ALTER, or skipping a backfill it should
+// have done). Missing tables and missing columns answer false with no error (see
+// columnInfo), so this cannot fire for anything the migration chain expects.
 func hasColumn(db *sql.DB, table, column string) bool {
-	exists, _ := columnInfo(db, table, column)
+	exists, _, err := columnInfo(db, table, column)
+	if err != nil {
+		panic(fmt.Sprintf("migrate: probing %s.%s failed, refusing to guess: %v", table, column, err))
+	}
 	return exists
 }
 
@@ -1513,7 +1780,7 @@ func migrateStyleVisibility(db *sql.DB) error {
 }
 
 // migrateCardStatuses adds the card status columns: `protected` (shields a card
-// from Delete All), `custom_status` ('' normal, 'pending' awaiting staff approval,
+// from Delete All), `custom_status` (” normal, 'pending' awaiting staff approval,
 // 'approved' a live custom card), and `world` (the requester's home world for a
 // custom-card request; the character name reuses player_name). Idempotent.
 func migrateCardStatuses(db *sql.DB) error {
@@ -1818,6 +2085,14 @@ func migrateAffiliates(db *sql.DB) error {
 // colour, optional Discord + Carrd links, and a sort_order for drag-and-drop.
 // Existing rows default to 0 sort_order (keeping their prior order until dragged)
 // and empty strings. Idempotent (each ALTER is guarded by hasColumn).
+// affiliatesSortIndexSQL backs ListAffiliates' ORDER BY. Shared between
+// createIndexes (fresh install) and migrateAffiliateFields (existing databases) so
+// the two paths cannot drift - it previously existed ONLY on fresh installs, so
+// every database that had already been upgraded was missing an index a new one had.
+// The column list matches the query's full ordering rather than just its first key.
+const affiliatesSortIndexSQL = `CREATE INDEX IF NOT EXISTS idx_affiliates_sort ` +
+	`ON affiliates(sort_order, name COLLATE NOCASE, id)`
+
 func migrateAffiliateFields(db *sql.DB) error {
 	if !tableExists(db, "affiliates") {
 		return nil
@@ -1835,6 +2110,13 @@ func migrateAffiliateFields(db *sql.DB) error {
 		if _, err := db.Exec(c.ddl); err != nil {
 			return fmt.Errorf("add affiliates.%s: %w", c.name, err)
 		}
+	}
+	// Own the index here too, the way migrateTeaRooms/migrateStampRally/
+	// migrateGarapons each own theirs, so an upgraded database ends up with the same
+	// indexes a fresh install gets. sort_order is added just above, so this must
+	// follow the ALTER loop.
+	if _, err := db.Exec(affiliatesSortIndexSQL); err != nil {
+		return fmt.Errorf("create idx_affiliates_sort: %w", err)
 	}
 	return nil
 }
@@ -1858,6 +2140,8 @@ const teaRoomsTableSQL = `CREATE TABLE IF NOT EXISTS tea_rooms (
 	open INTEGER NOT NULL DEFAULT 1,
 	lockable INTEGER NOT NULL DEFAULT 0,
 	discounted INTEGER NOT NULL DEFAULT 0,
+	locked INTEGER NOT NULL DEFAULT 0,
+	locked_until TEXT NOT NULL DEFAULT '',
 	image TEXT NOT NULL DEFAULT '',
 	color TEXT NOT NULL DEFAULT '',
 	sort_order INTEGER NOT NULL DEFAULT 0,
@@ -1884,14 +2168,60 @@ func migrateTeaRooms(db *sql.DB) error {
 // column ALTER is guarded by hasColumn, the index by IF NOT EXISTS. The unique
 // index is safe to build on existing data because room_number was already
 // effectively per-room; a duplicate would surface here as a build error.
+// teaRoomNumberIndexSQL enforces that a room number identifies one room. PARTIAL on
+// purpose: room_number is the public/embed lookup key when set, but a room is
+// allowed to have none, and a plain UNIQUE index would collapse every blank into a
+// single permitted row. Shared between createIndexes and migrateTeaRoomSubtitle so
+// the fresh-install and upgrade paths cannot drift.
+const teaRoomNumberIndexSQL = `CREATE UNIQUE INDEX IF NOT EXISTS idx_tea_rooms_room_number ` +
+	`ON tea_rooms(room_number) WHERE room_number != ''`
+
 func migrateTeaRoomSubtitle(db *sql.DB) error {
 	if !hasColumn(db, "tea_rooms", "subtitle") {
 		if _, err := db.Exec(`ALTER TABLE tea_rooms ADD COLUMN subtitle TEXT NOT NULL DEFAULT ''`); err != nil {
 			return fmt.Errorf("add tea_rooms.subtitle: %w", err)
 		}
 	}
-	if _, err := db.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_tea_rooms_room_number ON tea_rooms(room_number)`); err != nil {
+	// The release before this one let a room be saved with no number, and several
+	// rooms could share one. A plain UNIQUE index over that data fails to build, and
+	// a migration that fails is a server that will not boot - so make it PARTIAL
+	// (blank numbers are simply not indexed, and stay allowed) and clear genuine
+	// duplicates first by blanking all but the lowest-id row of each set. Blanking
+	// rather than deleting: a duplicate number is a data-entry slip, not a reason to
+	// destroy somebody's room.
+	if _, err := db.Exec(`UPDATE tea_rooms SET room_number = ''
+		WHERE room_number != '' AND id NOT IN (
+			SELECT MIN(id) FROM tea_rooms WHERE room_number != '' GROUP BY room_number
+		)`); err != nil {
+		return fmt.Errorf("dedupe tea_rooms.room_number before unique index: %w", err)
+	}
+	if _, err := db.Exec(teaRoomNumberIndexSQL); err != nil {
 		return fmt.Errorf("create tea_rooms room_number unique index: %w", err)
+	}
+	return nil
+}
+
+// migrateTeaRoomLocks (schema v69) adds the two columns behind a room lock:
+// `locked` is whether the room is locked right NOW - distinct from `lockable`,
+// which only says it can be - and `locked_until` is the UTC RFC-3339 instant the
+// lock lifts, empty meaning it stands until an admin unlocks the room by hand
+// (how every lock behaved before this). Existing rooms therefore come out
+// unlocked with no expiry, which is what they all were. Idempotent.
+func migrateTeaRoomLocks(db *sql.DB) error {
+	if !tableExists(db, "tea_rooms") {
+		return nil
+	}
+	cols := []struct{ column, spec string }{
+		{"locked", "INTEGER NOT NULL DEFAULT 0"},
+		{"locked_until", "TEXT NOT NULL DEFAULT ''"},
+	}
+	for _, c := range cols {
+		if hasColumn(db, "tea_rooms", c.column) {
+			continue
+		}
+		if _, err := db.Exec(fmt.Sprintf("ALTER TABLE tea_rooms ADD COLUMN %s %s", c.column, c.spec)); err != nil {
+			return fmt.Errorf("add tea_rooms.%s: %w", c.column, err)
+		}
 	}
 	return nil
 }
@@ -2004,6 +2334,10 @@ func migrateStampRally(db *sql.DB) error {
 		`CREATE INDEX IF NOT EXISTS idx_stamp_rally_prizes_rally ON stamp_rally_prizes(rally_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_stamp_rally_cards_rally ON stamp_rally_cards(rally_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_stamp_rally_cards_token ON stamp_rally_cards(token)`,
+		// Backs the public name lookup (POST /api/stamp-lookup), which matched
+		// participant_name case-insensitively with nothing to use and so scanned
+		// every card ever issued.
+		`CREATE INDEX IF NOT EXISTS idx_stamp_rally_cards_participant ON stamp_rally_cards(participant_name COLLATE NOCASE)`,
 		`CREATE INDEX IF NOT EXISTS idx_stamp_rally_collected_card ON stamp_rally_collected(card_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_stamp_rally_collected_stamp ON stamp_rally_collected(stamp_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_stamp_rally_collected_rally ON stamp_rally_collected(rally_id)`,
@@ -2107,6 +2441,9 @@ func migrateGarapons(db *sql.DB) error {
 		garaponDrawsTableSQL,
 		`CREATE INDEX IF NOT EXISTS idx_garapon_prizes_garapon ON garapon_prizes(garapon_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_garapon_players_garapon ON garapon_players(garapon_id)`,
+		// The stamp-lookup join key: without it SQLite built a transient index over
+		// garapon_players on every public lookup.
+		`CREATE INDEX IF NOT EXISTS idx_garapon_players_stamp_card ON garapon_players(stamp_card_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_garapon_players_token ON garapon_players(token)`,
 		`CREATE INDEX IF NOT EXISTS idx_garapon_draws_garapon ON garapon_draws(garapon_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_garapon_draws_player ON garapon_draws(player_id)`,
@@ -2181,8 +2518,13 @@ func rebuildTableTx(db *sql.DB, what string, stmts []string) error {
 // (nothing references it), so the rebuild is foreign-key-safe.
 func migrateGaraponDrawKeepLogs(db *sql.DB) error {
 	// A missing column/table reports notNull=false, so this also no-ops on a DB
-	// that never had garapon_draws.
-	if _, notNull := columnInfo(db, "garapon_draws", "player_id"); !notNull {
+	// that never had garapon_draws. A genuine probe error is different: it must not
+	// be read as "already migrated", which would skip the rebuild for good.
+	_, notNull, err := columnInfo(db, "garapon_draws", "player_id")
+	if err != nil {
+		return fmt.Errorf("probe garapon_draws.player_id: %w", err)
+	}
+	if !notNull {
 		return nil
 	}
 	stmts := []string{
@@ -2206,4 +2548,302 @@ func migrateGaraponDrawKeepLogs(db *sql.DB) error {
 		`CREATE INDEX IF NOT EXISTS idx_garapon_draws_player ON garapon_draws(player_id)`,
 	}
 	return rebuildTableTx(db, "migrate garapon draws keep-logs", stmts)
+}
+
+// festivalMapsTableSQL defines the Festival Map table (Festival -> Festival Map):
+// a titled floor plan with a markdown description, the datetime ranges the
+// festival runs across (a JSON array, like affiliates.hours), the base map image
+// its stalls are drawn on, and a publish status. Shared between createTables
+// (fresh install) and migrateFestivalMaps (existing databases).
+const festivalMapsTableSQL = `CREATE TABLE IF NOT EXISTS festival_maps (
+	id INTEGER PRIMARY KEY AUTOINCREMENT,
+	title TEXT NOT NULL,
+	slug TEXT NOT NULL DEFAULT '',
+	description TEXT NOT NULL DEFAULT '',
+	times TEXT NOT NULL DEFAULT '[]',
+	map_image TEXT NOT NULL DEFAULT '',
+	status TEXT NOT NULL DEFAULT 'in_progress',
+	created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+)`
+
+// festivalStallsTableSQL defines one booth on a festival map: the affiliate
+// running it (NULL = the venue itself), its own title/description, what it offers
+// (stall_type), how it is drawn (shape + color + the same pos/size/rotation
+// placement columns the stamp-rally tables use), and its own opening times as a
+// JSON array. Shared between createTables and migrateFestivalMaps.
+const festivalStallsTableSQL = `CREATE TABLE IF NOT EXISTS festival_stalls (
+	id INTEGER PRIMARY KEY AUTOINCREMENT,
+	map_id INTEGER NOT NULL,
+	shape TEXT NOT NULL DEFAULT 'rect',
+	color TEXT NOT NULL DEFAULT '',
+	selection_color TEXT NOT NULL DEFAULT '',
+	text_color TEXT NOT NULL DEFAULT '',
+	pos_x REAL NOT NULL DEFAULT 0,
+	pos_y REAL NOT NULL DEFAULT 0,
+	width REAL NOT NULL DEFAULT 12,
+	height REAL NOT NULL DEFAULT 8,
+	rotation REAL NOT NULL DEFAULT 0,
+	sort_order INTEGER NOT NULL DEFAULT 0,
+	FOREIGN KEY (map_id) REFERENCES festival_maps(id) ON DELETE CASCADE
+)`
+
+// festivalStallOccupantsTableSQL defines who stands in a pitch: the affiliate
+// (NULL = the venue itself), the title and description shown for them, what they
+// offer, and the hours THEY keep - which is how a pitch that changes hands
+// between days decides whose name the map leads with. Shared between createTables
+// and migrateFestivalStallOccupants.
+const festivalStallOccupantsTableSQL = `CREATE TABLE IF NOT EXISTS festival_stall_occupants (
+	id INTEGER PRIMARY KEY AUTOINCREMENT,
+	stall_id INTEGER NOT NULL,
+	affiliate_id INTEGER,
+	title TEXT NOT NULL DEFAULT '',
+	description TEXT NOT NULL DEFAULT '',
+	event_carrd TEXT NOT NULL DEFAULT '',
+	stall_type TEXT NOT NULL DEFAULT 'other',
+	type_label TEXT NOT NULL DEFAULT '',
+	times TEXT NOT NULL DEFAULT '[]',
+	sort_order INTEGER NOT NULL DEFAULT 0,
+	FOREIGN KEY (stall_id) REFERENCES festival_stalls(id) ON DELETE CASCADE,
+	FOREIGN KEY (affiliate_id) REFERENCES affiliates(id) ON DELETE SET NULL
+)`
+
+// migrateFestivalMaps (schema v61) creates the Festival Map tables and the two
+// columns that tie a Stamp Rally to a map: stamp_rallies.festival_map_id (the
+// rally's map) and stamp_rally_stamps.stall_id (which stall each stamp belongs
+// to). Both link columns are FK-less for the same reason as the garapon link -
+// ALTER can't add a foreign key, and createTables builds stamp_rallies before
+// festival_maps - so the store nulls them itself on delete. Idempotent.
+func migrateFestivalMaps(db *sql.DB) error {
+	stmts := []string{
+		festivalMapsTableSQL,
+		festivalStallsTableSQL,
+		`CREATE INDEX IF NOT EXISTS idx_festival_stalls_map ON festival_stalls(map_id)`,
+		festivalStallOccupantsTableSQL,
+		festivalStallOccupantIndexSQL,
+		`CREATE INDEX IF NOT EXISTS idx_festival_maps_status ON festival_maps(status)`,
+		festivalMapSlugIndexSQL,
+	}
+	for _, s := range stmts {
+		if _, err := db.Exec(s); err != nil {
+			return fmt.Errorf("migrate festival maps: %w", err)
+		}
+	}
+	cols := []struct{ table, column, spec string }{
+		{"stamp_rallies", "festival_map_id", "INTEGER"},
+		{"stamp_rally_stamps", "stall_id", "INTEGER"},
+	}
+	// v64 RENAMES stamp_rally_stamps.stall_id to occupant_id. This migration is
+	// guarded only on the pre-rename name, so on any re-run of the chain after v64
+	// it happily re-added stall_id (and its index) to a table that had already moved
+	// on - and v64 then early-returns because occupant_id exists, so neither was
+	// ever cleaned up, leaving a permanently dead column and index. Skip the add
+	// once the renamed column is present, the same post-rename guard
+	// migrateFestivalStallTypeLabel already uses.
+	postRename := tableExists(db, "stamp_rally_stamps") && hasColumn(db, "stamp_rally_stamps", "occupant_id")
+	for _, c := range cols {
+		if c.table == "stamp_rally_stamps" && c.column == "stall_id" && postRename {
+			continue
+		}
+		if !tableExists(db, c.table) || hasColumn(db, c.table, c.column) {
+			continue
+		}
+		if _, err := db.Exec(fmt.Sprintf("ALTER TABLE %s ADD COLUMN %s %s", c.table, c.column, c.spec)); err != nil {
+			return fmt.Errorf("add %s.%s: %w", c.table, c.column, err)
+		}
+	}
+	// Index the column only while it actually exists; after v64 the equivalent index
+	// belongs to occupant_id and is created there.
+	if hasColumn(db, "stamp_rally_stamps", "stall_id") {
+		if _, err := db.Exec(`CREATE INDEX IF NOT EXISTS idx_stamp_rally_stamps_stall ON stamp_rally_stamps(stall_id)`); err != nil {
+			return fmt.Errorf("migrate festival maps: %w", err)
+		}
+	}
+	return nil
+}
+
+// festivalMapSlugIndexSQL enforces that a shortcode names at most one map. It is
+// a PARTIAL index: the empty string means "no shortcode", and every map without
+// one would otherwise collide with every other. Shared between migrateFestivalMaps
+// (fresh install) and migrateFestivalMapSlug (existing databases).
+const festivalMapSlugIndexSQL = `CREATE UNIQUE INDEX IF NOT EXISTS idx_festival_maps_slug
+	ON festival_maps(slug) WHERE slug != ''`
+
+// migrateFestivalMapSlug (schema v62) adds festival_maps.slug - the optional
+// shortcode that lets a map be linked as /festival-maps/obon-2026 instead of by
+// its numeric id - plus the partial UNIQUE index above. Existing maps default to
+// ” (no shortcode) and stay reachable by id, which is the only way they were
+// ever linked. Idempotent.
+func migrateFestivalMapSlug(db *sql.DB) error {
+	if !tableExists(db, "festival_maps") {
+		return nil
+	}
+	if !hasColumn(db, "festival_maps", "slug") {
+		if _, err := db.Exec(`ALTER TABLE festival_maps ADD COLUMN slug TEXT NOT NULL DEFAULT ''`); err != nil {
+			return fmt.Errorf("add festival_maps.slug: %w", err)
+		}
+	}
+	if _, err := db.Exec(festivalMapSlugIndexSQL); err != nil {
+		return fmt.Errorf("index festival_maps.slug: %w", err)
+	}
+	return nil
+}
+
+// migrateFestivalStallTypeLabel (schema v63) adds festival_stalls.type_label -
+// the caption drawn under a stall's title when its type is "other", so a booth can
+// read "Omikuji" or "Art Raffle" rather than the meaningless "Other". Existing
+// stalls default to ” and keep showing their named type. Idempotent.
+func migrateFestivalStallTypeLabel(db *sql.DB) error {
+	if !tableExists(db, "festival_stalls") || hasColumn(db, "festival_stalls", "type_label") {
+		return nil
+	}
+	// A database that reached the occupant split (v64) - or was built fresh after
+	// it - holds identity on festival_stall_occupants, not on the pitch. `title` is
+	// the pre-split marker; without this the column would be bolted onto a pitch
+	// table that has no use for it.
+	if !hasColumn(db, "festival_stalls", "title") {
+		return nil
+	}
+	if _, err := db.Exec(`ALTER TABLE festival_stalls ADD COLUMN type_label TEXT NOT NULL DEFAULT ''`); err != nil {
+		return fmt.Errorf("add festival_stalls.type_label: %w", err)
+	}
+	return nil
+}
+
+// festivalStallOccupantIndexSQL indexes occupants by the pitch they stand in -
+// the only way they are ever looked up.
+const festivalStallOccupantIndexSQL = `CREATE INDEX IF NOT EXISTS idx_festival_stall_occupants_stall
+	ON festival_stall_occupants(stall_id)`
+
+// migrateFestivalStallOccupants (schema v64) splits a festival stall into the
+// PITCH on the plan (shape, color, placement) and the OCCUPANTS standing in it
+// (affiliate, title, description, offering, hours), so a booth that changes hands
+// between days is one shape with two names rather than two stalls stacked on the
+// same coordinates.
+//
+// Every existing stall becomes a pitch with exactly one occupant carrying its
+// identity, which is what it always was. Because that mapping is 1:1, a stamp
+// rally's per-stamp link can be repointed from the stall to its occupant in the
+// same pass: the column is renamed and its values remapped, so no rally loses the
+// stall its stamps name. Idempotent - it no-ops once the occupants table exists.
+func migrateFestivalStallOccupants(db *sql.DB) error {
+	if err := splitFestivalStallOccupants(db); err != nil {
+		return err
+	}
+	// Runs whether or not the split did: a FRESH install builds the post-split
+	// tables in createTables, so the split no-ops, but v61 still added the rally's
+	// link column under its old name and it has to be repointed all the same.
+	return migrateRallyStampOccupantLink(db)
+}
+
+// splitFestivalStallOccupants moves each stall's identity onto a single occupant
+// row and rebuilds the stall as a bare pitch. No-ops once the occupants table
+// exists - which is also the case on a fresh install.
+func splitFestivalStallOccupants(db *sql.DB) error {
+	if !tableExists(db, "festival_stalls") || tableExists(db, "festival_stall_occupants") {
+		return nil
+	}
+	// Ordered so the pitch rebuild happens BEFORE anything references it: dropping
+	// festival_stalls while occupants pointed at it would (with enforcement on)
+	// take them with it. rebuildTableTx runs the lot with foreign_keys off and
+	// runs foreign_key_check before committing, so a mistake here aborts rather
+	// than silently orphaning rows.
+	stmts := []string{
+		// 1. Park each stall's identity, keyed by the pitch it belongs to.
+		`CREATE TABLE festival_stall_identity_tmp AS
+			SELECT id AS stall_id, affiliate_id, title, description, stall_type, type_label, times
+			FROM festival_stalls`,
+		// 2. Rebuild the pitch without the identity columns, preserving every id so
+		//    placements - and any rally link - still resolve.
+		`CREATE TABLE festival_stalls_new (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			map_id INTEGER NOT NULL,
+			shape TEXT NOT NULL DEFAULT 'rect',
+			color TEXT NOT NULL DEFAULT '',
+			pos_x REAL NOT NULL DEFAULT 0,
+			pos_y REAL NOT NULL DEFAULT 0,
+			width REAL NOT NULL DEFAULT 12,
+			height REAL NOT NULL DEFAULT 8,
+			rotation REAL NOT NULL DEFAULT 0,
+			sort_order INTEGER NOT NULL DEFAULT 0,
+			FOREIGN KEY (map_id) REFERENCES festival_maps(id) ON DELETE CASCADE
+		)`,
+		`INSERT INTO festival_stalls_new (id, map_id, shape, color, pos_x, pos_y, width, height, rotation, sort_order)
+			SELECT id, map_id, shape, color, pos_x, pos_y, width, height, rotation, sort_order FROM festival_stalls`,
+		`DROP TABLE festival_stalls`,
+		`ALTER TABLE festival_stalls_new RENAME TO festival_stalls`,
+		`CREATE INDEX IF NOT EXISTS idx_festival_stalls_map ON festival_stalls(map_id)`,
+		// 3. Give every pitch its single occupant, back from the parked identity.
+		festivalStallOccupantsTableSQL,
+		`INSERT INTO festival_stall_occupants
+				(stall_id, affiliate_id, title, description, stall_type, type_label, times, sort_order)
+			SELECT stall_id, affiliate_id, title, description, stall_type, type_label, times, 0
+			FROM festival_stall_identity_tmp`,
+		festivalStallOccupantIndexSQL,
+		`DROP TABLE festival_stall_identity_tmp`,
+	}
+	return rebuildTableTx(db, "migrate festival stall occupants", stmts)
+}
+
+// migrateRallyStampOccupantLink repoints stamp_rally_stamps.stall_id at the
+// occupant that stall became (see migrateFestivalStallOccupants). A stamp belongs
+// to whoever runs the pitch on the day, not to the pitch itself - Flora's game
+// stamp isn't The Great Below's - so the column is renamed as well as remapped.
+// Idempotent: it no-ops once the column has been renamed.
+func migrateRallyStampOccupantLink(db *sql.DB) error {
+	if !tableExists(db, "stamp_rally_stamps") || hasColumn(db, "stamp_rally_stamps", "occupant_id") {
+		return nil
+	}
+	if !hasColumn(db, "stamp_rally_stamps", "stall_id") {
+		return nil
+	}
+	stmts := []string{
+		`ALTER TABLE stamp_rally_stamps RENAME COLUMN stall_id TO occupant_id`,
+		// The old value is a stall id; each stall has exactly one occupant at this
+		// point, so the remap is unambiguous. A link to a stall that no longer
+		// exists resolves to NULL, which is what an unlinked stamp already means.
+		`UPDATE stamp_rally_stamps SET occupant_id =
+			(SELECT o.id FROM festival_stall_occupants o WHERE o.stall_id = stamp_rally_stamps.occupant_id)
+			WHERE occupant_id IS NOT NULL`,
+		`DROP INDEX IF EXISTS idx_stamp_rally_stamps_stall`,
+		`CREATE INDEX IF NOT EXISTS idx_stamp_rally_stamps_occupant ON stamp_rally_stamps(occupant_id)`,
+	}
+	for _, stmt := range stmts {
+		if _, err := db.Exec(stmt); err != nil {
+			return fmt.Errorf("migrate rally stamp occupant link: %w", err)
+		}
+	}
+	return nil
+}
+
+// migrateRaffleFestivalLink (schema v65) files a raffle under a Festival Map and,
+// optionally, one stall on it: raffles.festival_map_id groups the raffle with that
+// festival (the same thing stamp_rallies.festival_map_id does), and
+// raffles.occupant_id assigns it to a pitch occupant so the stall's panel on the
+// public plan can link to it.
+//
+// Both are FK-less for the same reason as the other festival links - ALTER can't
+// add a foreign key, and createTables builds raffles long before festival_maps -
+// so the store clears them itself when a map or occupant goes away. Existing
+// raffles default to NULL and belong to no festival, which is what they all were.
+// Idempotent.
+func migrateRaffleFestivalLink(db *sql.DB) error {
+	if !tableExists(db, "raffles") {
+		return nil
+	}
+	cols := []struct{ column, spec string }{
+		{"festival_map_id", "INTEGER"},
+		{"occupant_id", "INTEGER"},
+	}
+	for _, c := range cols {
+		if hasColumn(db, "raffles", c.column) {
+			continue
+		}
+		if _, err := db.Exec(fmt.Sprintf("ALTER TABLE raffles ADD COLUMN %s %s", c.column, c.spec)); err != nil {
+			return fmt.Errorf("add raffles.%s: %w", c.column, err)
+		}
+	}
+	if _, err := db.Exec(`CREATE INDEX IF NOT EXISTS idx_raffles_occupant ON raffles(occupant_id)`); err != nil {
+		return fmt.Errorf("index raffles.occupant_id: %w", err)
+	}
+	return nil
 }

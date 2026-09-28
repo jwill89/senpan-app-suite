@@ -161,15 +161,22 @@ func (s *Server) handleStyleDelete(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	// If deleting the active style, clear the active setting + revert clients.
-	activeID, _ := s.store.GetSetting("active_style_id")
-	if activeID == fmt.Sprintf("%d", id) {
-		_ = s.store.SetSetting("active_style_id", "")
-		s.broadcastStyleUpdate("", "", "")
-	}
-	if _, err := s.store.DeleteStyle(id); err != nil {
+	// Delete FIRST, then stand down the active theme. Reverting every client and
+	// clearing the setting before a delete that can still fail left the site on the
+	// default theme with the style it was using still sitting in the table - a
+	// visible, unexplained change from an operation that reported failure.
+	deleted, err := s.store.DeleteStyle(id)
+	if err != nil {
 		writeInternalError(w, "delete style", err)
 		return
+	}
+	// Only once the row is actually gone: if it was the active style, clear the
+	// setting and revert clients to the default.
+	if deleted {
+		if activeID, _ := s.store.GetSetting("active_style_id"); activeID == fmt.Sprintf("%d", id) {
+			_ = s.store.SetSetting("active_style_id", "")
+			s.broadcastStyleUpdate("", "", "")
+		}
 	}
 	w.WriteHeader(http.StatusNoContent)
 }

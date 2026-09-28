@@ -46,11 +46,18 @@ type Hub struct {
 // Each client has its own buffered send channel and a dedicated read/write
 // goroutine pair that handles message delivery and connection health.
 type client struct {
-	hub    *Hub               // back-reference to the owning hub
-	conn   *websocket.Conn    // underlying WebSocket connection
-	send   chan []byte        // buffered channel of outbound messages
-	cardID string             // non-empty for player connections; used to target disconnects
-	cancel context.CancelFunc // cancels this client's context (signals pumps to exit)
+	hub  *Hub            // back-reference to the owning hub
+	conn *websocket.Conn // underlying WebSocket connection
+	send chan []byte     // buffered channel of outbound messages
+	// logSend carries the live-log tail on its OWN buffer. BroadcastLog already
+	// drops rather than disconnects when it is full, but sharing `send` made that
+	// promise hollow: a log burst filled the one buffer, and the next ordinary
+	// broadcast then found it full and dropped the admin - the very disconnect the
+	// drop-instead-of-disconnect rule exists to prevent. Never closed; unregister
+	// closes `send` alone, which is what signals writePump to finish.
+	logSend chan []byte
+	cardID  string             // non-empty for player connections; used to target disconnects
+	cancel  context.CancelFunc // cancels this client's context (signals pumps to exit)
 	// isAdmin gates the live-log tail: only true-admin connections receive it.
 	// An empty cardID alone is NOT sufficient (permission-limited staff and
 	// plugin PATs also open the cardID=="" channel for resource_changed and the
@@ -160,7 +167,7 @@ func (h *Hub) BroadcastLog(msg any) {
 			continue // true admins only (not staff grantees / plugin PATs)
 		}
 		select {
-		case c.send <- data:
+		case c.logSend <- data:
 		default: // buffer full - drop this log line, keep the client connected
 		}
 	}
@@ -214,6 +221,7 @@ func (h *Hub) ServeWS(w http.ResponseWriter, r *http.Request, cardID string, isA
 		hub:        h,
 		conn:       conn,
 		send:       make(chan []byte, 64),
+		logSend:    make(chan []byte, 64),
 		cardID:     cardID,
 		cancel:     clientCancel,
 		revalidate: revalidate,
@@ -294,16 +302,24 @@ func (h *Hub) register(c *client) {
 	slog.Debug("ws client registered", "kind", kind, "card_id", c.cardID, "clients", n)
 }
 
-// unregister removes a client from the hub, closes its send channel
-// (which signals writePump to exit), and cancels its context.
+// unregister removes a client from the hub and closes its send channel, which
+// tells writePump to flush what is queued and then send a normal close frame.
 // Safe to call multiple times - the map check prevents double-close.
+//
+// It deliberately does NOT cancel the client's context. DisconnectCardClients
+// queues a final message (card_deleted) and then calls this, and cancelling here
+// destroyed that message before it could go out: writePump selects on ctx.Done()
+// alongside c.send, so a cancelled context won the race about half the time, and
+// even when the message was picked its write deadline derived from the same dead
+// context and failed immediately. The player never learned their card was gone and
+// silently reconnected to it. The context is released by whichever pump exits
+// last, which is enough to keep it from leaking - see readPump/writePump.
 func (h *Hub) unregister(c *client) {
 	h.mu.Lock()
 	removed := false
 	if _, ok := h.clients[c]; ok {
 		delete(h.clients, c)
 		close(c.send)
-		c.cancel()
 		removed = true
 	}
 	n := len(h.clients)
@@ -319,6 +335,9 @@ func (c *client) readPump(ctx context.Context) {
 	defer recoverPump("readPump")
 	defer func() {
 		c.hub.unregister(c)
+		// Release the per-client context here rather than in unregister, so a
+		// queued final message still has a live context to be written with.
+		c.cancel()
 		_ = c.conn.CloseNow()
 	}()
 	for {
@@ -336,6 +355,9 @@ func (c *client) writePump(ctx context.Context) {
 	defer func() {
 		ticker.Stop()
 		c.hub.unregister(c)
+		// See readPump: the context outlives unregister so a final queued message
+		// can still be written, and is released once the pump is actually done.
+		c.cancel()
 		_ = c.conn.CloseNow()
 	}()
 	for {
@@ -361,6 +383,15 @@ func (c *client) writePump(ctx context.Context) {
 				if err != nil {
 					return
 				}
+			}
+		case msg := <-c.logSend:
+			// Best-effort log line. A write failure ends the pump like any other,
+			// but a FULL log buffer never reaches here - BroadcastLog drops instead.
+			writeCtx, cancel := context.WithTimeout(ctx, writeWait)
+			err := c.conn.Write(writeCtx, websocket.MessageText, msg)
+			cancel()
+			if err != nil {
+				return
 			}
 		case <-ticker.C:
 			// Re-authorize admin-channel connections: if the account was

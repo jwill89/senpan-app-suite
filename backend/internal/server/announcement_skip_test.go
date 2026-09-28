@@ -162,7 +162,7 @@ func TestAnnouncementSkip_DecrementsPerOccurrence(t *testing.T) {
 
 	// Two skips pending, and an occurrence already due.
 	past := time.Now().UTC().Add(-time.Minute).Format(time.RFC3339)
-	if err := env.store.AdvanceAnnouncement(int64(id), past, true, 2); err != nil {
+	if _, err := env.store.AdvanceAnnouncement(int64(id), env.announcementRow(t, id)["next_post_at"].(string), past, true, 2); err != nil {
 		t.Fatalf("seed cursor: %v", err)
 	}
 
@@ -173,7 +173,7 @@ func TestAnnouncementSkip_DecrementsPerOccurrence(t *testing.T) {
 	}
 
 	// The cursor moved forward, so make the NEXT occurrence due and sweep again.
-	if err := env.store.AdvanceAnnouncement(int64(id), past, true, 1); err != nil {
+	if _, err := env.store.AdvanceAnnouncement(int64(id), env.announcementRow(t, id)["next_post_at"].(string), past, true, 1); err != nil {
 		t.Fatalf("re-seed cursor: %v", err)
 	}
 	env.sweepAnnouncements(t)

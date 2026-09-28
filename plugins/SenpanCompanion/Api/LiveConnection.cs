@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.IO;
 using System.Net;
 using System.Net.WebSockets;
@@ -13,9 +13,9 @@ namespace SenpanCompanion.Api;
 /// <summary>
 /// Maintains the admin WebSocket to the Senpan server (/api/ws), authenticated via
 /// the personal access token on the query string. It surfaces the same live events
-/// the web admin receives - number draws (with winners), game start/end, and card
-/// list changes - so the bingo tab updates in real time, including when another
-/// operator (or the website) drives the game.
+/// the web admin receives - number draws (with winners), game start/end, card list
+/// changes, and expiring tea-room locks - so the bingo tab updates in real time,
+/// including when another operator (or the website) drives the game.
 ///
 /// Connecting is user-initiated (it starts when the window is open and a token is
 /// configured), which keeps it on the right side of Dalamud's "no automatic
@@ -67,6 +67,26 @@ public sealed class LiveConnection : IDisposable
     /// <summary>The server reached the half-time mark; the flag is whether auto was paused for it.</summary>
     public event Action<bool>? HalftimePrompt;
 
+    /// <summary>
+    /// A tea room's lock ran out and the server lifted it: the room's id, name and
+    /// room number. The name rides along because this event is ANNOUNCED rather
+    /// than rendered - the operator is told which room freed up, wherever they are
+    /// in the plugin - so it must not depend on the Tea Rooms page having been
+    /// opened, or on a REST round-trip to find out what the id means.
+    /// </summary>
+    public event Action<long, string, string>? TeaRoomUnlocked;
+
+    /// <summary>
+    /// Raised on the UI thread each time the socket comes back up after a drop.
+    /// Everything the plugin holds from a push (called numbers, winners, game state)
+    /// is only as complete as the stream it arrived on, so a gap leaves the local
+    /// copy silently short - End Game would then log the wrong winners. Subscribers
+    /// should mark their state stale and let the per-frame EnsureLoaded re-pull it,
+    /// exactly as the web client does. Not raised for the first connection: there is
+    /// nothing to re-sync yet.
+    /// </summary>
+    public event Action? Reconnected;
+
     public LiveConnection(Configuration config, IPluginLog log, IFramework framework)
     {
         this.config = config;
@@ -99,6 +119,12 @@ public sealed class LiveConnection : IDisposable
     }
 
     public void Dispose() => Stop();
+
+    /// <summary>
+    /// Whether the socket has ever been established, so Reconnected fires on a real
+    /// re-connect rather than at start-up. Only touched from the connection loop.
+    /// </summary>
+    private bool hasConnectedBefore;
 
     private async Task RunAsync(CancellationToken ct)
     {
@@ -177,6 +203,10 @@ public sealed class LiveConnection : IDisposable
             throw new LiveAuthException($"server returned {(int)ws.HttpStatusCode}");
         }
         this.Connected = true;
+        // Only after a previous session: the first connect has nothing to re-sync.
+        if (this.hasConnectedBefore)
+            RunOnUi(() => Reconnected?.Invoke());
+        this.hasConnectedBefore = true;
 
         var buffer = new byte[16 * 1024];
         using var ms = new MemoryStream();
@@ -272,6 +302,15 @@ public sealed class LiveConnection : IDisposable
                 RunOnUi(() => HalftimePrompt?.Invoke(autoPaused));
                 break;
             }
+
+            case "tea_room_unlocked":
+            {
+                var id = msg.Id;
+                var name = msg.Name ?? string.Empty;
+                var number = msg.RoomNumber ?? string.Empty;
+                RunOnUi(() => TeaRoomUnlocked?.Invoke(id, name, number));
+                break;
+            }
         }
     }
 
@@ -328,6 +367,11 @@ public sealed class LiveConnection : IDisposable
         // carries whether auto was paused for the mini-game decision.
         public int Interval { get; set; }
         public bool AutoPaused { get; set; }
+
+        // "tea_room_unlocked" identifies the room whose lock just expired.
+        public long Id { get; set; }
+        public string? Name { get; set; }
+        public string? RoomNumber { get; set; }
     }
 
     // Raised when the WebSocket handshake is rejected because the token isn't accepted

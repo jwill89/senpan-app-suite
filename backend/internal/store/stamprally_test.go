@@ -68,7 +68,7 @@ func TestStampRally_CompletionCounts(t *testing.T) {
 	r.CompletionMode = model.RallyCompletionCounts
 	r.RequiredFood = 1
 	r.RequiredGame = 1
-	if err := s.UpdateStampRally(r); err != nil {
+	if err := s.UpdateStampRally(r, true, true); err != nil {
 		t.Fatalf("UpdateStampRally: %v", err)
 	}
 	got, err := s.GetStampRally(r.ID)
@@ -85,7 +85,7 @@ func TestStampRally_UpdateKeepsCollections(t *testing.T) {
 	r := makeRally(t, s, "Rally")
 	stamp1 := r.Stamps[0]
 
-	card, err := s.IssueRallyCard(r.ID, "Tataru")
+	card, err := s.IssueRallyCard(r.ID, "Tataru", "Gilgamesh")
 	if err != nil {
 		t.Fatalf("IssueRallyCard: %v", err)
 	}
@@ -96,7 +96,7 @@ func TestStampRally_UpdateKeepsCollections(t *testing.T) {
 	// Update the rally, KEEPING stamp1 by id (and editing its password) and stamp2.
 	r.Title = "Rally (edited)"
 	r.Stamps[0].Password = "alpha2"
-	if err := s.UpdateStampRally(r); err != nil {
+	if err := s.UpdateStampRally(r, true, true); err != nil {
 		t.Fatalf("UpdateStampRally: %v", err)
 	}
 
@@ -128,7 +128,7 @@ func TestStampRally_UpdateStampScopedToRally(t *testing.T) {
 		Image:    "images/stamp_stamps/x.png",
 		Password: "hijacked",
 	})
-	if err := s.UpdateStampRally(a); err != nil {
+	if err := s.UpdateStampRally(a, true, true); err != nil {
 		t.Fatalf("UpdateStampRally: %v", err)
 	}
 
@@ -175,7 +175,7 @@ func TestStampRally_ListStallCounts(t *testing.T) {
 func TestStampRally_CollectUniqueGuard(t *testing.T) {
 	s := newTestStore(t)
 	r := makeRally(t, s, "Rally")
-	card, _ := s.IssueRallyCard(r.ID, "Solo")
+	card, _ := s.IssueRallyCard(r.ID, "Solo", "Gilgamesh")
 
 	if _, err := s.CollectStamp(r.ID, card.ID, r.Stamps[0].ID, "Solo", "Senpan Tea House", model.StampTypeFood); err != nil {
 		t.Fatalf("first collect: %v", err)
@@ -189,8 +189,8 @@ func TestStampRally_CollectUniqueGuard(t *testing.T) {
 func TestStampRally_LogsAndDelete(t *testing.T) {
 	s := newTestStore(t)
 	r := makeRally(t, s, "Rally")
-	c1, _ := s.IssueRallyCard(r.ID, "Aria")
-	c2, _ := s.IssueRallyCard(r.ID, "Borin")
+	c1, _ := s.IssueRallyCard(r.ID, "Aria", "Gilgamesh")
+	c2, _ := s.IssueRallyCard(r.ID, "Borin", "Gilgamesh")
 	_, _ = s.CollectStamp(r.ID, c1.ID, r.Stamps[0].ID, "Aria", "Senpan Tea House", model.StampTypeFood)
 	_, _ = s.CollectStamp(r.ID, c2.ID, r.Stamps[1].ID, "Borin", "Senpan Tea House", model.StampTypeGame)
 

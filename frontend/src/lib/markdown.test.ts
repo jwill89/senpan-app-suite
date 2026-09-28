@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
-import { useMarkdown } from './markdown'
+import { normalizeHardBreaks, useMarkdown } from './markdown'
 
 // markdown-it is lazy-loaded on first use; wait for the reactive `ready` flag
 // to flip before asserting on rendered output.
@@ -56,5 +56,40 @@ describe('useMarkdown', () => {
     expect(render('')).toBe('')
     expect(render(null)).toBe('')
     expect(render(undefined)).toBe('')
+  })
+})
+
+describe('normalizeHardBreaks', () => {
+  /**
+   * Raw HTML is escaped (html: false), so a description holding a literal "<br />"
+   * showed those characters to the reader instead of breaking the line. Text
+   * arrives that way from more than one direction - pasted from a source that
+   * emitted HTML, or serialized by a WYSIWYG editor that writes hard breaks as
+   * tags - so it is normalized before parsing rather than by allowing raw HTML.
+   */
+  it('turns every spelling of a break tag into a newline', () => {
+    expect(normalizeHardBreaks('one<br />two')).toBe('one\ntwo')
+    expect(normalizeHardBreaks('one<br>two')).toBe('one\ntwo')
+    expect(normalizeHardBreaks('one<br/>two')).toBe('one\ntwo')
+    expect(normalizeHardBreaks('one<BR />two')).toBe('one\ntwo')
+    expect(normalizeHardBreaks('one<br   />two')).toBe('one\ntwo')
+  })
+
+  it('leaves everything else exactly as written', () => {
+    // Only this one inert tag is promoted; every other tag stays text for the
+    // parser to escape, which is what keeps raw HTML out.
+    expect(normalizeHardBreaks('a <b>bold</b> <script>x</script>')).toBe(
+      'a <b>bold</b> <script>x</script>',
+    )
+    expect(normalizeHardBreaks('plain text')).toBe('plain text')
+  })
+
+  it('does not touch a break tag shown inside code', () => {
+    // Someone documenting the tag should see it, not a blank line.
+    expect(normalizeHardBreaks('use `<br />` here')).toBe('use `<br />` here')
+    expect(normalizeHardBreaks('```\n<br />\n```')).toBe('```\n<br />\n```')
+    expect(normalizeHardBreaks('~~~\n<br />\n~~~')).toBe('~~~\n<br />\n~~~')
+    // ...while a tag OUTSIDE the code in the same string still converts.
+    expect(normalizeHardBreaks('`<br />` then<br />done')).toBe('`<br />` then\ndone')
   })
 })

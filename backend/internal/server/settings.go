@@ -21,6 +21,7 @@ var settingsKeys = []string{
 	"yoever_cooldown_seconds",
 	"custom_card_cost",
 	"hide_bingo",
+	"hide_custom_cards",
 }
 
 // settingsDefaults provides fallback values for settings that have not been configured.
@@ -35,6 +36,7 @@ var settingsDefaults = map[string]string{
 	"yoever_cooldown_seconds":   strconv.Itoa(defaultYoeverCooldownSeconds),
 	"custom_card_cost":          "0",
 	"hide_bingo":                "0",
+	"hide_custom_cards":         "0",
 }
 
 // secretSettings are setting keys that must not be exposed to non-admin
@@ -94,6 +96,10 @@ func (s *Server) handleSettingsUpdate(w http.ResponseWriter, r *http.Request) {
 	if !s.requirePermission(w, r, permSystemSettings) {
 		return
 	}
+	// This page is grantable, but the READ path blanks secretSettings for anyone
+	// who is not a full admin - so the write path has to apply the same rule. See
+	// the skip in the save loop below.
+	admin := s.isAdmin(r)
 
 	req, err := readJSON[settingsRequest](w, r)
 	if err != nil || req.Settings == nil {
@@ -164,6 +170,14 @@ func (s *Server) handleSettingsUpdate(w http.ResponseWriter, r *http.Request) {
 				writeError(w, http.StatusBadRequest, "Hide Bingo must be 0 or 1")
 				return
 			}
+		case "hide_custom_cards":
+			// Same flag discipline as hide_bingo, and for the same reason - this
+			// one decides whether the Custom Card section is on the page while the
+			// rest of bingo stays up.
+			if val != "0" && val != "1" {
+				writeError(w, http.StatusBadRequest, "Hide Custom Cards must be 0 or 1")
+				return
+			}
 		case "header_font":
 			// Flows verbatim into the --header-font CSS variable on every client
 			// (theme.ts applyHeaderFont), so reject anything that could break out
@@ -180,6 +194,16 @@ func (s *Server) handleSettingsUpdate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	for key, val := range req.Settings {
+		// A caller who cannot read a secret must not be able to write it either.
+		// handleSettingsGet hands non-admins "" for every secretSettings key, so a
+		// permission-granted non-admin loads this form with the Google Fonts key and
+		// every club webhook blank - and, without this skip, saves those blanks
+		// straight over the stored values, silently destroying every book club's
+		// Discord webhook on an unrelated edit. Skipping rather than rejecting keeps
+		// the rest of their save working, which is the point of granting the page.
+		if secretSettings[key] && !admin {
+			continue
+		}
 		if err := s.store.SetSetting(key, val); err != nil {
 			writeInternalError(w, "save setting", err)
 			return

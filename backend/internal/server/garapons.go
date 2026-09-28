@@ -3,6 +3,7 @@ package server
 import (
 	"database/sql"
 	"errors"
+	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
@@ -305,7 +306,11 @@ func (s *Server) handleGaraponReopen(w http.ResponseWriter, r *http.Request) {
 // garaponPlayerCreateRequest is the JSON body for POST /api/garapons/{id}/players.
 type garaponPlayerCreateRequest struct {
 	PlayerName string `json:"player_name"`
-	MaxDraws   int    `json:"max_draws"`
+	// Home world, stored in its own field as every system now does. Optional: a
+	// composed "Name @ World" is split server-side, and staff issuing a link at a
+	// counter may genuinely not know it.
+	World    string `json:"world"`
+	MaxDraws int    `json:"max_draws"`
 }
 
 // handleGaraponPlayerCreate issues a new per-player drawing link.
@@ -331,6 +336,10 @@ func (s *Server) handleGaraponPlayerCreate(w http.ResponseWriter, r *http.Reques
 		writeError(w, http.StatusBadRequest, "Player name is required")
 		return
 	}
+	world := strings.TrimSpace(req.World)
+	if world == "" {
+		name, world = model.SplitParticipantLabel(name)
+	}
 	garapon, err := s.store.GetGarapon(garaponID)
 	if err != nil {
 		writeInternalError(w, "get garapon for player", err)
@@ -347,18 +356,24 @@ func (s *Server) handleGaraponPlayerCreate(w http.ResponseWriter, r *http.Reques
 	if maxDraws < 1 {
 		maxDraws = clampDefaultDraws(garapon.DefaultDraws)
 	}
-	player, err := s.store.CreateGaraponPlayer(garaponID, name, maxDraws)
+	player, err := s.store.CreateGaraponPlayer(garaponID, name, world, maxDraws)
 	if err != nil {
 		writeInternalError(w, "create garapon player", err)
 		return
 	}
-	// If the garapon is linked to an open stamp rally, also issue this participant
-	// a stamp card USING THE SAME TOKEN, so one hash serves both /garapon/<token>
-	// and /stamp-card/<token>. Best-effort: a rally that's since closed/vanished
-	// just yields no card (the drawing link is still valid on its own).
+	// If the garapon is linked to an open stamp rally, also issue this participant a
+	// stamp card - with its OWN token, not this link's.
+	//
+	// The two used to share one hash. That made the stamp-card link a spendable
+	// drawing token: a participant who screenshots their card, or pastes it to a
+	// friend, hands over draws they cannot get back. The public sign-up path was
+	// split first; this is the same defect on the staff-issued path.
+	//
+	// Best-effort: a rally that's since closed/vanished just yields no card (the
+	// drawing link is still valid on its own).
 	if garapon.StampRallyID != nil {
 		if rally, _ := s.store.GetStampRally(*garapon.StampRallyID); rally != nil && rally.Status == "open" {
-			if card, err := s.store.IssueRallyCardWithToken(*garapon.StampRallyID, name, player.Token); err == nil && card != nil {
+			if card, err := s.store.IssueRallyCard(*garapon.StampRallyID, name, world); err == nil && card != nil {
 				if err := s.store.SetPlayerStampCard(player.ID, card.ID); err == nil {
 					player.StampCardToken = card.Token
 				}
@@ -503,6 +518,16 @@ func (s *Server) handleGaraponPublic(w http.ResponseWriter, r *http.Request) {
 //	Auth:      public (the token is the capability)
 //	Response:  {"draw": GaraponDraw, "draws_used": int, "max_draws": int}
 func (s *Server) handleGaraponDraw(w http.ResponseWriter, r *http.Request) {
+	// Before the token is even resolved: a draw is irreversible, so the budget has
+	// to cover attempts against tokens that turn out to be wrong as well as right.
+	ip := clientIP(r)
+	if s.garaponDrawLimiter.isLimited(ip) {
+		slog.Warn("garapon draw rate limited", "ip", ip)
+		writeError(w, http.StatusTooManyRequests, "Too many draws. Please try again later.")
+		return
+	}
+	s.garaponDrawLimiter.recordFailure(ip)
+
 	token := strings.TrimSpace(r.PathValue("token"))
 	player, _, ok := s.loadGaraponByToken(w, token)
 	if !ok {

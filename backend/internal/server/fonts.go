@@ -275,6 +275,15 @@ func (s *Server) handleFontRename(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusConflict, "A font file named \""+newName+"\" already exists")
 		return
 	}
+	// A rename also changes the font's CSS family when it has no explicit one, so
+	// apply the same uniqueness rule the family edit does - otherwise renaming a
+	// font onto another's name collides in the served kit instead of being refused.
+	newKeyForCheck := fontGroupKey(newName)
+	if newFamily := fontFamilyFor(fontBase(newName), s.fontMetaMap()[newKeyForCheck]); newFamily != "" &&
+		s.familyTakenBy(newFamily, newKeyForCheck) {
+		writeError(w, http.StatusConflict, "Another font is already named \""+newFamily+"\"")
+		return
+	}
 	if err := os.Rename(filepath.Join(dir, name), dst); err != nil {
 		writeInternalError(w, "rename font", err)
 		return
@@ -309,6 +318,29 @@ type fontFamilyRequest struct {
 //	Request:   any of {"family": "..."}, {"serve": "WOFF2"},
 //	           {"origins": ["https://mysite.carrd.co", ...]}
 //	Response:  {"ok": true}
+//
+// familyTakenBy reports whether some OTHER font already resolves to this CSS
+// family name (case-insensitively). Two fonts sharing a family means the kit emits
+// two @font-face rules with the same name and the later one silently wins, so
+// whichever font lost is simply never served - with nothing anywhere saying so.
+//
+// exceptKey is the group being changed, so a font never conflicts with itself.
+// Shared by the family edit AND the file rename: a rename changes the DERIVED
+// family (it falls back to the filename base), so renaming a font onto another
+// font's name produced the same collision the family edit already refused.
+func (s *Server) familyTakenBy(family, exceptKey string) bool {
+	metas := s.fontMetaMap()
+	for _, other := range s.fontGroupList() {
+		if other.Key == exceptKey {
+			continue
+		}
+		if strings.EqualFold(fontFamilyFor(other.Base, metas[other.Key]), family) {
+			return true
+		}
+	}
+	return false
+}
+
 func (s *Server) handleFontFamilyPatch(w http.ResponseWriter, r *http.Request) {
 	if !s.requirePermission(w, r, permAtelierFonts) {
 		return
@@ -340,19 +372,9 @@ func (s *Server) handleFontFamilyPatch(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusBadRequest, "Font name may not contain quotes, backslashes, control characters, or any of { } ; < >")
 			return
 		}
-		if family != "" {
-			// Must stay unique across the other fonts' effective families (the
-			// kit would otherwise emit two identical @font-face names).
-			metas := s.fontMetaMap()
-			for _, other := range s.fontGroupList() {
-				if other.Key == g.Key {
-					continue
-				}
-				if strings.EqualFold(fontFamilyFor(other.Base, metas[other.Key]), family) {
-					writeError(w, http.StatusConflict, "Another font is already named \""+family+"\"")
-					return
-				}
-			}
+		if family != "" && s.familyTakenBy(family, g.Key) {
+			writeError(w, http.StatusConflict, "Another font is already named \""+family+"\"")
+			return
 		}
 	}
 

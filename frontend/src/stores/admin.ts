@@ -15,6 +15,7 @@ import { useAffiliatesStore } from './affiliates'
 import { useTeaRoomsStore } from './teaRooms'
 import { useGaraponsStore } from './garapons'
 import { useStampRalliesStore } from './stampRallies'
+import { useFestivalMapsStore } from './festivalMaps'
 import { useBookclubStore } from './bookclub'
 import { useStylesStore } from './styles'
 import { useAppStore } from './app'
@@ -44,6 +45,7 @@ export type AdminTab =
   | 'teahouse-tea-rooms'
   | 'teahouse-raffles'
   | BookClubTab
+  | 'festival-map'
   | 'festival-garapon'
   | 'festival-stamp-rally'
   | 'atelier-fonts'
@@ -98,6 +100,7 @@ export const useAdminStore = defineStore('admin', () => {
     const teaRooms = useTeaRoomsStore()
     const garapons = useGaraponsStore()
     const stampRallies = useStampRalliesStore()
+    const festivalMaps = useFestivalMapsStore()
     const bookclub = useBookclubStore()
     const styles = useStylesStore()
     const app = useAppStore()
@@ -113,6 +116,13 @@ export const useAdminStore = defineStore('admin', () => {
       raffles.selectedRaffle = null
       loadFresh('raffles', () => {
         void raffles.loadRaffles()
+      })
+    }
+    if (tab === 'festival-map') {
+      festivalMaps.selectedMap = null
+      festivalMaps.mapForm = null
+      loadFresh('festival-maps', () => {
+        void festivalMaps.loadMaps()
       })
     }
     if (tab === 'festival-garapon') {
@@ -244,6 +254,13 @@ export const useAdminStore = defineStore('admin', () => {
           void useTeaRoomsStore().loadTeaRooms()
         })
         break
+      case 'festival-maps':
+        apply('festival-maps', tab === 'festival-map', () => {
+          const fm = useFestivalMapsStore()
+          void fm.loadMaps()
+          if (fm.selectedMap) void fm.loadMapDetail(fm.selectedMap.id)
+        })
+        break
       case 'stamp-rallies':
         // When viewing the manager, reload the list + the open event detail + the
         // open logs so a participant's just-collected stamp shows live.
@@ -268,7 +285,10 @@ export const useAdminStore = defineStore('admin', () => {
         break
       case 'winners-log':
         apply('winners-log', tab === 'bingo-winners-log', () => {
-          void useGameStore().loadWinnersLog()
+          // Debounced: the server emits one of these per deleted row, so a bulk
+          // delete arrives as a burst and would otherwise re-walk the whole log
+          // once per row.
+          useGameStore().refreshWinnersLogSoon()
         })
         break
       case 'users':

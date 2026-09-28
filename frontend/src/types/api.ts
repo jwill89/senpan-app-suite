@@ -37,6 +37,10 @@ export type {
   StampRallyCard,
   StampRallyCollected,
   StampRallyLogEntry,
+  EventTime,
+  FestivalMap,
+  FestivalStall,
+  FestivalStallOccupant,
   Announcement,
   AnnouncementButton,
   AnnouncementType,
@@ -161,6 +165,17 @@ export type {
   StampSignupResponse,
   StampLookupEntry,
   StampLookupResponse,
+  // Festival maps
+  FestivalMapsResponse,
+  FestivalMapResponse,
+  FestivalMapDetailResponse,
+  PublicFestivalMapSummary,
+  PublicFestivalMapsResponse,
+  PublicStallAffiliate,
+  PublicStallOccupant,
+  PublicStallRaffle,
+  PublicFestivalStall,
+  PublicFestivalMap,
   // Book club / reading lists
   ReadingListsResponse,
   ReadingListDetailResponse,
@@ -230,6 +245,13 @@ export interface AppSettings {
    * setting; read through the app store's `hideBingo`, never compared by hand.
    */
   hide_bingo: string
+  /**
+   * `'1'` hides only the Custom Card request on the public home page, leaving Join
+   * Bingo and the rest of bingo up - for a period when staff aren't taking card
+   * requests but games are still running. `'0'` (the default) shows it. Read
+   * through the app store's `hideCustomCards`. `hide_bingo` still hides both.
+   */
+  hide_custom_cards: string
   /**
    * Per-club Discord webhook URLs, keyed `discord_webhook_url_<club_slug>`
    * (e.g. `discord_webhook_url_yaoi`). Admin-only (redacted for public). Each
@@ -397,6 +419,10 @@ export const RAFFLE_MODES: { value: RaffleMode; label: string; help: string }[] 
 
 // Form model for the admin raffle create/edit form.
 export interface RaffleForm {
+  /** Optional Festival Map the raffle belongs to (null = not part of a festival). */
+  festival_map_id: number | null
+  /** Optional stall on that map - a pitch OCCUPANT id (null = not pinned). */
+  occupant_id: number | null
   id: number
   title: string
   description: string
@@ -495,6 +521,10 @@ export interface TeaRoomForm {
   open: boolean
   lockable: boolean
   discounted: boolean
+  /** Whether the room is locked right now (`lockable` is only whether it can be). */
+  locked: boolean
+  /** UTC RFC-3339 instant the lock lifts; '' = it stands until someone unlocks it. */
+  locked_until: string
   image: string
   color: string
 }
@@ -508,6 +538,8 @@ export type RallyCompletionMode = 'all' | 'counts'
 // the model. A stamp's affiliate_id is null for the "Senpan Tea House" default.
 export interface StampRallyStampForm {
   id: number
+  /** Festival Map pitch OCCUPANT this stamp belongs to; null when unlinked. */
+  occupant_id: number | null
   affiliate_id: number | null
   image: string
   password: string
@@ -539,8 +571,80 @@ export interface StampRallyForm {
   completion_mode: RallyCompletionMode
   required_food: number
   required_game: number
+  /** Optional Festival Map link; when set, each stamp names one of its stalls. */
+  festival_map_id: number | null
   stamps: StampRallyStampForm[]
   prizes: StampRallyPrizeForm[]
+}
+
+// -- Festival Map -------------------------------------------------------------
+
+/** A festival map's publish state. Only `published` maps reach the public pages. */
+export type FestivalMapStatus = 'in_progress' | 'published' | 'closed'
+/** How a stall is drawn on the map. */
+export type StallShape = 'circle' | 'rect'
+/** What a stall offers - seeds its default shape/color and its stamp's type. */
+export type StallType = 'game' | 'food' | 'both' | 'other'
+
+/**
+ * One datetime range on the festival-map form. The wire format is UTC RFC-3339
+ * (model.EventTime); the form holds the admin's local `datetime-local` strings
+ * and converts on save, exactly like the rally availability window.
+ */
+export interface EventTimeForm {
+  label: string
+  start: string
+  end: string
+  /** Client-only stable key for the repeater (see lib/uid.ts); never sent. */
+  _uid?: number
+}
+
+// Form models for the admin festival-map editor.
+//
+// A stall on the plan is a PITCH - where it sits and how it is drawn - holding one
+// or more OCCUPANTS, the businesses standing in it. Most pitches keep the same
+// occupant all festival; a booth that changes hands between days has one per day,
+// each with its own affiliate, offering and times.
+export interface FestivalStallOccupantForm {
+  id: number
+  /** null = the venue's own booth (Senpan Tea House). */
+  affiliate_id: number | null
+  /** Optional: the map labels a pitch by its AFFILIATE, not by this. */
+  title: string
+  description: string
+  /** This occupant's own event page ('' = none; no fallback to the affiliate's). */
+  event_carrd: string
+  stall_type: StallType
+  /** Caption shown under the title when `stall_type` is 'other' ('' = none). */
+  type_label: string
+  /** When this occupant is here ([] = the whole festival). */
+  times: EventTimeForm[]
+  /** Client-only stable key for the occupant list; never sent. */
+  _uid?: number
+}
+export interface FestivalStallForm {
+  id: number
+  shape: StallShape
+  /** '#rrggbb', or '' to follow the first occupant's stall-type default color. */
+  color: string
+  /** Halo drawn when a visitor selects this pitch ('' = the app highlight). */
+  selection_color: string
+  /** Colour of this pitch's label ('' = white). */
+  text_color: string
+  placement: Placement
+  occupants: FestivalStallOccupantForm[]
+  /** Client-only stable key for the pitch list; never sent. */
+  _uid?: number
+}
+export interface FestivalMapForm {
+  id: number
+  title: string
+  /** Optional shortcode, e.g. 'obon-2026' ('' = the map is linked by id only). */
+  slug: string
+  description: string
+  map_image: string
+  times: EventTimeForm[]
+  stalls: FestivalStallForm[]
 }
 
 // -- WebSocket message types -------------------------------------------------
@@ -573,6 +677,11 @@ export type WsMessage =
   // button shows/hides, other admins' toggle syncs).
   | { type: 'yoever_config'; enabled: boolean }
   | { type: 'draw_delay_update'; delay: number }
+  // A tea room's lock ran out and the server lifted it. Admin channel only. It
+  // carries the room's name because its consumers ANNOUNCE it rather than render
+  // it - the in-game plugin alerts its operator by name the moment this lands.
+  // The SPA's own list refreshes off the `resource_changed` that follows.
+  | { type: 'tea_room_unlocked'; id: number; name: string; room_number: string }
   // Thin "an admin resource changed" signal (no payload): an admin viewing that
   // resource refetches it via REST. `resource` is a key like 'garapons',
   // 'raffles', 'announcements', 'bookclub', 'presets', 'users', etc.

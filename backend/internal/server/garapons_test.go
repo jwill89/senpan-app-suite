@@ -319,6 +319,67 @@ func TestGaraponDraw_Success(t *testing.T) {
 	}
 }
 
+// The draw endpoint is the only IRREVERSIBLE public action in the app and was the
+// one public mutating path with no limiter at all. Because a stamp-card link
+// doubles as a drawing token, anyone who saw a participant's card link could spend
+// their whole allowance in a burst; the limiter is what bounds that.
+//
+// Asserted against WRONG tokens on purpose: the budget has to be spent before the
+// token is resolved, or an attacker gets unlimited attempts against tokens that
+// miss and the limiter only ever sees the ones that hit.
+func TestGaraponDraw_RateLimited(t *testing.T) {
+	env := newTestEnv(t)
+	env.loginAdmin(t)
+	gid := env.createGarapon(t, "G")
+	token, _ := env.createGaraponPlayer(t, gid, "Hero", 1)
+
+	limited := false
+	for i := 0; i < 25; i++ {
+		resp := env.postJSON(t, "/api/garapon/deadbeef00/draw", map[string]any{})
+		resp.Body.Close()
+		if resp.StatusCode == http.StatusTooManyRequests {
+			limited = true
+			break
+		}
+	}
+	if !limited {
+		t.Fatal("25 draws against an unknown token were never rate limited")
+	}
+
+	// And the limit covers a REAL token too - the player still has a draw left, so
+	// a 429 here can only come from the limiter, not from the allowance.
+	resp := env.postJSON(t, "/api/garapon/"+token+"/draw", map[string]any{})
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusTooManyRequests {
+		t.Errorf("status = %d; want 429 once the per-IP budget is spent", resp.StatusCode)
+	}
+}
+
+// The draw log is what staff read when handing out a prize, and it outlives the
+// drawing link (player_id goes NULL on delete, the snapshot stays). Once names and
+// worlds were stored apart, snapshotting the bare name would have left two players
+// who share a character name across worlds indistinguishable at exactly the moment
+// it matters.
+func TestGaraponDraw_LogSnapshotsNameAndWorld(t *testing.T) {
+	env := newTestEnv(t)
+	env.loginAdmin(t)
+	gid := env.createGarapon(t, "G")
+
+	resp := env.postJSON(t, fmt.Sprintf("/api/garapons/%d/players", gid), map[string]any{
+		"player_name": "Aria Ashwood", "world": "Gilgamesh", "max_draws": 1,
+	})
+	token := decodeBody(t, resp)["player"].(map[string]any)["token"].(string)
+
+	drawn := decodeBody(t, env.postJSON(t, "/api/garapon/"+token+"/draw", map[string]any{}))
+	draw, _ := drawn["draw"].(map[string]any)
+	if draw == nil {
+		t.Fatal("no draw returned")
+	}
+	if draw["player_name"] != "Aria Ashwood @ Gilgamesh" {
+		t.Errorf("logged player_name = %v; want the composed identity", draw["player_name"])
+	}
+}
+
 func TestGaraponDraw_NoDrawsRemaining(t *testing.T) {
 	env := newTestEnv(t)
 	env.loginAdmin(t)

@@ -25,6 +25,9 @@ var modelTypes = map[string]any{
 	"StampRally": model.StampRally{}, "StampRallyStamp": model.StampRallyStamp{},
 	"StampRallyPrize": model.StampRallyPrize{}, "StampRallyCard": model.StampRallyCard{},
 	"StampRallyCollected": model.StampRallyCollected{}, "StampRallyLogEntry": model.StampRallyLogEntry{},
+	"FestivalMap": model.FestivalMap{}, "FestivalStall": model.FestivalStall{},
+	"FestivalStallOccupant": model.FestivalStallOccupant{},
+	"EventTime":             model.EventTime{},
 
 	// Shared response envelopes
 	"OKResponse": model.OKResponse{}, "DeletedResponse": model.DeletedResponse{},
@@ -84,6 +87,14 @@ var modelTypes = map[string]any{
 	"SignupRally": model.SignupRally{}, "SignupRalliesResponse": model.SignupRalliesResponse{},
 	"StampSignupResponse": model.StampSignupResponse{},
 	"StampLookupEntry":    model.StampLookupEntry{}, "StampLookupResponse": model.StampLookupResponse{},
+
+	// Festival maps
+	"FestivalMapsResponse": model.FestivalMapsResponse{}, "FestivalMapResponse": model.FestivalMapResponse{},
+	"FestivalMapDetailResponse":  model.FestivalMapDetailResponse{},
+	"PublicFestivalMapSummary":   model.PublicFestivalMapSummary{},
+	"PublicFestivalMapsResponse": model.PublicFestivalMapsResponse{},
+	"PublicStallAffiliate":       model.PublicStallAffiliate{}, "PublicFestivalStall": model.PublicFestivalStall{},
+	"PublicFestivalMap": model.PublicFestivalMap{},
 
 	// Book club / announcements
 	"ReadingListsResponse": model.ReadingListsResponse{}, "ReadingListDetailResponse": model.ReadingListDetailResponse{},

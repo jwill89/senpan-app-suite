@@ -123,12 +123,10 @@ func (s *Server) handleAuthAction(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Rotate session token on privilege escalation to prevent session fixation.
-	_ = s.sessions.RenewToken(r.Context())
-	s.sessions.Put(r.Context(), "user_id", user.ID)
-	// Record the password epoch this session was minted with; a later password
-	// change/reset bumps it, invalidating this (and every other) prior session.
-	s.sessions.Put(r.Context(), "user_epoch", user.PasswordEpoch)
+	// Rotate the session token (session fixation) and record the password epoch
+	// this session was minted with; a later password change/reset bumps it,
+	// invalidating this (and every other) prior session. See establishSession.
+	s.establishSession(r, user)
 	s.limiter.resetFailures(ip)
 	slog.Debug("login succeeded", "user_id", user.ID, "username", username, "admin", user.IsAdmin, "ip", ip)
 	// Stamp the last-login time (best-effort - don't fail the login if it errors).

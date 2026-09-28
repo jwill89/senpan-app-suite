@@ -1,5 +1,7 @@
 package model
 
+import "strings"
+
 // Stamp types - what kind of stall a stamp belongs to, so a rally can require a
 // number of each. Stored in stamp_rally_stamps.stamp_type and snapshotted onto
 // each collected-stamp log row.
@@ -87,9 +89,14 @@ type StampRally struct {
 	CompletionMode string `json:"completion_mode"`
 	// RequiredFood/RequiredGame are the per-type stamp counts a card needs in
 	// "counts" mode; both are ignored in "all" mode.
-	RequiredFood int    `json:"required_food"`
-	RequiredGame int    `json:"required_game"`
-	CreatedAt    string `json:"created_at"`
+	RequiredFood int `json:"required_food"`
+	RequiredGame int `json:"required_game"`
+	// FestivalMapID optionally ties the rally to a Festival Map. When set, each
+	// stamp names one of that map's stalls instead of a bare affiliate, and the
+	// public map badges those stalls as part of the rally. nil = not linked.
+	FestivalMapID   *int64 `json:"festival_map_id"`
+	FestivalMapName string `json:"festival_map_name,omitempty"` // joined for display
+	CreatedAt       string `json:"created_at"`
 
 	// Populated on detail fetches only (omitted from list responses for efficiency).
 	Stamps []StampRallyStamp `json:"stamps,omitempty"`
@@ -108,11 +115,19 @@ type StampRally struct {
 // StampRallyStamp is one collectable stamp on a rally card: an image, the password
 // a participant enters to collect it, its type (food or game - what a "counts"
 // rally counts), its placement on the card, an optional active window (within the
-// event window) and a manual pause toggle, and the affiliate (stall) it belongs
-// to. AffiliateID is nil for the "Senpan Tea House" default.
+// event window) and a manual pause toggle, and the stall it belongs to.
+//
+// The stall is either a Festival Map pitch OCCUPANT (OccupantID, when the rally is
+// linked to a map) or a bare affiliate (AffiliateID, nil for the "Senpan Tea
+// House" default). A stamp with an OccupantID takes its affiliate from that
+// occupant, so AffiliateID is kept in step on save rather than being a second,
+// disagreeing source of truth. It names the occupant rather than the pitch because
+// a pitch that changes hands between days hosts two different stalls.
 type StampRallyStamp struct {
 	ID            int64  `json:"id"`
 	RallyID       int64  `json:"rally_id"`
+	OccupantID    *int64 `json:"occupant_id"`        // nil = not tied to a Festival Map occupant
+	StallName     string `json:"stall_name"`         // joined from the occupant ("" when unlinked)
 	AffiliateID   *int64 `json:"affiliate_id"`       // nil = Senpan Tea House (default)
 	AffiliateName string `json:"affiliate_name"`     // joined for display ("" -> "Senpan Tea House")
 	Image         string `json:"image"`              // images/stamp_stamps/...
@@ -124,6 +139,23 @@ type StampRallyStamp struct {
 	Paused        bool   `json:"paused"`
 	SortOrder     int    `json:"sort_order"`
 }
+
+// DisplayStall is the name to show (and log) for a stamp's stall: its Festival Map
+// stall title when the rally is linked to a map, else its affiliate, else the
+// owning venue. One place decides it so the card, the log and the public map can't
+// drift apart.
+func (s StampRallyStamp) DisplayStall() string {
+	for _, name := range []string{s.StallName, s.AffiliateName} {
+		if trimmed := strings.TrimSpace(name); trimmed != "" {
+			return trimmed
+		}
+	}
+	return DefaultStallName
+}
+
+// DefaultStallName is the stall shown for a stamp with neither a map stall nor an
+// affiliate - the festival's own venue.
+const DefaultStallName = "Senpan Tea House"
 
 // StampRallyPrize is a reward revealed once a card completes: a name, an image, and
 // its placement on the card. Before completion the card shows the not-stamped
@@ -145,10 +177,14 @@ type StampRallyCard struct {
 	RallyID         int64  `json:"rally_id"`
 	Token           string `json:"token"`
 	ParticipantName string `json:"participant_name"`
-	Completed       bool   `json:"completed"`
-	CompletedAt     string `json:"completed_at"`
-	CreatedAt       string `json:"created_at"`
-	CollectedCount  int    `json:"collected_count,omitempty"`
+	// Home world, kept apart from the name the way every other system stores it
+	// (see model.ParticipantLabel). "" on cards written before schema v66, and on
+	// any a staff member entered without one.
+	World          string `json:"world"`
+	Completed      bool   `json:"completed"`
+	CompletedAt    string `json:"completed_at"`
+	CreatedAt      string `json:"created_at"`
+	CollectedCount int    `json:"collected_count,omitempty"`
 }
 
 // StampRallyCollected records one stamp a participant collected on their card, with
@@ -300,10 +336,13 @@ type SignupRalliesResponse struct {
 
 // StampSignupResponse is the body of POST /api/stamp-signup/{id}: the tokens the
 // participant needs, which the client turns into links. GaraponToken is "" when the
-// rally has no open linked Garapon; when it is set it equals CardToken, since a
-// paired drawing link and stamp card share one token.
+// rally has no open linked Garapon, and is otherwise a SEPARATE secret from
+// CardToken - the card link can be shared, the drawing link spends draws and
+// cannot. This response is the only time the drawing token is issued: no name-keyed
+// lookup returns it, so the client keeps it locally.
 type StampSignupResponse struct {
 	ParticipantName string `json:"participant_name"`
+	World           string `json:"world"`
 	RallyTitle      string `json:"rally_title"`
 	CardToken       string `json:"card_token"`
 	GaraponToken    string `json:"garapon_token,omitempty"`
@@ -311,13 +350,24 @@ type StampSignupResponse struct {
 }
 
 // StampLookupEntry is one rally a looked-up participant holds a card for.
+//
+// There is deliberately no garapon token here. The lookup is keyed on a character
+// name, which is public, so it may report that draws exist and how many remain, but
+// never the token that spends them - that is issued once, at sign-up, and lives on
+// the participant's own device (or with staff). GaraponDrawsLeft is 0 when the
+// rally has no open linked garapon.
 type StampLookupEntry struct {
-	RallyID      int64  `json:"rally_id"`
-	RallyTitle   string `json:"rally_title"`
-	CardToken    string `json:"card_token"`
-	GaraponToken string `json:"garapon_token,omitempty"`
-	GaraponTitle string `json:"garapon_title,omitempty"`
-	Completed    bool   `json:"completed"`
+	RallyID    int64  `json:"rally_id"`
+	RallyTitle string `json:"rally_title"`
+	CardToken  string `json:"card_token"`
+	// The name and world the card is actually held under, echoed back so the page
+	// can show which record it found - a card issued before schema v66 may carry no
+	// world, and one staff typed by hand may be spelled differently.
+	ParticipantName  string `json:"participant_name"`
+	World            string `json:"world"`
+	GaraponTitle     string `json:"garapon_title,omitempty"`
+	GaraponDrawsLeft int    `json:"garapon_draws_left,omitempty"`
+	Completed        bool   `json:"completed"`
 }
 
 // StampLookupResponse is the body of POST /api/stamp-lookup. An unknown name and a

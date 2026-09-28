@@ -132,19 +132,32 @@ func (s *Store) CreateReadingListItem(it *model.ReadingListItem) (int64, error) 
 	return res.LastInsertId()
 }
 
-// UpdateReadingListItem updates an item's editable fields (not its list or order).
-func (s *Store) UpdateReadingListItem(it *model.ReadingListItem) error {
-	_, err := s.db.Exec(
-		`UPDATE reading_list_items SET cover_image = ?, title = ?, summary = ?, format = ?, genres = ?, tropes = ?, chapters = ?, comments = ?, sources = ? WHERE id = ?`,
+// UpdateReadingListItem updates an item's editable fields (not its list or order),
+// scoped to the list it.ListID names. Returns true if a row matched.
+//
+// The list scope is what stops an item id from reaching across lists - and so
+// across book clubs, since a list belongs to exactly one club and the clubs are
+// separately permissioned. The route validates that the LIST belongs to the club
+// in the path; without the scope here, a user holding one club's permission could
+// pass any item id under a list they legitimately own and edit another club's item.
+func (s *Store) UpdateReadingListItem(it *model.ReadingListItem) (bool, error) {
+	res, err := s.db.Exec(
+		`UPDATE reading_list_items SET cover_image = ?, title = ?, summary = ?, format = ?, genres = ?, tropes = ?, chapters = ?, comments = ?, sources = ? WHERE id = ? AND list_id = ?`,
 		it.CoverImage, it.Title, it.Summary, it.Format, it.Genres,
-		it.Tropes, it.Chapters, it.Comments, encodeSources(it.Sources), it.ID,
+		it.Tropes, it.Chapters, it.Comments, encodeSources(it.Sources), it.ID, it.ListID,
 	)
-	return err
+	if err != nil {
+		return false, err
+	}
+	n, _ := res.RowsAffected()
+	return n > 0, nil
 }
 
-// DeleteReadingListItem removes a single item. Returns true if a row was deleted.
-func (s *Store) DeleteReadingListItem(itemID int64) (bool, error) {
-	res, err := s.db.Exec(`DELETE FROM reading_list_items WHERE id = ?`, itemID)
+// DeleteReadingListItem removes a single item from the given list. Returns true if
+// a row was deleted. Scoped to listID for the same cross-club reason as
+// UpdateReadingListItem.
+func (s *Store) DeleteReadingListItem(listID, itemID int64) (bool, error) {
+	res, err := s.db.Exec(`DELETE FROM reading_list_items WHERE id = ? AND list_id = ?`, itemID, listID)
 	if err != nil {
 		return false, err
 	}

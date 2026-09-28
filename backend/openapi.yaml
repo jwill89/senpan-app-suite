@@ -1017,6 +1017,581 @@ components:
         error:
           type: string
       type: object
+    EventTime:
+      properties:
+        end:
+          type: string
+        label:
+          type: string
+        start:
+          type: string
+      type: object
+    FestivalMap:
+      properties:
+        created_at:
+          type: string
+        description:
+          type: string
+        id:
+          format: int64
+          type: integer
+        map_image:
+          type: string
+        slug:
+          type: string
+        stall_count:
+          type: integer
+        stalls:
+          items:
+            properties:
+              color:
+                type: string
+              id:
+                format: int64
+                type: integer
+              map_id:
+                format: int64
+                type: integer
+              occupants:
+                items:
+                  properties:
+                    affiliate_id:
+                      format: int64
+                      nullable: true
+                      type: integer
+                    affiliate_name:
+                      type: string
+                    description:
+                      type: string
+                    event_carrd:
+                      type: string
+                    id:
+                      format: int64
+                      type: integer
+                    sort_order:
+                      type: integer
+                    stall_id:
+                      format: int64
+                      type: integer
+                    stall_type:
+                      type: string
+                    times:
+                      items:
+                        properties:
+                          end:
+                            type: string
+                          label:
+                            type: string
+                          start:
+                            type: string
+                        type: object
+                      type: array
+                    title:
+                      type: string
+                    type_label:
+                      type: string
+                  type: object
+                type: array
+              placement:
+                properties:
+                  height:
+                    format: double
+                    type: number
+                  rotation:
+                    format: double
+                    type: number
+                  width:
+                    format: double
+                    type: number
+                  x:
+                    format: double
+                    type: number
+                  "y":
+                    format: double
+                    type: number
+                type: object
+              selection_color:
+                type: string
+              shape:
+                type: string
+              sort_order:
+                type: integer
+              text_color:
+                type: string
+            type: object
+          type: array
+        status:
+          type: string
+        times:
+          items:
+            properties:
+              end:
+                type: string
+              label:
+                type: string
+              start:
+                type: string
+            type: object
+          type: array
+        title:
+          type: string
+      type: object
+    FestivalMapDetailResponse:
+      properties:
+        map:
+          properties:
+            created_at:
+              type: string
+            description:
+              type: string
+            id:
+              format: int64
+              type: integer
+            map_image:
+              type: string
+            slug:
+              type: string
+            stall_count:
+              type: integer
+            stalls:
+              items:
+                properties:
+                  color:
+                    type: string
+                  id:
+                    format: int64
+                    type: integer
+                  map_id:
+                    format: int64
+                    type: integer
+                  occupants:
+                    items:
+                      properties:
+                        affiliate_id:
+                          format: int64
+                          nullable: true
+                          type: integer
+                        affiliate_name:
+                          type: string
+                        description:
+                          type: string
+                        event_carrd:
+                          type: string
+                        id:
+                          format: int64
+                          type: integer
+                        sort_order:
+                          type: integer
+                        stall_id:
+                          format: int64
+                          type: integer
+                        stall_type:
+                          type: string
+                        times:
+                          items:
+                            properties:
+                              end:
+                                type: string
+                              label:
+                                type: string
+                              start:
+                                type: string
+                            type: object
+                          type: array
+                        title:
+                          type: string
+                        type_label:
+                          type: string
+                      type: object
+                    type: array
+                  placement:
+                    properties:
+                      height:
+                        format: double
+                        type: number
+                      rotation:
+                        format: double
+                        type: number
+                      width:
+                        format: double
+                        type: number
+                      x:
+                        format: double
+                        type: number
+                      "y":
+                        format: double
+                        type: number
+                    type: object
+                  selection_color:
+                    type: string
+                  shape:
+                    type: string
+                  sort_order:
+                    type: integer
+                  text_color:
+                    type: string
+                type: object
+              type: array
+            status:
+              type: string
+            times:
+              items:
+                properties:
+                  end:
+                    type: string
+                  label:
+                    type: string
+                  start:
+                    type: string
+                type: object
+              type: array
+            title:
+              type: string
+          type: object
+      type: object
+    FestivalMapResponse:
+      properties:
+        map:
+          properties:
+            created_at:
+              type: string
+            description:
+              type: string
+            id:
+              format: int64
+              type: integer
+            map_image:
+              type: string
+            slug:
+              type: string
+            stall_count:
+              type: integer
+            stalls:
+              items:
+                properties:
+                  color:
+                    type: string
+                  id:
+                    format: int64
+                    type: integer
+                  map_id:
+                    format: int64
+                    type: integer
+                  occupants:
+                    items:
+                      properties:
+                        affiliate_id:
+                          format: int64
+                          nullable: true
+                          type: integer
+                        affiliate_name:
+                          type: string
+                        description:
+                          type: string
+                        event_carrd:
+                          type: string
+                        id:
+                          format: int64
+                          type: integer
+                        sort_order:
+                          type: integer
+                        stall_id:
+                          format: int64
+                          type: integer
+                        stall_type:
+                          type: string
+                        times:
+                          items:
+                            properties:
+                              end:
+                                type: string
+                              label:
+                                type: string
+                              start:
+                                type: string
+                            type: object
+                          type: array
+                        title:
+                          type: string
+                        type_label:
+                          type: string
+                      type: object
+                    type: array
+                  placement:
+                    properties:
+                      height:
+                        format: double
+                        type: number
+                      rotation:
+                        format: double
+                        type: number
+                      width:
+                        format: double
+                        type: number
+                      x:
+                        format: double
+                        type: number
+                      "y":
+                        format: double
+                        type: number
+                    type: object
+                  selection_color:
+                    type: string
+                  shape:
+                    type: string
+                  sort_order:
+                    type: integer
+                  text_color:
+                    type: string
+                type: object
+              type: array
+            status:
+              type: string
+            times:
+              items:
+                properties:
+                  end:
+                    type: string
+                  label:
+                    type: string
+                  start:
+                    type: string
+                type: object
+              type: array
+            title:
+              type: string
+          type: object
+      type: object
+    FestivalMapsResponse:
+      properties:
+        maps:
+          items:
+            properties:
+              created_at:
+                type: string
+              description:
+                type: string
+              id:
+                format: int64
+                type: integer
+              map_image:
+                type: string
+              slug:
+                type: string
+              stall_count:
+                type: integer
+              stalls:
+                items:
+                  properties:
+                    color:
+                      type: string
+                    id:
+                      format: int64
+                      type: integer
+                    map_id:
+                      format: int64
+                      type: integer
+                    occupants:
+                      items:
+                        properties:
+                          affiliate_id:
+                            format: int64
+                            nullable: true
+                            type: integer
+                          affiliate_name:
+                            type: string
+                          description:
+                            type: string
+                          event_carrd:
+                            type: string
+                          id:
+                            format: int64
+                            type: integer
+                          sort_order:
+                            type: integer
+                          stall_id:
+                            format: int64
+                            type: integer
+                          stall_type:
+                            type: string
+                          times:
+                            items:
+                              properties:
+                                end:
+                                  type: string
+                                label:
+                                  type: string
+                                start:
+                                  type: string
+                              type: object
+                            type: array
+                          title:
+                            type: string
+                          type_label:
+                            type: string
+                        type: object
+                      type: array
+                    placement:
+                      properties:
+                        height:
+                          format: double
+                          type: number
+                        rotation:
+                          format: double
+                          type: number
+                        width:
+                          format: double
+                          type: number
+                        x:
+                          format: double
+                          type: number
+                        "y":
+                          format: double
+                          type: number
+                      type: object
+                    selection_color:
+                      type: string
+                    shape:
+                      type: string
+                    sort_order:
+                      type: integer
+                    text_color:
+                      type: string
+                  type: object
+                type: array
+              status:
+                type: string
+              times:
+                items:
+                  properties:
+                    end:
+                      type: string
+                    label:
+                      type: string
+                    start:
+                      type: string
+                  type: object
+                type: array
+              title:
+                type: string
+            type: object
+          type: array
+      type: object
+    FestivalStall:
+      properties:
+        color:
+          type: string
+        id:
+          format: int64
+          type: integer
+        map_id:
+          format: int64
+          type: integer
+        occupants:
+          items:
+            properties:
+              affiliate_id:
+                format: int64
+                nullable: true
+                type: integer
+              affiliate_name:
+                type: string
+              description:
+                type: string
+              event_carrd:
+                type: string
+              id:
+                format: int64
+                type: integer
+              sort_order:
+                type: integer
+              stall_id:
+                format: int64
+                type: integer
+              stall_type:
+                type: string
+              times:
+                items:
+                  properties:
+                    end:
+                      type: string
+                    label:
+                      type: string
+                    start:
+                      type: string
+                  type: object
+                type: array
+              title:
+                type: string
+              type_label:
+                type: string
+            type: object
+          type: array
+        placement:
+          properties:
+            height:
+              format: double
+              type: number
+            rotation:
+              format: double
+              type: number
+            width:
+              format: double
+              type: number
+            x:
+              format: double
+              type: number
+            "y":
+              format: double
+              type: number
+          type: object
+        selection_color:
+          type: string
+        shape:
+          type: string
+        sort_order:
+          type: integer
+        text_color:
+          type: string
+      type: object
+    FestivalStallOccupant:
+      properties:
+        affiliate_id:
+          format: int64
+          nullable: true
+          type: integer
+        affiliate_name:
+          type: string
+        description:
+          type: string
+        event_carrd:
+          type: string
+        id:
+          format: int64
+          type: integer
+        sort_order:
+          type: integer
+        stall_id:
+          format: int64
+          type: integer
+        stall_type:
+          type: string
+        times:
+          items:
+            properties:
+              end:
+                type: string
+              label:
+                type: string
+              start:
+                type: string
+            type: object
+          type: array
+        title:
+          type: string
+        type_label:
+          type: string
+      type: object
     Font:
       properties:
         base:
@@ -1367,6 +1942,8 @@ components:
                 type: string
               token:
                 type: string
+              world:
+                type: string
             type: object
           type: array
       type: object
@@ -1443,6 +2020,8 @@ components:
           type: string
         token:
           type: string
+        world:
+          type: string
       type: object
     GaraponPlayerResponse:
       properties:
@@ -1465,6 +2044,8 @@ components:
             stamp_card_token:
               type: string
             token:
+              type: string
+            world:
               type: string
           type: object
       type: object
@@ -2096,6 +2677,307 @@ components:
             type: object
           type: array
       type: object
+    PublicFestivalMap:
+      properties:
+        description:
+          type: string
+        id:
+          format: int64
+          type: integer
+        is_active:
+          type: boolean
+        map_image:
+          type: string
+        slug:
+          type: string
+        stalls:
+          items:
+            properties:
+              color:
+                type: string
+              id:
+                format: int64
+                type: integer
+              occupants:
+                items:
+                  properties:
+                    affiliate:
+                      nullable: true
+                      properties:
+                        carrd_link:
+                          type: string
+                        discord_link:
+                          type: string
+                        logo:
+                          type: string
+                        name:
+                          type: string
+                        owners:
+                          items:
+                            type: string
+                          type: array
+                        subtitle:
+                          type: string
+                      type: object
+                    description:
+                      type: string
+                    event_carrd:
+                      type: string
+                    id:
+                      format: int64
+                      type: integer
+                    in_stamp_rally:
+                      type: boolean
+                    is_open:
+                      type: boolean
+                    raffle:
+                      nullable: true
+                      properties:
+                        id:
+                          format: int64
+                          type: integer
+                        prize_image:
+                          type: string
+                        title:
+                          type: string
+                      type: object
+                    rally_id:
+                      format: int64
+                      type: integer
+                    rally_title:
+                      type: string
+                    stall_type:
+                      type: string
+                    stamp_image:
+                      type: string
+                    times:
+                      items:
+                        properties:
+                          end:
+                            type: string
+                          label:
+                            type: string
+                          start:
+                            type: string
+                        type: object
+                      type: array
+                    title:
+                      type: string
+                    type_label:
+                      type: string
+                  type: object
+                type: array
+              placement:
+                properties:
+                  height:
+                    format: double
+                    type: number
+                  rotation:
+                    format: double
+                    type: number
+                  width:
+                    format: double
+                    type: number
+                  x:
+                    format: double
+                    type: number
+                  "y":
+                    format: double
+                    type: number
+                type: object
+              selection_color:
+                type: string
+              shape:
+                type: string
+              text_color:
+                type: string
+            type: object
+          type: array
+        stamp_rally_id:
+          format: int64
+          type: integer
+        stamp_rally_signup:
+          type: boolean
+        stamp_rally_title:
+          type: string
+        times:
+          items:
+            properties:
+              end:
+                type: string
+              label:
+                type: string
+              start:
+                type: string
+            type: object
+          type: array
+        title:
+          type: string
+      type: object
+    PublicFestivalMapSummary:
+      properties:
+        description:
+          type: string
+        id:
+          format: int64
+          type: integer
+        is_active:
+          type: boolean
+        map_image:
+          type: string
+        slug:
+          type: string
+        stall_count:
+          type: integer
+        times:
+          items:
+            properties:
+              end:
+                type: string
+              label:
+                type: string
+              start:
+                type: string
+            type: object
+          type: array
+        title:
+          type: string
+      type: object
+    PublicFestivalMapsResponse:
+      properties:
+        maps:
+          items:
+            properties:
+              description:
+                type: string
+              id:
+                format: int64
+                type: integer
+              is_active:
+                type: boolean
+              map_image:
+                type: string
+              slug:
+                type: string
+              stall_count:
+                type: integer
+              times:
+                items:
+                  properties:
+                    end:
+                      type: string
+                    label:
+                      type: string
+                    start:
+                      type: string
+                  type: object
+                type: array
+              title:
+                type: string
+            type: object
+          type: array
+      type: object
+    PublicFestivalStall:
+      properties:
+        color:
+          type: string
+        id:
+          format: int64
+          type: integer
+        occupants:
+          items:
+            properties:
+              affiliate:
+                nullable: true
+                properties:
+                  carrd_link:
+                    type: string
+                  discord_link:
+                    type: string
+                  logo:
+                    type: string
+                  name:
+                    type: string
+                  owners:
+                    items:
+                      type: string
+                    type: array
+                  subtitle:
+                    type: string
+                type: object
+              description:
+                type: string
+              event_carrd:
+                type: string
+              id:
+                format: int64
+                type: integer
+              in_stamp_rally:
+                type: boolean
+              is_open:
+                type: boolean
+              raffle:
+                nullable: true
+                properties:
+                  id:
+                    format: int64
+                    type: integer
+                  prize_image:
+                    type: string
+                  title:
+                    type: string
+                type: object
+              rally_id:
+                format: int64
+                type: integer
+              rally_title:
+                type: string
+              stall_type:
+                type: string
+              stamp_image:
+                type: string
+              times:
+                items:
+                  properties:
+                    end:
+                      type: string
+                    label:
+                      type: string
+                    start:
+                      type: string
+                  type: object
+                type: array
+              title:
+                type: string
+              type_label:
+                type: string
+            type: object
+          type: array
+        placement:
+          properties:
+            height:
+              format: double
+              type: number
+            rotation:
+              format: double
+              type: number
+            width:
+              format: double
+              type: number
+            x:
+              format: double
+              type: number
+            "y":
+              format: double
+              type: number
+          type: object
+        selection_color:
+          type: string
+        shape:
+          type: string
+        text_color:
+          type: string
+      type: object
     PublicGarapon:
       properties:
         details:
@@ -2159,6 +3041,23 @@ components:
               format: double
               type: number
           type: object
+      type: object
+    PublicStallAffiliate:
+      properties:
+        carrd_link:
+          type: string
+        discord_link:
+          type: string
+        logo:
+          type: string
+        name:
+          type: string
+        owners:
+          items:
+            type: string
+          type: array
+        subtitle:
+          type: string
       type: object
     PublicStamp:
       properties:
@@ -2380,10 +3279,20 @@ components:
           type: string
         entry_mode:
           type: string
+        festival_map_id:
+          format: int64
+          nullable: true
+          type: integer
+        festival_map_name:
+          type: string
         id:
           format: int64
           type: integer
         max_entries:
+          type: integer
+        occupant_id:
+          format: int64
+          nullable: true
           type: integer
         paid_total:
           format: double
@@ -2395,6 +3304,8 @@ components:
         rules:
           type: string
         signup_instructions:
+          type: string
+        stall_name:
           type: string
         status:
           type: string
@@ -2456,10 +3367,20 @@ components:
               type: string
             entry_mode:
               type: string
+            festival_map_id:
+              format: int64
+              nullable: true
+              type: integer
+            festival_map_name:
+              type: string
             id:
               format: int64
               type: integer
             max_entries:
+              type: integer
+            occupant_id:
+              format: int64
+              nullable: true
               type: integer
             paid_total:
               format: double
@@ -2471,6 +3392,8 @@ components:
             rules:
               type: string
             signup_instructions:
+              type: string
+            stall_name:
               type: string
             status:
               type: string
@@ -2620,10 +3543,20 @@ components:
               type: string
             entry_mode:
               type: string
+            festival_map_id:
+              format: int64
+              nullable: true
+              type: integer
+            festival_map_name:
+              type: string
             id:
               format: int64
               type: integer
             max_entries:
+              type: integer
+            occupant_id:
+              format: int64
+              nullable: true
               type: integer
             paid_total:
               format: double
@@ -2635,6 +3568,8 @@ components:
             rules:
               type: string
             signup_instructions:
+              type: string
+            stall_name:
               type: string
             status:
               type: string
@@ -2698,10 +3633,20 @@ components:
                 type: string
               entry_mode:
                 type: string
+              festival_map_id:
+                format: int64
+                nullable: true
+                type: integer
+              festival_map_name:
+                type: string
               id:
                 format: int64
                 type: integer
               max_entries:
+                type: integer
+              occupant_id:
+                format: int64
+                nullable: true
                 type: integer
               paid_total:
                 format: double
@@ -2713,6 +3658,8 @@ components:
               rules:
                 type: string
               signup_instructions:
+                type: string
+              stall_name:
                 type: string
               status:
                 type: string
@@ -3056,14 +4003,18 @@ components:
           type: string
         completed:
           type: boolean
+        garapon_draws_left:
+          type: integer
         garapon_title:
           type: string
-        garapon_token:
+        participant_name:
           type: string
         rally_id:
           format: int64
           type: integer
         rally_title:
+          type: string
+        world:
           type: string
       type: object
     StampLookupResponse:
@@ -3075,14 +4026,18 @@ components:
                 type: string
               completed:
                 type: boolean
+              garapon_draws_left:
+                type: integer
               garapon_title:
                 type: string
-              garapon_token:
+              participant_name:
                 type: string
               rally_id:
                 format: int64
                 type: integer
               rally_title:
+                type: string
+              world:
                 type: string
             type: object
           type: array
@@ -3109,6 +4064,12 @@ components:
               created_at:
                 type: string
               details:
+                type: string
+              festival_map_id:
+                format: int64
+                nullable: true
+                type: integer
+              festival_map_name:
                 type: string
               id:
                 format: int64
@@ -3180,6 +4141,10 @@ components:
                       type: integer
                     image:
                       type: string
+                    occupant_id:
+                      format: int64
+                      nullable: true
+                      type: integer
                     password:
                       type: string
                     paused:
@@ -3207,6 +4172,8 @@ components:
                       type: integer
                     sort_order:
                       type: integer
+                    stall_name:
+                      type: string
                     stamp_type:
                       type: string
                   type: object
@@ -3237,6 +4204,12 @@ components:
         created_at:
           type: string
         details:
+          type: string
+        festival_map_id:
+          format: int64
+          nullable: true
+          type: integer
+        festival_map_name:
           type: string
         id:
           format: int64
@@ -3308,6 +4281,10 @@ components:
                 type: integer
               image:
                 type: string
+              occupant_id:
+                format: int64
+                nullable: true
+                type: integer
               password:
                 type: string
               paused:
@@ -3335,6 +4312,8 @@ components:
                 type: integer
               sort_order:
                 type: integer
+              stall_name:
+                type: string
               stamp_type:
                 type: string
             type: object
@@ -3364,6 +4343,8 @@ components:
           type: integer
         token:
           type: string
+        world:
+          type: string
       type: object
     StampRallyCardResponse:
       properties:
@@ -3386,6 +4367,8 @@ components:
               format: int64
               type: integer
             token:
+              type: string
+            world:
               type: string
           type: object
       type: object
@@ -3435,6 +4418,8 @@ components:
                 type: integer
               token:
                 type: string
+              world:
+                type: string
             type: object
           type: array
         stamp_rally:
@@ -3456,6 +4441,12 @@ components:
             created_at:
               type: string
             details:
+              type: string
+            festival_map_id:
+              format: int64
+              nullable: true
+              type: integer
+            festival_map_name:
               type: string
             id:
               format: int64
@@ -3527,6 +4518,10 @@ components:
                     type: integer
                   image:
                     type: string
+                  occupant_id:
+                    format: int64
+                    nullable: true
+                    type: integer
                   password:
                     type: string
                   paused:
@@ -3554,6 +4549,8 @@ components:
                     type: integer
                   sort_order:
                     type: integer
+                  stall_name:
+                    type: string
                   stamp_type:
                     type: string
                 type: object
@@ -3658,6 +4655,12 @@ components:
               type: string
             details:
               type: string
+            festival_map_id:
+              format: int64
+              nullable: true
+              type: integer
+            festival_map_name:
+              type: string
             id:
               format: int64
               type: integer
@@ -3728,6 +4731,10 @@ components:
                     type: integer
                   image:
                     type: string
+                  occupant_id:
+                    format: int64
+                    nullable: true
+                    type: integer
                   password:
                     type: string
                   paused:
@@ -3755,6 +4762,8 @@ components:
                     type: integer
                   sort_order:
                     type: integer
+                  stall_name:
+                    type: string
                   stamp_type:
                     type: string
                 type: object
@@ -3782,6 +4791,10 @@ components:
           type: integer
         image:
           type: string
+        occupant_id:
+          format: int64
+          nullable: true
+          type: integer
         password:
           type: string
         paused:
@@ -3809,6 +4822,8 @@ components:
           type: integer
         sort_order:
           type: integer
+        stall_name:
+          type: string
         stamp_type:
           type: string
       type: object
@@ -3823,6 +4838,8 @@ components:
         participant_name:
           type: string
         rally_title:
+          type: string
+        world:
           type: string
       type: object
     StampSubmitResponse:
@@ -4059,6 +5076,10 @@ components:
           type: string
         lockable:
           type: boolean
+        locked:
+          type: boolean
+        locked_until:
+          type: string
         name:
           type: string
         open:
@@ -4099,6 +5120,10 @@ components:
               type: string
             lockable:
               type: boolean
+            locked:
+              type: boolean
+            locked_until:
+              type: string
             name:
               type: string
             open:
@@ -4140,6 +5165,10 @@ components:
               type: string
             lockable:
               type: boolean
+            locked:
+              type: boolean
+            locked_until:
+              type: string
             name:
               type: string
             open:
@@ -4186,6 +5215,10 @@ components:
                 type: string
               lockable:
                 type: boolean
+              locked:
+                type: boolean
+              locked_until:
+                type: string
               name:
                 type: string
               open:
@@ -4228,6 +5261,10 @@ components:
                 type: string
               lockable:
                 type: boolean
+              locked:
+                type: boolean
+              locked_until:
+                type: string
               name:
                 type: string
               open:
@@ -4425,13 +5462,13 @@ info:
     - **no `id`** -> **admin** channel: requires an authenticated active account
       (cookie or `?token=pat_...`); streams draws immediately plus winner card IDs.
 
-    Broadcast messages (each carries a `type` field): `resource_changed`, `cards_update`, `card_deleted`, `patterns_update`, `game_update`, `game_draw`, `halftime_minigame`, `halftime_prompt`, `draw_delay_update`, `details_update`, `auto_config`, `yoever`, `yoever_config`, `style_update`, `settings_update`, `log`.
+    Broadcast messages (each carries a `type` field): `resource_changed`, `cards_update`, `card_deleted`, `patterns_update`, `game_update`, `game_draw`, `halftime_minigame`, `halftime_prompt`, `draw_delay_update`, `details_update`, `auto_config`, `yoever`, `yoever_config`, `tea_room_unlocked`, `style_update`, `settings_update`, `log`.
 
     The **admin** channel also receives a `log` message per server log line
     (`{ "type": "log", "entry": LogEntry }`) for the live log tail - best-effort,
     sent only while an admin is connected.
   title: Senpan App Suite API
-  version: 3.18.0
+  version: 3.24.0
 openapi: 3.0.3
 paths:
   /api/account/change-password:
@@ -6774,6 +7811,335 @@ paths:
       summary: Client bootstrap config
       tags:
       - System
+  /api/festival-maps:
+    get:
+      description: |-
+        **Auth:** permission:festival-map
+
+        Every map whatever its status, each with a `stall_count`.
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FestivalMapsResponse'
+          description: Success
+      security:
+      - cookieAuth: []
+      - bearerAuth: []
+      summary: List maps
+      tags:
+      - Festival Map
+    post:
+      description: |-
+        **Auth:** permission:festival-map
+
+        A new map always starts `in_progress` - publishing is a separate PATCH.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              properties:
+                description:
+                  description: Markdown.
+                  type: string
+                map_image:
+                  description: The base floor-plan image the stalls are placed on.
+                  type: string
+                slug:
+                  description: Optional shortcode, so the map can be linked as `/festival-maps/obon-2026`
+                    instead of by id. Lowercase letters, numbers and dashes, 2-64
+                    characters; whatever is sent is trimmed, lowercased and has spaces/underscores
+                    folded into dashes first. An all-numeric shortcode is refused
+                    (it would be indistinguishable from a map id), and it must not
+                    already belong to another map.
+                  type: string
+                stalls:
+                  description: The PITCHES on the plan, replaced wholesale. A pitch
+                    carries only how it is drawn (shape, color, placement); who stands
+                    in it lives in its `occupants`, one entry per business - several
+                    when a booth changes hands between days, each with its own `times`.
+                    An occupant with no `times` runs the whole festival. Placements
+                    are clamped to 0-100% of the map box; unknown shapes/types fall
+                    back to "rect"/"other" and a color that isn't `#rrggbb` is dropped.
+                    `type_label` is the caption drawn under an occupant's title when
+                    its `stall_type` is `other` ("Omikuji", "Art Raffle"); it is stored
+                    whatever the type but only rendered for `other`. Occupants are
+                    reconciled BY ID so a rally stamp keeps naming the same one; an
+                    occupant with neither a title nor an affiliate is dropped, and
+                    a pitch left with no occupants is dropped with it.
+                  items:
+                    $ref: '#/components/schemas/FestivalStall'
+                  type: array
+                times:
+                  description: When the festival runs; several ranges are allowed.
+                  items:
+                    $ref: '#/components/schemas/EventTime'
+                  type: array
+                title:
+                  description: Title (required).
+                  type: string
+              type: object
+        description: Map fields.
+        required: true
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FestivalMapResponse'
+          description: Created
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: Title required, or an invalid shortcode
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: Shortcode already used by another map
+      security:
+      - cookieAuth: []
+      - bearerAuth: []
+      summary: Create a map
+      tags:
+      - Festival Map
+  /api/festival-maps/{id}:
+    delete:
+      description: |-
+        **Auth:** permission:festival-map
+
+        Deletes the map and its stalls. A stamp rally linked to it survives, with its stamps falling back to their affiliates.
+      parameters:
+      - description: Map id.
+        in: path
+        name: id
+        required: true
+        schema:
+          type: string
+      responses:
+        "204":
+          description: No Content
+      security:
+      - cookieAuth: []
+      - bearerAuth: []
+      summary: Delete a map
+      tags:
+      - Festival Map
+    get:
+      description: |-
+        **Auth:** permission:festival-map
+
+        The map with its stalls (affiliate name joined).
+      parameters:
+      - description: Map id.
+        in: path
+        name: id
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FestivalMapDetailResponse'
+          description: Success
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: Not found
+      security:
+      - cookieAuth: []
+      - bearerAuth: []
+      summary: Map detail
+      tags:
+      - Festival Map
+    patch:
+      description: |-
+        **Auth:** permission:festival-map
+
+        Publishing needs a base map image - the stalls are positioned against it.
+      parameters:
+      - description: Map id.
+        in: path
+        name: id
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              properties:
+                status:
+                  description: '"in_progress", "published" or "closed"; anything else
+                    reads as "in_progress".'
+                  type: string
+              type: object
+        description: Status.
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StatusResponse'
+          description: Success
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: Publishing without a map image
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: Not found
+      security:
+      - cookieAuth: []
+      - bearerAuth: []
+      summary: Set the publish status
+      tags:
+      - Festival Map
+    put:
+      description: |-
+        **Auth:** permission:festival-map
+
+        Full replace of the editable fields. Stalls are reconciled by id, so a stall a stamp rally names survives the edit; status is preserved (use PATCH).
+      parameters:
+      - description: Map id.
+        in: path
+        name: id
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              properties:
+                description:
+                  description: Markdown.
+                  type: string
+                map_image:
+                  description: The base floor-plan image the stalls are placed on.
+                  type: string
+                slug:
+                  description: Optional shortcode, so the map can be linked as `/festival-maps/obon-2026`
+                    instead of by id. Lowercase letters, numbers and dashes, 2-64
+                    characters; whatever is sent is trimmed, lowercased and has spaces/underscores
+                    folded into dashes first. An all-numeric shortcode is refused
+                    (it would be indistinguishable from a map id), and it must not
+                    already belong to another map.
+                  type: string
+                stalls:
+                  description: The PITCHES on the plan, replaced wholesale. A pitch
+                    carries only how it is drawn (shape, color, placement); who stands
+                    in it lives in its `occupants`, one entry per business - several
+                    when a booth changes hands between days, each with its own `times`.
+                    An occupant with no `times` runs the whole festival. Placements
+                    are clamped to 0-100% of the map box; unknown shapes/types fall
+                    back to "rect"/"other" and a color that isn't `#rrggbb` is dropped.
+                    `type_label` is the caption drawn under an occupant's title when
+                    its `stall_type` is `other` ("Omikuji", "Art Raffle"); it is stored
+                    whatever the type but only rendered for `other`. Occupants are
+                    reconciled BY ID so a rally stamp keeps naming the same one; an
+                    occupant with neither a title nor an affiliate is dropped, and
+                    a pitch left with no occupants is dropped with it.
+                  items:
+                    $ref: '#/components/schemas/FestivalStall'
+                  type: array
+                times:
+                  description: When the festival runs; several ranges are allowed.
+                  items:
+                    $ref: '#/components/schemas/EventTime'
+                  type: array
+                title:
+                  description: Title (required).
+                  type: string
+              type: object
+        description: Full map fields.
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OKResponse'
+          description: Success
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: Title required, or an invalid shortcode
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: Shortcode already used by another map
+      security:
+      - cookieAuth: []
+      - bearerAuth: []
+      summary: Replace a map
+      tags:
+      - Festival Map
+  /api/festival-maps/public:
+    get:
+      description: |-
+        **Auth:** public
+
+        Maps whose status is `published`; `is_active` reports that now falls inside one of the festival's datetime ranges.
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PublicFestivalMapsResponse'
+          description: Success
+      security: []
+      summary: Published maps
+      tags:
+      - Festival Map
+  /api/festival-maps/public/{id}:
+    get:
+      description: |-
+        **Auth:** public
+
+        One published map with every stall resolved for a visitor: the affiliate card, whether the stall is open right now, the stall's rally badge and stamp art when an OPEN stamp rally is linked to the map, and a `raffle` link when a raffle assigned to that stall is RUNNING - open and inside its availability window (a closed raffle, or one whose window has not opened, is left off rather than linking somewhere a visitor cannot enter). The path segment is the map's SHORTCODE or its numeric id; both always resolve, so a link posted before a shortcode existed keeps working. An unpublished map answers 404 rather than 403, so a draft's existence isn't confirmed.
+      parameters:
+      - description: Map shortcode or numeric id.
+        in: path
+        name: id
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PublicFestivalMap'
+          description: Success
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: Not found or not published
+      security: []
+      summary: Public map view
+      tags:
+      - Festival Map
   /api/fonts:
     get:
       description: |-
@@ -8597,9 +9963,22 @@ paths:
                     `single` (flat cost_per_entry) or `custom` (per-ticket tier_costs
                     ladder). Absent/unknown = `single`.'
                   type: string
+                festival_map_id:
+                  description: Optional Festival Map the raffle belongs to - the same
+                    grouping a Stamp Rally gets, so a festival's raffles, rallies
+                    and floor plan hang off one event.
+                  format: int64
+                  type: integer
                 max_entries:
                   description: Per-player cap, 1-100. Ignored in `custom` mode, where
                     the tier_costs length sets it.
+                  format: int64
+                  type: integer
+                occupant_id:
+                  description: Optional stall on that map (a pitch OCCUPANT id), so
+                    the stall's panel on the public plan links to the raffle. Cleared
+                    when `festival_map_id` is null, and dropped when it names a stall
+                    that isn't on the linked map.
                   format: int64
                   type: integer
                 pay_image:
@@ -8731,9 +10110,22 @@ paths:
                     `single` (flat cost_per_entry) or `custom` (per-ticket tier_costs
                     ladder). Absent/unknown = `single`.'
                   type: string
+                festival_map_id:
+                  description: Optional Festival Map the raffle belongs to - the same
+                    grouping a Stamp Rally gets, so a festival's raffles, rallies
+                    and floor plan hang off one event.
+                  format: int64
+                  type: integer
                 max_entries:
                   description: Per-player cap, 1-100. Ignored in `custom` mode, where
                     the tier_costs length sets it.
+                  format: int64
+                  type: integer
+                occupant_id:
+                  description: Optional stall on that map (a pitch OCCUPANT id), so
+                    the stall's panel on the public plan links to the raffle. Cleared
+                    when `festival_map_id` is null, and dropped when it names a stall
+                    that isn't on the linked map.
                   format: int64
                   type: integer
                 pay_image:
@@ -9453,12 +10845,25 @@ paths:
                 details:
                   description: Markdown.
                   type: string
+                festival_map_id:
+                  description: Optional Festival Map link. When set, each stamp's
+                    `occupant_id` names one of that map's pitch OCCUPANTS (not the
+                    pitch - a booth that changes hands between days hosts two different
+                    stalls) and the stamp takes its affiliate from that occupant;
+                    when null, every `occupant_id` is cleared.
+                  format: int64
+                  type: integer
                 not_stamped_image:
                   type: string
                 prizes:
                   items:
                     $ref: '#/components/schemas/StampRallyPrize'
                   type: array
+                public_signup:
+                  description: Whether the rally takes public self-service sign-ups.
+                    OMITTING it on a PUT sends false and TURNS SIGN-UP OFF - the save
+                    replaces the rally's fields, it does not merge them.
+                  type: boolean
                 redeem_image:
                   description: Where-to-redeem screenshot.
                   type: string
@@ -9583,12 +10988,25 @@ paths:
                 details:
                   description: Markdown.
                   type: string
+                festival_map_id:
+                  description: Optional Festival Map link. When set, each stamp's
+                    `occupant_id` names one of that map's pitch OCCUPANTS (not the
+                    pitch - a booth that changes hands between days hosts two different
+                    stalls) and the stamp takes its affiliate from that occupant;
+                    when null, every `occupant_id` is cleared.
+                  format: int64
+                  type: integer
                 not_stamped_image:
                   type: string
                 prizes:
                   items:
                     $ref: '#/components/schemas/StampRallyPrize'
                   type: array
+                public_signup:
+                  description: Whether the rally takes public self-service sign-ups.
+                    OMITTING it on a PUT sends false and TURNS SIGN-UP OFF - the save
+                    replaces the rally's fields, it does not merge them.
+                  type: boolean
                 redeem_image:
                   description: Where-to-redeem screenshot.
                   type: string
@@ -10271,7 +11689,7 @@ paths:
       description: |-
         **Auth:** permission:teahouse-tea-rooms
 
-        Partial update of the quick-toggle flags; absent fields are left unchanged.
+        Partial update of the quick-toggle flags; absent fields are left unchanged. `locked` and `locked_until` move independently: `locked` alone locks or unlocks the room, `locked_until` alone re-times a lock already in place. A lock with no `locked_until` stands until someone unlocks it; one with an expiry is lifted by the server when that moment passes (and announced over the WebSocket as `tea_room_unlocked`). Unlocking clears the expiry.
       parameters:
       - description: Tea-room id.
         in: path
@@ -10287,6 +11705,13 @@ paths:
                 discounted:
                   description: 50%-off flag.
                   type: boolean
+                locked:
+                  description: Locked/unlocked.
+                  type: boolean
+                locked_until:
+                  description: UTC RFC-3339 instant the lock lifts ('' = no expiry,
+                    manual unlock).
+                  type: string
                 open:
                   description: Open/closed.
                   type: boolean
@@ -10300,6 +11725,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/TeaRoomResponse'
           description: Success
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: Unreadable unlock time
         "404":
           content:
             application/json:
@@ -10309,7 +11740,7 @@ paths:
       security:
       - cookieAuth: []
       - bearerAuth: []
-      summary: Toggle open/discounted
+      summary: Toggle open/discounted/locked
       tags:
       - Tea Rooms
     put:
@@ -10778,6 +12209,8 @@ tags:
   name: Tea Rooms
 - description: Stamp-rally events (admin + tokenized public)
   name: Stamp Rally
+- description: Interactive festival floor plans and their stalls (admin + public)
+  name: Festival Map
 - description: Reading lists and Discord publishing
   name: Book Club
 - description: Scheduled Discord announcements, types, and roles

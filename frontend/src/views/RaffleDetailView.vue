@@ -12,6 +12,7 @@ import { useRouter } from 'vue-router'
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
 import MarkdownText from '@/components/common/MarkdownText.vue'
 import TurnstileWidget from '@/components/common/TurnstileWidget.vue'
+import WorldPicker from '@/components/common/ui/WorldPicker.vue'
 import {
   useRafflesStore,
   isRaffleEnterable,
@@ -22,6 +23,7 @@ import {
 import { assetUrl } from '@/lib/assets'
 import { endpoints } from '@/lib/endpoints'
 import { RAFFLE_LOOKUP_MIN_QUERY } from '@/lib/constants'
+import { savedRaffleSignup } from '@/lib/signups'
 import type { RaffleLookupEntry } from '@/types/api'
 
 const props = defineProps<{ id: string }>()
@@ -74,6 +76,9 @@ const costTiers = computed(() => {
   }))
 })
 
+/** Whether the form was filled from a previous entry made on this device. */
+const prefilledFromDevice = ref(false)
+
 // Cloudflare Turnstile bot check for the public sign-up (empty site key = disabled).
 const turnstileSiteKey = ref('')
 const turnstile = useTemplateRef<InstanceType<typeof TurnstileWidget>>('turnstile')
@@ -84,7 +89,25 @@ async function load(id: number): Promise<void> {
     return
   }
   const ok = await raffles.loadPublicRaffleById(id)
-  if (!ok) void router.replace({ name: 'raffles' })
+  if (!ok) {
+    void router.replace({ name: 'raffles' })
+    return
+  }
+
+  // This browser has entered this raffle before, so reuse the EXACT name and world
+  // it used. Entries merge on that pair: retyping it even slightly differently
+  // starts a SECOND entry and splits the tickets across both. That is precisely
+  // what the name search below exists to prevent - this just gets there without
+  // making the entrant search for themselves.
+  //
+  // Only the spelling is restored. How many entries they may still take is the
+  // server's business, not this browser's, so nothing here is treated as a count.
+  const mine = savedRaffleSignup(id)
+  prefilledFromDevice.value = !!mine
+  if (mine) {
+    raffles.raffleSignup.characterName = mine.name
+    raffles.raffleSignup.world = mine.world
+  }
 }
 
 onMounted(async () => {
@@ -133,6 +156,9 @@ function runLookup(): void {
 function useHit(hit: RaffleLookupEntry): void {
   raffles.raffleSignup.characterName = hit.character_name
   raffles.raffleSignup.world = hit.world
+  // Came from the search, not from this device's saved entry - the notice would
+  // be claiming the wrong source.
+  prefilledFromDevice.value = false
 }
 
 function back(): void {
@@ -308,6 +334,22 @@ function back(): void {
         class="raffle-signup-form"
       >
         <h3 class="mb-12">Enter This Raffle</h3>
+
+        <!--
+          Says where the name came from, because it is not something the entrant
+          typed on this visit. It also tells them adding entries is expected: the
+          per-player cap is a total, so someone who took 5 of 10 can come back for
+          the rest under the same name. How many remain is the server's answer,
+          not this browser's, so no count is claimed here.
+        -->
+        <p v-if="prefilledFromDevice" class="form-alert form-alert-info" role="status">
+          <font-awesome-icon :icon="['fas', 'circle-info']" class="form-alert-icon" />
+          <span>
+            You entered this raffle from this device. We've filled in the same name so any entries
+            you add here join the ones you already have instead of starting a second entry.
+          </span>
+        </p>
+
         <div class="field mb-10">
           <label class="field-label">Character Name</label>
           <input
@@ -316,10 +358,7 @@ function back(): void {
             aria-label="Character Name"
           />
         </div>
-        <div class="field mb-10">
-          <label class="field-label">World</label>
-          <input v-model="raffles.raffleSignup.world" placeholder="World" aria-label="World" />
-        </div>
+        <WorldPicker v-model="raffles.raffleSignup.world" class="mb-10" />
         <div v-if="raffles.selectedRaffle.max_entries > 1" class="field mb-10">
           <label class="field-label">
             Number of Entries (max {{ raffles.selectedRaffle.max_entries }})

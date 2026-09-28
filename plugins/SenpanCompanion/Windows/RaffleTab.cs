@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Numerics;
@@ -52,7 +52,8 @@ internal sealed class RaffleTab : TabBase
         await Apply(() =>
         {
             this.raffles = rafflesRes.Raffles;
-            if (detailRes != null)
+            // Only if the selection has not moved on while this was in flight.
+            if (detailRes != null && this.selectedRaffleId == selected)
                 this.detail = detailRes;
         });
     }
@@ -106,10 +107,23 @@ internal sealed class RaffleTab : TabBase
     {
         this.selectedRaffleId = id;
         this.pendingWinner = null;
+        // Clear the previous raffle's detail immediately, and only write back a
+        // fetch that still matches the selection - the pattern LoadRally and
+        // LoadGarapon already use. Without both, picking a raffle while another
+        // load was in flight left selectedRaffleId on the NEW raffle while the
+        // header, entrant table and winner controls still rendered the OLD one, so
+        // "Add entrant" and "Pick a winner" acted on a raffle that was not on
+        // screen. TabBase.Run's busy gate silently drops the second fetch, which is
+        // what made the mismatch stick.
+        this.detail = null;
         Run(async () =>
         {
             var d = await this.api.GetRaffleAsync(id);
-            await Apply(() => this.detail = d);
+            await Apply(() =>
+            {
+                if (this.selectedRaffleId == id)
+                    this.detail = d;
+            });
         });
     }
 

@@ -21,9 +21,11 @@ import FormActions from '@/components/common/ui/FormActions.vue'
 import { BOOK_CLUBS, clubWebhookKey, FALLBACK_GOOGLE_FONTS } from '@/lib/constants'
 import { applyUploadedFonts } from '@/lib/theme'
 import { useAppStore } from '@/stores/app'
+import { useAuthStore } from '@/stores/auth'
 import { useFontsStore, toUploadedFont } from '@/stores/fonts'
 
 const app = useAppStore()
+const auth = useAuthStore()
 const fonts = useFontsStore()
 
 /** Uploaded fonts' effective CSS family names, de-duplicated. */
@@ -116,6 +118,22 @@ watch(
               <span class="switch-knob"></span>
             </button>
           </FormField>
+          <FormField
+            label="Hide Custom Cards"
+            help="Takes only the Custom Card request off the public home page, for when requests are closed but games are still running. Hide Bingo already hides it. Existing request links keep working."
+          >
+            <button
+              type="button"
+              class="switch"
+              role="switch"
+              :class="{ 'is-on': app.hideCustomCards }"
+              :aria-checked="app.hideCustomCards"
+              aria-label="Hide Custom Cards on the public home page"
+              @click="app.settings.hide_custom_cards = app.hideCustomCards ? '0' : '1'"
+            >
+              <span class="switch-knob"></span>
+            </button>
+          </FormField>
         </section>
 
         <!-- Gameplay ----------------------------------------------------- -->
@@ -179,7 +197,10 @@ watch(
           <h4 class="section-heading">
             <font-awesome-icon :icon="['fad', 'font']" /> Fonts &amp; Branding
           </h4>
-          <FormField label="Google Fonts API Key">
+          <!-- Secret settings are blanked for non-admins on GET and ignored on
+               POST, so showing the field to a system-settings grantee would only
+               offer an input that silently does nothing. -->
+          <FormField v-if="auth.isAdmin" label="Google Fonts API Key">
             <input
               v-model="app.settings.google_fonts_api_key"
               placeholder="Enter API key for font autocomplete"
@@ -254,19 +275,24 @@ watch(
           <h4 class="section-heading">
             <font-awesome-icon :icon="['fad', 'book-open-cover']" /> Book Club Integrations
           </h4>
-          <template v-for="club in BOOK_CLUBS" :key="club.slug">
-            <FormField
-              :label="`${club.name} - Reading List Webhook URL`"
-              help="Publishes this club's reading lists - each item posted as its own embed to this channel. Kept private; never sent to non-admin visitors."
-            >
-              <input
-                v-model="app.settings[clubWebhookKey(club.slug)]"
-                placeholder="https://discord.com/api/webhooks/..."
-                :aria-label="club.name + ' reading list Discord webhook URL'"
-                type="password"
-                autocomplete="off"
-              />
-            </FormField>
+          <!-- Admin-only, like the Google Fonts key above: the webhook URLs are
+               secret settings, so a non-admin is served blanks and cannot save
+               them back. -->
+          <template v-if="auth.isAdmin">
+            <template v-for="club in BOOK_CLUBS" :key="club.slug">
+              <FormField
+                :label="`${club.name} - Reading List Webhook URL`"
+                help="Publishes this club's reading lists - each item posted as its own embed to this channel. Kept private; never sent to non-admin visitors."
+              >
+                <input
+                  v-model="app.settings[clubWebhookKey(club.slug)]"
+                  placeholder="https://discord.com/api/webhooks/..."
+                  :aria-label="club.name + ' reading list Discord webhook URL'"
+                  type="password"
+                  autocomplete="off"
+                />
+              </FormField>
+            </template>
           </template>
           <FormField
             label="AniList API URL"

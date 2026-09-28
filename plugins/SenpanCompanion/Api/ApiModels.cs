@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 
 namespace SenpanCompanion.Api;
@@ -298,15 +298,25 @@ public sealed class Garapon
     public string StampRallyTitle { get; set; } = string.Empty; // joined for display when linked
     public int PlayerCount { get; set; }                        // admin-list aggregate
     public int DrawCount { get; set; }                          // admin-list aggregate
+    // Draws a new link gets when the caller doesn't say. The server has always sent
+    // this; omitting it here is why the plugin issued every link with 1 draw while
+    // the web admin and the public sign-up both honored the garapon's own default.
+    public int DefaultDraws { get; set; }
 }
 
 // A per-player drawing link. StampCardToken is non-empty only when the garapon is
-// tied to a rally and a dual card was auto-issued (it equals Token).
+// tied to a rally and a card was auto-issued alongside this link; it is a DIFFERENT
+// token from Token. The two used to be one string, which made the shareable stamp
+// card a spendable drawing link - a screenshot of the card burned the player's
+// draws, and those cannot be undone.
 public sealed class GaraponPlayer
 {
     public long Id { get; set; }
     public string Token { get; set; } = string.Empty;
     public string PlayerName { get; set; } = string.Empty;
+    // Home world, stored apart from the name as every system now records one.
+    // Empty on links issued before that change, or entered without one.
+    public string World { get; set; } = string.Empty;
     public int MaxDraws { get; set; }
     public int DrawsUsed { get; set; }
     public string StampCardToken { get; set; } = string.Empty;
@@ -374,6 +384,9 @@ public sealed class StampRallyCard
     public long Id { get; set; }
     public string Token { get; set; } = string.Empty;
     public string ParticipantName { get; set; } = string.Empty;
+    // Home world, stored apart from the name. Empty on cards issued before that
+    // change, or entered without one.
+    public string World { get; set; } = string.Empty;
     public bool Completed { get; set; }
     public int CollectedCount { get; set; }
 }
@@ -414,10 +427,10 @@ public sealed class StampRallyLogsResponse
 // -- Tea Rooms ------------------------------------------------------------------
 
 // A bookable tea room. The plugin surfaces only the compact operator view - room
-// number, name, owner, per-half-hour cost, and the two quick-toggle status flags
-// (open/closed and the 50%-off discount). The server model carries more (subtitle,
-// hashtags, image, embed colour, seasonal/lockable, ...) that the in-game panel
-// doesn't need, so those fields are intentionally omitted here.
+// number, name, owner, per-half-hour cost, the two quick-toggle status flags
+// (open/closed and the 50%-off discount), and the lock. The server model carries
+// more (subtitle, hashtags, image, embed colour, seasonal/lockable, ...) that the
+// in-game panel doesn't need, so those fields are intentionally omitted here.
 public sealed class TeaRoom
 {
     public long Id { get; set; }
@@ -428,6 +441,13 @@ public sealed class TeaRoom
     public long CostPerHalfHour { get; set; }
     public bool Open { get; set; }
     public bool Discounted { get; set; }
+    // Whether the room is locked right now (the server's `lockable` flag, which
+    // only says a room CAN be locked, is a different thing and isn't shown here).
+    public bool Locked { get; set; }
+    // When the lock lifts, as a UTC RFC-3339 instant; empty means it stands until
+    // somebody unlocks the room. The server sweeps expiries and announces each
+    // one over the WebSocket (see LiveConnection.TeaRoomUnlocked).
+    public string LockedUntil { get; set; } = string.Empty;
 }
 
 // GET /api/tea-rooms also returns the shared Discord webhook, but the plugin never

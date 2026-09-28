@@ -2,6 +2,7 @@ package store_test
 
 import (
 	"errors"
+	"math"
 	"testing"
 	"time"
 
@@ -117,6 +118,42 @@ func TestAddOrCreateRaffleEntry(t *testing.T) {
 	}
 	if e, _ := s.GetRaffleEntry(id, "Cloud", "Gaia"); e == nil || e.NumEntries != 3 {
 		t.Fatalf("over-cap add must not mutate: entry=%+v; want NumEntries=3", e)
+	}
+}
+
+// TestAddOrCreateRaffleEntryOverflow pins the cap check against integer overflow.
+// The check used to sum first (prevEntries + num) and compare, so a num near
+// MaxInt64 wrapped negative, slipped past "> maxEntries", and ran the UPDATE -
+// which pushed num_entries beyond int64 and left SQLite storing it as REAL, a
+// value no read path can scan back. That stranded the whole raffle: the staff
+// detail view and the entry-delete route both 500'd on the scan, so the poisoned
+// row could not even be removed. The cap must reject it and touch nothing.
+func TestAddOrCreateRaffleEntryOverflow(t *testing.T) {
+	s := newTestStore(t)
+	id, err := s.CreateRaffle(&model.Raffle{Title: "Overflow", MaxEntries: 3})
+	if err != nil {
+		t.Fatalf("CreateRaffle: %v", err)
+	}
+
+	// A row must already exist: with prevEntries==0 the sum cannot wrap, so the
+	// overflow is only reachable on the second sign-up for the same character.
+	if _, _, _, _, err := s.AddOrCreateRaffleEntry(id, "Aria", "Gilgamesh", 1, 3); err != nil {
+		t.Fatalf("seed entry: %v", err)
+	}
+
+	_, total, _, _, err := s.AddOrCreateRaffleEntry(id, "Aria", "Gilgamesh", math.MaxInt64, 3)
+	if !errors.Is(err, store.ErrRaffleEntryLimit) {
+		t.Fatalf("overflowing add: err=%v total=%d; want ErrRaffleEntryLimit", err, total)
+	}
+
+	// The row is untouched and still readable - the scan is the part that used to
+	// break, so read it back rather than trusting the return values.
+	e, err := s.GetRaffleEntry(id, "Aria", "Gilgamesh")
+	if err != nil {
+		t.Fatalf("entry unreadable after overflowing add (num_entries widened to REAL?): %v", err)
+	}
+	if e == nil || e.NumEntries != 1 {
+		t.Fatalf("overflowing add must not mutate: entry=%+v; want NumEntries=1", e)
 	}
 }
 
@@ -822,5 +859,121 @@ func TestSetRaffleEntryPaidClampsToTickets(t *testing.T) {
 	raffle, _ := s.GetRaffle(id)
 	if got := raffle.AmountCollected(*e); got != 200 {
 		t.Errorf("collected = %v; want 200, not a price for tickets nobody bought", got)
+	}
+}
+
+// TestLookupRaffleEntriesEscapesBackslash covers the gap the wildcard test above
+// leaves. That one queries a backslash but only asserts unrelated names are not
+// matched, which the buggy version satisfied: escapeLikePattern "escaped" the
+// escape character by replacing a backslash with a backslash, a no-op, so a typed
+// backslash stayed live and reached SQLite as a dangling ESCAPE. Assert instead
+// that a backslash behaves as the literal character somebody typed.
+func TestLookupRaffleEntriesEscapesBackslash(t *testing.T) {
+	s := newTestStore(t)
+	id, _ := s.CreateRaffle(&model.Raffle{Title: "Backslash", MaxEntries: 1})
+	_, _ = s.CreateRaffleEntry(id, `Back\slash`, "Hades", 1)
+	_, _ = s.CreateRaffleEntry(id, "Aria", "Gilgamesh", 1)
+
+	hits, _, err := s.LookupRaffleEntries(id, `\`, 50)
+	if err != nil {
+		t.Fatalf(`LookupRaffleEntries(\): %v`, err)
+	}
+	if len(hits) != 1 || hits[0].CharacterName != `Back\slash` {
+		t.Errorf(`search for a backslash returned %+v; want just the entrant whose name contains one`, hits)
+	}
+
+	// "\%" is a backslash followed by a percent: two literal characters, matching
+	// nobody here. Unescaped it read as an escaped percent and matched the lot.
+	if hits, _, err := s.LookupRaffleEntries(id, `\%`, 50); err != nil || len(hits) != 0 {
+		t.Errorf(`search for \%% returned %d hits (err=%v); want 0`, len(hits), err)
+	}
+}
+
+// TestPickRaffleWinnerWeightsByTickets is the weighting test the suite thought it
+// already had. Every existing PickRaffleWinner test builds a scenario with exactly
+// ONE eligible entry, so the per-ticket weighting - the whole point of buying more
+// tickets - was never asserted: a draw that ignored weights entirely, or that used
+// NumEntries where it should use the paid count, passed the suite unchanged.
+//
+// Weighting is probabilistic, so this asserts the distribution rather than any one
+// draw: with a 1:9 split over 400 draws, the heavy entrant must win clearly more
+// often. The bounds are wide enough not to flake and tight enough that "weights
+// ignored" (a 50/50 split) fails every time.
+func TestPickRaffleWinnerWeightsByTickets(t *testing.T) {
+	s := newTestStore(t)
+	id, _ := s.CreateRaffle(&model.Raffle{Title: "Weighted", MaxEntries: 20, CostPerEntry: 100})
+
+	light, _ := s.CreateRaffleEntry(id, "Light", "Gilgamesh", 1)
+	heavy, _ := s.CreateRaffleEntry(id, "Heavy", "Hades", 9)
+	if _, err := s.SetRaffleEntryPaid(light, true, 0, 0); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.SetRaffleEntryPaid(heavy, true, 0, 0); err != nil {
+		t.Fatal(err)
+	}
+
+	const draws = 400
+	wins := map[string]int{}
+	for range draws {
+		w, err := s.PickRaffleWinner(id, true)
+		if err != nil {
+			t.Fatalf("PickRaffleWinner: %v", err)
+		}
+		if w == nil {
+			t.Fatal("PickRaffleWinner returned no entry despite two paid entrants")
+		}
+		wins[w.CharacterName]++
+	}
+	if wins["Light"]+wins["Heavy"] != draws {
+		t.Fatalf("unexpected winners: %v", wins)
+	}
+	// True ratio is 9:1, so ~360/40. Anything at or below a coin flip means the
+	// ticket count is not influencing the draw at all.
+	if wins["Heavy"] <= wins["Light"] {
+		t.Errorf("9-ticket entrant won %d of %d against a 1-ticket entrant; weighting is not applied",
+			wins["Heavy"], draws)
+	}
+	if wins["Heavy"] < draws*60/100 {
+		t.Errorf("9-ticket entrant won only %d of %d; expected a clear majority under 9:1 weighting",
+			wins["Heavy"], draws)
+	}
+	// And the light entrant must still be reachable - weighting, not exclusion.
+	if wins["Light"] == 0 {
+		t.Error("1-ticket entrant never won across 400 draws; they should still be drawable")
+	}
+}
+
+// TestPickRaffleWinnerPaidOnlyUsesPaidTickets pins the other half of the weighting
+// rule: in paid-only mode an entry is worth min(PaidEntries, NumEntries), not its
+// full ticket count. A partly-settled row must weigh only what has been paid for.
+func TestPickRaffleWinnerPaidOnlyUsesPaidTickets(t *testing.T) {
+	s := newTestStore(t)
+	id, _ := s.CreateRaffle(&model.Raffle{Title: "PartPaid", MaxEntries: 20, CostPerEntry: 100})
+
+	// Ten tickets, only one of them settled.
+	part, _ := s.CreateRaffleEntry(id, "Part", "Gilgamesh", 10)
+	if _, err := s.SetRaffleEntryPaid(part, true, 1, 0); err != nil {
+		t.Fatalf("settle one ticket: %v", err)
+	}
+	// Nine tickets, all settled.
+	full, _ := s.CreateRaffleEntry(id, "Full", "Hades", 9)
+	if _, err := s.SetRaffleEntryPaid(full, true, 0, 0); err != nil {
+		t.Fatal(err)
+	}
+
+	const draws = 400
+	wins := map[string]int{}
+	for range draws {
+		w, err := s.PickRaffleWinner(id, true)
+		if err != nil || w == nil {
+			t.Fatalf("PickRaffleWinner: w=%v err=%v", w, err)
+		}
+		wins[w.CharacterName]++
+	}
+	// Weights are 1 (paid) vs 9, not 10 vs 9. If the unpaid tickets counted, the
+	// two would be near even instead of a clear 9:1 split.
+	if wins["Full"] <= wins["Part"] {
+		t.Errorf("paid-only draw counted unsettled tickets: Full %d vs Part %d of %d",
+			wins["Full"], wins["Part"], draws)
 	}
 }

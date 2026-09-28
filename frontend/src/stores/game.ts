@@ -404,25 +404,70 @@ export const useGameStore = defineStore('game', () => {
    * - asking for more than the cap would silently come back truncated, and a
    *   client-side sort over a truncated list is wrong in a way that looks right.
    */
+  /**
+   * Coalesces overlapping loads. Every winners-log DELETE echoes back over the
+   * WebSocket as a resource_changed, and admin.ts calls this on each one - so
+   * clearing a handful of entries used to start that many full re-pages at once,
+   * all racing to write the same ref. Callers still get a promise that resolves
+   * when the data is there; they just share one walk of the log.
+   */
+  let winnersLogInFlight: Promise<void> | null = null
+
   async function loadWinnersLog(): Promise<void> {
+    if (winnersLogInFlight) return winnersLogInFlight
+    const run = loadWinnersLogOnce()
+    winnersLogInFlight = run
+    try {
+      await run
+    } finally {
+      // Cleared unconditionally, and only for OUR run - never latch a settled
+      // promise here, or every later refresh returns it and silently does nothing.
+      if (winnersLogInFlight === run) winnersLogInFlight = null
+    }
+  }
+
+  /**
+   * Trailing-debounced reload, for the live-invalidation path.
+   *
+   * The server emits one `resource_changed` PER DELETED ROW and broadcasts it back
+   * to the deleting client too, so clearing forty rows arrives as forty events.
+   * The in-flight guard above only merges calls that OVERLAP - events landing
+   * between loads each start another full walk of the log. Waiting for the burst
+   * to stop collapses them into one reload however they are spaced.
+   *
+   * Deliberately not applied to loadWinnersLog itself: opening the tab should not
+   * sit behind a timer.
+   */
+  let winnersLogDebounce: ReturnType<typeof setTimeout> | null = null
+
+  function refreshWinnersLogSoon(): void {
+    if (winnersLogDebounce) clearTimeout(winnersLogDebounce)
+    winnersLogDebounce = setTimeout(() => {
+      winnersLogDebounce = null
+      void loadWinnersLog()
+    }, 250)
+  }
+
+  async function loadWinnersLogOnce(): Promise<void> {
     winnersLogLoading.value = true
     try {
       const PER_PAGE = 200
-      const all: WinnersLogEntry[] = []
-      let page = 1
-      let total = 0
-      do {
-        const data = await endpoints.winnersLog.list({
-          page,
-          perPage: PER_PAGE,
-          sort: 'logged_at',
-          dir: 'desc',
-        })
-        all.push(...data.entries)
-        total = data.total || all.length
-        page++
-      } while (all.length < total && all.length > 0)
-      winnersLog.value = all
+      const pageAt = (page: number) =>
+        endpoints.winnersLog.list({ page, perPage: PER_PAGE, sort: 'logged_at', dir: 'desc' })
+
+      // Page 1 first, because only it can tell us how many there are - then the
+      // rest AT ONCE. Walking them serially meant a venue with a couple of years
+      // of history waited on fifteen round trips in sequence before a single row
+      // painted; this is two round trips regardless of size.
+      const first = await pageAt(1)
+      const total = first.total || first.entries.length
+      const pages = Math.ceil(total / PER_PAGE)
+      const rest =
+        pages > 1
+          ? await Promise.all(Array.from({ length: pages - 1 }, (_, i) => pageAt(i + 2)))
+          : []
+
+      winnersLog.value = [first.entries, ...rest.map((r) => r.entries)].flat()
       winnersLogTotal.value = total
     } catch (e) {
       ui.notify((e as Error).message, 'error')
@@ -444,10 +489,12 @@ export const useGameStore = defineStore('game', () => {
       await endpoints.winnersLog.delete(id)
       ui.notify('Entry deleted', 'info')
       await loadWinnersLog()
-      // If that emptied the last page, step back one so we don't strand the user.
+      // If that emptied the list, step back a page so we don't strand the user on
+      // an empty one. No second reload: the store holds the WHOLE log and the
+      // table paginates it client-side, so re-fetching would return exactly what
+      // was just fetched.
       if (winnersLog.value.length === 0 && winnersLogPage.value > 1) {
         winnersLogPage.value--
-        await loadWinnersLog()
       }
     } catch (e) {
       ui.notify((e as Error).message, 'error')
@@ -466,14 +513,15 @@ export const useGameStore = defineStore('game', () => {
       ))
     )
       return 0
-    let done = 0
-    for (const id of ids) {
-      try {
-        await endpoints.winnersLog.delete(id)
-        done++
-      } catch (e) {
-        ui.notify((e as Error).message, 'error')
-      }
+    // Concurrently, not one after another: deleting forty selected rows used to be
+    // forty sequential round trips before the single reload at the end. allSettled
+    // so one failure doesn't abandon the rest, and the errors are reported once
+    // rather than as a stack of toasts.
+    const results = await Promise.allSettled(ids.map((id) => endpoints.winnersLog.delete(id)))
+    const done = results.filter((r) => r.status === 'fulfilled').length
+    const failed = results.length - done
+    if (failed) {
+      ui.notify(`${failed} entr${failed === 1 ? 'y' : 'ies'} could not be deleted`, 'error')
     }
     if (done) {
       ui.notify(`${done} entr${done === 1 ? 'y' : 'ies'} deleted`, 'info')
@@ -549,6 +597,7 @@ export const useGameStore = defineStore('game', () => {
     dismissHalftime,
     loadFrequentWinners,
     loadWinnersLog,
+    refreshWinnersLogSoon,
     deleteWinnerLogEntry,
     deleteWinnerLogEntries,
     deleteAllWinnersLog,

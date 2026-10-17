@@ -164,6 +164,45 @@ func TestFontServe_OriginGate(t *testing.T) {
 		}
 	})
 
+	// Safari fetches @font-face in no-cors mode: no Origin, and a Referer naming
+	// the embedding page (trimmed to its origin, being cross-site). These are the
+	// headers an iPhone on an allowlisted Carrd site actually sent.
+	safari := func(referer string) map[string]string {
+		return map[string]string{"Referer": referer, "Sec-Fetch-Site": "cross-site", "Sec-Fetch-Dest": "font"}
+	}
+
+	t.Run("safari: allowlisted page in the Referer is served", func(t *testing.T) {
+		for _, ref := range []string{"https://mysite.carrd.co/", "https://MySite.Carrd.co/about"} {
+			resp := env.getWithHeaders(t, path, safari(ref))
+			resp.Body.Close()
+			if resp.StatusCode != http.StatusOK {
+				t.Errorf("Referer %q = %d; want 200", ref, resp.StatusCode)
+			}
+			if acao := resp.Header.Get("Access-Control-Allow-Origin"); acao != "" {
+				t.Errorf("Referer %q: ACAO = %q; want none (a no-cors response is never CORS-checked)", ref, acao)
+			}
+		}
+	})
+
+	t.Run("safari: non-listed page in the Referer is refused", func(t *testing.T) {
+		resp := env.getWithHeaders(t, path, safari("https://other.carrd.co/"))
+		resp.Body.Close()
+		if resp.StatusCode != http.StatusForbidden {
+			t.Errorf("foreign Referer = %d; want 403", resp.StatusCode)
+		}
+	})
+
+	t.Run("a refused Origin is not rescued by an allowlisted Referer", func(t *testing.T) {
+		resp := env.getWithHeaders(t, path, map[string]string{
+			"Origin":  "https://other.carrd.co",
+			"Referer": "https://mysite.carrd.co/",
+		})
+		resp.Body.Close()
+		if resp.StatusCode != http.StatusForbidden {
+			t.Errorf("foreign Origin + listed Referer = %d; want 403", resp.StatusCode)
+		}
+	})
+
 	t.Run("allowlists are per font", func(t *testing.T) {
 		// A second font with no origins: the same site must NOT get it.
 		fontsDir := filepath.Join(env.srv.WebRootForTest(), "fonts")

@@ -760,10 +760,13 @@ the built SPA so redeploys never wipe them (full guide in `deploy/README.md`):
 - **Font host (protected serving)**: uploaded fonts are licensed assets and are
   NOT served statically. The Go server streams them via rotating tokenized URLs
   (`/api/fonts/pub/kit.css` + `/api/fonts/pub/f/{token}`, `fontserve.go`) gated
-  **per font** by its own origin allowlist (Font Upload -> Edit); cross-origin
-  `@font-face` requires the echoed CORS header, so non-listed sites can't
-  render the fonts, and `kit.css` only emits each requesting site's allowed
-  fonts. The `fonts.senpan.cafe` vhost is a **reverse proxy** (`ProxyPass / ->
+  **per font** by its own origin allowlist (Font Upload -> Edit); Chrome and
+  Firefox require the echoed CORS header on cross-origin `@font-face`, so
+  non-listed sites can't render the fonts, and `kit.css` only emits each
+  requesting site's allowed fonts. **Safari sends no `Origin` on font loads**
+  (WebKit fetches `@font-face` in `no-cors` mode), so an Origin-less request is
+  judged by its `Referer`'s site against the same allowlist - gate on `Origin`
+  alone and every iPhone gets a 403 while desktop looks fine. The `fonts.senpan.cafe` vhost is a **reverse proxy** (`ProxyPass / ->
 http://localhost:8080/api/fonts/pub/`); external Carrd sites embed
   `https://fonts.senpan.cafe/kit.css`. The SPA loads fonts same-origin through
   the `/api` ProxyPass, so it never depends on any allowlist. Deploy

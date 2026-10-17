@@ -41,9 +41,13 @@ import (
 //   - Same-origin requests (the SPA, dev via the Vite proxy) - always allowed.
 //   - Cross-origin requests - allowed only when the Origin header is on THAT
 //     FONT's allowlist (Atelier -> Font Upload -> Edit); the response echoes the
-//     origin in Access-Control-Allow-Origin, which browsers REQUIRE for
+//     origin in Access-Control-Allow-Origin, which Chrome and Firefox REQUIRE for
 //     cross-origin @font-face, so a non-listed site cannot render the font.
-//   - No usable Origin (address bar, wget, casual scrapers) - 403.
+//   - Safari (WebKit) is the exception: it fetches @font-face sources in
+//     no-cors mode, so its requests carry NO Origin and it never reads the CORS
+//     header. Its only signal is the Referer, which names the embedding page, so
+//     an Origin-less request is served when the Referer's site is allowlisted.
+//   - Neither usable (address bar, wget, casual scrapers) - 403.
 //
 // The kit stylesheet is additionally filtered by the requesting site: a
 // foreign Referer only sees @font-face rules for fonts that allow its origin.
@@ -266,11 +270,18 @@ func fontOriginAllowed(origin string, m fontMeta) bool {
 	return slices.Contains(m.Origins, norm)
 }
 
+// refererSite returns the "scheme://host" of a parsed Referer, lowercased the
+// way allowlist entries are stored.
+func refererSite(u *url.URL) string {
+	return strings.ToLower(u.Scheme) + "://" + strings.ToLower(u.Host)
+}
+
 // fontRequestAllowed decides whether a font-file request may be served given
 // the font's metadata, and returns the Origin value to echo in
 // Access-Control-Allow-Origin ("" when the request carried none). Same-origin
-// requests (the SPA) are always allowed; cross-origin requests need an Origin
-// on the font's allowlist; requests with no usable Origin at all (address bar,
+// requests (the SPA) are always allowed; cross-origin requests need their site
+// on the font's allowlist - named by the Origin header, or by the Referer when
+// there is no Origin (Safari); requests naming no site at all (address bar,
 // plain fetch tools) are refused.
 func (s *Server) fontRequestAllowed(r *http.Request, m fontMeta) (echoOrigin string, allowed bool) {
 	if origin := r.Header.Get("Origin"); origin != "" {
@@ -280,16 +291,26 @@ func (s *Server) fontRequestAllowed(r *http.Request, m fontMeta) (echoOrigin str
 		if fontOriginAllowed(origin, m) {
 			return origin, true
 		}
+		// A CORS request from a non-listed site. Its Referer is not consulted:
+		// the Origin is the browser's own answer, and it said no.
 		return "", false
 	}
-	// No Origin header. Browsers send one on every cross-origin font fetch, so
-	// only same-origin loads may land here (some browsers omit Origin on those).
+	// No Origin header: a same-origin load (some browsers omit Origin on those),
+	// or Safari, which fetches every @font-face in no-cors mode and so never
+	// sends one - even cross-origin.
 	if r.Header.Get("Sec-Fetch-Site") == "same-origin" {
 		return "", true
 	}
 	if ref := r.Header.Get("Referer"); ref != "" {
-		if u, err := url.Parse(ref); err == nil && sameHost(u.Hostname(), r.Host) {
-			return "", true
+		if u, err := url.Parse(ref); err == nil {
+			if sameHost(u.Hostname(), r.Host) {
+				return "", true
+			}
+			// Safari names the embedding page here (trimmed to its origin, being
+			// cross-site). Nothing to echo: a no-cors response is never CORS-checked.
+			if slices.Contains(m.Origins, refererSite(u)) {
+				return "", true
+			}
 		}
 	}
 	return "", false
@@ -319,7 +340,7 @@ func (s *Server) handleFontKitCSS(w http.ResponseWriter, r *http.Request) {
 	refOrigin := ""
 	if ref := r.Header.Get("Referer"); ref != "" {
 		if u, err := url.Parse(ref); err == nil && !sameHost(u.Hostname(), r.Host) {
-			refOrigin = strings.ToLower(u.Scheme) + "://" + strings.ToLower(u.Host)
+			refOrigin = refererSite(u)
 		}
 	}
 
@@ -367,8 +388,9 @@ func (s *Server) handleFontKitCSS(w http.ResponseWriter, r *http.Request) {
 // handleFontPublicFile streams a font file identified by its opaque token,
 // applying the owning font's origin gate. The echoed
 // Access-Control-Allow-Origin is what lets an allowed site's browser actually
-// use the font - cross-origin @font-face loads hard-require CORS, so this
-// check is enforcement, not advice.
+// use the font - Chrome and Firefox hard-require CORS on cross-origin
+// @font-face, so for them this check is enforcement, not advice. Safari skips
+// CORS for fonts entirely, which is why the gate also answers by Referer.
 //
 //	Endpoint:  GET /api/fonts/pub/f/{token}
 //	Auth:      public (per-font origin gate)
@@ -381,7 +403,10 @@ func (s *Server) handleFontPublicFile(w http.ResponseWriter, r *http.Request) {
 	}
 	origin, allowed := s.fontRequestAllowed(r, s.fontMetaMap()[groupKey])
 	// The response varies by Origin (both the ACAO header and the 403), so
-	// caches must key on it - set even on the refusal path.
+	// caches must key on it - set even on the refusal path. The Referer can also
+	// decide it, but stays out of Vary: no shared cache stores this (it is
+	// private), the 403 carries no freshness, and keying the browser cache on a
+	// per-page Referer would re-download every font on each navigation.
 	w.Header().Set("Vary", "Origin")
 	if !allowed {
 		writeError(w, http.StatusForbidden, "This font may only be used by approved sites")

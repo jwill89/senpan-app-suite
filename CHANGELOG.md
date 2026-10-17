@@ -1739,6 +1739,20 @@ First tracked release - establishes versioning for the current production build.
 
 ## Backend
 
+### [3.24.1] - 2026-10-16
+
+#### Fixed
+
+- **Hosted fonts now load in Safari, including on every iPhone.** The font gate
+  identified a site by its `Origin` header, but Safari fetches `@font-face` in
+  `no-cors` mode and so never sends one - its only clue is a `Referer` naming the
+  embedding page. Every font-file request from Safari on an allowlisted Carrd site
+  was refused with a 403 while the kit around it loaded fine, so the page fell
+  back to a system font; Chrome and Firefox were unaffected because they send the
+  `Origin`. An Origin-less request is now served when its `Referer`'s site is on
+  that font's allowlist. A request that does carry an `Origin` is still decided by
+  it alone, so a refused site can't get around it with a Referer.
+
 ### [3.24.0] - 2026-09-19
 
 #### Added

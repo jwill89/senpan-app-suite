@@ -179,10 +179,13 @@ Uploaded fonts are licensed assets, so they are **never served as static
 files**. The Go server streams them itself through obfuscated token URLs that
 rotate every 1-2 weeks, gated by the requesting site's `Origin` against
 **that font's own allowlist** (Atelier -> Font Upload -> Edit -> Allowed sites).
-Cross-origin `@font-face` loads hard-require CORS, so a site that isn't on a
-font's list cannot render it; requests with no usable Origin (pasting the URL
-into a browser, `wget`, casual scrapers) get a 403, and `kit.css` only emits
-each requesting site's allowed fonts. The SPA itself loads fonts
+Chrome and Firefox hard-require CORS on cross-origin `@font-face`, so a site
+that isn't on a font's list cannot render it. Safari is the exception: it fetches
+fonts in `no-cors` mode, sending **no** `Origin`, so for an Origin-less request
+the gate checks the site in the `Referer` (the embedding page) against the same
+allowlist instead. Requests naming no site at all (pasting the URL into a
+browser, `wget`, casual scrapers) get a 403, and `kit.css` only emits each
+requesting site's allowed fonts. The SPA itself loads fonts
 **same-origin** via the existing `/api` ProxyPass
 (`/api/fonts/pub/f/<token>`), so the app and its font picker always work - the
 allowlists only govern external sites.

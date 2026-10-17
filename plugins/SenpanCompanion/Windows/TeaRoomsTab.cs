@@ -5,6 +5,7 @@ using System.Numerics;
 using System.Threading.Tasks;
 using Dalamud.Bindings.ImGui;
 using Dalamud.Interface;
+using Dalamud.Interface.ImGuiNotification;
 using SenpanCompanion.Api;
 using SenpanCompanion.Services;
 
@@ -46,6 +47,7 @@ internal sealed class TeaRoomsTab : TabBase, IDisposable
 
     private readonly ApiClient api;
     private readonly LiveConnection live;
+    private readonly Session session;
 
     private List<TeaRoom> rooms = new();
 
@@ -54,10 +56,11 @@ internal sealed class TeaRoomsTab : TabBase, IDisposable
     private string lockUntil = string.Empty;
     private string lockError = string.Empty;
 
-    public TeaRoomsTab(ApiClient api, LiveConnection live)
+    public TeaRoomsTab(ApiClient api, LiveConnection live, Session session)
     {
         this.api = api;
         this.live = live;
+        this.session = session;
         this.live.TeaRoomUnlocked += OnTeaRoomUnlocked;
         this.live.Reconnected += OnReconnected;
     }
@@ -287,7 +290,8 @@ internal sealed class TeaRoomsTab : TabBase, IDisposable
     /// <summary>
     /// A room's lock ran out and the server lifted it. Correct the row we are holding
     /// (this is the one room change that arrives without anyone asking for it), then
-    /// say so in game.
+    /// say so in game - to an operator who can manage tea rooms, since the alert asks
+    /// them to go and act on it. The push reaches every admin connection regardless.
     /// </summary>
     private void OnTeaRoomUnlocked(long id, string name, string roomNumber)
     {
@@ -297,30 +301,56 @@ internal sealed class TeaRoomsTab : TabBase, IDisposable
             this.rooms[i].Locked = false;
             this.rooms[i].LockedUntil = string.Empty;
         }
-        AlertUnlocked(name, roomNumber);
+        if (this.session.Has(Perms.TeahouseTeaRooms))
+        {
+            AlertUnlocked(name, roomNumber);
+        }
+    }
+
+    /// <summary>
+    /// The alert's sentence. The website builds the same one (teaRoomUnlockedMessage
+    /// in frontend/src/stores/teaRooms.ts) - change one, change both.
+    /// </summary>
+    internal static string UnlockedMessage(string name, string roomNumber)
+    {
+        var room = string.IsNullOrWhiteSpace(name) ? "A tea room" : name.Trim();
+        var number = roomNumber.Trim().TrimStart('#');
+        var label = number.Length == 0 ? room : $"{room} (Room #{number})";
+        return $"{label} has been marked as unlocked. Please check the room to remind the occupants or extend the time.";
     }
 
     /// <summary>
     /// Tells the operator a room's lock has expired, wherever they are - the point of
-    /// an unlock time is that nobody has to watch for it.
+    /// an unlock time is that nobody has to watch for it. The pop-up stays until it is
+    /// dismissed: it asks for something to be done, and an operator who stepped away
+    /// should still find it when they come back. The chat line is the record that
+    /// outlives the dismissal.
     /// </summary>
     /// <remarks>
     /// All three channels are purely LOCAL. IChatGui.Print writes into this client's
     /// own chat log and sends nothing to the server - it is not ChatSender, which
     /// actually transmits and carries the account risk that comes with automated chat.
-    /// The toast is Dalamud's own overlay, and the chime is synthesized audio played
+    /// The pop-up is Dalamud's own overlay, and the chime is synthesized audio played
     /// through winmm with no game interop at all (see Services/Chime). So this is a
     /// notice only the operator can see or hear, about a change they asked the server
     /// to make.
     /// </remarks>
     private static void AlertUnlocked(string name, string roomNumber)
     {
-        var room = string.IsNullOrWhiteSpace(name) ? "A tea room" : name;
-        var full = string.IsNullOrWhiteSpace(roomNumber) ? room : $"{room} (Room {roomNumber})";
+        var message = UnlockedMessage(name, roomNumber);
 
         Chime.Unlock();
-        Plugin.ToastGui.ShowNormal($"{room} is unlocked");
-        Plugin.ChatGui.Print($"[Senpan] Room lock expired - {full} is now unlocked and available.");
+        Plugin.NotificationManager.AddNotification(new Notification
+        {
+            Title = "Tea room unlocked",
+            Content = message,
+            Type = NotificationType.Warning,
+            // Both at MaxValue = no timeout; it waits for the operator to dismiss it.
+            InitialDuration = TimeSpan.MaxValue,
+            HardExpiry = DateTime.MaxValue,
+            UserDismissable = true,
+        });
+        Plugin.ChatGui.Print($"[Senpan] {message}");
     }
 
     /// <summary>

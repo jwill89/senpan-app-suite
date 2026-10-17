@@ -87,7 +87,7 @@ public sealed class MainWindow : Window, IDisposable
         this.game = new BingoGameTab(api, config, live, this.cardCache);
         this.cards = new BingoCardsTab(api, nearby, config, chat, this.cardCache);
         this.winnersLog = new BingoWinnersTab(api);
-        this.teaRooms = new TeaRoomsTab(api, live);
+        this.teaRooms = new TeaRoomsTab(api, live, this.session);
         this.raffle = new RaffleTab(api, nearby);
         this.garapon = new GaraponTab(api, nearby, config, chat);
         this.stampRally = new StampRallyTab(api, nearby, config, chat);

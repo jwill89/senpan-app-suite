@@ -35,7 +35,7 @@ vi.mock('@/lib/endpoints', () => ({
   },
 }))
 
-import { useTeaRoomsStore } from './teaRooms'
+import { teaRoomUnlockedMessage, useTeaRoomsStore } from './teaRooms'
 import { useUiStore } from './ui'
 
 /** Minimal tea room with the fields the store reads. */
@@ -66,6 +66,24 @@ function room(over: Partial<TeaRoom> = {}): TeaRoom {
 beforeEach(() => {
   setActivePinia(createPinia())
   Object.values(ep).forEach((fn) => fn.mockClear())
+})
+
+describe('teaRoomUnlockedMessage', () => {
+  const tail =
+    'has been marked as unlocked. Please check the room to remind the occupants or extend the time.'
+
+  it('names the room and its number', () => {
+    expect(teaRoomUnlockedMessage('Jasmine Room', '3')).toBe(`Jasmine Room (Room #3) ${tail}`)
+  })
+
+  it('does not double a # the number already carries', () => {
+    expect(teaRoomUnlockedMessage('Jasmine Room', '#3')).toBe(`Jasmine Room (Room #3) ${tail}`)
+  })
+
+  it('drops the number when there is none, and names a nameless room generically', () => {
+    expect(teaRoomUnlockedMessage('Jasmine Room', ' ')).toBe(`Jasmine Room ${tail}`)
+    expect(teaRoomUnlockedMessage('', '')).toBe(`A tea room ${tail}`)
+  })
 })
 
 describe('loading', () => {

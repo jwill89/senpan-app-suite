@@ -42,6 +42,34 @@ The format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## Frontend
 
+### [3.28.0] - 2026-10-17
+
+Requires backend 3.24.0.
+
+#### Added
+
+- **A tea room whose unlock time arrives now raises an alert on the site.** The
+  server has lifted timed locks on its own since backend 3.23.0, but only the
+  in-game plugin said so - anyone working from a browser or a phone found out by
+  happening to look at the Tea Rooms list. Now every open admin page shows a pop-up
+  naming the room - "Jasmine Room (Room #3) has been marked as unlocked. Please
+  check the room to remind the occupants or extend the time." - with the same
+  two-note chime the plugin plays, a vibration on phones that support it, and an
+  **Open Tea Rooms** button. It stays until it is dismissed, so it is still there
+  for someone who stepped away, and several stack rather than replacing each
+  other. Only accounts that can manage tea rooms are alerted. It arrives over the
+  live connection, so the site has to be open: a phone with the browser in the
+  background or the screen locked hears nothing.
+- **Sticky alerts, separate from toasts** (`ui.alert` / `ui.dismissAlert`). The
+  toast has one slot and a timer, so a "Saved" landing a second after an alert
+  would have wiped it. Alerts stack above the toast in the same top-right column
+  and leave only when their own close button, or their action, is used.
+
+#### Fixed
+
+- **Vibration is no longer attempted before the page has been tapped.** Browsers
+  refuse it then anyway, and Chrome logged a console error every time it was asked.
+
 ### [3.27.0] - 2026-09-19
 
 Requires backend 3.24.0.
@@ -3337,6 +3365,25 @@ with a personal access token and is distributed through a Dalamud custom repo
 (`plugins/pluginmaster.json`). Versions use the four-part AssemblyVersion in
 `SenpanCompanion.csproj`. Entries below the current release were reconstructed
 from the `<Version>` history and commit messages.
+
+### [3.9.0.0] - 2026-10-17
+
+Requires backend 3.23.0.
+
+#### Changed
+
+- **An expiring tea-room lock now raises a pop-up that waits for you.** The alert
+  used the game's own toast, a single line that fades in a few seconds - easy to
+  miss, and too short to say what to do about it. It is now a Dalamud notification
+  titled "Tea room unlocked" that reads "Jasmine Room (Room #3) has been marked as
+  unlocked. Please check the room to remind the occupants or extend the time.", and
+  it stays on screen until you dismiss it, so it is still there if you stepped
+  away. The chime is unchanged, and the chat line now carries the same sentence -
+  it is the record left once the pop-up is gone. The website shows the same alert
+  with the same chime.
+- **Only staff who can manage tea rooms are alerted.** Every connected Companion
+  used to raise the alert, including bingo-only staff with no way to extend a lock.
+  The Tea Rooms page itself was already hidden from them.
 
 ### [3.8.0.0] - 2026-09-05
 

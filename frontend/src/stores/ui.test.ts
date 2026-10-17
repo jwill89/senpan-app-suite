@@ -6,6 +6,30 @@ beforeEach(() => {
   setActivePinia(createPinia())
 })
 
+describe('alerts', () => {
+  beforeEach(() => vi.useFakeTimers())
+  afterEach(() => vi.useRealTimers())
+
+  it('stack and stay until dismissed', () => {
+    const ui = useUiStore()
+    const a = ui.alert({ title: 'One', message: 'first' })
+    const b = ui.alert({ title: 'Two', message: 'second' })
+    vi.advanceTimersByTime(60 * 60 * 1000)
+    expect(ui.alerts.map((x) => x.title)).toEqual(['One', 'Two'])
+    ui.dismissAlert(a)
+    expect(ui.alerts.map((x) => x.id)).toEqual([b])
+  })
+
+  it('survive a toast landing on top of them', () => {
+    const ui = useUiStore()
+    ui.alert({ title: 'Room unlocked', message: 'go check' })
+    ui.notify('Saved', 'success', 1000)
+    vi.advanceTimersByTime(1000)
+    expect(ui.toast.show).toBe(false)
+    expect(ui.alerts).toHaveLength(1)
+  })
+})
+
 describe('toasts', () => {
   beforeEach(() => vi.useFakeTimers())
   afterEach(() => vi.useRealTimers())

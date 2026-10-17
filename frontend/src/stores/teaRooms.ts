@@ -16,6 +16,17 @@ import { useUiStore } from './ui'
 import { withLoading } from '@/lib/withLoading'
 import { datetimeLocalToUtc, utcToDatetimeLocal } from '@/lib/datetime'
 
+/**
+ * The alert shown when a room's timed lock runs out on its own. The plugin builds
+ * the same sentence (Windows/TeaRoomsTab.cs) - change one, change both.
+ */
+export function teaRoomUnlockedMessage(name: string, roomNumber: string): string {
+  const room = name.trim() || 'A tea room'
+  const number = roomNumber.trim().replace(/^#/, '')
+  const label = number ? `${room} (Room #${number})` : room
+  return `${label} has been marked as unlocked. Please check the room to remind the occupants or extend the time.`
+}
+
 /** A fresh, empty tea-room form (open by default, brand-pink accent). */
 function emptyForm(): TeaRoomForm {
   return {

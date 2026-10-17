@@ -32,6 +32,7 @@ import { useGaraponsStore } from '@/stores/garapons'
 import { useFestivalMapsStore } from '@/stores/festivalMaps'
 import { useUiStore } from '@/stores/ui'
 import { endpoints } from '@/lib/endpoints'
+import { armAudioOnFirstGesture } from '@/lib/sound'
 import { listPasskeys, registerPasskey, deletePasskey, passkeysSupported } from '@/lib/passkeys'
 import type { AccountTokenInfoResponse, Passkey } from '@/types/api'
 
@@ -68,6 +69,11 @@ onMounted(async () => {
     /* show the dashboard even if a data load failed */
   }
 })
+
+// Some admin alerts chime on their own (a tea room's lock running out), and a
+// browser plays nothing until the page has had a gesture - so arm audio on the
+// first click, tap or key press anywhere in the admin area.
+if (auth.hasPermission('teahouse-tea-rooms')) armAudioOnFirstGesture()
 
 // -- Mobile nav drawer --------------------------------------------------------
 // On narrow viewports the sidebar collapses into a hamburger-triggered drawer

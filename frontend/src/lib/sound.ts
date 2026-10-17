@@ -100,6 +100,30 @@ export function primeAudio(): void {
   }
 }
 
+let armed = false
+
+/**
+ * Resumes the AudioContext on the reader's first click, tap or key press. A sound
+ * that arrives on its own (a WebSocket alert) can only play once some gesture has
+ * resumed the context - iOS refuses outright otherwise - so a page that may chime
+ * without being touched calls this once when it mounts. Idempotent.
+ */
+export function armAudioOnFirstGesture(): void {
+  if (armed || typeof window === 'undefined') return
+  armed = true
+  const events = ['click', 'keydown', 'touchend'] as const
+  const arm = (): void => {
+    for (const e of events) window.removeEventListener(e, arm, true)
+    try {
+      const ac = getCtx()
+      if (ac && ac.state === 'suspended') void ac.resume()
+    } catch {
+      /* non-fatal */
+    }
+  }
+  for (const e of events) window.addEventListener(e, arm, true)
+}
+
 /**
  * Plays a sequence of synthesized notes as a short chime, scaling each note's
  * peak gain by the master volume. Shared by the basic-mode chimes below; a muted
@@ -206,6 +230,18 @@ export function playWinnerChime(): void {
     { freq: 659.25, at: 0.1, peak: 0.25, dur: 0.32, type: 'triangle' },
     { freq: 783.99, at: 0.2, peak: 0.25, dur: 0.32, type: 'triangle' },
     { freq: 1046.5, at: 0.3, peak: 0.25, dur: 0.32, type: 'triangle' },
+  ])
+}
+
+/**
+ * Plays the tea-room "lock expired" alert: a falling G5 -> C5, the same two notes
+ * the in-game plugin plays for it (Services/Chime.cs), so staff hear one sound for
+ * one event whether they are in the game or on the site.
+ */
+export function playUnlockChime(): void {
+  playChime([
+    { freq: 783.99, at: 0, peak: 0.25, dur: 0.22, type: 'triangle' }, // G5
+    { freq: 523.25, at: 0.2, peak: 0.25, dur: 0.3, type: 'triangle' }, // C5
   ])
 }
 
@@ -332,9 +368,15 @@ function woodKnock(ac: AudioContext, t: number, amp: number): void {
   osc.stop(t + 0.11)
 }
 
-/** Triggers a brief device vibration where supported (mobile). */
+/**
+ * Triggers a brief device vibration where supported (mobile). Skipped until the
+ * page has had a tap: browsers refuse it before then anyway, and Chrome logs a
+ * console error each time it is asked - which a WebSocket alert would otherwise do.
+ */
 export function vibrate(pattern: number | number[] = 60): void {
   try {
+    // A browser without userActivation throws here and is caught: no vibration.
+    if (!navigator.userActivation.hasBeenActive) return
     navigator.vibrate(pattern)
   } catch {
     /* non-fatal */

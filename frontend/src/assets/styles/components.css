@@ -6,18 +6,82 @@
    4. TOAST NOTIFICATION - Fixed top-right feedback popup
    ================================================================ */
 
-/* Base toast container - slides in from the right */
-.toast {
+/* The top-right column every toast and sticky alert stacks in. It ignores the
+   pointer so the page under its empty space stays clickable; its children opt back
+   in. */
+.toast-stack {
   position: fixed;
   top: 20px;
   right: 20px;
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 10px;
+  max-width: min(380px, calc(100vw - 32px));
+  pointer-events: none;
+}
+
+/* Base toast - slides in from the right */
+.toast {
   padding: 14px 24px;
   border-radius: var(--radius);
   font-weight: 600;
-  z-index: 1000;
   animation: slideIn 0.3s ease;
-  max-width: 380px;
   cursor: pointer;
+  pointer-events: auto;
+}
+
+/* A sticky alert: a raised card with a warning stripe rather than a solid fill
+   (text-on-fill can't be trusted on the light --warning), dismissed only by its
+   own button - clicking the card itself does nothing, since it may hold an action. */
+.toast--alert {
+  width: 100%;
+  padding: 12px 14px;
+  background: var(--panel-bg);
+  color: var(--text);
+  border: 1px solid var(--control-border);
+  border-left: 4px solid var(--warning);
+  box-shadow: 0 8px 24px var(--shadow);
+  font-weight: normal;
+  cursor: default;
+}
+
+.toast-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.toast-icon {
+  color: var(--warning);
+}
+
+.toast-title {
+  flex: 1;
+}
+
+.toast-close {
+  padding: 0 2px;
+  background: none;
+  border: none;
+  color: var(--text-muted);
+}
+
+.toast-close:hover {
+  color: var(--text);
+}
+
+.toast-body {
+  margin: 6px 0 0;
+  font-size: 0.92rem;
+  line-height: 1.4;
+}
+
+.toast-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 10px;
 }
 
 /* Toast color variants */

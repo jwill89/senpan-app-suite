@@ -9,7 +9,7 @@
  * a message updates depends on the current route (player vs. admin area).
  */
 import { WsClient } from '@/lib/ws'
-import { playEvent, playYoeverSound, vibrate } from '@/lib/sound'
+import { playEvent, playUnlockChime, playYoeverSound, vibrate } from '@/lib/sound'
 import { applyCustomCSS, applyHeaderFont, applyUploadedFonts } from '@/lib/theme'
 import type { WsMessage } from '@/types/api'
 import { useRouter } from 'vue-router'
@@ -22,6 +22,8 @@ import { usePatternsStore } from '@/stores/patterns'
 import { useAdminStore } from '@/stores/admin'
 import { useLogsStore } from '@/stores/logs'
 import { useYoeverStore } from '@/stores/yoever'
+import { useAuthStore } from '@/stores/auth'
+import { teaRoomUnlockedMessage } from '@/stores/teaRooms'
 import { endpoints } from '@/lib/endpoints'
 
 export function useWebSocket() {
@@ -35,6 +37,7 @@ export function useWebSocket() {
   const admin = useAdminStore()
   const logs = useLogsStore()
   const yoever = useYoeverStore()
+  const auth = useAuthStore()
 
   // Route-based context predicates (replace the old `ui.view === ...` checks).
   const isPlayerView = (): boolean => router.currentRoute.value.name === 'player'
@@ -176,6 +179,20 @@ export function useWebSocket() {
         // Live server-log tail - append to the viewer (it self-limits to the
         // admin Logs tab: entries only accumulate while that store is in use).
         if (isAdminView()) logs.appendLive(msg.entry)
+        break
+      case 'tea_room_unlocked':
+        // A room's timed lock ran out and the server lifted it - nobody clicked
+        // anything, so nobody is looking. Alert whoever could go and act on it;
+        // the rooms list itself refreshes off the resource_changed that follows.
+        if (isAdminView() && auth.hasPermission('teahouse-tea-rooms')) {
+          ui.alert({
+            title: 'Tea room unlocked',
+            message: teaRoomUnlockedMessage(msg.name, msg.room_number),
+            action: { label: 'Open Tea Rooms', to: '/admin/teahouse/tea-rooms' },
+          })
+          playUnlockChime()
+          vibrate([200, 100, 200])
+        }
         break
     }
   }

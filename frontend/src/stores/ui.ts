@@ -1,14 +1,24 @@
 /**
- * UI store: global toast notifications + clipboard helper.
+ * UI store: global toast notifications + sticky alerts + clipboard helper.
  *
  * Top-level view routing previously lived here (`view` / `setView`) but is now
  * handled by Vue Router (see `src/router`). Toasts auto-dismiss after 5.5s so
- * admins have time to read them before they fade.
+ * admins have time to read them before they fade. Alerts are the other kind: they
+ * ask someone to go and do something, so they stack and stay until dismissed.
  */
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 
 export type ToastType = 'info' | 'success' | 'error'
+
+/** A sticky alert: stays on screen, stacked with any others, until dismissed. */
+export interface UiAlert {
+  id: number
+  title: string
+  message: string
+  /** Optional button that takes the reader to where they can act on it. */
+  action?: { label: string; to: string }
+}
 
 /** Options for a themed confirm dialog (replaces the native window.confirm). */
 export interface ConfirmOptions {
@@ -110,6 +120,25 @@ export const useUiStore = defineStore('ui', () => {
     toast.value.show = false
   }
 
+  // -- Sticky alerts ------------------------------------------------------------
+  // Separate from the toast because the toast has ONE slot and a timer: a "Saved"
+  // landing a second later would wipe an alert someone still has to act on, and two
+  // alerts at once would lose the first.
+  const alerts = ref<UiAlert[]>([])
+  let nextAlertId = 1
+
+  /** Shows a sticky alert and returns its id (for `dismissAlert`). */
+  function alert(a: Omit<UiAlert, 'id'>): number {
+    const id = nextAlertId++
+    alerts.value.push({ id, ...a })
+    return id
+  }
+
+  /** Removes one alert. */
+  function dismissAlert(id: number): void {
+    alerts.value = alerts.value.filter((a) => a.id !== id)
+  }
+
   /** Copies text to the clipboard and shows a toast. Pass `successMsg` to combine
    *  the copy confirmation into a caller-specific message (one toast, not two). */
   function copyToClipboard(text: string, successMsg = 'Copied to clipboard!'): void {
@@ -128,6 +157,9 @@ export const useUiStore = defineStore('ui', () => {
     setWsStatus,
     notify,
     dismissToast,
+    alerts,
+    alert,
+    dismissAlert,
     confirm,
     resolveConfirm,
     copyToClipboard,

@@ -171,7 +171,7 @@ func TestAffiliates_PermissionGating(t *testing.T) {
 	}
 }
 
-// -- Reorder, webhook, and post-to-Discord -----------------------------------
+// -- Reorder and post-to-Discord ---------------------------------------------
 
 func TestAffiliates_Reorder(t *testing.T) {
 	env := newTestEnv(t)
@@ -202,44 +202,19 @@ func TestAffiliates_Reorder(t *testing.T) {
 	}
 }
 
-func TestAffiliates_Webhook(t *testing.T) {
-	env := newTestEnv(t)
-	env.loginAdmin(t)
-
-	// A valid Discord webhook saves and comes back on the list response.
-	hook := "https://discord.com/api/webhooks/123/abc"
-	resp := env.putJSON(t, "/api/affiliates/webhook", map[string]any{"webhook_url": hook})
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("set webhook status = %d; want 200", resp.StatusCode)
-	}
-	resp.Body.Close()
-	if got := decodeBody(t, env.get(t, "/api/affiliates"))["webhook_url"]; got != hook {
-		t.Errorf("webhook_url = %v; want %q", got, hook)
-	}
-
-	// A non-Discord URL is rejected.
-	resp = env.putJSON(t, "/api/affiliates/webhook", map[string]any{"webhook_url": "https://evil.example.com/x"})
-	if resp.StatusCode != http.StatusBadRequest {
-		t.Fatalf("bad webhook status = %d; want 400", resp.StatusCode)
-	}
-	resp.Body.Close()
-}
-
 func TestAffiliates_Post(t *testing.T) {
 	env := newTestEnv(t)
 	env.loginAdmin(t)
 	id := env.createAffiliate(t, "Poster")
 
-	// Posting with no webhook configured is a 400.
+	// Posting with no channel picked is a 400.
 	resp := env.postJSON(t, fmt.Sprintf("/api/affiliates/%d/post", id), map[string]any{})
 	if resp.StatusCode != http.StatusBadRequest {
-		t.Fatalf("post without webhook status = %d; want 400", resp.StatusCode)
+		t.Fatalf("post without a channel status = %d; want 400", resp.StatusCode)
 	}
 	resp.Body.Close()
 
-	// Posting an unknown affiliate is a 404 (even with a webhook set).
-	env.putJSON(t, "/api/affiliates/webhook",
-		map[string]any{"webhook_url": "https://discord.com/api/webhooks/1/x"}).Body.Close()
+	// Posting an unknown affiliate is a 404.
 	resp = env.postJSON(t, "/api/affiliates/999999/post", map[string]any{})
 	if resp.StatusCode != http.StatusNotFound {
 		t.Fatalf("post unknown affiliate status = %d; want 404", resp.StatusCode)

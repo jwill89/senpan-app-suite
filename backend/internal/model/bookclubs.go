@@ -70,8 +70,11 @@ type BookclubUploadResponse struct {
 	URL string `json:"url"`
 }
 
-// PublishResponse is the body of POST /api/book-clubs/{club}/reading-lists/{id}/publish
-// - the number of items posted to Discord. JSON: {"published": <int>}.
+// PublishResponse is the body of POST /api/book-clubs/{club}/reading-lists/{id}/publish:
+// how many messages were posted, and how many of the previous list's were removed (a club
+// set to replace its reading list).
 type PublishResponse struct {
-	Published int `json:"published"`
+	Published int    `json:"published"`
+	Replaced  int    `json:"replaced"`
+	Note      string `json:"note"`
 }

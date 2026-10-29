@@ -147,7 +147,7 @@ func buildFeaturePaths(b *pb) {
 			"discord_link", pstr("Discord link."), "carrd_link", pstr("Carrd (or other site) link."))
 	}
 	b.add("GET", "/api/affiliates", "Affiliates", "List affiliates", affiliate,
-		"Also returns the shared Discord webhook (`webhook_url`); safe here since the endpoint is permission-gated.", opt{
+		"For the affiliates page, also returns where affiliates post (`destination`) and each affiliate's Discord post (`discord_post`); the festival editors get the names only.", opt{
 			resps: []respEntry{ok("AffiliatesResponse")}})
 	b.add("POST", "/api/affiliates", "Affiliates", "Create an affiliate", affiliate, "", opt{
 		body:  actionBody("Affiliate fields.", nil, affiliateFields()),
@@ -156,10 +156,6 @@ func buildFeaturePaths(b *pb) {
 		"Persists a new drag order (top-first ids).", opt{
 			body:  actionBody("Bulk reorder.", nil, props("ordered_ids", parr("Affiliate ids in the new order.", pint("")))),
 			resps: []respEntry{ok("OKResponse")}})
-	b.add("PUT", "/api/affiliates/webhook", "Affiliates", "Set the shared Discord webhook", affiliate,
-		"Stores the single webhook every affiliate posts to (empty clears it). Validated as a Discord webhook URL.", opt{
-			body:  actionBody("Webhook URL.", nil, props("webhook_url", pstr("Discord webhook URL ('' clears)."))),
-			resps: []respEntry{ok("AffiliateWebhookResponse"), r("400", "Not a Discord webhook URL")}})
 	b.add("PUT", "/api/affiliates/{id}", "Affiliates", "Replace an affiliate", affiliate,
 		"Full replace of the editable fields (sort_order is preserved - reordering is separate).", opt{
 			path:  []*openapi3.Parameter{pparam("id", "Affiliate id.")},
@@ -169,14 +165,18 @@ func buildFeaturePaths(b *pb) {
 		path:  []*openapi3.Parameter{pparam("id", "Affiliate id.")},
 		resps: []respEntry{noContent()}})
 	b.add("POST", "/api/affiliates/{id}/post", "Affiliates", "Post to Discord", affiliate,
-		"Posts the affiliate's embed to the shared webhook now: colour, logo thumbnail, screenshot image, then (when set) the location, the open hours as local-time tokens, and the Discord/Carrd links.", opt{
+		"Posts the affiliate's embed to the Affiliates channel: color, logo thumbnail, screenshot image, then (when set) the location, the open hours as local-time tokens, and the Discord/Carrd links. Honors the destination's repost mode: `new` adds a post, `replace` deletes the earlier one after posting, `edit` updates the affiliate's post in place (posting fresh when there is none). In edit mode, saving the affiliate later updates the post on its own.", opt{
 			path:  []*openapi3.Parameter{pparam("id", "Affiliate id.")},
-			resps: []respEntry{ok("AffiliateResponse"), r("400", "No webhook configured"), r("404", "Not found"), r("502", "Discord failed")}})
+			resps: []respEntry{ok("DiscordPostResult"), r("400", "No Discord channel picked"), r("404", "Not found"), r("409", "Discord not connected"), r("502", "Discord refused or unreachable")}})
+	b.add("DELETE", "/api/affiliates/{id}/post", "Affiliates", "Take down from Discord", affiliate,
+		"Deletes the affiliate's post from Discord.", opt{
+			path:  []*openapi3.Parameter{pparam("id", "Affiliate id.")},
+			resps: []respEntry{ok("DiscordPostResult"), r("404", "Not found"), r("409", "Discord not connected"), r("502", "Discord refused or unreachable")}})
 
 	// -- Tea Rooms (admin CRUD + toggles + post; plus a public cross-origin read API)
 	teaRoom := "permission:teahouse-tea-rooms"
 	b.add("GET", "/api/tea-rooms", "Tea Rooms", "List tea rooms", teaRoom,
-		"Also returns the shared Discord webhook (`webhook_url`); safe here since the endpoint is permission-gated.", opt{
+		"Also returns where tea rooms post (`destination`) and each room's Discord post (`discord_post`).", opt{
 			resps: []respEntry{ok("TeaRoomsResponse")}})
 	b.add("POST", "/api/tea-rooms", "Tea Rooms", "Create a tea room", teaRoom,
 		"Room number is required and must be unique (the public lookup key).", opt{
@@ -186,12 +186,8 @@ func buildFeaturePaths(b *pb) {
 		"Persists a new drag order (top-first ids).", opt{
 			body:  actionBody("Bulk reorder.", nil, props("ordered_ids", parr("Tea-room ids in the new order.", pint("")))),
 			resps: []respEntry{ok("OKResponse")}})
-	b.add("PUT", "/api/tea-rooms/webhook", "Tea Rooms", "Set the shared Discord webhook", teaRoom,
-		"Stores the single webhook every tea room posts to (empty clears it). Validated as a Discord webhook URL.", opt{
-			body:  actionBody("Webhook URL.", nil, props("webhook_url", pstr("Discord webhook URL ('' clears)."))),
-			resps: []respEntry{ok("TeaRoomWebhookResponse"), r("400", "Not a Discord webhook URL")}})
 	b.add("GET", "/api/tea-rooms/public", "Tea Rooms", "Public: list all rooms", "public",
-		"Cross-origin (`Access-Control-Allow-Origin: *`), read-only room list for an external site (e.g. a Carrd embed). No webhook.", opt{
+		"Cross-origin (`Access-Control-Allow-Origin: *`), read-only room list for an external site (e.g. a Carrd embed). Never carries Discord posts.", opt{
 			resps: []respEntry{ok("TeaRoomsPublicResponse")}})
 	b.add("GET", "/api/tea-rooms/public/{number}", "Tea Rooms", "Public: one room", "public",
 		"Cross-origin single room (all data + status flags), looked up by its unique room number.", opt{
@@ -219,9 +215,13 @@ func buildFeaturePaths(b *pb) {
 		path:  []*openapi3.Parameter{pparam("id", "Tea-room id.")},
 		resps: []respEntry{noContent()}})
 	b.add("POST", "/api/tea-rooms/{id}/post", "Tea Rooms", "Post to Discord", teaRoom,
-		"Posts the room's embed to the shared Discord webhook now.", opt{
+		"Posts the room's embed to the Tea Rooms channel. Honors the destination's repost mode: `new` adds a post, `replace` deletes the earlier one after posting, `edit` updates the room's post in place (posting fresh when there is none). In edit mode, later changes to the room - a save, a toggle, a lock lifting - update the post on their own.", opt{
 			path:  []*openapi3.Parameter{pparam("id", "Tea-room id.")},
-			resps: []respEntry{ok("TeaRoomResponse"), r("400", "No webhook configured"), r("404", "Not found"), r("502", "Discord failed")}})
+			resps: []respEntry{ok("DiscordPostResult"), r("400", "No Discord channel picked"), r("404", "Not found"), r("409", "Discord not connected"), r("502", "Discord refused or unreachable")}})
+	b.add("DELETE", "/api/tea-rooms/{id}/post", "Tea Rooms", "Take down from Discord", teaRoom,
+		"Deletes the room's post from Discord.", opt{
+			path:  []*openapi3.Parameter{pparam("id", "Tea-room id.")},
+			resps: []respEntry{ok("DiscordPostResult"), r("404", "Not found"), r("409", "Discord not connected"), r("502", "Discord refused or unreachable")}})
 
 	// -- Festival Map (resource-oriented: methods for CRUD, PATCH for the status)
 	mapPerm := "permission:festival-map"
@@ -386,40 +386,25 @@ func buildFeaturePaths(b *pb) {
 			resps: []respEntry{noContent(), r("404", "Not found")}})
 	b.add("POST", "/api/book-clubs/{club}/reading-lists/{id}/publish", "Book Club", "Publish to Discord", "permission:bookclub-<club>", "", opt{
 		path:  []*openapi3.Parameter{clubParam(), pparam("id", "List id.")},
-		resps: []respEntry{ok("PublishResponse"), r("400", "No items / no webhook"), r("502", "Discord failed")}})
+		resps: []respEntry{ok("PublishResponse"), r("400", "No items / no Discord channel picked"), r("409", "Discord not connected"), r("502", "Discord failed (anything already posted is removed again)")}})
 
 	// -- Announcements ---------------------------------------------------------
 	ann := "permission:teahouse-announcements"
 	typeFields := func() openapi3.Schemas {
-		return props("name", pstr("Type name (required)."), "webhook_url", pstr("Discord webhook URL."))
+		return props("name", pstr("Type name (required)."), "channel_id", pstr("Discord channel id ('' = none yet)."))
 	}
 	b.add("GET", "/api/announcement-types", "Announcements", "List types", ann, "", opt{resps: []respEntry{ok("AnnouncementTypesResponse")}})
 	b.add("POST", "/api/announcement-types", "Announcements", "Create a type", ann, "", opt{
 		body:  actionBody("Type fields.", nil, typeFields()),
-		resps: []respEntry{created("AnnouncementTypeResponse"), r("400", "Name / webhook invalid")}})
+		resps: []respEntry{created("AnnouncementTypeResponse"), r("400", "Name / channel invalid")}})
 	b.add("PUT", "/api/announcement-types/{id}", "Announcements", "Replace a type", ann, "", opt{
 		path:  []*openapi3.Parameter{pparam("id", "Type id.")},
 		body:  actionBody("Full type fields.", nil, typeFields()),
-		resps: []respEntry{ok("AnnouncementTypeResponse"), r("400", "Name / webhook invalid")}})
+		resps: []respEntry{ok("AnnouncementTypeResponse"), r("400", "Name / channel invalid")}})
 	b.add("DELETE", "/api/announcement-types/{id}", "Announcements", "Delete a type", ann,
 		"Refused while the type is still used by any announcement.", opt{
 			path:  []*openapi3.Parameter{pparam("id", "Type id.")},
 			resps: []respEntry{noContent(), r("400", "Type still in use")}})
-	roleFields := func() openapi3.Schemas {
-		return props("name", pstr("Role name (required)."), "role_id", pstr("Discord snowflake (required)."))
-	}
-	b.add("GET", "/api/announcement-roles", "Announcements", "List roles", ann, "", opt{resps: []respEntry{ok("AnnouncementRolesResponse")}})
-	b.add("POST", "/api/announcement-roles", "Announcements", "Create a role", ann, "", opt{
-		body:  actionBody("Role fields.", nil, roleFields()),
-		resps: []respEntry{created("AnnouncementRoleResponse"), r("400", "Name / role id invalid")}})
-	b.add("PUT", "/api/announcement-roles/{id}", "Announcements", "Replace a role", ann, "", opt{
-		path:  []*openapi3.Parameter{pparam("id", "Role id.")},
-		body:  actionBody("Full role fields.", nil, roleFields()),
-		resps: []respEntry{ok("AnnouncementRoleResponse"), r("400", "Name / role id invalid")}})
-	b.add("DELETE", "/api/announcement-roles/{id}", "Announcements", "Delete a role", ann,
-		"Refused while the role is still tagged by any announcement.", opt{
-			path:  []*openapi3.Parameter{pparam("id", "Role id.")},
-			resps: []respEntry{noContent(), r("400", "Role still in use")}})
 	b.add("GET", "/api/announcements", "Announcements", "List announcements", ann, "", opt{resps: []respEntry{ok("AnnouncementsResponse")}})
 	b.add("POST", "/api/announcements", "Announcements", "Create an announcement", ann, "", opt{
 		body:  actionBody("New announcement.", nil, props("announcement", ref("Announcement"))),
@@ -436,9 +421,9 @@ func buildFeaturePaths(b *pb) {
 		path:  []*openapi3.Parameter{pparam("id", "Announcement id.")},
 		resps: []respEntry{noContent()}})
 	b.add("POST", "/api/announcements/{id}/send", "Announcements", "Send now", ann,
-		"Posts the announcement's embed to Discord immediately.", opt{
+		"Posts the announcement to its type's channel immediately; when it replaces its previous post, that one is deleted once the new one is up.", opt{
 			path:  []*openapi3.Parameter{pparam("id", "Announcement id.")},
-			resps: []respEntry{ok("AnnouncementResponse"), r("400", "No Discord webhook configured"), r("404", "Not found"), r("502", "Discord failed")}})
+			resps: []respEntry{ok("AnnouncementResponse"), r("400", "No Discord channel picked"), r("404", "Not found"), r("409", "Discord not connected"), r("502", "Discord refused or unreachable")}})
 	b.add("POST", "/api/announcements/{id}/skip", "Announcements", "Skip upcoming occurrences", ann,
 		"Sets how many upcoming scheduled occurrences to pass over - `{\"count\": 2}` sits out a "+
 			"Friday-and-Saturday weekend in one go. Each skipped occurrence decrements the count. An "+
@@ -466,7 +451,7 @@ func buildFeaturePaths(b *pb) {
 
 	// -- Settings --------------------------------------------------------------
 	b.add("GET", "/api/settings", "Settings", "Get settings", "public",
-		"Secret settings (per-club webhook URLs) are blanked for non-admins.", opt{resps: []respEntry{ok("SettingsResponse")}})
+		"Secret settings (the Google Fonts API key) are blanked for non-admins.", opt{resps: []respEntry{ok("SettingsResponse")}})
 	b.add("POST", "/api/settings", "Settings", "Update settings", "permission:system-settings", "", opt{
 		body:  actionBody("Setting values.", nil, props("settings", desc(openapi3.NewObjectSchema(), "Map of setting key -> value."))),
 		resps: []respEntry{ok("OKResponse"), r("400", "Unknown / invalid setting")}})
@@ -484,6 +469,58 @@ func buildFeaturePaths(b *pb) {
 		"Changes the process-wide minimum log level live (no restart) - used to toggle DEBUG on/off. Reverts to the startup default on restart.", opt{
 			body:  actionBody("The new level.", nil, props("level", desc(openapi3.NewStringSchema(), "One of debug, info, warn, error."))),
 			resps: []respEntry{ok("LogLevelResponse"), r("400", "Invalid level")}})
+
+	// -- Discord bot -------------------------------------------------------------
+	b.add("GET", "/api/discord/status", "Discord", "Bot status", "admin",
+		"Whether a token can be stored and is set, whether the bot is connected (REST) and online (gateway), who it is, the server it works in (and whether it holds Administrator there), the invite link, and the posting safety switches. `problem` names the one thing to fix next. Never carries the token.", opt{
+			resps: []respEntry{ok("DiscordStatusResponse")}})
+	b.add("PUT", "/api/discord/token", "Discord", "Set the bot token", "admin",
+		"Checks the token with Discord (`/users/@me` + `/applications/@me`), refuses one from a different application than the configured one, then stores it sealed (AES-GCM under a key derived from the session secret) and reconnects the bot. A leading `Bot ` is stripped.", opt{
+			body:  actionBody("The token.", nil, props("token", pstr("Bot token from the Developer Portal."))),
+			resps: []respEntry{ok("DiscordStatusResponse"), r("400", "Malformed, refused by Discord, or from another application"), r("409", "No session secret configured, so a token can't be stored"), r("502", "Discord unreachable")}})
+	b.add("DELETE", "/api/discord/token", "Discord", "Remove the bot token", "admin",
+		"Forgets the token and takes the bot offline.", opt{
+			resps: []respEntry{ok("DiscordStatusResponse")}})
+	b.add("PUT", "/api/discord/config", "Discord", "Save the bot configuration", "admin",
+		"Server (guild) id, application id, the bot's custom status text, the public site URL used for image links in posts, and test mode (every new post goes to the test channel and scheduled announcements are held).", opt{
+			body: actionBody("Configuration.", nil, props(
+				"guild_id", pstr("Server id (digits)."), "application_id", pstr("Application id (digits)."),
+				"status_text", pstr("Custom status, at most 128 characters ('' = none)."),
+				"public_base_url", pstr("Absolute http(s) site URL, e.g. https://apps.senpan.cafe."),
+				"test_mode", pbool("Send every new post to the test channel and hold scheduled announcements."),
+				"test_channel_id", pstr("Channel id for test mode (required when test_mode is on)."))),
+			resps: []respEntry{ok("DiscordStatusResponse"), r("400", "Invalid value")}})
+	b.add("POST", "/api/discord/test", "Discord", "Send a test message", "admin",
+		"Posts a short test message to the channel. The server's dry-run and redirect valves apply; test mode does not (the channel is explicit).", opt{
+			body:  actionBody("Where to post.", nil, props("channel_id", pstr("Channel id."))),
+			resps: []respEntry{ok("DiscordTestResponse"), r("400", "No channel"), r("409", "Discord not connected"), r("502", "Discord refused or unreachable")}})
+	b.add("GET", "/api/discord/channels", "Discord", "Postable channels", "admin or any posting permission",
+		"Text and announcement channels in Discord's order (uncategorized first, then by category). `available` is false, with a `problem`, when the bot isn't connected or isn't in the server.", opt{
+			resps: []respEntry{ok("DiscordChannelsResponse")}})
+	b.add("GET", "/api/discord/roles", "Discord", "Pingable roles", "admin or any posting permission",
+		"The server's roles, highest first, without @everyone (the pickers offer it separately).", opt{
+			resps: []respEntry{ok("DiscordRolesResponse")}})
+	b.add("GET", "/api/discord/destinations/{key}", "Discord", "Where a system posts", "the system's page permission",
+		"Keys: `tea-rooms`, `affiliates`, `bookclub:<slug>`. A destination never saved comes back with no channel and repost mode `new`.", opt{
+			path:  []*openapi3.Parameter{pparam("key", "Destination key.")},
+			resps: []respEntry{ok("DiscordDestinationResponse"), r("404", "Unknown key")}})
+	b.add("PUT", "/api/discord/destinations/{key}", "Discord", "Set where a system posts", "the system's page permission",
+		"The channel, who to ping (`''`, `everyone` or `role:<id>`), and the repost mode: `new`, `replace`, or (tea rooms and affiliates only) `edit`.", opt{
+			path: []*openapi3.Parameter{pparam("key", "Destination key.")},
+			body: actionBody("Destination.", nil, props(
+				"channel_id", pstr("Channel id ('' = none)."),
+				"mention", pstr("'' | everyone | role:<role id>."),
+				"repost_mode", pstr("new | replace | edit."))),
+			resps: []respEntry{ok("DiscordDestinationResponse"), r("400", "Invalid value"), r("404", "Unknown key")}})
+	b.add("GET", "/api/discord/import", "Discord", "Webhook import report", "admin",
+		"What became of each old webhook when the app moved to the bot: `imported` (its system now posts to the same channel), `other_server` (it posted into another Discord server - pick a channel), `webhook_deleted`, `error` (Discord unreachable; retried at startup or via retry) or `pending`. Never carries a webhook URL.", opt{
+			resps: []respEntry{ok("DiscordImportResponse")}})
+	b.add("POST", "/api/discord/import/retry", "Discord", "Retry the webhook import", "admin",
+		"Looks up any webhook still pending or that failed before, then returns the report.", opt{
+			resps: []respEntry{ok("DiscordImportResponse")}})
+	b.add("DELETE", "/api/discord/legacy-webhooks", "Discord", "Remove the old webhooks", "admin",
+		"Deletes the imported webhooks from Discord (those in the bot's own server; others are skipped) and clears the import report. Irreversible. The dry-run valve suppresses the deletes but still clears the report.", opt{
+			resps: []respEntry{ok("DiscordLegacyCleanupResponse")}})
 
 	buildFilePaths(b)
 }

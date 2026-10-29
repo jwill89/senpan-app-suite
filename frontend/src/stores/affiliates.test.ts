@@ -1,16 +1,19 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
-import type { Affiliate } from '@/types/api'
+import type { Affiliate, DiscordDestination, DiscordPostResult } from '@/types/api'
 
 // Mock the typed endpoint layer so store actions run without the network.
 const ep = vi.hoisted(() => ({
-  list: vi.fn(async () => ({ affiliates: [] as Affiliate[], webhook_url: '' })),
+  list: vi.fn(async () => ({ affiliates: [] as Affiliate[], destination: dest() })),
   create: vi.fn(async () => ({ ok: true })),
   update: vi.fn(async () => ({ ok: true })),
   del: vi.fn(async () => ({ ok: true })),
   reorder: vi.fn(async () => ({ ok: true })),
-  post: vi.fn(async () => ({ ok: true })),
-  setWebhook: vi.fn(async (url: string) => ({ webhook_url: url })),
+  post: vi.fn(async (): Promise<DiscordPostResult> => ({ post: livePost(), note: '' })),
+  takeDown: vi.fn(async (): Promise<DiscordPostResult> => ({ note: '' })),
+  saveDestination: vi.fn(async (key: string, d: Partial<DiscordDestination>) => ({
+    destination: { ...dest(), ...d, key },
+  })),
 }))
 vi.mock('@/lib/endpoints', () => ({
   endpoints: {
@@ -21,10 +24,33 @@ vi.mock('@/lib/endpoints', () => ({
       delete: ep.del,
       reorder: ep.reorder,
       post: ep.post,
-      setWebhook: ep.setWebhook,
+      takeDown: ep.takeDown,
     },
+    discord: { saveDestination: ep.saveDestination },
   },
 }))
+
+/** The affiliates destination, set to edit in place. */
+function dest(over: Partial<DiscordDestination> = {}): DiscordDestination {
+  return {
+    key: 'affiliates',
+    channel_id: '200000000000000003',
+    mention: '',
+    repost_mode: 'edit',
+    updated_at: '',
+    ...over,
+  }
+}
+
+function livePost() {
+  return {
+    state: 'live',
+    channel_id: '200000000000000003',
+    url: 'https://discord.com/channels/1/2/3',
+    posted_at: '',
+    edited_at: '',
+  }
+}
 
 import { useAffiliatesStore } from './affiliates'
 import { useUiStore } from './ui'
@@ -57,15 +83,15 @@ beforeEach(() => {
 })
 
 describe('loading', () => {
-  it('loadAffiliates populates the list and the shared webhook', async () => {
+  it('loadAffiliates populates the list and where affiliates post', async () => {
     ep.list.mockResolvedValueOnce({
       affiliates: [affiliate(), affiliate({ id: 2 })],
-      webhook_url: 'https://discord.com/api/webhooks/1/x',
+      destination: dest({ channel_id: '42' }),
     })
     const s = useAffiliatesStore()
     await s.loadAffiliates()
     expect(s.affiliates).toHaveLength(2)
-    expect(s.webhookUrl).toBe('https://discord.com/api/webhooks/1/x')
+    expect(s.destination?.channel_id).toBe('42')
     expect(s.affiliatesLoading).toBe(false)
   })
 })
@@ -189,7 +215,7 @@ describe('deleteAffiliate', () => {
   })
 })
 
-describe('reorder / webhook / post', () => {
+describe('reorder / Discord', () => {
   it('reorder persists the new id order', async () => {
     const s = useAffiliatesStore()
     await s.reorder([3, 1, 2])
@@ -206,30 +232,46 @@ describe('reorder / webhook / post', () => {
     expect(ui.notify).toHaveBeenCalled()
   })
 
-  it('saveWebhook stores the trimmed url', async () => {
+  it('saveDestination saves where affiliates post', async () => {
     const s = useAffiliatesStore()
-    const ok = await s.saveWebhook('  https://discord.com/api/webhooks/1/x  ')
+    const ok = await s.saveDestination({ channel_id: '77', mention: '', repost_mode: 'new' })
     expect(ok).toBe(true)
-    expect(ep.setWebhook).toHaveBeenCalledWith('https://discord.com/api/webhooks/1/x')
-    expect(s.webhookUrl).toBe('https://discord.com/api/webhooks/1/x')
+    expect(ep.saveDestination).toHaveBeenCalledWith('affiliates', {
+      channel_id: '77',
+      mention: '',
+      repost_mode: 'new',
+    })
+    expect(s.destination?.channel_id).toBe('77')
   })
 
-  it('postAffiliate refuses without a webhook', async () => {
+  it('postAffiliate refuses without a channel', async () => {
     const ui = useUiStore()
     ui.notify = vi.fn()
     const s = useAffiliatesStore()
-    s.webhookUrl = ''
+    s.destination = dest({ channel_id: '' })
     await s.postAffiliate(affiliate({ id: 5 }))
     expect(ep.post).not.toHaveBeenCalled()
     expect(ui.notify).toHaveBeenCalled()
   })
 
-  it('postAffiliate posts after confirmation when a webhook is set', async () => {
+  it('postAffiliate posts after confirmation and shows the post on the row', async () => {
     const ui = useUiStore()
     ui.confirm = vi.fn(async () => true)
     const s = useAffiliatesStore()
-    s.webhookUrl = 'https://discord.com/api/webhooks/1/x'
-    await s.postAffiliate(affiliate({ id: 5 }))
+    s.destination = dest()
+    s.affiliates = [affiliate({ id: 5 })]
+    await s.postAffiliate(s.affiliates[0])
     expect(ep.post).toHaveBeenCalledWith(5)
+    expect(s.affiliates[0].discord_post?.state).toBe('live')
+  })
+
+  it('takeDownAffiliate deletes the post after confirmation', async () => {
+    const ui = useUiStore()
+    ui.confirm = vi.fn(async () => true)
+    const s = useAffiliatesStore()
+    s.affiliates = [affiliate({ id: 5, discord_post: livePost() })]
+    await s.takeDownAffiliate(s.affiliates[0])
+    expect(ep.takeDown).toHaveBeenCalledWith(5)
+    expect(s.affiliates[0].discord_post).toBeUndefined()
   })
 })

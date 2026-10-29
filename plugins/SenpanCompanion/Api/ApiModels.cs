@@ -450,8 +450,9 @@ public sealed class TeaRoom
     public string LockedUntil { get; set; } = string.Empty;
 }
 
-// GET /api/tea-rooms also returns the shared Discord webhook, but the plugin never
-// posts rooms, so it's left out - an extra JSON field is simply ignored on decode.
+// GET /api/tea-rooms also returns where rooms post in Discord and each room's post,
+// but the plugin never posts rooms, so those are left out - an extra JSON field is
+// simply ignored on decode.
 public sealed class TeaRoomsResponse
 {
     public List<TeaRoom> TeaRooms { get; set; } = new();

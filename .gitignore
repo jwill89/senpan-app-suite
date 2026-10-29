@@ -2,6 +2,8 @@
 # Anchored to repo root so the rule doesn't also catch nested dirs like
 # plugins/SenpanCompanion/Data/ (git is case-insensitive on Windows).
 /devdata/
+# Local working plans - for our own use, never committed.
+/plans/
 .idea/
 .vscode/
 vendor/

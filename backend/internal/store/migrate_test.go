@@ -67,14 +67,25 @@ func TestMigrateBookClubEventsRetired(t *testing.T) {
 		t.Errorf("events webhook setting should have been removed; found %d", leftover)
 	}
 
-	var name, savedURL string
+	// v27 made the events webhook an announcement type; v70 (the move to the bot) then
+	// took the URL off the type and queued it for the webhook import.
+	var typeID int64
+	var savedURL string
 	if err := db.QueryRow(
-		`SELECT name, webhook_url FROM announcement_types WHERE webhook_url = ?`, webhook,
-	).Scan(&name, &savedURL); err != nil {
+		`SELECT id, webhook_url FROM announcement_types WHERE name = 'Yaoi Book Club Events'`,
+	).Scan(&typeID, &savedURL); err != nil {
 		t.Fatalf("expected a migrated announcement type: %v", err)
 	}
-	if name != "Yaoi Book Club Events" {
-		t.Errorf("migrated type name = %q; want %q", name, "Yaoi Book Club Events")
+	if savedURL != "" {
+		t.Errorf("type still holds its webhook after v70: %q", savedURL)
+	}
+	var queuedURL string
+	if err := db.QueryRow(`SELECT url FROM discord_legacy_webhooks WHERE source = ?`,
+		fmt.Sprintf("announcement_type:%d", typeID)).Scan(&queuedURL); err != nil {
+		t.Fatalf("the events webhook was not queued for import: %v", err)
+	}
+	if queuedURL != webhook {
+		t.Errorf("queued URL = %q; want %q", queuedURL, webhook)
 	}
 
 	// Idempotent: re-running the webhook migration adds nothing (no setting left).
@@ -82,12 +93,12 @@ func TestMigrateBookClubEventsRetired(t *testing.T) {
 		t.Fatalf("second migrateBookClubEventWebhooks: %v", err)
 	}
 	var typeCount int
-	if err := db.QueryRow(`SELECT COUNT(*) FROM announcement_types WHERE webhook_url = ?`, webhook).
+	if err := db.QueryRow(`SELECT COUNT(*) FROM announcement_types WHERE name = 'Yaoi Book Club Events'`).
 		Scan(&typeCount); err != nil {
 		t.Fatal(err)
 	}
 	if typeCount != 1 {
-		t.Errorf("announcement types with the webhook = %d; want 1", typeCount)
+		t.Errorf("announcement types named for the club = %d; want 1", typeCount)
 	}
 }
 

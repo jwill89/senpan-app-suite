@@ -12,14 +12,17 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"os"
 	"os/signal"
 	"strings"
 	"syscall"
 	"time"
 
+	"app-suite/internal/discord"
 	"app-suite/internal/logging"
 	"app-suite/internal/model"
+	"app-suite/internal/secretbox"
 	"app-suite/internal/server"
 	"app-suite/internal/store"
 	"app-suite/internal/ws"
@@ -46,8 +49,9 @@ func run() error {
 	turnstileSecret := flag.String("turnstile-secret", "", "Cloudflare Turnstile secret key (env APPSUITE_TURNSTILE_SECRET; empty = login bot check disabled)")
 	turnstileSiteKey := flag.String("turnstile-sitekey", "", "Cloudflare Turnstile public site key (env APPSUITE_TURNSTILE_SITEKEY)")
 	logFile := flag.String("log-file", "/var/log/senpan/senpan.log", "Rotating JSON log file path (daily midnight rotation); empty = stdout only")
-	webhookOverride := flag.String("webhook-override", "", "Redirect EVERY outbound Discord post to this webhook URL (env APPSUITE_WEBHOOK_OVERRIDE; dev safety when running on a copy of live data)")
-	webhookDryRun := flag.Bool("webhook-dry-run", false, "Log outbound Discord posts instead of sending them (env APPSUITE_WEBHOOK_DRY_RUN=1); wins over -webhook-override")
+	discordDryRun := flag.Bool("discord-dry-run", false, "Suppress every Discord bot write (post, edit, delete) and only log it (env APPSUITE_DISCORD_DRY_RUN=1); dev safety")
+	discordRedirect := flag.String("discord-redirect-channel", "", "Send every new Discord bot post to this channel ID instead (env APPSUITE_DISCORD_REDIRECT_CHANNEL); dev safety")
+	discordAPI := flag.String("discord-api-url", "", "Talk to a local fake Discord at this http://localhost URL instead of discord.com (env APPSUITE_DISCORD_API_URL); local testing only")
 	flag.Parse()
 
 	// Logging: install the JSON slog handler before anything logs. Always writes
@@ -78,6 +82,9 @@ func run() error {
 	if finalSecret == "" {
 		finalSecret = os.Getenv("APPSUITE_SESSION_SECRET")
 	}
+	// Only a configured secret can protect stored values: a random one is gone at the next
+	// restart, and anything sealed under it with it.
+	secretConfigured := finalSecret != ""
 	if finalSecret == "" {
 		// Generate a secure random 32-byte secret
 		b := make([]byte, 32)
@@ -110,24 +117,42 @@ func run() error {
 	srv.SetTurnstile(tsSecret, tsSiteKey)
 	srv.SetLogFile(*logFile) // GET /api/logs tails this file
 
-	// Outbound-Discord safety valves. A development server is normally pointed at a
-	// COPY OF THE LIVE DATABASE, whose announcement types, book clubs, affiliates and
-	// tea rooms all carry real webhook URLs - so without one of these, simply starting
-	// the process lets the announcement scheduler post to production channels. Both
-	// are off unless asked for, so production behaviour is unchanged; both are logged
-	// loudly at startup, because "did that actually post?" must never be a guess.
-	hookOverride := *webhookOverride
-	if hookOverride == "" {
-		hookOverride = os.Getenv("APPSUITE_WEBHOOK_OVERRIDE")
+	// The Discord bot. Its token is stored sealed under a key derived from the session
+	// secret, so a copy of the database is useless without this server's secret; with no
+	// configured secret there is no key, and the Discord page says a token can't be stored.
+	var tokenBox *secretbox.Box
+	if secretConfigured {
+		tokenBox, err = secretbox.New(finalSecret, server.DiscordTokenPurpose)
+		if err != nil {
+			return fmt.Errorf("derive the discord token key: %w", err)
+		}
 	}
-	hookDryRun := *webhookDryRun || os.Getenv("APPSUITE_WEBHOOK_DRY_RUN") == "1"
-	srv.SetWebhookPolicy(hookOverride, hookDryRun)
+	apiBase := *discordAPI
+	if apiBase == "" {
+		apiBase = os.Getenv("APPSUITE_DISCORD_API_URL")
+	}
+	if apiBase != "" {
+		// A fake Discord for local testing only. Anything else would send the bot token
+		// somewhere it doesn't belong, so refuse to start rather than guess.
+		if u, perr := url.Parse(apiBase); perr != nil || u.Scheme != "http" ||
+			(u.Hostname() != "localhost" && u.Hostname() != "127.0.0.1") {
+			return fmt.Errorf("-discord-api-url must be an http://localhost or http://127.0.0.1 address")
+		}
+		slog.Warn("DISCORD FAKE: the bot talks to a local fake Discord", "url", apiBase)
+	}
+	botDryRun := *discordDryRun || os.Getenv("APPSUITE_DISCORD_DRY_RUN") == "1"
+	botRedirect := *discordRedirect
+	if botRedirect == "" {
+		botRedirect = os.Getenv("APPSUITE_DISCORD_REDIRECT_CHANNEL")
+	}
 	switch {
-	case hookDryRun:
-		slog.Warn("DISCORD DRY RUN: outbound posts are suppressed and only logged")
-	case hookOverride != "":
-		slog.Warn("DISCORD OVERRIDE: every outbound post is redirected to the override webhook")
+	case botDryRun:
+		slog.Warn("DISCORD BOT DRY RUN: every bot post, edit and delete is suppressed and only logged")
+	case botRedirect != "":
+		slog.Warn("DISCORD BOT REDIRECT: every new bot post goes to one channel", "channel", botRedirect)
 	}
+	bot := discord.NewService(apiBase, "")
+	srv.SetDiscord(bot, tokenBox, botDryRun, botRedirect)
 
 	// Live log tail: forward each JSON log line to admin WebSocket clients as a
 	// {"type":"log","entry":...} message. Gated on an admin actually watching so the
@@ -192,6 +217,31 @@ func run() error {
 		srv.RunTeaRoomLockScheduler(schedCtx)
 	}()
 
+	// The bot's gateway session (keeps it online). Same shared context; it stops after the
+	// schedulers that might still be posting through it.
+	botDone := make(chan struct{})
+	go func() {
+		defer close(botDone)
+		bot.Run(schedCtx)
+	}()
+
+	// In-place edits of tea-room and affiliate posts, queued by their handlers and the
+	// lock sweeper. On shutdown it sends what is still pending before returning.
+	discordEditsDone := make(chan struct{})
+	go func() {
+		defer close(discordEditsDone)
+		srv.RunDiscordWorker(schedCtx)
+	}()
+
+	// The one-time move off webhooks: look up any old webhook URLs the v70 migration set
+	// aside and give their systems the channels they posted to. Quick, and a no-op once
+	// done; waited for on shutdown so a result it has just written isn't cut off.
+	importDone := make(chan struct{})
+	go func() {
+		defer close(importDone)
+		srv.RunDiscordImport(schedCtx)
+	}()
+
 	// Graceful shutdown: listen for SIGINT/SIGTERM.
 	shutdown := make(chan os.Signal, 1)
 	signal.Notify(shutdown, os.Interrupt, syscall.SIGTERM)
@@ -250,6 +300,24 @@ func run() error {
 	case <-roomLockDone:
 	case <-ctx.Done():
 		slog.Warn("tea-room lock scheduler did not stop within the shutdown deadline")
+	}
+
+	// The Discord edit worker, which may still be sending the last queued edits (and so
+	// writing their records), then the bot's gateway session, and the webhook import.
+	select {
+	case <-discordEditsDone:
+	case <-ctx.Done():
+		slog.Warn("discord edit worker did not stop within the shutdown deadline")
+	}
+	select {
+	case <-botDone:
+	case <-ctx.Done():
+		slog.Warn("discord gateway did not stop within the shutdown deadline")
+	}
+	select {
+	case <-importDone:
+	case <-ctx.Done():
+		slog.Warn("discord webhook import did not stop within the shutdown deadline")
 	}
 
 	// Close all WebSocket connections first.

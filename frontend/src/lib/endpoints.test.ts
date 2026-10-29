@@ -587,16 +587,16 @@ describe('stamp rallies (hybrid REST)', () => {
 
 describe('announcement types (hybrid REST)', () => {
   it('createType POSTs the type fields to the collection', async () => {
-    await endpoints.announcements.createType({ id: 0, name: 'News', webhook_url: 'https://d/w' })
+    await endpoints.announcements.createType({ id: 0, name: 'News', channel_id: '123' })
     expect(apiPost).toHaveBeenCalledWith('announcement-types', {
       name: 'News',
-      webhook_url: 'https://d/w',
+      channel_id: '123',
     })
   })
 
   it('updateType PUTs the type resource by id', async () => {
-    await endpoints.announcements.updateType(5, { id: 5, name: 'News', webhook_url: '' })
-    expect(apiPut).toHaveBeenCalledWith('announcement-types/5', { name: 'News', webhook_url: '' })
+    await endpoints.announcements.updateType(5, { id: 5, name: 'News', channel_id: '' })
+    expect(apiPut).toHaveBeenCalledWith('announcement-types/5', { name: 'News', channel_id: '' })
   })
 
   it('deleteType DELETEs the type resource', async () => {
@@ -605,20 +605,22 @@ describe('announcement types (hybrid REST)', () => {
   })
 })
 
-describe('announcement roles (hybrid REST)', () => {
-  it('createRole POSTs the role fields to the collection', async () => {
-    await endpoints.announcements.createRole({ id: 0, name: 'Crew', role_id: '123' })
-    expect(apiPost).toHaveBeenCalledWith('announcement-roles', { name: 'Crew', role_id: '123' })
+describe('Discord posts and destinations', () => {
+  it('posts and takes down a tea room or an affiliate', async () => {
+    await endpoints.teaRooms.post(3)
+    expect(apiPost).toHaveBeenCalledWith('tea-rooms/3/post', undefined)
+    await endpoints.teaRooms.takeDown(3)
+    expect(apiDelete).toHaveBeenCalledWith('tea-rooms/3/post')
+    await endpoints.affiliates.takeDown(4)
+    expect(apiDelete).toHaveBeenCalledWith('affiliates/4/post')
   })
 
-  it('updateRole PUTs the role resource by id', async () => {
-    await endpoints.announcements.updateRole(6, { id: 6, name: 'Crew', role_id: '123' })
-    expect(apiPut).toHaveBeenCalledWith('announcement-roles/6', { name: 'Crew', role_id: '123' })
-  })
-
-  it('deleteRole DELETEs the role resource', async () => {
-    await endpoints.announcements.deleteRole(6)
-    expect(apiDelete).toHaveBeenCalledWith('announcement-roles/6')
+  it('reads and saves a destination, escaping the key', async () => {
+    await endpoints.discord.destination('bookclub:yaoi')
+    expect(apiGet).toHaveBeenCalledWith('discord/destinations/bookclub%3Ayaoi')
+    const dest = { channel_id: '5', mention: 'everyone', repost_mode: 'replace' as const }
+    await endpoints.discord.saveDestination('tea-rooms', dest)
+    expect(apiPut).toHaveBeenCalledWith('discord/destinations/tea-rooms', dest)
   })
 })
 

@@ -88,6 +88,7 @@ func tags() openapi3.Tags {
 		{"Announcements", "Scheduled Discord announcements, types, and roles"},
 		{"Winners Log", "Confirmed winners log"},
 		{"Settings", "App settings"},
+		{"Discord", "The built-in Discord bot: token, configuration, status, and the channel/role lists for pickers"},
 		{"Files", "Fonts, Carrd projects, and central image hosting"},
 	}
 	out := make(openapi3.Tags, 0, len(names))

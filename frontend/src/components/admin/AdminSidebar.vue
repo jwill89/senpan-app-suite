@@ -377,6 +377,13 @@ function toggleSection(section: AdminSection): void {
         </button>
         <button
           v-if="auth.isAdmin"
+          :class="{ 'is-active': admin.adminTab === 'system-discord' }"
+          @click="go('system-discord')"
+        >
+          <font-awesome-icon :icon="['fab', 'discord']" /> Discord
+        </button>
+        <button
+          v-if="auth.isAdmin"
           :class="{ 'is-active': admin.adminTab === 'system-logs' }"
           @click="go('system-logs')"
         >

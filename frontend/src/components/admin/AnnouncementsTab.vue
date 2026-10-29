@@ -7,7 +7,7 @@
  * type each open as their own full-tab screen (a lightweight in-tab router via
  * `screen`), so the long form isn't shown all the time.
  *
- *   - Types: name + Discord webhook of a posting destination.
+ *   - Types: name + the Discord channel a posting destination posts to.
  *   - Announcements: title, type, optional start/end window, markdown details,
  *     optional uploaded-or-reused image, and an optional schedule (one-time,
  *     daily, weekly multi-weekday, or monthly Nth-weekday). Recurring schedules
@@ -33,18 +33,21 @@ import FormField from '@/components/common/ui/FormField.vue'
 import FormRow from '@/components/common/ui/FormRow.vue'
 import FormActions from '@/components/common/ui/FormActions.vue'
 import EmptyState from '@/components/common/ui/EmptyState.vue'
+import ChannelPicker from '@/components/common/ui/ChannelPicker.vue'
+import RolePicker from '@/components/common/ui/RolePicker.vue'
 import { useAnnouncementsStore } from '@/stores/announcements'
+import { useDiscordStore } from '@/stores/discord'
 import { detailPartCount } from '@/lib/announcementDetails'
 import { formatServerTimestamp } from '@/lib/datetime'
 import { supportedTimezones } from '@/lib/constants'
 import { nextUid } from '@/lib/uid'
-import type { Announcement, AnnouncementType, AnnouncementRole } from '@/types/api'
+import type { Announcement, AnnouncementType } from '@/types/api'
 import { DISCORD_TIME_FORMATS } from '@/types/api'
 
 const store = useAnnouncementsStore()
 
 /** Which full-tab screen is showing. */
-type Screen = 'list' | 'form' | 'types' | 'type-form' | 'roles' | 'role-form'
+type Screen = 'list' | 'form' | 'types' | 'type-form'
 const screen = ref<Screen>('list')
 
 const timezones = supportedTimezones()
@@ -74,13 +77,6 @@ function onReorder(): void {
 // How many Discord embed fields the current details will occupy. >1 means the
 // post will be split (at line breaks) to stay under Discord's 1024-char field cap.
 const detailParts = computed(() => detailPartCount(store.form.details))
-
-/** Options for the optional "tag a role" dropdown on the announcement form. */
-const mentionOptions = computed(() => [
-  { value: '', label: 'Do Not Tag' },
-  { value: 'everyone', label: 'Tag @everyone' },
-  ...store.roles.map((r) => ({ value: `role:${r.id}`, label: `Tag @${r.name}` })),
-])
 
 const isRecurring = computed(() =>
   ['daily', 'weekly', 'monthly'].includes(store.form.schedule_kind),
@@ -118,9 +114,12 @@ function scheduleLabel(a: Announcement): string {
   }
 }
 
-function maskWebhook(url: string): string {
-  if (!url) return 'No webhook set'
-  return `...${url.slice(-6)}`
+const discord = useDiscordStore()
+
+/** Where a type posts, for its row: "#channel", the id when the bot can't see it, or none. */
+function typeChannel(t: AnnouncementType): string {
+  if (!t.channel_id) return 'No channel picked'
+  return discord.channelLabel(t.channel_id) || `Channel ${t.channel_id}`
 }
 
 function toggleWeekday(day: number): void {
@@ -186,6 +185,8 @@ async function submit(): Promise<void> {
 
 function openTypes(): void {
   store.resetTypeForm()
+  // The list names each type's channel, which needs the server's channel list.
+  if (!discord.directoryAvailable && !discord.loadingDirectory) void discord.loadDirectory()
   screen.value = 'types'
 }
 function openNewType(): void {
@@ -199,22 +200,6 @@ function openEditType(t: AnnouncementType): void {
 async function submitType(): Promise<void> {
   if (await store.saveType()) screen.value = 'types'
 }
-
-function openRoles(): void {
-  store.resetRoleForm()
-  screen.value = 'roles'
-}
-function openNewRole(): void {
-  store.resetRoleForm()
-  screen.value = 'role-form'
-}
-function openEditRole(r: AnnouncementRole): void {
-  store.editRole(r)
-  screen.value = 'role-form'
-}
-async function submitRole(): Promise<void> {
-  if (await store.saveRole()) screen.value = 'roles'
-}
 </script>
 
 <template>
@@ -224,9 +209,6 @@ async function submitRole(): Promise<void> {
       <template #actions>
         <button class="btn-view btn-sm" @click="openTypes()">
           <font-awesome-icon :icon="['fad', 'folder-open']" /> Manage Types
-        </button>
-        <button class="btn-view btn-sm" @click="openRoles()">
-          <font-awesome-icon :icon="['fad', 'at']" /> Manage Roles
         </button>
         <button class="btn-confirm btn-sm" @click="openNew()">
           <font-awesome-icon :icon="['fas', 'plus']" /> New Announcement
@@ -250,7 +232,7 @@ async function submitRole(): Promise<void> {
       </template>
 
       <EmptyState v-if="!hasTypes">
-        Create an <strong>Announcement Type</strong> (with a Discord webhook) under
+        Create an <strong>Announcement Type</strong> (with a Discord channel) under
         <button class="link-btn" @click="openTypes()">Manage Types</button> first - every
         announcement posts through a type.
       </EmptyState>
@@ -329,6 +311,12 @@ async function submitRole(): Promise<void> {
               <span v-if="a.skip_count > 0" class="badge badge--warning announcement-badge"
                 ><font-awesome-icon :icon="['fas', 'forward-step']" />
                 {{ a.skip_count === 1 ? 'next skipped' : `next ${a.skip_count} skipped` }}</span
+              >
+              <span v-if="a.repost_mode === 'replace'" class="badge badge--muted announcement-badge"
+                >Replaces its last post</span
+              >
+              <a v-if="a.discord_url" :href="a.discord_url" target="_blank" rel="noopener"
+                >View in Discord</a
               >
             </p>
 
@@ -543,13 +531,27 @@ async function submitRole(): Promise<void> {
       <!-- Tag a role: optional mention posted in the message content above the embed -->
       <FormField
         label="Tag a role (optional)"
-        help="Posted above the embed (mentions inside an embed don't notify). Manage the list under “Manage Roles”."
+        html-for="announcement-ping"
+        help="Posted above the embed (mentions inside an embed don't notify)."
       >
-        <select v-model="store.form.mention" aria-label="Role to tag">
-          <option v-for="opt in mentionOptions" :key="opt.value" :value="opt.value">
-            {{ opt.label }}
-          </option>
-        </select>
+        <RolePicker id="announcement-ping" v-model="store.form.mention" />
+      </FormField>
+      <FormField
+        label="Previous post"
+        help="For a recurring announcement: keep the channel tidy by removing last time's post once the new one is up."
+      >
+        <label class="checkbox-inline">
+          <input
+            type="checkbox"
+            :checked="store.form.repost_mode === 'replace'"
+            @change="
+              store.form.repost_mode = ($event.target as HTMLInputElement).checked
+                ? 'replace'
+                : 'new'
+            "
+          />
+          Delete the previous post when this posts again
+        </label>
       </FormField>
 
       <!-- Discord buttons: optional link buttons rendered beneath the embed -->
@@ -709,7 +711,7 @@ async function submitRole(): Promise<void> {
         <ListRow v-for="t in store.sortedTypes" :key="t.id">
           <h4 class="list-row-title">{{ t.name }}</h4>
           <p class="text-sm text-muted">
-            <font-awesome-icon :icon="['fab', 'discord']" /> {{ maskWebhook(t.webhook_url) }}
+            <font-awesome-icon :icon="['fab', 'discord']" /> {{ typeChannel(t) }}
           </p>
           <template #actions>
             <button class="btn-confirm btn-sm" aria-label="Edit type" @click="openEditType(t)">
@@ -740,13 +742,15 @@ async function submitRole(): Promise<void> {
         />
       </FormField>
       <FormField
-        label="Discord webhook URL"
-        help="Announcements of this type post to this channel webhook."
+        label="Channel"
+        html-for="announcement-type-channel"
+        help="Announcements of this type post to this channel. Until one is picked, they wait."
       >
-        <input
-          v-model="store.typeForm.webhook_url"
-          placeholder="https://discord.com/api/webhooks/..."
-          aria-label="Discord webhook URL"
+        <ChannelPicker
+          id="announcement-type-channel"
+          v-model="store.typeForm.channel_id"
+          allow-none
+          placeholder="No channel yet"
         />
       </FormField>
       <FormActions align="start">
@@ -758,80 +762,6 @@ async function submitRole(): Promise<void> {
         >
           <LoadingSpinner v-if="store.savingType" label="Saving..." />
           <template v-else>{{ store.typeForm.id ? 'Save Changes' : 'Add Type' }}</template>
-        </button>
-      </FormActions>
-    </AdminPanel>
-
-    <!-- -- Roles list ------------------------------------------------------- -->
-    <AdminPanel v-else-if="screen === 'roles'">
-      <SubPageHeader title="Taggable Roles" :icon="['fad', 'at']" @back="screen = 'list'" />
-      <p class="text-muted text-sm mb-16">
-        Roles available to tag on an announcement. Each is a group name plus its Discord role ID
-        (enable Developer Mode in Discord, right-click a role -> “Copy Role ID”).
-      </p>
-      <div class="flex-toolbar flex-end mb-16">
-        <button class="btn-confirm btn-sm" @click="openNewRole()">
-          <font-awesome-icon :icon="['fas', 'plus']" /> New Role
-        </button>
-      </div>
-
-      <div v-if="store.roles.length" class="list-rows">
-        <ListRow v-for="r in store.roles" :key="r.id">
-          <h4 class="list-row-title">{{ r.name }}</h4>
-          <p class="text-sm text-muted">
-            <font-awesome-icon :icon="['fad', 'at']" /> {{ r.role_id }}
-          </p>
-          <template #actions>
-            <button class="btn-confirm btn-sm" aria-label="Edit role" @click="openEditRole(r)">
-              <font-awesome-icon :icon="['fas', 'pen-to-square']" />
-            </button>
-            <button class="btn-danger btn-sm" aria-label="Delete role" @click="store.deleteRole(r)">
-              <font-awesome-icon :icon="['fas', 'trash']" />
-            </button>
-          </template>
-        </ListRow>
-      </div>
-      <EmptyState v-else text="No roles yet. Add one with “New Role”." />
-    </AdminPanel>
-
-    <!-- -- Role form -------------------------------------------------------- -->
-    <AdminPanel v-else-if="screen === 'role-form'">
-      <SubPageHeader
-        :icon="['fad', 'at']"
-        :title="store.roleForm.id ? 'Edit Role' : 'New Role'"
-        @back="screen = 'roles'"
-      />
-
-      <FormField label="Group name" required>
-        <input
-          v-model="store.roleForm.name"
-          placeholder="e.g. Event Crew"
-          aria-label="Role group name"
-        />
-      </FormField>
-      <FormField
-        label="Discord role ID"
-        required
-        help="The numeric role ID. In Discord: Settings -> Advanced -> Developer Mode, then right-click the role -> Copy Role ID."
-      >
-        <input
-          v-model="store.roleForm.role_id"
-          placeholder="e.g. 123456789012345678"
-          inputmode="numeric"
-          aria-label="Discord role ID"
-        />
-      </FormField>
-      <FormActions align="start">
-        <button class="btn-neutral" @click="screen = 'roles'">Cancel</button>
-        <button
-          class="btn-confirm"
-          :disabled="
-            store.savingRole || !store.roleForm.name.trim() || !store.roleForm.role_id.trim()
-          "
-          @click="submitRole()"
-        >
-          <LoadingSpinner v-if="store.savingRole" label="Saving..." />
-          <template v-else>{{ store.roleForm.id ? 'Save Changes' : 'Add Role' }}</template>
         </button>
       </FormActions>
     </AdminPanel>

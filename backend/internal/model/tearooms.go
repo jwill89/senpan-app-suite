@@ -5,14 +5,14 @@ package model
 // markdown description, a handful of status flags (seasonal, open, lockable,
 // discounted), a lock with an optional expiry, an image picked from the shared
 // image library, and a Discord embed accent colour. Admins manage a
-// drag-orderable list of them and post each as a Discord embed to a single shared
-// webhook (see the tea-room webhook setting).
+// drag-orderable list of them, and the bot posts each as a Discord embed to the
+// Tea Rooms channel (the "tea-rooms" destination).
 //
 // The list is also exposed read-only through a public, cross-origin API so an
 // external Carrd site can render live room availability and pricing.
 type TeaRoom struct {
 	ID   int64  `json:"id"`
-	Name string `json:"name"`     // room name (embed title)
+	Name string `json:"name"` // room name (embed title)
 	// Subtitle is a short secondary line under the name (e.g. a Japanese phrase);
 	// stored as UTF-8, so it holds any script natively.
 	Subtitle string `json:"subtitle"`
@@ -43,33 +43,28 @@ type TeaRoom struct {
 	Color       string `json:"color"` // embed accent colour, "#rrggbb" ("" = brand default)
 	SortOrder   int    `json:"sort_order"`
 	CreatedAt   string `json:"created_at"`
+	// DiscordPost is the room's post in Discord. Filled on the admin list only; never
+	// on the public API.
+	DiscordPost *DiscordPostState `json:"discord_post,omitempty"`
 }
 
 // TeaRoomsResponse is the body of GET /api/tea-rooms - every room in the admin's
-// chosen order, plus the shared Discord webhook (returned only to callers who can
-// manage the feature; never exposed on the public API). JSON: {"tea_rooms": [...],
-// "webhook_url": "..."}.
+// chosen order, each with its Discord post, plus where tea rooms post.
 type TeaRoomsResponse struct {
-	TeaRooms   []TeaRoom `json:"tea_rooms"`
-	WebhookURL string    `json:"webhook_url"`
+	TeaRooms    []TeaRoom          `json:"tea_rooms"`
+	Destination DiscordDestination `json:"destination"`
 }
 
 // TeaRoomResponse is the body of POST /api/tea-rooms (create), PUT /api/tea-rooms/
-// {id} (replace), PATCH /api/tea-rooms/{id} (toggle), and POST /api/tea-rooms/{id}/
-// post (post to Discord) - the saved room. The handler passes the *TeaRoom from
-// GetTeaRoom through, so the pointer is preserved (nil -> null). JSON: {"tea_room": ...}.
+// {id} (replace) and PATCH /api/tea-rooms/{id} (toggle) - the saved room. The handler
+// passes the *TeaRoom from GetTeaRoom through, so the pointer is preserved (nil ->
+// null). JSON: {"tea_room": ...}.
 type TeaRoomResponse struct {
 	TeaRoom *TeaRoom `json:"tea_room"`
 }
 
-// TeaRoomWebhookResponse is the body of PUT /api/tea-rooms/webhook - the saved
-// shared Discord webhook. JSON: {"webhook_url": "..."}.
-type TeaRoomWebhookResponse struct {
-	WebhookURL string `json:"webhook_url"`
-}
-
 // TeaRoomsPublicResponse is the body of the public GET /api/tea-rooms/public - the
-// full room list for an external site (no webhook). JSON: {"tea_rooms": [...]}.
+// full room list for an external site (never its Discord posts). JSON: {"tea_rooms": [...]}.
 type TeaRoomsPublicResponse struct {
 	TeaRooms []TeaRoom `json:"tea_rooms"`
 }

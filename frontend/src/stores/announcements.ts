@@ -1,7 +1,7 @@
 /**
  * Announcement management store (admin).
  *
- * Covers Announcement Types (a named Discord webhook destination) and the
+ * Covers Announcement Types (a named Discord channel) and the
  * Announcements that post to them - CRUD, image upload + reuse, manual "send
  * now", "skip next occurrence", and a client-side search filter. Mirrors the
  * structure of the book-club store.
@@ -21,20 +21,13 @@ import type {
   AnnouncementForm,
   AnnouncementType,
   AnnouncementTypeForm,
-  AnnouncementRole,
-  AnnouncementRoleForm,
   ScheduleKind,
 } from '@/types/api'
 import { useUiStore } from './ui'
 
 /** A blank announcement-type form (used for "Add type" and reset after save). */
 function emptyTypeForm(): AnnouncementTypeForm {
-  return { id: 0, name: '', webhook_url: '' }
-}
-
-/** A blank taggable-role form (used for "Add role" and reset after save). */
-function emptyRoleForm(): AnnouncementRoleForm {
-  return { id: 0, name: '', role_id: '' }
+  return { id: 0, name: '', channel_id: '' }
 }
 
 /** A blank announcement form with sensible schedule defaults. */
@@ -61,6 +54,7 @@ function emptyForm(): AnnouncementForm {
     week_of_month: 3,
     buttons: [],
     mention: '',
+    repost_mode: 'new',
   }
 }
 
@@ -94,12 +88,10 @@ export const useAnnouncementsStore = defineStore('announcements', () => {
   const types = ref<AnnouncementType[]>([])
   /** Types sorted alphabetically by name (for the form dropdown + types list). */
   const sortedTypes = computed(() => [...types.value].sort((a, b) => a.name.localeCompare(b.name)))
-  const roles = ref<AnnouncementRole[]>([])
   const announcements = ref<Announcement[]>([])
 
   // Forms.
   const typeForm = ref<AnnouncementTypeForm>(emptyTypeForm())
-  const roleForm = ref<AnnouncementRoleForm>(emptyRoleForm())
   const form = ref<AnnouncementForm>(emptyForm())
 
   // Search + category (type) filters (client-side, like other admin tabs).
@@ -118,7 +110,6 @@ export const useAnnouncementsStore = defineStore('announcements', () => {
   // In-flight flags.
   const loading = ref(false)
   const savingType = ref(false)
-  const savingRole = ref(false)
   const saving = ref(false)
   const sendingId = ref<number | null>(null)
   const skippingId = ref<number | null>(null)
@@ -128,13 +119,11 @@ export const useAnnouncementsStore = defineStore('announcements', () => {
   async function load(): Promise<void> {
     loading.value = true
     try {
-      const [t, r, a] = await Promise.all([
+      const [t, a] = await Promise.all([
         endpoints.announcements.types(),
-        endpoints.announcements.roles(),
         endpoints.announcements.list(),
       ])
       types.value = t.types
-      roles.value = r.roles
       announcements.value = a.announcements
     } catch (e) {
       ui.notify((e as Error).message, 'error')
@@ -147,15 +136,6 @@ export const useAnnouncementsStore = defineStore('announcements', () => {
     try {
       const data = await endpoints.announcements.types()
       types.value = data.types
-    } catch (e) {
-      ui.notify((e as Error).message, 'error')
-    }
-  }
-
-  async function loadRoles(): Promise<void> {
-    try {
-      const data = await endpoints.announcements.roles()
-      roles.value = data.roles
     } catch (e) {
       ui.notify((e as Error).message, 'error')
     }
@@ -191,7 +171,7 @@ export const useAnnouncementsStore = defineStore('announcements', () => {
   }
 
   function editType(t: AnnouncementType): void {
-    typeForm.value = { id: t.id, name: t.name, webhook_url: t.webhook_url }
+    typeForm.value = { id: t.id, name: t.name, channel_id: t.channel_id }
   }
 
   async function saveType(): Promise<boolean> {
@@ -202,7 +182,7 @@ export const useAnnouncementsStore = defineStore('announcements', () => {
     }
     savingType.value = true
     try {
-      const payload = { ...f, name: f.name.trim() }
+      const payload = { ...f, name: f.name.trim(), channel_id: f.channel_id.trim() }
       if (f.id) {
         await endpoints.announcements.updateType(f.id, payload)
       } else {
@@ -238,64 +218,6 @@ export const useAnnouncementsStore = defineStore('announcements', () => {
     }
   }
 
-  // -- Roles (taggable Discord roles) -------------------------------------------
-
-  function resetRoleForm(): void {
-    roleForm.value = emptyRoleForm()
-  }
-
-  function editRole(r: AnnouncementRole): void {
-    roleForm.value = { id: r.id, name: r.name, role_id: r.role_id }
-  }
-
-  async function saveRole(): Promise<boolean> {
-    const f = roleForm.value
-    if (!f.name.trim()) {
-      ui.notify('Role name is required', 'error')
-      return false
-    }
-    if (!/^\d+$/.test(f.role_id.trim())) {
-      ui.notify('Role ID must be a Discord role ID (digits only)', 'error')
-      return false
-    }
-    savingRole.value = true
-    try {
-      const payload = { ...f, name: f.name.trim(), role_id: f.role_id.trim() }
-      if (f.id) {
-        await endpoints.announcements.updateRole(f.id, payload)
-      } else {
-        await endpoints.announcements.createRole(payload)
-      }
-      ui.notify(f.id ? 'Role updated' : 'Role added', 'success')
-      resetRoleForm()
-      await loadRoles()
-      return true
-    } catch (e) {
-      ui.notify((e as Error).message, 'error')
-      return false
-    } finally {
-      savingRole.value = false
-    }
-  }
-
-  async function deleteRole(r: AnnouncementRole): Promise<void> {
-    if (
-      !(await ui.confirm(`Delete the "${r.name}" role?`, {
-        title: 'Delete taggable role',
-        confirmText: 'Delete',
-      }))
-    )
-      return
-    try {
-      await endpoints.announcements.deleteRole(r.id)
-      ui.notify('Role deleted', 'info')
-      if (roleForm.value.id === r.id) resetRoleForm()
-      await loadRoles()
-    } catch (e) {
-      ui.notify((e as Error).message, 'error')
-    }
-  }
-
   // -- Announcements ----------------------------------------------------------
 
   function resetForm(): void {
@@ -313,6 +235,7 @@ export const useAnnouncementsStore = defineStore('announcements', () => {
     f.color = a.color || '#ff3131'
     f.location = a.location || ''
     f.mention = a.mention || ''
+    f.repost_mode = a.repost_mode === 'replace' ? 'replace' : 'new'
     f.buttons = a.buttons.map((b) => ({ ...b, _uid: nextUid() }))
     f.start_local = a.start_local
     f.end_local = a.end_local
@@ -347,6 +270,7 @@ export const useAnnouncementsStore = defineStore('announcements', () => {
       color: f.color,
       location: f.location,
       mention: f.mention,
+      repost_mode: f.repost_mode,
       buttons: f.buttons
         .map((b) => ({ label: b.label.trim(), emoji: (b.emoji || '').trim(), url: b.url.trim() }))
         .filter((b) => b.label && /^https?:\/\//i.test(b.url))
@@ -442,8 +366,8 @@ export const useAnnouncementsStore = defineStore('announcements', () => {
       return
     sendingId.value = a.id
     try {
-      await endpoints.announcements.sendNow(a.id)
-      ui.notify('Announcement posted to Discord', 'success')
+      const res = await endpoints.announcements.sendNow(a.id)
+      ui.notify(res.note || 'Announcement posted to Discord', 'success')
       await loadAnnouncements()
     } catch (e) {
       ui.notify((e as Error).message, 'error')
@@ -480,33 +404,25 @@ export const useAnnouncementsStore = defineStore('announcements', () => {
   return {
     types,
     sortedTypes,
-    roles,
     announcements,
     typeForm,
-    roleForm,
     form,
     search,
     typeFilter,
     filteredAnnouncements,
     loading,
     savingType,
-    savingRole,
     saving,
     sendingId,
     skippingId,
     load,
     loadTypes,
-    loadRoles,
     loadAnnouncements,
     reorder,
     resetTypeForm,
     editType,
     saveType,
     deleteType,
-    resetRoleForm,
-    editRole,
-    saveRole,
-    deleteRole,
     resetForm,
     editAnnouncement,
     save,

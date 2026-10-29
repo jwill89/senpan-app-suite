@@ -1,10 +1,10 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
-import type { TeaRoom } from '@/types/api'
+import type { DiscordDestination, DiscordPostResult, TeaRoom } from '@/types/api'
 
 // Mock the typed endpoint layer so store actions run without the network.
 const ep = vi.hoisted(() => ({
-  list: vi.fn(async () => ({ tea_rooms: [] as TeaRoom[], webhook_url: '' })),
+  list: vi.fn(async () => ({ tea_rooms: [] as TeaRoom[], destination: dest() })),
   create: vi.fn(async () => ({ tea_room: null })),
   update: vi.fn(async () => ({ tea_room: null })),
   patch: vi.fn(
@@ -17,8 +17,11 @@ const ep = vi.hoisted(() => ({
   ),
   del: vi.fn(async () => undefined),
   reorder: vi.fn(async () => ({ ok: true })),
-  post: vi.fn(async () => ({ tea_room: null })),
-  setWebhook: vi.fn(async (url: string) => ({ webhook_url: url })),
+  post: vi.fn(async (): Promise<DiscordPostResult> => ({ post: livePost(), note: '' })),
+  takeDown: vi.fn(async (): Promise<DiscordPostResult> => ({ note: '' })),
+  saveDestination: vi.fn(async (key: string, d: Partial<DiscordDestination>) => ({
+    destination: { ...dest(), ...d, key },
+  })),
 }))
 vi.mock('@/lib/endpoints', () => ({
   endpoints: {
@@ -30,10 +33,35 @@ vi.mock('@/lib/endpoints', () => ({
       delete: ep.del,
       reorder: ep.reorder,
       post: ep.post,
-      setWebhook: ep.setWebhook,
+      takeDown: ep.takeDown,
     },
+    discord: { saveDestination: ep.saveDestination },
   },
 }))
+
+/** The tea rooms destination, set to edit in place. */
+function dest(over: Partial<DiscordDestination> = {}): DiscordDestination {
+  return {
+    ...{
+      key: 'tea-rooms',
+      channel_id: '200000000000000003',
+      mention: '',
+      repost_mode: 'edit',
+      updated_at: '',
+    },
+    ...over,
+  }
+}
+
+function livePost() {
+  return {
+    state: 'live',
+    channel_id: '200000000000000003',
+    url: 'https://discord.com/channels/1/2/3',
+    posted_at: '',
+    edited_at: '',
+  }
+}
 
 import { teaRoomUnlockedMessage, useTeaRoomsStore } from './teaRooms'
 import { useUiStore } from './ui'
@@ -87,15 +115,15 @@ describe('teaRoomUnlockedMessage', () => {
 })
 
 describe('loading', () => {
-  it('loadTeaRooms populates the list and webhook', async () => {
+  it('loadTeaRooms populates the list and where rooms post', async () => {
     ep.list.mockResolvedValueOnce({
       tea_rooms: [room(), room({ id: 2 })],
-      webhook_url: 'https://discord.com/api/webhooks/x',
+      destination: dest({ channel_id: '42' }),
     })
     const s = useTeaRoomsStore()
     await s.loadTeaRooms()
     expect(s.teaRooms).toHaveLength(2)
-    expect(s.webhookUrl).toContain('discord.com')
+    expect(s.destination?.channel_id).toBe('42')
     expect(s.loading).toBe(false)
   })
 })
@@ -253,23 +281,51 @@ describe('locking', () => {
 })
 
 describe('postRoom', () => {
-  it('refuses to post without a webhook', async () => {
+  it('refuses to post without a channel', async () => {
     const ui = useUiStore()
     ui.notify = vi.fn()
     const s = useTeaRoomsStore()
-    s.webhookUrl = ''
+    s.destination = dest({ channel_id: '' })
     await s.postRoom(room({ id: 1 }))
     expect(ep.post).not.toHaveBeenCalled()
     expect(ui.notify).toHaveBeenCalled()
   })
 
-  it('posts after confirmation when a webhook is set', async () => {
+  it('posts after confirmation and shows the new post on the row', async () => {
     const ui = useUiStore()
     ui.confirm = vi.fn(async () => true)
     const s = useTeaRoomsStore()
-    s.webhookUrl = 'https://discord.com/api/webhooks/x'
-    await s.postRoom(room({ id: 3 }))
+    s.destination = dest()
+    s.teaRooms = [room({ id: 3 })]
+    await s.postRoom(s.teaRooms[0])
     expect(ep.post).toHaveBeenCalledWith(3)
+    expect(s.teaRooms[0].discord_post?.state).toBe('live')
+    expect(ui.confirm).toHaveBeenCalledWith(expect.stringContaining('Post'), expect.anything())
+  })
+
+  it('asks to update when the room already has a post that edits in place', async () => {
+    const ui = useUiStore()
+    ui.confirm = vi.fn(async () => false)
+    const s = useTeaRoomsStore()
+    s.destination = dest()
+    await s.postRoom(room({ id: 3, discord_post: livePost() }))
+    expect(ui.confirm).toHaveBeenCalledWith(
+      expect.stringContaining('Update'),
+      expect.objectContaining({ confirmText: 'Update' }),
+    )
+    expect(ep.post).not.toHaveBeenCalled()
+  })
+})
+
+describe('takeDownRoom', () => {
+  it('deletes the post after confirmation and clears it from the row', async () => {
+    const ui = useUiStore()
+    ui.confirm = vi.fn(async () => true)
+    const s = useTeaRoomsStore()
+    s.teaRooms = [room({ id: 5, discord_post: livePost() })]
+    await s.takeDownRoom(s.teaRooms[0])
+    expect(ep.takeDown).toHaveBeenCalledWith(5)
+    expect(s.teaRooms[0].discord_post).toBeUndefined()
   })
 })
 
@@ -295,12 +351,20 @@ describe('deleteTeaRoom', () => {
   })
 })
 
-describe('saveWebhook', () => {
-  it('saves and updates the stored webhook', async () => {
+describe('saveDestination', () => {
+  it('saves where rooms post and keeps the saved copy', async () => {
     const s = useTeaRoomsStore()
-    const ok = await s.saveWebhook('  https://discord.com/api/webhooks/y  ')
+    const ok = await s.saveDestination({
+      channel_id: ' 77 ',
+      mention: 'everyone',
+      repost_mode: 'replace',
+    })
     expect(ok).toBe(true)
-    expect(ep.setWebhook).toHaveBeenCalledWith('https://discord.com/api/webhooks/y')
-    expect(s.webhookUrl).toBe('https://discord.com/api/webhooks/y')
+    expect(ep.saveDestination).toHaveBeenCalledWith('tea-rooms', {
+      channel_id: '77',
+      mention: 'everyone',
+      repost_mode: 'replace',
+    })
+    expect(s.destination?.repost_mode).toBe('replace')
   })
 })

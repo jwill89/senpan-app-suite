@@ -18,7 +18,9 @@ import (
 	"github.com/alexedwards/scs/v2"
 
 	"app-suite/internal/bingo"
+	"app-suite/internal/discord"
 	"app-suite/internal/model"
+	"app-suite/internal/secretbox"
 	"app-suite/internal/store"
 	"app-suite/internal/ws"
 )
@@ -60,10 +62,23 @@ type Server struct {
 	// own, but counting it against the 5-per-15-minutes login limiter would lock a
 	// user out of password login for merely opening the passkey prompt a few times.
 	passkeyBeginLimiter *rateLimiter
-	// Dev-safety valves for outbound Discord posts (see SetWebhookPolicy). Empty /
-	// false in production, where posts go to the webhook the feature configured.
-	webhookOverride string
-	webhookDryRun   bool
+	// The Discord bot (see discord.go / SetDiscord). discord is never nil: New installs an
+	// unconfigured service, so Discord is simply off until a token is saved. secrets seals
+	// the token; nil when the server has no configured session secret.
+	discord         *discord.Service
+	secrets         *secretbox.Box
+	discordDryRun   bool
+	discordRedirect string
+	// What the last applyDiscordConfig found about the saved token. Guarded by discordMu.
+	discordMu            sync.Mutex
+	discordTokenSet      bool
+	discordTokenReadable bool
+	// One mutex per posted item ("kind:id"), so a double-click can't post it twice. See
+	// discordItemLock.
+	discordLocks sync.Map
+	// Pending in-place edits of tea-room and affiliate posts, worked off by
+	// RunDiscordWorker. See discordqueue.go.
+	editQueue discordEditQueue
 	// Cloudflare Turnstile bot check on the admin login. Disabled (verification
 	// skipped) when turnstileSecret is empty - see SetTurnstile / turnstile.go.
 	turnstileSecret  string
@@ -91,7 +106,7 @@ type Server struct {
 	fontMetaMu sync.Mutex
 
 	// Consecutive failed Discord posts per announcement id, used to stop the
-	// scheduler retrying a permanently-broken webhook every 30 seconds forever (see
+	// scheduler retrying a permanently-broken channel every 30 seconds forever (see
 	// postDueAnnouncements). In memory on purpose: it is a back-off, not a record,
 	// and a restart is a perfectly good reason to try again. Guarded by postFailMu.
 	postFailMu sync.Mutex
@@ -119,23 +134,6 @@ type Server struct {
 func (s *Server) SetTurnstile(secret, siteKey string) {
 	s.turnstileSecret = strings.TrimSpace(secret)
 	s.turnstileSiteKey = strings.TrimSpace(siteKey)
-}
-
-// SetWebhookPolicy installs the outbound-Discord safety valves used when the
-// server runs against non-production data. A development database is usually a
-// copy of the live one, so it carries REAL webhook URLs: without these, starting a
-// local server is enough for the announcement scheduler to post to production.
-//
-//   - dryRun blocks every outbound post and logs it instead. Strongest option:
-//     the process becomes incapable of posting anywhere.
-//   - override redirects every outbound post to one URL (a test channel),
-//     whatever the feature or database row says. Use it to exercise the real
-//     posting path without touching production channels.
-//
-// dryRun wins when both are set. Both are off in production.
-func (s *Server) SetWebhookPolicy(override string, dryRun bool) {
-	s.webhookOverride = strings.TrimSpace(override)
-	s.webhookDryRun = dryRun
 }
 
 // SetLogFile tells the admin log viewer (GET /api/logs) which rotating JSON log
@@ -187,6 +185,9 @@ func New(st *store.Store, hub *ws.Hub, sessionSecret, webRoot string, allowedOri
 		// watching the animation stays well under this.
 		garaponDrawLimiter: newRateLimiter(20, 10*time.Minute),
 		postFails:          make(map[int64]int),
+		// Off until SetDiscord installs the real one and a token is saved; with no token
+		// it never calls Discord.
+		discord: discord.NewService("", ""),
 		// Generous: a real user may open the passkey prompt, cancel, pick the wrong
 		// authenticator and retry several times in a sitting. It exists to bound
 		// unauthenticated session-store growth, not to police login attempts.
@@ -370,26 +371,26 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("GET /api/affiliates", s.handleAffiliatesList)
 	s.mux.HandleFunc("POST /api/affiliates", s.handleAffiliateCreate)
 	s.mux.HandleFunc("POST /api/affiliates/reorder", s.handleAffiliatesReorder)
-	s.mux.HandleFunc("PUT /api/affiliates/webhook", s.handleAffiliateWebhookSet)
 	s.mux.HandleFunc("PUT /api/affiliates/{id}", s.handleAffiliateUpdate)
 	s.mux.HandleFunc("DELETE /api/affiliates/{id}", s.handleAffiliateDelete)
 	s.mux.HandleFunc("POST /api/affiliates/{id}/post", s.handleAffiliatePost)
+	s.mux.HandleFunc("DELETE /api/affiliates/{id}/post", s.handleAffiliateTakeDown)
 
 	// Tea Rooms (Senpan Tea House -> Tea Rooms). Admin CRUD + drag reorder + the
-	// open/discounted flag toggles (PATCH) + post-to-Discord, the shared webhook
-	// setter, and a public cross-origin read API for external Carrd sites. The
-	// literal /reorder, /webhook, /public sub-paths are matched ahead of the {id}
-	// wildcard by the Go 1.22 mux; /public/{id} coexists with them.
+	// open/discounted flag toggles (PATCH) + post to / take down from Discord, and a
+	// public cross-origin read API for external Carrd sites. The literal /reorder and
+	// /public sub-paths are matched ahead of the {id} wildcard by the Go 1.22 mux;
+	// /public/{id} coexists with them.
 	s.mux.HandleFunc("GET /api/tea-rooms", s.handleTeaRoomsList)
 	s.mux.HandleFunc("POST /api/tea-rooms", s.handleTeaRoomCreate)
 	s.mux.HandleFunc("POST /api/tea-rooms/reorder", s.handleTeaRoomsReorder)
-	s.mux.HandleFunc("PUT /api/tea-rooms/webhook", s.handleTeaRoomWebhookSet)
 	s.mux.HandleFunc("GET /api/tea-rooms/public", s.handleTeaRoomsPublic)
 	s.mux.HandleFunc("GET /api/tea-rooms/public/{number}", s.handleTeaRoomPublic)
 	s.mux.HandleFunc("PUT /api/tea-rooms/{id}", s.handleTeaRoomUpdate)
 	s.mux.HandleFunc("PATCH /api/tea-rooms/{id}", s.handleTeaRoomPatch)
 	s.mux.HandleFunc("DELETE /api/tea-rooms/{id}", s.handleTeaRoomDelete)
 	s.mux.HandleFunc("POST /api/tea-rooms/{id}/post", s.handleTeaRoomPost)
+	s.mux.HandleFunc("DELETE /api/tea-rooms/{id}/post", s.handleTeaRoomTakeDown)
 
 	// Festival Map (Festival -> Festival Map; resource-oriented: methods for CRUD,
 	// PATCH for the publish status). Admin CRUD of maps (stalls with placements
@@ -457,10 +458,6 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("POST /api/announcement-types", s.handleAnnouncementTypeCreate)
 	s.mux.HandleFunc("PUT /api/announcement-types/{id}", s.handleAnnouncementTypeUpdate)
 	s.mux.HandleFunc("DELETE /api/announcement-types/{id}", s.handleAnnouncementTypeDelete)
-	s.mux.HandleFunc("GET /api/announcement-roles", s.handleAnnouncementRolesList)
-	s.mux.HandleFunc("POST /api/announcement-roles", s.handleAnnouncementRoleCreate)
-	s.mux.HandleFunc("PUT /api/announcement-roles/{id}", s.handleAnnouncementRoleUpdate)
-	s.mux.HandleFunc("DELETE /api/announcement-roles/{id}", s.handleAnnouncementRoleDelete)
 	// Announcements (resource-oriented: methods for CRUD, POST /{id}/{verb} for
 	// send/skip, POST /reorder for the bulk drag-order). The literal /reorder
 	// sub-path is matched ahead of the {id} wildcard by the Go 1.22 mux.
@@ -487,6 +484,21 @@ func (s *Server) routes() {
 	// the runtime log level (live DEBUG toggle).
 	s.mux.HandleFunc("GET /api/logs", s.handleLogs)
 	s.mux.HandleFunc("POST /api/logs/level", s.handleLogLevelSet)
+
+	// Discord bot (System -> Discord, admin-only), plus the channel/role lists the
+	// posting systems' pickers read.
+	s.mux.HandleFunc("GET /api/discord/status", s.handleDiscordStatus)
+	s.mux.HandleFunc("PUT /api/discord/token", s.handleDiscordSetToken)
+	s.mux.HandleFunc("DELETE /api/discord/token", s.handleDiscordClearToken)
+	s.mux.HandleFunc("PUT /api/discord/config", s.handleDiscordConfig)
+	s.mux.HandleFunc("POST /api/discord/test", s.handleDiscordTest)
+	s.mux.HandleFunc("GET /api/discord/channels", s.handleDiscordChannels)
+	s.mux.HandleFunc("GET /api/discord/roles", s.handleDiscordRoles)
+	s.mux.HandleFunc("GET /api/discord/destinations/{key}", s.handleDiscordDestinationGet)
+	s.mux.HandleFunc("PUT /api/discord/destinations/{key}", s.handleDiscordDestinationSet)
+	s.mux.HandleFunc("GET /api/discord/import", s.handleDiscordImport)
+	s.mux.HandleFunc("POST /api/discord/import/retry", s.handleDiscordImportRetry)
+	s.mux.HandleFunc("DELETE /api/discord/legacy-webhooks", s.handleDiscordLegacyCleanup)
 
 	// Font management (Atelier -> Font Upload). Font FILES are keyed by filename
 	// ({name}); logical FONTS (groups of variants sharing a base name) are keyed
@@ -714,17 +726,6 @@ func writeError(w http.ResponseWriter, status int, msg string) {
 func writeInternalError(w http.ResponseWriter, context string, err error) {
 	slog.Error("internal server error", "context", context, "error", err)
 	writeError(w, http.StatusInternalServerError, "Internal server error")
-}
-
-// writeUpstreamError logs a failed outbound Discord webhook post with context and
-// writes a 502 whose body names the reason. It logs server-side deliberately: a
-// reverse proxy (Cloudflare) can replace a 502's body with its own generic error
-// page before the admin ever sees the reason, so without this the log is often
-// the ONLY surviving record of WHY a "post to Discord" failed. err must already be
-// stripped of the webhook token - postDiscordWebhook does this (sanitizeWebhookErr).
-func writeUpstreamError(w http.ResponseWriter, context string, err error) {
-	slog.Error("discord webhook post failed", "context", context, "error", err)
-	writeError(w, http.StatusBadGateway, "Failed to post to Discord: "+err.Error())
 }
 
 // readJSON decodes the request body into a typed struct T using generics.
@@ -1032,7 +1033,7 @@ func adminMutationResource(path string) (string, bool) {
 			return "", false // public sign-up self-broadcasts
 		}
 		return "raffles", true
-	case "announcements", "announcement-types", "announcement-roles":
+	case "announcements", "announcement-types":
 		return "announcements", true
 	case "book-clubs":
 		return "bookclub", true
@@ -1040,6 +1041,22 @@ func adminMutationResource(path string) (string, bool) {
 		return "carrd", true
 	case "images", "image-categories":
 		return "images", true
+	case "discord":
+		// The test message changes nothing anyone else is looking at.
+		if strings.HasSuffix(path, "/test") {
+			return "", false
+		}
+		// A destination belongs to its system's page.
+		if key, ok := strings.CutPrefix(path, "/api/discord/destinations/"); ok {
+			switch {
+			case key == destTeaRooms, key == destAffiliates:
+				return key, true
+			case strings.HasPrefix(key, "bookclub:"):
+				return "bookclub", true
+			}
+			return "", false
+		}
+		return "discord", true
 	}
 	return "", false
 }

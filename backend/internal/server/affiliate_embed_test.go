@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"app-suite/internal/discord"
 	"app-suite/internal/model"
 )
 
@@ -90,8 +91,8 @@ func TestBuildAffiliateEmbed_Minimal(t *testing.T) {
 	if e.Thumbnail != nil || e.Image != nil {
 		t.Errorf("no images expected: thumb=%+v img=%+v", e.Thumbnail, e.Image)
 	}
-	if e.Color != accentColor {
-		t.Errorf("empty color should fall back to the brand accent (%#x), got %#x", accentColor, e.Color)
+	if e.Color != discord.AccentColor {
+		t.Errorf("empty color should fall back to the brand accent (%#x), got %#x", discord.AccentColor, e.Color)
 	}
 }
 

@@ -22,6 +22,7 @@ interface SavedPayload {
   schedule_weekdays: string
   buttons: { label: string; emoji: string; url: string }[]
   mention: string
+  repost_mode: string
   start_format: string
   end_format: string
   image: string
@@ -132,11 +133,18 @@ describe('save() payload building', () => {
     expect(payload.buttons.map((b) => b.label)).toEqual(['Go', 'One', 'Two', 'Three', 'Four'])
   })
 
-  it('passes the selected role tag through to the payload', async () => {
+  it('passes the role tag and repost mode through to the payload', async () => {
     const s = useAnnouncementsStore()
-    Object.assign(s.form, { type_id: 1, title: 'Tagged', details: 'x', mention: 'role:4' })
+    Object.assign(s.form, {
+      type_id: 1,
+      title: 'Tagged',
+      details: 'x',
+      mention: 'role:300000000000000001',
+      repost_mode: 'replace',
+    })
     await s.save()
-    expect(savedPayload().mention).toBe('role:4')
+    expect(savedPayload().mention).toBe('role:300000000000000001')
+    expect(savedPayload().repost_mode).toBe('replace')
   })
 
   it('passes the selected Discord start/end formats through to the payload', async () => {

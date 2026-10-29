@@ -7,7 +7,8 @@
  *     discount, lock/unlock, edit, delete - plus a search box. Reordering
  *     persists like the Announcements list.
  *   - form: the create/edit form (TeaRoomFormTab), a Back sub-page.
- *   - webhook: set the single shared Discord webhook every room posts to.
+ *   - discord: where the rooms post in Discord (channel, ping, and whether posting
+ *     again edits the room's post in place).
  *
  * All state + actions come from the tea-rooms store.
  */
@@ -23,6 +24,9 @@ import SearchInput from '@/components/common/ui/SearchInput.vue'
 import FormField from '@/components/common/ui/FormField.vue'
 import FormActions from '@/components/common/ui/FormActions.vue'
 import EmptyState from '@/components/common/ui/EmptyState.vue'
+import DiscordDestinationForm from '@/components/common/ui/DiscordDestinationForm.vue'
+import DiscordPostStatus from '@/components/common/ui/DiscordPostStatus.vue'
+import { ITEM_REPOST_OPTIONS, postVerb } from '@/lib/discordPosts'
 import TeaRoomFormTab from './TeaRoomFormTab.vue'
 import { useTeaRoomsStore } from '@/stores/teaRooms'
 import { useUiStore } from '@/stores/ui'
@@ -50,7 +54,7 @@ function copyApiLink(roomNumber?: string): void {
   )
 }
 
-type Screen = 'list' | 'form' | 'webhook'
+type Screen = 'list' | 'form' | 'discord'
 const screen = ref<Screen>('list')
 
 // Drag-reorder is only allowed when the full list is shown (an unfiltered search):
@@ -104,16 +108,6 @@ function openEdit(t: TeaRoom): void {
 function onFormDone(): void {
   screen.value = 'list'
 }
-
-// -- Webhook sub-page ---------------------------------------------------------
-const webhookDraft = ref('')
-function openWebhook(): void {
-  webhookDraft.value = store.webhookUrl
-  screen.value = 'webhook'
-}
-async function submitWebhook(): Promise<void> {
-  if (await store.saveWebhook(webhookDraft.value)) screen.value = 'list'
-}
 </script>
 
 <template>
@@ -121,36 +115,21 @@ async function submitWebhook(): Promise<void> {
     <!-- -- Form ---------------------------------------------------------------- -->
     <TeaRoomFormTab v-if="screen === 'form'" @saved="onFormDone" @cancel="onFormDone" />
 
-    <!-- -- Webhook ------------------------------------------------------------- -->
-    <AdminPanel v-else-if="screen === 'webhook'">
+    <!-- -- Discord -------------------------------------------------------------- -->
+    <AdminPanel v-else-if="screen === 'discord'">
       <SubPageHeader
         :icon="['fab', 'discord']"
-        title="Tea Rooms Discord Webhook"
+        title="Tea Rooms in Discord"
         @back="screen = 'list'"
       />
-      <p class="text-muted text-sm mb-16">
-        Every tea room posts to this one channel webhook. In Discord: Channel Settings ->
-        Integrations -> Webhooks -> New Webhook -> Copy Webhook URL.
-      </p>
-      <FormField
-        label="Discord webhook URL"
-        help="Leave blank to disable posting. Only Discord webhook URLs are accepted."
-      >
-        <input
-          v-model="webhookDraft"
-          placeholder="https://discord.com/api/webhooks/..."
-          aria-label="Discord webhook URL"
-        />
-      </FormField>
-      <FormActions align="start">
-        <button class="btn-neutral" :disabled="store.savingWebhook" @click="screen = 'list'">
-          Cancel
-        </button>
-        <button class="btn-confirm" :disabled="store.savingWebhook" @click="submitWebhook">
-          <LoadingSpinner v-if="store.savingWebhook" label="Saving..." />
-          <template v-else>Save Webhook</template>
-        </button>
-      </FormActions>
+      <DiscordDestinationForm
+        :destination="store.destination"
+        :options="ITEM_REPOST_OPTIONS"
+        :saving="store.savingDestination"
+        id-prefix="tea-discord"
+        @save="async (d) => (await store.saveDestination(d)) && (screen = 'list')"
+        @cancel="screen = 'list'"
+      />
     </AdminPanel>
 
     <!-- -- List ---------------------------------------------------------------- -->
@@ -163,8 +142,8 @@ async function submitWebhook(): Promise<void> {
         >
           <font-awesome-icon :icon="['fas', 'link']" /> Copy API Link
         </button>
-        <button class="btn-view btn-sm" @click="openWebhook">
-          <font-awesome-icon :icon="['fab', 'discord']" /> Webhook
+        <button class="btn-view btn-sm" @click="screen = 'discord'">
+          <font-awesome-icon :icon="['fab', 'discord']" /> Discord
         </button>
         <button class="btn-confirm btn-sm" @click="openNew">
           <font-awesome-icon :icon="['fas', 'plus']" /> New Tea Room
@@ -179,10 +158,13 @@ async function submitWebhook(): Promise<void> {
         />
       </template>
 
-      <div v-if="!store.webhookUrl && store.teaRooms.length" class="text-muted text-xs mb-12">
-        <font-awesome-icon :icon="['fad', 'triangle-exclamation']" /> No Discord webhook set yet -
-        add one with the <button class="link-btn" @click="openWebhook">Webhook</button> button to
-        post rooms.
+      <div
+        v-if="!store.destination?.channel_id && store.teaRooms.length"
+        class="text-muted text-xs mb-12"
+      >
+        <font-awesome-icon :icon="['fad', 'triangle-exclamation']" /> No Discord channel picked yet
+        - pick one with the <button class="link-btn" @click="screen = 'discord'">Discord</button>
+        button to post rooms.
       </div>
 
       <LoadingSpinner
@@ -264,18 +246,35 @@ async function submitWebhook(): Promise<void> {
             <p v-if="t.hashtags" class="text-sm text-muted list-row-meta list-row-meta--inline">
               {{ t.hashtags }}
             </p>
+            <p v-if="t.discord_post" class="list-row-meta list-row-meta--inline">
+              <DiscordPostStatus :post="t.discord_post" />
+            </p>
 
             <template #actions>
               <button
                 class="btn-action btn-sm"
                 :disabled="store.postingId === t.id"
-                title="Post to Discord now"
+                :title="
+                  postVerb(store.destination, t.discord_post) === 'Update'
+                    ? 'Update the post in Discord'
+                    : 'Post to Discord now'
+                "
                 @click="store.postRoom(t)"
               >
                 <LoadingSpinner v-if="store.postingId === t.id" label="Posting..." />
                 <template v-else
-                  ><font-awesome-icon :icon="['fas', 'paper-plane']" /> Post</template
+                  ><font-awesome-icon :icon="['fas', 'paper-plane']" />
+                  {{ postVerb(store.destination, t.discord_post) }}</template
                 >
+              </button>
+              <button
+                v-if="t.discord_post?.state === 'live'"
+                class="btn-caution btn-sm"
+                :disabled="store.postingId === t.id"
+                title="Delete the post from Discord"
+                @click="store.takeDownRoom(t)"
+              >
+                <font-awesome-icon :icon="['fas', 'trash']" /> Take down
               </button>
               <button
                 class="btn-view btn-sm"

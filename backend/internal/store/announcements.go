@@ -3,7 +3,6 @@ package store
 import (
 	"database/sql"
 	"errors"
-	"strconv"
 	"time"
 
 	"app-suite/internal/model"
@@ -11,13 +10,13 @@ import (
 
 // -- Announcement types ------------------------------------------------------
 //
-// An announcement type is a named Discord destination (label + channel webhook).
-// Every announcement references one type and posts to its webhook.
+// An announcement type is a named Discord destination (a label + the channel the bot
+// posts to). Every announcement references one type and posts to its channel.
 
 // ListAnnouncementTypes returns all announcement types, newest first.
 func (s *Store) ListAnnouncementTypes() ([]model.AnnouncementType, error) {
 	rows, err := s.db.Query(
-		`SELECT id, name, webhook_url, created_at FROM announcement_types ORDER BY id DESC`,
+		`SELECT id, name, channel_id, created_at FROM announcement_types ORDER BY id DESC`,
 	)
 	if err != nil {
 		return nil, err
@@ -27,7 +26,7 @@ func (s *Store) ListAnnouncementTypes() ([]model.AnnouncementType, error) {
 	types := make([]model.AnnouncementType, 0)
 	for rows.Next() {
 		var t model.AnnouncementType
-		if err := rows.Scan(&t.ID, &t.Name, &t.WebhookURL, &t.CreatedAt); err != nil {
+		if err := rows.Scan(&t.ID, &t.Name, &t.ChannelID, &t.CreatedAt); err != nil {
 			return nil, err
 		}
 		types = append(types, t)
@@ -39,8 +38,8 @@ func (s *Store) ListAnnouncementTypes() ([]model.AnnouncementType, error) {
 func (s *Store) GetAnnouncementType(id int64) (*model.AnnouncementType, error) {
 	var t model.AnnouncementType
 	err := s.db.QueryRow(
-		`SELECT id, name, webhook_url, created_at FROM announcement_types WHERE id = ?`, id,
-	).Scan(&t.ID, &t.Name, &t.WebhookURL, &t.CreatedAt)
+		`SELECT id, name, channel_id, created_at FROM announcement_types WHERE id = ?`, id,
+	).Scan(&t.ID, &t.Name, &t.ChannelID, &t.CreatedAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
 	}
@@ -51,9 +50,9 @@ func (s *Store) GetAnnouncementType(id int64) (*model.AnnouncementType, error) {
 }
 
 // CreateAnnouncementType inserts a new type and returns its ID.
-func (s *Store) CreateAnnouncementType(name, webhookURL string) (int64, error) {
+func (s *Store) CreateAnnouncementType(name, channelID string) (int64, error) {
 	res, err := s.db.Exec(
-		`INSERT INTO announcement_types (name, webhook_url) VALUES (?, ?)`, name, webhookURL,
+		`INSERT INTO announcement_types (name, channel_id) VALUES (?, ?)`, name, channelID,
 	)
 	if err != nil {
 		return 0, err
@@ -61,10 +60,10 @@ func (s *Store) CreateAnnouncementType(name, webhookURL string) (int64, error) {
 	return res.LastInsertId()
 }
 
-// UpdateAnnouncementType updates a type's name and webhook.
-func (s *Store) UpdateAnnouncementType(id int64, name, webhookURL string) error {
+// UpdateAnnouncementType updates a type's name and channel.
+func (s *Store) UpdateAnnouncementType(id int64, name, channelID string) error {
 	_, err := s.db.Exec(
-		`UPDATE announcement_types SET name = ?, webhook_url = ? WHERE id = ?`, name, webhookURL, id,
+		`UPDATE announcement_types SET name = ?, channel_id = ? WHERE id = ?`, name, channelID, id,
 	)
 	return err
 }
@@ -87,88 +86,6 @@ func (s *Store) CountAnnouncementsByType(typeID int64) (int, error) {
 	return n, err
 }
 
-// -- Announcement roles ------------------------------------------------------
-//
-// An announcement role is a named, taggable Discord role (label + role ID). It's
-// a convenience picker so admins tag a role by name; an announcement stores its
-// selection as "role:<id>" in the mention column.
-
-// ListAnnouncementRoles returns all taggable roles, newest first.
-func (s *Store) ListAnnouncementRoles() ([]model.AnnouncementRole, error) {
-	rows, err := s.db.Query(
-		`SELECT id, name, role_id, created_at FROM announcement_roles ORDER BY id DESC`,
-	)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	roles := make([]model.AnnouncementRole, 0)
-	for rows.Next() {
-		var r model.AnnouncementRole
-		if err := rows.Scan(&r.ID, &r.Name, &r.RoleID, &r.CreatedAt); err != nil {
-			return nil, err
-		}
-		roles = append(roles, r)
-	}
-	return roles, rows.Err()
-}
-
-// GetAnnouncementRole returns a single role by ID, or nil if it does not exist.
-func (s *Store) GetAnnouncementRole(id int64) (*model.AnnouncementRole, error) {
-	var r model.AnnouncementRole
-	err := s.db.QueryRow(
-		`SELECT id, name, role_id, created_at FROM announcement_roles WHERE id = ?`, id,
-	).Scan(&r.ID, &r.Name, &r.RoleID, &r.CreatedAt)
-	if errors.Is(err, sql.ErrNoRows) {
-		return nil, nil
-	}
-	if err != nil {
-		return nil, err
-	}
-	return &r, nil
-}
-
-// CreateAnnouncementRole inserts a new role and returns its ID.
-func (s *Store) CreateAnnouncementRole(name, roleID string) (int64, error) {
-	res, err := s.db.Exec(
-		`INSERT INTO announcement_roles (name, role_id) VALUES (?, ?)`, name, roleID,
-	)
-	if err != nil {
-		return 0, err
-	}
-	return res.LastInsertId()
-}
-
-// UpdateAnnouncementRole updates a role's name and Discord role ID.
-func (s *Store) UpdateAnnouncementRole(id int64, name, roleID string) error {
-	_, err := s.db.Exec(
-		`UPDATE announcement_roles SET name = ?, role_id = ? WHERE id = ?`, name, roleID, id,
-	)
-	return err
-}
-
-// DeleteAnnouncementRole removes a role by ID. Returns true if a row was deleted.
-func (s *Store) DeleteAnnouncementRole(id int64) (bool, error) {
-	res, err := s.db.Exec(`DELETE FROM announcement_roles WHERE id = ?`, id)
-	if err != nil {
-		return false, err
-	}
-	n, _ := res.RowsAffected()
-	return n > 0, nil
-}
-
-// CountAnnouncementsByRole returns how many announcements tag a given role - used
-// to block deleting a role that's still referenced by an announcement's mention.
-func (s *Store) CountAnnouncementsByRole(roleID int64) (int, error) {
-	var n int
-	err := s.db.QueryRow(
-		`SELECT COUNT(*) FROM announcements WHERE mention = ?`,
-		"role:"+strconv.FormatInt(roleID, 10),
-	).Scan(&n)
-	return n, err
-}
-
 // -- Announcements -----------------------------------------------------------
 
 // announcementColumns is the shared SELECT column list for the announcements
@@ -176,7 +93,7 @@ func (s *Store) CountAnnouncementsByRole(roleID int64) (int, error) {
 const announcementColumns = `a.id, a.type_id, a.title, a.details, a.image, a.thumbnail, a.color, a.location, a.start_local, a.end_local,
 	a.start_at, a.end_at, a.start_format, a.end_format, a.dynamic_dates, a.schedule_kind, a.timezone, a.once_local, a.schedule_minutes,
 	a.schedule_weekdays, a.schedule_week_of_month,
-	a.next_post_at, a.skip_count, a.active, a.last_posted_at, a.created_at, a.buttons, a.mention, COALESCE(t.name, '')`
+	a.next_post_at, a.skip_count, a.active, a.last_posted_at, a.created_at, a.buttons, a.mention, a.repost_mode, COALESCE(t.name, '')`
 
 // scanAnnouncement scans one row (in announcementColumns order) into a model.
 func scanAnnouncement(sc interface{ Scan(...any) error }) (model.Announcement, error) {
@@ -187,7 +104,7 @@ func scanAnnouncement(sc interface{ Scan(...any) error }) (model.Announcement, e
 	err := sc.Scan(&a.ID, &a.TypeID, &a.Title, &a.Details, &a.Image, &a.Thumbnail, &a.Color, &a.Location, &a.StartLocal, &a.EndLocal,
 		&a.StartAt, &a.EndAt, &a.StartFormat, &a.EndFormat, &dynamicDates, &a.ScheduleKind, &a.Timezone, &a.OnceLocal, &a.ScheduleMinutes,
 		&a.ScheduleWeekdays, &a.ScheduleWeekOfMonth,
-		&a.NextPostAt, &skipCount, &active, &lastPosted, &a.CreatedAt, &buttons, &a.Mention, &a.TypeName)
+		&a.NextPostAt, &skipCount, &active, &lastPosted, &a.CreatedAt, &buttons, &a.Mention, &a.RepostMode, &a.TypeName)
 	if err != nil {
 		return a, err
 	}
@@ -261,11 +178,11 @@ func (s *Store) CreateAnnouncement(a *model.Announcement) (int64, error) {
 		`INSERT INTO announcements
 			(type_id, title, details, image, thumbnail, color, location, start_local, end_local, start_at, end_at, start_format, end_format, dynamic_dates,
 			 schedule_kind, timezone, once_local, schedule_minutes, schedule_weekdays, schedule_week_of_month,
-			 next_post_at, active, buttons, mention)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			 next_post_at, active, buttons, mention, repost_mode)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		a.TypeID, a.Title, a.Details, a.Image, a.Thumbnail, a.Color, a.Location, a.StartLocal, a.EndLocal, a.StartAt, a.EndAt, a.StartFormat, a.EndFormat, boolToInt(a.DynamicDates),
 		a.ScheduleKind, a.Timezone, a.OnceLocal, a.ScheduleMinutes, a.ScheduleWeekdays, a.ScheduleWeekOfMonth,
-		a.NextPostAt, boolToInt(a.Active), encodeAnnouncementButtons(a.Buttons), a.Mention,
+		a.NextPostAt, boolToInt(a.Active), encodeAnnouncementButtons(a.Buttons), a.Mention, repostModeOrNew(a.RepostMode),
 	)
 	if err != nil {
 		return 0, err
@@ -283,12 +200,12 @@ func (s *Store) UpdateAnnouncement(a *model.Announcement) error {
 		`UPDATE announcements SET type_id = ?, title = ?, details = ?, image = ?, thumbnail = ?, color = ?, location = ?,
 			start_local = ?, end_local = ?, start_at = ?, end_at = ?, start_format = ?, end_format = ?, dynamic_dates = ?, schedule_kind = ?,
 			timezone = ?, once_local = ?, schedule_minutes = ?, schedule_weekdays = ?,
-			schedule_week_of_month = ?, next_post_at = ?, active = ?, buttons = ?, mention = ?
+			schedule_week_of_month = ?, next_post_at = ?, active = ?, buttons = ?, mention = ?, repost_mode = ?
 		 WHERE id = ?`,
 		a.TypeID, a.Title, a.Details, a.Image, a.Thumbnail, a.Color, a.Location, a.StartLocal, a.EndLocal, a.StartAt, a.EndAt, a.StartFormat, a.EndFormat, boolToInt(a.DynamicDates),
 		a.ScheduleKind, a.Timezone, a.OnceLocal, a.ScheduleMinutes, a.ScheduleWeekdays,
 		a.ScheduleWeekOfMonth, a.NextPostAt, boolToInt(a.Active),
-		encodeAnnouncementButtons(a.Buttons), a.Mention, a.ID,
+		encodeAnnouncementButtons(a.Buttons), a.Mention, repostModeOrNew(a.RepostMode), a.ID,
 	)
 	return err
 }
@@ -399,6 +316,15 @@ func (s *Store) TouchAnnouncementPosted(id int64) error {
 }
 
 // boolToInt maps a bool to SQLite's 0/1 integer representation.
+// repostModeOrNew stores an announcement's repost mode, reading anything but "replace" as
+// "new" (announcements don't edit in place: an edit notifies nobody).
+func repostModeOrNew(mode string) string {
+	if mode == model.RepostReplace {
+		return mode
+	}
+	return model.RepostNew
+}
+
 func boolToInt(b bool) int {
 	if b {
 		return 1

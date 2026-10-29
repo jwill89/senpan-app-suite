@@ -6,14 +6,24 @@
  * categories (System -> Images), exactly like raffle/garapon prize images.
  *
  * A lean cousin of the garapons store: no sub-tables, no public token view, no
- * status lifecycle - owners and hours are edited as repeatable form rows.
+ * status lifecycle - owners and hours are edited as repeatable form rows. Each
+ * affiliate can be posted to Discord and kept there, exactly like a tea room.
  */
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 import { endpoints } from '@/lib/endpoints'
 import { detectTimezone } from '@/lib/constants'
-import type { Affiliate, AffiliateForm, AffiliateHourForm, AffiliateOwnerForm } from '@/types/api'
+import type {
+  Affiliate,
+  AffiliateForm,
+  AffiliateHourForm,
+  AffiliateOwnerForm,
+  DiscordDestination,
+  RepostMode,
+} from '@/types/api'
 import { useUiStore } from './ui'
+import { useDiscordStore } from './discord'
+import { postVerb, setPostState } from '@/lib/discordPosts'
 import { nextUid } from '@/lib/uid'
 import { withLoading } from '@/lib/withLoading'
 
@@ -36,8 +46,11 @@ export const useAffiliatesStore = defineStore('affiliates', () => {
   const affiliates = ref<Affiliate[]>([])
   const selectedAffiliate = ref<Affiliate | null>(null)
   const affiliateForm = ref<AffiliateForm | null>(null)
-  /** The single shared Discord webhook every affiliate posts to ('' = none). */
-  const webhookUrl = ref('')
+  /**
+   * Where affiliates post in Discord. Null until loaded, and for the festival editors,
+   * which read the list only to name a stall's operator.
+   */
+  const destination = ref<DiscordDestination | null>(null)
 
   const search = ref('')
   const filteredAffiliates = computed(() => {
@@ -50,7 +63,7 @@ export const useAffiliatesStore = defineStore('affiliates', () => {
 
   const affiliatesLoading = ref(false)
   const savingAffiliate = ref(false)
-  const savingWebhook = ref(false)
+  const savingDestination = ref(false)
   const postingId = ref<number | null>(null)
 
   // -- Load -------------------------------------------------------------------
@@ -58,7 +71,7 @@ export const useAffiliatesStore = defineStore('affiliates', () => {
     await withLoading(affiliatesLoading, async () => {
       const data = await endpoints.affiliates.list()
       affiliates.value = data.affiliates
-      webhookUrl.value = data.webhook_url
+      destination.value = data.destination ?? null
     })
   }
 
@@ -194,23 +207,27 @@ export const useAffiliatesStore = defineStore('affiliates', () => {
     }
   }
 
-  /** Post an affiliate's embed to the shared Discord webhook (after confirmation). */
+  /**
+   * Post an affiliate to Discord (after confirmation) - or, when the affiliates' channel
+   * edits in place and the affiliate has a post up, update that post.
+   */
   async function postAffiliate(a: Affiliate): Promise<void> {
-    if (!webhookUrl.value.trim()) {
-      ui.notify('Set a Discord webhook first (Webhook button above).', 'error')
+    if (!destination.value?.channel_id) {
+      ui.notify('Pick a Discord channel first (Discord button above).', 'error')
       return
     }
-    if (
-      !(await ui.confirm(`Post "${a.name}" to Discord now?`, {
-        title: 'Post affiliate',
-        confirmText: 'Post',
-      }))
-    )
-      return
+    const verb = postVerb(destination.value, a.discord_post)
+    const question =
+      verb === 'Update' ? `Update "${a.name}" in Discord?` : `Post "${a.name}" to Discord now?`
+    if (!(await ui.confirm(question, { title: `${verb} affiliate`, confirmText: verb }))) return
     postingId.value = a.id
     try {
-      await endpoints.affiliates.post(a.id)
-      ui.notify('Affiliate posted to Discord', 'success')
+      const res = await endpoints.affiliates.post(a.id)
+      setPostState(affiliates.value, a.id, res.post)
+      ui.notify(
+        res.note || (verb === 'Update' ? 'Discord post updated' : 'Affiliate posted to Discord'),
+        'success',
+      )
     } catch (e) {
       ui.notify((e as Error).message, 'error')
     } finally {
@@ -218,19 +235,40 @@ export const useAffiliatesStore = defineStore('affiliates', () => {
     }
   }
 
-  /** Save the shared Discord webhook. Returns true on success. */
-  async function saveWebhook(url: string): Promise<boolean> {
-    savingWebhook.value = true
+  /** Delete an affiliate's post from Discord (after confirmation). */
+  async function takeDownAffiliate(a: Affiliate): Promise<void> {
+    if (
+      !(await ui.confirm(`Delete the Discord post for "${a.name}"?`, {
+        title: 'Take down',
+        confirmText: 'Take down',
+      }))
+    )
+      return
+    postingId.value = a.id
     try {
-      const data = await endpoints.affiliates.setWebhook(url.trim())
-      webhookUrl.value = data.webhook_url
-      ui.notify('Discord webhook saved', 'success')
-      return true
+      const res = await endpoints.affiliates.takeDown(a.id)
+      setPostState(affiliates.value, a.id, res.post)
+      ui.notify(res.note || 'Discord post deleted', res.note ? 'info' : 'success')
     } catch (e) {
       ui.notify((e as Error).message, 'error')
-      return false
     } finally {
-      savingWebhook.value = false
+      postingId.value = null
+    }
+  }
+
+  /** Save where affiliates post. Returns true on success. */
+  async function saveDestination(dest: {
+    channel_id: string
+    mention: string
+    repost_mode: RepostMode
+  }): Promise<boolean> {
+    savingDestination.value = true
+    try {
+      const saved = await useDiscordStore().saveDestination('affiliates', dest)
+      if (saved) destination.value = saved
+      return saved !== null
+    } finally {
+      savingDestination.value = false
     }
   }
 
@@ -238,12 +276,12 @@ export const useAffiliatesStore = defineStore('affiliates', () => {
     affiliates,
     selectedAffiliate,
     affiliateForm,
-    webhookUrl,
+    destination,
     search,
     filteredAffiliates,
     affiliatesLoading,
     savingAffiliate,
-    savingWebhook,
+    savingDestination,
     postingId,
     loadAffiliates,
     newAffiliateForm,
@@ -257,6 +295,7 @@ export const useAffiliatesStore = defineStore('affiliates', () => {
     deleteAffiliate,
     reorder,
     postAffiliate,
-    saveWebhook,
+    takeDownAffiliate,
+    saveDestination,
   }
 })

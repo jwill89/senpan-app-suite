@@ -18,7 +18,7 @@ import MarkdownEditor from '@/components/common/MarkdownEditor.vue'
 import AdminPanel from '@/components/common/ui/AdminPanel.vue'
 import FormField from '@/components/common/ui/FormField.vue'
 import FormActions from '@/components/common/ui/FormActions.vue'
-import { BOOK_CLUBS, clubWebhookKey, FALLBACK_GOOGLE_FONTS } from '@/lib/constants'
+import { FALLBACK_GOOGLE_FONTS } from '@/lib/constants'
 import { applyUploadedFonts } from '@/lib/theme'
 import { useAppStore } from '@/stores/app'
 import { useAuthStore } from '@/stores/auth'
@@ -275,25 +275,6 @@ watch(
           <h4 class="section-heading">
             <font-awesome-icon :icon="['fad', 'book-open-cover']" /> Book Club Integrations
           </h4>
-          <!-- Admin-only, like the Google Fonts key above: the webhook URLs are
-               secret settings, so a non-admin is served blanks and cannot save
-               them back. -->
-          <template v-if="auth.isAdmin">
-            <template v-for="club in BOOK_CLUBS" :key="club.slug">
-              <FormField
-                :label="`${club.name} - Reading List Webhook URL`"
-                help="Publishes this club's reading lists - each item posted as its own embed to this channel. Kept private; never sent to non-admin visitors."
-              >
-                <input
-                  v-model="app.settings[clubWebhookKey(club.slug)]"
-                  placeholder="https://discord.com/api/webhooks/..."
-                  :aria-label="club.name + ' reading list Discord webhook URL'"
-                  type="password"
-                  autocomplete="off"
-                />
-              </FormField>
-            </template>
-          </template>
           <FormField
             label="AniList API URL"
             help='GraphQL endpoint for the "Pull from AniList" lookup when adding reading list items. No API key needed.'

@@ -237,6 +237,22 @@
   margin-bottom: 0;
 }
 
+/* ChannelPicker / RolePicker: a Discord channel or ping control, which becomes a
+   select plus a typed-id box (and a line of help) when the bot isn't connected. The
+   pieces stack and stretch like any control directly inside a FormField. */
+.discord-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.discord-picker > select,
+.discord-picker > input {
+  width: 100%;
+}
+.discord-picker > .field-help {
+  margin-top: 0;
+}
+
 /* FormActions: a form's button row. Right-aligned by default. */
 .form-actions {
   display: flex;
@@ -668,7 +684,7 @@
 }
 
 /* Object: link-button - a real <button> that reads as a link, for an action offered
-   mid-sentence ("add one with the Webhook button"). Not a ghost button: it has no
+   mid-sentence ("pick one with the Discord button"). Not a ghost button: it has no
    border or fill to mistake for one, and it never sits in a button row. */
 .link-btn {
   background: none;
@@ -750,6 +766,15 @@
 .stack-label {
   flex: 0 0 110px;
   color: var(--text-muted);
+}
+
+/* -- Object: avatar ----------------------------------------------------------
+   A small round picture of an account or a server (the Discord bot and its server
+   on System -> Discord). Size comes from the img's width/height attributes. */
+.avatar {
+  border-radius: 50%;
+  object-fit: cover;
+  flex: 0 0 auto;
 }
 
 /* -- Object: captioned figure ----------------------------------------------

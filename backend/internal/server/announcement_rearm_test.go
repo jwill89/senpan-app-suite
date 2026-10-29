@@ -12,7 +12,7 @@ import (
 // test can edit and PUT it back the way the admin form does.
 func (e *testEnv) onceAnnouncement(t *testing.T, title, onceLocal string) (int, map[string]any) {
 	t.Helper()
-	tr := e.postJSON(t, "/api/announcement-types", map[string]any{"name": title + " type", "webhook_url": ""})
+	tr := e.postJSON(t, "/api/announcement-types", map[string]any{"name": title + " type", "channel_id": ""})
 	if tr.StatusCode != http.StatusCreated {
 		t.Fatalf("create announcement type = %d; want 201", tr.StatusCode)
 	}

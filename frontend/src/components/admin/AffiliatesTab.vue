@@ -6,7 +6,8 @@
  *     + location) with per-row actions - post to Discord, edit, delete - plus a
  *     search box. Reordering persists like the Tea Rooms / Announcements lists.
  *   - form: the create/edit form (AffiliateFormTab), a Back sub-page.
- *   - webhook: set the single shared Discord webhook every affiliate posts to.
+ *   - discord: where affiliates post in Discord (channel, ping, and whether posting
+ *     again edits the affiliate's post in place).
  *
  * All state + actions come from the affiliates store.
  */
@@ -18,9 +19,10 @@ import AdminPanel from '@/components/common/ui/AdminPanel.vue'
 import ListRow from '@/components/common/ui/ListRow.vue'
 import SubPageHeader from '@/components/common/ui/SubPageHeader.vue'
 import SearchInput from '@/components/common/ui/SearchInput.vue'
-import FormField from '@/components/common/ui/FormField.vue'
-import FormActions from '@/components/common/ui/FormActions.vue'
 import EmptyState from '@/components/common/ui/EmptyState.vue'
+import DiscordDestinationForm from '@/components/common/ui/DiscordDestinationForm.vue'
+import DiscordPostStatus from '@/components/common/ui/DiscordPostStatus.vue'
+import { ITEM_REPOST_OPTIONS, postVerb } from '@/lib/discordPosts'
 import AffiliateFormTab from './AffiliateFormTab.vue'
 import { useAffiliatesStore } from '@/stores/affiliates'
 import { assetUrl } from '@/lib/assets'
@@ -28,7 +30,7 @@ import type { Affiliate } from '@/types/api'
 
 const store = useAffiliatesStore()
 
-type Screen = 'list' | 'form' | 'webhook'
+type Screen = 'list' | 'form' | 'discord'
 const screen = ref<Screen>('list')
 
 // Drag-reorder is only allowed when the full list is shown (search cleared):
@@ -56,16 +58,6 @@ function openEdit(a: Affiliate): void {
 function onFormDone(): void {
   screen.value = 'list'
 }
-
-// -- Webhook sub-page ---------------------------------------------------------
-const webhookDraft = ref('')
-function openWebhook(): void {
-  webhookDraft.value = store.webhookUrl
-  screen.value = 'webhook'
-}
-async function submitWebhook(): Promise<void> {
-  if (await store.saveWebhook(webhookDraft.value)) screen.value = 'list'
-}
 </script>
 
 <template>
@@ -73,43 +65,28 @@ async function submitWebhook(): Promise<void> {
     <!-- -- Form ---------------------------------------------------------------- -->
     <AffiliateFormTab v-if="screen === 'form'" @saved="onFormDone" @cancel="onFormDone" />
 
-    <!-- -- Webhook ------------------------------------------------------------- -->
-    <AdminPanel v-else-if="screen === 'webhook'">
+    <!-- -- Discord -------------------------------------------------------------- -->
+    <AdminPanel v-else-if="screen === 'discord'">
       <SubPageHeader
         :icon="['fab', 'discord']"
-        title="Affiliates Discord Webhook"
+        title="Affiliates in Discord"
         @back="screen = 'list'"
       />
-      <p class="text-muted text-sm mb-16">
-        Every affiliate posts to this one channel webhook. In Discord: Channel Settings ->
-        Integrations -> Webhooks -> New Webhook -> Copy Webhook URL.
-      </p>
-      <FormField
-        label="Discord webhook URL"
-        help="Leave blank to disable posting. Only Discord webhook URLs are accepted."
-      >
-        <input
-          v-model="webhookDraft"
-          placeholder="https://discord.com/api/webhooks/..."
-          aria-label="Discord webhook URL"
-        />
-      </FormField>
-      <FormActions align="start">
-        <button class="btn-neutral" :disabled="store.savingWebhook" @click="screen = 'list'">
-          Cancel
-        </button>
-        <button class="btn-confirm" :disabled="store.savingWebhook" @click="submitWebhook">
-          <LoadingSpinner v-if="store.savingWebhook" label="Saving..." />
-          <template v-else>Save Webhook</template>
-        </button>
-      </FormActions>
+      <DiscordDestinationForm
+        :destination="store.destination"
+        :options="ITEM_REPOST_OPTIONS"
+        :saving="store.savingDestination"
+        id-prefix="aff-discord"
+        @save="async (d) => (await store.saveDestination(d)) && (screen = 'list')"
+        @cancel="screen = 'list'"
+      />
     </AdminPanel>
 
     <!-- -- List ---------------------------------------------------------------- -->
     <ManagerView v-else title="Affiliates" :icon="['fad', 'handshake']">
       <template #actions>
-        <button class="btn-view btn-sm" @click="openWebhook">
-          <font-awesome-icon :icon="['fab', 'discord']" /> Webhook
+        <button class="btn-view btn-sm" @click="screen = 'discord'">
+          <font-awesome-icon :icon="['fab', 'discord']" /> Discord
         </button>
         <button class="btn-confirm btn-sm" @click="openNew">
           <font-awesome-icon :icon="['fas', 'plus']" /> New Affiliate
@@ -124,10 +101,13 @@ async function submitWebhook(): Promise<void> {
         />
       </template>
 
-      <div v-if="!store.webhookUrl && store.affiliates.length" class="text-muted text-xs mb-12">
-        <font-awesome-icon :icon="['fad', 'triangle-exclamation']" /> No Discord webhook set yet -
-        add one with the <button class="link-btn" @click="openWebhook">Webhook</button> button to
-        post affiliates.
+      <div
+        v-if="!store.destination?.channel_id && store.affiliates.length"
+        class="text-muted text-xs mb-12"
+      >
+        <font-awesome-icon :icon="['fad', 'triangle-exclamation']" /> No Discord channel picked yet
+        - pick one with the <button class="link-btn" @click="screen = 'discord'">Discord</button>
+        button to post affiliates.
       </div>
 
       <LoadingSpinner
@@ -204,18 +184,35 @@ async function submitWebhook(): Promise<void> {
                 {{ a.hours.length }} open time{{ a.hours.length === 1 ? '' : 's' }}
               </span>
             </p>
+            <p v-if="a.discord_post" class="list-row-meta list-row-meta--inline">
+              <DiscordPostStatus :post="a.discord_post" />
+            </p>
 
             <template #actions>
               <button
                 class="btn-action btn-sm"
                 :disabled="store.postingId === a.id"
-                title="Post to Discord now"
+                :title="
+                  postVerb(store.destination, a.discord_post) === 'Update'
+                    ? 'Update the post in Discord'
+                    : 'Post to Discord now'
+                "
                 @click="store.postAffiliate(a)"
               >
                 <LoadingSpinner v-if="store.postingId === a.id" label="Posting..." />
                 <template v-else
-                  ><font-awesome-icon :icon="['fas', 'paper-plane']" /> Post</template
+                  ><font-awesome-icon :icon="['fas', 'paper-plane']" />
+                  {{ postVerb(store.destination, a.discord_post) }}</template
                 >
+              </button>
+              <button
+                v-if="a.discord_post?.state === 'live'"
+                class="btn-caution btn-sm"
+                :disabled="store.postingId === a.id"
+                title="Delete the post from Discord"
+                @click="store.takeDownAffiliate(a)"
+              >
+                <font-awesome-icon :icon="['fas', 'trash']" /> Take down
               </button>
               <button
                 class="btn-confirm btn-sm"

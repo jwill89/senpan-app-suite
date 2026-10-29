@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"app-suite/internal/discord"
 	"app-suite/internal/model"
 )
 
@@ -15,29 +16,23 @@ import (
 // An affiliate is a partner establishment (see model.Affiliate). Admins manage a
 // drag-orderable list of them - create/edit/delete/reorder - with owners and
 // opening hours edited as repeatable rows and persisted as JSON. The logo +
-// screenshot are picked from the shared image library (System -> Images). A single
-// shared Discord webhook (kept out of public settings) lets each affiliate be
-// posted as an embed. All of this is admin-only, gated by permTeahouseAffiliates.
-
-// affiliateWebhookSettingKey stores the single shared Discord webhook every
-// affiliate posts to. Deliberately NOT in settingsKeys (server/settings.go), so it
-// never leaks through the public GET /api/settings - read/written only through
-// these permission-gated endpoints.
-const affiliateWebhookSettingKey = "affiliate_webhook_url"
+// screenshot are picked from the shared image library (System -> Images). The bot
+// posts each affiliate as an embed to the Affiliates channel, edited in place as the
+// affiliate changes when the destination is set to (see discordqueue.go). All of this
+// is admin-only, gated by permTeahouseAffiliates.
 
 // handleAffiliatesList returns every affiliate, alphabetically by name.
 //
 //	Endpoint:  GET /api/affiliates
 //	Auth:      admin, or a user granted teahouse-affiliates, festival-map or
 //	           festival-stamp-rally (the latter two only to name a stall's operator)
-//	Response:  {"affiliates": [...], "webhook_url": "..." (affiliates page only)}
+//	Response:  model.AffiliatesResponse (destination + posts for the affiliates page only)
 func (s *Server) handleAffiliatesList(w http.ResponseWriter, r *http.Request) {
 	// The festival map and stamp rally editors both pick an affiliate to name who
 	// runs a pitch, so they need to READ this list - gating it on the affiliates
 	// page alone left those grantees with an empty operator select and no way to
-	// finish the form. They get the names only: the shared Discord webhook this
-	// response also carries belongs to the affiliates page, and a caller who cannot
-	// edit affiliates has no business holding it.
+	// finish the form. They get the names only: where affiliates post in Discord
+	// belongs to the affiliates page.
 	u := s.requireAnyPermission(w, r, permTeahouseAffiliates, permFestivalMap, permFestivalStampRally)
 	if u == nil {
 		return
@@ -47,11 +42,20 @@ func (s *Server) handleAffiliatesList(w http.ResponseWriter, r *http.Request) {
 		writeInternalError(w, "list affiliates", err)
 		return
 	}
-	var webhook string
+	res := model.AffiliatesResponse{Affiliates: affiliates}
 	if u.IsAdmin || userHasPermission(u, permTeahouseAffiliates) {
-		webhook, _ = s.store.GetSetting(affiliateWebhookSettingKey)
+		dest, err := s.store.GetDiscordDestination(destAffiliates)
+		if err != nil {
+			writeInternalError(w, "read affiliates destination", err)
+			return
+		}
+		res.Destination = &dest
+		posts := s.discordPostStates(postKindAffiliate)
+		for i := range res.Affiliates {
+			res.Affiliates[i].DiscordPost = posts[res.Affiliates[i].ID]
+		}
 	}
-	writeJSON(w, http.StatusOK, model.AffiliatesResponse{Affiliates: affiliates, WebhookURL: webhook})
+	writeJSON(w, http.StatusOK, res)
 }
 
 // affiliateWriteRequest is the JSON body for creating (POST /api/affiliates) or
@@ -182,10 +186,11 @@ func (s *Server) handleAffiliateUpdate(w http.ResponseWriter, r *http.Request) {
 		writeInternalError(w, "update affiliate", err)
 		return
 	}
+	s.queueDiscordEdit(postKindAffiliate, id)
 	writeJSON(w, http.StatusOK, model.OKResponse{OK: true})
 }
 
-// handleAffiliateDelete deletes an affiliate.
+// handleAffiliateDelete deletes an affiliate, and takes its Discord post down.
 //
 //	Endpoint:  DELETE /api/affiliates/{id}
 //	Auth:      admin, or a user granted teahouse-affiliates
@@ -198,9 +203,19 @@ func (s *Server) handleAffiliateDelete(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	affiliate, err := s.store.GetAffiliate(id)
+	if err != nil {
+		writeInternalError(w, "load affiliate for delete", err)
+		return
+	}
 	if _, err := s.store.DeleteAffiliate(id); err != nil {
 		writeInternalError(w, "delete affiliate", err)
 		return
+	}
+	if affiliate != nil {
+		ctx, cancel := detachedDiscordContext(r, discordWriteTimeout)
+		s.forgetDiscordItem(ctx, affiliateItems, id, affiliate.Name)
+		cancel()
 	}
 	w.WriteHeader(http.StatusNoContent)
 }
@@ -231,44 +246,14 @@ func (s *Server) handleAffiliatesReorder(w http.ResponseWriter, r *http.Request)
 	writeJSON(w, http.StatusOK, model.OKResponse{OK: true})
 }
 
-// affiliateWebhookRequest is the JSON body for PUT /api/affiliates/webhook.
-type affiliateWebhookRequest struct {
-	WebhookURL string `json:"webhook_url"`
-}
-
-// handleAffiliateWebhookSet stores the single shared affiliates Discord webhook.
-//
-//	Endpoint:  PUT /api/affiliates/webhook
-//	Auth:      admin, or a user granted teahouse-affiliates
-//	Request:   {"webhook_url": "https://discord.com/api/webhooks/..."}  ('' clears)
-//	Response:  200 {"webhook_url": "..."}
-func (s *Server) handleAffiliateWebhookSet(w http.ResponseWriter, r *http.Request) {
-	if !s.requirePermission(w, r, permTeahouseAffiliates) {
-		return
-	}
-	req, err := readJSON[affiliateWebhookRequest](w, r)
-	if err != nil {
-		writeError(w, http.StatusBadRequest, "Invalid JSON")
-		return
-	}
-	webhook := strings.TrimSpace(req.WebhookURL)
-	if webhook != "" && !isDiscordWebhookURL(webhook) {
-		writeError(w, http.StatusBadRequest, "Discord webhook URLs must look like https://discord.com/api/webhooks/...")
-		return
-	}
-	if err := s.store.SetSetting(affiliateWebhookSettingKey, webhook); err != nil {
-		writeInternalError(w, "save affiliate webhook", err)
-		return
-	}
-	writeJSON(w, http.StatusOK, model.AffiliateWebhookResponse{WebhookURL: webhook})
-}
-
-// handleAffiliatePost posts an affiliate to the shared Discord webhook as an embed.
+// handleAffiliatePost posts an affiliate to the Affiliates channel - or, when the
+// channel is set to edit in place and the affiliate already has a post there, updates
+// that post.
 //
 //	Endpoint:  POST /api/affiliates/{id}/post
 //	Auth:      admin, or a user granted teahouse-affiliates
-//	Response:  200 {"affiliate": Affiliate}
-//	           400 no webhook, 404 not found, 502 Discord post failed
+//	Response:  model.DiscordPostResult
+//	           400 no channel picked, 404 not found, 409 Discord off, 502 Discord refused
 func (s *Server) handleAffiliatePost(w http.ResponseWriter, r *http.Request) {
 	if !s.requirePermission(w, r, permTeahouseAffiliates) {
 		return
@@ -286,18 +271,46 @@ func (s *Server) handleAffiliatePost(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "Affiliate not found")
 		return
 	}
-	webhook, _ := s.store.GetSetting(affiliateWebhookSettingKey)
-	if strings.TrimSpace(webhook) == "" {
-		writeError(w, http.StatusBadRequest, "No Affiliates Discord webhook is configured. Set one on the Affiliates page first.")
+	ctx, cancel := detachedDiscordContext(r, discordWriteTimeout)
+	defer cancel()
+	res, err := s.postDiscordItem(ctx, affiliateItems, id)
+	if err != nil {
+		writeDiscordFailure(w, fmt.Sprintf("post affiliate %d", id), affiliateItems.where, err)
 		return
 	}
-	embed := buildAffiliateEmbed(*affiliate, s.siteBaseURL(r), time.Now())
-	target := webhookTarget{Kind: "affiliate", Name: affiliate.Name}
-	if err := s.postDiscordEmbed(r.Context(), target, webhook, embed); err != nil {
-		writeUpstreamError(w, fmt.Sprintf("post affiliate %d", id), err)
+	writeJSON(w, http.StatusOK, res)
+}
+
+// handleAffiliateTakeDown deletes an affiliate's post from Discord.
+//
+//	Endpoint:  DELETE /api/affiliates/{id}/post
+//	Auth:      admin, or a user granted teahouse-affiliates
+//	Response:  model.DiscordPostResult
+func (s *Server) handleAffiliateTakeDown(w http.ResponseWriter, r *http.Request) {
+	if !s.requirePermission(w, r, permTeahouseAffiliates) {
 		return
 	}
-	writeJSON(w, http.StatusOK, model.AffiliateResponse{Affiliate: *affiliate})
+	id, ok := pathInt64(w, r, "id", "affiliate")
+	if !ok {
+		return
+	}
+	affiliate, err := s.store.GetAffiliate(id)
+	if err != nil {
+		writeInternalError(w, "load affiliate for take down", err)
+		return
+	}
+	if affiliate == nil {
+		writeError(w, http.StatusNotFound, "Affiliate not found")
+		return
+	}
+	ctx, cancel := detachedDiscordContext(r, discordWriteTimeout)
+	defer cancel()
+	res, err := s.takeDownDiscordItem(ctx, affiliateItems, id, affiliate.Name)
+	if err != nil {
+		writeDiscordFailure(w, fmt.Sprintf("take down affiliate %d", id), affiliateItems.where, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, res)
 }
 
 // buildAffiliateEmbed renders an affiliate as a Discord embed: colour + name +
@@ -305,34 +318,34 @@ func (s *Server) handleAffiliatePost(w http.ResponseWriter, r *http.Request) {
 // the large image, and - in order, each skipped when absent - the location
 // (full-width), the opening hours (full-width, as Discord "Short Time" tokens
 // <t:unix:t> so each viewer sees them in their own timezone), and finally the
-// Discord + Carrd links as two side-by-side fields. baseURL (scheme://host) turns
-// the root-relative logo/screenshot paths into absolute image URLs; now anchors
+// Discord + Carrd links as two side-by-side fields. baseURL (the public site URL)
+// turns the root-relative logo/screenshot paths into absolute image URLs; now anchors
 // the recurring wall-clock hours onto a concrete date for the timestamp tokens.
-func buildAffiliateEmbed(a model.Affiliate, baseURL string, now time.Time) discordEmbed {
-	b := newEmbed().title(a.Name).colorHex(a.EmbedColor)
-	b.description(discordMarkdown(strings.TrimSpace(a.Details)))
+func buildAffiliateEmbed(a model.Affiliate, baseURL string, now time.Time) discord.Embed {
+	b := discord.NewEmbed().Title(a.Name).ColorHex(a.EmbedColor)
+	b.Description(discordMarkdown(strings.TrimSpace(a.Details)))
 
 	// Location first, full-width.
-	b.field("📍 Location", strings.TrimSpace(a.Location), false)
+	b.Field("📍 Location", strings.TrimSpace(a.Location), false)
 
 	// Opening hours next, full-width - one line per row (days in the admin's order),
 	// each time as a local-time token.
 	if hours := formatAffiliateHours(a, now); hours != "" {
-		b.field("🕒 Open Times", hours, false)
-		b.footer("Times are displayed in your local time zone.")
+		b.Field("🕒 Open Times", hours, false)
+		b.Footer("Times are displayed in your local time zone.")
 	}
 
 	// Discord + Carrd links last, side by side.
 	if link := normalizeExternalURL(a.DiscordLink); link != "" {
-		b.field("💬 Discord", "[Open Link]("+link+")", true)
+		b.Field("💬 Discord", "[Open Link]("+link+")", true)
 	}
 	if link := normalizeExternalURL(a.CarrdLink); link != "" {
-		b.field("🔗 Carrd", "[Open Link]("+link+")", true)
+		b.Field("🔗 Carrd", "[Open Link]("+link+")", true)
 	}
 
-	b.thumbnail(absoluteAssetURL(baseURL, a.Logo))
-	b.image(absoluteAssetURL(baseURL, a.Screenshot))
-	return b.build()
+	b.Thumbnail(absoluteAssetURL(baseURL, a.Logo))
+	b.Image(absoluteAssetURL(baseURL, a.Screenshot))
+	return b.Build()
 }
 
 // formatAffiliateHours renders an affiliate's opening hours as newline-separated
@@ -389,7 +402,7 @@ func hhmmToUnix(hhmm string, loc *time.Location, now time.Time) (int64, bool) {
 // blanks stay blank (the embed builder then skips the image).
 func absoluteAssetURL(baseURL, path string) string {
 	path = strings.TrimSpace(path)
-	if path == "" || isHTTPURL(path) {
+	if path == "" || discord.IsHTTPURL(path) {
 		return path
 	}
 	return strings.TrimRight(baseURL, "/") + "/" + strings.TrimPrefix(path, "/")
@@ -399,7 +412,7 @@ func absoluteAssetURL(baseURL, path string) string {
 // no scheme, so it's a valid target for an embed masked link. Blank stays blank.
 func normalizeExternalURL(u string) string {
 	u = strings.TrimSpace(u)
-	if u == "" || isHTTPURL(u) {
+	if u == "" || discord.IsHTTPURL(u) {
 		return u
 	}
 	return "https://" + u

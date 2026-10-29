@@ -1,30 +1,19 @@
 package model
 
 // AnnouncementType is a named Discord destination for announcements: a friendly
-// label plus the webhook URL of the channel its announcements post to. Each
-// announcement references one type, and posts to that type's webhook.
+// label plus the channel its announcements post to. Each announcement references
+// one type, so the list can be filtered by where things go.
 type AnnouncementType struct {
-	ID         int64  `json:"id"`
-	Name       string `json:"name"`
-	WebhookURL string `json:"webhook_url"` // Discord channel webhook
-	CreatedAt  string `json:"created_at"`
-}
-
-// AnnouncementRole is a named Discord role that an announcement can optionally
-// tag (ping) when it posts: a friendly group label plus the role's Discord ID.
-// It's a convenience picker - managed like announcement types - so admins choose
-// a role by name instead of pasting raw snowflake IDs. Tagging happens in the
-// message content (above the embed), because role mentions inside an embed don't
-// notify anyone.
-type AnnouncementRole struct {
-	ID        int64  `json:"id"`
-	Name      string `json:"name"`
-	RoleID    string `json:"role_id"` // Discord role snowflake ID (string to avoid JS precision loss)
+	ID   int64  `json:"id"`
+	Name string `json:"name"`
+	// ChannelID is the Discord channel the bot posts this type's announcements to
+	// ("" = none picked yet; its announcements wait until one is).
+	ChannelID string `json:"channel_id"`
 	CreatedAt string `json:"created_at"`
 }
 
-// Announcement is an admin-authored message posted to Discord as an embed via
-// its type's webhook - manually ("send now") or automatically on a schedule.
+// Announcement is an admin-authored message the bot posts to Discord as an embed in
+// its type's channel - manually ("send now") or automatically on a schedule.
 //
 // One IANA Timezone anchors every time on the announcement: the admin enters
 // wall-clock values (StartLocal/EndLocal for the event window, OnceLocal for a
@@ -80,8 +69,15 @@ type Announcement struct {
 
 	// Optional role tag posted in the message content (above the embed), since
 	// mentions inside an embed don't notify. One of: "" (don't tag), "everyone"
-	// (@everyone), or "role:<announcement_role_id>" (a managed AnnouncementRole).
+	// (@everyone), or "role:<role id>" (a Discord role in the server).
 	Mention string `json:"mention"`
+	// RepostMode is "new" (leave earlier posts up) or "replace" (delete the previous
+	// post once the new one is up). Announcements never edit in place: an edit
+	// notifies nobody, and notifying is what a recurring announcement is for.
+	RepostMode string `json:"repost_mode"`
+	// DiscordURL links to the newest post still up in Discord ("" when there is none).
+	// Read-only; filled on the admin list.
+	DiscordURL string `json:"discord_url,omitempty"`
 
 	// Read-only convenience for list rendering (joined from announcement_types).
 	TypeName string `json:"type_name,omitempty"`
@@ -111,19 +107,6 @@ type AnnouncementTypeResponse struct {
 	Type *AnnouncementType `json:"type"`
 }
 
-// AnnouncementRolesResponse is the body of GET /api/announcement-roles - all
-// taggable Discord roles. JSON: {"roles": [...]}.
-type AnnouncementRolesResponse struct {
-	Roles []AnnouncementRole `json:"roles"`
-}
-
-// AnnouncementRoleResponse is the body of POST /api/announcement-roles (create)
-// and PUT /api/announcement-roles/{id} (update) - the saved role. The handler
-// passes the *AnnouncementRole through (nil -> null). JSON: {"role": ...}.
-type AnnouncementRoleResponse struct {
-	Role *AnnouncementRole `json:"role"`
-}
-
 // AnnouncementsResponse is the body of GET /api/announcements - all announcements
 // (with type_name joined). JSON: {"announcements": [...]}.
 type AnnouncementsResponse struct {
@@ -137,4 +120,6 @@ type AnnouncementsResponse struct {
 // {"announcement": ...}.
 type AnnouncementResponse struct {
 	Announcement *Announcement `json:"announcement"`
+	// Note says something worth knowing about a send (a dry run, the test channel).
+	Note string `json:"note,omitempty"`
 }

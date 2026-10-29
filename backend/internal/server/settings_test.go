@@ -18,9 +18,9 @@ func settingsMap(t *testing.T, resp *http.Response) map[string]any {
 // TestSettingsSaveKeepsSecretsFromNonAdmin pins the read and write paths to the
 // same rule. GET /api/settings blanks secretSettings for anyone who is not a full
 // admin, but POST admits any holder of the grantable system-settings page - so a
-// non-admin loaded the form with the Google Fonts key and every club webhook
-// blank and, on save, wrote those blanks straight over the stored secrets. An
-// unrelated edit to the app title silently destroyed them.
+// non-admin loaded the form with the Google Fonts key blank and, on save, wrote
+// that blank straight over the stored secret. An unrelated edit to the app title
+// silently destroyed it.
 func TestSettingsSaveKeepsSecretsFromNonAdmin(t *testing.T) {
 	env := newTestEnv(t)
 	env.loginAdmin(t)

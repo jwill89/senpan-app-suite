@@ -44,7 +44,6 @@ export type {
   Announcement,
   AnnouncementButton,
   AnnouncementType,
-  AnnouncementRole,
   BingoDrawnNumber,
   BingoGame,
   BingoGamePattern,
@@ -85,6 +84,21 @@ export type {
   SkippedUpload,
   LogsResponse,
   LogLevelResponse,
+  // Discord bot
+  DiscordStatus,
+  DiscordStatusResponse,
+  DiscordChannelOption,
+  DiscordChannelsResponse,
+  DiscordRoleOption,
+  DiscordRolesResponse,
+  DiscordTestResponse,
+  DiscordImportRow,
+  DiscordImportResponse,
+  DiscordLegacyCleanupResponse,
+  DiscordDestination,
+  DiscordDestinationResponse,
+  DiscordPostState,
+  DiscordPostResult,
   // Auth / users / account
   AuthCheckResponse,
   LoginResponse,
@@ -142,11 +156,9 @@ export type {
   // Affiliates
   AffiliatesResponse,
   AffiliateResponse,
-  AffiliateWebhookResponse,
   // Tea rooms
   TeaRoomsResponse,
   TeaRoomResponse,
-  TeaRoomWebhookResponse,
   TeaRoomsPublicResponse,
   TeaRoomPublicResponse,
   // Stamp rally
@@ -186,8 +198,6 @@ export type {
   // Announcements
   AnnouncementTypesResponse,
   AnnouncementTypeResponse,
-  AnnouncementRolesResponse,
-  AnnouncementRoleResponse,
   AnnouncementsResponse,
   AnnouncementResponse,
   // Winners log
@@ -220,9 +230,8 @@ export type AccountTokenInfoResponse = TokenInfo
 
 // -- Settings (kept hand-written) ---------------------------------------------
 // The backend response types `settings` as a dynamic string->string map; this
-// richer view enumerates the known keys (plus the per-club webhook index
-// signature) for better editor support on the Settings page. Kept in sync by
-// hand with the backend `settingsKeys`.
+// richer view enumerates the known keys for better editor support on the Settings
+// page. Kept in sync by hand with the backend `settingsKeys`.
 export interface AppSettings {
   app_title: string
   default_draw_delay: string
@@ -252,12 +261,6 @@ export interface AppSettings {
    * through the app store's `hideCustomCards`. `hide_bingo` still hides both.
    */
   hide_custom_cards: string
-  /**
-   * Per-club Discord webhook URLs, keyed `discord_webhook_url_<club_slug>`
-   * (e.g. `discord_webhook_url_yaoi`). Admin-only (redacted for public). Each
-   * book club publishes its reading lists to its own channel. See BOOK_CLUBS.
-   */
-  [key: `discord_webhook_url_${string}`]: string
 }
 
 // GET /api/settings - the richer settings view (named keys) + uploaded fonts.
@@ -300,15 +303,17 @@ export interface ReadingListItemForm {
 export interface AnnouncementTypeForm {
   id: number
   name: string
-  webhook_url: string
+  /** The Discord channel the type posts to ('' = none picked yet). */
+  channel_id: string
 }
 
-// Form model for the admin taggable-role create/edit form.
-export interface AnnouncementRoleForm {
-  id: number
-  name: string
-  role_id: string
-}
+/**
+ * What a system does with its previous Discord post when it posts again:
+ *   'new'     - leave earlier posts up;
+ *   'replace' - delete the previous post once the new one is up;
+ *   'edit'    - keep one post per item and edit it in place (tea rooms, affiliates).
+ */
+export type RepostMode = 'new' | 'replace' | 'edit'
 
 /**
  * Recurrence builder kinds for the schedule UI.
@@ -384,9 +389,11 @@ export interface AnnouncementForm {
   buttons: AnnouncementButtonForm[]
   /**
    * Optional role tag posted above the embed: '' (don't tag), 'everyone'
-   * (@everyone), or 'role:<announcement_role_id>' (a managed taggable role).
+   * (@everyone), or 'role:<role id>' (a Discord role in the server).
    */
   mention: string
+  /** Delete the previous post when this posts again ('replace'), or leave it ('new'). */
+  repost_mode: 'new' | 'replace'
 }
 
 /**

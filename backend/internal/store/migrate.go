@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"regexp"
 	"strings"
 
 	"app-suite/internal/auth"
@@ -16,7 +17,7 @@ import (
 // PRAGMA user_version against this constant and runs only the migrations
 // needed to bring the database up to date. Bump this when adding a new
 // migration block.
-const schemaVersion = 69
+const schemaVersion = 70
 
 // ensureSchema reads the current PRAGMA user_version from the database and
 // applies any outstanding migrations to bring it up to schemaVersion.
@@ -470,6 +471,12 @@ func ensureSchema(db *sql.DB) error {
 
 	if version < 69 {
 		if err := migrateTeaRoomLocks(db); err != nil {
+			return err
+		}
+	}
+
+	if version < 70 {
+		if err := migrateDiscordBot(db); err != nil {
 			return err
 		}
 	}
@@ -2224,6 +2231,193 @@ func migrateTeaRoomLocks(db *sql.DB) error {
 		}
 	}
 	return nil
+}
+
+// The Discord bot's tables (schema v70).
+//
+// discord_destinations: where each posting system that isn't an announcement type
+// posts - "bookclub:<slug>", "tea-rooms", "affiliates" - with its ping and what to do
+// with the previous post.
+//
+// discord_posts: every message the bot posted, so a later post can replace it or edit
+// it in place. gone_at marks one deleted (by the app, or by someone in Discord).
+//
+// discord_legacy_webhooks: the one-time move off webhooks. Each old webhook URL waits
+// here until the importer has looked it up and settled where its channel goes, then the
+// URL - a credential - is blanked; the row stays as the import report.
+const discordDestinationsTableSQL = `CREATE TABLE IF NOT EXISTS discord_destinations (
+	key TEXT PRIMARY KEY,
+	channel_id TEXT NOT NULL DEFAULT '',
+	mention TEXT NOT NULL DEFAULT '',
+	repost_mode TEXT NOT NULL DEFAULT 'new',
+	updated_at TEXT NOT NULL DEFAULT ''
+)`
+
+const discordPostsTableSQL = `CREATE TABLE IF NOT EXISTS discord_posts (
+	id INTEGER PRIMARY KEY AUTOINCREMENT,
+	kind TEXT NOT NULL,
+	ref_id INTEGER NOT NULL DEFAULT 0,
+	scope TEXT NOT NULL DEFAULT '',
+	batch TEXT NOT NULL DEFAULT '',
+	seq INTEGER NOT NULL DEFAULT 0,
+	channel_id TEXT NOT NULL,
+	message_id TEXT NOT NULL,
+	fingerprint TEXT NOT NULL DEFAULT '',
+	posted_at TEXT NOT NULL,
+	edited_at TEXT NOT NULL DEFAULT '',
+	gone_at TEXT NOT NULL DEFAULT ''
+)`
+
+const discordLegacyWebhooksTableSQL = `CREATE TABLE IF NOT EXISTS discord_legacy_webhooks (
+	source TEXT PRIMARY KEY,
+	label TEXT NOT NULL DEFAULT '',
+	url TEXT NOT NULL DEFAULT '',
+	webhook_id TEXT NOT NULL DEFAULT '',
+	guild_id TEXT NOT NULL DEFAULT '',
+	channel_id TEXT NOT NULL DEFAULT '',
+	status TEXT NOT NULL DEFAULT 'pending',
+	detail TEXT NOT NULL DEFAULT '',
+	settled_at TEXT NOT NULL DEFAULT ''
+)`
+
+// legacyWebhookID pulls the numeric webhook id out of a webhook URL
+// (https://discord.com/api/webhooks/<id>/<token>), or "" when it isn't one.
+var legacyWebhookID = regexp.MustCompile(`/api/webhooks/(\d+)/`)
+
+// migrateDiscordBot (schema v70) moves the app from webhooks to the built-in bot.
+//
+// It creates the bot's tables, gives announcement types a channel and announcements a
+// repost mode, and moves every webhook URL into discord_legacy_webhooks: the announcement
+// types' webhook_url (blanked) and the four webhook settings - the per-club
+// discord_webhook_url_<slug>, tearoom_webhook_url and affiliate_webhook_url (deleted).
+// The URLs then live in exactly one place until the importer (server, at startup) has
+// looked each one up and filled in its channel; nothing here needs the network.
+//
+// The webhook_url column itself stays for now (empty): the code that read it is replaced
+// in the same release, and a schema can't be rolled back by swapping the binary anyway -
+// an older build refuses to start on it.
+func migrateDiscordBot(db *sql.DB) error {
+	for _, stmt := range []string{
+		discordDestinationsTableSQL,
+		discordPostsTableSQL,
+		`CREATE INDEX IF NOT EXISTS idx_discord_posts_ref ON discord_posts(kind, ref_id) WHERE gone_at = ''`,
+		`CREATE INDEX IF NOT EXISTS idx_discord_posts_scope ON discord_posts(kind, scope) WHERE gone_at = ''`,
+		discordLegacyWebhooksTableSQL,
+	} {
+		if _, err := db.Exec(stmt); err != nil {
+			return fmt.Errorf("create discord tables: %w", err)
+		}
+	}
+	if tableExists(db, "announcement_types") && !hasColumn(db, "announcement_types", "channel_id") {
+		if _, err := db.Exec(`ALTER TABLE announcement_types ADD COLUMN channel_id TEXT NOT NULL DEFAULT ''`); err != nil {
+			return fmt.Errorf("add announcement_types.channel_id: %w", err)
+		}
+	}
+	if tableExists(db, "announcements") && !hasColumn(db, "announcements", "repost_mode") {
+		if _, err := db.Exec(`ALTER TABLE announcements ADD COLUMN repost_mode TEXT NOT NULL DEFAULT 'new'`); err != nil {
+			return fmt.Errorf("add announcements.repost_mode: %w", err)
+		}
+	}
+
+	type legacy struct{ source, label, url string }
+	var moving []legacy
+	if tableExists(db, "announcement_types") {
+		rows, err := db.Query(`SELECT id, name, webhook_url FROM announcement_types WHERE webhook_url <> ''`)
+		if err != nil {
+			return fmt.Errorf("read announcement webhooks: %w", err)
+		}
+		for rows.Next() {
+			var id int64
+			var name, url string
+			if err := rows.Scan(&id, &name, &url); err != nil {
+				rows.Close()
+				return err
+			}
+			moving = append(moving, legacy{fmt.Sprintf("announcement_type:%d", id), name, url})
+		}
+		rows.Close()
+		if err := rows.Err(); err != nil {
+			return err
+		}
+	}
+	settingKeys := map[string]legacy{}
+	if tableExists(db, "settings") {
+		rows, err := db.Query(`SELECT key, value FROM settings
+			WHERE (key LIKE 'discord_webhook_url_%' OR key IN ('tearoom_webhook_url', 'affiliate_webhook_url'))`)
+		if err != nil {
+			return fmt.Errorf("read webhook settings: %w", err)
+		}
+		for rows.Next() {
+			var key, url string
+			if err := rows.Scan(&key, &url); err != nil {
+				rows.Close()
+				return err
+			}
+			switch key {
+			case "tearoom_webhook_url":
+				settingKeys[key] = legacy{"tea-rooms", "Tea Rooms", url}
+			case "affiliate_webhook_url":
+				settingKeys[key] = legacy{"affiliates", "Affiliates", url}
+			default:
+				slug := strings.TrimPrefix(key, "discord_webhook_url_")
+				settingKeys[key] = legacy{"bookclub:" + slug, "Book club: " + slug, url}
+			}
+		}
+		rows.Close()
+		if err := rows.Err(); err != nil {
+			return err
+		}
+	}
+
+	tx, err := db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback() //nolint:errcheck // no-op after Commit
+	insert := func(l legacy) error {
+		if strings.TrimSpace(l.url) == "" {
+			return nil
+		}
+		id := ""
+		if m := legacyWebhookID.FindStringSubmatch(l.url); m != nil {
+			id = m[1]
+		}
+		_, err := tx.Exec(`INSERT OR IGNORE INTO discord_legacy_webhooks (source, label, url, webhook_id)
+			VALUES (?, ?, ?, ?)`, l.source, l.label, strings.TrimSpace(l.url), id)
+		return err
+	}
+	for _, l := range moving {
+		if err := insert(l); err != nil {
+			return fmt.Errorf("move announcement webhook: %w", err)
+		}
+	}
+	if len(moving) > 0 {
+		if _, err := tx.Exec(`UPDATE announcement_types SET webhook_url = ''`); err != nil {
+			return err
+		}
+	}
+	for key, l := range settingKeys {
+		if err := insert(l); err != nil {
+			return fmt.Errorf("move %s: %w", key, err)
+		}
+		if _, err := tx.Exec(`DELETE FROM settings WHERE key = ?`, key); err != nil {
+			return err
+		}
+	}
+	// A role ping named its announcement_roles row ("role:4"); it now names the Discord role
+	// itself ("role:<snowflake>"), picked from the server's live roles. A role with no
+	// snowflake, or a row since deleted, already posted without a ping, so it becomes "".
+	// Row ids are small and snowflakes are 17+ digits, so the length guard keeps a rerun of
+	// this migration from mistaking a rewritten mention for a row id.
+	if tableExists(db, "announcements") && tableExists(db, "announcement_roles") {
+		if _, err := tx.Exec(`UPDATE announcements SET mention = COALESCE(
+				(SELECT 'role:' || r.role_id FROM announcement_roles r
+					WHERE 'role:' || r.id = announcements.mention AND r.role_id <> ''), '')
+			WHERE mention LIKE 'role:%' AND length(mention) < 20`); err != nil {
+			return fmt.Errorf("rewrite role mentions: %w", err)
+		}
+	}
+	return tx.Commit()
 }
 
 // stampRally*TableSQL define the Stamp Rally tables (Festival -> Stamp Rally). An

@@ -1,20 +1,22 @@
 /**
  * Tea Rooms store: admin management (list + create/edit/delete) of bookable tea
  * rooms, drag-reorder of the list, quick open/discounted toggles, locking a room
- * (with or without an unlock time), posting a room to Discord, and the single
- * shared Discord webhook the posts go to.
+ * (with or without an unlock time), posting a room to Discord (or updating its post,
+ * or taking it down), and where the rooms post.
  *
  * A cousin of the affiliates store (a flat single-table entity with an image
- * picked from the shared library) crossed with the announcements store (a
- * drag-orderable list plus per-row action flags + a webhook).
+ * picked from the shared library, kept in Discord the same way) crossed with the
+ * announcements store (a drag-orderable list plus per-row action flags).
  */
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 import { endpoints } from '@/lib/endpoints'
-import type { TeaRoom, TeaRoomForm } from '@/types/api'
+import type { DiscordDestination, RepostMode, TeaRoom, TeaRoomForm } from '@/types/api'
 import { useUiStore } from './ui'
+import { useDiscordStore } from './discord'
 import { withLoading } from '@/lib/withLoading'
 import { datetimeLocalToUtc, utcToDatetimeLocal } from '@/lib/datetime'
+import { postVerb, setPostState } from '@/lib/discordPosts'
 
 /**
  * The alert shown when a room's timed lock runs out on its own. The plugin builds
@@ -53,8 +55,8 @@ export const useTeaRoomsStore = defineStore('teaRooms', () => {
   const ui = useUiStore()
 
   const teaRooms = ref<TeaRoom[]>([])
-  /** The single shared Discord webhook every room posts to ('' = none). */
-  const webhookUrl = ref('')
+  /** Where the rooms post in Discord (null until loaded). */
+  const destination = ref<DiscordDestination | null>(null)
   const teaRoomForm = ref<TeaRoomForm | null>(null)
 
   const search = ref('')
@@ -68,7 +70,7 @@ export const useTeaRoomsStore = defineStore('teaRooms', () => {
 
   const loading = ref(false)
   const saving = ref(false)
-  const savingWebhook = ref(false)
+  const savingDestination = ref(false)
   const postingId = ref<number | null>(null)
   const togglingId = ref<number | null>(null)
 
@@ -77,7 +79,7 @@ export const useTeaRoomsStore = defineStore('teaRooms', () => {
     await withLoading(loading, async () => {
       const data = await endpoints.teaRooms.list()
       teaRooms.value = data.tea_rooms
-      webhookUrl.value = data.webhook_url
+      destination.value = data.destination
     })
   }
 
@@ -183,23 +185,48 @@ export const useTeaRoomsStore = defineStore('teaRooms', () => {
     }
   }
 
-  /** Post a room's embed to the shared Discord webhook (after confirmation). */
+  /**
+   * Post a room to Discord (after confirmation) - or, when the rooms' channel edits in
+   * place and the room has a post up, update that post.
+   */
   async function postRoom(t: TeaRoom): Promise<void> {
-    if (!webhookUrl.value.trim()) {
-      ui.notify('Set a Discord webhook first (Webhook button above).', 'error')
+    if (!destination.value?.channel_id) {
+      ui.notify('Pick a Discord channel first (Discord button above).', 'error')
       return
     }
+    const verb = postVerb(destination.value, t.discord_post)
+    const question =
+      verb === 'Update' ? `Update "${t.name}" in Discord?` : `Post "${t.name}" to Discord now?`
+    if (!(await ui.confirm(question, { title: `${verb} tea room`, confirmText: verb }))) return
+    postingId.value = t.id
+    try {
+      const res = await endpoints.teaRooms.post(t.id)
+      setPostState(teaRooms.value, t.id, res.post)
+      ui.notify(
+        res.note || (verb === 'Update' ? 'Discord post updated' : 'Tea room posted to Discord'),
+        'success',
+      )
+    } catch (e) {
+      ui.notify((e as Error).message, 'error')
+    } finally {
+      postingId.value = null
+    }
+  }
+
+  /** Delete a room's post from Discord (after confirmation). */
+  async function takeDownRoom(t: TeaRoom): Promise<void> {
     if (
-      !(await ui.confirm(`Post "${t.name}" to Discord now?`, {
-        title: 'Post tea room',
-        confirmText: 'Post',
+      !(await ui.confirm(`Delete the Discord post for "${t.name}"?`, {
+        title: 'Take down',
+        confirmText: 'Take down',
       }))
     )
       return
     postingId.value = t.id
     try {
-      await endpoints.teaRooms.post(t.id)
-      ui.notify('Tea room posted to Discord', 'success')
+      const res = await endpoints.teaRooms.takeDown(t.id)
+      setPostState(teaRooms.value, t.id, res.post)
+      ui.notify(res.note || 'Discord post deleted', res.note ? 'info' : 'success')
     } catch (e) {
       ui.notify((e as Error).message, 'error')
     } finally {
@@ -255,7 +282,10 @@ export const useTeaRoomsStore = defineStore('teaRooms', () => {
       const data = await endpoints.teaRooms.patch(t.id, fields)
       if (data.tea_room) {
         const i = teaRooms.value.findIndex((r) => r.id === t.id)
-        if (i !== -1) teaRooms.value[i] = data.tea_room
+        // The PATCH echo carries no Discord post; keep the one the list had.
+        if (i !== -1) {
+          teaRooms.value[i] = { ...data.tea_room, discord_post: teaRooms.value[i]?.discord_post }
+        }
       }
     } catch (e) {
       ui.notify((e as Error).message, 'error')
@@ -264,31 +294,31 @@ export const useTeaRoomsStore = defineStore('teaRooms', () => {
     }
   }
 
-  /** Save the shared Discord webhook. Returns true on success. */
-  async function saveWebhook(url: string): Promise<boolean> {
-    savingWebhook.value = true
+  /** Save where the rooms post. Returns true on success. */
+  async function saveDestination(dest: {
+    channel_id: string
+    mention: string
+    repost_mode: RepostMode
+  }): Promise<boolean> {
+    savingDestination.value = true
     try {
-      const data = await endpoints.teaRooms.setWebhook(url.trim())
-      webhookUrl.value = data.webhook_url
-      ui.notify('Discord webhook saved', 'success')
-      return true
-    } catch (e) {
-      ui.notify((e as Error).message, 'error')
-      return false
+      const saved = await useDiscordStore().saveDestination('tea-rooms', dest)
+      if (saved) destination.value = saved
+      return saved !== null
     } finally {
-      savingWebhook.value = false
+      savingDestination.value = false
     }
   }
 
   return {
     teaRooms,
-    webhookUrl,
+    destination,
     teaRoomForm,
     search,
     filteredTeaRooms,
     loading,
     saving,
-    savingWebhook,
+    savingDestination,
     postingId,
     togglingId,
     loadTeaRooms,
@@ -299,10 +329,11 @@ export const useTeaRoomsStore = defineStore('teaRooms', () => {
     deleteTeaRoom,
     reorder,
     postRoom,
+    takeDownRoom,
     toggleOpen,
     toggleDiscounted,
     lockRoom,
     unlockRoom,
-    saveWebhook,
+    saveDestination,
   }
 })

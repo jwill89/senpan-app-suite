@@ -10,7 +10,7 @@ linters:
   # Default linters (errcheck, govet, ineffassign, staticcheck, unused) plus a
   # curated set of high-signal additions.
   enable:
-    - bodyclose # HTTP response bodies must be closed (e.g. Discord webhooks)
+    - bodyclose # HTTP response bodies must be closed (e.g. Discord, AniList)
     - errorlint # use %w / errors.Is/As instead of %v / == for error handling
     - misspell # catch common spelling mistakes in comments and strings
     - unconvert # flag redundant type conversions

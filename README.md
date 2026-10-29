@@ -2,8 +2,8 @@
 
 A self-hosted suite of community tools for the **Senpan Tea House** and
 **Atelier Yao** - real-time Bingo, raffles, a festival lottery drum, Discord
-announcements, book-club reading lists, font/image hosting, and a fully
-themeable, permissioned admin dashboard. A **Go + SQLite** backend serves a
+announcements posted by its own Discord bot, book-club reading lists, font/image
+hosting, and a fully themeable, permissioned admin dashboard. A **Go + SQLite** backend serves a
 JSON/WebSocket API (`/api/*`, documented in [`API.md`](API.md)); a **Vue 3 +
 TypeScript** single-page app (built with Vite, installable as a PWA) is the
 frontend.
@@ -18,11 +18,14 @@ frontend.
 - **Festival** - a **Garapon** lottery-drum and a **Stamp Rally**, each with
   per-player tokenized links (draw / stamp cards) plus public token-gated views.
 - **Senpan Tea House** - scheduled **Discord announcements** (typed
-  destinations + roles), **book-club reading lists** (with cover lookup), partner
-  **affiliates**, and bookable **tea rooms** (with a public availability API).
+  destinations, role pings), **book-club reading lists** (with cover lookup), partner
+  **affiliates**, and bookable **tea rooms** (with a public availability API). The
+  tea rooms and affiliates can keep one Discord post each that updates itself as
+  they change.
 - **Atelier Yao** - **font upload** (served with CORS for use on external sites)
   and **Carrd image hosting**.
-- **System** - app **settings**, a structured **theme editor** (design tokens
+- **System** - the **Discord bot** (token, connection, test mode), app
+  **settings**, a structured **theme editor** (design tokens
   with a live preview and a WCAG 2.1 contrast report), central **image hosting**,
   **user accounts** with per-page permissions (password **or** passwordless
   WebAuthn passkeys, with an optional Cloudflare Turnstile bot check), and a live
@@ -47,11 +50,12 @@ frontend.
 # 1. Backend - run the API/WebSocket server on :8080
 cd backend
 # -log-file="" keeps logs on stdout only (the default writes to /var/log/senpan)
-# -webhook-dry-run suppresses outbound Discord posts. Keep it on: devdata is a copy
-# of the live database and carries real webhook URLs, so the announcement scheduler
-# would otherwise post to production channels by itself. Use
-# -webhook-override <url> to send everything to a test channel instead.
-go run . -addr :8080 -db ../devdata/database.sqlite -webroot ../devdata/webroot -log-file "" -webhook-dry-run
+# -discord-dry-run suppresses every Discord post, edit and delete. A copy of the live
+# database can't read the bot token (it is sealed under the production session
+# secret), so Discord is off locally anyway; the flag is the belt to that brace. Use
+# -discord-api-url http://127.0.0.1:8099 with `go run ./cmd/fakediscord` to click
+# through the Discord features against a local fake.
+go run . -addr :8080 -db ../devdata/database.sqlite -webroot ../devdata/webroot -log-file "" -discord-dry-run
 
 # 2. Frontend (in a second terminal)
 cd frontend

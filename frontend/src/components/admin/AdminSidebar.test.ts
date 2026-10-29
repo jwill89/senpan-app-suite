@@ -157,4 +157,24 @@ describe('AdminSidebar', () => {
     expect(buttons).toHaveLength(1)
     expect(buttons[0].text()).toContain('Manage Cards')
   })
+
+  it('offers the Discord page to admins only', async () => {
+    const systemItems = (w: VueWrapper) =>
+      section(w, 'System')
+        .findAll('.admin-nav-items button')
+        .map((b) => b.text())
+
+    const admin = mountAs(makeUser({ is_admin: true }))
+    expect(systemItems(admin)).toContain('Discord')
+    await section(admin, 'System')
+      .findAll('.admin-nav-items button')
+      .find((b) => b.text() === 'Discord')!
+      .trigger('click')
+    expect(push).toHaveBeenCalledWith({ name: 'admin-system-discord' })
+
+    // Settings access is not enough: the page holds the bot token.
+    setActivePinia(createPinia())
+    const staff = mountAs(makeUser({ permissions: ['system-settings'] }))
+    expect(systemItems(staff)).not.toContain('Discord')
+  })
 })

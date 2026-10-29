@@ -26,6 +26,8 @@ import { usePatternsStore } from './patterns'
 import { useAnnouncementsStore } from './announcements'
 import { useImagesStore } from './images'
 import { useUsersStore } from './users'
+import { useDiscordStore } from './discord'
+import { useAuthStore } from './auth'
 import type { BOOK_CLUBS } from '@/lib/constants'
 import { createFreshness } from '@/lib/freshness'
 
@@ -55,6 +57,7 @@ export type AdminTab =
   | 'system-images'
   | 'system-users'
   | 'system-logs'
+  | 'system-discord'
 
 // Per-dataset freshness gate so re-entering a tab doesn't re-spin and re-fetch
 // data we just loaded. Keyed by data domain (several tabs can share one key, e.g.
@@ -177,6 +180,13 @@ export const useAdminStore = defineStore('admin', () => {
       loadFresh('users', () => {
         void users.loadUsers()
       })
+    if (tab === 'system-discord')
+      loadFresh('discord', () => {
+        const discord = useDiscordStore()
+        void discord.loadStatus()
+        void discord.loadDirectory()
+        void discord.loadImport()
+      })
     if (tab === 'atelier-fonts')
       loadFresh('fonts', () => {
         void fonts.loadFonts()
@@ -230,6 +240,19 @@ export const useAdminStore = defineStore('admin', () => {
     }
 
     switch (resource) {
+      case 'discord': {
+        // Another admin changed the bot. The status (which drives the test-mode banner on
+        // every admin page) is admin-only - a 401 here would read as an expired session -
+        // so only admins refetch it; any picker already showing lists refetches those.
+        const discord = useDiscordStore()
+        if (useAuthStore().isAdmin) {
+          void discord.loadStatus()
+          if (tab === 'system-discord') void discord.loadImport()
+        }
+        if (discord.channels.length || discord.directoryProblem) void discord.loadDirectory()
+        tabData.invalidate('discord')
+        break
+      }
       case 'garapons':
         apply('garapons', tab === 'festival-garapon', () => {
           const garapons = useGaraponsStore()

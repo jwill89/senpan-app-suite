@@ -15,7 +15,7 @@ import (
 // way the admin form does.
 func (e *testEnv) scheduledAnnouncement(t *testing.T, title string) (int, map[string]any) {
 	t.Helper()
-	tr := e.postJSON(t, "/api/announcement-types", map[string]any{"name": title + " type", "webhook_url": ""})
+	tr := e.postJSON(t, "/api/announcement-types", map[string]any{"name": title + " type", "channel_id": ""})
 	if tr.StatusCode != http.StatusCreated {
 		t.Fatalf("create announcement type = %d; want 201", tr.StatusCode)
 	}
@@ -134,7 +134,7 @@ func TestAnnouncementSkip_SurvivesAnEdit(t *testing.T) {
 func TestAnnouncementSkip_RejectsUnscheduled(t *testing.T) {
 	env := newTestEnv(t)
 	env.loginAdmin(t)
-	tr := env.postJSON(t, "/api/announcement-types", map[string]any{"name": "Manual", "webhook_url": ""})
+	tr := env.postJSON(t, "/api/announcement-types", map[string]any{"name": "Manual", "channel_id": ""})
 	typeID := int(decodeBody(t, tr)["type"].(map[string]any)["id"].(float64))
 	cr := env.postJSON(t, "/api/announcements", map[string]any{"announcement": map[string]any{
 		"type_id": typeID, "title": "Manual only", "details": "x",

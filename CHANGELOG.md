@@ -42,6 +42,49 @@ The format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## Frontend
 
+### [4.0.0] - 2026-10-24
+
+Requires backend 4.0.0. Everything the site posts to Discord now comes from the app's
+own bot; this release is the admin side of that.
+
+#### Added
+
+- **System -> Discord** (admins only): the bot's page. It shows whether the bot is
+  online, which server it is in and whether it holds Administrator there, with an
+  **Invite** button when it isn't in the server yet. The bot token is pasted here once -
+  it is checked with Discord, stored encrypted, and never shown again. The same page
+  holds the server and application ids, the bot's status text, the public site URL used
+  for image links, a test message, and **test mode**.
+- **Test mode.** While it is on, every new post goes to one test channel with its pings
+  switched off, and scheduled announcements wait instead of going out. A banner on every
+  admin page says so, so it can't be left on by accident; turning it off sends what was
+  held.
+- **A Discord button on Tea Rooms, Affiliates and each Book Club** picks the channel,
+  who to ping, and what posting again does: keep **one post** and edit it, **replace**
+  the previous post, or **add another**. Tea rooms and affiliates default to keeping one
+  post - change a room (or open, discount or lock it, here or from the plugin) and its
+  post in Discord updates itself a few seconds later. A book club can replace its
+  previous reading list when it publishes a new one.
+- **Each tea room and affiliate row shows its post**: "Live in #channel" with a link, or
+  "Deleted in Discord" when someone removed it there. The button reads **Update** when
+  posting again will edit the post, and **Take down** deletes it. Deleting a room or an
+  affiliate takes its post down too.
+- **Webhook import report** on the Discord page: where each old webhook was posting and
+  whether its system picked that channel up, with a way to try again and a button to
+  delete the old webhooks from Discord once everything works.
+
+#### Changed
+
+- **BREAKING (with backend 4.0.0): announcement types pick a channel, and pings pick a
+  real role.** The webhook URL field is a channel list now, and the "Tag a role" choice
+  lists the server's own roles - so **Manage Roles** is gone; there is nothing to keep in
+  step with Discord any more. Pings set up before still work: the update converted them.
+- **An announcement can replace its last post** ("Delete the previous post when this
+  posts again"), which keeps a recurring announcement's channel to one message. Each
+  announcement links to its newest post in Discord.
+- **The book-club webhook fields are gone from System -> Settings**; a club's channel is
+  set from its own page.
+
 ### [3.28.0] - 2026-10-17
 
 Requires backend 3.24.0.
@@ -1766,6 +1809,70 @@ First tracked release - establishes versioning for the current production build.
 ---
 
 ## Backend
+
+### [4.0.0] - 2026-10-24
+
+Discord posts come from the app's own bot instead of webhooks. Deploy with frontend
+4.0.0. The first start migrates the database to schema v70 and looks up the old
+webhooks to find their channels - see **Discord bot** in `deploy/README.md`. A 3.x
+binary will not start on the migrated database, so a rollback needs the pre-deploy
+snapshot as well as the old binary.
+
+#### Changed
+
+- **BREAKING: everything posts as one Discord bot.** Announcements, reading lists, tea
+  rooms and affiliates all post through one funnel as the bot, so every post shows its
+  name and avatar - the old per-webhook names go away. The bot token is set on the new
+  Discord endpoints (below) and stored in the database sealed with AES-256-GCM under a
+  key derived from `APPSUITE_SESSION_SECRET`; it is never returned and never logged.
+  Without a configured session secret it can't be stored at all, and changing the
+  secret means entering it again. A copy of the database is useless without the secret,
+  so Discord is simply off on a development machine.
+- **BREAKING: webhook fields and routes are gone.** `GET /api/tea-rooms` and
+  `GET /api/affiliates` return a `destination` and a per-item `discord_post` instead of
+  `webhook_url`; `POST /api/tea-rooms/{id}/post` and `/api/affiliates/{id}/post` return
+  where the item now stands (`DiscordPostResult`); announcement types take and return
+  `channel_id` instead of `webhook_url`; an announcement's `mention` names a Discord role
+  (`role:<role id>`). Removed: `PUT /api/tea-rooms/webhook`, `PUT /api/affiliates/webhook`,
+  the `/api/announcement-roles` endpoints, the `discord_webhook_url_<club>` settings, and
+  the `-webhook-dry-run` / `-webhook-override` flags.
+- **A scheduled announcement that fails is retried instead of skipped.** A post that
+  timed out might have landed, so the webhook code gave up on it rather than risk posting
+  twice. Each scheduled occurrence now carries a nonce, and Discord answers a retry with
+  the message it already made - so the retry is safe, and an announcement no longer goes
+  missing because Discord was slow to answer.
+
+#### Added
+
+- **`/api/discord/*`**: the bot's status, its token (set, checked with Discord, and
+  removed), configuration (server, application, status text, the public site URL used for
+  image links, test mode), a test message, the channel and role lists the pickers read,
+  and each system's destination (`/api/discord/destinations/{key}` - channel, ping and
+  repost mode, guarded by that system's own page permission).
+- **Repost modes.** `new` adds a post; `replace` posts and then deletes the previous one
+  (so a failed post never leaves the channel empty); `edit` keeps one post per tea room or
+  affiliate and edits it in place. In edit mode a change to the item - a save, a toggle, a
+  lock lifting on its own - is queued and applied to its post a few seconds later, with a
+  burst of changes making one edit. Every post is recorded, so it can be updated or taken
+  down (`DELETE /api/tea-rooms/{id}/post`, `/api/affiliates/{id}/post`), and deleting the
+  item takes its post down too. A post someone deleted in Discord is reported as such and
+  never reposted on its own.
+- **Reading lists publish as one batch.** One message per item with the ping on the
+  first; a publish that fails partway deletes what it had posted, and a club set to
+  replace deletes its previous list only once the new one is fully up.
+- **Announcements can replace their previous post** (`repost_mode`), and the admin list
+  links to each one's newest post (`discord_url`).
+- **Test mode**: every new post goes to one channel with pings off, edits and deletes only
+  touch messages there, and the announcement scheduler holds until it is turned off.
+- **Moving off webhooks.** Schema v70 moves every webhook URL into an import table and
+  deletes the originals; on startup each one is looked up (no bot token needed) and its
+  system is given the channel it was posting to. The report, a retry and "remove old
+  webhooks" are under `/api/discord/import` and `/api/discord/legacy-webhooks`.
+  Existing role pings are converted to the Discord role they named.
+- **Development**: `-discord-dry-run` (no writes at all), `-discord-redirect-channel`
+  (every new post to one channel), `-discord-api-url` (a local fake only - anything but
+  localhost is refused), and `go run ./cmd/fakediscord`, a local fake Discord to click
+  through against.
 
 ### [3.24.1] - 2026-10-16
 

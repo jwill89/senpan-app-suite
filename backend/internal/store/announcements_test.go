@@ -38,7 +38,7 @@ func listAnnouncementTitles(t *testing.T, s *store.Store) []string {
 // newest-first - the behavior preserved by sort_order defaulting to 0.
 func TestListAnnouncements_DefaultOrder(t *testing.T) {
 	s := newTestStore(t)
-	typeID, err := s.CreateAnnouncementType("Events", "https://discord/webhook")
+	typeID, err := s.CreateAnnouncementType("Events", "200000000000000002")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -55,7 +55,7 @@ func TestListAnnouncements_DefaultOrder(t *testing.T) {
 // created announcement afterwards lands at the top (sort_order 0, id tie-break).
 func TestBulkReorderAnnouncements(t *testing.T) {
 	s := newTestStore(t)
-	typeID, err := s.CreateAnnouncementType("Events", "https://discord/webhook")
+	typeID, err := s.CreateAnnouncementType("Events", "200000000000000002")
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -7,8 +7,8 @@ import (
 	"time"
 )
 
-// runScheduler is the shared engine behind the background Discord-post
-// schedulers (announcements, book-club events). It calls sweep once immediately
+// runScheduler is the shared engine behind the background sweeps (announcements,
+// tea-room lock expiries). It calls sweep once immediately
 // - to catch up on anything that came due while the process was down - and then
 // on every tick of interval, until ctx is cancelled. The schedulers differ only
 // in their name, interval and sweep function, so each is a one-line wrapper

@@ -19,7 +19,7 @@ var modelTypes = map[string]any{
 	"ReadingList": model.ReadingList{}, "ReadingListItem": model.ReadingListItem{},
 	"ReadingListSource": model.ReadingListSource{}, "WinnersLogEntry": model.WinnersLogEntry{},
 	"FrequentWinner": model.FrequentWinner{}, "AnnouncementType": model.AnnouncementType{},
-	"AnnouncementRole": model.AnnouncementRole{}, "Announcement": model.Announcement{},
+	"Announcement":       model.Announcement{},
 	"AnnouncementButton": model.AnnouncementButton{}, "Affiliate": model.Affiliate{},
 	"AffiliateHour": model.AffiliateHour{}, "Placement": model.Placement{},
 	"StampRally": model.StampRally{}, "StampRallyStamp": model.StampRallyStamp{},
@@ -37,6 +37,16 @@ var modelTypes = map[string]any{
 	"SettingsResponse": model.SettingsResponse{},
 	"LogEntry":         model.LogEntry{}, "LogsResponse": model.LogsResponse{},
 	"LogLevelResponse": model.LogLevelResponse{},
+
+	// Discord bot
+	"DiscordStatus": model.DiscordStatus{}, "DiscordStatusResponse": model.DiscordStatusResponse{},
+	"DiscordChannelOption": model.DiscordChannelOption{}, "DiscordChannelsResponse": model.DiscordChannelsResponse{},
+	"DiscordRoleOption": model.DiscordRoleOption{}, "DiscordRolesResponse": model.DiscordRolesResponse{},
+	"DiscordTestResponse": model.DiscordTestResponse{},
+	"DiscordImportRow":    model.DiscordImportRow{}, "DiscordImportResponse": model.DiscordImportResponse{},
+	"DiscordLegacyCleanupResponse": model.DiscordLegacyCleanupResponse{},
+	"DiscordDestination":           model.DiscordDestination{}, "DiscordDestinationResponse": model.DiscordDestinationResponse{},
+	"DiscordPostState": model.DiscordPostState{}, "DiscordPostResult": model.DiscordPostResult{},
 
 	// Auth / users / account
 	"AuthCheckResponse": model.AuthCheckResponse{}, "LoginResponse": model.LoginResponse{},
@@ -73,13 +83,12 @@ var modelTypes = map[string]any{
 
 	// Tea rooms
 	"TeaRoom": model.TeaRoom{}, "TeaRoomsResponse": model.TeaRoomsResponse{},
-	"TeaRoomResponse": model.TeaRoomResponse{}, "TeaRoomWebhookResponse": model.TeaRoomWebhookResponse{},
+	"TeaRoomResponse":        model.TeaRoomResponse{},
 	"TeaRoomsPublicResponse": model.TeaRoomsPublicResponse{}, "TeaRoomPublicResponse": model.TeaRoomPublicResponse{},
 
 	// Affiliates / stamp rally
 	"AffiliatesResponse": model.AffiliatesResponse{}, "AffiliateResponse": model.AffiliateResponse{},
-	"AffiliateWebhookResponse": model.AffiliateWebhookResponse{},
-	"StampRalliesResponse":     model.StampRalliesResponse{}, "StampRallyResponse": model.StampRallyResponse{},
+	"StampRalliesResponse": model.StampRalliesResponse{}, "StampRallyResponse": model.StampRallyResponse{},
 	"StampRallyDetailResponse": model.StampRallyDetailResponse{}, "StampRallyCardResponse": model.StampRallyCardResponse{},
 	"StampRallyLogsResponse": model.StampRallyLogsResponse{}, "PublicStampRally": model.PublicStampRally{},
 	"PublicStamp": model.PublicStamp{}, "PublicPrize": model.PublicPrize{},
@@ -101,7 +110,6 @@ var modelTypes = map[string]any{
 	"ReadingListItemResponse": model.ReadingListItemResponse{}, "BookclubLookupResponse": model.BookclubLookupResponse{},
 	"BookclubUploadResponse": model.BookclubUploadResponse{}, "PublishResponse": model.PublishResponse{},
 	"AnnouncementTypesResponse": model.AnnouncementTypesResponse{}, "AnnouncementTypeResponse": model.AnnouncementTypeResponse{},
-	"AnnouncementRolesResponse": model.AnnouncementRolesResponse{}, "AnnouncementRoleResponse": model.AnnouncementRoleResponse{},
 	"AnnouncementsResponse": model.AnnouncementsResponse{}, "AnnouncementResponse": model.AnnouncementResponse{},
 
 	// Winners / settings / files

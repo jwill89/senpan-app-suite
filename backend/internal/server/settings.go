@@ -3,7 +3,6 @@ package server
 import (
 	"net/http"
 	"strconv"
-	"strings"
 
 	"app-suite/internal/model"
 )
@@ -41,10 +40,8 @@ var settingsDefaults = map[string]string{
 
 // secretSettings are setting keys that must not be exposed to non-admin
 // callers. GET /api/settings is public, so these are blanked out unless the
-// requester is an authenticated admin. Per-club Discord webhook URLs grant
-// write access to a channel and are registered here by bookclubs.go's init().
-// The Google Fonts API key is included so it isn't handed to anonymous callers
-// (it's only needed by the admin font picker).
+// requester is an authenticated admin. The Google Fonts API key is here so it
+// isn't handed to anonymous callers (it's only needed by the admin font picker).
 var secretSettings = map[string]bool{
 	"google_fonts_api_key": true,
 }
@@ -58,7 +55,7 @@ func (s *Server) handleSettingsGet(w http.ResponseWriter, r *http.Request) {
 	admin := s.isAdmin(r)
 	result := make(map[string]string, len(settingsKeys))
 	for _, key := range settingsKeys {
-		// Never leak secret settings (e.g. the Discord webhook URL) to public
+		// Never leak secret settings (e.g. the Google Fonts API key) to public
 		// callers - only admins, who need them to edit on the settings page.
 		if secretSettings[key] && !admin {
 			result[key] = ""
@@ -111,15 +108,6 @@ func (s *Server) handleSettingsUpdate(w http.ResponseWriter, r *http.Request) {
 	for key, val := range req.Settings {
 		if !isAllowedSetting(key) {
 			writeError(w, http.StatusBadRequest, "Unknown setting: "+key)
-			return
-		}
-		// Per-club Discord webhook settings must be a Discord webhook URL so a saved
-		// value can't point the server's outbound POSTs at an arbitrary host. An
-		// empty value clears it. Scope this to the webhook keys only (prefix set by
-		// clubWebhookKey) - NOT every secret setting, since google_fonts_api_key is
-		// also secret but is not a webhook and must not be validated as one.
-		if strings.HasPrefix(key, "discord_webhook_url_") && val != "" && !isDiscordWebhookURL(val) {
-			writeError(w, http.StatusBadRequest, "Discord webhook URLs must look like https://discord.com/api/webhooks/...")
 			return
 		}
 		// The AniList endpoint drives an outbound server request, so restrict it
@@ -196,11 +184,10 @@ func (s *Server) handleSettingsUpdate(w http.ResponseWriter, r *http.Request) {
 	for key, val := range req.Settings {
 		// A caller who cannot read a secret must not be able to write it either.
 		// handleSettingsGet hands non-admins "" for every secretSettings key, so a
-		// permission-granted non-admin loads this form with the Google Fonts key and
-		// every club webhook blank - and, without this skip, saves those blanks
-		// straight over the stored values, silently destroying every book club's
-		// Discord webhook on an unrelated edit. Skipping rather than rejecting keeps
-		// the rest of their save working, which is the point of granting the page.
+		// permission-granted non-admin loads this form with the Google Fonts key
+		// blank - and, without this skip, saves that blank straight over the stored
+		// value on an unrelated edit. Skipping rather than rejecting keeps the rest
+		// of their save working, which is the point of granting the page.
 		if secretSettings[key] && !admin {
 			continue
 		}

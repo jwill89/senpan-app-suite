@@ -163,25 +163,26 @@ func TestImagePickerReachableByMapAndTeaRoomGrantees(t *testing.T) {
 	}
 }
 
-// TestAffiliateListReadableByMapGranteeWithoutWebhook covers both halves of that
+// TestAffiliateListReadableByMapGranteeWithoutDestination covers both halves of that
 // permission change: the festival map editor needs the affiliate names for its
-// operator select, but the same response carries the shared Discord webhook, which
-// belongs to the affiliates page. A read granted for names must not confer a secret.
-func TestAffiliateListReadableByMapGranteeWithoutWebhook(t *testing.T) {
+// operator select, but the same response carries where affiliates post in Discord,
+// which belongs to the affiliates page. A read granted for names confers nothing more.
+func TestAffiliateListReadableByMapGranteeWithoutDestination(t *testing.T) {
 	env := newTestEnv(t)
 	env.loginAdmin(t)
-	resp := env.putJSON(t, "/api/affiliates/webhook", map[string]any{
-		"webhook_url": "https://discord.com/api/webhooks/123/abc",
+	env.createAffiliate(t, "Moogle Mart")
+	resp := env.putJSON(t, "/api/discord/destinations/affiliates", map[string]any{
+		"channel_id": "200000000000000003", "mention": "", "repost_mode": "edit",
 	})
 	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("seed affiliate webhook = %d; want 200", resp.StatusCode)
+		t.Fatalf("seed affiliates destination = %d; want 200", resp.StatusCode)
 	}
 	resp.Body.Close()
 
-	// Read it back as admin FIRST: the guard narrows who sees the secret, it must
-	// not blank it for the page that owns it.
-	if got := decodeBody(t, env.get(t, "/api/affiliates"))["webhook_url"]; got == "" {
-		t.Fatal("an admin lost access to the affiliate webhook")
+	// Read it back as admin FIRST: the guard narrows who sees where affiliates post, it
+	// must not hide it from the page that owns it.
+	if dest, _ := decodeBody(t, env.get(t, "/api/affiliates"))["destination"].(map[string]any); dest["channel_id"] != "200000000000000003" {
+		t.Fatalf("an admin lost the affiliates destination: %v", dest)
 	}
 
 	c := makeActiveUser(t, env, "mapstaff", "correct horse battery", []string{"festival-map"})
@@ -190,8 +191,12 @@ func TestAffiliateListReadableByMapGranteeWithoutWebhook(t *testing.T) {
 		t.Fatalf("affiliate list for a festival-map grantee = %d; want 200 (the operator select needs it)",
 			resp.StatusCode)
 	}
-	if got, ok := decodeBody(t, resp)["webhook_url"]; ok && got != "" {
-		t.Errorf("webhook_url = %v; want it withheld from a caller who cannot edit affiliates", got)
+	body := decodeBody(t, resp)
+	if got, ok := body["destination"]; ok {
+		t.Errorf("destination = %v; want it withheld from a caller who cannot edit affiliates", got)
+	}
+	if list, _ := body["affiliates"].([]any); len(list) != 1 {
+		t.Fatalf("affiliates = %v; want the one affiliate", body["affiliates"])
 	}
 }
 

@@ -2,6 +2,7 @@ package server
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -17,6 +18,7 @@ import (
 	"strings"
 	"time"
 
+	"app-suite/internal/discord"
 	"app-suite/internal/model"
 )
 
@@ -35,8 +37,7 @@ const anilistUserAgent = "SenpanAppSuite (+https://apps.senpan.cafe)"
 const defaultClubSlug = "yaoi"
 
 // bookClub identifies a book club for per-club configuration (notably its own
-// Discord webhook). Add an entry here to introduce a new club; its webhook
-// setting is then exposed/saved automatically (see init below).
+// Discord destination, "bookclub:<slug>"). Add an entry here to introduce a new club.
 type bookClub struct {
 	Slug string
 	Name string
@@ -62,34 +63,10 @@ func commentsLabelForClub(slug string) string {
 	return "Comments"
 }
 
-// webhookSettingKey returns the per-club reading-list Discord webhook setting
-// key for a slug (e.g. "discord_webhook_url_yaoi"). Must match clubWebhookKey
-// on the frontend.
-func webhookSettingKey(slug string) string {
-	return "discord_webhook_url_" + slug
-}
-
-// isDiscordWebhookURL reports whether raw is a valid Discord webhook URL: https
-// on an official Discord host with an /api/webhooks/ path. Admin-entered webhook
-// URLs (announcement types, per-club settings) are validated against this so a
-// saved value can't point the server's outbound POSTs at an arbitrary (e.g.
-// internal) host.
-func isDiscordWebhookURL(raw string) bool {
-	u, err := url.Parse(strings.TrimSpace(raw))
-	if err != nil || u.Scheme != "https" {
-		return false
-	}
-	switch strings.ToLower(u.Hostname()) {
-	case "discord.com", "discordapp.com", "ptb.discord.com", "canary.discord.com":
-		return strings.HasPrefix(u.Path, "/api/webhooks/")
-	}
-	return false
-}
-
 // isAllowedAniListURL reports whether raw is an acceptable AniList GraphQL
 // endpoint: https on a host under anilist.co. The anilist_api_url setting drives
 // the server's outbound lookup POST, so it is validated against this allowlist
-// (mirroring the Discord-webhook check) to stop an admin-entered value from
+// to stop an admin-entered value from
 // pointing those requests at an internal service or cloud metadata endpoint.
 func isAllowedAniListURL(raw string) bool {
 	u, err := url.Parse(strings.TrimSpace(raw))
@@ -99,22 +76,6 @@ func isAllowedAniListURL(raw string) bool {
 	host := strings.ToLower(u.Hostname())
 	return host == "anilist.co" || strings.HasSuffix(host, ".anilist.co")
 }
-
-// init registers each club's reading-list Discord webhook as a secret app
-// setting so the settings API exposes it to admins and accepts saves, without
-// hard-coding a key per club in settings.go.
-func init() {
-	for _, c := range bookClubs {
-		key := webhookSettingKey(c.Slug)
-		settingsKeys = append(settingsKeys, key)
-		secretSettings[key] = true
-	}
-}
-
-// bookclubHTTPClient is used for outbound Discord webhook posts (validated
-// against isDiscordWebhookURL at save time) with a sane timeout so a slow
-// upstream can't hang a request.
-var bookclubHTTPClient = &http.Client{Timeout: 15 * time.Second}
 
 // anilistHTTPClient is the client for AniList GraphQL lookups. The initial
 // endpoint is admin-configured and validated against isAllowedAniListURL at
@@ -865,17 +826,32 @@ func stripHTML(s string) string {
 }
 
 // -- Discord publish ---------------------------------------------------------
-//
-// The embed schema types, builder, colour helper, and transport live in
-// embeds.go (shared by every webhook-posting feature).
 
-// handlePublishReadingList posts each item in a reading list as its own Discord
-// embed via the configured webhook. Always posts every item (no published-state
-// tracking).
+// bookClubName is a club's display name ("Yaoi Book Club"), or its slug.
+func bookClubName(slug string) string {
+	for _, c := range bookClubs {
+		if c.Slug == slug {
+			return c.Name
+		}
+	}
+	return slug
+}
+
+// handlePublishReadingList posts a reading list to the club's channel, one message per
+// item (so long summaries fit Discord's 6000-character message budget), the ping on the
+// first. All of a publish's messages share one batch, so the whole list can be replaced
+// later:
+//
+//   - a club set to "replace" deletes its previous reading list once the new one is up;
+//   - a publish that fails partway deletes what it had posted, so the channel never holds
+//     half a list - and the previous list stays where it was.
+//
+// The writes run detached from the request, so a browser that gives up mid-publish
+// doesn't leave half a list behind.
 //
 //	Endpoint:  POST /api/book-clubs/{club}/reading-lists/{id}/publish
 //	Auth:      admin, or the book club's page permission
-//	Response:  {"published": <count>}
+//	Response:  model.PublishResponse
 func (s *Server) handlePublishReadingList(w http.ResponseWriter, r *http.Request) {
 	club, ok := s.bookClubFromPath(w, r)
 	if !ok {
@@ -901,68 +877,113 @@ func (s *Server) handlePublishReadingList(w http.ResponseWriter, r *http.Request
 		writeError(w, http.StatusBadRequest, "This reading list has no items to publish")
 		return
 	}
-
-	// Each book club publishes to its own Discord channel (per-club webhook).
-	webhook, _ := s.store.GetSetting(webhookSettingKey(list.ClubSlug))
-	webhook = strings.TrimSpace(webhook)
-	if webhook == "" {
-		writeError(w, http.StatusBadRequest, "No Discord webhook configured for this book club. Set it under System -> Settings.")
+	dest, err := s.store.GetDiscordDestination(bookClubDestination(club))
+	if err != nil {
+		writeInternalError(w, "read book club destination", err)
 		return
 	}
 
-	// Posting a whole list is a slow, sequential job (one webhook POST per item
-	// plus a rate-limit pause). Thread the request context so a client that
-	// disconnects - or a shutdown - stops the loop instead of hammering Discord
-	// with the remaining items.
-	ctx := r.Context()
-	commentsLabel := commentsLabelForClub(list.ClubSlug)
-	published := 0
-	for i, it := range list.Items {
-		if err := ctx.Err(); err != nil {
-			writeError(w, http.StatusRequestTimeout,
-				fmt.Sprintf("Publishing cancelled after %d of %d items", published, len(list.Items)))
-			return
-		}
-		target := webhookTarget{Kind: "bookclub_item", Name: it.Title}
-		if err := s.postDiscordEmbed(ctx, target, webhook, buildItemEmbed(it, commentsLabel)); err != nil {
-			slog.Error("discord webhook post failed",
-				"context", fmt.Sprintf("publish reading list %d item %q", id, it.Title), "error", err)
-			writeError(w, http.StatusBadGateway,
-				fmt.Sprintf("Published %d of %d before failing on %q: %v", published, len(list.Items), it.Title, err))
-			return
-		}
-		published++
-		// Be gentle with Discord's rate limit between posts, but abort the pause
-		// promptly if the request is cancelled (skip it after the last item).
-		if i < len(list.Items)-1 {
-			select {
-			case <-ctx.Done():
-				writeError(w, http.StatusRequestTimeout,
-					fmt.Sprintf("Publishing cancelled after %d of %d items", published, len(list.Items)))
-				return
-			case <-time.After(350 * time.Millisecond):
-			}
-		}
+	// One club publishes at a time: two overlapping publishes would each think the
+	// other's messages were the previous list.
+	unlock := s.discordItemLock(postKindReadingList+":"+club, 0)
+	defer unlock()
+	previous, err := s.store.LiveDiscordPostsInScope(postKindReadingList, club)
+	if err != nil {
+		writeInternalError(w, "read previous reading list posts", err)
+		return
 	}
 
-	slog.Info("published reading list", "list_id", id, "list", list.Title, "club", list.ClubSlug,
-		"items", published, "by", s.actorName(r))
-	writeJSON(w, http.StatusOK, model.PublishResponse{Published: published})
+	ctx, cancel := detachedDiscordContext(r, 2*time.Minute+time.Duration(len(list.Items))*5*time.Second)
+	defer cancel()
+	now := time.Now()
+	batch := strconv.FormatInt(list.ID, 36) + "-" + strconv.FormatInt(now.UnixNano(), 36)
+	commentsLabel := commentsLabelForClub(club)
+	var posted []model.DiscordPost
+	note := ""
+	for i, it := range list.Items {
+		mention := ""
+		if i == 0 {
+			mention = dest.Mention
+		}
+		created, err := s.discordCreate(ctx, discordOut{
+			Kind: postKindReadingList, RefID: list.ID, Scope: club, Batch: batch, Seq: i,
+			Name: it.Title, ChannelID: dest.ChannelID, Mention: mention,
+			Message: discord.Message{Embeds: []discord.Embed{buildItemEmbed(it, commentsLabel)}},
+			Patient: true,
+		})
+		if err != nil {
+			rolledBack := s.rollBackBatch(posted, list.Title)
+			slog.Error("publish reading list failed", "list_id", id, "item", it.Title,
+				"posted", len(posted), "rolled_back", rolledBack, "error", err)
+			if len(posted) == 0 {
+				writeDiscordFailure(w, fmt.Sprintf("publish reading list %d", id), bookClubName(club), err)
+				return
+			}
+			writeError(w, http.StatusBadGateway, fmt.Sprintf(
+				"Publishing stopped at %q: %s The %d message(s) already posted were removed, so the channel is as it was.",
+				it.Title, discordFailureText(err, bookClubName(club)), rolledBack))
+			return
+		}
+		if created.Suppressed {
+			writeJSON(w, http.StatusOK, model.PublishResponse{
+				Note: "This server is in dry-run mode, so nothing was sent to Discord."})
+			return
+		}
+		if created.Redirected != "" {
+			note = "Posted to the test channel, without pings (" + created.Redirected + ")."
+		}
+		posted = append(posted, created.Post)
+	}
+
+	replaced := 0
+	if dest.RepostMode == model.RepostReplace && len(previous) > 0 {
+		var held int
+		var delErr error
+		old := previous
+		for _, p := range posted {
+			old = otherPosts(old, p.MessageID)
+		}
+		replaced, held, delErr = s.discordDeleteAll(ctx, old, list.Title)
+		switch {
+		case delErr != nil:
+			slog.Error("remove previous reading list", "club", club, "error", delErr)
+			note = joinNotes(note, "Some of the previous reading list couldn't be removed: "+discordErrorText(delErr))
+		case held > 0:
+			note = joinNotes(note, "The previous reading list is outside the test channel, so it was left up.")
+		}
+	}
+	slog.Info("published reading list", "list_id", id, "list", list.Title, "club", club,
+		"items", len(posted), "replaced", replaced, "by", s.actorName(r))
+	writeJSON(w, http.StatusOK, model.PublishResponse{Published: len(posted), Replaced: replaced, Note: note})
+}
+
+// rollBackBatch deletes the messages a failed publish had posted, returning how many went.
+func (s *Server) rollBackBatch(posted []model.DiscordPost, name string) int {
+	if len(posted) == 0 {
+		return 0
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+	deleted, _, err := s.discordDeleteAll(ctx, posted, name)
+	if err != nil {
+		slog.Error("roll back a failed publish", "name", name, "error", err)
+	}
+	return deleted
 }
 
 // buildItemEmbed converts a reading list item into a Discord embed. The cover
 // renders as the large, full-width embed image (not the small thumbnail), and
 // the curator-comments field is labeled per club (commentsLabel).
-func buildItemEmbed(it model.ReadingListItem, commentsLabel string) discordEmbed {
-	b := newEmbed().
-		title(it.Title).
-		description(it.Summary).
-		image(it.CoverImage).
-		field("Format", it.Format, true).
-		field("Chapters", it.Chapters, true).
-		field("Genres", it.Genres, false).
-		field("Tropes", it.Tropes, false).
-		field(commentsLabel, it.Comments, false)
+func buildItemEmbed(it model.ReadingListItem, commentsLabel string) discord.Embed {
+	b := discord.NewEmbed().
+		Title(it.Title).
+		Description(it.Summary).
+		Image(it.CoverImage).
+		Field("Format", it.Format, true).
+		Field("Chapters", it.Chapters, true).
+		Field("Genres", it.Genres, false).
+		Field("Tropes", it.Tropes, false).
+		Field(commentsLabel, it.Comments, false)
 
 	if len(it.Sources) > 0 {
 		links := make([]string, 0, len(it.Sources))
@@ -976,7 +997,7 @@ func buildItemEmbed(it model.ReadingListItem, commentsLabel string) discordEmbed
 			}
 			links = append(links, fmt.Sprintf("[%s](%s)", label, src.URL))
 		}
-		b.field("Sources", strings.Join(links, "\n"), false)
+		b.Field("Sources", strings.Join(links, "\n"), false)
 	}
-	return b.build()
+	return b.Build()
 }

@@ -637,8 +637,10 @@ The local dev DB was NOT modified.
 
     # 6. Prune old dev-DB backups. Every backend deploy timestamps a fresh copy, and
     #    nothing removed the previous ones - so full copies of the LIVE database,
-    #    each carrying real password hashes, API tokens and Discord webhook URLs,
-    #    accumulated on the workstation indefinitely. Keep the three most recent.
+    #    each carrying real password hashes and API tokens (and, in copies from
+    #    before the move to the Discord bot, real webhook URLs; the bot token in
+    #    later copies is sealed under the production session secret), accumulated
+    #    on the workstation indefinitely. Keep the three most recent.
     $keep = 3
     $stale = @(Get-ChildItem "$DevDbPath.bak-*" -ErrorAction SilentlyContinue |
         Sort-Object Name -Descending | Select-Object -Skip $keep)

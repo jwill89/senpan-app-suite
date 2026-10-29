@@ -2,7 +2,6 @@ package server
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"log/slog"
 	"math"
@@ -12,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"app-suite/internal/discord"
 	"app-suite/internal/model"
 )
 
@@ -45,19 +45,18 @@ func (s *Server) handleAnnouncementTypesList(w http.ResponseWriter, r *http.Requ
 // announcement-types) or replacing (PUT /api/announcement-types/{id}) an
 // announcement type. The id comes from the path on PUT.
 type announcementTypeWriteRequest struct {
-	Name       string `json:"name"`
-	WebhookURL string `json:"webhook_url"`
+	Name      string `json:"name"`
+	ChannelID string `json:"channel_id"`
 }
 
 // validate checks the shared create/update requirements, writing a 400 and
 // returning ("", "", false) when they aren't met. Returns the trimmed name and
-// validated webhook URL on success.
-func (req announcementTypeWriteRequest) validate(w http.ResponseWriter) (name, webhook string, ok bool) {
-	// A provided webhook URL must be a Discord webhook so the server can't be
-	// pointed at an arbitrary outbound host. Empty = this type has no webhook.
-	webhook = strings.TrimSpace(req.WebhookURL)
-	if webhook != "" && !isDiscordWebhookURL(webhook) {
-		writeError(w, http.StatusBadRequest, "Discord webhook URLs must look like https://discord.com/api/webhooks/...")
+// channel id on success.
+func (req announcementTypeWriteRequest) validate(w http.ResponseWriter) (name, channel string, ok bool) {
+	// Empty = no channel yet; the type's announcements wait until one is picked.
+	channel = strings.TrimSpace(req.ChannelID)
+	if channel != "" && !isDiscordSnowflake(channel) {
+		writeError(w, http.StatusBadRequest, "Pick a Discord channel")
 		return "", "", false
 	}
 	name = strings.TrimSpace(req.Name)
@@ -65,7 +64,7 @@ func (req announcementTypeWriteRequest) validate(w http.ResponseWriter) (name, w
 		writeError(w, http.StatusBadRequest, "Type name is required")
 		return "", "", false
 	}
-	return name, webhook, true
+	return name, channel, true
 }
 
 // handleAnnouncementTypeCreate creates an announcement type.
@@ -82,11 +81,11 @@ func (s *Server) handleAnnouncementTypeCreate(w http.ResponseWriter, r *http.Req
 		writeError(w, http.StatusBadRequest, "Invalid JSON")
 		return
 	}
-	name, webhook, ok := req.validate(w)
+	name, channel, ok := req.validate(w)
 	if !ok {
 		return
 	}
-	id, err := s.store.CreateAnnouncementType(name, webhook)
+	id, err := s.store.CreateAnnouncementType(name, channel)
 	if err != nil {
 		writeInternalError(w, "create announcement type", err)
 		return
@@ -113,11 +112,11 @@ func (s *Server) handleAnnouncementTypeUpdate(w http.ResponseWriter, r *http.Req
 		writeError(w, http.StatusBadRequest, "Invalid JSON")
 		return
 	}
-	name, webhook, ok := req.validate(w)
+	name, channel, ok := req.validate(w)
 	if !ok {
 		return
 	}
-	if err := s.store.UpdateAnnouncementType(id, name, webhook); err != nil {
+	if err := s.store.UpdateAnnouncementType(id, name, channel); err != nil {
 		writeInternalError(w, "update announcement type", err)
 		return
 	}
@@ -156,138 +155,6 @@ func (s *Server) handleAnnouncementTypeDelete(w http.ResponseWriter, r *http.Req
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// -- Announcement roles (taggable Discord roles) -----------------------------
-
-// handleAnnouncementRolesList returns all taggable roles.
-//
-//	Endpoint:  GET /api/announcement-roles
-//	Auth:      admin, or a user granted this page's permission
-//	Response:  {"roles": [...]}
-func (s *Server) handleAnnouncementRolesList(w http.ResponseWriter, r *http.Request) {
-	if !s.requirePermission(w, r, permTeahouseAnnounce) {
-		return
-	}
-	roles, err := s.store.ListAnnouncementRoles()
-	if err != nil {
-		writeInternalError(w, "list announcement roles", err)
-		return
-	}
-	writeJSON(w, http.StatusOK, model.AnnouncementRolesResponse{Roles: roles})
-}
-
-// announcementRoleWriteRequest is the JSON body for creating (POST /api/
-// announcement-roles) or replacing (PUT /api/announcement-roles/{id}) a taggable
-// role. The id comes from the path on PUT.
-type announcementRoleWriteRequest struct {
-	Name   string `json:"name"`
-	RoleID string `json:"role_id"`
-}
-
-// validate checks the shared create/update requirements, writing a 400 and
-// returning ("", "", false) when they aren't met. Returns the trimmed name and
-// role id on success.
-func (req announcementRoleWriteRequest) validate(w http.ResponseWriter) (name, roleID string, ok bool) {
-	name = strings.TrimSpace(req.Name)
-	roleID = strings.TrimSpace(req.RoleID)
-	if name == "" {
-		writeError(w, http.StatusBadRequest, "Role name is required")
-		return "", "", false
-	}
-	if !isDiscordSnowflake(roleID) {
-		writeError(w, http.StatusBadRequest, "Role ID must be a Discord role ID (digits only)")
-		return "", "", false
-	}
-	return name, roleID, true
-}
-
-// handleAnnouncementRoleCreate creates a taggable role.
-//
-//	Endpoint:  POST /api/announcement-roles
-//	Auth:      admin, or a user granted this page's permission
-//	Response:  201 {"role": AnnouncementRole}
-func (s *Server) handleAnnouncementRoleCreate(w http.ResponseWriter, r *http.Request) {
-	if !s.requirePermission(w, r, permTeahouseAnnounce) {
-		return
-	}
-	req, err := readJSON[announcementRoleWriteRequest](w, r)
-	if err != nil {
-		writeError(w, http.StatusBadRequest, "Invalid JSON")
-		return
-	}
-	name, roleID, ok := req.validate(w)
-	if !ok {
-		return
-	}
-	id, err := s.store.CreateAnnouncementRole(name, roleID)
-	if err != nil {
-		writeInternalError(w, "create announcement role", err)
-		return
-	}
-	saved, _ := s.store.GetAnnouncementRole(id)
-	writeJSON(w, http.StatusCreated, model.AnnouncementRoleResponse{Role: saved})
-}
-
-// handleAnnouncementRoleUpdate replaces a taggable role.
-//
-//	Endpoint:  PUT /api/announcement-roles/{id}
-//	Auth:      admin, or a user granted this page's permission
-//	Response:  200 {"role": AnnouncementRole}
-func (s *Server) handleAnnouncementRoleUpdate(w http.ResponseWriter, r *http.Request) {
-	if !s.requirePermission(w, r, permTeahouseAnnounce) {
-		return
-	}
-	id, ok := pathInt64(w, r, "id", "role")
-	if !ok {
-		return
-	}
-	req, err := readJSON[announcementRoleWriteRequest](w, r)
-	if err != nil {
-		writeError(w, http.StatusBadRequest, "Invalid JSON")
-		return
-	}
-	name, roleID, ok := req.validate(w)
-	if !ok {
-		return
-	}
-	if err := s.store.UpdateAnnouncementRole(id, name, roleID); err != nil {
-		writeInternalError(w, "update announcement role", err)
-		return
-	}
-	saved, _ := s.store.GetAnnouncementRole(id)
-	writeJSON(w, http.StatusOK, model.AnnouncementRoleResponse{Role: saved})
-}
-
-// handleAnnouncementRoleDelete deletes a taggable role, refusing while it is
-// still tagged by any announcement.
-//
-//	Endpoint:  DELETE /api/announcement-roles/{id}
-//	Auth:      admin, or a user granted this page's permission
-//	Response:  204 No Content
-func (s *Server) handleAnnouncementRoleDelete(w http.ResponseWriter, r *http.Request) {
-	if !s.requirePermission(w, r, permTeahouseAnnounce) {
-		return
-	}
-	id, ok := pathInt64(w, r, "id", "role")
-	if !ok {
-		return
-	}
-	count, err := s.store.CountAnnouncementsByRole(id)
-	if err != nil {
-		writeInternalError(w, "count announcements by role", err)
-		return
-	}
-	if count > 0 {
-		writeError(w, http.StatusBadRequest,
-			fmt.Sprintf("This role is tagged by %d announcement(s). Change their tag first.", count))
-		return
-	}
-	if _, err := s.store.DeleteAnnouncementRole(id); err != nil {
-		writeInternalError(w, "delete announcement role", err)
-		return
-	}
-	w.WriteHeader(http.StatusNoContent)
-}
-
 // isDiscordSnowflake reports whether s is a non-empty all-digit Discord ID.
 func isDiscordSnowflake(s string) bool {
 	if s == "" {
@@ -316,6 +183,12 @@ func (s *Server) handleAnnouncementsList(w http.ResponseWriter, r *http.Request)
 	if err != nil {
 		writeInternalError(w, "list announcements", err)
 		return
+	}
+	posts := s.discordPostStates(postKindAnnouncement)
+	for i := range items {
+		if p := posts[items[i].ID]; p != nil {
+			items[i].DiscordURL = p.URL
+		}
 	}
 	writeJSON(w, http.StatusOK, model.AnnouncementsResponse{Announcements: items})
 }
@@ -436,6 +309,11 @@ func (s *Server) handleAnnouncementDelete(w http.ResponseWriter, r *http.Request
 		writeInternalError(w, "delete announcement", err)
 		return
 	}
+	// What it posted stays up in Discord - an announcement that went out is part of the
+	// channel's history - but the app forgets it.
+	if err := s.store.ForgetDiscordPosts(postKindAnnouncement, id); err != nil {
+		slog.Error("forget announcement posts", "id", id, "error", err)
+	}
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -462,13 +340,15 @@ func (s *Server) handleAnnouncementSend(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	typ, _ := s.store.GetAnnouncementType(a.TypeID)
-	if typ == nil || strings.TrimSpace(typ.WebhookURL) == "" {
-		writeError(w, http.StatusBadRequest, "This announcement's type has no Discord webhook configured.")
+	if typ == nil {
+		writeError(w, http.StatusBadRequest, "This announcement has no type.")
 		return
 	}
-	target := webhookTarget{Kind: "announcement", Name: a.Title}
-	if err := s.postDiscordWebhook(r.Context(), target, typ.WebhookURL, s.buildAnnouncementMessage(*a)); err != nil {
-		writeUpstreamError(w, fmt.Sprintf("send announcement %d", id), err)
+	ctx, cancel := detachedDiscordContext(r, discordWriteTimeout)
+	defer cancel()
+	note, err := s.postAnnouncement(ctx, *a, typ.ChannelID, "", false)
+	if err != nil {
+		writeDiscordFailure(w, fmt.Sprintf("send announcement %d", id), "the "+typ.Name+" type", err)
 		return
 	}
 	slog.Info("announcement sent manually", "id", a.ID, "title", a.Title, "type", typ.Name,
@@ -478,7 +358,12 @@ func (s *Server) handleAnnouncementSend(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	saved, _ := s.store.GetAnnouncement(a.ID)
-	writeJSON(w, http.StatusOK, model.AnnouncementResponse{Announcement: saved})
+	if saved != nil {
+		if p := s.discordPostStates(postKindAnnouncement)[saved.ID]; p != nil {
+			saved.DiscordURL = p.URL
+		}
+	}
+	writeJSON(w, http.StatusOK, model.AnnouncementResponse{Announcement: saved, Note: note})
 }
 
 // handleAnnouncementSkip skips an announcement's next scheduled occurrence.
@@ -604,23 +489,16 @@ func (s *Server) validateAndResolveAnnouncement(w http.ResponseWriter, a *model.
 	a.OnceLocal = strings.TrimSpace(a.OnceLocal)
 	a.Buttons = sanitizeAnnouncementButtons(a.Buttons)
 
-	// Optional role tag: "" (none), "everyone", or "role:<existing role id>".
+	// Optional ping: "" (none), "everyone", or "role:<role id>" (a Discord role). Whether
+	// the role still exists is Discord's to say; a ping for a deleted role just posts as
+	// text.
 	a.Mention = strings.TrimSpace(a.Mention)
-	if a.Mention != "" && a.Mention != "everyone" {
-		id, perr := strconv.ParseInt(strings.TrimPrefix(a.Mention, "role:"), 10, 64)
-		if !strings.HasPrefix(a.Mention, "role:") || perr != nil || id <= 0 {
-			writeError(w, http.StatusBadRequest, "Invalid role tag")
-			return false
-		}
-		role, err := s.store.GetAnnouncementRole(id)
-		if err != nil {
-			writeInternalError(w, "load announcement role", err)
-			return false
-		}
-		if role == nil {
-			writeError(w, http.StatusBadRequest, "The selected role to tag no longer exists")
-			return false
-		}
+	if !validMention(a.Mention) {
+		writeError(w, http.StatusBadRequest, "Invalid role tag")
+		return false
+	}
+	if a.RepostMode != model.RepostReplace {
+		a.RepostMode = model.RepostNew
 	}
 
 	a.ScheduleKind = strings.TrimSpace(a.ScheduleKind)
@@ -778,7 +656,7 @@ func sanitizeAnnouncementButtons(buttons []model.AnnouncementButton) []model.Ann
 	for _, b := range buttons {
 		label := strings.TrimSpace(b.Label)
 		url := strings.TrimSpace(b.URL)
-		if label == "" || !isHTTPURL(url) {
+		if label == "" || !discord.IsHTTPURL(url) {
 			continue
 		}
 		out = append(out, model.AnnouncementButton{
@@ -796,22 +674,48 @@ func sanitizeAnnouncementButtons(buttons []model.AnnouncementButton) []model.Ann
 	return out
 }
 
-// buildAnnouncementMessage assembles the full Discord webhook payload for an
-// announcement: an optional role tag in the message content (above the embed,
-// where mentions actually notify), the embed itself, and an optional action row
-// of link buttons.
-func (s *Server) buildAnnouncementMessage(a model.Announcement) discordWebhookPayload {
-	content, allowed := s.announcementMention(a)
+// buildAnnouncementMessage assembles an announcement's message: the embed and an optional
+// action row of link buttons. Its ping is added by the funnel (discordMention).
+func buildAnnouncementMessage(a model.Announcement, now time.Time) discord.Message {
 	// For "dynamic dates", re-anchor the event start/end onto the day this post
-	// goes out (now) so a recurring day-of announcement shows the current
-	// occurrence. A no-op when the flag is off. Mutates the local copy only.
-	a.StartAt, a.EndAt = dynamicEventTimes(a, time.Now())
-	return discordWebhookPayload{
-		Content:         content,
-		Embeds:          []discordEmbed{buildAnnouncementEmbed(a)},
-		Components:      announcementComponents(a),
-		AllowedMentions: allowed,
+	// goes out so a recurring day-of announcement shows the current occurrence.
+	// A no-op when the flag is off. Mutates the local copy only.
+	a.StartAt, a.EndAt = dynamicEventTimes(a, now)
+	return discord.Message{
+		Embeds:     []discord.Embed{buildAnnouncementEmbed(a)},
+		Components: announcementComponents(a),
 	}
+}
+
+// postAnnouncement posts an announcement to its type's channel and, when it replaces its
+// previous post, deletes that one once the new one is up. The note says when something
+// needs saying (a dry run, the test channel, an old post left up).
+func (s *Server) postAnnouncement(ctx context.Context, a model.Announcement, channel, nonce string, patient bool) (string, error) {
+	unlock := s.discordItemLock(postKindAnnouncement, a.ID)
+	defer unlock()
+	previous, err := s.store.LiveDiscordPosts(postKindAnnouncement, a.ID)
+	if err != nil {
+		return "", err
+	}
+	created, err := s.discordCreate(ctx, discordOut{
+		Kind: postKindAnnouncement, RefID: a.ID, Name: a.Title,
+		ChannelID: channel, Mention: a.Mention, Message: buildAnnouncementMessage(a, time.Now()),
+		Nonce: nonce, Patient: patient,
+	})
+	switch {
+	case err != nil:
+		return "", err
+	case created.Suppressed:
+		return "This server is in dry-run mode, so nothing was sent to Discord.", nil
+	}
+	note := ""
+	if created.Redirected != "" {
+		note = "Posted to the test channel, without pings (" + created.Redirected + ")."
+	}
+	if a.RepostMode == model.RepostReplace {
+		note = joinNotes(note, s.clearOlderPosts(ctx, otherPosts(previous, created.Post.MessageID), a.Title))
+	}
+	return note, nil
 }
 
 // dynamicEventTimes returns the start/end UTC instants the embed should display.
@@ -859,46 +763,17 @@ func daysBetween(a, b time.Time) int {
 	return int(math.Round(db.Sub(da).Hours() / 24))
 }
 
-// announcementMention resolves an announcement's Mention selection into the
-// message content string and the allowed-mentions whitelist that lets it ping:
-//
-//	""                  -> no mention (nil whitelist)
-//	"everyone"          -> "@everyone", parse ["everyone"]
-//	"role:<role_id>"    -> "<@&DISCORD_ID>", roles [DISCORD_ID]
-//
-// A role whose managed entry was deleted (or has no Discord ID) resolves to no
-// mention, so the announcement still posts - just without a tag.
-func (s *Server) announcementMention(a model.Announcement) (string, *discordAllowedMentions) {
-	mention := strings.TrimSpace(a.Mention)
-	switch {
-	case mention == "everyone":
-		return "@everyone", &discordAllowedMentions{Parse: []string{"everyone"}}
-	case strings.HasPrefix(mention, "role:"):
-		id, err := strconv.ParseInt(strings.TrimPrefix(mention, "role:"), 10, 64)
-		if err != nil || id <= 0 {
-			return "", nil
-		}
-		role, err := s.store.GetAnnouncementRole(id)
-		if err != nil || role == nil || strings.TrimSpace(role.RoleID) == "" {
-			return "", nil
-		}
-		return fmt.Sprintf("<@&%s>", role.RoleID), &discordAllowedMentions{Parse: []string{}, Roles: []string{role.RoleID}}
-	default:
-		return "", nil
-	}
-}
-
 // announcementComponents builds the announcement's link-button action row (up to
 // five), or nil when it has no valid buttons.
-func announcementComponents(a model.Announcement) []discordComponent {
+func announcementComponents(a model.Announcement) []discord.Component {
 	if len(a.Buttons) == 0 {
 		return nil
 	}
-	triples := make([]struct{ Label, Emoji, URL string }, 0, len(a.Buttons))
+	buttons := make([]discord.LinkButton, 0, len(a.Buttons))
 	for _, b := range a.Buttons {
-		triples = append(triples, struct{ Label, Emoji, URL string }{b.Label, b.Emoji, b.URL})
+		buttons = append(buttons, discord.LinkButton{Label: b.Label, Emoji: b.Emoji, URL: b.URL})
 	}
-	return linkButtonRow(triples)
+	return discord.LinkButtons(buttons)
 }
 
 // buildAnnouncementEmbed renders an announcement as a Discord embed. When times
@@ -914,10 +789,10 @@ func announcementComponents(a model.Announcement) []discordComponent {
 // An optional thumbnail renders small at the top-right and an optional image
 // full-width at the bottom. The accent colour comes from the announcement (brand
 // default if unset).
-func buildAnnouncementEmbed(a model.Announcement) discordEmbed {
-	b := newEmbed().
-		title(a.Title).
-		colorHex(a.Color)
+func buildAnnouncementEmbed(a model.Announcement) discord.Embed {
+	b := discord.NewEmbed().
+		Title(a.Title).
+		ColorHex(a.Color)
 
 	hasTime := false
 	if startT, err := time.Parse(time.RFC3339, a.StartAt); err == nil {
@@ -925,24 +800,24 @@ func buildAnnouncementEmbed(a model.Announcement) discordEmbed {
 		if endT, err := time.Parse(time.RFC3339, a.EndAt); err == nil {
 			value += fmt.Sprintf(" to <t:%d:%s>", endT.Unix(), discordTimeStyle(a.EndFormat, defaultEndFormat))
 		}
-		b.field("🗓️ When", value, false)
+		b.Field("🗓️ When", value, false)
 		hasTime = true
 	}
 	// Optional location on its own full-width line below the time (not inline, so
 	// "When" and "Where" stack vertically rather than sitting side by side).
-	b.field("📍 Where", a.Location, false)
+	b.Field("📍 Where", a.Location, false)
 	// Details below the time, headingless (zero-width-space name) and full-width.
 	// Split into multiple fields when over the 1024-char cap so nothing is cut.
-	for _, chunk := range splitForEmbedFields(discordMarkdown(a.Details), embedFieldValueMax) {
-		b.field(embedNoHeading, chunk, false)
+	for _, chunk := range splitForEmbedFields(discordMarkdown(a.Details), discord.FieldValueMax) {
+		b.Field(discord.NoHeading, chunk, false)
 	}
 	// Optional small top-right thumbnail and large bottom image.
-	b.thumbnail(a.Thumbnail)
-	b.image(a.Image)
+	b.Thumbnail(a.Thumbnail)
+	b.Image(a.Image)
 	if hasTime {
-		b.footer("Times shown in your local time zone.")
+		b.Footer("Times shown in your local time zone.")
 	}
-	return b.build()
+	return b.Build()
 }
 
 // splitForEmbedFields splits text into chunks that each fit within limit runes
@@ -1269,21 +1144,16 @@ func nthWeekdayOfMonth(year int, month time.Month, wd time.Weekday, n, h, m int,
 
 // -- Scheduler ---------------------------------------------------------------
 
-// RunAnnouncementScheduler posts due announcements to their type's webhook on a
+// RunAnnouncementScheduler posts due announcements to their type's channel on a
 // fixed interval until ctx is cancelled. Safe to call in a goroutine.
 func (s *Server) RunAnnouncementScheduler(ctx context.Context) {
 	runScheduler(ctx, "announcements", announcementSchedulerInterval, func() { s.postDueAnnouncements(ctx) })
 }
 
-// postDueAnnouncements posts every announcement whose scheduled time has arrived.
-// A "skip next" marker advances the cursor without posting; an announcement whose
-// type has no webhook is left pending; a failed post is retried next tick. Posts
-// run sequentially; ctx is checked between them so a graceful shutdown isn't
-// delayed by a long backlog of outbound Discord calls.
 // maxAnnouncementPostRetries is how many consecutive failed posts one occurrence
 // gets before the scheduler moves its cursor on. At the 30-second sweep interval
 // this is a couple of minutes of retrying, which covers a Discord blip while not
-// letting a deleted webhook wedge the sweep indefinitely.
+// letting a deleted channel wedge the sweep indefinitely.
 const maxAnnouncementPostRetries = 5
 
 // recordPostFailure counts one consecutive failure for an announcement and returns
@@ -1307,7 +1177,18 @@ func (s *Server) clearPostFailures(id int64) {
 	delete(s.postFails, id)
 }
 
+// postDueAnnouncements posts every announcement whose scheduled time has arrived.
+// A "skip next" marker advances the cursor without posting; an announcement left
+// with nowhere to go (Discord off, the type has no channel) stays pending; while
+// test mode is on, everything stays pending; a failed post is retried next tick.
+// Posts run sequentially; ctx is checked between them so a graceful shutdown isn't
+// delayed by a long backlog of outbound Discord calls.
 func (s *Server) postDueAnnouncements(ctx context.Context) {
+	// Test mode holds the schedule: nothing real is posted early into the test channel,
+	// and nothing is missed - turning test mode off lets the next sweep catch up.
+	if s.discordSetting(settingDiscordTestMode) == "1" && !s.discordDryRun {
+		return
+	}
 	due, err := s.store.DueAnnouncements(time.Now())
 	if err != nil {
 		slog.Error("announcement scheduler: load due", "error", err)
@@ -1346,20 +1227,22 @@ func (s *Server) postDueAnnouncements(ctx context.Context) {
 			continue
 		}
 		typ, _ := s.store.GetAnnouncementType(a.TypeID)
-		if typ == nil || strings.TrimSpace(typ.WebhookURL) == "" {
-			continue // no webhook yet; try again next tick
+		if typ == nil || typ.ChannelID == "" || !s.discord.Enabled() {
+			continue // nowhere to post yet; try again next tick
 		}
-		target := webhookTarget{Kind: "announcement_scheduled", Name: a.Title}
-		err := s.postDiscordWebhook(ctx, target, typ.WebhookURL, s.buildAnnouncementMessage(a))
-		if err != nil && !errors.Is(err, errWebhookAmbiguous) {
-			// Definitely not delivered (HTTP error status, incl. 429 rate limit):
-			// leave the cursor where it is so the next tick retries - but only up to a
-			// point. A webhook that has been deleted answers 404 every time, and
-			// retrying that every 30 seconds forever both spams the log and keeps a
-			// stuck announcement permanently "due", so nothing after it in the sweep
-			// ever gets a clean run. After maxAnnouncementPostRetries consecutive
-			// failures, give up on THIS occurrence and move the cursor on; a recurring
-			// announcement simply tries again at its next occurrence.
+		// The nonce names this occurrence, so a retry after a timeout - when the post may
+		// have landed after all - gets Discord's existing message back instead of a
+		// second one.
+		nonce := "a" + strconv.FormatInt(a.ID, 36) + "-" + strconv.FormatInt(occurrenceUnix(a), 36)
+		_, err := s.postAnnouncement(ctx, a, typ.ChannelID, nonce, true)
+		if err != nil {
+			// Leave the cursor where it is so the next tick retries - but only up to a
+			// point. A deleted channel answers 404 every time, and retrying that every
+			// 30 seconds forever both spams the log and keeps a stuck announcement
+			// permanently "due", so nothing after it in the sweep ever gets a clean
+			// run. After maxAnnouncementPostRetries consecutive failures, give up on
+			// THIS occurrence and move the cursor on; a recurring announcement simply
+			// tries again at its next occurrence.
 			n := s.recordPostFailure(a.ID)
 			slog.Error("announcement scheduler: post", "id", a.ID, "error", err, "consecutive_failures", n)
 			if n < maxAnnouncementPostRetries {
@@ -1377,11 +1260,6 @@ func (s *Server) postDueAnnouncements(ctx context.Context) {
 			continue
 		}
 		s.clearPostFailures(a.ID)
-		// Success OR an ambiguous transport failure: advance the cursor either way.
-		// On ambiguity the message may already be on Discord, so retrying would
-		// duplicate it - we advance instead and log a warning. Recurring posts
-		// resume at their next occurrence; a one-time post that truly failed needs
-		// a manual resend.
 		next, active := s.advanceCursor(a)
 		if mErr := s.markPostedWithRetry(a.ID, a.NextPostAt, next, active); mErr != nil {
 			// The Discord post already went out, but the cursor could not be advanced
@@ -1390,9 +1268,6 @@ func (s *Server) postDueAnnouncements(ctx context.Context) {
 			// failure here means the SQLite store itself is unhealthy.
 			slog.Error("announcement scheduler: mark posted failed after retries (possible duplicate next tick)",
 				"id", a.ID, "title", a.Title, "error", mErr)
-		} else if err != nil {
-			slog.Warn("announcement post ambiguous; advanced cursor to avoid a duplicate",
-				"id", a.ID, "title", a.Title, "error", err)
 		} else {
 			slog.Info("posted scheduled announcement", "id", a.ID, "title", a.Title)
 		}
@@ -1423,6 +1298,14 @@ func (s *Server) markPostedWithRetry(id int64, prevNextPostAt, nextPostAt string
 		time.Sleep(50 * time.Millisecond)
 	}
 	return err
+}
+
+// occurrenceUnix is the scheduled instant being posted (its cursor), or 0 when unreadable.
+func occurrenceUnix(a model.Announcement) int64 {
+	if t, err := time.Parse(time.RFC3339, a.NextPostAt); err == nil {
+		return t.Unix()
+	}
+	return 0
 }
 
 // advanceCursor computes the next schedule cursor for an announcement after its

@@ -25,6 +25,9 @@ type Affiliate struct {
 	CarrdLink   string          `json:"carrd_link"`   // optional Carrd (or other) site link
 	SortOrder   int             `json:"sort_order"`   // manual drag order (ascending)
 	CreatedAt   string          `json:"created_at"`
+	// DiscordPost is the affiliate's post in Discord. Filled for the affiliates page
+	// only; never for the festival map or stamp rally editors, nor publicly.
+	DiscordPost *DiscordPostState `json:"discord_post,omitempty"`
 }
 
 // AffiliateHour is one opening-hours entry on an affiliate: an optional label
@@ -36,21 +39,15 @@ type AffiliateHour struct {
 	End   string `json:"end"`   // optional wall-clock "HH:MM"
 }
 
-// AffiliatesResponse is the body of GET /api/affiliates. It also carries the
-// single shared Discord webhook every affiliate posts to - safe to include here
-// because the endpoint is permission-gated (it is kept out of public settings).
+// AffiliatesResponse is the body of GET /api/affiliates. For the affiliates page it
+// also carries where affiliates post (nil for the festival editors, which read the
+// list only to name a stall's operator).
 type AffiliatesResponse struct {
-	Affiliates []Affiliate `json:"affiliates"`
-	WebhookURL string      `json:"webhook_url"`
+	Affiliates  []Affiliate         `json:"affiliates"`
+	Destination *DiscordDestination `json:"destination,omitempty"`
 }
 
-// AffiliateResponse is the body of POST /api/affiliates (create) and
-// POST /api/affiliates/{id}/post when a single affiliate is echoed back.
+// AffiliateResponse is the body of POST /api/affiliates (create).
 type AffiliateResponse struct {
 	Affiliate Affiliate `json:"affiliate"`
-}
-
-// AffiliateWebhookResponse is the body of PUT /api/affiliates/webhook.
-type AffiliateWebhookResponse struct {
-	WebhookURL string `json:"webhook_url"`
 }

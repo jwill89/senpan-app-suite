@@ -31,6 +31,20 @@ components:
           type: string
         discord_link:
           type: string
+        discord_post:
+          nullable: true
+          properties:
+            channel_id:
+              type: string
+            edited_at:
+              type: string
+            posted_at:
+              type: string
+            state:
+              type: string
+            url:
+              type: string
+          type: object
         embed_color:
           type: string
         hours:
@@ -87,6 +101,20 @@ components:
               type: string
             discord_link:
               type: string
+            discord_post:
+              nullable: true
+              properties:
+                channel_id:
+                  type: string
+                edited_at:
+                  type: string
+                posted_at:
+                  type: string
+                state:
+                  type: string
+                url:
+                  type: string
+              type: object
             embed_color:
               type: string
             hours:
@@ -123,11 +151,6 @@ components:
               type: string
           type: object
       type: object
-    AffiliateWebhookResponse:
-      properties:
-        webhook_url:
-          type: string
-      type: object
     AffiliatesResponse:
       properties:
         affiliates:
@@ -141,6 +164,20 @@ components:
                 type: string
               discord_link:
                 type: string
+              discord_post:
+                nullable: true
+                properties:
+                  channel_id:
+                    type: string
+                  edited_at:
+                    type: string
+                  posted_at:
+                    type: string
+                  state:
+                    type: string
+                  url:
+                    type: string
+                type: object
               embed_color:
                 type: string
               hours:
@@ -177,8 +214,20 @@ components:
                 type: string
             type: object
           type: array
-        webhook_url:
-          type: string
+        destination:
+          nullable: true
+          properties:
+            channel_id:
+              type: string
+            key:
+              type: string
+            mention:
+              type: string
+            repost_mode:
+              type: string
+            updated_at:
+              type: string
+          type: object
       type: object
     Announcement:
       properties:
@@ -200,6 +249,8 @@ components:
         created_at:
           type: string
         details:
+          type: string
+        discord_url:
           type: string
         dynamic_dates:
           type: boolean
@@ -223,6 +274,8 @@ components:
         next_post_at:
           type: string
         once_local:
+          type: string
+        repost_mode:
           type: string
         schedule_kind:
           type: string
@@ -285,6 +338,8 @@ components:
               type: string
             details:
               type: string
+            discord_url:
+              type: string
             dynamic_dates:
               type: boolean
             end_at:
@@ -307,6 +362,8 @@ components:
             next_post_at:
               type: string
             once_local:
+              type: string
+            repost_mode:
               type: string
             schedule_kind:
               type: string
@@ -336,62 +393,19 @@ components:
             type_name:
               type: string
           type: object
-      type: object
-    AnnouncementRole:
-      properties:
-        created_at:
+        note:
           type: string
-        id:
-          format: int64
-          type: integer
-        name:
-          type: string
-        role_id:
-          type: string
-      type: object
-    AnnouncementRoleResponse:
-      properties:
-        role:
-          nullable: true
-          properties:
-            created_at:
-              type: string
-            id:
-              format: int64
-              type: integer
-            name:
-              type: string
-            role_id:
-              type: string
-          type: object
-      type: object
-    AnnouncementRolesResponse:
-      properties:
-        roles:
-          items:
-            properties:
-              created_at:
-                type: string
-              id:
-                format: int64
-                type: integer
-              name:
-                type: string
-              role_id:
-                type: string
-            type: object
-          type: array
       type: object
     AnnouncementType:
       properties:
+        channel_id:
+          type: string
         created_at:
           type: string
         id:
           format: int64
           type: integer
         name:
-          type: string
-        webhook_url:
           type: string
       type: object
     AnnouncementTypeResponse:
@@ -399,14 +413,14 @@ components:
         type:
           nullable: true
           properties:
+            channel_id:
+              type: string
             created_at:
               type: string
             id:
               format: int64
               type: integer
             name:
-              type: string
-            webhook_url:
               type: string
           type: object
       type: object
@@ -415,14 +429,14 @@ components:
         types:
           items:
             properties:
+              channel_id:
+                type: string
               created_at:
                 type: string
               id:
                 format: int64
                 type: integer
               name:
-                type: string
-              webhook_url:
                 type: string
             type: object
           type: array
@@ -451,6 +465,8 @@ components:
                 type: string
               details:
                 type: string
+              discord_url:
+                type: string
               dynamic_dates:
                 type: boolean
               end_at:
@@ -473,6 +489,8 @@ components:
               next_post_at:
                 type: string
               once_local:
+                type: string
+              repost_mode:
                 type: string
               schedule_kind:
                 type: string
@@ -952,6 +970,303 @@ components:
     DeletedResponse:
       properties:
         deleted:
+          type: boolean
+      type: object
+    DiscordChannelOption:
+      properties:
+        category:
+          type: string
+        id:
+          type: string
+        name:
+          type: string
+        type:
+          type: string
+      type: object
+    DiscordChannelsResponse:
+      properties:
+        available:
+          type: boolean
+        channels:
+          items:
+            properties:
+              category:
+                type: string
+              id:
+                type: string
+              name:
+                type: string
+              type:
+                type: string
+            type: object
+          type: array
+        problem:
+          type: string
+      type: object
+    DiscordDestination:
+      properties:
+        channel_id:
+          type: string
+        key:
+          type: string
+        mention:
+          type: string
+        repost_mode:
+          type: string
+        updated_at:
+          type: string
+      type: object
+    DiscordDestinationResponse:
+      properties:
+        destination:
+          properties:
+            channel_id:
+              type: string
+            key:
+              type: string
+            mention:
+              type: string
+            repost_mode:
+              type: string
+            updated_at:
+              type: string
+          type: object
+      type: object
+    DiscordImportResponse:
+      properties:
+        rows:
+          items:
+            properties:
+              channel_id:
+                type: string
+              detail:
+                type: string
+              label:
+                type: string
+              settled_at:
+                type: string
+              source:
+                type: string
+              status:
+                type: string
+              where:
+                type: string
+            type: object
+          type: array
+      type: object
+    DiscordImportRow:
+      properties:
+        channel_id:
+          type: string
+        detail:
+          type: string
+        label:
+          type: string
+        settled_at:
+          type: string
+        source:
+          type: string
+        status:
+          type: string
+        where:
+          type: string
+      type: object
+    DiscordLegacyCleanupResponse:
+      properties:
+        deleted:
+          type: integer
+        failed:
+          type: integer
+        skipped:
+          type: integer
+      type: object
+    DiscordPostResult:
+      properties:
+        note:
+          type: string
+        post:
+          nullable: true
+          properties:
+            channel_id:
+              type: string
+            edited_at:
+              type: string
+            posted_at:
+              type: string
+            state:
+              type: string
+            url:
+              type: string
+          type: object
+      type: object
+    DiscordPostState:
+      properties:
+        channel_id:
+          type: string
+        edited_at:
+          type: string
+        posted_at:
+          type: string
+        state:
+          type: string
+        url:
+          type: string
+      type: object
+    DiscordRoleOption:
+      properties:
+        color:
+          type: string
+        id:
+          type: string
+        managed:
+          type: boolean
+        name:
+          type: string
+      type: object
+    DiscordRolesResponse:
+      properties:
+        available:
+          type: boolean
+        problem:
+          type: string
+        roles:
+          items:
+            properties:
+              color:
+                type: string
+              id:
+                type: string
+              managed:
+                type: boolean
+              name:
+                type: string
+            type: object
+          type: array
+      type: object
+    DiscordStatus:
+      properties:
+        application_id:
+          type: string
+        application_mismatch:
+          type: boolean
+        bot_avatar_url:
+          type: string
+        bot_id:
+          type: string
+        bot_is_admin:
+          type: boolean
+        bot_name:
+          type: string
+        connected:
+          type: boolean
+        connected_at:
+          type: string
+        dry_run:
+          type: boolean
+        guild_icon_url:
+          type: string
+        guild_id:
+          type: string
+        guild_name:
+          type: string
+        in_guild:
+          type: boolean
+        invite_url:
+          type: string
+        key_available:
+          type: boolean
+        last_error:
+          type: string
+        online:
+          type: boolean
+        problem:
+          type: string
+        public_base_url:
+          type: string
+        redirect_channel_id:
+          type: string
+        status_text:
+          type: string
+        test_channel_id:
+          type: string
+        test_mode:
+          type: boolean
+        token_application_id:
+          type: string
+        token_readable:
+          type: boolean
+        token_set:
+          type: boolean
+      type: object
+    DiscordStatusResponse:
+      properties:
+        status:
+          properties:
+            application_id:
+              type: string
+            application_mismatch:
+              type: boolean
+            bot_avatar_url:
+              type: string
+            bot_id:
+              type: string
+            bot_is_admin:
+              type: boolean
+            bot_name:
+              type: string
+            connected:
+              type: boolean
+            connected_at:
+              type: string
+            dry_run:
+              type: boolean
+            guild_icon_url:
+              type: string
+            guild_id:
+              type: string
+            guild_name:
+              type: string
+            in_guild:
+              type: boolean
+            invite_url:
+              type: string
+            key_available:
+              type: boolean
+            last_error:
+              type: string
+            online:
+              type: boolean
+            problem:
+              type: string
+            public_base_url:
+              type: string
+            redirect_channel_id:
+              type: string
+            status_text:
+              type: string
+            test_channel_id:
+              type: string
+            test_mode:
+              type: boolean
+            token_application_id:
+              type: string
+            token_readable:
+              type: boolean
+            token_set:
+              type: boolean
+          type: object
+      type: object
+    DiscordTestResponse:
+      properties:
+        channel_id:
+          type: string
+        message_id:
+          type: string
+        note:
+          type: string
+        sent:
+          type: boolean
+        suppressed:
           type: boolean
       type: object
     DrawResult:
@@ -3261,7 +3576,11 @@ components:
       type: object
     PublishResponse:
       properties:
+        note:
+          type: string
         published:
+          type: integer
+        replaced:
           type: integer
       type: object
     Raffle:
@@ -5065,6 +5384,20 @@ components:
           type: string
         description:
           type: string
+        discord_post:
+          nullable: true
+          properties:
+            channel_id:
+              type: string
+            edited_at:
+              type: string
+            posted_at:
+              type: string
+            state:
+              type: string
+            url:
+              type: string
+          type: object
         discounted:
           type: boolean
         hashtags:
@@ -5109,6 +5442,20 @@ components:
               type: string
             description:
               type: string
+            discord_post:
+              nullable: true
+              properties:
+                channel_id:
+                  type: string
+                edited_at:
+                  type: string
+                posted_at:
+                  type: string
+                state:
+                  type: string
+                url:
+                  type: string
+              type: object
             discounted:
               type: boolean
             hashtags:
@@ -5154,6 +5501,20 @@ components:
               type: string
             description:
               type: string
+            discord_post:
+              nullable: true
+              properties:
+                channel_id:
+                  type: string
+                edited_at:
+                  type: string
+                posted_at:
+                  type: string
+                state:
+                  type: string
+                url:
+                  type: string
+              type: object
             discounted:
               type: boolean
             hashtags:
@@ -5185,11 +5546,6 @@ components:
               type: string
           type: object
       type: object
-    TeaRoomWebhookResponse:
-      properties:
-        webhook_url:
-          type: string
-      type: object
     TeaRoomsPublicResponse:
       properties:
         tea_rooms:
@@ -5204,6 +5560,20 @@ components:
                 type: string
               description:
                 type: string
+              discord_post:
+                nullable: true
+                properties:
+                  channel_id:
+                    type: string
+                  edited_at:
+                    type: string
+                  posted_at:
+                    type: string
+                  state:
+                    type: string
+                  url:
+                    type: string
+                type: object
               discounted:
                 type: boolean
               hashtags:
@@ -5238,6 +5608,19 @@ components:
       type: object
     TeaRoomsResponse:
       properties:
+        destination:
+          properties:
+            channel_id:
+              type: string
+            key:
+              type: string
+            mention:
+              type: string
+            repost_mode:
+              type: string
+            updated_at:
+              type: string
+          type: object
         tea_rooms:
           items:
             properties:
@@ -5250,6 +5633,20 @@ components:
                 type: string
               description:
                 type: string
+              discord_post:
+                nullable: true
+                properties:
+                  channel_id:
+                    type: string
+                  edited_at:
+                    type: string
+                  posted_at:
+                    type: string
+                  state:
+                    type: string
+                  url:
+                    type: string
+                type: object
               discounted:
                 type: boolean
               hashtags:
@@ -5281,8 +5678,6 @@ components:
                 type: string
             type: object
           type: array
-        webhook_url:
-          type: string
       type: object
     TokenInfo:
       properties:
@@ -5468,7 +5863,7 @@ info:
     (`{ "type": "log", "entry": LogEntry }`) for the live log tail - best-effort,
     sent only while an admin is connected.
   title: Senpan App Suite API
-  version: 3.24.1
+  version: 4.0.0
 openapi: 3.0.3
 paths:
   /api/account/change-password:
@@ -5719,7 +6114,7 @@ paths:
       description: |-
         **Auth:** permission:teahouse-affiliates
 
-        Also returns the shared Discord webhook (`webhook_url`); safe here since the endpoint is permission-gated.
+        For the affiliates page, also returns where affiliates post (`destination`) and each affiliate's Discord post (`discord_post`); the festival editors get the names only.
       responses:
         "200":
           content:
@@ -5891,11 +6286,11 @@ paths:
       tags:
       - Affiliates
   /api/affiliates/{id}/post:
-    post:
+    delete:
       description: |-
         **Auth:** permission:teahouse-affiliates
 
-        Posts the affiliate's embed to the shared webhook now: colour, logo thumbnail, screenshot image, then (when set) the location, the open hours as local-time tokens, and the Discord/Carrd links.
+        Deletes the affiliate's post from Discord.
       parameters:
       - description: Affiliate id.
         in: path
@@ -5908,26 +6303,75 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/AffiliateResponse'
+                $ref: '#/components/schemas/DiscordPostResult'
           description: Success
-        "400":
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-          description: No webhook configured
         "404":
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
           description: Not found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: Discord not connected
         "502":
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
-          description: Discord failed
+          description: Discord refused or unreachable
+      security:
+      - cookieAuth: []
+      - bearerAuth: []
+      summary: Take down from Discord
+      tags:
+      - Affiliates
+    post:
+      description: |-
+        **Auth:** permission:teahouse-affiliates
+
+        Posts the affiliate's embed to the Affiliates channel: color, logo thumbnail, screenshot image, then (when set) the location, the open hours as local-time tokens, and the Discord/Carrd links. Honors the destination's repost mode: `new` adds a post, `replace` deletes the earlier one after posting, `edit` updates the affiliate's post in place (posting fresh when there is none). In edit mode, saving the affiliate later updates the post on its own.
+      parameters:
+      - description: Affiliate id.
+        in: path
+        name: id
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DiscordPostResult'
+          description: Success
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: No Discord channel picked
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: Not found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: Discord not connected
+        "502":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: Discord refused or unreachable
       security:
       - cookieAuth: []
       - bearerAuth: []
@@ -5967,163 +6411,6 @@ paths:
       summary: Reorder affiliates
       tags:
       - Affiliates
-  /api/affiliates/webhook:
-    put:
-      description: |-
-        **Auth:** permission:teahouse-affiliates
-
-        Stores the single webhook every affiliate posts to (empty clears it). Validated as a Discord webhook URL.
-      requestBody:
-        content:
-          application/json:
-            schema:
-              properties:
-                webhook_url:
-                  description: Discord webhook URL ('' clears).
-                  type: string
-              type: object
-        description: Webhook URL.
-        required: true
-      responses:
-        "200":
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/AffiliateWebhookResponse'
-          description: Success
-        "400":
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-          description: Not a Discord webhook URL
-      security:
-      - cookieAuth: []
-      - bearerAuth: []
-      summary: Set the shared Discord webhook
-      tags:
-      - Affiliates
-  /api/announcement-roles:
-    get:
-      description: '**Auth:** permission:teahouse-announcements'
-      responses:
-        "200":
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/AnnouncementRolesResponse'
-          description: Success
-      security:
-      - cookieAuth: []
-      - bearerAuth: []
-      summary: List roles
-      tags:
-      - Announcements
-    post:
-      description: '**Auth:** permission:teahouse-announcements'
-      requestBody:
-        content:
-          application/json:
-            schema:
-              properties:
-                name:
-                  description: Role name (required).
-                  type: string
-                role_id:
-                  description: Discord snowflake (required).
-                  type: string
-              type: object
-        description: Role fields.
-        required: true
-      responses:
-        "201":
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/AnnouncementRoleResponse'
-          description: Created
-        "400":
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-          description: Name / role id invalid
-      security:
-      - cookieAuth: []
-      - bearerAuth: []
-      summary: Create a role
-      tags:
-      - Announcements
-  /api/announcement-roles/{id}:
-    delete:
-      description: |-
-        **Auth:** permission:teahouse-announcements
-
-        Refused while the role is still tagged by any announcement.
-      parameters:
-      - description: Role id.
-        in: path
-        name: id
-        required: true
-        schema:
-          type: string
-      responses:
-        "204":
-          description: No Content
-        "400":
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-          description: Role still in use
-      security:
-      - cookieAuth: []
-      - bearerAuth: []
-      summary: Delete a role
-      tags:
-      - Announcements
-    put:
-      description: '**Auth:** permission:teahouse-announcements'
-      parameters:
-      - description: Role id.
-        in: path
-        name: id
-        required: true
-        schema:
-          type: string
-      requestBody:
-        content:
-          application/json:
-            schema:
-              properties:
-                name:
-                  description: Role name (required).
-                  type: string
-                role_id:
-                  description: Discord snowflake (required).
-                  type: string
-              type: object
-        description: Full role fields.
-        required: true
-      responses:
-        "200":
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/AnnouncementRoleResponse'
-          description: Success
-        "400":
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-          description: Name / role id invalid
-      security:
-      - cookieAuth: []
-      - bearerAuth: []
-      summary: Replace a role
-      tags:
-      - Announcements
   /api/announcement-types:
     get:
       description: '**Auth:** permission:teahouse-announcements'
@@ -6147,11 +6434,11 @@ paths:
           application/json:
             schema:
               properties:
+                channel_id:
+                  description: Discord channel id ('' = none yet).
+                  type: string
                 name:
                   description: Type name (required).
-                  type: string
-                webhook_url:
-                  description: Discord webhook URL.
                   type: string
               type: object
         description: Type fields.
@@ -6168,7 +6455,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
-          description: Name / webhook invalid
+          description: Name / channel invalid
       security:
       - cookieAuth: []
       - bearerAuth: []
@@ -6217,11 +6504,11 @@ paths:
           application/json:
             schema:
               properties:
+                channel_id:
+                  description: Discord channel id ('' = none yet).
+                  type: string
                 name:
                   description: Type name (required).
-                  type: string
-                webhook_url:
-                  description: Discord webhook URL.
                   type: string
               type: object
         description: Full type fields.
@@ -6238,7 +6525,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
-          description: Name / webhook invalid
+          description: Name / channel invalid
       security:
       - cookieAuth: []
       - bearerAuth: []
@@ -6360,7 +6647,7 @@ paths:
       description: |-
         **Auth:** permission:teahouse-announcements
 
-        Posts the announcement's embed to Discord immediately.
+        Posts the announcement to its type's channel immediately; when it replaces its previous post, that one is deleted once the new one is up.
       parameters:
       - description: Announcement id.
         in: path
@@ -6380,19 +6667,25 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
-          description: No Discord webhook configured
+          description: No Discord channel picked
         "404":
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
           description: Not found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: Discord not connected
         "502":
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
-          description: Discord failed
+          description: Discord refused or unreachable
       security:
       - cookieAuth: []
       - bearerAuth: []
@@ -7016,13 +7309,19 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
-          description: No items / no webhook
+          description: No items / no Discord channel picked
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: Discord not connected
         "502":
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
-          description: Discord failed
+          description: Discord failed (anything already posted is removed again)
       security:
       - cookieAuth: []
       - bearerAuth: []
@@ -7811,6 +8110,373 @@ paths:
       summary: Client bootstrap config
       tags:
       - System
+  /api/discord/channels:
+    get:
+      description: |-
+        **Auth:** admin or any posting permission
+
+        Text and announcement channels in Discord's order (uncategorized first, then by category). `available` is false, with a `problem`, when the bot isn't connected or isn't in the server.
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DiscordChannelsResponse'
+          description: Success
+      security:
+      - cookieAuth: []
+      - bearerAuth: []
+      summary: Postable channels
+      tags:
+      - Discord
+  /api/discord/config:
+    put:
+      description: |-
+        **Auth:** admin
+
+        Server (guild) id, application id, the bot's custom status text, the public site URL used for image links in posts, and test mode (every new post goes to the test channel and scheduled announcements are held).
+      requestBody:
+        content:
+          application/json:
+            schema:
+              properties:
+                application_id:
+                  description: Application id (digits).
+                  type: string
+                guild_id:
+                  description: Server id (digits).
+                  type: string
+                public_base_url:
+                  description: Absolute http(s) site URL, e.g. https://apps.senpan.cafe.
+                  type: string
+                status_text:
+                  description: Custom status, at most 128 characters ('' = none).
+                  type: string
+                test_channel_id:
+                  description: Channel id for test mode (required when test_mode is
+                    on).
+                  type: string
+                test_mode:
+                  description: Send every new post to the test channel and hold scheduled
+                    announcements.
+                  type: boolean
+              type: object
+        description: Configuration.
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DiscordStatusResponse'
+          description: Success
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: Invalid value
+      security:
+      - cookieAuth: []
+      - bearerAuth: []
+      summary: Save the bot configuration
+      tags:
+      - Discord
+  /api/discord/destinations/{key}:
+    get:
+      description: |-
+        **Auth:** the system's page permission
+
+        Keys: `tea-rooms`, `affiliates`, `bookclub:<slug>`. A destination never saved comes back with no channel and repost mode `new`.
+      parameters:
+      - description: Destination key.
+        in: path
+        name: key
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DiscordDestinationResponse'
+          description: Success
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: Unknown key
+      security:
+      - cookieAuth: []
+      - bearerAuth: []
+      summary: Where a system posts
+      tags:
+      - Discord
+    put:
+      description: |-
+        **Auth:** the system's page permission
+
+        The channel, who to ping (`''`, `everyone` or `role:<id>`), and the repost mode: `new`, `replace`, or (tea rooms and affiliates only) `edit`.
+      parameters:
+      - description: Destination key.
+        in: path
+        name: key
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              properties:
+                channel_id:
+                  description: Channel id ('' = none).
+                  type: string
+                mention:
+                  description: ''''' | everyone | role:<role id>.'
+                  type: string
+                repost_mode:
+                  description: new | replace | edit.
+                  type: string
+              type: object
+        description: Destination.
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DiscordDestinationResponse'
+          description: Success
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: Invalid value
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: Unknown key
+      security:
+      - cookieAuth: []
+      - bearerAuth: []
+      summary: Set where a system posts
+      tags:
+      - Discord
+  /api/discord/import:
+    get:
+      description: |-
+        **Auth:** admin
+
+        What became of each old webhook when the app moved to the bot: `imported` (its system now posts to the same channel), `other_server` (it posted into another Discord server - pick a channel), `webhook_deleted`, `error` (Discord unreachable; retried at startup or via retry) or `pending`. Never carries a webhook URL.
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DiscordImportResponse'
+          description: Success
+      security:
+      - cookieAuth: []
+      - bearerAuth: []
+      summary: Webhook import report
+      tags:
+      - Discord
+  /api/discord/import/retry:
+    post:
+      description: |-
+        **Auth:** admin
+
+        Looks up any webhook still pending or that failed before, then returns the report.
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DiscordImportResponse'
+          description: Success
+      security:
+      - cookieAuth: []
+      - bearerAuth: []
+      summary: Retry the webhook import
+      tags:
+      - Discord
+  /api/discord/legacy-webhooks:
+    delete:
+      description: |-
+        **Auth:** admin
+
+        Deletes the imported webhooks from Discord (those in the bot's own server; others are skipped) and clears the import report. Irreversible. The dry-run valve suppresses the deletes but still clears the report.
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DiscordLegacyCleanupResponse'
+          description: Success
+      security:
+      - cookieAuth: []
+      - bearerAuth: []
+      summary: Remove the old webhooks
+      tags:
+      - Discord
+  /api/discord/roles:
+    get:
+      description: |-
+        **Auth:** admin or any posting permission
+
+        The server's roles, highest first, without @everyone (the pickers offer it separately).
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DiscordRolesResponse'
+          description: Success
+      security:
+      - cookieAuth: []
+      - bearerAuth: []
+      summary: Pingable roles
+      tags:
+      - Discord
+  /api/discord/status:
+    get:
+      description: |-
+        **Auth:** admin
+
+        Whether a token can be stored and is set, whether the bot is connected (REST) and online (gateway), who it is, the server it works in (and whether it holds Administrator there), the invite link, and the posting safety switches. `problem` names the one thing to fix next. Never carries the token.
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DiscordStatusResponse'
+          description: Success
+      security:
+      - cookieAuth: []
+      - bearerAuth: []
+      summary: Bot status
+      tags:
+      - Discord
+  /api/discord/test:
+    post:
+      description: |-
+        **Auth:** admin
+
+        Posts a short test message to the channel. The server's dry-run and redirect valves apply; test mode does not (the channel is explicit).
+      requestBody:
+        content:
+          application/json:
+            schema:
+              properties:
+                channel_id:
+                  description: Channel id.
+                  type: string
+              type: object
+        description: Where to post.
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DiscordTestResponse'
+          description: Success
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: No channel
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: Discord not connected
+        "502":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: Discord refused or unreachable
+      security:
+      - cookieAuth: []
+      - bearerAuth: []
+      summary: Send a test message
+      tags:
+      - Discord
+  /api/discord/token:
+    delete:
+      description: |-
+        **Auth:** admin
+
+        Forgets the token and takes the bot offline.
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DiscordStatusResponse'
+          description: Success
+      security:
+      - cookieAuth: []
+      - bearerAuth: []
+      summary: Remove the bot token
+      tags:
+      - Discord
+    put:
+      description: |-
+        **Auth:** admin
+
+        Checks the token with Discord (`/users/@me` + `/applications/@me`), refuses one from a different application than the configured one, then stores it sealed (AES-GCM under a key derived from the session secret) and reconnects the bot. A leading `Bot ` is stripped.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              properties:
+                token:
+                  description: Bot token from the Developer Portal.
+                  type: string
+              type: object
+        description: The token.
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DiscordStatusResponse'
+          description: Success
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: Malformed, refused by Discord, or from another application
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: No session secret configured, so a token can't be stored
+        "502":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: Discord unreachable
+      security:
+      - cookieAuth: []
+      - bearerAuth: []
+      summary: Set the bot token
+      tags:
+      - Discord
   /api/festival-maps:
     get:
       description: |-
@@ -10652,7 +11318,7 @@ paths:
       description: |-
         **Auth:** public
 
-        Secret settings (per-club webhook URLs) are blanked for non-admins.
+        Secret settings (the Google Fonts API key) are blanked for non-admins.
       responses:
         "200":
           content:
@@ -11618,7 +12284,7 @@ paths:
       description: |-
         **Auth:** permission:teahouse-tea-rooms
 
-        Also returns the shared Discord webhook (`webhook_url`); safe here since the endpoint is permission-gated.
+        Also returns where tea rooms post (`destination`) and each room's Discord post (`discord_post`).
       responses:
         "200":
           content:
@@ -11791,11 +12457,11 @@ paths:
       tags:
       - Tea Rooms
   /api/tea-rooms/{id}/post:
-    post:
+    delete:
       description: |-
         **Auth:** permission:teahouse-tea-rooms
 
-        Posts the room's embed to the shared Discord webhook now.
+        Deletes the room's post from Discord.
       parameters:
       - description: Tea-room id.
         in: path
@@ -11808,26 +12474,75 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/TeaRoomResponse'
+                $ref: '#/components/schemas/DiscordPostResult'
           description: Success
-        "400":
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-          description: No webhook configured
         "404":
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
           description: Not found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: Discord not connected
         "502":
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
-          description: Discord failed
+          description: Discord refused or unreachable
+      security:
+      - cookieAuth: []
+      - bearerAuth: []
+      summary: Take down from Discord
+      tags:
+      - Tea Rooms
+    post:
+      description: |-
+        **Auth:** permission:teahouse-tea-rooms
+
+        Posts the room's embed to the Tea Rooms channel. Honors the destination's repost mode: `new` adds a post, `replace` deletes the earlier one after posting, `edit` updates the room's post in place (posting fresh when there is none). In edit mode, later changes to the room - a save, a toggle, a lock lifting - update the post on their own.
+      parameters:
+      - description: Tea-room id.
+        in: path
+        name: id
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DiscordPostResult'
+          description: Success
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: No Discord channel picked
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: Not found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: Discord not connected
+        "502":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: Discord refused or unreachable
       security:
       - cookieAuth: []
       - bearerAuth: []
@@ -11839,7 +12554,7 @@ paths:
       description: |-
         **Auth:** public
 
-        Cross-origin (`Access-Control-Allow-Origin: *`), read-only room list for an external site (e.g. a Carrd embed). No webhook.
+        Cross-origin (`Access-Control-Allow-Origin: *`), read-only room list for an external site (e.g. a Carrd embed). Never carries Discord posts.
       responses:
         "200":
           content:
@@ -11912,42 +12627,6 @@ paths:
       - cookieAuth: []
       - bearerAuth: []
       summary: Reorder tea rooms
-      tags:
-      - Tea Rooms
-  /api/tea-rooms/webhook:
-    put:
-      description: |-
-        **Auth:** permission:teahouse-tea-rooms
-
-        Stores the single webhook every tea room posts to (empty clears it). Validated as a Discord webhook URL.
-      requestBody:
-        content:
-          application/json:
-            schema:
-              properties:
-                webhook_url:
-                  description: Discord webhook URL ('' clears).
-                  type: string
-              type: object
-        description: Webhook URL.
-        required: true
-      responses:
-        "200":
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/TeaRoomWebhookResponse'
-          description: Success
-        "400":
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-          description: Not a Discord webhook URL
-      security:
-      - cookieAuth: []
-      - bearerAuth: []
-      summary: Set the shared Discord webhook
       tags:
       - Tea Rooms
   /api/users:
@@ -12219,5 +12898,8 @@ tags:
   name: Winners Log
 - description: App settings
   name: Settings
+- description: 'The built-in Discord bot: token, configuration, status, and the channel/role
+    lists for pickers'
+  name: Discord
 - description: Fonts, Carrd projects, and central image hosting
   name: Files

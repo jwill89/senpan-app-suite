@@ -5,12 +5,14 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
-	"sync/atomic"
 	"testing"
 	"time"
 
+	"app-suite/internal/discord"
+	"app-suite/internal/discord/discordtest"
 	"app-suite/internal/model"
 	"app-suite/internal/store"
 )
@@ -178,10 +180,14 @@ func TestAdvanceCursor(t *testing.T) {
 	}
 }
 
-// newSchedulerEnv builds a minimal Server backed by a temp store plus a daily
-// announcement that is already overdue (cursor in the past), for scheduler tests.
-// Returns the server, the announcement id, and its starting next_post_at.
-func newSchedulerEnv(t *testing.T, webhook string) (*Server, int64, string) {
+// schedulerChannel is the fake server's channel the scheduler tests post to.
+const schedulerChannel = "200000000000000003"
+
+// newSchedulerEnv builds a minimal Server backed by a temp store and a fake Discord,
+// plus a daily announcement that is already overdue (cursor in the past), for
+// scheduler tests. wrap, when set, wraps the fake's handler (to act mid-request).
+// Returns the server, the fake, the announcement id, and its starting next_post_at.
+func newSchedulerEnv(t *testing.T, wrap func(http.Handler) http.Handler) (*Server, *discordtest.Server, int64, string) {
 	t.Helper()
 	st, err := store.New(filepath.Join(t.TempDir(), "test.db"))
 	if err != nil {
@@ -189,7 +195,17 @@ func newSchedulerEnv(t *testing.T, webhook string) (*Server, int64, string) {
 	}
 	t.Cleanup(func() { st.Close() })
 
-	typeID, err := st.CreateAnnouncementType("T", webhook)
+	fake := discordtest.New()
+	h := fake.Handler()
+	if wrap != nil {
+		h = wrap(h)
+	}
+	ts := httptest.NewServer(h)
+	t.Cleanup(ts.Close)
+	svc := discord.NewService(ts.URL, "")
+	svc.Configure(discord.Config{Token: discordtest.Token, GuildID: discordtest.GuildID})
+
+	typeID, err := st.CreateAnnouncementType("T", schedulerChannel)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -203,26 +219,19 @@ func newSchedulerEnv(t *testing.T, webhook string) (*Server, int64, string) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	return &Server{store: st}, id, startCursor
+	return &Server{store: st, discord: svc}, fake, id, startCursor
 }
 
 // TestPostDueAnnouncementsNoDoubleWhenOverdue is the regression test for the
 // reported double-posting: an overdue recurring announcement must post exactly
 // once and advance its cursor to a future slot, so a second sweep posts nothing.
 func TestPostDueAnnouncementsNoDoubleWhenOverdue(t *testing.T) {
-	var hits int32
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		atomic.AddInt32(&hits, 1)
-		w.WriteHeader(http.StatusNoContent)
-	}))
-	defer ts.Close()
-
-	s, id, _ := newSchedulerEnv(t, ts.URL)
+	s, fake, id, _ := newSchedulerEnv(t, nil)
 
 	s.postDueAnnouncements(context.Background())
 	s.postDueAnnouncements(context.Background()) // back-to-back: a correct scheduler still posts once
 
-	if got := atomic.LoadInt32(&hits); got != 1 {
+	if got := len(fake.Messages()); got != 1 {
 		t.Fatalf("posted %d times across two sweeps; want exactly 1", got)
 	}
 	reloaded, _ := s.store.GetAnnouncement(id)
@@ -231,42 +240,113 @@ func TestPostDueAnnouncementsNoDoubleWhenOverdue(t *testing.T) {
 	}
 }
 
-// TestPostDueAnnouncementsAmbiguousAdvances verifies a transport failure (the
-// webhook may have been delivered) advances the cursor instead of retrying, so a
-// possibly-delivered post is never duplicated on the next tick.
-func TestPostDueAnnouncementsAmbiguousAdvances(t *testing.T) {
-	ts := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
-	closedURL := ts.URL
-	ts.Close() // the port now refuses connections -> transport (ambiguous) error
+// TestPostDueAnnouncementsFailureRetries verifies a failed post leaves the cursor
+// untouched so the next tick retries, and that the retry carries the same nonce -
+// which is what makes retrying safe now: the webhook era had to give up on a post
+// that MIGHT have landed, rather than risk posting it twice.
+func TestPostDueAnnouncementsFailureRetries(t *testing.T) {
+	s, fake, id, startCursor := newSchedulerEnv(t, nil)
+	fake.Fail("POST /channels/", http.StatusInternalServerError, `{"message":"boom","code":0}`)
 
-	s, id, startCursor := newSchedulerEnv(t, closedURL)
 	s.postDueAnnouncements(context.Background())
-
 	reloaded, _ := s.store.GetAnnouncement(id)
-	if reloaded == nil || reloaded.NextPostAt == startCursor {
-		t.Errorf("ambiguous failure should advance the cursor (no retry), got %q", reloaded.NextPostAt)
+	if reloaded.NextPostAt != startCursor || len(fake.Messages()) != 0 {
+		t.Fatalf("a failed post must leave the cursor for a retry; cursor %q, messages %d",
+			reloaded.NextPostAt, len(fake.Messages()))
 	}
-	if reloaded != nil && !mustParse(t, reloaded.NextPostAt).After(time.Now()) {
-		t.Errorf("advanced cursor should be in the future, got %q", reloaded.NextPostAt)
+	s.postDueAnnouncements(context.Background())
+	msgs := fake.Messages()
+	if len(msgs) != 1 {
+		t.Fatalf("messages after the retry = %d; want 1", len(msgs))
+	}
+	if want := "a" + strconv.FormatInt(id, 36) + "-" + strconv.FormatInt(mustParse(t, startCursor).Unix(), 36); msgs[0].Nonce != want {
+		t.Errorf("nonce = %q; want %q (one per occurrence)", msgs[0].Nonce, want)
 	}
 }
 
-// TestPostDueAnnouncementsHTTPErrorRetries verifies a definite non-delivery (an
-// HTTP error status, e.g. a 429 rate limit or 5xx) leaves the cursor untouched so
-// the next tick retries - preserving delivery without duplicating.
-func TestPostDueAnnouncementsHTTPErrorRetries(t *testing.T) {
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusInternalServerError)
-	}))
-	defer ts.Close()
-
-	s, id, startCursor := newSchedulerEnv(t, ts.URL)
+// TestPostDueAnnouncementsNonceAbsorbsARepeat covers the case the nonce exists for: the
+// post landed but the cursor was never advanced (a timeout, a crash), so the same
+// occurrence is posted again. Discord answers with the message it already made.
+func TestPostDueAnnouncementsNonceAbsorbsARepeat(t *testing.T) {
+	s, fake, id, startCursor := newSchedulerEnv(t, nil)
 	s.postDueAnnouncements(context.Background())
+	if _, err := s.store.AdvanceAnnouncement(id, currentCursor(t, s, id), startCursor, true, 0); err != nil {
+		t.Fatal(err)
+	}
+	s.postDueAnnouncements(context.Background())
+	if got := len(fake.Messages()); got != 1 {
+		t.Errorf("the same occurrence posted %d messages; want 1", got)
+	}
+}
 
-	reloaded, _ := s.store.GetAnnouncement(id)
-	if reloaded == nil || reloaded.NextPostAt != startCursor {
-		t.Errorf("HTTP error should leave the cursor pending for retry; got %q want %q",
-			reloaded.NextPostAt, startCursor)
+// TestPostDueAnnouncementsWaitsWithoutAChannel leaves an announcement pending while its
+// type has nowhere to post, or the bot is off.
+func TestPostDueAnnouncementsWaitsWithoutAChannel(t *testing.T) {
+	s, fake, id, startCursor := newSchedulerEnv(t, nil)
+	a, _ := s.store.GetAnnouncement(id)
+	if err := s.store.UpdateAnnouncementType(a.TypeID, "T", ""); err != nil {
+		t.Fatal(err)
+	}
+	s.postDueAnnouncements(context.Background())
+	if reloaded, _ := s.store.GetAnnouncement(id); reloaded.NextPostAt != startCursor {
+		t.Errorf("a type with no channel advanced the cursor to %q", reloaded.NextPostAt)
+	}
+
+	if err := s.store.UpdateAnnouncementType(a.TypeID, "T", schedulerChannel); err != nil {
+		t.Fatal(err)
+	}
+	s.discord.Configure(discord.Config{})
+	s.postDueAnnouncements(context.Background())
+	if reloaded, _ := s.store.GetAnnouncement(id); reloaded.NextPostAt != startCursor {
+		t.Errorf("with the bot off the cursor moved to %q", reloaded.NextPostAt)
+	}
+	if len(fake.Messages()) != 0 {
+		t.Error("something was posted")
+	}
+}
+
+// TestPostDueAnnouncementsHoldsInTestMode holds the whole schedule while test mode is
+// on, and catches up once it is off.
+func TestPostDueAnnouncementsHoldsInTestMode(t *testing.T) {
+	s, fake, id, startCursor := newSchedulerEnv(t, nil)
+	for k, v := range map[string]string{settingDiscordTestMode: "1", settingDiscordTestChannel: "200000000000000005"} {
+		if err := s.store.SetSetting(k, v); err != nil {
+			t.Fatal(err)
+		}
+	}
+	s.postDueAnnouncements(context.Background())
+	if reloaded, _ := s.store.GetAnnouncement(id); reloaded.NextPostAt != startCursor || len(fake.Messages()) != 0 {
+		t.Fatalf("test mode let the scheduler post (cursor %q)", reloaded.NextPostAt)
+	}
+	if err := s.store.SetSetting(settingDiscordTestMode, "0"); err != nil {
+		t.Fatal(err)
+	}
+	s.postDueAnnouncements(context.Background())
+	if msgs := fake.Messages(); len(msgs) != 1 || msgs[0].ChannelID != schedulerChannel {
+		t.Errorf("after test mode, messages = %+v; want the held post in its real channel", msgs)
+	}
+}
+
+// TestPostDueAnnouncementsReplacesThePreviousPost deletes the earlier post once the new
+// one is up, for an announcement set to replace itself.
+func TestPostDueAnnouncementsReplacesThePreviousPost(t *testing.T) {
+	s, fake, id, startCursor := newSchedulerEnv(t, nil)
+	a, _ := s.store.GetAnnouncement(id)
+	a.RepostMode = model.RepostReplace
+	if err := s.store.UpdateAnnouncement(a); err != nil {
+		t.Fatal(err)
+	}
+	s.postDueAnnouncements(context.Background())
+	first := fake.Messages()
+	// Make it due again, a day later.
+	next := mustParse(t, startCursor).Add(24 * time.Hour).Format(time.RFC3339)
+	if _, err := s.store.AdvanceAnnouncement(id, currentCursor(t, s, id), next, true, 0); err != nil {
+		t.Fatal(err)
+	}
+	s.postDueAnnouncements(context.Background())
+	msgs := fake.Messages()
+	if len(first) != 1 || len(msgs) != 1 || msgs[0].ID == first[0].ID {
+		t.Fatalf("messages before %+v, after %+v; want the first replaced by the second", first, msgs)
 	}
 }
 
@@ -310,7 +390,7 @@ func TestBuildAnnouncementEmbed(t *testing.T) {
 	if detailsField.Inline {
 		t.Error("details field should be full-width (not inline)")
 	}
-	if detailsField.Name != embedNoHeading {
+	if detailsField.Name != discord.NoHeading {
 		t.Errorf("details field should have no visible heading, got name %q", detailsField.Name)
 	}
 	if detailsField.Value != a.Details {
@@ -335,15 +415,15 @@ func TestBuildAnnouncementEmbedNoTimes(t *testing.T) {
 	if len(embed.Fields) != 1 {
 		t.Fatalf("expected only the details field, got %d", len(embed.Fields))
 	}
-	if embed.Fields[0].Name != embedNoHeading || embed.Fields[0].Inline {
+	if embed.Fields[0].Name != discord.NoHeading || embed.Fields[0].Inline {
 		t.Errorf("details field: got name=%q inline=%v", embed.Fields[0].Name, embed.Fields[0].Inline)
 	}
 	if embed.Fields[0].Value != "Plain note." {
 		t.Errorf("details value: got %q", embed.Fields[0].Value)
 	}
 	// No explicit colour -> brand accent default.
-	if embed.Color != accentColor {
-		t.Errorf("color: got %#x, want default %#x", embed.Color, accentColor)
+	if embed.Color != discord.AccentColor {
+		t.Errorf("color: got %#x, want default %#x", embed.Color, discord.AccentColor)
 	}
 	if embed.Footer != nil {
 		t.Error("no time -> no footer expected")
@@ -354,7 +434,7 @@ func TestBuildAnnouncementEmbedLocation(t *testing.T) {
 	a := model.Announcement{Title: "Meetup", Details: "See you there.", Location: "Voice Channel #1"}
 	embed := buildAnnouncementEmbed(a)
 	// Location renders as a full-width "📍 Where" field on its own line.
-	var loc *discordEmbedField
+	var loc *discord.EmbedField
 	for i := range embed.Fields {
 		if embed.Fields[i].Name == "📍 Where" {
 			loc = &embed.Fields[i]
@@ -383,11 +463,11 @@ func TestBuildAnnouncementEmbedLongDetails(t *testing.T) {
 		t.Fatalf("expected 2 detail fields (split at the newline), got %d", len(embed.Fields))
 	}
 	for i, f := range embed.Fields {
-		if f.Name != embedNoHeading || f.Inline {
+		if f.Name != discord.NoHeading || f.Inline {
 			t.Errorf("field %d: got name=%q inline=%v; want headingless full-width", i, f.Name, f.Inline)
 		}
-		if len([]rune(f.Value)) > embedFieldValueMax {
-			t.Errorf("field %d length %d exceeds the %d cap", i, len([]rune(f.Value)), embedFieldValueMax)
+		if len([]rune(f.Value)) > discord.FieldValueMax {
+			t.Errorf("field %d length %d exceeds the %d cap", i, len([]rune(f.Value)), discord.FieldValueMax)
 		}
 		if strings.Contains(f.Value, "...") {
 			t.Errorf("field %d was truncated with an ellipsis: %q...", i, f.Value[:20])
@@ -567,25 +647,6 @@ func TestDiscordMarkdown(t *testing.T) {
 	}
 }
 
-func TestColorFromHex(t *testing.T) {
-	cases := []struct {
-		in   string
-		want int
-	}{
-		{"#1abc9c", 0x1abc9c},
-		{"1abc9c", 0x1abc9c},
-		{"  #FFFFFF  ", 0xFFFFFF},
-		{"", accentColor},            // empty -> default
-		{"not-a-color", accentColor}, // invalid hex -> default
-		{"#ffffffff", accentColor},   // out of 24-bit range -> default
-	}
-	for _, c := range cases {
-		if got := colorFromHex(c.in, accentColor); got != c.want {
-			t.Errorf("colorFromHex(%q): got %#x, want %#x", c.in, got, c.want)
-		}
-	}
-}
-
 // itoa is a tiny int64->string helper for assembling expected token strings.
 func itoa(n int64) string {
 	return strconv.FormatInt(n, 10)
@@ -621,14 +682,14 @@ func TestAnnouncementComponents(t *testing.T) {
 		{Label: "Skip", URL: "not-a-url"}, // dropped: invalid URL
 	}}
 	comps := announcementComponents(a)
-	if len(comps) != 1 || comps[0].Type != componentActionRow {
+	if len(comps) != 1 || comps[0].Type != discord.ComponentActionRow {
 		t.Fatalf("expected one action row, got %+v", comps)
 	}
 	row := comps[0].Components
 	if len(row) != 2 {
 		t.Fatalf("expected 2 valid buttons, got %d", len(row))
 	}
-	if row[0].Type != componentButton || row[0].Style != buttonStyleLink || row[0].URL != "https://example.com" {
+	if row[0].Type != discord.ComponentButton || row[0].Style != discord.ButtonStyleLink || row[0].URL != "https://example.com" {
 		t.Errorf("button 0: %+v", row[0])
 	}
 	if row[0].Emoji == nil || row[0].Emoji.Name != "🎉" {
@@ -643,73 +704,42 @@ func TestAnnouncementComponents(t *testing.T) {
 	}
 }
 
-func TestAnnouncementMention(t *testing.T) {
-	st, err := store.New(filepath.Join(t.TempDir(), "test.db"))
-	if err != nil {
-		t.Fatal(err)
+// TestDiscordMention covers the funnel's ping rules: what the message says, who it may
+// notify, and that a post landing in a test channel notifies no one.
+func TestDiscordMention(t *testing.T) {
+	cases := []struct {
+		mention, content string
+		parse, roles     []string
+	}{
+		{"", "", []string{}, []string{}},
+		{"everyone", "@everyone", []string{"everyone"}, []string{}},
+		{"role:123456789012345678", "<@&123456789012345678>", []string{}, []string{"123456789012345678"}},
+		{"role:not-a-snowflake", "", []string{}, []string{}},
 	}
-	defer st.Close()
-	s := &Server{store: st}
-
-	// No mention -> empty content, no whitelist.
-	if c, am := s.announcementMention(model.Announcement{}); c != "" || am != nil {
-		t.Errorf("none: got content=%q allowed=%+v", c, am)
-	}
-
-	// @everyone -> content + parse ["everyone"].
-	c, am := s.announcementMention(model.Announcement{Mention: "everyone"})
-	if c != "@everyone" || am == nil || len(am.Parse) != 1 || am.Parse[0] != "everyone" {
-		t.Errorf("everyone: got content=%q allowed=%+v", c, am)
-	}
-
-	// A managed role -> "<@&id>" with the role whitelisted (and parse suppressed).
-	id, err := st.CreateAnnouncementRole("Crew", "123456789012345678")
-	if err != nil {
-		t.Fatal(err)
-	}
-	c, am = s.announcementMention(model.Announcement{Mention: "role:" + strconv.FormatInt(id, 10)})
-	if c != "<@&123456789012345678>" || am == nil || len(am.Roles) != 1 || am.Roles[0] != "123456789012345678" {
-		t.Errorf("role: got content=%q allowed=%+v", c, am)
-	}
-	if am != nil && len(am.Parse) != 0 {
-		t.Errorf("role: parse should be empty to suppress other mentions, got %+v", am.Parse)
-	}
-
-	// A role reference that no longer resolves -> no mention (announcement still posts).
-	if c, am := s.announcementMention(model.Announcement{Mention: "role:999999"}); c != "" || am != nil {
-		t.Errorf("missing role: got content=%q allowed=%+v", c, am)
-	}
-}
-
-func TestParseEmoji(t *testing.T) {
-	if e := parseEmoji("  "); e != nil {
-		t.Errorf("blank -> nil, got %+v", e)
-	}
-	if e := parseEmoji("🎉"); e == nil || e.Name != "🎉" || e.ID != "" {
-		t.Errorf("unicode emoji: %+v", e)
-	}
-	if e := parseEmoji("<:wave:123>"); e == nil || e.Name != "wave" || e.ID != "123" || e.Animated {
-		t.Errorf("custom emoji: %+v", e)
-	}
-	if e := parseEmoji("<a:spin:456>"); e == nil || e.Name != "spin" || e.ID != "456" || !e.Animated {
-		t.Errorf("animated custom emoji: %+v", e)
+	for _, c := range cases {
+		content, allowed := discordMention(c.mention, false)
+		if content != c.content || !slices.Equal(allowed.Parse, c.parse) || !slices.Equal(allowed.Roles, c.roles) {
+			t.Errorf("%q: got %q %+v; want %q parse %v roles %v", c.mention, content, allowed, c.content, c.parse, c.roles)
+		}
+		quietContent, quiet := discordMention(c.mention, true)
+		if quietContent != c.content || len(quiet.Parse) != 0 || len(quiet.Roles) != 0 {
+			t.Errorf("%q quiet: got %q %+v; want the text without a ping", c.mention, quietContent, quiet)
+		}
 	}
 }
 
 // TestPostDueAnnouncementsGivesUpAfterRepeatedFailures pins the retry bound. A
 // definite non-delivery leaves the cursor pending so the next tick retries, which
-// is right for a blip - but a webhook that has been DELETED answers 404 every
+// is right for a blip - but a channel that has been DELETED answers 404 every
 // time, and retrying that every 30 seconds forever both floods the log and keeps a
 // stuck announcement permanently due, so it is reconsidered ahead of everything
 // else on every sweep. After a handful of consecutive failures the occurrence is
 // given up on and the cursor moves.
 func TestPostDueAnnouncementsGivesUpAfterRepeatedFailures(t *testing.T) {
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusNotFound) // a deleted webhook, permanently
-	}))
-	defer ts.Close()
-
-	s, id, startCursor := newSchedulerEnv(t, ts.URL)
+	s, fake, id, startCursor := newSchedulerEnv(t, nil)
+	for range maxAnnouncementPostRetries {
+		fake.Fail("POST /channels/", http.StatusNotFound, `{"message":"Unknown Channel","code":10003}`) // a deleted channel, permanently
+	}
 
 	// Every sweep up to the limit must leave the cursor alone, so a transient
 	// outage is still ridden out rather than skipped.
@@ -725,7 +755,7 @@ func TestPostDueAnnouncementsGivesUpAfterRepeatedFailures(t *testing.T) {
 	s.postDueAnnouncements(context.Background())
 	reloaded, _ := s.store.GetAnnouncement(id)
 	if reloaded.NextPostAt == startCursor {
-		t.Error("a permanently failing webhook is still being retried every sweep; the cursor never moved")
+		t.Error("a permanently failing channel is still being retried every sweep; the cursor never moved")
 	}
 	if !reloaded.Active {
 		t.Error("a recurring announcement should stay active and try again at its next occurrence")
@@ -733,7 +763,7 @@ func TestPostDueAnnouncementsGivesUpAfterRepeatedFailures(t *testing.T) {
 }
 
 // TestPostDueAnnouncementsRespectsAConcurrentEdit pins the snapshot guard on the
-// cursor write. The sweep reads an announcement, posts it (up to 15 seconds of
+// cursor write. The sweep reads an announcement, posts it (up to 30 seconds of
 // HTTP), and then advances the cursor from the values it read at the start - keyed
 // on id alone, so an admin edit that landed during the post was silently reverted.
 // The write now only applies while the row still holds the cursor the sweep read.
@@ -743,17 +773,18 @@ func TestPostDueAnnouncementsRespectsAConcurrentEdit(t *testing.T) {
 	edited := make(chan struct{})
 
 	// Rescheduling mid-post is what a real admin edit does: it moves next_post_at.
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		if _, err := s.store.AdvanceAnnouncement(id, currentCursor(t, s, id),
-			"2099-01-01T00:00:00Z", true, 0); err != nil {
-			t.Errorf("simulated admin edit: %v", err)
-		}
-		close(edited)
-		w.WriteHeader(http.StatusNoContent)
-	}))
-	defer ts.Close()
-
-	s, id, _ = newSchedulerEnv(t, ts.URL)
+	s, _, id, _ = newSchedulerEnv(t, func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.Method == http.MethodPost && strings.HasPrefix(r.URL.Path, "/channels/") {
+				if _, err := s.store.AdvanceAnnouncement(id, currentCursor(t, s, id),
+					"2099-01-01T00:00:00Z", true, 0); err != nil {
+					t.Errorf("simulated admin edit: %v", err)
+				}
+				close(edited)
+			}
+			next.ServeHTTP(w, r)
+		})
+	})
 	s.postDueAnnouncements(context.Background())
 	<-edited
 

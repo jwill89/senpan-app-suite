@@ -111,7 +111,7 @@ const adminChildren: RouteRecordRaw[] = [
   },
   // One route per registered book club, all served by the generic BookClubTab
   // (the active club drives its labels). Add a club in constants.ts to get its
-  // route, sidebar button, and settings webhook field automatically.
+  // route, sidebar button, and Discord destination automatically.
   ...BOOK_CLUBS.map((club): RouteRecordRaw => ({
     path: `teahouse/bookclub/${club.slug}`,
     name: `admin-bookclub-${club.slug}`,
@@ -168,6 +168,12 @@ const adminChildren: RouteRecordRaw[] = [
     name: 'admin-system-logs',
     component: () => import('@/components/admin/LogsTab.vue'),
     meta: { tab: 'system-logs' },
+  },
+  {
+    path: 'system/discord',
+    name: 'admin-system-discord',
+    component: () => import('@/components/admin/DiscordTab.vue'),
+    meta: { tab: 'system-discord' },
   },
   // Landing for active accounts with no granted pages (guard redirects here).
   {
@@ -393,7 +399,7 @@ router.beforeEach(async (to) => {
     const tab = to.meta.tab as AdminTab | undefined
     if (tab) {
       const allowed =
-        tab === 'system-users' || tab === 'system-logs'
+        tab === 'system-users' || tab === 'system-logs' || tab === 'system-discord'
           ? auth.isAdmin
           : auth.isAdmin || auth.hasPermission(tab)
       if (!allowed) {

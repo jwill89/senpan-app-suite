@@ -1,8 +1,8 @@
 /**
  * Book club store: admin management of reading lists and their items for the
  * book clubs (Yaoi, Yuri, ...). Covers list CRUD, item CRUD (manual or pulled
- * from AniList), cover-image upload, and publishing a list to Discord. Mirrors
- * the structure of the raffles store.
+ * from AniList), cover-image upload, publishing a list to Discord, and where the
+ * club's lists post. Mirrors the structure of the raffles store.
  *
  * One store serves every club: the active club (set via `openClub` when a club
  * tab is entered) drives which club's lists are loaded/created and the
@@ -16,12 +16,15 @@ import { createFreshness } from '@/lib/freshness'
 import { nextUid } from '@/lib/uid'
 import { withLoading } from '@/lib/withLoading'
 import type {
+  DiscordDestination,
   ReadingList,
   ReadingListItem,
   ReadingListItemForm,
   ReadingListSourceForm,
+  RepostMode,
 } from '@/types/api'
 import { useUiStore } from './ui'
+import { useDiscordStore } from './discord'
 
 /** A blank item form (used for "Add item" and reset after save). */
 function emptyItemForm(): ReadingListItemForm {
@@ -77,6 +80,9 @@ export const useBookclubStore = defineStore('bookclub', () => {
   const coverUploading = ref(false)
   const looking = ref(false)
   const publishing = ref(false)
+  /** Where the open club's reading lists post (null until loaded). */
+  const destination = ref<DiscordDestination | null>(null)
+  const savingDestination = ref(false)
 
   // -- Lists ----------------------------------------------------------------
 
@@ -121,9 +127,33 @@ export const useBookclubStore = defineStore('bookclub', () => {
 
   async function loadLists(): Promise<void> {
     await withLoading(listsLoading, async () => {
-      const data = await endpoints.bookclub.lists(activeClubSlug.value)
+      const slug = activeClubSlug.value
+      const [data, dest] = await Promise.all([
+        endpoints.bookclub.lists(slug),
+        endpoints.discord.destination(`bookclub:${slug}`),
+      ])
       lists.value = data.reading_lists
+      destination.value = dest.destination
     })
+  }
+
+  /** Save where the open club's reading lists post. Returns true on success. */
+  async function saveDestination(dest: {
+    channel_id: string
+    mention: string
+    repost_mode: RepostMode
+  }): Promise<boolean> {
+    savingDestination.value = true
+    try {
+      const saved = await useDiscordStore().saveDestination(
+        `bookclub:${activeClubSlug.value}`,
+        dest,
+      )
+      if (saved) destination.value = saved
+      return saved !== null
+    } finally {
+      savingDestination.value = false
+    }
   }
 
   async function loadListDetail(id: number): Promise<void> {
@@ -209,9 +239,15 @@ export const useBookclubStore = defineStore('bookclub', () => {
   }
 
   async function publishList(list: ReadingList): Promise<void> {
+    if (!destination.value?.channel_id) {
+      ui.notify('Pick a Discord channel first (Discord button above).', 'error')
+      return
+    }
+    const replacing = destination.value.repost_mode === 'replace'
     if (
       !(await ui.confirm(
-        `Publish "${list.title}" to Discord? Each item will be posted as an embed.`,
+        `Publish "${list.title}" to Discord? Each item will be posted as an embed.` +
+          (replacing ? ' The previous reading list is deleted once this one is up.' : ''),
         {
           title: 'Publish reading list',
           confirmText: 'Publish',
@@ -222,7 +258,10 @@ export const useBookclubStore = defineStore('bookclub', () => {
     publishing.value = true
     try {
       const data = await endpoints.bookclub.publish(activeClubSlug.value, list.id)
-      ui.notify(`Published ${data.published} item(s) to Discord`, 'success')
+      const done =
+        `Published ${data.published} item(s) to Discord` +
+        (data.replaced ? `, and removed the previous list (${data.replaced} message(s))` : '')
+      ui.notify(data.note ? `${done}. ${data.note}` : done, 'success')
     } catch (e) {
       ui.notify((e as Error).message, 'error')
     } finally {
@@ -368,6 +407,9 @@ export const useBookclubStore = defineStore('bookclub', () => {
   }
 
   return {
+    destination,
+    savingDestination,
+    saveDestination,
     activeClubSlug,
     clubName,
     clubIcon,

@@ -287,9 +287,10 @@ export const FF14_WORLD_NAMES: string[] = FF14_WORLDS.flatMap((dc) => dc.worlds)
 
 /**
  * Registry of book clubs shown under the admin "Book Clubs" section. Add an
- * entry to introduce a new club; its sidebar button, route, settings webhook
- * field, and tab all wire up automatically from this list (mirror the backend
- * `bookClubs` registry in bookclubs.go - keep `slug`/`commentsLabel` in sync).
+ * entry to introduce a new club; its sidebar button, route, tab and Discord
+ * destination ("bookclub:<slug>") all wire up automatically from this list (mirror
+ * the backend `bookClubs` registry in bookclubs.go - keep `slug`/`commentsLabel` in
+ * sync).
  *
  *   - `commentsLabel`: label for the per-item curator comments field (e.g.
  *     "Yao's Comments" vs "Drani's Comments"); also used in the Discord embed.
@@ -306,11 +307,6 @@ export const BOOK_CLUBS = [
     icon: 'flower-daffodil',
   },
 ] as const
-
-/** Per-club reading-list Discord webhook setting key (matches webhookSettingKey on the backend). */
-export function clubWebhookKey(slug: string): `discord_webhook_url_${string}` {
-  return `discord_webhook_url_${slug}`
-}
 
 /**
  * Canonical list of grantable admin page permissions. Each `key` matches both a
@@ -368,9 +364,6 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
   custom_card_cost: '0',
   hide_bingo: '0',
   hide_custom_cards: '0',
-  // One blank reading-list webhook default per known club so the settings form
-  // binds cleanly before the server response loads.
-  ...Object.fromEntries(BOOK_CLUBS.map((c) => [clubWebhookKey(c.slug), ''])),
 }
 
 /** The browser's current IANA timezone (e.g. "America/New_York"); 'UTC' fallback. */

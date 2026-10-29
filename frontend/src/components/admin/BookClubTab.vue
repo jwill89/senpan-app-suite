@@ -10,7 +10,8 @@
  *
  * Items can be filled manually or pulled from AniList (search -> pick a result ->
  * the form is populated, cover image URL included). "Publish" posts every item
- * in the list as its own Discord embed via the club's configured webhook.
+ * in the list as its own Discord embed to the club's channel; the Discord button
+ * picks that channel, the ping, and whether a new list replaces the previous one.
  */
 import { ref } from 'vue'
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
@@ -22,11 +23,23 @@ import SubPageHeader from '@/components/common/ui/SubPageHeader.vue'
 import FormField from '@/components/common/ui/FormField.vue'
 import FormActions from '@/components/common/ui/FormActions.vue'
 import EmptyState from '@/components/common/ui/EmptyState.vue'
+import DiscordDestinationForm from '@/components/common/ui/DiscordDestinationForm.vue'
 import { useBookclubStore } from '@/stores/bookclub'
 import { assetUrl } from '@/lib/assets'
-import type { ReadingList } from '@/types/api'
+import { LIST_REPOST_OPTIONS } from '@/lib/discordPosts'
+import type { ReadingList, RepostMode } from '@/types/api'
 
 const bookclub = useBookclubStore()
+
+/** The Discord sub-page: where this club's reading lists post. */
+const showDiscord = ref(false)
+async function saveDiscord(dest: {
+  channel_id: string
+  mention: string
+  repost_mode: RepostMode
+}): Promise<void> {
+  if (await bookclub.saveDestination(dest)) showDiscord.value = false
+}
 
 // Inline rename state for a reading list (themed, avoids native prompt()).
 const editingListId = ref<number | null>(null)
@@ -57,8 +70,25 @@ function cancelRename(): void {
 
 <template>
   <div class="tab-body">
+    <!-- Where the club's lists post -->
+    <AdminPanel v-if="showDiscord">
+      <SubPageHeader
+        :icon="['fab', 'discord']"
+        :title="`${bookclub.clubName} in Discord`"
+        @back="showDiscord = false"
+      />
+      <DiscordDestinationForm
+        :destination="bookclub.destination"
+        :options="LIST_REPOST_OPTIONS"
+        :saving="bookclub.savingDestination"
+        id-prefix="bookclub-discord"
+        @save="saveDiscord"
+        @cancel="showDiscord = false"
+      />
+    </AdminPanel>
+
     <!-- Reading list detail (items + add/edit form) -->
-    <AdminPanel v-if="bookclub.selectedList">
+    <AdminPanel v-else-if="bookclub.selectedList">
       <SubPageHeader
         :icon="['fad', bookclub.clubIcon]"
         :title="bookclub.selectedList.title"
@@ -339,6 +369,11 @@ function cancelRename(): void {
 
     <!-- Reading lists overview -->
     <ManagerView v-else :title="`${bookclub.clubName} - Reading Lists`" :icon="['fad', 'book']">
+      <template #actions>
+        <button class="btn-view btn-sm" @click="showDiscord = true">
+          <font-awesome-icon :icon="['fab', 'discord']" /> Discord
+        </button>
+      </template>
       <template #toolbar>
         <input
           v-model="bookclub.newListTitle"
@@ -363,6 +398,15 @@ function cancelRename(): void {
         label="Loading reading lists..."
       />
       <template v-else>
+        <div
+          v-if="bookclub.destination && !bookclub.destination.channel_id && bookclub.lists.length"
+          class="text-muted text-xs mb-12"
+        >
+          <font-awesome-icon :icon="['fad', 'triangle-exclamation']" /> No Discord channel picked
+          yet - pick one with the
+          <button class="link-btn" @click="showDiscord = true">Discord</button> button to publish
+          reading lists.
+        </div>
         <div v-if="bookclub.lists.length" class="list-rows">
           <ListRow v-for="list in bookclub.lists" :key="list.id">
             <input

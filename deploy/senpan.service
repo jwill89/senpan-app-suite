@@ -38,7 +38,10 @@ RestartSec=5
 #
 #   /etc/senpan/senpan.env   (chown root:root, chmod 600):
 #     APPSUITE_SESSION_SECRET=<fixed 64+ hex, e.g. `openssl rand -hex 32`; a fixed
-#                              value keeps sessions alive across restarts>
+#                              value keeps sessions alive across restarts, and it
+#                              also seals the Discord bot token stored in the
+#                              database - change it and the token must be pasted
+#                              again on System -> Discord>
 #     APPSUITE_TURNSTILE_SECRET=<Cloudflare Turnstile secret key>
 #     APPSUITE_TURNSTILE_SITEKEY=<Cloudflare Turnstile public site key>  # public, but
 #                              kept alongside the pair for convenience

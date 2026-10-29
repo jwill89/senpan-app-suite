@@ -1,13 +1,11 @@
 package server_test
 
 import (
-	"encoding/json"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
 	"strings"
-	"sync"
 	"testing"
 
 	"app-suite/internal/server"
@@ -238,152 +236,6 @@ func TestReadingListPerClubPermission(t *testing.T) {
 	resp.Body.Close()
 }
 
-func TestDiscordWebhookSettingRedactedForPublic(t *testing.T) {
-	e := newTestEnv(t)
-	if err := e.store.SetSetting("discord_webhook_url_yaoi", "https://discord.test/secret"); err != nil {
-		t.Fatal(err)
-	}
-
-	// Public (no login): webhook must be blanked.
-	resp := e.get(t, "/api/settings")
-	body := decodeBody(t, resp)
-	settings, _ := body["settings"].(map[string]any)
-	if v, _ := settings["discord_webhook_url_yaoi"].(string); v != "" {
-		t.Fatalf("public webhook = %q; want blank", v)
-	}
-
-	// Admin: webhook is visible.
-	e.loginAdmin(t)
-	resp = e.get(t, "/api/settings")
-	body = decodeBody(t, resp)
-	settings, _ = body["settings"].(map[string]any)
-	if v, _ := settings["discord_webhook_url_yaoi"].(string); v != "https://discord.test/secret" {
-		t.Fatalf("admin webhook = %q; want the real value", v)
-	}
-}
-
-func TestPublishPostsOneEmbedPerItem(t *testing.T) {
-	e := newTestEnv(t)
-	e.loginAdmin(t)
-
-	// Fake Discord webhook that records each received embed payload.
-	var mu sync.Mutex
-	var received []map[string]any
-	discord := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		data, _ := io.ReadAll(r.Body)
-		var payload map[string]any
-		_ = json.Unmarshal(data, &payload)
-		mu.Lock()
-		received = append(received, payload)
-		mu.Unlock()
-		w.WriteHeader(http.StatusNoContent)
-	}))
-	defer discord.Close()
-	if err := e.store.SetSetting("discord_webhook_url_yaoi", discord.URL); err != nil {
-		t.Fatal(err)
-	}
-
-	listID := createReadingList(t, e, "To Publish")
-	for _, title := range []string{"Alpha", "Beta", "Gamma"} {
-		resp := e.postJSON(t, "/api/book-clubs/yaoi/reading-lists/"+itoa(listID)+"/items", map[string]any{
-			"item": map[string]any{"title": title, "format": "Manga", "summary": title + " summary"},
-		})
-		resp.Body.Close()
-	}
-
-	resp := e.postJSON(t, "/api/book-clubs/yaoi/reading-lists/"+itoa(listID)+"/publish", map[string]any{})
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("publish status = %d; want 200", resp.StatusCode)
-	}
-	body := decodeBody(t, resp)
-	if n, _ := body["published"].(float64); int(n) != 3 {
-		t.Fatalf("published = %v; want 3", body["published"])
-	}
-
-	mu.Lock()
-	defer mu.Unlock()
-	if len(received) != 3 {
-		t.Fatalf("webhook received %d posts; want 3", len(received))
-	}
-	// Each payload has exactly one embed with a title.
-	for _, p := range received {
-		embeds, _ := p["embeds"].([]any)
-		if len(embeds) != 1 {
-			t.Fatalf("embeds per post = %d; want 1", len(embeds))
-		}
-		embed, _ := embeds[0].(map[string]any)
-		if _, ok := embed["title"].(string); !ok {
-			t.Fatalf("embed missing title: %+v", embed)
-		}
-	}
-}
-
-func TestPublishUsesPerClubCommentsLabel(t *testing.T) {
-	e := newTestEnv(t)
-	e.loginAdmin(t)
-
-	// Capture the embed posted to Discord for the Yuri club.
-	var got map[string]any
-	discord := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		data, _ := io.ReadAll(r.Body)
-		_ = json.Unmarshal(data, &got)
-		w.WriteHeader(http.StatusNoContent)
-	}))
-	defer discord.Close()
-	if err := e.store.SetSetting("discord_webhook_url_yuri", discord.URL); err != nil {
-		t.Fatal(err)
-	}
-
-	// Create a Yuri list (club from the path), with one commented item.
-	listID := createReadingListIn(t, e, "yuri", "Yuri Faves")
-
-	resp := e.postJSON(t, "/api/book-clubs/yuri/reading-lists/"+itoa(listID)+"/items", map[string]any{
-		"item": map[string]any{"title": "Bloom Into You", "comments": "Drani loved it."},
-	})
-	resp.Body.Close()
-
-	resp = e.postJSON(t, "/api/book-clubs/yuri/reading-lists/"+itoa(listID)+"/publish", map[string]any{})
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("publish status = %d; want 200", resp.StatusCode)
-	}
-	resp.Body.Close()
-
-	embeds, _ := got["embeds"].([]any)
-	if len(embeds) != 1 {
-		t.Fatalf("embeds = %d; want 1", len(embeds))
-	}
-	embed, _ := embeds[0].(map[string]any)
-	fields, _ := embed["fields"].([]any)
-	found := false
-	for _, f := range fields {
-		fm, _ := f.(map[string]any)
-		if name, _ := fm["name"].(string); name == "Drani's Comments" {
-			found = true
-		}
-		if name, _ := fm["name"].(string); name == "Yao's Comments" {
-			t.Errorf("yuri embed used Yao's Comments label")
-		}
-	}
-	if !found {
-		t.Errorf("yuri embed missing \"Drani's Comments\" field; fields=%+v", fields)
-	}
-}
-
-func TestPublishWithoutWebhookFails(t *testing.T) {
-	e := newTestEnv(t)
-	e.loginAdmin(t)
-	listID := createReadingList(t, e, "No Hook")
-	resp := e.postJSON(t, "/api/book-clubs/yaoi/reading-lists/"+itoa(listID)+"/items", map[string]any{
-		"item": map[string]any{"title": "X"},
-	})
-	resp.Body.Close()
-
-	resp = e.postJSON(t, "/api/book-clubs/yaoi/reading-lists/"+itoa(listID)+"/publish", map[string]any{})
-	if resp.StatusCode != http.StatusBadRequest {
-		t.Fatalf("publish w/o webhook status = %d; want 400", resp.StatusCode)
-	}
-	resp.Body.Close()
-}
 
 func TestBookclubLookupMapsAniListFields(t *testing.T) {
 	e := newTestEnv(t)

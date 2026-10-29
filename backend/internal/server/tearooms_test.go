@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	"app-suite/internal/discord"
 	"app-suite/internal/model"
 )
 
@@ -58,7 +59,7 @@ func TestFormatGil(t *testing.T) {
 }
 
 // fieldByName returns the embed field with the given name, or nil.
-func fieldByName(e discordEmbed, name string) *discordEmbedField {
+func fieldByName(e discord.Embed, name string) *discord.EmbedField {
 	for i := range e.Fields {
 		if e.Fields[i].Name == name {
 			return &e.Fields[i]

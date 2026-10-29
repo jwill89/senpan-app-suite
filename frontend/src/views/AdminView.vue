@@ -31,6 +31,7 @@ import { useStampRalliesStore } from '@/stores/stampRallies'
 import { useGaraponsStore } from '@/stores/garapons'
 import { useFestivalMapsStore } from '@/stores/festivalMaps'
 import { useUiStore } from '@/stores/ui'
+import { useDiscordStore } from '@/stores/discord'
 import { endpoints } from '@/lib/endpoints'
 import { armAudioOnFirstGesture } from '@/lib/sound'
 import { listPasskeys, registerPasskey, deletePasskey, passkeysSupported } from '@/lib/passkeys'
@@ -74,6 +75,11 @@ onMounted(async () => {
 // browser plays nothing until the page has had a gesture - so arm audio on the
 // first click, tap or key press anywhere in the admin area.
 if (auth.hasPermission('teahouse-tea-rooms')) armAudioOnFirstGesture()
+
+// The Discord test-mode banner above every page needs the bot's status, which is
+// admin-only (and a 401 would read as an expired session), so only admins fetch it.
+const discord = useDiscordStore()
+if (auth.isAdmin && !discord.status) void discord.loadStatus()
 
 // -- Mobile nav drawer --------------------------------------------------------
 // On narrow viewports the sidebar collapses into a hamburger-triggered drawer
@@ -330,6 +336,13 @@ function fmtPasskeyTime(ts: string): string {
 
       <div class="admin-content">
         <div class="admin-content-inner content-container">
+          <p v-if="discord.testMode" class="callout callout--warning">
+            Discord test mode is on: new posts go to the test channel and scheduled announcements
+            are waiting.
+            <router-link :to="{ name: 'admin-system-discord' }"
+              >Turn it off on the Discord page.</router-link
+            >
+          </p>
           <router-view />
         </div>
       </div>

@@ -11,8 +11,8 @@ import (
 //
 // A tea room is a single-table entity (see model.TeaRoom): a bookable room with a
 // per-half-hour gil cost, hashtags, a markdown description, status flags, an image,
-// and a Discord embed colour. Admins keep a drag-orderable list; the shared Discord
-// webhook they post to lives in the settings table, not here.
+// and a Discord embed colour. Admins keep a drag-orderable list; where the rooms post
+// in Discord (the "tea-rooms" destination) and their posts live in the discord tables.
 
 // teaRoomColumns is the shared SELECT column list for the tea_rooms table.
 const teaRoomColumns = `id, name, subtitle, room_owner, room_number, cost_per_half_hour, hashtags, description,

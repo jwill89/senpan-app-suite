@@ -10,37 +10,33 @@ import (
 	"time"
 	"unicode"
 
+	"app-suite/internal/discord"
 	"app-suite/internal/model"
 )
 
 // -- Tea Rooms (Senpan Tea House -> Tea Rooms) --------------------------------
 //
 // A tea room is a single-table entity (see model.TeaRoom): admins manage a
-// drag-orderable list of bookable rooms and post each as a Discord embed to one
-// shared webhook. The list is also exposed read-only through a public,
+// drag-orderable list of bookable rooms, and the bot posts each as a Discord embed to
+// the Tea Rooms channel - edited in place as the room changes, when the destination is
+// set to (see discordqueue.go). The list is also exposed read-only through a public,
 // cross-origin API so an external Carrd site can render live availability/pricing.
 //
 // Admin CRUD + the toggle/post/reorder commands are gated by permTeahouseTeaRooms;
 // the /public endpoints are unauthenticated and send `Access-Control-Allow-Origin:
 // *` so any site can fetch them.
 
-// teaRoomWebhookSettingKey is the settings-table key holding the single shared
-// Discord webhook that Tea Rooms post to. It is deliberately NOT in settingsKeys
-// (server/settings.go), so it never leaks through the public GET /api/settings -
-// it's read/written only through the permission-gated tea-room endpoints.
-const teaRoomWebhookSettingKey = "tearoom_webhook_url"
-
 // maxTeaRoomHashtags caps how many hashtags a room keeps (abuse guard).
 const maxTeaRoomHashtags = 30
 
 // -- Admin list + CRUD --------------------------------------------------------
 
-// handleTeaRoomsList returns every tea room (admin order) plus the shared Discord
-// webhook (safe here - the endpoint is permission-gated, unlike public settings).
+// handleTeaRoomsList returns every tea room (admin order), each with its Discord post,
+// plus where tea rooms post.
 //
 //	Endpoint:  GET /api/tea-rooms
 //	Auth:      admin, or a user granted teahouse-tea-rooms
-//	Response:  {"tea_rooms": [...], "webhook_url": "..."}
+//	Response:  model.TeaRoomsResponse
 func (s *Server) handleTeaRoomsList(w http.ResponseWriter, r *http.Request) {
 	if !s.requirePermission(w, r, permTeahouseTeaRooms) {
 		return
@@ -50,8 +46,16 @@ func (s *Server) handleTeaRoomsList(w http.ResponseWriter, r *http.Request) {
 		writeInternalError(w, "list tea rooms", err)
 		return
 	}
-	webhook, _ := s.store.GetSetting(teaRoomWebhookSettingKey)
-	writeJSON(w, http.StatusOK, model.TeaRoomsResponse{TeaRooms: rooms, WebhookURL: webhook})
+	dest, err := s.store.GetDiscordDestination(destTeaRooms)
+	if err != nil {
+		writeInternalError(w, "read tea rooms destination", err)
+		return
+	}
+	posts := s.discordPostStates(postKindTeaRoom)
+	for i := range rooms {
+		rooms[i].DiscordPost = posts[rooms[i].ID]
+	}
+	writeJSON(w, http.StatusOK, model.TeaRoomsResponse{TeaRooms: rooms, Destination: dest})
 }
 
 // teaRoomWriteRequest is the JSON body for creating (POST /api/tea-rooms) or
@@ -220,6 +224,7 @@ func (s *Server) handleTeaRoomUpdate(w http.ResponseWriter, r *http.Request) {
 		writeInternalError(w, "update tea room", err)
 		return
 	}
+	s.queueDiscordEdit(postKindTeaRoom, id)
 	saved, _ := s.store.GetTeaRoom(id)
 	writeJSON(w, http.StatusOK, model.TeaRoomResponse{TeaRoom: saved})
 }
@@ -303,12 +308,13 @@ func (s *Server) handleTeaRoomPatch(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	s.queueDiscordEdit(postKindTeaRoom, id)
 	saved, _ := s.store.GetTeaRoom(id)
 	writeJSON(w, http.StatusOK, model.TeaRoomResponse{TeaRoom: saved})
 }
 
-// handleTeaRoomDelete deletes a tea room. Its image is a shared library asset
-// (System -> Images), so the file is left intact.
+// handleTeaRoomDelete deletes a tea room, and takes its Discord post down. Its image is
+// a shared library asset (System -> Images), so the file is left intact.
 //
 //	Endpoint:  DELETE /api/tea-rooms/{id}
 //	Auth:      admin, or a user granted teahouse-tea-rooms
@@ -321,9 +327,19 @@ func (s *Server) handleTeaRoomDelete(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	room, err := s.store.GetTeaRoom(id)
+	if err != nil {
+		writeInternalError(w, "load tea room for delete", err)
+		return
+	}
 	if _, err := s.store.DeleteTeaRoom(id); err != nil {
 		writeInternalError(w, "delete tea room", err)
 		return
+	}
+	if room != nil {
+		ctx, cancel := detachedDiscordContext(r, discordWriteTimeout)
+		s.forgetDiscordItem(ctx, teaRoomItems, id, room.Name)
+		cancel()
 	}
 	w.WriteHeader(http.StatusNoContent)
 }
@@ -354,11 +370,13 @@ func (s *Server) handleTeaRoomsReorder(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, model.OKResponse{OK: true})
 }
 
-// handleTeaRoomPost posts a tea room's embed to the shared Discord webhook now.
+// handleTeaRoomPost posts a tea room to the Tea Rooms channel - or, when the channel is
+// set to edit in place and the room already has a post there, updates that post.
 //
 //	Endpoint:  POST /api/tea-rooms/{id}/post
 //	Auth:      admin, or a user granted teahouse-tea-rooms
-//	Response:  200 {"tea_room": TeaRoom}
+//	Response:  model.DiscordPostResult
+//	           400 no channel picked, 404 not found, 409 Discord off, 502 Discord refused
 func (s *Server) handleTeaRoomPost(w http.ResponseWriter, r *http.Request) {
 	if !s.requirePermission(w, r, permTeahouseTeaRooms) {
 		return
@@ -376,17 +394,46 @@ func (s *Server) handleTeaRoomPost(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "Tea room not found")
 		return
 	}
-	webhook, _ := s.store.GetSetting(teaRoomWebhookSettingKey)
-	if strings.TrimSpace(webhook) == "" {
-		writeError(w, http.StatusBadRequest, "No Tea Rooms Discord webhook is configured. Set one on the Tea Rooms page first.")
+	ctx, cancel := detachedDiscordContext(r, discordWriteTimeout)
+	defer cancel()
+	res, err := s.postDiscordItem(ctx, teaRoomItems, id)
+	if err != nil {
+		writeDiscordFailure(w, fmt.Sprintf("post tea room %d", id), teaRoomItems.where, err)
 		return
 	}
-	target := webhookTarget{Kind: "tea_room", Name: room.Name}
-	if err := s.postDiscordEmbed(r.Context(), target, webhook, buildTeaRoomEmbed(*room)); err != nil {
-		writeUpstreamError(w, fmt.Sprintf("post tea room %d", id), err)
+	writeJSON(w, http.StatusOK, res)
+}
+
+// handleTeaRoomTakeDown deletes a tea room's post from Discord.
+//
+//	Endpoint:  DELETE /api/tea-rooms/{id}/post
+//	Auth:      admin, or a user granted teahouse-tea-rooms
+//	Response:  model.DiscordPostResult
+func (s *Server) handleTeaRoomTakeDown(w http.ResponseWriter, r *http.Request) {
+	if !s.requirePermission(w, r, permTeahouseTeaRooms) {
 		return
 	}
-	writeJSON(w, http.StatusOK, model.TeaRoomResponse{TeaRoom: room})
+	id, ok := pathInt64(w, r, "id", "tea room")
+	if !ok {
+		return
+	}
+	room, err := s.store.GetTeaRoom(id)
+	if err != nil {
+		writeInternalError(w, "load tea room for take down", err)
+		return
+	}
+	if room == nil {
+		writeError(w, http.StatusNotFound, "Tea room not found")
+		return
+	}
+	ctx, cancel := detachedDiscordContext(r, discordWriteTimeout)
+	defer cancel()
+	res, err := s.takeDownDiscordItem(ctx, teaRoomItems, id, room.Name)
+	if err != nil {
+		writeDiscordFailure(w, fmt.Sprintf("take down tea room %d", id), teaRoomItems.where, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, res)
 }
 
 // -- Lock-expiry scheduler ----------------------------------------------------
@@ -440,6 +487,7 @@ func (s *Server) expireDueTeaRoomLocks() {
 		}
 		slog.Info("tea room lock expired", "id", room.ID, "name", room.Name, "room_number", room.RoomNumber)
 		s.broadcastTeaRoomUnlocked(room)
+		s.queueDiscordEdit(postKindTeaRoom, room.ID)
 		// The rooms list itself changed, and nothing here went through the admin
 		// mutation middleware (no request made this happen), so invalidate it too.
 		s.broadcastResourceChanged("tea-rooms")
@@ -461,47 +509,11 @@ func (s *Server) broadcastTeaRoomUnlocked(room model.TeaRoom) {
 	}{Type: "tea_room_unlocked", ID: room.ID, Name: room.Name, RoomNumber: room.RoomNumber})
 }
 
-// -- Shared Discord webhook --------------------------------------------------
-
-// teaRoomWebhookRequest is the JSON body for PUT /api/tea-rooms/webhook.
-type teaRoomWebhookRequest struct {
-	WebhookURL string `json:"webhook_url"`
-}
-
-// handleTeaRoomWebhookSet stores the single shared Discord webhook that Tea Rooms
-// post to. An empty value clears it.
-//
-//	Endpoint:  PUT /api/tea-rooms/webhook
-//	Auth:      admin, or a user granted teahouse-tea-rooms
-//	Response:  200 {"webhook_url": "..."}
-func (s *Server) handleTeaRoomWebhookSet(w http.ResponseWriter, r *http.Request) {
-	if !s.requirePermission(w, r, permTeahouseTeaRooms) {
-		return
-	}
-	req, err := readJSON[teaRoomWebhookRequest](w, r)
-	if err != nil {
-		writeError(w, http.StatusBadRequest, "Invalid JSON")
-		return
-	}
-	webhook := strings.TrimSpace(req.WebhookURL)
-	// A provided webhook must be a Discord webhook so the server can't be pointed at
-	// an arbitrary outbound host. Empty clears it.
-	if webhook != "" && !isDiscordWebhookURL(webhook) {
-		writeError(w, http.StatusBadRequest, "Discord webhook URLs must look like https://discord.com/api/webhooks/...")
-		return
-	}
-	if err := s.store.SetSetting(teaRoomWebhookSettingKey, webhook); err != nil {
-		writeInternalError(w, "save tea room webhook", err)
-		return
-	}
-	writeJSON(w, http.StatusOK, model.TeaRoomWebhookResponse{WebhookURL: webhook})
-}
-
 // -- Public API (cross-origin, read-only) ------------------------------------
 
 // handleTeaRoomsPublic returns every tea room for an external site (e.g. a Carrd
 // embed). Unauthenticated and cross-origin (`Access-Control-Allow-Origin: *`); the
-// data is non-sensitive room availability/pricing and carries no webhook.
+// data is non-sensitive room availability/pricing, and never carries Discord posts.
 //
 //	Endpoint:  GET /api/tea-rooms/public
 //	Auth:      public
@@ -550,32 +562,32 @@ func (s *Server) handleTeaRoomPublic(w http.ResponseWriter, r *http.Request) {
 // the open/closed status. Hashtags render in the footer, always capitalized. The
 // room image renders full-width at the bottom, and the accent colour comes from
 // the room (brand default when unset).
-func buildTeaRoomEmbed(t model.TeaRoom) discordEmbed {
-	b := newEmbed().title(t.Name).colorHex(t.Color)
+func buildTeaRoomEmbed(t model.TeaRoom) discord.Embed {
+	b := discord.NewEmbed().Title(t.Name).ColorHex(t.Color)
 
 	// Body: the markdown description.
-	b.description(discordMarkdown(strings.TrimSpace(t.Description)))
+	b.Description(discordMarkdown(strings.TrimSpace(t.Description)))
 
 	// Cost - full price, or the fixed 50%-off price plus a note when discounted.
 	// Inline so the room number + status sit beside it.
 	if t.Discounted {
-		b.field("💰 Cost", fmt.Sprintf("~~%s gil~~ **%s gil**/half hour\n**Currently Discounted!**",
+		b.Field("💰 Cost", fmt.Sprintf("~~%s gil~~ **%s gil**/half hour\n**Currently Discounted!**",
 			formatGil(t.CostPerHalfHour), formatGil(t.CostPerHalfHour/2)), true)
 	} else {
-		b.field("💰 Cost", fmt.Sprintf("%s gil/half hour", formatGil(t.CostPerHalfHour)), true)
+		b.Field("💰 Cost", fmt.Sprintf("%s gil/half hour", formatGil(t.CostPerHalfHour)), true)
 	}
 
 	// Room number + open/closed status, inline beside the cost.
-	b.field("🔢 Room Number", t.RoomNumber, true)
-	b.field("🚪 Status", boolLabel(t.Open, "Open", "Closed"), true)
+	b.Field("🔢 Room Number", t.RoomNumber, true)
+	b.Field("🚪 Status", boolLabel(t.Open, "Open", "Closed"), true)
 
 	// Hashtags in the footer, always capitalized (e.g. "#Cozy #Private").
 	if tags := strings.TrimSpace(t.Hashtags); tags != "" {
-		b.footer(capitalizeHashtags(tags))
+		b.Footer(capitalizeHashtags(tags))
 	}
 
-	b.image(t.Image)
-	return b.build()
+	b.Image(t.Image)
+	return b.Build()
 }
 
 // boolLabel returns yes when b is true, else no - a tiny helper for the embed's

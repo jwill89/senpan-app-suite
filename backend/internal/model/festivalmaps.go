@@ -221,7 +221,7 @@ type PublicFestivalMapsResponse struct {
 
 // PublicStallAffiliate is the affiliate card shown when a visitor opens a stall:
 // who runs it and where to find them. Deliberately a subset of Affiliate - the
-// Discord webhook, embed color and admin sort order stay out of a public payload.
+// Discord post, embed color and admin sort order stay out of a public payload.
 type PublicStallAffiliate struct {
 	Name        string   `json:"name"`
 	Subtitle    string   `json:"subtitle"`

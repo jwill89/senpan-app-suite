@@ -55,10 +55,8 @@ import type {
   StatusResponse,
   AffiliatesResponse,
   AffiliateResponse,
-  AffiliateWebhookResponse,
   TeaRoomsResponse,
   TeaRoomResponse,
-  TeaRoomWebhookResponse,
   StampRalliesResponse,
   StampRallyResponse,
   StampRallyDetailResponse,
@@ -92,9 +90,6 @@ import type {
   AnnouncementTypesResponse,
   AnnouncementTypeResponse,
   AnnouncementTypeForm,
-  AnnouncementRolesResponse,
-  AnnouncementRoleResponse,
-  AnnouncementRoleForm,
   AnnouncementsResponse,
   AnnouncementResponse,
   ImageCategoriesResponse,
@@ -115,6 +110,15 @@ import type {
   CarrdUploadResponse,
   LogsResponse,
   LogLevelResponse,
+  DiscordStatusResponse,
+  DiscordChannelsResponse,
+  DiscordRolesResponse,
+  DiscordTestResponse,
+  DiscordImportResponse,
+  DiscordLegacyCleanupResponse,
+  DiscordDestinationResponse,
+  DiscordPostResult,
+  RepostMode,
 } from '@/types/api'
 import type { AppSettings } from '@/types/api'
 
@@ -269,6 +273,46 @@ export const endpoints = {
     },
     /** POST /api/logs/level - set the runtime minimum log level (live DEBUG toggle). */
     setLevel: (level: string) => apiPost<LogLevelResponse>('logs/level', { level }),
+  },
+
+  // -- Discord bot (System -> Discord is admin-only; the lists serve every picker) --
+  discord: {
+    /** GET /api/discord/status - token/connection/server state (never the token). */
+    status: () => apiGet<DiscordStatusResponse>('discord/status'),
+    /** PUT /api/discord/token - check the token with Discord, store it sealed, connect. */
+    setToken: (token: string) => apiPut<DiscordStatusResponse>('discord/token', { token }),
+    /** DELETE /api/discord/token - forget the token and take the bot offline. */
+    clearToken: () => apiDelete<DiscordStatusResponse>('discord/token'),
+    /** PUT /api/discord/config - server, application, status text, public URL, test mode. */
+    saveConfig: (config: {
+      guild_id: string
+      application_id: string
+      status_text: string
+      public_base_url: string
+      test_mode: boolean
+      test_channel_id: string
+    }) => apiPut<DiscordStatusResponse>('discord/config', config),
+    /** POST /api/discord/test - post a test message to a channel. */
+    test: (channelId: string) =>
+      apiPost<DiscordTestResponse>('discord/test', { channel_id: channelId }),
+    /** GET /api/discord/channels - postable channels for the channel pickers. */
+    channels: () => apiGet<DiscordChannelsResponse>('discord/channels'),
+    /** GET /api/discord/roles - pingable roles for the role pickers (no @everyone). */
+    roles: () => apiGet<DiscordRolesResponse>('discord/roles'),
+    /** GET /api/discord/destinations/{key} - where a system posts (tea-rooms, affiliates, bookclub:<slug>). */
+    destination: (key: string) =>
+      apiGet<DiscordDestinationResponse>(`discord/destinations/${enc(key)}`),
+    /** PUT /api/discord/destinations/{key} - set a system's channel, ping and repost mode. */
+    saveDestination: (
+      key: string,
+      dest: { channel_id: string; mention: string; repost_mode: RepostMode },
+    ) => apiPut<DiscordDestinationResponse>(`discord/destinations/${enc(key)}`, dest),
+    /** GET /api/discord/import - what became of each old webhook (never its URL). */
+    importReport: () => apiGet<DiscordImportResponse>('discord/import'),
+    /** POST /api/discord/import/retry - look up webhooks that couldn't be reached before. */
+    retryImport: () => apiPost<DiscordImportResponse>('discord/import/retry', {}),
+    /** DELETE /api/discord/legacy-webhooks - delete our server's old webhooks, clear the report. */
+    removeOldWebhooks: () => apiDelete<DiscordLegacyCleanupResponse>('discord/legacy-webhooks'),
   },
 
   // -- Cards (hybrid REST) ------------------------------------------------------
@@ -539,7 +583,7 @@ export const endpoints = {
 
   // -- Affiliates (admin) -------------------------------------------------------
   affiliates: {
-    /** GET /api/affiliates - all affiliates + the shared Discord webhook (admin). */
+    /** GET /api/affiliates - all affiliates; for the affiliates page also their Discord posts + destination. */
     list: () => apiGet<AffiliatesResponse>('affiliates'),
     create: (affiliate: Record<string, unknown>) =>
       apiPost<AffiliateResponse>('affiliates', affiliate),
@@ -549,16 +593,15 @@ export const endpoints = {
     /** POST /api/affiliates/reorder - persist a new drag order (top-first ids). */
     reorder: (orderedIds: number[]) =>
       apiPost<OKResponse>('affiliates/reorder', { ordered_ids: orderedIds }),
-    /** POST /api/affiliates/{id}/post - post the affiliate's embed to the shared webhook now. */
-    post: (id: number) => apiPost<AffiliateResponse>(`affiliates/${id}/post`, undefined),
-    /** PUT /api/affiliates/webhook - set the single shared Discord webhook ('' clears). */
-    setWebhook: (webhookUrl: string) =>
-      apiPut<AffiliateWebhookResponse>('affiliates/webhook', { webhook_url: webhookUrl }),
+    /** POST /api/affiliates/{id}/post - post (or, in edit mode, update) the affiliate's Discord post. */
+    post: (id: number) => apiPost<DiscordPostResult>(`affiliates/${id}/post`, undefined),
+    /** DELETE /api/affiliates/{id}/post - take the affiliate's post down from Discord. */
+    takeDown: (id: number) => apiDelete<DiscordPostResult>(`affiliates/${id}/post`),
   },
 
   // -- Tea Rooms (admin) --------------------------------------------------------
   teaRooms: {
-    /** GET /api/tea-rooms - all rooms + the shared Discord webhook (admin/perm). */
+    /** GET /api/tea-rooms - all rooms with their Discord posts, plus where rooms post. */
     list: () => apiGet<TeaRoomsResponse>('tea-rooms'),
     /** POST /api/tea-rooms - create a room (201). */
     create: (room: Record<string, unknown>) =>
@@ -587,11 +630,10 @@ export const endpoints = {
     /** POST /api/tea-rooms/reorder - persist a new drag order (top-first ids). */
     reorder: (orderedIds: number[]) =>
       apiPost<OKResponse>('tea-rooms/reorder', { ordered_ids: orderedIds }),
-    /** POST /api/tea-rooms/{id}/post - post a room's embed to the shared webhook now. */
-    post: (id: number) => apiPost<TeaRoomResponse>(`tea-rooms/${id}/post`, undefined),
-    /** PUT /api/tea-rooms/webhook - set the single shared Discord webhook ('' clears). */
-    setWebhook: (webhookUrl: string) =>
-      apiPut<TeaRoomWebhookResponse>('tea-rooms/webhook', { webhook_url: webhookUrl }),
+    /** POST /api/tea-rooms/{id}/post - post (or, in edit mode, update) the room's Discord post. */
+    post: (id: number) => apiPost<DiscordPostResult>(`tea-rooms/${id}/post`, undefined),
+    /** DELETE /api/tea-rooms/{id}/post - take the room's post down from Discord. */
+    takeDown: (id: number) => apiDelete<DiscordPostResult>(`tea-rooms/${id}/post`),
   },
 
   // -- Festival Map (admin CRUD + the public read API) --------------------------
@@ -731,37 +773,21 @@ export const endpoints = {
 
   // -- Announcement management --------------------------------------------------
   announcements: {
-    /** GET /api/announcement-types - Discord destinations. */
+    /** GET /api/announcement-types - the named Discord destinations. */
     types: () => apiGet<AnnouncementTypesResponse>('announcement-types'),
     /** POST /api/announcement-types - create a type. */
     createType: (form: AnnouncementTypeForm) =>
       apiPost<AnnouncementTypeResponse>('announcement-types', {
         name: form.name,
-        webhook_url: form.webhook_url,
+        channel_id: form.channel_id,
       }),
     /** PUT /api/announcement-types/{id} - replace a type. */
     updateType: (id: number, form: AnnouncementTypeForm) =>
       apiPut<AnnouncementTypeResponse>(`announcement-types/${id}`, {
         name: form.name,
-        webhook_url: form.webhook_url,
+        channel_id: form.channel_id,
       }),
     deleteType: (id: number) => apiDelete(`announcement-types/${id}`),
-
-    /** GET /api/announcement-roles - taggable Discord roles. */
-    roles: () => apiGet<AnnouncementRolesResponse>('announcement-roles'),
-    /** POST /api/announcement-roles - create a taggable role. */
-    createRole: (form: AnnouncementRoleForm) =>
-      apiPost<AnnouncementRoleResponse>('announcement-roles', {
-        name: form.name,
-        role_id: form.role_id,
-      }),
-    /** PUT /api/announcement-roles/{id} - replace a taggable role. */
-    updateRole: (id: number, form: AnnouncementRoleForm) =>
-      apiPut<AnnouncementRoleResponse>(`announcement-roles/${id}`, {
-        name: form.name,
-        role_id: form.role_id,
-      }),
-    deleteRole: (id: number) => apiDelete(`announcement-roles/${id}`),
 
     /** GET /api/announcements - all announcements (filtering is client-side). */
     list: () => apiGet<AnnouncementsResponse>('announcements'),

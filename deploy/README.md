@@ -158,7 +158,14 @@ ps -o user= -C app-suite                         # not root
   rotate it (to a **new** value) in the same maintenance window as a password
   rotation - changing the secret is what forcibly logs out every outstanding
   session. The FFXIV plugin uses PAT bearer tokens, not the admin cookie, so it
-  is unaffected.
+  is unaffected. **The secret also seals the Discord bot token** stored in the
+  database, so after changing it the bot goes offline until the token is pasted
+  again on System -> Discord (the page says so).
+- **Discord bot token.** Reset it in the Developer Portal (your application ->
+  Bot -> Reset Token), then paste the new one on System -> Discord - the old one
+  stops working the moment it is reset, so do both in one go. The token is checked
+  with Discord before it is stored, and a token from a different application is
+  refused.
 - **`APPSUITE_TURNSTILE_SECRET` / `APPSUITE_TURNSTILE_SITEKEY`.** Configure the
   Cloudflare Turnstile pair (also settable as `-turnstile-secret`/`-turnstile-sitekey`
   flags) to enable the bot check on the public POST paths - login, registration,
@@ -172,6 +179,34 @@ ps -o user= -C app-suite                         # not root
   loaded with `EnvironmentFile=-/etc/senpan/senpan.env` (see the commented block in
   `deploy/senpan.service`). Rotate the secret from the Cloudflare dashboard and
   update the env file.
+
+## Discord bot
+
+Everything the app posts to Discord comes from its own bot (one Discord
+application, Administrator in the Senpan Tea House server). Setting it up needs
+nothing on the server beyond a fixed `APPSUITE_SESSION_SECRET` (above), which
+seals the stored token:
+
+1. **System -> Discord**: paste the bot token. The page shows the bot, whether it
+   is online, and whether it is in the server.
+2. If it isn't, use **Invite** (it adds the bot with Administrator, the server
+   preselected). The invite link works before a token is pasted.
+3. Pick a channel for each system: Announcement types (Announcements -> Manage
+   Types), Tea Rooms, Affiliates and each Book Club have a **Discord** button.
+
+**Test mode** (same page) sends every new post to one test channel with pings
+switched off and holds scheduled announcements until it is turned off again - use
+it for a live check after a change. A server started with `-discord-dry-run`
+posts nothing at all and only logs what it would have done.
+
+**Moving off webhooks (backend 4.0.0).** The first start of 4.0.0 migrates the
+database (schema v70) and then looks up every old webhook to find the channel it
+posted to; the result is on System -> Discord under **Webhook import**. A webhook
+that posted into another Discord server, or no longer exists, needs a channel
+picked by hand. Once posting works, **Remove old webhooks** deletes the imported
+ones from Discord. Rolling back means restoring BOTH the previous binary and the
+database snapshot `deploy.ps1` took: a 3.x binary refuses to start on a v70
+database.
 
 ## Font host (protected serving)
 

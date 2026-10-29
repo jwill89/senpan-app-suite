@@ -16,24 +16,27 @@ import (
 // garapon-draw handlers broadcast explicitly instead.
 func TestAdminMutationResource(t *testing.T) {
 	mapped := map[string]string{
-		"/api/garapons":              "garapons",
-		"/api/garapons/5/players":    "garapons",
-		"/api/raffles":               "raffles",
-		"/api/raffles/9/entries":     "raffles",
-		"/api/presets":               "presets",
-		"/api/users":                 "users",
-		"/api/announcements":         "announcements",
-		"/api/announcement-types":    "announcements",
-		"/api/announcement-roles":    "announcements",
+		"/api/garapons":                              "garapons",
+		"/api/garapons/5/players":                    "garapons",
+		"/api/raffles":                               "raffles",
+		"/api/raffles/9/entries":                     "raffles",
+		"/api/presets":                               "presets",
+		"/api/users":                                 "users",
+		"/api/announcements":                         "announcements",
+		"/api/announcement-types":                    "announcements",
+		"/api/discord/destinations/tea-rooms":        "tea-rooms",
+		"/api/discord/destinations/affiliates":       "affiliates",
+		"/api/discord/destinations/bookclub:yaoi":    "bookclub",
+		"/api/discord/token":                         "discord",
 		"/api/book-clubs/yaoi/reading-lists":         "bookclub",
 		"/api/book-clubs/yaoi/reading-lists/3/items": "bookclub",
-		"/api/winners-log":           "winners-log",
-		"/api/fonts":                 "fonts",
-		"/api/fonts/upload":          "fonts",
-		"/api/carrd/projects":        "carrd",
-		"/api/images":                "images",
-		"/api/images/upload":         "images",
-		"/api/image-categories":      "images",
+		"/api/winners-log":                           "winners-log",
+		"/api/fonts":                                 "fonts",
+		"/api/fonts/upload":                          "fonts",
+		"/api/carrd/projects":                        "carrd",
+		"/api/images":                                "images",
+		"/api/images/upload":                         "images",
+		"/api/image-categories":                      "images",
 	}
 	for path, want := range mapped {
 		got, ok := server.AdminMutationResourceForTest(path)
@@ -52,6 +55,9 @@ func TestAdminMutationResource(t *testing.T) {
 		"/api/cards",               // rich-realtime
 		"/api/styles",              // rich-realtime (style_update)
 		"/api/unknown",
+		"/api/announcement-roles",        // retired with the move to the bot
+		"/api/discord/test",              // changes nothing anyone else sees
+		"/api/discord/destinations/nope", // no such destination
 	}
 	for _, path := range excluded {
 		if got, ok := server.AdminMutationResourceForTest(path); ok {

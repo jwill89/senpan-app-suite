@@ -4,7 +4,9 @@ import "github.com/getkin/kin-openapi/openapi3"
 
 // -- small schema/builder helpers ---------------------------------------------
 
-func ref(name string) *openapi3.SchemaRef { return openapi3.NewSchemaRef("#/components/schemas/"+name, nil) }
+func ref(name string) *openapi3.SchemaRef {
+	return openapi3.NewSchemaRef("#/components/schemas/"+name, nil)
+}
 
 func desc(s *openapi3.Schema, d string) *openapi3.SchemaRef {
 	s.Description = d

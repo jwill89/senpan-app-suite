@@ -11,6 +11,7 @@ import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 import { endpoints } from '@/lib/endpoints'
 import type {
+  GaraponPublicResponse,
   Garapon,
   PublicGarapon,
   GaraponDraw,
@@ -61,6 +62,8 @@ export const useGaraponsStore = defineStore('garapons', () => {
   const publicGarapon = ref<PublicGarapon | null>(null)
   const publicPlayer = ref<GaraponPublicPlayer | null>(null)
   const publicDraws = ref<GaraponDraw[]>([])
+  /** Where the festival this drum's rally is filed under lives ('' = none). */
+  const publicFestivalLink = ref('')
   /** The most recent win (drives the "congratulations" banner). */
   const lastWin = ref<GaraponDraw | null>(null)
   const publicLoading = ref(false)
@@ -90,8 +93,8 @@ export const useGaraponsStore = defineStore('garapons', () => {
   )
   /**
    * The token of the Stamp Rally card linked to this drawing link (empty when the
-   * garapon isn't tied to a rally). It equals the garapon token, so the public view
-   * can link straight to /stamp-card/<token>.
+   * garapon isn't tied to a rally). Its own token, not the drawing one, so the
+   * public view can link straight to /stamp-card/<token>.
    */
   const publicStampCardToken = computed(() => publicPlayer.value?.stamp_card_token ?? '')
 
@@ -137,6 +140,7 @@ export const useGaraponsStore = defineStore('garapons', () => {
   function resetPlayerAdd(): void {
     playerAdd.value = {
       playerName: '',
+      // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing -- a 0 is the unset allowance of a pre-field garapon and must fall back to 1 too, as the server does
       maxDraws: selectedGarapon.value?.default_draws || 1,
     }
   }
@@ -165,7 +169,7 @@ export const useGaraponsStore = defineStore('garapons', () => {
   }
 
   function editGaraponForm(g: Garapon): void {
-    const prizes = (g.prizes || []).map((p) => ({
+    const prizes = (g.prizes ?? []).map((p) => ({
       name: p.name,
       ball_color: p.ball_color || DEFAULT_BALL_COLOR,
       rate: p.rate,
@@ -403,7 +407,24 @@ export const useGaraponsStore = defineStore('garapons', () => {
     publicGarapon.value = null
     publicPlayer.value = null
     publicDraws.value = []
+    publicFestivalLink.value = ''
     lastWin.value = null
+  }
+
+  /**
+   * Shows a drum loaded by someone else - the festival dashboard, which reads it
+   * as part of the participant's whole standing - through the same state the
+   * drawing page uses, so the one panel renders both.
+   */
+  function showPublic(
+    data: Pick<GaraponPublicResponse, 'garapon' | 'draws'> & { player: GaraponPublicPlayer | null },
+  ): void {
+    // A fresh drum, or the same one reloaded: either way the banner belongs to a
+    // draw made on THIS view, so it only survives a reload of the same player.
+    if (publicGarapon.value?.id !== data.garapon.id) lastWin.value = null
+    publicGarapon.value = data.garapon
+    publicPlayer.value = data.player
+    publicDraws.value = data.draws
   }
 
   /** Loads a player's garapon by token. Returns true on success. */
@@ -415,6 +436,7 @@ export const useGaraponsStore = defineStore('garapons', () => {
       publicGarapon.value = data.garapon
       publicPlayer.value = data.player
       publicDraws.value = data.draws
+      publicFestivalLink.value = data.festival_link ?? ''
       return true
     } catch {
       return false
@@ -469,6 +491,7 @@ export const useGaraponsStore = defineStore('garapons', () => {
     publicGarapon,
     publicPlayer,
     publicDraws,
+    publicFestivalLink,
     lastWin,
     publicLoading,
     drawing,
@@ -502,6 +525,7 @@ export const useGaraponsStore = defineStore('garapons', () => {
     copyStampCardLink,
     // public actions
     resetPublic,
+    showPublic,
     loadByToken,
     draw,
     commitDraw,

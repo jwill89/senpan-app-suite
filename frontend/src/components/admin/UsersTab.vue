@@ -162,6 +162,7 @@ onMounted(() => users.loadUsers())
       <div class="flex-toolbar mb-12">
         <h3 class="m-0"><font-awesome-icon :icon="['fad', 'users-gear']" /> Users</h3>
         <button
+          type="button"
           class="btn-view btn-sm push-right"
           title="Copy the hidden registration link to share with a new user"
           @click="copyRegistrationLink"
@@ -221,10 +222,16 @@ onMounted(() => users.loadUsers())
               <span class="text-muted text-xs">Protected account</span>
             </template>
             <template v-else>
-              <button class="btn-view btn-sm" title="Edit this account" @click="openEdit(row)">
+              <button
+                type="button"
+                class="btn-view btn-sm"
+                title="Edit this account"
+                @click="openEdit(row)"
+              >
                 <font-awesome-icon :icon="['fas', 'pen-to-square']" /> Edit
               </button>
               <button
+                type="button"
                 class="btn-danger btn-sm"
                 title="Delete this account"
                 @click="users.deleteUser(row.id, row.username)"
@@ -309,8 +316,10 @@ onMounted(() => users.loadUsers())
 
       <p v-if="editError" class="error-msg">{{ editError }}</p>
       <div class="modal-actions">
-        <button class="btn-neutral" :disabled="savingUser" @click="closeEdit">Cancel</button>
-        <button class="btn-action" :disabled="savingUser" @click="saveUser">
+        <button type="button" class="btn-neutral" :disabled="savingUser" @click="closeEdit">
+          Cancel
+        </button>
+        <button type="button" class="btn-action" :disabled="savingUser" @click="saveUser">
           <LoadingSpinner v-if="savingUser" label="Saving..." />
           <template v-else>Save Changes</template>
         </button>
@@ -323,9 +332,11 @@ onMounted(() => users.loadUsers())
 .badge-active {
   font-weight: 600;
 }
+
 .badge-inactive {
   color: var(--text-muted);
 }
+
 .badge-admin {
   color: var(--highlight);
   font-weight: 600;
@@ -336,6 +347,7 @@ onMounted(() => users.loadUsers())
   padding: 14px 0;
   border-top: 1px solid color-mix(in srgb, var(--text-muted) 22%, transparent);
 }
+
 .edit-section:first-of-type {
   border-top: none;
   padding-top: 8px;
@@ -347,6 +359,7 @@ onMounted(() => users.loadUsers())
   gap: 16px;
   margin: 12px 0;
 }
+
 .perm-group-title {
   margin: 0 0 6px;
   font-size: 0.8rem;
@@ -354,6 +367,7 @@ onMounted(() => users.loadUsers())
   letter-spacing: 0.04em;
   color: var(--text-muted);
 }
+
 .perm-option {
   display: flex;
   align-items: center;
@@ -361,6 +375,7 @@ onMounted(() => users.loadUsers())
   padding: 3px 0;
   cursor: pointer;
 }
+
 .perm-option input {
   width: auto;
   margin: 0;

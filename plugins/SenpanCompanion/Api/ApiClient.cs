@@ -65,105 +65,105 @@ public sealed class ApiClient : IDisposable
     // -- Auth -----------------------------------------------------------------
 
     public Task<AuthCheckResponse> CheckAuthAsync(CancellationToken ct = default)
-        => SendAsync<AuthCheckResponse>(HttpMethod.Get, "api/auth", null, ct);
+        => this.SendAsync<AuthCheckResponse>(HttpMethod.Get, "api/auth", null, ct);
 
     // -- Bingo: cards -----------------------------------------------------------
 
     public Task<CardsResponse> ListCardsAsync(CancellationToken ct = default)
-        => SendAsync<CardsResponse>(HttpMethod.Get, "api/cards", null, ct);
+        => this.SendAsync<CardsResponse>(HttpMethod.Get, "api/cards", null, ct);
 
     public Task<BoardResponse> GetCardBoardAsync(string id, CancellationToken ct = default)
-        => SendAsync<BoardResponse>(HttpMethod.Get, $"api/board?id={Uri.EscapeDataString(id)}&preview=1", null, ct);
+        => this.SendAsync<BoardResponse>(HttpMethod.Get, $"api/board?id={Uri.EscapeDataString(id)}&preview=1", null, ct);
 
     public Task<GenerateSingleResponse> CreateNamedCardAsync(string playerName, CancellationToken ct = default)
-        => SendAsync<GenerateSingleResponse>(HttpMethod.Post, "api/cards",
+        => this.SendAsync<GenerateSingleResponse>(HttpMethod.Post, "api/cards",
             new { player_name = playerName }, ct);
 
     public Task DeleteCardAsync(string id, CancellationToken ct = default)
-        => SendNoContentAsync(HttpMethod.Delete, $"api/cards/{Uri.EscapeDataString(id)}", null, ct);
+        => this.SendNoContentAsync(HttpMethod.Delete, $"api/cards/{Uri.EscapeDataString(id)}", null, ct);
 
     public Task<DeletedCountResponse> DeleteAllCardsAsync(CancellationToken ct = default)
-        => SendAsync<DeletedCountResponse>(HttpMethod.Delete, "api/cards/all", null, ct);
+        => this.SendAsync<DeletedCountResponse>(HttpMethod.Delete, "api/cards/all", null, ct);
 
     /// <summary>Approve a pending custom card (-> approved and auto-protected).</summary>
     public Task<OkResponse> ApproveCardAsync(string id, CancellationToken ct = default)
-        => SendAsync<OkResponse>(HttpMethod.Post, $"api/cards/{Uri.EscapeDataString(id)}/approve", null, ct);
+        => this.SendAsync<OkResponse>(HttpMethod.Post, $"api/cards/{Uri.EscapeDataString(id)}/approve", null, ct);
 
     /// <summary>Mark or unmark a card as Protected (spared by "Delete all").</summary>
     public Task<OkResponse> SetCardProtectedAsync(string id, bool isProtected, CancellationToken ct = default)
-        => SendAsync<OkResponse>(HttpMethod.Post, $"api/cards/{Uri.EscapeDataString(id)}/protect",
+        => this.SendAsync<OkResponse>(HttpMethod.Post, $"api/cards/{Uri.EscapeDataString(id)}/protect",
             new { @protected = isProtected }, ct);
 
     // -- Bingo: patterns + game -----------------------------------------------
 
     public Task<PatternsResponse> ListPatternsAsync(CancellationToken ct = default)
-        => SendAsync<PatternsResponse>(HttpMethod.Get, "api/patterns", null, ct);
+        => this.SendAsync<PatternsResponse>(HttpMethod.Get, "api/patterns", null, ct);
 
     public Task<PresetsResponse> ListPresetsAsync(CancellationToken ct = default)
-        => SendAsync<PresetsResponse>(HttpMethod.Get, "api/presets", null, ct);
+        => this.SendAsync<PresetsResponse>(HttpMethod.Get, "api/presets", null, ct);
 
     public Task<FrequentWinnersResponse> FrequentWinnersAsync(CancellationToken ct = default)
-        => SendAsync<FrequentWinnersResponse>(HttpMethod.Get, "api/winners-log/frequent", null, ct);
+        => this.SendAsync<FrequentWinnersResponse>(HttpMethod.Get, "api/winners-log/frequent", null, ct);
 
     public Task<WinnersLogResponse> WinnersLogAsync(int page, int perPage, string sort = "logged_at", string dir = "desc", CancellationToken ct = default)
-        => SendAsync<WinnersLogResponse>(HttpMethod.Get,
+        => this.SendAsync<WinnersLogResponse>(HttpMethod.Get,
             $"api/winners-log?page={page}&per_page={perPage}&sort={Uri.EscapeDataString(sort)}&dir={Uri.EscapeDataString(dir)}", null, ct);
 
     // Per-entry delete only - the plugin deliberately exposes no "clear all" for
     // the winners log, so it can't be wiped from in-game. Returns no body (204).
     public Task DeleteWinnersLogEntryAsync(long id, CancellationToken ct = default)
-        => SendNoContentAsync(HttpMethod.Delete, $"api/winners-log/{id}", null, ct);
+        => this.SendNoContentAsync(HttpMethod.Delete, $"api/winners-log/{id}", null, ct);
 
     public Task<GameStateResponse> GetGameAsync(CancellationToken ct = default)
-        => SendAsync<GameStateResponse>(HttpMethod.Get, "api/game", null, ct);
+        => this.SendAsync<GameStateResponse>(HttpMethod.Get, "api/game", null, ct);
 
     // Starts a game, optionally with the automatic-draw loop running (auto) at the
     // given seconds between draws (autoInterval, the "Time Between Calls" setting).
     public Task<GameStateResponse> StartGameAsync(int[] patternIds, bool auto, int autoInterval, CancellationToken ct = default)
-        => SendAsync<GameStateResponse>(HttpMethod.Post, "api/game/start",
+        => this.SendAsync<GameStateResponse>(HttpMethod.Post, "api/game/start",
             new { pattern_ids = patternIds, auto, auto_interval = autoInterval }, ct);
 
     public Task<DrawResult> DrawAsync(int delaySeconds, CancellationToken ct = default)
-        => SendAsync<DrawResult>(HttpMethod.Post, "api/game/draw",
+        => this.SendAsync<DrawResult>(HttpMethod.Post, "api/game/draw",
             new { delay = delaySeconds }, ct);
 
     public Task<OkResponse> EndGameAsync(string[] validWinnerIds, CancellationToken ct = default)
-        => SendAsync<OkResponse>(HttpMethod.Post, "api/game/end",
+        => this.SendAsync<OkResponse>(HttpMethod.Post, "api/game/end",
             new { valid_winner_ids = validWinnerIds }, ct);
 
     // Answers the half-time prompt: minigame=true alerts players about a mini-game
     // (auto stays paused); false declines it and resumes auto if it was paused.
     public Task<OkResponse> TriggerHalftimeAsync(bool minigame, CancellationToken ct = default)
-        => SendAsync<OkResponse>(HttpMethod.Post, "api/game/halftime", new { minigame }, ct);
+        => this.SendAsync<OkResponse>(HttpMethod.Post, "api/game/halftime", new { minigame }, ct);
 
     public Task<OkResponse> UpdateGameDetailsAsync(string details, CancellationToken ct = default)
-        => SendAsync<OkResponse>(HttpMethod.Patch, "api/game", new { details }, ct);
+        => this.SendAsync<OkResponse>(HttpMethod.Patch, "api/game", new { details }, ct);
 
     // Switches the "It's Yoever" reaction on/off for the current game. The server
     // broadcasts a yoever_config message so every client (and admin) stays in sync.
     public Task<OkResponse> SetYoeverEnabledAsync(bool enabled, CancellationToken ct = default)
-        => SendAsync<OkResponse>(HttpMethod.Patch, "api/game", new { yoever_enabled = enabled }, ct);
+        => this.SendAsync<OkResponse>(HttpMethod.Patch, "api/game", new { yoever_enabled = enabled }, ct);
 
     // Switches the automatic-draw loop on/off for the current game. The server
     // broadcasts an auto_config message so every admin surface stays in sync.
     public Task<OkResponse> SetAutoEnabledAsync(bool enabled, CancellationToken ct = default)
-        => SendAsync<OkResponse>(HttpMethod.Patch, "api/game", new { auto_enabled = enabled }, ct);
+        => this.SendAsync<OkResponse>(HttpMethod.Patch, "api/game", new { auto_enabled = enabled }, ct);
 
     // Adjusts the seconds between automatic draws for the current game (live; never
     // written back to a preset).
     public Task<OkResponse> SetAutoIntervalAsync(int seconds, CancellationToken ct = default)
-        => SendAsync<OkResponse>(HttpMethod.Patch, "api/game", new { auto_interval = seconds }, ct);
+        => this.SendAsync<OkResponse>(HttpMethod.Patch, "api/game", new { auto_interval = seconds }, ct);
 
     // -- Raffles --------------------------------------------------------------
 
     public Task<RafflesResponse> ListRafflesAsync(CancellationToken ct = default)
-        => SendAsync<RafflesResponse>(HttpMethod.Get, "api/raffles", null, ct);
+        => this.SendAsync<RafflesResponse>(HttpMethod.Get, "api/raffles", null, ct);
 
     public Task<RaffleDetailResponse> GetRaffleAsync(long id, CancellationToken ct = default)
-        => SendAsync<RaffleDetailResponse>(HttpMethod.Get, $"api/raffles/{id}", null, ct);
+        => this.SendAsync<RaffleDetailResponse>(HttpMethod.Get, $"api/raffles/{id}", null, ct);
 
     public Task<RaffleEntryResponse> AddRaffleEntryAsync(long raffleId, string characterName, string world, int numEntries, bool paid, CancellationToken ct = default)
-        => SendAsync<RaffleEntryResponse>(HttpMethod.Post, $"api/raffles/{raffleId}/entries",
+        => this.SendAsync<RaffleEntryResponse>(HttpMethod.Post, $"api/raffles/{raffleId}/entries",
             new { character_name = characterName, world, num_entries = numEntries, paid }, ct);
 
     /// <summary>
@@ -178,30 +178,30 @@ public sealed class ApiClient : IDisposable
     /// nothing settled and nothing waived.
     /// </summary>
     public Task<RaffleEntryResponse> MarkRaffleEntryPaidAsync(long raffleId, long entryId, bool paid, int paidEntries = 0, double amountWaived = 0, CancellationToken ct = default)
-        => SendAsync<RaffleEntryResponse>(HttpMethod.Patch, $"api/raffles/{raffleId}/entries/{entryId}",
+        => this.SendAsync<RaffleEntryResponse>(HttpMethod.Patch, $"api/raffles/{raffleId}/entries/{entryId}",
             new { paid, paid_entries = paidEntries, amount_waived = amountWaived }, ct);
 
     public Task DeleteRaffleEntryAsync(long raffleId, long entryId, CancellationToken ct = default)
-        => SendNoContentAsync(HttpMethod.Delete, $"api/raffles/{raffleId}/entries/{entryId}", null, ct);
+        => this.SendNoContentAsync(HttpMethod.Delete, $"api/raffles/{raffleId}/entries/{entryId}", null, ct);
 
     public Task<RaffleWinnerResponse> PickRaffleWinnerAsync(long raffleId, CancellationToken ct = default)
-        => SendAsync<RaffleWinnerResponse>(HttpMethod.Post, $"api/raffles/{raffleId}/pick-winner", null, ct);
+        => this.SendAsync<RaffleWinnerResponse>(HttpMethod.Post, $"api/raffles/{raffleId}/pick-winner", null, ct);
 
     public Task<RaffleWinnerResponse> PickAnotherRaffleWinnerAsync(long raffleId, CancellationToken ct = default)
-        => SendAsync<RaffleWinnerResponse>(HttpMethod.Post, $"api/raffles/{raffleId}/pick-another", null, ct);
+        => this.SendAsync<RaffleWinnerResponse>(HttpMethod.Post, $"api/raffles/{raffleId}/pick-another", null, ct);
 
     public Task<OkResponse> VerifyRaffleWinnerAsync(long raffleId, CancellationToken ct = default)
-        => SendAsync<OkResponse>(HttpMethod.Post, $"api/raffles/{raffleId}/verify-winner", null, ct);
+        => this.SendAsync<OkResponse>(HttpMethod.Post, $"api/raffles/{raffleId}/verify-winner", null, ct);
 
     // -- Garapon ----------------------------------------------------------------
 
     public Task<GaraponsResponse> ListGaraponsAsync(CancellationToken ct = default)
-        => SendAsync<GaraponsResponse>(HttpMethod.Get, "api/garapons", null, ct);
+        => this.SendAsync<GaraponsResponse>(HttpMethod.Get, "api/garapons", null, ct);
 
     // Detail carries the drawing links AND the full draw log in one call (there is
     // no separate draw-log endpoint) - both the manage and log pages read from it.
     public Task<GaraponDetailResponse> GetGaraponAsync(long id, CancellationToken ct = default)
-        => SendAsync<GaraponDetailResponse>(HttpMethod.Get, $"api/garapons/{id}", null, ct);
+        => this.SendAsync<GaraponDetailResponse>(HttpMethod.Get, $"api/garapons/{id}", null, ct);
 
     // Issues a per-player drawing link. When the garapon is linked to an open rally,
     // the server also auto-issues a paired stamp card - on its OWN token - and
@@ -213,45 +213,45 @@ public sealed class ApiClient : IDisposable
     // it from the game itself, which is the most reliable source there is. An empty
     // world is still accepted - the server splits a composed "Name @ World".
     public Task<GaraponPlayerResponse> CreateGaraponPlayerAsync(long garaponId, string playerName, string world, int maxDraws, CancellationToken ct = default)
-        => SendAsync<GaraponPlayerResponse>(HttpMethod.Post, $"api/garapons/{garaponId}/players",
+        => this.SendAsync<GaraponPlayerResponse>(HttpMethod.Post, $"api/garapons/{garaponId}/players",
             new { player_name = playerName, world, max_draws = maxDraws }, ct);
 
     // -- Stamp Rally --------------------------------------------------------------
 
     public Task<StampRalliesResponse> ListStampRalliesAsync(CancellationToken ct = default)
-        => SendAsync<StampRalliesResponse>(HttpMethod.Get, "api/stamp-rallies", null, ct);
+        => this.SendAsync<StampRalliesResponse>(HttpMethod.Get, "api/stamp-rallies", null, ct);
 
     public Task<StampRallyDetailResponse> GetStampRallyAsync(long id, CancellationToken ct = default)
-        => SendAsync<StampRallyDetailResponse>(HttpMethod.Get, $"api/stamp-rallies/{id}", null, ct);
+        => this.SendAsync<StampRallyDetailResponse>(HttpMethod.Get, $"api/stamp-rallies/{id}", null, ct);
 
     // World as above: sent when known so the card matches the same person's other
     // records, and optional because staff may issue one without it.
     public Task<StampRallyCardResponse> CreateStampRallyCardAsync(long rallyId, string participantName, string world, CancellationToken ct = default)
-        => SendAsync<StampRallyCardResponse>(HttpMethod.Post, $"api/stamp-rallies/{rallyId}/cards",
+        => this.SendAsync<StampRallyCardResponse>(HttpMethod.Post, $"api/stamp-rallies/{rallyId}/cards",
             new { participant_name = participantName, world }, ct);
 
     // Pause/resume one stall (stamp_rally_stamps.paused). The 200 body echoes the new
     // paused value; callers refetch detail, so OkResponse suffices (extra field ignored).
     public Task<OkResponse> SetStampPausedAsync(long rallyId, long stampId, bool paused, CancellationToken ct = default)
-        => SendAsync<OkResponse>(HttpMethod.Patch, $"api/stamp-rallies/{rallyId}/stamps/{stampId}",
+        => this.SendAsync<OkResponse>(HttpMethod.Patch, $"api/stamp-rallies/{rallyId}/stamps/{stampId}",
             new { paused }, ct);
 
     public Task<StampRallyLogsResponse> StampRallyLogsAsync(long id, CancellationToken ct = default)
-        => SendAsync<StampRallyLogsResponse>(HttpMethod.Get, $"api/stamp-rallies/{id}/logs", null, ct);
+        => this.SendAsync<StampRallyLogsResponse>(HttpMethod.Get, $"api/stamp-rallies/{id}/logs", null, ct);
 
     // -- Tea Rooms --------------------------------------------------------------
 
     public Task<TeaRoomsResponse> ListTeaRoomsAsync(CancellationToken ct = default)
-        => SendAsync<TeaRoomsResponse>(HttpMethod.Get, "api/tea-rooms", null, ct);
+        => this.SendAsync<TeaRoomsResponse>(HttpMethod.Get, "api/tea-rooms", null, ct);
 
     // PATCH /api/tea-rooms/{id} is a partial update: the server leaves any omitted
     // flag unchanged, so each toggle sends only its own field. Both echo the saved
     // room, which the caller swaps back into its list.
     public Task<TeaRoomResponse> SetTeaRoomOpenAsync(long id, bool open, CancellationToken ct = default)
-        => SendAsync<TeaRoomResponse>(HttpMethod.Patch, $"api/tea-rooms/{id}", new { open }, ct);
+        => this.SendAsync<TeaRoomResponse>(HttpMethod.Patch, $"api/tea-rooms/{id}", new { open }, ct);
 
     public Task<TeaRoomResponse> SetTeaRoomDiscountedAsync(long id, bool discounted, CancellationToken ct = default)
-        => SendAsync<TeaRoomResponse>(HttpMethod.Patch, $"api/tea-rooms/{id}", new { discounted }, ct);
+        => this.SendAsync<TeaRoomResponse>(HttpMethod.Patch, $"api/tea-rooms/{id}", new { discounted }, ct);
 
     /// <summary>
     /// Locks or unlocks a room. <paramref name="lockedUntil"/> is a UTC RFC-3339
@@ -261,7 +261,7 @@ public sealed class ApiClient : IDisposable
     /// it server-side anyway.
     /// </summary>
     public Task<TeaRoomResponse> SetTeaRoomLockAsync(long id, bool locked, string lockedUntil, CancellationToken ct = default)
-        => SendAsync<TeaRoomResponse>(HttpMethod.Patch, $"api/tea-rooms/{id}",
+        => this.SendAsync<TeaRoomResponse>(HttpMethod.Patch, $"api/tea-rooms/{id}",
             new { locked, locked_until = lockedUntil }, ct);
 
     // -- Transport ------------------------------------------------------------
@@ -271,8 +271,8 @@ public sealed class ApiClient : IDisposable
         // Link the caller's token with the client lifetime so in-flight requests
         // cancel when the plugin unloads.
         using var linked = CancellationTokenSource.CreateLinkedTokenSource(this.lifetime.Token, ct);
-        using var req = new HttpRequestMessage(method, BuildUrl(path));
-        ApplyAuth(req);
+        using var req = new HttpRequestMessage(method, this.BuildUrl(path));
+        this.ApplyAuth(req);
         if (body != null)
             req.Content = new StringContent(JsonSerializer.Serialize(body, Json), Encoding.UTF8, "application/json");
 
@@ -298,8 +298,8 @@ public sealed class ApiClient : IDisposable
     private async Task SendNoContentAsync(HttpMethod method, string path, object? body, CancellationToken ct)
     {
         using var linked = CancellationTokenSource.CreateLinkedTokenSource(this.lifetime.Token, ct);
-        using var req = new HttpRequestMessage(method, BuildUrl(path));
-        ApplyAuth(req);
+        using var req = new HttpRequestMessage(method, this.BuildUrl(path));
+        this.ApplyAuth(req);
         if (body != null)
             req.Content = new StringContent(JsonSerializer.Serialize(body, Json), Encoding.UTF8, "application/json");
 
@@ -348,7 +348,9 @@ public sealed class ApiClient : IDisposable
             if (doc.RootElement.ValueKind == JsonValueKind.Object &&
                 doc.RootElement.TryGetProperty("error", out var err) &&
                 err.ValueKind == JsonValueKind.String)
+            {
                 return err.GetString();
+            }
         }
         catch (JsonException)
         {

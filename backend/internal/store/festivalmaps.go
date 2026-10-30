@@ -1,8 +1,10 @@
 package store
 
 import (
+	"context"
 	"database/sql"
 	"errors"
+	"strconv"
 
 	"app-suite/internal/model"
 )
@@ -37,8 +39,8 @@ func decodeEventTimes(raw string) []model.EventTime {
 
 // ListFestivalMaps returns every map, newest first, each with its stall count.
 // Stalls themselves are omitted (use GetFestivalMap).
-func (s *Store) ListFestivalMaps() ([]model.FestivalMap, error) {
-	rows, err := s.db.Query(`SELECT m.id, m.title, m.slug, m.description, m.times, m.map_image, m.status, m.created_at,
+func (s *Store) ListFestivalMaps(ctx context.Context) ([]model.FestivalMap, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT m.id, m.title, m.slug, m.description, m.times, m.map_image, m.status, m.created_at,
 			COALESCE((SELECT COUNT(*) FROM festival_stalls st WHERE st.map_id = m.id), 0)
 		FROM festival_maps m ORDER BY m.created_at DESC, m.id DESC`)
 	if err != nil {
@@ -63,26 +65,26 @@ func (s *Store) ListFestivalMaps() ([]model.FestivalMap, error) {
 
 // GetFestivalMap returns a single map with its stalls (affiliate name joined).
 // Returns nil if not found.
-func (s *Store) GetFestivalMap(id int64) (*model.FestivalMap, error) {
-	return s.getFestivalMapWhere(`id = ?`, id)
+func (s *Store) GetFestivalMap(ctx context.Context, id int64) (*model.FestivalMap, error) {
+	return s.getFestivalMapWhere(ctx, `id = ?`, id)
 }
 
 // GetFestivalMapBySlug returns the map carrying a shortcode, or nil if none does.
 // The empty slug is never matched - it means "no shortcode", which most maps
 // share, so looking one up would return an arbitrary map rather than nothing.
-func (s *Store) GetFestivalMapBySlug(slug string) (*model.FestivalMap, error) {
+func (s *Store) GetFestivalMapBySlug(ctx context.Context, slug string) (*model.FestivalMap, error) {
 	if slug == "" {
 		return nil, nil
 	}
-	return s.getFestivalMapWhere(`slug = ?`, slug)
+	return s.getFestivalMapWhere(ctx, `slug = ?`, slug)
 }
 
 // getFestivalMapWhere loads one map (with its stalls) by an arbitrary single-arg
 // predicate, shared by the id and slug lookups. Returns nil if no row matches.
-func (s *Store) getFestivalMapWhere(where string, arg any) (*model.FestivalMap, error) {
+func (s *Store) getFestivalMapWhere(ctx context.Context, where string, arg any) (*model.FestivalMap, error) {
 	var m model.FestivalMap
 	var times string
-	err := s.db.QueryRow(`SELECT id, title, slug, description, times, map_image, status, created_at
+	err := s.db.QueryRowContext(ctx, `SELECT id, title, slug, description, times, map_image, status, created_at
 		FROM festival_maps WHERE `+where, arg).
 		Scan(&m.ID, &m.Title, &m.Slug, &m.Description, &times, &m.MapImage, &m.Status, &m.CreatedAt)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -93,7 +95,7 @@ func (s *Store) getFestivalMapWhere(where string, arg any) (*model.FestivalMap, 
 	}
 	m.Times = decodeEventTimes(times)
 	m.Status = model.NormalizeMapStatus(m.Status)
-	stalls, err := s.ListFestivalStalls(m.ID)
+	stalls, err := s.ListFestivalStalls(ctx, m.ID)
 	if err != nil {
 		return nil, err
 	}
@@ -105,8 +107,8 @@ func (s *Store) getFestivalMapWhere(where string, arg any) (*model.FestivalMap, 
 // occupants standing in it (affiliate name joined; empty means the venue's own
 // booth, resolved for display on the frontend). Occupants are fetched for the
 // whole map in one query rather than per pitch.
-func (s *Store) ListFestivalStalls(mapID int64) ([]model.FestivalStall, error) {
-	rows, err := s.db.Query(`SELECT id, map_id, shape, color, selection_color, text_color,
+func (s *Store) ListFestivalStalls(ctx context.Context, mapID int64) ([]model.FestivalStall, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT id, map_id, shape, color, selection_color, text_color,
 			pos_x, pos_y, width, height, rotation, sort_order
 		FROM festival_stalls WHERE map_id = ? ORDER BY sort_order ASC, id ASC`, mapID)
 	if err != nil {
@@ -129,7 +131,7 @@ func (s *Store) ListFestivalStalls(mapID int64) ([]model.FestivalStall, error) {
 		return nil, err
 	}
 
-	byStall, err := s.listOccupantsForMap(mapID)
+	byStall, err := s.listOccupantsForMap(ctx, mapID)
 	if err != nil {
 		return nil, err
 	}
@@ -143,8 +145,8 @@ func (s *Store) ListFestivalStalls(mapID int64) ([]model.FestivalStall, error) {
 
 // listOccupantsForMap loads every occupant on a map's pitches in display order,
 // keyed by pitch id - one query for the whole plan rather than one per pitch.
-func (s *Store) listOccupantsForMap(mapID int64) (map[int64][]model.FestivalStallOccupant, error) {
-	rows, err := s.db.Query(`SELECT o.id, o.stall_id, o.affiliate_id, COALESCE(a.name, ''),
+func (s *Store) listOccupantsForMap(ctx context.Context, mapID int64) (map[int64][]model.FestivalStallOccupant, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT o.id, o.stall_id, o.affiliate_id, COALESCE(a.name, ''),
 			o.title, o.description, o.event_carrd, o.stall_type, o.type_label, o.times, o.sort_order
 		FROM festival_stall_occupants o
 		JOIN festival_stalls st ON st.id = o.stall_id
@@ -178,14 +180,14 @@ func (s *Store) listOccupantsForMap(mapID int64) (map[int64][]model.FestivalStal
 
 // CreateFestivalMap inserts a new map and its stalls in one transaction, returning
 // the new map's ID.
-func (s *Store) CreateFestivalMap(m *model.FestivalMap) (int64, error) {
-	tx, err := s.beginImmediate()
+func (s *Store) CreateFestivalMap(ctx context.Context, m *model.FestivalMap) (int64, error) {
+	tx, err := s.beginImmediate(ctx)
 	if err != nil {
 		return 0, err
 	}
 	defer func() { _ = tx.Rollback() }()
 
-	res, err := tx.Exec(`INSERT INTO festival_maps (title, slug, description, times, map_image, status)
+	res, err := tx.ExecContext(ctx, `INSERT INTO festival_maps (title, slug, description, times, map_image, status)
 		VALUES (?, ?, ?, ?, ?, ?)`,
 		m.Title, m.Slug, m.Description, encodeEventTimes(m.Times), m.MapImage, m.Status)
 	if err != nil {
@@ -196,7 +198,7 @@ func (s *Store) CreateFestivalMap(m *model.FestivalMap) (int64, error) {
 		return 0, err
 	}
 	for i, st := range m.Stalls {
-		if _, err := insertFestivalStall(tx, id, st, i); err != nil {
+		if _, err := insertFestivalStall(ctx, tx, id, st, i); err != nil {
 			return 0, err
 		}
 	}
@@ -216,14 +218,14 @@ func (s *Store) CreateFestivalMap(m *model.FestivalMap) (int64, error) {
 // False leaves them exactly as they are - see the note on UpdateStampRally about
 // why "the request didn't mention them" and "the request wants none" have to be
 // different answers.
-func (s *Store) UpdateFestivalMap(m *model.FestivalMap, replaceStalls bool) error {
-	tx, err := s.beginImmediate()
+func (s *Store) UpdateFestivalMap(ctx context.Context, m *model.FestivalMap, replaceStalls bool) error {
+	tx, err := s.beginImmediate(ctx)
 	if err != nil {
 		return err
 	}
 	defer func() { _ = tx.Rollback() }()
 
-	if _, err := tx.Exec(`UPDATE festival_maps SET title = ?, slug = ?, description = ?, times = ?, map_image = ?
+	if _, err := tx.ExecContext(ctx, `UPDATE festival_maps SET title = ?, slug = ?, description = ?, times = ?, map_image = ?
 		WHERE id = ?`,
 		m.Title, m.Slug, m.Description, encodeEventTimes(m.Times), m.MapImage, m.ID); err != nil {
 		return err
@@ -236,20 +238,20 @@ func (s *Store) UpdateFestivalMap(m *model.FestivalMap, replaceStalls bool) erro
 	keep := make(map[int64]bool, len(m.Stalls))
 	for i, st := range m.Stalls {
 		if st.ID > 0 {
-			if err := updateFestivalStall(tx, m.ID, st, i); err != nil {
+			if err := updateFestivalStall(ctx, tx, m.ID, st, i); err != nil {
 				return err
 			}
 			keep[st.ID] = true
 			continue
 		}
-		newID, err := insertFestivalStall(tx, m.ID, st, i)
+		newID, err := insertFestivalStall(ctx, tx, m.ID, st, i)
 		if err != nil {
 			return err
 		}
 		keep[newID] = true
 	}
 
-	existing, err := tx.Query(`SELECT id FROM festival_stalls WHERE map_id = ?`, m.ID)
+	existing, err := tx.QueryContext(ctx, `SELECT id FROM festival_stalls WHERE map_id = ?`, m.ID)
 	if err != nil {
 		return err
 	}
@@ -269,15 +271,15 @@ func (s *Store) UpdateFestivalMap(m *model.FestivalMap, replaceStalls bool) erro
 		return err
 	}
 	for _, id := range toDelete {
-		if _, err := tx.Exec(`UPDATE stamp_rally_stamps SET occupant_id = NULL WHERE occupant_id IN
+		if _, err := tx.ExecContext(ctx, `UPDATE stamp_rally_stamps SET occupant_id = NULL WHERE occupant_id IN
 			(SELECT id FROM festival_stall_occupants WHERE stall_id = ?)`, id); err != nil {
 			return err
 		}
-		if _, err := tx.Exec(`UPDATE raffles SET occupant_id = NULL WHERE occupant_id IN
+		if _, err := tx.ExecContext(ctx, `UPDATE raffles SET occupant_id = NULL WHERE occupant_id IN
 			(SELECT id FROM festival_stall_occupants WHERE stall_id = ?)`, id); err != nil {
 			return err
 		}
-		if _, err := tx.Exec(`DELETE FROM festival_stalls WHERE id = ?`, id); err != nil {
+		if _, err := tx.ExecContext(ctx, `DELETE FROM festival_stalls WHERE id = ?`, id); err != nil {
 			return err
 		}
 	}
@@ -286,8 +288,8 @@ func (s *Store) UpdateFestivalMap(m *model.FestivalMap, replaceStalls bool) erro
 
 // insertFestivalStall inserts one pitch at the given sort order along with its
 // occupants, returning its ID.
-func insertFestivalStall(tx *sql.Tx, mapID int64, st model.FestivalStall, sortOrder int) (int64, error) {
-	res, err := tx.Exec(`INSERT INTO festival_stalls
+func insertFestivalStall(ctx context.Context, tx *sql.Tx, mapID int64, st model.FestivalStall, sortOrder int) (int64, error) {
+	res, err := tx.ExecContext(ctx, `INSERT INTO festival_stalls
 			(map_id, shape, color, selection_color, text_color, pos_x, pos_y, width, height, rotation, sort_order)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		mapID, st.Shape, st.Color, st.SelectionColor, st.TextColor,
@@ -299,7 +301,7 @@ func insertFestivalStall(tx *sql.Tx, mapID int64, st model.FestivalStall, sortOr
 	if err != nil {
 		return 0, err
 	}
-	return id, replaceStallOccupants(tx, id, st.Occupants)
+	return id, replaceStallOccupants(ctx, tx, id, st.Occupants)
 }
 
 // updateFestivalStall updates an existing pitch's drawn form + sort order and
@@ -312,8 +314,8 @@ func insertFestivalStall(tx *sql.Tx, mapID int64, st model.FestivalStall, sortOr
 // pitch, clearing the rally stamps and raffles that named them. A zero row count
 // also catches the benign race where a concurrent save deleted the stall, which
 // otherwise resurrects its occupants as orphans.
-func updateFestivalStall(tx *sql.Tx, mapID int64, st model.FestivalStall, sortOrder int) error {
-	res, err := tx.Exec(`UPDATE festival_stalls SET shape = ?, color = ?, selection_color = ?, text_color = ?,
+func updateFestivalStall(ctx context.Context, tx *sql.Tx, mapID int64, st model.FestivalStall, sortOrder int) error {
+	res, err := tx.ExecContext(ctx, `UPDATE festival_stalls SET shape = ?, color = ?, selection_color = ?, text_color = ?,
 			pos_x = ?, pos_y = ?, width = ?, height = ?, rotation = ?, sort_order = ?
 		WHERE id = ? AND map_id = ?`,
 		st.Shape, st.Color, st.SelectionColor, st.TextColor,
@@ -329,18 +331,18 @@ func updateFestivalStall(tx *sql.Tx, mapID int64, st model.FestivalStall, sortOr
 	if n == 0 {
 		return ErrStallNotOnMap
 	}
-	return replaceStallOccupants(tx, st.ID, st.Occupants)
+	return replaceStallOccupants(ctx, tx, st.ID, st.Occupants)
 }
 
 // replaceStallOccupants reconciles a pitch's occupants BY ID - existing ids
 // updated, id==0 inserted, omitted ids deleted - rather than replacing them
 // wholesale. A stamp rally names occupants, so an occupant that survives an edit
 // has to keep the id its stamps point at.
-func replaceStallOccupants(tx *sql.Tx, stallID int64, occupants []model.FestivalStallOccupant) error {
+func replaceStallOccupants(ctx context.Context, tx *sql.Tx, stallID int64, occupants []model.FestivalStallOccupant) error {
 	keep := make(map[int64]bool, len(occupants))
 	for i, o := range occupants {
 		if o.ID > 0 {
-			if _, err := tx.Exec(`UPDATE festival_stall_occupants
+			if _, err := tx.ExecContext(ctx, `UPDATE festival_stall_occupants
 					SET affiliate_id = ?, title = ?, description = ?, event_carrd = ?,
 						stall_type = ?, type_label = ?, times = ?, sort_order = ?
 					WHERE id = ? AND stall_id = ?`,
@@ -351,7 +353,7 @@ func replaceStallOccupants(tx *sql.Tx, stallID int64, occupants []model.Festival
 			keep[o.ID] = true
 			continue
 		}
-		res, err := tx.Exec(`INSERT INTO festival_stall_occupants
+		res, err := tx.ExecContext(ctx, `INSERT INTO festival_stall_occupants
 				(stall_id, affiliate_id, title, description, event_carrd, stall_type, type_label, times, sort_order)
 			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 			stallID, nullableID(o.AffiliateID), o.Title, o.Description, o.EventCarrd,
@@ -365,14 +367,14 @@ func replaceStallOccupants(tx *sql.Tx, stallID int64, occupants []model.Festival
 		}
 		keep[newID] = true
 	}
-	return deleteMissingOccupants(tx, stallID, keep)
+	return deleteMissingOccupants(ctx, tx, stallID, keep)
 }
 
 // deleteMissingOccupants removes the pitch's occupants that the save left out,
 // clearing any rally stamp that named one first (the link is a plain column, not
 // an enforced FK - see migrateFestivalStallOccupants).
-func deleteMissingOccupants(tx *sql.Tx, stallID int64, keep map[int64]bool) error {
-	rows, err := tx.Query(`SELECT id FROM festival_stall_occupants WHERE stall_id = ?`, stallID)
+func deleteMissingOccupants(ctx context.Context, tx *sql.Tx, stallID int64, keep map[int64]bool) error {
+	rows, err := tx.QueryContext(ctx, `SELECT id FROM festival_stall_occupants WHERE stall_id = ?`, stallID)
 	if err != nil {
 		return err
 	}
@@ -392,15 +394,15 @@ func deleteMissingOccupants(tx *sql.Tx, stallID int64, keep map[int64]bool) erro
 		return err
 	}
 	for _, id := range toDelete {
-		if _, err := tx.Exec(`UPDATE stamp_rally_stamps SET occupant_id = NULL WHERE occupant_id = ?`, id); err != nil {
+		if _, err := tx.ExecContext(ctx, `UPDATE stamp_rally_stamps SET occupant_id = NULL WHERE occupant_id = ?`, id); err != nil {
 			return err
 		}
 		// A raffle assigned to this occupant keeps its map - it is still part of the
 		// festival - but loses the pitch, which no longer exists.
-		if _, err := tx.Exec(`UPDATE raffles SET occupant_id = NULL WHERE occupant_id = ?`, id); err != nil {
+		if _, err := tx.ExecContext(ctx, `UPDATE raffles SET occupant_id = NULL WHERE occupant_id = ?`, id); err != nil {
 			return err
 		}
-		if _, err := tx.Exec(`DELETE FROM festival_stall_occupants WHERE id = ?`, id); err != nil {
+		if _, err := tx.ExecContext(ctx, `DELETE FROM festival_stall_occupants WHERE id = ?`, id); err != nil {
 			return err
 		}
 	}
@@ -412,26 +414,26 @@ func deleteMissingOccupants(tx *sql.Tx, stallID int64, keep map[int64]bool) erro
 // both are plain columns, not enforced FKs (see migrateFestivalMaps) - so a rally
 // survives the deletion of the map it was authored against, with its stamps
 // falling back to their affiliates. Returns true if a row was deleted.
-func (s *Store) DeleteFestivalMap(id int64) (bool, error) {
-	tx, err := s.beginImmediate()
+func (s *Store) DeleteFestivalMap(ctx context.Context, id int64) (bool, error) {
+	tx, err := s.beginImmediate(ctx)
 	if err != nil {
 		return false, err
 	}
 	defer func() { _ = tx.Rollback() }()
 
-	if _, err := tx.Exec(`UPDATE stamp_rally_stamps SET occupant_id = NULL WHERE occupant_id IN
+	if _, err := tx.ExecContext(ctx, `UPDATE stamp_rally_stamps SET occupant_id = NULL WHERE occupant_id IN
 		(SELECT o.id FROM festival_stall_occupants o
 			JOIN festival_stalls st ON st.id = o.stall_id WHERE st.map_id = ?)`, id); err != nil {
 		return false, err
 	}
-	if _, err := tx.Exec(`UPDATE raffles SET festival_map_id = NULL, occupant_id = NULL
+	if _, err := tx.ExecContext(ctx, `UPDATE raffles SET festival_map_id = NULL, occupant_id = NULL
 		WHERE festival_map_id = ?`, id); err != nil {
 		return false, err
 	}
-	if _, err := tx.Exec(`UPDATE stamp_rallies SET festival_map_id = NULL WHERE festival_map_id = ?`, id); err != nil {
+	if _, err := tx.ExecContext(ctx, `UPDATE stamp_rallies SET festival_map_id = NULL WHERE festival_map_id = ?`, id); err != nil {
 		return false, err
 	}
-	res, err := tx.Exec(`DELETE FROM festival_maps WHERE id = ?`, id)
+	res, err := tx.ExecContext(ctx, `DELETE FROM festival_maps WHERE id = ?`, id)
 	if err != nil {
 		return false, err
 	}
@@ -444,8 +446,8 @@ func (s *Store) DeleteFestivalMap(id int64) (bool, error) {
 
 // SetFestivalMapStatus updates a map's publish status ("in_progress", "published"
 // or "closed" - see the model.MapStatus* constants).
-func (s *Store) SetFestivalMapStatus(id int64, status string) (bool, error) {
-	res, err := s.db.Exec(`UPDATE festival_maps SET status = ? WHERE id = ?`, status, id)
+func (s *Store) SetFestivalMapStatus(ctx context.Context, id int64, status string) (bool, error) {
+	res, err := s.db.ExecContext(ctx, `UPDATE festival_maps SET status = ? WHERE id = ?`, status, id)
 	if err != nil {
 		return false, err
 	}
@@ -455,8 +457,8 @@ func (s *Store) SetFestivalMapStatus(id int64, status string) (bool, error) {
 
 // ListPublishedFestivalMaps returns the published maps (newest first) with their
 // stall counts - the public list page. In-progress and closed maps never appear.
-func (s *Store) ListPublishedFestivalMaps() ([]model.FestivalMap, error) {
-	rows, err := s.db.Query(`SELECT m.id, m.title, m.slug, m.description, m.times, m.map_image, m.created_at,
+func (s *Store) ListPublishedFestivalMaps(ctx context.Context) ([]model.FestivalMap, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT m.id, m.title, m.slug, m.description, m.times, m.map_image, m.created_at,
 			COALESCE((SELECT COUNT(*) FROM festival_stalls st WHERE st.map_id = m.id), 0)
 		FROM festival_maps m WHERE m.status = ?
 		ORDER BY m.created_at DESC, m.id DESC`, model.MapStatusPublished)
@@ -509,8 +511,8 @@ type StallRaffle struct {
 // ListRafflesForMap returns the raffles assigned to a map's occupants, keyed by
 // occupant id. A pitch with more than one raffle keeps the newest, since the map
 // panel links to a single one.
-func (s *Store) ListRafflesForMap(mapID int64) (map[int64]StallRaffle, error) {
-	rows, err := s.db.Query(`SELECT r.occupant_id, r.id, r.title, r.prize_image, r.status,
+func (s *Store) ListRafflesForMap(ctx context.Context, mapID int64) (map[int64]StallRaffle, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT r.occupant_id, r.id, r.title, r.prize_image, r.status,
 			r.available_from, r.available_to
 		FROM raffles r
 		JOIN festival_stall_occupants o ON o.id = r.occupant_id
@@ -534,6 +536,29 @@ func (s *Store) ListRafflesForMap(mapID int64) (map[int64]StallRaffle, error) {
 	return byOccupant, rows.Err()
 }
 
+// FestivalLinkForRally returns the path segment that links to the festival a
+// rally is filed under - the map's shortcode, or its id when it has none - or ""
+// when the rally belongs to no festival or the map isn't published (a link to an
+// unpublished map would only 404). The same slug-else-id rule as the frontend's
+// mapPath, so the two always produce the same URL.
+func (s *Store) FestivalLinkForRally(ctx context.Context, rallyID int64) (string, error) {
+	var id int64
+	var slug string
+	err := s.db.QueryRowContext(ctx, `SELECT m.id, m.slug FROM stamp_rallies r
+		JOIN festival_maps m ON m.id = r.festival_map_id
+		WHERE r.id = ? AND m.status = ?`, rallyID, model.MapStatusPublished).Scan(&id, &slug)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", nil
+	}
+	if err != nil {
+		return "", err
+	}
+	if slug != "" {
+		return slug, nil
+	}
+	return strconv.FormatInt(id, 10), nil
+}
+
 // RallyForMap is the open stamp rally linked to a festival map, if any.
 type RallyForMap struct {
 	ID           int64
@@ -549,10 +574,10 @@ type RallyForMap struct {
 // GetOpenRallyForMap returns the open stamp rally linked to a map, or nil when the
 // map has none. A closed rally is deliberately excluded: the public map badges
 // stalls only while their rally can still be stamped.
-func (s *Store) GetOpenRallyForMap(mapID int64) (*RallyForMap, error) {
+func (s *Store) GetOpenRallyForMap(ctx context.Context, mapID int64) (*RallyForMap, error) {
 	var r RallyForMap
 	var publicSignup int
-	err := s.db.QueryRow(`SELECT id, title, public_signup, available_from, available_to
+	err := s.db.QueryRowContext(ctx, `SELECT id, title, public_signup, available_from, available_to
 		FROM stamp_rallies
 		WHERE festival_map_id = ? AND status != 'closed' ORDER BY id DESC LIMIT 1`, mapID).
 		Scan(&r.ID, &r.Title, &publicSignup, &r.AvailableFrom, &r.AvailableTo)
@@ -568,8 +593,8 @@ func (s *Store) GetOpenRallyForMap(mapID int64) (*RallyForMap, error) {
 
 // ListRallyStampsForMap returns the stamps a rally has placed on festival-map
 // occupants, keyed by occupant id. Stamps that name no occupant are skipped.
-func (s *Store) ListRallyStampsForMap(rallyID int64) (map[int64]MapStallStamp, error) {
-	rows, err := s.db.Query(`SELECT occupant_id, image FROM stamp_rally_stamps
+func (s *Store) ListRallyStampsForMap(ctx context.Context, rallyID int64) (map[int64]MapStallStamp, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT occupant_id, image FROM stamp_rally_stamps
 		WHERE rally_id = ? AND occupant_id IS NOT NULL`, rallyID)
 	if err != nil {
 		return nil, err

@@ -208,17 +208,17 @@ func TestGameService_Draw_SkipsInactiveColumns(t *testing.T) {
 	st := testStore(t)
 	gs := NewService(st)
 
-	patID, err := st.SavePattern("Postage Stamps", postageStampPattern(), 1)
+	patID, err := st.SavePattern(t.Context(), "Postage Stamps", postageStampPattern(), 1)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := gs.Start([]int{int(patID)}, false, 0); err != nil {
+	if _, err := gs.Start(t.Context(), []int{int(patID)}, false, 0); err != nil {
 		t.Fatal(err)
 	}
 
 	count := 0
 	for {
-		r, _, err := gs.Draw()
+		r, _, err := gs.Draw(t.Context())
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -293,7 +293,7 @@ func TestParseWinnersCache_Null(t *testing.T) {
 
 func testStore(t *testing.T) *store.Store {
 	t.Helper()
-	s, err := store.New(filepath.Join(t.TempDir(), "test.db"))
+	s, err := store.New(t.Context(), filepath.Join(t.TempDir(), "test.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -307,7 +307,7 @@ func testPattern5x5() [][]bool {
 		grid[i] = make([]bool, 5)
 	}
 	// Top-row pattern
-	for c := 0; c < 5; c++ {
+	for c := range 5 {
 		grid[0][c] = true
 	}
 	return grid
@@ -318,7 +318,7 @@ func TestGameService_StartAndCurrentState(t *testing.T) {
 	gs := NewService(st)
 
 	// No active game initially
-	state, winners, err := gs.CurrentState()
+	state, winners, err := gs.CurrentState(t.Context())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -330,12 +330,12 @@ func TestGameService_StartAndCurrentState(t *testing.T) {
 	}
 
 	// Create a pattern and start a game
-	patID, err := st.SavePattern("Top Row", testPattern5x5(), 1)
+	patID, err := st.SavePattern(t.Context(), "Top Row", testPattern5x5(), 1)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	gameState, err := gs.Start([]int{int(patID)}, false, 0)
+	gameState, err := gs.Start(t.Context(), []int{int(patID)}, false, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -350,7 +350,7 @@ func TestGameService_StartAndCurrentState(t *testing.T) {
 	}
 
 	// CurrentState should return the active game
-	state, _, err = gs.CurrentState()
+	state, _, err = gs.CurrentState(t.Context())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -367,7 +367,7 @@ func TestGameService_Draw(t *testing.T) {
 	gs := NewService(st)
 
 	// Draw with no active game returns nil
-	result, _, err := gs.Draw()
+	result, _, err := gs.Draw(t.Context())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -376,16 +376,16 @@ func TestGameService_Draw(t *testing.T) {
 	}
 
 	// Start a game
-	patID, err := st.SavePattern("Top Row", testPattern5x5(), 1)
+	patID, err := st.SavePattern(t.Context(), "Top Row", testPattern5x5(), 1)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := gs.Start([]int{int(patID)}, false, 0); err != nil {
+	if _, err := gs.Start(t.Context(), []int{int(patID)}, false, 0); err != nil {
 		t.Fatal(err)
 	}
 
 	// Draw a number
-	result, _, err = gs.Draw()
+	result, _, err = gs.Draw(t.Context())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -406,7 +406,7 @@ func TestGameService_Draw(t *testing.T) {
 	}
 
 	// Draw again - number should be different, call_order increments
-	result2, _, err := gs.Draw()
+	result2, _, err := gs.Draw(t.Context())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -422,18 +422,18 @@ func TestGameService_Draw_AllNumbers(t *testing.T) {
 	st := testStore(t)
 	gs := NewService(st)
 
-	patID, err := st.SavePattern("Top Row", testPattern5x5(), 1)
+	patID, err := st.SavePattern(t.Context(), "Top Row", testPattern5x5(), 1)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := gs.Start([]int{int(patID)}, false, 0); err != nil {
+	if _, err := gs.Start(t.Context(), []int{int(patID)}, false, 0); err != nil {
 		t.Fatal(err)
 	}
 
 	// Draw all 75 numbers
 	seen := make(map[int]bool)
-	for i := 0; i < 75; i++ {
-		result, _, err := gs.Draw()
+	for i := range 75 {
+		result, _, err := gs.Draw(t.Context())
 		if err != nil {
 			t.Fatalf("draw %d: %v", i+1, err)
 		}
@@ -447,7 +447,7 @@ func TestGameService_Draw_AllNumbers(t *testing.T) {
 	}
 
 	// 76th draw should return nil
-	result, _, err := gs.Draw()
+	result, _, err := gs.Draw(t.Context())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -461,7 +461,7 @@ func TestGameService_End(t *testing.T) {
 	gs := NewService(st)
 
 	// End with no active game
-	ended, err := gs.End()
+	ended, err := gs.End(t.Context())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -470,15 +470,15 @@ func TestGameService_End(t *testing.T) {
 	}
 
 	// Start and end a game
-	patID, err := st.SavePattern("Top Row", testPattern5x5(), 1)
+	patID, err := st.SavePattern(t.Context(), "Top Row", testPattern5x5(), 1)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := gs.Start([]int{int(patID)}, false, 0); err != nil {
+	if _, err := gs.Start(t.Context(), []int{int(patID)}, false, 0); err != nil {
 		t.Fatal(err)
 	}
 
-	ended, err = gs.End()
+	ended, err = gs.End(t.Context())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -487,7 +487,7 @@ func TestGameService_End(t *testing.T) {
 	}
 
 	// End again should return false
-	ended, err = gs.End()
+	ended, err = gs.End(t.Context())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -500,19 +500,19 @@ func TestGameService_StartEndsActiveGame(t *testing.T) {
 	st := testStore(t)
 	gs := NewService(st)
 
-	patID, err := st.SavePattern("Top Row", testPattern5x5(), 1)
+	patID, err := st.SavePattern(t.Context(), "Top Row", testPattern5x5(), 1)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	// Start first game
-	g1, err := gs.Start([]int{int(patID)}, false, 0)
+	g1, err := gs.Start(t.Context(), []int{int(patID)}, false, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	// Start second game - should end the first
-	g2, err := gs.Start([]int{int(patID)}, false, 0)
+	g2, err := gs.Start(t.Context(), []int{int(patID)}, false, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -521,7 +521,7 @@ func TestGameService_StartEndsActiveGame(t *testing.T) {
 	}
 
 	// Only one active game should exist
-	state, _, err := gs.CurrentState()
+	state, _, err := gs.CurrentState(t.Context())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -542,24 +542,24 @@ func TestGameService_WinnerComputation(t *testing.T) {
 		{4, 19, 34, 49, 64},
 		{5, 20, 35, 50, 65},
 	}
-	if err := st.SaveCard("WIN001", board); err != nil {
+	if err := st.SaveCard(t.Context(), "WIN001", board); err != nil {
 		t.Fatal(err)
 	}
 
 	// Top-row pattern: requires 1, 16, 31, 46, 61
-	patID, err := st.SavePattern("Top Row", testPattern5x5(), 1)
+	patID, err := st.SavePattern(t.Context(), "Top Row", testPattern5x5(), 1)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if _, err := gs.Start([]int{int(patID)}, false, 0); err != nil {
+	if _, err := gs.Start(t.Context(), []int{int(patID)}, false, 0); err != nil {
 		t.Fatal(err)
 	}
 
 	// Draw all 75 numbers to guarantee the top-row numbers are called
 	var lastResult *DrawResult
-	for i := 0; i < 75; i++ {
-		r, _, err := gs.Draw()
+	for range 75 {
+		r, _, err := gs.Draw(t.Context())
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -592,29 +592,29 @@ func TestGameService_InvalidateCardCache(t *testing.T) {
 
 	// Populate cache by starting a game and drawing
 	board := GenerateBoard()
-	if err := st.SaveCard("CACHE1", board); err != nil {
+	if err := st.SaveCard(t.Context(), "CACHE1", board); err != nil {
 		t.Fatal(err)
 	}
 
-	patID, err := st.SavePattern("Test", testPattern5x5(), 1)
+	patID, err := st.SavePattern(t.Context(), "Test", testPattern5x5(), 1)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := gs.Start([]int{int(patID)}, false, 0); err != nil {
+	if _, err := gs.Start(t.Context(), []int{int(patID)}, false, 0); err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := gs.Draw(); err != nil {
+	if _, _, err := gs.Draw(t.Context()); err != nil {
 		t.Fatal(err)
 	}
 
 	// Invalidate and add a new card
 	gs.InvalidateCardCache()
-	if err := st.SaveCard("CACHE2", GenerateBoard()); err != nil {
+	if err := st.SaveCard(t.Context(), "CACHE2", GenerateBoard()); err != nil {
 		t.Fatal(err)
 	}
 
 	// Draw again - cache should be repopulated with both cards
-	result, _, err := gs.Draw()
+	result, _, err := gs.Draw(t.Context())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -684,14 +684,14 @@ func TestGameService_ComputeWinners_NoCardsOrPatterns(t *testing.T) {
 	gs := NewService(st)
 
 	// No cards in DB, start a game and draw - should return empty winners
-	patID, err := st.SavePattern("Test", testPattern5x5(), 1)
+	patID, err := st.SavePattern(t.Context(), "Test", testPattern5x5(), 1)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := gs.Start([]int{int(patID)}, false, 0); err != nil {
+	if _, err := gs.Start(t.Context(), []int{int(patID)}, false, 0); err != nil {
 		t.Fatal(err)
 	}
-	result, _, err := gs.Draw()
+	result, _, err := gs.Draw(t.Context())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -727,16 +727,16 @@ func TestDrawResult_LetterMatchesNumber(t *testing.T) {
 	st := testStore(t)
 	gs := NewService(st)
 
-	patID, err := st.SavePattern("Test", testPattern5x5(), 1)
+	patID, err := st.SavePattern(t.Context(), "Test", testPattern5x5(), 1)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := gs.Start([]int{int(patID)}, false, 0); err != nil {
+	if _, err := gs.Start(t.Context(), []int{int(patID)}, false, 0); err != nil {
 		t.Fatal(err)
 	}
 
-	for i := 0; i < 10; i++ {
-		result, _, err := gs.Draw()
+	for i := range 10 {
+		result, _, err := gs.Draw(t.Context())
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -786,11 +786,11 @@ func TestGameService_ConcurrentDrawsNoDuplicates(t *testing.T) {
 	st := testStore(t)
 	gs := NewService(st)
 
-	patID, err := st.SavePattern("Top Row", testPattern5x5(), 1)
+	patID, err := st.SavePattern(t.Context(), "Top Row", testPattern5x5(), 1)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := gs.Start([]int{int(patID)}, false, 0); err != nil {
+	if _, err := gs.Start(t.Context(), []int{int(patID)}, false, 0); err != nil {
 		t.Fatal(err)
 	}
 
@@ -799,10 +799,10 @@ func TestGameService_ConcurrentDrawsNoDuplicates(t *testing.T) {
 	var wg sync.WaitGroup
 	results := make(chan int, goroutines)
 	wg.Add(goroutines)
-	for i := 0; i < goroutines; i++ {
+	for range goroutines {
 		go func() {
 			defer wg.Done()
-			res, _, err := gs.Draw()
+			res, _, err := gs.Draw(t.Context())
 			if err != nil {
 				t.Errorf("draw error: %v", err)
 				return
@@ -834,18 +834,18 @@ func TestGameService_ConcurrentDrawsNoDuplicates(t *testing.T) {
 // startYoeverGame starts a fresh game so the reaction state is initialized.
 func startYoeverGame(t *testing.T, gs *Service, st *store.Store) {
 	t.Helper()
-	patID, err := st.SavePattern("Top Row", testPattern5x5(), 1)
+	patID, err := st.SavePattern(t.Context(), "Top Row", testPattern5x5(), 1)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := gs.Start([]int{int(patID)}, false, 0); err != nil {
+	if _, err := gs.Start(t.Context(), []int{int(patID)}, false, 0); err != nil {
 		t.Fatal(err)
 	}
 }
 
 func TestYoever_NoActiveGame(t *testing.T) {
 	gs := NewService(testStore(t))
-	if _, _, err := gs.TriggerYoever("ABC123", time.Now(), 3*time.Minute); !errors.Is(err, ErrYoeverNoGame) {
+	if _, _, err := gs.TriggerYoever(t.Context(), "ABC123", time.Now(), 3*time.Minute); !errors.Is(err, ErrYoeverNoGame) {
 		t.Fatalf("want ErrYoeverNoGame, got %v", err)
 	}
 }
@@ -859,12 +859,12 @@ func TestYoever_TriggerIncrementsWithCooldown(t *testing.T) {
 	cd := 3 * time.Minute
 
 	// First trigger for a card succeeds and counts.
-	if count, retry, err := gs.TriggerYoever("AAA111", base, cd); err != nil || retry != 0 || count != 1 {
+	if count, retry, err := gs.TriggerYoever(t.Context(), "AAA111", base, cd); err != nil || retry != 0 || count != 1 {
 		t.Fatalf("first trigger: count=%d retry=%v err=%v", count, retry, err)
 	}
 
 	// The same card inside the window is throttled and must not count.
-	count, retry, err := gs.TriggerYoever("AAA111", base.Add(30*time.Second), cd)
+	count, retry, err := gs.TriggerYoever(t.Context(), "AAA111", base.Add(30*time.Second), cd)
 	if err != nil {
 		t.Fatalf("throttled trigger err: %v", err)
 	}
@@ -876,12 +876,12 @@ func TestYoever_TriggerIncrementsWithCooldown(t *testing.T) {
 	}
 
 	// A different card is independent (count advances to 2).
-	if count, _, err := gs.TriggerYoever("BBB222", base.Add(31*time.Second), cd); err != nil || count != 2 {
+	if count, _, err := gs.TriggerYoever(t.Context(), "BBB222", base.Add(31*time.Second), cd); err != nil || count != 2 {
 		t.Fatalf("second card: count=%d err=%v", count, err)
 	}
 
 	// Once the cooldown elapses, the first card may trigger again (count 3).
-	if count, retry, err := gs.TriggerYoever("AAA111", base.Add(cd+time.Second), cd); err != nil || retry != 0 || count != 3 {
+	if count, retry, err := gs.TriggerYoever(t.Context(), "AAA111", base.Add(cd+time.Second), cd); err != nil || retry != 0 || count != 3 {
 		t.Fatalf("post-cooldown: count=%d retry=%v err=%v", count, retry, err)
 	}
 }
@@ -892,10 +892,10 @@ func TestYoever_ZeroCooldownNeverThrottles(t *testing.T) {
 	startYoeverGame(t, gs, st)
 
 	base := time.Unix(1_700_000_000, 0)
-	if _, retry, err := gs.TriggerYoever("AAA111", base, 0); err != nil || retry != 0 {
+	if _, retry, err := gs.TriggerYoever(t.Context(), "AAA111", base, 0); err != nil || retry != 0 {
 		t.Fatalf("first: retry=%v err=%v", retry, err)
 	}
-	if count, retry, err := gs.TriggerYoever("AAA111", base, 0); err != nil || retry != 0 || count != 2 {
+	if count, retry, err := gs.TriggerYoever(t.Context(), "AAA111", base, 0); err != nil || retry != 0 || count != 2 {
 		t.Fatalf("zero-cooldown re-trigger: count=%d retry=%v err=%v", count, retry, err)
 	}
 }
@@ -906,7 +906,7 @@ func TestYoever_DisabledRejects(t *testing.T) {
 	startYoeverGame(t, gs, st)
 
 	gs.SetYoeverEnabled(false)
-	if _, _, err := gs.TriggerYoever("AAA111", time.Now(), time.Minute); !errors.Is(err, ErrYoeverDisabled) {
+	if _, _, err := gs.TriggerYoever(t.Context(), "AAA111", time.Now(), time.Minute); !errors.Is(err, ErrYoeverDisabled) {
 		t.Fatalf("want ErrYoeverDisabled, got %v", err)
 	}
 	if gs.YoeverEnabled() {
@@ -919,14 +919,14 @@ func TestYoever_ResetOnStart(t *testing.T) {
 	gs := NewService(st)
 	startYoeverGame(t, gs, st)
 
-	if _, _, err := gs.TriggerYoever("AAA111", time.Now(), time.Minute); err != nil {
+	if _, _, err := gs.TriggerYoever(t.Context(), "AAA111", time.Now(), time.Minute); err != nil {
 		t.Fatal(err)
 	}
 	gs.SetYoeverEnabled(false)
 
 	// A new game re-enables the reaction, zeroes the count, and clears cooldowns.
 	startYoeverGame(t, gs, st)
-	state, _, err := gs.CurrentState()
+	state, _, err := gs.CurrentState(t.Context())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -937,7 +937,7 @@ func TestYoever_ResetOnStart(t *testing.T) {
 		t.Errorf("new game should reset count, got %d", state.YoeverCount)
 	}
 	// The previously-triggered card is no longer on cooldown in the new game.
-	if _, retry, err := gs.TriggerYoever("AAA111", time.Now(), time.Minute); err != nil || retry != 0 {
+	if _, retry, err := gs.TriggerYoever(t.Context(), "AAA111", time.Now(), time.Minute); err != nil || retry != 0 {
 		t.Fatalf("cooldown should reset on new game: retry=%v err=%v", retry, err)
 	}
 }
@@ -947,10 +947,10 @@ func TestYoever_StateReflectsCount(t *testing.T) {
 	gs := NewService(st)
 	startYoeverGame(t, gs, st)
 
-	if _, _, err := gs.TriggerYoever("AAA111", time.Now(), time.Minute); err != nil {
+	if _, _, err := gs.TriggerYoever(t.Context(), "AAA111", time.Now(), time.Minute); err != nil {
 		t.Fatal(err)
 	}
-	state, _, err := gs.CurrentState()
+	state, _, err := gs.CurrentState(t.Context())
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -238,7 +238,7 @@ export function useWebSocket() {
     // Admin view
     if (isAdminView()) {
       game.currentGame = g
-      game.winners = msg.winners || []
+      game.winners = msg.winners ?? []
       if (!g) {
         game.lastDrawn = null
         game.winnerPreview = null

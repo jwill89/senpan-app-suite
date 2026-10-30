@@ -30,7 +30,7 @@ func (s *Server) handleWinnersLog(w http.ResponseWriter, r *http.Request) {
 	sortDir := r.URL.Query().Get("dir")
 
 	offset := (page - 1) * perPage
-	entries, total, err := s.store.ListWinnersLog(perPage, offset, sortField, sortDir)
+	entries, total, err := s.store.ListWinnersLog(r.Context(), perPage, offset, sortField, sortDir)
 	if err != nil {
 		writeInternalError(w, "list winners log", err)
 		return
@@ -58,7 +58,7 @@ func (s *Server) handleWinnersLogDelete(w http.ResponseWriter, r *http.Request) 
 	if !ok {
 		return
 	}
-	if _, err := s.store.DeleteWinnerLogEntry(id); err != nil {
+	if _, err := s.store.DeleteWinnerLogEntry(r.Context(), id); err != nil {
 		writeInternalError(w, "delete winners log entry", err)
 		return
 	}
@@ -75,7 +75,7 @@ func (s *Server) handleWinnersLogDeleteAll(w http.ResponseWriter, r *http.Reques
 	if !s.requirePermission(w, r, permBingoWinnersLog) {
 		return
 	}
-	deleted, err := s.store.DeleteAllWinnersLog()
+	deleted, err := s.store.DeleteAllWinnersLog(r.Context())
 	if err != nil {
 		writeInternalError(w, "delete all winners log", err)
 		return
@@ -94,10 +94,10 @@ func (s *Server) handleFrequentWinners(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	threshold := s.getSettingInt("frequent_winner_threshold", 3)
-	hours := s.getSettingInt("frequent_winner_hours", 12)
+	threshold := s.getSettingInt(r.Context(), "frequent_winner_threshold", 3)
+	hours := s.getSettingInt(r.Context(), "frequent_winner_hours", 12)
 
-	winners, err := s.store.FrequentWinners(threshold, hours)
+	winners, err := s.store.FrequentWinners(r.Context(), threshold, hours)
 	if err != nil {
 		writeInternalError(w, "frequent winners", err)
 		return

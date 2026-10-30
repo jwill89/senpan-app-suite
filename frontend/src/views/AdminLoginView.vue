@@ -142,6 +142,7 @@ function goHome(): void {
   color: var(--text-muted);
   font-size: 0.85rem;
 }
+
 .login-or::before,
 .login-or::after {
   content: '';
@@ -149,6 +150,7 @@ function goHome(): void {
   height: 1px;
   background: color-mix(in srgb, var(--text) 15%, transparent);
 }
+
 .login-passkey {
   width: 100%;
   justify-content: center;

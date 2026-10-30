@@ -34,10 +34,10 @@ public sealed class CardCache : IDisposable
     {
         this.api = api;
         this.live = live;
-        this.live.CardsChanged += OnCardsChanged;
+        this.live.CardsChanged += this.OnCardsChanged;
     }
 
-    public void Dispose() => this.live.CardsChanged -= OnCardsChanged;
+    public void Dispose() => this.live.CardsChanged -= this.OnCardsChanged;
 
     /// <summary>
     /// Loads once (called each frame; self-guards). A failed load clears the guard so
@@ -52,7 +52,7 @@ public sealed class CardCache : IDisposable
             return;
         this.lastAttempt = now;
         this.loadedOnce = true;
-        Refresh();
+        this.Refresh();
     }
 
     /// <summary>Marks stale so the next EnsureLoaded reloads (e.g. token change).</summary>
@@ -63,7 +63,7 @@ public sealed class CardCache : IDisposable
     }
 
     /// <summary>Kicks a background refresh of the card list.</summary>
-    public void Refresh() => _ = RefreshAsync();
+    public void Refresh() => _ = this.RefreshAsync();
 
     /// <summary>
     /// Refreshes the card list. Concurrent callers share one in-flight request, so a
@@ -76,7 +76,7 @@ public sealed class CardCache : IDisposable
         {
             if (this.inFlight is { } running)
                 return running;
-            var task = RefreshCore();
+            var task = this.RefreshCore();
             // Only remember a task that is genuinely still running. RefreshCore's
             // finally re-enters this same re-entrant lock to null inFlight, so a
             // fetch that faults BEFORE its first await - an invalid ServerUrl throws
@@ -131,5 +131,5 @@ public sealed class CardCache : IDisposable
     public string? NameFor(string id)
         => this.namesById.TryGetValue(id, out var name) ? name : null;
 
-    private void OnCardsChanged() => Refresh();
+    private void OnCardsChanged() => this.Refresh();
 }

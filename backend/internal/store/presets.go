@@ -1,6 +1,7 @@
 package store
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"errors"
@@ -12,8 +13,8 @@ import (
 // -- Game preset operations --------------------------------------------------
 
 // ListGamePresets returns all game presets ordered by name.
-func (s *Store) ListGamePresets() ([]model.GamePreset, error) {
-	rows, err := s.db.Query("SELECT id, name, pattern_ids, game_details, auto_call, auto_interval, created_at FROM game_presets ORDER BY name ASC")
+func (s *Store) ListGamePresets(ctx context.Context) ([]model.GamePreset, error) {
+	rows, err := s.db.QueryContext(ctx, "SELECT id, name, pattern_ids, game_details, auto_call, auto_interval, created_at FROM game_presets ORDER BY name ASC")
 	if err != nil {
 		return nil, err
 	}
@@ -33,10 +34,10 @@ func (s *Store) ListGamePresets() ([]model.GamePreset, error) {
 }
 
 // GetGamePreset retrieves a single game preset by ID. Returns nil if not found.
-func (s *Store) GetGamePreset(id int64) (*model.GamePreset, error) {
+func (s *Store) GetGamePreset(ctx context.Context, id int64) (*model.GamePreset, error) {
 	var p model.GamePreset
 	var idsJSON string
-	err := s.db.QueryRow(
+	err := s.db.QueryRowContext(ctx,
 		"SELECT id, name, pattern_ids, game_details, auto_call, auto_interval, created_at FROM game_presets WHERE id = ?", id,
 	).Scan(&p.ID, &p.Name, &idsJSON, &p.GameDetails, &p.Auto, &p.AutoInterval, &p.CreatedAt)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -50,12 +51,12 @@ func (s *Store) GetGamePreset(id int64) (*model.GamePreset, error) {
 }
 
 // CreateGamePreset inserts a new game preset and returns its ID.
-func (s *Store) CreateGamePreset(name string, patternIDs []int64, gameDetails string, auto bool, autoInterval int) (int64, error) {
+func (s *Store) CreateGamePreset(ctx context.Context, name string, patternIDs []int64, gameDetails string, auto bool, autoInterval int) (int64, error) {
 	idsJSON, err := json.Marshal(normalizePresetIDs(patternIDs))
 	if err != nil {
 		return 0, fmt.Errorf("marshal preset pattern ids: %w", err)
 	}
-	res, err := s.db.Exec(
+	res, err := s.db.ExecContext(ctx,
 		"INSERT INTO game_presets (name, pattern_ids, game_details, auto_call, auto_interval) VALUES (?, ?, ?, ?, ?)",
 		name, string(idsJSON), gameDetails, auto, autoInterval,
 	)
@@ -66,12 +67,12 @@ func (s *Store) CreateGamePreset(name string, patternIDs []int64, gameDetails st
 }
 
 // UpdateGamePreset updates a preset's name, pattern IDs, game details, and auto-draw settings.
-func (s *Store) UpdateGamePreset(id int64, name string, patternIDs []int64, gameDetails string, auto bool, autoInterval int) error {
+func (s *Store) UpdateGamePreset(ctx context.Context, id int64, name string, patternIDs []int64, gameDetails string, auto bool, autoInterval int) error {
 	idsJSON, err := json.Marshal(normalizePresetIDs(patternIDs))
 	if err != nil {
 		return fmt.Errorf("marshal preset pattern ids: %w", err)
 	}
-	_, err = s.db.Exec(
+	_, err = s.db.ExecContext(ctx,
 		"UPDATE game_presets SET name = ?, pattern_ids = ?, game_details = ?, auto_call = ?, auto_interval = ? WHERE id = ?",
 		name, string(idsJSON), gameDetails, auto, autoInterval, id,
 	)
@@ -79,8 +80,8 @@ func (s *Store) UpdateGamePreset(id int64, name string, patternIDs []int64, game
 }
 
 // DeleteGamePreset removes a preset by ID. Returns true if a row was deleted.
-func (s *Store) DeleteGamePreset(id int64) (bool, error) {
-	res, err := s.db.Exec("DELETE FROM game_presets WHERE id = ?", id)
+func (s *Store) DeleteGamePreset(ctx context.Context, id int64) (bool, error) {
+	res, err := s.db.ExecContext(ctx, "DELETE FROM game_presets WHERE id = ?", id)
 	if err != nil {
 		return false, err
 	}

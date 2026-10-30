@@ -52,7 +52,35 @@ export interface SavedRaffleSignup {
   savedAt: number
 }
 
-export type SavedSignup = SavedRallySignup | SavedRaffleSignup
+/**
+ * Who this device visits a festival as, for the festival dashboard: the name and
+ * world its raffle entries are found under and its sign-up forms start from. It
+ * also remembers the festival's rally once the dashboard has named it, because the
+ * public map stops naming a rally outside its window, and without the id the card
+ * saved for that rally could not be found again.
+ */
+export interface SavedFestivalVisit {
+  kind: 'festival'
+  mapId: number
+  name: string
+  world: string
+  rallyId?: number
+  savedAt: number
+}
+
+export type SavedSignup = SavedRallySignup | SavedRaffleSignup | SavedFestivalVisit
+
+/** The id a saved entry is keyed on within its kind. */
+function entryId(entry: SavedSignup): number {
+  switch (entry.kind) {
+    case 'rally':
+      return entry.rallyId
+    case 'raffle':
+      return entry.raffleId
+    case 'festival':
+      return entry.mapId
+  }
+}
 
 const KEY = 'senpan_signups'
 
@@ -96,6 +124,16 @@ function read(): SavedSignup[] {
       const r = entry as Partial<SavedRaffleSignup>
       if (typeof r.raffleId !== 'number' || typeof r.name !== 'string' || !r.name) continue
       kept.push({ ...(r as SavedRaffleSignup), ...splitName(r.name, r.world) })
+      continue
+    }
+    if (e.kind === 'festival') {
+      const f = entry as Partial<SavedFestivalVisit>
+      if (typeof f.mapId !== 'number' || typeof f.name !== 'string' || !f.name) continue
+      kept.push({
+        ...(f as SavedFestivalVisit),
+        ...splitName(f.name, f.world),
+        rallyId: typeof f.rallyId === 'number' ? f.rallyId : undefined,
+      })
     }
   }
   return kept
@@ -137,12 +175,8 @@ export function savedSignups(): SavedSignup[] {
  * raffle again) refreshes rather than duplicates.
  */
 function put(entry: SavedSignup): void {
-  const same = (other: SavedSignup) =>
-    other.kind === entry.kind &&
-    (entry.kind === 'rally'
-      ? (other as SavedRallySignup).rallyId === entry.rallyId
-      : (other as SavedRaffleSignup).raffleId === entry.raffleId)
-  write([entry, ...read().filter((other) => !same(other))])
+  const id = entryId(entry)
+  write([entry, ...read().filter((other) => other.kind !== entry.kind || entryId(other) !== id)])
 }
 
 export function saveRallySignup(
@@ -159,6 +193,21 @@ export function saveRaffleSignup(
   const saved: SavedRaffleSignup = { ...entry, kind: 'raffle', savedAt: Date.now() }
   put(saved)
   return saved
+}
+
+export function saveFestivalVisit(
+  entry: Omit<SavedFestivalVisit, 'kind' | 'savedAt'>,
+): SavedFestivalVisit {
+  const saved: SavedFestivalVisit = { ...entry, kind: 'festival', savedAt: Date.now() }
+  put(saved)
+  return saved
+}
+
+/** Who this browser visits one festival as, if it said. */
+export function savedFestivalVisit(mapId: number): SavedFestivalVisit | undefined {
+  return read().find(
+    (entry): entry is SavedFestivalVisit => entry.kind === 'festival' && entry.mapId === mapId,
+  )
 }
 
 /** The saved sign-up for one rally, if this browser made it. */
@@ -181,13 +230,5 @@ export function savedRaffleSignup(raffleId: number): SavedRaffleSignup | undefin
  * it, and that link is the one thing here that spends something.
  */
 export function forgetSignup(kind: SavedSignup['kind'], id: number): void {
-  write(
-    read().filter((entry) =>
-      entry.kind !== kind
-        ? true
-        : kind === 'rally'
-          ? (entry as SavedRallySignup).rallyId !== id
-          : (entry as SavedRaffleSignup).raffleId !== id,
-    ),
-  )
+  write(read().filter((entry) => entry.kind !== kind || entryId(entry) !== id))
 }

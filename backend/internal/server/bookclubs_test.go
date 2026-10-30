@@ -240,7 +240,7 @@ func TestReadingListPerClubPermission(t *testing.T) {
 
 func TestDiscordWebhookSettingRedactedForPublic(t *testing.T) {
 	e := newTestEnv(t)
-	if err := e.store.SetSetting("discord_webhook_url_yaoi", "https://discord.test/secret"); err != nil {
+	if err := e.store.SetSetting(t.Context(), "discord_webhook_url_yaoi", "https://discord.test/secret"); err != nil {
 		t.Fatal(err)
 	}
 
@@ -279,7 +279,7 @@ func TestPublishPostsOneEmbedPerItem(t *testing.T) {
 		w.WriteHeader(http.StatusNoContent)
 	}))
 	defer discord.Close()
-	if err := e.store.SetSetting("discord_webhook_url_yaoi", discord.URL); err != nil {
+	if err := e.store.SetSetting(t.Context(), "discord_webhook_url_yaoi", discord.URL); err != nil {
 		t.Fatal(err)
 	}
 
@@ -330,7 +330,7 @@ func TestPublishUsesPerClubCommentsLabel(t *testing.T) {
 		w.WriteHeader(http.StatusNoContent)
 	}))
 	defer discord.Close()
-	if err := e.store.SetSetting("discord_webhook_url_yuri", discord.URL); err != nil {
+	if err := e.store.SetSetting(t.Context(), "discord_webhook_url_yuri", discord.URL); err != nil {
 		t.Fatal(err)
 	}
 
@@ -408,7 +408,7 @@ func TestBookclubLookupMapsAniListFields(t *testing.T) {
 	// endpoint would be rejected and fall back to the real AniList. Keep a valid,
 	// allowlisted endpoint URL and route the request to the mock via a host-rewriting
 	// transport - exercising the real allowlisted path end to end.
-	if err := e.store.SetSetting("anilist_api_url", "https://graphql.anilist.co"); err != nil {
+	if err := e.store.SetSetting(t.Context(), "anilist_api_url", "https://graphql.anilist.co"); err != nil {
 		t.Fatal(err)
 	}
 	restore, err := server.RouteAnilistToForTest(anilist.URL)

@@ -222,13 +222,13 @@ async function submitRole(): Promise<void> {
     <!-- -- List ------------------------------------------------------------- -->
     <ManagerView v-if="screen === 'list'" title="Announcements" :icon="['fad', 'megaphone']">
       <template #actions>
-        <button class="btn-view btn-sm" @click="openTypes()">
+        <button type="button" class="btn-view btn-sm" @click="openTypes()">
           <font-awesome-icon :icon="['fad', 'folder-open']" /> Manage Types
         </button>
-        <button class="btn-view btn-sm" @click="openRoles()">
+        <button type="button" class="btn-view btn-sm" @click="openRoles()">
           <font-awesome-icon :icon="['fad', 'at']" /> Manage Roles
         </button>
-        <button class="btn-confirm btn-sm" @click="openNew()">
+        <button type="button" class="btn-confirm btn-sm" @click="openNew()">
           <font-awesome-icon :icon="['fas', 'plus']" /> New Announcement
         </button>
       </template>
@@ -251,8 +251,8 @@ async function submitRole(): Promise<void> {
 
       <EmptyState v-if="!hasTypes">
         Create an <strong>Announcement Type</strong> (with a Discord webhook) under
-        <button class="link-btn" @click="openTypes()">Manage Types</button> first - every
-        announcement posts through a type.
+        <button type="button" class="link-btn" @click="openTypes()">Manage Types</button> first -
+        every announcement posts through a type.
       </EmptyState>
 
       <LoadingSpinner
@@ -334,6 +334,7 @@ async function submitRole(): Promise<void> {
 
             <template #actions>
               <button
+                type="button"
                 class="btn-action btn-sm"
                 :disabled="store.sendingId === a.id"
                 title="Post to Discord now"
@@ -346,6 +347,7 @@ async function submitRole(): Promise<void> {
               </button>
               <button
                 v-if="a.schedule_kind && a.next_post_at"
+                type="button"
                 class="btn-caution btn-sm"
                 :disabled="store.skippingId === a.id"
                 title="Skip one or more upcoming occurrences"
@@ -355,6 +357,7 @@ async function submitRole(): Promise<void> {
                 {{ a.skip_count > 0 ? 'Change skip' : 'Skip' }}
               </button>
               <button
+                type="button"
                 class="btn-confirm btn-sm"
                 aria-label="Edit"
                 title="Edit"
@@ -363,6 +366,7 @@ async function submitRole(): Promise<void> {
                 <font-awesome-icon :icon="['fas', 'pen-to-square']" />
               </button>
               <button
+                type="button"
                 class="btn-danger btn-sm"
                 aria-label="Delete"
                 title="Delete"
@@ -680,8 +684,9 @@ async function submitRole(): Promise<void> {
       </template>
 
       <FormActions align="start">
-        <button class="btn-neutral" @click="backToList()">Cancel</button>
+        <button type="button" class="btn-neutral" @click="backToList()">Cancel</button>
         <button
+          type="button"
           class="btn-confirm"
           :disabled="store.saving || !store.form.title.trim()"
           @click="submit()"
@@ -700,7 +705,7 @@ async function submitRole(): Promise<void> {
         @back="screen = 'list'"
       />
       <div class="flex-toolbar flex-end mb-16">
-        <button class="btn-confirm btn-sm" @click="openNewType()">
+        <button type="button" class="btn-confirm btn-sm" @click="openNewType()">
           <font-awesome-icon :icon="['fas', 'plus']" /> New Type
         </button>
       </div>
@@ -712,10 +717,20 @@ async function submitRole(): Promise<void> {
             <font-awesome-icon :icon="['fab', 'discord']" /> {{ maskWebhook(t.webhook_url) }}
           </p>
           <template #actions>
-            <button class="btn-confirm btn-sm" aria-label="Edit type" @click="openEditType(t)">
+            <button
+              type="button"
+              class="btn-confirm btn-sm"
+              aria-label="Edit type"
+              @click="openEditType(t)"
+            >
               <font-awesome-icon :icon="['fas', 'pen-to-square']" />
             </button>
-            <button class="btn-danger btn-sm" aria-label="Delete type" @click="store.deleteType(t)">
+            <button
+              type="button"
+              class="btn-danger btn-sm"
+              aria-label="Delete type"
+              @click="store.deleteType(t)"
+            >
               <font-awesome-icon :icon="['fas', 'trash']" />
             </button>
           </template>
@@ -750,8 +765,9 @@ async function submitRole(): Promise<void> {
         />
       </FormField>
       <FormActions align="start">
-        <button class="btn-neutral" @click="screen = 'types'">Cancel</button>
+        <button type="button" class="btn-neutral" @click="screen = 'types'">Cancel</button>
         <button
+          type="button"
           class="btn-confirm"
           :disabled="store.savingType || !store.typeForm.name.trim()"
           @click="submitType()"
@@ -770,7 +786,7 @@ async function submitRole(): Promise<void> {
         (enable Developer Mode in Discord, right-click a role -> “Copy Role ID”).
       </p>
       <div class="flex-toolbar flex-end mb-16">
-        <button class="btn-confirm btn-sm" @click="openNewRole()">
+        <button type="button" class="btn-confirm btn-sm" @click="openNewRole()">
           <font-awesome-icon :icon="['fas', 'plus']" /> New Role
         </button>
       </div>
@@ -782,10 +798,20 @@ async function submitRole(): Promise<void> {
             <font-awesome-icon :icon="['fad', 'at']" /> {{ r.role_id }}
           </p>
           <template #actions>
-            <button class="btn-confirm btn-sm" aria-label="Edit role" @click="openEditRole(r)">
+            <button
+              type="button"
+              class="btn-confirm btn-sm"
+              aria-label="Edit role"
+              @click="openEditRole(r)"
+            >
               <font-awesome-icon :icon="['fas', 'pen-to-square']" />
             </button>
-            <button class="btn-danger btn-sm" aria-label="Delete role" @click="store.deleteRole(r)">
+            <button
+              type="button"
+              class="btn-danger btn-sm"
+              aria-label="Delete role"
+              @click="store.deleteRole(r)"
+            >
               <font-awesome-icon :icon="['fas', 'trash']" />
             </button>
           </template>
@@ -822,8 +848,9 @@ async function submitRole(): Promise<void> {
         />
       </FormField>
       <FormActions align="start">
-        <button class="btn-neutral" @click="screen = 'roles'">Cancel</button>
+        <button type="button" class="btn-neutral" @click="screen = 'roles'">Cancel</button>
         <button
+          type="button"
           class="btn-confirm"
           :disabled="
             store.savingRole || !store.roleForm.name.trim() || !store.roleForm.role_id.trim()
@@ -862,8 +889,9 @@ async function submitRole(): Promise<void> {
         />
       </FormField>
       <FormActions align="end">
-        <button class="btn-neutral" @click="skipTarget = null">Cancel</button>
+        <button type="button" class="btn-neutral" @click="skipTarget = null">Cancel</button>
         <button
+          type="button"
           class="btn-caution"
           :disabled="store.skippingId === skipTarget.id || !skipValueValid"
           @click="submitSkip()"
@@ -886,25 +914,30 @@ async function submitRole(): Promise<void> {
   gap: 16px;
   margin-top: 12px;
 }
+
 .image-picker-block .field-label {
   margin-bottom: 6px;
 }
 
 /* vue-draggable-plus ghost while dragging a row. */
+
 /* Heads-up note under the Details editor when the post will be split into
    multiple embed fields (long details past Discord's 1024-char field cap). */
 .announcement-split-note {
   margin: 8px 0 0;
   color: var(--text-muted);
 }
+
 .announcement-split-note strong {
   color: var(--highlight);
 }
+
 .announcement-divider {
   border: none;
   border-top: 1px solid var(--panel-raised-bg);
   margin: 20px 0 12px;
 }
+
 .announcement-button-emoji {
   flex: 0 0 56px;
   display: flex;
@@ -918,17 +951,21 @@ async function submitRole(): Promise<void> {
   border-radius: var(--radius);
   cursor: pointer;
 }
+
 .announcement-button-emoji:hover {
   border-color: var(--accent);
 }
+
 .announcement-button-label {
   flex: 1 1 160px;
   min-width: 120px;
 }
+
 .announcement-button-url {
   flex: 2 1 220px;
   min-width: 160px;
 }
+
 /* Status pills use the global `.badge` object + shared `.badge--*` state
    modifiers; only the inter-pill spacing is component-specific. */
 .announcement-badge {

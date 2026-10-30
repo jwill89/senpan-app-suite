@@ -26,9 +26,9 @@ func TestGenerateBoard_FreeSpace(t *testing.T) {
 
 func TestGenerateBoard_ColumnRanges(t *testing.T) {
 	board := GenerateBoard()
-	for col := 0; col < 5; col++ {
+	for col := range 5 {
 		lo, hi := columnRanges[col][0], columnRanges[col][1]
-		for row := 0; row < 5; row++ {
+		for row := range 5 {
 			if row == 2 && col == 2 {
 				continue // FREE space
 			}
@@ -42,11 +42,11 @@ func TestGenerateBoard_ColumnRanges(t *testing.T) {
 
 func TestGenerateBoard_NoDuplicatesInColumn(t *testing.T) {
 	// Run multiple iterations to catch randomness issues.
-	for iter := 0; iter < 100; iter++ {
+	for iter := range 100 {
 		board := GenerateBoard()
-		for col := 0; col < 5; col++ {
+		for col := range 5 {
 			seen := make(map[int]bool)
-			for row := 0; row < 5; row++ {
+			for row := range 5 {
 				v := board[row][col]
 				if v == 0 {
 					continue

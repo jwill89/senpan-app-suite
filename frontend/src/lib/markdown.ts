@@ -12,7 +12,9 @@
  */
 import { ref } from 'vue'
 
-type MarkdownRenderer = { render: (src: string) => string }
+interface MarkdownRenderer {
+  render: (src: string) => string
+}
 
 // Two configured instances share one lazy import: `md` converts single newlines
 // to <br> (breaks: true - for user-entered game details/raffle copy where a line
@@ -66,9 +68,7 @@ const CODE_SPAN_OR_BREAK_TAG = /(```[\s\S]*?```|~~~[\s\S]*?~~~|`[^`\n]*`)|<br\s*
  * newline as a <br> the parser itself produced.
  */
 export function normalizeHardBreaks(text: string): string {
-  return text.replace(CODE_SPAN_OR_BREAK_TAG, (_match, code: string | undefined) =>
-    code === undefined ? '\n' : code,
-  )
+  return text.replace(CODE_SPAN_OR_BREAK_TAG, (_match, code: string | undefined) => code ?? '\n')
 }
 
 /** Shared reactive renderer factory over one of the configured instances. */

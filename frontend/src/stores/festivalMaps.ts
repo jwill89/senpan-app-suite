@@ -219,7 +219,7 @@ export const useFestivalMapsStore = defineStore('festivalMaps', () => {
       description: m.description,
       map_image: m.map_image,
       times: timesToForm(m.times),
-      stalls: (m.stalls || []).map((s) => ({
+      stalls: (m.stalls ?? []).map((s) => ({
         id: s.id,
         shape: s.shape === 'circle' ? 'circle' : 'rect',
         color: s.color,

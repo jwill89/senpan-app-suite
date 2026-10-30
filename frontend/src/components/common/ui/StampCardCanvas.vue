@@ -53,14 +53,17 @@ defineProps<{
 .stamp-canvas {
   position: relative;
   width: 100%;
+
   /* Items are absolutely positioned in % of this box; the bg image sizes it. */
 }
+
 .stamp-canvas-bg {
   display: block;
   width: 100%;
   height: auto;
   border-radius: var(--radius);
 }
+
 .stamp-canvas-empty {
   aspect-ratio: 16 / 10;
   display: flex;
@@ -71,12 +74,14 @@ defineProps<{
   background: var(--panel-raised-bg);
   border: 1px dashed var(--control-border);
 }
+
 .stamp-canvas-item {
   position: absolute;
   display: flex;
   align-items: center;
   justify-content: center;
 }
+
 .stamp-canvas-item img {
   width: 100%;
   height: 100%;

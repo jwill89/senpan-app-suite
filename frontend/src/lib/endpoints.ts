@@ -75,6 +75,7 @@ import type {
   FestivalMapDetailResponse,
   PublicFestivalMapsResponse,
   PublicFestivalMap,
+  FestivalDashboard,
   GaraponsResponse,
   GaraponResponse,
   GaraponDetailResponse,
@@ -617,6 +618,20 @@ export const endpoints = {
      *  resolves either. */
     publicDetail: (idOrSlug: string) =>
       apiGet<PublicFestivalMap>(`festival-maps/public/${enc(idOrSlug)}`),
+  },
+
+  // -- Festival dashboard (public) ----------------------------------------------
+  //
+  // Its own prefix rather than festival-maps/: the server treats every POST under
+  // that one as an admin edit.
+  festivalDashboard: {
+    /** POST /api/festival-dashboard/{id} - one participant's standing at a festival,
+     *  read from whatever this device holds. POST so the tokens and the name stay
+     *  out of URLs and the access log. */
+    get: (
+      idOrSlug: string,
+      body: { card_token: string; garapon_token: string; name: string; world: string },
+    ) => apiPost<FestivalDashboard>(`festival-dashboard/${enc(idOrSlug)}`, body),
   },
 
   // -- Stamp Rally (admin, hybrid REST) -----------------------------------------

@@ -2,8 +2,10 @@ package server_test
 
 import (
 	"bytes"
+	"context"
 	"log/slog"
 	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 )
@@ -51,5 +53,34 @@ func TestAccessLog_IncludesActor(t *testing.T) {
 	}
 	if out := buf.String(); !strings.Contains(out, `"auth":"bot"`) || !strings.Contains(out, "Googlebot") {
 		t.Errorf("verified-bot request: want auth=bot + Googlebot in log; got:\n%s", out)
+	}
+}
+
+// TestAccessLog_CanceledRequestIsNotAnError pins the access line for a request
+// whose client had gone before the handler's query ran: the 500 that follows is
+// the cancellation, not a fault, so it is logged at Info and marked canceled
+// rather than at Error - otherwise every dropped connection reads as an outage.
+func TestAccessLog_CanceledRequestIsNotAnError(t *testing.T) {
+	var buf bytes.Buffer
+	prev := slog.Default()
+	slog.SetDefault(slog.New(slog.NewJSONHandler(&buf, &slog.HandlerOptions{Level: slog.LevelInfo})))
+	t.Cleanup(func() { slog.SetDefault(prev) })
+
+	env := newTestEnv(t)
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel() // the client has already given up
+	req := httptest.NewRequestWithContext(ctx, http.MethodGet, "/api/raffles", nil)
+	rec := httptest.NewRecorder()
+	env.srv.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("status = %d; want 500 from the cancelled query", rec.Code)
+	}
+	out := buf.String()
+	if strings.Contains(out, `"level":"ERROR"`) {
+		t.Errorf("a canceled request was logged at ERROR:\n%s", out)
+	}
+	if !strings.Contains(out, `"canceled":true`) || !strings.Contains(out, `"path":"/api/raffles"`) {
+		t.Errorf("want the request recorded and marked canceled; got:\n%s", out)
 	}
 }

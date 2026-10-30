@@ -61,14 +61,14 @@ internal sealed class TeaRoomsTab : TabBase, IDisposable
         this.api = api;
         this.live = live;
         this.session = session;
-        this.live.TeaRoomUnlocked += OnTeaRoomUnlocked;
-        this.live.Reconnected += OnReconnected;
+        this.live.TeaRoomUnlocked += this.OnTeaRoomUnlocked;
+        this.live.Reconnected += this.OnReconnected;
     }
 
     public void Dispose()
     {
-        this.live.TeaRoomUnlocked -= OnTeaRoomUnlocked;
-        this.live.Reconnected -= OnReconnected;
+        this.live.TeaRoomUnlocked -= this.OnTeaRoomUnlocked;
+        this.live.Reconnected -= this.OnReconnected;
     }
 
     /// <summary>Reloads the full room list (the server preserves the admin order).</summary>
@@ -80,10 +80,10 @@ internal sealed class TeaRoomsTab : TabBase, IDisposable
 
     public void Draw()
     {
-        DrawStatusLine();
+        this.DrawStatusLine();
 
         if (Ui.Button("Refresh##tearooms"))
-            Run(LoadAsync);
+            this.Run(this.LoadAsync);
 
         Ui.Section(FontAwesomeIcon.Store, $"Tea Rooms ({this.rooms.Count})");
 
@@ -106,7 +106,9 @@ internal sealed class TeaRoomsTab : TabBase, IDisposable
         if (!ImGui.BeginTable("tearooms", 7,
                 ImGuiTableFlags.Borders | ImGuiTableFlags.RowBg | ImGuiTableFlags.ScrollY | ImGuiTableFlags.Resizable,
                 new Vector2(0f, height)))
+        {
             return;
+        }
 
         ImGui.TableSetupColumn("Room #", ImGuiTableColumnFlags.WidthFixed, 70);
         ImGui.TableSetupColumn("Name");
@@ -139,15 +141,15 @@ internal sealed class TeaRoomsTab : TabBase, IDisposable
             ImGui.TableNextColumn();
             var open = room.Open;
             if (ImGui.Checkbox($"##open{room.Id}", ref open))
-                SetOpen(room.Id, open);
+                this.SetOpen(room.Id, open);
 
             ImGui.TableNextColumn();
             var discounted = room.Discounted;
             if (ImGui.Checkbox($"##disc{room.Id}", ref discounted))
-                SetDiscounted(room.Id, discounted);
+                this.SetDiscounted(room.Id, discounted);
 
             ImGui.TableNextColumn();
-            DrawLockCell(room);
+            this.DrawLockCell(room);
         }
 
         ImGui.EndTable();
@@ -164,7 +166,7 @@ internal sealed class TeaRoomsTab : TabBase, IDisposable
         if (room.Locked)
         {
             if (ImGui.SmallButton($"Unlock##lock{room.Id}"))
-                SetLock(room.Id, false, string.Empty);
+                this.SetLock(room.Id, false, string.Empty);
             Ui.ItemTooltip("Unlock this room now");
             ImGui.SameLine();
             ImGui.TextDisabled(LockText(room));
@@ -178,7 +180,7 @@ internal sealed class TeaRoomsTab : TabBase, IDisposable
             ImGui.OpenPopup(LockPopupId(room));
         }
         Ui.ItemTooltip("Lock this room, with or without an unlock time");
-        DrawLockPopup(room);
+        this.DrawLockPopup(room);
     }
 
     private static string LockPopupId(TeaRoom room) => $"##lockpopup{room.Id}";
@@ -220,9 +222,9 @@ internal sealed class TeaRoomsTab : TabBase, IDisposable
 
         if (Ui.PrimaryButton($"Lock room##lockgo{room.Id}"))
         {
-            if (TryBuildLockUntil(out var until, out var error))
+            if (this.TryBuildLockUntil(out var until, out var error))
             {
-                SetLock(room.Id, true, until);
+                this.SetLock(room.Id, true, until);
                 ImGui.CloseCurrentPopup();
             }
             else
@@ -269,22 +271,22 @@ internal sealed class TeaRoomsTab : TabBase, IDisposable
         return true;
     }
 
-    private void SetOpen(long id, bool open) => Run(async () =>
+    private void SetOpen(long id, bool open) => this.Run(async () =>
     {
         var res = await this.api.SetTeaRoomOpenAsync(id, open);
-        await Apply(() => ReplaceRoom(res.TeaRoom));
+        await Apply(() => this.ReplaceRoom(res.TeaRoom));
     });
 
-    private void SetDiscounted(long id, bool discounted) => Run(async () =>
+    private void SetDiscounted(long id, bool discounted) => this.Run(async () =>
     {
         var res = await this.api.SetTeaRoomDiscountedAsync(id, discounted);
-        await Apply(() => ReplaceRoom(res.TeaRoom));
+        await Apply(() => this.ReplaceRoom(res.TeaRoom));
     });
 
-    private void SetLock(long id, bool locked, string until) => Run(async () =>
+    private void SetLock(long id, bool locked, string until) => this.Run(async () =>
     {
         var res = await this.api.SetTeaRoomLockAsync(id, locked, until);
-        await Apply(() => ReplaceRoom(res.TeaRoom));
+        await Apply(() => this.ReplaceRoom(res.TeaRoom));
     });
 
     /// <summary>
@@ -359,7 +361,7 @@ internal sealed class TeaRoomsTab : TabBase, IDisposable
     /// still locked when it isn't. Mark it stale and let the per-frame EnsureLoaded
     /// re-pull it, as the bingo page does.
     /// </summary>
-    private void OnReconnected() => MarkStale();
+    private void OnReconnected() => this.MarkStale();
 
     /// <summary>Swaps the server's saved room back into the list in place (matched by id).</summary>
     private void ReplaceRoom(TeaRoom? saved)

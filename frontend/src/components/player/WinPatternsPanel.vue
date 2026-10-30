@@ -6,8 +6,7 @@
 import PatternMini from '@/components/common/PatternMini.vue'
 import type { BingoGamePattern } from '@/types/api'
 
-const props = defineProps<{ patterns: BingoGamePattern[] }>()
-void props
+defineProps<{ patterns: BingoGamePattern[] }>()
 </script>
 
 <template>

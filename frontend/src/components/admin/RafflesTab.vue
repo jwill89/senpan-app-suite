@@ -207,10 +207,11 @@ async function deleteSelected(): Promise<void> {
         </span>
       </SubPageHeader>
       <div class="flex-toolbar flex-end mb-16">
-        <button v-if="isOpen" class="btn-confirm btn-sm" @click="editSelected">
+        <button v-if="isOpen" type="button" class="btn-confirm btn-sm" @click="editSelected">
           <font-awesome-icon :icon="['fas', 'pen-to-square']" /> Edit
         </button>
         <button
+          type="button"
           class="btn-view btn-sm"
           title="Start a new raffle pre-filled from this one"
           @click="duplicateSelected"
@@ -221,6 +222,7 @@ async function deleteSelected(): Promise<void> {
              only way to retire a details-only one, whose draw happens elsewhere.
              Verifying a winner still closes as part of that flow. -->
         <button
+          type="button"
           class="btn-caution btn-sm"
           :title="
             isOpen
@@ -232,7 +234,7 @@ async function deleteSelected(): Promise<void> {
           <font-awesome-icon :icon="['fas', isOpen ? 'lock' : 'rotate']" />
           {{ isOpen ? 'Close' : 'Reopen' }}
         </button>
-        <button class="btn-danger btn-sm" @click="deleteSelected">
+        <button type="button" class="btn-danger btn-sm" @click="deleteSelected">
           <font-awesome-icon :icon="['fas', 'trash']" /> Delete
         </button>
       </div>
@@ -252,6 +254,7 @@ async function deleteSelected(): Promise<void> {
         <p class="text-muted text-sm mb-12">{{ raffles.raffleWinner.num_entries }} entries</p>
         <div v-if="isOpen" class="flex-toolbar">
           <button
+            type="button"
             class="btn-action"
             :disabled="raffles.pickingWinner"
             @click="raffles.verifyRaffleWinner()"
@@ -259,6 +262,7 @@ async function deleteSelected(): Promise<void> {
             <font-awesome-icon :icon="['fas', 'circle-check']" /> Verify Winner
           </button>
           <button
+            type="button"
             class="btn-caution"
             :disabled="raffles.pickingWinner"
             @click="raffles.pickAnotherWinner()"
@@ -272,6 +276,7 @@ async function deleteSelected(): Promise<void> {
       <!-- Pick winner button -->
       <div v-if="isOpen && !raffles.raffleWinner" class="mb-16">
         <button
+          type="button"
           class="btn-action btn-lg"
           :disabled="raffles.pickingWinner"
           @click="raffles.pickRaffleWinner()"
@@ -330,6 +335,7 @@ async function deleteSelected(): Promise<void> {
             </label>
           </div>
           <button
+            type="button"
             class="btn-confirm btn-sm"
             :disabled="
               raffles.addingEntry ||
@@ -372,6 +378,7 @@ async function deleteSelected(): Promise<void> {
         <template #cell-paid="{ row }">
           <button
             v-if="isOpen"
+            type="button"
             :class="['btn-sm', PAID_BUTTON[entryPaymentState(row)].cls]"
             :title="charges ? 'Record a payment' : 'Mark this entry paid'"
             @click="payingEntry = row"
@@ -385,7 +392,9 @@ async function deleteSelected(): Promise<void> {
           </template>
         </template>
         <template #cell-actions="{ row }">
-          <button class="btn-danger btn-sm" @click="raffles.deleteEntry(row)">&times;</button>
+          <button type="button" class="btn-danger btn-sm" @click="raffles.deleteEntry(row)">
+            &times;
+          </button>
         </template>
       </DataTable>
       <EmptyState v-else text="No entries yet." />
@@ -402,7 +411,7 @@ async function deleteSelected(): Promise<void> {
     <!-- -- List ---------------------------------------------------------------- -->
     <ManagerView v-else title="Raffles" :icon="['fad', 'ticket']">
       <template #actions>
-        <button class="btn-confirm btn-sm" @click="openNew">
+        <button type="button" class="btn-confirm btn-sm" @click="openNew">
           <font-awesome-icon :icon="['fas', 'plus']" /> New Raffle
         </button>
       </template>
@@ -492,6 +501,7 @@ async function deleteSelected(): Promise<void> {
             <template #cell-actions="{ row }">
               <div class="row-actions">
                 <button
+                  type="button"
                   class="btn-view btn-sm"
                   aria-label="View"
                   title="View"
@@ -500,6 +510,7 @@ async function deleteSelected(): Promise<void> {
                   <font-awesome-icon :icon="['fas', 'eye']" />
                 </button>
                 <button
+                  type="button"
                   class="btn-view btn-sm"
                   aria-label="Copy to new raffle"
                   title="Copy to new raffle"
@@ -508,6 +519,7 @@ async function deleteSelected(): Promise<void> {
                   <font-awesome-icon :icon="['fas', 'copy']" />
                 </button>
                 <button
+                  type="button"
                   class="btn-danger btn-sm"
                   aria-label="Delete"
                   title="Delete"
@@ -539,16 +551,19 @@ async function deleteSelected(): Promise<void> {
 .entry-add-actions {
   justify-content: space-between;
 }
+
 .entry-add-paid {
   display: flex;
   align-items: center;
   gap: 8px;
   cursor: pointer;
 }
+
 /* Timing pill above a current-raffle card's title (Scheduled / Window passed). */
 .raffle-status-pill {
   margin-bottom: 8px;
 }
+
 /* Winner row highlight in the entries DataTable. `:deep` reaches the row that
    the DataTable child renders (a plain scoped selector wouldn't penetrate it). */
 :deep(.entry-winner-row) {

@@ -234,6 +234,7 @@ function cancel(): void {
             <input v-model="t.start" type="datetime-local" aria-label="Starts" />
             <input v-model="t.end" type="datetime-local" aria-label="Ends (optional)" />
             <button
+              type="button"
               class="btn-danger btn-sm"
               aria-label="Remove date row"
               title="Remove date row"
@@ -242,7 +243,11 @@ function cancel(): void {
               &times;
             </button>
           </div>
-          <button class="btn-neutral btn-sm mt-8" @click="addTime(store.mapForm.times)">
+          <button
+            type="button"
+            class="btn-neutral btn-sm mt-8"
+            @click="addTime(store.mapForm.times)"
+          >
             <font-awesome-icon :icon="['fas', 'plus']" /> Add Date
           </button>
         </div>
@@ -264,6 +269,7 @@ function cancel(): void {
         <button
           v-for="t in STALL_TYPES"
           :key="t.value"
+          type="button"
           class="btn-neutral btn-sm"
           @click="addStall(t.value)"
         >
@@ -288,7 +294,7 @@ function cancel(): void {
             />
             {{ selected.stall.occupants[0]?.title || `Stall ${selected.index + 1}` }}
           </h4>
-          <button class="btn-danger btn-sm" @click="removeSelected">
+          <button type="button" class="btn-danger btn-sm" @click="removeSelected">
             <font-awesome-icon :icon="['fas', 'trash']" /> Remove Stall
           </button>
         </div>
@@ -384,7 +390,7 @@ function cancel(): void {
             <font-awesome-icon :icon="['fad', 'handshake']" /> Who's here
             <span class="text-muted text-sm">({{ selected.stall.occupants.length }})</span>
           </h4>
-          <button class="btn-neutral btn-sm" @click="addOccupant">
+          <button type="button" class="btn-neutral btn-sm" @click="addOccupant">
             <font-awesome-icon :icon="['fas', 'plus']" /> Add another day
           </button>
         </div>
@@ -406,6 +412,7 @@ function cancel(): void {
               </span>
             </strong>
             <button
+              type="button"
               class="btn-danger btn-sm"
               :disabled="selected.stall.occupants.length <= 1"
               :title="
@@ -519,6 +526,7 @@ function cancel(): void {
                 <input v-model="t.start" type="datetime-local" aria-label="Opens" />
                 <input v-model="t.end" type="datetime-local" aria-label="Closes (optional)" />
                 <button
+                  type="button"
                   class="btn-danger btn-sm"
                   aria-label="Remove stall hours row"
                   title="Remove stall hours row"
@@ -527,7 +535,11 @@ function cancel(): void {
                   &times;
                 </button>
               </div>
-              <button class="btn-neutral btn-sm mt-8" @click="addTime(occupant.times)">
+              <button
+                type="button"
+                class="btn-neutral btn-sm mt-8"
+                @click="addTime(occupant.times)"
+              >
                 <font-awesome-icon :icon="['fas', 'plus']" /> Add Hours
               </button>
             </div>
@@ -539,8 +551,11 @@ function cancel(): void {
       </p>
 
       <FormActions align="start">
-        <button class="btn-neutral" :disabled="store.savingMap" @click="cancel">Cancel</button>
+        <button type="button" class="btn-neutral" :disabled="store.savingMap" @click="cancel">
+          Cancel
+        </button>
         <button
+          type="button"
           class="btn-confirm"
           :disabled="!store.mapForm.title.trim() || store.savingMap"
           @click="save"

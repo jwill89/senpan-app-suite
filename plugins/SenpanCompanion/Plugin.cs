@@ -1,7 +1,7 @@
 using System;
 using Dalamud.Game.Command;
-using Dalamud.IoC;
 using Dalamud.Interface.Windowing;
+using Dalamud.IoC;
 using Dalamud.Plugin;
 using Dalamud.Plugin.Services;
 using SenpanCompanion.Api;
@@ -37,11 +37,12 @@ public sealed class Plugin : IDalamudPlugin
 
     private const string CommandName = "/senpan";
 
-    public readonly WindowSystem WindowSystem = new("SenpanCompanion");
+    public WindowSystem WindowSystem { get; } = new("SenpanCompanion");
 
     private readonly Configuration config;
     private readonly ApiClient api;
     private readonly LiveConnection live;
+    private readonly ChatSender chat;
     private readonly RollTracker rollTracker;
     private readonly TimedMacroRunner timedMacros;
     private readonly MainWindow mainWindow;
@@ -59,25 +60,25 @@ public sealed class Plugin : IDalamudPlugin
         this.api = new ApiClient(this.config, Log);
         this.live = new LiveConnection(this.config, Log, Framework);
         var nearby = new NearbyPlayers(ObjectTable);
-        var chat = new ChatSender(Framework, Log);
+        this.chat = new ChatSender(Framework, Log);
         // Roll tracking is server-independent - it starts watching chat as soon as the
         // plugin loads, regardless of whether an account is connected.
         this.rollTracker = new RollTracker(ChatGui, ClientState, ObjectTable, Log);
         // Timed Text Macros are likewise account-free; the runner drives their timers off
         // the game frame and persists progress via config.
-        this.timedMacros = new TimedMacroRunner(this.config, chat, Framework, ClientState, Log);
+        this.timedMacros = new TimedMacroRunner(this.config, this.chat, Framework, ClientState, Log);
 
-        this.mainWindow = new MainWindow(this, this.config, this.api, this.live, nearby, chat, this.rollTracker, this.timedMacros);
+        this.mainWindow = new MainWindow(this, this.config, this.api, this.live, nearby, this.chat, this.rollTracker, this.timedMacros);
         this.WindowSystem.AddWindow(this.mainWindow);
 
-        CommandManager.AddHandler(CommandName, new CommandInfo(OnCommand)
+        CommandManager.AddHandler(CommandName, new CommandInfo(this.OnCommand)
         {
             HelpMessage = "Open the Senpan Companion window (settings are a tab inside).",
         });
 
-        PluginInterface.UiBuilder.Draw += DrawUi;
-        PluginInterface.UiBuilder.OpenConfigUi += OpenMain;
-        PluginInterface.UiBuilder.OpenMainUi += ToggleMain;
+        PluginInterface.UiBuilder.Draw += this.DrawUi;
+        PluginInterface.UiBuilder.OpenConfigUi += this.OpenMain;
+        PluginInterface.UiBuilder.OpenMainUi += this.ToggleMain;
 
         if (this.config.AutoConnect)
             this.live.Start();
@@ -85,15 +86,17 @@ public sealed class Plugin : IDalamudPlugin
 
     public void Dispose()
     {
-        PluginInterface.UiBuilder.Draw -= DrawUi;
-        PluginInterface.UiBuilder.OpenConfigUi -= OpenMain;
-        PluginInterface.UiBuilder.OpenMainUi -= ToggleMain;
+        PluginInterface.UiBuilder.Draw -= this.DrawUi;
+        PluginInterface.UiBuilder.OpenConfigUi -= this.OpenMain;
+        PluginInterface.UiBuilder.OpenMainUi -= this.ToggleMain;
         CommandManager.RemoveHandler(CommandName);
 
         this.WindowSystem.RemoveAllWindows();
         this.mainWindow.Dispose();
         this.rollTracker.Dispose();
         this.timedMacros.Dispose();
+        // After the window and the macro runner, the two things that send.
+        this.chat.Dispose();
         this.live.Dispose();
         this.api.Dispose();
     }

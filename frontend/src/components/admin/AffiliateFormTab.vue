@@ -70,6 +70,7 @@ function cancel(): void {
           >
             <input v-model="owner.value" placeholder="Owner name" aria-label="Owner name" />
             <button
+              type="button"
               class="btn-danger btn-sm"
               :disabled="affiliates.affiliateForm.owners.length <= 1"
               aria-label="Remove owner"
@@ -79,7 +80,7 @@ function cancel(): void {
               &times;
             </button>
           </div>
-          <button class="btn-neutral btn-sm mt-8" @click="affiliates.addOwner()">
+          <button type="button" class="btn-neutral btn-sm mt-8" @click="affiliates.addOwner()">
             <font-awesome-icon :icon="['fas', 'plus']" /> Add Owner
           </button>
         </div>
@@ -120,6 +121,7 @@ function cancel(): void {
             <input v-model="h.start" type="time" aria-label="Start time" />
             <input v-model="h.end" type="time" aria-label="End time (optional)" />
             <button
+              type="button"
               class="btn-danger btn-sm"
               :disabled="affiliates.affiliateForm.hours.length <= 1"
               aria-label="Remove hours row"
@@ -129,7 +131,7 @@ function cancel(): void {
               &times;
             </button>
           </div>
-          <button class="btn-neutral btn-sm mt-8" @click="affiliates.addHour()">
+          <button type="button" class="btn-neutral btn-sm mt-8" @click="affiliates.addHour()">
             <font-awesome-icon :icon="['fas', 'plus']" /> Add Time
           </button>
         </div>
@@ -196,10 +198,16 @@ function cancel(): void {
       </FormField>
 
       <FormActions align="start">
-        <button class="btn-neutral" :disabled="affiliates.savingAffiliate" @click="cancel">
+        <button
+          type="button"
+          class="btn-neutral"
+          :disabled="affiliates.savingAffiliate"
+          @click="cancel"
+        >
           Cancel
         </button>
         <button
+          type="button"
           class="btn-confirm"
           :disabled="!affiliates.affiliateForm.name.trim() || affiliates.savingAffiliate"
           @click="save"
@@ -219,16 +227,19 @@ function cancel(): void {
 .owner-row {
   grid-template-columns: minmax(140px, 1fr) 46px;
 }
+
 /* Hours: label + start + end + delete, header and rows sharing one template. */
 .hour-row {
   grid-template-columns: minmax(120px, 1fr) 120px 120px 46px;
 }
+
 /* Discord + Carrd links side by side, wrapping on narrow screens. */
 .affiliate-links-row {
   display: flex;
   flex-wrap: wrap;
   gap: 16px;
 }
+
 .affiliate-links-row > * {
   flex: 1 1 240px;
   min-width: 0;

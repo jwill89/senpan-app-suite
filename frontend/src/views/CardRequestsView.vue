@@ -6,7 +6,7 @@
  * (mirroring the backend) and blocks submission until it's a valid card; the
  * server additionally rejects a taken ID or a duplicate board with a clear message.
  */
-import { computed, onMounted, ref, useTemplateRef } from 'vue'
+import { computed, onMounted, ref, useId, useTemplateRef } from 'vue'
 import { useRouter } from 'vue-router'
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
 import TurnstileWidget from '@/components/common/TurnstileWidget.vue'
@@ -23,6 +23,9 @@ const app = useAppStore()
 // Cloudflare Turnstile bot check (empty site key = disabled).
 const turnstileSiteKey = ref('')
 const turnstile = useTemplateRef<InstanceType<typeof TurnstileWidget>>('turnstile')
+
+/** Ties each field caption to its input. */
+const fieldId = useId()
 
 onMounted(async () => {
   cr.reset()
@@ -74,7 +77,7 @@ function back(): void {
 <template>
   <div>
     <div class="topbar">
-      <button class="btn-neutral btn-sm" @click="back">
+      <button type="button" class="btn-neutral btn-sm" @click="back">
         <font-awesome-icon :icon="['fas', 'arrow-left']" /> Back
       </button>
       <h2>Personal Card Request</h2>
@@ -91,7 +94,9 @@ function back(): void {
           <strong>pending staff approval</strong>. Once it's approved (and paid for), it becomes
           playable on regular bingo nights.
         </p>
-        <button class="btn-view mt-12" @click="cr.reset()">Request another card</button>
+        <button type="button" class="btn-view mt-12" @click="cr.reset()">
+          Request another card
+        </button>
       </div>
 
       <!-- Request form -->
@@ -109,8 +114,9 @@ function back(): void {
 
         <div class="card-request-form">
           <div class="field">
-            <label class="field-label">Character Name</label>
+            <label :for="`${fieldId}-name`" class="field-label">Character Name</label>
             <input
+              :id="`${fieldId}-name`"
               v-model="cr.characterName"
               placeholder="Character Name"
               maxlength="60"
@@ -121,8 +127,9 @@ function back(): void {
           <WorldPicker v-model="cr.world" />
 
           <div class="field">
-            <label class="field-label">Custom Card ID</label>
+            <label :for="`${fieldId}-card-id`" class="field-label">Custom Card ID</label>
             <input
+              :id="`${fieldId}-card-id`"
               :value="cr.cardId"
               placeholder="ABC123"
               maxlength="6"
@@ -136,7 +143,7 @@ function back(): void {
           </div>
 
           <div class="field">
-            <label class="field-label">Your Card</label>
+            <span class="field-label">Your Card</span>
             <p class="text-muted text-sm mb-8">
               Enter a number in each cell (B 1-15, I 16-30, N 31-45, G 46-60, O 61-75), or use
               “Generate Random” and tweak from there. The centre is a free space.
@@ -168,6 +175,7 @@ function back(): void {
           </div>
 
           <button
+            type="button"
             class="btn-confirm card-request-submit"
             :disabled="
               cr.submitting || !!validationMessage || (!!turnstileSiteKey && !cr.turnstileToken)
@@ -203,6 +211,7 @@ function back(): void {
   border-radius: var(--radius, 8px);
   padding: 20px;
 }
+
 .card-request-form input,
 .card-request-form select {
   width: 100%;

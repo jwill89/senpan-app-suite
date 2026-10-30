@@ -11,7 +11,7 @@ import (
 
 func newTestStore(t *testing.T) *store.Store {
 	t.Helper()
-	s, err := store.New(filepath.Join(t.TempDir(), "test.db"))
+	s, err := store.New(t.Context(), filepath.Join(t.TempDir(), "test.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -31,11 +31,11 @@ func TestCardSaveAndGet(t *testing.T) {
 		{4, 19, 34, 49, 64},
 		{5, 20, 35, 50, 65},
 	}
-	if err := s.SaveCard("ABC123", board); err != nil {
+	if err := s.SaveCard(t.Context(), "ABC123", board); err != nil {
 		t.Fatal(err)
 	}
 
-	card, err := s.GetCard("ABC123")
+	card, err := s.GetCard(t.Context(), "ABC123")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -59,7 +59,7 @@ func TestCardSaveAndGet(t *testing.T) {
 func TestCardGetNotFound(t *testing.T) {
 	s := newTestStore(t)
 
-	card, err := s.GetCard("ZZZZZZ")
+	card, err := s.GetCard(t.Context(), "ZZZZZZ")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -71,7 +71,7 @@ func TestCardGetNotFound(t *testing.T) {
 func TestCardExists(t *testing.T) {
 	s := newTestStore(t)
 
-	exists, err := s.CardExists("ABC123")
+	exists, err := s.CardExists(t.Context(), "ABC123")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -80,11 +80,11 @@ func TestCardExists(t *testing.T) {
 	}
 
 	board := [][]int{{1, 16, 31, 46, 61}, {2, 17, 32, 47, 62}, {3, 18, 0, 48, 63}, {4, 19, 34, 49, 64}, {5, 20, 35, 50, 65}}
-	if err := s.SaveCard("ABC123", board); err != nil {
+	if err := s.SaveCard(t.Context(), "ABC123", board); err != nil {
 		t.Fatal(err)
 	}
 
-	exists, err = s.CardExists("ABC123")
+	exists, err = s.CardExists(t.Context(), "ABC123")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -102,11 +102,11 @@ func TestCardSaveBatch(t *testing.T) {
 		{ID: "CARD02", Board: board},
 		{ID: "CARD03", Board: board},
 	}
-	if err := s.SaveCardsBatch(batch); err != nil {
+	if err := s.SaveCardsBatch(t.Context(), batch); err != nil {
 		t.Fatal(err)
 	}
 
-	ids, err := s.ListCardIDs()
+	ids, err := s.ListCardIDs(t.Context())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -119,14 +119,14 @@ func TestCardListCards(t *testing.T) {
 	s := newTestStore(t)
 
 	board := [][]int{{1, 16, 31, 46, 61}, {2, 17, 32, 47, 62}, {3, 18, 0, 48, 63}, {4, 19, 34, 49, 64}, {5, 20, 35, 50, 65}}
-	if err := s.SaveCard("AAA111", board); err != nil {
+	if err := s.SaveCard(t.Context(), "AAA111", board); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.SaveCard("BBB222", board); err != nil {
+	if err := s.SaveCard(t.Context(), "BBB222", board); err != nil {
 		t.Fatal(err)
 	}
 
-	cards, err := s.ListCards()
+	cards, err := s.ListCards(t.Context())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -146,14 +146,14 @@ func TestCardListIDs(t *testing.T) {
 	s := newTestStore(t)
 
 	board := [][]int{{1, 16, 31, 46, 61}, {2, 17, 32, 47, 62}, {3, 18, 0, 48, 63}, {4, 19, 34, 49, 64}, {5, 20, 35, 50, 65}}
-	if err := s.SaveCard("AAA111", board); err != nil {
+	if err := s.SaveCard(t.Context(), "AAA111", board); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.SaveCard("BBB222", board); err != nil {
+	if err := s.SaveCard(t.Context(), "BBB222", board); err != nil {
 		t.Fatal(err)
 	}
 
-	ids, err := s.ListCardIDs()
+	ids, err := s.ListCardIDs(t.Context())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -169,11 +169,11 @@ func TestCardDelete(t *testing.T) {
 	s := newTestStore(t)
 
 	board := [][]int{{1, 16, 31, 46, 61}, {2, 17, 32, 47, 62}, {3, 18, 0, 48, 63}, {4, 19, 34, 49, 64}, {5, 20, 35, 50, 65}}
-	if err := s.SaveCard("DEL001", board); err != nil {
+	if err := s.SaveCard(t.Context(), "DEL001", board); err != nil {
 		t.Fatal(err)
 	}
 
-	deleted, err := s.DeleteCard("DEL001")
+	deleted, err := s.DeleteCard(t.Context(), "DEL001")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -182,7 +182,7 @@ func TestCardDelete(t *testing.T) {
 	}
 
 	// Delete again - should return false
-	deleted, err = s.DeleteCard("DEL001")
+	deleted, err = s.DeleteCard(t.Context(), "DEL001")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -196,12 +196,12 @@ func TestCardDeleteAll(t *testing.T) {
 
 	board := [][]int{{1, 16, 31, 46, 61}, {2, 17, 32, 47, 62}, {3, 18, 0, 48, 63}, {4, 19, 34, 49, 64}, {5, 20, 35, 50, 65}}
 	for _, id := range []string{"DA0001", "DA0002", "DA0003"} {
-		if err := s.SaveCard(id, board); err != nil {
+		if err := s.SaveCard(t.Context(), id, board); err != nil {
 			t.Fatal(err)
 		}
 	}
 
-	deleted, err := s.DeleteAllCards()
+	deleted, err := s.DeleteAllCards(t.Context())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -209,7 +209,7 @@ func TestCardDeleteAll(t *testing.T) {
 		t.Errorf("expected 3 deleted, got %d", len(deleted))
 	}
 
-	ids, err := s.ListCardIDs()
+	ids, err := s.ListCardIDs(t.Context())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -225,7 +225,7 @@ func testPattern() [][]bool {
 	for i := range grid {
 		grid[i] = make([]bool, 5)
 	}
-	for c := 0; c < 5; c++ {
+	for c := range 5 {
 		grid[0][c] = true
 	}
 	return grid
@@ -234,7 +234,7 @@ func testPattern() [][]bool {
 func TestPatternSaveAndList(t *testing.T) {
 	s := newTestStore(t)
 
-	id, err := s.SavePattern("Top Row", testPattern(), 1)
+	id, err := s.SavePattern(t.Context(), "Top Row", testPattern(), 1)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -242,7 +242,7 @@ func TestPatternSaveAndList(t *testing.T) {
 		t.Errorf("expected positive ID, got %d", id)
 	}
 
-	patterns, err := s.ListPatterns()
+	patterns, err := s.ListPatterns(t.Context())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -263,11 +263,11 @@ func TestPatternSaveAndList(t *testing.T) {
 func TestPatternAutoIncrementSortOrder(t *testing.T) {
 	s := newTestStore(t)
 
-	_, _ = s.SavePattern("Pat A", testPattern(), 1)
-	_, _ = s.SavePattern("Pat B", testPattern(), 1)
-	_, _ = s.SavePattern("Pat C", testPattern(), 1)
+	_, _ = s.SavePattern(t.Context(), "Pat A", testPattern(), 1)
+	_, _ = s.SavePattern(t.Context(), "Pat B", testPattern(), 1)
+	_, _ = s.SavePattern(t.Context(), "Pat C", testPattern(), 1)
 
-	patterns, _ := s.ListPatterns()
+	patterns, _ := s.ListPatterns(t.Context())
 	if len(patterns) != 3 {
 		t.Fatalf("expected 3, got %d", len(patterns))
 	}
@@ -281,11 +281,11 @@ func TestPatternAutoIncrementSortOrder(t *testing.T) {
 func TestPatternGetByIDs(t *testing.T) {
 	s := newTestStore(t)
 
-	idA, _ := s.SavePattern("A", testPattern(), 1)
-	_, _ = s.SavePattern("B", testPattern(), 1)
-	idC, _ := s.SavePattern("C", testPattern(), 1)
+	idA, _ := s.SavePattern(t.Context(), "A", testPattern(), 1)
+	_, _ = s.SavePattern(t.Context(), "B", testPattern(), 1)
+	idC, _ := s.SavePattern(t.Context(), "C", testPattern(), 1)
 
-	got, err := s.GetPatternsByIDs([]int{int(idA), int(idC)})
+	got, err := s.GetPatternsByIDs(t.Context(), []int{int(idA), int(idC)})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -297,7 +297,7 @@ func TestPatternGetByIDs(t *testing.T) {
 func TestPatternGetByIDs_Empty(t *testing.T) {
 	s := newTestStore(t)
 
-	got, err := s.GetPatternsByIDs(nil)
+	got, err := s.GetPatternsByIDs(t.Context(), nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -309,9 +309,9 @@ func TestPatternGetByIDs_Empty(t *testing.T) {
 func TestPatternRename(t *testing.T) {
 	s := newTestStore(t)
 
-	id, _ := s.SavePattern("Old Name", testPattern(), 1)
+	id, _ := s.SavePattern(t.Context(), "Old Name", testPattern(), 1)
 
-	renamed, err := s.RenamePattern(int(id), "New Name")
+	renamed, err := s.RenamePattern(t.Context(), int(id), "New Name")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -319,7 +319,7 @@ func TestPatternRename(t *testing.T) {
 		t.Error("expected true for renamed pattern")
 	}
 
-	patterns, _ := s.ListPatterns()
+	patterns, _ := s.ListPatterns(t.Context())
 	if patterns[0].Name != "New Name" {
 		t.Errorf("name = %q; want New Name", patterns[0].Name)
 	}
@@ -328,7 +328,7 @@ func TestPatternRename(t *testing.T) {
 func TestPatternRename_NotFound(t *testing.T) {
 	s := newTestStore(t)
 
-	renamed, err := s.RenamePattern(9999, "X")
+	renamed, err := s.RenamePattern(t.Context(), 9999, "X")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -340,9 +340,9 @@ func TestPatternRename_NotFound(t *testing.T) {
 func TestPatternDelete(t *testing.T) {
 	s := newTestStore(t)
 
-	id, _ := s.SavePattern("To Delete", testPattern(), 1)
+	id, _ := s.SavePattern(t.Context(), "To Delete", testPattern(), 1)
 
-	deleted, err := s.DeletePattern(int(id))
+	deleted, err := s.DeletePattern(t.Context(), int(id))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -350,7 +350,7 @@ func TestPatternDelete(t *testing.T) {
 		t.Error("expected true for deleted pattern")
 	}
 
-	deleted, _ = s.DeletePattern(int(id))
+	deleted, _ = s.DeletePattern(t.Context(), int(id))
 	if deleted {
 		t.Error("expected false for already-deleted pattern")
 	}
@@ -359,12 +359,12 @@ func TestPatternDelete(t *testing.T) {
 func TestPatternMove(t *testing.T) {
 	s := newTestStore(t)
 
-	_, _ = s.SavePattern("A", testPattern(), 1)
-	idB, _ := s.SavePattern("B", testPattern(), 1)
-	_, _ = s.SavePattern("C", testPattern(), 1)
+	_, _ = s.SavePattern(t.Context(), "A", testPattern(), 1)
+	idB, _ := s.SavePattern(t.Context(), "B", testPattern(), 1)
+	_, _ = s.SavePattern(t.Context(), "C", testPattern(), 1)
 
 	// Move B up -> order should be B, A, C
-	moved, err := s.MovePattern(int(idB), "up")
+	moved, err := s.MovePattern(t.Context(), int(idB), "up")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -372,7 +372,7 @@ func TestPatternMove(t *testing.T) {
 		t.Error("expected true for move up")
 	}
 
-	patterns, _ := s.ListPatterns()
+	patterns, _ := s.ListPatterns(t.Context())
 	if patterns[0].Name != "B" || patterns[1].Name != "A" || patterns[2].Name != "C" {
 		names := make([]string, len(patterns))
 		for i, p := range patterns {
@@ -385,12 +385,12 @@ func TestPatternMove(t *testing.T) {
 func TestPatternMove_Down(t *testing.T) {
 	s := newTestStore(t)
 
-	_, _ = s.SavePattern("A", testPattern(), 1)
-	idB, _ := s.SavePattern("B", testPattern(), 1)
-	_, _ = s.SavePattern("C", testPattern(), 1)
+	_, _ = s.SavePattern(t.Context(), "A", testPattern(), 1)
+	idB, _ := s.SavePattern(t.Context(), "B", testPattern(), 1)
+	_, _ = s.SavePattern(t.Context(), "C", testPattern(), 1)
 
 	// Move B down -> order should be A, C, B
-	moved, err := s.MovePattern(int(idB), "down")
+	moved, err := s.MovePattern(t.Context(), int(idB), "down")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -398,7 +398,7 @@ func TestPatternMove_Down(t *testing.T) {
 		t.Error("expected true for move down")
 	}
 
-	patterns, _ := s.ListPatterns()
+	patterns, _ := s.ListPatterns(t.Context())
 	if patterns[0].Name != "A" || patterns[1].Name != "C" || patterns[2].Name != "B" {
 		names := make([]string, len(patterns))
 		for i, p := range patterns {
@@ -411,10 +411,10 @@ func TestPatternMove_Down(t *testing.T) {
 func TestPatternMove_Boundary(t *testing.T) {
 	s := newTestStore(t)
 
-	idA, _ := s.SavePattern("A", testPattern(), 1)
+	idA, _ := s.SavePattern(t.Context(), "A", testPattern(), 1)
 
 	// Moving the only pattern up - should be a no-op
-	moved, err := s.MovePattern(int(idA), "up")
+	moved, err := s.MovePattern(t.Context(), int(idA), "up")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -426,7 +426,7 @@ func TestPatternMove_Boundary(t *testing.T) {
 func TestPatternMove_NotFound(t *testing.T) {
 	s := newTestStore(t)
 
-	moved, err := s.MovePattern(9999, "up")
+	moved, err := s.MovePattern(t.Context(), 9999, "up")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -440,7 +440,7 @@ func TestPatternMove_NotFound(t *testing.T) {
 func TestGameCreateAndGetActive(t *testing.T) {
 	s := newTestStore(t)
 
-	id, err := s.CreateGame()
+	id, err := s.CreateGame(t.Context())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -448,7 +448,7 @@ func TestGameCreateAndGetActive(t *testing.T) {
 		t.Errorf("expected positive ID, got %d", id)
 	}
 
-	game, err := s.GetActiveGame()
+	game, err := s.GetActiveGame(t.Context())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -469,7 +469,7 @@ func TestGameCreateAndGetActive(t *testing.T) {
 func TestGameGetActive_None(t *testing.T) {
 	s := newTestStore(t)
 
-	game, err := s.GetActiveGame()
+	game, err := s.GetActiveGame(t.Context())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -481,12 +481,12 @@ func TestGameGetActive_None(t *testing.T) {
 func TestGameEnd(t *testing.T) {
 	s := newTestStore(t)
 
-	id, _ := s.CreateGame()
-	if err := s.EndGame(id); err != nil {
+	id, _ := s.CreateGame(t.Context())
+	if err := s.EndGame(t.Context(), id); err != nil {
 		t.Fatal(err)
 	}
 
-	game, err := s.GetActiveGame()
+	game, err := s.GetActiveGame(t.Context())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -498,14 +498,14 @@ func TestGameEnd(t *testing.T) {
 func TestGamePatterns(t *testing.T) {
 	s := newTestStore(t)
 
-	gameID, _ := s.CreateGame()
+	gameID, _ := s.CreateGame(t.Context())
 
 	pat := testPattern()
-	if err := s.AddGamePattern(gameID, 1, "Top Row", pat); err != nil {
+	if err := s.AddGamePattern(t.Context(), gameID, 1, "Top Row", pat); err != nil {
 		t.Fatal(err)
 	}
 
-	patterns, err := s.GetGamePatterns(gameID)
+	patterns, err := s.GetGamePatterns(t.Context(), gameID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -523,19 +523,19 @@ func TestGamePatterns(t *testing.T) {
 func TestCalledNumbers(t *testing.T) {
 	s := newTestStore(t)
 
-	gameID, _ := s.CreateGame()
+	gameID, _ := s.CreateGame(t.Context())
 
-	if err := s.AddCalledNumber(gameID, 42, 1); err != nil {
+	if err := s.AddCalledNumber(t.Context(), gameID, 42, 1); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.AddCalledNumber(gameID, 7, 2); err != nil {
+	if err := s.AddCalledNumber(t.Context(), gameID, 7, 2); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.AddCalledNumber(gameID, 65, 3); err != nil {
+	if err := s.AddCalledNumber(t.Context(), gameID, 65, 3); err != nil {
 		t.Fatal(err)
 	}
 
-	nums, err := s.GetCalledNumbers(gameID)
+	nums, err := s.GetCalledNumbers(t.Context(), gameID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -551,13 +551,13 @@ func TestCalledNumbers(t *testing.T) {
 func TestWinnersCache(t *testing.T) {
 	s := newTestStore(t)
 
-	gameID, _ := s.CreateGame()
+	gameID, _ := s.CreateGame(t.Context())
 
-	if err := s.UpdateWinnersCache(gameID, []string{"WIN001", "WIN002"}); err != nil {
+	if err := s.UpdateWinnersCache(t.Context(), gameID, []string{"WIN001", "WIN002"}); err != nil {
 		t.Fatal(err)
 	}
 
-	game, _ := s.GetActiveGame()
+	game, _ := s.GetActiveGame(t.Context())
 	if game.WinnersCache != `["WIN001","WIN002"]` {
 		t.Errorf("winners_cache = %q", game.WinnersCache)
 	}
@@ -566,13 +566,13 @@ func TestWinnersCache(t *testing.T) {
 func TestWinnersCache_Nil(t *testing.T) {
 	s := newTestStore(t)
 
-	gameID, _ := s.CreateGame()
+	gameID, _ := s.CreateGame(t.Context())
 
-	if err := s.UpdateWinnersCache(gameID, nil); err != nil {
+	if err := s.UpdateWinnersCache(t.Context(), gameID, nil); err != nil {
 		t.Fatal(err)
 	}
 
-	game, _ := s.GetActiveGame()
+	game, _ := s.GetActiveGame(t.Context())
 	if game.WinnersCache != "[]" {
 		t.Errorf("winners_cache = %q; want []", game.WinnersCache)
 	}
@@ -581,9 +581,9 @@ func TestWinnersCache_Nil(t *testing.T) {
 func TestCalledNumbers_Empty(t *testing.T) {
 	s := newTestStore(t)
 
-	gameID, _ := s.CreateGame()
+	gameID, _ := s.CreateGame(t.Context())
 
-	nums, err := s.GetCalledNumbers(gameID)
+	nums, err := s.GetCalledNumbers(t.Context(), gameID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -595,9 +595,9 @@ func TestCalledNumbers_Empty(t *testing.T) {
 func TestGamePatterns_Empty(t *testing.T) {
 	s := newTestStore(t)
 
-	gameID, _ := s.CreateGame()
+	gameID, _ := s.CreateGame(t.Context())
 
-	patterns, err := s.GetGamePatterns(gameID)
+	patterns, err := s.GetGamePatterns(t.Context(), gameID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -618,7 +618,7 @@ func TestRaffleCreateAndGet(t *testing.T) {
 		MaxEntries:   5,
 		CostPerEntry: 100,
 	}
-	id, err := s.CreateRaffle(r)
+	id, err := s.CreateRaffle(t.Context(), r)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -626,7 +626,7 @@ func TestRaffleCreateAndGet(t *testing.T) {
 		t.Errorf("expected positive ID, got %d", id)
 	}
 
-	got, err := s.GetRaffle(id)
+	got, err := s.GetRaffle(t.Context(), id)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -647,7 +647,7 @@ func TestRaffleCreateAndGet(t *testing.T) {
 func TestRaffleGetNotFound(t *testing.T) {
 	s := newTestStore(t)
 
-	got, err := s.GetRaffle(9999)
+	got, err := s.GetRaffle(t.Context(), 9999)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -660,14 +660,14 @@ func TestRaffleUpdate(t *testing.T) {
 	s := newTestStore(t)
 
 	r := &model.Raffle{Title: "Original", MaxEntries: 1}
-	id, _ := s.CreateRaffle(r)
+	id, _ := s.CreateRaffle(t.Context(), r)
 
 	updated := &model.Raffle{ID: id, Title: "Updated", MaxEntries: 10, CostPerEntry: 500}
-	if err := s.UpdateRaffle(updated); err != nil {
+	if err := s.UpdateRaffle(t.Context(), updated); err != nil {
 		t.Fatal(err)
 	}
 
-	got, _ := s.GetRaffle(id)
+	got, _ := s.GetRaffle(t.Context(), id)
 	if got.Title != "Updated" {
 		t.Errorf("title = %q; want Updated", got.Title)
 	}
@@ -680,9 +680,9 @@ func TestRaffleDelete(t *testing.T) {
 	s := newTestStore(t)
 
 	r := &model.Raffle{Title: "To Delete", MaxEntries: 1}
-	id, _ := s.CreateRaffle(r)
+	id, _ := s.CreateRaffle(t.Context(), r)
 
-	deleted, err := s.DeleteRaffle(id)
+	deleted, err := s.DeleteRaffle(t.Context(), id)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -690,7 +690,7 @@ func TestRaffleDelete(t *testing.T) {
 		t.Error("expected deleted=true")
 	}
 
-	got, _ := s.GetRaffle(id)
+	got, _ := s.GetRaffle(t.Context(), id)
 	if got != nil {
 		t.Error("expected nil after deletion")
 	}
@@ -699,7 +699,7 @@ func TestRaffleDelete(t *testing.T) {
 func TestRaffleDelete_NotFound(t *testing.T) {
 	s := newTestStore(t)
 
-	deleted, err := s.DeleteRaffle(9999)
+	deleted, err := s.DeleteRaffle(t.Context(), 9999)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -711,10 +711,10 @@ func TestRaffleDelete_NotFound(t *testing.T) {
 func TestRaffleListAdmin(t *testing.T) {
 	s := newTestStore(t)
 
-	_, _ = s.CreateRaffle(&model.Raffle{Title: "R1", MaxEntries: 1})
-	_, _ = s.CreateRaffle(&model.Raffle{Title: "R2", MaxEntries: 1})
+	_, _ = s.CreateRaffle(t.Context(), &model.Raffle{Title: "R1", MaxEntries: 1})
+	_, _ = s.CreateRaffle(t.Context(), &model.Raffle{Title: "R2", MaxEntries: 1})
 
-	raffles, err := s.ListRaffles(true)
+	raffles, err := s.ListRaffles(t.Context(), true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -726,12 +726,12 @@ func TestRaffleListAdmin(t *testing.T) {
 func TestRaffleListPublic_OnlyOpen(t *testing.T) {
 	s := newTestStore(t)
 
-	id1, _ := s.CreateRaffle(&model.Raffle{Title: "Open", MaxEntries: 1})
-	id2, _ := s.CreateRaffle(&model.Raffle{Title: "Closed", MaxEntries: 1})
+	id1, _ := s.CreateRaffle(t.Context(), &model.Raffle{Title: "Open", MaxEntries: 1})
+	id2, _ := s.CreateRaffle(t.Context(), &model.Raffle{Title: "Closed", MaxEntries: 1})
 	_ = id1
-	_ = s.SetRaffleStatus(id2, "closed")
+	_ = s.SetRaffleStatus(t.Context(), id2, "closed")
 
-	raffles, err := s.ListRaffles(false)
+	raffles, err := s.ListRaffles(t.Context(), false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -746,9 +746,9 @@ func TestRaffleListPublic_OnlyOpen(t *testing.T) {
 func TestRaffleEntryCreateAndList(t *testing.T) {
 	s := newTestStore(t)
 
-	rID, _ := s.CreateRaffle(&model.Raffle{Title: "R", MaxEntries: 5})
+	rID, _ := s.CreateRaffle(t.Context(), &model.Raffle{Title: "R", MaxEntries: 5})
 
-	eID, err := s.CreateRaffleEntry(rID, "Player1", "World1", 3)
+	eID, err := s.CreateRaffleEntry(t.Context(), rID, "Player1", "World1", 3)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -756,7 +756,7 @@ func TestRaffleEntryCreateAndList(t *testing.T) {
 		t.Errorf("expected positive entry ID, got %d", eID)
 	}
 
-	entries, err := s.ListRaffleEntries(rID)
+	entries, err := s.ListRaffleEntries(t.Context(), rID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -774,11 +774,11 @@ func TestRaffleEntryCreateAndList(t *testing.T) {
 func TestRaffleEntryGetByCharWorld(t *testing.T) {
 	s := newTestStore(t)
 
-	rID, _ := s.CreateRaffle(&model.Raffle{Title: "R", MaxEntries: 5})
-	_, _ = s.CreateRaffleEntry(rID, "Player1", "World1", 2)
+	rID, _ := s.CreateRaffle(t.Context(), &model.Raffle{Title: "R", MaxEntries: 5})
+	_, _ = s.CreateRaffleEntry(t.Context(), rID, "Player1", "World1", 2)
 
 	// Exact match
-	entry, err := s.GetRaffleEntry(rID, "Player1", "World1")
+	entry, err := s.GetRaffleEntry(t.Context(), rID, "Player1", "World1")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -787,7 +787,7 @@ func TestRaffleEntryGetByCharWorld(t *testing.T) {
 	}
 
 	// Case-insensitive match
-	entry, err = s.GetRaffleEntry(rID, "player1", "world1")
+	entry, err = s.GetRaffleEntry(t.Context(), rID, "player1", "world1")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -796,7 +796,7 @@ func TestRaffleEntryGetByCharWorld(t *testing.T) {
 	}
 
 	// No match
-	entry, err = s.GetRaffleEntry(rID, "Nobody", "Nowhere")
+	entry, err = s.GetRaffleEntry(t.Context(), rID, "Nobody", "Nowhere")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -808,14 +808,14 @@ func TestRaffleEntryGetByCharWorld(t *testing.T) {
 func TestRaffleAddEntries(t *testing.T) {
 	s := newTestStore(t)
 
-	rID, _ := s.CreateRaffle(&model.Raffle{Title: "R", MaxEntries: 10})
-	eID, _ := s.CreateRaffleEntry(rID, "Player1", "World1", 2)
+	rID, _ := s.CreateRaffle(t.Context(), &model.Raffle{Title: "R", MaxEntries: 10})
+	eID, _ := s.CreateRaffleEntry(t.Context(), rID, "Player1", "World1", 2)
 
-	if err := s.AddRaffleEntries(eID, 3); err != nil {
+	if err := s.AddRaffleEntries(t.Context(), eID, 3); err != nil {
 		t.Fatal(err)
 	}
 
-	entry, _ := s.GetRaffleEntry(rID, "Player1", "World1")
+	entry, _ := s.GetRaffleEntry(t.Context(), rID, "Player1", "World1")
 	if entry.NumEntries != 5 {
 		t.Errorf("num_entries = %d; want 5", entry.NumEntries)
 	}
@@ -824,11 +824,11 @@ func TestRaffleAddEntries(t *testing.T) {
 func TestRaffleCountEntries(t *testing.T) {
 	s := newTestStore(t)
 
-	rID, _ := s.CreateRaffle(&model.Raffle{Title: "R", MaxEntries: 10})
-	_, _ = s.CreateRaffleEntry(rID, "P1", "W1", 3)
-	_, _ = s.CreateRaffleEntry(rID, "P2", "W1", 5)
+	rID, _ := s.CreateRaffle(t.Context(), &model.Raffle{Title: "R", MaxEntries: 10})
+	_, _ = s.CreateRaffleEntry(t.Context(), rID, "P1", "W1", 3)
+	_, _ = s.CreateRaffleEntry(t.Context(), rID, "P2", "W1", 5)
 
-	count, err := s.CountRaffleEntries(rID)
+	count, err := s.CountRaffleEntries(t.Context(), rID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -840,9 +840,9 @@ func TestRaffleCountEntries(t *testing.T) {
 func TestRaffleCountEntries_Empty(t *testing.T) {
 	s := newTestStore(t)
 
-	rID, _ := s.CreateRaffle(&model.Raffle{Title: "R", MaxEntries: 1})
+	rID, _ := s.CreateRaffle(t.Context(), &model.Raffle{Title: "R", MaxEntries: 1})
 
-	count, err := s.CountRaffleEntries(rID)
+	count, err := s.CountRaffleEntries(t.Context(), rID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -854,29 +854,29 @@ func TestRaffleCountEntries_Empty(t *testing.T) {
 func TestRaffleEntryPaid(t *testing.T) {
 	s := newTestStore(t)
 
-	rID, _ := s.CreateRaffle(&model.Raffle{Title: "R", MaxEntries: 5})
-	eID, _ := s.CreateRaffleEntry(rID, "P1", "W1", 1)
+	rID, _ := s.CreateRaffle(t.Context(), &model.Raffle{Title: "R", MaxEntries: 5})
+	eID, _ := s.CreateRaffleEntry(t.Context(), rID, "P1", "W1", 1)
 
 	// Initially not paid
-	entry, _ := s.GetRaffleEntry(rID, "P1", "W1")
+	entry, _ := s.GetRaffleEntry(t.Context(), rID, "P1", "W1")
 	if entry.Paid {
 		t.Error("expected unpaid initially")
 	}
 
 	// Mark paid
-	if _, err := s.SetRaffleEntryPaid(eID, true, 0, 0); err != nil {
+	if _, err := s.SetRaffleEntryPaid(t.Context(), eID, true, 0, 0); err != nil {
 		t.Fatal(err)
 	}
-	entry, _ = s.GetRaffleEntry(rID, "P1", "W1")
+	entry, _ = s.GetRaffleEntry(t.Context(), rID, "P1", "W1")
 	if !entry.Paid {
 		t.Error("expected paid after SetRaffleEntryPaid(true)")
 	}
 
 	// Unmark
-	if _, err := s.SetRaffleEntryPaid(eID, false, 0, 0); err != nil {
+	if _, err := s.SetRaffleEntryPaid(t.Context(), eID, false, 0, 0); err != nil {
 		t.Fatal(err)
 	}
-	entry, _ = s.GetRaffleEntry(rID, "P1", "W1")
+	entry, _ = s.GetRaffleEntry(t.Context(), rID, "P1", "W1")
 	if entry.Paid {
 		t.Error("expected unpaid after SetRaffleEntryPaid(false)")
 	}
@@ -885,10 +885,10 @@ func TestRaffleEntryPaid(t *testing.T) {
 func TestRaffleDeleteEntry(t *testing.T) {
 	s := newTestStore(t)
 
-	rID, _ := s.CreateRaffle(&model.Raffle{Title: "R", MaxEntries: 5})
-	eID, _ := s.CreateRaffleEntry(rID, "P1", "W1", 1)
+	rID, _ := s.CreateRaffle(t.Context(), &model.Raffle{Title: "R", MaxEntries: 5})
+	eID, _ := s.CreateRaffleEntry(t.Context(), rID, "P1", "W1", 1)
 
-	deleted, err := s.DeleteRaffleEntry(eID)
+	deleted, err := s.DeleteRaffleEntry(t.Context(), eID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -896,7 +896,7 @@ func TestRaffleDeleteEntry(t *testing.T) {
 		t.Error("expected deleted=true")
 	}
 
-	entries, _ := s.ListRaffleEntries(rID)
+	entries, _ := s.ListRaffleEntries(t.Context(), rID)
 	if len(entries) != 0 {
 		t.Errorf("expected 0 entries after delete, got %d", len(entries))
 	}
@@ -905,7 +905,7 @@ func TestRaffleDeleteEntry(t *testing.T) {
 func TestRaffleDeleteEntry_NotFound(t *testing.T) {
 	s := newTestStore(t)
 
-	deleted, err := s.DeleteRaffleEntry(9999)
+	deleted, err := s.DeleteRaffleEntry(t.Context(), 9999)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -917,11 +917,11 @@ func TestRaffleDeleteEntry_NotFound(t *testing.T) {
 func TestRafflePickWinner(t *testing.T) {
 	s := newTestStore(t)
 
-	rID, _ := s.CreateRaffle(&model.Raffle{Title: "R", MaxEntries: 5})
-	eID, _ := s.CreateRaffleEntry(rID, "P1", "W1", 3)
-	_, _ = s.SetRaffleEntryPaid(eID, true, 0, 0)
+	rID, _ := s.CreateRaffle(t.Context(), &model.Raffle{Title: "R", MaxEntries: 5})
+	eID, _ := s.CreateRaffleEntry(t.Context(), rID, "P1", "W1", 3)
+	_, _ = s.SetRaffleEntryPaid(t.Context(), eID, true, 0, 0)
 
-	winner, err := s.PickRaffleWinner(rID, true)
+	winner, err := s.PickRaffleWinner(t.Context(), rID, true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -936,10 +936,10 @@ func TestRafflePickWinner(t *testing.T) {
 func TestRafflePickWinner_NoPaidEntries(t *testing.T) {
 	s := newTestStore(t)
 
-	rID, _ := s.CreateRaffle(&model.Raffle{Title: "R", MaxEntries: 5})
-	_, _ = s.CreateRaffleEntry(rID, "P1", "W1", 3) // not paid
+	rID, _ := s.CreateRaffle(t.Context(), &model.Raffle{Title: "R", MaxEntries: 5})
+	_, _ = s.CreateRaffleEntry(t.Context(), rID, "P1", "W1", 3) // not paid
 
-	winner, err := s.PickRaffleWinner(rID, true)
+	winner, err := s.PickRaffleWinner(t.Context(), rID, true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -951,9 +951,9 @@ func TestRafflePickWinner_NoPaidEntries(t *testing.T) {
 func TestRafflePickWinner_NoEntries(t *testing.T) {
 	s := newTestStore(t)
 
-	rID, _ := s.CreateRaffle(&model.Raffle{Title: "R", MaxEntries: 5})
+	rID, _ := s.CreateRaffle(t.Context(), &model.Raffle{Title: "R", MaxEntries: 5})
 
-	winner, err := s.PickRaffleWinner(rID, true)
+	winner, err := s.PickRaffleWinner(t.Context(), rID, true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -965,33 +965,33 @@ func TestRafflePickWinner_NoEntries(t *testing.T) {
 func TestRaffleSetWinnerAndStatus(t *testing.T) {
 	s := newTestStore(t)
 
-	rID, _ := s.CreateRaffle(&model.Raffle{Title: "R", MaxEntries: 5})
-	eID, _ := s.CreateRaffleEntry(rID, "P1", "W1", 1)
-	_, _ = s.SetRaffleEntryPaid(eID, true, 0, 0)
+	rID, _ := s.CreateRaffle(t.Context(), &model.Raffle{Title: "R", MaxEntries: 5})
+	eID, _ := s.CreateRaffleEntry(t.Context(), rID, "P1", "W1", 1)
+	_, _ = s.SetRaffleEntryPaid(t.Context(), eID, true, 0, 0)
 
 	// Set winner
-	if err := s.SetRaffleWinner(rID, &eID); err != nil {
+	if err := s.SetRaffleWinner(t.Context(), rID, &eID); err != nil {
 		t.Fatal(err)
 	}
-	r, _ := s.GetRaffle(rID)
+	r, _ := s.GetRaffle(t.Context(), rID)
 	if r.WinnerEntryID == nil || *r.WinnerEntryID != eID {
 		t.Errorf("winner_entry_id = %v; want %d", r.WinnerEntryID, eID)
 	}
 
 	// Close raffle
-	if err := s.SetRaffleStatus(rID, "closed"); err != nil {
+	if err := s.SetRaffleStatus(t.Context(), rID, "closed"); err != nil {
 		t.Fatal(err)
 	}
-	r, _ = s.GetRaffle(rID)
+	r, _ = s.GetRaffle(t.Context(), rID)
 	if r.Status != "closed" {
 		t.Errorf("status = %q; want closed", r.Status)
 	}
 
 	// Clear winner
-	if err := s.SetRaffleWinner(rID, nil); err != nil {
+	if err := s.SetRaffleWinner(t.Context(), rID, nil); err != nil {
 		t.Fatal(err)
 	}
-	r, _ = s.GetRaffle(rID)
+	r, _ = s.GetRaffle(t.Context(), rID)
 	if r.WinnerEntryID != nil {
 		t.Error("expected nil winner_entry_id after clearing")
 	}
@@ -1003,7 +1003,7 @@ func TestSettingsGetSet(t *testing.T) {
 	s := newTestStore(t)
 
 	// Get non-existent setting returns empty
-	val, err := s.GetSetting("test_key")
+	val, err := s.GetSetting(t.Context(), "test_key")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1012,10 +1012,10 @@ func TestSettingsGetSet(t *testing.T) {
 	}
 
 	// Set and get
-	if err := s.SetSetting("test_key", "hello"); err != nil {
+	if err := s.SetSetting(t.Context(), "test_key", "hello"); err != nil {
 		t.Fatal(err)
 	}
-	val, err = s.GetSetting("test_key")
+	val, err = s.GetSetting(t.Context(), "test_key")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1024,10 +1024,10 @@ func TestSettingsGetSet(t *testing.T) {
 	}
 
 	// Overwrite
-	if err := s.SetSetting("test_key", "world"); err != nil {
+	if err := s.SetSetting(t.Context(), "test_key", "world"); err != nil {
 		t.Fatal(err)
 	}
-	val, _ = s.GetSetting("test_key")
+	val, _ = s.GetSetting(t.Context(), "test_key")
 	if val != "world" {
 		t.Errorf("expected world, got %q", val)
 	}
@@ -1038,7 +1038,7 @@ func TestSettingsGetSet(t *testing.T) {
 func TestStyleCRUD(t *testing.T) {
 	s := newTestStore(t)
 
-	id, err := s.CreateStyle("Dark Theme", map[string]string{"page-bg": "#000", "accent": "#fff"}, "images/flourishes/a.svg", "images/flourishes/b.svg", false)
+	id, err := s.CreateStyle(t.Context(), "Dark Theme", map[string]string{"page-bg": "#000", "accent": "#fff"}, "images/flourishes/a.svg", "images/flourishes/b.svg", false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1046,7 +1046,7 @@ func TestStyleCRUD(t *testing.T) {
 		t.Errorf("expected positive ID, got %d", id)
 	}
 
-	style, err := s.GetStyle(id)
+	style, err := s.GetStyle(t.Context(), id)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1068,18 +1068,18 @@ func TestStyleCRUD(t *testing.T) {
 	if style.IsPublic {
 		t.Error("new theme should default to Private (is_public=false)")
 	}
-	if pubs, _ := s.ListPublicStyles(); len(pubs) != 0 {
+	if pubs, _ := s.ListPublicStyles(t.Context()); len(pubs) != 0 {
 		t.Errorf("private theme leaked into public list: %v", pubs)
 	}
-	if ps, _ := s.GetPublicStyle(id); ps != nil {
+	if ps, _ := s.GetPublicStyle(t.Context(), id); ps != nil {
 		t.Error("GetPublicStyle returned a Private theme")
 	}
 
 	// Update (also clears the flourishes and marks the theme Public).
-	if err := s.UpdateStyle(id, "Light Theme", map[string]string{"page-bg": "#fff"}, "", "", true); err != nil {
+	if err := s.UpdateStyle(t.Context(), id, "Light Theme", map[string]string{"page-bg": "#fff"}, "", "", true); err != nil {
 		t.Fatal(err)
 	}
-	style, _ = s.GetStyle(id)
+	style, _ = s.GetStyle(t.Context(), id)
 	if style.Name != "Light Theme" {
 		t.Errorf("name after update = %q", style.Name)
 	}
@@ -1090,15 +1090,15 @@ func TestStyleCRUD(t *testing.T) {
 	if !style.IsPublic {
 		t.Error("theme should be Public after update")
 	}
-	if pubs, _ := s.ListPublicStyles(); len(pubs) != 1 || pubs[0].ID != id {
+	if pubs, _ := s.ListPublicStyles(t.Context()); len(pubs) != 1 || pubs[0].ID != id {
 		t.Errorf("public list after publish = %v", pubs)
 	}
-	if ps, _ := s.GetPublicStyle(id); ps == nil {
+	if ps, _ := s.GetPublicStyle(t.Context(), id); ps == nil {
 		t.Error("GetPublicStyle should return a Public theme")
 	}
 
 	// List
-	styles, err := s.ListStyles()
+	styles, err := s.ListStyles(t.Context())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1107,14 +1107,14 @@ func TestStyleCRUD(t *testing.T) {
 	}
 
 	// Delete
-	deleted, err := s.DeleteStyle(id)
+	deleted, err := s.DeleteStyle(t.Context(), id)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if !deleted {
 		t.Error("expected deleted=true")
 	}
-	style, _ = s.GetStyle(id)
+	style, _ = s.GetStyle(t.Context(), id)
 	if style != nil {
 		t.Error("expected nil after delete")
 	}
@@ -1123,7 +1123,7 @@ func TestStyleCRUD(t *testing.T) {
 func TestStyleGetNotFound(t *testing.T) {
 	s := newTestStore(t)
 
-	style, err := s.GetStyle(9999)
+	style, err := s.GetStyle(t.Context(), 9999)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1136,7 +1136,7 @@ func TestActiveStyleCSS(t *testing.T) {
 	s := newTestStore(t)
 
 	// No active style
-	css, err := s.GetActiveStyleCSS()
+	css, err := s.GetActiveStyleCSS(t.Context())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1145,10 +1145,10 @@ func TestActiveStyleCSS(t *testing.T) {
 	}
 
 	// Create and activate
-	id, _ := s.CreateStyle("Test", map[string]string{"highlight": "red"}, "images/flourishes/board.svg", "images/flourishes/num.svg", false)
-	_ = s.SetSetting("active_style_id", fmt.Sprintf("%d", id))
+	id, _ := s.CreateStyle(t.Context(), "Test", map[string]string{"highlight": "red"}, "images/flourishes/board.svg", "images/flourishes/num.svg", false)
+	_ = s.SetSetting(t.Context(), "active_style_id", fmt.Sprintf("%d", id))
 
-	css, err = s.GetActiveStyleCSS()
+	css, err = s.GetActiveStyleCSS(t.Context())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1157,7 +1157,7 @@ func TestActiveStyleCSS(t *testing.T) {
 	}
 
 	// The active style carries its flourishes (used by the active endpoint/broadcast).
-	active, err := s.GetActiveStyle()
+	active, err := s.GetActiveStyle(t.Context())
 	if err != nil || active == nil {
 		t.Fatalf("GetActiveStyle: %v / %v", active, err)
 	}
@@ -1175,11 +1175,11 @@ func TestWinnersLogInsertAndList(t *testing.T) {
 		{CardID: "AAA111", PlayerName: "Alice", GameDetails: "Round 1", WinningPatterns: `["Top Row"]`},
 		{CardID: "BBB222", PlayerName: "Bob", GameDetails: "Round 1", WinningPatterns: `["Full Card"]`},
 	}
-	if err := s.InsertWinnersLog(entries); err != nil {
+	if err := s.InsertWinnersLog(t.Context(), entries); err != nil {
 		t.Fatal(err)
 	}
 
-	results, total, err := s.ListWinnersLog(10, 0, "logged_at", "DESC")
+	results, total, err := s.ListWinnersLog(t.Context(), 10, 0, "logged_at", "DESC")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1200,9 +1200,9 @@ func TestWinnersLogPagination(t *testing.T) {
 			CardID: fmt.Sprintf("C%05d", i), PlayerName: "P", WinningPatterns: "[]",
 		}
 	}
-	_ = s.InsertWinnersLog(entries)
+	_ = s.InsertWinnersLog(t.Context(), entries)
 
-	results, total, err := s.ListWinnersLog(2, 0, "logged_at", "DESC")
+	results, total, err := s.ListWinnersLog(t.Context(), 2, 0, "logged_at", "DESC")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1214,7 +1214,7 @@ func TestWinnersLogPagination(t *testing.T) {
 	}
 
 	// Second page
-	results, total, err = s.ListWinnersLog(2, 2, "logged_at", "DESC")
+	results, total, err = s.ListWinnersLog(t.Context(), 2, 2, "logged_at", "DESC")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1234,36 +1234,36 @@ func TestWinnersLogDelete(t *testing.T) {
 		{CardID: "BBB222", PlayerName: "Bob", WinningPatterns: "[]"},
 		{CardID: "CCC333", PlayerName: "Cara", WinningPatterns: "[]"},
 	}
-	if err := s.InsertWinnersLog(entries); err != nil {
+	if err := s.InsertWinnersLog(t.Context(), entries); err != nil {
 		t.Fatal(err)
 	}
 
 	// Delete one by id (read an id back from the list).
-	rows, _, err := s.ListWinnersLog(10, 0, "logged_at", "DESC")
+	rows, _, err := s.ListWinnersLog(t.Context(), 10, 0, "logged_at", "DESC")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if deleted, err := s.DeleteWinnerLogEntry(rows[0].ID); err != nil || !deleted {
+	if deleted, err := s.DeleteWinnerLogEntry(t.Context(), rows[0].ID); err != nil || !deleted {
 		t.Fatalf("DeleteWinnerLogEntry = %v, err=%v; want true", deleted, err)
 	}
-	if _, total, _ := s.ListWinnersLog(10, 0, "logged_at", "DESC"); total != 2 {
+	if _, total, _ := s.ListWinnersLog(t.Context(), 10, 0, "logged_at", "DESC"); total != 2 {
 		t.Errorf("total after single delete = %d; want 2", total)
 	}
 
 	// Deleting a non-existent id reports false, no error.
-	if deleted, err := s.DeleteWinnerLogEntry(999999); err != nil || deleted {
+	if deleted, err := s.DeleteWinnerLogEntry(t.Context(), 999999); err != nil || deleted {
 		t.Errorf("DeleteWinnerLogEntry(missing) = %v, err=%v; want false, nil", deleted, err)
 	}
 
 	// Delete-all clears the log and reports how many rows went.
-	n, err := s.DeleteAllWinnersLog()
+	n, err := s.DeleteAllWinnersLog(t.Context())
 	if err != nil {
 		t.Fatal(err)
 	}
 	if n != 2 {
 		t.Errorf("DeleteAllWinnersLog count = %d; want 2", n)
 	}
-	if _, total, _ := s.ListWinnersLog(10, 0, "logged_at", "DESC"); total != 0 {
+	if _, total, _ := s.ListWinnersLog(t.Context(), 10, 0, "logged_at", "DESC"); total != 0 {
 		t.Errorf("total after delete-all = %d; want 0", total)
 	}
 }
@@ -1278,9 +1278,9 @@ func TestFrequentWinners(t *testing.T) {
 		{CardID: "A3", PlayerName: "Alice", WinningPatterns: "[]"},
 		{CardID: "B1", PlayerName: "Bob", WinningPatterns: "[]"},
 	}
-	_ = s.InsertWinnersLog(entries)
+	_ = s.InsertWinnersLog(t.Context(), entries)
 
-	frequent, err := s.FrequentWinners(3, 12)
+	frequent, err := s.FrequentWinners(t.Context(), 3, 12)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1299,9 +1299,9 @@ func TestDuplicatePatternDetection(t *testing.T) {
 	s := newTestStore(t)
 
 	pat := testPattern()
-	_, _ = s.SavePattern("Original", pat, 1)
+	_, _ = s.SavePattern(t.Context(), "Original", pat, 1)
 
-	dup, err := s.FindDuplicatePattern(pat)
+	dup, err := s.FindDuplicatePattern(t.Context(), pat)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1315,7 +1315,7 @@ func TestDuplicatePatternDetection(t *testing.T) {
 	// Different pattern should not be duplicate
 	pat2 := testPattern()
 	pat2[4][0] = true // modify one cell
-	dup, err = s.FindDuplicatePattern(pat2)
+	dup, err = s.FindDuplicatePattern(t.Context(), pat2)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1330,7 +1330,7 @@ func TestDuplicatePatternDetection(t *testing.T) {
 // collapsing its pager, when it had merely scrolled past the end.
 func TestWinnersLogPagePastEndReportsTotal(t *testing.T) {
 	s := newTestStore(t)
-	if err := s.InsertWinnersLog([]model.WinnersLogEntry{
+	if err := s.InsertWinnersLog(t.Context(), []model.WinnersLogEntry{
 		{CardID: "AAA111", PlayerName: "Alice", GameDetails: "Round 1", WinningPatterns: `["Top Row"]`},
 		{CardID: "BBB222", PlayerName: "Bob", GameDetails: "Round 1", WinningPatterns: `["Full Card"]`},
 		{CardID: "CCC333", PlayerName: "Cyra", GameDetails: "Round 1", WinningPatterns: `["Line"]`},
@@ -1339,7 +1339,7 @@ func TestWinnersLogPagePastEndReportsTotal(t *testing.T) {
 	}
 
 	// A page well past the end: no rows, but the total must still be the truth.
-	entries, total, err := s.ListWinnersLog(10, 100, "logged_at", "DESC")
+	entries, total, err := s.ListWinnersLog(t.Context(), 10, 100, "logged_at", "DESC")
 	if err != nil {
 		t.Fatalf("ListWinnersLog: %v", err)
 	}
@@ -1358,14 +1358,14 @@ func TestOpenNoMigrateLeavesTheSchemaAlone(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "readonly.db")
 
 	// A database one version behind: created normally, then stamped backwards.
-	s, err := store.New(path)
+	s, err := store.New(t.Context(), path)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := s.SetUserVersionForTest(1); err != nil {
+	if err := s.SetUserVersionForTest(t.Context(), 1); err != nil {
 		t.Fatalf("stamp user_version: %v", err)
 	}
-	before, err := s.UserVersionForTest()
+	before, err := s.UserVersionForTest(t.Context())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1375,7 +1375,7 @@ func TestOpenNoMigrateLeavesTheSchemaAlone(t *testing.T) {
 	if err != nil {
 		t.Fatalf("OpenNoMigrate: %v", err)
 	}
-	after, err := ro.UserVersionForTest()
+	after, err := ro.UserVersionForTest(t.Context())
 	if err != nil {
 		t.Fatal(err)
 	}

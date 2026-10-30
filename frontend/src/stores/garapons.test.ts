@@ -54,7 +54,7 @@ beforeEach(() => {
   setActivePinia(createPinia())
   Object.values(ep).forEach((fn) => fn.mockClear())
   // jsdom has no clipboard by default; provide a resolving stub.
-  Object.assign(navigator, { clipboard: { writeText: vi.fn(async () => {}) } })
+  Object.assign(navigator, { clipboard: { writeText: vi.fn(async () => undefined) } })
 })
 
 describe('loading', () => {

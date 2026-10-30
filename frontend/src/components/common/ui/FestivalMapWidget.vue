@@ -15,7 +15,7 @@
  * which of them the plan draws; the "stamp rally stalls only" toggle pushes the
  * rest into the background.
  */
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, useTemplateRef, watch } from 'vue'
 import MarkdownText from '@/components/common/MarkdownText.vue'
 import FestivalMapCanvas from '@/components/common/ui/FestivalMapCanvas.vue'
 import { assetUrl } from '@/lib/assets'
@@ -38,16 +38,37 @@ const props = withDefaults(
      * not have our site replace the page they were reading.
      */
     embedded?: boolean
+    /**
+     * Occupant ids whose rally stamp the visitor holds. Passed by the festival
+     * dashboard, the one view that knows who is looking: the plan and the stall
+     * panel then mark those stalls as done.
+     */
+    collectedOccupantIds?: Set<number>
   }>(),
-  { embedded: false },
+  { embedded: false, collectedOccupantIds: undefined },
 )
+
+defineSlots<{
+  /** Replaces the stall panel's "Get a stamp card" link, for a page that can
+   *  offer the stamp itself (the dashboard's code entry). */
+  'rally-action'?: (props: { occupant: PublicStallOccupant; collected: boolean }) => unknown
+  /** Replaces the stall panel's "View the raffle" link. */
+  'raffle-action'?: (props: { occupant: PublicStallOccupant }) => unknown
+}>()
+
+/** Whether the visitor holds this occupant's rally stamp. */
+function isCollected(occupant: PublicStallOccupant): boolean {
+  return props.collectedOccupantIds?.has(occupant.id) ?? false
+}
 
 /** The pitch whose details are open (null = none). */
 const selected = ref<PublicFestivalStall | null>(null)
 const rallyOnly = ref(false)
 /** Index into the map's `times` - which festival day is being browsed (-1 = all). */
 const dayIndex = ref(-1)
-const canvasRef = ref<{ zoomBy: (factor: number) => void; reset: () => void } | null>(null)
+const canvasRef = useTemplateRef<{ zoomBy: (factor: number) => void; reset: () => void }>(
+  'canvasRef',
+)
 
 const stalls = computed(() => props.map.stalls)
 
@@ -131,8 +152,8 @@ const modalPos = ref<{ x: number; y: number } | null>(null)
  * drag measured against the widget would be offset by the toolbar sitting above it
  * - which showed up as the panel jumping down the moment it was grabbed.
  */
-const stageRef = ref<HTMLElement | null>(null)
-const modalRef = ref<HTMLElement | null>(null)
+const stageRef = useTemplateRef<HTMLElement>('stageRef')
+const modalRef = useTemplateRef<HTMLElement>('modalRef')
 
 const modalStyle = computed(() =>
   modalPos.value
@@ -239,25 +260,37 @@ const linkTarget = computed(() => (props.embedded ? '_blank' : undefined))
     <!-- Any interaction at all clears the hint, the toolbar's own buttons
          included: zooming from the bar is using the map. Capture, so it counts
          even though the controls below stop the event for their own purposes. -->
+    <!-- eslint-disable-next-line vuejs-accessibility/no-static-element-interactions -- the listeners only observe events on the controls inside (capture phase) to clear the hint; the bar itself is not a control -->
     <div
       class="map-toolbar"
       @pointerdown.capture="dismissHint"
       @wheel.capture="dismissHint"
       @keydown.capture="dismissHint"
     >
-      <button class="btn-neutral btn-sm" aria-label="Zoom in" @click="canvasRef?.zoomBy(1.4)">
+      <button
+        type="button"
+        class="btn-neutral btn-sm"
+        aria-label="Zoom in"
+        @click="canvasRef?.zoomBy(1.4)"
+      >
         <font-awesome-icon :icon="['fas', 'magnifying-glass-plus']" />
       </button>
-      <button class="btn-neutral btn-sm" aria-label="Zoom out" @click="canvasRef?.zoomBy(1 / 1.4)">
+      <button
+        type="button"
+        class="btn-neutral btn-sm"
+        aria-label="Zoom out"
+        @click="canvasRef?.zoomBy(1 / 1.4)"
+      >
         <font-awesome-icon :icon="['fas', 'magnifying-glass-minus']" />
       </button>
-      <button class="btn-neutral btn-sm" @click="canvasRef?.reset()">
+      <button type="button" class="btn-neutral btn-sm" @click="canvasRef?.reset()">
         <font-awesome-icon :icon="['fas', 'expand']" /> Fit
       </button>
       <!-- Day switcher: only worth offering when the festival runs across more
            than one, since some stalls change hands from one day to the next. -->
       <span v-if="days.length > 1" class="map-day-picker">
         <button
+          type="button"
           class="btn-neutral btn-sm"
           :class="{ 'is-active': dayIndex === -1 }"
           @click="dayIndex = -1"
@@ -267,6 +300,7 @@ const linkTarget = computed(() => (props.embedded ? '_blank' : undefined))
         <button
           v-for="(t, i) in days"
           :key="i"
+          type="button"
           class="btn-neutral btn-sm"
           :class="{ 'is-active': dayIndex === i }"
           @click="dayIndex = i"
@@ -283,6 +317,7 @@ const linkTarget = computed(() => (props.embedded ? '_blank' : undefined))
     <!-- The stage: the plan and everything positioned against it. The toolbar is
          a sibling ABOVE this, so anchoring the panel and the hint to the widget
          would measure from the top of the bar instead of the top of the plan. -->
+    <!-- eslint-disable-next-line vuejs-accessibility/no-static-element-interactions -- the listeners only observe events on the map inside (capture phase) to clear the hint; the stage itself is not a control -->
     <div
       ref="stageRef"
       class="map-embed-stage"
@@ -299,6 +334,7 @@ const linkTarget = computed(() => (props.embedded ? '_blank' : undefined))
         :rally-ids="rallyIds"
         :day="selectedDay"
         :festival-days="days"
+        :collected-occupant-ids="collectedOccupantIds"
         :fill="embedded"
         @select="selected = $event"
         @frame-aspect="frameAspect = $event"
@@ -331,7 +367,12 @@ const linkTarget = computed(() => (props.embedded ? '_blank' : undefined))
              and the links inside it, so only this bar moves it. -->
         <div class="map-stall-modal-grip" @pointerdown="onModalDragStart">
           <font-awesome-icon :icon="['fad', 'bars']" class="map-stall-modal-grip-icon" />
-          <button class="map-stall-modal-close" aria-label="Close details" @click="selected = null">
+          <button
+            type="button"
+            class="map-stall-modal-close"
+            aria-label="Close details"
+            @click="selected = null"
+          >
             <font-awesome-icon :icon="['fas', 'circle-xmark']" />
           </button>
         </div>
@@ -445,7 +486,7 @@ const linkTarget = computed(() => (props.embedded ? '_blank' : undefined))
                 :src="assetUrl(occupant.raffle.prize_image)"
                 alt=""
               />
-              <div>
+              <div class="map-stall-rally-body">
                 <strong>{{ occupant.raffle.title }}</strong>
                 <p class="text-sm text-muted">
                   A raffle is running at this stall.
@@ -454,6 +495,7 @@ const linkTarget = computed(() => (props.embedded ? '_blank' : undefined))
                        vue-router leaves a _blank link to the browser. On our own
                        page it navigates in place as before. -->
                   <RouterLink
+                    v-if="!$slots['raffle-action']"
                     class="link-btn"
                     :to="{ name: 'raffle-detail', params: { id: String(occupant.raffle.id) } }"
                     :target="linkTarget"
@@ -461,18 +503,27 @@ const linkTarget = computed(() => (props.embedded ? '_blank' : undefined))
                     View the raffle
                   </RouterLink>
                 </p>
+                <slot name="raffle-action" :occupant="occupant" />
               </div>
             </div>
 
             <!-- Stamp rally badge: this occupant carries a stamp on the open rally. -->
-            <div v-if="occupant.in_stamp_rally" class="map-stall-rally">
+            <div
+              v-if="occupant.in_stamp_rally"
+              class="map-stall-rally"
+              :class="{ 'is-collected': isCollected(occupant) }"
+            >
               <img v-if="occupant.stamp_image" :src="assetUrl(occupant.stamp_image)" alt="" />
-              <div>
+              <div class="map-stall-rally-body">
                 <strong>Part of {{ occupant.rally_title }}</strong>
                 <p class="text-sm text-muted">
-                  Visit this stall to collect its stamp.
+                  <template v-if="isCollected(occupant)">
+                    <font-awesome-icon :icon="['fas', 'circle-check']" class="text-success" />
+                    You've collected this stall's stamp.
+                  </template>
+                  <template v-else>Visit this stall to collect its stamp.</template>
                   <RouterLink
-                    v-if="map.stamp_rally_signup && map.stamp_rally_id"
+                    v-if="!$slots['rally-action'] && map.stamp_rally_signup && map.stamp_rally_id"
                     class="link-btn"
                     :to="{
                       name: 'stamp-rally-signup',
@@ -483,6 +534,7 @@ const linkTarget = computed(() => (props.embedded ? '_blank' : undefined))
                     Get a stamp card
                   </RouterLink>
                 </p>
+                <slot name="rally-action" :occupant="occupant" :collected="isCollected(occupant)" />
               </div>
             </div>
           </div>

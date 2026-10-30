@@ -64,7 +64,7 @@ internal sealed class TimedMacrosTab
                 using (ImRaii.Disabled(!this.createForm.Valid))
                 {
                     if (Ui.PrimaryButton("Add macro"))
-                        AddMacro();
+                        this.AddMacro();
                 }
             }
         }
@@ -88,13 +88,13 @@ internal sealed class TimedMacrosTab
             var index = i + 1;
             Ui.Box($"macro{macro.Id}", () =>
             {
-                if (DrawMacroCard(macro, index, loggedIn))
+                if (this.DrawMacroCard(macro, index, loggedIn))
                     toDelete = macro.Id;
             });
         }
 
         if (toDelete != null)
-            DeleteMacro(toDelete);
+            this.DeleteMacro(toDelete);
     }
 
     private static void DrawIntro()
@@ -150,10 +150,14 @@ internal sealed class TimedMacrosTab
             return;
         var parts = TellComposer.PartCountPlain(text);
         if (parts <= 1)
+        {
             Ui.Help("Fits in a single message.");
+        }
         else
+        {
             UiText.WrappedColored(SplitWarnColor,
                 $"Too long for one line - will be sent as {parts} messages, one second apart.");
+        }
     }
 
     private void AddMacro()
@@ -173,7 +177,7 @@ internal sealed class TimedMacrosTab
     private bool DrawMacroCard(TimedTextMacro macro, int index, bool loggedIn)
     {
         if (this.editingId == macro.Id)
-            return DrawMacroEditor(macro);
+            return this.DrawMacroEditor(macro);
 
         var running = this.runner.IsRunning(macro.Id);
         var parts = TellComposer.PartCountPlain(macro.Text);
@@ -190,10 +194,10 @@ internal sealed class TimedMacrosTab
         var partsNote = parts > 1 ? $"  -  {parts} messages/send" : string.Empty;
         Ui.Help($"every {macro.IntervalMinutes} min{cap}{partsNote}");
 
-        DrawStatusLine(macro, running);
-        DrawMessage(macro, parts);
+        this.DrawStatusLine(macro, running);
+        this.DrawMessage(macro, parts);
 
-        return DrawActions(macro, running, loggedIn);
+        return this.DrawActions(macro, running, loggedIn);
     }
 
     private bool DrawMacroEditor(TimedTextMacro macro)
@@ -204,7 +208,7 @@ internal sealed class TimedMacrosTab
         using (ImRaii.Disabled(!this.editForm.Valid))
         {
             if (Ui.PrimaryButton("Save"))
-                SaveEdit(macro);
+                this.SaveEdit(macro);
         }
         ImGui.SameLine();
         if (Ui.Button("Cancel"))
@@ -320,7 +324,7 @@ internal sealed class TimedMacrosTab
 
             ImGui.SameLine();
             if (Ui.Button("Edit"))
-                BeginEdit(macro);
+                this.BeginEdit(macro);
         }
 
         ImGui.SameLine();

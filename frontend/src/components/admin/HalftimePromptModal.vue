@@ -24,8 +24,8 @@ const game = useGameStore()
     </p>
     <div v-else class="mb-20"></div>
     <div class="flex-center" style="gap: 12px">
-      <button class="btn-action" @click="game.confirmHalftime()">Yes</button>
-      <button class="btn-neutral" @click="game.dismissHalftime()">No</button>
+      <button type="button" class="btn-action" @click="game.confirmHalftime()">Yes</button>
+      <button type="button" class="btn-neutral" @click="game.dismissHalftime()">No</button>
     </div>
   </ModalOverlay>
 </template>

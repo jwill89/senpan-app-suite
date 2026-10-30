@@ -97,9 +97,9 @@ public sealed class LiveConnection : IDisposable
     /// <summary>Starts (or restarts) the background connect/receive/reconnect loop.</summary>
     public void Start()
     {
-        Stop();
+        this.Stop();
         this.cts = new CancellationTokenSource();
-        _ = Task.Run(() => RunAsync(this.cts.Token));
+        _ = Task.Run(() => this.RunAsync(this.cts.Token));
     }
 
     /// <summary>Stops the connection and the reconnect loop.</summary>
@@ -118,7 +118,7 @@ public sealed class LiveConnection : IDisposable
         this.Connected = false;
     }
 
-    public void Dispose() => Stop();
+    public void Dispose() => this.Stop();
 
     /// <summary>
     /// Whether the socket has ever been established, so Reconnected fires on a real
@@ -134,7 +134,7 @@ public sealed class LiveConnection : IDisposable
             var authRejected = false;
             try
             {
-                await ConnectAndReceiveAsync(ct).ConfigureAwait(false);
+                await this.ConnectAndReceiveAsync(ct).ConfigureAwait(false);
                 backoff = InitialBackoff; // clean disconnect -> reset the backoff
             }
             catch (OperationCanceledException)
@@ -182,7 +182,7 @@ public sealed class LiveConnection : IDisposable
 
     private async Task ConnectAndReceiveAsync(CancellationToken ct)
     {
-        var uri = BuildWebSocketUri();
+        var uri = this.BuildWebSocketUri();
         if (uri == null)
             return;
 
@@ -205,7 +205,7 @@ public sealed class LiveConnection : IDisposable
         this.Connected = true;
         // Only after a previous session: the first connect has nothing to re-sync.
         if (this.hasConnectedBefore)
-            RunOnUi(() => Reconnected?.Invoke());
+            this.RunOnUi(() => Reconnected?.Invoke());
         this.hasConnectedBefore = true;
 
         var buffer = new byte[16 * 1024];
@@ -236,7 +236,7 @@ public sealed class LiveConnection : IDisposable
 
             // Decode once, after the full message, so a multi-byte char split across
             // 16 KB frames isn't corrupted.
-            Dispatch(Encoding.UTF8.GetString(ms.GetBuffer(), 0, (int)ms.Length));
+            this.Dispatch(Encoding.UTF8.GetString(ms.GetBuffer(), 0, (int)ms.Length));
         }
     }
 
@@ -258,33 +258,33 @@ public sealed class LiveConnection : IDisposable
             {
                 var drawn = msg.Drawn;
                 var winners = msg.Winners ?? Array.Empty<string>();
-                RunOnUi(() => GameDraw?.Invoke(drawn, winners));
+                this.RunOnUi(() => GameDraw?.Invoke(drawn, winners));
                 break;
             }
 
             case "game_update":
             {
                 var state = msg.Game;
-                RunOnUi(() => GameUpdate?.Invoke(state));
+                this.RunOnUi(() => GameUpdate?.Invoke(state));
                 break;
             }
 
             case "cards_update":
-                RunOnUi(() => CardsChanged?.Invoke());
+                this.RunOnUi(() => CardsChanged?.Invoke());
                 break;
 
             case "yoever":
             {
                 var name = msg.PlayerName ?? string.Empty;
                 var count = msg.Count;
-                RunOnUi(() => Yoever?.Invoke(name, count));
+                this.RunOnUi(() => Yoever?.Invoke(name, count));
                 break;
             }
 
             case "yoever_config":
             {
                 var enabled = msg.Enabled;
-                RunOnUi(() => YoeverConfig?.Invoke(enabled));
+                this.RunOnUi(() => YoeverConfig?.Invoke(enabled));
                 break;
             }
 
@@ -292,14 +292,14 @@ public sealed class LiveConnection : IDisposable
             {
                 var enabled = msg.Enabled;
                 var interval = msg.Interval;
-                RunOnUi(() => AutoConfig?.Invoke(enabled, interval));
+                this.RunOnUi(() => AutoConfig?.Invoke(enabled, interval));
                 break;
             }
 
             case "halftime_prompt":
             {
                 var autoPaused = msg.AutoPaused;
-                RunOnUi(() => HalftimePrompt?.Invoke(autoPaused));
+                this.RunOnUi(() => HalftimePrompt?.Invoke(autoPaused));
                 break;
             }
 
@@ -308,7 +308,7 @@ public sealed class LiveConnection : IDisposable
                 var id = msg.Id;
                 var name = msg.Name ?? string.Empty;
                 var number = msg.RoomNumber ?? string.Empty;
-                RunOnUi(() => TeaRoomUnlocked?.Invoke(id, name, number));
+                this.RunOnUi(() => TeaRoomUnlocked?.Invoke(id, name, number));
                 break;
             }
         }

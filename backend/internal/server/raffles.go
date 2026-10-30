@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -35,7 +36,7 @@ func (s *Server) raffleStaff(r *http.Request) bool {
 //	Response:  {"raffles": [...]}
 func (s *Server) handleRafflesList(w http.ResponseWriter, r *http.Request) {
 	staff := s.raffleStaff(r)
-	raffles, err := s.store.ListRaffles(staff)
+	raffles, err := s.store.ListRaffles(r.Context(), staff)
 	if err != nil {
 		writeInternalError(w, "list raffles", err)
 		return
@@ -58,7 +59,7 @@ func (s *Server) handleRaffleDetail(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	raffle, err := s.store.GetRaffle(id)
+	raffle, err := s.store.GetRaffle(r.Context(), id)
 	if err != nil {
 		writeInternalError(w, "get raffle", err)
 		return
@@ -82,14 +83,14 @@ func (s *Server) handleRaffleDetail(w http.ResponseWriter, r *http.Request) {
 	resp := model.RaffleDetailResponse{Raffle: *raffle}
 
 	// Always include total entry count
-	totalEntries, err := s.store.CountRaffleEntries(id)
+	totalEntries, err := s.store.CountRaffleEntries(r.Context(), id)
 	if err == nil {
 		resp.TotalEntries = &totalEntries
 	}
 
 	// Include entries for staff, or winner entry for public on closed raffles
 	if staff {
-		entries, err := s.store.ListRaffleEntries(id)
+		entries, err := s.store.ListRaffleEntries(r.Context(), id)
 		if err != nil {
 			writeInternalError(w, "list raffle entries", err)
 			return
@@ -99,7 +100,7 @@ func (s *Server) handleRaffleDetail(w http.ResponseWriter, r *http.Request) {
 		// Show the winner entry to public - fetch directly by ID, minus the
 		// settlement columns (what they paid for and what was waived is staff-only;
 		// see RaffleEntry.PublicView).
-		entry, err := s.store.GetRaffleEntryByID(*raffle.WinnerEntryID)
+		entry, err := s.store.GetRaffleEntryByID(r.Context(), *raffle.WinnerEntryID)
 		if err == nil && entry != nil {
 			public := entry.PublicView()
 			resp.WinnerEntry = &public
@@ -138,12 +139,12 @@ type raffleWriteRequest struct {
 // stall cleared (naming one would claim a festival link it doesn't have), and a
 // stall that isn't on the linked map is dropped rather than failing the save -
 // the raffle is still a perfectly good raffle, it just isn't pinned to a pitch.
-func (s *Server) resolveRaffleStall(w http.ResponseWriter, raffle *model.Raffle) bool {
+func (s *Server) resolveRaffleStall(ctx context.Context, w http.ResponseWriter, raffle *model.Raffle) bool {
 	if raffle.FestivalMapID == nil {
 		raffle.OccupantID = nil
 		return true
 	}
-	m, err := s.store.GetFestivalMap(*raffle.FestivalMapID)
+	m, err := s.store.GetFestivalMap(ctx, *raffle.FestivalMapID)
 	if err != nil {
 		writeInternalError(w, "get festival map for raffle", err)
 		return false
@@ -301,10 +302,10 @@ func (s *Server) handleRaffleCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	raffle := req.toRaffle(0)
-	if !s.resolveRaffleStall(w, raffle) {
+	if !s.resolveRaffleStall(r.Context(), w, raffle) {
 		return
 	}
-	id, err := s.store.CreateRaffle(raffle)
+	id, err := s.store.CreateRaffle(r.Context(), raffle)
 	if err != nil {
 		writeInternalError(w, "create raffle", err)
 		return
@@ -342,14 +343,14 @@ func (s *Server) handleRaffleUpdate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	updated := req.toRaffle(id)
-	if !s.resolveRaffleStall(w, updated) {
+	if !s.resolveRaffleStall(r.Context(), w, updated) {
 		return
 	}
-	if err := s.store.UpdateRaffle(updated); err != nil {
+	if err := s.store.UpdateRaffle(r.Context(), updated); err != nil {
 		writeInternalError(w, "update raffle", err)
 		return
 	}
-	raffle, err := s.store.GetRaffle(id)
+	raffle, err := s.store.GetRaffle(r.Context(), id)
 	if err != nil || raffle == nil {
 		writeInternalError(w, "load updated raffle", err)
 		return
@@ -372,7 +373,7 @@ func (s *Server) handleRaffleDelete(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	if _, err := s.store.DeleteRaffle(id); err != nil {
+	if _, err := s.store.DeleteRaffle(r.Context(), id); err != nil {
 		writeInternalError(w, "delete raffle", err)
 		return
 	}
@@ -496,7 +497,7 @@ func (s *Server) handleRaffleEnter(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	raffle, err := s.store.GetRaffle(raffleID)
+	raffle, err := s.store.GetRaffle(r.Context(), raffleID)
 	if err != nil {
 		writeInternalError(w, "get raffle for entry", err)
 		return
@@ -535,7 +536,7 @@ func (s *Server) handleRaffleEnter(w http.ResponseWriter, r *http.Request) {
 	// add-vs-create decision inside one write transaction, so two simultaneous
 	// sign-ups for the same character+world can't both pass a stale count check and
 	// exceed the cap (or create duplicate rows).
-	entryID, newTotal, prevEntries, created, err := s.store.AddOrCreateRaffleEntry(
+	entryID, newTotal, prevEntries, created, err := s.store.AddOrCreateRaffleEntry(r.Context(),
 		raffleID, charName, world, req.NumEntries, raffle.MaxEntries)
 	if errors.Is(err, store.ErrRaffleEntryLimit) {
 		if prevEntries > 0 {
@@ -560,7 +561,7 @@ func (s *Server) handleRaffleEnter(w http.ResponseWriter, r *http.Request) {
 	// recoverable (staff see the real balance), silently under-quoting is not.
 	totalCost := raffle.EntryCost(newTotal)
 	amountDue := totalCost
-	if entry, err := s.store.GetRaffleEntryByID(entryID); err == nil && entry != nil {
+	if entry, err := s.store.GetRaffleEntryByID(r.Context(), entryID); err == nil && entry != nil {
 		amountDue = raffle.AmountOutstanding(*entry)
 	}
 	message := "Entries added successfully"
@@ -650,7 +651,7 @@ func (s *Server) handleRaffleEntryLookup(w http.ResponseWriter, r *http.Request)
 
 	// Only a raffle the caller could already see: a scheduled or hidden one must
 	// not become searchable just because its id was guessed.
-	raffle, err := s.store.GetRaffle(raffleID)
+	raffle, err := s.store.GetRaffle(r.Context(), raffleID)
 	if err != nil {
 		writeInternalError(w, "get raffle for lookup", err)
 		return
@@ -660,7 +661,7 @@ func (s *Server) handleRaffleEntryLookup(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	entries, truncated, err := s.store.LookupRaffleEntries(raffleID, name, raffleLookupLimit)
+	entries, truncated, err := s.store.LookupRaffleEntries(r.Context(), raffleID, name, raffleLookupLimit)
 	if err != nil {
 		writeInternalError(w, "look up raffle entries", err)
 		return
@@ -725,7 +726,7 @@ func (s *Server) handleRaffleEntryAdd(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	raffle, err := s.store.GetRaffle(raffleID)
+	raffle, err := s.store.GetRaffle(r.Context(), raffleID)
 	if err != nil {
 		writeInternalError(w, "get raffle for add entry", err)
 		return
@@ -739,10 +740,13 @@ func (s *Server) handleRaffleEntryAdd(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Adding the entry and settling it are two writes; run them detached, so a
+	// client that goes away between them can't leave a paid-for entry recorded unpaid.
+	ctx := context.WithoutCancel(r.Context())
 	// Same atomic cap-enforced write as the public enter path, so an admin and a
 	// player adding entries for the same character+world at once can't race past
 	// the max.
-	entryID, _, prevEntries, created, err := s.store.AddOrCreateRaffleEntry(
+	entryID, _, prevEntries, created, err := s.store.AddOrCreateRaffleEntry(ctx,
 		raffleID, charName, world, req.NumEntries, raffle.MaxEntries)
 	if errors.Is(err, store.ErrRaffleEntryLimit) {
 		if prevEntries > 0 {
@@ -763,13 +767,13 @@ func (s *Server) handleRaffleEntryAdd(w http.ResponseWriter, r *http.Request) {
 	// Settle right away when requested (never un-settles an existing entry). The
 	// tickets just added are outstanding by definition, so this always applies.
 	if req.Paid {
-		if _, err := s.store.SetRaffleEntryPaid(entryID, true, 0, req.AmountWaived); err != nil {
+		if _, err := s.store.SetRaffleEntryPaid(ctx, entryID, true, 0, req.AmountWaived); err != nil {
 			writeInternalError(w, "mark added entry paid", err)
 			return
 		}
 	}
 
-	entry, err := s.store.GetRaffleEntryByID(entryID)
+	entry, err := s.store.GetRaffleEntryByID(ctx, entryID)
 	if err != nil || entry == nil {
 		writeInternalError(w, "load added entry", err)
 		return
@@ -824,7 +828,7 @@ func (s *Server) handleRaffleEntryPatch(w http.ResponseWriter, r *http.Request) 
 	// Scope the entry to the raffle in the path: load it first and confirm it
 	// belongs to {id}, so a valid entry id from a DIFFERENT raffle can't be
 	// mutated by pairing it with any raffle id (IDOR).
-	entry, err := s.store.GetRaffleEntryByID(entryID)
+	entry, err := s.store.GetRaffleEntryByID(r.Context(), entryID)
 	if err != nil {
 		writeInternalError(w, "load entry", err)
 		return
@@ -841,14 +845,14 @@ func (s *Server) handleRaffleEntryPatch(w http.ResponseWriter, r *http.Request) 
 		writeError(w, http.StatusBadRequest, "Entries paid for cannot be negative")
 		return
 	}
-	if _, err := s.store.SetRaffleEntryPaid(entryID, req.Paid, req.PaidEntries, req.AmountWaived); err != nil {
+	if _, err := s.store.SetRaffleEntryPaid(r.Context(), entryID, req.Paid, req.PaidEntries, req.AmountWaived); err != nil {
 		writeInternalError(w, "mark entry paid", err)
 		return
 	}
 	// Re-read rather than patching the local copy: the store derives
 	// paid_entries and accumulates amount_waived, so only the row knows the
 	// result.
-	updated, err := s.store.GetRaffleEntryByID(entryID)
+	updated, err := s.store.GetRaffleEntryByID(r.Context(), entryID)
 	if err != nil || updated == nil {
 		writeInternalError(w, "load settled entry", err)
 		return
@@ -876,7 +880,7 @@ func (s *Server) handleRaffleEntryDelete(w http.ResponseWriter, r *http.Request)
 	// Scope the entry to the raffle in the path: confirm it belongs to {id}
 	// before deleting, so an entry id from a DIFFERENT raffle can't be deleted
 	// by pairing it with any raffle id (IDOR).
-	entry, err := s.store.GetRaffleEntryByID(entryID)
+	entry, err := s.store.GetRaffleEntryByID(r.Context(), entryID)
 	if err != nil {
 		writeInternalError(w, "load entry for delete", err)
 		return
@@ -885,7 +889,7 @@ func (s *Server) handleRaffleEntryDelete(w http.ResponseWriter, r *http.Request)
 		writeError(w, http.StatusNotFound, "Entry not found")
 		return
 	}
-	if _, err := s.store.DeleteRaffleEntry(entryID); err != nil {
+	if _, err := s.store.DeleteRaffleEntry(r.Context(), entryID); err != nil {
 		writeInternalError(w, "delete raffle entry", err)
 		return
 	}
@@ -901,8 +905,8 @@ func (s *Server) handleRaffleEntryDelete(w http.ResponseWriter, r *http.Request)
 // A raffle that charges for tickets draws from PAID entries only. A details-only
 // raffle never collects payment through the app - staff record entries from a
 // sign-up run elsewhere - so it draws from all of them.
-func (s *Server) pickRaffleWinner(w http.ResponseWriter, raffleID int64) {
-	raffle, err := s.store.GetRaffle(raffleID)
+func (s *Server) pickRaffleWinner(ctx context.Context, w http.ResponseWriter, raffleID int64) {
+	raffle, err := s.store.GetRaffle(ctx, raffleID)
 	if err != nil {
 		writeInternalError(w, "get raffle for winner pick", err)
 		return
@@ -912,7 +916,7 @@ func (s *Server) pickRaffleWinner(w http.ResponseWriter, raffleID int64) {
 		return
 	}
 	paidOnly := raffle.AcceptsSignups()
-	winner, err := s.store.PickRaffleWinner(raffleID, paidOnly)
+	winner, err := s.store.PickRaffleWinner(ctx, raffleID, paidOnly)
 	if err != nil {
 		writeInternalError(w, "pick raffle winner", err)
 		return
@@ -925,7 +929,7 @@ func (s *Server) pickRaffleWinner(w http.ResponseWriter, raffleID int64) {
 		}
 		return
 	}
-	if err := s.store.SetRaffleWinner(raffleID, &winner.ID); err != nil {
+	if err := s.store.SetRaffleWinner(ctx, raffleID, &winner.ID); err != nil {
 		writeInternalError(w, "set raffle winner", err)
 		return
 	}
@@ -945,7 +949,7 @@ func (s *Server) handleRafflePickWinner(w http.ResponseWriter, r *http.Request) 
 	if !ok {
 		return
 	}
-	s.pickRaffleWinner(w, raffleID)
+	s.pickRaffleWinner(r.Context(), w, raffleID)
 }
 
 // handleRafflePickAnother clears the pending winner and re-picks.
@@ -961,11 +965,14 @@ func (s *Server) handleRafflePickAnother(w http.ResponseWriter, r *http.Request)
 	if !ok {
 		return
 	}
-	if err := s.store.SetRaffleWinner(raffleID, nil); err != nil {
+	// Clearing the pick and making the next one go together, detached: stopping in
+	// between would leave the raffle with its winner cleared and none drawn.
+	ctx := context.WithoutCancel(r.Context())
+	if err := s.store.SetRaffleWinner(ctx, raffleID, nil); err != nil {
 		writeInternalError(w, "clear raffle winner", err)
 		return
 	}
-	s.pickRaffleWinner(w, raffleID)
+	s.pickRaffleWinner(ctx, w, raffleID)
 }
 
 // setRaffleStatus applies a status change and responds with {ok, status}. Shared
@@ -983,7 +990,7 @@ func (s *Server) setRaffleStatus(w http.ResponseWriter, r *http.Request, status 
 	if !ok {
 		return
 	}
-	raffle, err := s.store.GetRaffle(id)
+	raffle, err := s.store.GetRaffle(r.Context(), id)
 	if err != nil {
 		writeInternalError(w, "get raffle for status", err)
 		return
@@ -992,7 +999,7 @@ func (s *Server) setRaffleStatus(w http.ResponseWriter, r *http.Request, status 
 		writeError(w, http.StatusNotFound, "Raffle not found")
 		return
 	}
-	if err := s.store.SetRaffleStatus(id, status); err != nil {
+	if err := s.store.SetRaffleStatus(r.Context(), id, status); err != nil {
 		writeInternalError(w, "set raffle status", err)
 		return
 	}
@@ -1033,7 +1040,7 @@ func (s *Server) handleRaffleVerifyWinner(w http.ResponseWriter, r *http.Request
 	if !ok {
 		return
 	}
-	raffle, err := s.store.GetRaffle(raffleID)
+	raffle, err := s.store.GetRaffle(r.Context(), raffleID)
 	if err != nil || raffle == nil {
 		writeInternalError(w, "verify raffle winner", fmt.Errorf("get raffle: %w", err))
 		return
@@ -1042,7 +1049,7 @@ func (s *Server) handleRaffleVerifyWinner(w http.ResponseWriter, r *http.Request
 		writeError(w, http.StatusBadRequest, "No winner selected to verify")
 		return
 	}
-	if err := s.store.SetRaffleStatus(raffleID, "closed"); err != nil {
+	if err := s.store.SetRaffleStatus(r.Context(), raffleID, "closed"); err != nil {
 		writeInternalError(w, "close raffle", err)
 		return
 	}

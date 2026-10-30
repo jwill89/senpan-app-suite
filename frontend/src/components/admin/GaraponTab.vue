@@ -15,7 +15,7 @@
  * pages double as the read-only closed view. All state + actions come from the
  * garapons store; the per-page search/sort/pagination is local client-side state.
  */
-import { computed, ref } from 'vue'
+import { computed, ref, useTemplateRef } from 'vue'
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
 import AdminPanel from '@/components/common/ui/AdminPanel.vue'
 import ManagerView from '@/components/common/ui/ManagerView.vue'
@@ -89,12 +89,12 @@ const logMatches = (d: GaraponDraw, q: string): boolean =>
 const logSort = { key: 'drawn_at', dir: 'desc' } as const
 const logPrizeFilter = ref('')
 const logFilters = computed(() => ({ prize_name: logPrizeFilter.value }))
-const logTableRef = ref<{ exportCsv: (name?: string) => void } | null>(null)
+const logTableRef = useTemplateRef<{ exportCsv: (name?: string) => void }>('logTableRef')
 
 // -- Display helpers ----------------------------------------------------------
 
 /** Sum of the selected garapon's prize weights (for the normalized-% column). */
-const prizeRateTotal = computed(() => rateTotal(garapons.selectedGarapon?.prizes || []))
+const prizeRateTotal = computed(() => rateTotal(garapons.selectedGarapon?.prizes ?? []))
 /** A prize's odds as a normalized percentage string (relative weights). */
 function ratePct(p: GaraponPrize): string {
   return normalizedPct(p.rate, prizeRateTotal.value)
@@ -193,31 +193,32 @@ function toggleClosed(): void {
         </span>
       </SubPageHeader>
       <div class="flex-toolbar flex-end mb-16">
-        <button class="btn-neutral btn-sm" @click="openLinks">
+        <button type="button" class="btn-neutral btn-sm" @click="openLinks">
           <font-awesome-icon :icon="['fad', 'link']" /> Drawing Links ({{
             garapons.garaponPlayers.length
           }})
         </button>
-        <button class="btn-neutral btn-sm" @click="openLog">
+        <button type="button" class="btn-neutral btn-sm" @click="openLog">
           <font-awesome-icon :icon="['fad', 'clipboard-list']" /> Draw Log ({{
             garapons.garaponDraws.length
           }})
         </button>
-        <button v-if="isOpen" class="btn-confirm btn-sm" @click="editSelected">
+        <button v-if="isOpen" type="button" class="btn-confirm btn-sm" @click="editSelected">
           <font-awesome-icon :icon="['fas', 'pen-to-square']" /> Edit
         </button>
         <button
+          type="button"
           class="btn-view btn-sm"
           title="Start a new garapon pre-filled from this one"
           @click="duplicateSelected"
         >
           <font-awesome-icon :icon="['fas', 'copy']" /> Duplicate
         </button>
-        <button class="btn-caution btn-sm" @click="toggleClosed">
+        <button type="button" class="btn-caution btn-sm" @click="toggleClosed">
           <font-awesome-icon :icon="['fas', isOpen ? 'lock' : 'rotate']" />
           {{ isOpen ? 'Close' : 'Reopen' }}
         </button>
-        <button class="btn-danger btn-sm" @click="deleteSelected">
+        <button type="button" class="btn-danger btn-sm" @click="deleteSelected">
           <font-awesome-icon :icon="['fas', 'trash']" /> Delete
         </button>
       </div>
@@ -294,6 +295,7 @@ function toggleClosed(): void {
         </div>
         <div class="flex-toolbar flex-end">
           <button
+            type="button"
             class="btn-confirm btn-sm"
             :disabled="garapons.creatingPlayer || !garapons.playerAdd.playerName.trim()"
             @click="garapons.createPlayer()"
@@ -337,6 +339,7 @@ function toggleClosed(): void {
           <template #cell-actions="{ row }">
             <div class="row-actions">
               <button
+                type="button"
                 class="btn-view btn-sm"
                 aria-label="Copy drawing link"
                 title="Copy drawing link"
@@ -346,6 +349,7 @@ function toggleClosed(): void {
               </button>
               <button
                 v-if="row.stamp_card_token"
+                type="button"
                 class="btn-view btn-sm"
                 aria-label="Copy stamp card link"
                 title="Copy stamp card link (same hash)"
@@ -354,6 +358,7 @@ function toggleClosed(): void {
                 <font-awesome-icon :icon="['fad', 'stamp']" />
               </button>
               <button
+                type="button"
                 class="btn-danger btn-sm"
                 :disabled="row.draws_used > 0 && isOpen"
                 :aria-label="
@@ -413,6 +418,7 @@ function toggleClosed(): void {
           </template>
           <template #actions>
             <button
+              type="button"
               class="btn-view btn-sm"
               :disabled="!logView.total"
               title="Download the draws currently shown, as CSV"
@@ -462,7 +468,7 @@ function toggleClosed(): void {
     <!-- -- List ---------------------------------------------------------------- -->
     <ManagerView v-else title="Garapon" :icon="['fad', 'ferris-wheel']">
       <template #actions>
-        <button class="btn-confirm btn-sm" @click="openNew">
+        <button type="button" class="btn-confirm btn-sm" @click="openNew">
           <font-awesome-icon :icon="['fas', 'plus']" /> New Garapon
         </button>
       </template>
@@ -503,6 +509,7 @@ function toggleClosed(): void {
               <!-- @click.stop so deleting doesn't also open the detail view. -->
               <div class="garapon-card-actions">
                 <button
+                  type="button"
                   class="btn-danger btn-sm"
                   aria-label="Delete garapon"
                   title="Delete garapon and all its links and results"
@@ -552,6 +559,7 @@ function toggleClosed(): void {
             <template #cell-actions="{ row }">
               <div class="row-actions">
                 <button
+                  type="button"
                   class="btn-view btn-sm"
                   aria-label="View"
                   title="View"
@@ -560,6 +568,7 @@ function toggleClosed(): void {
                   <font-awesome-icon :icon="['fas', 'eye']" />
                 </button>
                 <button
+                  type="button"
                   class="btn-view btn-sm"
                   aria-label="Copy to new garapon"
                   title="Copy to new garapon"
@@ -568,6 +577,7 @@ function toggleClosed(): void {
                   <font-awesome-icon :icon="['fas', 'copy']" />
                 </button>
                 <button
+                  type="button"
                   class="btn-danger btn-sm"
                   aria-label="Delete"
                   title="Delete"
@@ -599,18 +609,21 @@ function toggleClosed(): void {
 .garapon-table-wrap {
   overflow-x: auto;
 }
+
 /* List-level delete on a Current Garapons card. */
 .garapon-card-actions {
   margin-top: 10px;
   display: flex;
   justify-content: flex-end;
 }
+
 /* Prize-name cell: swatch + label aligned on one baseline. */
 .prize-cell {
   display: inline-flex;
   align-items: center;
   gap: 6px;
 }
+
 .grand-star {
   color: var(--highlight);
   margin-right: 4px;

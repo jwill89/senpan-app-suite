@@ -28,14 +28,14 @@ func GenerateBoard() [][]int {
 		board[r] = make([]int, 5)
 	}
 
-	for col := 0; col < 5; col++ {
+	for col := range 5 {
 		lo, hi := columnRanges[col][0], columnRanges[col][1]
 		pool := make([]int, hi-lo+1)
 		for i := range pool {
 			pool[i] = lo + i
 		}
-		rand.Shuffle(len(pool), func(i, j int) { pool[i], pool[j] = pool[j], pool[i] })
-		for row := 0; row < 5; row++ {
+		rand.Shuffle(len(pool), func(i, j int) { pool[i], pool[j] = pool[j], pool[i] }) //nolint:gosec // a bingo card, not a secret: math/rand/v2 on purpose
+		for row := range 5 {
 			board[row][col] = pool[row]
 		}
 	}
@@ -50,7 +50,7 @@ func GenerateID(exists func(string) (bool, error)) (string, error) {
 	for {
 		id := make([]byte, 6)
 		for i := range id {
-			id[i] = idChars[rand.IntN(len(idChars))]
+			id[i] = idChars[rand.IntN(len(idChars))] //nolint:gosec // a card ID names a card, it grants nothing: math/rand/v2 on purpose
 		}
 		taken, err := exists(string(id))
 		if err != nil {
@@ -79,10 +79,10 @@ func ValidateBoard(board [][]int) error {
 	if board[2][2] != 0 {
 		return fmt.Errorf("the centre cell must be left as the FREE space")
 	}
-	for col := 0; col < 5; col++ {
+	for col := range 5 {
 		lo, hi := columnRanges[col][0], columnRanges[col][1]
 		seen := make(map[int]bool, 5)
-		for row := 0; row < 5; row++ {
+		for row := range 5 {
 			if col == 2 && row == 2 {
 				continue // FREE centre
 			}

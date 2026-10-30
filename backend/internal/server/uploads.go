@@ -116,7 +116,7 @@ func (s *Server) handleMultipartUploads(
 ) (uploaded []string, skipped []model.SkippedUpload, ok bool) {
 	// Cap the whole request at 64 MB (several files at once).
 	r.Body = http.MaxBytesReader(w, r.Body, 64<<20)
-	if err := r.ParseMultipartForm(32 << 20); err != nil {
+	if err := r.ParseMultipartForm(32 << 20); err != nil { //nolint:gosec // the body is capped at 64 MB on the line above
 		writeError(w, http.StatusBadRequest, "Upload failed (max 64MB total)")
 		return nil, nil, false
 	}
@@ -156,18 +156,19 @@ func saveMultipartFile(header *multipart.FileHeader, dst string) error {
 	if err != nil {
 		return err
 	}
-	defer src.Close()
+	defer func() { _ = src.Close() }() // read, never written: closing it has nothing to report
 
-	out, err := os.Create(dst)
+	out, err := os.Create(dst) //nolint:gosec // every caller builds dst from a name it checked (see above)
 	if err != nil {
 		return err
 	}
-	defer out.Close()
-
 	if _, err := io.Copy(out, src); err != nil {
+		_ = out.Close() // the copy's error is the one to report
 		return err
 	}
-	return nil
+	// Close is where a write that did not reach the disk surfaces, so a failed one
+	// is a failed save rather than a truncated file reported as uploaded.
+	return out.Close()
 }
 
 // sniffedImageType returns the content type detected from the first bytes of r,
@@ -208,7 +209,7 @@ func (s *Server) saveSingleImageUpload(w http.ResponseWriter, r *http.Request, r
 		writeError(w, http.StatusBadRequest, "Image upload failed (max 5MB)")
 		return
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }() // read, never written: closing it has nothing to report
 
 	name, ok := safeImageUploadName(header.Filename)
 	if !ok {

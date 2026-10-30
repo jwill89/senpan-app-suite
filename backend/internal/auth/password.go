@@ -95,6 +95,6 @@ func Verify(password, encoded string) (bool, error) {
 		return false, ErrInvalidHash
 	}
 
-	got := argon2.IDKey([]byte(password), salt, time, memory, threads, uint32(len(want)))
+	got := argon2.IDKey([]byte(password), salt, time, memory, threads, uint32(len(want))) //nolint:gosec // a decoded stored hash, a few dozen bytes long
 	return subtle.ConstantTimeCompare(got, want) == 1, nil
 }

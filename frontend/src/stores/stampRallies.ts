@@ -87,7 +87,7 @@ export function groupedByParticipant(rows: StampRallyLogEntry[]): StampRallyLogE
     }
     g.push(r)
   }
-  return order.flatMap((name) => groups.get(name) as StampRallyLogEntry[])
+  return order.flatMap((name) => groups.get(name) ?? [])
 }
 
 export const useStampRalliesStore = defineStore('stampRallies', () => {
@@ -358,7 +358,7 @@ export const useStampRalliesStore = defineStore('stampRallies', () => {
       required_food: r.required_food,
       required_game: r.required_game,
       festival_map_id: r.festival_map_id ?? null,
-      stamps: (r.stamps || []).map((s) => ({
+      stamps: (r.stamps ?? []).map((s) => ({
         id: s.id,
         occupant_id: s.occupant_id ?? null,
         affiliate_id: s.affiliate_id ?? null,
@@ -370,7 +370,7 @@ export const useStampRalliesStore = defineStore('stampRallies', () => {
         active_to: utcToDatetimeLocal(s.active_to),
         paused: s.paused,
       })),
-      prizes: (r.prizes || []).map((p) => ({
+      prizes: (r.prizes ?? []).map((p) => ({
         id: p.id,
         name: p.name,
         image: p.image,
@@ -524,7 +524,7 @@ export const useStampRalliesStore = defineStore('stampRallies', () => {
     if (rallyId in cardStamps.value) return // already loaded
     try {
       const data = await endpoints.stampRallies.detail(rallyId)
-      cardStamps.value = { ...cardStamps.value, [rallyId]: data.stamp_rally.stamps || [] }
+      cardStamps.value = { ...cardStamps.value, [rallyId]: data.stamp_rally.stamps ?? [] }
     } catch (e) {
       ui.notify((e as Error).message, 'error')
     }
@@ -543,7 +543,7 @@ export const useStampRalliesStore = defineStore('stampRallies', () => {
       ids.map(async (rallyId) => {
         try {
           const data = await endpoints.stampRallies.detail(rallyId)
-          cardStamps.value = { ...cardStamps.value, [rallyId]: data.stamp_rally.stamps || [] }
+          cardStamps.value = { ...cardStamps.value, [rallyId]: data.stamp_rally.stamps ?? [] }
         } catch {
           /* leave the cached stamps in place on a transient error */
         }
@@ -782,6 +782,15 @@ export const useStampRalliesStore = defineStore('stampRallies', () => {
     lastCollectedId.value = null
   }
 
+  /**
+   * Shows a card loaded by someone else - the festival dashboard, which reads it
+   * as part of the participant's whole standing - through the same state the card
+   * page uses, so the one panel renders both.
+   */
+  function showPublic(card: PublicStampCard): void {
+    publicCard.value = card
+  }
+
   async function loadByToken(token: string): Promise<boolean> {
     resetPublic()
     publicLoading.value = true
@@ -883,6 +892,7 @@ export const useStampRalliesStore = defineStore('stampRallies', () => {
     copyCardLink,
     // public actions
     resetPublic,
+    showPublic,
     loadByToken,
     submitPassword,
     // public self-service sign-up + lookup

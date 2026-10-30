@@ -6,7 +6,8 @@
  * The map itself is FestivalMapWidget, which is self-contained on purpose - the
  * same widget is what an <iframe> on someone else's site renders (see
  * views/FestivalMapEmbedView). This page is only the chrome around it: the back
- * link, the title, the description, and the days the festival runs.
+ * link, the title, the description, and the days the festival runs - and the way
+ * to the festival's dashboard, where a visitor takes part as well as looks.
  */
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
@@ -47,7 +48,7 @@ function goBack(): void {
 <template>
   <div>
     <div class="topbar">
-      <button class="btn-neutral btn-sm" @click="goBack">
+      <button type="button" class="btn-neutral btn-sm" @click="goBack">
         <font-awesome-icon :icon="['fas', 'arrow-left']" /> Festival Maps
       </button>
       <h2>
@@ -75,6 +76,11 @@ function goBack(): void {
             <font-awesome-icon :icon="['fad', 'calendar-days']" /> {{ formatEventTime(t) }}
           </li>
         </ul>
+
+        <RouterLink :to="{ name: 'festival-dashboard', params: { id } }" class="link-card mb-16">
+          <font-awesome-icon :icon="['fad', 'ticket']" />
+          <span>Open the festival dashboard</span>
+        </RouterLink>
 
         <FestivalMapWidget :map="store.publicMap" />
       </template>

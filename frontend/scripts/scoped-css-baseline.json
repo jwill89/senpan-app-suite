@@ -1,5 +1,5 @@
 {
-  "total": 2537,
+  "total": 2382,
   "cap": 120,
   "files": {
     "frontend/src/components/admin/AffiliateFormTab.vue": 20,
@@ -9,7 +9,7 @@
     "frontend/src/components/admin/BookClubTab.vue": 49,
     "frontend/src/components/admin/CardsTab.vue": 26,
     "frontend/src/components/admin/CarrdUploadTab.vue": 89,
-    "frontend/src/components/admin/ChangelogModal.vue": 279,
+    "frontend/src/components/admin/ChangelogModal.vue": 278,
     "frontend/src/components/admin/FontEditModal.vue": 66,
     "frontend/src/components/admin/FontsTab.vue": 66,
     "frontend/src/components/admin/GameTab.vue": 121,
@@ -45,8 +45,6 @@
     "frontend/src/views/AdminLoginView.vue": 19,
     "frontend/src/views/AdminView.vue": 66,
     "frontend/src/views/CardRequestsView.vue": 41,
-    "frontend/src/views/GaraponView.vue": 72,
-    "frontend/src/views/RegisterView.vue": 5,
-    "frontend/src/views/StampCardView.vue": 82
+    "frontend/src/views/RegisterView.vue": 5
   }
 }

@@ -212,6 +212,7 @@ function setStatus(status: FestivalMapStatus): void {
 
       <div class="flex-toolbar flex-end mb-16">
         <button
+          type="button"
           class="btn-confirm btn-sm"
           :disabled="!detailReady"
           :title="detailReady ? undefined : 'Still loading this map'"
@@ -220,6 +221,7 @@ function setStatus(status: FestivalMapStatus): void {
           <font-awesome-icon :icon="['fas', 'pen-to-square']" /> Edit
         </button>
         <button
+          type="button"
           class="btn-neutral btn-sm"
           :disabled="!detailReady"
           :title="detailReady ? undefined : 'Still loading this map'"
@@ -229,6 +231,7 @@ function setStatus(status: FestivalMapStatus): void {
         </button>
         <button
           v-if="store.selectedMap.status !== 'published'"
+          type="button"
           class="btn-view btn-sm"
           @click="setStatus('published')"
         >
@@ -236,6 +239,7 @@ function setStatus(status: FestivalMapStatus): void {
         </button>
         <button
           v-if="store.selectedMap.status === 'published'"
+          type="button"
           class="btn-neutral btn-sm"
           @click="setStatus('in_progress')"
         >
@@ -243,12 +247,13 @@ function setStatus(status: FestivalMapStatus): void {
         </button>
         <button
           v-if="store.selectedMap.status !== 'closed'"
+          type="button"
           class="btn-neutral btn-sm"
           @click="setStatus('closed')"
         >
           <font-awesome-icon :icon="['fad', 'box-archive']" /> Close
         </button>
-        <button class="btn-danger btn-sm" @click="deleteSelected">
+        <button type="button" class="btn-danger btn-sm" @click="deleteSelected">
           <font-awesome-icon :icon="['fas', 'trash']" /> Delete
         </button>
       </div>
@@ -260,7 +265,7 @@ function setStatus(status: FestivalMapStatus): void {
              pasting. -->
         <div v-if="store.selectedMap.status === 'published'" class="mb-16">
           <p class="flex-toolbar">
-            <button class="btn-neutral btn-sm" @click="copyText(publicUrl)">
+            <button type="button" class="btn-neutral btn-sm" @click="copyText(publicUrl)">
               <font-awesome-icon :icon="['fad', 'link']" /> Copy public link
             </button>
             <code class="text-xs text-muted">{{ publicUrl }}</code>
@@ -268,6 +273,7 @@ function setStatus(status: FestivalMapStatus): void {
 
           <p class="flex-toolbar mt-8">
             <button
+              type="button"
               class="btn-neutral btn-sm"
               :aria-expanded="showEmbed"
               aria-controls="map-embed-panel"
@@ -290,6 +296,7 @@ function setStatus(status: FestivalMapStatus): void {
                   @focus="($event.target as HTMLInputElement).select()"
                 />
                 <button
+                  type="button"
                   class="btn-view btn-sm"
                   title="Copy embed code"
                   @click="copyText(embedSnippet)"
@@ -362,7 +369,7 @@ function setStatus(status: FestivalMapStatus): void {
     <template v-else>
       <ManagerView title="Festival Maps" :icon="['fad', 'map-location-dot']">
         <template #actions>
-          <button class="btn-confirm btn-sm" @click="openNew">
+          <button type="button" class="btn-confirm btn-sm" @click="openNew">
             <font-awesome-icon :icon="['fas', 'plus']" /> New Map
           </button>
         </template>
@@ -440,6 +447,7 @@ function setStatus(status: FestivalMapStatus): void {
           <template #cell-actions="{ row }">
             <div class="row-actions">
               <button
+                type="button"
                 class="btn-view btn-sm"
                 aria-label="View"
                 title="View"
@@ -448,6 +456,7 @@ function setStatus(status: FestivalMapStatus): void {
                 <font-awesome-icon :icon="['fas', 'eye']" />
               </button>
               <button
+                type="button"
                 class="btn-view btn-sm"
                 aria-label="Copy to new festival map"
                 title="Copy to new festival map"
@@ -456,6 +465,7 @@ function setStatus(status: FestivalMapStatus): void {
                 <font-awesome-icon :icon="['fas', 'copy']" />
               </button>
               <button
+                type="button"
                 class="btn-danger btn-sm"
                 aria-label="Delete"
                 title="Delete"

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Numerics;
 using Dalamud.Bindings.ImGui;
@@ -49,29 +50,29 @@ internal sealed class RollsTab
     public void Draw()
     {
         var all = this.tracker.Snapshot(); // newest-first
-        var filtered = ApplyFilters(all);
+        var filtered = this.ApplyFilters(all);
 
         // Split into the query's winner(s) and the rest. Winners float to the top so the
         // answer is always on the first page, and each is highlighted in the table.
-        var winners = FindWinners(filtered);
+        var winners = this.FindWinners(filtered);
         var ordered = this.query == RollQuery.Off
             ? filtered
             : filtered.Where(winners.Contains).Concat(filtered.Where(e => !winners.Contains(e))).ToList();
 
         Ui.Section(FontAwesomeIcon.Dice, "Captured rolls");
         using (Ui.Body())
-            DrawToolbar();
+            this.DrawToolbar();
 
         Ui.Section(FontAwesomeIcon.Filter, "Filter");
         using (Ui.Body())
-            DrawFilters();
+            this.DrawFilters();
 
         Ui.Section(FontAwesomeIcon.Trophy, "Find the winner");
         using (Ui.Body())
         {
-            DrawQuery();
+            this.DrawQuery();
             if (this.query != RollQuery.Off)
-                DrawResultBanner(filtered, winners);
+                this.DrawResultBanner(filtered, winners);
         }
 
         Ui.Section(FontAwesomeIcon.ListOl, $"Rolls ({ordered.Count})");
@@ -86,8 +87,8 @@ internal sealed class RollsTab
             return;
         }
 
-        DrawPager(ordered.Count);
-        DrawTable(ordered, winners);
+        this.DrawPager(ordered.Count);
+        this.DrawTable(ordered, winners);
     }
 
     // -- Session summary ----------------------------------------------------------
@@ -137,7 +138,7 @@ internal sealed class RollsTab
     private void DrawQuery()
     {
         ImGui.SetNextItemWidth(160);
-        DrawQueryCombo();
+        this.DrawQueryCombo();
         if (this.query == RollQuery.ClosestTo)
         {
             ImGui.SameLine();
@@ -310,7 +311,9 @@ internal sealed class RollsTab
         if (!ImGui.BeginTable("rollslog", 5,
                 ImGuiTableFlags.Borders | ImGuiTableFlags.RowBg | ImGuiTableFlags.ScrollY,
                 new Vector2(0f, height)))
+        {
             return;
+        }
 
         ImGui.TableSetupColumn("##star", ImGuiTableColumnFlags.WidthFixed, 22);
         ImGui.TableSetupColumn("Player");
@@ -336,7 +339,7 @@ internal sealed class RollsTab
             ImGui.TableNextColumn();
             ImGui.TextUnformatted(RollText(e));
             ImGui.TableNextColumn();
-            ImGui.TextUnformatted(e.Time.ToString("HH:mm:ss"));
+            ImGui.TextUnformatted(e.Time.ToString("HH:mm:ss", CultureInfo.InvariantCulture));
         }
 
         ImGui.EndTable();
@@ -345,7 +348,7 @@ internal sealed class RollsTab
     // -- Helpers ------------------------------------------------------------------
 
     private static string RollText(RollEntry e)
-        => e.OutOf.HasValue ? $"{e.Value} (out of {e.OutOf.Value})" : e.Value.ToString();
+        => e.OutOf.HasValue ? $"{e.Value} (out of {e.OutOf.Value})" : e.Value.ToString(CultureInfo.InvariantCulture);
 
     private static string Who(RollEntry e)
         => string.IsNullOrEmpty(e.World) ? e.PlayerName : $"{e.PlayerName} ({e.World})";

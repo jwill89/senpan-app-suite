@@ -1,6 +1,7 @@
 package store
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 
@@ -21,9 +22,9 @@ const affiliateColumns = `id, name, subtitle, owners, location, timezone, hours,
 // ListAffiliates returns every affiliate in the admin's manual drag order, then
 // alphabetically by name (so a fresh install / never-reordered list stays
 // alphabetical until dragged), each with its owners and hours decoded.
-func (s *Store) ListAffiliates() ([]model.Affiliate, error) {
-	rows, err := s.db.Query(
-		`SELECT ` + affiliateColumns + `
+func (s *Store) ListAffiliates(ctx context.Context) ([]model.Affiliate, error) {
+	rows, err := s.db.QueryContext(ctx,
+		`SELECT `+affiliateColumns+`
 		   FROM affiliates ORDER BY sort_order ASC, name COLLATE NOCASE ASC, id ASC`)
 	if err != nil {
 		return nil, err
@@ -42,8 +43,8 @@ func (s *Store) ListAffiliates() ([]model.Affiliate, error) {
 }
 
 // GetAffiliate retrieves a single affiliate by id. Returns nil if not found.
-func (s *Store) GetAffiliate(id int64) (*model.Affiliate, error) {
-	row := s.db.QueryRow(
+func (s *Store) GetAffiliate(ctx context.Context, id int64) (*model.Affiliate, error) {
+	row := s.db.QueryRowContext(ctx,
 		`SELECT `+affiliateColumns+` FROM affiliates WHERE id = ?`, id)
 	a, err := scanAffiliate(row)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -57,8 +58,8 @@ func (s *Store) GetAffiliate(id int64) (*model.Affiliate, error) {
 
 // CreateAffiliate inserts a new affiliate and returns its ID. Owners and hours
 // are stored as JSON arrays.
-func (s *Store) CreateAffiliate(a *model.Affiliate) (int64, error) {
-	res, err := s.db.Exec(
+func (s *Store) CreateAffiliate(ctx context.Context, a *model.Affiliate) (int64, error) {
+	res, err := s.db.ExecContext(ctx,
 		`INSERT INTO affiliates
 		   (name, subtitle, owners, location, timezone, hours, details, logo, screenshot, embed_color, discord_link, carrd_link)
 		   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -74,8 +75,8 @@ func (s *Store) CreateAffiliate(a *model.Affiliate) (int64, error) {
 // UpdateAffiliate updates an affiliate's editable fields (everything but
 // id/created_at/sort_order - sort_order is managed by BulkReorderAffiliates, so an
 // edit must not reset the drag order).
-func (s *Store) UpdateAffiliate(a *model.Affiliate) error {
-	_, err := s.db.Exec(
+func (s *Store) UpdateAffiliate(ctx context.Context, a *model.Affiliate) error {
+	_, err := s.db.ExecContext(ctx,
 		`UPDATE affiliates SET name = ?, subtitle = ?, owners = ?, location = ?, timezone = ?,
 		   hours = ?, details = ?, logo = ?, screenshot = ?,
 		   embed_color = ?, discord_link = ?, carrd_link = ? WHERE id = ?`,
@@ -87,14 +88,14 @@ func (s *Store) UpdateAffiliate(a *model.Affiliate) error {
 
 // BulkReorderAffiliates rewrites sort_order to match the given id order (index 0 =
 // top), in a single transaction. Ids not present are left untouched.
-func (s *Store) BulkReorderAffiliates(ids []int64) error {
-	tx, err := s.beginImmediate()
+func (s *Store) BulkReorderAffiliates(ctx context.Context, ids []int64) error {
+	tx, err := s.beginImmediate(ctx)
 	if err != nil {
 		return err
 	}
 	defer func() { _ = tx.Rollback() }()
 	for i, id := range ids {
-		if _, err := tx.Exec(`UPDATE affiliates SET sort_order = ? WHERE id = ?`, i, id); err != nil {
+		if _, err := tx.ExecContext(ctx, `UPDATE affiliates SET sort_order = ? WHERE id = ?`, i, id); err != nil {
 			return err
 		}
 	}
@@ -104,8 +105,8 @@ func (s *Store) BulkReorderAffiliates(ids []int64) error {
 // DeleteAffiliate removes an affiliate. Returns true if a row was deleted. The
 // logo/screenshot files live in centrally-managed image categories (System ->
 // Images), so they're intentionally left intact for reuse.
-func (s *Store) DeleteAffiliate(id int64) (bool, error) {
-	tx, err := s.beginImmediate()
+func (s *Store) DeleteAffiliate(ctx context.Context, id int64) (bool, error) {
+	tx, err := s.beginImmediate(ctx)
 	if err != nil {
 		return false, err
 	}
@@ -120,13 +121,13 @@ func (s *Store) DeleteAffiliate(id int64) (bool, error) {
 	// occupants is dropped). Copy the name down first so the pitch keeps saying who
 	// was standing in it. COALESCE guards the no-such-affiliate case, where the
 	// subquery is NULL and title is NOT NULL.
-	if _, err := tx.Exec(`UPDATE festival_stall_occupants
+	if _, err := tx.ExecContext(ctx, `UPDATE festival_stall_occupants
 		SET title = COALESCE((SELECT name FROM affiliates WHERE id = ?), title)
 		WHERE affiliate_id = ? AND TRIM(title) = ''`, id, id); err != nil {
 		return false, err
 	}
 
-	res, err := tx.Exec(`DELETE FROM affiliates WHERE id = ?`, id)
+	res, err := tx.ExecContext(ctx, `DELETE FROM affiliates WHERE id = ?`, id)
 	if err != nil {
 		return false, err
 	}

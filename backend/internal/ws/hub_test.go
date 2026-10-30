@@ -68,7 +68,7 @@ func TestHub_Broadcast(t *testing.T) {
 	}
 }
 
-func TestHub_Broadcast_EmptyHub(t *testing.T) {
+func TestHub_Broadcast_EmptyHub(_ *testing.T) {
 	h := NewHub()
 	defer h.Shutdown(context.Background())
 	// Should not panic on empty hub

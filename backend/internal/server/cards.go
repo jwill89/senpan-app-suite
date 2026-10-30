@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"encoding/json"
 	"log/slog"
 	"net/http"
@@ -21,7 +22,7 @@ func (s *Server) handleCardsList(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	cards, err := s.store.ListCardIDsWithNames()
+	cards, err := s.store.ListCardIDsWithNames(r.Context())
 	if err != nil {
 		writeInternalError(w, "list cards", err)
 		return
@@ -64,18 +65,22 @@ func (s *Server) handleCardCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	name := strings.TrimSpace(req.PlayerName)
-	id, err := bingo.GenerateID(s.store.CardExists)
+	id, err := bingo.GenerateID(func(id string) (bool, error) { return s.store.CardExists(r.Context(), id) })
 	if err != nil {
 		writeInternalError(w, "generate card ID", err)
 		return
 	}
 	board := bingo.GenerateBoard()
-	if err := s.store.SaveCard(id, board); err != nil {
+	// Saving the card and naming its player are two writes for one card: once the
+	// first lands, finish the second (and the cache refresh after it) even if the
+	// client has gone, rather than leave an unnamed card the game cannot see.
+	ctx := context.WithoutCancel(r.Context())
+	if err := s.store.SaveCard(ctx, id, board); err != nil {
 		writeInternalError(w, "save card", err)
 		return
 	}
 	if name != "" {
-		if err := s.store.UpdateCardPlayer(id, name, ""); err != nil {
+		if err := s.store.UpdateCardPlayer(ctx, id, name, ""); err != nil {
 			writeInternalError(w, "assign card player", err)
 			return
 		}
@@ -85,7 +90,7 @@ func (s *Server) handleCardCreate(w http.ResponseWriter, r *http.Request) {
 		Card:  model.GeneratedNamedCard{ID: id, PlayerName: name, BoardData: board},
 		Count: 1,
 	})
-	s.broadcastCards()
+	s.broadcastCards(ctx)
 }
 
 // cardGenerateRequest is the JSON body for POST /api/cards/generate (bulk generate).
@@ -122,7 +127,7 @@ func (s *Server) handleCardsGenerate(w http.ResponseWriter, r *http.Request) {
 		if seen[id] {
 			return true, nil
 		}
-		return s.store.CardExists(id)
+		return s.store.CardExists(r.Context(), id)
 	}
 	for range count {
 		id, err := bingo.GenerateID(unused)
@@ -135,13 +140,13 @@ func (s *Server) handleCardsGenerate(w http.ResponseWriter, r *http.Request) {
 		cards = append(cards, model.GeneratedCard{ID: id, BoardData: board})
 		batch = append(batch, store.CardBatchEntry{ID: id, Board: board})
 	}
-	if err := s.store.SaveCardsBatch(batch); err != nil {
+	if err := s.store.SaveCardsBatch(r.Context(), batch); err != nil {
 		writeInternalError(w, "save cards batch", err)
 		return
 	}
 	s.game.InvalidateCardCache()
 	writeJSON(w, http.StatusCreated, model.GenerateCardsResponse{Cards: cards, Count: len(cards)})
-	s.broadcastCards()
+	s.broadcastCards(r.Context())
 }
 
 // handleCardsDeleteAll deletes every non-Protected card, reporting how many rows
@@ -156,14 +161,14 @@ func (s *Server) handleCardsDeleteAll(w http.ResponseWriter, r *http.Request) {
 	if !s.requirePermission(w, r, permBingoCards) {
 		return
 	}
-	deleted, err := s.store.DeleteAllCards()
+	deleted, err := s.store.DeleteAllCards(r.Context())
 	if err != nil {
 		writeInternalError(w, "delete all cards", err)
 		return
 	}
 	s.game.InvalidateCardCache()
 	writeJSON(w, http.StatusOK, model.DeletedCountResponse{Deleted: int64(len(deleted))})
-	s.broadcastCards()
+	s.broadcastCards(r.Context())
 	// Disconnect only the players whose card was actually deleted - a player on a
 	// surviving Protected card keeps their live board.
 	if msg, err := json.Marshal(map[string]string{"type": "card_deleted"}); err == nil {
@@ -188,14 +193,14 @@ func (s *Server) handleCardDelete(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "Card id is required")
 		return
 	}
-	deleted, err := s.store.DeleteCard(id)
+	deleted, err := s.store.DeleteCard(r.Context(), id)
 	if err != nil {
 		writeInternalError(w, "delete card", err)
 		return
 	}
 	s.game.InvalidateCardCache()
 	w.WriteHeader(http.StatusNoContent)
-	s.broadcastCards()
+	s.broadcastCards(r.Context())
 	// Disconnect any player whose card was just deleted
 	if deleted {
 		if msg, err := json.Marshal(map[string]string{"type": "card_deleted"}); err == nil {
@@ -231,14 +236,14 @@ func (s *Server) handleCardUpdate(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "Invalid JSON")
 		return
 	}
-	if err := s.store.UpdateCardPlayer(id, req.PlayerName, req.Details); err != nil {
+	if err := s.store.UpdateCardPlayer(r.Context(), id, req.PlayerName, req.Details); err != nil {
 		writeInternalError(w, "update card player", err)
 		return
 	}
 	writeJSON(w, http.StatusOK, model.OKResponse{OK: true})
 	// Broadcast so other admins viewing Manage Cards see the assignment change
 	// live (and keep their indicators, since the broadcast carries the names).
-	s.broadcastCards()
+	s.broadcastCards(r.Context())
 }
 
 // handleCardApprove approves a pending custom-card request: it becomes a live,
@@ -258,7 +263,7 @@ func (s *Server) handleCardApprove(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "Card id is required")
 		return
 	}
-	ok, err := s.store.ApproveCustomCard(id)
+	ok, err := s.store.ApproveCustomCard(r.Context(), id)
 	if err != nil {
 		writeInternalError(w, "approve card", err)
 		return
@@ -269,7 +274,7 @@ func (s *Server) handleCardApprove(w http.ResponseWriter, r *http.Request) {
 	}
 	s.game.InvalidateCardCache()
 	writeJSON(w, http.StatusOK, model.OKResponse{OK: true})
-	s.broadcastCards()
+	s.broadcastCards(r.Context())
 }
 
 // cardProtectRequest is the JSON body for POST /api/cards/{id}/protect.
@@ -299,7 +304,7 @@ func (s *Server) handleCardProtect(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "Invalid JSON")
 		return
 	}
-	ok, err := s.store.SetCardProtected(id, req.Protected)
+	ok, err := s.store.SetCardProtected(r.Context(), id, req.Protected)
 	if err != nil {
 		writeInternalError(w, "set card protected", err)
 		return
@@ -309,7 +314,7 @@ func (s *Server) handleCardProtect(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, model.OKResponse{OK: true})
-	s.broadcastCards()
+	s.broadcastCards(r.Context())
 }
 
 // cardRequestRequest is the JSON body for POST /api/cards/request (a public custom
@@ -381,7 +386,7 @@ func (s *Server) handleCardRequest(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// The ID must not already be in use.
-	exists, err := s.store.CardExists(id)
+	exists, err := s.store.CardExists(r.Context(), id)
 	if err != nil {
 		writeInternalError(w, "check card id", err)
 		return
@@ -392,7 +397,7 @@ func (s *Server) handleCardRequest(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// The exact card (same numbers in the same cells) must not already exist.
-	dupID, dup, err := s.store.FindDuplicateBoard(req.BoardData)
+	dupID, dup, err := s.store.FindDuplicateBoard(r.Context(), req.BoardData)
 	if err != nil {
 		writeInternalError(w, "check duplicate board", err)
 		return
@@ -402,11 +407,11 @@ func (s *Server) handleCardRequest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := s.store.CreateCustomCard(id, req.BoardData, charName, world); err != nil {
+	if err := s.store.CreateCustomCard(r.Context(), id, req.BoardData, charName, world); err != nil {
 		writeInternalError(w, "create custom card", err)
 		return
 	}
 	s.game.InvalidateCardCache()
 	writeJSON(w, http.StatusCreated, model.CardRequestResponse{ID: id, Status: "pending"})
-	s.broadcastCards()
+	s.broadcastCards(r.Context())
 }

@@ -257,7 +257,7 @@ func TestFontServe_TokenExpiry(t *testing.T) {
 	bucket := server.FontTokenBucketForTest(time.Now())
 
 	// Previous-bucket tokens still serve (grace window)...
-	prev := server.FontFileTokenForTest(env.srv, "Old.ttf", bucket-1)
+	prev := server.FontFileTokenForTest(env.srv, t.Context(), "Old.ttf", bucket-1)
 	resp := env.getWithHeaders(t, "/api/fonts/pub/f/"+prev, same)
 	resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
@@ -265,7 +265,7 @@ func TestFontServe_TokenExpiry(t *testing.T) {
 	}
 
 	// ...older ones have expired.
-	stale := server.FontFileTokenForTest(env.srv, "Old.ttf", bucket-2)
+	stale := server.FontFileTokenForTest(env.srv, t.Context(), "Old.ttf", bucket-2)
 	resp = env.getWithHeaders(t, "/api/fonts/pub/f/"+stale, same)
 	resp.Body.Close()
 	if resp.StatusCode != http.StatusNotFound {
@@ -343,7 +343,7 @@ func TestNormalizeFontOrigin(t *testing.T) {
 		"https://mysite.carrd.co":   "https://mysite.carrd.co",
 		"https://MySite.Carrd.co/":  "https://mysite.carrd.co",
 		"http://localhost:5173":     "http://localhost:5173",
-		"  https://a.example.com ":  "https://a.example.com",
+		"  https://a.example.com ":  "https://a.example.com", //nolint:gocritic // the padding is the input under test
 		"HTTPS://UPPER.example.com": "https://upper.example.com",
 	}
 	for in, want := range valid {

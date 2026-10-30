@@ -123,7 +123,7 @@ export const usePresetsStore = defineStore('presets', () => {
       return
     try {
       await endpoints.presets.delete(id)
-      if (editingPreset.value && editingPreset.value.id === id) editingPreset.value = null
+      if (editingPreset.value?.id === id) editingPreset.value = null
       ui.notify('Preset deleted', 'info')
       await loadPresets()
     } catch (e) {

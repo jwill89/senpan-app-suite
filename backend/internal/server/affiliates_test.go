@@ -140,15 +140,15 @@ func TestAffiliates_PermissionGating(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	staff, err := env.store.CreateUser("staff", hash)
+	staff, err := env.store.CreateUser(t.Context(), "staff", hash)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := env.store.SetUserActive(staff.ID, true); err != nil {
+	if err := env.store.SetUserActive(t.Context(), staff.ID, true); err != nil {
 		t.Fatal(err)
 	}
 	// Grant an unrelated permission first -> still forbidden on affiliates.
-	if err := env.store.SetUserPermissions(staff.ID, []string{"bingo-cards"}); err != nil {
+	if err := env.store.SetUserPermissions(t.Context(), staff.ID, []string{"bingo-cards"}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -162,7 +162,7 @@ func TestAffiliates_PermissionGating(t *testing.T) {
 	}
 
 	// Grant teahouse-affiliates -> the next request reloads perms and is allowed.
-	if err := env.store.SetUserPermissions(staff.ID, []string{"teahouse-affiliates"}); err != nil {
+	if err := env.store.SetUserPermissions(t.Context(), staff.ID, []string{"teahouse-affiliates"}); err != nil {
 		t.Fatal(err)
 	}
 	if resp := env.get(t, "/api/affiliates"); resp.StatusCode != http.StatusOK {

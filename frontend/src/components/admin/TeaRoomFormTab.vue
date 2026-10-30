@@ -183,8 +183,11 @@ function cancel(): void {
       </FormField>
 
       <FormActions align="start">
-        <button class="btn-neutral" :disabled="store.saving" @click="cancel">Cancel</button>
+        <button type="button" class="btn-neutral" :disabled="store.saving" @click="cancel">
+          Cancel
+        </button>
         <button
+          type="button"
           class="btn-confirm"
           :disabled="
             !store.teaRoomForm.name.trim() || !store.teaRoomForm.room_number.trim() || store.saving

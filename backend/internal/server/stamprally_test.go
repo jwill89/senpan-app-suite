@@ -327,8 +327,8 @@ func TestStampRally_CloseKeepsLogs(t *testing.T) {
 
 	// Collect the stamp, then find the card id (the only card).
 	if resp := env.postJSON(t, "/api/stamp-card/"+token+"/stamp", map[string]any{"password": "alpha"}); resp.StatusCode != http.StatusOK {
-		t.Fatalf("collect = %d; want 200", resp.StatusCode)
 		resp.Body.Close()
+		t.Fatalf("collect = %d; want 200", resp.StatusCode)
 	}
 	cards := decodeBody(t, env.get(t, fmt.Sprintf("/api/stamp-rallies/%d", id)))["cards"].([]any)
 	cardID := int(cards[0].(map[string]any)["id"].(float64))
@@ -439,14 +439,14 @@ func TestStampRally_PermissionGating(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	staff, err := env.store.CreateUser("staff", hash)
+	staff, err := env.store.CreateUser(t.Context(), "staff", hash)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := env.store.SetUserActive(staff.ID, true); err != nil {
+	if err := env.store.SetUserActive(t.Context(), staff.ID, true); err != nil {
 		t.Fatal(err)
 	}
-	if err := env.store.SetUserPermissions(staff.ID, []string{"bingo-cards"}); err != nil {
+	if err := env.store.SetUserPermissions(t.Context(), staff.ID, []string{"bingo-cards"}); err != nil {
 		t.Fatal(err)
 	}
 	env.postJSON(t, "/api/auth", map[string]string{
@@ -457,7 +457,7 @@ func TestStampRally_PermissionGating(t *testing.T) {
 		t.Errorf("wrong-permission status = %d; want 403", resp.StatusCode)
 		resp.Body.Close()
 	}
-	if err := env.store.SetUserPermissions(staff.ID, []string{"festival-stamp-rally"}); err != nil {
+	if err := env.store.SetUserPermissions(t.Context(), staff.ID, []string{"festival-stamp-rally"}); err != nil {
 		t.Fatal(err)
 	}
 	if resp := env.get(t, "/api/stamp-rallies"); resp.StatusCode != http.StatusOK {

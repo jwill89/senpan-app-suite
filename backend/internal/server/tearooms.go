@@ -45,12 +45,12 @@ func (s *Server) handleTeaRoomsList(w http.ResponseWriter, r *http.Request) {
 	if !s.requirePermission(w, r, permTeahouseTeaRooms) {
 		return
 	}
-	rooms, err := s.store.ListTeaRooms()
+	rooms, err := s.store.ListTeaRooms(r.Context())
 	if err != nil {
 		writeInternalError(w, "list tea rooms", err)
 		return
 	}
-	webhook, _ := s.store.GetSetting(teaRoomWebhookSettingKey)
+	webhook, _ := s.store.GetSetting(r.Context(), teaRoomWebhookSettingKey)
 	writeJSON(w, http.StatusOK, model.TeaRoomsResponse{TeaRooms: rooms, WebhookURL: webhook})
 }
 
@@ -139,8 +139,8 @@ func normalizeLockUntil(w http.ResponseWriter, locked bool, lockedUntil string) 
 // checkTeaRoomNumberUnique reports whether room_number is free to use (unique, or
 // already this room's). It writes a 400 and returns false when another room owns
 // it - a friendly guard ahead of the DB's UNIQUE index backstop.
-func (s *Server) checkTeaRoomNumberUnique(w http.ResponseWriter, number string, exceptID int64) bool {
-	other, err := s.store.GetTeaRoomByNumber(number)
+func (s *Server) checkTeaRoomNumberUnique(ctx context.Context, w http.ResponseWriter, number string, exceptID int64) bool {
+	other, err := s.store.GetTeaRoomByNumber(ctx, number)
 	if err != nil {
 		writeInternalError(w, "check tea room number", err)
 		return false
@@ -169,15 +169,15 @@ func (s *Server) handleTeaRoomCreate(w http.ResponseWriter, r *http.Request) {
 	if !req.validateAndSanitize(w) {
 		return
 	}
-	if !s.checkTeaRoomNumberUnique(w, req.TeaRoom.RoomNumber, 0) {
+	if !s.checkTeaRoomNumberUnique(r.Context(), w, req.TeaRoom.RoomNumber, 0) {
 		return
 	}
-	id, err := s.store.CreateTeaRoom(&req.TeaRoom)
+	id, err := s.store.CreateTeaRoom(r.Context(), &req.TeaRoom)
 	if err != nil {
 		writeInternalError(w, "create tea room", err)
 		return
 	}
-	saved, _ := s.store.GetTeaRoom(id)
+	saved, _ := s.store.GetTeaRoom(r.Context(), id)
 	writeJSON(w, http.StatusCreated, model.TeaRoomResponse{TeaRoom: saved})
 }
 
@@ -195,7 +195,7 @@ func (s *Server) handleTeaRoomUpdate(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	existing, err := s.store.GetTeaRoom(id)
+	existing, err := s.store.GetTeaRoom(r.Context(), id)
 	if err != nil {
 		writeInternalError(w, "load tea room for update", err)
 		return
@@ -212,15 +212,15 @@ func (s *Server) handleTeaRoomUpdate(w http.ResponseWriter, r *http.Request) {
 	if !req.validateAndSanitize(w) {
 		return
 	}
-	if !s.checkTeaRoomNumberUnique(w, req.TeaRoom.RoomNumber, id) {
+	if !s.checkTeaRoomNumberUnique(r.Context(), w, req.TeaRoom.RoomNumber, id) {
 		return
 	}
 	req.TeaRoom.ID = id
-	if err := s.store.UpdateTeaRoom(&req.TeaRoom); err != nil {
+	if err := s.store.UpdateTeaRoom(r.Context(), &req.TeaRoom); err != nil {
 		writeInternalError(w, "update tea room", err)
 		return
 	}
-	saved, _ := s.store.GetTeaRoom(id)
+	saved, _ := s.store.GetTeaRoom(r.Context(), id)
 	writeJSON(w, http.StatusOK, model.TeaRoomResponse{TeaRoom: saved})
 }
 
@@ -253,7 +253,7 @@ func (s *Server) handleTeaRoomPatch(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	existing, err := s.store.GetTeaRoom(id)
+	existing, err := s.store.GetTeaRoom(r.Context(), id)
 	if err != nil {
 		writeInternalError(w, "load tea room for patch", err)
 		return
@@ -285,25 +285,28 @@ func (s *Server) handleTeaRoomPatch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// The flags are written one statement each; once writing starts it finishes
+	// detached, so a client that goes away part-way can't leave half a PATCH applied.
+	ctx := context.WithoutCancel(r.Context())
 	if req.Open != nil {
-		if err := s.store.SetTeaRoomOpen(id, *req.Open); err != nil {
+		if err := s.store.SetTeaRoomOpen(ctx, id, *req.Open); err != nil {
 			writeInternalError(w, "toggle tea room open", err)
 			return
 		}
 	}
 	if req.Discounted != nil {
-		if err := s.store.SetTeaRoomDiscounted(id, *req.Discounted); err != nil {
+		if err := s.store.SetTeaRoomDiscounted(ctx, id, *req.Discounted); err != nil {
 			writeInternalError(w, "toggle tea room discounted", err)
 			return
 		}
 	}
 	if req.Locked != nil || req.LockedUntil != nil {
-		if err := s.store.SetTeaRoomLock(id, locked, lockedUntil); err != nil {
+		if err := s.store.SetTeaRoomLock(ctx, id, locked, lockedUntil); err != nil {
 			writeInternalError(w, "set tea room lock", err)
 			return
 		}
 	}
-	saved, _ := s.store.GetTeaRoom(id)
+	saved, _ := s.store.GetTeaRoom(ctx, id)
 	writeJSON(w, http.StatusOK, model.TeaRoomResponse{TeaRoom: saved})
 }
 
@@ -321,7 +324,7 @@ func (s *Server) handleTeaRoomDelete(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	if _, err := s.store.DeleteTeaRoom(id); err != nil {
+	if _, err := s.store.DeleteTeaRoom(r.Context(), id); err != nil {
 		writeInternalError(w, "delete tea room", err)
 		return
 	}
@@ -347,7 +350,7 @@ func (s *Server) handleTeaRoomsReorder(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "Invalid JSON")
 		return
 	}
-	if err := s.store.BulkReorderTeaRooms(req.OrderedIDs); err != nil {
+	if err := s.store.BulkReorderTeaRooms(r.Context(), req.OrderedIDs); err != nil {
 		writeInternalError(w, "reorder tea rooms", err)
 		return
 	}
@@ -367,7 +370,7 @@ func (s *Server) handleTeaRoomPost(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	room, err := s.store.GetTeaRoom(id)
+	room, err := s.store.GetTeaRoom(r.Context(), id)
 	if err != nil {
 		writeInternalError(w, "load tea room for post", err)
 		return
@@ -376,7 +379,7 @@ func (s *Server) handleTeaRoomPost(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "Tea room not found")
 		return
 	}
-	webhook, _ := s.store.GetSetting(teaRoomWebhookSettingKey)
+	webhook, _ := s.store.GetSetting(r.Context(), teaRoomWebhookSettingKey)
 	if strings.TrimSpace(webhook) == "" {
 		writeError(w, http.StatusBadRequest, "No Tea Rooms Discord webhook is configured. Set one on the Tea Rooms page first.")
 		return
@@ -400,17 +403,17 @@ const teaRoomLockSchedulerInterval = 15 * time.Second
 // RunTeaRoomLockScheduler lifts tea-room locks whose set expiry has passed, until
 // ctx is cancelled. Safe to call in a goroutine.
 func (s *Server) RunTeaRoomLockScheduler(ctx context.Context) {
-	runScheduler(ctx, "tea-room-locks", teaRoomLockSchedulerInterval, s.expireDueTeaRoomLocks)
+	runScheduler(ctx, "tea-room-locks", teaRoomLockSchedulerInterval, func() { s.expireDueTeaRoomLocks(ctx) })
 }
 
 // expireDueTeaRoomLocks unlocks every room whose lock expiry has arrived and
 // announces each one. Locks with no expiry are never touched - they are the ones
 // waiting on a person. Like the announcement sweep, it runs on startup too, so a
 // lock that ran out while the process was down is lifted as soon as it is back.
-func (s *Server) expireDueTeaRoomLocks() {
-	rooms, err := s.store.ExpiringTeaRoomLocks()
+func (s *Server) expireDueTeaRoomLocks(ctx context.Context) {
+	rooms, err := s.store.ExpiringTeaRoomLocks(ctx)
 	if err != nil {
-		slog.Error("tea room lock scheduler: load expiring locks", "error", err)
+		slog.Log(ctx, errorLevel(err), "tea room lock scheduler: load expiring locks", "error", err)
 		return
 	}
 	now := time.Now()
@@ -426,7 +429,7 @@ func (s *Server) expireDueTeaRoomLocks() {
 		} else if now.Before(at) {
 			continue
 		}
-		applied, err := s.store.ExpireTeaRoomLock(room.ID, room.LockedUntil)
+		applied, err := s.store.ExpireTeaRoomLock(ctx, room.ID, room.LockedUntil)
 		if err != nil {
 			slog.Error("tea room lock scheduler: expire lock", "id", room.ID, "error", err)
 			continue
@@ -490,7 +493,7 @@ func (s *Server) handleTeaRoomWebhookSet(w http.ResponseWriter, r *http.Request)
 		writeError(w, http.StatusBadRequest, "Discord webhook URLs must look like https://discord.com/api/webhooks/...")
 		return
 	}
-	if err := s.store.SetSetting(teaRoomWebhookSettingKey, webhook); err != nil {
+	if err := s.store.SetSetting(r.Context(), teaRoomWebhookSettingKey, webhook); err != nil {
 		writeInternalError(w, "save tea room webhook", err)
 		return
 	}
@@ -508,7 +511,7 @@ func (s *Server) handleTeaRoomWebhookSet(w http.ResponseWriter, r *http.Request)
 //	Response:  {"tea_rooms": [...]}
 func (s *Server) handleTeaRoomsPublic(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Access-Control-Allow-Origin", "*")
-	rooms, err := s.store.ListTeaRooms()
+	rooms, err := s.store.ListTeaRooms(r.Context())
 	if err != nil {
 		writeInternalError(w, "list tea rooms (public)", err)
 		return
@@ -530,7 +533,7 @@ func (s *Server) handleTeaRoomPublic(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "Tea room not found")
 		return
 	}
-	room, err := s.store.GetTeaRoomByNumber(number)
+	room, err := s.store.GetTeaRoomByNumber(r.Context(), number)
 	if err != nil {
 		writeInternalError(w, "load tea room (public)", err)
 		return
@@ -596,7 +599,7 @@ func formatGil(n int64) string {
 		sign, s = "-", s[1:]
 	}
 	var b strings.Builder
-	for i := 0; i < len(s); i++ {
+	for i := range len(s) {
 		if i > 0 && (len(s)-i)%3 == 0 {
 			b.WriteByte(',')
 		}

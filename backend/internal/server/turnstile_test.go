@@ -66,7 +66,7 @@ func TestVerifyTurnstileFailsClosed(t *testing.T) {
 // a missing/invalid token is rejected with 403; a valid token lets the request
 // reach the credential check (401 for an unknown user).
 func TestLoginGatedByTurnstile(t *testing.T) {
-	st, err := store.New(filepath.Join(t.TempDir(), "test.db"))
+	st, err := store.New(t.Context(), filepath.Join(t.TempDir(), "test.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -97,7 +97,7 @@ func TestLoginGatedByTurnstile(t *testing.T) {
 // TestLoginUngatedWhenDisabled confirms that with no secret the bot check is
 // skipped entirely (a login with no token reaches the credential check).
 func TestLoginUngatedWhenDisabled(t *testing.T) {
-	st, err := store.New(filepath.Join(t.TempDir(), "test.db"))
+	st, err := store.New(t.Context(), filepath.Join(t.TempDir(), "test.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -116,7 +116,7 @@ func TestLoginUngatedWhenDisabled(t *testing.T) {
 // TestRegisterGatedByTurnstile checks the bot gate also guards account creation:
 // no token -> 403; a valid token lets a valid signup through (200).
 func TestRegisterGatedByTurnstile(t *testing.T) {
-	st, err := store.New(filepath.Join(t.TempDir(), "test.db"))
+	st, err := store.New(t.Context(), filepath.Join(t.TempDir(), "test.db"))
 	if err != nil {
 		t.Fatal(err)
 	}

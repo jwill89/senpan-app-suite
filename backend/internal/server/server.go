@@ -4,6 +4,7 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"log/slog"
 	"net"
 	"net/http"
@@ -60,6 +61,10 @@ type Server struct {
 	// own, but counting it against the 5-per-15-minutes login limiter would lock a
 	// user out of password login for merely opening the passkey prompt a few times.
 	passkeyBeginLimiter *rateLimiter
+	// The festival dashboard's read. It matches raffle entries on an exact name, so
+	// it is bounded like the other name-keyed reads - but loosely, since the page
+	// reads it on every visit and after each entry.
+	dashboardLimiter *rateLimiter
 	// Dev-safety valves for outbound Discord posts (see SetWebhookPolicy). Empty /
 	// false in production, where posts go to the webhook the feature configured.
 	webhookOverride string
@@ -148,7 +153,14 @@ func (s *Server) SetLogFile(path string) {
 // New creates a Server, registers all API routes, and returns it. allowedOrigins
 // is the CORS allowlist (exact origin strings); pass nil/empty for a same-origin
 // deployment, which sends no CORS headers.
-func New(st *store.Store, hub *ws.Hub, sessionSecret, webRoot string, allowedOrigins []string) *Server {
+//
+// Sessions live in scs's in-memory store, so there is nothing to sign and no
+// secret to configure: a session is an opaque random token the server looks up,
+// and every session ends when the process restarts.
+//
+// ctx is used only for the startup migrations below that touch the database; the
+// Server keeps no context of its own.
+func New(ctx context.Context, st *store.Store, hub *ws.Hub, webRoot string, allowedOrigins []string) *Server {
 	sm := scs.New()
 	sm.Lifetime = 24 * time.Hour
 	sm.Cookie.Path = "/"
@@ -191,6 +203,7 @@ func New(st *store.Store, hub *ws.Hub, sessionSecret, webRoot string, allowedOri
 		// authenticator and retry several times in a sitting. It exists to bound
 		// unauthenticated session-store growth, not to police login attempts.
 		passkeyBeginLimiter: newRateLimiter(30, 10*time.Minute),
+		dashboardLimiter:    newRateLimiter(120, 10*time.Minute),
 		autoWake:            make(chan struct{}, 1), // one-slot wake mailbox for the auto-draw scheduler
 	}
 
@@ -211,7 +224,7 @@ func New(st *store.Store, hub *ws.Hub, sessionSecret, webRoot string, allowedOri
 	// origin allowlist), then reconcile every font's WOFF2 conversion -
 	// backfilling missing ones and sweeping stale copies. Both idempotent;
 	// conversion failures log and fall back to serving an uploaded format.
-	s.migrateFontMetaV2()
+	s.migrateFontMetaV2(ctx)
 	s.migrateFontDerivatives()
 	// LoadAndSave (outer) populates the session, then withUserCache adds a
 	// per-request memo so currentUser hits the DB at most once per request.
@@ -404,6 +417,10 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("PUT /api/festival-maps/{id}", s.handleFestivalMapUpdate)
 	s.mux.HandleFunc("PATCH /api/festival-maps/{id}", s.handleFestivalMapPatch)
 	s.mux.HandleFunc("DELETE /api/festival-maps/{id}", s.handleFestivalMapDelete)
+	// The festival dashboard's per-participant read (festivaldashboard.go). Its own
+	// prefix, not "festival-maps": adminMutationResource treats every POST under
+	// that one as an admin edit and would broadcast on each page load.
+	s.mux.HandleFunc("POST /api/festival-dashboard/{id}", s.handleFestivalDashboard)
 
 	// Stamp Rally (Festival -> Stamp Rally; resource-oriented: methods for CRUD,
 	// POST /{id}/{verb} for status, PATCH for the per-stamp pause toggle). Admin
@@ -618,10 +635,17 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// A 500 whose client had already gone is not a failure of ours: the handler's
+	// queries were cancelled with the request, and writeInternalError said so at
+	// debug. The line still records the request, at Info and marked as canceled,
+	// so a dropped phone connection doesn't read as an outage.
+	canceled := rw.status >= 500 && r.Context().Err() != nil
 	level := slog.LevelInfo
-	if rw.status >= 500 {
+	switch {
+	case canceled:
+	case rw.status >= 500:
 		level = slog.LevelError
-	} else if rw.status >= 400 {
+	case rw.status >= 400:
 		level = slog.LevelWarn
 	}
 	ip := logClientIP(r)
@@ -639,6 +663,9 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		"duration", duration.Round(time.Microsecond),
 		"ip", ip,
 		"auth", actor.kind,
+	}
+	if canceled {
+		attrs = append(attrs, "canceled", true)
 	}
 	if actor.user != "" {
 		attrs = append(attrs, "user", actor.user)
@@ -711,9 +738,35 @@ func writeError(w http.ResponseWriter, status int, msg string) {
 }
 
 // writeInternalError logs the error with context and writes a generic 500 response.
-func writeInternalError(w http.ResponseWriter, context string, err error) {
-	slog.Error("internal server error", "context", context, "error", err)
+//
+// A request whose client has gone (see clientGone) logs at Debug instead: there is
+// nobody left to tell, and an ERROR line for every closed tab or dropped phone
+// connection would bury the failures that matter.
+func writeInternalError(w http.ResponseWriter, where string, err error) {
+	if clientGone(err) {
+		slog.Debug("request canceled", "context", where, "error", err)
+	} else {
+		slog.Error("internal server error", "context", where, "error", err)
+	}
 	writeError(w, http.StatusInternalServerError, "Internal server error")
+}
+
+// clientGone reports whether err only says that the work's context was canceled -
+// the request's client went away, or the process is shutting down under a
+// background loop - so a query was refused or stopped part-way. database/sql
+// reports the first as context.Canceled; SQLite reports the second as an interrupt
+// (store.Interrupted).
+func clientGone(err error) bool {
+	return errors.Is(err, context.Canceled) || store.Interrupted(err)
+}
+
+// errorLevel is the level for logging a failure: Debug when the work was only
+// canceled (clientGone), Error otherwise.
+func errorLevel(err error) slog.Level {
+	if clientGone(err) {
+		return slog.LevelDebug
+	}
+	return slog.LevelError
 }
 
 // writeUpstreamError logs a failed outbound Discord webhook post with context and
@@ -860,7 +913,7 @@ func (s *Server) wsSessionUser(r *http.Request) *model.User {
 	if !ok || id == 0 {
 		return s.wsUserFromToken(r)
 	}
-	u, err := s.store.GetUserByID(id)
+	u, err := s.store.GetUserByID(ctx, id)
 	if err != nil || u == nil || !u.IsActive {
 		return nil
 	}
@@ -914,7 +967,7 @@ func (s *Server) loadCurrentUser(r *http.Request) *model.User {
 		// API clients (e.g. the FFXIV plugin) authenticate through the same guards.
 		return s.userFromToken(r)
 	}
-	u, err := s.store.GetUserByID(id)
+	u, err := s.store.GetUserByID(r.Context(), id)
 	if err != nil || u == nil || !u.IsActive {
 		return nil
 	}
@@ -1051,8 +1104,12 @@ func adminMutationResource(path string) (string, bool) {
 // Protected lock) live. Using the model type keeps this in lockstep with
 // handleCardsList - a broadcast that dropped a field would show a stale status
 // until a manual refetch (e.g. protecting a card wouldn't show the lock).
-func (s *Server) broadcastCards() {
-	cards, err := s.store.ListCardIDsWithNames()
+//
+// The read runs detached: a broadcast follows a change that has already been
+// saved and tells every OTHER admin about it, so the requester going away is no
+// reason to skip it.
+func (s *Server) broadcastCards(ctx context.Context) {
+	cards, err := s.store.ListCardIDsWithNames(context.WithoutCancel(ctx))
 	if err != nil {
 		return
 	}
@@ -1081,12 +1138,14 @@ func (s *Server) broadcastCards() {
 }
 
 // broadcastPatterns sends updated patterns and categories to the admin channel.
-func (s *Server) broadcastPatterns() {
-	patterns, err := s.store.ListPatterns()
+// Its reads run detached, for the same reason as broadcastCards.
+func (s *Server) broadcastPatterns(ctx context.Context) {
+	ctx = context.WithoutCancel(ctx)
+	patterns, err := s.store.ListPatterns(ctx)
 	if err != nil {
 		return
 	}
-	categories, err := s.store.ListPatternCategories()
+	categories, err := s.store.ListPatternCategories(ctx)
 	if err != nil {
 		return
 	}

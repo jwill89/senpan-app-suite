@@ -1,9 +1,10 @@
 name: CI
 
 # Runs the full quality gate on every push and pull request: the Vue/TS
-# frontend (lint, type-check, unit tests, production build) and the Go backend
-# (build, vet, test). Mirrors the local `npm` and `go` commands so a green CI
-# means the same checks a developer runs locally have passed.
+# frontend (lint, type-check, unit tests, audit, production build), the Go backend
+# (lint, build, vet, test, govulncheck), the FFXIV plugin and the PowerShell
+# scripts. Mirrors scripts/check.ps1, so a green CI means the same checks a
+# developer runs locally have passed.
 on:
   push:
   pull_request:
@@ -24,35 +25,12 @@ jobs:
       run:
         working-directory: frontend
     steps:
-      # Check out WITHOUT the eslint-config PAT and WITHOUT submodules.
       # persist-credentials: false keeps even the default GITHUB_TOKEN out of
       # .git/config, so the untrusted npm lifecycle scripts that `npm ci` runs
-      # below can't read a stored credential. The private submodule is fetched
-      # separately in the next step with a scoped, non-persisted token.
+      # below can't read a stored credential.
       - uses: actions/checkout@v7
         with:
           persist-credentials: false
-
-      # The frontend ESLint config lives in the private @jwill89/eslint-config
-      # repo, wired in as the frontend/eslint-config submodule. Fetch it with a
-      # PAT that can read that repo (ESLINT_CONFIG_TOKEN secret - ideally a
-      # fine-grained, read-only token limited to that repo) - the default
-      # GITHUB_TOKEN can't reach a different private repo. The credential is
-      # injected via a temporary `insteadOf` rewrite and unset immediately after,
-      # so it is never written into .git/config or the submodule config where
-      # later `npm ci` lifecycle scripts could read it.
-      - name: Fetch ESLint config submodule
-        working-directory: ${{ github.workspace }}
-        env:
-          ESLINT_CONFIG_TOKEN: ${{ secrets.ESLINT_CONFIG_TOKEN }}
-        run: |
-          if [ -z "$ESLINT_CONFIG_TOKEN" ]; then
-            echo "ERROR: ESLINT_CONFIG_TOKEN secret is not set." >&2
-            exit 1
-          fi
-          git config --global url."https://x-access-token:${ESLINT_CONFIG_TOKEN}@github.com/".insteadOf "https://github.com/"
-          git submodule update --init --recursive
-          git config --global --unset url."https://x-access-token:${ESLINT_CONFIG_TOKEN}@github.com/".insteadOf
 
       - name: Set up Node
         uses: actions/setup-node@v6
@@ -100,7 +78,9 @@ jobs:
       - name: Generate API types (tygo)
         run: npm run gen:types
 
-      - name: Lint
+      # ESLint (eslint.config.js) for the scripts and templates, Stylelint
+      # (stylelint.config.mjs) for the stylesheets and <style> blocks.
+      - name: Lint (ESLint + Stylelint)
         run: npm run lint:check
 
       # Prettier covers the CSS layer, which ESLint does not lint at all.
@@ -116,6 +96,10 @@ jobs:
 
       - name: Unit tests
         run: npm run test
+
+      # Known vulnerabilities in what ships (dev tooling excluded), at high or above.
+      - name: Dependency audit
+        run: npm audit --audit-level=high --omit=dev
 
       - name: Production build
         run: npm run build
@@ -138,10 +122,13 @@ jobs:
       # golangci-lint aggregates errcheck/govet/staticcheck/unused plus the
       # extras configured in backend/.golangci.yml. Pinned to match the version
       # developers run locally so CI and local results agree.
+      # Built from source with the pinned toolchain: a prebuilt linter binary can't
+      # read export data from a newer Go than it was compiled with.
       - name: Lint (golangci-lint)
         uses: golangci/golangci-lint-action@v9
         with:
-          version: v2.13.1
+          version: v2.15.0
+          install-mode: goinstall
           working-directory: backend
 
       - name: Build
@@ -150,8 +137,11 @@ jobs:
       - name: Vet
         run: go vet ./...
 
-      - name: Test
-        run: go test ./...
+      # Under the race detector: the WebSocket hub, the auto-draw loop, the
+      # schedulers and the rate limiters all run concurrently. The SQLite driver is
+      # pure Go, so the race build runs the same driver production ships.
+      - name: Test (race detector)
+        run: go test -race ./...
 
       # Scan the module (and its dependencies) for known Go vulnerabilities that
       # actually reach our code paths. Run latest so newly disclosed advisories
@@ -205,6 +195,27 @@ jobs:
       - name: Roslynator analyze
         run: dotnet roslynator analyze SenpanCompanion.csproj --severity-level info
 
+  scripts:
+    name: Scripts (PSScriptAnalyzer)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      # The PowerShell scripts in scripts/, with PSScriptAnalyzer as the repo-root
+      # PSScriptAnalyzerSettings.psd1 sets it, pinned to the version scripts/check.ps1
+      # requires so local and CI agree. Only TRACKED scripts are linted (the owner's
+      # scripts/deploy.config.ps1 is gitignored); any finding fails the job.
+      - name: Lint (PSScriptAnalyzer)
+        shell: pwsh
+        run: |
+          Install-PSResource PSScriptAnalyzer -Version 1.25.0 -Scope CurrentUser -TrustRepository -Quiet
+          Import-Module PSScriptAnalyzer -RequiredVersion 1.25.0
+          $findings = foreach ($file in (git ls-files 'scripts/*.ps1')) {
+            Invoke-ScriptAnalyzer -Path $file -Settings PSScriptAnalyzerSettings.psd1
+          }
+          $findings | Format-Table -AutoSize
+          if ($findings) { exit 1 }
+
   # On a push to main, AFTER the whole gate passes, tag + release any component
   # whose current version has no release yet. Tags follow <Component>-v<version>
   # (Frontend-v3.5.0, Backend-v3.4.0, Plugin-v2.0.1.0) and each release body is
@@ -213,7 +224,7 @@ jobs:
   # skipped, so ordinary main pushes are a no-op here.
   release:
     name: Tag + release (main, on version bump)
-    needs: [frontend, backend, plugin]
+    needs: [frontend, backend, plugin, scripts]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     permissions:

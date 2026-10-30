@@ -10,7 +10,7 @@
  *             participant's rows always grouped together. Live-refreshed over the WS.
  *   - form:   the create/edit form (StampRallyFormTab), a Back sub-page.
  */
-import { computed, ref } from 'vue'
+import { computed, ref, useTemplateRef } from 'vue'
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
 import AdminPanel from '@/components/common/ui/AdminPanel.vue'
 import ManagerView from '@/components/common/ui/ManagerView.vue'
@@ -88,12 +88,12 @@ function toggleManage(r: StampRally): void {
 const previewItems = computed<CanvasItem[]>(() => {
   const r = store.selectedRally
   if (!r) return []
-  const stamps = (r.stamps || []).map((s) => ({
+  const stamps = (r.stamps ?? []).map((s) => ({
     key: `s${s.id}`,
     image: s.image || r.not_stamped_image,
     placement: s.placement,
   }))
-  const prizes = (r.prizes || []).map((p) => ({
+  const prizes = (r.prizes ?? []).map((p) => ({
     key: `p${p.id}`,
     image: p.image || r.not_stamped_image,
     placement: p.placement,
@@ -117,7 +117,7 @@ const logMatches = (e: StampRallyLogEntry, q: string): boolean =>
   stampTypeShort(e.stamp_type).toLowerCase().includes(q)
 
 const logView = ref<DataTableView>({ total: 0, totalPages: 1, facets: {} })
-const logTableRef = ref<{ exportCsv: (name?: string) => void } | null>(null)
+const logTableRef = useTemplateRef<{ exportCsv: (name?: string) => void }>('logTableRef')
 
 function resetLogs(): void {
   logSearch.value = ''
@@ -211,14 +211,15 @@ async function deleteSelected(): Promise<void> {
         </span>
       </SubPageHeader>
       <div class="flex-toolbar flex-end mb-16">
-        <button class="btn-neutral btn-sm" @click="openCards">
+        <button type="button" class="btn-neutral btn-sm" @click="openCards">
           <font-awesome-icon :icon="['fad', 'id-card']" /> Cards ({{ store.rallyCards.length }})
         </button>
-        <button class="btn-neutral btn-sm" @click="openLogs">
+        <button type="button" class="btn-neutral btn-sm" @click="openLogs">
           <font-awesome-icon :icon="['fad', 'clipboard-list']" /> View Logs
         </button>
         <button
           v-if="!isClosed"
+          type="button"
           class="btn-confirm btn-sm"
           :disabled="!detailReady"
           :title="detailReady ? undefined : 'Still loading this rally'"
@@ -227,6 +228,7 @@ async function deleteSelected(): Promise<void> {
           <font-awesome-icon :icon="['fas', 'pen-to-square']" /> Edit
         </button>
         <button
+          type="button"
           class="btn-view btn-sm"
           :disabled="!detailReady"
           :title="
@@ -236,11 +238,11 @@ async function deleteSelected(): Promise<void> {
         >
           <font-awesome-icon :icon="['fas', 'copy']" /> Duplicate
         </button>
-        <button class="btn-caution btn-sm" @click="toggleClosed">
+        <button type="button" class="btn-caution btn-sm" @click="toggleClosed">
           <font-awesome-icon :icon="['fas', isClosed ? 'rotate' : 'lock']" />
           {{ isClosed ? 'Reopen' : 'Close' }}
         </button>
-        <button class="btn-danger btn-sm" @click="deleteSelected">
+        <button type="button" class="btn-danger btn-sm" @click="deleteSelected">
           <font-awesome-icon :icon="['fas', 'trash']" /> Delete
         </button>
       </div>
@@ -290,7 +292,11 @@ async function deleteSelected(): Promise<void> {
                   <span v-else class="status-badge status-badge-open">active</span>
                 </td>
                 <td class="ta-right">
-                  <button class="btn-caution btn-sm" @click="store.setStampPaused(s.id, !s.paused)">
+                  <button
+                    type="button"
+                    class="btn-caution btn-sm"
+                    @click="store.setStampPaused(s.id, !s.paused)"
+                  >
                     <font-awesome-icon :icon="['fas', s.paused ? 'rotate' : 'lock']" />
                     {{ s.paused ? 'Resume' : 'Pause' }}
                   </button>
@@ -336,6 +342,7 @@ async function deleteSelected(): Promise<void> {
         </div>
         <div class="flex-toolbar flex-end">
           <button
+            type="button"
             class="btn-confirm btn-sm"
             :disabled="store.creatingCard || !store.cardAdd.participantName.trim()"
             @click="store.createCard()"
@@ -369,6 +376,7 @@ async function deleteSelected(): Promise<void> {
               <td class="ta-right">
                 <div class="row-actions">
                   <button
+                    type="button"
                     class="btn-view btn-sm"
                     title="Copy link"
                     aria-label="Copy link"
@@ -377,6 +385,7 @@ async function deleteSelected(): Promise<void> {
                     <font-awesome-icon :icon="['fas', 'link']" />
                   </button>
                   <button
+                    type="button"
                     class="btn-danger btn-sm"
                     :disabled="(c.collected_count || 0) > 0 && !isClosed"
                     :aria-label="
@@ -420,6 +429,7 @@ async function deleteSelected(): Promise<void> {
           </template>
           <template #actions>
             <button
+              type="button"
               class="btn-view btn-sm"
               :disabled="!logView.total"
               title="Download the stamps currently shown, as CSV"
@@ -459,7 +469,7 @@ async function deleteSelected(): Promise<void> {
     <!-- -- List ---------------------------------------------------------------- -->
     <ManagerView v-else title="Stamp Rally" :icon="['fad', 'stamp']">
       <template #actions>
-        <button class="btn-confirm btn-sm" @click="openNew">
+        <button type="button" class="btn-confirm btn-sm" @click="openNew">
           <font-awesome-icon :icon="['fas', 'plus']" /> New Stamp Rally
         </button>
       </template>
@@ -518,6 +528,7 @@ async function deleteSelected(): Promise<void> {
                 <div class="rally-card-actions">
                   <button
                     v-if="(r.stamp_count || 0) > 0"
+                    type="button"
                     class="btn-neutral btn-sm"
                     :aria-expanded="expandedCard === r.id"
                     aria-label="Manage stalls"
@@ -531,6 +542,7 @@ async function deleteSelected(): Promise<void> {
                     /></span>
                   </button>
                   <button
+                    type="button"
                     class="btn-danger btn-sm"
                     aria-label="Delete stamp rally"
                     title="Delete"
@@ -559,6 +571,7 @@ async function deleteSelected(): Promise<void> {
                         {{ s.paused ? 'paused' : 'active' }}
                       </span>
                       <button
+                        type="button"
                         class="btn-caution btn-sm"
                         @click.stop="store.setStampPausedInList(r.id, s.id, !s.paused)"
                       >
@@ -617,6 +630,7 @@ async function deleteSelected(): Promise<void> {
             <template #cell-actions="{ row }">
               <div class="row-actions">
                 <button
+                  type="button"
                   class="btn-view btn-sm"
                   aria-label="View"
                   title="View"
@@ -625,6 +639,7 @@ async function deleteSelected(): Promise<void> {
                   <font-awesome-icon :icon="['fas', 'eye']" />
                 </button>
                 <button
+                  type="button"
                   class="btn-view btn-sm"
                   aria-label="Copy to new stamp rally"
                   title="Copy to new stamp rally"
@@ -633,6 +648,7 @@ async function deleteSelected(): Promise<void> {
                   <font-awesome-icon :icon="['fas', 'copy']" />
                 </button>
                 <button
+                  type="button"
                   class="btn-danger btn-sm"
                   aria-label="Delete"
                   title="Delete"
@@ -664,9 +680,11 @@ async function deleteSelected(): Promise<void> {
 .rally-table-wrap {
   overflow-x: auto;
 }
+
 .rally-preview {
   max-width: 520px;
 }
+
 .rally-card-actions {
   margin-top: 10px;
   display: flex;
@@ -674,10 +692,12 @@ async function deleteSelected(): Promise<void> {
   gap: 8px;
   justify-content: flex-end;
 }
+
 /* "X/Y active" turns to the caution colour when any stall is paused. */
 .has-paused {
   color: var(--warning);
 }
+
 /* Inline stall pause panel on a list card. */
 .stall-panel {
   margin-top: 12px;
@@ -688,11 +708,13 @@ async function deleteSelected(): Promise<void> {
   gap: 6px;
   cursor: default;
 }
+
 .stall-row {
   display: flex;
   align-items: center;
   gap: 8px;
 }
+
 .stall-row-name {
   flex: 1;
   min-width: 0;
@@ -701,11 +723,13 @@ async function deleteSelected(): Promise<void> {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
 .prize-chips {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
 }
+
 .prize-chip {
   display: inline-flex;
   align-items: center;
@@ -716,6 +740,7 @@ async function deleteSelected(): Promise<void> {
   padding: 4px 12px 4px 4px;
   font-size: 0.9rem;
 }
+
 .prize-chip img {
   width: 28px;
   height: 28px;

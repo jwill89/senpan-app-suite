@@ -22,9 +22,9 @@ const schemaVersion = 69
 // applies any outstanding migrations to bring it up to schemaVersion.
 // On the hot path (version == schemaVersion), zero migration queries execute.
 // Each migration is guarded by `if version < N` so they run incrementally.
-func ensureSchema(db *sql.DB) error {
+func ensureSchema(ctx context.Context, db *sql.DB) error {
 	var version int
-	if err := db.QueryRow("PRAGMA user_version").Scan(&version); err != nil {
+	if err := db.QueryRowContext(ctx, "PRAGMA user_version").Scan(&version); err != nil {
 		return fmt.Errorf("read user_version: %w", err)
 	}
 	if version == schemaVersion {
@@ -47,15 +47,15 @@ func ensureSchema(db *sql.DB) error {
 
 	if version < 1 {
 		var tableCount int
-		if err := db.QueryRow("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='cards'").Scan(&tableCount); err != nil {
+		if err := db.QueryRowContext(ctx, "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='cards'").Scan(&tableCount); err != nil {
 			return err
 		}
 		if tableCount == 0 {
-			if err := createTables(db); err != nil {
+			if err := createTables(ctx, db); err != nil {
 				return err
 			}
 		} else {
-			if err := migrateSortOrder(db); err != nil {
+			if err := migrateSortOrder(ctx, db); err != nil {
 				return err
 			}
 			// createIndexes builds a UNIQUE index on called_numbers(game_id, number).
@@ -64,77 +64,77 @@ func ensureSchema(db *sql.DB) error {
 			// migration), which would fail the index build here. Collapse duplicates
 			// first - the same dedup v43 performs - so the index is built on
 			// known-clean data.
-			if err := dedupeCalledNumbers(db); err != nil {
+			if err := dedupeCalledNumbers(ctx, db); err != nil {
 				return err
 			}
-			if err := createIndexes(db); err != nil {
+			if err := createIndexes(ctx, db); err != nil {
 				return err
 			}
 		}
 	}
 
 	if version < 2 {
-		if err := migrateWinnersCache(db); err != nil {
+		if err := migrateWinnersCache(ctx, db); err != nil {
 			return err
 		}
 	}
 
 	if version < 3 {
-		if err := migrateSettings(db); err != nil {
+		if err := migrateSettings(ctx, db); err != nil {
 			return err
 		}
 	}
 
 	if version < 4 {
-		if err := migrateStyles(db); err != nil {
+		if err := migrateStyles(ctx, db); err != nil {
 			return err
 		}
 	}
 
 	if version < 5 {
-		if err := migratePatternCategories(db); err != nil {
+		if err := migratePatternCategories(ctx, db); err != nil {
 			return err
 		}
 	}
 
 	if version < 6 {
-		if err := migrateRaffles(db); err != nil {
+		if err := migrateRaffles(ctx, db); err != nil {
 			return err
 		}
 	}
 
 	if version < 7 {
-		if err := migrateWinnersLog(db); err != nil {
+		if err := migrateWinnersLog(ctx, db); err != nil {
 			return err
 		}
 	}
 
 	if version < 8 {
-		if err := migrateWinnersLogIndex(db); err != nil {
+		if err := migrateWinnersLogIndex(ctx, db); err != nil {
 			return err
 		}
 	}
 
 	if version < 9 {
-		if err := migrateCardPlayerNameIndex(db); err != nil {
+		if err := migrateCardPlayerNameIndex(ctx, db); err != nil {
 			return err
 		}
 	}
 
 	if version < 10 {
-		if err := migrateRaffleImagePaths(db); err != nil {
+		if err := migrateRaffleImagePaths(ctx, db); err != nil {
 			return err
 		}
 	}
 
 	if version < 11 {
-		if err := migrateBookClubs(db); err != nil {
+		if err := migrateBookClubs(ctx, db); err != nil {
 			return err
 		}
 	}
 
 	if version < 12 {
-		if err := migrateBookClubTropes(db); err != nil {
+		if err := migrateBookClubTropes(ctx, db); err != nil {
 			return err
 		}
 	}
@@ -145,336 +145,336 @@ func ensureSchema(db *sql.DB) error {
 	// longer creates the table; an existing one has it dropped below).
 
 	if version < 15 {
-		if err := migrateGamePresets(db); err != nil {
+		if err := migrateGamePresets(ctx, db); err != nil {
 			return err
 		}
 	}
 
 	if version < 17 {
-		if err := migrateAnnouncements(db); err != nil {
+		if err := migrateAnnouncements(ctx, db); err != nil {
 			return err
 		}
 	}
 
 	if version < 18 {
-		if err := migrateAnnouncementTimezone(db); err != nil {
+		if err := migrateAnnouncementTimezone(ctx, db); err != nil {
 			return err
 		}
 	}
 
 	if version < 19 {
-		if err := migrateAnnouncementLocalTimes(db); err != nil {
+		if err := migrateAnnouncementLocalTimes(ctx, db); err != nil {
 			return err
 		}
 	}
 
 	if version < 20 {
-		if err := migrateAnnouncementColor(db); err != nil {
+		if err := migrateAnnouncementColor(ctx, db); err != nil {
 			return err
 		}
 	}
 
 	if version < 21 {
-		if err := migrateAnnouncementButtons(db); err != nil {
+		if err := migrateAnnouncementButtons(ctx, db); err != nil {
 			return err
 		}
 	}
 
 	if version < 22 {
-		if err := migrateUsers(db); err != nil {
+		if err := migrateUsers(ctx, db); err != nil {
 			return err
 		}
 	}
 
 	if version < 23 {
-		if err := migrateUserLastLogin(db); err != nil {
+		if err := migrateUserLastLogin(ctx, db); err != nil {
 			return err
 		}
 	}
 
 	if version < 24 {
-		if err := migrateAnnouncementRoles(db); err != nil {
+		if err := migrateAnnouncementRoles(ctx, db); err != nil {
 			return err
 		}
 	}
 
 	if version < 25 {
-		if err := migrateAnnouncementMention(db); err != nil {
+		if err := migrateAnnouncementMention(ctx, db); err != nil {
 			return err
 		}
 	}
 
 	if version < 26 {
-		if err := migrateAnnouncementLocation(db); err != nil {
+		if err := migrateAnnouncementLocation(ctx, db); err != nil {
 			return err
 		}
 	}
 
 	if version < 27 {
-		if err := migrateBookClubEventWebhooks(db); err != nil {
+		if err := migrateBookClubEventWebhooks(ctx, db); err != nil {
 			return err
 		}
 	}
 
 	if version < 28 {
-		if err := migrateDropBookClubEvents(db); err != nil {
+		if err := migrateDropBookClubEvents(ctx, db); err != nil {
 			return err
 		}
 	}
 
 	if version < 29 {
-		if err := migrateAnnouncementTimeFormats(db); err != nil {
+		if err := migrateAnnouncementTimeFormats(ctx, db); err != nil {
 			return err
 		}
 	}
 
 	if version < 30 {
-		if err := migrateCardCreatedAt(db); err != nil {
+		if err := migrateCardCreatedAt(ctx, db); err != nil {
 			return err
 		}
 	}
 
 	if version < 31 {
-		if err := migrateAnnouncementThumbnail(db); err != nil {
+		if err := migrateAnnouncementThumbnail(ctx, db); err != nil {
 			return err
 		}
 	}
 
 	if version < 32 {
-		if err := migrateAnnouncementDynamicDates(db); err != nil {
+		if err := migrateAnnouncementDynamicDates(ctx, db); err != nil {
 			return err
 		}
 	}
 
 	if version < 33 {
-		if err := migrateAnnouncementSortOrder(db); err != nil {
+		if err := migrateAnnouncementSortOrder(ctx, db); err != nil {
 			return err
 		}
 	}
 
 	if version < 34 {
-		if err := migrateStyleFlourishes(db); err != nil {
+		if err := migrateStyleFlourishes(ctx, db); err != nil {
 			return err
 		}
 	}
 
 	if version < 35 {
-		if err := migrateGarapons(db); err != nil {
+		if err := migrateGarapons(ctx, db); err != nil {
 			return err
 		}
 	}
 
 	if version < 36 {
-		if err := migrateGaraponDrawKeepLogs(db); err != nil {
+		if err := migrateGaraponDrawKeepLogs(ctx, db); err != nil {
 			return err
 		}
 	}
 
 	if version < 37 {
-		if err := migrateStyleTokens(db); err != nil {
+		if err := migrateStyleTokens(ctx, db); err != nil {
 			return err
 		}
 	}
 
 	if version < 38 {
-		if err := migrateAffiliates(db); err != nil {
+		if err := migrateAffiliates(ctx, db); err != nil {
 			return err
 		}
 	}
 
 	if version < 39 {
-		if err := migrateStampRally(db); err != nil {
+		if err := migrateStampRally(ctx, db); err != nil {
 			return err
 		}
 	}
 
 	if version < 40 {
-		if err := migrateStampRallyGaraponLink(db); err != nil {
+		if err := migrateStampRallyGaraponLink(ctx, db); err != nil {
 			return err
 		}
 	}
 
 	if version < 41 {
-		if err := migrateStampRallyKeepLogs(db); err != nil {
+		if err := migrateStampRallyKeepLogs(ctx, db); err != nil {
 			return err
 		}
 	}
 
 	if version < 42 {
-		if err := migrateUserTokens(db); err != nil {
+		if err := migrateUserTokens(ctx, db); err != nil {
 			return err
 		}
 	}
 
 	if version < 43 {
-		if err := migrateCalledNumbersUnique(db); err != nil {
+		if err := migrateCalledNumbersUnique(ctx, db); err != nil {
 			return err
 		}
 	}
 
 	if version < 44 {
-		if _, err := db.Exec(userPasskeysTableSQL); err != nil {
+		if _, err := db.ExecContext(ctx, userPasskeysTableSQL); err != nil {
 			return fmt.Errorf("create user_passkeys: %w", err)
 		}
-		if _, err := db.Exec(userPasskeysIndexSQL); err != nil {
+		if _, err := db.ExecContext(ctx, userPasskeysIndexSQL); err != nil {
 			return fmt.Errorf("create user_passkeys index: %w", err)
 		}
 	}
 
 	if version < 45 {
-		if err := migrateTeaRooms(db); err != nil {
+		if err := migrateTeaRooms(ctx, db); err != nil {
 			return err
 		}
 	}
 
 	if version < 46 {
-		if err := migrateTeaRoomSubtitle(db); err != nil {
+		if err := migrateTeaRoomSubtitle(ctx, db); err != nil {
 			return err
 		}
 	}
 
 	if version < 47 {
-		if err := migrateAffiliateFields(db); err != nil {
+		if err := migrateAffiliateFields(ctx, db); err != nil {
 			return err
 		}
 	}
 
 	if version < 48 {
-		if err := migrateStampRallyRedeemImage(db); err != nil {
+		if err := migrateStampRallyRedeemImage(ctx, db); err != nil {
 			return err
 		}
 	}
 
 	if version < 49 {
-		if err := migrateStyleVisibility(db); err != nil {
+		if err := migrateStyleVisibility(ctx, db); err != nil {
 			return err
 		}
-		if err := migrateCardStatuses(db); err != nil {
+		if err := migrateCardStatuses(ctx, db); err != nil {
 			return err
 		}
 	}
 
 	if version < 50 {
-		if err := migrateGamePresetAuto(db); err != nil {
+		if err := migrateGamePresetAuto(ctx, db); err != nil {
 			return err
 		}
 	}
 
 	if version < 51 {
-		if err := migrateUserPasswordEpoch(db); err != nil {
+		if err := migrateUserPasswordEpoch(ctx, db); err != nil {
 			return err
 		}
 	}
 
 	if version < 52 {
-		if err := migrateAffiliateSubtitle(db); err != nil {
+		if err := migrateAffiliateSubtitle(ctx, db); err != nil {
 			return err
 		}
 	}
 
 	if version < 53 {
-		if err := migrateTeaRoomOwner(db); err != nil {
+		if err := migrateTeaRoomOwner(ctx, db); err != nil {
 			return err
 		}
 	}
 
 	if version < 54 {
-		if err := migrateStampRallyPublicSignup(db); err != nil {
+		if err := migrateStampRallyPublicSignup(ctx, db); err != nil {
 			return err
 		}
 	}
 
 	if version < 55 {
-		if err := migrateGaraponDefaultDraws(db); err != nil {
+		if err := migrateGaraponDefaultDraws(ctx, db); err != nil {
 			return err
 		}
 	}
 
 	if version < 56 {
-		if err := migrateAnnouncementSkipCount(db); err != nil {
+		if err := migrateAnnouncementSkipCount(ctx, db); err != nil {
 			return err
 		}
 	}
 
 	if version < 57 {
-		if err := migrateRaffleEntryModes(db); err != nil {
+		if err := migrateRaffleEntryModes(ctx, db); err != nil {
 			return err
 		}
 	}
 
 	if version < 58 {
-		if err := migrateRaffleEntryPayments(db); err != nil {
+		if err := migrateRaffleEntryPayments(ctx, db); err != nil {
 			return err
 		}
 	}
 
 	if version < 59 {
-		if err := migrateRafflePayImage(db); err != nil {
+		if err := migrateRafflePayImage(ctx, db); err != nil {
 			return err
 		}
 	}
 
 	if version < 60 {
-		if err := migrateStampTypes(db); err != nil {
+		if err := migrateStampTypes(ctx, db); err != nil {
 			return err
 		}
 	}
 
 	if version < 61 {
-		if err := migrateFestivalMaps(db); err != nil {
+		if err := migrateFestivalMaps(ctx, db); err != nil {
 			return err
 		}
 	}
 
 	if version < 62 {
-		if err := migrateFestivalMapSlug(db); err != nil {
+		if err := migrateFestivalMapSlug(ctx, db); err != nil {
 			return err
 		}
 	}
 
 	if version < 63 {
-		if err := migrateFestivalStallTypeLabel(db); err != nil {
+		if err := migrateFestivalStallTypeLabel(ctx, db); err != nil {
 			return err
 		}
 	}
 
 	if version < 64 {
-		if err := migrateFestivalStallOccupants(db); err != nil {
+		if err := migrateFestivalStallOccupants(ctx, db); err != nil {
 			return err
 		}
 	}
 
 	if version < 65 {
-		if err := migrateRaffleFestivalLink(db); err != nil {
+		if err := migrateRaffleFestivalLink(ctx, db); err != nil {
 			return err
 		}
 	}
 
 	if version < 66 {
-		if err := migrateParticipantWorlds(db); err != nil {
+		if err := migrateParticipantWorlds(ctx, db); err != nil {
 			return err
 		}
 	}
 
 	if version < 67 {
-		if err := migrateStallSelectionAndCarrd(db); err != nil {
+		if err := migrateStallSelectionAndCarrd(ctx, db); err != nil {
 			return err
 		}
 	}
 
 	if version < 68 {
-		if err := migrateStallTextColor(db); err != nil {
+		if err := migrateStallTextColor(ctx, db); err != nil {
 			return err
 		}
 	}
 
 	if version < 69 {
-		if err := migrateTeaRoomLocks(db); err != nil {
+		if err := migrateTeaRoomLocks(ctx, db); err != nil {
 			return err
 		}
 	}
 
-	_, err := db.Exec(fmt.Sprintf("PRAGMA user_version = %d", schemaVersion))
+	_, err := db.ExecContext(ctx, fmt.Sprintf("PRAGMA user_version = %d", schemaVersion))
 	return err
 }
 
@@ -497,21 +497,21 @@ func ensureSchema(db *sql.DB) error {
 //
 // Idempotent: the column add is guarded by hasColumn, and only rows whose world is
 // still ” are touched, so a second run changes nothing.
-func migrateParticipantWorlds(db *sql.DB) error {
+func migrateParticipantWorlds(ctx context.Context, db *sql.DB) error {
 	for _, t := range []struct{ table, nameCol string }{
 		{"stamp_rally_cards", "participant_name"},
 		{"garapon_players", "player_name"},
 	} {
-		if !tableExists(db, t.table) {
+		if !tableExists(ctx, db, t.table) {
 			continue
 		}
-		if !hasColumn(db, t.table, "world") {
-			if _, err := db.Exec(fmt.Sprintf(
+		if !hasColumn(ctx, db, t.table, "world") {
+			if _, err := db.ExecContext(ctx, fmt.Sprintf(
 				`ALTER TABLE %s ADD COLUMN world TEXT NOT NULL DEFAULT ''`, t.table)); err != nil {
 				return fmt.Errorf("add %s.world: %w", t.table, err)
 			}
 		}
-		if err := backfillWorlds(db, t.table, t.nameCol); err != nil {
+		if err := backfillWorlds(ctx, db, t.table, t.nameCol); err != nil {
 			return err
 		}
 	}
@@ -522,8 +522,8 @@ func migrateParticipantWorlds(db *sql.DB) error {
 // Runs in a single transaction so a crash part-way cannot leave half a table split
 // and half not - which would be invisible afterwards, since both states look like
 // ordinary data.
-func backfillWorlds(db *sql.DB, table, nameCol string) error {
-	rows, err := db.Query(fmt.Sprintf(
+func backfillWorlds(ctx context.Context, db *sql.DB, table, nameCol string) error {
+	rows, err := db.QueryContext(ctx, fmt.Sprintf(
 		`SELECT id, %s FROM %s WHERE world = '' AND %s LIKE '%% @ %%'`, nameCol, table, nameCol))
 	if err != nil {
 		return fmt.Errorf("scan %s for world backfill: %w", table, err)
@@ -557,19 +557,19 @@ func backfillWorlds(db *sql.DB, table, nameCol string) error {
 		return nil
 	}
 
-	tx, err := db.Begin()
+	tx, err := db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}
 	defer func() { _ = tx.Rollback() }()
-	stmt := fmt.Sprintf(`UPDATE %s SET %s = ?, world = ? WHERE id = ?`, table, nameCol)
+	stmt := fmt.Sprintf(`UPDATE %s SET %s = ?, world = ? WHERE id = ?`, table, nameCol) //nolint:gosec // table and column come from the fixed list in migrateParticipantWorlds
 	for _, p := range pending {
 		// A blank half means the blob was " @ Something" or "Something @ " - keep
 		// the original rather than storing a nameless row.
 		if p.name == "" || p.world == "" {
 			continue
 		}
-		if _, err := tx.Exec(stmt, p.name, p.world, p.id); err != nil {
+		if _, err := tx.ExecContext(ctx, stmt, p.name, p.world, p.id); err != nil {
 			return fmt.Errorf("backfill %s.world: %w", table, err)
 		}
 	}
@@ -583,11 +583,11 @@ func backfillWorlds(db *sql.DB, table, nameCol string) error {
 // tinted anything deep left its own name barely legible. Existing rows default to
 // ” and the frontend draws those white, which is what most fills want; an admin
 // picks something else where it does not. Idempotent - guarded by hasColumn.
-func migrateStallTextColor(db *sql.DB) error {
-	if !tableExists(db, "festival_stalls") || hasColumn(db, "festival_stalls", "text_color") {
+func migrateStallTextColor(ctx context.Context, db *sql.DB) error {
+	if !tableExists(ctx, db, "festival_stalls") || hasColumn(ctx, db, "festival_stalls", "text_color") {
 		return nil
 	}
-	if _, err := db.Exec(
+	if _, err := db.ExecContext(ctx,
 		`ALTER TABLE festival_stalls ADD COLUMN text_color TEXT NOT NULL DEFAULT ''`); err != nil {
 		return fmt.Errorf("add festival_stalls.text_color: %w", err)
 	}
@@ -606,15 +606,15 @@ func migrateStallTextColor(db *sql.DB) error {
 //
 // Both default to ” (not set), which is what every existing row gets: nothing
 // renders until someone fills one in. Idempotent - each column is guarded.
-func migrateStallSelectionAndCarrd(db *sql.DB) error {
+func migrateStallSelectionAndCarrd(ctx context.Context, db *sql.DB) error {
 	for _, c := range []struct{ table, column string }{
 		{"festival_stalls", "selection_color"},
 		{"festival_stall_occupants", "event_carrd"},
 	} {
-		if !tableExists(db, c.table) || hasColumn(db, c.table, c.column) {
+		if !tableExists(ctx, db, c.table) || hasColumn(ctx, db, c.table, c.column) {
 			continue
 		}
-		if _, err := db.Exec(fmt.Sprintf(
+		if _, err := db.ExecContext(ctx, fmt.Sprintf(
 			`ALTER TABLE %s ADD COLUMN %s TEXT NOT NULL DEFAULT ''`, c.table, c.column)); err != nil {
 			return fmt.Errorf("add %s.%s: %w", c.table, c.column, err)
 		}
@@ -627,14 +627,14 @@ func migrateStallSelectionAndCarrd(db *sql.DB) error {
 // stamp_rallies.redeem_image, which does the same job for "Where to Redeem".
 // Existing raffles default to ” (no image), so nothing changes until someone
 // picks one. Idempotent - skipped when the column already exists.
-func migrateRafflePayImage(db *sql.DB) error {
-	if !tableExists(db, "raffles") {
+func migrateRafflePayImage(ctx context.Context, db *sql.DB) error {
+	if !tableExists(ctx, db, "raffles") {
 		return nil
 	}
-	if hasColumn(db, "raffles", "pay_image") {
+	if hasColumn(ctx, db, "raffles", "pay_image") {
 		return nil
 	}
-	if _, err := db.Exec(`ALTER TABLE raffles ADD COLUMN pay_image TEXT NOT NULL DEFAULT ''`); err != nil {
+	if _, err := db.ExecContext(ctx, `ALTER TABLE raffles ADD COLUMN pay_image TEXT NOT NULL DEFAULT ''`); err != nil {
 		return fmt.Errorf("add raffles.pay_image: %w", err)
 	}
 	return nil
@@ -651,12 +651,12 @@ func migrateRafflePayImage(db *sql.DB) error {
 // to fully settled with nothing waived, which is exactly what they meant before.
 // Idempotent - each column is skipped when it is already there, and the backfill
 // only runs alongside the column it fills.
-func migrateRaffleEntryPayments(db *sql.DB) error {
-	if !tableExists(db, "raffle_entries") {
+func migrateRaffleEntryPayments(ctx context.Context, db *sql.DB) error {
+	if !tableExists(ctx, db, "raffle_entries") {
 		return nil
 	}
-	if !hasColumn(db, "raffle_entries", "paid_entries") {
-		if _, err := db.Exec(`ALTER TABLE raffle_entries ADD COLUMN paid_entries INTEGER NOT NULL DEFAULT 0`); err != nil {
+	if !hasColumn(ctx, db, "raffle_entries", "paid_entries") {
+		if _, err := db.ExecContext(ctx, `ALTER TABLE raffle_entries ADD COLUMN paid_entries INTEGER NOT NULL DEFAULT 0`); err != nil {
 			return fmt.Errorf("add raffle_entries.paid_entries: %w", err)
 		}
 	}
@@ -673,11 +673,11 @@ func migrateRaffleEntryPayments(db *sql.DB) error {
 	// "WHERE paid = 1 AND paid_entries = 0" makes the re-run a no-op once the data
 	// is right, and cannot clobber a partial settlement recorded after the upgrade
 	// (those rows have paid_entries > 0).
-	if _, err := db.Exec(`UPDATE raffle_entries SET paid_entries = num_entries WHERE paid = 1 AND paid_entries = 0`); err != nil {
+	if _, err := db.ExecContext(ctx, `UPDATE raffle_entries SET paid_entries = num_entries WHERE paid = 1 AND paid_entries = 0`); err != nil {
 		return fmt.Errorf("backfill raffle_entries.paid_entries: %w", err)
 	}
-	if !hasColumn(db, "raffle_entries", "amount_waived") {
-		if _, err := db.Exec(`ALTER TABLE raffle_entries ADD COLUMN amount_waived REAL NOT NULL DEFAULT 0`); err != nil {
+	if !hasColumn(ctx, db, "raffle_entries", "amount_waived") {
+		if _, err := db.ExecContext(ctx, `ALTER TABLE raffle_entries ADD COLUMN amount_waived REAL NOT NULL DEFAULT 0`); err != nil {
 			return fmt.Errorf("add raffle_entries.amount_waived: %w", err)
 		}
 	}
@@ -690,17 +690,17 @@ func migrateRaffleEntryPayments(db *sql.DB) error {
 // default to "single" with an empty ladder, which is exactly what they did before
 // the mode existed, so nothing changes until someone edits one. Idempotent -
 // each column is skipped when it is already there.
-func migrateRaffleEntryModes(db *sql.DB) error {
-	if !tableExists(db, "raffles") {
+func migrateRaffleEntryModes(ctx context.Context, db *sql.DB) error {
+	if !tableExists(ctx, db, "raffles") {
 		return nil
 	}
-	if !hasColumn(db, "raffles", "entry_mode") {
-		if _, err := db.Exec(`ALTER TABLE raffles ADD COLUMN entry_mode TEXT NOT NULL DEFAULT 'single'`); err != nil {
+	if !hasColumn(ctx, db, "raffles", "entry_mode") {
+		if _, err := db.ExecContext(ctx, `ALTER TABLE raffles ADD COLUMN entry_mode TEXT NOT NULL DEFAULT 'single'`); err != nil {
 			return fmt.Errorf("add raffles.entry_mode: %w", err)
 		}
 	}
-	if !hasColumn(db, "raffles", "tier_costs") {
-		if _, err := db.Exec(`ALTER TABLE raffles ADD COLUMN tier_costs TEXT NOT NULL DEFAULT '[]'`); err != nil {
+	if !hasColumn(ctx, db, "raffles", "tier_costs") {
+		if _, err := db.ExecContext(ctx, `ALTER TABLE raffles ADD COLUMN tier_costs TEXT NOT NULL DEFAULT '[]'`); err != nil {
 			return fmt.Errorf("add raffles.tier_costs: %w", err)
 		}
 	}
@@ -711,14 +711,14 @@ func migrateRaffleEntryModes(db *sql.DB) error {
 // second line shown under the name (mirroring tea_rooms.subtitle). Existing rows
 // default to ”. Idempotent - skipped when the column already exists (a fresh
 // install gets it via createTables).
-func migrateAffiliateSubtitle(db *sql.DB) error {
-	if !tableExists(db, "affiliates") {
+func migrateAffiliateSubtitle(ctx context.Context, db *sql.DB) error {
+	if !tableExists(ctx, db, "affiliates") {
 		return nil
 	}
-	if hasColumn(db, "affiliates", "subtitle") {
+	if hasColumn(ctx, db, "affiliates", "subtitle") {
 		return nil
 	}
-	if _, err := db.Exec(`ALTER TABLE affiliates ADD COLUMN subtitle TEXT NOT NULL DEFAULT ''`); err != nil {
+	if _, err := db.ExecContext(ctx, `ALTER TABLE affiliates ADD COLUMN subtitle TEXT NOT NULL DEFAULT ''`); err != nil {
 		return fmt.Errorf("add affiliates.subtitle: %w", err)
 	}
 	return nil
@@ -730,14 +730,14 @@ func migrateAffiliateSubtitle(db *sql.DB) error {
 // runs was built on the assumption that staff hand out its cards, so none of them may
 // silently become self-serve. Idempotent - skipped when the column already exists (a
 // fresh install gets it via createTables).
-func migrateStampRallyPublicSignup(db *sql.DB) error {
-	if !tableExists(db, "stamp_rallies") {
+func migrateStampRallyPublicSignup(ctx context.Context, db *sql.DB) error {
+	if !tableExists(ctx, db, "stamp_rallies") {
 		return nil
 	}
-	if hasColumn(db, "stamp_rallies", "public_signup") {
+	if hasColumn(ctx, db, "stamp_rallies", "public_signup") {
 		return nil
 	}
-	if _, err := db.Exec(`ALTER TABLE stamp_rallies ADD COLUMN public_signup INTEGER NOT NULL DEFAULT 0`); err != nil {
+	if _, err := db.ExecContext(ctx, `ALTER TABLE stamp_rallies ADD COLUMN public_signup INTEGER NOT NULL DEFAULT 0`); err != nil {
 		return fmt.Errorf("add stamp_rallies.public_signup: %w", err)
 	}
 	return nil
@@ -755,7 +755,7 @@ func migrateStampRallyPublicSignup(db *sql.DB) error {
 //
 // Idempotent - each column is skipped when it already exists (a fresh install gets
 // them via createTables).
-func migrateStampTypes(db *sql.DB) error {
+func migrateStampTypes(ctx context.Context, db *sql.DB) error {
 	cols := []struct{ table, column, spec string }{
 		{"stamp_rally_stamps", "stamp_type", "TEXT NOT NULL DEFAULT 'food'"},
 		{"stamp_rally_collected", "stamp_type", "TEXT NOT NULL DEFAULT 'food'"},
@@ -764,10 +764,10 @@ func migrateStampTypes(db *sql.DB) error {
 		{"stamp_rallies", "required_game", "INTEGER NOT NULL DEFAULT 0"},
 	}
 	for _, c := range cols {
-		if !tableExists(db, c.table) || hasColumn(db, c.table, c.column) {
+		if !tableExists(ctx, db, c.table) || hasColumn(ctx, db, c.table, c.column) {
 			continue
 		}
-		if _, err := db.Exec(fmt.Sprintf("ALTER TABLE %s ADD COLUMN %s %s", c.table, c.column, c.spec)); err != nil {
+		if _, err := db.ExecContext(ctx, fmt.Sprintf("ALTER TABLE %s ADD COLUMN %s %s", c.table, c.column, c.spec)); err != nil {
 			return fmt.Errorf("add %s.%s: %w", c.table, c.column, err)
 		}
 	}
@@ -784,20 +784,20 @@ func migrateStampTypes(db *sql.DB) error {
 // Dropping the old column is best-effort: SQLite has supported DROP COLUMN since
 // 3.35, but a failure here must not stop the server booting - a leftover unused
 // column is harmless, and skip_count is the only one anything reads afterwards.
-func migrateAnnouncementSkipCount(db *sql.DB) error {
-	if !tableExists(db, "announcements") {
+func migrateAnnouncementSkipCount(ctx context.Context, db *sql.DB) error {
+	if !tableExists(ctx, db, "announcements") {
 		return nil
 	}
-	if !hasColumn(db, "announcements", "skip_count") {
-		if _, err := db.Exec(`ALTER TABLE announcements ADD COLUMN skip_count INTEGER NOT NULL DEFAULT 0`); err != nil {
+	if !hasColumn(ctx, db, "announcements", "skip_count") {
+		if _, err := db.ExecContext(ctx, `ALTER TABLE announcements ADD COLUMN skip_count INTEGER NOT NULL DEFAULT 0`); err != nil {
 			return fmt.Errorf("add announcements.skip_count: %w", err)
 		}
 	}
-	if hasColumn(db, "announcements", "skip_next") {
-		if _, err := db.Exec(`UPDATE announcements SET skip_count = 1 WHERE skip_next = 1 AND skip_count = 0`); err != nil {
+	if hasColumn(ctx, db, "announcements", "skip_next") {
+		if _, err := db.ExecContext(ctx, `UPDATE announcements SET skip_count = 1 WHERE skip_next = 1 AND skip_count = 0`); err != nil {
 			return fmt.Errorf("carry announcements.skip_next into skip_count: %w", err)
 		}
-		if _, err := db.Exec(`ALTER TABLE announcements DROP COLUMN skip_next`); err != nil {
+		if _, err := db.ExecContext(ctx, `ALTER TABLE announcements DROP COLUMN skip_next`); err != nil {
 			slog.Warn("could not drop the superseded announcements.skip_next column; it is unused from here on",
 				"error", err)
 		}
@@ -811,14 +811,14 @@ func migrateAnnouncementSkipCount(db *sql.DB) error {
 // and the fallback when an admin issues a link without a number. Existing garapons
 // default to 1, which is the fallback both paths already used, so nothing changes
 // until someone sets it. Idempotent - skipped when the column already exists.
-func migrateGaraponDefaultDraws(db *sql.DB) error {
-	if !tableExists(db, "garapons") {
+func migrateGaraponDefaultDraws(ctx context.Context, db *sql.DB) error {
+	if !tableExists(ctx, db, "garapons") {
 		return nil
 	}
-	if hasColumn(db, "garapons", "default_draws") {
+	if hasColumn(ctx, db, "garapons", "default_draws") {
 		return nil
 	}
-	if _, err := db.Exec(`ALTER TABLE garapons ADD COLUMN default_draws INTEGER NOT NULL DEFAULT 1`); err != nil {
+	if _, err := db.ExecContext(ctx, `ALTER TABLE garapons ADD COLUMN default_draws INTEGER NOT NULL DEFAULT 1`); err != nil {
 		return fmt.Errorf("add garapons.default_draws: %w", err)
 	}
 	return nil
@@ -828,14 +828,14 @@ func migrateGaraponDefaultDraws(db *sql.DB) error {
 // informational "character who owns the room" line. Existing rows default to ”.
 // Idempotent - skipped when the column already exists (a fresh install gets it via
 // createTables -> teaRoomsTableSQL).
-func migrateTeaRoomOwner(db *sql.DB) error {
-	if !tableExists(db, "tea_rooms") {
+func migrateTeaRoomOwner(ctx context.Context, db *sql.DB) error {
+	if !tableExists(ctx, db, "tea_rooms") {
 		return nil
 	}
-	if hasColumn(db, "tea_rooms", "room_owner") {
+	if hasColumn(ctx, db, "tea_rooms", "room_owner") {
 		return nil
 	}
-	if _, err := db.Exec(`ALTER TABLE tea_rooms ADD COLUMN room_owner TEXT NOT NULL DEFAULT ''`); err != nil {
+	if _, err := db.ExecContext(ctx, `ALTER TABLE tea_rooms ADD COLUMN room_owner TEXT NOT NULL DEFAULT ''`); err != nil {
 		return fmt.Errorf("add tea_rooms.room_owner: %w", err)
 	}
 	return nil
@@ -846,14 +846,14 @@ func migrateTeaRoomOwner(db *sql.DB) error {
 // was minted with; a mismatch invalidates the session, so changing a password
 // logs out every other session. Idempotent - skipped when the column already
 // exists (a fresh install gets it via createTables).
-func migrateUserPasswordEpoch(db *sql.DB) error {
-	if !tableExists(db, "users") {
+func migrateUserPasswordEpoch(ctx context.Context, db *sql.DB) error {
+	if !tableExists(ctx, db, "users") {
 		return nil
 	}
-	if hasColumn(db, "users", "password_epoch") {
+	if hasColumn(ctx, db, "users", "password_epoch") {
 		return nil
 	}
-	_, err := db.Exec("ALTER TABLE users ADD COLUMN password_epoch INTEGER NOT NULL DEFAULT 0")
+	_, err := db.ExecContext(ctx, "ALTER TABLE users ADD COLUMN password_epoch INTEGER NOT NULL DEFAULT 0")
 	return err
 }
 
@@ -861,17 +861,17 @@ func migrateUserPasswordEpoch(db *sql.DB) error {
 // game_presets: `auto_call` (pre-select the auto toggle when the preset is
 // applied) and `auto_interval` (the "Time Between Calls" seconds). Idempotent -
 // skipped when the columns already exist (e.g. a fresh install via createTables).
-func migrateGamePresetAuto(db *sql.DB) error {
-	if !tableExists(db, "game_presets") {
+func migrateGamePresetAuto(ctx context.Context, db *sql.DB) error {
+	if !tableExists(ctx, db, "game_presets") {
 		return nil
 	}
-	if !hasColumn(db, "game_presets", "auto_call") {
-		if _, err := db.Exec(`ALTER TABLE game_presets ADD COLUMN auto_call INTEGER NOT NULL DEFAULT 0`); err != nil {
+	if !hasColumn(ctx, db, "game_presets", "auto_call") {
+		if _, err := db.ExecContext(ctx, `ALTER TABLE game_presets ADD COLUMN auto_call INTEGER NOT NULL DEFAULT 0`); err != nil {
 			return fmt.Errorf("add game_presets.auto_call: %w", err)
 		}
 	}
-	if !hasColumn(db, "game_presets", "auto_interval") {
-		if _, err := db.Exec(`ALTER TABLE game_presets ADD COLUMN auto_interval INTEGER NOT NULL DEFAULT 0`); err != nil {
+	if !hasColumn(ctx, db, "game_presets", "auto_interval") {
+		if _, err := db.ExecContext(ctx, `ALTER TABLE game_presets ADD COLUMN auto_interval INTEGER NOT NULL DEFAULT 0`); err != nil {
 			return fmt.Errorf("add game_presets.auto_interval: %w", err)
 		}
 	}
@@ -893,21 +893,21 @@ const userPasskeysTableSQL = `CREATE TABLE IF NOT EXISTS user_passkeys (
 	FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 )`
 
-const userPasskeysIndexSQL = `CREATE INDEX IF NOT EXISTS idx_user_passkeys_user ON user_passkeys(user_id)`
+const userPasskeysIndexSQL = `CREATE INDEX IF NOT EXISTS idx_user_passkeys_user ON user_passkeys(user_id)` //nolint:gosec // DDL that names the passkeys table, not a credential
 
 // migrateCalledNumbersUnique adds a UNIQUE(game_id, number) index to
 // called_numbers: a database-level backstop so a number can't be recorded twice
 // in one game even if the draw path's in-process serialization is ever bypassed
 // (a second writer / process). Any pre-existing duplicates are collapsed to their
 // first occurrence so the unique index can be built.
-func migrateCalledNumbersUnique(db *sql.DB) error {
-	if !tableExists(db, "called_numbers") {
+func migrateCalledNumbersUnique(ctx context.Context, db *sql.DB) error {
+	if !tableExists(ctx, db, "called_numbers") {
 		return nil
 	}
-	if err := dedupeCalledNumbers(db); err != nil {
+	if err := dedupeCalledNumbers(ctx, db); err != nil {
 		return err
 	}
-	if _, err := db.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_called_numbers_game_number
+	if _, err := db.ExecContext(ctx, `CREATE UNIQUE INDEX IF NOT EXISTS idx_called_numbers_game_number
 		ON called_numbers(game_id, number)`); err != nil {
 		return fmt.Errorf("create called_numbers unique index: %w", err)
 	}
@@ -918,11 +918,11 @@ func migrateCalledNumbersUnique(db *sql.DB) error {
 // called_numbers to their first occurrence (lowest rowid), so the UNIQUE index on
 // (game_id, number) can be built on clean data. Shared by the version<1 legacy
 // upgrade path and the v43 migration. A no-op when the table doesn't exist.
-func dedupeCalledNumbers(db *sql.DB) error {
-	if !tableExists(db, "called_numbers") {
+func dedupeCalledNumbers(ctx context.Context, db *sql.DB) error {
+	if !tableExists(ctx, db, "called_numbers") {
 		return nil
 	}
-	if _, err := db.Exec(`DELETE FROM called_numbers WHERE rowid NOT IN (
+	if _, err := db.ExecContext(ctx, `DELETE FROM called_numbers WHERE rowid NOT IN (
 		SELECT MIN(rowid) FROM called_numbers GROUP BY game_id, number)`); err != nil {
 		return fmt.Errorf("dedupe called_numbers: %w", err)
 	}
@@ -931,7 +931,7 @@ func dedupeCalledNumbers(db *sql.DB) error {
 
 // createTables builds all tables from scratch for a fresh database.
 // Called only when no tables exist (version 0, no prior data).
-func createTables(db *sql.DB) error {
+func createTables(ctx context.Context, db *sql.DB) error {
 	stmts := []string{
 		`CREATE TABLE IF NOT EXISTS cards (
 			id TEXT PRIMARY KEY,
@@ -1087,26 +1087,26 @@ func createTables(db *sql.DB) error {
 	// Table creation was then never retried, and that empty database could never
 	// boot again. SQLite runs DDL inside a transaction, so wrapping the batch makes
 	// the probe's question have only two possible answers.
-	tx, err := db.Begin()
+	tx, err := db.BeginTx(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("create tables: %w", err)
 	}
 	defer func() { _ = tx.Rollback() }()
 	for _, s := range stmts {
-		if _, err := tx.Exec(s); err != nil {
+		if _, err := tx.ExecContext(ctx, s); err != nil {
 			return fmt.Errorf("create tables: %w", err)
 		}
 	}
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("create tables: %w", err)
 	}
-	return createIndexes(db)
+	return createIndexes(ctx, db)
 }
 
 // createIndexes creates all performance indexes. Called both from
 // createTables (fresh install) and from the version < 1 migration
 // path (upgrading an existing database that predates versioning).
-func createIndexes(db *sql.DB) error {
+func createIndexes(ctx context.Context, db *sql.DB) error {
 	indexes := []string{
 		"CREATE INDEX IF NOT EXISTS idx_games_status ON games(status)",
 		"CREATE INDEX IF NOT EXISTS idx_called_numbers_game ON called_numbers(game_id, call_order)",
@@ -1139,7 +1139,7 @@ func createIndexes(db *sql.DB) error {
 		affiliatesSortIndexSQL,
 	}
 	for _, idx := range indexes {
-		if _, err := db.Exec(idx); err != nil {
+		if _, err := db.ExecContext(ctx, idx); err != nil {
 			return fmt.Errorf("create indexes: %w", err)
 		}
 	}
@@ -1149,12 +1149,12 @@ func createIndexes(db *sql.DB) error {
 // migrateSortOrder adds the sort_order column to the patterns table
 // for databases created before pattern ordering was supported.
 // Backfills sort_order based on insertion order (id).
-func migrateSortOrder(db *sql.DB) error {
-	if !tableExists(db, "patterns") {
+func migrateSortOrder(ctx context.Context, db *sql.DB) error {
+	if !tableExists(ctx, db, "patterns") {
 		return nil
 	}
-	if !hasColumn(db, "patterns", "sort_order") {
-		if _, err := db.Exec("ALTER TABLE patterns ADD COLUMN sort_order INTEGER NOT NULL DEFAULT 0"); err != nil {
+	if !hasColumn(ctx, db, "patterns", "sort_order") {
+		if _, err := db.ExecContext(ctx, "ALTER TABLE patterns ADD COLUMN sort_order INTEGER NOT NULL DEFAULT 0"); err != nil {
 			return err
 		}
 	}
@@ -1164,7 +1164,7 @@ func migrateSortOrder(db *sql.DB) error {
 	// row at sort_order 0. Running it unconditionally is safe because the
 	// WHERE sort_order = 0 clause makes it idempotent - once backfilled, every row's
 	// sort_order is >= 1 so a re-run matches nothing.
-	_, err := db.Exec(`UPDATE patterns SET sort_order = (
+	_, err := db.ExecContext(ctx, `UPDATE patterns SET sort_order = (
 		SELECT COUNT(*) FROM patterns AS p2 WHERE p2.id <= patterns.id
 	) WHERE sort_order = 0`)
 	return err
@@ -1172,11 +1172,11 @@ func migrateSortOrder(db *sql.DB) error {
 
 // migrateWinnersCache adds the winners_cache JSON column to the games
 // table so winner card IDs can be stored without a separate table.
-func migrateWinnersCache(db *sql.DB) error {
-	if hasColumn(db, "games", "winners_cache") {
+func migrateWinnersCache(ctx context.Context, db *sql.DB) error {
+	if hasColumn(ctx, db, "games", "winners_cache") {
 		return nil
 	}
-	_, err := db.Exec("ALTER TABLE games ADD COLUMN winners_cache TEXT NOT NULL DEFAULT '[]'")
+	_, err := db.ExecContext(ctx, "ALTER TABLE games ADD COLUMN winners_cache TEXT NOT NULL DEFAULT '[]'")
 	return err
 }
 
@@ -1189,8 +1189,8 @@ func migrateWinnersCache(db *sql.DB) error {
 // a present table without that column gives. So a non-nil error here is always a
 // genuine fault (I/O, corruption, a closed handle), never an absence, and callers
 // must not read it as one.
-func columnInfo(db *sql.DB, table, column string) (exists, notNull bool, err error) {
-	rows, err := db.Query(fmt.Sprintf("PRAGMA table_info(%s)", table))
+func columnInfo(ctx context.Context, db *sql.DB, table, column string) (exists, notNull bool, err error) {
+	rows, err := db.QueryContext(ctx, fmt.Sprintf("PRAGMA table_info(%s)", table))
 	if err != nil {
 		return false, false, err
 	}
@@ -1228,18 +1228,25 @@ func columnInfo(db *sql.DB, table, column string) (exists, notNull bool, err err
 // on a production database (re-running an ALTER, or skipping a backfill it should
 // have done). Missing tables and missing columns answer false with no error (see
 // columnInfo), so this cannot fire for anything the migration chain expects.
-func hasColumn(db *sql.DB, table, column string) bool {
-	exists, _, err := columnInfo(db, table, column)
+//
+// A canceled ctx - a shutdown signal mid-migration - answers false instead of
+// panicking: no statement can run after it, the user_version bump included, so the
+// answer cannot lead anywhere permanent, and the next start runs the chain again.
+func hasColumn(ctx context.Context, db *sql.DB, table, column string) bool {
+	exists, _, err := columnInfo(ctx, db, table, column)
 	if err != nil {
+		if ctx.Err() != nil {
+			return false
+		}
 		panic(fmt.Sprintf("migrate: probing %s.%s failed, refusing to guess: %v", table, column, err))
 	}
 	return exists
 }
 
 // tableExists reports whether a table with the given name exists.
-func tableExists(db *sql.DB, name string) bool {
+func tableExists(ctx context.Context, db *sql.DB, name string) bool {
 	var found string
-	err := db.QueryRow(
+	err := db.QueryRowContext(ctx,
 		`SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?`, name,
 	).Scan(&found)
 	return err == nil
@@ -1247,8 +1254,8 @@ func tableExists(db *sql.DB, name string) bool {
 
 // migrateSettings creates the key-value settings table for app configuration
 // (e.g. app_title, default_draw_delay, active_style_id).
-func migrateSettings(db *sql.DB) error {
-	_, err := db.Exec(`CREATE TABLE IF NOT EXISTS settings (
+func migrateSettings(ctx context.Context, db *sql.DB) error {
+	_, err := db.ExecContext(ctx, `CREATE TABLE IF NOT EXISTS settings (
 		key TEXT PRIMARY KEY,
 		value TEXT NOT NULL DEFAULT ''
 	)`)
@@ -1256,8 +1263,8 @@ func migrateSettings(db *sql.DB) error {
 }
 
 // migrateStyles creates the styles table for custom CSS themes.
-func migrateStyles(db *sql.DB) error {
-	_, err := db.Exec(`CREATE TABLE IF NOT EXISTS styles (
+func migrateStyles(ctx context.Context, db *sql.DB) error {
+	_, err := db.ExecContext(ctx, `CREATE TABLE IF NOT EXISTS styles (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		name TEXT NOT NULL,
 		css_content TEXT NOT NULL DEFAULT '',
@@ -1269,9 +1276,9 @@ func migrateStyles(db *sql.DB) error {
 // migratePatternCategories creates the pattern_categories table and adds
 // the category_id foreign key column to patterns. Seeds a default
 // "Standard" category and assigns all existing patterns to it.
-func migratePatternCategories(db *sql.DB) error {
+func migratePatternCategories(ctx context.Context, db *sql.DB) error {
 	// Create the categories table.
-	if _, err := db.Exec(`CREATE TABLE IF NOT EXISTS pattern_categories (
+	if _, err := db.ExecContext(ctx, `CREATE TABLE IF NOT EXISTS pattern_categories (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		name TEXT NOT NULL,
 		sort_order INTEGER NOT NULL DEFAULT 0
@@ -1280,19 +1287,19 @@ func migratePatternCategories(db *sql.DB) error {
 	}
 
 	// Insert the default "Standard" category.
-	if _, err := db.Exec(`INSERT OR IGNORE INTO pattern_categories (id, name, sort_order) VALUES (1, 'Standard', 0)`); err != nil {
+	if _, err := db.ExecContext(ctx, `INSERT OR IGNORE INTO pattern_categories (id, name, sort_order) VALUES (1, 'Standard', 0)`); err != nil {
 		return err
 	}
 
 	// Add category_id column to patterns if it doesn't exist.
-	if !hasColumn(db, "patterns", "category_id") {
-		if _, err := db.Exec("ALTER TABLE patterns ADD COLUMN category_id INTEGER NOT NULL DEFAULT 1"); err != nil {
+	if !hasColumn(ctx, db, "patterns", "category_id") {
+		if _, err := db.ExecContext(ctx, "ALTER TABLE patterns ADD COLUMN category_id INTEGER NOT NULL DEFAULT 1"); err != nil {
 			return err
 		}
 	}
 
 	// Ensure all existing patterns point to the default category.
-	if _, err := db.Exec("UPDATE patterns SET category_id = 1 WHERE category_id = 0 OR category_id IS NULL"); err != nil {
+	if _, err := db.ExecContext(ctx, "UPDATE patterns SET category_id = 1 WHERE category_id = 0 OR category_id IS NULL"); err != nil {
 		return err
 	}
 
@@ -1301,7 +1308,7 @@ func migratePatternCategories(db *sql.DB) error {
 
 // migrateRaffles creates the raffles and raffle_entries tables with
 // their associated index on raffle_id.
-func migrateRaffles(db *sql.DB) error {
+func migrateRaffles(ctx context.Context, db *sql.DB) error {
 	stmts := []string{
 		`CREATE TABLE IF NOT EXISTS raffles (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -1336,7 +1343,7 @@ func migrateRaffles(db *sql.DB) error {
 		`CREATE INDEX IF NOT EXISTS idx_raffle_entries_raffle ON raffle_entries(raffle_id)`,
 	}
 	for _, s := range stmts {
-		if _, err := db.Exec(s); err != nil {
+		if _, err := db.ExecContext(ctx, s); err != nil {
 			return fmt.Errorf("migrate raffles: %w", err)
 		}
 	}
@@ -1346,21 +1353,21 @@ func migrateRaffles(db *sql.DB) error {
 // migrateWinnersLog adds player_name and details columns to the cards
 // table (if missing) and creates the winners_log table for tracking
 // game outcomes over time.
-func migrateWinnersLog(db *sql.DB) error {
+func migrateWinnersLog(ctx context.Context, db *sql.DB) error {
 	// Add player_name and details columns to cards table.
-	if !hasColumn(db, "cards", "player_name") {
-		if _, err := db.Exec("ALTER TABLE cards ADD COLUMN player_name TEXT NOT NULL DEFAULT ''"); err != nil {
+	if !hasColumn(ctx, db, "cards", "player_name") {
+		if _, err := db.ExecContext(ctx, "ALTER TABLE cards ADD COLUMN player_name TEXT NOT NULL DEFAULT ''"); err != nil {
 			return err
 		}
 	}
-	if !hasColumn(db, "cards", "details") {
-		if _, err := db.Exec("ALTER TABLE cards ADD COLUMN details TEXT NOT NULL DEFAULT ''"); err != nil {
+	if !hasColumn(ctx, db, "cards", "details") {
+		if _, err := db.ExecContext(ctx, "ALTER TABLE cards ADD COLUMN details TEXT NOT NULL DEFAULT ''"); err != nil {
 			return err
 		}
 	}
 
 	// Create winners_log table.
-	if _, err := db.Exec(`CREATE TABLE IF NOT EXISTS winners_log (
+	if _, err := db.ExecContext(ctx, `CREATE TABLE IF NOT EXISTS winners_log (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		logged_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 		card_id TEXT NOT NULL,
@@ -1370,28 +1377,28 @@ func migrateWinnersLog(db *sql.DB) error {
 	)`); err != nil {
 		return err
 	}
-	_, err := db.Exec("CREATE INDEX IF NOT EXISTS idx_winners_log_logged_at ON winners_log(logged_at)")
+	_, err := db.ExecContext(ctx, "CREATE INDEX IF NOT EXISTS idx_winners_log_logged_at ON winners_log(logged_at)")
 	return err
 }
 
 // migrateWinnersLogIndex adds a composite index on (player_name, logged_at)
 // to the winners_log table for efficient frequent-winner queries.
-func migrateWinnersLogIndex(db *sql.DB) error {
-	_, err := db.Exec("CREATE INDEX IF NOT EXISTS idx_winners_log_player_date ON winners_log(player_name, logged_at)")
+func migrateWinnersLogIndex(ctx context.Context, db *sql.DB) error {
+	_, err := db.ExecContext(ctx, "CREATE INDEX IF NOT EXISTS idx_winners_log_player_date ON winners_log(player_name, logged_at)")
 	return err
 }
 
 // migrateCardPlayerNameIndex adds an index on cards(player_name) for
 // faster lookups when searching or filtering cards by player name.
-func migrateCardPlayerNameIndex(db *sql.DB) error {
-	_, err := db.Exec("CREATE INDEX IF NOT EXISTS idx_cards_player_name ON cards(player_name)")
+func migrateCardPlayerNameIndex(ctx context.Context, db *sql.DB) error {
+	_, err := db.ExecContext(ctx, "CREATE INDEX IF NOT EXISTS idx_cards_player_name ON cards(player_name)")
 	return err
 }
 
 // migrateBookClubs creates the reading_lists and reading_list_items tables
 // (plus the list_id index) for the Book Clubs admin section. Item sources are
 // stored as a JSON array in the reading_list_items.sources column.
-func migrateBookClubs(db *sql.DB) error {
+func migrateBookClubs(ctx context.Context, db *sql.DB) error {
 	stmts := []string{
 		`CREATE TABLE IF NOT EXISTS reading_lists (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -1417,7 +1424,7 @@ func migrateBookClubs(db *sql.DB) error {
 		`CREATE INDEX IF NOT EXISTS idx_reading_list_items_list ON reading_list_items(list_id)`,
 	}
 	for _, s := range stmts {
-		if _, err := db.Exec(s); err != nil {
+		if _, err := db.ExecContext(ctx, s); err != nil {
 			return fmt.Errorf("migrate book clubs: %w", err)
 		}
 	}
@@ -1426,11 +1433,11 @@ func migrateBookClubs(db *sql.DB) error {
 
 // migrateBookClubTropes adds the tropes column to reading_list_items for
 // databases created before the Tropes field existed. Idempotent via hasColumn.
-func migrateBookClubTropes(db *sql.DB) error {
-	if hasColumn(db, "reading_list_items", "tropes") {
+func migrateBookClubTropes(ctx context.Context, db *sql.DB) error {
+	if hasColumn(ctx, db, "reading_list_items", "tropes") {
 		return nil
 	}
-	_, err := db.Exec("ALTER TABLE reading_list_items ADD COLUMN tropes TEXT NOT NULL DEFAULT ''")
+	_, err := db.ExecContext(ctx, "ALTER TABLE reading_list_items ADD COLUMN tropes TEXT NOT NULL DEFAULT ''")
 	return err
 }
 
@@ -1439,7 +1446,7 @@ func migrateBookClubTropes(db *sql.DB) error {
 // folder (so it no longer collides with the Vite `dist/assets/` output).
 // Old rows stored paths like "assets/images/raffles/raffle_....png"; rewrite
 // the prefix to "images/raffles/...". A leading-slash variant is handled too.
-func migrateRaffleImagePaths(db *sql.DB) error {
+func migrateRaffleImagePaths(ctx context.Context, db *sql.DB) error {
 	stmts := []string{
 		`UPDATE raffles SET prize_image = 'images/raffles/' || substr(prize_image, length('assets/images/raffles/') + 1)
 		   WHERE prize_image LIKE 'assets/images/raffles/%'`,
@@ -1447,7 +1454,7 @@ func migrateRaffleImagePaths(db *sql.DB) error {
 		   WHERE prize_image LIKE '/assets/images/raffles/%'`,
 	}
 	for _, stmt := range stmts {
-		if _, err := db.Exec(stmt); err != nil {
+		if _, err := db.ExecContext(ctx, stmt); err != nil {
 			return err
 		}
 	}
@@ -1508,7 +1515,7 @@ const announcementRolesTableSQL = `CREATE TABLE IF NOT EXISTS announcement_roles
 
 // migrateAnnouncements creates the Announcement Management tables
 // (announcement_types + announcements) and their indexes. Idempotent.
-func migrateAnnouncements(db *sql.DB) error {
+func migrateAnnouncements(ctx context.Context, db *sql.DB) error {
 	stmts := []string{
 		announcementTypesTableSQL,
 		announcementsTableSQL,
@@ -1516,7 +1523,7 @@ func migrateAnnouncements(db *sql.DB) error {
 		`CREATE INDEX IF NOT EXISTS idx_announcements_due ON announcements(active, next_post_at)`,
 	}
 	for _, stmt := range stmts {
-		if _, err := db.Exec(stmt); err != nil {
+		if _, err := db.ExecContext(ctx, stmt); err != nil {
 			return fmt.Errorf("migrate announcements: %w", err)
 		}
 	}
@@ -1525,11 +1532,11 @@ func migrateAnnouncements(db *sql.DB) error {
 
 // migrateAnnouncementTimezone adds the optional IANA `timezone` column to the
 // announcements table (anchors recurring times so they survive DST). Idempotent.
-func migrateAnnouncementTimezone(db *sql.DB) error {
-	if hasColumn(db, "announcements", "timezone") {
+func migrateAnnouncementTimezone(ctx context.Context, db *sql.DB) error {
+	if hasColumn(ctx, db, "announcements", "timezone") {
 		return nil
 	}
-	if _, err := db.Exec(`ALTER TABLE announcements ADD COLUMN timezone TEXT NOT NULL DEFAULT ''`); err != nil {
+	if _, err := db.ExecContext(ctx, `ALTER TABLE announcements ADD COLUMN timezone TEXT NOT NULL DEFAULT ''`); err != nil {
 		return fmt.Errorf("add announcements.timezone: %w", err)
 	}
 	return nil
@@ -1538,12 +1545,12 @@ func migrateAnnouncementTimezone(db *sql.DB) error {
 // migrateAnnouncementLocalTimes adds the wall-clock columns (start_local,
 // end_local, once_local) so every time on an announcement is anchored to its
 // timezone. Idempotent.
-func migrateAnnouncementLocalTimes(db *sql.DB) error {
+func migrateAnnouncementLocalTimes(ctx context.Context, db *sql.DB) error {
 	for _, col := range []string{"start_local", "end_local", "once_local"} {
-		if hasColumn(db, "announcements", col) {
+		if hasColumn(ctx, db, "announcements", col) {
 			continue
 		}
-		if _, err := db.Exec(`ALTER TABLE announcements ADD COLUMN ` + col + ` TEXT NOT NULL DEFAULT ''`); err != nil {
+		if _, err := db.ExecContext(ctx, `ALTER TABLE announcements ADD COLUMN `+col+` TEXT NOT NULL DEFAULT ''`); err != nil {
 			return fmt.Errorf("add announcements.%s: %w", col, err)
 		}
 	}
@@ -1552,11 +1559,11 @@ func migrateAnnouncementLocalTimes(db *sql.DB) error {
 
 // migrateAnnouncementColor adds the optional `color` column (a "#rrggbb" embed
 // accent colour; empty falls back to the brand default). Idempotent.
-func migrateAnnouncementColor(db *sql.DB) error {
-	if hasColumn(db, "announcements", "color") {
+func migrateAnnouncementColor(ctx context.Context, db *sql.DB) error {
+	if hasColumn(ctx, db, "announcements", "color") {
 		return nil
 	}
-	if _, err := db.Exec(`ALTER TABLE announcements ADD COLUMN color TEXT NOT NULL DEFAULT ''`); err != nil {
+	if _, err := db.ExecContext(ctx, `ALTER TABLE announcements ADD COLUMN color TEXT NOT NULL DEFAULT ''`); err != nil {
 		return fmt.Errorf("add announcements.color: %w", err)
 	}
 	return nil
@@ -1564,11 +1571,11 @@ func migrateAnnouncementColor(db *sql.DB) error {
 
 // migrateAnnouncementButtons adds the optional `buttons` column (a JSON array of
 // Discord link buttons rendered beneath the embed; "[]" when none). Idempotent.
-func migrateAnnouncementButtons(db *sql.DB) error {
-	if hasColumn(db, "announcements", "buttons") {
+func migrateAnnouncementButtons(ctx context.Context, db *sql.DB) error {
+	if hasColumn(ctx, db, "announcements", "buttons") {
 		return nil
 	}
-	if _, err := db.Exec(`ALTER TABLE announcements ADD COLUMN buttons TEXT NOT NULL DEFAULT '[]'`); err != nil {
+	if _, err := db.ExecContext(ctx, `ALTER TABLE announcements ADD COLUMN buttons TEXT NOT NULL DEFAULT '[]'`); err != nil {
 		return fmt.Errorf("add announcements.buttons: %w", err)
 	}
 	return nil
@@ -1576,8 +1583,8 @@ func migrateAnnouncementButtons(db *sql.DB) error {
 
 // migrateAnnouncementRoles creates the announcement_roles table (the managed list
 // of taggable Discord roles). Idempotent.
-func migrateAnnouncementRoles(db *sql.DB) error {
-	if _, err := db.Exec(announcementRolesTableSQL); err != nil {
+func migrateAnnouncementRoles(ctx context.Context, db *sql.DB) error {
+	if _, err := db.ExecContext(ctx, announcementRolesTableSQL); err != nil {
 		return fmt.Errorf("migrate announcement roles: %w", err)
 	}
 	return nil
@@ -1585,11 +1592,11 @@ func migrateAnnouncementRoles(db *sql.DB) error {
 
 // migrateAnnouncementMention adds the optional `mention` column (the role tag an
 // announcement posts above its embed: ""|"everyone"|"role:<id>"). Idempotent.
-func migrateAnnouncementMention(db *sql.DB) error {
-	if hasColumn(db, "announcements", "mention") {
+func migrateAnnouncementMention(ctx context.Context, db *sql.DB) error {
+	if hasColumn(ctx, db, "announcements", "mention") {
 		return nil
 	}
-	if _, err := db.Exec(`ALTER TABLE announcements ADD COLUMN mention TEXT NOT NULL DEFAULT ''`); err != nil {
+	if _, err := db.ExecContext(ctx, `ALTER TABLE announcements ADD COLUMN mention TEXT NOT NULL DEFAULT ''`); err != nil {
 		return fmt.Errorf("add announcements.mention: %w", err)
 	}
 	return nil
@@ -1598,11 +1605,11 @@ func migrateAnnouncementMention(db *sql.DB) error {
 // migrateAnnouncementThumbnail adds the optional `thumbnail` column (full URL of
 // the small top-right embed thumbnail, distinct from the large bottom image).
 // Idempotent.
-func migrateAnnouncementThumbnail(db *sql.DB) error {
-	if !tableExists(db, "announcements") || hasColumn(db, "announcements", "thumbnail") {
+func migrateAnnouncementThumbnail(ctx context.Context, db *sql.DB) error {
+	if !tableExists(ctx, db, "announcements") || hasColumn(ctx, db, "announcements", "thumbnail") {
 		return nil
 	}
-	if _, err := db.Exec(`ALTER TABLE announcements ADD COLUMN thumbnail TEXT NOT NULL DEFAULT ''`); err != nil {
+	if _, err := db.ExecContext(ctx, `ALTER TABLE announcements ADD COLUMN thumbnail TEXT NOT NULL DEFAULT ''`); err != nil {
 		return fmt.Errorf("add announcements.thumbnail: %w", err)
 	}
 	return nil
@@ -1611,11 +1618,11 @@ func migrateAnnouncementThumbnail(db *sql.DB) error {
 // migrateAnnouncementDynamicDates adds the optional `dynamic_dates` flag: when
 // set, the embed re-anchors the event start/end onto the day each post goes out
 // (for recurring day-of event announcements). Idempotent.
-func migrateAnnouncementDynamicDates(db *sql.DB) error {
-	if !tableExists(db, "announcements") || hasColumn(db, "announcements", "dynamic_dates") {
+func migrateAnnouncementDynamicDates(ctx context.Context, db *sql.DB) error {
+	if !tableExists(ctx, db, "announcements") || hasColumn(ctx, db, "announcements", "dynamic_dates") {
 		return nil
 	}
-	if _, err := db.Exec(`ALTER TABLE announcements ADD COLUMN dynamic_dates INTEGER NOT NULL DEFAULT 0`); err != nil {
+	if _, err := db.ExecContext(ctx, `ALTER TABLE announcements ADD COLUMN dynamic_dates INTEGER NOT NULL DEFAULT 0`); err != nil {
 		return fmt.Errorf("add announcements.dynamic_dates: %w", err)
 	}
 	return nil
@@ -1625,11 +1632,11 @@ func migrateAnnouncementDynamicDates(db *sql.DB) error {
 // drag-and-drop ordering of the announcement list. Existing rows default to 0, so
 // the list keeps its previous newest-first order (ListAnnouncements breaks ties on
 // id DESC) until the admin reorders. Idempotent.
-func migrateAnnouncementSortOrder(db *sql.DB) error {
-	if !tableExists(db, "announcements") || hasColumn(db, "announcements", "sort_order") {
+func migrateAnnouncementSortOrder(ctx context.Context, db *sql.DB) error {
+	if !tableExists(ctx, db, "announcements") || hasColumn(ctx, db, "announcements", "sort_order") {
 		return nil
 	}
-	if _, err := db.Exec(`ALTER TABLE announcements ADD COLUMN sort_order INTEGER NOT NULL DEFAULT 0`); err != nil {
+	if _, err := db.ExecContext(ctx, `ALTER TABLE announcements ADD COLUMN sort_order INTEGER NOT NULL DEFAULT 0`); err != nil {
 		return fmt.Errorf("add announcements.sort_order: %w", err)
 	}
 	return nil
@@ -1638,17 +1645,17 @@ func migrateAnnouncementSortOrder(db *sql.DB) error {
 // migrateStyleFlourishes adds the per-theme `board_flourish`/`number_flourish`
 // columns (root-relative paths into images/flourishes; "" = built-in art).
 // Idempotent.
-func migrateStyleFlourishes(db *sql.DB) error {
-	if !tableExists(db, "styles") {
+func migrateStyleFlourishes(ctx context.Context, db *sql.DB) error {
+	if !tableExists(ctx, db, "styles") {
 		return nil
 	}
-	if !hasColumn(db, "styles", "board_flourish") {
-		if _, err := db.Exec(`ALTER TABLE styles ADD COLUMN board_flourish TEXT NOT NULL DEFAULT ''`); err != nil {
+	if !hasColumn(ctx, db, "styles", "board_flourish") {
+		if _, err := db.ExecContext(ctx, `ALTER TABLE styles ADD COLUMN board_flourish TEXT NOT NULL DEFAULT ''`); err != nil {
 			return fmt.Errorf("add styles.board_flourish: %w", err)
 		}
 	}
-	if !hasColumn(db, "styles", "number_flourish") {
-		if _, err := db.Exec(`ALTER TABLE styles ADD COLUMN number_flourish TEXT NOT NULL DEFAULT ''`); err != nil {
+	if !hasColumn(ctx, db, "styles", "number_flourish") {
+		if _, err := db.ExecContext(ctx, `ALTER TABLE styles ADD COLUMN number_flourish TEXT NOT NULL DEFAULT ''`); err != nil {
 			return fmt.Errorf("add styles.number_flourish: %w", err)
 		}
 	}
@@ -1662,20 +1669,20 @@ func migrateStyleFlourishes(db *sql.DB) error {
 // the now-unused css_content column. The applied stylesheet is generated from
 // the tokens at read time (see TokensToCSS), so themes can no longer carry
 // arbitrary CSS. Idempotent.
-func migrateStyleTokens(db *sql.DB) error {
-	if !tableExists(db, "styles") {
+func migrateStyleTokens(ctx context.Context, db *sql.DB) error {
+	if !tableExists(ctx, db, "styles") {
 		return nil
 	}
-	if !hasColumn(db, "styles", "tokens") {
-		if _, err := db.Exec(`ALTER TABLE styles ADD COLUMN tokens TEXT NOT NULL DEFAULT '{}'`); err != nil {
+	if !hasColumn(ctx, db, "styles", "tokens") {
+		if _, err := db.ExecContext(ctx, `ALTER TABLE styles ADD COLUMN tokens TEXT NOT NULL DEFAULT '{}'`); err != nil {
 			return fmt.Errorf("add styles.tokens: %w", err)
 		}
 	}
 
 	// Backfill tokens from the old css_content, but only while that column still
 	// exists (so a re-run after the drop below is a no-op).
-	if hasColumn(db, "styles", "css_content") {
-		rows, err := db.Query(`SELECT id, css_content FROM styles WHERE tokens = '' OR tokens = '{}'`)
+	if hasColumn(ctx, db, "styles", "css_content") {
+		rows, err := db.QueryContext(ctx, `SELECT id, css_content FROM styles WHERE tokens = '' OR tokens = '{}'`)
 		if err != nil {
 			return fmt.Errorf("read styles for token backfill: %w", err)
 		}
@@ -1705,7 +1712,7 @@ func migrateStyleTokens(db *sql.DB) error {
 		}
 		rows.Close()
 		for _, u := range updates {
-			if _, err := db.Exec(`UPDATE styles SET tokens = ? WHERE id = ?`, u.json, u.id); err != nil {
+			if _, err := db.ExecContext(ctx, `UPDATE styles SET tokens = ? WHERE id = ?`, u.json, u.id); err != nil {
 				return fmt.Errorf("write backfilled tokens: %w", err)
 			}
 		}
@@ -1713,7 +1720,7 @@ func migrateStyleTokens(db *sql.DB) error {
 		// Drop the legacy column now that tokens are the source of truth. SQLite
 		// supports DROP COLUMN (3.35+); if an older engine ever rejects it, leave
 		// the column in place (harmless, unused) rather than failing startup.
-		if _, err := db.Exec(`ALTER TABLE styles DROP COLUMN css_content`); err != nil {
+		if _, err := db.ExecContext(ctx, `ALTER TABLE styles DROP COLUMN css_content`); err != nil {
 			// non-fatal: the column simply remains as dead, unused data.
 			_ = err
 		}
@@ -1723,11 +1730,11 @@ func migrateStyleTokens(db *sql.DB) error {
 
 // migrateAnnouncementLocation adds the optional `location` column (free-text
 // location shown on the embed, e.g. a Discord voice channel). Idempotent.
-func migrateAnnouncementLocation(db *sql.DB) error {
-	if hasColumn(db, "announcements", "location") {
+func migrateAnnouncementLocation(ctx context.Context, db *sql.DB) error {
+	if hasColumn(ctx, db, "announcements", "location") {
 		return nil
 	}
-	if _, err := db.Exec(`ALTER TABLE announcements ADD COLUMN location TEXT NOT NULL DEFAULT ''`); err != nil {
+	if _, err := db.ExecContext(ctx, `ALTER TABLE announcements ADD COLUMN location TEXT NOT NULL DEFAULT ''`); err != nil {
 		return fmt.Errorf("add announcements.location: %w", err)
 	}
 	return nil
@@ -1737,12 +1744,12 @@ func migrateAnnouncementLocation(db *sql.DB) error {
 // columns (the Discord timestamp style letters - t|T|d|D|f|F|R - used to render
 // the embed's start and end times independently; "" falls back to the defaults).
 // Idempotent.
-func migrateAnnouncementTimeFormats(db *sql.DB) error {
+func migrateAnnouncementTimeFormats(ctx context.Context, db *sql.DB) error {
 	for _, col := range []string{"start_format", "end_format"} {
-		if hasColumn(db, "announcements", col) {
+		if hasColumn(ctx, db, "announcements", col) {
 			continue
 		}
-		if _, err := db.Exec(`ALTER TABLE announcements ADD COLUMN ` + col + ` TEXT NOT NULL DEFAULT ''`); err != nil {
+		if _, err := db.ExecContext(ctx, `ALTER TABLE announcements ADD COLUMN `+col+` TEXT NOT NULL DEFAULT ''`); err != nil {
 			return fmt.Errorf("add announcements.%s: %w", col, err)
 		}
 	}
@@ -1754,13 +1761,13 @@ func migrateAnnouncementTimeFormats(db *sql.DB) error {
 // CURRENT_TIMESTAMP default on ADD COLUMN, so the column is nullable here (older
 // cards predate tracking and read as NULL -> blank); new inserts set it
 // explicitly. Idempotent.
-func migrateCardCreatedAt(db *sql.DB) error {
+func migrateCardCreatedAt(ctx context.Context, db *sql.DB) error {
 	// A fresh/partial DB may not have the cards table yet (createTables builds it
 	// with the column); only alter an existing one.
-	if !tableExists(db, "cards") || hasColumn(db, "cards", "created_at") {
+	if !tableExists(ctx, db, "cards") || hasColumn(ctx, db, "cards", "created_at") {
 		return nil
 	}
-	if _, err := db.Exec(`ALTER TABLE cards ADD COLUMN created_at DATETIME`); err != nil {
+	if _, err := db.ExecContext(ctx, `ALTER TABLE cards ADD COLUMN created_at DATETIME`); err != nil {
 		return fmt.Errorf("add cards.created_at: %w", err)
 	}
 	return nil
@@ -1769,11 +1776,11 @@ func migrateCardCreatedAt(db *sql.DB) error {
 // migrateStyleVisibility adds the `is_public` flag to styles. It defaults to 0
 // (Private) so every existing theme stays admin-only; admins opt a theme into the
 // public client-side picker by setting it. Idempotent.
-func migrateStyleVisibility(db *sql.DB) error {
-	if !tableExists(db, "styles") || hasColumn(db, "styles", "is_public") {
+func migrateStyleVisibility(ctx context.Context, db *sql.DB) error {
+	if !tableExists(ctx, db, "styles") || hasColumn(ctx, db, "styles", "is_public") {
 		return nil
 	}
-	if _, err := db.Exec(`ALTER TABLE styles ADD COLUMN is_public INTEGER NOT NULL DEFAULT 0`); err != nil {
+	if _, err := db.ExecContext(ctx, `ALTER TABLE styles ADD COLUMN is_public INTEGER NOT NULL DEFAULT 0`); err != nil {
 		return fmt.Errorf("add styles.is_public: %w", err)
 	}
 	return nil
@@ -1783,22 +1790,22 @@ func migrateStyleVisibility(db *sql.DB) error {
 // from Delete All), `custom_status` (” normal, 'pending' awaiting staff approval,
 // 'approved' a live custom card), and `world` (the requester's home world for a
 // custom-card request; the character name reuses player_name). Idempotent.
-func migrateCardStatuses(db *sql.DB) error {
-	if !tableExists(db, "cards") {
+func migrateCardStatuses(ctx context.Context, db *sql.DB) error {
+	if !tableExists(ctx, db, "cards") {
 		return nil
 	}
-	if !hasColumn(db, "cards", "protected") {
-		if _, err := db.Exec(`ALTER TABLE cards ADD COLUMN protected INTEGER NOT NULL DEFAULT 0`); err != nil {
+	if !hasColumn(ctx, db, "cards", "protected") {
+		if _, err := db.ExecContext(ctx, `ALTER TABLE cards ADD COLUMN protected INTEGER NOT NULL DEFAULT 0`); err != nil {
 			return fmt.Errorf("add cards.protected: %w", err)
 		}
 	}
-	if !hasColumn(db, "cards", "custom_status") {
-		if _, err := db.Exec(`ALTER TABLE cards ADD COLUMN custom_status TEXT NOT NULL DEFAULT ''`); err != nil {
+	if !hasColumn(ctx, db, "cards", "custom_status") {
+		if _, err := db.ExecContext(ctx, `ALTER TABLE cards ADD COLUMN custom_status TEXT NOT NULL DEFAULT ''`); err != nil {
 			return fmt.Errorf("add cards.custom_status: %w", err)
 		}
 	}
-	if !hasColumn(db, "cards", "world") {
-		if _, err := db.Exec(`ALTER TABLE cards ADD COLUMN world TEXT NOT NULL DEFAULT ''`); err != nil {
+	if !hasColumn(ctx, db, "cards", "world") {
+		if _, err := db.ExecContext(ctx, `ALTER TABLE cards ADD COLUMN world TEXT NOT NULL DEFAULT ''`); err != nil {
 			return fmt.Errorf("add cards.world: %w", err)
 		}
 	}
@@ -1810,12 +1817,12 @@ func migrateCardStatuses(db *sql.DB) error {
 // discord_events_webhook_url_<slug>) becomes a dedicated announcement type so the
 // club can author event posts there instead. The old settings rows are removed
 // afterward. Idempotent via the schema-version gate; a no-op when none are set.
-func migrateBookClubEventWebhooks(db *sql.DB) error {
+func migrateBookClubEventWebhooks(ctx context.Context, db *sql.DB) error {
 	// Nothing to migrate if neither table is present (e.g. a partial/legacy DB).
-	if !tableExists(db, "settings") || !tableExists(db, "announcement_types") {
+	if !tableExists(ctx, db, "settings") || !tableExists(ctx, db, "announcement_types") {
 		return nil
 	}
-	rows, err := db.Query(
+	rows, err := db.QueryContext(ctx,
 		`SELECT key, value FROM settings
 		   WHERE key LIKE 'discord_events_webhook_url_%' AND TRIM(value) != ''`)
 	if err != nil {
@@ -1843,7 +1850,7 @@ func migrateBookClubEventWebhooks(db *sql.DB) error {
 	// (which isn't version-gated as committed until all migrations finish) to
 	// re-insert on the next boot - which would accumulate duplicate types. The
 	// NOT-EXISTS guard makes it idempotent even if a prior partial run committed.
-	tx, err := db.Begin()
+	tx, err := db.BeginTx(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("begin events webhook migration: %w", err)
 	}
@@ -1852,19 +1859,19 @@ func migrateBookClubEventWebhooks(db *sql.DB) error {
 	for _, w := range found {
 		name := titleCaseSlug(w.slug) + " Book Club Events"
 		var exists int
-		if err := tx.QueryRow(
+		if err := tx.QueryRowContext(ctx,
 			`SELECT COUNT(*) FROM announcement_types WHERE name = ? AND webhook_url = ?`, name, w.url,
 		).Scan(&exists); err != nil {
 			return fmt.Errorf("check announcement type for %q: %w", w.slug, err)
 		}
 		if exists == 0 {
-			if _, err := tx.Exec(
+			if _, err := tx.ExecContext(ctx,
 				`INSERT INTO announcement_types (name, webhook_url) VALUES (?, ?)`, name, w.url,
 			); err != nil {
 				return fmt.Errorf("create announcement type for %q: %w", w.slug, err)
 			}
 		}
-		if _, err := tx.Exec(`DELETE FROM settings WHERE key = ?`, w.key); err != nil {
+		if _, err := tx.ExecContext(ctx, `DELETE FROM settings WHERE key = ?`, w.key); err != nil {
 			return fmt.Errorf("remove events webhook setting %q: %w", w.key, err)
 		}
 	}
@@ -1891,14 +1898,14 @@ func titleCaseSlug(slug string) string {
 
 // migrateDropBookClubEvents removes the retired book_club_events table and its
 // indexes (the feature was merged into Announcements). Idempotent.
-func migrateDropBookClubEvents(db *sql.DB) error {
+func migrateDropBookClubEvents(ctx context.Context, db *sql.DB) error {
 	stmts := []string{
 		`DROP INDEX IF EXISTS idx_book_club_events_due`,
 		`DROP INDEX IF EXISTS idx_book_club_events_club`,
 		`DROP TABLE IF EXISTS book_club_events`,
 	}
 	for _, s := range stmts {
-		if _, err := db.Exec(s); err != nil {
+		if _, err := db.ExecContext(ctx, s); err != nil {
 			return fmt.Errorf("drop book_club_events: %w", err)
 		}
 	}
@@ -1911,8 +1918,8 @@ func migrateDropBookClubEvents(db *sql.DB) error {
 // the seed uses INSERT OR IGNORE so it is safe to re-run and never clobbers an
 // admin whose password was already changed. The seeded password is intended to
 // be rotated immediately after the migration runs.
-func migrateUsers(db *sql.DB) error {
-	if _, err := db.Exec(`CREATE TABLE IF NOT EXISTS users (
+func migrateUsers(ctx context.Context, db *sql.DB) error {
+	if _, err := db.ExecContext(ctx, `CREATE TABLE IF NOT EXISTS users (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		username TEXT NOT NULL UNIQUE,
 		password_hash TEXT NOT NULL,
@@ -1930,7 +1937,7 @@ func migrateUsers(db *sql.DB) error {
 	if err != nil {
 		return fmt.Errorf("hash seed admin password: %w", err)
 	}
-	if _, err := db.Exec(
+	if _, err := db.ExecContext(ctx,
 		`INSERT OR IGNORE INTO users (username, password_hash, is_admin, is_active, permissions)
 		 VALUES ('admin', ?, 1, 1, '[]')`, hash); err != nil {
 		return fmt.Errorf("seed admin user: %w", err)
@@ -1940,11 +1947,11 @@ func migrateUsers(db *sql.DB) error {
 
 // migrateUserLastLogin adds the nullable last_login_at column to the users
 // table (NULL until an account's first login). Idempotent via hasColumn.
-func migrateUserLastLogin(db *sql.DB) error {
-	if hasColumn(db, "users", "last_login_at") {
+func migrateUserLastLogin(ctx context.Context, db *sql.DB) error {
+	if hasColumn(ctx, db, "users", "last_login_at") {
 		return nil
 	}
-	if _, err := db.Exec(`ALTER TABLE users ADD COLUMN last_login_at DATETIME`); err != nil {
+	if _, err := db.ExecContext(ctx, `ALTER TABLE users ADD COLUMN last_login_at DATETIME`); err != nil {
 		return fmt.Errorf("add users.last_login_at: %w", err)
 	}
 	return nil
@@ -1968,8 +1975,8 @@ const userTokensTableSQL = `CREATE TABLE IF NOT EXISTS user_tokens (
 
 // migrateUserTokens creates the user_tokens table (schema v42) for personal
 // access tokens used by external API clients (e.g. the FFXIV plugin). Idempotent.
-func migrateUserTokens(db *sql.DB) error {
-	if _, err := db.Exec(userTokensTableSQL); err != nil {
+func migrateUserTokens(ctx context.Context, db *sql.DB) error {
+	if _, err := db.ExecContext(ctx, userTokensTableSQL); err != nil {
 		return fmt.Errorf("migrate user tokens: %w", err)
 	}
 	return nil
@@ -1977,8 +1984,8 @@ func migrateUserTokens(db *sql.DB) error {
 
 // migrateGamePresets creates the game_presets table for reusable game templates
 // (pre-selected win patterns + pre-written markdown game details).
-func migrateGamePresets(db *sql.DB) error {
-	_, err := db.Exec(`CREATE TABLE IF NOT EXISTS game_presets (
+func migrateGamePresets(ctx context.Context, db *sql.DB) error {
+	_, err := db.ExecContext(ctx, `CREATE TABLE IF NOT EXISTS game_presets (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		name TEXT NOT NULL,
 		pattern_ids TEXT NOT NULL DEFAULT '[]',
@@ -2073,8 +2080,8 @@ const affiliatesTableSQL = `CREATE TABLE IF NOT EXISTS affiliates (
 // migrateAffiliates creates the affiliates table for the Affiliates admin section.
 // Owners and opening hours are stored as JSON arrays in the owners/hours columns.
 // Idempotent (CREATE TABLE IF NOT EXISTS).
-func migrateAffiliates(db *sql.DB) error {
-	if _, err := db.Exec(affiliatesTableSQL); err != nil {
+func migrateAffiliates(ctx context.Context, db *sql.DB) error {
+	if _, err := db.ExecContext(ctx, affiliatesTableSQL); err != nil {
 		return fmt.Errorf("migrate affiliates: %w", err)
 	}
 	return nil
@@ -2093,8 +2100,8 @@ func migrateAffiliates(db *sql.DB) error {
 const affiliatesSortIndexSQL = `CREATE INDEX IF NOT EXISTS idx_affiliates_sort ` +
 	`ON affiliates(sort_order, name COLLATE NOCASE, id)`
 
-func migrateAffiliateFields(db *sql.DB) error {
-	if !tableExists(db, "affiliates") {
+func migrateAffiliateFields(ctx context.Context, db *sql.DB) error {
+	if !tableExists(ctx, db, "affiliates") {
 		return nil
 	}
 	cols := []struct{ name, ddl string }{
@@ -2104,10 +2111,10 @@ func migrateAffiliateFields(db *sql.DB) error {
 		{"sort_order", `ALTER TABLE affiliates ADD COLUMN sort_order INTEGER NOT NULL DEFAULT 0`},
 	}
 	for _, c := range cols {
-		if hasColumn(db, "affiliates", c.name) {
+		if hasColumn(ctx, db, "affiliates", c.name) {
 			continue
 		}
-		if _, err := db.Exec(c.ddl); err != nil {
+		if _, err := db.ExecContext(ctx, c.ddl); err != nil {
 			return fmt.Errorf("add affiliates.%s: %w", c.name, err)
 		}
 	}
@@ -2115,7 +2122,7 @@ func migrateAffiliateFields(db *sql.DB) error {
 	// migrateGarapons each own theirs, so an upgraded database ends up with the same
 	// indexes a fresh install gets. sort_order is added just above, so this must
 	// follow the ALTER loop.
-	if _, err := db.Exec(affiliatesSortIndexSQL); err != nil {
+	if _, err := db.ExecContext(ctx, affiliatesSortIndexSQL); err != nil {
 		return fmt.Errorf("create idx_affiliates_sort: %w", err)
 	}
 	return nil
@@ -2150,13 +2157,13 @@ const teaRoomsTableSQL = `CREATE TABLE IF NOT EXISTS tea_rooms (
 
 // migrateTeaRooms creates the tea_rooms table (+ its ordering index) for the Tea
 // Rooms admin section. Idempotent (CREATE TABLE / INDEX IF NOT EXISTS).
-func migrateTeaRooms(db *sql.DB) error {
+func migrateTeaRooms(ctx context.Context, db *sql.DB) error {
 	stmts := []string{
 		teaRoomsTableSQL,
 		`CREATE INDEX IF NOT EXISTS idx_tea_rooms_sort ON tea_rooms(sort_order, id)`,
 	}
 	for _, s := range stmts {
-		if _, err := db.Exec(s); err != nil {
+		if _, err := db.ExecContext(ctx, s); err != nil {
 			return fmt.Errorf("migrate tea rooms: %w", err)
 		}
 	}
@@ -2176,9 +2183,9 @@ func migrateTeaRooms(db *sql.DB) error {
 const teaRoomNumberIndexSQL = `CREATE UNIQUE INDEX IF NOT EXISTS idx_tea_rooms_room_number ` +
 	`ON tea_rooms(room_number) WHERE room_number != ''`
 
-func migrateTeaRoomSubtitle(db *sql.DB) error {
-	if !hasColumn(db, "tea_rooms", "subtitle") {
-		if _, err := db.Exec(`ALTER TABLE tea_rooms ADD COLUMN subtitle TEXT NOT NULL DEFAULT ''`); err != nil {
+func migrateTeaRoomSubtitle(ctx context.Context, db *sql.DB) error {
+	if !hasColumn(ctx, db, "tea_rooms", "subtitle") {
+		if _, err := db.ExecContext(ctx, `ALTER TABLE tea_rooms ADD COLUMN subtitle TEXT NOT NULL DEFAULT ''`); err != nil {
 			return fmt.Errorf("add tea_rooms.subtitle: %w", err)
 		}
 	}
@@ -2189,13 +2196,13 @@ func migrateTeaRoomSubtitle(db *sql.DB) error {
 	// duplicates first by blanking all but the lowest-id row of each set. Blanking
 	// rather than deleting: a duplicate number is a data-entry slip, not a reason to
 	// destroy somebody's room.
-	if _, err := db.Exec(`UPDATE tea_rooms SET room_number = ''
+	if _, err := db.ExecContext(ctx, `UPDATE tea_rooms SET room_number = ''
 		WHERE room_number != '' AND id NOT IN (
 			SELECT MIN(id) FROM tea_rooms WHERE room_number != '' GROUP BY room_number
 		)`); err != nil {
 		return fmt.Errorf("dedupe tea_rooms.room_number before unique index: %w", err)
 	}
-	if _, err := db.Exec(teaRoomNumberIndexSQL); err != nil {
+	if _, err := db.ExecContext(ctx, teaRoomNumberIndexSQL); err != nil {
 		return fmt.Errorf("create tea_rooms room_number unique index: %w", err)
 	}
 	return nil
@@ -2207,8 +2214,8 @@ func migrateTeaRoomSubtitle(db *sql.DB) error {
 // lock lifts, empty meaning it stands until an admin unlocks the room by hand
 // (how every lock behaved before this). Existing rooms therefore come out
 // unlocked with no expiry, which is what they all were. Idempotent.
-func migrateTeaRoomLocks(db *sql.DB) error {
-	if !tableExists(db, "tea_rooms") {
+func migrateTeaRoomLocks(ctx context.Context, db *sql.DB) error {
+	if !tableExists(ctx, db, "tea_rooms") {
 		return nil
 	}
 	cols := []struct{ column, spec string }{
@@ -2216,10 +2223,10 @@ func migrateTeaRoomLocks(db *sql.DB) error {
 		{"locked_until", "TEXT NOT NULL DEFAULT ''"},
 	}
 	for _, c := range cols {
-		if hasColumn(db, "tea_rooms", c.column) {
+		if hasColumn(ctx, db, "tea_rooms", c.column) {
 			continue
 		}
-		if _, err := db.Exec(fmt.Sprintf("ALTER TABLE tea_rooms ADD COLUMN %s %s", c.column, c.spec)); err != nil {
+		if _, err := db.ExecContext(ctx, fmt.Sprintf("ALTER TABLE tea_rooms ADD COLUMN %s %s", c.column, c.spec)); err != nil {
 			return fmt.Errorf("add tea_rooms.%s: %w", c.column, err)
 		}
 	}
@@ -2323,7 +2330,7 @@ const stampRallyCollectedTableSQL = `CREATE TABLE IF NOT EXISTS stamp_rally_coll
 // migrateStampRally creates the Stamp Rally tables (stamp_rallies +
 // stamp_rally_stamps + stamp_rally_prizes + stamp_rally_cards +
 // stamp_rally_collected) and their indexes. Idempotent.
-func migrateStampRally(db *sql.DB) error {
+func migrateStampRally(ctx context.Context, db *sql.DB) error {
 	stmts := []string{
 		stampRalliesTableSQL,
 		stampRallyStampsTableSQL,
@@ -2343,7 +2350,7 @@ func migrateStampRally(db *sql.DB) error {
 		`CREATE INDEX IF NOT EXISTS idx_stamp_rally_collected_rally ON stamp_rally_collected(rally_id)`,
 	}
 	for _, s := range stmts {
-		if _, err := db.Exec(s); err != nil {
+		if _, err := db.ExecContext(ctx, s); err != nil {
 			return fmt.Errorf("migrate stamp rally: %w", err)
 		}
 	}
@@ -2356,19 +2363,19 @@ func migrateStampRally(db *sql.DB) error {
 // garapon also issues a stamp card recorded on the player (garapon_players.stamp_card_id).
 // The link columns are kept FK-less here (ALTER can't add FKs and the createTables order
 // puts garapons before stamp_rallies); the store nulls/cleans them on delete. Idempotent.
-func migrateStampRallyGaraponLink(db *sql.DB) error {
-	if tableExists(db, "stamp_rallies") && !hasColumn(db, "stamp_rallies", "status") {
-		if _, err := db.Exec(`ALTER TABLE stamp_rallies ADD COLUMN status TEXT NOT NULL DEFAULT 'open'`); err != nil {
+func migrateStampRallyGaraponLink(ctx context.Context, db *sql.DB) error {
+	if tableExists(ctx, db, "stamp_rallies") && !hasColumn(ctx, db, "stamp_rallies", "status") {
+		if _, err := db.ExecContext(ctx, `ALTER TABLE stamp_rallies ADD COLUMN status TEXT NOT NULL DEFAULT 'open'`); err != nil {
 			return fmt.Errorf("add stamp_rallies.status: %w", err)
 		}
 	}
-	if tableExists(db, "garapons") && !hasColumn(db, "garapons", "stamp_rally_id") {
-		if _, err := db.Exec(`ALTER TABLE garapons ADD COLUMN stamp_rally_id INTEGER`); err != nil {
+	if tableExists(ctx, db, "garapons") && !hasColumn(ctx, db, "garapons", "stamp_rally_id") {
+		if _, err := db.ExecContext(ctx, `ALTER TABLE garapons ADD COLUMN stamp_rally_id INTEGER`); err != nil {
 			return fmt.Errorf("add garapons.stamp_rally_id: %w", err)
 		}
 	}
-	if tableExists(db, "garapon_players") && !hasColumn(db, "garapon_players", "stamp_card_id") {
-		if _, err := db.Exec(`ALTER TABLE garapon_players ADD COLUMN stamp_card_id INTEGER`); err != nil {
+	if tableExists(ctx, db, "garapon_players") && !hasColumn(ctx, db, "garapon_players", "stamp_card_id") {
+		if _, err := db.ExecContext(ctx, `ALTER TABLE garapon_players ADD COLUMN stamp_card_id INTEGER`); err != nil {
 			return fmt.Errorf("add garapon_players.stamp_card_id: %w", err)
 		}
 	}
@@ -2378,9 +2385,9 @@ func migrateStampRallyGaraponLink(db *sql.DB) error {
 // migrateStampRallyRedeemImage (schema v48) adds the "Where to Redeem" screenshot column
 // to stamp_rallies - a card image shown to participants (alongside the redeem instructions)
 // once their card is complete. Idempotent.
-func migrateStampRallyRedeemImage(db *sql.DB) error {
-	if tableExists(db, "stamp_rallies") && !hasColumn(db, "stamp_rallies", "redeem_image") {
-		if _, err := db.Exec(`ALTER TABLE stamp_rallies ADD COLUMN redeem_image TEXT NOT NULL DEFAULT ''`); err != nil {
+func migrateStampRallyRedeemImage(ctx context.Context, db *sql.DB) error {
+	if tableExists(ctx, db, "stamp_rallies") && !hasColumn(ctx, db, "stamp_rallies", "redeem_image") {
+		if _, err := db.ExecContext(ctx, `ALTER TABLE stamp_rallies ADD COLUMN redeem_image TEXT NOT NULL DEFAULT ''`); err != nil {
 			return fmt.Errorf("add stamp_rallies.redeem_image: %w", err)
 		}
 	}
@@ -2395,8 +2402,8 @@ func migrateStampRallyRedeemImage(db *sql.DB) error {
 // Only runs when the old schema is detected (no rally_id column); a fresh DB built with
 // the updated const - or a re-run - is a no-op. The table is a leaf (nothing references
 // it), so the rebuild is foreign-key-safe.
-func migrateStampRallyKeepLogs(db *sql.DB) error {
-	if !tableExists(db, "stamp_rally_collected") || hasColumn(db, "stamp_rally_collected", "rally_id") {
+func migrateStampRallyKeepLogs(ctx context.Context, db *sql.DB) error {
+	if !tableExists(ctx, db, "stamp_rally_collected") || hasColumn(ctx, db, "stamp_rally_collected", "rally_id") {
 		return nil
 	}
 	stmts := []string{
@@ -2428,12 +2435,12 @@ func migrateStampRallyKeepLogs(db *sql.DB) error {
 		`CREATE INDEX IF NOT EXISTS idx_stamp_rally_collected_stamp ON stamp_rally_collected(stamp_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_stamp_rally_collected_rally ON stamp_rally_collected(rally_id)`,
 	}
-	return rebuildTableTx(db, "migrate stamp rally keep-logs", stmts)
+	return rebuildTableTx(ctx, db, "migrate stamp rally keep-logs", stmts)
 }
 
 // migrateGarapons creates the Garapon tables (garapons + garapon_prizes +
 // garapon_players + garapon_draws) and their indexes. Idempotent.
-func migrateGarapons(db *sql.DB) error {
+func migrateGarapons(ctx context.Context, db *sql.DB) error {
 	stmts := []string{
 		garaponsTableSQL,
 		garaponPrizesTableSQL,
@@ -2449,7 +2456,7 @@ func migrateGarapons(db *sql.DB) error {
 		`CREATE INDEX IF NOT EXISTS idx_garapon_draws_player ON garapon_draws(player_id)`,
 	}
 	for _, s := range stmts {
-		if _, err := db.Exec(s); err != nil {
+		if _, err := db.ExecContext(ctx, s); err != nil {
 			return fmt.Errorf("migrate garapons: %w", err)
 		}
 	}
@@ -2465,20 +2472,21 @@ func migrateGarapons(db *sql.DB) error {
 // db (whose per-connection foreign_keys=ON would otherwise stay in force through the
 // drop/rename and risk cascade surprises). The connection is restored to foreign_keys=ON
 // before it returns to the pool.
-func rebuildTableTx(db *sql.DB, what string, stmts []string) error {
-	ctx := context.Background()
+func rebuildTableTx(ctx context.Context, db *sql.DB, what string, stmts []string) error {
 	conn, err := db.Conn(ctx)
 	if err != nil {
 		return fmt.Errorf("%s: acquire conn: %w", what, err)
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }() // returns it to the pool: nothing to report
 
 	if _, err := conn.ExecContext(ctx, `PRAGMA foreign_keys = OFF`); err != nil {
 		return fmt.Errorf("%s: disable foreign_keys: %w", what, err)
 	}
 	// Restore enforcement on this connection before it goes back to the pool, whatever
-	// happens below (a pooled connection keeps its per-connection pragma state).
-	defer func() { _, _ = conn.ExecContext(ctx, `PRAGMA foreign_keys = ON`) }()
+	// happens below (a pooled connection keeps its per-connection pragma state) - a
+	// canceled ctx included, hence detached: a connection handed back with
+	// foreign_keys off would let deletes on it skip their cascades.
+	defer func() { _, _ = conn.ExecContext(context.WithoutCancel(ctx), `PRAGMA foreign_keys = ON`) }()
 
 	tx, err := conn.BeginTx(ctx, nil)
 	if err != nil {
@@ -2516,11 +2524,11 @@ func rebuildTableTx(db *sql.DB, what string, stmts []string) error {
 // when the old schema is detected (player_id NOT NULL), so a fresh DB created with
 // the updated const - or a re-run - is a no-op. garapon_draws is a leaf table
 // (nothing references it), so the rebuild is foreign-key-safe.
-func migrateGaraponDrawKeepLogs(db *sql.DB) error {
+func migrateGaraponDrawKeepLogs(ctx context.Context, db *sql.DB) error {
 	// A missing column/table reports notNull=false, so this also no-ops on a DB
 	// that never had garapon_draws. A genuine probe error is different: it must not
 	// be read as "already migrated", which would skip the rebuild for good.
-	_, notNull, err := columnInfo(db, "garapon_draws", "player_id")
+	_, notNull, err := columnInfo(ctx, db, "garapon_draws", "player_id")
 	if err != nil {
 		return fmt.Errorf("probe garapon_draws.player_id: %w", err)
 	}
@@ -2547,7 +2555,7 @@ func migrateGaraponDrawKeepLogs(db *sql.DB) error {
 		`CREATE INDEX IF NOT EXISTS idx_garapon_draws_garapon ON garapon_draws(garapon_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_garapon_draws_player ON garapon_draws(player_id)`,
 	}
-	return rebuildTableTx(db, "migrate garapon draws keep-logs", stmts)
+	return rebuildTableTx(ctx, db, "migrate garapon draws keep-logs", stmts)
 }
 
 // festivalMapsTableSQL defines the Festival Map table (Festival -> Festival Map):
@@ -2613,7 +2621,7 @@ const festivalStallOccupantsTableSQL = `CREATE TABLE IF NOT EXISTS festival_stal
 // to). Both link columns are FK-less for the same reason as the garapon link -
 // ALTER can't add a foreign key, and createTables builds stamp_rallies before
 // festival_maps - so the store nulls them itself on delete. Idempotent.
-func migrateFestivalMaps(db *sql.DB) error {
+func migrateFestivalMaps(ctx context.Context, db *sql.DB) error {
 	stmts := []string{
 		festivalMapsTableSQL,
 		festivalStallsTableSQL,
@@ -2624,7 +2632,7 @@ func migrateFestivalMaps(db *sql.DB) error {
 		festivalMapSlugIndexSQL,
 	}
 	for _, s := range stmts {
-		if _, err := db.Exec(s); err != nil {
+		if _, err := db.ExecContext(ctx, s); err != nil {
 			return fmt.Errorf("migrate festival maps: %w", err)
 		}
 	}
@@ -2639,22 +2647,22 @@ func migrateFestivalMaps(db *sql.DB) error {
 	// ever cleaned up, leaving a permanently dead column and index. Skip the add
 	// once the renamed column is present, the same post-rename guard
 	// migrateFestivalStallTypeLabel already uses.
-	postRename := tableExists(db, "stamp_rally_stamps") && hasColumn(db, "stamp_rally_stamps", "occupant_id")
+	postRename := tableExists(ctx, db, "stamp_rally_stamps") && hasColumn(ctx, db, "stamp_rally_stamps", "occupant_id")
 	for _, c := range cols {
 		if c.table == "stamp_rally_stamps" && c.column == "stall_id" && postRename {
 			continue
 		}
-		if !tableExists(db, c.table) || hasColumn(db, c.table, c.column) {
+		if !tableExists(ctx, db, c.table) || hasColumn(ctx, db, c.table, c.column) {
 			continue
 		}
-		if _, err := db.Exec(fmt.Sprintf("ALTER TABLE %s ADD COLUMN %s %s", c.table, c.column, c.spec)); err != nil {
+		if _, err := db.ExecContext(ctx, fmt.Sprintf("ALTER TABLE %s ADD COLUMN %s %s", c.table, c.column, c.spec)); err != nil {
 			return fmt.Errorf("add %s.%s: %w", c.table, c.column, err)
 		}
 	}
 	// Index the column only while it actually exists; after v64 the equivalent index
 	// belongs to occupant_id and is created there.
-	if hasColumn(db, "stamp_rally_stamps", "stall_id") {
-		if _, err := db.Exec(`CREATE INDEX IF NOT EXISTS idx_stamp_rally_stamps_stall ON stamp_rally_stamps(stall_id)`); err != nil {
+	if hasColumn(ctx, db, "stamp_rally_stamps", "stall_id") {
+		if _, err := db.ExecContext(ctx, `CREATE INDEX IF NOT EXISTS idx_stamp_rally_stamps_stall ON stamp_rally_stamps(stall_id)`); err != nil {
 			return fmt.Errorf("migrate festival maps: %w", err)
 		}
 	}
@@ -2673,16 +2681,16 @@ const festivalMapSlugIndexSQL = `CREATE UNIQUE INDEX IF NOT EXISTS idx_festival_
 // its numeric id - plus the partial UNIQUE index above. Existing maps default to
 // ” (no shortcode) and stay reachable by id, which is the only way they were
 // ever linked. Idempotent.
-func migrateFestivalMapSlug(db *sql.DB) error {
-	if !tableExists(db, "festival_maps") {
+func migrateFestivalMapSlug(ctx context.Context, db *sql.DB) error {
+	if !tableExists(ctx, db, "festival_maps") {
 		return nil
 	}
-	if !hasColumn(db, "festival_maps", "slug") {
-		if _, err := db.Exec(`ALTER TABLE festival_maps ADD COLUMN slug TEXT NOT NULL DEFAULT ''`); err != nil {
+	if !hasColumn(ctx, db, "festival_maps", "slug") {
+		if _, err := db.ExecContext(ctx, `ALTER TABLE festival_maps ADD COLUMN slug TEXT NOT NULL DEFAULT ''`); err != nil {
 			return fmt.Errorf("add festival_maps.slug: %w", err)
 		}
 	}
-	if _, err := db.Exec(festivalMapSlugIndexSQL); err != nil {
+	if _, err := db.ExecContext(ctx, festivalMapSlugIndexSQL); err != nil {
 		return fmt.Errorf("index festival_maps.slug: %w", err)
 	}
 	return nil
@@ -2692,18 +2700,18 @@ func migrateFestivalMapSlug(db *sql.DB) error {
 // the caption drawn under a stall's title when its type is "other", so a booth can
 // read "Omikuji" or "Art Raffle" rather than the meaningless "Other". Existing
 // stalls default to ” and keep showing their named type. Idempotent.
-func migrateFestivalStallTypeLabel(db *sql.DB) error {
-	if !tableExists(db, "festival_stalls") || hasColumn(db, "festival_stalls", "type_label") {
+func migrateFestivalStallTypeLabel(ctx context.Context, db *sql.DB) error {
+	if !tableExists(ctx, db, "festival_stalls") || hasColumn(ctx, db, "festival_stalls", "type_label") {
 		return nil
 	}
 	// A database that reached the occupant split (v64) - or was built fresh after
 	// it - holds identity on festival_stall_occupants, not on the pitch. `title` is
 	// the pre-split marker; without this the column would be bolted onto a pitch
 	// table that has no use for it.
-	if !hasColumn(db, "festival_stalls", "title") {
+	if !hasColumn(ctx, db, "festival_stalls", "title") {
 		return nil
 	}
-	if _, err := db.Exec(`ALTER TABLE festival_stalls ADD COLUMN type_label TEXT NOT NULL DEFAULT ''`); err != nil {
+	if _, err := db.ExecContext(ctx, `ALTER TABLE festival_stalls ADD COLUMN type_label TEXT NOT NULL DEFAULT ''`); err != nil {
 		return fmt.Errorf("add festival_stalls.type_label: %w", err)
 	}
 	return nil
@@ -2725,21 +2733,21 @@ const festivalStallOccupantIndexSQL = `CREATE INDEX IF NOT EXISTS idx_festival_s
 // rally's per-stamp link can be repointed from the stall to its occupant in the
 // same pass: the column is renamed and its values remapped, so no rally loses the
 // stall its stamps name. Idempotent - it no-ops once the occupants table exists.
-func migrateFestivalStallOccupants(db *sql.DB) error {
-	if err := splitFestivalStallOccupants(db); err != nil {
+func migrateFestivalStallOccupants(ctx context.Context, db *sql.DB) error {
+	if err := splitFestivalStallOccupants(ctx, db); err != nil {
 		return err
 	}
 	// Runs whether or not the split did: a FRESH install builds the post-split
 	// tables in createTables, so the split no-ops, but v61 still added the rally's
 	// link column under its old name and it has to be repointed all the same.
-	return migrateRallyStampOccupantLink(db)
+	return migrateRallyStampOccupantLink(ctx, db)
 }
 
 // splitFestivalStallOccupants moves each stall's identity onto a single occupant
 // row and rebuilds the stall as a bare pitch. No-ops once the occupants table
 // exists - which is also the case on a fresh install.
-func splitFestivalStallOccupants(db *sql.DB) error {
-	if !tableExists(db, "festival_stalls") || tableExists(db, "festival_stall_occupants") {
+func splitFestivalStallOccupants(ctx context.Context, db *sql.DB) error {
+	if !tableExists(ctx, db, "festival_stalls") || tableExists(ctx, db, "festival_stall_occupants") {
 		return nil
 	}
 	// Ordered so the pitch rebuild happens BEFORE anything references it: dropping
@@ -2781,7 +2789,7 @@ func splitFestivalStallOccupants(db *sql.DB) error {
 		festivalStallOccupantIndexSQL,
 		`DROP TABLE festival_stall_identity_tmp`,
 	}
-	return rebuildTableTx(db, "migrate festival stall occupants", stmts)
+	return rebuildTableTx(ctx, db, "migrate festival stall occupants", stmts)
 }
 
 // migrateRallyStampOccupantLink repoints stamp_rally_stamps.stall_id at the
@@ -2789,11 +2797,11 @@ func splitFestivalStallOccupants(db *sql.DB) error {
 // to whoever runs the pitch on the day, not to the pitch itself - Flora's game
 // stamp isn't The Great Below's - so the column is renamed as well as remapped.
 // Idempotent: it no-ops once the column has been renamed.
-func migrateRallyStampOccupantLink(db *sql.DB) error {
-	if !tableExists(db, "stamp_rally_stamps") || hasColumn(db, "stamp_rally_stamps", "occupant_id") {
+func migrateRallyStampOccupantLink(ctx context.Context, db *sql.DB) error {
+	if !tableExists(ctx, db, "stamp_rally_stamps") || hasColumn(ctx, db, "stamp_rally_stamps", "occupant_id") {
 		return nil
 	}
-	if !hasColumn(db, "stamp_rally_stamps", "stall_id") {
+	if !hasColumn(ctx, db, "stamp_rally_stamps", "stall_id") {
 		return nil
 	}
 	stmts := []string{
@@ -2808,7 +2816,7 @@ func migrateRallyStampOccupantLink(db *sql.DB) error {
 		`CREATE INDEX IF NOT EXISTS idx_stamp_rally_stamps_occupant ON stamp_rally_stamps(occupant_id)`,
 	}
 	for _, stmt := range stmts {
-		if _, err := db.Exec(stmt); err != nil {
+		if _, err := db.ExecContext(ctx, stmt); err != nil {
 			return fmt.Errorf("migrate rally stamp occupant link: %w", err)
 		}
 	}
@@ -2826,8 +2834,8 @@ func migrateRallyStampOccupantLink(db *sql.DB) error {
 // so the store clears them itself when a map or occupant goes away. Existing
 // raffles default to NULL and belong to no festival, which is what they all were.
 // Idempotent.
-func migrateRaffleFestivalLink(db *sql.DB) error {
-	if !tableExists(db, "raffles") {
+func migrateRaffleFestivalLink(ctx context.Context, db *sql.DB) error {
+	if !tableExists(ctx, db, "raffles") {
 		return nil
 	}
 	cols := []struct{ column, spec string }{
@@ -2835,14 +2843,14 @@ func migrateRaffleFestivalLink(db *sql.DB) error {
 		{"occupant_id", "INTEGER"},
 	}
 	for _, c := range cols {
-		if hasColumn(db, "raffles", c.column) {
+		if hasColumn(ctx, db, "raffles", c.column) {
 			continue
 		}
-		if _, err := db.Exec(fmt.Sprintf("ALTER TABLE raffles ADD COLUMN %s %s", c.column, c.spec)); err != nil {
+		if _, err := db.ExecContext(ctx, fmt.Sprintf("ALTER TABLE raffles ADD COLUMN %s %s", c.column, c.spec)); err != nil {
 			return fmt.Errorf("add raffles.%s: %w", c.column, err)
 		}
 	}
-	if _, err := db.Exec(`CREATE INDEX IF NOT EXISTS idx_raffles_occupant ON raffles(occupant_id)`); err != nil {
+	if _, err := db.ExecContext(ctx, `CREATE INDEX IF NOT EXISTS idx_raffles_occupant ON raffles(occupant_id)`); err != nil {
 		return fmt.Errorf("index raffles.occupant_id: %w", err)
 	}
 	return nil

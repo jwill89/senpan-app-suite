@@ -76,7 +76,7 @@ export const useAppStore = defineStore('app', () => {
       const data = await endpoints.settings.get()
       // Register uploaded fonts first so applyHeaderFont knows to skip Google
       // for an uploaded family.
-      uploadedFonts.value = data.uploaded_fonts || []
+      uploadedFonts.value = data.uploaded_fonts ?? []
       applyUploadedFonts(uploadedFonts.value)
       settings.value = { ...settings.value, ...data.settings }
       document.title = settings.value.app_title || 'Senpan App Suite'

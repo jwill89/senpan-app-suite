@@ -33,7 +33,7 @@ func (s *Server) handleAnnouncementTypesList(w http.ResponseWriter, r *http.Requ
 	if !s.requirePermission(w, r, permTeahouseAnnounce) {
 		return
 	}
-	types, err := s.store.ListAnnouncementTypes()
+	types, err := s.store.ListAnnouncementTypes(r.Context())
 	if err != nil {
 		writeInternalError(w, "list announcement types", err)
 		return
@@ -86,12 +86,12 @@ func (s *Server) handleAnnouncementTypeCreate(w http.ResponseWriter, r *http.Req
 	if !ok {
 		return
 	}
-	id, err := s.store.CreateAnnouncementType(name, webhook)
+	id, err := s.store.CreateAnnouncementType(r.Context(), name, webhook)
 	if err != nil {
 		writeInternalError(w, "create announcement type", err)
 		return
 	}
-	saved, _ := s.store.GetAnnouncementType(id)
+	saved, _ := s.store.GetAnnouncementType(r.Context(), id)
 	writeJSON(w, http.StatusCreated, model.AnnouncementTypeResponse{Type: saved})
 }
 
@@ -117,11 +117,11 @@ func (s *Server) handleAnnouncementTypeUpdate(w http.ResponseWriter, r *http.Req
 	if !ok {
 		return
 	}
-	if err := s.store.UpdateAnnouncementType(id, name, webhook); err != nil {
+	if err := s.store.UpdateAnnouncementType(r.Context(), id, name, webhook); err != nil {
 		writeInternalError(w, "update announcement type", err)
 		return
 	}
-	saved, _ := s.store.GetAnnouncementType(id)
+	saved, _ := s.store.GetAnnouncementType(r.Context(), id)
 	writeJSON(w, http.StatusOK, model.AnnouncementTypeResponse{Type: saved})
 }
 
@@ -139,7 +139,7 @@ func (s *Server) handleAnnouncementTypeDelete(w http.ResponseWriter, r *http.Req
 	if !ok {
 		return
 	}
-	count, err := s.store.CountAnnouncementsByType(id)
+	count, err := s.store.CountAnnouncementsByType(r.Context(), id)
 	if err != nil {
 		writeInternalError(w, "count announcements by type", err)
 		return
@@ -149,7 +149,7 @@ func (s *Server) handleAnnouncementTypeDelete(w http.ResponseWriter, r *http.Req
 			fmt.Sprintf("This type is used by %d announcement(s). Reassign or delete them first.", count))
 		return
 	}
-	if _, err := s.store.DeleteAnnouncementType(id); err != nil {
+	if _, err := s.store.DeleteAnnouncementType(r.Context(), id); err != nil {
 		writeInternalError(w, "delete announcement type", err)
 		return
 	}
@@ -167,7 +167,7 @@ func (s *Server) handleAnnouncementRolesList(w http.ResponseWriter, r *http.Requ
 	if !s.requirePermission(w, r, permTeahouseAnnounce) {
 		return
 	}
-	roles, err := s.store.ListAnnouncementRoles()
+	roles, err := s.store.ListAnnouncementRoles(r.Context())
 	if err != nil {
 		writeInternalError(w, "list announcement roles", err)
 		return
@@ -218,12 +218,12 @@ func (s *Server) handleAnnouncementRoleCreate(w http.ResponseWriter, r *http.Req
 	if !ok {
 		return
 	}
-	id, err := s.store.CreateAnnouncementRole(name, roleID)
+	id, err := s.store.CreateAnnouncementRole(r.Context(), name, roleID)
 	if err != nil {
 		writeInternalError(w, "create announcement role", err)
 		return
 	}
-	saved, _ := s.store.GetAnnouncementRole(id)
+	saved, _ := s.store.GetAnnouncementRole(r.Context(), id)
 	writeJSON(w, http.StatusCreated, model.AnnouncementRoleResponse{Role: saved})
 }
 
@@ -249,11 +249,11 @@ func (s *Server) handleAnnouncementRoleUpdate(w http.ResponseWriter, r *http.Req
 	if !ok {
 		return
 	}
-	if err := s.store.UpdateAnnouncementRole(id, name, roleID); err != nil {
+	if err := s.store.UpdateAnnouncementRole(r.Context(), id, name, roleID); err != nil {
 		writeInternalError(w, "update announcement role", err)
 		return
 	}
-	saved, _ := s.store.GetAnnouncementRole(id)
+	saved, _ := s.store.GetAnnouncementRole(r.Context(), id)
 	writeJSON(w, http.StatusOK, model.AnnouncementRoleResponse{Role: saved})
 }
 
@@ -271,7 +271,7 @@ func (s *Server) handleAnnouncementRoleDelete(w http.ResponseWriter, r *http.Req
 	if !ok {
 		return
 	}
-	count, err := s.store.CountAnnouncementsByRole(id)
+	count, err := s.store.CountAnnouncementsByRole(r.Context(), id)
 	if err != nil {
 		writeInternalError(w, "count announcements by role", err)
 		return
@@ -281,7 +281,7 @@ func (s *Server) handleAnnouncementRoleDelete(w http.ResponseWriter, r *http.Req
 			fmt.Sprintf("This role is tagged by %d announcement(s). Change their tag first.", count))
 		return
 	}
-	if _, err := s.store.DeleteAnnouncementRole(id); err != nil {
+	if _, err := s.store.DeleteAnnouncementRole(r.Context(), id); err != nil {
 		writeInternalError(w, "delete announcement role", err)
 		return
 	}
@@ -312,7 +312,7 @@ func (s *Server) handleAnnouncementsList(w http.ResponseWriter, r *http.Request)
 	if !s.requirePermission(w, r, permTeahouseAnnounce) {
 		return
 	}
-	items, err := s.store.ListAnnouncements()
+	items, err := s.store.ListAnnouncements(r.Context())
 	if err != nil {
 		writeInternalError(w, "list announcements", err)
 		return
@@ -362,15 +362,15 @@ func (s *Server) handleAnnouncementCreate(w http.ResponseWriter, r *http.Request
 		return
 	}
 	a := req.Announcement
-	if !s.validateAndResolveAnnouncement(w, &a, nil) {
+	if !s.validateAndResolveAnnouncement(r.Context(), w, &a, nil) {
 		return
 	}
-	id, err := s.store.CreateAnnouncement(&a)
+	id, err := s.store.CreateAnnouncement(r.Context(), &a)
 	if err != nil {
 		writeInternalError(w, "create announcement", err)
 		return
 	}
-	saved, _ := s.store.GetAnnouncement(id)
+	saved, _ := s.store.GetAnnouncement(r.Context(), id)
 	writeJSON(w, http.StatusCreated, model.AnnouncementResponse{Announcement: saved})
 }
 
@@ -392,7 +392,7 @@ func (s *Server) handleAnnouncementUpdate(w http.ResponseWriter, r *http.Request
 		writeError(w, http.StatusBadRequest, "Invalid JSON")
 		return
 	}
-	existing, err := s.store.GetAnnouncement(id)
+	existing, err := s.store.GetAnnouncement(r.Context(), id)
 	if err != nil {
 		writeInternalError(w, "load announcement for update", err)
 		return
@@ -402,18 +402,18 @@ func (s *Server) handleAnnouncementUpdate(w http.ResponseWriter, r *http.Request
 		return
 	}
 	a := req.Announcement
-	if !s.validateAndResolveAnnouncement(w, &a, existing) {
+	if !s.validateAndResolveAnnouncement(r.Context(), w, &a, existing) {
 		return
 	}
 	a.ID = id
-	if err := s.store.UpdateAnnouncement(&a); err != nil {
+	if err := s.store.UpdateAnnouncement(r.Context(), &a); err != nil {
 		writeInternalError(w, "update announcement", err)
 		return
 	}
 	// Images are managed centrally on the System -> Images page (a shared
 	// library), so replacing an announcement's image no longer deletes the
 	// old file here - it may be reused by another announcement.
-	saved, _ := s.store.GetAnnouncement(a.ID)
+	saved, _ := s.store.GetAnnouncement(r.Context(), a.ID)
 	writeJSON(w, http.StatusOK, model.AnnouncementResponse{Announcement: saved})
 }
 
@@ -432,7 +432,7 @@ func (s *Server) handleAnnouncementDelete(w http.ResponseWriter, r *http.Request
 	if !ok {
 		return
 	}
-	if _, err := s.store.DeleteAnnouncement(id); err != nil {
+	if _, err := s.store.DeleteAnnouncement(r.Context(), id); err != nil {
 		writeInternalError(w, "delete announcement", err)
 		return
 	}
@@ -452,7 +452,7 @@ func (s *Server) handleAnnouncementSend(w http.ResponseWriter, r *http.Request) 
 	if !ok {
 		return
 	}
-	a, err := s.store.GetAnnouncement(id)
+	a, err := s.store.GetAnnouncement(r.Context(), id)
 	if err != nil {
 		writeInternalError(w, "load announcement for send", err)
 		return
@@ -461,23 +461,26 @@ func (s *Server) handleAnnouncementSend(w http.ResponseWriter, r *http.Request) 
 		writeError(w, http.StatusNotFound, "Announcement not found")
 		return
 	}
-	typ, _ := s.store.GetAnnouncementType(a.TypeID)
+	typ, _ := s.store.GetAnnouncementType(r.Context(), a.TypeID)
 	if typ == nil || strings.TrimSpace(typ.WebhookURL) == "" {
 		writeError(w, http.StatusBadRequest, "This announcement's type has no Discord webhook configured.")
 		return
 	}
 	target := webhookTarget{Kind: "announcement", Name: a.Title}
-	if err := s.postDiscordWebhook(r.Context(), target, typ.WebhookURL, s.buildAnnouncementMessage(*a)); err != nil {
+	if err := s.postDiscordWebhook(r.Context(), target, typ.WebhookURL, s.buildAnnouncementMessage(r.Context(), *a)); err != nil {
 		writeUpstreamError(w, fmt.Sprintf("send announcement %d", id), err)
 		return
 	}
 	slog.Info("announcement sent manually", "id", a.ID, "title", a.Title, "type", typ.Name,
 		"by", s.actorName(r))
-	if err := s.store.TouchAnnouncementPosted(a.ID); err != nil {
+	// The message is on Discord now, so it is stamped as posted even if the admin
+	// has gone: the record must not claim it was never sent.
+	ctx := context.WithoutCancel(r.Context())
+	if err := s.store.TouchAnnouncementPosted(ctx, a.ID); err != nil {
 		writeInternalError(w, "stamp announcement posted", err)
 		return
 	}
-	saved, _ := s.store.GetAnnouncement(a.ID)
+	saved, _ := s.store.GetAnnouncement(ctx, a.ID)
 	writeJSON(w, http.StatusOK, model.AnnouncementResponse{Announcement: saved})
 }
 
@@ -494,7 +497,7 @@ func (s *Server) handleAnnouncementSkip(w http.ResponseWriter, r *http.Request) 
 	if !ok {
 		return
 	}
-	a, err := s.store.GetAnnouncement(id)
+	a, err := s.store.GetAnnouncement(r.Context(), id)
 	if err != nil {
 		writeInternalError(w, "load announcement for skip", err)
 		return
@@ -528,13 +531,13 @@ func (s *Server) handleAnnouncementSkip(w http.ResponseWriter, r *http.Request) 
 			fmt.Sprintf("You can skip at most %d upcoming occurrences.", maxSkipCount))
 		return
 	}
-	if err := s.store.SetAnnouncementSkip(a.ID, count); err != nil {
+	if err := s.store.SetAnnouncementSkip(r.Context(), a.ID, count); err != nil {
 		writeInternalError(w, "skip announcement", err)
 		return
 	}
 	slog.Info("announcement skip set", "id", a.ID, "title", a.Title, "skip_count", count,
 		"by", s.actorName(r))
-	saved, _ := s.store.GetAnnouncement(a.ID)
+	saved, _ := s.store.GetAnnouncement(r.Context(), a.ID)
 	writeJSON(w, http.StatusOK, model.AnnouncementResponse{Announcement: saved})
 }
 
@@ -553,7 +556,7 @@ func (s *Server) handleAnnouncementsReorder(w http.ResponseWriter, r *http.Reque
 		writeError(w, http.StatusBadRequest, "Invalid JSON")
 		return
 	}
-	if err := s.store.BulkReorderAnnouncements(req.OrderedIDs); err != nil {
+	if err := s.store.BulkReorderAnnouncements(r.Context(), req.OrderedIDs); err != nil {
 		writeInternalError(w, "reorder announcements", err)
 		return
 	}
@@ -568,7 +571,7 @@ func (s *Server) handleAnnouncementsReorder(w http.ResponseWriter, r *http.Reque
 // existing is the stored row on an update, nil on a create. It is needed because
 // next_post_at/active are schedule-CURSOR state (like skip_count) that the edit
 // form does not own - see the "once" branch below.
-func (s *Server) validateAndResolveAnnouncement(w http.ResponseWriter, a *model.Announcement, existing *model.Announcement) bool {
+func (s *Server) validateAndResolveAnnouncement(ctx context.Context, w http.ResponseWriter, a *model.Announcement, existing *model.Announcement) bool {
 	a.Title = strings.TrimSpace(a.Title)
 	if a.Title == "" {
 		writeError(w, http.StatusBadRequest, "Title is required")
@@ -583,7 +586,7 @@ func (s *Server) validateAndResolveAnnouncement(w http.ResponseWriter, a *model.
 		writeError(w, http.StatusBadRequest, "An announcement type is required")
 		return false
 	}
-	typ, err := s.store.GetAnnouncementType(a.TypeID)
+	typ, err := s.store.GetAnnouncementType(ctx, a.TypeID)
 	if err != nil {
 		writeInternalError(w, "load announcement type", err)
 		return false
@@ -612,7 +615,7 @@ func (s *Server) validateAndResolveAnnouncement(w http.ResponseWriter, a *model.
 			writeError(w, http.StatusBadRequest, "Invalid role tag")
 			return false
 		}
-		role, err := s.store.GetAnnouncementRole(id)
+		role, err := s.store.GetAnnouncementRole(ctx, id)
 		if err != nil {
 			writeInternalError(w, "load announcement role", err)
 			return false
@@ -800,8 +803,8 @@ func sanitizeAnnouncementButtons(buttons []model.AnnouncementButton) []model.Ann
 // announcement: an optional role tag in the message content (above the embed,
 // where mentions actually notify), the embed itself, and an optional action row
 // of link buttons.
-func (s *Server) buildAnnouncementMessage(a model.Announcement) discordWebhookPayload {
-	content, allowed := s.announcementMention(a)
+func (s *Server) buildAnnouncementMessage(ctx context.Context, a model.Announcement) discordWebhookPayload {
+	content, allowed := s.announcementMention(ctx, a)
 	// For "dynamic dates", re-anchor the event start/end onto the day this post
 	// goes out (now) so a recurring day-of announcement shows the current
 	// occurrence. A no-op when the flag is off. Mutates the local copy only.
@@ -868,7 +871,7 @@ func daysBetween(a, b time.Time) int {
 //
 // A role whose managed entry was deleted (or has no Discord ID) resolves to no
 // mention, so the announcement still posts - just without a tag.
-func (s *Server) announcementMention(a model.Announcement) (string, *discordAllowedMentions) {
+func (s *Server) announcementMention(ctx context.Context, a model.Announcement) (string, *discordAllowedMentions) {
 	mention := strings.TrimSpace(a.Mention)
 	switch {
 	case mention == "everyone":
@@ -878,7 +881,7 @@ func (s *Server) announcementMention(a model.Announcement) (string, *discordAllo
 		if err != nil || id <= 0 {
 			return "", nil
 		}
-		role, err := s.store.GetAnnouncementRole(id)
+		role, err := s.store.GetAnnouncementRole(ctx, id)
 		if err != nil || role == nil || strings.TrimSpace(role.RoleID) == "" {
 			return "", nil
 		}
@@ -1093,8 +1096,7 @@ func tightenLists(s string) string {
 	lines := strings.Split(s, "\n")
 	out := make([]string, 0, len(lines))
 	inList := false
-	for i := 0; i < len(lines); i++ {
-		line := lines[i]
+	for i, line := range lines {
 		if strings.TrimSpace(line) == "" {
 			// Find the next non-blank line to see if the list continues.
 			next := ""
@@ -1180,7 +1182,7 @@ func nextAnnouncementOccurrence(a model.Announcement, after time.Time) string {
 			return ""
 		}
 		// Scan up to 8 days so we also catch "same weekday, but later today".
-		for i := 0; i <= 7; i++ {
+		for i := range 8 {
 			d := after.AddDate(0, 0, i)
 			if days[int(d.Weekday())] {
 				cand := time.Date(d.Year(), d.Month(), d.Day(), h, m, 0, 0, loc)
@@ -1197,7 +1199,7 @@ func nextAnnouncementOccurrence(a model.Announcement, after time.Time) string {
 			return ""
 		}
 		// Walk forward month by month until an occurrence lands after `after`.
-		for i := 0; i < 13; i++ {
+		for i := range 13 {
 			base := time.Date(after.Year(), after.Month(), 1, 0, 0, 0, 0, loc).AddDate(0, i, 0)
 			cand := nthWeekdayOfMonth(base.Year(), base.Month(), wd, a.ScheduleWeekOfMonth, h, m, loc)
 			if !cand.IsZero() && cand.After(after) {
@@ -1308,9 +1310,9 @@ func (s *Server) clearPostFailures(id int64) {
 }
 
 func (s *Server) postDueAnnouncements(ctx context.Context) {
-	due, err := s.store.DueAnnouncements(time.Now())
+	due, err := s.store.DueAnnouncements(ctx, time.Now())
 	if err != nil {
-		slog.Error("announcement scheduler: load due", "error", err)
+		slog.Log(ctx, errorLevel(err), "announcement scheduler: load due", "error", err)
 		return
 	}
 	if len(due) > 0 {
@@ -1327,7 +1329,7 @@ func (s *Server) postDueAnnouncements(ctx context.Context) {
 			// out this occurrence and the next, rather than the whole run at once.
 			remaining := a.SkipCount - 1
 			next, active := s.advanceCursor(a)
-			applied, err := s.store.AdvanceAnnouncement(a.ID, a.NextPostAt, next, active, remaining)
+			applied, err := s.store.AdvanceAnnouncement(ctx, a.ID, a.NextPostAt, next, active, remaining)
 			if err != nil {
 				slog.Error("announcement scheduler: consume skip", "id", a.ID, "error", err)
 				continue
@@ -1345,12 +1347,12 @@ func (s *Server) postDueAnnouncements(ctx context.Context) {
 				"next", next, "still_active", active, "skips_remaining", remaining)
 			continue
 		}
-		typ, _ := s.store.GetAnnouncementType(a.TypeID)
+		typ, _ := s.store.GetAnnouncementType(ctx, a.TypeID)
 		if typ == nil || strings.TrimSpace(typ.WebhookURL) == "" {
 			continue // no webhook yet; try again next tick
 		}
 		target := webhookTarget{Kind: "announcement_scheduled", Name: a.Title}
-		err := s.postDiscordWebhook(ctx, target, typ.WebhookURL, s.buildAnnouncementMessage(a))
+		err := s.postDiscordWebhook(ctx, target, typ.WebhookURL, s.buildAnnouncementMessage(ctx, a))
 		if err != nil && !errors.Is(err, errWebhookAmbiguous) {
 			// Definitely not delivered (HTTP error status, incl. 429 rate limit):
 			// leave the cursor where it is so the next tick retries - but only up to a
@@ -1366,7 +1368,7 @@ func (s *Server) postDueAnnouncements(ctx context.Context) {
 				continue
 			}
 			next, active := s.advanceCursor(a)
-			if applied, err := s.store.AdvanceAnnouncement(a.ID, a.NextPostAt, next, active, a.SkipCount); err != nil || !applied {
+			if applied, err := s.store.AdvanceAnnouncement(ctx, a.ID, a.NextPostAt, next, active, a.SkipCount); err != nil || !applied {
 				slog.Error("announcement scheduler: give up on occurrence",
 					"id", a.ID, "error", err, "applied", applied)
 				continue
@@ -1383,7 +1385,9 @@ func (s *Server) postDueAnnouncements(ctx context.Context) {
 		// resume at their next occurrence; a one-time post that truly failed needs
 		// a manual resend.
 		next, active := s.advanceCursor(a)
-		if mErr := s.markPostedWithRetry(a.ID, a.NextPostAt, next, active); mErr != nil {
+		// Detached: the post has gone out, so the cursor must move even when
+		// shutdown canceled ctx during it - or the next boot posts it again.
+		if mErr := s.markPostedWithRetry(context.WithoutCancel(ctx), a.ID, a.NextPostAt, next, active); mErr != nil {
 			// The Discord post already went out, but the cursor could not be advanced
 			// even after retrying - the announcement is still "due", so the next tick
 			// would re-post it (a duplicate @everyone blast). Log loudly; a persistent
@@ -1410,11 +1414,11 @@ func (s *Server) postDueAnnouncements(ctx context.Context) {
 // it means an admin edited the schedule during the post: their cursor stands, and
 // this returns nil rather than retrying, because retrying would only overwrite the
 // edit again. The message is already on Discord either way.
-func (s *Server) markPostedWithRetry(id int64, prevNextPostAt, nextPostAt string, active bool) error {
+func (s *Server) markPostedWithRetry(ctx context.Context, id int64, prevNextPostAt, nextPostAt string, active bool) error {
 	var err error
-	for attempt := 0; attempt < 3; attempt++ {
+	for range 3 {
 		var applied bool
-		if applied, err = s.store.MarkAnnouncementPosted(id, prevNextPostAt, nextPostAt, active); err == nil {
+		if applied, err = s.store.MarkAnnouncementPosted(ctx, id, prevNextPostAt, nextPostAt, active); err == nil {
 			if !applied {
 				slog.Info("announcement changed during its post; leaving the admin's cursor alone", "id", id)
 			}

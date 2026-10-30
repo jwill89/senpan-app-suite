@@ -2,6 +2,7 @@ package server
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -163,7 +164,7 @@ func (s *Server) handleReadingListsList(w http.ResponseWriter, r *http.Request) 
 	if !ok {
 		return
 	}
-	lists, err := s.store.ListReadingLists(club)
+	lists, err := s.store.ListReadingLists(r.Context(), club)
 	if err != nil {
 		writeInternalError(w, "list reading lists", err)
 		return
@@ -186,7 +187,7 @@ func (s *Server) handleReadingListDetail(w http.ResponseWriter, r *http.Request)
 		writeError(w, http.StatusBadRequest, "Invalid reading list ID")
 		return
 	}
-	list, err := s.store.GetReadingList(id)
+	list, err := s.store.GetReadingList(r.Context(), id)
 	if err != nil {
 		writeInternalError(w, "get reading list", err)
 		return
@@ -233,12 +234,12 @@ func (s *Server) handleReadingListCreate(w http.ResponseWriter, r *http.Request)
 		writeError(w, http.StatusBadRequest, "Title is required")
 		return
 	}
-	id, err := s.store.CreateReadingList(club, title)
+	id, err := s.store.CreateReadingList(r.Context(), club, title)
 	if err != nil {
 		writeInternalError(w, "create reading list", err)
 		return
 	}
-	list, err := s.store.GetReadingList(id)
+	list, err := s.store.GetReadingList(r.Context(), id)
 	if err != nil {
 		writeInternalError(w, "load created reading list", err)
 		return
@@ -261,7 +262,7 @@ func (s *Server) handleReadingListUpdate(w http.ResponseWriter, r *http.Request)
 	if !ok {
 		return
 	}
-	existing, err := s.store.GetReadingList(id)
+	existing, err := s.store.GetReadingList(r.Context(), id)
 	if err != nil {
 		writeInternalError(w, "get reading list", err)
 		return
@@ -281,7 +282,7 @@ func (s *Server) handleReadingListUpdate(w http.ResponseWriter, r *http.Request)
 		writeError(w, http.StatusBadRequest, "Title is required")
 		return
 	}
-	if err := s.store.UpdateReadingListTitle(id, title); err != nil {
+	if err := s.store.UpdateReadingListTitle(r.Context(), id, title); err != nil {
 		writeInternalError(w, "update reading list", err)
 		return
 	}
@@ -303,7 +304,7 @@ func (s *Server) handleReadingListDelete(w http.ResponseWriter, r *http.Request)
 	if !ok {
 		return
 	}
-	existing, err := s.store.GetReadingList(id)
+	existing, err := s.store.GetReadingList(r.Context(), id)
 	if err != nil {
 		writeInternalError(w, "get reading list", err)
 		return
@@ -320,12 +321,15 @@ func (s *Server) handleReadingListDelete(w http.ResponseWriter, r *http.Request)
 	for _, it := range existing.Items {
 		covers = append(covers, it.CoverImage)
 	}
-	if _, err := s.store.DeleteReadingList(id); err != nil {
+	if _, err := s.store.DeleteReadingList(r.Context(), id); err != nil {
 		writeInternalError(w, "delete reading list", err)
 		return
 	}
+	// The rows are gone; the file cleanup runs detached so a client that leaves
+	// now doesn't strand the covers on disk.
+	cleanup := context.WithoutCancel(r.Context())
 	for _, c := range covers {
-		s.removeBookclubCoverIfUnused(c)
+		s.removeBookclubCoverIfUnused(cleanup, c)
 	}
 	w.WriteHeader(http.StatusNoContent)
 }
@@ -351,7 +355,7 @@ func (s *Server) resolveReadingListParent(w http.ResponseWriter, r *http.Request
 	if !ok {
 		return 0, false
 	}
-	parent, err := s.store.GetReadingList(listID)
+	parent, err := s.store.GetReadingList(r.Context(), listID)
 	if err != nil {
 		writeInternalError(w, "get reading list", err)
 		return 0, false
@@ -388,7 +392,7 @@ func (s *Server) handleReadingListItemCreate(w http.ResponseWriter, r *http.Requ
 	it.ListID = listID
 	it.Title = title
 	it.Sources = sanitizeSources(it.Sources)
-	id, err := s.store.CreateReadingListItem(&it)
+	id, err := s.store.CreateReadingListItem(r.Context(), &it)
 	if err != nil {
 		writeInternalError(w, "create reading list item", err)
 		return
@@ -426,7 +430,7 @@ func (s *Server) handleReadingListItemUpdate(w http.ResponseWriter, r *http.Requ
 	it.ListID = listID
 	it.Title = title
 	it.Sources = sanitizeSources(it.Sources)
-	updated, err := s.store.UpdateReadingListItem(&it)
+	updated, err := s.store.UpdateReadingListItem(r.Context(), &it)
 	if err != nil {
 		writeInternalError(w, "update reading list item", err)
 		return
@@ -459,7 +463,7 @@ func (s *Server) handleReadingListItemDelete(w http.ResponseWriter, r *http.Requ
 	// Capture the cover URL before deleting so the file can be cleaned up after
 	// the row is gone - but only if no other item still references it.
 	var cover string
-	if list, err := s.store.GetReadingList(listID); err == nil && list != nil {
+	if list, err := s.store.GetReadingList(r.Context(), listID); err == nil && list != nil {
 		for _, it := range list.Items {
 			if it.ID == itemID {
 				cover = it.CoverImage
@@ -467,7 +471,7 @@ func (s *Server) handleReadingListItemDelete(w http.ResponseWriter, r *http.Requ
 			}
 		}
 	}
-	deleted, err := s.store.DeleteReadingListItem(listID, itemID)
+	deleted, err := s.store.DeleteReadingListItem(r.Context(), listID, itemID)
 	if err != nil {
 		writeInternalError(w, "delete reading list item", err)
 		return
@@ -478,7 +482,8 @@ func (s *Server) handleReadingListItemDelete(w http.ResponseWriter, r *http.Requ
 		writeError(w, http.StatusNotFound, "Reading list item not found")
 		return
 	}
-	s.removeBookclubCoverIfUnused(cover)
+	// Detached, like the list delete's cleanup: the row is gone either way.
+	s.removeBookclubCoverIfUnused(context.WithoutCancel(r.Context()), cover)
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -532,11 +537,11 @@ func (s *Server) siteBaseURL(r *http.Request) string {
 // app no longer rewrites upload names), so two items can share one file; call this
 // AFTER the owning item/list rows are deleted so the reference count reflects only
 // the remaining items. External (AniList) URLs are ignored by the inner removal.
-func (s *Server) removeBookclubCoverIfUnused(coverURL string) {
+func (s *Server) removeBookclubCoverIfUnused(ctx context.Context, coverURL string) {
 	if coverURL == "" {
 		return
 	}
-	if n, err := s.store.CountReadingListItemsByCover(coverURL); err != nil || n > 0 {
+	if n, err := s.store.CountReadingListItemsByCover(ctx, coverURL); err != nil || n > 0 {
 		return
 	}
 	s.removeUploadedBookclubImage(coverURL)
@@ -616,7 +621,7 @@ func (s *Server) handleBookclubLookup(w http.ResponseWriter, r *http.Request) {
 	if !s.requireAnyBookClub(w, r) {
 		return
 	}
-	endpoint := s.anilistURL()
+	endpoint := s.anilistURL(r.Context())
 	q := strings.TrimSpace(r.URL.Query().Get("q"))
 	idStr := strings.TrimSpace(r.URL.Query().Get("id"))
 
@@ -630,12 +635,12 @@ func (s *Server) handleBookclubLookup(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		var one *anilistMedia
-		one, err = fetchAniListByID(endpoint, id)
+		one, err = fetchAniListByID(r.Context(), endpoint, id)
 		if one != nil {
 			media = []anilistMedia{*one}
 		}
 	case q != "":
-		media, err = fetchAniListSearch(endpoint, q)
+		media, err = fetchAniListSearch(r.Context(), endpoint, q)
 	default:
 		writeError(w, http.StatusBadRequest, "Provide a search query (q) or an AniList id")
 		return
@@ -661,8 +666,8 @@ func (s *Server) handleBookclubLookup(w http.ResponseWriter, r *http.Request) {
 
 // anilistURL returns the configured AniList GraphQL endpoint (trimmed, no
 // trailing slash), falling back to the default.
-func (s *Server) anilistURL() string {
-	base, _ := s.store.GetSetting("anilist_api_url")
+func (s *Server) anilistURL(ctx context.Context) string {
+	base, _ := s.store.GetSetting(ctx, "anilist_api_url")
 	base = strings.TrimSpace(base)
 	// Defense in depth: the settings handler validates anilist_api_url against
 	// isAllowedAniListURL at save time, but a value written another way (a
@@ -676,9 +681,9 @@ func (s *Server) anilistURL() string {
 }
 
 // fetchAniListSearch runs a paged manga search and returns the media list.
-func fetchAniListSearch(endpoint, search string) ([]anilistMedia, error) {
+func fetchAniListSearch(ctx context.Context, endpoint, search string) ([]anilistMedia, error) {
 	query := `query ($search: String) { Page(page: 1, perPage: 10) { media(search: $search, type: MANGA, sort: SEARCH_MATCH) { ` + anilistMediaFields + ` } } }`
-	body, err := anilistPost(endpoint, query, map[string]any{"search": search})
+	body, err := anilistPost(ctx, endpoint, query, map[string]any{"search": search})
 	if err != nil {
 		return nil, err
 	}
@@ -702,9 +707,9 @@ func fetchAniListSearch(endpoint, search string) ([]anilistMedia, error) {
 }
 
 // fetchAniListByID fetches a single manga title by AniList id.
-func fetchAniListByID(endpoint string, id int) (*anilistMedia, error) {
+func fetchAniListByID(ctx context.Context, endpoint string, id int) (*anilistMedia, error) {
 	query := `query ($id: Int) { Media(id: $id, type: MANGA) { ` + anilistMediaFields + ` } }`
-	body, err := anilistPost(endpoint, query, map[string]any{"id": id})
+	body, err := anilistPost(ctx, endpoint, query, map[string]any{"id": id})
 	if err != nil {
 		return nil, err
 	}
@@ -726,13 +731,13 @@ func fetchAniListByID(endpoint string, id int) (*anilistMedia, error) {
 }
 
 // anilistPost executes a GraphQL POST and returns the response body, capping
-// the read size.
-func anilistPost(endpoint, query string, variables map[string]any) ([]byte, error) {
+// the read size. ctx is the admin's request, so a lookup they abandon stops too.
+func anilistPost(ctx context.Context, endpoint, query string, variables map[string]any) ([]byte, error) {
 	payload, err := json.Marshal(map[string]any{"query": query, "variables": variables})
 	if err != nil {
 		return nil, fmt.Errorf("encode query")
 	}
-	req, err := http.NewRequest(http.MethodPost, endpoint, bytes.NewReader(payload))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(payload))
 	if err != nil {
 		return nil, fmt.Errorf("build request")
 	}
@@ -755,7 +760,8 @@ func anilistPost(endpoint, query string, variables map[string]any) ([]byte, erro
 		}
 		return nil, fmt.Errorf("request failed (%w)", err)
 	}
-	defer resp.Body.Close()
+	// Read below: closing it has nothing to report.
+	defer func() { _ = resp.Body.Close() }()
 	body, _ := io.ReadAll(io.LimitReader(resp.Body, 2<<20)) // 2 MB cap
 	slog.Debug("anilist response", "status", resp.StatusCode, "bytes", len(body))
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
@@ -887,7 +893,7 @@ func (s *Server) handlePublishReadingList(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	list, err := s.store.GetReadingList(id)
+	list, err := s.store.GetReadingList(r.Context(), id)
 	if err != nil {
 		writeInternalError(w, "get reading list for publish", err)
 		return
@@ -903,7 +909,7 @@ func (s *Server) handlePublishReadingList(w http.ResponseWriter, r *http.Request
 	}
 
 	// Each book club publishes to its own Discord channel (per-club webhook).
-	webhook, _ := s.store.GetSetting(webhookSettingKey(list.ClubSlug))
+	webhook, _ := s.store.GetSetting(r.Context(), webhookSettingKey(list.ClubSlug))
 	webhook = strings.TrimSpace(webhook)
 	if webhook == "" {
 		writeError(w, http.StatusBadRequest, "No Discord webhook configured for this book club. Set it under System -> Settings.")

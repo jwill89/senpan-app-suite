@@ -300,6 +300,7 @@ function fmtPasskeyTime(ts: string): string {
       <div class="flex gap-sm">
         <button
           v-if="isNarrow"
+          type="button"
           class="btn-neutral btn-sm admin-nav-toggle"
           :aria-expanded="navOpen"
           aria-label="Toggle navigation menu"
@@ -318,6 +319,7 @@ function fmtPasskeyTime(ts: string): string {
 
     <div class="admin-layout">
       <!-- Backdrop behind the mobile drawer; only exists in the narrow drawer mode. -->
+      <!-- eslint-disable-next-line vuejs-accessibility/click-events-have-key-events, vuejs-accessibility/no-static-element-interactions -- a tap-outside backdrop; the menu toggle in the top bar is the keyboard way to close the drawer -->
       <div v-if="isNarrow && navOpen" class="admin-nav-backdrop" @click="navOpen = false"></div>
 
       <AdminSidebar
@@ -546,41 +548,51 @@ function fmtPasskeyTime(ts: string): string {
   align-items: center;
   gap: 10px;
 }
+
 .topbar-user {
   font-size: 0.85rem;
 }
+
 .modal-actions {
   display: flex;
   gap: 12px;
   justify-content: flex-end;
   margin-top: 16px;
 }
+
 .access-token-intro {
   font-size: 0.9rem;
 }
+
 .access-token-note {
   font-size: 0.85rem;
 }
+
 .access-token-reveal {
   display: flex;
   gap: 8px;
 }
+
 .access-token-input {
   flex: 1;
   font-family: monospace;
 }
+
 .access-token-meta {
   display: grid;
   grid-template-columns: auto 1fr;
   gap: 4px 16px;
   margin: 0 0 12px;
 }
+
 .access-token-meta dt {
   font-size: 0.85rem;
 }
+
 .access-token-meta dd {
   margin: 0;
 }
+
 .passkey-list {
   list-style: none;
   margin: 0 0 16px;
@@ -589,6 +601,7 @@ function fmtPasskeyTime(ts: string): string {
   flex-direction: column;
   gap: 8px;
 }
+
 .passkey-row {
   display: flex;
   align-items: center;
@@ -598,12 +611,14 @@ function fmtPasskeyTime(ts: string): string {
   border-radius: var(--radius);
   background: color-mix(in srgb, var(--text) 6%, transparent);
 }
+
 .passkey-info {
   display: flex;
   flex-direction: column;
   gap: 2px;
   min-width: 0;
 }
+
 .passkey-add {
   margin-top: 8px;
 }

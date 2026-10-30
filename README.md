@@ -89,14 +89,14 @@ partial deploy can't silently leave the halves incompatible.
 | `npm run test:watch`         | Vitest watch mode                                  |
 | `npm run test:coverage`      | Tests with v8 coverage                             |
 | `npm run typecheck`          | `vue-tsc` type check                               |
-| `npm run lint` / `lint:check`| ESLint with / without `--fix`                      |
+| `npm run lint` / `lint:check`| ESLint + Stylelint with / without `--fix`          |
 | `npm run build`              | Type-check + production build -> `frontend/dist/`   |
 
 | Command (in `backend/`)      | Purpose                          |
 | ---------------------------- | -------------------------------- |
 | `go build ./...`             | Build the backend                |
 | `go vet ./...`               | Static analysis                  |
-| `golangci-lint run ./...`    | Lint (config in `.golangci.yml`) |
+| `go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.15.0 run ./...` | Lint (config in `.golangci.yml`) |
 | `go test ./...`              | Backend tests                    |
 | `go run ./cmd/openapi-gen`   | Regenerate `openapi.yaml` from the model |
 

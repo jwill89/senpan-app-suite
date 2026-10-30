@@ -9,7 +9,7 @@ import (
 func TestReadingListCRUD(t *testing.T) {
 	s := newTestStore(t)
 
-	id, err := s.CreateReadingList("yaoi", "Summer Picks")
+	id, err := s.CreateReadingList(t.Context(), "yaoi", "Summer Picks")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -17,7 +17,7 @@ func TestReadingListCRUD(t *testing.T) {
 		t.Fatalf("CreateReadingList id = %d; want > 0", id)
 	}
 
-	lists, err := s.ListReadingLists("yaoi")
+	lists, err := s.ListReadingLists(t.Context(), "yaoi")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -26,14 +26,14 @@ func TestReadingListCRUD(t *testing.T) {
 	}
 
 	// A different club must not see this list.
-	if other, err := s.ListReadingLists("other"); err != nil || len(other) != 0 {
+	if other, err := s.ListReadingLists(t.Context(), "other"); err != nil || len(other) != 0 {
 		t.Fatalf("ListReadingLists(other) = %+v, err=%v; want empty", other, err)
 	}
 
-	if err := s.UpdateReadingListTitle(id, "Winter Picks"); err != nil {
+	if err := s.UpdateReadingListTitle(t.Context(), id, "Winter Picks"); err != nil {
 		t.Fatal(err)
 	}
-	list, err := s.GetReadingList(id)
+	list, err := s.GetReadingList(t.Context(), id)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -44,11 +44,11 @@ func TestReadingListCRUD(t *testing.T) {
 		t.Error("Items should be a non-nil (empty) slice")
 	}
 
-	deleted, err := s.DeleteReadingList(id)
+	deleted, err := s.DeleteReadingList(t.Context(), id)
 	if err != nil || !deleted {
 		t.Fatalf("DeleteReadingList = %v, err=%v; want true", deleted, err)
 	}
-	if got, _ := s.GetReadingList(id); got != nil {
+	if got, _ := s.GetReadingList(t.Context(), id); got != nil {
 		t.Error("expected nil after delete")
 	}
 }
@@ -56,7 +56,7 @@ func TestReadingListCRUD(t *testing.T) {
 func TestReadingListItemsRoundTrip(t *testing.T) {
 	s := newTestStore(t)
 
-	listID, err := s.CreateReadingList("yaoi", "My List")
+	listID, err := s.CreateReadingList(t.Context(), "yaoi", "My List")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -76,17 +76,17 @@ func TestReadingListItemsRoundTrip(t *testing.T) {
 			{Title: "Official", URL: "https://example.com/buy"},
 		},
 	}
-	itemID, err := s.CreateReadingListItem(item)
+	itemID, err := s.CreateReadingListItem(t.Context(), item)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	// Add a second item to verify ordering by sort_order.
-	if _, err := s.CreateReadingListItem(&model.ReadingListItem{ListID: listID, Title: "Second"}); err != nil {
+	if _, err := s.CreateReadingListItem(t.Context(), &model.ReadingListItem{ListID: listID, Title: "Second"}); err != nil {
 		t.Fatal(err)
 	}
 
-	got, err := s.GetReadingList(listID)
+	got, err := s.GetReadingList(t.Context(), listID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -111,20 +111,20 @@ func TestReadingListItemsRoundTrip(t *testing.T) {
 	// Update the first item.
 	first.Title = "Renamed"
 	first.Sources = []model.ReadingListSource{{Title: "Only", URL: "https://x.test"}}
-	if updated, err := s.UpdateReadingListItem(&first); err != nil || !updated {
+	if updated, err := s.UpdateReadingListItem(t.Context(), &first); err != nil || !updated {
 		t.Fatalf("UpdateReadingListItem = %v, err=%v", updated, err)
 	}
-	got2, _ := s.GetReadingList(listID)
+	got2, _ := s.GetReadingList(t.Context(), listID)
 	if got2.Items[0].Title != "Renamed" || len(got2.Items[0].Sources) != 1 {
 		t.Fatalf("update failed: %+v", got2.Items[0])
 	}
 
 	// Delete the first item.
-	deleted, err := s.DeleteReadingListItem(listID, itemID)
+	deleted, err := s.DeleteReadingListItem(t.Context(), listID, itemID)
 	if err != nil || !deleted {
 		t.Fatalf("DeleteReadingListItem = %v, err=%v", deleted, err)
 	}
-	got3, _ := s.GetReadingList(listID)
+	got3, _ := s.GetReadingList(t.Context(), listID)
 	if len(got3.Items) != 1 || got3.Items[0].Title != "Second" {
 		t.Fatalf("after delete items = %+v; want only 'Second'", got3.Items)
 	}
@@ -132,16 +132,16 @@ func TestReadingListItemsRoundTrip(t *testing.T) {
 
 func TestDeleteReadingListCascadesItems(t *testing.T) {
 	s := newTestStore(t)
-	listID, _ := s.CreateReadingList("yaoi", "L")
-	if _, err := s.CreateReadingListItem(&model.ReadingListItem{ListID: listID, Title: "A"}); err != nil {
+	listID, _ := s.CreateReadingList(t.Context(), "yaoi", "L")
+	if _, err := s.CreateReadingListItem(t.Context(), &model.ReadingListItem{ListID: listID, Title: "A"}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.DeleteReadingList(listID); err != nil {
+	if _, err := s.DeleteReadingList(t.Context(), listID); err != nil {
 		t.Fatal(err)
 	}
 	// Recreate a list with a new id and confirm no stray items leak in.
-	newID, _ := s.CreateReadingList("yaoi", "L2")
-	got, _ := s.GetReadingList(newID)
+	newID, _ := s.CreateReadingList(t.Context(), "yaoi", "L2")
+	got, _ := s.GetReadingList(t.Context(), newID)
 	if len(got.Items) != 0 {
 		t.Errorf("items leaked across lists: %+v", got.Items)
 	}
@@ -152,24 +152,24 @@ func TestDeleteReadingListCascadesItems(t *testing.T) {
 // only be deleted once nothing references it.
 func TestCountReadingListItemsByCover(t *testing.T) {
 	s := newTestStore(t)
-	listID, _ := s.CreateReadingList("yaoi", "L")
+	listID, _ := s.CreateReadingList(t.Context(), "yaoi", "L")
 	const shared = "https://host/images/bookclub/cat.jpg"
-	a, _ := s.CreateReadingListItem(&model.ReadingListItem{ListID: listID, Title: "A", CoverImage: shared})
-	if _, err := s.CreateReadingListItem(&model.ReadingListItem{ListID: listID, Title: "B", CoverImage: shared}); err != nil {
+	a, _ := s.CreateReadingListItem(t.Context(), &model.ReadingListItem{ListID: listID, Title: "A", CoverImage: shared})
+	if _, err := s.CreateReadingListItem(t.Context(), &model.ReadingListItem{ListID: listID, Title: "B", CoverImage: shared}); err != nil {
 		t.Fatal(err)
 	}
 
-	if n, err := s.CountReadingListItemsByCover(shared); err != nil || n != 2 {
+	if n, err := s.CountReadingListItemsByCover(t.Context(), shared); err != nil || n != 2 {
 		t.Fatalf("CountReadingListItemsByCover = %d, %v; want 2, nil", n, err)
 	}
 	// After deleting one item the shared cover is still referenced by the other.
-	if _, err := s.DeleteReadingListItem(listID, a); err != nil {
+	if _, err := s.DeleteReadingListItem(t.Context(), listID, a); err != nil {
 		t.Fatal(err)
 	}
-	if n, _ := s.CountReadingListItemsByCover(shared); n != 1 {
+	if n, _ := s.CountReadingListItemsByCover(t.Context(), shared); n != 1 {
 		t.Fatalf("after one delete: count = %d; want 1 (file must NOT be removed yet)", n)
 	}
-	if n, _ := s.CountReadingListItemsByCover("https://host/images/bookclub/none.jpg"); n != 0 {
+	if n, _ := s.CountReadingListItemsByCover(t.Context(), "https://host/images/bookclub/none.jpg"); n != 0 {
 		t.Fatalf("unreferenced cover: count = %d; want 0", n)
 	}
 }

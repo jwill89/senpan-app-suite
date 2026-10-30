@@ -8,12 +8,12 @@
  * Tokens are single-use and expire, so the parent should call the exposed
  * `reset()` after a failed login (or on `expired`) to issue a fresh one.
  */
-import { onBeforeUnmount, onMounted, ref } from 'vue'
+import { onBeforeUnmount, onMounted, useTemplateRef } from 'vue'
 
 const props = defineProps<{ siteKey: string }>()
 const emit = defineEmits<{ verified: [token: string]; expired: []; error: [] }>()
 
-const host = ref<HTMLDivElement | null>(null)
+const host = useTemplateRef<HTMLDivElement>('host')
 let widgetId: string | undefined
 
 const SCRIPT_SRC = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit'

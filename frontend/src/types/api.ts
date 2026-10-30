@@ -176,6 +176,10 @@ export type {
   PublicStallRaffle,
   PublicFestivalStall,
   PublicFestivalMap,
+  FestivalDashboard,
+  FestivalDashboardRally,
+  FestivalDashboardGarapon,
+  FestivalDashboardRaffle,
   // Book club / reading lists
   ReadingListsResponse,
   ReadingListDetailResponse,

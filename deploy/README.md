@@ -149,16 +149,16 @@ ps -o user= -C app-suite                         # not root
 
 - **Admin (and pre-existing staff) passwords.** Rotate the admin password to a
   fresh high-entropy value via the app's change-password flow, plus any staff
-  accounts that predate a known exposure. Rotating the password alone does **not**
-  invalidate already-issued session cookies - the session secret does (below).
-- **`APPSUITE_SESSION_SECRET`.** When unset, the server generates a *random*
-  secret on every boot, so all sessions drop on each restart and there is no
-  operator-controlled secret to rotate. Set it explicitly in the unit's
-  `Environment=` (or an `EnvironmentFile=`) to a stable high-entropy value, and
-  rotate it (to a **new** value) in the same maintenance window as a password
-  rotation - changing the secret is what forcibly logs out every outstanding
-  session. The FFXIV plugin uses PAT bearer tokens, not the admin cookie, so it
-  is unaffected.
+  accounts that predate a known exposure. A password change or reset logs that
+  account's other sessions out (each session records the account's password
+  epoch) and revokes its personal-access token.
+- **Sessions.** Sessions are held in the server's memory, so restarting the
+  service (`systemctl restart senpan`) ends every session at once - that is how to
+  force every browser to log in again. There is no session secret to set or
+  rotate: an `APPSUITE_SESSION_SECRET` left in an env file by an earlier version
+  is ignored, and the old `-secret` flag is gone (a unit still passing it fails to
+  start, so take it off `ExecStart` before deploying). The FFXIV plugin uses PAT
+  bearer tokens, not the admin cookie, so it is unaffected.
 - **`APPSUITE_TURNSTILE_SECRET` / `APPSUITE_TURNSTILE_SITEKEY`.** Configure the
   Cloudflare Turnstile pair (also settable as `-turnstile-secret`/`-turnstile-sitekey`
   flags) to enable the bot check on the public POST paths - login, registration,
@@ -168,7 +168,7 @@ ps -o user= -C app-suite                         # not root
   not a lockout. The **secret** is sensitive; the **sitekey** is public (it is
   served to browsers via `GET /api/config`). Keep the secret out of the unit's
   inline `Environment=` (visible via `systemctl show` / `/proc/<pid>/environ`) -
-  put both, alongside `APPSUITE_SESSION_SECRET`, in a root-owned `chmod 600` file
+  put both in a root-owned `chmod 600` file
   loaded with `EnvironmentFile=-/etc/senpan/senpan.env` (see the commented block in
   `deploy/senpan.service`). Rotate the secret from the Cloudflare dashboard and
   update the env file.

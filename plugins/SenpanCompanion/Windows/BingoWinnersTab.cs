@@ -1,6 +1,6 @@
 using System;
 using System.Collections.Generic;
-using System.Numerics;
+using System.Globalization;
 using System.Text.Json;
 using System.Threading.Tasks;
 using Dalamud.Bindings.ImGui;
@@ -38,11 +38,11 @@ internal sealed class BingoWinnersTab : TabBase
 
     public void Draw()
     {
-        DrawStatusLine();
+        this.DrawStatusLine();
 
         Ui.Section(FontAwesomeIcon.Trophy, "Winners log");
         if (Ui.Button("Refresh##winlog"))
-            Run(LoadAsync);
+            this.Run(this.LoadAsync);
         ImGui.SameLine();
         ImGui.TextDisabled(this.total > this.entries.Count
             ? $"showing {this.entries.Count} of {this.total}"
@@ -56,7 +56,9 @@ internal sealed class BingoWinnersTab : TabBase
 
         if (!ImGui.BeginTable("winlog", 5,
                 ImGuiTableFlags.Borders | ImGuiTableFlags.RowBg | ImGuiTableFlags.ScrollY | ImGuiTableFlags.Resizable))
+        {
             return;
+        }
 
         ImGui.TableSetupColumn("When", ImGuiTableColumnFlags.WidthFixed, 150);
         ImGui.TableSetupColumn("Player");
@@ -80,10 +82,10 @@ internal sealed class BingoWinnersTab : TabBase
             if (Ui.DangerIconButton($"del{e.Id}", FontAwesomeIcon.Trash, "Delete entry"))
             {
                 var id = e.Id;
-                Run(async () =>
+                this.Run(async () =>
                 {
                     await this.api.DeleteWinnersLogEntryAsync(id);
-                    await LoadAsync();
+                    await this.LoadAsync();
                 });
             }
         }
@@ -97,7 +99,7 @@ internal sealed class BingoWinnersTab : TabBase
             return "-";
         var normalized = ts.Contains('T') ? ts : ts.Replace(' ', 'T') + "Z";
         return DateTimeOffset.TryParse(normalized, out var dto)
-            ? dto.ToLocalTime().ToString("yyyy-MM-dd HH:mm")
+            ? dto.ToLocalTime().ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture)
             : ts;
     }
 

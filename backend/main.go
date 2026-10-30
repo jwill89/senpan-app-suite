@@ -5,8 +5,6 @@ package main
 
 import (
 	"context"
-	"crypto/rand"
-	"encoding/base64"
 	"errors"
 	"flag"
 	"fmt"
@@ -41,7 +39,6 @@ func run() error {
 	addr := flag.String("addr", ":8080", "HTTP listen address")
 	dbPath := flag.String("db", "/opt/app-suite/data/database.sqlite", "SQLite database path")
 	webRoot := flag.String("webroot", "/var/www/www.yoursite.com", "Web root directory for static assets (e.g. image uploads)")
-	secret := flag.String("secret", "", "Session cookie secret (env APPSUITE_SESSION_SECRET or random if empty)")
 	corsOrigins := flag.String("cors-origins", "", "Comma-separated CORS allowlist of cross-origin sites (env APPSUITE_CORS_ORIGINS; empty = same-origin only, no CORS headers)")
 	turnstileSecret := flag.String("turnstile-secret", "", "Cloudflare Turnstile secret key (env APPSUITE_TURNSTILE_SECRET; empty = login bot check disabled)")
 	turnstileSiteKey := flag.String("turnstile-sitekey", "", "Cloudflare Turnstile public site key (env APPSUITE_TURNSTILE_SITEKEY)")
@@ -56,7 +53,7 @@ func run() error {
 	// non-Linux box should pass -log-file="" to avoid creating a /var/log tree.
 	logCloser, logErr := logging.Setup(*logFile, slog.LevelInfo)
 	if logCloser != nil {
-		defer logCloser.Close()
+		defer func() { _ = logCloser.Close() }() // at exit: the log is where a failure would go
 	}
 	if logErr != nil {
 		slog.Warn("file logging disabled; using stdout only", "path", *logFile, "error", logErr)
@@ -73,27 +70,26 @@ func run() error {
 		allowedOrigins = strings.Split(originsCSV, ",")
 	}
 
-	// Session secret: flag > env > random
-	finalSecret := *secret
-	if finalSecret == "" {
-		finalSecret = os.Getenv("APPSUITE_SESSION_SECRET")
-	}
-	if finalSecret == "" {
-		// Generate a secure random 32-byte secret
-		b := make([]byte, 32)
-		_, err := rand.Read(b)
-		if err != nil {
-			return fmt.Errorf("generate random session secret: %w", err)
-		}
-		finalSecret = base64.RawURLEncoding.EncodeToString(b)
-		slog.Warn("No session secret provided; generated random secret (sessions will be invalidated on restart)")
-	}
+	// The process context: canceled by SIGINT/SIGTERM, or by run itself when the
+	// server fails, so everything started under it - the migrations below, then the
+	// background loops - stops on either. Created before the database opens so a
+	// signal that lands mid-migration stops the migration between statements rather
+	// than killing the process outright. Until stopSignals runs at exit, a second
+	// signal is swallowed rather than killing the graceful shutdown part-way, as before.
+	sigCtx, stopSignals := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stopSignals()
+	ctx, cancel := context.WithCancel(sigCtx)
+	defer cancel()
 
-	db, err := store.New(*dbPath)
+	db, err := store.New(ctx, *dbPath)
 	if err != nil {
 		return fmt.Errorf("open database: %w", err)
 	}
-	defer db.Close()
+	defer func() {
+		if err := db.Close(); err != nil {
+			slog.Error("close database", "error", err)
+		}
+	}()
 
 	// Cloudflare Turnstile login bot check: flag > env. Disabled when no secret.
 	tsSecret := *turnstileSecret
@@ -106,7 +102,7 @@ func run() error {
 	}
 
 	hub := ws.NewHub()
-	srv := server.New(db, hub, finalSecret, *webRoot, allowedOrigins)
+	srv := server.New(ctx, db, hub, *webRoot, allowedOrigins)
 	srv.SetTurnstile(tsSecret, tsSiteKey)
 	srv.SetLogFile(*logFile) // GET /api/logs tails this file
 
@@ -162,16 +158,14 @@ func run() error {
 		IdleTimeout:       120 * time.Second,
 	}
 
-	// Background scheduler: posts due announcement embeds to Discord. Tied to a
-	// context cancelled on shutdown so the goroutine exits cleanly. schedDone is
-	// closed when it has fully returned, so shutdown can wait for an in-flight
-	// sweep before closing the DB.
-	schedCtx, cancelSched := context.WithCancel(context.Background())
-	defer cancelSched()
+	// Background scheduler: posts due announcement embeds to Discord. Runs under the
+	// process context, canceled on shutdown, so the goroutine exits cleanly.
+	// schedDone is closed when it has fully returned, so shutdown can wait for an
+	// in-flight sweep before closing the DB.
 	schedDone := make(chan struct{})
 	go func() {
 		defer close(schedDone)
-		srv.RunAnnouncementScheduler(schedCtx)
+		srv.RunAnnouncementScheduler(ctx)
 	}()
 
 	// Automatic bingo-draw scheduler: draws a number on the admin-chosen interval
@@ -180,7 +174,7 @@ func run() error {
 	autoDone := make(chan struct{})
 	go func() {
 		defer close(autoDone)
-		srv.RunAutoDrawScheduler(schedCtx)
+		srv.RunAutoDrawScheduler(ctx)
 	}()
 
 	// Tea-room lock scheduler: unlocks rooms whose set expiry has passed and tells
@@ -189,12 +183,8 @@ func run() error {
 	roomLockDone := make(chan struct{})
 	go func() {
 		defer close(roomLockDone)
-		srv.RunTeaRoomLockScheduler(schedCtx)
+		srv.RunTeaRoomLockScheduler(ctx)
 	}()
-
-	// Graceful shutdown: listen for SIGINT/SIGTERM.
-	shutdown := make(chan os.Signal, 1)
-	signal.Notify(shutdown, os.Interrupt, syscall.SIGTERM)
 
 	// A failed ListenAndServe (e.g. the port is already in use) must run the SAME
 	// graceful-shutdown path below rather than exiting on the spot - otherwise the
@@ -214,17 +204,17 @@ func run() error {
 	// backend that could never start sit there looking healthy.
 	var fatal error
 	select {
-	case <-shutdown:
+	case <-ctx.Done():
 		slog.Info("shutdown signal received, shutting down gracefully...")
 	case err := <-serverErr:
 		slog.Error("server failed, shutting down", "error", err)
 		fatal = err
 	}
-	cancelSched() // stop the background announcement scheduler
+	cancel() // stop the background loops
 
 	// Give in-flight requests 10 seconds to complete.
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
+	shutdownCtx, cancelShutdown := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancelShutdown()
 
 	// Wait for the announcement scheduler to finish any in-flight sweep before
 	// the deferred db.Close(): a Discord post that already succeeded must get its
@@ -232,7 +222,7 @@ func run() error {
 	// Bounded by the shutdown deadline so a hung post can't block forever.
 	select {
 	case <-schedDone:
-	case <-ctx.Done():
+	case <-shutdownCtx.Done():
 		slog.Warn("announcement scheduler did not stop within the shutdown deadline")
 	}
 
@@ -240,7 +230,7 @@ func run() error {
 	// finishes writing before db.Close(). Bounded by the same shutdown deadline.
 	select {
 	case <-autoDone:
-	case <-ctx.Done():
+	case <-shutdownCtx.Done():
 		slog.Warn("auto-draw scheduler did not stop within the shutdown deadline")
 	}
 
@@ -248,15 +238,15 @@ func run() error {
 	// interrupted part-way by db.Close(). Bounded by the same shutdown deadline.
 	select {
 	case <-roomLockDone:
-	case <-ctx.Done():
+	case <-shutdownCtx.Done():
 		slog.Warn("tea-room lock scheduler did not stop within the shutdown deadline")
 	}
 
 	// Close all WebSocket connections first.
-	hub.Shutdown(ctx)
+	hub.Shutdown(shutdownCtx)
 
 	// Then shut down the HTTP server.
-	if err := httpServer.Shutdown(ctx); err != nil {
+	if err := httpServer.Shutdown(shutdownCtx); err != nil {
 		slog.Error("HTTP server shutdown error", "error", err)
 	}
 

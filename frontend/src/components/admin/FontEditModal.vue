@@ -58,7 +58,7 @@ watch(
     if (!f) return
     // Only reset when the target font changes (not on every list refresh, or
     // typing would be clobbered by unrelated reloads) - except the first run.
-    if (old && old.base === f.base) return
+    if (old?.base === f.base) return
     familyDraft.value = f.family === f.base ? '' : f.family
     serveDraft.value = f.serve
     originsDraft.value = f.origins.slice()
@@ -203,7 +203,7 @@ function formatSize(bytes: number): string {
           placeholder="https://mysite.carrd.co"
           @keyup.enter="addOrigin"
         />
-        <button class="btn-action btn-sm" @click="addOrigin">
+        <button type="button" class="btn-action btn-sm" @click="addOrigin">
           <font-awesome-icon :icon="['fas', 'plus']" /> Add
         </button>
       </div>
@@ -211,7 +211,12 @@ function formatSize(bytes: number): string {
     <ul v-if="originsDraft.length" class="font-modal-origins">
       <li v-for="o in originsDraft" :key="o">
         <span class="code-highlight">{{ o }}</span>
-        <button class="btn-danger btn-sm" :title="`Remove ${o}`" @click="removeOrigin(o)">
+        <button
+          type="button"
+          class="btn-danger btn-sm"
+          :title="`Remove ${o}`"
+          @click="removeOrigin(o)"
+        >
           <font-awesome-icon :icon="['fas', 'trash']" /> Remove
         </button>
       </li>
@@ -232,8 +237,10 @@ function formatSize(bytes: number): string {
             @keyup.esc="cancelRename"
           />
           <span class="font-modal-file-actions">
-            <button class="btn-confirm btn-sm" @click="commitRename(v.name)">Save</button>
-            <button class="btn-neutral btn-sm" @click="cancelRename">Cancel</button>
+            <button type="button" class="btn-confirm btn-sm" @click="commitRename(v.name)">
+              Save
+            </button>
+            <button type="button" class="btn-neutral btn-sm" @click="cancelRename">Cancel</button>
           </span>
         </template>
         <template v-else>
@@ -246,6 +253,7 @@ function formatSize(bytes: number): string {
           </span>
           <span v-if="!v.converted" class="font-modal-file-actions">
             <button
+              type="button"
               class="btn-confirm btn-sm"
               title="Rename this file"
               @click="startRename(v.name)"
@@ -253,6 +261,7 @@ function formatSize(bytes: number): string {
               <font-awesome-icon :icon="['fas', 'pen-to-square']" /> Rename
             </button>
             <button
+              type="button"
               class="btn-danger btn-sm"
               title="Delete this file"
               @click="fonts.deleteFile(v.name)"
@@ -266,11 +275,11 @@ function formatSize(bytes: number): string {
     </ul>
 
     <div class="font-modal-actions">
-      <button class="btn-confirm" :disabled="!dirty || fonts.saving" @click="save">
+      <button type="button" class="btn-confirm" :disabled="!dirty || fonts.saving" @click="save">
         <LoadingSpinner v-if="fonts.saving" label="Saving..." />
         <template v-else>Save</template>
       </button>
-      <button class="btn-neutral" @click="emit('close')">Close</button>
+      <button type="button" class="btn-neutral" @click="emit('close')">Close</button>
     </div>
   </ModalOverlay>
 </template>
@@ -281,15 +290,18 @@ function formatSize(bytes: number): string {
   gap: 8px;
   align-items: center;
 }
+
 .font-modal-row input {
   flex: 1;
   min-width: 0;
 }
+
 .font-modal-origins {
   list-style: none;
   margin: 0 0 12px;
   padding: 0;
 }
+
 .font-modal-origins li {
   display: flex;
   align-items: center;
@@ -298,17 +310,21 @@ function formatSize(bytes: number): string {
   padding: 5px 0;
   border-bottom: 1px solid color-mix(in srgb, var(--highlight) 12%, transparent);
 }
+
 .font-modal-origins li:last-child {
   border-bottom: none;
 }
+
 .font-modal-files-heading {
   margin: 16px 0 6px;
 }
+
 .font-modal-files {
   list-style: none;
   margin: 0 0 16px;
   padding: 0;
 }
+
 .font-modal-files li {
   display: flex;
   align-items: center;
@@ -317,9 +333,11 @@ function formatSize(bytes: number): string {
   padding: 6px 0;
   border-bottom: 1px solid color-mix(in srgb, var(--highlight) 12%, transparent);
 }
+
 .font-modal-files li:last-child {
   border-bottom: none;
 }
+
 .font-modal-file {
   display: flex;
   flex-direction: column;
@@ -327,15 +345,18 @@ function formatSize(bytes: number): string {
   min-width: 0;
   overflow-wrap: anywhere;
 }
+
 .font-modal-file-actions {
   display: flex;
   gap: 6px;
   flex-shrink: 0;
 }
+
 .font-modal-rename {
   flex: 1;
   min-width: 0;
 }
+
 .font-modal-actions {
   display: flex;
   gap: 8px;

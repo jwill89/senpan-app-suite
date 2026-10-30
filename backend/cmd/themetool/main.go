@@ -12,6 +12,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"math"
@@ -210,19 +211,21 @@ func checkTheme(name string, tok map[string]string) (aaFail, aaaFail int) {
 		fmt.Printf("  %-24s %5.2f:1  AA %s AAA %s%s\n", p.label, ratio, mark(aaOK), mark(aaaOK), tag)
 	}
 	fmt.Printf("  -> AA fails: %d   AAA fails: %d\n", aaFail, aaaFail)
-	return
+	return aaFail, aaaFail
 }
 
 // openDB opens the database for a command. readOnly commands (dump, check) open
 // WITHOUT migrating: this tool is routinely pointed at a copy of production, and
 // migrating is irreversible - a `themetool dump` should never leave the file it
 // inspected on a different schema than it found it.
-func openDB(path string, readOnly bool) *store.Store {
-	openFn := store.New
+func openDB(ctx context.Context, path string, readOnly bool) *store.Store {
+	var st *store.Store
+	var err error
 	if readOnly {
-		openFn = store.OpenNoMigrate
+		st, err = store.OpenNoMigrate(path)
+	} else {
+		st, err = store.New(ctx, path)
 	}
-	st, err := openFn(path)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "open db:", err)
 		os.Exit(1)
@@ -230,15 +233,15 @@ func openDB(path string, readOnly bool) *store.Store {
 	return st
 }
 
-func loadThemes(st *store.Store) []map[string]string {
-	list, err := st.ListStyles()
+func loadThemes(ctx context.Context, st *store.Store) []map[string]string {
+	list, err := st.ListStyles(ctx)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "list:", err)
 		os.Exit(1)
 	}
 	var out []map[string]string
 	for _, s := range list {
-		full, _ := st.GetStyle(s.ID)
+		full, _ := st.GetStyle(ctx, s.ID)
 		m := map[string]string{"__id": strconv.FormatInt(s.ID, 10), "__name": s.Name}
 		for k, v := range full.Tokens {
 			m[k] = v
@@ -259,18 +262,29 @@ func tokensOnly(m map[string]string) map[string]string {
 }
 
 func main() {
+	os.Exit(run())
+}
+
+// run is the command itself, returning the exit code so its deferred close runs
+// before main exits.
+func run() int {
 	if len(os.Args) < 3 {
 		fmt.Fprintln(os.Stderr, "usage: themetool <dump|check|apply> <db> [changes.json]")
-		os.Exit(2)
+		return 2
 	}
 	cmd, dbPath := os.Args[1], os.Args[2]
+	ctx := context.Background()
 	// Only "apply" writes; everything else just reads and must not migrate.
-	st := openDB(dbPath, cmd != "apply")
-	defer st.Close()
+	st := openDB(ctx, dbPath, cmd != "apply")
+	defer func() {
+		if err := st.Close(); err != nil {
+			fmt.Fprintln(os.Stderr, "close db:", err)
+		}
+	}()
 
 	switch cmd {
 	case "dump":
-		for _, m := range loadThemes(st) {
+		for _, m := range loadThemes(ctx, st) {
 			b, _ := json.Marshal(tokensOnly(m))
 			fmt.Printf("[%s] %s\n%s\n\n", m["__id"], m["__name"], b)
 		}
@@ -279,7 +293,7 @@ func main() {
 		totalAA, totalAAA := 0, 0
 		aa, aaa := checkTheme("[default] (built-in)", defaultTokens)
 		totalAA, totalAAA = totalAA+aa, totalAAA+aaa
-		themes := loadThemes(st)
+		themes := loadThemes(ctx, st)
 		sort.Slice(themes, func(i, j int) bool { return themes[i]["__name"] < themes[j]["__name"] })
 		for _, m := range themes {
 			aa, aaa := checkTheme(fmt.Sprintf("[%s] %s", m["__id"], m["__name"]), tokensOnly(m))
@@ -293,7 +307,7 @@ func main() {
 		// seeded from this DB). Touches only `styles` - safe on the live prod DB.
 		esc := func(s string) string { return strings.ReplaceAll(s, "'", "''") }
 		fmt.Println("BEGIN IMMEDIATE;")
-		for _, m := range loadThemes(st) {
+		for _, m := range loadThemes(ctx, st) {
 			b, _ := json.Marshal(tokensOnly(m))
 			fmt.Printf("UPDATE styles SET tokens='%s' WHERE id=%s;\n", esc(string(b)), m["__id"])
 		}
@@ -302,12 +316,12 @@ func main() {
 	case "apply":
 		if len(os.Args) < 4 {
 			fmt.Fprintln(os.Stderr, "apply needs a changes.json path")
-			os.Exit(2)
+			return 2
 		}
-		raw, err := os.ReadFile(os.Args[3])
+		raw, err := os.ReadFile(os.Args[3]) //nolint:gosec // the operator's own changes file, named on their command line
 		if err != nil {
 			fmt.Fprintln(os.Stderr, "read changes:", err)
-			os.Exit(1)
+			return 1
 		}
 		var changes struct {
 			Update map[string]map[string]string `json:"update"`
@@ -320,11 +334,11 @@ func main() {
 		}
 		if err := json.Unmarshal(raw, &changes); err != nil {
 			fmt.Fprintln(os.Stderr, "parse changes:", err)
-			os.Exit(1)
+			return 1
 		}
 		for idStr, over := range changes.Update {
 			id, _ := strconv.ParseInt(idStr, 10, 64)
-			cur, err := st.GetStyle(id)
+			cur, err := st.GetStyle(ctx, id)
 			if err != nil || cur == nil {
 				fmt.Printf("update %s: not found\n", idStr)
 				continue
@@ -336,7 +350,7 @@ func main() {
 			for k, v := range over {
 				tok[k] = v
 			}
-			if err := st.UpdateStyle(id, cur.Name, tok, cur.BoardFlourish, cur.NumberFlourish, cur.IsPublic); err != nil {
+			if err := st.UpdateStyle(ctx, id, cur.Name, tok, cur.BoardFlourish, cur.NumberFlourish, cur.IsPublic); err != nil {
 				fmt.Printf("update %s: %v\n", idStr, err)
 				continue
 			}
@@ -344,7 +358,7 @@ func main() {
 		}
 		for _, c := range changes.Create {
 			tok := merged(c.Tokens) // fill any omitted token from defaults
-			id, err := st.CreateStyle(c.Name, tok, c.BoardFlourish, c.NumberFlourish, false)
+			id, err := st.CreateStyle(ctx, c.Name, tok, c.BoardFlourish, c.NumberFlourish, false)
 			if err != nil {
 				fmt.Printf("create %s: %v\n", c.Name, err)
 				continue
@@ -354,6 +368,7 @@ func main() {
 
 	default:
 		fmt.Fprintln(os.Stderr, "unknown command:", cmd)
-		os.Exit(2)
+		return 2
 	}
+	return 0
 }

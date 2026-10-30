@@ -55,7 +55,7 @@ func (s *Server) verifyTurnstile(ctx context.Context, token, remoteIP string) bo
 	if err != nil {
 		return false
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }() // read: closing it has nothing to report
 	var out struct {
 		Success bool `json:"success"`
 	}
@@ -72,7 +72,7 @@ func (s *Server) verifyTurnstile(ctx context.Context, token, remoteIP string) bo
 //	Endpoint:  GET /api/config
 //	Auth:      public
 //	Response:  {"turnstile_site_key": "..."}
-func (s *Server) handleConfig(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handleConfig(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, struct {
 		TurnstileSiteKey string `json:"turnstile_site_key"`
 	}{TurnstileSiteKey: s.turnstileSiteKey})

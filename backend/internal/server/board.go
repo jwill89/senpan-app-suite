@@ -22,7 +22,7 @@ func (s *Server) handleBoard(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	card, err := s.store.GetCard(strings.ToUpper(id))
+	card, err := s.store.GetCard(r.Context(), strings.ToUpper(id))
 	if err != nil {
 		writeInternalError(w, "get card", err)
 		return
@@ -46,13 +46,13 @@ func (s *Server) handleBoard(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	state, _, err := s.game.CurrentState()
+	state, _, err := s.game.CurrentState(r.Context())
 	if err != nil {
 		writeInternalError(w, "get game state", err)
 		return
 	}
 
-	details, _ := s.game.GameDetails()
+	details, _ := s.game.GameDetails(r.Context())
 
 	writeJSON(w, http.StatusOK, model.BoardResponse{
 		Card:        *card,

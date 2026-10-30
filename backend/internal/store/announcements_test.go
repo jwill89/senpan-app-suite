@@ -9,7 +9,7 @@ import (
 
 func mustCreateAnnouncement(t *testing.T, s *store.Store, typeID int64, title string) int64 {
 	t.Helper()
-	id, err := s.CreateAnnouncement(&model.Announcement{
+	id, err := s.CreateAnnouncement(t.Context(), &model.Announcement{
 		TypeID:  typeID,
 		Title:   title,
 		Details: "body",
@@ -23,7 +23,7 @@ func mustCreateAnnouncement(t *testing.T, s *store.Store, typeID int64, title st
 
 func listAnnouncementTitles(t *testing.T, s *store.Store) []string {
 	t.Helper()
-	items, err := s.ListAnnouncements()
+	items, err := s.ListAnnouncements(t.Context())
 	if err != nil {
 		t.Fatalf("ListAnnouncements: %v", err)
 	}
@@ -38,7 +38,7 @@ func listAnnouncementTitles(t *testing.T, s *store.Store) []string {
 // newest-first - the behavior preserved by sort_order defaulting to 0.
 func TestListAnnouncements_DefaultOrder(t *testing.T) {
 	s := newTestStore(t)
-	typeID, err := s.CreateAnnouncementType("Events", "https://discord/webhook")
+	typeID, err := s.CreateAnnouncementType(t.Context(), "Events", "https://discord/webhook")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -55,7 +55,7 @@ func TestListAnnouncements_DefaultOrder(t *testing.T) {
 // created announcement afterwards lands at the top (sort_order 0, id tie-break).
 func TestBulkReorderAnnouncements(t *testing.T) {
 	s := newTestStore(t)
-	typeID, err := s.CreateAnnouncementType("Events", "https://discord/webhook")
+	typeID, err := s.CreateAnnouncementType(t.Context(), "Events", "https://discord/webhook")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -64,7 +64,7 @@ func TestBulkReorderAnnouncements(t *testing.T) {
 	c := mustCreateAnnouncement(t, s, typeID, "charlie")
 
 	// Reorder to alpha, charlie, bravo.
-	if err := s.BulkReorderAnnouncements([]int64{a, c, b}); err != nil {
+	if err := s.BulkReorderAnnouncements(t.Context(), []int64{a, c, b}); err != nil {
 		t.Fatalf("BulkReorderAnnouncements: %v", err)
 	}
 	if got := listAnnouncementTitles(t, s); !equalSlice(got, []string{"alpha", "charlie", "bravo"}) {

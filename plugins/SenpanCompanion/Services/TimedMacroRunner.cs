@@ -46,14 +46,14 @@ public sealed class TimedMacroRunner : IDisposable
         this.clientState = clientState;
         this.log = log;
 
-        this.framework.Update += OnUpdate;
-        this.clientState.Logout += OnLogout;
+        this.framework.Update += this.OnUpdate;
+        this.clientState.Logout += this.OnLogout;
     }
 
     public void Dispose()
     {
-        this.framework.Update -= OnUpdate;
-        this.clientState.Logout -= OnLogout;
+        this.framework.Update -= this.OnUpdate;
+        this.clientState.Logout -= this.OnLogout;
     }
 
     /// <summary>True if the macro is currently ticking.</summary>
@@ -87,7 +87,7 @@ public sealed class TimedMacroRunner : IDisposable
             return false;
         lock (this.gate)
             this.states[macro.Id] = new RunState { Running = true };
-        Fire(macro);
+        this.Fire(macro);
         return true;
     }
 
@@ -123,7 +123,7 @@ public sealed class TimedMacroRunner : IDisposable
     /// </summary>
     public bool ResetProgress(TimedTextMacro macro)
     {
-        if (IsRunning(macro.Id))
+        if (this.IsRunning(macro.Id))
             return false;
         macro.SendsCompleted = 0;
         this.config.Save();
@@ -177,7 +177,7 @@ public sealed class TimedMacroRunner : IDisposable
         if (due == null)
             return;
         foreach (var macro in due)
-            Fire(macro);
+            this.Fire(macro);
     }
 
     // Sends the macro's text now, records progress, and either schedules the next send or
@@ -190,7 +190,7 @@ public sealed class TimedMacroRunner : IDisposable
             this.chat.SendChannelMessage(macro.Channel, parts);
 
             macro.SendsCompleted++;
-            SaveConfigOffThread();
+            this.SaveConfigOffThread();
         }
         catch (Exception ex)
         {

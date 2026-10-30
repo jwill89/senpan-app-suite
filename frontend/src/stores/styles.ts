@@ -96,7 +96,7 @@ export const useStylesStore = defineStore('styles', () => {
       return
     try {
       await endpoints.styles.delete(id)
-      if (editingStyle.value && editingStyle.value.id === id) editingStyle.value = null
+      if (editingStyle.value?.id === id) editingStyle.value = null
       ui.notify('Theme deleted', 'info')
       await loadStyles()
     } catch (e) {
@@ -110,8 +110,8 @@ export const useStylesStore = defineStore('styles', () => {
       await endpoints.styles.setActive(id)
       activeStyleId.value = id > 0 ? String(id) : ''
       // Apply CSS + flourishes locally immediately (the server also broadcasts).
-      if (id > 0 && editingStyle.value && editingStyle.value.id === id) {
-        applyCustomCSS(tokensToCss(editingStyle.value.tokens || {}))
+      if (id > 0 && editingStyle.value?.id === id) {
+        applyCustomCSS(tokensToCss(editingStyle.value.tokens ?? {}))
         app.applyFlourishes(
           editingStyle.value.board_flourish || '',
           editingStyle.value.number_flourish || '',

@@ -69,7 +69,7 @@ type client struct {
 	// ping that the account is still active (returning active=false drops the
 	// socket) and reports its current admin status (used to refresh isAdmin).
 	// nil for player connections (public, never re-checked).
-	revalidate func() (active bool, isAdmin bool)
+	revalidate func(ctx context.Context) (active bool, isAdmin bool)
 }
 
 // NewHub creates a new Hub with a background context.
@@ -84,14 +84,14 @@ func NewHub() *Hub {
 }
 
 // Shutdown gracefully closes all WebSocket connections and prevents new ones.
-func (h *Hub) Shutdown(ctx context.Context) {
+func (h *Hub) Shutdown(_ context.Context) {
 	h.cancel() // signal all client goroutines to stop
 
 	// Close all connections with a proper close frame.
 	h.mu.Lock()
 	for c := range h.clients {
 		if c.conn != nil {
-			c.conn.Close(websocket.StatusGoingAway, "server shutting down")
+			_ = c.conn.Close(websocket.StatusGoingAway, "server shutting down") // the process is going: nobody to tell
 		}
 		delete(h.clients, c)
 		close(c.send)
@@ -201,10 +201,11 @@ func (h *Hub) broadcastRaw(data []byte, filter func(*client) bool) {
 // when their card is deleted.
 // ServeWS upgrades and registers a connection. isAdmin marks a true-admin
 // account (gates the live-log tail; false for players and staff grantees).
-// revalidate is called periodically (on the ping tick) to re-check that the
-// connection is still active and to refresh its admin status; pass a closure for
-// admin-channel connections and nil for public player connections.
-func (h *Hub) ServeWS(w http.ResponseWriter, r *http.Request, cardID string, isAdmin bool, revalidate func() (active bool, isAdmin bool)) {
+// revalidate is called periodically (on the ping tick), under the connection's
+// own context, to re-check that the connection is still active and to refresh
+// its admin status; pass a closure for admin-channel connections and nil for
+// public player connections.
+func (h *Hub) ServeWS(w http.ResponseWriter, r *http.Request, cardID string, isAdmin bool, revalidate func(ctx context.Context) (active bool, isAdmin bool)) {
 	// Default same-origin check: Origin must match Host header.
 	// Requires the reverse proxy to set ProxyPreserveHost On so the
 	// original Host header reaches Go (e.g. Apache: ProxyPreserveHost On).
@@ -366,7 +367,7 @@ func (c *client) writePump(ctx context.Context) {
 			return
 		case msg, ok := <-c.send:
 			if !ok {
-				c.conn.Close(websocket.StatusNormalClosure, "")
+				_ = c.conn.Close(websocket.StatusNormalClosure, "") // the peer may already be gone; the deferred CloseNow follows
 				return
 			}
 			writeCtx, cancel := context.WithTimeout(ctx, writeWait)
@@ -402,9 +403,9 @@ func (c *client) writePump(ctx context.Context) {
 			// (the account may still be an active staff grantee needing
 			// resource_changed).
 			if c.revalidate != nil {
-				active, isAdmin := c.revalidate()
+				active, isAdmin := c.revalidate(ctx)
 				if !active {
-					c.conn.Close(websocket.StatusPolicyViolation, "session no longer authorized")
+					_ = c.conn.Close(websocket.StatusPolicyViolation, "session no longer authorized") // the socket is dropped either way
 					return
 				}
 				c.isAdmin.Store(isAdmin)

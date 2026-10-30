@@ -30,7 +30,7 @@ namespace SenpanCompanion.Services;
 /// messages <see cref="MessageSpacingMs"/> apart, so concurrent features can't gang up
 /// and defeat the game's outgoing-chat throttle.
 /// </summary>
-public sealed class ChatSender
+public sealed class ChatSender : IDisposable
 {
     // Minimum gap between ANY two consecutive outgoing messages - one second - so the
     // game's chat throttle doesn't drop a rapid follow-up. Enforced globally across every
@@ -56,6 +56,11 @@ public sealed class ChatSender
         this.log = log;
     }
 
+    // Called on plugin unload, after everything that sends has stopped. A send still
+    // queued on the gate then never fires, so nothing new reaches chat once the plugin is
+    // gone; one already past the gate ends in SendSpaced's logged best-effort catch.
+    public void Dispose() => this.sendGate.Dispose();
+
     /// <summary>
     /// Sends one or more /tell messages to a character (the parts of a single message
     /// that was split to fit the in-game chat limit - see <see cref="TellComposer"/>).
@@ -77,7 +82,7 @@ public sealed class ChatSender
             if (msg.Length > 0)
                 commands.Add($"/tell {name}@{w} {msg}");
         }
-        SendSpaced(commands);
+        this.SendSpaced(commands);
     }
 
     /// <summary>
@@ -99,7 +104,7 @@ public sealed class ChatSender
             if (msg.Length > 0)
                 commands.Add($"{command} {msg}");
         }
-        SendSpaced(commands);
+        this.SendSpaced(commands);
     }
 
     /// <summary>Maps a channel key to its chat command, or null if unrecognized.</summary>
@@ -127,7 +132,7 @@ public sealed class ChatSender
             try
             {
                 foreach (var command in commands)
-                    await SendOneSpaced(command).ConfigureAwait(false);
+                    await this.SendOneSpaced(command).ConfigureAwait(false);
             }
             catch (Exception ex)
             {
@@ -154,7 +159,7 @@ public sealed class ChatSender
                     await Task.Delay(waitMs).ConfigureAwait(false);
             }
 
-            await this.framework.RunOnFrameworkThread(() => Execute(command)).ConfigureAwait(false);
+            await this.framework.RunOnFrameworkThread(() => this.Execute(command)).ConfigureAwait(false);
             this.nextAllowedTicks = DateTime.UtcNow.AddMilliseconds(MessageSpacingMs).Ticks;
         }
         finally

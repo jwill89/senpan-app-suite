@@ -17,7 +17,7 @@ func TestPasskeyLoginBeginIsRateLimited(t *testing.T) {
 
 	limited := false
 	// The budget is 30 per 10 minutes; go well past it.
-	for i := 0; i < 40; i++ {
+	for range 40 {
 		resp := env.postJSON(t, "/api/auth/passkey/begin", map[string]any{})
 		resp.Body.Close()
 		if resp.StatusCode == http.StatusTooManyRequests {

@@ -59,15 +59,15 @@ public sealed partial class RollTracker : IDisposable
         this.objectTable = objectTable;
         this.log = log;
 
-        this.chat.ChatMessage += OnChatMessage;
-        this.clientState.Logout += OnLogout;
+        this.chat.ChatMessage += this.OnChatMessage;
+        this.clientState.Logout += this.OnLogout;
     }
 
     public void Dispose()
     {
-        this.chat.ChatMessage -= OnChatMessage;
-        this.clientState.Logout -= OnLogout;
-        Clear();
+        this.chat.ChatMessage -= this.OnChatMessage;
+        this.clientState.Logout -= this.OnLogout;
+        this.Clear();
     }
 
     /// <summary>Number of rolls currently held.</summary>
@@ -99,7 +99,7 @@ public sealed partial class RollTracker : IDisposable
     }
 
     // Logout wipes the log so a character's rolls don't linger into the next session.
-    private void OnLogout(int type, int code) => Clear();
+    private void OnLogout(int type, int code) => this.Clear();
 
     private void OnChatMessage(IHandleableChatMessage message)
     {
@@ -113,8 +113,11 @@ public sealed partial class RollTracker : IDisposable
 
             var numbers = new List<int>();
             foreach (Match m in NumberPattern().Matches(text))
+            {
                 if (TryParseNumber(m.Value, out var n))
                     numbers.Add(n);
+            }
+
             if (numbers.Count == 0)
                 return;
 
@@ -124,7 +127,7 @@ public sealed partial class RollTracker : IDisposable
             var value = numbers.Min();
             int? outOf = numbers.Count > 1 ? numbers.Max() : null;
 
-            var (name, world) = ResolveRoller(line);
+            var (name, world) = this.ResolveRoller(line);
 
             var entry = new RollEntry(name, world, value, outOf, DateTime.Now);
             lock (this.gate)

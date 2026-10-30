@@ -5,23 +5,25 @@
 
 .DESCRIPTION
     Backend (backend/):   golangci-lint - go build - go vet - go test - govulncheck
-    Frontend (frontend/): gen:types - lint:check - format:check - lint:conventions - typecheck - test - build
+    Frontend (frontend/): gen:types - lint:check (ESLint + Stylelint) - format:check - lint:conventions - typecheck - test - npm audit - build
     Plugin (plugins/SenpanCompanion/): dotnet build (warnings=errors) - dotnet format - roslynator analyze
+    Scripts (scripts/*.ps1): PSScriptAnalyzer (PSScriptAnalyzerSettings.psd1)
 
     Stops at the first failing step with a clear message, so `golangci-lint`
     (which is NOT part of `go build`/`go vet`) can't be forgotten and slip
-    through to CI. Mirrors .github/workflows/ci.yml.
+    through to CI. Mirrors .github/workflows/ci.yml. golangci-lint is built from
+    source at the pinned version with `go run`, the way CI installs it, so there
+    is nothing to install and local and CI results cannot drift apart.
 
     The plugin (.NET) steps no-op with a message if the `dotnet` SDK isn't
-    installed locally, so the script still runs on a machine without it.
+    installed locally, and the scripts step does the same without PSScriptAnalyzer
+    1.25.0, so the script still runs on a machine without them.
 
-    Note: `go test -race` is intentionally NOT run. The production binary builds
-    CGO_ENABLED=0 with the pure-Go SQLite driver, and the race detector needs
-    cgo; a cgo-linked driver just for the race run would exercise DIFFERENT SQL/
-    locking semantics than production ships (false confidence). Concurrency
-    correctness instead rests on the game service's opMu serialization, the v43
-    UNIQUE(game_id, number) constraint, the ws hub's lock discipline, and the
-    manifest/settings mutexes - all covered by targeted tests under this gate.
+    Note: `go test -race` runs in CI, not here. The race detector needs cgo for
+    its runtime and a C toolchain to build it, which not every Windows machine
+    has; the SQLite driver itself is pure Go, so the race build exercises the same
+    driver production ships. With gcc on PATH, run it by hand from backend/:
+    `go test -race ./...` (about four minutes).
 
 .PARAMETER SkipFrontend
     Run only the backend checks.
@@ -57,40 +59,28 @@ function Invoke-Step($name, [scriptblock]$body) {
 }
 
 if (-not $SkipBackend) {
-    if (-not (Get-Command golangci-lint -ErrorAction SilentlyContinue)) {
-        Write-Host "golangci-lint not found on PATH. Install the pinned version:" -ForegroundColor Red
-        Write-Host "  go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.13.1" -ForegroundColor Yellow
-        exit 1
-    }
     Push-Location "$root\backend"
     try {
-        Invoke-Step "backend: golangci-lint" { golangci-lint run ./... }
+        # The version pinned in backend/.golangci.yml and ci.yml.
+        Invoke-Step "backend: golangci-lint" {
+            go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.15.0 run ./...
+        }
         Invoke-Step "backend: go build" { go build ./... }
         Invoke-Step "backend: go vet" { go vet ./... }
         Invoke-Step "backend: go test" { go test ./... }
         # Scan the module + dependencies for known Go vulns that reach our code.
         # Run latest (as CI does) so newly disclosed advisories are caught.
         Invoke-Step "backend: govulncheck" { go run golang.org/x/vuln/cmd/govulncheck@latest ./... }
-    }
-    finally { Pop-Location }
+    } finally { Pop-Location }
 }
 
 if (-not $SkipFrontend) {
     Push-Location "$root\frontend"
     try {
-        # The shared ESLint config (@jwill89/eslint-config) is a git submodule linked
-        # as a file: dependency. Without it checked out AND npm-linked, `eslint` fails
-        # to START ("Cannot find package") instead of reporting violations - silently
-        # disabling the lint gate. Fail early with the fix rather than skipping lint.
-        if (-not (Test-Path "$root\frontend\node_modules\@jwill89\eslint-config\package.json")) {
-            Write-Host "`nFAILED: frontend ESLint config (@jwill89/eslint-config) is not linked; lint can't run." -ForegroundColor Red
-            Write-Host "  Fix (once per clone):" -ForegroundColor Yellow
-            Write-Host "    git submodule update --init --recursive" -ForegroundColor Yellow
-            Write-Host "    cd frontend; npm install" -ForegroundColor Yellow
-            exit 1
-        }
         # api.generated.ts is gitignored; regenerate so typecheck/build are current.
         Invoke-Step "frontend: gen:types" { npm run gen:types }
+        # ESLint (eslint.config.js) for the scripts and templates, Stylelint
+        # (stylelint.config.mjs) for the stylesheets and <style> blocks.
         Invoke-Step "frontend: lint" { npm run lint:check }
         # Prettier covers what ESLint doesn't: the CSS layer. Formatting used to be
         # hand-maintained there because themes were authored as raw CSS in a code
@@ -102,9 +92,10 @@ if (-not $SkipFrontend) {
         Invoke-Step "frontend: conventions" { npm run lint:conventions }
         Invoke-Step "frontend: typecheck" { npm run typecheck }
         Invoke-Step "frontend: test" { npm run test }
+        # Known vulnerabilities in what ships (dev tooling excluded), at high or above.
+        Invoke-Step "frontend: npm audit" { npm audit --audit-level=high --omit=dev }
         Invoke-Step "frontend: build" { npm run build }
-    }
-    finally { Pop-Location }
+    } finally { Pop-Location }
 }
 
 # Plugin (FFXIV Dalamud) - the third CI job. Only runs on a full check (neither
@@ -114,8 +105,7 @@ if (-not $SkipFrontend) {
 if (-not $SkipFrontend -and -not $SkipBackend) {
     if (-not (Get-Command dotnet -ErrorAction SilentlyContinue)) {
         Write-Host "`n==> plugin: dotnet SDK not found on PATH - skipping plugin build/format checks." -ForegroundColor Yellow
-    }
-    else {
+    } else {
         Push-Location "$root\plugins\SenpanCompanion"
         try {
             # Promote warnings to errors so the plugin's 0-warning rule is enforced.
@@ -131,8 +121,31 @@ if (-not $SkipFrontend -and -not $SkipBackend) {
             Invoke-Step "plugin: roslynator analyze" {
                 dotnet roslynator analyze .\SenpanCompanion.csproj --severity-level info
             }
+        } finally { Pop-Location }
+    }
+}
+
+# Scripts (scripts/*.ps1) - PSScriptAnalyzer with the repo-root PSScriptAnalyzerSettings.psd1,
+# as CI runs it. Like the plugin, only on a full check. Only TRACKED scripts are linted:
+# scripts/deploy.config.ps1 is the owner's local copy. Requires PSScriptAnalyzer 1.25.0
+# (the version CI pins); skips with a clear message when it isn't installed.
+if (-not $SkipFrontend -and -not $SkipBackend) {
+    $analyzerVersion = '1.25.0'
+    if (-not (Get-Module -ListAvailable PSScriptAnalyzer | Where-Object Version -EQ $analyzerVersion)) {
+        Write-Host "`n==> scripts: PSScriptAnalyzer $analyzerVersion not installed - skipping script lint. Install it with:" -ForegroundColor Yellow
+        Write-Host "      Install-PSResource PSScriptAnalyzer -Version $analyzerVersion -Scope CurrentUser -TrustRepository" -ForegroundColor Yellow
+    } else {
+        Write-Host "`n==> scripts: PSScriptAnalyzer" -ForegroundColor Cyan
+        Import-Module PSScriptAnalyzer -RequiredVersion $analyzerVersion
+        $settings = Join-Path $root 'PSScriptAnalyzerSettings.psd1'
+        $findings = foreach ($file in (git -C $root ls-files 'scripts/*.ps1')) {
+            Invoke-ScriptAnalyzer -Path (Join-Path $root $file) -Settings $settings
         }
-        finally { Pop-Location }
+        if ($findings) {
+            $findings | Format-Table -AutoSize | Out-String | Write-Host
+            Write-Host "`nFAILED: scripts: PSScriptAnalyzer ($(@($findings).Count) finding(s))" -ForegroundColor Red
+            exit 1
+        }
     }
 }
 

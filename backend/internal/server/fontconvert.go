@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"log/slog"
@@ -209,7 +210,7 @@ func (s *Server) refreshGroupDerivative(g fontGroup) error {
 	if err := os.MkdirAll(s.fontDerivedDir(), 0755); err != nil {
 		return err
 	}
-	return os.WriteFile(dst, woff2, 0644)
+	return os.WriteFile(dst, woff2, 0644) //nolint:gosec // named after a font file already in the fonts directory
 }
 
 // refreshGroupDerivativeByKey is refreshGroupDerivative for a (possibly now
@@ -296,8 +297,8 @@ func (m fontMeta) isZero() bool {
 
 // fontMetaMap reads the per-font metadata map. Returns an empty map when unset
 // or unreadable.
-func (s *Server) fontMetaMap() map[string]fontMeta {
-	raw, err := s.store.GetSetting(settingFontMeta)
+func (s *Server) fontMetaMap(ctx context.Context) map[string]fontMeta {
+	raw, err := s.store.GetSetting(ctx, settingFontMeta)
 	if err != nil || raw == "" {
 		return map[string]fontMeta{}
 	}
@@ -310,7 +311,7 @@ func (s *Server) fontMetaMap() map[string]fontMeta {
 
 // saveFontMetaMap persists the metadata map, dropping empty entries (and the
 // migration-only legacy flag) so deleted customizations don't accumulate.
-func (s *Server) saveFontMetaMap(metas map[string]fontMeta) error {
+func (s *Server) saveFontMetaMap(ctx context.Context, metas map[string]fontMeta) error {
 	for key, m := range metas {
 		m.LegacyOriginal = false
 		if m.isZero() {
@@ -323,20 +324,20 @@ func (s *Server) saveFontMetaMap(metas map[string]fontMeta) error {
 	if err != nil {
 		return err
 	}
-	return s.store.SetSetting(settingFontMeta, string(data))
+	return s.store.SetSetting(ctx, settingFontMeta, string(data))
 }
 
 // updateFontMeta applies mutate to a group's metadata entry and persists it,
 // holding fontMetaMu across the read-modify-write so a concurrent edit to a
 // DIFFERENT font cannot be lost - every font shares one settings blob.
-func (s *Server) updateFontMeta(groupKey string, mutate func(*fontMeta)) error {
+func (s *Server) updateFontMeta(ctx context.Context, groupKey string, mutate func(*fontMeta)) error {
 	s.fontMetaMu.Lock()
 	defer s.fontMetaMu.Unlock()
-	metas := s.fontMetaMap()
+	metas := s.fontMetaMap(ctx)
 	m := metas[groupKey]
 	mutate(&m)
 	metas[groupKey] = m
-	return s.saveFontMetaMap(metas)
+	return s.saveFontMetaMap(ctx, metas)
 }
 
 // fontFamilyFor returns a group's effective CSS family name.
@@ -352,8 +353,8 @@ func fontFamilyFor(base string, m fontMeta) string {
 //     by group and translate original->Serve (that file's type).
 //   - the global origin allowlist becomes every font's per-font Origins, and
 //     the legacy settings key is cleared.
-func (s *Server) migrateFontMetaV2() {
-	metas := s.fontMetaMap()
+func (s *Server) migrateFontMetaV2(ctx context.Context) {
+	metas := s.fontMetaMap(ctx)
 	changed := false
 	for key, m := range metas {
 		ext := strings.ToLower(filepath.Ext(key))
@@ -372,7 +373,7 @@ func (s *Server) migrateFontMetaV2() {
 		metas[fontGroupKey(key)] = target
 	}
 
-	if legacy, err := s.store.GetSetting(settingFontOriginsLegacy); err == nil && legacy != "" {
+	if legacy, err := s.store.GetSetting(ctx, settingFontOriginsLegacy); err == nil && legacy != "" {
 		var origins []string
 		if err := json.Unmarshal([]byte(legacy), &origins); err == nil && len(origins) > 0 {
 			for _, g := range s.fontGroupList() {
@@ -384,13 +385,13 @@ func (s *Server) migrateFontMetaV2() {
 				}
 			}
 		}
-		if err := s.store.SetSetting(settingFontOriginsLegacy, ""); err == nil {
+		if err := s.store.SetSetting(ctx, settingFontOriginsLegacy, ""); err == nil {
 			slog.Info("migrated global font origins to per-font allowlists", "origins", len(origins))
 		}
 	}
 
 	if changed {
-		if err := s.saveFontMetaMap(metas); err != nil {
+		if err := s.saveFontMetaMap(ctx, metas); err != nil {
 			slog.Warn("migrate font metadata", "error", err)
 		}
 	}
@@ -400,7 +401,7 @@ func (s *Server) migrateFontMetaV2() {
 // into a new one (oldKey no longer has files). The metadata only follows when
 // the destination group has none of its own; it is dropped when oldKey still
 // has members (the renamed file simply joins/creates the other group).
-func (s *Server) renameFontMetaKey(oldKey, newKey string) {
+func (s *Server) renameFontMetaKey(ctx context.Context, oldKey, newKey string) {
 	if oldKey == newKey {
 		return
 	}
@@ -409,7 +410,7 @@ func (s *Server) renameFontMetaKey(oldKey, newKey string) {
 	}
 	s.fontMetaMu.Lock()
 	defer s.fontMetaMu.Unlock()
-	metas := s.fontMetaMap()
+	metas := s.fontMetaMap(ctx)
 	m, ok := metas[oldKey]
 	if !ok {
 		return
@@ -418,22 +419,22 @@ func (s *Server) renameFontMetaKey(oldKey, newKey string) {
 	if _, taken := metas[newKey]; !taken {
 		metas[newKey] = m
 	}
-	if err := s.saveFontMetaMap(metas); err != nil {
+	if err := s.saveFontMetaMap(ctx, metas); err != nil {
 		slog.Warn("move font metadata", "font", oldKey, "error", err)
 	}
 }
 
 // deleteFontMetaKey removes a group's metadata entry (used when its last file
 // is deleted).
-func (s *Server) deleteFontMetaKey(key string) {
+func (s *Server) deleteFontMetaKey(ctx context.Context, key string) {
 	s.fontMetaMu.Lock()
 	defer s.fontMetaMu.Unlock()
-	metas := s.fontMetaMap()
+	metas := s.fontMetaMap(ctx)
 	if _, ok := metas[key]; !ok {
 		return
 	}
 	delete(metas, key)
-	if err := s.saveFontMetaMap(metas); err != nil {
+	if err := s.saveFontMetaMap(ctx, metas); err != nil {
 		slog.Warn("delete font metadata", "font", key, "error", err)
 	}
 }

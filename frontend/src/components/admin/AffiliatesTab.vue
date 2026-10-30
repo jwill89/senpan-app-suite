@@ -95,10 +95,20 @@ async function submitWebhook(): Promise<void> {
         />
       </FormField>
       <FormActions align="start">
-        <button class="btn-neutral" :disabled="store.savingWebhook" @click="screen = 'list'">
+        <button
+          type="button"
+          class="btn-neutral"
+          :disabled="store.savingWebhook"
+          @click="screen = 'list'"
+        >
           Cancel
         </button>
-        <button class="btn-confirm" :disabled="store.savingWebhook" @click="submitWebhook">
+        <button
+          type="button"
+          class="btn-confirm"
+          :disabled="store.savingWebhook"
+          @click="submitWebhook"
+        >
           <LoadingSpinner v-if="store.savingWebhook" label="Saving..." />
           <template v-else>Save Webhook</template>
         </button>
@@ -108,10 +118,10 @@ async function submitWebhook(): Promise<void> {
     <!-- -- List ---------------------------------------------------------------- -->
     <ManagerView v-else title="Affiliates" :icon="['fad', 'handshake']">
       <template #actions>
-        <button class="btn-view btn-sm" @click="openWebhook">
+        <button type="button" class="btn-view btn-sm" @click="openWebhook">
           <font-awesome-icon :icon="['fab', 'discord']" /> Webhook
         </button>
-        <button class="btn-confirm btn-sm" @click="openNew">
+        <button type="button" class="btn-confirm btn-sm" @click="openNew">
           <font-awesome-icon :icon="['fas', 'plus']" /> New Affiliate
         </button>
       </template>
@@ -126,8 +136,9 @@ async function submitWebhook(): Promise<void> {
 
       <div v-if="!store.webhookUrl && store.affiliates.length" class="text-muted text-xs mb-12">
         <font-awesome-icon :icon="['fad', 'triangle-exclamation']" /> No Discord webhook set yet -
-        add one with the <button class="link-btn" @click="openWebhook">Webhook</button> button to
-        post affiliates.
+        add one with the
+        <button type="button" class="link-btn" @click="openWebhook">Webhook</button> button to post
+        affiliates.
       </div>
 
       <LoadingSpinner
@@ -207,6 +218,7 @@ async function submitWebhook(): Promise<void> {
 
             <template #actions>
               <button
+                type="button"
                 class="btn-action btn-sm"
                 :disabled="store.postingId === a.id"
                 title="Post to Discord now"
@@ -218,6 +230,7 @@ async function submitWebhook(): Promise<void> {
                 >
               </button>
               <button
+                type="button"
                 class="btn-confirm btn-sm"
                 aria-label="Edit"
                 title="Edit"
@@ -226,6 +239,7 @@ async function submitWebhook(): Promise<void> {
                 <font-awesome-icon :icon="['fas', 'pen-to-square']" />
               </button>
               <button
+                type="button"
                 class="btn-danger btn-sm"
                 aria-label="Delete"
                 title="Delete"

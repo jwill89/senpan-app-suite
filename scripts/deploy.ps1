@@ -303,7 +303,12 @@ function Invoke-Upload([string]$ArchivePath, [string]$RemotePath) {
     while (-not $proc.HasExited) {
         Start-Sleep -Seconds 1
         Write-Progress -Activity "Uploading frontend" -Status ("{0} KB archive - {1:mm\:ss} elapsed" -f $sizeKb, $sw.Elapsed)
-        if ($sw.Elapsed.TotalSeconds -gt $maxSeconds) { try { $proc.Kill() } catch {}; $killed = $true; break }
+        if ($sw.Elapsed.TotalSeconds -gt $maxSeconds) {
+            # pscp may finish between the check and the kill; that race is harmless.
+            try { $proc.Kill() } catch { Write-Verbose "pscp had already exited: $($_.Exception.Message)" }
+            $killed = $true
+            break
+        }
     }
     $proc.WaitForExit()
     $sw.Stop()
@@ -359,19 +364,17 @@ $remotePluginDir = "$WebRoot/plugin"
 $remotePluginZipDir = "$remotePluginDir/SenpanCompanionAdmin"
 
 # == Frontend ==================================================================
-function Deploy-Frontend {
+function Deploy-Frontend([switch]$SkipBuild, [switch]$NoBackup) {
     # 1. Build
     if ($SkipBuild) {
         Write-Step "Skipping frontend build (-SkipBuild); using existing frontend/dist"
-    }
-    else {
+    } else {
         Write-Step "Building frontend (vue-tsc + vite)..."
         Push-Location $FrontendDir
         try {
             npm run build
             if ($LASTEXITCODE -ne 0) { Fail "Frontend build failed (exit $LASTEXITCODE). Live site untouched." }
-        }
-        finally { Pop-Location }
+        } finally { Pop-Location }
     }
     if (-not (Test-Path (Join-Path $DistDir "index.html"))) {
         Fail "frontend/dist/index.html is missing - nothing to deploy."
@@ -404,8 +407,7 @@ Could not connect, or $WebRoot does not exist / is not writable.
         # `-C $remoteNew` lands exactly where `pscp -r dist` used to put them.
         & $tar -czf $archive dist
         if ($LASTEXITCODE -ne 0) { Fail "Could not pack $DistDir into an archive (tar exit $LASTEXITCODE)." }
-    }
-    finally { Pop-Location }
+    } finally { Pop-Location }
     $archiveKb = [math]::Round((Get-Item $archive).Length / 1KB)
     $rawKb = [math]::Round(((Get-ChildItem -Recurse -File $DistDir | Measure-Object Length -Sum).Sum / 1KB))
     Write-Ok ("Packed {0} KB -> {1} KB." -f $rawKb, $archiveKb)
@@ -419,8 +421,7 @@ Could not connect, or $WebRoot does not exist / is not writable.
             Start-Sleep -Seconds 35
             $r = Invoke-Upload -ArchivePath $archive -RemotePath $remoteArchive
         }
-    }
-    finally { Remove-Item $archive -Force -ErrorAction SilentlyContinue }
+    } finally { Remove-Item $archive -Force -ErrorAction SilentlyContinue }
     if (-not $r.Ok) { Fail "Upload failed. Live site untouched (still serving the previous build).`n$($r.Err)" }
     Write-Ok ("Upload finished in {0:mm\:ss}." -f $r.Elapsed)
 
@@ -454,12 +455,10 @@ rm -rf '$remoteNew'
     if (Test-Path $HtaccessLocal) {
         if (Send-FileVerified $HtaccessLocal "$WebRoot/.htaccess") {
             Write-Ok ".htaccess synced to $WebRoot/.htaccess"
-        }
-        else {
+        } else {
             Write-Host "    WARNING: .htaccess upload failed; the site bundle is deployed but the Apache config was NOT updated. Re-run, or upload deploy/.htaccess manually." -ForegroundColor Yellow
         }
-    }
-    else {
+    } else {
         Write-Host "    WARNING: $HtaccessLocal not found; skipped the .htaccess sync." -ForegroundColor Yellow
     }
 
@@ -471,7 +470,7 @@ rm -rf '$remoteNew'
 }
 
 # == Backend ===================================================================
-function Deploy-Backend {
+function Deploy-Backend([switch]$SkipBuild, [switch]$NoBackup) {
     $remoteBin = "$RemoteOptDir/app-suite"
     $remoteBinNew = "$RemoteOptDir/app-suite.new"
     $remoteBinOld = "$RemoteOptDir/app-suite.old"
@@ -479,8 +478,7 @@ function Deploy-Backend {
     # 1. Cross-compile the static linux/amd64 binary
     if ($SkipBuild) {
         Write-Step "Skipping backend build (-SkipBuild); using existing $LocalBinary"
-    }
-    else {
+    } else {
         if (-not (Get-Command go -ErrorAction SilentlyContinue)) {
             Fail "Go toolchain not found (go). Install Go or add it to PATH."
         }
@@ -491,8 +489,7 @@ function Deploy-Backend {
             $env:GOOS = 'linux'; $env:GOARCH = 'amd64'; $env:CGO_ENABLED = '0'
             go build "-ldflags=-s -w" -o app-suite .
             if ($LASTEXITCODE -ne 0) { Fail "Backend build failed (exit $LASTEXITCODE). Service untouched." }
-        }
-        finally {
+        } finally {
             Pop-Location
             Restore-Env 'GOOS' $savedGOOS
             Restore-Env 'GOARCH' $savedGOARCH
@@ -641,7 +638,7 @@ The local dev DB was NOT modified.
     #    accumulated on the workstation indefinitely. Keep the three most recent.
     $keep = 3
     $stale = @(Get-ChildItem "$DevDbPath.bak-*" -ErrorAction SilentlyContinue |
-        Sort-Object Name -Descending | Select-Object -Skip $keep)
+            Sort-Object Name -Descending | Select-Object -Skip $keep)
     if ($stale.Count -gt 0) {
         $stale | Remove-Item -Force -ErrorAction SilentlyContinue
         Write-Ok "Pruned $($stale.Count) old dev DB backup(s); keeping the newest $keep."
@@ -653,12 +650,11 @@ The local dev DB was NOT modified.
 }
 
 # == Plugin (Dalamud custom repo) ==============================================
-function Deploy-Plugin {
+function Deploy-Plugin([switch]$SkipBuild) {
     # 1. Build the plugin (DalamudPackager emits .../SenpanCompanionAdmin/latest.zip).
     if ($SkipBuild) {
         Write-Step "Skipping plugin build (-SkipBuild); using existing $PluginZip"
-    }
-    else {
+    } else {
         if (-not (Get-Command dotnet -ErrorAction SilentlyContinue)) {
             Fail ".NET SDK not found (dotnet). Install the .NET 10 SDK or add it to PATH."
         }
@@ -667,8 +663,7 @@ function Deploy-Plugin {
         try {
             dotnet build -c Release --nologo -v minimal
             if ($LASTEXITCODE -ne 0) { Fail "Plugin build failed (exit $LASTEXITCODE)." }
-        }
-        finally { Pop-Location }
+        } finally { Pop-Location }
     }
     if (-not (Test-Path $PluginZip)) { Fail "Plugin package not found at $PluginZip - nothing to deploy." }
     if (-not (Test-Path $PluginMaster)) { Fail "pluginmaster.json not found at $PluginMaster." }
@@ -719,8 +714,7 @@ function Deploy-Plugin {
             Fail "pluginmaster.json upload failed."
         }
         Write-Ok "Repo index uploaded."
-    }
-    finally {
+    } finally {
         Remove-Item $tmpMaster -Force -ErrorAction SilentlyContinue
     }
 
@@ -732,12 +726,10 @@ function Deploy-Plugin {
     if (Test-Path $PluginHtaccess) {
         if (Send-FileVerified $PluginHtaccess "$remotePluginDir/.htaccess") {
             Write-Ok ".htaccess synced to $remotePluginDir/.htaccess"
-        }
-        else {
+        } else {
             Write-Host "    WARNING: plugin .htaccess upload failed; the package is live but Cloudflare may still edge-cache latest.zip (the ?v= cache-bust still applies). Re-run, or upload deploy/plugin.htaccess to $remotePluginDir/.htaccess manually." -ForegroundColor Yellow
         }
-    }
-    else {
+    } else {
         Write-Host "    WARNING: $PluginHtaccess not found; skipped the plugin .htaccess sync." -ForegroundColor Yellow
     }
 
@@ -749,13 +741,18 @@ function Deploy-Plugin {
 # -- Dispatch ------------------------------------------------------------------
 Write-Host "Deploy target: $Target -> $remoteTarget" -ForegroundColor Yellow
 $pause = { Write-Step "Pausing 35s between targets to stay under the SSH connection rate limit..."; Start-Sleep -Seconds 35 }
-# After a backend deploy, refresh the local dev DB from live (unless -NoDbPull). Its
+# After a backend deploy, refresh the local dev DB from live, unless -NoDbPull. Its
 # SSH connections are a fresh group, so pause first to reset the rate-limit window.
-$dbPull = { if (-not $NoDbPull) { & $pause; Sync-LiveDbToDev } }
+$dbPull = { & $pause; Sync-LiveDbToDev }
+if ($NoDbPull) { $dbPull = {} }
+# The frontend and backend deploys take this run's switches as parameters rather than
+# reading them from the script's scope. The plugin deploy keeps no rollback copy, so
+# -NoBackup does not apply to it.
+$deployOptions = @{ SkipBuild = $SkipBuild; NoBackup = $NoBackup }
 switch ($Target) {
-    'frontend' { Deploy-Frontend }
-    'backend' { Deploy-Backend; & $dbPull }
-    'plugin' { Deploy-Plugin }
+    'frontend' { Deploy-Frontend @deployOptions }
+    'backend' { Deploy-Backend @deployOptions; & $dbPull }
+    'plugin' { Deploy-Plugin -SkipBuild:$SkipBuild }
     # 'main' is the preferred name for frontend + backend; 'both' is kept as an alias.
     #
     # The API goes FIRST. A new backend is additive to the old SPA - the endpoints
@@ -766,18 +763,18 @@ switch ($Target) {
     # $dbPull already opens with its own pause, so it goes last and no extra pause
     # is needed between the two deploys.
     { $_ -in 'both', 'main' } {
-        Deploy-Backend
+        Deploy-Backend @deployOptions
         & $pause
-        Deploy-Frontend
+        Deploy-Frontend @deployOptions
         & $dbPull
     }
     # 'all' is everything: backend + frontend + plugin, API first for the same reason.
     'all' {
-        Deploy-Backend
+        Deploy-Backend @deployOptions
         & $pause
-        Deploy-Frontend
+        Deploy-Frontend @deployOptions
         & $pause
-        Deploy-Plugin
+        Deploy-Plugin -SkipBuild:$SkipBuild
         & $dbPull
     }
 }

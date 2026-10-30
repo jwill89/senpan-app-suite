@@ -167,7 +167,7 @@ async function copyRepoUrl(): Promise<void> {
       </div>
 
       <footer class="changelog-foot">
-        <button class="btn-neutral" @click="$emit('close')">Close</button>
+        <button type="button" class="btn-neutral" @click="$emit('close')">Close</button>
       </footer>
     </div>
   </ModalOverlay>
@@ -190,14 +190,16 @@ async function copyRepoUrl(): Promise<void> {
   padding-bottom: 10px;
   border-bottom: 1px solid var(--control-border);
 }
+
 .changelog-title {
   margin: 0;
   display: flex;
   align-items: center;
   gap: 8px;
 }
+
 .changelog-latest {
-  font-family: 'Consolas', 'Monaco', monospace;
+  font-family: Consolas, Monaco, monospace;
   font-size: 0.8rem;
   font-weight: 600;
   color: var(--text-muted);
@@ -223,6 +225,7 @@ async function copyRepoUrl(): Promise<void> {
   padding-right: 8px;
   border-right: 1px solid var(--control-border);
 }
+
 .changelog-rail-item {
   display: flex;
   flex-direction: column;
@@ -240,29 +243,35 @@ async function copyRepoUrl(): Promise<void> {
     background 0.12s,
     border-color 0.12s;
 }
+
 .changelog-rail-item:hover {
   background: var(--panel-raised-bg);
 }
+
 .changelog-rail-item.is-active {
   background: var(--accent);
   border-color: var(--accent);
   color: var(--text-on-accent);
 }
+
 .changelog-rail-item--install {
   flex-direction: row;
   align-items: center;
   gap: 7px;
   font-weight: 600;
 }
+
 .changelog-rail-version {
-  font-family: 'Consolas', 'Monaco', monospace;
+  font-family: Consolas, Monaco, monospace;
   font-weight: 600;
   font-size: 0.86rem;
 }
+
 .changelog-rail-date {
   font-size: 0.68rem;
   opacity: 0.75;
 }
+
 .changelog-rail-divider {
   margin: 8px 4px 3px;
   font-size: 0.66rem;
@@ -278,6 +287,7 @@ async function copyRepoUrl(): Promise<void> {
   overflow-y: auto;
   padding-right: 6px;
 }
+
 .changelog-detail-title {
   margin: 0 0 10px;
   display: flex;
@@ -285,12 +295,14 @@ async function copyRepoUrl(): Promise<void> {
   gap: 10px;
   font-size: 1.15rem;
 }
+
 .changelog-entry-date,
 .changelog-note {
   font-size: 0.78rem;
   color: var(--text-muted);
   font-weight: 400;
 }
+
 .changelog-lead {
   color: var(--text-muted);
   margin-bottom: 16px;
@@ -301,28 +313,35 @@ async function copyRepoUrl(): Promise<void> {
 .changelog-group {
   margin-bottom: 16px;
 }
+
 /* Change-type badge - pill chrome from the `.badge` object; the type modifiers
    below set `color`, which drives both the outline and the tinted fill. */
 .changelog-badge {
   margin-bottom: 6px;
-  border: 1px solid currentColor;
-  background: color-mix(in srgb, currentColor 14%, transparent);
+  border: 1px solid currentcolor;
+  background: color-mix(in srgb, currentcolor 14%, transparent);
 }
+
 .changelog-badge--added {
   color: #3fb950;
 }
+
 .changelog-badge--fixed {
   color: #d29922;
 }
+
 .changelog-badge--changed {
   color: #539bf5;
 }
+
 .changelog-badge--security {
   color: #db61a2;
 }
+
 .changelog-badge--removed {
   color: #f85149;
 }
+
 .changelog-badge--deprecated,
 .changelog-badge--default {
   color: var(--text-muted);
@@ -336,6 +355,7 @@ async function copyRepoUrl(): Promise<void> {
   border-radius: var(--radius);
   background: var(--panel-raised-bg);
 }
+
 .changelog-repo-label {
   display: block;
   font-size: 0.68rem;
@@ -344,12 +364,14 @@ async function copyRepoUrl(): Promise<void> {
   color: var(--text-muted);
   margin-bottom: 6px;
 }
+
 .changelog-repo-row {
   display: flex;
   align-items: center;
   gap: 10px;
   flex-wrap: wrap;
 }
+
 .changelog-repo-url {
   flex: 1;
   min-width: 220px;
@@ -359,12 +381,14 @@ async function copyRepoUrl(): Promise<void> {
   font-size: 0.82rem;
   word-break: break-all;
 }
+
 .changelog-copy {
   flex: 0 0 auto;
   display: inline-flex;
   align-items: center;
   gap: 6px;
 }
+
 .changelog-steps {
   margin: 0 0 14px;
   padding-left: 22px;
@@ -372,18 +396,23 @@ async function copyRepoUrl(): Promise<void> {
   flex-direction: column;
   gap: 9px;
 }
+
 .changelog-steps li {
   line-height: 1.5;
 }
+
 .changelog-step-title {
   font-weight: 600;
 }
+
 .changelog-step-detail {
   color: var(--text-muted);
 }
+
 .changelog-note {
   padding-top: 6px;
 }
+
 .changelog-empty {
   color: var(--text-muted);
 }
@@ -401,9 +430,11 @@ async function copyRepoUrl(): Promise<void> {
   margin: 0 0 8px;
   line-height: 1.55;
 }
+
 .md :deep(p:last-child) {
   margin-bottom: 0;
 }
+
 .changelog-group-list.md :deep(ul) {
   margin: 0;
   padding-left: 20px;
@@ -411,27 +442,33 @@ async function copyRepoUrl(): Promise<void> {
   flex-direction: column;
   gap: 7px;
 }
+
 .changelog-group-list.md :deep(li) {
   line-height: 1.55;
 }
+
 .changelog-group-list.md :deep(ul ul) {
   margin-top: 6px;
   gap: 4px;
 }
+
 .md :deep(code) {
   padding: 1px 5px;
   border-radius: 0;
   background: var(--panel-raised-bg);
   font-size: 0.86em;
 }
+
 .md :deep(a) {
   color: var(--accent);
   text-decoration: underline;
   text-underline-offset: 2px;
 }
+
 .md :deep(strong) {
   color: var(--text);
 }
+
 .md :deep(blockquote) {
   margin: 8px 0;
   padding: 4px 12px;
@@ -440,24 +477,26 @@ async function copyRepoUrl(): Promise<void> {
 }
 
 /* Stack the panes on narrow screens: rail becomes a horizontal scroller. */
-@media (max-width: 640px) {
+@media (width <= 640px) {
   .changelog-body {
     flex-direction: column;
   }
+
   .changelog-rail {
     flex: 0 0 auto;
     flex-direction: row;
     max-height: none;
-    overflow-x: auto;
-    overflow-y: hidden;
+    overflow: auto hidden;
     padding: 0 0 8px;
     border-right: none;
     border-bottom: 1px solid var(--control-border);
   }
+
   .changelog-rail-item {
     width: auto;
     white-space: nowrap;
   }
+
   .changelog-rail-divider {
     display: none;
   }

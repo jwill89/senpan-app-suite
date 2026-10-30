@@ -322,21 +322,21 @@ func TestFontConvert_StartupBackfillAndMetaMigration(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	st, err := store.New(filepath.Join(t.TempDir(), "test.db"))
+	st, err := store.New(t.Context(), filepath.Join(t.TempDir(), "test.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { st.Close() })
 	// v1 metadata (keyed by FILENAME, with the old "original" flag) + the old
 	// global origins list.
-	if err := st.SetSetting("font_meta", `{"Legacy.ttf":{"family":"Old Style","original":true}}`); err != nil {
+	if err := st.SetSetting(t.Context(), "font_meta", `{"Legacy.ttf":{"family":"Old Style","original":true}}`); err != nil {
 		t.Fatal(err)
 	}
-	if err := st.SetSetting("font_allowed_origins", `["https://mysite.carrd.co"]`); err != nil {
+	if err := st.SetSetting(t.Context(), "font_allowed_origins", `["https://mysite.carrd.co"]`); err != nil {
 		t.Fatal(err)
 	}
 
-	srv := server.New(st, ws.NewHub(), testSecret, webRoot, nil)
+	srv := server.New(t.Context(), st, ws.NewHub(), webRoot, nil)
 	ts := httptest.NewTLSServer(srv)
 	t.Cleanup(ts.Close)
 	jar, _ := cookiejar.New(nil)

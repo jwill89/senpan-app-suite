@@ -121,7 +121,7 @@ export class WsClient {
     // (The server also sends its own protocol-level pings every 30s.)
     if (this.keepaliveTimer) clearInterval(this.keepaliveTimer)
     this.keepaliveTimer = setInterval(() => {
-      if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+      if (this.ws?.readyState === WebSocket.OPEN) {
         this.ws.send('ping')
       }
     }, 25000)

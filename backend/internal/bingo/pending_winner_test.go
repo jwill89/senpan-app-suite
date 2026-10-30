@@ -25,25 +25,25 @@ func TestPendingCustomCardNotEligibleToWin(t *testing.T) {
 		{8, 23, 37, 53, 68},
 		{9, 24, 38, 54, 69},
 	}
-	if err := st.SaveCard("WIN001", normal); err != nil {
+	if err := st.SaveCard(t.Context(), "WIN001", normal); err != nil {
 		t.Fatal(err)
 	}
-	if err := st.CreateCustomCard("PEND01", pending, "Aria", "Gilgamesh"); err != nil {
+	if err := st.CreateCustomCard(t.Context(), "PEND01", pending, "Aria", "Gilgamesh"); err != nil {
 		t.Fatal(err)
 	}
 
-	patID, err := st.SavePattern("Top Row", testPattern5x5(), 1)
+	patID, err := st.SavePattern(t.Context(), "Top Row", testPattern5x5(), 1)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := gs.Start([]int{int(patID)}, false, 0); err != nil {
+	if _, err := gs.Start(t.Context(), []int{int(patID)}, false, 0); err != nil {
 		t.Fatal(err)
 	}
 
 	// Draw every number so both top rows are fully called.
 	var last *DrawResult
-	for i := 0; i < 75; i++ {
-		r, _, err := gs.Draw()
+	for range 75 {
+		r, _, err := gs.Draw(t.Context())
 		if err != nil {
 			t.Fatal(err)
 		}

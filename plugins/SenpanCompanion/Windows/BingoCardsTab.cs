@@ -50,7 +50,7 @@ internal sealed class BingoCardsTab : TabBase
 
     public void Draw()
     {
-        DrawStatusLine();
+        this.DrawStatusLine();
 
         var cards = this.cardCache.Cards;
 
@@ -58,20 +58,22 @@ internal sealed class BingoCardsTab : TabBase
             this.cardCache.Refresh();
         ImGui.SameLine();
         if (Ui.DangerButton("Delete all"))
-            Run(async () =>
+        {
+            this.Run(async () =>
             {
                 await this.api.DeleteAllCardsAsync();
                 await this.cardCache.RefreshAsync();
             });
+        }
 
         Ui.Section(FontAwesomeIcon.Plus, "Issue a card");
         ImGui.SetNextItemWidth(220);
         ImGui.InputTextWithHint("##playername", "Player name", ref this.newPlayerName, 64);
         ImGui.SameLine();
-        DrawNearbyPicker();
+        this.DrawNearbyPicker();
         // Create on its own line so it's never pushed off-screen on a narrow window.
         if (Ui.PrimaryButton("Create card") && !string.IsNullOrWhiteSpace(this.newPlayerName))
-            OnCreateClicked();
+            this.OnCreateClicked();
 
         Ui.Section(FontAwesomeIcon.ThLarge, $"Cards ({cards.Count})");
 
@@ -97,13 +99,13 @@ internal sealed class BingoCardsTab : TabBase
                 ImGui.TableNextColumn();
                 DrawStatusIcons(card);
                 ImGui.TableNextColumn();
-                DrawRowActions(card);
+                this.DrawRowActions(card);
             }
 
             ImGui.EndTable();
         }
 
-        DrawReplacePopup();
+        this.DrawReplacePopup();
     }
 
     /// <summary>Status glyphs for a card: a pending/approved custom star and/or a Protected lock.</summary>
@@ -160,11 +162,14 @@ internal sealed class BingoCardsTab : TabBase
         if (card.CustomStatus == "pending")
         {
             if (Ui.IconButton($"approve{id}", FontAwesomeIcon.Check, "Approve custom card"))
-                Run(async () =>
+            {
+                this.Run(async () =>
                 {
                     await this.api.ApproveCardAsync(id);
                     await this.cardCache.RefreshAsync();
                 });
+            }
+
             ImGui.SameLine();
         }
 
@@ -172,11 +177,14 @@ internal sealed class BingoCardsTab : TabBase
         var isProtected = card.Protected;
         if (Ui.IconButton($"prot{id}", isProtected ? FontAwesomeIcon.LockOpen : FontAwesomeIcon.Lock,
                 isProtected ? "Unprotect (allow Delete all)" : "Protect from Delete all"))
-            Run(async () =>
+        {
+            this.Run(async () =>
             {
                 await this.api.SetCardProtectedAsync(id, !isProtected);
                 await this.cardCache.RefreshAsync();
             });
+        }
+
         ImGui.SameLine();
 
         if (Ui.IconButton($"copy{id}", FontAwesomeIcon.Copy, "Copy card URL"))
@@ -184,11 +192,13 @@ internal sealed class BingoCardsTab : TabBase
         ImGui.SameLine();
 
         if (Ui.DangerIconButton($"del{id}", FontAwesomeIcon.Trash, "Delete card"))
-            Run(async () =>
+        {
+            this.Run(async () =>
             {
                 await this.api.DeleteCardAsync(id);
                 await this.cardCache.RefreshAsync();
             });
+        }
     }
 
     private void OnCreateClicked()
@@ -213,7 +223,7 @@ internal sealed class BingoCardsTab : TabBase
         if (this.replaceIds.Count > 0)
             this.openReplacePopup = true;
         else
-            RunCreate(false);
+            this.RunCreate(false);
     }
 
     private void RunCreate(bool replaceExisting)
@@ -223,7 +233,7 @@ internal sealed class BingoCardsTab : TabBase
         var tellWorld = this.createTellWorld;
         var toDelete = replaceExisting ? this.replaceIds.ToList() : new List<string>();
 
-        Run(async () =>
+        this.Run(async () =>
         {
             foreach (var id in toDelete)
                 await this.api.DeleteCardAsync(id);
@@ -269,7 +279,7 @@ internal sealed class BingoCardsTab : TabBase
         ImGui.Spacing();
         if (Ui.DangerButton("Replace"))
         {
-            RunCreate(true);
+            this.RunCreate(true);
             ImGui.CloseCurrentPopup();
         }
         ImGui.SameLine();

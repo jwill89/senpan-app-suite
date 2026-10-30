@@ -50,7 +50,7 @@ func TestStampPasswordGuessingIsRateLimited(t *testing.T) {
 	token := env.issueCard(t, rallyID, "Tataru")
 
 	limited := false
-	for i := 0; i < 25; i++ {
+	for i := range 25 {
 		resp := env.postJSON(t, "/api/stamp-card/"+token+"/stamp",
 			map[string]any{"password": fmt.Sprintf("guess%d", i)})
 		resp.Body.Close()
@@ -202,7 +202,7 @@ func TestAffiliateListReadableByMapGranteeWithoutWebhook(t *testing.T) {
 func TestPendingCardPreviewAllowedForCardsGrantee(t *testing.T) {
 	env := newTestEnv(t)
 	env.loginAdmin(t)
-	if err := env.store.CreateCustomCard("PEND01", srvValidBoard(), "Aria", "Gilgamesh"); err != nil {
+	if err := env.store.CreateCustomCard(t.Context(), "PEND01", srvValidBoard(), "Aria", "Gilgamesh"); err != nil {
 		t.Fatal(err)
 	}
 

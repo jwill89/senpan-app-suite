@@ -62,7 +62,7 @@ function isStandalone(): boolean {
 function isIosDevice(): boolean {
   if (typeof navigator === 'undefined') return false
   const ua = navigator.userAgent
-  return /iphone|ipod|ipad/i.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1)
+  return /iphone|ipod|ipad/i.test(ua) || (ua.includes('Macintosh') && navigator.maxTouchPoints > 1)
 }
 
 /**

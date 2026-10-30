@@ -3,7 +3,7 @@
  * Admin Winners Log tab - paginated, sortable table of past game winners with
  * per-page controls. Mirrors the original `adminTab==='bingo-winners-log'` block.
  */
-import { ref } from 'vue'
+import { ref, useTemplateRef } from 'vue'
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
 import AdminPanel from '@/components/common/ui/AdminPanel.vue'
 import DataTableToolbar from '@/components/common/ui/DataTableToolbar.vue'
@@ -19,7 +19,7 @@ import { formatServerTimestamp } from '@/lib/datetime'
 const game = useGameStore()
 const view = ref<DataTableView>({ total: 0, totalPages: 1, facets: {} })
 const selectedEntries = ref<(string | number)[]>([])
-const tableRef = ref<{ exportCsv: (name?: string) => void } | null>(null)
+const tableRef = useTemplateRef<{ exportCsv: (name?: string) => void }>('tableRef')
 
 /** Bulk-delete the checked entries, then drop the now-stale selection. */
 async function deleteSelectedEntries(): Promise<void> {
@@ -60,6 +60,7 @@ function patternsLabel(json: string): string {
       >
         <template #actions>
           <button
+            type="button"
             class="btn-view btn-sm"
             :disabled="!view.total"
             title="Download the entries currently shown, as CSV"
@@ -69,6 +70,7 @@ function patternsLabel(json: string): string {
           </button>
           <button
             v-if="selectedEntries.length"
+            type="button"
             class="btn-danger btn-sm"
             @click="deleteSelectedEntries"
           >
@@ -76,6 +78,7 @@ function patternsLabel(json: string): string {
             {{ selectedEntries.length }} selected
           </button>
           <button
+            type="button"
             class="btn-danger btn-sm"
             :disabled="!game.winnersLogTotal"
             title="Delete all winners-log entries"
@@ -116,6 +119,7 @@ function patternsLabel(json: string): string {
           <template #cell-actions="{ row }">
             <div class="row-actions">
               <button
+                type="button"
                 class="btn-danger btn-sm"
                 aria-label="Delete entry"
                 title="Delete entry"

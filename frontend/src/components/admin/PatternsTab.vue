@@ -95,10 +95,10 @@ async function saveNew(): Promise<void> {
     <!-- -- List ------------------------------------------------------------ -->
     <ManagerView v-if="screen === 'list'" title="Patterns" :icon="['fad', 'grid']">
       <template #actions>
-        <button class="btn-view btn-sm" @click="screen = 'categories'">
+        <button type="button" class="btn-view btn-sm" @click="screen = 'categories'">
           <font-awesome-icon :icon="['fad', 'folder-open']" /> Manage Categories
         </button>
-        <button class="btn-confirm btn-sm" @click="goNew">
+        <button type="button" class="btn-confirm btn-sm" @click="goNew">
           <font-awesome-icon :icon="['fas', 'plus']" /> New Pattern
         </button>
       </template>
@@ -179,7 +179,11 @@ async function saveNew(): Promise<void> {
       <!-- Grouped, draggable view -->
       <template v-else>
         <div class="flex-toolbar mb-12">
-          <button class="btn-neutral btn-sm" @click="patterns.togglePatternsCollapsed()">
+          <button
+            type="button"
+            class="btn-neutral btn-sm"
+            @click="patterns.togglePatternsCollapsed()"
+          >
             <font-awesome-icon
               :icon="['fas', patterns.patternsCollapsed ? 'chevron-right' : 'chevron-down']"
             />
@@ -222,7 +226,7 @@ async function saveNew(): Promise<void> {
             handle=".drag-handle"
             :animation="150"
             ghost-class="is-dragging"
-            :draggable="'.saved-pattern'"
+            draggable=".saved-pattern"
             @end="onChange"
           >
             <div v-for="p in group.patterns" :key="p.id" class="saved-pattern">
@@ -299,13 +303,22 @@ async function saveNew(): Promise<void> {
               v-for="(cell, ci) in row"
               :key="ri + '-' + ci"
               :class="['pattern-editor-cell', cell ? 'is-on' : '']"
+              role="button"
+              tabindex="0"
+              :aria-label="`Row ${ri + 1}, column ${ci + 1}`"
+              :aria-pressed="cell"
               @click="patterns.toggleNewPatternCell(ri, ci)"
+              @keydown.enter="patterns.toggleNewPatternCell(ri, ci)"
+              @keydown.space.prevent="patterns.toggleNewPatternCell(ri, ci)"
             ></div>
           </template>
         </div>
         <div class="btns">
-          <button class="btn-caution btn-sm" @click="patterns.clearPatternEditor()">Clear</button>
+          <button type="button" class="btn-caution btn-sm" @click="patterns.clearPatternEditor()">
+            Clear
+          </button>
           <button
+            type="button"
             class="btn-confirm"
             :disabled="!patterns.newPatternName.trim() || patterns.savingPattern"
             @click="saveNew"
@@ -325,7 +338,7 @@ async function saveNew(): Promise<void> {
         @back="screen = 'list'"
       />
       <div class="flex-toolbar flex-end mb-16">
-        <button class="btn-confirm btn-sm" @click="goNewCategory">
+        <button type="button" class="btn-confirm btn-sm" @click="goNewCategory">
           <font-awesome-icon :icon="['fas', 'plus']" /> New Category
         </button>
       </div>
@@ -334,6 +347,7 @@ async function saveNew(): Promise<void> {
         <template #cell-actions="{ row }">
           <div class="row-actions">
             <button
+              type="button"
               class="btn-confirm btn-sm"
               aria-label="Edit"
               title="Edit"
@@ -342,6 +356,7 @@ async function saveNew(): Promise<void> {
               <font-awesome-icon :icon="['fas', 'pen-to-square']" />
             </button>
             <button
+              type="button"
               class="btn-danger btn-sm"
               aria-label="Delete"
               title="Delete"
@@ -383,8 +398,9 @@ async function saveNew(): Promise<void> {
         </select>
       </FormField>
       <FormActions align="start">
-        <button class="btn-neutral" @click="screen = 'categories'">Cancel</button>
+        <button type="button" class="btn-neutral" @click="screen = 'categories'">Cancel</button>
         <button
+          type="button"
           class="btn-confirm"
           :disabled="!patterns.categoryForm.name.trim() || patterns.savingCategory"
           @click="saveCategory"

@@ -63,6 +63,7 @@ function onTrigger(): void {
 <template>
   <button
     v-if="player.playerGame"
+    type="button"
     class="btn-view btn-sm"
     :disabled="!canTrigger"
     :title="title"

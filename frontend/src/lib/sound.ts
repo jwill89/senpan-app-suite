@@ -91,7 +91,7 @@ function playSample(name: string): void {
 export function primeAudio(): void {
   try {
     const ac = getCtx()
-    if (ac && ac.state === 'suspended') void ac.resume()
+    if (ac?.state === 'suspended') void ac.resume()
     // Warm the game samples so the first real event plays without a fetch delay.
     for (const name of ['moogle_noise', 'queue_pop', 'level_up', 'this_is_bad'])
       getSample(name)?.load()
@@ -116,7 +116,7 @@ export function armAudioOnFirstGesture(): void {
     for (const e of events) window.removeEventListener(e, arm, true)
     try {
       const ac = getCtx()
-      if (ac && ac.state === 'suspended') void ac.resume()
+      if (ac?.state === 'suspended') void ac.resume()
     } catch {
       /* non-fatal */
     }

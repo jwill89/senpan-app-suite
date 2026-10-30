@@ -143,10 +143,20 @@ async function submitWebhook(): Promise<void> {
         />
       </FormField>
       <FormActions align="start">
-        <button class="btn-neutral" :disabled="store.savingWebhook" @click="screen = 'list'">
+        <button
+          type="button"
+          class="btn-neutral"
+          :disabled="store.savingWebhook"
+          @click="screen = 'list'"
+        >
           Cancel
         </button>
-        <button class="btn-confirm" :disabled="store.savingWebhook" @click="submitWebhook">
+        <button
+          type="button"
+          class="btn-confirm"
+          :disabled="store.savingWebhook"
+          @click="submitWebhook"
+        >
           <LoadingSpinner v-if="store.savingWebhook" label="Saving..." />
           <template v-else>Save Webhook</template>
         </button>
@@ -157,16 +167,17 @@ async function submitWebhook(): Promise<void> {
     <ManagerView v-else title="Tea Rooms" :icon="['fad', 'booth-curtain']">
       <template #actions>
         <button
+          type="button"
           class="btn-view btn-sm"
           title="Copy the public API link for all rooms (for the Carrd site)"
           @click="copyApiLink()"
         >
           <font-awesome-icon :icon="['fas', 'link']" /> Copy API Link
         </button>
-        <button class="btn-view btn-sm" @click="openWebhook">
+        <button type="button" class="btn-view btn-sm" @click="openWebhook">
           <font-awesome-icon :icon="['fab', 'discord']" /> Webhook
         </button>
-        <button class="btn-confirm btn-sm" @click="openNew">
+        <button type="button" class="btn-confirm btn-sm" @click="openNew">
           <font-awesome-icon :icon="['fas', 'plus']" /> New Tea Room
         </button>
       </template>
@@ -181,8 +192,9 @@ async function submitWebhook(): Promise<void> {
 
       <div v-if="!store.webhookUrl && store.teaRooms.length" class="text-muted text-xs mb-12">
         <font-awesome-icon :icon="['fad', 'triangle-exclamation']" /> No Discord webhook set yet -
-        add one with the <button class="link-btn" @click="openWebhook">Webhook</button> button to
-        post rooms.
+        add one with the
+        <button type="button" class="link-btn" @click="openWebhook">Webhook</button> button to post
+        rooms.
       </div>
 
       <LoadingSpinner
@@ -267,6 +279,7 @@ async function submitWebhook(): Promise<void> {
 
             <template #actions>
               <button
+                type="button"
                 class="btn-action btn-sm"
                 :disabled="store.postingId === t.id"
                 title="Post to Discord now"
@@ -278,6 +291,7 @@ async function submitWebhook(): Promise<void> {
                 >
               </button>
               <button
+                type="button"
                 class="btn-view btn-sm"
                 :disabled="store.togglingId === t.id"
                 :title="t.open ? 'Mark closed' : 'Mark open'"
@@ -287,6 +301,7 @@ async function submitWebhook(): Promise<void> {
                 {{ t.open ? 'Close' : 'Open' }}
               </button>
               <button
+                type="button"
                 class="btn-caution btn-sm"
                 :disabled="store.togglingId === t.id"
                 :title="t.discounted ? 'Remove discount' : 'Mark discounted (50% off)'"
@@ -296,6 +311,7 @@ async function submitWebhook(): Promise<void> {
                 {{ t.discounted ? 'Undiscount' : 'Discount' }}
               </button>
               <button
+                type="button"
                 class="btn-action btn-sm"
                 :disabled="store.togglingId === t.id"
                 :title="t.locked ? 'Unlock this room now' : 'Lock this room'"
@@ -305,6 +321,7 @@ async function submitWebhook(): Promise<void> {
                 {{ t.locked ? 'Unlock' : 'Lock' }}
               </button>
               <button
+                type="button"
                 class="btn-view btn-sm"
                 aria-label="Copy this room's API link"
                 title="Copy this room's API link"
@@ -313,6 +330,7 @@ async function submitWebhook(): Promise<void> {
                 <font-awesome-icon :icon="['fas', 'link']" />
               </button>
               <button
+                type="button"
                 class="btn-confirm btn-sm"
                 aria-label="Edit"
                 title="Edit"
@@ -321,6 +339,7 @@ async function submitWebhook(): Promise<void> {
                 <font-awesome-icon :icon="['fas', 'pen-to-square']" />
               </button>
               <button
+                type="button"
                 class="btn-danger btn-sm"
                 aria-label="Delete"
                 title="Delete"
@@ -358,13 +377,19 @@ async function submitWebhook(): Promise<void> {
       </FormField>
       <FormActions align="start">
         <button
+          type="button"
           class="btn-neutral"
           :disabled="store.togglingId !== null"
           @click="lockTarget = null"
         >
           Cancel
         </button>
-        <button class="btn-action" :disabled="store.togglingId !== null" @click="submitLock">
+        <button
+          type="button"
+          class="btn-action"
+          :disabled="store.togglingId !== null"
+          @click="submitLock"
+        >
           <font-awesome-icon :icon="['fas', 'lock']" /> Lock Room
         </button>
       </FormActions>

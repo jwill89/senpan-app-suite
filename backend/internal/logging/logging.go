@@ -95,7 +95,7 @@ func Setup(filePath string, level slog.Level) (io.Closer, error) {
 	var closer io.Closer
 	var setupErr error
 	if filePath != "" {
-		if err := os.MkdirAll(filepath.Dir(filePath), 0o755); err != nil {
+		if err := os.MkdirAll(filepath.Dir(filePath), 0o755); err != nil { //nolint:gosec // listable like the rest of /var/log; timberjack creates the files in it 0640
 			setupErr = err
 		} else {
 			tj := &timberjack.Logger{

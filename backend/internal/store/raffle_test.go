@@ -19,7 +19,7 @@ func fmtUTC(t time.Time) string {
 
 func mustCreateRaffle(t *testing.T, s *store.Store, title, from, to string) int64 {
 	t.Helper()
-	id, err := s.CreateRaffle(&model.Raffle{
+	id, err := s.CreateRaffle(t.Context(), &model.Raffle{
 		Title:         title,
 		MaxEntries:    1,
 		AvailableFrom: from,
@@ -48,7 +48,7 @@ func TestListRafflesAvailabilityWindow(t *testing.T) {
 	alwaysID := mustCreateRaffle(t, s, "always", "", "")                   // no window
 	legacyPast := mustCreateRaffle(t, s, "legacy", "", "2000-01-01T00:00") // legacy naive, long past
 
-	raffles, err := s.ListRaffles(false)
+	raffles, err := s.ListRaffles(t.Context(), false)
 	if err != nil {
 		t.Fatalf("ListRaffles(false): %v", err)
 	}
@@ -75,7 +75,7 @@ func TestListRafflesAvailabilityWindow(t *testing.T) {
 	}
 
 	// Admin sees everything regardless of the window.
-	all, err := s.ListRaffles(true)
+	all, err := s.ListRaffles(t.Context(), true)
 	if err != nil {
 		t.Fatalf("ListRaffles(true): %v", err)
 	}
@@ -89,13 +89,13 @@ func TestListRafflesAvailabilityWindow(t *testing.T) {
 // same row, and refuses an over-cap add without mutating anything.
 func TestAddOrCreateRaffleEntry(t *testing.T) {
 	s := newTestStore(t)
-	id, err := s.CreateRaffle(&model.Raffle{Title: "Cap", MaxEntries: 5})
+	id, err := s.CreateRaffle(t.Context(), &model.Raffle{Title: "Cap", MaxEntries: 5})
 	if err != nil {
 		t.Fatalf("CreateRaffle: %v", err)
 	}
 
 	// First sign-up creates the row.
-	entryID, total, prev, created, err := s.AddOrCreateRaffleEntry(id, "Cloud", "Gaia", 2, 5)
+	entryID, total, prev, created, err := s.AddOrCreateRaffleEntry(t.Context(), id, "Cloud", "Gaia", 2, 5)
 	if err != nil {
 		t.Fatalf("AddOrCreateRaffleEntry (create): %v", err)
 	}
@@ -104,7 +104,7 @@ func TestAddOrCreateRaffleEntry(t *testing.T) {
 	}
 
 	// Repeat sign-up (different case) folds into the same row.
-	gotID, total, prev, created, err := s.AddOrCreateRaffleEntry(id, "cloud", "GAIA", 1, 5)
+	gotID, total, prev, created, err := s.AddOrCreateRaffleEntry(t.Context(), id, "cloud", "GAIA", 1, 5)
 	if err != nil {
 		t.Fatalf("AddOrCreateRaffleEntry (add): %v", err)
 	}
@@ -113,10 +113,10 @@ func TestAddOrCreateRaffleEntry(t *testing.T) {
 	}
 
 	// Over-cap add is rejected and leaves the row unchanged.
-	if _, _, prev, _, err := s.AddOrCreateRaffleEntry(id, "Cloud", "Gaia", 3, 5); !errors.Is(err, store.ErrRaffleEntryLimit) {
+	if _, _, prev, _, err := s.AddOrCreateRaffleEntry(t.Context(), id, "Cloud", "Gaia", 3, 5); !errors.Is(err, store.ErrRaffleEntryLimit) {
 		t.Fatalf("over-cap add: err=%v (prev=%d); want ErrRaffleEntryLimit", err, prev)
 	}
-	if e, _ := s.GetRaffleEntry(id, "Cloud", "Gaia"); e == nil || e.NumEntries != 3 {
+	if e, _ := s.GetRaffleEntry(t.Context(), id, "Cloud", "Gaia"); e == nil || e.NumEntries != 3 {
 		t.Fatalf("over-cap add must not mutate: entry=%+v; want NumEntries=3", e)
 	}
 }
@@ -130,25 +130,25 @@ func TestAddOrCreateRaffleEntry(t *testing.T) {
 // row could not even be removed. The cap must reject it and touch nothing.
 func TestAddOrCreateRaffleEntryOverflow(t *testing.T) {
 	s := newTestStore(t)
-	id, err := s.CreateRaffle(&model.Raffle{Title: "Overflow", MaxEntries: 3})
+	id, err := s.CreateRaffle(t.Context(), &model.Raffle{Title: "Overflow", MaxEntries: 3})
 	if err != nil {
 		t.Fatalf("CreateRaffle: %v", err)
 	}
 
 	// A row must already exist: with prevEntries==0 the sum cannot wrap, so the
 	// overflow is only reachable on the second sign-up for the same character.
-	if _, _, _, _, err := s.AddOrCreateRaffleEntry(id, "Aria", "Gilgamesh", 1, 3); err != nil {
+	if _, _, _, _, err := s.AddOrCreateRaffleEntry(t.Context(), id, "Aria", "Gilgamesh", 1, 3); err != nil {
 		t.Fatalf("seed entry: %v", err)
 	}
 
-	_, total, _, _, err := s.AddOrCreateRaffleEntry(id, "Aria", "Gilgamesh", math.MaxInt64, 3)
+	_, total, _, _, err := s.AddOrCreateRaffleEntry(t.Context(), id, "Aria", "Gilgamesh", math.MaxInt64, 3)
 	if !errors.Is(err, store.ErrRaffleEntryLimit) {
 		t.Fatalf("overflowing add: err=%v total=%d; want ErrRaffleEntryLimit", err, total)
 	}
 
 	// The row is untouched and still readable - the scan is the part that used to
 	// break, so read it back rather than trusting the return values.
-	e, err := s.GetRaffleEntry(id, "Aria", "Gilgamesh")
+	e, err := s.GetRaffleEntry(t.Context(), id, "Aria", "Gilgamesh")
 	if err != nil {
 		t.Fatalf("entry unreadable after overflowing add (num_entries widened to REAL?): %v", err)
 	}
@@ -162,29 +162,29 @@ func TestAddOrCreateRaffleEntryOverflow(t *testing.T) {
 // paid tickets only (sum of paid num_entries x cost_per_entry).
 func TestListRafflesAdminAggregates(t *testing.T) {
 	s := newTestStore(t)
-	id, err := s.CreateRaffle(&model.Raffle{Title: "Prize", MaxEntries: 10, CostPerEntry: 100})
+	id, err := s.CreateRaffle(t.Context(), &model.Raffle{Title: "Prize", MaxEntries: 10, CostPerEntry: 100})
 	if err != nil {
 		t.Fatalf("CreateRaffle: %v", err)
 	}
 	// One paid entry (3 tickets) -> counts; one unpaid (2 tickets) -> excluded.
-	paidID, err := s.CreateRaffleEntry(id, "Aria", "Gilgamesh", 3)
+	paidID, err := s.CreateRaffleEntry(t.Context(), id, "Aria", "Gilgamesh", 3)
 	if err != nil {
 		t.Fatalf("CreateRaffleEntry (paid): %v", err)
 	}
-	if _, err := s.CreateRaffleEntry(id, "Borin", "Hades", 2); err != nil {
+	if _, err := s.CreateRaffleEntry(t.Context(), id, "Borin", "Hades", 2); err != nil {
 		t.Fatalf("CreateRaffleEntry (unpaid): %v", err)
 	}
-	if _, err := s.SetRaffleEntryPaid(paidID, true, 0, 0); err != nil {
+	if _, err := s.SetRaffleEntryPaid(t.Context(), paidID, true, 0, 0); err != nil {
 		t.Fatalf("SetRaffleEntryPaid: %v", err)
 	}
-	if err := s.SetRaffleWinner(id, &paidID); err != nil {
+	if err := s.SetRaffleWinner(t.Context(), id, &paidID); err != nil {
 		t.Fatalf("SetRaffleWinner: %v", err)
 	}
-	if err := s.SetRaffleStatus(id, "closed"); err != nil {
+	if err := s.SetRaffleStatus(t.Context(), id, "closed"); err != nil {
 		t.Fatalf("SetRaffleStatus: %v", err)
 	}
 
-	all, err := s.ListRaffles(true)
+	all, err := s.ListRaffles(t.Context(), true)
 	if err != nil {
 		t.Fatalf("ListRaffles(true): %v", err)
 	}
@@ -205,7 +205,7 @@ func TestListRafflesAdminAggregates(t *testing.T) {
 	}
 
 	// The public list omits both aggregates.
-	pub, err := s.ListRaffles(false)
+	pub, err := s.ListRaffles(t.Context(), false)
 	if err != nil {
 		t.Fatalf("ListRaffles(false): %v", err)
 	}
@@ -261,7 +261,7 @@ func TestRaffleEntryCostByMode(t *testing.T) {
 // and that a raffle stored before entry modes existed reads back as "single".
 func TestRaffleTierCostsRoundTrip(t *testing.T) {
 	s := newTestStore(t)
-	id, err := s.CreateRaffle(&model.Raffle{
+	id, err := s.CreateRaffle(t.Context(), &model.Raffle{
 		Title:      "Tiered",
 		MaxEntries: 3,
 		EntryMode:  model.RaffleModeCustom,
@@ -270,7 +270,7 @@ func TestRaffleTierCostsRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateRaffle: %v", err)
 	}
-	got, err := s.GetRaffle(id)
+	got, err := s.GetRaffle(t.Context(), id)
 	if err != nil || got == nil {
 		t.Fatalf("GetRaffle: %v (raffle=%v)", err, got)
 	}
@@ -286,10 +286,10 @@ func TestRaffleTierCostsRoundTrip(t *testing.T) {
 	got.EntryMode = model.RaffleModeSingle
 	got.TierCosts = nil
 	got.CostPerEntry = 25_000
-	if err := s.UpdateRaffle(got); err != nil {
+	if err := s.UpdateRaffle(t.Context(), got); err != nil {
 		t.Fatalf("UpdateRaffle: %v", err)
 	}
-	after, err := s.GetRaffle(id)
+	after, err := s.GetRaffle(t.Context(), id)
 	if err != nil || after == nil {
 		t.Fatalf("GetRaffle after update: %v", err)
 	}
@@ -307,7 +307,7 @@ func TestRaffleTierCostsRoundTrip(t *testing.T) {
 // sum would report 200k.
 func TestListRafflesAdminTieredTotal(t *testing.T) {
 	s := newTestStore(t)
-	id, err := s.CreateRaffle(&model.Raffle{
+	id, err := s.CreateRaffle(t.Context(), &model.Raffle{
 		Title:      "Tiered",
 		MaxEntries: 3,
 		EntryMode:  model.RaffleModeCustom,
@@ -316,26 +316,26 @@ func TestListRafflesAdminTieredTotal(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateRaffle: %v", err)
 	}
-	oneTicket, err := s.CreateRaffleEntry(id, "Aria", "Gilgamesh", 1)
+	oneTicket, err := s.CreateRaffleEntry(t.Context(), id, "Aria", "Gilgamesh", 1)
 	if err != nil {
 		t.Fatalf("CreateRaffleEntry: %v", err)
 	}
-	threeTickets, err := s.CreateRaffleEntry(id, "Borin", "Hades", 3)
+	threeTickets, err := s.CreateRaffleEntry(t.Context(), id, "Borin", "Hades", 3)
 	if err != nil {
 		t.Fatalf("CreateRaffleEntry: %v", err)
 	}
-	unpaid, err := s.CreateRaffleEntry(id, "Ceri", "Ravana", 2)
+	unpaid, err := s.CreateRaffleEntry(t.Context(), id, "Ceri", "Ravana", 2)
 	if err != nil {
 		t.Fatalf("CreateRaffleEntry: %v", err)
 	}
 	_ = unpaid
 	for _, e := range []int64{oneTicket, threeTickets} {
-		if _, err := s.SetRaffleEntryPaid(e, true, 0, 0); err != nil {
+		if _, err := s.SetRaffleEntryPaid(t.Context(), e, true, 0, 0); err != nil {
 			t.Fatalf("SetRaffleEntryPaid: %v", err)
 		}
 	}
 
-	all, err := s.ListRaffles(true)
+	all, err := s.ListRaffles(t.Context(), true)
 	if err != nil {
 		t.Fatalf("ListRaffles(true): %v", err)
 	}
@@ -358,18 +358,18 @@ func TestListRafflesAdminTieredTotal(t *testing.T) {
 // paid and a paid-only draw would find no one.
 func TestPickRaffleWinnerIncludesUnpaid(t *testing.T) {
 	s := newTestStore(t)
-	id, err := s.CreateRaffle(&model.Raffle{Title: "Info", MaxEntries: 1, EntryMode: model.RaffleModeDetails})
+	id, err := s.CreateRaffle(t.Context(), &model.Raffle{Title: "Info", MaxEntries: 1, EntryMode: model.RaffleModeDetails})
 	if err != nil {
 		t.Fatalf("CreateRaffle: %v", err)
 	}
-	if _, err := s.CreateRaffleEntry(id, "Aria", "Gilgamesh", 1); err != nil {
+	if _, err := s.CreateRaffleEntry(t.Context(), id, "Aria", "Gilgamesh", 1); err != nil {
 		t.Fatalf("CreateRaffleEntry: %v", err)
 	}
 
-	if winner, err := s.PickRaffleWinner(id, true); err != nil || winner != nil {
+	if winner, err := s.PickRaffleWinner(t.Context(), id, true); err != nil || winner != nil {
 		t.Fatalf("paid-only pick: winner=%v err=%v; want no winner", winner, err)
 	}
-	winner, err := s.PickRaffleWinner(id, false)
+	winner, err := s.PickRaffleWinner(t.Context(), id, false)
 	if err != nil {
 		t.Fatalf("PickRaffleWinner: %v", err)
 	}
@@ -383,21 +383,21 @@ func TestPickRaffleWinnerIncludesUnpaid(t *testing.T) {
 // whose first ticket was free and who later buys two more keeps both waivers.
 func TestRaffleEntryWaiverIsAdditive(t *testing.T) {
 	s := newTestStore(t)
-	id, err := s.CreateRaffle(&model.Raffle{Title: "Waived", MaxEntries: 3, CostPerEntry: 50_000})
+	id, err := s.CreateRaffle(t.Context(), &model.Raffle{Title: "Waived", MaxEntries: 3, CostPerEntry: 50_000})
 	if err != nil {
 		t.Fatalf("CreateRaffle: %v", err)
 	}
-	entryID, err := s.CreateRaffleEntry(id, "Aria", "Gilgamesh", 1)
+	entryID, err := s.CreateRaffleEntry(t.Context(), id, "Aria", "Gilgamesh", 1)
 	if err != nil {
 		t.Fatalf("CreateRaffleEntry: %v", err)
 	}
 
 	// First ticket settled, entirely waived - nothing collected.
-	if _, err := s.SetRaffleEntryPaid(entryID, true, 0, 50_000); err != nil {
+	if _, err := s.SetRaffleEntryPaid(t.Context(), entryID, true, 0, 50_000); err != nil {
 		t.Fatalf("SetRaffleEntryPaid: %v", err)
 	}
-	raffle, _ := s.GetRaffle(id)
-	e, _ := s.GetRaffleEntryByID(entryID)
+	raffle, _ := s.GetRaffle(t.Context(), id)
+	e, _ := s.GetRaffleEntryByID(t.Context(), entryID)
 	if !e.Paid || e.PaidEntries != 1 {
 		t.Fatalf("after first settlement: paid=%v paid_entries=%d; want true/1", e.Paid, e.PaidEntries)
 	}
@@ -407,10 +407,10 @@ func TestRaffleEntryWaiverIsAdditive(t *testing.T) {
 
 	// Two more tickets bought later: the row falls back to partial, keeping what
 	// it already settled and waived.
-	if _, _, _, _, err := s.AddOrCreateRaffleEntry(id, "Aria", "Gilgamesh", 2, 3); err != nil {
+	if _, _, _, _, err := s.AddOrCreateRaffleEntry(t.Context(), id, "Aria", "Gilgamesh", 2, 3); err != nil {
 		t.Fatalf("AddOrCreateRaffleEntry: %v", err)
 	}
-	e, _ = s.GetRaffleEntryByID(entryID)
+	e, _ = s.GetRaffleEntryByID(t.Context(), entryID)
 	if e.Paid {
 		t.Error("row must leave paid once unsettled tickets are added")
 	}
@@ -425,10 +425,10 @@ func TestRaffleEntryWaiverIsAdditive(t *testing.T) {
 	}
 
 	// Settling again waives another 25,000 ON TOP of the first waiver.
-	if _, err := s.SetRaffleEntryPaid(entryID, true, 0, 25_000); err != nil {
+	if _, err := s.SetRaffleEntryPaid(t.Context(), entryID, true, 0, 25_000); err != nil {
 		t.Fatalf("SetRaffleEntryPaid (second): %v", err)
 	}
-	e, _ = s.GetRaffleEntryByID(entryID)
+	e, _ = s.GetRaffleEntryByID(t.Context(), entryID)
 	if e.AmountWaived != 75_000 {
 		t.Fatalf("amount_waived = %v; want 75000 (50000 + 25000, not overwritten)", e.AmountWaived)
 	}
@@ -442,10 +442,10 @@ func TestRaffleEntryWaiverIsAdditive(t *testing.T) {
 
 	// Clearing the settlement resets both counters - a mis-click must not leave a
 	// waiver credited against an unpaid entry.
-	if _, err := s.SetRaffleEntryPaid(entryID, false, 0, 0); err != nil {
+	if _, err := s.SetRaffleEntryPaid(t.Context(), entryID, false, 0, 0); err != nil {
 		t.Fatalf("SetRaffleEntryPaid (clear): %v", err)
 	}
-	e, _ = s.GetRaffleEntryByID(entryID)
+	e, _ = s.GetRaffleEntryByID(t.Context(), entryID)
 	if e.Paid || e.PaidEntries != 0 || e.AmountWaived != 0 {
 		t.Errorf("after clearing: %+v; want nothing settled and nothing waived", e)
 	}
@@ -456,13 +456,13 @@ func TestRaffleEntryWaiverIsAdditive(t *testing.T) {
 // negative that would eat into another entry's contribution.
 func TestRaffleWaiverNeverGoesNegative(t *testing.T) {
 	s := newTestStore(t)
-	id, _ := s.CreateRaffle(&model.Raffle{Title: "Over-waived", MaxEntries: 1, CostPerEntry: 1_000})
-	entryID, _ := s.CreateRaffleEntry(id, "Aria", "Gilgamesh", 1)
-	if _, err := s.SetRaffleEntryPaid(entryID, true, 0, 9_999); err != nil {
+	id, _ := s.CreateRaffle(t.Context(), &model.Raffle{Title: "Over-waived", MaxEntries: 1, CostPerEntry: 1_000})
+	entryID, _ := s.CreateRaffleEntry(t.Context(), id, "Aria", "Gilgamesh", 1)
+	if _, err := s.SetRaffleEntryPaid(t.Context(), entryID, true, 0, 9_999); err != nil {
 		t.Fatalf("SetRaffleEntryPaid: %v", err)
 	}
 
-	all, err := s.ListRaffles(true)
+	all, err := s.ListRaffles(t.Context(), true)
 	if err != nil {
 		t.Fatalf("ListRaffles(true): %v", err)
 	}
@@ -478,7 +478,7 @@ func TestRaffleWaiverNeverGoesNegative(t *testing.T) {
 // including from a partly-settled entry.
 func TestListRafflesAdminNetsOffWaivers(t *testing.T) {
 	s := newTestStore(t)
-	id, err := s.CreateRaffle(&model.Raffle{
+	id, err := s.CreateRaffle(t.Context(), &model.Raffle{
 		Title:      "Tiered",
 		MaxEntries: 3,
 		EntryMode:  model.RaffleModeCustom,
@@ -488,24 +488,24 @@ func TestListRafflesAdminNetsOffWaivers(t *testing.T) {
 		t.Fatalf("CreateRaffle: %v", err)
 	}
 	// Fully settled, 3 tickets (300,000) with 100,000 waived -> 200,000.
-	full, _ := s.CreateRaffleEntry(id, "Aria", "Gilgamesh", 3)
-	if _, err := s.SetRaffleEntryPaid(full, true, 0, 100_000); err != nil {
+	full, _ := s.CreateRaffleEntry(t.Context(), id, "Aria", "Gilgamesh", 3)
+	if _, err := s.SetRaffleEntryPaid(t.Context(), full, true, 0, 100_000); err != nil {
 		t.Fatalf("SetRaffleEntryPaid: %v", err)
 	}
 	// Settled 1 of 3 (50,000), nothing waived -> 50,000 collected.
-	partial, _ := s.CreateRaffleEntry(id, "Borin", "Hades", 1)
-	if _, err := s.SetRaffleEntryPaid(partial, true, 0, 0); err != nil {
+	partial, _ := s.CreateRaffleEntry(t.Context(), id, "Borin", "Hades", 1)
+	if _, err := s.SetRaffleEntryPaid(t.Context(), partial, true, 0, 0); err != nil {
 		t.Fatalf("SetRaffleEntryPaid: %v", err)
 	}
-	if _, _, _, _, err := s.AddOrCreateRaffleEntry(id, "Borin", "Hades", 2, 3); err != nil {
+	if _, _, _, _, err := s.AddOrCreateRaffleEntry(t.Context(), id, "Borin", "Hades", 2, 3); err != nil {
 		t.Fatalf("AddOrCreateRaffleEntry: %v", err)
 	}
 	// Never settled -> contributes nothing.
-	if _, err := s.CreateRaffleEntry(id, "Ceri", "Ravana", 2); err != nil {
+	if _, err := s.CreateRaffleEntry(t.Context(), id, "Ceri", "Ravana", 2); err != nil {
 		t.Fatalf("CreateRaffleEntry: %v", err)
 	}
 
-	all, err := s.ListRaffles(true)
+	all, err := s.ListRaffles(t.Context(), true)
 	if err != nil {
 		t.Fatalf("ListRaffles(true): %v", err)
 	}
@@ -528,29 +528,29 @@ func TestListRafflesAdminNetsOffWaivers(t *testing.T) {
 // chance - not excluded outright, and not given all three.
 func TestPickRaffleWinnerWeightsBySettledTickets(t *testing.T) {
 	s := newTestStore(t)
-	id, err := s.CreateRaffle(&model.Raffle{Title: "Weighted", MaxEntries: 3, CostPerEntry: 100})
+	id, err := s.CreateRaffle(t.Context(), &model.Raffle{Title: "Weighted", MaxEntries: 3, CostPerEntry: 100})
 	if err != nil {
 		t.Fatalf("CreateRaffle: %v", err)
 	}
-	partial, err := s.CreateRaffleEntry(id, "Aria", "Gilgamesh", 1)
+	partial, err := s.CreateRaffleEntry(t.Context(), id, "Aria", "Gilgamesh", 1)
 	if err != nil {
 		t.Fatalf("CreateRaffleEntry: %v", err)
 	}
-	if _, err := s.SetRaffleEntryPaid(partial, true, 0, 0); err != nil {
+	if _, err := s.SetRaffleEntryPaid(t.Context(), partial, true, 0, 0); err != nil {
 		t.Fatalf("SetRaffleEntryPaid: %v", err)
 	}
-	if _, _, _, _, err := s.AddOrCreateRaffleEntry(id, "Aria", "Gilgamesh", 2, 3); err != nil {
+	if _, _, _, _, err := s.AddOrCreateRaffleEntry(t.Context(), id, "Aria", "Gilgamesh", 2, 3); err != nil {
 		t.Fatalf("AddOrCreateRaffleEntry: %v", err)
 	}
 	// A wholly unpaid entrant must still be excluded.
-	if _, err := s.CreateRaffleEntry(id, "Ceri", "Ravana", 3); err != nil {
+	if _, err := s.CreateRaffleEntry(t.Context(), id, "Ceri", "Ravana", 3); err != nil {
 		t.Fatalf("CreateRaffleEntry: %v", err)
 	}
 
 	// Aria is the only eligible entrant, so every draw must land on her - which
 	// also proves the unpaid entry contributes no weight.
-	for i := 0; i < 25; i++ {
-		winner, err := s.PickRaffleWinner(id, true)
+	for range 25 {
+		winner, err := s.PickRaffleWinner(t.Context(), id, true)
 		if err != nil {
 			t.Fatalf("PickRaffleWinner: %v", err)
 		}
@@ -569,13 +569,13 @@ func TestPickRaffleWinnerWeightsBySettledTickets(t *testing.T) {
 // sees the settled one.
 func TestPickRaffleWinnerSkipsUnsettledEntries(t *testing.T) {
 	s := newTestStore(t)
-	id, _ := s.CreateRaffle(&model.Raffle{Title: "Weighted", MaxEntries: 9, CostPerEntry: 100})
-	settled, _ := s.CreateRaffleEntry(id, "Aria", "Gilgamesh", 1)
-	_, _ = s.SetRaffleEntryPaid(settled, true, 0, 0)
-	_, _ = s.CreateRaffleEntry(id, "Borin", "Hades", 9) // never settled
+	id, _ := s.CreateRaffle(t.Context(), &model.Raffle{Title: "Weighted", MaxEntries: 9, CostPerEntry: 100})
+	settled, _ := s.CreateRaffleEntry(t.Context(), id, "Aria", "Gilgamesh", 1)
+	_, _ = s.SetRaffleEntryPaid(t.Context(), settled, true, 0, 0)
+	_, _ = s.CreateRaffleEntry(t.Context(), id, "Borin", "Hades", 9) // never settled
 
-	for i := 0; i < 50; i++ {
-		winner, err := s.PickRaffleWinner(id, true)
+	for range 50 {
+		winner, err := s.PickRaffleWinner(t.Context(), id, true)
 		if err != nil || winner == nil {
 			t.Fatalf("PickRaffleWinner: winner=%v err=%v", winner, err)
 		}
@@ -616,14 +616,14 @@ func TestEntryCostWalksTheLadderNotTheTickets(t *testing.T) {
 // raffle took in.
 func TestSetRaffleEntryPaidIsIdempotent(t *testing.T) {
 	s := newTestStore(t)
-	id, _ := s.CreateRaffle(&model.Raffle{Title: "Twice", MaxEntries: 3, CostPerEntry: 50_000})
-	entryID, _ := s.CreateRaffleEntry(id, "Aria", "Gilgamesh", 3)
+	id, _ := s.CreateRaffle(t.Context(), &model.Raffle{Title: "Twice", MaxEntries: 3, CostPerEntry: 50_000})
+	entryID, _ := s.CreateRaffleEntry(t.Context(), id, "Aria", "Gilgamesh", 3)
 
-	applied, err := s.SetRaffleEntryPaid(entryID, true, 0, 20_000)
+	applied, err := s.SetRaffleEntryPaid(t.Context(), entryID, true, 0, 20_000)
 	if err != nil || !applied {
 		t.Fatalf("first settlement: applied=%v err=%v; want applied", applied, err)
 	}
-	applied, err = s.SetRaffleEntryPaid(entryID, true, 0, 20_000)
+	applied, err = s.SetRaffleEntryPaid(t.Context(), entryID, true, 0, 20_000)
 	if err != nil {
 		t.Fatalf("second settlement: %v", err)
 	}
@@ -631,17 +631,17 @@ func TestSetRaffleEntryPaidIsIdempotent(t *testing.T) {
 		t.Error("a repeat settlement with nothing outstanding must be a no-op")
 	}
 
-	e, _ := s.GetRaffleEntryByID(entryID)
+	e, _ := s.GetRaffleEntryByID(t.Context(), entryID)
 	if e.AmountWaived != 20_000 {
 		t.Errorf("amount_waived = %v; want 20000 (not stacked twice)", e.AmountWaived)
 	}
 
 	// Buying more tickets makes a settlement meaningful again, and THAT waiver
 	// does accumulate.
-	if _, _, _, _, err := s.AddOrCreateRaffleEntry(id, "Aria", "Gilgamesh", 0, 3); err == nil {
+	if _, _, _, _, err := s.AddOrCreateRaffleEntry(t.Context(), id, "Aria", "Gilgamesh", 0, 3); err == nil {
 		t.Log("zero-ticket add is a no-op, as expected")
 	}
-	e, _ = s.GetRaffleEntryByID(entryID)
+	e, _ = s.GetRaffleEntryByID(t.Context(), entryID)
 	if e.AmountWaived != 20_000 {
 		t.Errorf("amount_waived = %v; want it unchanged by a no-op add", e.AmountWaived)
 	}
@@ -652,17 +652,17 @@ func TestSetRaffleEntryPaidIsIdempotent(t *testing.T) {
 // more to show.
 func TestLookupRaffleEntries(t *testing.T) {
 	s := newTestStore(t)
-	id, _ := s.CreateRaffle(&model.Raffle{Title: "Search", MaxEntries: 3, CostPerEntry: 100})
-	other, _ := s.CreateRaffle(&model.Raffle{Title: "Other", MaxEntries: 3, CostPerEntry: 100})
+	id, _ := s.CreateRaffle(t.Context(), &model.Raffle{Title: "Search", MaxEntries: 3, CostPerEntry: 100})
+	other, _ := s.CreateRaffle(t.Context(), &model.Raffle{Title: "Other", MaxEntries: 3, CostPerEntry: 100})
 
-	part, _ := s.CreateRaffleEntry(id, "Aria Fairwind", "Gilgamesh", 3)
-	_, _ = s.SetRaffleEntryPaid(part, true, 0, 0)
-	_, _, _, _, _ = s.AddOrCreateRaffleEntry(id, "Aria Fairwind", "Gilgamesh", 0, 3)
-	_, _ = s.CreateRaffleEntry(id, "Borin Stoneheart", "Hades", 1)
-	_, _ = s.CreateRaffleEntry(other, "Aria Fairwind", "Gilgamesh", 1)
+	part, _ := s.CreateRaffleEntry(t.Context(), id, "Aria Fairwind", "Gilgamesh", 3)
+	_, _ = s.SetRaffleEntryPaid(t.Context(), part, true, 0, 0)
+	_, _, _, _, _ = s.AddOrCreateRaffleEntry(t.Context(), id, "Aria Fairwind", "Gilgamesh", 0, 3)
+	_, _ = s.CreateRaffleEntry(t.Context(), id, "Borin Stoneheart", "Hades", 1)
+	_, _ = s.CreateRaffleEntry(t.Context(), other, "Aria Fairwind", "Gilgamesh", 1)
 
 	// Substring, case-insensitive, and scoped to this raffle only.
-	hits, truncated, err := s.LookupRaffleEntries(id, "aria", 50)
+	hits, truncated, err := s.LookupRaffleEntries(t.Context(), id, "aria", 50)
 	if err != nil {
 		t.Fatalf("LookupRaffleEntries: %v", err)
 	}
@@ -681,11 +681,11 @@ func TestLookupRaffleEntries(t *testing.T) {
 	}
 
 	// A mid-name substring works, which is the point of the search.
-	if hits, _, _ := s.LookupRaffleEntries(id, "stoneheart", 50); len(hits) != 1 {
+	if hits, _, _ := s.LookupRaffleEntries(t.Context(), id, "stoneheart", 50); len(hits) != 1 {
 		t.Errorf("mid-name search = %+v; want Borin", hits)
 	}
 	// A miss is an empty list, not an error.
-	if hits, _, err := s.LookupRaffleEntries(id, "nobody", 50); err != nil || len(hits) != 0 {
+	if hits, _, err := s.LookupRaffleEntries(t.Context(), id, "nobody", 50); err != nil || len(hits) != 0 {
 		t.Errorf("miss = %+v (err %v); want an empty list", hits, err)
 	}
 }
@@ -695,13 +695,13 @@ func TestLookupRaffleEntries(t *testing.T) {
 // character and "%" would match the lot.
 func TestLookupRaffleEntriesEscapesWildcards(t *testing.T) {
 	s := newTestStore(t)
-	id, _ := s.CreateRaffle(&model.Raffle{Title: "Wild", MaxEntries: 1})
-	_, _ = s.CreateRaffleEntry(id, "Aria", "Gilgamesh", 1)
-	_, _ = s.CreateRaffleEntry(id, "Borin", "Hades", 1)
-	_, _ = s.CreateRaffleEntry(id, "Under_score", "Ravana", 1)
+	id, _ := s.CreateRaffle(t.Context(), &model.Raffle{Title: "Wild", MaxEntries: 1})
+	_, _ = s.CreateRaffleEntry(t.Context(), id, "Aria", "Gilgamesh", 1)
+	_, _ = s.CreateRaffleEntry(t.Context(), id, "Borin", "Hades", 1)
+	_, _ = s.CreateRaffleEntry(t.Context(), id, "Under_score", "Ravana", 1)
 
 	for _, q := range []string{"%", "__", `\`} {
-		hits, _, err := s.LookupRaffleEntries(id, q, 50)
+		hits, _, err := s.LookupRaffleEntries(t.Context(), id, q, 50)
 		if err != nil {
 			t.Fatalf("LookupRaffleEntries(%q): %v", q, err)
 		}
@@ -712,7 +712,7 @@ func TestLookupRaffleEntriesEscapesWildcards(t *testing.T) {
 		}
 	}
 	// The literal underscore still finds the name that actually contains one.
-	if hits, _, _ := s.LookupRaffleEntries(id, "r_s", 50); len(hits) != 1 {
+	if hits, _, _ := s.LookupRaffleEntries(t.Context(), id, "r_s", 50); len(hits) != 1 {
 		t.Errorf(`search "r_s" = %+v; want the literal Under_score`, hits)
 	}
 }
@@ -721,14 +721,14 @@ func TestLookupRaffleEntriesEscapesWildcards(t *testing.T) {
 // passing itself off as every match.
 func TestLookupRaffleEntriesTruncates(t *testing.T) {
 	s := newTestStore(t)
-	id, _ := s.CreateRaffle(&model.Raffle{Title: "Many", MaxEntries: 1})
-	for i := 0; i < 5; i++ {
-		if _, err := s.CreateRaffleEntry(id, "Aria"+string(rune('A'+i)), "Gilgamesh", 1); err != nil {
+	id, _ := s.CreateRaffle(t.Context(), &model.Raffle{Title: "Many", MaxEntries: 1})
+	for i := range 5 {
+		if _, err := s.CreateRaffleEntry(t.Context(), id, "Aria"+string(rune('A'+i)), "Gilgamesh", 1); err != nil {
 			t.Fatalf("CreateRaffleEntry: %v", err)
 		}
 	}
 
-	hits, truncated, err := s.LookupRaffleEntries(id, "aria", 3)
+	hits, truncated, err := s.LookupRaffleEntries(t.Context(), id, "aria", 3)
 	if err != nil {
 		t.Fatalf("LookupRaffleEntries: %v", err)
 	}
@@ -736,7 +736,7 @@ func TestLookupRaffleEntriesTruncates(t *testing.T) {
 		t.Errorf("hits=%d truncated=%v; want 3 and truncated", len(hits), truncated)
 	}
 	// Exactly at the limit is NOT truncated.
-	if _, truncated, _ := s.LookupRaffleEntries(id, "ariaA", 1); truncated {
+	if _, truncated, _ := s.LookupRaffleEntries(t.Context(), id, "ariaA", 1); truncated {
 		t.Error("an exact-fit result must not report truncation")
 	}
 }
@@ -747,7 +747,7 @@ func TestLookupRaffleEntriesTruncates(t *testing.T) {
 // go.
 func TestRafflePayImageRoundTrip(t *testing.T) {
 	s := newTestStore(t)
-	id, err := s.CreateRaffle(&model.Raffle{
+	id, err := s.CreateRaffle(t.Context(), &model.Raffle{
 		Title:      "Prize",
 		MaxEntries: 1,
 		PrizeImage: "images/raffles/prize.png",
@@ -756,7 +756,7 @@ func TestRafflePayImageRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateRaffle: %v", err)
 	}
-	got, err := s.GetRaffle(id)
+	got, err := s.GetRaffle(t.Context(), id)
 	if err != nil || got == nil {
 		t.Fatalf("GetRaffle: %v", err)
 	}
@@ -769,10 +769,10 @@ func TestRafflePayImageRoundTrip(t *testing.T) {
 	}
 
 	got.PayImage = ""
-	if err := s.UpdateRaffle(got); err != nil {
+	if err := s.UpdateRaffle(t.Context(), got); err != nil {
 		t.Fatalf("UpdateRaffle: %v", err)
 	}
-	after, _ := s.GetRaffle(id)
+	after, _ := s.GetRaffle(t.Context(), id)
 	if after.PayImage != "" {
 		t.Errorf("pay_image = %q; want it cleared", after.PayImage)
 	}
@@ -782,18 +782,18 @@ func TestRafflePayImageRoundTrip(t *testing.T) {
 // over gil for two of their three entries now and the rest later.
 func TestSetRaffleEntryPaidPartial(t *testing.T) {
 	s := newTestStore(t)
-	id, _ := s.CreateRaffle(&model.Raffle{
+	id, _ := s.CreateRaffle(t.Context(), &model.Raffle{
 		Title: "Tiered", MaxEntries: 3,
 		EntryMode: model.RaffleModeCustom, TierCosts: []float64{50_000, 100_000, 150_000},
 	})
-	entryID, _ := s.CreateRaffleEntry(id, "Aria", "Gilgamesh", 3)
+	entryID, _ := s.CreateRaffleEntry(t.Context(), id, "Aria", "Gilgamesh", 3)
 
-	applied, err := s.SetRaffleEntryPaid(entryID, true, 2, 0)
+	applied, err := s.SetRaffleEntryPaid(t.Context(), entryID, true, 2, 0)
 	if err != nil || !applied {
 		t.Fatalf("part settlement: applied=%v err=%v; want applied", applied, err)
 	}
-	raffle, _ := s.GetRaffle(id)
-	e, _ := s.GetRaffleEntryByID(entryID)
+	raffle, _ := s.GetRaffle(t.Context(), id)
+	e, _ := s.GetRaffleEntryByID(t.Context(), entryID)
 	if e.PaidEntries != 2 || e.Paid {
 		t.Fatalf("entry = %+v; want 2 settled and NOT fully paid", e)
 	}
@@ -808,10 +808,10 @@ func TestSetRaffleEntryPaidPartial(t *testing.T) {
 	}
 
 	// Settling the rest completes it, and the waiver accumulates as always.
-	if _, err := s.SetRaffleEntryPaid(entryID, true, 3, 25_000); err != nil {
+	if _, err := s.SetRaffleEntryPaid(t.Context(), entryID, true, 3, 25_000); err != nil {
 		t.Fatalf("final settlement: %v", err)
 	}
-	e, _ = s.GetRaffleEntryByID(entryID)
+	e, _ = s.GetRaffleEntryByID(t.Context(), entryID)
 	if !e.Paid || e.PaidEntries != 3 || e.AmountWaived != 25_000 {
 		t.Errorf("entry = %+v; want fully paid, 3 settled, 25000 waived", e)
 	}
@@ -822,20 +822,20 @@ func TestSetRaffleEntryPaidPartial(t *testing.T) {
 // (and must not bank its waiver either). Clearing is the way to undo.
 func TestSetRaffleEntryPaidNeverGoesBackwards(t *testing.T) {
 	s := newTestStore(t)
-	id, _ := s.CreateRaffle(&model.Raffle{Title: "Back", MaxEntries: 3, CostPerEntry: 100})
-	entryID, _ := s.CreateRaffleEntry(id, "Aria", "Gilgamesh", 3)
+	id, _ := s.CreateRaffle(t.Context(), &model.Raffle{Title: "Back", MaxEntries: 3, CostPerEntry: 100})
+	entryID, _ := s.CreateRaffleEntry(t.Context(), id, "Aria", "Gilgamesh", 3)
 
-	if _, err := s.SetRaffleEntryPaid(entryID, true, 3, 10); err != nil {
+	if _, err := s.SetRaffleEntryPaid(t.Context(), entryID, true, 3, 10); err != nil {
 		t.Fatalf("SetRaffleEntryPaid: %v", err)
 	}
-	applied, err := s.SetRaffleEntryPaid(entryID, true, 1, 999)
+	applied, err := s.SetRaffleEntryPaid(t.Context(), entryID, true, 1, 999)
 	if err != nil {
 		t.Fatalf("SetRaffleEntryPaid: %v", err)
 	}
 	if applied {
 		t.Error("a lower ticket count must not apply")
 	}
-	e, _ := s.GetRaffleEntryByID(entryID)
+	e, _ := s.GetRaffleEntryByID(t.Context(), entryID)
 	if e.PaidEntries != 3 || !e.Paid || e.AmountWaived != 10 {
 		t.Errorf("entry = %+v; want it untouched at 3 settled / 10 waived", e)
 	}
@@ -846,17 +846,17 @@ func TestSetRaffleEntryPaidNeverGoesBackwards(t *testing.T) {
 // collected total price tickets nobody bought.
 func TestSetRaffleEntryPaidClampsToTickets(t *testing.T) {
 	s := newTestStore(t)
-	id, _ := s.CreateRaffle(&model.Raffle{Title: "Clamp", MaxEntries: 2, CostPerEntry: 100})
-	entryID, _ := s.CreateRaffleEntry(id, "Aria", "Gilgamesh", 2)
+	id, _ := s.CreateRaffle(t.Context(), &model.Raffle{Title: "Clamp", MaxEntries: 2, CostPerEntry: 100})
+	entryID, _ := s.CreateRaffleEntry(t.Context(), id, "Aria", "Gilgamesh", 2)
 
-	if _, err := s.SetRaffleEntryPaid(entryID, true, 99, 0); err != nil {
+	if _, err := s.SetRaffleEntryPaid(t.Context(), entryID, true, 99, 0); err != nil {
 		t.Fatalf("SetRaffleEntryPaid: %v", err)
 	}
-	e, _ := s.GetRaffleEntryByID(entryID)
+	e, _ := s.GetRaffleEntryByID(t.Context(), entryID)
 	if e.PaidEntries != 2 || !e.Paid {
 		t.Errorf("entry = %+v; want it clamped to its 2 tickets and fully paid", e)
 	}
-	raffle, _ := s.GetRaffle(id)
+	raffle, _ := s.GetRaffle(t.Context(), id)
 	if got := raffle.AmountCollected(*e); got != 200 {
 		t.Errorf("collected = %v; want 200, not a price for tickets nobody bought", got)
 	}
@@ -870,11 +870,11 @@ func TestSetRaffleEntryPaidClampsToTickets(t *testing.T) {
 // that a backslash behaves as the literal character somebody typed.
 func TestLookupRaffleEntriesEscapesBackslash(t *testing.T) {
 	s := newTestStore(t)
-	id, _ := s.CreateRaffle(&model.Raffle{Title: "Backslash", MaxEntries: 1})
-	_, _ = s.CreateRaffleEntry(id, `Back\slash`, "Hades", 1)
-	_, _ = s.CreateRaffleEntry(id, "Aria", "Gilgamesh", 1)
+	id, _ := s.CreateRaffle(t.Context(), &model.Raffle{Title: "Backslash", MaxEntries: 1})
+	_, _ = s.CreateRaffleEntry(t.Context(), id, `Back\slash`, "Hades", 1)
+	_, _ = s.CreateRaffleEntry(t.Context(), id, "Aria", "Gilgamesh", 1)
 
-	hits, _, err := s.LookupRaffleEntries(id, `\`, 50)
+	hits, _, err := s.LookupRaffleEntries(t.Context(), id, `\`, 50)
 	if err != nil {
 		t.Fatalf(`LookupRaffleEntries(\): %v`, err)
 	}
@@ -884,7 +884,7 @@ func TestLookupRaffleEntriesEscapesBackslash(t *testing.T) {
 
 	// "\%" is a backslash followed by a percent: two literal characters, matching
 	// nobody here. Unescaped it read as an escaped percent and matched the lot.
-	if hits, _, err := s.LookupRaffleEntries(id, `\%`, 50); err != nil || len(hits) != 0 {
+	if hits, _, err := s.LookupRaffleEntries(t.Context(), id, `\%`, 50); err != nil || len(hits) != 0 {
 		t.Errorf(`search for \%% returned %d hits (err=%v); want 0`, len(hits), err)
 	}
 }
@@ -901,21 +901,21 @@ func TestLookupRaffleEntriesEscapesBackslash(t *testing.T) {
 // ignored" (a 50/50 split) fails every time.
 func TestPickRaffleWinnerWeightsByTickets(t *testing.T) {
 	s := newTestStore(t)
-	id, _ := s.CreateRaffle(&model.Raffle{Title: "Weighted", MaxEntries: 20, CostPerEntry: 100})
+	id, _ := s.CreateRaffle(t.Context(), &model.Raffle{Title: "Weighted", MaxEntries: 20, CostPerEntry: 100})
 
-	light, _ := s.CreateRaffleEntry(id, "Light", "Gilgamesh", 1)
-	heavy, _ := s.CreateRaffleEntry(id, "Heavy", "Hades", 9)
-	if _, err := s.SetRaffleEntryPaid(light, true, 0, 0); err != nil {
+	light, _ := s.CreateRaffleEntry(t.Context(), id, "Light", "Gilgamesh", 1)
+	heavy, _ := s.CreateRaffleEntry(t.Context(), id, "Heavy", "Hades", 9)
+	if _, err := s.SetRaffleEntryPaid(t.Context(), light, true, 0, 0); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.SetRaffleEntryPaid(heavy, true, 0, 0); err != nil {
+	if _, err := s.SetRaffleEntryPaid(t.Context(), heavy, true, 0, 0); err != nil {
 		t.Fatal(err)
 	}
 
 	const draws = 400
 	wins := map[string]int{}
 	for range draws {
-		w, err := s.PickRaffleWinner(id, true)
+		w, err := s.PickRaffleWinner(t.Context(), id, true)
 		if err != nil {
 			t.Fatalf("PickRaffleWinner: %v", err)
 		}
@@ -948,23 +948,23 @@ func TestPickRaffleWinnerWeightsByTickets(t *testing.T) {
 // full ticket count. A partly-settled row must weigh only what has been paid for.
 func TestPickRaffleWinnerPaidOnlyUsesPaidTickets(t *testing.T) {
 	s := newTestStore(t)
-	id, _ := s.CreateRaffle(&model.Raffle{Title: "PartPaid", MaxEntries: 20, CostPerEntry: 100})
+	id, _ := s.CreateRaffle(t.Context(), &model.Raffle{Title: "PartPaid", MaxEntries: 20, CostPerEntry: 100})
 
 	// Ten tickets, only one of them settled.
-	part, _ := s.CreateRaffleEntry(id, "Part", "Gilgamesh", 10)
-	if _, err := s.SetRaffleEntryPaid(part, true, 1, 0); err != nil {
+	part, _ := s.CreateRaffleEntry(t.Context(), id, "Part", "Gilgamesh", 10)
+	if _, err := s.SetRaffleEntryPaid(t.Context(), part, true, 1, 0); err != nil {
 		t.Fatalf("settle one ticket: %v", err)
 	}
 	// Nine tickets, all settled.
-	full, _ := s.CreateRaffleEntry(id, "Full", "Hades", 9)
-	if _, err := s.SetRaffleEntryPaid(full, true, 0, 0); err != nil {
+	full, _ := s.CreateRaffleEntry(t.Context(), id, "Full", "Hades", 9)
+	if _, err := s.SetRaffleEntryPaid(t.Context(), full, true, 0, 0); err != nil {
 		t.Fatal(err)
 	}
 
 	const draws = 400
 	wins := map[string]int{}
 	for range draws {
-		w, err := s.PickRaffleWinner(id, true)
+		w, err := s.PickRaffleWinner(t.Context(), id, true)
 		if err != nil || w == nil {
 			t.Fatalf("PickRaffleWinner: w=%v err=%v", w, err)
 		}

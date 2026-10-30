@@ -3,10 +3,10 @@
     "Author": "MathDad",
     "Name": "Senpan Admin Companion",
     "InternalName": "SenpanCompanionAdmin",
-    "AssemblyVersion": "3.9.0.0",
+    "AssemblyVersion": "3.9.1.0",
     "Description": "Serves as an alternative to many of the web-interface functions, allowing staff to operate various systems from within the game.",
     "Punchline": "Allows Senpan Tea House staff to use various app services right from the game.",
-    "Changelog": "When a tea room's unlock time arrives, a pop-up now stays on screen until you dismiss it, asking you to check the room and remind the occupants or extend the time - alongside the chime and the line in your chat log. Only staff who can manage tea rooms are alerted.",
+    "Changelog": "A tell or chat message still waiting to be sent when the plugin unloads is now dropped instead of reaching chat afterwards. Everything else is unchanged.",
     "Tags": ["bingo", "raffle", "venue", "senpan"],
     "RepoUrl": "https://github.com/jwill89/senpan-app-suite",
     "ApplicableVersion": "any",
@@ -19,7 +19,7 @@
     "DownloadLinkUpdate": "https://apps.senpan.cafe/plugin/SenpanCompanionAdmin/latest.zip",
     "DownloadLinkTesting": "https://apps.senpan.cafe/plugin/SenpanCompanionAdmin/latest.zip",
     "DownloadCount": 0,
-    "LastUpdate": 1792195200,
+    "LastUpdate": 1793232000,
     "AcceptsFeedback": true
   }
 ]

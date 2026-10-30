@@ -39,7 +39,7 @@ const invalidCells = computed(() => {
       const n = props.modelValue[row][col]
       if (n === 0) continue // blank - incomplete, not yet an error
       if (n < lo || n > hi) bad.add(`${row}-${col}`)
-      const rows = rowsByValue.get(n) || []
+      const rows = rowsByValue.get(n) ?? []
       rows.push(row)
       rowsByValue.set(n, rows)
     }
@@ -89,6 +89,7 @@ const invalidCells = computed(() => {
 .card-editor {
   text-align: center;
 }
+
 .card-editor-header,
 .card-editor-grid {
   display: grid;
@@ -97,20 +98,24 @@ const invalidCells = computed(() => {
   max-width: 340px;
   margin-inline: auto;
 }
+
 .card-editor-header {
   margin-bottom: 6px;
 }
+
 .card-editor-letter {
   text-align: center;
   font-weight: 700;
   color: var(--highlight);
 }
+
 .card-editor-cell {
   aspect-ratio: 1;
   text-align: center;
   font-size: 1rem;
   padding: 0;
 }
+
 .card-editor-free {
   display: flex;
   align-items: center;
@@ -121,6 +126,7 @@ const invalidCells = computed(() => {
   color: var(--text-on-accent);
   border-radius: var(--radius, 6px);
 }
+
 .card-editor-invalid {
   border-color: var(--danger) !important;
   outline: 1px solid var(--danger);

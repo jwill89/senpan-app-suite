@@ -10,7 +10,7 @@ import (
 
 func mustCreateGarapon(t *testing.T, s *store.Store, title string, prizes []model.GaraponPrize) int64 {
 	t.Helper()
-	id, err := s.CreateGarapon(&model.Garapon{Title: title, Prizes: prizes})
+	id, err := s.CreateGarapon(t.Context(), &model.Garapon{Title: title, Prizes: prizes})
 	if err != nil {
 		t.Fatalf("CreateGarapon(%s): %v", title, err)
 	}
@@ -27,13 +27,13 @@ func TestGaraponDrawCapAndWeighting(t *testing.T) {
 		{Name: "Nothing", BallColor: "#111111", Rate: 0},
 		{Name: "Jackpot", BallColor: "#ffcc00", Rate: 100, IsGrand: true},
 	})
-	player, err := s.CreateGaraponPlayer(gid, "Aria", "Gilgamesh", 25)
+	player, err := s.CreateGaraponPlayer(t.Context(), gid, "Aria", "Gilgamesh", 25)
 	if err != nil {
 		t.Fatalf("CreateGaraponPlayer: %v", err)
 	}
 
-	for i := 0; i < 25; i++ {
-		d, err := s.RecordGaraponDraw(player.ID)
+	for i := range 25 {
+		d, err := s.RecordGaraponDraw(t.Context(), player.ID)
 		if err != nil {
 			t.Fatalf("draw %d: %v", i, err)
 		}
@@ -42,10 +42,10 @@ func TestGaraponDrawCapAndWeighting(t *testing.T) {
 		}
 	}
 	// The 26th draw exceeds the cap.
-	if _, err := s.RecordGaraponDraw(player.ID); !errors.Is(err, store.ErrGaraponNoDraws) {
+	if _, err := s.RecordGaraponDraw(t.Context(), player.ID); !errors.Is(err, store.ErrGaraponNoDraws) {
 		t.Fatalf("over-cap draw err = %v; want ErrGaraponNoDraws", err)
 	}
-	draws, err := s.ListPlayerDraws(player.ID)
+	draws, err := s.ListPlayerDraws(t.Context(), player.ID)
 	if err != nil {
 		t.Fatalf("ListPlayerDraws: %v", err)
 	}
@@ -60,30 +60,30 @@ func TestGaraponDeletePlayerGuard(t *testing.T) {
 	s := newTestStore(t)
 	gid := mustCreateGarapon(t, s, "Fest", []model.GaraponPrize{{Name: "Prize", BallColor: "#ffcc00", Rate: 1, IsGrand: true}})
 
-	p1, err := s.CreateGaraponPlayer(gid, "Borin", "Gilgamesh", 3)
+	p1, err := s.CreateGaraponPlayer(t.Context(), gid, "Borin", "Gilgamesh", 3)
 	if err != nil {
 		t.Fatalf("CreateGaraponPlayer: %v", err)
 	}
-	deleted, err := s.DeleteGaraponPlayer(p1.ID, false)
+	deleted, err := s.DeleteGaraponPlayer(t.Context(), p1.ID, false)
 	if err != nil || !deleted {
 		t.Fatalf("delete unused player: deleted=%v err=%v; want true,nil", deleted, err)
 	}
 
-	p2, err := s.CreateGaraponPlayer(gid, "Cyra", "Gilgamesh", 3)
+	p2, err := s.CreateGaraponPlayer(t.Context(), gid, "Cyra", "Gilgamesh", 3)
 	if err != nil {
 		t.Fatalf("CreateGaraponPlayer: %v", err)
 	}
-	if _, err := s.RecordGaraponDraw(p2.ID); err != nil {
+	if _, err := s.RecordGaraponDraw(t.Context(), p2.ID); err != nil {
 		t.Fatalf("RecordGaraponDraw: %v", err)
 	}
-	deleted, err = s.DeleteGaraponPlayer(p2.ID, false)
+	deleted, err = s.DeleteGaraponPlayer(t.Context(), p2.ID, false)
 	if err != nil {
 		t.Fatalf("delete drawn player: %v", err)
 	}
 	if deleted {
 		t.Error("a player who has drawn must NOT be deletable while the garapon is open")
 	}
-	if got, _ := s.GetGaraponPlayerByID(p2.ID); got == nil {
+	if got, _ := s.GetGaraponPlayerByID(t.Context(), p2.ID); got == nil {
 		t.Error("drawn player row should still exist after a blocked delete")
 	}
 }
@@ -101,27 +101,27 @@ func TestGaraponDeletePlayerRespectsStampedCard(t *testing.T) {
 		{Name: "Prize", BallColor: "#ffcc00", Rate: 1, IsGrand: true},
 	})
 
-	card, err := s.IssueRallyCard(rally.ID, "Tataru", "Gilgamesh")
+	card, err := s.IssueRallyCard(t.Context(), rally.ID, "Tataru", "Gilgamesh")
 	if err != nil {
 		t.Fatalf("IssueRallyCard: %v", err)
 	}
-	if _, err := s.CollectStamp(rally.ID, card.ID, rally.Stamps[0].ID, "Tataru", "Senpan Tea House", model.StampTypeFood); err != nil {
+	if _, err := s.CollectStamp(t.Context(), rally.ID, card.ID, rally.Stamps[0].ID, "Tataru", "Senpan Tea House", model.StampTypeFood); err != nil {
 		t.Fatalf("CollectStamp: %v", err)
 	}
-	player, err := s.CreateGaraponPlayer(gid, "Tataru", "Gilgamesh", 3)
+	player, err := s.CreateGaraponPlayer(t.Context(), gid, "Tataru", "Gilgamesh", 3)
 	if err != nil {
 		t.Fatalf("CreateGaraponPlayer: %v", err)
 	}
-	if err := s.SetPlayerStampCard(player.ID, card.ID); err != nil {
+	if err := s.SetPlayerStampCard(t.Context(), player.ID, card.ID); err != nil {
 		t.Fatalf("SetPlayerStampCard: %v", err)
 	}
 
 	// Rally still open: the link goes, the stamped card stays.
-	deleted, err := s.DeleteGaraponPlayer(player.ID, false)
+	deleted, err := s.DeleteGaraponPlayer(t.Context(), player.ID, false)
 	if err != nil || !deleted {
 		t.Fatalf("delete link: deleted=%v err=%v; want true,nil", deleted, err)
 	}
-	got, err := s.GetRallyCardByID(card.ID)
+	got, err := s.GetRallyCardByID(t.Context(), card.ID)
 	if err != nil {
 		t.Fatalf("GetRallyCardByID: %v", err)
 	}
@@ -131,20 +131,20 @@ func TestGaraponDeletePlayerRespectsStampedCard(t *testing.T) {
 
 	// Once the rally is closed the card is sweepable, which is the rule everywhere
 	// else - so re-link a fresh player and confirm the sweep still happens.
-	player2, err := s.CreateGaraponPlayer(gid, "Tataru Again", "Gilgamesh", 3)
+	player2, err := s.CreateGaraponPlayer(t.Context(), gid, "Tataru Again", "Gilgamesh", 3)
 	if err != nil {
 		t.Fatalf("CreateGaraponPlayer: %v", err)
 	}
-	if err := s.SetPlayerStampCard(player2.ID, card.ID); err != nil {
+	if err := s.SetPlayerStampCard(t.Context(), player2.ID, card.ID); err != nil {
 		t.Fatalf("SetPlayerStampCard: %v", err)
 	}
-	if err := s.SetStampRallyStatus(rally.ID, "closed"); err != nil {
+	if err := s.SetStampRallyStatus(t.Context(), rally.ID, "closed"); err != nil {
 		t.Fatalf("SetStampRallyStatus: %v", err)
 	}
-	if _, err := s.DeleteGaraponPlayer(player2.ID, false); err != nil {
+	if _, err := s.DeleteGaraponPlayer(t.Context(), player2.ID, false); err != nil {
 		t.Fatalf("delete link after close: %v", err)
 	}
-	if got, _ := s.GetRallyCardByID(card.ID); got != nil {
+	if got, _ := s.GetRallyCardByID(t.Context(), card.ID); got != nil {
 		t.Error("with the rally closed the paired card should be swept with the link")
 	}
 }
@@ -155,30 +155,30 @@ func TestGaraponDeletePlayerRespectsStampedCard(t *testing.T) {
 func TestGaraponClosedDeletePlayerKeepsLog(t *testing.T) {
 	s := newTestStore(t)
 	gid := mustCreateGarapon(t, s, "Fest", []model.GaraponPrize{{Name: "Prize", BallColor: "#ffcc00", Rate: 1, IsGrand: true}})
-	p, err := s.CreateGaraponPlayer(gid, "Aria", "Gilgamesh", 3)
+	p, err := s.CreateGaraponPlayer(t.Context(), gid, "Aria", "Gilgamesh", 3)
 	if err != nil {
 		t.Fatalf("CreateGaraponPlayer: %v", err)
 	}
-	if _, err := s.RecordGaraponDraw(p.ID); err != nil {
+	if _, err := s.RecordGaraponDraw(t.Context(), p.ID); err != nil {
 		t.Fatalf("RecordGaraponDraw: %v", err)
 	}
-	if err := s.SetGaraponStatus(gid, "closed"); err != nil {
+	if err := s.SetGaraponStatus(t.Context(), gid, "closed"); err != nil {
 		t.Fatalf("SetGaraponStatus: %v", err)
 	}
 
-	deleted, err := s.DeleteGaraponPlayer(p.ID, true) // force (closed garapon)
+	deleted, err := s.DeleteGaraponPlayer(t.Context(), p.ID, true) // force (closed garapon)
 	if err != nil {
 		t.Fatalf("DeleteGaraponPlayer(force): %v", err)
 	}
 	if !deleted {
 		t.Fatal("a closed garapon's drawn link should be force-deletable")
 	}
-	if pp, _ := s.GetGaraponPlayerByID(p.ID); pp != nil {
+	if pp, _ := s.GetGaraponPlayerByID(t.Context(), p.ID); pp != nil {
 		t.Error("drawing link should be gone after force delete")
 	}
 
 	// The draw must remain in the garapon's log, with its snapshot intact.
-	draws, err := s.ListGaraponDraws(gid)
+	draws, err := s.ListGaraponDraws(t.Context(), gid)
 	if err != nil {
 		t.Fatalf("ListGaraponDraws: %v", err)
 	}
@@ -198,14 +198,14 @@ func TestGaraponClosedDeletePlayerKeepsLog(t *testing.T) {
 func TestGaraponClosedBlocksDraw(t *testing.T) {
 	s := newTestStore(t)
 	gid := mustCreateGarapon(t, s, "Fest", []model.GaraponPrize{{Name: "Prize", BallColor: "#ffcc00", Rate: 1, IsGrand: true}})
-	p, err := s.CreateGaraponPlayer(gid, "Dee", "Gilgamesh", 3)
+	p, err := s.CreateGaraponPlayer(t.Context(), gid, "Dee", "Gilgamesh", 3)
 	if err != nil {
 		t.Fatalf("CreateGaraponPlayer: %v", err)
 	}
-	if err := s.SetGaraponStatus(gid, "closed"); err != nil {
+	if err := s.SetGaraponStatus(t.Context(), gid, "closed"); err != nil {
 		t.Fatalf("SetGaraponStatus: %v", err)
 	}
-	if _, err := s.RecordGaraponDraw(p.ID); !errors.Is(err, store.ErrGaraponClosed) {
+	if _, err := s.RecordGaraponDraw(t.Context(), p.ID); !errors.Is(err, store.ErrGaraponClosed) {
 		t.Fatalf("draw on closed garapon err = %v; want ErrGaraponClosed", err)
 	}
 }
@@ -221,23 +221,23 @@ func TestDeleteGaraponCascades(t *testing.T) {
 		{Name: "A", BallColor: "#111111", Rate: 50, IsGrand: true},
 		{Name: "B", BallColor: "#222222", Rate: 50},
 	})
-	p, err := s.CreateGaraponPlayer(gid, "Aria", "Gilgamesh", 3)
+	p, err := s.CreateGaraponPlayer(t.Context(), gid, "Aria", "Gilgamesh", 3)
 	if err != nil {
 		t.Fatalf("CreateGaraponPlayer: %v", err)
 	}
-	if _, err := s.RecordGaraponDraw(p.ID); err != nil {
+	if _, err := s.RecordGaraponDraw(t.Context(), p.ID); err != nil {
 		t.Fatalf("RecordGaraponDraw: %v", err)
 	}
 
 	// Precondition: the link + draw exist before the delete.
-	if players, _ := s.ListGaraponPlayers(gid); len(players) != 1 {
+	if players, _ := s.ListGaraponPlayers(t.Context(), gid); len(players) != 1 {
 		t.Fatalf("precondition: want 1 drawing link, got %d", len(players))
 	}
-	if draws, _ := s.ListGaraponDraws(gid); len(draws) != 1 {
+	if draws, _ := s.ListGaraponDraws(t.Context(), gid); len(draws) != 1 {
 		t.Fatalf("precondition: want 1 draw, got %d", len(draws))
 	}
 
-	deleted, err := s.DeleteGarapon(gid)
+	deleted, err := s.DeleteGarapon(t.Context(), gid)
 	if err != nil {
 		t.Fatalf("DeleteGarapon: %v", err)
 	}
@@ -246,16 +246,16 @@ func TestDeleteGaraponCascades(t *testing.T) {
 	}
 
 	// The garapon and every associated row must be gone.
-	if g, _ := s.GetGarapon(gid); g != nil {
+	if g, _ := s.GetGarapon(t.Context(), gid); g != nil {
 		t.Error("garapon still present after delete")
 	}
-	if players, _ := s.ListGaraponPlayers(gid); len(players) != 0 {
+	if players, _ := s.ListGaraponPlayers(t.Context(), gid); len(players) != 0 {
 		t.Errorf("drawing links not cascade-deleted: %d remain", len(players))
 	}
-	if draws, _ := s.ListGaraponDraws(gid); len(draws) != 0 {
+	if draws, _ := s.ListGaraponDraws(t.Context(), gid); len(draws) != 0 {
 		t.Errorf("draw-log entries not cascade-deleted: %d remain", len(draws))
 	}
-	if pp, _ := s.GetGaraponPlayerByID(p.ID); pp != nil {
+	if pp, _ := s.GetGaraponPlayerByID(t.Context(), p.ID); pp != nil {
 		t.Error("player row not cascade-deleted")
 	}
 }
@@ -269,18 +269,18 @@ func TestGaraponListAggregatesAndUpdate(t *testing.T) {
 		{Name: "A", BallColor: "#111111", Rate: 50, IsGrand: true},
 		{Name: "B", BallColor: "#222222", Rate: 50},
 	})
-	pa, err := s.CreateGaraponPlayer(gid, "Aria", "Gilgamesh", 2)
+	pa, err := s.CreateGaraponPlayer(t.Context(), gid, "Aria", "Gilgamesh", 2)
 	if err != nil {
 		t.Fatalf("CreateGaraponPlayer: %v", err)
 	}
-	if _, err := s.CreateGaraponPlayer(gid, "Borin", "Gilgamesh", 2); err != nil {
+	if _, err := s.CreateGaraponPlayer(t.Context(), gid, "Borin", "Gilgamesh", 2); err != nil {
 		t.Fatalf("CreateGaraponPlayer: %v", err)
 	}
-	if _, err := s.RecordGaraponDraw(pa.ID); err != nil {
+	if _, err := s.RecordGaraponDraw(t.Context(), pa.ID); err != nil {
 		t.Fatalf("RecordGaraponDraw: %v", err)
 	}
 
-	list, err := s.ListGarapons()
+	list, err := s.ListGarapons(t.Context())
 	if err != nil {
 		t.Fatalf("ListGarapons: %v", err)
 	}
@@ -300,19 +300,19 @@ func TestGaraponListAggregatesAndUpdate(t *testing.T) {
 		t.Errorf("draw_count = %d; want 1", g.DrawCount)
 	}
 
-	if err := s.UpdateGarapon(&model.Garapon{ID: gid, Title: "Fest", Prizes: []model.GaraponPrize{
+	if err := s.UpdateGarapon(t.Context(), &model.Garapon{ID: gid, Title: "Fest", Prizes: []model.GaraponPrize{
 		{Name: "X", BallColor: "#aabbcc", Rate: 1, IsGrand: true},
 	}}); err != nil {
 		t.Fatalf("UpdateGarapon: %v", err)
 	}
-	got, err := s.GetGarapon(gid)
+	got, err := s.GetGarapon(t.Context(), gid)
 	if err != nil {
 		t.Fatalf("GetGarapon: %v", err)
 	}
 	if len(got.Prizes) != 1 || got.Prizes[0].Name != "X" {
 		t.Errorf("after update prizes = %+v; want single X", got.Prizes)
 	}
-	if draws, _ := s.ListGaraponDraws(gid); len(draws) != 1 {
+	if draws, _ := s.ListGaraponDraws(t.Context(), gid); len(draws) != 1 {
 		t.Errorf("draw log lost after prize replace: got %d; want 1", len(draws))
 	}
 }

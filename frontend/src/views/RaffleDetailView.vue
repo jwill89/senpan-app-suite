@@ -7,7 +7,7 @@
  * refresh. Redirects back to the list if the raffle can't be loaded. Back
  * navigates to the public raffle list.
  */
-import { computed, onMounted, ref, useTemplateRef, watch } from 'vue'
+import { computed, onMounted, ref, useId, useTemplateRef, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
 import MarkdownText from '@/components/common/MarkdownText.vue'
@@ -68,7 +68,7 @@ const alreadyCovered = computed(() => {
  */
 const costTiers = computed(() => {
   const r = raffles.selectedRaffle
-  if (!r || r.entry_mode !== 'custom') return []
+  if (r?.entry_mode !== 'custom') return []
   return r.tier_costs.map((_, i) => ({
     n: i + 1,
     cost: raffleTicketCost(r, i + 1),
@@ -82,6 +82,9 @@ const prefilledFromDevice = ref(false)
 // Cloudflare Turnstile bot check for the public sign-up (empty site key = disabled).
 const turnstileSiteKey = ref('')
 const turnstile = useTemplateRef<InstanceType<typeof TurnstileWidget>>('turnstile')
+
+/** Ties each sign-up field caption to its input. */
+const fieldId = useId()
 
 async function load(id: number): Promise<void> {
   if (!Number.isFinite(id)) {
@@ -171,7 +174,7 @@ function back(): void {
 <template>
   <div v-if="raffles.selectedRaffle">
     <div class="topbar">
-      <button class="btn-neutral btn-sm" @click="back">
+      <button type="button" class="btn-neutral btn-sm" @click="back">
         <font-awesome-icon :icon="['fas', 'arrow-left']" /> Back
       </button>
       <h2>{{ raffles.selectedRaffle.title }}</h2>
@@ -281,6 +284,7 @@ function back(): void {
             @keyup.enter="runLookup"
           />
           <button
+            type="button"
             class="btn-view"
             :disabled="raffles.entryLookupLoading || !lookupReady"
             @click="runLookup"
@@ -313,6 +317,7 @@ function back(): void {
                 </template>
               </span>
               <button
+                type="button"
                 class="btn-view btn-sm push-right"
                 title="Fill the sign-up form with this exact name"
                 @click="useHit(hit)"
@@ -351,8 +356,9 @@ function back(): void {
         </p>
 
         <div class="field mb-10">
-          <label class="field-label">Character Name</label>
+          <label :for="`${fieldId}-name`" class="field-label">Character Name</label>
           <input
+            :id="`${fieldId}-name`"
             v-model="raffles.raffleSignup.characterName"
             placeholder="Character Name"
             aria-label="Character Name"
@@ -360,10 +366,11 @@ function back(): void {
         </div>
         <WorldPicker v-model="raffles.raffleSignup.world" class="mb-10" />
         <div v-if="raffles.selectedRaffle.max_entries > 1" class="field mb-10">
-          <label class="field-label">
+          <label :for="`${fieldId}-entries`" class="field-label">
             Number of Entries (max {{ raffles.selectedRaffle.max_entries }})
           </label>
           <input
+            :id="`${fieldId}-entries`"
             v-model.number="raffles.raffleSignup.numEntries"
             type="number"
             min="1"
@@ -388,6 +395,7 @@ function back(): void {
           @error="onTurnstileCleared"
         />
         <button
+          type="button"
           class="btn-confirm"
           :disabled="
             !raffles.raffleSignup.characterName.trim() ||

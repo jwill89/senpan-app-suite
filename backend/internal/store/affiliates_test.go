@@ -11,7 +11,7 @@ import (
 func TestAffiliatesCRUD(t *testing.T) {
 	s := newTestStore(t)
 
-	id, err := s.CreateAffiliate(&model.Affiliate{
+	id, err := s.CreateAffiliate(t.Context(), &model.Affiliate{
 		Name:     "The Tipsy Moogle",
 		Subtitle: "「 静かな酒場 」", // UTF-8 (Japanese) round-trips
 		Owners:   []string{"Tataru", "Hildibrand"},
@@ -29,7 +29,7 @@ func TestAffiliatesCRUD(t *testing.T) {
 		t.Fatalf("CreateAffiliate: %v", err)
 	}
 
-	got, err := s.GetAffiliate(id)
+	got, err := s.GetAffiliate(t.Context(), id)
 	if err != nil || got == nil {
 		t.Fatalf("GetAffiliate: got=%v err=%v", got, err)
 	}
@@ -54,10 +54,10 @@ func TestAffiliatesCRUD(t *testing.T) {
 	got.Subtitle = "「 沈んだ酒場 」"
 	got.Owners = []string{"Tataru"}
 	got.Hours = []model.AffiliateHour{{Start: "09:00", End: "17:00"}}
-	if err := s.UpdateAffiliate(got); err != nil {
+	if err := s.UpdateAffiliate(t.Context(), got); err != nil {
 		t.Fatalf("UpdateAffiliate: %v", err)
 	}
-	reloaded, err := s.GetAffiliate(id)
+	reloaded, err := s.GetAffiliate(t.Context(), id)
 	if err != nil || reloaded == nil {
 		t.Fatalf("GetAffiliate after update: got=%v err=%v", reloaded, err)
 	}
@@ -67,10 +67,10 @@ func TestAffiliatesCRUD(t *testing.T) {
 	}
 
 	// List is alphabetical by name.
-	if _, err := s.CreateAffiliate(&model.Affiliate{Name: "Aether Lounge"}); err != nil {
+	if _, err := s.CreateAffiliate(t.Context(), &model.Affiliate{Name: "Aether Lounge"}); err != nil {
 		t.Fatalf("CreateAffiliate (second): %v", err)
 	}
-	list, err := s.ListAffiliates()
+	list, err := s.ListAffiliates(t.Context())
 	if err != nil {
 		t.Fatalf("ListAffiliates: %v", err)
 	}
@@ -82,11 +82,11 @@ func TestAffiliatesCRUD(t *testing.T) {
 	}
 
 	// Delete.
-	deleted, err := s.DeleteAffiliate(id)
+	deleted, err := s.DeleteAffiliate(t.Context(), id)
 	if err != nil || !deleted {
 		t.Fatalf("DeleteAffiliate: deleted=%v err=%v; want true,nil", deleted, err)
 	}
-	if gone, _ := s.GetAffiliate(id); gone != nil {
+	if gone, _ := s.GetAffiliate(t.Context(), id); gone != nil {
 		t.Errorf("GetAffiliate after delete = %+v; want nil", gone)
 	}
 }
@@ -95,11 +95,11 @@ func TestAffiliatesCRUD(t *testing.T) {
 // read back as empty (non-nil) slices, never JSON null.
 func TestAffiliateEmptyCollectionsRoundTrip(t *testing.T) {
 	s := newTestStore(t)
-	id, err := s.CreateAffiliate(&model.Affiliate{Name: "Bare Minimum"})
+	id, err := s.CreateAffiliate(t.Context(), &model.Affiliate{Name: "Bare Minimum"})
 	if err != nil {
 		t.Fatalf("CreateAffiliate: %v", err)
 	}
-	got, err := s.GetAffiliate(id)
+	got, err := s.GetAffiliate(t.Context(), id)
 	if err != nil || got == nil {
 		t.Fatalf("GetAffiliate: got=%v err=%v", got, err)
 	}

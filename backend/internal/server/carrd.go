@@ -165,7 +165,7 @@ func isMP4Signature(b []byte) bool {
 // readCarrdTitle reads the project Title from a folder's sidecar metadata,
 // falling back to the folder name when the sidecar is missing or unreadable.
 func readCarrdTitle(folderPath, folder string) string {
-	data, err := os.ReadFile(filepath.Join(folderPath, carrdMetaFile))
+	data, err := os.ReadFile(filepath.Join(folderPath, carrdMetaFile)) //nolint:gosec // a project folder under the carrd root, and a fixed file name
 	if err != nil {
 		return folder
 	}
@@ -181,9 +181,9 @@ func readCarrdTitle(folderPath, folder string) string {
 // combined size in bytes. The project folder itself is not counted as a
 // sub-directory, and dotfiles (e.g. the .carrd.json title sidecar) are ignored.
 func carrdProjectStats(folderPath string) (subfolders, files int, totalSize int64) {
-	_ = filepath.WalkDir(folderPath, func(path string, d fs.DirEntry, err error) error {
+	_ = filepath.WalkDir(folderPath, func(path string, d fs.DirEntry, err error) error { //nolint:gosec // a project folder under the carrd root: a listed entry or a checked name
 		if err != nil {
-			return nil
+			return nil //nolint:nilerr // an unreadable entry is skipped: the stats are a best-effort summary
 		}
 		if d.IsDir() {
 			if path != folderPath {
@@ -351,7 +351,7 @@ func (s *Server) handleCarrdProjectDelete(w http.ResponseWriter, r *http.Request
 		writeError(w, http.StatusBadRequest, "Invalid folder name")
 		return
 	}
-	if err := os.RemoveAll(filepath.Join(root, folder)); err != nil {
+	if err := os.RemoveAll(filepath.Join(root, folder)); err != nil { //nolint:gosec // folder passed validCarrdFolder just above
 		writeInternalError(w, "delete carrd project", err)
 		return
 	}
@@ -453,7 +453,7 @@ func (s *Server) renameCarrdProject(w http.ResponseWriter, root, reqFolder, reqT
 	}
 
 	srcPath := filepath.Join(root, folder)
-	if info, err := os.Stat(srcPath); err != nil || !info.IsDir() {
+	if info, err := os.Stat(srcPath); err != nil || !info.IsDir() { //nolint:gosec // folder passed validCarrdFolder above
 		writeError(w, http.StatusNotFound, "Project not found")
 		return
 	}
@@ -483,7 +483,7 @@ func (s *Server) renameCarrdProject(w http.ResponseWriter, root, reqFolder, reqT
 	destPath := srcPath
 	if newFolder != folder {
 		destPath = filepath.Join(root, newFolder)
-		if err := os.Rename(srcPath, destPath); err != nil {
+		if err := os.Rename(srcPath, destPath); err != nil { //nolint:gosec // folder passed validCarrdFolder, and newFolder is slugifyFolder's output
 			if os.IsExist(err) {
 				writeError(w, http.StatusConflict, "A project folder \""+newFolder+"\" already exists")
 				return
@@ -495,14 +495,14 @@ func (s *Server) renameCarrdProject(w http.ResponseWriter, root, reqFolder, reqT
 
 	// Update the title sidecar in the (possibly moved) folder.
 	meta, _ := json.Marshal(carrdMeta{Title: title})
-	if err := os.WriteFile(filepath.Join(destPath, carrdMetaFile), meta, 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(destPath, carrdMetaFile), meta, 0644); err != nil { //nolint:gosec // built from checked folder names above, and a fixed file name
 		writeInternalError(w, "write carrd metadata", err)
 		return
 	}
 
 	subfolders, files, totalSize := carrdProjectStats(destPath)
 	modified := ""
-	if info, err := os.Stat(destPath); err == nil {
+	if info, err := os.Stat(destPath); err == nil { //nolint:gosec // built from checked folder names above
 		modified = info.ModTime().UTC().Format(time.RFC3339)
 	}
 	writeJSON(w, http.StatusOK, model.CarrdProjectCreateResponse{
@@ -617,7 +617,7 @@ func (s *Server) handleCarrdImageDelete(w http.ResponseWriter, r *http.Request) 
 		writeError(w, http.StatusBadRequest, "Invalid file name")
 		return
 	}
-	if err := os.Remove(filepath.Join(dirPath, name)); err != nil {
+	if err := os.Remove(filepath.Join(dirPath, name)); err != nil { //nolint:gosec // dirPath is from carrdResolve and name from safeCarrdFileName, both checked above
 		if os.IsNotExist(err) {
 			writeError(w, http.StatusNotFound, "File not found")
 			return
@@ -695,7 +695,7 @@ func (s *Server) handleCarrdDirDelete(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "Use the projects endpoint to delete a whole project")
 		return
 	}
-	if err := os.RemoveAll(dirPath); err != nil {
+	if err := os.RemoveAll(dirPath); err != nil { //nolint:gosec // dirPath is from carrdResolve, checked above
 		writeInternalError(w, "delete carrd dir", err)
 		return
 	}

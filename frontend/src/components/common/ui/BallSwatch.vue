@@ -15,24 +15,28 @@ withDefaults(defineProps<{ color: string; size?: 'sm' | 'md' | 'lg' }>(), { size
 <style scoped>
 .ball-swatch {
   display: inline-block;
+
   /* Never grow or shrink - stays a circle even as a flex item (e.g. the grand
      prize row), where it would otherwise deform into an ellipse. */
   flex: none;
   border-radius: 50%;
   border: 1px solid var(--control-border);
   box-shadow:
-    inset 0 -2px 3px rgba(0, 0, 0, 0.25),
-    inset 0 2px 3px rgba(255, 255, 255, 0.35);
+    inset 0 -2px 3px rgb(0 0 0 / 25%),
+    inset 0 2px 3px rgb(255 255 255 / 35%);
   vertical-align: middle;
 }
+
 .ball-swatch-sm {
   width: 14px;
   height: 14px;
 }
+
 .ball-swatch-md {
   width: 20px;
   height: 20px;
 }
+
 .ball-swatch-lg {
   width: 30px;
   height: 30px;

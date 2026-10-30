@@ -10,6 +10,9 @@
 #
 # Keeping these here (not in the tracked deploy.ps1) means the repo never reveals
 # the host, SSH user, key path, filesystem layout, or service name.
+[Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUseDeclaredVarsMoreThanAssignments', '', Justification = 'deploy.ps1 dot-sources this file and reads the $Deploy* values')]
+param()
+
 $DeployVpsHost = "<your-droplet-ip-or-hostname>"
 $DeployVpsUser = "<ssh-user>"                          # e.g. root or a deploy user
 $DeployKeyPath = "<path-to-your-deploy-key.ppk>"

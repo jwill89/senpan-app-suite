@@ -42,7 +42,11 @@ const tokens = computed<Record<string, string>>({
                 'style-item',
                 styles.editingStyle && styles.editingStyle.id === st.id ? 'is-selected' : '',
               ]"
+              role="button"
+              tabindex="0"
               @click="styles.loadStyle(st.id)"
+              @keydown.enter="styles.loadStyle(st.id)"
+              @keydown.space.prevent="styles.loadStyle(st.id)"
             >
               <span class="style-name">{{ st.name }}</span>
               <span v-if="st.is_public" class="style-public-badge">Public</span>
@@ -63,7 +67,7 @@ const tokens = computed<Record<string, string>>({
               No themes yet.
             </p>
           </div>
-          <button class="btn-confirm btn-sm mt w-full" @click="styles.newStyle()">
+          <button type="button" class="btn-confirm btn-sm mt w-full" @click="styles.newStyle()">
             + New Theme
           </button>
           <button
@@ -72,6 +76,7 @@ const tokens = computed<Record<string, string>>({
               styles.editingStyle.id &&
               String(styles.editingStyle.id) !== styles.activeStyleId
             "
+            type="button"
             class="btn-action btn-sm mt w-full"
             @click="styles.setActiveStyle(styles.editingStyle.id)"
           >
@@ -79,6 +84,7 @@ const tokens = computed<Record<string, string>>({
           </button>
           <button
             v-if="styles.activeStyleId"
+            type="button"
             class="btn-caution btn-sm mt w-full"
             @click="styles.setActiveStyle(0)"
           >
@@ -97,6 +103,7 @@ const tokens = computed<Record<string, string>>({
                 style="flex: 1"
               />
               <button
+                type="button"
                 class="btn-confirm btn-sm"
                 :disabled="styles.savingStyle"
                 @click="styles.saveStyle()"
@@ -106,6 +113,7 @@ const tokens = computed<Record<string, string>>({
               </button>
               <button
                 v-if="styles.editingStyle.id"
+                type="button"
                 class="btn-danger btn-sm"
                 @click="styles.deleteStyle(styles.editingStyle.id)"
               >
@@ -133,7 +141,7 @@ const tokens = computed<Record<string, string>>({
                  shared image library. Empty = the app's built-in flourishes. -->
             <div class="flourish-options">
               <div class="flourish-option">
-                <label class="field-label">Board Flourish</label>
+                <span class="field-label">Board Flourish</span>
                 <p class="text-muted text-xs mb-8">
                   SVG drawn at the four corners of the player bingo board. Upload SVGs on the System
                   -> Images page. Leave unset to use the built-in flourish.
@@ -141,7 +149,7 @@ const tokens = computed<Record<string, string>>({
                 <ImagePicker v-model="styles.editingStyle.board_flourish" :extensions="['.svg']" />
               </div>
               <div class="flourish-option">
-                <label class="field-label">Number Flourish</label>
+                <span class="field-label">Number Flourish</span>
                 <p class="text-muted text-xs mb-8">
                   SVG shown either side of the “Last Called” number (player view + Game tab). Leave
                   unset to use the built-in flourish.
@@ -165,13 +173,16 @@ const tokens = computed<Record<string, string>>({
   gap: 20px;
   margin-top: 16px;
 }
+
 .flourish-option {
   flex: 1 1 280px;
   min-width: 260px;
 }
+
 .flourish-option .field-label {
   font-weight: 600;
 }
+
 /* Public/Private toggle in the editor. */
 .visibility-toggle {
   display: flex;
@@ -180,10 +191,12 @@ const tokens = computed<Record<string, string>>({
   cursor: pointer;
   font-weight: 600;
 }
+
 .visibility-toggle input {
   width: auto;
   margin: 0;
 }
+
 /* "Public" badge in the theme list - pill chrome from the `.badge` object. */
 .style-public-badge {
   background: var(--accent-2);

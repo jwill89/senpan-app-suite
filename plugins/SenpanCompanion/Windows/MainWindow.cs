@@ -129,7 +129,7 @@ public sealed class MainWindow : Window, IDisposable
         this.fontHandle.Dispose();
     }
 
-    public override void OnOpen() => SyncSettingsFields();
+    public override void OnOpen() => this.SyncSettingsFields();
 
     public override void Draw()
     {
@@ -150,8 +150,8 @@ public sealed class MainWindow : Window, IDisposable
             if (this.session.Loaded && !this.navInitialized)
             {
                 this.navInitialized = true;
-                if (!IsAccessible(this.currentPage))
-                    this.currentPage = FirstAccessiblePage();
+                if (!this.IsAccessible(this.currentPage))
+                    this.currentPage = this.FirstAccessiblePage();
             }
             // A just-connected first-run account was parked on Settings by the no-token
             // branch below; move it onto the first usable suite page (its accessible
@@ -159,11 +159,11 @@ public sealed class MainWindow : Window, IDisposable
             if (this.session.Loaded && this.landOnConnect)
             {
                 this.landOnConnect = false;
-                this.currentPage = FirstAccessiblePage();
+                this.currentPage = this.FirstAccessiblePage();
             }
 
-            DrawTopBar();
-            DrawSessionNotice();
+            this.DrawTopBar();
+            this.DrawSessionNotice();
         }
         else
         {
@@ -194,11 +194,11 @@ public sealed class MainWindow : Window, IDisposable
         // return (ImGui requires it). Borderless - the ImGuiChildFlags border member's
         // name varies across ImGui versions, and the layout reads clearly without it.
         ImGui.BeginChild("##senpanNav", new Vector2(NavWidth, 0f));
-        DrawSidebar();
+        this.DrawSidebar();
         ImGui.EndChild();
         ImGui.SameLine();
         ImGui.BeginChild("##senpanContent", new Vector2(0f, 0f));
-        DrawContent();
+        this.DrawContent();
         ImGui.EndChild();
     }
 
@@ -214,26 +214,26 @@ public sealed class MainWindow : Window, IDisposable
         var showBingo = s.Has(Perms.BingoGame) || s.Has(Perms.BingoCards) || s.Has(Perms.BingoWinnersLog);
         if (showBingo && ImGui.CollapsingHeader("Bingo###secBingo", ImGuiTreeNodeFlags.DefaultOpen))
         {
-            NavItem("Game", Page.BingoGame, s.Has(Perms.BingoGame));
-            NavItem("Cards", Page.BingoCards, s.Has(Perms.BingoCards));
-            NavItem("Winners", Page.BingoWinners, s.Has(Perms.BingoWinnersLog));
+            this.NavItem("Game", Page.BingoGame, s.Has(Perms.BingoGame));
+            this.NavItem("Cards", Page.BingoCards, s.Has(Perms.BingoCards));
+            this.NavItem("Winners", Page.BingoWinners, s.Has(Perms.BingoWinnersLog));
         }
 
         // Tea House section - mirrors the web's "Senpan Tea House" group. Only the
         // Tea Rooms page is exposed in-game; the rest of that group is website-only.
         if (s.Has(Perms.TeahouseTeaRooms) && ImGui.CollapsingHeader("Tea House###secTeahouse", ImGuiTreeNodeFlags.DefaultOpen))
         {
-            NavItem("Tea Rooms", Page.TeaRooms, s.Has(Perms.TeahouseTeaRooms));
+            this.NavItem("Tea Rooms", Page.TeaRooms, s.Has(Perms.TeahouseTeaRooms));
         }
 
         var showFestival = s.Has(Perms.TeahouseRaffles) || s.Has(Perms.FestivalGarapon) || s.Has(Perms.FestivalStampRally);
         if (showFestival && ImGui.CollapsingHeader("Festival###secFestival", ImGuiTreeNodeFlags.DefaultOpen))
         {
-            NavItem("Raffles", Page.Raffles, s.Has(Perms.TeahouseRaffles));
-            NavItem("Garapon", Page.Garapon, s.Has(Perms.FestivalGarapon));
-            NavItem("Garapon Draw Log", Page.GaraponLog, s.Has(Perms.FestivalGarapon));
-            NavItem("Stamp Rally", Page.StampRally, s.Has(Perms.FestivalStampRally));
-            NavItem("Stamp Rally Log", Page.StampRallyLog, s.Has(Perms.FestivalStampRally));
+            this.NavItem("Raffles", Page.Raffles, s.Has(Perms.TeahouseRaffles));
+            this.NavItem("Garapon", Page.Garapon, s.Has(Perms.FestivalGarapon));
+            this.NavItem("Garapon Draw Log", Page.GaraponLog, s.Has(Perms.FestivalGarapon));
+            this.NavItem("Stamp Rally", Page.StampRally, s.Has(Perms.FestivalStampRally));
+            this.NavItem("Stamp Rally Log", Page.StampRallyLog, s.Has(Perms.FestivalStampRally));
         }
 
         // Account-free tools live under their own always-visible group, mirroring the
@@ -241,10 +241,10 @@ public sealed class MainWindow : Window, IDisposable
         ImGui.Spacing();
         if (ImGui.CollapsingHeader("General###secGeneral", ImGuiTreeNodeFlags.DefaultOpen))
         {
-            NavItem("Rolls", Page.Rolls, true);
-            NavItem("Timed Text Macros", Page.TimedMacros, true);
-            NavItem("Settings", Page.Settings, true);
-            NavItem("About", Page.About, true);
+            this.NavItem("Rolls", Page.Rolls, true);
+            this.NavItem("Timed Text Macros", Page.TimedMacros, true);
+            this.NavItem("Settings", Page.Settings, true);
+            this.NavItem("About", Page.About, true);
         }
     }
 
@@ -262,7 +262,7 @@ public sealed class MainWindow : Window, IDisposable
 
     private void DrawContent()
     {
-        if (!IsAccessible(this.currentPage))
+        if (!this.IsAccessible(this.currentPage))
         {
             ImGui.TextDisabled("Select a page from the menu.");
             return;
@@ -319,10 +319,10 @@ public sealed class MainWindow : Window, IDisposable
                 // so a token set on first-run (or elsewhere) is reflected, not clobbered.
                 if (!this.settingsPrimed)
                 {
-                    SyncSettingsFields();
+                    this.SyncSettingsFields();
                     this.settingsPrimed = true;
                 }
-                DrawSettingsPanel();
+                this.DrawSettingsPanel();
                 break;
             case Page.About:
                 DrawAboutTab();
@@ -351,8 +351,11 @@ public sealed class MainWindow : Window, IDisposable
             Page.Garapon, Page.GaraponLog, Page.StampRally, Page.StampRallyLog, Page.Rolls, Page.TimedMacros, Page.Settings,
         };
         foreach (var p in order)
-            if (IsAccessible(p))
+        {
+            if (this.IsAccessible(p))
                 return p;
+        }
+
         return Page.Settings; // always reachable
     }
 
@@ -392,10 +395,14 @@ public sealed class MainWindow : Window, IDisposable
         if (!this.session.Loaded)
         {
             if (this.session.LoadFailed)
+            {
                 UiText.WrappedColored(new Vector4(0.9f, 0.5f, 0.4f, 1f),
                     "Couldn't verify your account - check your token on the Settings tab.");
+            }
             else
+            {
                 ImGui.TextDisabled("Verifying your account...");
+            }
             return;
         }
 
@@ -509,9 +516,12 @@ public sealed class MainWindow : Window, IDisposable
 
         var parts = estimateParts(getTemplate());
         if (parts >= 2)
+        {
             UiText.WrappedColored(WarnColor, parts == 2
                 ? "This message is too long and will be split into two separate tells."
                 : $"This message is too long and will be split into {parts} separate tells.");
+        }
+
         ImGui.Unindent(22f);
     }
 
@@ -559,35 +569,35 @@ public sealed class MainWindow : Window, IDisposable
         }
 
         Ui.Section(FontAwesomeIcon.Bullhorn, "Automatic tells");
-        DrawTellSetting(
+        this.DrawTellSetting(
             "/tell the bingo card link when creating from the nearby list",
             () => this.config.TellCardUrlOnCreate, v => this.config.TellCardUrlOnCreate = v,
             () => this.config.BingoCardTellTemplate, v => this.config.BingoCardTellTemplate = v,
             "##bingotelltmpl",
             "Placeholders: <t> = player name  -  <bingocard-link> = the card link.",
-            t => TellComposer.PartCount(t, BingoReprValues()));
+            t => TellComposer.PartCount(t, this.BingoReprValues()));
 
-        DrawTellSetting(
+        this.DrawTellSetting(
             "/tell the Garapon drawing link when issuing from the nearby list",
             () => this.config.TellGaraponUrlOnCreate, v => this.config.TellGaraponUrlOnCreate = v,
             () => this.config.GaraponTellTemplate, v => this.config.GaraponTellTemplate = v,
             "##garapontelltmpl",
             "Placeholders: <t> = player name  -  <garapon-link> = the drawing link.",
-            t => TellComposer.PartCount(t, GaraponReprValues()));
+            t => TellComposer.PartCount(t, this.GaraponReprValues()));
 
-        DrawTellSetting(
+        this.DrawTellSetting(
             "/tell the Stamp Rally card link when issuing from the nearby list",
             () => this.config.TellStampCardUrlOnCreate, v => this.config.TellStampCardUrlOnCreate = v,
             () => this.config.StampCardTellTemplate, v => this.config.StampCardTellTemplate = v,
             "##stamptelltmpl",
             "Placeholders: <t> = player name  -  <stamprally-link> = the card link.",
-            t => TellComposer.PartCount(t, StampReprValues()));
+            t => TellComposer.PartCount(t, this.StampReprValues()));
 
         UiText.WrappedDisabled("Each sends an outgoing chat message on your behalf - a long message splits into multiple tells. See the README's ToS note.");
 
         ImGui.Spacing();
         if (Ui.PrimaryButton("Save"))
-            SaveSettings();
+            this.SaveSettings();
         ImGui.SameLine();
         // Snapshot: TestSettings() below sets settingsTesting true synchronously, so
         // re-reading the field at the End would pop a scope that was never pushed.
@@ -596,8 +606,8 @@ public sealed class MainWindow : Window, IDisposable
             ImGui.BeginDisabled();
         if (Ui.Button("Save & Test Connection"))
         {
-            SaveSettings();
-            TestSettings();
+            this.SaveSettings();
+            this.TestSettings();
             // The user explicitly asked to see the connection result - don't let the
             // first-run land-on-connect jump yank them off Settings before they read it.
             this.landOnConnect = false;

@@ -46,9 +46,11 @@ function onChange(e: Event): void {
   gap: 8px;
   font-size: 0.9rem;
 }
+
 .theme-picker-label {
   font-weight: 600;
 }
+
 .theme-picker select {
   width: auto;
 }

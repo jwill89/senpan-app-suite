@@ -105,7 +105,7 @@ func TestTeaRoomLockPatch(t *testing.T) {
 	if resp.StatusCode != http.StatusBadRequest {
 		t.Errorf("unreadable locked_until status = %d; want 400", resp.StatusCode)
 	}
-	got, _ := env.store.GetTeaRoom(id)
+	got, _ := env.store.GetTeaRoom(t.Context(), id)
 	if got.LockedUntil != "" {
 		t.Errorf("rejected time was still stored: %q", got.LockedUntil)
 	}
@@ -171,43 +171,43 @@ func TestTeaRoomLockExpirySweep(t *testing.T) {
 	env := newTestEnv(t)
 	env.loginAdmin(t)
 
-	due, err := env.store.CreateTeaRoom(&model.TeaRoom{Name: "Jasmine Room", RoomNumber: "12"})
+	due, err := env.store.CreateTeaRoom(t.Context(), &model.TeaRoom{Name: "Jasmine Room", RoomNumber: "12"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	indefinite, _ := env.store.CreateTeaRoom(&model.TeaRoom{Name: "Peony Room", RoomNumber: "13"})
-	future, _ := env.store.CreateTeaRoom(&model.TeaRoom{Name: "Lotus Room", RoomNumber: "14"})
+	indefinite, _ := env.store.CreateTeaRoom(t.Context(), &model.TeaRoom{Name: "Peony Room", RoomNumber: "13"})
+	future, _ := env.store.CreateTeaRoom(t.Context(), &model.TeaRoom{Name: "Lotus Room", RoomNumber: "14"})
 
 	now := time.Now().UTC()
-	if err := env.store.SetTeaRoomLock(due, true, now.Add(-time.Minute).Format(time.RFC3339)); err != nil {
+	if err := env.store.SetTeaRoomLock(t.Context(), due, true, now.Add(-time.Minute).Format(time.RFC3339)); err != nil {
 		t.Fatal(err)
 	}
-	if err := env.store.SetTeaRoomLock(indefinite, true, ""); err != nil {
+	if err := env.store.SetTeaRoomLock(t.Context(), indefinite, true, ""); err != nil {
 		t.Fatal(err)
 	}
-	if err := env.store.SetTeaRoomLock(future, true, now.Add(time.Hour).Format(time.RFC3339)); err != nil {
+	if err := env.store.SetTeaRoomLock(t.Context(), future, true, now.Add(time.Hour).Format(time.RFC3339)); err != nil {
 		t.Fatal(err)
 	}
 
 	admin := env.dialAdminWS(t)
 	defer admin.Close(websocket.StatusNormalClosure, "")
 
-	server.ExpireDueTeaRoomLocksForTest(env.srv)
+	server.ExpireDueTeaRoomLocksForTest(env.srv, t.Context())
 
-	if got, _ := env.store.GetTeaRoom(due); got.Locked || got.LockedUntil != "" {
+	if got, _ := env.store.GetTeaRoom(t.Context(), due); got.Locked || got.LockedUntil != "" {
 		t.Errorf("expired room: locked=%v until=%q; want unlocked with no expiry", got.Locked, got.LockedUntil)
 	}
-	if got, _ := env.store.GetTeaRoom(indefinite); !got.Locked {
+	if got, _ := env.store.GetTeaRoom(t.Context(), indefinite); !got.Locked {
 		t.Error("a lock with no expiry was swept; it waits on a person, not the clock")
 	}
-	if got, _ := env.store.GetTeaRoom(future); !got.Locked {
+	if got, _ := env.store.GetTeaRoom(t.Context(), future); !got.Locked {
 		t.Error("a lock still in the future was swept")
 	}
 
 	expectTeaRoomUnlocked(t, admin, "Jasmine Room")
 
 	// A second pass has nothing left to do, so nothing is announced twice.
-	server.ExpireDueTeaRoomLocksForTest(env.srv)
+	server.ExpireDueTeaRoomLocksForTest(env.srv, t.Context())
 	expectNoTeaRoomUnlocked(t, admin, 500*time.Millisecond)
 }
 

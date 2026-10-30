@@ -115,7 +115,7 @@ public class Configuration : IPluginConfiguration
     public void Initialize(IDalamudPluginInterface pi)
     {
         this.pluginInterface = pi;
-        LoadToken();
+        this.LoadToken();
     }
 
     // Resolves the in-memory plaintext token after Dalamud deserializes the config,
@@ -129,7 +129,7 @@ public class Configuration : IPluginConfiguration
             {
                 // Stray plaintext alongside ciphertext (e.g. a hand-edited config): drop it.
                 this.Token = string.Empty;
-                Save();
+                this.Save();
             }
         }
         else if (!string.IsNullOrEmpty(this.Token))
@@ -139,13 +139,13 @@ public class Configuration : IPluginConfiguration
             this.tokenPlain = this.Token.Trim();
             this.TokenProtected = TokenProtector.Protect(this.tokenPlain);
             this.Token = string.Empty;
-            Save();
+            this.Save();
         }
     }
 
     /// <summary>
     /// Serializes the config to disk. Dalamud's writer goes to a fixed
-    /// "<config>.json.tmp" and then renames, so two callers writing at once collide
+    /// "&lt;config&gt;.json.tmp" and then renames, so two callers writing at once collide
     /// on that one temp path - and there ARE two: the draw thread (settings edits)
     /// and the thread pool (TimedMacroRunner's progress saves). The lock also stops
     /// the background serializer walking a collection the draw thread is adding to

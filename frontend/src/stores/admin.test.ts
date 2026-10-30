@@ -22,10 +22,10 @@ import { useBookclubStore } from './bookclub'
 function stubLoaders() {
   const garapons = useGaraponsStore()
   garapons.loadGarapons = vi.fn()
-  garapons.loadGaraponDetail = vi.fn(async () => {})
+  garapons.loadGaraponDetail = vi.fn(async () => undefined)
   const raffles = useRafflesStore()
   raffles.loadRaffles = vi.fn()
-  raffles.loadRaffleDetail = vi.fn(async () => {})
+  raffles.loadRaffleDetail = vi.fn(async () => undefined)
   const presets = usePresetsStore()
   presets.loadPresets = vi.fn()
   const users = useUsersStore()

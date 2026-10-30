@@ -79,34 +79,41 @@ function onVolume(e: Event): void {
   flex-direction: column;
   gap: 10px;
 }
+
 .sound-mode-row {
   display: flex;
   align-items: center;
   gap: 8px;
 }
+
 .sound-mode-row .label {
   font-size: 0.85rem;
   color: var(--text-muted);
   min-width: 58px;
 }
+
 .sound-mode-btns {
   display: flex;
   gap: 6px;
   flex-wrap: wrap;
 }
+
 /* The volume row reuses the global .opacity-slider styling; only the disabled
    (sound-off) affordance is local. */
 .sound-volume .label {
   min-width: 58px;
 }
+
 .sound-volume input[type='range'] {
   flex: 1;
   width: auto;
   min-width: 120px;
 }
+
 .sound-volume.is-disabled {
   opacity: 0.5;
 }
+
 .sound-volume.is-disabled input[type='range'] {
   cursor: not-allowed;
 }

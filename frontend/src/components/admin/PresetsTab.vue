@@ -94,14 +94,24 @@ function patternById(id: number) {
       </FormField>
 
       <FormActions align="start">
-        <button class="btn-confirm" :disabled="presets.savingPreset" @click="presets.savePreset()">
+        <button
+          type="button"
+          class="btn-confirm"
+          :disabled="presets.savingPreset"
+          @click="presets.savePreset()"
+        >
           <LoadingSpinner v-if="presets.savingPreset" label="Saving..." />
           <template v-else>
             <font-awesome-icon :icon="['fas', 'circle-check']" />
             {{ presets.editingPreset.id ? 'Save Changes' : 'Create Preset' }}
           </template>
         </button>
-        <button class="btn-neutral" :disabled="presets.savingPreset" @click="presets.cancelEdit()">
+        <button
+          type="button"
+          class="btn-neutral"
+          :disabled="presets.savingPreset"
+          @click="presets.cancelEdit()"
+        >
           Cancel
         </button>
       </FormActions>
@@ -110,7 +120,7 @@ function patternById(id: number) {
     <!-- -- List ------------------------------------------------------------ -->
     <ManagerView v-else title="Game Presets" :icon="['fad', 'ballot']">
       <template #actions>
-        <button class="btn-confirm btn-sm" @click="presets.newPreset()">
+        <button type="button" class="btn-confirm btn-sm" @click="presets.newPreset()">
           <font-awesome-icon :icon="['fas', 'plus']" /> New Preset
         </button>
       </template>
@@ -144,6 +154,7 @@ function patternById(id: number) {
           </p>
           <template #actions>
             <button
+              type="button"
               class="btn-confirm btn-sm"
               title="Edit preset"
               @click="presets.editPreset(preset)"
@@ -151,6 +162,7 @@ function patternById(id: number) {
               <font-awesome-icon :icon="['fas', 'pen-to-square']" /> Edit
             </button>
             <button
+              type="button"
               class="btn-danger btn-sm"
               title="Delete preset"
               @click="presets.deletePreset(preset.id)"

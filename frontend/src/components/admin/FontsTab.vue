@@ -14,7 +14,7 @@
  * sites. A live-preview panel renders custom text in any variant of the
  * selected font, so the converted WOFF2 can be compared against the uploads.
  */
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, useTemplateRef, watch } from 'vue'
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
 import AdminPanel from '@/components/common/ui/AdminPanel.vue'
 import FormField from '@/components/common/ui/FormField.vue'
@@ -53,7 +53,7 @@ async function copyKitSnippet(): Promise<void> {
 // -- Upload -------------------------------------------------------------------
 
 /** Hidden <input type="file"> used by the Upload button. */
-const fileInput = ref<HTMLInputElement | null>(null)
+const fileInput = useTemplateRef<HTMLInputElement>('fileInput')
 
 function pickFiles(): void {
   fileInput.value?.click()
@@ -228,7 +228,12 @@ watch(
     <AdminPanel>
       <div class="flex-toolbar mb-12">
         <h3 class="m-0"><font-awesome-icon :icon="['fad', 'font']" /> Font Upload</h3>
-        <button class="btn-action btn-sm push-right" :disabled="fonts.uploading" @click="pickFiles">
+        <button
+          type="button"
+          class="btn-action btn-sm push-right"
+          :disabled="fonts.uploading"
+          @click="pickFiles"
+        >
           <LoadingSpinner v-if="fonts.uploading" label="Uploading..." />
           <template v-else><font-awesome-icon :icon="['fas', 'plus']" /> Upload Fonts</template>
         </button>
@@ -238,6 +243,7 @@ watch(
           accept=".ttf,.otf,.woff,.woff2,.eot"
           multiple
           hidden
+          aria-label="Font files to upload"
           @change="onFilesSelected"
         />
       </div>
@@ -275,7 +281,12 @@ watch(
                 aria-label="Font kit embed code"
                 @focus="($event.target as HTMLInputElement).select()"
               />
-              <button class="btn-view btn-sm" title="Copy embed code" @click="copyKitSnippet">
+              <button
+                type="button"
+                class="btn-view btn-sm"
+                title="Copy embed code"
+                @click="copyKitSnippet"
+              >
                 <font-awesome-icon :icon="['fas', 'copy']" /> Copy
               </button>
             </div>
@@ -316,6 +327,7 @@ watch(
             <button
               v-for="v in selectedFont.variants"
               :key="v.token"
+              type="button"
               class="btn-view btn-sm"
               :class="{ 'is-active': previewToken === v.token }"
               @click="previewToken = v.token"
@@ -394,6 +406,7 @@ watch(
         <template #cell-actions="{ row }">
           <div class="row-actions">
             <button
+              type="button"
               class="btn-view btn-sm"
               :class="{ 'is-active': selectedBase === row.base }"
               title="Preview this font in the panel above"
@@ -402,6 +415,7 @@ watch(
               <font-awesome-icon :icon="['fas', 'eye']" /> Preview
             </button>
             <button
+              type="button"
               class="btn-view btn-sm"
               title="Copy the served version's tokenized URL (expires in 1-2 weeks - embed the kit stylesheet for anything permanent)"
               @click="copyLink(row)"
@@ -409,6 +423,7 @@ watch(
               <font-awesome-icon :icon="['fas', 'copy']" /> Copy URL
             </button>
             <button
+              type="button"
               class="btn-confirm btn-sm"
               title="Edit this font: CSS name, served version, allowed sites, and files"
               @click="editingBase = row.base"
@@ -416,6 +431,7 @@ watch(
               <font-awesome-icon :icon="['fas', 'pen-to-square']" /> Edit
             </button>
             <button
+              type="button"
               class="btn-danger btn-sm"
               title="Delete this font (all of its files)"
               @click="fonts.deleteFont(row)"
@@ -447,10 +463,12 @@ watch(
   border-radius: var(--radius);
   padding: 16px 18px;
 }
+
 #font-external-body,
 #font-preview-body {
   margin-top: 12px;
 }
+
 /* Collapse toggle: a full-width, borderless header that reads as a label. */
 .font-panel-toggle {
   display: flex;
@@ -466,16 +484,19 @@ watch(
   font-size: inherit;
   text-align: left;
 }
+
 /* Input + button on one line (kit snippet). */
 .font-inline-row {
   display: flex;
   gap: 8px;
   align-items: center;
 }
+
 .font-inline-row input {
   flex: 1;
   min-width: 0;
 }
+
 /* Format-variant toggle above the preview stage. */
 .font-variant-toggle {
   display: flex;
@@ -484,6 +505,7 @@ watch(
   flex-wrap: wrap;
   margin-top: 12px;
 }
+
 .font-preview-stage {
   margin-top: 12px;
   padding: 16px 18px;
@@ -491,6 +513,7 @@ watch(
   background: var(--panel-bg);
   border-radius: var(--radius);
   color: var(--highlight);
+
   /* The clamped font's own metrics; sample text wraps for long input.
      Doubled from 2rem so the sample is large enough to judge fine details. */
   font-size: 4rem;
@@ -504,6 +527,7 @@ watch(
 .row-selected td {
   background: color-mix(in srgb, var(--highlight) 14%, transparent);
 }
+
 .row-selected td:first-child {
   box-shadow: inset 4px 0 0 0 var(--highlight);
 }

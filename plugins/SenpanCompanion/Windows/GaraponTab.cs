@@ -70,8 +70,8 @@ internal sealed class GaraponTab : TabBase
 
     public void DrawManage()
     {
-        DrawStatusLine();
-        DrawPickerRow();
+        this.DrawStatusLine();
+        this.DrawPickerRow();
 
         var d = this.detail;
         if (d == null)
@@ -86,12 +86,12 @@ internal sealed class GaraponTab : TabBase
         var open = string.Equals(d.Garapon.Status, "open", StringComparison.OrdinalIgnoreCase);
         Ui.Section(FontAwesomeIcon.Plus, "Issue a drawing link");
         if (open)
-            DrawCreateForm();
+            this.DrawCreateForm();
         else
             UiText.WrappedDisabled("This garapon is closed - no new drawing links can be issued.");
 
         Ui.Section(FontAwesomeIcon.Link, $"Drawing links ({d.Players.Count})");
-        DrawPlayers(d.Players);
+        this.DrawPlayers(d.Players);
     }
 
     private void DrawCreateForm()
@@ -99,7 +99,7 @@ internal sealed class GaraponTab : TabBase
         ImGui.SetNextItemWidth(220);
         ImGui.InputTextWithHint("##garaponname", "Player name (or Name @ World)", ref this.newPlayerName, 64);
         ImGui.SameLine();
-        DrawNearbyPicker();
+        this.DrawNearbyPicker();
 
         ImGui.SetNextItemWidth(120);
         if (ImGui.InputInt("Draws", ref this.newMaxDraws))
@@ -110,7 +110,7 @@ internal sealed class GaraponTab : TabBase
         if (!canCreate)
             ImGui.BeginDisabled();
         if (Ui.PrimaryButton("Issue drawing link"))
-            RunCreatePlayer();
+            this.RunCreatePlayer();
         if (!canCreate)
             ImGui.EndDisabled();
     }
@@ -141,7 +141,7 @@ internal sealed class GaraponTab : TabBase
         var doTell = this.config.TellGaraponUrlOnCreate && !string.IsNullOrEmpty(pickedWorld);
         var tellWorld = pickedWorld;
 
-        Run(async () =>
+        this.Run(async () =>
         {
             var created = (await this.api.CreateGaraponPlayerAsync(id, name, pickedWorld, maxDraws)).Player;
             var d = await this.api.GetGaraponAsync(id);
@@ -178,7 +178,9 @@ internal sealed class GaraponTab : TabBase
         if (!ImGui.BeginTable("garaponplayers", 3,
                 ImGuiTableFlags.Borders | ImGuiTableFlags.RowBg | ImGuiTableFlags.ScrollY,
                 new Vector2(0, 320)))
+        {
             return;
+        }
 
         ImGui.TableSetupColumn("Player");
         ImGui.TableSetupColumn("Draws", ImGuiTableColumnFlags.WidthFixed, 70);
@@ -210,8 +212,8 @@ internal sealed class GaraponTab : TabBase
 
     public void DrawLog()
     {
-        DrawStatusLine();
-        DrawPickerRow();
+        this.DrawStatusLine();
+        this.DrawPickerRow();
 
         var d = this.detail;
         if (d == null)
@@ -232,7 +234,9 @@ internal sealed class GaraponTab : TabBase
 
         if (!ImGui.BeginTable("garaponlog", 3,
                 ImGuiTableFlags.Borders | ImGuiTableFlags.RowBg | ImGuiTableFlags.ScrollY | ImGuiTableFlags.Resizable))
+        {
             return;
+        }
 
         ImGui.TableSetupColumn("When", ImGuiTableColumnFlags.WidthFixed, 150);
         ImGui.TableSetupColumn("Player");
@@ -260,9 +264,9 @@ internal sealed class GaraponTab : TabBase
     private void DrawPickerRow()
     {
         if (Ui.Button("Refresh##garapon"))
-            Run(LoadAsync);
+            this.Run(this.LoadAsync);
         ImGui.SameLine();
-        DrawGaraponPicker();
+        this.DrawGaraponPicker();
     }
 
     private void DrawGaraponPicker()
@@ -287,7 +291,7 @@ internal sealed class GaraponTab : TabBase
             foreach (var g in this.garapons)
             {
                 if (ImGui.Selectable($"{g.Title} ({g.Status})##g{g.Id}", g.Id == this.selectedGaraponId))
-                    LoadGarapon(g.Id);
+                    this.LoadGarapon(g.Id);
             }
             ImGui.EndCombo();
         }
@@ -299,7 +303,7 @@ internal sealed class GaraponTab : TabBase
     {
         this.selectedGaraponId = id;
         this.detail = null; // clear stale detail; the body shows "Loading..." until it arrives
-        Run(async () =>
+        this.Run(async () =>
         {
             var d = await this.api.GetGaraponAsync(id);
             await Apply(() =>
@@ -346,7 +350,7 @@ internal sealed class GaraponTab : TabBase
             return "-";
         var normalized = ts.Contains('T') ? ts : ts.Replace(' ', 'T') + "Z";
         return DateTimeOffset.TryParse(normalized, out var dto)
-            ? dto.ToLocalTime().ToString("yyyy-MM-dd HH:mm")
+            ? dto.ToLocalTime().ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture)
             : ts;
     }
 
@@ -358,7 +362,10 @@ internal sealed class GaraponTab : TabBase
             int.TryParse(s.AsSpan(0, 2), NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var r) &&
             int.TryParse(s.AsSpan(2, 2), NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var g) &&
             int.TryParse(s.AsSpan(4, 2), NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var b))
+        {
             return new Vector4(r / 255f, g / 255f, b / 255f, 1f);
+        }
+
         return new Vector4(1f, 1f, 1f, 1f);
     }
 }

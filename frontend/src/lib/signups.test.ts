@@ -6,6 +6,8 @@ import {
   savedRallySignup,
   savedRaffleSignup,
   forgetSignup,
+  saveFestivalVisit,
+  savedFestivalVisit,
 } from './signups'
 
 const KEY = 'senpan_signups'
@@ -165,5 +167,46 @@ describe('saved sign-ups', () => {
     })
     expect(() => rally()).not.toThrow()
     setItem.mockRestore()
+  })
+})
+
+describe('saved festival visits', () => {
+  it('remembers who a festival is visited as, and its rally once named', () => {
+    saveFestivalVisit({ mapId: 7, name: 'Aria Ashwood', world: 'Gilgamesh', rallyId: 3 })
+    expect(savedFestivalVisit(7)).toMatchObject({
+      name: 'Aria Ashwood',
+      world: 'Gilgamesh',
+      rallyId: 3,
+    })
+    // Keyed on the map, apart from a rally or raffle that happens to share the id.
+    rally({ rallyId: 7 })
+    expect(savedFestivalVisit(7)?.kind).toBe('festival')
+    expect(savedRallySignup(7)?.kind).toBe('rally')
+  })
+
+  it('refreshes rather than duplicates, and forgets on request', () => {
+    saveFestivalVisit({ mapId: 7, name: 'Aria Ashwood', world: 'Gilgamesh' })
+    saveFestivalVisit({ mapId: 7, name: 'Bea Bright', world: 'Balmung' })
+    expect(savedSignups().filter((s) => s.kind === 'festival')).toHaveLength(1)
+    expect(savedFestivalVisit(7)?.name).toBe('Bea Bright')
+    forgetSignup('festival', 7)
+    expect(savedFestivalVisit(7)).toBeUndefined()
+  })
+
+  it('drops a stored rally id that is not a number', () => {
+    localStorage.setItem(
+      KEY,
+      JSON.stringify([
+        {
+          kind: 'festival',
+          mapId: 7,
+          name: 'Aria',
+          world: 'Gilgamesh',
+          rallyId: '3',
+          savedAt: Date.now(),
+        },
+      ]),
+    )
+    expect(savedFestivalVisit(7)?.rallyId).toBeUndefined()
   })
 })

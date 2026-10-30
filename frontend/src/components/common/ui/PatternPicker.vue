@@ -69,6 +69,7 @@ function toggleSelectAll(): void {
         <option v-for="c in patterns.categories" :key="c.id" :value="c.id">{{ c.name }}</option>
       </select>
       <button
+        type="button"
         class="btn-neutral btn-sm"
         :disabled="patterns.displayedPatterns.length === 0"
         :title="
@@ -83,6 +84,7 @@ function toggleSelectAll(): void {
       </button>
       <button
         v-if="!searching"
+        type="button"
         class="btn-neutral btn-sm"
         @click="patterns.togglePatternsCollapsed()"
       >

@@ -11,7 +11,7 @@
  *
  * The dialog content is provided via the default slot.
  */
-import { onBeforeUnmount, onMounted, ref } from 'vue'
+import { onBeforeUnmount, onMounted, useTemplateRef } from 'vue'
 
 defineProps<{
   /** Adds the `modal-centered` class to the box (used by simple prompts). */
@@ -78,8 +78,8 @@ function inertBackground(overlay: HTMLElement): () => void {
   }
 }
 
-const box = ref<HTMLElement | null>(null)
-const overlay = ref<HTMLElement | null>(null)
+const box = useTemplateRef<HTMLElement>('box')
+const overlay = useTemplateRef<HTMLElement>('overlay')
 const entry: ModalEntry = { overlay: null }
 let previouslyFocused: HTMLElement | null = null
 let restoreBackground: (() => void) | null = null
@@ -158,6 +158,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
+  <!-- eslint-disable-next-line vuejs-accessibility/click-events-have-key-events, vuejs-accessibility/no-static-element-interactions -- clicking the backdrop is the pointer twin of Escape, which onKeydown handles for the whole document; the backdrop itself is not a control -->
   <div ref="overlay" class="modal-overlay" @click.self="emit('close')">
     <div
       ref="box"

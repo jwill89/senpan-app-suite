@@ -61,7 +61,7 @@ function applyUpdate(key: string, placement: Placement): void {
   const f = store.rallyForm
   if (!f) return
   const idx = Number(key.slice(1))
-  const target = key[0] === 's' ? f.stamps[idx] : f.prizes[idx]
+  const target = key.startsWith('s') ? f.stamps[idx] : f.prizes[idx]
   Object.assign(target.placement, placement)
 }
 
@@ -71,7 +71,7 @@ const selected = computed(() => {
   const k = selectedKey.value
   if (!f || !k) return null
   const idx = Number(k.slice(1))
-  if (k[0] === 's') {
+  if (k.startsWith('s')) {
     const stamp = f.stamps[idx]
     return { kind: 'stamp' as const, index: idx, stamp }
   }
@@ -107,7 +107,7 @@ const gameCount = computed(
 /** Set a stamp's affiliate from the select ('' -> Senpan Tea House default). */
 function setAffiliate(stampIndex: number, value: string): void {
   const f = store.rallyForm
-  if (!f || !f.stamps[stampIndex]) return
+  if (!f?.stamps[stampIndex]) return
   f.stamps[stampIndex].affiliate_id = value ? Number(value) : null
 }
 
@@ -312,13 +312,13 @@ function cancel(): void {
         <font-awesome-icon :icon="['fad', 'stamp']" /> Stamps &amp; Prizes
       </h3>
       <div class="flex-toolbar flex-end mb-10">
-        <button class="btn-neutral btn-sm" @click="addStamp('food')">
+        <button type="button" class="btn-neutral btn-sm" @click="addStamp('food')">
           <font-awesome-icon :icon="['fas', 'plus']" /> Add Food Stamp
         </button>
-        <button class="btn-neutral btn-sm" @click="addStamp('game')">
+        <button type="button" class="btn-neutral btn-sm" @click="addStamp('game')">
           <font-awesome-icon :icon="['fas', 'plus']" /> Add Game Stamp
         </button>
-        <button class="btn-neutral btn-sm" @click="addPrize">
+        <button type="button" class="btn-neutral btn-sm" @click="addPrize">
           <font-awesome-icon :icon="['fas', 'plus']" /> Add Prize
         </button>
       </div>
@@ -342,7 +342,7 @@ function cancel(): void {
                 : `${stampTypeLabel(selected.stamp.stamp_type)} ${selected.index + 1}`
             }}
           </h4>
-          <button class="btn-danger btn-sm" @click="removeSelected">
+          <button type="button" class="btn-danger btn-sm" @click="removeSelected">
             <font-awesome-icon :icon="['fas', 'trash']" /> Remove
           </button>
         </div>
@@ -436,8 +436,11 @@ function cancel(): void {
       </p>
 
       <FormActions align="start">
-        <button class="btn-neutral" :disabled="store.savingRally" @click="cancel">Cancel</button>
+        <button type="button" class="btn-neutral" :disabled="store.savingRally" @click="cancel">
+          Cancel
+        </button>
         <button
+          type="button"
           class="btn-confirm"
           :disabled="!store.rallyForm.title.trim() || store.savingRally"
           @click="save"
@@ -454,6 +457,7 @@ function cancel(): void {
 .no-margin {
   margin: 0;
 }
+
 .checkbox-row {
   display: flex;
   align-items: center;

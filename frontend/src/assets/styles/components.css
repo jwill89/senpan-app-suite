@@ -27,7 +27,7 @@
   padding: 14px 24px;
   border-radius: var(--radius);
   font-weight: 600;
-  animation: slideIn 0.3s ease;
+  animation: slide-in 0.3s ease;
   cursor: pointer;
   pointer-events: auto;
 }
@@ -101,11 +101,12 @@
 }
 
 /* Slide-in animation for toast appearance */
-@keyframes slideIn {
+@keyframes slide-in {
   from {
     opacity: 0;
     transform: translateX(40px);
   }
+
   to {
     opacity: 1;
     transform: translateX(0);
@@ -184,12 +185,14 @@ button[disabled] {
   opacity: 0.55;
   cursor: not-allowed;
 }
+
 button:disabled:hover,
 button[disabled]:hover {
   /* Cancel the per-variant hover changes while disabled. */
   background: inherit;
   border-color: inherit;
 }
+
 button:disabled:active {
   transform: none;
 }
@@ -200,6 +203,7 @@ button:disabled:active {
     transform: rotate(360deg);
   }
 }
+
 .spinner {
   display: inline-block;
   width: 1.1em;
@@ -228,6 +232,7 @@ button:disabled:active {
   padding: 40px;
   color: var(--text-muted);
 }
+
 .loading-label {
   color: var(--text-muted);
 }
@@ -244,22 +249,26 @@ button:disabled:active {
   color: var(--text-muted);
   padding: 40px 24px;
 }
+
 .empty-state-icon {
   font-size: 2.4rem;
   opacity: 0.5;
   margin-bottom: 6px;
   color: var(--text-muted);
 }
+
 .empty-state-title {
   font-size: 0.95rem;
   line-height: 1.4;
 }
+
 .empty-state-hint {
   font-size: 0.82rem;
   opacity: 0.85;
   max-width: 44ch;
   line-height: 1.45;
 }
+
 .empty-state-action {
   margin-top: 10px;
 }
@@ -275,20 +284,24 @@ button:disabled:active {
   background: var(--panel-raised-bg);
   overflow: hidden;
 }
+
 .route-progress-bar {
   height: 100%;
   width: 40%;
   background: var(--accent);
   border-radius: 0;
-  animation: routeProgressSlide 1.1s ease-in-out infinite;
+  animation: route-progress-slide 1.1s ease-in-out infinite;
 }
-@keyframes routeProgressSlide {
+
+@keyframes route-progress-slide {
   0% {
     margin-left: -40%;
   }
+
   50% {
     margin-left: 60%;
   }
+
   100% {
     margin-left: 110%;
   }
@@ -316,6 +329,7 @@ kbd {
   font-weight: 600;
   color: var(--text-muted);
 }
+
 .admin-nav-items button.is-active .nav-count {
   color: var(--text);
 }
@@ -331,17 +345,20 @@ kbd {
   border: 1px solid color-mix(in srgb, var(--success) 45%, transparent);
   color: var(--text);
 }
+
 .live-badge .live-dot {
   background: var(--success);
   box-shadow: 0 0 6px 1px color-mix(in srgb, var(--success) 70%, transparent);
 }
+
 .live-dot {
   width: 7px;
   height: 7px;
   border-radius: 50%;
-  background: currentColor;
-  animation: livePulse 1.4s ease-in-out infinite;
+  background: currentcolor;
+  animation: live-pulse 1.4s ease-in-out infinite;
 }
+
 /* Admin-only elapsed-game clock shown beside the "Live" badge on Current Game. */
 .game-clock {
   display: inline-flex;
@@ -353,6 +370,7 @@ kbd {
   border-radius: 0;
   background: var(--panel-raised-bg);
   color: var(--text);
+
   /* Named for the same reason as `.badge`: this clock is an inline child of the
      Current Game <h3>, and a display serif at 0.8rem with tabular figures is
      illegible. */
@@ -362,10 +380,12 @@ kbd {
   font-variant-numeric: tabular-nums;
   letter-spacing: 0.02em;
 }
+
 .game-clock .svg-inline--fa {
   color: var(--highlight);
   font-size: 0.75rem;
 }
+
 /* Live dot in the admin sidebar's game nav item: sits just after the label,
    tinted SUCCESS green (matching the Current Game "Live" badge + the player
    site's connected indicator) so a live game reads as a positive state. */
@@ -375,12 +395,14 @@ kbd {
   vertical-align: middle;
   background: var(--success);
 }
-@keyframes livePulse {
+
+@keyframes live-pulse {
   0%,
   100% {
     opacity: 1;
     transform: scale(1);
   }
+
   50% {
     opacity: 0.35;
     transform: scale(0.65);

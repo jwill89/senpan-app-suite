@@ -63,7 +63,12 @@ function copyCardUrl(id: string): void {
           max="500"
         />
         <span class="text-muted">cards</span>
-        <button class="btn-action" :disabled="cards.generating" @click="cards.generateCards()">
+        <button
+          type="button"
+          class="btn-action"
+          :disabled="cards.generating"
+          @click="cards.generateCards()"
+        >
           <LoadingSpinner v-if="cards.generating" label="Generating..." />
           <template v-else>Generate</template>
         </button>
@@ -79,6 +84,7 @@ function copyCardUrl(id: string): void {
           @keyup.enter="cards.generateSingleCard()"
         />
         <button
+          type="button"
           class="btn-action"
           :disabled="cards.generatingSingle || !cards.singleCardName.trim()"
           @click="cards.generateSingleCard()"
@@ -89,6 +95,7 @@ function copyCardUrl(id: string): void {
 
         <button
           v-if="cards.cards.length"
+          type="button"
           class="btn-danger btn-sm push-right"
           @click="cards.deleteAllCards()"
         >
@@ -113,6 +120,7 @@ function copyCardUrl(id: string): void {
         <template #actions>
           <button
             v-if="selectedCards.length"
+            type="button"
             class="btn-danger btn-sm"
             @click="deleteSelectedCards"
           >
@@ -182,6 +190,7 @@ function copyCardUrl(id: string): void {
             <div class="row-actions">
               <button
                 v-if="row.custom_status === 'pending'"
+                type="button"
                 class="btn-confirm btn-sm"
                 aria-label="Approve custom card"
                 title="Approve custom card"
@@ -190,6 +199,7 @@ function copyCardUrl(id: string): void {
                 <font-awesome-icon :icon="['fas', 'circle-check']" />
               </button>
               <button
+                type="button"
                 class="btn-view btn-sm"
                 :class="{ 'is-protected': row.protected }"
                 :aria-label="row.protected ? 'Unprotect card' : 'Protect card'"
@@ -199,6 +209,7 @@ function copyCardUrl(id: string): void {
                 <font-awesome-icon :icon="['fas', 'table-cells-lock']" />
               </button>
               <button
+                type="button"
                 class="btn-view btn-sm"
                 aria-label="View or edit board"
                 title="View / edit board"
@@ -207,6 +218,7 @@ function copyCardUrl(id: string): void {
                 <font-awesome-icon :icon="['fas', 'eye']" />
               </button>
               <button
+                type="button"
                 class="btn-view btn-sm"
                 aria-label="Copy board ID"
                 title="Copy ID"
@@ -215,6 +227,7 @@ function copyCardUrl(id: string): void {
                 <font-awesome-icon :icon="['fas', 'copy']" />
               </button>
               <button
+                type="button"
                 class="btn-view btn-sm"
                 aria-label="Copy playable card link"
                 title="Copy link"
@@ -223,6 +236,7 @@ function copyCardUrl(id: string): void {
                 <font-awesome-icon :icon="['fas', 'link']" />
               </button>
               <button
+                type="button"
                 class="btn-danger btn-sm"
                 aria-label="Delete board"
                 title="Delete board"
@@ -256,6 +270,7 @@ function copyCardUrl(id: string): void {
 .cards-name-input {
   width: 160px;
 }
+
 /* Status icon column: pending (hollow star), approved (highlight star), protected (lock). */
 .status-icons {
   display: inline-flex;
@@ -263,15 +278,19 @@ function copyCardUrl(id: string): void {
   align-items: center;
   justify-content: center;
 }
+
 .status-pending {
   color: var(--text-muted);
 }
+
 .status-approved {
   color: var(--warning);
 }
+
 .status-protected {
   color: var(--accent);
 }
+
 /* Protect toggle in the "on" state reads as active. */
 .row-actions .is-protected {
   color: var(--accent);

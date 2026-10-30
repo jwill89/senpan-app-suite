@@ -75,16 +75,16 @@ immediately**. See **Authentication & authorization** below.
 |       +-- types/
 |       |   +-- api.generated.ts      <- tygo-generated from Go model - GITIGNORED, DO NOT EDIT (run `npm run gen:types`)
 |       |   \-- api.ts                <- re-exports + hand-written request/response/WS envelopes
-|       +-- stores/                   <- Pinia stores (ui, app, auth, users, player, game, cards, patterns, presets, styles, raffles, affiliates, garapons, stampRallies, images, fonts, bookclub, carrd, announcements, logs, admin)
+|       +-- stores/                   <- Pinia stores (ui, app, auth, users, player, game, cards, patterns, presets, styles, raffles, affiliates, garapons, stampRallies, festivalMaps, festivalDashboard, images, fonts, bookclub, carrd, announcements, logs, admin)
 |       +-- composables/
 |       |   +-- useWebSocket.ts       <- wires WsClient -> stores (message dispatch)
 |       |   \-- usePwaInstall.ts      <- beforeinstallprompt capture + install/standalone state for the PWA "Install" affordance
 |       +-- components/
 |       |   +-- common/               <- BingoBoard, CalledNumbers, PatternMini, ModalOverlay, ConfirmModal, ToastNotification, LoadingSpinner, RouteProgressBar, MarkdownEditor (WYSIWYG), AppFooter, CornerFlourish
 |       |   |   \-- ui/                <- admin UI primitives (presentational, render stable themeable classes). Forms/tables: AdminPanel, FormField, FormRow, FormActions, DataTable, PaginationBar, EmptyState. Manager model: ManagerView (list page shell), ListRow (item row, actions far-right), SubPageHeader (Back sub-page header), SearchInput. Shared widgets: PatternPicker (v-model selected pattern ids - search + category filter + Select-All + collapse-all over a grouped collapsible checkbox grid; used by GameTab + the Preset editor), ImageField (upload-or-reuse-an-image field; announcement forms), ColorPicker (lazy vue-color Chrome wrapper + .color-picker skin; player stamp-colour modal). Every admin "manage items" tab routes through these for one consistent structure
-|       |   +-- player/               <- Stamp{Shape,Color,Opacity} pickers, WinPatternsPanel
+|       |   +-- player/               <- Stamp{Shape,Color,Opacity} pickers, WinPatternsPanel, GaraponWheel; StampCardPanel + GaraponPanel (the card/drum bodies their own pages AND the festival dashboard render) + FestivalRaffleCard
 |       |   \-- admin/                <- AdminSidebar + one component per tab + modals (CardPreview, EndGame, WinnerVerify, HalftimePrompt) + ThemeTokenEditor. Tabs: Game, Cards, WinnersLog, Patterns (one manager unifying the patterns list + New Pattern / Manage Categories sub-pages), Presets, RaffleForm, Raffles, Announcements, Affiliates + AffiliateForm, BookClub (one generic tab serves every club), Garapon + GaraponForm, StampRallies + StampRallyForm, FestivalMaps + FestivalMapForm, Settings, Themes, Images, Users (admin-only account+permission manager), Logs (admin-only live server-log viewer - typed/colored columns, filters, live tail, DEBUG toggle), Fonts, CarrdUpload; PlacementEditor (shared %-based image placement widget for Garapon/Stamp Rally forms) + MapStallEditor (the same for Festival Map stalls - both share the drag geometry in `composables/usePlacementDrag.ts` and the `.placement-*`/`.map-*` styles in `assets/styles/mapeditor.css`)
-|       +-- views/                    <- HomeView, PlayerView, RafflesView, RaffleDetailView, GaraponView (public token-gated draw), StampCardView (public token-gated stamp card), AdminLoginView, RegisterView (hidden), NoAccessView (active account, no granted pages), AdminView
+|       +-- views/                    <- HomeView, PlayerView, RafflesView, RaffleDetailView, GaraponView (public token-gated draw), StampCardView (public token-gated stamp card), FestivalDashboardView (one visitor's whole festival), AdminLoginView, RegisterView (hidden), NoAccessView (active account, no granted pages), AdminView
 |       \-- **/*.test.ts              <- Vitest unit/component tests, colocated next to the code they cover
 +-- .github/workflows/ci.yml          <- CI: frontend (lint-typecheck-test-build) + backend (lint-build-vet-test-govulncheck) + plugin (build-format-lint) + release (main: auto tag + GitHub Release per component on version bump)
 +-- .github/scripts/release.sh        <- the release job's script: reads each component's version, tags <Component>-v<version> + publishes a Release with that component's CHANGELOG.md section
@@ -97,7 +97,7 @@ immediately**. See **Authentication & authorization** below.
 |       +-- auth/password.go          <- argon2id Hash()/Verify() (PHC strings); own package so store (seed) + server (login) share it without an import cycle
 |       +-- model/model.go            <- Domain types (User, Card, Pattern, GamePreset, BingoGame, BingoGameState, Raffle, ReadingList(+Item/Source), AnnouncementType, AnnouncementRole, Announcement(+Button), etc.)
 |       +-- store/                    <- Store struct wrapping *sql.DB; one file per feature's typed CRUD
-|       |   +-- store.go              <- Store struct, New()/Close(), pragmas, shared helpers (one domain per file: users.go, cards.go, winners.go, patterns.go, games.go, settings.go, styles.go, presets.go, raffles.go, bookclubs.go, announcements.go)
+|       |   +-- store.go              <- Store struct, New(ctx, path)/Close(), pragmas, shared helpers (one domain per file: users.go, cards.go, winners.go, patterns.go, games.go, settings.go, styles.go, presets.go, raffles.go, bookclubs.go, announcements.go)
 |       |   +-- users.go              <- users CRUD: create (inactive), get/list, set active/admin/permissions/password, delete (password hash stays here, never on model.User)
 |       |   +-- bookclubs.go          <- reading_lists + reading_list_items CRUD
 |       |   +-- announcements.go      <- announcement_types + announcement_roles + announcements CRUD + due/advance helpers (scheduler)
@@ -299,7 +299,8 @@ not store-driven view switching:
 
 - Public: `/`, `/play/:cardId`, `/raffles`, `/raffles/:id`, `/festival-maps`,
   `/festival-maps/:id` (the published festival maps and one map's interactive
-  floor plan), `/garapon/:token`
+  floor plan), `/festival/:id` (the festival dashboard - see **Festival
+  dashboard**), `/garapon/:token`
   (per-player Garapon draw - the unguessable token is the capability, no admin
   auth), `/stamp-card/:token` (per-participant Stamp Rally card, likewise
   token-gated), `/admin/login`, `/admin/register` (hidden - linked nowhere; admins
@@ -356,7 +357,7 @@ Never edit it by hand. Request/response/WebSocket envelopes are hand-written in
 - **Route progress + loading UX**: a top progress bar (`RouteProgressBar.vue`, driven by `ui.routeLoading` from the router guards) shows during async navigation/lazy-chunk loads; stores expose per-action loading flags (`joining`, `drawing`, `starting`, ...) that drive `LoadingSpinner.vue` + disabled buttons.
 - **Global error handler**: `app.config.errorHandler` (`main.ts`) surfaces uncaught errors as a toast.
 - **Accessible modals**: `ModalOverlay.vue` traps focus, restores it on close, supports Escape, and sets `role="dialog"`/`aria-modal`.
-- **Lint/format**: ESLint flat config (`eslint.config.js`) + Prettier (`.prettierrc.json`); `npm run lint` (autofix) / `npm run lint:check` (no fix, used by CI) / `npm run format`. Bundle treemap via `npm run analyze` -> `dist/stats.html`.
+- **Lint/format**: ESLint flat config (`eslint.config.js`: Vue's recommended rules, typescript-eslint strict + stylistic type-checked rules, `eslint-plugin-vuejs-accessibility`, and stricter `vue/*` rules - the Kindred Nights standard, inline since the shared `@jwill89/eslint-config` submodule was retired) + Stylelint (`stylelint.config.mjs`: `stylelint-config-standard` + the Vue config, class names held to the naming rules below) + Prettier (`prettier.config.js`); `npm run lint` (autofix both) / `npm run lint:check` (no fix, used by CI) / `npm run format`. A rule is turned off in its config with the reason, or at the one line with the reason beside it, never silently. Static `style=""` stays allowed (see **CSS conventions**), so `vue/no-static-inline-styles` is deliberately off. Bundle treemap via `npm run analyze` -> `dist/stats.html`.
 
 **Testing** (Vitest + Vue Test Utils, jsdom):
 
@@ -365,7 +366,7 @@ Never edit it by hand. Request/response/WebSocket envelopes are hand-written in
 - Run: `npm run test` (CI), `npm run test:watch`, `npm run test:coverage` (v8).
 - Patterns: mock `fetch` via `vi.stubGlobal` for `api.ts`; mock the `./api` module with `vi.hoisted` + `vi.mock` for `endpoints.ts`; Pinia stores use `setActivePinia(createPinia())`; components use `mount()` from `@vue/test-utils`. Pure helpers tested directly (e.g. `exportCard.ts` exports `parseInlineRuns`/`parseDetailParagraphs` for this).
 
-**Public routes**: `/` - `/play/:cardId` - `/raffles` - `/raffles/:id` - `/garapon/:token` (token-gated) - `/stamp-card/:token` (token-gated) - `/card-requests` (submit a self-designed bingo card for admin approval) - `/admin/login` - `/admin/register` (hidden).
+**Public routes**: `/` - `/play/:cardId` - `/raffles` - `/raffles/:id` - `/festival-maps` - `/festival-maps/:id` - `/festival/:id` (festival dashboard) - `/garapon/:token` (token-gated) - `/stamp-card/:token` (token-gated) - `/card-requests` (submit a self-designed bingo card for admin approval) - `/admin/login` - `/admin/register` (hidden).
 **Admin sections** (`adminSection`, sidebar highlight): `bingo` | `teahouse` | `festival` | `atelier` | `system`.
 **Admin tabs** (`adminTab` / route): `bingo-game` - `bingo-cards` - `bingo-winners-log` - `bingo-patterns` - `bingo-presets` - `teahouse-announcements` - `teahouse-affiliates` - `teahouse-tea-rooms` - `bookclub-<slug>` (one per registered club, e.g. `bookclub-yaoi`, `bookclub-yuri`) - `festival-garapon` - `festival-stamp-rally` - `teahouse-raffles` (shown in the Festival section, id unchanged) - `system-settings` - `system-themes` - `system-images` - `system-users` (admin-only) - `system-logs` (admin-only) - `atelier-fonts` - `atelier-carrd`. Each tab id (except `system-users`/`system-logs`) doubles as its **page-permission key**.
 
@@ -421,8 +422,9 @@ Never edit it by hand. Request/response/WebSocket envelopes are hand-written in
 ### CSS conventions
 
 Enforced by `npm run lint:conventions` (`frontend/scripts/check-conventions.mjs`), which
-runs in `scripts/check.ps1` and CI. ESLint does not lint CSS and Prettier only formats
-it, so without that script none of this is checked.
+runs in `scripts/check.ps1` and CI. Stylelint checks the CSS itself (unknown
+properties, deprecated values, class-name shape) and Prettier formats it, but neither
+knows the rules below, so without that script none of this is checked.
 
 **The two tiers.** Shared styles are the default; a `<style scoped>` block is the
 exception and needs a reason. Scoped CSS is for what is genuinely one-of-a-kind about
@@ -646,7 +648,7 @@ cd frontend; npm run test           # Vitest run (CI mode, one-shot)
 cd frontend; npm run test:watch     # Vitest watch mode
 cd frontend; npm run test:coverage  # Vitest + v8 coverage report
 cd frontend; npm run lint           # ESLint (flat config) with --fix
-cd frontend; npm run lint:check     # ESLint without --fix (CI gate)
+cd frontend; npm run lint:check     # ESLint + Stylelint without --fix (CI gate)
 cd frontend; npm run format         # Prettier write over src/
 cd frontend; npm run analyze        # build + emit dist/stats.html bundle treemap (visualizer)
 cd frontend; npm run gen:types      # regenerate TS types from Go models (runs tygo in ../backend; needs Go)
@@ -672,7 +674,8 @@ cd backend; go run . -addr :8080 -db ../devdata/database.sqlite -webroot ../devd
 
 # Vet / lint
 cd backend; go vet ./...
-cd backend; golangci-lint run ./...   # config: backend/.golangci.yml (pinned v2.13.1 in CI)
+cd backend; go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.15.0 run ./...   # config: backend/.golangci.yml (built from source at the pin, as CI does)
+cd backend; go test -race ./...       # CI runs this; locally needs gcc on PATH (cgo for the race runtime)
 
 # Run tests
 cd backend; go test ./...
@@ -690,17 +693,24 @@ dotnet tool restore; dotnet roslynator analyze plugins\SenpanCompanion\SenpanCom
 
 ## Continuous integration
 
-`.github/workflows/ci.yml` runs on every push and pull request, with three gate
-jobs plus a release job:
+`.github/workflows/ci.yml` runs on every push and pull request, with four gate
+jobs plus a release job. The lint standard is Kindred Nights' (the owner's sister
+project), adapted to this repo's conventions:
 
 - **frontend** (`working-directory: frontend`): `npm ci` -> `npm run gen:types`
-  (needs Go, so the job also sets up the Go toolchain) -> `lint:check` ->
-  `typecheck` -> `test` -> `build`. Mirrors the local gate, so a green CI ==
-  the checks a developer runs locally have passed.
+  (needs Go, so the job also sets up the Go toolchain) -> `lint:check` (ESLint +
+  Stylelint) -> `format:check` -> `lint:conventions` -> `typecheck` -> `test` ->
+  `npm audit --audit-level=high --omit=dev` -> `build`. Mirrors the local gate, so
+  a green CI == the checks a developer runs locally have passed.
 - **backend** (`working-directory: backend`): `golangci-lint run` (pinned
-  v2.13.1, config `backend/.golangci.yml`) -> `go build ./...` -> `go vet ./...` ->
-  `go test ./...` (Go version read from `backend/go.mod`; the tests include the
-  OpenAPI spec-freshness + route-coverage checks in `internal/apidoc`) ->
+  v2.15.0 and built from source with `install-mode: goinstall`, since a prebuilt
+  binary can't read export data from a newer Go; config `backend/.golangci.yml`:
+  the default linters plus bodyclose, errorlint, exhaustive, gocritic, gosec,
+  noctx, revive and the rest of Kindred Nights' set, and the gofmt + goimports
+  formatters) -> `go build ./...` -> `go vet ./...` -> `go test -race ./...` (Go
+  version read from `backend/go.mod`; the tests include the OpenAPI
+  spec-freshness + route-coverage checks in `internal/apidoc`; the SQLite driver
+  is pure Go, so the race build runs the driver production ships) ->
   `govulncheck ./...` (`go run golang.org/x/vuln/cmd/govulncheck@latest`, run at
   latest so newly disclosed advisories are caught).
 - **plugin** (`working-directory: plugins/SenpanCompanion`): builds the FFXIV
@@ -713,8 +723,14 @@ jobs plus a release job:
   (the C# lint gate - Roslynator CLI pinned in `.config/dotnet-tools.json`; ruleset
   curated in `plugins/SenpanCompanion/.editorconfig`).
   Tracking Dalamud `latest` means an upstream API bump can redden it - the cue to
-  bump `DalamudApiLevel`.
-- **release** (`needs: [frontend, backend, plugin]`, only on a push to `main`):
+  bump `DalamudApiLevel`. The csproj also turns on the .NET analyzers at
+  `latest-recommended` with `EnforceCodeStyleInBuild`, so the C# style rules in the
+  plugin's `.editorconfig` (`this.` qualification, `var`, file-scoped namespaces,
+  naming) fail the build rather than waiting for `dotnet format`.
+- **scripts**: PSScriptAnalyzer 1.25.0 over the tracked `scripts/*.ps1`, with the
+  repo-root `PSScriptAnalyzerSettings.psd1` (default rules + the one-true-brace
+  layout). Any finding fails it.
+- **release** (`needs: [frontend, backend, plugin, scripts]`, only on a push to `main`):
   runs `.github/scripts/release.sh`, which for each component reads its current
   version (`package.json` / `version.go` / `SenpanCompanion.csproj`) and, if the
   `<Component>-v<version>` release doesn't exist yet, tags it and publishes a
@@ -890,6 +906,68 @@ the image.
   builds `stamp_rallies` before `festival_maps`), so the stamps survive and fall back
   to their affiliates.
 
+### Festival dashboard
+
+`/festival/:id` (`FestivalDashboardView`, `stores/festivalDashboard.ts`) is one
+visitor's view of everything filed under a festival - the plan, the stamp rally,
+the garapon and the raffles - with the actions on each, so nobody is sent off to a
+page per system. The festival list (`/festival-maps`) opens it; the map page, the
+stamp card page and the drawing page link to it. Same shortcode-or-id segment as
+the map.
+
+- **Two reads.** The plan is the public map (`GET /api/festival-maps/public/{id}`,
+  the same payload every visitor gets). What depends on WHO is looking is
+  `POST /api/festival-dashboard/{id}` (`server/festivaldashboard.go`): fed the card
+  token, the drawing token and the name + world this device holds, it returns the
+  card on the festival's rally, the drum linked to that rally, and every raffle
+  filed under the festival (`raffles.festival_map_id`) a visitor may see, each with
+  the visitor's own entry. POST so tokens and names stay out of URLs and logs; its
+  own prefix because `adminMutationResource` treats every POST under
+  `festival-maps` as an admin edit and would broadcast on each page load. Rate
+  limited loosely (`dashboardLimiter`, 120 / 10 min).
+- **Everything sent is checked against the festival** and a token that doesn't
+  belong is ignored, not refused (a phone that has been to two festivals holds
+  both). A card counts when its rally is filed under this map, whatever the rally's
+  status - a finished card with its prizes is still worth showing. A drawing link
+  counts only when its drum serves THAT rally. A drawing link carries its paired
+  card (`garapon_players.stamp_card_id`), echoed back as `card_token`, so a device
+  that only held the drawing link learns the card; the reverse never happens - a
+  card alone reports `paired_draws_left`, never the drawing token.
+- **Raffle entries match the whole name and world**, the way entries merge
+  (`FestivalRaffleEntriesFor`), never a substring, and carry no gil figure
+  (`RaffleLookupEntry`). The dashboard's entry form has no name field: it always
+  enters as the visitor, so new tickets join their existing entry.
+- **The panels are shared, not copied.** The store hands the card and the drum to
+  the stamp-rally and garapon stores' public state (`showPublic`), and the same
+  `StampCardPanel` / `GaraponPanel` their own pages render show them here. Every
+  action goes through the endpoint that owns it (stamp, draw, enter, sign up,
+  lookup). `GaraponPanel` copes with a drum loaded without a player - no drawing
+  link on this device - by showing the prizes alone.
+- **Who is visiting** is kept per festival in `lib/signups` (`kind: 'festival'`:
+  name, world, and the rally once named - the public map stops naming a rally
+  outside its window, and without its id the card saved for it couldn't be found).
+  A card fixes the identity; without one the visitor types it. "Forget this
+  device" drops the festival's links, name and raffle spellings.
+- **Hand-off from the card and drawing pages** goes in history state
+  (`festivalConnectState`), never the URL, and is taken off the history entry as
+  it's read, so a reload can't replay it after a "forget". A handed-over card
+  replaces the device's own for that rally (and drops a drawing link kept for the
+  old one); a handed-over drawing link brings its own card.
+- **Collected stamps on the plan.** `PublicStamp.occupant_id` lets the dashboard
+  pass `collectedOccupantIds` to `FestivalMapWidget`/`FestivalMapCanvas`: a stall
+  whose stamps the visitor holds gets a success-colored ring and a check in place
+  of the stamp mark, and its panel says so. The widget's `rally-action` and
+  `raffle-action` slots let the dashboard put a stamp-password box in the stall
+  panel and jump to the raffle in-page instead of linking away. Every other map
+  view passes nothing and is unchanged.
+- **Layout.** A wide screen shows every section: the plan across the top, the rest
+  in auto-fit columns. Under 900px the tiles (stamps collected, draws left,
+  raffles entered) pick ONE section to show; the others are `display: none`
+  rather than unmounted, so the plan keeps its zoom and the drum its spin. The
+  styles live in `assets/styles/festival.css` with the card and drum objects.
+- **Refresh on return**: coming back to the tab re-reads after 60s (never
+  mid-spin). There is no WebSocket feed for visitors.
+
 ### Duplicating an event
 
 Raffles, Stamp Rallies, Garapons and Festival Maps each expose a **Duplicate** on
@@ -1037,6 +1115,7 @@ draw and the collected-gil totals read.
 
 - **CSS naming + token drift**: see **CSS conventions** under **Frontend** - role-named shared objects, `-` for a part, `--` for a modifier, `is-` for state, the component's full name as a scoped prefix, and never the appearance. Shared styles are the default; a rule becomes a shared object at its **second** occurrence. Scoped CSS may only shrink (ratcheted against `scoped-css-baseline.json`; new SFCs cap at 120 lines). The themeable token list is duplicated in three sources that must agree, and every themeable token must have a consumer outside the theme editor. All of it is gated by `npm run lint:conventions`.
 - **Typed structs everywhere**: all store methods return typed `model.*` structs - no `map[string]interface{}`.
+- **Context everywhere, cancellable by default**: every store method that touches the database takes `ctx context.Context` first and uses the `*Context` query forms (golangci-lint's `noctx` holds it). Handlers pass `r.Context()`, so a request whose client has gone stops its queries; the background loops pass the process context `main.go` cancels on SIGINT/SIGTERM (and that context runs the migrations in `store.New(ctx, path)`). Work that has to finish after the response - a delayed player draw, a half-time timer, a broadcast's reads, or a run of writes a cancellation would leave half-done - runs under `context.WithoutCancel(r.Context())`. A query canceled that way fails with `context.Canceled` or SQLite's interrupt (`store.Interrupted`); `writeInternalError` and `errorLevel` log those at Debug, and the access line logs such a 500 at Info with `canceled=true`, so a dropped connection never reads as an outage.
 - **Dependency injection**: `Server` struct holds all deps (`Store`, `GameService`, `Hub`, sessions, password). No package-level globals.
 - **Method-pattern routing**: Go 1.26+ `"GET /api/auth"` patterns - no manual method checks.
 - **Typed JSON requests**: each handler defines a request struct and uses `readJSON[T]()` generic decoder.
@@ -1113,7 +1192,7 @@ draw and the collected-gil totals read.
 
 - **New API endpoint**: add a handler method on `*Server` in `internal/server/` returning a **typed response struct** from `internal/model` (add it to `model/responses*.go` - not `map[string]any`), register the route in `routes()`, add a typed wrapper in `frontend/src/lib/endpoints.ts`, then add the endpoint to the OpenAPI paths table in `internal/apidoc/paths*.go` (add its response schema name to `internal/apidoc/schemas.go` too) and run `go run ./cmd/openapi-gen`. The `internal/apidoc` tests fail if a route is undocumented or `openapi.yaml` is stale.
 - **New domain type / response struct**: add to `internal/model/` (domain in `model.go`, response envelopes in `model/responses*.go`), then run `npm run gen:types` (frontend types) and, if it's referenced by the spec, add it to `internal/apidoc/schemas.go` + `go run ./cmd/openapi-gen`.
-- **New store method**: add to the matching domain file in `internal/store/` (`raffles.go`, `patterns.go`, ...; new domain -> new file), returning typed structs.
+- **New store method**: add to the matching domain file in `internal/store/` (`raffles.go`, `patterns.go`, ...; new domain -> new file), taking `ctx context.Context` first and returning typed structs.
 - **New migration**: bump `schemaVersion` in `store/migrate.go`, add an `if version < N` block in `ensureSchema()`.
 - **New admin tab**: add the tab id to the `AdminTab` union in `frontend/src/stores/admin.ts` (mapping its prefix to a section in `setTabFromRoute()` + any per-tab data load - wrap the load in `loadFresh('<key>', ...)` so revisits stay snappy), add a child route with `meta.tab` in `router/index.ts`, add a sidebar link (gated with `v-if="can('<key>')"`) in `components/admin/AdminSidebar.vue`, and create a `components/admin/<Tab>.vue` referenced by the route's lazy `import()`. **Wire its permission too** (see "New admin page permission" below) unless it's admin-only. For a "manage items" tab use the **manager model** (`ManagerView` + `ListRow` + `SubPageHeader` + `SearchInput`, with a `screen` ref for sub-pages - see `PatternsTab.vue`); otherwise wrap content in `<AdminPanel>`. Either way build forms/tables from the `components/common/ui/` primitives (`FormField`, `FormRow`, `FormActions`, `DataTable`, `PaginationBar`, `EmptyState`) rather than hand-rolled markup.
 - **New admin page permission**: the page-permission key **must equal** the tab id. Add the constant + include it in `validPermissions()` in `server/permissions.go`; guard the page's handlers with `s.requirePermission(w, r, perm...)`; add an entry to `ADMIN_PERMISSIONS` in `frontend/src/lib/constants.ts` (label + section) so the Users-page editor, sidebar gating, and router guard all pick it up. (An **admin-only** page instead guards with `requireAdmin` and is left out of `ADMIN_PERMISSIONS` - see `system-users`.)

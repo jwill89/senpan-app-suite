@@ -10,7 +10,7 @@ import (
 // value isn't sensitive - the SPA pairs it with its own build version in the
 // admin dashboard for a compatibility check - and a public endpoint also doubles
 // as a lightweight health/version probe.
-func (s *Server) handleVersion(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handleVersion(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, struct {
 		Backend string `json:"backend"`
 	}{Backend: version.Version})

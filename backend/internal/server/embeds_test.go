@@ -174,7 +174,7 @@ func TestWebhookPolicy(t *testing.T) {
 
 	t.Run("dry run wins over override", func(t *testing.T) {
 		var overrideHits int
-		test := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		test := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 			overrideHits++
 			w.WriteHeader(http.StatusNoContent)
 		}))

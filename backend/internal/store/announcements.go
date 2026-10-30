@@ -1,6 +1,7 @@
 package store
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 	"strconv"
@@ -15,8 +16,8 @@ import (
 // Every announcement references one type and posts to its webhook.
 
 // ListAnnouncementTypes returns all announcement types, newest first.
-func (s *Store) ListAnnouncementTypes() ([]model.AnnouncementType, error) {
-	rows, err := s.db.Query(
+func (s *Store) ListAnnouncementTypes(ctx context.Context) ([]model.AnnouncementType, error) {
+	rows, err := s.db.QueryContext(ctx,
 		`SELECT id, name, webhook_url, created_at FROM announcement_types ORDER BY id DESC`,
 	)
 	if err != nil {
@@ -36,9 +37,9 @@ func (s *Store) ListAnnouncementTypes() ([]model.AnnouncementType, error) {
 }
 
 // GetAnnouncementType returns a single type by ID, or nil if it does not exist.
-func (s *Store) GetAnnouncementType(id int64) (*model.AnnouncementType, error) {
+func (s *Store) GetAnnouncementType(ctx context.Context, id int64) (*model.AnnouncementType, error) {
 	var t model.AnnouncementType
-	err := s.db.QueryRow(
+	err := s.db.QueryRowContext(ctx,
 		`SELECT id, name, webhook_url, created_at FROM announcement_types WHERE id = ?`, id,
 	).Scan(&t.ID, &t.Name, &t.WebhookURL, &t.CreatedAt)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -51,8 +52,8 @@ func (s *Store) GetAnnouncementType(id int64) (*model.AnnouncementType, error) {
 }
 
 // CreateAnnouncementType inserts a new type and returns its ID.
-func (s *Store) CreateAnnouncementType(name, webhookURL string) (int64, error) {
-	res, err := s.db.Exec(
+func (s *Store) CreateAnnouncementType(ctx context.Context, name, webhookURL string) (int64, error) {
+	res, err := s.db.ExecContext(ctx,
 		`INSERT INTO announcement_types (name, webhook_url) VALUES (?, ?)`, name, webhookURL,
 	)
 	if err != nil {
@@ -62,16 +63,16 @@ func (s *Store) CreateAnnouncementType(name, webhookURL string) (int64, error) {
 }
 
 // UpdateAnnouncementType updates a type's name and webhook.
-func (s *Store) UpdateAnnouncementType(id int64, name, webhookURL string) error {
-	_, err := s.db.Exec(
+func (s *Store) UpdateAnnouncementType(ctx context.Context, id int64, name, webhookURL string) error {
+	_, err := s.db.ExecContext(ctx,
 		`UPDATE announcement_types SET name = ?, webhook_url = ? WHERE id = ?`, name, webhookURL, id,
 	)
 	return err
 }
 
 // DeleteAnnouncementType removes a type by ID. Returns true if a row was deleted.
-func (s *Store) DeleteAnnouncementType(id int64) (bool, error) {
-	res, err := s.db.Exec(`DELETE FROM announcement_types WHERE id = ?`, id)
+func (s *Store) DeleteAnnouncementType(ctx context.Context, id int64) (bool, error) {
+	res, err := s.db.ExecContext(ctx, `DELETE FROM announcement_types WHERE id = ?`, id)
 	if err != nil {
 		return false, err
 	}
@@ -81,9 +82,9 @@ func (s *Store) DeleteAnnouncementType(id int64) (bool, error) {
 
 // CountAnnouncementsByType returns how many announcements reference a type - used
 // to block deleting a type that's still in use.
-func (s *Store) CountAnnouncementsByType(typeID int64) (int, error) {
+func (s *Store) CountAnnouncementsByType(ctx context.Context, typeID int64) (int, error) {
 	var n int
-	err := s.db.QueryRow(`SELECT COUNT(*) FROM announcements WHERE type_id = ?`, typeID).Scan(&n)
+	err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM announcements WHERE type_id = ?`, typeID).Scan(&n)
 	return n, err
 }
 
@@ -94,8 +95,8 @@ func (s *Store) CountAnnouncementsByType(typeID int64) (int, error) {
 // selection as "role:<id>" in the mention column.
 
 // ListAnnouncementRoles returns all taggable roles, newest first.
-func (s *Store) ListAnnouncementRoles() ([]model.AnnouncementRole, error) {
-	rows, err := s.db.Query(
+func (s *Store) ListAnnouncementRoles(ctx context.Context) ([]model.AnnouncementRole, error) {
+	rows, err := s.db.QueryContext(ctx,
 		`SELECT id, name, role_id, created_at FROM announcement_roles ORDER BY id DESC`,
 	)
 	if err != nil {
@@ -115,9 +116,9 @@ func (s *Store) ListAnnouncementRoles() ([]model.AnnouncementRole, error) {
 }
 
 // GetAnnouncementRole returns a single role by ID, or nil if it does not exist.
-func (s *Store) GetAnnouncementRole(id int64) (*model.AnnouncementRole, error) {
+func (s *Store) GetAnnouncementRole(ctx context.Context, id int64) (*model.AnnouncementRole, error) {
 	var r model.AnnouncementRole
-	err := s.db.QueryRow(
+	err := s.db.QueryRowContext(ctx,
 		`SELECT id, name, role_id, created_at FROM announcement_roles WHERE id = ?`, id,
 	).Scan(&r.ID, &r.Name, &r.RoleID, &r.CreatedAt)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -130,8 +131,8 @@ func (s *Store) GetAnnouncementRole(id int64) (*model.AnnouncementRole, error) {
 }
 
 // CreateAnnouncementRole inserts a new role and returns its ID.
-func (s *Store) CreateAnnouncementRole(name, roleID string) (int64, error) {
-	res, err := s.db.Exec(
+func (s *Store) CreateAnnouncementRole(ctx context.Context, name, roleID string) (int64, error) {
+	res, err := s.db.ExecContext(ctx,
 		`INSERT INTO announcement_roles (name, role_id) VALUES (?, ?)`, name, roleID,
 	)
 	if err != nil {
@@ -141,16 +142,16 @@ func (s *Store) CreateAnnouncementRole(name, roleID string) (int64, error) {
 }
 
 // UpdateAnnouncementRole updates a role's name and Discord role ID.
-func (s *Store) UpdateAnnouncementRole(id int64, name, roleID string) error {
-	_, err := s.db.Exec(
+func (s *Store) UpdateAnnouncementRole(ctx context.Context, id int64, name, roleID string) error {
+	_, err := s.db.ExecContext(ctx,
 		`UPDATE announcement_roles SET name = ?, role_id = ? WHERE id = ?`, name, roleID, id,
 	)
 	return err
 }
 
 // DeleteAnnouncementRole removes a role by ID. Returns true if a row was deleted.
-func (s *Store) DeleteAnnouncementRole(id int64) (bool, error) {
-	res, err := s.db.Exec(`DELETE FROM announcement_roles WHERE id = ?`, id)
+func (s *Store) DeleteAnnouncementRole(ctx context.Context, id int64) (bool, error) {
+	res, err := s.db.ExecContext(ctx, `DELETE FROM announcement_roles WHERE id = ?`, id)
 	if err != nil {
 		return false, err
 	}
@@ -160,9 +161,9 @@ func (s *Store) DeleteAnnouncementRole(id int64) (bool, error) {
 
 // CountAnnouncementsByRole returns how many announcements tag a given role - used
 // to block deleting a role that's still referenced by an announcement's mention.
-func (s *Store) CountAnnouncementsByRole(roleID int64) (int, error) {
+func (s *Store) CountAnnouncementsByRole(ctx context.Context, roleID int64) (int, error) {
 	var n int
-	err := s.db.QueryRow(
+	err := s.db.QueryRowContext(ctx,
 		`SELECT COUNT(*) FROM announcements WHERE mention = ?`,
 		"role:"+strconv.FormatInt(roleID, 10),
 	).Scan(&n)
@@ -216,9 +217,9 @@ func decodeAnnouncementButtons(raw string) []model.AnnouncementButton {
 // admin's chosen order: sort_order ascending, then newest-first as a tie-break.
 // Rows default to sort_order 0 (so a fresh list is newest-first, and a newly
 // created announcement appears at the top) until the admin drags to reorder.
-func (s *Store) ListAnnouncements() ([]model.Announcement, error) {
-	rows, err := s.db.Query(
-		`SELECT ` + announcementColumns + ` FROM announcements a
+func (s *Store) ListAnnouncements(ctx context.Context) ([]model.Announcement, error) {
+	rows, err := s.db.QueryContext(ctx,
+		`SELECT `+announcementColumns+` FROM announcements a
 		   LEFT JOIN announcement_types t ON t.id = a.type_id
 		   ORDER BY a.sort_order ASC, a.id DESC`,
 	)
@@ -239,8 +240,8 @@ func (s *Store) ListAnnouncements() ([]model.Announcement, error) {
 }
 
 // GetAnnouncement returns a single announcement by ID, or nil if it doesn't exist.
-func (s *Store) GetAnnouncement(id int64) (*model.Announcement, error) {
-	row := s.db.QueryRow(
+func (s *Store) GetAnnouncement(ctx context.Context, id int64) (*model.Announcement, error) {
+	row := s.db.QueryRowContext(ctx,
 		`SELECT `+announcementColumns+` FROM announcements a
 		   LEFT JOIN announcement_types t ON t.id = a.type_id
 		   WHERE a.id = ?`, id,
@@ -256,8 +257,8 @@ func (s *Store) GetAnnouncement(id int64) (*model.Announcement, error) {
 }
 
 // CreateAnnouncement inserts a new announcement and returns its ID.
-func (s *Store) CreateAnnouncement(a *model.Announcement) (int64, error) {
-	res, err := s.db.Exec(
+func (s *Store) CreateAnnouncement(ctx context.Context, a *model.Announcement) (int64, error) {
+	res, err := s.db.ExecContext(ctx,
 		`INSERT INTO announcements
 			(type_id, title, details, image, thumbnail, color, location, start_local, end_local, start_at, end_at, start_format, end_format, dynamic_dates,
 			 schedule_kind, timezone, once_local, schedule_minutes, schedule_weekdays, schedule_week_of_month,
@@ -278,8 +279,8 @@ func (s *Store) CreateAnnouncement(a *model.Announcement) (int64, error) {
 // which belongs to the schedule cursor rather than the form: it is written only by
 // SetAnnouncementSkip and AdvanceAnnouncement. Writing it here is what silently
 // cleared a pending skip every time an admin saved an unrelated edit.
-func (s *Store) UpdateAnnouncement(a *model.Announcement) error {
-	_, err := s.db.Exec(
+func (s *Store) UpdateAnnouncement(ctx context.Context, a *model.Announcement) error {
+	_, err := s.db.ExecContext(ctx,
 		`UPDATE announcements SET type_id = ?, title = ?, details = ?, image = ?, thumbnail = ?, color = ?, location = ?,
 			start_local = ?, end_local = ?, start_at = ?, end_at = ?, start_format = ?, end_format = ?, dynamic_dates = ?, schedule_kind = ?,
 			timezone = ?, once_local = ?, schedule_minutes = ?, schedule_weekdays = ?,
@@ -296,14 +297,14 @@ func (s *Store) UpdateAnnouncement(a *model.Announcement) error {
 // BulkReorderAnnouncements rewrites the sort_order of the given announcements so
 // they list in the supplied id order (index 0 = top). Ids are applied in a single
 // transaction; unknown ids are no-ops. Mirrors BulkReorderPatterns.
-func (s *Store) BulkReorderAnnouncements(ids []int64) error {
-	tx, err := s.beginImmediate()
+func (s *Store) BulkReorderAnnouncements(ctx context.Context, ids []int64) error {
+	tx, err := s.beginImmediate(ctx)
 	if err != nil {
 		return err
 	}
 	defer func() { _ = tx.Rollback() }()
 	for i, id := range ids {
-		if _, err := tx.Exec(`UPDATE announcements SET sort_order = ? WHERE id = ?`, i, id); err != nil {
+		if _, err := tx.ExecContext(ctx, `UPDATE announcements SET sort_order = ? WHERE id = ?`, i, id); err != nil {
 			return err
 		}
 	}
@@ -311,8 +312,8 @@ func (s *Store) BulkReorderAnnouncements(ids []int64) error {
 }
 
 // DeleteAnnouncement removes an announcement by ID. Returns true if a row was deleted.
-func (s *Store) DeleteAnnouncement(id int64) (bool, error) {
-	res, err := s.db.Exec(`DELETE FROM announcements WHERE id = ?`, id)
+func (s *Store) DeleteAnnouncement(ctx context.Context, id int64) (bool, error) {
+	res, err := s.db.ExecContext(ctx, `DELETE FROM announcements WHERE id = ?`, id)
 	if err != nil {
 		return false, err
 	}
@@ -322,8 +323,8 @@ func (s *Store) DeleteAnnouncement(id int64) (bool, error) {
 
 // DueAnnouncements returns active announcements whose next_post_at has arrived
 // (set and at/before now), soonest first - the scheduler's work queue.
-func (s *Store) DueAnnouncements(now time.Time) ([]model.Announcement, error) {
-	rows, err := s.db.Query(
+func (s *Store) DueAnnouncements(ctx context.Context, now time.Time) ([]model.Announcement, error) {
+	rows, err := s.db.QueryContext(ctx,
 		`SELECT `+announcementColumns+` FROM announcements a
 		   LEFT JOIN announcement_types t ON t.id = a.type_id
 		   WHERE a.active = 1 AND a.next_post_at != '' AND datetime(a.next_post_at) <= datetime(?)
@@ -353,8 +354,8 @@ func (s *Store) DueAnnouncements(now time.Time) ([]model.Announcement, error) {
 // update only applies while the row still holds it, so an admin edit that landed
 // during the (up to 15s) Discord POST is not silently reverted by a write computed
 // from a stale snapshot. Returns whether the row still matched.
-func (s *Store) MarkAnnouncementPosted(id int64, prevNextPostAt, nextPostAt string, active bool) (bool, error) {
-	res, err := s.db.Exec(
+func (s *Store) MarkAnnouncementPosted(ctx context.Context, id int64, prevNextPostAt, nextPostAt string, active bool) (bool, error) {
+	res, err := s.db.ExecContext(ctx,
 		`UPDATE announcements SET last_posted_at = CURRENT_TIMESTAMP, next_post_at = ?, active = ?
 		 WHERE id = ? AND next_post_at = ?`, nextPostAt, boolToInt(active), id, prevNextPostAt,
 	)
@@ -370,8 +371,8 @@ func (s *Store) MarkAnnouncementPosted(id int64, prevNextPostAt, nextPostAt stri
 // skipped.
 // prevNextPostAt guards against a concurrent admin edit the same way
 // MarkAnnouncementPosted does. Returns whether the row still matched.
-func (s *Store) AdvanceAnnouncement(id int64, prevNextPostAt, nextPostAt string, active bool, skipCount int) (bool, error) {
-	res, err := s.db.Exec(
+func (s *Store) AdvanceAnnouncement(ctx context.Context, id int64, prevNextPostAt, nextPostAt string, active bool, skipCount int) (bool, error) {
+	res, err := s.db.ExecContext(ctx,
 		`UPDATE announcements SET next_post_at = ?, active = ?, skip_count = ?
 		 WHERE id = ? AND next_post_at = ?`,
 		nextPostAt, boolToInt(active), skipCount, id, prevNextPostAt,
@@ -384,15 +385,15 @@ func (s *Store) AdvanceAnnouncement(id int64, prevNextPostAt, nextPostAt string,
 }
 
 // SetAnnouncementSkip sets how many upcoming occurrences to skip (0 clears it).
-func (s *Store) SetAnnouncementSkip(id int64, count int) error {
-	_, err := s.db.Exec(`UPDATE announcements SET skip_count = ? WHERE id = ?`, count, id)
+func (s *Store) SetAnnouncementSkip(ctx context.Context, id int64, count int) error {
+	_, err := s.db.ExecContext(ctx, `UPDATE announcements SET skip_count = ? WHERE id = ?`, count, id)
 	return err
 }
 
 // TouchAnnouncementPosted stamps last_posted_at without touching the schedule -
 // used by a manual "send now" that should not advance the recurrence cursor.
-func (s *Store) TouchAnnouncementPosted(id int64) error {
-	_, err := s.db.Exec(
+func (s *Store) TouchAnnouncementPosted(ctx context.Context, id int64) error {
+	_, err := s.db.ExecContext(ctx,
 		`UPDATE announcements SET last_posted_at = CURRENT_TIMESTAMP WHERE id = ?`, id,
 	)
 	return err

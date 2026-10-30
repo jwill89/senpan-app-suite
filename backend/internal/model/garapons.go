@@ -132,9 +132,9 @@ type GaraponPublicPlayer struct {
 	MaxDraws   int    `json:"max_draws"`
 	DrawsUsed  int    `json:"draws_used"`
 	// StampCardToken is set when this drawing link's garapon is tied to a Stamp
-	// Rally and a card was issued for the player - it equals the garapon token, so
-	// the public view can link to /stamp-card/<token>. "" when there is no linked
-	// card, which gates whether the rally link is shown.
+	// Rally and a card was issued for the player - its own token, not the drawing
+	// one, so the public view can link to /stamp-card/<token>. "" when there is no
+	// linked card, which gates whether the rally link is shown.
 	StampCardToken string `json:"stamp_card_token,omitempty"`
 }
 
@@ -145,6 +145,9 @@ type GaraponPublicResponse struct {
 	Garapon PublicGarapon       `json:"garapon"`
 	Player  GaraponPublicPlayer `json:"player"`
 	Draws   []GaraponDraw       `json:"draws"`
+	// FestivalLink is the path segment of the festival the drum's rally is filed
+	// under (see PublicStampRally.FestivalLink); "" when there is none.
+	FestivalLink string `json:"festival_link,omitempty"`
 }
 
 // GaraponDrawResponse is the body of POST /api/garapon/{token}/draw - the recorded

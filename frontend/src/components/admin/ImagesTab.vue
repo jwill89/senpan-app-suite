@@ -13,7 +13,7 @@
  *   - browse:     category picker + upload drop zone + image grid.
  *   - categories: manage categories (add / rename / delete via a modal).
  */
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onMounted, ref, useTemplateRef, watch } from 'vue'
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
 import AdminPanel from '@/components/common/ui/AdminPanel.vue'
 import ManagerView from '@/components/common/ui/ManagerView.vue'
@@ -38,7 +38,7 @@ const screen = ref<Screen>('browse')
 const selectedDir = ref('')
 
 /** Hidden <input type="file"> used by the Upload button. */
-const fileInput = ref<HTMLInputElement | null>(null)
+const fileInput = useTemplateRef<HTMLInputElement>('fileInput')
 /** True while a file is being dragged over the drop zone. */
 const dragOver = ref(false)
 
@@ -131,6 +131,10 @@ async function submitCategory(): Promise<void> {
 function pickFiles(): void {
   fileInput.value?.click()
 }
+/** The drop zone's keyboard twin of its click, which is off while no category is picked. */
+function pickFilesFromKey(): void {
+  if (selectedDir.value) pickFiles()
+}
 async function onFilesSelected(e: Event): Promise<void> {
   const input = e.target as HTMLInputElement
   if (input.files && input.files.length > 0 && selectedDir.value) {
@@ -174,7 +178,7 @@ onMounted(() => images.loadCategories())
         those images (announcements, raffles, ...) will lose them.
       </p>
       <div class="flex-toolbar flex-end mb-16">
-        <button class="btn-confirm btn-sm" @click="openNewCategory">
+        <button type="button" class="btn-confirm btn-sm" @click="openNewCategory">
           <font-awesome-icon :icon="['fas', 'plus']" /> New Category
         </button>
       </div>
@@ -195,6 +199,7 @@ onMounted(() => images.loadCategories())
         <template #cell-actions="{ row }">
           <div class="row-actions">
             <button
+              type="button"
               class="btn-confirm btn-sm"
               title="Rename this category"
               @click="startEditCategory(row)"
@@ -202,6 +207,7 @@ onMounted(() => images.loadCategories())
               <font-awesome-icon :icon="['fas', 'pen-to-square']" /> Edit
             </button>
             <button
+              type="button"
               class="btn-danger btn-sm"
               title="Delete this category"
               @click="images.deleteCategory(row)"
@@ -219,7 +225,7 @@ onMounted(() => images.loadCategories())
     <!-- -- Browse: category picker + upload + image grid ----------------------- -->
     <ManagerView v-else title="Images" :icon="['fad', 'images']">
       <template #actions>
-        <button class="btn-view btn-sm" @click="screen = 'categories'">
+        <button type="button" class="btn-view btn-sm" @click="screen = 'categories'">
           <font-awesome-icon :icon="['fad', 'folder-open']" /> Manage Categories
         </button>
       </template>
@@ -246,6 +252,7 @@ onMounted(() => images.loadCategories())
             </select>
           </FormField>
           <button
+            type="button"
             class="btn-action btn-sm push-right"
             :disabled="images.uploading || !selectedDir"
             @click="pickFiles"
@@ -261,6 +268,7 @@ onMounted(() => images.loadCategories())
             accept=".jpg,.jpeg,.png,.webp,.gif,.svg"
             multiple
             hidden
+            aria-label="Images to upload"
             @change="onFilesSelected"
           />
         </div>
@@ -273,11 +281,16 @@ onMounted(() => images.loadCategories())
         <div
           class="file-dropzone"
           :class="{ 'is-dragover': dragOver, 'is-disabled': !selectedDir }"
+          role="button"
+          tabindex="0"
+          :aria-disabled="!selectedDir"
           @dragover.prevent="dragOver = true"
           @dragenter.prevent="dragOver = true"
           @dragleave.prevent="dragOver = false"
           @drop.prevent="onDrop"
           @click="pickFiles"
+          @keydown.enter="pickFilesFromKey"
+          @keydown.space.prevent="pickFilesFromKey"
         >
           <font-awesome-icon :icon="['fad', 'cloud-arrow-up']" />
           <span>Drag &amp; drop images here, or click to browse</span>
@@ -316,6 +329,7 @@ onMounted(() => images.loadCategories())
                 <img :src="assetUrl(img.path)" :alt="img.name" loading="lazy" />
               </a>
               <button
+                type="button"
                 class="file-del-overlay"
                 title="Delete this image"
                 @click="images.deleteImage(selectedDir, img.name)"
@@ -327,6 +341,7 @@ onMounted(() => images.loadCategories())
               <span class="file-name code-highlight" :title="img.name">{{ img.name }}</span>
               <span class="text-muted text-xs">{{ formatSize(img.size) }}</span>
               <button
+                type="button"
                 class="btn-view btn-sm file-copy-btn"
                 title="Copy public URL to clipboard"
                 @click="copyUrl(img.url)"
@@ -382,8 +397,9 @@ onMounted(() => images.loadCategories())
         it - existing references to the old path will break.
       </p>
       <div class="flex-toolbar flex-end">
-        <button class="btn-neutral btn-sm" @click="closeModal">Cancel</button>
+        <button type="button" class="btn-neutral btn-sm" @click="closeModal">Cancel</button>
         <button
+          type="button"
           class="btn-confirm btn-sm"
           :disabled="savingCategory || !formName.trim()"
           @click="submitCategory"
@@ -410,6 +426,7 @@ onMounted(() => images.loadCategories())
   gap: 10px;
   margin-bottom: 16px;
 }
+
 .upload-progress-track {
   flex: 1;
   height: 8px;
@@ -417,16 +434,19 @@ onMounted(() => images.loadCategories())
   border-radius: 0;
   overflow: hidden;
 }
+
 .upload-progress-bar {
   height: 100%;
   background: var(--highlight);
   border-radius: 0;
   transition: width 0.2s ease;
 }
+
 /* Bytes are all sent; the bar is full while the server saves the files. */
 .upload-progress-bar.is-processing {
   animation: upload-pulse 1s ease-in-out infinite;
 }
+
 .upload-progress-label {
   min-width: 92px;
   font-size: 0.8rem;
@@ -434,19 +454,23 @@ onMounted(() => images.loadCategories())
   font-variant-numeric: tabular-nums;
   text-align: right;
 }
+
 @keyframes upload-pulse {
   0%,
   100% {
     opacity: 1;
   }
+
   50% {
     opacity: 0.55;
   }
 }
+
 @media (prefers-reduced-motion: reduce) {
   .upload-progress-bar {
     transition: none;
   }
+
   .upload-progress-bar.is-processing {
     animation: none;
   }

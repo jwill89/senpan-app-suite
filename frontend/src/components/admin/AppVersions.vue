@@ -115,18 +115,22 @@ const pluginVersion = computed(() => livePlugin.value ?? changelog.plugin.latest
   font-size: 0.72rem;
   color: var(--text-muted);
 }
+
 .app-versions-row {
   display: flex;
   justify-content: space-between;
   gap: 10px;
 }
+
 .app-versions-label {
   opacity: 0.85;
 }
+
 .app-versions-val {
-  font-family: 'Consolas', 'Monaco', monospace;
+  font-family: Consolas, Monaco, monospace;
   color: var(--text);
 }
+
 /* Version numbers are buttons that open the changelog - reset button chrome and
    surface them as subtle links. */
 .app-versions-link {
@@ -139,13 +143,16 @@ const pluginVersion = computed(() => livePlugin.value ?? changelog.plugin.latest
   text-decoration-style: dotted;
   text-underline-offset: 2px;
 }
+
 .app-versions-link:hover,
 .app-versions-link:focus-visible {
   color: var(--accent);
 }
+
 .app-versions--warn .app-versions-val {
   color: var(--warning);
 }
+
 .app-versions-flag {
   margin-top: 3px;
   color: var(--warning);

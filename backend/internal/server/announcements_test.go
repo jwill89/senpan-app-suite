@@ -183,13 +183,13 @@ func TestAdvanceCursor(t *testing.T) {
 // Returns the server, the announcement id, and its starting next_post_at.
 func newSchedulerEnv(t *testing.T, webhook string) (*Server, int64, string) {
 	t.Helper()
-	st, err := store.New(filepath.Join(t.TempDir(), "test.db"))
+	st, err := store.New(t.Context(), filepath.Join(t.TempDir(), "test.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { st.Close() })
 
-	typeID, err := st.CreateAnnouncementType("T", webhook)
+	typeID, err := st.CreateAnnouncementType(t.Context(), "T", webhook)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -199,7 +199,7 @@ func newSchedulerEnv(t *testing.T, webhook string) (*Server, int64, string) {
 		ScheduleKind: "daily", Timezone: "UTC", ScheduleMinutes: 9 * 60,
 		NextPostAt: startCursor, Active: true,
 	}
-	id, err := st.CreateAnnouncement(a)
+	id, err := st.CreateAnnouncement(t.Context(), a)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -225,7 +225,7 @@ func TestPostDueAnnouncementsNoDoubleWhenOverdue(t *testing.T) {
 	if got := atomic.LoadInt32(&hits); got != 1 {
 		t.Fatalf("posted %d times across two sweeps; want exactly 1", got)
 	}
-	reloaded, _ := s.store.GetAnnouncement(id)
+	reloaded, _ := s.store.GetAnnouncement(t.Context(), id)
 	if reloaded == nil || !mustParse(t, reloaded.NextPostAt).After(time.Now()) {
 		t.Errorf("cursor not advanced to a future slot: %+v", reloaded)
 	}
@@ -242,7 +242,7 @@ func TestPostDueAnnouncementsAmbiguousAdvances(t *testing.T) {
 	s, id, startCursor := newSchedulerEnv(t, closedURL)
 	s.postDueAnnouncements(context.Background())
 
-	reloaded, _ := s.store.GetAnnouncement(id)
+	reloaded, _ := s.store.GetAnnouncement(t.Context(), id)
 	if reloaded == nil || reloaded.NextPostAt == startCursor {
 		t.Errorf("ambiguous failure should advance the cursor (no retry), got %q", reloaded.NextPostAt)
 	}
@@ -263,7 +263,7 @@ func TestPostDueAnnouncementsHTTPErrorRetries(t *testing.T) {
 	s, id, startCursor := newSchedulerEnv(t, ts.URL)
 	s.postDueAnnouncements(context.Background())
 
-	reloaded, _ := s.store.GetAnnouncement(id)
+	reloaded, _ := s.store.GetAnnouncement(t.Context(), id)
 	if reloaded == nil || reloaded.NextPostAt != startCursor {
 		t.Errorf("HTTP error should leave the cursor pending for retry; got %q want %q",
 			reloaded.NextPostAt, startCursor)
@@ -644,7 +644,7 @@ func TestAnnouncementComponents(t *testing.T) {
 }
 
 func TestAnnouncementMention(t *testing.T) {
-	st, err := store.New(filepath.Join(t.TempDir(), "test.db"))
+	st, err := store.New(t.Context(), filepath.Join(t.TempDir(), "test.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -652,22 +652,22 @@ func TestAnnouncementMention(t *testing.T) {
 	s := &Server{store: st}
 
 	// No mention -> empty content, no whitelist.
-	if c, am := s.announcementMention(model.Announcement{}); c != "" || am != nil {
+	if c, am := s.announcementMention(t.Context(), model.Announcement{}); c != "" || am != nil {
 		t.Errorf("none: got content=%q allowed=%+v", c, am)
 	}
 
 	// @everyone -> content + parse ["everyone"].
-	c, am := s.announcementMention(model.Announcement{Mention: "everyone"})
+	c, am := s.announcementMention(t.Context(), model.Announcement{Mention: "everyone"})
 	if c != "@everyone" || am == nil || len(am.Parse) != 1 || am.Parse[0] != "everyone" {
 		t.Errorf("everyone: got content=%q allowed=%+v", c, am)
 	}
 
 	// A managed role -> "<@&id>" with the role whitelisted (and parse suppressed).
-	id, err := st.CreateAnnouncementRole("Crew", "123456789012345678")
+	id, err := st.CreateAnnouncementRole(t.Context(), "Crew", "123456789012345678")
 	if err != nil {
 		t.Fatal(err)
 	}
-	c, am = s.announcementMention(model.Announcement{Mention: "role:" + strconv.FormatInt(id, 10)})
+	c, am = s.announcementMention(t.Context(), model.Announcement{Mention: "role:" + strconv.FormatInt(id, 10)})
 	if c != "<@&123456789012345678>" || am == nil || len(am.Roles) != 1 || am.Roles[0] != "123456789012345678" {
 		t.Errorf("role: got content=%q allowed=%+v", c, am)
 	}
@@ -676,7 +676,7 @@ func TestAnnouncementMention(t *testing.T) {
 	}
 
 	// A role reference that no longer resolves -> no mention (announcement still posts).
-	if c, am := s.announcementMention(model.Announcement{Mention: "role:999999"}); c != "" || am != nil {
+	if c, am := s.announcementMention(t.Context(), model.Announcement{Mention: "role:999999"}); c != "" || am != nil {
 		t.Errorf("missing role: got content=%q allowed=%+v", c, am)
 	}
 }
@@ -715,7 +715,7 @@ func TestPostDueAnnouncementsGivesUpAfterRepeatedFailures(t *testing.T) {
 	// outage is still ridden out rather than skipped.
 	for i := 1; i < maxAnnouncementPostRetries; i++ {
 		s.postDueAnnouncements(context.Background())
-		reloaded, _ := s.store.GetAnnouncement(id)
+		reloaded, _ := s.store.GetAnnouncement(t.Context(), id)
 		if reloaded.NextPostAt != startCursor {
 			t.Fatalf("sweep %d advanced the cursor early; a short outage must still be retried", i)
 		}
@@ -723,7 +723,7 @@ func TestPostDueAnnouncementsGivesUpAfterRepeatedFailures(t *testing.T) {
 
 	// The one that crosses the limit gives up on this occurrence and moves on.
 	s.postDueAnnouncements(context.Background())
-	reloaded, _ := s.store.GetAnnouncement(id)
+	reloaded, _ := s.store.GetAnnouncement(t.Context(), id)
 	if reloaded.NextPostAt == startCursor {
 		t.Error("a permanently failing webhook is still being retried every sweep; the cursor never moved")
 	}
@@ -744,7 +744,7 @@ func TestPostDueAnnouncementsRespectsAConcurrentEdit(t *testing.T) {
 
 	// Rescheduling mid-post is what a real admin edit does: it moves next_post_at.
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		if _, err := s.store.AdvanceAnnouncement(id, currentCursor(t, s, id),
+		if _, err := s.store.AdvanceAnnouncement(t.Context(), id, currentCursor(t, s, id),
 			"2099-01-01T00:00:00Z", true, 0); err != nil {
 			t.Errorf("simulated admin edit: %v", err)
 		}
@@ -757,7 +757,7 @@ func TestPostDueAnnouncementsRespectsAConcurrentEdit(t *testing.T) {
 	s.postDueAnnouncements(context.Background())
 	<-edited
 
-	reloaded, _ := s.store.GetAnnouncement(id)
+	reloaded, _ := s.store.GetAnnouncement(t.Context(), id)
 	if reloaded.NextPostAt != "2099-01-01T00:00:00Z" {
 		t.Errorf("cursor = %q; want the admin's edit preserved, not overwritten from the pre-post snapshot",
 			reloaded.NextPostAt)
@@ -767,7 +767,7 @@ func TestPostDueAnnouncementsRespectsAConcurrentEdit(t *testing.T) {
 // currentCursor reads an announcement's stored next_post_at.
 func currentCursor(t *testing.T, s *Server, id int64) string {
 	t.Helper()
-	a, err := s.store.GetAnnouncement(id)
+	a, err := s.store.GetAnnouncement(t.Context(), id)
 	if err != nil || a == nil {
 		t.Fatalf("GetAnnouncement: %v", err)
 	}

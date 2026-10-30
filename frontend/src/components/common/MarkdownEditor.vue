@@ -30,7 +30,7 @@
  * opens a view that uses it. Colors are mapped to the app theme variables so
  * the editor follows the active theme (including custom themes).
  */
-import { nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { nextTick, onBeforeUnmount, onMounted, ref, useTemplateRef, watch } from 'vue'
 import { icon as faIcon } from '@fortawesome/fontawesome-svg-core'
 import type { CrepeBuilder as CrepeBuilderType } from '@milkdown/crepe/builder'
 import type { TopBarFeatureConfig } from '@milkdown/crepe/feature/top-bar'
@@ -45,7 +45,7 @@ const emit = defineEmits<{
   (e: 'blur'): void
 }>()
 
-const el = ref<HTMLDivElement | null>(null)
+const el = useTemplateRef<HTMLDivElement>('el')
 let crepe: CrepeBuilderType | null = null
 /** Push an external markdown value into the editor (set after create()). */
 let applyExternal: ((markdown: string) => void) | null = null
@@ -271,6 +271,7 @@ watch(
 
 .md-editor :deep(.milkdown) {
   --crepe-color-background: var(--panel-bg);
+
   /* The top bar and floating widgets (slash menu) sit on the raised surface so
      they stand out from the editor body. */
   --crepe-color-surface: var(--panel-raised-bg);
@@ -281,6 +282,7 @@ watch(
   --crepe-color-primary: var(--accent);
   --crepe-color-secondary: var(--panel-raised-bg);
   --crepe-color-on-secondary: var(--text);
+
   /* Crepe uses --outline as a FOREGROUND color for top-bar/handle icons and
      dividers, so it must be a readable text tone - not a background color, or
      the icons are invisible (and vanish entirely when hover swaps the bg). */

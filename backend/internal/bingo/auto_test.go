@@ -47,13 +47,13 @@ func TestClampAutoInterval(t *testing.T) {
 func TestAutoState_StartSeedsAndStamps(t *testing.T) {
 	st := testStore(t)
 	gs := NewService(st)
-	patID, err := st.SavePattern("Top Row", testPattern5x5(), 1)
+	patID, err := st.SavePattern(t.Context(), "Top Row", testPattern5x5(), 1)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	// Starting with auto on seeds the state and stamps it onto the returned state.
-	state, err := gs.Start([]int{int(patID)}, true, 20)
+	state, err := gs.Start(t.Context(), []int{int(patID)}, true, 20)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -65,7 +65,7 @@ func TestAutoState_StartSeedsAndStamps(t *testing.T) {
 	}
 
 	// CurrentState also carries the auto snapshot.
-	cur, _, err := gs.CurrentState()
+	cur, _, err := gs.CurrentState(t.Context())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -74,7 +74,7 @@ func TestAutoState_StartSeedsAndStamps(t *testing.T) {
 	}
 
 	// A fresh manual game resets auto off (clamped default interval).
-	state2, err := gs.Start([]int{int(patID)}, false, 0)
+	state2, err := gs.Start(t.Context(), []int{int(patID)}, false, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -161,28 +161,28 @@ func TestAutoState_HalftimeClearBlocksResume(t *testing.T) {
 func TestDrawAuto_OnlyDrawsWhenEnabled(t *testing.T) {
 	st := testStore(t)
 	gs := NewService(st)
-	patID, err := st.SavePattern("Top Row", testPattern5x5(), 1)
+	patID, err := st.SavePattern(t.Context(), "Top Row", testPattern5x5(), 1)
 	if err != nil {
 		t.Fatal(err)
 	}
 	// Manual start -> auto off. DrawAuto must not draw.
-	if _, err := gs.Start([]int{int(patID)}, false, 0); err != nil {
+	if _, err := gs.Start(t.Context(), []int{int(patID)}, false, 0); err != nil {
 		t.Fatal(err)
 	}
-	result, _, err := gs.DrawAuto()
+	result, _, err := gs.DrawAuto(t.Context())
 	if err != nil {
 		t.Fatal(err)
 	}
 	if result != nil {
 		t.Error("DrawAuto drew a number while auto was off")
 	}
-	if n, _ := st.GetCalledNumbers(1); len(n) != 0 {
+	if n, _ := st.GetCalledNumbers(t.Context(), 1); len(n) != 0 {
 		t.Errorf("no number should have been recorded; got %d", len(n))
 	}
 
 	// With auto on, DrawAuto draws.
 	gs.SetAutoEnabled(true)
-	result, _, err = gs.DrawAuto()
+	result, _, err = gs.DrawAuto(t.Context())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -192,7 +192,7 @@ func TestDrawAuto_OnlyDrawsWhenEnabled(t *testing.T) {
 
 	// Switching auto off again stops DrawAuto, even mid-game.
 	gs.DisableAuto()
-	if result, _, _ := gs.DrawAuto(); result != nil {
+	if result, _, _ := gs.DrawAuto(t.Context()); result != nil {
 		t.Error("DrawAuto drew after auto was switched off")
 	}
 }
@@ -202,21 +202,21 @@ func TestDrawAuto_OnlyDrawsWhenEnabled(t *testing.T) {
 func TestDraw_NewWinnerFlag(t *testing.T) {
 	st := testStore(t)
 	gs := NewService(st)
-	patID, err := st.SavePattern("Top Row", testPattern5x5(), 1)
+	patID, err := st.SavePattern(t.Context(), "Top Row", testPattern5x5(), 1)
 	if err != nil {
 		t.Fatal(err)
 	}
 	// One card, so the first satisfying draw produces exactly one new winner.
-	if err := st.SaveCard("TOPWIN", topRowWinningBoard()); err != nil {
+	if err := st.SaveCard(t.Context(), "TOPWIN", topRowWinningBoard()); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := gs.Start([]int{int(patID)}, false, 0); err != nil {
+	if _, err := gs.Start(t.Context(), []int{int(patID)}, false, 0); err != nil {
 		t.Fatal(err)
 	}
 
 	sawNewWinner := false
 	for {
-		result, newWinner, err := gs.Draw()
+		result, newWinner, err := gs.Draw(t.Context())
 		if err != nil {
 			t.Fatal(err)
 		}

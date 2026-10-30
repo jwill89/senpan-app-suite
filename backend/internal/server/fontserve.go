@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"crypto/hmac"
 	"crypto/rand"
 	"crypto/sha256"
@@ -61,7 +62,7 @@ import (
 
 // settingFontSecret is the settings key holding the HMAC key for font tokens.
 // Deliberately not in settingsKeys (it must never leave the server).
-const settingFontSecret = "font_url_secret"
+const settingFontSecret = "font_url_secret" //nolint:gosec // the setting's key, not its value
 
 // fontTokenBucketSeconds is the width of the token time bucket (one week).
 // Tokens from the current and previous bucket are accepted, so any served URL
@@ -91,13 +92,17 @@ var fontFormatHints = map[string]string{
 // fontSecret returns the HMAC key for font tokens, generating and persisting a
 // 32-byte secret on first use. If persisting fails the in-memory secret is still
 // used - tokens then rotate on restart, which only forces clients to re-fetch.
-func (s *Server) fontSecret() []byte {
+func (s *Server) fontSecret(ctx context.Context) []byte {
 	s.fontSecretMu.Lock()
 	defer s.fontSecretMu.Unlock()
 	if s.fontSecretVal != nil {
 		return s.fontSecretVal
 	}
-	if stored, err := s.store.GetSetting(settingFontSecret); err == nil && stored != "" {
+	// Detached: a failed read below is taken to mean "no key stored yet", and a
+	// read canceled by a departing client must never pass for that - it would mint
+	// a fresh key for the life of the process and break every published font URL.
+	ctx = context.WithoutCancel(ctx)
+	if stored, err := s.store.GetSetting(ctx, settingFontSecret); err == nil && stored != "" {
 		if b, err := hex.DecodeString(stored); err == nil && len(b) == 32 {
 			s.fontSecretVal = b
 			return b
@@ -112,7 +117,7 @@ func (s *Server) fontSecret() []byte {
 		slog.Error("generate font token secret", "error", err)
 		panic(fmt.Sprintf("font token secret: crypto/rand unavailable: %v", err))
 	}
-	if err := s.store.SetSetting(settingFontSecret, hex.EncodeToString(b)); err != nil {
+	if err := s.store.SetSetting(ctx, settingFontSecret, hex.EncodeToString(b)); err != nil {
 		slog.Warn("font token secret not persisted; font tokens will rotate on restart", "error", err)
 	}
 	s.fontSecretVal = b
@@ -128,18 +133,18 @@ func fontTokenBucket(t time.Time) int64 {
 // a given time bucket: a truncated HMAC of the filename, plus the real
 // (lowercased) extension so clients and the serving handler know the format
 // without exposing the name.
-func (s *Server) fontFileToken(name string, bucket int64) string {
-	mac := hmac.New(sha256.New, s.fontSecret())
-	fmt.Fprintf(mac, "font:%d:%s", bucket, name)
+func (s *Server) fontFileToken(ctx context.Context, name string, bucket int64) string {
+	mac := hmac.New(sha256.New, s.fontSecret(ctx))
+	_, _ = fmt.Fprintf(mac, "font:%d:%s", bucket, name) // a hash's Write never returns an error
 	sum := mac.Sum(nil)
 	return base64.RawURLEncoding.EncodeToString(sum[:16]) + strings.ToLower(filepath.Ext(name))
 }
 
 // fontDerivedToken derives the serving token for a group's CONVERTED WOFF2
 // copy (distinct HMAC input, so it can never collide with an upload's token).
-func (s *Server) fontDerivedToken(groupKey string, bucket int64) string {
-	mac := hmac.New(sha256.New, s.fontSecret())
-	fmt.Fprintf(mac, "font:%d:woff2:%s", bucket, groupKey)
+func (s *Server) fontDerivedToken(ctx context.Context, groupKey string, bucket int64) string {
+	mac := hmac.New(sha256.New, s.fontSecret(ctx))
+	_, _ = fmt.Fprintf(mac, "font:%d:woff2:%s", bucket, groupKey) // a hash's Write never returns an error
 	sum := mac.Sum(nil)
 	return base64.RawURLEncoding.EncodeToString(sum[:16]) + ".woff2"
 }
@@ -160,26 +165,26 @@ func (g fontGroup) fontVariantByType(label string) string {
 // the admin's Serve selection and falling back to the auto preference order
 // (WOFF2 first - including the converted copy - then the remaining formats).
 // Returns the serving token and the variant's type label.
-func (s *Server) servedFontVariant(g fontGroup, m fontMeta, bucket int64) (token, typeLabel string) {
+func (s *Server) servedFontVariant(ctx context.Context, g fontGroup, m fontMeta, bucket int64) (token, typeLabel string) {
 	_, hasConverted := s.fontDerivativeInfo(g.Key)
 
 	// Explicit selection first (ignored when that variant no longer exists).
 	if m.Serve != "" {
 		if name := g.fontVariantByType(m.Serve); name != "" {
-			return s.fontFileToken(name, bucket), m.Serve
+			return s.fontFileToken(ctx, name, bucket), m.Serve
 		}
 		if m.Serve == "WOFF2" && hasConverted {
-			return s.fontDerivedToken(g.Key, bucket), "WOFF2"
+			return s.fontDerivedToken(ctx, g.Key, bucket), "WOFF2"
 		}
 	}
 	// Auto: preference order, with the converted copy standing in for WOFF2.
 	for _, ext := range fontServePreference {
 		label := fontTypeLabels[ext]
 		if name := g.fontVariantByType(label); name != "" {
-			return s.fontFileToken(name, bucket), label
+			return s.fontFileToken(ctx, name, bucket), label
 		}
 		if ext == ".woff2" && hasConverted {
-			return s.fontDerivedToken(g.Key, bucket), "WOFF2"
+			return s.fontDerivedToken(ctx, g.Key, bucket), "WOFF2"
 		}
 	}
 	return "", "" // unreachable for a non-empty group
@@ -190,7 +195,7 @@ func (s *Server) servedFontVariant(g fontGroup, m fontMeta, bucket int64) (token
 // plus the owning group's key, accepting the current and previous time
 // buckets. The fonts dir is small, so recomputing per file is cheap;
 // comparisons are constant-time.
-func (s *Server) fontFileForToken(token string) (path, groupKey string, ok bool) {
+func (s *Server) fontFileForToken(ctx context.Context, token string) (path, groupKey string, ok bool) {
 	if token == "" || len(token) > 100 {
 		return "", "", false
 	}
@@ -199,11 +204,11 @@ func (s *Server) fontFileForToken(token string) (path, groupKey string, ok bool)
 	for _, g := range s.fontGroupList() {
 		for _, bucket := range []int64{current, current - 1} {
 			for _, name := range g.Files {
-				if subtle.ConstantTimeCompare([]byte(s.fontFileToken(name, bucket)), tok) == 1 {
+				if subtle.ConstantTimeCompare([]byte(s.fontFileToken(ctx, name, bucket)), tok) == 1 {
 					return filepath.Join(s.fontsDir(), name), g.Key, true
 				}
 			}
-			if subtle.ConstantTimeCompare([]byte(s.fontDerivedToken(g.Key, bucket)), tok) == 1 {
+			if subtle.ConstantTimeCompare([]byte(s.fontDerivedToken(ctx, g.Key, bucket)), tok) == 1 {
 				if _, exists := s.fontDerivativeInfo(g.Key); exists {
 					return s.derivedFontPath(g.Key), g.Key, true
 				}
@@ -216,16 +221,16 @@ func (s *Server) fontFileForToken(token string) (path, groupKey string, ok bool)
 // uploadedFontRefs returns the fonts (one per group) with their effective CSS
 // family names and current serving tokens - the shape the public settings
 // payload exposes for the SPA's @font-face registration and header-font picker.
-func (s *Server) uploadedFontRefs() []model.UploadedFont {
+func (s *Server) uploadedFontRefs(ctx context.Context) []model.UploadedFont {
 	groups := s.fontGroupList()
 	if len(groups) == 0 {
 		return nil
 	}
 	bucket := fontTokenBucket(time.Now())
-	metas := s.fontMetaMap()
+	metas := s.fontMetaMap(ctx)
 	refs := make([]model.UploadedFont, 0, len(groups))
 	for _, g := range groups {
-		token, _ := s.servedFontVariant(g, metas[g.Key], bucket)
+		token, _ := s.servedFontVariant(ctx, g, metas[g.Key], bucket)
 		if token == "" {
 			continue
 		}
@@ -345,7 +350,7 @@ func (s *Server) handleFontKitCSS(w http.ResponseWriter, r *http.Request) {
 	}
 
 	bucket := fontTokenBucket(time.Now())
-	metas := s.fontMetaMap()
+	metas := s.fontMetaMap(r.Context())
 	var b strings.Builder
 	b.WriteString("/* Senpan font kit - generated. Font URLs are tokenized and rotate;\n")
 	b.WriteString("   always reference fonts through this stylesheet, never by copied URL. */\n")
@@ -362,7 +367,7 @@ func (s *Server) handleFontKitCSS(w http.ResponseWriter, r *http.Request) {
 			// predates that validation.
 			continue
 		}
-		token, _ := s.servedFontVariant(g, m, bucket)
+		token, _ := s.servedFontVariant(r.Context(), g, m, bucket)
 		if token == "" {
 			continue
 		}
@@ -396,12 +401,12 @@ func (s *Server) handleFontKitCSS(w http.ResponseWriter, r *http.Request) {
 //	Auth:      public (per-font origin gate)
 //	Response:  the font bytes (font/* content type)
 func (s *Server) handleFontPublicFile(w http.ResponseWriter, r *http.Request) {
-	path, groupKey, ok := s.fontFileForToken(r.PathValue("token"))
+	path, groupKey, ok := s.fontFileForToken(r.Context(), r.PathValue("token"))
 	if !ok {
 		writeError(w, http.StatusNotFound, "Unknown or expired font link")
 		return
 	}
-	origin, allowed := s.fontRequestAllowed(r, s.fontMetaMap()[groupKey])
+	origin, allowed := s.fontRequestAllowed(r, s.fontMetaMap(r.Context())[groupKey])
 	// The response varies by Origin (both the ACAO header and the 403), so
 	// caches must key on it - set even on the refusal path. The Referer can also
 	// decide it, but stays out of Vary: no shared cache stores this (it is

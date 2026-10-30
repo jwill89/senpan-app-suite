@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"strings"
@@ -19,12 +20,12 @@ func (s *Server) handleStylesList(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	styles, err := s.store.ListStyles()
+	styles, err := s.store.ListStyles(r.Context())
 	if err != nil {
 		writeInternalError(w, "list styles", err)
 		return
 	}
-	activeID, _ := s.store.GetSetting("active_style_id")
+	activeID, _ := s.store.GetSetting(r.Context(), "active_style_id")
 	writeJSON(w, http.StatusOK, model.StylesResponse{
 		Styles:        styles,
 		ActiveStyleID: activeID,
@@ -44,7 +45,7 @@ func (s *Server) handleStyleGet(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	style, err := s.store.GetStyle(id)
+	style, err := s.store.GetStyle(r.Context(), id)
 	if err != nil {
 		writeInternalError(w, "get style", err)
 		return
@@ -94,7 +95,7 @@ func (s *Server) handleStyleCreate(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "Flourish must be an images/<category>/<file>.svg path")
 		return
 	}
-	id, err := s.store.CreateStyle(name, req.Tokens, req.BoardFlourish, req.NumberFlourish, req.IsPublic)
+	id, err := s.store.CreateStyle(r.Context(), name, req.Tokens, req.BoardFlourish, req.NumberFlourish, req.IsPublic)
 	if err != nil {
 		writeInternalError(w, "create style", err)
 		return
@@ -132,14 +133,17 @@ func (s *Server) handleStyleUpdate(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "Flourish must be an images/<category>/<file>.svg path")
 		return
 	}
-	if err := s.store.UpdateStyle(id, name, req.Tokens, req.BoardFlourish, req.NumberFlourish, req.IsPublic); err != nil {
+	// Detached from here: the read after the save decides whether every client is sent
+	// the new CSS, and it swallows its error, so a canceled read would skip that.
+	ctx := context.WithoutCancel(r.Context())
+	if err := s.store.UpdateStyle(ctx, id, name, req.Tokens, req.BoardFlourish, req.NumberFlourish, req.IsPublic); err != nil {
 		writeInternalError(w, "update style", err)
 		return
 	}
 	writeJSON(w, http.StatusOK, model.OKResponse{OK: true})
 
 	// If this is the active style, broadcast the regenerated CSS to all clients.
-	activeID, _ := s.store.GetSetting("active_style_id")
+	activeID, _ := s.store.GetSetting(ctx, "active_style_id")
 	if activeID == fmt.Sprintf("%d", id) {
 		s.broadcastStyleUpdate(store.TokensToCSS(req.Tokens), req.BoardFlourish, req.NumberFlourish)
 	}
@@ -161,11 +165,14 @@ func (s *Server) handleStyleDelete(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	// Detached: the delete and standing down the active theme are one change, and the
+	// read between them swallows its error.
+	ctx := context.WithoutCancel(r.Context())
 	// Delete FIRST, then stand down the active theme. Reverting every client and
 	// clearing the setting before a delete that can still fail left the site on the
 	// default theme with the style it was using still sitting in the table - a
 	// visible, unexplained change from an operation that reported failure.
-	deleted, err := s.store.DeleteStyle(id)
+	deleted, err := s.store.DeleteStyle(ctx, id)
 	if err != nil {
 		writeInternalError(w, "delete style", err)
 		return
@@ -173,8 +180,8 @@ func (s *Server) handleStyleDelete(w http.ResponseWriter, r *http.Request) {
 	// Only once the row is actually gone: if it was the active style, clear the
 	// setting and revert clients to the default.
 	if deleted {
-		if activeID, _ := s.store.GetSetting("active_style_id"); activeID == fmt.Sprintf("%d", id) {
-			_ = s.store.SetSetting("active_style_id", "")
+		if activeID, _ := s.store.GetSetting(ctx, "active_style_id"); activeID == fmt.Sprintf("%d", id) {
+			_ = s.store.SetSetting(ctx, "active_style_id", "")
 			s.broadcastStyleUpdate("", "", "")
 		}
 	}
@@ -195,12 +202,15 @@ func (s *Server) handleStyleActivate(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	if err := s.store.SetSetting("active_style_id", fmt.Sprintf("%d", id)); err != nil {
+	// Detached: the read after the save supplies the CSS every client is sent, and a
+	// canceled one would broadcast an empty theme to all of them.
+	ctx := context.WithoutCancel(r.Context())
+	if err := s.store.SetSetting(ctx, "active_style_id", fmt.Sprintf("%d", id)); err != nil {
 		writeInternalError(w, "set active style", err)
 		return
 	}
 	css, board, number := "", "", ""
-	if active, _ := s.store.GetActiveStyle(); active != nil {
+	if active, _ := s.store.GetActiveStyle(ctx); active != nil {
 		css, board, number = active.CSSContent, active.BoardFlourish, active.NumberFlourish
 	}
 	writeJSON(w, http.StatusOK, model.OKResponse{OK: true})
@@ -218,7 +228,7 @@ func (s *Server) handleStyleDeactivate(w http.ResponseWriter, r *http.Request) {
 	if !s.requirePermission(w, r, permSystemThemes) {
 		return
 	}
-	if err := s.store.SetSetting("active_style_id", ""); err != nil {
+	if err := s.store.SetSetting(r.Context(), "active_style_id", ""); err != nil {
 		writeInternalError(w, "clear active style", err)
 		return
 	}
@@ -232,7 +242,7 @@ func (s *Server) handleStyleDeactivate(w http.ResponseWriter, r *http.Request) {
 //	Auth:      public
 //	Response:  {"css": "..."}
 func (s *Server) handleActiveStyleCSS(w http.ResponseWriter, r *http.Request) {
-	active, err := s.store.GetActiveStyle()
+	active, err := s.store.GetActiveStyle(r.Context())
 	if err != nil {
 		writeInternalError(w, "get active style", err)
 		return
@@ -255,7 +265,7 @@ func (s *Server) handleActiveStyleCSS(w http.ResponseWriter, r *http.Request) {
 //	Auth:      public
 //	Response:  {"styles": [{"id": 1, "name": "..."}, ...]}
 func (s *Server) handlePublicStylesList(w http.ResponseWriter, r *http.Request) {
-	styles, err := s.store.ListPublicStyles()
+	styles, err := s.store.ListPublicStyles(r.Context())
 	if err != nil {
 		writeInternalError(w, "list public styles", err)
 		return
@@ -275,7 +285,7 @@ func (s *Server) handlePublicStyleCSS(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	style, err := s.store.GetPublicStyle(id)
+	style, err := s.store.GetPublicStyle(r.Context(), id)
 	if err != nil {
 		writeInternalError(w, "get public style", err)
 		return

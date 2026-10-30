@@ -89,7 +89,9 @@ function onColorChange(c: { rgba: string }): void {
         </div>
       </div>
 
-      <button class="btn-neutral mt-20 color-picker-done" @click="open = false">Done</button>
+      <button type="button" class="btn-neutral mt-20 color-picker-done" @click="open = false">
+        Done
+      </button>
     </ModalOverlay>
   </div>
 </template>
@@ -102,6 +104,7 @@ function onColorChange(c: { rgba: string }): void {
   align-items: center;
   gap: 8px;
 }
+
 .secondary-stamp-toggle .label {
   font-size: 0.85rem;
   color: var(--text-muted);
@@ -111,21 +114,26 @@ function onColorChange(c: { rgba: string }): void {
   opacity: 0.45;
   cursor: not-allowed;
 }
+
 .color-picker-help {
   font-size: 0.85rem;
 }
+
 .color-picker-done {
   width: 100%;
 }
+
 .color-picker-presets {
   flex-direction: column;
   align-items: center;
   gap: 10px;
 }
+
 .color-picker-presets-label {
   font-size: 0.8rem;
   color: var(--text-muted);
 }
+
 .color-picker-swatches {
   display: flex;
   flex-wrap: wrap;

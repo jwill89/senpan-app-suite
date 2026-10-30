@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"errors"
 	"net/http"
 	"regexp"
@@ -80,11 +81,11 @@ func slugError(slug string) string {
 // map's own). It writes a 409 and returns false when another map holds it - a
 // friendly guard ahead of the partial UNIQUE index's backstop, mirroring the
 // tea-room room-number check.
-func (s *Server) checkMapSlugUnique(w http.ResponseWriter, slug string, exceptID int64) bool {
+func (s *Server) checkMapSlugUnique(ctx context.Context, w http.ResponseWriter, slug string, exceptID int64) bool {
 	if slug == "" {
 		return true
 	}
-	other, err := s.store.GetFestivalMapBySlug(slug)
+	other, err := s.store.GetFestivalMapBySlug(ctx, slug)
 	if err != nil {
 		writeInternalError(w, "check festival map slug", err)
 		return false
@@ -149,7 +150,7 @@ func (s *Server) handleFestivalMapsList(w http.ResponseWriter, r *http.Request) 
 	if !s.requirePermission(w, r, permFestivalMap) {
 		return
 	}
-	maps, err := s.store.ListFestivalMaps()
+	maps, err := s.store.ListFestivalMaps(r.Context())
 	if err != nil {
 		writeInternalError(w, "list festival maps", err)
 		return
@@ -169,7 +170,7 @@ func (s *Server) handleFestivalMapDetail(w http.ResponseWriter, r *http.Request)
 	if !ok {
 		return
 	}
-	m, err := s.store.GetFestivalMap(id)
+	m, err := s.store.GetFestivalMap(r.Context(), id)
 	if err != nil {
 		writeInternalError(w, "get festival map", err)
 		return
@@ -280,11 +281,11 @@ func (s *Server) handleFestivalMapCreate(w http.ResponseWriter, r *http.Request)
 		writeError(w, http.StatusBadRequest, msg)
 		return
 	}
-	if !s.checkMapSlugUnique(w, m.Slug, 0) {
+	if !s.checkMapSlugUnique(r.Context(), w, m.Slug, 0) {
 		return
 	}
 	m.Status = model.MapStatusInProgress
-	id, err := s.store.CreateFestivalMap(m)
+	id, err := s.store.CreateFestivalMap(r.Context(), m)
 	if err != nil {
 		writeInternalError(w, "create festival map", err)
 		return
@@ -323,14 +324,14 @@ func (s *Server) handleFestivalMapUpdate(w http.ResponseWriter, r *http.Request)
 		writeError(w, http.StatusBadRequest, msg)
 		return
 	}
-	if !s.checkMapSlugUnique(w, m.Slug, id) {
+	if !s.checkMapSlugUnique(r.Context(), w, m.Slug, id) {
 		return
 	}
 	// Authoritative for the pitches only when the request actually carried a
 	// "stalls" key - see the note in UpdateStampRally. An omitted key decodes to a
 	// nil slice and leaves the map's pitches alone; an explicit [] still clears
 	// them, so deliberately emptying a map keeps working.
-	if err := s.store.UpdateFestivalMap(m, req.Stalls != nil); err != nil {
+	if err := s.store.UpdateFestivalMap(r.Context(), m, req.Stalls != nil); err != nil {
 		// A stall id that isn't on this map means a stale editor (someone deleted
 		// the pitch meanwhile) or a spoofed body - the caller's problem, not ours,
 		// and the save was rejected whole rather than applied across two maps.
@@ -359,7 +360,7 @@ func (s *Server) handleFestivalMapDelete(w http.ResponseWriter, r *http.Request)
 	if !ok {
 		return
 	}
-	if _, err := s.store.DeleteFestivalMap(id); err != nil {
+	if _, err := s.store.DeleteFestivalMap(r.Context(), id); err != nil {
 		writeInternalError(w, "delete festival map", err)
 		return
 	}
@@ -406,7 +407,7 @@ func (s *Server) handleFestivalMapPatch(w http.ResponseWriter, r *http.Request) 
 	}
 	status := req.Status
 	if status == model.MapStatusPublished {
-		m, err := s.store.GetFestivalMap(id)
+		m, err := s.store.GetFestivalMap(r.Context(), id)
 		if err != nil {
 			writeInternalError(w, "get festival map for publish", err)
 			return
@@ -421,7 +422,7 @@ func (s *Server) handleFestivalMapPatch(w http.ResponseWriter, r *http.Request) 
 			return
 		}
 	}
-	changed, err := s.store.SetFestivalMapStatus(id, status)
+	changed, err := s.store.SetFestivalMapStatus(r.Context(), id, status)
 	if err != nil {
 		writeInternalError(w, "set festival map status", err)
 		return
@@ -440,7 +441,7 @@ func (s *Server) handleFestivalMapPatch(w http.ResponseWriter, r *http.Request) 
 //	Endpoint:  GET /api/festival-maps/public
 //	Auth:      public
 func (s *Server) handleFestivalMapsPublic(w http.ResponseWriter, r *http.Request) {
-	maps, err := s.store.ListPublishedFestivalMaps()
+	maps, err := s.store.ListPublishedFestivalMaps(r.Context())
 	if err != nil {
 		writeInternalError(w, "list published festival maps", err)
 		return
@@ -462,15 +463,15 @@ func (s *Server) handleFestivalMapsPublic(w http.ResponseWriter, r *http.Request
 // id. Both always work: a link posted before a shortcode existed keeps resolving,
 // and adding or changing one never breaks it. A purely-numeric shortcode is
 // refused on save (see slugError), so the two forms can never collide.
-func (s *Server) resolvePublicMap(idOrSlug string) (*model.FestivalMap, error) {
-	if m, err := s.store.GetFestivalMapBySlug(normalizeMapSlug(idOrSlug)); err != nil || m != nil {
+func (s *Server) resolvePublicMap(ctx context.Context, idOrSlug string) (*model.FestivalMap, error) {
+	if m, err := s.store.GetFestivalMapBySlug(ctx, normalizeMapSlug(idOrSlug)); err != nil || m != nil {
 		return m, err
 	}
 	id, err := strconv.ParseInt(idOrSlug, 10, 64)
 	if err != nil {
-		return nil, nil // neither a known shortcode nor an id - the caller 404s
+		return nil, nil //nolint:nilerr // neither a known shortcode nor an id - the caller 404s
 	}
-	return s.store.GetFestivalMap(id)
+	return s.store.GetFestivalMap(ctx, id)
 }
 
 // handleFestivalMapPublic returns one published map with every stall on it, each
@@ -485,7 +486,7 @@ func (s *Server) resolvePublicMap(idOrSlug string) (*model.FestivalMap, error) {
 //	Endpoint:  GET /api/festival-maps/public/{id}
 //	Auth:      public
 func (s *Server) handleFestivalMapPublic(w http.ResponseWriter, r *http.Request) {
-	m, err := s.resolvePublicMap(strings.TrimSpace(r.PathValue("id")))
+	m, err := s.resolvePublicMap(r.Context(), strings.TrimSpace(r.PathValue("id")))
 	if err != nil {
 		writeInternalError(w, "get public festival map", err)
 		return
@@ -499,7 +500,7 @@ func (s *Server) handleFestivalMapPublic(w http.ResponseWriter, r *http.Request)
 	// The stamps an open linked rally placed on this map's stalls, so each stall
 	// can be badged (and show its stamp art) without a second round trip.
 	var rallyStamps map[int64]store.MapStallStamp
-	rally, err := s.store.GetOpenRallyForMap(id)
+	rally, err := s.store.GetOpenRallyForMap(r.Context(), id)
 	if err != nil {
 		writeInternalError(w, "get rally for festival map", err)
 		return
@@ -513,7 +514,7 @@ func (s *Server) handleFestivalMapPublic(w http.ResponseWriter, r *http.Request)
 		rally = nil
 	}
 	if rally != nil {
-		rallyStamps, err = s.store.ListRallyStampsForMap(rally.ID)
+		rallyStamps, err = s.store.ListRallyStampsForMap(r.Context(), rally.ID)
 		if err != nil {
 			writeInternalError(w, "list rally stamps for festival map", err)
 			return
@@ -522,13 +523,13 @@ func (s *Server) handleFestivalMapPublic(w http.ResponseWriter, r *http.Request)
 
 	// Raffles pinned to this map's stalls. Which of them are actually RUNNING is
 	// decided below against the clock, not in the query.
-	stallRaffles, err := s.store.ListRafflesForMap(id)
+	stallRaffles, err := s.store.ListRafflesForMap(r.Context(), id)
 	if err != nil {
 		writeInternalError(w, "list raffles for festival map", err)
 		return
 	}
 
-	affiliates, err := s.affiliateCardsByID(m.Stalls)
+	affiliates, err := s.affiliateCardsByID(r.Context(), m.Stalls)
 	if err != nil {
 		writeInternalError(w, "load stall affiliates", err)
 		return
@@ -588,7 +589,7 @@ func (s *Server) handleFestivalMapPublic(w http.ResponseWriter, r *http.Request)
 // affiliateCardsByID loads the public affiliate card for every affiliate the
 // map's occupants reference, keyed by id. One lookup per DISTINCT affiliate, so a
 // plan where a dozen occupants belong to the same partner still costs one read.
-func (s *Server) affiliateCardsByID(stalls []model.FestivalStall) (map[int64]*model.PublicStallAffiliate, error) {
+func (s *Server) affiliateCardsByID(ctx context.Context, stalls []model.FestivalStall) (map[int64]*model.PublicStallAffiliate, error) {
 	cards := make(map[int64]*model.PublicStallAffiliate)
 	for i := range stalls {
 		for j := range stalls[i].Occupants {
@@ -599,7 +600,7 @@ func (s *Server) affiliateCardsByID(stalls []model.FestivalStall) (map[int64]*mo
 			if _, done := cards[*id]; done {
 				continue
 			}
-			a, err := s.store.GetAffiliate(*id)
+			a, err := s.store.GetAffiliate(ctx, *id)
 			if err != nil {
 				return nil, err
 			}

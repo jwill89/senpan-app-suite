@@ -47,7 +47,7 @@ func TestCategories_CreateListRenameDelete(t *testing.T) {
 
 	// Rename (PATCH /api/pattern-categories/{id} -> 200).
 	resp = env.patchJSON(t, fmt.Sprintf("/api/pattern-categories/%d", id), map[string]any{"name": "Bonus Patterns"})
-	if resp.StatusCode != 200 {
+	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("rename status = %d; want 200", resp.StatusCode)
 	}
 	resp.Body.Close()

@@ -5,7 +5,7 @@
  * drawn, patterns, winners, frequent winners, called numbers) once started.
  * Mirrors the original `adminTab==='bingo-game'` block exactly.
  */
-import { onBeforeUnmount, onMounted, computed, ref } from 'vue'
+import { onBeforeUnmount, onMounted, computed, ref, useId } from 'vue'
 import { useRouter } from 'vue-router'
 import CalledNumbers from '@/components/common/CalledNumbers.vue'
 import PatternMini from '@/components/common/PatternMini.vue'
@@ -44,6 +44,8 @@ const yoever = useYoeverStore()
 
 // Currently-selected preset in the "Start from a preset" picker (v-model).
 const selectedPresetId = ref<number | null>(null)
+/** Ties the picker's visible caption to its select. */
+const presetSelectId = useId()
 
 /**
  * Applies a saved preset to the new-game form: pre-selects its win patterns
@@ -213,15 +215,16 @@ onBeforeUnmount(() => {
       <div v-if="!game.currentGame" class="game-setup">
         <div v-if="patterns.patterns.length === 0" class="mb-12">
           <p class="text-muted mb-8">Create some win patterns first.</p>
-          <button class="btn-confirm btn-sm" @click="goToPatterns">
+          <button type="button" class="btn-confirm btn-sm" @click="goToPatterns">
             <font-awesome-icon :icon="['fas', 'plus']" /> Create a Pattern
           </button>
         </div>
         <div v-else>
           <!-- Start from a saved preset (auto-fills patterns + details) -->
           <div v-if="presets.presets.length" class="flex-toolbar mb-12">
-            <label class="text-muted text-sm">Start from a preset:</label>
+            <label :for="presetSelectId" class="text-muted text-sm">Start from a preset:</label>
             <select
+              :id="presetSelectId"
               v-model.number="selectedPresetId"
               aria-label="Game preset"
               class="manager-filter"
@@ -230,6 +233,7 @@ onBeforeUnmount(() => {
               <option v-for="p in presets.presets" :key="p.id" :value="p.id">{{ p.name }}</option>
             </select>
             <button
+              type="button"
               class="btn-action btn-sm"
               :disabled="selectedPresetId === null"
               title="Apply this preset's patterns and game details"
@@ -245,10 +249,10 @@ onBeforeUnmount(() => {
 
           <!-- Game details editor -->
           <div class="game-details-editor">
-            <label class="field-label">
+            <span class="field-label">
               Game Details
               <span class="text-muted fw-normal text-xs"> (Markdown supported) </span>
-            </label>
+            </span>
             <MarkdownEditor
               v-model="game.gameDetails"
               min-height="120px"
@@ -283,6 +287,7 @@ onBeforeUnmount(() => {
           </p>
 
           <button
+            type="button"
             class="btn-action btn-lg"
             :disabled="game.selectedPatternIds.length === 0 || game.starting"
             @click="game.startGame()"
@@ -303,6 +308,7 @@ onBeforeUnmount(() => {
         <div class="draw-area">
           <div class="draw-controls">
             <button
+              type="button"
               class="btn-action btn-lg"
               :disabled="game.drawCountdown !== null || game.drawing"
               @click="game.drawNumber()"
@@ -322,7 +328,12 @@ onBeforeUnmount(() => {
                 {{ delayLabel(s) }}
               </option>
             </select>
-            <button class="btn-caution btn-lg" :disabled="game.ending" @click="game.endGame()">
+            <button
+              type="button"
+              class="btn-caution btn-lg"
+              :disabled="game.ending"
+              @click="game.endGame()"
+            >
               <LoadingSpinner v-if="game.ending" label="Ending..." />
               <template v-else>End Game</template>
             </button>
@@ -361,6 +372,7 @@ onBeforeUnmount(() => {
                 <h4 class="settings-section-title">Auto-Draw</h4>
                 <div class="settings-controls">
                   <button
+                    type="button"
                     class="btn-neutral btn-sm"
                     :aria-pressed="game.currentGame.auto_enabled"
                     :title="
@@ -403,6 +415,7 @@ onBeforeUnmount(() => {
                 <h4 class="settings-section-title">It's Yoever</h4>
                 <div class="settings-controls">
                   <button
+                    type="button"
                     class="btn-neutral btn-sm"
                     :aria-pressed="game.currentGame.yoever_enabled"
                     :title="
@@ -459,6 +472,7 @@ onBeforeUnmount(() => {
                 <h4 class="settings-section-title">Sound</h4>
                 <div class="settings-controls">
                   <button
+                    type="button"
                     class="btn-neutral btn-sm winner-sound-toggle"
                     :aria-pressed="game.winnerSoundEnabled"
                     :title="
@@ -602,6 +616,7 @@ onBeforeUnmount(() => {
   border-radius: var(--radius);
   background: var(--panel-raised-bg);
 }
+
 .game-settings-summary {
   display: flex;
   align-items: center;
@@ -613,36 +628,44 @@ onBeforeUnmount(() => {
   user-select: none;
   list-style: none;
 }
+
 /* Hide the default disclosure triangle - we render our own chevron. */
 .game-settings-summary::-webkit-details-marker {
   display: none;
 }
+
 .game-settings-icon {
   color: var(--highlight);
 }
+
 .game-settings-chevron {
   margin-left: auto;
   font-size: 0.8rem;
   color: var(--text-muted);
   transition: transform 0.18s ease;
 }
+
 .game-settings[open] .game-settings-chevron {
   transform: rotate(180deg);
 }
+
 .game-settings-body {
   display: flex;
   flex-direction: column;
   padding: 0 14px 14px;
 }
+
 .settings-section {
   display: flex;
   flex-direction: column;
   gap: 8px;
   padding: 12px 0;
 }
+
 .settings-section + .settings-section {
   border-top: 1px solid var(--control-border);
 }
+
 .settings-section-title {
   margin: 0;
   font-size: 0.8rem;
@@ -651,29 +674,34 @@ onBeforeUnmount(() => {
   letter-spacing: 0.04em;
   color: var(--text-muted);
 }
+
 .settings-controls {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 14px;
 }
+
 .auto-interval-field {
   display: inline-flex;
   align-items: center;
   gap: 8px;
 }
+
 .auto-interval-field select {
   padding: 6px 10px;
   font-size: 0.9rem;
   font-weight: 600;
   cursor: pointer;
 }
+
 .yoever-count {
   font-weight: 700;
   font-size: 0.9rem;
   color: var(--text-muted);
   white-space: nowrap;
 }
+
 .yoever-selfmute {
   display: inline-flex;
   align-items: center;
@@ -683,13 +711,16 @@ onBeforeUnmount(() => {
   cursor: pointer;
   user-select: none;
 }
+
 .yoever-selfmute input {
   cursor: pointer;
 }
+
 .yoever-selfmute.is-disabled {
   opacity: 0.5;
   cursor: not-allowed;
 }
+
 .yoever-selfmute.is-disabled input {
   cursor: not-allowed;
 }

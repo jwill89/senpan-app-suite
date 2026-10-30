@@ -18,7 +18,7 @@ import (
 // taken, or the reserved bootstrap "admin" - so the endpoint can't be used to
 // enumerate which accounts exist. The eligible account is still created.
 func TestRegisterNoEnumeration(t *testing.T) {
-	st, err := store.New(filepath.Join(t.TempDir(), "test.db"))
+	st, err := store.New(t.Context(), filepath.Join(t.TempDir(), "test.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -46,7 +46,7 @@ func TestRegisterNoEnumeration(t *testing.T) {
 	}
 
 	// The brand-new account must actually have been created (inactive).
-	u, _, err := st.GetUserByUsername("brandnew")
+	u, _, err := st.GetUserByUsername(t.Context(), "brandnew")
 	if err != nil {
 		t.Fatal(err)
 	}

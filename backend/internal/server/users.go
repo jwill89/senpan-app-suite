@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"log/slog"
 	"net/http"
 
@@ -28,7 +29,7 @@ func (s *Server) handleUsersList(w http.ResponseWriter, r *http.Request) {
 	if !s.requireAdmin(w, r) {
 		return
 	}
-	users, err := s.store.ListUsers()
+	users, err := s.store.ListUsers(r.Context())
 	if err != nil {
 		writeInternalError(w, "list users", err)
 		return
@@ -72,7 +73,7 @@ func (s *Server) handleUserPatch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	target, err := s.store.GetUserByID(id)
+	target, err := s.store.GetUserByID(r.Context(), id)
 	if err != nil {
 		writeInternalError(w, "get user", err)
 		return
@@ -97,15 +98,19 @@ func (s *Server) handleUserPatch(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "No fields to update")
 		return
 	}
+	// Each field is its own write, and a password reset is followed by revoking the
+	// account's token - a reset that stopped before the revoke would leave a
+	// compromised token working. So once writing starts, it finishes detached.
+	ctx := context.WithoutCancel(r.Context())
 
 	if req.Active != nil {
-		if err := s.store.SetUserActive(id, *req.Active); err != nil {
+		if err := s.store.SetUserActive(ctx, id, *req.Active); err != nil {
 			writeInternalError(w, "set user active", err)
 			return
 		}
 	}
 	if req.Admin != nil {
-		if err := s.store.SetUserAdmin(id, *req.Admin); err != nil {
+		if err := s.store.SetUserAdmin(ctx, id, *req.Admin); err != nil {
 			writeInternalError(w, "set user admin", err)
 			return
 		}
@@ -124,7 +129,7 @@ func (s *Server) handleUserPatch(w http.ResponseWriter, r *http.Request) {
 				cleaned = append(cleaned, p)
 			}
 		}
-		if err := s.store.SetUserPermissions(id, cleaned); err != nil {
+		if err := s.store.SetUserPermissions(ctx, id, cleaned); err != nil {
 			writeInternalError(w, "set user permissions", err)
 			return
 		}
@@ -139,14 +144,14 @@ func (s *Server) handleUserPatch(w http.ResponseWriter, r *http.Request) {
 			writeInternalError(w, "hash password", err)
 			return
 		}
-		if err := s.store.SetUserPassword(id, hash); err != nil {
+		if err := s.store.SetUserPassword(ctx, id, hash); err != nil {
 			writeInternalError(w, "set user password", err)
 			return
 		}
 		// An admin resetting the password must also cut off the target's existing
 		// PAT so a compromised token can't outlive the reset (the user re-issues it).
 		// The target's browser sessions can't be swept from here - see 'unresolved'.
-		if _, err := s.store.DeleteUserToken(id); err != nil {
+		if _, err := s.store.DeleteUserToken(ctx, id); err != nil {
 			slog.Error("revoke token after admin password reset", "error", err, "user_id", id)
 		}
 	}
@@ -168,7 +173,7 @@ func (s *Server) handleUserDelete(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	target, err := s.store.GetUserByID(id)
+	target, err := s.store.GetUserByID(r.Context(), id)
 	if err != nil {
 		writeInternalError(w, "get user", err)
 		return
@@ -181,7 +186,7 @@ func (s *Server) handleUserDelete(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusForbidden, "The admin account cannot be modified here")
 		return
 	}
-	if _, err := s.store.DeleteUser(id); err != nil {
+	if _, err := s.store.DeleteUser(r.Context(), id); err != nil {
 		writeInternalError(w, "delete user", err)
 		return
 	}
@@ -217,7 +222,7 @@ func (s *Server) handleAccountChangePassword(w http.ResponseWriter, r *http.Requ
 		return
 	}
 	// Re-read with the hash to verify the current password.
-	_, hash, err := s.store.GetUserByUsername(user.Username)
+	_, hash, err := s.store.GetUserByUsername(r.Context(), user.Username)
 	if err != nil {
 		writeInternalError(w, "get user", err)
 		return
@@ -232,7 +237,11 @@ func (s *Server) handleAccountChangePassword(w http.ResponseWriter, r *http.Requ
 		writeInternalError(w, "hash password", err)
 		return
 	}
-	if err := s.store.SetUserPassword(user.ID, newHash); err != nil {
+	// The change and what must follow it - re-stamping this session, revoking the
+	// token - run detached: stopping after the first would leave a leaked token
+	// working past the change, or log this browser out with nobody told.
+	ctx := context.WithoutCancel(r.Context())
+	if err := s.store.SetUserPassword(ctx, user.ID, newHash); err != nil {
 		writeInternalError(w, "set password", err)
 		return
 	}
@@ -243,10 +252,10 @@ func (s *Server) handleAccountChangePassword(w http.ResponseWriter, r *http.Requ
 	// fixation / a stolen pre-change cookie value). Also revoke the account's PAT so
 	// any leaked token stops working and must be re-issued.
 	_ = s.sessions.RenewToken(r.Context())
-	if fresh, err := s.store.GetUserByID(user.ID); err == nil && fresh != nil {
+	if fresh, err := s.store.GetUserByID(ctx, user.ID); err == nil && fresh != nil {
 		s.sessions.Put(r.Context(), "user_epoch", fresh.PasswordEpoch)
 	}
-	if _, err := s.store.DeleteUserToken(user.ID); err != nil {
+	if _, err := s.store.DeleteUserToken(ctx, user.ID); err != nil {
 		slog.Error("revoke token after password change", "error", err, "user_id", user.ID)
 	}
 	writeJSON(w, http.StatusOK, model.OKResponse{OK: true})

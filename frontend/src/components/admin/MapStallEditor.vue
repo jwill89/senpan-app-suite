@@ -11,7 +11,7 @@
  * `select` and `update(uid, placement)` rather than mutating props. Continuous
  * drags emit on each pointermove; the parent applies the placement to its stall.
  */
-import { ref } from 'vue'
+import { useTemplateRef } from 'vue'
 import { assetUrl } from '@/lib/assets'
 import { isCircle, occupantMapLabel, stallCaption, stallColor, stallStyle } from '@/lib/festivalmap'
 import { useFestivalMapsStore } from '@/stores/festivalMaps'
@@ -30,7 +30,7 @@ const emit = defineEmits<{
   update: [uid: number, placement: Placement]
 }>()
 
-const canvasRef = ref<HTMLElement | null>(null)
+const canvasRef = useTemplateRef<HTMLElement>('canvasRef')
 
 const store = useFestivalMapsStore()
 

@@ -6,7 +6,7 @@
  * A theme is just a set of token overrides - there is no free-form CSS - so this
  * is the whole editor. The bound value is a `{ tokenName: cssValue }` map.
  */
-import { computed, nextTick, ref } from 'vue'
+import { computed, nextTick, ref, useTemplateRef } from 'vue'
 import ModalOverlay from '@/components/common/ModalOverlay.vue'
 import ColorPicker from '@/components/common/ui/ColorPicker.vue'
 import {
@@ -108,7 +108,7 @@ const fmtRatio = (r: number) => `${r.toFixed(2)}:1`
 const tokenTrail = (fg: string, bg: string) => `${fg.startsWith('#') ? fg : `--${fg}`} -> --${bg}`
 
 // "Find in preview": open the preview and flash the element a pairing renders as.
-const stageRef = ref<HTMLElement | null>(null)
+const stageRef = useTemplateRef<HTMLElement>('stageRef')
 async function revealInPreview(id: string): Promise<void> {
   showPreview.value = true
   await nextTick()
@@ -117,6 +117,7 @@ async function revealInPreview(id: string): Promise<void> {
   el.scrollIntoView({ block: 'center', behavior: 'smooth' })
   el.classList.remove('theme-preview-flash')
   // Reflow so re-adding the class restarts the animation on repeat clicks.
+  // eslint-disable-next-line @typescript-eslint/no-meaningless-void-operator -- the read is the point: it forces layout, and void marks it as deliberate (a bare read would trip no-unused-expressions)
   void el.offsetWidth
   el.classList.add('theme-preview-flash')
   window.setTimeout(() => el.classList.remove('theme-preview-flash'), 1600)
@@ -275,7 +276,7 @@ async function revealInPreview(id: string): Promise<void> {
     </div>
 
     <!-- WCAG compliance report: live audit of the edited theme's contrast. -->
-    <div class="wcag" :class="`wcag--${report.level}`">
+    <div class="wcag" :class="`wcag--${report.level.toLowerCase()}`">
       <button
         type="button"
         class="collapse-toggle"
@@ -494,7 +495,9 @@ async function revealInPreview(id: string): Promise<void> {
       <h3 class="mb-8"><font-awesome-icon :icon="['fad', 'palette']" /> {{ pickerToken.label }}</h3>
       <p class="text-muted text-sm mb-16">{{ pickerToken.desc }}</p>
       <ColorPicker :value="pickerSeed(pickerToken)" @change="onPickerChange(pickerToken, $event)" />
-      <button class="btn-neutral mt-20 w-full" @click="pickerToken = null">Done</button>
+      <button type="button" class="btn-neutral mt-20 w-full" @click="pickerToken = null">
+        Done
+      </button>
     </ModalOverlay>
   </div>
 </template>
@@ -512,12 +515,14 @@ async function revealInPreview(id: string): Promise<void> {
   border-radius: var(--radius);
   overflow: hidden;
 }
+
 .token-preview-hint {
   color: var(--text-muted);
   font-weight: 400;
   font-size: 0.8rem;
 }
-@media (max-width: 560px) {
+
+@media (width <= 560px) {
   .token-preview-hint {
     display: none;
   }
@@ -528,6 +533,7 @@ async function revealInPreview(id: string): Promise<void> {
   color: var(--text);
   padding: 16px;
 }
+
 .theme-preview-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
@@ -551,10 +557,12 @@ async function revealInPreview(id: string): Promise<void> {
   flex-direction: column;
   gap: 8px;
 }
+
 /* The board is ~396px at the real 68px cell, wider than one grid track. */
 .theme-preview-panel--wide {
   grid-column: 1 / -1;
 }
+
 /* .section-heading ships an 8px bottom margin for margin-spaced panels; this
    panel is a flex column with its own gap. Child combinator on purpose - the
    .section-heading inside .subpanel keeps the real margin. */
@@ -567,6 +575,7 @@ async function revealInPreview(id: string): Promise<void> {
 .theme-preview-board {
   align-self: flex-start;
 }
+
 /* The cell sizes itself off the VIEWPORT (player.css: min(68px, calc((100vw -
    100px) / 5))), which assumes the board sits near the page edges. Here it is
    nested admin-panel > token-preview > stage > panel, so the same formula needs a
@@ -574,6 +583,7 @@ async function revealInPreview(id: string): Promise<void> {
 .theme-preview-board .board-cell {
   --cell-size: min(68px, calc((100vw - 220px) / 5));
 }
+
 .theme-preview-tracker {
   margin-top: 12px;
 }
@@ -589,6 +599,7 @@ async function revealInPreview(id: string): Promise<void> {
   place-items: center;
   min-height: 160px;
 }
+
 /* Real dialogs are >=440px wide; in a grid track this narrow the two full-size
    dialog buttons must be allowed to wrap. */
 .theme-preview-overlay .confirm-btns {
@@ -601,27 +612,32 @@ async function revealInPreview(id: string): Promise<void> {
   color: var(--highlight);
   font-size: 0.95rem;
 }
+
 .token-rows {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
   gap: 14px 18px;
 }
+
 .token-row {
   display: flex;
   flex-direction: column;
   gap: 4px;
 }
+
 .token-row-head {
   display: flex;
   align-items: center;
   gap: 8px;
 }
+
 .token-row-desc {
   margin: 0;
   color: var(--text-muted);
   font-size: 0.78rem;
   line-height: 1.35;
 }
+
 .token-row-swatch {
   width: 18px;
   height: 18px;
@@ -629,6 +645,7 @@ async function revealInPreview(id: string): Promise<void> {
   border: 1px solid var(--control-border);
   flex: 0 0 auto;
 }
+
 .token-row-label {
   flex: 1 1 auto;
   font-size: 0.85rem;
@@ -636,6 +653,7 @@ async function revealInPreview(id: string): Promise<void> {
   overflow: hidden;
   text-overflow: ellipsis;
 }
+
 .token-row-color {
   width: 34px;
   height: 28px;
@@ -646,14 +664,16 @@ async function revealInPreview(id: string): Promise<void> {
   cursor: pointer;
   flex: 0 0 auto;
 }
+
 /* Alpha-token swatch button: the chosen colour (incl. transparency) fills it. */
 .token-row-color--btn {
   padding: 0;
 }
+
 .token-row-value {
   width: 120px;
   flex: 0 0 auto;
-  font-family: 'Consolas', 'Monaco', monospace;
+  font-family: Consolas, Monaco, monospace;
   font-size: 0.8rem;
   padding: 5px 7px;
 }
@@ -663,12 +683,14 @@ async function revealInPreview(id: string): Promise<void> {
   animation: theme-preview-flash 1.6s ease-out;
   border-radius: 0;
 }
+
 @keyframes theme-preview-flash {
   0%,
   100% {
     outline: 2px solid transparent;
     outline-offset: 2px;
   }
+
   15%,
   55% {
     outline: 2px solid var(--accent);
@@ -683,6 +705,7 @@ async function revealInPreview(id: string): Promise<void> {
   border-radius: var(--radius);
   overflow: hidden;
 }
+
 .collapse-toggle {
   width: 100%;
   display: flex;
@@ -696,6 +719,7 @@ async function revealInPreview(id: string): Promise<void> {
   font-weight: 600;
   cursor: pointer;
 }
+
 .wcag-verdict {
   margin-left: auto;
   font-size: 0.78rem;
@@ -704,42 +728,52 @@ async function revealInPreview(id: string): Promise<void> {
   border-radius: 0;
   color: var(--text-on-fill);
 }
-.wcag--AAA .wcag-verdict {
+
+.wcag--aaa .wcag-verdict {
   background: var(--success);
 }
-.wcag--AA .wcag-verdict {
+
+.wcag--aa .wcag-verdict {
   background: var(--warning);
   color: #1f1a06;
 }
+
 .wcag--fail .wcag-verdict {
   background: var(--danger);
 }
+
 .wcag-body {
   padding: 12px;
   display: flex;
   flex-direction: column;
   gap: 10px;
 }
+
 .wcag-summary {
   margin: 0;
   font-size: 0.88rem;
   color: var(--text);
 }
+
 .wcag-group {
   display: flex;
   flex-direction: column;
   gap: 4px;
 }
+
 .wcag-heading {
   margin: 0;
   font-size: 0.82rem;
 }
+
 .wcag-heading--error {
   color: var(--danger);
 }
+
 .wcag-heading--warn {
   color: var(--warning);
 }
+
 /* A single finding row: live chip - description - metrics - find button. */
 .wcag-finding {
   display: flex;
@@ -750,12 +784,15 @@ async function revealInPreview(id: string): Promise<void> {
   background: var(--panel-raised-bg);
   border-left: 3px solid var(--control-border);
 }
+
 .wcag-finding--fail {
   border-left-color: var(--danger);
 }
+
 .wcag-finding--aa {
   border-left-color: var(--warning);
 }
+
 .wcag-finding--aaa {
   border-left-color: var(--success);
 }
@@ -782,17 +819,20 @@ async function revealInPreview(id: string): Promise<void> {
   gap: 1px;
   min-width: 0;
 }
+
 .wcag-pair {
   font-size: 0.84rem;
   font-weight: 600;
   color: var(--text);
 }
+
 .wcag-where {
   font-size: 0.74rem;
   color: var(--text-muted);
 }
+
 .wcag-tokens {
-  font-family: 'Consolas', 'Monaco', monospace;
+  font-family: Consolas, Monaco, monospace;
   font-size: 0.7rem;
   color: var(--text-muted);
   opacity: 0.85;
@@ -805,25 +845,31 @@ async function revealInPreview(id: string): Promise<void> {
   align-items: flex-end;
   gap: 2px;
 }
+
 .wcag-ratio {
-  font-family: 'Consolas', 'Monaco', monospace;
+  font-family: Consolas, Monaco, monospace;
   font-weight: 700;
   font-size: 0.82rem;
+
   /* Default to body text so the number is always legible on the active admin
      theme; status is conveyed by the row border, the AA/AAA pills, and (for
      problems) the brighter danger/warning tints below. */
   color: var(--text);
 }
+
 .wcag-ratio--error {
   color: var(--danger);
 }
+
 .wcag-ratio--warn {
   color: var(--warning);
 }
+
 .wcag-levels {
   display: flex;
   gap: 4px;
 }
+
 .wcag-level {
   font-size: 0.62rem;
   font-weight: 700;
@@ -831,14 +877,17 @@ async function revealInPreview(id: string): Promise<void> {
   border-radius: 0;
   white-space: nowrap;
 }
+
 .wcag-level--on {
   background: color-mix(in srgb, var(--success) 24%, transparent);
   color: var(--text);
 }
+
 .wcag-level--off {
   background: color-mix(in srgb, var(--danger) 18%, transparent);
   color: var(--text-muted);
 }
+
 .wcag-large {
   font-size: 0.62rem;
   color: var(--text-muted);
@@ -858,6 +907,7 @@ async function revealInPreview(id: string): Promise<void> {
   font-weight: 600;
   cursor: pointer;
 }
+
 .wcag-find:hover {
   background: color-mix(in srgb, var(--control-border) 82%, var(--text));
 }
@@ -884,10 +934,11 @@ async function revealInPreview(id: string): Promise<void> {
 
 /* On narrow widths, let the finding row wrap so the chip + text + metrics stack
    instead of crushing. */
-@media (max-width: 560px) {
+@media (width <= 560px) {
   .wcag-finding {
     flex-wrap: wrap;
   }
+
   .wcag-metrics {
     align-items: flex-start;
   }

@@ -13,7 +13,7 @@ import (
 func bearerGet(t *testing.T, e *testEnv, path, token string) *http.Response {
 	t.Helper()
 	c := &http.Client{Transport: e.ts.Client().Transport}
-	req, _ := http.NewRequest("GET", e.url(path), nil)
+	req, _ := http.NewRequest(http.MethodGet, e.url(path), nil)
 	if token != "" {
 		req.Header.Set("Authorization", "Bearer "+token)
 	}

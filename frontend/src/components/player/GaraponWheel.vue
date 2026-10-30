@@ -12,7 +12,7 @@
  * The draw is provided by the parent (`performDraw`) so this component owns only
  * the animation, never the odds - it animates to whatever the server returned.
  */
-import { nextTick, ref } from 'vue'
+import { nextTick, ref, useTemplateRef } from 'vue'
 import { playPonSound, playGaraponRoll, vibrate } from '@/lib/sound'
 import type { GaraponDrawResponse } from '@/types/api'
 
@@ -28,7 +28,7 @@ const rotation = ref(0)
 const spinning = ref(false)
 const restingBall = ref<{ color: string } | null>(null)
 const leavingBall = ref<{ color: string } | null>(null)
-const ballEl = ref<HTMLElement | null>(null)
+const ballEl = useTemplateRef<HTMLElement>('ballEl')
 
 // Regular hexagon barrel (pointy top/bottom), centered (160,140), radius 78.
 const hexPoints = '160,62 227.5,101 227.5,179 160,218 92.5,179 92.5,101'
@@ -95,7 +95,9 @@ async function dropBall(color: string): Promise<void> {
     playPonSound()
     vibrate(40)
   }, 380)
-  await anim.finished.catch(() => {})
+  await anim.finished.catch(() => {
+    // A cancelled drop (the next draw clears it above) rejects; that is not an error.
+  })
 }
 </script>
 
@@ -181,6 +183,7 @@ async function dropBall(color: string): Promise<void> {
   max-width: 340px;
   margin: 0 auto;
 }
+
 .drum-button {
   display: block;
   width: 100%;
@@ -189,15 +192,18 @@ async function dropBall(color: string): Promise<void> {
   border: none;
   cursor: pointer;
 }
+
 .drum-button:disabled {
   cursor: default;
 }
+
 .drum-svg {
   width: 100%;
   height: auto;
   display: block;
   overflow: visible;
 }
+
 /* Positioning context for the ball overlay - sized to the drum only, so the hint
    text below sits clear of a dropped ball. */
 .drum-area {
@@ -210,42 +216,51 @@ async function dropBall(color: string): Promise<void> {
   transform-origin: 160px 140px;
   transition: transform 1.9s cubic-bezier(0.16, 0.62, 0.18, 1);
 }
+
 /* Wooden barrel: a subtle seam stroke over the wood gradient, a highlight band rim,
    dark-brown facet seams, and a brass axle pin. */
 .barrel-face {
   stroke: #6f4a25;
   stroke-width: 1.5;
 }
+
 .barrel-rim {
   fill: none;
   stroke: var(--highlight);
   stroke-width: 5;
 }
+
 .barrel-spokes line {
   stroke: #7a5430;
   stroke-width: 2;
   opacity: 0.55;
 }
+
 .barrel-hub {
   fill: var(--highlight);
   stroke: #6f4a25;
   stroke-width: 2;
 }
+
 .crank-arm {
   stroke: var(--control-border);
   stroke-width: 6;
   stroke-linecap: round;
 }
+
 .crank-knob {
   fill: var(--highlight);
 }
+
 .drum-stand path,
 .drum-stand rect {
   fill: var(--control-border);
 }
+
 .drum-tray {
   fill: color-mix(in srgb, var(--control-border) 75%, #000);
 }
+
 .drum-chute {
   fill: color-mix(in srgb, var(--control-border) 85%, #000);
 }
@@ -261,6 +276,7 @@ async function dropBall(color: string): Promise<void> {
   inset: 0;
   pointer-events: none;
 }
+
 .garapon-ball {
   position: absolute;
   left: calc(50% - 21px);
@@ -270,29 +286,34 @@ async function dropBall(color: string): Promise<void> {
   border-radius: 50%;
   background: radial-gradient(
     circle at 32% 28%,
-    rgba(255, 255, 255, 0.85),
+    rgb(255 255 255 / 85%),
     var(--ball) 46%,
     color-mix(in srgb, var(--ball) 65%, #000) 100%
   );
   box-shadow: 0 6px 12px var(--shadow);
 }
+
 .garapon-ball.is-leaving {
   animation: garapon-ball-away 0.6s ease-in forwards;
 }
+
 @keyframes garapon-ball-away {
   0% {
     transform: translate(10px, 0) scale(1);
     opacity: 1;
   }
+
   30% {
     transform: translate(48px, -70px) scale(1.05) rotate(45deg);
     opacity: 1;
   }
+
   100% {
     transform: translate(340px, 240px) scale(0.5) rotate(240deg);
     opacity: 0;
   }
 }
+
 .drum-hint {
   text-align: center;
   margin-top: 6px;

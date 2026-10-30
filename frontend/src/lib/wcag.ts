@@ -246,7 +246,7 @@ const PAIRS: Pair[] = [
 /** Parsed RGB (0-255). Alpha is ignored - no checked pair uses an alpha token. */
 function parseRgb(input: string): [number, number, number] | null {
   const s = (input || '').trim()
-  const hex = s.match(/^#([0-9a-f]{3,8})$/i)
+  const hex = /^#([0-9a-f]{3,8})$/i.exec(s)
   if (hex) {
     let h = hex[1]
     if (h.length === 3 || h.length === 4)
@@ -256,7 +256,7 @@ function parseRgb(input: string): [number, number, number] | null {
         .join('')
     return [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16)]
   }
-  const fn = s.match(/^rgba?\(([^)]+)\)$/i)
+  const fn = /^rgba?\(([^)]+)\)$/i.exec(s)
   if (fn) {
     const parts = fn[1]
       .replace(/\//g, ' ')

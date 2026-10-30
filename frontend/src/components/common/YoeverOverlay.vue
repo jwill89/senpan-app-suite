@@ -76,7 +76,7 @@ const durationMs = YOEVER_DURATION_MS
   width: clamp(90px, 14vw, 170px);
   height: auto;
   user-select: none;
-  filter: drop-shadow(0 6px 10px rgba(0, 0, 0, 0.45));
+  filter: drop-shadow(0 6px 10px rgb(0 0 0 / 45%));
 }
 
 .yoever-name {
@@ -87,10 +87,10 @@ const durationMs = YOEVER_DURATION_MS
   max-width: 44vw;
   padding: 4px 12px;
   border-radius: 0;
-  background: rgba(0, 0, 0, 0.55);
+  background: rgb(0 0 0 / 55%);
   color: #fff;
   text-align: center;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
+  text-shadow: 0 1px 2px rgb(0 0 0 / 60%);
 }
 
 .yoever-quote {
@@ -115,12 +115,15 @@ const durationMs = YOEVER_DURATION_MS
     transform: translateX(-25vw);
     opacity: 0;
   }
+
   10% {
     opacity: 0.8;
   }
+
   78% {
     opacity: 0.8;
   }
+
   100% {
     transform: translateX(115vw);
     opacity: 0;
@@ -132,6 +135,7 @@ const durationMs = YOEVER_DURATION_MS
   100% {
     transform: translateY(0);
   }
+
   50% {
     transform: translateY(-56px);
   }
@@ -145,14 +149,17 @@ const durationMs = YOEVER_DURATION_MS
     animation-name: yoever-fade;
     animation-timing-function: ease-in-out;
   }
+
   .yoever-bob {
     animation: none;
   }
+
   @keyframes yoever-fade {
     0%,
     100% {
       opacity: 0;
     }
+
     15%,
     75% {
       opacity: 0.8;

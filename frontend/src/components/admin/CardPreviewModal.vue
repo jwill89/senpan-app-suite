@@ -7,7 +7,7 @@
  * Autofocus of the edit input (which app.js did via $refs + $nextTick) is
  * reproduced with a template ref watched against the editing field.
  */
-import { nextTick, ref, watch } from 'vue'
+import { nextTick, useTemplateRef, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import ModalOverlay from '@/components/common/ModalOverlay.vue'
 import BingoBoard from '@/components/common/BingoBoard.vue'
@@ -18,7 +18,7 @@ const cards = useCardsStore()
 const ui = useUiStore()
 const router = useRouter()
 
-const editInput = ref<HTMLInputElement | null>(null)
+const editInput = useTemplateRef<HTMLInputElement>('editInput')
 
 /** Copies the card's full playable URL (origin + /play/:cardId) to clipboard. */
 function copyCardUrl(): void {
@@ -51,16 +51,24 @@ watch(
       </h3>
       <div class="flex-toolbar" style="flex-wrap: nowrap; gap: 8px">
         <button
+          type="button"
           class="btn-view btn-sm nowrap"
           title="Copy card ID"
           @click="ui.copyToClipboard(cards.previewCard.id)"
         >
           <font-awesome-icon :icon="['fas', 'copy']" /> Copy ID
         </button>
-        <button class="btn-view btn-sm nowrap" title="Copy playable card URL" @click="copyCardUrl">
+        <button
+          type="button"
+          class="btn-view btn-sm nowrap"
+          title="Copy playable card URL"
+          @click="copyCardUrl"
+        >
           <font-awesome-icon :icon="['fas', 'link']" /> Copy URL
         </button>
-        <button class="btn-neutral btn-sm" @click="cards.previewCard = null">Close</button>
+        <button type="button" class="btn-neutral btn-sm" @click="cards.previewCard = null">
+          Close
+        </button>
       </div>
     </div>
     <div class="flex-center">
@@ -82,10 +90,14 @@ watch(
       <p
         v-else
         style="font-weight: 600; cursor: pointer"
+        role="button"
+        tabindex="0"
         :title="
           cards.previewCard.player_name ? 'Double-click to edit' : 'Double-click to set player name'
         "
         @dblclick="cards.startPreviewCardEdit('player_name')"
+        @keydown.enter="cards.startPreviewCardEdit('player_name')"
+        @keydown.space.prevent="cards.startPreviewCardEdit('player_name')"
       >
         {{ cards.previewCard.player_name || 'No player assigned' }}
         <span v-if="!cards.previewCard.player_name" class="text-muted text-sm">
@@ -107,8 +119,12 @@ watch(
         v-else
         class="text-muted text-sm"
         style="cursor: pointer"
+        role="button"
+        tabindex="0"
         :title="cards.previewCard.details ? 'Double-click to edit' : 'Double-click to set details'"
         @dblclick="cards.startPreviewCardEdit('details')"
+        @keydown.enter="cards.startPreviewCardEdit('details')"
+        @keydown.space.prevent="cards.startPreviewCardEdit('details')"
       >
         {{ cards.previewCard.details || 'No details' }}
         <span v-if="!cards.previewCard.details" style="opacity: 0.5"> (double-click to edit)</span>

@@ -308,7 +308,12 @@ watch(
       </div>
 
       <FormActions align="start">
-        <button class="btn-confirm" :disabled="app.savingSettings" @click="app.saveSettings()">
+        <button
+          type="button"
+          class="btn-confirm"
+          :disabled="app.savingSettings"
+          @click="app.saveSettings()"
+        >
           <LoadingSpinner v-if="app.savingSettings" label="Saving..." />
           <template v-else>Save Settings</template>
         </button>
@@ -329,6 +334,7 @@ watch(
   align-items: flex-start;
   margin-bottom: 20px;
 }
+
 .settings-section {
   flex: 1 1 calc(50% - 10px);
   min-width: min(100%, 340px);
@@ -336,28 +342,34 @@ watch(
   border-radius: var(--radius);
   padding: 16px 18px;
 }
+
 /* The shared .section-heading object sets colour + bottom margin; just clear the
    default heading top margin so it sits flush with the card top. */
 .settings-section > .section-heading {
   margin-top: 0;
 }
+
 /* Last field/preview in a card shouldn't add trailing space below the card. */
 .settings-section > :last-child {
   margin-bottom: 0;
 }
+
 .settings-section .font-preview {
   margin-top: 4px;
 }
+
 /* The three sample lines inside the live font preview (chosen header font). */
 .font-preview-bingo {
   font-size: 2rem;
   font-weight: 800;
   letter-spacing: 2px;
 }
+
 .font-preview-numbers {
   font-size: 1.3rem;
   font-weight: 700;
 }
+
 .font-preview-title {
   font-size: 3rem;
   font-weight: 700;

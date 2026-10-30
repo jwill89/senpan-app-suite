@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Numerics;
 using System.Threading.Tasks;
@@ -60,12 +61,12 @@ internal sealed class RaffleTab : TabBase
 
     public void Draw()
     {
-        DrawStatusLine();
+        this.DrawStatusLine();
 
         if (Ui.Button("Refresh##raffles"))
-            Run(LoadAsync);
+            this.Run(this.LoadAsync);
         ImGui.SameLine();
-        DrawRafflePicker();
+        this.DrawRafflePicker();
 
         if (this.detail == null)
         {
@@ -77,13 +78,13 @@ internal sealed class RaffleTab : TabBase
         DrawRaffleHeader(this.detail);
 
         Ui.Section(FontAwesomeIcon.UserPlus, "Add entrant");
-        DrawAddEntry();
+        this.DrawAddEntry();
 
         Ui.Section(FontAwesomeIcon.Users, "Entrants");
-        DrawEntries(this.detail);
+        this.DrawEntries(this.detail);
 
         Ui.Section(FontAwesomeIcon.Trophy, "Draw a winner");
-        DrawWinnerControls();
+        this.DrawWinnerControls();
     }
 
     private void DrawRafflePicker()
@@ -98,7 +99,7 @@ internal sealed class RaffleTab : TabBase
         {
             var selected = raffle.Id == this.selectedRaffleId;
             if (ImGui.Selectable($"{raffle.Title} ({raffle.Status})##r{raffle.Id}", selected))
-                LoadRaffle(raffle.Id);
+                this.LoadRaffle(raffle.Id);
         }
         ImGui.EndCombo();
     }
@@ -116,7 +117,7 @@ internal sealed class RaffleTab : TabBase
         // screen. TabBase.Run's busy gate silently drops the second fetch, which is
         // what made the mismatch stick.
         this.detail = null;
-        Run(async () =>
+        this.Run(async () =>
         {
             var d = await this.api.GetRaffleAsync(id);
             await Apply(() =>
@@ -150,7 +151,7 @@ internal sealed class RaffleTab : TabBase
         {
             return raffle.TierCosts.Count == 0
                 ? string.Empty
-                : "Cost per entry: " + string.Join(" / ", raffle.TierCosts.Select(c => c.ToString("0.##")));
+                : "Cost per entry: " + string.Join(" / ", raffle.TierCosts.Select(c => c.ToString("0.##", CultureInfo.InvariantCulture)));
         }
 
         return raffle.AcceptsSignups && raffle.CostPerEntry > 0
@@ -185,7 +186,7 @@ internal sealed class RaffleTab : TabBase
         ImGui.SetNextItemWidth(140);
         ImGui.InputText("World##entry", ref this.world, 32);
         ImGui.SameLine();
-        DrawNearbyPicker();
+        this.DrawNearbyPicker();
 
         ImGui.SetNextItemWidth(120);
         if (ImGui.InputInt("Tickets", ref this.numEntries))
@@ -204,7 +205,7 @@ internal sealed class RaffleTab : TabBase
             var w = this.world.Trim();
             var n = Math.Max(1, this.numEntries);
             var paid = this.markPaidOnAdd;
-            Run(async () =>
+            this.Run(async () =>
             {
                 await this.api.AddRaffleEntryAsync(id, name, w, n, paid);
                 var d = await this.api.GetRaffleAsync(id);
@@ -232,7 +233,9 @@ internal sealed class RaffleTab : TabBase
         if (!ImGui.BeginTable("entries", 5,
                 ImGuiTableFlags.Borders | ImGuiTableFlags.RowBg | ImGuiTableFlags.ScrollY,
                 new Vector2(0, 200)))
+        {
             return;
+        }
 
         ImGui.TableSetupColumn("Name");
         ImGui.TableSetupColumn("World");
@@ -259,18 +262,18 @@ internal sealed class RaffleTab : TabBase
             }
             else
             {
-                ImGui.TextUnformatted(entry.NumEntries.ToString());
+                ImGui.TextUnformatted(entry.NumEntries.ToString(CultureInfo.InvariantCulture));
             }
 
             ImGui.TableNextColumn();
-            DrawPaymentCell(d.Raffle, entry);
+            this.DrawPaymentCell(d.Raffle, entry);
 
             ImGui.TableNextColumn();
             if (Ui.DangerIconButton($"e{entry.Id}", FontAwesomeIcon.Trash, "Delete entrant"))
             {
                 var id = this.selectedRaffleId;
                 var entryId = entry.Id;
-                Run(async () =>
+                this.Run(async () =>
                 {
                     await this.api.DeleteRaffleEntryAsync(id, entryId);
                     var d2 = await this.api.GetRaffleAsync(id);
@@ -302,9 +305,9 @@ internal sealed class RaffleTab : TabBase
         ImGui.PopStyleColor();
         Ui.ItemTooltip("Record a payment");
         if (open)
-            OpenPaymentPopup(entry);
+            this.OpenPaymentPopup(entry);
 
-        DrawPaymentPopup(raffle, entry);
+        this.DrawPaymentPopup(raffle, entry);
     }
 
     /// <summary>
@@ -364,7 +367,7 @@ internal sealed class RaffleTab : TabBase
 
         if (Ui.PrimaryButton("Mark paid"))
         {
-            Settle(entry.Id, true, this.payTickets, this.payWaived);
+            this.Settle(entry.Id, true, this.payTickets, this.payWaived);
             ImGui.CloseCurrentPopup();
         }
         if (entry.PaidEntries > 0)
@@ -374,7 +377,7 @@ internal sealed class RaffleTab : TabBase
             {
                 // Clearing resets the whole row - settled tickets AND waived gil -
                 // which is also the only way to walk a settlement back.
-                Settle(entry.Id, false, 0, 0);
+                this.Settle(entry.Id, false, 0, 0);
                 ImGui.CloseCurrentPopup();
             }
         }
@@ -389,7 +392,7 @@ internal sealed class RaffleTab : TabBase
     private void Settle(long entryId, bool paid, int tickets, int waived)
     {
         var id = this.selectedRaffleId;
-        Run(async () =>
+        this.Run(async () =>
         {
             await this.api.MarkRaffleEntryPaidAsync(id, entryId, paid, tickets, waived);
             var d = await this.api.GetRaffleAsync(id);
@@ -407,7 +410,7 @@ internal sealed class RaffleTab : TabBase
             if (Ui.PrimaryButton("Confirm winner"))
             {
                 var id = this.selectedRaffleId;
-                Run(async () =>
+                this.Run(async () =>
                 {
                     await this.api.VerifyRaffleWinnerAsync(id);
                     var d = await this.api.GetRaffleAsync(id);
@@ -422,7 +425,7 @@ internal sealed class RaffleTab : TabBase
             if (Ui.Button("Draw another"))
             {
                 var id = this.selectedRaffleId;
-                Run(async () =>
+                this.Run(async () =>
                 {
                     var w = (await this.api.PickAnotherRaffleWinnerAsync(id)).Winner;
                     await Apply(() => this.pendingWinner = w);
@@ -434,7 +437,7 @@ internal sealed class RaffleTab : TabBase
         if (Ui.PrimaryButton("Pick a winner"))
         {
             var id = this.selectedRaffleId;
-            Run(async () =>
+            this.Run(async () =>
             {
                 var w = (await this.api.PickRaffleWinnerAsync(id)).Winner;
                 await Apply(() => this.pendingWinner = w);

@@ -49,7 +49,7 @@ function goLookup(): void {
 <template>
   <div>
     <div class="topbar">
-      <button class="btn-neutral btn-sm" @click="goHome">
+      <button type="button" class="btn-neutral btn-sm" @click="goHome">
         <font-awesome-icon :icon="['fas', 'arrow-left']" /> Home
       </button>
       <h2><font-awesome-icon :icon="['fad', 'stamp']" /> Stamp Rallies</h2>
@@ -104,7 +104,7 @@ function goLookup(): void {
            is far more likely to arrive here than to have kept the lookup URL. -->
       <p class="stamp-signup-lookup-line">
         Already signed up and lost your link?
-        <button class="link-btn" @click="goLookup">Find my links</button>
+        <button type="button" class="link-btn" @click="goLookup">Find my links</button>
       </p>
     </div>
   </div>

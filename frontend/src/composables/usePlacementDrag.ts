@@ -63,7 +63,7 @@ function renderedHeightPct(start: Placement, square: boolean, rect: DOMRect): nu
  * by `key` (whatever the caller uses to identify items - an index string, a uid).
  */
 export function usePlacementDrag<K>(
-  canvasRef: Ref<HTMLElement | null>,
+  canvasRef: Readonly<Ref<HTMLElement | null>>,
   onUpdate: (key: K, placement: Placement) => void,
 ) {
   let drag: DragState<K> | null = null

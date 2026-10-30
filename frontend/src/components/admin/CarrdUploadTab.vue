@@ -16,7 +16,7 @@
  * Uploading an image whose name already exists overwrites it server-side, so a
  * Carrd site referencing that URL picks up the replacement.
  */
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, useTemplateRef } from 'vue'
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
 import AdminPanel from '@/components/common/ui/AdminPanel.vue'
 import ManagerView from '@/components/common/ui/ManagerView.vue'
@@ -55,7 +55,7 @@ const addingDir = ref(false)
 const newDirName = ref('')
 
 /** Hidden <input type="file"> used by the Upload button. */
-const fileInput = ref<HTMLInputElement | null>(null)
+const fileInput = useTemplateRef<HTMLInputElement>('fileInput')
 /** True while a file is being dragged over the drop zone. */
 const dragOver = ref(false)
 
@@ -239,6 +239,7 @@ onMounted(() => carrd.loadProjects())
           <template v-for="(crumb, i) in breadcrumbs" :key="crumb.path">
             <span v-if="i > 0" class="carrd-crumb-sep">/</span>
             <button
+              type="button"
               class="carrd-crumb"
               :class="{ 'is-current': i === breadcrumbs.length - 1 }"
               :disabled="i === breadcrumbs.length - 1"
@@ -248,7 +249,12 @@ onMounted(() => carrd.loadProjects())
             </button>
           </template>
         </nav>
-        <button class="btn-action btn-sm push-right" :disabled="carrd.uploading" @click="pickFiles">
+        <button
+          type="button"
+          class="btn-action btn-sm push-right"
+          :disabled="carrd.uploading"
+          @click="pickFiles"
+        >
           <LoadingSpinner v-if="carrd.uploading" label="Uploading..." />
           <template v-else><font-awesome-icon :icon="['fas', 'upload']" /> Upload Images</template>
         </button>
@@ -258,6 +264,7 @@ onMounted(() => carrd.loadProjects())
           accept=".jpg,.jpeg,.png,.webp,.gif,.mp3,.mp4"
           multiple
           hidden
+          aria-label="Files to upload"
           @change="onFilesSelected"
         />
       </div>
@@ -267,6 +274,7 @@ onMounted(() => carrd.loadProjects())
         <button
           v-for="dir in carrd.dirs"
           :key="dir"
+          type="button"
           class="chip"
           @click="carrd.navigate(joinCarrdPath(carrd.currentPath, dir))"
         >
@@ -292,10 +300,10 @@ onMounted(() => carrd.loadProjects())
             @keyup.enter="submitDir"
             @keyup.esc="cancelAddDir"
           />
-          <button class="btn-confirm btn-sm" @click="submitDir">Add</button>
-          <button class="btn-neutral btn-sm" @click="cancelAddDir">Cancel</button>
+          <button type="button" class="btn-confirm btn-sm" @click="submitDir">Add</button>
+          <button type="button" class="btn-neutral btn-sm" @click="cancelAddDir">Cancel</button>
         </template>
-        <button v-else class="chip carrd-dir-add" @click="addingDir = true">
+        <button v-else type="button" class="chip carrd-dir-add" @click="addingDir = true">
           <font-awesome-icon :icon="['fas', 'plus']" /> New Folder
         </button>
       </div>
@@ -304,11 +312,15 @@ onMounted(() => carrd.loadProjects())
       <div
         class="file-dropzone"
         :class="{ 'is-dragover': dragOver }"
+        role="button"
+        tabindex="0"
         @dragover.prevent="dragOver = true"
         @dragenter.prevent="dragOver = true"
         @dragleave.prevent="dragOver = false"
         @drop.prevent="onDrop"
         @click="pickFiles"
+        @keydown.enter="pickFiles"
+        @keydown.space.prevent="pickFiles"
       >
         <font-awesome-icon :icon="['fad', 'cloud-arrow-up']" />
         <span>Drag &amp; drop images, audio or video here, or click to browse</span>
@@ -334,6 +346,7 @@ onMounted(() => carrd.loadProjects())
               <img :src="fileUrl(img.name)" :alt="img.name" loading="lazy" />
             </a>
             <!-- Video: inline player -->
+            <!-- eslint-disable-next-line vuejs-accessibility/media-has-caption -- an admin preview of an uploaded file; the app holds no caption track to offer for it -->
             <video
               v-else-if="fileKind(img.name) === 'video'"
               :src="fileUrl(img.name)"
@@ -346,6 +359,7 @@ onMounted(() => carrd.loadProjects())
               <font-awesome-icon :icon="['fad', 'file-audio']" />
             </div>
             <button
+              type="button"
               class="file-del-overlay"
               title="Delete this file"
               @click="carrd.deleteImage(img.name)"
@@ -356,6 +370,7 @@ onMounted(() => carrd.loadProjects())
           <figcaption class="file-card-body">
             <span class="file-name code-highlight" :title="img.name">{{ img.name }}</span>
             <span class="text-muted text-xs">{{ formatSize(img.size) }}</span>
+            <!-- eslint-disable-next-line vuejs-accessibility/media-has-caption -- an admin preview of an uploaded file; the app holds no caption track to offer for it -->
             <audio
               v-if="fileKind(img.name) === 'audio'"
               :src="fileUrl(img.name)"
@@ -364,6 +379,7 @@ onMounted(() => carrd.loadProjects())
               preload="none"
             ></audio>
             <button
+              type="button"
               class="btn-view btn-sm file-copy-btn"
               title="Copy public URL to clipboard"
               @click="copyUrl(img.name)"
@@ -382,7 +398,7 @@ onMounted(() => carrd.loadProjects())
     <!-- -- List: projects table (create/rename via modal) ----------------------- -->
     <ManagerView v-else title="Carrd Upload" :icon="['fad', 'images']">
       <template #actions>
-        <button class="btn-confirm btn-sm" @click="openNew">
+        <button type="button" class="btn-confirm btn-sm" @click="openNew">
           <font-awesome-icon :icon="['fas', 'plus']" /> New Project
         </button>
       </template>
@@ -414,7 +430,7 @@ onMounted(() => carrd.loadProjects())
 
         <DataTable :columns="projectColumns" :rows="filteredProjects" row-key="folder">
           <template #cell-title="{ row }">
-            <button class="carrd-open-btn" @click="openProject(row)">
+            <button type="button" class="carrd-open-btn" @click="openProject(row)">
               <font-awesome-icon :icon="['fad', 'folder']" /> {{ row.title }}
             </button>
           </template>
@@ -433,6 +449,7 @@ onMounted(() => carrd.loadProjects())
           <template #cell-actions="{ row }">
             <div class="row-actions">
               <button
+                type="button"
                 class="btn-confirm btn-sm"
                 title="Rename this project"
                 @click="startEdit(row)"
@@ -440,6 +457,7 @@ onMounted(() => carrd.loadProjects())
                 <font-awesome-icon :icon="['fas', 'pen-to-square']" /> Edit
               </button>
               <button
+                type="button"
                 class="btn-danger btn-sm"
                 title="Delete this project"
                 @click="carrd.deleteProject(row.folder, row.title)"
@@ -503,8 +521,9 @@ onMounted(() => carrd.loadProjects())
         embeds pointing at the old folder will break.
       </p>
       <div class="flex-toolbar flex-end">
-        <button class="btn-neutral btn-sm" @click="closeModal">Cancel</button>
+        <button type="button" class="btn-neutral btn-sm" @click="closeModal">Cancel</button>
         <button
+          type="button"
           class="btn-confirm btn-sm"
           :disabled="savingProject || !formTitle.trim()"
           @click="submitProject"
@@ -533,6 +552,7 @@ onMounted(() => carrd.loadProjects())
   cursor: pointer;
   text-align: left;
 }
+
 .carrd-open-btn:hover {
   text-decoration: underline;
 }
@@ -545,6 +565,7 @@ onMounted(() => carrd.loadProjects())
   gap: 2px;
   min-width: 0;
 }
+
 .carrd-crumb {
   background: none;
   border: 0;
@@ -555,14 +576,17 @@ onMounted(() => carrd.loadProjects())
   cursor: pointer;
   border-radius: 0;
 }
+
 .carrd-crumb:hover:not(:disabled) {
   color: var(--highlight);
 }
+
 .carrd-crumb.is-current {
   color: var(--highlight);
   font-weight: 600;
   cursor: default;
 }
+
 .carrd-crumb-sep {
   color: var(--text-muted);
   opacity: 0.6;
@@ -575,17 +599,20 @@ onMounted(() => carrd.loadProjects())
   align-items: center;
   gap: 8px;
 }
+
 /* Sub-folder chips are plain `.chip`s; the delete affordance is `.chip-del`
    (only its left margin is local). The "New Folder" chip is a `.chip` with a
    dashed, muted outline. */
 .carrd-dir-del {
   margin-left: 2px;
 }
+
 .carrd-dir-add {
   color: var(--text-muted);
   border-style: dashed;
   border-color: var(--panel-raised-bg);
 }
+
 .carrd-dir-input {
   width: 160px;
 }
@@ -595,6 +622,7 @@ onMounted(() => carrd.loadProjects())
   width: 100%;
   object-fit: contain;
 }
+
 /* Audio (and other non-previewable) files show a centered file-type glyph. */
 .carrd-file-icon {
   display: flex;
@@ -603,14 +631,17 @@ onMounted(() => carrd.loadProjects())
   color: var(--text-muted);
   font-size: 2.6rem;
 }
+
 /* Inline audio player in the card body. */
 .carrd-audio {
   width: 100%;
   height: 32px;
   margin-top: 2px;
 }
+
 /* Delete control sits in the thumbnail corner so the caption row has space for
    a full-width Copy URL button (which would otherwise wrap in a narrow cell). */
+
 /* Full-width copy action under each media card. Fill + hover come from the
    `.btn-view` intent; only the full-width layout is component-specific. */
 </style>

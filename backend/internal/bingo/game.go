@@ -1,6 +1,7 @@
 package bingo
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"math"
@@ -107,7 +108,7 @@ func (g *Service) invalidateStateCache() {
 }
 
 // GameDetails returns the cached game details string, loading from DB on first call.
-func (g *Service) GameDetails() (string, error) {
+func (g *Service) GameDetails(ctx context.Context) (string, error) {
 	g.detailsMu.RLock()
 	if g.detailsReady {
 		v := g.detailsCache
@@ -121,7 +122,7 @@ func (g *Service) GameDetails() (string, error) {
 	if g.detailsReady {
 		return g.detailsCache, nil
 	}
-	v, err := g.store.GetSetting("game_details")
+	v, err := g.store.GetSetting(ctx, "game_details")
 	if err != nil {
 		return "", err
 	}
@@ -131,8 +132,8 @@ func (g *Service) GameDetails() (string, error) {
 }
 
 // SetGameDetails updates the cached game details and persists to DB.
-func (g *Service) SetGameDetails(details string) error {
-	if err := g.store.SetSetting("game_details", details); err != nil {
+func (g *Service) SetGameDetails(ctx context.Context, details string) error {
+	if err := g.store.SetSetting(ctx, "game_details", details); err != nil {
 		return err
 	}
 	g.detailsMu.Lock()
@@ -143,7 +144,7 @@ func (g *Service) SetGameDetails(details string) error {
 }
 
 // cachedCards returns all cards, loading from the DB on first call.
-func (g *Service) cachedCards() ([]model.Card, error) {
+func (g *Service) cachedCards(ctx context.Context) ([]model.Card, error) {
 	g.cacheMu.RLock()
 	if g.cacheReady {
 		cards := g.cardCache
@@ -161,7 +162,7 @@ func (g *Service) cachedCards() ([]model.Card, error) {
 		return g.cardCache, nil
 	}
 
-	cards, err := g.store.ListCards()
+	cards, err := g.store.ListCards(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -184,12 +185,12 @@ func (g *Service) cachedCards() ([]model.Card, error) {
 // Start begins a new game with the given pattern IDs. Any currently active game
 // is ended first. auto/autoInterval seed the automatic-draw controls for the new
 // game (interval clamped to a sane range); pass auto=false to start a manual game.
-func (g *Service) Start(patternIDs []int, auto bool, autoInterval int) (*model.BingoGameState, error) {
+func (g *Service) Start(ctx context.Context, patternIDs []int, auto bool, autoInterval int) (*model.BingoGameState, error) {
 	g.opMu.Lock()
 	defer g.opMu.Unlock()
 
 	// Read the selected patterns to snapshot (a read, so outside the write tx).
-	patterns, err := g.store.GetPatternsByIDs(patternIDs)
+	patterns, err := g.store.GetPatternsByIDs(ctx, patternIDs)
 	if err != nil {
 		return nil, err
 	}
@@ -209,10 +210,14 @@ func (g *Service) Start(patternIDs []int, auto bool, autoInterval int) (*model.B
 	// single transaction, so a partial failure can't leave a new active game with
 	// an incomplete pattern set (which miscalibrates winner detection). The
 	// createdAt timestamp (for the admin elapsed-time clock) comes back with it.
-	gameID, createdAt, err := g.store.StartGame(snapshots)
+	gameID, createdAt, err := g.store.StartGame(ctx, snapshots)
 	if err != nil {
 		return nil, err
 	}
+	// The game exists from here on, so its state is read whether or not the caller
+	// is still waiting: a canceled read would leave a started game that no client
+	// was ever told about.
+	ctx = context.WithoutCancel(ctx)
 	g.invalidateStateCache()
 	// A fresh game re-enables the reaction, zeroes the counter, and forgets every
 	// card's cooldown, so the on/off toggle and "Yoevers: N" count are per-game.
@@ -220,7 +225,7 @@ func (g *Service) Start(patternIDs []int, auto bool, autoInterval int) (*model.B
 	// Seed the automatic-draw controls for this game (off unless started with auto).
 	g.resetAuto(auto, autoInterval)
 
-	state, err := g.buildGameState(gameID, createdAt)
+	state, err := g.buildGameState(ctx, gameID, createdAt)
 	if err != nil {
 		return nil, err
 	}
@@ -235,10 +240,10 @@ func (g *Service) Start(patternIDs []int, auto bool, autoInterval int) (*model.B
 // (a card not already in the winners cache) - the caller uses it to switch off the
 // automatic-draw loop the moment a winner is recognized. Returns (nil, false, nil)
 // when there is no active game or all callable numbers have been drawn.
-func (g *Service) Draw() (*DrawResult, bool, error) {
+func (g *Service) Draw(ctx context.Context) (*DrawResult, bool, error) {
 	g.opMu.Lock()
 	defer g.opMu.Unlock()
-	return g.drawLocked()
+	return g.drawLocked(ctx)
 }
 
 // DrawAuto is Draw for the automatic loop: it draws only while auto is still
@@ -248,18 +253,18 @@ func (g *Service) Draw() (*DrawResult, bool, error) {
 // serialized against the draw and reliably prevents the stray auto-draw. Returns
 // (nil, false, nil) when auto is off, the same signal the scheduler treats as
 // "park" (like an exhausted or absent game).
-func (g *Service) DrawAuto() (*DrawResult, bool, error) {
+func (g *Service) DrawAuto(ctx context.Context) (*DrawResult, bool, error) {
 	g.opMu.Lock()
 	defer g.opMu.Unlock()
 	if enabled, _ := g.AutoState(); !enabled {
 		return nil, false, nil
 	}
-	return g.drawLocked()
+	return g.drawLocked(ctx)
 }
 
 // drawLocked is the shared draw body; the caller must already hold opMu.
-func (g *Service) drawLocked() (*DrawResult, bool, error) {
-	game, err := g.store.GetActiveGame()
+func (g *Service) drawLocked(ctx context.Context) (*DrawResult, bool, error) {
+	game, err := g.store.GetActiveGame(ctx)
 	if err != nil {
 		return nil, false, err
 	}
@@ -267,12 +272,12 @@ func (g *Service) drawLocked() (*DrawResult, bool, error) {
 		return nil, false, nil
 	}
 
-	called, err := g.store.GetCalledNumbers(game.ID)
+	called, err := g.store.GetCalledNumbers(ctx, game.ID)
 	if err != nil {
 		return nil, false, err
 	}
 
-	patterns, err := g.store.GetGamePatterns(game.ID)
+	patterns, err := g.store.GetGamePatterns(ctx, game.ID)
 	if err != nil {
 		return nil, false, err
 	}
@@ -296,10 +301,15 @@ func (g *Service) drawLocked() (*DrawResult, bool, error) {
 		return nil, false, nil
 	}
 
-	number := remaining[rand.IntN(len(remaining))]
+	number := remaining[rand.IntN(len(remaining))] //nolint:gosec // a bingo draw, not a secret: math/rand/v2 on purpose
 	order := len(called) + 1
 
-	if err := g.store.AddCalledNumber(game.ID, number, order); err != nil {
+	// Recording the number and caching the winners it makes are one draw. Detached
+	// so a caller that goes away between the two can't leave a number called whose
+	// winners were never computed; the reads above stay cancelable, since nothing
+	// has been written yet.
+	ctx = context.WithoutCancel(ctx)
+	if err := g.store.AddCalledNumber(ctx, game.ID, number, order); err != nil {
 		return nil, false, err
 	}
 	called = append(called, number)
@@ -307,11 +317,11 @@ func (g *Service) drawLocked() (*DrawResult, bool, error) {
 
 	// Compute and cache winners (skip already-known winners).
 	existingWinners := parseWinnersCache(game.WinnersCache)
-	winners, err := g.computeWinners(calledSet, patterns, existingWinners)
+	winners, err := g.computeWinners(ctx, calledSet, patterns, existingWinners)
 	if err != nil {
 		return nil, false, err
 	}
-	if err := g.store.UpdateWinnersCache(game.ID, winners); err != nil {
+	if err := g.store.UpdateWinnersCache(ctx, game.ID, winners); err != nil {
 		return nil, false, err
 	}
 	newWinner := len(winners) > len(existingWinners)
@@ -339,11 +349,11 @@ func (g *Service) drawLocked() (*DrawResult, bool, error) {
 }
 
 // End ends the currently active game. Returns true if a game was ended.
-func (g *Service) End() (bool, error) {
+func (g *Service) End(ctx context.Context) (bool, error) {
 	g.opMu.Lock()
 	defer g.opMu.Unlock()
 
-	game, err := g.store.GetActiveGame()
+	game, err := g.store.GetActiveGame(ctx)
 	if err != nil {
 		return false, err
 	}
@@ -353,13 +363,13 @@ func (g *Service) End() (bool, error) {
 	g.invalidateStateCache()
 	// A game with auto running must stop drawing the moment it ends.
 	g.DisableAuto()
-	return true, g.store.EndGame(game.ID)
+	return true, g.store.EndGame(ctx, game.ID)
 }
 
 // CurrentState returns the active game state and cached winners.
 // Returns (nil, empty winners, nil) when no game is active.
-func (g *Service) CurrentState() (*model.BingoGameState, []string, error) {
-	game, err := g.store.GetActiveGame()
+func (g *Service) CurrentState(ctx context.Context) (*model.BingoGameState, []string, error) {
+	game, err := g.store.GetActiveGame(ctx)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -382,7 +392,7 @@ func (g *Service) CurrentState() (*model.BingoGameState, []string, error) {
 	}
 	g.stateMu.RUnlock()
 
-	state, err := g.buildGameState(game.ID, game.CreatedAt)
+	state, err := g.buildGameState(ctx, game.ID, game.CreatedAt)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -438,8 +448,8 @@ func (g *Service) SetYoeverEnabled(on bool) {
 // same card must not have triggered within the cooldown window - in which case
 // it returns retryAfter > 0 (and does not count the trigger). `now` is passed in
 // so tests can control the clock. A non-positive cooldown disables the throttle.
-func (g *Service) TriggerYoever(cardID string, now time.Time, cooldown time.Duration) (count int, retryAfter time.Duration, err error) {
-	game, err := g.store.GetActiveGame()
+func (g *Service) TriggerYoever(ctx context.Context, cardID string, now time.Time, cooldown time.Duration) (count int, retryAfter time.Duration, err error) {
+	game, err := g.store.GetActiveGame(ctx)
 	if err != nil {
 		return 0, 0, err
 	}
@@ -623,12 +633,12 @@ func (g *Service) setStateCache(gameID int64, state *model.BingoGameState) {
 // buildGameState assembles a GameState from the database for the given game ID.
 // Fetches called numbers and pattern snapshots. The createdAt timestamp is
 // passed in by the caller (the game's start time); it may be empty.
-func (g *Service) buildGameState(gameID int64, createdAt string) (*model.BingoGameState, error) {
-	called, err := g.store.GetCalledNumbers(gameID)
+func (g *Service) buildGameState(ctx context.Context, gameID int64, createdAt string) (*model.BingoGameState, error) {
+	called, err := g.store.GetCalledNumbers(ctx, gameID)
 	if err != nil {
 		return nil, err
 	}
-	patterns, err := g.store.GetGamePatterns(gameID)
+	patterns, err := g.store.GetGamePatterns(ctx, gameID)
 	if err != nil {
 		return nil, err
 	}
@@ -644,12 +654,12 @@ func (g *Service) buildGameState(gameID int64, createdAt string) (*model.BingoGa
 // computeWinners scans all cards against the active patterns and called numbers,
 // returning the full list of winning card IDs. Skips cards already in existingWinners
 // to avoid redundant checks on each draw.
-func (g *Service) computeWinners(calledSet map[int]bool, patterns []model.BingoGamePattern, existingWinners []string) ([]string, error) {
+func (g *Service) computeWinners(ctx context.Context, calledSet map[int]bool, patterns []model.BingoGamePattern, existingWinners []string) ([]string, error) {
 	if len(calledSet) == 0 || len(patterns) == 0 {
 		return []string{}, nil
 	}
 
-	cards, err := g.cachedCards()
+	cards, err := g.cachedCards(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -726,12 +736,12 @@ func HalftimeThreshold(patterns []model.BingoGamePattern) int {
 
 // MatchesPattern checks if a card matches a win pattern given the called numbers.
 func MatchesPattern(board [][]int, pattern [][]bool, calledSet map[int]bool) bool {
-	for r := 0; r < 5; r++ {
+	for r := range 5 {
 		if r >= len(board) || r >= len(pattern) {
 			return false
 		}
-		for c := 0; c < 5; c++ {
-			if c >= len(board[r]) || c >= len(pattern[r]) {
+		for c := range 5 {
+			if c >= len(board[r]) || c >= len(pattern[r]) { //nolint:gosec // r is checked against both slices just above
 				return false
 			}
 			if !pattern[r][c] {
@@ -741,7 +751,7 @@ func MatchesPattern(board [][]int, pattern [][]bool, calledSet map[int]bool) boo
 			if r == 2 && c == 2 {
 				continue
 			}
-			if !calledSet[board[r][c]] {
+			if !calledSet[board[r][c]] { //nolint:gosec // r and c are checked against both slices above
 				return false
 			}
 		}

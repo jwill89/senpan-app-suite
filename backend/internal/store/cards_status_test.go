@@ -15,17 +15,17 @@ func validBoard() [][]int {
 
 func TestCardProtectionAndDeleteAll(t *testing.T) {
 	s := newTestStore(t)
-	if err := s.SaveCard("KEEP01", validBoard()); err != nil {
+	if err := s.SaveCard(t.Context(), "KEEP01", validBoard()); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.SaveCard("GONE01", validBoard()); err != nil {
+	if err := s.SaveCard(t.Context(), "GONE01", validBoard()); err != nil {
 		t.Fatal(err)
 	}
-	if ok, err := s.SetCardProtected("KEEP01", true); err != nil || !ok {
+	if ok, err := s.SetCardProtected(t.Context(), "KEEP01", true); err != nil || !ok {
 		t.Fatalf("SetCardProtected: ok=%v err=%v", ok, err)
 	}
 
-	deleted, err := s.DeleteAllCards()
+	deleted, err := s.DeleteAllCards(t.Context())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -33,14 +33,14 @@ func TestCardProtectionAndDeleteAll(t *testing.T) {
 		t.Fatalf("DeleteAllCards deleted = %v; want [GONE01]", deleted)
 	}
 
-	kept, err := s.GetCard("KEEP01")
+	kept, err := s.GetCard(t.Context(), "KEEP01")
 	if err != nil || kept == nil {
 		t.Fatalf("protected card missing after Delete All: %v", err)
 	}
 	if !kept.Protected {
 		t.Error("surviving card should still be Protected")
 	}
-	if gone, _ := s.GetCard("GONE01"); gone != nil {
+	if gone, _ := s.GetCard(t.Context(), "GONE01"); gone != nil {
 		t.Error("unprotected card should have been deleted")
 	}
 }
@@ -48,11 +48,11 @@ func TestCardProtectionAndDeleteAll(t *testing.T) {
 func TestCustomCardLifecycle(t *testing.T) {
 	s := newTestStore(t)
 	board := validBoard()
-	if err := s.CreateCustomCard("CUST01", board, "Aria Nightsong", "Gilgamesh"); err != nil {
+	if err := s.CreateCustomCard(t.Context(), "CUST01", board, "Aria Nightsong", "Gilgamesh"); err != nil {
 		t.Fatal(err)
 	}
 
-	c, err := s.GetCard("CUST01")
+	c, err := s.GetCard(t.Context(), "CUST01")
 	if err != nil || c == nil {
 		t.Fatalf("GetCard: %v", err)
 	}
@@ -64,39 +64,39 @@ func TestCustomCardLifecycle(t *testing.T) {
 	}
 
 	// A matching board is detected as a duplicate.
-	if id, dup, _ := s.FindDuplicateBoard(board); !dup || id != "CUST01" {
+	if id, dup, _ := s.FindDuplicateBoard(t.Context(), board); !dup || id != "CUST01" {
 		t.Errorf("FindDuplicateBoard = %q,%v; want CUST01,true", id, dup)
 	}
 
 	// Approving flips it to approved + protected.
-	if ok, err := s.ApproveCustomCard("CUST01"); err != nil || !ok {
+	if ok, err := s.ApproveCustomCard(t.Context(), "CUST01"); err != nil || !ok {
 		t.Fatalf("ApproveCustomCard: ok=%v err=%v", ok, err)
 	}
-	c, _ = s.GetCard("CUST01")
+	c, _ = s.GetCard(t.Context(), "CUST01")
 	if c.CustomStatus != "approved" || !c.Protected {
 		t.Errorf("approved custom card = status %q protected %v; want approved / true", c.CustomStatus, c.Protected)
 	}
 
 	// Re-approving a non-pending card is a no-op.
-	if ok, _ := s.ApproveCustomCard("CUST01"); ok {
+	if ok, _ := s.ApproveCustomCard(t.Context(), "CUST01"); ok {
 		t.Error("re-approving an already-approved card should be a no-op")
 	}
 
 	// An approved card is auto-protected, so it survives Delete All.
-	if deleted, _ := s.DeleteAllCards(); len(deleted) != 0 {
+	if deleted, _ := s.DeleteAllCards(t.Context()); len(deleted) != 0 {
 		t.Errorf("Delete All removed an approved custom card: %v", deleted)
 	}
 }
 
 func TestFindDuplicateBoardDistinct(t *testing.T) {
 	s := newTestStore(t)
-	if err := s.SaveCard("AAA001", validBoard()); err != nil {
+	if err := s.SaveCard(t.Context(), "AAA001", validBoard()); err != nil {
 		t.Fatal(err)
 	}
 	// A different board (swap two numbers in the B column) is not a duplicate.
 	other := validBoard()
 	other[0][0], other[1][0] = other[1][0], other[0][0]
-	if _, dup, _ := s.FindDuplicateBoard(other); dup {
+	if _, dup, _ := s.FindDuplicateBoard(t.Context(), other); dup {
 		t.Error("a distinct board should not be flagged as a duplicate")
 	}
 }

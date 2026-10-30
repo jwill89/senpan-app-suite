@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
@@ -91,29 +92,29 @@ func wsUpgradeToken(r *http.Request) string {
 // userFromToken resolves the active account bearing the request's Authorization
 // Bearer PAT (REST routes), or nil when absent/unmatched/inactive.
 func (s *Server) userFromToken(r *http.Request) *model.User {
-	return s.userForToken(bearerToken(r))
+	return s.userForToken(r.Context(), bearerToken(r))
 }
 
 // wsUserFromToken resolves the active account for a WebSocket upgrade, honoring
 // the `?token=` query fallback in addition to the Authorization header.
 func (s *Server) wsUserFromToken(r *http.Request) *model.User {
-	return s.userForToken(wsUpgradeToken(r))
+	return s.userForToken(r.Context(), wsUpgradeToken(r))
 }
 
 // userForToken resolves the active account for a raw PAT string, or nil when the
 // token is empty, matches nothing, or the owning account is inactive. On a hit it
 // best-effort stamps the token's last-used time (throttled in the store) so the
 // account UI can show when the token was last exercised.
-func (s *Server) userForToken(tok string) *model.User {
+func (s *Server) userForToken(ctx context.Context, tok string) *model.User {
 	if tok == "" {
 		return nil
 	}
 	hash := hashToken(tok)
-	u, err := s.store.GetUserByTokenHash(hash)
+	u, err := s.store.GetUserByTokenHash(ctx, hash)
 	if err != nil || u == nil {
 		return nil
 	}
-	_ = s.store.TouchUserToken(hash)
+	_ = s.store.TouchUserToken(ctx, hash)
 	return u
 }
 
@@ -130,7 +131,7 @@ func (s *Server) handleAccountTokenInfo(w http.ResponseWriter, r *http.Request) 
 	if !ok {
 		return
 	}
-	info, err := s.store.GetUserTokenInfo(user.ID)
+	info, err := s.store.GetUserTokenInfo(r.Context(), user.ID)
 	if err != nil {
 		writeInternalError(w, "get token info", err)
 		return
@@ -157,11 +158,11 @@ func (s *Server) handleAccountTokenGenerate(w http.ResponseWriter, r *http.Reque
 		writeInternalError(w, "generate token", err)
 		return
 	}
-	if err := s.store.UpsertUserToken(user.ID, hash, prefix); err != nil {
+	if err := s.store.UpsertUserToken(r.Context(), user.ID, hash, prefix); err != nil {
 		writeInternalError(w, "store token", err)
 		return
 	}
-	info, err := s.store.GetUserTokenInfo(user.ID)
+	info, err := s.store.GetUserTokenInfo(r.Context(), user.ID)
 	if err != nil {
 		writeInternalError(w, "load token info", err)
 		return
@@ -185,7 +186,7 @@ func (s *Server) handleAccountTokenRevoke(w http.ResponseWriter, r *http.Request
 	if !ok {
 		return
 	}
-	deleted, err := s.store.DeleteUserToken(user.ID)
+	deleted, err := s.store.DeleteUserToken(r.Context(), user.ID)
 	if err != nil {
 		writeInternalError(w, "revoke token", err)
 		return

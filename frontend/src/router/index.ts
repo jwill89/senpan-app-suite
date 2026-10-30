@@ -9,6 +9,7 @@
  *   /play/:cardId             -> Player board (loads the board by id)
  *   /raffles                  -> Public raffle list
  *   /raffles/:id              -> Public raffle detail (loads raffle by id)
+ *   /festival/:id             -> Festival dashboard (map, stamp rally, garapon, raffles)
  *   /admin/login              -> Admin login
  *   /admin                    -> redirect -> /admin/bingo/game
  *   /admin/bingo/game         -> Admin: Current/New Game
@@ -225,6 +226,15 @@ const routes: RouteRecordRaw[] = [
     component: () => import('@/views/FestivalMapView.vue'),
     props: true,
   },
+  // The festival dashboard: the map, the stamp rally, the garapon and the raffles
+  // filed under one festival, on one page, for one visitor. Linked by the same
+  // shortcode-or-id segment as the map page.
+  {
+    path: '/festival/:id',
+    name: 'festival-dashboard',
+    component: () => import('@/views/FestivalDashboardView.vue'),
+    props: true,
+  },
   // The same map with none of our page around it, for an <iframe> on another
   // site (the snippet the admin map screen hands out). `meta.embed` is what tells
   // the shell to leave off the site footer - the host page has its own.
@@ -297,6 +307,7 @@ const routes: RouteRecordRaw[] = [
 export const router = createRouter({
   history: createWebHistory(),
   routes,
+  // eslint-disable-next-line @typescript-eslint/no-deprecated -- its only replacement (ScrollRestoration) lives in vue-router/experimental; keep the stable option until that API graduates
   scrollBehavior() {
     return { top: 0 }
   },

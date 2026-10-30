@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"log/slog"
 	"mime/multipart"
 	"net/http"
@@ -129,7 +130,7 @@ func (s *Server) handleFontsList(w http.ResponseWriter, r *http.Request) {
 	}
 
 	bucket := fontTokenBucket(time.Now())
-	metas := s.fontMetaMap()
+	metas := s.fontMetaMap(r.Context())
 	groups := s.fontGroupList()
 	fonts := make([]model.Font, 0, len(groups))
 	for _, g := range groups {
@@ -151,7 +152,7 @@ func (s *Server) handleFontsList(w http.ResponseWriter, r *http.Request) {
 				Type:     fontTypeLabels[strings.ToLower(filepath.Ext(name))],
 				Size:     info.Size(),
 				Modified: modified,
-				Token:    s.fontFileToken(name, bucket),
+				Token:    s.fontFileToken(r.Context(), name, bucket),
 			})
 		}
 		if size, ok := s.fontDerivativeInfo(g.Key); ok {
@@ -161,10 +162,10 @@ func (s *Server) handleFontsList(w http.ResponseWriter, r *http.Request) {
 				Converted: true,
 				Size:      size,
 				Modified:  fontModTime(s.derivedFontPath(g.Key)),
-				Token:     s.fontDerivedToken(g.Key, bucket),
+				Token:     s.fontDerivedToken(r.Context(), g.Key, bucket),
 			})
 		}
-		servedToken, servedType := s.servedFontVariant(g, m, bucket)
+		servedToken, servedType := s.servedFontVariant(r.Context(), g, m, bucket)
 		origins := m.Origins
 		if origins == nil {
 			origins = []string{}
@@ -209,7 +210,7 @@ func (s *Server) handleFontDelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := os.Remove(filepath.Join(s.fontsDir(), name)); err != nil {
+	if err := os.Remove(filepath.Join(s.fontsDir(), name)); err != nil { //nolint:gosec // name passed safeFontName above
 		if os.IsNotExist(err) {
 			writeError(w, http.StatusNotFound, "Font file not found")
 			return
@@ -221,8 +222,10 @@ func (s *Server) handleFontDelete(w http.ResponseWriter, r *http.Request) {
 	if err := s.refreshGroupDerivativeByKey(key); err != nil {
 		slog.Warn("refresh font conversion after delete", "font", key, "error", err)
 	}
+	// The file is gone, so its metadata goes with it even if the client has: the
+	// two must not disagree. Detached for that reason.
 	if _, stillExists := s.fontGroupByBase(key); !stillExists {
-		s.deleteFontMetaKey(key)
+		s.deleteFontMetaKey(context.WithoutCancel(r.Context()), key)
 	}
 	w.WriteHeader(http.StatusNoContent)
 }
@@ -265,7 +268,7 @@ func (s *Server) handleFontRename(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// Source must exist...
-	if _, err := os.Stat(filepath.Join(dir, name)); err != nil {
+	if _, err := os.Stat(filepath.Join(dir, name)); err != nil { //nolint:gosec // name passed safeFontName above
 		writeError(w, http.StatusNotFound, "Font file not found")
 		return
 	}
@@ -275,22 +278,30 @@ func (s *Server) handleFontRename(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusConflict, "A font file named \""+newName+"\" already exists")
 		return
 	}
+	// The check below guards a file rename that no context can stop, and its reads
+	// answer "nothing stored" on any error - so they, and the metadata move after
+	// the rename, run detached. A canceled read must not wave a colliding rename
+	// through.
+	ctx := context.WithoutCancel(r.Context())
 	// A rename also changes the font's CSS family when it has no explicit one, so
 	// apply the same uniqueness rule the family edit does - otherwise renaming a
 	// font onto another's name collides in the served kit instead of being refused.
 	newKeyForCheck := fontGroupKey(newName)
-	if newFamily := fontFamilyFor(fontBase(newName), s.fontMetaMap()[newKeyForCheck]); newFamily != "" &&
-		s.familyTakenBy(newFamily, newKeyForCheck) {
+	if newFamily := fontFamilyFor(fontBase(newName), s.fontMetaMap(ctx)[newKeyForCheck]); newFamily != "" &&
+		s.familyTakenBy(ctx, newFamily, newKeyForCheck) {
 		writeError(w, http.StatusConflict, "Another font is already named \""+newFamily+"\"")
 		return
 	}
-	if err := os.Rename(filepath.Join(dir, name), dst); err != nil {
+	if err := os.Rename(filepath.Join(dir, name), dst); err != nil { //nolint:gosec // both names passed safeFontName above
 		writeInternalError(w, "rename font", err)
 		return
 	}
 
 	oldKey, newKey := fontGroupKey(name), fontGroupKey(newName)
-	s.renameFontMetaKey(oldKey, newKey)
+	// The file has moved; its metadata follows it whether or not the client is
+	// still waiting, or the font would come back under its new name without its
+	// family or its allowed sites.
+	s.renameFontMetaKey(ctx, oldKey, newKey)
 	for _, key := range []string{oldKey, newKey} {
 		if err := s.refreshGroupDerivativeByKey(key); err != nil {
 			slog.Warn("refresh font conversion after rename", "font", key, "error", err)
@@ -328,8 +339,8 @@ type fontFamilyRequest struct {
 // Shared by the family edit AND the file rename: a rename changes the DERIVED
 // family (it falls back to the filename base), so renaming a font onto another
 // font's name produced the same collision the family edit already refused.
-func (s *Server) familyTakenBy(family, exceptKey string) bool {
-	metas := s.fontMetaMap()
+func (s *Server) familyTakenBy(ctx context.Context, family, exceptKey string) bool {
+	metas := s.fontMetaMap(ctx)
 	for _, other := range s.fontGroupList() {
 		if other.Key == exceptKey {
 			continue
@@ -372,7 +383,7 @@ func (s *Server) handleFontFamilyPatch(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusBadRequest, "Font name may not contain quotes, backslashes, control characters, or any of { } ; < >")
 			return
 		}
-		if family != "" && s.familyTakenBy(family, g.Key) {
+		if family != "" && s.familyTakenBy(r.Context(), family, g.Key) {
 			writeError(w, http.StatusConflict, "Another font is already named \""+family+"\"")
 			return
 		}
@@ -420,7 +431,7 @@ func (s *Server) handleFontFamilyPatch(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	err = s.updateFontMeta(g.Key, func(m *fontMeta) {
+	err = s.updateFontMeta(r.Context(), g.Key, func(m *fontMeta) {
 		if req.Family != nil {
 			// The base name spelled out explicitly is just the default.
 			if strings.EqualFold(family, g.Base) {
@@ -466,7 +477,8 @@ func (s *Server) handleFontFamilyDelete(w http.ResponseWriter, r *http.Request) 
 	if err := os.Remove(s.derivedFontPath(g.Key)); err != nil && !os.IsNotExist(err) {
 		slog.Warn("remove font conversion", "font", g.Key, "error", err)
 	}
-	s.deleteFontMetaKey(g.Key)
+	// The files are gone; detached so their metadata always goes with them.
+	s.deleteFontMetaKey(context.WithoutCancel(r.Context()), g.Key)
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -508,7 +520,7 @@ func (s *Server) handleFontUpload(w http.ResponseWriter, r *http.Request) {
 			dst := filepath.Join(destDir, name)
 			// Reject if a file with this name already exists - an in-use font must
 			// be deleted first, never silently overwritten.
-			if _, err := os.Stat(dst); err == nil {
+			if _, err := os.Stat(dst); err == nil { //nolint:gosec // name passed safeFontName above
 				return name, "Already exists - delete the existing file first"
 			}
 			if err := saveMultipartFile(header, dst); err != nil {

@@ -9,7 +9,7 @@
  * (e.g. bad/expired id) it redirects home. The WebSocket connect/disconnect is
  * driven by App.vue off the active route + loaded card.
  */
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onMounted, ref, useTemplateRef, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import BingoBoard from '@/components/common/BingoBoard.vue'
 import CalledNumbers from '@/components/common/CalledNumbers.vue'
@@ -42,7 +42,7 @@ const ui = useUiStore()
 const yoever = useYoeverStore()
 
 /** Ref to the BingoBoard component so we can capture its `.board-wrap` root. */
-const boardRef = ref<{ $el?: HTMLElement } | null>(null)
+const boardRef = useTemplateRef<{ $el?: HTMLElement }>('boardRef')
 /** True while the card image is being generated (drives the export button). */
 const exporting = ref(false)
 
@@ -82,7 +82,7 @@ async function exportCard(): Promise<void> {
 
 /** Loads the board for the current cardId param if not already loaded. */
 async function ensureLoaded(id: string): Promise<void> {
-  if (player.playerCard && player.playerCard.id === id) return
+  if (player.playerCard?.id === id) return
   const details = await player.loadBoardById(id)
   if (details === null && !player.playerCard) {
     // Failed to load (bad id) -> bounce home with the error toast.
@@ -164,7 +164,7 @@ function onYoeverSoundToggle(): void {
 <template>
   <div>
     <div class="topbar">
-      <button class="btn-neutral btn-sm" @click="leave">
+      <button type="button" class="btn-neutral btn-sm" @click="leave">
         <font-awesome-icon :icon="['fas', 'arrow-left']" /> Leave
       </button>
       <div class="topbar-id">
@@ -210,6 +210,7 @@ function onYoeverSoundToggle(): void {
         <!-- Stamp Settings & Game Controls (collapsible - set once, then tuck away) -->
         <div class="stamp-customization">
           <button
+            type="button"
             class="stamp-custom-toggle"
             :aria-expanded="showStampCustomization"
             @click="showStampCustomization = !showStampCustomization"
@@ -282,6 +283,7 @@ function onYoeverSoundToggle(): void {
             <!-- Clear / Save / It's Yoever action bar -->
             <div class="player-actions">
               <button
+                type="button"
                 class="btn-caution btn-sm"
                 title="Clear all stamps on the board"
                 @click="player.clearAllStamps()"
@@ -291,6 +293,7 @@ function onYoeverSoundToggle(): void {
               </button>
 
               <button
+                type="button"
                 class="btn-view btn-sm"
                 :disabled="exporting"
                 :title="exporting ? 'Saving card image...' : 'Save card as image'"
@@ -368,7 +371,7 @@ function onYoeverSoundToggle(): void {
             </p>
             <br />
             <p class="game-over-subtitle">The next game will begin soon - hang tight!</p>
-            <button class="btn-action game-over-discord-btn" @click="openDiscord">
+            <button type="button" class="btn-action game-over-discord-btn" @click="openDiscord">
               <font-awesome-icon :icon="['fab', 'discord']" /> Join the Discord Server
             </button>
           </div>
@@ -390,7 +393,9 @@ function onYoeverSoundToggle(): void {
         It's time for a half-time minigame! Please check your in-game chat for details and
         instructions!
       </p>
-      <button class="btn-neutral" @click="player.showMinigameModal = false">Got it!</button>
+      <button type="button" class="btn-neutral" @click="player.showMinigameModal = false">
+        Got it!
+      </button>
     </ModalOverlay>
 
     <!-- Konami-code easter egg (clears the board, on purpose) -->

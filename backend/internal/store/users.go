@@ -1,6 +1,7 @@
 package store
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"errors"
@@ -23,8 +24,8 @@ var ErrUsernameTaken = errors.New("username already taken")
 // CreateUser inserts a new account. New accounts are inactive and non-admin
 // with no page permissions; an admin must activate and grant access. Returns
 // ErrUsernameTaken if the username is already in use.
-func (s *Store) CreateUser(username, passwordHash string) (*model.User, error) {
-	res, err := s.db.Exec(
+func (s *Store) CreateUser(ctx context.Context, username, passwordHash string) (*model.User, error) {
+	res, err := s.db.ExecContext(ctx,
 		`INSERT INTO users (username, password_hash, is_admin, is_active, permissions)
 		 VALUES (?, ?, 0, 0, '[]')`,
 		username, passwordHash,
@@ -37,23 +38,23 @@ func (s *Store) CreateUser(username, passwordHash string) (*model.User, error) {
 		return nil, err
 	}
 	id, _ := res.LastInsertId()
-	return s.GetUserByID(id)
+	return s.GetUserByID(ctx, id)
 }
 
 // GetUserByID retrieves a user by id. Returns nil if not found.
-func (s *Store) GetUserByID(id int64) (*model.User, error) {
-	return s.scanUser(s.db.QueryRow(
+func (s *Store) GetUserByID(ctx context.Context, id int64) (*model.User, error) {
+	return s.scanUser(s.db.QueryRowContext(ctx,
 		`SELECT id, username, is_admin, is_active, permissions, created_at, COALESCE(last_login_at, ''), COALESCE(password_epoch, 0)
 		 FROM users WHERE id = ?`, id))
 }
 
 // GetUserByUsername retrieves a user plus its password hash, used by login.
 // Returns (nil, "", nil) if no such user exists.
-func (s *Store) GetUserByUsername(username string) (*model.User, string, error) {
+func (s *Store) GetUserByUsername(ctx context.Context, username string) (*model.User, string, error) {
 	var u model.User
 	var permsJSON, hash string
 	var isAdmin, isActive int
-	err := s.db.QueryRow(
+	err := s.db.QueryRowContext(ctx,
 		`SELECT id, username, password_hash, is_admin, is_active, permissions, created_at, COALESCE(last_login_at, ''), COALESCE(password_epoch, 0)
 		 FROM users WHERE username = ?`, username).
 		Scan(&u.ID, &u.Username, &hash, &isAdmin, &isActive, &permsJSON, &u.CreatedAt, &u.LastLoginAt, &u.PasswordEpoch)
@@ -70,8 +71,8 @@ func (s *Store) GetUserByUsername(username string) (*model.User, string, error) 
 }
 
 // ListUsers returns all users ordered by username (no password hashes).
-func (s *Store) ListUsers() ([]model.User, error) {
-	rows, err := s.db.Query(
+func (s *Store) ListUsers(ctx context.Context) ([]model.User, error) {
+	rows, err := s.db.QueryContext(ctx,
 		`SELECT id, username, is_admin, is_active, permissions, created_at, COALESCE(last_login_at, '')
 		 FROM users ORDER BY username`)
 	if err != nil {
@@ -96,9 +97,9 @@ func (s *Store) ListUsers() ([]model.User, error) {
 }
 
 // UserExists reports whether an account with the given username exists.
-func (s *Store) UserExists(username string) (bool, error) {
+func (s *Store) UserExists(ctx context.Context, username string) (bool, error) {
 	var n int
-	err := s.db.QueryRow("SELECT 1 FROM users WHERE username = ?", username).Scan(&n)
+	err := s.db.QueryRowContext(ctx, "SELECT 1 FROM users WHERE username = ?", username).Scan(&n)
 	if errors.Is(err, sql.ErrNoRows) {
 		return false, nil
 	}
@@ -109,26 +110,26 @@ func (s *Store) UserExists(username string) (bool, error) {
 }
 
 // CountUsers returns the total number of accounts.
-func (s *Store) CountUsers() (int, error) {
+func (s *Store) CountUsers(ctx context.Context) (int, error) {
 	var n int
-	err := s.db.QueryRow("SELECT COUNT(*) FROM users").Scan(&n)
+	err := s.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM users").Scan(&n)
 	return n, err
 }
 
 // SetUserActive activates or deactivates an account.
-func (s *Store) SetUserActive(id int64, active bool) error {
-	_, err := s.db.Exec("UPDATE users SET is_active = ? WHERE id = ?", boolToInt(active), id)
+func (s *Store) SetUserActive(ctx context.Context, id int64, active bool) error {
+	_, err := s.db.ExecContext(ctx, "UPDATE users SET is_active = ? WHERE id = ?", boolToInt(active), id)
 	return err
 }
 
 // SetUserAdmin grants or revokes admin (full-access) status.
-func (s *Store) SetUserAdmin(id int64, admin bool) error {
-	_, err := s.db.Exec("UPDATE users SET is_admin = ? WHERE id = ?", boolToInt(admin), id)
+func (s *Store) SetUserAdmin(ctx context.Context, id int64, admin bool) error {
+	_, err := s.db.ExecContext(ctx, "UPDATE users SET is_admin = ? WHERE id = ?", boolToInt(admin), id)
 	return err
 }
 
 // SetUserPermissions replaces a user's page-permission set.
-func (s *Store) SetUserPermissions(id int64, perms []string) error {
+func (s *Store) SetUserPermissions(ctx context.Context, id int64, perms []string) error {
 	if perms == nil {
 		perms = []string{}
 	}
@@ -136,7 +137,7 @@ func (s *Store) SetUserPermissions(id int64, perms []string) error {
 	if err != nil {
 		return fmt.Errorf("marshal permissions: %w", err)
 	}
-	_, err = s.db.Exec("UPDATE users SET permissions = ? WHERE id = ?", string(data), id)
+	_, err = s.db.ExecContext(ctx, "UPDATE users SET permissions = ? WHERE id = ?", string(data), id)
 	return err
 }
 
@@ -145,21 +146,21 @@ func (s *Store) SetUserPermissions(id int64, perms []string) error {
 // statement, so every change/reset invalidates the account's other cookie
 // sessions (currentUser checks the epoch). Callers that want the current session
 // to survive must re-store the new epoch after this returns.
-func (s *Store) SetUserPassword(id int64, passwordHash string) error {
-	_, err := s.db.Exec("UPDATE users SET password_hash = ?, password_epoch = password_epoch + 1 WHERE id = ?", passwordHash, id)
+func (s *Store) SetUserPassword(ctx context.Context, id int64, passwordHash string) error {
+	_, err := s.db.ExecContext(ctx, "UPDATE users SET password_hash = ?, password_epoch = password_epoch + 1 WHERE id = ?", passwordHash, id)
 	return err
 }
 
 // UpdateLastLogin stamps a user's last_login_at with the current UTC time.
 // Called (best-effort) after a successful login.
-func (s *Store) UpdateLastLogin(id int64) error {
-	_, err := s.db.Exec("UPDATE users SET last_login_at = CURRENT_TIMESTAMP WHERE id = ?", id)
+func (s *Store) UpdateLastLogin(ctx context.Context, id int64) error {
+	_, err := s.db.ExecContext(ctx, "UPDATE users SET last_login_at = CURRENT_TIMESTAMP WHERE id = ?", id)
 	return err
 }
 
 // DeleteUser removes an account. Returns true if a row was deleted.
-func (s *Store) DeleteUser(id int64) (bool, error) {
-	res, err := s.db.Exec("DELETE FROM users WHERE id = ?", id)
+func (s *Store) DeleteUser(ctx context.Context, id int64) (bool, error) {
+	res, err := s.db.ExecContext(ctx, "DELETE FROM users WHERE id = ?", id)
 	if err != nil {
 		return false, err
 	}

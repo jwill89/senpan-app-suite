@@ -64,7 +64,7 @@ func TestAnnouncementEditDoesNotRepostSpentOnce(t *testing.T) {
 	// Put it in the state the scheduler leaves after it fires.
 	// The cursor the row currently holds, so the guarded update matches.
 	cur := env.announcementRow(t, id)["next_post_at"].(string)
-	if _, err := env.store.MarkAnnouncementPosted(int64(id), cur, "", false); err != nil {
+	if _, err := env.store.MarkAnnouncementPosted(t.Context(), int64(id), cur, "", false); err != nil {
 		t.Fatalf("MarkAnnouncementPosted: %v", err)
 	}
 	if row := env.announcementRow(t, id); row["active"] != false || row["next_post_at"] != "" {
@@ -104,7 +104,7 @@ func TestAnnouncementEditToFutureStillArms(t *testing.T) {
 	id, fields := env.onceAnnouncement(t, "Reschedule Me", past)
 	// The cursor the row currently holds, so the guarded update matches.
 	cur := env.announcementRow(t, id)["next_post_at"].(string)
-	if _, err := env.store.MarkAnnouncementPosted(int64(id), cur, "", false); err != nil {
+	if _, err := env.store.MarkAnnouncementPosted(t.Context(), int64(id), cur, "", false); err != nil {
 		t.Fatalf("MarkAnnouncementPosted: %v", err)
 	}
 

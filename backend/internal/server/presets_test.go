@@ -10,7 +10,7 @@ import (
 // returns its id, so preset tests have a valid pattern to reference.
 func (e *testEnv) seedPattern(t *testing.T, name string) int64 {
 	t.Helper()
-	id, err := e.store.SavePattern(name, [][]bool{
+	id, err := e.store.SavePattern(t.Context(), name, [][]bool{
 		{true, false, false, false, false},
 		{false, true, false, false, false},
 		{false, false, true, false, false},
@@ -60,7 +60,7 @@ func TestPresets_CreateListUpdateDelete(t *testing.T) {
 	resp = env.putJSON(t, fmt.Sprintf("/api/presets/%d", id), map[string]any{
 		"name": "Renamed", "pattern_ids": []int64{pid},
 	})
-	if resp.StatusCode != 200 {
+	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("update status = %d; want 200", resp.StatusCode)
 	}
 	resp.Body.Close()

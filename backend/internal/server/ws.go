@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"log/slog"
 	"net/http"
 )
@@ -53,14 +54,14 @@ func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 	// open the admin channel and peek (defeating the draw-delay anti-cheat).
 	// The /api/ws route bypasses the session middleware, so load it manually.
 	var isAdmin bool
-	var revalidate func() (active bool, isAdmin bool)
+	var revalidate func(ctx context.Context) (active bool, isAdmin bool)
 	var actor string
 	if cardID != "" {
 		// A player connection must name a card that actually exists. Nothing checked
 		// this, so any string registered a client: an anonymous caller could park
 		// sockets on ids that were never real, and a player whose card was deleted
 		// reconnected to it forever (DisconnectCardClients can only target a live id).
-		exists, err := s.store.CardExists(cardID)
+		exists, err := s.store.CardExists(r.Context(), cardID)
 		if err != nil {
 			writeInternalError(w, "check card for ws", err)
 			return
@@ -100,14 +101,14 @@ func (s *Server) handleWS(w http.ResponseWriter, r *http.Request) {
 		// periodically (see hub writePump) so an account deactivated or deleted
 		// mid-session has its admin socket dropped instead of streaming forever,
 		// and so an admin demoted mid-session stops receiving the log tail.
-		// Uses a context-free lookup by id - the request context is gone once the
-		// upgrade handler returns. Catches deactivation/deletion (the anti-peek
-		// threat: staff revoked during a live game); a browser logout closes its
-		// own socket client-side, and a revoked plugin token is rejected on the
-		// plugin's next reconnect.
+		// Runs under the connection's own context, which the hub hands it - the
+		// request context is gone once the upgrade handler returns. Catches
+		// deactivation/deletion (the anti-peek threat: staff revoked during a live
+		// game); a browser logout closes its own socket client-side, and a revoked
+		// plugin token is rejected on the plugin's next reconnect.
 		id := user.ID
-		revalidate = func() (bool, bool) {
-			u, err := s.store.GetUserByID(id)
+		revalidate = func(ctx context.Context) (bool, bool) {
+			u, err := s.store.GetUserByID(ctx, id)
 			if err != nil || u == nil || !u.IsActive {
 				return false, false
 			}

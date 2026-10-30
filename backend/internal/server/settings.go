@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"net/http"
 	"strconv"
 	"strings"
@@ -64,7 +65,7 @@ func (s *Server) handleSettingsGet(w http.ResponseWriter, r *http.Request) {
 			result[key] = ""
 			continue
 		}
-		val, err := s.store.GetSetting(key)
+		val, err := s.store.GetSetting(r.Context(), key)
 		if err != nil || val == "" {
 			val = settingsDefaults[key]
 		}
@@ -75,7 +76,7 @@ func (s *Server) handleSettingsGet(w http.ResponseWriter, r *http.Request) {
 	// Google Fonts). Tokens are minted fresh per response - see fontserve.go.
 	writeJSON(w, http.StatusOK, model.SettingsResponse{
 		Settings:      result,
-		UploadedFonts: s.uploadedFontRefs(),
+		UploadedFonts: s.uploadedFontRefs(r.Context()),
 	})
 }
 
@@ -193,6 +194,10 @@ func (s *Server) handleSettingsUpdate(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Every setting is its own write. Validation is done, so the saves (and the
+	// broadcast built from them) run detached: a client that goes away part-way must
+	// not leave some of one form's settings saved and the rest not.
+	ctx := context.WithoutCancel(r.Context())
 	for key, val := range req.Settings {
 		// A caller who cannot read a secret must not be able to write it either.
 		// handleSettingsGet hands non-admins "" for every secretSettings key, so a
@@ -204,7 +209,7 @@ func (s *Server) handleSettingsUpdate(w http.ResponseWriter, r *http.Request) {
 		if secretSettings[key] && !admin {
 			continue
 		}
-		if err := s.store.SetSetting(key, val); err != nil {
+		if err := s.store.SetSetting(ctx, key, val); err != nil {
 			writeInternalError(w, "save setting", err)
 			return
 		}
@@ -225,7 +230,7 @@ func (s *Server) handleSettingsUpdate(w http.ResponseWriter, r *http.Request) {
 		broadcastPayload.HeaderFont = v
 		// Include the current uploaded fonts so every client can register the
 		// @font-face for a newly selected uploaded font without a reload.
-		broadcastPayload.UploadedFonts = s.uploadedFontRefs()
+		broadcastPayload.UploadedFonts = s.uploadedFontRefs(ctx)
 	}
 	if broadcastPayload.Title != "" || broadcastPayload.HeaderFont != "" {
 		s.hub.Broadcast(broadcastPayload)
@@ -245,8 +250,8 @@ func isAllowedSetting(key string) bool {
 }
 
 // getSettingInt reads a numeric setting with a default fallback.
-func (s *Server) getSettingInt(key string, fallback int) int {
-	val, err := s.store.GetSetting(key)
+func (s *Server) getSettingInt(ctx context.Context, key string, fallback int) int {
+	val, err := s.store.GetSetting(ctx, key)
 	if err != nil || val == "" {
 		return fallback
 	}

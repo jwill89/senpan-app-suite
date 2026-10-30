@@ -16,12 +16,14 @@
   user-select: none;
   touch-action: none;
 }
+
 .placement-bg {
   display: block;
   width: 100%;
   height: auto;
   border-radius: var(--radius);
 }
+
 .placement-empty {
   aspect-ratio: 16 / 10;
   display: flex;
@@ -32,27 +34,32 @@
   background: var(--panel-raised-bg);
   border: 1px dashed var(--control-border);
 }
+
 .placement-item {
   position: absolute;
   cursor: move;
   box-sizing: border-box;
   border: 1px solid transparent;
 }
+
 .placement-item.is-selected {
   border-color: var(--highlight);
   box-shadow: 0 0 0 1px var(--highlight);
 }
+
 /* A prize slot is outlined so it reads as a different kind of item from a stamp. */
 .placement-item--prize:not(.is-selected) {
   border-color: color-mix(in srgb, var(--highlight) 40%, transparent);
   border-style: dashed;
 }
+
 .placement-item img {
   width: 100%;
   height: 100%;
   object-fit: contain;
   pointer-events: none;
 }
+
 .placement-item-empty {
   width: 100%;
   height: 100%;
@@ -77,6 +84,7 @@
   border-radius: 50%;
   cursor: pointer;
 }
+
 .placement-rotate {
   width: 22px;
   height: 22px;
@@ -90,6 +98,7 @@
   color: var(--highlight);
   cursor: grab;
 }
+
 .placement-resize {
   width: 16px;
   height: 16px;
@@ -98,6 +107,7 @@
   border-radius: 0;
   cursor: nwse-resize;
 }
+
 .placement-hint {
   margin-top: 8px;
 }
@@ -107,24 +117,28 @@
 .map-canvas {
   position: relative;
   width: 100%;
+
   /* The plan is the yardstick for label size, so every stall on a map gets the
      same one - see .map-stall's font-size. Only the inline axis is contained:
      the canvas is externally sized at 100% width, but its HEIGHT comes from the
      background image in flow, and `size` containment would collapse it. */
   container-type: inline-size;
 }
+
 /* The admin editor drags stalls around; the public canvas is dragged as a whole
    (see .map-viewport), so only the editor suppresses native gestures. */
 .map-canvas.is-editable {
   user-select: none;
   touch-action: none;
 }
+
 .map-canvas-bg {
   display: block;
   width: 100%;
   height: auto;
   border-radius: var(--radius);
 }
+
 .map-canvas-empty {
   aspect-ratio: 16 / 10;
   display: flex;
@@ -145,12 +159,14 @@
   padding: 2px;
   cursor: move;
   border: 1px solid color-mix(in srgb, var(--page-bg) 55%, transparent);
+
   /* Sizes the label against the stall's own box - see .map-stall-label.
      Size containment only; it deliberately does NOT clip, because the drag
      handles sit OUTSIDE this box (see .placement-handle). Clipping here is what
      hid the rotate handle entirely and left the resize handle as an unusable
      nub - the label clips itself instead. */
   container-type: size;
+
   /* THE one label size for the whole plan. It is declared here rather than on
      the label because an element's own container-type does not apply to its own
      declarations: `cqw` here resolves against the nearest ANCESTOR container,
@@ -161,6 +177,7 @@
   font-size: 0.6rem;
   font-size: 1.3cqw;
 }
+
 /* The selected pitch wears a ring: a 5px stroke held 5px clear of the shape.
    `outline` is what draws it - it follows border-radius (so a circular pitch gets
    a circular ring), sits outside the box without changing layout, and takes an
@@ -172,10 +189,12 @@
   border-color: var(--stall-selection, var(--highlight));
   outline: 5px solid var(--stall-selection, var(--highlight));
   outline-offset: 5px;
+
   /* Stalls are absolutely-positioned siblings, so without this the selected
      stall's handles can end up beneath a stall drawn later in the list. */
   z-index: 2;
 }
+
 /* The stall's two lines: its title, and the caption naming what it offers. */
 .map-stall-label {
   display: flex;
@@ -188,16 +207,19 @@
   text-align: center;
   text-transform: uppercase;
   letter-spacing: 0.02em;
+
   /* Per pitch, set inline by stallStyle; white when the admin has not chosen one.
      A single fixed colour cannot serve every fill an admin might pick. */
   color: var(--stall-text, #fff);
   pointer-events: none;
   overflow-wrap: anywhere;
+
   /* The label, not the stall, is what clips - so a long title stays inside its
      shape without taking the drag handles with it. */
   max-width: 100%;
   max-height: 100%;
   overflow: hidden;
+
   /* Uniform across the plan, shrinking ONLY where the pitch truly cannot hold
      it. `1em` is the size inherited from .map-stall, identical for every stall;
      the cqh term is this pitch's own ceiling, and at 42% of the box a title plus
@@ -228,8 +250,10 @@
   justify-content: center;
   max-width: 100%;
 }
+
 /* A pitch with several occupants stacks them, the way a printed plan lists both
    of a booth's tenants. */
+
 /* Two tenants sharing a pitch need daylight between them, or the second one's name
    reads as a third line of the first one's. Set in `em` so the gap scales with the
    label, which is itself sized from the plan. */
@@ -238,6 +262,7 @@
   padding-top: 0.7em;
   border-top: 1px solid color-mix(in srgb, var(--stall-text, #fff) 35%, transparent);
 }
+
 /* Under a day filter the occupants who aren't on that day are still drawn, so the
    pitch keeps its size, but pushed back behind the one who is. */
 .map-stall-occupant.is-dimmed {
@@ -249,12 +274,14 @@
    container-scaled font size rather than needing its own clamp. */
 .map-stall-caption {
   display: block;
+
   /* Heavier than it was (500): drawn small, over a coloured fill, at whatever size
      the plan's scale works out to, the lighter weight was hard to read. */
   font-weight: 700;
   font-size: 0.82em;
   opacity: 0.9;
 }
+
 /* The stall type sits under the name and any day note, and is the least of the
    three - lighter than them so the lines read in order, but still heavier than the
    500 it used to be, which was the weight that was hard to read on a tinted fill. */
@@ -281,13 +308,16 @@
   background: var(--panel-raised-bg);
   border: 1px solid var(--control-border);
   border-radius: var(--radius);
+
   /* --map-aspect is the PLAN's own shape, set inline by the component once its
      image has loaded (and on the widget around it, which is capped to match). The
      1.6 fallback is only what an empty or not-yet-loaded map is drawn at. */
   aspect-ratio: var(--map-aspect, 1.6);
+
   /* However tall the plan, the frame stays something a visitor can see past - the
      detail panel and the day filter sit below it. */
   max-height: var(--map-frame-height, 80vh);
+
   /* ...and the same cap stated on the width, which is what that height allows AT
      THIS SHAPE. `aspect-ratio` already transfers a max-height back through the
      ratio, so this is belt and braces on a subtle behaviour rather than the thing
@@ -295,15 +325,18 @@
      margins below are for, and it should not be left implicit.
      The dead space this used to leave is dealt with one level up: see .map-embed. */
   max-width: calc(var(--map-frame-height, 80vh) * var(--map-aspect, 1.6));
+
   /* Centred, because a frame narrowed by that cap is narrower than what contains
      it. Left alone it hugged the left edge with the dead space all on one side -
      which is what the bare canvas (the admin map screen, with no widget around it)
      used to do. */
   margin-inline: auto;
 }
+
 .map-viewport.is-dragging {
   cursor: grabbing;
 }
+
 /* The pan/zoom transform wrapper. Its transform-origin is the top-left so the
    pan offset is in plain, unscaled canvas coordinates. */
 .map-pan {
@@ -313,24 +346,40 @@
   width: 100%;
   transform-origin: 0 0;
 }
+
 .map-stall.is-interactive {
   cursor: pointer;
 }
+
 .map-stall.is-interactive:hover,
 .map-stall.is-interactive:focus-visible {
   outline: 2px solid var(--highlight);
   outline-offset: 1px;
 }
+
 /* Filtered out by the "stamp rally stalls only" toggle: still drawn, so the plan
    keeps its shape, but pushed back so the rally stalls read at a glance. */
 .map-stall.is-dimmed {
   opacity: 0.22;
   pointer-events: none;
 }
+
 /* A stall carrying a stamp on the open rally. */
 .map-stall.is-rally {
   box-shadow: 0 0 0 2px var(--highlight);
 }
+
+/* ...whose stamp the visitor already holds (the festival dashboard is the only
+   view that knows who is looking). The ring turns to the success color, so a
+   participant can see at a glance which stalls are still left to visit - thicker,
+   with a thin edge of the fill-text color outside it, because a theme's success
+   green is often deep enough to vanish against a dark plan on its own. */
+.map-stall.is-rally.is-collected {
+  box-shadow:
+    0 0 0 3px var(--success),
+    0 0 0 4px var(--text-on-fill);
+}
+
 /* The stamp-rally badge. Sized as a share of the pitch - the icon inside fills the
    box rather than the box following a font size, which would have made every badge
    the same size whatever it sat on - so a small stall still gets a small mark.
@@ -347,13 +396,15 @@
   display: flex;
   width: 19%;
   max-width: 15px;
-  color: var(--stall-text, #ffffff);
+  color: var(--stall-text, #fff);
   pointer-events: none;
 }
+
 .map-stall-stamp svg {
   width: 100%;
   height: auto;
 }
+
 /* A circle has no top-right corner to pin a badge to: the corner of its box is
    outside the disc, so the badge either floated beside the stall or, pulled far
    enough in to land on it, sat on top of the name. It goes to the top of the disc
@@ -367,6 +418,14 @@
   transform: translateX(-50%);
 }
 
+/* The collected mark: a check on the success color, over a disc of the fill-text
+   color so the cut-out check reads on any stall fill, light or dark. */
+.map-stall-stamp.is-collected {
+  color: var(--success);
+  background: var(--text-on-fill);
+  border-radius: 50%;
+}
+
 /* The map as a self-contained widget: its toolbar, the plan, and the detail a
    tapped stall opens, all inside one box. It is meant to stand on its own -
    embedded in a page elsewhere there is nothing around it to lean on - so
@@ -375,9 +434,11 @@
   position: relative;
   display: flex;
   flex-direction: column;
+
   /* Shared by the frame below and by the widget's own cap, so the two cannot
      disagree about how tall a map is allowed to get. */
   --map-frame-height: 80vh;
+
   /* The WHOLE widget narrows with the plan, not just the frame around it.
      This is the border a fitted map used to open with. Once the height cap bites -
      a square or portrait plan on an ordinary screen - the frame shrinks to keep the
@@ -400,6 +461,7 @@
   flex: 1;
   min-height: 0;
   max-width: none;
+
   /* The auto side margins that centre a narrowed widget on our own page have to
      go here. A flex item with an auto margin on the cross axis does not stretch -
      the margin absorbs the free space instead - so the widget shrank to the width
@@ -407,14 +469,17 @@
      beside it. */
   margin-inline: 0;
 }
+
 .map-embed.is-framed .map-toolbar {
   border-width: 0 0 1px;
   border-radius: 0;
 }
+
 .map-embed.is-framed .map-embed-stage {
   flex: 1;
   min-height: 0;
 }
+
 .map-embed.is-framed .map-viewport {
   aspect-ratio: auto;
   height: 100%;
@@ -423,6 +488,7 @@
   border-width: 0;
   border-radius: 0;
 }
+
 .map-embed.is-framed .map-hint {
   border-radius: 0;
 }
@@ -435,6 +501,7 @@
 body.is-embedded {
   overflow: hidden;
 }
+
 .map-embed-page {
   display: flex;
   flex-direction: column;
@@ -451,6 +518,7 @@ body.is-embedded {
   align-items: center;
   gap: 8px;
 }
+
 .map-embed-code-row input {
   flex: 1;
   min-width: 0;
@@ -518,6 +586,7 @@ body.is-embedded {
   pointer-events: none;
   transition: opacity 400ms ease;
 }
+
 .map-hint-text {
   display: flex;
   align-items: center;
@@ -528,10 +597,12 @@ body.is-embedded {
   text-align: center;
   text-wrap: balance;
 }
+
 .map-hint-icon {
   flex: none;
   font-size: 1.4em;
 }
+
 .map-hint.is-dismissed {
   opacity: 0;
   visibility: hidden;
@@ -539,6 +610,7 @@ body.is-embedded {
     opacity 400ms ease,
     visibility 0s linear 400ms;
 }
+
 @media (prefers-reduced-motion: reduce) {
   .map-hint,
   .map-hint.is-dismissed {
@@ -561,6 +633,7 @@ body.is-embedded {
   flex-wrap: wrap;
   gap: 4px;
 }
+
 .map-day-picker .is-active {
   background: var(--accent);
   color: var(--text-on-accent);
@@ -574,6 +647,7 @@ body.is-embedded {
   position: absolute;
   z-index: 4;
   inset: auto 12px 12px;
+
   /* Leaves roughly a third of the plan in view above it on a phone. Taller than
      this and the map behind is a sliver, which defeats the point of keeping the
      details on the map at all. */
@@ -584,6 +658,7 @@ body.is-embedded {
   border: 1px solid var(--control-border);
   border-radius: var(--radius);
   box-shadow: 0 6px 24px rgb(0 0 0 / 35%);
+
   /* Resizable by the visitor: the panel covers part of the plan whatever size it
      is, so let them decide how much. `overflow: hidden` is what makes the native
      grabber appear, and the body inside does the scrolling. */
@@ -603,20 +678,24 @@ body.is-embedded {
   flex: none;
   padding: 4px 6px 4px 10px;
   color: var(--text-muted);
+
   /* The panel body is --panel-raised-bg; the bar takes the surface one step below
      it, so it reads as the panel's chrome - the part you grab - rather than as the
      first line of the content. Both are existing theme tokens, so the pair keeps
      its relationship in every theme. */
   background: var(--panel-bg);
   border-bottom: 1px solid var(--control-border);
+
   /* Follows the panel's own corners; a square bar would poke out of them. */
   border-radius: calc(var(--radius) - 1px) calc(var(--radius) - 1px) 0 0;
   cursor: grab;
   touch-action: none;
 }
+
 .map-stall-modal-grip:active {
   cursor: grabbing;
 }
+
 .map-stall-modal-grip-icon {
   pointer-events: none;
 }
@@ -640,6 +719,7 @@ body.is-embedded {
   font-size: 1rem;
   line-height: 1;
 }
+
 .map-stall-modal-close:hover {
   color: var(--text);
 }
@@ -653,6 +733,7 @@ body.is-embedded {
   display: flex;
   margin: 6px 0 0;
 }
+
 /* .status-badge carries a global `margin-left: 6px` for the usual case, where it
    TRAILS a heading. Here it leads its own row, and that inherited nudge left it
    6px right of the icon column below - close enough to read as a mistake rather
@@ -680,6 +761,7 @@ body.is-embedded {
 @media (width >= 720px) {
   .map-stall-modal {
     inset: 12px 12px auto auto;
+
     /* Wide enough for the three link buttons to share one line. At 380px they
        broke 1-then-2, which reads as a mistake rather than a wrap. The visitor can
        still resize it from here. */
@@ -687,6 +769,7 @@ body.is-embedded {
     max-height: calc(100% - 24px);
   }
 }
+
 /* A pitch with two tenants lists them one after another, ruled apart so it reads
    as two businesses rather than one run-on entry. */
 .map-stall-occupant-panel + .map-stall-occupant-panel {
@@ -694,18 +777,21 @@ body.is-embedded {
   padding-top: 14px;
   border-top: 1px solid var(--control-border);
 }
+
 .map-stall-panel-head {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
 }
+
 .map-stall-logo {
   width: 56px;
   height: 56px;
   object-fit: contain;
   border-radius: var(--radius-media);
 }
+
 /* One row of links, aligned with the column of text above it. Every other line in
    the panel - the name, the status, the type, the hours, the prose - starts at the
    same left edge, and a row of buttons pushed to the far right was the one thing
@@ -720,6 +806,7 @@ body.is-embedded {
   gap: 8px;
   margin-top: 10px;
 }
+
 .map-stall-hours {
   /* Close to the type it belongs with, not evenly spaced from it. */
   margin: 3px 0 0;
@@ -728,6 +815,7 @@ body.is-embedded {
   font-size: 0.85rem;
   color: var(--text-muted);
 }
+
 /* Laid out like .map-stall-type above it, with the SAME gap: the two lines sit
    one under the other, so an icon-to-text distance that differed between them
    would show as a ragged left edge on the text. */
@@ -742,6 +830,7 @@ body.is-embedded {
 .map-stall-modal-body .md-body {
   margin-top: 14px;
 }
+
 .map-stall-rally {
   display: flex;
   align-items: center;
@@ -752,6 +841,21 @@ body.is-embedded {
   border: 1px solid color-mix(in srgb, var(--highlight) 45%, transparent);
   border-radius: var(--radius);
 }
+
+/* The visitor already holds this occupant's stamp: the tint follows the plan's
+   collected ring, from the highlight to the success color. */
+.map-stall-rally.is-collected {
+  background: color-mix(in srgb, var(--success) 12%, transparent);
+  border-color: color-mix(in srgb, var(--success) 45%, transparent);
+}
+
+/* The text beside the stamp art. Allowed to shrink, so a stamp form placed in it
+   on the dashboard narrows with the panel instead of running out of it. */
+.map-stall-rally-body {
+  flex: 1;
+  min-width: 0;
+}
+
 .map-stall-rally img {
   width: 44px;
   height: 44px;

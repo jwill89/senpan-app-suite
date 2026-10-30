@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"errors"
 	"log/slog"
 	"net/http"
@@ -189,8 +190,8 @@ func buildPublicCard(r *model.StampRally, card *model.StampRallyCard, stamps []m
 		st := &stamps[i]
 		at, got := collected[st.ID]
 		pc.Stamps = append(pc.Stamps, model.PublicStamp{
-			ID: st.ID, AffiliateName: st.DisplayStall(), StampType: model.NormalizeStampType(st.StampType),
-			Image: st.Image, Placement: st.Placement,
+			ID: st.ID, AffiliateName: st.DisplayStall(), OccupantID: st.OccupantID,
+			StampType: model.NormalizeStampType(st.StampType), Image: st.Image, Placement: st.Placement,
 			ActiveFrom: st.ActiveFrom, ActiveTo: st.ActiveTo,
 			Available: stampAvailable(r, st, now), Expired: stampExpired(r, st, now),
 			Collected: got, CollectedAt: at,
@@ -218,7 +219,7 @@ func (s *Server) handleStampRalliesList(w http.ResponseWriter, r *http.Request) 
 	if !s.requirePermission(w, r, permFestivalStampRally) {
 		return
 	}
-	rallies, err := s.store.ListStampRallies()
+	rallies, err := s.store.ListStampRallies(r.Context())
 	if err != nil {
 		writeInternalError(w, "list stamp rallies", err)
 		return
@@ -239,7 +240,7 @@ func (s *Server) handleStampRallyDetail(w http.ResponseWriter, r *http.Request) 
 		writeError(w, http.StatusBadRequest, "Invalid stamp rally ID")
 		return
 	}
-	rally, err := s.store.GetStampRally(id)
+	rally, err := s.store.GetStampRally(r.Context(), id)
 	if err != nil {
 		writeInternalError(w, "get stamp rally", err)
 		return
@@ -248,7 +249,7 @@ func (s *Server) handleStampRallyDetail(w http.ResponseWriter, r *http.Request) 
 		writeError(w, http.StatusNotFound, "Stamp rally not found")
 		return
 	}
-	cards, err := s.store.ListRallyCards(id)
+	cards, err := s.store.ListRallyCards(r.Context(), id)
 	if err != nil {
 		writeInternalError(w, "list rally cards", err)
 		return
@@ -270,7 +271,7 @@ func (s *Server) handleStampRallyLogs(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "Invalid stamp rally ID")
 		return
 	}
-	logs, err := s.store.ListRallyCollections(id)
+	logs, err := s.store.ListRallyCollections(r.Context(), id)
 	if err != nil {
 		writeInternalError(w, "list rally collections", err)
 		return
@@ -387,14 +388,14 @@ func rallyFromRequest(req stampRallyWriteRequest, title string) *model.StampRall
 // since, or a spoofed id) falls back to its affiliate rather than failing the
 // whole save, and an unlinked rally has every occupant id cleared: naming one
 // would claim a map link the rally doesn't have.
-func (s *Server) resolveMapStalls(w http.ResponseWriter, rally *model.StampRally) bool {
+func (s *Server) resolveMapStalls(ctx context.Context, w http.ResponseWriter, rally *model.StampRally) bool {
 	if rally.FestivalMapID == nil {
 		for i := range rally.Stamps {
 			rally.Stamps[i].OccupantID = nil
 		}
 		return true
 	}
-	m, err := s.store.GetFestivalMap(*rally.FestivalMapID)
+	m, err := s.store.GetFestivalMap(ctx, *rally.FestivalMapID)
 	if err != nil {
 		writeInternalError(w, "get festival map for rally", err)
 		return false
@@ -448,10 +449,10 @@ func (s *Server) handleStampRallyCreate(w http.ResponseWriter, r *http.Request) 
 		writeError(w, http.StatusBadRequest, msg)
 		return
 	}
-	if !s.resolveMapStalls(w, rally) {
+	if !s.resolveMapStalls(r.Context(), w, rally) {
 		return
 	}
-	id, err := s.store.CreateStampRally(rally)
+	id, err := s.store.CreateStampRally(r.Context(), rally)
 	if err != nil {
 		writeInternalError(w, "create stamp rally", err)
 		return
@@ -491,7 +492,7 @@ func (s *Server) handleStampRallyUpdate(w http.ResponseWriter, r *http.Request) 
 		writeError(w, http.StatusBadRequest, msg)
 		return
 	}
-	if !s.resolveMapStalls(w, rally) {
+	if !s.resolveMapStalls(r.Context(), w, rally) {
 		return
 	}
 	// A save is authoritative for a child collection only when it actually carried
@@ -500,7 +501,7 @@ func (s *Server) handleStampRallyUpdate(w http.ResponseWriter, r *http.Request) 
 	// client wants no stamps" stay distinguishable - and only the second deletes
 	// anything. This is what stops an editor opened before (or without) a detail
 	// fetch from wiping every stamp and every participant's collected rows.
-	if err := s.store.UpdateStampRally(rally, req.Stamps != nil, req.Prizes != nil); err != nil {
+	if err := s.store.UpdateStampRally(r.Context(), rally, req.Stamps != nil, req.Prizes != nil); err != nil {
 		writeInternalError(w, "update stamp rally", err)
 		return
 	}
@@ -520,7 +521,7 @@ func (s *Server) handleStampRallyDelete(w http.ResponseWriter, r *http.Request) 
 	if !ok {
 		return
 	}
-	if _, err := s.store.DeleteStampRally(id); err != nil {
+	if _, err := s.store.DeleteStampRally(r.Context(), id); err != nil {
 		writeInternalError(w, "delete stamp rally", err)
 		return
 	}
@@ -537,7 +538,7 @@ func (s *Server) setStampRallyStatus(w http.ResponseWriter, r *http.Request, sta
 	if !ok {
 		return
 	}
-	if err := s.store.SetStampRallyStatus(id, status); err != nil {
+	if err := s.store.SetStampRallyStatus(r.Context(), id, status); err != nil {
 		writeInternalError(w, "set stamp rally status", err)
 		return
 	}
@@ -590,7 +591,7 @@ func (s *Server) handleStampRallyStampPatch(w http.ResponseWriter, r *http.Reque
 		writeError(w, http.StatusBadRequest, "Invalid JSON")
 		return
 	}
-	paused, err := s.store.SetStampPaused(rallyID, stampID, req.Paused)
+	paused, err := s.store.SetStampPaused(r.Context(), rallyID, stampID, req.Paused)
 	if err != nil {
 		writeInternalError(w, "set stamp paused", err)
 		return
@@ -637,7 +638,7 @@ func (s *Server) handleStampRallyCardCreate(w http.ResponseWriter, r *http.Reque
 	if world == "" {
 		name, world = model.SplitParticipantLabel(name)
 	}
-	rally, err := s.store.GetStampRally(rallyID)
+	rally, err := s.store.GetStampRally(r.Context(), rallyID)
 	if err != nil {
 		writeInternalError(w, "get rally for card", err)
 		return
@@ -646,7 +647,7 @@ func (s *Server) handleStampRallyCardCreate(w http.ResponseWriter, r *http.Reque
 		writeError(w, http.StatusNotFound, "Stamp rally not found")
 		return
 	}
-	card, err := s.store.IssueRallyCard(rallyID, name, world)
+	card, err := s.store.IssueRallyCard(r.Context(), rallyID, name, world)
 	if err != nil {
 		writeInternalError(w, "issue rally card", err)
 		return
@@ -674,7 +675,7 @@ func (s *Server) handleStampRallyCardDelete(w http.ResponseWriter, r *http.Reque
 	// A card with collected stamps can only be deleted once the rally is closed
 	// (its log is preserved either way - collected rows snapshot participant/stall
 	// and detach via ON DELETE SET NULL). Mirrors garapon drawing-link deletion.
-	rally, err := s.store.GetStampRally(rallyID)
+	rally, err := s.store.GetStampRally(r.Context(), rallyID)
 	if err != nil {
 		writeInternalError(w, "get rally for card delete", err)
 		return
@@ -685,7 +686,7 @@ func (s *Server) handleStampRallyCardDelete(w http.ResponseWriter, r *http.Reque
 	}
 	closed := rally.Status == "closed"
 	if !closed {
-		collected, err := s.store.ListCollectedStampIDs(cardID)
+		collected, err := s.store.ListCollectedStampIDs(r.Context(), cardID)
 		if err != nil {
 			writeInternalError(w, "list collected for card delete", err)
 			return
@@ -696,7 +697,7 @@ func (s *Server) handleStampRallyCardDelete(w http.ResponseWriter, r *http.Reque
 			return
 		}
 	}
-	if _, err := s.store.DeleteRallyCard(rallyID, cardID, closed); err != nil {
+	if _, err := s.store.DeleteRallyCard(r.Context(), rallyID, cardID, closed); err != nil {
 		writeInternalError(w, "delete rally card", err)
 		return
 	}
@@ -707,8 +708,8 @@ func (s *Server) handleStampRallyCardDelete(w http.ResponseWriter, r *http.Reque
 
 // loadCardByToken resolves a token to its card + rally, writing the 404 itself when
 // the token is unknown. Returns (card, rally, ok).
-func (s *Server) loadCardByToken(w http.ResponseWriter, token string) (*model.StampRallyCard, *model.StampRally, bool) {
-	card, err := s.store.GetRallyCardByToken(token)
+func (s *Server) loadCardByToken(ctx context.Context, w http.ResponseWriter, token string) (*model.StampRallyCard, *model.StampRally, bool) {
+	card, err := s.store.GetRallyCardByToken(ctx, token)
 	if err != nil {
 		writeInternalError(w, "get card by token", err)
 		return nil, nil, false
@@ -717,7 +718,7 @@ func (s *Server) loadCardByToken(w http.ResponseWriter, token string) (*model.St
 		writeError(w, http.StatusNotFound, "Stamp card not found")
 		return nil, nil, false
 	}
-	rally, err := s.store.GetStampRally(card.RallyID)
+	rally, err := s.store.GetStampRally(ctx, card.RallyID)
 	if err != nil {
 		writeInternalError(w, "get rally for card", err)
 		return nil, nil, false
@@ -732,20 +733,20 @@ func (s *Server) loadCardByToken(w http.ResponseWriter, token string) (*model.St
 // maybeComplete recomputes completion and persists it when the card has just become
 // complete (so completion driven by stamp expiry is caught lazily on read). Mutates
 // the passed card so the response reflects the new state.
-func (s *Server) maybeComplete(card *model.StampRallyCard, rally *model.StampRally,
+func (s *Server) maybeComplete(ctx context.Context, card *model.StampRallyCard, rally *model.StampRally,
 	collected map[int64]string, now time.Time) {
 	if card.Completed {
 		return
 	}
 	if rallyCardComplete(rally, rally.Stamps, collected, now) {
 		ts := now.UTC().Format(time.RFC3339)
-		if err := s.store.SetRallyCardCompleted(card.ID, ts); err != nil {
+		if err := s.store.SetRallyCardCompleted(ctx, card.ID, ts); err != nil {
 			// Don't fail the request over it - the participant's collected stamps are
 			// already durable and the card completes on the next view. But say so:
 			// swallowing this made a failed completion write invisible server-side,
 			// so the card silently reported completed=false (prizes still hidden)
 			// with nothing anywhere to explain why.
-			slog.Error("mark stamp card completed", "card_id", card.ID, "rally_id", rally.ID, "error", err)
+			slog.Log(ctx, errorLevel(err), "mark stamp card completed", "card_id", card.ID, "rally_id", rally.ID, "error", err)
 			return
 		}
 		card.Completed = true
@@ -759,18 +760,20 @@ func (s *Server) maybeComplete(card *model.StampRallyCard, rally *model.StampRal
 //	Auth:      public (the token is the capability)
 func (s *Server) handleStampCardPublic(w http.ResponseWriter, r *http.Request) {
 	token := strings.TrimSpace(r.PathValue("token"))
-	card, rally, ok := s.loadCardByToken(w, token)
+	card, rally, ok := s.loadCardByToken(r.Context(), w, token)
 	if !ok {
 		return
 	}
-	collected, err := s.store.ListCollectedStampIDs(card.ID)
+	collected, err := s.store.ListCollectedStampIDs(r.Context(), card.ID)
 	if err != nil {
 		writeInternalError(w, "list collected", err)
 		return
 	}
 	now := time.Now().UTC()
-	s.maybeComplete(card, rally, collected, now)
-	writeJSON(w, http.StatusOK, buildPublicCard(rally, card, rally.Stamps, rally.Prizes, collected, now))
+	s.maybeComplete(r.Context(), card, rally, collected, now)
+	pc := buildPublicCard(rally, card, rally.Stamps, rally.Prizes, collected, now)
+	pc.Rally.FestivalLink = s.festivalLinkForRally(r.Context(), rally.ID)
+	writeJSON(w, http.StatusOK, pc)
 }
 
 // stampSubmitRequest is the JSON body for POST /api/stamp-card/{token}/stamp.
@@ -796,7 +799,7 @@ func (s *Server) handleStampCardStamp(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	token := strings.TrimSpace(r.PathValue("token"))
-	card, rally, ok := s.loadCardByToken(w, token)
+	card, rally, ok := s.loadCardByToken(r.Context(), w, token)
 	if !ok {
 		return
 	}
@@ -836,7 +839,7 @@ func (s *Server) handleStampCardStamp(w http.ResponseWriter, r *http.Request) {
 	stall := match.DisplayStall()
 	// Snapshot the composed identity - the log outlives the card, and a bare name
 	// cannot tell two players apart who share one across worlds.
-	if _, err := s.store.CollectStamp(card.RallyID, card.ID, match.ID,
+	if _, err := s.store.CollectStamp(r.Context(), card.RallyID, card.ID, match.ID,
 		model.ParticipantLabel(card.ParticipantName, card.World), stall,
 		model.NormalizeStampType(match.StampType)); err != nil {
 		if errors.Is(err, store.ErrStampAlreadyCollected) {
@@ -850,15 +853,16 @@ func (s *Server) handleStampCardStamp(w http.ResponseWriter, r *http.Request) {
 	// Reload collected set, recompute completion, and broadcast so an admin viewing
 	// the manager/logs sees the new collection live (this public path is excluded
 	// from the adminMutationResource middleware).
-	collected, err := s.store.ListCollectedStampIDs(card.ID)
+	collected, err := s.store.ListCollectedStampIDs(r.Context(), card.ID)
 	if err != nil {
 		writeInternalError(w, "list collected", err)
 		return
 	}
-	s.maybeComplete(card, rally, collected, now)
+	s.maybeComplete(r.Context(), card, rally, collected, now)
 	s.broadcastResourceChanged("stamp-rallies")
 
 	resp := buildPublicCard(rally, card, rally.Stamps, rally.Prizes, collected, now)
+	resp.Rally.FestivalLink = s.festivalLinkForRally(r.Context(), rally.ID)
 	writeJSON(w, http.StatusOK, model.StampSubmitResponse{
 		Card:             resp,
 		CollectedStampID: match.ID,

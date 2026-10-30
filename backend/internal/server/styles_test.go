@@ -59,7 +59,7 @@ func TestStyles_TokenRoundTrip(t *testing.T) {
 	id := int64(decodeBody(t, resp)["id"].(float64))
 
 	got := env.get(t, fmt.Sprintf("/api/styles/%d", id))
-	if got.StatusCode != 200 {
+	if got.StatusCode != http.StatusOK {
 		t.Fatalf("get status = %d; want 200", got.StatusCode)
 	}
 	style := decodeBody(t, got)["style"].(map[string]any)

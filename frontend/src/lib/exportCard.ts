@@ -115,7 +115,7 @@ export function parseDetailParagraphs(md: string): Word[][] {
   const paragraphs: Word[][] = []
   for (const rawLine of cleaned.split('\n')) {
     let line = rawLine
-    const heading = line.match(/^\s{0,3}(#{1,6})\s+(.*)$/)
+    const heading = /^\s{0,3}(#{1,6})\s+(.*)$/.exec(line)
     const forceBold = !!heading
     if (heading) line = heading[2]
     line = line
@@ -216,7 +216,7 @@ function drawWordLine(
 
 /** Shrinks the current ctx font until `text` fits within `maxWidth` (min 60%). */
 function fitText(ctx: CanvasRenderingContext2D, text: string, maxWidth: number): void {
-  const match = ctx.font.match(/(\d+(?:\.\d+)?)px/)
+  const match = /(\d+(?:\.\d+)?)px/.exec(ctx.font)
   if (!match) return
   let size = parseFloat(match[1])
   const min = size * 0.6

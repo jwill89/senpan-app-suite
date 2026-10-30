@@ -12,8 +12,8 @@ type GamePreset struct {
 	// AutoInterval fills the "Time Between Calls" selector (seconds). A game
 	// started from the preset begins auto-drawing when Auto is set; adjusting the
 	// live game's auto controls never writes back to the preset.
-	Auto         bool `json:"auto"`
-	AutoInterval int  `json:"auto_interval"`
+	Auto         bool   `json:"auto"`
+	AutoInterval int    `json:"auto_interval"`
 	CreatedAt    string `json:"created_at"`
 }
 

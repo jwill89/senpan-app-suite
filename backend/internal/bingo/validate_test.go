@@ -20,7 +20,7 @@ func TestValidateBoard(t *testing.T) {
 	}
 
 	tests := []struct {
-		name  string
+		name   string
 		mutate func(b [][]int)
 	}{
 		{"free centre not 0", func(b [][]int) { b[2][2] = 33 }},

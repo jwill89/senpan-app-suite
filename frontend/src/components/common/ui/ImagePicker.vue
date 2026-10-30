@@ -17,13 +17,11 @@
  * `assetUrl`, which leaves absolute URLs untouched and prefixes relative paths
  * with "/".
  */
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onMounted, ref, useTemplateRef, watch } from 'vue'
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
 import { assetUrl } from '@/lib/assets'
 import { useAuthStore } from '@/stores/auth'
 import { useImagesStore } from '@/stores/images'
-
-const model = defineModel<string>({ required: true })
 
 const props = withDefaults(
   defineProps<{
@@ -34,6 +32,8 @@ const props = withDefaults(
   }>(),
   { valueKey: 'path', extensions: undefined },
 )
+
+const model = defineModel<string>({ required: true })
 
 const auth = useAuthStore()
 const images = useImagesStore()
@@ -74,7 +74,7 @@ function onDirChange(e: Event): void {
 // exactly as before (the backend enforces the same permission on the endpoint).
 const canUpload = computed(() => auth.hasPermission('system-images'))
 
-const fileInput = ref<HTMLInputElement | null>(null)
+const fileInput = useTemplateRef<HTMLInputElement>('fileInput')
 const dragOver = ref(false)
 /**
  * True only while THIS picker's upload runs. The store's `uploading` flag is
@@ -148,10 +148,12 @@ onMounted(async () => {
       <div v-else class="image-field-preview media-empty">
         <font-awesome-icon :icon="['fad', 'image']" />
       </div>
-      <button v-if="model" class="btn-neutral btn-sm mt-8" @click="model = ''">Remove</button>
+      <button v-if="model" type="button" class="btn-neutral btn-sm mt-8" @click="model = ''">
+        Remove
+      </button>
     </div>
     <div class="image-field-reuse">
-      <label class="field-label">Select an uploaded image</label>
+      <span class="field-label">Select an uploaded image</span>
       <p v-if="!images.sortedCategories.length" class="text-muted text-sm">
         No image categories yet - create one on the System -> Images page.
       </p>
@@ -169,6 +171,7 @@ onMounted(async () => {
           </select>
           <template v-if="canUpload">
             <button
+              type="button"
               class="btn-neutral btn-sm image-picker-upload"
               :disabled="busy || !selectedDir"
               title="Upload images into this category"
@@ -184,10 +187,12 @@ onMounted(async () => {
               :accept="accept"
               multiple
               hidden
+              aria-label="Images to upload into this category"
               @change="onFilesSelected"
             />
           </template>
         </div>
+        <!-- eslint-disable-next-line vuejs-accessibility/no-static-element-interactions -- a drop target: dragging files in has no keyboard form, and the Upload button above is the keyboard path -->
         <div
           class="image-picker-drop"
           :class="{ 'is-dragover': dragOver }"
@@ -228,10 +233,12 @@ onMounted(async () => {
 .image-field-main {
   flex: 0 0 150px;
 }
+
 .image-field-reuse {
   flex: 1;
   min-width: 160px;
 }
+
 .image-field-preview {
   width: 150px;
   height: 85px;
@@ -239,6 +246,7 @@ onMounted(async () => {
   border-radius: var(--radius-media);
   margin-bottom: 8px;
 }
+
 .image-picker-bar {
   display: flex;
   align-items: center;
@@ -246,14 +254,17 @@ onMounted(async () => {
   gap: 8px;
   margin-bottom: 8px;
 }
+
 .image-picker-category {
   flex: 1 1 auto;
   max-width: 280px;
 }
+
 .image-picker-upload {
   flex: 0 0 auto;
   white-space: nowrap;
 }
+
 /* The thumbnail grid doubles as the drop target, so drag-to-upload costs no
    extra vertical space. The outline only appears mid-drag. */
 .image-picker-drop {
@@ -262,6 +273,7 @@ onMounted(async () => {
   outline-offset: 3px;
   transition: outline-color 0.15s ease;
 }
+
 .image-picker-drop.is-dragover {
   outline-color: var(--accent);
 }

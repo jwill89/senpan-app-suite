@@ -12,7 +12,7 @@ package model
 // external Carrd site can render live room availability and pricing.
 type TeaRoom struct {
 	ID   int64  `json:"id"`
-	Name string `json:"name"`     // room name (embed title)
+	Name string `json:"name"` // room name (embed title)
 	// Subtitle is a short secondary line under the name (e.g. a Japanese phrase);
 	// stored as UTF-8, so it holds any script natively.
 	Subtitle string `json:"subtitle"`

@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 	"log/slog"
@@ -28,7 +29,7 @@ func (s *Server) handleGaraponsList(w http.ResponseWriter, r *http.Request) {
 	if !s.requirePermission(w, r, permFestivalGarapon) {
 		return
 	}
-	garapons, err := s.store.ListGarapons()
+	garapons, err := s.store.ListGarapons(r.Context())
 	if err != nil {
 		writeInternalError(w, "list garapons", err)
 		return
@@ -51,7 +52,7 @@ func (s *Server) handleGaraponDetail(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "Invalid garapon ID")
 		return
 	}
-	garapon, err := s.store.GetGarapon(id)
+	garapon, err := s.store.GetGarapon(r.Context(), id)
 	if err != nil {
 		writeInternalError(w, "get garapon", err)
 		return
@@ -60,12 +61,12 @@ func (s *Server) handleGaraponDetail(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "Garapon not found")
 		return
 	}
-	players, err := s.store.ListGaraponPlayers(id)
+	players, err := s.store.ListGaraponPlayers(r.Context(), id)
 	if err != nil {
 		writeInternalError(w, "list garapon players", err)
 		return
 	}
-	draws, err := s.store.ListGaraponDraws(id)
+	draws, err := s.store.ListGaraponDraws(r.Context(), id)
 	if err != nil {
 		writeInternalError(w, "list garapon draws", err)
 		return
@@ -94,11 +95,11 @@ func clampDefaultDraws(n int) int {
 // resolveStampRallyLink validates an optional garapon->rally link: nil/0 means
 // unlinked; a supplied id must be a real, OPEN rally (closed/unknown rallies are
 // rejected). Writes the error and returns ok=false on any problem.
-func (s *Server) resolveStampRallyLink(w http.ResponseWriter, id *int64) (*int64, bool) {
+func (s *Server) resolveStampRallyLink(ctx context.Context, w http.ResponseWriter, id *int64) (*int64, bool) {
 	if id == nil || *id == 0 {
 		return nil, true
 	}
-	rally, err := s.store.GetStampRally(*id)
+	rally, err := s.store.GetStampRally(ctx, *id)
 	if err != nil {
 		writeInternalError(w, "get rally for link", err)
 		return nil, false
@@ -175,7 +176,7 @@ func (s *Server) handleGaraponCreate(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, msg)
 		return
 	}
-	link, ok := s.resolveStampRallyLink(w, req.StampRallyID)
+	link, ok := s.resolveStampRallyLink(r.Context(), w, req.StampRallyID)
 	if !ok {
 		return
 	}
@@ -187,7 +188,7 @@ func (s *Server) handleGaraponCreate(w http.ResponseWriter, r *http.Request) {
 		DefaultDraws:    clampDefaultDraws(req.DefaultDraws),
 		Prizes:          prizes,
 	}
-	id, err := s.store.CreateGarapon(garapon)
+	id, err := s.store.CreateGarapon(r.Context(), garapon)
 	if err != nil {
 		writeInternalError(w, "create garapon", err)
 		return
@@ -226,7 +227,7 @@ func (s *Server) handleGaraponUpdate(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, msg)
 		return
 	}
-	link, ok := s.resolveStampRallyLink(w, req.StampRallyID)
+	link, ok := s.resolveStampRallyLink(r.Context(), w, req.StampRallyID)
 	if !ok {
 		return
 	}
@@ -239,7 +240,7 @@ func (s *Server) handleGaraponUpdate(w http.ResponseWriter, r *http.Request) {
 		DefaultDraws:    clampDefaultDraws(req.DefaultDraws),
 		Prizes:          prizes,
 	}
-	if err := s.store.UpdateGarapon(garapon); err != nil {
+	if err := s.store.UpdateGarapon(r.Context(), garapon); err != nil {
 		writeInternalError(w, "update garapon", err)
 		return
 	}
@@ -261,7 +262,7 @@ func (s *Server) handleGaraponDelete(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	if _, err := s.store.DeleteGarapon(id); err != nil {
+	if _, err := s.store.DeleteGarapon(r.Context(), id); err != nil {
 		writeInternalError(w, "delete garapon", err)
 		return
 	}
@@ -278,7 +279,7 @@ func (s *Server) setGaraponStatus(w http.ResponseWriter, r *http.Request, status
 	if !ok {
 		return
 	}
-	if err := s.store.SetGaraponStatus(id, status); err != nil {
+	if err := s.store.SetGaraponStatus(r.Context(), id, status); err != nil {
 		writeInternalError(w, "set garapon status", err)
 		return
 	}
@@ -340,7 +341,7 @@ func (s *Server) handleGaraponPlayerCreate(w http.ResponseWriter, r *http.Reques
 	if world == "" {
 		name, world = model.SplitParticipantLabel(name)
 	}
-	garapon, err := s.store.GetGarapon(garaponID)
+	garapon, err := s.store.GetGarapon(r.Context(), garaponID)
 	if err != nil {
 		writeInternalError(w, "get garapon for player", err)
 		return
@@ -356,7 +357,11 @@ func (s *Server) handleGaraponPlayerCreate(w http.ResponseWriter, r *http.Reques
 	if maxDraws < 1 {
 		maxDraws = clampDefaultDraws(garapon.DefaultDraws)
 	}
-	player, err := s.store.CreateGaraponPlayer(garaponID, name, world, maxDraws)
+	// Creating the link, issuing its stamp card and tying the two together are
+	// three writes with no transaction around them, and the rally read between
+	// them swallows its error - so once the first lands, the rest run detached.
+	ctx := context.WithoutCancel(r.Context())
+	player, err := s.store.CreateGaraponPlayer(ctx, garaponID, name, world, maxDraws)
 	if err != nil {
 		writeInternalError(w, "create garapon player", err)
 		return
@@ -372,9 +377,9 @@ func (s *Server) handleGaraponPlayerCreate(w http.ResponseWriter, r *http.Reques
 	// Best-effort: a rally that's since closed/vanished just yields no card (the
 	// drawing link is still valid on its own).
 	if garapon.StampRallyID != nil {
-		if rally, _ := s.store.GetStampRally(*garapon.StampRallyID); rally != nil && rally.Status == "open" {
-			if card, err := s.store.IssueRallyCard(*garapon.StampRallyID, name, world); err == nil && card != nil {
-				if err := s.store.SetPlayerStampCard(player.ID, card.ID); err == nil {
+		if rally, _ := s.store.GetStampRally(ctx, *garapon.StampRallyID); rally != nil && rally.Status == "open" {
+			if card, err := s.store.IssueRallyCard(ctx, *garapon.StampRallyID, name, world); err == nil && card != nil {
+				if err := s.store.SetPlayerStampCard(ctx, player.ID, card.ID); err == nil {
 					player.StampCardToken = card.Token
 				}
 				// A stamp card was issued - let admins viewing the rally see it live.
@@ -402,7 +407,7 @@ func (s *Server) handleGaraponPlayerDelete(w http.ResponseWriter, r *http.Reques
 	if !ok {
 		return
 	}
-	existing, err := s.store.GetGaraponPlayerByID(playerID)
+	existing, err := s.store.GetGaraponPlayerByID(r.Context(), playerID)
 	if err != nil {
 		writeInternalError(w, "get garapon player", err)
 		return
@@ -417,7 +422,7 @@ func (s *Server) handleGaraponPlayerDelete(w http.ResponseWriter, r *http.Reques
 	// A closed garapon can be cleaned up: any link may be deleted, and its
 	// draws stay in the log (garapon_draws.player_id is ON DELETE SET NULL).
 	// While the garapon is open, a link that has already drawn can't be deleted.
-	garapon, err := s.store.GetGarapon(garaponID)
+	garapon, err := s.store.GetGarapon(r.Context(), garaponID)
 	if err != nil {
 		writeInternalError(w, "get garapon for delete player", err)
 		return
@@ -428,7 +433,7 @@ func (s *Server) handleGaraponPlayerDelete(w http.ResponseWriter, r *http.Reques
 			"This player has already drawn and can't be deleted while the garapon is open")
 		return
 	}
-	if _, err := s.store.DeleteGaraponPlayer(playerID, closed); err != nil {
+	if _, err := s.store.DeleteGaraponPlayer(r.Context(), playerID, closed); err != nil {
 		writeInternalError(w, "delete garapon player", err)
 		return
 	}
@@ -458,8 +463,8 @@ func toPublicGarapon(g *model.Garapon) model.PublicGarapon {
 
 // loadGaraponByToken resolves a player token to its player + garapon, writing the
 // 404 itself when the token is unknown. Returns (player, garapon, ok).
-func (s *Server) loadGaraponByToken(w http.ResponseWriter, token string) (*model.GaraponPlayer, *model.Garapon, bool) {
-	player, err := s.store.GetGaraponPlayerByToken(token)
+func (s *Server) loadGaraponByToken(ctx context.Context, w http.ResponseWriter, token string) (*model.GaraponPlayer, *model.Garapon, bool) {
+	player, err := s.store.GetGaraponPlayerByToken(ctx, token)
 	if err != nil {
 		writeInternalError(w, "get garapon player by token", err)
 		return nil, nil, false
@@ -468,7 +473,7 @@ func (s *Server) loadGaraponByToken(w http.ResponseWriter, token string) (*model
 		writeError(w, http.StatusNotFound, "Drawing link not found")
 		return nil, nil, false
 	}
-	garapon, err := s.store.GetGarapon(player.GaraponID)
+	garapon, err := s.store.GetGarapon(ctx, player.GaraponID)
 	if err != nil {
 		writeInternalError(w, "get garapon for token", err)
 		return nil, nil, false
@@ -489,16 +494,16 @@ func (s *Server) loadGaraponByToken(w http.ResponseWriter, token string) (*model
 //	Response:  {"garapon": {...}, "player": {...}, "draws": [...]}
 func (s *Server) handleGaraponPublic(w http.ResponseWriter, r *http.Request) {
 	token := strings.TrimSpace(r.PathValue("token"))
-	player, garapon, ok := s.loadGaraponByToken(w, token)
+	player, garapon, ok := s.loadGaraponByToken(r.Context(), w, token)
 	if !ok {
 		return
 	}
-	draws, err := s.store.ListPlayerDraws(player.ID)
+	draws, err := s.store.ListPlayerDraws(r.Context(), player.ID)
 	if err != nil {
 		writeInternalError(w, "list player draws", err)
 		return
 	}
-	writeJSON(w, http.StatusOK, model.GaraponPublicResponse{
+	resp := model.GaraponPublicResponse{
 		Garapon: toPublicGarapon(garapon),
 		Player: model.GaraponPublicPlayer{
 			PlayerName:     player.PlayerName,
@@ -507,7 +512,11 @@ func (s *Server) handleGaraponPublic(w http.ResponseWriter, r *http.Request) {
 			StampCardToken: player.StampCardToken,
 		},
 		Draws: draws,
-	})
+	}
+	if garapon.StampRallyID != nil {
+		resp.FestivalLink = s.festivalLinkForRally(r.Context(), *garapon.StampRallyID)
+	}
+	writeJSON(w, http.StatusOK, resp)
 }
 
 // handleGaraponDraw performs one authoritative draw for a token. The store
@@ -529,12 +538,12 @@ func (s *Server) handleGaraponDraw(w http.ResponseWriter, r *http.Request) {
 	s.garaponDrawLimiter.recordFailure(ip)
 
 	token := strings.TrimSpace(r.PathValue("token"))
-	player, _, ok := s.loadGaraponByToken(w, token)
+	player, _, ok := s.loadGaraponByToken(r.Context(), w, token)
 	if !ok {
 		return
 	}
 
-	draw, err := s.store.RecordGaraponDraw(player.ID)
+	draw, err := s.store.RecordGaraponDraw(r.Context(), player.ID)
 	switch {
 	case errors.Is(err, store.ErrGaraponClosed):
 		writeError(w, http.StatusBadRequest, "This garapon is closed")

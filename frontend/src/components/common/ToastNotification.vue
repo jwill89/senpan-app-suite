@@ -40,6 +40,7 @@ function follow(a: UiAlert): void {
         </button>
       </div>
     </div>
+    <!-- eslint-disable-next-line vuejs-accessibility/click-events-have-key-events, vuejs-accessibility/no-static-element-interactions -- a status live region that clears itself on a timer; click-to-dismiss is a pointer shortcut, and making it focusable would pull it out of the status role -->
     <div
       v-if="ui.toast.show"
       :class="['toast', 'toast-' + ui.toast.type]"

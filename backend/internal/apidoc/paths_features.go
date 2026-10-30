@@ -266,6 +266,18 @@ func buildFeaturePaths(b *pb) {
 		"One published map with every stall resolved for a visitor: the affiliate card, whether the stall is open right now, the stall's rally badge and stamp art when an OPEN stamp rally is linked to the map, and a `raffle` link when a raffle assigned to that stall is RUNNING - open and inside its availability window (a closed raffle, or one whose window has not opened, is left off rather than linking somewhere a visitor cannot enter). The path segment is the map's SHORTCODE or its numeric id; both always resolve, so a link posted before a shortcode existed keeps working. An unpublished map answers 404 rather than 403, so a draft's existence isn't confirmed.", opt{
 			path:  []*openapi3.Parameter{pparam("id", "Map shortcode or numeric id.")},
 			resps: []respEntry{ok("PublicFestivalMap"), r("404", "Not found or not published")}})
+	b.add("POST", "/api/festival-dashboard/{id}", "Festival Map", "One participant's festival dashboard", "public",
+		"Everything filed under a published festival that depends on who is looking: their card on the festival's stamp rally, "+
+			"the garapon linked to that rally (with their draws when the drawing token is sent, else only how many draws wait on "+
+			"the link paired with their card - never its token), and every raffle filed under the festival a visitor may see, each "+
+			"with their own entry matched on the whole name and world. A drawing token also yields its paired card, echoed as "+
+			"`card_token`. Tokens belonging to another festival are ignored, not refused. POST so tokens and names stay out of "+
+			"URLs and logs; rate limited per IP. The plan itself comes from GET /api/festival-maps/public/{id}.", opt{
+			path: []*openapi3.Parameter{pparam("id", "Map shortcode or numeric id.")},
+			body: actionBody("What the participant's device holds; every field optional.", nil, props(
+				"card_token", pstr("Stamp card token."), "garapon_token", pstr("Garapon drawing token."),
+				"name", pstr("Character name, used when no card or drawing link matched."), "world", pstr("Home world."))),
+			resps: []respEntry{ok("FestivalDashboard"), r("400", "Invalid JSON or a too-long name"), r("404", "Not found or not published"), r("429", "Rate limited")}})
 
 	// -- Stamp Rally (resource-oriented: methods for CRUD, POST /{id}/{verb}) ----
 	rallyFields := func() openapi3.Schemas {

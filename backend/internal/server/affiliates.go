@@ -42,14 +42,14 @@ func (s *Server) handleAffiliatesList(w http.ResponseWriter, r *http.Request) {
 	if u == nil {
 		return
 	}
-	affiliates, err := s.store.ListAffiliates()
+	affiliates, err := s.store.ListAffiliates(r.Context())
 	if err != nil {
 		writeInternalError(w, "list affiliates", err)
 		return
 	}
 	var webhook string
 	if u.IsAdmin || userHasPermission(u, permTeahouseAffiliates) {
-		webhook, _ = s.store.GetSetting(affiliateWebhookSettingKey)
+		webhook, _ = s.store.GetSetting(r.Context(), affiliateWebhookSettingKey)
 	}
 	writeJSON(w, http.StatusOK, model.AffiliatesResponse{Affiliates: affiliates, WebhookURL: webhook})
 }
@@ -144,7 +144,7 @@ func (s *Server) handleAffiliateCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	affiliate := affiliateFromRequest(req, name)
-	id, err := s.store.CreateAffiliate(affiliate)
+	id, err := s.store.CreateAffiliate(r.Context(), affiliate)
 	if err != nil {
 		writeInternalError(w, "create affiliate", err)
 		return
@@ -178,7 +178,7 @@ func (s *Server) handleAffiliateUpdate(w http.ResponseWriter, r *http.Request) {
 	}
 	affiliate := affiliateFromRequest(req, name)
 	affiliate.ID = id
-	if err := s.store.UpdateAffiliate(affiliate); err != nil {
+	if err := s.store.UpdateAffiliate(r.Context(), affiliate); err != nil {
 		writeInternalError(w, "update affiliate", err)
 		return
 	}
@@ -198,7 +198,7 @@ func (s *Server) handleAffiliateDelete(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	if _, err := s.store.DeleteAffiliate(id); err != nil {
+	if _, err := s.store.DeleteAffiliate(r.Context(), id); err != nil {
 		writeInternalError(w, "delete affiliate", err)
 		return
 	}
@@ -224,7 +224,7 @@ func (s *Server) handleAffiliatesReorder(w http.ResponseWriter, r *http.Request)
 		writeError(w, http.StatusBadRequest, "Invalid JSON")
 		return
 	}
-	if err := s.store.BulkReorderAffiliates(req.OrderedIDs); err != nil {
+	if err := s.store.BulkReorderAffiliates(r.Context(), req.OrderedIDs); err != nil {
 		writeInternalError(w, "reorder affiliates", err)
 		return
 	}
@@ -256,7 +256,7 @@ func (s *Server) handleAffiliateWebhookSet(w http.ResponseWriter, r *http.Reques
 		writeError(w, http.StatusBadRequest, "Discord webhook URLs must look like https://discord.com/api/webhooks/...")
 		return
 	}
-	if err := s.store.SetSetting(affiliateWebhookSettingKey, webhook); err != nil {
+	if err := s.store.SetSetting(r.Context(), affiliateWebhookSettingKey, webhook); err != nil {
 		writeInternalError(w, "save affiliate webhook", err)
 		return
 	}
@@ -277,7 +277,7 @@ func (s *Server) handleAffiliatePost(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	affiliate, err := s.store.GetAffiliate(id)
+	affiliate, err := s.store.GetAffiliate(r.Context(), id)
 	if err != nil {
 		writeInternalError(w, "load affiliate for post", err)
 		return
@@ -286,7 +286,7 @@ func (s *Server) handleAffiliatePost(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "Affiliate not found")
 		return
 	}
-	webhook, _ := s.store.GetSetting(affiliateWebhookSettingKey)
+	webhook, _ := s.store.GetSetting(r.Context(), affiliateWebhookSettingKey)
 	if strings.TrimSpace(webhook) == "" {
 		writeError(w, http.StatusBadRequest, "No Affiliates Discord webhook is configured. Set one on the Affiliates page first.")
 		return

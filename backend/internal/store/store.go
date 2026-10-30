@@ -4,6 +4,7 @@ package store
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"math/rand/v2"
 	"os"
@@ -14,7 +15,7 @@ import (
 )
 
 // randInt returns a random int in [0, n).
-func randInt(n int) int { return rand.IntN(n) }
+func randInt(n int) int { return rand.IntN(n) } //nolint:gosec // raffle and garapon draws, not secrets: math/rand/v2, seeded per process
 
 // connectPragmas are applied to EVERY pooled connection via the driver's
 // connect hook (see New). SQLite applies most pragmas per-connection rather than
@@ -44,8 +45,20 @@ type Store struct {
 // and returns a ready-to-use Store.
 // New opens the database and brings its schema up to date, which is what a server
 // wants. Anything that only READS should use OpenNoMigrate instead.
-func New(path string) (*Store, error) {
-	return open(path, true)
+//
+// ctx bounds the migrations. Canceling it stops them at the next statement; the
+// schema version is written only once every migration has run, so the next start
+// runs them again from the version stored, just as it would after a crash.
+func New(ctx context.Context, path string) (*Store, error) {
+	st, err := open(path)
+	if err != nil {
+		return nil, err
+	}
+	if err := ensureSchema(ctx, st.db); err != nil {
+		_ = st.db.Close() // the schema error is the one to report
+		return nil, fmt.Errorf("ensure schema: %w", err)
+	}
+	return st, nil
 }
 
 // OpenNoMigrate opens an existing database WITHOUT running migrations, for tools
@@ -58,11 +71,13 @@ func OpenNoMigrate(path string) (*Store, error) {
 	if _, err := os.Stat(path); err != nil {
 		return nil, fmt.Errorf("open database: %w", err)
 	}
-	return open(path, false)
+	return open(path)
 }
 
-func open(path string, migrate bool) (*Store, error) {
-	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+// open opens the database and configures its connection pool. It runs no query:
+// the driver connects lazily, and migrating is New's job alone.
+func open(path string) (*Store, error) {
+	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil { //nolint:gosec // made only when missing (a fresh dev database); the deploy owns production's directory
 		return nil, fmt.Errorf("create data directory: %w", err)
 	}
 
@@ -79,18 +94,19 @@ func open(path string, migrate bool) (*Store, error) {
 	// lock contention with the pure-Go driver.
 	db.SetMaxOpenConns(4)
 
-	if migrate {
-		if err := ensureSchema(db); err != nil {
-			db.Close()
-			return nil, fmt.Errorf("ensure schema: %w", err)
-		}
-	}
-
 	return &Store{db: db}, nil
 }
 
 // Close closes the underlying database connection.
 func (s *Store) Close() error { return s.db.Close() }
+
+// Interrupted reports whether err is a query SQLite stopped part-way because its
+// context was done. database/sql answers context.Canceled for a query whose
+// context was already done before it started, but one canceled while running
+// comes back from the driver as SQLITE_INTERRUPT, which errors.Is(err,
+// context.Canceled) does not see - and that is the usual shape of a request whose
+// client disconnected mid-query.
+func Interrupted(err error) bool { return errors.Is(err, sqlite3.INTERRUPT) }
 
 // beginImmediate starts a write transaction (issuing BEGIN IMMEDIATE via the
 // driver's serializable isolation level) rather than the default deferred
@@ -102,6 +118,6 @@ func (s *Store) Close() error { return s.db.Close() }
 // serialize on busy_timeout - SQLite allows only one writer anyway, so there is no
 // throughput cost - which keeps count/cap checks (e.g. a garapon's remaining
 // draws) race-free. Every multi-statement mutation in this package uses it.
-func (s *Store) beginImmediate() (*sql.Tx, error) {
-	return s.db.BeginTx(context.Background(), &sql.TxOptions{Isolation: sql.LevelSerializable})
+func (s *Store) beginImmediate(ctx context.Context) (*sql.Tx, error) {
+	return s.db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelSerializable})
 }

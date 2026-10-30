@@ -2,6 +2,7 @@ package server_test
 
 import (
 	"io"
+	"net/http"
 	"strings"
 	"testing"
 )
@@ -16,7 +17,7 @@ func TestAPIDocsEndpoints(t *testing.T) {
 
 	resp := env.get(t, "/api/openapi.yaml")
 	defer resp.Body.Close()
-	if resp.StatusCode != 200 {
+	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("GET /api/openapi.yaml = %d; want 200", resp.StatusCode)
 	}
 	if ct := resp.Header.Get("Content-Type"); !strings.HasPrefix(ct, "application/yaml") {
@@ -29,7 +30,7 @@ func TestAPIDocsEndpoints(t *testing.T) {
 
 	docs := env.get(t, "/api/docs")
 	defer docs.Body.Close()
-	if docs.StatusCode != 200 {
+	if docs.StatusCode != http.StatusOK {
 		t.Fatalf("GET /api/docs = %d; want 200", docs.StatusCode)
 	}
 	if ct := docs.Header.Get("Content-Type"); !strings.HasPrefix(ct, "text/html") {
@@ -47,7 +48,7 @@ func TestAPIDocsSpecUnset(t *testing.T) {
 	env := newTestEnv(t) // no SetOpenAPISpec
 	resp := env.get(t, "/api/openapi.yaml")
 	defer resp.Body.Close()
-	if resp.StatusCode != 503 {
+	if resp.StatusCode != http.StatusServiceUnavailable {
 		t.Fatalf("GET /api/openapi.yaml with no spec = %d; want 503", resp.StatusCode)
 	}
 }

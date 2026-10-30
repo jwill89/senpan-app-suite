@@ -115,7 +115,7 @@ func TestCardApproveAndProtect(t *testing.T) {
 		t.Fatalf("approve = %d; want 200", resp.StatusCode)
 	}
 	resp.Body.Close()
-	card, err := env.store.GetCard("CUST01")
+	card, err := env.store.GetCard(t.Context(), "CUST01")
 	if err != nil || card == nil {
 		t.Fatal("card missing after approve")
 	}
@@ -138,7 +138,7 @@ func TestCardApproveAndProtect(t *testing.T) {
 	resp.Body.Close()
 
 	// Protect toggles a normal card.
-	if err := env.store.SaveCard("NORM01", srvValidBoard()); err != nil {
+	if err := env.store.SaveCard(t.Context(), "NORM01", srvValidBoard()); err != nil {
 		t.Fatal(err)
 	}
 	resp = env.postJSON(t, "/api/cards/NORM01/protect", map[string]any{"protected": true})
@@ -146,7 +146,7 @@ func TestCardApproveAndProtect(t *testing.T) {
 		t.Errorf("protect = %d; want 200", resp.StatusCode)
 	}
 	resp.Body.Close()
-	if c, _ := env.store.GetCard("NORM01"); c == nil || !c.Protected {
+	if c, _ := env.store.GetCard(t.Context(), "NORM01"); c == nil || !c.Protected {
 		t.Error("card should be Protected after protect")
 	}
 
@@ -163,14 +163,14 @@ func TestDeleteAllSparesProtected(t *testing.T) {
 	env.loginAdmin(t)
 
 	for _, id := range []string{"AAA111", "BBB222"} {
-		if err := env.store.SaveCard(id, srvValidBoard()); err != nil {
+		if err := env.store.SaveCard(t.Context(), id, srvValidBoard()); err != nil {
 			t.Fatal(err)
 		}
 	}
-	if err := env.store.SaveCard("KEEP01", srvValidBoard()); err != nil {
+	if err := env.store.SaveCard(t.Context(), "KEEP01", srvValidBoard()); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := env.store.SetCardProtected("KEEP01", true); err != nil {
+	if _, err := env.store.SetCardProtected(t.Context(), "KEEP01", true); err != nil {
 		t.Fatal(err)
 	}
 
@@ -182,10 +182,10 @@ func TestDeleteAllSparesProtected(t *testing.T) {
 	if got["deleted"].(float64) != 2 {
 		t.Errorf("deleted = %v; want 2", got["deleted"])
 	}
-	if c, _ := env.store.GetCard("KEEP01"); c == nil {
+	if c, _ := env.store.GetCard(t.Context(), "KEEP01"); c == nil {
 		t.Error("protected card should survive Delete All")
 	}
-	if c, _ := env.store.GetCard("AAA111"); c != nil {
+	if c, _ := env.store.GetCard(t.Context(), "AAA111"); c != nil {
 		t.Error("unprotected card should have been deleted")
 	}
 }
@@ -193,11 +193,11 @@ func TestDeleteAllSparesProtected(t *testing.T) {
 func TestPublicStylesEndpoints(t *testing.T) {
 	env := newTestEnv(t)
 
-	pubID, err := env.store.CreateStyle("Ocean Public", map[string]string{"page-bg": "#08191f"}, "", "", true)
+	pubID, err := env.store.CreateStyle(t.Context(), "Ocean Public", map[string]string{"page-bg": "#08191f"}, "", "", true)
 	if err != nil {
 		t.Fatal(err)
 	}
-	privID, err := env.store.CreateStyle("Secret", map[string]string{"page-bg": "#111"}, "", "", false)
+	privID, err := env.store.CreateStyle(t.Context(), "Secret", map[string]string{"page-bg": "#111"}, "", "", false)
 	if err != nil {
 		t.Fatal(err)
 	}

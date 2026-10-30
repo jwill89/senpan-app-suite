@@ -38,6 +38,7 @@ button:has(> .svg-inline--fa):not(.admin-nav-items button) {
   justify-content: center;
   gap: 0.35em;
 }
+
 button:has(> .svg-inline--fa):not(.admin-nav-items button) > .svg-inline--fa {
   margin-right: 0;
 }
@@ -78,6 +79,7 @@ button {
   padding: 10px 20px;
   font-size: 0.95rem;
   font-weight: 600;
+
   /* line-height 1 makes a button's content exactly one em tall whether it holds
      text or a single icon, so icon-only and text buttons of the same size class
      are identical in height. (Icon buttons are inline-flex - see above - so their
@@ -195,26 +197,31 @@ h1,
   --btn-fill: var(--success);
   --btn-text: var(--text-on-fill);
 }
+
 .btn-action {
   --btn-fill: var(--accent);
   --btn-fill-hover: var(--accent-hover);
   --btn-text: var(--text-on-accent);
 }
+
 .btn-view {
   --btn-fill: var(--accent-2);
   --btn-fill-hover: var(--accent-2-hover);
   --btn-text: var(--text-on-fill);
 }
+
 /* Caution uses a fixed dark ink (not --text-on-accent, which goes light in
    light themes) so --warning can stay a bright amber/yellow in every theme. */
 .btn-caution {
   --btn-fill: var(--warning);
   --btn-text: #1f1a06;
 }
+
 .btn-danger {
   --btn-fill: var(--danger);
   --btn-text: var(--text-on-fill);
 }
+
 /* Neutral fills with `--control-border` (not a panel surface) so it stays
    visible even when it sits ON a `--panel-raised-bg` box - a solid fill, never a
    ghost/transparent border. It's the lowest-emphasis intent but still a real,
@@ -232,6 +239,7 @@ h1,
 .btn-neutral {
   background: var(--btn-fill);
   color: var(--btn-text);
+
   /* These classes are worn by <a> as often as by <button> - an external link
      styled as a button. Without this the anchor keeps the browser's underline and
      reads as half link, half button. A thing is one or the other: a button looks
@@ -250,6 +258,7 @@ h1,
      the hovered colour; the rest derive a darkening from their fill. */
   background: var(--btn-fill-hover, color-mix(in srgb, var(--btn-fill) 85%, #000));
 }
+
 .btn-neutral:hover {
   background: color-mix(in srgb, var(--btn-fill) 82%, var(--text));
 }
@@ -275,6 +284,7 @@ h1,
   input[type='color'] {
     min-height: 44px;
   }
+
   /* Icon-only buttons also need the horizontal target. */
   .row-actions button,
   .list-row-actions button,

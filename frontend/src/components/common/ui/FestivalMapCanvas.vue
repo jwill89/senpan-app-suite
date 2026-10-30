@@ -13,7 +13,7 @@
  * The interactive editor counterpart is admin/MapStallEditor.vue; both draw the
  * same shapes through lib/festivalmap.ts, so a stall looks identical in each.
  */
-import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, useTemplateRef } from 'vue'
 import { assetUrl } from '@/lib/assets'
 import {
   clampPan as clampPanTo,
@@ -52,6 +52,12 @@ const props = withDefaults(
      * day worth naming on its label.
      */
     festivalDays?: EventTime[]
+    /**
+     * Occupant ids whose rally stamp the visitor has already collected. Only the
+     * festival dashboard knows who is looking, so only it passes this; everywhere
+     * else the mark stays the plain "there is a stamp here" one.
+     */
+    collectedOccupantIds?: Set<number>
   }>(),
   {
     selectedId: null,
@@ -59,6 +65,7 @@ const props = withDefaults(
     rallyIds: undefined,
     day: null,
     festivalDays: undefined,
+    collectedOccupantIds: undefined,
   },
 )
 
@@ -75,8 +82,8 @@ const emit = defineEmits<{
 
 const MAX_ZOOM = 6
 
-const viewportRef = ref<HTMLElement | null>(null)
-const canvasRef = ref<HTMLElement | null>(null)
+const viewportRef = useTemplateRef<HTMLElement>('viewportRef')
+const canvasRef = useTemplateRef<HTMLElement>('canvasRef')
 const zoom = ref(1)
 const panX = ref(0)
 const panY = ref(0)
@@ -388,14 +395,25 @@ const isRally = (id: number): boolean => props.rallyIds?.has(id) ?? false
 const perStall = computed(() => {
   const byStall = new Map<
     PublicFestivalStall,
-    { shown: Set<PublicStallOccupant>; list: PublicStallOccupant[]; stamped: boolean }
+    {
+      shown: Set<PublicStallOccupant>
+      list: PublicStallOccupant[]
+      stamped: boolean
+      collected: boolean
+    }
   >()
+  const collected = props.collectedOccupantIds
   for (const stall of props.stalls) {
     const onDay = occupantsOnDay(stall.occupants, props.day, props.festivalDays ?? [])
+    const stampedHere = onDay.filter((o) => o.in_stamp_rally)
     byStall.set(stall, {
       shown: new Set(onDay),
       list: onDay,
-      stamped: onDay.some((o) => o.in_stamp_rally),
+      stamped: stampedHere.length > 0,
+      // Every stamp drawn here, not any: a pitch two tenants share on one day
+      // carries two stamps, and ticking it off after one would hide the other.
+      collected:
+        !!collected && stampedHere.length > 0 && stampedHere.every((o) => collected.has(o.id)),
     })
   }
   return byStall
@@ -415,6 +433,10 @@ function drawnOccupants(stall: PublicFestivalStall): PublicStallOccupant[] {
 
 function isStamped(stall: PublicFestivalStall): boolean {
   return perStall.value.get(stall)?.stamped ?? false
+}
+
+function isCollected(stall: PublicFestivalStall): boolean {
+  return perStall.value.get(stall)?.collected ?? false
 }
 
 defineExpose({ zoomBy, reset, zoom })
@@ -453,6 +475,7 @@ defineExpose({ zoomBy, reset, zoom })
             'is-selected': stall.id === selectedId,
             'is-dimmed': isDimmed(stall.id),
             'is-rally': isRally(stall.id),
+            'is-collected': isCollected(stall),
             'map-stall--round': isCircle(stall.shape),
           }"
           :style="
@@ -467,7 +490,7 @@ defineExpose({ zoomBy, reset, zoom })
           "
           role="button"
           tabindex="0"
-          :aria-label="`${stall.occupants.map((o) => o.title).join(', ')} - open details`"
+          :aria-label="`${stall.occupants.map((o) => o.title).join(', ')}${isCollected(stall) ? ' - stamp collected' : ''} - open details`"
           @pointerup="onStallPointerUp(stall, $event)"
           @keydown.enter.prevent="emit('select', stall)"
           @keydown.space.prevent="emit('select', stall)"
@@ -506,10 +529,17 @@ defineExpose({ zoomBy, reset, zoom })
               >
             </span>
           </span>
-          <!-- The rally mark. Solid rather than duotone so it is one flat colour -
-               the stall's own label colour - instead of two tones of it. -->
-          <span v-if="isStamped(stall)" class="map-stall-stamp" aria-hidden="true">
-            <font-awesome-icon :icon="['fas', 'stamp']" />
+          <!-- The rally mark. Solid rather than duotone so it is one flat color -
+               the stall's own label color - instead of two tones of it. Once the
+               visitor has the stamp it turns into a check on the success color,
+               the one mark on the plan that is about them rather than the stall. -->
+          <span
+            v-if="isStamped(stall)"
+            class="map-stall-stamp"
+            :class="{ 'is-collected': isCollected(stall) }"
+            aria-hidden="true"
+          >
+            <font-awesome-icon :icon="['fas', isCollected(stall) ? 'circle-check' : 'stamp']" />
           </span>
         </div>
       </div>

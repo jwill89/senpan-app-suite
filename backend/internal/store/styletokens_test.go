@@ -109,33 +109,33 @@ func TestMigrateStyleTokens_Backfill(t *testing.T) {
 		)`,
 	}
 	for _, stmt := range setup {
-		if _, err := db.Exec(stmt); err != nil {
+		if _, err := db.ExecContext(t.Context(), stmt); err != nil {
 			t.Fatalf("setup legacy schema: %v", err)
 		}
 	}
-	if _, err := db.Exec(
+	if _, err := db.ExecContext(t.Context(),
 		`INSERT INTO styles (name, css_content) VALUES (?, ?)`,
 		"Obon", ":root{ --page-bg: #1a0a0b; --accent: #fbc95d; }",
 	); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := db.Exec("PRAGMA user_version = 36"); err != nil {
+	if _, err := db.ExecContext(t.Context(), "PRAGMA user_version = 36"); err != nil {
 		t.Fatal(err)
 	}
 
-	if err := ensureSchema(db); err != nil {
+	if err := ensureSchema(t.Context(), db); err != nil {
 		t.Fatalf("ensureSchema: %v", err)
 	}
 
-	if !hasColumn(db, "styles", "tokens") {
+	if !hasColumn(t.Context(), db, "styles", "tokens") {
 		t.Fatal("styles.tokens column should exist after migration")
 	}
-	if hasColumn(db, "styles", "css_content") {
+	if hasColumn(t.Context(), db, "styles", "css_content") {
 		t.Error("legacy styles.css_content column should have been dropped")
 	}
 
 	var raw string
-	if err := db.QueryRow(`SELECT tokens FROM styles WHERE name = 'Obon'`).Scan(&raw); err != nil {
+	if err := db.QueryRowContext(t.Context(), `SELECT tokens FROM styles WHERE name = 'Obon'`).Scan(&raw); err != nil {
 		t.Fatal(err)
 	}
 	tokens := map[string]string{}

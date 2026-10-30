@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"errors"
 	"log/slog"
 	"net/http"
@@ -92,7 +93,7 @@ func (s *Server) handleAuthAction(w http.ResponseWriter, r *http.Request) {
 	}
 
 	username := strings.TrimSpace(req.Username)
-	user, hash, err := s.store.GetUserByUsername(username)
+	user, hash, err := s.store.GetUserByUsername(r.Context(), username)
 	if err != nil {
 		writeInternalError(w, "lookup user", err)
 		return
@@ -132,7 +133,8 @@ func (s *Server) handleAuthAction(w http.ResponseWriter, r *http.Request) {
 	// Stamp the last-login time (best-effort - don't fail the login if it errors).
 	// The returned user still carries the *previous* value, which is the intended
 	// "last seen" semantic; the users table reloads to show the fresh time.
-	if err := s.store.UpdateLastLogin(user.ID); err != nil {
+	// Detached: the login has happened, whether or not the client stays for the reply.
+	if err := s.store.UpdateLastLogin(context.WithoutCancel(r.Context()), user.ID); err != nil {
 		slog.Error("update last login", "error", err, "user_id", user.ID)
 	}
 	writeJSON(w, http.StatusOK, model.LoginResponse{Success: true, User: *user})
@@ -210,7 +212,7 @@ func (s *Server) handleRegister(w http.ResponseWriter, r *http.Request) {
 		writeInternalError(w, "hash password", err)
 		return
 	}
-	if _, err := s.store.CreateUser(username, hash); err != nil {
+	if _, err := s.store.CreateUser(r.Context(), username, hash); err != nil {
 		if errors.Is(err, store.ErrUsernameTaken) {
 			slog.Info("register attempt for existing username", "username", username, "ip", ip)
 			writeJSON(w, http.StatusOK, generic)

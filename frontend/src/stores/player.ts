@@ -61,9 +61,7 @@ function resolveStoredShape(): { mode: string; emoji: string } {
   if (mode === 'blank') return { mode: 'blank', emoji: '' }
   // Legacy fixed shape id (heart/star/...): map to its emoji, else fall back blank.
   const legacy = STAMP_SHAPES.find((s) => s.id === mode)
-  return legacy && legacy.emoji
-    ? { mode: 'emoji', emoji: legacy.emoji }
-    : { mode: 'blank', emoji: '' }
+  return legacy?.emoji ? { mode: 'emoji', emoji: legacy.emoji } : { mode: 'blank', emoji: '' }
 }
 
 export const usePlayerStore = defineStore('player', () => {
@@ -476,7 +474,7 @@ export const usePlayerStore = defineStore('player', () => {
    */
   function uploadCustomStamp(event: Event): void {
     const input = event.target as HTMLInputElement
-    const file = input.files && input.files[0]
+    const file = input.files?.[0]
     if (!file) return
     if (!file.type.startsWith('image/')) {
       ui.notify('Please select an image file.', 'error')
@@ -569,7 +567,7 @@ export const usePlayerStore = defineStore('player', () => {
   async function loadBoardById(id: string): Promise<string | null> {
     joinError.value = ''
     if (!id) return null
-    if (playerCard.value && playerCard.value.id === id) {
+    if (playerCard.value?.id === id) {
       return null // already loaded for this id; caller keeps existing details
     }
     joining.value = true

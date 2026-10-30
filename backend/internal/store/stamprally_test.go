@@ -12,7 +12,7 @@ import (
 // rally (so callers get the assigned stamp/prize ids).
 func makeRally(t *testing.T, s *store.Store, title string) *model.StampRally {
 	t.Helper()
-	id, err := s.CreateStampRally(&model.StampRally{
+	id, err := s.CreateStampRally(t.Context(), &model.StampRally{
 		Title:           title,
 		CardImage:       "images/stamp_cards/card.png",
 		NotStampedImage: "images/stamp_stamps/blank.png",
@@ -29,7 +29,7 @@ func makeRally(t *testing.T, s *store.Store, title string) *model.StampRally {
 	if err != nil {
 		t.Fatalf("CreateStampRally: %v", err)
 	}
-	r, err := s.GetStampRally(id)
+	r, err := s.GetStampRally(t.Context(), id)
 	if err != nil || r == nil {
 		t.Fatalf("GetStampRally: r=%v err=%v", r, err)
 	}
@@ -68,10 +68,10 @@ func TestStampRally_CompletionCounts(t *testing.T) {
 	r.CompletionMode = model.RallyCompletionCounts
 	r.RequiredFood = 1
 	r.RequiredGame = 1
-	if err := s.UpdateStampRally(r, true, true); err != nil {
+	if err := s.UpdateStampRally(t.Context(), r, true, true); err != nil {
 		t.Fatalf("UpdateStampRally: %v", err)
 	}
-	got, err := s.GetStampRally(r.ID)
+	got, err := s.GetStampRally(t.Context(), r.ID)
 	if err != nil || got == nil {
 		t.Fatalf("GetStampRally: got=%v err=%v", got, err)
 	}
@@ -85,23 +85,23 @@ func TestStampRally_UpdateKeepsCollections(t *testing.T) {
 	r := makeRally(t, s, "Rally")
 	stamp1 := r.Stamps[0]
 
-	card, err := s.IssueRallyCard(r.ID, "Tataru", "Gilgamesh")
+	card, err := s.IssueRallyCard(t.Context(), r.ID, "Tataru", "Gilgamesh")
 	if err != nil {
 		t.Fatalf("IssueRallyCard: %v", err)
 	}
-	if _, err := s.CollectStamp(r.ID, card.ID, stamp1.ID, "Tataru", "Senpan Tea House", model.StampTypeFood); err != nil {
+	if _, err := s.CollectStamp(t.Context(), r.ID, card.ID, stamp1.ID, "Tataru", "Senpan Tea House", model.StampTypeFood); err != nil {
 		t.Fatalf("CollectStamp: %v", err)
 	}
 
 	// Update the rally, KEEPING stamp1 by id (and editing its password) and stamp2.
 	r.Title = "Rally (edited)"
 	r.Stamps[0].Password = "alpha2"
-	if err := s.UpdateStampRally(r, true, true); err != nil {
+	if err := s.UpdateStampRally(t.Context(), r, true, true); err != nil {
 		t.Fatalf("UpdateStampRally: %v", err)
 	}
 
 	// stamp1 kept its id, so the collection survives the edit.
-	collected, err := s.ListCollectedStampIDs(card.ID)
+	collected, err := s.ListCollectedStampIDs(t.Context(), card.ID)
 	if err != nil {
 		t.Fatalf("ListCollectedStampIDs: %v", err)
 	}
@@ -128,11 +128,11 @@ func TestStampRally_UpdateStampScopedToRally(t *testing.T) {
 		Image:    "images/stamp_stamps/x.png",
 		Password: "hijacked",
 	})
-	if err := s.UpdateStampRally(a, true, true); err != nil {
+	if err := s.UpdateStampRally(t.Context(), a, true, true); err != nil {
 		t.Fatalf("UpdateStampRally: %v", err)
 	}
 
-	rb, err := s.GetStampRally(b.ID)
+	rb, err := s.GetStampRally(t.Context(), b.ID)
 	if err != nil || rb == nil {
 		t.Fatalf("GetStampRally(B): rb=%v err=%v", rb, err)
 	}
@@ -154,7 +154,7 @@ func TestStampRally_ListStallCounts(t *testing.T) {
 	s := newTestStore(t)
 	r := makeRally(t, s, "Rally") // 2 stamps, none paused
 
-	list, err := s.ListStampRallies()
+	list, err := s.ListStampRallies(t.Context())
 	if err != nil {
 		t.Fatalf("ListStampRallies: %v", err)
 	}
@@ -163,10 +163,10 @@ func TestStampRally_ListStallCounts(t *testing.T) {
 	}
 
 	// Pausing one stall drops the active count (the at-a-glance "X/Y active" summary).
-	if _, err := s.SetStampPaused(r.ID, r.Stamps[0].ID, true); err != nil {
+	if _, err := s.SetStampPaused(t.Context(), r.ID, r.Stamps[0].ID, true); err != nil {
 		t.Fatalf("SetStampPaused: %v", err)
 	}
-	list, _ = s.ListStampRallies()
+	list, _ = s.ListStampRallies(t.Context())
 	if list[0].ActiveStampCount != 1 {
 		t.Errorf("active after pause = %d; want 1", list[0].ActiveStampCount)
 	}
@@ -175,12 +175,12 @@ func TestStampRally_ListStallCounts(t *testing.T) {
 func TestStampRally_CollectUniqueGuard(t *testing.T) {
 	s := newTestStore(t)
 	r := makeRally(t, s, "Rally")
-	card, _ := s.IssueRallyCard(r.ID, "Solo", "Gilgamesh")
+	card, _ := s.IssueRallyCard(t.Context(), r.ID, "Solo", "Gilgamesh")
 
-	if _, err := s.CollectStamp(r.ID, card.ID, r.Stamps[0].ID, "Solo", "Senpan Tea House", model.StampTypeFood); err != nil {
+	if _, err := s.CollectStamp(t.Context(), r.ID, card.ID, r.Stamps[0].ID, "Solo", "Senpan Tea House", model.StampTypeFood); err != nil {
 		t.Fatalf("first collect: %v", err)
 	}
-	_, err := s.CollectStamp(r.ID, card.ID, r.Stamps[0].ID, "Solo", "Senpan Tea House", model.StampTypeFood)
+	_, err := s.CollectStamp(t.Context(), r.ID, card.ID, r.Stamps[0].ID, "Solo", "Senpan Tea House", model.StampTypeFood)
 	if !errors.Is(err, store.ErrStampAlreadyCollected) {
 		t.Errorf("second collect err = %v; want ErrStampAlreadyCollected", err)
 	}
@@ -189,12 +189,12 @@ func TestStampRally_CollectUniqueGuard(t *testing.T) {
 func TestStampRally_LogsAndDelete(t *testing.T) {
 	s := newTestStore(t)
 	r := makeRally(t, s, "Rally")
-	c1, _ := s.IssueRallyCard(r.ID, "Aria", "Gilgamesh")
-	c2, _ := s.IssueRallyCard(r.ID, "Borin", "Gilgamesh")
-	_, _ = s.CollectStamp(r.ID, c1.ID, r.Stamps[0].ID, "Aria", "Senpan Tea House", model.StampTypeFood)
-	_, _ = s.CollectStamp(r.ID, c2.ID, r.Stamps[1].ID, "Borin", "Senpan Tea House", model.StampTypeGame)
+	c1, _ := s.IssueRallyCard(t.Context(), r.ID, "Aria", "Gilgamesh")
+	c2, _ := s.IssueRallyCard(t.Context(), r.ID, "Borin", "Gilgamesh")
+	_, _ = s.CollectStamp(t.Context(), r.ID, c1.ID, r.Stamps[0].ID, "Aria", "Senpan Tea House", model.StampTypeFood)
+	_, _ = s.CollectStamp(t.Context(), r.ID, c2.ID, r.Stamps[1].ID, "Borin", "Senpan Tea House", model.StampTypeGame)
 
-	logs, err := s.ListRallyCollections(r.ID)
+	logs, err := s.ListRallyCollections(t.Context(), r.ID)
 	if err != nil {
 		t.Fatalf("ListRallyCollections: %v", err)
 	}
@@ -211,14 +211,14 @@ func TestStampRally_LogsAndDelete(t *testing.T) {
 	}
 
 	// Delete cascades cards + collections.
-	deleted, err := s.DeleteStampRally(r.ID)
+	deleted, err := s.DeleteStampRally(t.Context(), r.ID)
 	if err != nil || !deleted {
 		t.Fatalf("DeleteStampRally: deleted=%v err=%v", deleted, err)
 	}
-	if gone, _ := s.GetStampRally(r.ID); gone != nil {
+	if gone, _ := s.GetStampRally(t.Context(), r.ID); gone != nil {
 		t.Errorf("rally still present after delete")
 	}
-	if logs, _ := s.ListRallyCollections(r.ID); len(logs) != 0 {
+	if logs, _ := s.ListRallyCollections(t.Context(), r.ID); len(logs) != 0 {
 		t.Errorf("collections survived rally delete")
 	}
 }

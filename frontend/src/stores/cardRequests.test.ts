@@ -31,7 +31,7 @@ describe('cardRequests store', () => {
 
   it('submit() blocks and notifies when the form is invalid', async () => {
     const s = useCardRequestsStore()
-    const notify = vi.spyOn(useUiStore(), 'notify').mockImplementation(() => {})
+    const notify = vi.spyOn(useUiStore(), 'notify').mockImplementation(() => undefined)
     await s.submit()
     expect(req).not.toHaveBeenCalled()
     expect(notify).toHaveBeenCalled()
@@ -39,7 +39,7 @@ describe('cardRequests store', () => {
 
   it('submit() posts the request (uppercasing the id) and records the pending result', async () => {
     const s = useCardRequestsStore()
-    vi.spyOn(useUiStore(), 'notify').mockImplementation(() => {})
+    vi.spyOn(useUiStore(), 'notify').mockImplementation(() => undefined)
     req.mockResolvedValue({ id: 'ABC123', status: 'pending' })
     s.characterName = 'Aria'
     s.world = 'Gilgamesh'

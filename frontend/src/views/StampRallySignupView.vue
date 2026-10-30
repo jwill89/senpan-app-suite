@@ -143,7 +143,7 @@ function goLookup(): void {
 <template>
   <div>
     <div class="topbar">
-      <button class="btn-neutral btn-sm" @click="back">
+      <button type="button" class="btn-neutral btn-sm" @click="back">
         <font-awesome-icon :icon="['fas', 'arrow-left']" /> Back
       </button>
       <h2>{{ rally?.title ?? 'Stamp Rally' }}</h2>
@@ -171,7 +171,7 @@ function goLookup(): void {
             <a :href="cardLink" target="_blank" rel="noopener" class="stamp-signup-link-url">
               {{ cardLink }}
             </a>
-            <button class="btn-view btn-sm" @click="store.copyLink(cardLink)">
+            <button type="button" class="btn-view btn-sm" @click="store.copyLink(cardLink)">
               <font-awesome-icon :icon="['fas', 'copy']" /> Copy
             </button>
           </div>
@@ -181,7 +181,7 @@ function goLookup(): void {
             <a :href="garaponLink" target="_blank" rel="noopener" class="stamp-signup-link-url">
               {{ garaponLink }}
             </a>
-            <button class="btn-view btn-sm" @click="store.copyLink(garaponLink)">
+            <button type="button" class="btn-view btn-sm" @click="store.copyLink(garaponLink)">
               <font-awesome-icon :icon="['fas', 'copy']" /> Copy
             </button>
           </div>
@@ -198,7 +198,7 @@ function goLookup(): void {
               <strong>Save these links.</strong> This browser remembers them, so they will be here
               when you come back on this device - but clearing your browser data loses them. Your
               stamp card can also be
-              <button class="link-btn" @click="goLookup">looked up by name</button>;
+              <button type="button" class="link-btn" @click="goLookup">looked up by name</button>;
               <template v-if="garaponLink"
                 >your draw link cannot, so keep that one somewhere safe or ask a staff member.
               </template>
@@ -207,7 +207,9 @@ function goLookup(): void {
 
           <p v-if="!justSignedUp" class="stamp-signup-lookup-line">
             Not your device?
-            <button class="link-btn" @click="forgetOnThisDevice">Forget these links here</button>
+            <button type="button" class="link-btn" @click="forgetOnThisDevice">
+              Forget these links here
+            </button>
           </p>
         </div>
 
@@ -280,7 +282,7 @@ function goLookup(): void {
 
           <p class="stamp-signup-lookup-line">
             Already signed up?
-            <button class="link-btn" @click="goLookup">Find my links</button>
+            <button type="button" class="link-btn" @click="goLookup">Find my links</button>
           </p>
         </template>
       </template>

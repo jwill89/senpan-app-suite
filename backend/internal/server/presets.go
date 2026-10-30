@@ -45,7 +45,7 @@ func (s *Server) handlePresetsList(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	presets, err := s.store.ListGamePresets()
+	presets, err := s.store.ListGamePresets(r.Context())
 	if err != nil {
 		writeInternalError(w, "presets", err)
 		return
@@ -71,7 +71,7 @@ func (s *Server) handlePresetCreate(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	id, err := s.store.CreateGamePreset(name, req.PatternIDs, req.GameDetails, req.Auto, bingo.ClampAutoInterval(req.AutoInterval))
+	id, err := s.store.CreateGamePreset(r.Context(), name, req.PatternIDs, req.GameDetails, req.Auto, bingo.ClampAutoInterval(req.AutoInterval))
 	if err != nil {
 		writeInternalError(w, "presets", err)
 		return
@@ -101,7 +101,7 @@ func (s *Server) handlePresetUpdate(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	if err := s.store.UpdateGamePreset(id, name, req.PatternIDs, req.GameDetails, req.Auto, bingo.ClampAutoInterval(req.AutoInterval)); err != nil {
+	if err := s.store.UpdateGamePreset(r.Context(), id, name, req.PatternIDs, req.GameDetails, req.Auto, bingo.ClampAutoInterval(req.AutoInterval)); err != nil {
 		writeInternalError(w, "presets", err)
 		return
 	}
@@ -121,7 +121,7 @@ func (s *Server) handlePresetDelete(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	if _, err := s.store.DeleteGamePreset(id); err != nil {
+	if _, err := s.store.DeleteGamePreset(r.Context(), id); err != nil {
 		writeInternalError(w, "presets", err)
 		return
 	}

@@ -1,64 +1,108 @@
-# golangci-lint configuration for the Go backend (schema v2; installed v2.13.1).
+# golangci-lint configuration for the Go backend (schema v2; pinned v2.15.0).
 #
-# Run locally with `golangci-lint run ./...` from the `backend/` directory; CI runs
-# the same command (see .github/workflows/ci.yml). The CI version is pinned to
-# match what is documented here so local and CI results agree.
+# Run from `backend/` the way CI does, built from source with the local toolchain (a
+# prebuilt linter binary cannot read export data from a newer Go than it was built with):
+#
+#   go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.15.0 run ./...
+#
+# The standard set (errcheck, govet, ineffassign, staticcheck, unused) and these. Each one
+# off in a place is off below with its reason, or at the line with a nolint that says why.
 
 version: "2"
 
 linters:
-  # Default linters (errcheck, govet, ineffassign, staticcheck, unused) plus a
-  # curated set of high-signal additions.
   enable:
-    - bodyclose # HTTP response bodies must be closed (e.g. Discord webhooks)
-    - errorlint # use %w / errors.Is/As instead of %v / == for error handling
-    - misspell # catch common spelling mistakes in comments and strings
-    - unconvert # flag redundant type conversions
-
+    - bodyclose # a response body left open leaks the connection (Discord, AniList)
+    - copyloopvar
+    - dupword
+    - durationcheck
+    - errname
+    - errorlint # errors compared and wrapped so errors.Is sees through them
+    - exhaustive # a switch on a fixed list names every value or says default
+    - gocritic
+    - gosec
+    - intrange
+    - makezero
+    - misspell
+    - nakedret
+    - nilerr
+    - noctx # every outbound request can be cancelled
+    - predeclared
+    - revive
+    - rowserrcheck
+    - unconvert
+    - unparam
+    - usestdlibvars
+    - wastedassign
+    # Not contextcheck: nothing it finds here is a context dropped by mistake. It flags
+    # callbacks handed to APIs that take none (bingo.GenerateID's existence check,
+    # go-webauthn's user lookup), which close over the request's context instead, and the
+    # WebSocket upgrade, whose connection outlives the request and runs under the hub's.
+    # Not sqlclosecheck: inside a transaction the store closes a result set by hand before
+    # its next statement on the same connection, where a deferred close would come too late.
   settings:
+    gosec:
+      excludes:
+        - G104 # unchecked errors are errcheck's, with its own exclusions below
+        - G118 # a goroutine given a fresh context does work that outlives its request
+    revive:
+      # Its own default rules, less the two below.
+      enable-default-rules: true
+      rules:
+        # Exported names get a doc comment only when the name does not already say it.
+        - name: exported
+          disabled: true
+        - name: package-comments
+          disabled: true
+    errcheck:
+      # Writing a response fails only when the client has gone: there is nobody left to tell,
+      # and a log line for every dropped phone connection would bury the ones that matter.
+      # Every other error is handled, or discarded at its line with the reason beside it.
+      exclude-functions:
+        - (net/http.ResponseWriter).Write
+        # A deferred rows.Close runs after rows.Err() has been read (rowserrcheck holds every
+        # query to that). A result set read to the end was already closed by Next, and on an
+        # early return the error being returned is the one that matters.
+        - (*database/sql.Rows).Close
     staticcheck:
-      # QF1001 (apply De Morgan's law) is a stylistic refactor, not a bug. For
-      # the character-whitelist guards in carrd.go the `!(a || b || c)` form
-      # reads more clearly than the negated-and rewrite, so keep it disabled.
+      # QF1001 (apply De Morgan's law) is a stylistic refactor, not a bug. For the
+      # character-allowlist guards in carrd.go the `!(a || b || c)` form reads more
+      # clearly than the negated-and rewrite.
       checks:
         - all
         - -QF1001
-
   exclusions:
-    # Preserve the v1 default exclusion set carried over by the v2 migration.
-    generated: lax
-    presets:
-      - comments
-      - common-false-positives
-      - legacy
-      - std-error-handling
     rules:
-      # The test helper `decodeBody` closes the response body via a deferred
-      # Close, but bodyclose cannot trace closure through a helper and reports a
-      # false positive. Test response bodies are short-lived regardless.
-      - linters:
-          - bodyclose
-        path: _test\.go
-      # SA5011 (possible nil pointer dereference) in tests: our tests follow the
-      # standard `x, err := ...; if err != nil { t.Fatal(err) }; if x == nil {
-      # t.Fatal(...) }; use x` shape. t.Fatal terminates the goroutine, so the later
-      # deref is safe, but staticcheck doesn't treat t.Fatal as no-return here and
-      # flags a false positive. (A genuine nil deref in a test panics loudly and
-      # fails the test anyway.) Scoped to test files only - production nil-deref
-      # checks stay on.
-      - linters:
-          - staticcheck
-        path: _test\.go
+      # Tests read every body through a helper and talk to their own servers, and a test's
+      # helper keeps a parameter its callers happen to agree on, for reading at the call.
+      - path: _test\.go
+        linters: [bodyclose, noctx, gosec, unparam]
+      # SA5011 (possible nil pointer dereference) in tests: they follow the standard
+      # `x, err := ...; if err != nil { t.Fatal(err) }; if x == nil { t.Fatal(...) }; use x`
+      # shape. t.Fatal ends the goroutine, so the later dereference is safe, but staticcheck
+      # does not treat it as no-return here. Production nil-dereference checks stay on.
+      - path: _test\.go
+        linters: [staticcheck]
         text: SA5011
-    paths:
-      - third_party$
-      - builtin$
-      - examples$
+      # A test closes what it opened - a response body, a test server, a database - once its
+      # assertions are made. A failed close changes no verdict and has nobody to tell.
+      - path: _test\.go
+        linters: [errcheck]
+        text: "Error return value of `[^`]*\\.Close` is not checked"
+      # Everything the server writes lands in the web root's upload trees (images/, carrd/,
+      # fonts/), kept world-readable like the rest of the document root: Apache serves
+      # images/ and carrd/ as its own user (deploy/README.md, "Running as a non-root user").
+      - path: internal/server/
+        linters: [gosec]
+        text: "G30[16]:"
 
 formatters:
-  exclusions:
-    generated: lax
-    paths:
-      - third_party$
-      - builtin$
-      - examples$
+  enable:
+    - gofmt
+    - goimports
+  settings:
+    goimports:
+      # The module's own packages are a group of their own, after everything else. Its name
+      # has no dot, which goimports would otherwise read as the standard library.
+      local-prefixes:
+        - app-suite

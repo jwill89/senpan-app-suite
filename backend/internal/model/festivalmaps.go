@@ -305,3 +305,85 @@ type PublicFestivalMap struct {
 	StampRallySignup bool  `json:"stamp_rally_signup,omitempty"`
 	StampRallyID     int64 `json:"stamp_rally_id,omitempty"`
 }
+
+// -- Festival dashboard -------------------------------------------------------
+//
+// The dashboard is one participant's standing across everything filed under a
+// festival: their stamp card on the festival's rally, their garapon drawing link,
+// and their entries in the festival's raffles. The plan itself still comes from
+// PublicFestivalMap; this is only the part that depends on WHO is looking.
+//
+// Who is looking is whatever the participant's own device holds - the card and
+// drawing tokens issued at sign-up, and the name and world they enter as - so the
+// request carries those and every one is checked against the festival before it
+// counts. A token from some other festival is ignored rather than refused, since
+// a phone that has been to two festivals holds both.
+
+// FestivalDashboard is the body of POST /api/festival-dashboard/{id}.
+type FestivalDashboard struct {
+	// Who the dashboard describes: the card's holder when a card matched, else the
+	// drawing link's, else the name and world sent. "" when none of them is known.
+	ParticipantName string `json:"participant_name"`
+	World           string `json:"world"`
+	// Rally is the festival's stamp rally (nil = none is running). When a card
+	// matched it is that card's rally, which may since have closed.
+	Rally *FestivalDashboardRally `json:"rally"`
+	// Card is the participant's stamp card on Rally (nil = none on this device).
+	Card *PublicStampCard `json:"card"`
+	// CardToken echoes the token Card was loaded with. It can differ from the one
+	// sent: a drawing link carries its paired card, so a device that only had the
+	// drawing link learns the card's token here and keeps it.
+	CardToken string `json:"card_token,omitempty"`
+	// Garapon is the drum linked to Rally (nil = none).
+	Garapon *FestivalDashboardGarapon `json:"garapon"`
+	// Raffles is every raffle filed under the festival that a visitor may see:
+	// running ones, and closed ones with their winner. Never nil.
+	Raffles []FestivalDashboardRaffle `json:"raffles"`
+}
+
+// FestivalDashboardRally describes the festival's rally for its sign-up panel.
+type FestivalDashboardRally struct {
+	ID        int64  `json:"id"`
+	Title     string `json:"title"`
+	CardImage string `json:"card_image"`
+	Details   string `json:"details"` // markdown
+	// SignupOpen reports that a visitor may issue themselves a card right now: the
+	// rally opted into public sign-up and is open and inside its window.
+	SignupOpen bool `json:"signup_open"`
+}
+
+// FestivalDashboardGarapon is the drum linked to the festival's rally.
+//
+// Player and Draws are set only when the drawing token sent belongs to this drum;
+// with them the page can spin it. Without that token the page can still say how
+// many draws are waiting on the link paired with the participant's card
+// (PairedDrawsLeft), but never hand out the token that spends them - the same rule
+// the name-keyed stamp lookup follows.
+type FestivalDashboardGarapon struct {
+	Garapon PublicGarapon `json:"garapon"`
+	// DefaultDraws is what a public sign-up issues, for the "sign up to get N
+	// draws" line shown before there is any link at all.
+	DefaultDraws    int                  `json:"default_draws"`
+	Player          *GaraponPublicPlayer `json:"player"`
+	Draws           []GaraponDraw        `json:"draws"`
+	HasPairedLink   bool                 `json:"has_paired_link"`
+	PairedDrawsLeft int                  `json:"paired_draws_left"`
+}
+
+// FestivalDashboardRaffle is one of the festival's raffles, with the
+// participant's own entry in it.
+type FestivalDashboardRaffle struct {
+	Raffle       Raffle `json:"raffle"`
+	TotalEntries int    `json:"total_entries"`
+	// Running reports that the raffle can be entered right now: open and inside
+	// its availability window. A closed one is listed for its winner.
+	Running bool `json:"running"`
+	// Entry is the participant's own entry, matched on the whole name and world
+	// exactly as entries merge (nil = none, or no name known). A RaffleLookupEntry
+	// rather than the stored row, so no gil figure ever reaches this response.
+	Entry *RaffleLookupEntry `json:"entry"`
+	// WinnerName is the winner as "Name @ World" once the raffle has closed with
+	// one; IsWinner says it is the participant.
+	WinnerName string `json:"winner_name,omitempty"`
+	IsWinner   bool   `json:"is_winner,omitempty"`
+}

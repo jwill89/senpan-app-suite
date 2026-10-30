@@ -1026,6 +1026,321 @@ components:
         start:
           type: string
       type: object
+    FestivalDashboard:
+      properties:
+        card:
+          nullable: true
+          properties:
+            completed:
+              type: boolean
+            completed_at:
+              type: string
+            participant_name:
+              type: string
+            prizes:
+              items:
+                properties:
+                  id:
+                    format: int64
+                    type: integer
+                  image:
+                    type: string
+                  name:
+                    type: string
+                  placement:
+                    properties:
+                      height:
+                        format: double
+                        type: number
+                      rotation:
+                        format: double
+                        type: number
+                      width:
+                        format: double
+                        type: number
+                      x:
+                        format: double
+                        type: number
+                      "y":
+                        format: double
+                        type: number
+                    type: object
+                type: object
+              type: array
+            prizes_revealed:
+              type: boolean
+            rally:
+              properties:
+                available_from:
+                  type: string
+                available_to:
+                  type: string
+                card_image:
+                  type: string
+                completion_mode:
+                  type: string
+                details:
+                  type: string
+                festival_link:
+                  type: string
+                id:
+                  format: int64
+                  type: integer
+                is_active:
+                  type: boolean
+                not_stamped_image:
+                  type: string
+                redeem_image:
+                  type: string
+                redeem_instructions:
+                  type: string
+                required_food:
+                  type: integer
+                required_game:
+                  type: integer
+                title:
+                  type: string
+              type: object
+            stamps:
+              items:
+                properties:
+                  active_from:
+                    type: string
+                  active_to:
+                    type: string
+                  affiliate_name:
+                    type: string
+                  available:
+                    type: boolean
+                  collected:
+                    type: boolean
+                  collected_at:
+                    type: string
+                  expired:
+                    type: boolean
+                  id:
+                    format: int64
+                    type: integer
+                  image:
+                    type: string
+                  occupant_id:
+                    format: int64
+                    nullable: true
+                    type: integer
+                  placement:
+                    properties:
+                      height:
+                        format: double
+                        type: number
+                      rotation:
+                        format: double
+                        type: number
+                      width:
+                        format: double
+                        type: number
+                      x:
+                        format: double
+                        type: number
+                      "y":
+                        format: double
+                        type: number
+                    type: object
+                  stamp_type:
+                    type: string
+                type: object
+              type: array
+          type: object
+        card_token:
+          type: string
+        garapon:
+          nullable: true
+          properties:
+            default_draws:
+              type: integer
+            draws:
+              items:
+                properties:
+                  ball_color:
+                    type: string
+                  drawn_at:
+                    type: string
+                  garapon_id:
+                    format: int64
+                    type: integer
+                  id:
+                    format: int64
+                    type: integer
+                  player_id:
+                    format: int64
+                    type: integer
+                  player_name:
+                    type: string
+                  prize_id:
+                    format: int64
+                    type: integer
+                  prize_name:
+                    type: string
+                type: object
+              type: array
+            garapon:
+              properties:
+                details:
+                  type: string
+                grand_prize_image:
+                  type: string
+                id:
+                  format: int64
+                  type: integer
+                prizes:
+                  items:
+                    properties:
+                      ball_color:
+                        type: string
+                      garapon_id:
+                        format: int64
+                        type: integer
+                      id:
+                        format: int64
+                        type: integer
+                      is_grand:
+                        type: boolean
+                      name:
+                        type: string
+                      rate:
+                        format: double
+                        type: number
+                      sort_order:
+                        type: integer
+                    type: object
+                  type: array
+                status:
+                  type: string
+                title:
+                  type: string
+              type: object
+            has_paired_link:
+              type: boolean
+            paired_draws_left:
+              type: integer
+            player:
+              nullable: true
+              properties:
+                draws_used:
+                  type: integer
+                max_draws:
+                  type: integer
+                player_name:
+                  type: string
+                stamp_card_token:
+                  type: string
+              type: object
+          type: object
+        participant_name:
+          type: string
+        raffles:
+          items:
+            properties:
+              entry:
+                nullable: true
+                properties:
+                  character_name:
+                    type: string
+                  num_entries:
+                    type: integer
+                  paid_entries:
+                    type: integer
+                  payment_state:
+                    type: string
+                  world:
+                    type: string
+                type: object
+              is_winner:
+                type: boolean
+              raffle:
+                properties:
+                  available_from:
+                    type: string
+                  available_to:
+                    type: string
+                  cost_per_entry:
+                    format: double
+                    type: number
+                  created_at:
+                    type: string
+                  description:
+                    type: string
+                  entry_mode:
+                    type: string
+                  festival_map_id:
+                    format: int64
+                    nullable: true
+                    type: integer
+                  festival_map_name:
+                    type: string
+                  id:
+                    format: int64
+                    type: integer
+                  max_entries:
+                    type: integer
+                  occupant_id:
+                    format: int64
+                    nullable: true
+                    type: integer
+                  paid_total:
+                    format: double
+                    type: number
+                  pay_image:
+                    type: string
+                  prize_image:
+                    type: string
+                  rules:
+                    type: string
+                  signup_instructions:
+                    type: string
+                  stall_name:
+                    type: string
+                  status:
+                    type: string
+                  tier_costs:
+                    items:
+                      format: double
+                      type: number
+                    type: array
+                  title:
+                    type: string
+                  winner_entry_id:
+                    format: int64
+                    nullable: true
+                    type: integer
+                  winner_name:
+                    type: string
+                type: object
+              running:
+                type: boolean
+              total_entries:
+                type: integer
+              winner_name:
+                type: string
+            type: object
+          type: array
+        rally:
+          nullable: true
+          properties:
+            card_image:
+              type: string
+            details:
+              type: string
+            id:
+              format: int64
+              type: integer
+            signup_open:
+              type: boolean
+            title:
+              type: string
+          type: object
+        world:
+          type: string
+      type: object
     FestivalMap:
       properties:
         created_at:
@@ -2107,6 +2422,8 @@ components:
                 type: string
             type: object
           type: array
+        festival_link:
+          type: string
         garapon:
           properties:
             details:
@@ -3080,6 +3397,10 @@ components:
           type: integer
         image:
           type: string
+        occupant_id:
+          format: int64
+          nullable: true
+          type: integer
         placement:
           properties:
             height:
@@ -3153,6 +3474,8 @@ components:
               type: string
             details:
               type: string
+            festival_link:
+              type: string
             id:
               format: int64
               type: integer
@@ -3193,6 +3516,10 @@ components:
                 type: integer
               image:
                 type: string
+              occupant_id:
+                format: int64
+                nullable: true
+                type: integer
               placement:
                 properties:
                   height:
@@ -3227,6 +3554,8 @@ components:
         completion_mode:
           type: string
         details:
+          type: string
+        festival_link:
           type: string
         id:
           format: int64
@@ -4896,6 +5225,8 @@ components:
                   type: string
                 details:
                   type: string
+                festival_link:
+                  type: string
                 id:
                   format: int64
                   type: integer
@@ -4936,6 +5267,10 @@ components:
                     type: integer
                   image:
                     type: string
+                  occupant_id:
+                    format: int64
+                    nullable: true
+                    type: integer
                   placement:
                     properties:
                       height:
@@ -5468,7 +5803,7 @@ info:
     (`{ "type": "log", "entry": LogEntry }`) for the live log tail - best-effort,
     sent only while an admin is connected.
   title: Senpan App Suite API
-  version: 3.24.1
+  version: 3.25.0
 openapi: 3.0.3
 paths:
   /api/account/change-password:
@@ -7811,6 +8146,68 @@ paths:
       summary: Client bootstrap config
       tags:
       - System
+  /api/festival-dashboard/{id}:
+    post:
+      description: |-
+        **Auth:** public
+
+        Everything filed under a published festival that depends on who is looking: their card on the festival's stamp rally, the garapon linked to that rally (with their draws when the drawing token is sent, else only how many draws wait on the link paired with their card - never its token), and every raffle filed under the festival a visitor may see, each with their own entry matched on the whole name and world. A drawing token also yields its paired card, echoed as `card_token`. Tokens belonging to another festival are ignored, not refused. POST so tokens and names stay out of URLs and logs; rate limited per IP. The plan itself comes from GET /api/festival-maps/public/{id}.
+      parameters:
+      - description: Map shortcode or numeric id.
+        in: path
+        name: id
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              properties:
+                card_token:
+                  description: Stamp card token.
+                  type: string
+                garapon_token:
+                  description: Garapon drawing token.
+                  type: string
+                name:
+                  description: Character name, used when no card or drawing link matched.
+                  type: string
+                world:
+                  description: Home world.
+                  type: string
+              type: object
+        description: What the participant's device holds; every field optional.
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FestivalDashboard'
+          description: Success
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: Invalid JSON or a too-long name
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: Not found or not published
+        "429":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: Rate limited
+      security: []
+      summary: One participant's festival dashboard
+      tags:
+      - Festival Map
   /api/festival-maps:
     get:
       description: |-

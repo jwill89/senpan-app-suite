@@ -13,7 +13,7 @@
          the repo and on disk). The folder/csproj keep the shorter "SenpanCompanion"
          name; only the published assembly is "SenpanCompanionAdmin". -->
     <AssemblyName>SenpanCompanionAdmin</AssemblyName>
-    <Version>3.9.0.0</Version>
+    <Version>3.9.1.0</Version>
     <Description>Senpan Admin Companion: operate Senpan Tea House app services from inside FFXIV.</Description>
     <PackageProjectUrl>https://github.com/jwill89/senpan-app-suite</PackageProjectUrl>
     <Nullable>enable</Nullable>
@@ -25,6 +25,19 @@
          non-Windows, so it is a no-op locally: the normal Windows build and the
          `dotnet build -c Release` deploy step are unaffected. -->
     <EnableWindowsTargeting Condition="'$(OS)' != 'Windows_NT'">true</EnableWindowsTargeting>
+
+    <!-- The .NET analyzers at their recommended level, and the code style in
+         .editorconfig checked in the build (the same standard as the sister Kindred
+         Nights plugin). Set here rather than in a plugins/Directory.Build.props
+         because this is the only project, and its .editorconfig is scoped to this
+         folder too, so the two halves of the standard sit side by side. The
+         documentation file is made only so the build can see unused usings
+         (IDE0005); nothing reads it, so it stays in obj/ rather than being copied
+         next to the DLL, where DalamudPackager would put it in latest.zip. -->
+    <AnalysisLevel>latest-recommended</AnalysisLevel>
+    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <CopyDocumentationFileToOutputDirectory>false</CopyDocumentationFileToOutputDirectory>
   </PropertyGroup>
 
   <ItemGroup>

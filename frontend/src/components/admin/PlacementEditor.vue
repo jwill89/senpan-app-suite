@@ -12,7 +12,7 @@
  * `select` and `update(key, placement)` rather than mutating props. Continuous drags
  * emit on each pointermove; the parent applies the new placement to the matching item.
  */
-import { ref } from 'vue'
+import { useTemplateRef } from 'vue'
 import { assetUrl } from '@/lib/assets'
 import { placementStyle } from '@/lib/stampcard'
 import { usePlacementDrag, type DragMode } from '@/composables/usePlacementDrag'
@@ -37,7 +37,7 @@ const emit = defineEmits<{
   update: [key: string, placement: Placement]
 }>()
 
-const canvasRef = ref<HTMLElement | null>(null)
+const canvasRef = useTemplateRef<HTMLElement>('canvasRef')
 
 // Move/resize/rotate geometry is shared with the Festival Map stall editor.
 const { beginDrag: startDrag } = usePlacementDrag<string>(canvasRef, (key, placement) =>

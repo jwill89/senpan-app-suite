@@ -45,7 +45,7 @@ function goHome(): void {
 <template>
   <div>
     <div class="topbar">
-      <button class="btn-neutral btn-sm" @click="goHome">
+      <button type="button" class="btn-neutral btn-sm" @click="goHome">
         <font-awesome-icon :icon="['fas', 'arrow-left']" /> Home
       </button>
       <h2><font-awesome-icon :icon="['fad', 'ticket']" /> Raffles</h2>

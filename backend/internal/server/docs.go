@@ -25,7 +25,7 @@ func (s *Server) registerDocs() {
 
 // handleOpenAPISpec serves the raw OpenAPI 3 document (public - the API contract
 // is already public in the repo; the spec carries no secrets).
-func (s *Server) handleOpenAPISpec(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handleOpenAPISpec(w http.ResponseWriter, _ *http.Request) {
 	if len(s.openAPISpec) == 0 {
 		http.Error(w, "API spec not available", http.StatusServiceUnavailable)
 		return
@@ -37,7 +37,7 @@ func (s *Server) handleOpenAPISpec(w http.ResponseWriter, r *http.Request) {
 
 // handleAPIDocs serves a minimal HTML page that renders the spec with Scalar's
 // standalone API-reference viewer (loaded from a CDN). Public.
-func (s *Server) handleAPIDocs(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handleAPIDocs(w http.ResponseWriter, _ *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-cache")
 	_, _ = w.Write([]byte(scalarHTML))

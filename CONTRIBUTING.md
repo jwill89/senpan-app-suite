@@ -15,14 +15,14 @@ the primary reference. New to the repo? Start with [`README.md`](README.md).
 **First-time setup (once per clone):**
 
 ```bash
-git submodule update --init --recursive   # shared ESLint config (@jwill89/eslint-config)
 git config core.hooksPath .githooks        # pre-push runs scripts/check.ps1 (the CI mirror)
 ```
 
-The ESLint config is a git submodule linked as a `file:` dependency - without it
-checked out **and** `npm install` run to link it, `npm run lint:check` can't even
-start (it errors _"Cannot find package"_), so lint silently doesn't run. `check.ps1`
-now fails early with this exact fix if the config isn't linked.
+The lint configs live in the repo: `frontend/eslint.config.js`,
+`frontend/stylelint.config.mjs`, `backend/.golangci.yml`, the plugin's
+`.editorconfig` and the root `PSScriptAnalyzerSettings.psd1`. (The frontend used to
+pull its ESLint rules from a private `@jwill89/eslint-config` submodule; that is
+gone, so a plain `npm install` is all the frontend needs.)
 
 ```bash
 cd backend && go run . -addr :8080 -db ../devdata/database.sqlite -webroot ../devdata/webroot   # backend
@@ -50,7 +50,9 @@ CI fails the pipeline on any of these, so run them locally first.
 **Frontend (in `frontend/`):**
 
 ```bash
-npm run lint:check     # ESLint (no --fix)
+npm run lint:check     # ESLint + Stylelint (no --fix)
+npm run format:check   # Prettier
+npm run lint:conventions  # CSS naming, the scoped-CSS ratchet, theme tokens
 npm run typecheck      # vue-tsc
 npm run test           # Vitest (one-shot)
 npm run build          # production build
@@ -59,10 +61,10 @@ npm run build          # production build
 **Backend (in `backend/`):**
 
 ```bash
-golangci-lint run ./...
+go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.15.0 run ./...
 go build ./...
 go vet ./...
-go test ./...
+go test ./...          # CI adds -race; locally that needs gcc on PATH
 ```
 
 (CI also runs `gen:types` and `govulncheck`; see
@@ -77,10 +79,12 @@ go test ./...
 > (`git config core.hooksPath .githooks`), this runs automatically on `git push` and
 > aborts it on any failure - bypass a single push with `git push --no-verify`.
 > `golangci-lint` is **not** covered
-> by `go build`/`go vet`, so don't skip it (install the pinned version:
-> `go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.13.1`).
-> The race detector is intentionally not run - the pure-Go SQLite driver
-> (`CGO_ENABLED=0`) can't use it; see the note in `check.ps1`. (`scripts/check.ps1`
+> by `go build`/`go vet`, so don't skip it; `check.ps1` builds the pinned v2.15.0
+> from source with `go run`, so there is nothing to install. The script also runs
+> `npm audit` and PSScriptAnalyzer (1.25.0; install with
+> `Install-PSResource PSScriptAnalyzer -Version 1.25.0 -Scope CurrentUser`). The
+> race detector runs in CI only - it needs gcc for its runtime; see the note in
+> `check.ps1`. (`scripts/check.ps1`
 > and `scripts/deploy.ps1` are version-controlled; all deploy server settings
 > (host, user, key, webroot, service, opt dir) live in an untracked
 > `scripts/deploy.config.ps1` - copy `deploy.config.example.ps1`.)

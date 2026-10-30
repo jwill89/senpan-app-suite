@@ -1,6 +1,7 @@
 package store
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 
@@ -14,8 +15,8 @@ import (
 
 // GetRaffleEntry retrieves a single raffle entry by character+world for a raffle
 // (case-insensitive), or nil when none matches.
-func (s *Store) GetRaffleEntry(raffleID int64, charName, world string) (*model.RaffleEntry, error) {
-	e, err := scanRaffleEntry(s.db.QueryRow(`SELECT `+raffleEntryColumns+` FROM raffle_entries WHERE raffle_id = ? AND LOWER(character_name) = LOWER(?) AND LOWER(world) = LOWER(?)`,
+func (s *Store) GetRaffleEntry(ctx context.Context, raffleID int64, charName, world string) (*model.RaffleEntry, error) {
+	e, err := scanRaffleEntry(s.db.QueryRowContext(ctx, `SELECT `+raffleEntryColumns+` FROM raffle_entries WHERE raffle_id = ? AND LOWER(character_name) = LOWER(?) AND LOWER(world) = LOWER(?)`,
 		raffleID, charName, world))
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
@@ -27,8 +28,8 @@ func (s *Store) GetRaffleEntry(raffleID int64, charName, world string) (*model.R
 }
 
 // CreateRaffleEntry inserts a new raffle entry (no cap enforcement).
-func (s *Store) CreateRaffleEntry(raffleID int64, charName, world string, numEntries int) (int64, error) {
-	res, err := s.db.Exec(`INSERT INTO raffle_entries (raffle_id, character_name, world, num_entries) VALUES (?, ?, ?, ?)`,
+func (s *Store) CreateRaffleEntry(ctx context.Context, raffleID int64, charName, world string, numEntries int) (int64, error) {
+	res, err := s.db.ExecContext(ctx, `INSERT INTO raffle_entries (raffle_id, character_name, world, num_entries) VALUES (?, ?, ?, ?)`,
 		raffleID, charName, world, numEntries)
 	if err != nil {
 		return 0, err
@@ -37,7 +38,7 @@ func (s *Store) CreateRaffleEntry(raffleID int64, charName, world string, numEnt
 }
 
 // AddRaffleEntries adds entries to an existing raffle_entries row.
-func (s *Store) AddRaffleEntries(entryID int64, additionalEntries int) error {
-	_, err := s.db.Exec(`UPDATE raffle_entries SET num_entries = num_entries + ? WHERE id = ?`, additionalEntries, entryID)
+func (s *Store) AddRaffleEntries(ctx context.Context, entryID int64, additionalEntries int) error {
+	_, err := s.db.ExecContext(ctx, `UPDATE raffle_entries SET num_entries = num_entries + ? WHERE id = ?`, additionalEntries, entryID)
 	return err
 }

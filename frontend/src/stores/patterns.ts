@@ -152,7 +152,7 @@ export const usePatternsStore = defineStore('patterns', () => {
     savingPattern.value = true
     try {
       const catId =
-        newPatternCategoryId.value || (categories.value.length ? categories.value[0].id : 1)
+        newPatternCategoryId.value ?? (categories.value.length ? categories.value[0].id : 1)
       await endpoints.patterns.create(name, newPatternGrid.value, catId)
       ui.notify('Pattern saved', 'success')
       clearPatternEditor()

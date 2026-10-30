@@ -4,12 +4,12 @@ import "testing"
 
 func TestValidFlourishPath(t *testing.T) {
 	valid := []string{
-		"",                                // unset
-		"images/flourishes/a.svg",         // canonical picker output
-		"images/flourishes/Board.svg",     // uppercase filename allowed
+		"",                                  // unset
+		"images/flourishes/a.svg",           // canonical picker output
+		"images/flourishes/Board.svg",       // uppercase filename allowed
 		"images/flourishes/My Flourish.svg", // space in filename allowed
-		"images/flourishes/swirl.SVG",     // case-insensitive extension
-		"images/custom_cat/x.svg",         // underscore category
+		"images/flourishes/swirl.SVG",       // case-insensitive extension
+		"images/custom_cat/x.svg",           // underscore category
 	}
 	for _, p := range valid {
 		if !ValidFlourishPath(p) {
@@ -21,7 +21,7 @@ func TestValidFlourishPath(t *testing.T) {
 		"data:image/svg+xml,<svg onload=alert(1)>", // data URI XSS vector
 		"https://evil.example/x.svg",               // external URL
 		"//evil.example/x.svg",                     // scheme-relative URL
-		"../../etc/passwd.svg",                      // traversal
+		"../../etc/passwd.svg",                     // traversal
 		"images/flourishes/x.png",                  // wrong extension
 		"images/flourishes/x",                      // no extension
 		"images/flourishes/",                       // no filename

@@ -126,7 +126,7 @@ func TestGarapons_Update(t *testing.T) {
 		"title":  "New Title",
 		"prizes": []map[string]any{{"name": "Only", "rate": 1, "is_grand": true}},
 	})
-	if resp.StatusCode != 200 {
+	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("update status = %d; want 200", resp.StatusCode)
 	}
 	resp.Body.Close()
@@ -144,7 +144,7 @@ func TestGarapons_CloseReopen(t *testing.T) {
 
 	// Close -> status flips to closed.
 	resp := env.postJSON(t, fmt.Sprintf("/api/garapons/%d/close", id), map[string]any{})
-	if resp.StatusCode != 200 {
+	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("close status = %d; want 200", resp.StatusCode)
 	}
 	if got := decodeBody(t, resp)["status"]; got != "closed" {
@@ -156,7 +156,7 @@ func TestGarapons_CloseReopen(t *testing.T) {
 
 	// Reopen -> status flips back to open.
 	resp = env.postJSON(t, fmt.Sprintf("/api/garapons/%d/reopen", id), map[string]any{})
-	if resp.StatusCode != 200 {
+	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("reopen status = %d; want 200", resp.StatusCode)
 	}
 	if got := decodeBody(t, resp)["status"]; got != "open" {
@@ -334,7 +334,7 @@ func TestGaraponDraw_RateLimited(t *testing.T) {
 	token, _ := env.createGaraponPlayer(t, gid, "Hero", 1)
 
 	limited := false
-	for i := 0; i < 25; i++ {
+	for range 25 {
 		resp := env.postJSON(t, "/api/garapon/deadbeef00/draw", map[string]any{})
 		resp.Body.Close()
 		if resp.StatusCode == http.StatusTooManyRequests {

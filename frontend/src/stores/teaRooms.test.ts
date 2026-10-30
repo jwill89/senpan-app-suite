@@ -231,7 +231,7 @@ describe('locking', () => {
     // The same instant, expressed in UTC - not the local string passed straight
     // through, which would land the unlock at the wrong moment for anyone else.
     expect(fields.locked_until).toMatch(/Z$/)
-    expect(new Date(fields.locked_until as string).getTime()).toBe(new Date(local).getTime())
+    expect(new Date(fields.locked_until!).getTime()).toBe(new Date(local).getTime())
   })
 
   it('refuses an unlock time that has already passed', async () => {

@@ -261,11 +261,11 @@ export const useRafflesStore = defineStore('raffles', () => {
       const data = await endpoints.raffles.detail(id)
       if (reqId !== detailSeq) return // a newer load superseded this one
       selectedRaffle.value = data.raffle
-      raffleEntries.value = data.entries || []
+      raffleEntries.value = data.entries ?? []
       raffleWinner.value = null
       if (data.raffle.winner_entry_id && raffleEntries.value.length) {
         raffleWinner.value =
-          raffleEntries.value.find((e) => e.id === data.raffle.winner_entry_id) || null
+          raffleEntries.value.find((e) => e.id === data.raffle.winner_entry_id) ?? null
       }
     } catch (e) {
       if (reqId === detailSeq) ui.notify((e as Error).message, 'error')
@@ -302,10 +302,13 @@ export const useRafflesStore = defineStore('raffles', () => {
       .detail(raffle.id)
       .then((data) => {
         selectedRaffle.value = data.raffle
-        raffleTotalEntryCount.value = data.total_entries || 0
+        raffleTotalEntryCount.value = data.total_entries ?? 0
         if (data.winner_entry) raffleWinnerEntry.value = data.winner_entry
       })
-      .catch(() => {})
+      .catch(() => {
+        // Best effort: the raffle from the list is already showing, so a failed
+        // refresh only leaves its winner and entry count unloaded.
+      })
   }
 
   /**
@@ -327,7 +330,7 @@ export const useRafflesStore = defineStore('raffles', () => {
       const data = await endpoints.raffles.detail(id)
       if (reqId !== detailSeq) return true // superseded; the newer load owns the state
       selectedRaffle.value = data.raffle
-      raffleTotalEntryCount.value = data.total_entries || 0
+      raffleTotalEntryCount.value = data.total_entries ?? 0
       if (data.winner_entry) raffleWinnerEntry.value = data.winner_entry
       return true
     } catch {
@@ -535,7 +538,7 @@ export const useRafflesStore = defineStore('raffles', () => {
     try {
       await endpoints.raffles.delete(id)
       raffles.value = raffles.value.filter((r) => r.id !== id)
-      if (selectedRaffle.value && selectedRaffle.value.id === id) selectedRaffle.value = null
+      if (selectedRaffle.value?.id === id) selectedRaffle.value = null
       ui.notify('Raffle deleted', 'info')
     } catch (e) {
       ui.notify((e as Error).message, 'error')

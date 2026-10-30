@@ -107,7 +107,7 @@ func TestCardsUpdateNotSentToPlayers(t *testing.T) {
 	env := newTestEnv(t)
 	env.loginAdmin(t)
 
-	if err := env.store.SaveCard("PLAYR1", srvValidBoard()); err != nil {
+	if err := env.store.SaveCard(t.Context(), "PLAYR1", srvValidBoard()); err != nil {
 		t.Fatal(err)
 	}
 
@@ -195,7 +195,7 @@ func TestCardProtectBroadcastsProtected(t *testing.T) {
 	env := newTestEnv(t)
 	env.loginAdmin(t)
 
-	if err := env.store.SaveCard("PROT01", srvValidBoard()); err != nil {
+	if err := env.store.SaveCard(t.Context(), "PROT01", srvValidBoard()); err != nil {
 		t.Fatal(err)
 	}
 
@@ -220,7 +220,7 @@ func TestCardApproveBroadcastsStatus(t *testing.T) {
 	env := newTestEnv(t)
 	env.loginAdmin(t)
 
-	if err := env.store.CreateCustomCard("CUST01", srvValidBoard(), "Aria", "Gilgamesh"); err != nil {
+	if err := env.store.CreateCustomCard(t.Context(), "CUST01", srvValidBoard(), "Aria", "Gilgamesh"); err != nil {
 		t.Fatal(err)
 	}
 
@@ -253,14 +253,14 @@ func TestGarapon_DrawBroadcastsResourceChanged(t *testing.T) {
 	env.loginAdmin(t)
 
 	// Seed a garapon + a drawing link directly through the store.
-	gid, err := env.store.CreateGarapon(&model.Garapon{
+	gid, err := env.store.CreateGarapon(t.Context(), &model.Garapon{
 		Title:  "Festival Drum",
 		Prizes: []model.GaraponPrize{{Name: "Grand", BallColor: "#fff", Rate: 1, IsGrand: true}},
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	player, err := env.store.CreateGaraponPlayer(gid, "Hero", "Gilgamesh", 3)
+	player, err := env.store.CreateGaraponPlayer(t.Context(), gid, "Hero", "Gilgamesh", 3)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -270,7 +270,7 @@ func TestGarapon_DrawBroadcastsResourceChanged(t *testing.T) {
 
 	// Public draw - note the singular "garapon" token path.
 	resp := env.postJSON(t, "/api/garapon/"+player.Token+"/draw", map[string]any{})
-	if resp.StatusCode != 200 {
+	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("draw status = %d; want 200", resp.StatusCode)
 	}
 	resp.Body.Close()
@@ -288,7 +288,7 @@ func TestRaffle_EnterBroadcastsResourceChanged(t *testing.T) {
 	env := newTestEnv(t)
 	env.loginAdmin(t)
 
-	rid, err := env.store.CreateRaffle(&model.Raffle{Title: "Prize Raffle", MaxEntries: 10})
+	rid, err := env.store.CreateRaffle(t.Context(), &model.Raffle{Title: "Prize Raffle", MaxEntries: 10})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -344,7 +344,7 @@ func TestCardDeleteReachesThePlayer(t *testing.T) {
 		env.loginAdmin(t)
 
 		cardID := fmt.Sprintf("DEL%03d", i)
-		if err := env.store.SaveCard(cardID, srvValidBoard()); err != nil {
+		if err := env.store.SaveCard(t.Context(), cardID, srvValidBoard()); err != nil {
 			t.Fatal(err)
 		}
 

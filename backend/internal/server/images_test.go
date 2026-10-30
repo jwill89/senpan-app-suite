@@ -501,13 +501,13 @@ func TestImages_ReservedCategoryDir(t *testing.T) {
 // a test can pre-seed files before the server (and its startup migration) run.
 func newTestEnvWithWebRoot(t *testing.T, webRoot string) *testEnv {
 	t.Helper()
-	st, err := store.New(filepath.Join(t.TempDir(), "test.db"))
+	st, err := store.New(t.Context(), filepath.Join(t.TempDir(), "test.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { st.Close() })
 
-	srv := server.New(st, ws.NewHub(), testSecret, webRoot, nil)
+	srv := server.New(t.Context(), st, ws.NewHub(), webRoot, nil)
 	ts := httptest.NewTLSServer(srv)
 	t.Cleanup(ts.Close)
 

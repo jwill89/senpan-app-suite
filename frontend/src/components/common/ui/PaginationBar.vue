@@ -11,6 +11,7 @@ const emit = defineEmits<{ go: [page: number] }>()
 <template>
   <div v-if="totalPages > 1" class="pagination-bar">
     <button
+      type="button"
       class="btn-neutral btn-sm"
       :disabled="props.page <= 1"
       @click="emit('go', props.page - 1)"
@@ -19,6 +20,7 @@ const emit = defineEmits<{ go: [page: number] }>()
     </button>
     <span class="text-muted text-xs">Page {{ props.page }} / {{ props.totalPages }}</span>
     <button
+      type="button"
       class="btn-neutral btn-sm"
       :disabled="props.page >= props.totalPages"
       @click="emit('go', props.page + 1)"

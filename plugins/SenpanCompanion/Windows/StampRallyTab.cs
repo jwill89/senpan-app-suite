@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Numerics;
 using System.Threading.Tasks;
@@ -72,8 +73,8 @@ internal sealed class StampRallyTab : TabBase
 
     public void DrawManage()
     {
-        DrawStatusLine();
-        DrawPickerRow();
+        this.DrawStatusLine();
+        this.DrawPickerRow();
 
         var d = this.detail;
         if (d == null)
@@ -88,15 +89,15 @@ internal sealed class StampRallyTab : TabBase
         var open = string.Equals(d.StampRally.Status, "open", StringComparison.OrdinalIgnoreCase);
         Ui.Section(FontAwesomeIcon.Plus, "Issue a card");
         if (open)
-            DrawIssueCardForm();
+            this.DrawIssueCardForm();
         else
             UiText.WrappedDisabled("This rally is closed - no new cards can be issued.");
 
         Ui.Section(FontAwesomeIcon.IdCard, $"Cards ({d.Cards.Count})");
-        DrawCards(d.Cards);
+        this.DrawCards(d.Cards);
 
         Ui.Section(FontAwesomeIcon.Store, "Stalls");
-        DrawStalls(d.StampRally.Stamps);
+        this.DrawStalls(d.StampRally.Stamps);
     }
 
     private void DrawIssueCardForm()
@@ -104,13 +105,13 @@ internal sealed class StampRallyTab : TabBase
         ImGui.SetNextItemWidth(220);
         ImGui.InputTextWithHint("##rallyname", "Participant name (or Name @ World)", ref this.newParticipantName, 64);
         ImGui.SameLine();
-        DrawNearbyPicker();
+        this.DrawNearbyPicker();
 
         var canCreate = !string.IsNullOrWhiteSpace(this.newParticipantName);
         if (!canCreate)
             ImGui.BeginDisabled();
         if (Ui.PrimaryButton("Issue card"))
-            RunCreateCard();
+            this.RunCreateCard();
         if (!canCreate)
             ImGui.EndDisabled();
     }
@@ -135,7 +136,7 @@ internal sealed class StampRallyTab : TabBase
         var doTell = this.config.TellStampCardUrlOnCreate && !string.IsNullOrEmpty(pickedWorld);
         var tellWorld = pickedWorld;
 
-        Run(async () =>
+        this.Run(async () =>
         {
             var created = (await this.api.CreateStampRallyCardAsync(id, name, pickedWorld)).Card;
             var d = await this.api.GetStampRallyAsync(id);
@@ -171,7 +172,9 @@ internal sealed class StampRallyTab : TabBase
         if (!ImGui.BeginTable("rallycards", 4,
                 ImGuiTableFlags.Borders | ImGuiTableFlags.RowBg | ImGuiTableFlags.ScrollY,
                 new Vector2(0, 200)))
+        {
             return;
+        }
 
         ImGui.TableSetupColumn("Participant");
         ImGui.TableSetupColumn("Stamps", ImGuiTableColumnFlags.WidthFixed, 70);
@@ -185,7 +188,7 @@ internal sealed class StampRallyTab : TabBase
             ImGui.TableNextColumn();
             ImGui.TextUnformatted(Ui.ParticipantLabel(c.ParticipantName, c.World));
             ImGui.TableNextColumn();
-            ImGui.TextUnformatted(c.CollectedCount.ToString());
+            ImGui.TextUnformatted(c.CollectedCount.ToString(CultureInfo.InvariantCulture));
             ImGui.TableNextColumn();
             if (c.Completed)
                 Ui.Icon(FontAwesomeIcon.Check);
@@ -213,7 +216,9 @@ internal sealed class StampRallyTab : TabBase
         if (!ImGui.BeginTable("rallystalls", 4,
                 ImGuiTableFlags.Borders | ImGuiTableFlags.RowBg | ImGuiTableFlags.ScrollY,
                 new Vector2(0, 200)))
+        {
             return;
+        }
 
         ImGui.TableSetupColumn("Stall");
         ImGui.TableSetupColumn("Type", ImGuiTableColumnFlags.WidthFixed, 60);
@@ -235,7 +240,7 @@ internal sealed class StampRallyTab : TabBase
                 ImGui.TextColored(new Vector4(0.3f, 0.85f, 0.35f, 1f), "Active");
             ImGui.TableNextColumn();
             if (Ui.SmallButton($"{(s.Paused ? "Resume" : "Pause")}##stall{s.Id}"))
-                SetStallPaused(s.Id, !s.Paused);
+                this.SetStallPaused(s.Id, !s.Paused);
         }
 
         ImGui.EndTable();
@@ -246,7 +251,7 @@ internal sealed class StampRallyTab : TabBase
         var id = this.selectedRallyId;
         if (id == 0)
             return;
-        Run(async () =>
+        this.Run(async () =>
         {
             await this.api.SetStampPausedAsync(id, stampId, paused);
             var d = await this.api.GetStampRallyAsync(id);
@@ -262,8 +267,8 @@ internal sealed class StampRallyTab : TabBase
 
     public void DrawLog()
     {
-        DrawStatusLine();
-        DrawPickerRow();
+        this.DrawStatusLine();
+        this.DrawPickerRow();
 
         if (this.detail == null)
         {
@@ -283,7 +288,9 @@ internal sealed class StampRallyTab : TabBase
 
         if (!ImGui.BeginTable("rallylog", 4,
                 ImGuiTableFlags.Borders | ImGuiTableFlags.RowBg | ImGuiTableFlags.ScrollY | ImGuiTableFlags.Resizable))
+        {
             return;
+        }
 
         ImGui.TableSetupColumn("Participant");
         ImGui.TableSetupColumn("Stall");
@@ -313,9 +320,9 @@ internal sealed class StampRallyTab : TabBase
     private void DrawPickerRow()
     {
         if (Ui.Button("Refresh##rally"))
-            Run(LoadAsync);
+            this.Run(this.LoadAsync);
         ImGui.SameLine();
-        DrawRallyPicker();
+        this.DrawRallyPicker();
     }
 
     private void DrawRallyPicker()
@@ -338,7 +345,7 @@ internal sealed class StampRallyTab : TabBase
             foreach (var r in this.rallies)
             {
                 if (ImGui.Selectable($"{r.Title} ({r.Status})##sr{r.Id}", r.Id == this.selectedRallyId))
-                    LoadRally(r.Id);
+                    this.LoadRally(r.Id);
             }
             ImGui.EndCombo();
         }
@@ -351,7 +358,7 @@ internal sealed class StampRallyTab : TabBase
         this.selectedRallyId = id;
         this.detail = null;         // clear stale detail/log; the body shows "Loading..."
         this.logs = new();          // until the new rally's data arrives
-        Run(async () =>
+        this.Run(async () =>
         {
             var d = await this.api.GetStampRallyAsync(id);
             var l = await this.api.StampRallyLogsAsync(id);
@@ -416,7 +423,7 @@ internal sealed class StampRallyTab : TabBase
             return "-";
         var normalized = ts.Contains('T') ? ts : ts.Replace(' ', 'T') + "Z";
         return DateTimeOffset.TryParse(normalized, out var dto)
-            ? dto.ToLocalTime().ToString("yyyy-MM-dd HH:mm")
+            ? dto.ToLocalTime().ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture)
             : ts;
     }
 }

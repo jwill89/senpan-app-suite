@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"strings"
@@ -18,12 +19,12 @@ func (s *Server) handlePatternsList(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	patterns, err := s.store.ListPatterns()
+	patterns, err := s.store.ListPatterns(r.Context())
 	if err != nil {
 		writeInternalError(w, "patterns", err)
 		return
 	}
-	categories, err := s.store.ListPatternCategories()
+	categories, err := s.store.ListPatternCategories(r.Context())
 	if err != nil {
 		writeInternalError(w, "patterns", err)
 		return
@@ -34,13 +35,13 @@ func (s *Server) handlePatternsList(w http.ResponseWriter, r *http.Request) {
 // patternsAndCategories fetches the full patterns + categories snapshot, the
 // shape returned after a (single or bulk) reorder so the client re-renders from
 // authoritative order. Writes an internal error and returns ok=false on failure.
-func (s *Server) patternsAndCategories(w http.ResponseWriter) (model.PatternsResponse, bool) {
-	patterns, err := s.store.ListPatterns()
+func (s *Server) patternsAndCategories(ctx context.Context, w http.ResponseWriter) (model.PatternsResponse, bool) {
+	patterns, err := s.store.ListPatterns(ctx)
 	if err != nil {
 		writeInternalError(w, "patterns", err)
 		return model.PatternsResponse{}, false
 	}
-	categories, err := s.store.ListPatternCategories()
+	categories, err := s.store.ListPatternCategories(ctx)
 	if err != nil {
 		writeInternalError(w, "patterns", err)
 		return model.PatternsResponse{}, false
@@ -85,7 +86,7 @@ func (s *Server) handlePatternCreate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Check for duplicate pattern.
-	dup, err := s.store.FindDuplicatePattern(req.PatternData)
+	dup, err := s.store.FindDuplicatePattern(r.Context(), req.PatternData)
 	if err != nil {
 		writeInternalError(w, "patterns", err)
 		return
@@ -96,7 +97,7 @@ func (s *Server) handlePatternCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	id, err := s.store.SavePattern(name, req.PatternData, req.CategoryID)
+	id, err := s.store.SavePattern(r.Context(), name, req.PatternData, req.CategoryID)
 	if err != nil {
 		writeInternalError(w, "patterns", err)
 		return
@@ -109,7 +110,7 @@ func (s *Server) handlePatternCreate(w http.ResponseWriter, r *http.Request) {
 			CategoryID:  req.CategoryID,
 		},
 	})
-	s.broadcastPatterns()
+	s.broadcastPatterns(r.Context())
 }
 
 // handlePatternDelete deletes one pattern by id.
@@ -126,12 +127,12 @@ func (s *Server) handlePatternDelete(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	if _, err := s.store.DeletePattern(int(id64)); err != nil {
+	if _, err := s.store.DeletePattern(r.Context(), int(id64)); err != nil {
 		writeInternalError(w, "patterns", err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
-	s.broadcastPatterns()
+	s.broadcastPatterns(r.Context())
 }
 
 // patternPatchRequest is the JSON body for PATCH /api/patterns/{id}. All fields
@@ -173,6 +174,11 @@ func (s *Server) handlePatternPatch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Rename, re-categorize and move are separate writes that one PATCH may combine,
+	// so they run detached: a client that goes away part-way must not leave its
+	// change half-applied.
+	ctx := context.WithoutCancel(r.Context())
+
 	// Rename + set-category may both be applied in one call.
 	if req.Name != nil {
 		name := strings.TrimSpace(*req.Name)
@@ -180,7 +186,7 @@ func (s *Server) handlePatternPatch(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusBadRequest, "Pattern name cannot be empty")
 			return
 		}
-		if _, err := s.store.RenamePattern(id, name); err != nil {
+		if _, err := s.store.RenamePattern(ctx, id, name); err != nil {
 			writeInternalError(w, "patterns", err)
 			return
 		}
@@ -190,7 +196,7 @@ func (s *Server) handlePatternPatch(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusBadRequest, "category_id must be a positive id")
 			return
 		}
-		if err := s.store.SetPatternCategory(id, *req.CategoryID); err != nil {
+		if err := s.store.SetPatternCategory(ctx, id, *req.CategoryID); err != nil {
 			writeInternalError(w, "patterns", err)
 			return
 		}
@@ -202,21 +208,21 @@ func (s *Server) handlePatternPatch(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusBadRequest, "direction must be up or down")
 			return
 		}
-		if _, err := s.store.MovePattern(id, *req.Direction); err != nil {
+		if _, err := s.store.MovePattern(ctx, id, *req.Direction); err != nil {
 			writeInternalError(w, "patterns", err)
 			return
 		}
-		resp, ok := s.patternsAndCategories(w)
+		resp, ok := s.patternsAndCategories(ctx, w)
 		if !ok {
 			return
 		}
 		writeJSON(w, http.StatusOK, resp)
-		s.broadcastPatterns()
+		s.broadcastPatterns(ctx)
 		return
 	}
 
 	writeJSON(w, http.StatusOK, model.OKResponse{OK: true})
-	s.broadcastPatterns()
+	s.broadcastPatterns(ctx)
 }
 
 // patternBulkReorderRequest is the JSON body for POST /api/patterns/reorder.
@@ -246,16 +252,16 @@ func (s *Server) handlePatternsReorder(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "Provide category_id and ordered_ids array")
 		return
 	}
-	if err := s.store.BulkReorderPatterns(req.CategoryID, req.OrderedIDs); err != nil {
+	if err := s.store.BulkReorderPatterns(r.Context(), req.CategoryID, req.OrderedIDs); err != nil {
 		writeInternalError(w, "patterns", err)
 		return
 	}
-	resp, ok := s.patternsAndCategories(w)
+	resp, ok := s.patternsAndCategories(r.Context(), w)
 	if !ok {
 		return
 	}
 	writeJSON(w, http.StatusOK, resp)
-	s.broadcastPatterns()
+	s.broadcastPatterns(r.Context())
 }
 
 // -- Pattern Category handlers -----------------------------------------------
@@ -270,7 +276,7 @@ func (s *Server) handleCategoriesList(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	categories, err := s.store.ListPatternCategories()
+	categories, err := s.store.ListPatternCategories(r.Context())
 	if err != nil {
 		writeInternalError(w, "patterns", err)
 		return
@@ -304,13 +310,13 @@ func (s *Server) handleCategoryCreate(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "Category name is required")
 		return
 	}
-	id, err := s.store.CreatePatternCategory(name)
+	id, err := s.store.CreatePatternCategory(r.Context(), name)
 	if err != nil {
 		writeInternalError(w, "patterns", err)
 		return
 	}
 	writeJSON(w, http.StatusCreated, model.CategoryCreateResponse{ID: id, Name: name})
-	s.broadcastPatterns()
+	s.broadcastPatterns(r.Context())
 }
 
 // handleCategoryDelete deletes a pattern category. Deleting the last remaining
@@ -328,7 +334,7 @@ func (s *Server) handleCategoryDelete(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	deleted, err := s.store.DeletePatternCategory(id)
+	deleted, err := s.store.DeletePatternCategory(r.Context(), id)
 	if err != nil {
 		writeInternalError(w, "patterns", err)
 		return
@@ -338,7 +344,7 @@ func (s *Server) handleCategoryDelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
-	s.broadcastPatterns()
+	s.broadcastPatterns(r.Context())
 }
 
 // categoryPatchRequest is the JSON body for PATCH /api/pattern-categories/{id}.
@@ -375,13 +381,17 @@ func (s *Server) handleCategoryPatch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Rename and move are separate writes that one PATCH may combine; detached for
+	// the same reason as handlePatternPatch.
+	ctx := context.WithoutCancel(r.Context())
+
 	if req.Name != nil {
 		name := strings.TrimSpace(*req.Name)
 		if name == "" {
 			writeError(w, http.StatusBadRequest, "Category name is required")
 			return
 		}
-		if _, err := s.store.RenamePatternCategory(id, name); err != nil {
+		if _, err := s.store.RenamePatternCategory(ctx, id, name); err != nil {
 			writeInternalError(w, "patterns", err)
 			return
 		}
@@ -392,22 +402,22 @@ func (s *Server) handleCategoryPatch(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusBadRequest, "direction must be up or down")
 			return
 		}
-		if _, err := s.store.MovePatternCategory(id, *req.Direction); err != nil {
+		if _, err := s.store.MovePatternCategory(ctx, id, *req.Direction); err != nil {
 			writeInternalError(w, "patterns", err)
 			return
 		}
-		categories, err := s.store.ListPatternCategories()
+		categories, err := s.store.ListPatternCategories(ctx)
 		if err != nil {
 			writeInternalError(w, "patterns", err)
 			return
 		}
 		writeJSON(w, http.StatusOK, model.CategoriesResponse{Categories: categories})
-		s.broadcastPatterns()
+		s.broadcastPatterns(ctx)
 		return
 	}
 
 	writeJSON(w, http.StatusOK, model.OKResponse{OK: true})
-	s.broadcastPatterns()
+	s.broadcastPatterns(ctx)
 }
 
 // categoryBulkReorderRequest is the JSON body for POST /api/pattern-categories/reorder.
@@ -436,15 +446,15 @@ func (s *Server) handleCategoriesReorder(w http.ResponseWriter, r *http.Request)
 		writeError(w, http.StatusBadRequest, "Provide ordered_ids array")
 		return
 	}
-	if err := s.store.BulkReorderCategories(req.OrderedIDs); err != nil {
+	if err := s.store.BulkReorderCategories(r.Context(), req.OrderedIDs); err != nil {
 		writeInternalError(w, "patterns", err)
 		return
 	}
-	categories, err := s.store.ListPatternCategories()
+	categories, err := s.store.ListPatternCategories(r.Context())
 	if err != nil {
 		writeInternalError(w, "patterns", err)
 		return
 	}
 	writeJSON(w, http.StatusOK, model.CategoriesResponse{Categories: categories})
-	s.broadcastPatterns()
+	s.broadcastPatterns(r.Context())
 }

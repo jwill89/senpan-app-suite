@@ -121,7 +121,7 @@ func TestAbsoluteAssetURL(t *testing.T) {
 		"images/affiliate_logos/x.png":  "https://h/images/affiliate_logos/x.png",
 		"/images/x.png":                 "https://h/images/x.png",
 		"https://cdn.example.com/x.png": "https://cdn.example.com/x.png", // already absolute
-		"":                             "",
+		"":                              "",
 	}
 	for in, want := range cases {
 		if got := absoluteAssetURL("https://h", in); got != want {

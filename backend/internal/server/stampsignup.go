@@ -38,7 +38,7 @@ const maxParticipantNameLen = 60
 //	Auth:      public
 //	Response:  200 {"rallies": [SignupRally]}
 func (s *Server) handleStampSignupList(w http.ResponseWriter, r *http.Request) {
-	rallies, err := s.store.ListSignupRallies()
+	rallies, err := s.store.ListSignupRallies(r.Context())
 	if err != nil {
 		writeInternalError(w, "list signup rallies", err)
 		return
@@ -118,7 +118,7 @@ func (s *Server) handleStampSignup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	rally, err := s.store.GetStampRally(rallyID)
+	rally, err := s.store.GetStampRally(r.Context(), rallyID)
 	if err != nil {
 		writeInternalError(w, "get rally for signup", err)
 		return
@@ -144,14 +144,14 @@ func (s *Server) handleStampSignup(w http.ResponseWriter, r *http.Request) {
 	var garaponID *int64
 	var garaponTitle string
 	garaponDraws := 1
-	if g, gErr := s.store.OpenGaraponForRally(rallyID); gErr != nil {
-		slog.Error("stamp signup: look up linked garapon", "rally_id", rallyID, "error", gErr)
+	if g, gErr := s.store.OpenGaraponForRally(r.Context(), rallyID); gErr != nil {
+		slog.Log(r.Context(), errorLevel(gErr), "stamp signup: look up linked garapon", "rally_id", rallyID, "error", gErr)
 	} else if g != nil {
 		garaponID, garaponTitle = &g.ID, g.Title
 		garaponDraws = clampDefaultDraws(g.DefaultDraws)
 	}
 
-	card, garaponToken, err := s.store.SignUpForRally(rallyID, name, world, garaponID, garaponDraws)
+	card, garaponToken, err := s.store.SignUpForRally(r.Context(), rallyID, name, world, garaponID, garaponDraws)
 	if errors.Is(err, store.ErrParticipantNameTaken) {
 		writeError(w, http.StatusConflict,
 			`Someone has already signed up for this rally under that name. `+
@@ -234,7 +234,7 @@ func (s *Server) handleStampLookup(w http.ResponseWriter, r *http.Request) {
 	if world == "" {
 		name, world = model.SplitParticipantLabel(name)
 	}
-	entries, err := s.store.LookupParticipantCards(name, world)
+	entries, err := s.store.LookupParticipantCards(r.Context(), name, world)
 	if err != nil {
 		writeInternalError(w, "look up participant cards", err)
 		return

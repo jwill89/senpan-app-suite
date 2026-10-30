@@ -285,8 +285,11 @@ function cancel(): void {
         <ImagePicker v-model="raffles.raffleForm.prize_image" />
       </FormField>
       <FormActions align="start">
-        <button class="btn-neutral" :disabled="raffles.savingRaffle" @click="cancel">Cancel</button>
+        <button type="button" class="btn-neutral" :disabled="raffles.savingRaffle" @click="cancel">
+          Cancel
+        </button>
         <button
+          type="button"
           class="btn-confirm"
           :disabled="!raffles.raffleForm.title.trim() || raffles.savingRaffle"
           @click="save"

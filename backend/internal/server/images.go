@@ -177,7 +177,7 @@ func (s *Server) migrateImageCategoryManifest() {
 	defer s.imageManifestMu.Unlock()
 
 	path := filepath.Join(s.imagesRootDir(), imageCategoriesManifest)
-	data, err := os.ReadFile(path)
+	data, err := os.ReadFile(path) //nolint:gosec // the manifest's fixed name under the images root
 	switch {
 	case err == nil:
 		var m imageManifest
@@ -498,8 +498,8 @@ func (s *Server) renameImageCategory(w http.ResponseWriter, reqDir, reqName, req
 		src := filepath.Join(s.imagesRootDir(), dir)
 		dst := filepath.Join(s.imagesRootDir(), newDir)
 		// The source may not exist yet if no images were uploaded; only move when present.
-		if info, err := os.Stat(src); err == nil && info.IsDir() {
-			if err := os.Rename(src, dst); err != nil {
+		if info, err := os.Stat(src); err == nil && info.IsDir() { //nolint:gosec // dir passed validImageDir above, and newDir is slugifyImageDir's output
+			if err := os.Rename(src, dst); err != nil { //nolint:gosec // dir passed validImageDir above, and newDir is slugifyImageDir's output
 				if os.IsExist(err) {
 					writeError(w, http.StatusConflict, "A directory named \""+newDir+"\" already exists")
 					return
@@ -550,7 +550,7 @@ func (s *Server) deleteImageCategory(w http.ResponseWriter, reqDir string) {
 	// covered by this lock (it would block the multipart save on the manifest
 	// mutex). That upload-vs-delete race is admin-only and self-healing (re-run
 	// the delete), so it is accepted rather than serialized against large uploads.
-	if err := os.RemoveAll(filepath.Join(s.imagesRootDir(), dir)); err != nil {
+	if err := os.RemoveAll(filepath.Join(s.imagesRootDir(), dir)); err != nil { //nolint:gosec // dir passed validImageDir above
 		writeInternalError(w, "delete image category", err)
 		return
 	}
@@ -652,7 +652,7 @@ func (s *Server) handleImageDelete(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "Invalid file name")
 		return
 	}
-	if err := os.Remove(filepath.Join(s.imagesRootDir(), dir, name)); err != nil {
+	if err := os.Remove(filepath.Join(s.imagesRootDir(), dir, name)); err != nil { //nolint:gosec // dir passed validImageDir and name safeImageFileName above
 		if os.IsNotExist(err) {
 			writeError(w, http.StatusNotFound, "File not found")
 			return
@@ -691,7 +691,7 @@ func (s *Server) handleImagesUpload(w http.ResponseWriter, r *http.Request) {
 				return "", false
 			}
 			destDir := filepath.Join(s.imagesRootDir(), dir)
-			if err := os.MkdirAll(destDir, 0755); err != nil {
+			if err := os.MkdirAll(destDir, 0755); err != nil { //nolint:gosec // dir passed validImageDir and is a known category, just above
 				writeError(w, http.StatusInternalServerError, "Failed to create category directory")
 				return "", false
 			}
@@ -724,7 +724,7 @@ func (s *Server) handleImagesUpload(w http.ResponseWriter, r *http.Request) {
 					return name, "Not a valid SVG"
 				}
 				// Same name overwrites the existing file on purpose.
-				if err := os.WriteFile(filepath.Join(destDir, name), clean, 0644); err != nil {
+				if err := os.WriteFile(filepath.Join(destDir, name), clean, 0644); err != nil { //nolint:gosec // name passed safeImageFileName above
 					return name, "Failed to save"
 				}
 				return name, ""
@@ -771,11 +771,11 @@ func (s *Server) migrateAnnouncementImages() {
 		if err := os.MkdirAll(dstDir, 0755); err != nil {
 			return
 		}
-		data, err := os.ReadFile(filepath.Join(srcDir, e.Name()))
+		data, err := os.ReadFile(filepath.Join(srcDir, e.Name())) //nolint:gosec // a directory entry's own name, in a fixed directory
 		if err != nil {
 			continue
 		}
-		_ = os.WriteFile(dst, data, 0644)
+		_ = os.WriteFile(dst, data, 0644) //nolint:gosec // a fixed directory and a name from its own listing or the loop's fixed list
 	}
 }
 
@@ -791,13 +791,13 @@ func (s *Server) seedFlourishes() {
 		if _, err := os.Stat(dst); err == nil {
 			continue // already seeded
 		}
-		data, err := os.ReadFile(filepath.Join(s.imagesRootDir(), name))
+		data, err := os.ReadFile(filepath.Join(s.imagesRootDir(), name)) //nolint:gosec // one of the two fixed names this loop ranges over
 		if err != nil {
 			continue // source not deployed -> nothing to seed
 		}
 		if err := os.MkdirAll(dstDir, 0755); err != nil {
 			return
 		}
-		_ = os.WriteFile(dst, data, 0644)
+		_ = os.WriteFile(dst, data, 0644) //nolint:gosec // a fixed directory and a name from its own listing or the loop's fixed list
 	}
 }

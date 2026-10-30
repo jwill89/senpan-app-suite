@@ -10,7 +10,7 @@ import (
 func TestUsersSeedAdmin(t *testing.T) {
 	s := newTestStore(t)
 
-	admin, hash, err := s.GetUserByUsername("admin")
+	admin, hash, err := s.GetUserByUsername(t.Context(), "admin")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -28,7 +28,7 @@ func TestUsersSeedAdmin(t *testing.T) {
 func TestUsersPasswordEpochBumps(t *testing.T) {
 	s := newTestStore(t)
 
-	u, err := s.CreateUser("epoch-user", "hash-1")
+	u, err := s.CreateUser(t.Context(), "epoch-user", "hash-1")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -38,10 +38,10 @@ func TestUsersPasswordEpochBumps(t *testing.T) {
 
 	// Each password change must advance the epoch so prior sessions go stale.
 	for want := int64(1); want <= 2; want++ {
-		if err := s.SetUserPassword(u.ID, "hash-new"); err != nil {
+		if err := s.SetUserPassword(t.Context(), u.ID, "hash-new"); err != nil {
 			t.Fatal(err)
 		}
-		got, err := s.GetUserByID(u.ID)
+		got, err := s.GetUserByID(t.Context(), u.ID)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -51,7 +51,7 @@ func TestUsersPasswordEpochBumps(t *testing.T) {
 	}
 
 	// The epoch is also readable via the login path (GetUserByUsername).
-	byName, _, err := s.GetUserByUsername("epoch-user")
+	byName, _, err := s.GetUserByUsername(t.Context(), "epoch-user")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -63,7 +63,7 @@ func TestUsersPasswordEpochBumps(t *testing.T) {
 func TestUsersUpdateLastLogin(t *testing.T) {
 	s := newTestStore(t)
 
-	u, err := s.CreateUser("tester", "hash-1")
+	u, err := s.CreateUser(t.Context(), "tester", "hash-1")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -71,11 +71,11 @@ func TestUsersUpdateLastLogin(t *testing.T) {
 		t.Fatalf("a new user should have no last-login time, got %q", u.LastLoginAt)
 	}
 
-	if err := s.UpdateLastLogin(u.ID); err != nil {
+	if err := s.UpdateLastLogin(t.Context(), u.ID); err != nil {
 		t.Fatal(err)
 	}
 
-	got, err := s.GetUserByID(u.ID)
+	got, err := s.GetUserByID(t.Context(), u.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -87,7 +87,7 @@ func TestUsersUpdateLastLogin(t *testing.T) {
 func TestUsersCreateInactiveAndMutate(t *testing.T) {
 	s := newTestStore(t)
 
-	u, err := s.CreateUser("tester", "hash-1")
+	u, err := s.CreateUser(t.Context(), "tester", "hash-1")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -98,17 +98,17 @@ func TestUsersCreateInactiveAndMutate(t *testing.T) {
 		t.Fatalf("new users start with no permissions, got %v", u.Permissions)
 	}
 
-	if err := s.SetUserActive(u.ID, true); err != nil {
+	if err := s.SetUserActive(t.Context(), u.ID, true); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.SetUserPermissions(u.ID, []string{"bingo-game", "bingo-cards"}); err != nil {
+	if err := s.SetUserPermissions(t.Context(), u.ID, []string{"bingo-game", "bingo-cards"}); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.SetUserPassword(u.ID, "hash-2"); err != nil {
+	if err := s.SetUserPassword(t.Context(), u.ID, "hash-2"); err != nil {
 		t.Fatal(err)
 	}
 
-	got, hash, err := s.GetUserByUsername("tester")
+	got, hash, err := s.GetUserByUsername(t.Context(), "tester")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -126,10 +126,10 @@ func TestUsersCreateInactiveAndMutate(t *testing.T) {
 func TestUsersDuplicateUsername(t *testing.T) {
 	s := newTestStore(t)
 
-	if _, err := s.CreateUser("dup", "h"); err != nil {
+	if _, err := s.CreateUser(t.Context(), "dup", "h"); err != nil {
 		t.Fatal(err)
 	}
-	_, err := s.CreateUser("dup", "h2")
+	_, err := s.CreateUser(t.Context(), "dup", "h2")
 	if !errors.Is(err, store.ErrUsernameTaken) {
 		t.Fatalf("expected ErrUsernameTaken, got %v", err)
 	}
@@ -138,15 +138,15 @@ func TestUsersDuplicateUsername(t *testing.T) {
 func TestUsersDelete(t *testing.T) {
 	s := newTestStore(t)
 
-	u, err := s.CreateUser("temp", "h")
+	u, err := s.CreateUser(t.Context(), "temp", "h")
 	if err != nil {
 		t.Fatal(err)
 	}
-	deleted, err := s.DeleteUser(u.ID)
+	deleted, err := s.DeleteUser(t.Context(), u.ID)
 	if err != nil || !deleted {
 		t.Fatalf("expected delete to succeed, got deleted=%v err=%v", deleted, err)
 	}
-	got, _, err := s.GetUserByUsername("temp")
+	got, _, err := s.GetUserByUsername(t.Context(), "temp")
 	if err != nil {
 		t.Fatal(err)
 	}

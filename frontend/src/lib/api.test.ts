@@ -52,7 +52,7 @@ describe('api()', () => {
   beforeEach(() => {
     vi.stubGlobal('fetch', vi.fn())
     // Reset the module-level 401 handler between tests.
-    setUnauthorizedHandler(() => {})
+    setUnauthorizedHandler(() => undefined)
   })
   afterEach(() => {
     vi.unstubAllGlobals()
@@ -130,7 +130,7 @@ describe('api()', () => {
 
 describe('apiUpload()', () => {
   beforeEach(() => {
-    setUnauthorizedHandler(() => {})
+    setUnauthorizedHandler(() => undefined)
     FakeXHR.instances = []
     FakeXHR.onSend = null
     vi.stubGlobal('XMLHttpRequest', FakeXHR)

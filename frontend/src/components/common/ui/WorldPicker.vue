@@ -14,7 +14,7 @@
  * staff member typed by hand, has to survive being edited on a form that would not
  * offer that value today.
  */
-import { computed } from 'vue'
+import { computed, useId } from 'vue'
 import { FF14_WORLDS } from '@/lib/constants'
 
 const props = withDefaults(
@@ -38,6 +38,9 @@ const props = withDefaults(
 
 const emit = defineEmits<{ 'update:modelValue': [value: string] }>()
 
+/** Ties the caption to the select; the picker renders once per form that uses it. */
+const selectId = useId()
+
 /**
  * A stored world the list no longer offers (a retired world, a hand-typed one, or
  * anything predating the picker). Surfaced as its own option so opening the form
@@ -53,8 +56,9 @@ const unknownValue = computed(() => {
 
 <template>
   <div class="field">
-    <label class="field-label">{{ label }}</label>
+    <label :for="selectId" class="field-label">{{ label }}</label>
     <select
+      :id="selectId"
       :value="modelValue"
       :disabled="disabled"
       :aria-label="label"

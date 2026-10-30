@@ -17,17 +17,17 @@ func TestCSSNameUnsafe(t *testing.T) {
 	}
 
 	unsafe := []string{
-		"a'}body{display:none",  // quote + braces
-		"a\"b",                  // double quote
-		"a\\b",                  // backslash
-		"a;b",                   // semicolon
-		"a{b",                   // brace
-		"a}b",                   // brace
-		"a<b",                   // angle
-		"a>b",                   // angle
-		"Evil\n}body{}",         // newline (must be \A-escaped in CSS)
-		"a\tb",                  // tab (control)
-		"a\x7fb",                // DEL (control)
+		"a'}body{display:none", // quote + braces
+		"a\"b",                 // double quote
+		"a\\b",                 // backslash
+		"a;b",                  // semicolon
+		"a{b",                  // brace
+		"a}b",                  // brace
+		"a<b",                  // angle
+		"a>b",                  // angle
+		"Evil\n}body{}",        // newline (must be \A-escaped in CSS)
+		"a\tb",                 // tab (control)
+		"a\x7fb",               // DEL (control)
 	}
 	for _, s := range unsafe {
 		if !cssNameUnsafe(s) {

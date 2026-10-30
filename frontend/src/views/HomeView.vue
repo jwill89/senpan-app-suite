@@ -4,7 +4,7 @@
  * optional Raffles card. Navigates via the router (`/play/:cardId`,
  * `/raffles`, `/admin/login`).
  */
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, useTemplateRef } from 'vue'
 import { useRouter } from 'vue-router'
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
 import MarkdownText from '@/components/common/MarkdownText.vue'
@@ -89,7 +89,7 @@ const nothingOn = computed(
 )
 
 // Focus the board-ID field on load so players can type their code immediately.
-const joinInput = ref<HTMLInputElement | null>(null)
+const joinInput = useTemplateRef<HTMLInputElement>('joinInput')
 onMounted(() => {
   joinInput.value?.focus()
   // Decides whether the Stamp Rallies card is offered at all - the endpoint
@@ -145,6 +145,7 @@ const logoUrl = '/images/logo.png'
             @input="onJoinInput"
           />
           <button
+            type="button"
             class="btn-action"
             :disabled="player.joinId.length === 0 || player.joining"
             @click="join"
@@ -163,7 +164,7 @@ const logoUrl = '/images/logo.png'
           <h2><font-awesome-icon :icon="['fad', 'id-card']" /> Custom Card</h2>
           <p>Design your own bingo card and request it from Senpan staff.</p>
         </div>
-        <button class="btn-view" @click="goCardRequests">Request a Card</button>
+        <button type="button" class="btn-view" @click="goCardRequests">Request a Card</button>
       </div>
       <!-- Raffles (only if open raffles exist) -->
       <div v-if="raffles.homeRaffles.length" class="home-card home-card--dest">
@@ -171,7 +172,7 @@ const logoUrl = '/images/logo.png'
           <h2><font-awesome-icon :icon="['fad', 'ticket']" /> Raffles</h2>
           <p>View currently open raffles and enter for a chance to win!</p>
         </div>
-        <button class="btn-view" @click="viewRaffles">View Raffles</button>
+        <button type="button" class="btn-view" @click="viewRaffles">View Raffles</button>
       </div>
       <!-- Festival Maps (only when one is published) -->
       <div v-if="festivalMaps.publicMaps.length" class="home-card home-card--dest">
@@ -179,7 +180,7 @@ const logoUrl = '/images/logo.png'
           <h2><font-awesome-icon :icon="['fad', 'map-location-dot']" /> Festival Map</h2>
           <p>Explore the festival grounds and find out what every stall is offering.</p>
         </div>
-        <button class="btn-view" @click="viewFestivalMaps">View Festival Maps</button>
+        <button type="button" class="btn-view" @click="viewFestivalMaps">View Festival Maps</button>
       </div>
       <!-- Stamp Rallies (only when one is open to public sign-up) -->
       <div v-if="stampRallies.signupRallies.length" class="home-card home-card--dest">
@@ -187,7 +188,7 @@ const logoUrl = '/images/logo.png'
           <h2><font-awesome-icon :icon="['fad', 'stamp']" /> Stamp Rallies</h2>
           <p>Sign up for a stamp card and collect stamps from every stall!</p>
         </div>
-        <button class="btn-view" @click="viewStampRallies">View Stamp Rallies</button>
+        <button type="button" class="btn-view" @click="viewStampRallies">View Stamp Rallies</button>
       </div>
       <p v-if="nothingOn" class="text-muted ta-center">
         Nothing is running just now - check back soon!
@@ -195,7 +196,7 @@ const logoUrl = '/images/logo.png'
     </div>
     <!-- Admin portal (separate) -->
     <div class="home-admin">
-      <button class="btn-neutral btn-sm" @click="goAdminLogin">
+      <button type="button" class="btn-neutral btn-sm" @click="goAdminLogin">
         <font-awesome-icon :icon="['fas', 'lock']" /> Admin Portal
       </button>
     </div>

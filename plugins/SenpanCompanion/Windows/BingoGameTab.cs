@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Numerics;
 using System.Threading.Tasks;
@@ -85,24 +86,24 @@ internal sealed class BingoGameTab : TabBase, IDisposable
         this.live = live;
         this.cardCache = cardCache;
 
-        this.live.GameDraw += OnGameDraw;
-        this.live.GameUpdate += OnGameUpdate;
-        this.live.Yoever += OnYoever;
-        this.live.YoeverConfig += OnYoeverConfig;
-        this.live.AutoConfig += OnAutoConfig;
-        this.live.HalftimePrompt += OnHalftimePrompt;
-        this.live.Reconnected += OnReconnected;
+        this.live.GameDraw += this.OnGameDraw;
+        this.live.GameUpdate += this.OnGameUpdate;
+        this.live.Yoever += this.OnYoever;
+        this.live.YoeverConfig += this.OnYoeverConfig;
+        this.live.AutoConfig += this.OnAutoConfig;
+        this.live.HalftimePrompt += this.OnHalftimePrompt;
+        this.live.Reconnected += this.OnReconnected;
     }
 
     public void Dispose()
     {
-        this.live.GameDraw -= OnGameDraw;
-        this.live.GameUpdate -= OnGameUpdate;
-        this.live.Yoever -= OnYoever;
-        this.live.YoeverConfig -= OnYoeverConfig;
-        this.live.AutoConfig -= OnAutoConfig;
-        this.live.HalftimePrompt -= OnHalftimePrompt;
-        this.live.Reconnected -= OnReconnected;
+        this.live.GameDraw -= this.OnGameDraw;
+        this.live.GameUpdate -= this.OnGameUpdate;
+        this.live.Yoever -= this.OnYoever;
+        this.live.YoeverConfig -= this.OnYoeverConfig;
+        this.live.AutoConfig -= this.OnAutoConfig;
+        this.live.HalftimePrompt -= this.OnHalftimePrompt;
+        this.live.Reconnected -= this.OnReconnected;
     }
 
     protected override async Task LoadAsync()
@@ -145,16 +146,16 @@ internal sealed class BingoGameTab : TabBase, IDisposable
         // Stamped every frame this page is visible, so a prompt arriving later can
         // tell whether the operator is actually looking at it (see OnHalftimePrompt).
         this.lastDrawnAt = DateTime.UtcNow;
-        DrawStatusLine();
+        this.DrawStatusLine();
 
         if (this.game == null)
-            DrawNewGame();
+            this.DrawNewGame();
         else
-            DrawCurrentGame(this.game);
+            this.DrawCurrentGame(this.game);
 
-        DrawHalftimePopup();
-        DrawEndGamePopup();
-        DrawViewCardPopup();
+        this.DrawHalftimePopup();
+        this.DrawEndGamePopup();
+        this.DrawViewCardPopup();
     }
 
     // -- New game -------------------------------------------------------------
@@ -184,7 +185,7 @@ internal sealed class BingoGameTab : TabBase, IDisposable
             }
             ImGui.SameLine();
             if (Ui.Button("Apply Preset") && current != null)
-                ApplyPreset(current);
+                this.ApplyPreset(current);
         }
 
         Ui.Section(FontAwesomeIcon.ThLarge, "Win patterns");
@@ -195,7 +196,7 @@ internal sealed class BingoGameTab : TabBase, IDisposable
             this.patternsCollapsed = !this.patternsCollapsed;
             this.pendingPatternOpen = !this.patternsCollapsed;
         }
-        DrawPatternPicker();
+        this.DrawPatternPicker();
 
         Ui.Section(FontAwesomeIcon.AlignLeft, "Game details");
         Ui.Help("Markdown supported.");
@@ -205,7 +206,7 @@ internal sealed class BingoGameTab : TabBase, IDisposable
         if (ImGui.IsItemDeactivatedAfterEdit())
         {
             var toSave = this.gameDetails;
-            Run(() => this.api.UpdateGameDetailsAsync(toSave));
+            this.Run(() => this.api.UpdateGameDetailsAsync(toSave));
         }
 
         Ui.Section(FontAwesomeIcon.Robot, "Auto-draw");
@@ -237,7 +238,7 @@ internal sealed class BingoGameTab : TabBase, IDisposable
             var ids = this.selectedPatterns.ToArray();
             var startAuto = this.newGameAuto;
             var startInterval = this.newGameAutoInterval;
-            Run(async () =>
+            this.Run(async () =>
             {
                 var g = await this.api.StartGameAsync(ids, startAuto, startInterval);
                 await Apply(() =>
@@ -266,7 +267,7 @@ internal sealed class BingoGameTab : TabBase, IDisposable
         this.newGameAuto = preset.Auto;
         this.newGameAutoInterval = preset.AutoInterval > 0 ? preset.AutoInterval : DefaultAutoInterval;
         var toSave = this.gameDetails;
-        Run(() => this.api.UpdateGameDetailsAsync(toSave));
+        this.Run(() => this.api.UpdateGameDetailsAsync(toSave));
     }
 
     private void DrawPatternPicker()
@@ -319,13 +320,13 @@ internal sealed class BingoGameTab : TabBase, IDisposable
         if (Ui.PrimaryButton("Draw Number"))
         {
             var delay = this.config.DrawDelaySeconds;
-            Run(async () =>
+            this.Run(async () =>
             {
                 var result = await this.api.DrawAsync(delay);
                 await Apply(() =>
                 {
                     this.lastDrawn = result.Drawn;
-                    ApplyWinners(result.Winners);
+                    this.ApplyWinners(result.Winners);
                     if (this.game != null && !this.game.CalledNumbers.Contains(result.Drawn.Number))
                         this.game.CalledNumbers.Add(result.Drawn.Number);
                     // The half-time prompt is server-driven now (halftime_prompt),
@@ -337,7 +338,7 @@ internal sealed class BingoGameTab : TabBase, IDisposable
             ImGui.EndDisabled();
 
         ImGui.SameLine();
-        DrawDelayCombo();
+        this.DrawDelayCombo();
         ImGui.SameLine();
         if (Ui.DangerButton("End Game"))
         {
@@ -350,7 +351,7 @@ internal sealed class BingoGameTab : TabBase, IDisposable
             }
             else
             {
-                EndGame(Array.Empty<string>());
+                this.EndGame(Array.Empty<string>());
             }
         }
 
@@ -361,7 +362,7 @@ internal sealed class BingoGameTab : TabBase, IDisposable
         {
             var next = yoeverEnabled;
             state.YoeverEnabled = next; // optimistic; the yoever_config broadcast confirms
-            Run(() => this.api.SetYoeverEnabledAsync(next));
+            this.Run(() => this.api.SetYoeverEnabledAsync(next));
         }
         if (ImGui.IsItemHovered())
             ImGui.SetTooltip("Let players trigger the \"It's Yoever\" reaction. Switch off to curb spam.");
@@ -375,7 +376,7 @@ internal sealed class BingoGameTab : TabBase, IDisposable
         {
             var next = autoEnabled;
             state.AutoEnabled = next; // optimistic; the auto_config broadcast confirms
-            Run(() => this.api.SetAutoEnabledAsync(next));
+            this.Run(() => this.api.SetAutoEnabledAsync(next));
         }
         if (ImGui.IsItemHovered())
             ImGui.SetTooltip("Draw numbers automatically on a timer. Turns off at half-time and when a winner is found.");
@@ -390,7 +391,7 @@ internal sealed class BingoGameTab : TabBase, IDisposable
                     if (ImGui.Selectable(AutoIntervalLabel(s), s == state.AutoInterval))
                     {
                         state.AutoInterval = s; // optimistic; the auto_config broadcast confirms
-                        Run(() => this.api.SetAutoIntervalAsync(s));
+                        this.Run(() => this.api.SetAutoIntervalAsync(s));
                     }
                 }
                 ImGui.EndCombo();
@@ -415,8 +416,8 @@ internal sealed class BingoGameTab : TabBase, IDisposable
         ImGui.SameLine();
 
         ImGui.BeginGroup();
-        DrawWinners();
-        DrawFrequentWinners();
+        this.DrawWinners();
+        this.DrawFrequentWinners();
         if (!string.IsNullOrWhiteSpace(this.gameDetails))
         {
             ImGui.TextDisabled("Game Details");
@@ -479,7 +480,7 @@ internal sealed class BingoGameTab : TabBase, IDisposable
                     var hit = called.Contains(n);
                     if (hit)
                         ImGui.TableSetBgColor(ImGuiTableBgTarget.CellBg, highlight);
-                    CenteredCell(n.ToString(), hit ? GridHotColor : GridDimColor);
+                    CenteredCell(n.ToString(CultureInfo.InvariantCulture), hit ? GridHotColor : GridDimColor);
                 }
             }
 
@@ -503,7 +504,7 @@ internal sealed class BingoGameTab : TabBase, IDisposable
             ImGui.BulletText(string.IsNullOrEmpty(name) ? id : $"{name}  ({id})");
             ImGui.SameLine();
             if (Ui.SmallButton($"View##win{id}"))
-                OpenViewCard(id);
+                this.OpenViewCard(id);
         }
         ImGui.Spacing();
     }
@@ -544,7 +545,7 @@ internal sealed class BingoGameTab : TabBase, IDisposable
         // clears it on a boundary, but the operator may not have had this page open
         // when that arrived, so check again at the point of use.
         if (this.halftimeGameId != 0 && this.halftimeGameId != (this.game?.Id ?? 0))
-            ClearHalftimePrompt();
+            this.ClearHalftimePrompt();
 
         if (this.openHalftimePopup)
         {
@@ -568,7 +569,7 @@ internal sealed class BingoGameTab : TabBase, IDisposable
         if (Ui.PrimaryButton("Yes"))
         {
             // Yes -> run a mini-game (alert players; auto stays paused).
-            Run(() => this.api.TriggerHalftimeAsync(true));
+            this.Run(() => this.api.TriggerHalftimeAsync(true));
             this.halftimeAutoPaused = false;
             ImGui.CloseCurrentPopup();
         }
@@ -576,7 +577,7 @@ internal sealed class BingoGameTab : TabBase, IDisposable
         if (Ui.Button("No"))
         {
             // No -> decline the mini-game; the server resumes auto if it was paused.
-            Run(() => this.api.TriggerHalftimeAsync(false));
+            this.Run(() => this.api.TriggerHalftimeAsync(false));
             this.halftimeAutoPaused = false;
             ImGui.CloseCurrentPopup();
         }
@@ -614,7 +615,7 @@ internal sealed class BingoGameTab : TabBase, IDisposable
         ImGui.Spacing();
         if (Ui.DangerButton("End Game##confirm"))
         {
-            EndGame(this.endGameSelected.ToArray());
+            this.EndGame(this.endGameSelected.ToArray());
             ImGui.CloseCurrentPopup();
         }
         ImGui.SameLine();
@@ -625,7 +626,7 @@ internal sealed class BingoGameTab : TabBase, IDisposable
 
     private void EndGame(string[] validWinnerIds)
     {
-        Run(async () =>
+        this.Run(async () =>
         {
             await this.api.EndGameAsync(validWinnerIds);
             await Apply(() =>
@@ -653,7 +654,7 @@ internal sealed class BingoGameTab : TabBase, IDisposable
                 await Apply(() =>
                 {
                     this.viewCard = res.Card;
-                    this.viewMatched = ComputeMatched(res.Card.BoardData);
+                    this.viewMatched = this.ComputeMatched(res.Card.BoardData);
                 });
             }
             catch (Exception ex)
@@ -697,9 +698,13 @@ internal sealed class BingoGameTab : TabBase, IDisposable
             if (!satisfied)
                 continue;
             for (var r = 0; r < 5; r++)
+            {
                 for (var c = 0; c < 5; c++)
+                {
                     if (r < pd.Length && c < pd[r].Length && pd[r][c])
                         matched.Add((r, c));
+                }
+            }
         }
         return matched;
     }
@@ -774,7 +779,7 @@ internal sealed class BingoGameTab : TabBase, IDisposable
                     var hit = matched.Contains((r, c));
                     if (hit)
                         ImGui.TableSetBgColor(ImGuiTableBgTarget.CellBg, matchBg);
-                    var text = val == 0 ? "FREE" : val.ToString();
+                    var text = val == 0 ? "FREE" : val.ToString(CultureInfo.InvariantCulture);
                     var color = hit ? BoardMatchText : val == 0 ? BoardFreeText : BoardText;
                     CenteredCell(text, color);
                 }
@@ -790,7 +795,7 @@ internal sealed class BingoGameTab : TabBase, IDisposable
     private void OnGameDraw(DrawnNumber drawn, string[] winnerIds)
     {
         this.lastDrawn = drawn;
-        ApplyWinners(winnerIds.ToList());
+        this.ApplyWinners(winnerIds.ToList());
         if (this.game != null && !this.game.CalledNumbers.Contains(drawn.Number))
             this.game.CalledNumbers.Add(drawn.Number);
     }
@@ -800,7 +805,7 @@ internal sealed class BingoGameTab : TabBase, IDisposable
         // A different game (or none at all) makes any pending half-time prompt
         // meaningless - drop it rather than letting it surface against the new game.
         if (state == null || state.Id != this.game?.Id)
-            ClearHalftimePrompt();
+            this.ClearHalftimePrompt();
         this.game = state;
         if (state == null)
         {
@@ -840,7 +845,7 @@ internal sealed class BingoGameTab : TabBase, IDisposable
     /// </summary>
     private void OnReconnected()
     {
-        MarkStale();
+        this.MarkStale();
         this.cardCache.MarkStale();
     }
 

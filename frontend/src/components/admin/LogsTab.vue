@@ -11,7 +11,7 @@
  * per-page control; the "Debug" toggle flips the server's runtime level live and
  * "Live" pauses the feed for inspection.
  */
-import { onMounted, ref } from 'vue'
+import { onMounted, ref, useId } from 'vue'
 import AdminPanel from '@/components/common/ui/AdminPanel.vue'
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
 import EmptyState from '@/components/common/ui/EmptyState.vue'
@@ -23,6 +23,8 @@ import PaginationBar from '@/components/common/ui/PaginationBar.vue'
 import { useLogsStore, type LogRow } from '@/stores/logs'
 
 const logs = useLogsStore()
+/** Ties each toolbar caption to its select. */
+const fieldId = useId()
 
 const columns: DataColumn[] = [
   { key: '_expand', label: '', width: '24px' },
@@ -159,8 +161,9 @@ onMounted(() => void logs.load())
   <div class="tab-body logs-tab">
     <AdminPanel title="Server Logs" :icon="['fad', 'clipboard-clock']">
       <div class="flex-toolbar mb-12">
-        <label class="text-muted text-xs">Show:</label>
+        <label :for="`${fieldId}-level`" class="text-muted text-xs">Show:</label>
         <select
+          :id="`${fieldId}-level`"
           v-model="logs.level"
           aria-label="Minimum level to show"
           style="width: 100px"
@@ -181,6 +184,7 @@ onMounted(() => void logs.load())
           @input="onQueryInput"
         />
         <button
+          type="button"
           class="btn-sm"
           :class="logs.live ? 'btn-confirm' : 'btn-view'"
           :title="logs.live ? 'Pause live tail' : 'Resume live tail'"
@@ -191,6 +195,7 @@ onMounted(() => void logs.load())
           <span v-if="logs.live" class="live-dot" role="status" aria-label="Live"></span>
         </button>
         <button
+          type="button"
           class="btn-sm"
           :class="logs.serverLevel === 'debug' ? 'btn-caution' : 'btn-view'"
           :disabled="logs.settingLevel"
@@ -204,8 +209,9 @@ onMounted(() => void logs.load())
           <font-awesome-icon :icon="['fad', 'bug']" />
           Debug {{ logs.serverLevel === 'debug' ? 'On' : 'Off' }}
         </button>
-        <label class="text-muted text-xs">Per page:</label>
+        <label :for="`${fieldId}-per-page`" class="text-muted text-xs">Per page:</label>
         <select
+          :id="`${fieldId}-per-page`"
           v-model.number="perPage"
           aria-label="Entries per page"
           style="width: 70px"
@@ -217,7 +223,7 @@ onMounted(() => void logs.load())
           <option :value="200">200</option>
         </select>
         <span class="text-muted text-xs push-right">{{ logs.entries.length }} shown</span>
-        <button class="btn-view btn-sm" title="Clear the view" @click="logs.clear()">
+        <button type="button" class="btn-view btn-sm" title="Clear the view" @click="logs.clear()">
           <font-awesome-icon :icon="['fas', 'eraser']" /> Clear
         </button>
       </div>
@@ -304,12 +310,15 @@ onMounted(() => void logs.load())
 .log-search {
   width: 180px;
 }
+
 .log-table {
   font-size: 0.85rem;
 }
+
 .log-caret {
   color: var(--text-muted);
 }
+
 .log-time,
 .log-dur,
 .log-ip {
@@ -319,6 +328,7 @@ onMounted(() => void logs.load())
   font-family: ui-monospace, monospace;
   font-size: 0.78rem;
 }
+
 .actor {
   white-space: nowrap;
   overflow: hidden;
@@ -327,23 +337,28 @@ onMounted(() => void logs.load())
   max-width: 100%;
   font-size: 0.78rem;
 }
+
 /* Anonymous rows fade the "-"; a verified bot is italic; a plugin token (token)
    auth and admin (session) auth read as normal account names. */
 .actor-anon {
   color: var(--text-muted);
 }
+
 .actor-bot {
   font-style: italic;
   color: var(--text-muted);
 }
+
 .log-path {
   font-family: ui-monospace, monospace;
   font-size: 0.8rem;
 }
+
 .log-msg-text {
   font-weight: 500;
   margin-left: 0.4rem;
 }
+
 .log-fields-preview {
   margin-left: 0.5rem;
   color: var(--text-muted);
@@ -351,14 +366,16 @@ onMounted(() => void logs.load())
   font-size: 0.78rem;
   opacity: 0.85;
 }
+
 .log-detail {
   margin: 0;
   padding: 0.5rem 0.25rem;
   font-family: ui-monospace, monospace;
   font-size: 0.78rem;
   white-space: pre-wrap;
-  word-break: break-word;
+  overflow-wrap: anywhere;
 }
+
 /* -- Diagnostic palette -----------------------------------------------------
    A log tailer needs severity and method to be scannable by hue, and the theme
    tokens can't supply that: --danger/--success are dark FILL colours meant to be
@@ -382,6 +399,7 @@ onMounted(() => void logs.load())
   --log-orange: color-mix(in srgb, #e67e22 var(--log-ink), var(--text));
   --log-violet: color-mix(in srgb, #9b59b6 var(--log-ink), var(--text));
 }
+
 /* Level badges. */
 .log-level {
   display: inline-block;
@@ -391,22 +409,27 @@ onMounted(() => void logs.load())
   font-weight: 700;
   letter-spacing: 0.02em;
 }
+
 .log-level--error {
   color: var(--log-red);
   background: color-mix(in srgb, #e53131 var(--log-tint), transparent);
 }
+
 .log-level--warn {
   color: var(--log-amber);
   background: color-mix(in srgb, #f5a623 var(--log-tint), transparent);
 }
+
 .log-level--info {
   color: var(--log-blue);
   background: color-mix(in srgb, #4aa3df var(--log-tint), transparent);
 }
+
 .log-level--debug {
   color: var(--text-muted);
   background: color-mix(in srgb, var(--text-muted) 14%, transparent);
 }
+
 /* Method badges. */
 .log-method {
   display: inline-block;
@@ -416,30 +439,37 @@ onMounted(() => void logs.load())
   font-weight: 700;
   font-family: ui-monospace, monospace;
 }
+
 .log-method--get {
   color: var(--log-blue);
   background: color-mix(in srgb, #4aa3df var(--log-tint), transparent);
 }
+
 .log-method--post {
   color: var(--log-green);
   background: color-mix(in srgb, #2ecc71 var(--log-tint), transparent);
 }
+
 .log-method--put {
   color: var(--log-amber);
   background: color-mix(in srgb, #f5a623 var(--log-tint), transparent);
 }
+
 .log-method--patch {
   color: var(--log-orange);
   background: color-mix(in srgb, #e67e22 var(--log-tint), transparent);
 }
+
 .log-method--delete {
   color: var(--log-red);
   background: color-mix(in srgb, #e53131 var(--log-tint), transparent);
 }
+
 .log-method--ws {
   color: var(--log-violet);
   background: color-mix(in srgb, #9b59b6 var(--log-tint), transparent);
 }
+
 /* Status codes. */
 .log-status {
   font-variant-numeric: tabular-nums;
@@ -447,15 +477,19 @@ onMounted(() => void logs.load())
   font-family: ui-monospace, monospace;
   font-size: 0.78rem;
 }
+
 .log-status--2xx {
   color: var(--log-green);
 }
+
 .log-status--3xx {
   color: var(--log-blue);
 }
+
 .log-status--4xx {
   color: var(--log-amber);
 }
+
 .log-status--5xx {
   color: var(--log-red);
 }

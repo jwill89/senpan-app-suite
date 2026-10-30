@@ -8,6 +8,13 @@
  */
 import { defineAsyncComponent } from 'vue'
 
+defineProps<{
+  /** Seed colour bound into the picker (hex or rgba). */
+  value: string
+}>()
+
+const emit = defineEmits<{ change: [value: { rgba: string; hex: string }] }>()
+
 /** Lazy-load the Chrome picker so it never bloats the initial payload. */
 const ChromePicker = defineAsyncComponent(() => import('@ckpack/vue-color').then((m) => m.Chrome))
 
@@ -17,13 +24,6 @@ interface ColorPayload {
   hex8: string
   rgba: { r: number | string; g: number | string; b: number | string; a: number }
 }
-
-defineProps<{
-  /** Seed colour bound into the picker (hex or rgba). */
-  value: string
-}>()
-
-const emit = defineEmits<{ change: [value: { rgba: string; hex: string }] }>()
 
 /** Normalize the picker payload to an rgba() string + #rrggbb(aa) hex. */
 function onChange(p: ColorPayload): void {

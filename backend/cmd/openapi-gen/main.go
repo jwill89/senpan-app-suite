@@ -17,7 +17,7 @@ func main() {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
-	if err := os.WriteFile("openapi.yaml", data, 0644); err != nil {
+	if err := os.WriteFile("openapi.yaml", data, 0644); err != nil { //nolint:gosec // a tracked file in the checkout, readable like the rest of it
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}

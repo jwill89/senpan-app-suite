@@ -1,6 +1,7 @@
 package store
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 
@@ -19,8 +20,8 @@ import (
 // UpsertUserToken stores (or replaces) the access token for a user. A new
 // hash/prefix overwrites any existing token - the old token stops working
 // immediately - and resets created_at/last_used_at.
-func (s *Store) UpsertUserToken(userID int64, tokenHash, prefix string) error {
-	_, err := s.db.Exec(
+func (s *Store) UpsertUserToken(ctx context.Context, userID int64, tokenHash, prefix string) error {
+	_, err := s.db.ExecContext(ctx,
 		`INSERT INTO user_tokens (user_id, token_hash, token_prefix, created_at, last_used_at)
 		 VALUES (?, ?, ?, CURRENT_TIMESTAMP, NULL)
 		 ON CONFLICT(user_id) DO UPDATE SET
@@ -35,9 +36,9 @@ func (s *Store) UpsertUserToken(userID int64, tokenHash, prefix string) error {
 
 // GetUserTokenInfo returns the non-secret metadata for a user's token. HasToken
 // is false (and the other fields empty) when the account has none.
-func (s *Store) GetUserTokenInfo(userID int64) (model.TokenInfo, error) {
+func (s *Store) GetUserTokenInfo(ctx context.Context, userID int64) (model.TokenInfo, error) {
 	var info model.TokenInfo
-	err := s.db.QueryRow(
+	err := s.db.QueryRowContext(ctx,
 		`SELECT token_prefix, created_at, COALESCE(last_used_at, '')
 		   FROM user_tokens WHERE user_id = ?`, userID).
 		Scan(&info.Prefix, &info.CreatedAt, &info.LastUsedAt)
@@ -55,8 +56,8 @@ func (s *Store) GetUserTokenInfo(userID int64) (model.TokenInfo, error) {
 // (nil, nil) when no token matches or the owning account is inactive/missing, so
 // a revoked or deactivated account's token authenticates no one. last_used_at is
 // not touched here - call TouchUserToken for that.
-func (s *Store) GetUserByTokenHash(tokenHash string) (*model.User, error) {
-	row := s.db.QueryRow(
+func (s *Store) GetUserByTokenHash(ctx context.Context, tokenHash string) (*model.User, error) {
+	row := s.db.QueryRowContext(ctx,
 		`SELECT u.id, u.username, u.is_admin, u.is_active, u.permissions, u.created_at, COALESCE(u.last_login_at, ''), COALESCE(u.password_epoch, 0)
 		   FROM user_tokens t JOIN users u ON u.id = t.user_id
 		  WHERE t.token_hash = ?`, tokenHash)
@@ -71,8 +72,8 @@ func (s *Store) GetUserByTokenHash(tokenHash string) (*model.User, error) {
 // so a busy client doesn't write on every request: it only updates when the
 // stored value is null or at least a minute old. Best-effort - callers ignore
 // the error (a failed stamp must never block an otherwise-valid request).
-func (s *Store) TouchUserToken(tokenHash string) error {
-	_, err := s.db.Exec(
+func (s *Store) TouchUserToken(ctx context.Context, tokenHash string) error {
+	_, err := s.db.ExecContext(ctx,
 		`UPDATE user_tokens SET last_used_at = CURRENT_TIMESTAMP
 		  WHERE token_hash = ?
 		    AND (last_used_at IS NULL OR last_used_at <= datetime('now', '-60 seconds'))`,
@@ -81,8 +82,8 @@ func (s *Store) TouchUserToken(tokenHash string) error {
 }
 
 // DeleteUserToken revokes a user's token. Returns true if a token was removed.
-func (s *Store) DeleteUserToken(userID int64) (bool, error) {
-	res, err := s.db.Exec("DELETE FROM user_tokens WHERE user_id = ?", userID)
+func (s *Store) DeleteUserToken(ctx context.Context, userID int64) (bool, error) {
+	res, err := s.db.ExecContext(ctx, "DELETE FROM user_tokens WHERE user_id = ?", userID)
 	if err != nil {
 		return false, err
 	}

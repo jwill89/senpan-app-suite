@@ -19,10 +19,11 @@ const ui = useUiStore()
     <h3>{{ ui.confirmState.title }}</h3>
     <p class="confirm-msg">{{ ui.confirmState.message }}</p>
     <div class="confirm-btns">
-      <button class="btn-neutral" @click="ui.resolveConfirm(false)">
+      <button type="button" class="btn-neutral" @click="ui.resolveConfirm(false)">
         {{ ui.confirmState.cancelText }}
       </button>
       <button
+        type="button"
         :class="ui.confirmState.danger ? 'btn-danger' : 'btn-confirm'"
         @click="ui.resolveConfirm(true)"
       >

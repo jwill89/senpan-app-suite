@@ -102,27 +102,6 @@ import {
   type SortingState,
 } from '@tanstack/vue-table'
 
-// v9 composes the engine from explicit features instead of bundling everything:
-// each capability is opted into here, and a row model must come AFTER the feature
-// it depends on. The core row model is implicit now, so it has no entry. This is
-// the whole engine this table uses - filtering (global + per-column facets),
-// sorting, paging, and interactive column resizing (which needs BOTH the sizing
-// and resizing features).
-const features = tableFeatures({
-  columnFilteringFeature,
-  globalFilteringFeature,
-  rowSortingFeature,
-  rowPaginationFeature,
-  columnFacetingFeature,
-  columnSizingFeature,
-  columnResizingFeature,
-  filteredRowModel: createFilteredRowModel(),
-  sortedRowModel: createSortedRowModel(),
-  paginatedRowModel: createPaginatedRowModel(),
-  facetedRowModel: createFacetedRowModel(),
-  facetedUniqueValues: createFacetedUniqueValues(),
-})
-
 const props = defineProps<{
   columns: DataColumn[]
   /** The FULL row list - the table filters, sorts and paginates it. */
@@ -152,6 +131,27 @@ const props = defineProps<{
 }>()
 
 const emit = defineEmits<{ 'update:view': [view: DataTableView] }>()
+
+// v9 composes the engine from explicit features instead of bundling everything:
+// each capability is opted into here, and a row model must come AFTER the feature
+// it depends on. The core row model is implicit now, so it has no entry. This is
+// the whole engine this table uses - filtering (global + per-column facets),
+// sorting, paging, and interactive column resizing (which needs BOTH the sizing
+// and resizing features).
+const features = tableFeatures({
+  columnFilteringFeature,
+  globalFilteringFeature,
+  rowSortingFeature,
+  rowPaginationFeature,
+  columnFacetingFeature,
+  columnSizingFeature,
+  columnResizingFeature,
+  filteredRowModel: createFilteredRowModel(),
+  sortedRowModel: createSortedRowModel(),
+  paginatedRowModel: createPaginatedRowModel(),
+  facetedRowModel: createFacetedRowModel(),
+  facetedUniqueValues: createFacetedUniqueValues(),
+})
 
 /** Current page, 1-based. `v-model:page` from the parent, which owns the pager. */
 const page = defineModel<number>('page', { default: 1 })
@@ -501,6 +501,7 @@ function rowClassFor(row: T): string | Record<string, boolean> | undefined {
               class="dt-sort-icon"
               aria-hidden="true"
             />
+            <!-- eslint-disable-next-line vuejs-accessibility/no-static-element-interactions -- a pointer-only drag handle: click.stop keeps a resize drag from sorting the column, and keyboard resizing is not offered -->
             <span
               v-if="resizable"
               class="dt-resizer"

@@ -149,11 +149,11 @@ func (s *Server) handleLogLevelSet(w http.ResponseWriter, r *http.Request) {
 // than the cap it seeks to the tail and drops the first (partial) line, and
 // reports truncated=true so the caller can tell the viewer older lines exist.
 func tailFile(path string, capBytes int64) (data []byte, truncated bool, err error) {
-	f, err := os.Open(path)
+	f, err := os.Open(path) //nolint:gosec // the operator's -log-file, never a request's
 	if err != nil {
 		return nil, false, err
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }() // opened to read: closing it has nothing to report
 	fi, err := f.Stat()
 	if err != nil {
 		return nil, false, err

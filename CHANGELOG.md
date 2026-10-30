@@ -42,6 +42,41 @@ The format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## Frontend
 
+### [3.29.0] - 2026-10-29
+
+Requires backend 3.25.0.
+
+#### Added
+
+- **A festival dashboard, at `/festival/<shortcode>`.** Everything filed under a
+  festival - the stall map, its stamp rally, the garapon and its raffles - is on one
+  page, and a visitor takes part from it rather than following a link per system:
+  sign up for the stamp rally and get its drawing link, enter stamp passwords, spin
+  the garapon, and enter a raffle or buy more tickets under the same name. Their own
+  standing sits at the top as tiles - stamps collected, draws left, raffles entered.
+  A wide screen shows every section at once; a phone shows one at a time, picked
+  from the tiles. The festival list now opens the dashboard, and the map page links
+  to it.
+- **The map marks the stalls a visitor has already stamped.** On the dashboard, a
+  stall whose stamp you hold gets a success-colored ring and a check in place of its
+  stamp mark, and its panel says so. A stall you still need offers a stamp-password
+  box right in its panel, and a stall's raffle jumps to that raffle on the same
+  page. Everywhere else the map looks as it did.
+- **Card and drawing links open the dashboard too.** A stamp card or garapon link
+  for a rally that belongs to a published festival now offers "Open the festival
+  dashboard", which hands the link over without putting it in the address. Opening
+  a drawing link this way brings its stamp card with it.
+- **The dashboard remembers who you are, on this device only,** so your raffle
+  entries are found and your sign-ups are filled in. "Forget this device" takes the
+  festival's links and name off it.
+
+#### Changed
+
+- **The stamp card and garapon pages share their insides with the dashboard,** so
+  the three can't drift apart. Nothing changes on screen apart from a stall row on
+  the card wrapping on a phone instead of squeezing, and a check on its "Collected"
+  badge.
+
 ### [3.28.0] - 2026-10-17
 
 Requires backend 3.24.0.
@@ -1767,6 +1802,64 @@ First tracked release - establishes versioning for the current production build.
 
 ## Backend
 
+### [3.25.0] - 2026-10-29
+
+#### Added
+
+- **`POST /api/festival-dashboard/{id}`: one visitor's standing at a festival.** Fed
+  whatever their device holds - the stamp card token, the garapon drawing token, and
+  a name and world - it returns their card on the festival's rally, the garapon
+  linked to that rally, and every raffle filed under the festival with their own
+  entry in it. Each token is checked against the festival and one that doesn't
+  belong is ignored rather than refused. A drawing token brings its paired card
+  (echoed as `card_token`); a card alone reports how many draws wait on its paired
+  link, never that link's token. Raffle entries match the whole name and world, the
+  way entries merge, and carry no gil figures. POST so tokens and names stay out of
+  URLs and logs; rate limited per IP. Its own path rather than one under
+  `festival-maps`, where every POST is treated as an admin edit.
+- **`occupant_id` on each public stamp**, so a page can tell which map stalls a card
+  has collected, and **`festival_link`** on the public stamp card
+  (`rally.festival_link`) and garapon (`festival_link`) responses - the festival's
+  shortcode or id when the rally belongs to a published festival, so those pages can
+  link to it.
+
+#### Fixed
+
+- **An upload whose last write never reached the disk is reported as failed.** The
+  upload helper dropped the error from closing the file, so a write that failed at
+  the end - a full disk, say - answered as a success with a file missing or cut
+  short. It now comes back as the same "Failed to save" skip any other write
+  failure gives.
+
+#### Removed
+
+- **The `-secret` flag and `APPSUITE_SESSION_SECRET`.** Neither ever did anything:
+  sessions are held in the server's memory, which signs nothing, so every session
+  has always ended on a restart whatever the secret was - and rotating it logged
+  nobody out, though the deploy guide said it would. An env file that still sets
+  the variable is ignored, but a unit that still passes `-secret` will not start,
+  so take it off `ExecStart` before deploying this version.
+
+#### Changed
+
+- **Database work stops when the request it serves is abandoned.** Every store
+  query now runs under the request's context, so a visitor who closes the page
+  mid-request no longer leaves its queries running; work that has to finish after
+  the response (broadcasts, delayed draws, a run of writes that must land
+  together) runs detached from it, and shutting down now stops a migration or a
+  background sweep between statements rather than killing it. A query canceled
+  this way is logged at debug level, and the request's access line at info marked
+  `canceled=true`, so a dropped connection no longer reads as a server error.
+- **An AniList lookup stops when the admin abandons it,** rather than running on
+  to its 15-second timeout.
+- **Lint standard: Kindred Nights'.** golangci-lint v2.15.0 with bodyclose,
+  errorlint, exhaustive, gocritic, gosec, noctx, revive and the rest of that set,
+  plus gofmt + goimports; every exclusion carries its reason in
+  `backend/.golangci.yml`. CI now runs the tests under the race detector.
+- **Dependencies:** go-sqlite3 0.36.0 (with the SQLite it bundles), kin-openapi
+  0.152.0, go-webauthn 0.18.2, timberjack 1.4.9, tdewolff/font, and the
+  `golang.org/x` modules. No change to the API.
+
 ### [3.24.1] - 2026-10-16
 
 #### Fixed
@@ -3365,6 +3458,24 @@ with a personal access token and is distributed through a Dalamud custom repo
 (`plugins/pluginmaster.json`). Versions use the four-part AssemblyVersion in
 `SenpanCompanion.csproj`. Entries below the current release were reconstructed
 from the `<Version>` history and commit messages.
+
+### [3.9.1.0] - 2026-10-29
+
+Requires backend 3.23.0.
+
+#### Fixed
+
+- **A message still waiting to be sent when the plugin unloads is dropped** rather
+  than reaching chat after the plugin has gone. Tells and timed macros go out one
+  at a time, a second apart, and one queued at the moment of unloading used to fire
+  regardless.
+
+#### Changed
+
+- **The .NET analyzers now run at their recommended level, and the code style is
+  checked in the build** (Kindred Nights' C# standard): `this.` on members, `var`,
+  file-scoped namespaces, braces on multi-line bodies, numbers and times formatted
+  invariantly. No change on screen.
 
 ### [3.9.0.0] - 2026-10-17
 

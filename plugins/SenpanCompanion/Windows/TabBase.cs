@@ -46,9 +46,9 @@ internal abstract class TabBase
         if (this.lastLoadAttempt != 0 && now - this.lastLoadAttempt < RetryCooldownMs)
             return;
         this.lastLoadAttempt = now;
-        Run(async () =>
+        this.Run(async () =>
         {
-            await LoadAsync();
+            await this.LoadAsync();
             this.loaded = true;
         });
     }

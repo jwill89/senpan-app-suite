@@ -11,6 +11,13 @@
 import { defineAsyncComponent } from 'vue'
 import ModalOverlay from '@/components/common/ModalOverlay.vue'
 
+defineProps<{
+  /** Show a "No emoji" button that selects an empty string (clears the value). */
+  allowClear?: boolean
+}>()
+
+const emit = defineEmits<{ select: [emoji: string]; close: [] }>()
+
 /** Lazy-load the emoji picker + its stylesheet together into one on-demand chunk. */
 const EmojiPicker = defineAsyncComponent(async () => {
   await import('vue3-emoji-picker/css')
@@ -21,13 +28,6 @@ const EmojiPicker = defineAsyncComponent(async () => {
 interface EmojiSelect {
   i: string
 }
-
-defineProps<{
-  /** Show a "No emoji" button that selects an empty string (clears the value). */
-  allowClear?: boolean
-}>()
-
-const emit = defineEmits<{ select: [emoji: string]; close: [] }>()
 
 function onSelect(e: EmojiSelect): void {
   emit('select', e.i)
@@ -53,7 +53,7 @@ function onSelect(e: EmojiSelect): void {
       </button>
     </div>
     <div class="emoji-picker-wrap">
-      <EmojiPicker :native="true" theme="dark" :display-recent="true" @select="onSelect" />
+      <EmojiPicker native theme="dark" display-recent @select="onSelect" />
     </div>
   </ModalOverlay>
 </template>
@@ -66,6 +66,7 @@ function onSelect(e: EmojiSelect): void {
   gap: 12px;
   margin-bottom: 12px;
 }
+
 .emoji-picker-wrap {
   display: flex;
   justify-content: center;

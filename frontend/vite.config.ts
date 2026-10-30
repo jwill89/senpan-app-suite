@@ -61,7 +61,7 @@ function ogImageCacheBust(): Plugin {
 // object form of `manualChunks`, so the same grouping is expressed as a function
 // that maps a module's node_modules package to its chunk. Purely a
 // caching/loading win - no behavioural change.
-const vendorChunkGroups: ReadonlyArray<readonly [string, readonly string[]]> = [
+const vendorChunkGroups: readonly (readonly [string, readonly string[]])[] = [
   ['vue', ['vue', '@vue', 'pinia', 'vue-router']],
   ['fontawesome', ['@fortawesome']],
   ['markdown', ['markdown-it']],
@@ -102,7 +102,7 @@ function manualChunks(id: string): string | undefined {
 const adminOnlyOutput = new Set<string>()
 
 function markAdminOnlyOutput(): Plugin {
-  type Chunk = {
+  interface Chunk {
     isEntry: boolean
     facadeModuleId: string | null
     imports: string[]

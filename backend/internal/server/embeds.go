@@ -283,7 +283,7 @@ func (b *embedBuilder) image(rawURL string) *embedBuilder {
 }
 
 // footer sets the footer line, skipping it when blank.
-func (b *embedBuilder) footer(text string) *embedBuilder {
+func (b *embedBuilder) footer(text string) *embedBuilder { //nolint:unparam // returns the builder like every other step, so a chain can carry on past it
 	if strings.TrimSpace(text) != "" {
 		b.embed.Footer = &discordEmbedFooter{Text: text}
 	}
@@ -373,12 +373,14 @@ func (s *Server) postDiscordWebhook(ctx context.Context, target webhookTarget, w
 	slog.Debug("discord webhook post", "kind", target.Kind, "name", target.Name,
 		"embeds", len(payload.Embeds), "components", len(payload.Components), "bytes", len(body))
 	start := time.Now()
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, webhookURL, bytes.NewReader(body))
+	// Every stored webhook passed isDiscordWebhookURL when it was saved, and the
+	// override is the operator's own flag or environment value.
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, webhookURL, bytes.NewReader(body)) //nolint:gosec // a checked Discord webhook URL (see above)
 	if err != nil {
 		return fmt.Errorf("build webhook request: %s", sanitizeWebhookErr(err))
 	}
 	req.Header.Set("Content-Type", "application/json")
-	resp, err := bookclubHTTPClient.Do(req)
+	resp, err := bookclubHTTPClient.Do(req) //nolint:gosec // a checked Discord webhook URL (see above)
 	if err != nil {
 		// Transport failure: the request may or may not have reached Discord, so
 		// mark it ambiguous (callers must not blindly retry - see errWebhookAmbiguous).
@@ -386,7 +388,7 @@ func (s *Server) postDiscordWebhook(ctx context.Context, target webhookTarget, w
 		// token) that http.Client bakes into the *url.Error it returns.
 		return fmt.Errorf("%w: %s", errWebhookAmbiguous, sanitizeWebhookErr(err))
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }() // read below: closing it has nothing to report
 	// Read (not discard) the response so a non-2xx can report Discord's own reason
 	// - e.g. "Unknown Webhook" for a deleted webhook - instead of a bare status
 	// code. The read also drains the body so the keep-alive connection is reusable.

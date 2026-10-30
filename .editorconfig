@@ -1,0 +1,23 @@
+# The whole repo: UTF-8, LF, a final newline, no trailing whitespace, two-space
+# indents - what Prettier and gofmt already write, so editors agree with the
+# formatters before either runs. The plugin keeps its own .editorconfig (root =
+# true in plugins/SenpanCompanion), which carries the C# style rules.
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+indent_style = space
+indent_size = 2
+
+[*.go]
+indent_style = tab
+
+# PSScriptAnalyzerSettings.psd1 sets four-space indents for the scripts.
+[*.{ps1,psd1}]
+indent_size = 4
+
+[*.md]
+trim_trailing_whitespace = false

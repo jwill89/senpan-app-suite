@@ -66,7 +66,7 @@ public sealed class Session
         if (this.lastAttempt != 0 && now - this.lastAttempt < 3000)
             return;
         this.lastAttempt = now;
-        _ = RefreshAsync();
+        _ = this.RefreshAsync();
     }
 
     /// <summary>Forces a reload on the next EnsureLoaded (e.g. after a token change).</summary>
@@ -83,7 +83,7 @@ public sealed class Session
         {
             if (this.inFlight is { } running)
                 return running;
-            var task = RefreshCore();
+            var task = this.RefreshCore();
             // Only remember a task that is genuinely still running. RefreshCore's
             // finally re-enters this same re-entrant lock to null inFlight, so a
             // fetch that faults BEFORE its first await - an invalid ServerUrl throws

@@ -34,7 +34,7 @@ function setStampRally(value: string): void {
 }
 
 /** Sum of positive prize weights, for the live normalized-% readouts. */
-const total = computed(() => rateTotal(garapons.garaponForm?.prizes || []))
+const total = computed(() => rateTotal(garapons.garaponForm?.prizes ?? []))
 /** A prize's odds as a normalized percentage (relative weights). */
 function ratePct(rate: number): string {
   return normalizedPct(rate, total.value)
@@ -148,6 +148,7 @@ function cancel(): void {
             <span class="prize-pct-col text-muted">{{ ratePct(p.rate) }}</span>
             <span class="prize-del-col">
               <button
+                type="button"
                 class="btn-danger btn-sm"
                 :disabled="garapons.garaponForm.prizes.length <= 1"
                 aria-label="Remove prize"
@@ -158,7 +159,7 @@ function cancel(): void {
               </button>
             </span>
           </div>
-          <button class="btn-neutral btn-sm mt-8" @click="garapons.addPrizeRow()">
+          <button type="button" class="btn-neutral btn-sm mt-8" @click="garapons.addPrizeRow()">
             <font-awesome-icon :icon="['fas', 'plus']" /> Add Prize
           </button>
         </div>
@@ -172,10 +173,16 @@ function cancel(): void {
       </FormField>
 
       <FormActions align="start">
-        <button class="btn-neutral" :disabled="garapons.savingGarapon" @click="cancel">
+        <button
+          type="button"
+          class="btn-neutral"
+          :disabled="garapons.savingGarapon"
+          @click="cancel"
+        >
           Cancel
         </button>
         <button
+          type="button"
           class="btn-confirm"
           :disabled="!garapons.garaponForm.title.trim() || garapons.savingGarapon"
           @click="save"
@@ -193,41 +200,51 @@ function cancel(): void {
   display: flex;
   flex-direction: column;
   gap: 8px;
+
   /* Scroll horizontally on very narrow screens rather than cramping columns. */
   overflow-x: auto;
 }
+
 /* The header row and every field row use ONE shared grid template, so the column
    headers line up exactly with the inputs below regardless of input intrinsic widths. */
 .prize-row {
   display: grid;
+
   /* Last track is wide enough for the small delete button so it doesn't overflow
      and trigger the editor's horizontal scrollbar. */
   grid-template-columns: 48px minmax(110px, 1fr) 76px 96px 56px 46px;
   align-items: center;
   column-gap: 8px;
 }
+
 .prize-row-head {
   padding-bottom: 2px;
 }
+
 /* Let inputs shrink to their grid track instead of forcing the track wider. */
 .prize-row > span {
   min-width: 0;
 }
+
 .prize-grand-col {
   text-align: center;
 }
+
 .prize-pct-col {
   text-align: right;
   font-size: 0.85rem;
 }
+
 .prize-del-col {
   text-align: right;
 }
+
 /* Text + number inputs fill their column for consistent alignment. */
 .prize-name-col input,
 .prize-rate-col input {
   width: 100%;
 }
+
 /* Native color input trimmed to a neat swatch that fills its column. */
 .prize-color {
   width: 100%;

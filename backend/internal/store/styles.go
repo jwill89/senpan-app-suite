@@ -1,6 +1,7 @@
 package store
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"errors"
@@ -162,8 +163,8 @@ func scanTokens(raw string) map[string]string {
 
 // ListStyles returns all styles (name + visibility, no tokens) for lightweight
 // listing in the admin theme manager.
-func (s *Store) ListStyles() ([]model.Style, error) {
-	rows, err := s.db.Query("SELECT id, name, is_public, created_at FROM styles ORDER BY name ASC")
+func (s *Store) ListStyles(ctx context.Context) ([]model.Style, error) {
+	rows, err := s.db.QueryContext(ctx, "SELECT id, name, is_public, created_at FROM styles ORDER BY name ASC")
 	if err != nil {
 		return nil, err
 	}
@@ -182,8 +183,8 @@ func (s *Store) ListStyles() ([]model.Style, error) {
 
 // ListPublicStyles returns the id + name of every Public theme (ordered by name)
 // for the client-side theme picker. Excludes tokens/CSS and Private themes.
-func (s *Store) ListPublicStyles() ([]model.PublicStyle, error) {
-	rows, err := s.db.Query("SELECT id, name FROM styles WHERE is_public = 1 ORDER BY name ASC")
+func (s *Store) ListPublicStyles(ctx context.Context) ([]model.PublicStyle, error) {
+	rows, err := s.db.QueryContext(ctx, "SELECT id, name FROM styles WHERE is_public = 1 ORDER BY name ASC")
 	if err != nil {
 		return nil, err
 	}
@@ -203,16 +204,16 @@ func (s *Store) ListPublicStyles() ([]model.PublicStyle, error) {
 // GetPublicStyle returns a theme (with generated CSS + flourishes) only when it is
 // Public. Returns nil for a missing or Private theme, so the public by-id CSS
 // endpoint can't be used to fetch a Private theme's stylesheet by guessing its id.
-func (s *Store) GetPublicStyle(id int64) (*model.Style, error) {
-	return s.scanStyle(s.db.QueryRow(
+func (s *Store) GetPublicStyle(ctx context.Context, id int64) (*model.Style, error) {
+	return s.scanStyle(s.db.QueryRowContext(ctx,
 		"SELECT id, name, tokens, board_flourish, number_flourish, is_public, created_at FROM styles WHERE id = ? AND is_public = 1", id,
 	))
 }
 
 // GetStyle retrieves a single style by ID with its tokens (and the generated
 // CSS + flourishes). Returns nil if not found.
-func (s *Store) GetStyle(id int64) (*model.Style, error) {
-	return s.scanStyle(s.db.QueryRow(
+func (s *Store) GetStyle(ctx context.Context, id int64) (*model.Style, error) {
+	return s.scanStyle(s.db.QueryRowContext(ctx,
 		"SELECT id, name, tokens, board_flourish, number_flourish, is_public, created_at FROM styles WHERE id = ?", id,
 	))
 }
@@ -257,7 +258,7 @@ func ValidFlourishPath(p string) bool {
 
 // CreateStyle inserts a new theme from a token map (sanitized) and returns its ID.
 // isPublic marks the theme as selectable in the client-side picker (false = admin-only).
-func (s *Store) CreateStyle(name string, tokens map[string]string, boardFlourish, numberFlourish string, isPublic bool) (int64, error) {
+func (s *Store) CreateStyle(ctx context.Context, name string, tokens map[string]string, boardFlourish, numberFlourish string, isPublic bool) (int64, error) {
 	if !ValidFlourishPath(boardFlourish) || !ValidFlourishPath(numberFlourish) {
 		return 0, ErrInvalidFlourish
 	}
@@ -265,7 +266,7 @@ func (s *Store) CreateStyle(name string, tokens map[string]string, boardFlourish
 	if err != nil {
 		return 0, err
 	}
-	res, err := s.db.Exec(
+	res, err := s.db.ExecContext(ctx,
 		"INSERT INTO styles (name, tokens, board_flourish, number_flourish, is_public) VALUES (?, ?, ?, ?, ?)",
 		name, tokenJSON, boardFlourish, numberFlourish, boolToInt(isPublic),
 	)
@@ -276,7 +277,7 @@ func (s *Store) CreateStyle(name string, tokens map[string]string, boardFlourish
 }
 
 // UpdateStyle updates a theme's name, tokens (sanitized), flourishes, and visibility.
-func (s *Store) UpdateStyle(id int64, name string, tokens map[string]string, boardFlourish, numberFlourish string, isPublic bool) error {
+func (s *Store) UpdateStyle(ctx context.Context, id int64, name string, tokens map[string]string, boardFlourish, numberFlourish string, isPublic bool) error {
 	if !ValidFlourishPath(boardFlourish) || !ValidFlourishPath(numberFlourish) {
 		return ErrInvalidFlourish
 	}
@@ -284,7 +285,7 @@ func (s *Store) UpdateStyle(id int64, name string, tokens map[string]string, boa
 	if err != nil {
 		return err
 	}
-	_, err = s.db.Exec(
+	_, err = s.db.ExecContext(ctx,
 		"UPDATE styles SET name = ?, tokens = ?, board_flourish = ?, number_flourish = ?, is_public = ? WHERE id = ?",
 		name, tokenJSON, boardFlourish, numberFlourish, boolToInt(isPublic), id,
 	)
@@ -292,8 +293,8 @@ func (s *Store) UpdateStyle(id int64, name string, tokens map[string]string, boa
 }
 
 // DeleteStyle removes a style by ID. Returns true if a row was deleted.
-func (s *Store) DeleteStyle(id int64) (bool, error) {
-	res, err := s.db.Exec("DELETE FROM styles WHERE id = ?", id)
+func (s *Store) DeleteStyle(ctx context.Context, id int64) (bool, error) {
+	res, err := s.db.ExecContext(ctx, "DELETE FROM styles WHERE id = ?", id)
 	if err != nil {
 		return false, err
 	}
@@ -304,20 +305,20 @@ func (s *Store) DeleteStyle(id int64) (bool, error) {
 // GetActiveStyle returns the currently active style (tokens + generated CSS +
 // flourishes), or nil when no active style is set or it no longer exists. Used
 // by the active-CSS endpoint and the live style broadcast.
-func (s *Store) GetActiveStyle() (*model.Style, error) {
-	idStr, err := s.GetSetting("active_style_id")
+func (s *Store) GetActiveStyle(ctx context.Context) (*model.Style, error) {
+	idStr, err := s.GetSetting(ctx, "active_style_id")
 	if err != nil || idStr == "" {
 		return nil, err
 	}
-	return s.scanStyle(s.db.QueryRow(
+	return s.scanStyle(s.db.QueryRowContext(ctx,
 		"SELECT id, name, tokens, board_flourish, number_flourish, is_public, created_at FROM styles WHERE id = ?", idStr,
 	))
 }
 
 // GetActiveStyleCSS returns the generated CSS of the currently active style, or
 // "" when none is set / it no longer exists.
-func (s *Store) GetActiveStyleCSS() (string, error) {
-	active, err := s.GetActiveStyle()
+func (s *Store) GetActiveStyleCSS(ctx context.Context) (string, error) {
+	active, err := s.GetActiveStyle(ctx)
 	if err != nil || active == nil {
 		return "", err
 	}

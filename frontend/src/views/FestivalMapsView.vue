@@ -4,8 +4,9 @@
  *
  * The server decides what appears here - an in-progress or closed map is never
  * listed - so this view just renders what it is given. Picking one opens its
- * interactive map, which is directly linkable so staff can post a festival's map
- * URL straight into Discord.
+ * festival dashboard - the map with the festival's stamp rally, garapon and
+ * raffles around it - which is directly linkable so staff can post it straight
+ * into Discord.
  */
 import { onMounted } from 'vue'
 import { useRouter } from 'vue-router'
@@ -22,7 +23,7 @@ const store = useFestivalMapsStore()
 onMounted(() => store.loadPublicMaps())
 
 function openMap(m: PublicFestivalMapSummary): void {
-  void router.push({ name: 'festival-map', params: { id: store.mapPath(m) } })
+  void router.push({ name: 'festival-dashboard', params: { id: store.mapPath(m) } })
 }
 
 function goHome(): void {
@@ -33,7 +34,7 @@ function goHome(): void {
 <template>
   <div>
     <div class="topbar">
-      <button class="btn-neutral btn-sm" @click="goHome">
+      <button type="button" class="btn-neutral btn-sm" @click="goHome">
         <font-awesome-icon :icon="['fas', 'arrow-left']" /> Home
       </button>
       <h2><font-awesome-icon :icon="['fad', 'map-location-dot']" /> Festival Maps</h2>

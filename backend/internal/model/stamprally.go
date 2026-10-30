@@ -263,6 +263,10 @@ type PublicStampRally struct {
 	CompletionMode string `json:"completion_mode"`
 	RequiredFood   int    `json:"required_food"`
 	RequiredGame   int    `json:"required_game"`
+	// FestivalLink is the path segment of the festival this rally is filed under -
+	// its shortcode, or its id - so the card can open the festival dashboard. ""
+	// when the rally belongs to no festival or its map isn't published.
+	FestivalLink string `json:"festival_link,omitempty"`
 }
 
 // PublicStamp is one stamp slot in the participant-facing card. AffiliateName ""
@@ -271,12 +275,15 @@ type PublicStampRally struct {
 type PublicStamp struct {
 	ID            int64  `json:"id"`
 	AffiliateName string `json:"affiliate_name"`
-	StampType     string `json:"stamp_type"` // "food" | "game"
-	Image         string `json:"image"`
-	Placement     `json:"placement"`
-	ActiveFrom    string `json:"active_from"`
-	ActiveTo      string `json:"active_to"`
-	Available     bool   `json:"available"`
+	// OccupantID is the festival-map occupant the stamp belongs to (nil when the
+	// rally is not on a map), so the map can mark the stalls already collected.
+	OccupantID *int64 `json:"occupant_id"`
+	StampType  string `json:"stamp_type"` // "food" | "game"
+	Image      string `json:"image"`
+	Placement  `json:"placement"`
+	ActiveFrom string `json:"active_from"`
+	ActiveTo   string `json:"active_to"`
+	Available  bool   `json:"available"`
 	// Expired reports that the stamp can never be collected again (its own window
 	// ended, or the event did), as opposed to merely closed right now. The card uses
 	// it to tell a participant when a per-type requirement has gone out of reach,

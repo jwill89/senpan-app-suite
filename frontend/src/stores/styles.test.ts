@@ -49,7 +49,7 @@ describe('newStyle', () => {
     const s = useStylesStore()
     s.newStyle()
     expect(s.editingStyle).toMatchObject({ id: 0, name: '' })
-    expect(s.editingStyle?.tokens?.['accent']).toBe('#d6bdae')
+    expect(s.editingStyle?.tokens?.accent).toBe('#d6bdae')
   })
 })
 

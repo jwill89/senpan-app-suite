@@ -12,7 +12,7 @@
  * the form is populated, cover image URL included). "Publish" posts every item
  * in the list as its own Discord embed via the club's configured webhook.
  */
-import { ref } from 'vue'
+import { ref, useTemplateRef } from 'vue'
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
 import MarkdownEditor from '@/components/common/MarkdownEditor.vue'
 import AdminPanel from '@/components/common/ui/AdminPanel.vue'
@@ -36,7 +36,7 @@ const editingTitle = ref('')
  *  renders the browser's own grey "Choose File" control, which cannot be themed
  *  (only ::file-selector-button can, and not consistently) - so every upload in
  *  the app hides the input and triggers it from a real button instead. */
-const coverInput = ref<HTMLInputElement | null>(null)
+const coverInput = useTemplateRef<HTMLInputElement>('coverInput')
 
 function pickCover(): void {
   coverInput.value?.click()
@@ -66,6 +66,7 @@ function cancelRename(): void {
       />
       <div class="flex-toolbar flex-end mb-16">
         <button
+          type="button"
           class="btn-action btn-sm"
           :disabled="bookclub.publishing || !bookclub.selectedList.items?.length"
           @click="bookclub.publishList(bookclub.selectedList)"
@@ -119,6 +120,7 @@ function cancelRename(): void {
                    "button". Naming them per ITEM also distinguishes one row's
                    Edit from the next when tabbing or listing controls. -->
               <button
+                type="button"
                 class="btn-confirm btn-sm"
                 :aria-label="`Edit ${item.title}`"
                 :title="`Edit ${item.title}`"
@@ -127,6 +129,7 @@ function cancelRename(): void {
                 <font-awesome-icon :icon="['fas', 'pen-to-square']" />
               </button>
               <button
+                type="button"
                 class="btn-danger btn-sm"
                 :aria-label="`Delete ${item.title}`"
                 :title="`Delete ${item.title}`"
@@ -157,6 +160,7 @@ function cancelRename(): void {
                 @keyup.enter="bookclub.runLookup()"
               />
               <button
+                type="button"
                 class="btn-action btn-sm"
                 :disabled="bookclub.looking || !bookclub.lookupQuery.trim()"
                 @click="bookclub.runLookup()"
@@ -171,6 +175,7 @@ function cancelRename(): void {
               <button
                 v-for="(res, i) in bookclub.lookupResults"
                 :key="i"
+                type="button"
                 class="book-club-result"
                 @click="bookclub.applyLookupResult(res)"
               >
@@ -197,6 +202,7 @@ function cancelRename(): void {
                 alt="Cover preview"
               />
               <button
+                type="button"
                 class="btn-action btn-sm mt-8"
                 :disabled="bookclub.coverUploading"
                 @click="pickCover"
@@ -214,6 +220,7 @@ function cancelRename(): void {
               />
               <button
                 v-if="bookclub.itemForm.cover_image"
+                type="button"
                 class="btn-neutral btn-sm mt-8"
                 @click="bookclub.itemForm.cover_image = ''"
               >
@@ -307,11 +314,11 @@ function cancelRename(): void {
                 placeholder="https://..."
                 aria-label="Source URL"
               />
-              <button class="btn-danger btn-sm" @click="bookclub.removeSourceRow(i)">
+              <button type="button" class="btn-danger btn-sm" @click="bookclub.removeSourceRow(i)">
                 &times;
               </button>
             </div>
-            <button class="btn-confirm btn-sm" @click="bookclub.addSourceRow()">
+            <button type="button" class="btn-confirm btn-sm" @click="bookclub.addSourceRow()">
               <font-awesome-icon :icon="['fas', 'plus']" /> Add Source
             </button>
           </FormField>
@@ -319,12 +326,14 @@ function cancelRename(): void {
           <FormActions align="start">
             <button
               v-if="bookclub.itemForm.id"
+              type="button"
               class="btn-neutral"
               @click="bookclub.resetItemForm()"
             >
               Cancel Edit
             </button>
             <button
+              type="button"
               class="btn-confirm"
               :disabled="bookclub.savingItem || !bookclub.itemForm.title.trim()"
               @click="bookclub.saveItem()"
@@ -348,6 +357,7 @@ function cancelRename(): void {
           @keyup.enter="bookclub.createList()"
         />
         <button
+          type="button"
           class="btn-confirm btn-sm"
           :disabled="bookclub.creatingList || !bookclub.newListTitle.trim()"
           @click="bookclub.createList()"
@@ -374,17 +384,29 @@ function cancelRename(): void {
               @keyup.enter="commitRename(list)"
               @keyup.esc="cancelRename()"
             />
-            <button v-else class="book-club-list-title" @click="bookclub.selectList(list)">
+            <button
+              v-else
+              type="button"
+              class="book-club-list-title"
+              @click="bookclub.selectList(list)"
+            >
               {{ list.title }}
             </button>
             <template #actions>
               <template v-if="editingListId === list.id">
-                <button class="btn-confirm btn-sm" @click="commitRename(list)">Save</button>
-                <button class="btn-neutral btn-sm" @click="cancelRename()">Cancel</button>
+                <button type="button" class="btn-confirm btn-sm" @click="commitRename(list)">
+                  Save
+                </button>
+                <button type="button" class="btn-neutral btn-sm" @click="cancelRename()">
+                  Cancel
+                </button>
               </template>
               <template v-else>
-                <button class="btn-view btn-sm" @click="bookclub.selectList(list)">Open</button>
+                <button type="button" class="btn-view btn-sm" @click="bookclub.selectList(list)">
+                  Open
+                </button>
                 <button
+                  type="button"
                   class="btn-action btn-sm"
                   aria-label="Publish"
                   :disabled="bookclub.publishing"
@@ -392,10 +414,16 @@ function cancelRename(): void {
                 >
                   <font-awesome-icon :icon="['fas', 'paper-plane']" />
                 </button>
-                <button class="btn-confirm btn-sm" aria-label="Rename" @click="startRename(list)">
+                <button
+                  type="button"
+                  class="btn-confirm btn-sm"
+                  aria-label="Rename"
+                  @click="startRename(list)"
+                >
                   <font-awesome-icon :icon="['fas', 'pen-to-square']" />
                 </button>
                 <button
+                  type="button"
                   class="btn-danger btn-sm"
                   aria-label="Delete"
                   @click="bookclub.deleteList(list)"
@@ -424,18 +452,22 @@ function cancelRename(): void {
   flex: 1;
   min-width: 140px;
 }
+
 .book-club-list-title:hover {
   text-decoration: underline;
 }
+
 .book-club-item-sources {
   margin: 6px 0 0;
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
 }
+
 .book-club-source-link {
   white-space: nowrap;
 }
+
 .book-club-results {
   display: flex;
   flex-direction: column;
@@ -443,6 +475,7 @@ function cancelRename(): void {
   max-height: 280px;
   overflow-y: auto;
 }
+
 .book-club-result {
   display: flex;
   align-items: center;
@@ -455,9 +488,11 @@ function cancelRename(): void {
   cursor: pointer;
   text-align: left;
 }
+
 .book-club-result:hover {
   border-color: var(--accent);
 }
+
 .book-club-result-info {
   display: flex;
   flex-direction: column;

@@ -24,7 +24,7 @@ import (
 // cap-enforcing writer (with an effectively unlimited cap) and returns its id.
 func createRaffleEntry(t *testing.T, s *store.Store, raffleID int64, name, world string, num int) int64 {
 	t.Helper()
-	id, _, _, _, err := s.AddOrCreateRaffleEntry(raffleID, name, world, num, 1_000_000)
+	id, _, _, _, err := s.AddOrCreateRaffleEntry(t.Context(), raffleID, name, world, num, 1_000_000)
 	if err != nil {
 		t.Fatalf("create raffle entry: %v", err)
 	}
@@ -35,7 +35,7 @@ func createRaffleEntry(t *testing.T, s *store.Store, raffleID int64, name, world
 // via the production list query, returning nil when none matches.
 func getRaffleEntryByName(t *testing.T, s *store.Store, raffleID int64, name, world string) *model.RaffleEntry {
 	t.Helper()
-	entries, err := s.ListRaffleEntries(raffleID)
+	entries, err := s.ListRaffleEntries(t.Context(), raffleID)
 	if err != nil {
 		t.Fatalf("list raffle entries: %v", err)
 	}
@@ -48,7 +48,6 @@ func getRaffleEntryByName(t *testing.T, s *store.Store, raffleID int64, name, wo
 }
 
 const (
-	testSecret = "test-secret-key-for-sessions-32b"
 	// Bootstrap account seeded by the users migration (see store.migrateUsers).
 	seedAdminUser = "admin"
 	seedAdminPass = "admin"
@@ -65,14 +64,14 @@ type testEnv struct {
 
 func newTestEnv(t *testing.T) *testEnv {
 	t.Helper()
-	st, err := store.New(filepath.Join(t.TempDir(), "test.db"))
+	st, err := store.New(t.Context(), filepath.Join(t.TempDir(), "test.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { st.Close() })
 
 	hub := ws.NewHub()
-	srv := server.New(st, hub, testSecret, t.TempDir(), nil)
+	srv := server.New(t.Context(), st, hub, t.TempDir(), nil)
 
 	ts := httptest.NewTLSServer(srv)
 	t.Cleanup(ts.Close)
@@ -146,7 +145,7 @@ func (e *testEnv) loginAdmin(t *testing.T) {
 		"action": "login", "username": seedAdminUser, "password": seedAdminPass,
 	})
 	resp.Body.Close()
-	if resp.StatusCode != 200 {
+	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("admin login failed: %d", resp.StatusCode)
 	}
 }
@@ -214,7 +213,7 @@ func TestCSRF_CrossOriginMutationBlocked(t *testing.T) {
 func TestCORS_OptionsPreflight(t *testing.T) {
 	env := newTestEnv(t)
 
-	req, _ := http.NewRequest("OPTIONS", env.url("/api/auth"), nil)
+	req, _ := http.NewRequest(http.MethodOptions, env.url("/api/auth"), nil)
 	req.Header.Set("Origin", "http://evil.example")
 	resp, err := env.client.Do(req)
 	if err != nil {
@@ -236,7 +235,7 @@ func TestCORS_OptionsPreflight(t *testing.T) {
 func TestCORS_UnlistedOriginGetsNoHeaders(t *testing.T) {
 	env := newTestEnv(t)
 
-	req, _ := http.NewRequest("GET", env.url("/api/game"), nil)
+	req, _ := http.NewRequest(http.MethodGet, env.url("/api/game"), nil)
 	req.Header.Set("Origin", "http://evil.example")
 	resp, err := env.client.Do(req)
 	if err != nil {
@@ -252,18 +251,18 @@ func TestCORS_UnlistedOriginGetsNoHeaders(t *testing.T) {
 // TestCORS_AllowlistedOriginReflected verifies an explicitly allow-listed origin
 // is echoed back with credentials enabled.
 func TestCORS_AllowlistedOriginReflected(t *testing.T) {
-	st, err := store.New(filepath.Join(t.TempDir(), "test.db"))
+	st, err := store.New(t.Context(), filepath.Join(t.TempDir(), "test.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { st.Close() })
 
 	const origin = "https://app.example"
-	srv := server.New(st, ws.NewHub(), testSecret, t.TempDir(), []string{origin})
+	srv := server.New(t.Context(), st, ws.NewHub(), t.TempDir(), []string{origin})
 	ts := httptest.NewTLSServer(srv)
 	t.Cleanup(ts.Close)
 
-	req, _ := http.NewRequest("GET", ts.URL+"/api/game", nil)
+	req, _ := http.NewRequest(http.MethodGet, ts.URL+"/api/game", nil)
 	req.Header.Set("Origin", origin)
 	resp, err := ts.Client().Do(req)
 	if err != nil {
@@ -365,12 +364,12 @@ func TestBoard_Found(t *testing.T) {
 		{4, 19, 34, 49, 64},
 		{5, 20, 35, 50, 65},
 	}
-	if err := env.store.SaveCard("TEST01", board); err != nil {
+	if err := env.store.SaveCard(t.Context(), "TEST01", board); err != nil {
 		t.Fatal(err)
 	}
 
 	resp := env.get(t, "/api/board?id=TEST01")
-	if resp.StatusCode != 200 {
+	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("status = %d; want 200", resp.StatusCode)
 	}
 	data := decodeBody(t, resp)
@@ -396,12 +395,12 @@ func TestBoard_Preview(t *testing.T) {
 		{4, 19, 34, 49, 64},
 		{5, 20, 35, 50, 65},
 	}
-	if err := env.store.SaveCard("PREV01", board); err != nil {
+	if err := env.store.SaveCard(t.Context(), "PREV01", board); err != nil {
 		t.Fatal(err)
 	}
 
 	resp := env.get(t, "/api/board?id=PREV01&preview=1")
-	if resp.StatusCode != 200 {
+	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("status = %d; want 200", resp.StatusCode)
 	}
 	data := decodeBody(t, resp)
@@ -424,12 +423,12 @@ func TestBoard_CaseInsensitive(t *testing.T) {
 		{4, 19, 34, 49, 64},
 		{5, 20, 35, 50, 65},
 	}
-	if err := env.store.SaveCard("UPPER1", board); err != nil {
+	if err := env.store.SaveCard(t.Context(), "UPPER1", board); err != nil {
 		t.Fatal(err)
 	}
 
 	resp := env.get(t, "/api/board?id=upper1")
-	if resp.StatusCode != 200 {
+	if resp.StatusCode != http.StatusOK {
 		t.Errorf("status = %d; want 200 for lowercase lookup", resp.StatusCode)
 	}
 	resp.Body.Close()
@@ -645,7 +644,7 @@ func testPattern5x5() [][]bool {
 	for i := range grid {
 		grid[i] = make([]bool, 5)
 	}
-	for c := 0; c < 5; c++ {
+	for c := range 5 {
 		grid[0][c] = true
 	}
 	return grid
@@ -658,7 +657,7 @@ func testPattern5x5Alt() [][]bool {
 	for i := range grid {
 		grid[i] = make([]bool, 5)
 	}
-	for c := 0; c < 5; c++ {
+	for c := range 5 {
 		grid[4][c] = true
 	}
 	return grid
@@ -930,7 +929,7 @@ func TestGame_FullLifecycle(t *testing.T) {
 	resp = env.postJSON(t, "/api/game/start", map[string]any{
 		"pattern_ids": []int{int(patID)},
 	})
-	if resp.StatusCode != 200 {
+	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
 		resp.Body.Close()
 		t.Fatalf("start game: status = %d; body = %s", resp.StatusCode, body)
@@ -950,7 +949,7 @@ func TestGame_FullLifecycle(t *testing.T) {
 
 	// Draw a number
 	resp = env.postJSON(t, "/api/game/draw", map[string]any{})
-	if resp.StatusCode != 200 {
+	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
 		resp.Body.Close()
 		t.Fatalf("draw: status = %d; body = %s", resp.StatusCode, body)
@@ -1065,7 +1064,7 @@ func TestGame_BoardWithActiveGame(t *testing.T) {
 		{4, 19, 34, 49, 64},
 		{5, 20, 35, 50, 65},
 	}
-	if err := env.store.SaveCard("GAME01", board); err != nil {
+	if err := env.store.SaveCard(t.Context(), "GAME01", board); err != nil {
 		t.Fatal(err)
 	}
 
@@ -1244,7 +1243,7 @@ func TestRaffles_Delete(t *testing.T) {
 	}
 	resp.Body.Close()
 	// Confirm it's gone.
-	if r, _ := env.store.GetRaffle(int64(id)); r != nil {
+	if r, _ := env.store.GetRaffle(t.Context(), int64(id)); r != nil {
 		t.Error("raffle should be deleted")
 	}
 }
@@ -1575,7 +1574,7 @@ func TestRaffles_EnterClosedRaffle(t *testing.T) {
 	id := int(data["raffle"].(map[string]any)["id"].(float64))
 
 	// Close the raffle via store directly
-	_ = env.store.SetRaffleStatus(int64(id), "closed")
+	_ = env.store.SetRaffleStatus(t.Context(), int64(id), "closed")
 
 	resp = env.postJSON(t, fmt.Sprintf("/api/raffles/%d/enter", id), map[string]any{
 		"character_name": "Player", "world": "World", "num_entries": 1,
@@ -1640,7 +1639,7 @@ func TestRaffles_PickWinner(t *testing.T) {
 	raffleID := int(data["raffle"].(map[string]any)["id"].(float64))
 
 	entryID := createRaffleEntry(t, env.store, int64(raffleID), "Winner", "World", 3)
-	_, _ = env.store.SetRaffleEntryPaid(entryID, true, 0, 0)
+	_, _ = env.store.SetRaffleEntryPaid(t.Context(), entryID, true, 0, 0)
 
 	resp = env.postJSON(t, fmt.Sprintf("/api/raffles/%d/pick-winner", raffleID), nil)
 	data = decodeBody(t, resp)
@@ -1681,8 +1680,8 @@ func TestRaffles_VerifyWinner(t *testing.T) {
 	raffleID := int(data["raffle"].(map[string]any)["id"].(float64))
 
 	entryID := createRaffleEntry(t, env.store, int64(raffleID), "W", "X", 1)
-	_, _ = env.store.SetRaffleEntryPaid(entryID, true, 0, 0)
-	_ = env.store.SetRaffleWinner(int64(raffleID), &entryID)
+	_, _ = env.store.SetRaffleEntryPaid(t.Context(), entryID, true, 0, 0)
+	_ = env.store.SetRaffleWinner(t.Context(), int64(raffleID), &entryID)
 
 	resp = env.postJSON(t, fmt.Sprintf("/api/raffles/%d/verify-winner", raffleID), nil)
 	data = decodeBody(t, resp)
@@ -1691,7 +1690,7 @@ func TestRaffles_VerifyWinner(t *testing.T) {
 	}
 
 	// Verify raffle is actually closed
-	r, _ := env.store.GetRaffle(int64(raffleID))
+	r, _ := env.store.GetRaffle(t.Context(), int64(raffleID))
 	if r.Status != "closed" {
 		t.Errorf("raffle status = %q; want closed", r.Status)
 	}
@@ -1800,7 +1799,7 @@ func TestRaffles_AddEntryMergesExisting(t *testing.T) {
 
 	// Pre-existing settled entry, with one of its tickets waived.
 	entryID := createRaffleEntry(t, env.store, int64(raffleID), "Aerith", "Gaia", 3)
-	_, _ = env.store.SetRaffleEntryPaid(entryID, true, 0, 500)
+	_, _ = env.store.SetRaffleEntryPaid(t.Context(), entryID, true, 0, 500)
 
 	// Admin adds 2 more (case-insensitive match) WITHOUT the paid flag: the
 	// tickets merge onto the same row, and because those two are NOT settled the
@@ -2164,7 +2163,7 @@ func TestRaffles_AddEntryClosedRaffle(t *testing.T) {
 		"action": "create", "title": "Closed Test", "max_entries": 5,
 	})
 	raffleID := int(decodeBody(t, resp)["raffle"].(map[string]any)["id"].(float64))
-	_ = env.store.SetRaffleStatus(int64(raffleID), "closed")
+	_ = env.store.SetRaffleStatus(t.Context(), int64(raffleID), "closed")
 
 	resp = env.postJSON(t, fmt.Sprintf("/api/raffles/%d/entries", raffleID), map[string]any{
 		"action": "add_entry", "character_name": "P", "world": "W", "num_entries": 1,

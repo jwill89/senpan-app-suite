@@ -38,7 +38,7 @@ func topRowPattern() [][]bool {
 	for i := range grid {
 		grid[i] = make([]bool, 5)
 	}
-	for c := 0; c < 5; c++ {
+	for c := range 5 {
 		grid[0][c] = true
 	}
 	return grid
@@ -49,7 +49,7 @@ func topRowPattern() [][]bool {
 // freshly-created named card's id to trigger with.
 func (e *testEnv) startYoeverGame(t *testing.T, playerName string) string {
 	t.Helper()
-	patID, err := e.store.SavePattern("Top Row", topRowPattern(), 1)
+	patID, err := e.store.SavePattern(t.Context(), "Top Row", topRowPattern(), 1)
 	if err != nil {
 		t.Fatal(err)
 	}

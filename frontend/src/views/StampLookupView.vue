@@ -37,7 +37,7 @@ function back(): void {
 <template>
   <div>
     <div class="topbar">
-      <button class="btn-neutral btn-sm" @click="back">
+      <button type="button" class="btn-neutral btn-sm" @click="back">
         <font-awesome-icon :icon="['fas', 'arrow-left']" /> Back
       </button>
       <h2><font-awesome-icon :icon="['fad', 'magnifying-glass']" /> Find My Links</h2>
@@ -102,6 +102,7 @@ function back(): void {
                 {{ store.stampCardUrl(entry.card_token) }}
               </a>
               <button
+                type="button"
                 class="btn-view btn-sm"
                 @click="store.copyLink(store.stampCardUrl(entry.card_token))"
               >

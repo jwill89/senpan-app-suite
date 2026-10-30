@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"encoding/base64"
 	"encoding/binary"
 	"encoding/json"
@@ -51,7 +52,7 @@ type webauthnUser struct {
 
 func (u *webauthnUser) WebAuthnID() []byte {
 	b := make([]byte, 8)
-	binary.BigEndian.PutUint64(b, uint64(u.user.ID))
+	binary.BigEndian.PutUint64(b, uint64(u.user.ID)) //nolint:gosec // the id's bits, kept as they are: a positive row id round-trips through userHandleToID
 	return b
 }
 func (u *webauthnUser) WebAuthnName() string                       { return u.user.Username }
@@ -73,12 +74,12 @@ func userHandleToID(handle []byte) (int64, bool) {
 	if len(handle) != 8 {
 		return 0, false
 	}
-	return int64(binary.BigEndian.Uint64(handle)), true
+	return int64(binary.BigEndian.Uint64(handle)), true //nolint:gosec // the reverse of WebAuthnID: the bits of the row id it encoded
 }
 
 // loadWebAuthnUser loads a user's stored credentials and wraps them for go-webauthn.
-func (s *Server) loadWebAuthnUser(u *model.User) (*webauthnUser, error) {
-	jsons, err := s.store.GetPasskeyCredentialsJSON(u.ID)
+func (s *Server) loadWebAuthnUser(ctx context.Context, u *model.User) (*webauthnUser, error) {
+	jsons, err := s.store.GetPasskeyCredentialsJSON(ctx, u.ID)
 	if err != nil {
 		return nil, err
 	}
@@ -118,8 +119,8 @@ func (s *Server) popWebAuthnSession(r *http.Request, key string) (*webauthn.Sess
 }
 
 const (
-	sessKeyPasskeyRegister = "webauthn_register"
-	sessKeyPasskeyLogin    = "webauthn_login"
+	sessKeyPasskeyRegister = "webauthn_register" //nolint:gosec // a session key name, not a credential
+	sessKeyPasskeyLogin    = "webauthn_login"    //nolint:gosec // a session key name, not a credential
 )
 
 // handlePasskeyRegisterBegin starts registering a new passkey for the logged-in
@@ -134,7 +135,7 @@ func (s *Server) handlePasskeyRegisterBegin(w http.ResponseWriter, r *http.Reque
 		writeInternalError(w, "webauthn config", err)
 		return
 	}
-	wu, err := s.loadWebAuthnUser(user)
+	wu, err := s.loadWebAuthnUser(r.Context(), user)
 	if err != nil {
 		writeInternalError(w, "load passkeys", err)
 		return
@@ -177,7 +178,7 @@ func (s *Server) handlePasskeyRegisterFinish(w http.ResponseWriter, r *http.Requ
 		writeInternalError(w, "webauthn config", err)
 		return
 	}
-	wu, err := s.loadWebAuthnUser(user)
+	wu, err := s.loadWebAuthnUser(r.Context(), user)
 	if err != nil {
 		writeInternalError(w, "load passkeys", err)
 		return
@@ -188,7 +189,7 @@ func (s *Server) handlePasskeyRegisterFinish(w http.ResponseWriter, r *http.Requ
 		return
 	}
 	credID := base64.RawURLEncoding.EncodeToString(credential.ID)
-	if exists, err := s.store.PasskeyCredentialExists(credID); err != nil {
+	if exists, err := s.store.PasskeyCredentialExists(r.Context(), credID); err != nil {
 		writeInternalError(w, "check passkey", err)
 		return
 	} else if exists {
@@ -201,11 +202,11 @@ func (s *Server) handlePasskeyRegisterFinish(w http.ResponseWriter, r *http.Requ
 		return
 	}
 	name := passkeyName(r.URL.Query().Get("name"))
-	if _, err := s.store.CreatePasskey(user.ID, credID, string(credJSON), name); err != nil {
+	if _, err := s.store.CreatePasskey(r.Context(), user.ID, credID, string(credJSON), name); err != nil {
 		writeInternalError(w, "save passkey", err)
 		return
 	}
-	s.writePasskeyList(w, user.ID)
+	s.writePasskeyList(r.Context(), w, user.ID)
 }
 
 // handlePasskeyList returns the logged-in account's passkeys. Auth: self-service.
@@ -214,7 +215,7 @@ func (s *Server) handlePasskeyList(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	s.writePasskeyList(w, user.ID)
+	s.writePasskeyList(r.Context(), w, user.ID)
 }
 
 // handlePasskeyDelete removes one of the logged-in account's passkeys by id.
@@ -228,7 +229,7 @@ func (s *Server) handlePasskeyDelete(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "Invalid passkey ID")
 		return
 	}
-	deleted, err := s.store.DeletePasskey(user.ID, id)
+	deleted, err := s.store.DeletePasskey(r.Context(), user.ID, id)
 	if err != nil {
 		writeInternalError(w, "delete passkey", err)
 		return
@@ -237,12 +238,12 @@ func (s *Server) handlePasskeyDelete(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "Passkey not found")
 		return
 	}
-	s.writePasskeyList(w, user.ID)
+	s.writePasskeyList(r.Context(), w, user.ID)
 }
 
 // writePasskeyList writes a user's current passkeys as the response.
-func (s *Server) writePasskeyList(w http.ResponseWriter, userID int64) {
-	list, err := s.store.ListPasskeys(userID)
+func (s *Server) writePasskeyList(ctx context.Context, w http.ResponseWriter, userID int64) {
+	list, err := s.store.ListPasskeys(ctx, userID)
 	if err != nil {
 		writeInternalError(w, "list passkeys", err)
 		return
@@ -309,14 +310,14 @@ func (s *Server) handlePasskeyLoginFinish(w http.ResponseWriter, r *http.Request
 		if !ok {
 			return nil, errors.New("invalid user handle")
 		}
-		u, err := s.store.GetUserByID(id)
+		u, err := s.store.GetUserByID(r.Context(), id)
 		if err != nil {
 			return nil, err
 		}
 		if u == nil || !u.IsActive {
 			return nil, errors.New("account not found or inactive")
 		}
-		return s.loadWebAuthnUser(u)
+		return s.loadWebAuthnUser(r.Context(), u)
 	}
 	user, credential, err := wa.FinishPasskeyLogin(handler, *sessionData, r)
 	if err != nil {
@@ -331,11 +332,15 @@ func (s *Server) handlePasskeyLoginFinish(w http.ResponseWriter, r *http.Request
 		return
 	}
 	acct := wu.user
+	// The assertion has been verified and spent, so what it changed is saved
+	// whether or not the client stays for the reply - above all the signature
+	// counter, which clone detection compares the next login against.
+	ctx := context.WithoutCancel(r.Context())
 
 	// Persist the updated signature counter (clone-detection state).
 	credID := base64.RawURLEncoding.EncodeToString(credential.ID)
 	if j, err := json.Marshal(credential); err == nil {
-		if err := s.store.UpdatePasskeyCredential(credID, string(j)); err != nil {
+		if err := s.store.UpdatePasskeyCredential(ctx, credID, string(j)); err != nil {
 			slog.Error("update passkey credential", "error", err)
 		}
 	}
@@ -346,7 +351,7 @@ func (s *Server) handlePasskeyLoginFinish(w http.ResponseWriter, r *http.Request
 	// password: the login succeeded and every request after it 401'd.
 	s.establishSession(r, acct)
 	s.limiter.resetFailures(ip)
-	if err := s.store.UpdateLastLogin(acct.ID); err != nil {
+	if err := s.store.UpdateLastLogin(ctx, acct.ID); err != nil {
 		slog.Error("update last login", "error", err, "user_id", acct.ID)
 	}
 	writeJSON(w, http.StatusOK, model.LoginResponse{Success: true, User: *acct})

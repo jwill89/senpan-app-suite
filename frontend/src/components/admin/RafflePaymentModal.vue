@@ -97,7 +97,7 @@ async function clearPayment(): Promise<void> {
         <font-awesome-icon :icon="['fad', 'coins']" /> {{ entry.character_name }} @
         {{ entry.world }}
       </h3>
-      <button class="btn-neutral btn-sm" @click="emit('close')">Close</button>
+      <button type="button" class="btn-neutral btn-sm" @click="emit('close')">Close</button>
     </div>
 
     <ul class="stack mb-16">
@@ -168,7 +168,7 @@ async function clearPayment(): Promise<void> {
         Leaves {{ entry.num_entries - ticketsSettled }} of {{ entry.num_entries }} unpaid.
       </p>
       <div class="flex-toolbar">
-        <button class="btn-confirm" :disabled="raffles.settlingEntry" @click="settle">
+        <button type="button" class="btn-confirm" :disabled="raffles.settlingEntry" @click="settle">
           <LoadingSpinner v-if="raffles.settlingEntry" label="Saving..." />
           <template v-else>
             <font-awesome-icon :icon="['fas', 'circle-check']" /> Mark Paid
@@ -176,6 +176,7 @@ async function clearPayment(): Promise<void> {
         </button>
         <button
           v-if="state === 'partial'"
+          type="button"
           class="btn-danger"
           :disabled="raffles.settlingEntry"
           @click="clearPayment"
@@ -190,7 +191,12 @@ async function clearPayment(): Promise<void> {
       <p class="text-muted mb-12">
         Clearing this resets the entry to unpaid and removes everything waived on it.
       </p>
-      <button class="btn-danger" :disabled="raffles.settlingEntry" @click="clearPayment">
+      <button
+        type="button"
+        class="btn-danger"
+        :disabled="raffles.settlingEntry"
+        @click="clearPayment"
+      >
         <LoadingSpinner v-if="raffles.settlingEntry" label="Saving..." />
         <template v-else>Mark Unpaid</template>
       </button>

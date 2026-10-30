@@ -83,7 +83,12 @@ function usesSecondaryStamp(ri: number, ci: number): boolean {
             :class="
               cellClass ? cellClass(ri, ci, cell) : ['board-cell', cell === 0 ? 'is-free' : '']
             "
+            role="button"
+            tabindex="0"
+            :aria-pressed="isStamped ? isStamped(ri, ci) : false"
             @click="emit('cellClick', ri, ci, cell)"
+            @keydown.enter="emit('cellClick', ri, ci, cell)"
+            @keydown.space.prevent="emit('cellClick', ri, ci, cell)"
           >
             <span class="cell-num">{{ cell === 0 ? 'FREE' : cell }}</span>
             <div

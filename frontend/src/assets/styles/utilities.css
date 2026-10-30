@@ -25,7 +25,7 @@
   padding: 0;
   margin: -1px;
   overflow: hidden;
-  clip: rect(0, 0, 0, 0);
+  clip-path: inset(50%);
   white-space: nowrap;
   border: 0;
 }
@@ -50,23 +50,33 @@
 .text-muted {
   color: var(--text-muted);
 }
+
 .text-highlight {
   color: var(--highlight);
 }
+
+.text-success {
+  color: var(--success);
+}
+
 .text-sm {
   font-size: 0.85rem;
 }
+
 /* Completes the size scale upward, for the one figure on a panel that has to
    outweigh the lines around it (the raffle sign-up's Amount Due). */
 .text-lg {
   font-size: 1.1rem;
 }
+
 .text-xs {
   font-size: 0.8rem;
 }
+
 .fw-normal {
   font-weight: 400;
 }
+
 .code-highlight {
   font-family: monospace;
   color: var(--highlight);
@@ -76,39 +86,51 @@
 .mb-4 {
   margin-bottom: 4px;
 }
+
 .mb-6 {
   margin-bottom: 6px;
 }
+
 .mb-8 {
   margin-bottom: 8px;
 }
+
 .mb-10 {
   margin-bottom: 10px;
 }
+
 .mb-12 {
   margin-bottom: 12px;
 }
+
 .mb-16 {
   margin-bottom: 16px;
 }
+
 .mb-20 {
   margin-bottom: 20px;
 }
+
 .mt-4 {
   margin-top: 4px;
 }
+
 .mt-8 {
   margin-top: 8px;
 }
+
 .mt-10 {
   margin-top: 10px;
 }
+
 .mt-12 {
   margin-top: 12px;
 }
+
 .mt-16 {
   margin-top: 16px;
 }
+
 .mt-20 {
   margin-top: 20px;
 }
@@ -122,14 +144,17 @@
 .nowrap {
   white-space: nowrap;
 }
+
 .w-full {
   width: 100%;
 }
+
 .m-0 {
   margin: 0;
 }
 
 /* Flex layout utilities */
+
 /* Object: horizontal toolbar (search/filter/action controls). `.manager-toolbar`
    is the same toolbar with bottom spacing for a manager page header row. */
 .flex-toolbar,
@@ -139,14 +164,17 @@
   flex-wrap: wrap;
   align-items: center;
 }
+
 .flex-row {
   display: flex;
   gap: 16px;
   flex-wrap: wrap;
 }
+
 .items-start {
   align-items: flex-start;
 }
+
 .flex-center {
   display: flex;
   justify-content: center;
@@ -159,11 +187,18 @@
   max-width: 1200px;
   margin-inline: auto;
 }
+
+/* A single column read on its own, like a stamp card or a drawing link. */
+.content-container--narrow {
+  max-width: 640px;
+}
+
 .flex-between {
   display: flex;
   justify-content: space-between;
   align-items: center;
 }
+
 .flex-end {
   display: flex;
   justify-content: flex-end;
@@ -177,6 +212,7 @@
   display: block;
   margin-bottom: 4px;
 }
+
 .field-input-full {
   width: 100%;
 }
@@ -202,6 +238,7 @@
 .field > textarea {
   width: 100%;
 }
+
 /* Pattern editor reuses .field as a centered flex row - keep auto width. */
 .pattern-editor .field > input,
 .pattern-editor .field > select {
@@ -231,6 +268,7 @@
   flex-wrap: wrap;
   margin-bottom: 14px;
 }
+
 .form-row > .field {
   flex: 1;
   min-width: 180px;
@@ -245,12 +283,15 @@
   align-items: center;
   margin-top: 4px;
 }
+
 .form-actions--start {
   justify-content: flex-start;
 }
+
 .form-actions--end {
   justify-content: flex-end;
 }
+
 .form-actions--between {
   justify-content: space-between;
 }
@@ -267,22 +308,26 @@
   gap: 12px;
   margin-bottom: 12px;
 }
+
 .dt-toolbar-start,
 .dt-toolbar-end {
   display: flex;
   align-items: center;
   gap: 10px;
 }
+
 /* The left group takes the slack, which pins the right group to the far edge on
    every table whether or not a search box is present. */
 .dt-toolbar-start {
   flex: 1 1 240px;
   min-width: 0;
 }
+
 .dt-toolbar-end {
   margin-left: auto;
   flex-wrap: wrap;
 }
+
 /* The search box is a FIXED preferred width here, not flex-grow. Left to grow,
    it filled whatever the right-hand group didn't need - so the same control came
    out 360px on a table with one button and 253px on one with three, which reads
@@ -297,11 +342,13 @@
   font-size: 0.8rem;
   white-space: nowrap;
 }
+
 .dt-toolbar-perpage {
   display: flex;
   align-items: center;
   gap: 6px;
 }
+
 .dt-toolbar-perpage select {
   width: 70px;
 }
@@ -311,26 +358,31 @@
 .data-table-wrap {
   overflow-x: auto;
 }
+
 .data-table {
   width: 100%;
   border-collapse: collapse;
   font-size: 0.85rem;
 }
+
 .data-table th,
 .data-table td {
   padding: 8px 12px;
   text-align: left;
   border-bottom: 1px solid var(--panel-raised-bg);
 }
+
 .data-table thead th {
   border-bottom-width: 2px;
 }
+
 .data-table th {
   color: var(--text-muted);
   font-weight: 600;
   user-select: none;
   white-space: nowrap;
 }
+
 .data-table th.is-sortable {
   cursor: pointer;
 }
@@ -343,12 +395,14 @@
 .data-table tbody tr:nth-child(even) {
   background: color-mix(in srgb, var(--panel-raised-bg) 55%, transparent);
 }
+
 /* Expandable rows: the whole row is the toggle, and the detail band sits under it. */
 .data-table .dt-expandable {
   cursor: pointer;
 }
+
 .data-table .dt-detail-row > td {
-  background: rgba(127, 127, 127, 0.08);
+  background: rgb(127 127 127 / 8%);
 }
 
 /* Checkbox column for bulk actions: only as wide as the control. */
@@ -363,6 +417,7 @@
 .data-table.is-resizable th {
   position: relative;
 }
+
 .dt-resizer {
   position: absolute;
   top: 0;
@@ -373,6 +428,7 @@
   touch-action: none;
   user-select: none;
 }
+
 .dt-resizer::after {
   content: '';
   position: absolute;
@@ -383,6 +439,7 @@
   background: transparent;
   transition: background 0.15s;
 }
+
 .dt-resizer:hover::after,
 .dt-resizer:active::after {
   background: var(--highlight);
@@ -397,9 +454,11 @@
 .ta-left {
   text-align: left;
 }
+
 .ta-center {
   text-align: center;
 }
+
 .ta-right {
   text-align: right;
 }
@@ -430,6 +489,7 @@
   margin-bottom: 16px;
   border-bottom: 2px solid var(--highlight);
 }
+
 /* Top step of the heading scale - panel titles are set in admin.css, section
    labels keep the browser default. */
 .manager-header > h3,
@@ -502,6 +562,7 @@
   border-radius: var(--radius);
   transition: border-color 0.2s;
 }
+
 /* Modifier: inset the content, for a card of plain content rather than one built
    around an edge-to-edge image. Matches the inner spacing of the other boxes a
    reader meets on these pages (`.raffle-signup-form`, `.stamp-signup-result`). */
@@ -531,6 +592,7 @@
   margin-bottom: 16px;
   font-size: 1.05rem;
 }
+
 /* `--warning` recolors the band for a notice the reader has to accept rather than
    celebrate - e.g. a stamp card whose remaining stalls have closed for good. */
 .callout--warning {
@@ -547,9 +609,11 @@
   gap: 8px;
   cursor: pointer;
 }
+
 .checkbox-inline input {
   cursor: pointer;
 }
+
 .checkbox-inline--strong {
   font-weight: 600;
   user-select: none;
@@ -589,19 +653,23 @@
     border-color 0.15s,
     background 0.15s;
 }
+
 .file-dropzone:hover {
   border-color: var(--highlight);
 }
+
 .file-dropzone.is-dragover {
   border-color: var(--highlight);
   background: color-mix(in srgb, var(--highlight) 12%, transparent);
   color: var(--highlight);
 }
+
 /* Images can be dropped only once a category is chosen. */
 .file-dropzone.is-disabled {
   opacity: 0.5;
   pointer-events: none;
 }
+
 .file-dropzone .svg-inline--fa {
   font-size: 1.6rem;
 }
@@ -612,6 +680,7 @@
   grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
   gap: 14px;
 }
+
 .file-card {
   margin: 0;
   background: var(--panel-raised-bg);
@@ -620,12 +689,14 @@
   display: flex;
   flex-direction: column;
 }
+
 .file-card-body {
   padding: 8px 10px;
   display: flex;
   flex-direction: column;
   gap: 4px;
 }
+
 .file-name {
   font-size: 0.78rem;
   overflow: hidden;
@@ -655,10 +726,12 @@
     background 0.15s,
     opacity 0.15s;
 }
+
 .file-del-overlay:hover {
   opacity: 1;
   background: var(--danger);
 }
+
 /* Full-width copy action under each card. Fill + hover come from the `.btn-view`
    intent; only the full-width layout belongs here. */
 .file-copy-btn {
@@ -698,13 +771,16 @@
   cursor: pointer;
   transition: border-color 0.15s;
 }
+
 .chip:hover {
   border-color: var(--highlight);
 }
+
 .chip-del {
   color: var(--text-muted);
   cursor: pointer;
 }
+
 .chip-del:hover {
   color: var(--danger);
 }
@@ -720,6 +796,7 @@
   cursor: pointer;
   transition: color 0.12s;
 }
+
 .del-x:hover {
   color: var(--text);
 }
@@ -739,11 +816,13 @@
   margin: 0;
   padding: 0;
 }
+
 .stack-row {
   display: flex;
   align-items: center;
   gap: 8px;
 }
+
 /* Part: the fixed first column that turns a run of rows into a key/value list
    (a raffle's per-entry prices, the payment summary). Fixed width so the values
    line up down the column instead of stepping in and out with the label. */
@@ -761,12 +840,15 @@
 .captioned-figure {
   margin: 12px 0 0;
 }
+
 .captioned-figure figcaption {
   font-weight: 600;
   margin-bottom: 6px;
 }
+
 .captioned-figure img {
   max-width: 100%;
+
   /* --radius-media, not --radius: chrome is square by design here, but a picture
      takes the soft edge every other image object uses (see tokens.css). The scoped
      rule this object replaces used the square token, which read as a hard crop. */
@@ -800,9 +882,11 @@
   cursor: pointer;
   transition: border-color 0.15s;
 }
+
 .toggle-btn:hover {
   border-color: var(--accent);
 }
+
 .toggle-btn.is-active {
   background: var(--accent);
   color: var(--text-on-accent);
@@ -823,6 +907,7 @@
   opacity: 0.5;
   cursor: not-allowed;
 }
+
 .toggle-btn:disabled:hover {
   border-color: transparent;
 }
@@ -847,18 +932,22 @@
     background 0.15s,
     border-color 0.15s;
 }
+
 .switch.is-on {
   background: var(--accent);
   border-color: var(--accent);
 }
+
 .switch:focus-visible {
   outline: 2px solid var(--highlight);
   outline-offset: 2px;
 }
+
 .switch:disabled {
   opacity: 0.45;
   cursor: not-allowed;
 }
+
 .switch-knob {
   position: absolute;
   top: 50%;
@@ -870,6 +959,7 @@
   background: var(--panel-bg);
   transition: left 0.15s;
 }
+
 .switch.is-on .switch-knob {
   left: calc(100% - 18px);
   background: var(--text-on-accent);
@@ -891,6 +981,7 @@
   vertical-align: middle;
   padding: 2px 10px;
   border-radius: 0;
+
   /* Named, not inherited: `.live-badge` sits INSIDE the Current Game panel's <h3>,
      so inheriting would hand a 0.7rem badge the display serif. A badge is always
      chrome, never a display-face element. */
@@ -910,18 +1001,22 @@
   background: color-mix(in srgb, var(--accent) 22%, transparent);
   color: var(--text);
 }
+
 .badge--success {
   background: color-mix(in srgb, var(--success) 30%, transparent);
   color: var(--text);
 }
+
 .badge--warning {
   background: color-mix(in srgb, var(--warning) 22%, transparent);
   color: var(--text);
 }
+
 .badge--danger {
   background: color-mix(in srgb, var(--danger) 26%, transparent);
   color: var(--text);
 }
+
 .badge--muted {
   background: var(--panel-bg);
   color: var(--text-muted);
@@ -938,6 +1033,7 @@
   max-height: 180px;
   overflow-y: auto;
 }
+
 .img-thumb {
   width: 72px;
   height: 48px;
@@ -948,16 +1044,19 @@
   cursor: pointer;
   background: var(--panel-bg);
 }
+
 .img-thumb img {
   width: 100%;
   height: 100%;
   object-fit: cover;
   display: block;
 }
+
 .img-thumb:hover,
 .img-thumb.is-active {
   border-color: var(--accent);
 }
+
 /* Placeholder box shown in a cover/preview slot when no image is set. A dashed
    inset + larger, dimmed glyph reads as a deliberate "no image" state rather
    than a broken/missing graphic. */
@@ -971,6 +1070,7 @@
   font-size: 1.4rem;
   opacity: 0.7;
 }
+
 /* Cover/preview image - shared chrome; a size modifier sets the dimensions so
    every announcement/book-club cover matches. Pairs with `.media-empty` for the
    no-image placeholder (which keeps its own centred flex display - base sets no
@@ -980,6 +1080,7 @@
   border-radius: var(--radius-media);
   flex: 0 0 auto;
 }
+
 .media-cover--wide {
   width: 120px;
   height: 68px;
@@ -1010,6 +1111,7 @@
   max-width: 360px;
   color: var(--text-muted);
 }
+
 .search-input input {
   flex: 1;
 }
@@ -1022,6 +1124,7 @@
   flex-direction: column;
   gap: 12px;
 }
+
 .list-row {
   display: flex;
   align-items: stretch;
@@ -1030,16 +1133,19 @@
   border-radius: var(--radius);
   padding: 12px;
 }
+
 .list-row-media {
   display: flex;
   flex: 0 0 auto;
   gap: 8px;
 }
+
 .list-row-body {
   flex: 1;
   min-width: 0;
   align-self: flex-start;
 }
+
 .list-row-actions {
   display: flex;
   flex-wrap: wrap;
@@ -1063,12 +1169,15 @@
   border-radius: 0;
   flex: 0 0 auto;
 }
+
 .list-row-title {
   margin: 0 0 4px;
 }
+
 .list-row-meta {
   margin: 0 0 4px;
 }
+
 .list-row-meta--inline {
   display: flex;
   flex-wrap: wrap;
@@ -1082,11 +1191,13 @@
 .media-tile-wrap {
   position: relative;
 }
+
 .media-tile {
   display: block;
   aspect-ratio: 1 / 1;
   background: var(--panel-bg);
 }
+
 /* The image fills the square without cropping - a thumbnail is a preview of the
    whole asset, not a crop of it. Was written identically in both media managers. */
 .media-tile img {
@@ -1104,11 +1215,13 @@
   gap: 8px;
   overflow-x: auto;
 }
+
 .repeater-row {
   display: grid;
   align-items: center;
   column-gap: 8px;
 }
+
 .repeater-row > input {
   width: 100%;
   min-width: 0;
@@ -1123,6 +1236,7 @@
   align-items: center;
   gap: 10px;
 }
+
 .color-field-input {
   width: 48px;
   height: 36px;
@@ -1132,6 +1246,7 @@
   background: var(--panel-bg);
   cursor: pointer;
 }
+
 .color-field-hex {
   font-family: monospace;
   text-transform: uppercase;
@@ -1184,14 +1299,17 @@
   margin-bottom: 14px;
   color: var(--text);
 }
+
 .form-alert-danger {
   background: color-mix(in srgb, var(--danger) 15%, transparent);
   border: 1px solid var(--danger);
 }
+
 .form-alert-warning {
   background: color-mix(in srgb, var(--warning) 15%, transparent);
   border: 1px solid var(--warning);
 }
+
 /* Neither a danger nor a warning: a statement of something already true and in the
    reader's favour (e.g. "we filled your name in from your last entry"). Built on
    --highlight rather than a new semantic colour, since nothing is wrong. */
@@ -1199,16 +1317,20 @@
   background: color-mix(in srgb, var(--highlight) 15%, transparent);
   border: 1px solid color-mix(in srgb, var(--highlight) 60%, transparent);
 }
+
 .form-alert-icon {
   margin-top: 2px;
   flex-shrink: 0;
 }
+
 .form-alert-info .form-alert-icon {
   color: var(--highlight);
 }
+
 .form-alert-danger .form-alert-icon {
   color: var(--danger);
 }
+
 .form-alert-warning .form-alert-icon {
   color: var(--warning);
 }
@@ -1250,9 +1372,11 @@
   border-radius: var(--radius);
   padding: 20px;
 }
+
 .stamp-signup-form input {
   width: 100%;
 }
+
 .stamp-signup-submit {
   width: 100%;
   margin-top: 4px;
@@ -1276,11 +1400,13 @@
   padding: 10px 0;
   border-top: 1px solid color-mix(in srgb, var(--text-muted) 20%, transparent);
 }
+
 .stamp-signup-link-url {
   color: var(--highlight);
   font-size: 0.9rem;
   overflow-wrap: anywhere;
 }
+
 .stamp-signup-link .btn-view {
   align-self: flex-start;
 }
@@ -1298,6 +1424,7 @@
   border-top: 1px solid color-mix(in srgb, var(--text-muted) 20%, transparent);
   font-size: 0.9rem;
 }
+
 .stamp-lookup-draws .text-muted {
   font-size: 0.85rem;
 }
@@ -1315,6 +1442,7 @@
   gap: 8px;
   margin-bottom: 16px;
 }
+
 .stamp-lookup-form input {
   flex: 1;
   min-width: 0;
@@ -1332,20 +1460,24 @@
   max-width: 700px;
   margin: 0 auto;
 }
+
 .prize-container {
   text-align: center;
   margin-bottom: 20px;
 }
+
 .prize-img {
   max-width: 100%;
   max-height: 400px;
   border-radius: var(--radius-media);
 }
+
 .prize-img-sm {
   max-width: 300px;
   max-height: 200px;
   border-radius: var(--radius-media);
 }
+
 /* Object: highlight sub-section heading - level 3 of the heading scale. No separator
    rule (the colour carries it) and the body face, because the display face is not
    readable at this size (see base.css section 1). Uppercase + letter-spacing is what

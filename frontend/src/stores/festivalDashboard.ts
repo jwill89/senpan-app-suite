@@ -78,6 +78,8 @@ export const useFestivalDashboardStore = defineStore('festivalDashboard', () => 
   /** When the last read finished (ms), for the page's refresh-on-return. */
   const loadedAt = ref(0)
   const busy = ref(false)
+  /** Google Fonts family names for the plaque designer (loaded on first use). */
+  const googleFonts = ref<string[]>([])
   /** The confirmation of the latest raffle entry made here, keyed by raffle id. */
   const entered = ref<Partial<Record<number, RaffleEnterResponse>>>({})
 
@@ -354,6 +356,65 @@ export const useFestivalDashboardStore = defineStore('festivalDashboard', () => 
     }
   }
 
+  /** Loads the designer's Google Fonts list once; it is empty without a server key. */
+  async function loadGoogleFonts(): Promise<void> {
+    if (googleFonts.value.length) return
+    try {
+      googleFonts.value = (await endpoints.ema.googleFonts()).families
+    } catch {
+      googleFonts.value = []
+    }
+  }
+
+  /**
+   * Sends a plaque designed on the site, under the visitor's name. It waits for
+   * staff to approve it, who then have the app post it to Discord.
+   */
+  async function submitEmaPlaque(png: Blob, turnstileToken: string): Promise<boolean> {
+    const board = dashboard.value?.ema
+    if (!board || !visitorName.value || busy.value) return false
+    const form = new FormData()
+    form.append('name', visitorName.value)
+    form.append('world', visitorWorld.value)
+    form.append('turnstile_token', turnstileToken)
+    form.append('image', png, 'ema.png')
+    busy.value = true
+    try {
+      await endpoints.ema.submitPlaque(board.id, form)
+      ui.notify('Sent! Staff will look it over and post it for you.', 'success')
+      await refresh()
+      return true
+    } catch (e) {
+      ui.notify((e as Error).message, 'error')
+      return false
+    } finally {
+      busy.value = false
+    }
+  }
+
+  /** Asks the board's artist to make the visitor's plaque. */
+  async function requestEmaPlaque(description: string, turnstileToken: string): Promise<boolean> {
+    const board = dashboard.value?.ema
+    if (!board || !visitorName.value || busy.value) return false
+    busy.value = true
+    try {
+      await endpoints.ema.request(board.id, {
+        name: visitorName.value,
+        world: visitorWorld.value,
+        description: description.trim(),
+        turnstile_token: turnstileToken,
+      })
+      ui.notify(`Sent to ${board.artist_name}!`, 'success')
+      await refresh()
+      return true
+    } catch (e) {
+      ui.notify((e as Error).message, 'error')
+      return false
+    } finally {
+      busy.value = false
+    }
+  }
+
   return {
     festivalKey,
     map,
@@ -364,6 +425,7 @@ export const useFestivalDashboardStore = defineStore('festivalDashboard', () => 
     loadedAt,
     busy,
     entered,
+    googleFonts,
     card,
     cardToken,
     visitorName,
@@ -380,5 +442,8 @@ export const useFestivalDashboardStore = defineStore('festivalDashboard', () => 
     findCard,
     stamp,
     enterRaffle,
+    loadGoogleFonts,
+    submitEmaPlaque,
+    requestEmaPlaque,
   }
 })

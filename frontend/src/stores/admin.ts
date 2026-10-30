@@ -16,6 +16,7 @@ import { useTeaRoomsStore } from './teaRooms'
 import { useGaraponsStore } from './garapons'
 import { useStampRalliesStore } from './stampRallies'
 import { useFestivalMapsStore } from './festivalMaps'
+import { useEmaStore } from './ema'
 import { useBookclubStore } from './bookclub'
 import { useStylesStore } from './styles'
 import { useAppStore } from './app'
@@ -48,6 +49,8 @@ export type AdminTab =
   | 'festival-map'
   | 'festival-garapon'
   | 'festival-stamp-rally'
+  | 'festival-ema'
+  | 'festival-ema-requests'
   | 'atelier-fonts'
   | 'atelier-carrd'
   | 'system-settings'
@@ -150,6 +153,19 @@ export const useAdminStore = defineStore('admin', () => {
       stampRallies.rallyForm = null
       loadFresh('stamp-rallies', () => {
         void stampRallies.loadRallies()
+      })
+    }
+    if (tab === 'festival-ema') {
+      const ema = useEmaStore()
+      ema.selectedBoard = null
+      ema.boardForm = null
+      loadFresh('ema-boards', () => {
+        void ema.loadBoards()
+      })
+    }
+    if (tab === 'festival-ema-requests') {
+      loadFresh('ema-requests', () => {
+        void useEmaStore().loadRequests()
       })
     }
     // openClub manages its own per-club freshness (and preserves the open list /
@@ -259,6 +275,20 @@ export const useAdminStore = defineStore('admin', () => {
           const fm = useFestivalMapsStore()
           void fm.loadMaps()
           if (fm.selectedMap) void fm.loadMapDetail(fm.selectedMap.id)
+        })
+        break
+      case 'ema-boards':
+        // A visitor's new plaque, or another reviewer's decision: refresh the
+        // counts, and the open board's queue so it isn't reviewed twice.
+        apply('ema-boards', tab === 'festival-ema', () => {
+          const ema = useEmaStore()
+          void ema.loadBoards()
+          if (ema.selectedBoard) void ema.loadPlaques(ema.selectedBoard.id)
+        })
+        break
+      case 'ema-requests':
+        apply('ema-requests', tab === 'festival-ema-requests', () => {
+          void useEmaStore().loadRequests()
         })
         break
       case 'stamp-rallies':

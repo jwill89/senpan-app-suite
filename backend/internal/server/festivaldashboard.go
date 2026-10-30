@@ -157,7 +157,65 @@ func (s *Server) handleFestivalDashboard(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	out.Raffles = raffles
+
+	if out.Ema, err = s.dashboardEma(r.Context(), m.ID, out.ParticipantName, out.World, now); err != nil {
+		writeInternalError(w, "load ema board for dashboard", err)
+		return
+	}
 	writeJSON(w, http.StatusOK, out)
+}
+
+// dashboardEma builds the festival's open plaque board for a visitor: what it
+// offers, its windows (never their webhooks), the one taking plaques now, and the
+// visitor's own plaques when a name is known. nil when the festival has no open
+// board.
+func (s *Server) dashboardEma(ctx context.Context, mapID int64, name, world string, now time.Time) (*model.FestivalDashboardEma, error) {
+	b, err := s.store.GetEmaBoardForMap(ctx, mapID)
+	if err != nil || b == nil || b.Status != "open" {
+		return nil, err
+	}
+	out := &model.FestivalDashboardEma{
+		ID: b.ID, Title: b.Title, TemplateImage: b.TemplateImage, Instructions: b.Instructions,
+		DiscordLink: b.DiscordLink, AllowSelf: b.AllowSelf, AllowSite: b.AllowSite,
+		AllowArtist: b.AllowArtist, ArtistName: b.ArtistName,
+		Windows: make([]model.PublicEmaWindow, 0, len(b.Windows)),
+		Plaques: []model.PublicEmaPlaque{},
+	}
+	current := currentEmaWindow(b.Windows, now)
+	if current != nil {
+		id := current.ID
+		out.CurrentWindowID = &id
+	}
+	for _, w := range b.Windows {
+		out.Windows = append(out.Windows, model.PublicEmaWindow{
+			ID: w.ID, Label: w.Label, StartAt: w.StartAt, EndAt: w.EndAt,
+			IsOpen: current != nil && current.ID == w.ID,
+		})
+	}
+	if name == "" {
+		return out, nil
+	}
+	mine, err := s.store.ListEmaPlaquesFor(ctx, b.ID, name, world)
+	if err != nil {
+		return nil, err
+	}
+	for i := range mine {
+		p := &mine[i]
+		pp := model.PublicEmaPlaque{
+			ID: p.ID, WindowID: p.WindowID, WindowLabel: p.WindowLabel, Kind: p.Kind,
+			Status: p.Status, Description: p.Description, CreatedAt: p.CreatedAt,
+		}
+		// The visitor's own upload, shown back to them while it waits; the file is
+		// gone once it is posted or rejected.
+		if p.Status == model.EmaStatusPending || p.Status == model.EmaStatusPosting {
+			pp.Image = p.Image
+		}
+		out.Plaques = append(out.Plaques, pp)
+		if current != nil && p.WindowID != nil && *p.WindowID == current.ID && p.Status != model.EmaStatusRejected {
+			out.HasPlaqueThisWindow = true
+		}
+	}
+	return out, nil
 }
 
 // dashboardGaraponPlayer resolves a drawing token to its link and drum. An empty

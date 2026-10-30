@@ -1090,3 +1090,59 @@
   gap: 8px;
   margin-top: 8px;
 }
+
+/* ================================================================
+   EMA PLAQUES - the plaque board form, the review queue, the artist's queue
+   ================================================================ */
+
+/* A board's plaque day: label, start, end, webhook, remove. Shares the .repeater
+   objects; only the column template is its own. */
+.ema-window-row {
+  grid-template-columns:
+    minmax(90px, 0.7fr) minmax(160px, 190px) minmax(160px, 190px) minmax(200px, 1.4fr)
+    46px;
+}
+
+.ema-options {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ema-board-thumb {
+  width: 72px;
+  height: 52px;
+  object-fit: contain;
+}
+
+/* Plaques waiting for review, each a tile with its image and the two decisions. */
+.ema-review-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 14px;
+}
+
+.ema-review-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ema-review-image {
+  width: 100%;
+  aspect-ratio: 842 / 595;
+  object-fit: contain;
+  border-radius: var(--radius-media);
+  background: var(--panel-raised-bg);
+}
+
+/* What a visitor asked the artist for: kept whole, wrapped, and readable. */
+.ema-request-text {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* A finished request, when the queue is showing them. */
+.ema-request-done {
+  opacity: 0.6;
+}

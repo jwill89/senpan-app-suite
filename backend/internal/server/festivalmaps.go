@@ -147,7 +147,10 @@ func raffleRunning(r store.StallRaffle, now time.Time) bool {
 //	Endpoint:  GET /api/festival-maps
 //	Auth:      admin, or a user granted festival-map
 func (s *Server) handleFestivalMapsList(w http.ResponseWriter, r *http.Request) {
-	if !s.requirePermission(w, r, permFestivalMap) {
+	// The Ema board editor picks its festival from this list, and a board can't
+	// exist without one. The list carries nothing secret (the maps' stalls aren't
+	// in it), so the narrowing requireAnyPermission allows for isn't needed here.
+	if s.requireAnyPermission(w, r, permFestivalMap, permFestivalEma) == nil {
 		return
 	}
 	maps, err := s.store.ListFestivalMaps(r.Context())
@@ -360,9 +363,21 @@ func (s *Server) handleFestivalMapDelete(w http.ResponseWriter, r *http.Request)
 	if !ok {
 		return
 	}
-	if _, err := s.store.DeleteFestivalMap(r.Context(), id); err != nil {
+	// The festival's plaque board goes with it (the table cascades), so the images
+	// still waiting for review are gathered first and removed after. Detached, so
+	// the rows and the files go together.
+	ctx := context.WithoutCancel(r.Context())
+	emaImages, err := s.store.EmaImagesForMap(ctx, id)
+	if err != nil {
+		writeInternalError(w, "list ema images for festival map", err)
+		return
+	}
+	if _, err := s.store.DeleteFestivalMap(ctx, id); err != nil {
 		writeInternalError(w, "delete festival map", err)
 		return
+	}
+	for _, img := range emaImages {
+		s.removeEmaImage(img)
 	}
 	w.WriteHeader(http.StatusNoContent)
 }

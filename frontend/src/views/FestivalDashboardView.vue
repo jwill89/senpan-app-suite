@@ -20,6 +20,7 @@ import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
 import MarkdownText from '@/components/common/MarkdownText.vue'
 import TurnstileWidget from '@/components/common/TurnstileWidget.vue'
 import WorldPicker from '@/components/common/ui/WorldPicker.vue'
+import FestivalEmaSection from '@/components/player/FestivalEmaSection.vue'
 import FestivalRaffleCard from '@/components/player/FestivalRaffleCard.vue'
 import GaraponPanel from '@/components/player/GaraponPanel.vue'
 import StampCardPanel from '@/components/player/StampCardPanel.vue'
@@ -34,7 +35,7 @@ import { participantLabel } from '@/lib/participant'
 // resolves either, so it is passed through as typed.
 const props = defineProps<{ id: string }>()
 
-type Section = 'map' | 'stamps' | 'garapon' | 'raffles'
+type Section = 'map' | 'stamps' | 'garapon' | 'raffles' | 'ema'
 
 const router = useRouter()
 const store = useFestivalDashboardStore()
@@ -113,6 +114,13 @@ const raffleTally = computed(() => {
   return open ? `${open} open` : 'Drawn'
 })
 
+const emaTally = computed(() => {
+  const e = data.value?.ema
+  if (!e) return ''
+  if (e.has_plaque_this_window) return 'Hung today'
+  return e.current_window_id ? 'Open today' : 'Not today'
+})
+
 const tiles = computed(() => {
   const list: { key: Section; label: string; icon: string; value: string }[] = [
     {
@@ -128,6 +136,8 @@ const tiles = computed(() => {
     list.push({ key: 'garapon', label: 'Garapon', icon: 'ferris-wheel', value: drawTally.value })
   if (raffles.value.length)
     list.push({ key: 'raffles', label: 'Raffles', icon: 'ticket', value: raffleTally.value })
+  if (data.value?.ema)
+    list.push({ key: 'ema', label: 'Ema Plaques', icon: 'torii-gate', value: emaTally.value })
   return list
 })
 
@@ -513,6 +523,21 @@ function goBack(): void {
                 :turnstile-site-key="turnstileSiteKey"
               />
             </div>
+          </section>
+
+          <!-- Ema plaques -->
+          <section
+            v-if="data?.ema"
+            id="festival-ema"
+            class="festival-dash-section festival-dash-section--wide"
+            :class="{ 'is-current': current === 'ema' }"
+            aria-labelledby="festival-ema-title"
+          >
+            <h3 id="festival-ema-title" class="festival-dash-section-title">
+              <font-awesome-icon :icon="['fad', 'torii-gate']" />
+              {{ data.ema.title || 'Ema Plaques' }}
+            </h3>
+            <FestivalEmaSection :ema="data.ema" :turnstile-site-key="turnstileSiteKey" />
           </section>
         </div>
       </template>

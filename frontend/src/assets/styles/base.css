@@ -97,7 +97,8 @@ button:active {
 
 /* Default input/select styles */
 input,
-select {
+select,
+textarea {
   font-family: inherit;
   border: 2px solid var(--control-border);
   border-radius: var(--radius);
@@ -108,8 +109,16 @@ select {
   outline: none;
 }
 
-input:focus {
+input:focus,
+textarea:focus {
   border-color: var(--accent-2);
+}
+
+/* A text area is a control like any other (the rule above); only its own two
+   needs are added: it grows downward when dragged, and it reads as prose. */
+textarea {
+  resize: vertical;
+  line-height: 1.4;
 }
 
 /* Placeholder text - an explicit, theme-aware colour so it clears WCAG AA

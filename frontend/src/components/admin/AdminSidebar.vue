@@ -25,6 +25,7 @@ import { useRafflesStore } from '@/stores/raffles'
 import { useStampRalliesStore } from '@/stores/stampRallies'
 import { useFestivalMapsStore } from '@/stores/festivalMaps'
 import { useGaraponsStore } from '@/stores/garapons'
+import { useEmaStore } from '@/stores/ema'
 import { BOOK_CLUBS } from '@/lib/constants'
 import AppVersions from '@/components/admin/AppVersions.vue'
 
@@ -45,6 +46,7 @@ const raffles = useRafflesStore()
 const stampRallies = useStampRalliesStore()
 const festivalMaps = useFestivalMapsStore()
 const garapons = useGaraponsStore()
+const ema = useEmaStore()
 
 // "User Options" isn't tied to a route/tab, so it tracks its own accordion state.
 const userOptionsOpen = ref(false)
@@ -75,7 +77,14 @@ const showTeahouse = computed(() =>
 // Festival now also hosts Raffles (moved out of Senpan Tea House). The Raffles
 // page keeps its `teahouse-raffles` permission/route id; only its placement moved.
 const showFestival = computed(() =>
-  ['festival-map', 'festival-garapon', 'festival-stamp-rally', 'teahouse-raffles'].some(can),
+  [
+    'festival-map',
+    'festival-garapon',
+    'festival-stamp-rally',
+    'festival-ema',
+    'festival-ema-requests',
+    'teahouse-raffles',
+  ].some(can),
 )
 const showAtelier = computed(() => ['atelier-fonts', 'atelier-carrd'].some(can))
 const showSystem = computed(
@@ -300,6 +309,26 @@ function toggleSection(section: AdminSection): void {
           <font-awesome-icon :icon="['fad', 'stamp']" /> Stamp Rally
           <span v-if="stampRallies.openRallies.length" class="nav-count">
             ({{ stampRallies.openRallies.length }})
+          </span>
+        </button>
+        <button
+          v-if="can('festival-ema')"
+          type="button"
+          :class="{ 'is-active': admin.adminTab === 'festival-ema' }"
+          @click="go('festival-ema')"
+        >
+          <font-awesome-icon :icon="['fad', 'torii-gate']" /> Ema Plaques
+          <span v-if="ema.pendingTotal" class="nav-count">({{ ema.pendingTotal }})</span>
+        </button>
+        <button
+          v-if="can('festival-ema-requests')"
+          type="button"
+          :class="{ 'is-active': admin.adminTab === 'festival-ema-requests' }"
+          @click="go('festival-ema-requests')"
+        >
+          <font-awesome-icon :icon="['fad', 'palette']" /> Ema Requests
+          <span v-if="ema.openRequests.length" class="nav-count">
+            ({{ ema.openRequests.length }})
           </span>
         </button>
       </div>

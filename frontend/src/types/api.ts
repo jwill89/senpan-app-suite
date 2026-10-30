@@ -180,6 +180,18 @@ export type {
   FestivalDashboardRally,
   FestivalDashboardGarapon,
   FestivalDashboardRaffle,
+  FestivalDashboardEma,
+  // Ema Plaques
+  EmaBoard,
+  EmaWindow,
+  EmaPlaque,
+  EmaBoardsResponse,
+  EmaBoardResponse,
+  EmaPlaquesResponse,
+  EmaPlaqueResponse,
+  PublicEmaWindow,
+  PublicEmaPlaque,
+  GoogleFontsResponse,
   // Book club / reading lists
   ReadingListsResponse,
   ReadingListDetailResponse,
@@ -693,3 +705,32 @@ export type WsMessage =
   // Live server-log tail: one message per log line, sent to admin connections
   // only (best-effort - dropped rather than queued when a client can't keep up).
   | { type: 'log'; entry: LogEntry }
+
+/**
+ * One plaque window in the Ema board form. `start_at`/`end_at` hold the LOCAL
+ * wall-clock value an `<input type="datetime-local">` expects; the store converts
+ * them to and from UTC. `_uid` is a client-only stable key for the repeater.
+ */
+export interface EmaWindowForm {
+  id: number
+  label: string
+  start_at: string
+  end_at: string
+  webhook_url: string
+  _uid?: number
+}
+
+/** The Ema board form (create when `id` is 0). */
+export interface EmaBoardForm {
+  id: number
+  festival_map_id: number | null
+  title: string
+  template_image: string
+  instructions: string
+  discord_link: string
+  allow_self: boolean
+  allow_site: boolean
+  allow_artist: boolean
+  artist_name: string
+  windows: EmaWindowForm[]
+}

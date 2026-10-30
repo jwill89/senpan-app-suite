@@ -76,6 +76,11 @@ import type {
   PublicFestivalMapsResponse,
   PublicFestivalMap,
   FestivalDashboard,
+  EmaBoardsResponse,
+  EmaBoardResponse,
+  EmaPlaquesResponse,
+  EmaPlaqueResponse,
+  GoogleFontsResponse,
   GaraponsResponse,
   GaraponResponse,
   GaraponDetailResponse,
@@ -632,6 +637,56 @@ export const endpoints = {
       idOrSlug: string,
       body: { card_token: string; garapon_token: string; name: string; world: string },
     ) => apiPost<FestivalDashboard>(`festival-dashboard/${enc(idOrSlug)}`, body),
+  },
+
+  // -- Ema Plaques (admin) -------------------------------------------------------
+  emaBoards: {
+    /** GET /api/ema-boards - every board, with review/request counts. */
+    list: () => apiGet<EmaBoardsResponse>('ema-boards'),
+    /** GET /api/ema-boards/{id} - one board with its windows (webhooks included). */
+    detail: (id: number) => apiGet<EmaBoardResponse>(`ema-boards/${id}`),
+    /** POST /api/ema-boards - create a board (201). */
+    create: (board: Record<string, unknown>) => apiPost<EmaBoardResponse>('ema-boards', board),
+    /** PUT /api/ema-boards/{id} - replace a board's fields and windows. */
+    update: (id: number, board: Record<string, unknown>) =>
+      apiPut<OKResponse>(`ema-boards/${id}`, board),
+    /** PATCH /api/ema-boards/{id} - open or close a board. */
+    setStatus: (id: number, status: 'open' | 'closed') =>
+      apiPatch<StatusResponse>(`ema-boards/${id}`, { status }),
+    /** DELETE /api/ema-boards/{id} - delete a board and its plaques (204). */
+    delete: (id: number) => apiDelete(`ema-boards/${id}`),
+    /** GET /api/ema-boards/{id}/plaques - the review queue and the record. */
+    plaques: (id: number) => apiGet<EmaPlaquesResponse>(`ema-boards/${id}/plaques`),
+    /** POST .../plaques/{plaqueId}/approve - post a site plaque to Discord. */
+    approve: (boardId: number, plaqueId: number) =>
+      apiPost<EmaPlaqueResponse>(`ema-boards/${boardId}/plaques/${plaqueId}/approve`, undefined),
+    /** POST .../plaques/{plaqueId}/reject - refuse a site plaque. */
+    reject: (boardId: number, plaqueId: number) =>
+      apiPost<EmaPlaqueResponse>(`ema-boards/${boardId}/plaques/${plaqueId}/reject`, undefined),
+  },
+  emaRequests: {
+    /** GET /api/ema-requests - the artist's queue across every board. */
+    list: () => apiGet<EmaPlaquesResponse>('ema-requests'),
+    /** PATCH /api/ema-requests/{id} - mark a request complete, or reopen it. */
+    setComplete: (id: number, complete: boolean) =>
+      apiPatch<EmaPlaqueResponse>(`ema-requests/${id}`, { complete }),
+  },
+
+  // -- Ema Plaques (public submissions) ------------------------------------------
+  //
+  // Singular /api/ema/... so the admin prefixes' broadcast middleware leaves them
+  // alone.
+  ema: {
+    /** POST /api/ema/{id}/plaques - a site-designed plaque, held for review. */
+    submitPlaque: (boardId: number, form: FormData) =>
+      apiUpload<EmaPlaqueResponse>(`ema/${boardId}/plaques`, form),
+    /** POST /api/ema/{id}/requests - ask the board's artist for a plaque. */
+    request: (
+      boardId: number,
+      body: { name: string; world: string; description: string; turnstile_token: string },
+    ) => apiPost<EmaPlaqueResponse>(`ema/${boardId}/requests`, body),
+    /** GET /api/google-fonts - Google Fonts family names, read with the server's key. */
+    googleFonts: () => apiGet<GoogleFontsResponse>('google-fonts'),
   },
 
   // -- Stamp Rally (admin, hybrid REST) -----------------------------------------

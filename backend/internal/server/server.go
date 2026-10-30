@@ -65,6 +65,11 @@ type Server struct {
 	// it is bounded like the other name-keyed reads - but loosely, since the page
 	// reads it on every visit and after each entry.
 	dashboardLimiter *rateLimiter
+	// Public Ema plaque submissions (designs and artist requests share it). A
+	// visitor sends one or two a festival, so this only stops a flood.
+	emaLimiter *rateLimiter
+	// The Google Fonts family list, fetched with the server's own key (googlefonts.go).
+	googleFonts googleFontsCache
 	// Dev-safety valves for outbound Discord posts (see SetWebhookPolicy). Empty /
 	// false in production, where posts go to the webhook the feature configured.
 	webhookOverride string
@@ -204,6 +209,7 @@ func New(ctx context.Context, st *store.Store, hub *ws.Hub, webRoot string, allo
 		// unauthenticated session-store growth, not to police login attempts.
 		passkeyBeginLimiter: newRateLimiter(30, 10*time.Minute),
 		dashboardLimiter:    newRateLimiter(120, 10*time.Minute),
+		emaLimiter:          newRateLimiter(10, 10*time.Minute),
 		autoWake:            make(chan struct{}, 1), // one-slot wake mailbox for the auto-draw scheduler
 	}
 
@@ -421,6 +427,24 @@ func (s *Server) routes() {
 	// prefix, not "festival-maps": adminMutationResource treats every POST under
 	// that one as an admin edit and would broadcast on each page load.
 	s.mux.HandleFunc("POST /api/festival-dashboard/{id}", s.handleFestivalDashboard)
+
+	// Ema Plaques (ema.go). The plural admin prefixes are invalidated by
+	// adminMutationResource; the singular /api/ema/{id}/... submit paths are public
+	// and broadcast their own invalidation.
+	s.mux.HandleFunc("GET /api/ema-boards", s.handleEmaBoardsList)
+	s.mux.HandleFunc("POST /api/ema-boards", s.handleEmaBoardCreate)
+	s.mux.HandleFunc("GET /api/ema-boards/{id}", s.handleEmaBoardDetail)
+	s.mux.HandleFunc("PUT /api/ema-boards/{id}", s.handleEmaBoardUpdate)
+	s.mux.HandleFunc("PATCH /api/ema-boards/{id}", s.handleEmaBoardPatch)
+	s.mux.HandleFunc("DELETE /api/ema-boards/{id}", s.handleEmaBoardDelete)
+	s.mux.HandleFunc("GET /api/ema-boards/{id}/plaques", s.handleEmaPlaquesList)
+	s.mux.HandleFunc("POST /api/ema-boards/{id}/plaques/{plaqueId}/approve", s.handleEmaPlaqueApprove)
+	s.mux.HandleFunc("POST /api/ema-boards/{id}/plaques/{plaqueId}/reject", s.handleEmaPlaqueReject)
+	s.mux.HandleFunc("GET /api/ema-requests", s.handleEmaRequestsList)
+	s.mux.HandleFunc("PATCH /api/ema-requests/{id}", s.handleEmaRequestPatch)
+	s.mux.HandleFunc("POST /api/ema/{id}/plaques", s.handleEmaPlaqueSubmit)
+	s.mux.HandleFunc("POST /api/ema/{id}/requests", s.handleEmaRequestSubmit)
+	s.mux.HandleFunc("GET /api/google-fonts", s.handleGoogleFonts)
 
 	// Stamp Rally (Festival -> Stamp Rally; resource-oriented: methods for CRUD,
 	// POST /{id}/{verb} for status, PATCH for the per-stamp pause toggle). Admin
@@ -1078,7 +1102,8 @@ func (s *Server) broadcastResourceChanged(resource string) {
 func adminMutationResource(path string) (string, bool) {
 	seg, _, _ := strings.Cut(strings.TrimPrefix(path, "/api/"), "/")
 	switch seg {
-	case "garapons", "affiliates", "tea-rooms", "stamp-rallies", "festival-maps", "presets", "users", "winners-log", "fonts":
+	case "garapons", "affiliates", "tea-rooms", "stamp-rallies", "festival-maps", "presets", "users", "winners-log", "fonts",
+		"ema-boards", "ema-requests":
 		return seg, true
 	case "raffles":
 		if strings.HasSuffix(path, "/enter") {

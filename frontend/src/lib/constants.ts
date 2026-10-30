@@ -345,6 +345,9 @@ export const ADMIN_PERMISSIONS: AdminPermission[] = [
   { key: 'festival-map', label: 'Festival Map', section: 'Festival' },
   { key: 'festival-garapon', label: 'Garapon', section: 'Festival' },
   { key: 'festival-stamp-rally', label: 'Stamp Rally', section: 'Festival' },
+  { key: 'festival-ema', label: 'Ema Plaques', section: 'Festival' },
+  // The artist's queue, on its own so the artist needn't see the boards' webhooks.
+  { key: 'festival-ema-requests', label: 'Ema Requests', section: 'Festival' },
   // Raffles moved under Festival; the permission/route id stays `teahouse-raffles`.
   { key: 'teahouse-raffles', label: 'Raffles', section: 'Festival' },
   { key: 'atelier-fonts', label: 'Font Upload', section: 'Atelier Yao' },

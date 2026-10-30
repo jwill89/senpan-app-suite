@@ -42,6 +42,34 @@ The format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## Frontend
 
+### [3.30.0] - 2026-10-30
+
+Requires backend 3.26.0.
+
+#### Added
+
+- **Ema plaques on the festival dashboard.** A festival with a plaque board gets an
+  Ema section offering up to three ways to hang a wish:
+  - **Design it yourself** - save the blank plaque, decorate it in any image editor,
+    and post it in the festival's Discord, with the board's own instructions.
+  - **Design it here** - a small image editor right on the page: upload pictures,
+    place, size and turn them, add text in any Google Font or a basic one with
+    color and an outline, erase the parts of a picture that hang off the plaque,
+    keep everything inside the plaque, arrange layers, and undo. The finished
+    plaque can be downloaded, or sent: staff look it over and the app posts it to
+    Discord under the visitor's name.
+  - **Ask the artist** - describe the plaque and the board's artist makes it.
+
+  Everyone gets one plaque per festival day, whichever way they make it, and the
+  section shows their plaques and where each stands.
+- **Festival -> Ema Plaques**, for staff: one board per festival - the template,
+  the instructions, which options are offered, and the days, each with the Discord
+  webhook its approved plaques post to - plus the review queue. Approving a plaque
+  posts it; rejecting it lets its author send another.
+- **Festival -> Ema Requests**, the artist's own queue: what each visitor asked for,
+  across festivals, marked complete once posted. Its own permission, so the artist
+  needn't see the boards' webhooks.
+
 ### [3.29.0] - 2026-10-29
 
 Requires backend 3.25.0.
@@ -1802,6 +1830,44 @@ First tracked release - establishes versioning for the current production build.
 
 ## Backend
 
+### [3.26.0] - 2026-10-30
+
+Schema v70.
+
+#### Added
+
+- **Ema plaque boards** (`ema_boards`, `ema_windows`, `ema_plaques`; schema v70):
+  one per festival, taking plaques in days that may not overlap, each day with its
+  own Discord webhook. One plaque per person per day across every way of making
+  one - a partial unique index, so two submissions racing each other can't both
+  land; a rejected plaque frees the day.
+  - `GET/POST /api/ema-boards`, `GET/PUT/PATCH/DELETE /api/ema-boards/{id}` -
+    setup (`festival-ema`).
+  - `GET /api/ema-boards/{id}/plaques` and `POST .../plaques/{plaqueId}/approve` /
+    `reject` - the review queue. Approving claims the plaque, posts it to the day's
+    webhook with the image attached, records it as posted and **deletes the stored
+    image**; rejecting deletes it too. Only plaques still waiting for review keep a
+    file on the server. A second approval of the same plaque is refused rather than
+    posted twice, and a failed post puts it back in the queue.
+  - `GET /api/ema-requests` and `PATCH /api/ema-requests/{id}` - the artist's queue
+    (`festival-ema-requests`).
+  - `POST /api/ema/{id}/plaques` (a PNG, multipart) and `POST /api/ema/{id}/requests`
+    - public submissions, for the day open now, rate limited and bot-checked.
+  - The festival dashboard response gains `ema`: the board, its days (never their
+    webhooks), the one open now, and the visitor's own plaques.
+- **`GET /api/google-fonts`**: the Google Fonts family list, fetched with the
+  server's own API key - which stays a secret setting - and cached for 12 hours.
+- **Discord posts can carry an image.** The posting funnel sends a multipart upload
+  when a post has a file, so the dry-run and override valves and the "discord post
+  sent" record cover it like every other post.
+
+#### Changed
+
+- **`GET /api/festival-maps` is also readable with `festival-ema`**, whose board
+  editor picks its festival from it.
+- **Deleting a festival deletes its plaque board** and the plaque images still
+  waiting for review.
+
 ### [3.25.0] - 2026-10-29
 
 #### Added
@@ -1833,12 +1899,13 @@ First tracked release - establishes versioning for the current production build.
 
 #### Removed
 
-- **The `-secret` flag and `APPSUITE_SESSION_SECRET`.** Neither ever did anything:
-  sessions are held in the server's memory, which signs nothing, so every session
-  has always ended on a restart whatever the secret was - and rotating it logged
-  nobody out, though the deploy guide said it would. An env file that still sets
-  the variable is ignored, but a unit that still passes `-secret` will not start,
-  so take it off `ExecStart` before deploying this version.
+- **The `-secret` flag.** It never did anything: sessions are held in the
+  server's memory, which signs nothing, so every session has always ended on a
+  restart whatever the secret was - and rotating it logged nobody out, though the
+  deploy guide said it would. A unit that still passes `-secret` will not start, so
+  keep it off `ExecStart`. Keep `APPSUITE_SESSION_SECRET` itself set in the env
+  file: this version ignores it, but the Discord bot release derives the key that
+  seals its token from it.
 
 #### Changed
 

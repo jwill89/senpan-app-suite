@@ -8,7 +8,9 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"mime/multipart"
 	"net/http"
+	"net/textproto"
 	"net/url"
 	"strconv"
 	"strings"
@@ -96,6 +98,23 @@ type discordWebhookPayload struct {
 	Embeds          []discordEmbed          `json:"embeds"`
 	Components      []discordComponent      `json:"components,omitempty"`
 	AllowedMentions *discordAllowedMentions `json:"allowed_mentions,omitempty"`
+	// Attachments describes the files sent alongside the payload (multipart); an
+	// embed shows one as `attachment://<filename>`. Set by postDiscordWebhookFile.
+	Attachments []discordAttachment `json:"attachments,omitempty"`
+}
+
+// discordAttachment names one uploaded file in a webhook payload: id is its index
+// in the multipart `files[n]` parts.
+type discordAttachment struct {
+	ID       int    `json:"id"`
+	Filename string `json:"filename"`
+}
+
+// discordFile is a file posted with a webhook message.
+type discordFile struct {
+	Name        string
+	ContentType string
+	Data        []byte
 }
 
 // discordAllowedMentions whitelists which mentions in Content actually ping.
@@ -345,6 +364,21 @@ func (s *Server) postDiscordEmbed(ctx context.Context, target webhookTarget, web
 // vanish. Link buttons are non-interactive, so channel (non-application-owned)
 // webhooks are allowed to send them once the flag is set.
 func (s *Server) postDiscordWebhook(ctx context.Context, target webhookTarget, webhookURL string, payload discordWebhookPayload) error {
+	return s.sendDiscordWebhook(ctx, target, webhookURL, payload, nil)
+}
+
+// postDiscordWebhookFile sends a payload with one file attached, as Discord's
+// multipart form (`payload_json` + `files[0]`). An embed in the payload shows the
+// file with `attachment://<file.Name>`. Same funnel as postDiscordWebhook, so the
+// dev-safety valves and the "discord post sent" record apply to it too.
+func (s *Server) postDiscordWebhookFile(ctx context.Context, target webhookTarget, webhookURL string,
+	payload discordWebhookPayload, file discordFile) error {
+	return s.sendDiscordWebhook(ctx, target, webhookURL, payload, &file)
+}
+
+// sendDiscordWebhook is the one place a Discord post leaves the process.
+func (s *Server) sendDiscordWebhook(ctx context.Context, target webhookTarget, webhookURL string,
+	payload discordWebhookPayload, file *discordFile) error {
 	// Dev safety, applied before anything leaves the process. A development server
 	// is routinely pointed at a COPY OF THE LIVE DATABASE, which carries real
 	// webhook URLs for every announcement type, book club, affiliate and tea room -
@@ -354,7 +388,7 @@ func (s *Server) postDiscordWebhook(ctx context.Context, target webhookTarget, w
 	// future one inherits them for free.
 	if s.webhookDryRun {
 		slog.Warn("discord post SUPPRESSED (dry run)", "kind", target.Kind, "name", target.Name,
-			"embeds", len(payload.Embeds))
+			"embeds", len(payload.Embeds), "attachment", file != nil)
 		return nil
 	}
 	if s.webhookOverride != "" {
@@ -363,9 +397,18 @@ func (s *Server) postDiscordWebhook(ctx context.Context, target webhookTarget, w
 		webhookURL = s.webhookOverride
 	}
 
+	contentType := "application/json"
+	if file != nil {
+		payload.Attachments = []discordAttachment{{ID: 0, Filename: file.Name}}
+	}
 	body, err := json.Marshal(payload)
 	if err != nil {
 		return fmt.Errorf("encode embed")
+	}
+	if file != nil {
+		if body, contentType, err = multipartWebhookBody(body, *file); err != nil {
+			return fmt.Errorf("encode attachment: %w", err)
+		}
 	}
 	if len(payload.Components) > 0 {
 		webhookURL = withComponentsParam(webhookURL)
@@ -379,7 +422,7 @@ func (s *Server) postDiscordWebhook(ctx context.Context, target webhookTarget, w
 	if err != nil {
 		return fmt.Errorf("build webhook request: %s", sanitizeWebhookErr(err))
 	}
-	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Content-Type", contentType)
 	resp, err := bookclubHTTPClient.Do(req) //nolint:gosec // a checked Discord webhook URL (see above)
 	if err != nil {
 		// Transport failure: the request may or may not have reached Discord, so
@@ -405,6 +448,30 @@ func (s *Server) postDiscordWebhook(ctx context.Context, target webhookTarget, w
 		"status", resp.StatusCode, "embeds", len(payload.Embeds),
 		"duration_ms", time.Since(start).Milliseconds())
 	return nil
+}
+
+// multipartWebhookBody wraps a JSON payload and one file in the multipart form a
+// webhook takes for an upload, returning the body and its Content-Type.
+func multipartWebhookBody(payloadJSON []byte, file discordFile) ([]byte, string, error) {
+	var buf bytes.Buffer
+	mw := multipart.NewWriter(&buf)
+	if err := mw.WriteField("payload_json", string(payloadJSON)); err != nil {
+		return nil, "", err
+	}
+	h := make(textproto.MIMEHeader)
+	h.Set("Content-Disposition", fmt.Sprintf(`form-data; name="files[0]"; filename=%q`, file.Name))
+	h.Set("Content-Type", file.ContentType)
+	part, err := mw.CreatePart(h)
+	if err != nil {
+		return nil, "", err
+	}
+	if _, err := part.Write(file.Data); err != nil {
+		return nil, "", err
+	}
+	if err := mw.Close(); err != nil {
+		return nil, "", err
+	}
+	return buf.Bytes(), mw.FormDataContentType(), nil
 }
 
 // discordErrorMessage extracts a human-readable reason from a Discord webhook

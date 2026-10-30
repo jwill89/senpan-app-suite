@@ -339,6 +339,8 @@ type FestivalDashboard struct {
 	// Raffles is every raffle filed under the festival that a visitor may see:
 	// running ones, and closed ones with their winner. Never nil.
 	Raffles []FestivalDashboardRaffle `json:"raffles"`
+	// Ema is the festival's open plaque board (nil = none).
+	Ema *FestivalDashboardEma `json:"ema"`
 }
 
 // FestivalDashboardRally describes the festival's rally for its sign-up panel.

@@ -96,6 +96,9 @@ var modelTypes = map[string]any{
 	"PublicStallAffiliate":       model.PublicStallAffiliate{}, "PublicFestivalStall": model.PublicFestivalStall{},
 	"PublicFestivalMap": model.PublicFestivalMap{},
 	"FestivalDashboard": model.FestivalDashboard{},
+	"EmaBoardsResponse": model.EmaBoardsResponse{}, "EmaBoardResponse": model.EmaBoardResponse{},
+	"EmaPlaquesResponse": model.EmaPlaquesResponse{}, "EmaPlaqueResponse": model.EmaPlaqueResponse{},
+	"GoogleFontsResponse": model.GoogleFontsResponse{},
 
 	// Book club / announcements
 	"ReadingListsResponse": model.ReadingListsResponse{}, "ReadingListDetailResponse": model.ReadingListDetailResponse{},

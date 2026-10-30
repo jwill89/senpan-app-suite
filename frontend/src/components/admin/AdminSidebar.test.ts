@@ -68,15 +68,17 @@ describe('AdminSidebar', () => {
     expect(section(wrapper, 'Bingo').find('.admin-nav-items').isVisible()).toBe(true)
     expect(isExpanded(wrapper, 'System')).toBe(false)
     expect(section(wrapper, 'System').find('.admin-nav-items').isVisible()).toBe(false)
-    // The Festival section carries Festival Map + Garapon + Stamp Rally +
-    // Raffles (Raffles moved here from Tea House).
+    // The Festival section carries Festival Map + Garapon + Stamp Rally + the two
+    // Ema pages + Raffles (Raffles moved here from Tea House).
     const festivalText = section(wrapper, 'Festival')
       .findAll('.admin-nav-items button')
       .map((b) => b.text())
-    expect(festivalText).toHaveLength(4)
+    expect(festivalText).toHaveLength(6)
     expect(festivalText.join(' ')).toContain('Festival Map')
     expect(festivalText.join(' ')).toContain('Garapon')
     expect(festivalText.join(' ')).toContain('Stamp Rally')
+    expect(festivalText.join(' ')).toContain('Ema Plaques')
+    expect(festivalText.join(' ')).toContain('Ema Requests')
     expect(festivalText.join(' ')).toContain('Raffles')
     // The always-present User Options section carries Access Token, Change
     // Password + Logout.

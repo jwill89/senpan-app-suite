@@ -154,11 +154,15 @@ ps -o user= -C app-suite                         # not root
   epoch) and revokes its personal-access token.
 - **Sessions.** Sessions are held in the server's memory, so restarting the
   service (`systemctl restart senpan`) ends every session at once - that is how to
-  force every browser to log in again. There is no session secret to set or
-  rotate: an `APPSUITE_SESSION_SECRET` left in an env file by an earlier version
-  is ignored, and the old `-secret` flag is gone (a unit still passing it fails to
-  start, so take it off `ExecStart` before deploying). The FFXIV plugin uses PAT
-  bearer tokens, not the admin cookie, so it is unaffected.
+  force every browser to log in again. The FFXIV plugin uses PAT bearer tokens,
+  not the admin cookie, so it is unaffected.
+- **`APPSUITE_SESSION_SECRET` - keep it set.** This version reads nothing from it
+  (sessions are in memory and signed with nothing, so rotating it never logged
+  anyone out), and the `-secret` flag is gone: a unit still passing `-secret`
+  fails to start, so keep it off `ExecStart`. But the Discord bot release seals the
+  bot's token under a key derived from this value, so leave it in
+  `/etc/senpan/senpan.env`, unchanged, ready for that release. Changing or removing
+  it after the bot ships would leave the stored token unreadable.
 - **`APPSUITE_TURNSTILE_SECRET` / `APPSUITE_TURNSTILE_SITEKEY`.** Configure the
   Cloudflare Turnstile pair (also settable as `-turnstile-secret`/`-turnstile-sitekey`
   flags) to enable the bot check on the public POST paths - login, registration,

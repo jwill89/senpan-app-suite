@@ -1,7 +1,7 @@
 {
   "name": "app-suite-frontend",
   "private": true,
-  "version": "3.29.0",
+  "version": "3.30.0",
   "type": "module",
   "engines": {
     "node": "^24"
@@ -32,6 +32,7 @@
     "@milkdown/crepe": "^7.23.0",
     "@tanstack/vue-table": "^9.3.1",
     "html-to-image": "^1.11.13",
+    "konva": "^10.9.0",
     "markdown-it": "^15.0.3",
     "pinia": "^4.1.0",
     "vue": "^3.5.44",

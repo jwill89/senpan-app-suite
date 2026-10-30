@@ -1,0 +1,359 @@
+/* ================================================================
+   EMA DESIGNER - the "design it on the site" plaque editor
+   (components/player/ema/): a workspace (tool bar, canvas, hint), the
+   panels (eraser, the selected layer, the layer list, keep-inside) and
+   the finishing actions. Mobile first: one scrolling column with the
+   actions pinned to its foot; from 900px the panels sit beside the
+   canvas. The breakpoint is read by EmaDesigner.vue as well, to size
+   the canvas, so change both together.
+
+   What is drawn ON the canvas is Konva's and takes nothing from here.
+   Loaded after festival.css: the designer opens from the festival
+   dashboard, and it raises a few shared objects (buttons, the opacity
+   slider, the color well) to thumb size in its own context.
+   ================================================================ */
+
+.ema-designer {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  overflow-y: auto;
+  color: var(--text);
+}
+
+/* Every control is at least a thumb tall. */
+.ema-designer button {
+  min-height: 44px;
+}
+
+/* An icon-only button: square, and no narrower than it is tall. */
+.ema-icon-btn {
+  min-width: 44px;
+  padding-inline: 10px;
+}
+
+/* -- Workspace ------------------------------------------------------------- */
+
+.ema-workspace {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.ema-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.ema-toolbar-group {
+  display: flex;
+  gap: 6px;
+}
+
+/* The canvas's box. The checkerboard shows through wherever the plaque and the
+   design are transparent, the way image editors mark "nothing here". */
+.ema-stage-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 160px;
+  overflow: hidden;
+  background: repeating-conic-gradient(var(--panel-raised-bg) 0 25%, var(--page-bg) 0 50%) 0 0 /
+    24px 24px;
+  border-radius: var(--radius);
+}
+
+/* Konva's container. A press on the canvas is a drag or an eraser stroke, never
+   a page scroll or a pinch-zoom. */
+.ema-stage {
+  touch-action: none;
+}
+
+.ema-stage.is-erasing {
+  cursor: crosshair;
+}
+
+.ema-stage-status {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  margin: 0;
+  padding: 16px;
+  text-align: center;
+  color: var(--text-muted);
+}
+
+/* One line of guidance under the canvas. Holds its height while empty so the
+   canvas doesn't jump when a hint appears. */
+.ema-hint {
+  min-height: 1.4em;
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+/* -- Panels ---------------------------------------------------------------- */
+
+.ema-panels {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* Worn with `.subpanel`, which supplies the surface. */
+.ema-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* Outranks `.modal-box h3`, whose bottom margin is meant for a dialog's title. */
+.ema-panel .ema-panel-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 1rem;
+  color: var(--highlight);
+}
+
+.ema-panel-note {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+.ema-check {
+  min-height: 44px;
+  font-weight: 600;
+}
+
+.ema-check input {
+  width: 20px;
+  height: 20px;
+}
+
+/* -- Layer list ------------------------------------------------------------ */
+
+.ema-layer {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px;
+  background: var(--panel-bg);
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+}
+
+.ema-layer.is-selected {
+  border-color: var(--accent);
+}
+
+/* The row's own pick button: the layer's name, filling what the buttons leave. */
+.ema-layer-pick {
+  flex: 1;
+  justify-content: flex-start;
+  min-width: 0;
+  padding: 6px 8px;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+}
+
+.ema-layer.is-hidden .ema-layer-pick {
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.ema-layer-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* -- Selected layer -------------------------------------------------------- */
+
+.ema-props {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* The control's look is base.css's shared textarea rule; only its size is its own. */
+.ema-words {
+  width: 100%;
+  min-height: 84px;
+}
+
+.ema-style-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  margin-bottom: 14px;
+}
+
+.ema-props .color-field-input {
+  width: 56px;
+  height: 44px;
+}
+
+/* The player's stamp opacity slider, stretched across the panel. */
+.ema-slider {
+  margin-bottom: 8px;
+}
+
+.ema-slider .label {
+  flex: 0 0 96px;
+}
+
+/* A thumb-tall hit area around the same thin track. The global `input` chrome
+   (border, padding) would box the track in, so it is taken off. */
+.ema-slider input[type='range'] {
+  flex: 1;
+  width: auto;
+  min-width: 0;
+  height: 44px;
+  padding: 0;
+  border: 0;
+}
+
+.ema-slider .opacity-val {
+  min-width: 52px;
+  text-align: right;
+}
+
+/* -- Font picker ----------------------------------------------------------- */
+
+.ema-font-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ema-font-picker .search-input {
+  max-width: none;
+}
+
+.ema-font-list {
+  max-height: 240px;
+  overflow-y: auto;
+  background: var(--input-bg);
+  border: 2px solid var(--control-border);
+  border-radius: var(--radius);
+}
+
+.ema-font-group {
+  position: sticky;
+  top: 0;
+  margin: 0;
+  padding: 4px 12px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  background: var(--panel-raised-bg);
+}
+
+.ema-font-options {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ema-font-option {
+  display: block;
+  width: 100%;
+  padding: 8px 12px;
+  font-size: 1rem;
+  font-weight: 400;
+  text-align: left;
+  color: var(--text);
+  background: transparent;
+  border-radius: 0;
+}
+
+.ema-font-option:hover {
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+}
+
+.ema-font-option.is-selected {
+  background: var(--accent);
+  color: var(--text-on-accent);
+}
+
+.ema-font-empty {
+  margin: 0;
+  padding: 10px 12px;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+/* -- Finishing actions ----------------------------------------------------- */
+
+/* Pinned to the foot of the scrolling column, so Send is always in reach. */
+.ema-actions {
+  position: sticky;
+  bottom: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: auto;
+  padding-top: 10px;
+  background: var(--panel-bg);
+  border-top: 1px solid var(--control-border);
+}
+
+/* On a phone the three don't fit on one line: Send takes the bottom row to
+   itself, right under the thumb, rather than wrapping wherever it falls. */
+.ema-send {
+  flex: 1 1 100%;
+}
+
+/* -- Wide: panels beside the canvas ----------------------------------------- */
+
+@media (width >= 900px) {
+  .ema-designer {
+    display: grid;
+    grid-template:
+      'work panels' minmax(0, 1fr)
+      'actions actions' auto
+      / minmax(0, 1fr) minmax(300px, 360px);
+    gap: 12px 16px;
+    overflow: hidden;
+  }
+
+  .ema-workspace {
+    grid-area: work;
+    min-height: 0;
+  }
+
+  .ema-stage-wrap {
+    flex: 1;
+    min-height: 0;
+  }
+
+  .ema-panels {
+    grid-area: panels;
+    min-height: 0;
+    overflow-y: auto;
+  }
+
+  .ema-actions {
+    grid-area: actions;
+    position: static;
+  }
+
+  .ema-send {
+    flex: 0 0 auto;
+  }
+}

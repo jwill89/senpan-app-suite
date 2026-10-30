@@ -29,6 +29,7 @@ import { usePatternsStore } from '@/stores/patterns'
 import { useRafflesStore } from '@/stores/raffles'
 import { useStampRalliesStore } from '@/stores/stampRallies'
 import { useGaraponsStore } from '@/stores/garapons'
+import { useEmaStore } from '@/stores/ema'
 import { useFestivalMapsStore } from '@/stores/festivalMaps'
 import { useUiStore } from '@/stores/ui'
 import { endpoints } from '@/lib/endpoints'
@@ -46,6 +47,7 @@ const raffles = useRafflesStore()
 const stampRallies = useStampRalliesStore()
 const garapons = useGaraponsStore()
 const festivalMaps = useFestivalMapsStore()
+const ema = useEmaStore()
 const ui = useUiStore()
 
 onMounted(async () => {
@@ -63,6 +65,8 @@ onMounted(async () => {
     if (auth.hasPermission('festival-stamp-rally')) loads.push(stampRallies.loadRallies())
     if (auth.hasPermission('festival-garapon')) loads.push(garapons.loadGarapons())
     if (auth.hasPermission('festival-map')) loads.push(festivalMaps.loadMaps())
+    if (auth.hasPermission('festival-ema')) loads.push(ema.loadBoards())
+    if (auth.hasPermission('festival-ema-requests')) loads.push(ema.loadRequests())
     await Promise.allSettled(loads)
     game.drawDelay = parseInt(app.settings.default_draw_delay) || 0
   } catch {

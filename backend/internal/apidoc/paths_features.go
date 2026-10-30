@@ -234,8 +234,8 @@ func buildFeaturePaths(b *pb) {
 			"map_image", pstr("The base floor-plan image the stalls are placed on."),
 			"stalls", parr("The PITCHES on the plan, replaced wholesale. A pitch carries only how it is drawn (shape, color, placement); who stands in it lives in its `occupants`, one entry per business - several when a booth changes hands between days, each with its own `times`. An occupant with no `times` runs the whole festival. Placements are clamped to 0-100% of the map box; unknown shapes/types fall back to \"rect\"/\"other\" and a color that isn't `#rrggbb` is dropped. `type_label` is the caption drawn under an occupant's title when its `stall_type` is `other` (\"Omikuji\", \"Art Raffle\"); it is stored whatever the type but only rendered for `other`. Occupants are reconciled BY ID so a rally stamp keeps naming the same one; an occupant with neither a title nor an affiliate is dropped, and a pitch left with no occupants is dropped with it.", ref("FestivalStall")))
 	}
-	b.add("GET", "/api/festival-maps", "Festival Map", "List maps", mapPerm,
-		"Every map whatever its status, each with a `stall_count`.", opt{
+	b.add("GET", "/api/festival-maps", "Festival Map", "List maps", mapPerm+" or permission:festival-ema",
+		"Every map whatever its status, each with a `stall_count`. Also readable with festival-ema, whose board editor picks a festival from it.", opt{
 			resps: []respEntry{ok("FestivalMapsResponse")}})
 	b.add("POST", "/api/festival-maps", "Festival Map", "Create a map", mapPerm,
 		"A new map always starts `in_progress` - publishing is a separate PATCH.", opt{
@@ -278,6 +278,90 @@ func buildFeaturePaths(b *pb) {
 				"card_token", pstr("Stamp card token."), "garapon_token", pstr("Garapon drawing token."),
 				"name", pstr("Character name, used when no card or drawing link matched."), "world", pstr("Home world."))),
 			resps: []respEntry{ok("FestivalDashboard"), r("400", "Invalid JSON or a too-long name"), r("404", "Not found or not published"), r("429", "Rate limited")}})
+
+	// -- Ema Plaques -----------------------------------------------------------
+	emaPerm, emaReqPerm := "permission:festival-ema", "permission:festival-ema-requests"
+	emaBoardBody := func() *openapi3.RequestBodyRef {
+		return actionBody("Board.", nil, props(
+			"festival_map_id", pint("The festival the board belongs to (required; one board per festival)."),
+			"title", pstr(""), "template_image", pstr("The blank plaque (images/...); required when allow_self or allow_site."),
+			"instructions", pstr("Markdown for the do-it-yourself option."), "discord_link", pstr("Where self-made plaques are posted."),
+			"allow_self", pbool(""), "allow_site", pbool(""), "allow_artist", pbool(""),
+			"artist_name", pstr("Defaults to Tara."),
+			"windows", parr("The days plaques are taken on; they may not overlap. An existing window keeps its id.",
+				openapi3.NewObjectSchema().WithProperties(map[string]*openapi3.Schema{
+					"id": openapi3.NewInt64Schema(), "label": openapi3.NewStringSchema(),
+					"start_at": openapi3.NewStringSchema(), "end_at": openapi3.NewStringSchema(),
+					"webhook_url": openapi3.NewStringSchema(),
+				}).NewRef())))
+	}
+	b.add("GET", "/api/ema-boards", "Ema Plaques", "List plaque boards", emaPerm,
+		"Every board, with how many site plaques wait for review and how many artist requests are open.", opt{
+			resps: []respEntry{ok("EmaBoardsResponse")}})
+	b.add("POST", "/api/ema-boards", "Ema Plaques", "Create a plaque board", emaPerm,
+		"Creates an open board for a festival, windows inline. Each window's webhook must be a Discord webhook URL.", opt{
+			body:  emaBoardBody(),
+			resps: []respEntry{created("EmaBoardResponse"), r("400", "Invalid board"), r("409", "The festival already has a board")}})
+	b.add("GET", "/api/ema-boards/{id}", "Ema Plaques", "Get a plaque board", emaPerm,
+		"One board with its windows, webhooks included.", opt{
+			path:  []*openapi3.Parameter{pparam("id", "Board id.")},
+			resps: []respEntry{ok("EmaBoardResponse"), r("404", "Not found")}})
+	b.add("PUT", "/api/ema-boards/{id}", "Ema Plaques", "Replace a plaque board", emaPerm,
+		"Replaces the editable fields and reconciles windows by id (a window left out is deleted; its plaques keep their label).", opt{
+			path:  []*openapi3.Parameter{pparam("id", "Board id.")},
+			body:  emaBoardBody(),
+			resps: []respEntry{ok("OKResponse"), r("400", "Invalid board"), r("404", "Not found"), r("409", "The festival already has a board")}})
+	b.add("PATCH", "/api/ema-boards/{id}", "Ema Plaques", "Open or close a plaque board", emaPerm,
+		"A closed board takes no plaques and leaves the festival dashboard; its review queue stays workable.", opt{
+			path:  []*openapi3.Parameter{pparam("id", "Board id.")},
+			body:  actionBody("Status.", nil, props("status", pstr("open or closed."))),
+			resps: []respEntry{ok("StatusResponse"), r("400", "Invalid status")}})
+	b.add("DELETE", "/api/ema-boards/{id}", "Ema Plaques", "Delete a plaque board", emaPerm,
+		"Deletes the board, its windows and plaques, and the images still waiting for review.", opt{
+			path:  []*openapi3.Parameter{pparam("id", "Board id.")},
+			resps: []respEntry{noContent(), r("404", "Not found")}})
+	b.add("GET", "/api/ema-boards/{id}/plaques", "Ema Plaques", "List a board's plaques", emaPerm,
+		"Every plaque on the board, newest first: the review queue (site plaques `pending`) and the record.", opt{
+			path:  []*openapi3.Parameter{pparam("id", "Board id.")},
+			resps: []respEntry{ok("EmaPlaquesResponse")}})
+	b.add("POST", "/api/ema-boards/{id}/plaques/{plaqueId}/approve", "Ema Plaques", "Approve and post a plaque", emaPerm,
+		"Posts a pending site plaque to its window's Discord webhook with the image attached, then records it as posted and "+
+			"deletes the stored image (Discord holds the posted copy). The plaque is claimed before the post, so a second "+
+			"approval is refused rather than posted twice; a failed post returns it to the queue.", opt{
+			path: []*openapi3.Parameter{pparam("id", "Board id."), pparam("plaqueId", "Plaque id.")},
+			resps: []respEntry{ok("EmaPlaqueResponse"), r("400", "The window has no webhook"), r("404", "Not found"),
+				r("409", "Already reviewed, or being posted"), r("502", "Discord refused or didn't answer")}})
+	b.add("POST", "/api/ema-boards/{id}/plaques/{plaqueId}/reject", "Ema Plaques", "Reject a plaque", emaPerm,
+		"Rejects a pending site plaque and deletes its image. Its author may submit another for the same window.", opt{
+			path:  []*openapi3.Parameter{pparam("id", "Board id."), pparam("plaqueId", "Plaque id.")},
+			resps: []respEntry{ok("EmaPlaqueResponse"), r("404", "Not found"), r("409", "Already reviewed")}})
+	b.add("GET", "/api/ema-requests", "Ema Plaques", "The artist's request queue", emaReqPerm,
+		"Every request for the artist, across boards, newest first, with its festival.", opt{
+			resps: []respEntry{ok("EmaPlaquesResponse")}})
+	b.add("PATCH", "/api/ema-requests/{id}", "Ema Plaques", "Complete or reopen a request", emaReqPerm,
+		"Marks an artist request complete (`complete: true`) or reopens it. The artist posts the plaque themselves.", opt{
+			path:  []*openapi3.Parameter{pparam("id", "Request (plaque) id.")},
+			body:  actionBody("Completion.", nil, props("complete", pbool(""))),
+			resps: []respEntry{ok("EmaPlaqueResponse"), r("409", "Already changed")}})
+	b.add("POST", "/api/ema/{id}/plaques", "Ema Plaques", "Submit a plaque designed on the site", "public",
+		"Takes a PNG plaque for staff review, for the window open now. One plaque per person per window, whichever way it "+
+			"was made. Rate limited per IP; bot-checked when Turnstile is configured.", opt{
+			path: []*openapi3.Parameter{pparam("id", "Board id.")},
+			body: multipartBody("Plaque.", props("image", pbinary("The plaque PNG (max 12 MB, 4096 px a side)."),
+				"name", pstr("Character name."), "world", pstr("Home world."), "turnstile_token", pstr(""))),
+			resps: []respEntry{created("EmaPlaqueResponse"), r("400", "Invalid plaque, or no window open"),
+				r("403", "Bot check failed"), r("404", "Board not taking plaques"), r("409", "Already has a plaque this window"), r("429", "Rate limited")}})
+	b.add("POST", "/api/ema/{id}/requests", "Ema Plaques", "Ask the artist for a plaque", "public",
+		"Records a request for the board's artist, for the window open now. Same one-per-window rule, limit and bot check as a design.", opt{
+			path: []*openapi3.Parameter{pparam("id", "Board id.")},
+			body: actionBody("Request.", nil, props("name", pstr("Character name."), "world", pstr("Home world."),
+				"description", pstr("What the plaque should show (max 2000 characters)."), "turnstile_token", pstr(""))),
+			resps: []respEntry{created("EmaPlaqueResponse"), r("400", "Invalid request, or no window open"),
+				r("403", "Bot check failed"), r("404", "Board not taking plaques"), r("409", "Already has a plaque this window"), r("429", "Rate limited")}})
+	b.add("GET", "/api/google-fonts", "Settings", "Google Fonts family list", "public",
+		"The Google Fonts family names, most popular first, fetched with the server's own API key (so the key never reaches a "+
+			"browser) and cached. Empty when no key is configured.", opt{
+			resps: []respEntry{ok("GoogleFontsResponse")}})
 
 	// -- Stamp Rally (resource-oriented: methods for CRUD, POST /{id}/{verb}) ----
 	rallyFields := func() openapi3.Schemas {

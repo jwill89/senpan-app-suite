@@ -25,11 +25,16 @@ const (
 	permFestivalMap        = "festival-map"
 	permFestivalGarapon    = "festival-garapon"
 	permFestivalStampRally = "festival-stamp-rally"
-	permAtelierFonts       = "atelier-fonts"
-	permAtelierCarrd       = "atelier-carrd"
-	permSystemSettings     = "system-settings"
-	permSystemThemes       = "system-themes"
-	permSystemImages       = "system-images"
+	// The plaque board: setup, windows and webhooks, and reviewing site plaques.
+	permFestivalEma = "festival-ema"
+	// The artist's request queue - on its own, so the artist can work it without
+	// seeing the board's webhooks.
+	permFestivalEmaRequests = "festival-ema-requests"
+	permAtelierFonts        = "atelier-fonts"
+	permAtelierCarrd        = "atelier-carrd"
+	permSystemSettings      = "system-settings"
+	permSystemThemes        = "system-themes"
+	permSystemImages        = "system-images"
 )
 
 // bookClubSlugs lists the known book clubs that get their own page permission.
@@ -47,7 +52,7 @@ func validPermissions() map[string]bool {
 	keys := []string{
 		permBingoGame, permBingoCards, permBingoWinnersLog, permBingoPatterns, permBingoPresets,
 		permTeahouseAnnounce, permTeahouseAffiliates, permTeahouseTeaRooms, permTeahouseRaffles,
-		permFestivalMap, permFestivalGarapon, permFestivalStampRally,
+		permFestivalMap, permFestivalGarapon, permFestivalStampRally, permFestivalEma, permFestivalEmaRequests,
 		permAtelierFonts, permAtelierCarrd,
 		permSystemSettings, permSystemThemes, permSystemImages,
 	}

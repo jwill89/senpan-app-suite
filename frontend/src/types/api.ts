@@ -709,7 +709,9 @@ export type WsMessage =
 /**
  * One plaque window in the Ema board form. `start_at`/`end_at` hold the LOCAL
  * wall-clock value an `<input type="datetime-local">` expects; the store converts
- * them to and from UTC. `_uid` is a client-only stable key for the repeater.
+ * them to and from UTC. `artist_limit` 0 means no limit; `artist_count` is the
+ * requests the saved window already holds, shown beside it and never sent. `_uid`
+ * is a client-only stable key for the repeater.
  */
 export interface EmaWindowForm {
   id: number
@@ -717,6 +719,8 @@ export interface EmaWindowForm {
   start_at: string
   end_at: string
   webhook_url: string
+  artist_limit: number
+  artist_count?: number
   _uid?: number
 }
 

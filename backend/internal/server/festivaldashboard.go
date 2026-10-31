@@ -187,10 +187,14 @@ func (s *Server) dashboardEma(ctx context.Context, mapID int64, name, world stri
 		out.CurrentWindowID = &id
 	}
 	for _, w := range b.Windows {
-		out.Windows = append(out.Windows, model.PublicEmaWindow{
+		pw := model.PublicEmaWindow{
 			ID: w.ID, Label: w.Label, StartAt: w.StartAt, EndAt: w.EndAt,
-			IsOpen: current != nil && current.ID == w.ID,
-		})
+			IsOpen: current != nil && current.ID == w.ID, ArtistLimit: w.ArtistLimit,
+		}
+		if w.ArtistLimit > 0 {
+			pw.ArtistLeft = max(0, w.ArtistLimit-w.ArtistCount)
+		}
+		out.Windows = append(out.Windows, pw)
 	}
 	if name == "" {
 		return out, nil

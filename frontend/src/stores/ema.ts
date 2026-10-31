@@ -17,7 +17,10 @@ import { withLoading } from '@/lib/withLoading'
 import type { EmaBoard, EmaBoardForm, EmaPlaque, EmaWindowForm, FestivalMap } from '@/types/api'
 import { useUiStore } from './ui'
 
-/** A new window row, starting where the last one ended so days follow on. */
+/**
+ * A new window row, starting where the last one ended so days follow on, and
+ * taking the same number of artist requests.
+ */
 function blankWindow(after?: EmaWindowForm): EmaWindowForm {
   return {
     id: 0,
@@ -25,6 +28,7 @@ function blankWindow(after?: EmaWindowForm): EmaWindowForm {
     start_at: after?.end_at ?? '',
     end_at: '',
     webhook_url: '',
+    artist_limit: after?.artist_limit ?? 0,
     _uid: nextUid(),
   }
 }
@@ -62,6 +66,8 @@ export const useEmaStore = defineStore('ema', () => {
 
   const requests = ref<EmaPlaque[]>([])
   const requestsLoading = ref(false)
+  /** A finished plaque is on its way to Discord. */
+  const postingRequest = ref(false)
 
   /** Site plaques waiting for review, across every board (the sidebar count). */
   const pendingTotal = computed(() => boards.value.reduce((n, b) => n + (b.pending_count ?? 0), 0))
@@ -137,6 +143,8 @@ export const useEmaStore = defineStore('ema', () => {
         start_at: utcToDatetimeLocal(w.start_at),
         end_at: utcToDatetimeLocal(w.end_at),
         webhook_url: w.webhook_url,
+        artist_limit: w.artist_limit,
+        artist_count: w.artist_count,
         _uid: nextUid(),
       })),
     }
@@ -176,6 +184,7 @@ export const useEmaStore = defineStore('ema', () => {
         start_at: datetimeLocalToUtc(w.start_at),
         end_at: datetimeLocalToUtc(w.end_at),
         webhook_url: w.webhook_url,
+        artist_limit: w.artist_limit,
       })),
     }
     saving.value = true
@@ -274,6 +283,30 @@ export const useEmaStore = defineStore('ema', () => {
     }
   }
 
+  /**
+   * Posts the artist's finished plaque for a request to its day's Discord channel,
+   * which also marks the request complete. The server keeps no copy. Returns
+   * whether it posted.
+   */
+  async function postRequest(p: EmaPlaque, image: File): Promise<boolean> {
+    if (postingRequest.value) return false
+    const form = new FormData()
+    form.append('image', image)
+    postingRequest.value = true
+    try {
+      const res = await endpoints.emaRequests.post(p.id, form)
+      requests.value = requests.value.map((x) => (x.id === p.id ? res.plaque : x))
+      ui.notify('Posted to Discord', 'success')
+      return true
+    } catch (e) {
+      ui.notify((e as Error).message, 'error')
+      void loadRequests()
+      return false
+    } finally {
+      postingRequest.value = false
+    }
+  }
+
   return {
     boards,
     boardsLoading,
@@ -286,6 +319,7 @@ export const useEmaStore = defineStore('ema', () => {
     reviewing,
     requests,
     requestsLoading,
+    postingRequest,
     pendingTotal,
     openRequests,
     pendingPlaques,
@@ -303,5 +337,6 @@ export const useEmaStore = defineStore('ema', () => {
     review,
     loadRequests,
     setRequestComplete,
+    postRequest,
   }
 })

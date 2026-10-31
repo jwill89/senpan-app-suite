@@ -63,8 +63,9 @@ type EmaBoard struct {
 }
 
 // EmaWindow is one stretch of the festival a plaque is taken for - usually a day -
-// with the Discord webhook its approved site plaques are posted to. The webhook is
-// a secret: it is returned to staff who manage the board and nowhere else.
+// with the Discord webhook its approved site plaques are posted to and the most
+// requests the artist takes on it. The webhook is a secret: it is returned to staff
+// who manage the board and nowhere else.
 type EmaWindow struct {
 	ID         int64  `json:"id"`
 	BoardID    int64  `json:"board_id"`
@@ -72,7 +73,11 @@ type EmaWindow struct {
 	StartAt    string `json:"start_at"`    // UTC RFC-3339
 	EndAt      string `json:"end_at"`      // UTC RFC-3339
 	WebhookURL string `json:"webhook_url"` // staff only
-	SortOrder  int    `json:"sort_order"`
+	// ArtistLimit is the most artist requests taken on this window; 0 = no limit.
+	ArtistLimit int `json:"artist_limit"`
+	// ArtistCount is how many artist requests the window already holds (read-only).
+	ArtistCount int `json:"artist_count"`
+	SortOrder   int `json:"sort_order"`
 }
 
 // EmaPlaque is one visitor's plaque: designed on the site (with its image, until it
@@ -128,13 +133,17 @@ type GoogleFontsResponse struct {
 
 // -- Public (the festival dashboard's Ema section) ------------------------------
 
-// PublicEmaWindow is a window as a visitor sees it: no webhook.
+// PublicEmaWindow is a window as a visitor sees it: no webhook. ArtistLeft is how
+// many artist requests the window still takes, meaningful only when ArtistLimit is
+// set (0 = no limit); at 0 left, the request option is closed for that window.
 type PublicEmaWindow struct {
-	ID      int64  `json:"id"`
-	Label   string `json:"label"`
-	StartAt string `json:"start_at"`
-	EndAt   string `json:"end_at"`
-	IsOpen  bool   `json:"is_open"`
+	ID          int64  `json:"id"`
+	Label       string `json:"label"`
+	StartAt     string `json:"start_at"`
+	EndAt       string `json:"end_at"`
+	IsOpen      bool   `json:"is_open"`
+	ArtistLimit int    `json:"artist_limit"`
+	ArtistLeft  int    `json:"artist_left"`
 }
 
 // PublicEmaPlaque is one of the visitor's own plaques. It carries the image only

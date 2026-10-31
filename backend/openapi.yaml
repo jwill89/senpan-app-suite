@@ -1046,6 +1046,10 @@ components:
             windows:
               items:
                 properties:
+                  artist_count:
+                    type: integer
+                  artist_limit:
+                    type: integer
                   board_id:
                     format: int64
                     type: integer
@@ -1106,6 +1110,10 @@ components:
               windows:
                 items:
                   properties:
+                    artist_count:
+                      type: integer
+                    artist_limit:
+                      type: integer
                     board_id:
                       format: int64
                       type: integer
@@ -1405,6 +1413,10 @@ components:
             windows:
               items:
                 properties:
+                  artist_left:
+                    type: integer
+                  artist_limit:
+                    type: integer
                   end_at:
                     type: string
                   id:
@@ -6077,7 +6089,7 @@ info:
     (`{ "type": "log", "entry": LogEntry }`) for the live log tail - best-effort,
     sent only while an admin is connected.
   title: Senpan App Suite API
-  version: 3.26.0
+  version: 3.27.0
 openapi: 3.0.3
 paths:
   /api/account/change-password:
@@ -8480,6 +8492,10 @@ paths:
                     An existing window keeps its id.
                   items:
                     properties:
+                      artist_limit:
+                        maximum: 1000
+                        minimum: 0
+                        type: integer
                       end_at:
                         type: string
                       id:
@@ -8670,6 +8686,10 @@ paths:
                     An existing window keeps its id.
                   items:
                     properties:
+                      artist_limit:
+                        maximum: 1000
+                        minimum: 0
+                        type: integer
                       end_at:
                         type: string
                       id:
@@ -8904,6 +8924,68 @@ paths:
       summary: Complete or reopen a request
       tags:
       - Ema Plaques
+  /api/ema-requests/{id}/post:
+    post:
+      description: |-
+        **Auth:** permission:festival-ema-requests
+
+        Posts the finished plaque for an open request straight to its window's Discord webhook - "Requested by <character>, made by <artist>" - and marks the request complete. No review step, and the image is not kept: it is read, posted and dropped. The request is claimed before the post, so a double submit can't post it twice; a failed post reopens it.
+      parameters:
+      - description: Request (plaque) id.
+        in: path
+        name: id
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              properties:
+                image:
+                  description: PNG, JPEG, GIF or WebP, max 10 MB.
+                  format: binary
+                  type: string
+              type: object
+        description: Finished plaque.
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EmaPlaqueResponse'
+          description: Success
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: Not an image, or the window has no webhook
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: Not a request
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: Already finished, or being posted
+        "502":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: Discord refused or didn't answer
+      security:
+      - cookieAuth: []
+      - bearerAuth: []
+      summary: Post the artist's finished plaque
+      tags:
+      - Ema Plaques
   /api/ema/{id}/plaques:
     post:
       description: |-
@@ -8983,7 +9065,7 @@ paths:
       description: |-
         **Auth:** public
 
-        Records a request for the board's artist, for the window open now. Same one-per-window rule, limit and bot check as a design.
+        Records a request for the board's artist, for the window open now. Same one-per-window rule, limit and bot check as a design; a window with an `artist_limit` takes no more requests once it holds that many.
       parameters:
       - description: Board id.
         in: path
@@ -9040,7 +9122,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
-          description: Already has a plaque this window
+          description: Already has a plaque this window, or the window's artist requests
+            are full
         "429":
           content:
             application/json:

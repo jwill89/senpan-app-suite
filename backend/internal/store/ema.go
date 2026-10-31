@@ -25,6 +25,10 @@ var ErrEmaPlaqueTaken = errors.New("a plaque is already recorded for this person
 // id that belongs to another board - a stale client or a spoofed id.
 var ErrEmaWindowNotOnBoard = errors.New("window does not belong to this board")
 
+// ErrEmaArtistFull is returned when an artist request would go past its window's
+// artist_limit.
+var ErrEmaArtistFull = errors.New("the artist's requests for this window are full")
+
 // migrateEma (schema v70) adds the Ema plaque tables.
 //
 // ema_boards.festival_map_id cascades: a board exists only for its festival, and
@@ -85,6 +89,17 @@ func migrateEma(ctx context.Context, db *sql.DB) error {
 		}
 	}
 	return nil
+}
+
+// migrateEmaArtistLimit (schema v71) adds ema_windows.artist_limit: the most
+// artist requests a window takes. 0 is no limit, which is how every window
+// behaved before.
+func migrateEmaArtistLimit(ctx context.Context, db *sql.DB) error {
+	if !tableExists(ctx, db, "ema_windows") || hasColumn(ctx, db, "ema_windows", "artist_limit") {
+		return nil
+	}
+	_, err := db.ExecContext(ctx, `ALTER TABLE ema_windows ADD COLUMN artist_limit INTEGER NOT NULL DEFAULT 0`)
+	return err
 }
 
 // -- Boards -------------------------------------------------------------------
@@ -156,8 +171,9 @@ func (s *Store) getEmaBoardWhere(ctx context.Context, where string, arg any) (*m
 }
 
 func (s *Store) listEmaWindows(ctx context.Context, boardID int64) ([]model.EmaWindow, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT id, board_id, label, start_at, end_at, webhook_url, sort_order
-		FROM ema_windows WHERE board_id = ? ORDER BY sort_order, start_at, id`, boardID)
+	rows, err := s.db.QueryContext(ctx, `SELECT w.id, w.board_id, w.label, w.start_at, w.end_at, w.webhook_url,
+			w.artist_limit, (SELECT COUNT(*) FROM ema_plaques p WHERE p.window_id = w.id AND p.kind = ?), w.sort_order
+		FROM ema_windows w WHERE w.board_id = ? ORDER BY w.sort_order, w.start_at, w.id`, model.EmaKindArtist, boardID)
 	if err != nil {
 		return nil, err
 	}
@@ -165,7 +181,8 @@ func (s *Store) listEmaWindows(ctx context.Context, boardID int64) ([]model.EmaW
 	windows := make([]model.EmaWindow, 0)
 	for rows.Next() {
 		var w model.EmaWindow
-		if err := rows.Scan(&w.ID, &w.BoardID, &w.Label, &w.StartAt, &w.EndAt, &w.WebhookURL, &w.SortOrder); err != nil {
+		if err := rows.Scan(&w.ID, &w.BoardID, &w.Label, &w.StartAt, &w.EndAt, &w.WebhookURL,
+			&w.ArtistLimit, &w.ArtistCount, &w.SortOrder); err != nil {
 			return nil, err
 		}
 		windows = append(windows, w)
@@ -194,9 +211,7 @@ func (s *Store) CreateEmaBoard(ctx context.Context, b *model.EmaBoard) (int64, e
 		return 0, err
 	}
 	for i := range b.Windows {
-		w := b.Windows[i]
-		if _, err := tx.ExecContext(ctx, `INSERT INTO ema_windows (board_id, label, start_at, end_at, webhook_url, sort_order)
-			VALUES (?, ?, ?, ?, ?, ?)`, id, w.Label, w.StartAt, w.EndAt, w.WebhookURL, i); err != nil {
+		if err := insertEmaWindow(ctx, tx, id, &b.Windows[i], i); err != nil {
 			return 0, err
 		}
 	}
@@ -250,14 +265,13 @@ func (s *Store) UpdateEmaBoard(ctx context.Context, b *model.EmaBoard) error {
 			}
 			kept[w.ID] = true
 			if _, err := tx.ExecContext(ctx, `UPDATE ema_windows SET label = ?, start_at = ?, end_at = ?,
-					webhook_url = ?, sort_order = ? WHERE id = ?`,
-				w.Label, w.StartAt, w.EndAt, w.WebhookURL, i, w.ID); err != nil {
+					webhook_url = ?, artist_limit = ?, sort_order = ? WHERE id = ?`,
+				w.Label, w.StartAt, w.EndAt, w.WebhookURL, w.ArtistLimit, i, w.ID); err != nil {
 				return err
 			}
 			continue
 		}
-		if _, err := tx.ExecContext(ctx, `INSERT INTO ema_windows (board_id, label, start_at, end_at, webhook_url, sort_order)
-			VALUES (?, ?, ?, ?, ?, ?)`, b.ID, w.Label, w.StartAt, w.EndAt, w.WebhookURL, i); err != nil {
+		if err := insertEmaWindow(ctx, tx, b.ID, &w, i); err != nil {
 			return err
 		}
 	}
@@ -269,6 +283,13 @@ func (s *Store) UpdateEmaBoard(ctx context.Context, b *model.EmaBoard) error {
 		}
 	}
 	return tx.Commit()
+}
+
+func insertEmaWindow(ctx context.Context, tx *sql.Tx, boardID int64, w *model.EmaWindow, sortOrder int) error {
+	_, err := tx.ExecContext(ctx, `INSERT INTO ema_windows (board_id, label, start_at, end_at, webhook_url,
+			artist_limit, sort_order)
+		VALUES (?, ?, ?, ?, ?, ?, ?)`, boardID, w.Label, w.StartAt, w.EndAt, w.WebhookURL, w.ArtistLimit, sortOrder)
+	return err
 }
 
 // SetEmaBoardStatus opens or closes a board.
@@ -409,9 +430,21 @@ func (s *Store) GetEmaPlaque(ctx context.Context, id int64) (*model.EmaPlaque, e
 }
 
 // CreateEmaPlaque records a plaque, refusing a second one for the same person in
-// the same window with ErrEmaPlaqueTaken.
+// the same window with ErrEmaPlaqueTaken, and an artist request past its window's
+// artist_limit with ErrEmaArtistFull.
+//
+// The limit is checked AFTER the insert, inside the same write-locked transaction:
+// the write lock is what keeps two requests for the last place from both counting
+// the window as not full, and inserting first leaves the one-per-day refusal ahead
+// of the full one for someone who already has a plaque.
 func (s *Store) CreateEmaPlaque(ctx context.Context, p *model.EmaPlaque) (*model.EmaPlaque, error) {
-	res, err := s.db.ExecContext(ctx, `INSERT INTO ema_plaques (board_id, window_id, window_label, kind,
+	tx, err := s.beginImmediate(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	res, err := tx.ExecContext(ctx, `INSERT INTO ema_plaques (board_id, window_id, window_label, kind,
 			character_name, world, description, image, status)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		p.BoardID, p.WindowID, p.WindowLabel, p.Kind, p.CharacterName, p.World, p.Description, p.Image, p.Status)
@@ -421,8 +454,23 @@ func (s *Store) CreateEmaPlaque(ctx context.Context, p *model.EmaPlaque) (*model
 	if err != nil {
 		return nil, err
 	}
+	if p.Kind == model.EmaKindArtist && p.WindowID != nil {
+		var limit, count int
+		err := tx.QueryRowContext(ctx, `SELECT artist_limit,
+				(SELECT COUNT(*) FROM ema_plaques WHERE window_id = ema_windows.id AND kind = ?)
+			FROM ema_windows WHERE id = ?`, model.EmaKindArtist, *p.WindowID).Scan(&limit, &count)
+		if err != nil {
+			return nil, err
+		}
+		if limit > 0 && count > limit {
+			return nil, ErrEmaArtistFull
+		}
+	}
 	id, err := res.LastInsertId()
 	if err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(); err != nil {
 		return nil, err
 	}
 	return s.GetEmaPlaque(ctx, id)

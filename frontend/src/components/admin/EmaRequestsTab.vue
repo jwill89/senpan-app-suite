@@ -2,7 +2,9 @@
 /**
  * Admin Festival -> Ema Requests: the artist's queue. Every plaque a visitor asked
  * the artist to make, across festivals, with what they asked for. The artist makes
- * it, posts it to Discord themselves, and marks it complete here.
+ * it, then either uploads it here - the app posts it to the day's Discord channel
+ * and completes the request (EmaRequestPostModal) - or posts it by hand and marks
+ * it complete.
  *
  * Its own page and permission (festival-ema-requests), so the artist can work the
  * queue without seeing the boards' webhooks.
@@ -12,13 +14,18 @@ import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
 import ManagerView from '@/components/common/ui/ManagerView.vue'
 import DataTable, { type DataColumn } from '@/components/common/ui/DataTable.vue'
 import EmptyState from '@/components/common/ui/EmptyState.vue'
+import EmaRequestPostModal from '@/components/admin/EmaRequestPostModal.vue'
 import { useEmaStore } from '@/stores/ema'
 import { formatServerTimestamp } from '@/lib/datetime'
 import { participantLabel } from '@/lib/participant'
+import type { EmaPlaque } from '@/types/api'
 
 const ema = useEmaStore()
 
 onMounted(() => ema.loadRequests())
+
+/** The request whose finished plaque is being posted. */
+const posting = ref<EmaPlaque | null>(null)
 
 /** Finished requests are hidden until asked for: the queue is what's left to do. */
 const showFinished = ref(false)
@@ -46,8 +53,9 @@ const columns: DataColumn[] = [
     </template>
 
     <p class="text-muted text-sm mb-12">
-      Plaques visitors asked you to make. Make it, post it to the festival's Discord yourself, then
-      mark it complete so it leaves the queue.
+      Plaques visitors asked you to make. When one is done, post it here - it goes to that day's
+      Discord channel with their name and yours, and leaves the queue. Posted it yourself? Mark it
+      complete instead.
     </p>
 
     <LoadingSpinner
@@ -75,14 +83,20 @@ const columns: DataColumn[] = [
       </template>
       <template #cell-actions="{ row }">
         <div class="row-actions">
-          <button
-            v-if="row.status === 'requested'"
-            type="button"
-            class="btn-confirm btn-sm"
-            @click="ema.setRequestComplete(row, true)"
-          >
-            <font-awesome-icon :icon="['fas', 'check']" /> Complete
-          </button>
+          <template v-if="row.status === 'requested'">
+            <button type="button" class="btn-action btn-sm" @click="posting = row">
+              <font-awesome-icon :icon="['fab', 'discord']" /> Post Plaque
+            </button>
+            <button
+              type="button"
+              class="btn-confirm btn-sm"
+              title="Mark it done without posting - for a plaque you posted yourself"
+              @click="ema.setRequestComplete(row, true)"
+            >
+              <font-awesome-icon :icon="['fas', 'check']" /> Complete
+            </button>
+          </template>
+          <span v-else-if="row.status === 'posting'" class="badge badge--warning">Posting</span>
           <button
             v-else
             type="button"
@@ -100,5 +114,7 @@ const columns: DataColumn[] = [
       :icon="['fad', 'palette']"
       :text="showFinished ? 'No plaque requests yet.' : 'Nothing in the queue.'"
     />
+
+    <EmaRequestPostModal v-if="posting" :request="posting" @close="posting = null" />
   </ManagerView>
 </template>

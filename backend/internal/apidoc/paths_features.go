@@ -292,7 +292,8 @@ func buildFeaturePaths(b *pb) {
 				openapi3.NewObjectSchema().WithProperties(map[string]*openapi3.Schema{
 					"id": openapi3.NewInt64Schema(), "label": openapi3.NewStringSchema(),
 					"start_at": openapi3.NewStringSchema(), "end_at": openapi3.NewStringSchema(),
-					"webhook_url": openapi3.NewStringSchema(),
+					"webhook_url":  openapi3.NewStringSchema(),
+					"artist_limit": openapi3.NewIntegerSchema().WithMin(0).WithMax(1000),
 				}).NewRef())))
 	}
 	b.add("GET", "/api/ema-boards", "Ema Plaques", "List plaque boards", emaPerm,
@@ -343,6 +344,14 @@ func buildFeaturePaths(b *pb) {
 			path:  []*openapi3.Parameter{pparam("id", "Request (plaque) id.")},
 			body:  actionBody("Completion.", nil, props("complete", pbool(""))),
 			resps: []respEntry{ok("EmaPlaqueResponse"), r("409", "Already changed")}})
+	b.add("POST", "/api/ema-requests/{id}/post", "Ema Plaques", "Post the artist's finished plaque", emaReqPerm,
+		"Posts the finished plaque for an open request straight to its window's Discord webhook - \"Requested by <character>, "+
+			"made by <artist>\" - and marks the request complete. No review step, and the image is not kept: it is read, posted "+
+			"and dropped. The request is claimed before the post, so a double submit can't post it twice; a failed post reopens it.", opt{
+			path: []*openapi3.Parameter{pparam("id", "Request (plaque) id.")},
+			body: multipartBody("Finished plaque.", props("image", pbinary("PNG, JPEG, GIF or WebP, max 10 MB."))),
+			resps: []respEntry{ok("EmaPlaqueResponse"), r("400", "Not an image, or the window has no webhook"), r("404", "Not a request"),
+				r("409", "Already finished, or being posted"), r("502", "Discord refused or didn't answer")}})
 	b.add("POST", "/api/ema/{id}/plaques", "Ema Plaques", "Submit a plaque designed on the site", "public",
 		"Takes a PNG plaque for staff review, for the window open now. One plaque per person per window, whichever way it "+
 			"was made. Rate limited per IP; bot-checked when Turnstile is configured.", opt{
@@ -352,12 +361,14 @@ func buildFeaturePaths(b *pb) {
 			resps: []respEntry{created("EmaPlaqueResponse"), r("400", "Invalid plaque, or no window open"),
 				r("403", "Bot check failed"), r("404", "Board not taking plaques"), r("409", "Already has a plaque this window"), r("429", "Rate limited")}})
 	b.add("POST", "/api/ema/{id}/requests", "Ema Plaques", "Ask the artist for a plaque", "public",
-		"Records a request for the board's artist, for the window open now. Same one-per-window rule, limit and bot check as a design.", opt{
+		"Records a request for the board's artist, for the window open now. Same one-per-window rule, limit and bot check as a design; "+
+			"a window with an `artist_limit` takes no more requests once it holds that many.", opt{
 			path: []*openapi3.Parameter{pparam("id", "Board id.")},
 			body: actionBody("Request.", nil, props("name", pstr("Character name."), "world", pstr("Home world."),
 				"description", pstr("What the plaque should show (max 2000 characters)."), "turnstile_token", pstr(""))),
 			resps: []respEntry{created("EmaPlaqueResponse"), r("400", "Invalid request, or no window open"),
-				r("403", "Bot check failed"), r("404", "Board not taking plaques"), r("409", "Already has a plaque this window"), r("429", "Rate limited")}})
+				r("403", "Bot check failed"), r("404", "Board not taking plaques"),
+				r("409", "Already has a plaque this window, or the window's artist requests are full"), r("429", "Rate limited")}})
 	b.add("GET", "/api/google-fonts", "Settings", "Google Fonts family list", "public",
 		"The Google Fonts family names, most popular first, fetched with the server's own API key (so the key never reaches a "+
 			"browser) and cached. Empty when no key is configured.", opt{

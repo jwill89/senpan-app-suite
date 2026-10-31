@@ -137,6 +137,12 @@ func TestEma_BoardSaveValidates(t *testing.T) {
 			{"start_at": "2026-08-01T00:00:00Z", "end_at": "2026-08-02T00:00:00Z", "webhook_url": "https://example.com/hook"},
 		}),
 		"no days": base(nil),
+		"negative artist limit": base([]map[string]any{
+			{"start_at": "2026-08-01T00:00:00Z", "end_at": "2026-08-02T00:00:00Z", "artist_limit": -1},
+		}),
+		"artist limit past the cap": base([]map[string]any{
+			{"start_at": "2026-08-01T00:00:00Z", "end_at": "2026-08-02T00:00:00Z", "artist_limit": 1001},
+		}),
 	}
 	for name, body := range cases {
 		resp := f.env.reqJSON(t, http.MethodPut, fmt.Sprintf("/api/ema-boards/%d", f.boardID), body)
@@ -305,6 +311,151 @@ func TestEma_ArtistQueueHasItsOwnPermission(t *testing.T) {
 	}
 	if got := decodeBody(t, resp)["plaque"].(map[string]any)["status"]; got != "complete" {
 		t.Errorf("status = %v; want complete", got)
+	}
+}
+
+// setArtistLimit re-saves the board with Day 1 (kept by id) taking at most `limit`
+// artist requests.
+func (f emaFestival) setArtistLimit(t *testing.T, limit int) {
+	t.Helper()
+	now := time.Now().UTC()
+	resp := f.env.reqJSON(t, http.MethodPut, fmt.Sprintf("/api/ema-boards/%d", f.boardID), map[string]any{
+		"festival_map_id": f.mapID, "template_image": "images/ema/template.png",
+		"allow_self": true, "allow_site": true, "allow_artist": true, "artist_name": "Tara",
+		"windows": []map[string]any{{
+			"id": f.windowID, "label": "Day 1",
+			"start_at": now.Add(-time.Hour).Format(time.RFC3339),
+			"end_at":   now.Add(time.Hour).Format(time.RFC3339), "webhook_url": testWebhook,
+			"artist_limit": limit,
+		}},
+	})
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("save artist limit status = %d; want 200", resp.StatusCode)
+	}
+	resp.Body.Close()
+}
+
+func TestEma_ArtistRequestsStopAtTheDaysLimit(t *testing.T) {
+	f := newEmaFestival(t)
+	f.setArtistLimit(t, 2)
+
+	for _, name := range []string{"Aria Ashwood", "Bea Bright"} {
+		if r := f.requestPlaque(t, name, "A koi"); r.StatusCode != http.StatusCreated {
+			t.Fatalf("%s's request = %d; want 201", name, r.StatusCode)
+		}
+	}
+	r := f.requestPlaque(t, "Cass Cole", "A koi")
+	if r.StatusCode != http.StatusConflict {
+		t.Fatalf("request past the limit = %d; want 409", r.StatusCode)
+	}
+	if msg := decodeBody(t, r)["error"]; msg != "Tara's requests for Day 1 are full" {
+		t.Errorf("error = %q; want the full message", msg)
+	}
+	// The limit is the artist's: designing on the site is still open.
+	if r := f.submitPlaque(t, "Cass Cole", plaquePNG(t)); r.StatusCode != http.StatusCreated {
+		t.Errorf("site plaque on a full artist day = %d; want 201", r.StatusCode)
+	}
+
+	board := decodeBody(t, f.env.get(t, fmt.Sprintf("/api/ema-boards/%d", f.boardID)))["board"].(map[string]any)
+	day := board["windows"].([]any)[0].(map[string]any)
+	if day["artist_limit"] != float64(2) || day["artist_count"] != float64(2) {
+		t.Errorf("staff see the day as %v; want limit 2, count 2", day)
+	}
+	ema := f.env.dashboard(t, f.mapID, map[string]any{"name": "Dee Dunn", "world": "Gilgamesh"})["ema"].(map[string]any)
+	pub := ema["windows"].([]any)[0].(map[string]any)
+	if pub["artist_limit"] != float64(2) || pub["artist_left"] != float64(0) {
+		t.Errorf("visitors see the day as %v; want limit 2, none left", pub)
+	}
+
+	// Raising the limit reopens the day.
+	f.setArtistLimit(t, 3)
+	if r := f.requestPlaque(t, "Dee Dunn", "A koi"); r.StatusCode != http.StatusCreated {
+		t.Errorf("request after raising the limit = %d; want 201", r.StatusCode)
+	}
+}
+
+// postFinished uploads the artist's finished plaque for request `id` through
+// `client` (the logged-in admin's, or another).
+func (f emaFestival) postFinished(t *testing.T, client *http.Client, id int, img []byte) *http.Response {
+	t.Helper()
+	var body bytes.Buffer
+	mw := multipart.NewWriter(&body)
+	part, _ := mw.CreateFormFile("image", "finished.png")
+	_, _ = part.Write(img)
+	_ = mw.Close()
+	resp, err := client.Post(f.env.url(fmt.Sprintf("/api/ema-requests/%d/post", id)), mw.FormDataContentType(), &body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return resp
+}
+
+func TestEma_ArtistPostsTheFinishedPlaqueWithoutKeepingIt(t *testing.T) {
+	f := newEmaFestival(t)
+	req := decodeBody(t, f.requestPlaque(t, "Aria Ashwood", "A koi"))["plaque"].(map[string]any)
+	id := int(req["id"].(float64))
+	hook := &approvalHook{}
+	f.env.srv.SetWebhookPolicy(hook.serve(t, http.StatusOK).URL, false)
+	img := plaquePNG(t)
+
+	anon := &http.Client{Transport: f.env.ts.Client().Transport}
+	if r := f.postFinished(t, anon, id, img); r.StatusCode != http.StatusUnauthorized {
+		t.Errorf("anonymous post = %d; want 401", r.StatusCode)
+	}
+	if r := f.postFinished(t, f.env.client, id, []byte("not an image")); r.StatusCode != http.StatusBadRequest {
+		t.Errorf("non-image post = %d; want 400", r.StatusCode)
+	}
+	if len(hook.posts) != 0 {
+		t.Fatalf("discord got %d posts before a valid one; want none", len(hook.posts))
+	}
+
+	resp := f.postFinished(t, f.env.client, id, img)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("post status = %d; want 200", resp.StatusCode)
+	}
+	after := decodeBody(t, resp)["plaque"].(map[string]any)
+	if after["status"] != "complete" || after["reviewed_by"] != "admin" {
+		t.Errorf("after posting = %v; want complete, with who posted it", after)
+	}
+	if len(hook.files) != 1 || !bytes.Equal(hook.files[0], img) {
+		t.Fatalf("discord got %d file(s); want the finished plaque once", len(hook.files))
+	}
+	if want := "Requested by **Aria Ashwood @ Gilgamesh**, made by **Tara** - Day 1"; !strings.Contains(hook.posts[0], want) {
+		t.Errorf("payload = %s; want %q", hook.posts[0], want)
+	}
+	// Posted and dropped: no copy of it anywhere under the web root.
+	_ = filepath.WalkDir(f.webRoot, func(p string, d os.DirEntry, err error) error {
+		if err == nil && !d.IsDir() {
+			if data, _ := os.ReadFile(p); bytes.Equal(data, img) { //nolint:gosec // a test walking its own temp dir
+				t.Errorf("the finished plaque was kept on the server at %s", p)
+			}
+		}
+		return nil
+	})
+
+	// Finished: a second post is refused rather than posted again.
+	if r := f.postFinished(t, f.env.client, id, img); r.StatusCode != http.StatusConflict {
+		t.Errorf("second post = %d; want 409", r.StatusCode)
+	}
+	if len(hook.files) != 1 {
+		t.Errorf("discord got %d posts; want exactly one", len(hook.files))
+	}
+}
+
+func TestEma_FailedArtistPostReopensTheRequest(t *testing.T) {
+	f := newEmaFestival(t)
+	req := decodeBody(t, f.requestPlaque(t, "Aria Ashwood", "A koi"))["plaque"].(map[string]any)
+	hook := &approvalHook{}
+	f.env.srv.SetWebhookPolicy(hook.serve(t, http.StatusBadRequest).URL, false)
+
+	resp := f.postFinished(t, f.env.client, int(req["id"].(float64)), plaquePNG(t))
+	if resp.StatusCode != http.StatusBadGateway {
+		t.Errorf("post with Discord refusing = %d; want 502", resp.StatusCode)
+	}
+	resp.Body.Close()
+	queue := decodeBody(t, f.env.get(t, "/api/ema-requests"))["plaques"].([]any)
+	if got := queue[0].(map[string]any)["status"]; got != "requested" {
+		t.Errorf("after a failed post the request is %v; want requested, to try again", got)
 	}
 }
 

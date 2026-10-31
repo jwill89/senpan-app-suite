@@ -10,7 +10,8 @@
  * 3. Ask the artist - a description, saved to the artist's queue.
  *
  * Options 2 and 3 share the one-plaque-per-day rule, which the server enforces;
- * the section mirrors it so nobody designs a plaque they can't send.
+ * the section mirrors it so nobody designs a plaque they can't send. Option 3 can
+ * also close for the day when the artist's request limit is reached.
  */
 import { computed, defineAsyncComponent, ref, useTemplateRef } from 'vue'
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
@@ -56,6 +57,18 @@ const nextWindow = computed(() =>
 const canSend = computed(
   () => !!currentWindow.value && !!store.visitorName && !props.ema.has_plaque_this_window,
 )
+/**
+ * Requests the artist still takes today, or null when today has no limit. At 0 the
+ * request option closes for the day; the server holds the same line.
+ */
+const artistLeft = computed(() =>
+  currentWindow.value && currentWindow.value.artist_limit > 0
+    ? currentWindow.value.artist_left
+    : null,
+)
+const artistFull = computed(() => artistLeft.value === 0)
+/** Whether the visitor may ask the artist right now. */
+const canAsk = computed(() => canSend.value && !artistFull.value)
 
 // -- Design on the site -----------------------------------------------------------
 
@@ -244,6 +257,14 @@ async function sendRequest(): Promise<void> {
         <p class="text-sm m-0">
           Describe the plaque you'd like and {{ ema.artist_name }} will make it and post it for you.
         </p>
+        <p v-if="currentWindow && artistFull" class="form-alert form-alert-warning" role="status">
+          <font-awesome-icon :icon="['fas', 'triangle-exclamation']" class="form-alert-icon" />
+          <span>{{ ema.artist_name }}'s requests for {{ currentWindow.label }} are full.</span>
+        </p>
+        <p v-else-if="currentWindow && artistLeft !== null" class="text-sm text-muted m-0">
+          {{ artistLeft }} {{ artistLeft === 1 ? 'request' : 'requests' }} left for
+          {{ currentWindow.label }}.
+        </p>
         <form class="festival-dash-form" @submit.prevent="sendRequest">
           <textarea
             v-model="requestText"
@@ -251,10 +272,10 @@ async function sendRequest(): Promise<void> {
             maxlength="2000"
             :placeholder="`What should ${ema.artist_name} draw and write?`"
             :aria-label="`Your request for ${ema.artist_name}`"
-            :disabled="!canSend"
+            :disabled="!canAsk"
           ></textarea>
           <TurnstileWidget
-            v-if="turnstileSiteKey && canSend"
+            v-if="turnstileSiteKey && canAsk"
             ref="requestWidget"
             :site-key="turnstileSiteKey"
             @verified="requestToken = $event"
@@ -266,7 +287,7 @@ async function sendRequest(): Promise<void> {
               type="submit"
               class="btn-confirm btn-sm"
               :disabled="
-                !canSend ||
+                !canAsk ||
                 store.busy ||
                 !requestText.trim() ||
                 (!!turnstileSiteKey && !requestToken)

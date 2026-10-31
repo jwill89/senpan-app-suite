@@ -48,13 +48,22 @@ const maxEmaImageSide = 4096
 // maxEmaDescriptionLen bounds an artist request, counted in runes.
 const maxEmaDescriptionLen = 2000
 
+// maxEmaArtistImageBytes bounds the artist's finished plaque: Discord's default
+// upload limit, so nothing is accepted that the post would then be refused for.
+const maxEmaArtistImageBytes = 10 << 20
+
+// maxEmaArtistLimit bounds a window's artist_limit - well past any one artist's
+// day, so a typo of an extra zero is caught rather than stored.
+const maxEmaArtistLimit = 1000
+
 // emaWindowRequest is one window in a board save.
 type emaWindowRequest struct {
-	ID         int64  `json:"id"`
-	Label      string `json:"label"`
-	StartAt    string `json:"start_at"`
-	EndAt      string `json:"end_at"`
-	WebhookURL string `json:"webhook_url"`
+	ID          int64  `json:"id"`
+	Label       string `json:"label"`
+	StartAt     string `json:"start_at"`
+	EndAt       string `json:"end_at"`
+	WebhookURL  string `json:"webhook_url"`
+	ArtistLimit int    `json:"artist_limit"`
 }
 
 // emaBoardWriteRequest is the JSON body for creating or replacing a board.
@@ -112,9 +121,10 @@ func emaBoardFromRequest(req emaBoardWriteRequest) (*model.EmaBoard, string) {
 	spans := make([]span, 0, len(req.Windows))
 	for i, wr := range req.Windows {
 		w := model.EmaWindow{
-			ID:         wr.ID,
-			Label:      strings.TrimSpace(wr.Label),
-			WebhookURL: strings.TrimSpace(wr.WebhookURL),
+			ID:          wr.ID,
+			Label:       strings.TrimSpace(wr.Label),
+			WebhookURL:  strings.TrimSpace(wr.WebhookURL),
+			ArtistLimit: wr.ArtistLimit,
 		}
 		if w.Label == "" {
 			w.Label = fmt.Sprintf("Day %d", i+1)
@@ -129,6 +139,9 @@ func emaBoardFromRequest(req emaBoardWriteRequest) (*model.EmaBoard, string) {
 		}
 		if w.WebhookURL != "" && !isDiscordWebhookURL(w.WebhookURL) {
 			return nil, w.Label + "'s webhook isn't a Discord webhook URL"
+		}
+		if w.ArtistLimit < 0 || w.ArtistLimit > maxEmaArtistLimit {
+			return nil, fmt.Sprintf("%s's artist request limit must be 0 (no limit) to %d", w.Label, maxEmaArtistLimit)
 		}
 		w.StartAt, w.EndAt = start.UTC().Format(time.RFC3339), end.UTC().Format(time.RFC3339)
 		b.Windows = append(b.Windows, w)
@@ -422,12 +435,7 @@ func (s *Server) handleEmaPlaqueApprove(w http.ResponseWriter, r *http.Request) 
 		writeInternalError(w, "get ema board for approval", err)
 		return
 	}
-	var webhook string
-	for _, win := range board.Windows {
-		if p.WindowID != nil && win.ID == *p.WindowID {
-			webhook = win.WebhookURL
-		}
-	}
+	webhook := emaWindowWebhook(board, p.WindowID)
 	if webhook == "" {
 		writeError(w, http.StatusBadRequest, "Set a webhook for "+p.WindowLabel+" before approving its plaques")
 		return
@@ -452,12 +460,8 @@ func (s *Server) handleEmaPlaqueApprove(w http.ResponseWriter, r *http.Request) 
 	}
 
 	who := model.ParticipantLabel(p.CharacterName, p.World)
-	embed := newEmbed().title("An Ema plaque").description("Hung by **" + who + "** - " + p.WindowLabel).build()
-	// Set directly: the builder takes web URLs only, and this names the upload.
-	embed.Image = &discordEmbedImage{URL: "attachment://ema.png"}
-	target := webhookTarget{Kind: "ema_plaque", Name: who}
-	postErr := s.postDiscordWebhookFile(ctx, target, webhook,
-		discordWebhookPayload{Embeds: []discordEmbed{embed}},
+	postErr := s.postEmaToDiscord(ctx, webhookTarget{Kind: "ema_plaque", Name: who}, webhook,
+		"Hung by **"+who+"** - "+p.WindowLabel,
 		discordFile{Name: "ema.png", ContentType: "image/png", Data: data})
 	if postErr != nil {
 		if _, err := s.store.SetEmaPlaqueStatus(ctx, p.ID, model.EmaStatusPosting, model.EmaStatusPending); err != nil {
@@ -509,6 +513,27 @@ func (s *Server) handleEmaPlaqueReject(w http.ResponseWriter, r *http.Request) {
 	}
 	s.removeEmaImage(p.Image)
 	s.writeEmaPlaque(ctx, w, p.ID)
+}
+
+// emaWindowWebhook returns the webhook of the window a plaque was made for, or ""
+// when the window has none or has since been deleted.
+func emaWindowWebhook(board *model.EmaBoard, windowID *int64) string {
+	for _, win := range board.Windows {
+		if windowID != nil && win.ID == *windowID {
+			return win.WebhookURL
+		}
+	}
+	return ""
+}
+
+// postEmaToDiscord posts a plaque to a window's webhook: an embed carrying the
+// image as an attachment, sent through the shared funnel so the dry-run and
+// override valves apply.
+func (s *Server) postEmaToDiscord(ctx context.Context, target webhookTarget, webhook, description string, file discordFile) error {
+	embed := newEmbed().title("An Ema plaque").description(description).build()
+	// Set directly: the builder takes web URLs only, and this names the upload.
+	embed.Image = &discordEmbedImage{URL: "attachment://" + file.Name}
+	return s.postDiscordWebhookFile(ctx, target, webhook, discordWebhookPayload{Embeds: []discordEmbed{embed}}, file)
 }
 
 // writeEmaPlaque answers with a plaque's current row.
@@ -569,6 +594,134 @@ func (s *Server) handleEmaRequestPatch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.writeEmaPlaque(r.Context(), w, id)
+}
+
+// emaArtistImageName names the artist's finished plaque in the Discord post by its
+// sniffed type, or returns "" for anything that isn't an image Discord shows inline.
+func emaArtistImageName(contentType string) string {
+	switch contentType {
+	case "image/png":
+		return "ema.png"
+	case "image/jpeg":
+		return "ema.jpg"
+	case "image/gif":
+		return "ema.gif"
+	case "image/webp":
+		return "ema.webp"
+	}
+	return ""
+}
+
+// handleEmaRequestPost posts the artist's finished plaque for an open request
+// straight to its window's Discord webhook, crediting the visitor who asked and the
+// artist who made it, and marks the request complete. There is no review step - the
+// artist is staff - and nothing is kept: the upload is read into memory, posted,
+// and dropped. Marking a request complete without posting (PATCH) still works, for
+// a plaque the artist posts by hand.
+//
+//	Endpoint:  POST /api/ema-requests/{id}/post
+//	Auth:      festival-ema-requests
+//	Request:   multipart: image (PNG, JPEG, GIF or WebP, max 10 MB)
+//	Response:  200 EmaPlaqueResponse (status "complete"); 400 no webhook / not an
+//	           image; 404 not a request; 409 not open; 502 Discord refused
+//
+// The request is claimed (requested -> posting) before the post, like an approval,
+// so a double click can't post it twice; a failed post hands it back.
+func (s *Server) handleEmaRequestPost(w http.ResponseWriter, r *http.Request) {
+	if !s.requirePermission(w, r, permFestivalEmaRequests) {
+		return
+	}
+	id, ok := pathInt64(w, r, "id", "request")
+	if !ok {
+		return
+	}
+	// Under the memory cap, so the upload never touches the disk.
+	r.Body = http.MaxBytesReader(w, r.Body, maxEmaArtistImageBytes+(1<<20))
+	if err := r.ParseMultipartForm(maxEmaArtistImageBytes + (1 << 20)); err != nil { //nolint:gosec // the body is capped by the MaxBytesReader just above
+		writeError(w, http.StatusBadRequest, "That image is too large - Discord takes up to 10 MB")
+		return
+	}
+	p, err := s.store.GetEmaPlaque(r.Context(), id)
+	if err != nil {
+		writeInternalError(w, "get ema request", err)
+		return
+	}
+	if p == nil || p.Kind != model.EmaKindArtist {
+		writeError(w, http.StatusNotFound, "Request not found")
+		return
+	}
+	if p.Status != model.EmaStatusRequested {
+		writeError(w, http.StatusConflict, "This request is already finished - reopen it to post a plaque for it")
+		return
+	}
+	board, err := s.store.GetEmaBoard(r.Context(), p.BoardID)
+	if err != nil || board == nil {
+		writeInternalError(w, "get ema board for a request", err)
+		return
+	}
+	webhook := emaWindowWebhook(board, p.WindowID)
+	if webhook == "" {
+		writeError(w, http.StatusBadRequest, p.WindowLabel+" has no webhook to post to - ask staff to set one")
+		return
+	}
+
+	file, _, err := r.FormFile("image")
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "Attach the finished plaque")
+		return
+	}
+	defer func() { _ = file.Close() }() // read in full below; nothing to report on close
+	data, err := io.ReadAll(io.LimitReader(file, maxEmaArtistImageBytes+1))
+	if err != nil || len(data) > maxEmaArtistImageBytes {
+		writeError(w, http.StatusBadRequest, "That image is too large - Discord takes up to 10 MB")
+		return
+	}
+	// Sniffed from the bytes, not trusted from the browser's label.
+	contentType := http.DetectContentType(data)
+	name := emaArtistImageName(contentType)
+	if name == "" {
+		writeError(w, http.StatusBadRequest, "The plaque must be a PNG, JPEG, GIF or WebP image")
+		return
+	}
+
+	// From the claim on, the steps belong together, as in an approval.
+	ctx := context.WithoutCancel(r.Context())
+	claimed, err := s.store.SetEmaPlaqueStatus(ctx, p.ID, model.EmaStatusRequested, model.EmaStatusPosting)
+	if err != nil {
+		writeInternalError(w, "claim ema request", err)
+		return
+	}
+	if !claimed {
+		writeError(w, http.StatusConflict, "This request is already being posted")
+		return
+	}
+
+	who := model.ParticipantLabel(p.CharacterName, p.World)
+	postErr := s.postEmaToDiscord(ctx, webhookTarget{Kind: "ema_request", Name: who}, webhook,
+		"Requested by **"+who+"**, made by **"+board.ArtistName+"** - "+p.WindowLabel,
+		discordFile{Name: name, ContentType: contentType, Data: data})
+	if postErr != nil {
+		if _, err := s.store.SetEmaPlaqueStatus(ctx, p.ID, model.EmaStatusPosting, model.EmaStatusRequested); err != nil {
+			slog.Error("release ema request after a failed post", "plaque_id", p.ID, "error", err)
+		}
+		if errors.Is(postErr, errWebhookAmbiguous) {
+			writeError(w, http.StatusBadGateway,
+				"Discord didn't answer, so the plaque may or may not have posted. Check the channel before posting it again.")
+			slog.Error("ema request post ambiguous", "plaque_id", p.ID, "error", postErr)
+			return
+		}
+		writeUpstreamError(w, "post ema request", postErr)
+		return
+	}
+
+	if _, err := s.store.FinishEmaPlaque(ctx, p.ID, model.EmaStatusPosting, model.EmaStatusComplete, s.actorName(r)); err != nil {
+		// Posted, but not recorded as such: say so rather than invite a second post.
+		slog.Error("record ema request as complete", "plaque_id", p.ID, "error", err)
+		writeError(w, http.StatusInternalServerError, "The plaque was posted, but recording it failed. Don't post it again.")
+		return
+	}
+	slog.Info("ema request posted", "plaque_id", p.ID, "board_id", p.BoardID, "by", s.actorName(r))
+	s.writeEmaPlaque(ctx, w, p.ID)
 }
 
 // -- Public: submitting a plaque ------------------------------------------------
@@ -747,7 +900,8 @@ type emaRequestSubmit struct {
 //
 //	Endpoint:  POST /api/ema/{id}/requests
 //	Auth:      public (rate limited, bot-checked)
-//	Response:  201 EmaPlaqueResponse (status "requested"); 409 already has one this window
+//	Response:  201 EmaPlaqueResponse (status "requested"); 409 already has one this
+//	           window, or the window's artist requests are full
 func (s *Server) handleEmaRequestSubmit(w http.ResponseWriter, r *http.Request) {
 	if s.emaLimited(w, r) {
 		return
@@ -785,6 +939,10 @@ func (s *Server) handleEmaRequestSubmit(w http.ResponseWriter, r *http.Request) 
 	})
 	if errors.Is(err, store.ErrEmaPlaqueTaken) {
 		writeError(w, http.StatusConflict, "You already have a plaque for "+win.Label+" - one per day")
+		return
+	}
+	if errors.Is(err, store.ErrEmaArtistFull) {
+		writeError(w, http.StatusConflict, board.ArtistName+"'s requests for "+win.Label+" are full")
 		return
 	}
 	if err != nil {

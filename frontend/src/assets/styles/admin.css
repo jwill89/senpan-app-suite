@@ -1095,12 +1095,26 @@
    EMA PLAQUES - the plaque board form, the review queue, the artist's queue
    ================================================================ */
 
-/* A board's plaque day: label, start, end, webhook, remove. Shares the .repeater
-   objects; only the column template is its own. */
+/* A board's plaque day: label, start, end, webhook, artist limit, remove. Shares
+   the .repeater objects; only the column template is its own. */
 .ema-window-row {
   grid-template-columns:
     minmax(90px, 0.7fr) minmax(160px, 190px) minmax(160px, 190px) minmax(200px, 1.4fr)
-    46px;
+    minmax(110px, 150px) 46px;
+}
+
+/* The artist limit box, with how many have already asked beside it. */
+.ema-window-limit {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.ema-window-limit > input {
+  flex: 1;
+  width: 100%;
+  min-width: 0;
 }
 
 .ema-options {

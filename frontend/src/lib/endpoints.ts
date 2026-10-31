@@ -670,6 +670,12 @@ export const endpoints = {
     /** PATCH /api/ema-requests/{id} - mark a request complete, or reopen it. */
     setComplete: (id: number, complete: boolean) =>
       apiPatch<EmaPlaqueResponse>(`ema-requests/${id}`, { complete }),
+    /**
+     * POST /api/ema-requests/{id}/post - post the artist's finished plaque (multipart
+     * `image`) to its day's Discord webhook and mark the request complete.
+     */
+    post: (id: number, form: FormData) =>
+      apiUpload<EmaPlaqueResponse>(`ema-requests/${id}/post`, form),
   },
 
   // -- Ema Plaques (public submissions) ------------------------------------------

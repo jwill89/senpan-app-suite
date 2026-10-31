@@ -42,6 +42,32 @@ The format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## Frontend
 
+### [3.31.0] - 2026-10-31
+
+Requires backend 3.27.0.
+
+#### Added
+
+- **A limit on artist requests, per plaque day.** Each day on a plaque board gets an
+  Artist Requests box beside its webhook: the most requests the artist takes that
+  day, or empty for no limit, with how many have already asked shown next to it. A
+  new day starts with the same limit as the one before it.
+- **The dashboard shows what's left.** On a limited day the Ask the Artist option
+  says how many requests are left; once none are, it says the day is full and its
+  box and button are disabled. Designing on the site is unaffected.
+- **Post Plaque, in Ema Requests.** The artist uploads the finished plaque for a
+  request (PNG, JPEG, GIF or WebP, up to 10 MB), looks it over, and posts it: the app
+  sends it to that day's Discord channel as requested by the visitor and made by the
+  artist, and marks the request complete. Complete is still there for a plaque the
+  artist posts by hand.
+
+#### Fixed
+
+- **A plaque sent from a page that had gone out of date** - the visitor already had
+  one for the day, or the artist's requests filled up while they typed - now
+  re-reads the dashboard, so the section shows why instead of leaving a form that
+  can't be sent.
+
 ### [3.30.0] - 2026-10-30
 
 Requires backend 3.26.0.
@@ -1829,6 +1855,28 @@ First tracked release - establishes versioning for the current production build.
 ---
 
 ## Backend
+
+### [3.27.0] - 2026-10-31
+
+Schema v71.
+
+#### Added
+
+- **`ema_windows.artist_limit`** (schema v71): the most artist requests a plaque day
+  takes, 0 for no limit - how every day behaved before. Saved with the board's
+  windows (`artist_limit`, 0 to 1000), and returned to staff with `artist_count`, the
+  requests the day already holds. `POST /api/ema/{id}/requests` refuses a request
+  past the limit with a 409. The check runs inside the insert's write-locked
+  transaction, so two visitors racing for the last place can't both get it.
+- **The festival dashboard's Ema days carry `artist_limit` and `artist_left`**, so
+  the request option can show what's left and close when the day is full.
+- **`POST /api/ema-requests/{id}/post`** (`festival-ema-requests`): the artist's
+  finished plaque for an open request, posted straight to its day's Discord webhook
+  as `Requested by <character>, made by <artist>`, and the request marked complete.
+  No review step, and nothing kept: the image is read, posted and dropped. PNG,
+  JPEG, GIF or WebP by their bytes, up to 10 MB (Discord's default upload limit).
+  Claimed before the post like an approval, so a double submit can't post it twice;
+  a failed post reopens the request.
 
 ### [3.26.0] - 2026-10-30
 

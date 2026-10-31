@@ -17,6 +17,7 @@
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 import type { HistoryState } from 'vue-router'
+import { ApiError } from '@/lib/api'
 import { endpoints } from '@/lib/endpoints'
 import {
   forgetSignup,
@@ -386,6 +387,7 @@ export const useFestivalDashboardStore = defineStore('festivalDashboard', () => 
       return true
     } catch (e) {
       ui.notify((e as Error).message, 'error')
+      await refreshOnConflict(e)
       return false
     } finally {
       busy.value = false
@@ -409,10 +411,20 @@ export const useFestivalDashboardStore = defineStore('festivalDashboard', () => 
       return true
     } catch (e) {
       ui.notify((e as Error).message, 'error')
+      await refreshOnConflict(e)
       return false
     } finally {
       busy.value = false
     }
+  }
+
+  /**
+   * A 409 from a plaque submit means the page is out of date - the visitor already
+   * has a plaque for the day, or the artist's requests filled up while they typed -
+   * so read it again and let the section show why.
+   */
+  async function refreshOnConflict(e: unknown): Promise<void> {
+    if (e instanceof ApiError && e.status === 409) await refresh()
   }
 
   return {

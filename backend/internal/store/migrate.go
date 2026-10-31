@@ -16,7 +16,7 @@ import (
 // PRAGMA user_version against this constant and runs only the migrations
 // needed to bring the database up to date. Bump this when adding a new
 // migration block.
-const schemaVersion = 70
+const schemaVersion = 71
 
 // ensureSchema reads the current PRAGMA user_version from the database and
 // applies any outstanding migrations to bring it up to schemaVersion.
@@ -476,6 +476,12 @@ func ensureSchema(ctx context.Context, db *sql.DB) error {
 
 	if version < 70 {
 		if err := migrateEma(ctx, db); err != nil {
+			return err
+		}
+	}
+
+	if version < 71 {
+		if err := migrateEmaArtistLimit(ctx, db); err != nil {
 			return err
 		}
 	}

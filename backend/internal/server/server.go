@@ -442,6 +442,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("POST /api/ema-boards/{id}/plaques/{plaqueId}/reject", s.handleEmaPlaqueReject)
 	s.mux.HandleFunc("GET /api/ema-requests", s.handleEmaRequestsList)
 	s.mux.HandleFunc("PATCH /api/ema-requests/{id}", s.handleEmaRequestPatch)
+	s.mux.HandleFunc("POST /api/ema-requests/{id}/post", s.handleEmaRequestPost)
 	s.mux.HandleFunc("POST /api/ema/{id}/plaques", s.handleEmaPlaqueSubmit)
 	s.mux.HandleFunc("POST /api/ema/{id}/requests", s.handleEmaRequestSubmit)
 	s.mux.HandleFunc("GET /api/google-fonts", s.handleGoogleFonts)

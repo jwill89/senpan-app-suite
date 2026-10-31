@@ -17,12 +17,18 @@ import FormField from '@/components/common/ui/FormField.vue'
 import FormActions from '@/components/common/ui/FormActions.vue'
 import ImagePicker from '@/components/common/ui/ImagePicker.vue'
 import { useEmaStore } from '@/stores/ema'
+import type { EmaWindowForm } from '@/types/api'
 
 const emit = defineEmits<{ saved: [id: number]; cancel: [] }>()
 const ema = useEmaStore()
 
 function setFestival(value: string): void {
   if (ema.boardForm) ema.boardForm.festival_map_id = value ? Number(value) : null
+}
+
+/** An empty box is no limit (0); anything else is a whole number of requests. */
+function setArtistLimit(w: EmaWindowForm, value: string): void {
+  w.artist_limit = Math.max(0, Math.trunc(Number(value) || 0))
 }
 
 async function save(): Promise<void> {
@@ -122,7 +128,7 @@ function cancel(): void {
       <FormField
         label="Days"
         required
-        help="When plaques are taken - usually one row per festival day. Each person gets one plaque per day, whichever way they make it. A plaque designed on the site posts to its day's webhook once approved. Days can't overlap."
+        help="When plaques are taken - usually one row per festival day. Each person gets one plaque per day, whichever way they make it. A plaque designed on the site posts to its day's webhook once approved. Artist Requests is the most requests the artist takes that day - leave it empty for no limit; once it's reached, nobody can pick that option for the day. Days can't overlap."
       >
         <div class="repeater">
           <div class="repeater-row ema-window-row text-muted text-xs">
@@ -130,6 +136,7 @@ function cancel(): void {
             <span>Starts</span>
             <span>Ends</span>
             <span>Discord Webhook</span>
+            <span>Artist Requests</span>
             <span></span>
           </div>
           <div
@@ -147,6 +154,22 @@ function cancel(): void {
               aria-label="Discord webhook for this day"
               autocomplete="off"
             />
+            <span class="ema-window-limit">
+              <input
+                :value="w.artist_limit || ''"
+                type="number"
+                min="0"
+                max="1000"
+                step="1"
+                placeholder="No limit"
+                aria-label="Most artist requests this day"
+                :disabled="!ema.boardForm.allow_artist"
+                @input="setArtistLimit(w, ($event.target as HTMLInputElement).value)"
+              />
+              <span v-if="w.artist_count" class="text-xs text-muted nowrap">
+                {{ w.artist_count }} asked
+              </span>
+            </span>
             <button
               type="button"
               class="btn-danger btn-sm"

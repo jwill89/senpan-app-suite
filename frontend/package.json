@@ -1,10 +1,10 @@
 {
   "name": "app-suite-frontend",
   "private": true,
-  "version": "3.31.0",
+  "version": "3.31.1",
   "type": "module",
   "engines": {
-    "node": "^24"
+    "node": "^26"
   },
   "scripts": {
     "dev": "vite",
@@ -42,7 +42,7 @@
   },
   "devDependencies": {
     "@types/markdown-it": "^14.2.0",
-    "@types/node": "^24.19.2",
+    "@types/node": "^26.6.6",
     "@vitejs/plugin-vue": "^6.0.10",
     "@vitest/coverage-v8": "^5.0.5",
     "@vue/eslint-config-prettier": "^10.2.0",

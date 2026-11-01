@@ -42,6 +42,19 @@ The format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## Frontend
 
+### [3.31.1] - 2026-11-01
+
+Requires backend 3.27.0.
+
+#### Dependencies
+
+- **Node 26 is now the minimum.** Node 26 is LTS, so `engines` moves from `^24` to
+  `^26`, CI builds on 26, and the README and CONTRIBUTING prerequisites say so. The
+  frontend is built on the deploying machine (`scripts/deploy.ps1`), so the server
+  needs nothing new.
+- **`@types/node` 24 -> 26**, the bump 3.17.0 held back until the runtime caught up:
+  the types track the Node that actually runs.
+
 ### [3.31.0] - 2026-10-31
 
 Requires backend 3.27.0.

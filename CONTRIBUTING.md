@@ -10,7 +10,7 @@ the primary reference. New to the repo? Start with [`README.md`](README.md).
 
 ## Getting set up
 
-**Prerequisites:** Node 24+ and Go (version per `backend/go.mod`).
+**Prerequisites:** Node 26 LTS and Go (version per `backend/go.mod`).
 
 **First-time setup (once per clone):**
 

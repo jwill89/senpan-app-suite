@@ -41,7 +41,7 @@ frontend.
 
 ## Quick start
 
-**Prerequisites:** Node 24+ and Go (version per `backend/go.mod`).
+**Prerequisites:** Node 26 LTS and Go (version per `backend/go.mod`).
 
 ```bash
 # 1. Backend - run the API/WebSocket server on :8080

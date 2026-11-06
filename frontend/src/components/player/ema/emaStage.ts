@@ -202,7 +202,9 @@ export class EmaStage {
   /** Scales the stage to the largest size that fits `box`. */
   fit(box: Size): void {
     const scale = fitScale(this.size, box)
-    if (scale <= 0) return
+    if (scale <= 0) {
+      return
+    }
     // A whole number of CSS pixels across, so the canvas has no half-pixel seam.
     const width = Math.max(1, Math.floor(this.size.width * scale))
     this.scale = width / this.size.width
@@ -231,8 +233,12 @@ export class EmaStage {
         nodes.group.zIndex(index)
       })
       for (const [id, nodes] of this.nodes) {
-        if (seen.has(id)) continue
-        if (this.active?.id === id) this.cancelStroke()
+        if (seen.has(id)) {
+          continue
+        }
+        if (this.active?.id === id) {
+          this.cancelStroke()
+        }
         nodes.group.destroy()
         this.nodes.delete(id)
       }
@@ -250,14 +256,20 @@ export class EmaStage {
   }
 
   setTool(tool: EmaTool): void {
-    if (tool === this.tool) return
+    if (tool === this.tool) {
+      return
+    }
     this.finishStroke()
     this.tool = tool
     // While erasing, every press belongs to the brush: nothing on the design
     // canvas should catch it, and no layer should start a drag.
     this.design.listening(tool === 'move')
-    for (const nodes of this.nodes.values()) nodes.group.draggable(tool === 'move')
-    if (tool === 'move') this.hideRing()
+    for (const nodes of this.nodes.values()) {
+      nodes.group.draggable(tool === 'move')
+    }
+    if (tool === 'move') {
+      this.hideRing()
+    }
     this.refreshHandles()
   }
 
@@ -280,7 +292,9 @@ export class EmaStage {
    */
   refreshText(): void {
     for (const nodes of this.nodes.values()) {
-      if (nodes.kind !== 'text') continue
+      if (nodes.kind !== 'text') {
+        continue
+      }
       nodes.content._setTextData()
       this.anchorText(nodes.content)
     }
@@ -326,8 +340,11 @@ export class EmaStage {
     }
     return new Promise((resolve, reject) => {
       canvas.toBlob((blob) => {
-        if (blob) resolve(blob)
-        else reject(new Error('The plaque could not be saved as a PNG.'))
+        if (blob) {
+          resolve(blob)
+        } else {
+          reject(new Error('The plaque could not be saved as a PNG.'))
+        }
       }, 'image/png')
     })
   }
@@ -421,9 +438,13 @@ export class EmaStage {
       this.anchorText(nodes.content)
     }
     if (nodes.strokes !== layer.strokes) {
-      for (const line of nodes.lines) line.destroy()
+      for (const line of nodes.lines) {
+        line.destroy()
+      }
       nodes.lines = layer.strokes.map((s) => this.strokeLine(s.size, s.points))
-      if (nodes.lines.length) nodes.group.add(...nodes.lines)
+      if (nodes.lines.length) {
+        nodes.group.add(...nodes.lines)
+      }
       nodes.strokes = layer.strokes
     }
   }
@@ -460,7 +481,9 @@ export class EmaStage {
       this.size,
       REACHABLE_MARGIN,
     )
-    if (shift.x || shift.y) group.position({ x: group.x() + shift.x, y: group.y() + shift.y })
+    if (shift.x || shift.y) {
+      group.position({ x: group.x() + shift.x, y: group.y() + shift.y })
+    }
   }
 
   private refreshHandles(): void {
@@ -469,7 +492,9 @@ export class EmaStage {
     const editable = this.tool === 'move'
     this.transformer.setAttrs({ resizeEnabled: editable, rotateEnabled: editable })
     this.transformer.nodes(target)
-    if (target.length) this.transformer.forceUpdate()
+    if (target.length) {
+      this.transformer.forceUpdate()
+    }
     this.ui.batchDraw()
   }
 
@@ -482,19 +507,27 @@ export class EmaStage {
         return
       }
       const group = e.target.getParent()
-      if (group?.getParent() === this.design) this.events.select(group.id())
+      if (group?.getParent() === this.design) {
+        this.events.select(group.id())
+      }
       return
     }
-    if (e.evt.button === 0) this.startStroke(e.evt.pointerId)
+    if (e.evt.button === 0) {
+      this.startStroke(e.evt.pointerId)
+    }
   }
 
   private startStroke(pointerId: number): void {
     const nodes = this.selectedId ? this.nodes.get(this.selectedId) : undefined
     const pos = this.stage.getPointerPosition()
-    if (!nodes?.group.visible() || !pos) return
+    if (!nodes?.group.visible() || !pos) {
+      return
+    }
     const absolute = asAffine(nodes.group.getAbsoluteTransform().getMatrix())
     const toLocal = invertAffine(absolute)
-    if (!toLocal) return
+    if (!toLocal) {
+      return
+    }
     const start = applyAffine(toLocal, pos)
     const width = localBrushWidth(this.brushSize, this.scale, absolute)
     // Two copies of the first point, so a single tap leaves a round dot.
@@ -512,14 +545,20 @@ export class EmaStage {
 
   private readonly extendStroke = (e: PointerEvent): void => {
     const active = this.active
-    if (e.pointerId !== active?.pointerId) return
+    if (e.pointerId !== active?.pointerId) {
+      return
+    }
     this.stage.setPointersPositions(e)
     const pos = this.stage.getPointerPosition()
-    if (!pos) return
+    if (!pos) {
+      return
+    }
     const p = applyAffine(active.toLocal, pos)
     const lastX = active.points[active.points.length - 2] ?? p.x
     const lastY = active.points[active.points.length - 1] ?? p.y
-    if (Math.hypot(p.x - lastX, p.y - lastY) < MIN_STROKE_STEP) return
+    if (Math.hypot(p.x - lastX, p.y - lastY) < MIN_STROKE_STEP) {
+      return
+    }
     active.points.push(p.x, p.y)
     active.line.points(active.points)
     this.moveRing()
@@ -527,16 +566,22 @@ export class EmaStage {
   }
 
   private readonly endStroke = (e: PointerEvent): void => {
-    if (e.pointerId !== this.active?.pointerId) return
+    if (e.pointerId !== this.active?.pointerId) {
+      return
+    }
     this.finishStroke()
     // A lifted finger or pen is gone; only a mouse is still hovering where it was.
-    if (e.pointerType !== 'mouse') this.hideRing()
+    if (e.pointerType !== 'mouse') {
+      this.hideRing()
+    }
   }
 
   /** Ends the stroke in progress and reports it. */
   private finishStroke(): void {
     const active = this.active
-    if (!active) return
+    if (!active) {
+      return
+    }
     this.cancelStroke()
     this.events.stroke(active.id, {
       size: roundCoord(active.width),
@@ -550,7 +595,9 @@ export class EmaStage {
    */
   private cancelStroke(): void {
     const active = this.active
-    if (!active) return
+    if (!active) {
+      return
+    }
     this.active = null
     window.removeEventListener('pointermove', this.extendStroke)
     window.removeEventListener('pointerup', this.endStroke)
@@ -561,7 +608,9 @@ export class EmaStage {
 
   private moveRing(): void {
     const pos = this.stage.getPointerPosition()
-    if (this.tool !== 'erase' || !pos) return
+    if (this.tool !== 'erase' || !pos) {
+      return
+    }
     this.ring.setAttrs({
       x: pos.x / this.scale,
       y: pos.y / this.scale,
@@ -572,7 +621,9 @@ export class EmaStage {
   }
 
   private readonly hideRing = (): void => {
-    if (this.active) return
+    if (this.active) {
+      return
+    }
     this.ring.visible(false)
     this.ui.batchDraw()
   }

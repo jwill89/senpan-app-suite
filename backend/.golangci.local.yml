@@ -1,0 +1,25 @@
+# Senpan's own golangci-lint rules, merged on top of the shared template
+# (shared/lint/go/golangci.template.yml) into .golangci.yml. Edit this file, then run
+# `go run -C shared/lint/go . -dir backend` from the repo root and commit both.
+linters:
+  settings:
+    errcheck:
+      exclude-functions:
+        # The store writes its row loops by hand (there is no generated query layer), and a
+        # deferred rows.Close runs after rows.Err() has been read: rowserrcheck holds every
+        # query to that. A result set read to the end was already closed by Next, and on an
+        # early return the error being returned is the one that matters.
+        - (*database/sql.Rows).Close
+  exclusions:
+    rules:
+      # A test closes what it opened - a response body, a test server, a database - once its
+      # assertions are made. A failed close changes no verdict and has nobody to tell.
+      - path: _test\.go
+        linters: [errcheck]
+        text: "Error return value of `[^`]*\\.Close` is not checked"
+      # Everything the server writes lands in the web root's upload trees (images/, carrd/,
+      # fonts/), kept world-readable like the rest of the document root: Apache serves
+      # images/ and carrd/ as its own user (deploy/README.md, "Running as a non-root user").
+      - path: internal/server/
+        linters: [gosec]
+        text: "G30[16]:"

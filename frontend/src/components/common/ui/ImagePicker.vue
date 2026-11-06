@@ -62,7 +62,9 @@ const entries = computed(() => {
 
 function browseDir(dir: string): void {
   selectedDir.value = dir
-  if (dir) void images.ensureImages(dir)
+  if (dir) {
+    void images.ensureImages(dir)
+  }
 }
 
 function onDirChange(e: Event): void {
@@ -89,8 +91,12 @@ const accept = computed(() => props.extensions?.join(',') ?? '.jpg,.jpeg,.png,.w
 /** Compact progress text - this sits inside a small button, so keep it short. */
 const uploadLabel = computed(() => {
   const p = images.uploadProgress
-  if (p < 0) return 'Uploading...'
-  if (p < 100) return `${p}%`
+  if (p < 0) {
+    return 'Uploading...'
+  }
+  if (p < 100) {
+    return `${p}%`
+  }
   return 'Saving...'
 })
 
@@ -99,7 +105,9 @@ function pickFiles(): void {
 }
 
 async function upload(files: FileList | File[]): Promise<void> {
-  if (!canUpload.value || !selectedDir.value || busy.value) return
+  if (!canUpload.value || !selectedDir.value || busy.value) {
+    return
+  }
   busy.value = true
   try {
     await images.uploadImages(selectedDir.value, files)
@@ -110,18 +118,24 @@ async function upload(files: FileList | File[]): Promise<void> {
 
 async function onFilesSelected(e: Event): Promise<void> {
   const input = e.target as HTMLInputElement
-  if (input.files && input.files.length > 0) await upload(input.files)
+  if (input.files && input.files.length > 0) {
+    await upload(input.files)
+  }
   input.value = '' // reset so selecting the same file re-triggers change
 }
 
 function onDragOver(): void {
-  if (canUpload.value && selectedDir.value) dragOver.value = true
+  if (canUpload.value && selectedDir.value) {
+    dragOver.value = true
+  }
 }
 
 function onDrop(e: DragEvent): void {
   dragOver.value = false
   const files = e.dataTransfer?.files
-  if (files && files.length > 0) void upload(files)
+  if (files && files.length > 0) {
+    void upload(files)
+  }
 }
 
 // Follow external model changes (e.g. the form loads another record) into the

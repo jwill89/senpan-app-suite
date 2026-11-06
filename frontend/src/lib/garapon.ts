@@ -13,6 +13,8 @@ export function rateTotal(prizes: { rate: number }[]): number {
 
 /** A weight's share of `total` as a percent string (e.g. "33.3%"), or "-" when total <= 0. */
 export function ratePct(rate: number, total: number): string {
-  if (total <= 0) return '-'
+  if (total <= 0) {
+    return '-'
+  }
   return `${((Math.max(0, rate) / total) * 100).toFixed(1)}%`
 }

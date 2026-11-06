@@ -15,7 +15,11 @@ const emit = defineEmits<{ 'update:modelValue': [board: number[][]] }>()
 function setCell(row: number, col: number, raw: string): void {
   const n = parseInt(raw, 10)
   const next = props.modelValue.map((r) => [...r])
-  next[row][col] = Number.isNaN(n) ? 0 : n
+  const cells = next[row]
+  if (!cells) {
+    return
+  }
+  cells[col] = Number.isNaN(n) ? 0 : n
   emit('update:modelValue', next)
 }
 
@@ -35,16 +39,24 @@ const invalidCells = computed(() => {
     const [lo, hi] = columnRange(col)
     const rowsByValue = new Map<number, number[]>()
     for (let row = 0; row < 5; row++) {
-      if (isFree(row, col)) continue
-      const n = props.modelValue[row][col]
-      if (n === 0) continue // blank - incomplete, not yet an error
-      if (n < lo || n > hi) bad.add(`${row}-${col}`)
+      if (isFree(row, col)) {
+        continue
+      }
+      const n = props.modelValue[row]?.[col]
+      if (n === undefined || n === 0) {
+        continue // blank - incomplete, not yet an error
+      }
+      if (n < lo || n > hi) {
+        bad.add(`${row}-${col}`)
+      }
       const rows = rowsByValue.get(n) ?? []
       rows.push(row)
       rowsByValue.set(n, rows)
     }
     for (const rows of rowsByValue.values()) {
-      if (rows.length > 1) rows.forEach((row) => bad.add(`${row}-${col}`))
+      if (rows.length > 1) {
+        rows.forEach((row) => bad.add(`${row}-${col}`))
+      }
     }
   }
   return bad
@@ -70,7 +82,7 @@ const invalidCells = computed(() => {
             inputmode="numeric"
             :min="columnRange(col - 1)[0]"
             :max="columnRange(col - 1)[1]"
-            :value="modelValue[row - 1][col - 1] || ''"
+            :value="modelValue[row - 1]?.[col - 1] || ''"
             :aria-label="`Column ${BINGO_LETTERS[col - 1]}, row ${row}`"
             @input="setCell(row - 1, col - 1, ($event.target as HTMLInputElement).value)"
           />

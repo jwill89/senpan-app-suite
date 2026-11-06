@@ -57,7 +57,7 @@ func (s *Store) DeleteRaffle(ctx context.Context, id int64) (bool, error) {
 const raffleColumns = `r.id, r.title, r.description, r.rules, r.max_entries, r.signup_instructions,
 	r.entry_mode, r.cost_per_entry, r.tier_costs, r.available_from, r.available_to, r.prize_image,
 	r.pay_image, r.status, r.winner_entry_id,
-	r.festival_map_id, COALESCE(fm.title, ''), r.occupant_id, COALESCE(fo.title, ''), r.created_at`
+	r.festival_map_id, COALESCE(fm.title, ''), r.occupant_id, COALESCE(fo.title, ''), CAST(r.created_at AS TEXT)`
 
 // raffleFrom is the FROM clause raffleColumns is written against: the raffle plus
 // the two optional festival joins - the map it is filed under, and the stall
@@ -356,7 +356,7 @@ func (s *Store) CountRaffleEntries(ctx context.Context, raffleID int64) (int, er
 
 // raffleEntryColumns is the shared SELECT list for raffle_entries, matching the
 // scan order in scanRaffleEntry.
-const raffleEntryColumns = "id, raffle_id, character_name, world, num_entries, paid_entries, amount_waived, paid, created_at"
+const raffleEntryColumns = "id, raffle_id, character_name, world, num_entries, paid_entries, amount_waived, paid, CAST(created_at AS TEXT)"
 
 // scanRaffleEntry scans one raffle_entries row (paid stored as 0/1). Shared by the
 // list/get/pick paths so the column order + paid conversion live in one place.

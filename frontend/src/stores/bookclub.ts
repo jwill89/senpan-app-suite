@@ -113,7 +113,9 @@ export const useBookclubStore = defineStore('bookclub', () => {
     if (viewing) {
       void loadLists()
       clubFresh.touch(key)
-      if (selectedList.value) void loadListDetail(selectedList.value.id)
+      if (selectedList.value) {
+        void loadListDetail(selectedList.value.id)
+      }
     } else {
       clubFresh.invalidate(key)
     }
@@ -131,13 +133,19 @@ export const useBookclubStore = defineStore('bookclub', () => {
     detailLoading.value = true
     try {
       const data = await endpoints.bookclub.listDetail(activeClubSlug.value, id)
-      if (reqId !== detailSeq) return // a newer load superseded this one
+      if (reqId !== detailSeq) {
+        return // a newer load superseded this one
+      }
       selectedList.value = data.reading_list
       resetItemForm()
     } catch (e) {
-      if (reqId === detailSeq) ui.notify((e as Error).message, 'error')
+      if (reqId === detailSeq) {
+        ui.notify((e as Error).message, 'error')
+      }
     } finally {
-      if (reqId === detailSeq) detailLoading.value = false
+      if (reqId === detailSeq) {
+        detailLoading.value = false
+      }
     }
   }
 
@@ -177,11 +185,15 @@ export const useBookclubStore = defineStore('bookclub', () => {
   /** Rename a reading list to `title` (the component supplies it via inline edit). */
   async function renameList(list: ReadingList, title: string): Promise<boolean> {
     const trimmed = title.trim()
-    if (!trimmed || trimmed === list.title) return false
+    if (!trimmed || trimmed === list.title) {
+      return false
+    }
     try {
       await endpoints.bookclub.renameList(activeClubSlug.value, list.id, trimmed)
       list.title = trimmed
-      if (selectedList.value?.id === list.id) selectedList.value.title = trimmed
+      if (selectedList.value?.id === list.id) {
+        selectedList.value.title = trimmed
+      }
       ui.notify('Reading list renamed', 'success')
       return true
     } catch (e) {
@@ -196,12 +208,15 @@ export const useBookclubStore = defineStore('bookclub', () => {
         title: 'Delete reading list',
         confirmText: 'Delete',
       }))
-    )
+    ) {
       return
+    }
     try {
       await endpoints.bookclub.deleteList(activeClubSlug.value, list.id)
       lists.value = lists.value.filter((l) => l.id !== list.id)
-      if (selectedList.value?.id === list.id) selectedList.value = null
+      if (selectedList.value?.id === list.id) {
+        selectedList.value = null
+      }
       ui.notify('Reading list deleted', 'info')
     } catch (e) {
       ui.notify((e as Error).message, 'error')
@@ -217,8 +232,9 @@ export const useBookclubStore = defineStore('bookclub', () => {
           confirmText: 'Publish',
         },
       ))
-    )
+    ) {
       return
+    }
     publishing.value = true
     try {
       const data = await endpoints.bookclub.publish(activeClubSlug.value, list.id)
@@ -261,7 +277,9 @@ export const useBookclubStore = defineStore('bookclub', () => {
   }
 
   async function saveItem(): Promise<void> {
-    if (!selectedList.value) return
+    if (!selectedList.value) {
+      return
+    }
     const f = itemForm.value
     if (!f.title.trim()) {
       ui.notify('Item title is required', 'error')
@@ -292,14 +310,17 @@ export const useBookclubStore = defineStore('bookclub', () => {
   }
 
   async function deleteItem(item: ReadingListItem): Promise<void> {
-    if (!selectedList.value) return
+    if (!selectedList.value) {
+      return
+    }
     if (
       !(await ui.confirm(`Delete "${item.title}"?`, {
         title: 'Delete item',
         confirmText: 'Delete',
       }))
-    )
+    ) {
       return
+    }
     try {
       await endpoints.bookclub.deleteItem(activeClubSlug.value, selectedList.value.id, item.id)
       ui.notify('Item deleted', 'info')
@@ -312,7 +333,9 @@ export const useBookclubStore = defineStore('bookclub', () => {
   async function uploadCover(event: Event): Promise<void> {
     const input = event.target as HTMLInputElement
     const file = input.files?.[0]
-    if (!file) return
+    if (!file) {
+      return
+    }
     coverUploading.value = true
     try {
       const formData = new FormData()
@@ -332,13 +355,17 @@ export const useBookclubStore = defineStore('bookclub', () => {
 
   async function runLookup(): Promise<void> {
     const q = lookupQuery.value.trim()
-    if (!q) return
+    if (!q) {
+      return
+    }
     looking.value = true
     lookupResults.value = []
     try {
       const data = await endpoints.bookclub.lookup(q)
       lookupResults.value = data.results
-      if (!lookupResults.value.length) ui.notify('No matches found', 'info')
+      if (!lookupResults.value.length) {
+        ui.notify('No matches found', 'info')
+      }
     } catch (e) {
       ui.notify((e as Error).message, 'error')
     } finally {

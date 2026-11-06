@@ -71,7 +71,9 @@ const payingFor = computed(
 
 /** The waived field, normalized: never negative, never more than is outstanding. */
 const waiveAmount = computed(() => {
-  if (!Number.isFinite(waived.value)) return 0
+  if (!Number.isFinite(waived.value)) {
+    return 0
+  }
   return Math.min(Math.max(waived.value, 0), Math.max(0, payingFor.value))
 })
 
@@ -81,12 +83,15 @@ const dueNow = computed(() => Math.max(0, payingFor.value - waiveAmount.value))
 const gil = (n: number): string => `${n.toLocaleString()} gil`
 
 async function settle(): Promise<void> {
-  if (await raffles.setEntryPaid(props.entry, true, waiveAmount.value, ticketsSettled.value))
+  if (await raffles.setEntryPaid(props.entry, true, waiveAmount.value, ticketsSettled.value)) {
     emit('saved')
+  }
 }
 
 async function clearPayment(): Promise<void> {
-  if (await raffles.setEntryPaid(props.entry, false)) emit('saved')
+  if (await raffles.setEntryPaid(props.entry, false)) {
+    emit('saved')
+  }
 }
 </script>
 

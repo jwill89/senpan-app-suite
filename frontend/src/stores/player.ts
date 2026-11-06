@@ -19,7 +19,9 @@ export type SoundMode = 'off' | 'basic' | 'game'
 /** Reads the persisted sound mode, migrating the legacy on/off boolean. */
 function readSoundMode(): SoundMode {
   const stored = localStorage.getItem('bingo_sound_mode')
-  if (stored === 'off' || stored === 'basic' || stored === 'game') return stored
+  if (stored === 'off' || stored === 'basic' || stored === 'game') {
+    return stored
+  }
   // Legacy `bingo_sound_enabled` ('1' = on) -> the basic beeps that were in place.
   return localStorage.getItem('bingo_sound_enabled') === '1' ? 'basic' : 'off'
 }
@@ -27,7 +29,9 @@ function readSoundMode(): SoundMode {
 /** Reads the persisted sound volume (0..1), defaulting to 0.7. */
 function readSoundVolume(): number {
   const v = parseFloat(localStorage.getItem('bingo_sound_volume') ?? '')
-  if (!Number.isFinite(v)) return 0.7
+  if (!Number.isFinite(v)) {
+    return 0.7
+  }
   return Math.min(1, Math.max(0, v))
 }
 
@@ -43,7 +47,9 @@ const DEFAULT_SECONDARY_STAMP_COLOR = 'rgba(56,128,255,0.55)'
  * matching preset value so returning players keep their chosen colour.
  */
 function resolveStoredColor(stored: string | null): string {
-  if (!stored) return DEFAULT_STAMP_COLOR
+  if (!stored) {
+    return DEFAULT_STAMP_COLOR
+  }
   const preset = STAMP_COLORS.find((c) => c.id === stored)
   return preset ? preset.value : stored
 }
@@ -57,8 +63,12 @@ function resolveStoredColor(stored: string | null): string {
 function resolveStoredShape(): { mode: string; emoji: string } {
   const mode = localStorage.getItem('bingo_stamp_shape') || 'blank'
   const emoji = localStorage.getItem('bingo_stamp_emoji') || ''
-  if (mode === 'custom' || mode === 'emoji') return { mode, emoji }
-  if (mode === 'blank') return { mode: 'blank', emoji: '' }
+  if (mode === 'custom' || mode === 'emoji') {
+    return { mode, emoji }
+  }
+  if (mode === 'blank') {
+    return { mode: 'blank', emoji: '' }
+  }
   // Legacy fixed shape id (heart/star/...): map to its emoji, else fall back blank.
   const legacy = STAMP_SHAPES.find((s) => s.id === mode)
   return legacy?.emoji ? { mode: 'emoji', emoji: legacy.emoji } : { mode: 'blank', emoji: '' }
@@ -160,7 +170,9 @@ export const usePlayerStore = defineStore('player', () => {
 
   /** Set of called numbers (O(1) lookup in templates). */
   const playerCalledSet = computed(() => {
-    if (!playerGame.value) return new Set<number>()
+    if (!playerGame.value) {
+      return new Set<number>()
+    }
     return new Set(playerGame.value.called_numbers)
   })
 
@@ -195,7 +207,9 @@ export const usePlayerStore = defineStore('player', () => {
       for (let r = 0; r < 5 && r < grid.length; r++) {
         const row = grid[r] ?? []
         for (let c = 0; c < 5 && c < row.length; c++) {
-          if (row[c]) set.add(`${r}-${c}`)
+          if (row[c]) {
+            set.add(`${r}-${c}`)
+          }
         }
       }
     }
@@ -217,7 +231,9 @@ export const usePlayerStore = defineStore('player', () => {
   watch(
     () => playerGame.value?.id,
     (id, prevId) => {
-      if (id && id !== prevId) frozenPatternCells.value = null
+      if (id && id !== prevId) {
+        frozenPatternCells.value = null
+      }
     },
     { flush: 'sync' },
   )
@@ -226,7 +242,9 @@ export const usePlayerStore = defineStore('player', () => {
   watch(
     winningPatternCells,
     (cells) => {
-      if (cells.size > 0) frozenPatternCells.value = new Set(cells)
+      if (cells.size > 0) {
+        frozenPatternCells.value = new Set(cells)
+      }
     },
     { flush: 'sync' },
   )
@@ -256,7 +274,9 @@ export const usePlayerStore = defineStore('player', () => {
   watch(
     () => game.gameDetails,
     (d) => {
-      if (d) frozenGameDetails.value = d
+      if (d) {
+        frozenGameDetails.value = d
+      }
     },
     { flush: 'sync' },
   )
@@ -277,13 +297,17 @@ export const usePlayerStore = defineStore('player', () => {
   }
 
   function isStamped(ri: number, ci: number): boolean {
-    return stamps.value[`${ri}-${ci}`]
+    return stamps.value[`${ri}-${ci}`] ?? false
   }
 
   function boardCellClass(ri: number, ci: number, cell: number): (string | false)[] {
     const classes: (string | false)[] = ['board-cell']
-    if (cell === 0) classes.push('is-free')
-    if (stamps.value[`${ri}-${ci}`]) classes.push('is-stamped')
+    if (cell === 0) {
+      classes.push('is-free')
+    }
+    if (stamps.value[`${ri}-${ci}`]) {
+      classes.push('is-stamped')
+    }
     return classes
   }
 
@@ -311,7 +335,9 @@ export const usePlayerStore = defineStore('player', () => {
   }
 
   function saveStamps(): void {
-    if (!playerCard.value || !playerGame.value) return
+    if (!playerCard.value || !playerGame.value) {
+      return
+    }
     const k = `stamps_${playerCard.value.id}_${playerGame.value.id}`
     // Best-effort persistence: the reactive stamps drive the board regardless, so
     // a full/unavailable quota mustn't throw out of the high-frequency toggle path.
@@ -346,13 +372,17 @@ export const usePlayerStore = defineStore('player', () => {
 
   /** localStorage key for this card+game's yoever cooldown, or null if not loaded. */
   function yoeverCooldownKey(): string | null {
-    if (!playerCard.value || !playerGame.value) return null
+    if (!playerCard.value || !playerGame.value) {
+      return null
+    }
     return `yoever_cd_${playerCard.value.id}_${playerGame.value.id}`
   }
 
   /** Arms the local cooldown for `seconds` and persists its expiry (best-effort). */
   function setYoeverCooldown(seconds: number): void {
-    if (seconds > 0) yoeverCooldownHint.value = seconds
+    if (seconds > 0) {
+      yoeverCooldownHint.value = seconds
+    }
     yoeverCooldownUntil.value = Date.now() + seconds * 1000
     const k = yoeverCooldownKey()
     if (k) {
@@ -386,8 +416,12 @@ export const usePlayerStore = defineStore('player', () => {
    * just arm the local cooldown on success. Returns true if the trigger was sent.
    */
   async function triggerYoever(): Promise<boolean> {
-    if (!playerCard.value || !playerGame.value || !yoeverEnabled.value) return false
-    if (yoeverTriggering.value || Date.now() < yoeverCooldownUntil.value) return false
+    if (!playerCard.value || !playerGame.value || !yoeverEnabled.value) {
+      return false
+    }
+    if (yoeverTriggering.value || Date.now() < yoeverCooldownUntil.value) {
+      return false
+    }
     yoeverTriggering.value = true
     try {
       const res = await endpoints.game.yoever(playerCard.value.id)
@@ -475,7 +509,9 @@ export const usePlayerStore = defineStore('player', () => {
   function uploadCustomStamp(event: Event): void {
     const input = event.target as HTMLInputElement
     const file = input.files?.[0]
-    if (!file) return
+    if (!file) {
+      return
+    }
     if (!file.type.startsWith('image/')) {
       ui.notify('Please select an image file.', 'error')
       input.value = ''
@@ -528,7 +564,9 @@ export const usePlayerStore = defineStore('player', () => {
    */
   async function joinGame(): Promise<string | null> {
     joinError.value = ''
-    if (!joinId.value.trim()) return null
+    if (!joinId.value.trim()) {
+      return null
+    }
     joining.value = true
     try {
       const data = await endpoints.board.get(joinId.value.trim())
@@ -566,7 +604,9 @@ export const usePlayerStore = defineStore('player', () => {
    */
   async function loadBoardById(id: string): Promise<string | null> {
     joinError.value = ''
-    if (!id) return null
+    if (!id) {
+      return null
+    }
     if (playerCard.value?.id === id) {
       return null // already loaded for this id; caller keeps existing details
     }

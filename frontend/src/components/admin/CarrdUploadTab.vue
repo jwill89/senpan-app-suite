@@ -77,7 +77,9 @@ const projectColumns: DataColumn[] = [
 /** Projects filtered by the search box (matches title or folder). */
 const filteredProjects = computed(() => {
   const q = search.value.trim().toLowerCase()
-  if (!q) return carrd.projects
+  if (!q) {
+    return carrd.projects
+  }
   return carrd.projects.filter((p) => [p.title, p.folder].some((s) => s.toLowerCase().includes(q)))
 })
 
@@ -88,7 +90,9 @@ const filteredProjects = computed(() => {
  */
 const breadcrumbs = computed(() => {
   const project = selectedProject.value
-  if (!project) return []
+  if (!project) {
+    return []
+  }
   const crumbs = [{ label: project.title, path: '' }]
   let acc = ''
   for (const seg of carrd.currentPath.split('/').filter(Boolean)) {
@@ -130,7 +134,9 @@ function closeModal(): void {
 }
 
 async function submitProject(): Promise<void> {
-  if (!projectModal.value || !formTitle.value.trim()) return
+  if (!projectModal.value || !formTitle.value.trim()) {
+    return
+  }
   savingProject.value = true
   try {
     if (projectModal.value.mode === 'edit') {
@@ -139,7 +145,9 @@ async function submitProject(): Promise<void> {
         formTitle.value,
         formFolder.value,
       )
-      if (ok) closeModal()
+      if (ok) {
+        closeModal()
+      }
     } else {
       // The store creates and opens the project (loads its contents) on success.
       const folder = await carrd.createProject(formTitle.value, formFolder.value)
@@ -176,7 +184,9 @@ function onDrop(e: DragEvent): void {
 
 /** Submits the inline new-sub-directory form. */
 async function submitDir(): Promise<void> {
-  if (!newDirName.value.trim()) return
+  if (!newDirName.value.trim()) {
+    return
+  }
   const ok = await carrd.createDir(newDirName.value)
   if (ok) {
     newDirName.value = ''
@@ -192,7 +202,9 @@ function cancelAddDir(): void {
 /** Copies an image's public URL (including the current path) to the clipboard. */
 async function copyUrl(name: string): Promise<void> {
   const folder = carrd.selectedFolder
-  if (!folder) return
+  if (!folder) {
+    return
+  }
   const url = carrdImageUrl(folder, carrd.currentPath, name)
   try {
     await navigator.clipboard.writeText(url)
@@ -205,8 +217,12 @@ async function copyUrl(name: string): Promise<void> {
 /** Classifies a file by extension so the grid renders the right media element. */
 function fileKind(name: string): 'image' | 'audio' | 'video' {
   const ext = name.slice(name.lastIndexOf('.') + 1).toLowerCase()
-  if (ext === 'mp3') return 'audio'
-  if (ext === 'mp4') return 'video'
+  if (ext === 'mp3') {
+    return 'audio'
+  }
+  if (ext === 'mp4') {
+    return 'video'
+  }
   return 'image'
 }
 

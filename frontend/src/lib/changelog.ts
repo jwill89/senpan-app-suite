@@ -50,7 +50,9 @@ export const PLUGIN_MASTER_PATH = '/plugin/pluginmaster.json'
 export async function fetchLivePluginVersion(): Promise<string | null> {
   try {
     const res = await fetch(PLUGIN_MASTER_PATH, { cache: 'no-store' })
-    if (!res.ok) return null
+    if (!res.ok) {
+      return null
+    }
     const data: unknown = await res.json()
     const first = Array.isArray(data) ? data[0] : null
     const version =

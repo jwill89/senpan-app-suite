@@ -55,7 +55,8 @@ Mentions: `announcements.mention` is `''` (9), `'everyone'` (4) or `'role:<annou
 Dev-safety valves today: `-webhook-dry-run` / `APPSUITE_WEBHOOK_DRY_RUN=1` and
 `-webhook-override` / `APPSUITE_WEBHOOK_OVERRIDE` (`main.go:49-50, 119-130`,
 `Server.SetWebhookPolicy` `server.go:124-139`). They exist because `deploy.ps1` pulls a copy
-of the live DB to the dev machine on every backend deploy (`scripts/deploy.ps1:640`).
+of the live DB to the dev machine on every backend deploy (SharedDeploy's `Copy-LiveDatabase`,
+called at the end of `scripts/deploy.ps1`'s backend run unless `-NoDbPull`).
 
 ## Target architecture
 
@@ -252,7 +253,7 @@ for rows in the Senpan guild. Irreversible, so it sits behind a confirm.
 
 Replaces `postDiscordWebhook`. Lives in `server/discordpost.go`, calls `discord.Service`.
 
-```
+```go
 s.discordPost(ctx, post{kind, refID, scope, channelID, mention, message, nonce}) (discord.Message, error)
 s.discordEdit(ctx, postRow, message) error      // 404 -> mark gone, return errPostGone
 s.discordDelete(ctx, postRow) error             // 404 -> success (already gone)
@@ -274,7 +275,7 @@ s.discordDelete(ctx, postRow) error             // 404 -> success (already gone)
   shown to the admin; 429 handled in the client; transport -> retryable (nonce makes it safe).
   HTTP handlers still answer 502 with the reason (`writeUpstreamError`).
 
-**Repost modes**
+#### Repost modes
 
 - `new`: post; leave earlier posts alone (today's behavior).
 - `replace`: post the new message(s) **first**, then delete the previous live post(s) of the
@@ -285,7 +286,8 @@ s.discordDelete(ctx, postRow) error             // 404 -> success (already gone)
 
 ### Behavior per system
 
-**Announcements**
+#### Announcements
+
 - Type form: Name + **channel picker** (replaces the webhook URL field). Types stay as named
   destinations, since the list filters by type.
 - Announcement form: ping picker = No ping / @everyone / live server roles. New checkbox
@@ -301,7 +303,8 @@ s.discordDelete(ctx, postRow) error             // 404 -> success (already gone)
 - Manual Send uses nonce `a<id>-m<unix now>`.
 - `last_posted_at` unchanged; the list row gets a "view in Discord" link from the newest live post.
 
-**Book clubs**
+#### Book clubs
+
 - Each club tab gets a **Discord** button opening a destination form (channel, optional ping,
   "Replace the previous reading list"). Gated by `bookclub-<slug>`. Removed from System ->
   Settings.
@@ -315,6 +318,7 @@ s.discordDelete(ctx, postRow) error             // 404 -> success (already gone)
 - The optional ping goes on the first message only.
 
 **Tea rooms** (edit in place)
+
 - Destination form behind the existing header button (renamed **Discord**): channel, optional
   ping, mode `new` / `replace` / `edit` (default `edit`).
 - Row actions: **Post** (or **Update** when live), **Take down** (delete the live post), and a
@@ -329,10 +333,12 @@ s.discordDelete(ctx, postRow) error             // 404 -> success (already gone)
 - Note the plugin's PATCH calls (open/discount/lock) trigger the same updates for free.
 
 **Affiliates** (edit in place)
+
 - Same as tea rooms: destination form, Post/Update/Take down, auto-update after
   `PUT /api/affiliates/{id}`, delete -> take down.
 
-**Edit queue worker**
+#### Edit queue worker
+
 - `RunDiscordWorker(ctx)` started in `main.go` with its own done channel, like the three
   schedulers. Handlers enqueue `{kind, refID}`; the worker coalesces, rebuilds the embed from
   the DB at send time (so it always sends the latest state), edits, records `edited_at`.
@@ -364,6 +370,7 @@ New (all JSON, documented in `internal/apidoc/paths_features.go` + `schemas.go`,
 accepted.
 
 Changed:
+
 - `GET /api/tea-rooms`, `GET /api/affiliates`: `webhook_url` -> `destination` + per-item
   `discord_post {state: unposted|live|gone, channel_id, url, posted_at, edited_at}`.
   Keep the `affiliates`/`tea_rooms` arrays (festival-map and stamp-rally stores read
@@ -402,7 +409,7 @@ the new API shapes.
   test, import retry, destinations get/put.
 - **New shared primitives** (`components/common/ui/`):
   - `ChannelPicker.vue`: `<select>` with `<optgroup>` per category (the `WorldPicker` pattern),
-    keeps an unknown stored id as "Channel <id> (no longer in the server)", falls back to a
+    keeps an unknown stored id as "Channel \<id> (no longer in the server)", falls back to a
     digits-only text input when the list is empty (bot off), shows `#name`.
   - `RolePicker.vue`: options No ping / @everyone / `@role` (colored dot), same stale-id and
     fallback behavior. Value format `'' | 'everyone' | 'role:<snowflake>'`.
@@ -437,6 +444,7 @@ the new API shapes.
 ### Testing
 
 Backend
+
 - Port Kindred's fakes: `fakeDiscord` (httptest REST with auth check, injectable 429/403/404,
   fake channels/roles/messages; `discord_test.go:27-433`) and `fakeGateway`
   (`gateway_test.go:22-163`: identify -> reconnect -> resume, presence before READY, clean stop).
@@ -471,6 +479,7 @@ Tests to rewrite or delete (from the inventory):
 store `announcements_test.go` role tests.
 
 Frontend
+
 - `stores/discord.test.ts`; `ChannelPicker.test.ts` / `RolePicker.test.ts` (grouping, stale id
   kept, fallback input, value format); `DiscordDestinationForm.test.ts`.
 - Rewrite: `stores/affiliates.test.ts` (webhook mocks 7/13/24, tests 60-68, 209-235),
@@ -479,6 +488,7 @@ Frontend
   `AdminSidebar.test.ts` (System items), `stores/admin.test.ts` (tab table 81-100).
 
 End to end (no dev bot exists)
+
 - **Fake-backed end to end, locally.** Run the real binary with its Discord base URL pointed at
   a local fake (`-discord-api-url`, accepted only for `http://localhost:*`; production always
   uses `https://discord.com/api/v10`). The fake is the ported `fakeDiscord` wrapped as a small
@@ -508,8 +518,9 @@ End to end (no dev bot exists)
   the bot.
 - `deploy/senpan.service` template: one comment next to the session secret saying it also
   protects the stored bot token. No structural change.
-- `scripts/deploy.ps1:640` comment: dev copies now carry an encrypted token and channel ids,
-  no webhook URLs.
+- `scripts/deploy.ps1`, the comment on the pre-deploy snapshot ("live accounts, tokens,
+  webhooks"), and `deploy/README.md`'s dev-database pull step, which lists the same: the
+  copies now carry an encrypted token and channel ids, no webhook URLs.
 - Stale comments: `server/scheduler.go:11`, `server/embeds.go:27`, `model/announcements.go:133-134`,
   `utilities.css:671`, `router/index.ts:96-97, 113-114`.
 - `CHANGELOG.md`: Backend 4.0.0, Frontend 4.0.0 entries (breaking: API fields removed; posts

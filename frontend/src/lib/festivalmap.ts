@@ -18,8 +18,8 @@ import type {
 } from '@/types/api'
 import { parseServerTimestamp } from '@/lib/datetime'
 
-/** The stall types, in picker order, with the defaults each one seeds. */
-export const STALL_TYPES: {
+/** A stall type, with the defaults it seeds. */
+interface StallTypeMeta {
   value: StallType
   label: string
   /** Shape a new stall of this type starts as (still editable per stall). */
@@ -27,16 +27,28 @@ export const STALL_TYPES: {
   /** Color a stall of this type falls back to when it sets none of its own. */
   color: string
   icon: string
-}[] = [
+}
+
+/** "Other": last in the picker, and what anything unknown falls back to. */
+const OTHER_STALL_TYPE: StallTypeMeta = {
+  value: 'other',
+  label: 'Other',
+  shape: 'rect',
+  color: '#b08a8a',
+  icon: 'shop',
+}
+
+/** The stall types, in picker order, with the defaults each one seeds. */
+export const STALL_TYPES: StallTypeMeta[] = [
   { value: 'game', label: 'Game', shape: 'circle', color: '#a89298', icon: 'dice' },
   { value: 'food', label: 'Food', shape: 'rect', color: '#e0a480', icon: 'bowl-rice' },
   { value: 'both', label: 'Food & Game', shape: 'rect', color: '#c9a08c', icon: 'utensils' },
-  { value: 'other', label: 'Other', shape: 'rect', color: '#b08a8a', icon: 'shop' },
+  OTHER_STALL_TYPE,
 ]
 
 /** The stall type's metadata, falling back to "Other" for anything unknown. */
-export function stallTypeMeta(type: string): (typeof STALL_TYPES)[number] {
-  return STALL_TYPES.find((t) => t.value === type) ?? STALL_TYPES[STALL_TYPES.length - 1]
+export function stallTypeMeta(type: string): StallTypeMeta {
+  return STALL_TYPES.find((t) => t.value === type) ?? OTHER_STALL_TYPE
 }
 
 /** Display label for a stall type ("Game", "Food", ...). */
@@ -77,7 +89,9 @@ export function stampTypeForStall(type: string): StampType {
  * it, but only an "other" stall renders it.
  */
 export function stallCaption(occupant: { stall_type: string; type_label: string }): string {
-  if (occupant.stall_type === 'other') return occupant.type_label.trim()
+  if (occupant.stall_type === 'other') {
+    return occupant.type_label.trim()
+  }
   return stallTypeLabel(occupant.stall_type)
 }
 
@@ -137,7 +151,9 @@ export function stallStyle(
  * `placement.height` no longer describes where its bottom edge lands.
  */
 export function circleHeightPct(widthPct: number, boxWidth: number, boxHeight: number): number {
-  if (boxHeight <= 0) return widthPct
+  if (boxHeight <= 0) {
+    return widthPct
+  }
   return (((widthPct / 100) * boxWidth) / boxHeight) * 100
 }
 
@@ -185,7 +201,9 @@ function zoneAbbreviation(at: Date): string {
 
 export function formatEventRange(start: string | null | undefined, end?: string | null): string {
   const startMs = parseServerTimestamp(start)
-  if (!Number.isFinite(startMs)) return ''
+  if (!Number.isFinite(startMs)) {
+    return ''
+  }
   const from = new Date(startMs)
 
   const date = from.toLocaleDateString(undefined, eventDateParts)
@@ -194,7 +212,9 @@ export function formatEventRange(start: string | null | undefined, end?: string 
   const suffix = zone ? ` ${zone}` : ''
 
   const endMs = parseServerTimestamp(end)
-  if (!Number.isFinite(endMs)) return `${date}, ${fromTime}${suffix}`
+  if (!Number.isFinite(endMs)) {
+    return `${date}, ${fromTime}${suffix}`
+  }
 
   const toTime = new Date(endMs).toLocaleTimeString(undefined, eventTimeParts)
   return `${date}, ${fromTime} - ${toTime}${suffix}`
@@ -212,9 +232,13 @@ export function formatEventTime(time: EventTime): string {
 /** Whether `now` falls inside a range, treating a missing bound as unbounded. */
 export function isWithin(time: EventTime, now: number): boolean {
   const start = parseServerTimestamp(time.start)
-  if (Number.isFinite(start) && now < start) return false
+  if (Number.isFinite(start) && now < start) {
+    return false
+  }
   const end = parseServerTimestamp(time.end)
-  if (Number.isFinite(end) && now > end) return false
+  if (Number.isFinite(end) && now > end) {
+    return false
+  }
   return true
 }
 
@@ -228,8 +252,12 @@ export function rangesOverlap(a: EventTime, b: EventTime): boolean {
   const aEnd = parseServerTimestamp(a.end)
   const bStart = parseServerTimestamp(b.start)
   const bEnd = parseServerTimestamp(b.end)
-  if (Number.isFinite(aStart) && Number.isFinite(bEnd) && aStart > bEnd) return false
-  if (Number.isFinite(bStart) && Number.isFinite(aEnd) && bStart > aEnd) return false
+  if (Number.isFinite(aStart) && Number.isFinite(bEnd) && aStart > bEnd) {
+    return false
+  }
+  if (Number.isFinite(bStart) && Number.isFinite(aEnd) && bStart > aEnd) {
+    return false
+  }
   return true
 }
 
@@ -246,7 +274,9 @@ export function occupantsOnDay<T extends { times: EventTime[] }>(
   day: EventTime | null,
   reference: EventTime[] = [],
 ): T[] {
-  if (!day) return occupants
+  if (!day) {
+    return occupants
+  }
   // Assigned by GREATEST overlap against the whole day list, the same way the day
   // label is decided - see occupantDays. Matching on any overlap at all put a Day 1
   // vendor under the Day 2 filter, because real festival days are broad spans that
@@ -293,8 +323,12 @@ export interface Pan {
  * value before the image has loaded.
  */
 export function fitZoom(canvas: Size, viewport: Size): number {
-  if (canvas.width <= 0 || canvas.height <= 0) return 1
-  if (viewport.width <= 0 || viewport.height <= 0) return 1
+  if (canvas.width <= 0 || canvas.height <= 0) {
+    return 1
+  }
+  if (viewport.width <= 0 || viewport.height <= 0) {
+    return 1
+  }
   return Math.min(viewport.width / canvas.width, viewport.height / canvas.height)
 }
 
@@ -311,7 +345,9 @@ export function fitZoom(canvas: Size, viewport: Size): number {
 export function clampPan(pan: Pan, canvas: Size, viewport: Size, zoom: number): Pan {
   const scaledWidth = canvas.width * zoom
   const scaledHeight = canvas.height * zoom
-  if (scaledWidth <= 0 || scaledHeight <= 0) return pan
+  if (scaledWidth <= 0 || scaledHeight <= 0) {
+    return pan
+  }
 
   const bound = (offset: number, slack: number) =>
     slack >= 0 ? slack / 2 : Math.min(0, Math.max(slack, offset))
@@ -337,9 +373,12 @@ export function clampPan(pan: Pan, canvas: Size, viewport: Size, zoom: number): 
 export function splitTitleNote(title: string): { title: string; note: string } {
   const trimmed = title.trim()
   const match = /^(.*\S)\s*\(([^()]*)\)$/.exec(trimmed)
-  if (!match) return { title: trimmed, note: '' }
-  const note = match[2].trim()
-  return note ? { title: match[1].trim(), note } : { title: trimmed, note: '' }
+  if (!match) {
+    return { title: trimmed, note: '' }
+  }
+  const [, name = '', inner = ''] = match
+  const note = inner.trim()
+  return note ? { title: name.trim(), note } : { title: trimmed, note: '' }
 }
 
 /**
@@ -355,7 +394,9 @@ export function occupantMapLabel(occupant: {
   affiliate_name?: string
 }): string {
   const affiliate = (occupant.affiliate?.name ?? occupant.affiliate_name ?? '').trim()
-  if (affiliate) return affiliate
+  if (affiliate) {
+    return affiliate
+  }
   // No affiliate: a record from before one was required. Its own title is the only
   // thing that names it - and naming it after the venue instead was actively wrong,
   // since a pitch with no affiliate is not necessarily the venue's own. One such
@@ -393,7 +434,9 @@ export const MAX_VIEWPORT_ASPECT = 5 // 5:1, a long banner
  * Returns 0 for a plan whose size is not known yet, meaning "leave the CSS default".
  */
 export function viewportAspect(imageAspect: number): number {
-  if (!(imageAspect > 0)) return 0
+  if (!(imageAspect > 0)) {
+    return 0
+  }
   return Math.min(MAX_VIEWPORT_ASPECT, Math.max(MIN_VIEWPORT_ASPECT, imageAspect))
 }
 
@@ -408,7 +451,9 @@ function overlapMs(a: EventTime, b: EventTime): number {
     bound(parseServerTimestamp(a.end), Infinity),
     bound(parseServerTimestamp(b.end), Infinity),
   )
-  if (!(end > start)) return 0
+  if (!(end > start)) {
+    return 0
+  }
   return Number.isFinite(end - start) ? end - start : Number.MAX_SAFE_INTEGER
 }
 
@@ -430,7 +475,9 @@ export function occupantDays(
   occupant: { times: EventTime[] },
   reference: EventTime[],
 ): EventTime[] {
-  if (occupant.times.length === 0) return reference
+  if (occupant.times.length === 0) {
+    return reference
+  }
   const chosen = new Set<EventTime>()
   for (const time of occupant.times) {
     let best: EventTime | null = null
@@ -442,7 +489,9 @@ export function occupantDays(
         best = day
       }
     }
-    if (best) chosen.add(best)
+    if (best) {
+      chosen.add(best)
+    }
   }
   return reference.filter((day) => chosen.has(day))
 }
@@ -467,8 +516,12 @@ export function isDayRestricted(
   occupant: { times: EventTime[] },
   festivalDays: EventTime[],
 ): boolean {
-  if (occupant.times.length === 0) return false
-  if (festivalDays.length <= 1) return false
+  if (occupant.times.length === 0) {
+    return false
+  }
+  if (festivalDays.length <= 1) {
+    return false
+  }
   return occupantDays(occupant, festivalDays).length < festivalDays.length
 }
 
@@ -486,12 +539,16 @@ export function dayReference(
   festivalDays: EventTime[],
   occupants: { times: EventTime[] }[],
 ): EventTime[] {
-  if (festivalDays.length > 1) return festivalDays
+  if (festivalDays.length > 1) {
+    return festivalDays
+  }
   const seen = new Set<string>()
   const fromOccupants: EventTime[] = []
   for (const time of occupants.flatMap((o) => o.times)) {
     const key = `${time.start}|${time.end}`
-    if (seen.has(key)) continue
+    if (seen.has(key)) {
+      continue
+    }
     seen.add(key)
     fromOccupants.push(time)
   }
@@ -512,11 +569,15 @@ export function occupantDayNote(
   occupant: { title: string; times: EventTime[] },
   reference: EventTime[],
 ): string {
-  if (!isDayRestricted(occupant, reference)) return ''
+  if (!isDayRestricted(occupant, reference)) {
+    return ''
+  }
 
   // The admin's own words first, where they wrote them into the title.
   const typed = splitTitleNote(occupant.title).note
-  if (typed) return typed
+  if (typed) {
+    return typed
+  }
 
   // Then the names of the REFERENCE days this occupant actually overlaps. This is
   // the case that matters in practice: a festival names its days ("Day 1", "Day 2")
@@ -525,7 +586,9 @@ export function occupantDayNote(
   const overlapped = occupantDays(occupant, reference)
     .map((day) => day.label.trim())
     .filter(Boolean)
-  if (overlapped.length) return overlapped.join(', ')
+  if (overlapped.length) {
+    return overlapped.join(', ')
+  }
 
   // Failing both, whatever the occupant named its own hours.
   return occupant.times
@@ -555,10 +618,14 @@ export function occupantListLabel(occupant: {
   const affiliate = (occupant.affiliate?.name ?? occupant.affiliate_name ?? '').trim()
   const title = (occupant.title ?? '').trim()
   // With no affiliate the title IS the name, so it is not repeated after itself.
-  if (!affiliate) return title
+  if (!affiliate) {
+    return title
+  }
   // Nor when the two say the same thing: a stall titled after the business running
   // it is common, and "Lunaria - Lunaria" reads as a mistake.
-  if (!title || title.toLowerCase() === affiliate.toLowerCase()) return affiliate
+  if (!title || title.toLowerCase() === affiliate.toLowerCase()) {
+    return affiliate
+  }
   return `${affiliate} - ${title}`
 }
 

@@ -105,7 +105,7 @@ describe('festivalMaps store', () => {
       store.editMapForm(makeMap())
       // The exact local string depends on the runner's zone; what matters is
       // that it is the `datetime-local` shape, not the stored RFC-3339 one.
-      const start = store.mapForm?.times[0].start ?? ''
+      const start = store.mapForm?.times[0]!.start ?? ''
       expect(start).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/)
       expect(start).not.toContain('Z')
     })
@@ -113,18 +113,18 @@ describe('festivalMaps store', () => {
     it('gives every row a stable client key for the repeaters', () => {
       const store = useFestivalMapsStore()
       store.editMapForm(makeMap())
-      expect(store.mapForm?.times[0]._uid).toBeTypeOf('number')
-      expect(store.mapForm?.stalls[0]._uid).toBeTypeOf('number')
-      expect(store.mapForm?.stalls[0].occupants[0]._uid).toBeTypeOf('number')
+      expect(store.mapForm?.times[0]!._uid).toBeTypeOf('number')
+      expect(store.mapForm?.stalls[0]!._uid).toBeTypeOf('number')
+      expect(store.mapForm?.stalls[0]!.occupants[0]!._uid).toBeTypeOf('number')
     })
 
     it("loads a pitch's occupants, keeping their ids so a rally keeps naming them", () => {
       const store = useFestivalMapsStore()
       store.editMapForm(makeMap())
-      const occupants = store.mapForm?.stalls[0].occupants ?? []
+      const occupants = store.mapForm?.stalls[0]!.occupants ?? []
       expect(occupants).toHaveLength(1)
-      expect(occupants[0].id).toBe(21)
-      expect(occupants[0].title).toBe('Flora Teahouse')
+      expect(occupants[0]!.id).toBe(21)
+      expect(occupants[0]!.title).toBe('Flora Teahouse')
     })
   })
 
@@ -139,18 +139,18 @@ describe('festivalMaps store', () => {
       // The pitch is still in place, with its position, but is a new row - and so
       // is everyone standing in it.
       expect(form?.stalls).toHaveLength(1)
-      expect(form?.stalls[0].id).toBe(0)
-      expect(form?.stalls[0].placement).toEqual({
+      expect(form?.stalls[0]!.id).toBe(0)
+      expect(form?.stalls[0]!.placement).toEqual({
         x: 10,
         y: 20,
         width: 15,
         height: 10,
         rotation: 0,
       })
-      expect(form?.stalls[0].occupants[0].id).toBe(0)
-      expect(form?.stalls[0].occupants[0].title).toBe('Flora Teahouse')
+      expect(form?.stalls[0]!.occupants[0]!.id).toBe(0)
+      expect(form?.stalls[0]!.occupants[0]!.title).toBe('Flora Teahouse')
       // A stale window would mark the new festival as long over.
-      expect(form?.stalls[0].occupants[0].times).toEqual([])
+      expect(form?.stalls[0]!.occupants[0]!.times).toEqual([])
       expect(form?.times.every((t) => t.start === '')).toBe(true)
       // A shortcode names exactly one map - keeping it would be refused on save,
       // and would take over the URL the original is already linked by.
@@ -177,7 +177,7 @@ describe('festivalMaps store', () => {
       store.newMapForm()
       const pitch = store.addStall('game')
       expect(pitch?.occupants).toHaveLength(1)
-      expect(pitch?.occupants[0].stall_type).toBe('game')
+      expect(pitch?.occupants[0]!.stall_type).toBe('game')
     })
   })
 
@@ -188,7 +188,7 @@ describe('festivalMaps store', () => {
       store.addStall('food')
       const added = store.addOccupant(0)
       expect(added?.stall_type).toBe('food')
-      expect(store.mapForm?.stalls[0].occupants).toHaveLength(2)
+      expect(store.mapForm?.stalls[0]!.occupants).toHaveLength(2)
     })
 
     it('removes an occupant', () => {
@@ -197,7 +197,7 @@ describe('festivalMaps store', () => {
       store.addStall('food')
       store.addOccupant(0)
       store.removeOccupant(0, 1)
-      expect(store.mapForm?.stalls[0].occupants).toHaveLength(1)
+      expect(store.mapForm?.stalls[0]!.occupants).toHaveLength(1)
     })
 
     it('refuses to remove the last one - a pitch with nobody in it is dropped on save', () => {
@@ -205,7 +205,7 @@ describe('festivalMaps store', () => {
       store.newMapForm()
       store.addStall('food')
       store.removeOccupant(0, 0)
-      expect(store.mapForm?.stalls[0].occupants).toHaveLength(1)
+      expect(store.mapForm?.stalls[0]!.occupants).toHaveLength(1)
     })
   })
 
@@ -231,7 +231,7 @@ describe('festivalMaps store', () => {
       store.newMapForm()
       store.mapForm!.title = 'Obon'
       store.addStall('food')
-      store.mapForm!.stalls[0].occupants[0].affiliate_id = null
+      store.mapForm!.stalls[0]!.occupants[0]!.affiliate_id = null
 
       expect(await store.saveMap()).toBe(false)
       expect(ep.create).not.toHaveBeenCalled()
@@ -243,7 +243,7 @@ describe('festivalMaps store', () => {
       store.newMapForm()
       store.mapForm!.title = 'Obon'
       store.addStall('food')
-      store.mapForm!.stalls[0].occupants[0].affiliate_id = 7
+      store.mapForm!.stalls[0]!.occupants[0]!.affiliate_id = 7
       expect(await store.saveMap()).toBe(true)
     })
 
@@ -251,8 +251,8 @@ describe('festivalMaps store', () => {
       const store = useFestivalMapsStore()
       store.newMapForm()
       store.mapForm!.title = 'Obon'
-      store.mapForm!.times[0].start = ''
-      store.mapForm!.times[0].label = 'Ghost'
+      store.mapForm!.times[0]!.start = ''
+      store.mapForm!.times[0]!.label = 'Ghost'
       expect(await store.saveMap()).toBe(true)
       expect(lastPayload(ep.create).times).toEqual([])
     })
@@ -273,24 +273,28 @@ describe('festivalMaps store', () => {
       store.mapForm!.title = 'Obon'
       store.addStall('food')
 
-      const stall = store.mapForm!.stalls[0]
-      stall.occupants[0].affiliate_id = 7 // required before a map will save
+      const stall = store.mapForm!.stalls[0]!
+      stall.occupants[0]!.affiliate_id = 7 // required before a map will save
       stall.color = '#112233'
       stall.selection_color = '#ff3ea5'
       stall.text_color = '#ffe9a8'
-      stall.occupants[0].event_carrd = 'https://ev.carrd.co'
-      stall.occupants[0].title = 'Tea Bar'
+      stall.occupants[0]!.event_carrd = 'https://ev.carrd.co'
+      stall.occupants[0]!.title = 'Tea Bar'
       await store.saveMap()
 
-      const pitch = (lastPayload(ep.create).stalls as Record<string, unknown>[])[0]
-      const occupant = (pitch.occupants as Record<string, unknown>[])[0]
+      const pitch = (lastPayload(ep.create).stalls as Record<string, unknown>[])[0]!
+      const occupant = (pitch.occupants as Record<string, unknown>[])[0]!
       // Every form key except the client-only row id must reach the wire.
       for (const [key, value] of Object.entries(stall)) {
-        if (key === '_uid' || key === 'occupants') continue
+        if (key === '_uid' || key === 'occupants') {
+          continue
+        }
         expect({ key, value: pitch[key] }).toEqual({ key, value })
       }
-      for (const [key, value] of Object.entries(stall.occupants[0])) {
-        if (key === '_uid' || key === 'times') continue
+      for (const [key, value] of Object.entries(stall.occupants[0]!)) {
+        if (key === '_uid' || key === 'times') {
+          continue
+        }
         expect({ key, value: occupant[key] }).toEqual({ key, value })
       }
     })
@@ -301,14 +305,14 @@ describe('festivalMaps store', () => {
       store.mapForm!.title = 'Obon'
       store.mapForm!.times[0] = { label: 'Day 1', start: '2026-08-01T18:00', end: '', _uid: 99 }
       store.addStall('game')
-      store.mapForm!.stalls[0].occupants[0].affiliate_id = 7 // required before a map will save
+      store.mapForm!.stalls[0]!.occupants[0]!.affiliate_id = 7 // required before a map will save
       await store.saveMap()
 
       const payload = lastPayload(ep.create)
       const times = payload.times as Record<string, unknown>[]
-      expect(times[0].start).toMatch(/Z$/)
+      expect(times[0]!.start).toMatch(/Z$/)
       expect(times[0]).not.toHaveProperty('_uid')
-      const pitch = (payload.stalls as Record<string, unknown>[])[0]
+      const pitch = (payload.stalls as Record<string, unknown>[])[0]!
       expect(pitch).not.toHaveProperty('_uid')
       expect((pitch.occupants as Record<string, unknown>[])[0]).not.toHaveProperty('_uid')
     })
@@ -329,7 +333,7 @@ describe('festivalMaps store', () => {
       store.maps = [listed]
       store.selectedMap = listed
       await store.setStatus(7, 'published')
-      expect(store.maps[0].status).toBe('published')
+      expect(store.maps[0]!.status).toBe('published')
       expect(store.selectedMap.status).toBe('published')
     })
   })

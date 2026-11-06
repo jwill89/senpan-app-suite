@@ -32,7 +32,8 @@ Router (history mode, lazy routes) - Go 1.26+ stdlib HTTP - SQLite (WAL) -
 coder/websocket - per-user accounts (argon2id) + WebAuthn passkeys + optional
 Cloudflare Turnstile + per-page permissions - embedded tzdata + background
 schedulers (Discord embeds) - Vitest + Vue Test Utils - C#/.NET 10 Dalamud plugin
-(ImGui) - GitHub Actions CI.
+(ImGui) - GitHub Actions CI on shared-tooling's reusable workflows (the `shared/`
+submodule, see **Shared tooling** below).
 
 **Auth model (read this first):** the admin area is now gated by **per-user
 accounts**, not a single shared password. Accounts log in with username +
@@ -44,15 +45,18 @@ account's other sessions (a `password_epoch` checked each request). A bootstrap
 `admin`/`admin` account is seeded by migration v22 and **must be rotated
 immediately**. See **Authentication & authorization** below.
 
-```
+```text
 +-- frontend/                         <- Vue 3 + TypeScript SPA (Vite)
 |   +-- index.html                    <- Vite entry (mounts #app)
 |   +-- package.json                  <- deps: vue, pinia, vue-router, vue-draggable-plus (sortablejs), markdown-it, @milkdown/crepe (Milkdown "Crepe" WYSIWYG authoring), @awesome.me/kit-... (FA Pro icons) + @fortawesome/fontawesome-svg-core + @fortawesome/vue-fontawesome (the <font-awesome-icon> component), @ckpack/vue-color, vue3-emoji-picker, html-to-image
+|   +-- .npmrc                        <- Font Awesome registry scopes + install-links=true (tracked; holds no token - that lives in ~/.npmrc)
+|   +-- .nvmrc                        <- the Node major CI installs (26)
+|   +-- eslint.config.js              <- ESLint: @jwill89/lint-web (shared-tooling's lint/web) + Senpan's own rules; stylelint.config.mjs + prettier.config.js extend it the same way
 |   +-- vite.config.ts                <- build -> dist/, dev proxy for /api, manualChunks, strip dist/images
-|   +-- tsconfig*.json                <- TS project refs (app + node)
+|   +-- tsconfig*.json                <- TS project refs (app + node), extending @jwill89/lint-web's tsconfigs (strict, noUncheckedIndexedAccess)
 |   +-- public/                       <- copied verbatim into dist/ at build
 |   |   \-- images/                   <- logo, favicon, share banner (dev only; stripped from dist - served from doc root in prod)
-|   +-- vitest.config.ts              <- Vitest config (jsdom, @ alias; separate from vite.config so tests skip PWA/visualizer)
+|   +-- vitest.config.ts              <- Vitest config: the shared vitestDefaults (jsdom, v8 coverage with its floor) + the @ alias; separate from vite.config so tests skip PWA/visualizer
 |   \-- src/
 |       +-- main.ts                   <- createApp + Pinia + Router + registers the global <font-awesome-icon> component (imports assets/app.css + lib/fontawesome; registers 401 handler)
 |       +-- App.vue                   <- root shell: <RouterView>, WebSocket lifecycle, toast, route progress bar
@@ -73,7 +77,7 @@ immediately**. See **Authentication & authorization** below.
 |       |   +-- freshness.ts          <- createFreshness(): keyed time-gate so re-entered admin tabs skip redundant refetches (snappy navigation)
 |       |   \-- constants.ts          <- stamp shapes/colors, column helpers, fallback fonts, BOOK_CLUBS registry + per-club webhook setting keys
 |       +-- types/
-|       |   +-- api.generated.ts      <- tygo-generated from Go model - GITIGNORED, DO NOT EDIT (run `npm run gen:types`)
+|       |   +-- api.generated.ts      <- tygo-generated from Go model - committed, DO NOT EDIT (run `npm run gen:types`)
 |       |   \-- api.ts                <- re-exports + hand-written request/response/WS envelopes
 |       +-- stores/                   <- Pinia stores (ui, app, auth, users, player, game, cards, patterns, presets, styles, raffles, affiliates, garapons, stampRallies, festivalMaps, festivalDashboard, images, fonts, bookclub, carrd, announcements, logs, admin)
 |       +-- composables/
@@ -86,13 +90,19 @@ immediately**. See **Authentication & authorization** below.
 |       |   \-- admin/                <- AdminSidebar + one component per tab + modals (CardPreview, EndGame, WinnerVerify, HalftimePrompt) + ThemeTokenEditor. Tabs: Game, Cards, WinnersLog, Patterns (one manager unifying the patterns list + New Pattern / Manage Categories sub-pages), Presets, RaffleForm, Raffles, Announcements, Affiliates + AffiliateForm, BookClub (one generic tab serves every club), Garapon + GaraponForm, StampRallies + StampRallyForm, FestivalMaps + FestivalMapForm, Settings, Themes, Images, Users (admin-only account+permission manager), Logs (admin-only live server-log viewer - typed/colored columns, filters, live tail, DEBUG toggle), Fonts, CarrdUpload; PlacementEditor (shared %-based image placement widget for Garapon/Stamp Rally forms) + MapStallEditor (the same for Festival Map stalls - both share the drag geometry in `composables/usePlacementDrag.ts` and the `.placement-*`/`.map-*` styles in `assets/styles/mapeditor.css`)
 |       +-- views/                    <- HomeView, PlayerView, RafflesView, RaffleDetailView, GaraponView (public token-gated draw), StampCardView (public token-gated stamp card), FestivalDashboardView (one visitor's whole festival), AdminLoginView, RegisterView (hidden), NoAccessView (active account, no granted pages), AdminView
 |       \-- **/*.test.ts              <- Vitest unit/component tests, colocated next to the code they cover
-+-- .github/workflows/ci.yml          <- CI: frontend (lint-typecheck-test-build) + backend (lint-build-vet-test-govulncheck) + plugin (build-format-lint) + release (main: auto tag + GitHub Release per component on version bump)
++-- .github/workflows/ci.yml          <- CI: shared-tooling's reusable workflows - frontend (web.yml), backend (go.yml), plugin (dotnet.yml), scripts (pwsh.yml), docs (docs.yml) - + release (main: auto tag + GitHub Release per component on version bump)
 +-- .github/scripts/release.sh        <- the release job's script: reads each component's version, tags <Component>-v<version> + publishes a Release with that component's CHANGELOG.md section
++-- .github/dependabot.yml            <- weekly updates for npm, Go modules, NuGet and Actions (shared/ is left out: a release is taken on purpose)
++-- shared/                           <- the shared-tooling submodule (lint configs, the CI workflows' scripts, SharedDeploy, repo files) - see **Shared tooling**
++-- Taskfile.yml                      <- day-to-day commands (`task` lists them); includes shared/repo/Taskfile.yml as shared:*
++-- scripts/                          <- check.ps1 (the local gate CI mirrors; the pre-push hook runs it) + deploy.ps1 (on SharedDeploy; settings in the untracked deploy.config.ps1)
 +-- deploy/                           <- Apache deploy artifacts (.htaccess + persistent images/ + README)
 +-- backend/                          <- Go backend
 |   +-- main.go                       <- Entry point: flags, DB init, server start
 |   +-- tygo.yaml                     <- Go->TS type generation config (run `npm run gen:types`)
-|   +-- go.mod / go.sum               <- Module deps (alexedwards/scs, coder/websocket, ncruces sqlite, golang.org/x/crypto for argon2id)
+|   +-- go.mod / go.sum               <- Module deps (alexedwards/scs, coder/websocket, modernc.org/sqlite (pure Go), golang.org/x/crypto for argon2id) + tygo pinned as a `tool`
+|   +-- .golangci.yml                 <- golangci-lint config WRITTEN from shared-tooling's template - never edit it by hand
+|   +-- .golangci.local.yml           <- Senpan's own golangci-lint rules, merged into .golangci.yml by `go run -C shared/lint/go . -dir backend`
 |   \-- internal/
 |       +-- auth/password.go          <- argon2id Hash()/Verify() (PHC strings); own package so store (seed) + server (login) share it without an import cycle
 |       +-- model/model.go            <- Domain types (User, Card, Pattern, GamePreset, BingoGame, BingoGameState, Raffle, ReadingList(+Item/Source), AnnouncementType, AnnouncementRole, Announcement(+Button), etc.)
@@ -101,6 +111,7 @@ immediately**. See **Authentication & authorization** below.
 |       |   +-- users.go              <- users CRUD: create (inactive), get/list, set active/admin/permissions/password, delete (password hash stays here, never on model.User)
 |       |   +-- bookclubs.go          <- reading_lists + reading_list_items CRUD
 |       |   +-- announcements.go      <- announcement_types + announcement_roles + announcements CRUD + due/advance helpers (scheduler)
+|       |   +-- driver_test.go        <- what the store relies on the SQLite driver for: pragmas on every connection, BEGIN IMMEDIATE, cancellation, DATETIME read as stored
 |       |   \-- migrate.go            <- Schema versioning + migrations (PRAGMA user_version)
 |       +-- bingo/
 |       |   +-- card.go               <- Card/board generation, ID generation, LetterForNumber
@@ -138,14 +149,15 @@ immediately**. See **Authentication & authorization** below.
 |           \-- ws.go                 <- GET /api/ws (delegates to hub)
 +-- plugins/                          <- FFXIV Dalamud plugin (C#/.NET) - secondary admin UI over the server
 |   +-- pluginmaster.json             <- Dalamud custom-repo index (hosted at /plugin/pluginmaster.json)
+|   +-- Directory.Build.props         <- imports shared/lint/dotnet/analyzers.props: the .NET analyzers (latest-recommended) + the shared C# code style (.globalconfig), checked in the build
 |   \-- SenpanCompanion/              <- the plugin (DLL/InternalName "SenpanCompanionAdmin"; display "Senpan Admin Companion")
 |       +-- Plugin.cs                 <- entry point: injected [PluginService]s, /senpan (+ /senpan config) command, window system
 |       +-- Configuration.cs          <- persisted config: server URL + personal-access token
 |       +-- Api/                      <- ApiClient (REST, Bearer pat_...) + ApiModels + LiveConnection (admin WS: game_draw/game_update/cards_update/yoever(_config)/auto_config/halftime_prompt)
 |       +-- Services/                 <- Session (auth/perms), CardCache (coalesced, framework-thread), NearbyPlayers (IObjectTable), ChatSender (/tell), WinnerChime (winmm synth)
 |       +-- Windows/                  <- ImGui tabs: TabBase + Bingo{Cards,Game,Winners}Tab + RaffleTab + MainWindow
-|       +-- SenpanCompanion.csproj    <- Dalamud.NET.Sdk/15.0.0; <AssemblyName>SenpanCompanionAdmin; EnableWindowsTargeting (Linux CI)
-|       \-- .editorconfig             <- dotnet format rules + Roslynator lint severities (root; curated ruleset)
+|       \-- SenpanCompanion.csproj    <- Dalamud.NET.Sdk/15.0.0; <AssemblyName>SenpanCompanionAdmin; EnableWindowsTargeting (Linux CI)
++-- .editorconfig / .gitattributes    <- from shared/repo (Sync-RepoFiles.ps1); Senpan's lines - the plugin's two C# exceptions - go below the project marker
 +-- devdata/                          <- Local dev sandbox: SQLite DBs + built binaries + webroot uploads (gitignored)
 ```
 
@@ -340,8 +352,9 @@ cards,winners-log,patterns,presets}`), **teahouse** ("Senpan Tea House":
   route with a "session expired" toast when any non-auth request 401s.
 
 **Type sync**: TS domain types are generated from the Go `model` package via tygo
-into `frontend/src/types/api.generated.ts` - this file is **gitignored** (each dev
-regenerates it locally with `npm run gen:types`; CI/build regenerate as needed).
+into `frontend/src/types/api.generated.ts` - this file is **committed**: regenerate
+it with `npm run gen:types` after changing a Go model and commit it with the change;
+CI's `generated` job (and `npm run gen:check`) fails when the committed copy is stale.
 Never edit it by hand. Request/response/WebSocket envelopes are hand-written in
 `types/api.ts`.
 
@@ -361,13 +374,15 @@ Never edit it by hand. Request/response/WebSocket envelopes are hand-written in
 - **Route progress + loading UX**: a top progress bar (`RouteProgressBar.vue`, driven by `ui.routeLoading` from the router guards) shows during async navigation/lazy-chunk loads; stores expose per-action loading flags (`joining`, `drawing`, `starting`, ...) that drive `LoadingSpinner.vue` + disabled buttons.
 - **Global error handler**: `app.config.errorHandler` (`main.ts`) surfaces uncaught errors as a toast.
 - **Accessible modals**: `ModalOverlay.vue` traps focus, restores it on close, supports Escape, and sets `role="dialog"`/`aria-modal`.
-- **Lint/format**: ESLint flat config (`eslint.config.js`: Vue's recommended rules, typescript-eslint strict + stylistic type-checked rules, `eslint-plugin-vuejs-accessibility`, and stricter `vue/*` rules - the Kindred Nights standard, inline since the shared `@jwill89/eslint-config` submodule was retired) + Stylelint (`stylelint.config.mjs`: `stylelint-config-standard` + the Vue config, class names held to the naming rules below) + Prettier (`prettier.config.js`); `npm run lint` (autofix both) / `npm run lint:check` (no fix, used by CI) / `npm run format`. A rule is turned off in its config with the reason, or at the one line with the reason beside it, never silently. Static `style=""` stays allowed (see **CSS conventions**), so `vue/no-static-inline-styles` is deliberately off. Bundle treemap via `npm run analyze` -> `dist/stats.html`.
+- **Lint/format**: the configs extend **`@jwill89/lint-web`**, shared-tooling's front-end package, installed from `file:../shared/lint/web` (`frontend/.npmrc` sets `install-links=true`, so npm copies it in with its own dependencies; a symlink would leave ESLint unable to find its plugins). ESLint flat config (`eslint.config.js`: the shared rules - Vue's recommended rules, typescript-eslint strict + stylistic type-checked rules, template accessibility, the shared Vue conventions, `curly` on every body - then Senpan's own `senpan/*` blocks) + Stylelint (`stylelint.config.mjs`: `@jwill89/lint-web/stylelint`, with class names held to the naming rules below) + Prettier (`prettier.config.js` re-exports `@jwill89/lint-web/prettier`); `npm run lint` (autofix both) / `npm run lint:check` (no fix, used by CI) / `npm run format`. A rule is turned off in its config with the reason, or at the one line with the reason beside it, never silently. Static `style=""` stays allowed (see **CSS conventions**), so `vue/no-static-inline-styles` is deliberately off. Change a shared rule in shared-tooling, not here. Bundle treemap via `npm run analyze` -> `dist/stats.html`.
+- **TypeScript**: `tsconfig.app.json` / `tsconfig.node.json` extend the package's tsconfigs, which turn on `noUncheckedIndexedAccess` on top of `strict`: an index into an array or a record is typed as possibly `undefined`, so guard it, or assert with `!` where the index is known to hit (the tests do `entries[0]!`). Don't delete a guard the type now asks for to quiet a lint warning - it is usually the code handling a missing row or key.
 
 **Testing** (Vitest + Vue Test Utils, jsdom):
 
-- Config in `vitest.config.ts` (kept separate from `vite.config.ts` so tests don't load the PWA/visualizer plugins). Tests **import `describe/it/expect/vi` from `vitest`** explicitly (`globals: false`) so they type-check with no extra global-types config.
+- Config in `vitest.config.ts` (kept separate from `vite.config.ts` so tests don't load the PWA/visualizer plugins), built on shared-tooling's `vitestDefaults` (`shared/test/web/vitest.js`): jsdom, spies restored and stubbed globals put back after each test, and v8 coverage over all of `src`. Tests **import `describe/it/expect/vi` from `vitest`** explicitly (`globals: false`) so they type-check with no extra global-types config.
+- **Coverage floor**: `npm run test:coverage` fails below 35.5% of statements, 25.5% of branches, 28% of functions and 35.5% of lines (the `floor` in `vitest.config.ts`, set a little under what the suite reached). CI and `scripts/check.ps1` run it. Raise it as tests land; never lower it.
 - Test files are colocated as `src/**/*.test.ts`. Current coverage: `lib/{constants,api,endpoints,exportCard,theme,datetime,freshness,markdown,ws}.test.ts`, `stores/{player,ui,raffles,cards,patterns,announcements,auth,users}.test.ts`, `components/common/BingoBoard.test.ts`, `components/admin/AdminSidebar.test.ts` (mocks `vue-router`/`@/router` to assert accordion toggling + per-permission section hiding), `components/common/ui/{FormField,DataTable,PaginationBar,ManagerView,ListRow,SubPageHeader,SearchInput}.test.ts`. Backend mirrors this with `internal/auth/password_test.go`, `internal/store/users_test.go`, `internal/server/users_test.go`, and the existing per-domain `*_test.go`.
-- Run: `npm run test` (CI), `npm run test:watch`, `npm run test:coverage` (v8).
+- Run: `npm run test` (one-shot), `npm run test:watch`, `npm run test:coverage` (v8, with the floor - what CI runs).
 - Patterns: mock `fetch` via `vi.stubGlobal` for `api.ts`; mock the `./api` module with `vi.hoisted` + `vi.mock` for `endpoints.ts`; Pinia stores use `setActivePinia(createPinia())`; components use `mount()` from `@vue/test-utils`. Pure helpers tested directly (e.g. `exportCard.ts` exports `parseInlineRuns`/`parseDetailParagraphs` for this).
 
 **Public routes**: `/` - `/play/:cardId` - `/raffles` - `/raffles/:id` - `/festival-maps` - `/festival-maps/:id` - `/festival/:id` (festival dashboard) - `/garapon/:token` (token-gated) - `/stamp-card/:token` (token-gated) - `/card-requests` (submit a self-designed bingo card for admin approval) - `/admin/login` - `/admin/register` (hidden).
@@ -403,7 +418,7 @@ Never edit it by hand. Request/response/WebSocket envelopes are hand-written in
 - **Winners Log tab**: paginated table of past winners with sorting and per-page controls; delete an individual entry (per-row trash button) or **Delete All** to clear the log (both confirm first)
 - The sidebar shows a **count** beside Manage Cards, Festival Map, Raffles, Garapon and Stamp Rally (open items, or published maps). The counts read `openRaffles` / `openGarapons` / `openRallies` / `publishedMaps` from their stores, which `AdminView`'s mount preloads (permission-gated) - without that preload a count reads 0 until its own tab is visited.
 - **Senpan Tea House -> Raffles tab** (`RafflesTab.vue`): one manager (replacing the former New/Open/Closed tabs) - **Current Raffles** (every non-closed raffle) as image cards with a corner status icon (calendar-clock when it opens later, red calendar-circle-exclamation when its open window has passed), then a searchable + paginated **Closed Raffles** table (title, winner, open period, and the gil collected from paid entries - `Raffle.winner_name`/`paid_total`, admin-only aggregates joined in `listRafflesAdmin`) with a **Copy** action that seeds a new raffle from a past one (`copyRaffleForm`). The form also carries a **"Where to Pay"** image (`pay_image`), shown to players under the sign-up instructions - the raffle counterpart to a stamp rally's Where to Redeem. Detail (winner pick/verify, **manually add an entry - optionally paid, with an amount waived**, record/clear payments via `RafflePaymentModal.vue`, delete; read-only when closed) and the create/edit form (`RaffleFormTab.vue`, emits `saved`/`cancel`) open as Back sub-pages. The form's **Entry Type** picker swaps the cost controls per mode, and in `custom` mode edits the price ladder (a `.stack` of rows; its length sets `max_entries`). Weighted random winner pick; **Close / Reopen** (a raffle with no entries and no winner - every details-only one - can't reach verify-winner, which closes only as the last step of confirming a winner, so without this it stays on the public list forever; neither verb touches a winner already recorded); delete raffles. **Duplicate** (detail toolbar, and the Copy action on the closed table) seeds the create form from an existing raffle - the same `copyRaffleForm` the Garapon and Stamp Rally managers mirror, see **Duplicating an event** below.
-- **Senpan Tea House -> Announcements tab** (`AnnouncementsTab.vue`): manage **announcement types** (a named Discord channel webhook), **taggable roles** (a friendly name + Discord role ID - managed like types under "Manage Roles"), and **announcements** authored as Discord embeds (title, markdown details, accent colour, optional location + event window, image upload/reuse, an optional **role tag** posted in the message content above the embed - _Do Not Tag_ / _@everyone_ / a managed role, since mentions inside an embed don't notify - and **up to 5 Discord link buttons** - label + optional emoji + URL - rendered as an action row beneath the embed; sanitized server-side and stored as JSON in `announcements.buttons`). Post manually (**send now**) or on a schedule (once / daily / weekly / monthly, anchored to an IANA timezone so times survive DST); **skip next** occurrence; the background scheduler posts due items. Client-side search + type filter. (Link buttons require a webhook whose target supports message components.) Book-club meeting/event posts are authored here too (the retired per-club "event posts" feature was merged in; its webhooks migrated to dedicated "<Club> Book Club Events" types).
+- **Senpan Tea House -> Announcements tab** (`AnnouncementsTab.vue`): manage **announcement types** (a named Discord channel webhook), **taggable roles** (a friendly name + Discord role ID - managed like types under "Manage Roles"), and **announcements** authored as Discord embeds (title, markdown details, accent colour, optional location + event window, image upload/reuse, an optional **role tag** posted in the message content above the embed - _Do Not Tag_ / _@everyone_ / a managed role, since mentions inside an embed don't notify - and **up to 5 Discord link buttons** - label + optional emoji + URL - rendered as an action row beneath the embed; sanitized server-side and stored as JSON in `announcements.buttons`). Post manually (**send now**) or on a schedule (once / daily / weekly / monthly, anchored to an IANA timezone so times survive DST); **skip next** occurrence; the background scheduler posts due items. Client-side search + type filter. (Link buttons require a webhook whose target supports message components.) Book-club meeting/event posts are authored here too (the retired per-club "event posts" feature was merged in; its webhooks migrated to dedicated "\<Club> Book Club Events" types).
 - **Senpan Tea House -> Book Club tabs** (`BookClubTab.vue`, one route per registered club): manage **reading lists** + their items - add items manually or pull them from **AniList** (search/by-id proxy that prefills title/summary/cover/format/genres/chapters/source), drag-reorder, upload covers; **publish** a list to the club's Discord channel (one embed per item).
 - **System -> Settings tab**: app title, bingo join prompt, default draw delay, frequent-winner threshold/window, the **header/board font** picker (combo box with optgroups for uploaded fonts + Google Fonts, optional Google Fonts API key, live preview), the AniList API URL, and the per-club reading-list Discord webhook URLs (treated as secret)
 - **System -> Themes tab**: CRUD themes via a structured **token editor** (`ThemeTokenEditor.vue` - a swatch + value per `:root` design token, grouped, with a collapsible live preview), activate/deactivate live. A theme stores a **token map** (not CSS); the server generates the `:root{}` stylesheet (`store.TokensToCSS`). Alpha tokens (modal/shadow/glow) use the `@ckpack/vue-color` picker; solid tokens the native colour input
@@ -632,33 +647,93 @@ talks peer-to-peer.
   TFM and references Dalamud from the local XIVLauncher install; needs the **.NET 10
   SDK** + XIVLauncher/Dalamud. `dotnet build -c Release` emits
   `bin/Release/SenpanCompanionAdmin/latest.zip` (DalamudPackager); `bin/` + `obj/`
-  are gitignored. **0/0 warnings is enforced - keep it that way.** Note ImGui's
-  namespace is `Dalamud.Bindings.ImGui` (not ImGuiNET).
+  are gitignored. **0/0 warnings is enforced - keep it that way.** The .NET
+  analyzers (`latest-recommended`) and the C# code style come from shared-tooling's
+  `lint/dotnet`, imported by `plugins/Directory.Build.props` and reported as build
+  warnings; the plugin's two exceptions (braced `case` blocks not indented a level,
+  classic `[DllImport]` for the winmm and DPAPI P/Invokes) sit below the project marker
+  in the root `.editorconfig`. Note ImGui's namespace is `Dalamud.Bindings.ImGui`
+  (not ImGuiNET).
 - **Distribution.** A **custom Dalamud repo**, not the official list:
   `plugins/pluginmaster.json` + `latest.zip` are hosted at
-  `https://apps.senpan.cafe/plugin/...` (publish with `scripts/deploy.ps1 -Target
-plugin`). Bump `AssemblyVersion` + `LastUpdate` in `pluginmaster.json` per release;
-  a Dalamud API bump means bumping `DalamudApiLevel` (currently **15**).
+  `https://apps.senpan.cafe/plugin/...` (publish with
+  `scripts/deploy.ps1 -Target plugin` or `-Target all`). Bump `AssemblyVersion` +
+  `LastUpdate` in `pluginmaster.json` per release; the deploy reads the published version first and stops before building
+  anything when the new one is not higher, since Dalamud updates to nothing else. A
+  Dalamud API bump means bumping `DalamudApiLevel` (currently **15**).
+
+## Shared tooling
+
+The lint configs, the CI workflows, the deploy module and the repo files are
+**shared-tooling**'s (`https://github.com/jwill89/shared-tooling`), held as a git
+submodule at `shared/` and pinned to one release. `shared/README.md` says what each
+folder holds; `shared/PLAN.md` says why. What Senpan takes from it:
+
+- **Frontend:** `@jwill89/lint-web` (ESLint, Prettier, Stylelint, the tsconfigs) from
+  `shared/lint/web`, and `vitestDefaults` from `shared/test/web/vitest.js`.
+- **Backend:** the golangci-lint template in `shared/lint/go`, which writes
+  `backend/.golangci.yml`; Senpan's own rules are in `backend/.golangci.local.yml`.
+- **Plugin:** `shared/lint/dotnet` (the analyzers and the C# code style), imported by
+  `plugins/Directory.Build.props`.
+- **Scripts:** `shared/lint/pwsh` (PSScriptAnalyzer's settings and
+  `Invoke-ScriptLint.ps1`, which lints every tracked script), and the SharedDeploy
+  module in `shared/deploy/pwsh` that `scripts/deploy.ps1` is built on.
+- **Repo:** `.editorconfig` and `.gitattributes` from `shared/repo`
+  (`Sync-RepoFiles.ps1`), `.markdownlint-cli2.jsonc` extending
+  `shared/lint/markdown`, and the shared tasks `Taskfile.yml` includes as `shared:*`.
+- **CI:** the reusable workflows `.github/workflows/ci.yml` calls (see **Continuous
+  integration**).
+
+Rules that follow from it:
+
+- **A fresh clone needs `git submodule update --init`** (or `git clone
+  --recurse-submodules`) before `npm ci` will install - the frontend's lint package
+  is a `file:../shared/lint/web` dependency - and before `scripts/check.ps1` or a
+  deploy will run.
+- **Never edit anything under `shared/`** from this repo, nor `backend/.golangci.yml`
+  or the part of `.editorconfig` / `.gitattributes` above the
+  `# ---- project: lines below this one are this repo's own ----` marker: those are
+  rewritten from shared-tooling, and CI fails when they differ from it. A rule only
+  Senpan needs goes in the project's own file (`eslint.config.js`'s `senpan/*`
+  blocks, `.golangci.local.yml`, below the marker); a rule every project should hold
+  goes to shared-tooling.
+- **The submodule and the workflow refs move together.** Every
+  `uses: jwill89/shared-tooling/...@vX.Y.Z` in `ci.yml` names the release `shared/`
+  holds, and the docs job fails if they differ. Take a new release with
+  `task shared:update -- vX.Y.Z` (it moves both, re-syncs the repo files, rewrites
+  `.golangci.yml` and reinstalls `@jwill89/lint-web`), then review the diff as one
+  change.
 
 ## Developer commands
 
 ```powershell
+# -- First time, from the repo root --
+git submodule update --init         # shared-tooling at shared/; npm ci, check.ps1 and deploy.ps1 all need it
+# The Font Awesome Pro packages install from Font Awesome's registry with the account's
+# token, kept in ~/.npmrc (never in the repo):  //npm.fontawesome.com/:_authToken=<token>
+git config core.hooksPath .githooks # pre-push runs scripts/check.ps1
+task                                # lists the Taskfile's commands (setup, dev, check, deploy:*, shared:*), if go-task is installed
+
 # -- Frontend (Vite) --
-cd frontend; npm install            # first time / after dependency changes
+cd frontend; npm ci                 # first time / after the lockfile changes (npm install <pkg> to add one)
 cd frontend; npm run dev            # dev server on :5173, proxies /api -> :8080
 cd frontend; npm run build          # type-check (vue-tsc) + build to frontend/dist/
 cd frontend; npm run typecheck      # vue-tsc only
-cd frontend; npm run test           # Vitest run (CI mode, one-shot)
+cd frontend; npm run test           # Vitest run (one-shot)
 cd frontend; npm run test:watch     # Vitest watch mode
-cd frontend; npm run test:coverage  # Vitest + v8 coverage report
-cd frontend; npm run lint           # ESLint (flat config) with --fix
+cd frontend; npm run test:coverage  # Vitest + v8 coverage, failing below the floor in vitest.config.ts (CI gate)
+cd frontend; npm run lint           # ESLint + Stylelint with --fix
 cd frontend; npm run lint:check     # ESLint + Stylelint without --fix (CI gate)
 cd frontend; npm run format         # Prettier write over src/
+cd frontend; npm run format:check   # Prettier check (CI gate)
+cd frontend; npm run lint:conventions  # CSS naming, the scoped-CSS ratchet, theme tokens (CI gate)
 cd frontend; npm run analyze        # build + emit dist/stats.html bundle treemap (visualizer)
-cd frontend; npm run gen:types      # regenerate TS types from Go models (runs tygo in ../backend; needs Go)
+cd frontend; npm run gen:types      # regenerate TS types from Go models (`go tool tygo generate` in ../backend; tygo is pinned as a tool in backend/go.mod; needs Go)
+cd frontend; npm run gen:check      # regenerate them and fail if the committed api.generated.ts differs (CI's generated job)
+cd frontend; npm run test:e2e       # end-to-end: builds the API and the SPA, runs them on a throwaway database in %TEMP%, never devdata/ (e2e/)
 
-# NOTE: src/types/api.generated.ts is gitignored. Run `npm run gen:types` after a
-# fresh clone (or after changing Go model types) before build/typecheck/test.
+# NOTE: src/types/api.generated.ts is committed. After changing Go model types, run
+# `npm run gen:types` and commit the result with the change.
 
 # -- Go backend --
 # Build the Go backend
@@ -679,7 +754,9 @@ cd backend; go run . -addr :8080 -db ../devdata/database.sqlite -webroot ../devd
 # Vet / lint
 cd backend; go vet ./...
 cd backend; go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.15.0 run ./...   # config: backend/.golangci.yml (built from source at the pin, as CI does)
-cd backend; go test -race ./...       # CI runs this; locally needs gcc on PATH (cgo for the race runtime)
+go run -C shared/lint/go . -dir backend -check   # (repo root) .golangci.yml still = the shared template + .golangci.local.yml; drop -check to rewrite it after editing .golangci.local.yml
+cd backend; go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 ./...   # the release CI runs
+cd backend; go test -race ./...       # CI runs this (shuffled, with a 63% statement-coverage floor); locally needs gcc on PATH (cgo for the race runtime)
 
 # Run tests
 cd backend; go test ./...
@@ -689,62 +766,104 @@ cd backend; go build -ldflags="-s -w" -o app-suite .
 
 # -- FFXIV Dalamud plugin (C#/.NET 10) --
 # Needs the .NET 10 SDK + a local XIVLauncher/Dalamud install (Windows).
-cd plugins\SenpanCompanion; dotnet build -c Release   # -> bin/Release/SenpanCompanionAdmin/latest.zip (keep 0/0 warnings)
-cd plugins\SenpanCompanion; dotnet format             # apply .editorconfig style (CI runs --verify-no-changes)
-dotnet tool restore; dotnet roslynator analyze plugins\SenpanCompanion\SenpanCompanion.csproj --severity-level info   # C# lint gate (Roslynator CLI, pinned in .config/dotnet-tools.json; ruleset curated in .editorconfig)
+cd plugins\SenpanCompanion; dotnet build -c Release   # -> bin/Release/SenpanCompanionAdmin/latest.zip (keep 0/0 warnings; the analyzers + code style run in the build - the C# lint gate)
+cd plugins\SenpanCompanion; dotnet format             # apply the code style (CI runs --verify-no-changes)
 .\scripts\deploy.ps1 -Target plugin                   # build + publish the custom Dalamud repo (pluginmaster.json + latest.zip)
+
+# -- Scripts, docs and repo files (from the repo root) --
+pwsh shared/lint/pwsh/Invoke-ScriptLint.ps1           # PSScriptAnalyzer 1.25.0 with the shared settings, on every tracked .ps1/.psm1/.psd1
+npx --yes markdownlint-cli2@0.24.0                    # every .md, with the shared config (.markdownlint-cli2.jsonc)
+pwsh shared/repo/Sync-RepoFiles.ps1 -Path . -Check    # .editorconfig/.gitattributes above their marker still match shared/repo
+.\scripts\check.ps1                                   # everything CI runs, stopping at the first failure (-SkipFrontend / -SkipBackend for half)
 ```
 
 ## Continuous integration
 
-`.github/workflows/ci.yml` runs on every push and pull request, with four gate
-jobs plus a release job. The lint standard is Kindred Nights' (the owner's sister
-project), adapted to this repo's conventions:
+`.github/workflows/ci.yml` runs on every push and pull request. Six of its gate jobs
+each call one of shared-tooling's reusable workflows, pinned to the release the
+`shared/` submodule holds (the docs job fails if the two ever differ); the
+`generated` gate and the release job are Senpan's own. Each workflow checks the submodule out with the repo.
+`scripts/check.ps1` runs the same checks locally, so a green CI == the checks a
+developer runs locally have passed:
 
-- **frontend** (`working-directory: frontend`): `npm ci` -> `npm run gen:types`
-  (needs Go, so the job also sets up the Go toolchain) -> `lint:check` (ESLint +
-  Stylelint) -> `format:check` -> `lint:conventions` -> `typecheck` -> `test` ->
-  `npm audit --audit-level=high --omit=dev` -> `build`. Mirrors the local gate, so
-  a green CI == the checks a developer runs locally have passed.
-- **backend** (`working-directory: backend`): `golangci-lint run` (pinned
-  v2.15.0 and built from source with `install-mode: goinstall`, since a prebuilt
-  binary can't read export data from a newer Go; config `backend/.golangci.yml`:
-  the default linters plus bodyclose, errorlint, exhaustive, gocritic, gosec,
-  noctx, revive and the rest of Kindred Nights' set, and the gofmt + goimports
-  formatters) -> `go build ./...` -> `go vet ./...` -> `go test -race ./...` (Go
-  version read from `backend/go.mod`; the tests include the OpenAPI
-  spec-freshness + route-coverage checks in `internal/apidoc`; the SQLite driver
-  is pure Go, so the race build runs the driver production ships) ->
-  `govulncheck ./...` (`go run golang.org/x/vuln/cmd/govulncheck@latest`, run at
-  latest so newly disclosed advisories are caught).
-- **plugin** (`working-directory: plugins/SenpanCompanion`): builds the FFXIV
+- **frontend** (`web.yml`, `dir: frontend`): Node from `frontend/.nvmrc`, the Font
+  Awesome registry token from the `FONTAWESOME_TOKEN` secret (written to `~/.npmrc`
+  for the install and removed straight after) -> `npm ci` -> `npm audit
+  --audit-level=high --omit=dev` -> then the scripts the job lists, in order:
+  `lint:check` (ESLint + Stylelint) -> `format:check` -> `lint:conventions` ->
+  `typecheck` -> `test:coverage` (fails below the floor in `vitest.config.ts`) ->
+  `build`. It compiles against the committed API types.
+- **generated** (Senpan's own): Go from `backend/go.mod` -> `go tool tygo generate`
+  -> fails if `frontend/src/types/api.generated.ts` now differs from the committed
+  copy, the same check as `npm run gen:check`.
+- **backend** (`go.yml`, `dir: backend`): `.golangci.yml` still matches the shared
+  template merged with `.golangci.local.yml` -> `go vet ./...` -> golangci-lint
+  v2.15.0 (built from source with `install-mode: goinstall`, since a prebuilt binary
+  can't read export data from a newer Go; the template's linters - bodyclose,
+  errorlint, exhaustive, gocritic, gosec, noctx, revive, rowserrcheck and the rest -
+  and the gofmt + goimports formatters, with Senpan's exclusions from
+  `.golangci.local.yml`) -> govulncheck v1.9.0 (pinned: an old release crashes on a
+  newer Go) -> `go test -race -shuffle=on ./...` with coverage, failing below **63%**
+  of statements (raise it as tests land, never lower it) -> `go build -ldflags="-s -w"
+  -o app-suite .`, the binary as the deploy builds it. Go version read from
+  `backend/go.mod`; the tests include the OpenAPI spec-freshness + route-coverage
+  checks in `internal/apidoc`; the SQLite driver is pure Go, so the race build runs
+  the driver production ships.
+- **e2e** (`e2e.yml`, after the frontend and backend jobs): `npm run test:e2e`, the
+  Playwright suite in `frontend/e2e/` on shared-tooling's `test/e2e` settings, in the
+  runner's Chrome. `e2e/server/prepare.ts` builds the API into a throwaway folder in
+  the temp directory, refusing any path inside the checkout so `devdata/` is never
+  touched, and the server runs with `-webhook-dry-run` and Turnstile off, so nothing
+  reaches Discord. The SPA is built and served by `vite preview`, whose proxy sends
+  `/api` and the WebSocket to it; data is seeded through the API as the bootstrap
+  admin. The main public pages must show their data and pass axe at WCAG 2.2 AA
+  (shared-tooling's `test/a11y`), and a player must join a board, see a draw arrive
+  over the WebSocket and keep a stamp across a reload. The specs find elements by
+  role and name, never by class. Pages keep their visible titles as `h2`: the home
+  page's logo is its `h1`, and every other page has a visually hidden `h1` with the
+  app's name (`App.vue`).
+- **plugin** (`dotnet.yml`, `projects: plugins/SenpanCompanion`): builds the FFXIV
   Dalamud plugin on a **Linux** runner - there's no XIVLauncher there, so it
   downloads the official Dalamud dev distribution and points `DALAMUD_HOME` at it;
   the `net*-windows` TFM compiles via the `EnableWindowsTargeting` property
   (conditioned off on Windows, so local builds are unchanged). Gate =
   `dotnet build -c Release -p:TreatWarningsAsErrors=true` (the 0-warning rule) +
-  `dotnet format --verify-no-changes` + `roslynator analyze --severity-level info`
-  (the C# lint gate - Roslynator CLI pinned in `.config/dotnet-tools.json`; ruleset
-  curated in `plugins/SenpanCompanion/.editorconfig`).
-  Tracking Dalamud `latest` means an upstream API bump can redden it - the cue to
-  bump `DalamudApiLevel`. The csproj also turns on the .NET analyzers at
-  `latest-recommended` with `EnforceCodeStyleInBuild`, so the C# style rules in the
-  plugin's `.editorconfig` (`this.` qualification, `var`, file-scoped namespaces,
-  naming) fail the build rather than waiting for `dotnet format`.
-- **scripts**: PSScriptAnalyzer 1.25.0 over the tracked `scripts/*.ps1`, with the
-  repo-root `PSScriptAnalyzerSettings.psd1` (default rules + the one-true-brace
-  layout). Any finding fails it.
-- **release** (`needs: [frontend, backend, plugin, scripts]`, only on a push to `main`):
-  runs `.github/scripts/release.sh`, which for each component reads its current
-  version (`package.json` / `version.go` / `SenpanCompanion.csproj`) and, if the
-  `<Component>-v<version>` release doesn't exist yet, tags it and publishes a
+  `dotnet format --verify-no-changes`. The build is also the C# lint gate:
+  `plugins/Directory.Build.props` imports shared-tooling's `lint/dotnet`, which turns
+  on the .NET analyzers at `latest-recommended` and checks the shared code style
+  (`this.` qualification, `var`, file-scoped namespaces, naming) in the build with
+  `EnforceCodeStyleInBuild`, so a departure fails it rather than waiting for
+  `dotnet format`. Tracking Dalamud `latest` means an upstream API bump can redden
+  it - the cue to bump `DalamudApiLevel`.
+- **scripts** (`pwsh.yml`): PSScriptAnalyzer 1.25.0 through
+  `shared/lint/pwsh/Invoke-ScriptLint.ps1`, on every tracked `.ps1`/`.psm1`/`.psd1`
+  (the untracked `scripts/deploy.config.ps1` is never read), with the shared
+  settings (default rules + the one-true-brace layout). Any finding fails it.
+- **docs** (`docs.yml`): markdownlint-cli2 0.24.0 over every `.md` (the shared config,
+  through `.markdownlint-cli2.jsonc`), `.editorconfig` / `.gitattributes` still
+  matching `shared/repo` above their project marker, and every shared workflow ref
+  naming the release the submodule holds.
+- **release** (`needs: [frontend, backend, plugin, scripts, docs]`, only on a push to
+  `main`): runs `.github/scripts/release.sh`, which for each component reads its
+  current version (`package.json` / `version.go` / `SenpanCompanion.csproj`) and, if
+  the `<Component>-v<version>` release doesn't exist yet, tags it and publishes a
   GitHub Release whose body is that component's `CHANGELOG.md` section. Idempotent
   (already-released versions are skipped) and gated on the whole gate passing, so
   only green commits release. Needs `contents: write` (set at the job level; the
   workflow default is `contents: read`).
 
-When adding a check, wire it into both the relevant npm/go/dotnet script **and**
-`.github/workflows/ci.yml` so local and CI stay in lockstep.
+`scripts/check.ps1` (the pre-push hook's gate) runs, stopping at the first failure:
+backend - the golangci config check, golangci-lint, `go build`, `go vet`, `go test`
+(without `-race`, which needs gcc) and govulncheck; frontend - the frontend job's
+scripts plus `npm audit`; then, on a full run only, the plugin's build and
+`dotnet format` (skipped with a message when `dotnet` isn't installed) and the
+scripts and docs jobs' checks. It needs `shared/` checked out, and says so when it
+isn't.
+
+When adding a check, wire it into both `scripts/check.ps1` **and** the matching job
+in `.github/workflows/ci.yml` (a new npm script goes in the frontend job's `scripts`
+list) so local and CI stay in lockstep. A check every project should run belongs in
+shared-tooling's workflow instead.
 
 ## Deployment (Apache)
 
@@ -752,13 +871,14 @@ The frontend is served statically by Apache; `/api/*` + `/api/ws` are reverse-
 proxied to the Go server. The document root layout keeps uploads separate from
 the built SPA so redeploys never wipe them (full guide in `deploy/README.md`):
 
-```
+```text
 <DocumentRoot>/
 +-- .htaccess        <- deploy/.htaccess  (SPA fallback: serves dist/index.html; routes /assets -> dist/assets; /images served from root)
 +-- images/          <- deploy/images/    (PERSISTENT: logo/favicon/banner + raffles/, announcements/, bookclub/ uploads)
 +-- fonts/           <- (PERSISTENT: admin-uploaded font files; NOT static - streamed by the Go server via tokenized URLs; fonts.senpan.cafe reverse-proxies to /api/fonts/pub/)
 +-- carrd/           <- (PERSISTENT: Carrd image-host projects; served by the carrd.senpan.cafe vhost)
-\-- dist/            <- frontend/dist/    (built SPA; replaced each deploy)
++-- plugin/          <- the Dalamud custom repo: pluginmaster.json + SenpanCompanionAdmin/latest.zip + .htaccess (deploy/plugin.htaccess); replaced by -Target plugin/all, previous kept as plugin.old
+\-- dist/            <- frontend/dist/    (built SPA; replaced each deploy, previous kept as dist.old)
 ```
 
 - Run the Go server with `-webroot <DocumentRoot>`; uploads are written under
@@ -1012,8 +1132,8 @@ festival dashboard (`FestivalEmaSection.vue`):
   site is never capped.
 - **The artist posts a finished request from the queue** (`POST
   /api/ema-requests/{id}/post`, `EmaRequestPostModal.vue`): the uploaded image goes
-  straight to the request's day webhook as "Requested by <character>, made by
-  <artist>" and the request is completed. No review (the artist is staff) and **no
+  straight to the request's day webhook as "Requested by \<character>, made by
+  \<artist>" and the request is completed. No review (the artist is staff) and **no
   copy kept** - the multipart body is capped under the parse's memory limit so it
   never spills to a temp file, and nothing is written. Same claim as an approval
   (`requested` -> `posting` -> `complete`, back to `requested` on a failed post).
@@ -1041,7 +1161,7 @@ behave the same way:
 - **every id goes to 0** (the item's own, plus nested stamp/prize rows), so saving
   CREATES instead of overwriting the thing it was copied from - the single most
   damaging way to get this wrong;
-- **the title gains ` (Copy)`**, since the form can be submitted as-is and two
+- **the title gains `(Copy)`**, since the form can be submitted as-is and two
   identically named events are a support problem;
 - **dates are cleared** - a raffle's availability window, a rally's window AND its
   per-stamp active windows (a stale one silently gates a stall on last event's
@@ -1177,7 +1297,7 @@ draw and the collected-gil totals read.
 
 - **CSS naming + token drift**: see **CSS conventions** under **Frontend** - role-named shared objects, `-` for a part, `--` for a modifier, `is-` for state, the component's full name as a scoped prefix, and never the appearance. Shared styles are the default; a rule becomes a shared object at its **second** occurrence. Scoped CSS may only shrink (ratcheted against `scoped-css-baseline.json`; new SFCs cap at 120 lines). The themeable token list is duplicated in three sources that must agree, and every themeable token must have a consumer outside the theme editor. All of it is gated by `npm run lint:conventions`.
 - **Typed structs everywhere**: all store methods return typed `model.*` structs - no `map[string]interface{}`.
-- **Context everywhere, cancellable by default**: every store method that touches the database takes `ctx context.Context` first and uses the `*Context` query forms (golangci-lint's `noctx` holds it). Handlers pass `r.Context()`, so a request whose client has gone stops its queries; the background loops pass the process context `main.go` cancels on SIGINT/SIGTERM (and that context runs the migrations in `store.New(ctx, path)`). Work that has to finish after the response - a delayed player draw, a half-time timer, a broadcast's reads, or a run of writes a cancellation would leave half-done - runs under `context.WithoutCancel(r.Context())`. A query canceled that way fails with `context.Canceled` or SQLite's interrupt (`store.Interrupted`); `writeInternalError` and `errorLevel` log those at Debug, and the access line logs such a 500 at Info with `canceled=true`, so a dropped connection never reads as an outage.
+- **Context everywhere, cancellable by default**: every store method that touches the database takes `ctx context.Context` first and uses the `*Context` query forms (golangci-lint's `noctx` holds it). Handlers pass `r.Context()`, so a request whose client has gone stops its queries; the background loops pass the process context `main.go` cancels on SIGINT/SIGTERM (and that context runs the migrations in `store.New(ctx, path)`). Work that has to finish after the response - a delayed player draw, a half-time timer, a broadcast's reads, or a run of writes a cancellation would leave half-done - runs under `context.WithoutCancel(r.Context())`. A query canceled that way fails with `context.Canceled` - database/sql answers that for one refused before it ran, and the driver for one it interrupts mid-run - and `store.Interrupted` (SQLite's own interrupt code) is the backstop for an interrupt that arrives unconverted; `writeInternalError` and `errorLevel` log both at Debug (`clientGone`), and the access line logs such a 500 at Info with `canceled=true`, so a dropped connection never reads as an outage.
 - **Dependency injection**: `Server` struct holds all deps (`Store`, `GameService`, `Hub`, sessions, password). No package-level globals.
 - **Method-pattern routing**: Go 1.26+ `"GET /api/auth"` patterns - no manual method checks.
 - **Typed JSON requests**: each handler defines a request struct and uses `readJSON[T]()` generic decoder.
@@ -1204,14 +1324,15 @@ draw and the collected-gil totals read.
 - **Crash isolation**: a top-level panic-recovery wrapper in `ServeHTTP` logs the panic (with stack, path redacted) and returns a 500 while the access-log line still records; long-lived/background goroutines (the auto-draw loop, the WS client read/write pumps, the scheduler sweep, and the deferred player-draw/half-time timers) each `recover()` so one panic can't take down the process.
 - **HTTP server timeouts**: `ReadHeaderTimeout`/`ReadTimeout`/`IdleTimeout` are set on the `http.Server` to bound slow-client (Slowloris) exposure; there is deliberately **no** global `WriteTimeout` (it would sever the long-lived `/api/ws` socket). A listen failure sends to an error channel that triggers the normal graceful shutdown (deferred cleanup runs) rather than `os.Exit`.
 - **WS upgrade is access-logged**: because `/api/ws` bypasses the request-logging middleware, `handleWS` emits its own structured log line (method/path/status/ip/actor) - including rejected admin attempts - so the privileged channel is auditable.
-- **SQLite pragmas**: WAL mode, synchronous=NORMAL, busy_timeout=5000, cache_size=8MB, mmap_size=32MB, foreign_keys=ON, temp_store=MEMORY, max_open_conns=4. They are applied **per connection** via the ncruces `driver.Open` connect hook (`connectPragmas` in `store.go`) - not once after open - because most of these are per-connection in SQLite. This matters for correctness, not just tuning: `foreign_keys` (default OFF) is what makes the `ON DELETE CASCADE` rules fire, so a delete on a connection without it would silently orphan child rows.
+- **SQLite pragmas**: WAL mode, synchronous=NORMAL, busy_timeout=5000, cache_size=8MB, mmap_size=32MB, foreign_keys=ON, temp_store=MEMORY, max_open_conns=4. The driver is **`modernc.org/sqlite`** (pure Go, no cgo), and the pragmas travel in the DSN as `_pragma` parameters (`connectPragmas` + `dsn()` in `store.go`), which the driver applies to **every connection** as it opens it - not once after open - because most of these are per-connection in SQLite. This matters for correctness, not just tuning: `foreign_keys` (default OFF) is what makes the `ON DELETE CASCADE` rules fire, so a delete on a connection without it would silently orphan child rows. The DSN also carries `_txlock=immediate`, so every read-write transaction on the pool begins `BEGIN IMMEDIATE` (the driver ignores `TxOptions.Isolation`); `beginImmediate` names the transactions that rely on taking the write lock up front. `store/driver_test.go` checks all of this against the real driver.
+- **DATETIME columns are read as `CAST(col AS TEXT)`** - every one, in every query, and in every new store method. modernc parses a column declared `DATE`, `DATETIME` or `TIMESTAMP` into a `time.Time`, which database/sql then formats as RFC 3339 when it scans into a string, so a bare `created_at` would reach the API as `2026-01-02T03:04:05Z` where the table holds `2026-01-02 03:04:05` - and the frontend and the plugin parse the two differently. The cast hands the value back as stored. A `COALESCE(col, '')` is already an expression and needs no cast. `TestDatetimeColumnsReadAsStored` (`store/driver_test.go`) guards the paths the frontend and plugin parse.
 - **WebSocket bypass**: `/api/ws` is routed directly to the mux, bypassing the SCS session middleware and `responseWriter` wrapper - `coder/websocket` requires the raw `http.ResponseWriter` for the upgrade handshake. Because it skips the middleware, `handleWS` reads the session manually (`wsSessionUser`) to gate the admin channel (no-`id` connections require an authenticated, active account); player connections (with a card `id`) stay public.
 - **Pre-built session handler**: `sessions.LoadAndSave(mux)` is constructed once in `New()` and stored as `sessHandler` - not rebuilt per-request.
 - **Client-side keepalive**: JS sends a `ping` text message every 25s to prevent reverse-proxy idle timeouts from dropping the WebSocket.
 - **Rate limiter**: IP-based brute-force protection for login / registration / passkey-login (begin + finish). Its per-IP key comes from the same `logClientIP` logic the access log uses - `CF-Connecting-IP`/`X-Forwarded-For` trusted **only** from the loopback proxy peer, else `RemoteAddr` - so a client behind Cloudflare can neither share nor forge another IP's throttle bucket (`clientIP` delegates to `logClientIP`).
 - **FontAwesome**: bundled via `@fortawesome/fontawesome-svg-core`; only the used Pro-kit icons are added to the library in `frontend/src/lib/fontawesome.ts`. Templates render them with the global **`<font-awesome-icon :icon="[prefix, name]" />`** component (`@fortawesome/vue-fontawesome`, registered in `main.ts`) - `['fad', ...]` duotone, `['fas', ...]` solid, `['fab', 'discord']` brands. Vue owns the `<svg>` directly (no `dom.watch()`/MutationObserver, no nest-mode hack). The shared `ui/` primitives (AdminPanel/ManagerView/SubPageHeader/EmptyState) take an `icon?: [IconPrefix, string]` prop and forward it (name is `string` because Pro icon names aren't in FA's free `IconName`). CSS targets the rendered `.svg-inline--fa` (not `<i>`). Component tests stub `<font-awesome-icon>` globally via `vitest.setup.ts`.
 - **Theme editor**: structured token editor (`ThemeTokenEditor.vue`) bound to the edited theme's `tokens` map; `lib/theme-tokens.ts` is the token source of truth. Themes are token-only (no free-form CSS); the applied `:root{}` is generated server-side (`store.TokensToCSS`) and locally for the live preview (`tokensToCss`). CodeMirror was removed.
-- **TS<->Go type sync**: `frontend/src/types/api.generated.ts` is generated from `internal/model` by tygo (`backend/tygo.yaml`); it is **gitignored** - regenerate with `npm run gen:types` (needs Go) after a fresh clone or model change. Never edit the generated file.
+- **TS<->Go type sync**: `frontend/src/types/api.generated.ts` is generated from `internal/model` by tygo (`backend/tygo.yaml`; `go tool tygo generate`, with tygo's version pinned by the `tool` directive in `backend/go.mod`); it is **committed** - regenerate with `npm run gen:types` (needs Go) after a model change and commit it with the change; CI's `generated` job fails on a stale copy. Never edit the generated file.
 - **Typed endpoint layer**: stores never call `api<T>('path')` directly - they call `endpoints.*` (`frontend/src/lib/endpoints.ts`), which wraps every backend path in a typed function. Add new endpoints there so paths/bodies/response types live in one place.
 - **Global 401 handling**: `api.ts` invokes a registered handler (set in `main.ts`) on any non-auth 401 -> redirect to `/admin/login` + "session expired" toast. Auth endpoints pass `skipAuthRedirect` so a bad-password login doesn't trigger it.
 - **Themed confirm dialog**: use `await ui.confirm(message, opts)` (renders `ConfirmModal.vue`) instead of the native `window.confirm`.
@@ -1254,7 +1375,7 @@ draw and the collected-gil totals read.
 
 - **New API endpoint**: add a handler method on `*Server` in `internal/server/` returning a **typed response struct** from `internal/model` (add it to `model/responses*.go` - not `map[string]any`), register the route in `routes()`, add a typed wrapper in `frontend/src/lib/endpoints.ts`, then add the endpoint to the OpenAPI paths table in `internal/apidoc/paths*.go` (add its response schema name to `internal/apidoc/schemas.go` too) and run `go run ./cmd/openapi-gen`. The `internal/apidoc` tests fail if a route is undocumented or `openapi.yaml` is stale.
 - **New domain type / response struct**: add to `internal/model/` (domain in `model.go`, response envelopes in `model/responses*.go`), then run `npm run gen:types` (frontend types) and, if it's referenced by the spec, add it to `internal/apidoc/schemas.go` + `go run ./cmd/openapi-gen`.
-- **New store method**: add to the matching domain file in `internal/store/` (`raffles.go`, `patterns.go`, ...; new domain -> new file), taking `ctx context.Context` first and returning typed structs.
+- **New store method**: add to the matching domain file in `internal/store/` (`raffles.go`, `patterns.go`, ...; new domain -> new file), taking `ctx context.Context` first and returning typed structs. **Read every `DATE`/`DATETIME`/`TIMESTAMP` column as `CAST(col AS TEXT)`** (see **DATETIME columns** above) - a bare one comes back reformatted as RFC 3339 - and add the path to `TestDatetimeColumnsReadAsStored` when the frontend or plugin parses it. A multi-statement write goes through `beginImmediate`.
 - **New migration**: bump `schemaVersion` in `store/migrate.go`, add an `if version < N` block in `ensureSchema()`.
 - **New admin tab**: add the tab id to the `AdminTab` union in `frontend/src/stores/admin.ts` (mapping its prefix to a section in `setTabFromRoute()` + any per-tab data load - wrap the load in `loadFresh('<key>', ...)` so revisits stay snappy), add a child route with `meta.tab` in `router/index.ts`, add a sidebar link (gated with `v-if="can('<key>')"`) in `components/admin/AdminSidebar.vue`, and create a `components/admin/<Tab>.vue` referenced by the route's lazy `import()`. **Wire its permission too** (see "New admin page permission" below) unless it's admin-only. For a "manage items" tab use the **manager model** (`ManagerView` + `ListRow` + `SubPageHeader` + `SearchInput`, with a `screen` ref for sub-pages - see `PatternsTab.vue`); otherwise wrap content in `<AdminPanel>`. Either way build forms/tables from the `components/common/ui/` primitives (`FormField`, `FormRow`, `FormActions`, `DataTable`, `PaginationBar`, `EmptyState`) rather than hand-rolled markup.
 - **New admin page permission**: the page-permission key **must equal** the tab id. Add the constant + include it in `validPermissions()` in `server/permissions.go`; guard the page's handlers with `s.requirePermission(w, r, perm...)`; add an entry to `ADMIN_PERMISSIONS` in `frontend/src/lib/constants.ts` (label + section) so the Users-page editor, sidebar gating, and router guard all pick it up. (An **admin-only** page instead guards with `requireAdmin` and is left out of `ADMIN_PERMISSIONS` - see `system-users`.)

@@ -27,6 +27,6 @@ describe('CalledNumbers', () => {
     const w = mount(CalledNumbers, { props: { count: 1, isCalled: (n: number) => n === 5 } })
     const called = w.findAll('.num-cell.is-called')
     expect(called).toHaveLength(1)
-    expect(called[0].text()).toBe('5')
+    expect(called[0]!.text()).toBe('5')
   })
 })

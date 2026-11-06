@@ -22,7 +22,9 @@ const editInput = useTemplateRef<HTMLInputElement>('editInput')
 
 /** Copies the card's full playable URL (origin + /play/:cardId) to clipboard. */
 function copyCardUrl(): void {
-  if (!cards.previewCard) return
+  if (!cards.previewCard) {
+    return
+  }
   const href = router.resolve({ name: 'player', params: { cardId: cards.previewCard.id } }).href
   ui.copyToClipboard(window.location.origin + href)
 }

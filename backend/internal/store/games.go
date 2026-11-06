@@ -62,7 +62,7 @@ func (s *Store) StartGame(ctx context.Context, patterns []model.BingoGamePattern
 	}
 
 	var createdAt string
-	if err := tx.QueryRowContext(ctx, "SELECT created_at FROM games WHERE id = ?", gameID).Scan(&createdAt); err != nil {
+	if err := tx.QueryRowContext(ctx, "SELECT CAST(created_at AS TEXT) FROM games WHERE id = ?", gameID).Scan(&createdAt); err != nil {
 		return 0, "", err
 	}
 
@@ -82,7 +82,7 @@ func (s *Store) EndGame(ctx context.Context, gameID int64) error {
 func (s *Store) GetActiveGame(ctx context.Context) (*model.BingoGame, error) {
 	var g model.BingoGame
 	err := s.db.QueryRowContext(ctx,
-		"SELECT id, status, created_at, winners_cache FROM games WHERE status = 'active' ORDER BY id DESC LIMIT 1",
+		"SELECT id, status, CAST(created_at AS TEXT), winners_cache FROM games WHERE status = 'active' ORDER BY id DESC LIMIT 1",
 	).Scan(&g.ID, &g.Status, &g.CreatedAt, &g.WinnersCache)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil

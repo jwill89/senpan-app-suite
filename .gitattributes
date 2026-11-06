@@ -1,13 +1,37 @@
-# Normalize all text files to LF in the repo and working tree.
-# Keeps Go (gofmt) happy and matches the Linux deploy target.
+# LF everywhere, regardless of the machine's core.autocrlf: the deploy scripts send
+# shell to the droplet, and gofmt, Prettier and PHP CS Fixer all expect LF. eol=lf
+# overrides autocrlf, so no per-machine setup is needed.
+#
+# Copied in from shared-tooling/repo by Sync-RepoFiles.ps1. Edit only below the
+# project marker; everything above it is rewritten on the next sync.
 * text=auto eol=lf
 
-# Binary assets - never touch.
+# cmd.exe misreads LF-terminated batch files.
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# Binary: listed rather than left to content detection, so a text-looking header is
+# never normalised into corruption.
 *.png binary
 *.jpg binary
 *.jpeg binary
 *.gif binary
 *.webp binary
+*.avif binary
+*.bmp binary
 *.ico binary
+*.pdf binary
+*.woff binary
+*.woff2 binary
+*.ttf binary
+*.otf binary
+*.mp4 binary
+*.webm binary
+*.mid binary
 *.exe binary
+*.db binary
 *.sqlite binary
+*.xlsx binary
+*.pyc binary
+
+# ---- project: lines below this one are this repo's own ----

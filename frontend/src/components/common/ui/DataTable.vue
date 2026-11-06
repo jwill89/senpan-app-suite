@@ -175,9 +175,15 @@ const cellOf = (row: T, key: string): unknown => (row as Record<string, unknown>
 /** Cell value as comparable/searchable text. Narrowed explicitly rather than
  *  `String(v)` so an object cell yields its JSON instead of "[object Object]". */
 function asText(v: unknown): string {
-  if (v == null) return ''
-  if (typeof v === 'string') return v
-  if (typeof v === 'number' || typeof v === 'boolean') return String(v)
+  if (v == null) {
+    return ''
+  }
+  if (typeof v === 'string') {
+    return v
+  }
+  if (typeof v === 'number' || typeof v === 'boolean') {
+    return String(v)
+  }
   return JSON.stringify(v)
 }
 
@@ -204,7 +210,9 @@ const userSorting = ref<SortingState>(
  */
 const sorting = computed<SortingState>(() => {
   const active = userSorting.value
-  if (!props.groupBy || active[0]?.id === props.groupBy) return active
+  if (!props.groupBy || active[0]?.id === props.groupBy) {
+    return active
+  }
   return [{ id: props.groupBy, desc: false }, ...active]
 })
 
@@ -273,9 +281,13 @@ const table = useTable<typeof features, T>({
     sizing.value = typeof updater === 'function' ? updater(sizing.value) : updater
   },
   globalFilterFn: (row, _columnId, query: string) => {
-    if (!query) return true
+    if (!query) {
+      return true
+    }
     const original = row.original
-    if (props.filterFn) return props.filterFn(original, query)
+    if (props.filterFn) {
+      return props.filterFn(original, query)
+    }
     return props.columns.some((c) => asText(cellOf(original, c.key)).toLowerCase().includes(query))
   },
 })
@@ -295,9 +307,13 @@ const visibleRows = computed(() => table.getRowModel().rows.map((r) => r.origina
 const facets = computed<Record<string, DataFacet[]>>(() => {
   const out: Record<string, DataFacet[]> = {}
   for (const col of props.columns) {
-    if (!col.facetable) continue
+    if (!col.facetable) {
+      continue
+    }
     const uniq = table.getColumn(col.key)?.getFacetedUniqueValues()
-    if (!uniq) continue
+    if (!uniq) {
+      continue
+    }
     out[col.key] = [...uniq.entries()]
       .map(([value, count]) => ({ value: asText(value), count }))
       .filter((f) => f.value !== '')
@@ -321,7 +337,9 @@ watch(sorting, () => (page.value = 1))
 watch(
   totalPages,
   (n) => {
-    if (page.value > n) page.value = n
+    if (page.value > n) {
+      page.value = n
+    }
   },
   { immediate: true },
 )
@@ -406,8 +424,11 @@ defineExpose({ exportCsv })
 function toggleExpand(row: T): void {
   const k = keyFor(row)
   const next = new Set(expandedKeys.value)
-  if (next.has(k)) next.delete(k)
-  else next.add(k)
+  if (next.has(k)) {
+    next.delete(k)
+  } else {
+    next.add(k)
+  }
   expandedKeys.value = next
 }
 function isExpanded(row: T): boolean {
@@ -417,16 +438,22 @@ function isExpanded(row: T): boolean {
 /** Toggle expand on row click - but let clicks on interactive cell controls
  *  (buttons, links, form fields) through without also toggling the row. */
 function onRowClick(row: T, e: MouseEvent): void {
-  if (!hasDetail.value) return
+  if (!hasDetail.value) {
+    return
+  }
   const target = e.target as HTMLElement | null
-  if (target?.closest('button, a, input, select, textarea, label')) return
+  if (target?.closest('button, a, input, select, textarea, label')) {
+    return
+  }
   toggleExpand(row)
 }
 
 /** Enter/Space toggle the row - only when the row itself (not an inner control)
  *  holds focus, so activating a cell button doesn't also expand the row. */
 function onRowKeydown(row: T, e: KeyboardEvent): void {
-  if (!hasDetail.value || e.target !== e.currentTarget) return
+  if (!hasDetail.value || e.target !== e.currentTarget) {
+    return
+  }
   if (e.key === 'Enter' || e.key === ' ') {
     e.preventDefault()
     toggleExpand(row)
@@ -435,14 +462,18 @@ function onRowKeydown(row: T, e: KeyboardEvent): void {
 
 // -- Header -------------------------------------------------------------------
 function onHeaderClick(col: DataColumn): void {
-  if (col.sortable) table.getColumn(col.key)?.toggleSorting()
+  if (col.sortable) {
+    table.getColumn(col.key)?.toggleSorting()
+  }
 }
 
 /** Sort-direction icon for the active column; null when this column isn't sorted.
  *  A FontAwesome chevron rather than a text glyph, so it renders in the icon font
  *  everywhere instead of depending on the platform having the arrow characters. */
 function sortIcon(col: DataColumn): ['fas', string] | null {
-  if (!col.sortable) return null
+  if (!col.sortable) {
+    return null
+  }
   const dir = table.getColumn(col.key)?.getIsSorted()
   return dir ? ['fas', dir === 'asc' ? 'chevron-up' : 'chevron-down'] : null
 }

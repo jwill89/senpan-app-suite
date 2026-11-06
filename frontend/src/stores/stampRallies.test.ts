@@ -9,6 +9,7 @@ import type {
   StampLookupEntry,
   StampRally,
   StampRallyLogEntry,
+  StampRallyStamp,
   StampSignupResponse,
 } from '@/types/api'
 
@@ -158,10 +159,10 @@ describe('admin', () => {
   it('setRallyStatus updates the selected + listed rally', async () => {
     const s = useStampRalliesStore()
     s.rallies = [{ id: 1, status: 'open' } as StampRally]
-    s.selectedRally = s.rallies[0]
+    s.selectedRally = s.rallies[0]!
     await s.setRallyStatus(1, 'closed')
     expect(ep.setStatus).toHaveBeenCalledWith(1, 'closed')
-    expect(s.rallies[0].status).toBe('closed')
+    expect(s.rallies[0]!.status).toBe('closed')
     expect(s.selectedRally.status).toBe('closed')
   })
 
@@ -171,10 +172,10 @@ describe('admin', () => {
     s.cardStamps[1] = [
       { id: 10, paused: false },
       { id: 11, paused: false },
-    ] as never
+    ] as StampRallyStamp[]
     await s.setStampPausedInList(1, 10, true)
-    expect(s.cardStamps[1][0].paused).toBe(true)
-    expect(s.rallies[0].active_stamp_count).toBe(1)
+    expect(s.cardStamps[1][0]!.paused).toBe(true)
+    expect(s.rallies[0]!.active_stamp_count).toBe(1)
   })
 
   it('saveRally requires a title', async () => {
@@ -295,7 +296,7 @@ describe('public', () => {
     expect(s.cardProgress.game.unreachable).toBe(true)
     // A stall that is merely closed right now can still be collected later.
     // (Mutate through the store, so the computed sees the change.)
-    s.publicCard.stamps[1].expired = false
+    s.publicCard.stamps[1]!.expired = false
     expect(s.cardProgress.game.unreachable).toBe(false)
   })
 
@@ -462,14 +463,14 @@ describe('copyRallyForm', () => {
     expect(f.redeem_instructions).toBe('See staff')
     expect(f.public_signup).toBe(true)
     expect(f.stamps).toHaveLength(1)
-    expect(f.stamps[0].password).toBe('moon')
-    expect(f.stamps[0].affiliate_id).toBe(3)
-    expect(f.stamps[0].stamp_type).toBe('game')
+    expect(f.stamps[0]!.password).toBe('moon')
+    expect(f.stamps[0]!.affiliate_id).toBe(3)
+    expect(f.stamps[0]!.stamp_type).toBe('game')
     // The completion rule describes the event, not the run that already happened.
     expect(f.completion_mode).toBe('counts')
     expect(f.required_food).toBe(1)
     expect(f.required_game).toBe(1)
-    expect(f.prizes[0].name).toBe('Grand')
+    expect(f.prizes[0]!.name).toBe('Grand')
   })
 
   /**
@@ -504,8 +505,8 @@ describe('copyRallyForm', () => {
     const f = store.rallyForm!
 
     expect(f.id).toBe(0)
-    expect(f.stamps[0].id).toBe(0)
-    expect(f.prizes[0].id).toBe(0)
+    expect(f.stamps[0]!.id).toBe(0)
+    expect(f.prizes[0]!.id).toBe(0)
   })
 
   it('clears the dates and paused flags tied to the run that already happened', () => {
@@ -516,23 +517,23 @@ describe('copyRallyForm', () => {
     expect(f.available_from).toBe('')
     expect(f.available_to).toBe('')
     // A stale per-stamp window would silently gate a stall on last event's dates.
-    expect(f.stamps[0].active_from).toBe('')
-    expect(f.stamps[0].active_to).toBe('')
-    expect(f.stamps[0].paused).toBe(false)
+    expect(f.stamps[0]!.active_from).toBe('')
+    expect(f.stamps[0]!.active_to).toBe('')
+    expect(f.stamps[0]!.paused).toBe(false)
   })
 
   it('drops the festival link, so a copy is not filed under the finished festival', () => {
     const store = useStampRalliesStore()
     const source = sourceRally()
     source.festival_map_id = 4
-    source.stamps![0].occupant_id = 21
+    source.stamps![0]!.occupant_id = 21
     store.copyRallyForm(source)
     const f = store.rallyForm!
 
     // The original's stalls still exist, so nothing on the server would clear
     // these - next year's rally would silently name last year's stalls.
     expect(f.festival_map_id).toBeNull()
-    expect(f.stamps[0].occupant_id).toBeNull()
+    expect(f.stamps[0]!.occupant_id).toBeNull()
   })
 
   it('leaves the original untouched', () => {
@@ -540,11 +541,11 @@ describe('copyRallyForm', () => {
     const source = sourceRally()
     store.copyRallyForm(source)
     store.rallyForm!.title = 'Something else'
-    store.rallyForm!.stamps[0].password = 'changed'
+    store.rallyForm!.stamps[0]!.password = 'changed'
 
     expect(source.title).toBe('Obon Rally')
-    expect(source.stamps?.[0].password).toBe('moon')
-    expect(source.stamps?.[0].id).toBe(41)
+    expect(source.stamps?.[0]!.password).toBe('moon')
+    expect(source.stamps?.[0]!.id).toBe(41)
   })
 })
 
@@ -603,14 +604,14 @@ describe('festival map linkage', () => {
     const store = useStampRalliesStore()
     store.newRallyForm()
     store.addStamp('food')
-    store.rallyForm!.stamps[0].occupant_id = 999 // belonged to some other map
+    store.rallyForm!.stamps[0]!.occupant_id = 999 // belonged to some other map
 
     await store.setFestivalMap(4)
 
     expect(store.rallyForm!.festival_map_id).toBe(4)
     expect(store.mapStalls).toHaveLength(1)
     // The old stall id belonged to the previously-linked map, so it can't stand.
-    expect(store.rallyForm!.stamps[0].occupant_id).toBeNull()
+    expect(store.rallyForm!.stamps[0]!.occupant_id).toBeNull()
   })
 
   it('unlinking clears the stall list and every stamp stall', async () => {
@@ -624,7 +625,7 @@ describe('festival map linkage', () => {
     await store.setFestivalMap(null)
 
     expect(store.mapStalls).toEqual([])
-    expect(store.rallyForm!.stamps[0].occupant_id).toBeNull()
+    expect(store.rallyForm!.stamps[0]!.occupant_id).toBeNull()
   })
 
   it("takes the stall's affiliate and seeds the stamp type from what it offers", async () => {
@@ -640,13 +641,13 @@ describe('festival map linkage', () => {
     await store.setFestivalMap(4)
 
     store.setStampStall(0, 21)
-    expect(store.rallyForm!.stamps[0].affiliate_id).toBe(9)
-    expect(store.rallyForm!.stamps[0].stamp_type).toBe('game')
+    expect(store.rallyForm!.stamps[0]!.affiliate_id).toBe(9)
+    expect(store.rallyForm!.stamps[0]!.stamp_type).toBe('game')
 
     // A stall with no affiliate of its own falls back to the venue, as a food stamp.
     store.setStampStall(0, 22)
-    expect(store.rallyForm!.stamps[0].affiliate_id).toBeNull()
-    expect(store.rallyForm!.stamps[0].stamp_type).toBe('food')
+    expect(store.rallyForm!.stamps[0]!.affiliate_id).toBeNull()
+    expect(store.rallyForm!.stamps[0]!.stamp_type).toBe('food')
   })
 
   it('sends the map link and each stamp stall on save', async () => {
@@ -661,6 +662,6 @@ describe('festival map linkage', () => {
     expect(await store.saveRally()).toBe(true)
     const payload = (ep.create.mock.calls.at(-1) as unknown[])[0] as Record<string, unknown>
     expect(payload.festival_map_id).toBe(4)
-    expect((payload.stamps as Record<string, unknown>[])[0].occupant_id).toBe(21)
+    expect((payload.stamps as Record<string, unknown>[])[0]!.occupant_id).toBe(21)
   })
 })

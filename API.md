@@ -36,7 +36,7 @@ WebSocket upgrade). A token inherits its account's permissions, so external clie
 (e.g. the FFXIV plugin) pass through the same guards as the SPA.
 
 Each operation's description states its guard: **public**, **auth** (any active
-account), **admin**, or **permission:<key>**. Grantable page-permission keys:
+account), **admin**, or **permission:\<key>**. Grantable page-permission keys:
 `bingo-game`, `bingo-cards`, `bingo-winners-log`, `bingo-patterns`, `bingo-presets`,
 `teahouse-announcements`, `teahouse-affiliates`, `teahouse-tea-rooms`, `teahouse-raffles`,
 `festival-garapon`, `festival-stamp-rally`, `atelier-fonts`, `atelier-carrd`,

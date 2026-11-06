@@ -40,7 +40,7 @@ func decodeEventTimes(raw string) []model.EventTime {
 // ListFestivalMaps returns every map, newest first, each with its stall count.
 // Stalls themselves are omitted (use GetFestivalMap).
 func (s *Store) ListFestivalMaps(ctx context.Context) ([]model.FestivalMap, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT m.id, m.title, m.slug, m.description, m.times, m.map_image, m.status, m.created_at,
+	rows, err := s.db.QueryContext(ctx, `SELECT m.id, m.title, m.slug, m.description, m.times, m.map_image, m.status, CAST(m.created_at AS TEXT),
 			COALESCE((SELECT COUNT(*) FROM festival_stalls st WHERE st.map_id = m.id), 0)
 		FROM festival_maps m ORDER BY m.created_at DESC, m.id DESC`)
 	if err != nil {
@@ -84,7 +84,7 @@ func (s *Store) GetFestivalMapBySlug(ctx context.Context, slug string) (*model.F
 func (s *Store) getFestivalMapWhere(ctx context.Context, where string, arg any) (*model.FestivalMap, error) {
 	var m model.FestivalMap
 	var times string
-	err := s.db.QueryRowContext(ctx, `SELECT id, title, slug, description, times, map_image, status, created_at
+	err := s.db.QueryRowContext(ctx, `SELECT id, title, slug, description, times, map_image, status, CAST(created_at AS TEXT)
 		FROM festival_maps WHERE `+where, arg).
 		Scan(&m.ID, &m.Title, &m.Slug, &m.Description, &times, &m.MapImage, &m.Status, &m.CreatedAt)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -458,7 +458,7 @@ func (s *Store) SetFestivalMapStatus(ctx context.Context, id int64, status strin
 // ListPublishedFestivalMaps returns the published maps (newest first) with their
 // stall counts - the public list page. In-progress and closed maps never appear.
 func (s *Store) ListPublishedFestivalMaps(ctx context.Context) ([]model.FestivalMap, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT m.id, m.title, m.slug, m.description, m.times, m.map_image, m.created_at,
+	rows, err := s.db.QueryContext(ctx, `SELECT m.id, m.title, m.slug, m.description, m.times, m.map_image, CAST(m.created_at AS TEXT),
 			COALESCE((SELECT COUNT(*) FROM festival_stalls st WHERE st.map_id = m.id), 0)
 		FROM festival_maps m WHERE m.status = ?
 		ORDER BY m.created_at DESC, m.id DESC`, model.MapStatusPublished)

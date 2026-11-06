@@ -39,11 +39,16 @@ const modalStack: ModalEntry[] = []
 /** Re-apply inert/aria-hidden across the stack: only the top overlay is live. */
 function restack(): void {
   modalStack.forEach((m, i) => {
-    if (!m.overlay) return
+    if (!m.overlay) {
+      return
+    }
     const isTop = i === modalStack.length - 1
     m.overlay.inert = !isTop
-    if (isTop) m.overlay.removeAttribute('aria-hidden')
-    else m.overlay.setAttribute('aria-hidden', 'true')
+    if (isTop) {
+      m.overlay.removeAttribute('aria-hidden')
+    } else {
+      m.overlay.setAttribute('aria-hidden', 'true')
+    }
   })
 }
 
@@ -59,15 +64,23 @@ function inertBackground(overlay: HTMLElement): () => void {
   while (node.parentElement) {
     const parent = node.parentElement
     for (const sib of Array.from(parent.children)) {
-      if (sib === node) continue
+      if (sib === node) {
+        continue
+      }
       const el = sib as HTMLElement
-      if (el.classList.contains('modal-overlay') || el.querySelector('.modal-overlay')) continue
-      if (el.inert || el.hasAttribute('aria-hidden')) continue
+      if (el.classList.contains('modal-overlay') || el.querySelector('.modal-overlay')) {
+        continue
+      }
+      if (el.inert || el.hasAttribute('aria-hidden')) {
+        continue
+      }
       el.inert = true
       el.setAttribute('aria-hidden', 'true')
       changed.push(el)
     }
-    if (parent === document.body) break
+    if (parent === document.body) {
+      break
+    }
     node = parent
   }
   return () => {
@@ -91,7 +104,9 @@ function isTop(): boolean {
 
 /** Returns the focusable elements within the dialog, in DOM order. */
 function focusable(): HTMLElement[] {
-  if (!box.value) return []
+  if (!box.value) {
+    return []
+  }
   return Array.from(
     box.value.querySelectorAll<HTMLElement>(
       'a[href], button:not([disabled]), textarea, input, select, [tabindex]:not([tabindex="-1"])',
@@ -103,22 +118,26 @@ function onKeydown(e: KeyboardEvent): void {
   // Only the top-most modal reacts - a lower modal must ignore keys meant for
   // the dialog stacked above it (e.g. Escape on a confirm dialog opened from an
   // edit modal must not also close the edit modal).
-  if (!isTop()) return
+  if (!isTop()) {
+    return
+  }
   if (e.key === 'Escape') {
     e.stopImmediatePropagation()
     emit('close')
     return
   }
-  if (e.key !== 'Tab') return
+  if (e.key !== 'Tab') {
+    return
+  }
   // Trap focus within the dialog.
   const items = focusable()
-  if (items.length === 0) {
+  const first = items[0]
+  const last = items[items.length - 1]
+  if (!first || !last) {
     e.preventDefault()
     box.value?.focus()
     return
   }
-  const first = items[0]
-  const last = items[items.length - 1]
   const active = document.activeElement as HTMLElement | null
   if (e.shiftKey && (active === first || !box.value?.contains(active))) {
     e.preventDefault()
@@ -142,13 +161,15 @@ onMounted(() => {
   document.addEventListener('keydown', onKeydown, true)
   // Focus the first focusable control, else the dialog itself.
   const items = focusable()
-  ;(items[0] ?? box.value).focus()
+  ;(items[0] ?? box.value)?.focus()
 })
 
 onBeforeUnmount(() => {
   document.removeEventListener('keydown', onKeydown, true)
   const i = modalStack.indexOf(entry)
-  if (i !== -1) modalStack.splice(i, 1)
+  if (i !== -1) {
+    modalStack.splice(i, 1)
+  }
   restoreBackground?.()
   restoreBackground = null
   restack()

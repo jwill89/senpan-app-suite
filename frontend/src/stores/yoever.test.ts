@@ -78,7 +78,7 @@ describe('yoever store', () => {
     const y = useYoeverStore()
     y.show('Tifa')
     expect(y.active).toHaveLength(1)
-    expect(y.active[0].name).toBe('Tifa')
+    expect(y.active[0]!.name).toBe('Tifa')
     vi.advanceTimersByTime(YOEVER_DURATION_MS + 10)
     expect(y.active).toHaveLength(0)
     vi.useRealTimers()
@@ -94,7 +94,9 @@ describe('yoever store', () => {
   it('caps the number of concurrent reactions', () => {
     vi.useFakeTimers()
     const y = useYoeverStore()
-    for (let i = 0; i < 20; i++) y.show(`P${i}`)
+    for (let i = 0; i < 20; i++) {
+      y.show(`P${i}`)
+    }
     expect(y.active.length).toBeLessThanOrEqual(8)
     vi.useRealTimers()
   })

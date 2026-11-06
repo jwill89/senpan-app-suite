@@ -21,9 +21,8 @@ fi
 root=$(git rev-parse --show-toplevel)
 echo "pre-push: running scripts/check.ps1 (CI mirror) - bypass with 'git push --no-verify'." >&2
 # Redirect stdin from /dev/null: git hands the pre-push hook the list of refs being
-# pushed on stdin, and some gate tools (e.g. `roslynator analyze`) read stdin as extra
-# path arguments - which fails the gate spuriously ("Project or solution file not found:
-# refs/heads/main ..."). check.ps1 never needs stdin.
+# pushed on stdin, and a gate tool that reads stdin takes them as extra arguments (the
+# Roslynator CLI the gate once ran failed on "refs/heads/main"). check.ps1 never needs stdin.
 "$shell" -NoProfile -ExecutionPolicy Bypass -File "$root/scripts/check.ps1" </dev/null
 code=$?
 if [ "$code" -ne 0 ]; then

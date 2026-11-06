@@ -13,7 +13,9 @@ const router = useRouter()
 /** Follows an alert's action and dismisses it - acting on it is the point. */
 function follow(a: UiAlert): void {
   ui.dismissAlert(a.id)
-  if (a.action) void router.push(a.action.to)
+  if (a.action) {
+    void router.push(a.action.to)
+  }
 }
 </script>
 

@@ -17,7 +17,7 @@ import (
 
 // teaRoomColumns is the shared SELECT column list for the tea_rooms table.
 const teaRoomColumns = `id, name, subtitle, room_owner, room_number, cost_per_half_hour, hashtags, description,
-	seasonal, open, lockable, discounted, locked, locked_until, image, color, sort_order, created_at`
+	seasonal, open, lockable, discounted, locked, locked_until, image, color, sort_order, CAST(created_at AS TEXT)`
 
 // scanTeaRoom scans one row (in teaRoomColumns order), decoding the 0/1 flag
 // columns into bools.

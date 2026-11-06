@@ -132,7 +132,9 @@ function backToDetail(): void {
 }
 /** Opens the create form pre-filled from this garapon (see copyGaraponForm). */
 function duplicateSelected(): void {
-  if (!garapons.selectedGarapon) return
+  if (!garapons.selectedGarapon) {
+    return
+  }
   garapons.copyGaraponForm(garapons.selectedGarapon)
   screen.value = 'form'
 }
@@ -147,13 +149,17 @@ function duplicateSelected(): void {
  */
 async function copyGarapon(g: Garapon): Promise<void> {
   await garapons.loadGaraponDetail(g.id)
-  if (!garapons.selectedGarapon) return
+  if (!garapons.selectedGarapon) {
+    return
+  }
   garapons.copyGaraponForm(garapons.selectedGarapon)
   screen.value = 'form'
 }
 
 function editSelected(): void {
-  if (!garapons.selectedGarapon) return
+  if (!garapons.selectedGarapon) {
+    return
+  }
   garapons.editGaraponForm(garapons.selectedGarapon)
   screen.value = 'form'
 }
@@ -166,12 +172,18 @@ function onFormDone(): void {
 }
 async function deleteSelected(): Promise<void> {
   const g = garapons.selectedGarapon
-  if (!g) return
+  if (!g) {
+    return
+  }
   await garapons.deleteGarapon(g.id)
-  if (!garapons.selectedGarapon) screen.value = 'list'
+  if (!garapons.selectedGarapon) {
+    screen.value = 'list'
+  }
 }
 function toggleClosed(): void {
-  if (!garapons.selectedGarapon) return
+  if (!garapons.selectedGarapon) {
+    return
+  }
   void garapons.setGaraponStatus(
     garapons.selectedGarapon.id,
     garapons.selectedGarapon.status === 'open' ? 'closed' : 'open',

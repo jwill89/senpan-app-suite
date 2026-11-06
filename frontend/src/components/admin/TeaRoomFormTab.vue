@@ -22,7 +22,9 @@ const emit = defineEmits<{ saved: []; cancel: [] }>()
 const store = useTeaRoomsStore()
 
 async function save(): Promise<void> {
-  if (await store.saveTeaRoom()) emit('saved')
+  if (await store.saveTeaRoom()) {
+    emit('saved')
+  }
 }
 function cancel(): void {
   store.cancelTeaRoomForm()

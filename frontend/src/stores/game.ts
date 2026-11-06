@@ -20,14 +20,20 @@ import { useUiStore } from './ui'
 // row. Typed `unknown` on purpose so the shape checks are genuine (not flagged as
 // unnecessary under the project's strict-but-not-noUncheckedIndexedAccess types).
 function patternCell(grid: unknown, r: number, c: number): boolean {
-  if (!Array.isArray(grid)) return false
+  if (!Array.isArray(grid)) {
+    return false
+  }
   const row = grid[r]
   return Array.isArray(row) ? Boolean(row[c]) : false
 }
 function boardCell(grid: unknown, r: number, c: number): number {
-  if (!Array.isArray(grid)) return 0
+  if (!Array.isArray(grid)) {
+    return 0
+  }
   const row = grid[r]
-  if (!Array.isArray(row)) return 0
+  if (!Array.isArray(row)) {
+    return 0
+  }
   const val = row[c]
   return typeof val === 'number' ? val : 0
 }
@@ -103,7 +109,9 @@ export const useGameStore = defineStore('game', () => {
   // -- Computed ---------------------------------------------------------------
 
   const adminCalledSet = computed(() => {
-    if (!currentGame.value) return new Set<number>()
+    if (!currentGame.value) {
+      return new Set<number>()
+    }
     return new Set(currentGame.value.called_numbers)
   })
 
@@ -153,7 +161,9 @@ export const useGameStore = defineStore('game', () => {
   }
 
   async function drawNumber(): Promise<void> {
-    if (drawing.value) return
+    if (drawing.value) {
+      return
+    }
     drawing.value = true
     try {
       const delay = drawDelay.value || 0
@@ -164,7 +174,9 @@ export const useGameStore = defineStore('game', () => {
       winners.value = data.winners
       if (winners.value.length > prevCount) {
         ui.notify('We have winner(s)!', 'success', 6000)
-        if (winnerSoundEnabled.value) playWinnerChime()
+        if (winnerSoundEnabled.value) {
+          playWinnerChime()
+        }
       }
 
       clearDrawCountdown()
@@ -172,7 +184,9 @@ export const useGameStore = defineStore('game', () => {
         drawSent.value = false
         drawCountdown.value = delay
         drawCountdownTimer = setInterval(() => {
-          if (drawCountdown.value === null) return
+          if (drawCountdown.value === null) {
+            return
+          }
           drawCountdown.value--
           if (drawCountdown.value <= 0) {
             clearDrawCountdown()
@@ -268,11 +282,15 @@ export const useGameStore = defineStore('game', () => {
    * every client), reverting if the request fails.
    */
   async function setYoeverEnabled(on: boolean): Promise<void> {
-    if (currentGame.value) currentGame.value.yoever_enabled = on
+    if (currentGame.value) {
+      currentGame.value.yoever_enabled = on
+    }
     try {
       await endpoints.game.setYoeverEnabled(on)
     } catch (e) {
-      if (currentGame.value) currentGame.value.yoever_enabled = !on
+      if (currentGame.value) {
+        currentGame.value.yoever_enabled = !on
+      }
       ui.notify((e as Error).message, 'error')
     }
   }
@@ -284,11 +302,15 @@ export const useGameStore = defineStore('game', () => {
    * never writes back to a preset the game was started from.
    */
   async function setAutoEnabled(on: boolean): Promise<void> {
-    if (currentGame.value) currentGame.value.auto_enabled = on
+    if (currentGame.value) {
+      currentGame.value.auto_enabled = on
+    }
     try {
       await endpoints.game.setAutoEnabled(on)
     } catch (e) {
-      if (currentGame.value) currentGame.value.auto_enabled = !on
+      if (currentGame.value) {
+        currentGame.value.auto_enabled = !on
+      }
       ui.notify((e as Error).message, 'error')
     }
   }
@@ -296,11 +318,15 @@ export const useGameStore = defineStore('game', () => {
   /** Adjusts the seconds between automatic draws for the current game (optimistic). */
   async function setAutoInterval(seconds: number): Promise<void> {
     const prev = currentGame.value?.auto_interval
-    if (currentGame.value) currentGame.value.auto_interval = seconds
+    if (currentGame.value) {
+      currentGame.value.auto_interval = seconds
+    }
     try {
       await endpoints.game.setAutoInterval(seconds)
     } catch (e) {
-      if (currentGame.value && prev !== undefined) currentGame.value.auto_interval = prev
+      if (currentGame.value && prev !== undefined) {
+        currentGame.value.auto_interval = prev
+      }
       ui.notify((e as Error).message, 'error')
     }
   }
@@ -309,7 +335,9 @@ export const useGameStore = defineStore('game', () => {
 
   /** Fetches a winning card and highlights cells completing the win patterns. */
   async function viewWinner(cardId: string): Promise<void> {
-    if (winnerLoading.value) return
+    if (winnerLoading.value) {
+      return
+    }
     winnerLoading.value = true
     try {
       const data = await endpoints.board.get(cardId)
@@ -330,12 +358,16 @@ export const useGameStore = defineStore('game', () => {
               }
             }
           }
-          if (!satisfied) break
+          if (!satisfied) {
+            break
+          }
         }
         if (satisfied) {
           for (let r = 0; r < 5; r++) {
             for (let c = 0; c < 5; c++) {
-              if (patternCell(pd, r, c)) matchedCells.add(`${r}-${c}`)
+              if (patternCell(pd, r, c)) {
+                matchedCells.add(`${r}-${c}`)
+              }
             }
           }
         }
@@ -349,7 +381,9 @@ export const useGameStore = defineStore('game', () => {
   }
 
   function isWinnerCellMatch(ri: number, ci: number): boolean {
-    if (!winnerPreview.value) return false
+    if (!winnerPreview.value) {
+      return false
+    }
     return winnerPreview.value.matchedCells.has(`${ri}-${ci}`)
   }
 
@@ -376,7 +410,9 @@ export const useGameStore = defineStore('game', () => {
     halftimeAutoPaused.value = false
     try {
       await endpoints.game.halftime(false)
-      if (resumed) ui.notify('Auto-draw resumed.', 'info')
+      if (resumed) {
+        ui.notify('Auto-draw resumed.', 'info')
+      }
     } catch (e) {
       ui.notify((e as Error).message, 'error')
     }
@@ -414,7 +450,9 @@ export const useGameStore = defineStore('game', () => {
   let winnersLogInFlight: Promise<void> | null = null
 
   async function loadWinnersLog(): Promise<void> {
-    if (winnersLogInFlight) return winnersLogInFlight
+    if (winnersLogInFlight) {
+      return winnersLogInFlight
+    }
     const run = loadWinnersLogOnce()
     winnersLogInFlight = run
     try {
@@ -422,7 +460,9 @@ export const useGameStore = defineStore('game', () => {
     } finally {
       // Cleared unconditionally, and only for OUR run - never latch a settled
       // promise here, or every later refresh returns it and silently does nothing.
-      if (winnersLogInFlight === run) winnersLogInFlight = null
+      if (winnersLogInFlight === run) {
+        winnersLogInFlight = null
+      }
     }
   }
 
@@ -441,7 +481,9 @@ export const useGameStore = defineStore('game', () => {
   let winnersLogDebounce: ReturnType<typeof setTimeout> | null = null
 
   function refreshWinnersLogSoon(): void {
-    if (winnersLogDebounce) clearTimeout(winnersLogDebounce)
+    if (winnersLogDebounce) {
+      clearTimeout(winnersLogDebounce)
+    }
     winnersLogDebounce = setTimeout(() => {
       winnersLogDebounce = null
       void loadWinnersLog()
@@ -483,8 +525,9 @@ export const useGameStore = defineStore('game', () => {
         title: 'Delete entry',
         confirmText: 'Delete',
       }))
-    )
+    ) {
       return
+    }
     try {
       await endpoints.winnersLog.delete(id)
       ui.notify('Entry deleted', 'info')
@@ -505,14 +548,17 @@ export const useGameStore = defineStore('game', () => {
   /** Bulk delete from the table's selection: one confirm for the whole set and
    *  a single reload afterwards, rather than a prompt and a refetch per row. */
   async function deleteWinnerLogEntries(ids: number[]): Promise<number> {
-    if (ids.length === 0) return 0
+    if (ids.length === 0) {
+      return 0
+    }
     if (
       !(await ui.confirm(
         `Delete ${ids.length} selected entr${ids.length === 1 ? 'y' : 'ies'}? This cannot be undone.`,
         { title: 'Delete selected entries', confirmText: `Delete ${ids.length}` },
       ))
-    )
+    ) {
       return 0
+    }
     // Concurrently, not one after another: deleting forty selected rows used to be
     // forty sequential round trips before the single reload at the end. allSettled
     // so one failure doesn't abandon the rest, and the errors are reported once
@@ -536,8 +582,9 @@ export const useGameStore = defineStore('game', () => {
         title: 'Delete all entries',
         confirmText: 'Delete all',
       }))
-    )
+    ) {
       return
+    }
     try {
       await endpoints.winnersLog.deleteAll()
       ui.notify('All winners-log entries deleted', 'info')

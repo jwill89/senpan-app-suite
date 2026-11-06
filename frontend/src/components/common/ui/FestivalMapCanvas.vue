@@ -132,7 +132,9 @@ const viewportStyle = computed(() => {
 /** The zoom at which the whole plan fits inside the viewport. */
 const fitZoom = computed(() => {
   const box = viewportRef.value?.getBoundingClientRect()
-  if (!box) return 1
+  if (!box) {
+    return 1
+  }
   return fitZoomFor(canvasSize.value, box)
 })
 
@@ -162,7 +164,9 @@ function clamp(value: number, lo: number, hi: number): number {
  */
 function clampPan(): void {
   const box = viewportRef.value?.getBoundingClientRect()
-  if (!box) return
+  if (!box) {
+    return
+  }
   const next = clampPanTo({ x: panX.value, y: panY.value }, canvasSize.value, box, zoom.value)
   panX.value = next.x
   panY.value = next.y
@@ -175,9 +179,13 @@ function clampPan(): void {
  */
 function zoomBy(factor: number, clientX?: number, clientY?: number): void {
   const box = viewportRef.value?.getBoundingClientRect()
-  if (!box) return
+  if (!box) {
+    return
+  }
   const next = clamp(zoom.value * factor, minZoom.value, MAX_ZOOM)
-  if (next === zoom.value) return
+  if (next === zoom.value) {
+    return
+  }
   const anchorX = (clientX ?? box.left + box.width / 2) - box.left
   const anchorY = (clientY ?? box.top + box.height / 2) - box.top
   // Solve for the pan that leaves the anchor over the same canvas point.
@@ -257,9 +265,13 @@ function frameHasPlanShape(): boolean {
 
 function measureCanvas(): void {
   const el = canvasRef.value
-  if (!el) return
+  if (!el) {
+    return
+  }
   const box = el.getBoundingClientRect()
-  if (box.width <= 0 || box.height <= 0) return
+  if (box.width <= 0 || box.height <= 0) {
+    return
+  }
   // getBoundingClientRect reports the SCALED box; divide the zoom back out to
   // recover the natural size every calculation here is written against.
   canvasSize.value = { width: box.width / zoom.value, height: box.height / zoom.value }
@@ -273,10 +285,16 @@ function measureCanvas(): void {
 
 onMounted(() => {
   measureCanvas()
-  if (typeof ResizeObserver === 'undefined') return
+  if (typeof ResizeObserver === 'undefined') {
+    return
+  }
   resizeObserver = new ResizeObserver(() => measureCanvas())
-  if (canvasRef.value) resizeObserver.observe(canvasRef.value)
-  if (viewportRef.value) resizeObserver.observe(viewportRef.value)
+  if (canvasRef.value) {
+    resizeObserver.observe(canvasRef.value)
+  }
+  if (viewportRef.value) {
+    resizeObserver.observe(viewportRef.value)
+  }
 })
 
 onBeforeUnmount(() => {
@@ -298,8 +316,10 @@ let pinchStart = 0
 
 /** Distance between the two active pointers (0 when there aren't two). */
 function pinchDistance(): number {
-  if (pointers.size < 2) return 0
   const [a, b] = [...pointers.values()]
+  if (!a || !b) {
+    return 0
+  }
   return Math.hypot(a.x - b.x, a.y - b.y)
 }
 
@@ -318,19 +338,23 @@ function onPointerDown(e: PointerEvent): void {
 }
 
 function onPointerMove(e: PointerEvent): void {
-  if (!pointers.has(e.pointerId)) return
+  if (!pointers.has(e.pointerId)) {
+    return
+  }
   pointers.set(e.pointerId, { x: e.clientX, y: e.clientY })
 
   if (pointers.size === 2) {
     const distance = pinchDistance()
-    if (pinchStart > 0 && distance > 0) {
-      const [a, b] = [...pointers.values()]
+    const [a, b] = [...pointers.values()]
+    if (pinchStart > 0 && distance > 0 && a && b) {
       zoomBy(distance / pinchStart, (a.x + b.x) / 2, (a.y + b.y) / 2)
       pinchStart = distance
     }
     return
   }
-  if (!dragging.value) return
+  if (!dragging.value) {
+    return
+  }
   panX.value = panStart.panX + (e.clientX - panStart.x)
   panY.value = panStart.panY + (e.clientY - panStart.y)
   clampPan()
@@ -338,8 +362,12 @@ function onPointerMove(e: PointerEvent): void {
 
 function onPointerUp(e: PointerEvent): void {
   pointers.delete(e.pointerId)
-  if (pointers.size < 2) pinchStart = 0
-  if (pointers.size > 0) return
+  if (pointers.size < 2) {
+    pinchStart = 0
+  }
+  if (pointers.size > 0) {
+    return
+  }
   dragging.value = false
   window.removeEventListener('pointermove', onPointerMove)
   window.removeEventListener('pointerup', onPointerUp)
@@ -361,7 +389,9 @@ onBeforeUnmount(() => {
  */
 function onStallPointerUp(stall: PublicFestivalStall, e: PointerEvent): void {
   const moved = Math.hypot(e.clientX - panStart.x, e.clientY - panStart.y)
-  if (moved > 4) return
+  if (moved > 4) {
+    return
+  }
   emit('select', stall)
 }
 

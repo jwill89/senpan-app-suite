@@ -93,7 +93,9 @@ const emojiIcon = faceSmile?.html[0] ?? '<span>🙂</span>'
  */
 async function onEmojiSelect(emoji: string): Promise<void> {
   emojiOpen.value = false
-  if (!emoji) return
+  if (!emoji) {
+    return
+  }
   await nextTick()
   insertInline?.(emoji)
 }
@@ -129,7 +131,9 @@ function topBarGroup(builder: TopBarBuilder, key: string): TopBarGroup | null {
 const buildTopBar: BuildTopBar = (builder) => {
   const drop = (key: string, ...items: string[]): void => {
     const g = topBarGroup(builder, key)
-    if (g) g.group.items = g.group.items.filter((i) => !items.includes(i.key))
+    if (g) {
+      g.group.items = g.group.items.filter((i) => !items.includes(i.key))
+    }
   }
   drop('list', 'task-list')
   drop('insert', 'image', 'table')
@@ -173,7 +177,9 @@ onMounted(async () => {
     import('@milkdown/crepe/theme/common/style.css'),
     import('@milkdown/crepe/theme/classic.css'),
   ])
-  if (disposed || !el.value) return
+  if (disposed || !el.value) {
+    return
+  }
 
   const builder = new CrepeBuilder({
     root: el.value,
@@ -195,7 +201,9 @@ onMounted(async () => {
 
   builder.on((listener) => {
     listener.markdownUpdated((_ctx, markdown) => {
-      if (ready) emit('update:modelValue', markdown)
+      if (ready) {
+        emit('update:modelValue', markdown)
+      }
     })
     listener.blur(() => emit('blur'))
   })
@@ -241,7 +249,9 @@ onBeforeUnmount(() => {
 watch(
   () => props.modelValue,
   (v) => {
-    if (crepe && applyExternal && v !== crepe.getMarkdown()) applyExternal(v || '')
+    if (crepe && applyExternal && v !== crepe.getMarkdown()) {
+      applyExternal(v || '')
+    }
   },
 )
 </script>

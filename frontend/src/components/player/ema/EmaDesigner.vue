@@ -114,15 +114,25 @@ const canFinish = computed(
 )
 
 const hint = computed(() => {
-  if (!ready.value) return ''
-  if (!layers.value.length) return 'Add a picture or some text to get started.'
+  if (!ready.value) {
+    return ''
+  }
+  if (!layers.value.length) {
+    return 'Add a picture or some text to get started.'
+  }
   const layer = selected.value
   if (tool.value === 'erase') {
-    if (!layer) return 'Pick a layer in the list, then rub over the parts you want gone.'
-    if (!layer.visible) return 'That layer is hidden. Show it to erase from it.'
+    if (!layer) {
+      return 'Pick a layer in the list, then rub over the parts you want gone.'
+    }
+    if (!layer.visible) {
+      return 'That layer is hidden. Show it to erase from it.'
+    }
     return `Erasing from "${layerLabel(layer)}" only. Undo brings a stroke back.`
   }
-  if (!layer) return 'Tap something on the plaque to move it, or pick it in the list.'
+  if (!layer) {
+    return 'Tap something on the plaque to move it, or pick it in the list.'
+  }
   return 'Drag to move it. Pull a corner to resize, or the top handle to turn it.'
 })
 
@@ -134,7 +144,9 @@ function patch(id: string, p: EmaLayerPatch): void {
 }
 
 function patchSelected(p: EmaLayerPatch): void {
-  if (selectedId.value) patch(selectedId.value, p)
+  if (selectedId.value) {
+    patch(selectedId.value, p)
+  }
 }
 
 /** Records the layers as they are now as one undo step. */
@@ -149,10 +161,14 @@ function edit(next: EmaLayers): void {
 }
 
 function restore(next: EmaHistory<string>): void {
-  if (next === history.value) return
+  if (next === history.value) {
+    return
+  }
   history.value = next
   layers.value = deserializeLayers(next.present)
-  if (!layers.value.some((l) => l.id === selectedId.value)) selectedId.value = null
+  if (!layers.value.some((l) => l.id === selectedId.value)) {
+    selectedId.value = null
+  }
 }
 
 function undo(): void {
@@ -169,7 +185,9 @@ function select(id: string | null): void {
 
 function toggleVisible(id: string): void {
   const layer = layers.value.find((l) => l.id === id)
-  if (layer) edit(updateLayer(layers.value, id, { visible: !layer.visible }))
+  if (layer) {
+    edit(updateLayer(layers.value, id, { visible: !layer.visible }))
+  }
 }
 
 function move(id: string, direction: 'up' | 'down'): void {
@@ -178,11 +196,15 @@ function move(id: string, direction: 'up' | 'down'): void {
 
 function remove(id: string): void {
   edit(removeLayer(layers.value, id))
-  if (selectedId.value === id) selectedId.value = null
+  if (selectedId.value === id) {
+    selectedId.value = null
+  }
 }
 
 function restoreErased(): void {
-  if (selected.value) edit(updateLayer(layers.value, selected.value.id, { strokes: [] }))
+  if (selected.value) {
+    edit(updateLayer(layers.value, selected.value.id, { strokes: [] }))
+  }
 }
 
 const stageEvents: EmaStageEvents = {
@@ -192,7 +214,9 @@ const stageEvents: EmaStageEvents = {
   },
   stroke: (id, stroke) => {
     const layer = layers.value.find((l) => l.id === id)
-    if (layer) edit(updateLayer(layers.value, id, { strokes: [...layer.strokes, stroke] }))
+    if (layer) {
+      edit(updateLayer(layers.value, id, { strokes: [...layer.strokes, stroke] }))
+    }
   },
 }
 
@@ -245,8 +269,11 @@ function readAsDataUrl(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader()
     reader.onload = () => {
-      if (typeof reader.result === 'string') resolve(reader.result)
-      else reject(new Error('The file could not be read.'))
+      if (typeof reader.result === 'string') {
+        resolve(reader.result)
+      } else {
+        reject(new Error('The file could not be read.'))
+      }
     }
     reader.onerror = () => {
       reject(reader.error ?? new Error('The file could not be read.'))
@@ -284,7 +311,9 @@ async function decodeUpload(
   const img = await loadImage(await readAsDataUrl(file))
   const size = downscaleSize(img.naturalWidth, img.naturalHeight)
   const ctx = size.scaled ? document.createElement('canvas').getContext('2d') : null
-  if (!ctx) return { asset: img, width: img.naturalWidth, height: img.naturalHeight }
+  if (!ctx) {
+    return { asset: img, width: img.naturalWidth, height: img.naturalHeight }
+  }
   ctx.canvas.width = size.width
   ctx.canvas.height = size.height
   ctx.imageSmoothingQuality = 'high'
@@ -297,7 +326,9 @@ async function onFilesChosen(e: Event): Promise<void> {
   const files = Array.from(input.files ?? [])
   // Cleared so choosing the same file again still fires `change`.
   input.value = ''
-  if (!files.length) return
+  if (!files.length) {
+    return
+  }
   const plaque = designSize()
   const added: EmaImageLayer[] = []
   reading.value++
@@ -334,7 +365,9 @@ async function onFilesChosen(e: Event): Promise<void> {
     reading.value--
   }
   const last = added.at(-1)
-  if (!last) return
+  if (!last) {
+    return
+  }
   edit([...layers.value, ...added])
   selectedId.value = last.id
   tool.value = 'move'
@@ -349,7 +382,9 @@ async function onFilesChosen(e: Event): Promise<void> {
  */
 function loadTextFonts(): void {
   for (const layer of layers.value) {
-    if (layer.kind !== 'text' || isWebSafeFont(layer.fontFamily)) continue
+    if (layer.kind !== 'text' || isWebSafeFont(layer.fontFamily)) {
+      continue
+    }
     loadGoogleFont(layer.fontFamily)
     void waitForFontFace(
       document.fonts,
@@ -390,11 +425,15 @@ async function loadTemplate(src: string): Promise<void> {
   try {
     img = await loadImage(src)
   } catch {
-    if (src === props.templateSrc) templateState.value = 'error'
+    if (src === props.templateSrc) {
+      templateState.value = 'error'
+    }
     return
   }
   // A newer template may have been asked for while this one loaded.
-  if (src !== props.templateSrc || !stage) return
+  if (src !== props.templateSrc || !stage) {
+    return
+  }
   stage.setTemplate(img)
   stage.setLayers(layers.value)
   templateState.value = 'ready'
@@ -410,7 +449,9 @@ async function loadTemplate(src: string): Promise<void> {
 function fitStage(): void {
   const wrap = stageWrap.value
   const box = root.value
-  if (!stage || !wrap || !box) return
+  if (!stage || !wrap || !box) {
+    return
+  }
   const wide = window.matchMedia(WIDE_LAYOUT).matches
   stage.fit({
     width: wrap.clientWidth,
@@ -433,20 +474,29 @@ function token(styles: CSSStyleDeclaration, name: string): string {
 /** True for a target that owns its own keystrokes (a text field, the font search). */
 function isTypingInto(target: EventTarget | null): boolean {
   const el = target as HTMLElement | null
-  if (!el?.tagName) return false
+  if (!el?.tagName) {
+    return false
+  }
   return el.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(el.tagName)
 }
 
 function onKeydown(e: KeyboardEvent): void {
-  if (e.defaultPrevented || ui.confirmState.show || isTypingInto(e.target)) return
+  if (e.defaultPrevented || ui.confirmState.show || isTypingInto(e.target)) {
+    return
+  }
   // Kept mounted but hidden (a parent's v-show), the designer isn't what the keys are for.
-  if (!root.value?.getClientRects().length) return
+  if (!root.value?.getClientRects().length) {
+    return
+  }
   const mod = e.ctrlKey || e.metaKey
   const key = e.key.toLowerCase()
   if (mod && key === 'z') {
     e.preventDefault()
-    if (e.shiftKey) redo()
-    else undo()
+    if (e.shiftKey) {
+      redo()
+    } else {
+      undo()
+    }
   } else if (mod && key === 'y') {
     e.preventDefault()
     redo()
@@ -459,7 +509,9 @@ function onKeydown(e: KeyboardEvent): void {
 // -- Finishing -----------------------------------------------------------------
 
 async function renderPng(): Promise<Blob | null> {
-  if (!stage) return null
+  if (!stage) {
+    return null
+  }
   exporting.value = true
   try {
     return await stage.toPng()
@@ -473,14 +525,18 @@ async function renderPng(): Promise<Blob | null> {
 
 async function download(): Promise<void> {
   const blob = await renderPng()
-  if (!blob) return
+  if (!blob) {
+    return
+  }
   triggerDownload(blob, 'ema-plaque.png')
   savedSnapshot.value = snapshot.value
 }
 
 async function send(): Promise<void> {
   const blob = await renderPng()
-  if (blob) emit('done', blob)
+  if (blob) {
+    emit('done', blob)
+  }
 }
 
 /**
@@ -489,7 +545,9 @@ async function send(): Promise<void> {
  * only here.
  */
 async function confirmDiscard(): Promise<boolean> {
-  if (!hasUnsavedWork.value) return true
+  if (!hasUnsavedWork.value) {
+    return true
+  }
   return ui.confirm("Your plaque hasn't been sent or downloaded yet. Close it anyway?", {
     title: 'Leave your plaque?',
     confirmText: 'Close and lose it',
@@ -498,14 +556,18 @@ async function confirmDiscard(): Promise<boolean> {
 }
 
 async function onCancel(): Promise<void> {
-  if (await confirmDiscard()) emit('cancel')
+  if (await confirmDiscard()) {
+    emit('cancel')
+  }
 }
 
 defineExpose({ confirmDiscard })
 
 onMounted(() => {
   const el = stageEl.value
-  if (!el) return
+  if (!el) {
+    return
+  }
   const styles = getComputedStyle(el)
   stage = new EmaStage(el, assets, stageEvents, {
     handle: token(styles, '--highlight'),
@@ -514,8 +576,12 @@ onMounted(() => {
   stage.setBrushSize(brushSize.value)
   stage.setClip(keepInside.value)
   observer = new ResizeObserver(scheduleFit)
-  if (root.value) observer.observe(root.value)
-  if (stageWrap.value) observer.observe(stageWrap.value)
+  if (root.value) {
+    observer.observe(root.value)
+  }
+  if (stageWrap.value) {
+    observer.observe(stageWrap.value)
+  }
   window.addEventListener('keydown', onKeydown)
   void loadTemplate(props.templateSrc)
 })

@@ -38,7 +38,9 @@ const selectedKey = ref<string | null>(null)
 /** Combined stamp + prize items for the placement editor (empty image -> placeholder). */
 const items = computed<PlaceItem[]>(() => {
   const f = store.rallyForm
-  if (!f) return []
+  if (!f) {
+    return []
+  }
   const stamps = f.stamps.map((s, i) => ({
     key: `s${i}`,
     label: `${stampTypeLabel(s.stamp_type)} ${i + 1}`,
@@ -59,24 +61,30 @@ const items = computed<PlaceItem[]>(() => {
 /** Apply an editor placement change back onto the matching form item. */
 function applyUpdate(key: string, placement: Placement): void {
   const f = store.rallyForm
-  if (!f) return
+  if (!f) {
+    return
+  }
   const idx = Number(key.slice(1))
   const target = key.startsWith('s') ? f.stamps[idx] : f.prizes[idx]
-  Object.assign(target.placement, placement)
+  if (target) {
+    Object.assign(target.placement, placement)
+  }
 }
 
 /** The currently-selected stamp or prize (for the editing panel). */
 const selected = computed(() => {
   const f = store.rallyForm
   const k = selectedKey.value
-  if (!f || !k) return null
+  if (!f || !k) {
+    return null
+  }
   const idx = Number(k.slice(1))
   if (k.startsWith('s')) {
     const stamp = f.stamps[idx]
-    return { kind: 'stamp' as const, index: idx, stamp }
+    return stamp ? { kind: 'stamp' as const, index: idx, stamp } : null
   }
   const prize = f.prizes[idx]
-  return { kind: 'prize' as const, index: idx, prize }
+  return prize ? { kind: 'prize' as const, index: idx, prize } : null
 })
 
 function addStamp(type: StampType): void {
@@ -89,9 +97,14 @@ function addPrize(): void {
 }
 function removeSelected(): void {
   const sel = selected.value
-  if (!sel) return
-  if (sel.kind === 'stamp') store.removeStamp(sel.index)
-  else store.removePrize(sel.index)
+  if (!sel) {
+    return
+  }
+  if (sel.kind === 'stamp') {
+    store.removeStamp(sel.index)
+  } else {
+    store.removePrize(sel.index)
+  }
   selectedKey.value = null
 }
 
@@ -107,7 +120,9 @@ const gameCount = computed(
 /** Set a stamp's affiliate from the select ('' -> Senpan Tea House default). */
 function setAffiliate(stampIndex: number, value: string): void {
   const f = store.rallyForm
-  if (!f?.stamps[stampIndex]) return
+  if (!f?.stamps[stampIndex]) {
+    return
+  }
   f.stamps[stampIndex].affiliate_id = value ? Number(value) : null
 }
 
@@ -141,7 +156,9 @@ function setStall(stampIndex: number, value: string): void {
  */
 function clampRequirements(): void {
   const f = store.rallyForm
-  if (!f) return
+  if (!f) {
+    return
+  }
   f.required_food = Math.min(foodCount.value, toStampCount(f.required_food))
   f.required_game = Math.min(gameCount.value, toStampCount(f.required_game))
 }
@@ -158,7 +175,9 @@ watch([foodCount, gameCount], clampRequirements)
  */
 function setCompletionMode(mode: string): void {
   const f = store.rallyForm
-  if (!f) return
+  if (!f) {
+    return
+  }
   f.completion_mode = mode === 'counts' ? 'counts' : 'all'
   if (f.completion_mode === 'counts' && f.required_food === 0 && f.required_game === 0) {
     f.required_food = foodCount.value
@@ -167,7 +186,9 @@ function setCompletionMode(mode: string): void {
 }
 
 async function save(): Promise<void> {
-  if (await store.saveRally()) emit('saved')
+  if (await store.saveRally()) {
+    emit('saved')
+  }
 }
 function cancel(): void {
   store.cancelRallyForm()

@@ -22,6 +22,9 @@ frontend/dist/
 frontend/.vite/
 frontend/*.tsbuildinfo
 frontend/coverage/
+# Playwright's traces of a failed end-to-end run.
+frontend/test-results/
+frontend/playwright-report/
 
 # CI report artifacts (JUnit test reports + golangci-lint Code Quality), produced
 # by the pipeline (and if you run the CI commands locally).
@@ -36,14 +39,12 @@ frontend/coverage/
 # OS noise
 Thumbs.db
 .DS_Store
-/frontend/src/types/api.generated.ts
 /deploy/images/favicon.png
 /frontend/public/images/favicon.png
 /deploy/images/logo.png
 /frontend/public/images/logo.png
 /deploy/images/share_banner.png
 /frontend/public/images/share_banner.png
-/frontend/.npmrc
 /.claude/launch.json
 /frontend/public/images/called_flourish.svg
 /deploy/images/apple-touch-icon.png

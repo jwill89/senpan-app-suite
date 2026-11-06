@@ -63,7 +63,9 @@ export const useStylesStore = defineStore('styles', () => {
   }
 
   async function saveStyle(): Promise<void> {
-    if (!editingStyle.value) return
+    if (!editingStyle.value) {
+      return
+    }
     const name = editingStyle.value.name.trim()
     if (!name) {
       ui.notify('Theme name is required', 'error')
@@ -92,11 +94,16 @@ export const useStylesStore = defineStore('styles', () => {
   }
 
   async function deleteStyle(id: number): Promise<void> {
-    if (!(await ui.confirm('Delete this theme?', { title: 'Delete theme', confirmText: 'Delete' })))
+    if (
+      !(await ui.confirm('Delete this theme?', { title: 'Delete theme', confirmText: 'Delete' }))
+    ) {
       return
+    }
     try {
       await endpoints.styles.delete(id)
-      if (editingStyle.value?.id === id) editingStyle.value = null
+      if (editingStyle.value?.id === id) {
+        editingStyle.value = null
+      }
       ui.notify('Theme deleted', 'info')
       await loadStyles()
     } catch (e) {

@@ -72,7 +72,9 @@ export const useAdminStore = defineStore('admin', () => {
 
   /** Runs `load` unless `key`'s data was already loaded within the freshness TTL. */
   function loadFresh(key: string, load: () => void): void {
-    if (!tabData.isStale(key)) return
+    if (!tabData.isStale(key)) {
+      return
+    }
     tabData.touch(key)
     load()
   }
@@ -83,18 +85,24 @@ export const useAdminStore = defineStore('admin', () => {
    * load that the old `adminNav()` performed.
    */
   function setTabFromRoute(tab: AdminTab): void {
-    if (tab.startsWith('bingo-')) adminSection.value = 'bingo'
+    if (tab.startsWith('bingo-')) {
+      adminSection.value = 'bingo'
+    }
     // Raffles moved under Festival (alongside Garapon); it keeps its
     // `teahouse-raffles` id, so map it to 'festival' before the generic
     // teahouse- check below.
-    else if (tab === 'teahouse-raffles' || tab.startsWith('festival-'))
+    else if (tab === 'teahouse-raffles' || tab.startsWith('festival-')) {
       adminSection.value = 'festival'
+    }
     // The Senpan Tea House section holds Announcement Management and the book
     // clubs (bookclub-*).
-    else if (tab.startsWith('teahouse-') || tab.startsWith('bookclub-'))
+    else if (tab.startsWith('teahouse-') || tab.startsWith('bookclub-')) {
       adminSection.value = 'teahouse'
-    else if (tab.startsWith('atelier-')) adminSection.value = 'atelier'
-    else if (tab.startsWith('system-')) adminSection.value = 'system'
+    } else if (tab.startsWith('atelier-')) {
+      adminSection.value = 'atelier'
+    } else if (tab.startsWith('system-')) {
+      adminSection.value = 'system'
+    }
     adminTab.value = tab
 
     const game = useGameStore()
@@ -173,47 +181,57 @@ export const useAdminStore = defineStore('admin', () => {
     if (tab.startsWith('bookclub-')) {
       bookclub.openClub(tab.slice('bookclub-'.length))
     }
-    if (tab === 'teahouse-announcements')
+    if (tab === 'teahouse-announcements') {
       loadFresh('announcements', () => {
         void announcements.load()
       })
-    if (tab === 'system-themes')
+    }
+    if (tab === 'system-themes') {
       loadFresh('styles', () => {
         void styles.loadStyles()
       })
-    if (tab === 'system-settings')
+    }
+    if (tab === 'system-settings') {
       loadFresh('settings', () => {
         void app.loadSettings()
       })
-    if (tab === 'system-images')
+    }
+    if (tab === 'system-images') {
       loadFresh('images', () => {
         void images.loadCategories()
       })
-    if (tab === 'system-users')
+    }
+    if (tab === 'system-users') {
       loadFresh('users', () => {
         void users.loadUsers()
       })
-    if (tab === 'atelier-fonts')
+    }
+    if (tab === 'atelier-fonts') {
       loadFresh('fonts', () => {
         void fonts.loadFonts()
       })
-    if (tab === 'atelier-carrd')
+    }
+    if (tab === 'atelier-carrd') {
       loadFresh('carrd', () => {
         void carrd.loadProjects()
       })
-    if (tab === 'bingo-winners-log')
+    }
+    if (tab === 'bingo-winners-log') {
       loadFresh('winners-log', () => {
         void game.loadWinnersLog()
       })
-    if (tab === 'bingo-patterns')
+    }
+    if (tab === 'bingo-patterns') {
       loadFresh('patterns', () => {
         void patterns.loadPatterns()
       })
+    }
     // Presets are needed on the Game tab (to start from one) and the Presets tab.
-    if (tab === 'bingo-game' || tab === 'bingo-presets')
+    if (tab === 'bingo-game' || tab === 'bingo-presets') {
       loadFresh('presets', () => {
         void presets.loadPresets()
       })
+    }
   }
 
   /**
@@ -250,14 +268,18 @@ export const useAdminStore = defineStore('admin', () => {
         apply('garapons', tab === 'festival-garapon', () => {
           const garapons = useGaraponsStore()
           void garapons.loadGarapons()
-          if (garapons.selectedGarapon) void garapons.loadGaraponDetail(garapons.selectedGarapon.id)
+          if (garapons.selectedGarapon) {
+            void garapons.loadGaraponDetail(garapons.selectedGarapon.id)
+          }
         })
         break
       case 'raffles':
         apply('raffles', tab === 'teahouse-raffles', () => {
           const raffles = useRafflesStore()
           void raffles.loadRaffles()
-          if (raffles.selectedRaffle) void raffles.loadRaffleDetail(raffles.selectedRaffle.id)
+          if (raffles.selectedRaffle) {
+            void raffles.loadRaffleDetail(raffles.selectedRaffle.id)
+          }
         })
         break
       case 'affiliates':
@@ -274,7 +296,9 @@ export const useAdminStore = defineStore('admin', () => {
         apply('festival-maps', tab === 'festival-map', () => {
           const fm = useFestivalMapsStore()
           void fm.loadMaps()
-          if (fm.selectedMap) void fm.loadMapDetail(fm.selectedMap.id)
+          if (fm.selectedMap) {
+            void fm.loadMapDetail(fm.selectedMap.id)
+          }
         })
         break
       case 'ema-boards':
@@ -283,7 +307,9 @@ export const useAdminStore = defineStore('admin', () => {
         apply('ema-boards', tab === 'festival-ema', () => {
           const ema = useEmaStore()
           void ema.loadBoards()
-          if (ema.selectedBoard) void ema.loadPlaques(ema.selectedBoard.id)
+          if (ema.selectedBoard) {
+            void ema.loadPlaques(ema.selectedBoard.id)
+          }
         })
         break
       case 'ema-requests':
@@ -347,11 +373,18 @@ export const useAdminStore = defineStore('admin', () => {
         // via refreshImagesQuiet rather than re-toasting a 400 forever.
         const images = useImagesStore()
         const viewing = tab === 'system-images'
-        if (viewing || images.categories.length > 0) void images.refreshCategoriesQuiet()
-        for (const dir of Object.keys(images.imagesByDir)) void images.refreshImagesQuiet(dir)
+        if (viewing || images.categories.length > 0) {
+          void images.refreshCategoriesQuiet()
+        }
+        for (const dir of Object.keys(images.imagesByDir)) {
+          void images.refreshImagesQuiet(dir)
+        }
         // Freshness governs the System -> Images tab specifically.
-        if (viewing) tabData.touch('images')
-        else tabData.invalidate('images')
+        if (viewing) {
+          tabData.touch('images')
+        } else {
+          tabData.invalidate('images')
+        }
         break
       }
       case 'bookclub':

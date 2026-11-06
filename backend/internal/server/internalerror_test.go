@@ -3,6 +3,8 @@ package server
 import (
 	"bytes"
 	"context"
+	"database/sql"
+	"database/sql/driver"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -11,10 +13,20 @@ import (
 	"net/http/httptest"
 	"path/filepath"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
 
-	"github.com/ncruces/go-sqlite3"
-	"github.com/ncruces/go-sqlite3/driver"
+	"modernc.org/sqlite"
+)
+
+// cancel_query(id) cancels the context stored under id. The driver's functions are
+// process-wide, so it is registered once and finds each query's cancel by the id
+// the query passes it.
+var (
+	registerCancelQuery sync.Once
+	cancelQueries       sync.Map // int64 -> context.CancelFunc
+	cancelQueryIDs      atomic.Int64
 )
 
 // interruptedQueryErr returns the error a real query gives when its context is
@@ -24,18 +36,28 @@ import (
 // every time rather than depending on a race with a timer.
 func interruptedQueryErr(t *testing.T) error {
 	t.Helper()
+	registerCancelQuery.Do(func() {
+		sqlite.MustRegisterScalarFunction("cancel_query", 1, func(_ *sqlite.FunctionContext, args []driver.Value) (driver.Value, error) {
+			if cancel, ok := cancelQueries.Load(args[0]); ok {
+				cancel.(context.CancelFunc)()
+			}
+			return nil, nil
+		})
+	})
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
-	db, err := driver.Open(filepath.Join(t.TempDir(), "interrupt.db"), func(c *sqlite3.Conn) error {
-		return c.CreateFunction("cancel_query", 0, 0, func(sqlite3.Context, ...sqlite3.Value) { cancel() })
-	})
+	id := cancelQueryIDs.Add(1)
+	cancelQueries.Store(id, cancel)
+	defer cancelQueries.Delete(id)
+
+	db, err := sql.Open("sqlite", filepath.Join(t.TempDir(), "interrupt.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer db.Close()
 	var n int
 	err = db.QueryRowContext(ctx, `WITH RECURSIVE c(x) AS (SELECT 1 UNION ALL SELECT x + 1 FROM c WHERE x < 1000000)
-		SELECT count(cancel_query()) FROM c`).Scan(&n)
+		SELECT count(cancel_query(?)) FROM c`, id).Scan(&n)
 	if err == nil {
 		t.Fatal("the query ran to the end; it was meant to be interrupted")
 	}
@@ -60,8 +82,8 @@ func TestWriteInternalErrorCanceledLogsAtDebug(t *testing.T) {
 	}{
 		{"refused before it ran", context.Canceled, "DEBUG"},
 		{"wrapped on the way up", fmt.Errorf("list cards: %w", context.Canceled), "DEBUG"},
-		// What a client disconnecting mid-query usually produces: the driver's
-		// interrupt, which errors.Is(err, context.Canceled) alone does not see.
+		// What a client disconnecting mid-query usually produces: the driver
+		// interrupting the query part-way, whatever error it reports that with.
 		{"interrupted mid-query", interruptedQueryErr(t), "DEBUG"},
 		{"a real failure", errors.New("disk I/O error"), "ERROR"},
 		{"a deadline is not a departed client", context.DeadlineExceeded, "ERROR"},

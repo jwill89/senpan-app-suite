@@ -36,7 +36,7 @@ const currentEntry = computed(() => entries.value.find((e) => e.version === sele
 
 /** Category class for a change-group label (colours the badge). */
 function badgeClass(label: string): string {
-  const key = label.trim().toLowerCase().split(/\s+/)[0]
+  const key = label.trim().toLowerCase().split(/\s+/)[0] ?? ''
   const known = ['added', 'fixed', 'changed', 'security', 'removed', 'deprecated']
   return known.includes(key) ? `changelog-badge--${key}` : 'changelog-badge--default'
 }
@@ -48,7 +48,9 @@ async function copyRepoUrl(): Promise<void> {
   try {
     await navigator.clipboard.writeText(PLUGIN_REPO_URL)
     copied.value = true
-    if (copyTimer) clearTimeout(copyTimer)
+    if (copyTimer) {
+      clearTimeout(copyTimer)
+    }
     copyTimer = setTimeout(() => {
       copied.value = false
     }, 1600)

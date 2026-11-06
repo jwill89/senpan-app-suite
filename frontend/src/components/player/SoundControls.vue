@@ -55,7 +55,9 @@ function onVolume(e: Event): void {
       </div>
     </div>
 
-    <div class="opacity-slider sound-volume" :class="{ 'is-disabled': !player.soundOn }">
+    <!-- A <label>, so the caption and the read-out belong to the slider: dimmed
+         with it while sound is off, they are part of a disabled control. -->
+    <label class="opacity-slider sound-volume" :class="{ 'is-disabled': !player.soundOn }">
       <span class="label">Volume:</span>
       <input
         type="range"
@@ -69,7 +71,7 @@ function onVolume(e: Event): void {
         @input="onVolume"
       />
       <span class="opacity-val">{{ Math.round(player.soundVolume * 100) }}%</span>
-    </div>
+    </label>
   </div>
 </template>
 

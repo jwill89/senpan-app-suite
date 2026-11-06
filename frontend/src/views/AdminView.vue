@@ -56,17 +56,35 @@ onMounted(async () => {
   // keeps one 403 from aborting the rest.
   try {
     const loads: Promise<unknown>[] = [app.loadSettings()]
-    if (auth.hasPermission('bingo-cards')) loads.push(cards.loadCards())
-    if (auth.hasPermission('bingo-patterns')) loads.push(patterns.loadPatterns())
-    if (auth.hasPermission('bingo-game')) loads.push(game.loadGameState())
-    if (auth.hasPermission('teahouse-raffles')) loads.push(raffles.loadRaffles())
+    if (auth.hasPermission('bingo-cards')) {
+      loads.push(cards.loadCards())
+    }
+    if (auth.hasPermission('bingo-patterns')) {
+      loads.push(patterns.loadPatterns())
+    }
+    if (auth.hasPermission('bingo-game')) {
+      loads.push(game.loadGameState())
+    }
+    if (auth.hasPermission('teahouse-raffles')) {
+      loads.push(raffles.loadRaffles())
+    }
     // Loaded for the sidebar's open-count badges, same as cards + raffles above -
     // without these the counts would read 0 until the tab itself was visited.
-    if (auth.hasPermission('festival-stamp-rally')) loads.push(stampRallies.loadRallies())
-    if (auth.hasPermission('festival-garapon')) loads.push(garapons.loadGarapons())
-    if (auth.hasPermission('festival-map')) loads.push(festivalMaps.loadMaps())
-    if (auth.hasPermission('festival-ema')) loads.push(ema.loadBoards())
-    if (auth.hasPermission('festival-ema-requests')) loads.push(ema.loadRequests())
+    if (auth.hasPermission('festival-stamp-rally')) {
+      loads.push(stampRallies.loadRallies())
+    }
+    if (auth.hasPermission('festival-garapon')) {
+      loads.push(garapons.loadGarapons())
+    }
+    if (auth.hasPermission('festival-map')) {
+      loads.push(festivalMaps.loadMaps())
+    }
+    if (auth.hasPermission('festival-ema')) {
+      loads.push(ema.loadBoards())
+    }
+    if (auth.hasPermission('festival-ema-requests')) {
+      loads.push(ema.loadRequests())
+    }
     await Promise.allSettled(loads)
     game.drawDelay = parseInt(app.settings.default_draw_delay) || 0
   } catch {
@@ -77,7 +95,9 @@ onMounted(async () => {
 // Some admin alerts chime on their own (a tea room's lock running out), and a
 // browser plays nothing until the page has had a gesture - so arm audio on the
 // first click, tap or key press anywhere in the admin area.
-if (auth.hasPermission('teahouse-tea-rooms')) armAudioOnFirstGesture()
+if (auth.hasPermission('teahouse-tea-rooms')) {
+  armAudioOnFirstGesture()
+}
 
 // -- Mobile nav drawer --------------------------------------------------------
 // On narrow viewports the sidebar collapses into a hamburger-triggered drawer
@@ -100,7 +120,9 @@ const isNarrow = ref(false)
 let navMql: MediaQueryList | null = null
 function syncIsNarrow(): void {
   isNarrow.value = !!navMql?.matches
-  if (!isNarrow.value) navOpen.value = false // back to desktop -> ensure the drawer is closed
+  if (!isNarrow.value) {
+    navOpen.value = false // back to desktop -> ensure the drawer is closed
+  }
 }
 onMounted(() => {
   navMql = window.matchMedia(NARROW_QUERY)
@@ -170,7 +192,9 @@ const newToken = ref('')
 
 /** Formats a SQLite UTC timestamp ("YYYY-MM-DD HH:MM:SS") for local display. */
 function fmtTokenTime(ts: string): string {
-  if (!ts) return 'Never'
+  if (!ts) {
+    return 'Never'
+  }
   const d = new Date(ts.replace(' ', 'T') + 'Z')
   return Number.isNaN(d.getTime()) ? ts : d.toLocaleString()
 }
@@ -292,7 +316,9 @@ async function removePasskey(id: number): Promise<void> {
 
 /** Formats a SQLite UTC timestamp for local display ("Never" when empty). */
 function fmtPasskeyTime(ts: string): string {
-  if (!ts) return 'Never'
+  if (!ts) {
+    return 'Never'
+  }
   const d = new Date(ts.replace(' ', 'T') + 'Z')
   return Number.isNaN(d.getTime()) ? ts : d.toLocaleString()
 }

@@ -49,7 +49,9 @@ function parseEntries(lines: string[]): ChangelogEntry[] {
   let group: ChangelogGroup | null = null
 
   const flush = () => {
-    if (!cur) return
+    if (!cur) {
+      return
+    }
     entries.push({
       version: cur.version,
       date: cur.date,
@@ -71,7 +73,9 @@ function parseEntries(lines: string[]): ChangelogEntry[] {
       group = null
       continue
     }
-    if (!cur) continue
+    if (!cur) {
+      continue
+    }
     // `#### Added` / `#### Fixed` / ... starts a change-group within the entry.
     const g = /^####\s+(.+?)\s*$/.exec(line)
     if (g) {
@@ -79,8 +83,11 @@ function parseEntries(lines: string[]): ChangelogEntry[] {
       cur.groups.push(group)
       continue
     }
-    if (group) group.body += line + '\n'
-    else cur.intro.push(line)
+    if (group) {
+      group.body += line + '\n'
+    } else {
+      cur.intro.push(line)
+    }
   }
   flush()
   return entries
@@ -103,7 +110,9 @@ export function parseChangelog(md: string): Changelog {
       current = HEADING_TO_KEY[h2[1].trim()] ?? null
       continue
     }
-    if (current) buf[current].push(line)
+    if (current) {
+      buf[current].push(line)
+    }
   }
   const build = (lines: string[]): ChangelogSection => {
     const entries = parseEntries(lines)
@@ -126,7 +135,9 @@ export function changelogPlugin(): Plugin {
       return id === virtualId ? resolvedId : undefined
     },
     load(id) {
-      if (id !== resolvedId) return undefined
+      if (id !== resolvedId) {
+        return undefined
+      }
       // Re-read on every load and register the file so `vite dev` picks up edits.
       this.addWatchFile(CHANGELOG_PATH)
       let md = ''

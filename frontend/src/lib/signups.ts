@@ -98,37 +98,51 @@ function read(): SavedSignup[] {
   } catch {
     return [] // storage disabled or blocked
   }
-  if (!raw) return []
+  if (!raw) {
+    return []
+  }
   let parsed: unknown
   try {
     parsed = JSON.parse(raw)
   } catch {
     return [] // corrupt - treated as empty, and rewritten on the next save
   }
-  if (!Array.isArray(parsed)) return []
+  if (!Array.isArray(parsed)) {
+    return []
+  }
 
   const cutoff = Date.now() - MAX_AGE_MS
   const kept: SavedSignup[] = []
   for (const entry of parsed) {
-    if (!entry || typeof entry !== 'object') continue
+    if (!entry || typeof entry !== 'object') {
+      continue
+    }
     const e = entry as Partial<SavedSignup> & { savedAt?: unknown }
-    if (typeof e.savedAt !== 'number' || e.savedAt < cutoff) continue
+    if (typeof e.savedAt !== 'number' || e.savedAt < cutoff) {
+      continue
+    }
 
     if (e.kind === 'rally') {
       const r = entry as Partial<SavedRallySignup>
-      if (typeof r.rallyId !== 'number' || typeof r.cardToken !== 'string' || !r.cardToken) continue
+      if (typeof r.rallyId !== 'number' || typeof r.cardToken !== 'string' || !r.cardToken) {
+        continue
+      }
       kept.push({ ...(r as SavedRallySignup), ...splitName(r.name, r.world) })
       continue
     }
     if (e.kind === 'raffle') {
       const r = entry as Partial<SavedRaffleSignup>
-      if (typeof r.raffleId !== 'number' || typeof r.name !== 'string' || !r.name) continue
+      if (typeof r.raffleId !== 'number' || typeof r.name !== 'string' || !r.name) {
+        continue
+      }
       kept.push({ ...(r as SavedRaffleSignup), ...splitName(r.name, r.world) })
       continue
     }
     if (e.kind === 'festival') {
       const f = entry as Partial<SavedFestivalVisit>
-      if (typeof f.mapId !== 'number' || typeof f.name !== 'string' || !f.name) continue
+      if (typeof f.mapId !== 'number' || typeof f.name !== 'string' || !f.name) {
+        continue
+      }
       kept.push({
         ...(f as SavedFestivalVisit),
         ...splitName(f.name, f.world),
@@ -152,7 +166,9 @@ function read(): SavedSignup[] {
 function splitName(name: unknown, world: unknown): { name: string; world: string } {
   const storedName = typeof name === 'string' ? name : ''
   const storedWorld = typeof world === 'string' ? world.trim() : ''
-  if (storedWorld) return { name: storedName.trim(), world: storedWorld }
+  if (storedWorld) {
+    return { name: storedName.trim(), world: storedWorld }
+  }
   return splitParticipantLabel(storedName)
 }
 

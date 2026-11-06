@@ -26,7 +26,9 @@ onMounted(() => {
   void presets.loadPresets()
   // The pattern picker needs patterns/categories; AdminView loads them on entry,
   // but reload if they're somehow empty (e.g. deep-link straight to this tab).
-  if (patterns.patterns.length === 0) void patterns.loadPatterns()
+  if (patterns.patterns.length === 0) {
+    void patterns.loadPatterns()
+  }
 })
 
 /** Pattern name lookup for rendering a preset's pattern chips in the list. */

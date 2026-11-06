@@ -4,14 +4,13 @@ All notable changes to the **Senpan App Suite** are recorded here.
 
 The **frontend** (Vue SPA), **backend** (Go API), and **plugin** (SenpanCompanion,
 a Dalamud/FFXIV plugin) are versioned independently with
-[Semantic Versioning](https://semver.org/) and tracked in their own sections below
+[Semantic Versioning](https://semver.org/) and tracked in their own sections below:
+a change usually touches only one, and they deploy separately. The admin
+dashboard shows the live frontend + backend versions (sidebar footer) so operators
+can confirm the two web halves are compatible; the plugin ships through its own
+Dalamud custom repo and talks to the backend over the same API (PAT-authenticated).
 
-- a change usually touches only one, and they deploy separately. The admin
-  dashboard shows the live frontend + backend versions (sidebar footer) so operators
-  can confirm the two web halves are compatible; the plugin ships through its own
-  Dalamud custom repo and talks to the backend over the same API (PAT-authenticated).
-
-**Sources of truth**
+**Sources of truth:**
 
 - Frontend version -> `frontend/package.json` (`"version"`), baked into the build
   and read via `frontend/src/lib/version.ts`.
@@ -37,6 +36,210 @@ is all it takes - no manual tagging. To publish a release, make sure the version
 source and its section here are updated in the same commit.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/).
+
+---
+
+## [Unreleased]
+
+Not in a release yet: each entry moves into its component's section below when that
+component's version is next bumped. Repo-wide tooling and the deploy are recorded
+under Backend, as before.
+
+The move onto **shared-tooling** 1.2.0 - the lint, test, CI and deploy pieces the
+owner's projects share - held as a git submodule at `shared/`. A fresh clone needs
+`git submodule update --init` (or `git clone --recurse-submodules`) before `npm ci`
+will install.
+
+### Frontend
+
+#### Added
+
+- **End-to-end tests** (`npm run test:e2e`, `task test:e2e`, and CI's `e2e` job on
+  shared-tooling's `e2e.yml`): Playwright builds the API and the SPA and runs them on a
+  throwaway database, never `devdata/`, with Discord held back. Each main public page
+  must show its data and pass axe at WCAG 2.2 AA, and a player joins a board, sees a
+  draw arrive live, stamps the called number and still has it after a reload.
+
+#### Changed
+
+- **ESLint, Prettier, Stylelint and the tsconfigs extend `@jwill89/lint-web`**,
+  shared-tooling's front-end package, installed from `file:../shared/lint/web`.
+  `frontend/.npmrc` sets `install-links=true`, so npm copies the package in with its
+  own dependencies; a link would leave ESLint unable to find its plugins. The rules
+  `eslint.config.js` and `stylelint.config.mjs` held inline are the package's now,
+  and each keeps only what is this app's own; the plugins and configs the package
+  supplies left `devDependencies`.
+- **`curly` and `noUncheckedIndexedAccess` now apply**, from the shared ESLint rules
+  and tsconfig: every `if`, `else` and loop body is braced, and an index into an
+  array or a record is typed as possibly finding nothing. The code is brought up to
+  both.
+- **Tests run on shared-tooling's Vitest settings** (`vitestDefaults`): jsdom, spies
+  restored and stubbed globals put back after each test, and v8 coverage over all of
+  `src`, untested files included. `npm run test:coverage` fails below a floor of
+  35.5% of statements, 25.5% of branches, 28% of functions and 35.5% of lines - a
+  little under what the suite reached when it was set - and CI and
+  `scripts/check.ps1` run it in place of `npm run test`. Raise it as tests land;
+  never lower it.
+- **CI's frontend job is shared-tooling's `web.yml`**, with Node from the new
+  `frontend/.nvmrc` and the Font Awesome token from the `FONTAWESOME_TOKEN` secret,
+  written to `~/.npmrc` for the install and removed straight after; then
+  `npm audit` and the same scripts in the same order, less `gen:types`.
+- **`npm run gen:types` is `go tool tygo generate`**, with tygo pinned by a `tool`
+  directive in `backend/go.mod` instead of a version in the script.
+- **The API types are committed** (`frontend/src/types/api.generated.ts`), as the
+  other projects commit theirs, where each clone and CI job generated them. A new
+  `npm run gen:check` regenerates them and fails if the committed copy differs, and
+  CI's new `generated` job runs the same check with Go, so the frontend job needs no
+  Go. After changing a Go model, run `npm run gen:types` and commit the result.
+- **`frontend/.npmrc` is tracked, and holds no token**: it names Font Awesome's
+  registry for `@awesome.me` and `@fortawesome` and sets `install-links=true`. The
+  account's token goes in your own `~/.npmrc`
+  (`//npm.fontawesome.com/:_authToken=<token>`).
+
+#### Removed
+
+- **`frontend/.prettierrc.json`**, a second copy of the same four settings:
+  `prettier.config.js` re-exports `@jwill89/lint-web/prettier`.
+
+#### Fixed
+
+What the new axe checks found, at WCAG 2.2 AA:
+
+- **Every page has a `main` landmark** around its content.
+- **Every page has a level-one heading**: the home page's logo, and elsewhere the app's
+  name for screen readers; the visible page titles stay as they were.
+- **The footer's links stand out from its text** by weight as well as colour.
+- **The home page's Admin Portal button is readable**: dimmed less, from 3.3:1 to 4.9:1.
+- **The player's volume control is one labelled control**, so its caption and value
+  belong to the slider.
+- **The stamp lookup's world picker has a name** when its caption is hidden.
+
+### Backend
+
+#### Changed
+
+- **The SQLite driver is `modernc.org/sqlite`** (was `ncruces/go-sqlite3`), still
+  pure Go with no cgo, so the static build, the race build and the unit's
+  `MemoryDenyWriteExecute=yes` all stand. No change to the API.
+  - The pragmas travel in the DSN (`_pragma`), which the driver applies to every
+    pooled connection as it opens it, in place of the old driver's connect hook.
+  - `_txlock=immediate` in the DSN keeps `BEGIN IMMEDIATE` for every read-write
+    transaction. The driver ignores `TxOptions.Isolation`, which is how
+    `beginImmediate` used to ask for it.
+  - `mmap_size` (32 MB) now takes effect; the old driver ignored it.
+  - A query canceled mid-run now comes back as `context.Canceled`.
+    `store.Interrupted` checks modernc's `SQLITE_INTERRUPT` code and stays as a
+    backstop, so a departed client still logs at Debug.
+  - **Every read of a DATETIME column is `CAST(col AS TEXT)`.** modernc parses a
+    column declared `DATE`, `DATETIME` or `TIMESTAMP` into a `time.Time`, which
+    database/sql would hand back as RFC 3339 (`2026-01-02T03:04:05Z` for a stored
+    `2026-01-02 03:04:05`); the cast keeps every timestamp the API returns as it
+    was. A new store method must do the same. `TestDatetimeColumnsReadAsStored`
+    guards the paths the frontend and the plugin parse, and the rest of
+    `store/driver_test.go` checks the pragmas, the immediate `BEGIN` and
+    cancellation against the driver.
+- **`.golangci.yml` is written from shared-tooling's template**
+  (`go run -C shared/lint/go . -dir backend`), with Senpan's own settings and
+  exclusions in `.golangci.local.yml`, merged on top. CI and `scripts/check.ps1`
+  fail when the written file has drifted from the two.
+- **CI's backend job is shared-tooling's `go.yml`**: the config check, `go vet`,
+  golangci-lint v2.15.0, govulncheck, the tests under the race detector in shuffled
+  order with a floor of **63%** statement coverage (63.3% when it was set; raise it
+  as tests land, never lower it), and the binary built as the deploy builds it.
+- **govulncheck is pinned at v1.9.0** in CI, `scripts/check.ps1` and the Taskfile,
+  instead of running at `@latest`.
+- **tygo is a `tool` in `go.mod`**, so `go tool tygo generate` builds the same tygo
+  on every machine.
+
+#### Dependencies
+
+- **`modernc.org/sqlite` v1.61.1** replaces `ncruces/go-sqlite3` v0.36.0 and its
+  WebAssembly build of SQLite; **tygo v0.2.21** joins as a tool, with what it needs.
+
+#### Tooling
+
+- **shared-tooling is a submodule at `shared/`**, pinned to v1.2.0. The submodule
+  and every `uses: jwill89/shared-tooling/...@v1.2.0` in `ci.yml` name the same
+  release, and CI fails if they ever differ; `task shared:update -- vX.Y.Z` moves
+  both.
+- **CI calls shared-tooling's reusable workflows** - `web.yml`, `go.yml`,
+  `dotnet.yml`, `pwsh.yml`, and `docs.yml`, new here (markdownlint, the repo files,
+  the workflow refs) - beside Senpan's own release job, which now waits on the docs
+  job too.
+- **`scripts/check.ps1`** (the local gate, and the pre-push hook) runs what the new
+  jobs run: the golangci config check, govulncheck at its pin, `test:coverage`, the
+  plugin without Roslynator, and the shared script lint, markdownlint, repo-file and
+  version checks. It needs `shared/` checked out, and says so when it isn't.
+- **`.editorconfig` and `.gitattributes` come from `shared/repo`**
+  (`Sync-RepoFiles.ps1`), with Senpan's own lines - the plugin's two C# exceptions -
+  below the project marker.
+- **PowerShell lints with shared-tooling's settings** through
+  `shared/lint/pwsh/Invoke-ScriptLint.ps1`, on every tracked `.ps1`, `.psm1` and
+  `.psd1` rather than `scripts/*.ps1` alone. The root `PSScriptAnalyzerSettings.psd1`
+  is gone.
+- **`.markdownlint-cli2.jsonc`** lints every Markdown file with the shared config,
+  and the docs were brought into line with it.
+- **`Taskfile.yml`**: the day-to-day commands (`task` lists them), with the shared
+  tasks included as `shared:*`.
+- **`.github/dependabot.yml`**: weekly updates for npm (through the Font Awesome
+  registry, so `FONTAWESOME_TOKEN` is needed as a Dependabot secret too), Go
+  modules, NuGet and GitHub Actions. TypeScript's next major is held until vue-tsc
+  supports it, and `shared/` is left out, since a release is taken on purpose.
+
+#### Deploy
+
+- **`scripts/deploy.ps1` is built on shared-tooling's SharedDeploy module**: one
+  archive, one SSH connection held for the whole run, and one remote run that checks
+  the archive's SHA-256 and file count before it changes anything. The backend
+  steps read the running unit for the service's user, its database (`-db`) and its
+  address (`-addr`). `deploy/README.md` walks through a run.
+- **The site's public address**, which the smoke check fetches, is
+  `https://apps.senpan.cafe` unless `-SiteUrl`, `DEPLOY_SITE_URL` or
+  `$DeploySiteUrl` names another.
+- **A smoke check through Cloudflare, with rollback.** After the host run, the
+  deploy fetches `/api/version` (which must name the version just built), the page
+  and its entry script, and the plugin index with this release's `?v=`; if any
+  fails, what the run changed goes back - the plugin and the frontend first, then
+  the backend.
+- **A rollback puts the database back with the binary.** The new binary may have
+  migrated the schema, and the previous one refuses a newer schema, so a failed start
+  or a failed smoke check restores the snapshot taken just before the deploy. Until
+  now the database stayed as it was and the run printed the command to restore it,
+  which left the service down until someone did. What was written in the seconds the
+  new release ran is lost with it.
+- **The plugin's version is checked before anything is built.** With the plugin in
+  the run, the published `pluginmaster.json` is read first, and a version not
+  higher than it stops the run - before a backend and frontend in the same run could
+  go live.
+- **A daily database backup**, installed and checked by every backend deploy: a
+  systemd timer, run as the service's user, copies the database into
+  `<db folder>/backups/<service>-YYYY-MM-DD.sqlite` and keeps 28 days. If it can't
+  be installed, the deploy fails saying the site is live but its backup is not.
+- **The live database is pulled into `devdata/database.sqlite`** after a backend
+  deploy by SharedDeploy's `Copy-LiveDatabase`, keeping the three previous local
+  copies; `-NoDbPull` skips it.
+
+### Plugin
+
+#### Changed
+
+- **The analyzers and the code style come from shared-tooling** (`shared/lint/dotnet`),
+  imported by the new `plugins/Directory.Build.props`: the .NET analyzers at their
+  recommended level and the C# code style, checked in the build as before. The two
+  exceptions the plugin keeps - braced `case` blocks not indented a level, and
+  classic `[DllImport]` for the winmm and DPAPI calls - moved to the root
+  `.editorconfig`, and `plugins/SenpanCompanion/.editorconfig` is gone.
+- **CI's plugin job is shared-tooling's `dotnet.yml`**: the same Release build with
+  warnings as errors against Dalamud's latest distribution, and
+  `dotnet format --verify-no-changes`.
+- **The source files lose their UTF-8 byte-order marks**, as the shared
+  `.editorconfig` writes them.
+
+#### Removed
+
+- **Roslynator**, with its CLI pin in `.config/dotnet-tools.json` and the gate's
+  `roslynator analyze` step: the shared analyzers in the build cover what it
+  checked.
 
 ---
 
@@ -592,7 +795,7 @@ Festivals have an interactive map. Requires backend 3.19.0.
   in its form; the "Stall / Vendor" select then lists that map's stalls instead of
   the affiliate list, and picking one takes the stall's affiliate and seeds the
   stamp type from what the stall offers. On the public map those stalls are ringed
-  and show their stamp art, with a "Highlight <rally> stalls only" toggle that
+  and show their stamp art, with a "Highlight \<rally> stalls only" toggle that
   pushes everything else into the background rather than removing it - the plan
   keeps its shape either way - and a link to the rally's sign-up page when it takes
   public sign-ups.
@@ -2122,8 +2325,6 @@ recognisable across all of them.
 Closes the highest-severity finding from the security review: a public character
 name could be turned into someone else's garapon draws.
 
-#### Security
-
 - **A stamp-card link is no longer a spendable drawing token.** A rally sign-up
   used to put the SAME token on the stamp card and on its paired garapon drawing
   link, so one hash served `/stamp-card/<token>` and `/garapon/<token>`. That made
@@ -2576,7 +2777,7 @@ with frontend 3.21.0.
   card optional. Requirements are clamped on save to the stamps of that type the
   rally carries, and a `counts` rally that requires nothing of either type is
   rejected with a 400 (it would finish every card at its first stamp, and 0/0 is
-  where the admin form's mode starts). The clamp bounds what can be *asked for* - it
+  where the admin form's mode starts). The clamp bounds what can be _asked for_ - it
   can't keep a requirement reachable, since pausing a stall or letting its window
   end takes stamps out of play afterwards.
 - **The public card carries the rule** (`completion_mode`, `required_food`,
@@ -2731,7 +2932,7 @@ every card by hand. Paired with frontend 3.18.0.
   scheduler. Structurally immune now rather than relying on each caller to carry the
   value forward, with a regression test that fails against the old code. Worth noting
   for anyone who saw this as "it doesn't survive a restart": the value is a database
-  column and nothing at boot touches it - a *save* was always what cleared it.
+  column and nothing at boot touches it - a _save_ was always what cleared it.
 
 - **Multi-word emoji shortcodes posted as literal text in Discord embeds.**
   `:video_game:` came out as `:video\_game:`, while a one-word name like `:tada:` was
@@ -3758,7 +3959,7 @@ Follows the stamp rally's split into food and game stamps (backend 3.18.0).
   Game. A stall the server sends without a type reads as Food, matching every stall
   that existed before types.
 - **What finishes a card, on the rally header** - every stamp, or the required food
-  + game counts - so an operator answering "am I done?" at a stall doesn't have to
+  and game counts - so an operator answering "am I done?" at a stall doesn't have to
   open the website to find out. The stall summary also splits into food and game.
 
 ### [3.4.1.0] - 2026-08-23
@@ -4120,3 +4321,8 @@ Adds the **"It's Yoever"** bingo controls (paired with backend 3.6.0).
 2. Add an entry under the matching section above (Frontend / Backend / Plugin),
    newest first, grouped as _Added / Changed / Fixed / Removed / Security_.
 3. Keep the version string in the source file and the heading here in sync.
+4. A change recorded before its version is bumped goes under **Unreleased** at the
+   top, in its component's `### Frontend` / `### Backend` / `### Plugin`, and moves
+   into that component's new `### [version]` when it is bumped. Never put an
+   Unreleased heading inside a component section: the release job and the admin
+   dashboard's changelog take the first `### [...]` there as the latest version.

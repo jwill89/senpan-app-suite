@@ -28,7 +28,9 @@ const selectedCards = ref<(string | number)[]>([])
 /** Bulk-delete the checked cards, then drop the now-stale selection. */
 async function deleteSelectedCards(): Promise<void> {
   const done = await cards.deleteCards(selectedCards.value.map(String))
-  if (done) selectedCards.value = []
+  if (done) {
+    selectedCards.value = []
+  }
 }
 const ui = useUiStore()
 const router = useRouter()

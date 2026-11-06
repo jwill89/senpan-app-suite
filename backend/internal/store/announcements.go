@@ -18,7 +18,7 @@ import (
 // ListAnnouncementTypes returns all announcement types, newest first.
 func (s *Store) ListAnnouncementTypes(ctx context.Context) ([]model.AnnouncementType, error) {
 	rows, err := s.db.QueryContext(ctx,
-		`SELECT id, name, webhook_url, created_at FROM announcement_types ORDER BY id DESC`,
+		`SELECT id, name, webhook_url, CAST(created_at AS TEXT) FROM announcement_types ORDER BY id DESC`,
 	)
 	if err != nil {
 		return nil, err
@@ -40,7 +40,7 @@ func (s *Store) ListAnnouncementTypes(ctx context.Context) ([]model.Announcement
 func (s *Store) GetAnnouncementType(ctx context.Context, id int64) (*model.AnnouncementType, error) {
 	var t model.AnnouncementType
 	err := s.db.QueryRowContext(ctx,
-		`SELECT id, name, webhook_url, created_at FROM announcement_types WHERE id = ?`, id,
+		`SELECT id, name, webhook_url, CAST(created_at AS TEXT) FROM announcement_types WHERE id = ?`, id,
 	).Scan(&t.ID, &t.Name, &t.WebhookURL, &t.CreatedAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
@@ -97,7 +97,7 @@ func (s *Store) CountAnnouncementsByType(ctx context.Context, typeID int64) (int
 // ListAnnouncementRoles returns all taggable roles, newest first.
 func (s *Store) ListAnnouncementRoles(ctx context.Context) ([]model.AnnouncementRole, error) {
 	rows, err := s.db.QueryContext(ctx,
-		`SELECT id, name, role_id, created_at FROM announcement_roles ORDER BY id DESC`,
+		`SELECT id, name, role_id, CAST(created_at AS TEXT) FROM announcement_roles ORDER BY id DESC`,
 	)
 	if err != nil {
 		return nil, err
@@ -119,7 +119,7 @@ func (s *Store) ListAnnouncementRoles(ctx context.Context) ([]model.Announcement
 func (s *Store) GetAnnouncementRole(ctx context.Context, id int64) (*model.AnnouncementRole, error) {
 	var r model.AnnouncementRole
 	err := s.db.QueryRowContext(ctx,
-		`SELECT id, name, role_id, created_at FROM announcement_roles WHERE id = ?`, id,
+		`SELECT id, name, role_id, CAST(created_at AS TEXT) FROM announcement_roles WHERE id = ?`, id,
 	).Scan(&r.ID, &r.Name, &r.RoleID, &r.CreatedAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
@@ -177,7 +177,7 @@ func (s *Store) CountAnnouncementsByRole(ctx context.Context, roleID int64) (int
 const announcementColumns = `a.id, a.type_id, a.title, a.details, a.image, a.thumbnail, a.color, a.location, a.start_local, a.end_local,
 	a.start_at, a.end_at, a.start_format, a.end_format, a.dynamic_dates, a.schedule_kind, a.timezone, a.once_local, a.schedule_minutes,
 	a.schedule_weekdays, a.schedule_week_of_month,
-	a.next_post_at, a.skip_count, a.active, a.last_posted_at, a.created_at, a.buttons, a.mention, COALESCE(t.name, '')`
+	a.next_post_at, a.skip_count, a.active, CAST(a.last_posted_at AS TEXT), CAST(a.created_at AS TEXT), a.buttons, a.mention, COALESCE(t.name, '')`
 
 // scanAnnouncement scans one row (in announcementColumns order) into a model.
 func scanAnnouncement(sc interface{ Scan(...any) error }) (model.Announcement, error) {

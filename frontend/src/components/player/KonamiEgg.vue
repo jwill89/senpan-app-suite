@@ -56,16 +56,26 @@ let hideTimer: number | undefined
 /** True for a target that owns its own keystrokes (a search box, a text field). */
 function isTypingInto(target: EventTarget | null): boolean {
   const el = target as HTMLElement | null
-  if (!el?.tagName) return false
+  if (!el?.tagName) {
+    return false
+  }
   return el.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(el.tagName)
 }
 
 function onKeydown(e: KeyboardEvent): void {
-  if (isTypingInto(e.target)) return
+  if (isTypingInto(e.target)) {
+    return
+  }
   recent.push(e.key.length === 1 ? e.key.toLowerCase() : e.key)
-  if (recent.length > SEQUENCE.length) recent.shift()
-  if (recent.length < SEQUENCE.length) return
-  if (!SEQUENCE.every((key, i) => key === recent[i])) return
+  if (recent.length > SEQUENCE.length) {
+    recent.shift()
+  }
+  if (recent.length < SEQUENCE.length) {
+    return
+  }
+  if (!SEQUENCE.every((key, i) => key === recent[i])) {
+    return
+  }
   recent.length = 0
   reveal()
 }

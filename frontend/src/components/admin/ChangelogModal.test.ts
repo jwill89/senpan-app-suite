@@ -16,20 +16,20 @@ describe('ChangelogModal', () => {
     expect(wrapper.findAll('.changelog-rail-item')).toHaveLength(versions.length)
 
     // Opens on the newest release, with its change-group badges (Added/Changed/...).
-    expect(wrapper.find('.changelog-detail-title').text()).toContain(`v${versions[0].version}`)
+    expect(wrapper.find('.changelog-detail-title').text()).toContain(`v${versions[0]!.version}`)
     const badges = wrapper.findAll('.changelog-badge').map((b) => b.text())
     expect(badges.length).toBeGreaterThan(0)
     // Badges are the newest release's actual change-group labels - don't hardcode one
     // (a Changed/Fixed-only release has no "Added" group).
-    expect(badges).toEqual(versions[0].groups.map((g) => g.label))
+    expect(badges).toEqual(versions[0]!.groups.map((g) => g.label))
   })
 
   it('navigates to an older version when its rail item is clicked', async () => {
     const wrapper = mount(ChangelogModal, { props: { component: 'frontend' } })
     const versions = changelog.frontend.entries
     // Click the second-newest version.
-    await wrapper.findAll('.changelog-rail-item')[1].trigger('click')
-    expect(wrapper.find('.changelog-detail-title').text()).toContain(`v${versions[1].version}`)
+    await wrapper.findAll('.changelog-rail-item')[1]!.trigger('click')
+    expect(wrapper.find('.changelog-detail-title').text()).toContain(`v${versions[1]!.version}`)
   })
 
   it('opens the plugin on a distinct install view with the copyable repo URL', () => {

@@ -5,7 +5,9 @@ import type { BingoGamePattern } from '@/types/api'
 /** Builds a pattern whose required cells are in the given [row,col] positions. */
 function pattern(cells: [number, number][]): BingoGamePattern {
   const grid = Array.from({ length: 5 }, () => Array.from({ length: 5 }, () => false))
-  for (const [r, c] of cells) grid[r][c] = true
+  for (const [r, c] of cells) {
+    grid[r]![c] = true
+  }
   return { id: 1, name: 'p', pattern_data: grid }
 }
 

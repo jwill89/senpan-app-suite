@@ -88,8 +88,12 @@ function openLock(t: TeaRoom): void {
 }
 async function submitLock(): Promise<void> {
   const t = lockTarget.value
-  if (!t) return
-  if (await store.lockRoom(t, lockUntil.value)) lockTarget.value = null
+  if (!t) {
+    return
+  }
+  if (await store.lockRoom(t, lockUntil.value)) {
+    lockTarget.value = null
+  }
 }
 
 // -- Navigation ---------------------------------------------------------------
@@ -112,7 +116,9 @@ function openWebhook(): void {
   screen.value = 'webhook'
 }
 async function submitWebhook(): Promise<void> {
-  if (await store.saveWebhook(webhookDraft.value)) screen.value = 'list'
+  if (await store.saveWebhook(webhookDraft.value)) {
+    screen.value = 'list'
+  }
 }
 </script>
 

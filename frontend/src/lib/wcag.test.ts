@@ -85,8 +85,12 @@ describe('auditTheme', () => {
     for (const r of report.results) {
       expect(typeof r.aaPass).toBe('boolean')
       expect(typeof r.aaaPass).toBe('boolean')
-      if (r.status === 'aaa') expect(r.aaPass && r.aaaPass).toBe(true)
-      if (r.status === 'fail') expect(r.aaPass).toBe(false)
+      if (r.status === 'aaa') {
+        expect(r.aaPass && r.aaaPass).toBe(true)
+      }
+      if (r.status === 'fail') {
+        expect(r.aaPass).toBe(false)
+      }
     }
   })
 

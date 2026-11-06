@@ -110,11 +110,11 @@ const logoUrl = '/images/logo.png'
 
 <template>
   <div class="home">
-    <!-- Masthead. The logo artwork includes the wordmark, so it stands in for the
-         page title and `app_title` becomes its accessible name - the setting still
-         drives the browser tab title and the player topbar. -->
+    <!-- Masthead. The logo artwork includes the wordmark, so it is the page's h1
+         and `app_title` becomes its accessible name - the setting still drives the
+         browser tab title and the player topbar. -->
     <header class="home-mast">
-      <img :src="logoUrl" :alt="app.settings.app_title" class="home-logo" />
+      <h1><img :src="logoUrl" :alt="app.settings.app_title" class="home-logo" /></h1>
     </header>
     <!-- One column of distinct rows. The primary task leads and carries the
          weight (larger title, the only input, roughly double the height); the two

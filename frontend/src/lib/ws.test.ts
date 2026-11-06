@@ -26,7 +26,7 @@ class MockWS {
   }
 }
 
-const latest = (): MockWS => MockWS.instances[MockWS.instances.length - 1]
+const latest = (): MockWS => MockWS.instances[MockWS.instances.length - 1]!
 
 function makeCb(overrides: Partial<WsCallbacks> = {}): WsCallbacks {
   return {

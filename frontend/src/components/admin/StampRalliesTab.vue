@@ -41,7 +41,9 @@ const screen = ref<Screen>('list')
 const search = ref('')
 const filteredOpen = computed(() => {
   const q = search.value.trim().toLowerCase()
-  if (!q) return store.openRallies
+  if (!q) {
+    return store.openRallies
+  }
   return store.openRallies.filter((r) => r.title.toLowerCase().includes(q))
 })
 
@@ -60,8 +62,12 @@ const closedMatches = (r: StampRally, q: string): boolean => r.title.toLowerCase
 /** One-line summary of what completes a card on the selected rally. */
 const completionText = computed(() => {
   const r = store.selectedRally
-  if (!r) return ''
-  if (r.completion_mode !== 'counts') return 'A card completes when every stamp is collected.'
+  if (!r) {
+    return ''
+  }
+  if (r.completion_mode !== 'counts') {
+    return 'A card completes when every stamp is collected.'
+  }
   return `A card completes at ${r.required_food} food stamp${
     r.required_food === 1 ? '' : 's'
   } and ${r.required_game} game stamp${r.required_game === 1 ? '' : 's'}.`
@@ -69,7 +75,9 @@ const completionText = computed(() => {
 
 const isClosed = computed(() => store.selectedRally?.status === 'closed')
 function toggleClosed(): void {
-  if (!store.selectedRally) return
+  if (!store.selectedRally) {
+    return
+  }
   void store.setRallyStatus(store.selectedRally.id, isClosed.value ? 'open' : 'closed')
 }
 
@@ -87,7 +95,9 @@ function toggleManage(r: StampRally): void {
 // -- Detail preview (card + stamps + prizes at their placements) --------------
 const previewItems = computed<CanvasItem[]>(() => {
   const r = store.selectedRally
-  if (!r) return []
+  if (!r) {
+    return []
+  }
   const stamps = (r.stamps ?? []).map((s) => ({
     key: `s${s.id}`,
     image: s.image || r.not_stamped_image,
@@ -140,7 +150,9 @@ function openCards(): void {
   screen.value = 'cards'
 }
 function openLogs(): void {
-  if (store.selectedRally) void store.loadRallyLogs(store.selectedRally.id)
+  if (store.selectedRally) {
+    void store.loadRallyLogs(store.selectedRally.id)
+  }
   resetLogs()
   screen.value = 'logs'
 }
@@ -157,14 +169,22 @@ const detailReady = computed(
 )
 
 function editSelected(): void {
-  if (!store.selectedRally) return
-  if (!store.editRallyForm(store.selectedRally)) return
+  if (!store.selectedRally) {
+    return
+  }
+  if (!store.editRallyForm(store.selectedRally)) {
+    return
+  }
   screen.value = 'form'
 }
 /** Opens the create form pre-filled from this rally (see copyRallyForm). */
 function duplicateSelected(): void {
-  if (!store.selectedRally) return
-  if (!store.copyRallyForm(store.selectedRally)) return
+  if (!store.selectedRally) {
+    return
+  }
+  if (!store.copyRallyForm(store.selectedRally)) {
+    return
+  }
   screen.value = 'form'
 }
 /**
@@ -177,9 +197,13 @@ function duplicateSelected(): void {
  */
 async function copyRally(r: StampRally): Promise<void> {
   await store.loadRallyDetail(r.id)
-  if (!store.selectedRally) return
+  if (!store.selectedRally) {
+    return
+  }
   // The fetch can still have failed, which leaves the stamp-less list row here.
-  if (!store.copyRallyForm(store.selectedRally)) return
+  if (!store.copyRallyForm(store.selectedRally)) {
+    return
+  }
   screen.value = 'form'
 }
 function backToList(): void {
@@ -191,9 +215,13 @@ function onFormDone(): void {
 }
 async function deleteSelected(): Promise<void> {
   const r = store.selectedRally
-  if (!r) return
+  if (!r) {
+    return
+  }
   await store.deleteRally(r.id)
-  if (!store.selectedRally) screen.value = 'list'
+  if (!store.selectedRally) {
+    screen.value = 'list'
+  }
 }
 </script>
 
@@ -557,7 +585,7 @@ async function deleteSelected(): Promise<void> {
                   <div v-if="!store.cardStamps[r.id]" class="text-muted text-sm">
                     Loading stalls...
                   </div>
-                  <template v-else-if="store.cardStamps[r.id].length">
+                  <template v-else-if="store.cardStamps[r.id]?.length">
                     <div v-for="s in store.cardStamps[r.id]" :key="s.id" class="stall-row">
                       <span class="stall-row-name">{{
                         stallName(s.stall_name, s.affiliate_name)

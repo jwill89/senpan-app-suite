@@ -80,7 +80,9 @@ function manualChunks(id: string): string | undefined {
         ? id.includes(`/node_modules/${pkg}`)
         : id.includes(`/node_modules/${pkg}/`),
     )
-    if (hit) return chunk
+    if (hit) {
+      return chunk
+    }
   }
   return undefined
 }
@@ -114,8 +116,11 @@ function markAdminOnlyOutput(): Plugin {
     apply: 'build',
     generateBundle(_options, bundle) {
       const chunks = new Map<string, Chunk>()
-      for (const [file, output] of Object.entries(bundle))
-        if (output.type === 'chunk') chunks.set(file, output)
+      for (const [file, output] of Object.entries(bundle)) {
+        if (output.type === 'chunk') {
+          chunks.set(file, output)
+        }
+      }
 
       const facadeOf = (file: string) =>
         (chunks.get(file)?.facadeModuleId || '').split('\\').join('/')
@@ -132,10 +137,14 @@ function markAdminOnlyOutput(): Plugin {
       )
       while (queue.length) {
         const file = queue.pop()
-        if (!file || reachable.has(file) || !chunks.has(file) || isAdmin(file)) continue
+        if (!file || reachable.has(file) || !chunks.has(file) || isAdmin(file)) {
+          continue
+        }
         reachable.add(file)
         const chunk = chunks.get(file)
-        if (chunk) queue.push(...chunk.imports, ...chunk.dynamicImports)
+        if (chunk) {
+          queue.push(...chunk.imports, ...chunk.dynamicImports)
+        }
       }
 
       // A chunk's stylesheet and the fonts that stylesheet pulls ride with it:
@@ -148,10 +157,15 @@ function markAdminOnlyOutput(): Plugin {
       const publicSidecars = new Set([...reachable].flatMap(sidecarsOf))
       adminOnlyOutput.clear()
       for (const file of chunks.keys()) {
-        if (reachable.has(file)) continue
+        if (reachable.has(file)) {
+          continue
+        }
         adminOnlyOutput.add(file)
-        for (const sidecar of sidecarsOf(file))
-          if (!publicSidecars.has(sidecar)) adminOnlyOutput.add(sidecar)
+        for (const sidecar of sidecarsOf(file)) {
+          if (!publicSidecars.has(sidecar)) {
+            adminOnlyOutput.add(sidecar)
+          }
+        }
       }
     },
   }
@@ -189,17 +203,19 @@ function verifyAdminNotPrecached(): Plugin {
       }
       const precached = new Set([...source.matchAll(/url:"([^"]+)"/g)].map((match) => match[1]))
       const leaked = [...adminOnlyOutput].filter((file) => precached.has(file))
-      if (leaked.length)
+      if (leaked.length) {
         this.error(
           `${leaked.length} admin-only file(s) reached the service-worker precache, ` +
             `so every visitor would download them: ${leaked.slice(0, 3).join(', ')}` +
             (leaked.length > 3 ? ', ...' : ''),
         )
-      if (!adminOnlyOutput.size)
+      }
+      if (!adminOnlyOutput.size) {
         this.error(
           'no admin-only output was identified - the reachability walk in ' +
             'markAdminOnlyOutput is no longer finding the admin chunks',
         )
+      }
     },
   }
 }

@@ -41,7 +41,7 @@ describe('BingoBoard', () => {
     const wrapper = mount(BingoBoard, {
       props: { board: sampleBoard(), mode: 'player', cellClass: () => ['board-cell'] },
     })
-    await wrapper.findAll('.board-cell')[0].trigger('click')
+    await wrapper.findAll('.board-cell')[0]!.trigger('click')
     expect(wrapper.emitted('cellClick')?.[0]).toEqual([0, 0, 1])
   })
 
@@ -57,7 +57,7 @@ describe('BingoBoard', () => {
         stampShape: 'star',
       },
     })
-    const first = wrapper.findAll('.board-cell')[0]
+    const first = wrapper.findAll('.board-cell')[0]!
     expect(first.classes()).toContain('is-stamped')
     expect(first.find('.stamp-mark').text()).toBe('⭐')
   })
@@ -96,11 +96,11 @@ describe('BingoBoard', () => {
     })
     const marks = wrapper.findAll('.stamp-mark')
     // Pattern cell (0,0): primary stamp -> shows the emoji.
-    expect(marks[0].text()).toBe('⭐')
-    expect(marks[0].attributes('style')).toContain('background: pink')
+    expect(marks[0]!.text()).toBe('⭐')
+    expect(marks[0]!.attributes('style')).toContain('background: pink')
     // Non-pattern cell (0,1): secondary stamp -> plain circle, no emoji.
-    expect(marks[1].text()).toBe('')
-    expect(marks[1].attributes('style')).toContain('background: blue')
+    expect(marks[1]!.text()).toBe('')
+    expect(marks[1]!.attributes('style')).toContain('background: blue')
   })
 
   it('uses the primary stamp everywhere when no secondary style is provided', () => {
@@ -115,6 +115,6 @@ describe('BingoBoard', () => {
       },
     })
     // Without secondaryStampStyle, every stamped cell keeps the primary emoji.
-    expect(wrapper.findAll('.stamp-mark')[1].text()).toBe('⭐')
+    expect(wrapper.findAll('.stamp-mark')[1]!.text()).toBe('⭐')
   })
 })

@@ -95,7 +95,9 @@ function onDesigned(png: Blob): void {
   // A data: URL, not a blob: one - the site's Content-Security-Policy allows the
   // former for images and not the latter.
   reader.onload = () => {
-    if (typeof reader.result === 'string') designPreview.value = reader.result
+    if (typeof reader.result === 'string') {
+      designPreview.value = reader.result
+    }
   }
   reader.readAsDataURL(png)
 }
@@ -121,11 +123,15 @@ const designer = useTemplateRef<{ confirmDiscard: () => Promise<boolean> }>('des
  * would be lost (nothing added, or already downloaded, closes without a question).
  */
 async function onModalClose(): Promise<void> {
-  if (!designer.value || (await designer.value.confirmDiscard())) closeDesigner()
+  if (!designer.value || (await designer.value.confirmDiscard())) {
+    closeDesigner()
+  }
 }
 
 async function sendDesign(): Promise<void> {
-  if (!design.value) return
+  if (!design.value) {
+    return
+  }
   if (await store.submitEmaPlaque(design.value, designToken.value)) {
     closeDesigner()
     return

@@ -164,7 +164,7 @@ func scanTokens(raw string) map[string]string {
 // ListStyles returns all styles (name + visibility, no tokens) for lightweight
 // listing in the admin theme manager.
 func (s *Store) ListStyles(ctx context.Context) ([]model.Style, error) {
-	rows, err := s.db.QueryContext(ctx, "SELECT id, name, is_public, created_at FROM styles ORDER BY name ASC")
+	rows, err := s.db.QueryContext(ctx, "SELECT id, name, is_public, CAST(created_at AS TEXT) FROM styles ORDER BY name ASC")
 	if err != nil {
 		return nil, err
 	}
@@ -206,7 +206,7 @@ func (s *Store) ListPublicStyles(ctx context.Context) ([]model.PublicStyle, erro
 // endpoint can't be used to fetch a Private theme's stylesheet by guessing its id.
 func (s *Store) GetPublicStyle(ctx context.Context, id int64) (*model.Style, error) {
 	return s.scanStyle(s.db.QueryRowContext(ctx,
-		"SELECT id, name, tokens, board_flourish, number_flourish, is_public, created_at FROM styles WHERE id = ? AND is_public = 1", id,
+		"SELECT id, name, tokens, board_flourish, number_flourish, is_public, CAST(created_at AS TEXT) FROM styles WHERE id = ? AND is_public = 1", id,
 	))
 }
 
@@ -214,7 +214,7 @@ func (s *Store) GetPublicStyle(ctx context.Context, id int64) (*model.Style, err
 // CSS + flourishes). Returns nil if not found.
 func (s *Store) GetStyle(ctx context.Context, id int64) (*model.Style, error) {
 	return s.scanStyle(s.db.QueryRowContext(ctx,
-		"SELECT id, name, tokens, board_flourish, number_flourish, is_public, created_at FROM styles WHERE id = ?", id,
+		"SELECT id, name, tokens, board_flourish, number_flourish, is_public, CAST(created_at AS TEXT) FROM styles WHERE id = ?", id,
 	))
 }
 
@@ -311,7 +311,7 @@ func (s *Store) GetActiveStyle(ctx context.Context) (*model.Style, error) {
 		return nil, err
 	}
 	return s.scanStyle(s.db.QueryRowContext(ctx,
-		"SELECT id, name, tokens, board_flourish, number_flourish, is_public, created_at FROM styles WHERE id = ?", idStr,
+		"SELECT id, name, tokens, board_flourish, number_flourish, is_public, CAST(created_at AS TEXT) FROM styles WHERE id = ?", idStr,
 	))
 }
 

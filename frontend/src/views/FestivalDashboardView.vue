@@ -70,8 +70,12 @@ watch(
  * then would show the prize first.
  */
 function onVisible(): void {
-  if (document.visibilityState !== 'visible' || garapons.drawing) return
-  if (Date.now() - store.loadedAt > 60_000) void store.refresh()
+  if (document.visibilityState !== 'visible' || garapons.drawing) {
+    return
+  }
+  if (Date.now() - store.loadedAt > 60_000) {
+    void store.refresh()
+  }
 }
 onMounted(() => document.addEventListener('visibilitychange', onVisible))
 onBeforeUnmount(() => document.removeEventListener('visibilitychange', onVisible))
@@ -88,7 +92,9 @@ const raffles = computed(() =>
 
 const stampTally = computed(() => {
   const p = stampRallies.cardProgress
-  if (!store.card) return rally.value?.signup_open ? 'Get a card' : 'No card yet'
+  if (!store.card) {
+    return rally.value?.signup_open ? 'Get a card' : 'No card yet'
+  }
   if (p.byType) {
     const need = p.food.required + p.game.required
     const have =
@@ -100,24 +106,38 @@ const stampTally = computed(() => {
 
 const drawTally = computed(() => {
   const g = garapon.value
-  if (!g) return ''
-  if (g.garapon.status === 'closed') return 'Closed'
-  if (g.player) return `${garapons.drawsRemaining} left`
-  if (g.has_paired_link) return `${g.paired_draws_left} waiting`
+  if (!g) {
+    return ''
+  }
+  if (g.garapon.status === 'closed') {
+    return 'Closed'
+  }
+  if (g.player) {
+    return `${garapons.drawsRemaining} left`
+  }
+  if (g.has_paired_link) {
+    return `${g.paired_draws_left} waiting`
+  }
   return 'With a card'
 })
 
 const raffleTally = computed(() => {
   const mine = store.enteredRaffles.length
-  if (mine) return `In ${mine}`
+  if (mine) {
+    return `In ${mine}`
+  }
   const open = store.runningRaffles.length
   return open ? `${open} open` : 'Drawn'
 })
 
 const emaTally = computed(() => {
   const e = data.value?.ema
-  if (!e) return ''
-  if (e.has_plaque_this_window) return 'Hung today'
+  if (!e) {
+    return ''
+  }
+  if (e.has_plaque_this_window) {
+    return 'Hung today'
+  }
   return e.current_window_id ? 'Open today' : 'Not today'
 })
 
@@ -130,14 +150,18 @@ const tiles = computed(() => {
       value: `${store.map?.stalls.length ?? 0} stalls`,
     },
   ]
-  if (rally.value)
+  if (rally.value) {
     list.push({ key: 'stamps', label: 'Stamp Rally', icon: 'stamp', value: stampTally.value })
-  if (garapon.value)
+  }
+  if (garapon.value) {
     list.push({ key: 'garapon', label: 'Garapon', icon: 'ferris-wheel', value: drawTally.value })
-  if (raffles.value.length)
+  }
+  if (raffles.value.length) {
     list.push({ key: 'raffles', label: 'Raffles', icon: 'ticket', value: raffleTally.value })
-  if (data.value?.ema)
+  }
+  if (data.value?.ema) {
     list.push({ key: 'ema', label: 'Ema Plaques', icon: 'torii-gate', value: emaTally.value })
+  }
   return list
 })
 
@@ -167,7 +191,9 @@ function editVisitor(): void {
 }
 
 async function saveVisitor(): Promise<void> {
-  if (await store.setVisitor(visitorName.value, visitorWorld.value)) editingVisitor.value = false
+  if (await store.setVisitor(visitorName.value, visitorWorld.value)) {
+    editingVisitor.value = false
+  }
 }
 
 // -- Stamp rally: sign up / find a card / stamp from the plan ----------------------
@@ -181,8 +207,12 @@ const signupWidget = useTemplateRef<InstanceType<typeof TurnstileWidget>>('signu
 watch(
   () => [store.visitorName, store.visitorWorld] as const,
   ([name, world]) => {
-    if (!signupName.value) signupName.value = name
-    if (!signupWorld.value) signupWorld.value = world
+    if (!signupName.value) {
+      signupName.value = name
+    }
+    if (!signupWorld.value) {
+      signupWorld.value = world
+    }
   },
   { immediate: true },
 )
@@ -203,7 +233,9 @@ function findCard(): void {
 /** One code box for the stall panel: only one stall's panel is open at a time. */
 const stallCode = ref('')
 async function stampFromStall(): Promise<void> {
-  if (await store.stamp(stallCode.value)) stallCode.value = ''
+  if (await store.stamp(stallCode.value)) {
+    stallCode.value = ''
+  }
 }
 
 function forget(): void {

@@ -86,7 +86,7 @@ describe('loadFonts', () => {
     const s = useFontsStore()
     await s.loadFonts()
     expect(s.fonts).toHaveLength(1)
-    expect(s.fonts[0].base).toBe('Jasper')
+    expect(s.fonts[0]!.base).toBe('Jasper')
     expect(s.loading).toBe(false)
   })
 })

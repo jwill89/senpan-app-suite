@@ -64,7 +64,9 @@ function openNew(): void {
 }
 
 function editBoard(): void {
-  if (!ema.selectedBoard) return
+  if (!ema.selectedBoard) {
+    return
+  }
   ema.editBoardForm(ema.selectedBoard)
   screen.value = 'form'
 }
@@ -84,12 +86,16 @@ function backToList(): void {
 }
 
 async function deleteBoard(): Promise<void> {
-  if (ema.selectedBoard && (await ema.deleteBoard(ema.selectedBoard))) screen.value = 'list'
+  if (ema.selectedBoard && (await ema.deleteBoard(ema.selectedBoard))) {
+    screen.value = 'list'
+  }
 }
 
 /** The festival dashboard the board appears on, for posting in Discord. */
 function copyDashboardLink(): void {
-  if (!ema.selectedBoard) return
+  if (!ema.selectedBoard) {
+    return
+  }
   ui.copyToClipboard(
     `${window.location.origin}/festival/${ema.selectedBoard.festival_map_id}`,
     'Dashboard link copied',

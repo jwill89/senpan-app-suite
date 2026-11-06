@@ -69,22 +69,34 @@ function field(row: LogRow, key: string): unknown {
 }
 function fieldStr(row: LogRow, key: string): string {
   const v = field(row, key)
-  if (v == null) return ''
-  if (typeof v === 'string') return v
-  if (typeof v === 'number' || typeof v === 'boolean') return String(v)
+  if (v == null) {
+    return ''
+  }
+  if (typeof v === 'string') {
+    return v
+  }
+  if (typeof v === 'number' || typeof v === 'boolean') {
+    return String(v)
+  }
   return JSON.stringify(v)
 }
 function fieldNum(row: LogRow, key: string): number | null {
   const v = field(row, key)
-  if (typeof v === 'number') return v
-  if (typeof v === 'string' && v.trim() !== '' && !Number.isNaN(Number(v))) return Number(v)
+  if (typeof v === 'number') {
+    return v
+  }
+  if (typeof v === 'string' && v.trim() !== '' && !Number.isNaN(Number(v))) {
+    return Number(v)
+  }
   return null
 }
 
 /** HTTP method label - the WebSocket upgrade path reads as "WS". */
 function methodLabel(row: LogRow): string {
   const m = fieldStr(row, 'method')
-  if (!m) return ''
+  if (!m) {
+    return ''
+  }
   return fieldStr(row, 'path') === '/api/ws' ? 'WS' : m
 }
 function methodClass(row: LogRow): string {
@@ -92,26 +104,44 @@ function methodClass(row: LogRow): string {
   return m ? `log-method log-method--${m.toLowerCase()}` : ''
 }
 function statusClass(status: number): string {
-  if (status >= 500) return 'log-status log-status--5xx'
-  if (status >= 400) return 'log-status log-status--4xx'
-  if (status >= 300) return 'log-status log-status--3xx'
-  if (status >= 200) return 'log-status log-status--2xx'
+  if (status >= 500) {
+    return 'log-status log-status--5xx'
+  }
+  if (status >= 400) {
+    return 'log-status log-status--4xx'
+  }
+  if (status >= 300) {
+    return 'log-status log-status--3xx'
+  }
+  if (status >= 200) {
+    return 'log-status log-status--2xx'
+  }
   return 'log-status'
 }
 
 /** Nanoseconds -> compact human duration. */
 function formatDuration(ns: number | null): string {
-  if (ns == null) return ''
-  if (ns < 1000) return `${ns}ns`
-  if (ns < 1_000_000) return `${(ns / 1000).toFixed(0)}µs`
-  if (ns < 1_000_000_000) return `${(ns / 1_000_000).toFixed(1)}ms`
+  if (ns == null) {
+    return ''
+  }
+  if (ns < 1000) {
+    return `${ns}ns`
+  }
+  if (ns < 1_000_000) {
+    return `${(ns / 1000).toFixed(0)}µs`
+  }
+  if (ns < 1_000_000_000) {
+    return `${(ns / 1_000_000).toFixed(1)}ms`
+  }
   return `${(ns / 1_000_000_000).toFixed(2)}s`
 }
 
 /** Compact HH:MM:SS.mmm for the row; full ISO timestamp on hover. */
 function shortTime(iso: string): string {
   const d = new Date(iso)
-  if (Number.isNaN(d.getTime())) return iso
+  if (Number.isNaN(d.getTime())) {
+    return iso
+  }
   return (
     d.toLocaleTimeString(undefined, { hour12: false }) +
     '.' +
@@ -138,7 +168,9 @@ function actorClass(row: LogRow): string {
 const PROMOTED = new Set(['method', 'path', 'status', 'ip', 'duration', 'auth', 'user', 'bot'])
 /** Inline preview of the non-promoted fields (full set on expand). */
 function extraFieldsPreview(row: LogRow): string {
-  if (!row.fields) return ''
+  if (!row.fields) {
+    return ''
+  }
   return Object.entries(row.fields)
     .filter(([k]) => !PROMOTED.has(k))
     .map(([k, v]) => `${k}=${typeof v === 'string' ? v : JSON.stringify(v)}`)
@@ -147,9 +179,15 @@ function extraFieldsPreview(row: LogRow): string {
 
 function levelClass(level: string): string {
   const l = level.toUpperCase()
-  if (l === 'ERROR') return 'log-level log-level--error'
-  if (l === 'WARN' || l === 'WARNING') return 'log-level log-level--warn'
-  if (l === 'DEBUG') return 'log-level log-level--debug'
+  if (l === 'ERROR') {
+    return 'log-level log-level--error'
+  }
+  if (l === 'WARN' || l === 'WARNING') {
+    return 'log-level log-level--warn'
+  }
+  if (l === 'DEBUG') {
+    return 'log-level log-level--debug'
+  }
   return 'log-level log-level--info'
 }
 

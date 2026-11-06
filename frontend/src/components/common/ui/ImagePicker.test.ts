@@ -96,7 +96,7 @@ describe('ImagePicker', () => {
     await flushPromises()
     const thumbs = wrapper.findAll('.img-thumb')
     expect(thumbs).toHaveLength(1)
-    expect(thumbs[0].attributes('title')).toBe('swirl.svg')
+    expect(thumbs[0]!.attributes('title')).toBe('swirl.svg')
   })
 
   it('clears the value via the Remove button', async () => {

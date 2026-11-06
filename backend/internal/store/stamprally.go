@@ -29,7 +29,7 @@ func (s *Store) ListStampRallies(ctx context.Context) ([]model.StampRally, error
 	rows, err := s.db.QueryContext(ctx, `SELECT r.id, r.title, r.card_image, r.not_stamped_image,
 			r.available_from, r.available_to, r.details, r.redeem_instructions, r.redeem_image, r.status,
 			r.public_signup, r.completion_mode, r.required_food, r.required_game,
-			r.festival_map_id, COALESCE(fm.title, ''), r.created_at,
+			r.festival_map_id, COALESCE(fm.title, ''), CAST(r.created_at AS TEXT),
 			COALESCE((SELECT COUNT(*) FROM stamp_rally_cards c WHERE c.rally_id = r.id), 0),
 			COALESCE((SELECT COUNT(*) FROM stamp_rally_cards c WHERE c.rally_id = r.id AND c.completed = 1), 0),
 			COALESCE((SELECT COUNT(*) FROM stamp_rally_stamps st WHERE st.rally_id = r.id), 0),
@@ -73,7 +73,7 @@ func (s *Store) GetStampRally(ctx context.Context, id int64) (*model.StampRally,
 	err := s.db.QueryRowContext(ctx, `SELECT r.id, r.title, r.card_image, r.not_stamped_image,
 			r.available_from, r.available_to, r.details, r.redeem_instructions, r.redeem_image, r.status,
 			r.public_signup, r.completion_mode, r.required_food, r.required_game,
-			r.festival_map_id, COALESCE(fm.title, ''), r.created_at
+			r.festival_map_id, COALESCE(fm.title, ''), CAST(r.created_at AS TEXT)
 		FROM stamp_rallies r LEFT JOIN festival_maps fm ON fm.id = r.festival_map_id
 		WHERE r.id = ?`, id).
 		Scan(&r.ID, &r.Title, &r.CardImage, &r.NotStampedImage,
@@ -627,7 +627,7 @@ func scanRallyCard(sc rowScanner) (*model.StampRallyCard, error) {
 
 // GetRallyCardByID returns a single card by id (nil if not found).
 func (s *Store) GetRallyCardByID(ctx context.Context, id int64) (*model.StampRallyCard, error) {
-	row := s.db.QueryRowContext(ctx, `SELECT id, rally_id, token, participant_name, world, completed, completed_at, created_at
+	row := s.db.QueryRowContext(ctx, `SELECT id, rally_id, token, participant_name, world, completed, CAST(completed_at AS TEXT), CAST(created_at AS TEXT)
 		FROM stamp_rally_cards WHERE id = ?`, id)
 	c, err := scanRallyCard(row)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -639,7 +639,7 @@ func (s *Store) GetRallyCardByID(ctx context.Context, id int64) (*model.StampRal
 // GetRallyCardByToken returns a single card by its token (nil if not found). This is the
 // public stamp-card view's entry point.
 func (s *Store) GetRallyCardByToken(ctx context.Context, token string) (*model.StampRallyCard, error) {
-	row := s.db.QueryRowContext(ctx, `SELECT id, rally_id, token, participant_name, world, completed, completed_at, created_at
+	row := s.db.QueryRowContext(ctx, `SELECT id, rally_id, token, participant_name, world, completed, CAST(completed_at AS TEXT), CAST(created_at AS TEXT)
 		FROM stamp_rally_cards WHERE token = ?`, token)
 	c, err := scanRallyCard(row)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -651,7 +651,7 @@ func (s *Store) GetRallyCardByToken(ctx context.Context, token string) (*model.S
 // ListRallyCards returns a rally's participant cards (newest first) with each card's
 // collected-stamp count.
 func (s *Store) ListRallyCards(ctx context.Context, rallyID int64) ([]model.StampRallyCard, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT c.id, c.rally_id, c.token, c.participant_name, c.world, c.completed, c.completed_at, c.created_at,
+	rows, err := s.db.QueryContext(ctx, `SELECT c.id, c.rally_id, c.token, c.participant_name, c.world, c.completed, CAST(c.completed_at AS TEXT), CAST(c.created_at AS TEXT),
 			COALESCE((SELECT COUNT(*) FROM stamp_rally_collected col WHERE col.card_id = c.id), 0)
 		FROM stamp_rally_cards c WHERE c.rally_id = ? ORDER BY c.created_at DESC, c.id DESC`, rallyID)
 	if err != nil {
@@ -687,7 +687,7 @@ func (s *Store) SetRallyCardCompleted(ctx context.Context, cardID int64, complet
 
 // ListCollectedStampIDs returns the set of stamp ids a card has collected.
 func (s *Store) ListCollectedStampIDs(ctx context.Context, cardID int64) (map[int64]string, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT stamp_id, stamped_at FROM stamp_rally_collected WHERE card_id = ?`, cardID)
+	rows, err := s.db.QueryContext(ctx, `SELECT stamp_id, CAST(stamped_at AS TEXT) FROM stamp_rally_collected WHERE card_id = ?`, cardID)
 	if err != nil {
 		return nil, err
 	}
@@ -730,7 +730,7 @@ func (s *Store) CollectStamp(ctx context.Context, rallyID, cardID, stampID int64
 	}
 	var c model.StampRallyCollected
 	var cardCol, stampCol sql.NullInt64
-	err = s.db.QueryRowContext(ctx, `SELECT id, rally_id, card_id, stamp_id, participant_name, stall_name, stamp_type, stamped_at
+	err = s.db.QueryRowContext(ctx, `SELECT id, rally_id, card_id, stamp_id, participant_name, stall_name, stamp_type, CAST(stamped_at AS TEXT)
 		FROM stamp_rally_collected WHERE id = ?`, id).
 		Scan(&c.ID, &c.RallyID, &cardCol, &stampCol, &c.ParticipantName, &c.StallName, &c.StampType, &c.StampedAt)
 	if err != nil {
@@ -745,7 +745,7 @@ func (s *Store) CollectStamp(ctx context.Context, rallyID, cardID, stampID int64
 // columns, so rows persist after their card or stamp is deleted. Ordered by participant
 // then time so the admin table can group a participant's rows together by default.
 func (s *Store) ListRallyCollections(ctx context.Context, rallyID int64) ([]model.StampRallyLogEntry, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT card_id, stamp_id, participant_name, stall_name, stamp_type, stamped_at
+	rows, err := s.db.QueryContext(ctx, `SELECT card_id, stamp_id, participant_name, stall_name, stamp_type, CAST(stamped_at AS TEXT)
 		FROM stamp_rally_collected WHERE rally_id = ?
 		ORDER BY participant_name COLLATE NOCASE ASC, stamped_at ASC, id ASC`, rallyID)
 	if err != nil {

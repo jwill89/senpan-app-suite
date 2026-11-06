@@ -42,7 +42,9 @@ export const useAffiliatesStore = defineStore('affiliates', () => {
   const search = ref('')
   const filteredAffiliates = computed(() => {
     const q = search.value.trim().toLowerCase()
-    if (!q) return affiliates.value
+    if (!q) {
+      return affiliates.value
+    }
     return affiliates.value.filter((a) =>
       [a.name, a.location, ...a.owners].some((s) => s.toLowerCase().includes(q)),
     )
@@ -110,7 +112,9 @@ export const useAffiliatesStore = defineStore('affiliates', () => {
   }
   function removeOwner(index: number): void {
     const f = affiliateForm.value
-    if (!f || f.owners.length <= 1) return
+    if (!f || f.owners.length <= 1) {
+      return
+    }
     f.owners.splice(index, 1)
   }
 
@@ -119,14 +123,18 @@ export const useAffiliatesStore = defineStore('affiliates', () => {
   }
   function removeHour(index: number): void {
     const f = affiliateForm.value
-    if (!f || f.hours.length <= 1) return
+    if (!f || f.hours.length <= 1) {
+      return
+    }
     f.hours.splice(index, 1)
   }
 
   /** Saves the affiliate form. Returns true on success (caller navigates back). */
   async function saveAffiliate(): Promise<boolean> {
     const f = affiliateForm.value
-    if (!f) return false
+    if (!f) {
+      return false
+    }
     if (!f.name.trim()) {
       ui.notify('Name is required', 'error')
       return false
@@ -169,12 +177,15 @@ export const useAffiliatesStore = defineStore('affiliates', () => {
         title: 'Delete affiliate',
         confirmText: 'Delete',
       }))
-    )
+    ) {
       return
+    }
     try {
       await endpoints.affiliates.delete(id)
       affiliates.value = affiliates.value.filter((a) => a.id !== id)
-      if (selectedAffiliate.value?.id === id) selectedAffiliate.value = null
+      if (selectedAffiliate.value?.id === id) {
+        selectedAffiliate.value = null
+      }
       ui.notify('Affiliate deleted', 'info')
     } catch (e) {
       ui.notify((e as Error).message, 'error')
@@ -205,8 +216,9 @@ export const useAffiliatesStore = defineStore('affiliates', () => {
         title: 'Post affiliate',
         confirmText: 'Post',
       }))
-    )
+    ) {
       return
+    }
     postingId.value = a.id
     try {
       await endpoints.affiliates.post(a.id)

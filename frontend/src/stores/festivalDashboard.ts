@@ -55,7 +55,9 @@ export function festivalConnectState(connect: FestivalConnect): HistoryState {
 function takeConnect(): FestivalConnect | null {
   const state = window.history.state as Record<string, unknown> | null
   const raw = state?.[CONNECT_KEY]
-  if (!state || !raw || typeof raw !== 'object') return null
+  if (!state || !raw || typeof raw !== 'object') {
+    return null
+  }
   window.history.replaceState({ ...state, [CONNECT_KEY]: null }, '')
   const r = raw as Record<string, unknown>
   const pick = (v: unknown) => (typeof v === 'string' && v ? v : undefined)
@@ -95,7 +97,9 @@ export const useFestivalDashboardStore = defineStore('festivalDashboard', () => 
   const collectedOccupantIds = computed(() => {
     const ids = new Set<number>()
     for (const s of card.value?.stamps ?? []) {
-      if (s.collected && s.occupant_id != null) ids.add(s.occupant_id)
+      if (s.collected && s.occupant_id != null) {
+        ids.add(s.occupant_id)
+      }
     }
     return ids
   })
@@ -143,7 +147,9 @@ export const useFestivalDashboardStore = defineStore('festivalDashboard', () => 
     knownRallyId?: number,
   ): Promise<void> {
     const m = map.value
-    if (!m) return
+    if (!m) {
+      return
+    }
     const visit = savedFestivalVisit(m.id)
     const rallyId = knownRallyId ?? visit?.rallyId ?? m.stamp_rally_id ?? 0
     const signup = rallyId ? savedRallySignup(rallyId) : undefined
@@ -158,7 +164,9 @@ export const useFestivalDashboardStore = defineStore('festivalDashboard', () => 
     } else if (connect?.garaponToken) {
       // A drawing link carries its own card, which the server returns.
       sentDraw = connect.garaponToken
-      if (connect.garaponToken !== signup?.garaponToken) sentCard = ''
+      if (connect.garaponToken !== signup?.garaponToken) {
+        sentCard = ''
+      }
     }
 
     let data: FestivalDashboard
@@ -179,8 +187,11 @@ export const useFestivalDashboardStore = defineStore('festivalDashboard', () => 
     garaponToken.value = data.garapon?.player ? sentDraw : ''
     remember(data, sentCard, sentDraw, rallyId)
 
-    if (data.card) stampRallies.showPublic(data.card)
-    else stampRallies.resetPublic()
+    if (data.card) {
+      stampRallies.showPublic(data.card)
+    } else {
+      stampRallies.resetPublic()
+    }
     // The drum shows whether or not this device can spin it: its prizes are worth
     // seeing before there is a link to draw with.
     if (data.garapon) {
@@ -189,7 +200,9 @@ export const useFestivalDashboardStore = defineStore('festivalDashboard', () => 
         player: data.garapon.player ?? null,
         draws: data.garapon.draws,
       })
-    } else garapons.resetPublic()
+    } else {
+      garapons.resetPublic()
+    }
 
     // The tokens were looked up under the rally the map named, and the map names
     // a rally only inside its window. If the server names one this device holds a
@@ -208,7 +221,9 @@ export const useFestivalDashboardStore = defineStore('festivalDashboard', () => 
   /** Keeps what the read confirmed, and drops the links it didn't recognize. */
   function remember(data: FestivalDashboard, sentCard: string, sentDraw: string, rallyId: number) {
     const m = map.value
-    if (!m) return
+    if (!m) {
+      return
+    }
     if (data.card && data.card_token && data.rally) {
       saveRallySignup({
         rallyId: data.rally.id,
@@ -256,10 +271,16 @@ export const useFestivalDashboardStore = defineStore('festivalDashboard', () => 
    */
   async function forgetDevice(): Promise<void> {
     const m = map.value
-    if (!m) return
+    if (!m) {
+      return
+    }
     const rallyId = dashboard.value?.rally?.id ?? savedFestivalVisit(m.id)?.rallyId
-    if (rallyId) forgetSignup('rally', rallyId)
-    for (const r of dashboard.value?.raffles ?? []) forgetSignup('raffle', r.raffle.id)
+    if (rallyId) {
+      forgetSignup('rally', rallyId)
+    }
+    for (const r of dashboard.value?.raffles ?? []) {
+      forgetSignup('raffle', r.raffle.id)
+    }
     forgetSignup('festival', m.id)
     entered.value = {}
     await refresh()
@@ -270,11 +291,15 @@ export const useFestivalDashboardStore = defineStore('festivalDashboard', () => 
   async function signUp(name: string, world: string, turnstileToken: string): Promise<boolean> {
     const m = map.value
     const rally = dashboard.value?.rally
-    if (!m || !rally) return false
+    if (!m || !rally) {
+      return false
+    }
     // The stamp-rally store saves the issued links on this device, which is what
     // the dashboard reads them back from.
     const ok = await stampRallies.signUp(rally.id, name, world, turnstileToken)
-    if (!ok) return false
+    if (!ok) {
+      return false
+    }
     saveFestivalVisit({ mapId: m.id, name: name.trim(), world: world.trim(), rallyId: rally.id })
     stampRallies.resetSignup()
     await refresh()
@@ -290,7 +315,9 @@ export const useFestivalDashboardStore = defineStore('festivalDashboard', () => 
   async function findCard(name: string, world: string): Promise<boolean> {
     const m = map.value
     const rally = dashboard.value?.rally
-    if (!m || !rally || busy.value) return false
+    if (!m || !rally || busy.value) {
+      return false
+    }
     busy.value = true
     try {
       const { entries } = await endpoints.stampSignup.lookup(name.trim(), world.trim())
@@ -336,7 +363,9 @@ export const useFestivalDashboardStore = defineStore('festivalDashboard', () => 
     const name = visitorName.value
     const world = visitorWorld.value
     const row = dashboard.value?.raffles.find((r) => r.raffle.id === raffleId)
-    if (!row || !name || busy.value) return false
+    if (!row || !name || busy.value) {
+      return false
+    }
     busy.value = true
     try {
       const res = await endpoints.raffles.enter(raffleId, {
@@ -359,7 +388,9 @@ export const useFestivalDashboardStore = defineStore('festivalDashboard', () => 
 
   /** Loads the designer's Google Fonts list once; it is empty without a server key. */
   async function loadGoogleFonts(): Promise<void> {
-    if (googleFonts.value.length) return
+    if (googleFonts.value.length) {
+      return
+    }
     try {
       googleFonts.value = (await endpoints.ema.googleFonts()).families
     } catch {
@@ -373,7 +404,9 @@ export const useFestivalDashboardStore = defineStore('festivalDashboard', () => 
    */
   async function submitEmaPlaque(png: Blob, turnstileToken: string): Promise<boolean> {
     const board = dashboard.value?.ema
-    if (!board || !visitorName.value || busy.value) return false
+    if (!board || !visitorName.value || busy.value) {
+      return false
+    }
     const form = new FormData()
     form.append('name', visitorName.value)
     form.append('world', visitorWorld.value)
@@ -397,7 +430,9 @@ export const useFestivalDashboardStore = defineStore('festivalDashboard', () => 
   /** Asks the board's artist to make the visitor's plaque. */
   async function requestEmaPlaque(description: string, turnstileToken: string): Promise<boolean> {
     const board = dashboard.value?.ema
-    if (!board || !visitorName.value || busy.value) return false
+    if (!board || !visitorName.value || busy.value) {
+      return false
+    }
     busy.value = true
     try {
       await endpoints.ema.request(board.id, {
@@ -424,7 +459,9 @@ export const useFestivalDashboardStore = defineStore('festivalDashboard', () => 
    * so read it again and let the section show why.
    */
   async function refreshOnConflict(e: unknown): Promise<void> {
-    if (e instanceof ApiError && e.status === 409) await refresh()
+    if (e instanceof ApiError && e.status === 409) {
+      await refresh()
+    }
   }
 
   return {

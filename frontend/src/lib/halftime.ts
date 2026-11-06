@@ -29,7 +29,9 @@ export function activeColumnCount(patterns: BingoGamePattern[] | undefined | nul
     for (let r = 0; r < 5 && r < grid.length; r++) {
       const row = grid[r] ?? []
       for (let c = 0; c < 5 && c < row.length; c++) {
-        if (row[c] && !(r === 2 && c === 2)) cols[c] = true
+        if (row[c] && !(r === 2 && c === 2)) {
+          cols[c] = true
+        }
       }
     }
   }

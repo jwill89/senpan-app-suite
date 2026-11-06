@@ -38,19 +38,19 @@ describe('parseDetailParagraphs', () => {
     const paras = parseDetailParagraphs('first line\nsecond line')
     expect(paras).toHaveLength(2)
     // Each paragraph is an array of words; each word an array of styled chars.
-    expect(paras[0].map((w) => w.map((c) => c.ch).join(''))).toEqual(['first', 'line'])
+    expect(paras[0]!.map((w) => w.map((c) => c.ch).join(''))).toEqual(['first', 'line'])
   })
 
   it('renders headings as bold and drops the # markers', () => {
     const [para] = parseDetailParagraphs('## Prizes')
-    const word = para[0]
+    const word = para![0]!
     expect(word.map((c) => c.ch).join('')).toBe('Prizes')
     expect(word.every((c) => c.bold)).toBe(true)
   })
 
   it('converts list bullets to a * marker', () => {
     const [para] = parseDetailParagraphs('- item one')
-    const firstWord = para[0].map((c) => c.ch).join('')
+    const firstWord = para![0]!.map((c) => c.ch).join('')
     expect(firstWord).toBe('*')
   })
 
@@ -72,7 +72,7 @@ describe('parseDetailParagraphs', () => {
 
   it('preserves bold styling across a paragraph word', () => {
     const [para] = parseDetailParagraphs('plain **loud**')
-    const loud = para.find((w) => w.map((c) => c.ch).join('') === 'loud')
+    const loud = para!.find((w) => w.map((c) => c.ch).join('') === 'loud')
     expect(loud?.every((c) => c.bold)).toBe(true)
   })
 })

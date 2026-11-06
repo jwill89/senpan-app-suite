@@ -108,14 +108,17 @@ export const useCardsStore = defineStore('cards', () => {
   /** Bulk delete from the table's selection: confirms ONCE for the whole set
    *  (a per-card prompt would be unusable), then removes them together. */
   async function deleteCards(ids: string[]): Promise<number> {
-    if (ids.length === 0) return 0
+    if (ids.length === 0) {
+      return 0
+    }
     if (
       !(await ui.confirm(
         `Delete ${ids.length} selected card${ids.length === 1 ? '' : 's'}? This cannot be undone.`,
         { title: 'Delete selected cards', confirmText: `Delete ${ids.length}` },
       ))
-    )
+    ) {
       return 0
+    }
     let done = 0
     for (const id of ids) {
       try {
@@ -139,8 +142,9 @@ export const useCardsStore = defineStore('cards', () => {
         title: 'Delete all cards',
         confirmText: 'Delete all',
       }))
-    )
+    ) {
       return
+    }
     try {
       const data = await endpoints.cards.deleteAll()
       // Protected cards survive, so refetch the surviving set rather than clearing.
@@ -174,7 +178,9 @@ export const useCardsStore = defineStore('cards', () => {
 
   /** Fetches a single card's board data on demand for the preview modal. */
   async function openCardPreview(id: string): Promise<void> {
-    if (previewLoading.value) return
+    if (previewLoading.value) {
+      return
+    }
     previewLoading.value = true
     try {
       const data = await endpoints.board.get(id, { preview: true })
@@ -194,11 +200,15 @@ export const useCardsStore = defineStore('cards', () => {
 
   /** Saves the inline-edited field on the preview card to the server. */
   async function savePreviewCardField(field: 'player_name' | 'details'): Promise<void> {
-    if (!previewCard.value) return
+    if (!previewCard.value) {
+      return
+    }
     const newValue = previewCardEditValue.value.trim()
     const oldValue = previewCard.value[field] || ''
     previewCardEditing.value = null
-    if (newValue === oldValue) return
+    if (newValue === oldValue) {
+      return
+    }
     try {
       const playerName = field === 'player_name' ? newValue : previewCard.value.player_name || ''
       const details = field === 'details' ? newValue : previewCard.value.details || ''

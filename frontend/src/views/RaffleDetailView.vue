@@ -68,7 +68,9 @@ const alreadyCovered = computed(() => {
  */
 const costTiers = computed(() => {
   const r = raffles.selectedRaffle
-  if (r?.entry_mode !== 'custom') return []
+  if (r?.entry_mode !== 'custom') {
+    return []
+  }
   return r.tier_costs.map((_, i) => ({
     n: i + 1,
     cost: raffleTicketCost(r, i + 1),

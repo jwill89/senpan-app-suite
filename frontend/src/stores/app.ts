@@ -126,7 +126,9 @@ export const useAppStore = defineStore('app', () => {
       googleFontsCacheKey = ''
       return
     }
-    if (key === googleFontsCacheKey && googleFontsList.value.length > 0) return
+    if (key === googleFontsCacheKey && googleFontsList.value.length > 0) {
+      return
+    }
     try {
       const resp = await fetch(
         `https://www.googleapis.com/webfonts/v1/webfonts?key=${encodeURIComponent(key)}&sort=popularity`,
@@ -146,7 +148,9 @@ export const useAppStore = defineStore('app', () => {
   /** Previews the header font without saving (live update in settings panel). */
   function previewHeaderFont(): void {
     const font = (settings.value.header_font || '').trim()
-    if (font) applyHeaderFont(font)
+    if (font) {
+      applyHeaderFont(font)
+    }
   }
 
   /** Loads the active (admin-selected) theme CSS and injects it. This is the
@@ -189,7 +193,9 @@ export const useAppStore = defineStore('app', () => {
     const pref = themePreference.value
     if (pref && pref !== 'default') {
       const id = Number(pref)
-      if (Number.isFinite(id) && id > 0 && (await applyPublicTheme(id))) return
+      if (Number.isFinite(id) && id > 0 && (await applyPublicTheme(id))) {
+        return
+      }
       themePreference.value = 'default'
       localStorage.setItem(THEME_PREF_KEY, 'default')
     }

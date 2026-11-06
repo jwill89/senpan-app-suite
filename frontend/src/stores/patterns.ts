@@ -57,20 +57,22 @@ export const usePatternsStore = defineStore('patterns', () => {
 
   /** Patterns grouped by category, in category sort order. */
   const patternsByCategory = computed<PatternGroup[]>(() => {
-    const map: Record<number, PatternGroup> = {}
+    const map = new Map<number, PatternGroup>()
     for (const cat of categories.value) {
-      map[cat.id] = { category: cat, patterns: [] }
+      map.set(cat.id, { category: cat, patterns: [] })
     }
     for (const p of patterns.value) {
-      if (!(p.category_id in map)) {
-        map[p.category_id] = {
+      let group = map.get(p.category_id)
+      if (!group) {
+        group = {
           category: { id: p.category_id, name: p.category_name || 'Unknown', sort_order: 0 },
           patterns: [],
         }
+        map.set(p.category_id, group)
       }
-      map[p.category_id].patterns.push(p)
+      group.patterns.push(p)
     }
-    return categories.value.map((c) => map[c.id]).filter(Boolean)
+    return categories.value.flatMap((c) => map.get(c.id) ?? [])
   })
 
   /** Patterns filtered by category + search query (game-start picker). */
@@ -80,7 +82,9 @@ export const usePatternsStore = defineStore('patterns', () => {
       list = list.filter((p) => p.category_id === patternCategoryFilter.value)
     }
     const q = (patternSearchQuery.value || '').trim().toLowerCase()
-    if (q) list = list.filter((p) => p.name.toLowerCase().includes(q))
+    if (q) {
+      list = list.filter((p) => p.name.toLowerCase().includes(q))
+    }
     return list
   })
 
@@ -91,7 +95,9 @@ export const usePatternsStore = defineStore('patterns', () => {
    * collapsed category - those keep their current selection.
    */
   const displayedPatterns = computed<Pattern[]>(() => {
-    if ((patternSearchQuery.value || '').trim()) return gameFilteredPatterns.value
+    if ((patternSearchQuery.value || '').trim()) {
+      return gameFilteredPatterns.value
+    }
     const groups = patternCategoryFilter.value
       ? patternsByCategory.value.filter((g) => g.category.id === patternCategoryFilter.value)
       : patternsByCategory.value
@@ -122,13 +128,18 @@ export const usePatternsStore = defineStore('patterns', () => {
   }
 
   function toggleNewPatternCell(ri: number, ci: number): void {
-    newPatternGrid.value[ri][ci] = !newPatternGrid.value[ri][ci]
+    const row = newPatternGrid.value[ri]
+    if (row) {
+      row[ci] = !row[ci]
+    }
   }
 
   /** Saves the new-pattern editor. Returns true on success (caller can navigate). */
   async function savePattern(): Promise<boolean> {
     const name = newPatternName.value.trim()
-    if (!name) return false
+    if (!name) {
+      return false
+    }
     const hasCell = newPatternGrid.value.some((r) => r.some((c) => c))
     if (!hasCell) {
       ui.notify('Select at least one cell in the pattern', 'error')
@@ -136,10 +147,14 @@ export const usePatternsStore = defineStore('patterns', () => {
     }
     // Client-side duplicate check.
     const dup = patterns.value.find((p) => {
-      if (p.pattern_data.length !== 5) return false
+      if (p.pattern_data.length !== 5) {
+        return false
+      }
       for (let r = 0; r < 5; r++) {
         for (let c = 0; c < 5; c++) {
-          if (p.pattern_data[r][c] !== newPatternGrid.value[r][c]) return false
+          if (p.pattern_data[r]?.[c] !== newPatternGrid.value[r]?.[c]) {
+            return false
+          }
         }
       }
       return true
@@ -151,8 +166,7 @@ export const usePatternsStore = defineStore('patterns', () => {
     }
     savingPattern.value = true
     try {
-      const catId =
-        newPatternCategoryId.value ?? (categories.value.length ? categories.value[0].id : 1)
+      const catId = newPatternCategoryId.value ?? categories.value[0]?.id ?? 1
       await endpoints.patterns.create(name, newPatternGrid.value, catId)
       ui.notify('Pattern saved', 'success')
       clearPatternEditor()
@@ -171,7 +185,9 @@ export const usePatternsStore = defineStore('patterns', () => {
   function togglePatternsCollapsed(): void {
     patternsCollapsed.value = !patternsCollapsed.value
     const newState: Record<number, boolean> = {}
-    for (const cat of categories.value) newState[cat.id] = patternsCollapsed.value
+    for (const cat of categories.value) {
+      newState[cat.id] = patternsCollapsed.value
+    }
     collapsedCategories.value = newState
   }
 
@@ -183,7 +199,7 @@ export const usePatternsStore = defineStore('patterns', () => {
   }
 
   function isCategoryCollapsed(catId: number): boolean {
-    return collapsedCategories.value[catId]
+    return collapsedCategories.value[catId] ?? false
   }
 
   // -- Pattern CRUD -----------------------------------------------------------
@@ -204,8 +220,9 @@ export const usePatternsStore = defineStore('patterns', () => {
         title: 'Delete pattern',
         confirmText: 'Delete',
       }))
-    )
+    ) {
       return
+    }
     void deletePattern(id)
   }
 
@@ -217,9 +234,13 @@ export const usePatternsStore = defineStore('patterns', () => {
   async function finishPatternRename(id: number): Promise<void> {
     const newName = (editingPatternName.value || '').trim()
     editingPatternId.value = null
-    if (!newName) return
+    if (!newName) {
+      return
+    }
     const pat = patterns.value.find((p) => p.id === id)
-    if (!pat || pat.name === newName) return
+    if (!pat || pat.name === newName) {
+      return
+    }
     try {
       await endpoints.patterns.rename(id, newName)
       pat.name = newName
@@ -236,7 +257,7 @@ export const usePatternsStore = defineStore('patterns', () => {
     categoryForm.value = {
       id: 0,
       name: '',
-      position: categories.value.length ? `after:${last.id}` : 'start',
+      position: last ? `after:${last.id}` : 'start',
     }
   }
 
@@ -291,8 +312,12 @@ export const usePatternsStore = defineStore('patterns', () => {
         ui.notify('Category created', 'success')
       } else {
         const cat = categories.value.find((c) => c.id === id)
-        if (cat && cat.name !== name) await endpoints.patternCategories.rename(id, name)
-        if (position !== 'keep') await applyCategoryPosition(id, position)
+        if (cat && cat.name !== name) {
+          await endpoints.patternCategories.rename(id, name)
+        }
+        if (position !== 'keep') {
+          await applyCategoryPosition(id, position)
+        }
         await loadPatterns()
         ui.notify('Category updated', 'success')
       }
@@ -321,8 +346,9 @@ export const usePatternsStore = defineStore('patterns', () => {
         'Delete this category? Its patterns will be moved to the first remaining category.',
         { title: 'Delete category', confirmText: 'Delete' },
       ))
-    )
+    ) {
       return
+    }
     void deleteCategory(id)
   }
 
@@ -345,18 +371,22 @@ export const usePatternsStore = defineStore('patterns', () => {
 
   /** Rebuilds `editableGroups` from the current `patterns` + `categories`. */
   function rebuildEditableGroups(): void {
-    const map: Record<number, PatternGroup> = {}
-    for (const cat of categories.value) map[cat.id] = { category: cat, patterns: [] }
+    const map = new Map<number, PatternGroup>()
+    for (const cat of categories.value) {
+      map.set(cat.id, { category: cat, patterns: [] })
+    }
     for (const p of patterns.value) {
-      if (!(p.category_id in map)) {
-        map[p.category_id] = {
+      let group = map.get(p.category_id)
+      if (!group) {
+        group = {
           category: { id: p.category_id, name: p.category_name || 'Unknown', sort_order: 0 },
           patterns: [],
         }
+        map.set(p.category_id, group)
       }
-      map[p.category_id].patterns.push({ ...p })
+      group.patterns.push({ ...p })
     }
-    editableGroups.value = categories.value.map((c) => map[c.id]).filter(Boolean)
+    editableGroups.value = categories.value.flatMap((c) => map.get(c.id) ?? [])
   }
 
   /**
@@ -374,7 +404,9 @@ export const usePatternsStore = defineStore('patterns', () => {
   watch(
     [patterns, categories],
     () => {
-      if (applyingOrder) return
+      if (applyingOrder) {
+        return
+      }
       rebuildEditableGroups()
     },
     { deep: true },
@@ -408,7 +440,9 @@ export const usePatternsStore = defineStore('patterns', () => {
         // ordered_ids (and there's nothing to persist for a category with no
         // patterns). A pattern moved out of a category is reassigned via its
         // destination group's call, which sets its new category_id.
-        if (group.patterns.length === 0) continue
+        if (group.patterns.length === 0) {
+          continue
+        }
         await endpoints.patterns.bulkReorder(
           group.category.id,
           group.patterns.map((p) => p.id),

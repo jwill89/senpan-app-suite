@@ -22,25 +22,37 @@ export const EMBED_FIELD_VALUE_MAX = 1024
  */
 export function splitDetailParts(details: string, limit = EMBED_FIELD_VALUE_MAX): string[] {
   const text = details.replace(/\r\n/g, '\n').replace(/\r/g, '\n').trim()
-  if (text === '') return []
+  if (text === '') {
+    return []
+  }
   // Array.from splits by code point (like Go's []rune) so surrogate pairs count as one.
   const chars = Array.from(text)
-  if (chars.length <= limit) return [text]
+  if (chars.length <= limit) {
+    return [text]
+  }
 
   const parts: string[] = []
   let rest = chars
   while (rest.length > 0) {
     if (rest.length <= limit) {
       const c = rest.join('').trim()
-      if (c) parts.push(c)
+      if (c) {
+        parts.push(c)
+      }
       break
     }
     const window = rest.slice(0, limit)
     let cut = window.lastIndexOf('\n')
-    if (cut <= 0) cut = window.lastIndexOf(' ')
-    if (cut <= 0) cut = limit
+    if (cut <= 0) {
+      cut = window.lastIndexOf(' ')
+    }
+    if (cut <= 0) {
+      cut = limit
+    }
     const c = rest.slice(0, cut).join('').trim()
-    if (c) parts.push(c)
+    if (c) {
+      parts.push(c)
+    }
     rest = rest.slice(cut) // leading break char is trimmed off the next chunk
   }
   return parts

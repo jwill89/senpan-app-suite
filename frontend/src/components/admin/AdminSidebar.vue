@@ -115,8 +115,11 @@ function isOpen(section: AdminSection): boolean {
 
 /** Accordion toggle for a section header (no navigation; independent per section). */
 function toggleSection(section: AdminSection): void {
-  if (openSections.has(section)) openSections.delete(section)
-  else openSections.add(section)
+  if (openSections.has(section)) {
+    openSections.delete(section)
+  } else {
+    openSections.add(section)
+  }
 }
 </script>
 

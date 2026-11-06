@@ -16,14 +16,18 @@ let ctx: AudioContext | null = null
 
 /** Lazily creates the shared AudioContext (handles the webkit-prefixed name). */
 function getCtx(): AudioContext | null {
-  if (ctx) return ctx
+  if (ctx) {
+    return ctx
+  }
   // Older Safari/iOS only expose the prefixed constructor; fall back to it.
   const w = window as unknown as {
     AudioContext?: typeof AudioContext
     webkitAudioContext?: typeof AudioContext
   }
   const AC = w.AudioContext ?? w.webkitAudioContext
-  if (!AC) return null
+  if (!AC) {
+    return null
+  }
   try {
     ctx = new AC()
   } catch {
@@ -71,10 +75,14 @@ function getSample(name: string): HTMLAudioElement | null {
 
 /** Plays a bundled MP3 sample at the current volume (no-op when muted). */
 function playSample(name: string): void {
-  if (volume <= 0) return
+  if (volume <= 0) {
+    return
+  }
   try {
     const a = getSample(name)
-    if (!a) return
+    if (!a) {
+      return
+    }
     a.volume = volume
     a.currentTime = 0
     void a.play()
@@ -91,10 +99,13 @@ function playSample(name: string): void {
 export function primeAudio(): void {
   try {
     const ac = getCtx()
-    if (ac?.state === 'suspended') void ac.resume()
+    if (ac?.state === 'suspended') {
+      void ac.resume()
+    }
     // Warm the game samples so the first real event plays without a fetch delay.
-    for (const name of ['moogle_noise', 'queue_pop', 'level_up', 'this_is_bad'])
+    for (const name of ['moogle_noise', 'queue_pop', 'level_up', 'this_is_bad']) {
       getSample(name)?.load()
+    }
   } catch {
     /* non-fatal */
   }
@@ -109,19 +120,27 @@ let armed = false
  * without being touched calls this once when it mounts. Idempotent.
  */
 export function armAudioOnFirstGesture(): void {
-  if (armed || typeof window === 'undefined') return
+  if (armed || typeof window === 'undefined') {
+    return
+  }
   armed = true
   const events = ['click', 'keydown', 'touchend'] as const
   const arm = (): void => {
-    for (const e of events) window.removeEventListener(e, arm, true)
+    for (const e of events) {
+      window.removeEventListener(e, arm, true)
+    }
     try {
       const ac = getCtx()
-      if (ac?.state === 'suspended') void ac.resume()
+      if (ac?.state === 'suspended') {
+        void ac.resume()
+      }
     } catch {
       /* non-fatal */
     }
   }
-  for (const e of events) window.addEventListener(e, arm, true)
+  for (const e of events) {
+    window.addEventListener(e, arm, true)
+  }
 }
 
 /**
@@ -133,11 +152,17 @@ export function armAudioOnFirstGesture(): void {
 function playChime(
   notes: { freq: number; at: number; peak: number; dur: number; type?: OscillatorType }[],
 ): void {
-  if (volume <= 0) return
+  if (volume <= 0) {
+    return
+  }
   try {
     const ac = getCtx()
-    if (!ac) return
-    if (ac.state === 'suspended') void ac.resume()
+    if (!ac) {
+      return
+    }
+    if (ac.state === 'suspended') {
+      void ac.resume()
+    }
     const now = ac.currentTime
     for (const n of notes) {
       const osc = ac.createOscillator()
@@ -252,11 +277,17 @@ export function playUnlockChime(): void {
  * ringing decay and a slight downward pitch chirp. No audio asset; no-op when muted.
  */
 export function playPonSound(): void {
-  if (volume <= 0) return
+  if (volume <= 0) {
+    return
+  }
   try {
     const ac = getCtx()
-    if (!ac) return
-    if (ac.state === 'suspended') void ac.resume()
+    if (!ac) {
+      return
+    }
+    if (ac.state === 'suspended') {
+      void ac.resume()
+    }
     const now = ac.currentTime
     const partials = [
       { f: 540, g: 0.5 },
@@ -291,11 +322,17 @@ export function playPonSound(): void {
  * roughly match the spin length. No audio asset; no-op when muted.
  */
 export function playGaraponRoll(durationMs = 1900): void {
-  if (volume <= 0) return
+  if (volume <= 0) {
+    return
+  }
   try {
     const ac = getCtx()
-    if (!ac) return
-    if (ac.state === 'suspended') void ac.resume()
+    if (!ac) {
+      return
+    }
+    if (ac.state === 'suspended') {
+      void ac.resume()
+    }
     const now = ac.currentTime
     const dur = Math.max(0.2, durationMs / 1000)
 
@@ -376,7 +413,9 @@ function woodKnock(ac: AudioContext, t: number, amp: number): void {
 export function vibrate(pattern: number | number[] = 60): void {
   try {
     // A browser without userActivation throws here and is caught: no vibration.
-    if (!navigator.userActivation.hasBeenActive) return
+    if (!navigator.userActivation.hasBeenActive) {
+      return
+    }
     navigator.vibrate(pattern)
   } catch {
     /* non-fatal */

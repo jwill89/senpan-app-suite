@@ -27,7 +27,9 @@ const ready = ref(false)
 
 /** Kicks off the one-time dynamic import of markdown-it (idempotent). */
 function ensureLoaded(): Promise<void> {
-  if (loadPromise) return loadPromise
+  if (loadPromise) {
+    return loadPromise
+  }
   loadPromise = import('markdown-it').then(({ default: MarkdownIt }) => {
     const inline = new MarkdownIt({ html: false, breaks: true, linkify: true })
     const flow = new MarkdownIt({ html: false, breaks: false, linkify: true })
@@ -76,7 +78,9 @@ function useRenderer(get: () => MarkdownRenderer | null) {
   void ensureLoaded()
   function render(text: string | null | undefined): string {
     // Touch `ready` so the rendering effect re-runs once the parser loads.
-    if (!ready.value || !text) return ''
+    if (!ready.value || !text) {
+      return ''
+    }
     return get()?.render(normalizeHardBreaks(text)) ?? ''
   }
   return { render, ready }

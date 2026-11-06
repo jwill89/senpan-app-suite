@@ -44,7 +44,7 @@ func (s *Store) CreateUser(ctx context.Context, username, passwordHash string) (
 // GetUserByID retrieves a user by id. Returns nil if not found.
 func (s *Store) GetUserByID(ctx context.Context, id int64) (*model.User, error) {
 	return s.scanUser(s.db.QueryRowContext(ctx,
-		`SELECT id, username, is_admin, is_active, permissions, created_at, COALESCE(last_login_at, ''), COALESCE(password_epoch, 0)
+		`SELECT id, username, is_admin, is_active, permissions, CAST(created_at AS TEXT), COALESCE(last_login_at, ''), COALESCE(password_epoch, 0)
 		 FROM users WHERE id = ?`, id))
 }
 
@@ -55,7 +55,7 @@ func (s *Store) GetUserByUsername(ctx context.Context, username string) (*model.
 	var permsJSON, hash string
 	var isAdmin, isActive int
 	err := s.db.QueryRowContext(ctx,
-		`SELECT id, username, password_hash, is_admin, is_active, permissions, created_at, COALESCE(last_login_at, ''), COALESCE(password_epoch, 0)
+		`SELECT id, username, password_hash, is_admin, is_active, permissions, CAST(created_at AS TEXT), COALESCE(last_login_at, ''), COALESCE(password_epoch, 0)
 		 FROM users WHERE username = ?`, username).
 		Scan(&u.ID, &u.Username, &hash, &isAdmin, &isActive, &permsJSON, &u.CreatedAt, &u.LastLoginAt, &u.PasswordEpoch)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -73,7 +73,7 @@ func (s *Store) GetUserByUsername(ctx context.Context, username string) (*model.
 // ListUsers returns all users ordered by username (no password hashes).
 func (s *Store) ListUsers(ctx context.Context) ([]model.User, error) {
 	rows, err := s.db.QueryContext(ctx,
-		`SELECT id, username, is_admin, is_active, permissions, created_at, COALESCE(last_login_at, '')
+		`SELECT id, username, is_admin, is_active, permissions, CAST(created_at AS TEXT), COALESCE(last_login_at, '')
 		 FROM users ORDER BY username`)
 	if err != nil {
 		return nil, err

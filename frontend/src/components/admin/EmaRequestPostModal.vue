@@ -34,7 +34,9 @@ function onPick(e: Event): void {
   const picked = input.files?.[0] ?? null
   file.value = null
   preview.value = ''
-  if (!picked) return
+  if (!picked) {
+    return
+  }
   if (picked.size > MAX_BYTES) {
     ui.notify('That image is too large - Discord takes up to 10 MB', 'error')
     input.value = ''
@@ -45,13 +47,17 @@ function onPick(e: Event): void {
   // A data: URL, not a blob: one - the site's Content-Security-Policy allows the
   // former for images and not the latter.
   reader.onload = () => {
-    if (typeof reader.result === 'string') preview.value = reader.result
+    if (typeof reader.result === 'string') {
+      preview.value = reader.result
+    }
   }
   reader.readAsDataURL(picked)
 }
 
 async function post(): Promise<void> {
-  if (file.value && (await ema.postRequest(props.request, file.value))) emit('close')
+  if (file.value && (await ema.postRequest(props.request, file.value))) {
+    emit('close')
+  }
 }
 </script>
 

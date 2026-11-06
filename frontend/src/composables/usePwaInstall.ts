@@ -31,7 +31,9 @@ const installed = ref(false)
 let registered = false
 
 function registerListeners(): void {
-  if (registered || typeof window === 'undefined') return
+  if (registered || typeof window === 'undefined') {
+    return
+  }
   registered = true
   window.addEventListener('beforeinstallprompt', (e: Event) => {
     // Capture + defer the event so our own footer link can trigger the prompt on
@@ -50,7 +52,9 @@ registerListeners()
 
 /** True when the app is already running as an installed PWA. */
 function isStandalone(): boolean {
-  if (typeof window === 'undefined') return false
+  if (typeof window === 'undefined') {
+    return false
+  }
   return (
     window.matchMedia('(display-mode: standalone)').matches ||
     // iOS Safari exposes its own standalone flag rather than display-mode.
@@ -60,7 +64,9 @@ function isStandalone(): boolean {
 
 /** iPhone/iPod/iPad - including iPadOS 13+ which reports as desktop Safari. */
 function isIosDevice(): boolean {
-  if (typeof navigator === 'undefined') return false
+  if (typeof navigator === 'undefined') {
+    return false
+  }
   const ua = navigator.userAgent
   return /iphone|ipod|ipad/i.test(ua) || (ua.includes('Macintosh') && navigator.maxTouchPoints > 1)
 }
@@ -74,7 +80,9 @@ function isIosDevice(): boolean {
  * signal for a phone/tablet, so we treat either signal as mobile.
  */
 function isMobile(): boolean {
-  if (typeof navigator === 'undefined') return false
+  if (typeof navigator === 'undefined') {
+    return false
+  }
   const uaMobile = /android|iphone|ipod|ipad|mobile/i.test(navigator.userAgent) || isIosDevice()
   const coarsePointer =
     typeof window !== 'undefined' && window.matchMedia('(pointer: coarse)').matches
@@ -109,7 +117,9 @@ export function usePwaInstall() {
    */
   async function promptInstall(): Promise<'accepted' | 'dismissed' | 'unavailable'> {
     const evt = deferredPrompt.value
-    if (!evt) return 'unavailable'
+    if (!evt) {
+      return 'unavailable'
+    }
     await evt.prompt()
     const choice = await evt.userChoice
     // A deferred prompt can only be used once.

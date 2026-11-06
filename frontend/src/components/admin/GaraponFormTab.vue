@@ -30,7 +30,9 @@ onMounted(() => {
 
 /** Set the linked stamp rally from the select ('' -> null = not linked). */
 function setStampRally(value: string): void {
-  if (garapons.garaponForm) garapons.garaponForm.stamp_rally_id = value ? Number(value) : null
+  if (garapons.garaponForm) {
+    garapons.garaponForm.stamp_rally_id = value ? Number(value) : null
+  }
 }
 
 /** Sum of positive prize weights, for the live normalized-% readouts. */
@@ -41,7 +43,9 @@ function ratePct(rate: number): string {
 }
 
 async function save(): Promise<void> {
-  if (await garapons.saveGarapon()) emit('saved')
+  if (await garapons.saveGarapon()) {
+    emit('saved')
+  }
 }
 function cancel(): void {
   garapons.cancelGaraponForm()

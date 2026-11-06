@@ -5,9 +5,13 @@
 
 .DESCRIPTION
     Backend (backend/):   golangci-lint - go build - go vet - go test - govulncheck
-    Frontend (frontend/): gen:types - lint:check (ESLint + Stylelint) - format:check - lint:conventions - typecheck - test - npm audit - build
-    Plugin (plugins/SenpanCompanion/): dotnet build (warnings=errors) - dotnet format - roslynator analyze
-    Scripts (scripts/*.ps1): PSScriptAnalyzer (PSScriptAnalyzerSettings.psd1)
+    Frontend (frontend/): gen:check - lint:check (ESLint + Stylelint) - format:check - lint:conventions - typecheck - test:coverage - npm audit - build - test:e2e
+    Plugin (plugins/SenpanCompanion/): dotnet build (warnings=errors) - dotnet format
+    Scripts and repo: PSScriptAnalyzer on every tracked script, markdownlint, the shared
+    .editorconfig/.gitattributes and the shared-tooling version (shared-tooling's own checks)
+
+    The settings come from shared-tooling, the submodule at shared/ (run
+    `git submodule update --init` once after cloning).
 
     Stops at the first failing step with a clear message, so `golangci-lint`
     (which is NOT part of `go build`/`go vet`) can't be forgotten and slip
@@ -16,8 +20,9 @@
     is nothing to install and local and CI results cannot drift apart.
 
     The plugin (.NET) steps no-op with a message if the `dotnet` SDK isn't
-    installed locally, and the scripts step does the same without PSScriptAnalyzer
-    1.25.0, so the script still runs on a machine without them.
+    installed locally. The scripts step fails without PSScriptAnalyzer; install it once
+    with `Install-PSResource PSScriptAnalyzer -Version 1.25.0 -Scope CurrentUser
+    -TrustRepository`.
 
     Note: `go test -race` runs in CI, not here. The race detector needs cgo for
     its runtime and a C toolchain to build it, which not every Windows machine
@@ -61,24 +66,28 @@ function Invoke-Step($name, [scriptblock]$body) {
 if (-not $SkipBackend) {
     Push-Location "$root\backend"
     try {
-        # The version pinned in backend/.golangci.yml and ci.yml.
+        # .golangci.yml is written from shared-tooling's template (Senpan's own rules are in
+        # .golangci.local.yml), so a hand edit there, or a template change not yet taken, fails.
+        # (-dir is the module's folder from the repo root, which the tool finds itself.)
+        Invoke-Step "backend: golangci config" { go run -C ../shared/lint/go . -check -dir backend }
+        # The version shared-tooling's go.yml builds in CI.
         Invoke-Step "backend: golangci-lint" {
             go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.15.0 run ./...
         }
         Invoke-Step "backend: go build" { go build ./... }
         Invoke-Step "backend: go vet" { go vet ./... }
         Invoke-Step "backend: go test" { go test ./... }
-        # Scan the module + dependencies for known Go vulns that reach our code.
-        # Run latest (as CI does) so newly disclosed advisories are caught.
-        Invoke-Step "backend: govulncheck" { go run golang.org/x/vuln/cmd/govulncheck@latest ./... }
+        # Known Go vulnerabilities that reach the code, at the release go.yml runs.
+        Invoke-Step "backend: govulncheck" { go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 ./... }
     } finally { Pop-Location }
 }
 
 if (-not $SkipFrontend) {
     Push-Location "$root\frontend"
     try {
-        # api.generated.ts is gitignored; regenerate so typecheck/build are current.
-        Invoke-Step "frontend: gen:types" { npm run gen:types }
+        # api.generated.ts is committed; this regenerates it from the Go models and fails
+        # if the committed copy is stale (CI's generated job does the same).
+        Invoke-Step "frontend: gen:check" { npm run gen:check }
         # ESLint (eslint.config.js) for the scripts and templates, Stylelint
         # (stylelint.config.mjs) for the stylesheets and <style> blocks.
         Invoke-Step "frontend: lint" { npm run lint:check }
@@ -91,10 +100,13 @@ if (-not $SkipFrontend) {
         # tokens.css / theme-tokens.ts / styles.go. See AGENTS.md "CSS conventions".
         Invoke-Step "frontend: conventions" { npm run lint:conventions }
         Invoke-Step "frontend: typecheck" { npm run typecheck }
-        Invoke-Step "frontend: test" { npm run test }
+        # With coverage, so the floor in vitest.config.ts fails here as in CI.
+        Invoke-Step "frontend: test" { npm run test:coverage }
         # Known vulnerabilities in what ships (dev tooling excluded), at high or above.
         Invoke-Step "frontend: npm audit" { npm audit --audit-level=high --omit=dev }
         Invoke-Step "frontend: build" { npm run build }
+        # The API and the built SPA on a throwaway database, never devdata/ (e2e/server/prepare.ts).
+        Invoke-Step "frontend: end-to-end" { npm run test:e2e }
     } finally { Pop-Location }
 }
 
@@ -112,41 +124,29 @@ if (-not $SkipFrontend -and -not $SkipBackend) {
             Invoke-Step "plugin: dotnet build (warnings = errors)" {
                 dotnet build .\SenpanCompanion.csproj -c Release -p:TreatWarningsAsErrors=true
             }
-            # Whitespace/style gate; rules pinned in .editorconfig.
+            # The analyzers and code style are shared-tooling's (plugins/Directory.Build.props
+            # imports them), so the build above is the lint gate; this checks the formatting.
             Invoke-Step "plugin: dotnet format" { dotnet format --verify-no-changes }
-            # C# lint gate (the analog to golangci-lint / eslint): the Roslynator CLI,
-            # pinned in .config/dotnet-tools.json, fails on any analyzer diagnostic at
-            # info or above. The ruleset is curated in the plugin's .editorconfig.
-            Invoke-Step "plugin: roslynator restore" { dotnet tool restore }
-            Invoke-Step "plugin: roslynator analyze" {
-                dotnet roslynator analyze .\SenpanCompanion.csproj --severity-level info
-            }
         } finally { Pop-Location }
     }
 }
 
-# Scripts (scripts/*.ps1) - PSScriptAnalyzer with the repo-root PSScriptAnalyzerSettings.psd1,
-# as CI runs it. Like the plugin, only on a full check. Only TRACKED scripts are linted:
-# scripts/deploy.config.ps1 is the owner's local copy. Requires PSScriptAnalyzer 1.25.0
-# (the version CI pins); skips with a clear message when it isn't installed.
+# Scripts and the repo - shared-tooling's own checks, as CI's pwsh and docs jobs run them.
+# Like the plugin, only on a full check. PSScriptAnalyzer runs on every TRACKED script
+# (scripts/deploy.config.ps1 is the owner's local copy) with the shared settings; the
+# script says how to install the pinned PSScriptAnalyzer if it is missing.
 if (-not $SkipFrontend -and -not $SkipBackend) {
-    $analyzerVersion = '1.25.0'
-    if (-not (Get-Module -ListAvailable PSScriptAnalyzer | Where-Object Version -EQ $analyzerVersion)) {
-        Write-Host "`n==> scripts: PSScriptAnalyzer $analyzerVersion not installed - skipping script lint. Install it with:" -ForegroundColor Yellow
-        Write-Host "      Install-PSResource PSScriptAnalyzer -Version $analyzerVersion -Scope CurrentUser -TrustRepository" -ForegroundColor Yellow
-    } else {
-        Write-Host "`n==> scripts: PSScriptAnalyzer" -ForegroundColor Cyan
-        Import-Module PSScriptAnalyzer -RequiredVersion $analyzerVersion
-        $settings = Join-Path $root 'PSScriptAnalyzerSettings.psd1'
-        $findings = foreach ($file in (git -C $root ls-files 'scripts/*.ps1')) {
-            Invoke-ScriptAnalyzer -Path (Join-Path $root $file) -Settings $settings
-        }
-        if ($findings) {
-            $findings | Format-Table -AutoSize | Out-String | Write-Host
-            Write-Host "`nFAILED: scripts: PSScriptAnalyzer ($(@($findings).Count) finding(s))" -ForegroundColor Red
-            exit 1
-        }
+    $shared = Join-Path $root 'shared'
+    if (-not (Test-Path -LiteralPath (Join-Path $shared 'VERSION'))) {
+        throw 'shared/ is empty: run `git submodule update --init` once after cloning.'
     }
+    Push-Location $root
+    try {
+        Invoke-Step "scripts: PSScriptAnalyzer" { pwsh -NoProfile -File (Join-Path $shared 'lint/pwsh/Invoke-ScriptLint.ps1') }
+        Invoke-Step "docs: markdownlint" { npx --yes markdownlint-cli2@0.24.0 }
+        Invoke-Step "repo: .editorconfig and .gitattributes" { pwsh -NoProfile -File (Join-Path $shared 'repo/Sync-RepoFiles.ps1') -Path . -Check }
+        Invoke-Step "repo: shared-tooling version" { pwsh -NoProfile -File (Join-Path $shared 'repo/Test-SharedVersion.ps1') }
+    } finally { Pop-Location }
 }
 
 Write-Host "`n[OK] All checks passed." -ForegroundColor Green

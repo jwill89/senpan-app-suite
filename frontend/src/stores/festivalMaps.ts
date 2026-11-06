@@ -153,12 +153,18 @@ export const useFestivalMapsStore = defineStore('festivalMaps', () => {
     detailLoading.value = true
     try {
       const data = await endpoints.festivalMaps.detail(id)
-      if (reqId !== detailSeq) return // a newer load superseded this one
+      if (reqId !== detailSeq) {
+        return // a newer load superseded this one
+      }
       selectedMap.value = data.map
     } catch (e) {
-      if (reqId === detailSeq) ui.notify((e as Error).message, 'error')
+      if (reqId === detailSeq) {
+        ui.notify((e as Error).message, 'error')
+      }
     } finally {
-      if (reqId === detailSeq) detailLoading.value = false
+      if (reqId === detailSeq) {
+        detailLoading.value = false
+      }
     }
   }
 
@@ -253,9 +259,13 @@ export const useFestivalMapsStore = defineStore('festivalMaps', () => {
    * mark the new festival as long over.
    */
   function copyMapForm(m: FestivalMap): boolean {
-    if (!editMapForm(m)) return false
+    if (!editMapForm(m)) {
+      return false
+    }
     const f = mapForm.value
-    if (!f) return false
+    if (!f) {
+      return false
+    }
     f.id = 0
     f.title = `${m.title} (Copy)`
     // A shortcode names exactly one map, so a copy can't keep the original's -
@@ -279,7 +289,9 @@ export const useFestivalMapsStore = defineStore('festivalMaps', () => {
 
   function addStall(type: StallType): FestivalStallForm | null {
     const f = mapForm.value
-    if (!f) return null
+    if (!f) {
+      return null
+    }
     const stall = blankStall(type)
     f.stalls.push(stall)
     return stall
@@ -296,7 +308,9 @@ export const useFestivalMapsStore = defineStore('festivalMaps', () => {
    */
   function addOccupant(stallIndex: number): FestivalStallOccupantForm | null {
     const stall = mapForm.value?.stalls[stallIndex]
-    if (!stall) return null
+    if (!stall) {
+      return null
+    }
     const occupant = blankOccupant(stall.occupants[0]?.stall_type ?? 'other')
     stall.occupants.push(occupant)
     return occupant
@@ -309,14 +323,18 @@ export const useFestivalMapsStore = defineStore('festivalMaps', () => {
    */
   function removeOccupant(stallIndex: number, occupantIndex: number): void {
     const stall = mapForm.value?.stalls[stallIndex]
-    if (!stall || stall.occupants.length <= 1) return
+    if (!stall || stall.occupants.length <= 1) {
+      return
+    }
     stall.occupants.splice(occupantIndex, 1)
   }
 
   /** Saves the map form. Returns true on success (caller navigates back). */
   async function saveMap(): Promise<boolean> {
     const f = mapForm.value
-    if (!f) return false
+    if (!f) {
+      return false
+    }
     if (!f.title.trim()) {
       ui.notify('Title is required', 'error')
       return false
@@ -380,12 +398,15 @@ export const useFestivalMapsStore = defineStore('festivalMaps', () => {
         'Delete this festival map and all its stalls? A stamp rally linked to it is kept, but its stamps lose their stall.',
         { title: 'Delete festival map', confirmText: 'Delete' },
       ))
-    )
+    ) {
       return
+    }
     try {
       await endpoints.festivalMaps.delete(id)
       maps.value = maps.value.filter((m) => m.id !== id)
-      if (selectedMap.value?.id === id) selectedMap.value = null
+      if (selectedMap.value?.id === id) {
+        selectedMap.value = null
+      }
       ui.notify('Festival map deleted', 'info')
     } catch (e) {
       ui.notify((e as Error).message, 'error')
@@ -396,9 +417,13 @@ export const useFestivalMapsStore = defineStore('festivalMaps', () => {
   async function setStatus(id: number, status: FestivalMapStatus): Promise<void> {
     try {
       await endpoints.festivalMaps.setStatus(id, status)
-      if (selectedMap.value?.id === id) selectedMap.value.status = status
+      if (selectedMap.value?.id === id) {
+        selectedMap.value.status = status
+      }
       const inList = maps.value.find((m) => m.id === id)
-      if (inList) inList.status = status
+      if (inList) {
+        inList.status = status
+      }
       const said: Record<FestivalMapStatus, string> = {
         in_progress: 'Festival map moved back to in progress',
         published: 'Festival map published',

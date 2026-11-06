@@ -21,10 +21,10 @@ describe('ThemeTokenEditor', () => {
 
     const emits = wrapper.emitted('update:modelValue')
     expect(emits).toBeTruthy()
-    const payload = emits![0][0] as Record<string, string>
-    expect(payload[THEME_TOKENS[0].name]).toBe('#123456')
+    const payload = emits![0]![0] as Record<string, string>
+    expect(payload[THEME_TOKENS[0]!.name]).toBe('#123456')
     // The emit is a copy, not a mutation of the original model.
-    expect(model[THEME_TOKENS[0].name]).toBe(THEME_TOKENS[0].default)
+    expect(model[THEME_TOKENS[0]!.name]).toBe(THEME_TOKENS[0]!.default)
   })
 
   it('shows a WCAG compliance verdict (AAA for the default token set)', () => {
@@ -39,8 +39,8 @@ describe('ThemeTokenEditor', () => {
     const descs = wrapper.findAll('.token-row-desc')
     expect(descs).toHaveLength(THEME_TOKENS.length)
     // The first token (page-bg) shows its description.
-    expect(descs[0].text()).toBe(THEME_TOKENS[0].desc)
-    expect(descs[0].text().length).toBeGreaterThan(0)
+    expect(descs[0]!.text()).toBe(THEME_TOKENS[0]!.desc)
+    expect(descs[0]!.text().length).toBeGreaterThan(0)
   })
 
   it('has a preview element for every audited pairing (so "Find" always lands)', () => {
@@ -75,7 +75,7 @@ describe('ThemeTokenEditor', () => {
     const findings = wrapper.findAll('.wcag-finding--fail')
     expect(findings.length).toBeGreaterThan(0)
     // Each finding carries a chip and a Find-in-preview button.
-    const first = findings[0]
+    const first = findings[0]!
     expect(first.find('.wcag-chip').exists()).toBe(true)
     expect(first.find('.wcag-find').exists()).toBe(true)
     expect(first.find('.wcag-tokens').text()).toContain('--')

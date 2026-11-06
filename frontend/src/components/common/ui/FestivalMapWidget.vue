@@ -109,8 +109,11 @@ const dimmedIds = computed(() => {
   const dimmed = new Set<number>()
   for (const stall of stalls.value) {
     const shown = occupantsShown(stall)
-    if (shown.length === 0) dimmed.add(stall.id)
-    else if (rallyOnly.value && !shown.some((o) => o.in_stamp_rally)) dimmed.add(stall.id)
+    if (shown.length === 0) {
+      dimmed.add(stall.id)
+    } else if (rallyOnly.value && !shown.some((o) => o.in_stamp_rally)) {
+      dimmed.add(stall.id)
+    }
   }
   return dimmed
 })
@@ -167,7 +170,9 @@ let dragFrom = { pointer: { x: 0, y: 0 }, panel: { x: 0, y: 0 } }
 function clampToMap(x: number, y: number): { x: number; y: number } {
   const box = stageRef.value?.getBoundingClientRect()
   const panel = modalRef.value?.getBoundingClientRect()
-  if (!box || !panel) return { x, y }
+  if (!box || !panel) {
+    return { x, y }
+  }
   return {
     x: Math.min(Math.max(0, x), Math.max(0, box.width - panel.width)),
     y: Math.min(Math.max(0, y), Math.max(0, box.height - panel.height)),
@@ -196,11 +201,15 @@ function onModalDragStart(e: PointerEvent): void {
   // The grip holds the close button. Starting a drag from it would swallow the
   // button's click - preventDefault below suppresses it - so the panel could only
   // be nudged, never closed.
-  if ((e.target as HTMLElement).closest('button')) return
+  if ((e.target as HTMLElement).closest('button')) {
+    return
+  }
 
   const box = stageRef.value?.getBoundingClientRect()
   const panel = modalRef.value?.getBoundingClientRect()
-  if (!box || !panel) return
+  if (!box || !panel) {
+    return
+  }
   e.preventDefault() // never let the map underneath start panning too
   dragFrom = {
     pointer: { x: e.clientX, y: e.clientY },
@@ -244,7 +253,9 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
-  if (hintTimer !== null) clearTimeout(hintTimer)
+  if (hintTimer !== null) {
+    clearTimeout(hintTimer)
+  }
 })
 
 /**

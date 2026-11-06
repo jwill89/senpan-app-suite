@@ -267,9 +267,15 @@ export const endpoints = {
     /** GET /api/logs - tail the server JSON log, newest-first, filtered. */
     list: (params: { level?: string; q?: string; limit?: number } = {}) => {
       const qs = new URLSearchParams()
-      if (params.level) qs.set('level', params.level)
-      if (params.q) qs.set('q', params.q)
-      if (params.limit) qs.set('limit', String(params.limit))
+      if (params.level) {
+        qs.set('level', params.level)
+      }
+      if (params.q) {
+        qs.set('q', params.q)
+      }
+      if (params.limit) {
+        qs.set('limit', String(params.limit))
+      }
       const s = qs.toString()
       return apiGet<LogsResponse>(`logs${s ? `?${s}` : ''}`)
     },

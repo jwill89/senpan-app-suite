@@ -21,6 +21,7 @@ const props = withDefaults(
   defineProps<{
     /** Selected world; '' when nothing is chosen yet. */
     modelValue: string
+    /** The caption above the select; '' leaves it off, and the select is still named "World". */
     label?: string
     /** Placeholder shown while nothing is selected. */
     placeholder?: string
@@ -48,7 +49,9 @@ const selectId = useId()
  */
 const unknownValue = computed(() => {
   const current = props.modelValue.trim()
-  if (!current || !props.allowUnknown) return ''
+  if (!current || !props.allowUnknown) {
+    return ''
+  }
   const known = FF14_WORLDS.some((dc) => dc.worlds.includes(current))
   return known ? '' : current
 })
@@ -61,7 +64,7 @@ const unknownValue = computed(() => {
       :id="selectId"
       :value="modelValue"
       :disabled="disabled"
-      :aria-label="label"
+      :aria-label="label || 'World'"
       @change="emit('update:modelValue', ($event.target as HTMLSelectElement).value)"
     >
       <option value="" disabled>{{ placeholder }}</option>

@@ -89,9 +89,13 @@ const previewToken = ref('')
 watch(selectedFont, (f, old) => {
   // Re-target on selection change or when the current token vanished (e.g. a
   // variant was deleted); keep the user's variant choice across list reloads.
-  if (!f) return
+  if (!f) {
+    return
+  }
   const stillThere = f.variants.some((v) => v.token === previewToken.value)
-  if (old?.base !== f.base || !stillThere) previewToken.value = f.served_token
+  if (old?.base !== f.base || !stillThere) {
+    previewToken.value = f.served_token
+  }
 })
 
 /** Escapes a value for a single-quoted CSS string. */
@@ -217,7 +221,9 @@ watch(
     // and re-pick if the selected one was deleted/renamed away.
     const stillPresent =
       selectedBase.value !== null && fonts.fonts.some((f) => f.base === selectedBase.value)
-    if (!stillPresent) selectedBase.value = fonts.fonts[0]?.base ?? null
+    if (!stillPresent) {
+      selectedBase.value = fonts.fonts[0]?.base ?? null
+    }
   },
   { deep: true },
 )

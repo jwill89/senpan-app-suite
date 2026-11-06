@@ -66,7 +66,9 @@ function onTurnstileCleared(): void {
 async function submit(): Promise<void> {
   await cr.submit()
   // On failure the (single-use) token was cleared - re-issue a fresh one.
-  if (!cr.result) turnstile.value?.reset()
+  if (!cr.result) {
+    turnstile.value?.reset()
+  }
 }
 
 function back(): void {

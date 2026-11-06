@@ -45,16 +45,18 @@ const dragOver = ref(false)
 const selectedCategory = computed(
   () => images.sortedCategories.find((c) => c.dir === selectedDir.value) ?? null,
 )
-const currentImages = computed(() =>
-  selectedDir.value in images.imagesByDir ? images.imagesByDir[selectedDir.value] : [],
-)
+const currentImages = computed(() => images.imagesByDir[selectedDir.value] ?? [])
 
 // Upload progress. `uploadProgress` is 0-100 while bytes transfer, then sits at
 // 100 while the server saves the files; -1 when idle.
 const uploadLabel = computed(() => {
   const p = images.uploadProgress
-  if (p < 0) return 'Uploading...'
-  if (p < 100) return `Uploading ${p}%`
+  if (p < 0) {
+    return 'Uploading...'
+  }
+  if (p < 100) {
+    return `Uploading ${p}%`
+  }
   return 'Processing...'
 })
 const uploadBarWidth = computed(() => `${images.uploadProgress < 0 ? 0 : images.uploadProgress}%`)
@@ -63,15 +65,18 @@ const uploadBarWidth = computed(() => `${images.uploadProgress < 0 ? 0 : images.
 watch(
   () => images.sortedCategories,
   (cats) => {
-    if (cats.length && !cats.some((c) => c.dir === selectedDir.value)) {
-      selectedDir.value = cats[0].dir
+    const first = cats[0]
+    if (first && !cats.some((c) => c.dir === selectedDir.value)) {
+      selectedDir.value = first.dir
     }
   },
   { immediate: true },
 )
 // Load the selected category's images whenever the selection changes.
 watch(selectedDir, (dir) => {
-  if (dir) void images.loadImages(dir)
+  if (dir) {
+    void images.loadImages(dir)
+  }
 })
 
 // -- Category management modal ------------------------------------------------
@@ -106,7 +111,9 @@ function closeModal(): void {
 }
 
 async function submitCategory(): Promise<void> {
-  if (!categoryModal.value || !formName.value.trim()) return
+  if (!categoryModal.value || !formName.value.trim()) {
+    return
+  }
   savingCategory.value = true
   try {
     const dir =
@@ -133,7 +140,9 @@ function pickFiles(): void {
 }
 /** The drop zone's keyboard twin of its click, which is off while no category is picked. */
 function pickFilesFromKey(): void {
-  if (selectedDir.value) pickFiles()
+  if (selectedDir.value) {
+    pickFiles()
+  }
 }
 async function onFilesSelected(e: Event): Promise<void> {
   const input = e.target as HTMLInputElement

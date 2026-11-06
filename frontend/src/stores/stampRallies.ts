@@ -137,7 +137,9 @@ export const useStampRalliesStore = defineStore('stampRallies', () => {
 
   const drawsRemaining = computed(() => {
     const c = publicCard.value
-    if (!c) return 0
+    if (!c) {
+      return 0
+    }
     return c.stamps.filter((s) => !s.collected && s.available).length
   })
 
@@ -193,13 +195,19 @@ export const useStampRalliesStore = defineStore('stampRallies', () => {
     detailLoading.value = true
     try {
       const data = await endpoints.stampRallies.detail(id)
-      if (reqId !== detailSeq) return // a newer load superseded this one
+      if (reqId !== detailSeq) {
+        return // a newer load superseded this one
+      }
       selectedRally.value = data.stamp_rally
       rallyCards.value = data.cards
     } catch (e) {
-      if (reqId === detailSeq) ui.notify((e as Error).message, 'error')
+      if (reqId === detailSeq) {
+        ui.notify((e as Error).message, 'error')
+      }
     } finally {
-      if (reqId === detailSeq) detailLoading.value = false
+      if (reqId === detailSeq) {
+        detailLoading.value = false
+      }
     }
   }
 
@@ -278,10 +286,16 @@ export const useStampRalliesStore = defineStore('stampRallies', () => {
    */
   async function setFestivalMap(mapId: number | null): Promise<void> {
     const f = rallyForm.value
-    if (!f) return
-    if (f.festival_map_id === mapId) return
+    if (!f) {
+      return
+    }
+    if (f.festival_map_id === mapId) {
+      return
+    }
     f.festival_map_id = mapId
-    for (const stamp of f.stamps) stamp.occupant_id = null
+    for (const stamp of f.stamps) {
+      stamp.occupant_id = null
+    }
     await loadMapStalls(mapId)
   }
 
@@ -292,10 +306,14 @@ export const useStampRalliesStore = defineStore('stampRallies', () => {
    */
   function setStampStall(stampIndex: number, occupantId: number | null): void {
     const stamp = rallyForm.value?.stamps[stampIndex]
-    if (!stamp) return
+    if (!stamp) {
+      return
+    }
     stamp.occupant_id = occupantId
     const occupant = mapStalls.value.find((o) => o.id === occupantId)
-    if (!occupant) return
+    if (!occupant) {
+      return
+    }
     stamp.affiliate_id = occupant.affiliate_id ?? null
     stamp.stamp_type = stampTypeForStall(occupant.stall_type)
   }
@@ -391,9 +409,13 @@ export const useStampRalliesStore = defineStore('stampRallies', () => {
    * original rally and are not touched at all.
    */
   function copyRallyForm(r: StampRally): boolean {
-    if (!editRallyForm(r)) return false
+    if (!editRallyForm(r)) {
+      return false
+    }
     const f = rallyForm.value
-    if (!f) return false
+    if (!f) {
+      return false
+    }
     f.id = 0
     f.title = `${r.title} (Copy)`
     f.available_from = ''
@@ -411,7 +433,9 @@ export const useStampRalliesStore = defineStore('stampRallies', () => {
       stamp.active_to = ''
       stamp.paused = false
     }
-    for (const prize of f.prizes) prize.id = 0
+    for (const prize of f.prizes) {
+      prize.id = 0
+    }
     return true
   }
 
@@ -435,7 +459,9 @@ export const useStampRalliesStore = defineStore('stampRallies', () => {
   /** Saves the rally form. Returns true on success (caller navigates back). */
   async function saveRally(): Promise<boolean> {
     const f = rallyForm.value
-    if (!f) return false
+    if (!f) {
+      return false
+    }
     if (!f.title.trim()) {
       ui.notify('Title is required', 'error')
       return false
@@ -494,12 +520,15 @@ export const useStampRalliesStore = defineStore('stampRallies', () => {
         title: 'Delete stamp rally',
         confirmText: 'Delete',
       }))
-    )
+    ) {
       return
+    }
     try {
       await endpoints.stampRallies.delete(id)
       rallies.value = rallies.value.filter((r) => r.id !== id)
-      if (selectedRally.value?.id === id) selectedRally.value = null
+      if (selectedRally.value?.id === id) {
+        selectedRally.value = null
+      }
       ui.notify('Stamp rally deleted', 'info')
     } catch (e) {
       ui.notify((e as Error).message, 'error')
@@ -510,9 +539,13 @@ export const useStampRalliesStore = defineStore('stampRallies', () => {
   async function setRallyStatus(id: number, status: 'open' | 'closed'): Promise<void> {
     try {
       await endpoints.stampRallies.setStatus(id, status)
-      if (selectedRally.value?.id === id) selectedRally.value.status = status
+      if (selectedRally.value?.id === id) {
+        selectedRally.value.status = status
+      }
       const inList = rallies.value.find((r) => r.id === id)
-      if (inList) inList.status = status
+      if (inList) {
+        inList.status = status
+      }
       ui.notify(status === 'closed' ? 'Stamp rally closed' : 'Stamp rally reopened', 'success')
     } catch (e) {
       ui.notify((e as Error).message, 'error')
@@ -521,7 +554,9 @@ export const useStampRalliesStore = defineStore('stampRallies', () => {
 
   /** Loads a rally's stamps for the inline "Manage stalls" panel on a list card. */
   async function loadCardStamps(rallyId: number): Promise<void> {
-    if (rallyId in cardStamps.value) return // already loaded
+    if (rallyId in cardStamps.value) {
+      return // already loaded
+    }
     try {
       const data = await endpoints.stampRallies.detail(rallyId)
       cardStamps.value = { ...cardStamps.value, [rallyId]: data.stamp_rally.stamps ?? [] }
@@ -560,10 +595,14 @@ export const useStampRalliesStore = defineStore('stampRallies', () => {
   ): Promise<void> {
     try {
       await endpoints.stampRallies.setStampPaused(rallyId, stampId, paused)
-      const st = cardStamps.value[rallyId].find((s) => s.id === stampId)
-      if (st) st.paused = paused
+      const st = cardStamps.value[rallyId]?.find((s) => s.id === stampId)
+      if (st) {
+        st.paused = paused
+      }
       const r = rallies.value.find((rr) => rr.id === rallyId)
-      if (r) r.active_stamp_count = Math.max(0, (r.active_stamp_count ?? 0) + (paused ? -1 : 1))
+      if (r) {
+        r.active_stamp_count = Math.max(0, (r.active_stamp_count ?? 0) + (paused ? -1 : 1))
+      }
       ui.notify(paused ? 'Stall paused' : 'Stall resumed', 'success')
     } catch (e) {
       ui.notify((e as Error).message, 'error')
@@ -572,11 +611,15 @@ export const useStampRalliesStore = defineStore('stampRallies', () => {
 
   /** Pause/resume a single stamp on the selected rally (live availability toggle). */
   async function setStampPaused(stampId: number, paused: boolean): Promise<void> {
-    if (!selectedRally.value) return
+    if (!selectedRally.value) {
+      return
+    }
     try {
       await endpoints.stampRallies.setStampPaused(selectedRally.value.id, stampId, paused)
       const st = selectedRally.value.stamps?.find((s) => s.id === stampId)
-      if (st) st.paused = paused
+      if (st) {
+        st.paused = paused
+      }
       ui.notify(paused ? 'Stall paused' : 'Stall resumed', 'success')
     } catch (e) {
       ui.notify((e as Error).message, 'error')
@@ -585,7 +628,9 @@ export const useStampRalliesStore = defineStore('stampRallies', () => {
 
   // -- Admin: participant cards ---------------------------------------------
   async function createCard(): Promise<void> {
-    if (!selectedRally.value) return
+    if (!selectedRally.value) {
+      return
+    }
     const name = cardAdd.value.participantName.trim()
     if (!name) {
       ui.notify('Participant name is required', 'error')
@@ -615,7 +660,9 @@ export const useStampRalliesStore = defineStore('stampRallies', () => {
   }
 
   async function deleteCard(card: StampRallyCard): Promise<void> {
-    if (!selectedRally.value) return
+    if (!selectedRally.value) {
+      return
+    }
     if (
       !(await ui.confirm(
         `Delete the card for ${card.participant_name}? Their stamp record is removed.`,
@@ -624,8 +671,9 @@ export const useStampRalliesStore = defineStore('stampRallies', () => {
           confirmText: 'Delete',
         },
       ))
-    )
+    ) {
       return
+    }
     try {
       await endpoints.stampRallies.deleteCard(selectedRally.value.id, card.id)
       rallyCards.value = rallyCards.value.filter((c) => c.id !== card.id)
@@ -707,7 +755,9 @@ export const useStampRalliesStore = defineStore('stampRallies', () => {
     world: string,
     turnstileToken = '',
   ): Promise<boolean> {
-    if (submitting.value) return false
+    if (submitting.value) {
+      return false
+    }
     const trimmed = name.trim()
     if (!trimmed) {
       ui.notify('Enter your character name', 'error')
@@ -806,7 +856,9 @@ export const useStampRalliesStore = defineStore('stampRallies', () => {
 
   /** Submits a stamp password. Returns true on a successful collection. */
   async function submitPassword(token: string, password: string): Promise<boolean> {
-    if (submitting.value) return false
+    if (submitting.value) {
+      return false
+    }
     const pw = password.trim()
     if (!pw) {
       ui.notify('Enter a password', 'error')

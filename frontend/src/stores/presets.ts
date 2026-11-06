@@ -74,7 +74,9 @@ export const usePresetsStore = defineStore('presets', () => {
   }
 
   async function savePreset(): Promise<void> {
-    if (!editingPreset.value) return
+    if (!editingPreset.value) {
+      return
+    }
     const form = editingPreset.value
     const name = form.name.trim()
     if (!name) {
@@ -119,11 +121,14 @@ export const usePresetsStore = defineStore('presets', () => {
   async function deletePreset(id: number): Promise<void> {
     if (
       !(await ui.confirm('Delete this preset?', { title: 'Delete preset', confirmText: 'Delete' }))
-    )
+    ) {
       return
+    }
     try {
       await endpoints.presets.delete(id)
-      if (editingPreset.value?.id === id) editingPreset.value = null
+      if (editingPreset.value?.id === id) {
+        editingPreset.value = null
+      }
       ui.notify('Preset deleted', 'info')
       await loadPresets()
     } catch (e) {

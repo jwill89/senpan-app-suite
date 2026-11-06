@@ -41,14 +41,16 @@ const stalls = computed(() => store.mapForm?.stalls ?? [])
 /** The selected stall plus its index, for the editing panel below the map. */
 const selected = computed(() => {
   const index = stalls.value.findIndex((s) => s._uid === selectedUid.value)
-  if (index < 0) return null
-  return { index, stall: stalls.value[index] }
+  const stall = stalls.value[index]
+  return stall ? { index, stall } : null
 })
 
 /** Apply an editor placement change back onto the matching stall. */
 function applyUpdate(uid: number, placement: Placement): void {
   const stall = stalls.value.find((s) => s._uid === uid)
-  if (stall) Object.assign(stall.placement, placement)
+  if (stall) {
+    Object.assign(stall.placement, placement)
+  }
 }
 
 function addStall(type: StallType): void {
@@ -57,7 +59,9 @@ function addStall(type: StallType): void {
 
 function removeSelected(): void {
   const sel = selected.value
-  if (!sel) return
+  if (!sel) {
+    return
+  }
   store.removeStall(sel.index)
   selectedUid.value = null
 }
@@ -75,20 +79,29 @@ function setAffiliate(occupant: FestivalStallOccupantForm, value: string): void 
  */
 function setStallType(occupant: FestivalStallOccupantForm, value: string): void {
   const sel = selected.value
-  if (!sel) return
-  const type = (STALL_TYPES.find((t) => t.value === value) ?? STALL_TYPES[0]).value
+  if (!sel) {
+    return
+  }
+  // Anything unknown is a game stall, the first type.
+  const type = STALL_TYPES.find((t) => t.value === value)?.value ?? 'game'
   occupant.stall_type = type
-  if (occupant === sel.stall.occupants[0]) sel.stall.shape = stallTypeMeta(type).shape
+  if (occupant === sel.stall.occupants[0]) {
+    sel.stall.shape = stallTypeMeta(type).shape
+  }
 }
 
 /** Adds another occupant - the business that takes the pitch on a different day. */
 function addOccupant(): void {
-  if (selected.value) store.addOccupant(selected.value.index)
+  if (selected.value) {
+    store.addOccupant(selected.value.index)
+  }
 }
 
 /** Removes one occupant; the last is kept (a pitch with nobody in it is dropped). */
 function removeOccupant(occupantIndex: number): void {
-  if (selected.value) store.removeOccupant(selected.value.index, occupantIndex)
+  if (selected.value) {
+    store.removeOccupant(selected.value.index, occupantIndex)
+  }
 }
 
 /** The color swatch always needs a literal, so show what the pitch renders as. */
@@ -97,12 +110,16 @@ const selectedColor = computed(() =>
 )
 
 function setColor(value: string): void {
-  if (selected.value) selected.value.stall.color = value
+  if (selected.value) {
+    selected.value.stall.color = value
+  }
 }
 
 /** Drop back to the stall type's own color. */
 function clearColor(): void {
-  if (selected.value) selected.value.stall.color = ''
+  if (selected.value) {
+    selected.value.stall.color = ''
+  }
 }
 
 /**
@@ -114,11 +131,15 @@ function clearColor(): void {
 const selectedRingColor = computed(() => selected.value?.stall.selection_color || '#d6bdae')
 
 function setRingColor(value: string): void {
-  if (selected.value) selected.value.stall.selection_color = value
+  if (selected.value) {
+    selected.value.stall.selection_color = value
+  }
 }
 
 function clearRingColor(): void {
-  if (selected.value) selected.value.stall.selection_color = ''
+  if (selected.value) {
+    selected.value.stall.selection_color = ''
+  }
 }
 
 /**
@@ -128,15 +149,21 @@ function clearRingColor(): void {
 const selectedTextColor = computed(() => selected.value?.stall.text_color || '#ffffff')
 
 function setTextColor(value: string): void {
-  if (selected.value) selected.value.stall.text_color = value
+  if (selected.value) {
+    selected.value.stall.text_color = value
+  }
 }
 
 function clearTextColor(): void {
-  if (selected.value) selected.value.stall.text_color = ''
+  if (selected.value) {
+    selected.value.stall.text_color = ''
+  }
 }
 
 function setShape(value: string): void {
-  if (selected.value) selected.value.stall.shape = value === 'circle' ? 'circle' : 'rect'
+  if (selected.value) {
+    selected.value.stall.shape = value === 'circle' ? 'circle' : 'rect'
+  }
 }
 
 /**
@@ -147,7 +174,9 @@ function setShape(value: string): void {
  */
 function normalizeRotation(): void {
   const stall = selected.value?.stall
-  if (!stall) return
+  if (!stall) {
+    return
+  }
   const degrees = stall.placement.rotation
   stall.placement.rotation = Number.isFinite(degrees)
     ? ((Math.round(degrees) % 360) + 360) % 360
@@ -168,7 +197,9 @@ const SHAPES: { value: StallShape; label: string }[] = [
 ]
 
 async function save(): Promise<void> {
-  if (await store.saveMap()) emit('saved')
+  if (await store.saveMap()) {
+    emit('saved')
+  }
 }
 function cancel(): void {
   store.cancelMapForm()

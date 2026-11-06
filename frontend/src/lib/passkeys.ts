@@ -32,7 +32,9 @@ export async function registerPasskey(name: string): Promise<PasskeysResponse> {
   const credential = (await navigator.credentials.create({
     publicKey,
   })) as PublicKeyCredential | null
-  if (!credential) throw new Error('Passkey creation was cancelled.')
+  if (!credential) {
+    throw new Error('Passkey creation was cancelled.')
+  }
   return await apiPost<PasskeysResponse>(
     `account/passkeys/register/finish?name=${encodeURIComponent(name)}`,
     credential.toJSON(),
@@ -53,7 +55,9 @@ export async function loginWithPasskey(): Promise<LoginResponse> {
   )
   const publicKey = PublicKeyCredential.parseRequestOptionsFromJSON(options.publicKey)
   const assertion = (await navigator.credentials.get({ publicKey })) as PublicKeyCredential | null
-  if (!assertion) throw new Error('Passkey login was cancelled.')
+  if (!assertion) {
+    throw new Error('Passkey login was cancelled.')
+  }
   return await apiPost<LoginResponse>('auth/passkey/finish', assertion.toJSON(), {
     skipAuthRedirect: true,
   })

@@ -11,7 +11,9 @@
  * Already-absolute paths, full URLs, and data: URIs are returned unchanged.
  */
 export function assetUrl(path: string | null | undefined): string {
-  if (!path) return ''
+  if (!path) {
+    return ''
+  }
   // Absolute path, protocol-relative/full URL, or inline data URI - leave as-is.
   if (path.startsWith('/') || /^(https?:)?\/\//i.test(path) || path.startsWith('data:')) {
     return path
@@ -32,8 +34,12 @@ export function assetCssUrl(path: string | null | undefined): string {
   let out = ''
   for (const ch of url) {
     const code = ch.charCodeAt(0)
-    if (code < 0x20 || code === 0x7f) continue // drop control chars / newlines
-    if (ch === '"' || ch === '\\') out += '\\' // escape for the quoted CSS string
+    if (code < 0x20 || code === 0x7f) {
+      continue // drop control chars / newlines
+    }
+    if (ch === '"' || ch === '\\') {
+      out += '\\' // escape for the quoted CSS string
+    }
     out += ch
   }
   return out

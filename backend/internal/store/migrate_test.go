@@ -14,7 +14,7 @@ import (
 // setting) becomes a dedicated announcement type while its setting row is removed.
 func TestMigrateBookClubEventsRetired(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "legacy.db")
-	db, err := sql.Open("sqlite3", path)
+	db, err := sql.Open("sqlite", path)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -100,7 +100,7 @@ func TestMigrateBookClubEventsRetired(t *testing.T) {
 // silent corruption into a startup error the operator can act on.
 func TestEnsureSchemaRefusesNewerDatabase(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "future.db")
-	db, err := sql.Open("sqlite3", path)
+	db, err := sql.Open("sqlite", path)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -140,7 +140,7 @@ func TestEnsureSchemaRefusesNewerDatabase(t *testing.T) {
 // genuine duplicates are blanked first.
 func TestMigrateTeaRoomNumberIndexToleratesLegacyData(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "tearooms.db")
-	db, err := sql.Open("sqlite3", path)
+	db, err := sql.Open("sqlite", path)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -190,7 +190,7 @@ func TestMigrateTeaRoomNumberIndexToleratesLegacyData(t *testing.T) {
 // returned on occupant_id and never cleaned either up.
 func TestMigrateFestivalMapsIsReRunSafeAfterRename(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "rerun.db")
-	db, err := sql.Open("sqlite3", path)
+	db, err := sql.Open("sqlite", path)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -232,7 +232,7 @@ func TestMigrateFestivalMapsIsReRunSafeAfterRename(t *testing.T) {
 // as unpaid.
 func TestMigrateRaffleEntryPaymentsBackfillIsReRunnable(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "payments.db")
-	db, err := sql.Open("sqlite3", path)
+	db, err := sql.Open("sqlite", path)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -285,7 +285,7 @@ func TestStampLookupIndexesExistOnBothPaths(t *testing.T) {
 	want := []string{"idx_stamp_rally_cards_participant", "idx_garapon_players_stamp_card"}
 
 	t.Run("fresh install", func(t *testing.T) {
-		db, err := sql.Open("sqlite3", filepath.Join(t.TempDir(), "fresh.db"))
+		db, err := sql.Open("sqlite", filepath.Join(t.TempDir(), "fresh.db"))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -297,7 +297,7 @@ func TestStampLookupIndexesExistOnBothPaths(t *testing.T) {
 	})
 
 	t.Run("upgraded database", func(t *testing.T) {
-		db, err := sql.Open("sqlite3", filepath.Join(t.TempDir(), "upgraded.db"))
+		db, err := sql.Open("sqlite", filepath.Join(t.TempDir(), "upgraded.db"))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -343,7 +343,7 @@ func assertIndexes(t *testing.T, db *sql.DB, names []string) {
 // after the upgrade that must not be touched by a re-run.
 func TestMigrateParticipantWorldsSplitsAndIsReRunnable(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "worlds.db")
-	db, err := sql.Open("sqlite3", path)
+	db, err := sql.Open("sqlite", path)
 	if err != nil {
 		t.Fatal(err)
 	}

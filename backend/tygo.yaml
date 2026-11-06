@@ -2,13 +2,13 @@
 #
 # This keeps the frontend's API types in sync with the backend `model` package.
 # Run with:  npm run gen:types   (from the frontend/ folder)
-# or:        go run github.com/gzuidhof/tygo@v0.2.21 generate   (from backend/)
+# or:        go tool tygo generate   (from backend/)
 #
-# Keep the pinned version above in sync with frontend/package.json's
-# `gen:types` script so type generation is reproducible across machines.
+# tygo's version is pinned by the `tool` directive in backend/go.mod, so both
+# commands build the same tygo on every machine.
 #
-# The generated file is committed so the frontend builds without Go installed,
-# but should be regenerated whenever the Go model types change.
+# The generated file is committed: regenerate it whenever the Go model types
+# change and commit it with them. CI's generated job fails if it is stale.
 packages:
   - path: "app-suite/internal/model"
     output_path: "../frontend/src/types/api.generated.ts"

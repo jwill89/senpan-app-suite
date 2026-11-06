@@ -64,7 +64,9 @@ function openWebhook(): void {
   screen.value = 'webhook'
 }
 async function submitWebhook(): Promise<void> {
-  if (await store.saveWebhook(webhookDraft.value)) screen.value = 'list'
+  if (await store.saveWebhook(webhookDraft.value)) {
+    screen.value = 'list'
+  }
 }
 </script>
 

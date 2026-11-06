@@ -23,7 +23,9 @@ const emit = defineEmits<{ saved: [id: number]; cancel: [] }>()
 const ema = useEmaStore()
 
 function setFestival(value: string): void {
-  if (ema.boardForm) ema.boardForm.festival_map_id = value ? Number(value) : null
+  if (ema.boardForm) {
+    ema.boardForm.festival_map_id = value ? Number(value) : null
+  }
 }
 
 /** An empty box is no limit (0); anything else is a whole number of requests. */
@@ -33,7 +35,9 @@ function setArtistLimit(w: EmaWindowForm, value: string): void {
 
 async function save(): Promise<void> {
   const id = await ema.saveBoard()
-  if (id) emit('saved', id)
+  if (id) {
+    emit('saved', id)
+  }
 }
 
 function cancel(): void {

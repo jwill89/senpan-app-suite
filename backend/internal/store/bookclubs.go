@@ -14,7 +14,7 @@ import (
 // Items are not loaded (use GetReadingList for the full detail).
 func (s *Store) ListReadingLists(ctx context.Context, clubSlug string) ([]model.ReadingList, error) {
 	rows, err := s.db.QueryContext(ctx,
-		`SELECT id, club_slug, title, created_at FROM reading_lists WHERE club_slug = ? ORDER BY created_at DESC, id DESC`,
+		`SELECT id, club_slug, title, CAST(created_at AS TEXT) FROM reading_lists WHERE club_slug = ? ORDER BY created_at DESC, id DESC`,
 		clubSlug,
 	)
 	if err != nil {
@@ -38,7 +38,7 @@ func (s *Store) ListReadingLists(ctx context.Context, clubSlug string) ([]model.
 func (s *Store) GetReadingList(ctx context.Context, id int64) (*model.ReadingList, error) {
 	var l model.ReadingList
 	err := s.db.QueryRowContext(ctx,
-		`SELECT id, club_slug, title, created_at FROM reading_lists WHERE id = ?`, id,
+		`SELECT id, club_slug, title, CAST(created_at AS TEXT) FROM reading_lists WHERE id = ?`, id,
 	).Scan(&l.ID, &l.ClubSlug, &l.Title, &l.CreatedAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil

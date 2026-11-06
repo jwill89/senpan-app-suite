@@ -57,7 +57,7 @@ const saved = ref<SavedRallySignup | undefined>()
  */
 const issued = computed(() => {
   const fresh = store.signupResult
-  if (fresh)
+  if (fresh) {
     return {
       name: participantLabel(fresh.participant_name, fresh.world),
       rallyTitle: fresh.rally_title,
@@ -65,7 +65,8 @@ const issued = computed(() => {
       garaponToken: fresh.garapon_token ?? '',
       garaponTitle: fresh.garapon_title ?? '',
     }
-  if (saved.value)
+  }
+  if (saved.value) {
     return {
       name: participantLabel(saved.value.name, saved.value.world),
       rallyTitle: saved.value.rallyTitle,
@@ -73,6 +74,7 @@ const issued = computed(() => {
       garaponToken: saved.value.garaponToken ?? '',
       garaponTitle: saved.value.garaponTitle ?? '',
     }
+  }
   return null
 })
 
@@ -100,8 +102,12 @@ async function load(): Promise<void> {
   // Read before the list loads: it is local, and it decides whether this page
   // shows a form at all.
   saved.value = savedRallySignup(rallyId.value)
-  if (!store.signupRallies.length) await store.loadSignupRallies()
-  if (!rally.value) void router.replace({ name: 'stamp-rallies' })
+  if (!store.signupRallies.length) {
+    await store.loadSignupRallies()
+  }
+  if (!rally.value) {
+    void router.replace({ name: 'stamp-rallies' })
+  }
 }
 
 onMounted(async () => {

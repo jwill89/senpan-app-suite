@@ -11,7 +11,9 @@ class FakeAudio {
   play = vi.fn(() => Promise.resolve())
   load = vi.fn()
   constructor(s?: string) {
-    if (s !== undefined) this.src = s
+    if (s !== undefined) {
+      this.src = s
+    }
     created.push(this)
   }
 }

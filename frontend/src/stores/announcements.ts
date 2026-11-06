@@ -68,7 +68,7 @@ const pad = (n: number): string => String(n).padStart(2, '0')
 
 /** Parse an "HH:mm" wall-clock string into minutes-of-day (0-1439). */
 function timeToMinutes(time: string): number {
-  const [hh, mm] = time.split(':').map((n) => Number(n) || 0)
+  const [hh = 0, mm = 0] = time.split(':').map((n) => Number(n) || 0)
   return hh * 60 + mm
 }
 
@@ -109,8 +109,12 @@ export const useAnnouncementsStore = defineStore('announcements', () => {
     const q = search.value.trim().toLowerCase()
     const tf = typeFilter.value
     return announcements.value.filter((a) => {
-      if (tf && a.type_id !== tf) return false
-      if (!q) return true
+      if (tf && a.type_id !== tf) {
+        return false
+      }
+      if (!q) {
+        return true
+      }
       return [a.title, a.type_name ?? '', a.details].some((s) => s.toLowerCase().includes(q))
     })
   })
@@ -226,12 +230,15 @@ export const useAnnouncementsStore = defineStore('announcements', () => {
         title: 'Delete announcement type',
         confirmText: 'Delete',
       }))
-    )
+    ) {
       return
+    }
     try {
       await endpoints.announcements.deleteType(t.id)
       ui.notify('Type deleted', 'info')
-      if (typeForm.value.id === t.id) resetTypeForm()
+      if (typeForm.value.id === t.id) {
+        resetTypeForm()
+      }
       await loadTypes()
     } catch (e) {
       ui.notify((e as Error).message, 'error')
@@ -284,12 +291,15 @@ export const useAnnouncementsStore = defineStore('announcements', () => {
         title: 'Delete taggable role',
         confirmText: 'Delete',
       }))
-    )
+    ) {
       return
+    }
     try {
       await endpoints.announcements.deleteRole(r.id)
       ui.notify('Role deleted', 'info')
-      if (roleForm.value.id === r.id) resetRoleForm()
+      if (roleForm.value.id === r.id) {
+        resetRoleForm()
+      }
       await loadRoles()
     } catch (e) {
       ui.notify((e as Error).message, 'error')
@@ -320,7 +330,9 @@ export const useAnnouncementsStore = defineStore('announcements', () => {
     f.end_format = (a.end_format || 't') as AnnouncementForm['end_format']
     f.dynamic_dates = a.dynamic_dates
     f.schedule_kind = (a.schedule_kind || '') as ScheduleKind
-    if (a.timezone) f.timezone = a.timezone
+    if (a.timezone) {
+      f.timezone = a.timezone
+    }
     if (a.schedule_kind === 'once') {
       f.once_local = a.once_local
     } else if (a.schedule_kind === 'daily') {
@@ -380,15 +392,27 @@ export const useAnnouncementsStore = defineStore('announcements', () => {
 
   /** Returns an error string if the form is invalid, else null. */
   function validate(f: AnnouncementForm): string | null {
-    if (!f.title.trim()) return 'Title is required'
-    if (!f.type_id) return 'An announcement type is required'
-    if (!f.details.trim()) return 'Details are required'
-    if (f.schedule_kind === 'once' && !f.once_local)
+    if (!f.title.trim()) {
+      return 'Title is required'
+    }
+    if (!f.type_id) {
+      return 'An announcement type is required'
+    }
+    if (!f.details.trim()) {
+      return 'Details are required'
+    }
+    if (f.schedule_kind === 'once' && !f.once_local) {
       return 'Pick a date & time for the one-time post'
-    if ((f.schedule_kind === 'weekly' || f.schedule_kind === 'monthly') && !f.time_local)
+    }
+    if ((f.schedule_kind === 'weekly' || f.schedule_kind === 'monthly') && !f.time_local) {
       return 'Pick a time for the recurring post'
-    if (f.schedule_kind === 'weekly' && f.weekdays.length === 0) return 'Pick at least one weekday'
-    if (f.schedule_kind === 'monthly' && f.weekdays.length === 0) return 'Pick a weekday'
+    }
+    if (f.schedule_kind === 'weekly' && f.weekdays.length === 0) {
+      return 'Pick at least one weekday'
+    }
+    if (f.schedule_kind === 'monthly' && f.weekdays.length === 0) {
+      return 'Pick a weekday'
+    }
     return null
   }
 
@@ -420,12 +444,15 @@ export const useAnnouncementsStore = defineStore('announcements', () => {
         title: 'Delete announcement',
         confirmText: 'Delete',
       }))
-    )
+    ) {
       return
+    }
     try {
       await endpoints.announcements.delete(a.id)
       ui.notify('Announcement deleted', 'info')
-      if (form.value.id === a.id) resetForm()
+      if (form.value.id === a.id) {
+        resetForm()
+      }
       await loadAnnouncements()
     } catch (e) {
       ui.notify((e as Error).message, 'error')
@@ -438,8 +465,9 @@ export const useAnnouncementsStore = defineStore('announcements', () => {
         title: 'Send announcement',
         confirmText: 'Send now',
       }))
-    )
+    ) {
       return
+    }
     sendingId.value = a.id
     try {
       await endpoints.announcements.sendNow(a.id)

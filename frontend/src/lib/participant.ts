@@ -38,10 +38,14 @@ export function participantLabel(name: string, world = ''): string {
 export function splitParticipantLabel(value: string): { name: string; world: string } {
   const trimmed = value.trim()
   const at = trimmed.lastIndexOf(SEPARATOR)
-  if (at < 0) return { name: trimmed, world: '' }
+  if (at < 0) {
+    return { name: trimmed, world: '' }
+  }
 
   const name = trimmed.slice(0, at).trim()
   const world = trimmed.slice(at + SEPARATOR.length).trim()
-  if (!name || !world) return { name: trimmed, world: '' }
+  if (!name || !world) {
+    return { name: trimmed, world: '' }
+  }
   return { name, world }
 }

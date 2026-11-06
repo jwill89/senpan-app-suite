@@ -19,7 +19,9 @@ const styles = useStylesStore()
 const tokens = computed<Record<string, string>>({
   get: () => styles.editingStyle?.tokens ?? {},
   set: (v) => {
-    if (styles.editingStyle) styles.editingStyle.tokens = v
+    if (styles.editingStyle) {
+      styles.editingStyle.tokens = v
+    }
   },
 })
 </script>

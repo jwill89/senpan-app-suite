@@ -17,7 +17,9 @@ import {
 // Build a 5x5 pattern grid marking the given columns (a true cell in row 0 of each).
 function markCols(...columns: number[]): boolean[][] {
   const g = Array.from({ length: 5 }, () => Array.from({ length: 5 }, () => false))
-  for (const c of columns) g[0][c] = true
+  for (const c of columns) {
+    g[0]![c] = true
+  }
   return g
 }
 
@@ -52,14 +54,14 @@ describe('emptyGrid', () => {
 
   it('returns independent rows (no shared reference)', () => {
     const g = emptyGrid()
-    g[0][0] = true
-    expect(g[1][0]).toBe(false)
+    g[0]![0] = true
+    expect(g[1]![0]).toBe(false)
   })
 })
 
 describe('stamp metadata', () => {
   it('exposes unique shape ids starting with blank', () => {
-    expect(STAMP_SHAPES[0].id).toBe('blank')
+    expect(STAMP_SHAPES[0]!.id).toBe('blank')
     const ids = STAMP_SHAPES.map((s) => s.id)
     expect(new Set(ids).size).toBe(ids.length)
   })
@@ -108,7 +110,7 @@ describe('patternColumns', () => {
 
   it('ignores the FREE centre - a free-only pattern is treated as all-active', () => {
     const freeOnly = Array.from({ length: 5 }, () => Array.from({ length: 5 }, () => false))
-    freeOnly[2][2] = true
+    freeOnly[2]![2] = true
     expect(patternColumns([{ pattern_data: freeOnly }])).toEqual([true, true, true, true, true])
   })
 
@@ -141,7 +143,7 @@ describe('bingo card helpers', () => {
   it('randomBoard produces a valid card with a FREE centre and in-range distinct columns', () => {
     for (let i = 0; i < 20; i++) {
       const b = randomBoard()
-      expect(b[2][2]).toBe(0)
+      expect(b[2]![2]).toBe(0)
       expect(validateBoard(b)).toBe('')
     }
   })
@@ -156,19 +158,19 @@ describe('bingo card helpers', () => {
 
   it('validateBoard requires the FREE centre', () => {
     const b = validBoard()
-    b[2][2] = 33
+    b[2]![2] = 33
     expect(validateBoard(b)).toMatch(/FREE/)
   })
 
   it('validateBoard rejects an out-of-range number', () => {
     const b = validBoard()
-    b[0][0] = 99 // B column only allows 1-15
+    b[0]![0] = 99 // B column only allows 1-15
     expect(validateBoard(b)).toMatch(/Column B/)
   })
 
   it('validateBoard rejects a duplicate within a column', () => {
     const b = validBoard()
-    b[1][0] = b[0][0] // duplicate in B
+    b[1]![0] = b[0]![0]! // duplicate in B
     expect(validateBoard(b)).toMatch(/more than once/)
   })
 })

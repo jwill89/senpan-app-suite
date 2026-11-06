@@ -338,9 +338,13 @@ export function adminTabRouteName(tab: AdminTab): string {
  * permission for. Returns null when the account has no granted pages.
  */
 function firstAllowedAdminRoute(auth: ReturnType<typeof useAuthStore>): string | null {
-  if (auth.isAdmin) return 'admin-bingo-game'
+  if (auth.isAdmin) {
+    return 'admin-bingo-game'
+  }
   for (const p of ADMIN_PERMISSIONS) {
-    if (auth.hasPermission(p.key)) return adminTabRouteName(p.key as AdminTab)
+    if (auth.hasPermission(p.key)) {
+      return adminTabRouteName(p.key as AdminTab)
+    }
   }
   return null
 }
@@ -386,9 +390,13 @@ router.onError((error, to) => {
   // doing a full browser load of the target URL, which fetches the fresh
   // index.html + current chunk hashes. The sessionStorage guard ensures we only
   // attempt this once per target so a genuinely broken chunk can't loop.
-  if (!isChunkLoadError(error)) return
+  if (!isChunkLoadError(error)) {
+    return
+  }
   const target = to.fullPath || window.location.pathname + window.location.search
-  if (sessionStorage.getItem(CHUNK_RELOAD_KEY) === target) return
+  if (sessionStorage.getItem(CHUNK_RELOAD_KEY) === target) {
+    return
+  }
   sessionStorage.setItem(CHUNK_RELOAD_KEY, target)
   window.location.assign(target)
 })
@@ -423,8 +431,12 @@ router.beforeEach(async (to) => {
           : auth.isAdmin || auth.hasPermission(tab)
       if (!allowed) {
         const fallback = firstAllowedAdminRoute(auth)
-        if (fallback && fallback !== to.name) return { name: fallback }
-        if (!fallback) return { name: 'admin-no-access' }
+        if (fallback && fallback !== to.name) {
+          return { name: fallback }
+        }
+        if (!fallback) {
+          return { name: 'admin-no-access' }
+        }
       }
     }
   }

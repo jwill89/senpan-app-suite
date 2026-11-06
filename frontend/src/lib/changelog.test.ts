@@ -16,7 +16,7 @@ describe('changelog pipeline', () => {
       const section = changelog[key]
       expect(section.entries.length, `${key} entries`).toBeGreaterThan(0)
       // `latest` mirrors the newest entry's version.
-      expect(section.latest).toBe(section.entries[0].version)
+      expect(section.latest).toBe(section.entries[0]!.version)
       // Every entry has a version and at least a date or some groups.
       for (const e of section.entries) {
         expect(e.version, `${key} entry version`).toBeTruthy()
@@ -25,7 +25,7 @@ describe('changelog pipeline', () => {
   })
 
   it('parses labelled change-groups with bullet bodies', () => {
-    expect(changelog.frontend.entries[0].groups.length).toBeGreaterThan(0)
+    expect(changelog.frontend.entries[0]!.groups.length).toBeGreaterThan(0)
     // Find any frontend entry with an "Added" group rather than assuming the newest
     // one has it (newer entries may be Changed/Fixed only) - the point is that the
     // parser produces labelled groups whose bodies are markdown bullet lists.
@@ -42,7 +42,7 @@ describe('changelog pipeline', () => {
     // The Dalamud plugin uses a four-part AssemblyVersion.
     expect(changelog.plugin.latest).toMatch(/^\d+\.\d+\.\d+\.\d+$/)
     // Dates are parsed off the heading (`### [x] - YYYY-MM-DD`).
-    expect(changelog.frontend.entries[0].date).toMatch(/^\d{4}-\d{2}-\d{2}$/)
+    expect(changelog.frontend.entries[0]!.date).toMatch(/^\d{4}-\d{2}-\d{2}$/)
   })
 
   it('keeps sections separate (no cross-bleed)', () => {

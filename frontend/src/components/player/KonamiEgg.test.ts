@@ -24,7 +24,9 @@ const KONAMI = [
 
 /** Fires `keys` as keydown events, from `target` when one is given. */
 function press(keys: string[], target: EventTarget = window): void {
-  for (const key of keys) target.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true }))
+  for (const key of keys) {
+    target.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true }))
+  }
 }
 
 /** A player store with a stamped board, as if mid-game. */

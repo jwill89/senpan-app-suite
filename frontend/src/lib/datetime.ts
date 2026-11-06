@@ -18,12 +18,16 @@
  * historically compared them.
  */
 export function utcToDatetimeLocal(value: string | null | undefined): string {
-  if (!value) return ''
+  if (!value) {
+    return ''
+  }
   // A trailing Z or ±HH:MM means the string already carries its zone; otherwise
   // it's a legacy naive value we treat as UTC by appending Z.
   const hasZone = /[zZ]$|[+-]\d{2}:?\d{2}$/.test(value)
   const date = new Date(hasZone ? value : `${value}Z`)
-  if (Number.isNaN(date.getTime())) return ''
+  if (Number.isNaN(date.getTime())) {
+    return ''
+  }
   const pad = (n: number): string => String(n).padStart(2, '0')
   return (
     `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}` +
@@ -36,10 +40,14 @@ export function utcToDatetimeLocal(value: string | null | undefined): string {
  * UTC RFC-3339 string for storage. Returns '' for empty/invalid input.
  */
 export function datetimeLocalToUtc(value: string | null | undefined): string {
-  if (!value) return ''
+  if (!value) {
+    return ''
+  }
   // `new Date("YYYY-MM-DDTHH:mm")` parses the (zone-less) value as LOCAL time.
   const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return ''
+  if (Number.isNaN(date.getTime())) {
+    return ''
+  }
   return date.toISOString()
 }
 
@@ -53,9 +61,13 @@ export function datetimeLocalToUtc(value: string | null | undefined): string {
  * Returns NaN for empty/invalid input.
  */
 export function parseServerTimestamp(ts: string | null | undefined): number {
-  if (!ts) return NaN
+  if (!ts) {
+    return NaN
+  }
   // Already carries a zone designator (Z or ±HH:MM) -> parse as-is.
-  if (/[zZ]$|[+-]\d{2}:?\d{2}$/.test(ts)) return new Date(ts).getTime()
+  if (/[zZ]$|[+-]\d{2}:?\d{2}$/.test(ts)) {
+    return new Date(ts).getTime()
+  }
   // Otherwise treat as UTC: normalize the space form to ISO and append Z.
   return new Date(ts.replace(' ', 'T') + 'Z').getTime()
 }

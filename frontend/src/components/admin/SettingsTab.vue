@@ -55,9 +55,15 @@ const fontOptions = computed(() =>
  */
 const customHeaderFont = computed(() => {
   const f = (app.settings.header_font || '').trim()
-  if (!f) return ''
-  if (uploadedFontFamilies.value.includes(f)) return ''
-  if (fontOptions.value.includes(f)) return ''
+  if (!f) {
+    return ''
+  }
+  if (uploadedFontFamilies.value.includes(f)) {
+    return ''
+  }
+  if (fontOptions.value.includes(f)) {
+    return ''
+  }
   return f
 })
 

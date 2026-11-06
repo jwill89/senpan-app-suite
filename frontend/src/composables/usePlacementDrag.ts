@@ -69,7 +69,9 @@ export function usePlacementDrag<K>(
   let drag: DragState<K> | null = null
 
   function onPointerMove(e: PointerEvent): void {
-    if (!drag) return
+    if (!drag) {
+      return
+    }
     const { rect, start } = drag
     const dxPct = ((e.clientX - drag.startX) / rect.width) * 100
     const dyPct = ((e.clientY - drag.startY) / rect.height) * 100
@@ -134,7 +136,9 @@ export function usePlacementDrag<K>(
     opts: DragOptions = {},
   ): void {
     const rect = canvasRef.value?.getBoundingClientRect()
-    if (!rect) return
+    if (!rect) {
+      return
+    }
     drag = {
       mode,
       key,

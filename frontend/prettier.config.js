@@ -1,8 +1,3 @@
-// Prettier formats everything under src/, the stylesheets included. Carried over
-// unchanged from the retired shared @jwill89/eslint-config package.
-export default {
-  semi: false,
-  singleQuote: true,
-  printWidth: 100,
-  trailingComma: 'all',
-}
+// The shared Prettier settings (shared-tooling's lint/web). Prettier formats
+// everything under src/, the stylesheets included.
+export { default } from '@jwill89/lint-web/prettier'

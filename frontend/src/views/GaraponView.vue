@@ -23,7 +23,9 @@ const notFound = ref(false)
 async function load(token: string): Promise<void> {
   notFound.value = false
   const ok = await garapons.loadByToken(token)
-  if (!ok) notFound.value = true
+  if (!ok) {
+    notFound.value = true
+  }
 }
 
 onMounted(() => load(props.token))

@@ -43,7 +43,7 @@ describe('users store', () => {
     const users = useUsersStore()
     await users.loadUsers()
     expect(users.users).toHaveLength(1)
-    expect(users.users[0].username).toBe('tester')
+    expect(users.users[0]!.username).toBe('tester')
   })
 
   it('setActive calls the endpoint then refreshes', async () => {

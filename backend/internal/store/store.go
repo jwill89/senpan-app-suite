@@ -7,36 +7,56 @@ import (
 	"errors"
 	"fmt"
 	"math/rand/v2"
+	"net/url"
 	"os"
 	"path/filepath"
 
-	"github.com/ncruces/go-sqlite3"
-	"github.com/ncruces/go-sqlite3/driver"
+	"modernc.org/sqlite"
+	sqlite3 "modernc.org/sqlite/lib"
 )
 
 // randInt returns a random int in [0, n).
 func randInt(n int) int { return rand.IntN(n) } //nolint:gosec // raffle and garapon draws, not secrets: math/rand/v2, seeded per process
 
-// connectPragmas are applied to EVERY pooled connection via the driver's
-// connect hook (see New). SQLite applies most pragmas per-connection rather than
+// connectPragmas are applied to EVERY pooled connection: the driver runs each
+// _pragma in the DSN (see dsn) as it opens a connection, busy_timeout first and
+// the rest in name order. SQLite applies most pragmas per-connection rather than
 // per-database, so setting them once after open would leave the pool's other
 // connections without them. Two of these are correctness-critical, not just
 // tuning: foreign_keys (defaults OFF) is what makes the ON DELETE CASCADE rules
 // actually fire - a delete that lands on a connection without it would silently
 // orphan child rows - and busy_timeout prevents spurious "database is locked"
-// errors under WAL write contention. journal_mode/mmap_size persist in the
-// database file, but asserting them here too is harmless and keeps it explicit.
-const connectPragmas = `
-PRAGMA journal_mode = WAL;
-PRAGMA synchronous = NORMAL;
-PRAGMA busy_timeout = 5000;
-PRAGMA cache_size = -8000;
-PRAGMA temp_store = MEMORY;
-PRAGMA mmap_size = 33554432;
-PRAGMA foreign_keys = ON;
-`
+// errors under WAL write contention. journal_mode persists in the database file,
+// but asserting it here too is harmless and keeps it explicit.
+var connectPragmas = []string{
+	"journal_mode(WAL)",
+	"synchronous(NORMAL)",
+	"busy_timeout(5000)",
+	"cache_size(-8000)",
+	"temp_store(MEMORY)",
+	"mmap_size(33554432)",
+	"foreign_keys(1)",
+}
+
+// dsn is the data source name modernc opens path with: the path, then the
+// settings the driver reads from its query. It has no "file:" prefix, so the path
+// reaches SQLite as it is, without URI decoding of a '%' or '#' in it.
+func dsn(path string) string {
+	return path + "?" + url.Values{
+		"_pragma": connectPragmas,
+		// Every read-write transaction begins IMMEDIATE; see beginImmediate.
+		"_txlock": {"immediate"},
+	}.Encode()
+}
 
 // Store wraps the SQLite database connection and provides typed CRUD methods.
+//
+// Timestamps leave the store as SQLite stores them. The driver parses a column
+// declared DATE, DATETIME or TIMESTAMP into a time.Time, which database/sql then
+// formats as RFC 3339 when it scans into a string ("2026-01-02T03:04:05Z" for a
+// stored "2026-01-02 03:04:05"), so every query reads such a column as
+// CAST(col AS TEXT), which the driver leaves as it is. A COALESCE over one is
+// already an expression and needs no cast.
 type Store struct {
 	db *sql.DB
 }
@@ -81,11 +101,9 @@ func open(path string) (*Store, error) {
 		return nil, fmt.Errorf("create data directory: %w", err)
 	}
 
-	// driver.Open's init callback runs for every connection the pool opens, so
-	// the per-connection pragmas apply to all of them - not just the first.
-	db, err := driver.Open(path, func(conn *sqlite3.Conn) error {
-		return conn.Exec(connectPragmas)
-	})
+	// The DSN carries the per-connection pragmas, so they apply to every
+	// connection the pool opens - not just the first.
+	db, err := sql.Open("sqlite", dsn(path))
 	if err != nil {
 		return nil, fmt.Errorf("open database: %w", err)
 	}
@@ -100,24 +118,32 @@ func open(path string) (*Store, error) {
 // Close closes the underlying database connection.
 func (s *Store) Close() error { return s.db.Close() }
 
-// Interrupted reports whether err is a query SQLite stopped part-way because its
-// context was done. database/sql answers context.Canceled for a query whose
-// context was already done before it started, but one canceled while running
-// comes back from the driver as SQLITE_INTERRUPT, which errors.Is(err,
-// context.Canceled) does not see - and that is the usual shape of a request whose
-// client disconnected mid-query.
-func Interrupted(err error) bool { return errors.Is(err, sqlite3.INTERRUPT) }
+// Interrupted reports whether err is SQLite's interrupt (SQLITE_INTERRUPT): a
+// query stopped part-way because its context was done, reported as the driver's
+// own error. database/sql answers context.Canceled for a query whose context was
+// done before it started, and modernc answers the same for one it interrupts
+// while running - the usual shape of a request whose client disconnected
+// mid-query - so callers check for context.Canceled first (see the server's
+// clientGone). This catches an interrupt that reaches them unconverted.
+func Interrupted(err error) bool {
+	var e *sqlite.Error
+	return errors.As(err, &e) && e.Code()&0xff == sqlite3.SQLITE_INTERRUPT
+}
 
-// beginImmediate starts a write transaction (issuing BEGIN IMMEDIATE via the
-// driver's serializable isolation level) rather than the default deferred
-// transaction. A deferred transaction starts read-only and only takes the write
-// lock when it first writes; under WAL with multiple pooled connections that lets
-// two read-modify-write transactions both read the same snapshot and then collide
-// when the second tries to upgrade its read to a write, failing with a stale-
-// snapshot error. Taking the write lock up front instead makes concurrent writers
-// serialize on busy_timeout - SQLite allows only one writer anyway, so there is no
-// throughput cost - which keeps count/cap checks (e.g. a garapon's remaining
-// draws) race-free. Every multi-statement mutation in this package uses it.
+// beginImmediate starts a write transaction with BEGIN IMMEDIATE rather than the
+// default deferred transaction. A deferred transaction starts read-only and only
+// takes the write lock when it first writes; under WAL with multiple pooled
+// connections that lets two read-modify-write transactions both read the same
+// snapshot and then collide when the second tries to upgrade its read to a write,
+// failing with a stale-snapshot error. Taking the write lock up front instead
+// makes concurrent writers serialize on busy_timeout - SQLite allows only one
+// writer anyway, so there is no throughput cost - which keeps count/cap checks
+// (e.g. a garapon's remaining draws) race-free. Every multi-statement mutation in
+// this package uses it.
+//
+// The driver ignores TxOptions.Isolation, so it is the DSN's _txlock that makes
+// the BEGIN immediate, for every read-write transaction on the pool (the
+// migrations' included); this names the transactions that rely on it.
 func (s *Store) beginImmediate(ctx context.Context) (*sql.Tx, error) {
-	return s.db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelSerializable})
+	return s.db.BeginTx(ctx, nil)
 }

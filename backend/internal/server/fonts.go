@@ -398,7 +398,8 @@ func (s *Server) handleFontFamilyPatch(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			_, hasConverted := s.fontDerivativeInfo(g.Key)
-			if g.fontVariantByType(serve) == "" && !(serve == "WOFF2" && hasConverted) {
+			convertedWOFF2 := serve == "WOFF2" && hasConverted
+			if g.fontVariantByType(serve) == "" && !convertedWOFF2 {
 				writeError(w, http.StatusBadRequest, "This font has no "+serve+" variant")
 				return
 			}

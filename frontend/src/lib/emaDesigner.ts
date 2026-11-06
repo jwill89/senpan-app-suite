@@ -45,7 +45,9 @@ export function downscaleSize(
   maxSide = EMA_UPLOAD_MAX_SIDE,
 ): Size & { scaled: boolean } {
   const longest = Math.max(width, height)
-  if (longest <= maxSide) return { width, height, scaled: false }
+  if (longest <= maxSide) {
+    return { width, height, scaled: false }
+  }
   const ratio = maxSide / longest
   return {
     width: Math.max(1, Math.round(width * ratio)),
@@ -56,7 +58,9 @@ export function downscaleSize(
 
 /** The largest scale at which `content` fits inside `box`; 0 when either is empty. */
 export function fitScale(content: Size, box: Size): number {
-  if (content.width <= 0 || content.height <= 0 || box.width <= 0 || box.height <= 0) return 0
+  if (content.width <= 0 || content.height <= 0 || box.width <= 0 || box.height <= 0) {
+    return 0
+  }
   return Math.min(box.width / content.width, box.height / content.height)
 }
 
@@ -90,7 +94,9 @@ export function applyAffine(m: Affine, p: Point): Point {
 export function invertAffine(m: Affine): Affine | null {
   const [a, b, c, d, e, f] = m
   const det = a * d - b * c
-  if (!det || !Number.isFinite(det)) return null
+  if (!det || !Number.isFinite(det)) {
+    return null
+  }
   return [d / det, -b / det, -c / det, a / det, (c * f - d * e) / det, (b * e - a * f) / det]
 }
 
@@ -129,8 +135,12 @@ export type Rect = Point & Size
  */
 export function reachableShift(rect: Rect, area: Size, margin: number): Point {
   const axis = (start: number, length: number, limit: number): number => {
-    if (start + length < margin) return margin - (start + length)
-    if (start > limit - margin) return limit - margin - start
+    if (start + length < margin) {
+      return margin - (start + length)
+    }
+    if (start > limit - margin) {
+      return limit - margin - start
+    }
     return 0
   }
   return {
@@ -214,9 +224,12 @@ export type EmaLayerPatch = Partial<Omit<EmaImageLayer, 'id' | 'kind'>> &
 /** `layers` with one layer's fields replaced. Unknown ids leave it unchanged. */
 export function updateLayer(layers: EmaLayers, id: string, patch: EmaLayerPatch): EmaLayers {
   const index = layers.findIndex((l) => l.id === id)
-  if (index < 0) return layers
+  const layer = layers[index]
+  if (!layer) {
+    return layers
+  }
   const next = layers.slice()
-  next[index] = { ...layers[index], ...patch }
+  next[index] = { ...layer, ...patch }
   return next
 }
 
@@ -232,10 +245,15 @@ export function removeLayer(layers: EmaLayers, id: string): EmaLayers {
 export function moveLayer(layers: EmaLayers, id: string, direction: 'up' | 'down'): EmaLayers {
   const from = layers.findIndex((l) => l.id === id)
   const to = direction === 'up' ? from + 1 : from - 1
-  if (from < 0 || to < 0 || to >= layers.length) return layers
+  // An unknown id, or a step past either end, finds no layer to swap with.
+  const moving = layers[from]
+  const other = layers[to]
+  if (!moving || !other) {
+    return layers
+  }
   const next = layers.slice()
-  next[to] = layers[from]
-  next[from] = layers[to]
+  next[to] = moving
+  next[from] = other
   return next
 }
 
@@ -257,7 +275,9 @@ export function layerLabel(layer: EmaLayer, maxLength = 28): string {
       ? (layer.text.split('\n').find((line) => line.trim()) ?? '').trim()
       : layer.name.trim()
   const fallback = layer.kind === 'text' ? 'Text' : 'Picture'
-  if (!raw) return fallback
+  if (!raw) {
+    return fallback
+  }
   return raw.length > maxLength ? raw.slice(0, maxLength - 1).trimEnd() + '…' : raw
 }
 
@@ -294,7 +314,9 @@ export function historyPush<T>(
   state: T,
   limit = EMA_HISTORY_LIMIT,
 ): EmaHistory<T> {
-  if (state === h.present) return h
+  if (state === h.present) {
+    return h
+  }
   const past = [...h.past, h.present]
   return {
     past: past.length > limit ? past.slice(past.length - limit) : past,
@@ -306,14 +328,18 @@ export function historyPush<T>(
 /** One step back, or the same history when there is nothing to undo. */
 export function historyUndo<T>(h: EmaHistory<T>): EmaHistory<T> {
   const previous = h.past[h.past.length - 1]
-  if (previous === undefined) return h
+  if (previous === undefined) {
+    return h
+  }
   return { past: h.past.slice(0, -1), present: previous, future: [h.present, ...h.future] }
 }
 
 /** One step forward again, or the same history when there is nothing to redo. */
 export function historyRedo<T>(h: EmaHistory<T>): EmaHistory<T> {
   const next = h.future[0]
-  if (next === undefined) return h
+  if (next === undefined) {
+    return h
+  }
   return { past: [...h.past, h.present], present: next, future: h.future.slice(1) }
 }
 
@@ -352,7 +378,9 @@ export function fontChoices(fonts: readonly string[], fallback: readonly string[
   const google: string[] = []
   for (const raw of source) {
     const family = raw.trim()
-    if (!family || isWebSafeFont(family) || seen.has(family)) continue
+    if (!family || isWebSafeFont(family) || seen.has(family)) {
+      continue
+    }
     seen.add(family)
     google.push(family)
   }
@@ -367,9 +395,15 @@ export function filterFonts(families: readonly string[], query: string): string[
 
 /** Konva's `fontStyle` for a bold/italic pair. */
 export function konvaFontStyle(bold: boolean, italic: boolean): string {
-  if (bold && italic) return 'italic bold'
-  if (bold) return 'bold'
-  if (italic) return 'italic'
+  if (bold && italic) {
+    return 'italic bold'
+  }
+  if (bold) {
+    return 'bold'
+  }
+  if (italic) {
+    return 'italic'
+  }
   return 'normal'
 }
 
@@ -397,11 +431,15 @@ export async function waitForFontFace(
   const deadline = Date.now() + timeoutMs
   for (;;) {
     try {
-      if ((await fonts.load(spec, text || ' ')).length > 0) return true
+      if ((await fonts.load(spec, text || ' ')).length > 0) {
+        return true
+      }
     } catch {
       // An unparseable spec or a failed download: keep asking until the deadline.
     }
-    if (Date.now() + retryMs > deadline) return false
+    if (Date.now() + retryMs > deadline) {
+      return false
+    }
     await new Promise((resolve) => setTimeout(resolve, retryMs))
   }
 }

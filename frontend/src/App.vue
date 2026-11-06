@@ -72,9 +72,13 @@ const wsKey = computed<string | null>(() => {
 watch(
   wsKey,
   (key) => {
-    if (key === null) ws.disconnect()
-    else if (key.startsWith('player:')) ws.connect(key.slice('player:'.length))
-    else ws.connect(null)
+    if (key === null) {
+      ws.disconnect()
+    } else if (key.startsWith('player:')) {
+      ws.connect(key.slice('player:'.length))
+    } else {
+      ws.connect(null)
+    }
   },
   { immediate: true },
 )
@@ -98,7 +102,16 @@ onBeforeUnmount(() => {
     <RouteProgressBar />
     <ToastNotification />
     <ConfirmModal />
-    <router-view />
+    <!-- The page's own content is the main landmark; the footer stays outside it.
+         The site's name heads every page for screen readers, above each page's
+         visible title (its h2); on home the logo, which carries the wordmark, is
+         that heading instead. -->
+    <main>
+      <h1 v-if="route.name !== 'home'" class="sr-only">
+        {{ app.settings.app_title || 'Senpan App Suite' }}
+      </h1>
+      <router-view />
+    </main>
     <AppFooter v-if="showFooter" />
     <!-- "It's Yoever" reaction - global so it shows on both player and admin views -->
     <YoeverOverlay />

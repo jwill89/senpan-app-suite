@@ -30,7 +30,7 @@ interface SavedPayload {
 }
 /** Args of the first save() call (vi infers no params, so widen to read them). */
 function firstSaveArgs(): unknown[] {
-  return save.mock.calls[0]
+  return save.mock.calls[0]!
 }
 /** The payload passed to the first save() call, typed for assertions. */
 function savedPayload(): SavedPayload {
@@ -231,7 +231,7 @@ describe('editAnnouncement round-trip', () => {
     // Buttons round-trip; each also gains a client-only `_uid` for stable
     // repeater keying (stripped again when the payload is built).
     expect(s.form.buttons).toMatchObject([{ label: 'Go', emoji: '', url: 'https://a.com' }])
-    expect(s.form.buttons[0]._uid).toEqual(expect.any(Number))
+    expect(s.form.buttons[0]!._uid).toEqual(expect.any(Number))
     expect(s.form.mention).toBe('everyone')
   })
 

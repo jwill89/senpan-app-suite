@@ -79,7 +79,9 @@ export const useUiStore = defineStore('ui', () => {
    */
   function confirm(message: string, opts: ConfirmOptions = {}): Promise<boolean> {
     // If a previous confirm is somehow open, resolve it false first.
-    if (confirmResolve) confirmResolve(false)
+    if (confirmResolve) {
+      confirmResolve(false)
+    }
     confirmState.value = {
       show: true,
       message,
@@ -98,7 +100,9 @@ export const useUiStore = defineStore('ui', () => {
     confirmState.value.show = false
     const r = confirmResolve
     confirmResolve = null
-    if (r) r(result)
+    if (r) {
+      r(result)
+    }
   }
 
   /**

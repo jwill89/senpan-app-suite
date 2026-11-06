@@ -20,7 +20,9 @@ const SCRIPT_SRC = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render
 
 /** Load the Turnstile script once (idempotent across mounts). */
 function loadScript(): Promise<void> {
-  if (window.turnstile) return Promise.resolve()
+  if (window.turnstile) {
+    return Promise.resolve()
+  }
   const existing = document.querySelector<HTMLScriptElement>(`script[src="${SCRIPT_SRC}"]`)
   if (existing) {
     return new Promise((resolve, reject) => {
@@ -60,12 +62,16 @@ onMounted(async () => {
 })
 
 onBeforeUnmount(() => {
-  if (window.turnstile && widgetId !== undefined) window.turnstile.remove(widgetId)
+  if (window.turnstile && widgetId !== undefined) {
+    window.turnstile.remove(widgetId)
+  }
 })
 
 /** Re-issue a fresh token (tokens are single-use; call after a failed attempt). */
 function reset(): void {
-  if (window.turnstile && widgetId !== undefined) window.turnstile.reset(widgetId)
+  if (window.turnstile && widgetId !== undefined) {
+    window.turnstile.reset(widgetId)
+  }
 }
 defineExpose({ reset })
 </script>

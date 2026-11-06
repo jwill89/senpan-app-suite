@@ -117,7 +117,7 @@ describe('form editing', () => {
     const s = useGaraponsStore()
     s.newGaraponForm()
     expect(s.garaponForm?.prizes).toHaveLength(1)
-    expect(s.garaponForm?.prizes[0].is_grand).toBe(true)
+    expect(s.garaponForm?.prizes[0]!.is_grand).toBe(true)
   })
 
   it('editGaraponForm guarantees exactly one grand prize', () => {
@@ -147,7 +147,7 @@ describe('form editing', () => {
     s.addPrizeRow() // [grand, normal]
     s.removePrizeRow(0) // remove the grand row
     expect(s.garaponForm?.prizes).toHaveLength(1)
-    expect(s.garaponForm?.prizes[0].is_grand).toBe(true)
+    expect(s.garaponForm?.prizes[0]!.is_grand).toBe(true)
   })
 
   it('removePrizeRow refuses to drop the last row', () => {
@@ -163,7 +163,7 @@ describe('saveGarapon', () => {
     const s = useGaraponsStore()
     s.newGaraponForm()
     s.garaponForm!.title = '   '
-    s.garaponForm!.prizes[0].name = 'Grand'
+    s.garaponForm!.prizes[0]!.name = 'Grand'
     expect(await s.saveGarapon()).toBe(false)
     expect(ep.create).not.toHaveBeenCalled()
   })
@@ -180,7 +180,7 @@ describe('saveGarapon', () => {
     const s = useGaraponsStore()
     s.newGaraponForm()
     s.garaponForm!.title = 'Festival'
-    s.garaponForm!.prizes[0].name = 'Grand'
+    s.garaponForm!.prizes[0]!.name = 'Grand'
     s.addPrizeRow() // unnamed row should be filtered out
 
     expect(await s.saveGarapon()).toBe(true)
@@ -233,7 +233,7 @@ describe('setGaraponStatus', () => {
     await s.setGaraponStatus(1, 'closed')
     expect(ep.setStatus).toHaveBeenCalledWith(1, 'closed')
     expect(s.selectedGarapon.status).toBe('closed')
-    expect(s.garapons[0].status).toBe('closed')
+    expect(s.garapons[0]!.status).toBe('closed')
   })
 })
 
@@ -373,10 +373,10 @@ describe('copyGaraponForm', () => {
     const source = sourceGarapon()
     store.copyGaraponForm(source)
     store.garaponForm!.title = 'Something else'
-    store.garaponForm!.prizes[0].name = 'Changed'
+    store.garaponForm!.prizes[0]!.name = 'Changed'
 
     expect(source.title).toBe('Obon Garapon')
-    expect(source.prizes?.[0].name).toBe('Grand')
+    expect(source.prizes?.[0]!.name).toBe('Grand')
     expect(source.stamp_rally_id).toBe(11)
   })
 })

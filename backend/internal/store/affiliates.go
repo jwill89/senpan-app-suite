@@ -17,7 +17,7 @@ import (
 
 // affiliateColumns is the shared SELECT column list (order matches scanAffiliate).
 const affiliateColumns = `id, name, subtitle, owners, location, timezone, hours, details, logo, screenshot,
-	embed_color, discord_link, carrd_link, sort_order, created_at`
+	embed_color, discord_link, carrd_link, sort_order, CAST(created_at AS TEXT)`
 
 // ListAffiliates returns every affiliate in the admin's manual drag order, then
 // alphabetically by name (so a fresh install / never-reordered list stays

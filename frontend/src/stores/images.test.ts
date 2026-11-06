@@ -54,7 +54,7 @@ describe('images loaders', () => {
     const store = useImagesStore()
     await store.loadCategories()
     expect(store.categories).toHaveLength(1)
-    expect(store.categories[0].dir).toBe('raffles')
+    expect(store.categories[0]!.dir).toBe('raffles')
   })
 
   it('loadImages caches results keyed by directory', async () => {
@@ -62,7 +62,7 @@ describe('images loaders', () => {
     const store = useImagesStore()
     await store.loadImages('raffles')
     expect(list).toHaveBeenCalledWith('raffles')
-    expect(store.imagesByDir.raffles.map((i) => i.name)).toEqual(['a.png'])
+    expect(store.imagesByDir.raffles!.map((i) => i.name)).toEqual(['a.png'])
   })
 
   it('ensureCategories fetches once for concurrent callers and skips when loaded', async () => {
@@ -114,7 +114,7 @@ describe('images quiet refreshers (live invalidation)', () => {
     // A transient 502 leaves the cached images in place, silently.
     list.mockRejectedValueOnce(new ApiError('Bad gateway', 502))
     await store.refreshImagesQuiet('kept')
-    expect(store.imagesByDir.kept.map((i) => i.name)).toEqual(['b.png'])
+    expect(store.imagesByDir.kept!.map((i) => i.name)).toEqual(['b.png'])
     expect(notify).not.toHaveBeenCalled()
   })
 })

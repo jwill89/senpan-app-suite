@@ -25,8 +25,8 @@ describe('ToastNotification alerts', () => {
     await w.vm.$nextTick()
     const toasts = w.findAll('.toast')
     expect(toasts).toHaveLength(2)
-    expect(toasts[0].classes()).toContain('toast--alert')
-    expect(toasts[0].text()).toContain('Jasmine Room (Room #3)')
+    expect(toasts[0]!.classes()).toContain('toast--alert')
+    expect(toasts[0]!.text()).toContain('Jasmine Room (Room #3)')
   })
 
   it('clicking the card does not dismiss it; its close button does', async () => {

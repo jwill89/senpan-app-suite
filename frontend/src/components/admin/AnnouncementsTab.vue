@@ -91,7 +91,9 @@ const typeName = (a: Announcement): string =>
 
 /** Format a stored UTC instant in the announcement's own timezone. */
 function inZone(iso: string, tz: string): string {
-  if (!iso) return ''
+  if (!iso) {
+    return ''
+  }
   try {
     return new Date(iso).toLocaleString(undefined, {
       dateStyle: 'medium',
@@ -119,20 +121,27 @@ function scheduleLabel(a: Announcement): string {
 }
 
 function maskWebhook(url: string): string {
-  if (!url) return 'No webhook set'
+  if (!url) {
+    return 'No webhook set'
+  }
   return `...${url.slice(-6)}`
 }
 
 function toggleWeekday(day: number): void {
   const idx = store.form.weekdays.indexOf(day)
-  if (idx === -1) store.form.weekdays.push(day)
-  else store.form.weekdays.splice(idx, 1)
+  if (idx === -1) {
+    store.form.weekdays.push(day)
+  } else {
+    store.form.weekdays.splice(idx, 1)
+  }
 }
 
 // -- Discord buttons (up to 5 link buttons under the embed) -------------------
 const MAX_BUTTONS = 5
 function addButton(): void {
-  if (store.form.buttons.length >= MAX_BUTTONS) return
+  if (store.form.buttons.length >= MAX_BUTTONS) {
+    return
+  }
   store.form.buttons.push({ label: '', emoji: '', url: '', _uid: nextUid() })
 }
 function removeButton(i: number): void {
@@ -142,7 +151,10 @@ function removeButton(i: number): void {
 /** Which button row's emoji picker is open (null = none). */
 const emojiPickerRow = ref<number | null>(null)
 function onButtonEmoji(emoji: string): void {
-  if (emojiPickerRow.value !== null) store.form.buttons[emojiPickerRow.value].emoji = emoji
+  const row = emojiPickerRow.value !== null ? store.form.buttons[emojiPickerRow.value] : undefined
+  if (row) {
+    row.emoji = emoji
+  }
   emojiPickerRow.value = null
 }
 
@@ -163,8 +175,12 @@ function openSkip(a: Announcement): void {
 
 async function submitSkip(): Promise<void> {
   const a = skipTarget.value
-  if (!a || !skipValueValid.value) return
-  if (await store.setSkip(a, skipValue.value)) skipTarget.value = null
+  if (!a || !skipValueValid.value) {
+    return
+  }
+  if (await store.setSkip(a, skipValue.value)) {
+    skipTarget.value = null
+  }
 }
 
 // -- Navigation ---------------------------------------------------------------
@@ -181,7 +197,9 @@ function backToList(): void {
   screen.value = 'list'
 }
 async function submit(): Promise<void> {
-  if (await store.save()) screen.value = 'list'
+  if (await store.save()) {
+    screen.value = 'list'
+  }
 }
 
 function openTypes(): void {
@@ -197,7 +215,9 @@ function openEditType(t: AnnouncementType): void {
   screen.value = 'type-form'
 }
 async function submitType(): Promise<void> {
-  if (await store.saveType()) screen.value = 'types'
+  if (await store.saveType()) {
+    screen.value = 'types'
+  }
 }
 
 function openRoles(): void {
@@ -213,7 +233,9 @@ function openEditRole(r: AnnouncementRole): void {
   screen.value = 'role-form'
 }
 async function submitRole(): Promise<void> {
-  if (await store.saveRole()) screen.value = 'roles'
+  if (await store.saveRole()) {
+    screen.value = 'roles'
+  }
 }
 </script>
 

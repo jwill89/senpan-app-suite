@@ -24,7 +24,9 @@ onMounted(() => {
   }, 500)
 })
 onBeforeUnmount(() => {
-  if (timer) clearInterval(timer)
+  if (timer) {
+    clearInterval(timer)
+  }
 })
 
 /** Whole seconds left on this client's cooldown (0 = ready). */
@@ -46,9 +48,15 @@ const countdown = computed(() => {
 
 /** Tooltip explaining the current (possibly disabled) state. */
 const title = computed(() => {
-  if (!player.yoeverEnabled) return `"It's Yoever" is switched off by the host`
-  if (onCooldown.value) return `Hold on - you can do this again in ${countdown.value}`
-  if (player.yoeverTriggering) return 'Sending...'
+  if (!player.yoeverEnabled) {
+    return `"It's Yoever" is switched off by the host`
+  }
+  if (onCooldown.value) {
+    return `Hold on - you can do this again in ${countdown.value}`
+  }
+  if (player.yoeverTriggering) {
+    return 'Sending...'
+  }
   return `Trigger "It's Yoever" for everyone`
 })
 

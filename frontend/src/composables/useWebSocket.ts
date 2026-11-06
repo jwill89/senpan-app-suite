@@ -85,12 +85,16 @@ export function useWebSocket() {
         handleGameDraw(msg)
         break
       case 'cards_update':
-        if (isAdminView()) cards.cards = msg.cards
+        if (isAdminView()) {
+          cards.cards = msg.cards
+        }
         break
       case 'patterns_update':
         if (isAdminView()) {
           patterns.patterns = msg.patterns
-          if (msg.categories) patterns.categories = msg.categories
+          if (msg.categories) {
+            patterns.categories = msg.categories
+          }
         }
         break
       case 'card_deleted':
@@ -130,7 +134,9 @@ export function useWebSocket() {
         if (isPlayerView() && (gid === undefined || gid === player.playerGame?.id)) {
           player.showMinigameModal = true
           const mode = player.soundMode
-          if (mode !== 'off') playEvent('minigame', mode)
+          if (mode !== 'off') {
+            playEvent('minigame', mode)
+          }
         }
         break
       }
@@ -158,8 +164,12 @@ export function useWebSocket() {
         // An admin switched the reaction on/off: reflect it on whichever game
         // state is loaded so the player's trigger button shows/hides and every
         // admin's toggle stays in step.
-        if (isPlayerView() && player.playerGame) player.playerGame.yoever_enabled = msg.enabled
-        if (isAdminView() && game.currentGame) game.currentGame.yoever_enabled = msg.enabled
+        if (isPlayerView() && player.playerGame) {
+          player.playerGame.yoever_enabled = msg.enabled
+        }
+        if (isAdminView() && game.currentGame) {
+          game.currentGame.yoever_enabled = msg.enabled
+        }
         break
       case 'draw_delay_update':
         // Shared draw-delay control: sync every admin's selector live, and keep
@@ -173,12 +183,16 @@ export function useWebSocket() {
         // An admin elsewhere mutated a CRUD resource: if we're viewing it, refetch
         // it (the REST load re-applies our own permission guard); otherwise mark it
         // stale so the next navigation refetches. See admin.refreshResource.
-        if (isAdminView()) admin.refreshResource(msg.resource)
+        if (isAdminView()) {
+          admin.refreshResource(msg.resource)
+        }
         break
       case 'log':
         // Live server-log tail - append to the viewer (it self-limits to the
         // admin Logs tab: entries only accumulate while that store is in use).
-        if (isAdminView()) logs.appendLive(msg.entry)
+        if (isAdminView()) {
+          logs.appendLive(msg.entry)
+        }
         break
       case 'tea_room_unlocked':
         // A room's timed lock ran out and the server lifted it - nobody clicked
@@ -205,7 +219,9 @@ export function useWebSocket() {
   function handleGameUpdate(msg: Extract<WsMessage, { type: 'game_update' }>): void {
     const g = msg.game
 
-    if (msg.game_details !== undefined) game.gameDetails = msg.game_details
+    if (msg.game_details !== undefined) {
+      game.gameDetails = msg.game_details
+    }
 
     // Player view
     if (isPlayerView() && player.playerCard) {
@@ -217,7 +233,9 @@ export function useWebSocket() {
         player.gameEnded = true
         player.lastDrawn = null
         const mode = player.soundMode
-        if (mode !== 'off') playEvent('gameend', mode)
+        if (mode !== 'off') {
+          playEvent('gameend', mode)
+        }
       }
       player.playerGame = g
       if (g) {
@@ -259,7 +277,9 @@ export function useWebSocket() {
     // it as the "last called" announcement (plus the opt-in chime/vibration).
     if (isPlayerView() && player.playerGame) {
       // Drop a draw stamped for a different game (stale frame around a game change).
-      if (gid !== undefined && gid !== player.playerGame.id) return
+      if (gid !== undefined && gid !== player.playerGame.id) {
+        return
+      }
       // Guard against a re-delivered draw double-counting: each bingo number is
       // drawn at most once, so its presence in called_numbers means we've already
       // applied (and announced) it - skip the append, tally, and chime.
@@ -277,7 +297,9 @@ export function useWebSocket() {
 
     // Admin view - only if we don't already have this number
     if (isAdminView() && game.currentGame) {
-      if (gid !== undefined && gid !== game.currentGame.id) return
+      if (gid !== undefined && gid !== game.currentGame.id) {
+        return
+      }
       const alreadyHas = game.currentGame.called_numbers.includes(drawn.number)
       if (!alreadyHas) {
         game.currentGame.called_numbers.push(drawn.number)
@@ -285,7 +307,9 @@ export function useWebSocket() {
         game.lastDrawn = drawn
       }
       const prevWinnerCount = game.winners.length
-      if (msg.winners) game.winners = msg.winners
+      if (msg.winners) {
+        game.winners = msg.winners
+      }
       if (game.winners.length > prevWinnerCount && game.winners.length > 0) {
         ui.notify('We have winner(s)!', 'success', 6000)
       }
@@ -301,9 +325,13 @@ export function useWebSocket() {
    * independent of the main sound mode, but still at the master volume.
    */
   function handleYoever(msg: Extract<WsMessage, { type: 'yoever' }>): void {
-    if (isAdminView() && game.currentGame) game.currentGame.yoever_count = msg.count
+    if (isAdminView() && game.currentGame) {
+      game.currentGame.yoever_count = msg.count
+    }
     yoever.show(msg.player_name)
-    if (!yoever.muted && yoever.soundEnabled) playYoeverSound()
+    if (!yoever.muted && yoever.soundEnabled) {
+      playYoeverSound()
+    }
   }
 
   /**

@@ -51,8 +51,8 @@ describe('patternsByCategory', () => {
     s.patterns = [pat(10, 'Row', 1), pat(11, 'Col', 1), pat(12, 'Box', 2)]
     const groups = s.patternsByCategory
     expect(groups.map((g) => g.category.name)).toEqual(['Lines', 'Shapes'])
-    expect(groups[0].patterns.map((p) => p.id)).toEqual([10, 11])
-    expect(groups[1].patterns.map((p) => p.id)).toEqual([12])
+    expect(groups[0]!.patterns.map((p) => p.id)).toEqual([10, 11])
+    expect(groups[1]!.patterns.map((p) => p.id)).toEqual([12])
   })
 })
 
@@ -157,12 +157,12 @@ describe('editableGroups stays in step with server state', () => {
     s.categories = [cat(1, 'Lines')]
     s.patterns = [pat(10, 'Row', 1), pat(11, 'Col', 1)]
     await nextTick()
-    expect(s.editableGroups[0].patterns.map((p) => p.id)).toEqual([10, 11])
+    expect(s.editableGroups[0]!.patterns.map((p) => p.id)).toEqual([10, 11])
 
     // The shape deletePattern uses.
     s.patterns = s.patterns.filter((p) => p.id !== 10)
     await nextTick()
-    expect(s.editableGroups[0].patterns.map((p) => p.id)).toEqual([11])
+    expect(s.editableGroups[0]!.patterns.map((p) => p.id)).toEqual([11])
   })
 
   it('follows an in-place rename', async () => {
@@ -170,12 +170,12 @@ describe('editableGroups stays in step with server state', () => {
     s.categories = [cat(1, 'Lines')]
     s.patterns = [pat(10, 'Row', 1)]
     await nextTick()
-    expect(s.editableGroups[0].patterns[0].name).toBe('Row')
+    expect(s.editableGroups[0]!.patterns[0]!.name).toBe('Row')
 
     // The shape finishPatternRename uses: mutate the object, not the array.
-    s.patterns[0].name = 'Top Row'
+    s.patterns[0]!.name = 'Top Row'
     await nextTick()
-    expect(s.editableGroups[0].patterns[0].name).toBe('Top Row')
+    expect(s.editableGroups[0]!.patterns[0]!.name).toBe('Top Row')
   })
 
   it('follows a new category appearing', async () => {

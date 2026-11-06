@@ -193,17 +193,17 @@ describe('toggles', () => {
   it('toggleOpen patches the opposite flag and replaces the row', async () => {
     const s = useTeaRoomsStore()
     s.teaRooms = [room({ id: 1, open: true })]
-    await s.toggleOpen(s.teaRooms[0])
+    await s.toggleOpen(s.teaRooms[0]!)
     expect(ep.patch).toHaveBeenCalledWith(1, { open: false })
-    expect(s.teaRooms[0].open).toBe(false)
+    expect(s.teaRooms[0]!.open).toBe(false)
   })
 
   it('toggleDiscounted patches the opposite flag', async () => {
     const s = useTeaRoomsStore()
     s.teaRooms = [room({ id: 1, discounted: false })]
-    await s.toggleDiscounted(s.teaRooms[0])
+    await s.toggleDiscounted(s.teaRooms[0]!)
     expect(ep.patch).toHaveBeenCalledWith(1, { discounted: true })
-    expect(s.teaRooms[0].discounted).toBe(true)
+    expect(s.teaRooms[0]!.discounted).toBe(true)
   })
 })
 
@@ -211,7 +211,7 @@ describe('locking', () => {
   it('locks with no expiry when no unlock time is given', async () => {
     const s = useTeaRoomsStore()
     s.teaRooms = [room({ id: 1 })]
-    expect(await s.lockRoom(s.teaRooms[0], '')).toBe(true)
+    expect(await s.lockRoom(s.teaRooms[0]!, '')).toBe(true)
     expect(ep.patch).toHaveBeenCalledWith(1, { locked: true, locked_until: '' })
   })
 
@@ -225,8 +225,8 @@ describe('locking', () => {
       `${future.getFullYear()}-${pad(future.getMonth() + 1)}-${pad(future.getDate())}` +
       `T${pad(future.getHours())}:${pad(future.getMinutes())}`
 
-    expect(await s.lockRoom(s.teaRooms[0], local)).toBe(true)
-    const [, fields] = ep.patch.mock.calls[0]
+    expect(await s.lockRoom(s.teaRooms[0]!, local)).toBe(true)
+    const [, fields] = ep.patch.mock.calls[0]!
     expect(fields.locked).toBe(true)
     // The same instant, expressed in UTC - not the local string passed straight
     // through, which would land the unlock at the wrong moment for anyone else.
@@ -239,7 +239,7 @@ describe('locking', () => {
     ui.notify = vi.fn()
     const s = useTeaRoomsStore()
     s.teaRooms = [room({ id: 1 })]
-    expect(await s.lockRoom(s.teaRooms[0], '2020-01-01T00:00')).toBe(false)
+    expect(await s.lockRoom(s.teaRooms[0]!, '2020-01-01T00:00')).toBe(false)
     expect(ep.patch).not.toHaveBeenCalled()
     expect(ui.notify).toHaveBeenCalled()
   })
@@ -247,7 +247,7 @@ describe('locking', () => {
   it('unlockRoom clears the lock', async () => {
     const s = useTeaRoomsStore()
     s.teaRooms = [room({ id: 4, locked: true, locked_until: '2030-01-01T00:00:00Z' })]
-    await s.unlockRoom(s.teaRooms[0])
+    await s.unlockRoom(s.teaRooms[0]!)
     expect(ep.patch).toHaveBeenCalledWith(4, { locked: false })
   })
 })
@@ -279,7 +279,7 @@ describe('deleteTeaRoom', () => {
     ui.confirm = vi.fn(async () => false)
     const s = useTeaRoomsStore()
     s.teaRooms = [room({ id: 1 })]
-    await s.deleteTeaRoom(s.teaRooms[0])
+    await s.deleteTeaRoom(s.teaRooms[0]!)
     expect(ep.del).not.toHaveBeenCalled()
     expect(s.teaRooms).toHaveLength(1)
   })
@@ -289,7 +289,7 @@ describe('deleteTeaRoom', () => {
     ui.confirm = vi.fn(async () => true)
     const s = useTeaRoomsStore()
     s.teaRooms = [room({ id: 1 }), room({ id: 2 })]
-    await s.deleteTeaRoom(s.teaRooms[0])
+    await s.deleteTeaRoom(s.teaRooms[0]!)
     expect(ep.del).toHaveBeenCalledWith(1)
     expect(s.teaRooms.map((r) => r.id)).toEqual([2])
   })

@@ -66,7 +66,9 @@ const search = ref('')
 const activeMaps = computed(() => store.maps.filter((m) => m.status !== 'closed'))
 const filteredActive = computed(() => {
   const q = search.value.trim().toLowerCase()
-  if (!q) return activeMaps.value
+  if (!q) {
+    return activeMaps.value
+  }
   return activeMaps.value.filter((m) => m.title.toLowerCase().includes(q))
 })
 
@@ -146,14 +148,22 @@ const previewStalls = computed(() => toPublicStalls(selectedStalls.value))
 const detailReady = computed(() => !store.detailLoading && store.hasMapDetail(store.selectedMap))
 
 function editSelected(): void {
-  if (!store.selectedMap) return
-  if (!store.editMapForm(store.selectedMap)) return
+  if (!store.selectedMap) {
+    return
+  }
+  if (!store.editMapForm(store.selectedMap)) {
+    return
+  }
   screen.value = 'form'
 }
 /** Opens the create form pre-filled from this map (see copyMapForm). */
 function duplicateSelected(): void {
-  if (!store.selectedMap) return
-  if (!store.copyMapForm(store.selectedMap)) return
+  if (!store.selectedMap) {
+    return
+  }
+  if (!store.copyMapForm(store.selectedMap)) {
+    return
+  }
   screen.value = 'form'
 }
 /**
@@ -166,9 +176,13 @@ function duplicateSelected(): void {
  */
 async function copyMap(m: FestivalMap): Promise<void> {
   await store.loadMapDetail(m.id)
-  if (!store.selectedMap) return
+  if (!store.selectedMap) {
+    return
+  }
   // The fetch can still have failed, which leaves the stall-less list row here.
-  if (!store.copyMapForm(store.selectedMap)) return
+  if (!store.copyMapForm(store.selectedMap)) {
+    return
+  }
   screen.value = 'form'
 }
 /**
@@ -187,12 +201,18 @@ function onFormDone(): void {
 }
 async function deleteSelected(): Promise<void> {
   const m = store.selectedMap
-  if (!m) return
+  if (!m) {
+    return
+  }
   await store.deleteMap(m.id)
-  if (!store.selectedMap) screen.value = 'list'
+  if (!store.selectedMap) {
+    screen.value = 'list'
+  }
 }
 function setStatus(status: FestivalMapStatus): void {
-  if (store.selectedMap) void store.setStatus(store.selectedMap.id, status)
+  if (store.selectedMap) {
+    void store.setStatus(store.selectedMap.id, status)
+  }
 }
 </script>
 

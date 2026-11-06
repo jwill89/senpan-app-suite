@@ -1,0 +1,57 @@
+# Weekly dependency updates, in the shape every repo follows (shared-tooling's
+# repo/dependabot.example.yml): Monday, one pull request per ecosystem for minors and
+# patches together, majors one by one, since they can need code changes. The shared/
+# submodule is left out: a project takes a shared-tooling release on purpose
+# (`task shared:update`).
+#
+# Dependabot can't read Actions secrets: the Font Awesome Pro registry needs
+# FONTAWESOME_TOKEN added again as a Dependabot secret (Settings, Secrets and
+# variables, Dependabot).
+version: 2
+
+registries:
+  fontawesome:
+    type: npm-registry
+    url: https://npm.fontawesome.com
+    token: ${{ secrets.FONTAWESOME_TOKEN }}
+
+updates:
+  - package-ecosystem: npm
+    directory: /frontend
+    registries:
+      - fontawesome
+    schedule:
+      interval: weekly
+      day: monday
+    groups:
+      npm-minor:
+        patterns: ['*']
+        update-types: [minor, patch]
+    ignore:
+      # Held on purpose: TypeScript stays on 6.x until vue-tsc supports TypeScript 7.
+      - dependency-name: typescript
+        update-types: ['version-update:semver-major']
+
+  - package-ecosystem: gomod
+    directory: /backend
+    schedule:
+      interval: weekly
+      day: monday
+    groups:
+      go:
+        patterns: ['*']
+
+  - package-ecosystem: nuget
+    directory: /plugins/SenpanCompanion
+    schedule:
+      interval: weekly
+      day: monday
+    groups:
+      dotnet:
+        patterns: ['*']
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday

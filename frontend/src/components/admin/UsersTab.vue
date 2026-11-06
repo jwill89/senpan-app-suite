@@ -63,7 +63,9 @@ const displayedUsers = computed(() => {
     : users.users.slice()
   // Admins first, then by username.
   return rows.sort((a, b) => {
-    if (a.is_admin !== b.is_admin) return a.is_admin ? -1 : 1
+    if (a.is_admin !== b.is_admin) {
+      return a.is_admin ? -1 : 1
+    }
     return a.username.localeCompare(b.username)
   })
 })
@@ -89,8 +91,12 @@ function formatLastLogin(ts: string): string {
 
 /** Human summary of a user's access for the table cell. */
 function permissionSummary(u: User): string {
-  if (u.is_admin) return 'Full access (admin)'
-  if (!u.permissions.length) return 'None'
+  if (u.is_admin) {
+    return 'Full access (admin)'
+  }
+  if (!u.permissions.length) {
+    return 'None'
+  }
   return `${u.permissions.length} page${u.permissions.length === 1 ? '' : 's'}`
 }
 
@@ -124,14 +130,19 @@ function closeEdit(): void {
   editUserId.value = null
 }
 function togglePerm(key: string): void {
-  if (permDraft.value.has(key)) permDraft.value.delete(key)
-  else permDraft.value.add(key)
+  if (permDraft.value.has(key)) {
+    permDraft.value.delete(key)
+  } else {
+    permDraft.value.add(key)
+  }
   // Reassign to trigger reactivity on the Set.
   permDraft.value = new Set(permDraft.value)
 }
 async function saveUser(): Promise<void> {
   editError.value = ''
-  if (editUserId.value === null) return
+  if (editUserId.value === null) {
+    return
+  }
   // Password is optional; validate only when one is being set.
   if (editPassword.value || editConfirm.value) {
     if (editPassword.value.length < 8) {
@@ -150,7 +161,9 @@ async function saveUser(): Promise<void> {
     editPassword.value || undefined,
   )
   savingUser.value = false
-  if (ok) editUserId.value = null
+  if (ok) {
+    editUserId.value = null
+  }
 }
 
 onMounted(() => users.loadUsers())

@@ -43,10 +43,14 @@ const categoryColumns: DataColumn[] = [
  */
 const categoryPositionOptions = computed(() => {
   const opts: { value: string; label: string }[] = []
-  if (patterns.categoryForm.id !== 0) opts.push({ value: 'keep', label: 'Keep current position' })
+  if (patterns.categoryForm.id !== 0) {
+    opts.push({ value: 'keep', label: 'Keep current position' })
+  }
   opts.push({ value: 'start', label: 'At the beginning' })
   for (const c of patterns.categories) {
-    if (c.id === patterns.categoryForm.id) continue
+    if (c.id === patterns.categoryForm.id) {
+      continue
+    }
     opts.push({ value: `after:${c.id}`, label: `After ${c.name}` })
   }
   return opts
@@ -61,7 +65,9 @@ function goEditCategory(cat: PatternCategory): void {
   screen.value = 'category-form'
 }
 async function saveCategory(): Promise<void> {
-  if (await patterns.saveCategoryForm()) screen.value = 'categories'
+  if (await patterns.saveCategoryForm()) {
+    screen.value = 'categories'
+  }
 }
 
 onMounted(() => patterns.rebuildEditableGroups())
@@ -86,7 +92,9 @@ function goNew(): void {
   screen.value = 'new'
 }
 async function saveNew(): Promise<void> {
-  if (await patterns.savePattern()) screen.value = 'list'
+  if (await patterns.savePattern()) {
+    screen.value = 'list'
+  }
 }
 </script>
 

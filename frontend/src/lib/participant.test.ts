@@ -58,7 +58,7 @@ describe('splitParticipantLabel', () => {
       ['Odd @ Name', 'Gilgamesh'],
       ['Aria Ashwood', ''],
     ]) {
-      expect(splitParticipantLabel(participantLabel(name, world))).toEqual({ name, world })
+      expect(splitParticipantLabel(participantLabel(name!, world))).toEqual({ name, world })
     }
   })
 })

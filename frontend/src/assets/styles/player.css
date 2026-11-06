@@ -31,8 +31,9 @@
 
 /* Home page logo. No drop-shadow: the artwork already carries a soft shadow of
    its own, so the CSS one was doubling it, and elevation is out generally. The
-   logo includes the wordmark, so it IS the page title - there's no separate <h1>.
-   `app_title` is its alt text, and still drives the browser tab + player topbar. */
+   logo includes the wordmark, so it IS the page title: the <h1> holds it and
+   nothing else, so it adds no type of its own. `app_title` is its alt text, and
+   still drives the browser tab + player topbar. */
 .home-logo {
   display: block;
   width: min(240px, 62vw);
@@ -122,9 +123,10 @@
   font-size: 1.1rem;
 }
 
-/* Subtle admin login link at bottom of home page */
+/* Subtle admin login link at bottom of home page. Dimmed, but no further than its
+   label still reads at 4.5:1 (0.7 is 4.9:1 on the default theme; 0.5 was 3.3:1). */
 .home-admin {
-  opacity: 0.5;
+  opacity: 0.7;
   transition: opacity 0.2s;
   border-top: 1px solid var(--control-border);
   padding-top: 14px;
@@ -1475,8 +1477,12 @@ span.pattern-mini {
   margin: 0;
 }
 
+/* Set apart from the credits around them by weight as well as colour: --highlight
+   and --text-muted are too close in lightness (1.2:1) for colour alone to mark a
+   link, and the underline only comes on hover. */
 .app-footer a {
   color: var(--highlight);
+  font-weight: 600;
   text-decoration: none;
 }
 

@@ -54,7 +54,9 @@ const presetSelectId = useId()
  */
 function applyPreset(): void {
   const preset = presets.presets.find((p) => p.id === selectedPresetId.value)
-  if (!preset) return
+  if (!preset) {
+    return
+  }
   const validIds = new Set(patterns.patterns.map((p) => p.id))
   game.selectedPatternIds = preset.pattern_ids.filter((id) => validIds.has(id))
   game.gameDetails = preset.game_details || ''
@@ -84,7 +86,9 @@ let clockTimer: ReturnType<typeof setInterval> | null = null
 /** Live elapsed-time string (H:MM:SS / MM:SS) since the game started. */
 const elapsedTime = computed(() => {
   const start = game.currentGame ? parseServerTimestamp(game.currentGame.created_at) : NaN
-  if (!Number.isFinite(start)) return ''
+  if (!Number.isFinite(start)) {
+    return ''
+  }
   const secs = Math.max(0, Math.floor((now.value - start) / 1000))
   const h = Math.floor(secs / 3600)
   const m = Math.floor((secs % 3600) / 60)
@@ -142,18 +146,26 @@ function toggleYoeverForMe(): void {
  */
 function toggleYoeverSoundForMe(): void {
   yoever.toggleSound()
-  if (yoever.soundEnabled) primeAudio()
+  if (yoever.soundEnabled) {
+    primeAudio()
+  }
 }
 
 // Keyboard shortcut: Space (or Enter) draws the next number during an active
 // game - speeds up calling a fast game. Ignored while typing in a form field,
 // while a draw is already in flight, or during the inter-draw countdown.
 function onKeydown(e: KeyboardEvent): void {
-  if (e.key !== ' ' && e.key !== 'Enter') return
-  if (!game.currentGame || game.drawing || game.drawCountdown !== null) return
+  if (e.key !== ' ' && e.key !== 'Enter') {
+    return
+  }
+  if (!game.currentGame || game.drawing || game.drawCountdown !== null) {
+    return
+  }
   // Never draw while a modal is open - the hotkey must not fire behind a dialog
   // (e.g. the winner-verify or a confirm modal opened over the game).
-  if (document.querySelector('.modal-overlay')) return
+  if (document.querySelector('.modal-overlay')) {
+    return
+  }
   // Don't hijack a focused form control or button - let it handle the key
   // itself (e.g. Enter on "End Game" should end, not draw; Space on a winner
   // chip should verify, not draw).
@@ -175,14 +187,18 @@ function onKeydown(e: KeyboardEvent): void {
 
 onMounted(() => {
   window.addEventListener('keydown', onKeydown)
-  if (presets.presets.length === 0) void presets.loadPresets()
+  if (presets.presets.length === 0) {
+    void presets.loadPresets()
+  }
   clockTimer = setInterval(() => {
     now.value = Date.now()
   }, 1000)
 })
 onBeforeUnmount(() => {
   window.removeEventListener('keydown', onKeydown)
-  if (clockTimer) clearInterval(clockTimer)
+  if (clockTimer) {
+    clearInterval(clockTimer)
+  }
 })
 </script>
 

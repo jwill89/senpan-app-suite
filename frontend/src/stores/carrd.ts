@@ -78,21 +78,29 @@ export const useCarrdStore = defineStore('carrd', () => {
 
   /** Loads the contents (sub-dirs + images) of the current folder/path. */
   async function loadContents(): Promise<void> {
-    if (!selectedFolder.value) return
+    if (!selectedFolder.value) {
+      return
+    }
     const reqId = ++contentsSeq
     loadingImages.value = true
     try {
       const data = await endpoints.carrd.images(selectedFolder.value, currentPath.value)
-      if (reqId !== contentsSeq) return // a newer load superseded this one
+      if (reqId !== contentsSeq) {
+        return // a newer load superseded this one
+      }
       dirs.value = data.dirs
       images.value = data.images
     } catch (e) {
-      if (reqId !== contentsSeq) return
+      if (reqId !== contentsSeq) {
+        return
+      }
       ui.notify((e as Error).message, 'error')
       dirs.value = []
       images.value = []
     } finally {
-      if (reqId === contentsSeq) loadingImages.value = false
+      if (reqId === contentsSeq) {
+        loadingImages.value = false
+      }
     }
   }
 
@@ -163,8 +171,9 @@ export const useCarrdStore = defineStore('carrd', () => {
         `Delete project “${title}” and all of its images? This cannot be undone.`,
         { title: 'Delete project', confirmText: 'Delete' },
       ))
-    )
+    ) {
       return
+    }
     try {
       await endpoints.carrd.deleteProject(folder)
       ui.notify('Project deleted', 'info')
@@ -182,7 +191,9 @@ export const useCarrdStore = defineStore('carrd', () => {
 
   /** Creates a sub-directory at the current path; returns true on success. */
   async function createDir(name: string): Promise<boolean> {
-    if (!selectedFolder.value) return false
+    if (!selectedFolder.value) {
+      return false
+    }
     const trimmed = name.trim()
     if (!trimmed) {
       ui.notify('Folder name is required', 'error')
@@ -202,14 +213,17 @@ export const useCarrdStore = defineStore('carrd', () => {
 
   /** Deletes a sub-directory (and its contents) under the current path. */
   async function deleteDir(name: string): Promise<void> {
-    if (!selectedFolder.value) return
+    if (!selectedFolder.value) {
+      return
+    }
     if (
       !(await ui.confirm(
         `Delete folder “${name}” and everything inside it? This cannot be undone.`,
         { title: 'Delete folder', confirmText: 'Delete' },
       ))
-    )
+    ) {
       return
+    }
     try {
       await endpoints.carrd.deleteDir(selectedFolder.value, joinCarrdPath(currentPath.value, name))
       ui.notify('Folder deleted', 'info')
@@ -222,13 +236,19 @@ export const useCarrdStore = defineStore('carrd', () => {
 
   /** Uploads files into the current folder/path, then refreshes. */
   async function uploadImages(files: FileList | File[]): Promise<void> {
-    if (!selectedFolder.value) return
+    if (!selectedFolder.value) {
+      return
+    }
     const list = Array.from(files)
-    if (list.length === 0) return
+    if (list.length === 0) {
+      return
+    }
     const form = new FormData()
     form.append('folder', selectedFolder.value)
     form.append('path', currentPath.value)
-    for (const f of list) form.append('files', f)
+    for (const f of list) {
+      form.append('files', f)
+    }
 
     uploading.value = true
     try {
@@ -254,14 +274,17 @@ export const useCarrdStore = defineStore('carrd', () => {
   }
 
   async function deleteImage(name: string): Promise<void> {
-    if (!selectedFolder.value) return
+    if (!selectedFolder.value) {
+      return
+    }
     if (
       !(await ui.confirm(`Delete image “${name}”? This cannot be undone.`, {
         title: 'Delete image',
         confirmText: 'Delete',
       }))
-    )
+    ) {
       return
+    }
     try {
       await endpoints.carrd.deleteImage(selectedFolder.value, currentPath.value, name)
       ui.notify('Image deleted', 'info')

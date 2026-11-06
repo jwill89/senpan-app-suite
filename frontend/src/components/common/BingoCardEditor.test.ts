@@ -16,20 +16,20 @@ describe('BingoCardEditor', () => {
     const emitted = w.emitted('update:modelValue')
     expect(emitted).toBeTruthy()
     const board = emitted!.at(-1)![0] as number[][]
-    expect(board[0][0]).toBe(7)
+    expect(board[0]![0]).toBe(7)
   })
 
   it('Generate Random emits a fully-filled board with a FREE centre', async () => {
     const w = mount(BingoCardEditor, { props: { modelValue: emptyNumberBoard() } })
     await w.find('button').trigger('click')
     const board = w.emitted('update:modelValue')!.at(-1)![0] as number[][]
-    expect(board[2][2]).toBe(0)
+    expect(board[2]![2]).toBe(0)
     expect(board.flat().filter((n) => n !== 0)).toHaveLength(24)
   })
 
   it('flags an out-of-range cell as invalid', () => {
     const board = emptyNumberBoard()
-    board[0][0] = 99 // out of the B (1-15) range
+    board[0]![0] = 99 // out of the B (1-15) range
     const w = mount(BingoCardEditor, { props: { modelValue: board } })
     expect(w.find('.card-editor-invalid').exists()).toBe(true)
   })

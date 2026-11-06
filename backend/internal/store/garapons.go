@@ -179,7 +179,7 @@ func (s *Store) GetGarapon(ctx context.Context, id int64) (*model.Garapon, error
 	var g model.Garapon
 	var stampRallyID sql.NullInt64
 	err := s.db.QueryRowContext(ctx, `SELECT g.id, g.title, g.details, g.grand_prize_image, g.status,
-			g.stamp_rally_id, COALESCE(sr.title, ''), g.default_draws, g.created_at
+			g.stamp_rally_id, COALESCE(sr.title, ''), g.default_draws, CAST(g.created_at AS TEXT)
 		FROM garapons g LEFT JOIN stamp_rallies sr ON sr.id = g.stamp_rally_id WHERE g.id = ?`, id).
 		Scan(&g.ID, &g.Title, &g.Details, &g.GrandPrizeImage, &g.Status,
 			&stampRallyID, &g.StampRallyTitle, &g.DefaultDraws, &g.CreatedAt)
@@ -206,7 +206,7 @@ func (s *Store) GetGarapon(ctx context.Context, id int64) (*model.Garapon, error
 // efficiency (the detail fetch loads them).
 func (s *Store) ListGarapons(ctx context.Context) ([]model.Garapon, error) {
 	rows, err := s.db.QueryContext(ctx, `SELECT g.id, g.title, g.details, g.grand_prize_image, g.status,
-			g.stamp_rally_id, COALESCE(sr.title, ''), g.default_draws, g.created_at,
+			g.stamp_rally_id, COALESCE(sr.title, ''), g.default_draws, CAST(g.created_at AS TEXT),
 			COALESCE((SELECT COUNT(*) FROM garapon_players p WHERE p.garapon_id = g.id), 0),
 			COALESCE((SELECT COUNT(*) FROM garapon_draws d WHERE d.garapon_id = g.id), 0)
 		FROM garapons g LEFT JOIN stamp_rallies sr ON sr.id = g.stamp_rally_id
@@ -238,7 +238,7 @@ func (s *Store) ListGarapons(ctx context.Context) ([]model.Garapon, error) {
 // ListGaraponPlayers returns a garapon's drawing links with each player's
 // read-only draws-used count, oldest first.
 func (s *Store) ListGaraponPlayers(ctx context.Context, garaponID int64) ([]model.GaraponPlayer, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT p.id, p.garapon_id, p.token, p.player_name, p.world, p.max_draws, p.created_at,
+	rows, err := s.db.QueryContext(ctx, `SELECT p.id, p.garapon_id, p.token, p.player_name, p.world, p.max_draws, CAST(p.created_at AS TEXT),
 			COALESCE((SELECT COUNT(*) FROM garapon_draws d WHERE d.player_id = p.id), 0),
 			COALESCE(sc.token, '')
 		FROM garapon_players p LEFT JOIN stamp_rally_cards sc ON sc.id = p.stamp_card_id
@@ -264,7 +264,7 @@ func (s *Store) ListGaraponPlayers(ctx context.Context, garaponID int64) ([]mode
 // WHERE clause, shared by the by-id and by-token lookups.
 func (s *Store) getGaraponPlayer(ctx context.Context, where string, arg any) (*model.GaraponPlayer, error) {
 	var p model.GaraponPlayer
-	err := s.db.QueryRowContext(ctx, `SELECT p.id, p.garapon_id, p.token, p.player_name, p.world, p.max_draws, p.created_at,
+	err := s.db.QueryRowContext(ctx, `SELECT p.id, p.garapon_id, p.token, p.player_name, p.world, p.max_draws, CAST(p.created_at AS TEXT),
 			COALESCE((SELECT COUNT(*) FROM garapon_draws d WHERE d.player_id = p.id), 0),
 			COALESCE(sc.token, '')
 		FROM garapon_players p LEFT JOIN stamp_rally_cards sc ON sc.id = p.stamp_card_id WHERE `+where, arg).
@@ -387,7 +387,7 @@ func (s *Store) DeleteGaraponPlayer(ctx context.Context, playerID int64, force b
 func (s *Store) GetGaraponDraw(ctx context.Context, id int64) (*model.GaraponDraw, error) {
 	var d model.GaraponDraw
 	var playerID sql.NullInt64 // null once the link is deleted (log is kept)
-	err := s.db.QueryRowContext(ctx, `SELECT id, garapon_id, player_id, prize_id, player_name, prize_name, ball_color, drawn_at
+	err := s.db.QueryRowContext(ctx, `SELECT id, garapon_id, player_id, prize_id, player_name, prize_name, ball_color, CAST(drawn_at AS TEXT)
 		FROM garapon_draws WHERE id = ?`, id).
 		Scan(&d.ID, &d.GaraponID, &playerID, &d.PrizeID, &d.PlayerName, &d.PrizeName, &d.BallColor, &d.DrawnAt)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -423,13 +423,13 @@ func (s *Store) scanGaraponDraws(ctx context.Context, query string, arg any) ([]
 
 // ListGaraponDraws returns a garapon's full draw log, newest first (admin view).
 func (s *Store) ListGaraponDraws(ctx context.Context, garaponID int64) ([]model.GaraponDraw, error) {
-	return s.scanGaraponDraws(ctx, `SELECT id, garapon_id, player_id, prize_id, player_name, prize_name, ball_color, drawn_at
+	return s.scanGaraponDraws(ctx, `SELECT id, garapon_id, player_id, prize_id, player_name, prize_name, ball_color, CAST(drawn_at AS TEXT)
 		FROM garapon_draws WHERE garapon_id = ? ORDER BY drawn_at DESC, id DESC`, garaponID)
 }
 
 // ListPlayerDraws returns one player's draws, oldest first (the public record).
 func (s *Store) ListPlayerDraws(ctx context.Context, playerID int64) ([]model.GaraponDraw, error) {
-	return s.scanGaraponDraws(ctx, `SELECT id, garapon_id, player_id, prize_id, player_name, prize_name, ball_color, drawn_at
+	return s.scanGaraponDraws(ctx, `SELECT id, garapon_id, player_id, prize_id, player_name, prize_name, ball_color, CAST(drawn_at AS TEXT)
 		FROM garapon_draws WHERE player_id = ? ORDER BY drawn_at ASC, id ASC`, playerID)
 }
 

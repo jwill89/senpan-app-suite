@@ -32,8 +32,12 @@ export const useAuthStore = defineStore('auth', () => {
    * everything; other active users need the specific permission key granted.
    */
   function hasPermission(key: string): boolean {
-    if (!user.value) return false
-    if (user.value.is_admin) return true
+    if (!user.value) {
+      return false
+    }
+    if (user.value.is_admin) {
+      return true
+    }
     return user.value.permissions.includes(key)
   }
 

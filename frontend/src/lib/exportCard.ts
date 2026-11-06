@@ -85,16 +85,25 @@ export function parseInlineRuns(text: string): { text: string; bold: boolean; it
   let last = 0
   let m: RegExpExecArray | null
   while ((m = re.exec(text)) !== null) {
-    if (m.index > last) runs.push({ text: text.slice(last, m.index), bold: false, italic: false })
-    if (m[2]) runs.push({ text: m[2], bold: true, italic: true })
-    else if (m[4]) runs.push({ text: m[4], bold: true, italic: false })
-    else if (m[6]) runs.push({ text: m[6], bold: false, italic: true })
-    else if (m[7])
+    if (m.index > last) {
+      runs.push({ text: text.slice(last, m.index), bold: false, italic: false })
+    }
+    if (m[2]) {
+      runs.push({ text: m[2], bold: true, italic: true })
+    } else if (m[4]) {
+      runs.push({ text: m[4], bold: true, italic: false })
+    } else if (m[6]) {
+      runs.push({ text: m[6], bold: false, italic: true })
+    } else if (m[7]) {
       runs.push({ text: m[7], bold: false, italic: false }) // inline code
-    else if (m[8]) runs.push({ text: m[8], bold: false, italic: false }) // strikethrough
+    } else if (m[8]) {
+      runs.push({ text: m[8], bold: false, italic: false }) // strikethrough
+    }
     last = re.lastIndex
   }
-  if (last < text.length) runs.push({ text: text.slice(last), bold: false, italic: false })
+  if (last < text.length) {
+    runs.push({ text: text.slice(last), bold: false, italic: false })
+  }
   return runs
 }
 
@@ -117,13 +126,17 @@ export function parseDetailParagraphs(md: string): Word[][] {
     let line = rawLine
     const heading = /^\s{0,3}(#{1,6})\s+(.*)$/.exec(line)
     const forceBold = !!heading
-    if (heading) line = heading[2]
+    if (heading) {
+      line = heading[2] ?? ''
+    }
     line = line
       .replace(/^\s{0,3}>\s?/, '') // blockquote
       .replace(/^\s*[-*+]\s+/, '* ') // list bullet
       .replace(/[ \t]{2,}/g, ' ')
       .trim()
-    if (!line) continue
+    if (!line) {
+      continue
+    }
 
     // Flatten styled runs -> words (split on spaces, preserving style).
     const words: Word[] = []
@@ -140,8 +153,12 @@ export function parseDetailParagraphs(md: string): Word[][] {
         }
       }
     }
-    if (current.length) words.push(current)
-    if (words.length) paragraphs.push(words)
+    if (current.length) {
+      words.push(current)
+    }
+    if (words.length) {
+      paragraphs.push(words)
+    }
   }
   return paragraphs
 }
@@ -185,11 +202,18 @@ function wrapWords(
         lineW += needed
       }
     }
-    if (line.length) all.push(line)
+    if (line.length) {
+      all.push(line)
+    }
   }
-  if (all.length <= maxLines) return all
+  if (all.length <= maxLines) {
+    return all
+  }
   const kept = all.slice(0, maxLines)
-  kept[kept.length - 1] = [...kept[kept.length - 1], [{ ch: '...', bold: false, italic: false }]]
+  const last = kept[kept.length - 1]
+  if (last) {
+    kept[kept.length - 1] = [...last, [{ ch: '...', bold: false, italic: false }]]
+  }
   return kept
 }
 
@@ -205,7 +229,9 @@ function drawWordLine(
   const spaceW = ctx.measureText(' ').width
   let cx = x
   line.forEach((word, i) => {
-    if (i > 0) cx += spaceW
+    if (i > 0) {
+      cx += spaceW
+    }
     for (const c of word) {
       ctx.font = detailFont(size, c.bold, c.italic)
       ctx.fillText(c.ch, cx, baselineY)
@@ -216,9 +242,11 @@ function drawWordLine(
 
 /** Shrinks the current ctx font until `text` fits within `maxWidth` (min 60%). */
 function fitText(ctx: CanvasRenderingContext2D, text: string, maxWidth: number): void {
-  const match = /(\d+(?:\.\d+)?)px/.exec(ctx.font)
-  if (!match) return
-  let size = parseFloat(match[1])
+  const px = /(\d+(?:\.\d+)?)px/.exec(ctx.font)?.[1]
+  if (px === undefined) {
+    return
+  }
+  let size = parseFloat(px)
   const min = size * 0.6
   while (size > min && ctx.measureText(text).width > maxWidth) {
     size -= 1
@@ -306,7 +334,7 @@ export async function exportCardImage(opts: ExportCardOptions): Promise<void> {
   const maxDetailLines = 1000
 
   // Player name with the "@ World" suffix stripped (e.g. "Alice @ Foo" -> "Alice").
-  const cleanName = (opts.playerName || '').split('@')[0].trim()
+  const cleanName = ((opts.playerName || '').split('@')[0] ?? '').trim()
 
   // Header left-stack baselines, measured from the header top (topY added later):
   //   title -> "Bingo Card" -> [player name] -> card id.
@@ -319,7 +347,9 @@ export async function exportCardImage(opts: ExportCardOptions): Promise<void> {
 
   // Parse + wrap footer details (with bold/italic styling) before sizing canvas.
   const measure = document.createElement('canvas').getContext('2d')
-  if (!measure) throw new Error('Canvas not supported')
+  if (!measure) {
+    throw new Error('Canvas not supported')
+  }
   const detailParas = opts.gameDetails ? parseDetailParagraphs(opts.gameDetails) : []
   const detailLines = detailParas.length
     ? wrapWords(measure, detailParas, detailSize, totalW - pad * 2, maxDetailLines)
@@ -333,7 +363,9 @@ export async function exportCardImage(opts: ExportCardOptions): Promise<void> {
   out.width = totalW
   out.height = totalH
   const ctx = out.getContext('2d')
-  if (!ctx) throw new Error('Canvas not supported')
+  if (!ctx) {
+    throw new Error('Canvas not supported')
+  }
 
   // Background gradient (matches the board wrapper).
   const bg = ctx.createLinearGradient(0, 0, 0, totalH)
@@ -446,6 +478,8 @@ export async function exportCardImage(opts: ExportCardOptions): Promise<void> {
 
   // 5. Download.
   const blob = await new Promise<Blob | null>((resolve) => out.toBlob(resolve, 'image/png'))
-  if (!blob) throw new Error('Failed to render image')
+  if (!blob) {
+    throw new Error('Failed to render image')
+  }
   triggerDownload(blob, opts.fileName + '.png')
 }

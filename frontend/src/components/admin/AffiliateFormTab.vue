@@ -25,7 +25,9 @@ const affiliates = useAffiliatesStore()
 const timezones = supportedTimezones()
 
 async function save(): Promise<void> {
-  if (await affiliates.saveAffiliate()) emit('saved')
+  if (await affiliates.saveAffiliate()) {
+    emit('saved')
+  }
 }
 function cancel(): void {
   affiliates.cancelAffiliateForm()

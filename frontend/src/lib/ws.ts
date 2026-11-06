@@ -56,7 +56,9 @@ export class WsClient {
 
   /** Open (or re-open) the connection. Pass a card id for player connections. */
   connect(cardId?: string | null): void {
-    if (cardId !== undefined) this.cardId = cardId
+    if (cardId !== undefined) {
+      this.cardId = cardId
+    }
 
     // Tear down any prior socket/timers *without* emitting a user-visible
     // 'closed' status: an intentional (re)connect must not flash the "Live"
@@ -119,7 +121,9 @@ export class WsClient {
     // *discards* all incoming client frames (it never JSON-parses them), so this
     // is a safe no-op server-side - it's purely traffic to keep the link warm.
     // (The server also sends its own protocol-level pings every 30s.)
-    if (this.keepaliveTimer) clearInterval(this.keepaliveTimer)
+    if (this.keepaliveTimer) {
+      clearInterval(this.keepaliveTimer)
+    }
     this.keepaliveTimer = setInterval(() => {
       if (this.ws?.readyState === WebSocket.OPEN) {
         this.ws.send('ping')
@@ -156,7 +160,9 @@ export class WsClient {
   }
 
   private scheduleReconnect(): void {
-    if (this.reconnectTimer) return
+    if (this.reconnectTimer) {
+      return
+    }
     this.reconnectAttempts++
 
     if (this.reconnectAttempts > MAX_RECONNECT) {

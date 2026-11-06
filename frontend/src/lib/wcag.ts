@@ -246,25 +246,26 @@ const PAIRS: Pair[] = [
 /** Parsed RGB (0-255). Alpha is ignored - no checked pair uses an alpha token. */
 function parseRgb(input: string): [number, number, number] | null {
   const s = (input || '').trim()
-  const hex = /^#([0-9a-f]{3,8})$/i.exec(s)
-  if (hex) {
-    let h = hex[1]
-    if (h.length === 3 || h.length === 4)
+  const hex = /^#([0-9a-f]{3,8})$/i.exec(s)?.[1]
+  if (hex !== undefined) {
+    let h = hex
+    if (h.length === 3 || h.length === 4) {
       h = h
         .split('')
         .map((c) => c + c)
         .join('')
+    }
     return [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16)]
   }
-  const fn = /^rgba?\(([^)]+)\)$/i.exec(s)
-  if (fn) {
-    const parts = fn[1]
+  const fn = /^rgba?\(([^)]+)\)$/i.exec(s)?.[1]
+  if (fn !== undefined) {
+    const [r, g, b] = fn
       .replace(/\//g, ' ')
       .split(/[\s,]+/)
       .filter(Boolean)
-    if (parts.length >= 3) {
+    if (r !== undefined && g !== undefined && b !== undefined) {
       const ch = (x: string) => (x.endsWith('%') ? (parseFloat(x) / 100) * 255 : parseFloat(x))
-      return [ch(parts[0]), ch(parts[1]), ch(parts[2])]
+      return [ch(r), ch(g), ch(b)]
     }
   }
   return null
@@ -282,9 +283,13 @@ function relLuminance([r, g, b]: [number, number, number]): number {
 export function contrastRatio(fg: string, bg: string): number | null {
   const a = parseRgb(fg)
   const b = parseRgb(bg)
-  if (!a || !b) return null
+  if (!a || !b) {
+    return null
+  }
   let [l1, l2] = [relLuminance(a), relLuminance(b)]
-  if (l1 < l2) [l1, l2] = [l2, l1]
+  if (l1 < l2) {
+    ;[l1, l2] = [l2, l1]
+  }
   return (l1 + 0.05) / (l2 + 0.05)
 }
 

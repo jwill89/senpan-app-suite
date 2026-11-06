@@ -293,7 +293,9 @@ describe('history', () => {
 
   it('forgets the oldest steps past the limit', () => {
     let h = createHistory(0)
-    for (let i = 1; i <= 10; i++) h = historyPush(h, i, 3)
+    for (let i = 1; i <= 10; i++) {
+      h = historyPush(h, i, 3)
+    }
     expect(h.past).toEqual([7, 8, 9])
     expect(h.present).toBe(10)
   })

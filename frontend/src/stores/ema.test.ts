@@ -95,18 +95,18 @@ describe('the board form', () => {
   it("round-trips a window's times through the local wall clock the inputs show", async () => {
     const ema = useEmaStore()
     ema.editBoardForm(board())
-    const w = ema.boardForm!.windows[0]
+    const w = ema.boardForm!.windows[0]!
     expect(w.start_at).toBe(utcToDatetimeLocal('2026-08-01T18:00:00Z'))
 
     ep.update.mockResolvedValue({ ok: true })
     expect(await ema.saveBoard()).toBe(4)
-    const sent = ep.update.mock.calls[0][1] as {
+    const sent = ep.update.mock.calls[0]![1] as {
       windows: { id: number; start_at: string; artist_limit: number }[]
     }
     // Back to the same UTC instant (the server normalizes the format), keeping the
     // window's id so its plaques stay attached.
-    expect(sent.windows[0].id).toBe(9)
-    expect(Date.parse(sent.windows[0].start_at)).toBe(Date.parse('2026-08-01T18:00:00Z'))
+    expect(sent.windows[0]!.id).toBe(9)
+    expect(Date.parse(sent.windows[0]!.start_at)).toBe(Date.parse('2026-08-01T18:00:00Z'))
     // The limit goes back; the count of requests already made is the server's.
     expect(sent.windows[0]).toMatchObject({ artist_limit: 5 })
     expect(sent.windows[0]).not.toHaveProperty('artist_count')
@@ -116,11 +116,11 @@ describe('the board form', () => {
   it('starts a new day where the last one ended, taking as many requests', () => {
     const ema = useEmaStore()
     ema.newBoardForm()
-    ema.boardForm!.windows[0].end_at = '2026-08-02T04:00'
-    ema.boardForm!.windows[0].artist_limit = 8
+    ema.boardForm!.windows[0]!.end_at = '2026-08-02T04:00'
+    ema.boardForm!.windows[0]!.artist_limit = 8
     ema.addWindow()
-    expect(ema.boardForm!.windows[1].start_at).toBe('2026-08-02T04:00')
-    expect(ema.boardForm!.windows[1].artist_limit).toBe(8)
+    expect(ema.boardForm!.windows[1]!.start_at).toBe('2026-08-02T04:00')
+    expect(ema.boardForm!.windows[1]!.artist_limit).toBe(8)
   })
 
   it('keeps the form open when the server refuses it', async () => {
@@ -137,9 +137,9 @@ describe('review', () => {
     const ema = useEmaStore()
     ema.plaques = [plaque()]
     ep.approve.mockResolvedValue({ plaque: plaque({ status: 'posted', image: '' }) })
-    await ema.review(ema.plaques[0], 'approve')
+    await ema.review(ema.plaques[0]!, 'approve')
     expect(ep.approve).toHaveBeenCalledWith(4, 11)
-    expect(ema.plaques[0].status).toBe('posted')
+    expect(ema.plaques[0]!.status).toBe('posted')
     expect(ema.pendingPlaques).toHaveLength(0)
     expect(ep.list).toHaveBeenCalled()
   })
@@ -149,7 +149,7 @@ describe('review', () => {
     const ui = useUiStore()
     vi.spyOn(ui, 'confirm').mockResolvedValue(false)
     ema.plaques = [plaque()]
-    await ema.review(ema.plaques[0], 'reject')
+    await ema.review(ema.plaques[0]!, 'reject')
     expect(ep.reject).not.toHaveBeenCalled()
   })
 
@@ -181,7 +181,7 @@ describe("the artist's queue", () => {
     const [id, form] = ep.post.mock.calls[0] as [number, FormData]
     expect(id).toBe(11)
     expect(form.get('image')).toBeInstanceOf(File)
-    expect(ema.requests[0].status).toBe('complete')
+    expect(ema.requests[0]!.status).toBe('complete')
     expect(ema.postingRequest).toBe(false)
   })
 
@@ -194,6 +194,6 @@ describe("the artist's queue", () => {
 
     expect(await ema.postRequest(open, new File(['x'], 'done.png'))).toBe(false)
     expect(ep.requests).toHaveBeenCalled()
-    expect(ema.requests[0].status).toBe('requested')
+    expect(ema.requests[0]!.status).toBe('requested')
   })
 })

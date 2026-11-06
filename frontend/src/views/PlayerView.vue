@@ -60,7 +60,9 @@ watch(showStampCustomization, (open) => {
 /** Saves the current board (with stamps + active theme) as a framed PNG image. */
 async function exportCard(): Promise<void> {
   const el = boardRef.value?.$el
-  if (!el || exporting.value) return
+  if (!el || exporting.value) {
+    return
+  }
   exporting.value = true
   try {
     await exportCardImage({
@@ -82,14 +84,18 @@ async function exportCard(): Promise<void> {
 
 /** Loads the board for the current cardId param if not already loaded. */
 async function ensureLoaded(id: string): Promise<void> {
-  if (player.playerCard?.id === id) return
+  if (player.playerCard?.id === id) {
+    return
+  }
   const details = await player.loadBoardById(id)
   if (details === null && !player.playerCard) {
     // Failed to load (bad id) -> bounce home with the error toast.
     void router.replace({ name: 'home' })
     return
   }
-  if (details !== null) game.gameDetails = details
+  if (details !== null) {
+    game.gameDetails = details
+  }
 }
 
 onMounted(() => ensureLoaded(props.cardId))
@@ -157,7 +163,9 @@ function openDiscord(): void {
  *  enabling is a user gesture, so prime audio then so the sound can play. */
 function onYoeverSoundToggle(): void {
   yoever.toggleSound()
-  if (yoever.soundEnabled) primeAudio()
+  if (yoever.soundEnabled) {
+    primeAudio()
+  }
 }
 </script>
 

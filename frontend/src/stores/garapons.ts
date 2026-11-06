@@ -111,14 +111,20 @@ export const useGaraponsStore = defineStore('garapons', () => {
     detailLoading.value = true
     try {
       const data = await endpoints.garapons.detail(id)
-      if (reqId !== detailSeq) return // a newer load superseded this one
+      if (reqId !== detailSeq) {
+        return // a newer load superseded this one
+      }
       selectedGarapon.value = data.garapon
       garaponPlayers.value = data.players
       garaponDraws.value = data.draws
     } catch (e) {
-      if (reqId === detailSeq) ui.notify((e as Error).message, 'error')
+      if (reqId === detailSeq) {
+        ui.notify((e as Error).message, 'error')
+      }
     } finally {
-      if (reqId === detailSeq) detailLoading.value = false
+      if (reqId === detailSeq) {
+        detailLoading.value = false
+      }
     }
   }
 
@@ -177,7 +183,10 @@ export const useGaraponsStore = defineStore('garapons', () => {
       _uid: nextUid(),
     }))
     // Guarantee exactly one grand prize for the radio group.
-    if (prizes.length && !prizes.some((p) => p.is_grand)) prizes[0].is_grand = true
+    const firstPrize = prizes[0]
+    if (firstPrize && !prizes.some((p) => p.is_grand)) {
+      firstPrize.is_grand = true
+    }
     garaponForm.value = {
       id: g.id,
       title: g.title,
@@ -203,7 +212,9 @@ export const useGaraponsStore = defineStore('garapons', () => {
   function copyGaraponForm(g: Garapon): void {
     editGaraponForm(g)
     const f = garaponForm.value
-    if (!f) return
+    if (!f) {
+      return
+    }
     f.id = 0
     f.title = `${g.title} (Copy)`
     f.stamp_rally_id = null
@@ -221,23 +232,36 @@ export const useGaraponsStore = defineStore('garapons', () => {
   /** Removes a prize row; if it was the grand prize, promotes the first remaining row. */
   function removePrizeRow(index: number): void {
     const f = garaponForm.value
-    if (!f || f.prizes.length <= 1) return
-    const wasGrand = f.prizes[index].is_grand
+    if (!f || f.prizes.length <= 1) {
+      return
+    }
+    const row = f.prizes[index]
+    if (!row) {
+      return
+    }
     f.prizes.splice(index, 1)
-    if (wasGrand && !f.prizes.some((p) => p.is_grand)) f.prizes[0].is_grand = true
+    // More than one row was there, so a first one remains.
+    const first = f.prizes[0]
+    if (row.is_grand && first && !f.prizes.some((p) => p.is_grand)) {
+      first.is_grand = true
+    }
   }
 
   /** Marks one prize row as the grand prize (radio-style, single selection). */
   function setGrandPrize(index: number): void {
     const f = garaponForm.value
-    if (!f) return
+    if (!f) {
+      return
+    }
     f.prizes.forEach((p, i) => (p.is_grand = i === index))
   }
 
   /** Saves the garapon form. Returns true on success (caller navigates). */
   async function saveGarapon(): Promise<boolean> {
     const f = garaponForm.value
-    if (!f) return false
+    if (!f) {
+      return false
+    }
     if (!f.title.trim()) {
       ui.notify('Title is required', 'error')
       return false
@@ -283,12 +307,15 @@ export const useGaraponsStore = defineStore('garapons', () => {
         title: 'Delete garapon',
         confirmText: 'Delete',
       }))
-    )
+    ) {
       return
+    }
     try {
       await endpoints.garapons.delete(id)
       garapons.value = garapons.value.filter((g) => g.id !== id)
-      if (selectedGarapon.value?.id === id) selectedGarapon.value = null
+      if (selectedGarapon.value?.id === id) {
+        selectedGarapon.value = null
+      }
       ui.notify('Garapon deleted', 'info')
     } catch (e) {
       ui.notify((e as Error).message, 'error')
@@ -298,9 +325,13 @@ export const useGaraponsStore = defineStore('garapons', () => {
   async function setGaraponStatus(id: number, status: 'open' | 'closed'): Promise<void> {
     try {
       await endpoints.garapons.setStatus(id, status)
-      if (selectedGarapon.value?.id === id) selectedGarapon.value.status = status
+      if (selectedGarapon.value?.id === id) {
+        selectedGarapon.value.status = status
+      }
       const inList = garapons.value.find((g) => g.id === id)
-      if (inList) inList.status = status
+      if (inList) {
+        inList.status = status
+      }
       ui.notify(status === 'closed' ? 'Garapon closed' : 'Garapon reopened', 'success')
     } catch (e) {
       ui.notify((e as Error).message, 'error')
@@ -309,7 +340,9 @@ export const useGaraponsStore = defineStore('garapons', () => {
 
   // -- Admin: drawing links -------------------------------------------------
   async function createPlayer(): Promise<void> {
-    if (!selectedGarapon.value) return
+    if (!selectedGarapon.value) {
+      return
+    }
     const name = playerAdd.value.playerName.trim()
     if (!name) {
       ui.notify('Player name is required', 'error')
@@ -347,7 +380,9 @@ export const useGaraponsStore = defineStore('garapons', () => {
   }
 
   async function deletePlayer(player: GaraponPlayer): Promise<void> {
-    if (!selectedGarapon.value) return
+    if (!selectedGarapon.value) {
+      return
+    }
     // Deleting a link keeps its draws in the log (they detach, not delete), so
     // reassure the admin when the player has already drawn.
     const msg =
@@ -356,7 +391,9 @@ export const useGaraponsStore = defineStore('garapons', () => {
             player.draws_used === 1 ? '' : 's'
           } stay in the draw log.`
         : `Delete the drawing link for ${player.player_name}?`
-    if (!(await ui.confirm(msg, { title: 'Delete drawing link', confirmText: 'Delete' }))) return
+    if (!(await ui.confirm(msg, { title: 'Delete drawing link', confirmText: 'Delete' }))) {
+      return
+    }
     try {
       await endpoints.garapons.deletePlayer(selectedGarapon.value.id, player.id)
       garaponPlayers.value = garaponPlayers.value.filter((p) => p.id !== player.id)
@@ -393,7 +430,9 @@ export const useGaraponsStore = defineStore('garapons', () => {
   /** Copies a player's stamp card link (the same hash as their drawing link). */
   async function copyStampCardLink(player: GaraponPlayer): Promise<void> {
     const url = stampCardLinkUrl(player)
-    if (!url) return
+    if (!url) {
+      return
+    }
     try {
       await navigator.clipboard.writeText(url)
       ui.notify('Stamp card link copied to clipboard', 'success')
@@ -421,7 +460,9 @@ export const useGaraponsStore = defineStore('garapons', () => {
   ): void {
     // A fresh drum, or the same one reloaded: either way the banner belongs to a
     // draw made on THIS view, so it only survives a reload of the same player.
-    if (publicGarapon.value?.id !== data.garapon.id) lastWin.value = null
+    if (publicGarapon.value?.id !== data.garapon.id) {
+      lastWin.value = null
+    }
     publicGarapon.value = data.garapon
     publicPlayer.value = data.player
     publicDraws.value = data.draws
@@ -452,7 +493,9 @@ export const useGaraponsStore = defineStore('garapons', () => {
    * the record/counts reveal in sync with the animation.
    */
   async function draw(token: string): Promise<GaraponDrawResponse | null> {
-    if (drawing.value) return null
+    if (drawing.value) {
+      return null
+    }
     drawing.value = true
     try {
       return await endpoints.garapon.draw(token)

@@ -19,7 +19,9 @@ config.global.stubs = {
       iconName(): string {
         // Icons are passed as `[prefix, name]` (occasionally a bare name string).
         const icon = (this as unknown as { icon?: string | string[] }).icon
-        if (Array.isArray(icon)) return icon[icon.length - 1] ?? ''
+        if (Array.isArray(icon)) {
+          return icon[icon.length - 1] ?? ''
+        }
         return icon ?? ''
       },
     },

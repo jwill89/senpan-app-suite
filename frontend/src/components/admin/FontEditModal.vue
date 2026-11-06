@@ -37,7 +37,9 @@ const ui = useUiStore()
 /** The live font row (tracks list reloads); closing when it disappears. */
 const font = computed(() => fonts.fonts.find((f) => f.base === props.base) ?? null)
 watch(font, (f) => {
-  if (!f) emit('close')
+  if (!f) {
+    emit('close')
+  }
 })
 
 // -- Metadata drafts (applied together with Save) -----------------------------
@@ -55,10 +57,14 @@ const newOrigin = ref('')
 watch(
   font,
   (f, old) => {
-    if (!f) return
+    if (!f) {
+      return
+    }
     // Only reset when the target font changes (not on every list refresh, or
     // typing would be clobbered by unrelated reloads) - except the first run.
-    if (old?.base === f.base) return
+    if (old?.base === f.base) {
+      return
+    }
     familyDraft.value = f.family === f.base ? '' : f.family
     serveDraft.value = f.serve
     originsDraft.value = f.origins.slice()
@@ -69,7 +75,9 @@ watch(
 
 const dirty = computed(() => {
   const f = font.value
-  if (!f) return false
+  if (!f) {
+    return false
+  }
   const savedFamily = f.family === f.base ? '' : f.family
   return (
     familyDraft.value.trim() !== savedFamily ||
@@ -81,7 +89,9 @@ const dirty = computed(() => {
 /** Validates + normalizes the input to a bare origin and adds it to the draft. */
 function addOrigin(): void {
   const raw = newOrigin.value.trim().replace(/\/+$/, '')
-  if (!raw) return
+  if (!raw) {
+    return
+  }
   let origin = ''
   try {
     const u = new URL(raw.includes('://') ? raw : `https://${raw}`)
@@ -101,7 +111,9 @@ function addOrigin(): void {
     ui.notify('Enter a site origin like https://mysite.carrd.co (no path)', 'error')
     return
   }
-  if (!originsDraft.value.includes(origin)) originsDraft.value.push(origin)
+  if (!originsDraft.value.includes(origin)) {
+    originsDraft.value.push(origin)
+  }
   newOrigin.value = ''
 }
 
@@ -110,13 +122,17 @@ function removeOrigin(origin: string): void {
 }
 
 async function save(): Promise<void> {
-  if (!font.value) return
+  if (!font.value) {
+    return
+  }
   const ok = await fonts.updateFamily(font.value.base, {
     family: familyDraft.value.trim(),
     serve: serveDraft.value,
     origins: originsDraft.value,
   })
-  if (ok) emit('close')
+  if (ok) {
+    emit('close')
+  }
 }
 
 // -- Files (apply immediately) ------------------------------------------------
@@ -137,7 +153,9 @@ function cancelRename(): void {
 }
 
 async function commitRename(name: string): Promise<void> {
-  if (await fonts.renameFile(name, renameValue.value)) cancelRename()
+  if (await fonts.renameFile(name, renameValue.value)) {
+    cancelRename()
+  }
 }
 
 /** Label for a variant row/option, e.g. "WOFF2 (converted)". */
@@ -147,8 +165,12 @@ function variantLabel(v: FontVariant): string {
 
 /** Human-readable file size. */
 function formatSize(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+  if (bytes < 1024) {
+    return `${bytes} B`
+  }
+  if (bytes < 1024 * 1024) {
+    return `${(bytes / 1024).toFixed(1)} KB`
+  }
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
 }
 </script>

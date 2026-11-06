@@ -118,7 +118,9 @@ describe('festival map widget: embedded links', () => {
     const wrapper = await widget(false)
     const links = wrapper.findAll('.map-stall-rally a')
     expect(links.length).toBe(2)
-    for (const link of links) expect(link.attributes('target')).toBeUndefined()
+    for (const link of links) {
+      expect(link.attributes('target')).toBeUndefined()
+    }
   })
 
   it('fills its frame only when embedded', async () => {

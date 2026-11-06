@@ -262,7 +262,7 @@ describe('isWithin / isWithinAny', () => {
       time({ label: 'Day 2', start: '2026-08-01T09:00:00Z', end: '2026-08-01T22:00:00Z' }),
     ]
     expect(isWithinAny(times, noon)).toBe(true)
-    expect(isWithinAny([times[0]], noon)).toBe(false)
+    expect(isWithinAny([times[0]!], noon)).toBe(false)
   })
 })
 
@@ -502,8 +502,8 @@ describe('isDayRestricted', () => {
    * open on Day 2 reads as "come back tomorrow and it's gone".
    */
   it('is true for an occupant present on only some days', () => {
-    expect(isDayRestricted({ times: [days[0]] }, days)).toBe(true)
-    expect(isDayRestricted({ times: [days[1]] }, days)).toBe(true)
+    expect(isDayRestricted({ times: [days[0]!] }, days)).toBe(true)
+    expect(isDayRestricted({ times: [days[1]!] }, days)).toBe(true)
   })
 
   it('is false for an occupant present on every day', () => {
@@ -520,8 +520,8 @@ describe('isDayRestricted', () => {
 
   it('is false when the festival has no more than one day', () => {
     // Naming the only day there is tells a visitor nothing.
-    expect(isDayRestricted({ times: [days[0]] }, [days[0]])).toBe(false)
-    expect(isDayRestricted({ times: [days[0]] }, [])).toBe(false)
+    expect(isDayRestricted({ times: [days[0]!] }, [days[0]!])).toBe(false)
+    expect(isDayRestricted({ times: [days[0]!] }, [])).toBe(false)
   })
 
   it('is judged on overlap, not on exact equality', () => {
@@ -529,7 +529,7 @@ describe('isDayRestricted', () => {
     // day; only a day it does not reach at all makes it restricted.
     const shortShift = day('', '2026-08-30T19:00:00Z', '2026-08-30T21:00:00Z')
     expect(isDayRestricted({ times: [shortShift] }, days)).toBe(true)
-    expect(isDayRestricted({ times: [shortShift, days[1]] }, days)).toBe(false)
+    expect(isDayRestricted({ times: [shortShift, days[1]!] }, days)).toBe(false)
   })
 })
 

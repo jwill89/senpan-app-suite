@@ -63,12 +63,16 @@ export const useLogsStore = defineStore('logs', () => {
   function passesFilter(e: LogEntry): boolean {
     if (level.value) {
       const v = LEVEL_VALUE[(e.level || '').toUpperCase()]
-      if (v === undefined || v < FILTER_MIN[level.value]) return false
+      if (v === undefined || v < FILTER_MIN[level.value]) {
+        return false
+      }
     }
     if (query.value) {
       const q = query.value.toLowerCase()
       const hay = `${e.message} ${e.level} ${JSON.stringify(e.fields ?? {})}`.toLowerCase()
-      if (!hay.includes(q)) return false
+      if (!hay.includes(q)) {
+        return false
+      }
     }
     return true
   }
@@ -109,9 +113,13 @@ export const useLogsStore = defineStore('logs', () => {
 
   /** Prepend a live log line (from the WebSocket feed), honoring pause + filters. */
   function appendLive(entry: LogEntry): void {
-    if (!live.value || !passesFilter(entry)) return
+    if (!live.value || !passesFilter(entry)) {
+      return
+    }
     entries.value.unshift({ ...entry, _id: ++seq })
-    if (entries.value.length > MAX_ENTRIES) entries.value.length = MAX_ENTRIES
+    if (entries.value.length > MAX_ENTRIES) {
+      entries.value.length = MAX_ENTRIES
+    }
   }
 
   /** Re-fetch when a filter changes (the historical part is filtered server-side). */
@@ -127,7 +135,9 @@ export const useLogsStore = defineStore('logs', () => {
   /** Toggle the live tail; resuming re-loads to catch up on missed lines. */
   function toggleLive(): void {
     live.value = !live.value
-    if (live.value) void load()
+    if (live.value) {
+      void load()
+    }
   }
 
   return {

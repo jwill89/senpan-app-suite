@@ -84,7 +84,7 @@ describe('generateSingleCard', () => {
     expect(cards.singleCardName).toBe('')
     // The new card's playable URL is auto-copied to the clipboard.
     expect(writeText).toHaveBeenCalledTimes(1)
-    expect(writeText.mock.calls[0][0]).toContain('/play/NEW123')
+    expect(writeText.mock.calls[0]![0]).toContain('/play/NEW123')
   })
 })
 

@@ -70,7 +70,9 @@ export const DEFAULT_AUTO_INTERVAL = 30
 
 /** Human label for an auto-draw interval, e.g. 30 -> "30s", 90 -> "1m 30s". */
 export function autoIntervalLabel(seconds: number): string {
-  if (seconds < 60) return `${seconds}s`
+  if (seconds < 60) {
+    return `${seconds}s`
+  }
   const m = Math.floor(seconds / 60)
   const s = seconds % 60
   return s === 0 ? `${m}m` : `${m}m ${s}s`
@@ -98,18 +100,25 @@ export function emptyNumberBoard(): number[][] {
  * centre [2][2] = 0 = FREE). Mirrors the backend `bingo.GenerateBoard`.
  */
 export function randomBoard(): number[][] {
-  const board = emptyNumberBoard()
-  for (let col = 0; col < 5; col++) {
+  const columns = Array.from({ length: 5 }, (_, col) => {
     const [lo, hi] = columnRange(col)
     const pool = Array.from({ length: hi - lo + 1 }, (_, i) => lo + i)
+    // Fisher-Yates: i and j both lie inside the pool, so the swap always finds both.
     for (let i = pool.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1))
-      ;[pool[i], pool[j]] = [pool[j], pool[i]]
+      const [a, b] = [pool[i], pool[j]]
+      if (a !== undefined && b !== undefined) {
+        pool[i] = b
+        pool[j] = a
+      }
     }
-    for (let row = 0; row < 5; row++) board[row][col] = pool[row]
-  }
-  board[2][2] = 0 // FREE centre
-  return board
+    return pool
+  })
+  // Row r takes the r-th number of each shuffled column (a column's range holds 15,
+  // so there is always one); the centre is FREE.
+  return Array.from({ length: 5 }, (_, row) =>
+    columns.map((pool, col) => (row === 2 && col === 2 ? 0 : (pool[row] ?? 0))),
+  )
 }
 
 /**
@@ -118,18 +127,26 @@ export function randomBoard(): number[][] {
  * repeats. Returns a human-readable error message, or '' when the card is valid.
  */
 export function validateBoard(board: number[][]): string {
-  if (board.length !== 5 || board.some((r) => r.length !== 5)) return 'Card must be a 5x5 grid.'
-  if (board[2][2] !== 0) return 'The centre cell must be left as the FREE space.'
+  if (board.length !== 5 || board.some((r) => r.length !== 5)) {
+    return 'Card must be a 5x5 grid.'
+  }
+  if (board[2]?.[2] !== 0) {
+    return 'The centre cell must be left as the FREE space.'
+  }
   for (let col = 0; col < 5; col++) {
     const [lo, hi] = columnRange(col)
     const seen = new Set<number>()
     for (let row = 0; row < 5; row++) {
-      if (col === 2 && row === 2) continue // FREE centre
-      const n = board[row][col]
-      if (!Number.isInteger(n) || n < lo || n > hi) {
+      if (col === 2 && row === 2) {
+        continue // FREE centre
+      }
+      const n = board[row]?.[col]
+      if (n === undefined || !Number.isInteger(n) || n < lo || n > hi) {
         return `Column ${BINGO_LETTERS[col]} must only contain numbers ${lo}-${hi}.`
       }
-      if (seen.has(n)) return `Column ${BINGO_LETTERS[col]} has the number ${n} more than once.`
+      if (seen.has(n)) {
+        return `Column ${BINGO_LETTERS[col]} has the number ${n} more than once.`
+      }
       seen.add(n)
     }
   }
@@ -154,9 +171,11 @@ export function patternColumns(patterns: { pattern_data: boolean[][] }[]): boole
   const cols = [false, false, false, false, false]
   for (const p of patterns) {
     const grid = p.pattern_data
-    for (let r = 0; r < 5 && r < grid.length; r++) {
-      for (let c = 0; c < 5 && c < grid[r].length; c++) {
-        if (grid[r][c] && !(r === 2 && c === 2)) cols[c] = true
+    for (const [r, row] of grid.slice(0, 5).entries()) {
+      for (const [c, cell] of row.slice(0, 5).entries()) {
+        if (cell && !(r === 2 && c === 2)) {
+          cols[c] = true
+        }
       }
     }
   }
@@ -395,7 +414,9 @@ export function supportedTimezones(): string[] {
     const intl = Intl as unknown as { supportedValuesOf?: (key: string) => string[] }
     if (typeof intl.supportedValuesOf === 'function') {
       const zones = intl.supportedValuesOf('timeZone')
-      if (zones.length) return zones
+      if (zones.length) {
+        return zones
+      }
     }
   } catch {
     /* fall through to the curated list */

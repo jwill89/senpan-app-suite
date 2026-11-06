@@ -157,7 +157,9 @@ export const useEmaStore = defineStore('ema', () => {
 
   function addWindow(): void {
     const f = boardForm.value
-    if (f) f.windows.push(blankWindow(f.windows.at(-1)))
+    if (f) {
+      f.windows.push(blankWindow(f.windows.at(-1)))
+    }
   }
 
   function removeWindow(index: number): void {
@@ -167,7 +169,9 @@ export const useEmaStore = defineStore('ema', () => {
   /** Saves the form. Returns the saved board's id, or null when it was refused. */
   async function saveBoard(): Promise<number | null> {
     const f = boardForm.value
-    if (!f || saving.value) return null
+    if (!f || saving.value) {
+      return null
+    }
     const body = {
       festival_map_id: f.festival_map_id ?? 0,
       title: f.title,
@@ -190,8 +194,11 @@ export const useEmaStore = defineStore('ema', () => {
     saving.value = true
     try {
       let id = f.id
-      if (id) await endpoints.emaBoards.update(id, body)
-      else id = (await endpoints.emaBoards.create(body)).board.id
+      if (id) {
+        await endpoints.emaBoards.update(id, body)
+      } else {
+        id = (await endpoints.emaBoards.create(body)).board.id
+      }
       ui.notify('Plaque board saved', 'success')
       boardForm.value = null
       await loadBoards()
@@ -207,7 +214,9 @@ export const useEmaStore = defineStore('ema', () => {
   async function setBoardStatus(b: EmaBoard, status: 'open' | 'closed'): Promise<void> {
     try {
       await endpoints.emaBoards.setStatus(b.id, status)
-      if (selectedBoard.value?.id === b.id) selectedBoard.value = { ...selectedBoard.value, status }
+      if (selectedBoard.value?.id === b.id) {
+        selectedBoard.value = { ...selectedBoard.value, status }
+      }
       await loadBoards()
     } catch (e) {
       ui.notify((e as Error).message, 'error')
@@ -219,10 +228,14 @@ export const useEmaStore = defineStore('ema', () => {
       `Delete "${b.title || 'this board'}"? Its days, its plaque record and any plaques still waiting for review go with it.`,
       { confirmText: 'Delete', danger: true },
     )
-    if (!ok) return false
+    if (!ok) {
+      return false
+    }
     try {
       await endpoints.emaBoards.delete(b.id)
-      if (selectedBoard.value?.id === b.id) selectedBoard.value = null
+      if (selectedBoard.value?.id === b.id) {
+        selectedBoard.value = null
+      }
       await loadBoards()
       return true
     } catch (e) {
@@ -234,13 +247,17 @@ export const useEmaStore = defineStore('ema', () => {
   // -- Review -------------------------------------------------------------------
 
   async function review(p: EmaPlaque, action: 'approve' | 'reject'): Promise<void> {
-    if (reviewing.value.has(p.id)) return
+    if (reviewing.value.has(p.id)) {
+      return
+    }
     if (action === 'reject') {
       const ok = await ui.confirm(
         `Reject ${p.character_name}'s plaque? Its image is deleted, and they can send another for ${p.window_label}.`,
         { confirmText: 'Reject', danger: true },
       )
-      if (!ok) return
+      if (!ok) {
+        return
+      }
     }
     reviewing.value = new Set(reviewing.value).add(p.id)
     try {
@@ -253,7 +270,9 @@ export const useEmaStore = defineStore('ema', () => {
       void loadBoards()
     } catch (e) {
       ui.notify((e as Error).message, 'error')
-      if (selectedBoard.value) void loadPlaques(selectedBoard.value.id)
+      if (selectedBoard.value) {
+        void loadPlaques(selectedBoard.value.id)
+      }
     } finally {
       const next = new Set(reviewing.value)
       next.delete(p.id)
@@ -289,7 +308,9 @@ export const useEmaStore = defineStore('ema', () => {
    * whether it posted.
    */
   async function postRequest(p: EmaPlaque, image: File): Promise<boolean> {
-    if (postingRequest.value) return false
+    if (postingRequest.value) {
+      return false
+    }
     const form = new FormData()
     form.append('image', image)
     postingRequest.value = true

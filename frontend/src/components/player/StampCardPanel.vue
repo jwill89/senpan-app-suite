@@ -42,7 +42,9 @@ const card = computed<PublicStampCard | null>(() => store.publicCard)
  * reveal only once the card is complete. */
 const items = computed<CanvasItem[]>(() => {
   const c = card.value
-  if (!c) return []
+  if (!c) {
+    return []
+  }
   const stamps = c.stamps.map((s) => ({
     key: `s${s.id}`,
     // Collected -> the stamp art; otherwise the optional not-stamped overlay ('' ->
@@ -77,8 +79,12 @@ const progressParts = computed<{ have: number; label: string }[]>(() => {
   })
   const parts: { have: number; label: string }[] = []
   if (p.byType) {
-    if (p.food.required > 0) parts.push(part(p.food.collected, p.food.required, 'food '))
-    if (p.game.required > 0) parts.push(part(p.game.collected, p.game.required, 'game '))
+    if (p.food.required > 0) {
+      parts.push(part(p.food.collected, p.food.required, 'food '))
+    }
+    if (p.game.required > 0) {
+      parts.push(part(p.game.collected, p.game.required, 'game '))
+    }
   }
   return parts.length ? parts : [part(p.collected, p.total)]
 })
@@ -105,20 +111,28 @@ const canCollectMore = computed(
 )
 
 function stampStatus(s: PublicStamp): { label: string; modifier: string } {
-  if (s.collected) return { label: 'Collected', modifier: 'stamp-stall-status--collected' }
-  if (s.available) return { label: 'Open now', modifier: 'stamp-stall-status--open' }
+  if (s.collected) {
+    return { label: 'Collected', modifier: 'stamp-stall-status--collected' }
+  }
+  if (s.available) {
+    return { label: 'Open now', modifier: 'stamp-stall-status--open' }
+  }
   return { label: 'Closed', modifier: 'stamp-stall-status--closed' }
 }
 
 function windowText(s: PublicStamp): string {
-  if (!s.active_from && !s.active_to) return ''
+  if (!s.active_from && !s.active_to) {
+    return ''
+  }
   const from = s.active_from ? formatServerTimestamp(s.active_from) : '...'
   const to = s.active_to ? formatServerTimestamp(s.active_to) : '...'
   return `${from} - ${to}`
 }
 
 async function submit(): Promise<void> {
-  if (await store.submitPassword(props.token, password.value)) password.value = ''
+  if (await store.submitPassword(props.token, password.value)) {
+    password.value = ''
+  }
 }
 </script>
 

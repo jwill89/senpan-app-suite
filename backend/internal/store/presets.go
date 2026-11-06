@@ -14,7 +14,7 @@ import (
 
 // ListGamePresets returns all game presets ordered by name.
 func (s *Store) ListGamePresets(ctx context.Context) ([]model.GamePreset, error) {
-	rows, err := s.db.QueryContext(ctx, "SELECT id, name, pattern_ids, game_details, auto_call, auto_interval, created_at FROM game_presets ORDER BY name ASC")
+	rows, err := s.db.QueryContext(ctx, "SELECT id, name, pattern_ids, game_details, auto_call, auto_interval, CAST(created_at AS TEXT) FROM game_presets ORDER BY name ASC")
 	if err != nil {
 		return nil, err
 	}
@@ -38,7 +38,7 @@ func (s *Store) GetGamePreset(ctx context.Context, id int64) (*model.GamePreset,
 	var p model.GamePreset
 	var idsJSON string
 	err := s.db.QueryRowContext(ctx,
-		"SELECT id, name, pattern_ids, game_details, auto_call, auto_interval, created_at FROM game_presets WHERE id = ?", id,
+		"SELECT id, name, pattern_ids, game_details, auto_call, auto_interval, CAST(created_at AS TEXT) FROM game_presets WHERE id = ?", id,
 	).Scan(&p.ID, &p.Name, &idsJSON, &p.GameDetails, &p.Auto, &p.AutoInterval, &p.CreatedAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil

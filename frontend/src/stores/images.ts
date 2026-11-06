@@ -109,7 +109,9 @@ export const useImagesStore = defineStore('images', () => {
 
   /** Loads the category list only if it isn't already loaded or loading. */
   async function ensureCategories(): Promise<void> {
-    if (categories.value.length > 0) return
+    if (categories.value.length > 0) {
+      return
+    }
     categoriesPromise ??= loadCategories().finally(() => {
       categoriesPromise = null
     })
@@ -118,7 +120,9 @@ export const useImagesStore = defineStore('images', () => {
 
   /** Loads a category's images only if they aren't already cached or loading. */
   async function ensureImages(dir: string): Promise<void> {
-    if (loadedDirs.has(dir)) return
+    if (loadedDirs.has(dir)) {
+      return
+    }
     let pending = imagesPromises.get(dir)
     if (!pending) {
       pending = loadImages(dir).finally(() => imagesPromises.delete(dir))
@@ -156,8 +160,9 @@ export const useImagesStore = defineStore('images', () => {
         `Delete the “${cat.name}” category and all ${cat.file_count} image${cat.file_count === 1 ? '' : 's'} in it? This cannot be undone.`,
         { title: 'Delete category', confirmText: 'Delete' },
       ))
-    )
+    ) {
       return
+    }
     try {
       await endpoints.images.deleteCategory(cat.dir)
       ui.notify('Category deleted', 'info')
@@ -174,10 +179,14 @@ export const useImagesStore = defineStore('images', () => {
   /** Uploads files into a category, reporting per-file results, then refreshes. */
   async function uploadImages(dir: string, files: FileList | File[]): Promise<void> {
     const list = Array.from(files)
-    if (list.length === 0) return
+    if (list.length === 0) {
+      return
+    }
     const form = new FormData()
     form.append('dir', dir)
-    for (const f of list) form.append('files', f)
+    for (const f of list) {
+      form.append('files', f)
+    }
 
     uploading.value = true
     uploadProgress.value = 0
@@ -187,9 +196,15 @@ export const useImagesStore = defineStore('images', () => {
       })
       const ok = res.uploaded.length
       const skipped = res.skipped
-      if (ok > 0) ui.notify(`Uploaded ${ok} image${ok === 1 ? '' : 's'}`, 'success')
-      for (const s of skipped) ui.notify(`${s.name}: ${s.reason}`, 'error')
-      if (ok === 0 && skipped.length === 0) ui.notify('No images were uploaded', 'info')
+      if (ok > 0) {
+        ui.notify(`Uploaded ${ok} image${ok === 1 ? '' : 's'}`, 'success')
+      }
+      for (const s of skipped) {
+        ui.notify(`${s.name}: ${s.reason}`, 'error')
+      }
+      if (ok === 0 && skipped.length === 0) {
+        ui.notify('No images were uploaded', 'info')
+      }
       await loadImages(dir)
       await loadCategories() // refresh counts
     } catch (e) {
@@ -206,8 +221,9 @@ export const useImagesStore = defineStore('images', () => {
         title: 'Delete image',
         confirmText: 'Delete',
       }))
-    )
+    ) {
       return
+    }
     try {
       await endpoints.images.deleteImage(dir, name)
       ui.notify('Image deleted', 'info')

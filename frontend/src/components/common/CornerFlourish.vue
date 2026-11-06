@@ -30,16 +30,22 @@ const svgCache = new Map<string, Promise<string>>()
  * (the server sanitizes on upload); returns '' for anything that isn't clean SVG.
  */
 function sanitizeFlourishSvg(markup: string): string {
-  if (!markup.includes('<svg')) return ''
+  if (!markup.includes('<svg')) {
+    return ''
+  }
   let doc: Document
   try {
     doc = new DOMParser().parseFromString(markup, 'image/svg+xml')
   } catch {
     return ''
   }
-  if (doc.getElementsByTagName('parsererror').length > 0) return ''
+  if (doc.getElementsByTagName('parsererror').length > 0) {
+    return ''
+  }
   const root = doc.documentElement
-  if (root.nodeName.toLowerCase() !== 'svg') return ''
+  if (root.nodeName.toLowerCase() !== 'svg') {
+    return ''
+  }
   const BANNED_TAGS = new Set([
     'script',
     'foreignobject',

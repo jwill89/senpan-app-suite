@@ -52,7 +52,7 @@ func (s *Store) ListWinnersLog(ctx context.Context, limit, offset int, sortField
 		dir = "ASC"
 	}
 
-	query := fmt.Sprintf("SELECT id, logged_at, card_id, player_name, game_details, winning_patterns, COUNT(*) OVER() as total FROM winners_log ORDER BY %s %s LIMIT ? OFFSET ?", col, dir)
+	query := fmt.Sprintf("SELECT id, CAST(logged_at AS TEXT), card_id, player_name, game_details, winning_patterns, COUNT(*) OVER() as total FROM winners_log ORDER BY %s %s LIMIT ? OFFSET ?", col, dir)
 	rows, err := s.db.QueryContext(ctx, query, limit, offset)
 	if err != nil {
 		return nil, 0, err

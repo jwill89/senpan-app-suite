@@ -69,7 +69,9 @@ async function submit(): Promise<void> {
 /** Sign in with a passkey (usernameless). Navigates on success like a password login. */
 async function passkeyLogin(): Promise<void> {
   const ok = await auth.loginWithPasskey()
-  if (ok) void router.push(safeRedirect(route.query.redirect))
+  if (ok) {
+    void router.push(safeRedirect(route.query.redirect))
+  }
 }
 
 function goHome(): void {

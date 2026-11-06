@@ -46,7 +46,9 @@ function setFestivalMap(value: string): void {
 
 /** Pin the raffle to one stall on the linked map ('' -> not pinned). */
 function setOccupant(value: string): void {
-  if (raffles.raffleForm) raffles.raffleForm.occupant_id = value ? Number(value) : null
+  if (raffles.raffleForm) {
+    raffles.raffleForm.occupant_id = value ? Number(value) : null
+  }
 }
 
 const mode = computed<RaffleMode>(() => raffles.raffleForm?.entry_mode ?? 'single')
@@ -65,12 +67,16 @@ const tiersTotal = computed(() =>
 )
 
 function setMode(value: RaffleMode): void {
-  if (raffles.raffleForm) raffles.raffleForm.entry_mode = value
+  if (raffles.raffleForm) {
+    raffles.raffleForm.entry_mode = value
+  }
 }
 
 /** Save the form; on success let the parent return to the list. */
 async function save(): Promise<void> {
-  if (await raffles.saveRaffle()) emit('saved')
+  if (await raffles.saveRaffle()) {
+    emit('saved')
+  }
 }
 
 /** Discard the form and return to the list. */

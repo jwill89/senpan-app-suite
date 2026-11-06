@@ -60,7 +60,9 @@ export const useTeaRoomsStore = defineStore('teaRooms', () => {
   const search = ref('')
   const filteredTeaRooms = computed(() => {
     const q = search.value.trim().toLowerCase()
-    if (!q) return teaRooms.value
+    if (!q) {
+      return teaRooms.value
+    }
     return teaRooms.value.filter((t) =>
       [t.name, t.room_number, t.hashtags, t.description].some((s) => s.toLowerCase().includes(q)),
     )
@@ -115,7 +117,9 @@ export const useTeaRoomsStore = defineStore('teaRooms', () => {
   /** Saves the tea-room form. Returns true on success (caller navigates back). */
   async function saveTeaRoom(): Promise<boolean> {
     const f = teaRoomForm.value
-    if (!f) return false
+    if (!f) {
+      return false
+    }
     if (!f.name.trim()) {
       ui.notify('Room name is required', 'error')
       return false
@@ -158,12 +162,15 @@ export const useTeaRoomsStore = defineStore('teaRooms', () => {
         title: 'Delete tea room',
         confirmText: 'Delete',
       }))
-    )
+    ) {
       return
+    }
     try {
       await endpoints.teaRooms.delete(t.id)
       teaRooms.value = teaRooms.value.filter((r) => r.id !== t.id)
-      if (teaRoomForm.value?.id === t.id) teaRoomForm.value = null
+      if (teaRoomForm.value?.id === t.id) {
+        teaRoomForm.value = null
+      }
       ui.notify('Tea room deleted', 'info')
     } catch (e) {
       ui.notify((e as Error).message, 'error')
@@ -194,8 +201,9 @@ export const useTeaRoomsStore = defineStore('teaRooms', () => {
         title: 'Post tea room',
         confirmText: 'Post',
       }))
-    )
+    ) {
       return
+    }
     postingId.value = t.id
     try {
       await endpoints.teaRooms.post(t.id)
@@ -255,7 +263,9 @@ export const useTeaRoomsStore = defineStore('teaRooms', () => {
       const data = await endpoints.teaRooms.patch(t.id, fields)
       if (data.tea_room) {
         const i = teaRooms.value.findIndex((r) => r.id === t.id)
-        if (i !== -1) teaRooms.value[i] = data.tea_room
+        if (i !== -1) {
+          teaRooms.value[i] = data.tea_room
+        }
       }
     } catch (e) {
       ui.notify((e as Error).message, 'error')

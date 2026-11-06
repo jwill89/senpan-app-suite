@@ -24,7 +24,9 @@ const tableRef = useTemplateRef<{ exportCsv: (name?: string) => void }>('tableRe
 /** Bulk-delete the checked entries, then drop the now-stale selection. */
 async function deleteSelectedEntries(): Promise<void> {
   const done = await game.deleteWinnerLogEntries(selectedEntries.value.map(Number))
-  if (done) selectedEntries.value = []
+  if (done) {
+    selectedEntries.value = []
+  }
 }
 
 const columns: DataColumn[] = [

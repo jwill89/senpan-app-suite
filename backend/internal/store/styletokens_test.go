@@ -91,7 +91,7 @@ func TestParseRootTokens(t *testing.T) {
 // tokens were parsed into the new tokens column and the legacy column was dropped.
 func TestMigrateStyleTokens_Backfill(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "legacy.db")
-	db, err := sql.Open("sqlite3", path)
+	db, err := sql.Open("sqlite", path)
 	if err != nil {
 		t.Fatal(err)
 	}

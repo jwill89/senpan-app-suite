@@ -78,9 +78,13 @@ const entryColumns = computed<DataColumn[]>(() => {
   ]
   // A details-only (or free) raffle collects nothing, so the money column would
   // only ever read 0. The paid column stays: the draw still runs off it.
-  if (charges.value) cols.push({ key: 'cost', label: 'Cost', align: 'center' })
+  if (charges.value) {
+    cols.push({ key: 'cost', label: 'Cost', align: 'center' })
+  }
   cols.push({ key: 'paid', label: 'Paid', align: 'center' })
-  if (isOpen.value) cols.push({ key: 'actions', label: 'Actions', align: 'center' })
+  if (isOpen.value) {
+    cols.push({ key: 'actions', label: 'Actions', align: 'center' })
+  }
   return cols
 })
 
@@ -89,13 +93,17 @@ const charges = computed(() => !!raffles.selectedRaffle && raffleHasCost(raffles
 
 /** Sticker price of one entry row, priced through the raffle's entry mode. */
 function entryCost(e: RaffleEntry): string {
-  if (!raffles.selectedRaffle) return '-'
+  if (!raffles.selectedRaffle) {
+    return '-'
+  }
   return entryTicketPrice(raffles.selectedRaffle, e).toLocaleString()
 }
 
 /** What an entry has actually handed over, once its waivers are netted off. */
 function entryCollected(e: RaffleEntry): number {
-  if (!raffles.selectedRaffle) return 0
+  if (!raffles.selectedRaffle) {
+    return 0
+  }
   return entryAmountCollected(raffles.selectedRaffle, e)
 }
 
@@ -122,12 +130,18 @@ function entryRowClass(e: RaffleEntry): string {
  * it's live (no icon). Closed raffles never show one.
  */
 function raffleTiming(r: Raffle): 'upcoming' | 'ended' | '' {
-  if (r.status !== 'open') return ''
+  if (r.status !== 'open') {
+    return ''
+  }
   const now = Date.now()
   const from = parseServerTimestamp(r.available_from)
-  if (!Number.isNaN(from) && from > now) return 'upcoming'
+  if (!Number.isNaN(from) && from > now) {
+    return 'upcoming'
+  }
   const to = parseServerTimestamp(r.available_to)
-  if (!Number.isNaN(to) && to <= now) return 'ended'
+  if (!Number.isNaN(to) && to <= now) {
+    return 'ended'
+  }
   return ''
 }
 
@@ -135,13 +149,17 @@ function raffleTiming(r: Raffle): 'upcoming' | 'ended' | '' {
 function periodLabel(r: Raffle): string {
   const from = r.available_from ? formatServerTimestamp(r.available_from) : ''
   const to = r.available_to ? formatServerTimestamp(r.available_to) : ''
-  if (!from && !to) return 'Always open'
+  if (!from && !to) {
+    return 'Always open'
+  }
   return `${from || '-'} - ${to || '-'}`
 }
 
 /** Gil amount formatted with thousands separators (or "-" for nothing). */
 function gilLabel(amount: number | undefined): string {
-  if (!amount) return '-'
+  if (!amount) {
+    return '-'
+  }
   return `${amount.toLocaleString()} gil`
 }
 
@@ -155,7 +173,9 @@ function openRaffle(r: Raffle): void {
   screen.value = 'detail'
 }
 function editSelected(): void {
-  if (!raffles.selectedRaffle) return
+  if (!raffles.selectedRaffle) {
+    return
+  }
   raffles.editRaffleForm(raffles.selectedRaffle)
   screen.value = 'form'
 }
@@ -165,7 +185,9 @@ function copyRaffle(r: Raffle): void {
 }
 /** Same as copyRaffle, for the raffle currently open in the detail view. */
 function duplicateSelected(): void {
-  if (raffles.selectedRaffle) copyRaffle(raffles.selectedRaffle)
+  if (raffles.selectedRaffle) {
+    copyRaffle(raffles.selectedRaffle)
+  }
 }
 function backToList(): void {
   raffles.selectedRaffle = null
@@ -177,10 +199,14 @@ function onFormDone(): void {
 }
 async function deleteSelected(): Promise<void> {
   const r = raffles.selectedRaffle
-  if (!r) return
+  if (!r) {
+    return
+  }
   await raffles.deleteRaffle(r.id)
   // deleteRaffle clears selectedRaffle on success -> return to the list.
-  if (!raffles.selectedRaffle) screen.value = 'list'
+  if (!raffles.selectedRaffle) {
+    screen.value = 'list'
+  }
 }
 </script>
 

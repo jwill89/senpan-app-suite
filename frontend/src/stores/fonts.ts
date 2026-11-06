@@ -64,9 +64,13 @@ export const useFontsStore = defineStore('fonts', () => {
   /** Uploads the selected files, then refreshes the list. */
   async function uploadFonts(files: FileList | File[]): Promise<void> {
     const list = Array.from(files)
-    if (list.length === 0) return
+    if (list.length === 0) {
+      return
+    }
     const form = new FormData()
-    for (const f of list) form.append('files', f)
+    for (const f of list) {
+      form.append('files', f)
+    }
 
     uploading.value = true
     try {
@@ -103,8 +107,9 @@ export const useFontsStore = defineStore('fonts', () => {
         title: 'Delete font',
         confirmText: 'Delete',
       }))
-    )
+    ) {
       return
+    }
     try {
       await endpoints.fonts.deleteFont(font.base)
       ui.notify('Font deleted', 'info')
@@ -121,8 +126,9 @@ export const useFontsStore = defineStore('fonts', () => {
         title: 'Delete font file',
         confirmText: 'Delete',
       }))
-    )
+    ) {
       return
+    }
     try {
       await endpoints.fonts.deleteFile(name)
       ui.notify('File deleted', 'info')
@@ -135,7 +141,9 @@ export const useFontsStore = defineStore('fonts', () => {
   /** Renames one variant file; returns true on success. */
   async function renameFile(name: string, newName: string): Promise<boolean> {
     const trimmed = newName.trim()
-    if (!trimmed || trimmed === name) return false
+    if (!trimmed || trimmed === name) {
+      return false
+    }
     try {
       await endpoints.fonts.renameFile(name, trimmed)
       ui.notify('File renamed', 'success')

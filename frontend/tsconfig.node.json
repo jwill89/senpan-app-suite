@@ -1,19 +1,12 @@
 {
-  "compilerOptions": {
-    "target": "ES2023",
-    "lib": ["ES2023"],
-    "module": "ESNext",
-    "skipLibCheck": true,
-    "moduleResolution": "bundler",
-    "allowImportingTsExtensions": true,
-    "isolatedModules": true,
-    "moduleDetection": "force",
-    "noEmit": true,
-    "strict": true,
-    "noUnusedLocals": true,
-    "noUnusedParameters": true,
-    "noFallthroughCasesInSwitch": true,
-    "types": ["node"]
-  },
-  "include": ["vite.config.ts", "vitest.config.ts", "config/**/*.ts"]
+  // The shared settings for the Node-side files (shared-tooling's lint/web), the
+  // end-to-end suite's included.
+  "extends": "@jwill89/lint-web/tsconfig.node.json",
+  "include": [
+    "vite.config.ts",
+    "vitest.config.ts",
+    "config/**/*.ts",
+    "playwright.config.ts",
+    "e2e/**/*.ts"
+  ]
 }

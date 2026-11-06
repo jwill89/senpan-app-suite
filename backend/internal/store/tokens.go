@@ -39,7 +39,7 @@ func (s *Store) UpsertUserToken(ctx context.Context, userID int64, tokenHash, pr
 func (s *Store) GetUserTokenInfo(ctx context.Context, userID int64) (model.TokenInfo, error) {
 	var info model.TokenInfo
 	err := s.db.QueryRowContext(ctx,
-		`SELECT token_prefix, created_at, COALESCE(last_used_at, '')
+		`SELECT token_prefix, CAST(created_at AS TEXT), COALESCE(last_used_at, '')
 		   FROM user_tokens WHERE user_id = ?`, userID).
 		Scan(&info.Prefix, &info.CreatedAt, &info.LastUsedAt)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -58,7 +58,7 @@ func (s *Store) GetUserTokenInfo(ctx context.Context, userID int64) (model.Token
 // not touched here - call TouchUserToken for that.
 func (s *Store) GetUserByTokenHash(ctx context.Context, tokenHash string) (*model.User, error) {
 	row := s.db.QueryRowContext(ctx,
-		`SELECT u.id, u.username, u.is_admin, u.is_active, u.permissions, u.created_at, COALESCE(u.last_login_at, ''), COALESCE(u.password_epoch, 0)
+		`SELECT u.id, u.username, u.is_admin, u.is_active, u.permissions, CAST(u.created_at AS TEXT), COALESCE(u.last_login_at, ''), COALESCE(u.password_epoch, 0)
 		   FROM user_tokens t JOIN users u ON u.id = t.user_id
 		  WHERE t.token_hash = ?`, tokenHash)
 	u, err := s.scanUser(row)

@@ -25,19 +25,8 @@
          non-Windows, so it is a no-op locally: the normal Windows build and the
          `dotnet build -c Release` deploy step are unaffected. -->
     <EnableWindowsTargeting Condition="'$(OS)' != 'Windows_NT'">true</EnableWindowsTargeting>
-
-    <!-- The .NET analyzers at their recommended level, and the code style in
-         .editorconfig checked in the build (the same standard as the sister Kindred
-         Nights plugin). Set here rather than in a plugins/Directory.Build.props
-         because this is the only project, and its .editorconfig is scoped to this
-         folder too, so the two halves of the standard sit side by side. The
-         documentation file is made only so the build can see unused usings
-         (IDE0005); nothing reads it, so it stays in obj/ rather than being copied
-         next to the DLL, where DalamudPackager would put it in latest.zip. -->
-    <AnalysisLevel>latest-recommended</AnalysisLevel>
-    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
-    <GenerateDocumentationFile>true</GenerateDocumentationFile>
-    <CopyDocumentationFileToOutputDirectory>false</CopyDocumentationFileToOutputDirectory>
+    <!-- The analyzers and code style come from ../Directory.Build.props
+         (shared-tooling's lint/dotnet); the plugin's exceptions are in .editorconfig. -->
   </PropertyGroup>
 
   <ItemGroup>

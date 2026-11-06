@@ -59,8 +59,8 @@ describe('PlacementEditor accessibility', () => {
     })
     const els = wrapper.findAll('.placement-item')
 
-    await els[0].trigger('keydown.enter')
-    await els[1].trigger('keydown.space')
+    await els[0]!.trigger('keydown.enter')
+    await els[1]!.trigger('keydown.space')
 
     const selected = wrapper.emitted('select')
     expect(selected).toBeTruthy()
@@ -72,7 +72,7 @@ describe('PlacementEditor accessibility', () => {
       props: { cardImage: '', items: items(), selectedKey: 'p1' },
     })
     const els = wrapper.findAll('.placement-item')
-    expect(els[0].attributes('aria-pressed')).toBe('false')
-    expect(els[1].attributes('aria-pressed')).toBe('true')
+    expect(els[0]!.attributes('aria-pressed')).toBe('false')
+    expect(els[1]!.attributes('aria-pressed')).toBe('true')
   })
 })

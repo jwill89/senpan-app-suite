@@ -67,7 +67,9 @@ export const useYoeverStore = defineStore('yoever', () => {
   /** Toggles the reaction sound - only while effects are shown (locked off
    *  otherwise, since the sound can't play without the effect being active). */
   function toggleSound(): void {
-    if (muted.value) return
+    if (muted.value) {
+      return
+    }
     setSoundEnabled(!soundEnabled.value)
   }
 
@@ -76,7 +78,9 @@ export const useYoeverStore = defineStore('yoever', () => {
    * finishes. No-op while muted, so a suppressed client never renders it.
    */
   function show(name: string): void {
-    if (muted.value) return
+    if (muted.value) {
+      return
+    }
     const id = ++seq
     // Bias toward the upper half so the name caption below the image stays visible.
     const top = 8 + Math.random() * 34

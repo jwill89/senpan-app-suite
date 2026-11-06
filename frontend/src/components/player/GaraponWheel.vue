@@ -38,7 +38,9 @@ function delay(ms: number): Promise<void> {
 }
 
 async function spin(): Promise<void> {
-  if (props.disabled || spinning.value) return
+  if (props.disabled || spinning.value) {
+    return
+  }
   spinning.value = true
 
   // Fling the previous resting ball off-screen before the new round.

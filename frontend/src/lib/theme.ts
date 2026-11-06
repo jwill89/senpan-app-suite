@@ -26,9 +26,13 @@ import { assetCssUrl } from '@/lib/assets'
  * Tracks loaded fonts by element id to avoid duplicates.
  */
 export function loadGoogleFont(fontFamily: string): void {
-  if (!fontFamily) return
+  if (!fontFamily) {
+    return
+  }
   const id = 'gfont-' + fontFamily.replace(/\s+/g, '-').toLowerCase()
-  if (document.getElementById(id)) return
+  if (document.getElementById(id)) {
+    return
+  }
   const link = document.createElement('link')
   link.id = id
   link.rel = 'stylesheet'
@@ -72,8 +76,12 @@ const CSS_UNSAFE_CHARS = new Set(["'", '"', '\\', '{', '}', ';', '<', '>'])
 export function cssNameSafe(family: string): boolean {
   for (const ch of family) {
     const code = ch.charCodeAt(0)
-    if (code < 0x20 || code === 0x7f) return false
-    if (CSS_UNSAFE_CHARS.has(ch)) return false
+    if (code < 0x20 || code === 0x7f) {
+      return false
+    }
+    if (CSS_UNSAFE_CHARS.has(ch)) {
+      return false
+    }
   }
   return true
 }
@@ -117,10 +125,16 @@ export function clampFontMetrics(
   ascentRatio: number,
   descentRatio: number,
 ): FontMetricOverride | null {
-  if (!Number.isFinite(ascentRatio) || !Number.isFinite(descentRatio)) return null
-  if (ascentRatio < 0 || descentRatio < 0) return null
+  if (!Number.isFinite(ascentRatio) || !Number.isFinite(descentRatio)) {
+    return null
+  }
+  if (ascentRatio < 0 || descentRatio < 0) {
+    return null
+  }
   const total = ascentRatio + descentRatio
-  if (!(total > METRIC_CLAMP_THRESHOLD)) return null
+  if (!(total > METRIC_CLAMP_THRESHOLD)) {
+    return null
+  }
   const scale = METRIC_CLAMP_TARGET / total
   return { ascent: ascentRatio * scale, descent: descentRatio * scale }
 }
@@ -139,7 +153,9 @@ export function uploadedFontUrl(token: string): string {
 /** Builds a single @font-face rule, including override descriptors if clamped. */
 function fontFaceRule(font: UploadedFont): string {
   const family = fontFamily(font)
-  if (!family || !cssNameSafe(family)) return ''
+  if (!family || !cssNameSafe(family)) {
+    return ''
+  }
   const ext = (font.name.split('.').pop() || '').toLowerCase()
   const hint = FONT_FORMAT_HINTS[ext]
   const formatPart = hint ? ` format('${hint}')` : ''
@@ -172,7 +188,9 @@ function writeUploadedFontStyle(fonts: UploadedFont[]): void {
 function measureFontOverride(family: string): FontMetricOverride | null {
   try {
     const ctx = document.createElement('canvas').getContext('2d')
-    if (!ctx) return null
+    if (!ctx) {
+      return null
+    }
     const px = 100
     ctx.font = `${px}px '${family}'`
     const m = ctx.measureText('Hg')
@@ -190,11 +208,15 @@ function measureFontOverride(family: string): FontMetricOverride | null {
  * no-ops where the Font Loading API is unavailable (e.g. SSR / older browsers).
  */
 async function clampUploadedFontMetrics(fonts: UploadedFont[]): Promise<void> {
-  if (typeof document === 'undefined') return
+  if (typeof document === 'undefined') {
+    return
+  }
   const results = await Promise.all(
     fonts.map(async (font) => {
       const family = fontFamily(font)
-      if (!family || measuredFamilies.has(family)) return false
+      if (!family || measuredFamilies.has(family)) {
+        return false
+      }
       try {
         await document.fonts.load(`32px '${family}'`)
       } catch {
@@ -209,7 +231,9 @@ async function clampUploadedFontMetrics(fonts: UploadedFont[]): Promise<void> {
       return false
     }),
   )
-  if (results.includes(true)) writeUploadedFontStyle(lastFonts)
+  if (results.includes(true)) {
+    writeUploadedFontStyle(lastFonts)
+  }
 }
 
 /**
@@ -249,7 +273,9 @@ export function applyHeaderFont(fontFamily: string | null | undefined): void {
   // depth). The server rejects such values, so this only bites legacy data.
   const family = fontFamily && cssNameSafe(fontFamily) ? fontFamily : 'Arapey'
   document.documentElement.style.setProperty('--header-font', `'${family}', serif`)
-  if (!isUploadedFamily(family)) loadGoogleFont(family)
+  if (!isUploadedFamily(family)) {
+    loadGoogleFont(family)
+  }
 }
 
 /**

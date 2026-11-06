@@ -779,8 +779,9 @@ func writeInternalError(w http.ResponseWriter, where string, err error) {
 // clientGone reports whether err only says that the work's context was canceled -
 // the request's client went away, or the process is shutting down under a
 // background loop - so a query was refused or stopped part-way. database/sql
-// reports the first as context.Canceled; SQLite reports the second as an interrupt
-// (store.Interrupted).
+// reports the first as context.Canceled, and the driver the second too;
+// store.Interrupted catches SQLite's interrupt should it arrive as the driver's
+// own error instead.
 func clientGone(err error) bool {
 	return errors.Is(err, context.Canceled) || store.Interrupted(err)
 }

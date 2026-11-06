@@ -49,16 +49,18 @@ const colorCache = new Map<string, Rgba>()
 
 function parseColor(input: string): Rgba {
   const cached = colorCache.get(input)
-  if (cached) return cached
+  if (cached) {
+    return cached
+  }
   let result: Rgba = { r: 0, g: 0, b: 0, a: 1 }
   const el = document.createElement('div')
   el.style.color = input
   if (el.style.color) {
     document.body.appendChild(el)
-    const m = getComputedStyle(el).color.match(/[\d.]+/g)
+    const [r, g, b, a] = getComputedStyle(el).color.match(/[\d.]+/g) ?? []
     el.remove()
-    if (m && m.length >= 3) {
-      result = { r: +m[0], g: +m[1], b: +m[2], a: m.length > 3 ? +m[3] : 1 }
+    if (r !== undefined && g !== undefined && b !== undefined) {
+      result = { r: +r, g: +g, b: +b, a: a !== undefined ? +a : 1 }
     }
   }
   colorCache.set(input, result)
@@ -83,13 +85,17 @@ function pickerSeed(t: ThemeTokenMeta): string {
 /** Apply a Chrome-picker change, storing modern rgb(r g b / a%) (the picker
  *  emits a legacy rgba() string, which we normalise). */
 function onPickerChange(t: ThemeTokenMeta | null, payload: { rgba: string }): void {
-  if (t) setToken(t.name, toRgb(parseColor(payload.rgba)))
+  if (t) {
+    setToken(t.name, toRgb(parseColor(payload.rgba)))
+  }
 }
 
 /** Inline custom-property style so the preview reflects the edited tokens. */
 const previewStyle = computed(() => {
   const s: Record<string, string> = {}
-  for (const t of THEME_TOKENS) s[`--${t.name}`] = valueOf(t)
+  for (const t of THEME_TOKENS) {
+    s[`--${t.name}`] = valueOf(t)
+  }
   return s
 })
 
@@ -113,7 +119,9 @@ async function revealInPreview(id: string): Promise<void> {
   showPreview.value = true
   await nextTick()
   const el = stageRef.value?.querySelector<HTMLElement>(`[data-pair~="${id}"]`)
-  if (!el) return
+  if (!el) {
+    return
+  }
   el.scrollIntoView({ block: 'center', behavior: 'smooth' })
   el.classList.remove('theme-preview-flash')
   // Reflow so re-adding the class restarts the animation on repeat clicks.

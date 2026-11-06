@@ -19,7 +19,9 @@ const ui = useUiStore()
 async function onInstall(): Promise<void> {
   if (canPrompt.value) {
     const outcome = await promptInstall()
-    if (outcome === 'accepted') ui.notify('Installing - check your home screen!', 'success')
+    if (outcome === 'accepted') {
+      ui.notify('Installing - check your home screen!', 'success')
+    }
     return
   }
   if (needsIosInstructions.value) {

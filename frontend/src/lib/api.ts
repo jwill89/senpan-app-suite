@@ -108,7 +108,9 @@ export async function api<T = unknown>(endpoint: string, options: ApiOptions = {
     }
     throw e
   } finally {
-    if (timeoutId !== undefined) clearTimeout(timeoutId)
+    if (timeoutId !== undefined) {
+      clearTimeout(timeoutId)
+    }
   }
 
   let data: unknown
@@ -222,7 +224,9 @@ export function apiUpload<T = unknown>(
     const { onProgress } = options
     if (onProgress) {
       xhr.upload.onprogress = (e) => {
-        if (e.lengthComputable) onProgress(Math.round((e.loaded / e.total) * 100))
+        if (e.lengthComputable) {
+          onProgress(Math.round((e.loaded / e.total) * 100))
+        }
       }
     }
 
@@ -240,7 +244,9 @@ export function apiUpload<T = unknown>(
         resolve(data as T)
         return
       }
-      if (xhr.status === 401 && !options.skipAuthRedirect) onUnauthorized?.()
+      if (xhr.status === 401 && !options.skipAuthRedirect) {
+        onUnauthorized?.()
+      }
       const serverMsg =
         data && typeof data === 'object' && 'error' in data && typeof data.error === 'string'
           ? data.error

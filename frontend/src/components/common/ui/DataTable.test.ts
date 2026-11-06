@@ -27,28 +27,28 @@ describe('DataTable', () => {
 
   it('renders default cell values from the row keys', () => {
     const wrapper = mount(DataTable, { props: { columns, rows, rowKey: 'id' } })
-    const firstRow = wrapper.findAll('tbody tr')[0].findAll('td')
-    expect(firstRow[0].text()).toBe('Alpha')
-    expect(firstRow[1].text()).toBe('3')
+    const firstRow = wrapper.findAll('tbody tr')[0]!.findAll('td')
+    expect(firstRow[0]!.text()).toBe('Alpha')
+    expect(firstRow[1]!.text()).toBe('3')
   })
 
   const names = (w: ReturnType<typeof mount>) =>
-    w.findAll('tbody tr').map((tr) => tr.findAll('td')[0].text())
+    w.findAll('tbody tr').map((tr) => tr.findAll('td')[0]!.text())
 
   it('marks sortable headers and sorts the rows itself on click', async () => {
     const wrapper = mount(DataTable, { props: { columns, rows, rowKey: 'id' } })
     const headers = wrapper.findAll('thead th')
-    expect(headers[0].classes()).toContain('is-sortable')
-    expect(headers[1].classes()).not.toContain('is-sortable')
-    await headers[0].trigger('click')
+    expect(headers[0]!.classes()).toContain('is-sortable')
+    expect(headers[1]!.classes()).not.toContain('is-sortable')
+    await headers[0]!.trigger('click')
     expect(names(wrapper)).toEqual(['Alpha', 'Beta'])
-    await headers[0].trigger('click')
+    await headers[0]!.trigger('click')
     expect(names(wrapper)).toEqual(['Beta', 'Alpha'])
   })
 
   it('does not sort on a non-sortable column', async () => {
     const wrapper = mount(DataTable, { props: { columns, rows, rowKey: 'id' } })
-    await wrapper.findAll('thead th')[1].trigger('click')
+    await wrapper.findAll('thead th')[1]!.trigger('click')
     expect(wrapper.find('.dt-sort-icon').exists()).toBe(false)
     expect(names(wrapper)).toEqual(['Alpha', 'Beta'])
   })
@@ -59,8 +59,8 @@ describe('DataTable', () => {
     })
     expect(names(wrapper)).toEqual(['Beta', 'Alpha'])
     const headers = wrapper.findAll('thead th')
-    expect(headers[0].find('.dt-sort-icon').exists()).toBe(true)
-    expect(headers[1].find('.dt-sort-icon').exists()).toBe(false)
+    expect(headers[0]!.find('.dt-sort-icon').exists()).toBe(true)
+    expect(headers[1]!.find('.dt-sort-icon').exists()).toBe(false)
   })
 
   it('points the sort icon in the sorted direction', () => {
@@ -83,7 +83,7 @@ describe('DataTable', () => {
     ]
     const cols: DataColumn[] = [{ key: 'count', label: 'Count', sortable: true }]
     const wrapper = mount(DataTable, { props: { columns: cols, rows: many, rowKey: 'id' } })
-    await wrapper.findAll('thead th')[0].trigger('click')
+    await wrapper.findAll('thead th')[0]!.trigger('click')
     expect(wrapper.findAll('tbody tr').map((tr) => tr.text())).toEqual(['9', '10', '100'])
   })
 
@@ -143,7 +143,7 @@ describe('DataTable', () => {
 
   it('applies alignment classes from the column align option', () => {
     const wrapper = mount(DataTable, { props: { columns, rows, rowKey: 'id' } })
-    expect(wrapper.findAll('thead th')[1].classes()).toContain('ta-center')
+    expect(wrapper.findAll('thead th')[1]!.classes()).toContain('ta-center')
   })
 
   it('applies a per-row class from the rowClass function', () => {
@@ -156,8 +156,8 @@ describe('DataTable', () => {
       },
     })
     const trs = wrapper.findAll('tbody tr')
-    expect(trs[0].classes()).not.toContain('row-selected')
-    expect(trs[1].classes()).toContain('row-selected')
+    expect(trs[0]!.classes()).not.toContain('row-selected')
+    expect(trs[1]!.classes()).toContain('row-selected')
   })
 
   it('applies a static rowClass string to every row', () => {
@@ -178,7 +178,7 @@ describe('DataTable', () => {
 
   it('is not expandable and rows are inert without a #detail slot', async () => {
     const wrapper = mount(DataTable, { props: { columns, rows, rowKey: 'id' } })
-    const firstRow = wrapper.findAll('tbody tr')[0]
+    const firstRow = wrapper.findAll('tbody tr')[0]!
     expect(firstRow.classes()).not.toContain('dt-expandable')
     await firstRow.trigger('click')
     expect(wrapper.findAll('tbody tr')).toHaveLength(2) // no detail row inserted
@@ -189,11 +189,11 @@ describe('DataTable', () => {
       props: { columns, rows, rowKey: 'id' },
       slots: { detail: '<span class="detail">D</span>' },
     })
-    expect(wrapper.findAll('tbody tr')[0].classes()).toContain('dt-expandable')
+    expect(wrapper.findAll('tbody tr')[0]!.classes()).toContain('dt-expandable')
     expect(wrapper.findAll('.detail')).toHaveLength(0)
-    await wrapper.findAll('tbody tr')[0].trigger('click')
+    await wrapper.findAll('tbody tr')[0]!.trigger('click')
     expect(wrapper.findAll('.detail')).toHaveLength(1)
-    await wrapper.findAll('tbody tr')[0].trigger('click') // collapse
+    await wrapper.findAll('tbody tr')[0]!.trigger('click') // collapse
     expect(wrapper.findAll('.detail')).toHaveLength(0)
   })
 
@@ -208,13 +208,13 @@ describe('DataTable', () => {
       props: { columns, rows, rowKey: 'id' },
       slots: { detail: '<span class="detail">D</span>' },
     })
-    const firstRow = wrapper.findAll('tbody tr')[0]
+    const firstRow = wrapper.findAll('tbody tr')[0]!
     expect(firstRow.attributes('role')).toBe('button')
     expect(firstRow.attributes('tabindex')).toBe('0')
     expect(firstRow.attributes('aria-expanded')).toBe('false')
     await firstRow.trigger('keydown', { key: 'Enter' })
     expect(wrapper.findAll('.detail')).toHaveLength(1)
-    expect(wrapper.findAll('tbody tr')[0].attributes('aria-expanded')).toBe('true')
+    expect(wrapper.findAll('tbody tr')[0]!.attributes('aria-expanded')).toBe('true')
   })
 
   it('toggles an expandable row on Space', async () => {
@@ -222,13 +222,13 @@ describe('DataTable', () => {
       props: { columns, rows, rowKey: 'id' },
       slots: { detail: '<span class="detail">D</span>' },
     })
-    await wrapper.findAll('tbody tr')[0].trigger('keydown', { key: ' ' })
+    await wrapper.findAll('tbody tr')[0]!.trigger('keydown', { key: ' ' })
     expect(wrapper.findAll('.detail')).toHaveLength(1)
   })
 
   it('does not add button semantics to rows without a #detail slot', () => {
     const wrapper = mount(DataTable, { props: { columns, rows, rowKey: 'id' } })
-    const tr = wrapper.findAll('tbody tr')[0]
+    const tr = wrapper.findAll('tbody tr')[0]!
     expect(tr.attributes('role')).toBeUndefined()
     expect(tr.attributes('tabindex')).toBeUndefined()
     expect(tr.attributes('aria-expanded')).toBeUndefined()
@@ -306,12 +306,12 @@ describe('DataTable opt-in features', () => {
     const wrapper = mount(DataTable, {
       props: { columns: cols, rows: many, rowKey: 'id', groupBy: 'name' },
     })
-    const names = () => wrapper.findAll('tbody tr').map((tr) => tr.findAll('td')[0].text())
+    const names = () => wrapper.findAll('tbody tr').map((tr) => tr.findAll('td')[0]!.text())
     expect(names()).toEqual(['Ann', 'Ann', 'Bob', 'Cid'])
     // Sorting by count must not scatter the two Anns.
-    await wrapper.findAll('thead th')[1].trigger('click')
+    await wrapper.findAll('thead th')[1]!.trigger('click')
     expect(names()).toEqual(['Ann', 'Ann', 'Bob', 'Cid'])
-    const counts = wrapper.findAll('tbody tr').map((tr) => tr.findAll('td')[1].text())
+    const counts = wrapper.findAll('tbody tr').map((tr) => tr.findAll('td')[1]!.text())
     expect(counts.slice(0, 2)).toEqual(['1', '3'])
   })
 
@@ -323,7 +323,7 @@ describe('DataTable opt-in features', () => {
     expect(wrapper.findAll('thead th')).toHaveLength(3)
     const boxes = wrapper.findAll('tbody input[type="checkbox"]')
     expect(boxes).toHaveLength(4)
-    await boxes[1].trigger('change')
+    await boxes[1]!.trigger('change')
     expect(wrapper.emitted('update:selected')?.at(-1)?.[0]).toEqual([2])
   })
 
@@ -387,15 +387,15 @@ describe('DataTable opt-in features', () => {
       props: { columns: sized, rows: many, rowKey: 'id', resizable: true },
     })
     const th = wrapper.findAll('thead th')
-    expect(th[0].attributes('style')).toContain('80px')
-    expect(th[1].attributes('style')).toBeUndefined()
+    expect(th[0]!.attributes('style')).toContain('80px')
+    expect(th[1]!.attributes('style')).toBeUndefined()
   })
 
   it('a click on the resize grip does not sort the column', async () => {
     const wrapper = mount(DataTable, {
       props: { columns: cols, rows: many, rowKey: 'id', resizable: true },
     })
-    await wrapper.findAll('.dt-resizer')[0].trigger('click')
+    await wrapper.findAll('.dt-resizer')[0]!.trigger('click')
     expect(wrapper.find('.dt-sort-icon').exists()).toBe(false)
   })
 

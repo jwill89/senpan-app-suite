@@ -70,7 +70,7 @@ describe('api()', () => {
   it('JSON-stringifies a plain object body and sets the content-type', async () => {
     vi.mocked(fetch).mockResolvedValue(jsonResponse({ ok: true }))
     await apiPost('game', { action: 'draw', delay: 3 })
-    const [, opts] = vi.mocked(fetch).mock.calls[0]
+    const [, opts] = vi.mocked(fetch).mock.calls[0]!
     expect(opts?.method).toBe('POST')
     expect(opts?.body).toBe('{"action":"draw","delay":3}')
     expect((opts?.headers as Record<string, string>)['Content-Type']).toBe('application/json')
@@ -81,7 +81,7 @@ describe('api()', () => {
     const form = new FormData()
     form.append('file', 'x')
     await apiPost('raffles/upload', form)
-    const [, opts] = vi.mocked(fetch).mock.calls[0]
+    const [, opts] = vi.mocked(fetch).mock.calls[0]!
     expect(opts?.body).toBeInstanceOf(FormData)
     expect(opts?.headers).toBeUndefined()
   })
@@ -146,7 +146,7 @@ describe('apiUpload()', () => {
       xhr.onload?.()
     }
     await apiUpload('images/upload', new FormData())
-    const xhr = FakeXHR.instances[0]
+    const xhr = FakeXHR.instances[0]!
     expect(xhr.method).toBe('POST')
     expect(xhr.url).toBe(`${API_BASE}/images/upload`)
     expect(xhr.withCredentials).toBe(true)

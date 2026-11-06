@@ -699,7 +699,8 @@ func PatternColumns(patterns []model.BingoGamePattern) [5]bool {
 	for _, p := range patterns {
 		for r := 0; r < 5 && r < len(p.PatternData); r++ {
 			for c := 0; c < 5 && c < len(p.PatternData[r]); c++ {
-				if p.PatternData[r][c] && !(r == 2 && c == 2) {
+				centre := r == 2 && c == 2
+				if p.PatternData[r][c] && !centre {
 					cols[c] = true
 				}
 			}

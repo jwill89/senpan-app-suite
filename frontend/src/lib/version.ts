@@ -28,6 +28,8 @@ export function majorOf(version: string): number | null {
 export function versionsCompatible(frontend: string, backend: string): boolean {
   const fe = majorOf(frontend)
   const be = majorOf(backend)
-  if (fe === null || be === null) return true
+  if (fe === null || be === null) {
+    return true
+  }
   return fe === be
 }

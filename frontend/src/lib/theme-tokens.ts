@@ -224,7 +224,9 @@ const TOKEN_NAMES = new Set(THEME_TOKENS.map((t) => t.name))
 /** A fresh token map seeded with every token's default value. */
 export function defaultTokens(): Record<string, string> {
   const out: Record<string, string> = {}
-  for (const t of THEME_TOKENS) out[t.name] = t.default
+  for (const t of THEME_TOKENS) {
+    out[t.name] = t.default
+  }
   return out
 }
 
@@ -236,7 +238,9 @@ export function withDefaults(tokens: Record<string, string> | undefined): Record
   const out = defaultTokens()
   if (tokens) {
     for (const [k, v] of Object.entries(tokens)) {
-      if (TOKEN_NAMES.has(k) && v) out[k] = v
+      if (TOKEN_NAMES.has(k) && v) {
+        out[k] = v
+      }
     }
   }
   return out
@@ -288,15 +292,25 @@ export function toRgb(c: Rgba): string {
  * `rgb(0 0 0 / 70%)` pass; only injection vectors are blocked.
  */
 function tokenValueSafe(v: string): boolean {
-  if (v.length > 64) return false // cap length (mirrors the server's 64-char cap)
-  if (/[;{}<>\\]/.test(v)) return false // declaration/block breakers
-  if (/\/\*|\*\//.test(v)) return false // CSS comment markers
-  if (/url\s*\(/i.test(v)) return false // no external resource loads from the preview
+  if (v.length > 64) {
+    return false // cap length (mirrors the server's 64-char cap)
+  }
+  if (/[;{}<>\\]/.test(v)) {
+    return false // declaration/block breakers
+  }
+  if (/\/\*|\*\//.test(v)) {
+    return false // CSS comment markers
+  }
+  if (/url\s*\(/i.test(v)) {
+    return false // no external resource loads from the preview
+  }
   // Reject control characters (a colour/length token never contains one). Checked
   // via char codes so no control byte has to live in this source file.
   for (const ch of v) {
     const code = ch.charCodeAt(0)
-    if (code < 0x20 || code === 0x7f) return false
+    if (code < 0x20 || code === 0x7f) {
+      return false
+    }
   }
   return true
 }
@@ -313,7 +327,9 @@ export function tokensToCss(tokens: Record<string, string>): string {
   const decls: string[] = []
   for (const t of THEME_TOKENS) {
     const v = (tokens[t.name] || '').trim()
-    if (v && tokenValueSafe(v)) decls.push(`--${t.name}:${v};`)
+    if (v && tokenValueSafe(v)) {
+      decls.push(`--${t.name}:${v};`)
+    }
   }
   return decls.length ? `:root{${decls.join('')}}` : ''
 }

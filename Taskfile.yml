@@ -1,7 +1,7 @@
 version: '3'
 
-# Day-to-day commands; `task` alone lists them. scripts/check.ps1 stays the one quality
-# gate (CI mirrors it); the lint and test tasks here run pieces of it on their own.
+# Day-to-day commands; `task` alone lists them. CI is the gate; `task check`
+# (scripts/check.ps1) runs all of it locally, and the lint and test tasks run pieces.
 
 # The tasks every repo shares, from the shared-tooling submodule (shared:lint:scripts,
 # shared:lint:md, shared:update and the rest).

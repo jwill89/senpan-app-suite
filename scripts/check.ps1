@@ -1,7 +1,7 @@
 #!/usr/bin/env pwsh
 <#
 .SYNOPSIS
-    Run the full local quality gate (the same checks CI runs) before pushing.
+    Run every check CI runs, locally, when you want the answer before CI gives it.
 
 .DESCRIPTION
     Backend (backend/):   golangci-lint - go build - go vet - go test - govulncheck

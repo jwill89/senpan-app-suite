@@ -18,7 +18,6 @@ day-to-day commands in `Taskfile.yml`.
 
 ```bash
 git submodule update --init                # shared-tooling at shared/ - npm ci, check.ps1 and deploy.ps1 need it
-git config core.hooksPath .githooks        # pre-push runs scripts/check.ps1 (the CI mirror)
 ```
 
 The Font Awesome Pro packages install from Font Awesome's registry, which needs the
@@ -105,9 +104,8 @@ shared-tooling's reusable workflows.)
 > build (warnings as errors - the shared analyzers and code style run in it, so it
 > is the C# lint gate) and `dotnet format`, then PSScriptAnalyzer on every tracked
 > script, markdownlint, and the shared repo files and version - and stop at the
-> first failure. With the pre-push hook enabled
-> (`git config core.hooksPath .githooks`), this runs automatically on `git push` and
-> aborts it on any failure - bypass a single push with `git push --no-verify`.
+> first failure. Nothing runs it on `git push`: CI is the gate, as in every
+> project, and this is for when you want the same answer before pushing.
 > `golangci-lint` is **not** covered
 > by `go build`/`go vet`, so don't skip it; `check.ps1` builds the pinned v2.15.0
 > from source with `go run`, so there is nothing to install. PSScriptAnalyzer is

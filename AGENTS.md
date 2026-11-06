@@ -95,7 +95,7 @@ immediately**. See **Authentication & authorization** below.
 +-- .github/dependabot.yml            <- weekly updates for npm, Go modules, NuGet and Actions (shared/ is left out: a release is taken on purpose)
 +-- shared/                           <- the shared-tooling submodule (lint configs, the CI workflows' scripts, SharedDeploy, repo files) - see **Shared tooling**
 +-- Taskfile.yml                      <- day-to-day commands (`task` lists them); includes shared/repo/Taskfile.yml as shared:*
-+-- scripts/                          <- check.ps1 (the local gate CI mirrors; the pre-push hook runs it) + deploy.ps1 (on SharedDeploy; settings in the untracked deploy.config.ps1)
++-- scripts/                          <- check.ps1 (everything CI runs, on demand) + deploy.ps1 (on SharedDeploy; settings in the untracked deploy.config.ps1)
 +-- deploy/                           <- Apache deploy artifacts (.htaccess + persistent images/ + README)
 +-- backend/                          <- Go backend
 |   +-- main.go                       <- Entry point: flags, DB init, server start
@@ -711,7 +711,6 @@ Rules that follow from it:
 git submodule update --init         # shared-tooling at shared/; npm ci, check.ps1 and deploy.ps1 all need it
 # The Font Awesome Pro packages install from Font Awesome's registry with the account's
 # token, kept in ~/.npmrc (never in the repo):  //npm.fontawesome.com/:_authToken=<token>
-git config core.hooksPath .githooks # pre-push runs scripts/check.ps1
 task                                # lists the Taskfile's commands (setup, dev, check, deploy:*, shared:*), if go-task is installed
 
 # -- Frontend (Vite) --
@@ -852,7 +851,7 @@ developer runs locally have passed:
   only green commits release. Needs `contents: write` (set at the job level; the
   workflow default is `contents: read`).
 
-`scripts/check.ps1` (the pre-push hook's gate) runs, stopping at the first failure:
+`scripts/check.ps1` (or `task check`; CI is the gate, as in every project, and this is the same checks run locally, on demand) runs, stopping at the first failure:
 backend - the golangci config check, golangci-lint, `go build`, `go vet`, `go test`
 (without `-race`, which needs gcc) and govulncheck; frontend - the frontend job's
 scripts plus `npm audit`; then, on a full run only, the plugin's build and

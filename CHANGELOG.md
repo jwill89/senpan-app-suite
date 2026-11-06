@@ -166,10 +166,13 @@ What the new axe checks found, at WCAG 2.2 AA:
   `dotnet.yml`, `pwsh.yml`, and `docs.yml`, new here (markdownlint, the repo files,
   the workflow refs) - beside Senpan's own release job, which now waits on the docs
   job too.
-- **`scripts/check.ps1`** (the local gate, and the pre-push hook) runs what the new
-  jobs run: the golangci config check, govulncheck at its pin, `test:coverage`, the
-  plugin without Roslynator, and the shared script lint, markdownlint, repo-file and
-  version checks. It needs `shared/` checked out, and says so when it isn't.
+- **`scripts/check.ps1`** runs what the new jobs run: the golangci config check,
+  govulncheck at its pin, `test:coverage`, the plugin without Roslynator, and the
+  shared script lint, markdownlint, repo-file and version checks. It needs `shared/`
+  checked out, and says so when it isn't.
+- **No pre-push hook.** `.githooks/pre-push` ran all of `scripts/check.ps1` before
+  every push, end-to-end suite included; CI is the gate, as in the other projects,
+  and `scripts/check.ps1` (`task check`) runs the same checks when you ask.
 - **`.editorconfig` and `.gitattributes` come from `shared/repo`**
   (`Sync-RepoFiles.ps1`), with Senpan's own lines - the plugin's two C# exceptions -
   below the project marker.

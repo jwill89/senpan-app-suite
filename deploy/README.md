@@ -351,7 +351,7 @@ draw/stamp/font links never appear verbatim in the log or the viewer.
 
 ## Each deploy
 
-**Scripted (recommended).** From the repo root, on Windows (the Taskfile's `deploy:*` tasks run the same commands):
+**Scripted (recommended).** From the repo root, on Windows. `task deploy` runs the script's default (the frontend), and `task deploy:backend`, `task deploy:both`, `task deploy:all` and `task deploy:plugin` run the other targets, with flags after `--`. The script itself:
 
 ```powershell
 .\scripts\deploy.ps1                  # frontend (default)
@@ -371,7 +371,7 @@ The script is built on shared-tooling's SharedDeploy module (`shared/deploy/pwsh
 2. **Read the service on the host** (backend), before anything is uploaded. The unit must be installed. Its `User=` (and `Group=`) is who the backup runs as; the `-db` on its `ExecStart` is the live database; its `-addr` is where `/api/version` answers on the host (`:8080`, the binary's default, when it has none). A `RemoteDbPath` that differs from `-db` stops the run with nothing changed.
 3. **Upload** the archive as one stream through plink, into the SSH user's home.
 4. **One remote run.** The host checks the archive's SHA-256 and file count, and only then runs the steps, API first: a new backend is additive to the old SPA, while a new SPA calls endpoints an old backend does not have; the plugin, a second client of the API, comes last.
-   - **backend:** stops the service, keeps `app-suite.old`, snapshots the database to `<db>.pre-<yyyyMMdd-HHmmss>` with `sqlite3 .backup` (readable by root only; the newest three are kept), installs the binary, starts the service and waits up to 30 s for `/api/version` to answer on the host. If it does not, the previous binary goes back with the snapshot and restarts: the new binary may already have migrated the database, and the previous one refuses a newer schema (`database schema vN is newer than this binary`). Brief downtime (a few seconds) while the service is stopped.
+   - **backend:** stops the service, keeps `app-suite.old`, snapshots the database with `sqlite3 .backup`, checked with `PRAGMA integrity_check`, compressed with gzip and checked with `gzip -t`, to `<db>.pre-<yyyyMMdd-HHmmss>.gz` (UTC; readable by root only; the newest three are kept), installs the binary, starts the service and waits up to 30 s for `/api/version` to answer on the host. If it does not, the previous binary goes back with the snapshot and restarts: the new binary may already have migrated the database, and the previous one refuses a newer schema (`database schema vN is newer than this binary`). Brief downtime (a few seconds) while the service is stopped.
    - **frontend:** swaps `dist/` in by renames (the previous kept as `dist.old`), with `deploy/.htaccess` beside it (the previous kept as `.htaccess.old`). The repo copy of `.htaccess` is the source of truth - edit it there, not on the host. `images/` is never touched.
    - **plugin:** refuses a version that is not higher than the published one, since Dalamud updates to nothing else, then swaps the whole `plugin/` folder in (the previous kept as `plugin.old`).
 
@@ -384,7 +384,7 @@ The script is built on shared-tooling's SharedDeploy module (`shared/deploy/pwsh
 
 **The connection.** The droplet runs `ufw limit ssh`, which refuses an address after six connections in 30 s. The whole run is **one** SSH connection, held by a background `plink -share`; every command, the upload and the download ride it. If it drops, the module reconnects (one new connection) and retries the step once, resuming where it stopped; only a refused reconnect waits 35 s.
 
-**Rolling back by hand** (on the host, in the webroot or opt dir): frontend `mv dist dist.failed && mv dist.old dist && rm -rf dist.failed`, and `mv -f .htaccess.old .htaccess`; the plugin the same way with `plugin` and `plugin.old`; backend `systemctl stop <service> && install -m 755 app-suite.old app-suite && systemctl start <service>`. If the previous binary refuses the database: `systemctl stop <service> && rm -f <db>-wal <db>-shm && cat "$(ls -1t <db>.pre-* | head -n 1)" > <db> && systemctl start <service>`.
+**Rolling back by hand** (on the host, in the webroot or opt dir): frontend `mv dist dist.failed && mv dist.old dist && rm -rf dist.failed`, and `mv -f .htaccess.old .htaccess`; the plugin the same way with `plugin` and `plugin.old`; backend `systemctl stop <service> && install -m 755 app-suite.old app-suite && systemctl start <service>`. If the previous binary refuses the database, decompress the newest snapshot over it in place, which keeps the file's owner: `systemctl stop <service> && rm -f <db>-wal <db>-shm && gunzip -c "$(ls -1t <db>.pre-*.gz | head -n 1)" > <db> && systemctl start <service>`.
 
 **Requirements.**
 
@@ -405,11 +405,11 @@ Every deploy that includes the backend keeps a **daily backup** of the live data
 
 - **When:** daily at 10:00 UTC, spread over up to 15 minutes; a missed run happens at the next boot.
 - **As whom:** the service's own `User=` and `Group=`, read from the running unit at each deploy, the account that owns the database. A unit with `DynamicUser=yes` has no fixed user, so the deploy refuses to install the backup; one with no `User=` runs it as root, with a warning.
-- **What:** a `VACUUM INTO` copy of the live database, taken while the app keeps running (WAL included), checked with `PRAGMA integrity_check` before it takes the day's name.
-- **Where:** a `backups/` folder beside the database (created `0700`, owned by the service user), one file per UTC day: `<db folder>/backups/<service>-YYYY-MM-DD.sqlite`. A second run the same day replaces that day's copy. **28 days** are kept; the job removes only its own dated names.
+- **What:** a `VACUUM INTO` copy of the live database, taken while the app keeps running (WAL included), checked with `PRAGMA integrity_check`, compressed with gzip and checked with `gzip -t` before it takes the day's name. No uncompressed copy is left behind.
+- **Where:** a `backups/` folder beside the database (created `0700`, owned by the service user), one file per UTC day: `<db folder>/backups/<service>-YYYY-MM-DD.sqlite.gz`. A second run the same day replaces that day's copy. **28 days** are kept; the job removes only its own dated names.
 - **Sandbox:** the same hardening as Kindred Nights' backup (`ProtectSystem=strict`, `UMask=0077`, no capabilities and the rest); it may write only to the database's folder.
 
-The backups never collide with the deploy's own files: the pre-deploy snapshots are `<db>.pre-<yyyyMMdd-HHmmss>` in the database's own folder, pruned to the newest three by exactly that pattern, and the dev pull's `<db>.pull` lasts only for the pull. Neither pattern can match a dated name in `backups/`, and the backup's pruning cannot match theirs.
+The backups never collide with the deploy's own files: the pre-deploy snapshots are `<db>.pre-<yyyyMMdd-HHmmss>.gz` in the database's own folder, pruned to the newest three by exactly that pattern, and the dev pull's `<db>.pull` lasts only for the pull. Neither pattern can match a dated name in `backups/`, and the backup's pruning cannot match theirs.
 
 Most deploys find the units unchanged and run nothing. When the units or the job change, or on the first deploy, they are installed and the backup runs once while the deploy waits; if that run fails, the previous units come back (or none are left), and the deploy fails saying the site is live but its backup is not. The copies stay on the droplet; the copy that leaves it is the dev-database pull.
 
@@ -419,8 +419,8 @@ Checking and restoring, on the host:
 systemctl list-timers '<service>-backup.timer'   # the next run
 journalctl -u '<service>-backup.service' -n 20   # the last runs
 ls -l '<db folder>/backups/'
-# Restore a day's copy over the live database (cat keeps the file's owner):
-systemctl stop <service> && rm -f <db>-wal <db>-shm && cat '<db folder>/backups/<service>-YYYY-MM-DD.sqlite' > <db> && systemctl start <service>
+# Restore a day's copy over the live database (decompressing in place keeps the file's owner):
+systemctl stop <service> && rm -f <db>-wal <db>-shm && gunzip -c '<db folder>/backups/<service>-YYYY-MM-DD.sqlite.gz' > <db> && systemctl start <service>
 ```
 
 ## Notes

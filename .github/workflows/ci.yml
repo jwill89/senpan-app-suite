@@ -21,7 +21,7 @@ jobs:
   # vitest.config.ts. web.yml runs the audit itself. The API types it compiles against
   # are the committed ones, which the generated job checks.
   frontend:
-    uses: jwill89/shared-tooling/.github/workflows/web.yml@v2.1.4
+    uses: jwill89/shared-tooling/.github/workflows/web.yml@v2.1.5
     with:
       dir: frontend
       fontawesome: true
@@ -55,7 +55,7 @@ jobs:
   # it was set, 2026-11-06; raise it as tests land, never lower it), govulncheck, and
   # the binary built as the deploy builds it.
   backend:
-    uses: jwill89/shared-tooling/.github/workflows/go.yml@v2.1.4
+    uses: jwill89/shared-tooling/.github/workflows/go.yml@v2.1.5
     with:
       dir: backend
       coverage-floor: 63.0
@@ -64,7 +64,7 @@ jobs:
   # Built against Dalamud with warnings as errors (the shared analyzers, imported by
   # plugins/Directory.Build.props), and dotnet format.
   plugin:
-    uses: jwill89/shared-tooling/.github/workflows/dotnet.yml@v2.1.4
+    uses: jwill89/shared-tooling/.github/workflows/dotnet.yml@v2.1.5
     with:
       projects: plugins/SenpanCompanion
       warnings-as-errors: true
@@ -76,7 +76,7 @@ jobs:
   # reload.
   e2e:
     needs: [frontend, backend]
-    uses: jwill89/shared-tooling/.github/workflows/e2e.yml@v2.1.4
+    uses: jwill89/shared-tooling/.github/workflows/e2e.yml@v2.1.5
     with:
       dir: frontend
       go-version-file: backend/go.mod
@@ -85,10 +85,10 @@ jobs:
       FONTAWESOME_TOKEN: ${{ secrets.FONTAWESOME_NPM_TOKEN }}
 
   scripts:
-    uses: jwill89/shared-tooling/.github/workflows/pwsh.yml@v2.1.4
+    uses: jwill89/shared-tooling/.github/workflows/pwsh.yml@v2.1.5
 
   docs:
-    uses: jwill89/shared-tooling/.github/workflows/docs.yml@v2.1.4
+    uses: jwill89/shared-tooling/.github/workflows/docs.yml@v2.1.5
 
   # On a push to main, AFTER the whole gate passes, tag + release any component
   # whose current version has no release yet. Tags follow <Component>-v<version>

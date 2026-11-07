@@ -53,9 +53,17 @@
     reconnects), which stays under the droplet's `ufw limit ssh`.
 
 .PARAMETER Target
-    What to deploy: frontend (default), backend, main (backend + frontend; 'both' is a
-    kept alias), all (backend + frontend + plugin), or plugin (the Dalamud custom repo:
-    SenpanCompanionAdmin/latest.zip, pluginmaster.json and plugin.htaccess).
+    What to deploy: main (the default: backend, then frontend; 'both' is a kept alias),
+    frontend, backend, all (backend + frontend + plugin, in one run), or plugin (the Dalamud
+    custom repo: SenpanCompanionAdmin/latest.zip, pluginmaster.json and plugin.htaccess).
+    task deploy runs main, then plugin with -IfNewer; task deploy:frontend, deploy:backend
+    and deploy:plugin run one each.
+
+.PARAMETER IfNewer
+    With the plugin in the run: a plugin whose version is already the published one is left
+    out of the run (which ends there if it was the only target), where without it the run
+    refuses. A lower version still refuses. task deploy passes it, so a deploy that didn't
+    raise the plugin's version still succeeds.
 
 .PARAMETER VpsHost
     Droplet IP or hostname. If omitted, resolved from $env:DEPLOY_VPS_HOST, then
@@ -108,7 +116,7 @@
     that includes the backend.
 
 .EXAMPLE
-    .\scripts\deploy.ps1                 # frontend (default)
+    .\scripts\deploy.ps1                 # backend then frontend (default)
 
 .EXAMPLE
     .\scripts\deploy.ps1 -Target backend
@@ -117,7 +125,7 @@
     .\scripts\deploy.ps1 -Target backend -NoDbPull   # deploy backend, don't refresh dev DB
 
 .EXAMPLE
-    .\scripts\deploy.ps1 -Target both
+    .\scripts\deploy.ps1 -Target frontend
 
 .EXAMPLE
     .\scripts\deploy.ps1 -Target plugin   # build + publish the Dalamud plugin repo
@@ -125,7 +133,7 @@
 [CmdletBinding()]
 param(
     [ValidateSet('frontend', 'backend', 'both', 'main', 'all', 'plugin')]
-    [string]$Target = 'frontend',
+    [string]$Target = 'main',
 
     # Server-specific settings are NOT in this tracked script: nothing here reveals the
     # host, SSH user, key, filesystem paths, service name or site address. Each resolves
@@ -142,7 +150,8 @@ param(
 
     [switch]$SkipBuild,
     [switch]$NoBackup,
-    [switch]$NoDbPull
+    [switch]$NoDbPull,
+    [switch]$IfNewer
 )
 
 $ErrorActionPreference = 'Stop'
@@ -205,7 +214,14 @@ if ($withPlugin) {
         Write-Warning "The published plugin index could not be read ($($_.Exception.Message)); the host will check the version."
     }
     if ($planned -and $published -and [version]$planned -le [version]$published) {
-        throw "The plugin's version $planned is not higher than the published $published, and Dalamud updates to nothing else. Raise <Version> in plugins/SenpanCompanion/SenpanCompanion.csproj (and plugins/pluginmaster.json); nothing was built or changed."
+        if ($IfNewer -and [version]$planned -eq [version]$published) {
+            Write-Ok "Plugin $planned is already published; leaving it out of this run."
+            $withPlugin = $false
+            $targets = @($targets | Where-Object { $_ -ne 'plugin' })
+            if ($targets.Count -eq 0) { exit 0 }
+        } else {
+            throw "The plugin's version $planned is not higher than the published $published, and Dalamud updates to nothing else. Raise <Version> in plugins/SenpanCompanion/SenpanCompanion.csproj (and plugins/pluginmaster.json); nothing was built or changed."
+        }
     }
 }
 

@@ -351,12 +351,12 @@ draw/stamp/font links never appear verbatim in the log or the viewer.
 
 ## Each deploy
 
-**Scripted (recommended).** From the repo root, on Windows. `task deploy` runs the script's default (the frontend), and `task deploy:backend`, `task deploy:both`, `task deploy:all` and `task deploy:plugin` run the other targets, with flags after `--`. The script itself:
+**Scripted (recommended).** From the repo root, on Windows. `task deploy` deploys everything: the backend, then the frontend (`-Target main`), then the plugin with `-IfNewer`, which skips it when its version is already published. `task deploy:backend`, `task deploy:frontend` and `task deploy:plugin` deploy one each, with flags after `--`. The script itself:
 
 ```powershell
-.\scripts\deploy.ps1                  # frontend (default)
+.\scripts\deploy.ps1                  # backend, then frontend (default: main; 'both' is a kept alias)
+.\scripts\deploy.ps1 -Target frontend # the SPA only
 .\scripts\deploy.ps1 -Target backend  # Go binary + service restart, the daily backup check, the dev-database pull
-.\scripts\deploy.ps1 -Target main     # backend, then frontend ('both' is a kept alias)
 .\scripts\deploy.ps1 -Target all      # backend, frontend, then plugin
 .\scripts\deploy.ps1 -Target plugin   # Dalamud custom-repo files only
 ```

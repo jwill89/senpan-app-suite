@@ -135,29 +135,25 @@ tasks:
     cmds:
       - pwsh -NoProfile -File scripts/check.ps1 {{.CLI_ARGS}}
 
+  # task deploy ships everything, in order, and each part also deploys alone
+  # (standards/deploy-and-ops.md). The plugin goes last, and only when its version is new.
+  deploy:
+    desc: Deploy everything - the backend, then the frontend, then the plugin if its version is new (pass flags after --, e.g. -- -NoDbPull)
+    cmds:
+      - pwsh -NoProfile -File scripts/deploy.ps1 -Target main {{.CLI_ARGS}}
+      - pwsh -NoProfile -File scripts/deploy.ps1 -Target plugin -IfNewer {{.CLI_ARGS}}
+
   deploy:frontend:
-    desc: Build and deploy the frontend, the script's default (pass flags after --, e.g. -- -SkipBuild)
-    aliases: [deploy]
+    desc: Build and deploy the frontend only (pass flags after --, e.g. -- -SkipBuild)
     cmds:
       - pwsh -NoProfile -File scripts/deploy.ps1 -Target frontend {{.CLI_ARGS}}
 
   deploy:backend:
-    desc: Deploy the backend, then pull the live database into devdata (-- -NoDbPull skips the pull)
+    desc: Deploy the backend only, then pull the live database into devdata (-- -NoDbPull skips the pull)
     cmds:
       - pwsh -NoProfile -File scripts/deploy.ps1 -Target backend {{.CLI_ARGS}}
 
-  deploy:both:
-    desc: Deploy the backend, then the frontend
-    aliases: [deploy:main]
-    cmds:
-      - pwsh -NoProfile -File scripts/deploy.ps1 -Target both {{.CLI_ARGS}}
-
-  deploy:all:
-    desc: Deploy the backend, the frontend, then the plugin
-    cmds:
-      - pwsh -NoProfile -File scripts/deploy.ps1 -Target all {{.CLI_ARGS}}
-
   deploy:plugin:
-    desc: Build the Dalamud plugin and publish it to its custom repo
+    desc: Build the Dalamud plugin and publish it to its custom repo; refused unless its version is new
     cmds:
       - pwsh -NoProfile -File scripts/deploy.ps1 -Target plugin {{.CLI_ARGS}}

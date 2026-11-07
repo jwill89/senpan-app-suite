@@ -861,7 +861,7 @@ The frontend, the backend and the plugin are each versioned on their own today (
 
 ## Deployment (Apache)
 
-Only the maintainer deploys, from the owner's PC, through `scripts/deploy.ps1` on SharedDeploy: `task deploy` deploys the frontend (the script's default), and `task deploy:backend`, `task deploy:both`, `task deploy:all` and `task deploy:plugin` run the other targets, with flags after `--`. The settings live in the untracked `scripts/deploy.config.ps1`; `deploy/README.md` has the whole run.
+Only the maintainer deploys, from the owner's PC, through `scripts/deploy.ps1` on SharedDeploy: `task deploy` deploys everything: the backend, then the frontend, then the plugin when its version is new (`-IfNewer`). `task deploy:backend`, `task deploy:frontend` and `task deploy:plugin` deploy one each, with flags after `--`. The settings live in the untracked `scripts/deploy.config.ps1`; `deploy/README.md` has the whole run.
 
 The frontend is served statically by Apache; `/api/*` + `/api/ws` are reverse-
 proxied to the Go server. The document root layout keeps uploads separate from

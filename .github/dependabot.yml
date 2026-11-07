@@ -31,6 +31,20 @@ updates:
       # Held on purpose: TypeScript stays on 6.x until vue-tsc supports TypeScript 7.
       - dependency-name: typescript
         update-types: ['version-update:semver-major']
+      # The tools shared-tooling's lint/web owns move to a new major once, in
+      # shared-tooling, with the plugins and configs that must match, and reach here with
+      # `task shared:update`; a plugin of our own for one moves with it. Minors and
+      # patches still come here.
+      - dependency-name: eslint
+        update-types: ['version-update:semver-major']
+      - dependency-name: 'eslint-*'
+        update-types: ['version-update:semver-major']
+      - dependency-name: prettier
+        update-types: ['version-update:semver-major']
+      - dependency-name: stylelint
+        update-types: ['version-update:semver-major']
+      - dependency-name: 'stylelint-*'
+        update-types: ['version-update:semver-major']
 
   - package-ecosystem: gomod
     directory: /backend

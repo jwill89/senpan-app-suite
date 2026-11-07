@@ -62,6 +62,11 @@ will install.
 
 #### Changed
 
+- **The emoji picker is vue3-emoji-picker 2.0.** `EmojiPickerModal` gives it the 2.0
+  names (`set="native"`, `recent="recent"`, and the chosen emoji as `native`), so it
+  logs no deprecation warnings, and a test mounts the real picker and holds it to that.
+  It looks and works as before. Axe finds one thing inside it, its category headings
+  (`h5`) skipping a level below the dialog's `h3`; 1.x had the same headings.
 - **ESLint, Prettier, Stylelint and the tsconfigs extend `@jwill89/lint-web`**,
   shared-tooling's front-end package, installed from `file:../shared/lint/web`.
   `frontend/.npmrc` sets `install-links=true`, so npm copies the package in with its

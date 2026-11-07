@@ -9,6 +9,7 @@
  * emoji field, so the lazy import + modal + skin live in one place.
  */
 import { defineAsyncComponent } from 'vue'
+import type { EmojiExt } from 'vue3-emoji-picker'
 import ModalOverlay from '@/components/common/ModalOverlay.vue'
 
 defineProps<{
@@ -24,13 +25,9 @@ const EmojiPicker = defineAsyncComponent(async () => {
   return (await import('vue3-emoji-picker')).default
 })
 
-/** The emoji-picker `select` payload - `i` is the chosen emoji character. */
-interface EmojiSelect {
-  i: string
-}
-
-function onSelect(e: EmojiSelect): void {
-  emit('select', e.i)
+/** The picker's `select` payload; `native` is the chosen emoji character. */
+function onSelect(e: EmojiExt): void {
+  emit('select', e.native)
 }
 </script>
 
@@ -53,7 +50,7 @@ function onSelect(e: EmojiSelect): void {
       </button>
     </div>
     <div class="emoji-picker-wrap">
-      <EmojiPicker native theme="dark" display-recent @select="onSelect" />
+      <EmojiPicker set="native" theme="dark" recent="recent" @select="onSelect" />
     </div>
   </ModalOverlay>
 </template>

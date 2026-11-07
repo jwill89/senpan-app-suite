@@ -31,6 +31,12 @@ updates:
       # Held on purpose: TypeScript stays on 6.x until vue-tsc supports TypeScript 7.
       - dependency-name: typescript
         update-types: ['version-update:semver-major']
+      # vue-tsc 3.3.14 turns a `//` in a static attribute (placeholder="https://") into
+      # broken virtual code, which stops it checking the rest of that template
+      # (vuejs/language-tools#6322; held at 3.3.13 on 2026-11-07). Only that version:
+      # the fix comes through.
+      - dependency-name: vue-tsc
+        versions: ['3.3.14']
       # The tools shared-tooling's lint/web owns move to a new major once, in
       # shared-tooling, with the plugins and configs that must match, and reach here with
       # `task shared:update`; a plugin of our own for one moves with it. Minors and

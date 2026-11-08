@@ -129,11 +129,40 @@ tasks:
       # The version shared-tooling's go.yml runs in CI.
       - cd backend && go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 ./...
       - cd frontend && npm audit --audit-level=high --omit=dev
+      - task: shared:vuln
 
   check:
     desc: Everything CI runs (scripts/check.ps1); -- -SkipFrontend or -- -SkipBackend for half
     cmds:
-      - pwsh -NoProfile -File scripts/check.ps1 {{.CLI_ARGS}}
+      # The steps that don't depend on each other run at once, each line prefixed with
+      # its task (standards/testing.md). -- -SkipFrontend or -- -SkipBackend still leave a half out.
+      - task --parallel --output prefixed check:backend check:frontend check:plugin check:repo shared:vuln -- {{.CLI_ARGS}}
+
+  check:backend:
+    desc: The backend part of task check (scripts/check.ps1 -Only backend)
+    cmds:
+      - pwsh -NoProfile -File scripts/check.ps1 -Only backend {{.CLI_ARGS}}
+
+  check:frontend:
+    desc: The frontend part of task check, end-to-end suite included (scripts/check.ps1 -Only frontend)
+    cmds:
+      - pwsh -NoProfile -File scripts/check.ps1 -Only frontend {{.CLI_ARGS}}
+
+  check:plugin:
+    desc: The plugin part of task check (scripts/check.ps1 -Only plugin)
+    cmds:
+      - pwsh -NoProfile -File scripts/check.ps1 -Only plugin {{.CLI_ARGS}}
+
+  check:repo:
+    desc: The scripts, docs and shared-file part of task check (scripts/check.ps1 -Only repo)
+    cmds:
+      - pwsh -NoProfile -File scripts/check.ps1 -Only repo {{.CLI_ARGS}}
+
+  push:
+    desc: Take the in-range updates Dependabot would open, scan for advisories, run task check, then push (-- -Yes, -SkipUpdates, -SkipCheck)
+    interactive: true
+    cmds:
+      - task: shared:push
 
   # task deploy ships everything, in order, and each part also deploys alone
   # (standards/deploy-and-ops.md). The plugin goes last, and only when its version is new.

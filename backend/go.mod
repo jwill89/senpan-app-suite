@@ -8,12 +8,12 @@ require (
 	github.com/DeRuina/timberjack v1.4.9
 	github.com/alexedwards/scs/v2 v2.9.0
 	github.com/coder/websocket v1.8.15
-	github.com/getkin/kin-openapi v0.152.0
+	github.com/getkin/kin-openapi v0.153.0
 	github.com/go-webauthn/webauthn v0.18.2
 	github.com/tdewolff/font v0.0.0-20261010204837-88a7f6b56918
 	golang.org/x/crypto v0.58.0
 	golang.org/x/image v0.47.0
-	modernc.org/sqlite v1.61.1
+	modernc.org/sqlite v1.62.0
 	sigs.k8s.io/yaml v1.6.0
 )
 
@@ -35,8 +35,6 @@ require (
 	github.com/kr/pretty v0.3.1 // indirect
 	github.com/mattn/go-isatty v0.0.24 // indirect
 	github.com/ncruces/go-strftime v1.1.0 // indirect
-	github.com/oasdiff/yaml v0.1.3 // indirect
-	github.com/oasdiff/yaml3 v0.0.16 // indirect
 	github.com/philhofer/fwd v1.2.1 // indirect
 	github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec // indirect
 	github.com/rogpeppe/go-internal v1.16.0 // indirect
@@ -47,13 +45,14 @@ require (
 	github.com/tinylib/msgp v1.6.5 // indirect
 	github.com/x448/float16 v0.8.4 // indirect
 	go.yaml.in/yaml/v2 v2.4.4 // indirect
+	go.yaml.in/yaml/v4 v4.0.0 // indirect
 	golang.org/x/mod v0.42.0 // indirect
 	golang.org/x/sync v0.24.0 // indirect
 	golang.org/x/sys v0.49.0 // indirect
 	golang.org/x/text v0.43.0 // indirect
 	golang.org/x/tools v0.52.0 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
-	modernc.org/libc v1.79.0 // indirect
+	modernc.org/libc v1.80.1 // indirect
 	modernc.org/mathutil v1.7.1 // indirect
 	modernc.org/memory v1.12.1 // indirect
 )

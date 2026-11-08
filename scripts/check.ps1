@@ -36,15 +36,25 @@
 .PARAMETER SkipBackend
     Run only the frontend checks.
 
+.PARAMETER Only
+    Run only the named parts: backend, frontend, plugin, repo (the scripts, docs and
+    shared-file checks). `task check` runs each part in its own process, all at once; a
+    -Skip flag still leaves its half out, and the plugin and repo parts run only when
+    neither half is skipped.
+
 .EXAMPLE
     .\scripts\check.ps1
 .EXAMPLE
     .\scripts\check.ps1 -SkipFrontend
+.EXAMPLE
+    .\scripts\check.ps1 -Only plugin
 #>
 [CmdletBinding()]
 param(
     [switch]$SkipFrontend,
-    [switch]$SkipBackend
+    [switch]$SkipBackend,
+    [ValidateSet('backend', 'frontend', 'plugin', 'repo')]
+    [string[]]$Only
 )
 
 $ErrorActionPreference = 'Stop'
@@ -53,6 +63,19 @@ $PSNativeCommandUseErrorActionPreference = $false
 trap { Write-Host "`nERROR: $($_.Exception.Message)" -ForegroundColor Red; exit 1 }
 
 $root = Split-Path $PSScriptRoot -Parent
+
+# Which parts run: each one -Only names (all when it names none), less what a -Skip flag
+# leaves out. The plugin and repo parts belong to a full check, so either -Skip drops them.
+$full = -not $SkipFrontend -and -not $SkipBackend
+$run = @{
+    backend  = -not $SkipBackend
+    frontend = -not $SkipFrontend
+    plugin   = $full
+    repo     = $full
+}
+if ($Only) {
+    foreach ($part in @($run.Keys)) { $run[$part] = $run[$part] -and $Only -contains $part }
+}
 
 function Invoke-Step($name, [scriptblock]$body) {
     Write-Host "`n==> $name" -ForegroundColor Cyan
@@ -63,7 +86,7 @@ function Invoke-Step($name, [scriptblock]$body) {
     }
 }
 
-if (-not $SkipBackend) {
+if ($run.backend) {
     Push-Location "$root\backend"
     try {
         # .golangci.yml is written from shared-tooling's template (Senpan's own rules are in
@@ -82,7 +105,7 @@ if (-not $SkipBackend) {
     } finally { Pop-Location }
 }
 
-if (-not $SkipFrontend) {
+if ($run.frontend) {
     Push-Location "$root\frontend"
     try {
         # api.generated.ts is committed; this regenerates it from the Go models and fails
@@ -114,7 +137,7 @@ if (-not $SkipFrontend) {
 # -SkipFrontend nor -SkipBackend), so those flags keep their "only X" meaning.
 # Requires the .NET SDK; no-ops with a clear message when `dotnet` isn't installed
 # so this script still runs on a machine without it.
-if (-not $SkipFrontend -and -not $SkipBackend) {
+if ($run.plugin) {
     if (-not (Get-Command dotnet -ErrorAction SilentlyContinue)) {
         Write-Host "`n==> plugin: dotnet SDK not found on PATH - skipping plugin build/format checks." -ForegroundColor Yellow
     } else {
@@ -135,7 +158,7 @@ if (-not $SkipFrontend -and -not $SkipBackend) {
 # Like the plugin, only on a full check. PSScriptAnalyzer runs on every TRACKED script
 # (scripts/deploy.config.ps1 is the owner's local copy) with the shared settings; the
 # script says how to install the pinned PSScriptAnalyzer if it is missing.
-if (-not $SkipFrontend -and -not $SkipBackend) {
+if ($run.repo) {
     $shared = Join-Path $root 'shared'
     if (-not (Test-Path -LiteralPath (Join-Path $shared 'VERSION'))) {
         throw 'shared/ is empty: run `git submodule update --init` once after cloning.'
@@ -149,4 +172,9 @@ if (-not $SkipFrontend -and -not $SkipBackend) {
     } finally { Pop-Location }
 }
 
-Write-Host "`n[OK] All checks passed." -ForegroundColor Green
+$ran = @('backend', 'frontend', 'plugin', 'repo' | Where-Object { $run[$_] })
+if ($ran) {
+    Write-Host "`n[OK] Checks passed: $($ran -join ', ')." -ForegroundColor Green
+} else {
+    Write-Host "`nNothing to check: -Only and the -Skip flags left out every part." -ForegroundColor Yellow
+}

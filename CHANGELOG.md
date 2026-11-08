@@ -45,12 +45,35 @@ Not in a release yet: each entry moves into its component's section below when t
 component's version is next bumped. Repo-wide tooling and the deploy are recorded
 under Backend, as before.
 
-The move onto **shared-tooling** 1.2.0 - the lint, test, CI and deploy pieces the
-owner's projects share - held as a git submodule at `shared/`. A fresh clone needs
-`git submodule update --init` (or `git clone --recurse-submodules`) before `npm ci`
-will install.
+### Plugin
 
-### Frontend
+#### Changed
+
+- **The analyzers and the code style come from shared-tooling** (`shared/lint/dotnet`),
+  imported by the new `plugins/Directory.Build.props`: the .NET analyzers at their
+  recommended level and the C# code style, checked in the build as before. The two
+  exceptions the plugin keeps - braced `case` blocks not indented a level, and
+  classic `[DllImport]` for the winmm and DPAPI calls - moved to the root
+  `.editorconfig`, and `plugins/SenpanCompanion/.editorconfig` is gone.
+- **CI's plugin job is shared-tooling's `dotnet.yml`**: the same Release build with
+  warnings as errors against Dalamud's latest distribution, and
+  `dotnet format --verify-no-changes`.
+- **The source files lose their UTF-8 byte-order marks**, as the shared
+  `.editorconfig` writes them.
+
+#### Removed
+
+- **Roslynator**, with its CLI pin in `.config/dotnet-tools.json` and the gate's
+  `roslynator analyze` step: the shared analyzers in the build cover what it
+  checked.
+
+---
+
+## Frontend
+
+### [3.32.0] - 2026-11-07
+
+Requires backend 3.28.0.
 
 #### Added
 
@@ -119,139 +142,12 @@ What the new axe checks found, at WCAG 2.2 AA:
   belong to the slider.
 - **The stamp lookup's world picker has a name** when its caption is hidden.
 
-### Backend
-
-#### Changed
-
-- **The SQLite driver is `modernc.org/sqlite`** (was `ncruces/go-sqlite3`), still
-  pure Go with no cgo, so the static build, the race build and the unit's
-  `MemoryDenyWriteExecute=yes` all stand. No change to the API.
-  - The pragmas travel in the DSN (`_pragma`), which the driver applies to every
-    pooled connection as it opens it, in place of the old driver's connect hook.
-  - `_txlock=immediate` in the DSN keeps `BEGIN IMMEDIATE` for every read-write
-    transaction. The driver ignores `TxOptions.Isolation`, which is how
-    `beginImmediate` used to ask for it.
-  - `mmap_size` (32 MB) now takes effect; the old driver ignored it.
-  - A query canceled mid-run now comes back as `context.Canceled`.
-    `store.Interrupted` checks modernc's `SQLITE_INTERRUPT` code and stays as a
-    backstop, so a departed client still logs at Debug.
-  - **Every read of a DATETIME column is `CAST(col AS TEXT)`.** modernc parses a
-    column declared `DATE`, `DATETIME` or `TIMESTAMP` into a `time.Time`, which
-    database/sql would hand back as RFC 3339 (`2026-01-02T03:04:05Z` for a stored
-    `2026-01-02 03:04:05`); the cast keeps every timestamp the API returns as it
-    was. A new store method must do the same. `TestDatetimeColumnsReadAsStored`
-    guards the paths the frontend and the plugin parse, and the rest of
-    `store/driver_test.go` checks the pragmas, the immediate `BEGIN` and
-    cancellation against the driver.
-- **`.golangci.yml` is written from shared-tooling's template**
-  (`go run -C shared/lint/go . -dir backend`), with Senpan's own settings and
-  exclusions in `.golangci.local.yml`, merged on top. CI and `scripts/check.ps1`
-  fail when the written file has drifted from the two.
-- **CI's backend job is shared-tooling's `go.yml`**: the config check, `go vet`,
-  golangci-lint v2.15.0, govulncheck, the tests under the race detector in shuffled
-  order with a floor of **63%** statement coverage (63.3% when it was set; raise it
-  as tests land, never lower it), and the binary built as the deploy builds it.
-- **govulncheck is pinned at v1.9.0** in CI, `scripts/check.ps1` and the Taskfile,
-  instead of running at `@latest`.
-- **tygo is a `tool` in `go.mod`**, so `go tool tygo generate` builds the same tygo
-  on every machine.
-
 #### Dependencies
 
-- **`modernc.org/sqlite` v1.61.1** replaces `ncruces/go-sqlite3` v0.36.0 and its
-  WebAssembly build of SQLite; **tygo v0.2.21** joins as a tool, with what it needs.
-
-#### Tooling
-
-- **shared-tooling is a submodule at `shared/`**, pinned to v1.2.0. The submodule
-  and every `uses: jwill89/shared-tooling/...@v1.2.0` in `ci.yml` name the same
-  release, and CI fails if they ever differ; `task shared:update -- vX.Y.Z` moves
-  both.
-- **CI calls shared-tooling's reusable workflows** - `web.yml`, `go.yml`,
-  `dotnet.yml`, `pwsh.yml`, and `docs.yml`, new here (markdownlint, the repo files,
-  the workflow refs) - beside Senpan's own release job, which now waits on the docs
-  job too.
-- **`scripts/check.ps1`** runs what the new jobs run: the golangci config check,
-  govulncheck at its pin, `test:coverage`, the plugin without Roslynator, and the
-  shared script lint, markdownlint, repo-file and version checks. It needs `shared/`
-  checked out, and says so when it isn't.
-- **No pre-push hook.** `.githooks/pre-push` ran all of `scripts/check.ps1` before
-  every push, end-to-end suite included; CI is the gate, as in the other projects,
-  and `scripts/check.ps1` (`task check`) runs the same checks when you ask.
-- **`.editorconfig` and `.gitattributes` come from `shared/repo`**
-  (`Sync-RepoFiles.ps1`), with Senpan's own lines - the plugin's two C# exceptions -
-  below the project marker.
-- **PowerShell lints with shared-tooling's settings** through
-  `shared/lint/pwsh/Invoke-ScriptLint.ps1`, on every tracked `.ps1`, `.psm1` and
-  `.psd1` rather than `scripts/*.ps1` alone. The root `PSScriptAnalyzerSettings.psd1`
-  is gone.
-- **`.markdownlint-cli2.jsonc`** lints every Markdown file with the shared config,
-  and the docs were brought into line with it.
-- **`Taskfile.yml`**: the day-to-day commands (`task` lists them), with the shared
-  tasks included as `shared:*`.
-- **`.github/dependabot.yml`**: weekly updates for npm (through the Font Awesome
-  registry, so `FONTAWESOME_TOKEN` is needed as a Dependabot secret too), Go
-  modules, NuGet and GitHub Actions. TypeScript's next major is held until vue-tsc
-  supports it, and `shared/` is left out, since a release is taken on purpose.
-
-#### Deploy
-
-- **`scripts/deploy.ps1` is built on shared-tooling's SharedDeploy module**: one
-  archive, one SSH connection held for the whole run, and one remote run that checks
-  the archive's SHA-256 and file count before it changes anything. The backend
-  steps read the running unit for the service's user, its database (`-db`) and its
-  address (`-addr`). `deploy/README.md` walks through a run.
-- **The site's public address**, which the smoke check fetches, is
-  `https://apps.senpan.cafe` unless `-SiteUrl`, `DEPLOY_SITE_URL` or
-  `$DeploySiteUrl` names another.
-- **A smoke check through Cloudflare, with rollback.** After the host run, the
-  deploy fetches `/api/version` (which must name the version just built), the page
-  and its entry script, and the plugin index with this release's `?v=`; if any
-  fails, what the run changed goes back - the plugin and the frontend first, then
-  the backend.
-- **A rollback puts the database back with the binary.** The new binary may have
-  migrated the schema, and the previous one refuses a newer schema, so a failed start
-  or a failed smoke check restores the snapshot taken just before the deploy. Until
-  now the database stayed as it was and the run printed the command to restore it,
-  which left the service down until someone did. What was written in the seconds the
-  new release ran is lost with it.
-- **The plugin's version is checked before anything is built.** With the plugin in
-  the run, the published `pluginmaster.json` is read first, and a version not
-  higher than it stops the run - before a backend and frontend in the same run could
-  go live.
-- **A daily database backup**, installed and checked by every backend deploy: a
-  systemd timer, run as the service's user, copies the database into
-  `<db folder>/backups/<service>-YYYY-MM-DD.sqlite` and keeps 28 days. If it can't
-  be installed, the deploy fails saying the site is live but its backup is not.
-- **The live database is pulled into `devdata/database.sqlite`** after a backend
-  deploy by SharedDeploy's `Copy-LiveDatabase`, keeping the three previous local
-  copies; `-NoDbPull` skips it.
-
-### Plugin
-
-#### Changed
-
-- **The analyzers and the code style come from shared-tooling** (`shared/lint/dotnet`),
-  imported by the new `plugins/Directory.Build.props`: the .NET analyzers at their
-  recommended level and the C# code style, checked in the build as before. The two
-  exceptions the plugin keeps - braced `case` blocks not indented a level, and
-  classic `[DllImport]` for the winmm and DPAPI calls - moved to the root
-  `.editorconfig`, and `plugins/SenpanCompanion/.editorconfig` is gone.
-- **CI's plugin job is shared-tooling's `dotnet.yml`**: the same Release build with
-  warnings as errors against Dalamud's latest distribution, and
-  `dotnet format --verify-no-changes`.
-- **The source files lose their UTF-8 byte-order marks**, as the shared
-  `.editorconfig` writes them.
-
-#### Removed
-
-- **Roslynator**, with its CLI pin in `.config/dotnet-tools.json` and the gate's
-  `roslynator analyze` step: the shared analyzers in the build cover what it
-  checked.
-
----
-
-## Frontend
+- **Vite 8.3.6, Vue 3.5.45 and rollup-plugin-visualizer 7.1.2**, within their ranges.
+- **KaTeX 0.19.1 for the math extension**, by an override: `micromark-extension-math` asked for
+  0.16, which carries a prototype-pollution advisory (GHSA-238p-pmpm-9mq7). The editor already
+  used 0.19.1, so there is one KaTeX now.
 
 ### [3.31.1] - 2026-11-01
 
@@ -2079,6 +1975,124 @@ First tracked release - establishes versioning for the current production build.
 ---
 
 ## Backend
+
+### [3.28.0] - 2026-11-07
+
+The move onto **shared-tooling** 1.2.0 - the lint, test, CI and deploy pieces the
+owner's projects share - held as a git submodule at `shared/`. A fresh clone needs
+`git submodule update --init` (or `git clone --recurse-submodules`) before `npm ci`
+will install.
+
+#### Changed
+
+- **The SQLite driver is `modernc.org/sqlite`** (was `ncruces/go-sqlite3`), still
+  pure Go with no cgo, so the static build, the race build and the unit's
+  `MemoryDenyWriteExecute=yes` all stand. No change to the API.
+  - The pragmas travel in the DSN (`_pragma`), which the driver applies to every
+    pooled connection as it opens it, in place of the old driver's connect hook.
+  - `_txlock=immediate` in the DSN keeps `BEGIN IMMEDIATE` for every read-write
+    transaction. The driver ignores `TxOptions.Isolation`, which is how
+    `beginImmediate` used to ask for it.
+  - `mmap_size` (32 MB) now takes effect; the old driver ignored it.
+  - A query canceled mid-run now comes back as `context.Canceled`.
+    `store.Interrupted` checks modernc's `SQLITE_INTERRUPT` code and stays as a
+    backstop, so a departed client still logs at Debug.
+  - **Every read of a DATETIME column is `CAST(col AS TEXT)`.** modernc parses a
+    column declared `DATE`, `DATETIME` or `TIMESTAMP` into a `time.Time`, which
+    database/sql would hand back as RFC 3339 (`2026-01-02T03:04:05Z` for a stored
+    `2026-01-02 03:04:05`); the cast keeps every timestamp the API returns as it
+    was. A new store method must do the same. `TestDatetimeColumnsReadAsStored`
+    guards the paths the frontend and the plugin parse, and the rest of
+    `store/driver_test.go` checks the pragmas, the immediate `BEGIN` and
+    cancellation against the driver.
+- **`.golangci.yml` is written from shared-tooling's template**
+  (`go run -C shared/lint/go . -dir backend`), with Senpan's own settings and
+  exclusions in `.golangci.local.yml`, merged on top. CI and `scripts/check.ps1`
+  fail when the written file has drifted from the two.
+- **CI's backend job is shared-tooling's `go.yml`**: the config check, `go vet`,
+  golangci-lint v2.15.0, govulncheck, the tests under the race detector in shuffled
+  order with a floor of **63%** statement coverage (63.3% when it was set; raise it
+  as tests land, never lower it), and the binary built as the deploy builds it.
+- **govulncheck is pinned at v1.9.0** in CI, `scripts/check.ps1` and the Taskfile,
+  instead of running at `@latest`.
+- **tygo is a `tool` in `go.mod`**, so `go tool tygo generate` builds the same tygo
+  on every machine.
+
+#### Dependencies
+
+- **`modernc.org/sqlite` v1.61.1** replaces `ncruces/go-sqlite3` v0.36.0 and its
+  WebAssembly build of SQLite; **tygo v0.2.21** joins as a tool, with what it needs.
+- **`modernc.org/sqlite` v1.62.0** and **kin-openapi v0.153.0**, within their ranges.
+
+#### Tooling
+
+- **shared-tooling is a submodule at `shared/`**, pinned to v1.2.0. The submodule
+  and every `uses: jwill89/shared-tooling/...@v1.2.0` in `ci.yml` name the same
+  release, and CI fails if they ever differ; `task shared:update -- vX.Y.Z` moves
+  both.
+- **CI calls shared-tooling's reusable workflows** - `web.yml`, `go.yml`,
+  `dotnet.yml`, `pwsh.yml`, and `docs.yml`, new here (markdownlint, the repo files,
+  the workflow refs) - beside Senpan's own release job, which now waits on the docs
+  job too.
+- **`scripts/check.ps1`** runs what the new jobs run: the golangci config check,
+  govulncheck at its pin, `test:coverage`, the plugin without Roslynator, and the
+  shared script lint, markdownlint, repo-file and version checks. It needs `shared/`
+  checked out, and says so when it isn't.
+- **No pre-push hook.** `.githooks/pre-push` ran all of `scripts/check.ps1` before
+  every push, end-to-end suite included; CI is the gate, as in the other projects,
+  and `scripts/check.ps1` (`task check`) runs the same checks when you ask.
+- **`.editorconfig` and `.gitattributes` come from `shared/repo`**
+  (`Sync-RepoFiles.ps1`), with Senpan's own lines - the plugin's two C# exceptions -
+  below the project marker.
+- **PowerShell lints with shared-tooling's settings** through
+  `shared/lint/pwsh/Invoke-ScriptLint.ps1`, on every tracked `.ps1`, `.psm1` and
+  `.psd1` rather than `scripts/*.ps1` alone. The root `PSScriptAnalyzerSettings.psd1`
+  is gone.
+- **`.markdownlint-cli2.jsonc`** lints every Markdown file with the shared config,
+  and the docs were brought into line with it.
+- **`Taskfile.yml`**: the day-to-day commands (`task` lists them), with the shared
+  tasks included as `shared:*`.
+- **`.github/dependabot.yml`**: weekly updates for npm (through the Font Awesome
+  registry, so `FONTAWESOME_TOKEN` is needed as a Dependabot secret too), Go
+  modules, NuGet and GitHub Actions. TypeScript's next major is held until vue-tsc
+  supports it, and `shared/` is left out, since a release is taken on purpose.
+- **`task push`** takes the in-range updates Dependabot would open, scans every lockfile with
+  OSV-Scanner and runs `task check` before pushing. `task check` runs its four parts at once
+  (`scripts/check.ps1 -Only`), and CI's OSV job gates each release. `task deploy` deploys
+  everything: the backend, then the frontend, then the plugin when its version is new.
+
+#### Deploy
+
+- **`scripts/deploy.ps1` is built on shared-tooling's SharedDeploy module**: one
+  archive, one SSH connection held for the whole run, and one remote run that checks
+  the archive's SHA-256 and file count before it changes anything. The backend
+  steps read the running unit for the service's user, its database (`-db`) and its
+  address (`-addr`). `deploy/README.md` walks through a run.
+- **The site's public address**, which the smoke check fetches, is
+  `https://apps.senpan.cafe` unless `-SiteUrl`, `DEPLOY_SITE_URL` or
+  `$DeploySiteUrl` names another.
+- **A smoke check through Cloudflare, with rollback.** After the host run, the
+  deploy fetches `/api/version` (which must name the version just built), the page
+  and its entry script, and the plugin index with this release's `?v=`; if any
+  fails, what the run changed goes back - the plugin and the frontend first, then
+  the backend.
+- **A rollback puts the database back with the binary.** The new binary may have
+  migrated the schema, and the previous one refuses a newer schema, so a failed start
+  or a failed smoke check restores the snapshot taken just before the deploy. Until
+  now the database stayed as it was and the run printed the command to restore it,
+  which left the service down until someone did. What was written in the seconds the
+  new release ran is lost with it.
+- **The plugin's version is checked before anything is built.** With the plugin in
+  the run, the published `pluginmaster.json` is read first, and a version not
+  higher than it stops the run - before a backend and frontend in the same run could
+  go live.
+- **A daily database backup**, installed and checked by every backend deploy: a
+  systemd timer, run as the service's user, copies the database into
+  `<db folder>/backups/<service>-YYYY-MM-DD.sqlite` and keeps 28 days. If it can't
+  be installed, the deploy fails saying the site is live but its backup is not.
+- **The live database is pulled into `devdata/database.sqlite`** after a backend
+  deploy by SharedDeploy's `Copy-LiveDatabase`, keeping the three previous local
+  copies; `-NoDbPull` skips it.
 
 ### [3.27.0] - 2026-10-31
 

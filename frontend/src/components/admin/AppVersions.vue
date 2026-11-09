@@ -1,25 +1,26 @@
 <script setup lang="ts">
 /**
- * Frontend/backend/plugin version readout for the admin sidebar footer. The SPA's
- * build version (baked in) and the backend's (fetched from GET /api/version) are
- * shown so operators can confirm a deploy left the web halves compatible; a MAJOR
- * mismatch (or a failed probe) is flagged. The plugin's version is fetched LIVE from
- * the deployed Dalamud repo index (pluginmaster.json) so publishing a new plugin
- * refreshes it without a frontend rebuild; it falls back to the bundled changelog
- * version when the index isn't reachable (e.g. local dev). Each version is a button
- * that opens that component's changelog (the plugin's also carries install steps).
+ * App/plugin version readout for the admin sidebar footer. The app's version is this
+ * build's (baked in); the server's (GET /api/version) is fetched only to tell a tab
+ * opened before a deploy that the server runs another version now, and that a reload
+ * brings them back together. A failed probe is flagged too. The plugin's version is
+ * fetched LIVE from the deployed Dalamud repo index (pluginmaster.json) so publishing
+ * a new plugin refreshes it without an app release; it falls back to the bundled
+ * changelog version when the index isn't reachable (e.g. local dev). Each version is a
+ * button that opens its changelog (the plugin's also carries install steps).
  */
 import { computed, onMounted, ref } from 'vue'
 import { endpoints } from '@/lib/endpoints'
-import { FRONTEND_VERSION, versionsCompatible } from '@/lib/version'
+import { APP_VERSION, serverDiffers } from '@/lib/version'
 import { changelog, fetchLivePluginVersion, type ChangelogComponent } from '@/lib/changelog'
 import ChangelogModal from '@/components/admin/ChangelogModal.vue'
 
-const backend = ref<string | null>(null)
+/** The version the server runs, once fetched. */
+const server = ref<string | null>(null)
 const failed = ref(false)
 /** Live plugin version from the deployed repo index; null until fetched (or on failure). */
 const livePlugin = ref<string | null>(null)
-/** Which component's changelog modal is open (null = closed). */
+/** Which changelog modal is open (null = closed). */
 const openComponent = ref<ChangelogComponent | null>(null)
 
 // .then/.catch (not async/await) so the rejection handler is attached
@@ -28,7 +29,7 @@ onMounted(() => {
   endpoints.system
     .version()
     .then((r) => {
-      backend.value = r.backend
+      server.value = r.backend
     })
     .catch(() => {
       failed.value = true
@@ -41,43 +42,26 @@ onMounted(() => {
   })
 })
 
-/** Incompatible only once we actually know the backend version. */
-const incompatible = computed(
-  () => backend.value !== null && !versionsCompatible(FRONTEND_VERSION, backend.value),
-)
+/** The server runs another version than this tab: it was opened before a deploy. */
+const behind = computed(() => serverDiffers(server.value))
 
 /** Live plugin version if reachable, else the version baked into the bundled changelog. */
 const pluginVersion = computed(() => livePlugin.value ?? changelog.plugin.latest)
 </script>
 
 <template>
-  <div class="app-versions" :class="{ 'app-versions--warn': incompatible || failed }">
+  <div class="app-versions" :class="{ 'app-versions--warn': behind || failed }">
     <span class="app-versions-row">
-      <span class="app-versions-label">Frontend</span>
+      <span class="app-versions-label">App</span>
       <button
         type="button"
         class="app-versions-val app-versions-link"
-        title="View the Frontend changelog"
-        @click="openComponent = 'frontend'"
+        title="View the App changelog"
+        @click="openComponent = 'app'"
       >
-        v{{ FRONTEND_VERSION }}
+        v{{ APP_VERSION }}
       </button>
     </span>
-
-    <span class="app-versions-row">
-      <span class="app-versions-label">Backend</span>
-      <button
-        v-if="backend"
-        type="button"
-        class="app-versions-val app-versions-link"
-        title="View the Backend changelog"
-        @click="openComponent = 'backend'"
-      >
-        v{{ backend }}
-      </button>
-      <span v-else class="app-versions-val">{{ failed ? 'unknown' : '...' }}</span>
-    </span>
-
     <span class="app-versions-row">
       <span class="app-versions-label">Plugin</span>
       <button
@@ -91,13 +75,13 @@ const pluginVersion = computed(() => livePlugin.value ?? changelog.plugin.latest
       </button>
       <span v-else class="app-versions-val">-</span>
     </span>
-
     <span
-      v-if="incompatible"
+      v-if="behind"
       class="app-versions-flag"
-      title="Frontend and backend major versions differ - check compatibility."
+      :title="`This tab runs v${APP_VERSION}; the server runs v${server}. Reload to bring them together.`"
     >
-      <font-awesome-icon :icon="['fas', 'triangle-exclamation']" /> version mismatch
+      <font-awesome-icon :icon="['fas', 'triangle-exclamation']" /> server runs v{{ server }}:
+      reload
     </span>
 
     <ChangelogModal v-if="openComponent" :component="openComponent" @close="openComponent = null" />

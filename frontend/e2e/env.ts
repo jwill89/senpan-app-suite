@@ -2,15 +2,15 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 
 /**
- * Where the end-to-end run serves the suite: the built SPA from `vite preview`, which
- * sends /api (the WebSocket included) to the Go API, as Apache does in production. The
- * API is built from this checkout into the OS temp folder and runs there on a throwaway
- * database and web root, on its own port, with every Discord post held back.
+ * Where the end-to-end run serves the suite: the app as production runs it, the Go
+ * binary serving the API and the SPA it embeds. It is built from this checkout (after
+ * the front end's build, which it embeds) into the OS temp folder and runs there on a
+ * throwaway database and web root, on its own port, with every Discord post held back.
+ * The web root's images, which Apache serves in production, are served from that web
+ * root by the `images` fixture.
  */
-export const BACKEND_PORT = 8184
-export const SITE_PORT = 4184
-export const BACKEND_URL = `http://127.0.0.1:${String(BACKEND_PORT)}`
-export const SITE_URL = `http://127.0.0.1:${String(SITE_PORT)}`
+export const PORT = 8184
+export const SITE_URL = `http://127.0.0.1:${String(PORT)}`
 
 export const ROOT = resolve(import.meta.dirname, '../..')
 export const DATA_DIR = join(tmpdir(), 'senpan-e2e')
@@ -28,7 +28,7 @@ export const STAFF = { username: 'admin', password: 'admin' }
  * each one is given. `-webhook-dry-run` logs every Discord post instead of sending it.
  */
 export const serverFlags: Record<string, string> = {
-  '-addr': `127.0.0.1:${String(BACKEND_PORT)}`,
+  '-addr': `127.0.0.1:${String(PORT)}`,
   '-db': DATABASE,
   '-webroot': WEB_ROOT,
   '-log-file': LOG_FILE,

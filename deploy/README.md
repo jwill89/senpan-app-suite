@@ -1,13 +1,15 @@
 # Deployment (Apache)
 
-This folder holds the files you place at the **Apache document root** - i.e. the
-things that live *alongside* the built SPA but are **not** part of `dist/`.
+This folder holds the files for the **Apache document root**: its `.htaccess`
+template and the persistent `images/`. Since 4.0.0 the app is one Go binary that
+serves the API, the WebSocket and the SPA, whose build it embeds; Apache serves only
+the document root's own folders and proxies everything else to it.
 
 ## Document root layout
 
 ```text
 <DocumentRoot>/                <- e.g. /var/www/senpan  (Apache DocumentRoot, also the Go -webroot)
-+-- .htaccess                  <- from deploy/.htaccess  (SPA fallback + routing)
++-- .htaccess                  <- from deploy/.htaccess, with the app's address filled in (the deploy writes it)
 +-- images/                    <- from deploy/images/    (PERSISTENT - never wiped on redeploy)
 |   +-- logo.png
 |   +-- favicon.png
@@ -26,15 +28,21 @@ things that live *alongside* the built SPA but are **not** part of `dist/`.
 |   \-- bookclub/              <- reading-list cover uploads
 +-- fonts/                     <- admin-uploaded font files; NOT served statically - the Go server streams them via tokenized URLs (see Font host)
 +-- carrd/                     <- Carrd image-host projects; served by the carrd.senpan.cafe vhost (see Carrd host)
-+-- dist/                      <- from frontend/dist/    (the built Vue app; replaced on each deploy)
-|   +-- index.html
-|   \-- assets/...             <- content-hashed JS/CSS
 \-- plugin/                    <- the Dalamud custom repo (pluginmaster.json, SenpanCompanionAdmin/latest.zip, .htaccess); replaced whole on each plugin publish
 ```
 
-`images/` is a **sibling** of `dist/`, so re-uploading/replacing `dist/` never
-touches uploaded raffle images. The build also strips `dist/images/` (it would
-otherwise be a redundant copy) so the two never get confused.
+`.htaccess` serves `images/`, `carrd/` and `plugin/` as they are (a file missing
+there is a 404), refuses `fonts/` (its own `.htaccess`) and every dotfile, and
+proxies every other path to the app: its pages, its content-hashed `assets/`, its
+sounds and the PWA files. The app sets their cache rules, security headers and
+Content-Security-Policy itself. A deploy replaces only the binary and `.htaccess`, so
+uploads are never touched. The build strips its own `images/`, so the binary never
+carries a copy of the persistent one.
+
+Before 4.0.0 Apache served the SPA from `<DocumentRoot>/dist/`, which the deploy
+replaced (keeping `dist.old/`). The 4.0.0 deploy leaves both in place, so a rollback
+to the previous `.htaccess` still finds the previous SPA. Once 4.0.0 has stayed, remove
+them on the host: `rm -rf <DocumentRoot>/dist <DocumentRoot>/dist.old`.
 
 All image uploads are now managed centrally on the **System -> Images** admin
 page, which writes into per-category subdirectories of `images/` (the three
@@ -50,10 +58,12 @@ server's tokenized, origin-gated endpoints - see
 
 ## One-time server setup
 
-1. Upload `deploy/.htaccess` -> `<DocumentRoot>/.htaccess`.
+1. The deploy writes `<DocumentRoot>/.htaccess` from `deploy/.htaccess`; by hand,
+   copy it and replace `__APP__` with the app's address (`127.0.0.1:8080`).
 2. Upload `deploy/images/` -> `<DocumentRoot>/images/` (creates `images/raffles/`).
-3. Ensure Apache has `mod_rewrite` + `mod_headers` enabled and the vhost allows
-   `.htaccess` overrides for the doc root:
+3. Ensure Apache has `mod_rewrite`, `mod_headers`, `mod_proxy` and `mod_proxy_http`
+   enabled (the `.htaccess` proxies with `[P]`; the vhost's ProxyPass already needs
+   the last two) and the vhost allows `.htaccess` overrides for the doc root:
 
    ```apache
    <Directory /var/www/senpan>
@@ -84,15 +94,16 @@ server's tokenized, origin-gated endpoints - see
 
 ## Running as a non-root user (recommended)
 
-The repo's `senpan.service` specifies `User=senpan`/`Group=senpan`. Nothing in the
-server needs root - it binds `:8080` (non-privileged) and only touches ordinary
-files - so run it as a dedicated, locked system account to shrink the blast radius
-of any compromise.
+The standards run each service as its own locked system account, and the repo's
+`deploy/senpan.service` template does (`User=` and `Group=`, `<service-user>` there).
+Nothing in the server needs root - it binds `:8080` (non-privileged) and only touches
+ordinary files - so a dedicated account shrinks the blast radius of any compromise.
 
 > **Important:** `scripts/deploy.ps1` does **NOT** ship the systemd unit - it only
-> updates the binary, `dist/` + `.htaccess` and the plugin folder, and installs the
-> daily backup's own units. It **reads** the running unit (its `User=`, `-db` and
-> `-addr`), so the backup runs as whatever `User=` says. The repo `deploy/senpan.service` is a
+> updates the binary, the web root's `.htaccess` and the plugin folder, and installs the
+> daily backup's own units. It **reads** the running unit (its `User=`, `Group=`, `-db`
+> and `-addr`), so the binary it installs is owned by that account, as the standards
+> have it, and the backup runs as it too. The repo `deploy/senpan.service` is a
 > reference/template; the unit that actually runs lives on the host at
 > `/etc/systemd/system/senpan.service`. So editing `User=` in the repo and
 > redeploying does nothing to the running service - you must update the unit **on
@@ -351,57 +362,55 @@ draw/stamp/font links never appear verbatim in the log or the viewer.
 
 ## Each deploy
 
-**Scripted (recommended).** From the repo root, on Windows. `task deploy` deploys everything: the backend, then the frontend (`-Target main`), then the plugin with `-IfNewer`, which skips it when its version is already published. `task deploy:backend`, `task deploy:frontend` and `task deploy:plugin` deploy one each, with flags after `--`. The script itself:
+**Scripted (recommended).** From the repo root, on Windows. Only releases ship: the app's newest `v<version>` tag CI made on main, the plugin's newest `Plugin-v<version>` (the tags are fetched first). Each is checked out into a folder of its own under `%TEMP%` and built there, with `npm ci` from its own lockfile, so commits after it, a shared-tooling update or anything uncommitted are never part of it (shared-tooling's newest-release deploy). `task deploy` deploys the app, then the plugin with `-IfNewer`, which skips it when its version is already published. `task deploy:backend` (the app) and `task deploy:plugin` deploy one each, with flags after `--`. The script itself:
 
 ```powershell
-.\scripts\deploy.ps1                  # backend, then frontend (default: main; 'both' is a kept alias)
-.\scripts\deploy.ps1 -Target frontend # the SPA only
-.\scripts\deploy.ps1 -Target backend  # Go binary + service restart, the daily backup check, the dev-database pull
-.\scripts\deploy.ps1 -Target all      # backend, frontend, then plugin
-.\scripts\deploy.ps1 -Target plugin   # Dalamud custom-repo files only
+.\scripts\deploy.ps1                  # the app's newest release (skipped when the host already runs it)
+.\scripts\deploy.ps1 -Force           # the same release again
+.\scripts\deploy.ps1 -Target plugin   # the plugin's newest release, to the Dalamud custom repo
 ```
 
-The script is built on shared-tooling's SharedDeploy module (`shared/deploy/pwsh/`, from the `shared/` submodule; its README describes each function), so it takes the shape every deploy there takes: one archive, one SSH connection held for the whole run, one remote run. Several targets share the archive, the connection and the remote run, with no pauses between them.
+The script is built on shared-tooling's SharedDeploy module (`shared/deploy/pwsh/`, from the `shared/` submodule; its README describes each function), so it takes the shape every deploy there takes: one archive, one SSH connection held for the whole run, one remote run.
 
-> **First-time setup:** the script is version-controlled, but **no** environment-specific value is baked into it - the host, SSH user, key path, webroot, service name and opt dir all live outside the repo. Copy `scripts/deploy.config.example.ps1` to `scripts/deploy.config.ps1` (untracked) and fill in the six required `$Deploy*` values. Each can instead be passed as a `-param` or set via its `$env:DEPLOY_*` variable (`DEPLOY_VPS_HOST`, `DEPLOY_VPS_USER`, `DEPLOY_KEY_PATH`, `DEPLOY_WEB_ROOT`, `DEPLOY_SERVICE_NAME`, `DEPLOY_REMOTE_OPT_DIR`); the script fails fast, listing any that are unset, before it builds or connects. The site's address, which the smoke check fetches, is public already (`plugins/pluginmaster.json` links to it), so it defaults to `https://apps.senpan.cafe`; `-SiteUrl`, `DEPLOY_SITE_URL` or `$DeploySiteUrl` overrides it. `-ConfigPath` points it at another settings file. The live database needs no setting: it is read from the running unit (step 2). `RemoteDbPath` (`DEPLOY_REMOTE_DB_PATH`, `$DeployRemoteDbPath`) is only a cross-check, used on its own when the unit names no `-db`.
+> **First-time setup:** the script is version-controlled, but **no** environment-specific value is baked into it - the host, SSH user, key path, webroot, service name and opt dir all live outside the repo. Copy `scripts/deploy.config.example.ps1` to `scripts/deploy.config.ps1` (untracked) and fill in the six required `$Deploy*` values. Each can instead be passed as a `-param` or set via its `$env:DEPLOY_*` variable (`DEPLOY_VPS_HOST`, `DEPLOY_VPS_USER`, `DEPLOY_KEY_PATH`, `DEPLOY_WEB_ROOT`, `DEPLOY_SERVICE_NAME`, `DEPLOY_REMOTE_OPT_DIR`); the script fails fast, listing any that are unset, before it builds or connects. The site's address, which the smoke check fetches, is public already (`plugins/pluginmaster.json` links to it), so it defaults to `https://apps.senpan.cafe`; `-SiteUrl`, `DEPLOY_SITE_URL` or `$DeploySiteUrl` overrides it. `-ConfigPath` points it at another settings file. The live database needs no setting: it is read from the running unit (step 1). `RemoteDbPath` (`DEPLOY_REMOTE_DB_PATH`, `$DeployRemoteDbPath`) is only a cross-check, used on its own when the unit names no `-db`.
 
-**What a run does:**
+**What an app deploy does:**
 
-1. **Build, before anything connects.** Backend: a static `linux/amd64` binary (`GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -ldflags="-s -w" -o app-suite .` in `backend/`). Frontend: `npm run build` in `frontend/` (vue-tsc + vite). Plugin: `dotnet build -c Release` from clean (its `bin/` and `obj/` deleted first, so the package can never lag the manifest), then its repository laid out: `SenpanCompanionAdmin/latest.zip`, `plugins/pluginmaster.json` with `?v=<version>` on its download links, and `deploy/plugin.htaccess`. The built version must equal `pluginmaster.json`'s `AssemblyVersion`. With the plugin in the run, the published `<SiteUrl>/plugin/pluginmaster.json` is read before anything is built: a version not higher than the published one stops the run there, since a backend and frontend in the same run (`-Target all`) would otherwise be live before the host refused the plugin (if the index can't be read, the host's own check still stands). A broken build changes nothing. Every piece goes into **one** `.tar.gz`: a truncated archive refuses to unpack, where a half-copied folder can look whole.
-2. **Read the service on the host** (backend), before anything is uploaded. The unit must be installed. Its `User=` (and `Group=`) is who the backup runs as; the `-db` on its `ExecStart` is the live database; its `-addr` is where `/api/version` answers on the host (`:8080`, the binary's default, when it has none). A `RemoteDbPath` that differs from `-db` stops the run with nothing changed.
+1. **Read the service on the host**, before anything is built. The unit must be installed. Its `User=` (and `Group=`) is who the backup runs as; the `-db` on its `ExecStart` is the live database; its `-addr` is where the app answers on the host (`:8080`, the binary's default, when it has none, asked on `127.0.0.1`), which `/healthz` is asked on and the `.htaccess` proxies to. A `RemoteDbPath` that differs from `-db` stops the run with nothing changed. The host also says which release it last took (`~/.shared-deploy/senpan`): when that is this release, the run ends there, unless `-Force`.
+2. **Build the release, in its own checkout.** The front end first (`npm run build` in `frontend/`: vue-tsc + vite, into `backend/internal/web/dist/`), then a static `linux/amd64` binary that embeds it (`GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -ldflags="-s -w" -o app-suite .` in `backend/`). The release's `deploy/.htaccess` is filled in with the app's address. A broken build changes nothing. Both go into **one** `.tar.gz`: a truncated archive refuses to unpack, where a half-copied folder can look whole.
 3. **Upload** the archive as one stream through plink, into the SSH user's home.
-4. **One remote run.** The host checks the archive's SHA-256 and file count, and only then runs the steps, API first: a new backend is additive to the old SPA, while a new SPA calls endpoints an old backend does not have; the plugin, a second client of the API, comes last.
-   - **backend:** stops the service, keeps `app-suite.old`, snapshots the database with `sqlite3 .backup`, checked with `PRAGMA integrity_check`, compressed with gzip and checked with `gzip -t`, to `<db>.pre-<yyyyMMdd-HHmmss>.gz` (UTC; readable by root only; the newest three are kept), installs the binary, starts the service and waits up to 30 s for `/api/version` to answer on the host. If it does not, the previous binary goes back with the snapshot and restarts: the new binary may already have migrated the database, and the previous one refuses a newer schema (`database schema vN is newer than this binary`). Brief downtime (a few seconds) while the service is stopped.
-   - **frontend:** swaps `dist/` in by renames (the previous kept as `dist.old`), with `deploy/.htaccess` beside it (the previous kept as `.htaccess.old`). The repo copy of `.htaccess` is the source of truth - edit it there, not on the host. `images/` is never touched.
-   - **plugin:** refuses a version that is not higher than the published one, since Dalamud updates to nothing else, then swaps the whole `plugin/` folder in (the previous kept as `plugin.old`).
+4. **One remote run.** The host checks the archive's SHA-256 and file count, and only then:
+   - **the binary:** stops the service, keeps `app-suite.old`, snapshots the database with `sqlite3 .backup`, checked with `PRAGMA integrity_check`, compressed with gzip and checked with `gzip -t`, to `<db>.pre-<yyyyMMdd-HHmmss>.gz` (UTC; readable by root only; the newest three are kept), installs the binary, owned by the account the unit runs as, starts the service and waits up to 30 s for `/healthz` to answer on the host. If it does not, the previous binary goes back with the snapshot and restarts: the new binary may already have migrated the database, and the previous one refuses a newer schema (`database schema vN is newer than this binary`). Brief downtime (a few seconds) while the service is stopped.
+   - **then `.htaccess`:** swapped in by renames, the previous kept in `<DocumentRoot>/.deploy-backup/`. The repo's `deploy/.htaccess` is the source of truth - edit it there, not on the host. `images/` and the other folders are never touched.
+5. **Smoke check from this machine, through Cloudflare**, each URL tried three times: `<SiteUrl>/healthz` and `<SiteUrl>/api/version` must name this release's version; `<SiteUrl>/` must name the build's entry script, which must load too. If any fails, the previous `.htaccess` goes back, then the previous binary with the pre-deploy snapshot, so it starts on the schema it knows. Whatever was written in the seconds the new release ran is lost with it (decided 2026-11-06, as Kindred Nights does). Once the checks pass, the host records the release.
+6. **Daily backup**, once the smoke check passes: see [Database backups](#database-backups). If it cannot be installed, the run fails saying the site is live but its backup is not.
+7. **Dev-database pull** (unless `-NoDbPull`): an online `sqlite3 .backup` on the host (the service keeps running), downloaded and checked against the host's SHA-256 into `devdata/database.sqlite`. The previous local copy is kept as `database.sqlite.bak-<time>` (the newest three), stale `-wal`/`-shm` files are removed, and the host's copy is deleted. While a local dev server holds the database open, the pull is skipped with a warning. These copies hold **live** data (accounts, password hashes, tokens, webhook URLs) - keep them local.
 
-   A step that fails stops the run there. With several targets, the steps before it stay live and are not smoke-checked, so raise the plugin's version before `-Target all`, or use `-Target main`.
-5. **Smoke check from this machine, through Cloudflare**, each URL tried three times: `<SiteUrl>/api/version` must name the version this run built; `<SiteUrl>/` must name the build's entry script, which must load too; `<SiteUrl>/plugin/pluginmaster.json` must carry this release's `?v=`. If any fails, what this run changed goes back in reverse order: plugin, frontend, then backend, the backend with the pre-deploy snapshot, so the previous binary starts on the schema it knows. Whatever was written in the seconds the new release ran is lost with it (decided 2026-11-06, as Kindred Nights does).
-6. **Daily backup** (backend, once the smoke check passes): see [Database backups](#database-backups). If it cannot be installed, the run fails saying the site is live but its backup is not.
-7. **Dev-database pull** (backend, unless `-NoDbPull`): an online `sqlite3 .backup` on the host (the service keeps running), downloaded and checked against the host's SHA-256 into `devdata/database.sqlite`. The previous local copy is kept as `database.sqlite.bak-<time>` (the newest three), stale `-wal`/`-shm` files are removed, and the host's copy is deleted. While a local dev server holds the database open, the pull is skipped with a warning. These copies hold **live** data (accounts, password hashes, tokens, webhook URLs) - keep them local.
+The checkout under `%TEMP%` is removed at the end, whether the run passed or not.
 
-**Options.** `-SkipBuild` deploys the existing build artifacts (the `/api/version` check then only asks for an answer, since the binary's version is unknown). `-NoBackup` removes `app-suite.old`, `dist.old`, `.htaccess.old` and `plugin.old` once the host run succeeds; the smoke check then has nothing to go back to, so a failure only stops the run. The database snapshot is still taken. `-NoDbPull` skips step 7.
+**What a plugin deploy does.** It checks out the plugin's newest release, reads the published `<SiteUrl>/plugin/pluginmaster.json` and stops before building when the release's version is not higher, since Dalamud updates to nothing else (with `-IfNewer`, the same version ends the run without error; if the index can't be read, the host's own check still stands). Then `dotnet build -c Release` from clean (its `bin/` and `obj/` deleted first, so the package can never lag the manifest), and its repository laid out: `SenpanCompanionAdmin/latest.zip`, `plugins/pluginmaster.json` with `?v=<version>` on its download links, and `deploy/plugin.htaccess`. The built version must equal `pluginmaster.json`'s `AssemblyVersion`. On the host the whole `plugin/` folder is swapped in (the previous kept as `plugin.old`), and the published index must then carry the new `?v=`, or the previous folder goes back.
+
+**Options.** `-Force` deploys the app's release even when the host already runs it. `-NoBackup` removes `app-suite.old`, the previous `.htaccess` and `plugin.old` once the host run succeeds; the smoke check then has nothing to go back to, so a failure only stops the run. The database snapshot is still taken. `-NoDbPull` skips step 7.
 
 **The connection.** The droplet runs `ufw limit ssh`, which refuses an address after six connections in 30 s. The whole run is **one** SSH connection, held by a background `plink -share`; every command, the upload and the download ride it. If it drops, the module reconnects (one new connection) and retries the step once, resuming where it stopped; only a refused reconnect waits 35 s.
 
-**Rolling back by hand** (on the host, in the webroot or opt dir): frontend `mv dist dist.failed && mv dist.old dist && rm -rf dist.failed`, and `mv -f .htaccess.old .htaccess`; the plugin the same way with `plugin` and `plugin.old`; backend `systemctl stop <service> && install -m 755 app-suite.old app-suite && systemctl start <service>`. If the previous binary refuses the database, decompress the newest snapshot over it in place, which keeps the file's owner: `systemctl stop <service> && rm -f <db>-wal <db>-shm && gunzip -c "$(ls -1t <db>.pre-*.gz | head -n 1)" > <db> && systemctl start <service>`.
+**Rolling back by hand** (on the host): `.htaccess` with `mv -f <DocumentRoot>/.deploy-backup/.htaccess <DocumentRoot>/.htaccess`; the plugin with `mv plugin plugin.failed && mv plugin.old plugin && rm -rf plugin.failed` in the webroot; the binary with `systemctl stop <service> && install -m 755 -o <user> -g <group> app-suite.old app-suite && systemctl start <service>` in the opt dir (the unit's `User=` and `Group=`). If the previous binary refuses the database, decompress the newest snapshot over it in place, which keeps the file's owner: `systemctl stop <service> && rm -f <db>-wal <db>-shm && gunzip -c "$(ls -1t <db>.pre-*.gz | head -n 1)" > <db> && systemctl start <service>`. Going back past 4.0.0 means the 3.x `.htaccess`, which serves `dist/`, as well as the 3.x binary. A rollback by hand leaves the host's record naming the release it rolled back from, so the next deploy skips that release unless `-Force`.
 
 **Requirements.**
 
-- PowerShell 7.4 or later on Windows, with Windows' own `tar.exe` (shipped since Windows 10 1803).
+- PowerShell 7.4 or later on Windows, with Windows' own `tar.exe` (shipped since Windows 10 1803), git, Node and Go.
 - PuTTY's `plink` 0.85 or later (connection sharing), on PATH or in `C:\Program Files\PuTTY`; pscp is no longer used. plink runs in batch mode, so a passphrase-protected `.ppk` must be loaded into Pageant first: run `pageant.exe "<KeyPath>"` once and enter the passphrase (it stays unlocked for the session; a `shell:startup` shortcut loads it at login). The first-ever connection from PuTTY also needs the host key cached once (`plink -i "<KeyPath>" <user>@<host>`, accept the fingerprint).
-- On the host: bash, systemd, GNU coreutils, `curl` (the on-host health check) and `sqlite3` (the snapshot, the backup and the pull).
+- On the host: bash, systemd, GNU coreutils, `curl` (the on-host health check) and `sqlite3` (the snapshot, the backup and the pull); Apache with `mod_proxy_http`.
 - For the plugin: the .NET 10 SDK.
 
 **Manual fallback.**
 
-1. Locally: `cd frontend && npm run build`.
-2. Upload the contents of `frontend/dist/` -> `<DocumentRoot>/dist/` (replace).
-   Leave `<DocumentRoot>/images/` and `<DocumentRoot>/.htaccess` untouched.
+1. Locally, at the release's tag: `cd frontend && npm ci && npm run build`, then build the binary in `backend/` as in step 2.
+2. On the host: stop the service, install the binary over `app-suite`, start it, and check `/healthz`. Fill in and copy `.htaccess` as in [One-time server setup](#one-time-server-setup) when it changed.
 
 ## Database backups
 
-Every deploy that includes the backend keeps a **daily backup** of the live database installed and checked: shared-tooling's `Install-BackupTimer` with its shared job. It is two systemd units named after the service, `<service>-backup.service` (oneshot) and `<service>-backup.timer`, and the job script `/usr/local/libexec/shared-deploy/<service>-backup`. All three are rewritten by the deploy, so change them in `scripts/deploy.ps1`, not on the host.
+Every app deploy keeps a **daily backup** of the live database installed and checked: shared-tooling's `Install-BackupTimer` with its shared job. It is two systemd units named after the service, `<service>-backup.service` (oneshot) and `<service>-backup.timer`, and the job script `/usr/local/libexec/shared-deploy/<service>-backup`. All three are rewritten by the deploy, so change them in `scripts/deploy.ps1`, not on the host.
 
 - **When:** daily at 10:00 UTC, spread over up to 15 minutes; a missed run happens at the next boot.
 - **As whom:** the service's own `User=` and `Group=`, read from the running unit at each deploy, the account that owns the database. A unit with `DynamicUser=yes` has no fixed user, so the deploy refuses to install the backup; one with no `User=` runs it as root, with a warning.
@@ -432,12 +441,10 @@ systemctl stop <service> && rm -f <db>-wal <db>-shm && gunzip -c '<db folder>/ba
 - `/api/*` and `/api/ws` are never handled by `.htaccess`; the vhost ProxyPass
   intercepts them first.
 - **PWA**: the build also emits `sw.js`, `registerSW.js`, and
-  `manifest.webmanifest` at the `dist/` root - they're uploaded as part of
-  `dist/` and served at the document root by the `.htaccess` real-file rule. The
-  caching block in `.htaccess` deliberately exempts `sw.js`/`registerSW.js`/
-  `*.webmanifest` from the 1-year immutable cache so the app can update; if you
-  re-copy an older `.htaccess`, keep those exemptions or the service worker will
-  go stale. The PWA icons (`pwa-192x192.png`, `pwa-512x512.png`,
+  `manifest.webmanifest` at its root; the app serves them at the site's root,
+  `sw.js` and `registerSW.js` with `no-store` and the manifest with `no-cache`,
+  never the 1-year immutable cache its hashed `assets/` get, so the app can update
+  (`backend/internal/web`). The PWA icons (`pwa-192x192.png`, `pwa-512x512.png`,
   `pwa-maskable-512x512.png`) and the iOS `apple-touch-icon.png` are served from
   the persistent root `images/` folder - make sure they're present there (they
   ship in `deploy/images/`).

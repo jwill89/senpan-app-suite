@@ -5,14 +5,14 @@ go 1.27.1
 toolchain go1.27.3
 
 require (
-	github.com/DeRuina/timberjack v1.4.9
+	github.com/DeRuina/timberjack v1.4.10
 	github.com/alexedwards/scs/v2 v2.9.0
 	github.com/coder/websocket v1.8.15
 	github.com/getkin/kin-openapi v0.153.0
 	github.com/go-webauthn/webauthn v0.18.2
 	github.com/tdewolff/font v0.0.0-20261010204837-88a7f6b56918
 	golang.org/x/crypto v0.58.0
-	golang.org/x/image v0.47.0
+	golang.org/x/image v0.48.0
 	modernc.org/sqlite v1.62.0
 	sigs.k8s.io/yaml v1.6.0
 )
@@ -47,9 +47,9 @@ require (
 	go.yaml.in/yaml/v2 v2.4.4 // indirect
 	go.yaml.in/yaml/v4 v4.0.0 // indirect
 	golang.org/x/mod v0.42.0 // indirect
-	golang.org/x/sync v0.24.0 // indirect
-	golang.org/x/sys v0.49.0 // indirect
-	golang.org/x/text v0.43.0 // indirect
+	golang.org/x/sync v0.25.0 // indirect
+	golang.org/x/sys v0.50.0 // indirect
+	golang.org/x/text v0.44.0 // indirect
 	golang.org/x/tools v0.52.0 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	modernc.org/libc v1.80.1 // indirect

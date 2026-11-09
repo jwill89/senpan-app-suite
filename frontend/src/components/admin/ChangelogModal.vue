@@ -28,7 +28,7 @@ const hasInstall = computed(() => props.component === 'plugin')
 
 // Selected rail item: a version string, or 'install' for the plugin's steps view.
 // The plugin opens on its install steps (that's usually why you'd click it); the
-// web components open on their newest release.
+// app opens on its newest release.
 const selected = ref<string>(hasInstall.value ? 'install' : (entries.value[0]?.version ?? ''))
 
 const showInstall = computed(() => selected.value === 'install')

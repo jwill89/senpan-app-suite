@@ -4,8 +4,9 @@
     Run every check CI runs, locally, when you want the answer before CI gives it.
 
 .DESCRIPTION
+    First (for either half): the SPA's build, `task build:web`, which the backend embeds
     Backend (backend/):   golangci-lint - go build - go vet - go test - govulncheck
-    Frontend (frontend/): gen:check - lint:check (ESLint + Stylelint) - format:check - lint:conventions - typecheck - test:coverage - npm audit - build - test:e2e
+    Frontend (frontend/): gen:check - lint:check (ESLint + Stylelint) - format:check - lint:conventions - typecheck - test:coverage - npm audit - test:e2e
     Plugin (plugins/SenpanCompanion/): dotnet build (warnings=errors) - dotnet format
     Scripts and repo: PSScriptAnalyzer on every tracked script, markdownlint, the shared
     .editorconfig/.gitattributes and the shared-tooling version (shared-tooling's own checks)
@@ -86,6 +87,17 @@ function Invoke-Step($name, [scriptblock]$body) {
     }
 }
 
+# The SPA's build first, where the binary embeds it (backend/internal/web/dist): the
+# backend compiles it in, and the end-to-end suite's server serves it. task build:web
+# makes it once and skips it when nothing it is built from changed, so under task check,
+# which built it before starting the parts, it costs nothing.
+if ($run.backend -or $run.frontend) {
+    Push-Location $root
+    try {
+        Invoke-Step "build: the front end, which the backend embeds" { task build:web }
+    } finally { Pop-Location }
+}
+
 if ($run.backend) {
     Push-Location "$root\backend"
     try {
@@ -127,8 +139,8 @@ if ($run.frontend) {
         Invoke-Step "frontend: test" { npm run test:coverage }
         # Known vulnerabilities in what ships (dev tooling excluded), at high or above.
         Invoke-Step "frontend: npm audit" { npm audit --audit-level=high --omit=dev }
-        Invoke-Step "frontend: build" { npm run build }
-        # The API and the built SPA on a throwaway database, never devdata/ (e2e/server/prepare.ts).
+        # The app as built - the binary, serving the SPA it embeds - on a throwaway
+        # database, never devdata/ (e2e/server/prepare.ts).
         Invoke-Step "frontend: end-to-end" { npm run test:e2e }
     } finally { Pop-Location }
 }

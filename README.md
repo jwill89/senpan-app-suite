@@ -4,9 +4,9 @@ A self-hosted suite of community tools for the **Senpan Tea House** and
 **Atelier Yao** - real-time Bingo, raffles, a festival lottery drum, Discord
 announcements, book-club reading lists, font/image hosting, and a fully
 themeable, permissioned admin dashboard. A **Go + SQLite** backend serves a
-JSON/WebSocket API (`/api/*`, documented in [`API.md`](API.md)); a **Vue 3 +
-TypeScript** single-page app (built with Vite, installable as a PWA) is the
-frontend.
+JSON/WebSocket API (`/api/*`, documented in [`API.md`](API.md)) and the **Vue 3 +
+TypeScript** single-page app (built with Vite, installable as a PWA), whose build
+it embeds: one binary, one version.
 
 ## What's in the suite
 
@@ -54,7 +54,8 @@ but holds no token.
 # 0. Once per clone: shared-tooling, at shared/ (npm ci needs it)
 git submodule update --init
 
-# 1. Backend - run the API/WebSocket server on :8080
+# 1. Backend - run the API/WebSocket server on :8080. It embeds the front end's
+#    build, so build that once first: cd frontend && npm ci && npm run build
 cd backend
 # -log-file="" keeps logs on stdout only (the default writes to /var/log/senpan)
 # -webhook-dry-run suppresses outbound Discord posts. Keep it on: devdata is a copy
@@ -82,14 +83,15 @@ login.
 
 ## Versioning
 
-The frontend and backend are versioned **independently** with semver. The admin
-sidebar footer shows both live versions and flags a major-version mismatch, so a
-partial deploy can't silently leave the halves incompatible.
+Since 4.0.0 the app has **one** semver version, since one binary ships the SPA and
+the API together: `frontend/package.json`, which
+`backend/internal/version/version.go` must equal (a test checks; served at
+`GET /api/version` and `GET /healthz`). The plugin keeps its own, in
+`SenpanCompanion.csproj` and `plugins/pluginmaster.json`. The admin sidebar footer
+shows both, and flags an open tab whose server now runs a different version.
 
-- Frontend version -> `frontend/package.json`; backend version ->
-  `backend/internal/version/version.go` (served at `GET /api/version`).
-- Record every change in **[`CHANGELOG.md`](CHANGELOG.md)** and bump the matching
-  version source.
+- Record every change in **[`CHANGELOG.md`](CHANGELOG.md)** (App or Plugin) and
+  bump the matching version.
 
 ## Common commands
 
@@ -103,11 +105,11 @@ partial deploy can't silently leave the halves incompatible.
 | `npm run typecheck`          | `vue-tsc` type check                               |
 | `npm run lint` / `lint:check`| ESLint + Stylelint with / without `--fix`          |
 | `npm run format:check`       | Prettier check                                     |
-| `npm run build`              | Type-check + production build -> `frontend/dist/`   |
+| `npm run build`              | Type-check + production build -> `backend/internal/web/dist/` (embedded by the binary) |
 
 | Command (in `backend/`)      | Purpose                          |
 | ---------------------------- | -------------------------------- |
-| `go build ./...`             | Build the backend                |
+| `go build ./...`             | Build the backend (after `npm run build`) |
 | `go vet ./...`               | Static analysis                  |
 | `go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.15.0 run ./...` | Lint (`.golangci.yml`, written from the shared template; Senpan's own rules are in `.golangci.local.yml`) |
 | `go test ./...`              | Backend tests                    |
@@ -115,12 +117,13 @@ partial deploy can't silently leave the halves incompatible.
 
 ## Deploying
 
-`scripts/deploy.ps1` builds and ships to the host
-(`-Target frontend|backend|main|all|plugin`; `both` is a kept alias for `main`), then
-checks the live site through Cloudflare and rolls back what it changed if that
-fails. A backend deploy also keeps the daily database backup installed and pulls the
-live database into `devdata/` (`-NoDbPull` skips that). See
-[`deploy/README.md`](deploy/README.md) for the Apache layout and host setup.
+`scripts/deploy.ps1` ships the newest release CI tagged on main, built in a
+checkout of its own: the app (`-Target app`, the default: one binary, the SPA inside
+it) or the plugin (`-Target plugin`). It checks the live site through Cloudflare and
+rolls back what it changed if that fails. An app deploy also keeps the daily
+database backup installed and pulls the live database into `devdata/` (`-NoDbPull`
+skips that). See [`deploy/README.md`](deploy/README.md) for the Apache layout and
+host setup.
 
 ## Testing & CI
 
@@ -132,9 +135,11 @@ live database into `devdata/` (`-NoDbPull` skips that). See
   **frontend** job (lint -> format -> conventions -> typecheck -> tests with a
   coverage floor -> build, plus `npm audit`), a **generated** job (the committed API
   types are what tygo makes from the Go models now), a **backend** job (golangci-lint
-  -> vet -> govulncheck -> race-detector tests with a coverage floor -> build; the
+  -> vet -> govulncheck -> race-detector tests with a coverage floor -> build, on the
+  frontend job's build, which the binary embeds; the
   tests include the OpenAPI spec-freshness and route-coverage checks), a **plugin**
-  job (build with warnings as errors -> `dotnet format`), a **scripts** job
+  job (build with warnings as errors -> `dotnet format`), an **e2e** job (Playwright
+  against the binary, the SPA inside it), a **scripts** job
   (PSScriptAnalyzer) and a **docs** job (markdownlint and the shared repo files).
   `scripts/check.ps1` runs them all locally.
 
@@ -150,7 +155,7 @@ live database into `devdata/` (`-NoDbPull` skips that). See
   and AI agents).
 - **[`CONTRIBUTING.md`](CONTRIBUTING.md)** - dev workflow, the local checks that
   mirror CI, and versioning/changelog rules.
-- **[`CHANGELOG.md`](CHANGELOG.md)** - frontend, backend and plugin version history.
+- **[`CHANGELOG.md`](CHANGELOG.md)** - the app's and the plugin's version history.
 - **[`deploy/README.md`](deploy/README.md)** - Apache deployment (document-root
   layout, persistent uploads, the font host + CORS, PWA caching).
 
@@ -162,10 +167,10 @@ Proprietary - © 2026 mathdad, All Rights Reserved. See [`LICENSE`](LICENSE).
 
 ```text
 frontend/   Vue 3 + TS SPA (Vite)        - src/{views,components,stores,router,lib,types}
-backend/    Go backend                    - internal/{server,store,bingo,ws,model,version}
+backend/    Go backend                    - internal/{server,store,bingo,ws,model,version,web}
 plugins/    FFXIV Dalamud plugin (C#)     - SenpanCompanion/ + pluginmaster.json (its custom repo)
 scripts/    check.ps1 (the local gate) + deploy.ps1
 shared/     shared-tooling (git submodule) - lint configs, CI workflows, the deploy module
-deploy/     Apache artifacts              - .htaccess + fonts.htaccess (CORS) + persistent images/
+deploy/     Apache artifacts              - the web root's .htaccess + fonts.htaccess + persistent images/
 devdata/    Local dev sandbox: SQLite DBs + built binaries + webroot uploads (created at runtime, gitignored)
 ```

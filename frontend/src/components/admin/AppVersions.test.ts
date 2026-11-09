@@ -6,27 +6,30 @@ const versionFn = vi.fn()
 vi.mock('@/lib/endpoints', () => ({ endpoints: { system: { version: () => versionFn() } } }))
 
 import AppVersions from './AppVersions.vue'
-import { FRONTEND_VERSION, majorOf } from '@/lib/version'
+import { APP_VERSION } from '@/lib/version'
 
 describe('AppVersions', () => {
   beforeEach(() => versionFn.mockReset())
 
-  it('shows the frontend build version and the fetched backend version', async () => {
-    versionFn.mockResolvedValue({ backend: FRONTEND_VERSION })
+  it("shows the app's version, with no flag while the server runs it", async () => {
+    versionFn.mockResolvedValue({ backend: APP_VERSION })
     const wrapper = mount(AppVersions)
     await flushPromises()
 
-    expect(wrapper.text()).toContain(`v${FRONTEND_VERSION}`) // frontend row
-    expect(wrapper.find('.app-versions-flag').exists()).toBe(false) // same major -> no warning
+    expect(wrapper.text()).toContain(`v${APP_VERSION}`)
+    expect(wrapper.text()).toContain('App')
+    expect(wrapper.text()).not.toContain('Backend')
+    expect(wrapper.find('.app-versions-flag').exists()).toBe(false)
   })
 
-  it('flags a major-version mismatch', async () => {
-    const otherMajor = `${(majorOf(FRONTEND_VERSION) ?? 0) + 1}.0.0`
-    versionFn.mockResolvedValue({ backend: otherMajor })
+  it('tells a tab opened before a deploy that the server runs another version', async () => {
+    versionFn.mockResolvedValue({ backend: '999.0.0' })
     const wrapper = mount(AppVersions)
     await flushPromises()
 
-    expect(wrapper.find('.app-versions-flag').exists()).toBe(true)
+    const flag = wrapper.find('.app-versions-flag')
+    expect(flag.exists()).toBe(true)
+    expect(flag.text()).toContain('v999.0.0')
     expect(wrapper.classes()).toContain('app-versions--warn')
   })
 })

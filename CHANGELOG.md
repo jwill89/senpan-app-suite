@@ -2,38 +2,34 @@
 
 All notable changes to the **Senpan App Suite** are recorded here.
 
-The **frontend** (Vue SPA), **backend** (Go API), and **plugin** (SenpanCompanion,
-a Dalamud/FFXIV plugin) are versioned independently with
-[Semantic Versioning](https://semver.org/) and tracked in their own sections below:
-a change usually touches only one, and they deploy separately. The admin
-dashboard shows the live frontend + backend versions (sidebar footer) so operators
-can confirm the two web halves are compatible; the plugin ships through its own
-Dalamud custom repo and talks to the backend over the same API (PAT-authenticated).
+Since **4.0.0** the **app** - the Vue SPA and the Go API, built into one binary - has
+one version, and the **plugin** (SenpanCompanion, a Dalamud/FFXIV plugin) keeps its
+own, as Dalamud needs. Both follow [Semantic Versioning](https://semver.org/), and
+each has its section below: **App** and **Plugin**. Before 4.0.0 the frontend and the
+backend were versioned and deployed apart; their sections, **Frontend** and
+**Backend**, stay at the end as the history before it.
 
 **Sources of truth:**
 
-- Frontend version -> `frontend/package.json` (`"version"`), baked into the build
-  and read via `frontend/src/lib/version.ts`.
-- Backend version -> `backend/internal/version/version.go` (`Version`), served at
-  `GET /api/version`.
+- App version -> `frontend/package.json` (`"version"`), baked into the build. The
+  API reports it (`GET /api/version`, `GET /healthz`) from
+  `backend/internal/version/version.go`, which repeats it; a test fails if the two
+  differ.
 - Plugin version -> `plugins/SenpanCompanion/SenpanCompanion.csproj` (`<Version>`,
   a four-part Dalamud AssemblyVersion) + `plugins/pluginmaster.json` (the repo
   listing consumed by Dalamud).
 
-**Compatibility rule:** the SPA and API are compatible while their **MAJOR**
-versions match. Bump MAJOR only for a breaking change to the JSON/WebSocket API
-the SPA depends on; MINOR for backward-compatible additions; PATCH for fixes.
-When you change one side, bump its version and add an entry under its section.
+**Compatibility rule:** the SPA and the API ship together, so they always match. The
+plugin is a client released on its own: bump the app's **MAJOR** for a breaking
+change to the JSON/WebSocket API it relies on; MINOR for backward-compatible
+additions; PATCH for fixes.
 
-**Releases & tags.** Each version corresponds to a Git tag and GitHub Release
-named `<Component>-v<version>` - e.g. `Frontend-v3.5.0`, `Backend-v3.4.0`,
-`Plugin-v2.0.1.0`. These are created **automatically** by the CI `release` job
-(`.github/workflows/ci.yml` -> `.github/scripts/release.sh`): on a push to `main`,
-after the full gate passes, any component whose current version has no release
-yet is tagged and released, with the release body taken verbatim from that
-component's section below. So bumping a version here and pushing a green commit
-is all it takes - no manual tagging. To publish a release, make sure the version
-source and its section here are updated in the same commit.
+**Releases & tags.** The CI `release` job (`.github/workflows/ci.yml` ->
+`.github/scripts/release.sh`) tags each new version on a green push to `main`, with
+the release body taken verbatim from its entry below: the app as `v<version>` (which
+the deploy ships), the plugin as `Plugin-v<version>`. So bumping a version here and
+pushing a green commit is all it takes - no manual tagging. To publish a release,
+make sure the version source and its entry here are updated in the same commit.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/).
 
@@ -41,9 +37,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
-Not in a release yet: each entry moves into its component's section below when that
-component's version is next bumped. Repo-wide tooling and the deploy are recorded
-under Backend, as before.
+Not in a release yet: each entry moves into the App or Plugin section below when its
+version is next bumped, under a `### App` or `### Plugin` heading here until then.
 
 ### Plugin
 
@@ -69,7 +64,587 @@ under Backend, as before.
 
 ---
 
+## App
+
+The SPA and the API, one binary, one version (since 4.0.0). The admin dashboard's
+changelog shows this section, then the Frontend history before it.
+
+### [4.0.0] - 2026-11-09
+
+The SPA and the API become one app: one version, built into one binary, released
+and deployed as one.
+
+#### Changed
+
+- **One app version.** The frontend (3.32.0) and the backend (3.28.0) give way to one
+  version, 4.0.0, in `frontend/package.json`; `backend/internal/version/version.go`
+  repeats it for the API, and a test holds the two equal. CI tags each app release
+  `v<version>`, and the plugin keeps its own version and `Plugin-v` tags.
+- **The Go binary serves the SPA.** The build is embedded (`internal/web`), so the
+  front end builds before any Go build, test or lint (`task build:web`, which the
+  Go tasks depend on; CI's backend job takes the frontend job's build). The binary
+  answers the app's page for every route the SPA owns, the hashed assets with the
+  cache rules Apache set, a 404 for a file it doesn't have, and the same security
+  headers and Content-Security-Policy. Apache serves only the web root's own folders
+  now (`images/`, `carrd/`, `plugin/`) and proxies the rest to the app.
+- **`GET /healthz`** answers with the version running and the schema's (503 when the
+  database doesn't answer), for the deploy and an uptime check.
+- **The admin footer** shows the app's version and the plugin's, and says when the
+  server runs a different version from the open tab.
+- **The deploy ships the newest release.** `scripts/deploy.ps1` builds the newest
+  `v<version>` CI tagged on main (for the plugin, the newest `Plugin-v<version>`) in a
+  checkout of its own, and skips a release the host already runs (`-Force` deploys it
+  again). `-Target` is `app` or `plugin`; `task deploy:frontend` and `-SkipBuild` are
+  gone. An app deploy installs the binary, owned by the service's own account as the
+  standards have it (it was the SSH user's), then the web root's new `.htaccess`, checks
+  `/healthz`, `/api/version` and the page through Cloudflare, and records the release
+  on the host. The first 4.0.0 deploy leaves the old `dist/` in place for a rollback;
+  remove it once 4.0.0 has stayed (`deploy/README.md`).
+- **Dependencies:** shared-tooling 2.4.0; Vite 8.3.7, rollup-plugin-visualizer 7.1.3
+  and jsdom 31 on the front end (a test that read a hidden element now mounts it into
+  the document, since jsdom 31, like a browser, computes no style outside it);
+  timberjack 1.4.10 and golang.org/x/image 0.48.0 on the server.
+
+---
+
+## Plugin
+
+**SenpanCompanion** - a Dalamud/FFXIV plugin ("Senpan Admin Companion") that lets
+Tea House staff drive app services from in-game. It authenticates to the backend
+with a personal access token and is distributed through a Dalamud custom repo
+(`plugins/pluginmaster.json`). Versions use the four-part AssemblyVersion in
+`SenpanCompanion.csproj`. Entries below the current release were reconstructed
+from the `<Version>` history and commit messages.
+
+### [3.9.1.0] - 2026-10-29
+
+Requires backend 3.23.0.
+
+#### Fixed
+
+- **A message still waiting to be sent when the plugin unloads is dropped** rather
+  than reaching chat after the plugin has gone. Tells and timed macros go out one
+  at a time, a second apart, and one queued at the moment of unloading used to fire
+  regardless.
+
+#### Changed
+
+- **The .NET analyzers now run at their recommended level, and the code style is
+  checked in the build** (Kindred Nights' C# standard): `this.` on members, `var`,
+  file-scoped namespaces, braces on multi-line bodies, numbers and times formatted
+  invariantly. No change on screen.
+
+### [3.9.0.0] - 2026-10-17
+
+Requires backend 3.23.0.
+
+#### Changed
+
+- **An expiring tea-room lock now raises a pop-up that waits for you.** The alert
+  used the game's own toast, a single line that fades in a few seconds - easy to
+  miss, and too short to say what to do about it. It is now a Dalamud notification
+  titled "Tea room unlocked" that reads "Jasmine Room (Room #3) has been marked as
+  unlocked. Please check the room to remind the occupants or extend the time.", and
+  it stays on screen until you dismiss it, so it is still there if you stepped
+  away. The chime is unchanged, and the chat line now carries the same sentence -
+  it is the record left once the pop-up is gone. The website shows the same alert
+  with the same chime.
+- **Only staff who can manage tea rooms are alerted.** Every connected Companion
+  used to raise the alert, including bingo-only staff with no way to extend a lock.
+  The Tea Rooms page itself was already hidden from them.
+
+### [3.8.0.0] - 2026-09-05
+
+Locks a tea room from in game, and tells you when the lock runs out. Requires
+backend 3.23.0.
+
+#### Added
+
+- **Lock a room from the Tea Rooms page, with an unlock time.** The board gains a
+  Lock column beside Open and Discount. Locking opens a small prompt for when the
+  room should free up - typed as a local date and time, or filled in by a +30m /
+  +1h / +2h / +4h button, since "half an hour from now" is the usual answer and
+  nobody wants to work out the timestamp for it. Leave it blank and the room stays
+  locked until someone unlocks it. A locked row shows when it lifts, in your own
+  timezone.
+- **An expiring lock alerts you in game.** When the server lifts a lock, the
+  Companion plays a short two-note chime, shows a toast, and prints a line in your
+  own chat log, each naming the room - so you find out a room is free while looking
+  at the game, not by having this window open on the Tea Rooms page. All three are
+  purely local: the chat line is `IChatGui.Print` into your own log, which sends
+  nothing anywhere, and the chime is synthesized audio with no game interop, the
+  same as the winner chime.
+
+#### Fixed
+
+- **The room list corrects itself after a dropped connection.** Locks can expire
+  while the socket is down, and the pushes that said so are gone - leaving a list
+  that claims a room is still locked when it isn't. The page now reloads after a
+  reconnect, as the Bingo page already did.
+
+### [3.7.0.0] - 2026-08-28
+
+Keeps the Companion in step with how the suite now records a participant. Requires
+backend 3.21.0.
+
+#### Changed
+
+- **A drawing link or stamp card issued from the Companion now carries the home
+  world.** Every system stores a participant as a name plus a world, so a record
+  written without one cannot be matched to that person's raffle entry or other
+  cards. When the name came from the **Nearby...** picker the world is taken
+  straight from the game's object table - the most reliable source there is - and
+  sent with it. Typing a name by hand still works: the server splits a
+  "Name @ World", and the hint now says so.
+- **Player and participant lists show the world.** Both tables render the same
+  "Name @ World" the rest of the suite shows.
+
+#### Fixed
+
+- **A stamp card issued alongside a drawing link is no longer the same secret.**
+  The Companion's create-player call auto-issues a paired stamp card; the two used
+  to share one token, so the shareable card link spent the player's draws - a
+  screenshot of the card, or a link pasted to a friend, burned draws that cannot be
+  undone. The server now issues each on its own token, and the Companion's models
+  no longer claim they are equal.
+
+### [3.6.0.0] - 2026-08-26
+
+Fixes from a full-project security and correctness review. Requires backend 3.20.0.
+
+#### Fixed
+
+- **A failed refresh no longer wedges the card cache or the session.** Both
+  `RefreshAsync` methods stored whatever `RefreshCore()` returned, but a fetch that
+  faults before its first `await` - an invalid server URL does - completes
+  synchronously, and its `finally` clears the in-flight slot before the assignment
+  puts the finished task back. That latched a completed task forever, so every
+  later refresh returned it and did nothing, with no error anywhere.
+- **The winner chime no longer plays from memory the GC may have moved.** The WAV
+  was handed to winmm with `SND_ASYNC | SND_MEMORY`, so playback keeps reading that
+  buffer for the ~0.64s the chime lasts - but the marshaller only pins a managed
+  array for the duration of the call, leaving a compacting GC free to relocate it
+  mid-playback. The buffer is now pinned for the plugin's lifetime.
+- **A half-time prompt can no longer fire against the wrong game.** The prompt is a
+  latch only the Bingo Game page consumes, and nothing cleared it on a game
+  boundary, so one raised near the end of a game could pop during the NEXT one -
+  where answering Yes broadcast a half-time mini-game alert to players who had not
+  reached half time. It now carries the game it belongs to and is dropped when that
+  game ends.
+- **A half-time prompt that arrives off-page now says so in game.** The prompt is a
+  modal on the Bingo Game page, so with the window closed or showing something else
+  it was invisible - while the server had already PAUSED auto-draw waiting for an
+  answer, so the game simply stalled with nothing said anywhere. When the page was
+  not on screen a moment before, the plugin now chimes and prints a line into the
+  operator's own chat log telling them to open the window. Both channels are purely
+  local: the print goes to this client's chat log and transmits nothing (it is not
+  the chat SENDER), and the chime is the same no-interop one a new winner already
+  plays.
+- **The plugin honors a garapon's configured default draws.** Its `Garapon` DTO
+  omitted `default_draws`, so the Draws box started at a hardcoded 1 and the
+  server's "use the garapon default" fallback was unreachable from in-game, even
+  though the web admin and the public sign-up both honored it.
+- **The raffle panel cannot act on a raffle that is not on screen.** Picking a
+  raffle while another load was in flight left the selection on the new one while
+  the header, entrant table and winner controls still rendered the old - so "Add
+  entrant" and "Pick a winner" applied to the wrong raffle. Detail is now cleared on
+  pick and only written back when the selection still matches, the pattern the
+  stamp-rally and garapon tabs already used.
+- **Settings no longer write the config file on every keystroke.** The auto-tell
+  template called `Configuration.Save()` per character - a full JSON serialize plus
+  a write-flush-rename with a forced disk barrier, on the render thread. It now
+  saves when the field is done. `Save()` is also serialized, because the macro
+  runner writes the same file from the thread pool and Dalamud's writer uses one
+  fixed temp path.
+- **Game state is re-synced after the live connection drops.** Called numbers,
+  winners and game state arrive as WebSocket pushes, so anything sent while the
+  socket was down was simply missing - and nothing filled the gap, because the
+  server sends no snapshot on connect. A drop that spanned a draw left the
+  called-numbers grid permanently short and the winners stale, and ending the game
+  before the next draw wrote those wrong winners into the permanent log.
+  `LiveConnection` now raises a `Reconnected` event on the UI thread when the
+  socket comes back (not on the first connect, which has nothing to re-sync), and
+  the Bingo Game tab marks itself and the card cache stale so the existing
+  per-frame `EnsureLoaded` re-pulls `GET /api/game`. This mirrors what the web
+  client already did.
+- **Four ImGui disabled scopes could pop without pushing.** Each read a mutable
+  field (`Busy`, `settingsTesting`) twice - once to decide whether to call
+  `BeginDisabled`, once to decide whether to call `EndDisabled` - and the control
+  in between flips that field synchronously when clicked. On the click frame the
+  `End` ran without a matching `Begin`, under-popping ImGui's disabled and
+  item-flag stacks and corrupting the rest of the frame. Each site now snapshots
+  the flag into a local first, matching the neighboring pairs that already did.
+  Affects Draw Number, the garapon and stamp-rally pickers, and Save & Test
+  Connection.
+
+### [3.5.0.0] - 2026-08-24
+
+Follows the stamp rally's split into food and game stamps (backend 3.18.0).
+
+#### Added
+
+- **A Type column on the Stalls table and the collected-stamp log**, reading Food or
+  Game. A stall the server sends without a type reads as Food, matching every stall
+  that existed before types.
+- **What finishes a card, on the rally header** - every stamp, or the required food
+  and game counts - so an operator answering "am I done?" at a stall doesn't have to
+  open the website to find out. The stall summary also splits into food and game.
+
+### [3.4.1.0] - 2026-08-23
+
+Finishes the raffle panel's move to the new entry types and payment record, and gives
+the timed macros a dry run.
+
+#### Added
+
+- **A payment dialog on the Paid cell**, replacing the paid checkbox. It carries the
+  same settlement the website offers - how many tickets the payment covers, and gil
+  waived on it - because both need a number typed, which a checkbox has nowhere to
+  put. The cell itself now reads Paid / Partial / Unpaid, and Clear payment is there
+  too, since resetting the row is the only way to undo a settlement.
+- **Timed macros: a Test send**, putting the message out once so it can be checked in
+  chat before committing to a schedule. It deliberately does not count towards the
+  send total or start the timer - a test is not one of the sends that was asked for,
+  and counting it would eat into a send cap and shift every later "N of M".
+- **Timed macros: Reset is offered whenever there is progress to clear**, not only
+  once a send cap is reached. That was the real gap: an uncapped macro never
+  "completes", so it could never be reset at all. It is refused while the macro is
+  running, where the countdown and the "N of M" would otherwise disagree about the
+  same run.
+
+#### Fixed
+
+- **A details-only raffle no longer offers to sign anyone up.** The Add entrant form
+  is replaced by a note explaining that players enter it outside the app, rather than
+  a form whose Add would create an entrant the raffle never meant to collect. The
+  draw's caption follows suit, saying it runs over every entrant rather than paid
+  tickets. (Entrants for one are still recorded on the website.)
+
+#### Changed
+
+- The macro start button reads **Start** rather than **Send**, now that Test send
+  sits next to it and "Send" would have been ambiguous about which one fired once.
+
+### [3.4.0.0] - 2026-08-21
+
+Keeps the raffle panel honest about the new entry types and part-paid entrants.
+
+#### Added
+
+- **The raffle header names the pricing per entry type**: the ladder for a
+  custom-cost raffle (`Cost per entry: 50000 / 100000 / 150000`), the flat price for a
+  single-cost one, and "Details only - players sign up elsewhere" for a raffle that
+  takes no sign-ups through the app.
+- **Part-paid entrants read as `settled / total` tickets** with a tooltip, instead of
+  a bare total that hid the outstanding ones, and a hover on the Paid box reports what
+  has been waived on that entry. Ticking the box settles the rest waiving nothing -
+  entering an amount waived stays on the website, where the figures are on screen.
+- `Ui.ItemTooltip` - a hover tooltip for the item just drawn, for annotating a table
+  cell or checkbox without taking up room (unlike `Ui.HelpMarker`, which draws a
+  "(?)").
+
+### [3.3.2.0] - 2026-07-28
+
+Replaces the last text glyphs in the window with FontAwesome icons and normalises the
+punctuation in on-screen text.
+
+#### Changed
+
+- **Status and table glyphs are FontAwesome icons now.** The live/offline badge, the
+  garapon ball swatch, the stamp-rally completion mark and the roll stars drew filled and
+  hollow circles, a check mark and a star as plain text, which the game's Axis font
+  renders inconsistently. They go through the existing `Ui.Icon` helper and the bundled
+  icon font instead.
+- **On-screen text uses plain ASCII punctuation:** a hyphen for an empty table cell and
+  three dots for progress labels such as "Loading...", in place of the em-dash and
+  ellipsis characters.
+
+### [3.3.1.0] - 2026-07-24
+
+Shows the new **Room Owner** in the Tea Rooms table and fixes accented-character
+rendering (paired with backend 3.14.0).
+
+#### Added
+
+- **Room owner in the Tea Rooms table.** The Tea Rooms page gains an **Owner** column
+  beside the room name, showing the character who owns each room (the optional
+  `room_owner` field added in backend 3.14.0).
+
+#### Fixed
+
+- **Accented characters now render.** Text anywhere in the window (for example a room
+  name containing `ō`) previously dropped any glyph the game's Axis font doesn't
+  include. The window now merges **Noto Sans CJK** over the default font for the Latin
+  Extended ranges, so macron romanizations (ō, ā, ē, ī, ū) display correctly while
+  every other glyph is unchanged.
+
+### [3.3.0.0] - 2026-07-24
+
+Adds a **Tea Rooms** panel so Tea House staff can flip a room's availability and
+discount without leaving the game.
+
+#### Added
+
+- **Tea Rooms tab.** A new **Tea House -> Tea Rooms** page lists every room by
+  **number** and **name** (with its per-half-hour cost) and lets staff toggle each
+  room's **Open** and **Discount** (50% off) status with a click. It uses the
+  existing `PATCH /api/tea-rooms/{id}` endpoint and is gated by the **Tea Rooms**
+  (`teahouse-tea-rooms`) permission, so the section, page, and toggles appear only
+  for accounts that can manage tea rooms. Everything else about a room (subtitle,
+  image, hashtags, Discord posting, reordering) stays on the website.
+
+### [3.2.1.0] - 2026-07-21
+
+Hardening release from the audit-fix pass: the access token is now encrypted at rest with Windows DPAPI, and outgoing chat, connection retries, and background loads were made safe against throttle bursts, hostile servers, and off-thread state writes.
+
+#### Security
+
+- Encrypted the personal access token at rest with the Windows Data Protection API (DPAPI, CurrentUser scope) instead of storing it as plaintext in the config JSON, so a synced, backed-up, or world-readable config no longer exposes a usable token. An existing plaintext token is migrated to the encrypted form once on load and then cleared from disk.
+- Added a warning in the log when the configured server URL is not HTTPS, since the token would otherwise be transmitted in cleartext and could be intercepted (warned once, not on every request).
+- Bounded the live WebSocket receive buffer (1 MB per message cap), so a hostile or broken server can no longer stream an unbounded message and exhaust memory.
+
+#### Fixed
+
+- Routed every outgoing chat message - auto-tells and Timed Text Macros alike - through a single, globally serialized send queue that spaces messages one second apart, so concurrent features can no longer each start at once and defeat the game's outgoing-chat throttle.
+- Stopped the auth poll and live WebSocket from retrying forever on a terminal failure: an invalid/rejected token (401/403) now backs off hard until the token is changed instead of hammering the server every few seconds, while transient drops use exponential backoff that resets on a clean reconnect.
+- Allowed a failed initial card load to retry (behind a short cooldown) rather than leaving the card list empty until restart.
+- Fixed the outgoing-message length clamp to count UTF-8 bytes (the game's real limit) instead of UTF-16 characters, so a multibyte message is no longer wrongly truncated or let through over budget, and never splits a character.
+- Marshaled off-thread UI-state writes in error paths onto the framework thread (live-connection, session, and card-cache failure handling), and logged exceptions thrown by live-event subscribers instead of silently swallowing them.
+- Moved config saves off the render thread - timed-macro progress now persists on a background thread so the synchronous file write no longer stalls the UI.
+
+### [3.2.0.0] - 2026-07-20
+
+Adds **auto-run bingo** controls to the Bingo Game tab (paired with backend 3.11.0).
+
+#### Added
+
+- **Auto-draw controls.** The New Game view gains an **Auto-draw numbers** checkbox
+  and a **Time Between Calls** combo; applying a preset pre-fills them. The live game
+  view gains an **Auto-Draw** on/off checkbox and interval combo, kept in sync with
+  the website and other operators via the new `auto_config` WebSocket message.
+
+#### Changed
+
+- **Half-time prompt is server-driven.** The plugin now opens the mini-game prompt
+  when the server broadcasts `halftime_prompt` (fires for manual and automatic draws
+  alike), instead of detecting the midpoint locally. Its **Yes/No** buttons send the
+  mini-game choice (`Yes` alerts players and leaves auto paused; `No` declines and
+  resumes auto if it was paused); the prompt notes when auto has been paused.
+
+### [3.1.0.0] - 2026-07-19
+
+Adds custom-card request handling to the Bingo Cards tab (paired with backend 3.10.0).
+
+#### Added
+
+- **Card status + actions in the Bingo Cards tab.** A new **Status** column shows a
+  grey star for a **pending** custom-card request, a gold star for an **approved**
+  one, and a lock for a **Protected** card (hover a star for the requester's
+  character + world). Each row gains **Approve** (pending only) and
+  **Protect/Unprotect** actions. Approving a request makes the card playable and
+  automatically Protects it; Protected cards are spared by **Delete all** (still
+  individually deletable). Uses the backend's `POST /api/cards/{id}/approve` and
+  `/protect` endpoints with the existing `bingo-cards` permission.
+
+### [3.0.1.0] - 2026-07-17
+
+Polish on the 3.0.0.0 UI overhaul.
+
+#### Changed
+
+- **Button colours now match the web admin dashboard's default theme** - a tan primary
+  action (dark text), an olive secondary, and a red destructive - replacing the initial
+  purple accent, so the plugin and the site read as one product.
+- **Bingo win patterns** gain a **Collapse all / Show all** toggle to fold or unfold every
+  pattern category at once while building a game.
+
+#### Fixed
+
+- **A Timed Text Macro's message is now actually hidden until you expand it.** Previously
+  the preview text stayed visible and only the button label flipped; **Show message** /
+  **Hide message** now genuinely shows or hides the full text, and the button's stray glyph
+  (which didn't render in the game font, showing as a stray "=") is gone.
+
+### [3.0.0.0] - 2026-07-17
+
+A major **UI/UX overhaul** of the companion window, plus the ability to **edit saved
+macros**. What the tools do is unchanged - this is about how they look and how easy they
+are to operate.
+
+#### Added
+
+- **Edit a saved Timed Text Macro in place.** Each macro now has an **Edit** button that
+  reopens its name, channel, message, interval, and send cap in an inline editor
+  (Save / Cancel) - no more delete-and-recreate. (Stop a running macro first to edit it.)
+- **Shared design system across every page:** icon + accent **section headers**, a
+  three-tier **button system** (primary / secondary / destructive), compact **icon buttons**
+  for table-row actions (copy / delete), pill **badges**, and rounded **cards** - so related
+  controls read as a group and a Delete never looks like a Create.
+
+#### Changed
+
+- **Sidebar:** the always-available tools (**Rolls**, **Timed Text Macros**, **Settings**,
+  **About**) now live under a collapsible **General** group at the bottom, mirroring the
+  Bingo and Festival accordions.
+- **Timed Text Macros** renders each macro as its own **card** - an enumerated title with
+  channel and status badges, a schedule summary, and a one-line message preview that
+  **expands on demand**, so a long (multi-message) macro no longer floods the panel.
+- **Rolls** is split into labelled **Captured rolls / Filter / Find the winner / Rolls**
+  sections instead of one continuous flow.
+- **Settings** groups its fields under **Connection** and **Automatic tells** headers, and
+  the **Bingo, Raffle, Garapon, and Stamp Rally** pages pick up the same section headers,
+  button tiers, and copy / delete icon buttons.
+
+### [2.3.0.0] - 2026-07-16
+
+Adds two permission-free, account-free tools: a **Rolls** helper for in-game roll games
+and **Timed Text Macros** for repeating announcements.
+
+#### Added
+
+- **Rolls page** (no account or permission required - it works even before a token is
+  set). It watches chat for `/random` - `/dice` rolls near you and lists them in a
+  **paginated table** (15 / 30 / 45 per page, scrolls when needed) showing the player,
+  home world, the number rolled (with its ceiling for `/random N`, e.g. _"11 (out of
+  20)"_), and the time.
+- **Rolls filtering & search:** narrow to a player by name and/or to the **last N
+  minutes**, and run a **Highest / Lowest / Closest-to-N** query over that window.
+  Matching rolls are brought to the top and highlighted, with a summary banner - and
+  when the winning player rolled more than once in the window, a **"multiple rolls
+  detected in the time frame"** notice lists all of their rolls.
+- **Rolls privacy by design:** rolls are held **in memory only** - nothing is saved or
+  sent anywhere. The log clears automatically on **logout** (and is gone entirely once
+  the game closes and the plugin unloads); a **Clear** button wipes it on demand. A
+  disclaimer on the page states this.
+- **Timed Text Macros page** (also no account or permission required). Create any number
+  of named announcements, each sent on a chosen public channel (**Say / Yell / Shout**)
+  on a **fixed minute interval**, with an optional **cap on the number of sends** (e.g.
+  every 15 minutes, 8 times). The **first send fires when you press Send** and it repeats
+  until stopped or the cap is reached; each running macro shows a **live countdown to the
+  next send** and its **remaining count**.
+- **Macro message splitting:** the text can be any length - if it exceeds one in-game
+  chat message it is split with the **same logic as the auto-tells** and the page tells
+  you up front **how many messages** each send will become; the parts are delivered **one
+  second apart**.
+- **Macro persistence:** macros are saved and **survive logout and restart**. Progress is
+  saved after every send, so a crash leaves the remaining count accurate; a macro always
+  reloads **stopped** and must be started again by hand (logout also stops every macro).
+
+#### Changed
+
+- **Split auto-`/tell` messages are now sent one second apart** via the same shared pacing
+  as the new macros (previously they were already spaced a second apart; this unifies the
+  timing so both paths stay in step).
+
+#### Fixed
+
+- **Long text now wraps to the window** instead of running off the right edge. Disclaimers,
+  notices, warnings, and other multi-sentence text across the pages (Rolls, Timed Text
+  Macros, Settings, Garapon, Stamp Rally, Raffle, Bingo) now wrap at the window width.
+
+### [2.2.1.0] - 2026-07-16
+
+Makes the auto-`/tell` messages fully customizable, with length-aware splitting.
+
+#### Added
+
+- **Editable auto-tell templates** for all three tells (bingo card, garapon, stamp
+  rally): enabling a tell in Settings now reveals a message editor. Templates use
+  placeholders the plugin expands - `<t>` (recipient's character name) and
+  `<bingocard-link>` / `<garapon-link>` / `<stamprally-link>` (the relevant link).
+  Defaults reproduce the previous fixed messages, so an already-enabled tell behaves
+  the same until it's customized.
+
+#### Changed
+
+- **Long tells are split to fit the in-game chat limit.** Because the link
+  placeholders are expanded by the plugin, not the game, they're **measured at the
+  full width of the URL** they become. A message longer than one chat message is split
+  into multiple tells at the best break point (a sentence end where possible, else a
+  word boundary - nothing is dropped) and the parts are delivered a second apart to
+  respect the chat throttle. The Settings editor shows a live warning - _"This message
+  is too long and will be split into two separate tells."_ - when a template will split.
+
+### [2.2.0.0] - 2026-07-16
+
+Adds **Garapon** and **Stamp Rally** management, and replaces the tab bar with a
+**collapsible sidebar**. Uses only existing server endpoints (paired with backend
+3.9.0 for the public-page link, which is a web/backend concern).
+
+#### Added
+
+- **Garapon management** (gated on `festival-garapon`): a **Garapon** page to issue
+  a per-player drawing link for an existing garapon - quick-fill the name from the
+  nearby list, set the draw count, and **copy the link** (plus a **copy stamp-card
+  link** button when the garapon is tied to a Stamp Rally; the server issues that
+  paired card automatically on create, sharing the token). It is create-only, by
+  design - no edit/delete from in-game. A separate **Garapon Draw Log** page lists
+  the recorded pulls.
+- **Stamp Rally management** (gated on `festival-stamp-rally`): a **Stamp Rally**
+  page to issue a participant card for a nearby player (**copy the card link**) and
+  **pause/resume** individual stalls. A separate **Stamp Rally Log** page shows the
+  collected-stamp log.
+- **Optional `/tell` on create** for both, **off by default** (opt-in per feature in
+  Settings): when you issue a link/card for a player picked from the nearby list, the
+  plugin can `/tell` them the URL. Outgoing chat - see the ToS note in Settings.
+- **Collapsible sidebar navigation** replacing the flat tab bar: **Bingo** and
+  **Festival** sections with per-page links, plus **Settings** and **About**.
+  Sections and links are hidden for permissions the account lacks, mirroring the web
+  admin sidebar; the window opens on the first page the account can reach.
+
+### [2.1.0.0] - 2026-07-11
+
+Adds the **"It's Yoever"** bingo controls (paired with backend 3.6.0).
+
+#### Added
+
+- **"It's Yoever" live controls** on the Bingo Game tab: a checkbox to switch the
+  reaction on/off for all players during a live game (`PATCH /api/game` ->
+  `yoever_enabled`), and a **"Yoevers: N"** counter. Both track the server live -
+  the count updates on the `yoever` broadcast (between draws) and the toggle syncs
+  on `yoever_config` - and the game-state model carries `yoever_enabled` /
+  `yoever_count`.
+
+### [2.0.1.0] - 2026-07-02
+
+#### Security
+
+- **Personal access token moved to the `Authorization` header on the WebSocket
+  connection** (was previously on the WS URL query string, where it could land in
+  access logs). REST calls already used the header. Plus assorted bug fixes.
+
+### [2.0.0.0] - 2026-07-01
+
+#### Changed
+
+- **Major API migration** to match the backend's move to a hybrid RESTful-RPC
+  style with proper HTTP status codes - the plugin's API client was reworked
+  accordingly. (Major bump: it requires the correspondingly migrated backend.)
+
+### [1.0.0.0] - 2026-06-29
+
+#### Added
+
+- **First published release** through the Dalamud custom repo (repo listing
+  finalized).
+
+#### Changed
+
+- Cards sorted by creation date.
+
+### [0.1.0.0] - 2026-06-29
+
+#### Added
+
+- **Initial Dalamud plugin** (Senpan Companion): operate bingo and raffle features
+  from within the game, authenticated by a personal access token.
+
+---
+
 ## Frontend
+
+Released on its own until 3.32.0. Since 4.0.0 every release of the app is in the App
+section above; this is the frontend's history before it.
 
 ### [3.32.0] - 2026-11-07
 
@@ -1976,6 +2551,9 @@ First tracked release - establishes versioning for the current production build.
 
 ## Backend
 
+Released on its own until 3.28.0. Since 4.0.0 every release of the app is in the App
+section above; this is the backend's history before it.
+
 ### [3.28.0] - 2026-11-07
 
 The move onto **shared-tooling** 1.2.0 - the lint, test, CI and deploy pieces the
@@ -3801,550 +4379,18 @@ First tracked release - establishes versioning for the current production build.
 
 ---
 
-## Plugin
-
-**SenpanCompanion** - a Dalamud/FFXIV plugin ("Senpan Admin Companion") that lets
-Tea House staff drive app services from in-game. It authenticates to the backend
-with a personal access token and is distributed through a Dalamud custom repo
-(`plugins/pluginmaster.json`). Versions use the four-part AssemblyVersion in
-`SenpanCompanion.csproj`. Entries below the current release were reconstructed
-from the `<Version>` history and commit messages.
-
-### [3.9.1.0] - 2026-10-29
-
-Requires backend 3.23.0.
-
-#### Fixed
-
-- **A message still waiting to be sent when the plugin unloads is dropped** rather
-  than reaching chat after the plugin has gone. Tells and timed macros go out one
-  at a time, a second apart, and one queued at the moment of unloading used to fire
-  regardless.
-
-#### Changed
-
-- **The .NET analyzers now run at their recommended level, and the code style is
-  checked in the build** (Kindred Nights' C# standard): `this.` on members, `var`,
-  file-scoped namespaces, braces on multi-line bodies, numbers and times formatted
-  invariantly. No change on screen.
-
-### [3.9.0.0] - 2026-10-17
-
-Requires backend 3.23.0.
-
-#### Changed
-
-- **An expiring tea-room lock now raises a pop-up that waits for you.** The alert
-  used the game's own toast, a single line that fades in a few seconds - easy to
-  miss, and too short to say what to do about it. It is now a Dalamud notification
-  titled "Tea room unlocked" that reads "Jasmine Room (Room #3) has been marked as
-  unlocked. Please check the room to remind the occupants or extend the time.", and
-  it stays on screen until you dismiss it, so it is still there if you stepped
-  away. The chime is unchanged, and the chat line now carries the same sentence -
-  it is the record left once the pop-up is gone. The website shows the same alert
-  with the same chime.
-- **Only staff who can manage tea rooms are alerted.** Every connected Companion
-  used to raise the alert, including bingo-only staff with no way to extend a lock.
-  The Tea Rooms page itself was already hidden from them.
-
-### [3.8.0.0] - 2026-09-05
-
-Locks a tea room from in game, and tells you when the lock runs out. Requires
-backend 3.23.0.
-
-#### Added
-
-- **Lock a room from the Tea Rooms page, with an unlock time.** The board gains a
-  Lock column beside Open and Discount. Locking opens a small prompt for when the
-  room should free up - typed as a local date and time, or filled in by a +30m /
-  +1h / +2h / +4h button, since "half an hour from now" is the usual answer and
-  nobody wants to work out the timestamp for it. Leave it blank and the room stays
-  locked until someone unlocks it. A locked row shows when it lifts, in your own
-  timezone.
-- **An expiring lock alerts you in game.** When the server lifts a lock, the
-  Companion plays a short two-note chime, shows a toast, and prints a line in your
-  own chat log, each naming the room - so you find out a room is free while looking
-  at the game, not by having this window open on the Tea Rooms page. All three are
-  purely local: the chat line is `IChatGui.Print` into your own log, which sends
-  nothing anywhere, and the chime is synthesized audio with no game interop, the
-  same as the winner chime.
-
-#### Fixed
-
-- **The room list corrects itself after a dropped connection.** Locks can expire
-  while the socket is down, and the pushes that said so are gone - leaving a list
-  that claims a room is still locked when it isn't. The page now reloads after a
-  reconnect, as the Bingo page already did.
-
-### [3.7.0.0] - 2026-08-28
-
-Keeps the Companion in step with how the suite now records a participant. Requires
-backend 3.21.0.
-
-#### Changed
-
-- **A drawing link or stamp card issued from the Companion now carries the home
-  world.** Every system stores a participant as a name plus a world, so a record
-  written without one cannot be matched to that person's raffle entry or other
-  cards. When the name came from the **Nearby...** picker the world is taken
-  straight from the game's object table - the most reliable source there is - and
-  sent with it. Typing a name by hand still works: the server splits a
-  "Name @ World", and the hint now says so.
-- **Player and participant lists show the world.** Both tables render the same
-  "Name @ World" the rest of the suite shows.
-
-#### Fixed
-
-- **A stamp card issued alongside a drawing link is no longer the same secret.**
-  The Companion's create-player call auto-issues a paired stamp card; the two used
-  to share one token, so the shareable card link spent the player's draws - a
-  screenshot of the card, or a link pasted to a friend, burned draws that cannot be
-  undone. The server now issues each on its own token, and the Companion's models
-  no longer claim they are equal.
-
-### [3.6.0.0] - 2026-08-26
-
-Fixes from a full-project security and correctness review. Requires backend 3.20.0.
-
-#### Fixed
-
-- **A failed refresh no longer wedges the card cache or the session.** Both
-  `RefreshAsync` methods stored whatever `RefreshCore()` returned, but a fetch that
-  faults before its first `await` - an invalid server URL does - completes
-  synchronously, and its `finally` clears the in-flight slot before the assignment
-  puts the finished task back. That latched a completed task forever, so every
-  later refresh returned it and did nothing, with no error anywhere.
-- **The winner chime no longer plays from memory the GC may have moved.** The WAV
-  was handed to winmm with `SND_ASYNC | SND_MEMORY`, so playback keeps reading that
-  buffer for the ~0.64s the chime lasts - but the marshaller only pins a managed
-  array for the duration of the call, leaving a compacting GC free to relocate it
-  mid-playback. The buffer is now pinned for the plugin's lifetime.
-- **A half-time prompt can no longer fire against the wrong game.** The prompt is a
-  latch only the Bingo Game page consumes, and nothing cleared it on a game
-  boundary, so one raised near the end of a game could pop during the NEXT one -
-  where answering Yes broadcast a half-time mini-game alert to players who had not
-  reached half time. It now carries the game it belongs to and is dropped when that
-  game ends.
-- **A half-time prompt that arrives off-page now says so in game.** The prompt is a
-  modal on the Bingo Game page, so with the window closed or showing something else
-  it was invisible - while the server had already PAUSED auto-draw waiting for an
-  answer, so the game simply stalled with nothing said anywhere. When the page was
-  not on screen a moment before, the plugin now chimes and prints a line into the
-  operator's own chat log telling them to open the window. Both channels are purely
-  local: the print goes to this client's chat log and transmits nothing (it is not
-  the chat SENDER), and the chime is the same no-interop one a new winner already
-  plays.
-- **The plugin honors a garapon's configured default draws.** Its `Garapon` DTO
-  omitted `default_draws`, so the Draws box started at a hardcoded 1 and the
-  server's "use the garapon default" fallback was unreachable from in-game, even
-  though the web admin and the public sign-up both honored it.
-- **The raffle panel cannot act on a raffle that is not on screen.** Picking a
-  raffle while another load was in flight left the selection on the new one while
-  the header, entrant table and winner controls still rendered the old - so "Add
-  entrant" and "Pick a winner" applied to the wrong raffle. Detail is now cleared on
-  pick and only written back when the selection still matches, the pattern the
-  stamp-rally and garapon tabs already used.
-- **Settings no longer write the config file on every keystroke.** The auto-tell
-  template called `Configuration.Save()` per character - a full JSON serialize plus
-  a write-flush-rename with a forced disk barrier, on the render thread. It now
-  saves when the field is done. `Save()` is also serialized, because the macro
-  runner writes the same file from the thread pool and Dalamud's writer uses one
-  fixed temp path.
-- **Game state is re-synced after the live connection drops.** Called numbers,
-  winners and game state arrive as WebSocket pushes, so anything sent while the
-  socket was down was simply missing - and nothing filled the gap, because the
-  server sends no snapshot on connect. A drop that spanned a draw left the
-  called-numbers grid permanently short and the winners stale, and ending the game
-  before the next draw wrote those wrong winners into the permanent log.
-  `LiveConnection` now raises a `Reconnected` event on the UI thread when the
-  socket comes back (not on the first connect, which has nothing to re-sync), and
-  the Bingo Game tab marks itself and the card cache stale so the existing
-  per-frame `EnsureLoaded` re-pulls `GET /api/game`. This mirrors what the web
-  client already did.
-- **Four ImGui disabled scopes could pop without pushing.** Each read a mutable
-  field (`Busy`, `settingsTesting`) twice - once to decide whether to call
-  `BeginDisabled`, once to decide whether to call `EndDisabled` - and the control
-  in between flips that field synchronously when clicked. On the click frame the
-  `End` ran without a matching `Begin`, under-popping ImGui's disabled and
-  item-flag stacks and corrupting the rest of the frame. Each site now snapshots
-  the flag into a local first, matching the neighboring pairs that already did.
-  Affects Draw Number, the garapon and stamp-rally pickers, and Save & Test
-  Connection.
-
-### [3.5.0.0] - 2026-08-24
-
-Follows the stamp rally's split into food and game stamps (backend 3.18.0).
-
-#### Added
-
-- **A Type column on the Stalls table and the collected-stamp log**, reading Food or
-  Game. A stall the server sends without a type reads as Food, matching every stall
-  that existed before types.
-- **What finishes a card, on the rally header** - every stamp, or the required food
-  and game counts - so an operator answering "am I done?" at a stall doesn't have to
-  open the website to find out. The stall summary also splits into food and game.
-
-### [3.4.1.0] - 2026-08-23
-
-Finishes the raffle panel's move to the new entry types and payment record, and gives
-the timed macros a dry run.
-
-#### Added
-
-- **A payment dialog on the Paid cell**, replacing the paid checkbox. It carries the
-  same settlement the website offers - how many tickets the payment covers, and gil
-  waived on it - because both need a number typed, which a checkbox has nowhere to
-  put. The cell itself now reads Paid / Partial / Unpaid, and Clear payment is there
-  too, since resetting the row is the only way to undo a settlement.
-- **Timed macros: a Test send**, putting the message out once so it can be checked in
-  chat before committing to a schedule. It deliberately does not count towards the
-  send total or start the timer - a test is not one of the sends that was asked for,
-  and counting it would eat into a send cap and shift every later "N of M".
-- **Timed macros: Reset is offered whenever there is progress to clear**, not only
-  once a send cap is reached. That was the real gap: an uncapped macro never
-  "completes", so it could never be reset at all. It is refused while the macro is
-  running, where the countdown and the "N of M" would otherwise disagree about the
-  same run.
-
-#### Fixed
-
-- **A details-only raffle no longer offers to sign anyone up.** The Add entrant form
-  is replaced by a note explaining that players enter it outside the app, rather than
-  a form whose Add would create an entrant the raffle never meant to collect. The
-  draw's caption follows suit, saying it runs over every entrant rather than paid
-  tickets. (Entrants for one are still recorded on the website.)
-
-#### Changed
-
-- The macro start button reads **Start** rather than **Send**, now that Test send
-  sits next to it and "Send" would have been ambiguous about which one fired once.
-
-### [3.4.0.0] - 2026-08-21
-
-Keeps the raffle panel honest about the new entry types and part-paid entrants.
-
-#### Added
-
-- **The raffle header names the pricing per entry type**: the ladder for a
-  custom-cost raffle (`Cost per entry: 50000 / 100000 / 150000`), the flat price for a
-  single-cost one, and "Details only - players sign up elsewhere" for a raffle that
-  takes no sign-ups through the app.
-- **Part-paid entrants read as `settled / total` tickets** with a tooltip, instead of
-  a bare total that hid the outstanding ones, and a hover on the Paid box reports what
-  has been waived on that entry. Ticking the box settles the rest waiving nothing -
-  entering an amount waived stays on the website, where the figures are on screen.
-- `Ui.ItemTooltip` - a hover tooltip for the item just drawn, for annotating a table
-  cell or checkbox without taking up room (unlike `Ui.HelpMarker`, which draws a
-  "(?)").
-
-### [3.3.2.0] - 2026-07-28
-
-Replaces the last text glyphs in the window with FontAwesome icons and normalises the
-punctuation in on-screen text.
-
-#### Changed
-
-- **Status and table glyphs are FontAwesome icons now.** The live/offline badge, the
-  garapon ball swatch, the stamp-rally completion mark and the roll stars drew filled and
-  hollow circles, a check mark and a star as plain text, which the game's Axis font
-  renders inconsistently. They go through the existing `Ui.Icon` helper and the bundled
-  icon font instead.
-- **On-screen text uses plain ASCII punctuation:** a hyphen for an empty table cell and
-  three dots for progress labels such as "Loading...", in place of the em-dash and
-  ellipsis characters.
-
-### [3.3.1.0] - 2026-07-24
-
-Shows the new **Room Owner** in the Tea Rooms table and fixes accented-character
-rendering (paired with backend 3.14.0).
-
-#### Added
-
-- **Room owner in the Tea Rooms table.** The Tea Rooms page gains an **Owner** column
-  beside the room name, showing the character who owns each room (the optional
-  `room_owner` field added in backend 3.14.0).
-
-#### Fixed
-
-- **Accented characters now render.** Text anywhere in the window (for example a room
-  name containing `ō`) previously dropped any glyph the game's Axis font doesn't
-  include. The window now merges **Noto Sans CJK** over the default font for the Latin
-  Extended ranges, so macron romanizations (ō, ā, ē, ī, ū) display correctly while
-  every other glyph is unchanged.
-
-### [3.3.0.0] - 2026-07-24
-
-Adds a **Tea Rooms** panel so Tea House staff can flip a room's availability and
-discount without leaving the game.
-
-#### Added
-
-- **Tea Rooms tab.** A new **Tea House -> Tea Rooms** page lists every room by
-  **number** and **name** (with its per-half-hour cost) and lets staff toggle each
-  room's **Open** and **Discount** (50% off) status with a click. It uses the
-  existing `PATCH /api/tea-rooms/{id}` endpoint and is gated by the **Tea Rooms**
-  (`teahouse-tea-rooms`) permission, so the section, page, and toggles appear only
-  for accounts that can manage tea rooms. Everything else about a room (subtitle,
-  image, hashtags, Discord posting, reordering) stays on the website.
-
-### [3.2.1.0] - 2026-07-21
-
-Hardening release from the audit-fix pass: the access token is now encrypted at rest with Windows DPAPI, and outgoing chat, connection retries, and background loads were made safe against throttle bursts, hostile servers, and off-thread state writes.
-
-#### Security
-
-- Encrypted the personal access token at rest with the Windows Data Protection API (DPAPI, CurrentUser scope) instead of storing it as plaintext in the config JSON, so a synced, backed-up, or world-readable config no longer exposes a usable token. An existing plaintext token is migrated to the encrypted form once on load and then cleared from disk.
-- Added a warning in the log when the configured server URL is not HTTPS, since the token would otherwise be transmitted in cleartext and could be intercepted (warned once, not on every request).
-- Bounded the live WebSocket receive buffer (1 MB per message cap), so a hostile or broken server can no longer stream an unbounded message and exhaust memory.
-
-#### Fixed
-
-- Routed every outgoing chat message - auto-tells and Timed Text Macros alike - through a single, globally serialized send queue that spaces messages one second apart, so concurrent features can no longer each start at once and defeat the game's outgoing-chat throttle.
-- Stopped the auth poll and live WebSocket from retrying forever on a terminal failure: an invalid/rejected token (401/403) now backs off hard until the token is changed instead of hammering the server every few seconds, while transient drops use exponential backoff that resets on a clean reconnect.
-- Allowed a failed initial card load to retry (behind a short cooldown) rather than leaving the card list empty until restart.
-- Fixed the outgoing-message length clamp to count UTF-8 bytes (the game's real limit) instead of UTF-16 characters, so a multibyte message is no longer wrongly truncated or let through over budget, and never splits a character.
-- Marshaled off-thread UI-state writes in error paths onto the framework thread (live-connection, session, and card-cache failure handling), and logged exceptions thrown by live-event subscribers instead of silently swallowing them.
-- Moved config saves off the render thread - timed-macro progress now persists on a background thread so the synchronous file write no longer stalls the UI.
-
-### [3.2.0.0] - 2026-07-20
-
-Adds **auto-run bingo** controls to the Bingo Game tab (paired with backend 3.11.0).
-
-#### Added
-
-- **Auto-draw controls.** The New Game view gains an **Auto-draw numbers** checkbox
-  and a **Time Between Calls** combo; applying a preset pre-fills them. The live game
-  view gains an **Auto-Draw** on/off checkbox and interval combo, kept in sync with
-  the website and other operators via the new `auto_config` WebSocket message.
-
-#### Changed
-
-- **Half-time prompt is server-driven.** The plugin now opens the mini-game prompt
-  when the server broadcasts `halftime_prompt` (fires for manual and automatic draws
-  alike), instead of detecting the midpoint locally. Its **Yes/No** buttons send the
-  mini-game choice (`Yes` alerts players and leaves auto paused; `No` declines and
-  resumes auto if it was paused); the prompt notes when auto has been paused.
-
-### [3.1.0.0] - 2026-07-19
-
-Adds custom-card request handling to the Bingo Cards tab (paired with backend 3.10.0).
-
-#### Added
-
-- **Card status + actions in the Bingo Cards tab.** A new **Status** column shows a
-  grey star for a **pending** custom-card request, a gold star for an **approved**
-  one, and a lock for a **Protected** card (hover a star for the requester's
-  character + world). Each row gains **Approve** (pending only) and
-  **Protect/Unprotect** actions. Approving a request makes the card playable and
-  automatically Protects it; Protected cards are spared by **Delete all** (still
-  individually deletable). Uses the backend's `POST /api/cards/{id}/approve` and
-  `/protect` endpoints with the existing `bingo-cards` permission.
-
-### [3.0.1.0] - 2026-07-17
-
-Polish on the 3.0.0.0 UI overhaul.
-
-#### Changed
-
-- **Button colours now match the web admin dashboard's default theme** - a tan primary
-  action (dark text), an olive secondary, and a red destructive - replacing the initial
-  purple accent, so the plugin and the site read as one product.
-- **Bingo win patterns** gain a **Collapse all / Show all** toggle to fold or unfold every
-  pattern category at once while building a game.
-
-#### Fixed
-
-- **A Timed Text Macro's message is now actually hidden until you expand it.** Previously
-  the preview text stayed visible and only the button label flipped; **Show message** /
-  **Hide message** now genuinely shows or hides the full text, and the button's stray glyph
-  (which didn't render in the game font, showing as a stray "=") is gone.
-
-### [3.0.0.0] - 2026-07-17
-
-A major **UI/UX overhaul** of the companion window, plus the ability to **edit saved
-macros**. What the tools do is unchanged - this is about how they look and how easy they
-are to operate.
-
-#### Added
-
-- **Edit a saved Timed Text Macro in place.** Each macro now has an **Edit** button that
-  reopens its name, channel, message, interval, and send cap in an inline editor
-  (Save / Cancel) - no more delete-and-recreate. (Stop a running macro first to edit it.)
-- **Shared design system across every page:** icon + accent **section headers**, a
-  three-tier **button system** (primary / secondary / destructive), compact **icon buttons**
-  for table-row actions (copy / delete), pill **badges**, and rounded **cards** - so related
-  controls read as a group and a Delete never looks like a Create.
-
-#### Changed
-
-- **Sidebar:** the always-available tools (**Rolls**, **Timed Text Macros**, **Settings**,
-  **About**) now live under a collapsible **General** group at the bottom, mirroring the
-  Bingo and Festival accordions.
-- **Timed Text Macros** renders each macro as its own **card** - an enumerated title with
-  channel and status badges, a schedule summary, and a one-line message preview that
-  **expands on demand**, so a long (multi-message) macro no longer floods the panel.
-- **Rolls** is split into labelled **Captured rolls / Filter / Find the winner / Rolls**
-  sections instead of one continuous flow.
-- **Settings** groups its fields under **Connection** and **Automatic tells** headers, and
-  the **Bingo, Raffle, Garapon, and Stamp Rally** pages pick up the same section headers,
-  button tiers, and copy / delete icon buttons.
-
-### [2.3.0.0] - 2026-07-16
-
-Adds two permission-free, account-free tools: a **Rolls** helper for in-game roll games
-and **Timed Text Macros** for repeating announcements.
-
-#### Added
-
-- **Rolls page** (no account or permission required - it works even before a token is
-  set). It watches chat for `/random` - `/dice` rolls near you and lists them in a
-  **paginated table** (15 / 30 / 45 per page, scrolls when needed) showing the player,
-  home world, the number rolled (with its ceiling for `/random N`, e.g. _"11 (out of
-  20)"_), and the time.
-- **Rolls filtering & search:** narrow to a player by name and/or to the **last N
-  minutes**, and run a **Highest / Lowest / Closest-to-N** query over that window.
-  Matching rolls are brought to the top and highlighted, with a summary banner - and
-  when the winning player rolled more than once in the window, a **"multiple rolls
-  detected in the time frame"** notice lists all of their rolls.
-- **Rolls privacy by design:** rolls are held **in memory only** - nothing is saved or
-  sent anywhere. The log clears automatically on **logout** (and is gone entirely once
-  the game closes and the plugin unloads); a **Clear** button wipes it on demand. A
-  disclaimer on the page states this.
-- **Timed Text Macros page** (also no account or permission required). Create any number
-  of named announcements, each sent on a chosen public channel (**Say / Yell / Shout**)
-  on a **fixed minute interval**, with an optional **cap on the number of sends** (e.g.
-  every 15 minutes, 8 times). The **first send fires when you press Send** and it repeats
-  until stopped or the cap is reached; each running macro shows a **live countdown to the
-  next send** and its **remaining count**.
-- **Macro message splitting:** the text can be any length - if it exceeds one in-game
-  chat message it is split with the **same logic as the auto-tells** and the page tells
-  you up front **how many messages** each send will become; the parts are delivered **one
-  second apart**.
-- **Macro persistence:** macros are saved and **survive logout and restart**. Progress is
-  saved after every send, so a crash leaves the remaining count accurate; a macro always
-  reloads **stopped** and must be started again by hand (logout also stops every macro).
-
-#### Changed
-
-- **Split auto-`/tell` messages are now sent one second apart** via the same shared pacing
-  as the new macros (previously they were already spaced a second apart; this unifies the
-  timing so both paths stay in step).
-
-#### Fixed
-
-- **Long text now wraps to the window** instead of running off the right edge. Disclaimers,
-  notices, warnings, and other multi-sentence text across the pages (Rolls, Timed Text
-  Macros, Settings, Garapon, Stamp Rally, Raffle, Bingo) now wrap at the window width.
-
-### [2.2.1.0] - 2026-07-16
-
-Makes the auto-`/tell` messages fully customizable, with length-aware splitting.
-
-#### Added
-
-- **Editable auto-tell templates** for all three tells (bingo card, garapon, stamp
-  rally): enabling a tell in Settings now reveals a message editor. Templates use
-  placeholders the plugin expands - `<t>` (recipient's character name) and
-  `<bingocard-link>` / `<garapon-link>` / `<stamprally-link>` (the relevant link).
-  Defaults reproduce the previous fixed messages, so an already-enabled tell behaves
-  the same until it's customized.
-
-#### Changed
-
-- **Long tells are split to fit the in-game chat limit.** Because the link
-  placeholders are expanded by the plugin, not the game, they're **measured at the
-  full width of the URL** they become. A message longer than one chat message is split
-  into multiple tells at the best break point (a sentence end where possible, else a
-  word boundary - nothing is dropped) and the parts are delivered a second apart to
-  respect the chat throttle. The Settings editor shows a live warning - _"This message
-  is too long and will be split into two separate tells."_ - when a template will split.
-
-### [2.2.0.0] - 2026-07-16
-
-Adds **Garapon** and **Stamp Rally** management, and replaces the tab bar with a
-**collapsible sidebar**. Uses only existing server endpoints (paired with backend
-3.9.0 for the public-page link, which is a web/backend concern).
-
-#### Added
-
-- **Garapon management** (gated on `festival-garapon`): a **Garapon** page to issue
-  a per-player drawing link for an existing garapon - quick-fill the name from the
-  nearby list, set the draw count, and **copy the link** (plus a **copy stamp-card
-  link** button when the garapon is tied to a Stamp Rally; the server issues that
-  paired card automatically on create, sharing the token). It is create-only, by
-  design - no edit/delete from in-game. A separate **Garapon Draw Log** page lists
-  the recorded pulls.
-- **Stamp Rally management** (gated on `festival-stamp-rally`): a **Stamp Rally**
-  page to issue a participant card for a nearby player (**copy the card link**) and
-  **pause/resume** individual stalls. A separate **Stamp Rally Log** page shows the
-  collected-stamp log.
-- **Optional `/tell` on create** for both, **off by default** (opt-in per feature in
-  Settings): when you issue a link/card for a player picked from the nearby list, the
-  plugin can `/tell` them the URL. Outgoing chat - see the ToS note in Settings.
-- **Collapsible sidebar navigation** replacing the flat tab bar: **Bingo** and
-  **Festival** sections with per-page links, plus **Settings** and **About**.
-  Sections and links are hidden for permissions the account lacks, mirroring the web
-  admin sidebar; the window opens on the first page the account can reach.
-
-### [2.1.0.0] - 2026-07-11
-
-Adds the **"It's Yoever"** bingo controls (paired with backend 3.6.0).
-
-#### Added
-
-- **"It's Yoever" live controls** on the Bingo Game tab: a checkbox to switch the
-  reaction on/off for all players during a live game (`PATCH /api/game` ->
-  `yoever_enabled`), and a **"Yoevers: N"** counter. Both track the server live -
-  the count updates on the `yoever` broadcast (between draws) and the toggle syncs
-  on `yoever_config` - and the game-state model carries `yoever_enabled` /
-  `yoever_count`.
-
-### [2.0.1.0] - 2026-07-02
-
-#### Security
-
-- **Personal access token moved to the `Authorization` header on the WebSocket
-  connection** (was previously on the WS URL query string, where it could land in
-  access logs). REST calls already used the header. Plus assorted bug fixes.
-
-### [2.0.0.0] - 2026-07-01
-
-#### Changed
-
-- **Major API migration** to match the backend's move to a hybrid RESTful-RPC
-  style with proper HTTP status codes - the plugin's API client was reworked
-  accordingly. (Major bump: it requires the correspondingly migrated backend.)
-
-### [1.0.0.0] - 2026-06-29
-
-#### Added
-
-- **First published release** through the Dalamud custom repo (repo listing
-  finalized).
-
-#### Changed
-
-- Cards sorted by creation date.
-
-### [0.1.0.0] - 2026-06-29
-
-#### Added
-
-- **Initial Dalamud plugin** (Senpan Companion): operate bingo and raffle features
-  from within the game, authenticated by a personal access token.
-
----
-
 ## How to update this file
 
-1. Make your change and bump the relevant version source
-   (`frontend/package.json`, `backend/internal/version/version.go`, and/or the
-   plugin's `SenpanCompanion.csproj` `<Version>` + `plugins/pluginmaster.json`).
-2. Add an entry under the matching section above (Frontend / Backend / Plugin),
-   newest first, grouped as _Added / Changed / Fixed / Removed / Security_.
+1. Make your change and bump the version it ships in: the app's in
+   `frontend/package.json` and `backend/internal/version/version.go` together, the
+   plugin's in `SenpanCompanion.csproj` `<Version>` + `plugins/pluginmaster.json`.
+2. Add an entry under the matching section above (App / Plugin), newest first, as
+   `### [version] - date`, grouped as _Added / Changed / Fixed / Removed / Security_
+   (as `####` headings).
 3. Keep the version string in the source file and the heading here in sync.
 4. A change recorded before its version is bumped goes under **Unreleased** at the
-   top, in its component's `### Frontend` / `### Backend` / `### Plugin`, and moves
-   into that component's new `### [version]` when it is bumped. Never put an
-   Unreleased heading inside a component section: the release job and the admin
-   dashboard's changelog take the first `### [...]` there as the latest version.
+   top, in a `### App` or `### Plugin` heading, and moves into that section's new
+   `### [version]` when it is bumped. Never put an Unreleased heading inside the App
+   or Plugin section: the release job and the admin dashboard's changelog take the
+   first `### [...]` there as the latest version.
+5. Frontend and Backend take no new entries: they are the history before 4.0.0.

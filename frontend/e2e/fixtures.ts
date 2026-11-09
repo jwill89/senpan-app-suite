@@ -50,7 +50,7 @@ async function body<T>(response: Promise<APIResponse>): Promise<T> {
  * Playwright's test, with what the pages need from the run's server:
  *
  * - `/images/` answered from the run's web root, as Apache answers it from the
- *   document root (deploy/.htaccess); `vite preview` would send the SPA's shell.
+ *   document root (deploy/.htaccess); the app itself answers a 404 there.
  * - `staff`: the API, signed in as the bootstrap admin, which seeds the rest through
  *   the endpoints the admin pages call.
  * - `bingo`: a game that has just started, with a card in it.

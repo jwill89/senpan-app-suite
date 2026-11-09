@@ -9,10 +9,10 @@ import { changelog } from '@/lib/changelog'
 
 describe('ChangelogModal', () => {
   it('lists every version and shows the latest release with labelled groups', () => {
-    const wrapper = mount(ChangelogModal, { props: { component: 'frontend' } })
-    const versions = changelog.frontend.entries
+    const wrapper = mount(ChangelogModal, { props: { component: 'app' } })
+    const versions = changelog.app.entries
 
-    // One rail item per version (frontend has no install item).
+    // One rail item per version (the app has no install item).
     expect(wrapper.findAll('.changelog-rail-item')).toHaveLength(versions.length)
 
     // Opens on the newest release, with its change-group badges (Added/Changed/...).
@@ -25,8 +25,8 @@ describe('ChangelogModal', () => {
   })
 
   it('navigates to an older version when its rail item is clicked', async () => {
-    const wrapper = mount(ChangelogModal, { props: { component: 'frontend' } })
-    const versions = changelog.frontend.entries
+    const wrapper = mount(ChangelogModal, { props: { component: 'app' } })
+    const versions = changelog.app.entries
     // Click the second-newest version.
     await wrapper.findAll('.changelog-rail-item')[1]!.trigger('click')
     expect(wrapper.find('.changelog-detail-title').text()).toContain(`v${versions[1]!.version}`)

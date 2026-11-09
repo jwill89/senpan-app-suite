@@ -1,4 +1,5 @@
-// Package main is the entry point for the App Suite API server.
+// Package main is the entry point for the App Suite server: the API and, since
+// 4.0.0, the SPA, embedded in the binary (internal/web).
 // It parses configuration flags, initializes the SQLite database,
 // creates the WebSocket hub, and starts the HTTP server.
 package main
@@ -20,6 +21,7 @@ import (
 	"app-suite/internal/model"
 	"app-suite/internal/server"
 	"app-suite/internal/store"
+	"app-suite/internal/web"
 	"app-suite/internal/ws"
 )
 
@@ -101,8 +103,16 @@ func run() error {
 		tsSiteKey = os.Getenv("APPSUITE_TURNSTILE_SITEKEY")
 	}
 
+	// The SPA, from the build embedded at compile time. A binary built without it
+	// stops here rather than serving a site with no pages.
+	site, err := web.New(web.Dist())
+	if err != nil {
+		return err
+	}
+
 	hub := ws.NewHub()
 	srv := server.New(ctx, db, hub, *webRoot, allowedOrigins)
+	srv.SetSite(site)
 	srv.SetTurnstile(tsSecret, tsSiteKey)
 	srv.SetLogFile(*logFile) // GET /api/logs tails this file
 

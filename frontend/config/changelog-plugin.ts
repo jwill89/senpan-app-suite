@@ -30,12 +30,14 @@ interface ChangelogSection {
   entries: ChangelogEntry[]
 }
 interface Changelog {
+  app: ChangelogSection
   frontend: ChangelogSection
   backend: ChangelogSection
   plugin: ChangelogSection
 }
 
 const HEADING_TO_KEY: Record<string, keyof Changelog> = {
+  App: 'app',
   Frontend: 'frontend',
   Backend: 'backend',
   Plugin: 'plugin',
@@ -94,13 +96,15 @@ function parseEntries(lines: string[]): ChangelogEntry[] {
 }
 
 /**
- * Splits CHANGELOG.md into its `## Frontend` / `## Backend` / `## Plugin`
- * sections and parses each into structured version entries. Only level-2 headings
- * delimit a section (a `### [x.y.z]` version or `#### Added` never matches `^## `),
- * and the preamble before the first component heading is ignored.
+ * Splits CHANGELOG.md into its `## App` / `## Plugin` sections and the history before
+ * 4.0.0, `## Frontend` / `## Backend`, and parses each into structured version
+ * entries. Only level-2 headings delimit a section (a `### [x.y.z]` version or
+ * `#### Added` never matches `^## `), and the preamble before the first component
+ * heading is ignored. The app's entries go on into the frontend's: before 4.0.0 the
+ * SPA was the side of the app its users saw, so its notes are the app's history.
  */
 export function parseChangelog(md: string): Changelog {
-  const buf: Record<keyof Changelog, string[]> = { frontend: [], backend: [], plugin: [] }
+  const buf: Record<keyof Changelog, string[]> = { app: [], frontend: [], backend: [], plugin: [] }
   let current: keyof Changelog | null = null
   for (const line of md.split(/\r?\n/)) {
     const h2 = /^##\s+(.+?)\s*$/.exec(line)
@@ -114,11 +118,13 @@ export function parseChangelog(md: string): Changelog {
       buf[current].push(line)
     }
   }
-  const build = (lines: string[]): ChangelogSection => {
-    const entries = parseEntries(lines)
-    return { latest: entries[0]?.version ?? '', entries }
-  }
+  const section = (entries: ChangelogEntry[]): ChangelogSection => ({
+    latest: entries[0]?.version ?? '',
+    entries,
+  })
+  const build = (lines: string[]): ChangelogSection => section(parseEntries(lines))
   return {
+    app: section([...parseEntries(buf.app), ...parseEntries(buf.frontend)]),
     frontend: build(buf.frontend),
     backend: build(buf.backend),
     plugin: build(buf.plugin),

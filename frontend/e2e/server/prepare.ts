@@ -10,7 +10,7 @@
  * devdata/ is a copy of the live data, real webhook URLs and all.
  */
 import { execFileSync } from 'node:child_process'
-import { cpSync, mkdirSync, rmSync } from 'node:fs'
+import { cpSync, existsSync, mkdirSync, rmSync } from 'node:fs'
 import { isAbsolute, join, relative, resolve } from 'node:path'
 import { DATA_DIR, ROOT, SERVER, WEB_ROOT, serverFlags } from '../env.ts'
 
@@ -42,5 +42,11 @@ mkdirSync(WEB_ROOT, { recursive: true })
 // untracked, so a CI run has the folders without it (and the pages their alt text).
 cpSync(join(ROOT, 'deploy', 'images'), join(WEB_ROOT, 'images'), { recursive: true })
 
-// Built as `task build` builds it, to the run's folder.
+// Built as `task build` builds it, to the run's folder, with the front end's build
+// embedded: the binary serves the SPA, so that build comes first.
+if (!existsSync(join(ROOT, 'backend', 'internal', 'web', 'dist', 'index.html'))) {
+  throw new Error(
+    'The front end is not built, and the server embeds it: run `task build:web` (or `npm run build`) first.',
+  )
+}
 execFileSync('go', ['build', '-o', SERVER, '.'], { cwd: join(ROOT, 'backend'), stdio: 'inherit' })

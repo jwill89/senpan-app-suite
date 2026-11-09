@@ -9,10 +9,11 @@ import {
   PLUGIN_MASTER_PATH,
   fetchLivePluginVersion,
 } from './changelog'
+import { APP_VERSION } from './version'
 
 describe('changelog pipeline', () => {
   it('parses CHANGELOG.md into structured entries for each component', () => {
-    for (const key of ['frontend', 'backend', 'plugin'] as const) {
+    for (const key of ['app', 'frontend', 'backend', 'plugin'] as const) {
       const section = changelog[key]
       expect(section.entries.length, `${key} entries`).toBeGreaterThan(0)
       // `latest` mirrors the newest entry's version.
@@ -47,6 +48,17 @@ describe('changelog pipeline', () => {
 
   it('keeps sections separate (no cross-bleed)', () => {
     expect(changelog.frontend.latest).not.toBe(changelog.plugin.latest)
+  })
+
+  it("has an entry for this build's version, newest in the App section", () => {
+    // A release changes the version and its CHANGELOG.md entry together.
+    expect(changelog.app.latest).toBe(APP_VERSION)
+  })
+
+  it("continues the app's history with the frontend's from before 4.0.0", () => {
+    const { app, frontend } = changelog
+    expect(app.entries.length).toBeGreaterThan(frontend.entries.length)
+    expect(app.entries.slice(-frontend.entries.length)).toEqual(frontend.entries)
   })
 
   it('provides Dalamud install details for the plugin', () => {

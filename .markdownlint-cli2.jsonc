@@ -7,7 +7,7 @@
     "**/node_modules/**",
     "shared/**",
     "devdata/**",
-    "frontend/dist/**",
+    "backend/internal/web/dist/**",
     "frontend/coverage/**",
     // A failed end-to-end run leaves Playwright's error-context.md files here.
     "frontend/test-results/**",

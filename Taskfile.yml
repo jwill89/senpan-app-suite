@@ -27,6 +27,8 @@ tasks:
 
   dev:backend:
     desc: Run the API on :8080 against devdata, with Discord webhooks held back
+    # The binary embeds the SPA's build (it serves it on :8080 too), so it builds first.
+    deps: [build:web]
     dir: backend
     cmds:
       # devdata is a copy of the live database, real webhook URLs included.
@@ -43,10 +45,32 @@ tasks:
     cmds:
       - npm run gen:types
 
-  build:
-    desc: Build the frontend into frontend/dist and compile the backend
+  # The SPA's build, written where the Go binary embeds it (backend/internal/web/dist):
+  # every Go build, test, lint and scan compiles it in, so each depends on this. Once
+  # per run, so parallel steps share one build instead of emptying the folder under
+  # each other, and only when its sources changed.
+  build:web:
+    desc: Build the frontend into backend/internal/web/dist, where the binary embeds it
+    run: once
+    dir: frontend
     cmds:
-      - cd frontend && npm run build
+      - npm run build
+    sources:
+      - index.html
+      - package.json
+      - package-lock.json
+      - vite.config.ts
+      - config/**/*
+      - src/**/*
+      - public/**/*
+      - ../CHANGELOG.md
+    generates:
+      - ../backend/internal/web/dist/index.html
+
+  build:
+    desc: Build the frontend and compile the backend, which embeds it
+    deps: [build:web]
+    cmds:
       - cd backend && go build ./...
 
   build:plugin:
@@ -70,8 +94,9 @@ tasks:
       - npm test
 
   test:e2e:
-    desc: Run the end-to-end suite (Playwright and axe) on the built SPA and the API, on a throwaway database
+    desc: Run the end-to-end suite (Playwright and axe) on the app as built, on a throwaway database
     aliases: [tests:e2e]
+    deps: [build:web]
     dir: frontend
     cmds:
       - npm run test:e2e
@@ -79,6 +104,7 @@ tasks:
   test:backend:
     desc: Run the Go tests (CI adds -race, which needs gcc here)
     aliases: [tests:backend]
+    deps: [build:web]
     dir: backend
     cmds:
       - go test ./...
@@ -110,6 +136,7 @@ tasks:
 
   lint:backend:go:
     internal: true
+    deps: [build:web]
     dir: backend
     cmds:
       - go vet ./...
@@ -125,6 +152,8 @@ tasks:
 
   vuln:
     desc: Check dependencies for known vulnerabilities
+    # govulncheck compiles the packages, the embedded SPA among them.
+    deps: [build:web]
     cmds:
       # The version shared-tooling's go.yml runs in CI.
       - cd backend && go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 ./...
@@ -138,13 +167,17 @@ tasks:
       # its task (standards/testing.md). -- -SkipFrontend or -- -SkipBackend still leave a half out.
       - task --parallel --output prefixed check:backend check:frontend check:plugin check:repo shared:vuln -- {{.CLI_ARGS}}
 
+  # Both parts need the SPA's build (the backend compiles it in; the end-to-end suite's
+  # server serves it), which build:web makes once for the parallel run.
   check:backend:
     desc: The backend part of task check (scripts/check.ps1 -Only backend)
+    deps: [build:web]
     cmds:
       - pwsh -NoProfile -File scripts/check.ps1 -Only backend {{.CLI_ARGS}}
 
   check:frontend:
     desc: The frontend part of task check, end-to-end suite included (scripts/check.ps1 -Only frontend)
+    deps: [build:web]
     cmds:
       - pwsh -NoProfile -File scripts/check.ps1 -Only frontend {{.CLI_ARGS}}
 
@@ -165,24 +198,22 @@ tasks:
       - task: shared:push
 
   # task deploy ships everything, in order, and each part also deploys alone
-  # (standards/deploy-and-ops.md). The plugin goes last, and only when its version is new.
+  # (standards/deploy-and-ops.md): the app (the binary, the SPA inside it), then the
+  # plugin, only when its version is new. Each ships the newest release CI tagged, and
+  # does nothing when the host runs it already (-- -Force deploys it again). The SPA is
+  # in the binary, so there is no deploy:frontend.
   deploy:
-    desc: Deploy everything - the backend, then the frontend, then the plugin if its version is new (pass flags after --, e.g. -- -NoDbPull)
+    desc: Deploy everything - the app, then the plugin if its version is new (pass flags after --, e.g. -- -NoDbPull)
     cmds:
-      - pwsh -NoProfile -File scripts/deploy.ps1 -Target main {{.CLI_ARGS}}
+      - pwsh -NoProfile -File scripts/deploy.ps1 -Target app {{.CLI_ARGS}}
       - pwsh -NoProfile -File scripts/deploy.ps1 -Target plugin -IfNewer {{.CLI_ARGS}}
 
-  deploy:frontend:
-    desc: Build and deploy the frontend only (pass flags after --, e.g. -- -SkipBuild)
-    cmds:
-      - pwsh -NoProfile -File scripts/deploy.ps1 -Target frontend {{.CLI_ARGS}}
-
   deploy:backend:
-    desc: Deploy the backend only, then pull the live database into devdata (-- -NoDbPull skips the pull)
+    desc: Deploy the app alone (the binary, with the SPA inside), then pull the live database into devdata (-- -NoDbPull skips the pull)
     cmds:
-      - pwsh -NoProfile -File scripts/deploy.ps1 -Target backend {{.CLI_ARGS}}
+      - pwsh -NoProfile -File scripts/deploy.ps1 -Target app {{.CLI_ARGS}}
 
   deploy:plugin:
-    desc: Build the Dalamud plugin and publish it to its custom repo; refused unless its version is new
+    desc: Build the Dalamud plugin from the newest release and publish it to its custom repo; refused unless its version is new
     cmds:
       - pwsh -NoProfile -File scripts/deploy.ps1 -Target plugin {{.CLI_ARGS}}

@@ -19,13 +19,15 @@ permissions:
 jobs:
   # Lint is lint:check, which never rewrites; test:coverage fails below the floor in
   # vitest.config.ts. web.yml runs the audit itself. The API types it compiles against
-  # are the committed ones, which the generated job checks.
+  # are the committed ones, which the generated job checks. The build is uploaded for
+  # the backend job, since the binary embeds it.
   frontend:
-    uses: jwill89/shared-tooling/.github/workflows/web.yml@v2.2.3
+    uses: jwill89/shared-tooling/.github/workflows/web.yml@v2.4.0
     with:
       dir: frontend
       fontawesome: true
       scripts: lint:check format:check lint:conventions typecheck test:coverage build
+      artifact-path: backend/internal/web/dist
     secrets:
       FONTAWESOME_TOKEN: ${{ secrets.FONTAWESOME_NPM_TOKEN }}
 
@@ -53,58 +55,62 @@ jobs:
   # golangci-lint with backend/.golangci.yml (written from the shared template), the
   # tests under the race detector with their coverage floor (63.3% of statements when
   # it was set, 2026-11-06; raise it as tests land, never lower it), govulncheck, and
-  # the binary built as the deploy builds it.
+  # the binary built as the deploy builds it - on the frontend job's build, which the
+  # binary embeds, so every Go step compiles with it.
   backend:
-    uses: jwill89/shared-tooling/.github/workflows/go.yml@v2.2.3
+    needs: frontend
+    uses: jwill89/shared-tooling/.github/workflows/go.yml@v2.4.0
     with:
       dir: backend
+      download-artifact: web-dist
+      download-path: backend/internal/web/dist
       coverage-floor: 63.0
       build: go build -ldflags="-s -w" -o app-suite .
 
   # Built against Dalamud with warnings as errors (the shared analyzers, imported by
   # plugins/Directory.Build.props), and dotnet format.
   plugin:
-    uses: jwill89/shared-tooling/.github/workflows/dotnet.yml@v2.2.3
+    uses: jwill89/shared-tooling/.github/workflows/dotnet.yml@v2.4.0
     with:
       projects: plugins/SenpanCompanion
       warnings-as-errors: true
 
-  # The end-to-end run (frontend/playwright.config.ts): the API built and run on a
-  # throwaway database with Discord held back (-webhook-dry-run), the built SPA under
-  # vite preview, in the runner's Chrome. Every main page must pass axe at WCAG 2.2 AA,
-  # and a player must join a board, see a draw arrive live and keep a stamp across a
-  # reload.
+  # The end-to-end run (frontend/playwright.config.ts): the app as production runs it -
+  # the binary, built with the front end's build embedded, serving the API and the SPA -
+  # on a throwaway database with Discord held back (-webhook-dry-run), in the runner's
+  # Chrome. Every main page must pass axe at WCAG 2.2 AA, and a player must join a
+  # board, see a draw arrive live and keep a stamp across a reload.
   e2e:
     needs: [frontend, backend]
-    uses: jwill89/shared-tooling/.github/workflows/e2e.yml@v2.2.3
+    uses: jwill89/shared-tooling/.github/workflows/e2e.yml@v2.4.0
     with:
       dir: frontend
       go-version-file: backend/go.mod
       fontawesome: true
+      setup: npm --prefix frontend run build
     secrets:
       FONTAWESOME_TOKEN: ${{ secrets.FONTAWESOME_NPM_TOKEN }}
 
   scripts:
-    uses: jwill89/shared-tooling/.github/workflows/pwsh.yml@v2.2.3
+    uses: jwill89/shared-tooling/.github/workflows/pwsh.yml@v2.4.0
 
   docs:
-    uses: jwill89/shared-tooling/.github/workflows/docs.yml@v2.2.3
+    uses: jwill89/shared-tooling/.github/workflows/docs.yml@v2.4.0
 
   # OSV-Scanner over every lockfile. An osv-scanner.toml beside a lockfile passes over the
   # advisories that reach only lint, test or build tooling (standards/packages.md).
   osv:
-    uses: jwill89/shared-tooling/.github/workflows/osv.yml@v2.2.3
+    uses: jwill89/shared-tooling/.github/workflows/osv.yml@v2.4.0
     permissions:
       contents: read
       actions: read
       security-events: write
 
-  # On a push to main, AFTER the whole gate passes, tag + release any component
-  # whose current version has no release yet. Tags follow <Component>-v<version>
-  # (Frontend-v3.5.0, Backend-v3.4.0, Plugin-v2.0.1.0) and each release body is
-  # that component's CHANGELOG.md section, so a green version bump auto-publishes
-  # a release linked to its notes. Idempotent - versions already released are
-  # skipped, so ordinary main pushes are a no-op here.
+  # On a push to main, AFTER the whole gate passes, tag + release a version with no
+  # release yet: the app as v<version> (which the deploy ships) and the plugin as
+  # Plugin-v<version>, each with its CHANGELOG.md entry as the body, so a green version
+  # bump auto-publishes a release linked to its notes. Idempotent - versions already
+  # released are skipped, so ordinary main pushes are a no-op here.
   release:
     name: Tag + release (main, on version bump)
     needs: [frontend, generated, backend, e2e, plugin, scripts, docs, osv]
@@ -117,7 +123,7 @@ jobs:
         with:
           fetch-depth: 0 # need existing tags to detect what's already released
 
-      - name: Tag + release changed component versions
+      - name: Tag + release a new app or plugin version
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: bash .github/scripts/release.sh

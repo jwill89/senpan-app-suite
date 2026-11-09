@@ -118,6 +118,16 @@ func open(path string) (*Store, error) {
 // Close closes the underlying database connection.
 func (s *Store) Close() error { return s.db.Close() }
 
+// SchemaVersion reads the schema's version (PRAGMA user_version), which also shows
+// the database answers: GET /healthz reports both.
+func (s *Store) SchemaVersion(ctx context.Context) (int, error) {
+	var v int
+	if err := s.db.QueryRowContext(ctx, "PRAGMA user_version").Scan(&v); err != nil {
+		return 0, fmt.Errorf("read user_version: %w", err)
+	}
+	return v, nil
+}
+
 // Interrupted reports whether err is SQLite's interrupt (SQLITE_INTERRUPT): a
 // query stopped part-way because its context was done, reported as the driver's
 // own error. database/sql answers context.Canceled for a query whose context was

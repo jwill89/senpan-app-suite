@@ -19,9 +19,9 @@ $DeployVpsUser = "<ssh-user>"                          # e.g. root or a deploy u
 $DeployKeyPath = "<path-to-your-deploy-key.ppk>"       # load it into Pageant first if it has a passphrase
 $DeployWebRoot = "<apache-documentroot-on-host>"       # e.g. /var/www/example.com
 $DeployServiceName = "<systemd-service-name>"          # e.g. myapp
-$DeployRemoteOptDir = "<dir-holding-the-backend-binary>" # e.g. /opt/myapp
+$DeployRemoteOptDir = "<dir-holding-the-app-binary>"   # e.g. /opt/myapp
 # Optional: the site's public address, fetched after every deploy (the smoke check):
-# the page, /api/version and the plugin index, as visitors reach them through
+# the page, /healthz, /api/version and the plugin index, as visitors reach them through
 # Cloudflare. Unset, it is https://apps.senpan.cafe; set it only to check another.
 # $DeploySiteUrl = "<https-address-of-the-site>"       # e.g. https://example.com
 # Optional: the live SQLite database on the host. Leave it unset: the deploy reads it

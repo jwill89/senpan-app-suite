@@ -3,8 +3,8 @@
  *
  * Re-exports the parsed CHANGELOG.md (provided by the `virtual:changelog` build
  * plugin - see config/changelog-plugin.ts) and adds the Dalamud install steps
- * shown for the plugin. The admin sidebar shows each component's version and opens
- * its changelog on click (see AppVersions.vue / ChangelogModal.vue).
+ * shown for the plugin. The admin sidebar shows the app's and the plugin's version
+ * and opens its changelog on click (see AppVersions.vue / ChangelogModal.vue).
  */
 import {
   changelog,
@@ -16,14 +16,16 @@ import {
 export { changelog }
 export type { ChangelogSection, ChangelogEntry, ChangelogGroup }
 
-/** The three independently-versioned components. */
-export type ChangelogComponent = 'frontend' | 'backend' | 'plugin'
+/** The changelog's sections: the app and the plugin, versioned apart, and the
+ * frontend's and backend's own histories from before the app's one version (4.0.0). */
+export type ChangelogComponent = 'app' | 'plugin' | 'frontend' | 'backend'
 
-/** Human labels for each component (modal titles, etc.). */
+/** Human labels for each section (modal titles, etc.). */
 export const CHANGELOG_LABELS: Record<ChangelogComponent, string> = {
+  app: 'App',
+  plugin: 'Plugin',
   frontend: 'Frontend',
   backend: 'Backend',
-  plugin: 'Plugin',
 }
 
 /** The Dalamud custom-repository URL (matches pluginmaster.json's DownloadLink*). */

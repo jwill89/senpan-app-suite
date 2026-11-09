@@ -16,11 +16,17 @@ test_cookies.txt
 /backend/app-suite.exe
 *.exe
 
-# Frontend (Vite) build output & deps
+# Frontend (Vite) build output & deps. The build goes where the Go binary embeds it
+# (backend/internal/web/dist); frontend/dist is where it went before 4.0.0.
 frontend/node_modules/
+backend/internal/web/dist/
 frontend/dist/
+frontend/stats.html
 frontend/.vite/
 frontend/*.tsbuildinfo
+
+# Task's checksums for build:web's sources (Taskfile.yml).
+.task/
 frontend/coverage/
 # Playwright's traces of a failed end-to-end run.
 frontend/test-results/

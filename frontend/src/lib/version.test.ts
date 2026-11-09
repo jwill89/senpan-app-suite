@@ -1,27 +1,20 @@
 import { describe, it, expect } from 'vitest'
-import { FRONTEND_VERSION, majorOf, versionsCompatible } from './version'
+import { APP_VERSION, serverDiffers } from './version'
 
 describe('version', () => {
-  it('exposes a parseable frontend version (from package.json)', () => {
-    expect(FRONTEND_VERSION).toMatch(/^\d+\.\d+\.\d+/)
-    expect(majorOf(FRONTEND_VERSION)).not.toBeNull()
+  it('exposes the app version from package.json', () => {
+    expect(APP_VERSION).toMatch(/^\d+\.\d+\.\d+$/)
   })
 
-  it('parses the major component, tolerating a v-prefix', () => {
-    expect(majorOf('1.2.3')).toBe(1)
-    expect(majorOf('v2.0.0')).toBe(2)
-    expect(majorOf('not-a-version')).toBeNull()
+  it('sees no difference while the server runs this build', () => {
+    expect(serverDiffers(APP_VERSION)).toBe(false)
   })
 
-  it('treats equal major versions as compatible', () => {
-    expect(versionsCompatible('1.0.0', '1.9.4')).toBe(true)
+  it('tells a tab the server runs another version', () => {
+    expect(serverDiffers('999.0.0')).toBe(true)
   })
 
-  it('flags a major-version mismatch as incompatible', () => {
-    expect(versionsCompatible('2.0.0', '1.5.0')).toBe(false)
-  })
-
-  it('does not raise a false alarm for unparseable versions', () => {
-    expect(versionsCompatible('1.0.0', 'unknown')).toBe(true)
+  it('raises no false alarm while the server version is unknown', () => {
+    expect(serverDiffers(null)).toBe(false)
   })
 })

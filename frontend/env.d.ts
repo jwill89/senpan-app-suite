@@ -34,13 +34,16 @@ declare module 'virtual:changelog' {
     entries: ChangelogEntry[]
   }
   export const changelog: {
+    /** The app's releases (4.0.0 on), then the frontend's before them. */
+    app: ChangelogSection
+    /** The frontend's and the backend's own releases, before 4.0.0. */
     frontend: ChangelogSection
     backend: ChangelogSection
     plugin: ChangelogSection
   }
 }
 
-// Frontend semver, injected from package.json at build time (see vite.config.ts
+// The app's semver, injected from package.json at build time (see vite.config.ts
 // `define` + vitest.config.ts). Read it via `lib/version.ts`, not directly.
 declare const __APP_VERSION__: string
 

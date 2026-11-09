@@ -1,16 +1,17 @@
-// Package version exposes the backend's semantic version (major.minor.patch).
+// Package version exposes the app's semantic version (major.minor.patch).
 //
-// Bump Version in the SAME change that ships a backend behaviour change, and add
-// a matching entry to the top-level CHANGELOG.md (Backend section). The admin
-// dashboard fetches this (GET /api/version) and shows it next to the frontend
-// version so operators can confirm the two halves are compatible.
+// Since 4.0.0 the SPA and the API are one app, built into one binary, with one
+// version: frontend/package.json's, which CI tags as v<version> and the deploy
+// ships. Version repeats it here because the API reports it (GET /api/version,
+// GET /healthz) and the committed OpenAPI document names it; a test fails if the
+// two differ, so a release changes both, with its CHANGELOG.md section.
 //
-// Semver intent for the backend's API contract:
-//   - MAJOR: a breaking change to the JSON/WebSocket API the SPA relies on.
-//   - MINOR: a backward-compatible capability (new endpoint/field/event).
+// Semver intent:
+//   - MAJOR: a breaking change to the JSON/WebSocket API, which the plugin, a
+//     client released on its own, relies on.
+//   - MINOR: a backward-compatible capability (new endpoint, field, event or page).
 //   - PATCH: a bug fix or internal change with no API-surface effect.
 package version
 
-// Version is the backend's current semantic version. Keep it in sync with
-// CHANGELOG.md's latest Backend entry.
-const Version = "3.28.0"
+// Version is the app's current semantic version, frontend/package.json's.
+const Version = "4.0.0"

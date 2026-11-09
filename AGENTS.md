@@ -7,9 +7,11 @@ The rules every project follows are in [`shared/standards/README.md`](shared/sta
 ## Quick orientation
 
 Go + SQLite backend serving a Vue 3 + TypeScript single-page frontend built with
-Vite. The backend binary is built from `backend/` and serves only the API/WebSocket
-on `:8080`; the built frontend (`frontend/dist/`) is served statically (Apache),
-with `/api/*` proxied to the Go server.
+Vite. One binary, built from `backend/`, serves all of it on `:8080`: the API, the
+WebSocket and, since 4.0.0, the SPA, whose build it embeds (`backend/internal/web`).
+Apache proxies to it and serves only the web root's own folders (images, Carrd sites,
+the plugin repository). The app has one version (`frontend/package.json` and
+`internal/version`); the plugin keeps its own.
 
 Beyond bingo, the app is a small "suite" for a Discord community: **raffles**,
 **book clubs** (reading lists pulled from AniList),
@@ -54,10 +56,10 @@ immediately**. See **Authentication & authorization** below.
 |   +-- .npmrc                        <- Font Awesome registry scopes + install-links=true (tracked; holds no token - that lives in ~/.npmrc)
 |   +-- .nvmrc                        <- the Node major CI installs (26)
 |   +-- eslint.config.js              <- ESLint: @jwill89/lint-web (shared-tooling's lint/web) + Senpan's own rules; stylelint.config.mjs + prettier.config.js extend it the same way
-|   +-- vite.config.ts                <- build -> dist/, dev proxy for /api, manualChunks, strip dist/images
+|   +-- vite.config.ts                <- build -> ../backend/internal/web/dist (the binary embeds it), dev proxy for /api, manualChunks, strip the build's images/
 |   +-- tsconfig*.json                <- TS project refs (app + node), extending @jwill89/lint-web's tsconfigs (strict, noUncheckedIndexedAccess)
-|   +-- public/                       <- copied verbatim into dist/ at build
-|   |   \-- images/                   <- logo, favicon, share banner (dev only; stripped from dist - served from doc root in prod)
+|   +-- public/                       <- copied verbatim into the build
+|   |   \-- images/                   <- logo, favicon, share banner (dev only; stripped from the build - served from the doc root in prod)
 |   +-- vitest.config.ts              <- Vitest config: the shared vitestDefaults (jsdom, v8 coverage with its floor) + the @ alias; separate from vite.config so tests skip PWA/visualizer
 |   \-- src/
 |       +-- main.ts                   <- createApp + Pinia + Router + registers the global <font-awesome-icon> component (imports assets/app.css + lib/fontawesome; registers 401 handler)
@@ -92,15 +94,15 @@ immediately**. See **Authentication & authorization** below.
 |       |   \-- admin/                <- AdminSidebar + one component per tab + modals (CardPreview, EndGame, WinnerVerify, HalftimePrompt) + ThemeTokenEditor. Tabs: Game, Cards, WinnersLog, Patterns (one manager unifying the patterns list + New Pattern / Manage Categories sub-pages), Presets, RaffleForm, Raffles, Announcements, Affiliates + AffiliateForm, BookClub (one generic tab serves every club), Garapon + GaraponForm, StampRallies + StampRallyForm, FestivalMaps + FestivalMapForm, Settings, Themes, Images, Users (admin-only account+permission manager), Logs (admin-only live server-log viewer - typed/colored columns, filters, live tail, DEBUG toggle), Fonts, CarrdUpload; PlacementEditor (shared %-based image placement widget for Garapon/Stamp Rally forms) + MapStallEditor (the same for Festival Map stalls - both share the drag geometry in `composables/usePlacementDrag.ts` and the `.placement-*`/`.map-*` styles in `assets/styles/mapeditor.css`)
 |       +-- views/                    <- HomeView, PlayerView, RafflesView, RaffleDetailView, GaraponView (public token-gated draw), StampCardView (public token-gated stamp card), FestivalDashboardView (one visitor's whole festival), AdminLoginView, RegisterView (hidden), NoAccessView (active account, no granted pages), AdminView
 |       \-- **/*.test.ts              <- Vitest unit/component tests, colocated next to the code they cover
-+-- .github/workflows/ci.yml          <- CI: shared-tooling's reusable workflows - frontend (web.yml), backend (go.yml), plugin (dotnet.yml), scripts (pwsh.yml), docs (docs.yml) - + release (main: auto tag + GitHub Release per component on version bump)
-+-- .github/scripts/release.sh        <- the release job's script: reads each component's version, tags <Component>-v<version> + publishes a Release with that component's CHANGELOG.md section
++-- .github/workflows/ci.yml          <- CI: shared-tooling's reusable workflows - frontend (web.yml), backend (go.yml), plugin (dotnet.yml), scripts (pwsh.yml), docs (docs.yml) - + release (main: auto tag + GitHub Release for the app and the plugin on a version bump); the backend job builds on the frontend job's build, which the binary embeds
++-- .github/scripts/release.sh        <- the release job's script: reads the app's and the plugin's versions, tags v<version> / Plugin-v<version> + publishes a Release with that version's CHANGELOG.md entry
 +-- .github/dependabot.yml            <- weekly updates for npm, Go modules, NuGet and Actions (shared/ is left out: a release is taken on purpose)
 +-- shared/                           <- the shared-tooling submodule (lint configs, the CI workflows' scripts, SharedDeploy, repo files) - see **Shared tooling**
 +-- Taskfile.yml                      <- day-to-day commands (`task` lists them); includes shared/repo/Taskfile.yml as shared:*
 +-- scripts/                          <- check.ps1 (everything CI runs, on demand) + deploy.ps1 (on SharedDeploy; settings in the untracked deploy.config.ps1)
-+-- deploy/                           <- Apache deploy artifacts (.htaccess + persistent images/ + README)
++-- deploy/                           <- Apache deploy artifacts (the web root's .htaccess template + persistent images/ + README)
 +-- backend/                          <- Go backend
-|   +-- main.go                       <- Entry point: flags, DB init, server start
+|   +-- main.go                       <- Entry point: flags, DB init, the embedded SPA, server start
 |   +-- tygo.yaml                     <- Go->TS type generation config (run `npm run gen:types`)
 |   +-- go.mod / go.sum               <- Module deps (alexedwards/scs, coder/websocket, modernc.org/sqlite (pure Go), golang.org/x/crypto for argon2id) + tygo pinned as a `tool`
 |   +-- .golangci.yml                 <- golangci-lint config WRITTEN from shared-tooling's template - never edit it by hand
@@ -119,8 +121,12 @@ immediately**. See **Authentication & authorization** below.
 |       |   +-- card.go               <- Card/board generation, ID generation, LetterForNumber
 |       |   \-- game.go               <- bingo.Service (start, draw, end, state, winner matching, caching, auto-draw state + HalftimeThreshold); the auto-draw *loop* lives in server/game.go (it needs the hub to broadcast)
 |       +-- ws/hub.go                 <- WebSocket hub, client pumps, broadcast (player/admin channels; BroadcastLog = lossy live-log fan-out to true-admin (IsAdmin) clients only, never disconnects on a full buffer; isAdmin bit refreshed on the revalidate tick)
+|       +-- version/version.go        <- the app's version (equals frontend/package.json's; TestVersionIsTheApps checks)
+|       +-- web/                      <- the SPA, embedded: dist/ (Vite's build, git-ignored) served from memory with ETags, cache rules, the security headers + Content-Security-Policy; history-mode fallback to index.html
 |       +-- logging/logging.go        <- slog setup: JSON handler -> stdout + a rotating file (timberjack; daily-midnight rotation, zstd) + a live-tail tap (io.Writer forwarding each line); runtime-settable level via slog.LevelVar
 |       \-- server/
+|           +-- site.go               <- GET /healthz + every path outside /api, to the embedded SPA (kept out of server.go: the apidoc route test reads its routes)
+|           +-- version.go            <- GET /api/version + GET /healthz (status, version, schema; 503 when the database doesn't answer)
 |           +-- server.go             <- Server struct (deps, routes, CORS, JSON helpers, broadcast helpers) + auth helpers (currentUser/isAdmin/requireAuth/requireAdmin/requirePermission) + the request-logging middleware (structured JSON; actor identity + capability-token redaction; client IP via loopback-gated CF-Connecting-IP)
 |           +-- actor.go              <- per-request actor for the access log: withActor resolves session/PAT user + Cloudflare verified-bot (cf-verified-bot / x-verified-bot) -> auth/user/bot log fields
 |           +-- logredact.go          <- redact capability tokens (garapon/stamp-card/font paths, PAT ?token=, Referer) to a short SHA-256 correlation hash in log lines
@@ -167,7 +173,9 @@ immediately**. See **Authentication & authorization** below.
 
 Each place below is code that still does what the shared rules now rule out, checked against the code on 2026-11-07. The rest of this file describes the code as it is today. When a follow-up lands, its line here goes, and the lines that describe the old way change with it.
 
-Planned follow-ups, from shared-tooling's `PLAN.md` (step 3), most of them with the move to huma:
+Planned follow-ups, from shared-tooling's `PLAN.md` (step 3, and step 7's five releases), most of them with the move to huma:
+
+- **The document root.** The uploads (`images/`, `fonts/`), the Carrd sites and the plugin repository live in Apache's document root. Apache serves `images/`, the Carrd sites and the plugin repository straight from it; `fonts/` sits there unserved, streamed by the app. The goal is nothing served from it, as Home Library and Kindred Nights do (decided 2026-11-09): the app serves them from a data folder under `/opt/senpan`, and the vhost proxies everything to it. It comes after the move to huma, and the fonts need the most care: never reachable as plain files during the move, and `fonts.senpan.cafe/kit.css` and its token URLs unchanged.
 
 - **Package layout.** The backend is split by layer: HTTP handlers in `server` (97 files), game logic in `bingo`, data access in `store`, types in `model` (the "Layered" architecture below). The guide splits Go packages by domain (bingo, raffles, tea rooms, book clubs and the rest each owning its handlers, rules and queries), with thin handlers. It moves with huma, which rewrites every route's registration anyway; the architecture section below changes with it.
 - **Errors.** An API error is `{"error": "message"}` from `writeError` (`server/server.go`). It moves to RFC 9457 problem details with huma.
@@ -177,8 +185,6 @@ Planned follow-ups, from shared-tooling's `PLAN.md` (step 3), most of them with 
 - **Front-end API types.** tygo generates `frontend/src/types/api.generated.ts` from the Go models (`npm run gen:types`, checked by the `generated` CI job). openapi-typescript, run on the committed spec, replaces it with huma.
 - **Migrations.** `store/migrate.go` runs its own `if version < N` blocks against `PRAGMA user_version` (now 71). goose replaces them, and each goose migration also sets `user_version`.
 - **Connection pools.** The store opens one pool of four connections (`SetMaxOpenConns(4)` in `store/store.go`), and every read-write transaction begins `IMMEDIATE`. It splits into a write pool of one connection and a separate read pool.
-- **Front end in the binary.** Apache serves the built SPA from `<webroot>/dist` with `deploy/.htaccess` and proxies `/api` to the Go server. The SPA moves into the binary with `embed.FS`, so the front end builds before any Go build, test or lint, and the deploy's frontend swap and `.htaccess` change with it.
-- **One app version.** The frontend (`package.json`), the backend (`internal/version/version.go`) and the plugin (`SenpanCompanion.csproj`) each carry a version, `CHANGELOG.md` keeps a section for each, and CI tags `<Component>-v<version>`. One app version replaces the first two; the plugin keeps its own, as Dalamud needs.
 - **Vitest layout.** Specs sit beside the code as `src/**/*.test.ts`, with the config in `vitest.config.ts`. They move to `src/__tests__/*.spec.ts`, with the config inside `vite.config.ts`.
 - **Static inline styles.** `vue/no-static-inline-styles` is off (`eslint.config.js`, the `senpan/vue` block), and templates hold about 120 static `style=""` attributes, mostly one-off layout such as a form column's flex share. The shared rule comes back on, and those styles move into CSS.
 - **Timestamps.** Columns that default to `CURRENT_TIMESTAMP` hold `2026-01-02 03:04:05`, and every read casts them to text (`CAST(col AS TEXT)`), so the API sends that form; other times are RFC 3339 text in `TEXT` columns with `''` for none (`tea_rooms.locked_until`); no column has a CHECK on its form. Each moves to RFC 3339 in UTC to the second, in a `DATETIME` column with the guide's `strftime` default and CHECK, and `NULL` for none.
@@ -190,9 +196,7 @@ Found in the docs and checked against the code, with no follow-up planned yet. T
 - **Client address.** `logClientIP` (`server/ratelimit.go`) trusts `CF-Connecting-IP`, then the leftmost `X-Forwarded-For`, from a loopback peer. The guide has Apache restore the address with `mod_remoteip` and the app read the last `X-Forwarded-For` entry, never `CF-Connecting-IP`; the droplet's `mod_remoteip` change comes first.
 - **Sessions in memory.** Sessions live in scs's in-memory store (`server.New`), so a restart signs everyone out. The guide keeps them in the app's SQLite database.
 - **Bootstrap admin.** Migration v22 seeds `admin`/`admin`, protected by its name. The guide makes the first admin with a command run on the host, and protects the owner accounts named in config. It stays (decided 2026-11-07): the seeded password is changed as soon as an install creates it, and otherwise the account serves only development.
-- **Content-Security-Policy.** `deploy/.htaccess` sets the policy in Apache, with `style-src 'unsafe-inline'` and `https:` sources. The guide sets it in the app with a per-response nonce, never `'unsafe-inline'`, naming only the hosts the app uses.
-- **Health URL.** There is no `GET /healthz`: the deploy's start check and smoke check ask `GET /api/version`.
-- **Deploying a tag.** `scripts/deploy.ps1` ships the tree it runs from: it calls neither `Get-ReleaseTag` nor `Assert-CleanWorkingTree`, and has no `-Preview` switch.
+- **Content-Security-Policy.** The app sets the policy on the SPA (`internal/web`), the one Apache set before 4.0.0, with `style-src 'unsafe-inline'` and `https:` sources. The guide sets it in the app with a per-response nonce, never `'unsafe-inline'`, naming only the hosts the app uses.
 - **SQL and schema.** The store's SQL is written by hand on `database/sql`, not through sqlc, and there is no committed schema or schema test.
 - **Random numbers.** Card ids, boards, bingo draws and raffle and garapon draws use `math/rand/v2` (`bingo/card.go`, `bingo/game.go`, `store/store.go`). The guide takes anything users rely on from a CSPRNG.
 - **Upload names.** Image, font and Carrd uploads keep the uploaded file name, and a same-named upload overwrites, so Carrd sites keep their links. The guide stores an upload under a random name.
@@ -402,10 +406,10 @@ Never edit it by hand. Request/response/WebSocket envelopes are hand-written in
 **Performance / tooling**:
 
 - **Lazy routes**: every view + admin tab is a dynamic `import()` in `router/index.ts`, so heavy deps (the Milkdown editor, vue-draggable-plus, markdown-it) load only when their route is visited - the player/home payload stays small. `manualChunks` (vite.config) keeps shared vendors cached across route chunks.
-- **PWA**: `vite-plugin-pwa` (`registerType: 'autoUpdate'`) emits `sw.js` + `manifest.webmanifest`; the SW precaches the app shell and falls back to `index.html` for SPA routes, with `/api/` and `/images/` denylisted. The deploy `.htaccess` exempts `sw.js`/`registerSW.js`/`*.webmanifest` from the immutable cache so updates land. **The precache carries only what a public visitor can reach**: `markAdminOnlyOutput` in `vite.config.ts` walks the bundle graph treating admin chunks as barriers, and everything unreachable (Milkdown, the KaTeX faces, `AdminView`, the `*Tab` chunks, `DataTable`) is dropped from the manifest and left to a `CacheFirst` runtime rule, so an admin still gets it offline after one visit. Do not swap that for a file-name glob - names do not carry the answer (`DataTable` is admin-only; `emojipicker` and `fontawesome` are not). `verifyAdminNotPrecached` fails the build if any of it reaches the precache again.
+- **PWA**: `vite-plugin-pwa` (`registerType: 'autoUpdate'`) emits `sw.js` + `manifest.webmanifest`; the SW precaches the app shell and falls back to `index.html` for SPA routes, with `/api/` and `/images/` denylisted. The app (`internal/web`) keeps `sw.js`/`registerSW.js`/`*.webmanifest` out of the immutable cache that the hashed `assets/` get, so updates land. **The precache carries only what a public visitor can reach**: `markAdminOnlyOutput` in `vite.config.ts` walks the bundle graph treating admin chunks as barriers, and everything unreachable (Milkdown, the KaTeX faces, `AdminView`, the `*Tab` chunks, `DataTable`) is dropped from the manifest and left to a `CacheFirst` runtime rule, so an admin still gets it offline after one visit. Do not swap that for a file-name glob - names do not carry the answer (`DataTable` is admin-only; `emojipicker` and `fontawesome` are not). `verifyAdminNotPrecached` fails the build if any of it reaches the precache again.
 - **Route progress + loading UX**: a top progress bar (`RouteProgressBar.vue`, driven by `ui.routeLoading` from the router guards) shows during async navigation/lazy-chunk loads; stores expose per-action loading flags (`joining`, `drawing`, `starting`, ...) that drive `LoadingSpinner.vue` + disabled buttons.
 - **The one dialog**: `ModalOverlay.vue`, which traps focus, restores it on close, supports Escape, and sets `role="dialog"`/`aria-modal`.
-- **Lint/format**: the configs extend **`@jwill89/lint-web`**, shared-tooling's front-end package, installed from `file:../shared/lint/web`. ESLint flat config (`eslint.config.js`: the shared rules, then Senpan's own `senpan/*` blocks) + Stylelint (`stylelint.config.mjs`: `@jwill89/lint-web/stylelint`, with class names held to the naming rules below) + Prettier (`prettier.config.js` re-exports `@jwill89/lint-web/prettier`); `npm run lint` (autofix both) / `npm run lint:check` (no fix, used by CI) / `npm run format`. `vue/no-static-inline-styles` is off for now (see the departures above). Bundle treemap via `npm run analyze` -> `dist/stats.html`.
+- **Lint/format**: the configs extend **`@jwill89/lint-web`**, shared-tooling's front-end package, installed from `file:../shared/lint/web`. ESLint flat config (`eslint.config.js`: the shared rules, then Senpan's own `senpan/*` blocks) + Stylelint (`stylelint.config.mjs`: `@jwill89/lint-web/stylelint`, with class names held to the naming rules below) + Prettier (`prettier.config.js` re-exports `@jwill89/lint-web/prettier`); `npm run lint` (autofix both) / `npm run lint:check` (no fix, used by CI) / `npm run format`. `vue/no-static-inline-styles` is off for now (see the departures above). Bundle treemap via `npm run analyze` -> `frontend/stats.html`.
 - **TypeScript**: `tsconfig.app.json` / `tsconfig.node.json` extend the package's tsconfigs (`strict` with `noUncheckedIndexedAccess`).
 
 **Testing** (Vitest + Vue Test Utils, jsdom):
@@ -667,7 +671,7 @@ talks peer-to-peer.
 - **Distribution.** A **custom Dalamud repo**, not the official list:
   `plugins/pluginmaster.json` + `latest.zip` are hosted at
   `https://apps.senpan.cafe/plugin/...` (publish with
-  `scripts/deploy.ps1 -Target plugin` or `-Target all`). Bump `AssemblyVersion` +
+  `scripts/deploy.ps1 -Target plugin`, or `task deploy`). Bump `AssemblyVersion` +
   `LastUpdate` in `pluginmaster.json` per release; the deploy reads the published version first and stops before building
   anything when the new one is not higher, since Dalamud updates to nothing else. A
   Dalamud API bump means bumping `DalamudApiLevel` (currently **15**).
@@ -710,7 +714,7 @@ task                                # lists the Taskfile's commands (setup, dev,
 # -- Frontend (Vite) --
 cd frontend; npm ci                 # first time / after the lockfile changes (npm install <pkg> to add one)
 cd frontend; npm run dev            # dev server on :5173, proxies /api -> :8080
-cd frontend; npm run build          # type-check (vue-tsc) + build to frontend/dist/
+cd frontend; npm run build          # type-check (vue-tsc) + build to backend/internal/web/dist/, which the binary embeds (task build:web)
 cd frontend; npm run typecheck      # vue-tsc only
 cd frontend; npm run test           # Vitest run (one-shot)
 cd frontend; npm run test:watch     # Vitest watch mode
@@ -720,19 +724,22 @@ cd frontend; npm run lint:check     # ESLint + Stylelint without --fix (CI gate)
 cd frontend; npm run format         # Prettier write over src/
 cd frontend; npm run format:check   # Prettier check (CI gate)
 cd frontend; npm run lint:conventions  # CSS naming, the scoped-CSS ratchet, theme tokens (CI gate)
-cd frontend; npm run analyze        # build + emit dist/stats.html bundle treemap (visualizer)
+cd frontend; npm run analyze        # build + emit frontend/stats.html bundle treemap (visualizer)
 cd frontend; npm run gen:types      # regenerate TS types from Go models (`go tool tygo generate` in ../backend; tygo is pinned as a tool in backend/go.mod; needs Go)
 cd frontend; npm run gen:check      # regenerate them and fail if the committed api.generated.ts differs (CI's generated job)
-cd frontend; npm run test:e2e       # end-to-end: builds the API and the SPA, runs them on a throwaway database in %TEMP%, never devdata/ (e2e/)
+cd frontend; npm run test:e2e       # end-to-end: builds the binary (on the SPA's build: run npm run build first, or task test:e2e) and runs it on a throwaway database in %TEMP%, never devdata/ (e2e/)
 
 # NOTE: src/types/api.generated.ts is committed. After changing Go model types, run
 # `npm run gen:types` and commit the result with the change.
 
 # -- Go backend --
+# Every Go build, test and lint compiles the SPA in (go:embed), so the front end is
+# built first: cd frontend; npm run build (the task commands do it for you).
 # Build the Go backend
 cd backend; go build -o app-suite.exe .
 
-# Run the server (from project root or with -db flag).
+# Run the server (from project root or with -db flag). It serves the API and the
+# embedded SPA at http://localhost:8080; npm run dev is the way to work on the front end.
 # -webhook-dry-run is not optional in practice: devdata is a COPY OF THE LIVE
 # database, so its announcement types, book clubs, affiliates and tea rooms hold
 # REAL webhook URLs - without it, the announcement scheduler posts to production
@@ -784,11 +791,13 @@ each call one of shared-tooling's reusable workflows, pinned to the release the
   --audit-level=high --omit=dev` -> then the scripts the job lists, in order:
   `lint:check` (ESLint + Stylelint) -> `format:check` -> `lint:conventions` ->
   `typecheck` -> `test:coverage` (fails below the floor in `vitest.config.ts`) ->
-  `build`. It compiles against the committed API types.
+  `build`, uploaded as the `web-dist` artifact for the backend job. It compiles
+  against the committed API types.
 - **generated** (Senpan's own): Go from `backend/go.mod` -> `go tool tygo generate`
   -> fails if `frontend/src/types/api.generated.ts` now differs from the committed
   copy, the same check as `npm run gen:check`.
-- **backend** (`go.yml`, `dir: backend`): `.golangci.yml` still matches the shared
+- **backend** (`go.yml`, `dir: backend`, after the frontend job, whose build it
+  downloads into `backend/internal/web/dist` for the binary to embed): `.golangci.yml` still matches the shared
   template merged with `.golangci.local.yml` -> `go vet ./...` -> golangci-lint
   v2.15.0 (built from source with `install-mode: goinstall`, since a prebuilt binary
   can't read export data from a newer Go; the template's linters - bodyclose,
@@ -803,12 +812,12 @@ each call one of shared-tooling's reusable workflows, pinned to the release the
   the driver production ships.
 - **e2e** (`e2e.yml`, after the frontend and backend jobs): `npm run test:e2e`, the
   Playwright suite in `frontend/e2e/` on shared-tooling's `test/e2e` settings, in the
-  runner's Chrome. `e2e/server/prepare.ts` builds the API into a throwaway folder in
-  the temp directory, refusing any path inside the checkout so `devdata/` is never
-  touched, and the server runs with `-webhook-dry-run` and Turnstile off, so nothing
-  reaches Discord. The SPA is built and served by `vite preview`, whose proxy sends
-  `/api` and the WebSocket to it; data is seeded through the API as the bootstrap
-  admin. The main public pages must show their data and pass axe at WCAG 2.2 AA
+  runner's Chrome. The front end is built first, then `e2e/server/prepare.ts` builds
+  the binary with it embedded into a throwaway folder in the temp directory, refusing
+  any path inside the checkout so `devdata/` is never touched, and the server runs
+  with `-webhook-dry-run` and Turnstile off, so nothing reaches Discord. It serves the
+  API, the WebSocket and the SPA, as production does; data is seeded through the API
+  as the bootstrap admin. The main public pages must show their data and pass axe at WCAG 2.2 AA
   (shared-tooling's `test/a11y`), the floor under the AAA target; every theme's AAA
   contrast is held by `go run ./backend/cmd/themetool check <db>` (see
   `scripts/themes/README.md`). A player must join a board, see a draw arrive
@@ -837,16 +846,16 @@ each call one of shared-tooling's reusable workflows, pinned to the release the
   through `.markdownlint-cli2.jsonc`), `.editorconfig` / `.gitattributes` still
   matching `shared/repo` above their project marker, and every shared workflow ref
   naming the release the submodule holds.
-- **release** (`needs: [frontend, backend, plugin, scripts, docs]`, only on a push to
-  `main`): runs `.github/scripts/release.sh`, which for each component reads its
-  current version (`package.json` / `version.go` / `SenpanCompanion.csproj`) and, if
-  the `<Component>-v<version>` release doesn't exist yet, tags it and publishes a
-  GitHub Release whose body is that component's `CHANGELOG.md` section. Idempotent
+- **release** (after every gate job, only on a push to `main`): runs
+  `.github/scripts/release.sh`, which reads the app's version (`frontend/package.json`)
+  and the plugin's (`SenpanCompanion.csproj`) and, for each whose release doesn't exist
+  yet (`v<version>`, `Plugin-v<version>`), tags it and publishes a GitHub Release whose
+  body is that version's `CHANGELOG.md` entry. The deploy ships these tags. Idempotent
   (already-released versions are skipped) and gated on the whole gate passing, so
   only green commits release.
 
-`scripts/check.ps1` (or `task check`) runs, stopping at the first failure:
-backend - the golangci config check, golangci-lint, `go build`, `go vet`, `go test`
+`scripts/check.ps1` (or `task check`) runs, stopping at the first failure: the
+front end's build, which the binary embeds; backend - the golangci config check, golangci-lint, `go build`, `go vet`, `go test`
 (without `-race`, which needs gcc) and govulncheck; frontend - the frontend job's
 scripts plus `npm audit`; then, on a full run only, the plugin's build and
 `dotnet format` (skipped with a message when `dotnet` isn't installed) and the
@@ -857,39 +866,43 @@ A check only Senpan runs goes into both `scripts/check.ps1` and its job in `.git
 
 ### Versions and releases
 
-The frontend, the backend and the plugin are each versioned on their own today (see the departures above): `frontend/package.json` `"version"`, `backend/internal/version/version.go` `Version` (served at `GET /api/version`), and the plugin's `SenpanCompanion.csproj` `<Version>` with `AssemblyVersion` in `plugins/pluginmaster.json`. A change that ships bumps the matching version and adds its entry under that component's section of `CHANGELOG.md` (Frontend, Backend or Plugin), newest first, in the same commit. The admin sidebar footer shows the live frontend and backend versions and flags a major-version mismatch, since the SPA and the API are compatible only while their majors match. The release job above tags each new version and publishes its CHANGELOG section; nothing is tagged by hand.
+Since 4.0.0 the app has one version, for the SPA and the API together, since one binary ships both: `frontend/package.json` `"version"`, which `backend/internal/version/version.go` `Version` must equal (`TestVersionIsTheApps` checks; served at `GET /api/version` and `GET /healthz`). The plugin keeps its own, as Dalamud needs: `SenpanCompanion.csproj` `<Version>`, with `AssemblyVersion` in `plugins/pluginmaster.json`. A change that ships adds its entry under Unreleased in `CHANGELOG.md` (`### App` or `### Plugin`); raising a version moves those entries into a `### [version] - date` heading under the App or Plugin section, newest first, in the same commit. The Frontend and Backend sections are the history from before 4.0.0 and take no new entries. The admin sidebar footer shows the app's version and the plugin's, and flags an open tab whose server now runs a different version. The release job above tags each new version and publishes its CHANGELOG entry; nothing is tagged by hand.
 
 ## Deployment (Apache)
 
-Only the maintainer deploys, from the owner's PC, through `scripts/deploy.ps1` on SharedDeploy: `task deploy` deploys everything: the backend, then the frontend, then the plugin when its version is new (`-IfNewer`). `task deploy:backend`, `task deploy:frontend` and `task deploy:plugin` deploy one each, with flags after `--`. The settings live in the untracked `scripts/deploy.config.ps1`; `deploy/README.md` has the whole run.
+Only the maintainer deploys, from the owner's PC, through `scripts/deploy.ps1` on SharedDeploy, and only releases ship: the newest `v<version>` CI tagged on main for the app, the newest `Plugin-v<version>` for the plugin, each built in a checkout of its own (shared-tooling's newest-release deploy). `task deploy` deploys the app, then the plugin when its version is new (`-IfNewer`); an app release the host already runs is skipped (`-Force` deploys it again). `task deploy:backend` and `task deploy:plugin` deploy one each, with flags after `--`. The settings live in the untracked `scripts/deploy.config.ps1`; `deploy/README.md` has the whole run.
 
-The frontend is served statically by Apache; `/api/*` + `/api/ws` are reverse-
-proxied to the Go server. The document root layout keeps uploads separate from
-the built SPA so redeploys never wipe them (full guide in `deploy/README.md`):
+The Go binary serves the app: the API, the WebSocket and the SPA it embeds. The
+vhost's ProxyPass sends `/api/` to it, and the web root's `.htaccess` sends it
+everything else that isn't one of the web root's own folders. Uploads live in those
+folders, apart from the binary, so redeploys never wipe them (full guide in
+`deploy/README.md`):
 
 ```text
 <DocumentRoot>/
-+-- .htaccess        <- deploy/.htaccess  (SPA fallback: serves dist/index.html; routes /assets -> dist/assets; /images served from root)
++-- .htaccess        <- deploy/.htaccess, with the app's address filled in (serves the folders below; proxies everything else to the app)
 +-- images/          <- deploy/images/    (PERSISTENT: logo/favicon/banner + raffles/, announcements/, bookclub/ uploads)
 +-- fonts/           <- (PERSISTENT: admin-uploaded font files; NOT static - streamed by the Go server via tokenized URLs; fonts.senpan.cafe reverse-proxies to /api/fonts/pub/)
 +-- carrd/           <- (PERSISTENT: Carrd image-host projects; served by the carrd.senpan.cafe vhost)
-+-- plugin/          <- the Dalamud custom repo: pluginmaster.json + SenpanCompanionAdmin/latest.zip + .htaccess (deploy/plugin.htaccess); replaced by -Target plugin/all, previous kept as plugin.old
-\-- dist/            <- frontend/dist/    (built SPA; replaced each deploy, previous kept as dist.old)
+\-- plugin/          <- the Dalamud custom repo: pluginmaster.json + SenpanCompanionAdmin/latest.zip + .htaccess (deploy/plugin.htaccess); replaced by -Target plugin, previous kept as plugin.old
 ```
+
+Until 4.0.0 Apache served the SPA from `<DocumentRoot>/dist`; once 4.0.0 has stayed, `dist/` and `dist.old/` can go (`deploy/README.md`).
 
 - Run the Go server with `-webroot <DocumentRoot>`; uploads are written under
   `<DocumentRoot>/images/{raffles,announcements,bookclub}/`,
   `<DocumentRoot>/fonts/`, and `<DocumentRoot>/carrd/<project>/`. Image/font/carrd
   URLs are returned absolute (built from the request scheme+host).
-- `vite.config.ts` strips `dist/images/` after build (the `strip-dist-images`
-  plugin) so the redundant copy doesn't shadow the persistent root `images/`.
+- `vite.config.ts` strips the build's `images/` (the `strip-dist-images`
+  plugin), so the binary never carries a copy of the persistent root `images/`,
+  which Apache serves.
 - **Which folder a new image goes in.** A consequence of that strip: `frontend/public/images/`
   is a **dev-time mirror of the server's persistent tree**, not a way to ship a file. Put an
   image there and it works on `npm run dev` and 404s on live until someone uploads it by hand -
   and because the browser caches the miss, it stays broken for a while after they do. So:
   admin-uploadable or operator-replaceable art (raffle prizes, the logo, PWA icons) belongs in
   `public/images/` **and** `deploy/images/`; art that ships with the code belongs in
-  `src/assets/images/` as an `import` (Vite emits a content-hashed file into `dist/assets/`,
+  `src/assets/images/` as an `import` (Vite emits a content-hashed file into the build's `assets/`,
   which needs no deploy step and can never serve a stale cache entry). `KonamiEgg.vue` does
   the latter; `YoeverOverlay.vue` predates the rule and still reads `${BASE_URL}images/`.
 - Schema migration v10 rewrites legacy `assets/images/raffles/...` prize paths

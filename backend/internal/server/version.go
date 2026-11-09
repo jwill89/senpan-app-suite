@@ -6,12 +6,28 @@ import (
 	"app-suite/internal/version"
 )
 
-// handleVersion reports the backend's semantic version. Public (no auth): the
-// value isn't sensitive - the SPA pairs it with its own build version in the
-// admin dashboard for a compatibility check - and a public endpoint also doubles
-// as a lightweight health/version probe.
+// handleVersion reports the app's semantic version. Public (no auth): the value
+// isn't sensitive - the SPA pairs it with its own build version in the admin
+// dashboard, which tells an open tab it is older than the server.
 func (s *Server) handleVersion(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, struct {
 		Backend string `json:"backend"`
 	}{Backend: version.Version})
+}
+
+// handleHealth is GET /healthz: whether the app and its database answer, with the
+// version running and the schema's. Public, and outside the session, CSRF and
+// access-log layers, so the deploy's checks and an uptime monitor can poll it
+// freely. A database that doesn't answer is a 503.
+func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
+	status, state := http.StatusOK, "ok"
+	schema, err := s.store.SchemaVersion(r.Context())
+	if err != nil {
+		status, state = http.StatusServiceUnavailable, "unavailable"
+	}
+	writeJSON(w, status, struct {
+		Status  string `json:"status"`
+		Version string `json:"version"`
+		Schema  int    `json:"schema"`
+	}{Status: state, Version: version.Version, Schema: schema})
 }

@@ -1,35 +1,22 @@
 /**
- * App version info shown in the admin dashboard.
+ * The app's version, shown in the admin dashboard.
  *
- * The frontend (this SPA) and the backend (Go API) are versioned independently
- * with semver. `FRONTEND_VERSION` is baked in from package.json at build time;
- * the backend version is fetched from `GET /api/version`. The admin sidebar
- * shows both and flags a mismatch so operators can confirm the two halves are
- * compatible after a partial deploy.
+ * Since 4.0.0 the SPA and the API are one app, built into one binary, with one
+ * version: package.json's, baked into this build as `APP_VERSION`. The server reports
+ * the version it runs (GET /api/version), so a tab opened before a deploy can tell it
+ * is behind the server, and the admin footer says so.
  */
 
-/** This build's frontend version (package.json -> vite `define`). Falls back to a
- *  dev sentinel if the define is absent (e.g. an un-configured runtime). */
-export const FRONTEND_VERSION: string =
+/** This build's version (package.json -> vite `define`). Falls back to a dev sentinel
+ *  if the define is absent (e.g. an un-configured runtime). */
+export const APP_VERSION: string =
   typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : '0.0.0-dev'
 
-/** The MAJOR component of a semver string, or null if it doesn't parse. */
-export function majorOf(version: string): number | null {
-  const m = /^\s*v?(\d+)\./.exec(version || '')
-  return m ? Number(m[1]) : null
-}
-
 /**
- * Whether a frontend and backend version are compatible. The contract: the
- * SPA and API agree as long as their MAJOR versions match (a major bump is
- * reserved for a breaking API change). Unknown/unparseable versions are treated
- * as compatible so a probe failure never raises a false alarm.
+ * Whether the server runs another version than this tab's build: the tab was opened
+ * before a deploy (or after a rollback), so a reload brings the page and the API back
+ * together. An unknown server version (null) is never a false alarm.
  */
-export function versionsCompatible(frontend: string, backend: string): boolean {
-  const fe = majorOf(frontend)
-  const be = majorOf(backend)
-  if (fe === null || be === null) {
-    return true
-  }
-  return fe === be
+export function serverDiffers(server: string | null): boolean {
+  return server !== null && server !== APP_VERSION
 }

@@ -1,26 +1,29 @@
 # ============================================================================
-# Apache .htaccess - App Suite production document root
+# Apache .htaccess - App Suite production document root (4.0.0 on)
 # ----------------------------------------------------------------------------
-# PLACEMENT: copy this file to your Apache DocumentRoot (NOT into dist/).
+# The app deploy writes this file to the DocumentRoot (NOT into a subfolder), with
+# __APP__ replaced by the address the app listens on: the -addr on the service's
+# ExecStart (127.0.0.1:<port>). Edit it here; each app deploy replaces the live one,
+# keeping the previous in .deploy-backup until the site passes its checks.
+#
+# The Go binary serves the app: the API and, since 4.0.0, the SPA it embeds
+# (backend/internal/web), with the SPA's headers, cache rules and
+# Content-Security-Policy. The vhost's ProxyPass sends /api/ (the WebSocket included)
+# to it before this file runs; this file sends it everything else that isn't one of
+# the web root's own folders.
 #
 # Expected layout at the DocumentRoot:
 #
 #   <DocumentRoot>/
-#   +-- .htaccess              <- this file
-#   +-- images/                <- PERSISTENT static + uploaded images (sibling of dist)
-#   |   +-- logo.png, favicon.png, share_banner.png
-#   |   \-- raffles/           <- raffle uploads written by the Go server live here
-#   \-- dist/                  <- the built Vue SPA (re-uploaded on each deploy)
-#       +-- index.html
-#       \-- assets/...           <- content-hashed JS/CSS
+#   +-- .htaccess    <- this file
+#   +-- images/      <- PERSISTENT static + uploaded images (raffles, categories)
+#   +-- fonts/       <- uploaded fonts, refused here (fonts/.htaccess); the API streams them
+#   +-- carrd/       <- the Carrd sites (carrd/.htaccess)
+#   \-- plugin/      <- the Dalamud custom repository (plugin/.htaccess)
 #
-# Run the Go server with `-webroot <DocumentRoot>` so uploads are written to
-# <DocumentRoot>/images/raffles/ and served by Apache from there. Because the
-# images/ folder is a SIBLING of dist/, rebuilding/re-uploading dist/ never
-# touches uploaded images.
-#
-# The /api/* and /api/ws routes are handled by ProxyPass in the Apache *vhost*
-# (sites-available), which runs BEFORE this file - they are not routed here.
+# The Go server runs with `-webroot <DocumentRoot>`, so its uploads land in those
+# folders. dist/, where the SPA was served from before 4.0.0, is no longer read: once
+# 4.0.0 has stayed, remove it and its rollback copy dist.old (deploy/README.md).
 # ============================================================================
 
 # Never expose a directory listing if a rewrite rule is ever skipped (e.g.
@@ -44,83 +47,33 @@ Options -Indexes
     # Never rewrite API / WebSocket requests - the vhost ProxyPass handles them.
     RewriteRule ^api/ - [L]
 
-    # Serve the persistent images/ folder (static assets + raffle uploads)
-    # directly from the document root. These are real files, so just stop here.
-    RewriteRule ^images/ - [L]
+    # The web root's own folders, served as they are (a missing file there is a 404).
+    RewriteRule ^(images|carrd|plugin)/ - [L]
 
-    # Map the SPA's hashed bundles to the dist/ subfolder. The app references
-    # them as /assets/... (absolute), but they physically live in dist/assets/.
-    RewriteRule ^assets/(.*)$ dist/assets/$1 [L]
-
-    # Serve other real files that live inside dist/ (favicon, robots, etc.)
-    # when requested at the root path.
-    RewriteCond %{DOCUMENT_ROOT}/dist/%{REQUEST_URI} -f
-    RewriteRule ^(.*)$ dist/$1 [L]
-
-    # Don't rewrite anything that already maps to a real FILE at the root.
-    # NOTE: only -f, never -d. The document root itself is a directory, so a -d
-    # check matches the "/" request and short-circuits the SPA fallback below,
-    # causing Apache to look for a DirectoryIndex in the root (which doesn't
-    # exist - index.html lives in dist/) and fail with AH01276.
+    # Any other real file in the web root, as before 4.0.0.
     RewriteCond %{REQUEST_FILENAME} -f
     RewriteRule ^ - [L]
 
-    # Single-page-app fallback: everything else serves the built app shell.
-    RewriteRule ^ dist/index.html [L]
+    # Everything else is the app's: its pages, its hashed assets, its sounds.
+    RewriteRule ^(.*)$ http://__APP__/$1 [P,L]
 </IfModule>
 
 # ----------------------------------------------------------------------------
-# Caching
+# Security headers for what Apache serves itself, the web root's folders. The app sets
+# its own on everything it answers, so they are not set twice on a proxied response.
 # ----------------------------------------------------------------------------
 <IfModule mod_headers.c>
-    # ------------------------------------------------------------------------
-    # Security response headers (applied to every response; "always" covers
-    # error responses too). These harden the SPA and the publicly served
-    # uploads. The /api/* responses are emitted by the Go server, not this file.
-    # ------------------------------------------------------------------------
-    # Don't let browsers MIME-sniff a response into a different type. Pairs with
-    # the server's extension+magic-byte upload checks: an image that somehow slips
-    # through still won't be interpreted as HTML/script.
-    Header always set X-Content-Type-Options "nosniff"
-    # Clickjacking: refuse to be framed. X-Frame-Options covers older browsers;
-    # modern browsers use frame-ancestors 'none' from the full CSP below.
-    Header always set X-Frame-Options "DENY"
-    # Trim the Referer sent to other origins.
-    Header always set Referrer-Policy "strict-origin-when-cross-origin"
-    # Drop powerful features the app never uses.
-    Header always set Permissions-Policy "geolocation=(), camera=(), microphone=()"
-    # HSTS - now enabled: every subdomain is confirmed HTTPS-only. Note this is
-    # sticky: browsers cache it for the max-age and it's hard to undo.
-    Header always set Strict-Transport-Security "max-age=31536000; includeSubDomains"
-    #
-    # Full resource CSP - now ENFORCING (verified via a Report-Only pass across
-    # admin/player/editors/fonts/export; the only external scripts are allow-listed
-    # and no code needs 'unsafe-eval' after moving off vuedraggable). To debug a
-    # future breakage, temporarily append "-Report-Only" to the header name.
-    #   script/style/font/img/connect are kept permissive where the app needs it
-    #   (Google Fonts + cross-origin images over https:, inline theme CSS, data:
-    #   exports, the wss: game socket). challenges.cloudflare.com = Turnstile
-    #   (script + iframe); static.cloudflareinsights.com = CF Web Analytics beacon.
-    Header always set Content-Security-Policy "default-src 'self'; img-src 'self' data: https:; style-src 'self' 'unsafe-inline' https:; font-src 'self' https: data:; script-src 'self' https://challenges.cloudflare.com https://static.cloudflareinsights.com; frame-src https://challenges.cloudflare.com; connect-src 'self' https: wss:; frame-ancestors 'none'; base-uri 'self'; object-src 'none'"
-
-    # Vite emits content-hashed filenames under /assets/ - safe to cache forever.
-    <FilesMatch "\.(js|css|woff2?|ttf|eot|svg)$">
-        Header set Cache-Control "public, max-age=31536000, immutable"
-    </FilesMatch>
-
-    # Never cache the app shell so new deploys are picked up immediately.
-    <FilesMatch "^index\.html$">
-        Header set Cache-Control "no-cache, no-store, must-revalidate"
-    </FilesMatch>
-
-    # PWA service worker + its registration must NOT be cached immutably, or the
-    # app can never update. These override the broad .js rule above (later wins).
-    <FilesMatch "^(sw|registerSW)\.js$">
-        Header set Cache-Control "no-cache, no-store, must-revalidate"
-    </FilesMatch>
-
-    # The web manifest changes rarely but should revalidate, not cache forever.
-    <FilesMatch "\.webmanifest$">
-        Header set Cache-Control "no-cache"
-    </FilesMatch>
+    <If "%{REQUEST_URI} =~ m#^/(images|carrd|plugin)/#">
+        # Don't let browsers MIME-sniff a response into a different type. Pairs with
+        # the server's extension+magic-byte upload checks: an image that somehow slips
+        # through still won't be interpreted as HTML/script.
+        Header always set X-Content-Type-Options "nosniff"
+        # Clickjacking: refuse to be framed.
+        Header always set X-Frame-Options "DENY"
+        # Trim the Referer sent to other origins.
+        Header always set Referrer-Policy "strict-origin-when-cross-origin"
+        # HSTS: every subdomain is confirmed HTTPS-only. Sticky: browsers cache it for
+        # the max-age and it's hard to undo.
+        Header always set Strict-Transport-Security "max-age=31536000; includeSubDomains"
+    </If>
 </IfModule>

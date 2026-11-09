@@ -1,75 +1,75 @@
 #!/usr/bin/env bash
 #
-# Auto-tag + GitHub Release per component when its current version has no release
-# yet. Run by the CI "release" job on pushes to `main`, AFTER the frontend /
-# backend / plugin gate jobs pass - so only green commits are ever released.
+# Auto-tag + GitHub Release when a version has no release yet. Run by the CI
+# "release" job on a push to main, AFTER the gate jobs pass - so only green commits
+# are ever released.
 #
-# Each component's tag is <Component>-v<version> (matching the manual scheme:
-# Frontend-v3.5.0, Backend-v3.4.0, Plugin-v2.0.1.0) and the release body is that
-# component's section from CHANGELOG.md, so every tag is linked to its notes.
+# Two things are released, each when its version is new:
+#   - the app (the SPA and the API, one binary, one version since 4.0.0): tag
+#     v<version> from frontend/package.json, notes from the "### [<version>]" entry
+#     under CHANGELOG.md's "## App" section. The deploy ships the newest of these tags.
+#   - the plugin, which keeps its own four-part version as Dalamud needs: tag
+#     Plugin-v<version> from SenpanCompanion.csproj, notes from the "### [<version>]"
+#     entry under CHANGELOG.md's "## Plugin" section.
 #
-# Idempotent: a component whose <Component>-v<version> release already exists is
-# skipped, so this can run on every main push. When the git tag already exists
-# (e.g. created by hand) but has no release, the release is attached to it;
-# otherwise the tag is created at the pushed commit.
+# Idempotent: a version already released is skipped, so ordinary pushes are a no-op.
+# When the git tag already exists (e.g. created by hand) but has no release, the
+# release is attached to it; otherwise the tag is created at the pushed commit.
 set -euo pipefail
 
-# -- Version extraction (source of truth per component) ------------------------
-# The frontend version is JSON, so parse it with jq (preinstalled on the CI
-# runner). The backend (Go const) and plugin (XML csproj) are not JSON - grep
-# them. The `|| true` keeps a malformed/missing version file from aborting the
-# whole run under `set -e`; an empty result just skips that component (below).
-frontend_version() { jq -r '.version // empty' frontend/package.json || true; }
-backend_version()  { grep -oP 'const Version = "\K[^"]+' backend/internal/version/version.go || true; }
-plugin_version()   { grep -oP -m1 '<Version>\K[^<]+' plugins/SenpanCompanion/SenpanCompanion.csproj || true; }
+# The `|| true` keeps a malformed or missing version file from aborting the run under
+# `set -e`; an empty result just skips that release (below).
+app_version()    { jq -r '.version // empty' frontend/package.json || true; }
+plugin_version() { grep -oP -m1 '<Version>\K[^<]+' plugins/SenpanCompanion/SenpanCompanion.csproj || true; }
 
-# -- CHANGELOG section extraction ----------------------------------------------
-# Print the block under "## <section>" / "### [<version>]" up to the next
-# version (### [), section (## ), or separator (---). Section-scoped so a version
-# number shared across components (e.g. 3.4.0) resolves to the right section.
-changelog_section() {
+# notes <section> <version>: the "### [<version>]" entry under "## <section>" (App or
+# Plugin), up to the next entry (### [), section (## ) or separator (---). index() is a
+# literal (non-regex) match anchored at column 1, so the version's dots are literal, and
+# the section scope keeps an app and a plugin version that look alike apart.
+notes() {
   awk -v sec="## $1" -v ver="### [$2]" '
-    index($0, sec)==1 { insec=1; next }
+    $0 == sec { insec=1; next }
     insec && /^## / { insec=0 }
-    insec && index($0, ver)==1 { incap=1; print; next }
-    incap && (/^### \[/ || /^## / || /^---$/) { incap=0 }
-    incap { print }
+    insec && index($0, ver)==1 { cap=1; print; next }
+    cap && (/^### \[/ || /^## / || /^---$/) { cap=0 }
+    cap { print }
   ' CHANGELOG.md
 }
 
-# -- Release one component -----------------------------------------------------
-release_component() {
-  local component="$1" section="$2" version="$3"
-  local tag="${component}-v${version}"
-
-  if [ -z "$version" ]; then
-    echo "!! Could not read a version for ${component} - skipping" >&2
-    return
-  fi
+# release <tag> <title> <notes file>
+release() {
+  local tag="$1" title="$2" notes_file="$3"
   if gh release view "$tag" >/dev/null 2>&1; then
     echo "== ${tag}: release already exists - skipping"
     return
   fi
-
-  local notes_file
-  notes_file="$(mktemp)"
-  changelog_section "$section" "$version" > "$notes_file"
   if [ ! -s "$notes_file" ]; then
-    printf '_No CHANGELOG entry found for %s %s._\n' "$section" "$version" > "$notes_file"
+    printf '_No CHANGELOG entry found for %s._\n' "$title" > "$notes_file"
     echo "!! ${tag}: no CHANGELOG section found - releasing with a placeholder" >&2
   fi
-
   if git rev-parse -q --verify "refs/tags/${tag}" >/dev/null 2>&1; then
     echo "++ ${tag}: tag exists, attaching a release"
-    gh release create "$tag" --verify-tag \
-      --title "${component} v${version}" --notes-file "$notes_file"
+    gh release create "$tag" --verify-tag --title "$title" --notes-file "$notes_file"
   else
     echo "++ ${tag}: creating tag + release at ${GITHUB_SHA}"
-    gh release create "$tag" --target "$GITHUB_SHA" \
-      --title "${component} v${version}" --notes-file "$notes_file"
+    gh release create "$tag" --target "$GITHUB_SHA" --title "$title" --notes-file "$notes_file"
   fi
 }
 
-release_component "Frontend" "Frontend" "$(frontend_version)"
-release_component "Backend"  "Backend"  "$(backend_version)"
-release_component "Plugin"   "Plugin"   "$(plugin_version)"
+version="$(app_version)"
+if [ -n "$version" ]; then
+  notes_file="$(mktemp)"
+  notes App "$version" > "$notes_file"
+  release "v${version}" "v${version}" "$notes_file"
+else
+  echo "!! Could not read the app's version from frontend/package.json - skipping" >&2
+fi
+
+version="$(plugin_version)"
+if [ -n "$version" ]; then
+  notes_file="$(mktemp)"
+  notes Plugin "$version" > "$notes_file"
+  release "Plugin-v${version}" "Plugin v${version}" "$notes_file"
+else
+  echo "!! Could not read the plugin's version - skipping" >&2
+fi

@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { setActivePinia, createPinia } from 'pinia'
 import { mount, type VueWrapper } from '@vue/test-utils'
 
@@ -26,12 +26,19 @@ function makeUser(partial: Partial<User>): User {
 
 /** Mounts the sidebar with the given logged-in account. The AppVersions footer
  * (which fetches GET /api/version on mount) is stubbed - it's covered by its own
- * test and irrelevant to the navigation assertions here. */
+ * test and irrelevant to the navigation assertions here. It mounts into the
+ * document: jsdom (31 on), like a browser, computes no style for a detached
+ * element, so `isVisible()` could not see a collapsed section's `display: none`. */
+let mounted: VueWrapper | undefined
 function mountAs(user: User): VueWrapper {
   const auth = useAuthStore()
   auth.user = user
   auth.isAdmin = user.is_admin
-  return mount(AdminSidebar, { global: { stubs: { AppVersions: true } } })
+  mounted = mount(AdminSidebar, {
+    attachTo: document.body,
+    global: { stubs: { AppVersions: true } },
+  })
+  return mounted
 }
 
 /** The section wrapper whose header text contains `label` (looked up fresh). */
@@ -57,6 +64,11 @@ describe('AdminSidebar', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
     push.mockClear()
+  })
+
+  afterEach(() => {
+    mounted?.unmount()
+    mounted = undefined
   })
 
   it('shows every section for an admin, with the active section expanded', () => {

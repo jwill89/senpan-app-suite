@@ -36,9 +36,14 @@ type Server struct {
 	// empty - the SPA and API are same-origin - so no CORS headers are sent.
 	allowedOrigins map[string]bool
 	mux            *http.ServeMux
-	limiter        *rateLimiter // failed-login brute-force limiter
-	regLimiter     *rateLimiter // registration-rate limiter (mass-signup abuse)
-	raffleLimiter  *rateLimiter // public raffle-entry limiter (entry flooding)
+	// siteMux answers everything outside /api/: GET /healthz, and the SPA (site,
+	// set by SetSite) for the rest. It sits outside the API's session, CSRF and
+	// access-log layers.
+	siteMux       *http.ServeMux
+	site          http.Handler
+	limiter       *rateLimiter // failed-login brute-force limiter
+	regLimiter    *rateLimiter // registration-rate limiter (mass-signup abuse)
+	raffleLimiter *rateLimiter // public raffle-entry limiter (entry flooding)
 	// Separate from raffleLimiter on purpose: a search is what somebody does right
 	// before signing up, so the two must not share a budget.
 	raffleLookupLimiter *rateLimiter
@@ -214,6 +219,8 @@ func New(ctx context.Context, st *store.Store, hub *ws.Hub, webRoot string, allo
 	}
 
 	s.routes()
+	// Everything outside /api/: GET /healthz and the SPA (site.go).
+	s.siteRoutes()
 	// API-reference endpoints (GET /api/docs, GET /api/openapi.yaml). Registered
 	// apart from routes() so routes() stays the authoritative API-surface list.
 	s.registerDocs()
@@ -600,6 +607,14 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// wrappers - coder/websocket needs the raw ResponseWriter for upgrade.
 	if r.URL.Path == "/api/ws" {
 		s.mux.ServeHTTP(w, r)
+		return
+	}
+
+	// Everything outside /api/ - the SPA and its files, and GET /healthz - skips the
+	// API's session, CSRF and access-log layers: a page load is dozens of asset
+	// requests, which Apache served (and logged) before 4.0.0.
+	if r.URL.Path != "/api" && !strings.HasPrefix(r.URL.Path, "/api/") {
+		s.siteMux.ServeHTTP(w, r)
 		return
 	}
 

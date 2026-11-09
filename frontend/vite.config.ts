@@ -8,19 +8,23 @@ import { VitePWA } from 'vite-plugin-pwa'
 import { visualizer } from 'rollup-plugin-visualizer'
 import { changelogPlugin } from './config/changelog-plugin.ts'
 
+// The build goes where the Go server embeds it (backend/internal/web, embed.FS):
+// Go embeds only files inside its own module, and since 4.0.0 the binary serves the
+// SPA. So the front end builds before any Go build, test or lint.
+const outDir = '../backend/internal/web/dist'
+
 // Static images (logo/favicon/share_banner) live in `public/images/` so they
 // are available during `vite dev`. In production, they are served from a
-// PERSISTENT `images/` folder that sits next to `dist/` at the Apache document
-// root (see deploy/.htaccess), so the copies Vite would otherwise bake into
-// `dist/images/` are redundant. This plugin removes `dist/images/` after the
-// build so `dist/` contains only the SPA shell + hashed `assets/` - keeping the
-// build output cleanly separate from the root `images/` folder.
+// PERSISTENT `images/` folder at the Apache document root (see deploy/.htaccess),
+// beside the raffle uploads, so the copies Vite would otherwise bake into the
+// build's `images/` are redundant. This plugin removes them after the build so
+// the binary embeds only the SPA shell + hashed `assets/`.
 function stripDistImages(): Plugin {
   return {
     name: 'strip-dist-images',
     apply: 'build',
     async closeBundle() {
-      await rm(fileURLToPath(new URL('./dist/images', import.meta.url)), {
+      await rm(fileURLToPath(new URL(`./${outDir}/images`, import.meta.url)), {
         recursive: true,
         force: true,
       })
@@ -230,13 +234,14 @@ const frontendVersion = JSON.parse(
 
 // https://vite.dev/config/
 //
-// The Go backend serves only `/api/*` (REST + WebSocket). During development, we
-// proxy those to the Go server (default :8080) so the SPA can talk to it without
-// CORS friction. In production the built `dist/` is served statically by Apache
-// (with /api proxied to the Go server), so relative `api/...` URLs resolve.
+// During development the Vite dev server serves the SPA and proxies `/api/*`
+// (REST + WebSocket) to the Go server (default :8080), so the SPA talks to it
+// without CORS friction. In production the Go binary serves both: the build is
+// embedded in it (outDir above), and Apache proxies everything but the web root's
+// upload folders to it.
 //
 // Static assets (logo, favicon, share banner) and uploaded raffle images live
-// under `/images/` - copied verbatim from `public/` into `dist/` at build time.
+// under `/images/` - in `public/` for development; production's are the web root's.
 // For uploaded-image preview to work in dev, run the Go server with
 // `-webroot ../frontend/public` so uploads land in `public/images/raffles/`,
 // which Vite serves directly (the proxy below is a fallback for other setups).
@@ -316,11 +321,12 @@ export default defineConfig({
     verifyAdminNotPrecached(),
     stripDistImages(),
     ogImageCacheBust(),
-    // `npm run analyze` writes dist/stats.html with a treemap of bundle sizes.
+    // `npm run analyze` writes stats.html (git-ignored) with a treemap of bundle
+    // sizes, beside this file rather than in the build, which the binary embeds.
     ...(process.env.ANALYZE
       ? [
           visualizer({
-            filename: 'dist/stats.html',
+            filename: 'stats.html',
             gzipSize: true,
             brotliSize: true,
           }) as Plugin,
@@ -364,7 +370,7 @@ export default defineConfig({
     },
   },
   build: {
-    outDir: 'dist',
+    outDir,
     emptyOutDir: true,
     sourcemap: false,
     // The largest chunk (the Milkdown editor ~620 kB) is a monolithic

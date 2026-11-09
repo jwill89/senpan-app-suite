@@ -26,10 +26,10 @@ var ErrStampAlreadyCollected = errors.New("stamp already collected")
 // ListStampRallies returns every rally, newest first, each with its issued-card
 // and completed-card counts. Stamps/prizes are omitted (use GetStampRally).
 func (s *Store) ListStampRallies(ctx context.Context) ([]model.StampRally, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT r.id, r.title, r.card_image, r.not_stamped_image,
-			r.available_from, r.available_to, r.details, r.redeem_instructions, r.redeem_image, r.status,
+	rows, err := s.read.QueryContext(ctx, `SELECT r.id, r.title, r.card_image, r.not_stamped_image,
+			COALESCE(r.available_from, ''), COALESCE(r.available_to, ''), r.details, r.redeem_instructions, r.redeem_image, r.status,
 			r.public_signup, r.completion_mode, r.required_food, r.required_game,
-			r.festival_map_id, COALESCE(fm.title, ''), CAST(r.created_at AS TEXT),
+			r.festival_map_id, COALESCE(fm.title, ''), r.created_at,
 			COALESCE((SELECT COUNT(*) FROM stamp_rally_cards c WHERE c.rally_id = r.id), 0),
 			COALESCE((SELECT COUNT(*) FROM stamp_rally_cards c WHERE c.rally_id = r.id AND c.completed = 1), 0),
 			COALESCE((SELECT COUNT(*) FROM stamp_rally_stamps st WHERE st.rally_id = r.id), 0),
@@ -70,10 +70,10 @@ func (s *Store) GetStampRally(ctx context.Context, id int64) (*model.StampRally,
 	var r model.StampRally
 	var publicSignup int
 	var mapID sql.NullInt64
-	err := s.db.QueryRowContext(ctx, `SELECT r.id, r.title, r.card_image, r.not_stamped_image,
-			r.available_from, r.available_to, r.details, r.redeem_instructions, r.redeem_image, r.status,
+	err := s.read.QueryRowContext(ctx, `SELECT r.id, r.title, r.card_image, r.not_stamped_image,
+			COALESCE(r.available_from, ''), COALESCE(r.available_to, ''), r.details, r.redeem_instructions, r.redeem_image, r.status,
 			r.public_signup, r.completion_mode, r.required_food, r.required_game,
-			r.festival_map_id, COALESCE(fm.title, ''), CAST(r.created_at AS TEXT)
+			r.festival_map_id, COALESCE(fm.title, ''), r.created_at
 		FROM stamp_rallies r LEFT JOIN festival_maps fm ON fm.id = r.festival_map_id
 		WHERE r.id = ?`, id).
 		Scan(&r.ID, &r.Title, &r.CardImage, &r.NotStampedImage,
@@ -110,10 +110,10 @@ func (s *Store) GetStampRally(ctx context.Context, id int64) (*model.StampRally,
 // affiliate name (empty when the stamp has no affiliate -> the Senpan Tea House
 // default). model.StampRallyStamp.DisplayStall picks between them.
 func (s *Store) listStampRallyStamps(ctx context.Context, rallyID int64) ([]model.StampRallyStamp, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT st.id, st.rally_id, st.occupant_id, COALESCE(fo.title, ''),
+	rows, err := s.read.QueryContext(ctx, `SELECT st.id, st.rally_id, st.occupant_id, COALESCE(fo.title, ''),
 			st.affiliate_id, COALESCE(a.name, ''),
 			st.image, st.password, st.stamp_type, st.pos_x, st.pos_y, st.width, st.height, st.rotation,
-			st.active_from, st.active_to, st.paused, st.sort_order
+			COALESCE(st.active_from, ''), COALESCE(st.active_to, ''), st.paused, st.sort_order
 		FROM stamp_rally_stamps st
 		LEFT JOIN affiliates a ON a.id = st.affiliate_id
 		LEFT JOIN festival_stall_occupants fo ON fo.id = st.occupant_id
@@ -151,7 +151,7 @@ func (s *Store) listStampRallyStamps(ctx context.Context, rallyID int64) ([]mode
 
 // listStampRallyPrizes loads a rally's prizes in display order.
 func (s *Store) listStampRallyPrizes(ctx context.Context, rallyID int64) ([]model.StampRallyPrize, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT id, rally_id, name, image, pos_x, pos_y, width, height, rotation, sort_order
+	rows, err := s.read.QueryContext(ctx, `SELECT id, rally_id, name, image, pos_x, pos_y, width, height, rotation, sort_order
 		FROM stamp_rally_prizes WHERE rally_id = ? ORDER BY sort_order ASC, id ASC`, rallyID)
 	if err != nil {
 		return nil, err
@@ -183,7 +183,7 @@ func (s *Store) CreateStampRally(ctx context.Context, r *model.StampRally) (int6
 			(title, card_image, not_stamped_image, available_from, available_to, details, redeem_instructions, redeem_image,
 			public_signup, completion_mode, required_food, required_game, festival_map_id)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		r.Title, r.CardImage, r.NotStampedImage, r.AvailableFrom, r.AvailableTo, r.Details, r.RedeemInstructions, r.RedeemImage,
+		r.Title, r.CardImage, r.NotStampedImage, nullTime(r.AvailableFrom), nullTime(r.AvailableTo), r.Details, r.RedeemInstructions, r.RedeemImage,
 		boolToInt(r.PublicSignup), r.CompletionMode, r.RequiredFood, r.RequiredGame, nullableID(r.FestivalMapID))
 	if err != nil {
 		return 0, err
@@ -235,7 +235,7 @@ func (s *Store) UpdateStampRally(ctx context.Context, r *model.StampRally, repla
 			available_from = ?, available_to = ?, details = ?, redeem_instructions = ?, redeem_image = ?,
 			public_signup = ?, completion_mode = ?, required_food = ?, required_game = ?,
 			festival_map_id = ? WHERE id = ?`,
-		r.Title, r.CardImage, r.NotStampedImage, r.AvailableFrom, r.AvailableTo,
+		r.Title, r.CardImage, r.NotStampedImage, nullTime(r.AvailableFrom), nullTime(r.AvailableTo),
 		r.Details, r.RedeemInstructions, r.RedeemImage, boolToInt(r.PublicSignup),
 		r.CompletionMode, r.RequiredFood, r.RequiredGame, nullableID(r.FestivalMapID), r.ID); err != nil {
 		return err
@@ -317,7 +317,7 @@ func insertStampRallyStamp(ctx context.Context, tx *sql.Tx, rallyID int64, st mo
 			active_from, active_to, paused, sort_order)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		rallyID, nullableID(st.OccupantID), nullableID(st.AffiliateID), st.Image, st.Password, st.StampType,
-		st.X, st.Y, st.Width, st.Height, st.Rotation, st.ActiveFrom, st.ActiveTo, boolToInt(st.Paused), sortOrder)
+		st.X, st.Y, st.Width, st.Height, st.Rotation, nullTime(st.ActiveFrom), nullTime(st.ActiveTo), boolToInt(st.Paused), sortOrder)
 	if err != nil {
 		return 0, err
 	}
@@ -332,7 +332,7 @@ func updateStampRallyStamp(ctx context.Context, tx *sql.Tx, rallyID int64, st mo
 			pos_x = ?, pos_y = ?, width = ?, height = ?, rotation = ?,
 			active_from = ?, active_to = ?, paused = ?, sort_order = ? WHERE id = ? AND rally_id = ?`,
 		nullableID(st.OccupantID), nullableID(st.AffiliateID), st.Image, st.Password, st.StampType,
-		st.X, st.Y, st.Width, st.Height, st.Rotation, st.ActiveFrom, st.ActiveTo, boolToInt(st.Paused), sortOrder, st.ID, rallyID)
+		st.X, st.Y, st.Width, st.Height, st.Rotation, nullTime(st.ActiveFrom), nullTime(st.ActiveTo), boolToInt(st.Paused), sortOrder, st.ID, rallyID)
 	return err
 }
 
@@ -380,7 +380,7 @@ func (s *Store) DeleteStampRally(ctx context.Context, id int64) (bool, error) {
 
 // SetStampRallyStatus updates a rally's manual status ("open" or "closed").
 func (s *Store) SetStampRallyStatus(ctx context.Context, id int64, status string) error {
-	_, err := s.db.ExecContext(ctx, `UPDATE stamp_rallies SET status = ? WHERE id = ?`, status, id)
+	_, err := s.write.ExecContext(ctx, `UPDATE stamp_rallies SET status = ? WHERE id = ?`, status, id)
 	return err
 }
 
@@ -388,7 +388,7 @@ func (s *Store) SetStampRallyStatus(ctx context.Context, id int64, status string
 // without re-saving the whole event). It is scoped to rallyID so a caller can't
 // flip a stamp belonging to a different rally.
 func (s *Store) SetStampPaused(ctx context.Context, rallyID, stampID int64, paused bool) (bool, error) {
-	res, err := s.db.ExecContext(ctx, `UPDATE stamp_rally_stamps SET paused = ? WHERE id = ? AND rally_id = ?`,
+	res, err := s.write.ExecContext(ctx, `UPDATE stamp_rally_stamps SET paused = ? WHERE id = ? AND rally_id = ?`,
 		boolToInt(paused), stampID, rallyID)
 	if err != nil {
 		return false, err
@@ -412,7 +412,7 @@ func (s *Store) IssueRallyCard(ctx context.Context, rallyID int64, name, world s
 // IssueRallyCardWithToken creates a card using a SUPPLIED token, for a caller that
 // needs to know the token before the row exists.
 func (s *Store) IssueRallyCardWithToken(ctx context.Context, rallyID int64, name, world, token string) (*model.StampRallyCard, error) {
-	res, err := s.db.ExecContext(ctx, `INSERT INTO stamp_rally_cards (rally_id, token, participant_name, world)
+	res, err := s.write.ExecContext(ctx, `INSERT INTO stamp_rally_cards (rally_id, token, participant_name, world)
 		VALUES (?, ?, ?, ?)`, rallyID, token, name, world)
 	if err != nil {
 		return nil, err
@@ -438,8 +438,8 @@ var ErrParticipantNameTaken = errors.New("participant name already signed up")
 // linked to it if there is one. The availability WINDOW is not applied here - the
 // caller filters it against the current time, as the other public paths do.
 func (s *Store) ListSignupRallies(ctx context.Context) ([]model.SignupRally, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT r.id, r.title, r.card_image, r.details,
-			r.available_from, r.available_to,
+	rows, err := s.read.QueryContext(ctx, `SELECT r.id, r.title, r.card_image, r.details,
+			COALESCE(r.available_from, ''), COALESCE(r.available_to, ''),
 			COALESCE((SELECT g.title FROM garapons g
 				WHERE g.stamp_rally_id = r.id AND g.status = 'open' ORDER BY g.id LIMIT 1), '')
 		FROM stamp_rallies r
@@ -548,7 +548,7 @@ func (s *Store) LookupParticipantCards(ctx context.Context, name, world string) 
 	// participant on a borrowed device that their draws are intact without handing
 	// anyone the means to spend them. The card token is still returned: it opens the
 	// stamp card and, since the tokens were split, nothing else.
-	rows, err := s.db.QueryContext(ctx, `SELECT r.id, r.title, c.token, c.participant_name, c.world, c.completed,
+	rows, err := s.read.QueryContext(ctx, `SELECT r.id, r.title, c.token, c.participant_name, c.world, c.completed,
 			COALESCE(g.title, ''),
 			COALESCE(gp.max_draws, 0) - COALESCE((
 				SELECT COUNT(*) FROM garapon_draws d WHERE d.player_id = gp.id), 0)
@@ -600,9 +600,9 @@ func (s *Store) DeleteRallyCard(ctx context.Context, rallyID, cardID int64, forc
 	var res sql.Result
 	var err error
 	if force {
-		res, err = s.db.ExecContext(ctx, `DELETE FROM stamp_rally_cards WHERE id = ? AND rally_id = ?`, cardID, rallyID)
+		res, err = s.write.ExecContext(ctx, `DELETE FROM stamp_rally_cards WHERE id = ? AND rally_id = ?`, cardID, rallyID)
 	} else {
-		res, err = s.db.ExecContext(ctx, `DELETE FROM stamp_rally_cards WHERE id = ? AND rally_id = ?
+		res, err = s.write.ExecContext(ctx, `DELETE FROM stamp_rally_cards WHERE id = ? AND rally_id = ?
 			AND NOT EXISTS (SELECT 1 FROM stamp_rally_collected col WHERE col.card_id = ?)`, cardID, rallyID, cardID)
 	}
 	if err != nil {
@@ -627,7 +627,7 @@ func scanRallyCard(sc rowScanner) (*model.StampRallyCard, error) {
 
 // GetRallyCardByID returns a single card by id (nil if not found).
 func (s *Store) GetRallyCardByID(ctx context.Context, id int64) (*model.StampRallyCard, error) {
-	row := s.db.QueryRowContext(ctx, `SELECT id, rally_id, token, participant_name, world, completed, CAST(completed_at AS TEXT), CAST(created_at AS TEXT)
+	row := s.read.QueryRowContext(ctx, `SELECT id, rally_id, token, participant_name, world, completed, completed_at, created_at
 		FROM stamp_rally_cards WHERE id = ?`, id)
 	c, err := scanRallyCard(row)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -639,7 +639,7 @@ func (s *Store) GetRallyCardByID(ctx context.Context, id int64) (*model.StampRal
 // GetRallyCardByToken returns a single card by its token (nil if not found). This is the
 // public stamp-card view's entry point.
 func (s *Store) GetRallyCardByToken(ctx context.Context, token string) (*model.StampRallyCard, error) {
-	row := s.db.QueryRowContext(ctx, `SELECT id, rally_id, token, participant_name, world, completed, CAST(completed_at AS TEXT), CAST(created_at AS TEXT)
+	row := s.read.QueryRowContext(ctx, `SELECT id, rally_id, token, participant_name, world, completed, completed_at, created_at
 		FROM stamp_rally_cards WHERE token = ?`, token)
 	c, err := scanRallyCard(row)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -651,7 +651,7 @@ func (s *Store) GetRallyCardByToken(ctx context.Context, token string) (*model.S
 // ListRallyCards returns a rally's participant cards (newest first) with each card's
 // collected-stamp count.
 func (s *Store) ListRallyCards(ctx context.Context, rallyID int64) ([]model.StampRallyCard, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT c.id, c.rally_id, c.token, c.participant_name, c.world, c.completed, CAST(c.completed_at AS TEXT), CAST(c.created_at AS TEXT),
+	rows, err := s.read.QueryContext(ctx, `SELECT c.id, c.rally_id, c.token, c.participant_name, c.world, c.completed, c.completed_at, c.created_at,
 			COALESCE((SELECT COUNT(*) FROM stamp_rally_collected col WHERE col.card_id = c.id), 0)
 		FROM stamp_rally_cards c WHERE c.rally_id = ? ORDER BY c.created_at DESC, c.id DESC`, rallyID)
 	if err != nil {
@@ -678,8 +678,8 @@ func (s *Store) ListRallyCards(ctx context.Context, rallyID int64) ([]model.Stam
 // SetRallyCardCompleted marks a card completed at the given timestamp (RFC-3339). Used by
 // the lazy completion recompute when the last collectable stamp is accounted for.
 func (s *Store) SetRallyCardCompleted(ctx context.Context, cardID int64, completedAt string) error {
-	_, err := s.db.ExecContext(ctx, `UPDATE stamp_rally_cards SET completed = 1, completed_at = ? WHERE id = ?`,
-		completedAt, cardID)
+	_, err := s.write.ExecContext(ctx, `UPDATE stamp_rally_cards SET completed = 1, completed_at = ? WHERE id = ?`,
+		nullTime(completedAt), cardID)
 	return err
 }
 
@@ -687,7 +687,7 @@ func (s *Store) SetRallyCardCompleted(ctx context.Context, cardID int64, complet
 
 // ListCollectedStampIDs returns the set of stamp ids a card has collected.
 func (s *Store) ListCollectedStampIDs(ctx context.Context, cardID int64) (map[int64]string, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT stamp_id, CAST(stamped_at AS TEXT) FROM stamp_rally_collected WHERE card_id = ?`, cardID)
+	rows, err := s.read.QueryContext(ctx, `SELECT stamp_id, stamped_at FROM stamp_rally_collected WHERE card_id = ?`, cardID)
 	if err != nil {
 		return nil, err
 	}
@@ -715,7 +715,7 @@ func (s *Store) ListCollectedStampIDs(ctx context.Context, cardID int64) (map[in
 // rally id (so it cascade-deletes only with the whole rally). Returns
 // ErrStampAlreadyCollected when the (card, stamp) pair already exists (the UNIQUE guard).
 func (s *Store) CollectStamp(ctx context.Context, rallyID, cardID, stampID int64, participantName, stallName, stampType string) (*model.StampRallyCollected, error) {
-	res, err := s.db.ExecContext(ctx, `INSERT INTO stamp_rally_collected
+	res, err := s.write.ExecContext(ctx, `INSERT INTO stamp_rally_collected
 			(rally_id, card_id, stamp_id, participant_name, stall_name, stamp_type) VALUES (?, ?, ?, ?, ?, ?)`,
 		rallyID, cardID, stampID, participantName, stallName, stampType)
 	if err != nil {
@@ -730,7 +730,7 @@ func (s *Store) CollectStamp(ctx context.Context, rallyID, cardID, stampID int64
 	}
 	var c model.StampRallyCollected
 	var cardCol, stampCol sql.NullInt64
-	err = s.db.QueryRowContext(ctx, `SELECT id, rally_id, card_id, stamp_id, participant_name, stall_name, stamp_type, CAST(stamped_at AS TEXT)
+	err = s.read.QueryRowContext(ctx, `SELECT id, rally_id, card_id, stamp_id, participant_name, stall_name, stamp_type, stamped_at
 		FROM stamp_rally_collected WHERE id = ?`, id).
 		Scan(&c.ID, &c.RallyID, &cardCol, &stampCol, &c.ParticipantName, &c.StallName, &c.StampType, &c.StampedAt)
 	if err != nil {
@@ -745,7 +745,7 @@ func (s *Store) CollectStamp(ctx context.Context, rallyID, cardID, stampID int64
 // columns, so rows persist after their card or stamp is deleted. Ordered by participant
 // then time so the admin table can group a participant's rows together by default.
 func (s *Store) ListRallyCollections(ctx context.Context, rallyID int64) ([]model.StampRallyLogEntry, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT card_id, stamp_id, participant_name, stall_name, stamp_type, CAST(stamped_at AS TEXT)
+	rows, err := s.read.QueryContext(ctx, `SELECT card_id, stamp_id, participant_name, stall_name, stamp_type, stamped_at
 		FROM stamp_rally_collected WHERE rally_id = ?
 		ORDER BY participant_name COLLATE NOCASE ASC, stamped_at ASC, id ASC`, rallyID)
 	if err != nil {

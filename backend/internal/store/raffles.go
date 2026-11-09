@@ -17,11 +17,11 @@ var ErrRaffleEntryLimit = errors.New("raffle entry limit exceeded")
 
 // CreateRaffle inserts a new raffle and returns its ID.
 func (s *Store) CreateRaffle(ctx context.Context, r *model.Raffle) (int64, error) {
-	res, err := s.db.ExecContext(ctx, `INSERT INTO raffles (title, description, rules, max_entries, signup_instructions, entry_mode, cost_per_entry, tier_costs, available_from, available_to, prize_image, pay_image, status, festival_map_id, occupant_id)
+	res, err := s.write.ExecContext(ctx, `INSERT INTO raffles (title, description, rules, max_entries, signup_instructions, entry_mode, cost_per_entry, tier_costs, available_from, available_to, prize_image, pay_image, status, festival_map_id, occupant_id)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		r.Title, r.Description, r.Rules, r.MaxEntries, r.SignupInstructions,
 		r.Mode(), r.CostPerEntry, encodeTierCosts(r.TierCosts),
-		r.AvailableFrom, r.AvailableTo, r.PrizeImage, r.PayImage, "open",
+		nullTime(r.AvailableFrom), nullTime(r.AvailableTo), r.PrizeImage, r.PayImage, "open",
 		nullableID(r.FestivalMapID), nullableID(r.OccupantID),
 	)
 	if err != nil {
@@ -32,10 +32,10 @@ func (s *Store) CreateRaffle(ctx context.Context, r *model.Raffle) (int64, error
 
 // UpdateRaffle updates an existing raffle's editable fields.
 func (s *Store) UpdateRaffle(ctx context.Context, r *model.Raffle) error {
-	_, err := s.db.ExecContext(ctx, `UPDATE raffles SET title=?, description=?, rules=?, max_entries=?, signup_instructions=?, entry_mode=?, cost_per_entry=?, tier_costs=?, available_from=?, available_to=?, prize_image=?, pay_image=?, festival_map_id=?, occupant_id=? WHERE id=?`,
+	_, err := s.write.ExecContext(ctx, `UPDATE raffles SET title=?, description=?, rules=?, max_entries=?, signup_instructions=?, entry_mode=?, cost_per_entry=?, tier_costs=?, available_from=?, available_to=?, prize_image=?, pay_image=?, festival_map_id=?, occupant_id=? WHERE id=?`,
 		r.Title, r.Description, r.Rules, r.MaxEntries, r.SignupInstructions,
 		r.Mode(), r.CostPerEntry, encodeTierCosts(r.TierCosts),
-		r.AvailableFrom, r.AvailableTo, r.PrizeImage, r.PayImage,
+		nullTime(r.AvailableFrom), nullTime(r.AvailableTo), r.PrizeImage, r.PayImage,
 		nullableID(r.FestivalMapID), nullableID(r.OccupantID), r.ID,
 	)
 	return err
@@ -43,7 +43,7 @@ func (s *Store) UpdateRaffle(ctx context.Context, r *model.Raffle) error {
 
 // DeleteRaffle removes a raffle and its entries (cascade). Returns true if deleted.
 func (s *Store) DeleteRaffle(ctx context.Context, id int64) (bool, error) {
-	res, err := s.db.ExecContext(ctx, "DELETE FROM raffles WHERE id = ?", id)
+	res, err := s.write.ExecContext(ctx, "DELETE FROM raffles WHERE id = ?", id)
 	if err != nil {
 		return false, err
 	}
@@ -55,9 +55,9 @@ func (s *Store) DeleteRaffle(ctx context.Context, id int64) (bool, error) {
 // scan order in scanRaffle. (listRafflesAdmin appends its own aggregate columns.)
 // It is written against raffleFrom's aliases, so the two are always used together.
 const raffleColumns = `r.id, r.title, r.description, r.rules, r.max_entries, r.signup_instructions,
-	r.entry_mode, r.cost_per_entry, r.tier_costs, r.available_from, r.available_to, r.prize_image,
+	r.entry_mode, r.cost_per_entry, r.tier_costs, COALESCE(r.available_from, ''), COALESCE(r.available_to, ''), r.prize_image,
 	r.pay_image, r.status, r.winner_entry_id,
-	r.festival_map_id, COALESCE(fm.title, ''), r.occupant_id, COALESCE(fo.title, ''), CAST(r.created_at AS TEXT)`
+	r.festival_map_id, COALESCE(fm.title, ''), r.occupant_id, COALESCE(fo.title, ''), r.created_at`
 
 // raffleFrom is the FROM clause raffleColumns is written against: the raffle plus
 // the two optional festival joins - the map it is filed under, and the stall
@@ -104,7 +104,7 @@ func scanRaffle(sc rowScanner) (model.Raffle, error) {
 
 // GetRaffle retrieves a single raffle by ID. Returns nil if not found.
 func (s *Store) GetRaffle(ctx context.Context, id int64) (*model.Raffle, error) {
-	r, err := scanRaffle(s.db.QueryRowContext(ctx, `SELECT `+raffleColumns+` `+raffleFrom+` WHERE r.id = ?`, id))
+	r, err := scanRaffle(s.read.QueryRowContext(ctx, `SELECT `+raffleColumns+` `+raffleFrom+` WHERE r.id = ?`, id))
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
 	}
@@ -126,15 +126,13 @@ func (s *Store) ListRaffles(ctx context.Context, adminMode bool) ([]model.Raffle
 		return s.listRafflesAdmin(ctx)
 	}
 	// Public list: only open raffles currently inside their availability
-	// window. Availability dates are stored as UTC (RFC-3339 with 'Z' for new
-	// values, legacy naive strings treated as UTC); datetime() normalizes both
-	// to a UTC timestamp so the comparison against datetime('now') (also UTC)
-	// is timezone-correct - a raffle past its "available to" instant no longer
-	// shows regardless of the admin's timezone.
-	rows, err := s.db.QueryContext(ctx, `SELECT `+raffleColumns+` `+raffleFrom+`
+	// window. Availability is stored in UTC in the one timestamp form, so the
+	// text compares against now's in that form - a raffle past its "available
+	// to" instant no longer shows regardless of the admin's timezone.
+	rows, err := s.read.QueryContext(ctx, `SELECT `+raffleColumns+` `+raffleFrom+`
 		WHERE r.status = 'open'
-		  AND (r.available_from = '' OR datetime(r.available_from) <= datetime('now'))
-		  AND (r.available_to = '' OR datetime(r.available_to) >= datetime('now'))
+		  AND (r.available_from IS NULL OR r.available_from <= strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+		  AND (r.available_to IS NULL OR r.available_to >= strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
 		ORDER BY r.created_at DESC`)
 	if err != nil {
 		return nil, err
@@ -167,7 +165,7 @@ type FestivalRaffle struct {
 // caller's call, made against the clock as on the public raffle pages. Two
 // queries whatever the number of raffles: the rows, then one tally over them all.
 func (s *Store) ListFestivalRaffles(ctx context.Context, mapID int64) ([]FestivalRaffle, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT `+raffleColumns+` `+raffleFrom+`
+	rows, err := s.read.QueryContext(ctx, `SELECT `+raffleColumns+` `+raffleFrom+`
 		WHERE r.festival_map_id = ? ORDER BY r.created_at DESC, r.id DESC`, mapID)
 	if err != nil {
 		return nil, err
@@ -194,7 +192,7 @@ func (s *Store) ListFestivalRaffles(ctx context.Context, mapID int64) ([]Festiva
 		name, world string
 	}
 	tallies := make(map[int64]tally, len(raffles))
-	trows, err := s.db.QueryContext(ctx, `SELECT r.id,
+	trows, err := s.read.QueryContext(ctx, `SELECT r.id,
 			COALESCE((SELECT SUM(e.num_entries) FROM raffle_entries e WHERE e.raffle_id = r.id), 0),
 			COALESCE(w.character_name, ''), COALESCE(w.world, '')
 		FROM raffles r LEFT JOIN raffle_entries w ON w.id = r.winner_entry_id
@@ -229,7 +227,7 @@ func (s *Store) ListFestivalRaffles(ctx context.Context, mapID int64) ([]Festiva
 // entered" rather than "how did I spell it". Rows carry no money, as in the
 // lookup (see model.RaffleLookupEntry).
 func (s *Store) FestivalRaffleEntriesFor(ctx context.Context, mapID int64, name, world string) (map[int64]model.RaffleLookupEntry, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT e.raffle_id, e.character_name, e.world, e.num_entries, e.paid_entries
+	rows, err := s.read.QueryContext(ctx, `SELECT e.raffle_id, e.character_name, e.world, e.num_entries, e.paid_entries
 		FROM raffle_entries e JOIN raffles r ON r.id = e.raffle_id
 		WHERE r.festival_map_id = ? AND LOWER(e.character_name) = LOWER(?) AND LOWER(e.world) = LOWER(?)`,
 		mapID, name, world)
@@ -262,7 +260,7 @@ func (s *Store) FestivalRaffleEntriesFor(ctx context.Context, mapID int64, name,
 // which knows each mode's rule. That is three small queries over an admin-only
 // list rather than one, and it keeps the pricing rule in exactly one place.
 func (s *Store) listRafflesAdmin(ctx context.Context) ([]model.Raffle, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT `+raffleColumns+` `+raffleFrom+` ORDER BY r.created_at DESC`)
+	rows, err := s.read.QueryContext(ctx, `SELECT `+raffleColumns+` `+raffleFrom+` ORDER BY r.created_at DESC`)
 	if err != nil {
 		return nil, err
 	}
@@ -303,7 +301,7 @@ func (s *Store) listRafflesAdmin(ctx context.Context) ([]model.Raffle, error) {
 // raffleWinnerNames maps a winner entry id to its "Character @ World" label, for
 // every raffle that has one set.
 func (s *Store) raffleWinnerNames(ctx context.Context) (map[int64]string, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT e.id, e.character_name, e.world FROM raffle_entries e
+	rows, err := s.read.QueryContext(ctx, `SELECT e.id, e.character_name, e.world FROM raffle_entries e
 		JOIN raffles r ON r.winner_entry_id = e.id`)
 	if err != nil {
 		return nil, err
@@ -330,7 +328,7 @@ func (s *Store) raffleWinnerNames(ctx context.Context) (map[int64]string, error)
 // "three entries holding 1", and each entry carries its own waived amount.
 // Partly-settled entries are included: they really did hand gil over.
 func (s *Store) settledRaffleEntries(ctx context.Context) (map[int64][]model.RaffleEntry, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT raffle_id, paid_entries, amount_waived FROM raffle_entries WHERE paid_entries > 0`)
+	rows, err := s.read.QueryContext(ctx, `SELECT raffle_id, paid_entries, amount_waived FROM raffle_entries WHERE paid_entries > 0`)
 	if err != nil {
 		return nil, err
 	}
@@ -350,13 +348,13 @@ func (s *Store) settledRaffleEntries(ctx context.Context) (map[int64][]model.Raf
 // CountRaffleEntries returns the total number of entries (sum of num_entries) for a raffle.
 func (s *Store) CountRaffleEntries(ctx context.Context, raffleID int64) (int, error) {
 	var count int
-	err := s.db.QueryRowContext(ctx, `SELECT COALESCE(SUM(num_entries), 0) FROM raffle_entries WHERE raffle_id = ?`, raffleID).Scan(&count)
+	err := s.read.QueryRowContext(ctx, `SELECT COALESCE(SUM(num_entries), 0) FROM raffle_entries WHERE raffle_id = ?`, raffleID).Scan(&count)
 	return count, err
 }
 
 // raffleEntryColumns is the shared SELECT list for raffle_entries, matching the
 // scan order in scanRaffleEntry.
-const raffleEntryColumns = "id, raffle_id, character_name, world, num_entries, paid_entries, amount_waived, paid, CAST(created_at AS TEXT)"
+const raffleEntryColumns = "id, raffle_id, character_name, world, num_entries, paid_entries, amount_waived, paid, created_at"
 
 // scanRaffleEntry scans one raffle_entries row (paid stored as 0/1). Shared by the
 // list/get/pick paths so the column order + paid conversion live in one place.
@@ -373,7 +371,7 @@ func scanRaffleEntry(sc rowScanner) (model.RaffleEntry, error) {
 
 // ListRaffleEntries returns all entries for a raffle.
 func (s *Store) ListRaffleEntries(ctx context.Context, raffleID int64) ([]model.RaffleEntry, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT `+raffleEntryColumns+` FROM raffle_entries WHERE raffle_id = ? ORDER BY created_at ASC`, raffleID)
+	rows, err := s.read.QueryContext(ctx, `SELECT `+raffleEntryColumns+` FROM raffle_entries WHERE raffle_id = ? ORDER BY created_at ASC`, raffleID)
 	if err != nil {
 		return nil, err
 	}
@@ -392,7 +390,7 @@ func (s *Store) ListRaffleEntries(ctx context.Context, raffleID int64) ([]model.
 
 // GetRaffleEntryByID returns a single raffle entry by its ID.
 func (s *Store) GetRaffleEntryByID(ctx context.Context, entryID int64) (*model.RaffleEntry, error) {
-	e, err := scanRaffleEntry(s.db.QueryRowContext(ctx, `SELECT `+raffleEntryColumns+` FROM raffle_entries WHERE id = ?`, entryID))
+	e, err := scanRaffleEntry(s.read.QueryRowContext(ctx, `SELECT `+raffleEntryColumns+` FROM raffle_entries WHERE id = ?`, entryID))
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
 	}
@@ -492,7 +490,7 @@ func (s *Store) AddOrCreateRaffleEntry(ctx context.Context, raffleID int64, char
 // so what the admin sees is always the settlement that stuck.
 func (s *Store) SetRaffleEntryPaid(ctx context.Context, entryID int64, paid bool, tickets int, waived float64) (applied bool, err error) {
 	if !paid {
-		res, err := s.db.ExecContext(ctx, `UPDATE raffle_entries SET paid = 0, paid_entries = 0, amount_waived = 0 WHERE id = ?`, entryID)
+		res, err := s.write.ExecContext(ctx, `UPDATE raffle_entries SET paid = 0, paid_entries = 0, amount_waived = 0 WHERE id = ?`, entryID)
 		if err != nil {
 			return false, err
 		}
@@ -502,14 +500,14 @@ func (s *Store) SetRaffleEntryPaid(ctx context.Context, entryID int64, paid bool
 
 	var res sql.Result
 	if tickets <= 0 {
-		res, err = s.db.ExecContext(ctx, `UPDATE raffle_entries
+		res, err = s.write.ExecContext(ctx, `UPDATE raffle_entries
 			SET paid = 1, paid_entries = num_entries, amount_waived = amount_waived + ?
 			WHERE id = ? AND paid_entries < num_entries`, waived, entryID)
 	} else {
 		// MIN() in SQL, not a clamp in Go: num_entries can grow between the read and
 		// the write (a player buying more tickets), and only the statement itself
 		// sees the row's real count.
-		res, err = s.db.ExecContext(ctx, `UPDATE raffle_entries
+		res, err = s.write.ExecContext(ctx, `UPDATE raffle_entries
 			SET paid_entries = MIN(?, num_entries),
 			    paid = CASE WHEN MIN(?, num_entries) >= num_entries THEN 1 ELSE 0 END,
 			    amount_waived = amount_waived + ?
@@ -526,16 +524,16 @@ func (s *Store) SetRaffleEntryPaid(ctx context.Context, entryID int64, paid bool
 // SetRaffleWinner sets the winner_entry_id on a raffle.
 func (s *Store) SetRaffleWinner(ctx context.Context, raffleID int64, entryID *int64) error {
 	if entryID == nil {
-		_, err := s.db.ExecContext(ctx, `UPDATE raffles SET winner_entry_id = NULL WHERE id = ?`, raffleID)
+		_, err := s.write.ExecContext(ctx, `UPDATE raffles SET winner_entry_id = NULL WHERE id = ?`, raffleID)
 		return err
 	}
-	_, err := s.db.ExecContext(ctx, `UPDATE raffles SET winner_entry_id = ? WHERE id = ?`, *entryID, raffleID)
+	_, err := s.write.ExecContext(ctx, `UPDATE raffles SET winner_entry_id = ? WHERE id = ?`, *entryID, raffleID)
 	return err
 }
 
 // SetRaffleStatus updates the raffle's status.
 func (s *Store) SetRaffleStatus(ctx context.Context, raffleID int64, status string) error {
-	_, err := s.db.ExecContext(ctx, `UPDATE raffles SET status = ? WHERE id = ?`, status, raffleID)
+	_, err := s.write.ExecContext(ctx, `UPDATE raffles SET status = ? WHERE id = ?`, status, raffleID)
 	return err
 }
 
@@ -557,7 +555,7 @@ func (s *Store) PickRaffleWinner(ctx context.Context, raffleID int64, paidOnly b
 	if paidOnly {
 		where += ` AND paid_entries > 0`
 	}
-	rows, err := s.db.QueryContext(ctx, `SELECT `+raffleEntryColumns+` FROM raffle_entries `+where, raffleID)
+	rows, err := s.read.QueryContext(ctx, `SELECT `+raffleEntryColumns+` FROM raffle_entries `+where, raffleID)
 	if err != nil {
 		return nil, err
 	}
@@ -659,7 +657,7 @@ func (s *Store) LookupRaffleEntries(ctx context.Context, raffleID int64, query s
 		limit = 1
 	}
 	// Fetch one more than asked for: if it comes back, there are further matches.
-	rows, err := s.db.QueryContext(ctx, `SELECT character_name, world, num_entries, paid_entries
+	rows, err := s.read.QueryContext(ctx, `SELECT character_name, world, num_entries, paid_entries
 		FROM raffle_entries
 		WHERE raffle_id = ? AND character_name LIKE ? ESCAPE '\' COLLATE NOCASE
 		ORDER BY character_name COLLATE NOCASE, world COLLATE NOCASE

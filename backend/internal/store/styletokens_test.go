@@ -1,9 +1,6 @@
 package store
 
 import (
-	"database/sql"
-	"encoding/json"
-	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -83,66 +80,5 @@ func TestParseRootTokens(t *testing.T) {
 	// Only the first :root block is parsed.
 	if _, ok := tokens["ignored-second-block"]; ok {
 		t.Error("second :root block should not be parsed")
-	}
-}
-
-// TestMigrateStyleTokens_Backfill builds a legacy v36 styles table (css_content,
-// no tokens column), then runs the migrations and verifies each theme's :root
-// tokens were parsed into the new tokens column and the legacy column was dropped.
-func TestMigrateStyleTokens_Backfill(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "legacy.db")
-	db, err := sql.Open("sqlite", path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
-
-	setup := []string{
-		`CREATE TABLE settings (key TEXT PRIMARY KEY, value TEXT NOT NULL DEFAULT '')`,
-		`CREATE TABLE styles (
-			id INTEGER PRIMARY KEY AUTOINCREMENT,
-			name TEXT NOT NULL,
-			css_content TEXT NOT NULL DEFAULT '',
-			board_flourish TEXT NOT NULL DEFAULT '',
-			number_flourish TEXT NOT NULL DEFAULT '',
-			created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-		)`,
-	}
-	for _, stmt := range setup {
-		if _, err := db.ExecContext(t.Context(), stmt); err != nil {
-			t.Fatalf("setup legacy schema: %v", err)
-		}
-	}
-	if _, err := db.ExecContext(t.Context(),
-		`INSERT INTO styles (name, css_content) VALUES (?, ?)`,
-		"Obon", ":root{ --page-bg: #1a0a0b; --accent: #fbc95d; }",
-	); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := db.ExecContext(t.Context(), "PRAGMA user_version = 36"); err != nil {
-		t.Fatal(err)
-	}
-
-	if err := ensureSchema(t.Context(), db); err != nil {
-		t.Fatalf("ensureSchema: %v", err)
-	}
-
-	if !hasColumn(t.Context(), db, "styles", "tokens") {
-		t.Fatal("styles.tokens column should exist after migration")
-	}
-	if hasColumn(t.Context(), db, "styles", "css_content") {
-		t.Error("legacy styles.css_content column should have been dropped")
-	}
-
-	var raw string
-	if err := db.QueryRowContext(t.Context(), `SELECT tokens FROM styles WHERE name = 'Obon'`).Scan(&raw); err != nil {
-		t.Fatal(err)
-	}
-	tokens := map[string]string{}
-	if err := json.Unmarshal([]byte(raw), &tokens); err != nil {
-		t.Fatalf("tokens not valid JSON: %v (%q)", err, raw)
-	}
-	if tokens["page-bg"] != "#1a0a0b" || tokens["accent"] != "#fbc95d" {
-		t.Errorf("backfilled tokens = %v", tokens)
 	}
 }

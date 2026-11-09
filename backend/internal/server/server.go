@@ -164,14 +164,15 @@ func (s *Server) SetLogFile(path string) {
 // is the CORS allowlist (exact origin strings); pass nil/empty for a same-origin
 // deployment, which sends no CORS headers.
 //
-// Sessions live in scs's in-memory store, so there is nothing to sign and no
-// secret to configure: a session is an opaque random token the server looks up,
-// and every session ends when the process restarts.
+// Sessions live in the database (sessionStore), so there is nothing to sign and no
+// secret to configure: a session is an opaque random token the server looks up
+// by its hash, and it outlives a restart.
 //
 // ctx is used only for the startup migrations below that touch the database; the
 // Server keeps no context of its own.
 func New(ctx context.Context, st *store.Store, hub *ws.Hub, webRoot string, allowedOrigins []string) *Server {
 	sm := scs.New()
+	sm.Store = newSessionStore(st.DB())
 	sm.Lifetime = 24 * time.Hour
 	sm.Cookie.Path = "/"
 	sm.Cookie.HttpOnly = true

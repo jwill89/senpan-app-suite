@@ -30,6 +30,23 @@ func waitForCalled(t *testing.T, env *testEnv, want int, timeout time.Duration) 
 	t.Fatalf("timed out waiting for %d called number(s); have %d", want, calledCount(t, env))
 }
 
+// waitForHalftimePause polls until the auto loop has paused itself for half-time,
+// or fails. The loop pauses just after the crossing draw commits, so a read can
+// see that draw a moment before the pause.
+func waitForHalftimePause(t *testing.T, env *testEnv, timeout time.Duration) {
+	t.Helper()
+	deadline := time.Now().Add(timeout)
+	for {
+		if enabled, _ := gameAuto(t, env); !enabled {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("auto should be paused at the half-time mark")
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+}
+
 // autoTestGame creates a top-row pattern (all five columns -> half-time at 35) and
 // returns its id, ready to start games from.
 func autoTestPattern(t *testing.T, env *testEnv) int {
@@ -147,9 +164,7 @@ func TestGame_HalftimePausesAndResumesAuto(t *testing.T) {
 	// Enable auto -> the immediate auto draw crosses the half-time mark and pauses.
 	env.patchJSON(t, "/api/game", map[string]any{"auto_enabled": true, "auto_interval": 600}).Body.Close()
 	waitForCalled(t, env, 7, 2*time.Second)
-	if enabled, _ := gameAuto(t, env); enabled {
-		t.Error("auto should be paused at the half-time mark")
-	}
+	waitForHalftimePause(t, env, 2*time.Second)
 
 	// Decline the mini-game -> auto resumes.
 	env.postJSON(t, "/api/game/halftime", map[string]any{"minigame": false}).Body.Close()
@@ -263,9 +278,7 @@ func TestGame_HalftimeMinigameKeepsAutoOff(t *testing.T) {
 	}
 	env.patchJSON(t, "/api/game", map[string]any{"auto_enabled": true, "auto_interval": 600}).Body.Close()
 	waitForCalled(t, env, 7, 2*time.Second)
-	if enabled, _ := gameAuto(t, env); enabled {
-		t.Fatal("auto should be paused at the half-time mark")
-	}
+	waitForHalftimePause(t, env, 2*time.Second)
 
 	// Choose the mini-game -> auto stays off.
 	env.postJSON(t, "/api/game/halftime", map[string]any{"minigame": true}).Body.Close()

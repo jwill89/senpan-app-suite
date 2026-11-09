@@ -114,6 +114,7 @@ shows both, and flags an open tab whose server now runs a different version.
 | `go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.15.0 run ./...` | Lint (`.golangci.yml`, written from the shared template; Senpan's own rules are in `.golangci.local.yml`) |
 | `go test ./...`              | Backend tests                    |
 | `go run ./cmd/openapi-gen`   | Regenerate `openapi.yaml` from the model |
+| `go run ./cmd/schema-gen`    | Write `schema.sql`, the schema the migrations build |
 
 ## Deploying
 

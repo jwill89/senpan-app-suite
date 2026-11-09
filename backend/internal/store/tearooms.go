@@ -17,7 +17,7 @@ import (
 
 // teaRoomColumns is the shared SELECT column list for the tea_rooms table.
 const teaRoomColumns = `id, name, subtitle, room_owner, room_number, cost_per_half_hour, hashtags, description,
-	seasonal, open, lockable, discounted, locked, locked_until, image, color, sort_order, CAST(created_at AS TEXT)`
+	seasonal, open, lockable, discounted, locked, COALESCE(locked_until, ''), image, color, sort_order, created_at`
 
 // scanTeaRoom scans one row (in teaRoomColumns order), decoding the 0/1 flag
 // columns into bools.
@@ -40,7 +40,7 @@ func scanTeaRoom(sc rowScanner) (*model.TeaRoom, error) {
 // ascending, then newest-first as a tie-break (so a freshly created room appears
 // at the top until the admin drags to reorder). Mirrors ListAnnouncements.
 func (s *Store) ListTeaRooms(ctx context.Context) ([]model.TeaRoom, error) {
-	rows, err := s.db.QueryContext(ctx,
+	rows, err := s.read.QueryContext(ctx,
 		`SELECT `+teaRoomColumns+` FROM tea_rooms ORDER BY sort_order ASC, id DESC`)
 	if err != nil {
 		return nil, err
@@ -60,7 +60,7 @@ func (s *Store) ListTeaRooms(ctx context.Context) ([]model.TeaRoom, error) {
 
 // GetTeaRoom returns a single tea room by id, or nil if it doesn't exist.
 func (s *Store) GetTeaRoom(ctx context.Context, id int64) (*model.TeaRoom, error) {
-	row := s.db.QueryRowContext(ctx, `SELECT `+teaRoomColumns+` FROM tea_rooms WHERE id = ?`, id)
+	row := s.read.QueryRowContext(ctx, `SELECT `+teaRoomColumns+` FROM tea_rooms WHERE id = ?`, id)
 	t, err := scanTeaRoom(row)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
@@ -75,7 +75,7 @@ func (s *Store) GetTeaRoom(ctx context.Context, id int64) (*model.TeaRoom, error
 // room_number is unique, so at most one matches; the ORDER BY is a defensive
 // tie-break. It backs the public single-room lookup + the uniqueness check.
 func (s *Store) GetTeaRoomByNumber(ctx context.Context, number string) (*model.TeaRoom, error) {
-	row := s.db.QueryRowContext(ctx, `SELECT `+teaRoomColumns+`
+	row := s.read.QueryRowContext(ctx, `SELECT `+teaRoomColumns+`
 		FROM tea_rooms WHERE room_number = ? ORDER BY sort_order ASC, id ASC LIMIT 1`, number)
 	t, err := scanTeaRoom(row)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -89,14 +89,14 @@ func (s *Store) GetTeaRoomByNumber(ctx context.Context, number string) (*model.T
 
 // CreateTeaRoom inserts a new tea room and returns its ID.
 func (s *Store) CreateTeaRoom(ctx context.Context, t *model.TeaRoom) (int64, error) {
-	res, err := s.db.ExecContext(ctx,
+	res, err := s.write.ExecContext(ctx,
 		`INSERT INTO tea_rooms
 			(name, subtitle, room_owner, room_number, cost_per_half_hour, hashtags, description,
 			 seasonal, open, lockable, discounted, locked, locked_until, image, color)
 		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		t.Name, t.Subtitle, t.RoomOwner, t.RoomNumber, t.CostPerHalfHour, t.Hashtags, t.Description,
 		boolToInt(t.Seasonal), boolToInt(t.Open), boolToInt(t.Lockable), boolToInt(t.Discounted),
-		boolToInt(t.Locked), t.LockedUntil, t.Image, t.Color)
+		boolToInt(t.Locked), nullTime(t.LockedUntil), t.Image, t.Color)
 	if err != nil {
 		return 0, err
 	}
@@ -108,26 +108,26 @@ func (s *Store) CreateTeaRoom(ctx context.Context, t *model.TeaRoom) (int64, err
 // alongside the dedicated single-field setters (SetTeaRoomOpen/
 // SetTeaRoomDiscounted/SetTeaRoomLock).
 func (s *Store) UpdateTeaRoom(ctx context.Context, t *model.TeaRoom) error {
-	_, err := s.db.ExecContext(ctx,
+	_, err := s.write.ExecContext(ctx,
 		`UPDATE tea_rooms SET name = ?, subtitle = ?, room_owner = ?, room_number = ?, cost_per_half_hour = ?, hashtags = ?,
 			description = ?, seasonal = ?, open = ?, lockable = ?, discounted = ?, locked = ?, locked_until = ?,
 			image = ?, color = ?
 		 WHERE id = ?`,
 		t.Name, t.Subtitle, t.RoomOwner, t.RoomNumber, t.CostPerHalfHour, t.Hashtags, t.Description,
 		boolToInt(t.Seasonal), boolToInt(t.Open), boolToInt(t.Lockable), boolToInt(t.Discounted),
-		boolToInt(t.Locked), t.LockedUntil, t.Image, t.Color, t.ID)
+		boolToInt(t.Locked), nullTime(t.LockedUntil), t.Image, t.Color, t.ID)
 	return err
 }
 
 // SetTeaRoomOpen flips a room's open/closed flag without re-saving the whole room.
 func (s *Store) SetTeaRoomOpen(ctx context.Context, id int64, open bool) error {
-	_, err := s.db.ExecContext(ctx, `UPDATE tea_rooms SET open = ? WHERE id = ?`, boolToInt(open), id)
+	_, err := s.write.ExecContext(ctx, `UPDATE tea_rooms SET open = ? WHERE id = ?`, boolToInt(open), id)
 	return err
 }
 
 // SetTeaRoomDiscounted flips a room's discounted flag without re-saving the room.
 func (s *Store) SetTeaRoomDiscounted(ctx context.Context, id int64, discounted bool) error {
-	_, err := s.db.ExecContext(ctx, `UPDATE tea_rooms SET discounted = ? WHERE id = ?`, boolToInt(discounted), id)
+	_, err := s.write.ExecContext(ctx, `UPDATE tea_rooms SET discounted = ? WHERE id = ?`, boolToInt(discounted), id)
 	return err
 }
 
@@ -139,8 +139,8 @@ func (s *Store) SetTeaRoomLock(ctx context.Context, id int64, locked bool, locke
 	if !locked {
 		lockedUntil = ""
 	}
-	_, err := s.db.ExecContext(ctx, `UPDATE tea_rooms SET locked = ?, locked_until = ? WHERE id = ?`,
-		boolToInt(locked), lockedUntil, id)
+	_, err := s.write.ExecContext(ctx, `UPDATE tea_rooms SET locked = ?, locked_until = ? WHERE id = ?`,
+		boolToInt(locked), nullTime(lockedUntil), id)
 	return err
 }
 
@@ -149,8 +149,8 @@ func (s *Store) SetTeaRoomLock(ctx context.Context, id int64, locked bool, locke
 // (see server.parseTeaRoomLockTime), so a value SQLite's date functions can't
 // parse is still visible rather than silently never coming due.
 func (s *Store) ExpiringTeaRoomLocks(ctx context.Context) ([]model.TeaRoom, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT `+teaRoomColumns+`
-		FROM tea_rooms WHERE locked = 1 AND locked_until != '' ORDER BY id ASC`)
+	rows, err := s.read.QueryContext(ctx, `SELECT `+teaRoomColumns+`
+		FROM tea_rooms WHERE locked = 1 AND locked_until IS NOT NULL ORDER BY id ASC`)
 	if err != nil {
 		return nil, err
 	}
@@ -173,8 +173,8 @@ func (s *Store) ExpiringTeaRoomLocks(ctx context.Context) ([]model.TeaRoom, erro
 // the lock from then on, and their change must not be undone by a decision made
 // from a snapshot taken before it. Mirrors AdvanceAnnouncement's applied flag.
 func (s *Store) ExpireTeaRoomLock(ctx context.Context, id int64, expectedUntil string) (bool, error) {
-	res, err := s.db.ExecContext(ctx,
-		`UPDATE tea_rooms SET locked = 0, locked_until = ''
+	res, err := s.write.ExecContext(ctx,
+		`UPDATE tea_rooms SET locked = 0, locked_until = NULL
 		 WHERE id = ? AND locked = 1 AND locked_until = ?`, id, expectedUntil)
 	if err != nil {
 		return false, err
@@ -187,7 +187,7 @@ func (s *Store) ExpireTeaRoomLock(ctx context.Context, id int64, expectedUntil s
 // image file lives in a centrally-managed image category (System -> Images), so it
 // is intentionally left intact for reuse.
 func (s *Store) DeleteTeaRoom(ctx context.Context, id int64) (bool, error) {
-	res, err := s.db.ExecContext(ctx, `DELETE FROM tea_rooms WHERE id = ?`, id)
+	res, err := s.write.ExecContext(ctx, `DELETE FROM tea_rooms WHERE id = ?`, id)
 	if err != nil {
 		return false, err
 	}

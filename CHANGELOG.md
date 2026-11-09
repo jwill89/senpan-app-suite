@@ -69,6 +69,44 @@ version is next bumped, under a `### App` or `### Plugin` heading here until the
 The SPA and the API, one binary, one version (since 4.0.0). The admin dashboard's
 changelog shows this section, then the Frontend history before it.
 
+### [4.1.0] - 2026-11-09
+
+The data layer moves to the standards: goose migrations, two connection pools, one
+timestamp form, sign-ins kept in the database, and draws from a cryptographic
+source. The API keeps its shape.
+
+#### Changed
+
+- **Migrations run on goose.** The 71 hand-written migration blocks give way to
+  goose, taking over at v71: its baseline (`internal/store/baseline.sql`) builds a
+  fresh database as they did, a database they brought to v71 is taken over as it
+  is, and one short of v71 is refused until a 4.0 release brings it there. Each
+  migration also sets `PRAGMA user_version` to its own number, and the schema they
+  build is committed as `backend/schema.sql` (`go run ./cmd/schema-gen`), which a
+  test holds to them.
+- **Two connection pools.** Every write and transaction goes through a pool of one
+  connection, and reads through a separate read-only pool, so writers queue in the
+  app rather than on SQLite's lock.
+- **Every timestamp is RFC 3339 in UTC to the second** (`2026-11-09T21:30:00Z`), in
+  a `DATETIME` column whose CHECK refuses any other form, with `NULL` where there is
+  none. Migration 73 converts what is stored: SQLite's space form, the browser's
+  milliseconds, an offset, and the naive form older raffles stored. The API sends
+  the new form, which the SPA and the plugin already read, and still sends `""` for
+  none. A raffle or stamp-rally time that isn't one is a 400.
+- **Production's schema matches a fresh build.** The hand-written migrations had
+  left it apart in places (column order, three missing indexes, a full unique index
+  on `tea_rooms.room_number`, `patterns` without its foreign key); migration 73
+  rebuilds those tables.
+- **Sign-ins are kept in the database**, so a deploy or restart no longer signs
+  everyone out. The database holds only a SHA-256 hash of each session's token.
+- **Card IDs, boards and every draw come from `crypto/rand`** (bingo, raffles, the
+  garapon), through `internal/random`.
+
+#### Fixed
+
+- **The admin's access-token and passkey dialogs** read their times in the new
+  form, through the SPA's shared formatter.
+
 ### [4.0.0] - 2026-11-09
 
 The SPA and the API become one app: one version, built into one binary, released

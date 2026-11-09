@@ -3,400 +3,265 @@ package store
 import (
 	"database/sql"
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"app-suite/internal/model"
 )
 
-// TestMigrateBookClubEventsRetired verifies the merge-into-Announcements
-// migrations on a legacy database: an old book_club_events table is dropped, and
-// each per-club events-channel webhook (a discord_events_webhook_url_<slug>
-// setting) becomes a dedicated announcement type while its setting row is removed.
-func TestMigrateBookClubEventsRetired(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "legacy.db")
-	db, err := sql.Open("sqlite", path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
-
-	// A minimal legacy DB at v15: the settings table (present since v3 in any real
-	// DB) with an events webhook, plus a stray book_club_events table + row. The
-	// remaining migrations never touch the table's columns, so its exact shape
-	// doesn't matter - only that it exists to be dropped.
-	const webhook = "https://discord.com/api/webhooks/123/abc"
-	setup := []string{
-		`CREATE TABLE settings (key TEXT PRIMARY KEY, value TEXT NOT NULL DEFAULT '')`,
-		`CREATE TABLE book_club_events (id INTEGER PRIMARY KEY AUTOINCREMENT, club_slug TEXT, title TEXT)`,
-	}
-	for _, stmt := range setup {
-		if _, err := db.ExecContext(t.Context(), stmt); err != nil {
-			t.Fatalf("setup legacy schema: %v", err)
-		}
-	}
-	if _, err := db.ExecContext(t.Context(), `INSERT INTO book_club_events (club_slug, title) VALUES ('yaoi', 'Old Meeting')`); err != nil {
-		t.Fatalf("seed legacy event: %v", err)
-	}
-	if _, err := db.ExecContext(t.Context(),
-		`INSERT INTO settings (key, value) VALUES ('discord_events_webhook_url_yaoi', ?)`, webhook,
-	); err != nil {
-		t.Fatalf("seed events webhook: %v", err)
-	}
-	if _, err := db.ExecContext(t.Context(), "PRAGMA user_version = 15"); err != nil {
-		t.Fatal(err)
-	}
-
-	// Run migrations up to the current schema version.
-	if err := ensureSchema(t.Context(), db); err != nil {
-		t.Fatalf("ensureSchema: %v", err)
-	}
-
-	// The retired events table is gone.
-	if tableExists(t.Context(), db, "book_club_events") {
-		t.Error("book_club_events table should have been dropped")
-	}
-
-	// The events webhook setting was migrated to an announcement type and removed.
-	var leftover int
-	if err := db.QueryRowContext(t.Context(),
-		`SELECT COUNT(*) FROM settings WHERE key = 'discord_events_webhook_url_yaoi'`,
-	).Scan(&leftover); err != nil {
-		t.Fatal(err)
-	}
-	if leftover != 0 {
-		t.Errorf("events webhook setting should have been removed; found %d", leftover)
-	}
-
-	var name, savedURL string
-	if err := db.QueryRowContext(t.Context(),
-		`SELECT name, webhook_url FROM announcement_types WHERE webhook_url = ?`, webhook,
-	).Scan(&name, &savedURL); err != nil {
-		t.Fatalf("expected a migrated announcement type: %v", err)
-	}
-	if name != "Yaoi Book Club Events" {
-		t.Errorf("migrated type name = %q; want %q", name, "Yaoi Book Club Events")
-	}
-
-	// Idempotent: re-running the webhook migration adds nothing (no setting left).
-	if err := migrateBookClubEventWebhooks(t.Context(), db); err != nil {
-		t.Fatalf("second migrateBookClubEventWebhooks: %v", err)
-	}
-	var typeCount int
-	if err := db.QueryRowContext(t.Context(), `SELECT COUNT(*) FROM announcement_types WHERE webhook_url = ?`, webhook).
-		Scan(&typeCount); err != nil {
-		t.Fatal(err)
-	}
-	if typeCount != 1 {
-		t.Errorf("announcement types with the webhook = %d; want 1", typeCount)
-	}
-}
-
-// TestEnsureSchemaRefusesNewerDatabase pins the guard that makes a rolled-back
-// deploy safe. ensureSchema used to treat any version >= schemaVersion as "up to
-// date", so a binary opening a database migrated by a NEWER build started
-// silently - and the deploy script's automatic binary rollback does exactly that:
-// it restores the previous binary but cannot un-migrate the database, so old code
-// would run against a schema it has never seen, with nobody told. Refusing turns
-// silent corruption into a startup error the operator can act on.
-func TestEnsureSchemaRefusesNewerDatabase(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "future.db")
-	db, err := sql.Open("sqlite", path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
-
-	// Bring it up to date the normal way first, then stamp it as being from a
-	// build newer than this one.
-	if err := ensureSchema(t.Context(), db); err != nil {
-		t.Fatalf("initial ensureSchema: %v", err)
-	}
-	if _, err := db.ExecContext(t.Context(), fmt.Sprintf("PRAGMA user_version = %d", schemaVersion+1)); err != nil {
-		t.Fatal(err)
-	}
-
-	err = ensureSchema(t.Context(), db)
-	if err == nil {
-		t.Fatal("ensureSchema accepted a database newer than the binary; a rolled-back deploy would run old code against a migrated schema")
-	}
-	if !strings.Contains(err.Error(), "newer than this binary") {
-		t.Errorf("error = %v; want it to say the schema is newer than the binary", err)
-	}
-
-	// An exactly-current database is still the fast path.
-	if _, err := db.ExecContext(t.Context(), fmt.Sprintf("PRAGMA user_version = %d", schemaVersion)); err != nil {
-		t.Fatal(err)
-	}
-	if err := ensureSchema(t.Context(), db); err != nil {
-		t.Errorf("ensureSchema rejected an up-to-date database: %v", err)
-	}
-}
-
-// TestMigrateTeaRoomNumberIndexToleratesLegacyData covers a migration that could
-// stop the server booting. The release before v46 let a room be saved with no
-// number and let several rooms share one; v46 then built a plain UNIQUE index over
-// that column, which fails on exactly that data - and a migration that fails is a
-// server that will not start. The index is now partial (blanks are not indexed) and
-// genuine duplicates are blanked first.
-func TestMigrateTeaRoomNumberIndexToleratesLegacyData(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "tearooms.db")
-	db, err := sql.Open("sqlite", path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
-
-	if _, err := db.ExecContext(t.Context(), teaRoomsTableSQL); err != nil {
-		t.Fatalf("create tea_rooms: %v", err)
-	}
-	// The shapes v45 permitted: two blanks, and two rooms sharing "101".
-	for _, num := range []string{"", "", "101", "101", "102"} {
-		if _, err := db.ExecContext(t.Context(), `INSERT INTO tea_rooms (name, room_number) VALUES (?, ?)`, "Room "+num, num); err != nil {
-			t.Fatalf("seed tea_rooms: %v", err)
-		}
-	}
-
-	if err := migrateTeaRoomSubtitle(t.Context(), db); err != nil {
-		t.Fatalf("migrateTeaRoomSubtitle refused legacy data: %v", err)
-	}
-
-	// Blanks survive untouched - a room is allowed to have no number.
-	var blanks int
-	if err := db.QueryRowContext(t.Context(), `SELECT COUNT(*) FROM tea_rooms WHERE room_number = ''`).Scan(&blanks); err != nil {
-		t.Fatal(err)
-	}
-	if blanks != 3 { // the two original blanks, plus the de-duplicated "101"
-		t.Errorf("blank room numbers = %d; want 3 (2 original + 1 blanked duplicate)", blanks)
-	}
-	// Nothing was deleted: a duplicate number is a data-entry slip, not a reason to
-	// destroy a room.
-	var total int
-	if err := db.QueryRowContext(t.Context(), `SELECT COUNT(*) FROM tea_rooms`).Scan(&total); err != nil {
-		t.Fatal(err)
-	}
-	if total != 5 {
-		t.Errorf("tea_rooms rows = %d; want all 5 kept", total)
-	}
-	// And the index really is in force for non-blank numbers.
-	if _, err := db.ExecContext(t.Context(), `INSERT INTO tea_rooms (name, room_number) VALUES ('Dup', '102')`); err == nil {
-		t.Error("a duplicate non-blank room number was accepted; the unique index is not doing its job")
-	}
-}
-
-// TestMigrateFestivalMapsIsReRunSafeAfterRename pins the guard against a migration
-// resurrecting a column a later one renamed. v64 renames
-// stamp_rally_stamps.stall_id to occupant_id; v61 was guarded only on the old name,
-// so re-running the chain re-added stall_id and its index, and v64 then early-
-// returned on occupant_id and never cleaned either up.
-func TestMigrateFestivalMapsIsReRunSafeAfterRename(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "rerun.db")
-	db, err := sql.Open("sqlite", path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
-
-	// A fully migrated database: past v64, so the column is occupant_id.
-	if err := ensureSchema(t.Context(), db); err != nil {
-		t.Fatalf("ensureSchema: %v", err)
-	}
-	if exists, _, err := columnInfo(t.Context(), db, "stamp_rally_stamps", "occupant_id"); err != nil || !exists {
-		t.Fatalf("precondition: occupant_id should exist after a full migrate (exists=%v err=%v)", exists, err)
-	}
-
-	// Re-run the v61 migration the way a repeated chain would.
-	if err := migrateFestivalMaps(t.Context(), db); err != nil {
-		t.Fatalf("migrateFestivalMaps re-run: %v", err)
-	}
-
-	if exists, _, err := columnInfo(t.Context(), db, "stamp_rally_stamps", "stall_id"); err != nil {
-		t.Fatal(err)
-	} else if exists {
-		t.Error("re-running migrateFestivalMaps resurrected the renamed-away stall_id column")
-	}
-	var idx int
-	if err := db.QueryRowContext(t.Context(), `SELECT COUNT(*) FROM sqlite_master
-		WHERE type='index' AND name='idx_stamp_rally_stamps_stall'`).Scan(&idx); err != nil {
-		t.Fatal(err)
-	}
-	if idx != 0 {
-		t.Error("re-running migrateFestivalMaps re-created the dead stall_id index")
-	}
-}
-
-// TestMigrateRaffleEntryPaymentsBackfillIsReRunnable pins the backfill's
-// idempotency. ensureSchema bumps user_version once, after everything has run, so a
-// boot that died between this ALTER committing and that write came back with the
-// column present - and the backfill, gated on the column being absent, was then
-// skipped for good. Historically paid entries stayed at paid_entries=0, which reads
-// as unpaid.
-func TestMigrateRaffleEntryPaymentsBackfillIsReRunnable(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "payments.db")
-	db, err := sql.Open("sqlite", path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
-
-	if err := ensureSchema(t.Context(), db); err != nil {
-		t.Fatalf("ensureSchema: %v", err)
-	}
-	if _, err := db.ExecContext(t.Context(), `INSERT INTO raffles (title) VALUES ('R')`); err != nil {
-		t.Fatal(err)
-	}
-	// A settled row whose backfill was missed: paid, but paid_entries left at 0.
-	if _, err := db.ExecContext(t.Context(), `INSERT INTO raffle_entries (raffle_id, character_name, world, num_entries, paid, paid_entries)
-		VALUES (1, 'Aria', 'Gilgamesh', 4, 1, 0)`); err != nil {
-		t.Fatal(err)
-	}
-	// A row settled AFTER the upgrade, partially. The re-run must not touch it.
-	if _, err := db.ExecContext(t.Context(), `INSERT INTO raffle_entries (raffle_id, character_name, world, num_entries, paid, paid_entries)
-		VALUES (1, 'Borin', 'Hades', 5, 1, 2)`); err != nil {
-		t.Fatal(err)
-	}
-
-	if err := migrateRaffleEntryPayments(t.Context(), db); err != nil {
-		t.Fatalf("migrateRaffleEntryPayments re-run: %v", err)
-	}
-
-	var aria, borin int
-	if err := db.QueryRowContext(t.Context(), `SELECT paid_entries FROM raffle_entries WHERE character_name='Aria'`).Scan(&aria); err != nil {
-		t.Fatal(err)
-	}
-	if err := db.QueryRowContext(t.Context(), `SELECT paid_entries FROM raffle_entries WHERE character_name='Borin'`).Scan(&borin); err != nil {
-		t.Fatal(err)
-	}
-	if aria != 4 {
-		t.Errorf("missed backfill not repaired: paid_entries = %d; want 4", aria)
-	}
-	if borin != 2 {
-		t.Errorf("re-run clobbered a partial settlement: paid_entries = %d; want 2 left alone", borin)
-	}
-}
-
-// TestStampLookupIndexesExistOnBothPaths pins the indexes behind the public
-// participant lookup. It filters on participant_name (case-insensitively) and
-// joins garapon_players by stamp_card_id, and neither had an index - so an
-// unauthenticated endpoint scanned every card ever issued and made SQLite build a
-// transient index over garapon_players on every call. Checked on a FRESH database
-// and on a migrated one, because an index that exists only on fresh installs is a
-// bug this file has produced before.
-func TestStampLookupIndexesExistOnBothPaths(t *testing.T) {
-	want := []string{"idx_stamp_rally_cards_participant", "idx_garapon_players_stamp_card"}
-
-	t.Run("fresh install", func(t *testing.T) {
-		db, err := sql.Open("sqlite", filepath.Join(t.TempDir(), "fresh.db"))
-		if err != nil {
-			t.Fatal(err)
-		}
-		defer db.Close()
-		if err := ensureSchema(t.Context(), db); err != nil {
-			t.Fatal(err)
-		}
-		assertIndexes(t, db, want)
-	})
-
-	t.Run("upgraded database", func(t *testing.T) {
-		db, err := sql.Open("sqlite", filepath.Join(t.TempDir(), "upgraded.db"))
-		if err != nil {
-			t.Fatal(err)
-		}
-		defer db.Close()
-		// Build the tables the way an existing database has them, then run only the
-		// owning migrations - the path an upgrade takes, which never calls
-		// createIndexes.
-		if err := ensureSchema(t.Context(), db); err != nil {
-			t.Fatal(err)
-		}
-		for _, idx := range want {
-			if _, err := db.ExecContext(t.Context(), "DROP INDEX IF EXISTS "+idx); err != nil {
-				t.Fatal(err)
-			}
-		}
-		if err := migrateStampRally(t.Context(), db); err != nil {
-			t.Fatalf("migrateStampRally: %v", err)
-		}
-		if err := migrateGarapons(t.Context(), db); err != nil {
-			t.Fatalf("migrateGarapons: %v", err)
-		}
-		assertIndexes(t, db, want)
-	})
-}
-
-func assertIndexes(t *testing.T, db *sql.DB, names []string) {
+// latestVersion is the newest migration's version.
+func latestVersion(t *testing.T) int64 {
 	t.Helper()
-	for _, name := range names {
-		var found int
-		if err := db.QueryRowContext(t.Context(),
-			`SELECT COUNT(*) FROM sqlite_master WHERE type='index' AND name=?`, name).Scan(&found); err != nil {
-			t.Fatal(err)
-		}
-		if found == 0 {
-			t.Errorf("index %s is missing", name)
-		}
-	}
-}
-
-// The v66 backfill splits composed participant names into name + world. It runs
-// once over live festival data, so the cases that matter are the ragged ones: a
-// name with no world, a name that itself contains the separator, and rows written
-// after the upgrade that must not be touched by a re-run.
-func TestMigrateParticipantWorldsSplitsAndIsReRunnable(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "worlds.db")
-	db, err := sql.Open("sqlite", path)
+	db, err := sql.Open("sqlite", ":memory:")
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close()
-
-	if err := ensureSchema(t.Context(), db); err != nil {
-		t.Fatalf("ensureSchema: %v", err)
-	}
-	if _, err := db.ExecContext(t.Context(), `INSERT INTO stamp_rallies (title) VALUES ('R')`); err != nil {
+	t.Cleanup(func() { db.Close() })
+	p, err := provider(db)
+	if err != nil {
 		t.Fatal(err)
 	}
-	// Rows as they looked before the column existed: everything in one blob.
-	for _, seed := range []struct{ token, composed string }{
-		{"t1", "Aria Ashwood @ Gilgamesh"},
-		{"t2", "Solo Name"},              // never typed a world
-		{"t3", "Odd @ Name @ Gilgamesh"}, // separator inside the name
-		{"t4", "  Spacey  @  Balmung  "},
+	sources := p.ListSources()
+	return sources[len(sources)-1].Version
+}
+
+// rawDB opens path with the write pool's settings, without migrating.
+func rawDB(t *testing.T, path string) *sql.DB {
+	t.Helper()
+	db, err := sql.Open("sqlite", writeDSN(path))
+	if err != nil {
+		t.Fatal(err)
+	}
+	db.SetMaxOpenConns(1)
+	t.Cleanup(func() { db.Close() })
+	return db
+}
+
+// A fresh database migrates to the newest version, where user_version and goose's
+// version agree, with the bootstrap account and the first pattern category seeded.
+func TestFreshDatabaseMigratesToLatest(t *testing.T) {
+	s, err := New(t.Context(), filepath.Join(t.TempDir(), "fresh.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { s.Close() })
+
+	v, err := s.SchemaVersion(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	var goose int64
+	if err := s.read.QueryRowContext(t.Context(), `SELECT MAX(version_id) FROM goose_db_version WHERE is_applied`).Scan(&goose); err != nil {
+		t.Fatal(err)
+	}
+	if latest := latestVersion(t); int64(v) != latest || goose != latest {
+		t.Fatalf("user_version %d and goose's version %d, want both %d", v, goose, latest)
+	}
+	var admins, categories int
+	if err := s.read.QueryRowContext(t.Context(), `SELECT COUNT(*) FROM users WHERE username = 'admin' AND is_admin = 1 AND is_active = 1`).Scan(&admins); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.read.QueryRowContext(t.Context(), `SELECT COUNT(*) FROM pattern_categories WHERE id = 1 AND name = 'Standard'`).Scan(&categories); err != nil {
+		t.Fatal(err)
+	}
+	if admins != 1 || categories != 1 {
+		t.Errorf("seeded %d bootstrap admins and %d Standard categories, want one of each", admins, categories)
+	}
+}
+
+// A database the hand-written migrations brought to v71 - production's - is taken
+// over as it is: the baseline doesn't run on it, so nothing it holds changes and
+// no seed comes back that was deleted, and the migrations after it run.
+func TestDatabaseAtTheBaselineIsTakenOver(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "v71.db")
+	db := rawDB(t, path)
+	for _, q := range []string{
+		baselineSQL,
+		`INSERT INTO users (username, password_hash, is_admin, is_active) VALUES ('owner', 'x', 1, 1)`,
+		`INSERT INTO settings (key, value) VALUES ('app_title', 'Senpan')`,
+		fmt.Sprintf("PRAGMA user_version = %d", baselineVersion),
 	} {
-		if _, err := db.ExecContext(t.Context(), `INSERT INTO stamp_rally_cards (rally_id, token, participant_name, world)
-			VALUES (1, ?, ?, '')`, seed.token, seed.composed); err != nil {
+		if _, err := db.ExecContext(t.Context(), q); err != nil {
 			t.Fatal(err)
 		}
 	}
-	// A row written AFTER the upgrade, already split. A re-run must leave it alone
-	// even though its name would otherwise look splittable.
-	if _, err := db.ExecContext(t.Context(), `INSERT INTO stamp_rally_cards (rally_id, token, participant_name, world)
-		VALUES (1, 't5', 'Later @ Person', 'Hades')`); err != nil {
+	_ = db.Close()
+
+	s, err := New(t.Context(), path)
+	if err != nil {
+		t.Fatalf("taking over a v%d database: %v", baselineVersion, err)
+	}
+	t.Cleanup(func() { s.Close() })
+
+	var users, categories int
+	var title string
+	if err := s.read.QueryRowContext(t.Context(), `SELECT COUNT(*) FROM users`).Scan(&users); err != nil {
 		t.Fatal(err)
 	}
+	if err := s.read.QueryRowContext(t.Context(), `SELECT COUNT(*) FROM pattern_categories`).Scan(&categories); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.read.QueryRowContext(t.Context(), `SELECT value FROM settings WHERE key = 'app_title'`).Scan(&title); err != nil {
+		t.Fatal(err)
+	}
+	if users != 1 || categories != 0 || title != "Senpan" {
+		t.Errorf("after the takeover: %d users, %d categories, title %q; want the database as it was (1, 0, Senpan)", users, categories, title)
+	}
+	if v, _ := s.SchemaVersion(t.Context()); int64(v) != latestVersion(t) {
+		t.Errorf("user_version %d after the takeover, want %d", v, latestVersion(t))
+	}
+}
 
-	for pass := 1; pass <= 2; pass++ { // idempotent: the second pass changes nothing
-		if err := migrateParticipantWorlds(t.Context(), db); err != nil {
-			t.Fatalf("migrateParticipantWorlds pass %d: %v", pass, err)
+// A database the hand-written migrations left short of v71 is refused, untouched:
+// goose takes over only at the baseline.
+func TestDatabaseShortOfTheBaselineIsRefused(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "v50.db")
+	db := rawDB(t, path)
+	for _, q := range []string{`CREATE TABLE cards (id TEXT PRIMARY KEY)`, `PRAGMA user_version = 50`} {
+		if _, err := db.ExecContext(t.Context(), q); err != nil {
+			t.Fatal(err)
 		}
-		for _, want := range []struct{ token, name, world string }{
-			{"t1", "Aria Ashwood", "Gilgamesh"},
-			// No separator: keep what the participant typed rather than inventing a
-			// world for them.
-			{"t2", "Solo Name", ""},
-			// Split on the LAST separator - a world never contains one.
-			{"t3", "Odd @ Name", "Gilgamesh"},
-			{"t4", "Spacey", "Balmung"},
-			{"t5", "Later @ Person", "Hades"},
-		} {
-			var name, world string
-			if err := db.QueryRowContext(t.Context(), `SELECT participant_name, world FROM stamp_rally_cards WHERE token = ?`,
-				want.token).Scan(&name, &world); err != nil {
-				t.Fatal(err)
-			}
-			if name != want.name || world != want.world {
-				t.Errorf("pass %d, %s: got (%q, %q); want (%q, %q)",
-					pass, want.token, name, world, want.name, want.world)
-			}
+	}
+	_ = db.Close()
+
+	if s, err := New(t.Context(), path); err == nil {
+		s.Close()
+		t.Fatal("a v50 database was migrated; it should be refused until a 4.0 release brings it to v71")
+	} else if !strings.Contains(err.Error(), "predates goose") {
+		t.Fatalf("refused for the wrong reason: %v", err)
+	}
+	if adopted, err := hasGoose(t.Context(), rawDB(t, path)); err != nil || adopted {
+		t.Errorf("the refused database was changed: goose's table is there (%v, %v)", adopted, err)
+	}
+}
+
+// A database migrated by a newer binary is refused rather than run, so a
+// rolled-back deploy can't run old code against a schema it doesn't know.
+func TestNewerDatabaseIsRefused(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "newer.db")
+	s, err := New(t.Context(), path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SetUserVersionForTest(t.Context(), int(latestVersion(t))+1); err != nil {
+		t.Fatal(err)
+	}
+	_ = s.Close()
+
+	if s, err := New(t.Context(), path); err == nil {
+		s.Close()
+		t.Fatal("a database newer than the binary was accepted")
+	} else if !strings.Contains(err.Error(), "newer than this binary") {
+		t.Fatalf("refused for the wrong reason: %v", err)
+	}
+}
+
+// v71Database builds a database the way production's was before goose: the
+// baseline's schema at v71, then the given rows.
+func v71Database(t *testing.T, rows ...string) string {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "v71.db")
+	db := rawDB(t, path)
+	for _, q := range append([]string{baselineSQL}, append(rows, fmt.Sprintf("PRAGMA user_version = %d", baselineVersion))...) {
+		if _, err := db.ExecContext(t.Context(), q); err != nil {
+			t.Fatalf("%s: %v", q, err)
 		}
+	}
+	_ = db.Close()
+	return path
+}
+
+// Migration 73 moves every timestamp to the one stored form: SQLite's space form,
+// the browser's milliseconds, an offset and the naive form older raffles stored
+// (read as UTC) all convert, ” becomes NULL, and AUTOINCREMENT keeps its
+// high-water mark, so a deleted id doesn't come back.
+func TestTimestampMigrationConvertsEveryForm(t *testing.T) {
+	path := v71Database(t,
+		`INSERT INTO users (id, username, password_hash, created_at, last_login_at) VALUES (1, 'a', 'x', '2026-01-02 03:04:05', NULL), (2, 'b', 'x', '2026-01-02 03:04:05', '2026-03-04 05:06:07')`,
+		`INSERT INTO user_tokens (user_id, token_hash, created_at, last_used_at) VALUES (2, 'h', '2026-01-02 03:04:05', NULL)`,
+		`INSERT INTO user_passkeys (user_id, credential_id, credential) VALUES (1, 'c', 'x')`,
+		`INSERT INTO raffles (id, title, available_from, available_to) VALUES (5, 'gone', '', '')`,
+		`DELETE FROM raffles WHERE id = 5`,
+		`INSERT INTO raffles (id, title, available_from, available_to) VALUES (3, 'r', '2026-06-13T20:00:00.000Z', '2026-06-14T20:00')`,
+		`INSERT INTO raffle_entries (raffle_id, character_name, world) VALUES (3, 'Aria Ashwood', 'Gilgamesh')`,
+		`INSERT INTO tea_rooms (name, locked_until) VALUES ('open', ''), ('locked', '2026-06-13T22:00:00+02:00')`,
+		`INSERT INTO festival_maps (id, title) VALUES (1, 'map')`,
+		`INSERT INTO ema_boards (id, festival_map_id) VALUES (1, 1)`,
+		`INSERT INTO ema_windows (board_id, start_at, end_at) VALUES (1, '2026-06-13T20:00:00Z', '2026-06-13T21:00:00Z')`,
+	)
+	s, err := New(t.Context(), path)
+	if err != nil {
+		t.Fatalf("migrating a v71 database: %v", err)
+	}
+	t.Cleanup(func() { s.Close() })
+
+	for query, want := range map[string]string{
+		`SELECT created_at FROM users WHERE id = 1`:                        "2026-01-02T03:04:05Z",
+		`SELECT last_login_at IS NULL FROM users WHERE id = 1`:             "1",
+		`SELECT last_login_at FROM users WHERE id = 2`:                     "2026-03-04T05:06:07Z",
+		`SELECT last_used_at IS NULL FROM user_tokens`:                     "1",
+		`SELECT created_at GLOB '????-??-??T??:??:??Z' FROM user_passkeys`: "1",
+		`SELECT last_used_at IS NULL FROM user_passkeys`:                   "1",
+		`SELECT available_from FROM raffles WHERE id = 3`:                  "2026-06-13T20:00:00Z",
+		`SELECT available_to FROM raffles WHERE id = 3`:                    "2026-06-14T20:00:00Z",
+		`SELECT locked_until IS NULL FROM tea_rooms WHERE name = 'open'`:   "1",
+		`SELECT locked_until FROM tea_rooms WHERE name = 'locked'`:         "2026-06-13T20:00:00Z",
+		`SELECT start_at FROM ema_windows`:                                 "2026-06-13T20:00:00Z",
+		`SELECT COUNT(*) FROM raffle_entries WHERE raffle_id = 3`:          "1",
+		`SELECT seq FROM sqlite_sequence WHERE name = 'raffles'`:           "5",
+	} {
+		var got string
+		if err := s.read.QueryRowContext(t.Context(), query).Scan(&got); err != nil {
+			t.Fatalf("%s: %v", query, err)
+		}
+		if got != want {
+			t.Errorf("%s = %q, want %q", query, got, want)
+		}
+	}
+	id, err := s.CreateRaffle(t.Context(), &model.Raffle{Title: "next"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if id != 6 {
+		t.Errorf("the next raffle got id %d, want 6: AUTOINCREMENT lost its mark and could reuse a deleted id", id)
+	}
+}
+
+// A time the migration can't read stops it, and every table stays as it was: the
+// rebuild is one transaction, so a deploy rolls back to a database the previous
+// binary still runs on.
+func TestTimestampMigrationRefusesAnUnreadableTime(t *testing.T) {
+	path := v71Database(t, `INSERT INTO raffles (title, available_from) VALUES ('r', 'next tuesday')`)
+	if s, err := New(t.Context(), path); err == nil {
+		s.Close()
+		t.Fatal("a raffle open from 'next tuesday' migrated; the time would have been lost")
+	}
+	db := rawDB(t, path)
+	var from, sql string
+	if err := db.QueryRowContext(t.Context(), `SELECT available_from FROM raffles`).Scan(&from); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.QueryRowContext(t.Context(), `SELECT sql FROM sqlite_master WHERE name = 'raffles'`).Scan(&sql); err != nil {
+		t.Fatal(err)
+	}
+	if from != "next tuesday" || strings.Contains(sql, "CHECK") {
+		t.Errorf("after the refused migration: available_from %q, table %q; want both as they were", from, sql)
+	}
+}
+
+// The committed backend/schema.sql is what the migrations build now.
+func TestSchemaIsCurrent(t *testing.T) {
+	want, err := Schema(t.Context())
+	if err != nil {
+		t.Fatalf("build the schema: %v", err)
+	}
+	got, err := os.ReadFile("../../schema.sql")
+	if err != nil {
+		t.Fatalf("read the committed schema.sql: %v", err)
+	}
+	if string(got) != want {
+		t.Fatal("backend/schema.sql is out of date - run `go run ./cmd/schema-gen` in backend/ and commit the result")
 	}
 }

@@ -40,7 +40,7 @@ func decodeEventTimes(raw string) []model.EventTime {
 // ListFestivalMaps returns every map, newest first, each with its stall count.
 // Stalls themselves are omitted (use GetFestivalMap).
 func (s *Store) ListFestivalMaps(ctx context.Context) ([]model.FestivalMap, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT m.id, m.title, m.slug, m.description, m.times, m.map_image, m.status, CAST(m.created_at AS TEXT),
+	rows, err := s.read.QueryContext(ctx, `SELECT m.id, m.title, m.slug, m.description, m.times, m.map_image, m.status, m.created_at,
 			COALESCE((SELECT COUNT(*) FROM festival_stalls st WHERE st.map_id = m.id), 0)
 		FROM festival_maps m ORDER BY m.created_at DESC, m.id DESC`)
 	if err != nil {
@@ -84,7 +84,7 @@ func (s *Store) GetFestivalMapBySlug(ctx context.Context, slug string) (*model.F
 func (s *Store) getFestivalMapWhere(ctx context.Context, where string, arg any) (*model.FestivalMap, error) {
 	var m model.FestivalMap
 	var times string
-	err := s.db.QueryRowContext(ctx, `SELECT id, title, slug, description, times, map_image, status, CAST(created_at AS TEXT)
+	err := s.read.QueryRowContext(ctx, `SELECT id, title, slug, description, times, map_image, status, created_at
 		FROM festival_maps WHERE `+where, arg).
 		Scan(&m.ID, &m.Title, &m.Slug, &m.Description, &times, &m.MapImage, &m.Status, &m.CreatedAt)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -108,7 +108,7 @@ func (s *Store) getFestivalMapWhere(ctx context.Context, where string, arg any) 
 // booth, resolved for display on the frontend). Occupants are fetched for the
 // whole map in one query rather than per pitch.
 func (s *Store) ListFestivalStalls(ctx context.Context, mapID int64) ([]model.FestivalStall, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT id, map_id, shape, color, selection_color, text_color,
+	rows, err := s.read.QueryContext(ctx, `SELECT id, map_id, shape, color, selection_color, text_color,
 			pos_x, pos_y, width, height, rotation, sort_order
 		FROM festival_stalls WHERE map_id = ? ORDER BY sort_order ASC, id ASC`, mapID)
 	if err != nil {
@@ -146,7 +146,7 @@ func (s *Store) ListFestivalStalls(ctx context.Context, mapID int64) ([]model.Fe
 // listOccupantsForMap loads every occupant on a map's pitches in display order,
 // keyed by pitch id - one query for the whole plan rather than one per pitch.
 func (s *Store) listOccupantsForMap(ctx context.Context, mapID int64) (map[int64][]model.FestivalStallOccupant, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT o.id, o.stall_id, o.affiliate_id, COALESCE(a.name, ''),
+	rows, err := s.read.QueryContext(ctx, `SELECT o.id, o.stall_id, o.affiliate_id, COALESCE(a.name, ''),
 			o.title, o.description, o.event_carrd, o.stall_type, o.type_label, o.times, o.sort_order
 		FROM festival_stall_occupants o
 		JOIN festival_stalls st ON st.id = o.stall_id
@@ -447,7 +447,7 @@ func (s *Store) DeleteFestivalMap(ctx context.Context, id int64) (bool, error) {
 // SetFestivalMapStatus updates a map's publish status ("in_progress", "published"
 // or "closed" - see the model.MapStatus* constants).
 func (s *Store) SetFestivalMapStatus(ctx context.Context, id int64, status string) (bool, error) {
-	res, err := s.db.ExecContext(ctx, `UPDATE festival_maps SET status = ? WHERE id = ?`, status, id)
+	res, err := s.write.ExecContext(ctx, `UPDATE festival_maps SET status = ? WHERE id = ?`, status, id)
 	if err != nil {
 		return false, err
 	}
@@ -458,7 +458,7 @@ func (s *Store) SetFestivalMapStatus(ctx context.Context, id int64, status strin
 // ListPublishedFestivalMaps returns the published maps (newest first) with their
 // stall counts - the public list page. In-progress and closed maps never appear.
 func (s *Store) ListPublishedFestivalMaps(ctx context.Context) ([]model.FestivalMap, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT m.id, m.title, m.slug, m.description, m.times, m.map_image, CAST(m.created_at AS TEXT),
+	rows, err := s.read.QueryContext(ctx, `SELECT m.id, m.title, m.slug, m.description, m.times, m.map_image, m.created_at,
 			COALESCE((SELECT COUNT(*) FROM festival_stalls st WHERE st.map_id = m.id), 0)
 		FROM festival_maps m WHERE m.status = ?
 		ORDER BY m.created_at DESC, m.id DESC`, model.MapStatusPublished)
@@ -512,8 +512,8 @@ type StallRaffle struct {
 // occupant id. A pitch with more than one raffle keeps the newest, since the map
 // panel links to a single one.
 func (s *Store) ListRafflesForMap(ctx context.Context, mapID int64) (map[int64]StallRaffle, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT r.occupant_id, r.id, r.title, r.prize_image, r.status,
-			r.available_from, r.available_to
+	rows, err := s.read.QueryContext(ctx, `SELECT r.occupant_id, r.id, r.title, r.prize_image, r.status,
+			COALESCE(r.available_from, ''), COALESCE(r.available_to, '')
 		FROM raffles r
 		JOIN festival_stall_occupants o ON o.id = r.occupant_id
 		JOIN festival_stalls st ON st.id = o.stall_id
@@ -544,7 +544,7 @@ func (s *Store) ListRafflesForMap(ctx context.Context, mapID int64) (map[int64]S
 func (s *Store) FestivalLinkForRally(ctx context.Context, rallyID int64) (string, error) {
 	var id int64
 	var slug string
-	err := s.db.QueryRowContext(ctx, `SELECT m.id, m.slug FROM stamp_rallies r
+	err := s.read.QueryRowContext(ctx, `SELECT m.id, m.slug FROM stamp_rallies r
 		JOIN festival_maps m ON m.id = r.festival_map_id
 		WHERE r.id = ? AND m.status = ?`, rallyID, model.MapStatusPublished).Scan(&id, &slug)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -577,7 +577,7 @@ type RallyForMap struct {
 func (s *Store) GetOpenRallyForMap(ctx context.Context, mapID int64) (*RallyForMap, error) {
 	var r RallyForMap
 	var publicSignup int
-	err := s.db.QueryRowContext(ctx, `SELECT id, title, public_signup, available_from, available_to
+	err := s.read.QueryRowContext(ctx, `SELECT id, title, public_signup, COALESCE(available_from, ''), COALESCE(available_to, '')
 		FROM stamp_rallies
 		WHERE festival_map_id = ? AND status != 'closed' ORDER BY id DESC LIMIT 1`, mapID).
 		Scan(&r.ID, &r.Title, &publicSignup, &r.AvailableFrom, &r.AvailableTo)
@@ -594,7 +594,7 @@ func (s *Store) GetOpenRallyForMap(ctx context.Context, mapID int64) (*RallyForM
 // ListRallyStampsForMap returns the stamps a rally has placed on festival-map
 // occupants, keyed by occupant id. Stamps that name no occupant are skipped.
 func (s *Store) ListRallyStampsForMap(ctx context.Context, rallyID int64) (map[int64]MapStallStamp, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT occupant_id, image FROM stamp_rally_stamps
+	rows, err := s.read.QueryContext(ctx, `SELECT occupant_id, image FROM stamp_rally_stamps
 		WHERE rally_id = ? AND occupant_id IS NOT NULL`, rallyID)
 	if err != nil {
 		return nil, err

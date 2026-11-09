@@ -19,8 +19,8 @@ func (s *Store) SaveCard(ctx context.Context, id string, board [][]int) error {
 	if err != nil {
 		return fmt.Errorf("marshal board: %w", err)
 	}
-	_, err = s.db.ExecContext(ctx,
-		"INSERT INTO cards (id, board_data, created_at) VALUES (?, ?, CURRENT_TIMESTAMP)", id, string(data))
+	_, err = s.write.ExecContext(ctx,
+		"INSERT INTO cards (id, board_data, created_at) VALUES (?, ?, strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))", id, string(data))
 	return err
 }
 
@@ -38,7 +38,7 @@ func (s *Store) SaveCardsBatch(ctx context.Context, cards []CardBatchEntry) erro
 	}
 	defer func() { _ = tx.Rollback() }()
 
-	stmt, err := tx.PrepareContext(ctx, "INSERT INTO cards (id, board_data, created_at) VALUES (?, ?, CURRENT_TIMESTAMP)")
+	stmt, err := tx.PrepareContext(ctx, "INSERT INTO cards (id, board_data, created_at) VALUES (?, ?, strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))")
 	if err != nil {
 		return fmt.Errorf("prepare stmt: %w", err)
 	}
@@ -61,7 +61,7 @@ func (s *Store) GetCard(ctx context.Context, id string) (*model.Card, error) {
 	var card model.Card
 	var boardJSON string
 	var protected int
-	err := s.db.QueryRowContext(ctx, "SELECT id, board_data, player_name, details, protected, custom_status, world FROM cards WHERE id = ?", id).
+	err := s.read.QueryRowContext(ctx, "SELECT id, board_data, player_name, details, protected, custom_status, world FROM cards WHERE id = ?", id).
 		Scan(&card.ID, &boardJSON, &card.PlayerName, &card.Details, &protected, &card.CustomStatus, &card.World)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
@@ -78,7 +78,7 @@ func (s *Store) GetCard(ctx context.Context, id string) (*model.Card, error) {
 
 // ListCards retrieves all cards with decoded board data.
 func (s *Store) ListCards(ctx context.Context) ([]model.Card, error) {
-	rows, err := s.db.QueryContext(ctx, "SELECT id, board_data, player_name, details, protected, custom_status, world FROM cards ORDER BY id")
+	rows, err := s.read.QueryContext(ctx, "SELECT id, board_data, player_name, details, protected, custom_status, world FROM cards ORDER BY id")
 	if err != nil {
 		return nil, err
 	}
@@ -103,7 +103,7 @@ func (s *Store) ListCards(ctx context.Context) ([]model.Card, error) {
 
 // ListCardIDs returns only card IDs (lightweight endpoint).
 func (s *Store) ListCardIDs(ctx context.Context) ([]string, error) {
-	rows, err := s.db.QueryContext(ctx, "SELECT id FROM cards ORDER BY id")
+	rows, err := s.read.QueryContext(ctx, "SELECT id FROM cards ORDER BY id")
 	if err != nil {
 		return nil, err
 	}
@@ -123,7 +123,7 @@ func (s *Store) ListCardIDs(ctx context.Context) ([]string, error) {
 // CardExists checks whether a card with the given ID exists.
 func (s *Store) CardExists(ctx context.Context, id string) (bool, error) {
 	var n int
-	err := s.db.QueryRowContext(ctx, "SELECT 1 FROM cards WHERE id = ?", id).Scan(&n)
+	err := s.read.QueryRowContext(ctx, "SELECT 1 FROM cards WHERE id = ?", id).Scan(&n)
 	if errors.Is(err, sql.ErrNoRows) {
 		return false, nil
 	}
@@ -135,7 +135,7 @@ func (s *Store) CardExists(ctx context.Context, id string) (bool, error) {
 
 // DeleteCard removes a card by ID. Returns true if a row was deleted.
 func (s *Store) DeleteCard(ctx context.Context, id string) (bool, error) {
-	res, err := s.db.ExecContext(ctx, "DELETE FROM cards WHERE id = ?", id)
+	res, err := s.write.ExecContext(ctx, "DELETE FROM cards WHERE id = ?", id)
 	if err != nil {
 		return false, err
 	}
@@ -147,7 +147,7 @@ func (s *Store) DeleteCard(ctx context.Context, id string) (bool, error) {
 // Protected cards (approved custom cards, or any card an admin has marked Protected)
 // are spared - they can only be removed individually via DeleteCard.
 func (s *Store) DeleteAllCards(ctx context.Context) ([]string, error) {
-	rows, err := s.db.QueryContext(ctx, "DELETE FROM cards WHERE protected = 0 RETURNING id")
+	rows, err := s.write.QueryContext(ctx, "DELETE FROM cards WHERE protected = 0 RETURNING id")
 	if err != nil {
 		return nil, err
 	}
@@ -166,7 +166,7 @@ func (s *Store) DeleteAllCards(ctx context.Context) ([]string, error) {
 
 // SetCardProtected marks or unmarks a card as Protected. Returns true if the card exists.
 func (s *Store) SetCardProtected(ctx context.Context, id string, protected bool) (bool, error) {
-	res, err := s.db.ExecContext(ctx, "UPDATE cards SET protected = ? WHERE id = ?", boolToInt(protected), id)
+	res, err := s.write.ExecContext(ctx, "UPDATE cards SET protected = ? WHERE id = ?", boolToInt(protected), id)
 	if err != nil {
 		return false, err
 	}
@@ -178,7 +178,7 @@ func (s *Store) SetCardProtected(ctx context.Context, id string, protected bool)
 // is automatically Protected. Returns true only if a still-pending card with that id
 // existed (approving a normal or already-approved card is a no-op -> false).
 func (s *Store) ApproveCustomCard(ctx context.Context, id string) (bool, error) {
-	res, err := s.db.ExecContext(ctx,
+	res, err := s.write.ExecContext(ctx,
 		"UPDATE cards SET custom_status = 'approved', protected = 1 WHERE id = ? AND custom_status = 'pending'", id)
 	if err != nil {
 		return false, err
@@ -195,8 +195,8 @@ func (s *Store) CreateCustomCard(ctx context.Context, id string, board [][]int, 
 	if err != nil {
 		return fmt.Errorf("marshal board: %w", err)
 	}
-	_, err = s.db.ExecContext(ctx,
-		"INSERT INTO cards (id, board_data, player_name, world, custom_status, protected, created_at) VALUES (?, ?, ?, ?, 'pending', 0, CURRENT_TIMESTAMP)",
+	_, err = s.write.ExecContext(ctx,
+		"INSERT INTO cards (id, board_data, player_name, world, custom_status, protected, created_at) VALUES (?, ?, ?, ?, 'pending', 0, strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))",
 		id, string(data), characterName, world,
 	)
 	return err
@@ -214,7 +214,7 @@ func (s *Store) FindDuplicateBoard(ctx context.Context, board [][]int) (string, 
 		return "", false, fmt.Errorf("marshal board: %w", err)
 	}
 	var id string
-	err = s.db.QueryRowContext(ctx, "SELECT id FROM cards WHERE board_data = ? LIMIT 1", string(target)).Scan(&id)
+	err = s.read.QueryRowContext(ctx, "SELECT id FROM cards WHERE board_data = ? LIMIT 1", string(target)).Scan(&id)
 	if errors.Is(err, sql.ErrNoRows) {
 		return "", false, nil
 	}
@@ -226,7 +226,7 @@ func (s *Store) FindDuplicateBoard(ctx context.Context, board [][]int) (string, 
 
 // UpdateCardPlayer sets the player_name and details for a card.
 func (s *Store) UpdateCardPlayer(ctx context.Context, id, playerName, details string) error {
-	_, err := s.db.ExecContext(ctx, "UPDATE cards SET player_name = ?, details = ? WHERE id = ?", playerName, details, id)
+	_, err := s.write.ExecContext(ctx, "UPDATE cards SET player_name = ?, details = ? WHERE id = ?", playerName, details, id)
 	return err
 }
 
@@ -235,7 +235,7 @@ func (s *Store) UpdateCardPlayer(ctx context.Context, id, playerName, details st
 // status columns (protected / custom_status / world) the admin Manage Cards table
 // renders as icons.
 func (s *Store) ListCardIDsWithNames(ctx context.Context) ([]model.Card, error) {
-	rows, err := s.db.QueryContext(ctx,
+	rows, err := s.read.QueryContext(ctx,
 		"SELECT id, player_name, details, COALESCE(created_at, ''), protected, custom_status, world FROM cards ORDER BY id")
 	if err != nil {
 		return nil, err
@@ -267,7 +267,7 @@ func (s *Store) GetCardPlayerNames(ctx context.Context, ids []string) (map[strin
 		args[i] = id
 	}
 	query := fmt.Sprintf("SELECT id, player_name FROM cards WHERE id IN (%s)", strings.Join(placeholders, ",")) //nolint:gosec // only "?" placeholders are formatted in; the ids go as arguments
-	rows, err := s.db.QueryContext(ctx, query, args...)
+	rows, err := s.read.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, err
 	}

@@ -14,7 +14,7 @@ import (
 
 // CreateGame inserts a new active game and returns its ID.
 func (s *Store) CreateGame(ctx context.Context) (int64, error) {
-	res, err := s.db.ExecContext(ctx, "INSERT INTO games (status, winners_cache) VALUES ('active', '[]')")
+	res, err := s.write.ExecContext(ctx, "INSERT INTO games (status, winners_cache) VALUES ('active', '[]')")
 	if err != nil {
 		return 0, err
 	}
@@ -62,7 +62,7 @@ func (s *Store) StartGame(ctx context.Context, patterns []model.BingoGamePattern
 	}
 
 	var createdAt string
-	if err := tx.QueryRowContext(ctx, "SELECT CAST(created_at AS TEXT) FROM games WHERE id = ?", gameID).Scan(&createdAt); err != nil {
+	if err := tx.QueryRowContext(ctx, "SELECT created_at FROM games WHERE id = ?", gameID).Scan(&createdAt); err != nil {
 		return 0, "", err
 	}
 
@@ -74,15 +74,15 @@ func (s *Store) StartGame(ctx context.Context, patterns []model.BingoGamePattern
 
 // EndGame marks a game as ended.
 func (s *Store) EndGame(ctx context.Context, gameID int64) error {
-	_, err := s.db.ExecContext(ctx, "UPDATE games SET status = 'ended' WHERE id = ?", gameID)
+	_, err := s.write.ExecContext(ctx, "UPDATE games SET status = 'ended' WHERE id = ?", gameID)
 	return err
 }
 
 // GetActiveGame returns the most recent active game, or nil if none.
 func (s *Store) GetActiveGame(ctx context.Context) (*model.BingoGame, error) {
 	var g model.BingoGame
-	err := s.db.QueryRowContext(ctx,
-		"SELECT id, status, CAST(created_at AS TEXT), winners_cache FROM games WHERE status = 'active' ORDER BY id DESC LIMIT 1",
+	err := s.read.QueryRowContext(ctx,
+		"SELECT id, status, created_at, winners_cache FROM games WHERE status = 'active' ORDER BY id DESC LIMIT 1",
 	).Scan(&g.ID, &g.Status, &g.CreatedAt, &g.WinnersCache)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
@@ -99,7 +99,7 @@ func (s *Store) AddGamePattern(ctx context.Context, gameID int64, patternID int,
 	if err != nil {
 		return fmt.Errorf("marshal pattern data: %w", err)
 	}
-	_, err = s.db.ExecContext(ctx,
+	_, err = s.write.ExecContext(ctx,
 		"INSERT INTO game_patterns (game_id, pattern_id, pattern_name, pattern_data) VALUES (?, ?, ?, ?)",
 		gameID, patternID, name, string(jsonData),
 	)
@@ -108,7 +108,7 @@ func (s *Store) AddGamePattern(ctx context.Context, gameID int64, patternID int,
 
 // GetGamePatterns retrieves all pattern snapshots for a game.
 func (s *Store) GetGamePatterns(ctx context.Context, gameID int64) ([]model.BingoGamePattern, error) {
-	rows, err := s.db.QueryContext(ctx,
+	rows, err := s.read.QueryContext(ctx,
 		"SELECT pattern_id, pattern_name, pattern_data FROM game_patterns WHERE game_id = ?", gameID,
 	)
 	if err != nil {
@@ -133,7 +133,7 @@ func (s *Store) GetGamePatterns(ctx context.Context, gameID int64) ([]model.Bing
 
 // AddCalledNumber records a drawn number for a game.
 func (s *Store) AddCalledNumber(ctx context.Context, gameID int64, number, order int) error {
-	_, err := s.db.ExecContext(ctx,
+	_, err := s.write.ExecContext(ctx,
 		"INSERT INTO called_numbers (game_id, number, call_order) VALUES (?, ?, ?)",
 		gameID, number, order,
 	)
@@ -142,7 +142,7 @@ func (s *Store) AddCalledNumber(ctx context.Context, gameID int64, number, order
 
 // GetCalledNumbers returns the called numbers for a game in call order.
 func (s *Store) GetCalledNumbers(ctx context.Context, gameID int64) ([]int, error) {
-	rows, err := s.db.QueryContext(ctx,
+	rows, err := s.read.QueryContext(ctx,
 		"SELECT number FROM called_numbers WHERE game_id = ? ORDER BY call_order", gameID,
 	)
 	if err != nil {
@@ -170,6 +170,6 @@ func (s *Store) UpdateWinnersCache(ctx context.Context, gameID int64, winners []
 	if err != nil {
 		return fmt.Errorf("marshal winners: %w", err)
 	}
-	_, err = s.db.ExecContext(ctx, "UPDATE games SET winners_cache = ? WHERE id = ?", string(data), gameID)
+	_, err = s.write.ExecContext(ctx, "UPDATE games SET winners_cache = ? WHERE id = ?", string(data), gameID)
 	return err
 }

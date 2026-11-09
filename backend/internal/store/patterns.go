@@ -16,7 +16,7 @@ import (
 
 // ListPatternCategories returns all pattern categories ordered by sort_order.
 func (s *Store) ListPatternCategories(ctx context.Context) ([]model.PatternCategory, error) {
-	rows, err := s.db.QueryContext(ctx, "SELECT id, name, sort_order FROM pattern_categories ORDER BY sort_order ASC, id ASC")
+	rows, err := s.read.QueryContext(ctx, "SELECT id, name, sort_order FROM pattern_categories ORDER BY sort_order ASC, id ASC")
 	if err != nil {
 		return nil, err
 	}
@@ -36,10 +36,10 @@ func (s *Store) ListPatternCategories(ctx context.Context) ([]model.PatternCateg
 // CreatePatternCategory inserts a new category and returns its ID.
 func (s *Store) CreatePatternCategory(ctx context.Context, name string) (int64, error) {
 	var nextOrder int
-	if err := s.db.QueryRowContext(ctx, "SELECT COALESCE(MAX(sort_order), 0) + 1 FROM pattern_categories").Scan(&nextOrder); err != nil {
+	if err := s.read.QueryRowContext(ctx, "SELECT COALESCE(MAX(sort_order), 0) + 1 FROM pattern_categories").Scan(&nextOrder); err != nil {
 		return 0, err
 	}
-	res, err := s.db.ExecContext(ctx, "INSERT INTO pattern_categories (name, sort_order) VALUES (?, ?)", name, nextOrder)
+	res, err := s.write.ExecContext(ctx, "INSERT INTO pattern_categories (name, sort_order) VALUES (?, ?)", name, nextOrder)
 	if err != nil {
 		return 0, err
 	}
@@ -48,7 +48,7 @@ func (s *Store) CreatePatternCategory(ctx context.Context, name string) (int64, 
 
 // RenamePatternCategory updates a category's name. Returns true if updated.
 func (s *Store) RenamePatternCategory(ctx context.Context, id int64, name string) (bool, error) {
-	res, err := s.db.ExecContext(ctx, "UPDATE pattern_categories SET name = ? WHERE id = ?", name, id)
+	res, err := s.write.ExecContext(ctx, "UPDATE pattern_categories SET name = ? WHERE id = ?", name, id)
 	if err != nil {
 		return false, err
 	}
@@ -61,7 +61,7 @@ func (s *Store) RenamePatternCategory(ctx context.Context, id int64, name string
 // exist or is the last remaining category.
 func (s *Store) DeletePatternCategory(ctx context.Context, id int64) (bool, error) {
 	var count int
-	if err := s.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM pattern_categories").Scan(&count); err != nil {
+	if err := s.read.QueryRowContext(ctx, "SELECT COUNT(*) FROM pattern_categories").Scan(&count); err != nil {
 		return false, err
 	}
 	if count <= 1 {
@@ -70,7 +70,7 @@ func (s *Store) DeletePatternCategory(ctx context.Context, id int64) (bool, erro
 
 	// Find the fallback category (lowest sort_order that isn't the one being deleted).
 	var fallbackID int64
-	err := s.db.QueryRowContext(ctx,
+	err := s.read.QueryRowContext(ctx,
 		"SELECT id FROM pattern_categories WHERE id != ? ORDER BY sort_order ASC, id ASC LIMIT 1", id,
 	).Scan(&fallbackID)
 	if err != nil {
@@ -100,7 +100,7 @@ func (s *Store) DeletePatternCategory(ctx context.Context, id int64) (bool, erro
 
 // MovePatternCategory swaps a category up or down.
 func (s *Store) MovePatternCategory(ctx context.Context, id int64, direction string) (bool, error) {
-	rows, err := s.db.QueryContext(ctx, "SELECT id FROM pattern_categories ORDER BY sort_order ASC, id ASC")
+	rows, err := s.read.QueryContext(ctx, "SELECT id FROM pattern_categories ORDER BY sort_order ASC, id ASC")
 	if err != nil {
 		return false, err
 	}
@@ -141,7 +141,7 @@ func (s *Store) MovePatternCategory(ctx context.Context, id int64, direction str
 }
 
 func (s *Store) swapCategoryOrder(ctx context.Context, idA, idB int64) (bool, error) {
-	rows, err := s.db.QueryContext(ctx, "SELECT id, sort_order FROM pattern_categories WHERE id IN (?, ?)", idA, idB)
+	rows, err := s.read.QueryContext(ctx, "SELECT id, sort_order FROM pattern_categories WHERE id IN (?, ?)", idA, idB)
 	if err != nil {
 		return false, err
 	}
@@ -194,14 +194,14 @@ func (s *Store) SavePattern(ctx context.Context, name string, data [][]bool, cat
 		categoryID = 1 // default to "Standard"
 	}
 	var nextOrder int
-	if err := s.db.QueryRowContext(ctx, "SELECT COALESCE(MAX(sort_order), 0) + 1 FROM patterns WHERE category_id = ?", categoryID).Scan(&nextOrder); err != nil {
+	if err := s.read.QueryRowContext(ctx, "SELECT COALESCE(MAX(sort_order), 0) + 1 FROM patterns WHERE category_id = ?", categoryID).Scan(&nextOrder); err != nil {
 		return 0, err
 	}
 	jsonData, err := json.Marshal(data)
 	if err != nil {
 		return 0, fmt.Errorf("marshal pattern: %w", err)
 	}
-	res, err := s.db.ExecContext(ctx,
+	res, err := s.write.ExecContext(ctx,
 		"INSERT INTO patterns (name, pattern_data, sort_order, category_id) VALUES (?, ?, ?, ?)",
 		name, string(jsonData), nextOrder, categoryID,
 	)
@@ -226,7 +226,7 @@ func (s *Store) FindDuplicatePattern(ctx context.Context, data [][]bool) (*Dupli
 		return nil, fmt.Errorf("marshal pattern: %w", err)
 	}
 	var info DuplicatePatternInfo
-	err = s.db.QueryRowContext(ctx, `
+	err = s.read.QueryRowContext(ctx, `
 		SELECT p.id, p.name, pc.name
 		FROM patterns p
 		JOIN pattern_categories pc ON pc.id = p.category_id
@@ -242,7 +242,7 @@ func (s *Store) FindDuplicatePattern(ctx context.Context, data [][]bool) (*Dupli
 
 // ListPatterns returns all patterns ordered by category sort_order, then pattern sort_order.
 func (s *Store) ListPatterns(ctx context.Context) ([]model.Pattern, error) {
-	rows, err := s.db.QueryContext(ctx, `
+	rows, err := s.read.QueryContext(ctx, `
 		SELECT p.id, p.name, p.pattern_data, p.sort_order, p.category_id, pc.name
 		FROM patterns p
 		JOIN pattern_categories pc ON pc.id = p.category_id
@@ -284,7 +284,7 @@ func (s *Store) GetPatternsByIDs(ctx context.Context, ids []int) ([]model.Patter
 		strings.Join(placeholders, ","),
 	)
 
-	rows, err := s.db.QueryContext(ctx, query, args...)
+	rows, err := s.read.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -307,7 +307,7 @@ func (s *Store) GetPatternsByIDs(ctx context.Context, ids []int) ([]model.Patter
 
 // RenamePattern updates a pattern's name. Returns true if a row was updated.
 func (s *Store) RenamePattern(ctx context.Context, id int, name string) (bool, error) {
-	res, err := s.db.ExecContext(ctx, "UPDATE patterns SET name = ? WHERE id = ?", name, id)
+	res, err := s.write.ExecContext(ctx, "UPDATE patterns SET name = ? WHERE id = ?", name, id)
 	if err != nil {
 		return false, err
 	}
@@ -317,7 +317,7 @@ func (s *Store) RenamePattern(ctx context.Context, id int, name string) (bool, e
 
 // DeletePattern removes a pattern by ID. Returns true if a row was deleted.
 func (s *Store) DeletePattern(ctx context.Context, id int) (bool, error) {
-	res, err := s.db.ExecContext(ctx, "DELETE FROM patterns WHERE id = ?", id)
+	res, err := s.write.ExecContext(ctx, "DELETE FROM patterns WHERE id = ?", id)
 	if err != nil {
 		return false, err
 	}
@@ -330,7 +330,7 @@ func (s *Store) DeletePattern(ctx context.Context, id int) (bool, error) {
 func (s *Store) MovePattern(ctx context.Context, id int, direction string) (bool, error) {
 	// Find the pattern's category.
 	var categoryID int64
-	err := s.db.QueryRowContext(ctx, "SELECT category_id FROM patterns WHERE id = ?", id).Scan(&categoryID)
+	err := s.read.QueryRowContext(ctx, "SELECT category_id FROM patterns WHERE id = ?", id).Scan(&categoryID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return false, nil
@@ -339,7 +339,7 @@ func (s *Store) MovePattern(ctx context.Context, id int, direction string) (bool
 	}
 
 	// Get ordered IDs within the same category.
-	rows, err := s.db.QueryContext(ctx, "SELECT id FROM patterns WHERE category_id = ? ORDER BY sort_order ASC, id ASC", categoryID)
+	rows, err := s.read.QueryContext(ctx, "SELECT id FROM patterns WHERE category_id = ? ORDER BY sort_order ASC, id ASC", categoryID)
 	if err != nil {
 		return false, err
 	}
@@ -375,7 +375,7 @@ func (s *Store) MovePattern(ctx context.Context, id int, direction string) (bool
 
 // swapPatternOrder exchanges the sort_order of two patterns in a transaction.
 func (s *Store) swapPatternOrder(ctx context.Context, idA, idB int) (bool, error) {
-	rows, err := s.db.QueryContext(ctx, "SELECT id, sort_order FROM patterns WHERE id IN (?, ?)", idA, idB)
+	rows, err := s.read.QueryContext(ctx, "SELECT id, sort_order FROM patterns WHERE id IN (?, ?)", idA, idB)
 	if err != nil {
 		return false, err
 	}
@@ -423,10 +423,10 @@ func (s *Store) swapPatternOrder(ctx context.Context, idA, idB int) (bool, error
 // The pattern is placed at the end of the target category's sort order.
 func (s *Store) SetPatternCategory(ctx context.Context, patternID int, categoryID int64) error {
 	var nextOrder int
-	if err := s.db.QueryRowContext(ctx, "SELECT COALESCE(MAX(sort_order), 0) + 1 FROM patterns WHERE category_id = ?", categoryID).Scan(&nextOrder); err != nil {
+	if err := s.read.QueryRowContext(ctx, "SELECT COALESCE(MAX(sort_order), 0) + 1 FROM patterns WHERE category_id = ?", categoryID).Scan(&nextOrder); err != nil {
 		return err
 	}
-	_, err := s.db.ExecContext(ctx, "UPDATE patterns SET category_id = ?, sort_order = ? WHERE id = ?", categoryID, nextOrder, patternID)
+	_, err := s.write.ExecContext(ctx, "UPDATE patterns SET category_id = ?, sort_order = ? WHERE id = ?", categoryID, nextOrder, patternID)
 	return err
 }
 

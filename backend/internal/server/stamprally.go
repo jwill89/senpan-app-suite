@@ -445,6 +445,10 @@ func (s *Server) handleStampRallyCreate(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	rally := rallyFromRequest(req, title)
+	if msg := rallyTimesError(rally); msg != "" {
+		writeError(w, http.StatusBadRequest, msg)
+		return
+	}
 	if msg := completionRuleError(rally); msg != "" {
 		writeError(w, http.StatusBadRequest, msg)
 		return
@@ -488,6 +492,10 @@ func (s *Server) handleStampRallyUpdate(w http.ResponseWriter, r *http.Request) 
 	}
 	rally := rallyFromRequest(req, title)
 	rally.ID = id
+	if msg := rallyTimesError(rally); msg != "" {
+		writeError(w, http.StatusBadRequest, msg)
+		return
+	}
 	if msg := completionRuleError(rally); msg != "" {
 		writeError(w, http.StatusBadRequest, msg)
 		return

@@ -5,11 +5,11 @@ import (
 	"encoding/json"
 	"errors"
 	"math"
-	"math/rand/v2"
 	"sync"
 	"time"
 
 	"app-suite/internal/model"
+	"app-suite/internal/random"
 	"app-suite/internal/store"
 )
 
@@ -301,7 +301,7 @@ func (g *Service) drawLocked(ctx context.Context) (*DrawResult, bool, error) {
 		return nil, false, nil
 	}
 
-	number := remaining[rand.IntN(len(remaining))] //nolint:gosec // a bingo draw, not a secret: math/rand/v2 on purpose
+	number := remaining[random.IntN(len(remaining))]
 	order := len(called) + 1
 
 	// Recording the number and caching the winners it makes are one draw. Detached

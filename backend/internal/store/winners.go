@@ -52,8 +52,8 @@ func (s *Store) ListWinnersLog(ctx context.Context, limit, offset int, sortField
 		dir = "ASC"
 	}
 
-	query := fmt.Sprintf("SELECT id, CAST(logged_at AS TEXT), card_id, player_name, game_details, winning_patterns, COUNT(*) OVER() as total FROM winners_log ORDER BY %s %s LIMIT ? OFFSET ?", col, dir)
-	rows, err := s.db.QueryContext(ctx, query, limit, offset)
+	query := fmt.Sprintf("SELECT id, logged_at, card_id, player_name, game_details, winning_patterns, COUNT(*) OVER() as total FROM winners_log ORDER BY %s %s LIMIT ? OFFSET ?", col, dir)
+	rows, err := s.read.QueryContext(ctx, query, limit, offset)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -77,7 +77,7 @@ func (s *Store) ListWinnersLog(ctx context.Context, limit, offset int, sortField
 	// count directly in that case; it only costs a query on a page that had nothing
 	// to show anyway.
 	if len(entries) == 0 {
-		if err := s.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM winners_log").Scan(&total); err != nil {
+		if err := s.read.QueryRowContext(ctx, "SELECT COUNT(*) FROM winners_log").Scan(&total); err != nil {
 			return nil, 0, err
 		}
 	}
@@ -87,7 +87,7 @@ func (s *Store) ListWinnersLog(ctx context.Context, limit, offset int, sortField
 // DeleteWinnerLogEntry removes a single winners-log entry by id.
 // Returns true if a row was deleted.
 func (s *Store) DeleteWinnerLogEntry(ctx context.Context, id int64) (bool, error) {
-	res, err := s.db.ExecContext(ctx, "DELETE FROM winners_log WHERE id = ?", id)
+	res, err := s.write.ExecContext(ctx, "DELETE FROM winners_log WHERE id = ?", id)
 	if err != nil {
 		return false, err
 	}
@@ -97,7 +97,7 @@ func (s *Store) DeleteWinnerLogEntry(ctx context.Context, id int64) (bool, error
 
 // DeleteAllWinnersLog removes every winners-log entry. Returns the number deleted.
 func (s *Store) DeleteAllWinnersLog(ctx context.Context) (int64, error) {
-	res, err := s.db.ExecContext(ctx, "DELETE FROM winners_log")
+	res, err := s.write.ExecContext(ctx, "DELETE FROM winners_log")
 	if err != nil {
 		return 0, err
 	}
@@ -108,9 +108,9 @@ func (s *Store) DeleteAllWinnersLog(ctx context.Context) (int64, error) {
 // FrequentWinners returns players who have won at least minWins times in the last hours.
 func (s *Store) FrequentWinners(ctx context.Context, minWins, hours int) ([]model.FrequentWinner, error) {
 	query := `SELECT player_name, COUNT(*) as win_count FROM winners_log
-		WHERE player_name != '' AND logged_at >= datetime('now', '-' || ? || ' hours')
+		WHERE player_name != '' AND logged_at >= strftime('%Y-%m-%dT%H:%M:%SZ', 'now', '-' || ? || ' hours')
 		GROUP BY player_name HAVING COUNT(*) >= ?`
-	rows, err := s.db.QueryContext(ctx, query, hours, minWins)
+	rows, err := s.read.QueryContext(ctx, query, hours, minWins)
 	if err != nil {
 		return nil, err
 	}

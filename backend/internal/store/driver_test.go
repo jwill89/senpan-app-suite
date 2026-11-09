@@ -31,8 +31,9 @@ func openDriverTestStore(t *testing.T) (*Store, string) {
 	return s, path
 }
 
-// Every connection the pool opens carries every connect pragma, not just the first
-// one: the test holds the pool's whole allowance at once, so each is its own.
+// Every connection either pool opens carries every connect pragma, not just the
+// first one: the test holds each pool's whole allowance at once, so each is its
+// own. The read pool's are query_only as well, and its connections refuse a write.
 func TestConnectPragmasOnEveryConnection(t *testing.T) {
 	s, _ := openDriverTestStore(t)
 	want := map[string]string{
@@ -44,29 +45,49 @@ func TestConnectPragmasOnEveryConnection(t *testing.T) {
 		"mmap_size":    "33554432",
 		"foreign_keys": "1",
 	}
-
-	n := s.db.Stats().MaxOpenConnections
-	if n < 2 {
-		t.Fatalf("the pool allows %d connections; the test needs several to mean anything", n)
-	}
-	for i := range n {
-		conn, err := s.db.Conn(t.Context())
-		if err != nil {
-			t.Fatal(err)
+	for _, pool := range []struct {
+		name      string
+		db        *sql.DB
+		size      int
+		queryOnly string
+	}{
+		{"write", s.write, 1, "0"},
+		{"read", s.read, readConns, "1"},
+	} {
+		if n := pool.db.Stats().MaxOpenConnections; n != pool.size {
+			t.Fatalf("the %s pool allows %d connections, want %d", pool.name, n, pool.size)
 		}
-		defer conn.Close()
-		for name, value := range want {
-			var got string
-			if err := conn.QueryRowContext(t.Context(), "PRAGMA "+name).Scan(&got); err != nil {
-				t.Fatalf("connection %d: PRAGMA %s: %v", i, name, err)
+		conns := make([]*sql.Conn, 0, pool.size)
+		for range pool.size {
+			conn, err := pool.db.Conn(t.Context())
+			if err != nil {
+				t.Fatal(err)
 			}
-			if got != value {
-				t.Errorf("connection %d: %s = %s, want %s", i, name, got, value)
+			conns = append(conns, conn)
+		}
+		for i, conn := range conns {
+			for name, value := range map[string]string{"query_only": pool.queryOnly} {
+				want[name] = value
+			}
+			for name, value := range want {
+				var got string
+				if err := conn.QueryRowContext(t.Context(), "PRAGMA "+name).Scan(&got); err != nil {
+					t.Fatalf("%s connection %d: PRAGMA %s: %v", pool.name, i, name, err)
+				}
+				if got != value {
+					t.Errorf("%s connection %d: %s = %s, want %s", pool.name, i, name, got, value)
+				}
 			}
 		}
+		if open := pool.db.Stats().OpenConnections; open != pool.size {
+			t.Errorf("checked %d %s connections, but the pool has %d open", pool.size, pool.name, open)
+		}
+		for _, conn := range conns {
+			_ = conn.Close()
+		}
 	}
-	if open := s.db.Stats().OpenConnections; open != n {
-		t.Errorf("checked %d connections, but the pool has %d open", n, open)
+	if _, err := s.read.ExecContext(t.Context(), `INSERT INTO settings (key, value) VALUES ('read-pool', 'x')`); err == nil {
+		t.Error("the read pool took a write")
 	}
 }
 
@@ -143,10 +164,10 @@ func TestQueryCanceledMidFlightIsCanceled(t *testing.T) {
 	}{
 		{"query", func(ctx context.Context, id int64) error {
 			var n int
-			return s.db.QueryRowContext(ctx, countToAMillion, id).Scan(&n)
+			return s.read.QueryRowContext(ctx, countToAMillion, id).Scan(&n)
 		}},
 		{"exec", func(ctx context.Context, id int64) error {
-			_, err := s.db.ExecContext(ctx, countToAMillion, id)
+			_, err := s.write.ExecContext(ctx, countToAMillion, id)
 			return err
 		}},
 		{"inside a write transaction", func(ctx context.Context, id int64) error {
@@ -183,10 +204,10 @@ func TestQueryCanceledMidFlightIsCanceled(t *testing.T) {
 func TestInterruptedIgnoresOtherErrors(t *testing.T) {
 	s, _ := openDriverTestStore(t)
 	insert := `INSERT INTO settings (key, value) VALUES ('interrupt_test', 'x')`
-	if _, err := s.db.ExecContext(t.Context(), insert); err != nil {
+	if _, err := s.write.ExecContext(t.Context(), insert); err != nil {
 		t.Fatal(err)
 	}
-	_, constraint := s.db.ExecContext(t.Context(), insert)
+	_, constraint := s.write.ExecContext(t.Context(), insert)
 	if constraint == nil {
 		t.Fatal("a duplicate key was accepted")
 	}
@@ -198,54 +219,58 @@ func TestInterruptedIgnoresOtherErrors(t *testing.T) {
 	}
 }
 
-// The driver parses a column declared DATETIME into a time.Time, which database/sql
-// then formats as RFC 3339 when it scans into a string, so reading one directly
-// would hand the API "2026-01-02T03:04:05Z" where the table holds SQLite's
-// "2026-01-02 03:04:05", and the frontend parses the two differently. The store
-// reads every one as CAST(... AS TEXT), which comes back as stored; these are the
-// paths the frontend and the plugin parse.
-func TestDatetimeColumnsReadAsStored(t *testing.T) {
+// Timestamps in the one stored form (database.md): RFC 3339 in UTC to the second.
+// The driver parses a DATETIME column into a time.Time, which database/sql formats
+// back as RFC 3339 when it scans into a string, so a value in the stored form reads
+// back as the same text - these are the paths the frontend and the plugin parse.
+// What SQL writes for "now" is that form, and every DATETIME column's CHECK refuses
+// any other: SQLite's space form, an offset, fractional seconds.
+func TestTimestampsInTheStoredForm(t *testing.T) {
 	ctx := t.Context()
 	s, _ := openDriverTestStore(t)
-	exec := func(query string, args ...any) sql.Result {
+	exec := func(query string, args ...any) (sql.Result, error) {
 		t.Helper()
-		res, err := s.db.ExecContext(ctx, query, args...)
+		return s.write.ExecContext(ctx, query, args...)
+	}
+	must := func(res sql.Result, err error) sql.Result {
+		t.Helper()
 		if err != nil {
-			t.Fatalf("%s: %v", query, err)
+			t.Fatal(err)
 		}
 		return res
 	}
-	const stored = "2026-01-02 03:04:05"
-	// What Go writes (a completed card's time), which the driver would also have
-	// reformatted, to "2026-01-02T03:04:05Z".
-	const storedRFC3339 = "2026-01-02T03:04:05.000Z"
+	const stored = "2026-01-02T03:04:05Z"
+	form := regexp.MustCompile(`^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$`)
 
 	u, err := s.CreateUser(ctx, "timestamps", "hash")
 	if err != nil {
 		t.Fatal(err)
 	}
-	exec(`UPDATE users SET created_at = ? WHERE id = ?`, stored, u.ID)
+	if !form.MatchString(u.CreatedAt) {
+		t.Errorf("a new user's created_at = %q, want the stored form", u.CreatedAt)
+	}
+	must(exec(`UPDATE users SET created_at = ? WHERE id = ?`, stored, u.ID))
 	got, err := s.GetUserByID(ctx, u.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got.CreatedAt != stored {
-		t.Errorf("user created_at = %q, want %q", got.CreatedAt, stored)
+	if got.CreatedAt != stored || got.LastLoginAt != "" {
+		t.Errorf("user created_at %q, last_login_at %q; want %q and none", got.CreatedAt, got.LastLoginAt, stored)
 	}
-
-	if err := s.UpsertUserToken(ctx, u.ID, "token-hash", "pat_test"); err != nil {
+	if err := s.UpdateLastLogin(ctx, u.ID); err != nil {
 		t.Fatal(err)
 	}
-	exec(`UPDATE user_tokens SET created_at = ? WHERE user_id = ?`, stored, u.ID)
-	info, err := s.GetUserTokenInfo(ctx, u.ID)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if info.CreatedAt != stored {
-		t.Errorf("token created_at = %q, want %q", info.CreatedAt, stored)
+	if got, _ = s.GetUserByID(ctx, u.ID); !form.MatchString(got.LastLoginAt) {
+		t.Errorf("last_login_at = %q after a sign-in, want the stored form", got.LastLoginAt)
 	}
 
-	exec(`INSERT INTO winners_log (logged_at, card_id) VALUES (?, 'ABC234')`, stored)
+	for _, bad := range []string{"2026-01-02 03:04:05", "2026-01-02T03:04:05.000Z", "2026-01-02T04:04:05+01:00", "2026-02-30T03:04:05Z"} {
+		if _, err := exec(`UPDATE users SET created_at = ? WHERE id = ?`, bad, u.ID); err == nil {
+			t.Errorf("created_at took %q; the CHECK should refuse all but the stored form", bad)
+		}
+	}
+
+	must(exec(`INSERT INTO winners_log (logged_at, card_id) VALUES (?, 'ABC234')`, stored))
 	entries, _, err := s.ListWinnersLog(ctx, 10, 0, "", "")
 	if err != nil {
 		t.Fatal(err)
@@ -254,30 +279,34 @@ func TestDatetimeColumnsReadAsStored(t *testing.T) {
 		t.Errorf("winners log = %+v, want one entry logged at %q", entries, stored)
 	}
 
-	rally, err := exec(`INSERT INTO stamp_rallies (title) VALUES ('Rally')`).LastInsertId()
+	rally, err := must(exec(`INSERT INTO stamp_rallies (title) VALUES ('Rally')`)).LastInsertId()
 	if err != nil {
 		t.Fatal(err)
 	}
-	card, err := exec(`INSERT INTO stamp_rally_cards (rally_id, token, completed, completed_at, created_at)
-		VALUES (?, 'card-token', 1, ?, ?)`, rally, storedRFC3339, stored).LastInsertId()
+	card, err := must(exec(`INSERT INTO stamp_rally_cards (rally_id, token, created_at) VALUES (?, 'card-token', ?)`, rally, stored)).LastInsertId()
 	if err != nil {
+		t.Fatal(err)
+	}
+	// A time from a client, in the browser's milliseconds, is written in the
+	// stored form.
+	if err := s.SetRallyCardCompleted(ctx, card, "2026-01-02T03:04:05.000Z"); err != nil {
 		t.Fatal(err)
 	}
 	c, err := s.GetRallyCardByID(ctx, card)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if c == nil || c.CompletedAt != storedRFC3339 || c.CreatedAt != stored {
-		t.Errorf("rally card = %+v, want completed_at %q and created_at %q", c, storedRFC3339, stored)
+	if c == nil || c.CompletedAt != stored || c.CreatedAt != stored {
+		t.Errorf("rally card = %+v, want completed_at and created_at %q", c, stored)
 	}
 
-	// A new game's start time, as CURRENT_TIMESTAMP wrote it.
+	// A new game's start time, as SQL writes "now".
 	_, createdAt, err := s.StartGame(ctx, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !regexp.MustCompile(`^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$`).MatchString(createdAt) {
-		t.Errorf("game created_at = %q, want SQLite's YYYY-MM-DD HH:MM:SS", createdAt)
+	if !form.MatchString(createdAt) {
+		t.Errorf("game created_at = %q, want the stored form", createdAt)
 	}
 	g, err := s.GetActiveGame(ctx)
 	if err != nil {
@@ -285,5 +314,27 @@ func TestDatetimeColumnsReadAsStored(t *testing.T) {
 	}
 	if g == nil || g.CreatedAt != createdAt {
 		t.Errorf("active game = %+v, want created_at %q", g, createdAt)
+	}
+}
+
+// NormalizeTime takes what clients send and returns the stored form, or "" for
+// none, and refuses anything that isn't a time.
+func TestNormalizeTime(t *testing.T) {
+	for in, want := range map[string]string{
+		"":                          "",
+		"  ":                        "",
+		"2026-06-13T20:00:00Z":      "2026-06-13T20:00:00Z",
+		"2026-06-13T20:00:00.000Z":  "2026-06-13T20:00:00Z",
+		"2026-06-13T22:00:00+02:00": "2026-06-13T20:00:00Z",
+		"2026-06-13T20:00":          "2026-06-13T20:00:00Z",
+	} {
+		if got, err := NormalizeTime(in); err != nil || got != want {
+			t.Errorf("NormalizeTime(%q) = %q, %v; want %q", in, got, err, want)
+		}
+	}
+	for _, bad := range []string{"tomorrow", "2026-06-13 20:00:00", "2026-13-01T00:00:00Z"} {
+		if _, err := NormalizeTime(bad); err == nil {
+			t.Errorf("NormalizeTime(%q) took it", bad)
+		}
 	}
 }

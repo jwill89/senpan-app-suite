@@ -14,7 +14,7 @@ import (
 
 // ListGamePresets returns all game presets ordered by name.
 func (s *Store) ListGamePresets(ctx context.Context) ([]model.GamePreset, error) {
-	rows, err := s.db.QueryContext(ctx, "SELECT id, name, pattern_ids, game_details, auto_call, auto_interval, CAST(created_at AS TEXT) FROM game_presets ORDER BY name ASC")
+	rows, err := s.read.QueryContext(ctx, "SELECT id, name, pattern_ids, game_details, auto_call, auto_interval, created_at FROM game_presets ORDER BY name ASC")
 	if err != nil {
 		return nil, err
 	}
@@ -37,8 +37,8 @@ func (s *Store) ListGamePresets(ctx context.Context) ([]model.GamePreset, error)
 func (s *Store) GetGamePreset(ctx context.Context, id int64) (*model.GamePreset, error) {
 	var p model.GamePreset
 	var idsJSON string
-	err := s.db.QueryRowContext(ctx,
-		"SELECT id, name, pattern_ids, game_details, auto_call, auto_interval, CAST(created_at AS TEXT) FROM game_presets WHERE id = ?", id,
+	err := s.read.QueryRowContext(ctx,
+		"SELECT id, name, pattern_ids, game_details, auto_call, auto_interval, created_at FROM game_presets WHERE id = ?", id,
 	).Scan(&p.ID, &p.Name, &idsJSON, &p.GameDetails, &p.Auto, &p.AutoInterval, &p.CreatedAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
@@ -56,7 +56,7 @@ func (s *Store) CreateGamePreset(ctx context.Context, name string, patternIDs []
 	if err != nil {
 		return 0, fmt.Errorf("marshal preset pattern ids: %w", err)
 	}
-	res, err := s.db.ExecContext(ctx,
+	res, err := s.write.ExecContext(ctx,
 		"INSERT INTO game_presets (name, pattern_ids, game_details, auto_call, auto_interval) VALUES (?, ?, ?, ?, ?)",
 		name, string(idsJSON), gameDetails, auto, autoInterval,
 	)
@@ -72,7 +72,7 @@ func (s *Store) UpdateGamePreset(ctx context.Context, id int64, name string, pat
 	if err != nil {
 		return fmt.Errorf("marshal preset pattern ids: %w", err)
 	}
-	_, err = s.db.ExecContext(ctx,
+	_, err = s.write.ExecContext(ctx,
 		"UPDATE game_presets SET name = ?, pattern_ids = ?, game_details = ?, auto_call = ?, auto_interval = ? WHERE id = ?",
 		name, string(idsJSON), gameDetails, auto, autoInterval, id,
 	)
@@ -81,7 +81,7 @@ func (s *Store) UpdateGamePreset(ctx context.Context, id int64, name string, pat
 
 // DeleteGamePreset removes a preset by ID. Returns true if a row was deleted.
 func (s *Store) DeleteGamePreset(ctx context.Context, id int64) (bool, error) {
-	res, err := s.db.ExecContext(ctx, "DELETE FROM game_presets WHERE id = ?", id)
+	res, err := s.write.ExecContext(ctx, "DELETE FROM game_presets WHERE id = ?", id)
 	if err != nil {
 		return false, err
 	}

@@ -302,6 +302,10 @@ func (s *Server) handleRaffleCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	raffle := req.toRaffle(0)
+	if msg := normalizeTimes(&raffle.AvailableFrom, &raffle.AvailableTo); msg != "" {
+		writeError(w, http.StatusBadRequest, msg)
+		return
+	}
 	if !s.resolveRaffleStall(r.Context(), w, raffle) {
 		return
 	}
@@ -343,6 +347,10 @@ func (s *Server) handleRaffleUpdate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	updated := req.toRaffle(id)
+	if msg := normalizeTimes(&updated.AvailableFrom, &updated.AvailableTo); msg != "" {
+		writeError(w, http.StatusBadRequest, msg)
+		return
+	}
 	if !s.resolveRaffleStall(r.Context(), w, updated) {
 		return
 	}

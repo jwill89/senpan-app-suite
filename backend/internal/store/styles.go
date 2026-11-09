@@ -164,7 +164,7 @@ func scanTokens(raw string) map[string]string {
 // ListStyles returns all styles (name + visibility, no tokens) for lightweight
 // listing in the admin theme manager.
 func (s *Store) ListStyles(ctx context.Context) ([]model.Style, error) {
-	rows, err := s.db.QueryContext(ctx, "SELECT id, name, is_public, CAST(created_at AS TEXT) FROM styles ORDER BY name ASC")
+	rows, err := s.read.QueryContext(ctx, "SELECT id, name, is_public, created_at FROM styles ORDER BY name ASC")
 	if err != nil {
 		return nil, err
 	}
@@ -184,7 +184,7 @@ func (s *Store) ListStyles(ctx context.Context) ([]model.Style, error) {
 // ListPublicStyles returns the id + name of every Public theme (ordered by name)
 // for the client-side theme picker. Excludes tokens/CSS and Private themes.
 func (s *Store) ListPublicStyles(ctx context.Context) ([]model.PublicStyle, error) {
-	rows, err := s.db.QueryContext(ctx, "SELECT id, name FROM styles WHERE is_public = 1 ORDER BY name ASC")
+	rows, err := s.read.QueryContext(ctx, "SELECT id, name FROM styles WHERE is_public = 1 ORDER BY name ASC")
 	if err != nil {
 		return nil, err
 	}
@@ -205,16 +205,16 @@ func (s *Store) ListPublicStyles(ctx context.Context) ([]model.PublicStyle, erro
 // Public. Returns nil for a missing or Private theme, so the public by-id CSS
 // endpoint can't be used to fetch a Private theme's stylesheet by guessing its id.
 func (s *Store) GetPublicStyle(ctx context.Context, id int64) (*model.Style, error) {
-	return s.scanStyle(s.db.QueryRowContext(ctx,
-		"SELECT id, name, tokens, board_flourish, number_flourish, is_public, CAST(created_at AS TEXT) FROM styles WHERE id = ? AND is_public = 1", id,
+	return s.scanStyle(s.read.QueryRowContext(ctx,
+		"SELECT id, name, tokens, board_flourish, number_flourish, is_public, created_at FROM styles WHERE id = ? AND is_public = 1", id,
 	))
 }
 
 // GetStyle retrieves a single style by ID with its tokens (and the generated
 // CSS + flourishes). Returns nil if not found.
 func (s *Store) GetStyle(ctx context.Context, id int64) (*model.Style, error) {
-	return s.scanStyle(s.db.QueryRowContext(ctx,
-		"SELECT id, name, tokens, board_flourish, number_flourish, is_public, CAST(created_at AS TEXT) FROM styles WHERE id = ?", id,
+	return s.scanStyle(s.read.QueryRowContext(ctx,
+		"SELECT id, name, tokens, board_flourish, number_flourish, is_public, created_at FROM styles WHERE id = ?", id,
 	))
 }
 
@@ -266,7 +266,7 @@ func (s *Store) CreateStyle(ctx context.Context, name string, tokens map[string]
 	if err != nil {
 		return 0, err
 	}
-	res, err := s.db.ExecContext(ctx,
+	res, err := s.write.ExecContext(ctx,
 		"INSERT INTO styles (name, tokens, board_flourish, number_flourish, is_public) VALUES (?, ?, ?, ?, ?)",
 		name, tokenJSON, boardFlourish, numberFlourish, boolToInt(isPublic),
 	)
@@ -285,7 +285,7 @@ func (s *Store) UpdateStyle(ctx context.Context, id int64, name string, tokens m
 	if err != nil {
 		return err
 	}
-	_, err = s.db.ExecContext(ctx,
+	_, err = s.write.ExecContext(ctx,
 		"UPDATE styles SET name = ?, tokens = ?, board_flourish = ?, number_flourish = ?, is_public = ? WHERE id = ?",
 		name, tokenJSON, boardFlourish, numberFlourish, boolToInt(isPublic), id,
 	)
@@ -294,7 +294,7 @@ func (s *Store) UpdateStyle(ctx context.Context, id int64, name string, tokens m
 
 // DeleteStyle removes a style by ID. Returns true if a row was deleted.
 func (s *Store) DeleteStyle(ctx context.Context, id int64) (bool, error) {
-	res, err := s.db.ExecContext(ctx, "DELETE FROM styles WHERE id = ?", id)
+	res, err := s.write.ExecContext(ctx, "DELETE FROM styles WHERE id = ?", id)
 	if err != nil {
 		return false, err
 	}
@@ -310,8 +310,8 @@ func (s *Store) GetActiveStyle(ctx context.Context) (*model.Style, error) {
 	if err != nil || idStr == "" {
 		return nil, err
 	}
-	return s.scanStyle(s.db.QueryRowContext(ctx,
-		"SELECT id, name, tokens, board_flourish, number_flourish, is_public, CAST(created_at AS TEXT) FROM styles WHERE id = ?", idStr,
+	return s.scanStyle(s.read.QueryRowContext(ctx,
+		"SELECT id, name, tokens, board_flourish, number_flourish, is_public, created_at FROM styles WHERE id = ?", idStr,
 	))
 }
 

@@ -11,7 +11,7 @@ import (
 // GetSetting retrieves a setting value by key. Returns empty string if not found.
 func (s *Store) GetSetting(ctx context.Context, key string) (string, error) {
 	var value string
-	err := s.db.QueryRowContext(ctx, "SELECT value FROM settings WHERE key = ?", key).Scan(&value)
+	err := s.read.QueryRowContext(ctx, "SELECT value FROM settings WHERE key = ?", key).Scan(&value)
 	if errors.Is(err, sql.ErrNoRows) {
 		return "", nil
 	}
@@ -20,7 +20,7 @@ func (s *Store) GetSetting(ctx context.Context, key string) (string, error) {
 
 // SetSetting upserts a setting value by key.
 func (s *Store) SetSetting(ctx context.Context, key, value string) error {
-	_, err := s.db.ExecContext(ctx,
+	_, err := s.write.ExecContext(ctx,
 		"INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value",
 		key, value,
 	)

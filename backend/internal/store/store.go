@@ -6,17 +6,18 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"math/rand/v2"
 	"net/url"
 	"os"
 	"path/filepath"
 
 	"modernc.org/sqlite"
 	sqlite3 "modernc.org/sqlite/lib"
+
+	"app-suite/internal/random"
 )
 
-// randInt returns a random int in [0, n).
-func randInt(n int) int { return rand.IntN(n) } //nolint:gosec // raffle and garapon draws, not secrets: math/rand/v2, seeded per process
+// randInt returns a random int in [0, n), for the raffle and garapon draws.
+func randInt(n int) int { return random.IntN(n) }
 
 // connectPragmas are applied to EVERY pooled connection: the driver runs each
 // _pragma in the DSN (see dsn) as it opens a connection, busy_timeout first and
@@ -38,45 +39,61 @@ var connectPragmas = []string{
 	"foreign_keys(1)",
 }
 
-// dsn is the data source name modernc opens path with: the path, then the
-// settings the driver reads from its query. It has no "file:" prefix, so the path
-// reaches SQLite as it is, without URI decoding of a '%' or '#' in it.
-func dsn(path string) string {
+// readConns is the read pool's size, all kept open: a reopened connection runs the
+// pragmas again.
+const readConns = 4
+
+// writeDSN and readDSN are the data source names modernc opens path with: the
+// path, then the settings the driver reads from its query. Neither has a "file:"
+// prefix, so the path reaches SQLite as it is, without URI decoding of a '%' or
+// '#' in it.
+//
+// The write pool begins every transaction IMMEDIATE (see beginImmediate). The read
+// pool is query_only, so a write sent to it by mistake fails rather than racing the
+// write pool's one connection.
+func writeDSN(path string) string {
 	return path + "?" + url.Values{
 		"_pragma": connectPragmas,
-		// Every read-write transaction begins IMMEDIATE; see beginImmediate.
 		"_txlock": {"immediate"},
 	}.Encode()
 }
 
-// Store wraps the SQLite database connection and provides typed CRUD methods.
-//
-// Timestamps leave the store as SQLite stores them. The driver parses a column
-// declared DATE, DATETIME or TIMESTAMP into a time.Time, which database/sql then
-// formats as RFC 3339 when it scans into a string ("2026-01-02T03:04:05Z" for a
-// stored "2026-01-02 03:04:05"), so every query reads such a column as
-// CAST(col AS TEXT), which the driver leaves as it is. A COALESCE over one is
-// already an expression and needs no cast.
-type Store struct {
-	db *sql.DB
+func readDSN(path string) string {
+	return path + "?" + url.Values{
+		"_pragma": append(append([]string{}, connectPragmas...), "query_only(1)"),
+	}.Encode()
 }
 
-// New opens (or creates) the SQLite database at path, applies migrations,
-// and returns a ready-to-use Store.
-// New opens the database and brings its schema up to date, which is what a server
-// wants. Anything that only READS should use OpenNoMigrate instead.
+// Store holds two pools over one SQLite file, as the standards have it
+// (database.md): every write and every transaction goes through write, a pool of
+// one connection, so writers queue in the app rather than on SQLite's lock; reads
+// go through read. A write commits before its response, so a read after it sees
+// it.
 //
-// ctx bounds the migrations. Canceling it stops them at the next statement; the
-// schema version is written only once every migration has run, so the next start
-// runs them again from the version stored, just as it would after a crash.
+// Timestamps leave the store as SQLite stores them, in the one form times.go
+// describes. The driver parses a DATETIME column into a time.Time, which
+// database/sql formats back as RFC 3339 when it scans into a string - the same
+// text, since that is the form stored.
+type Store struct {
+	write *sql.DB
+	read  *sql.DB
+}
+
+// New opens (or creates) the database and brings its schema up to date (migrate),
+// which is what a server wants. Anything that only READS should use OpenNoMigrate
+// instead.
+//
+// ctx bounds the migrations. Canceling one stops it at the next statement, and goose
+// records only the migrations that finished, so the next start runs the rest, just
+// as it would after a crash.
 func New(ctx context.Context, path string) (*Store, error) {
 	st, err := open(path)
 	if err != nil {
 		return nil, err
 	}
-	if err := ensureSchema(ctx, st.db); err != nil {
-		_ = st.db.Close() // the schema error is the one to report
-		return nil, fmt.Errorf("ensure schema: %w", err)
+	if err := migrate(ctx, st.write); err != nil {
+		_ = st.Close() // the schema error is the one to report
+		return nil, fmt.Errorf("migrate: %w", err)
 	}
 	return st, nil
 }
@@ -94,35 +111,42 @@ func OpenNoMigrate(path string) (*Store, error) {
 	return open(path)
 }
 
-// open opens the database and configures its connection pool. It runs no query:
-// the driver connects lazily, and migrating is New's job alone.
+// open opens the two pools. It runs no query: the driver connects lazily, and
+// migrating is New's job alone. The DSNs carry the per-connection pragmas, so they
+// apply to every connection either pool opens, not just the first.
 func open(path string) (*Store, error) {
 	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil { //nolint:gosec // made only when missing (a fresh dev database); the deploy owns production's directory
 		return nil, fmt.Errorf("create data directory: %w", err)
 	}
 
-	// The DSN carries the per-connection pragmas, so they apply to every
-	// connection the pool opens - not just the first.
-	db, err := sql.Open("sqlite", dsn(path))
+	write, err := sql.Open("sqlite", writeDSN(path))
 	if err != nil {
-		return nil, fmt.Errorf("open database: %w", err)
+		return nil, fmt.Errorf("open write pool: %w", err)
 	}
+	write.SetMaxOpenConns(1)
 
-	// SQLite only supports a single writer; limit open connections to avoid
-	// lock contention with the pure-Go driver.
-	db.SetMaxOpenConns(4)
+	read, err := sql.Open("sqlite", readDSN(path))
+	if err != nil {
+		return nil, errors.Join(fmt.Errorf("open read pool: %w", err), write.Close())
+	}
+	read.SetMaxOpenConns(readConns)
+	read.SetMaxIdleConns(readConns)
 
-	return &Store{db: db}, nil
+	return &Store{write: write, read: read}, nil
 }
 
-// Close closes the underlying database connection.
-func (s *Store) Close() error { return s.db.Close() }
+// DB is the write pool, for what keeps its own table in the database: the
+// session store.
+func (s *Store) DB() *sql.DB { return s.write }
+
+// Close closes both pools.
+func (s *Store) Close() error { return errors.Join(s.read.Close(), s.write.Close()) }
 
 // SchemaVersion reads the schema's version (PRAGMA user_version), which also shows
 // the database answers: GET /healthz reports both.
 func (s *Store) SchemaVersion(ctx context.Context) (int, error) {
 	var v int
-	if err := s.db.QueryRowContext(ctx, "PRAGMA user_version").Scan(&v); err != nil {
+	if err := s.read.QueryRowContext(ctx, "PRAGMA user_version").Scan(&v); err != nil {
 		return 0, fmt.Errorf("read user_version: %w", err)
 	}
 	return v, nil
@@ -142,18 +166,19 @@ func Interrupted(err error) bool {
 
 // beginImmediate starts a write transaction with BEGIN IMMEDIATE rather than the
 // default deferred transaction. A deferred transaction starts read-only and only
-// takes the write lock when it first writes; under WAL with multiple pooled
-// connections that lets two read-modify-write transactions both read the same
-// snapshot and then collide when the second tries to upgrade its read to a write,
-// failing with a stale-snapshot error. Taking the write lock up front instead
-// makes concurrent writers serialize on busy_timeout - SQLite allows only one
-// writer anyway, so there is no throughput cost - which keeps count/cap checks
-// (e.g. a garapon's remaining draws) race-free. Every multi-statement mutation in
-// this package uses it.
+// takes the write lock when it first writes, so a read-modify-write transaction
+// could read a snapshot that another writer (a second process such as themetool)
+// then changes, and fail with a stale-snapshot error when it upgrades. Taking the
+// write lock up front makes writers serialize on busy_timeout instead - SQLite
+// allows only one writer anyway - which keeps count/cap checks (e.g. a garapon's
+// remaining draws) race-free. Every multi-statement mutation in this package uses
+// it.
 //
-// The driver ignores TxOptions.Isolation, so it is the DSN's _txlock that makes
-// the BEGIN immediate, for every read-write transaction on the pool (the
-// migrations' included); this names the transactions that rely on it.
+// The driver ignores TxOptions.Isolation, so it is the write pool's _txlock that
+// makes the BEGIN immediate, for every transaction on it (the migrations'
+// included); this names the transactions that rely on it. Inside one, read and
+// write through the transaction: the write pool's one connection is the
+// transaction's until it ends, so a call on s.write would wait for it forever.
 func (s *Store) beginImmediate(ctx context.Context) (*sql.Tx, error) {
-	return s.db.BeginTx(ctx, nil)
+	return s.write.BeginTx(ctx, nil)
 }

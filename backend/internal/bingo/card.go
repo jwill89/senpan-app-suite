@@ -4,9 +4,10 @@ package bingo
 
 import (
 	"fmt"
-	"math/rand/v2"
 	"regexp"
 	"strings"
+
+	"app-suite/internal/random"
 )
 
 // Column ranges for standard 75-ball bingo: B(1-15), I(16-30), N(31-45), G(46-60), O(61-75).
@@ -34,7 +35,7 @@ func GenerateBoard() [][]int {
 		for i := range pool {
 			pool[i] = lo + i
 		}
-		rand.Shuffle(len(pool), func(i, j int) { pool[i], pool[j] = pool[j], pool[i] }) //nolint:gosec // a bingo card, not a secret: math/rand/v2 on purpose
+		random.Shuffle(len(pool), func(i, j int) { pool[i], pool[j] = pool[j], pool[i] })
 		for row := range 5 {
 			board[row][col] = pool[row]
 		}
@@ -50,7 +51,7 @@ func GenerateID(exists func(string) (bool, error)) (string, error) {
 	for {
 		id := make([]byte, 6)
 		for i := range id {
-			id[i] = idChars[rand.IntN(len(idChars))] //nolint:gosec // a card ID names a card, it grants nothing: math/rand/v2 on purpose
+			id[i] = idChars[random.IntN(len(idChars))]
 		}
 		taken, err := exists(string(id))
 		if err != nil {

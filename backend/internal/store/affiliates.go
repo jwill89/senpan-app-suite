@@ -17,13 +17,13 @@ import (
 
 // affiliateColumns is the shared SELECT column list (order matches scanAffiliate).
 const affiliateColumns = `id, name, subtitle, owners, location, timezone, hours, details, logo, screenshot,
-	embed_color, discord_link, carrd_link, sort_order, CAST(created_at AS TEXT)`
+	embed_color, discord_link, carrd_link, sort_order, created_at`
 
 // ListAffiliates returns every affiliate in the admin's manual drag order, then
 // alphabetically by name (so a fresh install / never-reordered list stays
 // alphabetical until dragged), each with its owners and hours decoded.
 func (s *Store) ListAffiliates(ctx context.Context) ([]model.Affiliate, error) {
-	rows, err := s.db.QueryContext(ctx,
+	rows, err := s.read.QueryContext(ctx,
 		`SELECT `+affiliateColumns+`
 		   FROM affiliates ORDER BY sort_order ASC, name COLLATE NOCASE ASC, id ASC`)
 	if err != nil {
@@ -44,7 +44,7 @@ func (s *Store) ListAffiliates(ctx context.Context) ([]model.Affiliate, error) {
 
 // GetAffiliate retrieves a single affiliate by id. Returns nil if not found.
 func (s *Store) GetAffiliate(ctx context.Context, id int64) (*model.Affiliate, error) {
-	row := s.db.QueryRowContext(ctx,
+	row := s.read.QueryRowContext(ctx,
 		`SELECT `+affiliateColumns+` FROM affiliates WHERE id = ?`, id)
 	a, err := scanAffiliate(row)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -59,7 +59,7 @@ func (s *Store) GetAffiliate(ctx context.Context, id int64) (*model.Affiliate, e
 // CreateAffiliate inserts a new affiliate and returns its ID. Owners and hours
 // are stored as JSON arrays.
 func (s *Store) CreateAffiliate(ctx context.Context, a *model.Affiliate) (int64, error) {
-	res, err := s.db.ExecContext(ctx,
+	res, err := s.write.ExecContext(ctx,
 		`INSERT INTO affiliates
 		   (name, subtitle, owners, location, timezone, hours, details, logo, screenshot, embed_color, discord_link, carrd_link)
 		   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -76,7 +76,7 @@ func (s *Store) CreateAffiliate(ctx context.Context, a *model.Affiliate) (int64,
 // id/created_at/sort_order - sort_order is managed by BulkReorderAffiliates, so an
 // edit must not reset the drag order).
 func (s *Store) UpdateAffiliate(ctx context.Context, a *model.Affiliate) error {
-	_, err := s.db.ExecContext(ctx,
+	_, err := s.write.ExecContext(ctx,
 		`UPDATE affiliates SET name = ?, subtitle = ?, owners = ?, location = ?, timezone = ?,
 		   hours = ?, details = ?, logo = ?, screenshot = ?,
 		   embed_color = ?, discord_link = ?, carrd_link = ? WHERE id = ?`,

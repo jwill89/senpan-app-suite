@@ -21,6 +21,7 @@ import CardPreviewModal from '@/components/admin/CardPreviewModal.vue'
 import ModalOverlay from '@/components/common/ModalOverlay.vue'
 import FormField from '@/components/common/ui/FormField.vue'
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
+import { formatServerTimestamp } from '@/lib/datetime'
 import { useAuthStore } from '@/stores/auth'
 import { useAppStore } from '@/stores/app'
 import { useGameStore } from '@/stores/game'
@@ -190,13 +191,9 @@ const tokenError = ref('')
 /** The freshly generated token plaintext - shown exactly once, then forgotten. */
 const newToken = ref('')
 
-/** Formats a SQLite UTC timestamp ("YYYY-MM-DD HH:MM:SS") for local display. */
+/** Formats a server timestamp for local display ("Never" when empty). */
 function fmtTokenTime(ts: string): string {
-  if (!ts) {
-    return 'Never'
-  }
-  const d = new Date(ts.replace(' ', 'T') + 'Z')
-  return Number.isNaN(d.getTime()) ? ts : d.toLocaleString()
+  return ts ? formatServerTimestamp(ts) || ts : 'Never'
 }
 
 /** Sidebar "Access Token" -> close the mobile drawer, open the modal, load info. */
@@ -314,13 +311,9 @@ async function removePasskey(id: number): Promise<void> {
   }
 }
 
-/** Formats a SQLite UTC timestamp for local display ("Never" when empty). */
+/** Formats a server timestamp for local display ("Never" when empty). */
 function fmtPasskeyTime(ts: string): string {
-  if (!ts) {
-    return 'Never'
-  }
-  const d = new Date(ts.replace(' ', 'T') + 'Z')
-  return Number.isNaN(d.getTime()) ? ts : d.toLocaleString()
+  return ts ? formatServerTimestamp(ts) || ts : 'Never'
 }
 </script>
 

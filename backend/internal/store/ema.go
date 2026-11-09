@@ -29,79 +29,6 @@ var ErrEmaWindowNotOnBoard = errors.New("window does not belong to this board")
 // artist_limit.
 var ErrEmaArtistFull = errors.New("the artist's requests for this window are full")
 
-// migrateEma (schema v70) adds the Ema plaque tables.
-//
-// ema_boards.festival_map_id cascades: a board exists only for its festival, and
-// deleting the festival is deleting its board. Plaques keep a snapshot of their
-// window's label, so editing or removing a window doesn't rewrite what a visitor
-// was told their plaque was for.
-func migrateEma(ctx context.Context, db *sql.DB) error {
-	stmts := []string{
-		`CREATE TABLE IF NOT EXISTS ema_boards (
-			id INTEGER PRIMARY KEY AUTOINCREMENT,
-			festival_map_id INTEGER NOT NULL UNIQUE REFERENCES festival_maps(id) ON DELETE CASCADE,
-			title TEXT NOT NULL DEFAULT '',
-			template_image TEXT NOT NULL DEFAULT '',
-			instructions TEXT NOT NULL DEFAULT '',
-			discord_link TEXT NOT NULL DEFAULT '',
-			allow_self INTEGER NOT NULL DEFAULT 1,
-			allow_site INTEGER NOT NULL DEFAULT 1,
-			allow_artist INTEGER NOT NULL DEFAULT 1,
-			artist_name TEXT NOT NULL DEFAULT 'Tara',
-			status TEXT NOT NULL DEFAULT 'open',
-			created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
-		)`,
-		`CREATE TABLE IF NOT EXISTS ema_windows (
-			id INTEGER PRIMARY KEY AUTOINCREMENT,
-			board_id INTEGER NOT NULL REFERENCES ema_boards(id) ON DELETE CASCADE,
-			label TEXT NOT NULL DEFAULT '',
-			start_at TEXT NOT NULL,
-			end_at TEXT NOT NULL,
-			webhook_url TEXT NOT NULL DEFAULT '',
-			sort_order INTEGER NOT NULL DEFAULT 0
-		)`,
-		`CREATE INDEX IF NOT EXISTS idx_ema_windows_board ON ema_windows(board_id)`,
-		`CREATE TABLE IF NOT EXISTS ema_plaques (
-			id INTEGER PRIMARY KEY AUTOINCREMENT,
-			board_id INTEGER NOT NULL REFERENCES ema_boards(id) ON DELETE CASCADE,
-			window_id INTEGER REFERENCES ema_windows(id) ON DELETE SET NULL,
-			window_label TEXT NOT NULL DEFAULT '',
-			kind TEXT NOT NULL,
-			character_name TEXT NOT NULL,
-			world TEXT NOT NULL DEFAULT '',
-			description TEXT NOT NULL DEFAULT '',
-			image TEXT NOT NULL DEFAULT '',
-			status TEXT NOT NULL,
-			reviewed_by TEXT NOT NULL DEFAULT '',
-			reviewed_at TEXT NOT NULL DEFAULT '',
-			created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
-		)`,
-		`CREATE INDEX IF NOT EXISTS idx_ema_plaques_board ON ema_plaques(board_id, status)`,
-		// One plaque per person per window, whichever way it was made. A rejected
-		// plaque doesn't count, so its author can try again.
-		`CREATE UNIQUE INDEX IF NOT EXISTS idx_ema_plaques_one_per_window
-			ON ema_plaques(window_id, character_name COLLATE NOCASE, world COLLATE NOCASE)
-			WHERE window_id IS NOT NULL AND status != 'rejected'`,
-	}
-	for _, q := range stmts {
-		if _, err := db.ExecContext(ctx, q); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-// migrateEmaArtistLimit (schema v71) adds ema_windows.artist_limit: the most
-// artist requests a window takes. 0 is no limit, which is how every window
-// behaved before.
-func migrateEmaArtistLimit(ctx context.Context, db *sql.DB) error {
-	if !tableExists(ctx, db, "ema_windows") || hasColumn(ctx, db, "ema_windows", "artist_limit") {
-		return nil
-	}
-	_, err := db.ExecContext(ctx, `ALTER TABLE ema_windows ADD COLUMN artist_limit INTEGER NOT NULL DEFAULT 0`)
-	return err
-}
-
 // -- Boards -------------------------------------------------------------------
 
 const emaBoardColumns = `b.id, b.festival_map_id, COALESCE(m.title, ''), b.title, b.template_image,
@@ -122,7 +49,7 @@ func scanEmaBoard(sc rowScanner) (model.EmaBoard, error) {
 // ListEmaBoards returns every board, newest first, with the counts the admin list
 // shows: site plaques waiting for review, and artist requests not yet done.
 func (s *Store) ListEmaBoards(ctx context.Context) ([]model.EmaBoard, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT `+emaBoardColumns+`,
+	rows, err := s.read.QueryContext(ctx, `SELECT `+emaBoardColumns+`,
 			(SELECT COUNT(*) FROM ema_plaques p WHERE p.board_id = b.id AND p.status = 'pending'),
 			(SELECT COUNT(*) FROM ema_plaques p WHERE p.board_id = b.id AND p.status = 'requested')
 		`+emaBoardFrom+` ORDER BY b.created_at DESC, b.id DESC`)
@@ -157,7 +84,7 @@ func (s *Store) GetEmaBoardForMap(ctx context.Context, mapID int64) (*model.EmaB
 }
 
 func (s *Store) getEmaBoardWhere(ctx context.Context, where string, arg any) (*model.EmaBoard, error) {
-	b, err := scanEmaBoard(s.db.QueryRowContext(ctx, `SELECT `+emaBoardColumns+` `+emaBoardFrom+` WHERE `+where, arg))
+	b, err := scanEmaBoard(s.read.QueryRowContext(ctx, `SELECT `+emaBoardColumns+` `+emaBoardFrom+` WHERE `+where, arg))
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
 	}
@@ -171,7 +98,7 @@ func (s *Store) getEmaBoardWhere(ctx context.Context, where string, arg any) (*m
 }
 
 func (s *Store) listEmaWindows(ctx context.Context, boardID int64) ([]model.EmaWindow, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT w.id, w.board_id, w.label, w.start_at, w.end_at, w.webhook_url,
+	rows, err := s.read.QueryContext(ctx, `SELECT w.id, w.board_id, w.label, w.start_at, w.end_at, w.webhook_url,
 			w.artist_limit, (SELECT COUNT(*) FROM ema_plaques p WHERE p.window_id = w.id AND p.kind = ?), w.sort_order
 		FROM ema_windows w WHERE w.board_id = ? ORDER BY w.sort_order, w.start_at, w.id`, model.EmaKindArtist, boardID)
 	if err != nil {
@@ -294,7 +221,7 @@ func insertEmaWindow(ctx context.Context, tx *sql.Tx, boardID int64, w *model.Em
 
 // SetEmaBoardStatus opens or closes a board.
 func (s *Store) SetEmaBoardStatus(ctx context.Context, id int64, status string) error {
-	_, err := s.db.ExecContext(ctx, `UPDATE ema_boards SET status = ? WHERE id = ?`, status, id)
+	_, err := s.write.ExecContext(ctx, `UPDATE ema_boards SET status = ? WHERE id = ?`, status, id)
 	return err
 }
 
@@ -340,7 +267,7 @@ func (s *Store) DeleteEmaBoard(ctx context.Context, id int64) (deleted bool, ima
 // before the festival is deleted (the board cascades with it) so the files can be
 // removed too.
 func (s *Store) EmaImagesForMap(ctx context.Context, mapID int64) ([]string, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT p.image FROM ema_plaques p
+	rows, err := s.read.QueryContext(ctx, `SELECT p.image FROM ema_plaques p
 		JOIN ema_boards b ON b.id = p.board_id
 		WHERE b.festival_map_id = ? AND p.image != ''`, mapID)
 	if err != nil {
@@ -361,7 +288,7 @@ func (s *Store) EmaImagesForMap(ctx context.Context, mapID int64) ([]string, err
 // -- Plaques ------------------------------------------------------------------
 
 const emaPlaqueColumns = `p.id, p.board_id, p.window_id, p.window_label, p.kind, p.character_name,
-	p.world, p.description, p.image, p.status, p.reviewed_by, p.reviewed_at, p.created_at,
+	p.world, p.description, p.image, p.status, p.reviewed_by, COALESCE(p.reviewed_at, ''), p.created_at,
 	COALESCE(m.title, '')`
 
 const emaPlaqueFrom = `FROM ema_plaques p
@@ -383,7 +310,7 @@ func scanEmaPlaque(sc rowScanner) (model.EmaPlaque, error) {
 
 func (s *Store) listEmaPlaques(ctx context.Context, where string, args ...any) ([]model.EmaPlaque, error) {
 	//nolint:gosec // `where` is one of this file's fixed predicates; every value is a ? placeholder
-	rows, err := s.db.QueryContext(ctx, `SELECT `+emaPlaqueColumns+` `+emaPlaqueFrom+` WHERE `+where+`
+	rows, err := s.read.QueryContext(ctx, `SELECT `+emaPlaqueColumns+` `+emaPlaqueFrom+` WHERE `+where+`
 		ORDER BY p.created_at DESC, p.id DESC`, args...)
 	if err != nil {
 		return nil, err
@@ -419,7 +346,7 @@ func (s *Store) ListEmaPlaquesFor(ctx context.Context, boardID int64, name, worl
 
 // GetEmaPlaque returns one plaque (nil if not found).
 func (s *Store) GetEmaPlaque(ctx context.Context, id int64) (*model.EmaPlaque, error) {
-	p, err := scanEmaPlaque(s.db.QueryRowContext(ctx, `SELECT `+emaPlaqueColumns+` `+emaPlaqueFrom+` WHERE p.id = ?`, id))
+	p, err := scanEmaPlaque(s.read.QueryRowContext(ctx, `SELECT `+emaPlaqueColumns+` `+emaPlaqueFrom+` WHERE p.id = ?`, id))
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
 	}
@@ -480,7 +407,7 @@ func (s *Store) CreateEmaPlaque(ctx context.Context, p *model.EmaPlaque) (*model
 // still in `from` - the claim an approval takes before posting, and its release
 // when the post fails. Reports whether it applied.
 func (s *Store) SetEmaPlaqueStatus(ctx context.Context, id int64, from, to string) (bool, error) {
-	res, err := s.db.ExecContext(ctx, `UPDATE ema_plaques SET status = ? WHERE id = ? AND status = ?`, to, id, from)
+	res, err := s.write.ExecContext(ctx, `UPDATE ema_plaques SET status = ? WHERE id = ? AND status = ?`, to, id, from)
 	if err != nil {
 		return false, err
 	}
@@ -493,7 +420,7 @@ func (s *Store) SetEmaPlaqueStatus(ctx context.Context, id int64, from, to strin
 // copy, and a rejected one is never used). Conditional on `from`, like
 // SetEmaPlaqueStatus. Reports whether it applied.
 func (s *Store) FinishEmaPlaque(ctx context.Context, id int64, from, to, by string) (bool, error) {
-	res, err := s.db.ExecContext(ctx, `UPDATE ema_plaques SET status = ?, image = '', reviewed_by = ?, reviewed_at = ?
+	res, err := s.write.ExecContext(ctx, `UPDATE ema_plaques SET status = ?, image = '', reviewed_by = ?, reviewed_at = ?
 		WHERE id = ? AND status = ?`, to, by, time.Now().UTC().Format(time.RFC3339), id, from)
 	if err != nil {
 		return false, err
@@ -508,7 +435,7 @@ func (s *Store) SetEmaRequestComplete(ctx context.Context, id int64, complete bo
 	if !complete {
 		from, to, by, at = model.EmaStatusComplete, model.EmaStatusRequested, "", ""
 	}
-	res, err := s.db.ExecContext(ctx, `UPDATE ema_plaques SET status = ?, reviewed_by = ?, reviewed_at = ?
+	res, err := s.write.ExecContext(ctx, `UPDATE ema_plaques SET status = ?, reviewed_by = ?, reviewed_at = ?
 		WHERE id = ? AND kind = ? AND status = ?`, to, by, at, id, model.EmaKindArtist, from)
 	if err != nil {
 		return false, err

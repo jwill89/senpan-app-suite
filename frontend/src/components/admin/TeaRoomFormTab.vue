@@ -84,7 +84,7 @@ function cancel(): void {
       <div class="flex-row items-start mb-10">
         <FormField
           label="Cost (gil / half hour)"
-          style="flex: 1 1 auto; min-width: 200px"
+          class="flex-auto min-w-200"
           help="Whole gil. When a room is discounted the embed shows this halved (50% off)."
         >
           <input
@@ -96,11 +96,7 @@ function cancel(): void {
             aria-label="Cost per half hour in gil"
           />
         </FormField>
-        <FormField
-          label="Embed color"
-          style="flex: 0 0 auto"
-          help="Accent stripe on the Discord embed."
-        >
+        <FormField label="Embed color" class="flex-none" help="Accent stripe on the Discord embed.">
           <div class="color-field">
             <input
               v-model="store.teaRoomForm.color"

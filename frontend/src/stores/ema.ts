@@ -1,7 +1,7 @@
 /**
  * Ema Plaques, admin side: the festival plaque boards (setup, windows and their
  * webhooks), the review queue for plaques designed on the site, and the artist's
- * request queue.
+ * requests, which are rows of the open board like any other plaque.
  *
  * Approving a site plaque is what posts it: the server sends it to the window's
  * Discord webhook with the image attached, records it as posted, and deletes the
@@ -72,15 +72,18 @@ export const useEmaStore = defineStore('ema', () => {
   /** Plaque ids with a review (approve/reject) in flight. */
   const reviewing = ref<Set<number>>(new Set())
 
-  const requests = ref<EmaPlaque[]>([])
-  const requestsLoading = ref(false)
   /** A finished plaque is on its way to Discord. */
   const postingRequest = ref(false)
 
-  /** Site plaques waiting for review, across every board (the sidebar count). */
-  const pendingTotal = computed(() => boards.value.reduce((n, b) => n + b.pendingCount, 0))
-  /** Artist requests not yet done (the sidebar count). */
-  const openRequests = computed(() => requests.value.filter((r) => r.status === 'requested'))
+  /**
+   * What waits on staff across every board: site plaques to review and artist requests
+   * to make (the sidebar count).
+   */
+  const waitingTotal = computed(() =>
+    boards.value.reduce((n, b) => n + b.pendingCount + b.requestedCount, 0),
+  )
+  /** What visitors asked the artist for on the open board, every day of it. */
+  const artistRequests = computed(() => plaques.value.filter((p) => p.kind === 'artist'))
 
   const pendingPlaques = computed(() =>
     plaques.value.filter(
@@ -297,16 +300,18 @@ export const useEmaStore = defineStore('ema', () => {
     }
   }
 
-  // -- The artist's queue ---------------------------------------------------------
+  // -- The artist's requests --------------------------------------------------------
 
-  async function loadRequests(): Promise<void> {
-    await withLoading(requestsLoading, async () => {
-      try {
-        requests.value = (await unwrap(api.GET('/ema-requests'))).plaques
-      } catch (e) {
-        ui.notify((e as Error).message, 'error')
-      }
-    })
+  /** Swaps a plaque the server answered with into the open board's list. */
+  function replacePlaque(res: EmaPlaque): void {
+    plaques.value = plaques.value.map((x) => (x.id === res.id ? res : x))
+  }
+
+  /** Reads the open board's plaques again, after a request the server refused. */
+  function reloadPlaques(): void {
+    if (selectedBoard.value) {
+      void loadPlaques(selectedBoard.value.id)
+    }
   }
 
   async function setRequestComplete(p: EmaPlaque, complete: boolean): Promise<void> {
@@ -317,10 +322,10 @@ export const useEmaStore = defineStore('ema', () => {
           ? api.POST('/ema-requests/{id}/complete', params)
           : api.POST('/ema-requests/{id}/reopen', params),
       )
-      requests.value = requests.value.map((x) => (x.id === p.id ? res : x))
+      replacePlaque(res)
     } catch (e) {
       ui.notify((e as Error).message, 'error')
-      void loadRequests()
+      reloadPlaques()
     }
   }
 
@@ -338,12 +343,12 @@ export const useEmaStore = defineStore('ema', () => {
     postingRequest.value = true
     try {
       const res = await apiUpload<EmaPlaque>(`ema-requests/${p.id}/post`, form)
-      requests.value = requests.value.map((x) => (x.id === p.id ? res : x))
+      replacePlaque(res)
       ui.notify('Posted to Discord', 'success')
       return true
     } catch (e) {
       ui.notify((e as Error).message, 'error')
-      void loadRequests()
+      reloadPlaques()
       return false
     } finally {
       postingRequest.value = false
@@ -360,11 +365,9 @@ export const useEmaStore = defineStore('ema', () => {
     saving,
     festivals,
     reviewing,
-    requests,
-    requestsLoading,
     postingRequest,
-    pendingTotal,
-    openRequests,
+    waitingTotal,
+    artistRequests,
     pendingPlaques,
     loadBoards,
     openBoard,
@@ -378,7 +381,6 @@ export const useEmaStore = defineStore('ema', () => {
     setBoardStatus,
     deleteBoard,
     review,
-    loadRequests,
     setRequestComplete,
     postRequest,
   }

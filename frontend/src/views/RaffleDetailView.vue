@@ -281,7 +281,7 @@ function back(): void {
             v-model="lookupName"
             placeholder="Character name"
             aria-label="Search your character name"
-            style="flex: 1; min-width: 160px"
+            class="flex-1 min-w-160"
             @keyup.enter="runLookup"
           />
           <button
@@ -382,7 +382,7 @@ function back(): void {
             @blur="raffles.clampSignupEntries()"
           />
         </div>
-        <p v-if="raffleCostLabel(raffles.selectedRaffle)" class="mb-12" style="font-size: 0.95rem">
+        <p v-if="raffleCostLabel(raffles.selectedRaffle)" class="mb-12 text-md">
           <strong>Total Cost:</strong> {{ raffles.raffleTotalCost().toLocaleString() }} gil
         </p>
         <!-- Cloudflare Turnstile bot check (only when a site key is configured). -->
@@ -415,7 +415,7 @@ function back(): void {
         v-if="!raffles.selectedRaffleEnterable && !detailsOnly && !raffles.raffleSignupResult"
         class="raffle-closed-msg"
       >
-        <p class="text-muted" style="text-align: center; padding: 20px; font-size: 1.1rem">
+        <p class="text-muted ta-center p-20 text-lg">
           <font-awesome-icon :icon="['fad', 'lock']" /> This raffle is closed.
         </p>
       </div>

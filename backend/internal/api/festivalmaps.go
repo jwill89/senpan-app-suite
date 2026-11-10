@@ -781,7 +781,7 @@ func (h handlers) deleteFestivalMap(ctx context.Context, in *festivalMapIDInput)
 		h.removePlaqueImage(img)
 	}
 	// The middleware tells the maps; these pages showed what the delete unlinked or removed.
-	for _, resource := range []string{"stamp-rallies", "raffles", "ema-boards", "ema-requests"} {
+	for _, resource := range []string{"stamp-rallies", "raffles", "ema-boards"} {
 		ResourceChanged(h.Live, resource)
 	}
 	return nil, nil

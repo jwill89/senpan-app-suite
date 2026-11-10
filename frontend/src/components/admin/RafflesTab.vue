@@ -312,7 +312,7 @@ async function deleteSelected(): Promise<void> {
       <div v-if="isOpen" class="subpanel mt-16 mb-16">
         <h3 class="section-heading"><font-awesome-icon :icon="['fad', 'plus']" /> Add Entry</h3>
         <div class="flex-row mb-10">
-          <FormField label="Character Name" style="flex: 2; min-width: 160px">
+          <FormField label="Character Name" class="flex-2 min-w-160">
             <input
               v-model="raffles.entryAdd.characterName"
               placeholder="Character name"
@@ -320,7 +320,7 @@ async function deleteSelected(): Promise<void> {
               @keyup.enter="raffles.addRaffleEntry()"
             />
           </FormField>
-          <FormField label="World" style="flex: 1; min-width: 120px">
+          <FormField label="World" class="flex-1 min-w-120">
             <input
               v-model="raffles.entryAdd.world"
               placeholder="World"
@@ -328,7 +328,7 @@ async function deleteSelected(): Promise<void> {
               @keyup.enter="raffles.addRaffleEntry()"
             />
           </FormField>
-          <FormField label="Entries" style="flex: 0 0 96px; min-width: 80px">
+          <FormField label="Entries" class="flex-fixed-96 min-w-80">
             <input
               v-model.number="raffles.entryAdd.numEntries"
               type="number"
@@ -351,7 +351,7 @@ async function deleteSelected(): Promise<void> {
                 type="number"
                 min="0"
                 step="1"
-                style="width: 110px"
+                class="w-110"
                 aria-label="Amount waived"
               />
             </label>

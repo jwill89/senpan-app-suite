@@ -59,11 +59,7 @@ const tokens = computed<Record<string, string>>({
               block
               label="Loading..."
             />
-            <p
-              v-else-if="styles.styles.length === 0"
-              class="text-muted text-sm"
-              style="padding: 8px"
-            >
+            <p v-else-if="styles.styles.length === 0" class="text-muted text-sm p-8">
               No themes yet.
             </p>
           </div>
@@ -100,7 +96,7 @@ const tokens = computed<Record<string, string>>({
                 v-model="styles.editingStyle.name"
                 placeholder="Theme name"
                 aria-label="Theme name"
-                style="flex: 1"
+                class="flex-1"
               />
               <button
                 type="button"

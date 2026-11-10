@@ -33,17 +33,6 @@ export default [
   vueConventions,
   tsStylistic,
   {
-    name: 'senpan/vue',
-    files: ['**/*.vue'],
-    rules: {
-      // AGENTS.md "CSS conventions" allows a static style="" for genuinely one-off
-      // layout (a form column's flex share), and moving those into CSS would grow
-      // scoped CSS, which the conventions gate ratchets down, or bloat the shared
-      // utility band.
-      'vue/no-static-inline-styles': 'off',
-    },
-  },
-  {
     name: 'senpan/a11y',
     rules: {
       // A label names its control by holding it or by `for`; the site's own

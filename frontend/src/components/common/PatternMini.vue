@@ -15,12 +15,7 @@ defineProps<{
 </script>
 
 <template>
-  <component
-    :is="inline ? 'span' : 'div'"
-    class="pattern-mini"
-    :class="size"
-    :style="inline ? 'display:inline-grid' : undefined"
-  >
+  <component :is="inline ? 'span' : 'div'" class="pattern-mini" :class="size">
     <template v-for="(row, ri) in patternData" :key="ri">
       <component
         :is="inline ? 'span' : 'div'"

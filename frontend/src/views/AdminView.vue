@@ -87,9 +87,6 @@ onMounted(async () => {
     if (auth.hasPermission('festival-ema')) {
       loads.push(ema.loadBoards())
     }
-    if (auth.hasPermission('festival-ema-requests')) {
-      loads.push(ema.loadRequests())
-    }
     // The game state carries the shared draw delay (loadGameState sets it).
     await Promise.allSettled(loads)
   } catch {

@@ -4,7 +4,6 @@
   "extends": "@jwill89/lint-web/tsconfig.node.json",
   "include": [
     "vite.config.ts",
-    "vitest.config.ts",
     "config/**/*.ts",
     "playwright.config.ts",
     "e2e/**/*.ts"

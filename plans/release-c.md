@@ -5,6 +5,9 @@ overhaul in shared-tooling's `PLAN.md` (step 7): the backend moves to huma and t
 the standards give an API (`shared/standards/api-and-realtime.md`), and the SPA and the
 plugin move with it, all released together as 5.0.0.
 
+**Status:** 5.0.0 was deployed on 2026-11-10. The plugin's in-game check waits until
+Dalamud is back up.
+
 ## Decisions (settled 2026-11-09)
 
 | Question | Decision |

@@ -2,27 +2,30 @@
 /**
  * Admin Festival -> Ema Plaques: one plaque board per festival.
  *
- * The list shows every board with how many plaques wait for review. A board's page
- * is where staff work: the review queue of plaques designed on the site - each
- * approved one is posted to its day's Discord webhook and its stored image deleted,
- * each rejected one just deleted - and the board's whole plaque record. The board's
- * setup is a Back sub-page (EmaBoardFormTab).
+ * The list shows every board with how many plaques wait for review and how many
+ * wait on the artist. A board's page is where staff work: the review queue of
+ * plaques designed on the site - each approved one is posted to its day's Discord
+ * webhook and its stored image deleted, each rejected one just deleted - the
+ * artist's requests, a table by day, and the board's whole plaque record. The
+ * board's setup is a Back sub-page (EmaBoardFormTab).
  */
-import { ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
 import AdminPanel from '@/components/common/ui/AdminPanel.vue'
 import ManagerView from '@/components/common/ui/ManagerView.vue'
 import ListRow from '@/components/common/ui/ListRow.vue'
 import SubPageHeader from '@/components/common/ui/SubPageHeader.vue'
 import DataTable, { type DataColumn } from '@/components/common/ui/DataTable.vue'
+import DataTableToolbar from '@/components/common/ui/DataTableToolbar.vue'
 import EmptyState from '@/components/common/ui/EmptyState.vue'
 import EmaBoardFormTab from './EmaBoardFormTab.vue'
+import EmaRequestPostModal from './EmaRequestPostModal.vue'
 import { useEmaStore } from '@/stores/ema'
 import { useUiStore } from '@/stores/ui'
 import { assetUrl } from '@/lib/assets'
 import { formatServerTimestamp } from '@/lib/datetime'
 import { participantLabel } from '@/lib/participant'
-import type { EmaBoard } from '@/api/client'
+import type { EmaBoard, EmaPlaque } from '@/api/client'
 
 const ema = useEmaStore()
 const ui = useUiStore()
@@ -48,6 +51,42 @@ const recordColumns: DataColumn[] = [
   { key: 'reviewedBy', label: 'Reviewed By', sortable: true },
   { key: 'createdAt', label: 'Sent', sortable: true, align: 'right' },
 ]
+
+const requestColumns: DataColumn[] = [
+  { key: 'windowLabel', label: 'Day', sortable: true },
+  { key: 'characterName', label: 'Character', sortable: true },
+  { key: 'description', label: 'What they asked for' },
+  { key: 'createdAt', label: 'Asked', sortable: true },
+  { key: 'actions', label: '', align: 'right' },
+]
+
+/** The request whose finished plaque is being posted. */
+const posting = ref<EmaPlaque | null>(null)
+/** Finished requests are hidden until asked for: the table is what's left to make. */
+const showFinished = ref(false)
+/** The day the requests are narrowed to, or all of them. */
+const requestDay = ref<number | ''>('')
+
+/** The requests the table is about: all of them, or only what's left to make. */
+const requestsInScope = computed(() =>
+  showFinished.value
+    ? ema.artistRequests
+    : ema.artistRequests.filter((r) => r.status !== 'complete'),
+)
+const requestRows = computed(() =>
+  requestsInScope.value.filter((r) => requestDay.value === '' || r.windowId === requestDay.value),
+)
+const requestsToMake = computed(
+  () => ema.artistRequests.filter((r) => r.status !== 'complete').length,
+)
+
+// Another board has other days.
+watch(
+  () => ema.selectedBoard?.id,
+  () => {
+    requestDay.value = ''
+  },
+)
 
 function when(ts: string): string {
   return ts ? formatServerTimestamp(ts) : ''
@@ -199,6 +238,88 @@ function copyDashboardLink(): void {
       </div>
       <EmptyState v-else text="Nothing waiting for review." />
 
+      <!-- The artist's requests, by day -->
+      <h4 class="section-heading mt-20">
+        <font-awesome-icon :icon="['fad', 'palette']" /> Artist Requests
+        <span class="text-muted text-sm">({{ requestsToMake }} to make)</span>
+      </h4>
+      <p class="text-muted text-sm mb-12">
+        Plaques visitors asked {{ ema.selectedBoard.artistName }} to make, each for one of the
+        board's days. When one is done, post it here - it goes to that day's Discord channel with
+        their name and the artist's, and leaves the list. Posted it yourself? Mark it complete
+        instead.
+      </p>
+      <template v-if="ema.artistRequests.length">
+        <DataTableToolbar
+          :count="requestRows.length"
+          :total="requestsInScope.length"
+          noun="request"
+        >
+          <template #filters>
+            <select v-model="requestDay" aria-label="Show the requests for a day">
+              <option value="">All days</option>
+              <option v-for="w in ema.selectedBoard.windows" :key="w.id" :value="w.id">
+                {{ w.label }} ({{ w.artistCount }}{{ w.artistLimit ? ` of ${w.artistLimit}` : '' }})
+              </option>
+            </select>
+          </template>
+          <template #actions>
+            <label class="checkbox-inline">
+              <input v-model="showFinished" type="checkbox" />
+              Show finished
+            </label>
+          </template>
+        </DataTableToolbar>
+        <DataTable
+          v-if="requestRows.length"
+          :columns="requestColumns"
+          :rows="requestRows"
+          row-key="id"
+          :page-size="25"
+          :default-sort="{ key: 'createdAt', dir: 'asc' }"
+          :row-class="(r) => (r.status === 'complete' ? 'ema-request-done' : '')"
+        >
+          <template #cell-characterName="{ row }">
+            <strong>{{ participantLabel(row.characterName, row.world) }}</strong>
+          </template>
+          <template #cell-description="{ row }">
+            <span class="ema-request-text">{{ row.description }}</span>
+          </template>
+          <template #cell-createdAt="{ row }">
+            <span class="text-sm">{{ when(row.createdAt) }}</span>
+          </template>
+          <template #cell-actions="{ row }">
+            <div class="row-actions">
+              <template v-if="row.status === 'requested'">
+                <button type="button" class="btn-action btn-sm" @click="posting = row">
+                  <font-awesome-icon :icon="['fab', 'discord']" /> Post Plaque
+                </button>
+                <button
+                  type="button"
+                  class="btn-confirm btn-sm"
+                  title="Mark it done without posting - for a plaque you posted yourself"
+                  @click="ema.setRequestComplete(row, true)"
+                >
+                  <font-awesome-icon :icon="['fas', 'check']" /> Complete
+                </button>
+              </template>
+              <span v-else-if="row.status === 'posting'" class="badge badge--warning">Posting</span>
+              <button
+                v-else
+                type="button"
+                class="btn-neutral btn-sm"
+                title="Put it back in the list"
+                @click="ema.setRequestComplete(row, false)"
+              >
+                Reopen
+              </button>
+            </div>
+          </template>
+        </DataTable>
+        <EmptyState v-else text="Nothing left to make for that." />
+      </template>
+      <EmptyState v-else text="No plaque requests yet." />
+
       <!-- The record -->
       <h4 class="section-heading mt-20">
         <font-awesome-icon :icon="['fad', 'torii-gate']" /> Every Plaque
@@ -228,6 +349,8 @@ function copyDashboardLink(): void {
         </template>
       </DataTable>
       <EmptyState v-else text="No plaques yet." />
+
+      <EmaRequestPostModal v-if="posting" :request="posting" @close="posting = null" />
     </AdminPanel>
 
     <!-- -- The boards ---------------------------------------------------------- -->

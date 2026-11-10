@@ -52,7 +52,6 @@ export type AdminTab =
   | 'festival-garapon'
   | 'festival-stamp-rally'
   | 'festival-ema'
-  | 'festival-ema-requests'
   | 'atelier-fonts'
   | 'atelier-carrd'
   | 'system-settings'
@@ -82,7 +81,6 @@ const TAB_RESOURCE: Partial<Record<AdminTab, string>> = {
   'festival-garapon': 'garapons',
   'festival-stamp-rally': 'stamp-rallies',
   'festival-ema': 'ema-boards',
-  'festival-ema-requests': 'ema-requests',
   'atelier-fonts': 'fonts',
   'atelier-carrd': 'carrd',
   'system-settings': 'integrations',
@@ -101,7 +99,6 @@ const TAB_KEYS = [
   'tea-rooms',
   'stamp-rallies',
   'ema-boards',
-  'ema-requests',
   'announcements',
   'styles',
   'settings',
@@ -217,11 +214,6 @@ export const useAdminStore = defineStore('admin', () => {
       ema.boardForm = null
       loadFresh('ema-boards', () => {
         void ema.loadBoards()
-      })
-    }
-    if (tab === 'festival-ema-requests') {
-      loadFresh('ema-requests', () => {
-        void useEmaStore().loadRequests()
       })
     }
     // openClub manages its own per-club freshness (and preserves the open list /
@@ -350,19 +342,14 @@ export const useAdminStore = defineStore('admin', () => {
         })
         break
       case 'ema-boards':
-        // A visitor's new plaque, or another reviewer's decision: refresh the
-        // counts, and the open board's queue so it isn't reviewed twice.
+        // A visitor's new plaque or request, or another reviewer's decision: refresh the
+        // counts, and the open board's queue and requests so none is handled twice.
         apply('ema-boards', tab === 'festival-ema', () => {
           const ema = useEmaStore()
           void ema.loadBoards()
           if (ema.selectedBoard) {
             void ema.loadPlaques(ema.selectedBoard.id)
           }
-        })
-        break
-      case 'ema-requests':
-        apply('ema-requests', tab === 'festival-ema-requests', () => {
-          void useEmaStore().loadRequests()
         })
         break
       case 'stamp-rallies':

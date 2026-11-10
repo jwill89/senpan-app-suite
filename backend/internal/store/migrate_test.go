@@ -267,3 +267,38 @@ func TestSchemaIsCurrent(t *testing.T) {
 		t.Fatal("backend/schema.sql is out of date - run `go run ./cmd/schema-gen` in backend/ and commit the result")
 	}
 }
+
+// Migration 75 folds the artist queue's page permission into the Ema Plaques one: an
+// account that held it ends with festival-ema in the same place, once, and nobody keeps
+// the old key.
+func TestEmaRequestsPermissionFoldsIntoEmaPlaques(t *testing.T) {
+	path := v71Database(t,
+		`INSERT INTO users (id, username, password_hash, permissions) VALUES
+			(1, 'artist', 'x', '["festival-ema-requests"]'),
+			(2, 'both', 'x', '["bingo-game","festival-ema-requests","festival-ema"]'),
+			(3, 'boards', 'x', '["festival-ema"]'),
+			(4, 'mixed', 'x', '["festival-ema-requests","bingo-game"]'),
+			(5, 'none', 'x', '[]')`,
+	)
+	s, err := New(t.Context(), path)
+	if err != nil {
+		t.Fatalf("migrating a v71 database: %v", err)
+	}
+	t.Cleanup(func() { s.Close() })
+
+	for id, want := range map[int]string{
+		1: `["festival-ema"]`,
+		2: `["bingo-game","festival-ema"]`,
+		3: `["festival-ema"]`,
+		4: `["festival-ema","bingo-game"]`,
+		5: `[]`,
+	} {
+		var got string
+		if err := s.read.QueryRowContext(t.Context(), `SELECT permissions FROM users WHERE id = ?`, id).Scan(&got); err != nil {
+			t.Fatalf("user %d: %v", id, err)
+		}
+		if got != want {
+			t.Errorf("user %d permissions = %s; want %s", id, got, want)
+		}
+	}
+}

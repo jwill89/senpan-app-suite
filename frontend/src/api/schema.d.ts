@@ -909,7 +909,7 @@ export interface paths {
     }
     /**
      * A board's plaques
-     * @description The review queue and the record.
+     * @description The review queue, the artist's requests and the record.
      */
     get: operations['list-ema-plaques']
     put?: never
@@ -971,26 +971,6 @@ export interface paths {
     put?: never
     /** Open a closed plaque board again */
     post: operations['reopen-ema-board']
-    delete?: never
-    options?: never
-    head?: never
-    patch?: never
-    trace?: never
-  }
-  '/ema-requests': {
-    parameters: {
-      query?: never
-      header?: never
-      path?: never
-      cookie?: never
-    }
-    /**
-     * The artist's queue
-     * @description The requests for the artist across every board.
-     */
-    get: operations['list-ema-requests']
-    put?: never
-    post?: never
     delete?: never
     options?: never
     head?: never
@@ -12177,53 +12157,6 @@ export interface operations {
       }
       /** @description Unprocessable Entity */
       422: {
-        headers: {
-          [name: string]: unknown
-        }
-        content: {
-          'application/problem+json': components['schemas']['ErrorModel']
-        }
-      }
-      /** @description Internal Server Error */
-      500: {
-        headers: {
-          [name: string]: unknown
-        }
-        content: {
-          'application/problem+json': components['schemas']['ErrorModel']
-        }
-      }
-    }
-  }
-  'list-ema-requests': {
-    parameters: {
-      query?: never
-      header?: never
-      path?: never
-      cookie?: never
-    }
-    requestBody?: never
-    responses: {
-      /** @description OK */
-      200: {
-        headers: {
-          [name: string]: unknown
-        }
-        content: {
-          'application/json': components['schemas']['EmaPlaqueList']
-        }
-      }
-      /** @description Unauthorized */
-      401: {
-        headers: {
-          [name: string]: unknown
-        }
-        content: {
-          'application/problem+json': components['schemas']['ErrorModel']
-        }
-      }
-      /** @description Forbidden */
-      403: {
         headers: {
           [name: string]: unknown
         }

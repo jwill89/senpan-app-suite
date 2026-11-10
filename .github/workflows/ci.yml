@@ -18,7 +18,7 @@ permissions:
 
 jobs:
   # Lint is lint:check, which never rewrites; test:coverage fails below the floor in
-  # vitest.config.ts. web.yml runs the audit itself. The API types it compiles against
+  # vite.config.ts. web.yml runs the audit itself. The API types it compiles against
   # are the committed ones, which the generated job checks. The build is uploaded for
   # the backend job, since the binary embeds it.
   frontend:

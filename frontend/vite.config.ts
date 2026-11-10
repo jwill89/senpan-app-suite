@@ -2,11 +2,13 @@ import { fileURLToPath, URL } from 'node:url'
 import { rm } from 'node:fs/promises'
 import { readFileSync } from 'node:fs'
 import { createHash } from 'node:crypto'
-import { defineConfig, type Plugin } from 'vite'
+import type { Plugin } from 'vite'
+import { defineConfig } from 'vitest/config'
 import vue from '@vitejs/plugin-vue'
 import { VitePWA } from 'vite-plugin-pwa'
 import { visualizer } from 'rollup-plugin-visualizer'
 import { changelogPlugin } from './config/changelog-plugin.ts'
+import { vitestDefaults } from '../shared/test/web/vitest.js'
 
 // The build goes where the Go server embeds it (backend/internal/web, embed.FS):
 // Go embeds only files inside its own module, and since 4.0.0 the binary serves the
@@ -340,6 +342,28 @@ export default defineConfig({
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url)),
     },
+  },
+  // The unit specs. Only the Vue compiler, the `changelog` virtual module, the `@` alias and
+  // `__APP_VERSION__` above matter to them; the build-only plugins here apply to `build` alone.
+  // `npm run test:coverage` fails below the floor: a little under what the specs reach.
+  // Raise it as specs land; never lower it.
+  test: {
+    // jsdom, mocks and stubbed globals put back after each test, and v8 coverage over all of src.
+    ...vitestDefaults({
+      environment: 'jsdom',
+      include: ['src/__tests__/**/*.spec.ts'],
+      // Stubs the globally registered <font-awesome-icon> for every mount.
+      setupFiles: ['./vitest.setup.ts'],
+      floor: { statements: 35.5, branches: 25.5, functions: 28, lines: 35.5 },
+    }),
+    // Test helpers (describe/it/expect/vi) are imported explicitly per file so
+    // type-checking works without extra global type config.
+    globals: false,
+    // Component styles aren't needed for behavior tests; skipping keeps runs fast.
+    css: false,
+    // restoreMocks puts spies back but keeps a vi.fn()'s recorded calls; the
+    // assertions on call counts expect each test to start from none.
+    clearMocks: true,
   },
   // Absolute base: required for Vue Router history mode so deep-link refreshes
   // (e.g. /admin/cards) resolve hashed assets from the document root /assets/

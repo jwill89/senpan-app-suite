@@ -82,7 +82,6 @@ const showFestival = computed(() =>
     'festival-garapon',
     'festival-stamp-rally',
     'festival-ema',
-    'festival-ema-requests',
     'teahouse-raffles',
   ].some(can),
 )
@@ -321,18 +320,7 @@ function toggleSection(section: AdminSection): void {
           @click="go('festival-ema')"
         >
           <font-awesome-icon :icon="['fad', 'torii-gate']" /> Ema Plaques
-          <span v-if="ema.pendingTotal" class="nav-count">({{ ema.pendingTotal }})</span>
-        </button>
-        <button
-          v-if="can('festival-ema-requests')"
-          type="button"
-          :class="{ 'is-active': admin.adminTab === 'festival-ema-requests' }"
-          @click="go('festival-ema-requests')"
-        >
-          <font-awesome-icon :icon="['fad', 'palette']" /> Ema Requests
-          <span v-if="ema.openRequests.length" class="nav-count">
-            ({{ ema.openRequests.length }})
-          </span>
+          <span v-if="ema.waitingTotal" class="nav-count">({{ ema.waitingTotal }})</span>
         </button>
       </div>
     </div>

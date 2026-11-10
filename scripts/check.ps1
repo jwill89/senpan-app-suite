@@ -149,7 +149,7 @@ if ($run.frontend) {
         # tokens.css / theme-tokens.ts / styles.go. See AGENTS.md "CSS conventions".
         Invoke-Step "frontend: conventions" { npm run lint:conventions }
         Invoke-Step "frontend: typecheck" { npm run typecheck }
-        # With coverage, so the floor in vitest.config.ts fails here as in CI.
+        # With coverage, so the floor in vite.config.ts fails here as in CI.
         Invoke-Step "frontend: test" { npm run test:coverage }
         # Known vulnerabilities in what ships (dev tooling excluded), at high or above.
         Invoke-Step "frontend: npm audit" { npm audit --audit-level=high --omit=dev }

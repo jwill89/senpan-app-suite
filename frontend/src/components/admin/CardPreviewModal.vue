@@ -51,7 +51,7 @@ watch(
       <h3 class="nowrap">
         Card <span class="code-highlight">{{ cards.previewCard.id }}</span>
       </h3>
-      <div class="flex-toolbar" style="flex-wrap: nowrap; gap: 8px">
+      <div class="flex-toolbar flex-toolbar--tight">
         <button
           type="button"
           class="btn-view btn-sm nowrap"
@@ -82,8 +82,7 @@ watch(
           ref="editInput"
           v-model="cards.previewCardEditValue"
           placeholder="Player name"
-          class="inline-edit-input ta-center"
-          style="font-weight: 600"
+          class="inline-edit-input ta-center fw-semibold"
           maxlength="100"
           @blur="cards.savePreviewCardField('playerName')"
           @keydown.enter="($event.target as HTMLInputElement).blur()"
@@ -92,7 +91,7 @@ watch(
       </template>
       <p
         v-else
-        style="font-weight: 600; cursor: pointer"
+        class="fw-semibold cursor-pointer"
         role="button"
         tabindex="0"
         :title="
@@ -121,8 +120,7 @@ watch(
       </template>
       <p
         v-else
-        class="text-muted text-sm"
-        style="cursor: pointer"
+        class="text-muted text-sm cursor-pointer"
         role="button"
         tabindex="0"
         :title="cards.previewCard.details ? 'Double-click to edit' : 'Double-click to set details'"
@@ -131,7 +129,7 @@ watch(
         @keydown.space.prevent="cards.startPreviewCardEdit('details')"
       >
         {{ cards.previewCard.details || 'No details' }}
-        <span v-if="!cards.previewCard.details" style="opacity: 0.5"> (double-click to edit)</span>
+        <span v-if="!cards.previewCard.details" class="opacity-50"> (double-click to edit)</span>
       </p>
     </div>
   </ModalOverlay>

@@ -287,7 +287,7 @@ function toggleClosed(): void {
           <font-awesome-icon :icon="['fad', 'ticket']" /> Generate Drawing
         </h3>
         <div class="flex-row mb-10">
-          <FormField label="Player Name" style="flex: 2; min-width: 160px">
+          <FormField label="Player Name" class="flex-2 min-w-160">
             <input
               v-model="garapons.playerAdd.playerName"
               placeholder="Player name"
@@ -295,7 +295,7 @@ function toggleClosed(): void {
               @keyup.enter="garapons.createPlayer()"
             />
           </FormField>
-          <FormField label="Number of Draws" style="flex: 0 0 140px; min-width: 110px">
+          <FormField label="Number of Draws" class="flex-fixed-140 min-w-110">
             <input
               v-model.number="garapons.playerAdd.maxDraws"
               type="number"
@@ -420,7 +420,7 @@ function toggleClosed(): void {
             />
           </template>
           <template #filters>
-            <select v-model="logPrizeFilter" aria-label="Filter by prize" style="width: 170px">
+            <select v-model="logPrizeFilter" aria-label="Filter by prize" class="w-170">
               <option value="">All prizes</option>
               <option v-for="f in logView.facets.prizeName" :key="f.value" :value="f.value">
                 {{ f.value }} ({{ f.count }})

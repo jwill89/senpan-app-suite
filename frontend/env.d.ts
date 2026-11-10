@@ -13,7 +13,7 @@ declare module '*.vue' {
 declare module 'vue3-emoji-picker/css'
 
 // Parsed CHANGELOG.md, provided at build/dev time by config/changelog-plugin.ts
-// (registered in vite.config.ts + vitest.config.ts). Read it via lib/changelog.ts.
+// (registered in vite.config.ts, which the specs use too). Read it via lib/changelog.ts.
 declare module 'virtual:changelog' {
   /** One labelled change-group (Added / Fixed / ...); `body` is its bullet markdown. */
   export interface ChangelogGroup {
@@ -44,7 +44,7 @@ declare module 'virtual:changelog' {
 }
 
 // The app's semver, injected from package.json at build time (see vite.config.ts
-// `define` + vitest.config.ts). Read it via `lib/version.ts`, not directly.
+// `define`, which the specs share). Read it via `lib/version.ts`, not directly.
 declare const __APP_VERSION__: string
 
 // Cloudflare Turnstile (loaded at runtime from challenges.cloudflare.com - see

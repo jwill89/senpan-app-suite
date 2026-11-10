@@ -23,7 +23,7 @@ const game = useGameStore()
       until you switch it back on).
     </p>
     <div v-else class="mb-20"></div>
-    <div class="flex-center" style="gap: 12px">
+    <div class="flex-center gap-md">
       <button type="button" class="btn-action" @click="game.confirmHalftime()">Yes</button>
       <button type="button" class="btn-neutral" @click="game.dismissHalftime()">No</button>
     </div>

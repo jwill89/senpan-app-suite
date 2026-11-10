@@ -217,7 +217,6 @@ var resources = map[string][]string{
 	"announcements": {permissions.TeahouseAnnouncements},
 	"carrd":         {permissions.AtelierCarrd},
 	"ema-boards":    {permissions.FestivalEma},
-	"ema-requests":  {permissions.FestivalEmaRequests},
 	"festival-maps": {permissions.FestivalMap, permissions.FestivalEma},
 	"fonts":         {permissions.AtelierFonts},
 	"garapons":      {permissions.FestivalGarapon},

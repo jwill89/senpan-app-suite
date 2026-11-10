@@ -130,7 +130,7 @@ host setup.
 ## Testing & CI
 
 - Frontend tests use **Vitest + Vue Test Utils** (jsdom); test files are
-  colocated as `src/**/*.test.ts`. See the **Testing** section of
+  in `src/__tests__/`, named `*.spec.ts`. See the **Testing** section of
   [`AGENTS.md`](AGENTS.md) for conventions.
 - CI ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) runs the same gates
   on every push / pull request, on shared-tooling's reusable workflows: a

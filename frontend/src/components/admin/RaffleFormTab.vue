@@ -216,13 +216,13 @@ function cancel(): void {
       >
         <div class="stack">
           <div v-for="(_, i) in raffles.raffleForm.tierCosts" :key="i" class="stack-row">
-            <span class="field-label" style="flex: 0 0 72px; margin: 0">Entry {{ i + 1 }}</span>
+            <span class="field-label field-label--inline flex-fixed-72">Entry {{ i + 1 }}</span>
             <input
               v-model.number="raffles.raffleForm.tierCosts[i]"
               type="number"
               min="0"
               step="1"
-              style="flex: 1; min-width: 100px"
+              class="flex-1 min-w-100"
               :aria-label="`Cost of entry ${i + 1}`"
             />
             <button

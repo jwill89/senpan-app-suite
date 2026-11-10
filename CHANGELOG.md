@@ -47,6 +47,45 @@ version is next bumped, under a `### App` or `### Plugin` heading here until the
 The SPA and the API, one binary, one version (since 4.0.0). The admin dashboard's
 changelog shows this section, then the Frontend history before it.
 
+### [5.1.0] - 2026-11-10
+
+The artist's Ema requests are a table on the Ema Plaques page now, not a page of their
+own, and Ema Plaques is the only permission for all of it.
+
+#### Changed
+
+- **Ema Requests is no longer a menu link.** Open a plaque board and its artist requests
+  are a table between the review queue and the record: each request with its day, the
+  day picker saying how many each day has taken (and its limit), finished ones hidden
+  until asked for, and Post Plaque / Complete / Reopen on each row as before. The Ema
+  Plaques link counts the plaques waiting for review and the requests waiting on the
+  artist together.
+- **One permission, `festival-ema`.** The `festival-ema-requests` page permission is
+  gone, and migration 75 gives an account that held it `festival-ema` in its place. That
+  account now sees the boards' setup, webhooks included, which the separate key kept
+  from it.
+- **The API follows.** `GET /api/v1/ema-requests` (the queue across every board) is gone,
+  since a board's requests are among its plaques (`GET /ema-boards/{id}/plaques`, `kind`
+  `artist`); completing, reopening and posting one need `festival-ema`, and a change to a
+  request tells the `ema-boards` page, since `ema-requests` is no longer a resource of
+  its own. The API's contract version is 5.1.0.
+
+### [5.0.1] - 2026-11-10
+
+Housekeeping in the front end: nothing a visitor or an admin sees changes.
+
+#### Changed
+
+- **The unit specs moved to `src/__tests__/`**, named `*.spec.ts` and laid out like
+  `src/`, and the Vitest settings are the `test` key of `vite.config.ts` in place of a
+  config of their own. The coverage floor, the jsdom environment and the setup file
+  are as they were.
+- **No template carries a static `style=""` any more.** The 61 that did (a form
+  column's share of its row, a width, a margin, a weight) are classes now: a few
+  more utilities (`flex-1`, `min-w-160`, `p-20`, `fw-semibold`, ...) and four small
+  objects (`check-list`, `flex-toolbar--tight`, `field--flush`, `board-cell--static`).
+  `vue/no-static-inline-styles` is on again, so a new one fails the lint.
+
 ### [5.0.0] - 2026-11-10
 
 The API moves to huma under `/api/v1`: an OpenAPI 3.1 document that the SPA's types

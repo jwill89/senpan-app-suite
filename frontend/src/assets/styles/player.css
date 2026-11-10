@@ -376,6 +376,12 @@
   cursor: pointer;
 }
 
+/* Modifier: a cell that only shows (the card preview), so it does not invite a tap. */
+.board-cell--static,
+.board-cell--static.is-free {
+  cursor: default;
+}
+
 /* "FREE" is 4 glyphs (vs <=2 for a number), so at the cell's normal font size it
    overflows and gets clipped in the narrow cells on small phones. Size ONLY the
    FREE label relative to the cell's own width (container query units) so it
@@ -1074,6 +1080,13 @@ span.pattern-mini {
 
 .winner-chip-btn:active {
   transform: scale(0.97);
+}
+
+/* Part: the player's name on a second, smaller line under the card ID. */
+.winner-chip-note {
+  display: block;
+  font-size: 0.7rem;
+  opacity: 0.8;
 }
 
 /* ================================================================

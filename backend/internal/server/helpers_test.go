@@ -23,8 +23,8 @@ func TestAdminMutationResource(t *testing.T) {
 		"/api/v1/festival-maps/5":                       "festival-maps",
 		"/api/v1/ema-boards/4/plaques/9/approve":        "ema-boards",
 		"/api/v1/ema-boards/4/close":                    "ema-boards",
-		"/api/v1/ema-requests/3/post":                   "ema-requests",
-		"/api/v1/ema-requests/3/complete":               "ema-requests",
+		"/api/v1/ema-requests/3/post":                   "ema-boards",
+		"/api/v1/ema-requests/3/complete":               "ema-boards",
 		"/api/v1/raffles":                               "raffles",
 		"/api/v1/raffles/9/entries":                     "raffles",
 		"/api/v1/raffles/9/entries/4/settle":            "raffles",
@@ -68,7 +68,7 @@ func TestAdminMutationResource(t *testing.T) {
 		"/api/v1/stamp-rallies/5/sign-up",     // public sign-up - its operation tells its pages
 		"/api/v1/festivals/7/dashboard",       // a public read, though a POST
 		"/api/v1/festivals/7/ema-plaques",     // public - its operation tells ema-boards
-		"/api/v1/festivals/7/ema-requests",    // public - its operation tells ema-requests
+		"/api/v1/festivals/7/ema-requests",    // public - its operation tells ema-boards
 		"/api/v1/raffles/9/enter",             // public sign-up - its operation tells raffles
 		"/api/v1/raffles/9/lookup",            // public search - changes nothing
 		"/api/v1/auth/login",                  // signing in

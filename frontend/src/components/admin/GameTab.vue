@@ -311,7 +311,7 @@ onBeforeUnmount(() => {
             <LoadingSpinner v-if="game.starting" label="Starting..." />
             <template v-else>
               Start Game
-              <span v-if="game.selectedPatternIds.length" style="opacity: 0.85">
+              <span v-if="game.selectedPatternIds.length" class="opacity-85">
                 ({{ game.selectedPatternIds.length }} selected)
               </span>
             </template>
@@ -556,10 +556,7 @@ onBeforeUnmount(() => {
                   @keydown.space.prevent="game.viewWinner(w)"
                 >
                   {{ w }}
-                  <small
-                    v-if="playerNameFor(w)"
-                    style="display: block; font-size: 0.7rem; opacity: 0.8"
-                  >
+                  <small v-if="playerNameFor(w)" class="winner-chip-note">
                     {{ playerNameFor(w) }}
                   </small>
                 </span>

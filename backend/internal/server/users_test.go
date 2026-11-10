@@ -473,7 +473,6 @@ func TestPermission_EveryPageGuardsAReadRoute(t *testing.T) {
 		"teahouse-tea-rooms":     "/api/v1/tea-rooms",
 		"festival-map":           "/api/v1/festival-maps",
 		"festival-ema":           "/api/v1/ema-boards",
-		"festival-ema-requests":  "/api/v1/ema-requests",
 		"festival-garapon":       "/api/v1/garapons",
 		"festival-stamp-rally":   "/api/v1/stamp-rallies",
 		"atelier-fonts":          "/api/v1/fonts",

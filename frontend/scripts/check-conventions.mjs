@@ -278,7 +278,7 @@ for (const [cls, files] of objectOf) {
 // wrapper classes.
 //
 // Exempt: a class referenced from a .ts file is a deliberate test or JS hook
-// (ChangelogModal.test.ts queries `.changelog-entry`), not dead markup. Only
+// (ChangelogModal.spec.ts queries `.changelog-entry`), not dead markup. Only
 // static attributes are checked - `:class` is a JS expression and cannot be
 // parsed reliably enough to gate on.
 const tsBlob = tsText.join('\n')

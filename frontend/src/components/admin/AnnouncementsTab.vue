@@ -417,14 +417,14 @@ async function submitRole(): Promise<void> {
       />
 
       <div class="flex-row mb-10">
-        <FormField label="Title" required style="flex: 2; min-width: 200px">
+        <FormField label="Title" required class="flex-2 min-w-200">
           <input
             v-model="store.form.title"
             placeholder="e.g. Saturday Tea Social"
             aria-label="Announcement title"
           />
         </FormField>
-        <FormField label="Type" required style="flex: 1; min-width: 160px">
+        <FormField label="Type" required class="flex-1 min-w-160">
           <select v-model.number="store.form.typeId" aria-label="Announcement type">
             <option :value="0" disabled>Select a type...</option>
             <option v-for="t in store.sortedTypes" :key="t.id" :value="t.id">{{ t.name }}</option>
@@ -436,7 +436,7 @@ async function submitRole(): Promise<void> {
         <FormField
           label="Timezone"
           required
-          style="flex: 1 1 auto; min-width: 200px"
+          class="flex-auto min-w-200"
           help="Anchors every time (event window + schedule); times stay put across DST."
         >
           <select v-model="store.form.timezone" aria-label="Timezone">
@@ -445,7 +445,7 @@ async function submitRole(): Promise<void> {
         </FormField>
         <FormField
           label="Embed color"
-          style="flex: 0 0 auto"
+          class="flex-none"
           help="Accent stripe on the embed's left edge."
         >
           <div class="color-field">
@@ -674,14 +674,14 @@ async function submitRole(): Promise<void> {
         </FormField>
 
         <div v-if="store.form.scheduleKind === 'monthly'" class="flex-row mb-10">
-          <FormField label="Week" required style="flex: 0 0 120px">
+          <FormField label="Week" required class="flex-fixed-120">
             <select v-model.number="store.form.weekOfMonth" aria-label="Week of month">
               <option v-for="w in WEEK_OF_MONTH" :key="w.value" :value="w.value">
                 {{ w.label }}
               </option>
             </select>
           </FormField>
-          <FormField label="Weekday" required style="flex: 0 0 140px">
+          <FormField label="Weekday" required class="flex-fixed-140">
             <select
               :value="store.form.weekdays[0] ?? ''"
               aria-label="Weekday"
@@ -697,7 +697,7 @@ async function submitRole(): Promise<void> {
           <input
             v-model="store.form.timeLocal"
             type="time"
-            style="max-width: 160px"
+            class="max-w-160"
             aria-label="Recurring post time"
           />
         </FormField>

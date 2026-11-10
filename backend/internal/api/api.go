@@ -40,7 +40,7 @@ const Prefix = "/api/v1"
 // ContractVersion is the API contract's own version, apart from the app's: it moves
 // only when the API surface changes, and the document carries it
 // as info.version.
-const ContractVersion = "5.0.0"
+const ContractVersion = "5.1.0"
 
 // SessionCookie is the session cookie's name, for the document's security scheme.
 const SessionCookie = "session"

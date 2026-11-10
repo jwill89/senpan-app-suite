@@ -124,8 +124,8 @@ function usesSecondaryStamp(ri: number, ci: number): boolean {
               'board-cell',
               cell === 0 ? 'is-free' : '',
               isCellMatch && isCellMatch(ri, ci) ? 'pattern-hit' : '',
+              'board-cell--static',
             ]"
-            style="cursor: default"
           >
             <span class="cell-num">{{ cell === 0 ? 'FREE' : cell }}</span>
             <div v-if="cell === 0" class="stamp-mark"></div>

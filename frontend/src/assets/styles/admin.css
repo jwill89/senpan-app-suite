@@ -315,7 +315,8 @@
 /* Name input + category selector row */
 .pattern-editor .field {
   display: flex;
-  gap: 10px;
+  flex-wrap: wrap;
+  gap: 8px;
   margin-bottom: 12px;
   justify-content: center;
 }

@@ -140,19 +140,13 @@ const adminChildren: RouteRecordRaw[] = [
     component: () => import('@/components/admin/StampRalliesTab.vue'),
     meta: { tab: 'festival-stamp-rally' },
   },
-  // Festival -> Ema Plaques (the boards and their review queue), and the
-  // artist's request queue on its own page.
+  // Festival -> Ema Plaques: the boards, and on each one its review queue and the
+  // artist's requests.
   {
     path: 'festival/ema',
     name: 'admin-festival-ema',
     component: () => import('@/components/admin/EmaPlaquesTab.vue'),
     meta: { tab: 'festival-ema' },
-  },
-  {
-    path: 'festival/ema-requests',
-    name: 'admin-festival-ema-requests',
-    component: () => import('@/components/admin/EmaRequestsTab.vue'),
-    meta: { tab: 'festival-ema-requests' },
   },
   {
     path: 'system/settings',

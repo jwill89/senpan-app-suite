@@ -52,7 +52,7 @@ function patternById(id: number) {
           v-model="presets.editingPreset.name"
           placeholder="e.g. Friday Night Blackout"
           aria-label="Preset name"
-          style="max-width: 360px"
+          class="max-w-360"
         />
       </FormField>
 
@@ -136,7 +136,7 @@ function patternById(id: number) {
       <EmptyState v-else-if="presets.presets.length === 0" text="No presets yet." />
       <div v-else class="list-rows">
         <ListRow v-for="preset in presets.presets" :key="preset.id">
-          <h4 style="margin: 0 0 8px">{{ preset.name }}</h4>
+          <h4 class="mt-0 mb-8">{{ preset.name }}</h4>
           <div class="pattern-cards">
             <div
               v-for="pid in preset.patternIds"

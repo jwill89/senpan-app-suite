@@ -243,7 +243,7 @@ function formatSize(bytes: number): string {
         </button>
       </li>
     </ul>
-    <p v-else class="text-muted text-xs" style="margin: 0 0 12px">
+    <p v-else class="text-muted text-xs mt-0 mb-12">
       No external sites yet - this font can only be used by the app itself.
     </p>
 

@@ -17,6 +17,10 @@
   gap: 8px;
 }
 
+.gap-md {
+  gap: 12px;
+}
+
 /* Visually hidden but available to screen readers */
 .sr-only {
   position: absolute;
@@ -63,6 +67,10 @@
   font-size: 0.85rem;
 }
 
+.text-md {
+  font-size: 0.95rem;
+}
+
 /* Completes the size scale upward, for the one figure on a panel that has to
    outweigh the lines around it (the raffle sign-up's Amount Due). */
 .text-lg {
@@ -77,12 +85,42 @@
   font-weight: 400;
 }
 
+.fw-semibold {
+  font-weight: 600;
+}
+
+/* Opacity steps, for a line that sits back from the text around it. */
+.opacity-50 {
+  opacity: 0.5;
+}
+
+.opacity-80 {
+  opacity: 0.8;
+}
+
+.opacity-85 {
+  opacity: 0.85;
+}
+
+.cursor-pointer {
+  cursor: pointer;
+}
+
 .code-highlight {
   font-family: monospace;
   color: var(--highlight);
 }
 
-/* Margin utilities */
+/* Margin utilities. `.m-0` (below) resets all four sides, so it cannot sit
+   beside a `.mb-*`; use `.mt-0` / `.mb-0` with a margin on the other side. */
+.mb-0 {
+  margin-bottom: 0;
+}
+
+.mt-0 {
+  margin-top: 0;
+}
+
 .mb-4 {
   margin-bottom: 4px;
 }
@@ -113,6 +151,10 @@
 
 .mt-4 {
   margin-top: 4px;
+}
+
+.mt-6 {
+  margin-top: 6px;
 }
 
 .mt-8 {
@@ -153,7 +195,114 @@
   margin: 0;
 }
 
+/* Padding utilities. */
+.p-8 {
+  padding: 8px;
+}
+
+.p-20 {
+  padding: 20px;
+}
+
+.py-16 {
+  padding-block: 16px;
+}
+
+/* Width utilities: a control that should not take its whole row (a filter's select,
+   a time, a small number). The min-/max- steps bound a field that flexes. */
+.w-70 {
+  width: 70px;
+}
+
+.w-100 {
+  width: 100px;
+}
+
+.w-110 {
+  width: 110px;
+}
+
+.w-170 {
+  width: 170px;
+}
+
+.min-w-80 {
+  min-width: 80px;
+}
+
+.min-w-100 {
+  min-width: 100px;
+}
+
+.min-w-110 {
+  min-width: 110px;
+}
+
+.min-w-120 {
+  min-width: 120px;
+}
+
+.min-w-140 {
+  min-width: 140px;
+}
+
+.min-w-160 {
+  min-width: 160px;
+}
+
+.min-w-200 {
+  min-width: 200px;
+}
+
+.min-w-240 {
+  min-width: 240px;
+}
+
+.max-w-160 {
+  max-width: 160px;
+}
+
+.max-w-360 {
+  max-width: 360px;
+}
+
 /* Flex layout utilities */
+
+/* Flex shares: how a field or control divides the row it sits in (a `.flex-row`,
+   `.flex-toolbar` or `.stack-row`). `.flex-fixed-*` is a column of that width that
+   neither grows nor shrinks; pair a share with a `.min-w-*` so it wraps instead of
+   squeezing. */
+.flex-1 {
+  flex: 1;
+}
+
+.flex-2 {
+  flex: 2;
+}
+
+.flex-auto {
+  flex: 1 1 auto;
+}
+
+.flex-none {
+  flex: 0 0 auto;
+}
+
+.flex-fixed-72 {
+  flex: 0 0 72px;
+}
+
+.flex-fixed-96 {
+  flex: 0 0 96px;
+}
+
+.flex-fixed-120 {
+  flex: 0 0 120px;
+}
+
+.flex-fixed-140 {
+  flex: 0 0 140px;
+}
 
 /* Object: horizontal toolbar (search/filter/action controls). `.manager-toolbar`
    is the same toolbar with bottom spacing for a manager page header row. */
@@ -165,6 +314,12 @@
   align-items: center;
 }
 
+/* Modifier: a toolbar of a few buttons that stays on one line. */
+.flex-toolbar--tight {
+  gap: 8px;
+  flex-wrap: nowrap;
+}
+
 .flex-row {
   display: flex;
   gap: 16px;
@@ -173,6 +328,10 @@
 
 .items-start {
   align-items: flex-start;
+}
+
+.items-stretch {
+  align-items: stretch;
 }
 
 .flex-center {
@@ -213,6 +372,11 @@
   margin-bottom: 4px;
 }
 
+/* Modifier: a label that sits in a row beside its control, not above it. */
+.field-label--inline {
+  margin: 0;
+}
+
 .field-input-full {
   width: 100%;
 }
@@ -237,6 +401,11 @@
 .field > select,
 .field > textarea {
   width: 100%;
+}
+
+/* Modifier: a field that sits in a toolbar, which spaces it, so it needs no gap beneath. */
+.field--flush {
+  margin-bottom: 0;
 }
 
 /* Pattern editor reuses .field as a centered flex row - keep auto width. */
@@ -783,6 +952,25 @@
 
 .chip-del:hover {
   color: var(--danger);
+}
+
+/* Object: a vertical list of checkable rows that scrolls when it gets long (the
+   cards to confirm as winners). `.check-list-item` is one row: box beside label. */
+.check-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 16px;
+  overflow-y: auto;
+  max-height: 50vh;
+  padding-right: 4px;
+}
+
+.check-list-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
 }
 
 /* Prominent "x" delete glyph - danger by default, dims to `--text` on hover (the

@@ -255,7 +255,7 @@ onMounted(() => users.loadUsers())
           </div>
         </template>
         <template #empty>
-          <p class="text-muted ta-center" style="padding: 20px">No users match “{{ search }}”.</p>
+          <p class="text-muted ta-center p-20">No users match “{{ search }}”.</p>
         </template>
       </DataTable>
 

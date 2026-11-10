@@ -258,7 +258,7 @@ function cancelRename(): void {
           </FormField>
 
           <div class="flex-row items-start mb-10">
-            <FormField label="Cover" style="flex: 0 0 120px">
+            <FormField label="Cover" class="flex-fixed-120">
               <img
                 v-if="bookclub.itemForm.coverImage"
                 :src="assetUrl(bookclub.itemForm.coverImage)"
@@ -291,7 +291,7 @@ function cancelRename(): void {
                 Remove
               </button>
             </FormField>
-            <div style="flex: 1; min-width: 200px">
+            <div class="flex-1 min-w-200">
               <FormField label="Title" required>
                 <input
                   v-model="bookclub.itemForm.title"
@@ -317,14 +317,14 @@ function cancelRename(): void {
           </FormField>
 
           <div class="flex-row mb-10">
-            <FormField label="Format" style="flex: 1; min-width: 140px">
+            <FormField label="Format" class="flex-1 min-w-140">
               <input
                 v-model="bookclub.itemForm.format"
                 placeholder="Manga, Manhwa, Danmei..."
                 aria-label="Format"
               />
             </FormField>
-            <FormField label="Chapters" style="flex: 0 0 120px; min-width: 100px">
+            <FormField label="Chapters" class="flex-fixed-120 min-w-100">
               <input
                 v-model="bookclub.itemForm.chapters"
                 placeholder="e.g. 156"
@@ -366,15 +366,13 @@ function cancelRename(): void {
             >
               <input
                 v-model="src.title"
-                class="field-input-full"
-                style="flex: 1"
+                class="field-input-full flex-1"
                 placeholder="Source title"
                 aria-label="Source title"
               />
               <input
                 v-model="src.url"
-                class="field-input-full"
-                style="flex: 2"
+                class="field-input-full flex-2"
                 placeholder="https://..."
                 aria-label="Source URL"
               />
@@ -423,7 +421,7 @@ function cancelRename(): void {
           v-model="bookclub.newListTitle"
           placeholder="New reading list title..."
           aria-label="New reading list title"
-          style="flex: 1; min-width: 160px; max-width: 360px"
+          class="flex-1 min-w-160 max-w-360"
           @keyup.enter="bookclub.createList()"
         />
         <button
@@ -456,8 +454,7 @@ function cancelRename(): void {
               v-if="editingListId === list.id"
               v-model="editingTitle"
               aria-label="Rename reading list"
-              class="w-full"
-              style="max-width: 360px"
+              class="w-full max-w-360"
               @keyup.enter="commitRename(list)"
               @keyup.esc="cancelRename()"
             />

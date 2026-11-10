@@ -7,7 +7,7 @@ import type { Plugin } from 'vite'
 // exposes the per-component sections as the virtual module `virtual:changelog`
 // (declared in env.d.ts), so the admin dashboard can render each component's
 // changelog without a backend round-trip or a committed generated file. Shared
-// between vite.config.ts and vitest.config.ts so tests resolve it too.
+// between the build and the specs, both on vite.config.ts.
 const CHANGELOG_PATH = fileURLToPath(new URL('../../CHANGELOG.md', import.meta.url))
 
 // A structured view of the changelog so the UI can render it with proper

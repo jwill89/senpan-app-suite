@@ -153,31 +153,25 @@ func TestEma_Guards(t *testing.T) {
 		{http.MethodGet, boardPath(f.boardID, "/plaques")},
 		{http.MethodPost, boardPath(f.boardID, fmt.Sprintf("/plaques/%d/approve", id))},
 		{http.MethodPost, boardPath(f.boardID, fmt.Sprintf("/plaques/%d/reject", id))},
-		{http.MethodGet, "/api/v1/ema-requests"},
 		{http.MethodPost, fmt.Sprintf("/api/v1/ema-requests/%d/complete", reqID)},
 		{http.MethodPost, fmt.Sprintf("/api/v1/ema-requests/%d/reopen", reqID)},
 	}
 	anon := newClient(t, f.env)
 	boards := makeActiveUser(t, f.env, "boards", "correct horse battery", []string{"festival-ema"})
-	queue := makeActiveUser(t, f.env, "queue", "correct horse battery", []string{"festival-ema-requests"})
+	other := makeActiveUser(t, f.env, "other", "correct horse battery", []string{"festival-map"})
 	for _, r := range routes {
-		isQueue := strings.Contains(r.path, "/ema-requests")
 		resp := reqAs(t, anon, f.env, r.method, r.path, map[string]any{})
 		resp.Body.Close()
 		if resp.StatusCode != http.StatusUnauthorized {
 			t.Errorf("%s %s signed out = %d; want 401", r.method, r.path, resp.StatusCode)
 		}
-		wrong, right := queue, boards
-		if isQueue {
-			wrong, right = boards, queue
-		}
-		resp = reqAs(t, wrong, f.env, r.method, r.path, map[string]any{})
+		resp = reqAs(t, other, f.env, r.method, r.path, map[string]any{})
 		resp.Body.Close()
 		if resp.StatusCode != http.StatusForbidden {
 			t.Errorf("%s %s with the other page's access = %d; want 403", r.method, r.path, resp.StatusCode)
 		}
 		if r.method == http.MethodGet {
-			resp = getAs(t, right, f.env, r.path)
+			resp = getAs(t, boards, f.env, r.path)
 			resp.Body.Close()
 			if resp.StatusCode != http.StatusOK {
 				t.Errorf("GET %s with its own page = %d; want 200", r.path, resp.StatusCode)
@@ -551,11 +545,16 @@ func TestEma_ArtistQueueCompleteAndReopen(t *testing.T) {
 	id := int(req["id"].(float64))
 	site := f.submitted(t, "Bea Bright")
 
-	var queue map[string]any
-	decodeInto(t, f.env.get(t, "/api/v1/ema-requests"), http.StatusOK, &queue)
-	plaques := queue["plaques"].([]any)
-	if len(plaques) != 1 || plaques[0].(map[string]any)["festivalMapName"] != "Obon Matsuri 2026" {
-		t.Fatalf("queue = %v; want the one request, with its festival", plaques)
+	var record map[string]any
+	decodeInto(t, f.env.get(t, boardPath(f.boardID, "/plaques")), http.StatusOK, &record)
+	var requests []any
+	for _, p := range record["plaques"].([]any) {
+		if p.(map[string]any)["kind"] == "artist" {
+			requests = append(requests, p)
+		}
+	}
+	if len(requests) != 1 || requests[0].(map[string]any)["windowLabel"] != "Day 1" {
+		t.Fatalf("the board's artist requests = %v; want the one request, with its day", requests)
 	}
 
 	reopen := fmt.Sprintf("/api/v1/ema-requests/%d/reopen", id)
@@ -714,9 +713,9 @@ func TestEma_FailedArtistPostReopensTheRequest(t *testing.T) {
 		t.Errorf("post with Discord refusing = %d; want 500", resp.StatusCode)
 	}
 	resp.Body.Close()
-	var queue map[string]any
-	decodeInto(t, f.env.get(t, "/api/v1/ema-requests"), http.StatusOK, &queue)
-	if got := queue["plaques"].([]any)[0].(map[string]any)["status"]; got != "requested" {
+	var record map[string]any
+	decodeInto(t, f.env.get(t, boardPath(f.boardID, "/plaques")), http.StatusOK, &record)
+	if got := record["plaques"].([]any)[0].(map[string]any)["status"]; got != "requested" {
 		t.Errorf("after a failed post the request is %v; want requested, to try again", got)
 	}
 }
@@ -789,8 +788,8 @@ func TestEma_SubmissionsTellTheirQueues(t *testing.T) {
 		t.Errorf("a site plaque told %+v; want ema-boards", e)
 	}
 	f.requestPlaque(t, "Bea Bright", "A koi").Body.Close()
-	if e := s.expect("resource_changed", 3*time.Second); e.str("resource") != "ema-requests" {
-		t.Errorf("an artist request told %+v; want ema-requests", e)
+	if e := s.expect("resource_changed", 3*time.Second); e.str("resource") != "ema-boards" {
+		t.Errorf("an artist request told %+v; want ema-boards", e)
 	}
 }
 

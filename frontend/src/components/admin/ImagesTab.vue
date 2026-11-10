@@ -252,8 +252,8 @@ onMounted(() => images.loadCategories())
       />
 
       <template v-else>
-        <div class="flex-toolbar mb-12" style="gap: 12px; align-items: center">
-          <FormField label="Category" html-for="image-category" style="margin: 0; min-width: 240px">
+        <div class="flex-toolbar mb-12">
+          <FormField label="Category" html-for="image-category" class="field--flush min-w-240">
             <select id="image-category" v-model="selectedDir" aria-label="Image category">
               <option v-for="c in images.sortedCategories" :key="c.dir" :value="c.dir">
                 {{ c.name }}
@@ -361,7 +361,7 @@ onMounted(() => images.loadCategories())
           </figure>
         </div>
 
-        <p v-else-if="!images.loadingImages" class="text-muted" style="padding: 16px 0">
+        <p v-else-if="!images.loadingImages" class="text-muted py-16">
           No images in this category yet. Drop some above to get started.
         </p>
       </template>

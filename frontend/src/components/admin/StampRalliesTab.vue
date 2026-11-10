@@ -359,7 +359,7 @@ async function deleteSelected(): Promise<void> {
       <div class="subpanel mb-16">
         <h3 class="section-heading"><font-awesome-icon :icon="['fad', 'id-card']" /> Issue Card</h3>
         <div class="flex-row mb-10">
-          <FormField label="Participant Name" style="flex: 1; min-width: 160px">
+          <FormField label="Participant Name" class="flex-1 min-w-160">
             <input
               v-model="store.cardAdd.participantName"
               placeholder="Participant name"

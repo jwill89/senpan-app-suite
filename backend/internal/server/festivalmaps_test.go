@@ -1106,7 +1106,7 @@ func TestFestivalMap_WritesTellTheMapsAndWhatTheyLink(t *testing.T) {
 
 	resp := env.del(t, mapPathOf(id))
 	resp.Body.Close()
-	if got := told(t, s, 5); !got["festival-maps"] || !got["stamp-rallies"] || !got["raffles"] || !got["ema-boards"] || !got["ema-requests"] {
+	if got := told(t, s, 4); !got["festival-maps"] || !got["stamp-rallies"] || !got["raffles"] || !got["ema-boards"] {
 		t.Errorf("a delete told %v; want the map and everything it unlinked", got)
 	}
 }

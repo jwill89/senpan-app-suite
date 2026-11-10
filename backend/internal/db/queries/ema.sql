@@ -81,15 +81,6 @@ LEFT JOIN festival_maps m ON m.id = b.festival_map_id
 WHERE p.board_id = ?
 ORDER BY p.created_at DESC, p.id DESC;
 
--- name: ListEmaArtistRequests :many
-SELECT p.id, p.board_id, p.window_id, p.window_label, p.kind, p.character_name, p.world, p.description, p.image,
-       p.status, p.reviewed_by, p.reviewed_at, p.created_at, CAST(COALESCE(m.title, '') AS TEXT) AS festival_map_name
-FROM ema_plaques p
-JOIN ema_boards b ON b.id = p.board_id
-LEFT JOIN festival_maps m ON m.id = b.festival_map_id
-WHERE p.kind = 'artist'
-ORDER BY p.created_at DESC, p.id DESC;
-
 -- name: ListEmaPlaquesFor :many
 -- One visitor's plaques on a board, on the whole name and world, ignoring case: the
 -- identity the one-per-day rule uses.

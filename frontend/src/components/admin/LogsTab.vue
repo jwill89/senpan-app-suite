@@ -204,7 +204,7 @@ onMounted(() => void logs.load())
           :id="`${fieldId}-level`"
           v-model="logs.level"
           aria-label="Minimum level to show"
-          style="width: 100px"
+          class="w-100"
           @change="onLevelChange"
         >
           <option value="">All</option>
@@ -252,7 +252,7 @@ onMounted(() => void logs.load())
           :id="`${fieldId}-per-page`"
           v-model.number="perPage"
           aria-label="Entries per page"
-          style="width: 70px"
+          class="w-70"
           @change="resetToFirstPage"
         >
           <option :value="25">25</option>

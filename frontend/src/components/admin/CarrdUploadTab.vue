@@ -249,7 +249,7 @@ onMounted(() => carrd.loadProjects())
         name replaces it.
       </p>
 
-      <div class="flex-toolbar mb-12" style="gap: 12px; align-items: center">
+      <div class="flex-toolbar mb-12">
         <!-- Breadcrumb: project root -> nested path -->
         <nav class="carrd-breadcrumb" aria-label="Folder path">
           <template v-for="(crumb, i) in breadcrumbs" :key="crumb.path">
@@ -406,7 +406,7 @@ onMounted(() => carrd.loadProjects())
         </figure>
       </div>
 
-      <p v-else-if="!carrd.loadingImages" class="text-muted" style="padding: 16px 0">
+      <p v-else-if="!carrd.loadingImages" class="text-muted py-16">
         No images in this folder yet. Drop some above, or create a sub-folder to organize them.
       </p>
     </AdminPanel>

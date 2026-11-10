@@ -37,7 +37,7 @@ const game = useGameStore()
       v-if="game.winnerPreview.card.playerName || game.winnerPreview.card.details"
       class="mt-12 text-center"
     >
-      <p v-if="game.winnerPreview.card.playerName" style="font-weight: 600">
+      <p v-if="game.winnerPreview.card.playerName" class="fw-semibold">
         {{ game.winnerPreview.card.playerName }}
       </p>
       <p v-if="game.winnerPreview.card.details" class="text-muted text-sm">

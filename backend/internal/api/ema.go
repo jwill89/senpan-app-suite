@@ -30,7 +30,7 @@ import (
 // Ema plaques: a festival's board takes wishing plaques on its days. Staff set the
 // board up and review the plaques visitors design on the site, which are posted to
 // the day's Discord webhook when approved. The artist works the queue of plaques
-// visitors ask for. Visitors submit through the festival's address.
+// visitors ask for, from the same board page. Visitors submit through the festival's address.
 
 var emaTags = []string{"Ema"}
 
@@ -258,7 +258,6 @@ type googleFontsOutput struct{ Body GoogleFontList }
 
 func (h handlers) registerEma(api huma.API) {
 	page := huma.Middlewares{h.permitted(api, permissions.FestivalEma)}
-	queue := huma.Middlewares{h.permitted(api, permissions.FestivalEmaRequests)}
 	guarded := []int{http.StatusUnauthorized, http.StatusForbidden}
 	notFound := slices.Concat(guarded, []int{http.StatusNotFound})
 	invalid := slices.Concat(notFound, []int{http.StatusConflict, http.StatusUnprocessableEntity})
@@ -303,7 +302,7 @@ func (h handlers) registerEma(api huma.API) {
 	}, h.deleteEmaBoard)
 	huma.Register(api, huma.Operation{
 		OperationID: "list-ema-plaques", Method: http.MethodGet, Path: "/ema-boards/{id}/plaques",
-		Summary: "A board's plaques", Description: "The review queue and the record.", Tags: emaTags,
+		Summary: "A board's plaques", Description: "The review queue, the artist's requests and the record.", Tags: emaTags,
 		Security: secured, Middlewares: page, Errors: notFound,
 	}, h.listEmaPlaques)
 	huma.Register(api, huma.Operation{
@@ -322,19 +321,14 @@ func (h handlers) registerEma(api huma.API) {
 		Tags:        emaTags, Security: secured, Middlewares: page, Errors: slices.Concat(notFound, []int{http.StatusConflict}),
 	}, h.rejectEmaPlaque)
 	huma.Register(api, huma.Operation{
-		OperationID: "list-ema-requests", Method: http.MethodGet, Path: "/ema-requests",
-		Summary: "The artist's queue", Description: "The requests for the artist across every board.", Tags: emaTags,
-		Security: secured, Middlewares: queue, Errors: guarded,
-	}, h.listEmaRequests)
-	huma.Register(api, huma.Operation{
 		OperationID: "complete-ema-request", Method: http.MethodPost, Path: "/ema-requests/{id}/complete",
 		Summary:     "Mark an artist request done",
 		Description: "For a plaque the artist posts by hand.",
-		Tags:        emaTags, Security: secured, Middlewares: queue, Errors: slices.Concat(notFound, []int{http.StatusConflict}),
+		Tags:        emaTags, Security: secured, Middlewares: page, Errors: slices.Concat(notFound, []int{http.StatusConflict}),
 	}, h.completeEmaRequest)
 	huma.Register(api, huma.Operation{
 		OperationID: "reopen-ema-request", Method: http.MethodPost, Path: "/ema-requests/{id}/reopen",
-		Summary: "Reopen a finished artist request", Tags: emaTags, Security: secured, Middlewares: queue,
+		Summary: "Reopen a finished artist request", Tags: emaTags, Security: secured, Middlewares: page,
 		Errors: slices.Concat(notFound, []int{http.StatusConflict}),
 	}, h.reopenEmaRequest)
 	huma.Register(api, huma.Operation{
@@ -343,7 +337,7 @@ func (h handlers) registerEma(api huma.API) {
 		Description: "Sends the picture to the request's day webhook, crediting the visitor and the artist, and marks the " +
 			"request complete. There is no review, and nothing is kept: the picture is read into memory, posted and " +
 			"dropped. Claimed like an approval, so a double click can't post twice.",
-		Tags: emaTags, Security: secured, Middlewares: queue, MaxBodyBytes: maxEmaArtistImageBytes + multipartOverhead,
+		Tags: emaTags, Security: secured, Middlewares: page, MaxBodyBytes: maxEmaArtistImageBytes + multipartOverhead,
 		Errors: slices.Concat(notFound, posts, []int{http.StatusRequestEntityTooLarge, http.StatusUnprocessableEntity}),
 	}, h.postEmaRequest)
 	huma.Register(api, huma.Operation{
@@ -686,8 +680,6 @@ func (h handlers) deleteEmaBoard(ctx context.Context, in *emaBoardIDInput) (*str
 	for _, img := range images {
 		h.removePlaqueImage(img)
 	}
-	// The middleware tells the boards; the artist's queue lost this board's requests.
-	ResourceChanged(h.Live, "ema-requests")
 	return nil, nil
 }
 
@@ -701,18 +693,6 @@ func (h handlers) listEmaPlaques(ctx context.Context, in *emaBoardIDInput) (*ema
 	rows, err := q.ListEmaPlaques(ctx, in.ID)
 	if err != nil {
 		return nil, h.fail("list plaques", err)
-	}
-	out := EmaPlaqueList{Plaques: make([]EmaPlaque, 0, len(rows))}
-	for _, r := range rows {
-		out.Plaques = append(out.Plaques, toEmaPlaque((*db.GetEmaPlaqueRow)(r)))
-	}
-	return &emaPlaqueListOutput{Body: out}, nil
-}
-
-func (h handlers) listEmaRequests(ctx context.Context, _ *struct{}) (*emaPlaqueListOutput, error) {
-	rows, err := h.read().ListEmaArtistRequests(ctx)
-	if err != nil {
-		return nil, h.fail("list artist requests", err)
 	}
 	out := EmaPlaqueList{Plaques: make([]EmaPlaque, 0, len(rows))}
 	for _, r := range rows {
@@ -1217,7 +1197,8 @@ func (h handlers) requestEmaPlaque(ctx context.Context, in *emaRequestSubmitInpu
 	if err != nil {
 		return nil, h.fail("reload a request", err)
 	}
-	ResourceChanged(h.Live, "ema-requests")
+	// The write middleware leaves public paths out, so tell the boards.
+	ResourceChanged(h.Live, "ema-boards")
 	return &publicEmaPlaqueOutput{Status: http.StatusCreated, Body: toPublicEmaPlaque(p)}, nil
 }
 

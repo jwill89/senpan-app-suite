@@ -291,12 +291,12 @@ async function saveNew(): Promise<void> {
     <div v-else-if="screen === 'new'" class="admin-panel">
       <SubPageHeader title="New Pattern" :icon="['fad', 'plus']" @back="screen = 'list'" />
       <div class="pattern-editor">
-        <div class="field" style="display: flex; gap: 8px; flex-wrap: wrap">
+        <div class="field">
           <input
             v-model="patterns.newPatternName"
             placeholder="Pattern name (e.g. Diagonal)"
             aria-label="Pattern name"
-            style="flex: 1; min-width: 140px"
+            class="flex-1 min-w-140"
             @keyup.enter="saveNew"
           />
           <select v-model="patterns.newPatternCategoryId" aria-label="Pattern category">

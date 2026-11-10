@@ -350,11 +350,7 @@ watch(
               Select a font below (the “Preview” action) to see your text rendered here.
             </span>
           </div>
-          <p
-            v-if="selectedFont && previewVariant"
-            class="text-muted text-xs"
-            style="margin: 6px 0 0"
-          >
+          <p v-if="selectedFont && previewVariant" class="text-muted text-xs mt-6 mb-0">
             Previewing <span class="code-highlight">{{ selectedFont.family }}</span> -
             {{ previewVariant.type }}{{ previewVariant.converted ? ' (converted)' : '' }}
           </p>
@@ -449,7 +445,7 @@ watch(
           </div>
         </template>
         <template #empty>
-          <p class="text-muted ta-center" style="padding: 20px">No fonts match “{{ search }}”.</p>
+          <p class="text-muted ta-center p-20">No fonts match “{{ search }}”.</p>
         </template>
       </DataTable>
 

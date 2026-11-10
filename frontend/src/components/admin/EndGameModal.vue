@@ -28,7 +28,7 @@ function playerNameFor(id: string): string | undefined {
     <p class="text-muted text-xs mb-12">
       Uncheck any card IDs that should NOT count as valid winners.
     </p>
-    <div style="display: flex; gap: 8px; margin-bottom: 12px">
+    <div class="flex-toolbar flex-toolbar--tight items-stretch mb-12">
       <button
         type="button"
         class="btn-neutral btn-sm"
@@ -40,28 +40,14 @@ function playerNameFor(id: string): string | undefined {
         Uncheck All
       </button>
     </div>
-    <div
-      style="
-        display: flex;
-        flex-direction: column;
-        gap: 8px;
-        margin-bottom: 16px;
-        overflow-y: auto;
-        max-height: 50vh;
-        padding-right: 4px;
-      "
-    >
-      <label
-        v-for="w in game.winners"
-        :key="w"
-        style="display: flex; align-items: center; gap: 8px; cursor: pointer"
-      >
+    <div class="check-list">
+      <label v-for="w in game.winners" :key="w" class="check-list-item">
         <input v-model="game.endGameSelectedWinners" type="checkbox" :value="w" />
         <span class="code-highlight">{{ w }}</span>
         <small v-if="playerNameFor(w)" class="text-muted">- {{ playerNameFor(w) }}</small>
       </label>
     </div>
-    <div style="display: flex; gap: 8px; justify-content: flex-end">
+    <div class="flex-toolbar flex-toolbar--tight items-stretch flex-end">
       <button type="button" class="btn-neutral" @click="game.showEndGameModal = false">
         Cancel
       </button>

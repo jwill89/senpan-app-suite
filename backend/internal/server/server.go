@@ -679,8 +679,11 @@ func adminMutationResource(path string) (string, bool) {
 	seg, after, _ := strings.Cut(rest, "/")
 	switch seg {
 	case "garapons", "affiliates", "tea-rooms", "festival-maps", "presets", "users", "winners-log",
-		"ema-boards", "ema-requests":
+		"ema-boards":
 		return seg, true
+	case "ema-requests":
+		// The artist's requests are part of a plaque board.
+		return "ema-boards", true
 	case "fonts", "font-files":
 		return "fonts", true
 	case "image-categories":

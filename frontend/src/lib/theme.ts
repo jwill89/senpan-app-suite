@@ -13,7 +13,7 @@
  * uploaded via System -> Font Upload. `applyUploadedFonts()` registers an
  * @font-face for each uploaded font so those families are usable anywhere
  * `--header-font` is - for players too, not just the admin preview. Fonts are
- * sourced SAME-ORIGIN from `/api/fonts/pub/f/<token>` (rotating opaque tokens;
+ * sourced SAME-ORIGIN from `/api/v1/fonts/pub/f/<token>` (rotating opaque tokens;
  * see the backend's fontserve.go), so the app never depends on the external
  * fonts host or its origin allowlist. `applyHeaderFont()` then skips the
  * Google Fonts request for a family it knows is an uploaded one.
@@ -147,7 +147,7 @@ let lastFonts: UploadedFont[] = []
 
 /** Same-origin path a font token is served from (proxied to the Go backend). */
 export function uploadedFontUrl(token: string): string {
-  return `/api/fonts/pub/f/${encodeURIComponent(token)}`
+  return `/api/v1/fonts/pub/f/${encodeURIComponent(token)}`
 }
 
 /** Builds a single @font-face rule, including override descriptors if clamped. */

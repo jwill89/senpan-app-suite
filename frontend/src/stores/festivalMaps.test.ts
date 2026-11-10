@@ -1,31 +1,20 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
-import type { FestivalMap, PublicFestivalMap, PublicFestivalMapSummary } from '@/types/api'
+import type { FestivalMap } from '@/api/client'
 
-// Mock the typed endpoint layer so store actions run without the network.
-const ep = vi.hoisted(() => ({
-  list: vi.fn(async () => ({ maps: [] as FestivalMap[] })),
-  detail: vi.fn(async () => ({ map: {} as FestivalMap })),
-  create: vi.fn(async () => ({ map: {} as FestivalMap })),
-  update: vi.fn(async () => ({ ok: true })),
-  del: vi.fn(async () => undefined),
-  setStatus: vi.fn(async () => ({ ok: true, status: 'published' })),
-  publicList: vi.fn(async () => ({ maps: [] as PublicFestivalMapSummary[] })),
-  publicDetail: vi.fn(async () => ({}) as PublicFestivalMap),
+// The store calls the API client; only its calls are faked (unwrap is the real
+// one). Each fake answers a call's `{ data, error, response }`.
+const ok = (data: unknown, status = 200) => ({ data, response: new Response(null, { status }) })
+const api = vi.hoisted(() => ({
+  GET: vi.fn(),
+  POST: vi.fn(),
+  PUT: vi.fn(),
+  PATCH: vi.fn(),
+  DELETE: vi.fn(),
 }))
-vi.mock('@/lib/endpoints', () => ({
-  endpoints: {
-    festivalMaps: {
-      list: ep.list,
-      detail: ep.detail,
-      create: ep.create,
-      update: ep.update,
-      delete: ep.del,
-      setStatus: ep.setStatus,
-      publicList: ep.publicList,
-      publicDetail: ep.publicDetail,
-    },
-  },
+vi.mock('@/api/client', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  api,
 }))
 
 import { useFestivalMapsStore } from './festivalMaps'
@@ -36,34 +25,34 @@ function makeMap(over: Partial<FestivalMap> = {}): FestivalMap {
     id: 7,
     title: 'Obon Matsuri 2026',
     slug: 'obon-2026',
+    publicPath: 'obon-2026',
     description: 'Come along.',
     times: [{ label: 'Day 1', start: '2026-08-01T18:00:00Z', end: '2026-08-01T22:00:00Z' }],
-    map_image: 'images/festival_maps/plan.png',
+    mapImage: 'images/festival_maps/plan.png',
     status: 'published',
-    created_at: '2026-07-01T00:00:00Z',
+    createdAt: '2026-07-01T00:00:00Z',
+    stallCount: 1,
     stalls: [
       {
         id: 11,
-        map_id: 7,
         shape: 'rect',
         color: '#e0a480',
-        selection_color: '',
-        text_color: '',
+        selectionColor: '',
+        textColor: '',
         placement: { x: 10, y: 20, width: 15, height: 10, rotation: 0 },
-        sort_order: 0,
+        sortOrder: 0,
         occupants: [
           {
             id: 21,
-            stall_id: 11,
-            affiliate_id: 3,
-            affiliate_name: 'Flora Teahouse',
+            affiliateId: 3,
+            affiliateName: 'Flora Teahouse',
             title: 'Flora Teahouse',
             description: 'Tea and cakes.',
-            event_carrd: '',
-            stall_type: 'food',
-            type_label: '',
-            times: [{ label: 'Day 1', start: '2026-08-01T19:00:00Z', end: '' }],
-            sort_order: 0,
+            eventCarrd: '',
+            stallType: 'food',
+            typeLabel: '',
+            times: [{ label: 'Day 1', start: '2026-08-01T19:00:00Z', end: null }],
+            sortOrder: 0,
           },
         ],
       },
@@ -72,15 +61,22 @@ function makeMap(over: Partial<FestivalMap> = {}): FestivalMap {
   }
 }
 
-/** The payload of the most recent create/update call. */
+/** The body of the most recent call a method made. */
 function lastPayload(fn: { mock: { calls: unknown[][] } }): Record<string, unknown> {
-  return fn.mock.calls.at(-1)?.[0] as Record<string, unknown>
+  return (fn.mock.calls.at(-1)?.[1] as { body: Record<string, unknown> }).body
 }
 
 describe('festivalMaps store', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
-    vi.clearAllMocks()
+    Object.values(api).forEach((fn) => fn.mockReset())
+    api.POST.mockResolvedValue(ok({ id: 7 }, 201))
+    api.PUT.mockResolvedValue(ok({}))
+    api.PATCH.mockResolvedValue(ok({}))
+    api.DELETE.mockResolvedValue(ok(null, 204))
+    api.GET.mockImplementation(async (path: string) =>
+      ok(path === '/affiliates' ? { affiliates: [] } : { maps: [], ...makeMap() }),
+    )
   })
 
   describe('status buckets', () => {
@@ -133,7 +129,7 @@ describe('festivalMaps store', () => {
       const form = store.mapForm
       expect(form?.id).toBe(0)
       expect(form?.title).toBe('Obon Matsuri 2026 (Copy)')
-      expect(form?.map_image).toBe('images/festival_maps/plan.png')
+      expect(form?.mapImage).toBe('images/festival_maps/plan.png')
       // The pitch is still in place, with its position, but is a new row - and so
       // is everyone standing in it.
       expect(form?.stalls).toHaveLength(1)
@@ -175,7 +171,7 @@ describe('festivalMaps store', () => {
       store.newMapForm()
       const pitch = store.addStall('game')
       expect(pitch?.occupants).toHaveLength(1)
-      expect(pitch?.occupants[0]!.stall_type).toBe('game')
+      expect(pitch?.occupants[0]!.stallType).toBe('game')
     })
   })
 
@@ -185,7 +181,7 @@ describe('festivalMaps store', () => {
       store.newMapForm()
       store.addStall('food')
       const added = store.addOccupant(0)
-      expect(added?.stall_type).toBe('food')
+      expect(added?.stallType).toBe('food')
       expect(store.mapForm?.stalls[0]!.occupants).toHaveLength(2)
     })
 
@@ -213,7 +209,7 @@ describe('festivalMaps store', () => {
       const ui = useUiStore()
       store.newMapForm()
       expect(await store.saveMap()).toBe(false)
-      expect(ep.create).not.toHaveBeenCalled()
+      expect(api.POST).not.toHaveBeenCalled()
       expect(ui.toast.message).toBe('Title is required')
     })
 
@@ -229,10 +225,10 @@ describe('festivalMaps store', () => {
       store.newMapForm()
       store.mapForm!.title = 'Obon'
       store.addStall('food')
-      store.mapForm!.stalls[0]!.occupants[0]!.affiliate_id = null
+      store.mapForm!.stalls[0]!.occupants[0]!.affiliateId = null
 
       expect(await store.saveMap()).toBe(false)
-      expect(ep.create).not.toHaveBeenCalled()
+      expect(api.POST).not.toHaveBeenCalled()
       expect(ui.toast.message).toMatch(/affiliate/i)
     })
 
@@ -241,7 +237,7 @@ describe('festivalMaps store', () => {
       store.newMapForm()
       store.mapForm!.title = 'Obon'
       store.addStall('food')
-      store.mapForm!.stalls[0]!.occupants[0]!.affiliate_id = 7
+      store.mapForm!.stalls[0]!.occupants[0]!.affiliateId = 7
       expect(await store.saveMap()).toBe(true)
     })
 
@@ -252,7 +248,7 @@ describe('festivalMaps store', () => {
       store.mapForm!.times[0]!.start = ''
       store.mapForm!.times[0]!.label = 'Ghost'
       expect(await store.saveMap()).toBe(true)
-      expect(lastPayload(ep.create).times).toEqual([])
+      expect(lastPayload(api.POST).times).toEqual([])
     })
 
     /**
@@ -272,15 +268,15 @@ describe('festivalMaps store', () => {
       store.addStall('food')
 
       const stall = store.mapForm!.stalls[0]!
-      stall.occupants[0]!.affiliate_id = 7 // required before a map will save
+      stall.occupants[0]!.affiliateId = 7 // required before a map will save
       stall.color = '#112233'
-      stall.selection_color = '#ff3ea5'
-      stall.text_color = '#ffe9a8'
-      stall.occupants[0]!.event_carrd = 'https://ev.carrd.co'
+      stall.selectionColor = '#ff3ea5'
+      stall.textColor = '#ffe9a8'
+      stall.occupants[0]!.eventCarrd = 'https://ev.carrd.co'
       stall.occupants[0]!.title = 'Tea Bar'
       await store.saveMap()
 
-      const pitch = (lastPayload(ep.create).stalls as Record<string, unknown>[])[0]!
+      const pitch = (lastPayload(api.POST).stalls as Record<string, unknown>[])[0]!
       const occupant = (pitch.occupants as Record<string, unknown>[])[0]!
       // Every form key except the client-only row id must reach the wire.
       for (const [key, value] of Object.entries(stall)) {
@@ -303,10 +299,10 @@ describe('festivalMaps store', () => {
       store.mapForm!.title = 'Obon'
       store.mapForm!.times[0] = { label: 'Day 1', start: '2026-08-01T18:00', end: '', _uid: 99 }
       store.addStall('game')
-      store.mapForm!.stalls[0]!.occupants[0]!.affiliate_id = 7 // required before a map will save
+      store.mapForm!.stalls[0]!.occupants[0]!.affiliateId = 7 // required before a map will save
       await store.saveMap()
 
-      const payload = lastPayload(ep.create)
+      const payload = lastPayload(api.POST)
       const times = payload.times as Record<string, unknown>[]
       expect(times[0]!.start).toMatch(/Z$/)
       expect(times[0]).not.toHaveProperty('_uid')
@@ -319,8 +315,8 @@ describe('festivalMaps store', () => {
       const store = useFestivalMapsStore()
       store.editMapForm(makeMap())
       expect(await store.saveMap()).toBe(true)
-      expect(ep.update).toHaveBeenCalled()
-      expect(ep.create).not.toHaveBeenCalled()
+      expect(api.PUT).toHaveBeenCalled()
+      expect(api.POST).not.toHaveBeenCalled()
     })
   })
 
@@ -337,16 +333,19 @@ describe('festivalMaps store', () => {
   })
 
   describe('mapPath', () => {
-    it('links a map by its shortcode when it has one, else by id', () => {
+    it('links a map by the segment the server names: its shortcode, else its id', () => {
       const store = useFestivalMapsStore()
-      expect(store.mapPath({ id: 7, slug: 'obon-2026' })).toBe('obon-2026')
-      expect(store.mapPath({ id: 7, slug: '' })).toBe('7')
+      expect(store.mapPath({ publicPath: 'obon-2026' })).toBe('obon-2026')
+      expect(store.mapPath({ publicPath: '7' })).toBe('7')
     })
   })
 
   describe('loadPublicMap', () => {
     it('reports false for a map the public endpoint refuses', async () => {
-      ep.publicDetail.mockRejectedValueOnce(new Error('Festival map not found'))
+      api.GET.mockResolvedValueOnce({
+        error: { title: 'Not Found', detail: 'There is no such festival map.' },
+        response: new Response(null, { status: 404 }),
+      })
       const store = useFestivalMapsStore()
       expect(await store.loadPublicMap('99')).toBe(false)
       expect(store.publicMap).toBeNull()

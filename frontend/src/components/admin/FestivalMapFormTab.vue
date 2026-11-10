@@ -20,13 +20,8 @@ import ImagePicker from '@/components/common/ui/ImagePicker.vue'
 import MapStallEditor from './MapStallEditor.vue'
 import { blankEventTime, useFestivalMapsStore } from '@/stores/festivalMaps'
 import { STALL_TYPES, stallCaption, stallColor, stallTypeMeta } from '@/lib/festivalmap'
-import type {
-  EventTimeForm,
-  FestivalStallOccupantForm,
-  Placement,
-  StallShape,
-  StallType,
-} from '@/types/api'
+import type { EventTimeForm, FestivalStallOccupantForm, StallShape, StallType } from '@/types/api'
+import type { Placement } from '@/api/client'
 
 const emit = defineEmits<{ saved: []; cancel: [] }>()
 const store = useFestivalMapsStore()
@@ -68,7 +63,7 @@ function removeSelected(): void {
 
 /** Set an occupant's operator from the select ('' -> the venue itself). */
 function setAffiliate(occupant: FestivalStallOccupantForm, value: string): void {
-  occupant.affiliate_id = value ? Number(value) : null
+  occupant.affiliateId = value ? Number(value) : null
 }
 
 /**
@@ -84,7 +79,7 @@ function setStallType(occupant: FestivalStallOccupantForm, value: string): void 
   }
   // Anything unknown is a game stall, the first type.
   const type = STALL_TYPES.find((t) => t.value === value)?.value ?? 'game'
-  occupant.stall_type = type
+  occupant.stallType = type
   if (occupant === sel.stall.occupants[0]) {
     sel.stall.shape = stallTypeMeta(type).shape
   }
@@ -128,17 +123,17 @@ function clearColor(): void {
  * the same colour as the shape it surrounds is the one thing that would not read
  * as a selection. '' follows the app highlight.
  */
-const selectedRingColor = computed(() => selected.value?.stall.selection_color || '#d6bdae')
+const selectedRingColor = computed(() => selected.value?.stall.selectionColor || '#d6bdae')
 
 function setRingColor(value: string): void {
   if (selected.value) {
-    selected.value.stall.selection_color = value
+    selected.value.stall.selectionColor = value
   }
 }
 
 function clearRingColor(): void {
   if (selected.value) {
-    selected.value.stall.selection_color = ''
+    selected.value.stall.selectionColor = ''
   }
 }
 
@@ -146,17 +141,17 @@ function clearRingColor(): void {
  * The colour this pitch's label is drawn in. Its own setting beside the fill,
  * because a label that reads on a pale fill disappears on a deep one. '' = white.
  */
-const selectedTextColor = computed(() => selected.value?.stall.text_color || '#ffffff')
+const selectedTextColor = computed(() => selected.value?.stall.textColor || '#ffffff')
 
 function setTextColor(value: string): void {
   if (selected.value) {
-    selected.value.stall.text_color = value
+    selected.value.stall.textColor = value
   }
 }
 
 function clearTextColor(): void {
   if (selected.value) {
-    selected.value.stall.text_color = ''
+    selected.value.stall.textColor = ''
   }
 }
 
@@ -288,7 +283,7 @@ function cancel(): void {
         label="Base Map Image"
         help="The bare floor plan - walls, rest areas, the stage, seating. The stalls are drawn on top of it by the app, so their labels don't need to be part of the artwork. Required before the map can be published."
       >
-        <ImagePicker v-model="store.mapForm.map_image" />
+        <ImagePicker v-model="store.mapForm.mapImage" />
       </FormField>
 
       <!-- Stall editor -->
@@ -309,7 +304,7 @@ function cancel(): void {
       </div>
 
       <MapStallEditor
-        :map-image="store.mapForm.map_image"
+        :map-image="store.mapForm.mapImage"
         :stalls="store.mapForm.stalls"
         :selected-uid="selectedUid"
         @select="selectedUid = $event"
@@ -321,7 +316,7 @@ function cancel(): void {
         <div class="flex-toolbar flex-between mb-10">
           <h4 class="section-heading m-0">
             <font-awesome-icon
-              :icon="['fad', stallTypeMeta(selected.stall.occupants[0]?.stall_type ?? '').icon]"
+              :icon="['fad', stallTypeMeta(selected.stall.occupants[0]?.stallType ?? '').icon]"
             />
             {{ selected.stall.occupants[0]?.title || `Stall ${selected.index + 1}` }}
           </h4>
@@ -383,7 +378,7 @@ function cancel(): void {
               <button
                 type="button"
                 class="btn-neutral btn-sm"
-                :disabled="!selected.stall.text_color"
+                :disabled="!selected.stall.textColor"
                 @click="clearTextColor"
               >
                 Reset
@@ -406,7 +401,7 @@ function cancel(): void {
               <button
                 type="button"
                 class="btn-neutral btn-sm"
-                :disabled="!selected.stall.selection_color"
+                :disabled="!selected.stall.selectionColor"
                 @click="clearRingColor"
               >
                 Reset
@@ -461,7 +456,7 @@ function cancel(): void {
           <FormRow>
             <FormField label="Affiliate*" help="Who runs it. Every stall needs one.">
               <select
-                :value="occupant.affiliate_id ?? ''"
+                :value="occupant.affiliateId ?? ''"
                 aria-label="Stall affiliate"
                 @change="setAffiliate(occupant, ($event.target as HTMLSelectElement).value)"
               >
@@ -492,7 +487,7 @@ function cancel(): void {
               help="Drawn under the title on the map. The first occupant's choice also sets the stall's shape and color."
             >
               <select
-                :value="occupant.stall_type"
+                :value="occupant.stallType"
                 aria-label="Stall type"
                 @change="setStallType(occupant, ($event.target as HTMLSelectElement).value)"
               >
@@ -502,12 +497,12 @@ function cancel(): void {
               </select>
             </FormField>
             <FormField
-              v-if="occupant.stall_type === 'other'"
+              v-if="occupant.stallType === 'other'"
               label="Offers (wording)"
               help="What this stall actually offers, drawn under its title. Leave it empty and the stall shows its title alone - “Other” would tell a visitor nothing."
             >
               <input
-                v-model="occupant.type_label"
+                v-model="occupant.typeLabel"
                 placeholder="e.g. Omikuji, Art Raffle"
                 aria-label="Stall offering wording"
               />
@@ -519,7 +514,7 @@ function cancel(): void {
             help="This occupant's own event page. Per occupant, so a stall that changes hands between days links a different page each day. Leave blank to hide the button."
           >
             <input
-              v-model="occupant.event_carrd"
+              v-model="occupant.eventCarrd"
               placeholder="https://example.carrd.co"
               inputmode="url"
               aria-label="Booth Page link"

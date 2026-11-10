@@ -2,7 +2,7 @@ import { describe, it, expect, vi, afterEach } from 'vitest'
 import { mount } from '@vue/test-utils'
 import { createRouter, createMemoryHistory } from 'vue-router'
 import FestivalMapWidget from './FestivalMapWidget.vue'
-import type { PublicFestivalMap } from '@/types/api'
+import type { PublicFestivalMap } from '@/api/client'
 
 /**
  * The map widget is the one piece of this app that runs somewhere we do not
@@ -32,42 +32,45 @@ function festivalMap(): PublicFestivalMap {
     id: 1,
     title: 'Summer Night Festival',
     slug: 'summer',
+    publicPath: 'summer',
     description: '',
     times: [],
-    map_image: '/images/plan.png',
-    is_active: true,
-    stamp_rally_id: 9,
-    stamp_rally_title: 'Lantern Rally',
-    stamp_rally_signup: true,
+    mapImage: '/images/plan.png',
+    isActive: true,
+    stampRallyId: 9,
+    stampRallyTitle: 'Lantern Rally',
+    stampRallySignup: true,
     stalls: [
       {
         id: 1,
         shape: 'rect',
         color: '#e0a480',
-        text_color: '',
-        selection_color: '',
+        textColor: '',
+        selectionColor: '',
         placement: { x: 10, y: 10, width: 20, height: 15, rotation: 0 },
         occupants: [
           {
             id: 11,
             title: '',
             description: '',
-            stall_type: 'food',
-            type_label: '',
+            stallType: 'food',
+            typeLabel: '',
             times: [],
-            is_open: true,
-            in_stamp_rally: true,
-            rally_title: 'Lantern Rally',
-            stamp_image: '/images/onigiri.png',
+            eventCarrd: '',
+            isOpen: true,
+            inStampRally: true,
+            rallyId: 3,
+            rallyTitle: 'Lantern Rally',
+            stampImage: '/images/onigiri.png',
             affiliate: {
               name: 'Lunaria',
               subtitle: '',
               owners: [],
               logo: '',
-              discord_link: '',
-              carrd_link: '',
+              discordLink: '',
+              carrdLink: '',
             },
-            raffle: { id: 7, title: 'Prize Draw', prize_image: '' },
+            raffle: { id: 7, title: 'Prize Draw', prizeImage: '' },
           },
         ],
       },

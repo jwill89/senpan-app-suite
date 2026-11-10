@@ -13,7 +13,7 @@ import FormField from '@/components/common/ui/FormField.vue'
 import { participantLabel } from '@/lib/participant'
 import { useEmaStore } from '@/stores/ema'
 import { useUiStore } from '@/stores/ui'
-import type { EmaPlaque } from '@/types/api'
+import type { EmaPlaque } from '@/api/client'
 
 const props = defineProps<{ request: EmaPlaque }>()
 const emit = defineEmits<{ close: [] }>()
@@ -66,7 +66,7 @@ async function post(): Promise<void> {
     <div class="flex-between mb-12">
       <h3>
         <font-awesome-icon :icon="['fab', 'discord']" />
-        Post {{ participantLabel(request.character_name, request.world) }}'s Plaque
+        Post {{ participantLabel(request.characterName, request.world) }}'s Plaque
       </h3>
       <button type="button" class="btn-neutral btn-sm" @click="emit('close')">Close</button>
     </div>
@@ -80,8 +80,8 @@ async function post(): Promise<void> {
     <img v-if="preview" :src="preview" class="ema-review-image mb-12" alt="The finished plaque" />
 
     <p class="text-sm m-0">
-      Posts to {{ request.window_label }}'s Discord channel as requested by
-      <strong>{{ participantLabel(request.character_name, request.world) }}</strong> and made by the
+      Posts to {{ request.windowLabel }}'s Discord channel as requested by
+      <strong>{{ participantLabel(request.characterName, request.world) }}</strong> and made by the
       board's artist, then marks the request complete. The image isn't kept on the site.
     </p>
 

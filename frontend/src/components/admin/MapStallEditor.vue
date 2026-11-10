@@ -16,7 +16,8 @@ import { assetUrl } from '@/lib/assets'
 import { isCircle, occupantMapLabel, stallCaption, stallColor, stallStyle } from '@/lib/festivalmap'
 import { useFestivalMapsStore } from '@/stores/festivalMaps'
 import { usePlacementDrag, type DragMode } from '@/composables/usePlacementDrag'
-import type { FestivalStallForm, FestivalStallOccupantForm, Placement } from '@/types/api'
+import type { FestivalStallForm, FestivalStallOccupantForm } from '@/types/api'
+import type { Placement } from '@/api/client'
 
 defineProps<{
   mapImage: string
@@ -45,8 +46,8 @@ const store = useFestivalMapsStore()
  * own booth, which occupantMapLabel names.
  */
 function editorLabel(occupant: FestivalStallOccupantForm): string {
-  const affiliate = store.affiliates.find((a) => a.id === occupant.affiliate_id)
-  return occupantMapLabel({ affiliate_name: affiliate?.name ?? '' })
+  const affiliate = store.affiliates.find((a) => a.id === occupant.affiliateId)
+  return occupantMapLabel({ affiliateName: affiliate?.name ?? '' })
 }
 
 const { beginDrag: startDrag } = usePlacementDrag<number>(canvasRef, (uid, placement) =>
@@ -120,7 +121,7 @@ function onCanvasPointerDown(e: PointerEvent): void {
             stall.shape,
             stallColor(stall),
             '',
-            stall.text_color,
+            stall.textColor,
             stall.occupants.length,
           )
         "

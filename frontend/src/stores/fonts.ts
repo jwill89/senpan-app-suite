@@ -15,9 +15,9 @@
  */
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
-import { endpoints } from '@/lib/endpoints'
-import type { UploadedFont } from '@/api/client'
-import type { Font } from '@/types/api'
+import { api, unwrap } from '@/api/client'
+import type { Font, FontChanges, FontUpload, UploadedFont } from '@/api/client'
+import { apiUpload, refusedFiles } from '@/lib/api'
 import { useUiStore } from './ui'
 
 /** Public base URL of the external fonts host (no trailing slash). Its vhost
@@ -36,7 +36,7 @@ export function fontShareUrl(token: string): string {
 /** Maps a font to the shape applyUploadedFonts registers (its served variant,
  *  under the font's effective CSS family). */
 export function toUploadedFont(f: Font): UploadedFont {
-  return { name: f.base, family: f.family, token: f.served_token }
+  return { name: f.base, family: f.family, token: f.servedToken }
 }
 
 export const useFontsStore = defineStore('fonts', () => {
@@ -53,8 +53,7 @@ export const useFontsStore = defineStore('fonts', () => {
   async function loadFonts(): Promise<void> {
     loading.value = true
     try {
-      const data = await endpoints.fonts.list()
-      fonts.value = data.fonts
+      fonts.value = (await unwrap(api.GET('/fonts'))).fonts
     } catch (e) {
       ui.notify((e as Error).message, 'error')
     } finally {
@@ -75,7 +74,7 @@ export const useFontsStore = defineStore('fonts', () => {
 
     uploading.value = true
     try {
-      const res = await endpoints.fonts.upload(form)
+      const res = await apiUpload<FontUpload>('fonts', form)
       const ok = res.uploaded.length
       const skipped = res.skipped
       if (ok > 0) {
@@ -86,7 +85,7 @@ export const useFontsStore = defineStore('fonts', () => {
       }
       // Conversion warnings: the file uploaded, but its WOFF2 conversion
       // failed - an uploaded format is served for that font.
-      for (const w of res.warnings ?? []) {
+      for (const w of res.warnings) {
         ui.notify(w, 'info')
       }
       if (ok === 0 && skipped.length === 0) {
@@ -94,7 +93,15 @@ export const useFontsStore = defineStore('fonts', () => {
       }
       await loadFonts()
     } catch (e) {
-      ui.notify((e as Error).message, 'error')
+      // Every file refused: the problem names each one and why.
+      const refused = refusedFiles(e)
+      if (refused.length > 0) {
+        for (const r of refused) {
+          ui.notify(`${r.name}: ${r.reason}`, 'error')
+        }
+      } else {
+        ui.notify((e as Error).message, 'error')
+      }
     } finally {
       uploading.value = false
     }
@@ -112,7 +119,7 @@ export const useFontsStore = defineStore('fonts', () => {
       return
     }
     try {
-      await endpoints.fonts.deleteFont(font.base)
+      await unwrap(api.DELETE('/fonts/{base}', { params: { path: { base: font.base } } }))
       ui.notify('Font deleted', 'info')
       await loadFonts()
     } catch (e) {
@@ -131,7 +138,7 @@ export const useFontsStore = defineStore('fonts', () => {
       return
     }
     try {
-      await endpoints.fonts.deleteFile(name)
+      await unwrap(api.DELETE('/font-files/{name}', { params: { path: { name } } }))
       ui.notify('File deleted', 'info')
       await loadFonts()
     } catch (e) {
@@ -146,7 +153,9 @@ export const useFontsStore = defineStore('fonts', () => {
       return false
     }
     try {
-      await endpoints.fonts.renameFile(name, trimmed)
+      await unwrap(
+        api.PATCH('/font-files/{name}', { params: { path: { name } }, body: { name: trimmed } }),
+      )
       ui.notify('File renamed', 'success')
       await loadFonts()
       return true
@@ -160,13 +169,10 @@ export const useFontsStore = defineStore('fonts', () => {
    * Saves a font's metadata (CSS family name, served variant type, per-font
    * allowed sites) and reloads the list; returns true on success.
    */
-  async function updateFamily(
-    base: string,
-    fields: { family?: string; serve?: string; origins?: string[] },
-  ): Promise<boolean> {
+  async function updateFamily(base: string, fields: FontChanges): Promise<boolean> {
     saving.value = true
     try {
-      await endpoints.fonts.updateFamily(base, fields)
+      await unwrap(api.PATCH('/fonts/{base}', { params: { path: { base } }, body: fields }))
       ui.notify('Font updated', 'success')
       await loadFonts()
       return true

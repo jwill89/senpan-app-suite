@@ -164,14 +164,77 @@ version is next bumped, under a `### App` or `### Plugin` heading here until the
   a cancelled request a 408, and a failure part-way says "Posted N of M, then: …".
   Each club's Discord webhook moved off the integrations onto its own page
   (`GET`/`PUT …/webhook`), so the integrations hold only the Google Fonts key; the
-  saved webhooks carry over. The cover upload (`POST /api/bookclub/upload`) is
-  unchanged until the media phase.
+  saved webhooks carry over.
+- **The festival is on huma**: garapons (`/garapons`), stamp rallies
+  (`/stamp-rallies`), festival maps (`/festival-maps`), the festival dashboard
+  (`POST /festivals/{idOrSlug}/dashboard`) and ema plaques (`/ema-boards`,
+  `/ema-requests`), with camelCase fields and their SQL from sqlc, the rules in
+  `internal/festival`. The visitor's side is `GET`/`POST /garapon-players/{token}[/draw]`,
+  `POST /stamp-rallies/{id}/sign-up`, `POST /stamp-cards/lookup`,
+  `GET /stamp-cards/{token}` with `…/stamp`, `GET /stamp-rallies/public`, the public maps
+  (`/festival-maps/public[/{idOrSlug}]`, which carry `publicPath`: the shortcode, else the
+  id) and the two public ema submissions (`POST /festivals/{idOrSlug}/ema-plaques` and
+  `…/ema-requests`); `GET /google-fonts` is public too. Closing and reopening a garapon,
+  rally or board are commands (`…/close`, `…/reopen`), and a map's status is a `PATCH`.
+  A rally or map is saved with its stamps, prizes or pitches in one `PUT` (`[]` clears,
+  a missing list is a 422). A time a map or an ema day states is `{label, start, end}`,
+  `end` null when unstated. The statuses are now exact: drawing is a 409 when the garapon
+  is closed, out of draws or has no prizes; stamping is a 409 for a stamp already
+  collected or a closed, paused or out-of-hours stall, and a 422 for a password that
+  matches no stamp; a stamp id that isn't on its rally, a bad `shape` or `stallType`, or
+  a festival that doesn't exist is a 422; a pitch, occupant or day id that isn't the
+  map's or board's own is a 409, as is publishing a map with no base image; an
+  unknown id on a delete is a 404, where several routes answered 200 or 204. Making a
+  drawing link and the stamp card it pairs with is one transaction, so a failure leaves
+  neither. The public ema submissions count against their limit before the body is read,
+  and the reviewer recorded is the signed-in account. Visitors' dashboards show their own
+  plaques. Fixed with it:
+  - Drawing, stamping, signing up and the public ema submissions tell the pages that
+    show them; a card whose completion was written when it was read (the stamp card or the
+    dashboard) now tells the Stamp Rally page, which heard nothing before. Deleting a
+    rally also tells the Garapon page; saving a map tells the Stamp Rally and Raffles
+    pages; deleting one also tells the ema boards, and deleting a board tells the artist's
+    queue.
+  - `ema_plaques`, where plaques wait for review, can no longer be made an image
+    category.
+- **Media is on huma**: the image library (`/image-categories`, with `…/images`), Carrd
+  projects (`/carrd-projects`, with `…/files` and `…/folders`), fonts (`/fonts` and
+  `/font-files`, and the public `/fonts/pub/kit.css` and `/fonts/pub/f/{token}`) and the
+  book-club cover upload (`POST /book-clubs/{club}/covers`), the pure rules in
+  `internal/uploads` and `internal/fonts` and the file work in `internal/media`. A
+  multi-file upload answers 201 with what was saved and what was skipped and why, or 422
+  naming each file when none was; a file with the wrong type is skipped, not the batch
+  refused. A bad project or category name in a path is a 404, a bad `path` a 422.
+  Decided: JPEG and PNG uploads are now checked and re-encoded, which drops their
+  metadata (EXIF, GPS, text chunks; a photo keeps its orientation), while GIF and WebP
+  are checked and kept as sent, a GIF refused past 500 frames or too many pixels and any
+  image over 40 megapixels or 16384 pixels a side; an image that isn't one is a 422 or
+  skipped. Upload names are kept, so a same-name upload still replaces the file and
+  Carrd's links hold. The fonts' public address moves: the SPA and the font host now use
+  `/api/v1/fonts/pub/`, `fonts.senpan.cafe`'s own addresses are unchanged, and its
+  vhost's ProxyPass must be pointed at the new path on deploy day (`deploy/README.md`);
+  the old `/api/fonts/pub/` no longer answers. Fixed with it:
+  - Renaming an image category no longer moves its folder unless a new `dir` is sent
+    (it used to, breaking every stored picture path under it).
+  - The library seeds ten editable categories; `bookclub`, `announcements` and
+    `ema_plaques` belong to other features and can't be made one.
+  - Every font write sends `settings_changed`, since the public settings carry the
+    uploaded fonts; the cover upload's address is now escaped.
+  - Unknown ids and names on a delete answer 404 (the Carrd project and folder deletes
+    answered 204).
+- **Every route is on huma.** Nothing is registered by hand under `/api/` any more, so
+  `writeError`, `writeJSON`, `readJSON`, `requirePermission`, `requireAnyBookClub`,
+  `requireImageBrowse`, `writeUpstreamError`, the SPA's `lib/endpoints.ts` and the
+  `api()` of `lib/api.ts` are gone, with the `model` types only they used. The SPA calls
+  everything through the generated client; uploads keep an XHR helper for progress,
+  pointed at `/api/v1`. The Dalamud plugin still calls eight old garapon and stamp-rally
+  routes until the release's last phase.
 - **A Discord failure is never a 502 any more.** The transport moved to
   `internal/discord` (the `Sender`, with the dry-run and override policy), and its
   errors are typed: a rate limit answers 429 with `Retry-After`, Discord unreachable
   or silent after the request may have gone out answers 503 (the ambiguous case says
   to check the channel before trying again), and a refusal or a missing webhook
-  answers 500. Ema's posts, still on the old routes, answer the same. AniList failures
+  answers 500. Ema's posts answer the same. AniList failures
   map the same way (503, 429, 500), and no longer 424.
 - **A request its client cancelled is logged at Debug** by the operations, not as an
   error.

@@ -8,16 +8,16 @@ import (
 )
 
 // Capability tokens travel in the URL path (and, for the PAT fallback, the query
-// string): /api/garapon/{token}, /api/stamp-card/{token}, /api/fonts/pub/f/{token},
+// string): /api/v1/garapon-players/{token}, /api/v1/stamp-cards/{token}, /api/v1/fonts/pub/f/{token},
 // and the SPA referer forms /garapon/{token}, /stamp-card/{token}. Those tokens
 // are bearer credentials, so the request logger must not write them verbatim to
 // the rotating file, the /api/logs viewer, or the admins' live log events. The
-// trailing slash on each prefix keeps the plural admin routes (/api/garapons/{id},
-// integer ids) from ever matching.
+// trailing slash on each prefix keeps the admin routes (/api/v1/garapons/{id}, integer
+// ids) from ever matching.
 var tokenPathPrefixes = []string{
-	"/api/garapon/",
-	"/api/stamp-card/",
-	"/api/fonts/pub/f/",
+	"/api/v1/garapon-players/",
+	"/api/v1/stamp-cards/",
+	"/api/v1/fonts/pub/f/",
 	"/garapon/",
 	"/stamp-card/",
 }
@@ -44,7 +44,8 @@ func redactSensitivePath(path string) string {
 		if i := strings.IndexByte(rest, '/'); i >= 0 {
 			tok, tail = rest[:i], rest[i:]
 		}
-		if tok == "" {
+		// The lookup is a fixed path that sits where a card's token would.
+		if tok == "" || (pre == "/api/v1/stamp-cards/" && strings.EqualFold(tok, "lookup")) {
 			return path
 		}
 		// 8 hex chars (32 bits) of the token's SHA-256 - a stable, non-reversible

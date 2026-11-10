@@ -167,8 +167,48 @@ numbers stay as they were, so the references to them hold.
    request a 408, and a failure part-way says "Posted N of M, then: …". The cover upload
    (`POST /api/bookclub/upload`) stays on its old handler until the media phase.
 7. Merged into 6.
-8. **Festival**: garapons, stamp rallies, sign-up, festival maps and dashboard, ema.
-9. **Media**: images and categories, Carrd, fonts (the public font paths unchanged).
+8. **Festival** (built 2026-11-10, with 9): garapons, stamp rallies (public sign-up,
+   lookup and the stamp card), festival maps, the festival dashboard, ema plaques and the
+   Google Fonts list on huma with sqlc (`garapons.sql`, `stamprallies.sql`,
+   `festivalmaps.sql`, `ema.sql`), the rules in `internal/festival` (prize sanitizing and
+   the weighted pick, the rally and completion rules, shortcodes and event times, ema's
+   days and board validation). A drawing link and its paired card are made in one
+   transaction; the draw takes no body and is a 409 when closed, out of draws or without
+   prizes; a stamp id that isn't on its rally is a 422, and a map or board saved with an id
+   that isn't its own is a 409. A map save without `stalls` is a 422 (`[]` clears), a bad
+   `shape` or `stallType` a 422 rather than a silent default, and publishing without a base
+   image a 409. Maps carry `publicPath` (the shortcode, else the id), so the SPA never
+   derives it; a day or a map's time is `{label, start, end}` with `end` null when
+   unstated. The public ema submissions count against `EmaLimit` before the body is read,
+   the plaque image is judged from its bytes, and the reviewer recorded is the signed-in
+   account. `ema_plaques` is a reserved image directory. Every token-gated or public
+   write publishes what it changed itself; the middleware table maps `garapons`,
+   `stamp-rallies` (not `…/sign-up`), `festival-maps`, `ema-boards` and `ema-requests`.
+   Deleting something that is unknown is a 404 where several of the old routes answered 200
+   or 204. The plugin still calls eight old garapon and stamp-rally routes until phase 10.
+9. **Media** (built 2026-11-10, with 8): the image library and its categories, Carrd
+   projects, fonts (admin and the public tokenized serving) and the book-club cover
+   upload on huma, the pure parts in `internal/uploads` (names, slugs, byte sniffing, the
+   SVG sanitizer, `CheckImage` with the EXIF orientation parser), the file work over the
+   web root in `internal/media` (`Images`, `Carrd`, `Fonts`) and the font rules in
+   `internal/fonts`. Decided by the owner: JPEG and PNG uploads are decoded and re-encoded
+   (dropping EXIF, GPS and text chunks, keeping the orientation); GIF and WebP are
+   checked and kept, since Go writes no WebP and re-encoding a GIF risks its animation; a
+   GIF is pre-scanned for frames and total pixels before a full decode. Upload names are
+   kept, so a same-name upload replaces the file and Carrd's external links hold. The
+   font path moves only: `/api/v1/fonts/pub/…` answers and `/api/fonts/pub/` does not (no
+   alias). Multi-file uploads answer 201 `{uploaded, skipped}` when one file was saved
+   and 422 naming each file when none was; their parts are declared
+   `application/octet-stream`, so one stray file is skipped rather than the batch
+   refused. A bad project or category name in a path is a 404, a bad `path` query or body
+   path a 422. Renaming an image category keeps its folder unless a `dir` is sent (it
+   used to move the folder, breaking every stored `images/<dir>/…` reference), and
+   `bookclub`, `announcements` and `ema_plaques` can't be made a category. The startup
+   migrations of images and fonts are still called from `server.New`. With both phases
+   in, `routes()` registers nothing under `/api/`, and `writeError`, `writeJSON`,
+   `readJSON`, `requirePermission`, `requireAnyBookClub`, `requireImageBrowse`,
+   `writeUpstreamError`, `lib/endpoints.ts`, `lib/api.ts`'s `api()` and the `model` types
+   only they used are gone; tygo's file shrinks and goes in phase 10.
 10. **The plugin and the release**: the deploy's smoke check asks
     `/api/v1/version` (left on `/api/version` until then, so a 4.x hotfix still
     deploys); the plugin's naming policy to camelCase (query values too: the winners log's `sort=loggedAt`, `perPage`), its account read moved to
@@ -258,6 +298,19 @@ below; the plugin's share is phase 10's.
   while a winner is pending, and picking another or confirming names the winner it
   means; the public raffle sign-up and the announcement scheduler's sweeps send
   `resource_changed`, and the public entry search no longer does.
+- **The festival and media** (fixed in phases 8 and 9):
+  - Drawing from a garapon, stamping a card, signing up for a rally and the public
+    ema submissions each tell the pages that show them (`garapons`, `stamp-rallies`,
+    `ema-boards`, `ema-requests`); a drawing link made, or deleted, with its paired card
+    also tells the Stamp Rally page, and deleting a rally also tells the Garapon page.
+  - A stamp card or the festival dashboard that writes a card's completion on read now
+    tells the Stamp Rally page, which heard nothing before.
+  - Saving a festival map also tells the Stamp Rally and Raffles pages (the stall names
+    they show); deleting one also tells them and the ema boards it unlinks or deletes,
+    and deleting a board tells the artist's queue.
+  - Every font write also sends `settings_changed` to everyone, since the public
+    settings carry the uploaded fonts. Image, Carrd and font writes tell their own pages.
+  - A cover upload tells no page, as it changes no reading list.
 - **Later phases**: the plugin handles the details, draw
   delay, pattern and resource events, takes the draw delay from the game state, and
   closes its half-time and end-game windows when another surface answers them (10).
@@ -267,7 +320,9 @@ below; the plugin's share is phase 10's.
 1. `task deploy`: the app, then the plugin (its version is new, so it publishes). The
    CORS allowlist arrives seeded with the senpan.cafe origins.
 2. On the droplet, point the `fonts.senpan.cafe` vhost's ProxyPass at
-   `/api/v1/fonts/pub/` (deploy/README.md, Font host), and reload Apache.
+   `/api/v1/fonts/pub/` (deploy/README.md, Font host), and reload Apache. The old
+   `/api/fonts/pub/` answers nothing after the deploy (no alias), so until this step
+   `fonts.senpan.cafe` is down; its public addresses do not change.
 3. Update each Carrd page's tea-room script to the camelCase fields and the
    `/api/v1/tea-rooms/public` address. The pages must be served from an origin on the
    `teaRoomOrigins` allowlist (seeded with `https://senpan.cafe` and

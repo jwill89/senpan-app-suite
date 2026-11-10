@@ -10,11 +10,19 @@
  */
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
-import { endpoints } from '@/lib/endpoints'
+import {
+  api,
+  unwrap,
+  type EmaBoard,
+  type EmaBoardInput,
+  type EmaPlaque,
+  type FestivalMap,
+} from '@/api/client'
+import { apiUpload } from '@/lib/api'
 import { datetimeLocalToUtc, utcToDatetimeLocal } from '@/lib/datetime'
 import { nextUid } from '@/lib/uid'
 import { withLoading } from '@/lib/withLoading'
-import type { EmaBoard, EmaBoardForm, EmaPlaque, EmaWindowForm, FestivalMap } from '@/types/api'
+import type { EmaBoardForm, EmaWindowForm } from '@/types/api'
 import { useUiStore } from './ui'
 
 /**
@@ -25,10 +33,10 @@ function blankWindow(after?: EmaWindowForm): EmaWindowForm {
   return {
     id: 0,
     label: '',
-    start_at: after?.end_at ?? '',
-    end_at: '',
-    webhook_url: '',
-    artist_limit: after?.artist_limit ?? 0,
+    startAt: after?.endAt ?? '',
+    endAt: '',
+    webhookUrl: '',
+    artistLimit: after?.artistLimit ?? 0,
     _uid: nextUid(),
   }
 }
@@ -36,15 +44,15 @@ function blankWindow(after?: EmaWindowForm): EmaWindowForm {
 function blankForm(): EmaBoardForm {
   return {
     id: 0,
-    festival_map_id: null,
+    festivalMapId: null,
     title: 'Ema Plaques',
-    template_image: '',
+    templateImage: '',
     instructions: '',
-    discord_link: '',
-    allow_self: true,
-    allow_site: true,
-    allow_artist: true,
-    artist_name: 'Tara',
+    discordLink: '',
+    allowSelf: true,
+    allowSite: true,
+    allowArtist: true,
+    artistName: 'Tara',
     windows: [blankWindow()],
   }
 }
@@ -70,7 +78,7 @@ export const useEmaStore = defineStore('ema', () => {
   const postingRequest = ref(false)
 
   /** Site plaques waiting for review, across every board (the sidebar count). */
-  const pendingTotal = computed(() => boards.value.reduce((n, b) => n + (b.pending_count ?? 0), 0))
+  const pendingTotal = computed(() => boards.value.reduce((n, b) => n + b.pendingCount, 0))
   /** Artist requests not yet done (the sidebar count). */
   const openRequests = computed(() => requests.value.filter((r) => r.status === 'requested'))
 
@@ -83,7 +91,7 @@ export const useEmaStore = defineStore('ema', () => {
   async function loadBoards(): Promise<void> {
     await withLoading(boardsLoading, async () => {
       try {
-        boards.value = (await endpoints.emaBoards.list()).boards
+        boards.value = (await unwrap(api.GET('/ema-boards'))).boards
       } catch (e) {
         ui.notify((e as Error).message, 'error')
       }
@@ -92,7 +100,7 @@ export const useEmaStore = defineStore('ema', () => {
 
   async function openBoard(id: number): Promise<void> {
     try {
-      selectedBoard.value = (await endpoints.emaBoards.detail(id)).board
+      selectedBoard.value = await unwrap(api.GET('/ema-boards/{id}', { params: { path: { id } } }))
     } catch (e) {
       ui.notify((e as Error).message, 'error')
       return
@@ -103,7 +111,9 @@ export const useEmaStore = defineStore('ema', () => {
   async function loadPlaques(id: number): Promise<void> {
     await withLoading(plaquesLoading, async () => {
       try {
-        plaques.value = (await endpoints.emaBoards.plaques(id)).plaques
+        plaques.value = (
+          await unwrap(api.GET('/ema-boards/{id}/plaques', { params: { path: { id } } }))
+        ).plaques
       } catch (e) {
         ui.notify((e as Error).message, 'error')
       }
@@ -112,7 +122,7 @@ export const useEmaStore = defineStore('ema', () => {
 
   async function loadFestivals(): Promise<void> {
     try {
-      festivals.value = (await endpoints.festivalMaps.list()).maps
+      festivals.value = (await unwrap(api.GET('/festival-maps'))).maps
     } catch {
       festivals.value = []
     }
@@ -128,23 +138,23 @@ export const useEmaStore = defineStore('ema', () => {
   function editBoardForm(b: EmaBoard): void {
     boardForm.value = {
       id: b.id,
-      festival_map_id: b.festival_map_id,
+      festivalMapId: b.festivalMapId,
       title: b.title,
-      template_image: b.template_image,
+      templateImage: b.templateImage,
       instructions: b.instructions,
-      discord_link: b.discord_link,
-      allow_self: b.allow_self,
-      allow_site: b.allow_site,
-      allow_artist: b.allow_artist,
-      artist_name: b.artist_name,
-      windows: (b.windows ?? []).map((w) => ({
+      discordLink: b.discordLink,
+      allowSelf: b.allowSelf,
+      allowSite: b.allowSite,
+      allowArtist: b.allowArtist,
+      artistName: b.artistName,
+      windows: b.windows.map((w) => ({
         id: w.id,
         label: w.label,
-        start_at: utcToDatetimeLocal(w.start_at),
-        end_at: utcToDatetimeLocal(w.end_at),
-        webhook_url: w.webhook_url,
-        artist_limit: w.artist_limit,
-        artist_count: w.artist_count,
+        startAt: utcToDatetimeLocal(w.startAt),
+        endAt: utcToDatetimeLocal(w.endAt),
+        webhookUrl: w.webhookUrl,
+        artistLimit: w.artistLimit,
+        artistCount: w.artistCount,
         _uid: nextUid(),
       })),
     }
@@ -172,32 +182,32 @@ export const useEmaStore = defineStore('ema', () => {
     if (!f || saving.value) {
       return null
     }
-    const body = {
-      festival_map_id: f.festival_map_id ?? 0,
+    const body: EmaBoardInput = {
+      festivalMapId: f.festivalMapId ?? 0,
       title: f.title,
-      template_image: f.template_image,
+      templateImage: f.templateImage,
       instructions: f.instructions,
-      discord_link: f.discord_link,
-      allow_self: f.allow_self,
-      allow_site: f.allow_site,
-      allow_artist: f.allow_artist,
-      artist_name: f.artist_name,
+      discordLink: f.discordLink,
+      allowSelf: f.allowSelf,
+      allowSite: f.allowSite,
+      allowArtist: f.allowArtist,
+      artistName: f.artistName,
       windows: f.windows.map((w) => ({
         id: w.id,
         label: w.label,
-        start_at: datetimeLocalToUtc(w.start_at),
-        end_at: datetimeLocalToUtc(w.end_at),
-        webhook_url: w.webhook_url,
-        artist_limit: w.artist_limit,
+        startAt: datetimeLocalToUtc(w.startAt),
+        endAt: datetimeLocalToUtc(w.endAt),
+        webhookUrl: w.webhookUrl,
+        artistLimit: w.artistLimit,
       })),
     }
     saving.value = true
     try {
       let id = f.id
       if (id) {
-        await endpoints.emaBoards.update(id, body)
+        await unwrap(api.PUT('/ema-boards/{id}', { params: { path: { id } }, body }))
       } else {
-        id = (await endpoints.emaBoards.create(body)).board.id
+        id = (await unwrap(api.POST('/ema-boards', { body }))).id
       }
       ui.notify('Plaque board saved', 'success')
       boardForm.value = null
@@ -213,9 +223,14 @@ export const useEmaStore = defineStore('ema', () => {
 
   async function setBoardStatus(b: EmaBoard, status: 'open' | 'closed'): Promise<void> {
     try {
-      await endpoints.emaBoards.setStatus(b.id, status)
+      const params = { params: { path: { id: b.id } } }
+      const changed = await unwrap(
+        status === 'closed'
+          ? api.POST('/ema-boards/{id}/close', params)
+          : api.POST('/ema-boards/{id}/reopen', params),
+      )
       if (selectedBoard.value?.id === b.id) {
-        selectedBoard.value = { ...selectedBoard.value, status }
+        selectedBoard.value = changed
       }
       await loadBoards()
     } catch (e) {
@@ -232,7 +247,7 @@ export const useEmaStore = defineStore('ema', () => {
       return false
     }
     try {
-      await endpoints.emaBoards.delete(b.id)
+      await unwrap(api.DELETE('/ema-boards/{id}', { params: { path: { id: b.id } } }))
       if (selectedBoard.value?.id === b.id) {
         selectedBoard.value = null
       }
@@ -252,7 +267,7 @@ export const useEmaStore = defineStore('ema', () => {
     }
     if (action === 'reject') {
       const ok = await ui.confirm(
-        `Reject ${p.character_name}'s plaque? Its image is deleted, and they can send another for ${p.window_label}.`,
+        `Reject ${p.characterName}'s plaque? Its image is deleted, and they can send another for ${p.windowLabel}.`,
         { confirmText: 'Reject', danger: true },
       )
       if (!ok) {
@@ -261,11 +276,13 @@ export const useEmaStore = defineStore('ema', () => {
     }
     reviewing.value = new Set(reviewing.value).add(p.id)
     try {
-      const res =
+      const params = { params: { path: { id: p.boardId, plaqueId: p.id } } }
+      const res = await unwrap(
         action === 'approve'
-          ? await endpoints.emaBoards.approve(p.board_id, p.id)
-          : await endpoints.emaBoards.reject(p.board_id, p.id)
-      plaques.value = plaques.value.map((x) => (x.id === p.id ? res.plaque : x))
+          ? api.POST('/ema-boards/{id}/plaques/{plaqueId}/approve', params)
+          : api.POST('/ema-boards/{id}/plaques/{plaqueId}/reject', params),
+      )
+      plaques.value = plaques.value.map((x) => (x.id === p.id ? res : x))
       ui.notify(action === 'approve' ? 'Posted to Discord' : 'Plaque rejected', 'success')
       void loadBoards()
     } catch (e) {
@@ -285,7 +302,7 @@ export const useEmaStore = defineStore('ema', () => {
   async function loadRequests(): Promise<void> {
     await withLoading(requestsLoading, async () => {
       try {
-        requests.value = (await endpoints.emaRequests.list()).plaques
+        requests.value = (await unwrap(api.GET('/ema-requests'))).plaques
       } catch (e) {
         ui.notify((e as Error).message, 'error')
       }
@@ -294,8 +311,13 @@ export const useEmaStore = defineStore('ema', () => {
 
   async function setRequestComplete(p: EmaPlaque, complete: boolean): Promise<void> {
     try {
-      const res = await endpoints.emaRequests.setComplete(p.id, complete)
-      requests.value = requests.value.map((x) => (x.id === p.id ? res.plaque : x))
+      const params = { params: { path: { id: p.id } } }
+      const res = await unwrap(
+        complete
+          ? api.POST('/ema-requests/{id}/complete', params)
+          : api.POST('/ema-requests/{id}/reopen', params),
+      )
+      requests.value = requests.value.map((x) => (x.id === p.id ? res : x))
     } catch (e) {
       ui.notify((e as Error).message, 'error')
       void loadRequests()
@@ -315,8 +337,8 @@ export const useEmaStore = defineStore('ema', () => {
     form.append('image', image)
     postingRequest.value = true
     try {
-      const res = await endpoints.emaRequests.post(p.id, form)
-      requests.value = requests.value.map((x) => (x.id === p.id ? res.plaque : x))
+      const res = await apiUpload<EmaPlaque>(`ema-requests/${p.id}/post`, form)
+      requests.value = requests.value.map((x) => (x.id === p.id ? res : x))
       ui.notify('Posted to Discord', 'success')
       return true
     } catch (e) {

@@ -8,12 +8,13 @@ import (
 func TestRedactSensitivePath(t *testing.T) {
 	// Admin / non-token paths must be left completely untouched.
 	unchanged := []string{
-		"/api/garapons/5",            // plural admin route, integer id
-		"/api/garapons/5/players",    // plural admin sub-route
-		"/api/stamp-rallies/12/logs", // plural admin route
-		"/api/v1/settings",           // ordinary route
-		"/api/fonts/pub/kit.css",     // font kit (not a token file)
-		"/",                          // root
+		"/api/v1/garapons/5",            // admin route, integer id
+		"/api/v1/garapons/5/players",    // admin sub-route
+		"/api/v1/stamp-rallies/12/logs", // admin route
+		"/api/v1/stamp-cards/lookup",    // the lookup sits where a card's token would
+		"/api/v1/settings",              // ordinary route
+		"/api/v1/fonts/pub/kit.css",     // font kit (not a token file)
+		"/",                             // root
 	}
 	for _, p := range unchanged {
 		if got := redactSensitivePath(p); got != p {
@@ -23,31 +24,31 @@ func TestRedactSensitivePath(t *testing.T) {
 
 	// Token routes: the token segment is replaced, any trailing action is kept,
 	// and the same token always maps to the same placeholder (correlatable).
-	drawA := redactSensitivePath("/api/garapon/SECRET123/draw")
-	if drawA == "/api/garapon/SECRET123/draw" {
+	drawA := redactSensitivePath("/api/v1/garapon-players/SECRET123/draw")
+	if drawA == "/api/v1/garapon-players/SECRET123/draw" {
 		t.Fatal("garapon token was not redacted")
 	}
-	if want := "/api/garapon/tok_"; drawA[:len(want)] != want {
+	if want := "/api/v1/garapon-players/tok_"; drawA[:len(want)] != want {
 		t.Errorf("redacted path = %q; want prefix %q", drawA, want)
 	}
 	if drawA[len(drawA)-5:] != "/draw" {
 		t.Errorf("redacted path = %q; want trailing /draw preserved", drawA)
 	}
-	if redactSensitivePath("/api/garapon/SECRET123") == "/api/garapon/SECRET123" {
+	if redactSensitivePath("/api/v1/garapon-players/SECRET123") == "/api/v1/garapon-players/SECRET123" {
 		t.Error("garapon token (no action) was not redacted")
 	}
 	// Stable correlation: same token -> same placeholder.
-	if redactSensitivePath("/api/garapon/SECRET123/draw") != drawA {
+	if redactSensitivePath("/api/v1/garapon-players/SECRET123/draw") != drawA {
 		t.Error("redaction is not stable for the same token")
 	}
 	// Different token -> different placeholder.
-	if redactSensitivePath("/api/garapon/OTHER/draw") == drawA {
+	if redactSensitivePath("/api/v1/garapon-players/OTHER/draw") == drawA {
 		t.Error("different tokens collided to the same placeholder")
 	}
 
 	for _, p := range []string{
-		"/api/stamp-card/ABC/stamp",
-		"/api/fonts/pub/f/XYZ",
+		"/api/v1/stamp-cards/ABC/stamp",
+		"/api/v1/fonts/pub/f/XYZ",
 		"/stamp-card/DEF", // SPA referer form
 		"/garapon/GHI",    // SPA referer form
 	} {
@@ -87,10 +88,10 @@ func TestRedactReferer(t *testing.T) {
 func TestRedactSensitivePathIsCaseInsensitive(t *testing.T) {
 	const token = "abcdef0123456789abcdef0123456789"
 	cases := []string{
-		"/API/Garapon/" + token,
-		"/Api/Stamp-Card/" + token + "/stamp",
-		"/GARAPON/" + token + "/draw",
-		"/api/Fonts/Pub/F/" + token,
+		"/API/V1/Garapon-Players/" + token,
+		"/Api/V1/Stamp-Cards/" + token + "/stamp",
+		"/GARAPON/" + token, // the SPA page
+		"/api/V1/Fonts/Pub/F/" + token,
 	}
 	for _, path := range cases {
 		got := redactSensitivePath(path)
@@ -103,7 +104,7 @@ func TestRedactSensitivePathIsCaseInsensitive(t *testing.T) {
 	}
 
 	// The prefix's ORIGINAL casing is preserved, and a trailing segment survives.
-	if got := redactSensitivePath("/API/Garapon/" + token + "/draw"); !strings.HasPrefix(got, "/API/Garapon/") ||
+	if got := redactSensitivePath("/API/V1/Garapon-Players/" + token + "/draw"); !strings.HasPrefix(got, "/API/V1/Garapon-Players/") ||
 		!strings.HasSuffix(got, "/draw") {
 		t.Errorf("redaction rewrote the request's own casing or dropped its tail: %q", got)
 	}

@@ -14,15 +14,15 @@
  */
 import { nextTick, ref, useTemplateRef } from 'vue'
 import { playPonSound, playGaraponRoll, vibrate } from '@/lib/sound'
-import type { GaraponDrawResponse } from '@/types/api'
+import type { GaraponDrawResult } from '@/api/client'
 
 const props = defineProps<{
   /** Whether drawing is currently disabled (closed garapon or no draws left). */
   disabled: boolean
   /** Performs one authoritative draw; resolves to the result (or null on error). */
-  performDraw: () => Promise<GaraponDrawResponse | null>
+  performDraw: () => Promise<GaraponDrawResult | null>
 }>()
-const emit = defineEmits<{ settled: [resp: GaraponDrawResponse] }>()
+const emit = defineEmits<{ settled: [resp: GaraponDrawResult] }>()
 
 const rotation = ref(0)
 const spinning = ref(false)
@@ -64,7 +64,7 @@ async function spin(): Promise<void> {
     return
   }
 
-  await dropBall(resp.draw.ball_color)
+  await dropBall(resp.draw.ballColor)
   spinning.value = false
   emit('settled', resp)
 }

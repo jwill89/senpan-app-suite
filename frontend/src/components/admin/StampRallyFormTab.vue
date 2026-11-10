@@ -26,7 +26,8 @@ import PlacementEditor, { type PlaceItem } from './PlacementEditor.vue'
 import { toStampCount, useStampRalliesStore } from '@/stores/stampRallies'
 import { STAMP_TYPES, stampTypeLabel } from '@/lib/stampcard'
 import { occupantListLabel, stallCaption } from '@/lib/festivalmap'
-import type { Placement, StampType } from '@/types/api'
+import type { StampType } from '@/types/api'
+import type { Placement } from '@/api/client'
 
 const emit = defineEmits<{ saved: []; cancel: [] }>()
 const store = useStampRalliesStore()
@@ -43,15 +44,15 @@ const items = computed<PlaceItem[]>(() => {
   }
   const stamps = f.stamps.map((s, i) => ({
     key: `s${i}`,
-    label: `${stampTypeLabel(s.stamp_type)} ${i + 1}`,
-    image: s.image || f.not_stamped_image,
+    label: `${stampTypeLabel(s.stampType)} ${i + 1}`,
+    image: s.image || f.notStampedImage,
     placement: s.placement,
     kind: 'stamp' as const,
   }))
   const prizes = f.prizes.map((p, i) => ({
     key: `p${i}`,
     label: p.name || `Prize ${i + 1}`,
-    image: p.image || f.not_stamped_image,
+    image: p.image || f.notStampedImage,
     placement: p.placement,
     kind: 'prize' as const,
   }))
@@ -111,10 +112,10 @@ function removeSelected(): void {
 /** How many stamps of each type the card carries - the ceiling on what completion
  *  can require (the server clamps to the same numbers on save). */
 const foodCount = computed(
-  () => store.rallyForm?.stamps.filter((s) => s.stamp_type !== 'game').length ?? 0,
+  () => store.rallyForm?.stamps.filter((s) => s.stampType !== 'game').length ?? 0,
 )
 const gameCount = computed(
-  () => store.rallyForm?.stamps.filter((s) => s.stamp_type === 'game').length ?? 0,
+  () => store.rallyForm?.stamps.filter((s) => s.stampType === 'game').length ?? 0,
 )
 
 /** Set a stamp's affiliate from the select ('' -> Senpan Tea House default). */
@@ -123,7 +124,7 @@ function setAffiliate(stampIndex: number, value: string): void {
   if (!f?.stamps[stampIndex]) {
     return
   }
-  f.stamps[stampIndex].affiliate_id = value ? Number(value) : null
+  f.stamps[stampIndex].affiliateId = value ? Number(value) : null
 }
 
 /**
@@ -132,7 +133,7 @@ function setAffiliate(stampIndex: number, value: string): void {
  * the form rather than off the loaded stall list (which is momentarily empty
  * while a newly-picked map's stalls are fetched).
  */
-const linkedToMap = computed(() => store.rallyForm?.festival_map_id != null)
+const linkedToMap = computed(() => store.rallyForm?.festivalMapId != null)
 
 /** Link (or unlink) the rally to a festival map ('' -> not linked). */
 function setFestivalMap(value: string): void {
@@ -159,8 +160,8 @@ function clampRequirements(): void {
   if (!f) {
     return
   }
-  f.required_food = Math.min(foodCount.value, toStampCount(f.required_food))
-  f.required_game = Math.min(gameCount.value, toStampCount(f.required_game))
+  f.requiredFood = Math.min(foodCount.value, toStampCount(f.requiredFood))
+  f.requiredGame = Math.min(gameCount.value, toStampCount(f.requiredGame))
 }
 
 // Removing stalls (or switching one between food and game) lowers a ceiling, so
@@ -178,10 +179,10 @@ function setCompletionMode(mode: string): void {
   if (!f) {
     return
   }
-  f.completion_mode = mode === 'counts' ? 'counts' : 'all'
-  if (f.completion_mode === 'counts' && f.required_food === 0 && f.required_game === 0) {
-    f.required_food = foodCount.value
-    f.required_game = gameCount.value
+  f.completionMode = mode === 'counts' ? 'counts' : 'all'
+  if (f.completionMode === 'counts' && f.requiredFood === 0 && f.requiredGame === 0) {
+    f.requiredFood = foodCount.value
+    f.requiredGame = gameCount.value
   }
 }
 
@@ -215,14 +216,14 @@ function cancel(): void {
       <FormRow>
         <FormField label="Available From" help="When the card opens (optional).">
           <input
-            v-model="store.rallyForm.available_from"
+            v-model="store.rallyForm.availableFrom"
             type="datetime-local"
             aria-label="Available from"
           />
         </FormField>
         <FormField label="Available To" help="When the card closes (optional).">
           <input
-            v-model="store.rallyForm.available_to"
+            v-model="store.rallyForm.availableTo"
             type="datetime-local"
             aria-label="Available to"
           />
@@ -234,7 +235,7 @@ function cancel(): void {
         help="Off by default. When on, this rally is listed publicly and anyone can issue themselves a card - one per character name. If a Garapon is linked to it, signing up also issues that drawing link. Leave off for a rally whose cards staff hand out."
       >
         <label class="checkbox-inline">
-          <input v-model="store.rallyForm.public_signup" type="checkbox" />
+          <input v-model="store.rallyForm.publicSignup" type="checkbox" />
           Let participants sign themselves up
         </label>
       </FormField>
@@ -249,7 +250,7 @@ function cancel(): void {
 
       <FormField label="How to Redeem" help="Shown to participants once their card is complete.">
         <MarkdownEditor
-          v-model="store.rallyForm.redeem_instructions"
+          v-model="store.rallyForm.redeemInstructions"
           min-height="100px"
           placeholder="How to claim the prizes (supports markdown)"
         />
@@ -259,7 +260,7 @@ function cancel(): void {
         label="Where to Redeem"
         help="Usually a screenshot of where in the area to go to redeem the completed card. Shown to participants alongside the redeem instructions once their card is complete."
       >
-        <ImagePicker v-model="store.rallyForm.redeem_image" />
+        <ImagePicker v-model="store.rallyForm.redeemImage" />
       </FormField>
 
       <FormRow>
@@ -267,13 +268,13 @@ function cancel(): void {
           label="Stamp Card Image"
           help="The full designed card - its frame, slot placeholders, stall labels, and any prize panel are all part of this image. Earned stamp/prize art is overlaid on top."
         >
-          <ImagePicker v-model="store.rallyForm.card_image" />
+          <ImagePicker v-model="store.rallyForm.cardImage" />
         </FormField>
         <FormField
           label="Not-Stamped Overlay (optional)"
           help="Drawn over uncollected stamp + locked prize slots. Leave empty if your card already marks them (e.g. with “?”)."
         >
-          <ImagePicker v-model="store.rallyForm.not_stamped_image" />
+          <ImagePicker v-model="store.rallyForm.notStampedImage" />
         </FormField>
       </FormRow>
 
@@ -282,7 +283,7 @@ function cancel(): void {
         help="Link this rally to a festival map and each stamp names one of its stalls instead of an affiliate. The map then badges those stalls for visitors."
       >
         <select
-          :value="store.rallyForm.festival_map_id ?? ''"
+          :value="store.rallyForm.festivalMapId ?? ''"
           aria-label="Linked festival map"
           @change="setFestivalMap(($event.target as HTMLSelectElement).value)"
         >
@@ -296,7 +297,7 @@ function cancel(): void {
         help="What finishes a card. Requiring a number of each type leaves the rest of the stalls optional - e.g. 3 of 5 food stalls and 3 of 5 games."
       >
         <select
-          :value="store.rallyForm.completion_mode"
+          :value="store.rallyForm.completionMode"
           aria-label="Card completion rule"
           @change="setCompletionMode(($event.target as HTMLSelectElement).value)"
         >
@@ -305,10 +306,10 @@ function cancel(): void {
         </select>
       </FormField>
 
-      <FormRow v-if="store.rallyForm.completion_mode === 'counts'">
+      <FormRow v-if="store.rallyForm.completionMode === 'counts'">
         <FormField label="Food Stamps Required" :help="`${foodCount} food stamp(s) on this card.`">
           <input
-            v-model.number="store.rallyForm.required_food"
+            v-model.number="store.rallyForm.requiredFood"
             type="number"
             min="0"
             :max="foodCount"
@@ -318,7 +319,7 @@ function cancel(): void {
         </FormField>
         <FormField label="Game Stamps Required" :help="`${gameCount} game stamp(s) on this card.`">
           <input
-            v-model.number="store.rallyForm.required_game"
+            v-model.number="store.rallyForm.requiredGame"
             type="number"
             min="0"
             :max="gameCount"
@@ -345,7 +346,7 @@ function cancel(): void {
       </div>
 
       <PlacementEditor
-        :card-image="store.rallyForm.card_image"
+        :card-image="store.rallyForm.cardImage"
         :items="items"
         :selected-key="selectedKey"
         @select="selectedKey = $event"
@@ -360,7 +361,7 @@ function cancel(): void {
             {{
               selected.kind === 'prize'
                 ? `Prize ${selected.index + 1}`
-                : `${stampTypeLabel(selected.stamp.stamp_type)} ${selected.index + 1}`
+                : `${stampTypeLabel(selected.stamp.stampType)} ${selected.index + 1}`
             }}
           </h4>
           <button type="button" class="btn-danger btn-sm" @click="removeSelected">
@@ -381,7 +382,7 @@ function cancel(): void {
             >
               <select
                 v-if="linkedToMap"
-                :value="selected.stamp.occupant_id ?? ''"
+                :value="selected.stamp.occupantId ?? ''"
                 aria-label="Map stall"
                 @change="setStall(selected.index, ($event.target as HTMLSelectElement).value)"
               >
@@ -392,7 +393,7 @@ function cancel(): void {
               </select>
               <select
                 v-else
-                :value="selected.stamp.affiliate_id ?? ''"
+                :value="selected.stamp.affiliateId ?? ''"
                 aria-label="Stall affiliate"
                 @change="setAffiliate(selected.index, ($event.target as HTMLSelectElement).value)"
               >
@@ -410,7 +411,7 @@ function cancel(): void {
               />
             </FormField>
             <FormField label="Stamp Type" help="What a completion requirement counts it as.">
-              <select v-model="selected.stamp.stamp_type" aria-label="Stamp type">
+              <select v-model="selected.stamp.stampType" aria-label="Stamp type">
                 <option v-for="t in STAMP_TYPES" :key="t.value" :value="t.value">
                   {{ t.label }}
                 </option>
@@ -423,14 +424,14 @@ function cancel(): void {
           <FormRow>
             <FormField label="Active From" help="Optional - defaults to the whole event.">
               <input
-                v-model="selected.stamp.active_from"
+                v-model="selected.stamp.activeFrom"
                 type="datetime-local"
                 aria-label="Stamp active from"
               />
             </FormField>
             <FormField label="Active To" help="Optional.">
               <input
-                v-model="selected.stamp.active_to"
+                v-model="selected.stamp.activeTo"
                 type="datetime-local"
                 aria-label="Stamp active to"
               />

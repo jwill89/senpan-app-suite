@@ -1,34 +1,38 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
-import type { Font } from '@/types/api'
+import type { Font } from '@/api/client'
 
-const ep = vi.hoisted(() => ({
-  list: vi.fn(async () => ({ fonts: [] as Font[] })),
-  upload: vi.fn(async () => ({ uploaded: ['a.ttf'], skipped: [] })),
-  deleteFile: vi.fn(async () => ({ ok: true })),
-  deleteFont: vi.fn(async () => ({ ok: true })),
-  renameFile: vi.fn(async () => ({ ok: true })),
-  updateFamily: vi.fn(async () => ({ ok: true })),
+// The store calls the API client; only its calls are faked (unwrap is the real one).
+// Each fake answers a call's `{ data, error, response }`. Uploads go through the XHR
+// helper, faked the same way.
+const ok = (data: unknown, status = 200) => ({ data, response: new Response(null, { status }) })
+const api = vi.hoisted(() => ({ GET: vi.fn(), PATCH: vi.fn(), DELETE: vi.fn() }))
+const apiUpload = vi.hoisted(() => vi.fn())
+vi.mock('@/api/client', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  api,
 }))
-vi.mock('@/lib/endpoints', () => ({
-  endpoints: {
-    fonts: {
-      list: ep.list,
-      upload: ep.upload,
-      deleteFile: ep.deleteFile,
-      deleteFont: ep.deleteFont,
-      renameFile: ep.renameFile,
-      updateFamily: ep.updateFamily,
-    },
-  },
+vi.mock('@/lib/api', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  apiUpload,
 }))
+
+/** The calls of a method made to a path, as `[path, init]`. */
+function callsTo(method: 'GET' | 'PATCH' | 'DELETE', path: string) {
+  return api[method].mock.calls.filter(([p]) => p === path) as [string, Record<string, unknown>][]
+}
 
 import { useFontsStore, fontShareUrl, toUploadedFont, FONT_KIT_URL } from './fonts'
 import { useUiStore } from './ui'
 
 beforeEach(() => {
   setActivePinia(createPinia())
-  Object.values(ep).forEach((fn) => fn.mockClear())
+  Object.values(api).forEach((fn) => fn.mockReset())
+  apiUpload.mockReset()
+  api.GET.mockResolvedValue(ok({ fonts: [] }))
+  api.PATCH.mockResolvedValue(ok({}))
+  api.DELETE.mockResolvedValue(ok(undefined, 204))
+  apiUpload.mockResolvedValue({ uploaded: ['a.ttf'], skipped: [], warnings: [] })
 })
 
 /** A representative grouped font row. */
@@ -36,8 +40,8 @@ const jasper: Font = {
   base: 'Jasper',
   family: 'Jasper Fancy',
   serve: '',
-  served_type: 'WOFF2',
-  served_token: 'conv.woff2',
+  servedType: 'WOFF2',
+  servedToken: 'conv.woff2',
   origins: ['https://mysite.carrd.co'],
   modified: '2026-07-02T00:00:00Z',
   variants: [
@@ -82,7 +86,7 @@ describe('toUploadedFont', () => {
 
 describe('loadFonts', () => {
   it('populates the grouped font list', async () => {
-    ep.list.mockResolvedValueOnce({ fonts: [jasper] })
+    api.GET.mockResolvedValueOnce(ok({ fonts: [jasper] }))
     const s = useFontsStore()
     await s.loadFonts()
     expect(s.fonts).toHaveLength(1)
@@ -95,14 +99,15 @@ describe('uploadFonts', () => {
   it('does nothing for an empty selection', async () => {
     const s = useFontsStore()
     await s.uploadFonts([])
-    expect(ep.upload).not.toHaveBeenCalled()
+    expect(apiUpload).not.toHaveBeenCalled()
   })
 
   it('uploads files and reloads the list', async () => {
     const s = useFontsStore()
     await s.uploadFonts([new File(['x'], 'a.ttf')])
-    expect(ep.upload).toHaveBeenCalledTimes(1)
-    expect(ep.list).toHaveBeenCalled()
+    expect(apiUpload).toHaveBeenCalledTimes(1)
+    expect(apiUpload.mock.calls[0]![0]).toBe('fonts')
+    expect(callsTo('GET', '/fonts')).toHaveLength(1)
   })
 })
 
@@ -111,14 +116,17 @@ describe('renameFile', () => {
     const s = useFontsStore()
     expect(await s.renameFile('a.ttf', '   ')).toBe(false)
     expect(await s.renameFile('a.ttf', 'a.ttf')).toBe(false)
-    expect(ep.renameFile).not.toHaveBeenCalled()
+    expect(api.PATCH).not.toHaveBeenCalled()
   })
 
   it('renames and reloads on success', async () => {
     const s = useFontsStore()
     expect(await s.renameFile('a.ttf', 'b.ttf')).toBe(true)
-    expect(ep.renameFile).toHaveBeenCalledWith('a.ttf', 'b.ttf')
-    expect(ep.list).toHaveBeenCalled()
+    expect(callsTo('PATCH', '/font-files/{name}')[0]![1]).toMatchObject({
+      params: { path: { name: 'a.ttf' } },
+      body: { name: 'b.ttf' },
+    })
+    expect(callsTo('GET', '/fonts')).toHaveLength(1)
   })
 })
 
@@ -127,13 +135,19 @@ describe('updateFamily', () => {
     const s = useFontsStore()
     const fields = { family: 'Fancy', serve: 'TTF', origins: ['https://x.example.com'] }
     expect(await s.updateFamily('Jasper', fields)).toBe(true)
-    expect(ep.updateFamily).toHaveBeenCalledWith('Jasper', fields)
-    expect(ep.list).toHaveBeenCalled()
+    expect(callsTo('PATCH', '/fonts/{base}')[0]![1]).toMatchObject({
+      params: { path: { base: 'Jasper' } },
+      body: fields,
+    })
+    expect(callsTo('GET', '/fonts')).toHaveLength(1)
     expect(s.saving).toBe(false)
   })
 
   it('reports failure without throwing', async () => {
-    ep.updateFamily.mockRejectedValueOnce(new Error('conflict'))
+    api.PATCH.mockResolvedValueOnce({
+      error: { title: 'Conflict', detail: 'Another font is already named "Dup"' },
+      response: new Response(null, { status: 409 }),
+    })
     const s = useFontsStore()
     expect(await s.updateFamily('Jasper', { family: 'Dup' })).toBe(false)
     expect(s.saving).toBe(false)
@@ -145,7 +159,7 @@ describe('deleteFont', () => {
     useUiStore().confirm = vi.fn(async () => false)
     const s = useFontsStore()
     await s.deleteFont(jasper)
-    expect(ep.deleteFont).not.toHaveBeenCalled()
+    expect(api.DELETE).not.toHaveBeenCalled()
   })
 
   it('deletes the whole font (by base) when confirmed', async () => {
@@ -153,10 +167,12 @@ describe('deleteFont', () => {
     useUiStore().confirm = confirm
     const s = useFontsStore()
     await s.deleteFont(jasper)
-    expect(ep.deleteFont).toHaveBeenCalledWith('Jasper')
+    expect(callsTo('DELETE', '/fonts/{base}')[0]![1]).toMatchObject({
+      params: { path: { base: 'Jasper' } },
+    })
     // The confirm names the uploaded files, not the converted copy.
     expect(confirm).toHaveBeenCalledWith(expect.stringContaining('Jasper.ttf'), expect.anything())
-    expect(ep.list).toHaveBeenCalled()
+    expect(callsTo('GET', '/fonts')).toHaveLength(1)
   })
 })
 
@@ -165,6 +181,8 @@ describe('deleteFile', () => {
     useUiStore().confirm = vi.fn(async () => true)
     const s = useFontsStore()
     await s.deleteFile('Jasper.ttf')
-    expect(ep.deleteFile).toHaveBeenCalledWith('Jasper.ttf')
+    expect(callsTo('DELETE', '/font-files/{name}')[0]![1]).toMatchObject({
+      params: { path: { name: 'Jasper.ttf' } },
+    })
   })
 })

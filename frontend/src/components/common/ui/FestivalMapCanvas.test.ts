@@ -2,7 +2,7 @@ import { describe, it, expect, afterEach } from 'vitest'
 import { mount } from '@vue/test-utils'
 import { nextTick } from 'vue'
 import FestivalMapCanvas from './FestivalMapCanvas.vue'
-import type { PublicFestivalStall, PublicStallOccupant } from '@/types/api'
+import type { PublicFestivalStall, PublicStallOccupant } from '@/api/client'
 
 /**
  * The map has to OPEN fitted, not merely be fittable.
@@ -123,19 +123,25 @@ function stall(over: Partial<PublicStallOccupant> = {}, id = 1): PublicFestivalS
     id,
     shape: 'rect',
     color: '#e0a480',
-    text_color: '#2d1b12',
-    selection_color: '',
+    textColor: '#2d1b12',
+    selectionColor: '',
     placement: { x: 10, y: 10, width: 20, height: 15, rotation: 0 },
     occupants: [
       {
         id: id * 10,
         title: 'Tea Bar',
         description: '',
-        stall_type: 'food',
-        type_label: '',
+        stallType: 'food',
+        typeLabel: '',
         times: [],
-        is_open: true,
-        in_stamp_rally: false,
+        eventCarrd: '',
+        isOpen: true,
+        affiliate: null,
+        inStampRally: false,
+        rallyId: null,
+        rallyTitle: '',
+        stampImage: '',
+        raffle: null,
         ...over,
       },
     ],
@@ -147,7 +153,7 @@ describe('festival map canvas: the stamp rally mark', () => {
     const wrapper = mount(FestivalMapCanvas, {
       props: {
         mapImage: '/images/plan.png',
-        stalls: [stall({ in_stamp_rally: true, stamp_image: '/images/onigiri.png' })],
+        stalls: [stall({ inStampRally: true, stampImage: '/images/onigiri.png' })],
       },
     })
     const badge = wrapper.find('.map-stall-stamp')
@@ -165,7 +171,7 @@ describe('festival map canvas: the stamp rally mark', () => {
    */
   it('marks a rally stall whose stamp has no artwork yet', () => {
     const wrapper = mount(FestivalMapCanvas, {
-      props: { mapImage: '/images/plan.png', stalls: [stall({ in_stamp_rally: true })] },
+      props: { mapImage: '/images/plan.png', stalls: [stall({ inStampRally: true })] },
     })
     expect(wrapper.find('.map-stall-stamp').exists()).toBe(true)
   })
@@ -184,7 +190,7 @@ describe('festival map canvas: the stamp rally mark', () => {
    */
   it("carries the stall's own label colour for the mark to take", () => {
     const wrapper = mount(FestivalMapCanvas, {
-      props: { mapImage: '/images/plan.png', stalls: [stall({ in_stamp_rally: true })] },
+      props: { mapImage: '/images/plan.png', stalls: [stall({ inStampRally: true })] },
     })
     expect(wrapper.find('.map-stall').attributes('style')).toContain('--stall-text: #2d1b12')
   })

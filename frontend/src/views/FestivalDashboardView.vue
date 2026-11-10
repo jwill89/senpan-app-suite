@@ -93,7 +93,7 @@ const raffles = computed(() =>
 const stampTally = computed(() => {
   const p = stampRallies.cardProgress
   if (!store.card) {
-    return rally.value?.signup_open ? 'Get a card' : 'No card yet'
+    return rally.value?.signupOpen ? 'Get a card' : 'No card yet'
   }
   if (p.byType) {
     const need = p.food.required + p.game.required
@@ -115,8 +115,8 @@ const drawTally = computed(() => {
   if (g.player) {
     return `${garapons.drawsRemaining} left`
   }
-  if (g.has_paired_link) {
-    return `${g.paired_draws_left} waiting`
+  if (g.hasPairedLink) {
+    return `${g.pairedDrawsLeft} waiting`
   }
   return 'With a card'
 })
@@ -135,10 +135,10 @@ const emaTally = computed(() => {
   if (!e) {
     return ''
   }
-  if (e.has_plaque_this_window) {
+  if (e.hasPlaqueThisWindow) {
     return 'Hung today'
   }
-  return e.current_window_id ? 'Open today' : 'Not today'
+  return e.currentWindowId ? 'Open today' : 'Not today'
 })
 
 const tiles = computed(() => {
@@ -279,7 +279,7 @@ function goBack(): void {
               <font-awesome-icon :icon="['fad', 'calendar-days']" /> {{ formatEventTime(t) }}
             </li>
           </ul>
-          <span v-if="store.map.is_active" class="status-badge status-badge-open">
+          <span v-if="store.map.isActive" class="status-badge status-badge-open">
             happening now
           </span>
           <details v-if="store.map.description" class="festival-dash-about">
@@ -395,7 +395,7 @@ function goBack(): void {
                   class="link-btn"
                   @click="goTo('stamps')"
                 >
-                  {{ rally.signup_open ? 'Get a stamp card' : 'Find your stamp card' }}
+                  {{ rally.signupOpen ? 'Get a stamp card' : 'Find your stamp card' }}
                 </button>
               </template>
               <template #raffle-action="{ occupant }">
@@ -431,7 +431,7 @@ function goBack(): void {
                 class="game-details mb-16"
                 :source="rally.details"
               />
-              <form v-if="rally.signup_open" class="festival-dash-form" @submit.prevent="signUp">
+              <form v-if="rally.signupOpen" class="festival-dash-form" @submit.prevent="signUp">
                 <p class="m-0">
                   Get a stamp card: visit the marked stalls, enter each stall's password here, and
                   collect a prize when your card is done.
@@ -517,19 +517,19 @@ function goBack(): void {
                  how to get there. -->
             <p v-if="!garapon.player" class="form-alert form-alert-info" role="status">
               <font-awesome-icon :icon="['fas', 'circle-info']" class="form-alert-icon" />
-              <span v-if="garapon.has_paired_link">
-                <strong>{{ garapon.paired_draws_left }}</strong>
-                {{ garapon.paired_draws_left === 1 ? 'draw is' : 'draws are' }} waiting on your
+              <span v-if="garapon.hasPairedLink">
+                <strong>{{ garapon.pairedDrawsLeft }}</strong>
+                {{ garapon.pairedDrawsLeft === 1 ? 'draw is' : 'draws are' }} waiting on your
                 drawing link, which isn't on this device. Open that link here and choose
                 <strong>Open the festival dashboard</strong> to draw from this page.
               </span>
               <span v-else-if="store.card">
                 Your stamp card didn't come with garapon draws. Ask a member of staff.
               </span>
-              <span v-else-if="rally?.signup_open">
+              <span v-else-if="rally?.signupOpen">
                 Get a stamp card and you'll get
-                {{ garapon.default_draws }}
-                {{ garapon.default_draws === 1 ? 'draw' : 'draws' }} with it.
+                {{ garapon.defaultDraws }}
+                {{ garapon.defaultDraws === 1 ? 'draw' : 'draws' }} with it.
               </span>
               <span v-else>Draws come with a stamp card from staff.</span>
             </p>

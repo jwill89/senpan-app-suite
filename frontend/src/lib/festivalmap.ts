@@ -8,14 +8,8 @@
  * so renaming or moving a stall never means re-exporting the artwork.
  */
 import type { CSSProperties } from 'vue'
-import type {
-  EventTime,
-  Placement,
-  PublicFestivalStall,
-  StallShape,
-  StallType,
-  StampType,
-} from '@/types/api'
+import type { StallShape, StallType, StampType } from '@/types/api'
+import type { EventTime, Placement, PublicFestivalStall, PublicStallOccupant } from '@/api/client'
 import { parseServerTimestamp } from '@/lib/datetime'
 
 /** A stall type, with the defaults it seeds. */
@@ -65,8 +59,8 @@ export function stallTypeLabel(type: string): string {
  * rather than flickering between them - the shape is the fixed thing on the plan;
  * the names inside it are what change.
  */
-export function stallColor(pitch: { color: string; occupants: { stall_type: string }[] }): string {
-  return pitch.color || stallTypeMeta(pitch.occupants[0]?.stall_type ?? '').color
+export function stallColor(pitch: { color: string; occupants: { stallType: string }[] }): string {
+  return pitch.color || stallTypeMeta(pitch.occupants[0]?.stallType ?? '').color
 }
 
 /**
@@ -88,11 +82,11 @@ export function stampTypeForStall(type: string): StampType {
  * whatever the type, so flipping a stall to a named type and back doesn't lose
  * it, but only an "other" stall renders it.
  */
-export function stallCaption(occupant: { stall_type: string; type_label: string }): string {
-  if (occupant.stall_type === 'other') {
-    return occupant.type_label.trim()
+export function stallCaption(occupant: { stallType: string; typeLabel: string }): string {
+  if (occupant.stallType === 'other') {
+    return occupant.typeLabel.trim()
   }
-  return stallTypeLabel(occupant.stall_type)
+  return stallTypeLabel(occupant.stallType)
 }
 
 /** Whether a shape draws as a true circle, whose height follows its width. */
@@ -292,7 +286,7 @@ export function occupantsOnDay<T extends { times: EventTime[] }>(
  * Whether `now` falls inside any of the ranges. An empty list is unbounded -
  * the same reading an empty availability window gets everywhere else in the app:
  * nothing was stated, so nothing is excluded. Mirrors the server's
- * withinAnyEventTime, which is what actually decides `is_active` / `is_open`;
+ * withinAnyEventTime, which is what actually decides `isActive` / `isOpen`;
  * this is for previewing an unsaved form.
  */
 export function isWithinAny(times: EventTime[], now: number): boolean {
@@ -391,9 +385,9 @@ export function splitTitleNote(title: string): { title: string; note: string } {
 export function occupantMapLabel(occupant: {
   title?: string
   affiliate?: { name?: string } | null
-  affiliate_name?: string
+  affiliateName?: string
 }): string {
-  const affiliate = (occupant.affiliate?.name ?? occupant.affiliate_name ?? '').trim()
+  const affiliate = (occupant.affiliate?.name ?? occupant.affiliateName ?? '').trim()
   if (affiliate) {
     return affiliate
   }
@@ -613,9 +607,9 @@ export function occupantDayNote(
 export function occupantListLabel(occupant: {
   title?: string
   affiliate?: { name?: string } | null
-  affiliate_name?: string
+  affiliateName?: string
 }): string {
-  const affiliate = (occupant.affiliate?.name ?? occupant.affiliate_name ?? '').trim()
+  const affiliate = (occupant.affiliate?.name ?? occupant.affiliateName ?? '').trim()
   const title = (occupant.title ?? '').trim()
   // With no affiliate the title IS the name, so it is not repeated after itself.
   if (!affiliate) {
@@ -647,41 +641,53 @@ export function toPublicStalls(
     id: number
     shape: string
     color: string
-    text_color?: string
-    selection_color?: string
+    textColor?: string
+    selectionColor?: string
     placement: Placement
     occupants: {
       id: number
       title: string
       description: string
-      event_carrd?: string
-      stall_type: string
-      type_label: string
+      eventCarrd?: string
+      stallType: string
+      typeLabel: string
       times: EventTime[]
-      affiliate_name?: string
+      affiliateName?: string
     }[]
   }[],
 ): PublicFestivalStall[] {
   return stalls.map((stall) => ({
     id: stall.id,
-    shape: stall.shape,
+    shape: stall.shape === 'circle' ? 'circle' : 'rect',
     color: stall.color,
-    text_color: stall.text_color ?? '',
-    selection_color: stall.selection_color ?? '',
-    ...stall.placement,
+    textColor: stall.textColor ?? '',
+    selectionColor: stall.selectionColor ?? '',
     placement: stall.placement,
     occupants: stall.occupants.map((o) => ({
       id: o.id,
       title: o.title,
       description: o.description,
-      event_carrd: o.event_carrd ?? '',
-      stall_type: o.stall_type,
-      type_label: o.type_label,
+      eventCarrd: o.eventCarrd ?? '',
+      stallType: o.stallType as PublicStallOccupant['stallType'],
+      typeLabel: o.typeLabel,
       times: o.times,
-      is_open: false,
-      in_stamp_rally: false,
-      affiliate: o.affiliate_name ? { name: o.affiliate_name } : undefined,
-    })) as PublicFestivalStall['occupants'],
+      isOpen: false,
+      inStampRally: false,
+      rallyId: null,
+      rallyTitle: '',
+      stampImage: '',
+      raffle: null,
+      affiliate: o.affiliateName
+        ? {
+            name: o.affiliateName,
+            subtitle: '',
+            owners: [],
+            logo: '',
+            discordLink: '',
+            carrdLink: '',
+          }
+        : null,
+    })),
   }))
 }
 

@@ -5,8 +5,6 @@ import (
 	"net/http"
 	"testing"
 	"time"
-
-	"app-suite/internal/model"
 )
 
 // The pages' events end to end: a write happens, public or by staff, and the staff
@@ -75,31 +73,6 @@ func TestCardApproveTellsStaff(t *testing.T) {
 	c := listedCard(t, env, "CUST01")
 	if c.CustomStatus != "approved" || !c.Protected {
 		t.Errorf("the list read again: %+v; want approved and protected", c)
-	}
-}
-
-// A public garapon draw goes through the token path, which the admin-mutation rule
-// leaves out, and still tells the garapon page.
-func TestGaraponDrawTellsItsPage(t *testing.T) {
-	env := newTestEnv(t)
-	env.loginAdmin(t)
-	gid, err := env.store.CreateGarapon(t.Context(), &model.Garapon{
-		Title:  "Festival Drum",
-		Prizes: []model.GaraponPrize{{Name: "Grand", BallColor: "#fff", Rate: 1, IsGrand: true}},
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	player, err := env.store.CreateGaraponPlayer(t.Context(), gid, "Hero", "Gilgamesh", 3)
-	if err != nil {
-		t.Fatal(err)
-	}
-	s := staffStream(t, env, env.client)
-
-	decodeInto(t, env.postJSON(t, "/api/garapon/"+player.Token+"/draw", map[string]any{}), http.StatusOK, nil)
-
-	if e := s.expect("resource_changed", 3*time.Second); e.str("resource") != "garapons" {
-		t.Errorf("resource_changed: %+v; want garapons", e)
 	}
 }
 
@@ -175,4 +148,36 @@ func TestCardDeleteAllReachesOnlyTheirPlayers(t *testing.T) {
 
 	gone.expect("card_deleted", 3*time.Second)
 	kept.expectNone("card_deleted", 500*time.Millisecond)
+}
+
+// The media pages: a font write tells the Fonts page and, because the public settings
+// carry the uploaded fonts, everyone's settings; a change to the image library tells
+// every page that picks a picture; a cover upload changes no reading list.
+func TestMediaWritesTellTheirPages(t *testing.T) {
+	env := newTestEnv(t)
+	fontStaff := makeActiveUser(t, env, "fontstaff", "correct horse battery", []string{"atelier-fonts"})
+	emaStaff := makeActiveUser(t, env, "emastaff", "correct horse battery", []string{"festival-ema"})
+	clubStaff := makeActiveUser(t, env, "clubstaff", "correct horse battery", []string{"bookclub-yaoi"})
+	fonts := staffStream(t, env, fontStaff)
+	ema := staffStream(t, env, emaStaff)
+	club := staffStream(t, env, clubStaff)
+
+	env.loginAdmin(t)
+	decodeInto(t, env.upload(t, "/api/v1/fonts", nil, filePart{field: "files", name: "Jasper.woff2", data: []byte("woff2")}),
+		http.StatusCreated, nil)
+	fonts.expect("settings_changed", 3*time.Second)
+	if e := fonts.expect("resource_changed", 3*time.Second); e.str("resource") != "fonts" {
+		t.Errorf("resource_changed: %+v; want fonts", e)
+	}
+	ema.expect("settings_changed", 3*time.Second)
+
+	decodeInto(t, env.postJSON(t, "/api/v1/image-categories", map[string]any{"name": "Plaque Art"}), http.StatusCreated, nil)
+	if e := ema.expect("resource_changed", 3*time.Second); e.str("resource") != "images" {
+		t.Errorf("resource_changed: %+v; want images", e)
+	}
+	fonts.expectNone("resource_changed", 300*time.Millisecond)
+
+	decodeInto(t, uploadAs(t, clubStaff, env, "/api/v1/book-clubs/yaoi/covers", nil,
+		filePart{field: "image", name: "cover.png", data: realPNG(t, 2, 2), kind: "image/png"}), http.StatusCreated, nil)
+	club.expectNone("resource_changed", 500*time.Millisecond)
 }

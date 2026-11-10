@@ -29,7 +29,7 @@ import ModalOverlay from '@/components/common/ModalOverlay.vue'
 import { useCarrdStore, carrdImageUrl, joinCarrdPath, CARRD_BASE_URL } from '@/stores/carrd'
 import { useUiStore } from '@/stores/ui'
 import { slugify, formatSize } from '@/lib/format'
-import type { CarrdProject } from '@/types/api'
+import type { CarrdProject } from '@/api/client'
 
 const carrd = useCarrdStore()
 const ui = useUiStore()
@@ -68,9 +68,9 @@ const selectedProject = computed(
 const projectColumns: DataColumn[] = [
   { key: 'title', label: 'Project' },
   { key: 'folder', label: 'Folder' },
-  { key: 'subfolder_count', label: 'Sub-folders', align: 'center' },
-  { key: 'file_count', label: 'Files', align: 'center' },
-  { key: 'total_size', label: 'Size', align: 'right' },
+  { key: 'subfolderCount', label: 'Sub-folders', align: 'center' },
+  { key: 'fileCount', label: 'Files', align: 'center' },
+  { key: 'totalSize', label: 'Size', align: 'right' },
   { key: 'actions', label: '', align: 'right' },
 ]
 
@@ -453,14 +453,14 @@ onMounted(() => carrd.loadProjects())
           <template #cell-folder="{ row }">
             <span class="code-highlight">/{{ row.folder }}</span>
           </template>
-          <template #cell-subfolder_count="{ row }">
-            <span class="text-muted">{{ row.subfolder_count }}</span>
+          <template #cell-subfolderCount="{ row }">
+            <span class="text-muted">{{ row.subfolderCount }}</span>
           </template>
-          <template #cell-file_count="{ row }">
-            <span class="text-muted">{{ row.file_count }}</span>
+          <template #cell-fileCount="{ row }">
+            <span class="text-muted">{{ row.fileCount }}</span>
           </template>
-          <template #cell-total_size="{ row }">
-            <span class="text-muted">{{ formatSize(row.total_size) }}</span>
+          <template #cell-totalSize="{ row }">
+            <span class="text-muted">{{ formatSize(row.totalSize) }}</span>
           </template>
           <template #cell-actions="{ row }">
             <div class="row-actions">

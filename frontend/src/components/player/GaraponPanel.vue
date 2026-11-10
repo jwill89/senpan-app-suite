@@ -18,7 +18,7 @@ import GaraponWheel from '@/components/player/GaraponWheel.vue'
 import { useGaraponsStore } from '@/stores/garapons'
 import { assetUrl } from '@/lib/assets'
 import { formatServerTimestamp } from '@/lib/datetime'
-import type { GaraponDrawResponse } from '@/types/api'
+import type { GaraponDrawResult } from '@/api/client'
 
 const props = withDefaults(
   defineProps<{
@@ -32,7 +32,7 @@ const props = withDefaults(
 
 const emit = defineEmits<{
   /** A draw landed and was committed to the record. */
-  drawn: [resp: GaraponDrawResponse]
+  drawn: [resp: GaraponDrawResult]
 }>()
 
 const garapons = useGaraponsStore()
@@ -40,18 +40,18 @@ const garapons = useGaraponsStore()
 const isClosed = computed(() => garapons.publicGarapon?.status === 'closed')
 
 /** Called by the wheel when the player taps it: clears the prior win + draws. */
-function onDraw(): Promise<GaraponDrawResponse | null> {
+function onDraw(): Promise<GaraponDrawResult | null> {
   garapons.lastWin = null
   return garapons.draw(props.token)
 }
 
 /** Called by the wheel once the ball lands: commit the win to the record. */
-function onSettled(resp: GaraponDrawResponse): void {
+function onSettled(resp: GaraponDrawResult): void {
   garapons.commitDraw(resp)
   emit('drawn', resp)
 }
 
-function when(ts: string): string {
+function when(ts: string | null): string {
   return ts ? formatServerTimestamp(ts) : ''
 }
 </script>
@@ -61,7 +61,7 @@ function when(ts: string): string {
     <!-- Whose link this is -->
     <p v-if="garapons.publicPlayer" class="lead-line">
       <font-awesome-icon :icon="['fad', 'user']" /> Drawing for
-      <strong>{{ garapons.publicPlayer.player_name }}</strong>
+      <strong>{{ garapons.publicPlayer.playerName }}</strong>
     </p>
 
     <!-- Status / remaining draws. With no player there is no allowance to state:
@@ -72,8 +72,8 @@ function when(ts: string): string {
       </template>
       <template v-else-if="garapons.drawsRemaining > 0">
         <strong>{{ garapons.drawsRemaining }}</strong> of
-        {{ garapons.publicPlayer?.max_draws }} draw{{
-          garapons.publicPlayer?.max_draws === 1 ? '' : 's'
+        {{ garapons.publicPlayer?.maxDraws }} draw{{
+          garapons.publicPlayer?.maxDraws === 1 ? '' : 's'
         }}
         remaining
       </template>
@@ -84,9 +84,9 @@ function when(ts: string): string {
 
     <!-- Congratulations banner -->
     <div v-if="garapons.lastWin" class="callout">
-      <BallSwatch :color="garapons.lastWin.ball_color" />
+      <BallSwatch :color="garapons.lastWin.ballColor" />
       <font-awesome-icon :icon="['fad', 'champagne-glasses']" /> Congratulations, you've won
-      <strong>{{ garapons.lastWin.prize_name }}</strong
+      <strong>{{ garapons.lastWin.prizeName }}</strong
       >!
     </div>
 
@@ -100,13 +100,13 @@ function when(ts: string): string {
       <h3 class="section-heading"><font-awesome-icon :icon="['fad', 'trophy']" /> Grand Prize</h3>
       <div class="garapon-grand">
         <img
-          v-if="garapons.publicGarapon.grand_prize_image"
-          :src="assetUrl(garapons.publicGarapon.grand_prize_image)"
+          v-if="garapons.publicGarapon.grandPrizeImage"
+          :src="assetUrl(garapons.publicGarapon.grandPrizeImage)"
           class="garapon-grand-img"
           alt="Grand prize"
         />
         <div class="garapon-grand-meta">
-          <BallSwatch :color="garapons.grandPrize.ball_color" size="lg" />
+          <BallSwatch :color="garapons.grandPrize.ballColor" size="lg" />
           <span class="garapon-grand-name">{{ garapons.grandPrize.name }}</span>
         </div>
       </div>
@@ -132,7 +132,7 @@ function when(ts: string): string {
         <tbody>
           <tr v-for="p in garapons.otherPrizes" :key="p.id">
             <td class="ta-center">
-              <BallSwatch :color="p.ball_color" />
+              <BallSwatch :color="p.ballColor" />
             </td>
             <td>{{ p.name }}</td>
           </tr>
@@ -154,12 +154,12 @@ function when(ts: string): string {
           </tr>
         </thead>
         <tbody>
-          <tr v-for="d in garapons.publicDraws" :key="d.id">
+          <tr v-for="(d, i) in garapons.publicDraws" :key="i">
             <td class="ta-center">
-              <BallSwatch :color="d.ball_color" />
+              <BallSwatch :color="d.ballColor" />
             </td>
-            <td>{{ d.prize_name }}</td>
-            <td class="ta-right text-sm text-muted">{{ when(d.drawn_at) }}</td>
+            <td>{{ d.prizeName }}</td>
+            <td class="ta-right text-sm text-muted">{{ when(d.drawnAt) }}</td>
           </tr>
         </tbody>
       </table>

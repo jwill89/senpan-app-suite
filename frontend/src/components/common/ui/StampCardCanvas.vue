@@ -14,7 +14,7 @@
  */
 import { assetUrl } from '@/lib/assets'
 import { placementStyle } from '@/lib/stampcard'
-import type { Placement } from '@/types/api'
+import type { Placement } from '@/api/client'
 
 export interface CanvasItem {
   key: string | number

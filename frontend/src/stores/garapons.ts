@@ -9,20 +9,21 @@
  */
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
-import { endpoints } from '@/lib/endpoints'
-import type {
-  GaraponPublicResponse,
-  Garapon,
-  PublicGarapon,
-  GaraponDraw,
-  GaraponDrawResponse,
-  GaraponForm,
-  GaraponPlayer,
-  GaraponPrize,
-  GaraponPrizeForm,
-  GaraponPublicPlayer,
-  StampRally,
-} from '@/types/api'
+import {
+  api,
+  unwrap,
+  type Garapon,
+  type GaraponDraw,
+  type GaraponDrawResult,
+  type GaraponPlayer,
+  type GaraponPlayerSummary,
+  type PublicGarapon,
+  type PublicGaraponDraw,
+  type PublicGaraponPrize,
+  type PublicGaraponPlayer,
+  type StampRally,
+} from '@/api/client'
+import type { GaraponForm, GaraponPrizeForm } from '@/types/api'
 import { useUiStore } from './ui'
 import { nextUid } from '@/lib/uid'
 import { withLoading } from '@/lib/withLoading'
@@ -32,7 +33,7 @@ const DEFAULT_BALL_COLOR = '#e5b53f'
 
 /** A fresh prize row for the editor (the first/grand row defaults to a higher weight). */
 function blankPrize(rate: number, isGrand = false): GaraponPrizeForm {
-  return { name: '', ball_color: DEFAULT_BALL_COLOR, rate, is_grand: isGrand, _uid: nextUid() }
+  return { name: '', ballColor: DEFAULT_BALL_COLOR, rate, isGrand, _uid: nextUid() }
 }
 
 export const useGaraponsStore = defineStore('garapons', () => {
@@ -60,12 +61,12 @@ export const useGaraponsStore = defineStore('garapons', () => {
   // -- Public (player view) state -------------------------------------------
   // The public token view returns the trimmed PublicGarapon (no odds/aggregates).
   const publicGarapon = ref<PublicGarapon | null>(null)
-  const publicPlayer = ref<GaraponPublicPlayer | null>(null)
-  const publicDraws = ref<GaraponDraw[]>([])
+  const publicPlayer = ref<GaraponPlayerSummary | null>(null)
+  const publicDraws = ref<PublicGaraponDraw[]>([])
   /** Where the festival this drum's rally is filed under lives ('' = none). */
   const publicFestivalLink = ref('')
   /** The most recent win (drives the "congratulations" banner). */
-  const lastWin = ref<GaraponDraw | null>(null)
+  const lastWin = ref<PublicGaraponDraw | null>(null)
   const publicLoading = ref(false)
   const drawing = ref(false)
 
@@ -74,17 +75,17 @@ export const useGaraponsStore = defineStore('garapons', () => {
   const closedGarapons = computed(() => garapons.value.filter((g) => g.status === 'closed'))
 
   /** The flagged grand prize of the currently-viewed public garapon (if any). */
-  const grandPrize = computed<GaraponPrize | null>(
-    () => publicGarapon.value?.prizes.find((p) => p.is_grand) ?? null,
+  const grandPrize = computed<PublicGaraponPrize | null>(
+    () => publicGarapon.value?.prizes.find((p) => p.isGrand) ?? null,
   )
   /** The non-grand prizes (the "other possible prizes" table). */
-  const otherPrizes = computed<GaraponPrize[]>(
-    () => publicGarapon.value?.prizes.filter((p) => !p.is_grand) ?? [],
+  const otherPrizes = computed<PublicGaraponPrize[]>(
+    () => publicGarapon.value?.prizes.filter((p) => !p.isGrand) ?? [],
   )
   /** Draws the public player has left. */
   const drawsRemaining = computed(() =>
     publicPlayer.value
-      ? Math.max(0, publicPlayer.value.max_draws - publicPlayer.value.draws_used)
+      ? Math.max(0, publicPlayer.value.maxDraws - publicPlayer.value.drawsUsed)
       : 0,
   )
   /** Whether the public player can draw right now. */
@@ -96,13 +97,12 @@ export const useGaraponsStore = defineStore('garapons', () => {
    * garapon isn't tied to a rally). Its own token, not the drawing one, so the
    * public view can link straight to /stamp-card/<token>.
    */
-  const publicStampCardToken = computed(() => publicPlayer.value?.stamp_card_token ?? '')
+  const publicStampCardToken = computed(() => publicPlayer.value?.stampCardToken ?? '')
 
   // -- Admin: load ----------------------------------------------------------
   async function loadGarapons(): Promise<void> {
     await withLoading(garaponsLoading, async () => {
-      const data = await endpoints.garapons.list()
-      garapons.value = data.garapons
+      garapons.value = (await unwrap(api.GET('/garapons'))).garapons
     })
   }
 
@@ -110,7 +110,7 @@ export const useGaraponsStore = defineStore('garapons', () => {
     const reqId = ++detailSeq
     detailLoading.value = true
     try {
-      const data = await endpoints.garapons.detail(id)
+      const data = await unwrap(api.GET('/garapons/{id}', { params: { path: { id } } }))
       if (reqId !== detailSeq) {
         return // a newer load superseded this one
       }
@@ -140,22 +140,20 @@ export const useGaraponsStore = defineStore('garapons', () => {
   /**
    * Clears the issue-link form, starting the draw count at the garapon's own
    * default so the common case ("everyone gets N draws at this event") is typed
-   * once on the garapon rather than re-entered for every link. Falls back to 1 for
-   * a garapon saved before the field existed, matching what the server applies.
+   * once on the garapon rather than re-entered for every link.
    */
   function resetPlayerAdd(): void {
     playerAdd.value = {
       playerName: '',
-      // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing -- a 0 is the unset allowance of a pre-field garapon and must fall back to 1 too, as the server does
-      maxDraws: selectedGarapon.value?.default_draws || 1,
+      maxDraws: Math.max(1, selectedGarapon.value?.defaultDraws ?? 1),
     }
   }
 
   /** Loads the OPEN stamp rallies for the form's "Linked Stamp Rally" picker. */
   async function loadStampRallyOptions(): Promise<void> {
     try {
-      const data = await endpoints.stampRallies.list()
-      stampRallyOptions.value = data.stamp_rallies.filter((r) => r.status !== 'closed')
+      const data = await unwrap(api.GET('/stamp-rallies'))
+      stampRallyOptions.value = data.stampRallies.filter((r) => r.status !== 'closed')
     } catch {
       stampRallyOptions.value = []
     }
@@ -167,35 +165,33 @@ export const useGaraponsStore = defineStore('garapons', () => {
       id: 0,
       title: '',
       details: '',
-      grand_prize_image: '',
-      stamp_rally_id: null,
-      default_draws: 1,
+      grandPrizeImage: '',
+      stampRallyId: null,
+      defaultDraws: 1,
       prizes: [blankPrize(50, true)],
     }
   }
 
   function editGaraponForm(g: Garapon): void {
-    const prizes = (g.prizes ?? []).map((p) => ({
+    const prizes = g.prizes.map((p) => ({
       name: p.name,
-      ball_color: p.ball_color || DEFAULT_BALL_COLOR,
+      ballColor: p.ballColor || DEFAULT_BALL_COLOR,
       rate: p.rate,
-      is_grand: p.is_grand,
+      isGrand: p.isGrand,
       _uid: nextUid(),
     }))
     // Guarantee exactly one grand prize for the radio group.
     const firstPrize = prizes[0]
-    if (firstPrize && !prizes.some((p) => p.is_grand)) {
-      firstPrize.is_grand = true
+    if (firstPrize && !prizes.some((p) => p.isGrand)) {
+      firstPrize.isGrand = true
     }
     garaponForm.value = {
       id: g.id,
       title: g.title,
       details: g.details,
-      grand_prize_image: g.grand_prize_image,
-      stamp_rally_id: g.stamp_rally_id ?? null,
-      // A garapon saved before this field existed reads back as 0; show the 1 the
-      // server would apply rather than a 0 the admin never chose.
-      default_draws: g.default_draws || 1,
+      grandPrizeImage: g.grandPrizeImage,
+      stampRallyId: g.stampRallyId,
+      defaultDraws: Math.max(1, g.defaultDraws),
       prizes: prizes.length ? prizes : [blankPrize(50, true)],
     }
   }
@@ -217,7 +213,7 @@ export const useGaraponsStore = defineStore('garapons', () => {
     }
     f.id = 0
     f.title = `${g.title} (Copy)`
-    f.stamp_rally_id = null
+    f.stampRallyId = null
   }
 
   function cancelGaraponForm(): void {
@@ -242,8 +238,8 @@ export const useGaraponsStore = defineStore('garapons', () => {
     f.prizes.splice(index, 1)
     // More than one row was there, so a first one remains.
     const first = f.prizes[0]
-    if (row.is_grand && first && !f.prizes.some((p) => p.is_grand)) {
-      first.is_grand = true
+    if (row.isGrand && first && !f.prizes.some((p) => p.isGrand)) {
+      first.isGrand = true
     }
   }
 
@@ -253,7 +249,7 @@ export const useGaraponsStore = defineStore('garapons', () => {
     if (!f) {
       return
     }
-    f.prizes.forEach((p, i) => (p.is_grand = i === index))
+    f.prizes.forEach((p, i) => (p.isGrand = i === index))
   }
 
   /** Saves the garapon form. Returns true on success (caller navigates). */
@@ -273,21 +269,25 @@ export const useGaraponsStore = defineStore('garapons', () => {
     }
     savingGarapon.value = true
     try {
-      // Strip the client-only `_uid` from each prize before sending.
-      const payload = {
-        ...f,
+      const body = {
+        title: f.title,
+        details: f.details,
+        grandPrizeImage: f.grandPrizeImage,
+        stampRallyId: f.stampRallyId,
+        defaultDraws: Math.max(1, Math.floor(f.defaultDraws || 1)),
+        // The client-only `_uid` stays behind.
         prizes: named.map((p) => ({
           name: p.name,
-          ball_color: p.ball_color,
+          ballColor: p.ballColor,
           rate: p.rate,
-          is_grand: p.is_grand,
+          isGrand: p.isGrand,
         })),
       }
       if (f.id) {
-        await endpoints.garapons.update(payload)
+        await unwrap(api.PUT('/garapons/{id}', { params: { path: { id: f.id } }, body }))
         ui.notify('Garapon updated', 'success')
       } else {
-        await endpoints.garapons.create(payload)
+        await unwrap(api.POST('/garapons', { body }))
         ui.notify('Garapon created', 'success')
       }
       garaponForm.value = null
@@ -311,7 +311,7 @@ export const useGaraponsStore = defineStore('garapons', () => {
       return
     }
     try {
-      await endpoints.garapons.delete(id)
+      await unwrap(api.DELETE('/garapons/{id}', { params: { path: { id } } }))
       garapons.value = garapons.value.filter((g) => g.id !== id)
       if (selectedGarapon.value?.id === id) {
         selectedGarapon.value = null
@@ -324,13 +324,18 @@ export const useGaraponsStore = defineStore('garapons', () => {
 
   async function setGaraponStatus(id: number, status: 'open' | 'closed'): Promise<void> {
     try {
-      await endpoints.garapons.setStatus(id, status)
+      const params = { params: { path: { id } } }
+      const changed = await unwrap(
+        status === 'closed'
+          ? api.POST('/garapons/{id}/close', params)
+          : api.POST('/garapons/{id}/reopen', params),
+      )
       if (selectedGarapon.value?.id === id) {
-        selectedGarapon.value.status = status
+        selectedGarapon.value.status = changed.status
       }
       const inList = garapons.value.find((g) => g.id === id)
       if (inList) {
-        inList.status = status
+        inList.status = changed.status
       }
       ui.notify(status === 'closed' ? 'Garapon closed' : 'Garapon reopened', 'success')
     } catch (e) {
@@ -351,17 +356,19 @@ export const useGaraponsStore = defineStore('garapons', () => {
     const max = Math.max(1, Math.floor(playerAdd.value.maxDraws || 1))
     creatingPlayer.value = true
     try {
-      const data = await endpoints.garapons.createPlayer(selectedGarapon.value.id, {
-        player_name: name,
-        max_draws: max,
-      })
+      const player = await unwrap(
+        api.POST('/garapons/{id}/players', {
+          params: { path: { id: selectedGarapon.value.id } },
+          body: { playerName: name, maxDraws: max },
+        }),
+      )
       // Copy the new link straight to the clipboard so the admin can paste it to
       // the player. The URL is too long for the toast, so we only confirm the
       // action; do the copy before the detail reload to stay within the click's
       // activation window, and fall back gracefully if the browser blocks it.
       let copied = false
       try {
-        await navigator.clipboard.writeText(playerLinkUrl(data.player))
+        await navigator.clipboard.writeText(playerLinkUrl(player))
         copied = true
       } catch {
         /* clipboard blocked (insecure context / permissions) - the per-row Copy link button still works */
@@ -386,16 +393,20 @@ export const useGaraponsStore = defineStore('garapons', () => {
     // Deleting a link keeps its draws in the log (they detach, not delete), so
     // reassure the admin when the player has already drawn.
     const msg =
-      player.draws_used > 0
-        ? `Delete the drawing link for ${player.player_name}? Their ${player.draws_used} draw${
-            player.draws_used === 1 ? '' : 's'
+      player.drawsUsed > 0
+        ? `Delete the drawing link for ${player.playerName}? Their ${player.drawsUsed} draw${
+            player.drawsUsed === 1 ? '' : 's'
           } stay in the draw log.`
-        : `Delete the drawing link for ${player.player_name}?`
+        : `Delete the drawing link for ${player.playerName}?`
     if (!(await ui.confirm(msg, { title: 'Delete drawing link', confirmText: 'Delete' }))) {
       return
     }
     try {
-      await endpoints.garapons.deletePlayer(selectedGarapon.value.id, player.id)
+      await unwrap(
+        api.DELETE('/garapons/{id}/players/{playerId}', {
+          params: { path: { id: selectedGarapon.value.id, playerId: player.id } },
+        }),
+      )
       garaponPlayers.value = garaponPlayers.value.filter((p) => p.id !== player.id)
       ui.notify('Drawing link deleted', 'info')
     } catch (e) {
@@ -420,14 +431,14 @@ export const useGaraponsStore = defineStore('garapons', () => {
     }
   }
 
-  /** The stamp card link auto-issued with this drawing link (same token), if any. */
+  /** The stamp card link issued with this drawing link, on a token of its own, if any. */
   function stampCardLinkUrl(player: GaraponPlayer): string {
-    return player.stamp_card_token
-      ? `${window.location.origin}/stamp-card/${player.stamp_card_token}`
+    return player.stampCardToken
+      ? `${window.location.origin}/stamp-card/${player.stampCardToken}`
       : ''
   }
 
-  /** Copies a player's stamp card link (the same hash as their drawing link). */
+  /** Copies a player's stamp card link, which opens the card and nothing else. */
   async function copyStampCardLink(player: GaraponPlayer): Promise<void> {
     const url = stampCardLinkUrl(player)
     if (!url) {
@@ -456,7 +467,7 @@ export const useGaraponsStore = defineStore('garapons', () => {
    * drawing page uses, so the one panel renders both.
    */
   function showPublic(
-    data: Pick<GaraponPublicResponse, 'garapon' | 'draws'> & { player: GaraponPublicPlayer | null },
+    data: Pick<PublicGaraponPlayer, 'garapon' | 'draws'> & { player: GaraponPlayerSummary | null },
   ): void {
     // A fresh drum, or the same one reloaded: either way the banner belongs to a
     // draw made on THIS view, so it only survives a reload of the same player.
@@ -473,11 +484,13 @@ export const useGaraponsStore = defineStore('garapons', () => {
     resetPublic()
     publicLoading.value = true
     try {
-      const data = await endpoints.garapon.get(token)
+      const data = await unwrap(
+        api.GET('/garapon-players/{token}', { params: { path: { token } } }),
+      )
       publicGarapon.value = data.garapon
       publicPlayer.value = data.player
       publicDraws.value = data.draws
-      publicFestivalLink.value = data.festival_link ?? ''
+      publicFestivalLink.value = data.festivalLink
       return true
     } catch {
       return false
@@ -492,13 +505,15 @@ export const useGaraponsStore = defineStore('garapons', () => {
    * error. State is committed separately via `commitDraw` once the ball lands, so
    * the record/counts reveal in sync with the animation.
    */
-  async function draw(token: string): Promise<GaraponDrawResponse | null> {
+  async function draw(token: string): Promise<GaraponDrawResult | null> {
     if (drawing.value) {
       return null
     }
     drawing.value = true
     try {
-      return await endpoints.garapon.draw(token)
+      return await unwrap(
+        api.POST('/garapon-players/{token}/draw', { params: { path: { token } } }),
+      )
     } catch (e) {
       ui.notify((e as Error).message, 'error')
       return null
@@ -508,11 +523,11 @@ export const useGaraponsStore = defineStore('garapons', () => {
   }
 
   /** Commits a drawn result to the visible record + remaining count + banner. */
-  function commitDraw(resp: GaraponDrawResponse): void {
+  function commitDraw(resp: GaraponDrawResult): void {
     publicDraws.value = [...publicDraws.value, resp.draw]
     if (publicPlayer.value) {
-      publicPlayer.value.draws_used = resp.draws_used
-      publicPlayer.value.max_draws = resp.max_draws
+      publicPlayer.value.drawsUsed = resp.drawsUsed
+      publicPlayer.value.maxDraws = resp.maxDraws
     }
     lastWin.value = resp.draw
   }

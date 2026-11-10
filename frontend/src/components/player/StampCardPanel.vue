@@ -18,7 +18,7 @@ import { useStampRalliesStore } from '@/stores/stampRallies'
 import { assetUrl } from '@/lib/assets'
 import { stallName, stampTypeShort } from '@/lib/stampcard'
 import { formatServerTimestamp } from '@/lib/datetime'
-import type { PublicStamp, PublicStampCard } from '@/types/api'
+import type { PublicStamp, PublicStampCard } from '@/api/client'
 
 const props = withDefaults(
   defineProps<{
@@ -49,13 +49,13 @@ const items = computed<CanvasItem[]>(() => {
     key: `s${s.id}`,
     // Collected -> the stamp art; otherwise the optional not-stamped overlay ('' ->
     // nothing, so a card with its own slot placeholders shows through).
-    image: s.collected ? s.image : c.rally.not_stamped_image,
+    image: s.collected ? s.image : c.rally.notStampedImage,
     placement: s.placement,
   }))
   const prizes = c.prizes.map((p) => ({
     key: `p${p.id}`,
     // Revealed only once the card is complete; otherwise the not-stamped overlay.
-    image: c.prizes_revealed ? p.image : c.rally.not_stamped_image,
+    image: c.prizesRevealed ? p.image : c.rally.notStampedImage,
     placement: p.placement,
   }))
   return [...stamps, ...prizes]
@@ -121,11 +121,11 @@ function stampStatus(s: PublicStamp): { label: string; modifier: string } {
 }
 
 function windowText(s: PublicStamp): string {
-  if (!s.active_from && !s.active_to) {
+  if (!s.activeFrom && !s.activeTo) {
     return ''
   }
-  const from = s.active_from ? formatServerTimestamp(s.active_from) : '...'
-  const to = s.active_to ? formatServerTimestamp(s.active_to) : '...'
+  const from = s.activeFrom ? formatServerTimestamp(s.activeFrom) : '...'
+  const to = s.activeTo ? formatServerTimestamp(s.activeTo) : '...'
   return `${from} - ${to}`
 }
 
@@ -140,7 +140,7 @@ async function submit(): Promise<void> {
   <div v-if="card">
     <p class="lead-line">
       <font-awesome-icon :icon="['fad', 'id-card']" /> Card for
-      <strong>{{ card.participant_name }}</strong>
+      <strong>{{ card.participantName }}</strong>
     </p>
 
     <!-- Completion banner -->
@@ -168,7 +168,7 @@ async function submit(): Promise<void> {
 
     <!-- The card -->
     <div class="stamp-canvas-wrap">
-      <StampCardCanvas :card-image="card.rally.card_image" :items="items" />
+      <StampCardCanvas :card-image="card.rally.cardImage" :items="items" />
     </div>
 
     <!-- Password entry (until complete, or while optional stalls remain) -->
@@ -198,8 +198,8 @@ async function submit(): Promise<void> {
     <h3 class="section-heading"><font-awesome-icon :icon="['fad', 'stamp']" /> Stalls</h3>
     <ul class="list-stack mb-16">
       <li v-for="s in card.stamps" :key="s.id" class="stamp-stall">
-        <span class="stamp-stall-name">{{ stallName(s.affiliate_name) }}</span>
-        <span class="badge badge--muted">{{ stampTypeShort(s.stamp_type) }}</span>
+        <span class="stamp-stall-name">{{ stallName(s.affiliateName) }}</span>
+        <span class="badge badge--muted">{{ stampTypeShort(s.stampType) }}</span>
         <span v-if="windowText(s)" class="stamp-stall-window text-muted text-xs">{{
           windowText(s)
         }}</span>
@@ -220,13 +220,13 @@ async function submit(): Promise<void> {
         </div>
       </div>
       <MarkdownText
-        v-if="card.rally.redeem_instructions"
+        v-if="card.rally.redeemInstructions"
         class="game-details"
-        :source="card.rally.redeem_instructions"
+        :source="card.rally.redeemInstructions"
       />
-      <figure v-if="card.rally.redeem_image" class="captioned-figure">
+      <figure v-if="card.rally.redeemImage" class="captioned-figure">
         <figcaption>Where to redeem</figcaption>
-        <img :src="assetUrl(card.rally.redeem_image)" alt="Where to redeem your card" />
+        <img :src="assetUrl(card.rally.redeemImage)" alt="Where to redeem your card" />
       </figure>
     </template>
   </div>

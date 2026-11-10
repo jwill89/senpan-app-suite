@@ -3,76 +3,76 @@ package server_test
 import (
 	"fmt"
 	"net/http"
+	"strings"
 	"testing"
+	"time"
 )
 
-// -- Festival Map admin CRUD --------------------------------------------------
+// -- Festival maps -------------------------------------------------------------
 //
 // A stall on a map is a PITCH (shape, color, placement) holding one or more
 // OCCUPANTS (affiliate, title, offering, hours) - so a booth that changes hands
 // between days is one shape with two names rather than two stalls stacked on the
 // same coordinates. Most of what follows exercises that split.
 
-func TestFestivalMap_RequiresAuth(t *testing.T) {
-	env := newTestEnv(t)
-	if resp := env.get(t, "/api/festival-maps"); resp.StatusCode != http.StatusUnauthorized {
-		t.Errorf("list status = %d; want 401", resp.StatusCode)
-		resp.Body.Close()
-	}
-	resp := env.postJSON(t, "/api/festival-maps", map[string]any{"title": "X"})
-	if resp.StatusCode != http.StatusUnauthorized {
-		t.Errorf("create status = %d; want 401", resp.StatusCode)
-	}
-	resp.Body.Close()
-}
+func mapPathOf(id int) string { return fmt.Sprintf("/api/v1/festival-maps/%d", id) }
 
-// occupant builds one occupant row for a create/update body.
+// occupant builds one occupant as a save sends it; over replaces fields of it.
 func occupant(title, stallType string, over map[string]any) map[string]any {
-	o := map[string]any{"title": title, "stall_type": stallType}
+	o := map[string]any{
+		"title": title, "description": "", "eventCarrd": "", "stallType": stallType, "typeLabel": "",
+		"times": []map[string]any{},
+	}
 	for k, v := range over {
 		o[k] = v
 	}
 	return o
 }
 
+// pitch builds one pitch as a save sends it, holding the occupants.
+func pitch(shape string, x, y, w, h float64, occupants ...map[string]any) map[string]any {
+	if occupants == nil {
+		occupants = []map[string]any{}
+	}
+	return map[string]any{
+		"shape": shape, "color": "", "textColor": "", "selectionColor": "",
+		"placement": placement(x, y, w, h), "occupants": occupants,
+	}
+}
+
+// mapBody builds a full map as a save sends it; over replaces fields of it.
+func mapBody(title string, over map[string]any) map[string]any {
+	b := map[string]any{
+		"title": title, "slug": "", "description": "", "times": []map[string]any{},
+		"mapImage": "images/festival_maps/plan.png", "stalls": []map[string]any{},
+	}
+	for k, v := range over {
+		b[k] = v
+	}
+	return b
+}
+
 // createMap posts a create with two single-occupant pitches (one game circle, one
 // food rectangle) and returns the new map's id.
 func (e *testEnv) createMap(t *testing.T, title string) int {
 	t.Helper()
-	resp := e.postJSON(t, "/api/festival-maps", map[string]any{
-		"title":       title,
+	first := pitch("circle", 10, 10, 12, 12, occupant("The Green Gaelicat", "game", nil))
+	first["color"] = "#AABBCC"
+	var made map[string]any
+	decodeInto(t, e.postJSON(t, "/api/v1/festival-maps", mapBody(title, map[string]any{
 		"description": "**Obon** is here.",
-		"map_image":   "images/festival_maps/plan.png",
-		"times": []map[string]any{
-			{"label": "Day 1", "start": "2026-08-01T18:00:00Z", "end": "2026-08-01T22:00:00Z"},
-		},
-		"stalls": []map[string]any{
-			{
-				"shape": "circle", "color": "#AABBCC",
-				"placement": map[string]any{"x": 10, "y": 10, "width": 12, "height": 12},
-				"occupants": []map[string]any{occupant("The Green Gaelicat", "game", nil)},
-			},
-			{
-				"shape":     "rect",
-				"placement": map[string]any{"x": 40, "y": 30, "width": 18, "height": 10},
-				"occupants": []map[string]any{occupant("Flora Teahouse", "food", nil)},
-			},
-		},
-	})
-	if resp.StatusCode != http.StatusCreated {
-		t.Fatalf("create map status = %d; want 201", resp.StatusCode)
-	}
-	return int(decodeBody(t, resp)["map"].(map[string]any)["id"].(float64))
+		"times":       []map[string]any{{"label": "Day 1", "start": "2026-08-01T18:00:00Z", "end": "2026-08-01T22:00:00Z"}},
+		"stalls":      []map[string]any{first, pitch("rect", 40, 30, 18, 10, occupant("Flora Teahouse", "food", nil))},
+	})), http.StatusCreated, &made)
+	return int(made["id"].(float64))
 }
 
-// mapDetail fetches a map's admin detail body.
+// mapDetail fetches a map's staff detail.
 func (e *testEnv) mapDetail(t *testing.T, id int) map[string]any {
 	t.Helper()
-	resp := e.get(t, fmt.Sprintf("/api/festival-maps/%d", id))
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("map detail status = %d; want 200", resp.StatusCode)
-	}
-	return decodeBody(t, resp)["map"].(map[string]any)
+	var m map[string]any
+	decodeInto(t, e.get(t, mapPathOf(id)), http.StatusOK, &m)
+	return m
 }
 
 // stallsOf returns a map detail's pitches.
@@ -84,14 +84,103 @@ func occupantsOf(stall any) []any { return stall.(map[string]any)["occupants"].(
 // firstOccupant returns a pitch's first occupant.
 func firstOccupant(stall any) map[string]any { return occupantsOf(stall)[0].(map[string]any) }
 
-// publish flips a map to published, failing the test when the server refuses.
+// publishMap publishes a map, failing the test when the server refuses.
 func (e *testEnv) publishMap(t *testing.T, id int) {
 	t.Helper()
-	resp := e.patchJSON(t, fmt.Sprintf("/api/festival-maps/%d", id), map[string]any{"status": "published"})
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("publish status = %d; want 200", resp.StatusCode)
+	decodeInto(t, e.patchJSON(t, mapPathOf(id), map[string]any{"status": "published"}), http.StatusOK, nil)
+}
+
+// saveMap replaces a map, answering the response.
+func (e *testEnv) saveMap(t *testing.T, id int, body map[string]any) *http.Response {
+	t.Helper()
+	return e.putJSON(t, mapPathOf(id), body)
+}
+
+// roundTrip replaces a map with what its detail returned, changing only the
+// description: the shape of an ordinary "fix a typo" edit.
+func (e *testEnv) roundTrip(t *testing.T, id int, description string) *http.Response {
+	t.Helper()
+	d := e.mapDetail(t, id)
+	return e.saveMap(t, id, mapBody(d["title"].(string), map[string]any{
+		"slug": d["slug"], "mapImage": d["mapImage"], "description": description, "times": d["times"],
+		"stalls": inputStalls(d),
+	}))
+}
+
+// inputStalls turns a detail's pitches into what a save takes back: the same, less
+// the fields only an answer carries.
+func inputStalls(d map[string]any) []map[string]any {
+	out := []map[string]any{}
+	for _, raw := range stallsOf(d) {
+		st := raw.(map[string]any)
+		occupants := []map[string]any{}
+		for _, o := range occupantsOf(st) {
+			occ := o.(map[string]any)
+			occupants = append(occupants, map[string]any{
+				"id": occ["id"], "affiliateId": occ["affiliateId"], "title": occ["title"], "description": occ["description"],
+				"eventCarrd": occ["eventCarrd"], "stallType": occ["stallType"], "typeLabel": occ["typeLabel"], "times": occ["times"],
+			})
+		}
+		out = append(out, map[string]any{
+			"id": st["id"], "shape": st["shape"], "color": st["color"], "textColor": st["textColor"],
+			"selectionColor": st["selectionColor"], "placement": st["placement"], "occupants": occupants,
+		})
 	}
+	return out
+}
+
+// problemOf decodes a problem details body.
+func problemOf(t *testing.T, resp *http.Response) map[string]any { return decodeBody(t, resp) }
+
+func TestFestivalMap_Guards(t *testing.T) {
+	env := newTestEnv(t)
+	for _, route := range []struct{ method, path string }{
+		{http.MethodGet, "/api/v1/festival-maps"},
+		{http.MethodPost, "/api/v1/festival-maps"},
+		{http.MethodGet, "/api/v1/festival-maps/1"},
+		{http.MethodPut, "/api/v1/festival-maps/1"},
+		{http.MethodPatch, "/api/v1/festival-maps/1"},
+		{http.MethodDelete, "/api/v1/festival-maps/1"},
+	} {
+		resp := reqAs(t, env.client, env, route.method, route.path, map[string]any{})
+		resp.Body.Close()
+		if resp.StatusCode != http.StatusUnauthorized {
+			t.Errorf("%s %s signed out = %d; want 401", route.method, route.path, resp.StatusCode)
+		}
+	}
+
+	env.loginAdmin(t)
+	id := env.createMap(t, "Obon")
+	mapsOnly := makeActiveUser(t, env, "mapper", "correct horse battery", []string{"festival-map"})
+	emaOnly := makeActiveUser(t, env, "emaonly", "correct horse battery", []string{"festival-ema"})
+	other := makeActiveUser(t, env, "other", "correct horse battery", []string{"bingo-presets"})
+
+	// The list is open to the Ema page, whose board editor picks a festival from it;
+	// everything else about a map is the map page's.
+	for who, c := range map[string]*http.Client{"festival-map": mapsOnly, "festival-ema": emaOnly} {
+		resp := getAs(t, c, env, "/api/v1/festival-maps")
+		resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			t.Errorf("list with %s = %d; want 200", who, resp.StatusCode)
+		}
+	}
+	for _, path := range []string{"/api/v1/festival-maps", mapPathOf(id)} {
+		resp := getAs(t, other, env, path)
+		resp.Body.Close()
+		if resp.StatusCode != http.StatusForbidden {
+			t.Errorf("GET %s without access = %d; want 403", path, resp.StatusCode)
+		}
+	}
+	resp := getAs(t, emaOnly, env, mapPathOf(id))
 	resp.Body.Close()
+	if resp.StatusCode != http.StatusForbidden {
+		t.Errorf("a map's detail for the Ema page = %d; want 403", resp.StatusCode)
+	}
+	resp = postAs(t, emaOnly, env, "/api/v1/festival-maps", mapBody("Nope", nil))
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusForbidden {
+		t.Errorf("creating a map for the Ema page = %d; want 403", resp.StatusCode)
+	}
 }
 
 func TestFestivalMap_CreateStartsInProgressAndNormalizes(t *testing.T) {
@@ -105,6 +194,9 @@ func TestFestivalMap_CreateStartsInProgressAndNormalizes(t *testing.T) {
 	if m["status"] != "in_progress" {
 		t.Errorf("status = %v; want in_progress", m["status"])
 	}
+	if m["publicPath"] != fmt.Sprint(id) {
+		t.Errorf("publicPath = %v; want the id while there is no shortcode", m["publicPath"])
+	}
 	stalls := stallsOf(m)
 	if len(stalls) != 2 {
 		t.Fatalf("stalls = %d; want 2", len(stalls))
@@ -117,44 +209,48 @@ func TestFestivalMap_CreateStartsInProgressAndNormalizes(t *testing.T) {
 	if first["color"] != "#aabbcc" {
 		t.Errorf("color = %v; want #aabbcc", first["color"])
 	}
-	if got := firstOccupant(stalls[0])["stall_type"]; got != "game" {
+	if got := firstOccupant(stalls[0])["stallType"]; got != "game" {
 		t.Errorf("first occupant type = %v; want game", got)
 	}
 	times := m["times"].([]any)
 	if len(times) != 1 || times[0].(map[string]any)["label"] != "Day 1" {
 		t.Errorf("times = %v; want one Day 1 range", times)
 	}
+	if end := times[0].(map[string]any)["end"]; end != "2026-08-01T22:00:00Z" {
+		t.Errorf("end = %v; want it kept in the stored form", end)
+	}
 }
 
-func TestFestivalMap_RejectsBadShapeTypeAndColor(t *testing.T) {
+func TestFestivalMap_SaveKeepsWhatItCanAndRefusesWhatItCannot(t *testing.T) {
 	env := newTestEnv(t)
 	env.loginAdmin(t)
 
-	resp := env.postJSON(t, "/api/festival-maps", map[string]any{
-		"title":     "Odd",
-		"map_image": "images/festival_maps/plan.png",
-		"stalls": []map[string]any{
-			{
-				"shape": "triangle", "color": "red; background: url(x)",
-				"placement": map[string]any{"x": -20, "y": 130, "width": 0, "height": 0},
-				"occupants": []map[string]any{
-					// A range with no start says nothing and is dropped.
-					occupant("Weird", "hovercraft", map[string]any{
-						"times": []map[string]any{{"label": "Ghost", "start": ""}},
-					}),
-				},
-			},
-		},
-	})
-	if resp.StatusCode != http.StatusCreated {
-		t.Fatalf("create status = %d; want 201", resp.StatusCode)
+	// A shape or a kind that doesn't exist is refused by the schema.
+	for name, body := range map[string]map[string]any{
+		"shape": mapBody("Odd", map[string]any{"stalls": []map[string]any{
+			pitch("triangle", 10, 10, 10, 10, occupant("Weird", "food", nil))}}),
+		"kind": mapBody("Odd", map[string]any{"stalls": []map[string]any{
+			pitch("rect", 10, 10, 10, 10, occupant("Weird", "hovercraft", nil))}}),
+		"no pitches key": {"title": "Odd", "slug": "", "description": "", "times": []any{}, "mapImage": ""},
+	} {
+		resp := env.postJSON(t, "/api/v1/festival-maps", body)
+		if resp.StatusCode != http.StatusUnprocessableEntity {
+			t.Errorf("a map with a bad %s = %d; want 422", name, resp.StatusCode)
+		}
+		resp.Body.Close()
 	}
-	id := int(decodeBody(t, resp)["map"].(map[string]any)["id"].(float64))
 
-	stall := stallsOf(env.mapDetail(t, id))[0].(map[string]any)
-	if stall["shape"] != "rect" {
-		t.Errorf("shape = %v; want rect", stall["shape"])
-	}
+	// A color that isn't a hex is dropped, a placement is clamped into the box, and a
+	// range with no start says nothing and goes.
+	bad := pitch("rect", -20, 130, 0, 0, occupant("Weird", "other", map[string]any{
+		"times": []map[string]any{{"label": "Ghost", "start": ""}},
+	}))
+	bad["color"] = "red; background: url(x)"
+	var made map[string]any
+	decodeInto(t, env.postJSON(t, "/api/v1/festival-maps", mapBody("Odd", map[string]any{
+		"stalls": []map[string]any{bad},
+	})), http.StatusCreated, &made)
+	stall := stallsOf(made)[0].(map[string]any)
 	if stall["color"] != "" {
 		t.Errorf("color = %q; want it dropped", stall["color"])
 	}
@@ -162,11 +258,7 @@ func TestFestivalMap_RejectsBadShapeTypeAndColor(t *testing.T) {
 	if p["x"].(float64) != 0 || p["y"].(float64) != 100 || p["width"].(float64) <= 0 {
 		t.Errorf("placement = %v; want clamped into the map box with a non-zero size", p)
 	}
-	occ := firstOccupant(stall)
-	if occ["stall_type"] != "other" {
-		t.Errorf("stall_type = %v; want other", occ["stall_type"])
-	}
-	if times := occ["times"].([]any); len(times) != 0 {
+	if times := firstOccupant(stall)["times"].([]any); len(times) != 0 {
 		t.Errorf("times = %v; want the startless range dropped", times)
 	}
 }
@@ -175,34 +267,20 @@ func TestFestivalMap_DropsEmptyOccupantsAndPitches(t *testing.T) {
 	env := newTestEnv(t)
 	env.loginAdmin(t)
 
-	resp := env.postJSON(t, "/api/festival-maps", map[string]any{
-		"title":     "Sparse",
-		"map_image": "images/festival_maps/plan.png",
+	var made map[string]any
+	decodeInto(t, env.postJSON(t, "/api/v1/festival-maps", mapBody("Sparse", map[string]any{
 		"stalls": []map[string]any{
-			{
-				"shape":     "rect",
-				"placement": map[string]any{"x": 10, "y": 10, "width": 12, "height": 8},
-				"occupants": []map[string]any{
-					occupant("Real Stall", "food", nil),
-					// Neither a title nor an affiliate: the row the form leaves behind
-					// when someone adds an occupant and thinks better of it.
-					occupant("   ", "other", nil),
-				},
-			},
-			{
-				// A pitch nobody occupies is a coloured box with nothing to say.
-				"shape":     "rect",
-				"placement": map[string]any{"x": 60, "y": 10, "width": 12, "height": 8},
-				"occupants": []map[string]any{},
-			},
+			pitch("rect", 10, 10, 12, 8,
+				occupant("Real Stall", "food", nil),
+				// Neither a title nor an affiliate: the row the form leaves behind when
+				// someone adds an occupant and thinks better of it.
+				occupant("   ", "other", nil)),
+			// A pitch nobody occupies is a colored box with nothing to say.
+			pitch("rect", 60, 10, 12, 8),
 		},
-	})
-	if resp.StatusCode != http.StatusCreated {
-		t.Fatalf("create status = %d; want 201", resp.StatusCode)
-	}
-	id := int(decodeBody(t, resp)["map"].(map[string]any)["id"].(float64))
+	})), http.StatusCreated, &made)
 
-	stalls := stallsOf(env.mapDetail(t, id))
+	stalls := stallsOf(made)
 	if len(stalls) != 1 {
 		t.Fatalf("pitches = %d; want the occupant-less one dropped", len(stalls))
 	}
@@ -215,22 +293,52 @@ func TestFestivalMap_PublishNeedsAMapImage(t *testing.T) {
 	env := newTestEnv(t)
 	env.loginAdmin(t)
 
-	resp := env.postJSON(t, "/api/festival-maps", map[string]any{"title": "No art"})
-	if resp.StatusCode != http.StatusCreated {
-		t.Fatalf("create status = %d; want 201", resp.StatusCode)
-	}
-	id := int(decodeBody(t, resp)["map"].(map[string]any)["id"].(float64))
+	var made map[string]any
+	decodeInto(t, env.postJSON(t, "/api/v1/festival-maps", mapBody("No art", map[string]any{"mapImage": ""})),
+		http.StatusCreated, &made)
+	id := int(made["id"].(float64))
 
-	// Stalls are positioned as a share of the base image's box, so publishing
-	// without one would show the public a plan of floating shapes.
-	resp = env.patchJSON(t, fmt.Sprintf("/api/festival-maps/%d", id), map[string]any{"status": "published"})
-	if resp.StatusCode != http.StatusBadRequest {
-		t.Errorf("publish status = %d; want 400", resp.StatusCode)
+	// Stalls are positioned as a share of the base image's box, so publishing without
+	// one would show the public a plan of floating shapes.
+	resp := env.patchJSON(t, mapPathOf(id), map[string]any{"status": "published"})
+	if resp.StatusCode != http.StatusConflict {
+		t.Errorf("publish status = %d; want 409", resp.StatusCode)
 	}
 	resp.Body.Close()
-
-	if maps := decodeBody(t, env.get(t, "/api/festival-maps/public"))["maps"].([]any); len(maps) != 0 {
+	var list map[string]any
+	decodeInto(t, env.get(t, "/api/v1/festival-maps/public"), http.StatusOK, &list)
+	if maps := list["maps"].([]any); len(maps) != 0 {
 		t.Errorf("public maps = %v; want none", maps)
+	}
+
+	// A status that isn't one is refused, and an unknown map is a 404.
+	resp = env.patchJSON(t, mapPathOf(id), map[string]any{"status": "live"})
+	if resp.StatusCode != http.StatusUnprocessableEntity {
+		t.Errorf("unknown status = %d; want 422", resp.StatusCode)
+	}
+	resp.Body.Close()
+	resp = env.patchJSON(t, mapPathOf(999), map[string]any{"status": "closed"})
+	if resp.StatusCode != http.StatusNotFound {
+		t.Errorf("patching an unknown map = %d; want 404", resp.StatusCode)
+	}
+	resp.Body.Close()
+}
+
+func TestFestivalMap_UnknownIDsAre404(t *testing.T) {
+	env := newTestEnv(t)
+	env.loginAdmin(t)
+	for _, c := range []struct{ method, tail string }{
+		{http.MethodGet, ""}, {http.MethodPut, ""}, {http.MethodDelete, ""},
+	} {
+		var body any
+		if c.method == http.MethodPut {
+			body = mapBody("Ghost", nil)
+		}
+		resp := env.reqJSON(t, c.method, mapPathOf(999), body)
+		resp.Body.Close()
+		if resp.StatusCode != http.StatusNotFound {
+			t.Errorf("%s of an unknown map = %d; want 404", c.method, resp.StatusCode)
+		}
 	}
 }
 
@@ -244,29 +352,17 @@ func TestFestivalMap_UpdateKeepsOccupantIDsAndDropsRemoved(t *testing.T) {
 	keptOccupant := int(firstOccupant(stalls[0])["id"].(float64))
 
 	// Re-save with the first pitch (by id) renamed and the second dropped.
-	resp := env.putJSON(t, fmt.Sprintf("/api/festival-maps/%d", id), map[string]any{
-		"title":     "Obon Matsuri 2026",
-		"map_image": "images/festival_maps/plan.png",
-		"stalls": []map[string]any{
-			{
-				"id": keptStall, "shape": "circle",
-				"placement": map[string]any{"x": 10, "y": 10, "width": 12, "height": 12},
-				"occupants": []map[string]any{
-					{"id": keptOccupant, "title": "The Green Gaelicat (Day 2)", "stall_type": "game"},
-				},
-			},
-		},
-	})
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("update status = %d; want 200", resp.StatusCode)
-	}
-	resp.Body.Close()
+	kept := pitch("circle", 10, 10, 12, 12, occupant("The Green Gaelicat (Day 2)", "game", map[string]any{"id": keptOccupant}))
+	kept["id"] = keptStall
+	var after map[string]any
+	decodeInto(t, env.saveMap(t, id, mapBody("Obon Matsuri 2026", map[string]any{"stalls": []map[string]any{kept}})),
+		http.StatusOK, &after)
 
-	after := stallsOf(env.mapDetail(t, id))
-	if len(after) != 1 {
-		t.Fatalf("pitches after update = %d; want 1", len(after))
+	pitches := stallsOf(after)
+	if len(pitches) != 1 {
+		t.Fatalf("pitches after update = %d; want 1", len(pitches))
 	}
-	occ := firstOccupant(after[0])
+	occ := firstOccupant(pitches[0])
 	if int(occ["id"].(float64)) != keptOccupant {
 		t.Errorf("occupant id = %v; want %d preserved so a rally keeps naming it", occ["id"], keptOccupant)
 	}
@@ -281,36 +377,123 @@ func TestFestivalMap_UpdateKeepsOccupantIDsAndDropsRemoved(t *testing.T) {
 // different days, returning the map id.
 func (e *testEnv) createDayShare(t *testing.T) int {
 	t.Helper()
-	resp := e.postJSON(t, "/api/festival-maps", map[string]any{
-		"title":     "Obon Matsuri 2026",
-		"map_image": "images/festival_maps/plan.png",
-		"times": []map[string]any{
-			{"label": "Day 1", "start": "2026-08-01T00:00:00Z", "end": "2026-08-01T23:59:00Z"},
-			{"label": "Day 2", "start": "2026-08-02T00:00:00Z", "end": "2026-08-02T23:59:00Z"},
-		},
-		"stalls": []map[string]any{
-			{
-				"shape":     "rect",
-				"placement": map[string]any{"x": 30, "y": 40, "width": 14, "height": 8},
-				"occupants": []map[string]any{
-					occupant("Flora Teahouse", "game", map[string]any{
-						"times": []map[string]any{
-							{"label": "Day 1", "start": "2026-08-01T00:00:00Z", "end": "2026-08-01T23:59:00Z"},
-						},
-					}),
-					occupant("The Great Below", "both", map[string]any{
-						"times": []map[string]any{
-							{"label": "Day 2", "start": "2026-08-02T00:00:00Z", "end": "2026-08-02T23:59:00Z"},
-						},
-					}),
-				},
-			},
-		},
-	})
-	if resp.StatusCode != http.StatusCreated {
-		t.Fatalf("create map status = %d; want 201", resp.StatusCode)
+	day := func(label, d string) map[string]any {
+		return map[string]any{"label": label, "start": "2026-08-0" + d + "T00:00:00Z", "end": "2026-08-0" + d + "T23:59:00Z"}
 	}
-	return int(decodeBody(t, resp)["map"].(map[string]any)["id"].(float64))
+	var made map[string]any
+	decodeInto(t, e.postJSON(t, "/api/v1/festival-maps", mapBody("Obon Matsuri 2026", map[string]any{
+		"times": []map[string]any{day("Day 1", "1"), day("Day 2", "2")},
+		"stalls": []map[string]any{pitch("rect", 30, 40, 14, 8,
+			occupant("Flora Teahouse", "game", map[string]any{"times": []map[string]any{day("Day 1", "1")}}),
+			occupant("The Great Below", "both", map[string]any{"times": []map[string]any{day("Day 2", "2")}}),
+		)},
+	})), http.StatusCreated, &made)
+	return int(made["id"].(float64))
+}
+
+// -- Saves that must not reach past their map ------------------------------------
+
+func TestFestivalMap_AffiliateDeleteKeepsPitch(t *testing.T) {
+	env := newTestEnv(t)
+	env.loginAdmin(t)
+
+	// An occupant may name an affiliate and nothing else: a blank title, its identity
+	// carried by the link. Deleting the affiliate must not leave it nameless, or the
+	// next unrelated save would drop it as an empty row, and its pitch with it.
+	affID := env.createAffiliate(t, "Flora's Fancies")
+	var made map[string]any
+	decodeInto(t, env.postJSON(t, "/api/v1/festival-maps", mapBody("Obon Matsuri", map[string]any{
+		"stalls": []map[string]any{
+			pitch("rect", 10, 10, 12, 8, occupant("", "food", map[string]any{"affiliateId": affID})),
+			pitch("rect", 60, 10, 12, 8, occupant("Other Stall", "game", nil)),
+		},
+	})), http.StatusCreated, &made)
+	id := int(made["id"].(float64))
+
+	if r := env.del(t, fmt.Sprintf("/api/v1/affiliates/%d", affID)); r.StatusCode != http.StatusNoContent {
+		t.Fatalf("affiliate delete status = %d; want 204", r.StatusCode)
+	} else {
+		r.Body.Close()
+	}
+	stalls := stallsOf(env.mapDetail(t, id))
+	if len(stalls) != 2 {
+		t.Fatalf("pitches after affiliate delete = %d; want 2", len(stalls))
+	}
+	if got := firstOccupant(stalls[0])["title"]; got != "Flora's Fancies" {
+		t.Errorf("occupant title after affiliate delete = %v; want the affiliate's name carried down", got)
+	}
+	decodeInto(t, env.roundTrip(t, id, "Obon is here!"), http.StatusOK, nil)
+	if after := stallsOf(env.mapDetail(t, id)); len(after) != 2 {
+		t.Errorf("pitches after an unrelated save = %d; want 2 (a pitch was silently deleted)", len(after))
+	}
+}
+
+func TestFestivalMap_SaveCannotReachAnotherMapsStall(t *testing.T) {
+	env := newTestEnv(t)
+	env.loginAdmin(t)
+
+	victimID := env.createMap(t, "Victim Festival")
+	attackerID := env.createMap(t, "Attacker Festival")
+	victim := stallsOf(env.mapDetail(t, victimID))
+	wantOccupant := firstOccupant(victim[0])["title"]
+
+	// Save the attacker's map claiming one of its pitches IS the victim's: the editor
+	// is stale or the id spoofed, and nothing is saved.
+	hijack := pitch("rect", 1, 1, 5, 5, occupant("Hijacked", "food", nil))
+	hijack["id"] = victim[0].(map[string]any)["id"]
+	resp := env.saveMap(t, attackerID, mapBody("Attacker Festival", map[string]any{"stalls": []map[string]any{hijack}}))
+	if resp.StatusCode != http.StatusConflict {
+		t.Errorf("cross-map save status = %d; want 409", resp.StatusCode)
+	}
+	resp.Body.Close()
+
+	after := stallsOf(env.mapDetail(t, victimID))
+	if len(after) != len(victim) || firstOccupant(after[0])["title"] != wantOccupant {
+		t.Errorf("the victim map changed: %d pitches, first occupant %v", len(after), firstOccupant(after[0])["title"])
+	}
+	// The attacker's own pitches stand as they were: the rejected save applied nothing.
+	if got := len(stallsOf(env.mapDetail(t, attackerID))); got != 2 {
+		t.Errorf("attacker pitches = %d; want its 2 untouched", got)
+	}
+
+	// An occupant id that isn't on the pitch it is saved under is stale in the same way.
+	own := stallsOf(env.mapDetail(t, attackerID))
+	foreign := firstOccupant(victim[0])["id"]
+	stale := pitch("rect", 1, 1, 5, 5, occupant("Mixed up", "food", map[string]any{"id": foreign}))
+	stale["id"] = own[0].(map[string]any)["id"]
+	resp = env.saveMap(t, attackerID, mapBody("Attacker Festival", map[string]any{"stalls": []map[string]any{stale}}))
+	if resp.StatusCode != http.StatusConflict {
+		t.Errorf("save with another pitch's occupant = %d; want 409", resp.StatusCode)
+	}
+	resp.Body.Close()
+}
+
+func TestFestivalMap_AStallsKeyIsRequiredAndEmptyClears(t *testing.T) {
+	env := newTestEnv(t)
+	env.loginAdmin(t)
+
+	id := env.createMap(t, "Obon Matsuri")
+	d := env.mapDetail(t, id)
+
+	// A save with no "stalls" at all - the shape of a list row - is refused rather than
+	// read as "delete them all".
+	resp := env.saveMap(t, id, map[string]any{
+		"title": d["title"], "slug": d["slug"], "mapImage": d["mapImage"], "description": "Typo fixed", "times": d["times"],
+	})
+	if resp.StatusCode != http.StatusUnprocessableEntity {
+		t.Fatalf("save without stalls status = %d; want 422", resp.StatusCode)
+	}
+	resp.Body.Close()
+	if got := len(stallsOf(env.mapDetail(t, id))); got != 2 {
+		t.Errorf("pitches after the refused save = %d; want 2 untouched", got)
+	}
+
+	// An explicit empty list still means "this map has no pitches".
+	var emptied map[string]any
+	decodeInto(t, env.saveMap(t, id, mapBody("Obon Matsuri", nil)), http.StatusOK, &emptied)
+	if got := len(stallsOf(emptied)); got != 0 {
+		t.Errorf("pitches after an explicit empty save = %d; want 0", got)
+	}
 }
 
 func TestFestivalMap_OnePitchHoldsSeveralOccupants(t *testing.T) {
@@ -349,7 +532,7 @@ func TestFestivalMap_PublicPitchCarriesEveryOccupant(t *testing.T) {
 	id := env.createDayShare(t)
 	env.publishMap(t, id)
 
-	detail := decodeBody(t, env.get(t, fmt.Sprintf("/api/festival-maps/public/%d", id)))
+	detail := decodeBody(t, env.get(t, fmt.Sprintf("/api/v1/festival-maps/public/%d", id)))
 	stalls := detail["stalls"].([]any)
 	if len(stalls) != 1 {
 		t.Fatalf("public pitches = %d; want 1", len(stalls))
@@ -361,7 +544,7 @@ func TestFestivalMap_PublicPitchCarriesEveryOccupant(t *testing.T) {
 	// The festival ran in 2026-08; neither day is open now, so both read closed
 	// rather than one being silently promoted.
 	for _, o := range occupants {
-		if o.(map[string]any)["is_open"].(bool) {
+		if o.(map[string]any)["isOpen"].(bool) {
 			t.Errorf("occupant %v is open outside the festival", o)
 		}
 	}
@@ -377,29 +560,29 @@ func TestFestivalMap_PublicShowsPublishedOnly(t *testing.T) {
 	live := env.createMap(t, "Obon Matsuri 2026")
 	env.publishMap(t, live)
 
-	body := decodeBody(t, env.get(t, "/api/festival-maps/public"))
+	body := decodeBody(t, env.get(t, "/api/v1/festival-maps/public"))
 	maps := body["maps"].([]any)
 	if len(maps) != 1 || maps[0].(map[string]any)["title"] != "Obon Matsuri 2026" {
 		t.Fatalf("public list = %v; want only the published map", maps)
 	}
-	if count := maps[0].(map[string]any)["stall_count"].(float64); count != 2 {
-		t.Errorf("stall_count = %v; want 2", count)
+	if count := maps[0].(map[string]any)["stallCount"].(float64); count != 2 {
+		t.Errorf("stallCount = %v; want 2", count)
 	}
 
 	// A draft's existence isn't something the public endpoint should confirm.
-	resp := env.get(t, fmt.Sprintf("/api/festival-maps/public/%d", draft))
+	resp := env.get(t, fmt.Sprintf("/api/v1/festival-maps/public/%d", draft))
 	if resp.StatusCode != http.StatusNotFound {
 		t.Errorf("draft public detail status = %d; want 404", resp.StatusCode)
 	}
 	resp.Body.Close()
 
-	detail := decodeBody(t, env.get(t, fmt.Sprintf("/api/festival-maps/public/%d", live)))
+	detail := decodeBody(t, env.get(t, fmt.Sprintf("/api/v1/festival-maps/public/%d", live)))
 	if len(detail["stalls"].([]any)) != 2 {
 		t.Errorf("public pitches = %v; want 2", detail["stalls"])
 	}
 	// No rally is linked, so no occupant carries a badge.
 	for _, s := range detail["stalls"].([]any) {
-		if firstOccupant(s)["in_stamp_rally"].(bool) {
+		if firstOccupant(s)["inStampRally"].(bool) {
 			t.Errorf("occupant %v is badged with no rally linked", s)
 		}
 	}
@@ -414,7 +597,7 @@ func TestFestivalMap_PublicRequiresNoAuth(t *testing.T) {
 	// The same server reached by a client with no cookie jar - so no session
 	// travels with the request and the endpoint has to stand on its own.
 	anon := &http.Client{Transport: env.client.Transport}
-	resp, err := anon.Get(env.url("/api/festival-maps/public"))
+	resp, err := anon.Get(env.url("/api/v1/festival-maps/public"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -429,9 +612,7 @@ func TestFestivalMap_PublicRequiresNoAuth(t *testing.T) {
 // createMapWithSlug posts a create carrying a shortcode and returns the response.
 func (e *testEnv) createMapWithSlug(t *testing.T, title, slug string) *http.Response {
 	t.Helper()
-	return e.postJSON(t, "/api/festival-maps", map[string]any{
-		"title": title, "slug": slug, "map_image": "images/festival_maps/plan.png",
-	})
+	return e.postJSON(t, "/api/v1/festival-maps", mapBody(title, map[string]any{"slug": slug}))
 }
 
 func TestFestivalMap_SlugIsNormalizedOnSave(t *testing.T) {
@@ -444,7 +625,7 @@ func TestFestivalMap_SlugIsNormalizedOnSave(t *testing.T) {
 	if resp.StatusCode != http.StatusCreated {
 		t.Fatalf("create status = %d; want 201", resp.StatusCode)
 	}
-	m := decodeBody(t, resp)["map"].(map[string]any)
+	m := decodeBody(t, resp)
 	if m["slug"] != "obon-matsuri-2026" {
 		t.Errorf("slug = %v; want obon-matsuri-2026", m["slug"])
 	}
@@ -458,10 +639,13 @@ func TestFestivalMap_SlugRejectsBadShortcodes(t *testing.T) {
 	bad := map[string]string{"numeric": "2026", "too short": "a", "punctuation": "obon!2026"}
 	for name, slug := range bad {
 		resp := env.createMapWithSlug(t, "Map "+name, slug)
-		if resp.StatusCode != http.StatusBadRequest {
-			t.Errorf("create with %s shortcode %q = %d; want 400", name, slug, resp.StatusCode)
+		if resp.StatusCode != http.StatusUnprocessableEntity {
+			t.Errorf("create with %s shortcode %q = %d; want 422", name, slug, resp.StatusCode)
 		}
-		resp.Body.Close()
+		problem := problemOf(t, resp)
+		if errs, _ := problem["errors"].([]any); len(errs) == 0 || errs[0].(map[string]any)["location"] != "body.slug" {
+			t.Errorf("problem = %v; want the error at body.slug", problem)
+		}
 	}
 }
 
@@ -473,7 +657,7 @@ func TestFestivalMap_SlugMustBeUnique(t *testing.T) {
 	if first.StatusCode != http.StatusCreated {
 		t.Fatalf("first create status = %d; want 201", first.StatusCode)
 	}
-	id := int(decodeBody(t, first)["map"].(map[string]any)["id"].(float64))
+	id := int(decodeBody(t, first)["id"].(float64))
 
 	second := env.createMapWithSlug(t, "Obon 2027", "obon-2026")
 	if second.StatusCode != http.StatusConflict {
@@ -482,9 +666,7 @@ func TestFestivalMap_SlugMustBeUnique(t *testing.T) {
 	second.Body.Close()
 
 	// A map may of course keep its own shortcode across an edit.
-	resp := env.putJSON(t, fmt.Sprintf("/api/festival-maps/%d", id), map[string]any{
-		"title": "Obon 2026", "slug": "obon-2026", "map_image": "images/festival_maps/plan.png",
-	})
+	resp := env.saveMap(t, id, mapBody("Obon 2026", map[string]any{"slug": "obon-2026"}))
 	if resp.StatusCode != http.StatusOK {
 		t.Errorf("re-saving its own shortcode = %d; want 200", resp.StatusCode)
 	}
@@ -506,20 +688,15 @@ func TestFestivalMap_PublicResolvesShortcodeAndID(t *testing.T) {
 	env.loginAdmin(t)
 
 	id := env.createMap(t, "Obon Matsuri 2026")
-	resp := env.putJSON(t, fmt.Sprintf("/api/festival-maps/%d", id), map[string]any{
-		"title": "Obon Matsuri 2026", "slug": "obon-2026",
-		"map_image": "images/festival_maps/plan.png",
-	})
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("update status = %d; want 200", resp.StatusCode)
-	}
-	resp.Body.Close()
+	d := env.mapDetail(t, id)
+	decodeInto(t, env.saveMap(t, id, mapBody("Obon Matsuri 2026", map[string]any{"slug": "obon-2026", "stalls": inputStalls(d)})),
+		http.StatusOK, nil)
 	env.publishMap(t, id)
 
 	// Both forms resolve to the same map, so a link posted before the shortcode
 	// existed keeps working.
 	for _, key := range []string{"obon-2026", fmt.Sprint(id)} {
-		body := decodeBody(t, env.get(t, "/api/festival-maps/public/"+key))
+		body := decodeBody(t, env.get(t, "/api/v1/festival-maps/public/"+key))
 		if int(body["id"].(float64)) != id {
 			t.Errorf("public/%s resolved to id %v; want %d", key, body["id"], id)
 		}
@@ -529,7 +706,7 @@ func TestFestivalMap_PublicResolvesShortcodeAndID(t *testing.T) {
 	}
 
 	// An unknown shortcode is a 404, not a 500 or an arbitrary map.
-	miss := env.get(t, "/api/festival-maps/public/hanami-2027")
+	miss := env.get(t, "/api/v1/festival-maps/public/hanami-2027")
 	if miss.StatusCode != http.StatusNotFound {
 		t.Errorf("unknown shortcode = %d; want 404", miss.StatusCode)
 	}
@@ -547,7 +724,7 @@ func TestFestivalMap_PublicShortcodeStillRespectsPublishing(t *testing.T) {
 	resp.Body.Close()
 
 	// A shortcode is not a capability - an unpublished map stays 404 either way.
-	miss := env.get(t, "/api/festival-maps/public/draft-2026")
+	miss := env.get(t, "/api/v1/festival-maps/public/draft-2026")
 	if miss.StatusCode != http.StatusNotFound {
 		t.Errorf("unpublished map by shortcode = %d; want 404", miss.StatusCode)
 	}
@@ -567,43 +744,34 @@ func TestFestivalMap_RallyOccupantLinkBadgesThePublicMap(t *testing.T) {
 
 	// The rally names Flora (Day 1) - not the pitch, which The Great Below also
 	// occupies on Day 2 with a different activity.
-	resp := env.postJSON(t, "/api/stamp-rallies", map[string]any{
-		"title":           "Obon Stamp Rally",
-		"festival_map_id": mapID,
-		"stamps": []map[string]any{
-			{"occupant_id": day1, "password": "alpha", "stamp_type": "game",
-				"image":     "images/stamp_stamps/a.png",
-				"placement": map[string]any{"x": 10, "y": 10, "width": 15, "height": 15}},
-		},
+	rallyID := env.createRally(t, "Obon Stamp Rally", map[string]any{
+		"festivalMapId": mapID,
+		"stamps":        []map[string]any{stampBody("alpha", map[string]any{"occupantId": day1, "stampType": "game"})},
 	})
-	if resp.StatusCode != http.StatusCreated {
-		t.Fatalf("create rally status = %d; want 201", resp.StatusCode)
-	}
-	rallyID := int(decodeBody(t, resp)["stamp_rally"].(map[string]any)["id"].(float64))
 
-	detail := decodeBody(t, env.get(t, fmt.Sprintf("/api/festival-maps/public/%d", mapID)))
-	if detail["stamp_rally_title"] != "Obon Stamp Rally" {
-		t.Errorf("stamp_rally_title = %v; want the linked rally", detail["stamp_rally_title"])
+	detail := decodeBody(t, env.get(t, fmt.Sprintf("/api/v1/festival-maps/public/%d", mapID)))
+	if detail["stampRallyTitle"] != "Obon Stamp Rally" {
+		t.Errorf("stampRallyTitle = %v; want the linked rally", detail["stampRallyTitle"])
 	}
 	pitchOccupants := occupantsOf(detail["stalls"].([]any)[0])
 	flora := pitchOccupants[0].(map[string]any)
 	below := pitchOccupants[1].(map[string]any)
-	if !flora["in_stamp_rally"].(bool) {
+	if !flora["inStampRally"].(bool) {
 		t.Error("Flora carries the rally stamp but isn't badged")
 	}
-	if flora["stamp_image"] != "images/stamp_stamps/a.png" {
-		t.Errorf("stamp_image = %v; want the stamp art", flora["stamp_image"])
+	if flora["stampImage"] != "images/stamp_stamps/a.png" {
+		t.Errorf("stampImage = %v; want the stamp art", flora["stampImage"])
 	}
 	// The badge follows the OCCUPANT, not the pitch they share.
-	if below["in_stamp_rally"].(bool) {
+	if below["inStampRally"].(bool) {
 		t.Error("The Great Below is badged for a stamp that belongs to Flora")
 	}
 
 	// The rally's own stall name now comes from the occupant.
-	rally := decodeBody(t, env.get(t, fmt.Sprintf("/api/stamp-rallies/%d", rallyID)))["stamp_rally"].(map[string]any)
+	rally, _ := env.rallyDetail(t, rallyID)
 	stamp := rally["stamps"].([]any)[0].(map[string]any)
-	if stamp["stall_name"] != "Flora Teahouse" {
-		t.Errorf("stall_name = %v; want the occupant's title", stamp["stall_name"])
+	if stamp["stallName"] != "Flora Teahouse" {
+		t.Errorf("stallName = %v; want the occupant's title", stamp["stallName"])
 	}
 }
 
@@ -615,24 +783,17 @@ func TestFestivalMap_UnlinkedRallyClearsOccupantIDs(t *testing.T) {
 	occID := int(firstOccupant(stallsOf(env.mapDetail(t, mapID))[0])["id"].(float64))
 
 	// An occupant id on a rally that names no map would claim a link it doesn't have.
-	resp := env.postJSON(t, "/api/stamp-rallies", map[string]any{
-		"title": "Unlinked Rally",
-		"stamps": []map[string]any{
-			{"occupant_id": occID, "password": "alpha",
-				"placement": map[string]any{"x": 10, "y": 10, "width": 15, "height": 15}},
-		},
+	rallyID := env.createRally(t, "Unlinked Rally", map[string]any{
+		"stamps": []map[string]any{stampBody("alpha", map[string]any{"occupantId": occID})},
 	})
-	if resp.StatusCode != http.StatusCreated {
-		t.Fatalf("create rally status = %d; want 201", resp.StatusCode)
-	}
-	rallyID := int(decodeBody(t, resp)["stamp_rally"].(map[string]any)["id"].(float64))
 
-	stamp := decodeBody(t, env.get(t, fmt.Sprintf("/api/stamp-rallies/%d", rallyID)))["stamp_rally"].(map[string]any)["stamps"].([]any)[0].(map[string]any)
-	if stamp["occupant_id"] != nil {
-		t.Errorf("occupant_id = %v; want it cleared on an unlinked rally", stamp["occupant_id"])
+	rally, _ := env.rallyDetail(t, rallyID)
+	stamp := rally["stamps"].([]any)[0].(map[string]any)
+	if stamp["occupantId"] != nil {
+		t.Errorf("occupantId = %v; want it cleared on an unlinked rally", stamp["occupantId"])
 	}
-	if stamp["stall_name"] != "" {
-		t.Errorf("stall_name = %v; want empty", stamp["stall_name"])
+	if stamp["stallName"] != "" {
+		t.Errorf("stallName = %v; want empty", stamp["stallName"])
 	}
 }
 
@@ -642,32 +803,25 @@ func TestFestivalMap_DeleteUnlinksTheRally(t *testing.T) {
 
 	mapID := env.createMap(t, "Obon Matsuri 2026")
 	occID := int(firstOccupant(stallsOf(env.mapDetail(t, mapID))[0])["id"].(float64))
-	resp := env.postJSON(t, "/api/stamp-rallies", map[string]any{
-		"title": "Obon Stamp Rally", "festival_map_id": mapID,
-		"stamps": []map[string]any{
-			{"occupant_id": occID, "password": "alpha",
-				"placement": map[string]any{"x": 10, "y": 10, "width": 15, "height": 15}},
-		},
+	rallyID := env.createRally(t, "Obon Stamp Rally", map[string]any{
+		"festivalMapId": mapID,
+		"stamps":        []map[string]any{stampBody("alpha", map[string]any{"occupantId": occID})},
 	})
-	if resp.StatusCode != http.StatusCreated {
-		t.Fatalf("create rally status = %d; want 201", resp.StatusCode)
-	}
-	rallyID := int(decodeBody(t, resp)["stamp_rally"].(map[string]any)["id"].(float64))
 
-	resp = env.del(t, fmt.Sprintf("/api/festival-maps/%d", mapID))
+	resp := env.del(t, fmt.Sprintf("/api/v1/festival-maps/%d", mapID))
 	if resp.StatusCode != http.StatusNoContent {
 		t.Fatalf("delete map status = %d; want 204", resp.StatusCode)
 	}
 	resp.Body.Close()
 
 	// The rally survives the map it was authored against.
-	rally := decodeBody(t, env.get(t, fmt.Sprintf("/api/stamp-rallies/%d", rallyID)))["stamp_rally"].(map[string]any)
-	if rally["festival_map_id"] != nil {
-		t.Errorf("festival_map_id = %v; want it cleared", rally["festival_map_id"])
+	rally, _ := env.rallyDetail(t, rallyID)
+	if rally["festivalMapId"] != nil {
+		t.Errorf("festivalMapId = %v; want it cleared", rally["festivalMapId"])
 	}
 	stamp := rally["stamps"].([]any)[0].(map[string]any)
-	if stamp["occupant_id"] != nil {
-		t.Errorf("occupant_id = %v; want it cleared", stamp["occupant_id"])
+	if stamp["occupantId"] != nil {
+		t.Errorf("occupantId = %v; want it cleared", stamp["occupantId"])
 	}
 	// The stamp still works - it just falls back to the venue's own name.
 	if stamp["password"] != "alpha" {
@@ -686,39 +840,22 @@ func TestFestivalMap_RemovingAnOccupantClearsItsRallyStamp(t *testing.T) {
 	keptID := int(occupants[0].(map[string]any)["id"].(float64))
 	droppedID := int(occupants[1].(map[string]any)["id"].(float64))
 
-	resp := env.postJSON(t, "/api/stamp-rallies", map[string]any{
-		"title": "Obon Stamp Rally", "festival_map_id": mapID,
+	rallyID := env.createRally(t, "Obon Stamp Rally", map[string]any{
+		"festivalMapId": mapID,
 		"stamps": []map[string]any{
-			{"occupant_id": keptID, "password": "alpha",
-				"placement": map[string]any{"x": 10, "y": 10, "width": 15, "height": 15}},
-			{"occupant_id": droppedID, "password": "beta",
-				"placement": map[string]any{"x": 40, "y": 10, "width": 15, "height": 15}},
+			stampBody("alpha", map[string]any{"occupantId": keptID}),
+			stampBody("beta", map[string]any{"occupantId": droppedID, "placement": placement(40, 10, 15, 15)}),
 		},
 	})
-	if resp.StatusCode != http.StatusCreated {
-		t.Fatalf("create rally status = %d; want 201", resp.StatusCode)
-	}
-	rallyID := int(decodeBody(t, resp)["stamp_rally"].(map[string]any)["id"].(float64))
 
 	// Re-save the map with only the Day 1 occupant.
-	resp = env.putJSON(t, fmt.Sprintf("/api/festival-maps/%d", mapID), map[string]any{
-		"title": "Obon Matsuri 2026", "map_image": "images/festival_maps/plan.png",
-		"stalls": []map[string]any{
-			{
-				"id": stallID, "shape": "rect",
-				"placement": map[string]any{"x": 30, "y": 40, "width": 14, "height": 8},
-				"occupants": []map[string]any{
-					{"id": keptID, "title": "Flora Teahouse", "stall_type": "game"},
-				},
-			},
-		},
-	})
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("update map status = %d; want 200", resp.StatusCode)
-	}
-	resp.Body.Close()
+	only := pitch("rect", 30, 40, 14, 8, occupant("Flora Teahouse", "game", map[string]any{"id": keptID}))
+	only["id"] = stallID
+	decodeInto(t, env.saveMap(t, mapID, mapBody("Obon Matsuri 2026", map[string]any{"stalls": []map[string]any{only}})),
+		http.StatusOK, nil)
 
-	stamps := decodeBody(t, env.get(t, fmt.Sprintf("/api/stamp-rallies/%d", rallyID)))["stamp_rally"].(map[string]any)["stamps"].([]any)
+	after, _ := env.rallyDetail(t, rallyID)
+	stamps := after["stamps"].([]any)
 	if len(stamps) != 2 {
 		t.Fatalf("stamps = %d; want both kept - a stamp outlives the occupant it named", len(stamps))
 	}
@@ -731,16 +868,16 @@ func TestFestivalMap_RemovingAnOccupantClearsItsRallyStamp(t *testing.T) {
 			orphaned = st
 		}
 	}
-	if kept["occupant_id"] == nil {
+	if kept["occupantId"] == nil {
 		t.Error("the surviving occupant's stamp lost its link")
 	}
 	// The dropped occupant's stamp falls back to its affiliate rather than
 	// pointing at a row that is gone.
-	if orphaned["occupant_id"] != nil {
-		t.Errorf("occupant_id = %v; want it cleared with the occupant", orphaned["occupant_id"])
+	if orphaned["occupantId"] != nil {
+		t.Errorf("occupantId = %v; want it cleared with the occupant", orphaned["occupantId"])
 	}
-	if orphaned["stall_name"] != "" {
-		t.Errorf("stall_name = %v; want empty once the occupant is gone", orphaned["stall_name"])
+	if orphaned["stallName"] != "" {
+		t.Errorf("stallName = %v; want empty once the occupant is gone", orphaned["stallName"])
 	}
 }
 
@@ -764,7 +901,7 @@ func (e *testEnv) assignRaffle(t *testing.T, title string, mapID, occupantID int
 // the pitch at `index`, or nil when that occupant carries none.
 func (e *testEnv) stallRaffle(t *testing.T, mapID, index int) map[string]any {
 	t.Helper()
-	detail := decodeBody(t, e.get(t, fmt.Sprintf("/api/festival-maps/public/%d", mapID)))
+	detail := decodeBody(t, e.get(t, fmt.Sprintf("/api/v1/festival-maps/public/%d", mapID)))
 	occ := firstOccupant(detail["stalls"].([]any)[index])
 	if raw, ok := occ["raffle"]; ok && raw != nil {
 		return raw.(map[string]any)
@@ -791,7 +928,7 @@ func TestFestivalMap_RunningRaffleLinksFromItsStall(t *testing.T) {
 	if int(raffle["id"].(float64)) != raffleID {
 		t.Errorf("raffle id = %v; want %d", raffle["id"], raffleID)
 	}
-	if raffle["title"] != "Gaelicat Raffle" || raffle["prize_image"] != "images/raffles/prize.png" {
+	if raffle["title"] != "Gaelicat Raffle" || raffle["prizeImage"] != "images/raffles/prize.png" {
 		t.Errorf("raffle block = %v; want the title + prize art", raffle)
 	}
 	// The badge follows the OCCUPANT: the other pitch carries nothing.
@@ -870,22 +1007,10 @@ func TestFestivalMap_RaffleKeepsItsMapWhenTheStallGoesAway(t *testing.T) {
 	raffleID := env.assignRaffle(t, "Homeless Raffle", mapID, doomedOccupant, nil)
 
 	// Re-save the map without the second pitch.
-	resp := env.putJSON(t, fmt.Sprintf("/api/festival-maps/%d", mapID), map[string]any{
-		"title": "Obon Matsuri 2026", "map_image": "images/festival_maps/plan.png",
-		"stalls": []map[string]any{
-			{
-				"id": keptStall, "shape": "circle",
-				"placement": map[string]any{"x": 10, "y": 10, "width": 12, "height": 12},
-				"occupants": []map[string]any{
-					{"id": keptOccupant, "title": "The Green Gaelicat", "stall_type": "game"},
-				},
-			},
-		},
-	})
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("update map status = %d; want 200", resp.StatusCode)
-	}
-	resp.Body.Close()
+	only := pitch("circle", 10, 10, 12, 12, occupant("The Green Gaelicat", "game", map[string]any{"id": keptOccupant}))
+	only["id"] = keptStall
+	decodeInto(t, env.saveMap(t, mapID, mapBody("Obon Matsuri 2026", map[string]any{"stalls": []map[string]any{only}})),
+		http.StatusOK, nil)
 
 	after := env.raffleDetail(t, raffleID)["raffle"].(map[string]any)
 	// It is still part of the festival - it just isn't pinned to a pitch any more.
@@ -905,7 +1030,7 @@ func TestFestivalMap_DeleteReleasesItsRaffles(t *testing.T) {
 	occupantID := int(firstOccupant(stallsOf(env.mapDetail(t, mapID))[0])["id"].(float64))
 	raffleID := env.assignRaffle(t, "Gaelicat Raffle", mapID, occupantID, nil)
 
-	resp := env.del(t, fmt.Sprintf("/api/festival-maps/%d", mapID))
+	resp := env.del(t, fmt.Sprintf("/api/v1/festival-maps/%d", mapID))
 	if resp.StatusCode != http.StatusNoContent {
 		t.Fatalf("delete map status = %d; want 204", resp.StatusCode)
 	}
@@ -918,5 +1043,70 @@ func TestFestivalMap_DeleteReleasesItsRaffles(t *testing.T) {
 	}
 	if after["title"] != "Gaelicat Raffle" {
 		t.Errorf("title = %v; want the raffle intact", after["title"])
+	}
+}
+
+func TestFestivalMap_PublicReadsAreCachedByRevalidation(t *testing.T) {
+	env := newTestEnv(t)
+	env.loginAdmin(t)
+	id := env.createMap(t, "Obon Matsuri 2026")
+	env.publishMap(t, id)
+
+	for _, path := range []string{"/api/v1/festival-maps/public", fmt.Sprintf("/api/v1/festival-maps/public/%d", id)} {
+		resp := env.get(t, path)
+		resp.Body.Close()
+		tag := resp.Header.Get("ETag")
+		if tag == "" || resp.Header.Get("Cache-Control") != "no-cache" {
+			t.Fatalf("GET %s: ETag %q, Cache-Control %q; want an ETag and no-cache", path, tag, resp.Header.Get("Cache-Control"))
+		}
+		req, _ := http.NewRequest(http.MethodGet, env.url(path), nil)
+		req.Header.Set("If-None-Match", tag)
+		again, err := env.client.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		again.Body.Close()
+		if again.StatusCode != http.StatusNotModified {
+			t.Errorf("GET %s with the ETag = %d; want 304", path, again.StatusCode)
+		}
+	}
+	// A staff answer is private.
+	if got := env.get(t, mapPathOf(id)); !strings.Contains(got.Header.Get("Cache-Control"), "no-store") {
+		t.Errorf("staff detail Cache-Control = %q; want no-store", got.Header.Get("Cache-Control"))
+	}
+}
+
+// told reads the next n resource_changed events from a staff stream and answers the
+// resources they name.
+func told(t *testing.T, s *stream, n int) map[string]bool {
+	t.Helper()
+	got := map[string]bool{}
+	for range n {
+		got[s.expect("resource_changed", 3*time.Second).str("resource")] = true
+	}
+	return got
+}
+
+func TestFestivalMap_WritesTellTheMapsAndWhatTheyLink(t *testing.T) {
+	env := newTestEnv(t)
+	env.loginAdmin(t)
+	s := staffStream(t, env, env.client)
+
+	id := env.createMap(t, "Obon Matsuri 2026")
+	if got := told(t, s, 1); !got["festival-maps"] {
+		t.Errorf("a create told %v; want festival-maps", got)
+	}
+
+	d := env.mapDetail(t, id)
+	decodeInto(t, env.saveMap(t, id, mapBody("Obon Matsuri 2026", map[string]any{"stalls": inputStalls(d)})), http.StatusOK, nil)
+	// The stall names show on the stamp cards and the raffles.
+	if got := told(t, s, 3); !got["festival-maps"] || !got["stamp-rallies"] || !got["raffles"] {
+		t.Errorf("an update told %v; want festival-maps, stamp-rallies and raffles", got)
+	}
+
+	resp := env.del(t, mapPathOf(id))
+	resp.Body.Close()
+	if got := told(t, s, 5); !got["festival-maps"] || !got["stamp-rallies"] || !got["raffles"] || !got["ema-boards"] || !got["ema-requests"] {
+		t.Errorf("a delete told %v; want the map and everything it unlinked", got)
 	}
 }

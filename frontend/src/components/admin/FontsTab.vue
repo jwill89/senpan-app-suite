@@ -29,7 +29,7 @@ import FontEditModal from '@/components/admin/FontEditModal.vue'
 import { applyUploadedFonts, uploadedFontUrl } from '@/lib/theme'
 import { useFontsStore, fontShareUrl, toUploadedFont, FONT_KIT_URL } from '@/stores/fonts'
 import { useUiStore } from '@/stores/ui'
-import type { Font, FontVariant } from '@/types/api'
+import type { Font, FontVariant } from '@/api/client'
 
 const fonts = useFontsStore()
 const ui = useUiStore()
@@ -94,7 +94,7 @@ watch(selectedFont, (f, old) => {
   }
   const stillThere = f.variants.some((v) => v.token === previewToken.value)
   if (old?.base !== f.base || !stillThere) {
-    previewToken.value = f.served_token
+    previewToken.value = f.servedToken
   }
 })
 
@@ -169,7 +169,7 @@ function selectForPreview(base: string): void {
 /** Columns for the shared DataTable (the last is the right-aligned actions). */
 const fontColumns: DataColumn[] = [
   { key: 'family', label: 'CSS Name', sortable: true },
-  { key: 'served_type', label: 'Serves', sortable: true },
+  { key: 'servedType', label: 'Serves', sortable: true },
   { key: 'modified', label: 'Modified', sortable: true },
   { key: 'actions', label: '', align: 'right' },
 ]
@@ -193,13 +193,13 @@ const fontsView = ref<DataTableView>({ total: 0, totalPages: 1, facets: {} })
 
 /** True when the served variant is the auto-converted WOFF2 copy. */
 function servesConverted(f: Font): boolean {
-  return f.variants.some((v) => v.converted && v.token === f.served_token)
+  return f.variants.some((v) => v.converted && v.token === f.servedToken)
 }
 
 /** Copies the tokenized URL of a font's SERVED variant to the clipboard. The
  *  token rotates every 1-2 weeks - for anything permanent, embed the kit. */
 async function copyLink(f: Font): Promise<void> {
-  const url = fontShareUrl(f.served_token)
+  const url = fontShareUrl(f.servedToken)
   try {
     await navigator.clipboard.writeText(url)
     ui.notify('Link copied - note it expires in 1-2 weeks (use the kit for embeds)', 'success')
@@ -396,9 +396,9 @@ watch(
         <template #cell-family="{ row }">
           <span class="code-highlight">{{ row.family }}</span>
         </template>
-        <template #cell-served_type="{ row }">
+        <template #cell-servedType="{ row }">
           <span :title="servesConverted(row) ? 'Serving the auto-converted WOFF2 copy' : undefined">
-            {{ row.served_type }}
+            {{ row.servedType }}
             <font-awesome-icon
               v-if="servesConverted(row)"
               class="text-muted text-xs"
@@ -407,7 +407,9 @@ watch(
           </span>
         </template>
         <template #cell-modified="{ row }">
-          <span class="text-muted">{{ new Date(row.modified).toLocaleString() }}</span>
+          <span class="text-muted">{{
+            row.modified ? new Date(row.modified).toLocaleString() : ''
+          }}</span>
         </template>
         <template #cell-actions="{ row }">
           <div class="row-actions">

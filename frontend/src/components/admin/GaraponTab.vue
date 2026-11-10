@@ -35,7 +35,7 @@ import { useGaraponsStore } from '@/stores/garapons'
 import { rateTotal, ratePct as normalizedPct } from '@/lib/garapon'
 import { assetUrl } from '@/lib/assets'
 import { formatServerTimestamp } from '@/lib/datetime'
-import type { Garapon, GaraponPrize, GaraponPlayer, GaraponDraw } from '@/types/api'
+import type { Garapon, GaraponPrize, GaraponPlayer, GaraponDraw } from '@/api/client'
 
 const garapons = useGaraponsStore()
 
@@ -50,9 +50,9 @@ const isOpen = computed(() => garapons.selectedGarapon?.status === 'open')
 // the row fields so the table's sort reads them directly.
 const closedColumns: DataColumn[] = [
   { key: 'title', label: 'Title', sortable: true },
-  { key: 'player_count', label: 'Drawings', align: 'right', sortable: true },
-  { key: 'draw_count', label: 'Draws', align: 'right', sortable: true },
-  { key: 'created_at', label: 'Created', sortable: true },
+  { key: 'playerCount', label: 'Drawings', align: 'right', sortable: true },
+  { key: 'drawCount', label: 'Draws', align: 'right', sortable: true },
+  { key: 'createdAt', label: 'Created', sortable: true },
   { key: 'actions', label: '', align: 'right' },
 ]
 const closedSearch = ref('')
@@ -61,34 +61,33 @@ const closedView = ref<DataTableView>({ total: 0, totalPages: 1, facets: {} })
 const closedMatches = (g: Garapon, q: string): boolean => g.title.toLowerCase().includes(q)
 
 const linkColumns: DataColumn[] = [
-  { key: 'player_name', label: 'Player', sortable: true },
-  { key: 'draws_used', label: 'Draws', align: 'center', sortable: true },
-  { key: 'created_at', label: 'Created', sortable: true },
+  { key: 'playerName', label: 'Player', sortable: true },
+  { key: 'drawsUsed', label: 'Draws', align: 'center', sortable: true },
+  { key: 'createdAt', label: 'Created', sortable: true },
   { key: 'actions', label: '', align: 'right' },
 ]
 const linkSearch = ref('')
 const linkPage = ref(1)
 const linkView = ref<DataTableView>({ total: 0, totalPages: 1, facets: {} })
-const linkMatches = (p: GaraponPlayer, q: string): boolean =>
-  p.player_name.toLowerCase().includes(q)
+const linkMatches = (p: GaraponPlayer, q: string): boolean => p.playerName.toLowerCase().includes(q)
 // Newest links first by default (a freshly generated link lands on top).
-const linkSort = { key: 'created_at', dir: 'desc' } as const
+const linkSort = { key: 'createdAt', dir: 'desc' } as const
 
 const logColumns: DataColumn[] = [
-  { key: 'player_name', label: 'Player', sortable: true },
+  { key: 'playerName', label: 'Player', sortable: true },
   // Facetable: "which prizes actually went out, and how many of each" is the
   // question this log gets asked, so its distinct values drive a filter.
-  { key: 'prize_name', label: 'Prize', sortable: true, facetable: true },
-  { key: 'drawn_at', label: 'When', sortable: true, align: 'right' },
+  { key: 'prizeName', label: 'Prize', sortable: true, facetable: true },
+  { key: 'drawnAt', label: 'When', sortable: true, align: 'right' },
 ]
 const logSearch = ref('')
 const logPage = ref(1)
 const logView = ref<DataTableView>({ total: 0, totalPages: 1, facets: {} })
 const logMatches = (d: GaraponDraw, q: string): boolean =>
-  d.player_name.toLowerCase().includes(q) || d.prize_name.toLowerCase().includes(q)
-const logSort = { key: 'drawn_at', dir: 'desc' } as const
+  d.playerName.toLowerCase().includes(q) || d.prizeName.toLowerCase().includes(q)
+const logSort = { key: 'drawnAt', dir: 'desc' } as const
 const logPrizeFilter = ref('')
-const logFilters = computed(() => ({ prize_name: logPrizeFilter.value }))
+const logFilters = computed(() => ({ prizeName: logPrizeFilter.value }))
 const logTableRef = useTemplateRef<{ exportCsv: (name?: string) => void }>('logTableRef')
 
 // -- Display helpers ----------------------------------------------------------
@@ -100,7 +99,7 @@ function ratePct(p: GaraponPrize): string {
   return normalizedPct(p.rate, prizeRateTotal.value)
 }
 
-function created(ts: string): string {
+function created(ts: string | null): string {
   return ts ? formatServerTimestamp(ts) : '-'
 }
 
@@ -236,9 +235,9 @@ function toggleClosed(): void {
       </div>
 
       <!-- Grand prize image -->
-      <div v-if="garapons.selectedGarapon.grand_prize_image" class="mb-16">
+      <div v-if="garapons.selectedGarapon.grandPrizeImage" class="mb-16">
         <img
-          :src="assetUrl(garapons.selectedGarapon.grand_prize_image)"
+          :src="assetUrl(garapons.selectedGarapon.grandPrizeImage)"
           class="prize-img-sm"
           alt="Grand prize"
         />
@@ -259,13 +258,13 @@ function toggleClosed(): void {
           <tbody>
             <tr v-for="p in garapons.selectedGarapon.prizes" :key="p.id">
               <td>
-                <span v-if="p.is_grand" class="grand-star" title="Grand prize">
+                <span v-if="p.isGrand" class="grand-star" title="Grand prize">
                   <font-awesome-icon :icon="['fad', 'trophy']" />
                 </span>
                 {{ p.name }}
               </td>
               <td class="ta-center">
-                <BallSwatch :color="p.ball_color" />
+                <BallSwatch :color="p.ballColor" />
               </td>
               <td class="ta-right">{{ p.rate }}</td>
               <td class="ta-right text-muted">{{ ratePct(p) }}</td>
@@ -344,9 +343,9 @@ function toggleClosed(): void {
           :default-sort="linkSort"
           @update:view="linkView = $event"
         >
-          <template #cell-draws_used="{ row }">{{ row.draws_used }}/{{ row.max_draws }}</template>
-          <template #cell-created_at="{ row }">
-            <span class="text-sm">{{ created(row.created_at) }}</span>
+          <template #cell-drawsUsed="{ row }">{{ row.drawsUsed }}/{{ row.maxDraws }}</template>
+          <template #cell-createdAt="{ row }">
+            <span class="text-sm">{{ created(row.createdAt) }}</span>
           </template>
           <template #cell-actions="{ row }">
             <div class="row-actions">
@@ -360,7 +359,7 @@ function toggleClosed(): void {
                 <font-awesome-icon :icon="['fas', 'link']" />
               </button>
               <button
-                v-if="row.stamp_card_token"
+                v-if="row.stampCardToken"
                 type="button"
                 class="btn-view btn-sm"
                 aria-label="Copy stamp card link"
@@ -372,14 +371,14 @@ function toggleClosed(): void {
               <button
                 type="button"
                 class="btn-danger btn-sm"
-                :disabled="row.draws_used > 0 && isOpen"
+                :disabled="row.drawsUsed > 0 && isOpen"
                 :aria-label="
-                  row.draws_used > 0 && isOpen
+                  row.drawsUsed > 0 && isOpen
                     ? 'Cannot delete - player has drawn (garapon is open)'
                     : 'Delete drawing link'
                 "
                 :title="
-                  row.draws_used > 0 && isOpen
+                  row.drawsUsed > 0 && isOpen
                     ? 'Player has already drawn - close the garapon to delete this link (its draws stay in the log)'
                     : 'Delete drawing link'
                 "
@@ -423,7 +422,7 @@ function toggleClosed(): void {
           <template #filters>
             <select v-model="logPrizeFilter" aria-label="Filter by prize" style="width: 170px">
               <option value="">All prizes</option>
-              <option v-for="f in logView.facets.prize_name" :key="f.value" :value="f.value">
+              <option v-for="f in logView.facets.prizeName" :key="f.value" :value="f.value">
                 {{ f.value }} ({{ f.count }})
               </option>
             </select>
@@ -454,13 +453,13 @@ function toggleClosed(): void {
           resizable
           @update:view="logView = $event"
         >
-          <template #cell-prize_name="{ row }">
+          <template #cell-prizeName="{ row }">
             <span class="prize-cell"
-              ><BallSwatch :color="row.ball_color" size="sm" /> {{ row.prize_name }}</span
+              ><BallSwatch :color="row.ballColor" size="sm" /> {{ row.prizeName }}</span
             >
           </template>
-          <template #cell-drawn_at="{ row }">
-            <span class="text-sm text-muted">{{ created(row.drawn_at) }}</span>
+          <template #cell-drawnAt="{ row }">
+            <span class="text-sm text-muted">{{ created(row.drawnAt) }}</span>
           </template>
           <template #empty>
             <EmptyState text="No draws match your search." />
@@ -507,16 +506,16 @@ function toggleClosed(): void {
             @keydown.space.prevent="openGarapon(g)"
           >
             <img
-              v-if="g.grand_prize_image"
-              :src="assetUrl(g.grand_prize_image)"
+              v-if="g.grandPrizeImage"
+              :src="assetUrl(g.grandPrizeImage)"
               class="media-card-image"
               alt="Grand prize"
             />
             <div class="media-card-body">
               <h3>{{ g.title }}</h3>
               <p class="text-muted text-sm">
-                {{ g.player_count || 0 }} drawing{{ g.player_count === 1 ? '' : 's' }} -
-                {{ g.draw_count || 0 }} draw{{ g.draw_count === 1 ? '' : 's' }}
+                {{ g.playerCount || 0 }} drawing{{ g.playerCount === 1 ? '' : 's' }} -
+                {{ g.drawCount || 0 }} draw{{ g.drawCount === 1 ? '' : 's' }}
               </p>
               <!-- @click.stop so deleting doesn't also open the detail view. -->
               <div class="garapon-card-actions">
@@ -563,10 +562,10 @@ function toggleClosed(): void {
             :page-size="10"
             @update:view="closedView = $event"
           >
-            <template #cell-player_count="{ row }">{{ row.player_count || 0 }}</template>
-            <template #cell-draw_count="{ row }">{{ row.draw_count || 0 }}</template>
-            <template #cell-created_at="{ row }">
-              <span class="text-sm">{{ created(row.created_at) }}</span>
+            <template #cell-playerCount="{ row }">{{ row.playerCount || 0 }}</template>
+            <template #cell-drawCount="{ row }">{{ row.drawCount || 0 }}</template>
+            <template #cell-createdAt="{ row }">
+              <span class="text-sm">{{ created(row.createdAt) }}</span>
             </template>
             <template #cell-actions="{ row }">
               <div class="row-actions">

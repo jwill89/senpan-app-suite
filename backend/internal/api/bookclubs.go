@@ -18,8 +18,10 @@ import (
 	"app-suite/internal/bookclubs"
 	"app-suite/internal/db"
 	"app-suite/internal/discord"
+	"app-suite/internal/media"
 	"app-suite/internal/permissions"
 	"app-suite/internal/settings"
+	"app-suite/internal/uploads"
 )
 
 // Book clubs: each club keeps named reading lists of titles, published to the club's
@@ -34,6 +36,9 @@ const (
 	noSuchReadingList = "There is no such reading list."
 	noSuchItem        = "There is no such reading-list item."
 )
+
+// maxCoverBytes bounds a cover upload.
+const maxCoverBytes = 5 << 20
 
 // publishPause is the wait between the posts of a published list, to stay under
 // Discord's rate limit.
@@ -102,6 +107,16 @@ type ReadingListItemInput struct {
 	Sources    []ReadingListSource `json:"sources" maxItems:"50" nullable:"false" doc:"Where to read it. Rows with no address are dropped."`
 }
 
+// BookClubCoverForm is a cover picture.
+type BookClubCoverForm struct {
+	Image huma.FormFile `form:"image" contentType:"image/*" required:"false" doc:"A JPEG, PNG, GIF or WebP of at most 5 MB, judged from its bytes. One whose name is already used replaces it. A JPEG or PNG is saved again without its metadata."`
+}
+
+// BookClubCover is an uploaded cover.
+type BookClubCover struct {
+	URL string `json:"url" doc:"Its absolute address, to store as an item's cover."`
+}
+
 // PublishResult says how many titles were posted.
 type PublishResult struct {
 	Published int64 `json:"published" doc:"How many items were posted, one embed each."`
@@ -149,6 +164,16 @@ type readingListItemSaveInput struct {
 	ID     int64  `path:"id" doc:"The reading list's id."`
 	ItemID int64  `path:"itemId" doc:"The item's id."`
 	Body   ReadingListItemInput
+}
+
+type bookClubCoverInput struct {
+	Club    string `path:"club" doc:"The book club's slug."`
+	RawBody huma.MultipartFormFiles[BookClubCoverForm]
+}
+
+type bookClubCoverOutput struct {
+	Status int
+	Body   BookClubCover
 }
 
 type bookClubWebhookInput struct {
@@ -237,6 +262,12 @@ func (h handlers) registerBookClubs(api huma.API) {
 		Tags: bookClubTags, Security: secured, Middlewares: club,
 		Errors: append(append(guarded, http.StatusRequestTimeout, http.StatusConflict), discordErrors...),
 	}, h.publishReadingList)
+	huma.Register(api, huma.Operation{
+		OperationID: "upload-book-club-cover", Method: http.MethodPost, Path: base + "/covers",
+		Summary: "Upload a cover picture", Description: "Stored under its uploaded name. Nothing on a reading list changes until an item is saved with the address.",
+		Tags: bookClubTags, DefaultStatus: http.StatusCreated, Security: secured, Middlewares: club, MaxBodyBytes: maxCoverBytes + multipartOverhead,
+		Errors: slices.Concat(guarded, []int{http.StatusRequestEntityTooLarge, http.StatusUnprocessableEntity}),
+	}, h.uploadBookClubCover)
 	huma.Register(api, huma.Operation{
 		OperationID: "get-book-club-webhook", Method: http.MethodGet, Path: base + "/webhook",
 		Summary: "The Discord webhook a club's lists are published to", Tags: bookClubTags,
@@ -420,9 +451,23 @@ func (h handlers) deleteReadingList(ctx context.Context, in *readingListInput) (
 	return nil, nil
 }
 
+// removeUnusedCovers deletes each uploaded cover file that no reading-list item uses.
+// Covers keep their uploaded name, so two items can share one file; this is called
+// after the rows that held them are gone, so the count reflects only the items that
+// remain. A cover from AniList is not an upload and is left alone.
 func (h handlers) removeUnusedCovers(ctx context.Context, urls ...string) {
-	if h.RemoveUnusedCovers != nil {
-		h.RemoveUnusedCovers(ctx, urls...)
+	if h.Images == nil {
+		return
+	}
+	q := h.read()
+	for _, cover := range urls {
+		if cover == "" {
+			continue
+		}
+		if n, err := q.CountReadingListItemsByCover(ctx, cover); err != nil || n > 0 {
+			continue
+		}
+		h.Images.RemoveCover(cover)
 	}
 }
 
@@ -641,4 +686,31 @@ func (h handlers) aniListProblem(err error) error {
 	default:
 		return huma.Error500InternalServerError("AniList refused the lookup: " + ae.Message + ".")
 	}
+}
+
+func (h handlers) uploadBookClubCover(ctx context.Context, in *bookClubCoverInput) (*bookClubCoverOutput, error) {
+	f := in.RawBody.Data().Image
+	if !f.IsSet {
+		return nil, fieldProblem("body.image", nil, "Choose a picture to upload.")
+	}
+	defer func() { _ = f.Close() }() // read in full below; nothing to report on close
+
+	name, ok := uploads.SafeName(f.Filename, uploads.IsRasterExt)
+	if !ok {
+		return nil, fieldProblem("body.image", f.Filename, "Only jpg, png, webp, and gif images are allowed")
+	}
+	data, err := readUpload(f)
+	if err != nil {
+		return nil, h.fail("read a cover", err)
+	}
+	stored, reason := h.checkPicture(data)
+	if reason != "" {
+		return nil, fieldProblem("body.image", f.Filename, "That file does not appear to be a valid image")
+	}
+	if err := h.Images.SaveCover(name, stored); err != nil {
+		return nil, h.fail("save a cover", err)
+	}
+	return &bookClubCoverOutput{Status: http.StatusCreated, Body: BookClubCover{
+		URL: imageURL(requestOf(ctx).Site, media.CoverDir, name),
+	}}, nil
 }

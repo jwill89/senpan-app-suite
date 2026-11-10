@@ -293,16 +293,15 @@ func TestTimestampsInTheStoredForm(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// A time from a client, in the browser's milliseconds, is written in the
-	// stored form.
-	if err := s.SetRallyCardCompleted(ctx, card, "2026-01-02T03:04:05.000Z"); err != nil {
+	completedAt := stored
+	if err := q.SetRallyCardCompleted(ctx, db.SetRallyCardCompletedParams{CompletedAt: &completedAt, ID: card}); err != nil {
 		t.Fatal(err)
 	}
-	c, err := s.GetRallyCardByID(ctx, card)
+	c, err := q.GetRallyCard(ctx, card)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if c == nil || c.CompletedAt != stored || c.CreatedAt != stored {
+	if c.CompletedAt == nil || *c.CompletedAt != stored || c.CreatedAt == nil || *c.CreatedAt != stored {
 		t.Errorf("rally card = %+v, want completed_at and created_at %q", c, stored)
 	}
 

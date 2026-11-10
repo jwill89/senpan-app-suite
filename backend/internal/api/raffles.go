@@ -662,7 +662,7 @@ func (h handlers) resolveStall(ctx context.Context, p *db.CreateRaffleParams) er
 		p.OccupantID = sql.NullInt64{}
 		return nil
 	}
-	m, err := h.Store.GetFestivalMap(ctx, p.FestivalMapID.Int64)
+	m, err := h.findFestivalMap(ctx, h.read(), p.FestivalMapID.Int64)
 	if err != nil {
 		return h.fail("read a festival for a raffle", err)
 	}

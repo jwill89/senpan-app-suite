@@ -412,6 +412,26 @@ export interface paths {
     patch?: never
     trace?: never
   }
+  '/book-clubs/{club}/covers': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Upload a cover picture
+     * @description Stored under its uploaded name. Nothing on a reading list changes until an item is saved with the address.
+     */
+    post: operations['upload-book-club-cover']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
   '/book-clubs/{club}/lookup': {
     parameters: {
       query?: never
@@ -712,6 +732,88 @@ export interface paths {
     patch?: never
     trace?: never
   }
+  '/carrd-projects': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /** The Carrd projects */
+    get: operations['list-carrd-projects']
+    put?: never
+    /** Make a project */
+    post: operations['create-carrd-project']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/carrd-projects/{folder}': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    post?: never
+    /**
+     * Delete a project
+     * @description Its folder and everything in it are deleted.
+     */
+    delete: operations['delete-carrd-project']
+    options?: never
+    head?: never
+    /** Retitle a project or rename its folder */
+    patch: operations['update-carrd-project']
+    trace?: never
+  }
+  '/carrd-projects/{folder}/files': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /** A folder of a project */
+    get: operations['list-carrd-files']
+    put?: never
+    /**
+     * Add files to a project folder
+     * @description Each file is judged on its own, so a batch with some bad files still saves the good ones; the answer lists both. If none could be saved the answer is a 422 naming each file.
+     */
+    post: operations['upload-carrd-files']
+    /** Delete a file */
+    delete: operations['delete-carrd-file']
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/carrd-projects/{folder}/folders': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /** Make a sub-folder */
+    post: operations['create-carrd-folder']
+    /**
+     * Delete a sub-folder
+     * @description It and everything in it are deleted. A project's root is deleted with the project.
+     */
+    delete: operations['delete-carrd-folder']
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
   '/config': {
     parameters: {
       query?: never
@@ -726,6 +828,226 @@ export interface paths {
     get: operations['get-config']
     put?: never
     post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/ema-boards': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /** Every plaque board */
+    get: operations['list-ema-boards']
+    put?: never
+    /**
+     * Make a plaque board
+     * @description It starts open.
+     */
+    post: operations['create-ema-board']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/ema-boards/{id}': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /** One plaque board with its days */
+    get: operations['get-ema-board']
+    /**
+     * Replace a plaque board's editable fields
+     * @description Its status is kept. Its days are reconciled by id, so a plaque stays attached to its day across an edit.
+     */
+    put: operations['update-ema-board']
+    post?: never
+    /**
+     * Delete a plaque board
+     * @description Its days and plaques go with it, and so do the pictures still waiting for review.
+     */
+    delete: operations['delete-ema-board']
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/ema-boards/{id}/close': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Close a plaque board
+     * @description It takes no plaques and leaves the festival page; its review queue stays workable.
+     */
+    post: operations['close-ema-board']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/ema-boards/{id}/plaques': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * A board's plaques
+     * @description The review queue and the record.
+     */
+    get: operations['list-ema-plaques']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/ema-boards/{id}/plaques/{plaqueId}/approve': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Approve a site plaque
+     * @description Claims the plaque so a second approval is refused, posts it to its day's Discord webhook, records it as posted and deletes its picture. A failed post hands it back for another try; when Discord didn't answer, the plaque may or may not have posted and the channel should be checked first.
+     */
+    post: operations['approve-ema-plaque']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/ema-boards/{id}/plaques/{plaqueId}/reject': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Reject a site plaque
+     * @description Deletes its picture and frees its author to send another for the same day.
+     */
+    post: operations['reject-ema-plaque']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/ema-boards/{id}/reopen': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /** Open a closed plaque board again */
+    post: operations['reopen-ema-board']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/ema-requests': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * The artist's queue
+     * @description The requests for the artist across every board.
+     */
+    get: operations['list-ema-requests']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/ema-requests/{id}/complete': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Mark an artist request done
+     * @description For a plaque the artist posts by hand.
+     */
+    post: operations['complete-ema-request']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/ema-requests/{id}/post': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Post the artist's finished plaque
+     * @description Sends the picture to the request's day webhook, crediting the visitor and the artist, and marks the request complete. There is no review, and nothing is kept: the picture is read into memory, posted and dropped. Claimed like an approval, so a double click can't post twice.
+     */
+    post: operations['post-ema-request']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/ema-requests/{id}/reopen': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /** Reopen a finished artist request */
+    post: operations['reopen-ema-request']
     delete?: never
     options?: never
     head?: never
@@ -750,6 +1072,259 @@ export interface paths {
     options?: never
     head?: never
     patch?: never
+    trace?: never
+  }
+  '/festival-maps': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * Every festival map
+     * @description Also open to the staff of the Ema page, whose board editor picks its festival from this list.
+     */
+    get: operations['list-festival-maps']
+    put?: never
+    /**
+     * Make a festival map
+     * @description It starts in progress; publishing is a separate step.
+     */
+    post: operations['create-festival-map']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/festival-maps/public': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /** The published festival maps */
+    get: operations['list-public-festival-maps']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/festival-maps/public/{idOrSlug}': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * One published festival map
+     * @description Found by its shortcode, else its numeric id, so a link posted before a shortcode existed keeps working. Each pitch is resolved for a visitor: the affiliate's card, whether it is open now, its stamp-rally badge and a raffle running there. A map that isn't published is not found.
+     */
+    get: operations['get-public-festival-map']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/festival-maps/{id}': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /** One festival map with its pitches */
+    get: operations['get-festival-map']
+    /**
+     * Replace a festival map's editable fields
+     * @description Its status is kept. The pitches are reconciled by id: kept ids are updated in place, 0 adds one, and one left out is deleted. A pitch or occupant id that isn't on this map is a 409, since the editor is out of date; nothing is saved.
+     */
+    put: operations['update-festival-map']
+    post?: never
+    /**
+     * Delete a festival map
+     * @description Its pitches go with it. The stamp rallies and raffles filed under it stay, unlinked, and the stamps that named its occupants fall back to their affiliates. Its plaque board is deleted with the plaques still waiting for review.
+     */
+    delete: operations['delete-festival-map']
+    options?: never
+    head?: never
+    /**
+     * Publish, close or reopen a festival map
+     * @description Publishing a map with no base image is a 409: the pitches are positioned as a share of that image.
+     */
+    patch: operations['change-festival-map']
+    trace?: never
+  }
+  '/festivals/{idOrSlug}/dashboard': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * A participant's standing at a festival
+     * @description A POST so neither the tokens nor the name reach a URL or the access log. A token that belongs to a different festival, or to nothing, is ignored: a phone that has been to two festivals holds both. A card's completion that has just come due is recorded. 120 reads from one address in ten minutes (429, with Retry-After).
+     */
+    post: operations['read-festival-dashboard']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/festivals/{idOrSlug}/ema-plaques': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Send a plaque designed on the site
+     * @description Held for staff review. One per person per day. Ten tries from one address in ten minutes, made or not, counted before anything else (429, with Retry-After).
+     */
+    post: operations['submit-ema-plaque']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/festivals/{idOrSlug}/ema-requests': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Ask the artist for a plaque
+     * @description One per person per day, within the day's limit. Ten tries from one address in ten minutes, made or not, counted before anything else (429, with Retry-After).
+     */
+    post: operations['request-ema-plaque']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/font-files/{name}': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    post?: never
+    /** Delete a font file */
+    delete: operations['delete-font-file']
+    options?: never
+    head?: never
+    /**
+     * Rename a font file
+     * @description A file of the same base name is another format of the same font. Its settings follow it when the rename empties its old font.
+     */
+    patch: operations['rename-font-file']
+    trace?: never
+  }
+  '/fonts': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /** The uploaded fonts */
+    get: operations['list-fonts']
+    put?: never
+    /**
+     * Upload font files
+     * @description Each file is judged on its own. A name already there is skipped, so a font in use is never overwritten. A font with no WOFF2 gets one converted; if that fails the upload stays and a warning says so. If none could be saved the answer is a 422 naming each file.
+     */
+    post: operations['upload-fonts']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/fonts/pub/f/{token}': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * A font file
+     * @description The font's bytes, for a token from the kit or the list. This app's own pages may always load it; an outside site only when the font's list names it, by Origin or, with none, by Referer. Ranges and conditional requests are answered. Kept private for a week, the length of a token's validity.
+     */
+    get: operations['get-font-file']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/fonts/pub/kit.css': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * The font stylesheet outside sites embed
+     * @description @font-face rules for the fonts the requesting site (by its Referer) is allowed to load, every font for this app's own pages. Sources are relative (f/<token>) so they resolve on the host that served it. Kept private for five minutes, and varied by Referer, since it differs by site.
+     */
+    get: operations['get-font-kit']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/fonts/{base}': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    post?: never
+    /**
+     * Delete a font
+     * @description Every file, the converted copy and the settings of the font are deleted.
+     */
+    delete: operations['delete-font']
+    options?: never
+    head?: never
+    /** Edit a font's family, served format or allowed sites */
+    patch: operations['update-font']
     trace?: never
   }
   '/game': {
@@ -871,6 +1446,269 @@ export interface paths {
      */
     post: operations['send-yoever']
     delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/garapon-players/{token}': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * What a drawing link opens
+     * @description Anyone holding the token: the garapon without its odds, the link's draws left, and its own draw history. A closed garapon still shows.
+     */
+    get: operations['get-garapon-player']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/garapon-players/{token}/draw': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Draw once
+     * @description The server checks that the garapon is open and the link has draws left, picks the prize by its rate and records the draw in one step, so neither the odds nor the allowance can be bent. Twenty tries from one address in ten minutes, made or not, counted before the token is looked up (429, with Retry-After).
+     */
+    post: operations['draw-garapon']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/garapons': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /** Every garapon */
+    get: operations['list-garapons']
+    put?: never
+    /**
+     * Make a garapon
+     * @description It starts open.
+     */
+    post: operations['create-garapon']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/garapons/{id}': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /** One garapon with its drawing links and draw log */
+    get: operations['get-garapon']
+    /**
+     * Replace a garapon's editable fields
+     * @description Its status is kept. Its prizes are replaced; the draws already made keep the names they were won under.
+     */
+    put: operations['update-garapon']
+    post?: never
+    /**
+     * Delete a garapon
+     * @description Its prizes, drawing links and draws go with it. Its picture stays in the image library.
+     */
+    delete: operations['delete-garapon']
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/garapons/{id}/close': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Close a garapon
+     * @description It takes no more draws.
+     */
+    post: operations['close-garapon']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/garapons/{id}/players': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Issue a drawing link
+     * @description Works on a closed garapon too. When the garapon serves an open stamp rally, the player is issued a card in it as well, with a token of its own.
+     */
+    post: operations['create-garapon-player']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/garapons/{id}/players/{playerId}': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    post?: never
+    /**
+     * Delete a drawing link
+     * @description While the garapon is open a link that has drawn can't be deleted (409); on a closed one any link can, and its draws stay in the log. The stamp card issued with the link goes with it, unless it has collected stamps in a rally still open.
+     */
+    delete: operations['delete-garapon-player']
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/garapons/{id}/reopen': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /** Open a closed garapon again */
+    post: operations['reopen-garapon']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/google-fonts': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * The Google Fonts families
+     * @description For the plaque designer's font picker. The server reads the list with its own key, which stays secret, and keeps it for twelve hours.
+     */
+    get: operations['list-google-fonts']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/image-categories': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /** The image library's categories */
+    get: operations['list-image-categories']
+    put?: never
+    /**
+     * Make a category
+     * @description The folders bookclub, announcements and ema_plaques belong to other pages and can't be made.
+     */
+    post: operations['create-image-category']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/image-categories/{dir}': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    post?: never
+    /**
+     * Delete a category
+     * @description Its folder and every picture in it are deleted.
+     */
+    delete: operations['delete-image-category']
+    options?: never
+    head?: never
+    /** Rename a category or move its folder */
+    patch: operations['update-image-category']
+    trace?: never
+  }
+  '/image-categories/{dir}/images': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /** A category's pictures */
+    get: operations['list-images']
+    put?: never
+    /**
+     * Add pictures to a category
+     * @description Each file is judged on its own, so a batch with some bad files still saves the good ones; the answer lists both. If none could be saved the answer is a 422 naming each file. A picture over 40 megapixels or 16384 pixels on a side is refused.
+     */
+    post: operations['upload-images']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/image-categories/{dir}/images/{name}': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    post?: never
+    /** Delete a picture */
+    delete: operations['delete-image']
     options?: never
     head?: never
     patch?: never
@@ -1551,6 +2389,266 @@ export interface paths {
     options?: never
     head?: never
     patch?: never
+    trace?: never
+  }
+  '/stamp-cards/lookup': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Find my cards
+     * @description For someone who lost their link: the cards held under the whole name and world, ignoring case, in open rallies. A miss is an empty list, never a 404. It gives the card's token and the draws left on its drawing link, never the drawing token. Fifteen tries from one address in ten minutes, with the sign-ups (429, with Retry-After).
+     */
+    post: operations['look-up-stamp-cards']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/stamp-cards/{token}': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * A participant's card
+     * @description Anyone holding the token. Without the stamps' passwords, and with each prize shown only once the card is complete. A card found complete here is recorded as complete.
+     */
+    get: operations['get-stamp-card']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/stamp-cards/{token}/stamp': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Collect a stamp with its password
+     * @description The stamp whose password matches. A stall that is closed, paused, outside its hours or in a closed rally, or a stamp already collected, is a 409. A password matching no stamp is a 422 and counts against ten wrong passwords from one address in ten minutes (429, with Retry-After), checked first.
+     */
+    post: operations['stamp-stamp-card']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/stamp-rallies': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /** Every stamp rally */
+    get: operations['list-stamp-rallies']
+    put?: never
+    /**
+     * Make a stamp rally
+     * @description It starts open, with the stamps and prizes sent.
+     */
+    post: operations['create-stamp-rally']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/stamp-rallies/public': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * The rallies anyone may sign up for
+     * @description Open rallies that took up public sign-up, inside their window. Nothing about their cards or participants.
+     */
+    get: operations['list-open-stamp-rallies']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/stamp-rallies/{id}': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /** One rally with its stamps, prizes and cards */
+    get: operations['get-stamp-rally']
+    /**
+     * Replace a rally's editable fields, stamps and prizes
+     * @description Its status is kept. A stamp that keeps its id keeps what was collected on it; one left out is deleted, its log rows staying. A stamp tied to a stall of the rally's festival takes its affiliate from that stall.
+     */
+    put: operations['update-stamp-rally']
+    post?: never
+    /**
+     * Delete a rally
+     * @description Its stamps, prizes, cards and log go with it; a garapon that served it is unlinked.
+     */
+    delete: operations['delete-stamp-rally']
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/stamp-rallies/{id}/cards': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Issue a card
+     * @description Staff may issue a card to a name already holding one.
+     */
+    post: operations['create-stamp-rally-card']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/stamp-rallies/{id}/cards/{cardId}': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    post?: never
+    /**
+     * Delete a card
+     * @description A card that has collected stamps can't be deleted while the rally is open (409); once it is closed any card can, and the stamp log is kept.
+     */
+    delete: operations['delete-stamp-rally-card']
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/stamp-rallies/{id}/close': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Close a rally
+     * @description It takes no more stamps or sign-ups, and any card can be deleted.
+     */
+    post: operations['close-stamp-rally']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/stamp-rallies/{id}/logs': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /** Every stamp collected in a rally */
+    get: operations['list-stamp-rally-logs']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/stamp-rallies/{id}/reopen': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /** Open a closed rally again */
+    post: operations['reopen-stamp-rally']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/stamp-rallies/{id}/sign-up': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Sign up for a card
+     * @description Anyone, for a rally that took up public sign-up. A rally that doesn't exist and one that didn't are both 404, so it can't be used to find rallies staff hand cards out for privately. A rally with an open garapon also issues a drawing link, its token given only in this answer. One card per character and world (409). Fifteen tries from one address in ten minutes, sign-ups and lookups together, made or not (429, with Retry-After).
+     */
+    post: operations['sign-up-for-stamp-rally']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/stamp-rallies/{id}/stamps/{stampId}': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    /**
+     * Pause or resume a stamp
+     * @description Without saving the whole rally.
+     */
+    patch: operations['update-stamp-rally-stamp']
     trace?: never
   }
   '/styles': {
@@ -2322,6 +3420,10 @@ export interface components {
       /** @description The game's details (Markdown); empty for none, and in a preview. */
       gameDetails: string
     }
+    BookClubCover: {
+      /** @description Its absolute address, to store as an item's cover. */
+      url: string
+    }
     Card: {
       /** @description Its numbers, row by row from the top: column B holds 1-15, I 16-30, N 31-45, G 46-60 and O 61-75, and the centre is 0, the free space. */
       boardData: number[][]
@@ -2465,6 +3567,88 @@ export interface components {
        */
       type: 'cards_changed'
     }
+    CarrdFile: {
+      /**
+       * Format: date-time
+       * @description When it last changed, RFC 3339 in UTC.
+       */
+      modified: string
+      /** @description The file's name. */
+      name: string
+      /**
+       * Format: int64
+       * @description Its size in bytes.
+       */
+      size: number
+    }
+    CarrdFolder: {
+      /** @description Its media files, by name. */
+      files: components['schemas']['CarrdFile'][]
+      /** @description The project's folder name. */
+      folder: string
+      /** @description Its sub-folders' names, by name. */
+      folders: string[]
+      /** @description The folder within the project, empty for its root. */
+      path: string
+    }
+    CarrdProject: {
+      /**
+       * Format: int64
+       * @description The media files in it, in sub-folders too.
+       */
+      fileCount: number
+      /** @description Its folder name, which is in the address of every file: lowercase letters, digits and hyphens. */
+      folder: string
+      /**
+       * Format: date-time
+       * @description When the folder last changed, RFC 3339 in UTC.
+       */
+      modified: string
+      /**
+       * Format: int64
+       * @description The sub-folders in it, nested ones too.
+       */
+      subfolderCount: number
+      /** @description What staff call it; unique among projects. */
+      title: string
+      /**
+       * Format: int64
+       * @description The media files' combined size in bytes.
+       */
+      totalSize: number
+    }
+    CarrdProjectChanges: {
+      /** @description A new folder name; the folder is renamed, which changes every file's address. */
+      folder?: string
+      /** @description A new title. */
+      title?: string
+    }
+    CarrdProjectInput: {
+      /** @description Its folder name, normalized to lowercase letters, digits and hyphens. Left out, it is made from the title. */
+      folder?: string
+      /** @description What staff call it; unique among projects. */
+      title: string
+    }
+    CarrdProjectList: {
+      /** @description The projects, by title. */
+      projects: components['schemas']['CarrdProject'][]
+    }
+    CarrdSubfolder: {
+      /** @description The name it got. */
+      name: string
+    }
+    CarrdSubfolderInput: {
+      /** @description Its name, normalized to lowercase letters, digits and hyphens. */
+      name: string
+      /** @description The folder to make it in, within the project; empty for the project's root. */
+      path?: string
+    }
+    CarrdUpload: {
+      /** @description The files that were not, each with why. */
+      skipped: components['schemas']['SkippedUpload'][]
+      /** @description The names saved. */
+      uploaded: string[]
+    }
     ChangePasswordInputBody: {
       /** @description The account's password now. */
       currentPassword: string
@@ -2579,6 +3763,211 @@ export interface components {
        */
       number: number
     }
+    EmaBoard: {
+      /** @description Whether visitors may ask the artist for a plaque. */
+      allowArtist: boolean
+      /** @description Whether visitors may make a plaque anywhere and post it themselves. */
+      allowSelf: boolean
+      /** @description Whether visitors may design a plaque on the site, for staff to review. */
+      allowSite: boolean
+      /** @description The artist's name. */
+      artistName: string
+      /**
+       * Format: date-time
+       * @description When it was made, RFC 3339 in UTC.
+       */
+      createdAt: string
+      /** @description Where visitors post their own plaques; empty for none. */
+      discordLink: string
+      /**
+       * Format: int64
+       * @description The festival it belongs to; a festival has one board.
+       */
+      festivalMapId: number
+      /** @description That festival's title. */
+      festivalMapName: string
+      /**
+       * Format: int64
+       * @description The board's id.
+       */
+      id: number
+      /** @description How to make and post a plaque yourself (Markdown). */
+      instructions: string
+      /**
+       * Format: int64
+       * @description Site plaques waiting for review.
+       */
+      pendingCount: number
+      /**
+       * Format: int64
+       * @description Artist requests not yet done.
+       */
+      requestedCount: number
+      /**
+       * @description A closed board takes no plaques and leaves the festival page; its queue stays workable.
+       * @enum {string}
+       */
+      status: 'open' | 'closed'
+      /** @description The blank plaque to download or design on: a path from the image library. */
+      templateImage: string
+      /** @description The board's title. */
+      title: string
+      /** @description Its days in order. Empty in a list. */
+      windows: components['schemas']['EmaWindow'][]
+    }
+    EmaBoardInput: {
+      /** @description Whether visitors may ask the artist for a plaque. At least one of the three ways is needed. */
+      allowArtist: boolean
+      /** @description Whether visitors may make a plaque anywhere and post it themselves. */
+      allowSelf: boolean
+      /** @description Whether visitors may design a plaque on the site. */
+      allowSite: boolean
+      /** @description The artist's name; empty for Tara. */
+      artistName: string
+      /** @description Where visitors post their own plaques: a web address; empty for none. */
+      discordLink: string
+      /**
+       * Format: int64
+       * @description The festival it belongs to. One that doesn't exist is refused, and so is one that already has a board.
+       */
+      festivalMapId: number
+      /** @description How to make and post a plaque yourself (Markdown). */
+      instructions: string
+      /** @description The blank plaque: a path from the image library. Needed when visitors may make a plaque themselves or on the site. */
+      templateImage: string
+      /** @description The board's title. */
+      title: string
+      /** @description The days it takes plaques on, at least one. */
+      windows: components['schemas']['EmaWindowInput'][]
+    }
+    EmaBoardList: {
+      /** @description Newest first, with the counts of what waits for staff and the artist, and without their days. */
+      boards: components['schemas']['EmaBoard'][]
+    }
+    EmaPlaque: {
+      /**
+       * Format: int64
+       * @description The board it was made on.
+       */
+      boardId: number
+      /** @description The visitor's character. */
+      characterName: string
+      /**
+       * Format: date-time
+       * @description When it was made, RFC 3339 in UTC.
+       */
+      createdAt: string
+      /** @description What an artist request asks for; empty for a site plaque. */
+      description: string
+      /** @description The festival it belongs to. */
+      festivalMapName: string
+      /**
+       * Format: int64
+       * @description The plaque's id.
+       */
+      id: number
+      /** @description A site plaque's picture while it waits; empty once it is posted or rejected. */
+      image: string
+      /**
+       * @description site: designed on the site for review. artist: a request for the artist.
+       * @enum {string}
+       */
+      kind: 'site' | 'artist'
+      /** @description When, RFC 3339 in UTC; null while it waits. */
+      reviewedAt: string | null
+      /** @description Who reviewed or finished it. */
+      reviewedBy: string
+      /**
+       * @description pending: awaiting review. posting: being posted. posted and rejected end a site plaque. requested and complete are an artist request's.
+       * @enum {string}
+       */
+      status: 'pending' | 'posting' | 'posted' | 'rejected' | 'requested' | 'complete'
+      /**
+       * Format: int64
+       * @description The day it was made for; null once that day is deleted.
+       */
+      windowId: number | null
+      /** @description That day's label, as it was when the plaque was made. */
+      windowLabel: string
+      /** @description Their home world. */
+      world: string
+    }
+    EmaPlaqueList: {
+      /** @description Newest first. */
+      plaques: components['schemas']['EmaPlaque'][]
+    }
+    EmaRequestInput: {
+      /** @description Their character. */
+      characterName: string
+      /** @description What they would like the plaque to be. */
+      description: string
+      /** @description The Cloudflare Turnstile response; needed only when the bot check is on. */
+      turnstileToken?: string
+      /** @description Their home world. */
+      world: string
+    }
+    EmaWindow: {
+      /**
+       * Format: int64
+       * @description The artist requests made for the day.
+       */
+      artistCount: number
+      /**
+       * Format: int64
+       * @description The most artist requests the day takes; 0 for no limit.
+       */
+      artistLimit: number
+      /**
+       * Format: date-time
+       * @description When it ends, RFC 3339 in UTC; the day takes plaques until then.
+       */
+      endAt: string
+      /**
+       * Format: int64
+       * @description The day's id.
+       */
+      id: number
+      /** @description What it is called, such as Day 1. */
+      label: string
+      /**
+       * Format: int64
+       * @description Its place in the board's list of days.
+       */
+      sortOrder: number
+      /**
+       * Format: date-time
+       * @description When it starts, RFC 3339 in UTC.
+       */
+      startAt: string
+      /** @description The Discord webhook the day's plaques are posted to; empty for none. Only staff see it. */
+      webhookUrl: string
+    }
+    EmaWindowInput: {
+      /**
+       * Format: int64
+       * @description The most artist requests it takes; 0 for no limit.
+       */
+      artistLimit: number
+      /**
+       * Format: date-time
+       * @description When it ends, RFC 3339; after the start. Days can't overlap.
+       */
+      endAt: string
+      /**
+       * Format: int64
+       * @description The day's id to keep it (and its plaques); 0 or left out adds one. A day left out of the save is deleted, and its plaques keep their label. An id that isn't on this board is a 409.
+       */
+      id?: number
+      /** @description What it is called; empty for Day N. */
+      label: string
+      /**
+       * Format: date-time
+       * @description When it starts, RFC 3339.
+       */
+      startAt: string
+      /** @description The Discord webhook its plaques are posted to: https, on Discord, under /api/webhooks/; empty for none. */
+      webhookUrl: string
+    }
     Empty: Record<string, never>
     EndResult: {
       /** @description True when this ended the game; false when it had already ended (another console, or the plugin, ended it first), so nothing was ended or logged. */
@@ -2629,6 +4018,375 @@ export interface components {
        * @example https://example.com/errors/example
        */
       type: string
+    }
+    EventTime: {
+      /** @description When the range ends, RFC 3339 in UTC; null for no stated end. */
+      end: string | null
+      /** @description A descriptor such as Day 1; empty for none. */
+      label: string
+      /**
+       * Format: date-time
+       * @description When the range starts, RFC 3339 in UTC.
+       */
+      start: string
+    }
+    EventTimeInput: {
+      /** @description When the range ends, RFC 3339; null or left out for no stated end. */
+      end?: string | null
+      /** @description A descriptor such as Day 1; empty or left out for none. */
+      label?: string
+      /** @description When the range starts, RFC 3339. A range with no start says nothing and is dropped. */
+      start: string
+    }
+    FestivalDashboard: {
+      /** @description Their stamp card; null when they hold none for this festival. */
+      card: components['schemas']['PublicStampCard'] | null
+      /** @description The card's token, which the visitor may not have sent when only the drawing link was. */
+      cardToken: string | null
+      /** @description The festival's open plaque board; null when it has none. */
+      ema: components['schemas']['FestivalEma'] | null
+      /** @description The garapon serving the rally; null when there is none. */
+      garapon: components['schemas']['FestivalDashboardGarapon'] | null
+      /** @description Who the visitor is: the card's participant, else the drawing link's, else the name they sent. */
+      participantName: string
+      /** @description The festival's raffles a visitor may see, newest first. */
+      raffles: components['schemas']['FestivalRaffle'][]
+      /** @description The festival's stamp rally; null when it has none that isn't closed. */
+      rally: components['schemas']['FestivalDashboardRally'] | null
+      /** @description Their home world. */
+      world: string
+    }
+    FestivalDashboardGarapon: {
+      /**
+       * Format: int64
+       * @description The draws a new drawing link carries.
+       */
+      defaultDraws: number
+      /** @description The draws made with their link, oldest first. */
+      draws: components['schemas']['PublicGaraponDraw'][]
+      /** @description The garapon. */
+      garapon: components['schemas']['PublicGarapon']
+      /** @description Whether a drawing link was issued with their card, which they don't hold. */
+      hasPairedLink: boolean
+      /**
+       * Format: int64
+       * @description The draws left on that link; never the link itself.
+       */
+      pairedDrawsLeft: number
+      /** @description The visitor's own drawing link; null when they hold none. */
+      player: components['schemas']['GaraponPlayerSummary'] | null
+    }
+    FestivalDashboardInput: {
+      /** @description The token of their stamp card. One that belongs to another festival, or to nothing, is ignored. */
+      cardToken?: string
+      /** @description Their character, to find their raffle entries and plaques when no card names them. */
+      characterName?: string
+      /** @description The token of their drawing link. One whose garapon doesn't serve this festival's rally is ignored. */
+      garaponToken?: string
+      /** @description Their home world. */
+      world?: string
+    }
+    FestivalDashboardRally: {
+      /** @description The card's background picture. */
+      cardImage: string
+      /** @description What it is about (Markdown). */
+      details: string
+      /**
+       * Format: int64
+       * @description The rally's id.
+       */
+      id: number
+      /** @description Whether anyone may sign up for a card now. */
+      signupOpen: boolean
+      /** @description The rally's title. */
+      title: string
+    }
+    FestivalEma: {
+      /** @description Whether visitors may ask the artist for a plaque. */
+      allowArtist: boolean
+      /** @description Whether visitors may make a plaque anywhere and post it themselves. */
+      allowSelf: boolean
+      /** @description Whether visitors may design a plaque on the site. */
+      allowSite: boolean
+      /** @description The artist's name. */
+      artistName: string
+      /**
+       * Format: int64
+       * @description The day taking plaques now; null when none.
+       */
+      currentWindowId: number | null
+      /** @description Where visitors post their own plaques; empty for none. */
+      discordLink: string
+      /** @description Whether the visitor already has a plaque for the day open now: one a day. */
+      hasPlaqueThisWindow: boolean
+      /**
+       * Format: int64
+       * @description The board's id.
+       */
+      id: number
+      /** @description How to make and post a plaque yourself (Markdown). */
+      instructions: string
+      /** @description The visitor's own plaques; empty when no name was sent. */
+      plaques: components['schemas']['PublicEmaPlaque'][]
+      /** @description The blank plaque. */
+      templateImage: string
+      /** @description The board's title. */
+      title: string
+      /** @description Its days in order. */
+      windows: components['schemas']['PublicEmaWindow'][]
+    }
+    FestivalMap: {
+      /** @description When it was made, RFC 3339 in UTC. */
+      createdAt: string | null
+      /** @description What it is about (Markdown). */
+      description: string
+      /**
+       * Format: int64
+       * @description The map's id.
+       */
+      id: number
+      /** @description The bare floor plan: a path from the image library. */
+      mapImage: string
+      /** @description The segment its public address uses: the shortcode, else the id. */
+      publicPath: string
+      /** @description The shortcode it is linked by; empty for none. */
+      slug: string
+      /**
+       * Format: int64
+       * @description How many pitches it has.
+       */
+      stallCount: number
+      /** @description Its pitches in draw order. Empty in a list. */
+      stalls: components['schemas']['FestivalStall'][]
+      /**
+       * @description Only a published map is public.
+       * @enum {string}
+       */
+      status: 'in_progress' | 'published' | 'closed'
+      /** @description When the festival runs. */
+      times: components['schemas']['EventTime'][]
+      /** @description The festival's title. */
+      title: string
+    }
+    FestivalMapChanges: {
+      /**
+       * @description Where the map stands. Publishing needs a base image.
+       * @enum {string}
+       */
+      status: 'in_progress' | 'published' | 'closed'
+    }
+    FestivalMapInput: {
+      /** @description What it is about (Markdown); empty for none. */
+      description: string
+      /** @description The bare floor plan: a path from the image library; empty for none. */
+      mapImage: string
+      /** @description The shortcode to link it by, folded to lowercase words joined by dashes (2-64 characters, not only digits); empty for none. */
+      slug: string
+      /** @description The pitches in draw order. Empty clears them. */
+      stalls: components['schemas']['FestivalStallInput'][]
+      /** @description When the festival runs. */
+      times: components['schemas']['EventTimeInput'][]
+      /** @description The festival's title. */
+      title: string
+    }
+    FestivalMapList: {
+      /** @description Newest first, without their pitches. */
+      maps: components['schemas']['FestivalMap'][]
+    }
+    FestivalRaffle: {
+      /** @description The visitor's own entry, on their whole name and world; null when they have none. */
+      entry: components['schemas']['RaffleLookupEntry'] | null
+      /** @description Whether the visitor is the winner. */
+      isWinner: boolean
+      /** @description The raffle. */
+      raffle: components['schemas']['Raffle']
+      /** @description Whether it can be entered now. */
+      running: boolean
+      /**
+       * Format: int64
+       * @description The tickets entered in all.
+       */
+      totalEntries: number
+      /** @description The winner once the raffle is closed; null before. */
+      winner: components['schemas']['RaffleWinner'] | null
+    }
+    FestivalStall: {
+      /** @description Its fill, #rrggbb; empty for the default of what its first occupant offers. */
+      color: string
+      /**
+       * Format: int64
+       * @description The pitch's id.
+       */
+      id: number
+      /** @description Who stands in it. */
+      occupants: components['schemas']['FestivalStallOccupant'][]
+      /** @description Where it sits on the plan, in percent of the plan's box. */
+      placement: components['schemas']['Placement']
+      /** @description The halo around it when tapped, #rrggbb; empty for the default. */
+      selectionColor: string
+      /**
+       * @description How it is drawn.
+       * @enum {string}
+       */
+      shape: 'circle' | 'rect'
+      /**
+       * Format: int64
+       * @description Its place in the plan's draw order.
+       */
+      sortOrder: number
+      /** @description Its label's color, #rrggbb; empty for the default. */
+      textColor: string
+    }
+    FestivalStallInput: {
+      /** @description Its fill, #rrggbb; anything else is dropped. */
+      color: string
+      /**
+       * Format: int64
+       * @description The pitch's id to keep it; 0 or left out adds one. A pitch left out of the save is deleted, and the stamps and raffles that named its occupants lose them. An id that isn't on this map is a 409.
+       */
+      id?: number
+      /** @description Who stands in it. A pitch left with none is dropped. */
+      occupants: components['schemas']['FestivalStallOccupantInput'][]
+      /** @description Where it sits on the plan, in percent of the plan's box; clamped. */
+      placement: components['schemas']['Placement']
+      /** @description The halo around it when tapped, #rrggbb; anything else is dropped. */
+      selectionColor: string
+      /**
+       * @description How it is drawn.
+       * @enum {string}
+       */
+      shape: 'circle' | 'rect'
+      /** @description Its label's color, #rrggbb; anything else is dropped. */
+      textColor: string
+    }
+    FestivalStallOccupant: {
+      /**
+       * Format: int64
+       * @description The affiliate it belongs to; null for the venue itself.
+       */
+      affiliateId: number | null
+      /** @description That affiliate's name; empty for none. */
+      affiliateName: string
+      /** @description What it offers (Markdown). */
+      description: string
+      /** @description A link to this occupant's page for the event; empty for none. */
+      eventCarrd: string
+      /**
+       * Format: int64
+       * @description The occupant's id.
+       */
+      id: number
+      /**
+       * Format: int64
+       * @description Its place within the pitch.
+       */
+      sortOrder: number
+      /**
+       * @description What it offers.
+       * @enum {string}
+       */
+      stallType: 'game' | 'food' | 'both' | 'other'
+      /** @description When it is here; empty for the whole festival. */
+      times: components['schemas']['EventTime'][]
+      /** @description The stall's title; empty to be named by its affiliate. */
+      title: string
+      /** @description The caption shown when stallType is other; empty for none. */
+      typeLabel: string
+    }
+    FestivalStallOccupantInput: {
+      /**
+       * Format: int64
+       * @description The affiliate it belongs to; null or left out for the venue itself.
+       */
+      affiliateId?: number | null
+      /** @description What it offers (Markdown). */
+      description: string
+      /** @description A link to this occupant's page for the event; empty for none. */
+      eventCarrd: string
+      /**
+       * Format: int64
+       * @description The occupant's id to keep it (and the stamps and raffles that name it); 0 or left out adds one. One left out of the pitch's list is deleted.
+       */
+      id?: number
+      /**
+       * @description What it offers.
+       * @enum {string}
+       */
+      stallType: 'game' | 'food' | 'both' | 'other'
+      /** @description When it is here; empty for the whole festival. */
+      times: components['schemas']['EventTimeInput'][]
+      /** @description The stall's title; empty to be named by its affiliate. A new occupant with neither a title nor an affiliate is dropped. */
+      title: string
+      /** @description The caption shown when stallType is other; empty for none. */
+      typeLabel: string
+    }
+    Font: {
+      /** @description The file name without its extension: the font's name here, and what the edit and delete operations address it by. */
+      base: string
+      /** @description The CSS font-family name the kit, the app and the header-font picker use; the base name unless set. */
+      family: string
+      /**
+       * Format: date-time
+       * @description When its newest file was changed, RFC 3339 in UTC; null for a font with no readable file.
+       */
+      modified: string | null
+      /** @description The outside sites allowed to load it, as bare origins. The app's own origin is always allowed and never listed. */
+      origins: string[]
+      /** @description The format chosen to be served, or empty for automatic (WOFF2 when there is one). */
+      serve: string
+      /** @description The token of the served format; it changes about weekly. */
+      servedToken: string
+      /** @description The format actually served. */
+      servedType: string
+      /** @description Its files and its converted copy. */
+      variants: components['schemas']['FontVariant'][]
+    }
+    FontChanges: {
+      /** @description The CSS family name. Blank resets it to the base name. It may not hold quotes, backslashes, control characters or any of { } ; < >, and no other font may have it. */
+      family?: string
+      /** @description The outside sites allowed to load the font, replacing the list. Each is an origin such as https://mysite.carrd.co, with no path. */
+      origins?: string[]
+      /** @description The format to serve: TTF, OTF, WOFF, WOFF2 or EOT, one the font has. Blank means automatic. */
+      serve?: string
+    }
+    FontFileRename: {
+      /** @description The file's name, with one of the font extensions. */
+      name: string
+    }
+    FontList: {
+      /** @description The fonts, by name. */
+      fonts: components['schemas']['Font'][]
+    }
+    FontUpload: {
+      /** @description The files that were not, each with why. A name that is already there is skipped: delete the file first. */
+      skipped: components['schemas']['SkippedUpload'][]
+      /** @description The names saved. */
+      uploaded: string[]
+      /** @description Files saved whose WOFF2 conversion failed, so an uploaded format is served for them. */
+      warnings: string[]
+    }
+    FontVariant: {
+      /** @description True for the WOFF2 copy the server made, false for an upload. */
+      converted: boolean
+      /**
+       * Format: date-time
+       * @description When it was last changed, RFC 3339 in UTC; null for a copy that can't be read.
+       */
+      modified: string | null
+      /** @description The file's name; the converted copy is named <base>.woff2. */
+      name: string
+      /**
+       * Format: int64
+       * @description Its size in bytes.
+       */
+      size: number
+      /** @description The token its public address ends in. It changes about weekly, so read it afresh and never store it. */
+      token: string
+      /**
+       * @description Its format.
+       * @enum {string}
+       */
+      type: 'TTF' | 'OTF' | 'WOFF' | 'WOFF2' | 'EOT'
     }
     FrequentWinner: {
       /** @description The player's name, as their cards gave it. */
@@ -2862,6 +4620,227 @@ export interface components {
       /** @description The ids of the cards that have won the game so far, in the order they won. Staff with the Game page alone see them: anyone else gets an empty list, as only the staff's live events carry them. */
       winners: string[]
     }
+    Garapon: {
+      /** @description When it was made, RFC 3339 in UTC. */
+      createdAt: string | null
+      /**
+       * Format: int64
+       * @description The draws a drawing link carries when nobody picks a number.
+       */
+      defaultDraws: number
+      /** @description What it is about (Markdown). */
+      details: string
+      /**
+       * Format: int64
+       * @description How many draws have been made across them.
+       */
+      drawCount: number
+      /** @description The grand prize's picture: a path from the image library; empty for none. */
+      grandPrizeImage: string
+      /**
+       * Format: int64
+       * @description The garapon's id.
+       */
+      id: number
+      /**
+       * Format: int64
+       * @description How many drawing links it has.
+       */
+      playerCount: number
+      /** @description Its prize tiers in order. Empty in a list. */
+      prizes: components['schemas']['GaraponPrize'][]
+      /**
+       * Format: int64
+       * @description The stamp rally whose sign-ups it serves; null for none. A drawing link issued for the garapon also issues a card in that rally.
+       */
+      stampRallyId: number | null
+      /** @description The linked rally's title; empty for none. */
+      stampRallyTitle: string
+      /**
+       * @description open takes draws; closed takes none and may have its players deleted.
+       * @enum {string}
+       */
+      status: 'open' | 'closed'
+      /** @description The garapon's title. */
+      title: string
+    }
+    GaraponDetail: {
+      /** @description Every draw made, newest first. */
+      draws: components['schemas']['GaraponDraw'][]
+      /** @description The garapon, with its prizes. */
+      garapon: components['schemas']['Garapon']
+      /** @description Its drawing links, oldest first. */
+      players: components['schemas']['GaraponPlayer'][]
+    }
+    GaraponDraw: {
+      /** @description The color of the ball, as it was. */
+      ballColor: string
+      /** @description When it was made, RFC 3339 in UTC. */
+      drawnAt: string | null
+      /**
+       * Format: int64
+       * @description The garapon it was made on.
+       */
+      garaponId: number
+      /**
+       * Format: int64
+       * @description The draw's id.
+       */
+      id: number
+      /**
+       * Format: int64
+       * @description The link that made it; null once the link is deleted.
+       */
+      playerId: number | null
+      /** @description The player as Character @ World, as they were when it was made. */
+      playerName: string
+      /**
+       * Format: int64
+       * @description The prize it won, which a later save of the garapon may have replaced.
+       */
+      prizeId: number | null
+      /** @description The prize, as it was when it was won. */
+      prizeName: string
+    }
+    GaraponDrawResult: {
+      /** @description What was won. */
+      draw: components['schemas']['PublicGaraponDraw']
+      /**
+       * Format: int64
+       * @description The draws made with the link, this one included.
+       */
+      drawsUsed: number
+      /**
+       * Format: int64
+       * @description The draws the link carries.
+       */
+      maxDraws: number
+    }
+    GaraponInput: {
+      /**
+       * Format: int64
+       * @description The draws a drawing link carries when nobody picks a number; 1 when left out.
+       */
+      defaultDraws?: number
+      /** @description What it is about (Markdown); empty for none. */
+      details: string
+      /** @description The grand prize's picture: a path from the image library; empty for none. */
+      grandPrizeImage: string
+      /** @description The prize tiers in order. A prize with no name is dropped; at least one must be left, and exactly one is grand (the first when none is marked). */
+      prizes: components['schemas']['GaraponPrizeInput'][]
+      /**
+       * Format: int64
+       * @description An open stamp rally to serve; null or left out for none. One that doesn't exist is refused, and so is a closed one.
+       */
+      stampRallyId?: number | null
+      /** @description The garapon's title. */
+      title: string
+    }
+    GaraponList: {
+      /** @description Newest first, each with its player and draw counts and without prizes. */
+      garapons: components['schemas']['Garapon'][]
+    }
+    GaraponPlayer: {
+      /** @description When it was issued, RFC 3339 in UTC. */
+      createdAt: string | null
+      /**
+       * Format: int64
+       * @description The draws made with it.
+       */
+      drawsUsed: number
+      /**
+       * Format: int64
+       * @description The garapon it draws from.
+       */
+      garaponId: number
+      /**
+       * Format: int64
+       * @description The link's id.
+       */
+      id: number
+      /**
+       * Format: int64
+       * @description The draws the link carries.
+       */
+      maxDraws: number
+      /** @description The character. */
+      playerName: string
+      /** @description The token of the stamp rally card issued with the link, a separate secret that can be shared; empty when the garapon serves no rally. */
+      stampCardToken: string
+      /** @description The link's token: whoever holds it can spend the draws, so it is for staff to hand to the player. */
+      token: string
+      /** @description Their home world; empty when it isn't known. */
+      world: string
+    }
+    GaraponPlayerInput: {
+      /**
+       * Format: int64
+       * @description The draws the link carries; below 1 or left out, the garapon's defaultDraws.
+       */
+      maxDraws?: number
+      /** @description The character. A name written as Name @ World with no world sent is split. */
+      playerName: string
+      /** @description Their home world; empty when staff don't know it. */
+      world?: string
+    }
+    GaraponPlayerSummary: {
+      /**
+       * Format: int64
+       * @description The draws made with it.
+       */
+      drawsUsed: number
+      /**
+       * Format: int64
+       * @description The draws the link carries.
+       */
+      maxDraws: number
+      /** @description The character. */
+      playerName: string
+      /** @description The token of the stamp card issued with the link, which opens that card; empty when there is none. */
+      stampCardToken: string
+      /** @description Their home world; empty when it isn't known. */
+      world: string
+    }
+    GaraponPrize: {
+      /** @description The color of the ball that wins it: a CSS color. */
+      ballColor: string
+      /**
+       * Format: int64
+       * @description The prize's id.
+       */
+      id: number
+      /** @description Whether it is the grand prize, the one the garapon's picture shows. Exactly one prize is. */
+      isGrand: boolean
+      /** @description The prize. */
+      name: string
+      /**
+       * Format: double
+       * @description How often it comes up, relative to the other prizes' rates; they need not total 100.
+       */
+      rate: number
+      /**
+       * Format: int64
+       * @description Its place in the garapon's prize list.
+       */
+      sortOrder: number
+    }
+    GaraponPrizeInput: {
+      /** @description The color of the ball that wins it: a CSS color; empty or left out for gray. */
+      ballColor?: string
+      /** @description Whether it is the grand prize. */
+      isGrand?: boolean
+      /** @description The prize. */
+      name: string
+      /**
+       * Format: double
+       * @description How often it comes up, relative to the other prizes' rates.
+       */
+      rate: number
+    }
+    GoogleFontList: {
+      /** @description The family names, most popular first. Empty when no API key is set or Google can't be reached. */
+      families: string[]
+    }
     Halftime: {
       /** @description Whether the automatic draws were paused for the prompt, so declining the mini-game starts them again. */
       autoPaused: boolean
@@ -2937,6 +4916,68 @@ export interface components {
       by: string
       /** @description Whether a mini-game is on. */
       minigame: boolean
+    }
+    Image: {
+      /**
+       * Format: date-time
+       * @description When it was last changed, RFC 3339 in UTC.
+       */
+      modified: string
+      /** @description The file's name. */
+      name: string
+      /** @description Its address relative to the site's root: images/<dir>/<name>. */
+      path: string
+      /**
+       * Format: int64
+       * @description Its size in bytes.
+       */
+      size: number
+      /** @description Its absolute address, which a Discord embed needs. */
+      url: string
+    }
+    ImageCategory: {
+      /** @description Its folder name: lowercase letters, digits and underscores. Pictures are served at /images/<dir>/<file>. */
+      dir: string
+      /**
+       * Format: int64
+       * @description How many pictures it holds.
+       */
+      fileCount: number
+      /** @description What staff call it. */
+      name: string
+      /**
+       * Format: int64
+       * @description Their combined size in bytes.
+       */
+      totalSize: number
+    }
+    ImageCategoryChanges: {
+      /** @description A new folder name; the folder is moved. Left out or blank, the folder stays, so every stored reference to a picture in it keeps working. */
+      dir?: string
+      /** @description A new name. */
+      name?: string
+    }
+    ImageCategoryInput: {
+      /** @description Its folder name, normalized to lowercase letters, digits and underscores. Left out, it is made from the name. */
+      dir?: string
+      /** @description What staff call it. */
+      name: string
+    }
+    ImageCategoryList: {
+      /** @description The categories, in the order they were made. */
+      categories: components['schemas']['ImageCategory'][]
+    }
+    ImageList: {
+      /** @description The category's folder name. */
+      dir: string
+      /** @description Its pictures, newest first. */
+      images: components['schemas']['Image'][]
+    }
+    ImageUpload: {
+      /** @description The files that were not, each with why. */
+      skipped: components['schemas']['SkippedUpload'][]
+      /** @description The pictures saved. */
+      uploaded: components['schemas']['Image'][]
     }
     Integrations: {
       /** @description The Google Fonts API key the header-font picker lists fonts with. Empty for none. */
@@ -3221,6 +5262,33 @@ export interface components {
        */
       type: 'ping'
     }
+    Placement: {
+      /**
+       * Format: double
+       * @description The item's height in percent of the card's. A save clamps it to 0..100 and gives 10 to one with none.
+       */
+      height: number
+      /**
+       * Format: double
+       * @description The item's turn in degrees.
+       */
+      rotation: number
+      /**
+       * Format: double
+       * @description The item's width in percent of the card's. A save clamps it to 0..100 and gives 10 to one with none.
+       */
+      width: number
+      /**
+       * Format: double
+       * @description The distance from the card's left edge, in percent of its width. A save clamps it to 0..100.
+       */
+      x: number
+      /**
+       * Format: double
+       * @description The distance from the card's top edge, in percent of its height. A save clamps it to 0..100.
+       */
+      y: number
+    }
     PlayerDrawEvent: {
       /**
        * Format: date-time
@@ -3248,6 +5316,377 @@ export interface components {
     PlayerDrawPayload: {
       /** @description The number drawn, with its place among the game's calls. */
       drawn: components['schemas']['DrawnNumber']
+    }
+    PublicEmaPlaque: {
+      /**
+       * Format: date-time
+       * @description When it was made, RFC 3339 in UTC.
+       */
+      createdAt: string
+      /** @description What an artist request asks for. */
+      description: string
+      /**
+       * Format: int64
+       * @description The plaque's id.
+       */
+      id: number
+      /** @description The visitor's own upload while it waits for review; empty once it is posted or rejected. */
+      image: string
+      /**
+       * @description site: designed on the site. artist: a request for the artist.
+       * @enum {string}
+       */
+      kind: 'site' | 'artist'
+      /**
+       * @description Where it stands.
+       * @enum {string}
+       */
+      status: 'pending' | 'posting' | 'posted' | 'rejected' | 'requested' | 'complete'
+      /**
+       * Format: int64
+       * @description The day it was made for; null once that day is deleted.
+       */
+      windowId: number | null
+      /** @description That day's label. */
+      windowLabel: string
+    }
+    PublicEmaWindow: {
+      /**
+       * Format: int64
+       * @description The artist requests it can still take; 0 when it has no limit or is full.
+       */
+      artistLeft: number
+      /**
+       * Format: int64
+       * @description The most artist requests it takes; 0 for no limit.
+       */
+      artistLimit: number
+      /**
+       * Format: date-time
+       * @description When it ends, RFC 3339 in UTC.
+       */
+      endAt: string
+      /**
+       * Format: int64
+       * @description The day's id.
+       */
+      id: number
+      /** @description Whether it is taking plaques now. */
+      isOpen: boolean
+      /** @description What it is called. */
+      label: string
+      /**
+       * Format: date-time
+       * @description When it starts, RFC 3339 in UTC.
+       */
+      startAt: string
+    }
+    PublicFestivalMap: {
+      /** @description What it is about (Markdown). */
+      description: string
+      /**
+       * Format: int64
+       * @description The map's id.
+       */
+      id: number
+      /** @description Whether the festival is running now. */
+      isActive: boolean
+      /** @description The bare floor plan. */
+      mapImage: string
+      /** @description The segment its address uses: the shortcode, else the id. */
+      publicPath: string
+      /** @description The shortcode it is linked by; empty for none. */
+      slug: string
+      /** @description Its pitches in draw order. */
+      stalls: components['schemas']['PublicFestivalStall'][]
+      /**
+       * Format: int64
+       * @description The festival's stamp rally if it is running now; null when none.
+       */
+      stampRallyId: number | null
+      /** @description Whether that rally takes sign-ups from the public. */
+      stampRallySignup: boolean
+      /** @description That rally's title; empty when none. */
+      stampRallyTitle: string
+      /** @description When the festival runs. */
+      times: components['schemas']['EventTime'][]
+      /** @description The festival's title. */
+      title: string
+    }
+    PublicFestivalMapList: {
+      /** @description Newest first. */
+      maps: components['schemas']['PublicFestivalMapSummary'][]
+    }
+    PublicFestivalMapSummary: {
+      /** @description What it is about (Markdown). */
+      description: string
+      /**
+       * Format: int64
+       * @description The map's id.
+       */
+      id: number
+      /** @description Whether the festival is running now. */
+      isActive: boolean
+      /** @description The bare floor plan. */
+      mapImage: string
+      /** @description The segment its address uses: the shortcode, else the id. */
+      publicPath: string
+      /** @description The shortcode it is linked by; empty for none. */
+      slug: string
+      /**
+       * Format: int64
+       * @description How many pitches it has.
+       */
+      stallCount: number
+      /** @description When the festival runs. */
+      times: components['schemas']['EventTime'][]
+      /** @description The festival's title. */
+      title: string
+    }
+    PublicFestivalStall: {
+      /** @description Its fill; empty for the default. */
+      color: string
+      /**
+       * Format: int64
+       * @description The pitch's id.
+       */
+      id: number
+      /** @description Who stands in it. */
+      occupants: components['schemas']['PublicStallOccupant'][]
+      /** @description Where it sits on the plan, in percent of the plan's box. */
+      placement: components['schemas']['Placement']
+      /** @description The halo around it when tapped; empty for the default. */
+      selectionColor: string
+      /**
+       * @description How it is drawn.
+       * @enum {string}
+       */
+      shape: 'circle' | 'rect'
+      /** @description Its label's color; empty for the default. */
+      textColor: string
+    }
+    PublicGarapon: {
+      /** @description What it is about (Markdown). */
+      details: string
+      /** @description The grand prize's picture; empty for none. */
+      grandPrizeImage: string
+      /**
+       * Format: int64
+       * @description The garapon's id.
+       */
+      id: number
+      /** @description The prizes in order. */
+      prizes: components['schemas']['PublicGaraponPrize'][]
+      /**
+       * @description A closed garapon takes no more draws.
+       * @enum {string}
+       */
+      status: 'open' | 'closed'
+      /** @description The garapon's title. */
+      title: string
+    }
+    PublicGaraponDraw: {
+      /** @description The color of the ball. */
+      ballColor: string
+      /** @description When it was made, RFC 3339 in UTC. */
+      drawnAt: string | null
+      /** @description Whether it was the grand prize. */
+      isGrand: boolean
+      /** @description The prize won. */
+      prizeName: string
+    }
+    PublicGaraponPlayer: {
+      /** @description The draws made with the link, oldest first. */
+      draws: components['schemas']['PublicGaraponDraw'][]
+      /** @description The shortcode or id of the published festival the linked rally is filed under; empty for none. */
+      festivalLink: string
+      /** @description The garapon. */
+      garapon: components['schemas']['PublicGarapon']
+      /** @description The link's holder and their draws. */
+      player: components['schemas']['GaraponPlayerSummary']
+    }
+    PublicGaraponPrize: {
+      /** @description The color of the ball that wins it: a CSS color. */
+      ballColor: string
+      /**
+       * Format: int64
+       * @description The prize's id.
+       */
+      id: number
+      /** @description Whether it is the grand prize. */
+      isGrand: boolean
+      /** @description The prize. */
+      name: string
+    }
+    PublicPrize: {
+      /**
+       * Format: int64
+       * @description The prize's id.
+       */
+      id: number
+      /** @description Its picture; empty until the card is complete. */
+      image: string
+      /** @description The prize; empty until the card is complete. */
+      name: string
+      /** @description Where it sits on the card. */
+      placement: components['schemas']['Placement']
+    }
+    PublicStallAffiliate: {
+      /** @description Its page; empty for none. */
+      carrdLink: string
+      /** @description Its Discord invite; empty for none. */
+      discordLink: string
+      /** @description Its logo. */
+      logo: string
+      /** @description The affiliate's name. */
+      name: string
+      /** @description Who runs it. */
+      owners: string[]
+      /** @description Its tagline. */
+      subtitle: string
+    }
+    PublicStallOccupant: {
+      /** @description The affiliate it belongs to; null for the venue itself. */
+      affiliate: components['schemas']['PublicStallAffiliate'] | null
+      /** @description What it offers (Markdown). */
+      description: string
+      /** @description A link to its page for the event; empty for none. */
+      eventCarrd: string
+      /**
+       * Format: int64
+       * @description The occupant's id.
+       */
+      id: number
+      /** @description Whether a stamp of the festival's running stamp rally is collected here. */
+      inStampRally: boolean
+      /** @description Whether it is open now: inside its own hours and the festival's. */
+      isOpen: boolean
+      /** @description A raffle running at this stall now; null when none. */
+      raffle: components['schemas']['PublicStallRaffle'] | null
+      /**
+       * Format: int64
+       * @description That rally; null when none.
+       */
+      rallyId: number | null
+      /** @description That rally's title; empty when none. */
+      rallyTitle: string
+      /**
+       * @description What it offers.
+       * @enum {string}
+       */
+      stallType: 'game' | 'food' | 'both' | 'other'
+      /** @description The stamp's picture; empty when none. */
+      stampImage: string
+      /** @description When it is here; empty for the whole festival. */
+      times: components['schemas']['EventTime'][]
+      /** @description The stall's title. */
+      title: string
+      /** @description The caption shown when stallType is other. */
+      typeLabel: string
+    }
+    PublicStallRaffle: {
+      /**
+       * Format: int64
+       * @description The raffle's id.
+       */
+      id: number
+      /** @description The prize's picture. */
+      prizeImage: string
+      /** @description The raffle's title. */
+      title: string
+    }
+    PublicStamp: {
+      /** @description When it can first be collected, RFC 3339 in UTC. */
+      activeFrom: string | null
+      /** @description When it can last be collected, RFC 3339 in UTC. */
+      activeTo: string | null
+      /** @description The stall: its title on a festival plan, else its affiliate, else the Tea House. */
+      affiliateName: string
+      /** @description Whether it can be collected now. */
+      available: boolean
+      /** @description Whether this card holds it. */
+      collected: boolean
+      /** @description When it was collected, RFC 3339 in UTC. */
+      collectedAt: string | null
+      /** @description Whether it can never be collected again, as opposed to closed for now. */
+      expired: boolean
+      /**
+       * Format: int64
+       * @description The stamp's id.
+       */
+      id: number
+      /** @description The stamp's picture. */
+      image: string
+      /**
+       * Format: int64
+       * @description The festival stall that holds it, so the plan can mark the ones collected.
+       */
+      occupantId: number | null
+      /** @description Where it sits on the card. */
+      placement: components['schemas']['Placement']
+      /**
+       * @description The kind of stall.
+       * @enum {string}
+       */
+      stampType: 'food' | 'game'
+    }
+    PublicStampCard: {
+      /** @description Whether the card is complete. */
+      completed: boolean
+      /** @description When it was found complete, RFC 3339 in UTC. */
+      completedAt: string | null
+      /** @description The participant as Character @ World. */
+      participantName: string
+      /** @description The prize slots; each shows its prize only once the card is complete. */
+      prizes: components['schemas']['PublicPrize'][]
+      /** @description Whether the prizes are shown: the card is complete. */
+      prizesRevealed: boolean
+      /** @description The rally. */
+      rally: components['schemas']['PublicStampRally']
+      /** @description The rally's stamps, without passwords. */
+      stamps: components['schemas']['PublicStamp'][]
+    }
+    PublicStampRally: {
+      /** @description When it opens, RFC 3339 in UTC. */
+      availableFrom: string | null
+      /** @description When it ends, RFC 3339 in UTC. */
+      availableTo: string | null
+      /** @description The card's background picture. */
+      cardImage: string
+      /**
+       * @description What finishes a card.
+       * @enum {string}
+       */
+      completionMode: 'all' | 'counts'
+      /** @description What it is about (Markdown). */
+      details: string
+      /** @description The shortcode or id of the published festival it is filed under, which opens that festival's page; empty for none. */
+      festivalLink: string
+      /**
+       * Format: int64
+       * @description The rally's id.
+       */
+      id: number
+      /** @description Whether it takes stamps now: open and inside its window. */
+      isActive: boolean
+      /** @description The picture shown where a stamp isn't collected and where a prize isn't won yet. */
+      notStampedImage: string
+      /** @description A screenshot of where to redeem. */
+      redeemImage: string
+      /** @description How to redeem a finished card (Markdown). */
+      redeemInstructions: string
+      /**
+       * Format: int64
+       * @description The food stamps a counts card needs.
+       */
+      requiredFood: number
+      /**
+       * Format: int64
+       * @description The game stamps a counts card needs.
+       */
+      requiredGame: number
+      /** @description The rally's title. */
+      title: string
     }
     PublicStyle: {
       /**
@@ -3899,6 +6338,412 @@ export interface components {
       turnstileToken?: string
       /** @description The username to sign in with. */
       username: string
+    }
+    SignupRally: {
+      /** @description When it opens, RFC 3339 in UTC. */
+      availableFrom: string | null
+      /** @description When it ends, RFC 3339 in UTC. */
+      availableTo: string | null
+      /** @description The card's background picture. */
+      cardImage: string
+      /** @description What it is about (Markdown). */
+      details: string
+      /** @description The title of the open garapon linked to it, whose drawing link a sign-up issues too; empty for none. */
+      garaponTitle: string
+      /**
+       * Format: int64
+       * @description The rally's id.
+       */
+      id: number
+      /** @description The rally's title. */
+      title: string
+    }
+    SignupRallyList: {
+      /** @description The open rallies that take sign-ups, inside their window, newest first. */
+      rallies: components['schemas']['SignupRally'][]
+    }
+    SkippedUpload: {
+      /** @description The file's name as it was sent. */
+      name: string
+      /** @description Why it was not saved. */
+      reason: string
+    }
+    StampLookup: {
+      /** @description The cards held under the whole name and world, ignoring case, in open rallies. Empty when none, so a lookup can't be used to find out who signed up. */
+      entries: components['schemas']['StampLookupEntry'][]
+    }
+    StampLookupEntry: {
+      /** @description The token of the card's link. */
+      cardToken: string
+      /** @description Whether the card is complete. */
+      completed: boolean
+      /**
+       * Format: int64
+       * @description The draws left on that link; null when there is none. The link's token is never given: a name is public and a draw can't be undone.
+       */
+      garaponDrawsLeft: number | null
+      /** @description The open garapon whose drawing link was issued with the card; empty for none. */
+      garaponTitle: string
+      /** @description The name the card is held under, which may be spelled differently from the search. */
+      participantName: string
+      /**
+       * Format: int64
+       * @description The rally.
+       */
+      rallyId: number
+      /** @description The rally's title. */
+      rallyTitle: string
+      /** @description The world it is held under; empty when none was known. */
+      world: string
+    }
+    StampLookupInput: {
+      /** @description The character, as they signed up. A name written as Name @ World with no world sent is split. */
+      characterName: string
+      /** @description Their home world. */
+      world?: string
+    }
+    StampRally: {
+      /**
+       * Format: int64
+       * @description The stamps not paused.
+       */
+      activeStampCount: number
+      /** @description When it opens, RFC 3339 in UTC; null for no start. */
+      availableFrom: string | null
+      /** @description When it ends, RFC 3339 in UTC; null for no end. */
+      availableTo: string | null
+      /**
+       * Format: int64
+       * @description The cards issued.
+       */
+      cardCount: number
+      /** @description The card's background picture: a path from the image library. */
+      cardImage: string
+      /**
+       * Format: int64
+       * @description The cards complete.
+       */
+      completedCount: number
+      /**
+       * @description all: a card is complete when every stamp is collected or can't be any more. counts: when it holds requiredFood food stamps and requiredGame game stamps.
+       * @enum {string}
+       */
+      completionMode: 'all' | 'counts'
+      /** @description When it was made, RFC 3339 in UTC. */
+      createdAt: string | null
+      /** @description What it is about (Markdown). */
+      details: string
+      /**
+       * Format: int64
+       * @description The festival it is filed under; null for none.
+       */
+      festivalMapId: number | null
+      /** @description The festival's title; empty for none. */
+      festivalMapName: string
+      /**
+       * Format: int64
+       * @description The rally's id.
+       */
+      id: number
+      /** @description The picture shown where a stamp isn't collected and where a prize isn't won yet. */
+      notStampedImage: string
+      /** @description Its prizes in order. Empty in a list. */
+      prizes: components['schemas']['StampRallyPrize'][]
+      /** @description Whether anyone may sign up for a card; off, only staff issue cards. */
+      publicSignup: boolean
+      /** @description A screenshot of where to redeem a finished card, shown once it is complete. */
+      redeemImage: string
+      /** @description How to redeem a finished card (Markdown), shown once it is complete. */
+      redeemInstructions: string
+      /**
+       * Format: int64
+       * @description The food stamps a card needs in counts mode.
+       */
+      requiredFood: number
+      /**
+       * Format: int64
+       * @description The game stamps a card needs in counts mode.
+       */
+      requiredGame: number
+      /**
+       * Format: int64
+       * @description The stamps it has.
+       */
+      stampCount: number
+      /** @description Its stamps in order, with their passwords. Empty in a list. */
+      stamps: components['schemas']['StampRallyStamp'][]
+      /**
+       * @description A closed rally takes no more stamps and no sign-ups.
+       * @enum {string}
+       */
+      status: 'open' | 'closed'
+      /** @description The rally's title. */
+      title: string
+    }
+    StampRallyCard: {
+      /**
+       * Format: int64
+       * @description The stamps collected on it.
+       */
+      collectedCount: number
+      /** @description Whether the card is complete. */
+      completed: boolean
+      /** @description When it was found complete, RFC 3339 in UTC. */
+      completedAt: string | null
+      /** @description When it was issued, RFC 3339 in UTC. */
+      createdAt: string | null
+      /**
+       * Format: int64
+       * @description The card's id.
+       */
+      id: number
+      /** @description The character. */
+      participantName: string
+      /** @description The token of the card's link. Staff only. */
+      token: string
+      /** @description Their home world; empty when it isn't known. */
+      world: string
+    }
+    StampRallyCardInput: {
+      /** @description The character. A name written as Name @ World with no world sent is split. */
+      participantName: string
+      /** @description Their home world; empty when staff don't know it. */
+      world?: string
+    }
+    StampRallyDetail: {
+      /** @description The cards issued, newest first. */
+      cards: components['schemas']['StampRallyCard'][]
+      /** @description The rally, with its stamps and prizes. */
+      stampRally: components['schemas']['StampRally']
+    }
+    StampRallyInput: {
+      /**
+       * Format: date-time
+       * @description When it opens, RFC 3339; null or left out for no start.
+       */
+      availableFrom?: string | null
+      /**
+       * Format: date-time
+       * @description When it ends, RFC 3339; null or left out for no end.
+       */
+      availableTo?: string | null
+      /** @description The card's background picture: a path from the image library. */
+      cardImage: string
+      /**
+       * @description all: every stamp collected or out of reach. counts: requiredFood food stamps and requiredGame game stamps.
+       * @enum {string}
+       */
+      completionMode: 'all' | 'counts'
+      /** @description What it is about (Markdown). */
+      details: string
+      /**
+       * Format: int64
+       * @description The festival to file it under; null or left out for none. One that doesn't exist is refused.
+       */
+      festivalMapId?: number | null
+      /** @description The picture shown where a stamp isn't collected and where a prize isn't won yet. */
+      notStampedImage: string
+      /** @description The rally's whole set of prizes, replacing the old. An empty list clears them. */
+      prizes: components['schemas']['StampRallyPrizeInput'][]
+      /** @description Whether anyone may sign up for a card. */
+      publicSignup: boolean
+      /** @description A screenshot of where to redeem a finished card. */
+      redeemImage: string
+      /** @description How to redeem a finished card (Markdown). */
+      redeemInstructions: string
+      /**
+       * Format: int64
+       * @description The food stamps a card needs in counts mode, kept to the number of food stamps.
+       */
+      requiredFood: number
+      /**
+       * Format: int64
+       * @description The game stamps a card needs in counts mode, kept to the number of game stamps.
+       */
+      requiredGame: number
+      /** @description The rally's whole set of stamps: a stamp with an id keeps that stamp and what was collected on it, id 0 adds one, and one left out is deleted. An empty list clears them. */
+      stamps: components['schemas']['StampRallyStampInput'][]
+      /** @description The rally's title. */
+      title: string
+    }
+    StampRallyList: {
+      /** @description Newest first, with their counts and without stamps or prizes. */
+      stampRallies: components['schemas']['StampRally'][]
+    }
+    StampRallyLogEntry: {
+      /**
+       * Format: int64
+       * @description The card that collected it; null once the card is deleted.
+       */
+      cardId: number | null
+      /** @description The participant as Character @ World, as they were. */
+      participantName: string
+      /** @description The stall, as it was named. */
+      stallName: string
+      /**
+       * Format: int64
+       * @description The stamp; null once it is deleted.
+       */
+      stampId: number | null
+      /**
+       * @description The kind of stall.
+       * @enum {string}
+       */
+      stampType: 'food' | 'game'
+      /** @description When it was collected, RFC 3339 in UTC. */
+      stampedAt: string | null
+    }
+    StampRallyLogList: {
+      /** @description Every collection, a participant's together. */
+      logs: components['schemas']['StampRallyLogEntry'][]
+    }
+    StampRallyPrize: {
+      /**
+       * Format: int64
+       * @description The prize's id.
+       */
+      id: number
+      /** @description Its picture: a path from the image library. */
+      image: string
+      /** @description The prize. */
+      name: string
+      /** @description Where it sits on the card. */
+      placement: components['schemas']['Placement']
+      /**
+       * Format: int64
+       * @description Its place in the rally's prizes.
+       */
+      sortOrder: number
+    }
+    StampRallyPrizeInput: {
+      /** @description Its picture: a path from the image library. */
+      image: string
+      /** @description The prize. */
+      name: string
+      /** @description Where it sits on the card; clamped into the card. */
+      placement: components['schemas']['Placement']
+    }
+    StampRallyStamp: {
+      /** @description When it can first be collected, RFC 3339 in UTC; null for the whole rally. */
+      activeFrom: string | null
+      /** @description When it can last be collected, RFC 3339 in UTC; null for the whole rally. */
+      activeTo: string | null
+      /**
+       * Format: int64
+       * @description The affiliate that runs the stall; null for the Tea House itself. A stamp on a stall takes it from the stall.
+       */
+      affiliateId: number | null
+      /** @description The affiliate's name; empty for none. */
+      affiliateName: string
+      /**
+       * Format: int64
+       * @description The stamp's id.
+       */
+      id: number
+      /** @description The stamp's picture: a path from the image library. */
+      image: string
+      /**
+       * Format: int64
+       * @description The stall of the rally's festival that holds it; null when it isn't tied to one.
+       */
+      occupantId: number | null
+      /** @description The word a participant enters to collect it, read out at the stall. Staff only. */
+      password: string
+      /** @description Whether staff have paused it: it can't be collected. */
+      paused: boolean
+      /** @description Where it sits on the card. */
+      placement: components['schemas']['Placement']
+      /**
+       * Format: int64
+       * @description Its place in the rally's stamps.
+       */
+      sortOrder: number
+      /** @description The title of that stall; empty when none. */
+      stallName: string
+      /**
+       * @description The kind of stall: what a counts rally counts.
+       * @enum {string}
+       */
+      stampType: 'food' | 'game'
+    }
+    StampRallyStampChanges: {
+      /** @description Whether the stamp is paused: a paused stamp can't be collected. */
+      paused: boolean
+    }
+    StampRallyStampInput: {
+      /**
+       * Format: date-time
+       * @description When it can first be collected, RFC 3339; null or left out for the whole rally.
+       */
+      activeFrom?: string | null
+      /**
+       * Format: date-time
+       * @description When it can last be collected, RFC 3339; null or left out for the whole rally.
+       */
+      activeTo?: string | null
+      /**
+       * Format: int64
+       * @description The affiliate that runs the stall; null for the Tea House itself. A stamp on a festival stall takes it from the stall.
+       */
+      affiliateId?: number | null
+      /**
+       * Format: int64
+       * @description The stamp's id; 0 adds a new one.
+       */
+      id: number
+      /** @description The stamp's picture: a path from the image library. */
+      image: string
+      /**
+       * Format: int64
+       * @description The stall of the rally's festival that holds it. With no festival it is cleared; one that isn't on the festival is dropped, and the stamp falls back to its affiliate.
+       */
+      occupantId?: number | null
+      /** @description The word a participant enters to collect it. An empty one can't be matched. */
+      password: string
+      /** @description Whether it is paused. */
+      paused: boolean
+      /** @description Where it sits on the card; clamped into the card. */
+      placement: components['schemas']['Placement']
+      /**
+       * @description The kind of stall.
+       * @enum {string}
+       */
+      stampType: 'food' | 'game'
+    }
+    StampResult: {
+      /** @description The refreshed card. */
+      card: components['schemas']['PublicStampCard']
+      /**
+       * Format: int64
+       * @description The stamp just collected.
+       */
+      collectedStampId: number
+    }
+    StampSignup: {
+      /** @description The token of the stamp card's link. It can be shared: it opens the card and nothing else. */
+      cardToken: string
+      /** @description The garapon's title, when a drawing link was issued. */
+      garaponTitle: string | null
+      /** @description The token of the drawing link, only when the rally has an open garapon. A secret apart from the card's: whoever holds it can spend the draws. This answer is the one time it is given, so it is kept on the participant's device. */
+      garaponToken: string | null
+      /** @description The character. */
+      participantName: string
+      /** @description The rally. */
+      rallyTitle: string
+      /** @description Their home world. */
+      world: string
+    }
+    StampSignupInput: {
+      /** @description The character signing up. */
+      characterName: string
+      /** @description The Cloudflare Turnstile response, when the check is on (GET /config gives its site key). */
+      turnstileToken?: string
+      /** @description Their home world. */
+      world: string
+    }
+    StampSubmitInput: {
+      /** @description The word read out at the stall. */
+      password: string
     }
     Style: {
       /** @description The board's corner flourish, an images/ path, or empty. */
@@ -6336,6 +9181,93 @@ export interface operations {
       }
     }
   }
+  'upload-book-club-cover': {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        /** @description The book club's slug. */
+        club: string
+      }
+      cookie?: never
+    }
+    requestBody?: {
+      content: {
+        'multipart/form-data': {
+          /**
+           * Format: binary
+           * @description A JPEG, PNG, GIF or WebP of at most 5 MB, judged from its bytes. One whose name is already used replaces it. A JPEG or PNG is saved again without its metadata.
+           */
+          image?: string
+        }
+      }
+    }
+    responses: {
+      /** @description Created */
+      201: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['BookClubCover']
+        }
+      }
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Request Entity Too Large */
+      413: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Unprocessable Entity */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+    }
+  }
   'look-up-title': {
     parameters: {
       query?: {
@@ -7883,6 +10815,646 @@ export interface operations {
       }
     }
   }
+  'list-carrd-projects': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['CarrdProjectList']
+        }
+      }
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+    }
+  }
+  'create-carrd-project': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['CarrdProjectInput']
+      }
+    }
+    responses: {
+      /** @description Created */
+      201: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['CarrdProject']
+        }
+      }
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Conflict */
+      409: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Unprocessable Entity */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+    }
+  }
+  'delete-carrd-project': {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        /** @description The project's folder name. */
+        folder: string
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description No Content */
+      204: {
+        headers: {
+          [name: string]: unknown
+        }
+        content?: never
+      }
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Unprocessable Entity */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+    }
+  }
+  'update-carrd-project': {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        /** @description The project's folder name. */
+        folder: string
+      }
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['CarrdProjectChanges']
+      }
+    }
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['CarrdProject']
+        }
+      }
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Conflict */
+      409: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Unprocessable Entity */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+    }
+  }
+  'list-carrd-files': {
+    parameters: {
+      query?: {
+        /** @description The folder within the project; empty for its root. */
+        path?: string
+      }
+      header?: never
+      path: {
+        /** @description The project's folder name. */
+        folder: string
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['CarrdFolder']
+        }
+      }
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Unprocessable Entity */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+    }
+  }
+  'upload-carrd-files': {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        /** @description The project's folder name. */
+        folder: string
+      }
+      cookie?: never
+    }
+    requestBody?: {
+      content: {
+        'multipart/form-data': {
+          files?: string[]
+          /** @description The folder to save into, within the project; empty for its root. It must exist. */
+          path?: string
+        }
+      }
+    }
+    responses: {
+      /** @description Created */
+      201: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['CarrdUpload']
+        }
+      }
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Request Entity Too Large */
+      413: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Unprocessable Entity */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+    }
+  }
+  'delete-carrd-file': {
+    parameters: {
+      query?: {
+        /** @description The folder within the project; empty for its root. */
+        path?: string
+        /** @description The file's name. */
+        name?: string
+      }
+      header?: never
+      path: {
+        /** @description The project's folder name. */
+        folder: string
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description No Content */
+      204: {
+        headers: {
+          [name: string]: unknown
+        }
+        content?: never
+      }
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Unprocessable Entity */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+    }
+  }
+  'create-carrd-folder': {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        /** @description The project's folder name. */
+        folder: string
+      }
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['CarrdSubfolderInput']
+      }
+    }
+    responses: {
+      /** @description Created */
+      201: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['CarrdSubfolder']
+        }
+      }
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Conflict */
+      409: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Unprocessable Entity */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+    }
+  }
+  'delete-carrd-folder': {
+    parameters: {
+      query?: {
+        /** @description The sub-folder within the project. The project's root can't be deleted here. */
+        path?: string
+      }
+      header?: never
+      path: {
+        /** @description The project's folder name. */
+        folder: string
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description No Content */
+      204: {
+        headers: {
+          [name: string]: unknown
+        }
+        content?: never
+      }
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Unprocessable Entity */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+    }
+  }
   'get-config': {
     parameters: {
       query?: never
@@ -7903,6 +11475,1032 @@ export interface operations {
       }
       /** @description Error */
       default: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+    }
+  }
+  'list-ema-boards': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['EmaBoardList']
+        }
+      }
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+    }
+  }
+  'create-ema-board': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['EmaBoardInput']
+      }
+    }
+    responses: {
+      /** @description Created */
+      201: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['EmaBoard']
+        }
+      }
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Conflict */
+      409: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Unprocessable Entity */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+    }
+  }
+  'get-ema-board': {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        /** @description The board's id. */
+        id: number
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['EmaBoard']
+        }
+      }
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Unprocessable Entity */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+    }
+  }
+  'update-ema-board': {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        /** @description The board's id. */
+        id: number
+      }
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['EmaBoardInput']
+      }
+    }
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['EmaBoard']
+        }
+      }
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Conflict */
+      409: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Unprocessable Entity */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+    }
+  }
+  'delete-ema-board': {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        /** @description The board's id. */
+        id: number
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description No Content */
+      204: {
+        headers: {
+          [name: string]: unknown
+        }
+        content?: never
+      }
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Unprocessable Entity */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+    }
+  }
+  'close-ema-board': {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        /** @description The board's id. */
+        id: number
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['EmaBoard']
+        }
+      }
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Unprocessable Entity */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+    }
+  }
+  'list-ema-plaques': {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        /** @description The board's id. */
+        id: number
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['EmaPlaqueList']
+        }
+      }
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Unprocessable Entity */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+    }
+  }
+  'approve-ema-plaque': {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        /** @description The board's id. */
+        id: number
+        /** @description The plaque's id. */
+        plaqueId: number
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['EmaPlaque']
+        }
+      }
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Conflict */
+      409: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Unprocessable Entity */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Too Many Requests */
+      429: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Service Unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+    }
+  }
+  'reject-ema-plaque': {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        /** @description The board's id. */
+        id: number
+        /** @description The plaque's id. */
+        plaqueId: number
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['EmaPlaque']
+        }
+      }
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Conflict */
+      409: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Unprocessable Entity */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+    }
+  }
+  'reopen-ema-board': {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        /** @description The board's id. */
+        id: number
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['EmaBoard']
+        }
+      }
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Unprocessable Entity */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+    }
+  }
+  'list-ema-requests': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['EmaPlaqueList']
+        }
+      }
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+    }
+  }
+  'complete-ema-request': {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        /** @description The request's id. */
+        id: number
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['EmaPlaque']
+        }
+      }
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Conflict */
+      409: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Unprocessable Entity */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+    }
+  }
+  'post-ema-request': {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        /** @description The request's id. */
+        id: number
+      }
+      cookie?: never
+    }
+    requestBody?: {
+      content: {
+        'multipart/form-data': {
+          /**
+           * Format: binary
+           * @description The finished plaque: a PNG, JPEG, GIF or WebP of at most 10 MB, judged from its bytes and never kept.
+           */
+          image: string
+        }
+      }
+    }
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['EmaPlaque']
+        }
+      }
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Conflict */
+      409: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Request Entity Too Large */
+      413: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Unprocessable Entity */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Too Many Requests */
+      429: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Service Unavailable */
+      503: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+    }
+  }
+  'reopen-ema-request': {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        /** @description The request's id. */
+        id: number
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['EmaPlaque']
+        }
+      }
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Conflict */
+      409: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Unprocessable Entity */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Internal Server Error */
+      500: {
         headers: {
           [name: string]: unknown
         }
@@ -8200,6 +12798,1277 @@ export interface operations {
       }
       /** @description Service Unavailable */
       503: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+    }
+  }
+  'list-festival-maps': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['FestivalMapList']
+        }
+      }
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+    }
+  }
+  'create-festival-map': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['FestivalMapInput']
+      }
+    }
+    responses: {
+      /** @description Created */
+      201: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['FestivalMap']
+        }
+      }
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Conflict */
+      409: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Unprocessable Entity */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+    }
+  }
+  'list-public-festival-maps': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['PublicFestivalMapList']
+        }
+      }
+      /** @description Error */
+      default: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+    }
+  }
+  'get-public-festival-map': {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        /** @description The map's shortcode or numeric id. */
+        idOrSlug: string
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['PublicFestivalMap']
+        }
+      }
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Unprocessable Entity */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+    }
+  }
+  'get-festival-map': {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        /** @description The festival map's id. */
+        id: number
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['FestivalMap']
+        }
+      }
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Unprocessable Entity */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+    }
+  }
+  'update-festival-map': {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        /** @description The festival map's id. */
+        id: number
+      }
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['FestivalMapInput']
+      }
+    }
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['FestivalMap']
+        }
+      }
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Conflict */
+      409: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Unprocessable Entity */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+    }
+  }
+  'delete-festival-map': {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        /** @description The festival map's id. */
+        id: number
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description No Content */
+      204: {
+        headers: {
+          [name: string]: unknown
+        }
+        content?: never
+      }
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Unprocessable Entity */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+    }
+  }
+  'change-festival-map': {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        /** @description The festival map's id. */
+        id: number
+      }
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['FestivalMapChanges']
+      }
+    }
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['FestivalMap']
+        }
+      }
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Conflict */
+      409: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Unprocessable Entity */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+    }
+  }
+  'read-festival-dashboard': {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        /** @description The festival's shortcode or numeric id. */
+        idOrSlug: string
+      }
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['FestivalDashboardInput']
+      }
+    }
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['FestivalDashboard']
+        }
+      }
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Unprocessable Entity */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Too Many Requests */
+      429: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+    }
+  }
+  'submit-ema-plaque': {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        /** @description The festival's shortcode or numeric id. */
+        idOrSlug: string
+      }
+      cookie?: never
+    }
+    requestBody?: {
+      content: {
+        'multipart/form-data': {
+          /** @description Their character. */
+          characterName?: string
+          /**
+           * Format: binary
+           * @description The plaque: a PNG of at most 12 MB and 4096 pixels a side.
+           */
+          image: string
+          /** @description The Cloudflare Turnstile response; needed only when the bot check is on. */
+          turnstileToken?: string
+          /** @description Their home world. */
+          world?: string
+        }
+      }
+    }
+    responses: {
+      /** @description Created */
+      201: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['PublicEmaPlaque']
+        }
+      }
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Conflict */
+      409: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Request Entity Too Large */
+      413: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Unprocessable Entity */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Too Many Requests */
+      429: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+    }
+  }
+  'request-ema-plaque': {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        /** @description The festival's shortcode or numeric id. */
+        idOrSlug: string
+      }
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['EmaRequestInput']
+      }
+    }
+    responses: {
+      /** @description Created */
+      201: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['PublicEmaPlaque']
+        }
+      }
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Conflict */
+      409: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Unprocessable Entity */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Too Many Requests */
+      429: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+    }
+  }
+  'delete-font-file': {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        /** @description The font file's name. */
+        name: string
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description No Content */
+      204: {
+        headers: {
+          [name: string]: unknown
+        }
+        content?: never
+      }
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Unprocessable Entity */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+    }
+  }
+  'rename-font-file': {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        /** @description The font file's current name. */
+        name: string
+      }
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['FontFileRename']
+      }
+    }
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['FontFileRename']
+        }
+      }
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Conflict */
+      409: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Unprocessable Entity */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+    }
+  }
+  'list-fonts': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['FontList']
+        }
+      }
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+    }
+  }
+  'upload-fonts': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: {
+      content: {
+        'multipart/form-data': {
+          files?: string[]
+        }
+      }
+    }
+    responses: {
+      /** @description Created */
+      201: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['FontUpload']
+        }
+      }
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Request Entity Too Large */
+      413: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Unprocessable Entity */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+    }
+  }
+  'get-font-file': {
+    parameters: {
+      query?: never
+      header?: {
+        /** @description The requesting site. It must be on the font's list, or be this app. It is echoed back in Access-Control-Allow-Origin. */
+        Origin?: string
+        /** @description Used when there is no Origin, as Safari sends none for fonts: the embedding page's site must be on the font's list. */
+        Referer?: string
+        /** @description same-origin lets the app's own pages load a font. */
+        'Sec-Fetch-Site'?: string
+      }
+      path: {
+        /** @description A font file's token, from the kit or the fonts list. */
+        token: string
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description The font. */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/vnd.ms-fontobject': string
+          'font/otf': string
+          'font/ttf': string
+          'font/woff': string
+          'font/woff2': string
+        }
+      }
+      /** @description The part of the font a Range header asked for. */
+      206: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/vnd.ms-fontobject': string
+          'font/otf': string
+          'font/ttf': string
+          'font/woff': string
+          'font/woff2': string
+        }
+      }
+      /** @description The font is unchanged since the If-Modified-Since date. */
+      304: {
+        headers: {
+          [name: string]: unknown
+        }
+        content?: never
+      }
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Unprocessable Entity */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+    }
+  }
+  'get-font-kit': {
+    parameters: {
+      query?: never
+      header?: {
+        /** @description The embedding page. The kit holds only the fonts that allow its site; with no Referer, or this app's own, it holds all of them. */
+        Referer?: string
+      }
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description The stylesheet. */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'text/css': string
+        }
+      }
+      /** @description Error */
+      default: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+    }
+  }
+  'delete-font': {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        /** @description The font's base name. */
+        base: string
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description No Content */
+      204: {
+        headers: {
+          [name: string]: unknown
+        }
+        content?: never
+      }
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Unprocessable Entity */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+    }
+  }
+  'update-font': {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        /** @description The font's base name. */
+        base: string
+      }
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['FontChanges']
+      }
+    }
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Font']
+        }
+      }
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Conflict */
+      409: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Unprocessable Entity */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Internal Server Error */
+      500: {
         headers: {
           [name: string]: unknown
         }
@@ -8634,6 +14503,1251 @@ export interface operations {
       }
       /** @description Too Many Requests */
       429: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+    }
+  }
+  'get-garapon-player': {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        /** @description The link's token. */
+        token: string
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['PublicGaraponPlayer']
+        }
+      }
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Unprocessable Entity */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+    }
+  }
+  'draw-garapon': {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        /** @description The link's token. */
+        token: string
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['GaraponDrawResult']
+        }
+      }
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Conflict */
+      409: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Unprocessable Entity */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Too Many Requests */
+      429: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+    }
+  }
+  'list-garapons': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['GaraponList']
+        }
+      }
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+    }
+  }
+  'create-garapon': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['GaraponInput']
+      }
+    }
+    responses: {
+      /** @description Created */
+      201: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Garapon']
+        }
+      }
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Conflict */
+      409: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Unprocessable Entity */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+    }
+  }
+  'get-garapon': {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        /** @description The garapon's id. */
+        id: number
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['GaraponDetail']
+        }
+      }
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Unprocessable Entity */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+    }
+  }
+  'update-garapon': {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        /** @description The garapon's id. */
+        id: number
+      }
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['GaraponInput']
+      }
+    }
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Garapon']
+        }
+      }
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Conflict */
+      409: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Unprocessable Entity */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+    }
+  }
+  'delete-garapon': {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        /** @description The garapon's id. */
+        id: number
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description No Content */
+      204: {
+        headers: {
+          [name: string]: unknown
+        }
+        content?: never
+      }
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Unprocessable Entity */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+    }
+  }
+  'close-garapon': {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        /** @description The garapon's id. */
+        id: number
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Garapon']
+        }
+      }
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Unprocessable Entity */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+    }
+  }
+  'create-garapon-player': {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        /** @description The garapon's id. */
+        id: number
+      }
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['GaraponPlayerInput']
+      }
+    }
+    responses: {
+      /** @description Created */
+      201: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['GaraponPlayer']
+        }
+      }
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Unprocessable Entity */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+    }
+  }
+  'delete-garapon-player': {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        /** @description The garapon's id. */
+        id: number
+        /** @description The drawing link's id. */
+        playerId: number
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description No Content */
+      204: {
+        headers: {
+          [name: string]: unknown
+        }
+        content?: never
+      }
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Conflict */
+      409: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Unprocessable Entity */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+    }
+  }
+  'reopen-garapon': {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        /** @description The garapon's id. */
+        id: number
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Garapon']
+        }
+      }
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Unprocessable Entity */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+    }
+  }
+  'list-google-fonts': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['GoogleFontList']
+        }
+      }
+      /** @description Error */
+      default: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+    }
+  }
+  'list-image-categories': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ImageCategoryList']
+        }
+      }
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+    }
+  }
+  'create-image-category': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['ImageCategoryInput']
+      }
+    }
+    responses: {
+      /** @description Created */
+      201: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ImageCategory']
+        }
+      }
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Conflict */
+      409: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Unprocessable Entity */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+    }
+  }
+  'delete-image-category': {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        /** @description The category's folder name. */
+        dir: string
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description No Content */
+      204: {
+        headers: {
+          [name: string]: unknown
+        }
+        content?: never
+      }
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Unprocessable Entity */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+    }
+  }
+  'update-image-category': {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        /** @description The category's folder name. */
+        dir: string
+      }
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['ImageCategoryChanges']
+      }
+    }
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ImageCategory']
+        }
+      }
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Conflict */
+      409: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Unprocessable Entity */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+    }
+  }
+  'list-images': {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        /** @description The category's folder name. */
+        dir: string
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ImageList']
+        }
+      }
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Unprocessable Entity */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+    }
+  }
+  'upload-images': {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        /** @description The category's folder name. */
+        dir: string
+      }
+      cookie?: never
+    }
+    requestBody?: {
+      content: {
+        'multipart/form-data': {
+          files?: string[]
+        }
+      }
+    }
+    responses: {
+      /** @description Created */
+      201: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ImageUpload']
+        }
+      }
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Request Entity Too Large */
+      413: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Unprocessable Entity */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+    }
+  }
+  'delete-image': {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        /** @description The category's folder name. */
+        dir: string
+        /** @description The picture's file name. */
+        name: string
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description No Content */
+      204: {
+        headers: {
+          [name: string]: unknown
+        }
+        content?: never
+      }
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Unprocessable Entity */
+      422: {
         headers: {
           [name: string]: unknown
         }
@@ -11422,6 +18536,1029 @@ export interface operations {
       }
       /** @description Forbidden */
       403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Unprocessable Entity */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+    }
+  }
+  'look-up-stamp-cards': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['StampLookupInput']
+      }
+    }
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['StampLookup']
+        }
+      }
+      /** @description Unprocessable Entity */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Too Many Requests */
+      429: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+    }
+  }
+  'get-stamp-card': {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        /** @description The link's token. */
+        token: string
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['PublicStampCard']
+        }
+      }
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Unprocessable Entity */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+    }
+  }
+  'stamp-stamp-card': {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        /** @description The card's token. */
+        token: string
+      }
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['StampSubmitInput']
+      }
+    }
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['StampResult']
+        }
+      }
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Conflict */
+      409: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Unprocessable Entity */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Too Many Requests */
+      429: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+    }
+  }
+  'list-stamp-rallies': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['StampRallyList']
+        }
+      }
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+    }
+  }
+  'create-stamp-rally': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['StampRallyInput']
+      }
+    }
+    responses: {
+      /** @description Created */
+      201: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['StampRally']
+        }
+      }
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Unprocessable Entity */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+    }
+  }
+  'list-open-stamp-rallies': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['SignupRallyList']
+        }
+      }
+      /** @description Error */
+      default: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+    }
+  }
+  'get-stamp-rally': {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        /** @description The rally's id. */
+        id: number
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['StampRallyDetail']
+        }
+      }
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Unprocessable Entity */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+    }
+  }
+  'update-stamp-rally': {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        /** @description The rally's id. */
+        id: number
+      }
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['StampRallyInput']
+      }
+    }
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['StampRally']
+        }
+      }
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Unprocessable Entity */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+    }
+  }
+  'delete-stamp-rally': {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        /** @description The rally's id. */
+        id: number
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description No Content */
+      204: {
+        headers: {
+          [name: string]: unknown
+        }
+        content?: never
+      }
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Unprocessable Entity */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+    }
+  }
+  'create-stamp-rally-card': {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        /** @description The rally's id. */
+        id: number
+      }
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['StampRallyCardInput']
+      }
+    }
+    responses: {
+      /** @description Created */
+      201: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['StampRallyCard']
+        }
+      }
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Unprocessable Entity */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+    }
+  }
+  'delete-stamp-rally-card': {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        /** @description The rally's id. */
+        id: number
+        /** @description The card's id. */
+        cardId: number
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description No Content */
+      204: {
+        headers: {
+          [name: string]: unknown
+        }
+        content?: never
+      }
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Conflict */
+      409: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Unprocessable Entity */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+    }
+  }
+  'close-stamp-rally': {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        /** @description The rally's id. */
+        id: number
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['StampRally']
+        }
+      }
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Unprocessable Entity */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+    }
+  }
+  'list-stamp-rally-logs': {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        /** @description The rally's id. */
+        id: number
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['StampRallyLogList']
+        }
+      }
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Unprocessable Entity */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+    }
+  }
+  'reopen-stamp-rally': {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        /** @description The rally's id. */
+        id: number
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['StampRally']
+        }
+      }
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Unprocessable Entity */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+    }
+  }
+  'sign-up-for-stamp-rally': {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        /** @description The rally's id. */
+        id: number
+      }
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['StampSignupInput']
+      }
+    }
+    responses: {
+      /** @description Created */
+      201: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['StampSignup']
+        }
+      }
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Not Found */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Conflict */
+      409: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Unprocessable Entity */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Too Many Requests */
+      429: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Internal Server Error */
+      500: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+    }
+  }
+  'update-stamp-rally-stamp': {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        /** @description The rally's id. */
+        id: number
+        /** @description The stamp's id. */
+        stampId: number
+      }
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['StampRallyStampChanges']
+      }
+    }
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['StampRallyStamp']
+        }
+      }
+      /** @description Unauthorized */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Forbidden */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/problem+json': components['schemas']['ErrorModel']
+        }
+      }
+      /** @description Not Found */
+      404: {
         headers: {
           [name: string]: unknown
         }

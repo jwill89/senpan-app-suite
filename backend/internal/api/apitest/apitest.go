@@ -14,6 +14,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"mime"
 	"net/http"
 	"strconv"
 	"strings"
@@ -79,6 +80,11 @@ func Problem(method, path string, status int, contentType string, body []byte) s
 	resp := op.Responses[strconv.Itoa(status)]
 	if resp == nil {
 		return fmt.Sprintf("the document declares no %d for %s", status, op.OperationID)
+	}
+	// A body that isn't JSON (a stylesheet, a font) is right when the document declares
+	// its type for the status.
+	if kind, _, err := mime.ParseMediaType(contentType); err == nil && kind != "application/json" && resp.Content[kind] != nil {
+		return ""
 	}
 	media := resp.Content["application/json"]
 	if media == nil || media.Schema == nil {

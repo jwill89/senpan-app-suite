@@ -26,7 +26,7 @@ import { useImagesStore } from '@/stores/images'
 import { useUiStore } from '@/stores/ui'
 import { assetUrl } from '@/lib/assets'
 import { slugify, formatSize } from '@/lib/format'
-import type { ImageCategory } from '@/types/api'
+import type { ImageCategory } from '@/api/client'
 
 const images = useImagesStore()
 const ui = useUiStore()
@@ -91,8 +91,8 @@ const formDerivedDir = computed(() => slugify(formDir.value || formName.value, '
 const categoryColumns: DataColumn[] = [
   { key: 'name', label: 'Category' },
   { key: 'dir', label: 'Directory' },
-  { key: 'file_count', label: 'Images', align: 'center' },
-  { key: 'total_size', label: 'Size', align: 'right' },
+  { key: 'fileCount', label: 'Images', align: 'center' },
+  { key: 'totalSize', label: 'Size', align: 'right' },
   { key: 'actions', label: '', align: 'right' },
 ]
 
@@ -199,11 +199,11 @@ onMounted(() => images.loadCategories())
         <template #cell-dir="{ row }">
           <span class="code-highlight">images/{{ row.dir }}</span>
         </template>
-        <template #cell-file_count="{ row }">
-          <span class="text-muted">{{ row.file_count }}</span>
+        <template #cell-fileCount="{ row }">
+          <span class="text-muted">{{ row.fileCount }}</span>
         </template>
-        <template #cell-total_size="{ row }">
-          <span class="text-muted">{{ formatSize(row.total_size) }}</span>
+        <template #cell-totalSize="{ row }">
+          <span class="text-muted">{{ formatSize(row.totalSize) }}</span>
         </template>
         <template #cell-actions="{ row }">
           <div class="row-actions">

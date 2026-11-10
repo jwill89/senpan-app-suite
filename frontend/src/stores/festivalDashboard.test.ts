@@ -1,24 +1,43 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
-import type { FestivalDashboard, PublicFestivalMap, PublicStampCard } from '@/types/api'
+import type { FestivalDashboard, PublicFestivalMap, PublicStampCard } from '@/api/client'
 
-const ep = vi.hoisted(() => ({
-  publicDetail: vi.fn(),
-  dashboard: vi.fn(),
-  enter: vi.fn(),
-  lookup: vi.fn(),
-}))
-vi.mock('@/lib/endpoints', () => ({
-  endpoints: {
-    festivalMaps: { publicDetail: ep.publicDetail },
-    festivalDashboard: { get: ep.dashboard },
-    stampSignup: { lookup: ep.lookup },
-  },
-}))
-// Entering a raffle goes through the API client; only its call is faked.
+// The store calls the API client; only its calls are faked (unwrap is the real one).
+// The festival's map and dashboard answers are faked as plain values (or a refusal),
+// and each call is answered the way the client does: `{ data, error, response }`.
+const ep = vi.hoisted(() => {
+  const publicDetail = vi.fn()
+  const dashboard = vi.fn()
+  const enter = vi.fn()
+  const reply = async (fn: () => unknown) => {
+    try {
+      return { data: await fn(), response: new Response(null, { status: 200 }) }
+    } catch (e) {
+      return {
+        error: { title: 'Not Found', detail: (e as Error).message },
+        response: new Response(null, { status: 404 }),
+      }
+    }
+  }
+  interface Init {
+    params: { path: { idOrSlug: string } }
+    body: unknown
+  }
+  return {
+    publicDetail,
+    dashboard,
+    enter,
+    GET: vi.fn((_path: string, init: Init) => reply(() => publicDetail(init.params.path.idOrSlug))),
+    POST: vi.fn((path: string, init: Init) =>
+      path === '/raffles/{id}/enter'
+        ? enter(path, init)
+        : reply(() => dashboard(init.params.path.idOrSlug, init.body)),
+    ),
+  }
+})
 vi.mock('@/api/client', async (importOriginal) => ({
   ...(await importOriginal<object>()),
-  api: { POST: ep.enter },
+  api: { GET: ep.GET, POST: ep.POST },
 }))
 
 import { festivalConnectState, useFestivalDashboardStore } from './festivalDashboard'
@@ -33,29 +52,52 @@ import {
 } from '@/lib/signups'
 
 function map(over: Partial<PublicFestivalMap> = {}): PublicFestivalMap {
-  return { id: 7, title: 'Obon', slug: 'obon', stalls: [], times: [], ...over } as PublicFestivalMap
+  return {
+    id: 7,
+    title: 'Obon',
+    slug: 'obon',
+    publicPath: 'obon',
+    stalls: [],
+    times: [],
+    ...over,
+  } as PublicFestivalMap
 }
 
 function card(): PublicStampCard {
   return {
-    participant_name: 'Aria @ Gilgamesh',
+    participantName: 'Aria @ Gilgamesh',
     completed: false,
-    rally: { id: 3, title: 'Obon Rally', completion_mode: 'all' },
+    rally: { id: 3, title: 'Obon Rally', completionMode: 'all' },
     stamps: [
-      { id: 1, occupant_id: 11, collected: true, stamp_type: 'food' },
-      { id: 2, occupant_id: 12, collected: false, stamp_type: 'game' },
-      { id: 3, collected: true, stamp_type: 'food' },
+      { id: 1, occupantId: 11, collected: true, stampType: 'food' },
+      { id: 2, occupantId: 12, collected: false, stampType: 'game' },
+      { id: 3, collected: true, stampType: 'food' },
     ],
     prizes: [],
   } as unknown as PublicStampCard
 }
 
 function dashboard(over: Partial<FestivalDashboard> = {}): FestivalDashboard {
-  return { participant_name: '', world: '', raffles: [], ...over }
+  return {
+    participantName: '',
+    world: '',
+    rally: null,
+    card: null,
+    cardToken: null,
+    garapon: null,
+    raffles: [],
+    ema: null,
+    ...over,
+  }
 }
 
 /** What the last dashboard read sent. */
-function lastSent(): { card_token: string; garapon_token: string; name: string; world: string } {
+function lastSent(): {
+  cardToken: string
+  garaponToken: string
+  characterName: string
+  world: string
+} {
   return ep.dashboard.mock.calls.at(-1)![1]
 }
 
@@ -63,8 +105,12 @@ beforeEach(() => {
   setActivePinia(createPinia())
   localStorage.clear()
   window.history.replaceState(null, '')
-  Object.values(ep).forEach((fn) => fn.mockReset())
-  ep.publicDetail.mockResolvedValue(map({ stamp_rally_id: 3 }))
+  ep.publicDetail.mockReset()
+  ep.dashboard.mockReset()
+  ep.enter.mockReset()
+  ep.GET.mockClear()
+  ep.POST.mockClear()
+  ep.publicDetail.mockResolvedValue(map({ stampRallyId: 3 }))
 })
 
 describe('opening a festival', () => {
@@ -81,9 +127,9 @@ describe('opening a festival', () => {
     await useFestivalDashboardStore().open('obon')
 
     expect(ep.dashboard).toHaveBeenCalledWith('obon', {
-      card_token: 'card-a',
-      garapon_token: 'draw-a',
-      name: 'Aria',
+      cardToken: 'card-a',
+      garaponToken: 'draw-a',
+      characterName: 'Aria',
       world: 'Gilgamesh',
     })
   })
@@ -91,11 +137,11 @@ describe('opening a festival', () => {
   it("hands the card to the stamp-rally store, so the card page's panel renders it", async () => {
     ep.dashboard.mockResolvedValue(
       dashboard({
-        participant_name: 'Aria',
+        participantName: 'Aria',
         world: 'Gilgamesh',
         card: card(),
-        card_token: 'card-a',
-        rally: { id: 3, title: 'Obon Rally', card_image: '', details: '', signup_open: true },
+        cardToken: 'card-a',
+        rally: { id: 3, title: 'Obon Rally', cardImage: '', details: '', signupOpen: true },
       }),
     )
     const store = useFestivalDashboardStore()
@@ -115,10 +161,11 @@ describe('opening a festival', () => {
       dashboard({
         garapon: {
           garapon,
-          default_draws: 2,
+          defaultDraws: 2,
+          player: null,
           draws: [],
-          has_paired_link: true,
-          paired_draws_left: 2,
+          hasPairedLink: true,
+          pairedDrawsLeft: 2,
         } as unknown as FestivalDashboard['garapon'],
       }),
     )
@@ -153,9 +200,9 @@ describe('links handed over from the card and drawing pages', () => {
     ep.dashboard.mockResolvedValue(dashboard())
     await useFestivalDashboardStore().open('obon')
 
-    expect(lastSent().garapon_token).toBe('draw-b')
+    expect(lastSent().garaponToken).toBe('draw-b')
     // Card A belongs with draw A; the server returns draw B's own card.
-    expect(lastSent().card_token).toBe('')
+    expect(lastSent().cardToken).toBe('')
     // Taken off the history entry, so a reload can't replay it after a "forget".
     expect((window.history.state as Record<string, unknown>).festivalConnect).toBeNull()
   })
@@ -173,7 +220,7 @@ describe('links handed over from the card and drawing pages', () => {
     ep.dashboard.mockResolvedValue(dashboard())
     await useFestivalDashboardStore().open('obon')
 
-    expect(lastSent()).toMatchObject({ card_token: 'card-b', garapon_token: '' })
+    expect(lastSent()).toMatchObject({ cardToken: 'card-b', garaponToken: '' })
   })
 })
 
@@ -194,7 +241,7 @@ describe('keeping the device honest', () => {
   it('reads again with the card when the map did not name the rally', async () => {
     // Outside its window the public map stops naming the rally, so the first read
     // goes out without the card the device holds for it.
-    ep.publicDetail.mockResolvedValue(map({ stamp_rally_id: undefined }))
+    ep.publicDetail.mockResolvedValue(map({ stampRallyId: null }))
     saveRallySignup({
       rallyId: 3,
       rallyTitle: 'Obon Rally',
@@ -202,15 +249,15 @@ describe('keeping the device honest', () => {
       world: 'Gilgamesh',
       cardToken: 'card-a',
     })
-    const rally = { id: 3, title: 'Obon Rally', card_image: '', details: '', signup_open: false }
+    const rally = { id: 3, title: 'Obon Rally', cardImage: '', details: '', signupOpen: false }
     ep.dashboard
       .mockResolvedValueOnce(dashboard({ rally }))
-      .mockResolvedValueOnce(dashboard({ rally, card: card(), card_token: 'card-a' }))
+      .mockResolvedValueOnce(dashboard({ rally, card: card(), cardToken: 'card-a' }))
     const store = useFestivalDashboardStore()
     await store.open('obon')
 
     expect(ep.dashboard).toHaveBeenCalledTimes(2)
-    expect(lastSent().card_token).toBe('card-a')
+    expect(lastSent().cardToken).toBe('card-a')
     expect(store.dashboard?.card).toBeTruthy()
   })
 })
@@ -218,13 +265,13 @@ describe('keeping the device honest', () => {
 describe('entering a raffle', () => {
   it('enters under the visitor the dashboard knows and keeps the spelling', async () => {
     saveFestivalVisit({ mapId: 7, name: 'Aria', world: 'Gilgamesh' })
-    const raffle = { id: 9, title: 'Gaelicat Raffle', max_entries: 3 }
+    const raffle = { id: 9, title: 'Gaelicat Raffle', maxEntries: 3 }
     ep.dashboard.mockResolvedValue(
       dashboard({
-        participant_name: 'Aria',
+        participantName: 'Aria',
         world: 'Gilgamesh',
         raffles: [
-          { raffle, running: true, total_entries: 0 } as unknown as FestivalDashboard['raffles'][0],
+          { raffle, running: true, totalEntries: 0 } as unknown as FestivalDashboard['raffles'][0],
         ],
       }),
     )

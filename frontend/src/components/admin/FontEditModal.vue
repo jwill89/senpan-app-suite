@@ -23,7 +23,7 @@ import FormField from '@/components/common/ui/FormField.vue'
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
 import { useFontsStore } from '@/stores/fonts'
 import { useUiStore } from '@/stores/ui'
-import type { FontVariant } from '@/types/api'
+import type { FontVariant } from '@/api/client'
 
 const props = defineProps<{
   /** Base name of the font being edited (group identity). */

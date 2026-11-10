@@ -4,7 +4,7 @@
  * entries - with the actions on each.
  *
  * Two reads make it up. The plan is the same public map every visitor sees; what
- * depends on WHO is looking comes from POST /api/festival-dashboard/{id}, fed
+ * depends on WHO is looking comes from POST /festivals/{idOrSlug}/dashboard, fed
  * whatever this device holds (lib/signups): the card and drawing tokens issued at
  * sign-up, and the name and world the visitor gave. The card and the drum are then
  * handed to the stamp-rally and garapon stores' public state, so the panels the
@@ -17,9 +17,15 @@
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 import type { HistoryState } from 'vue-router'
-import { api, unwrap, type RaffleEnterResult } from '@/api/client'
-import { ApiError } from '@/lib/api'
-import { endpoints } from '@/lib/endpoints'
+import {
+  api,
+  unwrap,
+  type FestivalDashboard,
+  type PublicEmaPlaque,
+  type PublicFestivalMap,
+  type RaffleEnterResult,
+} from '@/api/client'
+import { ApiError, apiUpload } from '@/lib/api'
 import {
   forgetSignup,
   saveFestivalVisit,
@@ -28,7 +34,6 @@ import {
   savedFestivalVisit,
   savedRallySignup,
 } from '@/lib/signups'
-import type { FestivalDashboard, PublicFestivalMap } from '@/types/api'
 import { useGaraponsStore } from './garapons'
 import { useStampRalliesStore } from './stampRallies'
 import { useUiStore } from './ui'
@@ -88,8 +93,8 @@ export const useFestivalDashboardStore = defineStore('festivalDashboard', () => 
   const entered = ref<Partial<Record<number, RaffleEnterResult>>>({})
 
   const card = computed(() => stampRallies.publicCard)
-  const cardToken = computed(() => dashboard.value?.card_token ?? '')
-  const visitorName = computed(() => dashboard.value?.participant_name ?? '')
+  const cardToken = computed(() => dashboard.value?.cardToken ?? '')
+  const visitorName = computed(() => dashboard.value?.participantName ?? '')
   const visitorWorld = computed(() => dashboard.value?.world ?? '')
   /** A card fixes who the visitor is; without one they may say. */
   const identityFromCard = computed(() => !!dashboard.value?.card)
@@ -98,8 +103,8 @@ export const useFestivalDashboardStore = defineStore('festivalDashboard', () => 
   const collectedOccupantIds = computed(() => {
     const ids = new Set<number>()
     for (const s of card.value?.stamps ?? []) {
-      if (s.collected && s.occupant_id != null) {
-        ids.add(s.occupant_id)
+      if (s.collected && s.occupantId != null) {
+        ids.add(s.occupantId)
       }
     }
     return ids
@@ -125,7 +130,9 @@ export const useFestivalDashboardStore = defineStore('festivalDashboard', () => 
     festivalKey.value = key
     loading.value = true
     try {
-      map.value = await endpoints.festivalMaps.publicDetail(key)
+      map.value = await unwrap(
+        api.GET('/festival-maps/public/{idOrSlug}', { params: { path: { idOrSlug: key } } }),
+      )
     } catch {
       notFound.value = true
       loading.value = false
@@ -152,7 +159,7 @@ export const useFestivalDashboardStore = defineStore('festivalDashboard', () => 
       return
     }
     const visit = savedFestivalVisit(m.id)
-    const rallyId = knownRallyId ?? visit?.rallyId ?? m.stamp_rally_id ?? 0
+    const rallyId = knownRallyId ?? visit?.rallyId ?? m.stampRallyId ?? 0
     const signup = rallyId ? savedRallySignup(rallyId) : undefined
 
     let sentCard = signup?.cardToken ?? ''
@@ -172,12 +179,17 @@ export const useFestivalDashboardStore = defineStore('festivalDashboard', () => 
 
     let data: FestivalDashboard
     try {
-      data = await endpoints.festivalDashboard.get(festivalKey.value, {
-        card_token: sentCard,
-        garapon_token: sentDraw,
-        name: visit?.name ?? signup?.name ?? '',
-        world: visit?.world ?? signup?.world ?? '',
-      })
+      data = await unwrap(
+        api.POST('/festivals/{idOrSlug}/dashboard', {
+          params: { path: { idOrSlug: festivalKey.value } },
+          body: {
+            cardToken: sentCard,
+            garaponToken: sentDraw,
+            characterName: visit?.name ?? signup?.name ?? '',
+            world: visit?.world ?? signup?.world ?? '',
+          },
+        }),
+      )
     } catch (e) {
       ui.notify((e as Error).message, 'error')
       return
@@ -198,7 +210,7 @@ export const useFestivalDashboardStore = defineStore('festivalDashboard', () => 
     if (data.garapon) {
       garapons.showPublic({
         garapon: data.garapon.garapon,
-        player: data.garapon.player ?? null,
+        player: data.garapon.player,
         draws: data.garapon.draws,
       })
     } else {
@@ -225,13 +237,13 @@ export const useFestivalDashboardStore = defineStore('festivalDashboard', () => 
     if (!m) {
       return
     }
-    if (data.card && data.card_token && data.rally) {
+    if (data.card && data.cardToken && data.rally) {
       saveRallySignup({
         rallyId: data.rally.id,
         rallyTitle: data.rally.title,
-        name: data.participant_name,
+        name: data.participantName,
         world: data.world,
-        cardToken: data.card_token,
+        cardToken: data.cardToken,
         garaponToken: data.garapon?.player ? sentDraw : undefined,
         garaponTitle: data.garapon?.player ? data.garapon.garapon.title : undefined,
       })
@@ -241,10 +253,10 @@ export const useFestivalDashboardStore = defineStore('festivalDashboard', () => 
       // that's gone.
       forgetSignup('rally', rallyId)
     }
-    if (data.participant_name) {
+    if (data.participantName) {
       saveFestivalVisit({
         mapId: m.id,
-        name: data.participant_name,
+        name: data.participantName,
         world: data.world,
         rallyId: data.rally?.id,
       })
@@ -321,8 +333,8 @@ export const useFestivalDashboardStore = defineStore('festivalDashboard', () => 
     }
     busy.value = true
     try {
-      const { entries } = await endpoints.stampSignup.lookup(name.trim(), world.trim())
-      const hit = entries.find((e) => e.rally_id === rally.id)
+      const { entries } = await stampRallies.lookUpCards(name.trim(), world.trim())
+      const hit = entries.find((e) => e.rallyId === rally.id)
       if (!hit) {
         ui.notify("There's no card on this rally under that name.", 'error')
         return false
@@ -330,13 +342,13 @@ export const useFestivalDashboardStore = defineStore('festivalDashboard', () => 
       saveRallySignup({
         rallyId: rally.id,
         rallyTitle: rally.title,
-        name: hit.participant_name,
+        name: hit.participantName,
         world: hit.world,
-        cardToken: hit.card_token,
+        cardToken: hit.cardToken,
       })
       saveFestivalVisit({
         mapId: m.id,
-        name: hit.participant_name,
+        name: hit.participantName,
         world: hit.world,
         rallyId: rally.id,
       })
@@ -398,7 +410,7 @@ export const useFestivalDashboardStore = defineStore('festivalDashboard', () => 
       return
     }
     try {
-      googleFonts.value = (await endpoints.ema.googleFonts()).families
+      googleFonts.value = (await unwrap(api.GET('/google-fonts'))).families
     } catch {
       googleFonts.value = []
     }
@@ -414,13 +426,16 @@ export const useFestivalDashboardStore = defineStore('festivalDashboard', () => 
       return false
     }
     const form = new FormData()
-    form.append('name', visitorName.value)
+    form.append('characterName', visitorName.value)
     form.append('world', visitorWorld.value)
-    form.append('turnstile_token', turnstileToken)
+    form.append('turnstileToken', turnstileToken)
     form.append('image', png, 'ema.png')
     busy.value = true
     try {
-      await endpoints.ema.submitPlaque(board.id, form)
+      await apiUpload<PublicEmaPlaque>(
+        `festivals/${encodeURIComponent(festivalKey.value)}/ema-plaques`,
+        form,
+      )
       ui.notify('Sent! Staff will look it over and post it for you.', 'success')
       await refresh()
       return true
@@ -441,13 +456,18 @@ export const useFestivalDashboardStore = defineStore('festivalDashboard', () => 
     }
     busy.value = true
     try {
-      await endpoints.ema.request(board.id, {
-        name: visitorName.value,
-        world: visitorWorld.value,
-        description: description.trim(),
-        turnstile_token: turnstileToken,
-      })
-      ui.notify(`Sent to ${board.artist_name}!`, 'success')
+      await unwrap(
+        api.POST('/festivals/{idOrSlug}/ema-requests', {
+          params: { path: { idOrSlug: festivalKey.value } },
+          body: {
+            characterName: visitorName.value,
+            world: visitorWorld.value,
+            description: description.trim(),
+            turnstileToken: turnstileToken || undefined,
+          },
+        }),
+      )
+      ui.notify(`Sent to ${board.artistName}!`, 'success')
       await refresh()
       return true
     } catch (e) {

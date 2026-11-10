@@ -1,6 +1,7 @@
 package server
 
 import (
+	"encoding/json"
 	"net/http"
 
 	"app-suite/internal/version"
@@ -16,7 +17,10 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		status, state = http.StatusServiceUnavailable, "unavailable"
 	}
-	writeJSON(w, status, struct {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.Header().Set("Cache-Control", "no-store")
+	w.WriteHeader(status)
+	_ = json.NewEncoder(w).Encode(struct {
 		Status  string `json:"status"`
 		Version string `json:"version"`
 		Schema  int    `json:"schema"`

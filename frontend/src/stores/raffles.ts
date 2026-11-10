@@ -7,6 +7,8 @@ import { computed, ref } from 'vue'
 import {
   api,
   unwrap,
+  type FestivalMap,
+  type FestivalStallOccupant,
   type Raffle,
   type RaffleEnterResult,
   type RaffleEntry,
@@ -15,9 +17,8 @@ import {
   type RaffleSettlement,
   type RaffleWinner,
 } from '@/api/client'
-import { endpoints } from '@/lib/endpoints'
 import { utcToDatetimeLocal, datetimeLocalToUtc, parseServerTimestamp } from '@/lib/datetime'
-import type { FestivalMap, FestivalStallOccupant, RaffleMode } from '@/types/api'
+import type { RaffleMode } from '@/types/api'
 import { useUiStore } from './ui'
 import { withLoading } from '@/lib/withLoading'
 import { saveRaffleSignup } from '@/lib/signups'
@@ -485,7 +486,7 @@ export const useRafflesStore = defineStore('raffles', () => {
    */
   async function loadFormSources(): Promise<void> {
     try {
-      festivalMaps.value = (await endpoints.festivalMaps.list()).maps
+      festivalMaps.value = (await unwrap(api.GET('/festival-maps'))).maps
     } catch {
       // No festival-map permission (or none exist) - the link select stays empty
       // and the raffle simply belongs to no festival.
@@ -501,7 +502,9 @@ export const useRafflesStore = defineStore('raffles', () => {
       return
     }
     try {
-      const stalls = (await endpoints.festivalMaps.detail(mapId)).map.stalls ?? []
+      const stalls = (
+        await unwrap(api.GET('/festival-maps/{id}', { params: { path: { id: mapId } } }))
+      ).stalls
       mapStalls.value = stalls.flatMap((stall) => stall.occupants)
     } catch {
       mapStalls.value = []

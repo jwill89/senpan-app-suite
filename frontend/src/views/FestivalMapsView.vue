@@ -15,7 +15,7 @@ import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
 import { useFestivalMapsStore } from '@/stores/festivalMaps'
 import { assetUrl } from '@/lib/assets'
 import { formatEventTime } from '@/lib/festivalmap'
-import type { PublicFestivalMapSummary } from '@/types/api'
+import type { PublicFestivalMapSummary } from '@/api/client'
 
 const router = useRouter()
 const store = useFestivalMapsStore()
@@ -56,22 +56,22 @@ function goHome(): void {
           @keydown.space.prevent="openMap(m)"
         >
           <img
-            v-if="m.map_image"
-            :src="assetUrl(m.map_image)"
+            v-if="m.mapImage"
+            :src="assetUrl(m.mapImage)"
             class="media-card-image"
             alt="Festival map"
           />
           <div class="media-card-body">
             <h3>
               {{ m.title }}
-              <span v-if="m.is_active" class="status-badge status-badge-open">happening now</span>
+              <span v-if="m.isActive" class="status-badge status-badge-open">happening now</span>
             </h3>
             <ul v-if="m.times.length" class="map-times">
               <li v-for="(t, i) in m.times" :key="i">
                 <font-awesome-icon :icon="['fad', 'calendar-days']" /> {{ formatEventTime(t) }}
               </li>
             </ul>
-            <p class="text-sm text-muted">{{ m.stall_count }} stall(s) to explore</p>
+            <p class="text-sm text-muted">{{ m.stallCount }} stall(s) to explore</p>
           </div>
         </div>
       </div>

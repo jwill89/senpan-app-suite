@@ -83,9 +83,9 @@ function back(): void {
       <!-- Results (null = nothing searched yet, so nothing is claimed either way) -->
       <template v-if="store.lookupResults">
         <div v-if="store.lookupResults.length" class="stamp-lookup-results">
-          <div v-for="entry in store.lookupResults" :key="entry.rally_id" class="card card--padded">
+          <div v-for="entry in store.lookupResults" :key="entry.rallyId" class="card card--padded">
             <h3 class="mb-8">
-              {{ entry.rally_title }}
+              {{ entry.rallyTitle }}
               <span v-if="entry.completed" class="badge badge--success">Complete</span>
             </h3>
             <!-- Which record this is. A card issued before worlds had their own
@@ -93,18 +93,18 @@ function back(): void {
                  what was just searched for. -->
             <p class="text-muted text-sm mb-8">
               Held by
-              <strong>{{ participantLabel(entry.participant_name, entry.world) }}</strong>
+              <strong>{{ participantLabel(entry.participantName, entry.world) }}</strong>
             </p>
 
             <div class="stamp-signup-link">
               <span class="field-label">Stamp card</span>
-              <a :href="store.stampCardUrl(entry.card_token)" class="stamp-signup-link-url">
-                {{ store.stampCardUrl(entry.card_token) }}
+              <a :href="store.stampCardUrl(entry.cardToken)" class="stamp-signup-link-url">
+                {{ store.stampCardUrl(entry.cardToken) }}
               </a>
               <button
                 type="button"
                 class="btn-view btn-sm"
-                @click="store.copyLink(store.stampCardUrl(entry.card_token))"
+                @click="store.copyLink(store.stampCardUrl(entry.cardToken))"
               >
                 <font-awesome-icon :icon="['fas', 'copy']" /> Copy
               </button>
@@ -117,12 +117,12 @@ function back(): void {
               hand it out. Saying the draws are still there is what a participant on
               a borrowed device actually needs to know.
             -->
-            <p v-if="entry.garapon_title" class="stamp-lookup-draws">
+            <p v-if="entry.garaponTitle" class="stamp-lookup-draws">
               <font-awesome-icon :icon="['fas', 'ticket']" />
               <span>
-                <strong>{{ entry.garapon_title }}</strong> &mdash;
-                {{ entry.garapon_draws_left || 0 }}
-                {{ entry.garapon_draws_left === 1 ? 'draw' : 'draws' }} left.
+                <strong>{{ entry.garaponTitle }}</strong> &mdash;
+                {{ entry.garaponDrawsLeft || 0 }}
+                {{ entry.garaponDrawsLeft === 1 ? 'draw' : 'draws' }} left.
               </span>
               <span class="text-muted">
                 Your drawing link was saved on the device you signed up with. Ask a staff member if

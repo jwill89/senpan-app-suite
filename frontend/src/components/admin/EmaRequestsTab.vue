@@ -18,7 +18,7 @@ import EmaRequestPostModal from '@/components/admin/EmaRequestPostModal.vue'
 import { useEmaStore } from '@/stores/ema'
 import { formatServerTimestamp } from '@/lib/datetime'
 import { participantLabel } from '@/lib/participant'
-import type { EmaPlaque } from '@/types/api'
+import type { EmaPlaque } from '@/api/client'
 
 const ema = useEmaStore()
 
@@ -34,11 +34,11 @@ const rows = computed(() =>
 )
 
 const columns: DataColumn[] = [
-  { key: 'festival_map_name', label: 'Festival', sortable: true, facetable: true },
-  { key: 'window_label', label: 'Day', sortable: true },
-  { key: 'character_name', label: 'Character', sortable: true },
+  { key: 'festivalMapName', label: 'Festival', sortable: true, facetable: true },
+  { key: 'windowLabel', label: 'Day', sortable: true },
+  { key: 'characterName', label: 'Character', sortable: true },
   { key: 'description', label: 'What they asked for' },
-  { key: 'created_at', label: 'Asked', sortable: true },
+  { key: 'createdAt', label: 'Asked', sortable: true },
   { key: 'actions', label: '', align: 'right' },
 ]
 </script>
@@ -69,17 +69,17 @@ const columns: DataColumn[] = [
       :rows="rows"
       row-key="id"
       :page-size="25"
-      :default-sort="{ key: 'created_at', dir: 'asc' }"
+      :default-sort="{ key: 'createdAt', dir: 'asc' }"
       :row-class="(r) => (r.status === 'complete' ? 'ema-request-done' : '')"
     >
-      <template #cell-character_name="{ row }">
-        <strong>{{ participantLabel(row.character_name, row.world) }}</strong>
+      <template #cell-characterName="{ row }">
+        <strong>{{ participantLabel(row.characterName, row.world) }}</strong>
       </template>
       <template #cell-description="{ row }">
         <span class="ema-request-text">{{ row.description }}</span>
       </template>
-      <template #cell-created_at="{ row }">
-        <span class="text-sm">{{ formatServerTimestamp(row.created_at) }}</span>
+      <template #cell-createdAt="{ row }">
+        <span class="text-sm">{{ formatServerTimestamp(row.createdAt) }}</span>
       </template>
       <template #cell-actions="{ row }">
         <div class="row-actions">

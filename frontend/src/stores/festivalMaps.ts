@@ -10,19 +10,25 @@
  */
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
-import { endpoints } from '@/lib/endpoints'
-import { api, unwrap, type Affiliate } from '@/api/client'
+import {
+  api,
+  unwrap,
+  type Affiliate,
+  type EventTime,
+  type EventTimeInput,
+  type FestivalMap,
+  type FestivalMapInput,
+  type Placement,
+  type PublicFestivalMap,
+  type PublicFestivalMapSummary,
+} from '@/api/client'
 import type {
   EventTimeForm,
-  FestivalMap,
   FestivalMapForm,
   FestivalMapStatus,
   FestivalStallForm,
   FestivalStallOccupantForm,
-  Placement,
   StallShape,
-  PublicFestivalMap,
-  PublicFestivalMapSummary,
   StallType,
 } from '@/types/api'
 import { datetimeLocalToUtc, utcToDatetimeLocal } from '@/lib/datetime'
@@ -47,12 +53,12 @@ function defaultPlacement(shape: StallShape): Placement {
 export function blankOccupant(type: StallType): FestivalStallOccupantForm {
   return {
     id: 0,
-    affiliate_id: null,
+    affiliateId: null,
     title: '',
     description: '',
-    event_carrd: '',
-    stall_type: type,
-    type_label: '',
+    eventCarrd: '',
+    stallType: type,
+    typeLabel: '',
     times: [],
     _uid: nextUid(),
   }
@@ -74,10 +80,10 @@ function blankStall(type: StallType): FestivalStallForm {
     color: '',
     // Also empty: the selection halo falls back to the app's highlight until an
     // admin picks a colour that reads against this pitch's fill.
-    selection_color: '',
+    selectionColor: '',
     // Empty means white, which reads on most fills; an admin picks another where
     // it does not.
-    text_color: '',
+    textColor: '',
     placement: defaultPlacement(meta.shape),
     occupants: [blankOccupant(type)],
     _uid: nextUid(),
@@ -90,7 +96,7 @@ export function blankEventTime(): EventTimeForm {
 }
 
 /** Stored UTC ranges -> the local wall-clock strings the datetime inputs bind to. */
-function timesToForm(times: { label: string; start: string; end: string }[]): EventTimeForm[] {
+function timesToForm(times: EventTime[]): EventTimeForm[] {
   return times.map((t) => ({
     label: t.label,
     start: utcToDatetimeLocal(t.start),
@@ -104,13 +110,13 @@ function timesToForm(times: { label: string; start: string; end: string }[]): Ev
  * unstarted range says nothing) and stripping the client-only `_uid`. The server
  * applies the same rule; doing it here keeps the payload honest either way.
  */
-function timesToPayload(times: EventTimeForm[]): { label: string; start: string; end: string }[] {
+function timesToPayload(times: EventTimeForm[]): EventTimeInput[] {
   return times
     .filter((t) => t.start.trim())
     .map((t) => ({
       label: t.label.trim(),
       start: datetimeLocalToUtc(t.start),
-      end: datetimeLocalToUtc(t.end),
+      end: datetimeLocalToUtc(t.end) || null,
     }))
 }
 
@@ -144,7 +150,7 @@ export const useFestivalMapsStore = defineStore('festivalMaps', () => {
   // -- Admin: load ----------------------------------------------------------
   async function loadMaps(): Promise<void> {
     await withLoading(mapsLoading, async () => {
-      maps.value = (await endpoints.festivalMaps.list()).maps
+      maps.value = (await unwrap(api.GET('/festival-maps'))).maps
     })
   }
 
@@ -152,11 +158,11 @@ export const useFestivalMapsStore = defineStore('festivalMaps', () => {
     const reqId = ++detailSeq
     detailLoading.value = true
     try {
-      const data = await endpoints.festivalMaps.detail(id)
+      const data = await unwrap(api.GET('/festival-maps/{id}', { params: { path: { id } } }))
       if (reqId !== detailSeq) {
         return // a newer load superseded this one
       }
-      selectedMap.value = data.map
+      selectedMap.value = data
     } catch (e) {
       if (reqId === detailSeq) {
         ui.notify((e as Error).message, 'error')
@@ -193,7 +199,7 @@ export const useFestivalMapsStore = defineStore('festivalMaps', () => {
       title: '',
       slug: '',
       description: '',
-      map_image: '',
+      mapImage: '',
       times: [blankEventTime()],
       stalls: [],
     }
@@ -203,14 +209,13 @@ export const useFestivalMapsStore = defineStore('festivalMaps', () => {
    * True when `m` carries its pitches, i.e. it came from a detail fetch rather
    * than the list.
    *
-   * The list omits `stalls` (`omitempty` server-side) and a save is a FULL
-   * REPLACE, so seeding the form from a list row and saving it would delete every
-   * pitch on the map along with the rally stamps and raffles pinned to them. The
-   * server now leaves a collection alone when the request didn't carry it, but the
-   * form must not offer an edit it cannot honor.
+   * The list carries no pitches, only their count, and a save is a FULL REPLACE, so
+   * seeding the form from a list row and saving it would delete every pitch on the
+   * map along with the rally stamps and raffles pinned to them. The form must not
+   * offer an edit it cannot honor.
    */
   function hasMapDetail(m: FestivalMap | null | undefined): boolean {
-    return !!m && Array.isArray(m.stalls)
+    return !!m && m.stalls.length === m.stallCount
   }
 
   function editMapForm(m: FestivalMap): boolean {
@@ -223,23 +228,23 @@ export const useFestivalMapsStore = defineStore('festivalMaps', () => {
       title: m.title,
       slug: m.slug,
       description: m.description,
-      map_image: m.map_image,
+      mapImage: m.mapImage,
       times: timesToForm(m.times),
-      stalls: (m.stalls ?? []).map((s) => ({
+      stalls: m.stalls.map((s) => ({
         id: s.id,
         shape: s.shape === 'circle' ? 'circle' : 'rect',
         color: s.color,
-        selection_color: s.selection_color,
-        text_color: s.text_color,
+        selectionColor: s.selectionColor,
+        textColor: s.textColor,
         placement: { ...s.placement },
         occupants: s.occupants.map((o) => ({
           id: o.id,
-          affiliate_id: o.affiliate_id ?? null,
+          affiliateId: o.affiliateId ?? null,
           title: o.title,
           description: o.description,
-          event_carrd: o.event_carrd,
-          stall_type: o.stall_type as StallType,
-          type_label: o.type_label,
+          eventCarrd: o.eventCarrd,
+          stallType: o.stallType,
+          typeLabel: o.typeLabel,
           times: timesToForm(o.times),
           _uid: nextUid(),
         })),
@@ -311,7 +316,7 @@ export const useFestivalMapsStore = defineStore('festivalMaps', () => {
     if (!stall) {
       return null
     }
-    const occupant = blankOccupant(stall.occupants[0]?.stall_type ?? 'other')
+    const occupant = blankOccupant(stall.occupants[0]?.stallType ?? 'other')
     stall.occupants.push(occupant)
     return occupant
   }
@@ -343,7 +348,7 @@ export const useFestivalMapsStore = defineStore('festivalMaps', () => {
     // one saved without leaves a blank shape on the plan - and the venue is an
     // affiliate in its own right now, so there is no default to fall back on.
     const missing = f.stalls.findIndex((stall) =>
-      stall.occupants.some((o) => o.affiliate_id === null),
+      stall.occupants.some((o) => o.affiliateId === null),
     )
     if (missing >= 0) {
       ui.notify(`Stall ${missing + 1} needs an affiliate`, 'error')
@@ -351,15 +356,14 @@ export const useFestivalMapsStore = defineStore('festivalMaps', () => {
     }
     savingMap.value = true
     try {
-      // Spread the form rather than listing fields. The list here was an
-      // allow-list that had to be extended every time the editor gained a field,
-      // and three of them - the event Carrd link, the selection colour and the
-      // label colour - were silently dropped by it: set in the editor, saved
-      // without complaint, gone on reload. Only the client-only `_uid` and the
-      // datetime shapes need handling; anything else the form holds goes as-is,
-      // and the server ignores what it does not know.
-      const payload = {
-        ...f,
+      // Spread each pitch and occupant rather than listing their fields, so a field
+      // the editor gains is sent without anyone remembering to add it here. Only the
+      // client-only `_uid` and the datetime shapes need handling.
+      const body: FestivalMapInput = {
+        title: f.title,
+        slug: f.slug,
+        description: f.description,
+        mapImage: f.mapImage,
         times: timesToPayload(f.times),
         stalls: f.stalls.map(({ _uid, occupants, ...stall }) => ({
           ...stall,
@@ -371,10 +375,10 @@ export const useFestivalMapsStore = defineStore('festivalMaps', () => {
       }
       let savedId = f.id
       if (f.id) {
-        await endpoints.festivalMaps.update(payload)
+        await unwrap(api.PUT('/festival-maps/{id}', { params: { path: { id: f.id } }, body }))
         ui.notify('Festival map updated', 'success')
       } else {
-        savedId = (await endpoints.festivalMaps.create(payload)).map.id
+        savedId = (await unwrap(api.POST('/festival-maps', { body }))).id
         ui.notify('Festival map created', 'success')
       }
       mapForm.value = null
@@ -402,7 +406,7 @@ export const useFestivalMapsStore = defineStore('festivalMaps', () => {
       return
     }
     try {
-      await endpoints.festivalMaps.delete(id)
+      await unwrap(api.DELETE('/festival-maps/{id}', { params: { path: { id } } }))
       maps.value = maps.value.filter((m) => m.id !== id)
       if (selectedMap.value?.id === id) {
         selectedMap.value = null
@@ -416,7 +420,7 @@ export const useFestivalMapsStore = defineStore('festivalMaps', () => {
   /** Sets a map's publish status (in progress / published / closed). */
   async function setStatus(id: number, status: FestivalMapStatus): Promise<void> {
     try {
-      await endpoints.festivalMaps.setStatus(id, status)
+      await unwrap(api.PATCH('/festival-maps/{id}', { params: { path: { id } }, body: { status } }))
       if (selectedMap.value?.id === id) {
         selectedMap.value.status = status
       }
@@ -439,7 +443,7 @@ export const useFestivalMapsStore = defineStore('festivalMaps', () => {
   async function loadPublicMaps(): Promise<void> {
     publicLoading.value = true
     try {
-      publicMaps.value = (await endpoints.festivalMaps.publicList()).maps
+      publicMaps.value = (await unwrap(api.GET('/festival-maps/public'))).maps
     } catch {
       publicMaps.value = []
     } finally {
@@ -456,7 +460,9 @@ export const useFestivalMapsStore = defineStore('festivalMaps', () => {
     publicMap.value = null
     publicLoading.value = true
     try {
-      publicMap.value = await endpoints.festivalMaps.publicDetail(idOrSlug)
+      publicMap.value = await unwrap(
+        api.GET('/festival-maps/public/{idOrSlug}', { params: { path: { idOrSlug } } }),
+      )
       return true
     } catch {
       return false
@@ -466,12 +472,12 @@ export const useFestivalMapsStore = defineStore('festivalMaps', () => {
   }
 
   /**
-   * The path segment a map is linked by: its shortcode when it has one, else its
-   * id. One place decides it, so the admin's "copy public link", the public list
-   * and the map page can't disagree about a map's URL.
+   * The path segment a map is linked by, as the server decides it (the shortcode
+   * when it has one, else the id), so the admin's "copy public link", the public
+   * list and the map page can't disagree about a map's URL.
    */
-  function mapPath(m: { id: number; slug: string }): string {
-    return m.slug || String(m.id)
+  function mapPath(m: { publicPath: string }): string {
+    return m.publicPath
   }
 
   return {

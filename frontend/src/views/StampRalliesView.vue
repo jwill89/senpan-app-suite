@@ -14,7 +14,7 @@ import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
 import { useStampRalliesStore } from '@/stores/stampRallies'
 import { assetUrl } from '@/lib/assets'
 import { savedSignups } from '@/lib/signups'
-import type { SignupRally } from '@/types/api'
+import type { SignupRally } from '@/api/client'
 
 const router = useRouter()
 const store = useStampRalliesStore()
@@ -72,8 +72,8 @@ function goLookup(): void {
             @keydown.space.prevent="openRally(r)"
           >
             <img
-              v-if="r.card_image"
-              :src="assetUrl(r.card_image)"
+              v-if="r.cardImage"
+              :src="assetUrl(r.cardImage)"
               class="media-card-image"
               alt="Stamp card"
             />
@@ -84,9 +84,9 @@ function goLookup(): void {
                      so here rather than letting someone walk into the error. -->
                 <span v-if="signedUpIds.has(r.id)" class="badge badge--success">Signed up</span>
               </h3>
-              <p v-if="r.garapon_title" class="text-sm text-muted">
+              <p v-if="r.garaponTitle" class="text-sm text-muted">
                 <font-awesome-icon :icon="['fad', 'circle-dot']" /> Includes a
-                {{ r.garapon_title }} garapon draw
+                {{ r.garaponTitle }} garapon draw
               </p>
             </div>
           </div>

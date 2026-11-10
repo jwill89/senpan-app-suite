@@ -1,65 +1,86 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
-import type { Garapon, GaraponDraw, GaraponPlayer, PublicGarapon } from '@/types/api'
+import type {
+  Garapon,
+  GaraponDraw,
+  GaraponPlayer,
+  GaraponPlayerSummary,
+  PublicGarapon,
+} from '@/api/client'
 
-// Mock the typed endpoint layer so store actions can be exercised without the
-// network. vi.hoisted lets the spies be referenced inside the mock factory.
-const ep = vi.hoisted(() => ({
-  list: vi.fn(async () => ({ garapons: [] as Garapon[] })),
-  detail: vi.fn(async () => ({
-    garapon: {} as Garapon,
-    players: [] as GaraponPlayer[],
-    draws: [] as GaraponDraw[],
-  })),
-  create: vi.fn(async () => ({ ok: true })),
-  update: vi.fn(async () => ({ ok: true })),
-  del: vi.fn(async () => ({ ok: true })),
-  setStatus: vi.fn(async () => ({ ok: true })),
-  createPlayer: vi.fn(async () => ({ player: { id: 9, token: 'tok', player_name: 'Hero' } })),
-  publicGet: vi.fn(async () => ({ garapon: {} as Garapon, player: {}, draws: [] })),
-  draw: vi.fn(async () => ({ draw: { prize_name: 'Grand' }, draws_used: 1, max_draws: 3 })),
+// The store calls the API client; only its calls are faked (unwrap is the real
+// one). Each fake answers a call's `{ data, error, response }`.
+const ok = (data: unknown, status = 200) => ({ data, response: new Response(null, { status }) })
+const api = vi.hoisted(() => ({
+  GET: vi.fn(),
+  POST: vi.fn(),
+  PUT: vi.fn(),
+  DELETE: vi.fn(),
 }))
-vi.mock('@/lib/endpoints', () => ({
-  endpoints: {
-    garapons: {
-      list: ep.list,
-      detail: ep.detail,
-      create: ep.create,
-      update: ep.update,
-      delete: ep.del,
-      setStatus: ep.setStatus,
-      createPlayer: ep.createPlayer,
-    },
-    garapon: { get: ep.publicGet, draw: ep.draw },
-    stampRallies: {
-      list: vi.fn(async () => ({
-        stamp_rallies: [
-          { id: 1, title: 'Open', status: 'open' },
-          { id: 2, title: 'Closed', status: 'closed' },
-        ],
-      })),
-    },
-  },
+vi.mock('@/api/client', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  api,
 }))
 
 import { useGaraponsStore } from './garapons'
 import { useUiStore } from './ui'
 
+/** What the store passes a call: the path parameters and the body. */
+interface CallInit {
+  params: { path: Record<string, unknown> }
+  body: Record<string, unknown>
+}
+
+/** The call to `path` among a method's calls, as `[path, init]`. */
+function callTo(method: 'GET' | 'POST' | 'PUT' | 'DELETE', path: string) {
+  return api[method].mock.calls.find(([p]) => p === path) as [string, CallInit] | undefined
+}
+
 /** Minimal garapon with the fields the store reads. */
 function garapon(over: Partial<Garapon> = {}): Garapon {
-  return { id: 1, title: 'G', status: 'open', prizes: [] as never, ...over } as Garapon
+  return {
+    id: 1,
+    title: 'G',
+    details: '',
+    grandPrizeImage: '',
+    status: 'open',
+    stampRallyId: null,
+    stampRallyTitle: '',
+    defaultDraws: 1,
+    createdAt: null,
+    prizes: [],
+    playerCount: 0,
+    drawCount: 0,
+    ...over,
+  }
+}
+
+function publicGarapon(over: Partial<PublicGarapon> = {}): PublicGarapon {
+  return {
+    id: 1,
+    title: 'G',
+    details: '',
+    grandPrizeImage: '',
+    status: 'open',
+    prizes: [],
+    ...over,
+  }
+}
+
+function summary(over: Partial<GaraponPlayerSummary> = {}): GaraponPlayerSummary {
+  return { playerName: 'Hero', world: '', maxDraws: 3, drawsUsed: 0, stampCardToken: '', ...over }
 }
 
 beforeEach(() => {
   setActivePinia(createPinia())
-  Object.values(ep).forEach((fn) => fn.mockClear())
+  Object.values(api).forEach((fn) => fn.mockReset())
   // jsdom has no clipboard by default; provide a resolving stub.
   Object.assign(navigator, { clipboard: { writeText: vi.fn(async () => undefined) } })
 })
 
 describe('loading', () => {
   it('loadGarapons populates the list', async () => {
-    ep.list.mockResolvedValueOnce({ garapons: [garapon(), garapon({ id: 2 })] })
+    api.GET.mockResolvedValueOnce(ok({ garapons: [garapon(), garapon({ id: 2 })] }))
     const s = useGaraponsStore()
     await s.loadGarapons()
     expect(s.garapons).toHaveLength(2)
@@ -67,16 +88,19 @@ describe('loading', () => {
   })
 
   it('loadGaraponDetail populates selected garapon, players, and draws', async () => {
-    ep.detail.mockResolvedValueOnce({
-      garapon: garapon({ id: 5 }),
-      players: [{ id: 1 } as GaraponPlayer],
-      draws: [{ id: 1 }, { id: 2 }] as GaraponDraw[],
-    })
+    api.GET.mockResolvedValueOnce(
+      ok({
+        garapon: garapon({ id: 5 }),
+        players: [{ id: 1 } as GaraponPlayer],
+        draws: [{ id: 1 }, { id: 2 }] as GaraponDraw[],
+      }),
+    )
     const s = useGaraponsStore()
     await s.loadGaraponDetail(5)
     expect(s.selectedGarapon?.id).toBe(5)
     expect(s.garaponPlayers).toHaveLength(1)
     expect(s.garaponDraws).toHaveLength(2)
+    expect(callTo('GET', '/garapons/{id}')?.[1].params.path).toEqual({ id: 5 })
   })
 })
 
@@ -90,13 +114,13 @@ describe('computed', () => {
 
   it('derives grand/other prizes and draw availability from the public garapon', () => {
     const s = useGaraponsStore()
-    s.publicGarapon = garapon({
+    s.publicGarapon = publicGarapon({
       prizes: [
-        { name: 'Grand', is_grand: true },
-        { name: 'Other', is_grand: false },
-      ] as never,
-    }) as unknown as PublicGarapon
-    s.publicPlayer = { player_name: 'Hero', max_draws: 3, draws_used: 1 }
+        { id: 1, name: 'Grand', ballColor: '#fff', isGrand: true },
+        { id: 2, name: 'Other', ballColor: '#000', isGrand: false },
+      ],
+    })
+    s.publicPlayer = summary({ drawsUsed: 1 })
     expect(s.grandPrize?.name).toBe('Grand')
     expect(s.otherPrizes).toHaveLength(1)
     expect(s.drawsRemaining).toBe(2)
@@ -105,8 +129,8 @@ describe('computed', () => {
 
   it('canDraw is false when the allowance is exhausted', () => {
     const s = useGaraponsStore()
-    s.publicGarapon = garapon() as unknown as PublicGarapon
-    s.publicPlayer = { player_name: 'Hero', max_draws: 1, draws_used: 1 }
+    s.publicGarapon = publicGarapon()
+    s.publicPlayer = summary({ maxDraws: 1, drawsUsed: 1 })
     expect(s.drawsRemaining).toBe(0)
     expect(s.canDraw).toBe(false)
   })
@@ -117,7 +141,7 @@ describe('form editing', () => {
     const s = useGaraponsStore()
     s.newGaraponForm()
     expect(s.garaponForm?.prizes).toHaveLength(1)
-    expect(s.garaponForm?.prizes[0]!.is_grand).toBe(true)
+    expect(s.garaponForm?.prizes[0]!.isGrand).toBe(true)
   })
 
   it('editGaraponForm guarantees exactly one grand prize', () => {
@@ -125,12 +149,12 @@ describe('form editing', () => {
     s.editGaraponForm(
       garapon({
         prizes: [
-          { name: 'A', is_grand: false },
-          { name: 'B', is_grand: false },
-        ] as never,
+          { id: 1, name: 'A', ballColor: '#111', rate: 1, isGrand: false, sortOrder: 0 },
+          { id: 2, name: 'B', ballColor: '#222', rate: 1, isGrand: false, sortOrder: 1 },
+        ],
       }),
     )
-    expect(s.garaponForm?.prizes.filter((p) => p.is_grand)).toHaveLength(1)
+    expect(s.garaponForm?.prizes.filter((p) => p.isGrand)).toHaveLength(1)
   })
 
   it('setGrandPrize is radio-style (single selection)', () => {
@@ -138,7 +162,7 @@ describe('form editing', () => {
     s.newGaraponForm()
     s.addPrizeRow()
     s.setGrandPrize(1)
-    expect(s.garaponForm?.prizes.map((p) => p.is_grand)).toEqual([false, true])
+    expect(s.garaponForm?.prizes.map((p) => p.isGrand)).toEqual([false, true])
   })
 
   it('removePrizeRow promotes the first row when the grand row is removed', () => {
@@ -147,7 +171,7 @@ describe('form editing', () => {
     s.addPrizeRow() // [grand, normal]
     s.removePrizeRow(0) // remove the grand row
     expect(s.garaponForm?.prizes).toHaveLength(1)
-    expect(s.garaponForm?.prizes[0]!.is_grand).toBe(true)
+    expect(s.garaponForm?.prizes[0]!.isGrand).toBe(true)
   })
 
   it('removePrizeRow refuses to drop the last row', () => {
@@ -159,13 +183,13 @@ describe('form editing', () => {
 })
 
 describe('saveGarapon', () => {
-  it('rejects a blank title without calling the endpoint', async () => {
+  it('rejects a blank title without calling the API', async () => {
     const s = useGaraponsStore()
     s.newGaraponForm()
     s.garaponForm!.title = '   '
     s.garaponForm!.prizes[0]!.name = 'Grand'
     expect(await s.saveGarapon()).toBe(false)
-    expect(ep.create).not.toHaveBeenCalled()
+    expect(api.POST).not.toHaveBeenCalled()
   })
 
   it('rejects when no prize has a name', async () => {
@@ -173,10 +197,12 @@ describe('saveGarapon', () => {
     s.newGaraponForm()
     s.garaponForm!.title = 'Festival'
     expect(await s.saveGarapon()).toBe(false)
-    expect(ep.create).not.toHaveBeenCalled()
+    expect(api.POST).not.toHaveBeenCalled()
   })
 
   it('creates a new garapon with only the named prizes, then reloads', async () => {
+    api.POST.mockResolvedValueOnce(ok(garapon(), 201))
+    api.GET.mockResolvedValueOnce(ok({ garapons: [] }))
     const s = useGaraponsStore()
     s.newGaraponForm()
     s.garaponForm!.title = 'Festival'
@@ -184,20 +210,30 @@ describe('saveGarapon', () => {
     s.addPrizeRow() // unnamed row should be filtered out
 
     expect(await s.saveGarapon()).toBe(true)
-    expect(ep.create).toHaveBeenCalledTimes(1)
-    const payload = (ep.create.mock.calls[0] as unknown[])[0] as { prizes: unknown[] }
-    expect(payload.prizes).toHaveLength(1) // unnamed row dropped
-    expect(ep.list).toHaveBeenCalled() // reloaded
+    const call = callTo('POST', '/garapons')
+    expect(call).toBeDefined()
+    const body = call![1].body as { prizes: Record<string, unknown>[]; id?: number }
+    expect(body.prizes).toHaveLength(1) // unnamed row dropped
+    expect(body.prizes[0]).not.toHaveProperty('_uid')
+    expect(body).not.toHaveProperty('id')
+    expect(callTo('GET', '/garapons')).toBeDefined() // reloaded
     expect(s.garaponForm).toBeNull()
   })
 
   it('updates when the form has an id', async () => {
+    api.PUT.mockResolvedValueOnce(ok(garapon({ id: 7 })))
+    api.GET.mockResolvedValueOnce(ok({ garapons: [] }))
     const s = useGaraponsStore()
-    s.editGaraponForm(garapon({ id: 7, prizes: [{ name: 'Grand', is_grand: true }] as never }))
+    s.editGaraponForm(
+      garapon({
+        id: 7,
+        prizes: [{ id: 1, name: 'Grand', ballColor: '#fff', rate: 1, isGrand: true, sortOrder: 0 }],
+      }),
+    )
     s.garaponForm!.title = 'Updated'
     expect(await s.saveGarapon()).toBe(true)
-    expect(ep.update).toHaveBeenCalledTimes(1)
-    expect(ep.create).not.toHaveBeenCalled()
+    expect(callTo('PUT', '/garapons/{id}')?.[1].params.path).toEqual({ id: 7 })
+    expect(api.POST).not.toHaveBeenCalled()
   })
 })
 
@@ -208,18 +244,19 @@ describe('deleteGarapon', () => {
     const s = useGaraponsStore()
     s.garapons = [garapon()]
     await s.deleteGarapon(1)
-    expect(ep.del).not.toHaveBeenCalled()
+    expect(api.DELETE).not.toHaveBeenCalled()
     expect(s.garapons).toHaveLength(1)
   })
 
   it('deletes and drops the garapon from the list when confirmed', async () => {
+    api.DELETE.mockResolvedValueOnce(ok(undefined, 204))
     const ui = useUiStore()
     ui.confirm = vi.fn(async () => true)
     const s = useGaraponsStore()
     s.garapons = [garapon(), garapon({ id: 2 })]
     s.selectedGarapon = garapon()
     await s.deleteGarapon(1)
-    expect(ep.del).toHaveBeenCalledWith(1)
+    expect(callTo('DELETE', '/garapons/{id}')?.[1].params.path).toEqual({ id: 1 })
     expect(s.garapons.map((g) => g.id)).toEqual([2])
     expect(s.selectedGarapon).toBeNull()
   })
@@ -227,25 +264,39 @@ describe('deleteGarapon', () => {
 
 describe('setGaraponStatus', () => {
   it('updates the selected garapon and the list row', async () => {
+    api.POST.mockResolvedValueOnce(ok(garapon({ status: 'closed' })))
     const s = useGaraponsStore()
     s.garapons = [garapon()]
     s.selectedGarapon = garapon()
     await s.setGaraponStatus(1, 'closed')
-    expect(ep.setStatus).toHaveBeenCalledWith(1, 'closed')
+    expect(callTo('POST', '/garapons/{id}/close')?.[1].params.path).toEqual({ id: 1 })
     expect(s.selectedGarapon.status).toBe('closed')
     expect(s.garapons[0]!.status).toBe('closed')
+  })
+
+  it('reopens through its own verb', async () => {
+    api.POST.mockResolvedValueOnce(ok(garapon({ status: 'open' })))
+    const s = useGaraponsStore()
+    s.garapons = [garapon({ status: 'closed' })]
+    await s.setGaraponStatus(1, 'open')
+    expect(callTo('POST', '/garapons/{id}/reopen')).toBeDefined()
+    expect(s.garapons[0]!.status).toBe('open')
   })
 })
 
 describe('createPlayer', () => {
   it('trims the name, clamps maxDraws to >=1, copies the link, and reloads', async () => {
+    api.POST.mockResolvedValueOnce(ok({ id: 9, token: 'tok', playerName: 'Hero' }, 201))
+    api.GET.mockResolvedValueOnce(ok({ garapon: garapon({ id: 3 }), players: [], draws: [] }))
     const s = useGaraponsStore()
     s.selectedGarapon = garapon({ id: 3 })
     s.playerAdd = { playerName: '  Hero  ', maxDraws: 0 }
     await s.createPlayer()
-    expect(ep.createPlayer).toHaveBeenCalledWith(3, { player_name: 'Hero', max_draws: 1 })
+    const call = callTo('POST', '/garapons/{id}/players')
+    expect(call?.[1].params.path).toEqual({ id: 3 })
+    expect(call?.[1].body).toEqual({ playerName: 'Hero', maxDraws: 1 })
     expect(navigator.clipboard.writeText).toHaveBeenCalled()
-    expect(ep.detail).toHaveBeenCalledWith(3) // reloaded
+    expect(callTo('GET', '/garapons/{id}')?.[1].params.path).toEqual({ id: 3 }) // reloaded
     expect(s.playerAdd.playerName).toBe('') // form reset
   })
 
@@ -254,63 +305,105 @@ describe('createPlayer', () => {
     s.selectedGarapon = garapon({ id: 3 })
     s.playerAdd = { playerName: '   ', maxDraws: 2 }
     await s.createPlayer()
-    expect(ep.createPlayer).not.toHaveBeenCalled()
+    expect(api.POST).not.toHaveBeenCalled()
+  })
+
+  it('starts the draw count at the garapon default', () => {
+    const s = useGaraponsStore()
+    s.viewGarapon(garapon({ id: 3, defaultDraws: 4 }))
+    expect(s.playerAdd.maxDraws).toBe(4)
   })
 })
 
 describe('public draw flow', () => {
   it('loadByToken populates the public view', async () => {
-    ep.publicGet.mockResolvedValueOnce({
-      garapon: garapon({ title: 'Festival' }),
-      player: { player_name: 'Hero', max_draws: 3, draws_used: 0 },
-      draws: [],
-    })
+    api.GET.mockResolvedValueOnce(
+      ok({
+        garapon: publicGarapon({ title: 'Festival' }),
+        player: summary(),
+        draws: [],
+        festivalLink: 'obon',
+      }),
+    )
     const s = useGaraponsStore()
     expect(await s.loadByToken('tok')).toBe(true)
     expect(s.publicGarapon?.title).toBe('Festival')
-    expect(s.publicPlayer?.max_draws).toBe(3)
+    expect(s.publicPlayer?.maxDraws).toBe(3)
+    expect(s.publicFestivalLink).toBe('obon')
+    expect(callTo('GET', '/garapon-players/{token}')?.[1].params.path).toEqual({ token: 'tok' })
   })
 
   it('loadByToken returns false on error', async () => {
-    ep.publicGet.mockRejectedValueOnce(new Error('404'))
+    api.GET.mockResolvedValueOnce({
+      error: { title: 'Not Found' },
+      response: new Response(null, { status: 404 }),
+    })
     const s = useGaraponsStore()
     expect(await s.loadByToken('bad')).toBe(false)
   })
 
   it('draw returns the server response and commitDraw applies it to visible state', async () => {
+    api.POST.mockResolvedValueOnce(
+      ok({
+        draw: { prizeName: 'Grand', ballColor: '#fff', isGrand: true, drawnAt: null },
+        drawsUsed: 1,
+        maxDraws: 3,
+      }),
+    )
     const s = useGaraponsStore()
-    s.publicPlayer = { player_name: 'Hero', max_draws: 3, draws_used: 0 }
+    s.publicPlayer = summary()
     s.publicDraws = []
     const resp = await s.draw('tok')
-    expect(resp?.draws_used).toBe(1)
+    expect(resp?.drawsUsed).toBe(1)
     s.commitDraw(resp!)
     expect(s.publicDraws).toHaveLength(1)
-    expect(s.publicPlayer.draws_used).toBe(1)
-    expect(s.lastWin?.prize_name).toBe('Grand')
+    expect(s.publicPlayer.drawsUsed).toBe(1)
+    expect(s.lastWin?.prizeName).toBe('Grand')
+  })
+
+  it('a refused draw notifies and answers null', async () => {
+    api.POST.mockResolvedValueOnce({
+      error: { title: 'Conflict', detail: 'No draws remaining.' },
+      response: new Response(null, { status: 409 }),
+    })
+    const s = useGaraponsStore()
+    expect(await s.draw('tok')).toBeNull()
+    expect(s.drawing).toBe(false)
   })
 })
 
 describe('linked stamp rally', () => {
   it('loadStampRallyOptions keeps only open rallies', async () => {
+    api.GET.mockResolvedValueOnce(
+      ok({
+        stampRallies: [
+          { id: 1, title: 'Open', status: 'open' },
+          { id: 2, title: 'Closed', status: 'closed' },
+        ],
+      }),
+    )
     const s = useGaraponsStore()
     await s.loadStampRallyOptions()
     expect(s.stampRallyOptions.map((r) => r.id)).toEqual([1])
   })
 
-  it('stampCardLinkUrl uses the shared token, empty when unlinked', () => {
+  it('stampCardLinkUrl uses the card token, empty when unlinked', () => {
     const s = useGaraponsStore()
-    expect(s.stampCardLinkUrl({ stamp_card_token: 'abc' } as GaraponPlayer)).toMatch(
+    expect(s.stampCardLinkUrl({ stampCardToken: 'abc' } as GaraponPlayer)).toMatch(
       /\/stamp-card\/abc$/,
     )
-    expect(s.stampCardLinkUrl({ stamp_card_token: '' } as GaraponPlayer)).toBe('')
+    expect(s.stampCardLinkUrl({ stampCardToken: '' } as GaraponPlayer)).toBe('')
   })
 
   it('loadByToken surfaces the linked stamp-card token to the public view', async () => {
-    ep.publicGet.mockResolvedValueOnce({
-      garapon: garapon({ title: 'Festival' }),
-      player: { player_name: 'Hero', max_draws: 3, draws_used: 0, stamp_card_token: 'tok' },
-      draws: [],
-    })
+    api.GET.mockResolvedValueOnce(
+      ok({
+        garapon: publicGarapon({ title: 'Festival' }),
+        player: summary({ stampCardToken: 'tok' }),
+        draws: [],
+        festivalLink: '',
+      }),
+    )
     const s = useGaraponsStore()
     await s.loadByToken('tok')
     expect(s.publicStampCardToken).toBe('tok')
@@ -318,7 +411,7 @@ describe('linked stamp rally', () => {
 
   it('publicStampCardToken is empty when the drawing link has no paired rally card', () => {
     const s = useGaraponsStore()
-    s.publicPlayer = { player_name: 'Hero', max_draws: 3, draws_used: 0 }
+    s.publicPlayer = summary()
     expect(s.publicStampCardToken).toBe('')
   })
 })
@@ -326,20 +419,19 @@ describe('linked stamp rally', () => {
 describe('copyGaraponForm', () => {
   /** A garapon with a prize table and a rally link - the link must not carry over. */
   function sourceGarapon(): Garapon {
-    return {
+    return garapon({
       id: 4,
       title: 'Obon Garapon',
       details: 'Spin the drum',
-      grand_prize_image: 'images/grand.png',
-      stamp_rally_id: 11,
-      default_draws: 3,
+      grandPrizeImage: 'images/grand.png',
+      stampRallyId: 11,
+      defaultDraws: 3,
       status: 'closed',
-      created_at: '',
       prizes: [
-        { id: 1, garapon_id: 4, name: 'Grand', ball_color: '#ffd700', rate: 5, is_grand: true },
-        { id: 2, garapon_id: 4, name: 'Minor', ball_color: '#88ccff', rate: 95, is_grand: false },
+        { id: 1, name: 'Grand', ballColor: '#ffd700', rate: 5, isGrand: true, sortOrder: 0 },
+        { id: 2, name: 'Minor', ballColor: '#88ccff', rate: 95, isGrand: false, sortOrder: 1 },
       ],
-    } as unknown as Garapon
+    })
   }
 
   it('carries the prize table and marks the title as a copy', () => {
@@ -349,9 +441,9 @@ describe('copyGaraponForm', () => {
 
     expect(f.title).toBe('Obon Garapon (Copy)')
     expect(f.details).toBe('Spin the drum')
-    expect(f.grand_prize_image).toBe('images/grand.png')
-    expect(f.default_draws).toBe(3)
-    expect(f.prizes.map((p) => [p.name, p.ball_color, p.rate, p.is_grand])).toEqual([
+    expect(f.grandPrizeImage).toBe('images/grand.png')
+    expect(f.defaultDraws).toBe(3)
+    expect(f.prizes.map((p) => [p.name, p.ballColor, p.rate, p.isGrand])).toEqual([
       ['Grand', '#ffd700', 5, true],
       ['Minor', '#88ccff', 95, false],
     ])
@@ -365,7 +457,7 @@ describe('copyGaraponForm', () => {
     expect(f.id).toBe(0)
     // Carrying the link over would leave two garapons issuing draws off one
     // rally's sign-ups.
-    expect(f.stamp_rally_id).toBeNull()
+    expect(f.stampRallyId).toBeNull()
   })
 
   it('leaves the original untouched', () => {
@@ -376,7 +468,7 @@ describe('copyGaraponForm', () => {
     store.garaponForm!.prizes[0]!.name = 'Changed'
 
     expect(source.title).toBe('Obon Garapon')
-    expect(source.prizes?.[0]!.name).toBe('Grand')
-    expect(source.stamp_rally_id).toBe(11)
+    expect(source.prizes[0]!.name).toBe('Grand')
+    expect(source.stampRallyId).toBe(11)
   })
 })

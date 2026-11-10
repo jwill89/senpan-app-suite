@@ -12,8 +12,9 @@
  */
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
-import { endpoints } from '@/lib/endpoints'
-import type { CarrdProject, CarrdImage } from '@/types/api'
+import { api, unwrap } from '@/api/client'
+import type { CarrdFile, CarrdProject, CarrdUpload } from '@/api/client'
+import { apiUpload, refusedFiles } from '@/lib/api'
 import { useUiStore } from './ui'
 
 /** Public base URL the carrd directory is served from (no trailing slash). */
@@ -41,7 +42,7 @@ export const useCarrdStore = defineStore('carrd', () => {
   /** Immediate sub-directories at the current path. */
   const dirs = ref<string[]>([])
   /** Images at the current path. */
-  const images = ref<CarrdImage[]>([])
+  const images = ref<CarrdFile[]>([])
 
   /** True while the project list is loading. */
   const loading = ref(false)
@@ -60,7 +61,7 @@ export const useCarrdStore = defineStore('carrd', () => {
   async function loadProjects(): Promise<void> {
     loading.value = true
     try {
-      const data = await endpoints.carrd.projects()
+      const data = await unwrap(api.GET('/carrd-projects'))
       projects.value = data.projects
       // Drop the selection if its project no longer exists.
       if (selectedFolder.value && !projects.value.some((p) => p.folder === selectedFolder.value)) {
@@ -84,12 +85,16 @@ export const useCarrdStore = defineStore('carrd', () => {
     const reqId = ++contentsSeq
     loadingImages.value = true
     try {
-      const data = await endpoints.carrd.images(selectedFolder.value, currentPath.value)
+      const data = await unwrap(
+        api.GET('/carrd-projects/{folder}/files', {
+          params: { path: { folder: selectedFolder.value }, query: { path: currentPath.value } },
+        }),
+      )
       if (reqId !== contentsSeq) {
         return // a newer load superseded this one
       }
-      dirs.value = data.dirs
-      images.value = data.images
+      dirs.value = data.folders
+      images.value = data.files
     } catch (e) {
       if (reqId !== contentsSeq) {
         return
@@ -126,11 +131,13 @@ export const useCarrdStore = defineStore('carrd', () => {
     }
     creating.value = true
     try {
-      const res = await endpoints.carrd.createProject(trimmed, folder.trim())
-      ui.notify(`Created project “${res.project.title}”`, 'success')
+      const project = await unwrap(
+        api.POST('/carrd-projects', { body: { title: trimmed, folder: folder.trim() } }),
+      )
+      ui.notify(`Created project “${project.title}”`, 'success')
       await loadProjects()
-      await openProject(res.project.folder)
-      return res.project.folder
+      await openProject(project.folder)
+      return project.folder
     } catch (e) {
       ui.notify((e as Error).message, 'error')
       return null
@@ -151,11 +158,16 @@ export const useCarrdStore = defineStore('carrd', () => {
       return false
     }
     try {
-      const res = await endpoints.carrd.renameProject(folder, trimmed, newFolder.trim())
-      ui.notify(`Renamed project to “${res.project.title}”`, 'success')
+      const project = await unwrap(
+        api.PATCH('/carrd-projects/{folder}', {
+          params: { path: { folder } },
+          body: { title: trimmed, folder: newFolder.trim() },
+        }),
+      )
+      ui.notify(`Renamed project to “${project.title}”`, 'success')
       // If the open project's folder changed on disk, re-point the selection.
-      if (selectedFolder.value === folder && res.project.folder !== folder) {
-        selectedFolder.value = res.project.folder
+      if (selectedFolder.value === folder && project.folder !== folder) {
+        selectedFolder.value = project.folder
       }
       await loadProjects()
       return true
@@ -175,7 +187,7 @@ export const useCarrdStore = defineStore('carrd', () => {
       return
     }
     try {
-      await endpoints.carrd.deleteProject(folder)
+      await unwrap(api.DELETE('/carrd-projects/{folder}', { params: { path: { folder } } }))
       ui.notify('Project deleted', 'info')
       if (selectedFolder.value === folder) {
         selectedFolder.value = null
@@ -200,7 +212,12 @@ export const useCarrdStore = defineStore('carrd', () => {
       return false
     }
     try {
-      await endpoints.carrd.createDir(selectedFolder.value, currentPath.value, trimmed)
+      await unwrap(
+        api.POST('/carrd-projects/{folder}/folders', {
+          params: { path: { folder: selectedFolder.value } },
+          body: { path: currentPath.value, name: trimmed },
+        }),
+      )
       ui.notify('Folder created', 'success')
       await loadContents()
       await loadProjects()
@@ -225,7 +242,14 @@ export const useCarrdStore = defineStore('carrd', () => {
       return
     }
     try {
-      await endpoints.carrd.deleteDir(selectedFolder.value, joinCarrdPath(currentPath.value, name))
+      await unwrap(
+        api.DELETE('/carrd-projects/{folder}/folders', {
+          params: {
+            path: { folder: selectedFolder.value },
+            query: { path: joinCarrdPath(currentPath.value, name) },
+          },
+        }),
+      )
       ui.notify('Folder deleted', 'info')
       await loadContents()
       await loadProjects()
@@ -244,7 +268,6 @@ export const useCarrdStore = defineStore('carrd', () => {
       return
     }
     const form = new FormData()
-    form.append('folder', selectedFolder.value)
     form.append('path', currentPath.value)
     for (const f of list) {
       form.append('files', f)
@@ -252,7 +275,10 @@ export const useCarrdStore = defineStore('carrd', () => {
 
     uploading.value = true
     try {
-      const res = await endpoints.carrd.upload(form)
+      const res = await apiUpload<CarrdUpload>(
+        `carrd-projects/${encodeURIComponent(selectedFolder.value)}/files`,
+        form,
+      )
       const ok = res.uploaded.length
       const skipped = res.skipped
       if (ok > 0) {
@@ -267,7 +293,15 @@ export const useCarrdStore = defineStore('carrd', () => {
       await loadContents()
       await loadProjects() // refresh image counts
     } catch (e) {
-      ui.notify((e as Error).message, 'error')
+      // Every file refused: the problem names each one and why.
+      const refused = refusedFiles(e)
+      if (refused.length > 0) {
+        for (const r of refused) {
+          ui.notify(`${r.name}: ${r.reason}`, 'error')
+        }
+      } else {
+        ui.notify((e as Error).message, 'error')
+      }
     } finally {
       uploading.value = false
     }
@@ -286,7 +320,14 @@ export const useCarrdStore = defineStore('carrd', () => {
       return
     }
     try {
-      await endpoints.carrd.deleteImage(selectedFolder.value, currentPath.value, name)
+      await unwrap(
+        api.DELETE('/carrd-projects/{folder}/files', {
+          params: {
+            path: { folder: selectedFolder.value },
+            query: { path: currentPath.value, name },
+          },
+        }),
+      )
       ui.notify('Image deleted', 'info')
       await loadContents()
       await loadProjects() // refresh image counts

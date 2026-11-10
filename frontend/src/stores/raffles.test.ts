@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
 import type { Raffle, RaffleEntry, RaffleLookupEntry } from '@/api/client'
-import type { FestivalMap, FestivalStallOccupant } from '@/types/api'
+import type { FestivalMap, FestivalStallOccupant } from '@/api/client'
 import { RAFFLE_MAX_ENTRIES } from '@/lib/constants'
 
 // The store calls the API client; only its calls are faked (unwrap is the real
@@ -13,14 +13,11 @@ vi.mock('@/api/client', async (importOriginal) => ({
   api,
 }))
 
-// The festival maps a raffle can be filed under are still read through the typed
-// endpoint layer.
+// The festival maps a raffle can be filed under are read from the same client: these
+// answer its two festival-map reads.
 const { mapList, mapDetail } = vi.hoisted(() => ({
   mapList: vi.fn(async () => ({ maps: [] as FestivalMap[] })),
   mapDetail: vi.fn(async () => ({ map: { stalls: [] } as unknown as FestivalMap })),
-}))
-vi.mock('@/lib/endpoints', () => ({
-  endpoints: { festivalMaps: { list: mapList, detail: mapDetail } },
 }))
 
 import { useUiStore } from './ui'
@@ -96,7 +93,13 @@ function raffle(maxEntries: number, costPerEntry: number): Raffle {
 beforeEach(() => {
   setActivePinia(createPinia())
   Object.values(api).forEach((fn) => fn.mockReset())
-  api.GET.mockResolvedValue(ok({ raffles: [] }))
+  api.GET.mockImplementation(async (path: string) =>
+    path === '/festival-maps'
+      ? ok(await mapList())
+      : path === '/festival-maps/{id}'
+        ? ok((await mapDetail()).map)
+        : ok({ raffles: [] }),
+  )
   api.POST.mockResolvedValue(ok(makeRaffle(), 201))
   api.PUT.mockResolvedValue(ok(makeRaffle()))
   api.DELETE.mockResolvedValue(ok(undefined, 204))
@@ -907,16 +910,15 @@ describe('festival map linkage', () => {
   function mapOccupant(over: Partial<FestivalStallOccupant> = {}): FestivalStallOccupant {
     return {
       id: 21,
-      stall_id: 4,
-      affiliate_id: 9,
-      affiliate_name: 'The Green Gaelicat',
+      affiliateId: 9,
+      affiliateName: 'The Green Gaelicat',
       title: 'The Green Gaelicat',
       description: '',
-      event_carrd: '',
-      stall_type: 'game',
-      type_label: '',
+      eventCarrd: '',
+      stallType: 'game',
+      typeLabel: '',
       times: [],
-      sort_order: 0,
+      sortOrder: 0,
       ...over,
     }
   }
@@ -928,13 +930,12 @@ describe('festival map linkage', () => {
         stalls: [
           {
             id: 4,
-            map_id: 4,
             shape: 'rect',
             color: '',
-            selection_color: '',
-            text_color: '',
+            selectionColor: '',
+            textColor: '',
             placement: { x: 0, y: 0, width: 10, height: 10, rotation: 0 },
-            sort_order: 0,
+            sortOrder: 0,
             occupants,
           },
         ],

@@ -91,7 +91,7 @@ jobs:
       # Counted across packages: the API's request tests live in internal/server and
       # exercise internal/api. scripts/check.ps1 checks the same floor locally.
       coverpkg: ./...
-      coverage-floor: 77.5
+      coverage-floor: 83.5
       # sqlc's generated code is left out of the count: the code that calls it is tested.
       coverage-exclude: |
         /internal/db/(db|models)\.go$

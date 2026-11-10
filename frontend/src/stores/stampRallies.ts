@@ -8,26 +8,29 @@
  * placement of stamps/prizes and the password-driven public collection flow.
  */
 import { defineStore } from 'pinia'
-import { computed, ref } from 'vue'
-import { endpoints } from '@/lib/endpoints'
-import { api, unwrap, type Affiliate } from '@/api/client'
+import { computed, ref, toRaw } from 'vue'
+import {
+  api,
+  unwrap,
+  type Affiliate,
+  type FestivalMap,
+  type FestivalStallOccupant,
+  type Placement,
+  type PublicStampCard,
+  type SignupRally,
+  type StampLookupEntry,
+  type StampRally,
+  type StampRallyCard,
+  type StampRallyLogEntry,
+  type StampRallyStamp,
+  type StampSignup,
+} from '@/api/client'
 import { saveRallySignup } from '@/lib/signups'
 import type {
-  FestivalMap,
-  FestivalStallOccupant,
-  Placement,
-  PublicStampCard,
-  StampRally,
-  StampRallyCard,
   StampRallyForm,
-  StampRallyLogEntry,
   StampRallyPrizeForm,
-  StampRallyStamp,
   StampRallyStampForm,
   StampType,
-  SignupRally,
-  StampSignupResponse,
-  StampLookupEntry,
 } from '@/types/api'
 import { datetimeLocalToUtc, utcToDatetimeLocal } from '@/lib/datetime'
 import { stampTypeForStall } from '@/lib/festivalmap'
@@ -42,14 +45,14 @@ function defaultPlacement(): Placement {
 function blankStamp(type: StampType): StampRallyStampForm {
   return {
     id: 0,
-    occupant_id: null,
-    affiliate_id: null,
+    occupantId: null,
+    affiliateId: null,
     image: '',
     password: '',
-    stamp_type: type,
+    stampType: type,
     placement: defaultPlacement(),
-    active_from: '',
-    active_to: '',
+    activeFrom: '',
+    activeTo: '',
     paused: false,
   }
 }
@@ -79,11 +82,11 @@ export function groupedByParticipant(rows: StampRallyLogEntry[]): StampRallyLogE
   const groups = new Map<string, StampRallyLogEntry[]>()
   const order: string[] = []
   for (const r of rows) {
-    let g = groups.get(r.participant_name)
+    let g = groups.get(r.participantName)
     if (!g) {
       g = []
-      groups.set(r.participant_name, g)
-      order.push(r.participant_name)
+      groups.set(r.participantName, g)
+      order.push(r.participantName)
     }
     g.push(r)
   }
@@ -120,6 +123,8 @@ export const useStampRalliesStore = defineStore('stampRallies', () => {
   // Monotonic token guarding loadRallyDetail against a last-write-wins race
   // (a slow earlier open overwriting a newer one). Only the latest request applies.
   let detailSeq = 0
+  /** The rallies read by `loadRallyDetail`, the only ones that carry all their stamps and prizes. */
+  const fromDetail = new WeakSet()
   const logsLoading = ref(false)
   const savingRally = ref(false)
   const creatingCard = ref(false)
@@ -159,7 +164,7 @@ export const useStampRalliesStore = defineStore('stampRallies', () => {
      * it never finishes.
      */
     const tally = (type: StampType, required: number) => {
-      const of = stamps.filter((s) => (s.stamp_type === 'game' ? 'game' : 'food') === type)
+      const of = stamps.filter((s) => (s.stampType === 'game' ? 'game' : 'food') === type)
       const collected = of.filter((s) => s.collected).length
       const open = of.filter((s) => !s.collected && !s.expired).length
       return {
@@ -171,9 +176,9 @@ export const useStampRalliesStore = defineStore('stampRallies', () => {
       }
     }
     return {
-      byType: c?.rally.completion_mode === 'counts',
-      food: tally('food', c?.rally.required_food ?? 0),
-      game: tally('game', c?.rally.required_game ?? 0),
+      byType: c?.rally.completionMode === 'counts',
+      food: tally('food', c?.rally.requiredFood ?? 0),
+      game: tally('game', c?.rally.requiredGame ?? 0),
       collected: stamps.filter((s) => s.collected).length,
       total: stamps.length,
     }
@@ -182,8 +187,7 @@ export const useStampRalliesStore = defineStore('stampRallies', () => {
   // -- Admin: load ----------------------------------------------------------
   async function loadRallies(): Promise<void> {
     await withLoading(ralliesLoading, async () => {
-      const data = await endpoints.stampRallies.list()
-      rallies.value = data.stamp_rallies
+      rallies.value = (await unwrap(api.GET('/stamp-rallies'))).stampRallies
     })
     // A live invalidation (admin.ts) re-runs loadRallies; refresh any expanded
     // "Manage stalls" panels too so their cached stamps don't go stale forever.
@@ -194,11 +198,12 @@ export const useStampRalliesStore = defineStore('stampRallies', () => {
     const reqId = ++detailSeq
     detailLoading.value = true
     try {
-      const data = await endpoints.stampRallies.detail(id)
+      const data = await unwrap(api.GET('/stamp-rallies/{id}', { params: { path: { id } } }))
       if (reqId !== detailSeq) {
         return // a newer load superseded this one
       }
-      selectedRally.value = data.stamp_rally
+      fromDetail.add(data.stampRally)
+      selectedRally.value = data.stampRally
       rallyCards.value = data.cards
     } catch (e) {
       if (reqId === detailSeq) {
@@ -213,7 +218,7 @@ export const useStampRalliesStore = defineStore('stampRallies', () => {
 
   async function loadRallyLogs(id: number): Promise<void> {
     await withLoading(logsLoading, async () => {
-      const data = await endpoints.stampRallies.logs(id)
+      const data = await unwrap(api.GET('/stamp-rallies/{id}/logs', { params: { path: { id } } }))
       rallyLogs.value = data.logs
     })
   }
@@ -242,7 +247,7 @@ export const useStampRalliesStore = defineStore('stampRallies', () => {
     // together rather than paying two or three sequential round trips every time
     // the form opens. Each keeps its own fallback, so one failing (typically the
     // map list, for a grantee without that page) still leaves the others loaded.
-    const mapID = rallyForm.value?.festival_map_id ?? null
+    const mapID = rallyForm.value?.festivalMapId ?? null
     await Promise.all([
       (async () => {
         try {
@@ -253,7 +258,7 @@ export const useStampRalliesStore = defineStore('stampRallies', () => {
       })(),
       (async () => {
         try {
-          festivalMaps.value = (await endpoints.festivalMaps.list()).maps
+          festivalMaps.value = (await unwrap(api.GET('/festival-maps'))).maps
         } catch {
           // No festival-map permission (or none exist) - the link select just
           // stays empty and the rally keeps naming affiliates.
@@ -271,7 +276,9 @@ export const useStampRalliesStore = defineStore('stampRallies', () => {
       return
     }
     try {
-      const stalls = (await endpoints.festivalMaps.detail(mapId)).map.stalls ?? []
+      const stalls = (
+        await unwrap(api.GET('/festival-maps/{id}', { params: { path: { id: mapId } } }))
+      ).stalls
       mapStalls.value = stalls.flatMap((stall) => stall.occupants)
     } catch {
       mapStalls.value = []
@@ -289,12 +296,12 @@ export const useStampRalliesStore = defineStore('stampRallies', () => {
     if (!f) {
       return
     }
-    if (f.festival_map_id === mapId) {
+    if (f.festivalMapId === mapId) {
       return
     }
-    f.festival_map_id = mapId
+    f.festivalMapId = mapId
     for (const stamp of f.stamps) {
-      stamp.occupant_id = null
+      stamp.occupantId = null
     }
     await loadMapStalls(mapId)
   }
@@ -309,13 +316,13 @@ export const useStampRalliesStore = defineStore('stampRallies', () => {
     if (!stamp) {
       return
     }
-    stamp.occupant_id = occupantId
+    stamp.occupantId = occupantId
     const occupant = mapStalls.value.find((o) => o.id === occupantId)
     if (!occupant) {
       return
     }
-    stamp.affiliate_id = occupant.affiliate_id ?? null
-    stamp.stamp_type = stampTypeForStall(occupant.stall_type)
+    stamp.affiliateId = occupant.affiliateId ?? null
+    stamp.stampType = stampTypeForStall(occupant.stallType)
   }
 
   // -- Admin: form ----------------------------------------------------------
@@ -323,18 +330,18 @@ export const useStampRalliesStore = defineStore('stampRallies', () => {
     rallyForm.value = {
       id: 0,
       title: '',
-      card_image: '',
-      not_stamped_image: '',
-      available_from: '',
-      available_to: '',
+      cardImage: '',
+      notStampedImage: '',
+      availableFrom: '',
+      availableTo: '',
       details: '',
-      redeem_instructions: '',
-      redeem_image: '',
-      public_signup: false,
-      completion_mode: 'all',
-      required_food: 0,
-      required_game: 0,
-      festival_map_id: null,
+      redeemInstructions: '',
+      redeemImage: '',
+      publicSignup: false,
+      completionMode: 'all',
+      requiredFood: 0,
+      requiredGame: 0,
+      festivalMapId: null,
       stamps: [],
       prizes: [],
     }
@@ -344,15 +351,13 @@ export const useStampRalliesStore = defineStore('stampRallies', () => {
    * True when `r` carries its child collections, i.e. it came from a detail fetch
    * rather than the list.
    *
-   * The list omits `stamps`/`prizes` entirely (`omitempty` server-side), and a
-   * save is a FULL REPLACE - so seeding the form from a list row and saving it
-   * would delete every stamp on the rally and every participant's collected rows.
-   * The server now refuses to touch a collection a request didn't carry, but the
-   * form must not offer the edit in the first place: silently saving fewer stamps
-   * than the admin can see is its own bug.
+   * The list leaves `stamps` and `prizes` empty, and a save is a FULL REPLACE - so
+   * seeding the form from a list row and saving it would delete every stamp on the
+   * rally and every participant's collected rows. Only a rally read by
+   * `loadRallyDetail` is complete, so only that one may seed the form.
    */
   function hasRallyDetail(r: StampRally | null | undefined): boolean {
-    return !!r && Array.isArray(r.stamps) && Array.isArray(r.prizes)
+    return !!r && fromDetail.has(toRaw(r))
   }
 
   function editRallyForm(r: StampRally): boolean {
@@ -363,32 +368,32 @@ export const useStampRalliesStore = defineStore('stampRallies', () => {
     rallyForm.value = {
       id: r.id,
       title: r.title,
-      card_image: r.card_image,
-      not_stamped_image: r.not_stamped_image,
+      cardImage: r.cardImage,
+      notStampedImage: r.notStampedImage,
       // Stored UTC -> this admin's local wall-clock for the datetime-local inputs.
-      available_from: utcToDatetimeLocal(r.available_from),
-      available_to: utcToDatetimeLocal(r.available_to),
+      availableFrom: utcToDatetimeLocal(r.availableFrom),
+      availableTo: utcToDatetimeLocal(r.availableTo),
       details: r.details,
-      redeem_instructions: r.redeem_instructions,
-      redeem_image: r.redeem_image,
-      public_signup: r.public_signup,
-      completion_mode: r.completion_mode === 'counts' ? 'counts' : 'all',
-      required_food: r.required_food,
-      required_game: r.required_game,
-      festival_map_id: r.festival_map_id ?? null,
-      stamps: (r.stamps ?? []).map((s) => ({
+      redeemInstructions: r.redeemInstructions,
+      redeemImage: r.redeemImage,
+      publicSignup: r.publicSignup,
+      completionMode: r.completionMode === 'counts' ? 'counts' : 'all',
+      requiredFood: r.requiredFood,
+      requiredGame: r.requiredGame,
+      festivalMapId: r.festivalMapId,
+      stamps: r.stamps.map((s) => ({
         id: s.id,
-        occupant_id: s.occupant_id ?? null,
-        affiliate_id: s.affiliate_id ?? null,
+        occupantId: s.occupantId,
+        affiliateId: s.affiliateId,
         image: s.image,
-        password: s.password ?? '',
-        stamp_type: s.stamp_type === 'game' ? 'game' : 'food',
+        password: s.password,
+        stampType: s.stampType === 'game' ? 'game' : 'food',
         placement: { ...s.placement },
-        active_from: utcToDatetimeLocal(s.active_from),
-        active_to: utcToDatetimeLocal(s.active_to),
+        activeFrom: utcToDatetimeLocal(s.activeFrom),
+        activeTo: utcToDatetimeLocal(s.activeTo),
         paused: s.paused,
       })),
-      prizes: (r.prizes ?? []).map((p) => ({
+      prizes: r.prizes.map((p) => ({
         id: p.id,
         name: p.name,
         image: p.image,
@@ -418,19 +423,19 @@ export const useStampRalliesStore = defineStore('stampRallies', () => {
     }
     f.id = 0
     f.title = `${r.title} (Copy)`
-    f.available_from = ''
-    f.available_to = ''
+    f.availableFrom = ''
+    f.availableTo = ''
     // The festival link points at the map the ORIGINAL rally ran at, whose stalls
     // still exist - so nothing on the server would clear it, and next year's rally
     // would quietly file itself under the finished festival with its stamps
     // naming last year's stalls. Both go, the same way a garapon copy drops its
     // stamp_rally_id; pick the festival again on the copy.
-    f.festival_map_id = null
+    f.festivalMapId = null
     for (const stamp of f.stamps) {
       stamp.id = 0
-      stamp.occupant_id = null
-      stamp.active_from = ''
-      stamp.active_to = ''
+      stamp.occupantId = null
+      stamp.activeFrom = ''
+      stamp.activeTo = ''
       stamp.paused = false
     }
     for (const prize of f.prizes) {
@@ -468,12 +473,12 @@ export const useStampRalliesStore = defineStore('stampRallies', () => {
     }
     // The number inputs can hold anything the admin typed (including an empty
     // field), so settle them into whole counts before they are validated or sent.
-    const requiredFood = toStampCount(f.required_food)
-    const requiredGame = toStampCount(f.required_game)
+    const requiredFood = toStampCount(f.requiredFood)
+    const requiredGame = toStampCount(f.requiredGame)
     // Per-type completion that requires nothing of either type would finish every
     // card at its first stamp - the server refuses it, so say so here rather than
     // bouncing the admin off a 400.
-    if (f.completion_mode === 'counts' && requiredFood + requiredGame === 0) {
+    if (f.completionMode === 'counts' && requiredFood + requiredGame === 0) {
       ui.notify(
         'Set how many food or game stamps a card needs, or switch completion back to every stamp.',
         'error',
@@ -484,23 +489,24 @@ export const useStampRalliesStore = defineStore('stampRallies', () => {
     try {
       // The form holds local datetime-local values; convert the event + per-stamp
       // windows to stored UTC before sending (mirrors the raffle store).
-      const payload = {
-        ...f,
-        available_from: datetimeLocalToUtc(f.available_from),
-        available_to: datetimeLocalToUtc(f.available_to),
-        required_food: requiredFood,
-        required_game: requiredGame,
+      const { id, ...fields } = f
+      const body = {
+        ...fields,
+        availableFrom: datetimeLocalToUtc(f.availableFrom) || null,
+        availableTo: datetimeLocalToUtc(f.availableTo) || null,
+        requiredFood,
+        requiredGame,
         stamps: f.stamps.map((s) => ({
           ...s,
-          active_from: datetimeLocalToUtc(s.active_from),
-          active_to: datetimeLocalToUtc(s.active_to),
+          activeFrom: datetimeLocalToUtc(s.activeFrom) || null,
+          activeTo: datetimeLocalToUtc(s.activeTo) || null,
         })),
       }
-      if (f.id) {
-        await endpoints.stampRallies.update(payload)
+      if (id) {
+        await unwrap(api.PUT('/stamp-rallies/{id}', { params: { path: { id } }, body }))
         ui.notify('Stamp rally updated', 'success')
       } else {
-        await endpoints.stampRallies.create(payload)
+        await unwrap(api.POST('/stamp-rallies', { body }))
         ui.notify('Stamp rally created', 'success')
       }
       rallyForm.value = null
@@ -524,7 +530,7 @@ export const useStampRalliesStore = defineStore('stampRallies', () => {
       return
     }
     try {
-      await endpoints.stampRallies.delete(id)
+      await unwrap(api.DELETE('/stamp-rallies/{id}', { params: { path: { id } } }))
       rallies.value = rallies.value.filter((r) => r.id !== id)
       if (selectedRally.value?.id === id) {
         selectedRally.value = null
@@ -538,13 +544,18 @@ export const useStampRalliesStore = defineStore('stampRallies', () => {
   /** Open/close a rally (closed = read-only, moves to the closed table, unlinkable). */
   async function setRallyStatus(id: number, status: 'open' | 'closed'): Promise<void> {
     try {
-      await endpoints.stampRallies.setStatus(id, status)
+      const params = { params: { path: { id } } }
+      const changed = await unwrap(
+        status === 'closed'
+          ? api.POST('/stamp-rallies/{id}/close', params)
+          : api.POST('/stamp-rallies/{id}/reopen', params),
+      )
       if (selectedRally.value?.id === id) {
-        selectedRally.value.status = status
+        selectedRally.value.status = changed.status
       }
       const inList = rallies.value.find((r) => r.id === id)
       if (inList) {
-        inList.status = status
+        inList.status = changed.status
       }
       ui.notify(status === 'closed' ? 'Stamp rally closed' : 'Stamp rally reopened', 'success')
     } catch (e) {
@@ -558,8 +569,10 @@ export const useStampRalliesStore = defineStore('stampRallies', () => {
       return // already loaded
     }
     try {
-      const data = await endpoints.stampRallies.detail(rallyId)
-      cardStamps.value = { ...cardStamps.value, [rallyId]: data.stamp_rally.stamps ?? [] }
+      const data = await unwrap(
+        api.GET('/stamp-rallies/{id}', { params: { path: { id: rallyId } } }),
+      )
+      cardStamps.value = { ...cardStamps.value, [rallyId]: data.stampRally.stamps }
     } catch (e) {
       ui.notify((e as Error).message, 'error')
     }
@@ -577,11 +590,23 @@ export const useStampRalliesStore = defineStore('stampRallies', () => {
     await Promise.all(
       ids.map(async (rallyId) => {
         try {
-          const data = await endpoints.stampRallies.detail(rallyId)
-          cardStamps.value = { ...cardStamps.value, [rallyId]: data.stamp_rally.stamps ?? [] }
+          const data = await unwrap(
+            api.GET('/stamp-rallies/{id}', { params: { path: { id: rallyId } } }),
+          )
+          cardStamps.value = { ...cardStamps.value, [rallyId]: data.stampRally.stamps }
         } catch {
           /* leave the cached stamps in place on a transient error */
         }
+      }),
+    )
+  }
+
+  /** Pauses or resumes one stamp on the server. */
+  async function setPaused(rallyId: number, stampId: number, paused: boolean): Promise<void> {
+    await unwrap(
+      api.PATCH('/stamp-rallies/{id}/stamps/{stampId}', {
+        params: { path: { id: rallyId, stampId } },
+        body: { paused },
       }),
     )
   }
@@ -594,14 +619,14 @@ export const useStampRalliesStore = defineStore('stampRallies', () => {
     paused: boolean,
   ): Promise<void> {
     try {
-      await endpoints.stampRallies.setStampPaused(rallyId, stampId, paused)
+      await setPaused(rallyId, stampId, paused)
       const st = cardStamps.value[rallyId]?.find((s) => s.id === stampId)
       if (st) {
         st.paused = paused
       }
       const r = rallies.value.find((rr) => rr.id === rallyId)
       if (r) {
-        r.active_stamp_count = Math.max(0, (r.active_stamp_count ?? 0) + (paused ? -1 : 1))
+        r.activeStampCount = Math.max(0, r.activeStampCount + (paused ? -1 : 1))
       }
       ui.notify(paused ? 'Stall paused' : 'Stall resumed', 'success')
     } catch (e) {
@@ -615,8 +640,8 @@ export const useStampRalliesStore = defineStore('stampRallies', () => {
       return
     }
     try {
-      await endpoints.stampRallies.setStampPaused(selectedRally.value.id, stampId, paused)
-      const st = selectedRally.value.stamps?.find((s) => s.id === stampId)
+      await setPaused(selectedRally.value.id, stampId, paused)
+      const st = selectedRally.value.stamps.find((s) => s.id === stampId)
       if (st) {
         st.paused = paused
       }
@@ -638,10 +663,15 @@ export const useStampRalliesStore = defineStore('stampRallies', () => {
     }
     creatingCard.value = true
     try {
-      const data = await endpoints.stampRallies.createCard(selectedRally.value.id, name)
+      const card = await unwrap(
+        api.POST('/stamp-rallies/{id}/cards', {
+          params: { path: { id: selectedRally.value.id } },
+          body: { participantName: name },
+        }),
+      )
       let copied = false
       try {
-        await navigator.clipboard.writeText(cardLinkUrl(data.card))
+        await navigator.clipboard.writeText(cardLinkUrl(card))
         copied = true
       } catch {
         /* clipboard blocked - the per-row copy button still works */
@@ -665,7 +695,7 @@ export const useStampRalliesStore = defineStore('stampRallies', () => {
     }
     if (
       !(await ui.confirm(
-        `Delete the card for ${card.participant_name}? Their stamp record is removed.`,
+        `Delete the card for ${card.participantName}? Their stamp record is removed.`,
         {
           title: 'Delete card',
           confirmText: 'Delete',
@@ -675,7 +705,11 @@ export const useStampRalliesStore = defineStore('stampRallies', () => {
       return
     }
     try {
-      await endpoints.stampRallies.deleteCard(selectedRally.value.id, card.id)
+      await unwrap(
+        api.DELETE('/stamp-rallies/{id}/cards/{cardId}', {
+          params: { path: { id: selectedRally.value.id, cardId: card.id } },
+        }),
+      )
       rallyCards.value = rallyCards.value.filter((c) => c.id !== card.id)
       ui.notify('Card deleted', 'info')
     } catch (e) {
@@ -717,7 +751,7 @@ export const useStampRalliesStore = defineStore('stampRallies', () => {
   const signupRallies = ref<SignupRally[]>([])
   const signupLoading = ref(false)
   /** The result of a successful sign-up, held so the view can show the links. */
-  const signupResult = ref<StampSignupResponse | null>(null)
+  const signupResult = ref<StampSignup | null>(null)
   /** Lookup results; null = no search run yet, [] = searched and found nothing. */
   const lookupResults = ref<StampLookupEntry[] | null>(null)
   const lookupLoading = ref(false)
@@ -735,7 +769,7 @@ export const useStampRalliesStore = defineStore('stampRallies', () => {
   async function loadSignupRallies(): Promise<void> {
     signupLoading.value = true
     try {
-      signupRallies.value = (await endpoints.stampSignup.list()).rallies
+      signupRallies.value = (await unwrap(api.GET('/stamp-rallies/public'))).rallies
     } catch {
       signupRallies.value = []
     } finally {
@@ -772,11 +806,15 @@ export const useStampRalliesStore = defineStore('stampRallies', () => {
     }
     submitting.value = true
     try {
-      const issued = await endpoints.stampSignup.signUp(
-        rallyId,
-        trimmed,
-        trimmedWorld,
-        turnstileToken,
+      const issued = await unwrap(
+        api.POST('/stamp-rallies/{id}/sign-up', {
+          params: { path: { id: rallyId } },
+          body: {
+            characterName: trimmed,
+            world: trimmedWorld,
+            turnstileToken: turnstileToken || undefined,
+          },
+        }),
       )
       signupResult.value = issued
       // The only moment the drawing token exists client-side: no name-keyed lookup
@@ -784,12 +822,12 @@ export const useStampRalliesStore = defineStore('stampRallies', () => {
       // Saving it here is what lets this browser show the link again later.
       saveRallySignup({
         rallyId,
-        rallyTitle: issued.rally_title,
-        name: issued.participant_name,
+        rallyTitle: issued.rallyTitle,
+        name: issued.participantName,
         world: issued.world,
-        cardToken: issued.card_token,
-        garaponToken: issued.garapon_token || undefined,
-        garaponTitle: issued.garapon_title || undefined,
+        cardToken: issued.cardToken,
+        garaponToken: issued.garaponToken || undefined,
+        garaponTitle: issued.garaponTitle || undefined,
       })
       return true
     } catch (e) {
@@ -798,6 +836,13 @@ export const useStampRalliesStore = defineStore('stampRallies', () => {
     } finally {
       submitting.value = false
     }
+  }
+
+  /** The cards held under the whole name and world, for the lookup page and the dashboard. */
+  function lookUpCards(name: string, world: string) {
+    return unwrap(
+      api.POST('/stamp-cards/lookup', { body: { characterName: name, world: world || undefined } }),
+    )
   }
 
   /** Looks up a participant's links by the exact name they signed up with. */
@@ -809,7 +854,7 @@ export const useStampRalliesStore = defineStore('stampRallies', () => {
     }
     lookupLoading.value = true
     try {
-      lookupResults.value = (await endpoints.stampSignup.lookup(trimmed, world.trim())).entries
+      lookupResults.value = (await lookUpCards(trimmed, world.trim())).entries
     } catch (e) {
       ui.notify((e as Error).message, 'error')
       lookupResults.value = null
@@ -845,7 +890,9 @@ export const useStampRalliesStore = defineStore('stampRallies', () => {
     resetPublic()
     publicLoading.value = true
     try {
-      publicCard.value = await endpoints.stampCard.get(token)
+      publicCard.value = await unwrap(
+        api.GET('/stamp-cards/{token}', { params: { path: { token } } }),
+      )
       return true
     } catch {
       return false
@@ -870,9 +917,14 @@ export const useStampRalliesStore = defineStore('stampRallies', () => {
     const wasComplete = publicCard.value?.completed ?? false
     submitting.value = true
     try {
-      const data = await endpoints.stampCard.stamp(token, pw)
+      const data = await unwrap(
+        api.POST('/stamp-cards/{token}/stamp', {
+          params: { path: { token } },
+          body: { password: pw },
+        }),
+      )
       publicCard.value = data.card
-      lastCollectedId.value = data.collected_stamp_id
+      lastCollectedId.value = data.collectedStampId
       ui.notify('Stamp collected!', 'success')
       if (data.card.completed && !wasComplete) {
         ui.notify('Card complete - your prizes are revealed below!', 'success')
@@ -958,6 +1010,7 @@ export const useStampRalliesStore = defineStore('stampRallies', () => {
     loadSignupRallies,
     signUp,
     lookupLinks,
+    lookUpCards,
     resetSignup,
     resetLookup,
   }

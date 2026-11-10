@@ -326,38 +326,45 @@ func TestAuth_Logout(t *testing.T) {
 	}
 }
 
-// -- JSON error format (the routes not yet on huma) ---------------------------
+// -- Problem details, JSON and caching of the API ------------------------------
 
 func TestErrorFormat(t *testing.T) {
 	env := newTestEnv(t)
 
-	resp := env.get(t, "/api/stamp-card/nosuchtoken")
+	resp := env.get(t, "/api/v1/fonts")
+	defer resp.Body.Close()
+	if ct := resp.Header.Get("Content-Type"); ct != "application/problem+json" {
+		t.Errorf("Content-Type = %q; want application/problem+json", ct)
+	}
 	data := decodeBody(t, resp)
-
-	if _, ok := data["error"]; !ok {
-		t.Error("expected error key in JSON error response")
+	if data["status"] != float64(http.StatusUnauthorized) || data["title"] == "" || data["detail"] == "" {
+		t.Errorf("problem = %v; want RFC 9457 problem details with status, title and detail", data)
+	}
+	if _, ok := data["error"]; ok {
+		t.Error("the old {\"error\": ...} shape is still answered")
 	}
 }
 
 func TestJSONContentType(t *testing.T) {
 	env := newTestEnv(t)
+	env.loginAdmin(t)
 
-	resp := env.get(t, "/api/stamp-signup")
+	resp := env.get(t, "/api/v1/fonts")
 	defer resp.Body.Close()
 
-	ct := resp.Header.Get("Content-Type")
-	if ct != "application/json; charset=utf-8" {
-		t.Errorf("Content-Type = %q; want application/json; charset=utf-8", ct)
+	if ct := resp.Header.Get("Content-Type"); ct != "application/json" {
+		t.Errorf("Content-Type = %q; want application/json", ct)
 	}
 }
 
 func TestCacheControlNoStore(t *testing.T) {
 	env := newTestEnv(t)
+	env.loginAdmin(t)
 
-	resp := env.get(t, "/api/stamp-signup")
+	resp := env.get(t, "/api/v1/fonts")
 	defer resp.Body.Close()
 
-	if cc := resp.Header.Get("Cache-Control"); cc != "no-store" {
-		t.Errorf("Cache-Control = %q; want no-store", cc)
+	if cc := resp.Header.Get("Cache-Control"); cc != "private, no-store" {
+		t.Errorf("Cache-Control = %q; want private, no-store", cc)
 	}
 }

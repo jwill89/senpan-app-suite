@@ -15,10 +15,11 @@ import TurnstileWidget from '@/components/common/TurnstileWidget.vue'
 import { useFestivalDashboardStore } from '@/stores/festivalDashboard'
 import { raffleAcceptsSignups, raffleCostLabel, raffleEntryCost } from '@/stores/raffles'
 import { assetUrl } from '@/lib/assets'
-import type { FestivalDashboardRaffle } from '@/types/api'
+import { participantLabel } from '@/lib/participant'
+import type { FestivalRaffle } from '@/api/client'
 
 const props = defineProps<{
-  row: FestivalDashboardRaffle
+  row: FestivalRaffle
   /** Cloudflare Turnstile site key ('' = the check is off). */
   turnstileSiteKey: string
 }>()
@@ -35,18 +36,18 @@ const store = useFestivalDashboardStore()
 const raffle = computed(() => props.row.raffle)
 /** The raffle's pricing, in the shape the store's helpers read. */
 const priced = computed(() => ({
-  entryMode: raffle.value.entry_mode,
-  costPerEntry: raffle.value.cost_per_entry,
-  tierCosts: raffle.value.tier_costs,
+  entryMode: raffle.value.entryMode,
+  costPerEntry: raffle.value.costPerEntry,
+  tierCosts: raffle.value.tierCosts,
 }))
-const held = computed(() => props.row.entry?.num_entries ?? 0)
+const held = computed(() => props.row.entry?.numEntries ?? 0)
 /** Entries the visitor may still add: the allowance is per player, in total. */
-const remaining = computed(() => Math.max(0, raffle.value.max_entries - held.value))
+const remaining = computed(() => Math.max(0, raffle.value.maxEntries - held.value))
 const takesSignups = computed(() => raffleAcceptsSignups(priced.value))
 const costLabel = computed(() => raffleCostLabel(priced.value))
 const confirmation = computed(() => store.entered[raffle.value.id] ?? null)
 const payment = computed(() =>
-  props.row.entry ? (PAYMENT_LABELS[props.row.entry.payment_state] ?? null) : null,
+  props.row.entry ? (PAYMENT_LABELS[props.row.entry.paymentState] ?? null) : null,
 )
 
 const formOpen = ref(false)
@@ -90,8 +91,8 @@ async function submit(): Promise<void> {
   <article :id="`festival-raffle-${raffle.id}`" class="festival-raffle card card--padded">
     <div class="festival-raffle-head">
       <img
-        v-if="raffle.prize_image"
-        :src="assetUrl(raffle.prize_image)"
+        v-if="raffle.prizeImage"
+        :src="assetUrl(raffle.prizeImage)"
         class="festival-raffle-prize"
         alt="Prize"
       />
@@ -101,12 +102,12 @@ async function submit(): Promise<void> {
           <span v-if="row.running" class="status-badge status-badge-open">running</span>
           <span v-else class="status-badge status-badge-closed">closed</span>
         </h4>
-        <p v-if="raffle.stall_name" class="text-sm text-muted m-0">
-          <font-awesome-icon :icon="['fad', 'store']" /> {{ raffle.stall_name }}
+        <p v-if="raffle.stallName" class="text-sm text-muted m-0">
+          <font-awesome-icon :icon="['fad', 'store']" /> {{ raffle.stallName }}
         </p>
         <p class="text-sm text-muted m-0">
-          <template v-if="costLabel">{{ costLabel }} - </template>{{ row.total_entries }}
-          {{ row.total_entries === 1 ? 'entry' : 'entries' }} so far
+          <template v-if="costLabel">{{ costLabel }} - </template>{{ row.totalEntries }}
+          {{ row.totalEntries === 1 ? 'entry' : 'entries' }} so far
         </p>
       </div>
     </div>
@@ -114,23 +115,24 @@ async function submit(): Promise<void> {
     <!-- The visitor's own standing in it. -->
     <p v-if="row.entry" class="festival-raffle-mine">
       <span>
-        You hold <strong>{{ row.entry.num_entries }}</strong>
-        {{ row.entry.num_entries === 1 ? 'entry' : 'entries' }}
+        You hold <strong>{{ row.entry.numEntries }}</strong>
+        {{ row.entry.numEntries === 1 ? 'entry' : 'entries' }}
       </span>
       <span v-if="payment" :class="['badge', payment.badge]">
         {{ payment.text }}
-        <template v-if="row.entry.payment_state === 'partial'">
-          ({{ row.entry.paid_entries }}/{{ row.entry.num_entries }})
+        <template v-if="row.entry.paymentState === 'partial'">
+          ({{ row.entry.paidEntries }}/{{ row.entry.numEntries }})
         </template>
       </span>
     </p>
 
     <!-- Drawn. -->
-    <div v-if="row.is_winner" class="callout">
+    <div v-if="row.isWinner" class="callout">
       <font-awesome-icon :icon="['fad', 'champagne-glasses']" /> You won this raffle!
     </div>
-    <p v-else-if="row.winner_name" class="text-sm m-0">
-      <font-awesome-icon :icon="['fad', 'trophy']" /> Won by <strong>{{ row.winner_name }}</strong>
+    <p v-else-if="row.winner" class="text-sm m-0">
+      <font-awesome-icon :icon="['fad', 'trophy']" /> Won by
+      <strong>{{ participantLabel(row.winner.characterName, row.winner.world) }}</strong>
     </p>
 
     <!-- Just entered here: what to send, and where. -->
@@ -146,9 +148,9 @@ async function submit(): Promise<void> {
         class="game-details"
         :source="confirmation.signupInstructions"
       />
-      <figure v-if="raffle.pay_image" class="captioned-figure">
+      <figure v-if="raffle.payImage" class="captioned-figure">
         <figcaption>Where to pay</figcaption>
-        <img :src="assetUrl(raffle.pay_image)" alt="Where to pay" />
+        <img :src="assetUrl(raffle.payImage)" alt="Where to pay" />
       </figure>
     </div>
 
@@ -160,9 +162,9 @@ async function submit(): Promise<void> {
         <MarkdownText class="game-details" :source="raffle.rules" />
       </template>
       <!-- A details-only raffle is entered elsewhere: these ARE how to enter. -->
-      <template v-if="!takesSignups && raffle.signup_instructions">
+      <template v-if="!takesSignups && raffle.signupInstructions">
         <h5 class="section-heading">How to enter</h5>
-        <MarkdownText class="game-details" :source="raffle.signup_instructions" />
+        <MarkdownText class="game-details" :source="raffle.signupInstructions" />
       </template>
     </details>
 

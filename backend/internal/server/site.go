@@ -2,9 +2,8 @@ package server
 
 import "net/http"
 
-// What the server answers outside /api/, apart from server.go's routes(), which stays
-// the list of the API's operations (the OpenAPI document is checked against it):
-// GET /healthz, and the SPA for every other path.
+// What the server answers outside /api/: GET /healthz, and the SPA for every other
+// path. The API's own routes are the operations in internal/api.
 
 // siteRoutes builds siteMux. ServeHTTP hands it every request outside /api/, ahead of
 // the API's session, CSRF and access-log layers.

@@ -24,13 +24,13 @@ const ema = useEmaStore()
 
 function setFestival(value: string): void {
   if (ema.boardForm) {
-    ema.boardForm.festival_map_id = value ? Number(value) : null
+    ema.boardForm.festivalMapId = value ? Number(value) : null
   }
 }
 
 /** An empty box is no limit (0); anything else is a whole number of requests. */
 function setArtistLimit(w: EmaWindowForm, value: string): void {
-  w.artist_limit = Math.max(0, Math.trunc(Number(value) || 0))
+  w.artistLimit = Math.max(0, Math.trunc(Number(value) || 0))
 }
 
 async function save(): Promise<void> {
@@ -60,7 +60,7 @@ function cancel(): void {
         help="The festival this board belongs to. Its plaques show on that festival's dashboard, and each festival has one board."
       >
         <select
-          :value="ema.boardForm.festival_map_id ?? ''"
+          :value="ema.boardForm.festivalMapId ?? ''"
           aria-label="Festival"
           @change="setFestival(($event.target as HTMLSelectElement).value)"
         >
@@ -77,35 +77,35 @@ function cancel(): void {
         label="Plaque Template"
         help="The blank plaque everyone starts from: downloaded for the do-it-yourself option, and drawn on in the site's designer. A transparent PNG works best."
       >
-        <ImagePicker v-model="ema.boardForm.template_image" />
+        <ImagePicker v-model="ema.boardForm.templateImage" />
       </FormField>
 
       <FormField label="Ways to Write a Plaque">
         <div class="ema-options">
           <label class="checkbox-inline">
-            <input v-model="ema.boardForm.allow_self" type="checkbox" />
+            <input v-model="ema.boardForm.allowSelf" type="checkbox" />
             Design it yourself (download the template, post it in Discord)
           </label>
           <label class="checkbox-inline">
-            <input v-model="ema.boardForm.allow_site" type="checkbox" />
+            <input v-model="ema.boardForm.allowSite" type="checkbox" />
             Design it on the site (staff approve it, then it posts for them)
           </label>
           <label class="checkbox-inline">
-            <input v-model="ema.boardForm.allow_artist" type="checkbox" />
+            <input v-model="ema.boardForm.allowArtist" type="checkbox" />
             Ask the artist to make it
           </label>
         </div>
       </FormField>
 
       <FormField
-        v-if="ema.boardForm.allow_artist"
+        v-if="ema.boardForm.allowArtist"
         label="Artist"
         help="Who takes plaque requests. Shown on the request option."
       >
-        <input v-model="ema.boardForm.artist_name" placeholder="Tara" aria-label="Artist name" />
+        <input v-model="ema.boardForm.artistName" placeholder="Tara" aria-label="Artist name" />
       </FormField>
 
-      <template v-if="ema.boardForm.allow_self">
+      <template v-if="ema.boardForm.allowSelf">
         <FormField
           label="Do-It-Yourself Instructions"
           help="How to decorate the template and where to post it."
@@ -121,7 +121,7 @@ function cancel(): void {
           help="The channel or invite self-made plaques are posted to."
         >
           <input
-            v-model="ema.boardForm.discord_link"
+            v-model="ema.boardForm.discordLink"
             type="url"
             placeholder="https://discord.com/channels/..."
             aria-label="Discord link"
@@ -149,10 +149,10 @@ function cancel(): void {
             class="repeater-row ema-window-row"
           >
             <input v-model="w.label" :placeholder="`Day ${i + 1}`" aria-label="Day label" />
-            <input v-model="w.start_at" type="datetime-local" aria-label="Starts" />
-            <input v-model="w.end_at" type="datetime-local" aria-label="Ends" />
+            <input v-model="w.startAt" type="datetime-local" aria-label="Starts" />
+            <input v-model="w.endAt" type="datetime-local" aria-label="Ends" />
             <input
-              v-model="w.webhook_url"
+              v-model="w.webhookUrl"
               type="url"
               placeholder="https://discord.com/api/webhooks/..."
               aria-label="Discord webhook for this day"
@@ -160,18 +160,18 @@ function cancel(): void {
             />
             <span class="ema-window-limit">
               <input
-                :value="w.artist_limit || ''"
+                :value="w.artistLimit || ''"
                 type="number"
                 min="0"
                 max="1000"
                 step="1"
                 placeholder="No limit"
                 aria-label="Most artist requests this day"
-                :disabled="!ema.boardForm.allow_artist"
+                :disabled="!ema.boardForm.allowArtist"
                 @input="setArtistLimit(w, ($event.target as HTMLInputElement).value)"
               />
-              <span v-if="w.artist_count" class="text-xs text-muted nowrap">
-                {{ w.artist_count }} asked
+              <span v-if="w.artistCount" class="text-xs text-muted nowrap">
+                {{ w.artistCount }} asked
               </span>
             </span>
             <button
@@ -198,7 +198,7 @@ function cancel(): void {
         <button
           type="button"
           class="btn-confirm"
-          :disabled="!ema.boardForm.festival_map_id || ema.saving"
+          :disabled="!ema.boardForm.festivalMapId || ema.saving"
           @click="save"
         >
           <LoadingSpinner v-if="ema.saving" label="Saving..." />

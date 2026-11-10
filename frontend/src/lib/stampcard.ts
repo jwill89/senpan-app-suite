@@ -7,7 +7,8 @@
  * card, so the style computation lives here in one place.
  */
 import type { CSSProperties } from 'vue'
-import type { Placement, StampType } from '@/types/api'
+import type { StampType } from '@/types/api'
+import type { Placement } from '@/api/client'
 
 /** Absolute-position style for an item at the given placement (rotated about its centre). */
 export function placementStyle(p: Placement): CSSProperties {

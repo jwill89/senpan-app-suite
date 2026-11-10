@@ -21,10 +21,10 @@ import TurnstileWidget from '@/components/common/TurnstileWidget.vue'
 import { useFestivalDashboardStore } from '@/stores/festivalDashboard'
 import { assetUrl } from '@/lib/assets'
 import { formatEventRange } from '@/lib/festivalmap'
-import type { FestivalDashboardEma } from '@/types/api'
+import type { FestivalEma } from '@/api/client'
 
 const props = defineProps<{
-  ema: FestivalDashboardEma
+  ema: FestivalEma
   /** Cloudflare Turnstile site key ('' = the check is off). */
   turnstileSiteKey: string
 }>()
@@ -45,25 +45,25 @@ const STATUS: Record<string, { text: string; badge: string }> = {
 }
 
 const currentWindow = computed(
-  () => props.ema.windows.find((w) => w.id === props.ema.current_window_id) ?? null,
+  () => props.ema.windows.find((w) => w.id === props.ema.currentWindowId) ?? null,
 )
 /** The next window to open, when none is open now. */
 const nextWindow = computed(() =>
   currentWindow.value
     ? null
-    : (props.ema.windows.find((w) => Date.parse(w.start_at) > Date.now()) ?? null),
+    : (props.ema.windows.find((w) => Date.parse(w.startAt) > Date.now()) ?? null),
 )
 /** Whether the visitor may send a design or a request right now. */
 const canSend = computed(
-  () => !!currentWindow.value && !!store.visitorName && !props.ema.has_plaque_this_window,
+  () => !!currentWindow.value && !!store.visitorName && !props.ema.hasPlaqueThisWindow,
 )
 /**
  * Requests the artist still takes today, or null when today has no limit. At 0 the
  * request option closes for the day; the server holds the same line.
  */
 const artistLeft = computed(() =>
-  currentWindow.value && currentWindow.value.artist_limit > 0
-    ? currentWindow.value.artist_left
+  currentWindow.value && currentWindow.value.artistLimit > 0
+    ? currentWindow.value.artistLeft
     : null,
 )
 const artistFull = computed(() => artistLeft.value === 0)
@@ -163,13 +163,13 @@ async function sendRequest(): Promise<void> {
     <p v-if="currentWindow" class="festival-ema-day">
       <font-awesome-icon :icon="['fad', 'calendar-days']" />
       Plaques for <strong>{{ currentWindow.label }}</strong> are being taken now -
-      {{ formatEventRange(currentWindow.start_at, currentWindow.end_at) }}
+      {{ formatEventRange(currentWindow.startAt, currentWindow.endAt) }}
     </p>
     <p v-else-if="nextWindow" class="festival-ema-day">
       <font-awesome-icon :icon="['fad', 'calendar-days']" />
       The next plaque day is <strong>{{ nextWindow.label }}</strong
       >,
-      {{ formatEventRange(nextWindow.start_at, nextWindow.end_at) }}
+      {{ formatEventRange(nextWindow.startAt, nextWindow.endAt) }}
     </p>
     <p v-else class="festival-ema-day text-muted">The plaque days for this festival are over.</p>
 
@@ -178,8 +178,8 @@ async function sendRequest(): Promise<void> {
       <li v-for="p in ema.plaques" :key="p.id" class="festival-ema-mine">
         <img v-if="p.image" :src="assetUrl(p.image)" class="festival-ema-thumb" alt="" />
         <span>
-          <strong>{{ p.window_label }}</strong> -
-          {{ p.kind === 'site' ? 'designed here' : `asked of ${ema.artist_name}` }}
+          <strong>{{ p.windowLabel }}</strong> -
+          {{ p.kind === 'site' ? 'designed here' : `asked of ${ema.artistName}` }}
         </span>
         <span :class="['badge', STATUS[p.status]?.badge ?? 'badge--muted']">
           {{ STATUS[p.status]?.text ?? p.status }}
@@ -187,7 +187,7 @@ async function sendRequest(): Promise<void> {
       </li>
     </ul>
 
-    <p v-if="ema.has_plaque_this_window" class="callout">
+    <p v-if="ema.hasPlaqueThisWindow" class="callout">
       <font-awesome-icon :icon="['fad', 'torii-gate']" /> You've hung your plaque for
       {{ currentWindow?.label ?? 'today' }}. You can write another on the next plaque day.
     </p>
@@ -199,14 +199,14 @@ async function sendRequest(): Promise<void> {
     <div class="festival-ema-options">
       <!-- 1. Do it yourself -->
       <section
-        v-if="ema.allow_self && ema.template_image"
+        v-if="ema.allowSelf && ema.templateImage"
         class="card card--padded festival-ema-option"
       >
         <h4 class="festival-ema-option-title">
           <font-awesome-icon :icon="['fas', 'download']" /> Design It Yourself
         </h4>
         <img
-          :src="assetUrl(ema.template_image)"
+          :src="assetUrl(ema.templateImage)"
           class="festival-ema-template"
           alt="The blank plaque"
         />
@@ -216,13 +216,13 @@ async function sendRequest(): Promise<void> {
           Discord.
         </p>
         <div class="form-actions">
-          <a class="btn-action btn-sm" :href="assetUrl(ema.template_image)" download>
+          <a class="btn-action btn-sm" :href="assetUrl(ema.templateImage)" download>
             <font-awesome-icon :icon="['fas', 'download']" /> Save the Template
           </a>
           <a
-            v-if="ema.discord_link"
+            v-if="ema.discordLink"
             class="btn-neutral btn-sm"
-            :href="ema.discord_link"
+            :href="ema.discordLink"
             target="_blank"
             rel="noopener noreferrer"
           >
@@ -233,7 +233,7 @@ async function sendRequest(): Promise<void> {
 
       <!-- 2. Design it here -->
       <section
-        v-if="ema.allow_site && ema.template_image"
+        v-if="ema.allowSite && ema.templateImage"
         class="card card--padded festival-ema-option"
       >
         <h4 class="festival-ema-option-title">
@@ -256,16 +256,16 @@ async function sendRequest(): Promise<void> {
       </section>
 
       <!-- 3. Ask the artist -->
-      <section v-if="ema.allow_artist" class="card card--padded festival-ema-option">
+      <section v-if="ema.allowArtist" class="card card--padded festival-ema-option">
         <h4 class="festival-ema-option-title">
-          <font-awesome-icon :icon="['fad', 'torii-gate']" /> Ask {{ ema.artist_name }}
+          <font-awesome-icon :icon="['fad', 'torii-gate']" /> Ask {{ ema.artistName }}
         </h4>
         <p class="text-sm m-0">
-          Describe the plaque you'd like and {{ ema.artist_name }} will make it and post it for you.
+          Describe the plaque you'd like and {{ ema.artistName }} will make it and post it for you.
         </p>
         <p v-if="currentWindow && artistFull" class="form-alert form-alert-warning" role="status">
           <font-awesome-icon :icon="['fas', 'triangle-exclamation']" class="form-alert-icon" />
-          <span>{{ ema.artist_name }}'s requests for {{ currentWindow.label }} are full.</span>
+          <span>{{ ema.artistName }}'s requests for {{ currentWindow.label }} are full.</span>
         </p>
         <p v-else-if="currentWindow && artistLeft !== null" class="text-sm text-muted m-0">
           {{ artistLeft }} {{ artistLeft === 1 ? 'request' : 'requests' }} left for
@@ -276,8 +276,8 @@ async function sendRequest(): Promise<void> {
             v-model="requestText"
             rows="4"
             maxlength="2000"
-            :placeholder="`What should ${ema.artist_name} draw and write?`"
-            :aria-label="`Your request for ${ema.artist_name}`"
+            :placeholder="`What should ${ema.artistName} draw and write?`"
+            :aria-label="`Your request for ${ema.artistName}`"
             :disabled="!canAsk"
           ></textarea>
           <TurnstileWidget
@@ -299,7 +299,7 @@ async function sendRequest(): Promise<void> {
                 (!!turnstileSiteKey && !requestToken)
               "
             >
-              Send to {{ ema.artist_name }}
+              Send to {{ ema.artistName }}
             </button>
           </div>
         </form>
@@ -317,7 +317,7 @@ async function sendRequest(): Promise<void> {
       <EmaDesigner
         v-show="!design"
         ref="designer"
-        :template-src="assetUrl(ema.template_image)"
+        :template-src="assetUrl(ema.templateImage)"
         :fonts="store.googleFonts"
         :busy="store.busy"
         @done="onDesigned"

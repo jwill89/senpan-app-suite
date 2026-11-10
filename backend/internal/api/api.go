@@ -3,8 +3,8 @@
 // plugin are built against (`go run . openapi`, committed as
 // frontend/src/api/openapi.json).
 //
-// The domains not registered here are still internal/server's hand-registered
-// routes; both share the server's mux and its session, CSRF and access-log layers.
+// Every route under /api is an operation here; internal/server supplies the session,
+// CSRF and access-log layers around them.
 package api
 
 import (
@@ -17,6 +17,7 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/alexedwards/scs/v2"
@@ -28,6 +29,7 @@ import (
 	"app-suite/internal/discord"
 	"app-suite/internal/game"
 	"app-suite/internal/live"
+	"app-suite/internal/media"
 	"app-suite/internal/model"
 	"app-suite/internal/store"
 )
@@ -57,8 +59,6 @@ type Deps struct {
 	TurnstileSiteKey func() string
 	// LogFile is the rotating JSON log's path, "" when the log goes to stdout only.
 	LogFile func() string
-	// UploadedFonts lists the uploaded fonts with fresh serving tokens.
-	UploadedFonts func(ctx context.Context) []model.UploadedFont
 	// Sessions is the session manager whose session every request's context carries
 	// (the server's LoadAndSave), so signing in and out happen on it.
 	Sessions *scs.SessionManager
@@ -70,6 +70,26 @@ type Deps struct {
 	// RaffleEntryLimit counts every public raffle sign-up and RaffleLookupLimit every
 	// public entry search, each by client address.
 	RaffleEntryLimit, RaffleLookupLimit Limiter
+	// GaraponDrawLimit counts every public garapon draw, by client address, before the
+	// drawing link is looked up.
+	GaraponDrawLimit Limiter
+	// StampGuessLimit counts the wrong stamp passwords tried, by client address.
+	StampGuessLimit Limiter
+	// RallyLimit counts every public stamp rally sign-up and card lookup, by client address.
+	RallyLimit Limiter
+	// DashboardLimit counts every festival dashboard read, by client address.
+	DashboardLimit Limiter
+	// EmaLimit counts every public plaque submission and artist request, by client
+	// address, before the request is read.
+	EmaLimit Limiter
+	// WebRoot is the folder the uploads live under; the plaques waiting for review are
+	// kept in images/ema_plaques within it.
+	WebRoot string
+	// Images is the image library, Carrd the Carrd projects and Fonts the uploaded
+	// fonts, each over the web root.
+	Images *media.Images
+	Carrd  *media.Carrd
+	Fonts  *media.Fonts
 	// Game is the bingo game: its state, its commands, and the live events each one
 	// publishes.
 	Game *game.Service
@@ -83,10 +103,9 @@ type Deps struct {
 	Discord *discord.Sender
 	// AniList looks titles up for the book clubs.
 	AniList *anilist.Client
-	// RemoveUnusedCovers deletes, from among the book-club cover urls, the uploaded
-	// files no reading-list item uses any more. It is called after the rows that held
-	// them are gone.
-	RemoveUnusedCovers func(ctx context.Context, urls ...string)
+
+	// fonts is the Google Fonts list kept between requests; New makes it.
+	fonts *googleFontList
 }
 
 // Limiter counts attempts by key (a client address) within a window.
@@ -155,6 +174,11 @@ func New(mux *http.ServeMux, d Deps) huma.API {
 	if d.Logger == nil {
 		d.Logger = slog.Default()
 	}
+	d.fonts = &googleFontList{}
+	// Parts of a form up to 16 MiB stay in memory, so the artist's plaque and a visitor's
+	// are never written to disk; larger uploads spill to temporary files that net/http
+	// removes after the request. Set once, since every server reads the same variable.
+	multipartMemory.Do(func() { humago.MultipartMaxMemory = 16 << 20 })
 	api := humago.NewWithPrefix(mux, Prefix, config())
 	h := handlers{Deps: d}
 	h.registerVersion(api)
@@ -177,9 +201,20 @@ func New(mux *http.ServeMux, d Deps) huma.API {
 	h.registerGame(api)
 	h.registerBoard(api)
 	h.registerRaffles(api)
+	h.registerGarapons(api)
+	h.registerStampRallies(api)
+	h.registerFestivalMaps(api)
+	h.registerFestivals(api)
+	h.registerEma(api)
+	h.registerImages(api)
+	h.registerCarrd(api)
+	h.registerFonts(api)
 	h.registerLive(api)
 	return api
 }
+
+// multipartMemory guards the one-time setting of humago.MultipartMaxMemory.
+var multipartMemory sync.Once
 
 // config is huma's with no document, docs or schema routes (the
 // document is committed, and the clients are built from it), and no $schema link in

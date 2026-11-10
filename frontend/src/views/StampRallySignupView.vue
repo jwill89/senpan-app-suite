@@ -59,11 +59,11 @@ const issued = computed(() => {
   const fresh = store.signupResult
   if (fresh) {
     return {
-      name: participantLabel(fresh.participant_name, fresh.world),
-      rallyTitle: fresh.rally_title,
-      cardToken: fresh.card_token,
-      garaponToken: fresh.garapon_token ?? '',
-      garaponTitle: fresh.garapon_title ?? '',
+      name: participantLabel(fresh.participantName, fresh.world),
+      rallyTitle: fresh.rallyTitle,
+      cardToken: fresh.cardToken,
+      garaponToken: fresh.garaponToken ?? '',
+      garaponTitle: fresh.garaponTitle ?? '',
     }
   }
   if (saved.value) {
@@ -222,17 +222,17 @@ function goLookup(): void {
         <!-- Sign-up form -->
         <template v-else>
           <img
-            v-if="rally.card_image"
-            :src="assetUrl(rally.card_image)"
+            v-if="rally.cardImage"
+            :src="assetUrl(rally.cardImage)"
             class="stamp-signup-card-image"
             alt="Stamp card"
           />
 
           <MarkdownText v-if="rally.details" class="game-details mb-16" :source="rally.details" />
 
-          <div v-if="rally.garapon_title" class="stamp-signup-note mb-16">
+          <div v-if="rally.garaponTitle" class="stamp-signup-note mb-16">
             <font-awesome-icon :icon="['fad', 'circle-dot']" />
-            Signing up also gets you a <strong>{{ rally.garapon_title }}</strong> garapon draw.
+            Signing up also gets you a <strong>{{ rally.garaponTitle }}</strong> garapon draw.
           </div>
 
           <form class="stamp-signup-form" @submit.prevent="submit">

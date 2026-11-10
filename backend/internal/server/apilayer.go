@@ -9,8 +9,7 @@ import (
 	"strings"
 )
 
-// The /api layer every API request passes through, the huma operations' and the
-// hand-registered routes' alike:
+// The /api layer every API request passes through:
 //
 //   - a path the mux doesn't know answers problem details, 404, or 405 keeping Allow,
 //     rather than the mux's plain text;

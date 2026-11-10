@@ -31,7 +31,7 @@ onMounted(() => {
 /** Set the linked stamp rally from the select ('' -> null = not linked). */
 function setStampRally(value: string): void {
   if (garapons.garaponForm) {
-    garapons.garaponForm.stamp_rally_id = value ? Number(value) : null
+    garapons.garaponForm.stampRallyId = value ? Number(value) : null
   }
 }
 
@@ -74,7 +74,7 @@ function cancel(): void {
         help="Optional. When linked, every drawing link you issue also issues that participant a stamp card for this rally - sharing the same link. Only open rallies are listed."
       >
         <select
-          :value="garapons.garaponForm.stamp_rally_id ?? ''"
+          :value="garapons.garaponForm.stampRallyId ?? ''"
           aria-label="Linked stamp rally"
           @change="setStampRally(($event.target as HTMLSelectElement).value)"
         >
@@ -90,7 +90,7 @@ function cancel(): void {
         help="How many draws a link carries when nobody picks a number: what a public stamp-rally sign-up issues (no staff member is there to choose), and what the Issue Link field starts at. You can still override it per link."
       >
         <input
-          v-model.number="garapons.garaponForm.default_draws"
+          v-model.number="garapons.garaponForm.defaultDraws"
           type="number"
           min="1"
           aria-label="Default draws per link"
@@ -124,7 +124,7 @@ function cancel(): void {
               <input
                 type="radio"
                 name="garapon-grand"
-                :checked="p.is_grand"
+                :checked="p.isGrand"
                 aria-label="Mark as grand prize"
                 @change="garapons.setGrandPrize(i)"
               />
@@ -134,7 +134,7 @@ function cancel(): void {
             </span>
             <span>
               <input
-                v-model="p.ball_color"
+                v-model="p.ballColor"
                 type="color"
                 class="prize-color"
                 aria-label="Ball color"
@@ -173,7 +173,7 @@ function cancel(): void {
         label="Grand Prize Image"
         help="Pick from any image category. Upload new images on the System -> Images page."
       >
-        <ImagePicker v-model="garapons.garaponForm.grand_prize_image" />
+        <ImagePicker v-model="garapons.garaponForm.grandPrizeImage" />
       </FormField>
 
       <FormActions align="start">

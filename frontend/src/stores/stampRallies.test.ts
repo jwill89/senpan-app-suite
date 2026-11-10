@@ -1,70 +1,63 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
 import type {
-  FestivalMap,
-  FestivalStallOccupant,
   PublicStamp,
   PublicStampCard,
-  SignupRally,
-  StampLookupEntry,
   StampRally,
   StampRallyLogEntry,
   StampRallyStamp,
-  StampSignupResponse,
-} from '@/types/api'
+  StampSignup,
+} from '@/api/client'
+import type { FestivalMap, FestivalStallOccupant } from '@/api/client'
 
-// Mock the typed endpoint layer so store actions run without the network.
-const ep = vi.hoisted(() => ({
-  list: vi.fn(async () => ({ stamp_rallies: [] as StampRally[] })),
-  create: vi.fn(async () => ({ ok: true })),
-  update: vi.fn(async () => ({ ok: true })),
-  stamp: vi.fn(async () => ({ card: {} as PublicStampCard, collected_stamp_id: 5 })),
-  get: vi.fn(async () => ({}) as PublicStampCard),
-  setStatus: vi.fn(async () => ({ ok: true })),
-  signupList: vi.fn(async () => ({ rallies: [] as SignupRally[] })),
-  // Typed as the full response so a test can override it with the optional garapon
-  // fields, which a rally with a linked garapon returns.
-  signUp: vi.fn(async (): Promise<StampSignupResponse> => ({
-    participant_name: 'Yao Ming',
-    world: 'Balmung',
-    rally_title: 'Festival',
-    card_token: 'tok_card',
-  })),
-  signupLookup: vi.fn(async () => ({ entries: [] as StampLookupEntry[] })),
+// The store calls the API client; only its calls are faked (unwrap is the real
+// one). Each fake answers a call's `{ data, error, response }`.
+const ok = (data: unknown, status = 200) => ({ data, response: new Response(null, { status }) })
+const failed = (status: number, detail: string) => ({
+  error: { title: 'Error', detail },
+  response: new Response(null, { status }),
+})
+const api = vi.hoisted(() => ({
+  GET: vi.fn(),
+  POST: vi.fn(),
+  PUT: vi.fn(),
+  PATCH: vi.fn(),
+  DELETE: vi.fn(),
+}))
+vi.mock('@/api/client', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  api,
+}))
+
+// The festival maps a rally can be linked to are read from the same client: these
+// answer its two festival-map reads.
+const maps = vi.hoisted(() => ({
   mapList: vi.fn(async () => ({ maps: [] as FestivalMap[] })),
   mapDetail: vi.fn(async () => ({ map: { stalls: [] } as unknown as FestivalMap })),
-}))
-vi.mock('@/lib/endpoints', () => ({
-  endpoints: {
-    stampRallies: {
-      list: ep.list,
-      detail: vi.fn(),
-      logs: vi.fn(),
-      create: ep.create,
-      update: ep.update,
-      delete: vi.fn(),
-      setStatus: ep.setStatus,
-      setStampPaused: vi.fn(),
-      createCard: vi.fn(),
-      deleteCard: vi.fn(),
-    },
-    stampCard: { get: ep.get, stamp: ep.stamp },
-    stampSignup: { list: ep.signupList, signUp: ep.signUp, lookup: ep.signupLookup },
-    festivalMaps: { list: ep.mapList, detail: ep.mapDetail },
-  },
 }))
 
 import { useStampRalliesStore, groupedByParticipant } from './stampRallies'
 import { useUiStore } from './ui'
 
+/** What the store passes a call: the path parameters and the body. */
+interface CallInit {
+  params: { path: Record<string, unknown> }
+  body: Record<string, unknown>
+}
+
+/** The call to `path` among a method's calls, as `[path, init]`. */
+function callTo(method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE', path: string) {
+  return api[method].mock.calls.find(([p]) => p === path) as [string, CallInit] | undefined
+}
+
 function logRow(over: Partial<StampRallyLogEntry>): StampRallyLogEntry {
   return {
-    card_id: 1,
-    participant_name: 'A',
-    stamp_id: 1,
-    stall_name: 'X',
-    stamp_type: 'food',
-    stamped_at: '',
+    cardId: 1,
+    participantName: 'A',
+    stampId: 1,
+    stallName: 'X',
+    stampType: 'food',
+    stampedAt: null,
     ...over,
   }
 }
@@ -74,24 +67,25 @@ function publicCard(over: Partial<PublicStampCard> = {}): PublicStampCard {
     rally: {
       id: 1,
       title: 'R',
-      card_image: '',
-      not_stamped_image: '',
+      cardImage: '',
+      notStampedImage: '',
       details: '',
-      redeem_instructions: '',
-      redeem_image: '',
-      available_from: '',
-      available_to: '',
-      is_active: true,
-      completion_mode: 'all',
-      required_food: 0,
-      required_game: 0,
+      redeemInstructions: '',
+      redeemImage: '',
+      availableFrom: null,
+      availableTo: null,
+      isActive: true,
+      completionMode: 'all',
+      requiredFood: 0,
+      requiredGame: 0,
+      festivalLink: '',
     },
-    participant_name: 'Tataru',
+    participantName: 'Tataru',
     completed: false,
-    completed_at: '',
+    completedAt: null,
     stamps: [],
     prizes: [],
-    prizes_revealed: false,
+    prizesRevealed: false,
     ...over,
   }
 }
@@ -99,46 +93,83 @@ function publicCard(over: Partial<PublicStampCard> = {}): PublicStampCard {
 function publicStamp(over: Partial<PublicStamp> = {}): PublicStamp {
   return {
     id: 1,
-    affiliate_name: '',
-    stamp_type: 'food',
+    affiliateName: '',
+    occupantId: null,
+    stampType: 'food',
     image: '',
     placement: { x: 0, y: 0, width: 10, height: 10, rotation: 0 },
-    active_from: '',
-    active_to: '',
+    activeFrom: null,
+    activeTo: null,
     available: true,
     expired: false,
     collected: false,
-    collected_at: '',
+    collectedAt: null,
+    ...over,
+  }
+}
+
+/** A rally as the API answers it; each test overrides what it cares about. */
+function rally(over: Partial<StampRally> = {}): StampRally {
+  return {
+    id: 1,
+    title: 'R',
+    cardImage: '',
+    notStampedImage: '',
+    redeemImage: '',
+    availableFrom: null,
+    availableTo: null,
+    details: '',
+    redeemInstructions: '',
+    status: 'open',
+    publicSignup: false,
+    completionMode: 'all',
+    requiredFood: 0,
+    requiredGame: 0,
+    festivalMapId: null,
+    festivalMapName: '',
+    createdAt: null,
+    stamps: [],
+    prizes: [],
+    cardCount: 0,
+    completedCount: 0,
+    stampCount: 0,
+    activeStampCount: 0,
     ...over,
   }
 }
 
 beforeEach(() => {
   setActivePinia(createPinia())
-  Object.values(ep).forEach((fn) => fn.mockClear())
+  Object.values(api).forEach((fn) => fn.mockReset())
+  Object.values(maps).forEach((fn) => fn.mockClear())
+  api.GET.mockImplementation(async (path: string) =>
+    path === '/festival-maps'
+      ? ok(await maps.mapList())
+      : path === '/festival-maps/{id}'
+        ? ok((await maps.mapDetail()).map)
+        : ok({}),
+  )
 })
 
 describe('groupedByParticipant', () => {
   it('keeps each participant rows contiguous, groups ordered by first appearance', () => {
     const rows = [
-      logRow({ participant_name: 'Bo', stamp_id: 1 }),
-      logRow({ participant_name: 'Aria', stamp_id: 2 }),
-      logRow({ participant_name: 'Bo', stamp_id: 3 }), // belongs with the first "Bo" block
-      logRow({ participant_name: 'Aria', stamp_id: 4 }),
+      logRow({ participantName: 'Bo', stampId: 1 }),
+      logRow({ participantName: 'Aria', stampId: 2 }),
+      logRow({ participantName: 'Bo', stampId: 3 }), // belongs with the first "Bo" block
+      logRow({ participantName: 'Aria', stampId: 4 }),
     ]
     const out = groupedByParticipant(rows)
     // Groups keyed on participant name (the snapshot, which survives card deletion).
-    expect(out.map((r) => r.participant_name)).toEqual(['Bo', 'Bo', 'Aria', 'Aria'])
+    expect(out.map((r) => r.participantName)).toEqual(['Bo', 'Bo', 'Aria', 'Aria'])
     // permutation: same length, same stamp ids present
-    expect(out.map((r) => r.stamp_id).sort()).toEqual([1, 2, 3, 4])
+    expect(out.map((r) => r.stampId).sort()).toEqual([1, 2, 3, 4])
   })
 })
 
 describe('admin', () => {
   it('loadRallies populates the list', async () => {
-    ep.list.mockResolvedValueOnce({
-      stamp_rallies: [{ id: 1 } as StampRally, { id: 2 } as StampRally],
-    })
+    api.GET.mockResolvedValueOnce(ok({ stampRallies: [rally({ id: 1 }), rally({ id: 2 })] }))
     const s = useStampRalliesStore()
     await s.loadRallies()
     expect(s.rallies).toHaveLength(2)
@@ -147,34 +178,48 @@ describe('admin', () => {
   it('splits rallies into open and closed by status', () => {
     const s = useStampRalliesStore()
     s.rallies = [
-      { id: 1, status: 'open' } as StampRally,
-      { id: 2, status: 'closed' } as StampRally,
-      { id: 3, status: 'open' } as StampRally,
+      rally({ id: 1, status: 'open' }),
+      rally({ id: 2, status: 'closed' }),
+      rally({ id: 3, status: 'open' }),
     ]
     expect(s.openRallies.map((r) => r.id)).toEqual([1, 3])
     expect(s.closedRallies.map((r) => r.id)).toEqual([2])
   })
 
   it('setRallyStatus updates the selected + listed rally', async () => {
+    api.POST.mockResolvedValueOnce(ok(rally({ status: 'closed' })))
     const s = useStampRalliesStore()
-    s.rallies = [{ id: 1, status: 'open' } as StampRally]
+    s.rallies = [rally({ id: 1, status: 'open' })]
     s.selectedRally = s.rallies[0]!
     await s.setRallyStatus(1, 'closed')
-    expect(ep.setStatus).toHaveBeenCalledWith(1, 'closed')
+    expect(callTo('POST', '/stamp-rallies/{id}/close')?.[1].params.path).toEqual({ id: 1 })
     expect(s.rallies[0]!.status).toBe('closed')
     expect(s.selectedRally.status).toBe('closed')
   })
 
-  it('setStampPausedInList toggles the loaded stall and adjusts the active count', async () => {
+  it('setRallyStatus reopens through its own verb', async () => {
+    api.POST.mockResolvedValueOnce(ok(rally({ status: 'open' })))
     const s = useStampRalliesStore()
-    s.rallies = [{ id: 1, stamp_count: 2, active_stamp_count: 2 } as StampRally]
+    s.rallies = [rally({ id: 1, status: 'closed' })]
+    await s.setRallyStatus(1, 'open')
+    expect(callTo('POST', '/stamp-rallies/{id}/reopen')).toBeDefined()
+    expect(s.rallies[0]!.status).toBe('open')
+  })
+
+  it('setStampPausedInList toggles the loaded stall and adjusts the active count', async () => {
+    api.PATCH.mockResolvedValueOnce(ok({ id: 10, paused: true }))
+    const s = useStampRalliesStore()
+    s.rallies = [rally({ id: 1, stampCount: 2, activeStampCount: 2 })]
     s.cardStamps[1] = [
       { id: 10, paused: false },
       { id: 11, paused: false },
     ] as StampRallyStamp[]
     await s.setStampPausedInList(1, 10, true)
+    const call = callTo('PATCH', '/stamp-rallies/{id}/stamps/{stampId}')
+    expect(call?.[1].params.path).toEqual({ id: 1, stampId: 10 })
+    expect(call?.[1].body).toEqual({ paused: true })
     expect(s.cardStamps[1][0]!.paused).toBe(true)
-    expect(s.rallies[0]!.active_stamp_count).toBe(1)
+    expect(s.rallies[0]!.activeStampCount).toBe(1)
   })
 
   it('saveRally requires a title', async () => {
@@ -183,7 +228,7 @@ describe('admin', () => {
     const s = useStampRalliesStore()
     s.newRallyForm()
     expect(await s.saveRally()).toBe(false)
-    expect(ep.create).not.toHaveBeenCalled()
+    expect(api.POST).not.toHaveBeenCalled()
   })
 
   it('saveRally refuses per-type completion that requires nothing', async () => {
@@ -192,11 +237,11 @@ describe('admin', () => {
     const s = useStampRalliesStore()
     s.newRallyForm()
     s.rallyForm!.title = 'Festival'
-    s.rallyForm!.completion_mode = 'counts'
+    s.rallyForm!.completionMode = 'counts'
 
     expect(await s.saveRally()).toBe(false)
     // Never reaches the API: 0/0 would finish every card at its first stamp.
-    expect(ep.create).not.toHaveBeenCalled()
+    expect(api.POST).not.toHaveBeenCalled()
     expect(ui.notify).toHaveBeenCalledWith(
       expect.stringContaining('how many food or game'),
       'error',
@@ -204,27 +249,45 @@ describe('admin', () => {
   })
 
   it('saveRally settles the requirement fields into whole counts', async () => {
+    api.POST.mockResolvedValueOnce(ok(rally(), 201))
+    api.GET.mockResolvedValueOnce(ok({ stampRallies: [] }))
     const s = useStampRalliesStore()
     s.newRallyForm()
     s.rallyForm!.title = 'Festival'
-    s.rallyForm!.completion_mode = 'counts'
+    s.rallyForm!.completionMode = 'counts'
     // What an emptied / half-typed number input can leave behind.
-    s.rallyForm!.required_food = 2.7
-    s.rallyForm!.required_game = '' as unknown as number
+    s.rallyForm!.requiredFood = 2.7
+    s.rallyForm!.requiredGame = '' as unknown as number
 
     expect(await s.saveRally()).toBe(true)
-    expect(ep.create).toHaveBeenCalledWith(
-      expect.objectContaining({ required_food: 2, required_game: 0 }),
+    expect(callTo('POST', '/stamp-rallies')?.[1].body).toEqual(
+      expect.objectContaining({ requiredFood: 2, requiredGame: 0 }),
     )
   })
 
-  it('saveRally creates and clears the form', async () => {
+  it('saveRally creates, sends null for an empty window, and clears the form', async () => {
+    api.POST.mockResolvedValueOnce(ok(rally(), 201))
+    api.GET.mockResolvedValueOnce(ok({ stampRallies: [] }))
     const s = useStampRalliesStore()
     s.newRallyForm()
     s.rallyForm!.title = 'Summer'
     expect(await s.saveRally()).toBe(true)
-    expect(ep.create).toHaveBeenCalledTimes(1)
+    const body = callTo('POST', '/stamp-rallies')![1].body
+    expect(body.availableFrom).toBeNull()
+    expect(body.availableTo).toBeNull()
+    expect(body).not.toHaveProperty('id')
     expect(s.rallyForm).toBeNull()
+  })
+
+  it('saveRally replaces an existing rally by its id', async () => {
+    api.PUT.mockResolvedValueOnce(ok(rally({ id: 4 })))
+    api.GET.mockResolvedValueOnce(ok({ stampRallies: [] }))
+    const s = useStampRalliesStore()
+    s.newRallyForm()
+    s.rallyForm!.id = 4
+    s.rallyForm!.title = 'Renamed'
+    expect(await s.saveRally()).toBe(true)
+    expect(callTo('PUT', '/stamp-rallies/{id}')?.[1].params.path).toEqual({ id: 4 })
   })
 })
 
@@ -237,13 +300,13 @@ describe('public', () => {
 
     // The stamp that completes the card announces it...
     s.publicCard = publicCard({ completed: false })
-    ep.stamp.mockResolvedValueOnce({ card: done, collected_stamp_id: 1 })
+    api.POST.mockResolvedValueOnce(ok({ card: done, collectedStampId: 1 }))
     await s.submitPassword('tok', 'alpha')
     expect(ui.notify).toHaveBeenCalledWith(expect.stringContaining('Card complete'), 'success')
 
     // ...an optional stall collected afterwards does not say it again.
     ui.notify = vi.fn()
-    ep.stamp.mockResolvedValueOnce({ card: done, collected_stamp_id: 2 })
+    api.POST.mockResolvedValueOnce(ok({ card: done, collectedStampId: 2 }))
     await s.submitPassword('tok', 'bravo')
     expect(ui.notify).toHaveBeenCalledWith('Stamp collected!', 'success')
     expect(ui.notify).not.toHaveBeenCalledWith(expect.stringContaining('Card complete'), 'success')
@@ -251,12 +314,30 @@ describe('public', () => {
 
   it('submitPassword commits the refreshed card + last collected id', async () => {
     const card = publicCard({ completed: false })
-    ep.stamp.mockResolvedValueOnce({ card, collected_stamp_id: 9 })
+    api.POST.mockResolvedValueOnce(ok({ card, collectedStampId: 9 }))
     const s = useStampRalliesStore()
-    const ok = await s.submitPassword('tok', 'alpha')
-    expect(ok).toBe(true)
+    const done = await s.submitPassword('tok', 'alpha')
+    expect(done).toBe(true)
     expect(s.publicCard).toEqual(card)
     expect(s.lastCollectedId).toBe(9)
+    const call = callTo('POST', '/stamp-cards/{token}/stamp')
+    expect(call?.[1].params.path).toEqual({ token: 'tok' })
+    expect(call?.[1].body).toEqual({ password: 'alpha' })
+  })
+
+  it('submitPassword shows a refusal and keeps the card', async () => {
+    const ui = useUiStore()
+    ui.notify = vi.fn()
+    api.POST.mockResolvedValueOnce(
+      failed(422, "That password doesn't match any stamp on this card."),
+    )
+    const s = useStampRalliesStore()
+    expect(await s.submitPassword('tok', 'nope')).toBe(false)
+    expect(ui.notify).toHaveBeenCalledWith(
+      "That password doesn't match any stamp on this card.",
+      'error',
+    )
+    expect(s.submitting).toBe(false)
   })
 
   it('submitPassword rejects an empty password without calling the API', async () => {
@@ -264,13 +345,29 @@ describe('public', () => {
     ui.notify = vi.fn()
     const s = useStampRalliesStore()
     expect(await s.submitPassword('tok', '   ')).toBe(false)
-    expect(ep.stamp).not.toHaveBeenCalled()
+    expect(api.POST).not.toHaveBeenCalled()
+  })
+
+  it('loadByToken reads the card by its token', async () => {
+    const card = publicCard()
+    api.GET.mockResolvedValueOnce(ok(card))
+    const s = useStampRalliesStore()
+    expect(await s.loadByToken('tok')).toBe(true)
+    expect(s.publicCard).toEqual(card)
+    expect(callTo('GET', '/stamp-cards/{token}')?.[1].params.path).toEqual({ token: 'tok' })
+  })
+
+  it('loadByToken answers false for an unknown card', async () => {
+    api.GET.mockResolvedValueOnce(failed(404, 'There is no such stamp card.'))
+    const s = useStampRalliesStore()
+    expect(await s.loadByToken('bad')).toBe(false)
+    expect(s.publicCard).toBeNull()
   })
 
   it('cardProgress counts the whole card on an "all" rally', () => {
     const s = useStampRalliesStore()
     s.publicCard = publicCard({
-      stamps: [publicStamp({ id: 1, collected: true }), publicStamp({ id: 2, stamp_type: 'game' })],
+      stamps: [publicStamp({ id: 1, collected: true }), publicStamp({ id: 2, stampType: 'game' })],
     })
     expect(s.cardProgress.byType).toBe(false)
     expect(s.cardProgress.collected).toBe(1)
@@ -283,12 +380,12 @@ describe('public', () => {
       stamps: [
         publicStamp({ id: 1, collected: true }),
         // The only game stall closed for good with nothing collected from it.
-        publicStamp({ id: 2, stamp_type: 'game', available: false, expired: true }),
+        publicStamp({ id: 2, stampType: 'game', available: false, expired: true }),
       ],
     })
-    card.rally.completion_mode = 'counts'
-    card.rally.required_food = 1
-    card.rally.required_game = 1
+    card.rally.completionMode = 'counts'
+    card.rally.requiredFood = 1
+    card.rally.requiredGame = 1
     s.publicCard = card
 
     expect(s.cardProgress.food.unreachable).toBe(false)
@@ -305,13 +402,13 @@ describe('public', () => {
       stamps: [
         publicStamp({ id: 1, collected: true }),
         publicStamp({ id: 2 }),
-        publicStamp({ id: 3, stamp_type: 'game', collected: true }),
-        publicStamp({ id: 4, stamp_type: 'game' }),
+        publicStamp({ id: 3, stampType: 'game', collected: true }),
+        publicStamp({ id: 4, stampType: 'game' }),
       ],
     })
-    card.rally.completion_mode = 'counts'
-    card.rally.required_food = 2
-    card.rally.required_game = 1
+    card.rally.completionMode = 'counts'
+    card.rally.requiredFood = 2
+    card.rally.requiredGame = 1
     s.publicCard = card
 
     expect(s.cardProgress.byType).toBe(true)
@@ -333,34 +430,66 @@ describe('public', () => {
 })
 
 describe('public sign-up + lookup', () => {
+  const issued: StampSignup = {
+    participantName: 'Yao Ming',
+    world: 'Balmung',
+    rallyTitle: 'Festival',
+    cardToken: 'tok_card',
+    garaponToken: null,
+    garaponTitle: null,
+  }
+
+  it('loadSignupRallies lists the rallies open to sign-up', async () => {
+    api.GET.mockResolvedValueOnce(ok({ rallies: [{ id: 3, title: 'Festival' }] }))
+    const s = useStampRalliesStore()
+    await s.loadSignupRallies()
+    expect(s.signupRallies).toHaveLength(1)
+    expect(callTo('GET', '/stamp-rallies/public')).toBeDefined()
+  })
+
   it('refuses to sign up without a world', async () => {
     // The world is what tells two players who share a character name apart. Sending
     // the name alone would create a record no other system can match.
     const s = useStampRalliesStore()
     expect(await s.signUp(3, 'Yao Ming', '   ')).toBe(false)
-    expect(ep.signUp).not.toHaveBeenCalled()
+    expect(api.POST).not.toHaveBeenCalled()
   })
 
   it('signUp trims both fields and keeps the issued tokens', async () => {
-    ep.signUp.mockResolvedValueOnce({
-      participant_name: 'Yao Ming',
-      world: 'Balmung',
-      rally_title: 'Festival',
-      card_token: 'tok_card',
-      garapon_token: 'tok_draw',
-      garapon_title: 'Festival Garapon',
-    })
+    api.POST.mockResolvedValueOnce(
+      ok(
+        {
+          ...issued,
+          garaponToken: 'tok_draw',
+          garaponTitle: 'Festival Garapon',
+        },
+        201,
+      ),
+    )
     const s = useStampRalliesStore()
     // Name and world go as two fields, the way every system now stores a person.
     expect(await s.signUp(3, '  Yao Ming  ', '  Balmung  ')).toBe(true)
-    expect(ep.signUp).toHaveBeenCalledWith(3, 'Yao Ming', 'Balmung', '')
-    expect(s.signupResult?.card_token).toBe('tok_card')
+    const call = callTo('POST', '/stamp-rallies/{id}/sign-up')
+    expect(call?.[1].params.path).toEqual({ id: 3 })
+    expect(call?.[1].body).toEqual({
+      characterName: 'Yao Ming',
+      world: 'Balmung',
+      turnstileToken: undefined,
+    })
+    expect(s.signupResult?.cardToken).toBe('tok_card')
     // The two tokens are SEPARATE secrets: the card link can be shared, the drawing
     // link spends draws. Sign-up is the only time the drawing token is issued, so
     // the store has to keep both rather than deriving one from the other.
-    expect(s.signupResult?.garapon_token).toBe('tok_draw')
+    expect(s.signupResult?.garaponToken).toBe('tok_draw')
     expect(s.garaponUrl('tok_draw')).toContain('/garapon/tok_draw')
     expect(s.stampCardUrl('tok_card')).toContain('/stamp-card/tok_card')
+  })
+
+  it('signUp sends the bot check response when there is one', async () => {
+    api.POST.mockResolvedValueOnce(ok(issued, 201))
+    const s = useStampRalliesStore()
+    await s.signUp(3, 'Yao Ming', 'Balmung', 'ts-token')
+    expect(callTo('POST', '/stamp-rallies/{id}/sign-up')?.[1].body.turnstileToken).toBe('ts-token')
   })
 
   it('signUp rejects a blank name without calling the API', async () => {
@@ -368,13 +497,13 @@ describe('public sign-up + lookup', () => {
     ui.notify = vi.fn()
     const s = useStampRalliesStore()
     expect(await s.signUp(3, '   ', 'Balmung', 'Balmung')).toBe(false)
-    expect(ep.signUp).not.toHaveBeenCalled()
+    expect(api.POST).not.toHaveBeenCalled()
   })
 
   it('signUp surfaces the server message on a taken name and keeps no result', async () => {
     const ui = useUiStore()
     ui.notify = vi.fn()
-    ep.signUp.mockRejectedValueOnce(new Error('Someone has already signed up under that name.'))
+    api.POST.mockResolvedValueOnce(failed(409, 'Someone has already signed up under that name.'))
     const s = useStampRalliesStore()
     expect(await s.signUp(3, 'Yao Ming', 'Balmung', 'Balmung')).toBe(false)
     expect(s.signupResult).toBeNull()
@@ -389,9 +518,13 @@ describe('public sign-up + lookup', () => {
     // Nothing searched yet -> null, so the view claims nothing either way.
     expect(s.lookupResults).toBeNull()
 
-    ep.signupLookup.mockResolvedValueOnce({ entries: [] })
+    api.POST.mockResolvedValueOnce(ok({ entries: [] }))
     await s.lookupLinks('Nobody', 'Balmung')
     expect(s.lookupResults).toEqual([])
+    expect(callTo('POST', '/stamp-cards/lookup')?.[1].body).toEqual({
+      characterName: 'Nobody',
+      world: 'Balmung',
+    })
 
     s.resetLookup()
     expect(s.lookupResults).toBeNull()
@@ -402,105 +535,147 @@ describe('public sign-up + lookup', () => {
     ui.notify = vi.fn()
     const s = useStampRalliesStore()
     await s.lookupLinks('  ', 'Balmung')
-    expect(ep.signupLookup).not.toHaveBeenCalled()
+    expect(api.POST).not.toHaveBeenCalled()
+  })
+})
+
+describe('cards', () => {
+  it('createCard issues a card under the trimmed name and copies its link', async () => {
+    Object.assign(navigator, { clipboard: { writeText: vi.fn(async () => undefined) } })
+    api.POST.mockResolvedValueOnce(ok({ id: 5, token: 'tok', participantName: 'Tataru' }, 201))
+    api.GET.mockResolvedValueOnce(ok({ stampRally: rally({ id: 4 }), cards: [] }))
+    const s = useStampRalliesStore()
+    s.selectedRally = rally({ id: 4 })
+    s.cardAdd = { participantName: '  Tataru  ' }
+    await s.createCard()
+    const call = callTo('POST', '/stamp-rallies/{id}/cards')
+    expect(call?.[1].params.path).toEqual({ id: 4 })
+    expect(call?.[1].body).toEqual({ participantName: 'Tataru' })
+    expect(navigator.clipboard.writeText).toHaveBeenCalledWith(
+      expect.stringMatching(/\/stamp-card\/tok$/),
+    )
+    expect(s.cardAdd.participantName).toBe('')
+  })
+
+  it('deleteCard asks first, then removes the card from the list', async () => {
+    const ui = useUiStore()
+    ui.confirm = vi.fn(async () => true)
+    api.DELETE.mockResolvedValueOnce(ok(undefined, 204))
+    const s = useStampRalliesStore()
+    s.selectedRally = rally({ id: 4 })
+    s.rallyCards = [{ id: 12, participantName: 'Tataru' } as never, { id: 13 } as never]
+    await s.deleteCard(s.rallyCards[0]!)
+    expect(callTo('DELETE', '/stamp-rallies/{id}/cards/{cardId}')?.[1].params.path).toEqual({
+      id: 4,
+      cardId: 12,
+    })
+    expect(s.rallyCards.map((c) => c.id)).toEqual([13])
   })
 })
 
 describe('copyRallyForm', () => {
   /** A rally with the pieces a duplicate has to carry over - and the ones it must not. */
   function sourceRally(): StampRally {
-    return {
+    return rally({
       id: 7,
       title: 'Obon Rally',
-      card_image: 'images/rally/card.png',
-      not_stamped_image: 'images/rally/blank.png',
-      available_from: '2026-08-01T00:00:00.000Z',
-      available_to: '2026-08-07T00:00:00.000Z',
+      cardImage: 'images/rally/card.png',
+      notStampedImage: 'images/rally/blank.png',
+      availableFrom: '2026-08-01T00:00:00.000Z',
+      availableTo: '2026-08-07T00:00:00.000Z',
       details: 'Collect them all',
-      redeem_instructions: 'See staff',
-      redeem_image: 'images/rally/where.png',
-      public_signup: true,
-      completion_mode: 'counts',
-      required_food: 1,
-      required_game: 1,
+      redeemInstructions: 'See staff',
+      redeemImage: 'images/rally/where.png',
+      publicSignup: true,
+      completionMode: 'counts',
+      requiredFood: 1,
+      requiredGame: 1,
       status: 'closed',
-      created_at: '',
+      stampCount: 1,
       stamps: [
         {
           id: 41,
-          rally_id: 7,
-          affiliate_id: 3,
-          affiliate_name: 'Lunaria',
+          occupantId: null,
+          stallName: '',
+          affiliateId: 3,
+          affiliateName: 'Lunaria',
           image: 'images/stamp.png',
           password: 'moon',
-          stamp_type: 'game',
+          stampType: 'game',
           placement: { x: 1, y: 2, width: 10, height: 10, rotation: 0 },
-          active_from: '2026-08-01T00:00:00.000Z',
-          active_to: '2026-08-02T00:00:00.000Z',
+          activeFrom: '2026-08-01T00:00:00.000Z',
+          activeTo: '2026-08-02T00:00:00.000Z',
           paused: true,
+          sortOrder: 0,
         },
       ],
       prizes: [
         {
           id: 88,
-          rally_id: 7,
           name: 'Grand',
           image: 'images/prize.png',
           placement: { x: 3, y: 4, width: 20, height: 20, rotation: 0 },
+          sortOrder: 0,
         },
       ],
-    } as unknown as StampRally
+    })
   }
 
-  it('carries the reusable content and marks the title as a copy', () => {
+  /** Reads a rally's detail through the store, as the manager does before it edits one. */
+  async function detailed(store: ReturnType<typeof useStampRalliesStore>, r: StampRally) {
+    api.GET.mockResolvedValueOnce(ok({ stampRally: r, cards: [] }))
+    await store.loadRallyDetail(r.id)
+    return store.selectedRally!
+  }
+
+  it('carries the reusable content and marks the title as a copy', async () => {
     const store = useStampRalliesStore()
-    store.copyRallyForm(sourceRally())
+    store.copyRallyForm(await detailed(store, sourceRally()))
     const f = store.rallyForm!
 
     expect(f.title).toBe('Obon Rally (Copy)')
-    expect(f.card_image).toBe('images/rally/card.png')
-    expect(f.redeem_instructions).toBe('See staff')
-    expect(f.public_signup).toBe(true)
+    expect(f.cardImage).toBe('images/rally/card.png')
+    expect(f.redeemInstructions).toBe('See staff')
+    expect(f.publicSignup).toBe(true)
     expect(f.stamps).toHaveLength(1)
     expect(f.stamps[0]!.password).toBe('moon')
-    expect(f.stamps[0]!.affiliate_id).toBe(3)
-    expect(f.stamps[0]!.stamp_type).toBe('game')
+    expect(f.stamps[0]!.affiliateId).toBe(3)
+    expect(f.stamps[0]!.stampType).toBe('game')
     // The completion rule describes the event, not the run that already happened.
-    expect(f.completion_mode).toBe('counts')
-    expect(f.required_food).toBe(1)
-    expect(f.required_game).toBe(1)
+    expect(f.completionMode).toBe('counts')
+    expect(f.requiredFood).toBe(1)
+    expect(f.requiredGame).toBe(1)
     expect(f.prizes[0]!.name).toBe('Grand')
   })
 
   /**
-   * A save is a FULL REPLACE, and the admin LIST omits stamps/prizes entirely. So
+   * A save is a FULL REPLACE, and the admin LIST leaves stamps/prizes empty. So
    * seeding the form from a list row and saving it deleted every stamp on the
    * rally, taking every participant's collected rows with it. Both entry points
    * must refuse a rally that has not had its detail loaded.
    */
   it('refuses a rally whose detail has not loaded, rather than seeding an empty card', () => {
     const store = useStampRalliesStore()
-    const listRow = { ...sourceRally() } as Record<string, unknown>
-    delete listRow.stamps
-    delete listRow.prizes
+    const listRow = { ...sourceRally(), stamps: [], prizes: [] }
 
-    expect(store.hasRallyDetail(listRow as unknown as StampRally)).toBe(false)
-    expect(store.editRallyForm(listRow as unknown as StampRally)).toBe(false)
-    expect(store.copyRallyForm(listRow as unknown as StampRally)).toBe(false)
+    expect(store.hasRallyDetail(listRow)).toBe(false)
+    expect(store.editRallyForm(listRow)).toBe(false)
+    expect(store.copyRallyForm(listRow)).toBe(false)
     // Nothing was seeded, so there is no way to save the destructive payload.
     expect(store.rallyForm).toBeNull()
   })
 
-  it('accepts a rally that carries its detail', () => {
+  it('accepts a rally read by its detail', async () => {
     const store = useStampRalliesStore()
-    expect(store.hasRallyDetail(sourceRally())).toBe(true)
-    expect(store.editRallyForm(sourceRally())).toBe(true)
+    const r = await detailed(store, sourceRally())
+    expect(store.hasRallyDetail(r)).toBe(true)
+    expect(store.editRallyForm(r)).toBe(true)
     expect(store.rallyForm!.stamps).toHaveLength(1)
   })
 
-  it('drops every id so saving creates instead of overwriting the original', () => {
+  it('drops every id so saving creates instead of overwriting the original', async () => {
     const store = useStampRalliesStore()
-    store.copyRallyForm(sourceRally())
+    store.copyRallyForm(await detailed(store, sourceRally()))
     const f = store.rallyForm!
 
     expect(f.id).toBe(0)
@@ -508,43 +683,43 @@ describe('copyRallyForm', () => {
     expect(f.prizes[0]!.id).toBe(0)
   })
 
-  it('clears the dates and paused flags tied to the run that already happened', () => {
+  it('clears the dates and paused flags tied to the run that already happened', async () => {
     const store = useStampRalliesStore()
-    store.copyRallyForm(sourceRally())
+    store.copyRallyForm(await detailed(store, sourceRally()))
     const f = store.rallyForm!
 
-    expect(f.available_from).toBe('')
-    expect(f.available_to).toBe('')
+    expect(f.availableFrom).toBe('')
+    expect(f.availableTo).toBe('')
     // A stale per-stamp window would silently gate a stall on last event's dates.
-    expect(f.stamps[0]!.active_from).toBe('')
-    expect(f.stamps[0]!.active_to).toBe('')
+    expect(f.stamps[0]!.activeFrom).toBe('')
+    expect(f.stamps[0]!.activeTo).toBe('')
     expect(f.stamps[0]!.paused).toBe(false)
   })
 
-  it('drops the festival link, so a copy is not filed under the finished festival', () => {
+  it('drops the festival link, so a copy is not filed under the finished festival', async () => {
     const store = useStampRalliesStore()
     const source = sourceRally()
-    source.festival_map_id = 4
-    source.stamps![0]!.occupant_id = 21
-    store.copyRallyForm(source)
+    source.festivalMapId = 4
+    source.stamps[0]!.occupantId = 21
+    store.copyRallyForm(await detailed(store, source))
     const f = store.rallyForm!
 
     // The original's stalls still exist, so nothing on the server would clear
     // these - next year's rally would silently name last year's stalls.
-    expect(f.festival_map_id).toBeNull()
-    expect(f.stamps[0]!.occupant_id).toBeNull()
+    expect(f.festivalMapId).toBeNull()
+    expect(f.stamps[0]!.occupantId).toBeNull()
   })
 
-  it('leaves the original untouched', () => {
+  it('leaves the original untouched', async () => {
     const store = useStampRalliesStore()
     const source = sourceRally()
-    store.copyRallyForm(source)
+    store.copyRallyForm(await detailed(store, source))
     store.rallyForm!.title = 'Something else'
     store.rallyForm!.stamps[0]!.password = 'changed'
 
     expect(source.title).toBe('Obon Rally')
-    expect(source.stamps?.[0]!.password).toBe('moon')
-    expect(source.stamps?.[0]!.id).toBe(41)
+    expect(source.stamps[0]!.password).toBe('moon')
+    expect(source.stamps[0]!.id).toBe(41)
   })
 })
 
@@ -554,25 +729,19 @@ describe('copyRallyForm', () => {
 // the map can badge the stalls that are part of the rally.
 
 describe('festival map linkage', () => {
-  beforeEach(() => {
-    setActivePinia(createPinia())
-    vi.clearAllMocks()
-  })
-
   /** One occupant of a map pitch - what the rally's stall select actually lists. */
   function mapOccupant(over: Partial<FestivalStallOccupant> = {}): FestivalStallOccupant {
     return {
       id: 21,
-      stall_id: 4,
-      affiliate_id: 9,
-      affiliate_name: 'The Green Gaelicat',
+      affiliateId: 9,
+      affiliateName: 'The Green Gaelicat',
       title: 'The Green Gaelicat',
       description: '',
-      event_carrd: '',
-      stall_type: 'game',
-      type_label: '',
+      eventCarrd: '',
+      stallType: 'game',
+      typeLabel: '',
       times: [],
-      sort_order: 0,
+      sortOrder: 0,
       ...over,
     }
   }
@@ -584,13 +753,12 @@ describe('festival map linkage', () => {
         stalls: [
           {
             id: 4,
-            map_id: 4,
             shape: 'rect',
             color: '',
-            selection_color: '',
-            text_color: '',
+            selectionColor: '',
+            textColor: '',
             placement: { x: 0, y: 0, width: 10, height: 10, rotation: 0 },
-            sort_order: 0,
+            sortOrder: 0,
             occupants,
           },
         ],
@@ -599,22 +767,22 @@ describe('festival map linkage', () => {
   }
 
   it('flattens the linked map into an occupant list and clears stamps on change', async () => {
-    ep.mapDetail.mockResolvedValue(mapWith([mapOccupant()]))
+    maps.mapDetail.mockResolvedValue(mapWith([mapOccupant()]))
     const store = useStampRalliesStore()
     store.newRallyForm()
     store.addStamp('food')
-    store.rallyForm!.stamps[0]!.occupant_id = 999 // belonged to some other map
+    store.rallyForm!.stamps[0]!.occupantId = 999 // belonged to some other map
 
     await store.setFestivalMap(4)
 
-    expect(store.rallyForm!.festival_map_id).toBe(4)
+    expect(store.rallyForm!.festivalMapId).toBe(4)
     expect(store.mapStalls).toHaveLength(1)
     // The old stall id belonged to the previously-linked map, so it can't stand.
-    expect(store.rallyForm!.stamps[0]!.occupant_id).toBeNull()
+    expect(store.rallyForm!.stamps[0]!.occupantId).toBeNull()
   })
 
   it('unlinking clears the stall list and every stamp stall', async () => {
-    ep.mapDetail.mockResolvedValue(mapWith([mapOccupant()]))
+    maps.mapDetail.mockResolvedValue(mapWith([mapOccupant()]))
     const store = useStampRalliesStore()
     store.newRallyForm()
     store.addStamp('food')
@@ -624,15 +792,12 @@ describe('festival map linkage', () => {
     await store.setFestivalMap(null)
 
     expect(store.mapStalls).toEqual([])
-    expect(store.rallyForm!.stamps[0]!.occupant_id).toBeNull()
+    expect(store.rallyForm!.stamps[0]!.occupantId).toBeNull()
   })
 
   it("takes the stall's affiliate and seeds the stamp type from what it offers", async () => {
-    ep.mapDetail.mockResolvedValue(
-      mapWith([
-        mapOccupant(),
-        mapOccupant({ id: 22, stall_type: 'food', affiliate_id: undefined }),
-      ]),
+    maps.mapDetail.mockResolvedValue(
+      mapWith([mapOccupant(), mapOccupant({ id: 22, stallType: 'food', affiliateId: undefined })]),
     )
     const store = useStampRalliesStore()
     store.newRallyForm()
@@ -640,17 +805,19 @@ describe('festival map linkage', () => {
     await store.setFestivalMap(4)
 
     store.setStampStall(0, 21)
-    expect(store.rallyForm!.stamps[0]!.affiliate_id).toBe(9)
-    expect(store.rallyForm!.stamps[0]!.stamp_type).toBe('game')
+    expect(store.rallyForm!.stamps[0]!.affiliateId).toBe(9)
+    expect(store.rallyForm!.stamps[0]!.stampType).toBe('game')
 
     // A stall with no affiliate of its own falls back to the venue, as a food stamp.
     store.setStampStall(0, 22)
-    expect(store.rallyForm!.stamps[0]!.affiliate_id).toBeNull()
-    expect(store.rallyForm!.stamps[0]!.stamp_type).toBe('food')
+    expect(store.rallyForm!.stamps[0]!.affiliateId).toBeNull()
+    expect(store.rallyForm!.stamps[0]!.stampType).toBe('food')
   })
 
   it('sends the map link and each stamp stall on save', async () => {
-    ep.mapDetail.mockResolvedValue(mapWith([mapOccupant()]))
+    maps.mapDetail.mockResolvedValue(mapWith([mapOccupant()]))
+    api.POST.mockResolvedValueOnce(ok(rally(), 201))
+    api.GET.mockResolvedValueOnce(ok({ stampRallies: [] }))
     const store = useStampRalliesStore()
     store.newRallyForm()
     store.rallyForm!.title = 'Obon Rally'
@@ -659,8 +826,8 @@ describe('festival map linkage', () => {
     store.setStampStall(0, 21)
 
     expect(await store.saveRally()).toBe(true)
-    const payload = (ep.create.mock.calls.at(-1) as unknown[])[0] as Record<string, unknown>
-    expect(payload.festival_map_id).toBe(4)
-    expect((payload.stamps as Record<string, unknown>[])[0]!.occupant_id).toBe(21)
+    const body = callTo('POST', '/stamp-rallies')![1].body
+    expect(body.festivalMapId).toBe(4)
+    expect((body.stamps as Record<string, unknown>[])[0]!.occupantId).toBe(21)
   })
 })

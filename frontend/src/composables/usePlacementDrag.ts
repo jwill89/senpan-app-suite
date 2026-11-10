@@ -13,7 +13,7 @@
  */
 import { onBeforeUnmount, type Ref } from 'vue'
 import { circleHeightPct } from '@/lib/festivalmap'
-import type { Placement } from '@/types/api'
+import type { Placement } from '@/api/client'
 
 /** What a drag is doing to the item under the pointer. */
 export type DragMode = 'move' | 'resize' | 'rotate'

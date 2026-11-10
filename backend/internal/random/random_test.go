@@ -1,6 +1,9 @@
 package random
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestIntNStaysInRangeAndReachesEveryValue(t *testing.T) {
 	seen := map[int]int{}
@@ -28,5 +31,19 @@ func TestShuffleKeepsEveryElement(t *testing.T) {
 	}
 	if len(xs) != 10 || sum != 55 {
 		t.Fatalf("Shuffle lost or changed elements: %v", xs)
+	}
+}
+
+func TestTokenIs32HexCharactersAndNeverRepeats(t *testing.T) {
+	seen := map[string]bool{}
+	for range 200 {
+		tok := Token()
+		if len(tok) != 32 || strings.Trim(tok, "0123456789abcdef") != "" {
+			t.Fatalf("Token() = %q, want 32 lowercase hex characters", tok)
+		}
+		if seen[tok] {
+			t.Fatalf("Token() gave %q twice", tok)
+		}
+		seen[tok] = true
 	}
 }

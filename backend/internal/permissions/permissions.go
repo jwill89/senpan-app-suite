@@ -34,7 +34,7 @@ const (
 func ImageBrowsers() []string {
 	return []string{
 		SystemImages, TeahouseAnnouncements, TeahouseRaffles, TeahouseAffiliates,
-		FestivalGarapon, FestivalStampRally, SystemThemes, FestivalMap, TeahouseTeaRooms,
+		FestivalGarapon, FestivalStampRally, SystemThemes, FestivalMap, TeahouseTeaRooms, FestivalEma,
 	}
 }
 

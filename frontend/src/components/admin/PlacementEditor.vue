@@ -16,7 +16,7 @@ import { useTemplateRef } from 'vue'
 import { assetUrl } from '@/lib/assets'
 import { placementStyle } from '@/lib/stampcard'
 import { usePlacementDrag, type DragMode } from '@/composables/usePlacementDrag'
-import type { Placement } from '@/types/api'
+import type { Placement } from '@/api/client'
 
 export interface PlaceItem {
   key: string

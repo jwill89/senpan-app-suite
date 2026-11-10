@@ -1,14 +1,12 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { api, apiGet, apiPost, apiUpload, ApiError, setUnauthorizedHandler, API_BASE } from './api'
-
-/** Builds a minimal Response-like stub for the mocked fetch. */
-function jsonResponse(body: unknown, init: { ok?: boolean; status?: number } = {}) {
-  return {
-    ok: init.ok ?? true,
-    status: init.status ?? 200,
-    json: async () => body,
-  } as Response
-}
+import {
+  apiUpload,
+  refusedFiles,
+  errorMessage,
+  ApiError,
+  setUnauthorizedHandler,
+  API_V1_BASE,
+} from './api'
 
 /**
  * Controllable stand-in for XMLHttpRequest. `apiUpload` wires up the handlers,
@@ -48,86 +46,6 @@ class FakeXHR {
   }
 }
 
-describe('api()', () => {
-  beforeEach(() => {
-    vi.stubGlobal('fetch', vi.fn())
-    // Reset the module-level 401 handler between tests.
-    setUnauthorizedHandler(() => undefined)
-  })
-  afterEach(() => {
-    vi.unstubAllGlobals()
-  })
-
-  it('prefixes the endpoint with the API base and sends cookies', async () => {
-    vi.mocked(fetch).mockResolvedValue(jsonResponse({ ok: true }))
-    await api('auth')
-    expect(fetch).toHaveBeenCalledWith(
-      `${API_BASE}/auth`,
-      expect.objectContaining({ credentials: 'include' }),
-    )
-  })
-
-  it('JSON-stringifies a plain object body and sets the content-type', async () => {
-    vi.mocked(fetch).mockResolvedValue(jsonResponse({ ok: true }))
-    await apiPost('game', { action: 'draw', delay: 3 })
-    const [, opts] = vi.mocked(fetch).mock.calls[0]!
-    expect(opts?.method).toBe('POST')
-    expect(opts?.body).toBe('{"action":"draw","delay":3}')
-    expect((opts?.headers as Record<string, string>)['Content-Type']).toBe('application/json')
-  })
-
-  it('passes FormData through untouched (no JSON content-type)', async () => {
-    vi.mocked(fetch).mockResolvedValue(jsonResponse({ ok: true }))
-    const form = new FormData()
-    form.append('file', 'x')
-    await apiPost('raffles/upload', form)
-    const [, opts] = vi.mocked(fetch).mock.calls[0]!
-    expect(opts?.body).toBeInstanceOf(FormData)
-    expect(opts?.headers).toBeUndefined()
-  })
-
-  it('returns the parsed JSON payload on success', async () => {
-    vi.mocked(fetch).mockResolvedValue(jsonResponse({ value: 42 }))
-    const data = await apiGet<{ value: number }>('settings')
-    expect(data.value).toBe(42)
-  })
-
-  it('throws an ApiError carrying the server error message and status', async () => {
-    vi.mocked(fetch).mockResolvedValue(jsonResponse({ error: 'nope' }, { ok: false, status: 400 }))
-    await expect(api('cards')).rejects.toMatchObject({
-      name: 'ApiError',
-      message: 'nope',
-      status: 400,
-    })
-  })
-
-  it('falls back to a status-bearing message when the error body has no error field', async () => {
-    vi.mocked(fetch).mockResolvedValue(jsonResponse(null, { ok: false, status: 500 }))
-    await expect(api('cards')).rejects.toBeInstanceOf(ApiError)
-    await expect(api('cards')).rejects.toHaveProperty('message', 'Request failed (HTTP 500)')
-  })
-
-  it('invokes the global unauthorized handler on a 401', async () => {
-    const onUnauthorized = vi.fn()
-    setUnauthorizedHandler(onUnauthorized)
-    vi.mocked(fetch).mockResolvedValue(
-      jsonResponse({ error: 'expired' }, { ok: false, status: 401 }),
-    )
-    await expect(api('game')).rejects.toBeInstanceOf(ApiError)
-    expect(onUnauthorized).toHaveBeenCalledOnce()
-  })
-
-  it('skips the unauthorized handler when skipAuthRedirect is set', async () => {
-    const onUnauthorized = vi.fn()
-    setUnauthorizedHandler(onUnauthorized)
-    vi.mocked(fetch).mockResolvedValue(
-      jsonResponse({ error: 'bad password' }, { ok: false, status: 401 }),
-    )
-    await expect(api('auth', { skipAuthRedirect: true })).rejects.toBeInstanceOf(ApiError)
-    expect(onUnauthorized).not.toHaveBeenCalled()
-  })
-})
-
 describe('apiUpload()', () => {
   beforeEach(() => {
     setUnauthorizedHandler(() => undefined)
@@ -139,16 +57,16 @@ describe('apiUpload()', () => {
     vi.unstubAllGlobals()
   })
 
-  it('opens a credentialed POST against the API base with no client timeout', async () => {
+  it('opens a credentialed POST against the API with no client timeout', async () => {
     FakeXHR.onSend = (xhr) => {
       xhr.status = 200
       xhr.responseText = '{}'
       xhr.onload?.()
     }
-    await apiUpload('images/upload', new FormData())
+    await apiUpload('image-categories/raffles/images', new FormData())
     const xhr = FakeXHR.instances[0]!
     expect(xhr.method).toBe('POST')
-    expect(xhr.url).toBe(`${API_BASE}/images/upload`)
+    expect(xhr.url).toBe(`${API_V1_BASE}/image-categories/raffles/images`)
     expect(xhr.withCredentials).toBe(true)
     expect(xhr.timeout).toBe(0) // large uploads must never be aborted on our side
   })
@@ -162,23 +80,33 @@ describe('apiUpload()', () => {
       xhr.onload?.()
     }
     const seen: number[] = []
-    const res = await apiUpload<{ uploaded: string[] }>('images/upload', new FormData(), {
-      onProgress: (p) => seen.push(p),
-    })
+    const res = await apiUpload<{ uploaded: string[] }>(
+      'image-categories/raffles/images',
+      new FormData(),
+      {
+        onProgress: (p) => seen.push(p),
+      },
+    )
     expect(res.uploaded).toEqual(['a.png'])
     expect(seen).toEqual([50, 100])
   })
 
   it('throws an ApiError carrying the server error message on a non-2xx response', async () => {
     FakeXHR.onSend = (xhr) => {
-      xhr.status = 400
-      xhr.responseText = JSON.stringify({ error: 'Upload failed (max 64MB total)' })
+      xhr.status = 413
+      xhr.responseText = JSON.stringify({
+        title: 'Request Entity Too Large',
+        status: 413,
+        detail: 'Request body is too large',
+      })
       xhr.onload?.()
     }
-    await expect(apiUpload('images/upload', new FormData())).rejects.toMatchObject({
+    await expect(
+      apiUpload('image-categories/raffles/images', new FormData()),
+    ).rejects.toMatchObject({
       name: 'ApiError',
-      message: 'Upload failed (max 64MB total)',
-      status: 400,
+      message: 'Request body is too large',
+      status: 413,
     })
   })
 
@@ -187,24 +115,64 @@ describe('apiUpload()', () => {
     setUnauthorizedHandler(onUnauthorized)
     FakeXHR.onSend = (xhr) => {
       xhr.status = 401
-      xhr.responseText = JSON.stringify({ error: 'expired' })
+      xhr.responseText = JSON.stringify({
+        title: 'Unauthorized',
+        status: 401,
+        detail: 'Sign in to continue.',
+      })
       xhr.onload?.()
     }
-    await expect(apiUpload('images/upload', new FormData())).rejects.toBeInstanceOf(ApiError)
+    await expect(
+      apiUpload('image-categories/raffles/images', new FormData()),
+    ).rejects.toBeInstanceOf(ApiError)
     expect(onUnauthorized).toHaveBeenCalledOnce()
 
     onUnauthorized.mockClear()
     await expect(
-      apiUpload('images/upload', new FormData(), { skipAuthRedirect: true }),
+      apiUpload('image-categories/raffles/images', new FormData(), { skipAuthRedirect: true }),
     ).rejects.toBeInstanceOf(ApiError)
     expect(onUnauthorized).not.toHaveBeenCalled()
   })
 
   it('rejects with a network-error ApiError when the transfer fails', async () => {
     FakeXHR.onSend = (xhr) => xhr.onerror?.()
-    await expect(apiUpload('images/upload', new FormData())).rejects.toMatchObject({
+    await expect(
+      apiUpload('image-categories/raffles/images', new FormData()),
+    ).rejects.toMatchObject({
       status: 0,
       message: expect.stringContaining('Network error'),
     })
+  })
+})
+
+describe('refusedFiles()', () => {
+  it('lists the files a 422 names, with the reason for each', () => {
+    const e = new ApiError('None of the files could be saved.', 422, {
+      errors: [
+        { location: 'body.files[0]', message: 'Not a valid image', value: 'a.png' },
+        { location: 'body.files[1]', message: 'Unsupported type', value: 'b.txt' },
+        { location: 'body.name', message: 'unrelated', value: 'x' },
+      ],
+    })
+    expect(refusedFiles(e)).toEqual([
+      { name: 'a.png', reason: 'Not a valid image' },
+      { name: 'b.txt', reason: 'Unsupported type' },
+    ])
+  })
+
+  it('is empty for any other failure', () => {
+    expect(refusedFiles(new ApiError('boom', 500))).toEqual([])
+    expect(refusedFiles(new Error('boom'))).toEqual([])
+    expect(refusedFiles(null)).toEqual([])
+  })
+})
+
+describe('errorMessage()', () => {
+  it("reads a problem's detail", () => {
+    expect(errorMessage({ title: 'Conflict', detail: 'That name is taken.' })).toBe(
+      'That name is taken.',
+    )
+    expect(errorMessage({ title: 'Conflict' })).toBeNull()
+    expect(errorMessage('nope')).toBeNull()
   })
 })

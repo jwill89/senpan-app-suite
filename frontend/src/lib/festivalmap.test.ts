@@ -31,7 +31,7 @@ import {
   stallTypeMeta,
   stampTypeForStall,
 } from './festivalmap'
-import type { EventTime } from '@/types/api'
+import type { EventTime } from '@/api/client'
 
 const time = (over: Partial<EventTime> = {}): EventTime => ({
   label: '',
@@ -59,32 +59,32 @@ describe('stall type metadata', () => {
 
 describe('stallCaption', () => {
   it('captions a named type with its own label', () => {
-    expect(stallCaption({ stall_type: 'game', type_label: '' })).toBe('Game')
-    expect(stallCaption({ stall_type: 'both', type_label: '' })).toBe('Food & Game')
+    expect(stallCaption({ stallType: 'game', typeLabel: '' })).toBe('Game')
+    expect(stallCaption({ stallType: 'both', typeLabel: '' })).toBe('Food & Game')
   })
 
   it('captions an \'other\' stall with its own wording, since "Other" says nothing', () => {
-    expect(stallCaption({ stall_type: 'other', type_label: 'Omikuji' })).toBe('Omikuji')
+    expect(stallCaption({ stallType: 'other', typeLabel: 'Omikuji' })).toBe('Omikuji')
   })
 
   it("drops the caption entirely for an 'other' stall with no wording", () => {
-    expect(stallCaption({ stall_type: 'other', type_label: '   ' })).toBe('')
+    expect(stallCaption({ stallType: 'other', typeLabel: '   ' })).toBe('')
   })
 
   it('ignores the wording on a named type, so flipping type back is predictable', () => {
-    expect(stallCaption({ stall_type: 'food', type_label: 'Omikuji' })).toBe('Food')
+    expect(stallCaption({ stallType: 'food', typeLabel: 'Omikuji' })).toBe('Food')
   })
 })
 
 describe('stallColor', () => {
   it("uses the pitch's own color when it set one", () => {
-    expect(stallColor({ color: '#123456', occupants: [{ stall_type: 'game' }] })).toBe('#123456')
+    expect(stallColor({ color: '#123456', occupants: [{ stallType: 'game' }] })).toBe('#123456')
   })
 
   it("falls back to the LEADING occupant's type default when the pitch sets none", () => {
     // A pitch that changes hands takes its color from the first occupant rather
     // than flickering between them - the shape is the fixed thing on the plan.
-    const pitch = { color: '', occupants: [{ stall_type: 'food' }, { stall_type: 'game' }] }
+    const pitch = { color: '', occupants: [{ stallType: 'food' }, { stallType: 'game' }] }
     expect(stallColor(pitch)).toBe(stallTypeMeta('food').color)
   })
 
@@ -332,7 +332,7 @@ describe('map labelling', () => {
    */
   it('labels by affiliate, falling back to the occupant own title', () => {
     expect(occupantMapLabel({ affiliate: { name: 'Flora Teahouse' } })).toBe('Flora Teahouse')
-    expect(occupantMapLabel({ affiliate_name: 'Lunaria' })).toBe('Lunaria')
+    expect(occupantMapLabel({ affiliateName: 'Lunaria' })).toBe('Lunaria')
     // No affiliate: a record from before one was required. Naming it after the
     // VENUE was wrong - a pitch without an affiliate is not necessarily the
     // venue's own, and one such pitch titled "Atelier YAO" was drawn as "Senpan
@@ -347,17 +347,17 @@ describe('map labelling', () => {
   it('does not repeat an affiliate whose stall is titled after it', () => {
     // Common in real data - a stall titled after the business running it - and
     // "Lunaria - Lunaria" reads as a mistake.
-    expect(occupantListLabel({ affiliate_name: 'Lunaria', title: 'Lunaria' })).toBe('Lunaria')
-    expect(occupantListLabel({ affiliate_name: 'Lunaria', title: 'lunaria' })).toBe('Lunaria')
+    expect(occupantListLabel({ affiliateName: 'Lunaria', title: 'Lunaria' })).toBe('Lunaria')
+    expect(occupantListLabel({ affiliateName: 'Lunaria', title: 'lunaria' })).toBe('Lunaria')
   })
 
   it('does not repeat a title after itself in a list label', () => {
     // With no affiliate the title IS the name.
     expect(occupantListLabel({ affiliate: null, title: 'Atelier YAO' })).toBe('Atelier YAO')
-    expect(occupantListLabel({ affiliate_name: 'Lunaria', title: 'Tea Bar' })).toBe(
+    expect(occupantListLabel({ affiliateName: 'Lunaria', title: 'Tea Bar' })).toBe(
       'Lunaria - Tea Bar',
     )
-    expect(occupantListLabel({ affiliate_name: 'Lunaria' })).toBe('Lunaria')
+    expect(occupantListLabel({ affiliateName: 'Lunaria' })).toBe('Lunaria')
   })
 
   /**

@@ -1,127 +1,18 @@
 /**
  * API types barrel.
  *
- * Re-exports the tygo-generated types from `api.generated.ts` - both the domain
- * models AND the request/response envelopes, which now live as Go structs in the
- * backend `model` package (so the Go handlers are the single source of truth for
- * every wire shape). This file adds only the handful of types that are
- * intentionally frontend-only: the admin *form* models and a couple of UI
- * enums/constants. The domains already on huma, and the live events, take their
- * types from the generated API schema instead (`@/api/client`, `@/lib/feed`).
+ * Re-exports the tygo-generated types from `api.generated.ts` and adds the types that
+ * are intentionally frontend-only: the admin *form* models and a couple of UI
+ * enums/constants. The operations and the live events take their types from the
+ * generated API schema (`@/api/client`, `@/lib/feed`).
  *
  * Regenerate the domain + envelope types with `npm run gen:types` after changing
  * any Go `model` struct.
  */
-import type {
-  // Domain types referenced by the form models below.
-  Placement,
-} from './api.generated'
+import type { Placement } from '@/api/client'
 
 // -- Domain models (generated from the Go `model` package) --------------------
-export type {
-  Placement,
-  StampRally,
-  StampRallyStamp,
-  StampRallyPrize,
-  StampRallyCard,
-  StampRallyCollected,
-  StampRallyLogEntry,
-  EventTime,
-  FestivalMap,
-  FestivalStall,
-  FestivalStallOccupant,
-  Raffle,
-  Garapon,
-  GaraponPrize,
-  GaraponPlayer,
-  GaraponDraw,
-  LogEntry,
-} from './api.generated'
-
-// -- Response envelopes (generated; backend `model` is the source of truth) ---
-export type {
-  // Shared
-  OKResponse,
-  DeletedResponse,
-  StatusResponse,
-  NamedOKResponse,
-  RenamedResponse,
-  PausedResponse,
-  SkippedUpload,
-  // Raffles
-  RaffleLookupEntry,
-  // Garapons
-  GaraponsResponse,
-  GaraponResponse,
-  GaraponDetailResponse,
-  GaraponPlayerResponse,
-  PublicGarapon,
-  GaraponPublicPlayer,
-  GaraponPublicResponse,
-  GaraponDrawResponse,
-  // Stamp rally
-  StampRalliesResponse,
-  StampRallyResponse,
-  StampRallyDetailResponse,
-  StampRallyCardResponse,
-  StampRallyLogsResponse,
-  PublicStampRally,
-  PublicStamp,
-  PublicPrize,
-  PublicStampCard,
-  StampSubmitResponse,
-  SignupRally,
-  SignupRalliesResponse,
-  StampSignupResponse,
-  StampLookupEntry,
-  StampLookupResponse,
-  // Festival maps
-  FestivalMapsResponse,
-  FestivalMapResponse,
-  FestivalMapDetailResponse,
-  PublicFestivalMapSummary,
-  PublicFestivalMapsResponse,
-  PublicStallAffiliate,
-  PublicStallOccupant,
-  PublicStallRaffle,
-  PublicFestivalStall,
-  PublicFestivalMap,
-  FestivalDashboard,
-  FestivalDashboardRally,
-  FestivalDashboardGarapon,
-  FestivalDashboardRaffle,
-  FestivalDashboardEma,
-  // Ema Plaques
-  EmaBoard,
-  EmaWindow,
-  EmaPlaque,
-  EmaBoardsResponse,
-  EmaBoardResponse,
-  EmaPlaquesResponse,
-  EmaPlaqueResponse,
-  PublicEmaWindow,
-  PublicEmaPlaque,
-  GoogleFontsResponse,
-  // Book club cover upload
-  BookclubUploadResponse,
-  // Fonts / Carrd / Images
-  Font,
-  FontVariant,
-  FontsResponse,
-  FontUploadResponse,
-  CarrdProject,
-  CarrdProjectsResponse,
-  CarrdProjectCreateResponse,
-  CarrdImage,
-  CarrdImagesResponse,
-  CarrdUploadResponse,
-  ImageCategory,
-  ImageCategoriesResponse,
-  ImageCategoryActionResponse,
-  ImageEntry,
-  ImagesResponse,
-  ImagesUploadResponse,
-} from './api.generated'
+export type { LogEntry } from './api.generated'
 
 // -- Form models (frontend-only) ----------------------------------------------
 
@@ -185,9 +76,9 @@ export const RAFFLE_MODES: { value: RaffleMode; label: string; help: string }[] 
 // ball color (hex), an appearance-rate weight, and whether it's the grand prize.
 export interface GaraponPrizeForm {
   name: string
-  ball_color: string
+  ballColor: string
   rate: number
-  is_grand: boolean
+  isGrand: boolean
   /** Client-only stable key for the prize repeater (see lib/uid.ts); stripped
    *  from the payload before it's sent to the server. */
   _uid?: number
@@ -196,11 +87,11 @@ export interface GaraponForm {
   id: number
   title: string
   details: string
-  grand_prize_image: string
+  grandPrizeImage: string
   /** Optional link to an open Stamp Rally (null = not linked). */
-  stamp_rally_id: number | null
+  stampRallyId: number | null
   /** Draws a link carries when nobody picks a number (public sign-up, or a blank admin field). */
-  default_draws: number
+  defaultDraws: number
   prizes: GaraponPrizeForm[]
 }
 
@@ -210,18 +101,18 @@ export type StampType = 'food' | 'game'
 export type RallyCompletionMode = 'all' | 'counts'
 
 // Form models for the admin stamp-rally editor. Placement is the same %-based box as
-// the model. A stamp's affiliate_id is null for the "Senpan Tea House" default.
+// the model. A stamp's affiliateId is null for the "Senpan Tea House" default.
 export interface StampRallyStampForm {
   id: number
   /** Festival Map pitch OCCUPANT this stamp belongs to; null when unlinked. */
-  occupant_id: number | null
-  affiliate_id: number | null
+  occupantId: number | null
+  affiliateId: number | null
   image: string
   password: string
-  stamp_type: StampType
+  stampType: StampType
   placement: Placement
-  active_from: string
-  active_to: string
+  activeFrom: string
+  activeTo: string
   paused: boolean
 }
 export interface StampRallyPrizeForm {
@@ -233,21 +124,21 @@ export interface StampRallyPrizeForm {
 export interface StampRallyForm {
   id: number
   title: string
-  card_image: string
-  not_stamped_image: string
-  available_from: string
-  available_to: string
+  cardImage: string
+  notStampedImage: string
+  availableFrom: string
+  availableTo: string
   details: string
-  redeem_instructions: string
-  redeem_image: string
+  redeemInstructions: string
+  redeemImage: string
   /** Opt-in that lists the rally publicly and lets participants issue themselves a card. */
-  public_signup: boolean
-  /** 'all' = collect the whole card; 'counts' = required_food + required_game. */
-  completion_mode: RallyCompletionMode
-  required_food: number
-  required_game: number
+  publicSignup: boolean
+  /** 'all' = collect the whole card; 'counts' = requiredFood + requiredGame. */
+  completionMode: RallyCompletionMode
+  requiredFood: number
+  requiredGame: number
   /** Optional Festival Map link; when set, each stamp names one of its stalls. */
-  festival_map_id: number | null
+  festivalMapId: number | null
   stamps: StampRallyStampForm[]
   prizes: StampRallyPrizeForm[]
 }
@@ -263,7 +154,7 @@ export type StallType = 'game' | 'food' | 'both' | 'other'
 
 /**
  * One datetime range on the festival-map form. The wire format is UTC RFC-3339
- * (model.EventTime); the form holds the admin's local `datetime-local` strings
+ * (the API's EventTime); the form holds the admin's local `datetime-local` strings
  * and converts on save, exactly like the rally availability window.
  */
 export interface EventTimeForm {
@@ -283,15 +174,15 @@ export interface EventTimeForm {
 export interface FestivalStallOccupantForm {
   id: number
   /** null = the venue's own booth (Senpan Tea House). */
-  affiliate_id: number | null
+  affiliateId: number | null
   /** Optional: the map labels a pitch by its AFFILIATE, not by this. */
   title: string
   description: string
   /** This occupant's own event page ('' = none; no fallback to the affiliate's). */
-  event_carrd: string
-  stall_type: StallType
-  /** Caption shown under the title when `stall_type` is 'other' ('' = none). */
-  type_label: string
+  eventCarrd: string
+  stallType: StallType
+  /** Caption shown under the title when `stallType` is 'other' ('' = none). */
+  typeLabel: string
   /** When this occupant is here ([] = the whole festival). */
   times: EventTimeForm[]
   /** Client-only stable key for the occupant list; never sent. */
@@ -303,9 +194,9 @@ export interface FestivalStallForm {
   /** '#rrggbb', or '' to follow the first occupant's stall-type default color. */
   color: string
   /** Halo drawn when a visitor selects this pitch ('' = the app highlight). */
-  selection_color: string
+  selectionColor: string
   /** Colour of this pitch's label ('' = white). */
-  text_color: string
+  textColor: string
   placement: Placement
   occupants: FestivalStallOccupantForm[]
   /** Client-only stable key for the pitch list; never sent. */
@@ -317,40 +208,40 @@ export interface FestivalMapForm {
   /** Optional shortcode, e.g. 'obon-2026' ('' = the map is linked by id only). */
   slug: string
   description: string
-  map_image: string
+  mapImage: string
   times: EventTimeForm[]
   stalls: FestivalStallForm[]
 }
 
 /**
- * One plaque window in the Ema board form. `start_at`/`end_at` hold the LOCAL
+ * One plaque window in the Ema board form. `startAt`/`endAt` hold the LOCAL
  * wall-clock value an `<input type="datetime-local">` expects; the store converts
- * them to and from UTC. `artist_limit` 0 means no limit; `artist_count` is the
+ * them to and from UTC. `artistLimit` 0 means no limit; `artistCount` is the
  * requests the saved window already holds, shown beside it and never sent. `_uid`
  * is a client-only stable key for the repeater.
  */
 export interface EmaWindowForm {
   id: number
   label: string
-  start_at: string
-  end_at: string
-  webhook_url: string
-  artist_limit: number
-  artist_count?: number
+  startAt: string
+  endAt: string
+  webhookUrl: string
+  artistLimit: number
+  artistCount?: number
   _uid?: number
 }
 
 /** The Ema board form (create when `id` is 0). */
 export interface EmaBoardForm {
   id: number
-  festival_map_id: number | null
+  festivalMapId: number | null
   title: string
-  template_image: string
+  templateImage: string
   instructions: string
-  discord_link: string
-  allow_self: boolean
-  allow_site: boolean
-  allow_artist: boolean
-  artist_name: string
+  discordLink: string
+  allowSelf: boolean
+  allowSite: boolean
+  allowArtist: boolean
+  artistName: string
   windows: EmaWindowForm[]
 }

@@ -9,16 +9,10 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
-	"strings"
 
 	"modernc.org/sqlite"
 	sqlite3 "modernc.org/sqlite/lib"
-
-	"app-suite/internal/random"
 )
-
-// randInt returns a random int in [0, n), for the garapon draws.
-func randInt(n int) int { return random.IntN(n) }
 
 // connectPragmas are applied to EVERY pooled connection: the driver runs each
 // _pragma in the DSN (see dsn) as it opens a connection, busy_timeout first and
@@ -184,10 +178,4 @@ func Interrupted(err error) bool {
 // transaction's until it ends, so a call on s.write would wait for it forever.
 func (s *Store) beginImmediate(ctx context.Context) (*sql.Tx, error) {
 	return s.write.BeginTx(ctx, nil)
-}
-
-// isUniqueViolation reports whether err is a SQLite UNIQUE-constraint failure
-// (the pure-Go driver surfaces it in the error text).
-func isUniqueViolation(err error) bool {
-	return err != nil && strings.Contains(err.Error(), "UNIQUE constraint failed")
 }

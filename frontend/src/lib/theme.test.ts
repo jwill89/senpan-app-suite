@@ -1,5 +1,11 @@
 import { describe, it, expect, afterEach } from 'vitest'
-import { clampFontMetrics, fontFamilyFromFile, applyNumberFlourish, cssNameSafe } from './theme'
+import {
+  clampFontMetrics,
+  fontFamilyFromFile,
+  applyNumberFlourish,
+  cssNameSafe,
+  uploadedFontUrl,
+} from './theme'
 
 describe('cssNameSafe', () => {
   it('accepts ordinary font family names', () => {
@@ -82,5 +88,15 @@ describe('clampFontMetrics', () => {
     expect(clampFontMetrics(NaN, 0.2)).toBeNull()
     expect(clampFontMetrics(0.8, Infinity)).toBeNull()
     expect(clampFontMetrics(-1, 2)).toBeNull()
+  })
+})
+
+describe('uploadedFontUrl', () => {
+  it('is the same-origin address a font token is served from', () => {
+    expect(uploadedFontUrl('AbC-123.woff2')).toBe('/api/v1/fonts/pub/f/AbC-123.woff2')
+  })
+
+  it('encodes what could change the path', () => {
+    expect(uploadedFontUrl('a/b?c.ttf')).toBe('/api/v1/fonts/pub/f/a%2Fb%3Fc.ttf')
   })
 })

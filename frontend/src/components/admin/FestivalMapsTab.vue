@@ -40,7 +40,8 @@ import {
   stallCaption,
   toPublicStalls,
 } from '@/lib/festivalmap'
-import type { FestivalMap, FestivalMapStatus } from '@/types/api'
+import type { FestivalMapStatus } from '@/types/api'
+import type { FestivalMap } from '@/api/client'
 
 const store = useFestivalMapsStore()
 
@@ -74,8 +75,8 @@ const filteredActive = computed(() => {
 
 const closedColumns: DataColumn[] = [
   { key: 'title', label: 'Title', sortable: true },
-  { key: 'stall_count', label: 'Stalls', align: 'right', sortable: true },
-  { key: 'created_at', label: 'Created', sortable: true },
+  { key: 'stallCount', label: 'Stalls', align: 'right', sortable: true },
+  { key: 'createdAt', label: 'Created', sortable: true },
   { key: 'actions', label: '', align: 'right' },
 ]
 const closedSearch = ref('')
@@ -356,7 +357,7 @@ function setStatus(status: FestivalMapStatus): void {
           One drawing of a festival map, not two kept in step by hand.
         -->
         <FestivalMapCanvas
-          :map-image="store.selectedMap.map_image"
+          :map-image="store.selectedMap.mapImage"
           :stalls="previewStalls"
           :festival-days="store.selectedMap.times"
         />
@@ -410,8 +411,8 @@ function setStatus(status: FestivalMapStatus): void {
             @keydown.space.prevent="openMap(m)"
           >
             <img
-              v-if="m.map_image"
-              :src="assetUrl(m.map_image)"
+              v-if="m.mapImage"
+              :src="assetUrl(m.mapImage)"
               class="media-card-image"
               alt="Festival map"
             />
@@ -421,7 +422,7 @@ function setStatus(status: FestivalMapStatus): void {
                 <span :class="['status-badge', statusClass(m.status)]">
                   {{ statusLabel(m.status) }}
                 </span>
-                {{ m.stall_count || 0 }} stall(s)
+                {{ m.stallCount || 0 }} stall(s)
               </p>
             </div>
           </div>
@@ -459,9 +460,9 @@ function setStatus(status: FestivalMapStatus): void {
           :filter-fn="closedMatches"
           @update:view="closedView = $event"
         >
-          <template #cell-created_at="{ row }">
+          <template #cell-createdAt="{ row }">
             <span class="text-sm text-muted">{{
-              formatServerTimestamp((row as FestivalMap).created_at)
+              formatServerTimestamp((row as FestivalMap).createdAt)
             }}</span>
           </template>
           <template #cell-actions="{ row }">

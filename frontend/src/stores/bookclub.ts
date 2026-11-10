@@ -13,13 +13,14 @@ import { computed, ref } from 'vue'
 import {
   api,
   unwrap,
+  type BookClubCover,
   type ReadingList,
   type ReadingListItem,
   type ReadingListItemInput,
   type ReadingListSource,
   type ReadingListSummary,
 } from '@/api/client'
-import { endpoints } from '@/lib/endpoints'
+import { apiUpload } from '@/lib/api'
 import { BOOK_CLUBS } from '@/lib/constants'
 import { createFreshness } from '@/lib/freshness'
 import { nextUid } from '@/lib/uid'
@@ -431,7 +432,10 @@ export const useBookclubStore = defineStore('bookclub', () => {
     try {
       const formData = new FormData()
       formData.append('image', file)
-      const data = await endpoints.bookclub.uploadImage(formData)
+      const data = await apiUpload<BookClubCover>(
+        `book-clubs/${encodeURIComponent(club().club)}/covers`,
+        formData,
+      )
       itemForm.value.coverImage = data.url
       ui.notify('Cover uploaded', 'success')
     } catch (e) {

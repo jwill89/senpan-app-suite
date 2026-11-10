@@ -21,11 +21,13 @@ the document root's own folders and proxies everything else to it.
 |   +-- raffles/               <- "Raffle" image category (prize images)
 |   +-- announcements_main/    <- "Announcement Main" image category (embed main image)
 |   +-- announcements_thumb/   <- "Announcement Thumbnail" image category (embed thumbnail)
+|   +-- garapons/, affiliate_logos/, affiliate_images/, stamp_cards/, stamp_stamps/, stamp_prizes/  <- the other seeded categories
 |   +-- flourishes/            <- "Flourishes" image category (SVG board/number flourishes; seeded from corner_flourish.svg + called_flourish.svg)
 |   +-- announcements/         <- legacy announcement images; copied into announcements_main on first start
 |   +-- <custom>/              <- any custom image categories added on System -> Images
-|   +-- .categories.json       <- manifest of custom image categories (name <-> dir)
-|   \-- bookclub/              <- reading-list cover uploads
+|   +-- .categories.json       <- manifest of the image categories (name <-> dir)
+|   +-- bookclub/              <- reading-list cover uploads (reserved: not an image category)
+|   \-- ema_plaques/           <- ema plaques awaiting review (reserved: not an image category)
 +-- fonts/                     <- admin-uploaded font files; NOT served statically - the Go server streams them via tokenized URLs (see Font host)
 +-- carrd/                     <- Carrd image-host projects; served by the carrd.senpan.cafe vhost (see Carrd host)
 \-- plugin/                    <- the Dalamud custom repo (pluginmaster.json, SenpanCompanionAdmin/latest.zip, .htaccess); replaced whole on each plugin publish
@@ -45,9 +47,10 @@ to the previous `.htaccess` still finds the previous SPA. Once 4.0.0 has stayed,
 them on the host: `rm -rf <DocumentRoot>/dist <DocumentRoot>/dist.old`.
 
 All image uploads are now managed centrally on the **System -> Images** admin
-page, which writes into per-category subdirectories of `images/` (the three
-permanent categories above plus any custom ones). They all live under the
-persistent `images/` tree, so no extra vhost or one-time setup is needed. On
+page, which writes into per-category subdirectories of `images/` (ten categories
+are seeded on first start, all editable, plus any custom ones; `bookclub`,
+`announcements` and `ema_plaques` belong to other features and can't be made a
+category). They all live under the persistent `images/` tree, so no extra vhost or one-time setup is needed. On
 first start the Go server copies any legacy `images/announcements/` files into
 `images/announcements_main/` (idempotent - safe to leave the legacy folder).
 
@@ -210,7 +213,7 @@ allowlist instead. Requests naming no site at all (pasting the URL into a
 browser, `wget`, casual scrapers) get a 403, and `kit.css` only emits each
 requesting site's allowed fonts. The SPA itself loads fonts
 **same-origin** via the existing `/api` ProxyPass
-(`/api/fonts/pub/f/<token>`), so the app and its font picker always work - the
+(`/api/v1/fonts/pub/f/<token>`), so the app and its font picker always work - the
 allowlists only govern external sites.
 
 External (Carrd) sites embed one stylesheet whose URL never changes:
@@ -236,13 +239,16 @@ One-time setup for the font host:
    (replacing any DocumentRoot-based static config):
 
    ```apache
-   ProxyPass        / http://localhost:8080/api/fonts/pub/
-   ProxyPassReverse / http://localhost:8080/api/fonts/pub/
+   ProxyPass        / http://localhost:8080/api/v1/fonts/pub/
+   ProxyPassReverse / http://localhost:8080/api/v1/fonts/pub/
    ProxyPreserveHost On
    ```
 
-   `https://fonts.senpan.cafe/kit.css` -> `/api/fonts/pub/kit.css` and
-   `https://fonts.senpan.cafe/f/<token>` -> `/api/fonts/pub/f/<token>`.
+   `https://fonts.senpan.cafe/kit.css` -> `/api/v1/fonts/pub/kit.css` and
+   `https://fonts.senpan.cafe/f/<token>` -> `/api/v1/fonts/pub/f/<token>`. A vhost
+   already proxying to the old `/api/fonts/pub/` must be edited the day the release
+   deploys: that path no longer answers, and there is no alias for it. The external
+   addresses (`kit.css`, `/f/<token>`) do not change.
 2. Upload `deploy/fonts.htaccess` -> `<webRoot>/fonts/.htaccess`. It now DENIES
    all direct access - pure defense in depth in case the vhost is ever
    reverted to serving the folder statically. The Go server only adds/removes

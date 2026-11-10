@@ -25,7 +25,7 @@ import type {
   PublicFestivalMap,
   PublicFestivalStall,
   PublicStallOccupant,
-} from '@/types/api'
+} from '@/api/client'
 
 const props = withDefaults(
   defineProps<{
@@ -97,7 +97,7 @@ function occupantsShown(stall: PublicFestivalStall): PublicStallOccupant[] {
 /** Pitches with at least one occupant carrying a stamp on the open rally. */
 const rallyIds = computed(
   () =>
-    new Set(stalls.value.filter((s) => s.occupants.some((o) => o.in_stamp_rally)).map((s) => s.id)),
+    new Set(stalls.value.filter((s) => s.occupants.some((o) => o.inStampRally)).map((s) => s.id)),
 )
 
 /**
@@ -111,7 +111,7 @@ const dimmedIds = computed(() => {
     const shown = occupantsShown(stall)
     if (shown.length === 0) {
       dimmed.add(stall.id)
-    } else if (rallyOnly.value && !shown.some((o) => o.in_stamp_rally)) {
+    } else if (rallyOnly.value && !shown.some((o) => o.inStampRally)) {
       dimmed.add(stall.id)
     }
   }
@@ -321,7 +321,7 @@ const linkTarget = computed(() => (props.embedded ? '_blank' : undefined))
       </span>
       <label v-if="rallyIds.size" class="checkbox-inline">
         <input v-model="rallyOnly" type="checkbox" />
-        Highlight {{ map.stamp_rally_title || 'stamp rally' }} stalls only
+        Highlight {{ map.stampRallyTitle || 'stamp rally' }} stalls only
       </label>
     </div>
 
@@ -338,7 +338,7 @@ const linkTarget = computed(() => (props.embedded ? '_blank' : undefined))
     >
       <FestivalMapCanvas
         ref="canvasRef"
-        :map-image="map.map_image"
+        :map-image="map.mapImage"
         :stalls="stalls"
         :selected-id="selected?.id ?? null"
         :dimmed-ids="dimmedIds"
@@ -411,9 +411,9 @@ const linkTarget = computed(() => (props.embedded ? '_blank' : undefined))
                 <p class="map-stall-status">
                   <span
                     class="status-badge"
-                    :class="occupant.is_open ? 'status-badge-open' : 'status-badge-closed'"
+                    :class="occupant.isOpen ? 'status-badge-open' : 'status-badge-closed'"
                   >
-                    {{ occupant.is_open ? 'open now' : 'closed' }}
+                    {{ occupant.isOpen ? 'open now' : 'closed' }}
                   </span>
                 </p>
                 <!-- The type alone. The affiliate used to be repeated here, one
@@ -451,9 +451,9 @@ const linkTarget = computed(() => (props.embedded ? '_blank' : undefined))
 
             <div
               v-if="
-                occupant.event_carrd ||
-                occupant.affiliate?.carrd_link ||
-                occupant.affiliate?.discord_link
+                occupant.eventCarrd ||
+                occupant.affiliate?.carrdLink ||
+                occupant.affiliate?.discordLink
               "
               class="map-stall-links"
             >
@@ -461,27 +461,27 @@ const linkTarget = computed(() => (props.embedded ? '_blank' : undefined))
                    to. The booth page leads them: it is about THIS stall on THIS
                    day, where the two beside it belong to the business behind it. -->
               <a
-                v-if="occupant.event_carrd"
+                v-if="occupant.eventCarrd"
                 class="btn-view btn-sm"
-                :href="occupant.event_carrd"
+                :href="occupant.eventCarrd"
                 target="_blank"
                 rel="noopener noreferrer"
               >
                 <font-awesome-icon :icon="['fad', 'store']" /> Booth Page
               </a>
               <a
-                v-if="occupant.affiliate?.carrd_link"
+                v-if="occupant.affiliate?.carrdLink"
                 class="btn-view btn-sm"
-                :href="occupant.affiliate.carrd_link"
+                :href="occupant.affiliate.carrdLink"
                 target="_blank"
                 rel="noopener noreferrer"
               >
                 <font-awesome-icon :icon="['fas', 'link']" /> Website
               </a>
               <a
-                v-if="occupant.affiliate?.discord_link"
+                v-if="occupant.affiliate?.discordLink"
                 class="btn-neutral btn-sm"
-                :href="occupant.affiliate.discord_link"
+                :href="occupant.affiliate.discordLink"
                 target="_blank"
                 rel="noopener noreferrer"
               >
@@ -493,8 +493,8 @@ const linkTarget = computed(() => (props.embedded ? '_blank' : undefined))
                  that is closed or outside its dates). -->
             <div v-if="occupant.raffle" class="map-stall-rally">
               <img
-                v-if="occupant.raffle.prize_image"
-                :src="assetUrl(occupant.raffle.prize_image)"
+                v-if="occupant.raffle.prizeImage"
+                :src="assetUrl(occupant.raffle.prizeImage)"
                 alt=""
               />
               <div class="map-stall-rally-body">
@@ -520,13 +520,13 @@ const linkTarget = computed(() => (props.embedded ? '_blank' : undefined))
 
             <!-- Stamp rally badge: this occupant carries a stamp on the open rally. -->
             <div
-              v-if="occupant.in_stamp_rally"
+              v-if="occupant.inStampRally"
               class="map-stall-rally"
               :class="{ 'is-collected': isCollected(occupant) }"
             >
-              <img v-if="occupant.stamp_image" :src="assetUrl(occupant.stamp_image)" alt="" />
+              <img v-if="occupant.stampImage" :src="assetUrl(occupant.stampImage)" alt="" />
               <div class="map-stall-rally-body">
-                <strong>Part of {{ occupant.rally_title }}</strong>
+                <strong>Part of {{ occupant.rallyTitle }}</strong>
                 <p class="text-sm text-muted">
                   <template v-if="isCollected(occupant)">
                     <font-awesome-icon :icon="['fas', 'circle-check']" class="text-success" />
@@ -534,11 +534,11 @@ const linkTarget = computed(() => (props.embedded ? '_blank' : undefined))
                   </template>
                   <template v-else>Visit this stall to collect its stamp.</template>
                   <RouterLink
-                    v-if="!$slots['rally-action'] && map.stamp_rally_signup && map.stamp_rally_id"
+                    v-if="!$slots['rally-action'] && map.stampRallySignup && map.stampRallyId"
                     class="link-btn"
                     :to="{
                       name: 'stamp-rally-signup',
-                      params: { id: String(map.stamp_rally_id) },
+                      params: { id: String(map.stampRallyId) },
                     }"
                     :target="linkTarget"
                   >

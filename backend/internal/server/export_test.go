@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"net/http"
 	"net/url"
 )
@@ -38,17 +39,6 @@ var (
 	// AccountMutationForTest reports whether a write's path has the staff streams
 	// check their accounts again.
 	AccountMutationForTest = accountMutation
-	// SafeFontNameForTest validates/normalizes an uploaded font filename.
-	SafeFontNameForTest = safeFontName
-	// SanitizeGaraponPrizesForTest trims/normalizes incoming garapon prize rows.
-	SanitizeGaraponPrizesForTest = sanitizeGaraponPrizes
-	// NormalizeFontOriginForTest validates/normalizes a font-allowlist origin.
-	NormalizeFontOriginForTest = normalizeFontOrigin
-	// FontTokenBucketForTest returns the token time bucket for an instant.
-	FontTokenBucketForTest = fontTokenBucket
-	// FontFileTokenForTest derives a font's serving token for a given bucket, so
-	// the expiry window (current + previous bucket) can be exercised directly.
-	FontFileTokenForTest = (*Server).fontFileToken
 	// LogClientIPForTest exposes the CF-Connecting-IP-first client-IP extraction
 	// used for the request log's ip field.
 	LogClientIPForTest = logClientIP
@@ -61,3 +51,7 @@ var (
 // WebRootForTest exposes the server's webRoot so external tests can seed
 // upload files mid-test (e.g. adding a font after the env is built).
 func (s *Server) WebRootForTest() string { return s.webRoot }
+
+// FontSecretForTest is the key the font link tokens are made with, so a test can make
+// a token of an earlier time bucket.
+func (s *Server) FontSecretForTest(ctx context.Context) ([]byte, error) { return s.fonts.Secret(ctx) }

@@ -1,65 +1,69 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
-import type { EmaBoard, EmaPlaque } from '@/types/api'
+import type { EmaBoard, EmaPlaque } from '@/api/client'
 
-const ep = vi.hoisted(() => ({
-  list: vi.fn(),
-  detail: vi.fn(),
-  create: vi.fn(),
-  update: vi.fn(),
-  plaques: vi.fn(),
-  approve: vi.fn(),
-  reject: vi.fn(),
-  maps: vi.fn(),
-  requests: vi.fn(),
-  setComplete: vi.fn(),
-  post: vi.fn(),
+// The store calls the API client; only its calls are faked (unwrap is the real one).
+// Each fake answers a call's `{ data, error, response }`. The finished plaque is a
+// file upload, which goes through the XHR upload helper.
+const ok = (data: unknown, status = 200) => ({ data, response: new Response(null, { status }) })
+const problem = (detail: string, status = 409) => ({
+  error: { title: 'Conflict', detail },
+  response: new Response(null, { status }),
+})
+const api = vi.hoisted(() => ({
+  GET: vi.fn(),
+  POST: vi.fn(),
+  PUT: vi.fn(),
+  DELETE: vi.fn(),
 }))
-vi.mock('@/lib/endpoints', () => ({
-  endpoints: {
-    emaBoards: {
-      list: ep.list,
-      detail: ep.detail,
-      create: ep.create,
-      update: ep.update,
-      plaques: ep.plaques,
-      approve: ep.approve,
-      reject: ep.reject,
-    },
-    emaRequests: { list: ep.requests, setComplete: ep.setComplete, post: ep.post },
-    festivalMaps: { list: ep.maps },
-  },
+const apiUpload = vi.hoisted(() => vi.fn())
+vi.mock('@/api/client', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  api,
+}))
+vi.mock('@/lib/api', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  apiUpload,
 }))
 
 import { useEmaStore } from './ema'
 import { useUiStore } from './ui'
 import { utcToDatetimeLocal } from '@/lib/datetime'
 
+/** The call to `path` among a method's calls, as `[path, init]`. */
+function callTo(method: 'GET' | 'POST' | 'PUT' | 'DELETE', path: string) {
+  return api[method].mock.calls.find(([p]) => p === path) as
+    | [string, { params: { path: Record<string, number> }; body: Record<string, unknown> }]
+    | undefined
+}
+
 function board(over: Partial<EmaBoard> = {}): EmaBoard {
   return {
     id: 4,
-    festival_map_id: 7,
+    festivalMapId: 7,
+    festivalMapName: 'Obon',
     title: 'Wishes',
-    template_image: 'images/ema/t.png',
+    templateImage: 'images/ema/t.png',
     instructions: '',
-    discord_link: '',
-    allow_self: true,
-    allow_site: true,
-    allow_artist: true,
-    artist_name: 'Tara',
+    discordLink: '',
+    allowSelf: true,
+    allowSite: true,
+    allowArtist: true,
+    artistName: 'Tara',
     status: 'open',
-    created_at: '',
+    createdAt: '2026-07-01T00:00:00Z',
+    pendingCount: 0,
+    requestedCount: 0,
     windows: [
       {
         id: 9,
-        board_id: 4,
         label: 'Day 1',
-        start_at: '2026-08-01T18:00:00Z',
-        end_at: '2026-08-02T04:00:00Z',
-        webhook_url: 'https://discord.com/api/webhooks/1/x',
-        artist_limit: 5,
-        artist_count: 2,
-        sort_order: 0,
+        startAt: '2026-08-01T18:00:00Z',
+        endAt: '2026-08-02T04:00:00Z',
+        webhookUrl: 'https://discord.com/api/webhooks/1/x',
+        artistLimit: 5,
+        artistCount: 2,
+        sortOrder: 0,
       },
     ],
     ...over,
@@ -69,26 +73,36 @@ function board(over: Partial<EmaBoard> = {}): EmaBoard {
 function plaque(over: Partial<EmaPlaque> = {}): EmaPlaque {
   return {
     id: 11,
-    board_id: 4,
-    window_label: 'Day 1',
+    boardId: 4,
+    windowId: 9,
+    windowLabel: 'Day 1',
     kind: 'site',
-    character_name: 'Aria',
+    characterName: 'Aria',
     world: 'Gilgamesh',
     description: '',
     image: 'images/ema_plaques/4-x.png',
     status: 'pending',
-    reviewed_by: '',
-    reviewed_at: '',
-    created_at: '',
+    reviewedBy: '',
+    reviewedAt: null,
+    createdAt: '2026-08-01T18:30:00Z',
+    festivalMapName: 'Obon',
     ...over,
   }
 }
 
 beforeEach(() => {
   setActivePinia(createPinia())
-  Object.values(ep).forEach((fn) => fn.mockReset())
-  ep.list.mockResolvedValue({ boards: [] })
-  ep.maps.mockResolvedValue({ maps: [] })
+  Object.values(api).forEach((fn) => fn.mockReset())
+  apiUpload.mockReset()
+  api.GET.mockImplementation(async (path: string) =>
+    ok(
+      path === '/ema-boards'
+        ? { boards: [] }
+        : path === '/ema-requests'
+          ? { plaques: [] }
+          : { maps: [] },
+    ),
+  )
 })
 
 describe('the board form', () => {
@@ -96,37 +110,39 @@ describe('the board form', () => {
     const ema = useEmaStore()
     ema.editBoardForm(board())
     const w = ema.boardForm!.windows[0]!
-    expect(w.start_at).toBe(utcToDatetimeLocal('2026-08-01T18:00:00Z'))
+    expect(w.startAt).toBe(utcToDatetimeLocal('2026-08-01T18:00:00Z'))
 
-    ep.update.mockResolvedValue({ ok: true })
+    api.PUT.mockResolvedValue(ok(board()))
     expect(await ema.saveBoard()).toBe(4)
-    const sent = ep.update.mock.calls[0]![1] as {
-      windows: { id: number; start_at: string; artist_limit: number }[]
+    const [, init] = callTo('PUT', '/ema-boards/{id}')!
+    expect(init.params.path.id).toBe(4)
+    const sent = init.body as {
+      windows: { id: number; startAt: string; artistLimit: number }[]
     }
     // Back to the same UTC instant (the server normalizes the format), keeping the
     // window's id so its plaques stay attached.
     expect(sent.windows[0]!.id).toBe(9)
-    expect(Date.parse(sent.windows[0]!.start_at)).toBe(Date.parse('2026-08-01T18:00:00Z'))
+    expect(Date.parse(sent.windows[0]!.startAt)).toBe(Date.parse('2026-08-01T18:00:00Z'))
     // The limit goes back; the count of requests already made is the server's.
-    expect(sent.windows[0]).toMatchObject({ artist_limit: 5 })
-    expect(sent.windows[0]).not.toHaveProperty('artist_count')
+    expect(sent.windows[0]).toMatchObject({ artistLimit: 5 })
+    expect(sent.windows[0]).not.toHaveProperty('artistCount')
     expect(ema.boardForm).toBeNull()
   })
 
   it('starts a new day where the last one ended, taking as many requests', () => {
     const ema = useEmaStore()
     ema.newBoardForm()
-    ema.boardForm!.windows[0]!.end_at = '2026-08-02T04:00'
-    ema.boardForm!.windows[0]!.artist_limit = 8
+    ema.boardForm!.windows[0]!.endAt = '2026-08-02T04:00'
+    ema.boardForm!.windows[0]!.artistLimit = 8
     ema.addWindow()
-    expect(ema.boardForm!.windows[1]!.start_at).toBe('2026-08-02T04:00')
-    expect(ema.boardForm!.windows[1]!.artist_limit).toBe(8)
+    expect(ema.boardForm!.windows[1]!.startAt).toBe('2026-08-02T04:00')
+    expect(ema.boardForm!.windows[1]!.artistLimit).toBe(8)
   })
 
   it('keeps the form open when the server refuses it', async () => {
     const ema = useEmaStore()
     ema.newBoardForm()
-    ep.create.mockRejectedValue(new Error('Day 1 and Day 2 overlap'))
+    api.POST.mockResolvedValue(problem('Day 1 and Day 2 overlap', 422))
     expect(await ema.saveBoard()).toBeNull()
     expect(ema.boardForm).not.toBeNull()
   })
@@ -136,12 +152,13 @@ describe('review', () => {
   it('swaps in the reviewed plaque and refreshes the counts', async () => {
     const ema = useEmaStore()
     ema.plaques = [plaque()]
-    ep.approve.mockResolvedValue({ plaque: plaque({ status: 'posted', image: '' }) })
+    api.POST.mockResolvedValue(ok(plaque({ status: 'posted', image: '' })))
     await ema.review(ema.plaques[0]!, 'approve')
-    expect(ep.approve).toHaveBeenCalledWith(4, 11)
+    const [, init] = callTo('POST', '/ema-boards/{id}/plaques/{plaqueId}/approve')!
+    expect(init.params.path).toEqual({ id: 4, plaqueId: 11 })
     expect(ema.plaques[0]!.status).toBe('posted')
     expect(ema.pendingPlaques).toHaveLength(0)
-    expect(ep.list).toHaveBeenCalled()
+    expect(callTo('GET', '/ema-boards')).toBeDefined()
   })
 
   it('asks before rejecting, and does nothing on no', async () => {
@@ -150,13 +167,24 @@ describe('review', () => {
     vi.spyOn(ui, 'confirm').mockResolvedValue(false)
     ema.plaques = [plaque()]
     await ema.review(ema.plaques[0]!, 'reject')
-    expect(ep.reject).not.toHaveBeenCalled()
+    expect(api.POST).not.toHaveBeenCalled()
   })
 
   it('counts what waits for review across boards', () => {
     const ema = useEmaStore()
-    ema.boards = [board({ pending_count: 2 }), board({ id: 5, pending_count: 1 })]
+    ema.boards = [board({ pendingCount: 2 }), board({ id: 5, pendingCount: 1 })]
     expect(ema.pendingTotal).toBe(3)
+  })
+
+  it('says why a post failed and re-reads the plaques', async () => {
+    const ema = useEmaStore()
+    const ui = useUiStore()
+    ema.selectedBoard = board()
+    ema.plaques = [plaque()]
+    api.POST.mockResolvedValue(problem('Someone else is reviewing this plaque.'))
+    await ema.review(ema.plaques[0]!, 'approve')
+    expect(ui.toast.message).toBe('Someone else is reviewing this plaque.')
+    expect(callTo('GET', '/ema-boards/{id}/plaques')).toBeDefined()
   })
 })
 
@@ -170,16 +198,31 @@ describe("the artist's queue", () => {
     expect(ema.openRequests).toHaveLength(1)
   })
 
+  it('marks a request done and reopens it through its own commands', async () => {
+    const ema = useEmaStore()
+    const open = plaque({ kind: 'artist', status: 'requested', image: '' })
+    ema.requests = [open]
+    api.POST.mockResolvedValueOnce(ok({ ...open, status: 'complete' }))
+    await ema.setRequestComplete(open, true)
+    expect(callTo('POST', '/ema-requests/{id}/complete')![1].params.path.id).toBe(11)
+    expect(ema.requests[0]!.status).toBe('complete')
+
+    api.POST.mockResolvedValueOnce(ok({ ...open, status: 'requested' }))
+    await ema.setRequestComplete(ema.requests[0]!, false)
+    expect(callTo('POST', '/ema-requests/{id}/reopen')).toBeDefined()
+    expect(ema.requests[0]!.status).toBe('requested')
+  })
+
   it('posts the finished plaque and swaps in the completed request', async () => {
     const ema = useEmaStore()
     const open = plaque({ kind: 'artist', status: 'requested', image: '' })
     ema.requests = [open]
-    ep.post.mockResolvedValue({ plaque: { ...open, status: 'complete' } })
+    apiUpload.mockResolvedValue({ ...open, status: 'complete' })
     const image = new File([new Uint8Array([1, 2, 3])], 'done.png', { type: 'image/png' })
 
     expect(await ema.postRequest(open, image)).toBe(true)
-    const [id, form] = ep.post.mock.calls[0] as [number, FormData]
-    expect(id).toBe(11)
+    const [endpoint, form] = apiUpload.mock.calls[0] as [string, FormData]
+    expect(endpoint).toBe('ema-requests/11/post')
     expect(form.get('image')).toBeInstanceOf(File)
     expect(ema.requests[0]!.status).toBe('complete')
     expect(ema.postingRequest).toBe(false)
@@ -189,11 +232,11 @@ describe("the artist's queue", () => {
     const ema = useEmaStore()
     const open = plaque({ kind: 'artist', status: 'requested', image: '' })
     ema.requests = [open]
-    ep.post.mockRejectedValue(new Error('Discord refused'))
-    ep.requests.mockResolvedValue({ plaques: [open] })
+    apiUpload.mockRejectedValue(new Error('Discord refused'))
+    api.GET.mockResolvedValue(ok({ plaques: [open] }))
 
     expect(await ema.postRequest(open, new File(['x'], 'done.png'))).toBe(false)
-    expect(ep.requests).toHaveBeenCalled()
+    expect(callTo('GET', '/ema-requests')).toBeDefined()
     expect(ema.requests[0]!.status).toBe('requested')
   })
 })

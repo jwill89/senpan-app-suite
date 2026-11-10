@@ -3,14 +3,12 @@ package server
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"log/slog"
 	"net"
 	"net/http"
 	"net/url"
 	"runtime/debug"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -23,6 +21,7 @@ import (
 	"app-suite/internal/discord"
 	"app-suite/internal/game"
 	"app-suite/internal/live"
+	"app-suite/internal/media"
 	"app-suite/internal/model"
 	"app-suite/internal/store"
 	"app-suite/internal/version"
@@ -73,15 +72,13 @@ type Server struct {
 	// own, but counting it against the 5-per-15-minutes login limiter would lock a
 	// user out of password login for merely opening the passkey prompt a few times.
 	passkeyBeginLimiter *rateLimiter
-	// The festival dashboard's read. It matches raffle entries on an exact name, so
-	// it is bounded like the other name-keyed reads - but loosely, since the page
-	// reads it on every visit and after each entry.
+	// The festival dashboard's read. It matches raffle entries on a whole name, so it
+	// is bounded like the other name-keyed reads, but loosely, since the page reads it
+	// on every visit and after each entry.
 	dashboardLimiter *rateLimiter
-	// Public Ema plaque submissions (designs and artist requests share it). A
-	// visitor sends one or two a festival, so this only stops a flood.
+	// Public Ema plaque submissions (designs and artist requests share it). A visitor
+	// sends one or two a festival, so this only stops a flood.
 	emaLimiter *rateLimiter
-	// The Google Fonts family list, fetched with the server's own key (googlefonts.go).
-	googleFonts googleFontsCache
 	// discord sends every outbound Discord post. Its dev-safety valves (see
 	// SetWebhookPolicy) are off in production, where a post goes to the webhook the
 	// feature configured.
@@ -95,21 +92,11 @@ type Server struct {
 	// logFile is the path to the rotating JSON log file the admin log viewer
 	// (GET /api/logs) tails. Empty disables the viewer. Injected via SetLogFile.
 	logFile string
-	// Lazily-loaded HMAC key for the tokenized public font URLs - see
-	// fontserve.go. Generated and persisted to settings on first use.
-	fontSecretMu  sync.Mutex
-	fontSecretVal []byte
-	// Serializes the image-category manifest read-modify-write (create/rename/
-	// delete + startup migration) so concurrent admin edits can't lose a write or
-	// orphan a directory. See images.go. Distinct from fontSecretMu - the font
-	// metadata lives in the DB, this manifest is a filesystem dotfile.
-	imageManifestMu sync.Mutex
-	// Serializes the font-metadata read-modify-write. Every font's family, serving
-	// preference and origin allowlist share ONE settings JSON blob, so two admin
-	// edits landing together each read the same map, mutate their own copy and
-	// write it back - and whichever saves second silently discards the other's
-	// change. Same reasoning as imageManifestMu, different store.
-	fontMetaMu sync.Mutex
+	// images, carrd and fonts are the uploads under webRoot; the operations in
+	// internal/api and the startup migrations below share them.
+	images *media.Images
+	carrd  *media.Carrd
+	fonts  *media.Fonts
 
 	// Consecutive failed Discord posts per announcement id, used to stop the
 	// scheduler retrying a permanently-broken webhook every 30 seconds forever (see
@@ -192,6 +179,9 @@ func New(ctx context.Context, st *store.Store, hub *live.Hub, webRoot string, al
 		live:           hub,
 		sessions:       sm,
 		webRoot:        webRoot,
+		images:         media.NewImages(webRoot),
+		carrd:          media.NewCarrd(webRoot),
+		fonts:          media.NewFonts(webRoot, media.StoreSettings(st)),
 		allowedOrigins: origins,
 		mux:            http.NewServeMux(),
 		limiter:        newRateLimiter(5, 15*time.Minute),  // 5 failed logins per 15 minutes
@@ -218,26 +208,32 @@ func New(ctx context.Context, st *store.Store, hub *live.Hub, webRoot string, al
 		emaLimiter:          newRateLimiter(10, 10*time.Minute),
 	}
 
-	s.routes()
 	// The operations already on huma (internal/api), on the same mux: they share its
 	// session, CSRF and access-log layers with the routes still registered by hand.
 	api.New(s.mux, api.Deps{
-		Store:              st,
-		Discord:            s.discord,
-		AniList:            s.anilist,
-		RemoveUnusedCovers: s.removeUnusedCovers,
-		Version:            version.Version,
-		Live:               hub,
-		TurnstileSiteKey:   func() string { return s.turnstileSiteKey },
-		LogFile:            func() string { return s.logFile },
-		UploadedFonts:      s.uploadedFontRefs,
-		Sessions:           sm,
-		SignInLimit:        s.limiter,
-		RegisterLimit:      s.regLimiter,
-		PasskeyLimit:       s.passkeyBeginLimiter,
-		CardRequestLimit:   s.cardReqLimiter,
-		RaffleEntryLimit:   s.raffleLimiter,
-		RaffleLookupLimit:  s.raffleLookupLimiter,
+		Store:             st,
+		Discord:           s.discord,
+		AniList:           s.anilist,
+		Version:           version.Version,
+		Live:              hub,
+		TurnstileSiteKey:  func() string { return s.turnstileSiteKey },
+		LogFile:           func() string { return s.logFile },
+		Sessions:          sm,
+		SignInLimit:       s.limiter,
+		RegisterLimit:     s.regLimiter,
+		PasskeyLimit:      s.passkeyBeginLimiter,
+		CardRequestLimit:  s.cardReqLimiter,
+		RaffleEntryLimit:  s.raffleLimiter,
+		RaffleLookupLimit: s.raffleLookupLimiter,
+		GaraponDrawLimit:  s.garaponDrawLimiter,
+		StampGuessLimit:   s.stampGuessLimiter,
+		RallyLimit:        s.rallyLimiter,
+		DashboardLimit:    s.dashboardLimiter,
+		EmaLimit:          s.emaLimiter,
+		WebRoot:           webRoot,
+		Images:            s.images,
+		Carrd:             s.carrd,
+		Fonts:             s.fonts,
 		Turnstile: func(ctx context.Context, response, ip string) bool {
 			return !s.turnstileEnabled() || s.verifyTurnstile(ctx, response, ip)
 		},
@@ -248,19 +244,19 @@ func New(ctx context.Context, st *store.Store, hub *live.Hub, webRoot string, al
 	s.siteRoutes()
 	// Upgrade the image-category manifest to the current schema (folds the
 	// formerly hardcoded permanent categories into the manifest; runs once).
-	s.migrateImageCategoryManifest()
+	s.images.MigrateManifest()
 	// One-time, idempotent migration of legacy announcement images into the new
 	// announcements_main category dir (safe to run on every startup).
-	s.migrateAnnouncementImages()
+	s.images.MigrateAnnouncementImages()
 	// Seed the built-in flourish SVGs into the Flourishes image category so they
 	// are pickable in the theme flourish selectors (idempotent).
-	s.seedFlourishes()
+	s.images.SeedFlourishes()
 	// Upgrade pre-group font metadata (file-keyed entries, the old global
 	// origin allowlist), then reconcile every font's WOFF2 conversion -
 	// backfilling missing ones and sweeping stale copies. Both idempotent;
 	// conversion failures log and fall back to serving an uploaded format.
-	s.migrateFontMetaV2(ctx)
-	s.migrateFontDerivatives()
+	s.fonts.MigrateMeta(ctx)
+	s.fonts.MigrateDerivatives()
 	// LoadAndSave (outer) populates the session, then withUserCache adds a
 	// per-request memo so currentUser hits the DB at most once per request.
 	s.sessHandler = sm.LoadAndSave(s.withUserCache(s.withActor(s.withWho(http.HandlerFunc(s.routeAPI)))))
@@ -272,9 +268,9 @@ func New(ctx context.Context, st *store.Store, hub *live.Hub, webRoot string, al
 // per-request user memo.
 type userCacheCtxKey struct{}
 
-// userCache memoizes currentUser for the lifetime of a single request, so a
-// handler that runs several guards (e.g. requirePermission then requireAnyPermission)
-// loads the account from the store once instead of per guard.
+// userCache memoizes currentUser for the lifetime of a single request, so an
+// operation that asks who is signed in more than once
+// loads the account from the store once instead of per call.
 type userCache struct {
 	loaded bool
 	user   *model.User
@@ -303,146 +299,6 @@ func (s *Server) withUserCache(next http.Handler) http.Handler {
 		ctx := context.WithValue(r.Context(), userCacheCtxKey{}, &userCache{})
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
-}
-
-// routes registers all API endpoint handlers on the internal mux.
-// Uses Go 1.22+ method-pattern routing ("GET /api/..." syntax).
-func (s *Server) routes() {
-	// Garapon routes (festival lottery drum; resource-oriented: methods for CRUD,
-	// POST /{id}/{verb} for status). Admin CRUD + close/reopen + per-player drawing
-	// links, plus the tokenized public player view + draw. The "garapon/{token}"
-	// (singular) public paths don't collide with the "garapons" (plural) admin
-	// paths; the literal /close, /reopen, /players sub-paths are matched ahead of
-	// the {id} wildcard by the Go 1.22 mux.
-	s.mux.HandleFunc("GET /api/garapons", s.handleGaraponsList)
-	s.mux.HandleFunc("POST /api/garapons", s.handleGaraponCreate)
-	s.mux.HandleFunc("GET /api/garapons/{id}", s.handleGaraponDetail)
-	s.mux.HandleFunc("PUT /api/garapons/{id}", s.handleGaraponUpdate)
-	s.mux.HandleFunc("DELETE /api/garapons/{id}", s.handleGaraponDelete)
-	s.mux.HandleFunc("POST /api/garapons/{id}/close", s.handleGaraponClose)
-	s.mux.HandleFunc("POST /api/garapons/{id}/reopen", s.handleGaraponReopen)
-	s.mux.HandleFunc("POST /api/garapons/{id}/players", s.handleGaraponPlayerCreate)
-	s.mux.HandleFunc("DELETE /api/garapons/{id}/players/{playerId}", s.handleGaraponPlayerDelete)
-	s.mux.HandleFunc("GET /api/garapon/{token}", s.handleGaraponPublic)
-	s.mux.HandleFunc("POST /api/garapon/{token}/draw", s.handleGaraponDraw)
-
-	// Festival Map (Festival -> Festival Map; resource-oriented: methods for CRUD,
-	// PATCH for the publish status). Admin CRUD of maps (stalls with placements
-	// inline), plus the public read API for PUBLISHED maps only. The literal
-	// /public sub-path is matched ahead of the {id} wildcard by the Go 1.22 mux,
-	// and /public/{id} coexists with it.
-	s.mux.HandleFunc("GET /api/festival-maps", s.handleFestivalMapsList)
-	s.mux.HandleFunc("POST /api/festival-maps", s.handleFestivalMapCreate)
-	s.mux.HandleFunc("GET /api/festival-maps/public", s.handleFestivalMapsPublic)
-	s.mux.HandleFunc("GET /api/festival-maps/public/{id}", s.handleFestivalMapPublic)
-	s.mux.HandleFunc("GET /api/festival-maps/{id}", s.handleFestivalMapDetail)
-	s.mux.HandleFunc("PUT /api/festival-maps/{id}", s.handleFestivalMapUpdate)
-	s.mux.HandleFunc("PATCH /api/festival-maps/{id}", s.handleFestivalMapPatch)
-	s.mux.HandleFunc("DELETE /api/festival-maps/{id}", s.handleFestivalMapDelete)
-	// The festival dashboard's per-participant read (festivaldashboard.go). Its own
-	// prefix, not "festival-maps": adminMutationResource treats every POST under
-	// that one as an admin edit and would broadcast on each page load.
-	s.mux.HandleFunc("POST /api/festival-dashboard/{id}", s.handleFestivalDashboard)
-
-	// Ema Plaques (ema.go). The plural admin prefixes are invalidated by
-	// adminMutationResource; the singular /api/ema/{id}/... submit paths are public
-	// and broadcast their own invalidation.
-	s.mux.HandleFunc("GET /api/ema-boards", s.handleEmaBoardsList)
-	s.mux.HandleFunc("POST /api/ema-boards", s.handleEmaBoardCreate)
-	s.mux.HandleFunc("GET /api/ema-boards/{id}", s.handleEmaBoardDetail)
-	s.mux.HandleFunc("PUT /api/ema-boards/{id}", s.handleEmaBoardUpdate)
-	s.mux.HandleFunc("PATCH /api/ema-boards/{id}", s.handleEmaBoardPatch)
-	s.mux.HandleFunc("DELETE /api/ema-boards/{id}", s.handleEmaBoardDelete)
-	s.mux.HandleFunc("GET /api/ema-boards/{id}/plaques", s.handleEmaPlaquesList)
-	s.mux.HandleFunc("POST /api/ema-boards/{id}/plaques/{plaqueId}/approve", s.handleEmaPlaqueApprove)
-	s.mux.HandleFunc("POST /api/ema-boards/{id}/plaques/{plaqueId}/reject", s.handleEmaPlaqueReject)
-	s.mux.HandleFunc("GET /api/ema-requests", s.handleEmaRequestsList)
-	s.mux.HandleFunc("PATCH /api/ema-requests/{id}", s.handleEmaRequestPatch)
-	s.mux.HandleFunc("POST /api/ema-requests/{id}/post", s.handleEmaRequestPost)
-	s.mux.HandleFunc("POST /api/ema/{id}/plaques", s.handleEmaPlaqueSubmit)
-	s.mux.HandleFunc("POST /api/ema/{id}/requests", s.handleEmaRequestSubmit)
-	s.mux.HandleFunc("GET /api/google-fonts", s.handleGoogleFonts)
-
-	// Stamp Rally (Festival -> Stamp Rally; resource-oriented: methods for CRUD,
-	// POST /{id}/{verb} for status, PATCH for the per-stamp pause toggle). Admin
-	// CRUD of events (stamps + prizes with placements) + close/reopen, tokenized
-	// participant cards, and the event-wide stamp log, plus the tokenized public
-	// card view + password-driven stamp collection. The singular "stamp-card/{token}"
-	// public paths don't collide with the plural "stamp-rallies" admin paths
-	// (mirrors the garapon singular/plural split); the literal /logs, /close,
-	// /reopen, /stamps, /cards sub-paths are matched ahead of the {id} wildcard.
-	s.mux.HandleFunc("GET /api/stamp-rallies", s.handleStampRalliesList)
-	s.mux.HandleFunc("POST /api/stamp-rallies", s.handleStampRallyCreate)
-	s.mux.HandleFunc("GET /api/stamp-rallies/{id}", s.handleStampRallyDetail)
-	s.mux.HandleFunc("PUT /api/stamp-rallies/{id}", s.handleStampRallyUpdate)
-	s.mux.HandleFunc("DELETE /api/stamp-rallies/{id}", s.handleStampRallyDelete)
-	s.mux.HandleFunc("GET /api/stamp-rallies/{id}/logs", s.handleStampRallyLogs)
-	s.mux.HandleFunc("POST /api/stamp-rallies/{id}/close", s.handleStampRallyClose)
-	s.mux.HandleFunc("POST /api/stamp-rallies/{id}/reopen", s.handleStampRallyReopen)
-	s.mux.HandleFunc("PATCH /api/stamp-rallies/{id}/stamps/{stampId}", s.handleStampRallyStampPatch)
-	s.mux.HandleFunc("POST /api/stamp-rallies/{id}/cards", s.handleStampRallyCardCreate)
-	s.mux.HandleFunc("DELETE /api/stamp-rallies/{id}/cards/{cardId}", s.handleStampRallyCardDelete)
-	s.mux.HandleFunc("GET /api/stamp-card/{token}", s.handleStampCardPublic)
-	s.mux.HandleFunc("POST /api/stamp-card/{token}/stamp", s.handleStampCardStamp)
-	// Public self-service sign-up + the "lost my link" lookup (stampsignup.go).
-	// Singular prefixes for the same reason as stamp-card: adminMutationResource
-	// treats the plural "stamp-rallies" segment as an admin mutation, and these
-	// broadcast their own invalidation.
-	s.mux.HandleFunc("GET /api/stamp-signup", s.handleStampSignupList)
-	s.mux.HandleFunc("POST /api/stamp-signup/{id}", s.handleStampSignup)
-	s.mux.HandleFunc("POST /api/stamp-lookup", s.handleStampLookup)
-
-	// The book-club cover upload. The rest of the book clubs and the announcements are
-	// operations in internal/api.
-	s.mux.HandleFunc("POST /api/bookclub/upload", s.handleBookclubUpload)
-
-	// App settings
-
-	// Server log viewer (admin-only): tails the rotating JSON log file, and flips
-	// the runtime log level (live DEBUG toggle).
-
-	// Font management (Atelier -> Font Upload). Font FILES are keyed by filename
-	// ({name}); logical FONTS (groups of variants sharing a base name) are keyed
-	// by base under the literal /families sub-path, which the Go 1.22 mux
-	// matches ahead of the single-segment {name} wildcard. The literal /upload
-	// sub-path likewise precedes {name}.
-	s.mux.HandleFunc("GET /api/fonts", s.handleFontsList)
-	s.mux.HandleFunc("POST /api/fonts/upload", s.handleFontUpload)
-	s.mux.HandleFunc("DELETE /api/fonts/{name}", s.handleFontDelete)
-	s.mux.HandleFunc("PATCH /api/fonts/{name}", s.handleFontRename)
-	s.mux.HandleFunc("PATCH /api/fonts/families/{base}", s.handleFontFamilyPatch)
-	s.mux.HandleFunc("DELETE /api/fonts/families/{base}", s.handleFontFamilyDelete)
-	// Public tokenized font serving (fontserve.go). The fonts.senpan.cafe vhost
-	// reverse-proxies to these ("/" -> /api/fonts/pub/); the SPA loads the same
-	// endpoints same-origin via the /api ProxyPass, so per-font allowlists never
-	// affect the app itself.
-	s.mux.HandleFunc("GET /api/fonts/pub/kit.css", s.handleFontKitCSS)
-	s.mux.HandleFunc("GET /api/fonts/pub/f/{token}", s.handleFontPublicFile)
-
-	// Carrd image hosting (System -> Carrd Upload). Projects are keyed by folder
-	// name (a path param); images/sub-dirs are keyed by folder+path (+name), which
-	// may contain slashes, so those deletes take query params. The literal
-	// /images/dirs sub-path coexists with /images (different method+path pairs).
-	s.mux.HandleFunc("GET /api/carrd/projects", s.handleCarrdProjectsList)
-	s.mux.HandleFunc("POST /api/carrd/projects", s.handleCarrdProjectCreate)
-	s.mux.HandleFunc("PATCH /api/carrd/projects/{folder}", s.handleCarrdProjectRename)
-	s.mux.HandleFunc("DELETE /api/carrd/projects/{folder}", s.handleCarrdProjectDelete)
-	s.mux.HandleFunc("GET /api/carrd/images", s.handleCarrdImagesList)
-	s.mux.HandleFunc("DELETE /api/carrd/images", s.handleCarrdImageDelete)
-	s.mux.HandleFunc("POST /api/carrd/images/dirs", s.handleCarrdDirCreate)
-	s.mux.HandleFunc("DELETE /api/carrd/images/dirs", s.handleCarrdDirDelete)
-	s.mux.HandleFunc("POST /api/carrd/upload", s.handleCarrdUpload)
-
-	// Central image hosting (System -> Images). Categories are keyed by directory
-	// name (a path param); image deletes take dir+name query params. /upload
-	// before the bare path so the more specific pattern wins.
-	s.mux.HandleFunc("GET /api/image-categories", s.handleImageCategoriesList)
-	s.mux.HandleFunc("POST /api/image-categories", s.handleImageCategoryCreate)
-	s.mux.HandleFunc("PATCH /api/image-categories/{dir}", s.handleImageCategoryRename)
-	s.mux.HandleFunc("DELETE /api/image-categories/{dir}", s.handleImageCategoryDelete)
-	s.mux.HandleFunc("GET /api/images", s.handleImagesList)
-	s.mux.HandleFunc("POST /api/images/upload", s.handleImagesUpload)
-	s.mux.HandleFunc("DELETE /api/images", s.handleImageDelete)
 }
 
 // ServeHTTP applies CORS middleware, logs the request, then dispatches to the router.
@@ -537,7 +393,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// A 500 whose client had already gone is not a failure of ours: the handler's
-	// queries were cancelled with the request, and writeInternalError said so at
+	// queries were cancelled with the request, and the operation said so at
 	// debug. The line still records the request, at Info and marked as canceled,
 	// so a dropped phone connection doesn't read as an outage.
 	canceled := rw.status >= 500 && r.Context().Err() != nil
@@ -633,36 +489,6 @@ func (rw *responseWriter) Write(b []byte) (int, error) {
 	return rw.ResponseWriter.Write(b)
 }
 
-// -- JSON helpers ------------------------------------------------------------
-
-// writeJSON serializes v as JSON and writes it with the given status code.
-// Sets Content-Type and Cache-Control: no-store to prevent caching of API responses.
-func writeJSON(w http.ResponseWriter, status int, v any) {
-	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	w.Header().Set("Cache-Control", "no-store")
-	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(v)
-}
-
-// writeError writes a JSON error response: {"error": msg} with the given HTTP status.
-func writeError(w http.ResponseWriter, status int, msg string) {
-	writeJSON(w, status, map[string]string{"error": msg})
-}
-
-// writeInternalError logs the error with context and writes a generic 500 response.
-//
-// A request whose client has gone (see clientGone) logs at Debug instead: there is
-// nobody left to tell, and an ERROR line for every closed tab or dropped phone
-// connection would bury the failures that matter.
-func writeInternalError(w http.ResponseWriter, where string, err error) {
-	if clientGone(err) {
-		slog.Debug("request canceled", "context", where, "error", err)
-	} else {
-		slog.Error("internal server error", "context", where, "error", err)
-	}
-	writeError(w, http.StatusInternalServerError, "Internal server error")
-}
-
 // clientGone reports whether err only says that the work's context was canceled -
 // the request's client went away, or the process is shutting down under a
 // background loop - so a query was refused or stopped part-way. database/sql
@@ -680,55 +506,6 @@ func errorLevel(err error) slog.Level {
 		return slog.LevelDebug
 	}
 	return slog.LevelError
-}
-
-// writeUpstreamError logs a failed outbound Discord post with context and writes the
-// status discord.HTTPStatus gives it, with a body naming the reason: 429 with
-// Retry-After for a rate limit, 503 when Discord can't be reached or didn't answer,
-// 500 when it refused the post. It logs here deliberately: a reverse proxy
-// (Cloudflare) can replace an error's body with its own page, so the log is
-// often the only surviving record of why a post failed. err carries no webhook
-// token (the Sender strips it).
-func writeUpstreamError(w http.ResponseWriter, what string, err error) {
-	writeDiscordFailure(w, what, "Failed to post to Discord: "+err.Error(), err)
-}
-
-// writeDiscordFailure logs a failed Discord post and writes msg with the status
-// discord.HTTPStatus gives err, adding Retry-After to a 429.
-func writeDiscordFailure(w http.ResponseWriter, what, msg string, err error) {
-	status, wait := discord.HTTPStatus(err)
-	level := slog.LevelError
-	if status == http.StatusTooManyRequests || status == http.StatusServiceUnavailable {
-		level = slog.LevelWarn
-	}
-	slog.Log(context.Background(), level, "discord webhook post failed", "context", what, "status", status, "error", err)
-	if status == http.StatusTooManyRequests {
-		w.Header().Set("Retry-After", strconv.Itoa(max(int((wait+time.Second-1)/time.Second), 1)))
-	}
-	writeError(w, status, msg)
-}
-
-// readJSON decodes the request body into a typed struct T using generics.
-// Limits the request body to 1MB to prevent memory abuse; passing w lets
-// MaxBytesReader signal the server to close the connection on an oversized body.
-// Returns the zero value and an error if decoding fails.
-func readJSON[T any](w http.ResponseWriter, r *http.Request) (T, error) {
-	var v T
-	r.Body = http.MaxBytesReader(w, r.Body, 1<<20) // 1MB limit
-	err := json.NewDecoder(r.Body).Decode(&v)
-	return v, err
-}
-
-// pathInt64 parses an int64 path wildcard (e.g. {id}). On a missing/invalid
-// value it writes a 400 "Invalid <label> ID" and returns ok=false; handlers
-// should return immediately. Shared by the resource-oriented (REST) routes.
-func pathInt64(w http.ResponseWriter, r *http.Request, name, label string) (int64, bool) {
-	v, err := strconv.ParseInt(r.PathValue(name), 10, 64)
-	if err != nil {
-		writeError(w, http.StatusBadRequest, "Invalid "+label+" ID")
-		return 0, false
-	}
-	return v, true
 }
 
 // -- Auth helpers ------------------------------------------------------------
@@ -855,19 +632,6 @@ func (s *Server) currentUser(r *http.Request) *model.User {
 	return u
 }
 
-// actorName is the username behind a request, for the "by" attribute on
-// admin-action logs. Reads the per-request cache currentUser already populated for
-// the permission guard, so attributing an action costs no extra store read. Falls
-// back to "unknown" rather than omitting the field, so a log query can filter on
-// `by` without missing lines (an authenticated handler should never hit it - only
-// a public endpoint or an expired session can).
-func (s *Server) actorName(r *http.Request) string {
-	if u := s.currentUser(r); u != nil {
-		return u.Username
-	}
-	return "unknown"
-}
-
 // loadCurrentUser reads the session's user id and loads the active account from
 // the store (uncached). Returns nil when unauthenticated, deleted, or inactive.
 func (s *Server) loadCurrentUser(r *http.Request) *model.User {
@@ -891,45 +655,6 @@ func (s *Server) loadCurrentUser(r *http.Request) *model.User {
 	return u
 }
 
-// requirePermission is the per-page guard: it allows admins (who hold every
-// permission) and non-admin users granted the given page-permission key. It
-// writes a 401 when unauthenticated and a 403 when authenticated but lacking the
-// permission, returning false in both cases.
-func (s *Server) requirePermission(w http.ResponseWriter, r *http.Request, perm string) bool {
-	u := s.currentUser(r)
-	if u == nil {
-		writeError(w, http.StatusUnauthorized, "Unauthorized - login required")
-		return false
-	}
-	if u.IsAdmin || userHasPermission(u, perm) {
-		return true
-	}
-	writeError(w, http.StatusForbidden, "Forbidden - you do not have access to this feature")
-	return false
-}
-
-// requireAnyPermission is requirePermission for a READ that several pages legitimately
-// need. It returns the caller so the handler can narrow what it sends: a page granted
-// access because its editor needs a list is not thereby entitled to that list's
-// secrets. Writes 401/403 and returns nil when the caller holds none of perms.
-func (s *Server) requireAnyPermission(w http.ResponseWriter, r *http.Request, perms ...string) *model.User {
-	u := s.currentUser(r)
-	if u == nil {
-		writeError(w, http.StatusUnauthorized, "Unauthorized - login required")
-		return nil
-	}
-	if u.IsAdmin {
-		return u
-	}
-	for _, p := range perms {
-		if userHasPermission(u, p) {
-			return u
-		}
-	}
-	writeError(w, http.StatusForbidden, "Forbidden - you do not have access to this feature")
-	return nil
-}
-
 // -- Live events ---------------------------------------------------------------
 
 // resourceChanged tells the staff whose pages show resource that it changed, so a
@@ -946,15 +671,26 @@ func (s *Server) resourceChanged(resource string) {
 // every resource-oriented sub-path (/{id}, /{id}/entries/{entryId}, /{id}/{verb},
 // ...) is covered. The public, sign-in and self-service paths and the operations
 // with events of their own (the game, cards, patterns, themes, settings) are
-// absent. The public raffle sign-up (.../enter) is left out here because its
-// operation tells "raffles" itself, and the public entry search (.../lookup)
-// changes nothing. A book club's paths tell that club's resource.
+// absent. The public raffle sign-up (.../enter) and stamp rally sign-up (.../sign-up) are
+// left out here because their operations tell the pages themselves, and the public entry search (.../lookup)
+// changes nothing. A book club's paths tell that club's resource, except a cover upload.
 func adminMutationResource(path string) (string, bool) {
 	rest := strings.TrimPrefix(strings.TrimPrefix(path, "/api/"), "v1/")
 	seg, after, _ := strings.Cut(rest, "/")
 	switch seg {
-	case "garapons", "affiliates", "tea-rooms", "stamp-rallies", "festival-maps", "presets", "users", "winners-log", "fonts",
+	case "garapons", "affiliates", "tea-rooms", "festival-maps", "presets", "users", "winners-log",
 		"ema-boards", "ema-requests":
+		return seg, true
+	case "fonts", "font-files":
+		return "fonts", true
+	case "image-categories":
+		return "images", true
+	case "carrd-projects":
+		return "carrd", true
+	case "stamp-rallies":
+		if strings.HasSuffix(path, "/sign-up") {
+			return "", false
+		}
 		return seg, true
 	case "raffles":
 		if strings.HasSuffix(path, "/enter") || strings.HasSuffix(path, "/lookup") {
@@ -965,14 +701,11 @@ func adminMutationResource(path string) (string, bool) {
 		return "announcements", true
 	case "book-clubs":
 		club, _, _ := strings.Cut(after, "/")
-		if club == "" {
+		// A cover upload changes no reading list.
+		if club == "" || strings.HasSuffix(path, "/covers") {
 			return "", false
 		}
 		return "bookclub-" + club, true
-	case "carrd":
-		return "carrd", true
-	case "images", "image-categories":
-		return "images", true
 	}
 	return "", false
 }
@@ -990,4 +723,17 @@ func accountMutation(path string) bool {
 		return after == "logout"
 	}
 	return false
+}
+
+// siteBaseURL is this site's scheme://host, for the absolute addresses the operations
+// build. It honors X-Forwarded-Proto, since the app runs behind a reverse proxy, and
+// falls back to whether the connection is TLS.
+func (s *Server) siteBaseURL(r *http.Request) string {
+	scheme := "https"
+	if proto := strings.TrimSpace(r.Header.Get("X-Forwarded-Proto")); proto != "" {
+		scheme = proto
+	} else if r.TLS == nil {
+		scheme = "http"
+	}
+	return scheme + "://" + r.Host
 }

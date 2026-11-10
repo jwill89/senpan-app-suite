@@ -119,7 +119,7 @@ if ($run.backend) {
             go test -shuffle=on -covermode=atomic '-coverpkg=./...' "-coverprofile=$coverProfile" ./...
         }
         Invoke-Step "backend: coverage floor" {
-            & ../shared/test/go/Test-CoverageFloor.ps1 -ProfilePath $coverProfile -Floor 77.5 `
+            & ../shared/test/go/Test-CoverageFloor.ps1 -ProfilePath $coverProfile -Floor 83.5 `
                 -Exclude '/internal/db/(db|models)\.go$', '/internal/db/[^/]+\.sql\.go$'
         }
         # Known Go vulnerabilities that reach the code, at the release go.yml runs.

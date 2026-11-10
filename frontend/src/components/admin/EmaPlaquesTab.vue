@@ -22,7 +22,7 @@ import { useUiStore } from '@/stores/ui'
 import { assetUrl } from '@/lib/assets'
 import { formatServerTimestamp } from '@/lib/datetime'
 import { participantLabel } from '@/lib/participant'
-import type { EmaBoard } from '@/types/api'
+import type { EmaBoard } from '@/api/client'
 
 const ema = useEmaStore()
 const ui = useUiStore()
@@ -41,12 +41,12 @@ const STATUS: Record<string, { text: string; badge: string }> = {
 }
 
 const recordColumns: DataColumn[] = [
-  { key: 'character_name', label: 'Character', sortable: true },
-  { key: 'window_label', label: 'Day', sortable: true, facetable: true },
+  { key: 'characterName', label: 'Character', sortable: true },
+  { key: 'windowLabel', label: 'Day', sortable: true, facetable: true },
   { key: 'kind', label: 'Made', sortable: true, facetable: true },
   { key: 'status', label: 'Status', sortable: true, facetable: true },
-  { key: 'reviewed_by', label: 'Reviewed By', sortable: true },
-  { key: 'created_at', label: 'Sent', sortable: true, align: 'right' },
+  { key: 'reviewedBy', label: 'Reviewed By', sortable: true },
+  { key: 'createdAt', label: 'Sent', sortable: true, align: 'right' },
 ]
 
 function when(ts: string): string {
@@ -97,7 +97,7 @@ function copyDashboardLink(): void {
     return
   }
   ui.copyToClipboard(
-    `${window.location.origin}/festival/${ema.selectedBoard.festival_map_id}`,
+    `${window.location.origin}/festival/${ema.selectedBoard.festivalMapId}`,
     'Dashboard link copied',
   )
 }
@@ -112,7 +112,7 @@ function copyDashboardLink(): void {
       <SubPageHeader @back="backToList">
         <font-awesome-icon :icon="['fad', 'torii-gate']" />
         {{ ema.selectedBoard.title || 'Ema Plaques' }}
-        <span class="text-muted text-sm">- {{ ema.selectedBoard.festival_map_name }}</span>
+        <span class="text-muted text-sm">- {{ ema.selectedBoard.festivalMapName }}</span>
       </SubPageHeader>
 
       <div class="flex-toolbar mb-16">
@@ -170,12 +170,12 @@ function copyDashboardLink(): void {
             v-if="p.image"
             :src="assetUrl(p.image)"
             class="ema-review-image"
-            :alt="`${p.character_name}'s plaque`"
+            :alt="`${p.characterName}'s plaque`"
           />
           <p class="m-0">
-            <strong>{{ participantLabel(p.character_name, p.world) }}</strong>
+            <strong>{{ participantLabel(p.characterName, p.world) }}</strong>
           </p>
-          <p class="text-muted text-sm m-0">{{ p.window_label }} - sent {{ when(p.created_at) }}</p>
+          <p class="text-muted text-sm m-0">{{ p.windowLabel }} - sent {{ when(p.createdAt) }}</p>
           <div class="form-actions">
             <button
               type="button"
@@ -210,10 +210,10 @@ function copyDashboardLink(): void {
         :rows="ema.plaques"
         row-key="id"
         :page-size="25"
-        :default-sort="{ key: 'created_at', dir: 'desc' }"
+        :default-sort="{ key: 'createdAt', dir: 'desc' }"
       >
-        <template #cell-character_name="{ row }">
-          {{ participantLabel(row.character_name, row.world) }}
+        <template #cell-characterName="{ row }">
+          {{ participantLabel(row.characterName, row.world) }}
         </template>
         <template #cell-kind="{ row }">
           {{ row.kind === 'site' ? 'On the site' : 'By the artist' }}
@@ -223,8 +223,8 @@ function copyDashboardLink(): void {
             {{ STATUS[row.status]?.text ?? row.status }}
           </span>
         </template>
-        <template #cell-created_at="{ row }">
-          <span class="text-sm">{{ when(row.created_at) }}</span>
+        <template #cell-createdAt="{ row }">
+          <span class="text-sm">{{ when(row.createdAt) }}</span>
         </template>
       </DataTable>
       <EmptyState v-else text="No plaques yet." />
@@ -247,21 +247,21 @@ function copyDashboardLink(): void {
         <ListRow v-for="b in ema.boards" :key="b.id">
           <template #media>
             <img
-              v-if="b.template_image"
-              :src="assetUrl(b.template_image)"
+              v-if="b.templateImage"
+              :src="assetUrl(b.templateImage)"
               class="ema-board-thumb"
               alt=""
             />
           </template>
           <div class="list-row-title">{{ b.title || 'Ema Plaques' }}</div>
           <div class="list-row-meta">
-            {{ b.festival_map_name }}
+            {{ b.festivalMapName }}
             <span v-if="b.status !== 'open'" class="badge badge--muted">closed</span>
-            <span v-if="b.pending_count" class="badge badge--warning">
-              {{ b.pending_count }} to review
+            <span v-if="b.pendingCount" class="badge badge--warning">
+              {{ b.pendingCount }} to review
             </span>
-            <span v-if="b.requested_count" class="badge badge--accent">
-              {{ b.requested_count }} with the artist
+            <span v-if="b.requestedCount" class="badge badge--accent">
+              {{ b.requestedCount }} with the artist
             </span>
           </div>
           <template #actions>

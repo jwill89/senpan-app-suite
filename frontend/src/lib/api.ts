@@ -1,22 +1,18 @@
 /**
- * Typed REST API client.
- *
- * Mirrors the original `app.js` `api()` helper: same base path (`api/...`),
- * cookie credentials, automatic JSON serialization, and error extraction from
- * the `{ "error": "..." }` response body.
+ * What the API client (api/client.ts) leaves to this module: the error every failed
+ * call is reported as, the session-expired callback, and the multipart upload, which
+ * goes through XHR for its progress events.
  */
 
 // Absolute (leading slash) so requests always resolve against the site root.
-// A relative base ('api') would resolve against the current route - e.g. from
-// /admin/cards it would hit /admin/api/... and 404.
-export const API_BASE = '/api'
+export const API_V1_BASE = '/api/v1'
 
 export class ApiError extends Error {
   status: number
   /**
-   * The parsed error response body (our `{ error, ... }` JSON), if any. Lets
-   * callers read extra fields the server included alongside the message - e.g. a
-   * 429's `retry_after` seconds - without a second round-trip.
+   * The parsed problem details body, if any. Lets callers read what the server
+   * included beside the message, such as the `errors` naming each field of a failed
+   * validation.
    */
   body?: unknown
   constructor(message: string, status: number, body?: unknown) {
@@ -25,23 +21,6 @@ export class ApiError extends Error {
     this.status = status
     this.body = body
   }
-}
-
-// Default per-request timeout. A request that hasn't responded by now is aborted
-// so a hung network can't leave a spinner (or the caller's promise) pending
-// forever. Callers that pass their own `signal` opt out of this entirely.
-const DEFAULT_TIMEOUT_MS = 30_000
-
-export interface ApiOptions extends Omit<RequestInit, 'body'> {
-  // Body objects are auto-stringified (unless FormData).
-  body?: unknown
-  // Skip the global 401 -> "session expired" handler for this request. Set on
-  // the auth endpoints themselves (a bad-password login legitimately 401s and
-  // must not trigger a redirect/"session expired" toast).
-  skipAuthRedirect?: boolean
-  // Abort the request after this many ms when the caller doesn't supply its own
-  // `signal`. Defaults to 30s; pass 0 to disable the timeout for this request.
-  timeoutMs?: number
 }
 
 // -- Global 401 handler --------------------------------------------------------
@@ -62,141 +41,37 @@ export function handleUnauthorized(): void {
   onUnauthorized?.()
 }
 
-/**
- * The message an error body carries: a problem details body's `detail` (the routes on
- * huma, and every 404, 405 and 500 under /api), else the hand-registered routes'
- * `{ "error": "..." }`, else null.
- */
+/** The message an error body carries: a problem details body's `detail`, else null. */
 export function errorMessage(data: unknown): string | null {
-  if (!data || typeof data !== 'object') {
-    return null
-  }
-  if ('detail' in data && typeof data.detail === 'string' && data.detail) {
-    return data.detail
-  }
-  if ('error' in data && typeof data.error === 'string') {
-    return data.error
+  if (data && typeof data === 'object' && 'detail' in data && typeof data.detail === 'string') {
+    return data.detail || null
   }
   return null
 }
 
 /**
- * Performs an API request and returns the parsed JSON.
- * @throws {ApiError} with the server's error message if the response is not OK.
+ * The files a failed upload refused, each with the reason: a 422 whose `errors` name
+ * the files (`body.files[i]`, the file's name as `value`). Empty for any other failure.
  */
-export async function api<T = unknown>(endpoint: string, options: ApiOptions = {}): Promise<T> {
-  const url = `${API_BASE}/${endpoint}`
-  const opts: RequestInit = { credentials: 'include', ...options } as RequestInit
-
-  if (
-    options.body !== undefined &&
-    options.body !== null &&
-    typeof options.body === 'object' &&
-    !(options.body instanceof FormData)
-  ) {
-    opts.headers = {
-      'Content-Type': 'application/json',
-      ...(options.headers as Record<string, string> | undefined),
-    }
-    opts.body = JSON.stringify(options.body)
-  } else if (options.body instanceof FormData) {
-    opts.body = options.body
-  } else if (options.body !== undefined) {
-    opts.body = options.body as BodyInit
+export function refusedFiles(e: unknown): { name: string; reason: string }[] {
+  if (!(e instanceof ApiError) || !e.body || typeof e.body !== 'object' || !('errors' in e.body)) {
+    return []
   }
-
-  // Abort/timeout: honor a caller-supplied `signal` as-is (they own its
-  // lifetime); otherwise install a default timeout so a hung request can't wait
-  // forever. The timer is always cleared in the finally, and an abort is surfaced
-  // as a clean error rather than a raw AbortError.
-  let timeoutId: ReturnType<typeof setTimeout> | undefined
-  if (!options.signal) {
-    const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS
-    if (timeoutMs > 0) {
-      const controller = new AbortController()
-      opts.signal = controller.signal
-      timeoutId = setTimeout(() => controller.abort(), timeoutMs)
+  const errors = Array.isArray(e.body.errors) ? (e.body.errors as unknown[]) : []
+  const out: { name: string; reason: string }[] = []
+  for (const err of errors) {
+    if (!err || typeof err !== 'object') {
+      continue
+    }
+    const { location, message, value } = err as Record<string, unknown>
+    if (typeof location === 'string' && location.startsWith('body.files[')) {
+      out.push({
+        name: typeof value === 'string' ? value : location,
+        reason: typeof message === 'string' ? message : 'Refused',
+      })
     }
   }
-
-  let res: Response
-  try {
-    res = await fetch(url, opts)
-  } catch (e) {
-    if ((e instanceof DOMException || e instanceof Error) && e.name === 'AbortError') {
-      // A caller-supplied signal means the caller cancelled; otherwise our own
-      // default timeout fired.
-      const msg = options.signal ? 'Request cancelled' : 'Request timed out. Please try again.'
-      throw new ApiError(msg, 0)
-    }
-    throw e
-  } finally {
-    if (timeoutId !== undefined) {
-      clearTimeout(timeoutId)
-    }
-  }
-
-  let data: unknown
-  try {
-    data = await res.json()
-  } catch {
-    data = null
-  }
-
-  if (!res.ok) {
-    // A 401 means the admin session is missing/expired. Surface it once,
-    // centrally, unless the caller opted out (the auth endpoints handle their
-    // own 401s - e.g. an invalid password).
-    if (res.status === 401 && !options.skipAuthRedirect) {
-      onUnauthorized?.()
-    }
-    // Prefer the server's own message (errorMessage). When the body isn't our JSON
-    // (an empty/HTML gateway error from Cloudflare/Apache, e.g. a 502 when the
-    // origin is unreachable), fall back to a message that still names the HTTP
-    // status so the failure is distinguishable from a generic one.
-    const serverMsg = errorMessage(data)
-    const msg = serverMsg || (res.status ? `Request failed (HTTP ${res.status})` : 'Request failed')
-    throw new ApiError(msg, res.status, data)
-  }
-
-  return data as T
-}
-
-// Convenience helpers ---------------------------------------------------------
-
-export function apiGet<T = unknown>(endpoint: string, options: ApiOptions = {}): Promise<T> {
-  return api<T>(endpoint, options)
-}
-
-export function apiPost<T = unknown>(
-  endpoint: string,
-  body: unknown,
-  options: ApiOptions = {},
-): Promise<T> {
-  return api<T>(endpoint, { method: 'POST', body, ...options })
-}
-
-/** PUT - full replace of the resource at `endpoint` (idempotent). */
-export function apiPut<T = unknown>(
-  endpoint: string,
-  body: unknown,
-  options: ApiOptions = {},
-): Promise<T> {
-  return api<T>(endpoint, { method: 'PUT', body, ...options })
-}
-
-/** PATCH - partial/field update of the resource at `endpoint`. */
-export function apiPatch<T = unknown>(
-  endpoint: string,
-  body: unknown,
-  options: ApiOptions = {},
-): Promise<T> {
-  return api<T>(endpoint, { method: 'PATCH', body, ...options })
-}
-
-/** DELETE - remove the resource at `endpoint` (idempotent; no body). */
-export function apiDelete<T = unknown>(endpoint: string, options: ApiOptions = {}): Promise<T> {
-  return api<T>(endpoint, { method: 'DELETE', ...options })
+  return out
 }
 
 // -- File uploads --------------------------------------------------------------
@@ -208,26 +83,26 @@ export interface UploadOptions {
   onProgress?: (percent: number) => void
   // Cancels the in-flight upload (e.g. the user navigated away).
   signal?: AbortSignal
-  // Skip the global 401 -> "session expired" handler (parity with ApiOptions).
+  // Skip the global 401 -> "session expired" handler.
   skipAuthRedirect?: boolean
 }
 
 /**
  * Uploads a multipart form via XMLHttpRequest and returns the parsed JSON.
  *
- * Uploads go through XHR rather than the fetch-based `api()` for two reasons that
+ * Uploads go through XHR rather than the API client's fetch for two reasons that
  * matter for large files:
  *   1. No client-side timeout. A big image (up to the server's 64 MB cap) over a
- *      slow uplink can legitimately take minutes; api()'s 30s default would abort
- *      it mid-transfer with a bogus "timed out" error. Here `xhr.timeout` stays 0
+ *      slow uplink can legitimately take minutes; a fetch timeout would abort it
+ *      mid-transfer with a bogus "timed out" error. Here `xhr.timeout` stays 0
  *      - the transfer takes as long as it takes, and only the network or the user
  *      can end it.
  *   2. Upload progress. fetch exposes no upload-progress events; XHR does (via
  *      `upload.onprogress`), so the UI can show a real percentage instead of an
  *      indeterminate spinner that looks hung on a long upload.
  *
- * Credentials, error extraction, and the global 401 handler mirror `api()` so
- * callers get the same {@link ApiError} contract.
+ * Credentials, error extraction, and the global 401 handler match the API client's
+ * (api/client.ts), so callers get the same {@link ApiError} contract.
  * @throws {ApiError} with the server's error message if the response is not OK.
  */
 export function apiUpload<T = unknown>(
@@ -237,7 +112,7 @@ export function apiUpload<T = unknown>(
 ): Promise<T> {
   return new Promise<T>((resolve, reject) => {
     const xhr = new XMLHttpRequest()
-    xhr.open('POST', `${API_BASE}/${endpoint}`)
+    xhr.open('POST', `${API_V1_BASE}/${endpoint}`)
     xhr.withCredentials = true // send the admin session cookie, like fetch's credentials:'include'
     xhr.timeout = 0 // never abort on our side; large uploads can take minutes
 

@@ -1,18 +1,13 @@
 package server
 
 import (
-	"bytes"
 	"context"
 	"database/sql"
 	"database/sql/driver"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
-	"net/http"
-	"net/http/httptest"
 	"path/filepath"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -64,51 +59,28 @@ func interruptedQueryErr(t *testing.T) error {
 	return err
 }
 
-// TestWriteInternalErrorCanceledLogsAtDebug pins how a failed request is logged.
-// A query refused or stopped because the request's context was canceled means the
-// client went away: that is logged at Debug, since there is nobody to tell and an
-// ERROR line per closed tab would bury real failures. Everything else still logs at
-// Error. The response is the same 500 either way.
-func TestWriteInternalErrorCanceledLogsAtDebug(t *testing.T) {
-	var buf bytes.Buffer
-	prev := slog.Default()
-	slog.SetDefault(slog.New(slog.NewJSONHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug})))
-	t.Cleanup(func() { slog.SetDefault(prev) })
-
+// TestErrorLevelCanceledIsDebug pins how a failure is logged. A query refused or
+// stopped because the work's context was canceled means the client went away (or the
+// process is shutting down): that is Debug, since there is nobody to tell and an
+// ERROR line per closed tab would bury real failures. Everything else is Error.
+func TestErrorLevelCanceledIsDebug(t *testing.T) {
 	cases := []struct {
-		name  string
-		err   error
-		level string
+		name string
+		err  error
+		want slog.Level
 	}{
-		{"refused before it ran", context.Canceled, "DEBUG"},
-		{"wrapped on the way up", fmt.Errorf("list cards: %w", context.Canceled), "DEBUG"},
+		{"refused before it ran", context.Canceled, slog.LevelDebug},
+		{"wrapped on the way up", fmt.Errorf("list cards: %w", context.Canceled), slog.LevelDebug},
 		// What a client disconnecting mid-query usually produces: the driver
 		// interrupting the query part-way, whatever error it reports that with.
-		{"interrupted mid-query", interruptedQueryErr(t), "DEBUG"},
-		{"a real failure", errors.New("disk I/O error"), "ERROR"},
-		{"a deadline is not a departed client", context.DeadlineExceeded, "ERROR"},
+		{"interrupted mid-query", interruptedQueryErr(t), slog.LevelDebug},
+		{"a real failure", errors.New("disk I/O error"), slog.LevelError},
+		{"a deadline is not a departed client", context.DeadlineExceeded, slog.LevelError},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			buf.Reset()
-			rec := httptest.NewRecorder()
-			writeInternalError(rec, "list cards", c.err)
-
-			if rec.Code != http.StatusInternalServerError {
-				t.Errorf("status = %d, want 500", rec.Code)
-			}
-			if body := rec.Body.String(); !strings.Contains(body, `"error":"Internal server error"`) {
-				t.Errorf("body = %s, want the generic internal error", body)
-			}
-			var line map[string]any
-			if err := json.Unmarshal(buf.Bytes(), &line); err != nil {
-				t.Fatalf("want exactly one JSON log line, got %q: %v", buf.String(), err)
-			}
-			if line["level"] != c.level {
-				t.Errorf("level = %v, want %s (line: %s)", line["level"], c.level, buf.String())
-			}
-			if line["context"] != "list cards" {
-				t.Errorf("context = %v, want the call site's label", line["context"])
+			if got := errorLevel(c.err); got != c.want {
+				t.Errorf("errorLevel = %v, want %v", got, c.want)
 			}
 		})
 	}

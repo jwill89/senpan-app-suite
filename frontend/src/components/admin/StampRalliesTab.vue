@@ -30,7 +30,7 @@ import { useStampRalliesStore } from '@/stores/stampRallies'
 import { assetUrl } from '@/lib/assets'
 import { formatServerTimestamp } from '@/lib/datetime'
 import { stallName, stampTypeShort } from '@/lib/stampcard'
-import type { StampRally, StampRallyLogEntry } from '@/types/api'
+import type { StampRally, StampRallyLogEntry } from '@/api/client'
 
 const store = useStampRalliesStore()
 
@@ -49,9 +49,9 @@ const filteredOpen = computed(() => {
 
 const closedColumns: DataColumn[] = [
   { key: 'title', label: 'Title', sortable: true },
-  { key: 'card_count', label: 'Cards', align: 'right', sortable: true },
-  { key: 'completed_count', label: 'Complete', align: 'right', sortable: true },
-  { key: 'created_at', label: 'Created', sortable: true },
+  { key: 'cardCount', label: 'Cards', align: 'right', sortable: true },
+  { key: 'completedCount', label: 'Complete', align: 'right', sortable: true },
+  { key: 'createdAt', label: 'Created', sortable: true },
   { key: 'actions', label: '', align: 'right' },
 ]
 const closedSearch = ref('')
@@ -65,12 +65,12 @@ const completionText = computed(() => {
   if (!r) {
     return ''
   }
-  if (r.completion_mode !== 'counts') {
+  if (r.completionMode !== 'counts') {
     return 'A card completes when every stamp is collected.'
   }
-  return `A card completes at ${r.required_food} food stamp${
-    r.required_food === 1 ? '' : 's'
-  } and ${r.required_game} game stamp${r.required_game === 1 ? '' : 's'}.`
+  return `A card completes at ${r.requiredFood} food stamp${
+    r.requiredFood === 1 ? '' : 's'
+  } and ${r.requiredGame} game stamp${r.requiredGame === 1 ? '' : 's'}.`
 })
 
 const isClosed = computed(() => store.selectedRally?.status === 'closed')
@@ -98,14 +98,14 @@ const previewItems = computed<CanvasItem[]>(() => {
   if (!r) {
     return []
   }
-  const stamps = (r.stamps ?? []).map((s) => ({
+  const stamps = r.stamps.map((s) => ({
     key: `s${s.id}`,
-    image: s.image || r.not_stamped_image,
+    image: s.image || r.notStampedImage,
     placement: s.placement,
   }))
-  const prizes = (r.prizes ?? []).map((p) => ({
+  const prizes = r.prizes.map((p) => ({
     key: `p${p.id}`,
-    image: p.image || r.not_stamped_image,
+    image: p.image || r.notStampedImage,
     placement: p.placement,
   }))
   return [...stamps, ...prizes]
@@ -113,18 +113,18 @@ const previewItems = computed<CanvasItem[]>(() => {
 
 // -- View Logs table (sortable, grouped by participant) -----------------------
 const logColumns: DataColumn[] = [
-  { key: 'participant_name', label: 'Participant', sortable: true },
-  { key: 'stall_name', label: 'Stall / Vendor', sortable: true },
-  { key: 'stamp_type', label: 'Type', sortable: true },
-  { key: 'stamped_at', label: 'When', sortable: true, align: 'right' },
+  { key: 'participantName', label: 'Participant', sortable: true },
+  { key: 'stallName', label: 'Stall / Vendor', sortable: true },
+  { key: 'stampType', label: 'Type', sortable: true },
+  { key: 'stampedAt', label: 'When', sortable: true, align: 'right' },
 ]
 // The table keeps each participant's rows together via `group-by`, which is a
 // primary sort key - so a column sort still orders rows WITHIN a participant.
 const logSearch = ref('')
 const logMatches = (e: StampRallyLogEntry, q: string): boolean =>
-  e.participant_name.toLowerCase().includes(q) ||
-  e.stall_name.toLowerCase().includes(q) ||
-  stampTypeShort(e.stamp_type).toLowerCase().includes(q)
+  e.participantName.toLowerCase().includes(q) ||
+  e.stallName.toLowerCase().includes(q) ||
+  stampTypeShort(e.stampType).toLowerCase().includes(q)
 
 const logView = ref<DataTableView>({ total: 0, totalPages: 1, facets: {} })
 const logTableRef = useTemplateRef<{ exportCsv: (name?: string) => void }>('logTableRef')
@@ -133,7 +133,7 @@ function resetLogs(): void {
   logSearch.value = ''
 }
 
-function when(ts: string): string {
+function when(ts: string | null): string {
   return ts ? formatServerTimestamp(ts) : '-'
 }
 
@@ -283,7 +283,7 @@ async function deleteSelected(): Promise<void> {
       <template v-else>
         <!-- Read-only card preview -->
         <div class="rally-preview mb-16">
-          <StampCardCanvas :card-image="store.selectedRally.card_image" :items="previewItems" />
+          <StampCardCanvas :card-image="store.selectedRally.cardImage" :items="previewItems" />
         </div>
 
         <!-- Stamps -->
@@ -308,9 +308,9 @@ async function deleteSelected(): Promise<void> {
             </thead>
             <tbody>
               <tr v-for="s in store.selectedRally.stamps" :key="s.id">
-                <td>{{ stallName(s.stall_name, s.affiliate_name) }}</td>
+                <td>{{ stallName(s.stallName, s.affiliateName) }}</td>
                 <td>
-                  <span class="badge badge--muted">{{ stampTypeShort(s.stamp_type) }}</span>
+                  <span class="badge badge--muted">{{ stampTypeShort(s.stampType) }}</span>
                 </td>
                 <td>
                   <code>{{ s.password || '-' }}</code>
@@ -395,8 +395,8 @@ async function deleteSelected(): Promise<void> {
           </thead>
           <tbody>
             <tr v-for="c in store.rallyCards" :key="c.id">
-              <td>{{ c.participant_name }}</td>
-              <td class="ta-center">{{ c.collected_count || 0 }}</td>
+              <td>{{ c.participantName }}</td>
+              <td class="ta-center">{{ c.collectedCount || 0 }}</td>
               <td class="ta-center">
                 <span v-if="c.completed" class="status-badge status-badge-open">complete</span>
                 <span v-else class="text-muted text-sm">in progress</span>
@@ -415,14 +415,14 @@ async function deleteSelected(): Promise<void> {
                   <button
                     type="button"
                     class="btn-danger btn-sm"
-                    :disabled="(c.collected_count || 0) > 0 && !isClosed"
+                    :disabled="(c.collectedCount || 0) > 0 && !isClosed"
                     :aria-label="
-                      (c.collected_count || 0) > 0 && !isClosed
+                      (c.collectedCount || 0) > 0 && !isClosed
                         ? 'Cannot delete - card has stamps (rally is open)'
                         : 'Delete card'
                     "
                     :title="
-                      (c.collected_count || 0) > 0 && !isClosed
+                      (c.collectedCount || 0) > 0 && !isClosed
                         ? 'This card has stamps - close the rally to delete it (its log is kept)'
                         : 'Delete card'
                     "
@@ -471,21 +471,21 @@ async function deleteSelected(): Promise<void> {
           ref="logTableRef"
           :columns="logColumns"
           :rows="store.rallyLogs"
-          :row-key="(row: StampRallyLogEntry) => `${row.card_id}-${row.stamp_id}`"
+          :row-key="(row: StampRallyLogEntry) => `${row.cardId}-${row.stampId}`"
           :filter="logSearch"
           :filter-fn="logMatches"
-          group-by="participant_name"
+          group-by="participantName"
           resizable
           @update:view="logView = $event"
         >
-          <template #cell-stamp_type="{ row }">
+          <template #cell-stampType="{ row }">
             <span class="badge badge--muted">{{
-              stampTypeShort((row as StampRallyLogEntry).stamp_type)
+              stampTypeShort((row as StampRallyLogEntry).stampType)
             }}</span>
           </template>
-          <template #cell-stamped_at="{ row }">
+          <template #cell-stampedAt="{ row }">
             <span class="text-sm text-muted">{{
-              when((row as StampRallyLogEntry).stamped_at)
+              when((row as StampRallyLogEntry).stampedAt)
             }}</span>
           </template>
           <template #empty><EmptyState text="No stamps match your search." /></template>
@@ -533,29 +533,29 @@ async function deleteSelected(): Promise<void> {
               @keydown.space.prevent="openRally(r)"
             >
               <img
-                v-if="r.card_image"
-                :src="assetUrl(r.card_image)"
+                v-if="r.cardImage"
+                :src="assetUrl(r.cardImage)"
                 class="media-card-image"
                 alt="Stamp card"
               />
               <div class="media-card-body">
                 <h3>{{ r.title }}</h3>
                 <p class="text-muted text-sm">
-                  {{ r.card_count || 0 }} card{{ r.card_count === 1 ? '' : 's' }} -
-                  {{ r.completed_count || 0 }} complete
+                  {{ r.cardCount || 0 }} card{{ r.cardCount === 1 ? '' : 's' }} -
+                  {{ r.completedCount || 0 }} complete
                 </p>
-                <p v-if="(r.stamp_count || 0) > 0" class="text-muted text-sm">
+                <p v-if="(r.stampCount || 0) > 0" class="text-muted text-sm">
                   <font-awesome-icon :icon="['fad', 'stamp']" />
                   <strong
-                    :class="{ 'has-paused': (r.active_stamp_count ?? 0) < (r.stamp_count || 0) }"
+                    :class="{ 'has-paused': (r.activeStampCount ?? 0) < (r.stampCount || 0) }"
                   >
-                    {{ r.active_stamp_count ?? 0 }}/{{ r.stamp_count }}
+                    {{ r.activeStampCount ?? 0 }}/{{ r.stampCount }}
                   </strong>
-                  stall{{ r.stamp_count === 1 ? '' : 's' }} active
+                  stall{{ r.stampCount === 1 ? '' : 's' }} active
                 </p>
                 <div class="rally-card-actions">
                   <button
-                    v-if="(r.stamp_count || 0) > 0"
+                    v-if="(r.stampCount || 0) > 0"
                     type="button"
                     class="btn-neutral btn-sm"
                     :aria-expanded="expandedCard === r.id"
@@ -588,7 +588,7 @@ async function deleteSelected(): Promise<void> {
                   <template v-else-if="store.cardStamps[r.id]?.length">
                     <div v-for="s in store.cardStamps[r.id]" :key="s.id" class="stall-row">
                       <span class="stall-row-name">{{
-                        stallName(s.stall_name, s.affiliate_name)
+                        stallName(s.stallName, s.affiliateName)
                       }}</span>
                       <span
                         :class="[
@@ -646,14 +646,12 @@ async function deleteSelected(): Promise<void> {
             :page-size="10"
             @update:view="closedView = $event"
           >
-            <template #cell-card_count="{ row }">{{
-              (row as StampRally).card_count || 0
+            <template #cell-cardCount="{ row }">{{ (row as StampRally).cardCount || 0 }}</template>
+            <template #cell-completedCount="{ row }">{{
+              (row as StampRally).completedCount || 0
             }}</template>
-            <template #cell-completed_count="{ row }">{{
-              (row as StampRally).completed_count || 0
-            }}</template>
-            <template #cell-created_at="{ row }">
-              <span class="text-sm">{{ when((row as StampRally).created_at) }}</span>
+            <template #cell-createdAt="{ row }">
+              <span class="text-sm">{{ when((row as StampRally).createdAt) }}</span>
             </template>
             <template #cell-actions="{ row }">
               <div class="row-actions">

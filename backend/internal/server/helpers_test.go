@@ -3,7 +3,6 @@ package server_test
 import (
 	"testing"
 
-	"app-suite/internal/model"
 	"app-suite/internal/server"
 )
 
@@ -16,8 +15,16 @@ import (
 // raffle-enter and garapon-draw handlers tell their page themselves.
 func TestAdminMutationResource(t *testing.T) {
 	mapped := map[string]string{
-		"/api/garapons":                                 "garapons",
-		"/api/garapons/5/players":                       "garapons",
+		"/api/v1/garapons":                              "garapons",
+		"/api/v1/garapons/5/players":                    "garapons",
+		"/api/v1/stamp-rallies":                         "stamp-rallies",
+		"/api/v1/stamp-rallies/5/cards/2":               "stamp-rallies",
+		"/api/v1/festival-maps":                         "festival-maps",
+		"/api/v1/festival-maps/5":                       "festival-maps",
+		"/api/v1/ema-boards/4/plaques/9/approve":        "ema-boards",
+		"/api/v1/ema-boards/4/close":                    "ema-boards",
+		"/api/v1/ema-requests/3/post":                   "ema-requests",
+		"/api/v1/ema-requests/3/complete":               "ema-requests",
 		"/api/v1/raffles":                               "raffles",
 		"/api/v1/raffles/9/entries":                     "raffles",
 		"/api/v1/raffles/9/entries/4/settle":            "raffles",
@@ -37,12 +44,14 @@ func TestAdminMutationResource(t *testing.T) {
 		"/api/v1/book-clubs/yuri/reading-lists/3/items": "bookclub-yuri",
 		"/api/v1/book-clubs/yuri/webhook":               "bookclub-yuri",
 		"/api/v1/winners-log/all":                       "winners-log",
-		"/api/fonts":                                    "fonts",
-		"/api/fonts/upload":                             "fonts",
-		"/api/carrd/projects":                           "carrd",
-		"/api/images":                                   "images",
-		"/api/images/upload":                            "images",
-		"/api/image-categories":                         "images",
+		"/api/v1/fonts":                                 "fonts",
+		"/api/v1/fonts/jasper":                          "fonts",
+		"/api/v1/font-files/jasper.ttf":                 "fonts",
+		"/api/v1/carrd-projects":                        "carrd",
+		"/api/v1/carrd-projects/obon/files":             "carrd",
+		"/api/v1/image-categories":                      "images",
+		"/api/v1/image-categories/raffles/images":       "images",
+		"/api/v1/image-categories/raffles/images/a.png": "images",
 	}
 	for path, want := range mapped {
 		got, ok := server.AdminMutationResourceForTest(path)
@@ -52,20 +61,28 @@ func TestAdminMutationResource(t *testing.T) {
 	}
 
 	excluded := []string{
-		"/api/garapon/abc123/draw", // public draw - its handler tells garapons
-		"/api/v1/raffles/9/enter",  // public sign-up - its operation tells raffles
-		"/api/v1/raffles/9/lookup", // public search - changes nothing
-		"/api/garapon/abc123",      // public token view
-		"/api/v1/auth/login",       // signing in
-		"/api/v1/me/token",         // self-service
-		"/api/v1/game/end",         // the game's own events
-		"/api/v1/cards/all",        // cards_changed
-		"/api/styles",              // theme_changed
-		"/api/v1/styles/3",         // theme_changed
-		"/api/v1/settings",         // settings_changed
-		"/api/v1/patterns/2/move",  // patterns_changed
+		"/api/v1/garapon-players/abc123/draw", // public draw - its operation tells garapons
+		"/api/v1/garapon-players/abc123",      // public token view
+		"/api/v1/stamp-cards/abc123/stamp",    // public stamp - its operation tells stamp-rallies
+		"/api/v1/stamp-cards/lookup",          // public lookup - changes nothing
+		"/api/v1/stamp-rallies/5/sign-up",     // public sign-up - its operation tells its pages
+		"/api/v1/festivals/7/dashboard",       // a public read, though a POST
+		"/api/v1/festivals/7/ema-plaques",     // public - its operation tells ema-boards
+		"/api/v1/festivals/7/ema-requests",    // public - its operation tells ema-requests
+		"/api/v1/raffles/9/enter",             // public sign-up - its operation tells raffles
+		"/api/v1/raffles/9/lookup",            // public search - changes nothing
+		"/api/v1/auth/login",                  // signing in
+		"/api/v1/me/token",                    // self-service
+		"/api/v1/game/end",                    // the game's own events
+		"/api/v1/cards/all",                   // cards_changed
+		"/api/styles",                         // theme_changed
+		"/api/v1/styles/3",                    // theme_changed
+		"/api/v1/settings",                    // settings_changed
+		"/api/v1/patterns/2/move",             // patterns_changed
 		"/api/v1/pattern-categories",
 		"/api/v1/book-clubs",
+		"/api/v1/book-clubs/yaoi/covers", // an upload changes no reading list
+
 		"/api/unknown",
 	}
 	for _, path := range excluded {
@@ -91,82 +108,4 @@ func TestAccountMutation(t *testing.T) {
 			t.Errorf("accountMutation(%q) = %v; want %v", path, got, want)
 		}
 	}
-}
-
-// -- safeFontName -------------------------------------------------------------
-
-func TestSafeFontName(t *testing.T) {
-	valid := map[string]string{
-		"Roboto.ttf":      "Roboto.ttf",
-		"  spaced.otf  ":  "spaced.otf",
-		"font.WOFF2":      "font.WOFF2",  // extension check is case-insensitive
-		"a/b/nested.woff": "nested.woff", // directory components stripped to base
-	}
-	for in, want := range valid {
-		got, ok := server.SafeFontNameForTest(in)
-		if !ok || got != want {
-			t.Errorf("safeFontName(%q) = (%q, %v); want (%q, true)", in, got, ok, want)
-		}
-	}
-
-	invalid := []string{
-		"",             // empty
-		"   ",          // blank
-		"..",           // dotdot
-		"noext",        // no extension
-		"evil.exe",     // disallowed extension
-		"shell.ttf.sh", // disallowed final extension
-	}
-	for _, in := range invalid {
-		if got, ok := server.SafeFontNameForTest(in); ok {
-			t.Errorf("safeFontName(%q) = (%q, true); want ok=false", in, got)
-		}
-	}
-}
-
-// -- sanitizeGaraponPrizes ----------------------------------------------------
-
-func TestSanitizeGaraponPrizes(t *testing.T) {
-	t.Run("drops blanks, defaults color, floors negative rate", func(t *testing.T) {
-		out, msg := server.SanitizeGaraponPrizesForTest([]model.GaraponPrize{
-			{Name: "  ", Rate: 5},                    // blank -> dropped
-			{Name: "Grand", Rate: -3, IsGrand: true}, // negative rate -> 0
-			{Name: "Other", BallColor: "", Rate: 2},  // empty color -> default
-		})
-		if msg != "" {
-			t.Fatalf("unexpected error msg: %q", msg)
-		}
-		if len(out) != 2 {
-			t.Fatalf("len(out) = %d; want 2", len(out))
-		}
-		if out[0].Rate != 0 {
-			t.Errorf("negative rate not floored: %v", out[0].Rate)
-		}
-		if out[1].BallColor == "" {
-			t.Error("empty ball color was not defaulted")
-		}
-	})
-
-	t.Run("auto-promotes the first prize when none is grand", func(t *testing.T) {
-		out, msg := server.SanitizeGaraponPrizesForTest([]model.GaraponPrize{
-			{Name: "A", Rate: 1}, {Name: "B", Rate: 1},
-		})
-		if msg != "" {
-			t.Fatalf("unexpected msg: %q", msg)
-		}
-		if !out[0].IsGrand {
-			t.Error("first prize should be auto-promoted to grand")
-		}
-	})
-
-	t.Run("rejects empty and multi-grand", func(t *testing.T) {
-		if _, msg := server.SanitizeGaraponPrizesForTest(nil); msg == "" {
-			t.Error("expected error for no usable prizes")
-		}
-		if _, msg := server.SanitizeGaraponPrizesForTest([]model.GaraponPrize{
-			{Name: "A", IsGrand: true}, {Name: "B", IsGrand: true},
-		}); msg == "" {
-			t.Error("expected error for multiple grand prizes")
-		}
-	})
 }

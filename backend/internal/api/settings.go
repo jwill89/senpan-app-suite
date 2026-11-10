@@ -206,10 +206,15 @@ func TeaRoomOriginAllowed(ctx context.Context, st *store.Store, origin string) b
 
 func (h handlers) uploadedFonts(ctx context.Context) []UploadedFont {
 	list := []UploadedFont{}
-	if h.UploadedFonts == nil {
+	if h.Fonts == nil {
 		return list
 	}
-	for _, f := range h.UploadedFonts(ctx) {
+	refs, err := h.Fonts.Refs(ctx)
+	if err != nil {
+		h.Logger.Warn("list the uploaded fonts", "error", err)
+		return list
+	}
+	for _, f := range refs {
 		list = append(list, UploadedFont{Name: f.Name, Family: f.Family, Token: f.Token})
 	}
 	return list

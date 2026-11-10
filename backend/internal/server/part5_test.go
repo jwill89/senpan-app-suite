@@ -8,32 +8,6 @@ import (
 	"testing"
 )
 
-// TestStampPasswordGuessingIsRateLimited pins the throttle on the public stamp
-// collect endpoint. Stamp passwords are short words staff read out at a stall, so
-// an unthrottled endpoint let a script collect a whole card without visiting
-// anything. Only a MISS costs budget.
-func TestStampPasswordGuessingIsRateLimited(t *testing.T) {
-	env := newTestEnv(t)
-	env.loginAdmin(t)
-
-	rallyID := env.createRally(t, "Guess Rally", false)
-	token := env.issueCard(t, rallyID, "Tataru")
-
-	limited := false
-	for i := range 25 {
-		resp := env.postJSON(t, "/api/stamp-card/"+token+"/stamp",
-			map[string]any{"password": fmt.Sprintf("guess%d", i)})
-		resp.Body.Close()
-		if resp.StatusCode == http.StatusTooManyRequests {
-			limited = true
-			break
-		}
-	}
-	if !limited {
-		t.Error("stamp password guessing was never throttled; the endpoint is a password oracle")
-	}
-}
-
 // TestFestivalMapPatchRejectsUnknownStatus pins the validation that replaced a
 // silent coercion. NormalizeMapStatus falls back to in_progress for anything it
 // does not recognize, which is right when reading a stored row and wrong on a
@@ -50,9 +24,9 @@ func TestFestivalMapPatchRejectsUnknownStatus(t *testing.T) {
 		{},                     // no status at all
 		{"status": ""},
 	} {
-		resp := env.patchJSON(t, fmt.Sprintf("/api/festival-maps/%d", id), body)
-		if resp.StatusCode != http.StatusBadRequest {
-			t.Errorf("PATCH %v status = %d; want 400", body, resp.StatusCode)
+		resp := env.patchJSON(t, fmt.Sprintf("/api/v1/festival-maps/%d", id), body)
+		if resp.StatusCode != http.StatusUnprocessableEntity {
+			t.Errorf("PATCH %v status = %d; want 422", body, resp.StatusCode)
 		}
 		resp.Body.Close()
 	}
@@ -104,19 +78,19 @@ func TestBoardStreamRequiresARealCard(t *testing.T) {
 	}
 }
 
-// TestImagePickerReachableByMapAndTeaRoomGrantees pins the permission list behind
+// TestImagePickerReachableByMapTeaRoomAndEmaGrantees pins the permission list behind
 // the shared image picker. Both the Festival Map and Tea Room editors embed it, but
 // neither permission was listed - so a grantee of either page got a 403 from the
 // picker their own form depends on and could not finish the task the permission
 // exists for.
-func TestImagePickerReachableByMapAndTeaRoomGrantees(t *testing.T) {
-	for _, perm := range []string{"festival-map", "teahouse-tea-rooms"} {
+func TestImagePickerReachableByMapTeaRoomAndEmaGrantees(t *testing.T) {
+	for _, perm := range []string{"festival-map", "teahouse-tea-rooms", "festival-ema"} {
 		t.Run(perm, func(t *testing.T) {
 			env := newTestEnv(t)
 			c := makeActiveUser(t, env, "staff-"+perm, "correct horse battery", []string{perm})
 			// The permission gate is what is under test, so assert it is not the
-			// thing refusing: an unknown-category 400 still means the guard passed.
-			resp := getAs(t, c, env, "/api/images?dir=announcements")
+			// thing refusing: an unknown-category 404 still means the guard passed.
+			resp := getAs(t, c, env, "/api/v1/image-categories/announcements/images")
 			defer resp.Body.Close()
 			if resp.StatusCode == http.StatusForbidden || resp.StatusCode == http.StatusUnauthorized {
 				t.Errorf("image list for a %s grantee = %d; the picker their own editor embeds is refusing them",

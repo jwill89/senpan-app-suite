@@ -28,7 +28,7 @@ import {
   stallStyle,
   viewportAspect,
 } from '@/lib/festivalmap'
-import type { EventTime, PublicFestivalStall, PublicStallOccupant } from '@/types/api'
+import type { EventTime, PublicFestivalStall, PublicStallOccupant } from '@/api/client'
 
 const props = withDefaults(
   defineProps<{
@@ -409,7 +409,7 @@ const isRally = (id: number): boolean => props.rallyIds?.has(id) ?? false
  * stamp, so it stays where it is being described - in the panel a tapped stall
  * opens - and the plan carries one consistent mark instead.
  *
- * Keyed on in_stamp_rally rather than on having artwork, so a stall whose stamp
+ * Keyed on inStampRally rather than on having artwork, so a stall whose stamp
  * image has not been uploaded yet is still marked as part of the rally.
  */
 /**
@@ -435,7 +435,7 @@ const perStall = computed(() => {
   const collected = props.collectedOccupantIds
   for (const stall of props.stalls) {
     const onDay = occupantsOnDay(stall.occupants, props.day, props.festivalDays ?? [])
-    const stampedHere = onDay.filter((o) => o.in_stamp_rally)
+    const stampedHere = onDay.filter((o) => o.inStampRally)
     byStall.set(stall, {
       shown: new Set(onDay),
       list: onDay,
@@ -513,8 +513,8 @@ defineExpose({ zoomBy, reset, zoom })
               stall.placement,
               stall.shape,
               stallColor(stall),
-              stall.selection_color,
-              stall.text_color,
+              stall.selectionColor,
+              stall.textColor,
               drawnOccupants(stall).length,
             )
           "

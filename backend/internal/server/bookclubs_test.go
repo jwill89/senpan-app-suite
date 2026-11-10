@@ -1,6 +1,7 @@
 package server_test
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"net/http"
@@ -646,5 +647,81 @@ func TestLookUpTitleIgnoresAnEndpointOffTheAllowlist(t *testing.T) {
 	defer hit.Unlock()
 	if len(urls) != 1 || urls[0] != "/" {
 		t.Fatalf("the stub saw requests for %v; want one for the default endpoint", urls)
+	}
+}
+
+// -- Cover uploads ------------------------------------------------------------
+
+func TestBookClubCoverUpload(t *testing.T) {
+	webRoot := t.TempDir()
+	env := newTestEnvWithWebRoot(t, webRoot)
+	yaoi := makeActiveUser(t, env, "yaoistaff", "correct horse battery", []string{"bookclub-yaoi"})
+	const path = "/api/v1/book-clubs/yaoi/covers"
+	// A browser labels a picture by its type.
+	cover := func(name string, data []byte) []filePart {
+		kind := "image/png"
+		if strings.HasSuffix(name, ".jpg") {
+			kind = "image/jpeg"
+		}
+		return []filePart{{field: "image", name: name, data: data, kind: kind}}
+	}
+
+	// The club's own page is the guard: nobody 401, another club's page 403, an unknown club 404.
+	env.signOut(t)
+	resp := env.upload(t, path, nil, cover("a.png", realPNG(t, 2, 2))...)
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusUnauthorized {
+		t.Errorf("signed out = %d; want 401", resp.StatusCode)
+	}
+	yuri := makeActiveUser(t, env, "yuristaff", "correct horse battery", []string{"bookclub-yuri"})
+	resp = uploadAs(t, yuri, env, path, nil, cover("a.png", realPNG(t, 2, 2))...)
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusForbidden {
+		t.Errorf("another club's page = %d; want 403", resp.StatusCode)
+	}
+	resp = uploadAs(t, yaoi, env, "/api/v1/book-clubs/nope/covers", nil, cover("a.png", realPNG(t, 2, 2))...)
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusNotFound {
+		t.Errorf("an unknown club = %d; want 404", resp.StatusCode)
+	}
+
+	// A picture is saved again without its metadata, under its own name, and answered
+	// as an absolute, path-escaped address.
+	var out struct {
+		URL string `json:"url"`
+	}
+	decodeInto(t, uploadAs(t, yaoi, env, path, nil, cover("my cover.jpg", exifJPEG(t, 8, 4, 6))...), http.StatusCreated, &out)
+	if !strings.HasPrefix(out.URL, "https://") || !strings.HasSuffix(out.URL, "/images/bookclub/my%20cover.jpg") {
+		t.Errorf("url = %q; want an absolute, escaped address", out.URL)
+	}
+	stored, err := os.ReadFile(filepath.Join(webRoot, "images", "bookclub", "my cover.jpg"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bytes.Contains(stored, []byte("Exif")) {
+		t.Error("the stored cover still has its EXIF")
+	}
+	// The same name replaces it.
+	decodeInto(t, uploadAs(t, yaoi, env, path, nil, cover("my cover.jpg", exifJPEG(t, 6, 6, 1))...), http.StatusCreated, nil)
+
+	for name, parts := range map[string][]filePart{
+		"a page named like a picture": cover("fake.png", []byte("<html><script>alert(1)</script></html>")),
+		"a text file":                 cover("notes.txt", []byte("hello")),
+		"an svg":                      cover("art.svg", []byte(`<svg xmlns="http://www.w3.org/2000/svg"/>`)),
+		"no file":                     nil,
+	} {
+		resp := uploadAs(t, yaoi, env, path, nil, parts...)
+		resp.Body.Close()
+		if resp.StatusCode != http.StatusUnprocessableEntity {
+			t.Errorf("%s = %d; want 422", name, resp.StatusCode)
+		}
+	}
+	resp = uploadAs(t, yaoi, env, path, nil, cover("big.png", bytes.Repeat([]byte{0}, 7<<20))...)
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusRequestEntityTooLarge {
+		t.Errorf("a 7 MB cover = %d; want 413", resp.StatusCode)
+	}
+	if entries, _ := os.ReadDir(filepath.Join(webRoot, "images", "bookclub")); len(entries) != 1 {
+		t.Errorf("the covers folder holds %d files; want only the one saved", len(entries))
 	}
 }

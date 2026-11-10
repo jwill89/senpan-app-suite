@@ -40,7 +40,7 @@ watch(
  * published festival.
  */
 const festivalTarget = computed(() => {
-  const link = store.publicCard?.rally.festival_link
+  const link = store.publicCard?.rally.festivalLink
   return link
     ? {
         name: 'festival-dashboard',

@@ -33,19 +33,3 @@ func NormalizeTime(s string) (string, error) {
 	}
 	return "", ErrInvalidTime
 }
-
-// nullTime is a time as written to a nullable DATETIME column: NULL for "", the
-// stored form otherwise. The handlers check a client's times with NormalizeTime
-// first; one that still fails to parse is written as it came, and the column's
-// CHECK refuses it.
-func nullTime(s string) any {
-	n, err := NormalizeTime(s)
-	switch {
-	case err != nil:
-		return s
-	case n == "":
-		return nil
-	default:
-		return n
-	}
-}

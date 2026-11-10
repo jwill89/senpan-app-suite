@@ -14,9 +14,9 @@
  */
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
-import { endpoints } from '@/lib/endpoints'
-import { ApiError } from '@/lib/api'
-import type { ImageCategory, ImageEntry } from '@/types/api'
+import { api, unwrap } from '@/api/client'
+import type { Image, ImageCategory, ImageUpload } from '@/api/client'
+import { ApiError, apiUpload, refusedFiles } from '@/lib/api'
 import { useUiStore } from './ui'
 
 export const useImagesStore = defineStore('images', () => {
@@ -28,7 +28,7 @@ export const useImagesStore = defineStore('images', () => {
     [...categories.value].sort((a, b) => a.name.localeCompare(b.name)),
   )
   /** Loaded images keyed by category directory. */
-  const imagesByDir = ref<Record<string, ImageEntry[]>>({})
+  const imagesByDir = ref<Record<string, Image[]>>({})
   // Dirs whose images have loaded successfully (a genuinely empty category counts
   // as loaded). ensureImages consults this rather than a cached array so a FAILED
   // load - which leaves an empty array behind - is retried instead of cached.
@@ -44,8 +44,7 @@ export const useImagesStore = defineStore('images', () => {
   async function loadCategories(): Promise<void> {
     loading.value = true
     try {
-      const data = await endpoints.images.categories()
-      categories.value = data.categories
+      categories.value = (await unwrap(api.GET('/image-categories'))).categories
     } catch (e) {
       ui.notify((e as Error).message, 'error')
     } finally {
@@ -57,7 +56,9 @@ export const useImagesStore = defineStore('images', () => {
   async function loadImages(dir: string): Promise<void> {
     loadingImages.value = true
     try {
-      const data = await endpoints.images.list(dir)
+      const data = await unwrap(
+        api.GET('/image-categories/{dir}/images', { params: { path: { dir } } }),
+      )
       imagesByDir.value = { ...imagesByDir.value, [dir]: data.images }
       loadedDirs.add(dir)
     } catch (e) {
@@ -75,8 +76,7 @@ export const useImagesStore = defineStore('images', () => {
   // interrupt the user - and they self-heal the cache instead of blanking it.
   async function refreshCategoriesQuiet(): Promise<void> {
     try {
-      const data = await endpoints.images.categories()
-      categories.value = data.categories
+      categories.value = (await unwrap(api.GET('/image-categories'))).categories
     } catch {
       // Stay silent. A 403 (access lost or never held) or a transient error
       // leaves the existing list untouched rather than clearing it or toasting.
@@ -85,15 +85,17 @@ export const useImagesStore = defineStore('images', () => {
 
   async function refreshImagesQuiet(dir: string): Promise<void> {
     try {
-      const data = await endpoints.images.list(dir)
+      const data = await unwrap(
+        api.GET('/image-categories/{dir}/images', { params: { path: { dir } } }),
+      )
       imagesByDir.value = { ...imagesByDir.value, [dir]: data.images }
       loadedDirs.add(dir)
     } catch (e) {
-      // A 400 "Unknown image category" means this dir was renamed or deleted:
+      // A 404 means this dir was renamed or deleted:
       // drop the stale key so it stops being refetched (and stops re-toasting on
       // every future invalidation). Any other error (403, transient 5xx) leaves
       // the cached images in place, silently.
-      if (e instanceof ApiError && e.status === 400) {
+      if (e instanceof ApiError && e.status === 404) {
         const next = { ...imagesByDir.value }
         Reflect.deleteProperty(next, dir)
         imagesByDir.value = next
@@ -131,7 +133,11 @@ export const useImagesStore = defineStore('images', () => {
     return pending
   }
 
-  /** Creates or renames a category; returns the resulting dir on success, else null. */
+  /**
+   * Creates or renames a category; returns the resulting dir on success, else null.
+   * A rename keeps the folder unless `newDir` names another, so the pictures stored
+   * references point at stay where they are.
+   */
   async function saveCategory(
     action: 'create' | 'rename',
     name: string,
@@ -144,10 +150,20 @@ export const useImagesStore = defineStore('images', () => {
       return null
     }
     try {
-      const res = await endpoints.images.saveCategory(action, trimmed, dir.trim(), newDir.trim())
+      const cat =
+        action === 'create'
+          ? await unwrap(
+              api.POST('/image-categories', { body: { name: trimmed, dir: dir.trim() } }),
+            )
+          : await unwrap(
+              api.PATCH('/image-categories/{dir}', {
+                params: { path: { dir: dir.trim() } },
+                body: { name: trimmed, dir: newDir.trim() },
+              }),
+            )
       ui.notify(action === 'create' ? 'Category created' : 'Category updated', 'success')
       await loadCategories()
-      return res.category.dir
+      return cat.dir
     } catch (e) {
       ui.notify((e as Error).message, 'error')
       return null
@@ -157,14 +173,14 @@ export const useImagesStore = defineStore('images', () => {
   async function deleteCategory(cat: ImageCategory): Promise<void> {
     if (
       !(await ui.confirm(
-        `Delete the “${cat.name}” category and all ${cat.file_count} image${cat.file_count === 1 ? '' : 's'} in it? This cannot be undone.`,
+        `Delete the “${cat.name}” category and all ${cat.fileCount} image${cat.fileCount === 1 ? '' : 's'} in it? This cannot be undone.`,
         { title: 'Delete category', confirmText: 'Delete' },
       ))
     ) {
       return
     }
     try {
-      await endpoints.images.deleteCategory(cat.dir)
+      await unwrap(api.DELETE('/image-categories/{dir}', { params: { path: { dir: cat.dir } } }))
       ui.notify('Category deleted', 'info')
       const next = { ...imagesByDir.value }
       Reflect.deleteProperty(next, cat.dir)
@@ -183,7 +199,6 @@ export const useImagesStore = defineStore('images', () => {
       return
     }
     const form = new FormData()
-    form.append('dir', dir)
     for (const f of list) {
       form.append('files', f)
     }
@@ -191,9 +206,15 @@ export const useImagesStore = defineStore('images', () => {
     uploading.value = true
     uploadProgress.value = 0
     try {
-      const res = await endpoints.images.upload(form, (pct) => {
-        uploadProgress.value = pct
-      })
+      const res = await apiUpload<ImageUpload>(
+        `image-categories/${encodeURIComponent(dir)}/images`,
+        form,
+        {
+          onProgress: (pct) => {
+            uploadProgress.value = pct
+          },
+        },
+      )
       const ok = res.uploaded.length
       const skipped = res.skipped
       if (ok > 0) {
@@ -208,7 +229,15 @@ export const useImagesStore = defineStore('images', () => {
       await loadImages(dir)
       await loadCategories() // refresh counts
     } catch (e) {
-      ui.notify((e as Error).message, 'error')
+      // Every file refused: the problem names each one and why.
+      const refused = refusedFiles(e)
+      if (refused.length > 0) {
+        for (const r of refused) {
+          ui.notify(`${r.name}: ${r.reason}`, 'error')
+        }
+      } else {
+        ui.notify((e as Error).message, 'error')
+      }
     } finally {
       uploading.value = false
       uploadProgress.value = -1
@@ -225,7 +254,9 @@ export const useImagesStore = defineStore('images', () => {
       return
     }
     try {
-      await endpoints.images.deleteImage(dir, name)
+      await unwrap(
+        api.DELETE('/image-categories/{dir}/images/{name}', { params: { path: { dir, name } } }),
+      )
       ui.notify('Image deleted', 'info')
       await loadImages(dir)
       await loadCategories() // refresh counts

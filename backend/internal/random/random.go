@@ -9,6 +9,7 @@ package random
 import (
 	crand "crypto/rand"
 	"encoding/binary"
+	"encoding/hex"
 	"math/rand/v2"
 )
 
@@ -31,3 +32,12 @@ func IntN(n int) int { return generator().IntN(n) }
 
 // Shuffle puts n elements in a random order, calling swap to exchange two.
 func Shuffle(n int, swap func(i, j int)) { generator().Shuffle(n, swap) }
+
+// Token returns an unguessable URL-safe token: 16 random bytes, hex-encoded. The
+// links it makes are the only thing gating what they open, so it must not be
+// predictable.
+func Token() string {
+	var b [16]byte
+	_, _ = crand.Read(b[:])
+	return hex.EncodeToString(b[:])
+}

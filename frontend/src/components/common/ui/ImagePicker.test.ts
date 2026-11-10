@@ -1,26 +1,37 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
-import type { ImageCategory, ImageEntry } from '@/types/api'
+import type { Image, ImageCategory } from '@/api/client'
 
-// Stub the endpoint layer the images store talks to.
-const { categories, list, upload } = vi.hoisted(() => ({
-  categories: vi.fn(async () => ({ categories: [] as ImageCategory[] })),
-  list: vi.fn(async (dir: string) => ({ dir, images: [] as ImageEntry[] })),
-  upload: vi.fn(async () => ({ uploaded: ['new.png'], skipped: [] })),
+// The store calls the API client and the upload helper; only those are faked (unwrap
+// is the real one). Each client fake answers a call's `{ data, error, response }`.
+const ok = (data: unknown, status = 200) => ({ data, response: new Response(null, { status }) })
+const api = vi.hoisted(() => ({ GET: vi.fn() }))
+const apiUpload = vi.hoisted(() => vi.fn())
+vi.mock('@/api/client', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  api,
 }))
-vi.mock('@/lib/endpoints', () => ({
-  endpoints: { images: { categories, list, upload } },
+vi.mock('@/lib/api', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  apiUpload,
 }))
+
+/** The directories the category listing was asked for, in order. */
+function listedDirs(): string[] {
+  return api.GET.mock.calls
+    .filter(([path]) => path === '/image-categories/{dir}/images')
+    .map(([, init]) => (init as { params: { path: { dir: string } } }).params.path.dir)
+}
 
 import ImagePicker from './ImagePicker.vue'
 import { useAuthStore } from '@/stores/auth'
 import type { Account } from '@/api/client'
 
 function cat(name: string, dir: string): ImageCategory {
-  return { name, dir, file_count: 0, total_size: 0 }
+  return { name, dir, fileCount: 0, totalSize: 0 }
 }
-function entry(dir: string, name: string): ImageEntry {
+function entry(dir: string, name: string): Image {
   return {
     name,
     url: `https://h/images/${dir}/${name}`,
@@ -32,17 +43,22 @@ function entry(dir: string, name: string): ImageEntry {
 
 beforeEach(() => {
   setActivePinia(createPinia())
-  vi.clearAllMocks()
-  categories.mockResolvedValue({
-    categories: [cat('Raffle', 'raffles'), cat('Flourishes', 'flourishes')],
+  api.GET.mockReset()
+  apiUpload.mockReset()
+  apiUpload.mockResolvedValue({ uploaded: [entry('raffles', 'new.png')], skipped: [] })
+  api.GET.mockImplementation(async (path: string, init?: { params: { path: { dir: string } } }) => {
+    if (path === '/image-categories') {
+      return ok({ categories: [cat('Raffle', 'raffles'), cat('Flourishes', 'flourishes')] })
+    }
+    const dir = init!.params.path.dir
+    return ok({
+      dir,
+      images:
+        dir === 'raffles'
+          ? [entry('raffles', 'prize.png')]
+          : [entry('flourishes', 'swirl.svg'), entry('flourishes', 'photo.png')],
+    })
   })
-  list.mockImplementation(async (dir: string) => ({
-    dir,
-    images:
-      dir === 'raffles'
-        ? [entry('raffles', 'prize.png')]
-        : [entry('flourishes', 'swirl.svg'), entry('flourishes', 'photo.png')],
-  }))
 })
 
 function mountPicker(modelValue = '', props: Record<string, unknown> = {}) {
@@ -55,7 +71,7 @@ describe('ImagePicker', () => {
     await flushPromises()
     const options = wrapper.findAll('option')
     expect(options.map((o) => o.text())).toEqual(['Flourishes', 'Raffle'])
-    expect(categories).toHaveBeenCalledTimes(1)
+    expect(api.GET.mock.calls.filter(([p]) => p === '/image-categories')).toHaveLength(1)
   })
 
   it("starts in the current value's category and highlights it", async () => {
@@ -87,7 +103,7 @@ describe('ImagePicker', () => {
     await flushPromises()
     await wrapper.find('select').setValue('flourishes')
     await flushPromises()
-    expect(list).toHaveBeenCalledWith('flourishes')
+    expect(listedDirs()).toContain('flourishes')
     expect(wrapper.findAll('.img-thumb')).toHaveLength(2)
   })
 
@@ -107,10 +123,17 @@ describe('ImagePicker', () => {
   })
 
   it('lists images alphabetically by file name, digit-aware', async () => {
-    list.mockImplementation(async (dir: string) => ({
-      dir,
-      images: ['img10.png', 'Zebra.png', 'img2.png', 'apple.png'].map((n) => entry(dir, n)),
-    }))
+    api.GET.mockImplementation(
+      async (path: string, init?: { params: { path: { dir: string } } }) =>
+        path === '/image-categories'
+          ? ok({ categories: [cat('Raffle', 'raffles')] })
+          : ok({
+              dir: init!.params.path.dir,
+              images: ['img10.png', 'Zebra.png', 'img2.png', 'apple.png'].map((n) =>
+                entry(init!.params.path.dir, n),
+              ),
+            }),
+    )
     const wrapper = mountPicker('images/raffles/apple.png')
     await flushPromises()
     expect(wrapper.findAll('.img-thumb').map((t) => t.attributes('title'))).toEqual([
@@ -150,12 +173,12 @@ describe('ImagePicker', () => {
       await wrapper.find('.image-picker-drop').trigger('drop', { dataTransfer: { files: [file] } })
       await flushPromises()
 
-      expect(upload).toHaveBeenCalledTimes(1)
-      const [form] = upload.mock.calls[0] as unknown as [FormData]
-      expect(form.get('dir')).toBe('raffles')
+      expect(apiUpload).toHaveBeenCalledTimes(1)
+      const [endpoint, form] = apiUpload.mock.calls[0] as unknown as [string, FormData]
+      expect(endpoint).toBe('image-categories/raffles/images')
       expect(form.getAll('files')).toHaveLength(1)
       // The category is re-listed so the new image appears in the grid.
-      expect(list).toHaveBeenLastCalledWith('raffles')
+      expect(listedDirs().at(-1)).toBe('raffles')
     })
 
     it('ignores drops when the user cannot upload', async () => {
@@ -164,7 +187,7 @@ describe('ImagePicker', () => {
       const file = new File(['x'], 'new.png', { type: 'image/png' })
       await wrapper.find('.image-picker-drop').trigger('drop', { dataTransfer: { files: [file] } })
       await flushPromises()
-      expect(upload).not.toHaveBeenCalled()
+      expect(apiUpload).not.toHaveBeenCalled()
     })
   })
 })

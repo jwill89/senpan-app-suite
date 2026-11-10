@@ -1,29 +1,36 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
-import type { CarrdProject } from '@/types/api'
+import type { CarrdProject } from '@/api/client'
 
-const ep = vi.hoisted(() => ({
-  projects: vi.fn(async () => ({ projects: [] as CarrdProject[] })),
-  images: vi.fn(async () => ({ dirs: [] as string[], images: [] })),
-  createProject: vi.fn(async () => ({ project: { folder: 'art', title: 'Art' } })),
-  createDir: vi.fn(async () => ({ ok: true })),
+// The store calls the API client; only its calls are faked (unwrap is the real one).
+// Each fake answers a call's `{ data, error, response }`.
+const ok = (data: unknown, status = 200) => ({ data, response: new Response(null, { status }) })
+const api = vi.hoisted(() => ({ GET: vi.fn(), POST: vi.fn(), PATCH: vi.fn(), DELETE: vi.fn() }))
+vi.mock('@/api/client', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  api,
 }))
-vi.mock('@/lib/endpoints', () => ({
-  endpoints: {
-    carrd: {
-      projects: ep.projects,
-      images: ep.images,
-      createProject: ep.createProject,
-      createDir: ep.createDir,
-    },
-  },
-}))
+
+/** The calls of a method made to a path, as `[path, init]`. */
+function callsTo(method: 'GET' | 'POST', path: string) {
+  return api[method].mock.calls.filter(([p]) => p === path) as [string, Record<string, unknown>][]
+}
 
 import { useCarrdStore, carrdImageUrl, joinCarrdPath } from './carrd'
 
 beforeEach(() => {
   setActivePinia(createPinia())
-  Object.values(ep).forEach((fn) => fn.mockClear())
+  Object.values(api).forEach((fn) => fn.mockReset())
+  api.GET.mockImplementation(async (path: string) =>
+    path === '/carrd-projects'
+      ? ok({ projects: [] })
+      : ok({ folder: 'art', path: '', folders: [], files: [] }),
+  )
+  api.POST.mockImplementation(async (path: string) =>
+    path === '/carrd-projects'
+      ? ok({ folder: 'art', title: 'Art' }, 201)
+      : ok({ name: 'sub' }, 201),
+  )
 })
 
 describe('pure helpers', () => {
@@ -42,7 +49,7 @@ describe('pure helpers', () => {
 
 describe('loadProjects', () => {
   it('drops a selection whose project no longer exists', async () => {
-    ep.projects.mockResolvedValueOnce({ projects: [{ folder: 'other' } as CarrdProject] })
+    api.GET.mockResolvedValueOnce(ok({ projects: [{ folder: 'other' } as CarrdProject] }))
     const s = useCarrdStore()
     s.selectedFolder = 'gone'
     s.currentPath = 'sub'
@@ -52,7 +59,7 @@ describe('loadProjects', () => {
   })
 
   it('keeps a selection that still exists', async () => {
-    ep.projects.mockResolvedValueOnce({ projects: [{ folder: 'keep' } as CarrdProject] })
+    api.GET.mockResolvedValueOnce(ok({ projects: [{ folder: 'keep' } as CarrdProject] }))
     const s = useCarrdStore()
     s.selectedFolder = 'keep'
     await s.loadProjects()
@@ -66,16 +73,20 @@ describe('navigation', () => {
     await s.openProject('art')
     expect(s.selectedFolder).toBe('art')
     expect(s.currentPath).toBe('')
-    expect(ep.images).toHaveBeenCalledWith('art', '')
+    expect(callsTo('GET', '/carrd-projects/{folder}/files')[0]![1]).toMatchObject({
+      params: { path: { folder: 'art' }, query: { path: '' } },
+    })
   })
 
   it('navigate moves to a subpath and reloads contents', async () => {
     const s = useCarrdStore()
     await s.openProject('art')
-    ep.images.mockClear()
+    api.GET.mockClear()
     await s.navigate('chapter1')
     expect(s.currentPath).toBe('chapter1')
-    expect(ep.images).toHaveBeenCalledWith('art', 'chapter1')
+    expect(callsTo('GET', '/carrd-projects/{folder}/files')[0]![1]).toMatchObject({
+      params: { path: { folder: 'art' }, query: { path: 'chapter1' } },
+    })
   })
 })
 
@@ -83,13 +94,15 @@ describe('createProject', () => {
   it('rejects a blank title', async () => {
     const s = useCarrdStore()
     expect(await s.createProject('   ')).toBeNull()
-    expect(ep.createProject).not.toHaveBeenCalled()
+    expect(api.POST).not.toHaveBeenCalled()
   })
 
   it('creates, reloads, and opens the new project', async () => {
     const s = useCarrdStore()
     const folder = await s.createProject('  Art  ')
-    expect(ep.createProject).toHaveBeenCalledWith('Art', '')
+    expect(callsTo('POST', '/carrd-projects')[0]![1]).toMatchObject({
+      body: { title: 'Art', folder: '' },
+    })
     expect(folder).toBe('art')
     expect(s.selectedFolder).toBe('art')
   })
@@ -99,13 +112,26 @@ describe('createDir', () => {
   it('requires an open project', async () => {
     const s = useCarrdStore()
     expect(await s.createDir('sub')).toBe(false)
-    expect(ep.createDir).not.toHaveBeenCalled()
+    expect(api.POST).not.toHaveBeenCalled()
   })
 
   it('rejects a blank folder name', async () => {
     const s = useCarrdStore()
     s.selectedFolder = 'art'
     expect(await s.createDir('   ')).toBe(false)
-    expect(ep.createDir).not.toHaveBeenCalled()
+    expect(api.POST).not.toHaveBeenCalled()
+  })
+})
+
+describe('createDir (open project)', () => {
+  it('makes the folder under the current path', async () => {
+    const s = useCarrdStore()
+    await s.openProject('art')
+    await s.navigate('chapter1')
+    expect(await s.createDir('  Panels ')).toBe(true)
+    expect(callsTo('POST', '/carrd-projects/{folder}/folders')[0]![1]).toMatchObject({
+      params: { path: { folder: 'art' } },
+      body: { path: 'chapter1', name: 'Panels' },
+    })
   })
 })

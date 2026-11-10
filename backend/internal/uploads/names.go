@@ -4,7 +4,7 @@
 package uploads
 
 import (
-	"path/filepath"
+	"path"
 	"strings"
 )
 
@@ -28,19 +28,20 @@ func IsCarrdExt(ext string) bool {
 }
 
 // SafeName reduces an uploaded file name to a safe base name, accepting it only when
-// allow approves its extension (lowercase, with its dot). It strips any path and
-// refuses an empty, dot, hidden or separator-bearing name, so the result is safe as
-// both the on-disk name and the URL's.
+// allow approves its extension (lowercase, with its dot). It strips any
+// slash-separated path and refuses an empty, dot or hidden name and one holding a
+// backslash, the same on every OS, so the result is safe as both the on-disk name and
+// the URL's.
 func SafeName(name string, allow func(ext string) bool) (string, bool) {
 	name = strings.TrimSpace(name)
-	name = filepath.Base(filepath.FromSlash(name))
+	name = path.Base(name)
 	if name == "" || name == "." || name == ".." || strings.HasPrefix(name, ".") {
 		return "", false
 	}
 	if strings.ContainsAny(name, `/\`) {
 		return "", false
 	}
-	if !allow(strings.ToLower(filepath.Ext(name))) {
+	if !allow(strings.ToLower(path.Ext(name))) {
 		return "", false
 	}
 	return name, true

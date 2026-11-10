@@ -71,9 +71,10 @@ func ValidFolder(name string) bool { return uploads.ValidSlug(name, '-') }
 
 // CleanPath validates a slash-separated path within a project and returns it
 // normalized, "" for the project's root. Each segment must be a valid folder name,
-// which refuses empty segments, dotfiles and any "." or "..".
+// which refuses empty segments, dotfiles, any "." or "..", and a backslash, so the
+// answer is the same whichever OS the server runs on.
 func CleanPath(rel string) (string, bool) {
-	rel = strings.Trim(strings.TrimSpace(filepath.ToSlash(rel)), "/")
+	rel = strings.Trim(strings.TrimSpace(rel), "/")
 	if rel == "" {
 		return "", true
 	}

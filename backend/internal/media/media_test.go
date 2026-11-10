@@ -61,14 +61,13 @@ func TestCleanPath(t *testing.T) {
 		"a":         "a",
 		"a/b":       "a/b",
 		"/a/b/":     "a/b",
-		`a\b`:       "a/b",
 		"spring-26": "spring-26",
 	} {
 		if got, ok := CleanPath(in); !ok || got != want {
 			t.Errorf("CleanPath(%q) = (%q, %v); want (%q, true)", in, got, ok, want)
 		}
 	}
-	for _, in := range []string{"..", "../..", "a/../b", "a//b", ".hidden", "a/.carrd.json", "UPPER", "a b", "a_b", "%2e%2e", "~"} {
+	for _, in := range []string{"..", "../..", "a/../b", "a//b", ".hidden", "a/.carrd.json", "UPPER", "a b", "a_b", "%2e%2e", "~", `a\b`, `..\..`} {
 		if got, ok := CleanPath(in); ok {
 			t.Errorf("CleanPath(%q) = (%q, true); want refused", in, got)
 		}

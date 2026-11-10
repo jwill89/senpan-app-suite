@@ -50,12 +50,11 @@ func TestSafeUploadName(t *testing.T) {
 		}
 	}
 
-	// Backslash traversal ("..\..\x.png") is platform-dependent: on Windows the
-	// backslash is a path separator (stripped to "x.png"); on POSIX it is a
-	// literal filename character (caught by the separator check -> rejected).
-	// Either way the traversal must be neutralized, so assert only the invariant.
-	if got, ok := SafeName(`..\..\x.png`, allow); ok {
-		assertSafeBasename(t, `..\..\x.png`, got)
+	// A backslash is refused on every OS, so a Windows-style path can't traverse.
+	for _, in := range []string{`..\..\x.png`, `C:\Users\me\x.png`, `a\b.png`} {
+		if got, ok := SafeName(in, allow); ok {
+			t.Errorf("SafeName(%q) = %q; want refused", in, got)
+		}
 	}
 }
 
